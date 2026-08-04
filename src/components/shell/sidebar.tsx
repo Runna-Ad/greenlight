@@ -12,12 +12,14 @@ import {
   CheckCheck,
   Settings,
   RefreshCw,
+  Eye,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { canSee, DEFAULT_ROLE, type NavKey, type ViewRole } from "@/lib/roles";
 import { Wordmark } from "./wordmark";
 
-type NavItem = { href: string; label: string; icon: LucideIcon };
+type NavItem = { key: NavKey; href: string; label: string; icon: LucideIcon };
 
 // Cross-client items live at the root; client-scoped items take the active slug.
 function navFor(slug: string | null): { section: string; items: NavItem[] }[] {
@@ -26,10 +28,15 @@ function navFor(slug: string | null): { section: string; items: NavItem[] }[] {
     {
       section: "General",
       items: [
-        { href: "/clientes", label: "Clientes", icon: Users },
-        { href: "/mi-trabajo", label: "Mi trabajo", icon: LayoutGrid },
-        { href: "/carga", label: "Carga", icon: GaugeCircle },
-        { href: "/entrega-check", label: "Entregas por revisar", icon: CheckCheck },
+        { key: "clientes", href: "/clientes", label: "Clientes", icon: Users },
+        { key: "mi-trabajo", href: "/mi-trabajo", label: "Mi trabajo", icon: LayoutGrid },
+        { key: "carga", href: "/carga", label: "Carga", icon: GaugeCircle },
+        {
+          key: "entrega-check",
+          href: "/entrega-check",
+          label: "Entregas por revisar",
+          icon: CheckCheck,
+        },
       ],
     },
     ...(clientBase
@@ -37,17 +44,23 @@ function navFor(slug: string | null): { section: string; items: NavItem[] }[] {
           {
             section: slug!.toUpperCase(),
             items: [
-              { href: `${clientBase}/tablero`, label: "Tablero", icon: LayoutGrid },
-              { href: `${clientBase}/briefs`, label: "Briefs", icon: FileText },
-              { href: `${clientBase}/sync`, label: "Sincronizar", icon: RefreshCw },
-              { href: `${clientBase}/entregas`, label: "Entregas", icon: CalendarClock },
+              { key: "tablero", href: `${clientBase}/tablero`, label: "Tablero", icon: LayoutGrid },
+              { key: "briefs", href: `${clientBase}/briefs`, label: "Briefs", icon: FileText },
+              { key: "sync", href: `${clientBase}/sync`, label: "Sincronizar", icon: RefreshCw },
+              {
+                key: "entregas",
+                href: `${clientBase}/entregas`,
+                label: "Entregas",
+                icon: CalendarClock,
+              },
+              { key: "portal", href: `${clientBase}/portal`, label: "Portal", icon: Eye },
             ] as NavItem[],
           },
         ]
       : []),
     {
       section: "Admin",
-      items: [{ href: "/admin", label: "Configuración", icon: Settings }],
+      items: [{ key: "admin", href: "/admin", label: "Configuración", icon: Settings }],
     },
   ];
 }
@@ -62,11 +75,16 @@ const RESERVED = new Set([
   "login",
 ]);
 
-export function Sidebar() {
+export function Sidebar({ role = DEFAULT_ROLE }: { role?: ViewRole }) {
   const pathname = usePathname();
   const first = pathname.split("/")[1] ?? "";
   const activeClient = first && !RESERVED.has(first) ? first : null;
-  const groups = navFor(activeClient);
+
+  // Filtrado por rol: en una vista previa el menú debe ENCOGER, que es
+  // justamente lo que no se podía comprobar antes.
+  const groups = navFor(activeClient)
+    .map((g) => ({ ...g, items: g.items.filter((i) => canSee(role, i.key)) }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground">
@@ -86,6 +104,11 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
+        {groups.length === 0 && (
+          <p className="px-3 text-xs text-sidebar-foreground/50">
+            Este rol no entra a la app interna.
+          </p>
+        )}
         {groups.map((group) => (
           <div key={group.section} className="mb-5">
             <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40">

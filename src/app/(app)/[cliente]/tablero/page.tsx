@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Lock } from "lucide-react";
+import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
+import { getViewAs } from "@/lib/view-as";
 import { Button } from "@/components/ui/button";
 import { Board, type BriefOption, type Member, type Task } from "@/components/board/board";
 
@@ -63,6 +65,24 @@ export default async function TableroPage({
   params: Promise<{ cliente: string }>;
 }) {
   const { cliente } = await params;
+  const role = await getViewAs();
+
+  // Quitar la entrada del menú no basta: la URL sigue siendo tecleable, y una
+  // vista previa que se salta escribiendo la ruta no prueba nada.
+  if (!canSee(role, "tablero")) {
+    return (
+      <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
+        <Lock className="mx-auto size-5 text-muted-foreground" />
+        <p className="mt-3 text-sm text-foreground">
+          Un {ROLE_LABEL[role]} no entra al tablero de producción.
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Estás en una vista previa. Vuelve a tu rol en la franja de arriba.
+        </p>
+      </div>
+    );
+  }
+
   const data = await loadBoard(cliente);
   const totalFiles = (data?.tasks ?? []).reduce((n, t) => n + t.file_count, 0);
 
@@ -99,6 +119,7 @@ export default async function TableroPage({
           tasks={data?.tasks ?? []}
           members={data?.members ?? []}
           briefs={data?.briefs ?? []}
+          role={role}
         />
       )}
     </div>

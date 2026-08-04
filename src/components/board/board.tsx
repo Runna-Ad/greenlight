@@ -26,6 +26,13 @@ import {
   type AssetStatus,
 } from "@/lib/brand";
 import { moveTask, setAssignees } from "@/app/(app)/[cliente]/tablero/actions";
+import {
+  DEFAULT_ROLE,
+  canAssign,
+  canMoveStatus,
+  canOverrideStatus,
+  type ViewRole,
+} from "@/lib/roles";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 
@@ -74,12 +81,18 @@ export function Board({
   tasks: initialTasks,
   members,
   briefs,
+  role = DEFAULT_ROLE,
 }: {
   cliente: string;
   tasks: Task[];
   members: Member[];
   briefs: BriefOption[];
+  role?: ViewRole;
 }) {
+  const mayMove = canMoveStatus(role);
+  const mayOverride = canOverrideStatus(role);
+  const mayAssign = canAssign(role);
+
   const [tasks, setTasks] = useState(initialTasks);
   const [dragging, setDragging] = useState<Task | null>(null);
   const [, startTransition] = useTransition();
@@ -126,17 +139,25 @@ export function Board({
     useSensor(KeyboardSensor),
   );
 
-  /** Optimistic move; the DB trigger is still the authority, so revert on error. */
+  /** Optimistic move; the DB is still the authority, so revert on error. */
   const applyMove = (task: Task, to: AssetStatus) => {
-    if (task.status === to) return;
+    if (task.status === to || !mayMove) return;
     const from = task.status;
+    const esOverride = !canMove(from, to);
     setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: to } : t)));
 
     startTransition(async () => {
-      const res = await moveTask(cliente, task.id, to);
+      const res = await moveTask(
+        cliente,
+        task.id,
+        to,
+        esOverride ? `${STATUS_LABEL[from]} → ${STATUS_LABEL[to]} fuera del flujo` : undefined,
+      );
       if (!res.ok) {
         setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: from } : t)));
         toast.error(res.error ?? "No se pudo mover la tarea.");
+      } else if (esOverride) {
+        toast.success(`Movida fuera del flujo — queda registrada.`);
       }
     });
   };
@@ -207,10 +228,11 @@ export function Board({
               key={status}
               status={status}
               tasks={visible.filter((t) => t.status === status)}
-              members={members}
+              members={mayAssign ? members : undefined}
               dragging={dragging}
+              mayOverride={mayOverride}
               onAssign={applyAssignees}
-              onMove={applyMove}
+              onMove={mayMove ? applyMove : undefined}
             />
           ))}
         </div>
@@ -231,22 +253,28 @@ function Column({
   tasks,
   members,
   dragging,
+  mayOverride,
   onAssign,
   onMove,
 }: {
   status: AssetStatus;
   tasks: Task[];
-  members: Member[];
+  members?: Member[];
   dragging: Task | null;
+  mayOverride: boolean;
   onAssign: (t: Task, ids: string[]) => void;
-  onMove: (t: Task, to: AssetStatus) => void;
+  onMove?: (t: Task, to: AssetStatus) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const token = STATUS_TOKEN[status];
 
   // While dragging, say up front which columns this card can reach. The DB
   // enforces it either way; showing it beats an error toast after the drop.
-  const reachable = !dragging || canMove(dragging.status, status);
+  // A lead reaches everywhere — the move is logged as an override.
+  const reachable =
+    !dragging || mayOverride || canMove(dragging.status, status);
+  const fueraDeFlujo =
+    dragging && mayOverride && !canMove(dragging.status, status);
   const isSource = dragging?.status === status;
 
   return (
@@ -281,13 +309,25 @@ function Column({
             : "border-border bg-secondary/25"
         }`}
       >
+        {dragging && !isSource && reachable && fueraDeFlujo && (
+          <p className="mb-1 rounded bg-amber-500/15 px-2 py-1 text-center text-[10px] font-medium text-amber-800">
+            Fuera del flujo · queda registrado
+          </p>
+        )}
         {tasks.length === 0 ? (
           <p className="py-6 text-center text-xs text-muted-foreground">
             {dragging && reachable && !isSource ? "Suelta aquí" : "Sin tarjetas"}
           </p>
         ) : (
           tasks.map((t) => (
-            <TaskCard key={t.id} task={t} members={members} onAssign={onAssign} onMove={onMove} />
+            <TaskCard
+              key={t.id}
+              task={t}
+              members={members}
+              mayOverride={mayOverride}
+              onAssign={onAssign}
+              onMove={onMove}
+            />
           ))
         )}
       </div>
@@ -301,24 +341,30 @@ function Column({
 function TaskCard({
   task,
   members,
+  mayOverride,
   onAssign,
   onMove,
 }: {
   task: Task;
-  members: Member[];
+  members?: Member[];
+  mayOverride: boolean;
   onAssign: (t: Task, ids: string[]) => void;
-  onMove: (t: Task, to: AssetStatus) => void;
+  onMove?: (t: Task, to: AssetStatus) => void;
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: task.id,
+    disabled: !onMove,
+  });
 
   return (
     <div ref={setNodeRef} className={isDragging ? "opacity-40" : ""}>
       <CardBody
         task={task}
         members={members}
+        mayOverride={mayOverride}
         onAssign={onAssign}
         onMove={onMove}
-        handleProps={{ ...listeners, ...attributes }}
+        handleProps={onMove ? { ...listeners, ...attributes } : undefined}
       />
     </div>
   );
@@ -327,6 +373,7 @@ function TaskCard({
 function CardBody({
   task,
   members,
+  mayOverride,
   onAssign,
   onMove,
   handleProps,
@@ -334,6 +381,7 @@ function CardBody({
 }: {
   task: Task;
   members?: Member[];
+  mayOverride?: boolean;
   onAssign?: (t: Task, ids: string[]) => void;
   onMove?: (t: Task, to: AssetStatus) => void;
   handleProps?: Record<string, unknown>;
@@ -341,6 +389,10 @@ function CardBody({
 }) {
   const typeToken = task.track === "real" ? "real" : "normal";
   const targets = ALLOWED_TRANSITIONS[task.status];
+  // Todo lo demás sólo aparece para quien puede sacar la tarea del flujo.
+  const fueraDeFlujo = mayOverride
+    ? KANBAN_STATUSES.filter((s) => s !== task.status && !targets.includes(s))
+    : [];
 
   return (
     <article
@@ -421,7 +473,7 @@ function CardBody({
           <PeopleChips members={task.members} />
         )}
 
-        {onMove && targets.length > 0 && (
+        {onMove && (targets.length > 0 || fueraDeFlujo.length > 0) && (
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -432,23 +484,50 @@ function CardBody({
                 Mover
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-52 p-1">
-              <p className="px-2 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                Mover a
-              </p>
-              {targets.map((to) => (
-                <button
-                  key={to}
-                  onClick={() => onMove(task, to)}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-secondary"
-                >
-                  <span
-                    className="size-2 rounded-full"
-                    style={{ backgroundColor: `var(--status-${STATUS_TOKEN[to]})` }}
-                  />
-                  {STATUS_LABEL[to]}
-                </button>
-              ))}
+            <PopoverContent align="end" className="w-56 p-1">
+              {targets.length > 0 && (
+                <>
+                  <p className="px-2 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Mover a
+                  </p>
+                  {targets.map((to) => (
+                    <button
+                      key={to}
+                      onClick={() => onMove(task, to)}
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-secondary"
+                    >
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: `var(--status-${STATUS_TOKEN[to]})` }}
+                      />
+                      {STATUS_LABEL[to]}
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {/* Separado a propósito: sacar una tarea del flujo no debe ser un
+                  clic indistinguible de seguirlo. Queda registrado con motivo. */}
+              {fueraDeFlujo.length > 0 && (
+                <>
+                  <p className="mt-1 border-t border-border px-2 pb-1 pt-2 text-[10px] uppercase tracking-wide text-amber-700">
+                    Fuera del flujo · queda registrado
+                  </p>
+                  {fueraDeFlujo.map((to) => (
+                    <button
+                      key={to}
+                      onClick={() => onMove(task, to)}
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-amber-500/10"
+                    >
+                      <span
+                        className="size-2 rounded-full opacity-60"
+                        style={{ backgroundColor: `var(--status-${STATUS_TOKEN[to]})` }}
+                      />
+                      {STATUS_LABEL[to]}
+                    </button>
+                  ))}
+                </>
+              )}
             </PopoverContent>
           </Popover>
         )}

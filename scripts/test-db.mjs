@@ -436,6 +436,95 @@ eq(
   Number(await scalar(`select count(*) from produccion.ideas`)),
 );
 
+// ── Override de lead + historial de la TAREA (0009) ──
+console.log("\n▶ Override de lead — auditado, no una puerta abierta");
+
+const ovIdea = await scalar(`select id from produccion.ideas limit 1`);
+await db.query(`update produccion.ideas set status='todo' where id=$1`, [ovIdea]);
+await db.query(`delete from produccion.status_events where idea_id=$1`, [ovIdea]);
+
+// El camino normal sigue funcionando y NO cuenta como override.
+eq(
+  "rpc_move_task hace la transición legal todo→in_progress",
+  await scalar(`select produccion.rpc_move_task($1,'in_progress')`, [ovIdea]),
+  "in_progress",
+);
+eq(
+  "el movimiento legal queda registrado",
+  Number(await scalar(`select count(*) from produccion.status_events where idea_id=$1`, [ovIdea])),
+  1,
+);
+eq(
+  "un movimiento legal NO se marca como override",
+  await scalar(`select override from produccion.status_events where idea_id=$1`, [ovIdea]),
+  false,
+);
+
+// Sin pedir override, un salto ilegal se rechaza igual que antes.
+let ilegalBlocked = false;
+try {
+  await db.query(`select produccion.rpc_move_task($1,'todo')`, [ovIdea]);
+} catch {
+  ilegalBlocked = true;
+}
+ok("sin p_as_lead, revertir sigue bloqueado", ilegalBlocked);
+
+// Pedirlo sin tener derecho tampoco basta: un creativo no puede revertir.
+await asUser(CREA);
+let creaBlocked = false;
+try {
+  await db.query(`select produccion.rpc_move_task($1,'todo',true,$2)`, [ovIdea, CREA]);
+} catch {
+  creaBlocked = true;
+}
+ok("un creativo NO puede revertir aunque pida override", creaBlocked);
+
+// Claims vacías no deben reventar nada (current_profile_id endurecido en 0009).
+await db.exec(`select set_config('request.jwt.claims','', false);`);
+eq(
+  "claims vacías → current_profile_id() devuelve null, no revienta",
+  await scalar(`select produccion.current_profile_id() is null`),
+  true,
+);
+
+// Un lead sí, y queda marcado como override con su motivo.
+eq(
+  "un lead revierte in_progress→todo",
+  await scalar(`select produccion.rpc_move_task($1,'todo',true,$2,'me equivoqué de tarjeta')`, [
+    ovIdea,
+    LEAD,
+  ]),
+  "todo",
+);
+const ovRow = (
+  await q(
+    `select override, reason, actor_id, from_status, to_status from produccion.status_events
+      where idea_id=$1 order by created_at desc limit 1`,
+    [ovIdea],
+  )
+)[0];
+ok("la reversión queda marcada como override", ovRow.override === true);
+eq("guarda el motivo", ovRow.reason, "me equivoqué de tarjeta");
+eq("guarda quién lo hizo", ovRow.actor_id, LEAD);
+eq("guarda de dónde a dónde", `${ovRow.from_status}→${ovRow.to_status}`, "in_progress→todo");
+
+// El permiso NO se queda encendido: el siguiente salto ilegal vuelve a fallar.
+let despuesBlocked = false;
+try {
+  await db.query(`select produccion.rpc_move_task($1,'completed')`, [ovIdea]);
+} catch {
+  despuesBlocked = true;
+}
+ok("el override no queda encendido para el resto de la transacción", despuesBlocked);
+
+// Un UPDATE directo también se registra — el registro no es opcional.
+await db.query(`update produccion.ideas set status='in_progress' where id=$1`, [ovIdea]);
+eq(
+  "un UPDATE directo también deja historial",
+  Number(await scalar(`select count(*) from produccion.status_events where idea_id=$1`, [ovIdea])),
+  3,
+);
+
 // ── CONTRACT: TS canMove() === DB transition_allowed() over ALL pairs ──
 // The board dims illegal columns using the TS map; the trigger enforces the SQL
 // one. If they ever drift, the UI would offer a drop the DB then rejects.
