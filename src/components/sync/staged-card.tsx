@@ -1,0 +1,386 @@
+"use client";
+
+import { ChevronDown, Sparkles, Pencil, AlertCircle, Undo2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { ChipSelect } from "@/components/intake/chip-select";
+import type { SheetRow } from "@/lib/sheet-sync";
+import {
+  ASIGNACION,
+  ENTREGA,
+  FORMATO,
+  GENERO,
+  MARCA,
+  PLATAFORMA,
+  PLATAFORMA_LABEL,
+  TAMANO,
+  TIPO_ASSET,
+  type Track,
+} from "@/lib/vocab";
+
+export type StagedRow = {
+  key: string;
+  rowNumber: number;
+  status: "new" | "updated" | "unchanged";
+  data: SheetRow;
+  tab: string;
+  label: string;
+  track: "real" | "normal" | null;
+};
+
+/** Fields that must be present before a task can be created. */
+export const REQUIRED_FIELDS = ["Naming", "# Idea", "Tipo de Asset", "Asignación"] as const;
+
+// Sheet cells hold multi-values as "a, b, c".
+const toList = (v?: string) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
+const fromList = (v: string[]) => v.join(", ");
+
+export function StagedCard({
+  row,
+  edits,
+  included,
+  expanded,
+  onToggleIncluded,
+  onToggleExpanded,
+  onEdit,
+  onResetField,
+}: {
+  row: StagedRow;
+  edits: Partial<SheetRow>;
+  included: boolean;
+  expanded: boolean;
+  onToggleIncluded: () => void;
+  onToggleExpanded: () => void;
+  onEdit: (field: keyof SheetRow, value: string) => void;
+  onResetField: (field: keyof SheetRow) => void;
+}) {
+  // Effective value = the lead's edit if she made one, else what the sheet says.
+  const val = (f: keyof SheetRow) => edits[f] ?? row.data[f] ?? "";
+  const isEdited = (f: keyof SheetRow) => edits[f] !== undefined;
+  const track: Track = row.track ?? "real";
+  const missing = REQUIRED_FIELDS.filter((f) => !val(f).trim());
+
+  return (
+    <li
+      className={cn(
+        "overflow-hidden rounded-xl border transition-colors",
+        included ? "border-border bg-card" : "border-border/60 bg-card/40",
+      )}
+    >
+      {/* ── Collapsed summary: what she scans ── */}
+      <div className="flex items-start gap-3 p-3.5">
+        <input
+          type="checkbox"
+          checked={included}
+          onChange={onToggleIncluded}
+          aria-label={`Incluir ${val("Naming") || "tarea"}`}
+          className="mt-1 size-4 shrink-0 accent-[var(--primary)]"
+        />
+
+        <div className={cn("min-w-0 flex-1", !included && "opacity-55")}>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-mono text-sm font-semibold tracking-tight text-foreground">
+              {val("Naming") || <span className="italic text-status-corrections">sin naming</span>}
+            </span>
+            {val("# Idea") && (
+              <Badge variant="secondary" className="font-mono text-[10px]">{val("# Idea")}</Badge>
+            )}
+            <span className="text-[11px] text-muted-foreground">{row.label}</span>
+            {row.status === "new" ? (
+              <Badge className="gap-0.5 bg-status-completed text-[10px] text-white">
+                <Sparkles className="size-2.5" /> nueva
+              </Badge>
+            ) : (
+              <Badge className="gap-0.5 bg-status-progress text-[10px] text-white">
+                <Pencil className="size-2.5" /> actualizada
+              </Badge>
+            )}
+          </div>
+
+          {/* Concepto is the human-readable "what is this" — give it room */}
+          <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-muted-foreground">
+            {val("Concepto") || "Sin concepto"}
+          </p>
+
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            {val("Marca") && <Chip tone="marca">{val("Marca")}</Chip>}
+            {val("Tipo de Asset") && <Chip tone="tipo">{val("Tipo de Asset")}</Chip>}
+            {val("Formato") && <Chip>{val("Formato")}</Chip>}
+            {toList(val("Tamaño")).map((t) => (
+              <Chip key={t} mono>{t}</Chip>
+            ))}
+            {toList(val("Plataforma")).map((p) => (
+              <Chip key={p} mono>{p}</Chip>
+            ))}
+            {val("Duración") && <Chip mono>{val("Duración")}</Chip>}
+            {toList(val("Asignación")).map((n) => (
+              <Chip key={n} tone="person">{n}</Chip>
+            ))}
+          </div>
+
+          {missing.length > 0 && (
+            <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-status-corrections">
+              <AlertCircle className="size-3.5 shrink-0" />
+              Falta {missing.join(" · ")} — ábrela para completar
+            </p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={onToggleExpanded}
+          aria-expanded={expanded}
+          aria-label={expanded ? "Cerrar detalle" : "Abrir para editar"}
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        >
+          <ChevronDown className={cn("size-4 transition-transform", expanded && "rotate-180")} />
+        </button>
+      </div>
+
+      {/* ── Expanded: an editor, not a read-only dump ── */}
+      {expanded && (
+        <div className="space-y-5 border-t border-border bg-secondary/25 px-4 py-4">
+          <Section title="Entrega">
+            <Grid>
+              <Picker label="# Entrega" options={ENTREGA} value={val("# Entrega")} edited={isEdited("# Entrega")}
+                onChange={(v) => onEdit("# Entrega", v[0] ?? "")} onReset={() => onResetField("# Entrega")} />
+              <Picker label="Marca" options={MARCA} value={val("Marca")} edited={isEdited("Marca")}
+                onChange={(v) => onEdit("Marca", v[0] ?? "")} onReset={() => onResetField("Marca")} />
+            </Grid>
+            <Picker
+              label="Asignación" multi required
+              options={ASIGNACION[track].map((p) => ({ value: p.name, color: p.color }))}
+              value={val("Asignación")} edited={isEdited("Asignación")}
+              onChange={(v) => onEdit("Asignación", fromList(v))} onReset={() => onResetField("Asignación")}
+            />
+            <Grid cols={3}>
+              <Text label="Mes" value={val("Mes")} mono edited={isEdited("Mes")}
+                onChange={(v) => onEdit("Mes", v)} onReset={() => onResetField("Mes")} />
+              <Text label="Entrega final" value={val("Entrega final")} edited={isEdited("Entrega final")}
+                onChange={(v) => onEdit("Entrega final", v)} onReset={() => onResetField("Entrega final")} />
+              <Text label="Brief Name" value={val("Brief Name")} edited={isEdited("Brief Name")}
+                onChange={(v) => onEdit("Brief Name", v)} onReset={() => onResetField("Brief Name")} />
+            </Grid>
+          </Section>
+
+          <Section title="Especificaciones">
+            <Grid cols={3}>
+              <Picker label="Tipo de Asset" required options={TIPO_ASSET[track]} value={val("Tipo de Asset")}
+                edited={isEdited("Tipo de Asset")} onChange={(v) => onEdit("Tipo de Asset", v[0] ?? "")}
+                onReset={() => onResetField("Tipo de Asset")} />
+              <Picker label="Formato" options={FORMATO[track]} value={val("Formato")} edited={isEdited("Formato")}
+                onChange={(v) => onEdit("Formato", v[0] ?? "")} onReset={() => onResetField("Formato")} />
+              <Picker label="Género" options={GENERO} value={val("Género")} edited={isEdited("Género")}
+                onChange={(v) => onEdit("Género", v[0] ?? "")} onReset={() => onResetField("Género")} />
+            </Grid>
+            <Picker label="Tamaño" multi options={TAMANO} value={val("Tamaño")} edited={isEdited("Tamaño")}
+              onChange={(v) => onEdit("Tamaño", fromList(v))} onReset={() => onResetField("Tamaño")} />
+            <Picker
+              label="Plataforma" multi
+              options={PLATAFORMA.map((p) => ({ value: p, label: `${p} · ${PLATAFORMA_LABEL[p]}` }))}
+              value={val("Plataforma")} edited={isEdited("Plataforma")}
+              onChange={(v) => onEdit("Plataforma", fromList(v))} onReset={() => onResetField("Plataforma")}
+            />
+            <Grid cols={4}>
+              <Text label="Duración" value={val("Duración")} mono edited={isEdited("Duración")}
+                onChange={(v) => onEdit("Duración", v)} onReset={() => onResetField("Duración")} />
+              <Text label="# Idea" value={val("# Idea")} mono required edited={isEdited("# Idea")}
+                onChange={(v) => onEdit("# Idea", v.toUpperCase())} onReset={() => onResetField("# Idea")} />
+              <Text label="Versión" value={val("Versión")} mono edited={isEdited("Versión")}
+                onChange={(v) => onEdit("Versión", v.toUpperCase())} onReset={() => onResetField("Versión")} />
+              <Text label="Naming" value={val("Naming")} mono required edited={isEdited("Naming")}
+                onChange={(v) => onEdit("Naming", v.toUpperCase())} onReset={() => onResetField("Naming")} />
+            </Grid>
+          </Section>
+
+          <Section title="Contenido">
+            <Area label="Concepto" value={val("Concepto")} rows={2} edited={isEdited("Concepto")}
+              onChange={(v) => onEdit("Concepto", v)} onReset={() => onResetField("Concepto")} />
+            <Area label="Comentarios Leads" value={val("Comentarios Leads")} rows={4}
+              edited={isEdited("Comentarios Leads")} onChange={(v) => onEdit("Comentarios Leads", v)}
+              onReset={() => onResetField("Comentarios Leads")} />
+            <Grid>
+              <Area label="Selling Points" value={val("Selling Points")} rows={3} edited={isEdited("Selling Points")}
+                onChange={(v) => onEdit("Selling Points", v)} onReset={() => onResetField("Selling Points")} />
+              <Area label="Referencias" value={val("Referencias")} rows={3} edited={isEdited("Referencias")}
+                onChange={(v) => onEdit("Referencias", v)} onReset={() => onResetField("Referencias")} />
+            </Grid>
+            <Area label="Peloteo" value={val("Peloteo")} rows={2} edited={isEdited("Peloteo")}
+              onChange={(v) => onEdit("Peloteo", v)} onReset={() => onResetField("Peloteo")} />
+          </Section>
+
+          <p className="border-t border-border pt-2.5 text-[11px] text-muted-foreground">
+            Origen: <span className="font-mono">{row.tab}</span> · fila {row.rowNumber}
+            {" · "}Editar aquí no cambia el Google Sheet.
+          </p>
+        </div>
+      )}
+    </li>
+  );
+}
+
+// ── presentation helpers ──────────────────────────────────────
+
+function Chip({
+  children,
+  mono,
+  tone,
+}: {
+  children: React.ReactNode;
+  mono?: boolean;
+  tone?: "marca" | "tipo" | "person";
+}) {
+  return (
+    <span
+      className={cn(
+        "rounded px-1.5 py-0.5 text-[10px] leading-4",
+        mono && "font-mono",
+        tone === "person" && "bg-primary/10 font-medium text-primary",
+        tone === "marca" && "bg-type-real/12 font-medium text-type-real",
+        tone === "tipo" && "bg-type-normal/12 font-medium text-type-normal",
+        !tone && "bg-secondary text-secondary-foreground",
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h4 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+        {title}
+      </h4>
+      {children}
+    </section>
+  );
+}
+
+function Grid({ children, cols = 2 }: { children: React.ReactNode; cols?: 2 | 3 | 4 }) {
+  return (
+    <div
+      className={cn(
+        "grid gap-3",
+        cols === 2 && "sm:grid-cols-2",
+        cols === 3 && "sm:grid-cols-2 lg:grid-cols-3",
+        cols === 4 && "sm:grid-cols-2 lg:grid-cols-4",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Label above value — mixed-length fields never rag when the label owns its line. */
+function Field({
+  label,
+  required,
+  edited,
+  empty,
+  onReset,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  edited?: boolean;
+  empty?: boolean;
+  onReset?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-1 flex items-center gap-1.5">
+        <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
+        {required && empty && (
+          <span className="text-[10px] font-semibold text-status-corrections">obligatorio</span>
+        )}
+        {edited && (
+          <button
+            type="button"
+            onClick={onReset}
+            title="Restaurar el valor del sheet"
+            className="ml-auto flex items-center gap-0.5 text-[10px] text-primary hover:underline"
+          >
+            <Undo2 className="size-2.5" /> editado
+          </button>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+const inputCx = (opts: { mono?: boolean; invalid?: boolean; edited?: boolean }) =>
+  cn(
+    "w-full rounded-md border bg-background px-2.5 py-1.5 text-[13px] outline-none transition-colors",
+    "focus-visible:ring-2 focus-visible:ring-ring",
+    opts.mono && "font-mono",
+    opts.invalid ? "border-status-corrections" : opts.edited ? "border-primary/50" : "border-input",
+  );
+
+function Text({
+  label, value, onChange, onReset, mono, required, edited,
+}: {
+  label: string; value: string; onChange: (v: string) => void; onReset: () => void;
+  mono?: boolean; required?: boolean; edited?: boolean;
+}) {
+  const empty = !value.trim();
+  return (
+    <Field label={label} required={required} edited={edited} empty={empty} onReset={onReset}>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={required ? "Obligatorio" : "—"}
+        aria-label={label}
+        className={inputCx({ mono, invalid: required && empty, edited })}
+      />
+    </Field>
+  );
+}
+
+function Area({
+  label, value, onChange, onReset, rows = 3, edited,
+}: {
+  label: string; value: string; onChange: (v: string) => void; onReset: () => void;
+  rows?: number; edited?: boolean;
+}) {
+  return (
+    <Field label={label} edited={edited} onReset={onReset}>
+      <textarea
+        value={value}
+        rows={rows}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="—"
+        aria-label={label}
+        className={cn(inputCx({ edited }), "resize-y leading-relaxed")}
+      />
+    </Field>
+  );
+}
+
+function Picker({
+  label, options, value, onChange, onReset, multi, required, edited,
+}: {
+  label: string;
+  options: (string | { value: string; label?: string; color?: string })[];
+  value: string;
+  onChange: (v: string[]) => void;
+  onReset: () => void;
+  multi?: boolean;
+  required?: boolean;
+  edited?: boolean;
+}) {
+  const selected = toList(value);
+  return (
+    <Field label={label} required={required} edited={edited} empty={selected.length === 0} onReset={onReset}>
+      <ChipSelect
+        ariaLabel={label}
+        options={options}
+        selected={selected}
+        multi={multi}
+        onChange={(updater) => onChange(updater(selected))}
+      />
+    </Field>
+  );
+}

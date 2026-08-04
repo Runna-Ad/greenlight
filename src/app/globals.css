@@ -1,0 +1,205 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-poppins);
+  --font-wordmark: var(--font-unbounded);
+
+  /* Greenlight wordmark — signal green. Deliberately brighter than the
+     "Completado" status green so the logo never reads as a status. */
+  --color-greenlight: var(--greenlight);
+  --color-greenlight-ink: var(--greenlight-ink);
+
+  /* Greenlight — domain tokens (exposed as Tailwind utilities) */
+  /* Kanban status colors */
+  --color-status-todo: var(--status-todo);
+  --color-status-progress: var(--status-progress);
+  --color-status-review: var(--status-review);
+  --color-status-corrections: var(--status-corrections);
+  --color-status-completed: var(--status-completed);
+  --color-status-published: var(--status-published);
+  --color-status-delivered: var(--status-delivered);
+  /* Platform pleca colors (TikTok black, Facebook blue, Google green) */
+  --color-plat-tt: var(--plat-tt);
+  --color-plat-fb: var(--plat-fb);
+  --color-plat-gg: var(--plat-gg);
+  /* Asset-type card colors (static light purple, normal dark purple, real person DiDi orange) */
+  --color-type-static: var(--type-static);
+  --color-type-normal: var(--type-normal);
+  --color-type-real: var(--type-real);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Runna brand — light theme (from Runna_Manual_de_Marca_2026) */
+  --background: #f5f3fa;              /* app surface */
+  --foreground: #2d2b55;             /* ink — headings & body */
+  --card: #ffffff;
+  --card-foreground: #2d2b55;
+  --popover: #ffffff;
+  --popover-foreground: #2d2b55;
+  --primary: #775cbf;                /* brand purple */
+  --primary-foreground: #ffffff;
+  --secondary: #efeaf9;             /* soft purple */
+  --secondary-foreground: #4a3d80;
+  --muted: #edebf4;
+  --muted-foreground: #6b6885;      /* ≥4.5:1 on white/surface */
+  --accent: #efeaf9;
+  --accent-foreground: #4a3d80;
+  --destructive: #de5a5f;           /* coral */
+  --border: #e4e0f0;
+  --input: #e4e0f0;
+  --ring: #775cbf;
+  --chart-1: #775cbf;
+  --chart-2: #fbae42;
+  --chart-3: #00cc88;
+  --chart-4: #de5a5f;
+  --chart-5: #6d9eeb;
+  --radius: 0.625rem;
+  --sidebar: #2d2b55;               /* deep navy rail */
+  --sidebar-foreground: #d9d5ec;
+  --sidebar-primary: #775cbf;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #3a3868;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #3a3868;
+  --sidebar-ring: #775cbf;
+
+  /* Kanban status — used as tint bg + ink text or dots/bars, never as text-on-white */
+  --status-todo: #5a6478;           /* slate */
+  --status-progress: #b97708;       /* amber (text-safe) / bar uses #fbae42 */
+  --status-review: #775cbf;         /* purple */
+  --status-corrections: #de5a5f;    /* coral */
+  --status-completed: #0b8a5f;      /* green (text-safe) / bar uses #00cc88 */
+  --status-published: #2563a8;      /* blue — in client portal */
+  --status-delivered: #0b8a5f;
+
+  /* Platform pleca */
+  --plat-tt: #111114;               /* TikTok black */
+  --plat-fb: #1877f2;               /* Facebook blue */
+  --plat-gg: #34a853;               /* Google green */
+
+  /* Asset-type card */
+  --type-static: #b9a7e6;           /* light purple */
+  --type-normal: #4a3d80;           /* dark purple */
+  --type-real: #ff6b1a;             /* DiDi orange */
+
+  /* Greenlight wordmark */
+  --greenlight: #00e676;            /* signal green — on dark surfaces only */
+  --greenlight-ink: #00a854;        /* deep green — legible as text on white */
+}
+
+.dark {
+  /* Dark-ready tokens (v1 ships light-only; dark enabled in v1.5 after contrast pass) */
+  --background: #191731;
+  --foreground: #efedfb;
+  --card: #232045;
+  --card-foreground: #efedfb;
+  --popover: #232045;
+  --popover-foreground: #efedfb;
+  --primary: #a78fe0;
+  --primary-foreground: #191731;
+  --secondary: #2e2856;
+  --secondary-foreground: #efedfb;
+  --muted: #2b2950;
+  --muted-foreground: #a09cc0;
+  --accent: #2e2856;
+  --accent-foreground: #efedfb;
+  --destructive: #ee8489;
+  --border: #37335c;
+  --input: #37335c;
+  --ring: #a78fe0;
+  --chart-1: #a78fe0;
+  --chart-2: #fbae42;
+  --chart-3: #4adca5;
+  --chart-4: #ee8489;
+  --chart-5: #8fbaf5;
+  --sidebar: #12102a;
+  --sidebar-foreground: #c6c2e0;
+  --sidebar-primary: #a78fe0;
+  --sidebar-primary-foreground: #12102a;
+  --sidebar-accent: #232045;
+  --sidebar-accent-foreground: #efedfb;
+  --sidebar-border: #37335c;
+  --sidebar-ring: #a78fe0;
+
+  --status-todo: #9aa3b8;
+  --status-progress: #f4b45c;
+  --status-review: #a78fe0;
+  --status-corrections: #ee8489;
+  --status-completed: #4adca5;
+  --status-published: #6ba3e8;
+  --status-delivered: #4adca5;
+
+  --plat-tt: #e6e6ea;
+  --plat-fb: #4a95f5;
+  --plat-gg: #5bbd77;
+
+  --type-static: #b9a7e6;
+  --type-normal: #b9a7e6;
+  --type-real: #ff8442;
+
+  --greenlight: #00e676;
+  --greenlight-ink: #4adca5;        /* on dark ground the bright green is fine */
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-poppins), system-ui, sans-serif;
+    text-wrap: balance;
+  }
+}
