@@ -150,9 +150,20 @@ DB: S.P.A.M Supabase project `ybbrpqzbedaxsmotgtkh`, dedicated schema `produccio
 - [x] Menú "Mover" además del arrastre (móvil + teclado)
 - [x] Filtros: persona, brief, plataforma, marca
 - [x] Import arreglado: ya escribe Asignación y Marca
-- [ ] **BLOQUEADO — falta aplicar 0008 a la base viva** (necesita "deploy it" de Pedro).
-      Ensayo en seco: 52 asignaciones en 30 filas, 0 sin match, 32 marca_id.
-      Hasta entonces no se puede verificar en navegador ni desplegar.
+- [x] 0008 aplicada a la base viva (2026-08-04, "deploy it"). Resultado idéntico
+      al ensayo: 52 asignaciones en 30 filas, 32 marca_id, 0 sin match.
+      S.P.A.M sin cambios: 42 public / 31 migraciones / 6 usuarios auth.
+- [x] Verificado en navegador con datos reales y desplegado a producción:
+      32 tarjetas (no 227) · A1 = "Flor, Mony" igual que el sheet · mover y
+      asignar persisten (probado también CONTRA producción) · pool acotado al
+      track · filtros 32 → TT 26 → TT+Card 13 idéntico a SQL · móvil sin scroll
+      horizontal · sin secretos en el HTML servido
+- [x] Corregidos 2 bugs que sólo se vieron en el navegador: hidratación de
+      dnd-kit (id estable) y contraste de los chips (4/10 fallaban AA)
+- [ ] **Sin login nadie es lead → ningún movimiento hacia atrás es posible.**
+      A1 quedó en "En progreso" de una prueba y no hay forma de devolverlo.
+      Cerrar antes de que el equipo lo use (¿"deshacer" explícito, o una
+      identidad de lead que no exija login completo?).
 - [ ] SIN filtro por pod: 0/32 tareas tienen pod_id y el sheet no trae esa columna.
       Decidir cómo se asigna un pod a una tarea antes de construir ese filtro.
 

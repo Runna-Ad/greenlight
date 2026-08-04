@@ -1,5 +1,52 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-04 — Repo propio, tablero interactivo, asignación real
+
+**Lo primero: el proyecto ya tiene git.** `git init` en la carpeta del proyecto
+(antes `git rev-parse --show-toplevel` devolvía `/Users/work` y todo estaba sin
+versionar). 99 archivos, 5 commits. `.gitignore`: `.env*` fuera salvo las
+plantillas `*.example`, más `.vercel`, `.next`, `supabase/.temp`. Verificado que
+ningún valor de `.env.local` quedó dentro de lo versionado.
+Falta el remoto — decidir cuenta y visibilidad.
+
+**Migración 0008 aplicada a la base viva** (con "deploy it" de Pedro).
+S.P.A.M idéntico antes y después: 42 tablas public / 31 migraciones / 6 usuarios.
+
+**Tablero interactivo desplegado.** Asignar personas, arrastrar entre estados,
+filtros por persona / brief / plataforma / marca.
+
+**Tres hallazgos**
+1. **El import tiraba `Asignación` y `Marca`** — pérdida silenciosa. `Asignación`
+   se leía, se usaba para la llave de dedup, y nunca se guardaba; las 32 tareas
+   estaban sin nadie. Recuperadas de `staged_rows.data` (52 asignaciones en 30
+   filas, 32 marcas, 0 sin match) e import arreglado para que no vuelva a pasar.
+2. **El filtro por pod estaría vacío** — 0/32 tareas tienen `pod_id` y el sheet
+   no trae esa columna. No se construyó. Falta decidir cómo se asigna un pod.
+3. **`@dnd-kit` no estaba instalado**, pese a la nota que decía lo contrario.
+
+**Dos bugs que sólo aparecieron en el navegador** (ni tsc, ni eslint, ni build):
+error de hidratación de dnd-kit, y 4 de 10 chips de personas fallando contraste
+AA. Ambos corregidos y re-medidos. Ver lessons.md.
+
+**Decisión de diseño con consecuencia a futuro:** las asignaciones apuntan a
+`track_members.id`, no a `profiles`. Crear 14 profiles con uuid inventado habría
+roto el login el día que la gente entre con Google. `track_members.profile_id`
+queda nulo como punto de unión.
+
+**Respondido por Pedro:** Copies = temas con cuota · Estáticos = sólo COPY IN |
+REFERENCIA/IMAGEN · Preview = ambos, en vivo. Detalle en todo.md.
+
+**⚠️ Abierto**
+1. Sin login nadie es lead, así que **ningún movimiento hacia atrás es posible**.
+   A1 quedó en "En progreso" de una prueba y no se puede devolver. Cerrar antes
+   de que el equipo lo use.
+2. `SHEETS_SCRIPT_SECRET` sigue sin rotar (estuvo público ~4 min).
+3. `check:leak` es un no-op desde la shell local y su salida parece un OK.
+4. Sigue sin remoto de git.
+
+**Sigue:** la plantilla de trabajo por tarea (punto 2 del plan), ya con las
+3 respuestas de Pedro.
+
 ## 2026-07-31 — Supabase live, sync persisting, task-model correction
 
 **What we did**
