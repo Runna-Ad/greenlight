@@ -30,7 +30,8 @@ const db = await PGlite.create();
 
 // ── Run every migration in order ──
 console.log("\n▶ Applying migrations");
-for (const f of readdirSync(migDir).filter((f) => f.endsWith(".sql")).sort()) {
+const migFiles = readdirSync(migDir).filter((f) => f.endsWith(".sql")).sort();
+for (const f of migFiles) {
   try {
     await db.exec(readFileSync(join(migDir, f), "utf8"));
     console.log(`  ✓ ${f}`);
@@ -41,6 +42,26 @@ for (const f of readdirSync(migDir).filter((f) => f.endsWith(".sql")).sort()) {
     // A broken migration invalidates everything downstream — stop here.
     console.error(`\n${fail} failure(s), ${pass} pass. Aborting.`);
     process.exit(1);
+  }
+}
+
+// ── seed.sql aplica contra el esquema vigente ──
+// En una instancia APARTE: el objetivo es probar que el archivo no se desfasó,
+// no sembrar la base de pruebas (sus fixtures usan los mismos slugs).
+// Sin este guard, un desfase vive meses invisible: pasó con
+// `on conflict (set, code)` (constraint cambiada por la 0003) y con
+// `on conflict (idea_id, role)` (eliminada por la 0008).
+console.log("\n▶ seed.sql — ¿sigue al día con el esquema?");
+{
+  const seedDb = await PGlite.create();
+  try {
+    for (const f of migFiles) await seedDb.exec(readFileSync(join(migDir, f), "utf8"));
+    await seedDb.exec(readFileSync(join(__dirname, "..", "supabase", "seed.sql"), "utf8"));
+    ok("seed.sql aplica sin errores sobre las migraciones", true);
+  } catch (e) {
+    ok("seed.sql aplica sin errores sobre las migraciones", false, `\n      ${e.message}`);
+  } finally {
+    await seedDb.close();
   }
 }
 
@@ -204,8 +225,11 @@ await db.exec(`
   insert into produccion.profiles (id, email, full_name, role) values
    ('${LEAD}','lead@runna.mx','Lead',   'lead'),
    ('${CREA}','crea@runna.mx','Creativo','creative');
+  -- La matriz base ya la siembra la migración 0012 (antes sólo vivía en
+  -- seed.sql, que nunca se aplicaba a producción).
   insert into produccion.size_platform_validity (media,tamano,plataforma) values
-   ('video','9:16','FB'),('video','9:16','TT'),('video','1:1','GG'),('video','4:5','FB');
+   ('video','9:16','FB'),('video','9:16','TT'),('video','1:1','GG'),('video','4:5','FB')
+  on conflict do nothing;
   insert into produccion.idea_assignments (idea_id, profile_id, role)
    values ('00000000-0000-0000-0000-0000000000d1','${CREA}','creativo');
 `);
@@ -643,6 +667,108 @@ for (const tipo of TIPOS) {
   }
 }
 ok(`TS missingRequired() === SQL missing_required() en ${reqChecked} casos`, reqMismatch === 0);
+
+
+// ── Plantilla de trabajo: reglas, estáticos, planos (0012) ──
+console.log("\n▶ Plantilla de trabajo — reglas contextuales");
+
+// El harness crea clients/marcas después de migrar, así que la biblioteca se
+// siembra ahora — la función es idempotente a propósito.
+await db.query(`select produccion.sembrar_biblioteca()`);
+
+eq("se sembraron las 7 reglas",
+   Number(await scalar(`select count(*) from produccion.reglas where activo`)), 7);
+eq("las reglas de marca emparejan por slug, no por uuid",
+   Number(await scalar(`select count(*) from produccion.reglas where scope='marca' and cond_marca_slug is not null`)), 2);
+
+// Una tarea de VIDEO de 10-40s en FB
+await db.query(
+  `update produccion.ideas set tipo_asset='RP Video', plataformas='{FB,TT}', duracion='10-40s',
+          marca_id=(select id from produccion.marcas where slug='card')
+    where id='00000000-0000-0000-0000-0000000000d1'`);
+const reglasDe = async (texto = null) =>
+  (await q(`select codigo from produccion.reglas_para_tarea('00000000-0000-0000-0000-0000000000d1', $1) order by sort_order`, [texto]))
+    .map((r) => r.codigo);
+
+const rVideo = await reglasDe();
+ok("video en FB trae safe zones", rVideo.includes("FB_SAFE_ZONES"));
+ok("video NO trae las reglas de estático", !rVideo.some((c) => c.includes("STATIC")));
+ok("40s dispara el mínimo de beneficios", rVideo.includes("DUR30_MIN5_BENEF"));
+ok("Card pide timeframes", rVideo.includes("CARD_TIMEFRAMES"));
+ok("y NO trae la de Préstamos", !rVideo.includes("PREST_SIN_TIMEFRAMES"));
+
+// La regla que depende del TEXTO que se está escribiendo
+ok("sin mencionar cashback, la regla del asterisco NO aparece",
+   !(await reglasDe("Un guión cualquiera")).includes("CASHBACK_ASTERISCO"));
+ok("al escribir CASHBACK, aparece",
+   (await reglasDe("Hasta 6% de CASHBACK en tus compras")).includes("CASHBACK_ASTERISCO"));
+ok("y también con MSI",
+   (await reglasDe("12 MSI en comercios")).includes("CASHBACK_ASTERISCO"));
+
+// EL CASO QUE IMPORTA: un estático multiplataforma recibe las DOS reglas
+// contradictorias. El diseño tiene que enseñarlas agrupadas, no elegir una.
+await db.query(
+  `update produccion.ideas set tipo_asset='Images', plataformas='{FB,GG,TT}', duracion='-'
+    where id='00000000-0000-0000-0000-0000000000d1'`);
+const rEstatico = await reglasDe();
+ok("estático multiplataforma trae la de GG (sin CTA)", rEstatico.includes("GG_STATIC_SIN_CTA"));
+ok("y también la de FB (con CTA) — contradictorias a propósito",
+   rEstatico.includes("FB_STATIC_CON_CTA"));
+ok("un estático sin duración NO dispara el mínimo de beneficios",
+   !rEstatico.includes("DUR30_MIN5_BENEF"));
+
+// Estáticos: la tabla y sus sub-campos
+console.log("\n▶ Plantilla de trabajo — estáticos y planos");
+await db.query(
+  `insert into produccion.estaticos (idea_id, orden, copy_titulo, copy_cta)
+   values ('00000000-0000-0000-0000-0000000000d1', 1, 'Hasta 6% de CASHBACK*', 'Pídela ya')`);
+eq("estático guarda los sub-campos de COPY IN",
+   await scalar(`select copy_titulo from produccion.estaticos limit 1`), "Hasta 6% de CASHBACK*");
+let dupEst = false;
+try {
+  await db.query(`insert into produccion.estaticos (idea_id, orden) values ('00000000-0000-0000-0000-0000000000d1', 1)`);
+} catch { dupEst = true; }
+ok("dos estáticos con el mismo orden se rechazan", dupEst);
+
+// planos: SFX y GFX ya son campos separados, como en el deck
+await db.query(
+  `insert into produccion.planos (idea_id, orden, sfx, gfx, dialogo, es_cierre)
+   values ('00000000-0000-0000-0000-0000000000d1', 9, 'Música alegre', 'Emoji de confeti',
+           'Hasta seis por ciento de cashback en todas tus compras diarias', false)`);
+const pl = (await q(`select sfx, gfx, read_time_s from produccion.planos where orden=9`))[0];
+eq("SFX y GFX son campos distintos", `${pl.sfx} | ${pl.gfx}`, "Música alegre | Emoji de confeti");
+eq("el read-time se calcula solo (11 palabras / 2.5 → 5s)", Number(pl.read_time_s), 5);
+ok("existe la marca de Cortinilla de Cierre",
+   (await scalar(`select count(*) from information_schema.columns
+                   where table_schema='produccion' and table_name='planos' and column_name='es_cierre'`)) > 0);
+
+// Lo que el seed nunca llevó a producción
+console.log("\n▶ Lo que faltaba del seed");
+ok("la matriz base de tamaño×plataforma ya está (17 combos base)",
+   Number(await scalar(`select count(*) from produccion.size_platform_validity
+                         where plataforma in ('GG','FB','TT') and tamano <> '2736 x 1260'`)) >= 17);
+eq("1.91:1 ya está en el vocabulario",
+   await scalar(`select label_es from produccion.vocab_terms where set='tamano' and code='1.91X1' limit 1`),
+   "1.91:1");
+ok("el set duracion dejó de estar vacío",
+   Number(await scalar(`select count(*) from produccion.vocab_terms where set='duracion'`)) >= 4);
+ok("la biblioteca de selling points tiene claims",
+   Number(await scalar(`select count(*) from produccion.snippets where kind='selling_point'`)) >= 30);
+// Idempotente: volver a llamarla no duplica nada.
+await db.query(`select produccion.sembrar_biblioteca()`);
+eq("sembrar_biblioteca() es idempotente",
+   Number(await scalar(`select count(*) from produccion.snippets where kind='selling_point'`)),
+   Number(await scalar(`select count(distinct body) from produccion.snippets where kind='selling_point'`)));
+eq("el legal está scopeado a MARCA, no a cliente",
+   await scalar(`select scope from produccion.snippets where kind='legal' limit 1`), "marca");
+
+// is_assigned() veía sólo profile_id desde la 0008
+eq("is_assigned() ahora ve las asignaciones por member_id",
+   await scalar(`
+     select produccion.is_assigned('00000000-0000-0000-0000-0000000000d1')
+       from (select set_config('request.jwt.claims', json_build_object('sub', tm.profile_id)::text, true)
+               from produccion.track_members tm limit 1) _`),
+   false); // sin profile_id ligado todavía: false, pero YA NO revienta
 
 // ── CONTRACT: TS canMove() === DB transition_allowed() over ALL pairs ──
 // The board dims illegal columns using the TS map; the trigger enforces the SQL

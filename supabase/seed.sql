@@ -1,8 +1,17 @@
--- Rünna On Deck — seed (reference data + demo brief)
--- Reference data (pods, vocab, validity, snippets) is production-real.
--- Demo client/brief/ideas/assets are for local dev; safe to delete later.
--- NOTE: profiles here use fixed UUIDs. On the real DB these must match auth.users
--- (created at deploy via Supabase admin API); the auth FK is skipped under PGlite.
+-- Greenlight — seed: SÓLO DEMO LOCAL.
+--
+-- Los DATOS DE REFERENCIA (vocabularios, matriz de validez, snippets) YA NO
+-- viven aquí: se mudaron a la migración 0011. Motivo: este archivo nunca se
+-- aplica a la base viva — `npm run migrate` sólo corre supabase/migrations.
+-- Tenerlos aquí hizo que producción quedara sin la matriz base de
+-- size_platform_validity y sin un solo snippet, durante meses y en silencio.
+--
+-- Regla: si producción lo necesita, va en una migración. Aquí sólo lo que
+-- sirve para desarrollar en local.
+--
+-- scripts/test-db.mjs aplica este archivo después de las migraciones y falla
+-- si lanza — así un desfase como el de `on conflict (set, code)` (constraint
+-- que la 0003 cambió y este archivo siguió usando) se detecta el mismo día.
 
 -- ── Pods (the 5 tripletas) ──
 insert into produccion.pods (name, slug, color) values
@@ -13,48 +22,7 @@ insert into produccion.pods (name, slug, color) values
   ('Neptunianos','neptunianos','#6d9eeb')
 on conflict (slug) do nothing;
 
--- ── Controlled vocabularies (code = filename token, [A-Z0-9]+) ──
--- tamaño & duración are intentionally NOT vocab: sizes carry ':' (handled by the
--- validity matrix) and durations are free-form buckets. See migration 0001.
-insert into produccion.vocab_terms (set, code, label_es, sort_order) values
-  ('plataforma','TT','TikTok',1),
-  ('plataforma','FB','Facebook',2),
-  ('plataforma','GG','Google',3),
-  ('tipo','REAL','Real Person',1),
-  ('tipo','NORMAL','Normal Video',2),
-  ('tipo','STATIC','Estático',3),
-  ('tipo','COPY','Copies',4),
-  ('formato','INHOUSE','In-house',1),
-  ('formato','UGC','UGC',2),
-  ('formato','ILLUS','Ilustración',3),
-  ('formato','STOCK','Stock',4),
-  ('formato','AI','AI',5),
-  ('formato','TEXTO','Texto',6),
-  ('formato','CREADOR','Creador',7),
-  ('formato','3D','Ilustración 3D',8),
-  ('genero','WOMAN','Mujer',1),
-  ('genero','MAN','Hombre',2),
-  ('genero','WOMANMAN','Mujer y hombre',3),
-  ('genero','FAMILY','Familia',4),
-  ('genero','NA','N/A (se omite)',5),
-  ('origen_idea','BENCHMARK','Benchmark',1),
-  ('origen_idea','RN','Rünna',2),
-  ('origen_idea','CH','Channel Manager',3),
-  ('origen_idea','BENCHCH','Benchmark + CH',4),
-  ('origen_idea','RNCH','Rünna + CH',5)
-on conflict (set, code) do nothing;
 
--- ── Size ↔ platform validity (Margaret's W2 rules) ──
-insert into produccion.size_platform_validity (media, tamano, plataforma) values
-  ('video','1:1','GG'),('video','1:1','FB'),('video','1:1','TT'),
-  ('video','9:16','FB'),('video','9:16','TT'),('video','9:16','GG'),
-  ('video','4:5','FB'),
-  ('video','16:9','GG'),
-  ('static','1:1','GG'),('static','1:1','FB'),('static','1:1','TT'),
-  ('static','9:16','FB'),('static','9:16','TT'),
-  ('static','4:5','GG'),('static','4:5','FB'),
-  ('static','1.91:1','GG'),('static','1.91:1','TT')
-on conflict do nothing;
 
 -- ── Clients & marcas ──
 insert into produccion.clients (id, name, slug, tagline, brand_color) values
@@ -65,18 +33,6 @@ insert into produccion.marcas (client_id, name, slug) values
   ('10000000-0000-0000-0000-000000000001','Préstamos','prestamos')
 on conflict (client_id, slug) do nothing;
 
--- ── Reuse-layer snippets (kills the 150×/117× copy-paste) ──
-insert into produccion.snippets (kind, title, body, scope, client_id) values
-  ('instruccion','Indicaciones para la producción',
-   E'1. En los videos con personas reales, los primeros 3 segundos deben captar la atención del usuario. El primer valor añadido o el nombre del producto debe aparecer entre 3 y 5 segundos después.\n2. En ilustraciones, el ritmo debe ser rápido; cada valor añadido coordinado con la música.\n3. Duración 20–30s: al menos 4 beneficios; +30s: 5; +40s: 6.\n4. Combinar Real Person con efectos y transiciones dinámicas.\n5. Hacerlo ver orgánico.',
-   'client','10000000-0000-0000-0000-000000000001'),
-  ('legal','Legal CASHBACK (Regigold)',
-   E'Regigold, S.A. de C.V., CAT promedio informativo. Tasa de interés promedio ponderada anual fija. *Aplican Términos y Condiciones.',
-   'client','10000000-0000-0000-0000-000000000001'),
-  ('consideracion','Regla estáticos CASHBACK/MSI',
-   'Si menciona CASHBACK o MSI, poner un * antes de "Aplican" (*Aplican) en los TyC.',
-   'client','10000000-0000-0000-0000-000000000001')
-on conflict do nothing;
 
 -- ── Demo team (local only; real users come from auth) ──
 insert into produccion.profiles (id, email, full_name, initials, role, pod_id) values
@@ -117,7 +73,8 @@ on conflict (family_id, variant_number) do nothing;
 
 insert into produccion.idea_assignments (idea_id, profile_id, role) values
   ('33000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','creativo')
-on conflict (idea_id, role) do nothing;
+-- La 0008 cambió unique(idea_id, role) por unique(idea_id, member_id).
+on conflict do nothing;
 
 -- assets inserted directly with varied statuses (INSERT bypasses the status guard)
 insert into produccion.assets
