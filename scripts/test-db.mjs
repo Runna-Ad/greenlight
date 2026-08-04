@@ -330,6 +330,111 @@ try {
 ok("lead can override to a non-mapped status", leadOverride);
 await resetRole();
 
+// ── Assignment model (0008) ──
+// The sheet's "Asignación" is MULTI-PERSON and carries no role ("Galie, Mony").
+console.log("\n▶ Asignación — personas en una tarea");
+
+const anIdea = await scalar(`select id from produccion.ideas limit 1`);
+const galie = await scalar(`select id from produccion.track_members where track='real' and name='Galie'`);
+const mony = await scalar(`select id from produccion.track_members where track='real' and name='Mony'`);
+const viri = await scalar(`select id from produccion.track_members where track='normal' and name='Viri'`);
+
+await db.query(
+  `insert into produccion.idea_assignments (idea_id, member_id) values ($1,$2),($1,$3)`,
+  [anIdea, galie, mony],
+);
+eq(
+  "dos personas en la misma tarea (el unique(idea_id,role) viejo lo bloqueaba)",
+  Number(
+    await scalar(`select count(*) from produccion.idea_assignments where idea_id=$1 and member_id is not null`, [
+      anIdea,
+    ]),
+  ),
+  2,
+);
+
+// Sin profile_id: las 14 personas no tienen cuenta todavía.
+eq(
+  "asignación por member_id no necesita profile_id (nadie tiene cuenta aún)",
+  Number(
+    await scalar(
+      `select count(*) from produccion.idea_assignments where idea_id=$1 and member_id is not null and profile_id is null`,
+      [anIdea],
+    ),
+  ),
+  2,
+);
+
+let dupMemberBlocked = false;
+try {
+  await db.query(`insert into produccion.idea_assignments (idea_id, member_id) values ($1,$2)`, [anIdea, galie]);
+} catch {
+  dupMemberBlocked = true;
+}
+ok("la misma persona dos veces en una tarea se rechaza", dupMemberBlocked);
+
+let emptyBlocked = false;
+try {
+  await db.query(`insert into produccion.idea_assignments (idea_id) values ($1)`, [anIdea]);
+} catch {
+  emptyBlocked = true;
+}
+ok("asignación sin persona se rechaza (check has_person)", emptyBlocked);
+
+// "Clau J" (real) y "Clau T" (normal) no se deben cruzar entre tracks.
+eq(
+  "el pool está separado por track (10 real / 4 normal)",
+  `${await scalar(`select count(*) from produccion.track_members where track='real'`)}/${await scalar(
+    `select count(*) from produccion.track_members where track='normal'`,
+  )}`,
+  "10/4",
+);
+
+// El match del backfill es insensible a acentos, mayúsculas y espacios.
+eq(
+  "match real del backfill: ' Galie ' del sheet → Galie del pool",
+  await scalar(
+    `select tm.name from produccion.track_members tm
+      where tm.track = 'real'
+        and lower(translate(tm.name,'áéíóúÁÉÍÓÚñÑ','aeiouAEIOUnN'))
+          = lower(translate(btrim(' galie '),'áéíóúÁÉÍÓÚñÑ','aeiouAEIOUnN'))`,
+  ),
+  "Galie",
+);
+eq(
+  "'Galie, Mony' del sheet se parte en 2 personas",
+  Number(
+    await scalar(
+      `select count(*) from unnest(string_to_array('Galie, Mony', ',')) nombre
+        join produccion.track_members tm
+          on tm.track='real'
+         and lower(translate(tm.name,'áéíóúÁÉÍÓÚñÑ','aeiouAEIOUnN'))
+           = lower(translate(btrim(nombre),'áéíóúÁÉÍÓÚñÑ','aeiouAEIOUnN'))`,
+    ),
+  ),
+  2,
+);
+ok(
+  "'Viri' (normal) no hace match dentro del track real",
+  Number(
+    await scalar(
+      `select count(*) from produccion.track_members where track='real' and name='Viri'`,
+    ),
+  ) === 0 && viri !== null,
+);
+
+// La vista del tablero trae personas y conteo de archivos pegados a la tarea.
+const boardRow = (
+  await q(`select file_count, jsonb_array_length(members) as n from produccion.board_tasks where id=$1`, [anIdea])
+)[0];
+eq("board_tasks lista las 2 personas", Number(boardRow.n), 2);
+ok("board_tasks trae el conteo de archivos", Number(boardRow.file_count) >= 0);
+eq(
+  "board_tasks devuelve una fila por TAREA, no por archivo",
+  Number(await scalar(`select count(*) from produccion.board_tasks`)),
+  Number(await scalar(`select count(*) from produccion.ideas`)),
+);
+
 // ── CONTRACT: TS buildFilename() === DB build_filename() over a matrix ──
 console.log("\n▶ Filename contract — TS vs DB (many combos)");
 await resetRole();
