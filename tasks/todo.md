@@ -167,6 +167,38 @@ DB: S.P.A.M Supabase project `ybbrpqzbedaxsmotgtkh`, dedicated schema `produccio
 - [ ] SIN filtro por pod: 0/32 tareas tienen pod_id y el sheet no trae esa columna.
       Decidir cómo se asigna un pod a una tarea antes de construir ese filtro.
 
+## Flujo por botones + obligatorios (2026-08-04) — construido, SIN aplicar
+Plan: /Users/work/.claude/plans/ahora-pregunta-q-opinas-drifting-wolf.md
+
+- [x] `src/lib/required.ts` — obligatorios POR Tipo de Asset (video / images / copies)
+- [x] Gate real en `import.ts` (server), checkbox deshabilitado y contador de
+      bloqueadas en el panel. Nada se salta en silencio.
+- [x] BUG: el importador inventaba entregables (`sizes.length ? sizes : ["9:16"]`)
+      → 2 archivos fantasma `SINNAMING_9X16_TEXTO_STATIC_IDEAX1_...`. Copies
+      ahora genera 0 archivos y el fallback desapareció.
+- [x] Migración 0010: 4 verbos del flujo, fan-out de notificaciones por trigger,
+      recipient_member_id, missing_required() espejo, board_tasks.member_ids
+- [x] Identidad "Soy X" (cookie servidor, pool del sheet)
+- [x] Botones por estado × rol × si es tu tarea; "Mandar cambios" exige texto
+- [x] Tarjeta en correcciones: contorno rojo + tag, en SU columna
+- [x] `/mi-trabajo` (antes 404) — correcciones primero
+- [x] Campanita con contador del servidor
+- [x] Tests: 46 lib + 81 db + 44 sync, 0 fallos
+- [ ] **BLOQUEADO — faltan aplicar 0009 y 0010 a la base viva.** Hasta entonces
+      la app no funciona contra producción (rpc_move_task no existe allá) y no
+      se puede verificar en navegador.
+- [ ] Después de aplicar: asignar responsable a las 2 tareas de Copies y
+      limpiar sus 2 archivos fantasma.
+- [ ] Trigger DEFERRED de obligatorios en la BD (migración futura), después de
+      limpiar las filas legacy — hoy la puerta está en import.ts.
+
+## Pendiente conocido: crear desde briefs
+`intake-form.tsx` NO persiste nada — su onClick sólo hace
+`toast.success("… (demo)")`. Pedro pidió obligatorios "desde sincronizar o desde
+briefs"; la mitad de briefs no se puede cumplir hasta conectar ese formulario.
+Es el momento natural para mover la creación a una RPC atómica (`rpc_create_task`),
+que además resolvería el hueco del constraint de Asignación.
+
 ## Parking lot
 - Final product name (placeholder: Rünna On Deck)
 - Blueprint v2 for team review (Pedro said "not yet" — revisit before launch)
