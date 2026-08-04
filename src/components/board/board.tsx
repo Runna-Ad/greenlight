@@ -54,10 +54,19 @@ export type BriefOption = { id: string; title: string | null; tab: string | null
 
 const ALL = "__todas__";
 
-/** The sheet's people colours are pastel — text on them must be dark to read. */
+/**
+ * The sheet's people colours are NOT all pastel — Sebas is #666666, Mony a
+ * mid purple. Used as a text background they failed contrast badly (2.3:1 and
+ * 3.7:1), and for the mid tones no text colour fixes it: neither white nor
+ * dark navy clears 4.5:1 on #8e7cc3.
+ *
+ * So the colour identifies, it doesn't carry the text: a light tint behind
+ * normal foreground text, plus a solid dot in the true colour. Stays legible
+ * whatever colour someone picks later in admin.
+ */
 const chipStyle = (color: string) => ({
-  backgroundColor: color,
-  color: "#2d2b55",
+  backgroundColor: `color-mix(in srgb, ${color} 26%, var(--card))`,
+  borderColor: `color-mix(in srgb, ${color} 55%, var(--card))`,
 });
 
 export function Board({
@@ -180,7 +189,11 @@ export function Board({
         total={tasks.length}
       />
 
+      {/* A stable id is required: without it dnd-kit numbers its a11y description
+          element from a module counter, which lands on a different value during
+          SSR than on the client and hydration fails ("DndDescribedBy-1" vs "-0"). */}
       <DndContext
+        id="tablero"
         sensors={sensors}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
@@ -444,19 +457,25 @@ function CardBody({
   );
 }
 
+function MemberChip({ name, color }: { name: string; color: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium text-foreground"
+      style={chipStyle(color)}
+    >
+      <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      {name}
+    </span>
+  );
+}
+
 function PeopleChips({ members }: { members: { id: string; name: string; color: string }[] }) {
   if (!members.length)
     return <span className="text-[10px] text-muted-foreground">Sin asignar</span>;
   return (
     <div className="flex flex-wrap gap-1">
       {members.map((m) => (
-        <span
-          key={m.id}
-          className="rounded px-1.5 py-0.5 text-[10px] font-medium"
-          style={chipStyle(m.color)}
-        >
-          {m.name}
-        </span>
+        <MemberChip key={m.id} name={m.name} color={m.color} />
       ))}
     </div>
   );
@@ -495,13 +514,7 @@ function AssignPicker({
           {task.members.length ? (
             <span className="flex flex-wrap gap-1">
               {task.members.map((m) => (
-                <span
-                  key={m.id}
-                  className="rounded px-1.5 py-0.5 text-[10px] font-medium"
-                  style={chipStyle(m.color)}
-                >
-                  {m.name}
-                </span>
+                <MemberChip key={m.id} name={m.name} color={m.color} />
               ))}
             </span>
           ) : (
