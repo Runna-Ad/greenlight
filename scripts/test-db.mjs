@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { buildFilename } from "../src/lib/filename.ts";
 import { canMove } from "../src/lib/brand.ts";
+import { missingRequired } from "../src/lib/required.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migDir = join(__dirname, "..", "supabase", "migrations");
@@ -524,6 +525,124 @@ eq(
   Number(await scalar(`select count(*) from produccion.status_events where idea_id=$1`, [ovIdea])),
   3,
 );
+
+
+// ── Flujo por botones + notificaciones (0010) ──
+console.log("\n▶ Flujo por botones — verbos, avisos y quién se entera");
+
+const flIdea = await scalar(`select id from produccion.ideas limit 1`);
+// Volver a 'todo' es una reversión: se pasa por la puerta de lead, como lo
+// haría una persona. Un UPDATE directo choca con el guard — y está bien.
+await db.query(`select produccion.rpc_move_task($1,'todo',true,$2,'reset de prueba')`, [flIdea, LEAD]);
+await db.query(`delete from produccion.notifications where entity_id=$1`, [flIdea]);
+// dos personas trabajando la tarea
+await db.query(
+  `insert into produccion.idea_assignments (idea_id, member_id)
+   select $1, id from produccion.track_members where track='real' and name in ('Galie','Mony')
+   on conflict do nothing`, [flIdea]);
+const mGalie = await scalar(`select id from produccion.track_members where track='real' and name='Galie'`);
+
+const notifs = async () => (await q(
+  `select n.type, n.title, tm.name as para, n.body
+     from produccion.notifications n
+     left join produccion.track_members tm on tm.id = n.recipient_member_id
+    where n.entity_id=$1 order by n.created_at`, [flIdea]));
+
+// Empezar: nadie tiene por qué enterarse.
+eq("rpc_task_start → in_progress", await scalar(`select produccion.rpc_task_start($1,$2)`, [flIdea, mGalie]), "in_progress");
+eq("empezar no notifica a nadie", (await notifs()).length, 0);
+
+// Mandar a revisión: se entera el lead.
+eq("rpc_task_submit_review → under_review",
+   await scalar(`select produccion.rpc_task_submit_review($1,$2)`, [flIdea, mGalie]), "under_review");
+const nRev = await notifs();
+eq("mandar a revisión avisa al lead", nRev.length, 1);
+eq("y el aviso dice de qué tarea", nRev[0].type, "task_submitted");
+
+eq("se registró la entrega in_app",
+  await scalar(`select channel::text from produccion.notification_deliveries d
+                 join produccion.notifications n on n.id=d.notification_id
+                where n.entity_id=$1 limit 1`, [flIdea]),
+  "in_app");
+eq("y como enviada (no pendiente)",
+  await scalar(`select status from produccion.notification_deliveries d
+                 join produccion.notifications n on n.id=d.notification_id
+                where n.entity_id=$1 limit 1`, [flIdea]),
+  "sent");
+
+// Pedir cambios: se enteran los que trabajan la tarea, menos quien lo pidió.
+let sinTexto = false;
+try { await db.query(`select produccion.rpc_task_request_changes($1,'')`, [flIdea]); } catch { sinTexto = true; }
+ok("pedir cambios sin decir cuáles se rechaza", sinTexto);
+
+await db.query(`delete from produccion.notifications where entity_id=$1`, [flIdea]);
+eq("rpc_task_request_changes → in_corrections",
+   await scalar(`select produccion.rpc_task_request_changes($1,$2,$3)`,
+                [flIdea, "Cambia el hook de los primeros 3 segundos", mGalie]), "in_corrections");
+const nCorr = await notifs();
+eq("avisa a los asignados", nCorr.length, 1);
+eq("pero NO a quien pidió los cambios", nCorr.map(n => n.para).join(), "Mony");
+eq("y el aviso lleva el texto de qué corregir", nCorr[0].body, "Cambia el hook de los primeros 3 segundos");
+eq("los cambios quedan como comentario",
+   await scalar(`select body from produccion.comments where idea_id=$1 and kind='correction_request'`, [flIdea]),
+   "Cambia el hook de los primeros 3 segundos");
+
+// El historial guarda a la persona del pool, no sólo al perfil admin.
+eq("el historial guarda quién del equipo lo movió",
+   await scalar(`select tm.name from produccion.status_events se
+                  join produccion.track_members tm on tm.id = se.actor_member_id
+                 where se.idea_id=$1 order by se.created_at desc limit 1`, [flIdea]),
+   "Galie");
+
+// Un UPDATE directo también notifica: el trigger no se puede evadir.
+await db.query(`delete from produccion.notifications where entity_id=$1`, [flIdea]);
+await db.query(`update produccion.ideas set status='in_progress' where id=$1`, [flIdea]);
+await db.query(`update produccion.ideas set status='under_review' where id=$1`, [flIdea]);
+ok("un UPDATE directo también avisa (el trigger no se evade)", (await notifs()).length > 0);
+
+// Un fallo notificando NO puede tumbar el movimiento de la tarea.
+await db.exec(`
+  create or replace function produccion.active_notify_channels()
+  returns produccion.notify_channel[] language plpgsql immutable as $$
+  begin
+    raise exception 'canal roto a propósito';
+  end $$;`);
+let movioIgual = false;
+try {
+  await db.query(`select produccion.rpc_task_approve($1,$2)`, [flIdea, mGalie]);
+  movioIgual = (await scalar(`select status from produccion.ideas where id=$1`, [flIdea])) === "completed";
+} catch { movioIgual = false; }
+ok("si la notificación revienta, la tarea se mueve igual", movioIgual);
+ok("y el fallo queda registrado, no invisible",
+   Number(await scalar(`select count(*) from produccion.activity_log where verb='notify_failed'`)) > 0);
+await db.exec(`
+  create or replace function produccion.active_notify_channels()
+  returns produccion.notify_channel[] language sql immutable as $$
+    select array['in_app']::produccion.notify_channel[];
+  $$;`);
+
+// ── CONTRACT: missingRequired() TS === missing_required() SQL ──
+console.log("\n▶ Obligatorios — contrato TS vs DB");
+const TIPOS = ["RP Video", "Normal Video", "AIGC video", "GIF", "Images", "Copies", "Podcast"];
+const CAMPOS = ["Asignación","Marca","# Entrega","Tipo de Asset","Concepto","Plataforma","Naming","# Idea","Tamaño","Duración"];
+const LLENA = { "Asignación":"Flor","Marca":"Card","# Entrega":"1ra","Concepto":"c",
+                "Plataforma":"FB","Naming":"N","# Idea":"A1","Tamaño":"9:16","Duración":"10s" };
+let reqMismatch = 0, reqChecked = 0;
+for (const tipo of TIPOS) {
+  // fila completa, y luego una variante por cada campo vaciado
+  for (const vaciar of [null, ...CAMPOS]) {
+    const row = { ...LLENA, "Tipo de Asset": tipo };
+    if (vaciar) row[vaciar] = "";
+    const ts = missingRequired(row).join("|");
+    const sql = (await scalar(`select produccion.missing_required($1::jsonb)`, [JSON.stringify(row)]) ?? []).join("|");
+    reqChecked++;
+    if (ts !== sql) {
+      reqMismatch++;
+      if (reqMismatch <= 3) console.error(`      ${tipo} sin "${vaciar}": ts=[${ts}] sql=[${sql}]`);
+    }
+  }
+}
+ok(`TS missingRequired() === SQL missing_required() en ${reqChecked} casos`, reqMismatch === 0);
 
 // ── CONTRACT: TS canMove() === DB transition_allowed() over ALL pairs ──
 // The board dims illegal columns using the TS map; the trigger enforces the SQL
