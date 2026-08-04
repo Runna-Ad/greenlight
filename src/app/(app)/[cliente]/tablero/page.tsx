@@ -3,6 +3,7 @@ import { RefreshCw, Lock } from "lucide-react";
 import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
+import { getSoy } from "@/lib/soy";
 import { Button } from "@/components/ui/button";
 import { Board, type BriefOption, type Member, type Task } from "@/components/board/board";
 
@@ -65,7 +66,7 @@ export default async function TableroPage({
   params: Promise<{ cliente: string }>;
 }) {
   const { cliente } = await params;
-  const role = await getViewAs();
+  const [role, soy] = await Promise.all([getViewAs(), getSoy()]);
 
   // Quitar la entrada del menú no basta: la URL sigue siendo tecleable, y una
   // vista previa que se salta escribiendo la ruta no prueba nada.
@@ -120,6 +121,7 @@ export default async function TableroPage({
           members={data?.members ?? []}
           briefs={data?.briefs ?? []}
           role={role}
+          soyId={soy?.id ?? null}
         />
       )}
     </div>

@@ -25,7 +25,15 @@ import {
   canMove,
   type AssetStatus,
 } from "@/lib/brand";
-import { moveTask, setAssignees } from "@/app/(app)/[cliente]/tablero/actions";
+import {
+  approveTask,
+  moveTask,
+  requestChanges,
+  setAssignees,
+  startTask,
+  submitForReview,
+} from "@/app/(app)/[cliente]/tablero/actions";
+import { actionsFor, waitingLabel, type TaskAction } from "@/lib/task-actions";
 import {
   DEFAULT_ROLE,
   canAssign,
@@ -82,12 +90,15 @@ export function Board({
   members,
   briefs,
   role = DEFAULT_ROLE,
+  soyId = null,
 }: {
   cliente: string;
   tasks: Task[];
   members: Member[];
   briefs: BriefOption[];
   role?: ViewRole;
+  /** Quién dice ser quien mira, para saber cuáles son "sus" tareas. */
+  soyId?: string | null;
 }) {
   const mayMove = canMoveStatus(role);
   const mayOverride = canOverrideStatus(role);
@@ -172,6 +183,32 @@ export function Board({
     applyMove(task, e.over.id as AssetStatus);
   };
 
+  /** Ejecuta un verbo del flujo. La BD sigue siendo la autoridad. */
+  const runAction = (task: Task, action: TaskAction, body?: string) => {
+    const from = task.status;
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: action.to } : t)));
+
+    startTransition(async () => {
+      const res =
+        action.verb === "start"
+          ? await startTask(task.id)
+          : action.verb === "submit_review"
+            ? await submitForReview(task.id)
+            : action.verb === "request_changes"
+              ? await requestChanges(task.id, body ?? "")
+              : await approveTask(task.id);
+
+      if (!res.ok) {
+        setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: from } : t)));
+        toast.error(res.error ?? "No se pudo completar la acción.");
+        return;
+      }
+      if (action.verb === "submit_review") toast.success("Mandada a revisión — el lead ya tiene el aviso.");
+      if (action.verb === "request_changes") toast.success("Cambios pedidos — quien la trabaja ya tiene el aviso.");
+      if (action.verb === "approve") toast.success("Aprobada.");
+    });
+  };
+
   const applyAssignees = (task: Task, memberIds: string[]) => {
     const before = task.members;
     const next = memberIds
@@ -231,8 +268,11 @@ export function Board({
               members={mayAssign ? members : undefined}
               dragging={dragging}
               mayOverride={mayOverride}
+              role={role}
+              soyId={soyId}
               onAssign={applyAssignees}
               onMove={mayMove ? applyMove : undefined}
+              onAction={runAction}
             />
           ))}
         </div>
@@ -254,16 +294,22 @@ function Column({
   members,
   dragging,
   mayOverride,
+  role,
+  soyId,
   onAssign,
   onMove,
+  onAction,
 }: {
   status: AssetStatus;
   tasks: Task[];
   members?: Member[];
   dragging: Task | null;
   mayOverride: boolean;
+  role: ViewRole;
+  soyId: string | null;
   onAssign: (t: Task, ids: string[]) => void;
   onMove?: (t: Task, to: AssetStatus) => void;
+  onAction: (t: Task, a: TaskAction, body?: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const token = STATUS_TOKEN[status];
@@ -325,8 +371,11 @@ function Column({
               task={t}
               members={members}
               mayOverride={mayOverride}
+              role={role}
+              soyId={soyId}
               onAssign={onAssign}
               onMove={onMove}
+              onAction={onAction}
             />
           ))
         )}
@@ -342,14 +391,20 @@ function TaskCard({
   task,
   members,
   mayOverride,
+  role,
+  soyId,
   onAssign,
   onMove,
+  onAction,
 }: {
   task: Task;
   members?: Member[];
   mayOverride: boolean;
+  role: ViewRole;
+  soyId: string | null;
   onAssign: (t: Task, ids: string[]) => void;
   onMove?: (t: Task, to: AssetStatus) => void;
+  onAction: (t: Task, a: TaskAction, body?: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: task.id,
@@ -362,8 +417,11 @@ function TaskCard({
         task={task}
         members={members}
         mayOverride={mayOverride}
+        role={role}
+        soyId={soyId}
         onAssign={onAssign}
         onMove={onMove}
+        onAction={onAction}
         handleProps={onMove ? { ...listeners, ...attributes } : undefined}
       />
     </div>
@@ -374,20 +432,34 @@ function CardBody({
   task,
   members,
   mayOverride,
+  role = DEFAULT_ROLE,
+  soyId = null,
   onAssign,
   onMove,
+  onAction,
   handleProps,
   dragging,
 }: {
   task: Task;
   members?: Member[];
   mayOverride?: boolean;
+  role?: ViewRole;
+  soyId?: string | null;
   onAssign?: (t: Task, ids: string[]) => void;
   onMove?: (t: Task, to: AssetStatus) => void;
+  onAction?: (t: Task, a: TaskAction, body?: string) => void;
   handleProps?: Record<string, unknown>;
   dragging?: boolean;
 }) {
   const typeToken = task.track === "real" ? "real" : "normal";
+  const ctx = {
+    isAssignee: !!soyId && task.members.some((m) => m.id === soyId),
+    role,
+    hasAssignee: task.members.length > 0,
+  };
+  const acciones = onAction ? actionsFor(task.status, ctx) : [];
+  const espera = waitingLabel(task.status, ctx);
+  const enCorrecciones = task.status === "in_corrections";
   const targets = ALLOWED_TRANSITIONS[task.status];
   // Todo lo demás sólo aparece para quien puede sacar la tarea del flujo.
   const fueraDeFlujo = mayOverride
@@ -396,10 +468,17 @@ function CardBody({
 
   return (
     <article
-      className={`rounded-lg border border-border bg-card p-2.5 shadow-[0_1px_2px_rgba(45,43,85,0.04)] ${
-        dragging ? "rotate-1 shadow-lg" : ""
-      }`}
+      className={`rounded-lg border bg-card p-2.5 shadow-[0_1px_2px_rgba(45,43,85,0.04)] ${
+        enCorrecciones
+          ? "border-status-corrections ring-1 ring-[color-mix(in_srgb,var(--status-corrections)_35%,transparent)]"
+          : "border-border"
+      } ${dragging ? "rotate-1 shadow-lg" : ""}`}
     >
+      {enCorrecciones && (
+        <p className="mb-1.5 rounded bg-[color-mix(in_srgb,var(--status-corrections)_12%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-status-corrections">
+          Cambios pedidos
+        </p>
+      )}
       <div className="flex items-center gap-1.5">
         {/* Only the handle starts a drag, so the chips below stay clickable. */}
         <button
@@ -464,6 +543,30 @@ function CardBody({
           </span>
         )}
       </div>
+
+      {/* El camino normal: el trabajo empuja la tarjeta. */}
+      {(acciones.length > 0 || espera) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-2">
+          {acciones.map((a) =>
+            a.needsBody ? (
+              <RequestChangesButton key={a.verb} task={task} action={a} onAction={onAction!} />
+            ) : (
+              <Button
+                key={a.verb}
+                size="sm"
+                variant={a.tone === "danger" ? "destructive" : "default"}
+                className="h-7 px-2.5 text-[11px]"
+                onClick={() => onAction!(task, a)}
+              >
+                {a.label}
+              </Button>
+            ),
+          )}
+          {espera && acciones.length === 0 && (
+            <span className="text-[11px] italic text-muted-foreground">{espera}</span>
+          )}
+        </div>
+      )}
 
       {/* people + the no-drag way to change status (mobile, keyboard) */}
       <div className="mt-2 flex items-center gap-1 border-t border-border/60 pt-2">
@@ -533,6 +636,64 @@ function CardBody({
         )}
       </div>
     </article>
+  );
+}
+
+/**
+ * "Mandar cambios" nunca es un clic suelto: pedir cambios sin decir cuáles no
+ * le sirve a nadie. La RPC también lo rechaza — esto sólo evita el viaje.
+ */
+function RequestChangesButton({
+  task,
+  action,
+  onAction,
+}: {
+  task: Task;
+  action: TaskAction;
+  onAction: (t: Task, a: TaskAction, body?: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [body, setBody] = useState("");
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="destructive" className="h-7 px-2.5 text-[11px]">
+          {action.label}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-2">
+        <p className="px-1 pb-1.5 text-[11px] font-medium text-foreground">
+          ¿Qué hay que corregir?
+        </p>
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={3}
+          autoFocus
+          placeholder="Ej. El hook de los primeros 3 segundos no cierra la idea…"
+          className="w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-[10px] text-muted-foreground">
+            Le llega a quien la trabaja.
+          </span>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="h-7 px-2.5 text-[11px]"
+            disabled={!body.trim()}
+            onClick={() => {
+              onAction(task, action, body.trim());
+              setBody("");
+              setOpen(false);
+            }}
+          >
+            Mandar
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

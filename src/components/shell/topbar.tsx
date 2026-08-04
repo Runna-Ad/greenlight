@@ -1,13 +1,28 @@
 "use client";
 
-import { Bell, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DEFAULT_ROLE, type ViewRole } from "@/lib/roles";
+import type { Soy } from "@/lib/soy";
 import { ViewAsSwitch } from "./view-as-switch";
+import { SoySwitch, type PoolMember } from "./soy-switch";
+import { NotificationsBell } from "./notifications-bell";
 import { Wordmark } from "./wordmark";
 
-export function Topbar({ title, role = DEFAULT_ROLE }: { title?: string; role?: ViewRole }) {
+export function Topbar({
+  title,
+  role = DEFAULT_ROLE,
+  soy = null,
+  pool = [],
+  avisos = 0,
+}: {
+  title?: string;
+  role?: ViewRole;
+  soy?: Soy | null;
+  pool?: PoolMember[];
+  avisos?: number;
+}) {
   return (
     <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-4 md:px-6">
       {title ? (
@@ -28,10 +43,9 @@ export function Topbar({ title, role = DEFAULT_ROLE }: { title?: string; role?: 
             className="h-9 w-64 rounded-md border border-input bg-background pl-8 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
+        <SoySwitch soy={soy} pool={pool} />
         <ViewAsSwitch role={role} />
-        <Button variant="ghost" size="icon" aria-label="Notificaciones">
-          <Bell className="size-4" />
-        </Button>
+        <NotificationsBell initialCount={avisos} />
         <Avatar className="size-8">
           <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
             PV
