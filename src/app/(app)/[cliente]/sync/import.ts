@@ -3,6 +3,7 @@
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { classifyTab, type SheetRow } from "@/lib/sheet-sync";
 import { namingKindForTipo } from "@/lib/filename";
+import { generatesFiles, missingRequired } from "@/lib/required";
 
 export type ImportRow = {
   key: string;
@@ -14,11 +15,15 @@ export type ImportRow = {
   edited?: Partial<SheetRow>; // the lead's corrections
 };
 
+export type BlockedRow = { naming: string; tab: string; missing: string[] };
+
 export type ImportResult = {
   ok: boolean;
   created: number;
   assets: number;
   skipped: number;
+  /** Filas rechazadas por campos obligatorios. Nunca se saltan en silencio. */
+  blocked: BlockedRow[];
   errors: string[];
 };
 
@@ -75,7 +80,9 @@ export async function importRows(
   clienteSlug: string,
   rows: ImportRow[],
 ): Promise<ImportResult> {
-  const res: ImportResult = { ok: false, created: 0, assets: 0, skipped: 0, errors: [] };
+  const res: ImportResult = {
+    ok: false, created: 0, assets: 0, skipped: 0, blocked: [], errors: [],
+  };
   if (!hasSupabase()) {
     res.errors.push("La base de datos no está configurada.");
     return res;
@@ -187,6 +194,29 @@ export async function importRows(
         continue;
       }
 
+      // ── El gate de verdad ──
+      // La UI también avisa, pero esto es una server action: un POST público.
+      // Antes se creaba la tarea y DESPUÉS se reportaba que faltaba la
+      // Asignación — así entraron 2 tareas sin responsable a la base.
+      const faltan = missingRequired({ ...row.data, ...row.edited });
+
+      // Un nombre que el pool no conoce es tan inválido como la celda vacía:
+      // se comprueba ANTES de crear nada, no después.
+      const memberIds = resolveMembers(v("Asignación"), track);
+      if (!faltan.includes("Asignación") && memberIds.length === 0) {
+        faltan.push("Asignación");
+      }
+
+      if (faltan.length) {
+        res.blocked.push({
+          naming: v("Naming") || v("Concepto").slice(0, 40) || row.key,
+          tab: row.tab,
+          missing: faltan,
+        });
+        res.skipped++;
+        continue;
+      }
+
       // idea family from "# Idea"
       const { letter } = splitIdeaCode(v("# Idea"));
       let familyId: string;
@@ -247,26 +277,26 @@ export async function importRows(
       res.created++;
 
       // ── people: "Asignación" is multi-person and carries no role ──
-      const memberIds = resolveMembers(v("Asignación"), track);
-      if (memberIds.length) {
-        const { error: asgErr } = await db
-          .from("idea_assignments")
-          .insert(memberIds.map((member_id) => ({ idea_id: idea.id, member_id })));
-        // A name the pool doesn't know shouldn't sink the whole row — report it.
-        if (asgErr) res.errors.push(`asignación de ${v("Naming")}: ${asgErr.message}`);
-      } else if (v("Asignación")) {
-        res.errors.push(
-          `Asignación "${v("Asignación")}" de ${v("Naming") || row.key}: no coincide con nadie del pool ${track}.`,
-        );
-      }
+      // memberIds ya se resolvió y validó arriba: si llegamos aquí, hay gente.
+      const { error: asgErr } = await db
+        .from("idea_assignments")
+        .insert(memberIds.map((member_id) => ({ idea_id: idea.id, member_id })));
+      if (asgErr) res.errors.push(`asignación de ${v("Naming")}: ${asgErr.message}`);
 
       // ── assets: every Tamaño × Plataforma the row asks for ──
+      // Un copy es texto: no tiene proporción ni archivo. El fallback de antes
+      // ("9:16" × "FB" cuando la fila no traía Tamaño ni Plataforma) le inventó
+      // a las 2 filas de Copies un entregable llamado
+      // SINNAMING_9X16_TEXTO_STATIC_IDEAX1_GG_V1_SINMES_RN — cuatro valores
+      // inventados apilados, camino a una entrega. Sin fallback: si un tipo que
+      // sí entrega archivos llega sin Tamaño o Plataforma, el gate de arriba ya
+      // lo bloqueó.
       const sizes = list(v("Tamaño")).map(cleanSize).filter(Boolean);
       const plats = list(v("Plataforma"));
       const ideaToken = v("# Idea") || idea.code || letter;
       const assetRows = [];
-      for (const size of sizes.length ? sizes : ["9:16"]) {
-        for (const plat of plats.length ? plats : ["FB"]) {
+      for (const size of generatesFiles(tipo) ? sizes : []) {
+        for (const plat of plats) {
           assetRows.push({
             idea_id: idea.id,
             brief_id: briefId,

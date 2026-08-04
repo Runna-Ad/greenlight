@@ -13,6 +13,7 @@ import {
 } from "@/app/(app)/[cliente]/sync/actions";
 import type { SheetRow, TabInfo } from "@/lib/sheet-sync";
 import { StagedCard } from "./staged-card";
+import { missingRequired } from "@/lib/required";
 import { importRows, knownRows } from "@/app/(app)/[cliente]/sync/import";
 
 export function SyncPanel({ cliente }: { cliente: string }) {
@@ -64,8 +65,14 @@ export function SyncPanel({ cliente }: { cliente: string }) {
       const known = await knownRows(cliente);
       const res = await previewProjects(picked, known);
       setPreviews(res);
+      // No preseleccionar lo que no se puede crear: marcar algo que luego se
+      // rechaza es peor que no marcarlo.
       const fresh = new Set<string>();
-      res.forEach((p) => p.rows.filter((r) => r.status !== "unchanged").forEach((r) => fresh.add(r.key)));
+      res.forEach((p) =>
+        p.rows
+          .filter((r) => r.status !== "unchanged" && missingRequired(r.data).length === 0)
+          .forEach((r) => fresh.add(r.key)),
+      );
       setAccepted(fresh);
 
       const total = res.reduce((n, p) => n + p.nuevas + p.actualizadas, 0);
@@ -77,8 +84,9 @@ export function SyncPanel({ cliente }: { cliente: string }) {
 
   const doImport = () =>
     startCreate(async () => {
+      const creatableKeys = new Set(creatable);
       const chosenRows = importable
-        .filter((r) => accepted.has(r.key))
+        .filter((r) => creatableKeys.has(r.key))
         .map((r) => ({
           key: r.key,
           hash: r.hash,
@@ -89,6 +97,14 @@ export function SyncPanel({ cliente }: { cliente: string }) {
         }));
 
       const result = await importRows(cliente, chosenRows);
+      if (result.blocked.length) {
+        toast.error(`${result.blocked.length} fila(s) rechazadas por campos obligatorios`, {
+          description: result.blocked
+            .slice(0, 3)
+            .map((b) => `${b.naming}: falta ${b.missing.join(", ")}`)
+            .join(" · "),
+        });
+      }
       if (result.errors.length) {
         toast.error(`${result.created} creadas, ${result.errors.length} con error`, {
           description: result.errors.slice(0, 2).join(" · "),
@@ -102,7 +118,7 @@ export function SyncPanel({ cliente }: { cliente: string }) {
       setPreviews((prev) =>
         prev?.map((p) => ({
           ...p,
-          rows: p.rows.filter((r) => !accepted.has(r.key)),
+          rows: p.rows.filter((r) => !creatableKeys.has(r.key)),
         })) ?? null,
       );
       setAccepted(new Set());
@@ -114,6 +130,17 @@ export function SyncPanel({ cliente }: { cliente: string }) {
         .filter((r) => r.status !== "unchanged")
         .map((r) => ({ ...r, tab: p.name, label: p.label, track: p.track })),
     ) ?? [];
+
+  // Se recalcula con las ediciones: corregir el campo desbloquea la fila en
+  // vivo, sin volver a sincronizar.
+  const blocked = new Set(
+    importable
+      .filter((r) => missingRequired({ ...r.data, ...edits[r.key] }).length > 0)
+      .map((r) => r.key),
+  );
+  // Lo que de verdad se va a crear. Una fila puede haberse marcado y luego
+  // haberse vaciado un campo: la intersección manda.
+  const creatable = [...accepted].filter((k) => !blocked.has(k));
 
   return (
     <div className="space-y-5">
@@ -316,12 +343,17 @@ export function SyncPanel({ cliente }: { cliente: string }) {
 
           <div className="mt-4 flex items-center justify-end gap-3">
             <span className="text-xs text-muted-foreground">
-              {accepted.size} de {importable.length} seleccionadas
+              {creatable.length} de {importable.length} seleccionadas
+              {blocked.size > 0 && (
+                <span className="ml-1.5 font-medium text-status-corrections">
+                  · {blocked.size} bloqueada{blocked.size === 1 ? "" : "s"} por campos faltantes
+                </span>
+              )}
             </span>
-            <Button disabled={accepted.size === 0 || creating} onClick={doImport}>
+            <Button disabled={creatable.length === 0 || creating} onClick={doImport}>
               {creating
                 ? "Creando…"
-                : `Crear ${accepted.size} tarea${accepted.size === 1 ? "" : "s"}`}
+                : `Crear ${creatable.length} tarea${creatable.length === 1 ? "" : "s"}`}
             </Button>
           </div>
         </section>

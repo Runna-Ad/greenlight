@@ -1,6 +1,8 @@
 // Pure-logic tests for the intake libs (no DB). Run: node scripts/test-lib.mjs
 // Node 24 strips TS types on import; the `import type` in filename.ts is erased.
 import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.ts";
+import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
+import { actionsFor, waitingLabel } from "../src/lib/task-actions.ts";
 
 let pass = 0,
   fail = 0;
@@ -56,6 +58,76 @@ ok("hyphenated override is valid", isValidOverride("CASHBACK_9X16_20-30S_RN"));
 }
 ok("valid override accepted", isValidOverride("CUSTOM_9X16_THING_RN"));
 ok("invalid override rejected", !isValidOverride("bad name"));
+
+
+// ── Obligatorios por Tipo de Asset ──
+console.log("\n▶ Obligatorios — dependen del Tipo de Asset");
+
+const fila = (o) => o;
+const COMPLETA_VIDEO = fila({
+  "Asignación": "Flor, Mony", "Marca": "Card", "# Entrega": "1ra entrega",
+  "Tipo de Asset": "RP Video", "Concepto": "Un concepto", "Plataforma": "FB, GG",
+  "Naming": "SPAPVOYTOURISM", "# Idea": "A1", "Tamaño": "9:16", "Duración": "10-40s",
+});
+
+eq("los 4 tipos de video piden lo mismo", ["RP Video","Normal Video","AIGC video","GIF"].every(t => tipoGroup(t) === "video"), true);
+eq("Images es su propio grupo", tipoGroup("Images"), "images");
+eq("Copies es su propio grupo", tipoGroup("Copies"), "copies");
+eq("un tipo desconocido cae en el grupo más exigente", tipoGroup("Podcast"), "video");
+
+eq("una fila de video completa no tiene faltantes", missingRequired(COMPLETA_VIDEO).length, 0);
+eq("video exige Duración", missingRequired({ ...COMPLETA_VIDEO, "Duración": "" }).join(), "Duración");
+eq('"-" en Duración cuenta como vacío', missingRequired({ ...COMPLETA_VIDEO, "Duración": "-" }).join(), "Duración");
+
+// Images: mismo caso pero sin Duración — 5 de 5 filas reales del sheet no la traen.
+const IMAGEN = { ...COMPLETA_VIDEO, "Tipo de Asset": "Images", "Duración": "" };
+eq("Images NO exige Duración", missingRequired(IMAGEN).length, 0);
+
+// Copies: las 2 filas reales del Brief 24/07 no traen Naming, # Idea ni Tamaño.
+const COPY_REAL = {
+  "Asignación": "Viri", "Marca": "Card", "# Entrega": "1ra entrega",
+  "Tipo de Asset": "Copies", "Concepto": "15 Headlines + descripción", "Plataforma": "GG",
+};
+eq("Copies no exige Naming, # Idea ni Tamaño", missingRequired(COPY_REAL).length, 0);
+eq("Copies SÍ exige Asignación", missingRequired({ ...COPY_REAL, "Asignación": "" }).join(), "Asignación");
+eq("Copies SÍ exige Marca", missingRequired({ ...COPY_REAL, "Marca": "" }).join(), "Marca");
+
+// La queja original de Pedro: no se crean tareas sin responsable.
+eq("sin Asignación siempre falta, en los 3 grupos",
+  ["RP Video","Images","Copies"].every(t => missingRequired({ ...COPY_REAL, "Tipo de Asset": t, "Asignación": "", "Naming":"X", "# Idea":"A1", "Tamaño":"9:16", "Duración":"10s" }).includes("Asignación")),
+  true);
+
+eq("video pide 10 campos", requiredFor("RP Video").length, 10);
+eq("images pide 9", requiredFor("Images").length, 9);
+eq("copies pide 6", requiredFor("Copies").length, 6);
+
+// El fantasma: un copy no es un archivo con proporción.
+eq("Copies NO genera entregables", generatesFiles("Copies"), false);
+eq("Images sí genera entregables", generatesFiles("Images"), true);
+eq("RP Video sí genera entregables", generatesFiles("RP Video"), true);
+
+// ── Botones por estado × rol × asignación ──
+console.log("\n▶ Botones — estado × rol × si es tu tarea");
+
+const asignado = { isAssignee: true, role: "creative", hasAssignee: true };
+const lead = { isAssignee: false, role: "lead", hasAssignee: true };
+const ajeno = { isAssignee: false, role: "creative", hasAssignee: true };
+const labels = (s, c) => actionsFor(s, c).map(a => a.label).join(" · ");
+
+eq("el asignado empieza una tarea por hacer", labels("todo", asignado), "Empezar");
+eq("sin responsable no hay botón de empezar", labels("todo", { ...asignado, hasAssignee: false }), "");
+eq("y se explica por qué", waitingLabel("todo", { ...asignado, hasAssignee: false }), "Falta responsable");
+eq("un creativo ajeno no empieza tu tarea", labels("todo", ajeno), "");
+eq("el lead sí puede empezar cualquiera", labels("todo", lead), "Empezar");
+
+eq("en progreso → mandar a revisión", labels("in_progress", asignado), "Mandar a revisión");
+eq("en revisión el asignado sólo espera", labels("under_review", asignado), "");
+eq("y se le dice", waitingLabel("under_review", asignado), "Esperando revisión");
+eq("en revisión el lead aprueba o pide cambios", labels("under_review", lead), "Aprobar · Mandar cambios");
+eq("mandar cambios exige texto", actionsFor("under_review", lead).find(a => a.tone === "danger").needsBody, true);
+eq("correcciones → retomar", labels("in_corrections", asignado), "Retomar");
+eq("el cliente no mueve nada", ["todo","in_progress","under_review","in_corrections"].every(s => actionsFor(s, { isAssignee: false, role: "client", hasAssignee: true }).length === 0), true);
+eq("completado no tiene botón (vive en Mover)", labels("completed", lead), "");
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ChipSelect } from "@/components/intake/chip-select";
 import type { SheetRow } from "@/lib/sheet-sync";
+import { missingRequired, requiredFor } from "@/lib/required";
 import {
   ASIGNACION,
   ENTREGA,
@@ -28,8 +29,9 @@ export type StagedRow = {
   track: "real" | "normal" | null;
 };
 
-/** Fields that must be present before a task can be created. */
-export const REQUIRED_FIELDS = ["Naming", "# Idea", "Tipo de Asset", "Asignación"] as const;
+// Los obligatorios dependen del Tipo de Asset y viven en src/lib/required.ts
+// (una lista fija exigía Naming y # Idea a las filas de Copies, que
+// legítimamente no los tienen — habría bloqueado trabajo real).
 
 // Sheet cells hold multi-values as "a, b, c".
 const toList = (v?: string) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
@@ -58,7 +60,12 @@ export function StagedCard({
   const val = (f: keyof SheetRow) => edits[f] ?? row.data[f] ?? "";
   const isEdited = (f: keyof SheetRow) => edits[f] !== undefined;
   const track: Track = row.track ?? "real";
-  const missing = REQUIRED_FIELDS.filter((f) => !val(f).trim());
+  // Se recalcula con las ediciones de la lead: corregir el campo desbloquea la
+  // fila en vivo, sin tener que volver a sincronizar.
+  const effective = { ...row.data, ...edits } as SheetRow;
+  const missing = missingRequired(effective);
+  const required = requiredFor(effective["Tipo de Asset"]);
+  const isRequired = (f: keyof SheetRow) => required.includes(f as never);
 
   return (
     <li
@@ -73,8 +80,14 @@ export function StagedCard({
           type="checkbox"
           checked={included}
           onChange={onToggleIncluded}
+          disabled={missing.length > 0}
+          title={
+            missing.length > 0
+              ? `Falta ${missing.join(", ")}. Ábrela y complétala para poder crearla.`
+              : undefined
+          }
           aria-label={`Incluir ${val("Naming") || "tarea"}`}
-          className="mt-1 size-4 shrink-0 accent-[var(--primary)]"
+          className="mt-1 size-4 shrink-0 accent-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-40"
         />
 
         <div className={cn("min-w-0 flex-1", !included && "opacity-55")}>
@@ -121,7 +134,7 @@ export function StagedCard({
           {missing.length > 0 && (
             <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-status-corrections">
               <AlertCircle className="size-3.5 shrink-0" />
-              Falta {missing.join(" · ")} — ábrela para completar
+              No se puede crear: falta {missing.join(" · ")}
             </p>
           )}
         </div>
@@ -142,13 +155,13 @@ export function StagedCard({
         <div className="space-y-5 border-t border-border bg-secondary/25 px-4 py-4">
           <Section title="Entrega">
             <Grid>
-              <Picker label="# Entrega" options={ENTREGA} value={val("# Entrega")} edited={isEdited("# Entrega")}
+              <Picker label="# Entrega" required={isRequired("# Entrega")} options={ENTREGA} value={val("# Entrega")} edited={isEdited("# Entrega")}
                 onChange={(v) => onEdit("# Entrega", v[0] ?? "")} onReset={() => onResetField("# Entrega")} />
-              <Picker label="Marca" options={MARCA} value={val("Marca")} edited={isEdited("Marca")}
+              <Picker label="Marca" required={isRequired("Marca")} options={MARCA} value={val("Marca")} edited={isEdited("Marca")}
                 onChange={(v) => onEdit("Marca", v[0] ?? "")} onReset={() => onResetField("Marca")} />
             </Grid>
             <Picker
-              label="Asignación" multi required
+              label="Asignación" multi required={isRequired("Asignación")}
               options={ASIGNACION[track].map((p) => ({ value: p.name, color: p.color }))}
               value={val("Asignación")} edited={isEdited("Asignación")}
               onChange={(v) => onEdit("Asignación", fromList(v))} onReset={() => onResetField("Asignación")}
@@ -165,7 +178,7 @@ export function StagedCard({
 
           <Section title="Especificaciones">
             <Grid cols={3}>
-              <Picker label="Tipo de Asset" required options={TIPO_ASSET[track]} value={val("Tipo de Asset")}
+              <Picker label="Tipo de Asset" required={isRequired("Tipo de Asset")} options={TIPO_ASSET[track]} value={val("Tipo de Asset")}
                 edited={isEdited("Tipo de Asset")} onChange={(v) => onEdit("Tipo de Asset", v[0] ?? "")}
                 onReset={() => onResetField("Tipo de Asset")} />
               <Picker label="Formato" options={FORMATO[track]} value={val("Formato")} edited={isEdited("Formato")}
@@ -173,28 +186,28 @@ export function StagedCard({
               <Picker label="Género" options={GENERO} value={val("Género")} edited={isEdited("Género")}
                 onChange={(v) => onEdit("Género", v[0] ?? "")} onReset={() => onResetField("Género")} />
             </Grid>
-            <Picker label="Tamaño" multi options={TAMANO} value={val("Tamaño")} edited={isEdited("Tamaño")}
+            <Picker label="Tamaño" multi required={isRequired("Tamaño")} options={TAMANO} value={val("Tamaño")} edited={isEdited("Tamaño")}
               onChange={(v) => onEdit("Tamaño", fromList(v))} onReset={() => onResetField("Tamaño")} />
             <Picker
-              label="Plataforma" multi
+              label="Plataforma" multi required={isRequired("Plataforma")}
               options={PLATAFORMA.map((p) => ({ value: p, label: `${p} · ${PLATAFORMA_LABEL[p]}` }))}
               value={val("Plataforma")} edited={isEdited("Plataforma")}
               onChange={(v) => onEdit("Plataforma", fromList(v))} onReset={() => onResetField("Plataforma")}
             />
             <Grid cols={4}>
-              <Text label="Duración" value={val("Duración")} mono edited={isEdited("Duración")}
+              <Text label="Duración" value={val("Duración")} mono required={isRequired("Duración")} edited={isEdited("Duración")}
                 onChange={(v) => onEdit("Duración", v)} onReset={() => onResetField("Duración")} />
-              <Text label="# Idea" value={val("# Idea")} mono required edited={isEdited("# Idea")}
+              <Text label="# Idea" value={val("# Idea")} mono required={isRequired("# Idea")} edited={isEdited("# Idea")}
                 onChange={(v) => onEdit("# Idea", v.toUpperCase())} onReset={() => onResetField("# Idea")} />
               <Text label="Versión" value={val("Versión")} mono edited={isEdited("Versión")}
                 onChange={(v) => onEdit("Versión", v.toUpperCase())} onReset={() => onResetField("Versión")} />
-              <Text label="Naming" value={val("Naming")} mono required edited={isEdited("Naming")}
+              <Text label="Naming" value={val("Naming")} mono required={isRequired("Naming")} edited={isEdited("Naming")}
                 onChange={(v) => onEdit("Naming", v.toUpperCase())} onReset={() => onResetField("Naming")} />
             </Grid>
           </Section>
 
           <Section title="Contenido">
-            <Area label="Concepto" value={val("Concepto")} rows={2} edited={isEdited("Concepto")}
+            <Area label="Concepto" value={val("Concepto")} rows={2} required={isRequired("Concepto")} edited={isEdited("Concepto")}
               onChange={(v) => onEdit("Concepto", v)} onReset={() => onResetField("Concepto")} />
             <Area label="Comentarios Leads" value={val("Comentarios Leads")} rows={4}
               edited={isEdited("Comentarios Leads")} onChange={(v) => onEdit("Comentarios Leads", v)}
@@ -340,20 +353,21 @@ function Text({
 }
 
 function Area({
-  label, value, onChange, onReset, rows = 3, edited,
+  label, value, onChange, onReset, rows = 3, edited, required,
 }: {
   label: string; value: string; onChange: (v: string) => void; onReset: () => void;
-  rows?: number; edited?: boolean;
+  rows?: number; edited?: boolean; required?: boolean;
 }) {
+  const empty = !value.trim();
   return (
-    <Field label={label} edited={edited} onReset={onReset}>
+    <Field label={label} required={required} empty={empty} edited={edited} onReset={onReset}>
       <textarea
         value={value}
         rows={rows}
         onChange={(e) => onChange(e.target.value)}
         placeholder="—"
         aria-label={label}
-        className={cn(inputCx({ edited }), "resize-y leading-relaxed")}
+        className={cn(inputCx({ edited, invalid: required && empty }), "resize-y leading-relaxed")}
       />
     </Field>
   );
