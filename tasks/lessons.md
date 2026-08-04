@@ -111,3 +111,15 @@ ROOT CAUSE: the intake design spec explicitly warned "brief → familia → tare
 FIX: migration 0007 moves `status` onto `ideas` (the task); assets remain the generated file list shown as a count inside the card. Board reads ideas.
 RULE: when a spec warns about a specific confusion, add a check that the confusion didn't happen — reading the warning is not the same as obeying it. Count-sanity-check any fan-out against the source (32 rows in → 32 cards out).
 TAGS: #override #data-model #kanban #fan-out
+
+[2026-08-04] LESSON (data loss, silent): The importer READ "Asignación" — it's one of the 5 required columns and part of the dedup natural key — and then never persisted it. Same for "Marca" (present in all 32 rows). 30 rows' worth of staffing was parsed, hashed, used for identity, and thrown away; the board had no one on any task and nobody noticed because the sheet still had the data.
+ROOT CAUSE: I equated "the field is used" with "the field is stored". A column consumed for IDENTITY leaves exactly the same trace in the code as one consumed for CONTENT — it appears in the parser, in the type, in the required list — so a reading of import.ts looks complete while the INSERT silently omits it.
+FIX: recovered both from `staged_rows.data` (which had kept all 21 columns verbatim — that decision paid for itself), and fixed import.ts so a re-sync can't drop them again. An unmatched name is now reported, not discarded.
+RULE: when replacing a spreadsheet, diff the INSERT statement against the source columns, not the parser. Ask of every column: which line writes this to a table? "It's in the natural key" is not an answer. And keep a verbatim copy of the source row (staged_rows.data) — it turns this class of bug into a backfill instead of a re-sync.
+TAGS: #bug #data-fidelity #import #silent-failure
+
+[2026-08-04] DESIGN (identidad de asignación): idea_assignments.profile_id required a `profiles` row, but only Pedro has one — the 14 team members live in track_members as bare names. The obvious move (create 14 profiles with invented uuids) would have quietly broken login later: when Vero signs in with Google her auth.users.id won't match the row we invented, and profile_id has no ON UPDATE CASCADE. CHOSE: give track_members a stable id, point assignments at it, leave track_members.profile_id null as the join point for the day AUTH_ENABLED flips. Also dropped unique(idea_id, role) — the sheet's Asignación is multi-person ("Galie, Mony") and carries no role at all.
+RULE: before minting identity rows for people who will later have real accounts, ask what binds the two the day they log in. If the answer is "we'll fix the ids then", pick a different key now.
+TAGS: #schema #auth #design #assignment
+
+[2026-08-04] LESSON: A carried-forward "already installed" note was wrong — @dnd-kit was in neither package.json nor node_modules, though the session brief listed it as done. RULE: verify a dependency claim with a one-line grep before building on it; a stale note costs less to check than to discover mid-implementation. TAGS: #deps #verification

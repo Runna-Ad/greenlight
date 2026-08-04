@@ -124,6 +124,38 @@ DB: S.P.A.M Supabase project `ybbrpqzbedaxsmotgtkh`, dedicated schema `produccio
 - [ ] Client portal + "ver como cliente" for admin
 - [ ] Auth stays OFF until pre-launch (Pedro's call; AUTH_ENABLED flag ready)
 
+## Git (2026-08-04) ✅
+- [x] `git init` en la carpeta del proyecto — antes todo vivía sin versionar dentro del repo de /Users/work
+- [x] .gitignore: `.env*` fuera salvo `*.example`; también `.vercel`, `.next`, `supabase/.temp`
+- [x] Verificado que ningún valor de .env.local aparece en los archivos versionados
+- [x] 3 commits: init (99 archivos) · migración 0008 · tablero interactivo
+- [ ] Crear repo remoto (GitHub) y push — pendiente de decidir cuenta/visibilidad
+
+## Respuestas de Pedro (2026-08-04) — plantillas de trabajo
+- **Copies** = temas con cuota. El lead define los temas y cuántos van por tema;
+  el copy llena headline + descripción bajo cada uno, con contador por tema y total.
+  Sale del Concepto real del sheet: "15 Headlines + descripción (5 por tema: …)".
+- **Estáticos** = sólo COPY IN | REFERENCIA/IMAGEN. Los legales y el CTA viven en
+  los chips de reglas contextuales, no como campos.
+- **Preview** = ambos, en vivo. La persona asignada ve el slide actualizarse
+  mientras escribe (panel al lado); el lead también al revisar.
+
+## P3 — Tablero interactivo (2026-08-04)
+- [x] Migración 0008: identidad de asignación (track_members.id), multi-persona
+      sin rol, vista board_tasks, rescate de Asignación y Marca desde staged_rows
+- [x] Asignar personas por tarjeta, pool acotado al track, chips con color del sheet
+- [x] Arrastrar entre estados (@dnd-kit — NO estaba instalado, se instaló ahora)
+- [x] Columnas ilegales se atenúan al arrastrar; canMove() en TS fijado contra
+      transition_allowed() con contract test de 42 pares
+- [x] Menú "Mover" además del arrastre (móvil + teclado)
+- [x] Filtros: persona, brief, plataforma, marca
+- [x] Import arreglado: ya escribe Asignación y Marca
+- [ ] **BLOQUEADO — falta aplicar 0008 a la base viva** (necesita "deploy it" de Pedro).
+      Ensayo en seco: 52 asignaciones en 30 filas, 0 sin match, 32 marca_id.
+      Hasta entonces no se puede verificar en navegador ni desplegar.
+- [ ] SIN filtro por pod: 0/32 tareas tienen pod_id y el sheet no trae esa columna.
+      Decidir cómo se asigna un pod a una tarea antes de construir ese filtro.
+
 ## Parking lot
 - Final product name (placeholder: Rünna On Deck)
 - Blueprint v2 for team review (Pedro said "not yet" — revisit before launch)
