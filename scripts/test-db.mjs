@@ -7,6 +7,8 @@ import { dirname, join } from "node:path";
 import { buildFilename } from "../src/lib/filename.ts";
 import { canMove } from "../src/lib/brand.ts";
 import { missingRequired } from "../src/lib/required.ts";
+import { readTimeS } from "../src/lib/plantilla.ts";
+import { reglasQueAplican } from "../src/lib/reglas.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migDir = join(__dirname, "..", "supabase", "migrations");
@@ -117,8 +119,11 @@ console.log("\n▶ Insert chain + asset filename trigger");
 await db.exec(`
   insert into produccion.clients (id, name, slug) values
     ('00000000-0000-0000-0000-000000000001','DiDi','didi');
+  -- Las DOS marcas, como en producción: sin Préstamos, las reglas de esa marca
+  -- nunca se pueden probar y el contrato TS↔SQL da un falso desacuerdo.
   insert into produccion.marcas (id, client_id, name, slug) values
-    ('00000000-0000-0000-0000-0000000000a1','00000000-0000-0000-0000-000000000001','Card','card');
+    ('00000000-0000-0000-0000-0000000000a1','00000000-0000-0000-0000-000000000001','Card','card'),
+    ('00000000-0000-0000-0000-0000000000a2','00000000-0000-0000-0000-000000000001','Préstamos','prestamos');
   insert into produccion.briefs (id, client_id, code, title) values
     ('00000000-0000-0000-0000-0000000000b1','00000000-0000-0000-0000-000000000001','DIDI-AGO26-01','Agosto');
   insert into produccion.idea_families (id, brief_id, letter) values
@@ -769,6 +774,62 @@ eq("is_assigned() ahora ve las asignaciones por member_id",
        from (select set_config('request.jwt.claims', json_build_object('sub', tm.profile_id)::text, true)
                from produccion.track_members tm limit 1) _`),
    false); // sin profile_id ligado todavía: false, pero YA NO revienta
+
+
+// ── CONTRACT: readTimeS() TS === trigger de planos ──
+console.log("\n▶ Read-time — contrato TS vs DB");
+const DIALOGOS = [
+  "", "   ", "Hola", "Hola mundo",
+  "Hasta seis por ciento de cashback en todas tus compras diarias",
+  "Uno  dos   tres", "Con\nsaltos\nde línea", "Acentuación en español mexicano",
+  "a b c d e f g h i j k l m n o p q r s t",
+];
+let rtMismatch = 0;
+for (const d of DIALOGOS) {
+  await db.query(`update produccion.planos set dialogo=$1 where orden=9`, [d]);
+  const sql = Number(await scalar(`select read_time_s from produccion.planos where orden=9`));
+  if (sql !== readTimeS(d)) {
+    rtMismatch++;
+    console.error(`      "${d.slice(0,30)}": db=${sql} ts=${readTimeS(d)}`);
+  }
+}
+ok(`TS readTimeS() === trigger en ${DIALOGOS.length} diálogos`, rtMismatch === 0);
+
+// ── CONTRACT: reglasQueAplican() TS === reglas_para_tarea() SQL ──
+console.log("\n▶ Reglas — contrato TS vs DB");
+const todasLasReglas = await q(`select codigo, titulo, mensaje, severidad, scope,
+  cond_media, cond_tipo_group, cond_plataformas, cond_marca_slug,
+  cond_duracion_min_s, cond_texto_contiene, sort_order from produccion.reglas where activo`);
+
+const ESCENARIOS = [
+  { tipo: "RP Video",     plats: ["FB","TT"],      dur: "10-40s", marca: "card",      texto: "" },
+  { tipo: "RP Video",     plats: ["GG"],           dur: "15-30s", marca: "prestamos", texto: "" },
+  { tipo: "Images",       plats: ["FB","GG","TT"], dur: "-",      marca: "card",      texto: "" },
+  { tipo: "Images",       plats: ["GG"],           dur: "-",      marca: "card",      texto: "6% de CASHBACK" },
+  { tipo: "Normal Video", plats: ["TT"],           dur: "50-60s", marca: "card",      texto: "12 MSI" },
+  { tipo: "Copies",       plats: ["GG"],           dur: "-",      marca: "prestamos", texto: "" },
+  { tipo: "Podcast",      plats: [],               dur: "",       marca: null,        texto: "" },
+];
+let regMismatch = 0;
+for (const e of ESCENARIOS) {
+  await db.query(
+    `update produccion.ideas set tipo_asset=$1, plataformas=$2, duracion=$3,
+            marca_id=(select id from produccion.marcas where slug=$4)
+      where id='00000000-0000-0000-0000-0000000000d1'`,
+    [e.tipo, e.plats, e.dur, e.marca]);
+  const sql = (await q(
+    `select codigo from produccion.reglas_para_tarea('00000000-0000-0000-0000-0000000000d1',$1) order by sort_order`,
+    [e.texto])).map((r) => r.codigo).join("|");
+  const ts = reglasQueAplican(todasLasReglas, {
+    tipoAsset: e.tipo, plataformas: e.plats, duracion: e.dur,
+    marcaSlug: e.marca, texto: e.texto,
+  }).map((r) => r.codigo).join("|");
+  if (sql !== ts) {
+    regMismatch++;
+    console.error(`      ${e.tipo}/${e.plats.join("+")}/${e.dur}: sql=[${sql}] ts=[${ts}]`);
+  }
+}
+ok(`TS reglasQueAplican() === SQL reglas_para_tarea() en ${ESCENARIOS.length} escenarios`, regMismatch === 0);
 
 // ── CONTRACT: TS canMove() === DB transition_allowed() over ALL pairs ──
 // The board dims illegal columns using the TS map; the trigger enforces the SQL

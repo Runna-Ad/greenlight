@@ -6,6 +6,9 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // Permite `from "./plantilla.ts"`: los scripts de prueba corren los libs
+    // directamente en Node, que exige la extensión en imports de valor.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

@@ -3,6 +3,7 @@
 import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.ts";
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
 import { actionsFor, waitingLabel } from "../src/lib/task-actions.ts";
+import { plantillaPara, readTimeS, parseDuracion, compararDuracion, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO } from "../src/lib/plantilla.ts";
 
 let pass = 0,
   fail = 0;
@@ -128,6 +129,61 @@ eq("mandar cambios exige texto", actionsFor("under_review", lead).find(a => a.to
 eq("correcciones → retomar", labels("in_corrections", asignado), "Retomar");
 eq("el cliente no mueve nada", ["todo","in_progress","under_review","in_corrections"].every(s => actionsFor(s, { isAssignee: false, role: "client", hasAssignee: true }).length === 0), true);
 eq("completado no tiene botón (vive en Mover)", labels("completed", lead), "");
+
+
+// ── Plantilla de trabajo ──
+console.log("\n▶ Plantilla de trabajo");
+
+eq("los 4 tipos de video usan el guión",
+   ["RP Video","Normal Video","AIGC video","GIF"].every(t => plantillaPara(t) === "guion"), true);
+eq("Images usa la plantilla de estático", plantillaPara("Images"), "estatico");
+eq("Copies tiene la suya", plantillaPara("Copies"), "copies");
+eq("un tipo desconocido cae en guión", plantillaPara("Podcast"), "guion");
+
+// El mapa está separado del de obligatorios A PROPÓSITO. Hoy coinciden; si
+// alguien los separa, que sea deliberado y no en silencio.
+const equivalente = { guion: "video", estatico: "images", copies: "copies" };
+eq("plantillaPara y tipoGroup siguen de acuerdo en los 6 tipos + desconocido",
+   ["RP Video","Normal Video","AIGC video","GIF","Images","Copies","Podcast"]
+     .every(t => equivalente[plantillaPara(t)] === tipoGroup(t)), true);
+
+// Read-time: espejo del trigger
+eq("sin diálogo, 0s", readTimeS(""), 0);
+eq("sólo espacios, 0s", readTimeS("   "), 0);
+eq("null, 0s", readTimeS(null), 0);
+eq("1 palabra → 1s", readTimeS("Hola"), 1);
+eq("11 palabras / 2.5 → 5s",
+   readTimeS("Hasta seis por ciento de cashback en todas tus compras diarias"), 5);
+eq("espacios múltiples y saltos cuentan como uno",
+   readTimeS("Hola   mundo\n\ncruel"), readTimeS("Hola mundo cruel"));
+
+// Duración
+eq("'15-30s' se lee como rango", JSON.stringify(parseDuracion("15-30s")), '{"min":15,"max":30}');
+eq("'30s' es un punto", JSON.stringify(parseDuracion("30s")), '{"min":30,"max":30}');
+eq("'-' no es duración", parseDuracion("-"), null);
+eq("vacío tampoco", parseDuracion(""), null);
+eq("texto libre tampoco", parseDuracion("lo que salga"), null);
+
+// Tres estados, nunca dos: un ✓ por defecto sería un falso verde.
+eq("dentro de rango", compararDuracion(20, "15-30s").estado, "dentro");
+eq("se pasa", compararDuracion(45, "15-30s").estado, "excede");
+eq("se queda corto", compararDuracion(8, "15-30s").estado, "corto");
+eq("sin duración legible NO dice que está bien",
+   compararDuracion(20, "-").estado, "sin-referencia");
+ok("y lo explica en vez de callarse",
+   compararDuracion(20, "-").mensaje.includes("sin duración"));
+
+// Las instrucciones del deck son PLACEHOLDER, jamás valor inicial.
+const plano = nuevoPlano(1);
+const estatico = nuevoEstatico(1);
+const textos = [...Object.values(PLACEHOLDER_GUION), ...Object.values(PLACEHOLDER_ESTATICO)];
+eq("un plano nuevo llega con todos los campos de texto vacíos",
+   Object.entries(plano).filter(([k]) => !["orden","es_cierre"].includes(k)).every(([,v]) => v === null), true);
+eq("un estático nuevo también",
+   Object.entries(estatico).filter(([k]) => k !== "orden").every(([,v]) => v === null), true);
+eq("ninguna instrucción del deck aparece como dato",
+   [...Object.values(plano), ...Object.values(estatico)]
+     .some(v => typeof v === "string" && textos.includes(v)), false);
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

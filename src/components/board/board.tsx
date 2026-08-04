@@ -14,6 +14,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import Link from "next/link";
 import { Files, Plus, X, GripVertical, Users } from "lucide-react";
 import { toast } from "sonner";
 
@@ -263,6 +264,7 @@ export function Board({
           {KANBAN_STATUSES.map((status) => (
             <Column
               key={status}
+              cliente={cliente}
               status={status}
               tasks={visible.filter((t) => t.status === status)}
               members={mayAssign ? members : undefined}
@@ -278,7 +280,7 @@ export function Board({
         </div>
 
         <DragOverlay dropAnimation={null}>
-          {dragging ? <CardBody task={dragging} dragging /> : null}
+          {dragging ? <CardBody cliente={cliente} task={dragging} dragging /> : null}
         </DragOverlay>
       </DndContext>
     </div>
@@ -289,6 +291,7 @@ export function Board({
 // Column
 // ─────────────────────────────────────────────────────────────
 function Column({
+  cliente,
   status,
   tasks,
   members,
@@ -300,6 +303,7 @@ function Column({
   onMove,
   onAction,
 }: {
+  cliente: string;
   status: AssetStatus;
   tasks: Task[];
   members?: Member[];
@@ -368,6 +372,7 @@ function Column({
           tasks.map((t) => (
             <TaskCard
               key={t.id}
+              cliente={cliente}
               task={t}
               members={members}
               mayOverride={mayOverride}
@@ -388,6 +393,7 @@ function Column({
 // Card
 // ─────────────────────────────────────────────────────────────
 function TaskCard({
+  cliente,
   task,
   members,
   mayOverride,
@@ -397,6 +403,7 @@ function TaskCard({
   onMove,
   onAction,
 }: {
+  cliente: string;
   task: Task;
   members?: Member[];
   mayOverride: boolean;
@@ -414,6 +421,7 @@ function TaskCard({
   return (
     <div ref={setNodeRef} className={isDragging ? "opacity-40" : ""}>
       <CardBody
+        cliente={cliente}
         task={task}
         members={members}
         mayOverride={mayOverride}
@@ -429,6 +437,7 @@ function TaskCard({
 }
 
 function CardBody({
+  cliente,
   task,
   members,
   mayOverride,
@@ -440,6 +449,7 @@ function CardBody({
   handleProps,
   dragging,
 }: {
+  cliente: string;
   task: Task;
   members?: Member[];
   mayOverride?: boolean;
@@ -514,9 +524,14 @@ function CardBody({
         </span>
       </div>
 
-      <p className="mt-1.5 font-mono text-[11px] font-semibold text-foreground">
-        {task.naming_base ?? "—"}
-      </p>
+      {/* La puerta a la plantilla de trabajo. El asa de arrastre está aislada
+          arriba, así que abrir y arrastrar no compiten. */}
+      <Link
+        href={`/${cliente}/tareas/${task.id}`}
+        className="mt-1.5 block font-mono text-[11px] font-semibold text-foreground underline-offset-2 hover:underline"
+      >
+        {task.naming_base ?? "Abrir tarea"}
+      </Link>
       <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-muted-foreground">
         {task.concepto ?? "Sin concepto"}
       </p>
