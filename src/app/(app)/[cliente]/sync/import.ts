@@ -99,6 +99,32 @@ export async function importRows(
     .from("vocab_terms").select("set, code, label_es, track");
   const V = (vocab ?? []) as { set: string; code: string; label_es: string; track: string }[];
 
+  // "Asignación" and "Marca" are columns the sheet always fills, and the import
+  // used to drop both — Asignación was read for the dedup key and then thrown
+  // away. Resolve them here so a re-sync can't lose them again.
+  const { data: memberRows } = await db
+    .from("track_members").select("id, name, track").eq("active", true);
+  const MEMBERS = (memberRows ?? []) as { id: string; name: string; track: string }[];
+
+  const { data: marcaRows } = await db
+    .from("marcas").select("id, name").eq("client_id", client.id);
+  const MARCAS = (marcaRows ?? []) as { id: string; name: string }[];
+
+  const fold = (s: string) =>
+    s.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+
+  /** "Galie, Mony" → the two member ids, matched within the row's own track. */
+  const resolveMembers = (raw: string, track: string): string[] =>
+    raw
+      .split(",")
+      .map((n) => fold(n))
+      .filter(Boolean)
+      .map((n) => MEMBERS.find((m) => m.track === track && fold(m.name) === n)?.id)
+      .filter((id): id is string => Boolean(id));
+
+  const resolveMarca = (raw: string): string | null =>
+    MARCAS.find((m) => fold(m.name) === fold(raw))?.id ?? null;
+
   // Whoever is acting — until login exists, attribute to the admin.
   const { data: actor } = await db
     .from("profiles").select("id").eq("role", "admin").limit(1).maybeSingle();
@@ -195,6 +221,7 @@ export async function importRows(
           family_id: familyId,
           brief_id: briefId,
           track,
+          marca_id: resolveMarca(v("Marca")),
           variant_number: variant,
           naming_base: v("Naming") || null,
           naming_kind: namingKind,
@@ -218,6 +245,20 @@ export async function importRows(
       if (ideaErr) throw new Error(`idea: ${ideaErr.message}`);
 
       res.created++;
+
+      // ── people: "Asignación" is multi-person and carries no role ──
+      const memberIds = resolveMembers(v("Asignación"), track);
+      if (memberIds.length) {
+        const { error: asgErr } = await db
+          .from("idea_assignments")
+          .insert(memberIds.map((member_id) => ({ idea_id: idea.id, member_id })));
+        // A name the pool doesn't know shouldn't sink the whole row — report it.
+        if (asgErr) res.errors.push(`asignación de ${v("Naming")}: ${asgErr.message}`);
+      } else if (v("Asignación")) {
+        res.errors.push(
+          `Asignación "${v("Asignación")}" de ${v("Naming") || row.key}: no coincide con nadie del pool ${track}.`,
+        );
+      }
 
       // ── assets: every Tamaño × Plataforma the row asks for ──
       const sizes = list(v("Tamaño")).map(cleanSize).filter(Boolean);

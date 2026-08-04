@@ -29,6 +29,28 @@ export const STATUS_LABEL: Record<AssetStatus, string> = {
   delivered: "Entregado",
 };
 
+/**
+ * Mirror of produccion.transition_allowed(). The DB is authoritative — a
+ * BEFORE UPDATE trigger raises on an illegal move — but the board needs to know
+ * the legal targets BEFORE the drop, so it can dim the columns you can't reach
+ * instead of letting you find out via an error toast.
+ *
+ * Duplicated logic across layers gets pinned with a contract test: test-db.mjs
+ * checks all 49 pairs against the SQL function (same guarantee as buildFilename).
+ */
+export const ALLOWED_TRANSITIONS: Record<AssetStatus, AssetStatus[]> = {
+  todo: ["in_progress"],
+  in_progress: ["under_review"],
+  under_review: ["in_corrections", "completed"],
+  in_corrections: ["in_progress"],
+  completed: ["published", "delivered"],
+  published: ["in_corrections", "delivered"],
+  delivered: [],
+};
+
+export const canMove = (from: AssetStatus, to: AssetStatus): boolean =>
+  from === to || ALLOWED_TRANSITIONS[from].includes(to);
+
 // Maps to the --status-* CSS tokens (see globals.css).
 export const STATUS_TOKEN: Record<AssetStatus, string> = {
   todo: "todo",

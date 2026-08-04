@@ -5,6 +5,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { buildFilename } from "../src/lib/filename.ts";
+import { canMove } from "../src/lib/brand.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migDir = join(__dirname, "..", "supabase", "migrations");
@@ -434,6 +435,36 @@ eq(
   Number(await scalar(`select count(*) from produccion.board_tasks`)),
   Number(await scalar(`select count(*) from produccion.ideas`)),
 );
+
+// ── CONTRACT: TS canMove() === DB transition_allowed() over ALL pairs ──
+// The board dims illegal columns using the TS map; the trigger enforces the SQL
+// one. If they ever drift, the UI would offer a drop the DB then rejects.
+console.log("\n▶ Transiciones — contrato TS vs DB");
+const STATUSES = [
+  "todo",
+  "in_progress",
+  "under_review",
+  "in_corrections",
+  "completed",
+  "published",
+  "delivered",
+];
+let tMismatch = 0;
+for (const from of STATUSES) {
+  for (const to of STATUSES) {
+    if (from === to) continue; // canMove() treats a no-op move as fine; SQL has no such pair
+    const dbAllows = await scalar(
+      `select produccion.transition_allowed($1::produccion.asset_status,$2::produccion.asset_status)`,
+      [from, to],
+    );
+    const tsAllows = canMove(from, to);
+    if (dbAllows !== tsAllows) {
+      tMismatch++;
+      if (tMismatch <= 3) console.error(`      ${from}→${to}: db=${dbAllows} ts=${tsAllows}`);
+    }
+  }
+}
+ok(`TS canMove() === DB transition_allowed() en ${STATUSES.length * (STATUSES.length - 1)} pares`, tMismatch === 0);
 
 // ── CONTRACT: TS buildFilename() === DB build_filename() over a matrix ──
 console.log("\n▶ Filename contract — TS vs DB (many combos)");
