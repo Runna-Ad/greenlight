@@ -258,3 +258,15 @@ vivo en prod:
 - Cada plano con banda "Plano N" a todo lo ancho.
 Nota: al probar escribiendo en los campos, el autoguardado persistió el texto
 de prueba en A1; se limpió después (plano 1 de vuelta a null). 112 lib, 0 fallos.
+
+## 2026-08-05 (cont.) — Cortinilla de Cierre con legales
+
+Al final del guión (después de todos los planos): bloque "Cortinilla de Cierre".
+- Texto libre editable (ideas.legales_libres, migración 0018 aplicada a prod).
+- "Agregar desde biblioteca": picker de legales por marca (idea_snippets, con
+  alternarSnippet que ya existía). Verificado en una tarea de Card: el picker
+  muestra "Legal CAT — Card" con su texto; se selecciona, no se pega.
+- Preview del cliente muestra seleccionados + texto libre.
+Nota: sólo el legal de Card está sembrado; Préstamos aún no (es un dato
+financiero que debe dar Pedro, o llegará por Notion). Para tareas de Préstamos
+sólo aplica el texto libre por ahora. S.P.A.M idéntico 42/31/6.
