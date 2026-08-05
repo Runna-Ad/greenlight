@@ -26,14 +26,8 @@ import {
   canMove,
   type AssetStatus,
 } from "@/lib/brand";
-import {
-  approveTask,
-  moveTask,
-  requestChanges,
-  setAssignees,
-  startTask,
-  submitForReview,
-} from "@/app/(app)/[cliente]/tablero/actions";
+import { moveTask, setAssignees } from "@/app/(app)/[cliente]/tablero/actions";
+import { EJECUTA_VERBO, TOAST_VERBO } from "@/components/board/verbos";
 import { actionsFor, waitingLabel, type TaskAction } from "@/lib/task-actions";
 import {
   DEFAULT_ROLE,
@@ -190,23 +184,15 @@ export function Board({
     setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: action.to } : t)));
 
     startTransition(async () => {
-      const res =
-        action.verb === "start"
-          ? await startTask(task.id)
-          : action.verb === "submit_review"
-            ? await submitForReview(task.id)
-            : action.verb === "request_changes"
-              ? await requestChanges(task.id, body ?? "")
-              : await approveTask(task.id);
+      const res = await EJECUTA_VERBO[action.verb](task.id, body);
 
       if (!res.ok) {
         setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: from } : t)));
         toast.error(res.error ?? "No se pudo completar la acción.");
         return;
       }
-      if (action.verb === "submit_review") toast.success("Mandada a revisión — el lead ya tiene el aviso.");
-      if (action.verb === "request_changes") toast.success("Cambios pedidos — quien la trabaja ya tiene el aviso.");
-      if (action.verb === "approve") toast.success("Aprobada.");
+      const msg = TOAST_VERBO[action.verb];
+      if (msg) toast.success(msg);
     });
   };
 

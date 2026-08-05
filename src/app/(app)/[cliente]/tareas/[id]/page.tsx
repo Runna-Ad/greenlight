@@ -11,6 +11,7 @@ import { ESTADOS_CERRADOS, plantillaPara } from "@/lib/plantilla";
 import type { Regla } from "@/lib/reglas";
 import { EditorTarea } from "@/components/tarea/editor-tarea";
 import { CabeceraTarea } from "@/components/tarea/cabecera";
+import { AccionesTarea } from "@/components/tarea/acciones-tarea";
 import type { EstaticoVista, PlanoVista } from "@/components/tarea/preview-slide";
 
 export const dynamic = "force-dynamic";
@@ -81,7 +82,7 @@ export default async function TareaPage({
     );
   }
 
-  const [{ data: marca }, { data: reglas }, { data: archivos }, { data: durVocab }] =
+  const [{ data: marca }, { data: reglas }, { data: archivos }, { data: durVocab }, { data: asignaciones }] =
     await Promise.all([
       idea.marca_id
         ? db.from("marcas").select("name, slug").eq("id", idea.marca_id).maybeSingle()
@@ -102,7 +103,14 @@ export default async function TareaPage({
         .eq("set", "duracion")
         .order("sort_order")
         .returns<{ label_es: string }[]>(),
+      // Quién la trabaja — alimenta la decisión de botones (actionsFor).
+      db
+        .from("idea_assignments")
+        .select("member_id")
+        .eq("idea_id", idea.id)
+        .returns<{ member_id: string | null }[]>(),
     ]);
+  const memberIds = (asignaciones ?? []).map((a) => a.member_id).filter(Boolean) as string[];
   const filenames = (archivos ?? []).map((a) => a.filename).filter(Boolean) as string[];
 
   // El cuerpo: se crea la primera fila al abrir, para que la persona escriba ya.
@@ -194,12 +202,25 @@ export default async function TareaPage({
           </p>
         </div>
 
-        {soloLectura && (
-          <p className="flex items-center gap-1.5 rounded-md border border-border bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground">
-            <Lock className="size-3.5 shrink-0" />
-            Cerrada — sólo un lead puede reabrirla
-          </p>
-        )}
+        <div className="flex items-center gap-2">
+          {soloLectura && (
+            <p className="flex items-center gap-1.5 rounded-md border border-border bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+              <Lock className="size-3.5 shrink-0" />
+              Cerrada — sólo un lead puede reabrirla
+            </p>
+          )}
+          {/* Wireframe: "Enviar a revisión" arriba a la derecha. Misma decisión
+              de botones que el tablero (actionsFor), no una copia. */}
+          <AccionesTarea
+            ideaId={idea.id}
+            status={idea.status}
+            ctx={{
+              role,
+              isAssignee: soy ? memberIds.includes(soy.id) : false,
+              hasAssignee: memberIds.length > 0,
+            }}
+          />
+        </div>
       </div>
 
       {!soy && (

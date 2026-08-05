@@ -9,6 +9,7 @@ import { canMove } from "../src/lib/brand.ts";
 import { missingRequired } from "../src/lib/required.ts";
 import { readTimeS } from "../src/lib/plantilla.ts";
 import { reglasQueAplican } from "../src/lib/reglas.ts";
+import { actionsFor } from "../src/lib/task-actions.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migDir = join(__dirname, "..", "supabase", "migrations");
@@ -886,6 +887,111 @@ eq("TREND y NOTAS ya tienen dónde guardarse",
                            and column_name in ('trend','notas')`)), 2);
 
 await db.exec(`delete from produccion.assets where idea_id='00000000-0000-0000-0000-0000000000d1'`);
+
+// ── 0014/0015: Enviar a cliente + leads en las asignaciones ──
+console.log("\n▶ Enviar a cliente — 5º verbo");
+await resetRole();
+{
+  const IDEA = "00000000-0000-0000-0000-0000000000d1";
+  // Estado conocido: aprobada y con un asignado que NO es quien publica.
+  await db.exec(`update produccion.ideas set status='completed' where id='${IDEA}'`);
+  await db.exec(`delete from produccion.notifications`);
+
+  const quienPublica = await scalar(
+    `select id from produccion.track_members
+      where id not in (select member_id from produccion.idea_assignments
+                        where idea_id='${IDEA}' and member_id is not null)
+      limit 1`);
+  await db.query(`select produccion.rpc_task_send_client($1::uuid, $2::uuid)`, [IDEA, quienPublica]);
+
+  eq("send_client mueve a published",
+     await scalar(`select status from produccion.ideas where id='${IDEA}'`), "published");
+  ok("published_at quedó sellado",
+     (await scalar(`select published_at from produccion.ideas where id='${IDEA}'`)) !== null);
+  ok("los asignados recibieron task_published",
+     Number(await scalar(`select count(*) from produccion.notifications
+                           where type='task_published' and entity_id='${IDEA}'`)) >= 1);
+  eq("el movimiento quedó en el historial",
+     await scalar(`select to_status::text from produccion.status_events
+                    where idea_id='${IDEA}' order by created_at desc limit 1`),
+     "published");
+
+  // El trigger no se evade: un update directo también notifica.
+  // (El reset published→completed no es una transición legal — se pasa con el
+  // override de lead, que es exactamente para eso.)
+  await db.exec(`select set_config('produccion.lead_override','on',false);
+                 update produccion.ideas set status='completed' where id='${IDEA}';
+                 select set_config('produccion.lead_override','',false);
+                 delete from produccion.notifications;
+                 update produccion.ideas set status='published' where id='${IDEA}'`);
+  ok("un update directo a published también notifica (trigger, no verbo)",
+     Number(await scalar(`select count(*) from produccion.notifications
+                           where type='task_published'`)) >= 1);
+
+  // Un lead miembro asignado recibe el aviso de revisión.
+  const LEAD_M = await scalar(
+    `select member_id from produccion.idea_assignments
+      where idea_id='${IDEA}' and member_id is not null limit 1`);
+  await db.query(`update produccion.track_members set es_lead=true where id=$1`, [LEAD_M]);
+  await db.query(`update produccion.idea_assignments set es_lead=true
+                   where idea_id='${IDEA}' and member_id=$1`, [LEAD_M]);
+  await db.exec(`select set_config('produccion.lead_override','on',false);
+                 update produccion.ideas set status='in_progress' where id='${IDEA}';
+                 select set_config('produccion.lead_override','',false);
+                 delete from produccion.notifications;
+                 update produccion.ideas set status='under_review' where id='${IDEA}'`);
+  ok("a revisión: el miembro lead asignado recibe aviso",
+     Number(await scalar(`select count(*) from produccion.notifications
+                           where recipient_member_id=$1 and type='task_submitted'`, [LEAD_M])) === 1,
+  );
+
+  // board_tasks separa leads de team sin tocar members.
+  const fila = (await q(`select member_ids, lead_ids, team_ids from produccion.board_tasks
+                          where id='${IDEA}'`))[0];
+  const union = [...(fila.lead_ids ?? []), ...(fila.team_ids ?? [])].sort();
+  eq("lead_ids ∪ team_ids = member_ids",
+     JSON.stringify(union), JSON.stringify([...(fila.member_ids ?? [])].sort()));
+  ok("lead_ids y team_ids son disjuntos",
+     (fila.lead_ids ?? []).every((x) => !(fila.team_ids ?? []).includes(x)));
+
+  // Volver al estado que esperan los tests de abajo.
+  await db.query(`update produccion.track_members set es_lead=false where id=$1`, [LEAD_M]);
+  await db.query(`update produccion.idea_assignments set es_lead=false
+                   where idea_id='${IDEA}' and member_id=$1`, [LEAD_M]);
+  await db.exec(`select set_config('produccion.lead_override','on',false);
+                 update produccion.ideas set status='todo' where id='${IDEA}';
+                 select set_config('produccion.lead_override','',false);
+                 delete from produccion.notifications`);
+}
+
+// ── CONTRACT: toda acción que ofrece actionsFor() es legal en SQL ──
+// El botón vive en TS; el candado en transition_allowed. Si divergen, la UI
+// ofrece un movimiento que la BD rechaza — o peor, deja de ofrecer uno legal.
+console.log("\n▶ Botones — contrato actionsFor() vs transition_allowed()");
+{
+  const ROLES = ["admin", "lead", "creative", "client"];
+  const CTXS = [
+    { isAssignee: true, hasAssignee: true },
+    { isAssignee: false, hasAssignee: true },
+    { isAssignee: false, hasAssignee: false },
+  ];
+  const ESTADOS = ["todo","in_progress","under_review","in_corrections","completed","published","delivered"];
+  let ofrecidas = 0, ilegales = 0;
+  for (const status of ESTADOS)
+    for (const role of ROLES)
+      for (const c of CTXS)
+        for (const a of actionsFor(status, { ...c, role })) {
+          ofrecidas++;
+          const legal = await scalar(
+            `select produccion.transition_allowed($1::produccion.asset_status,$2::produccion.asset_status)`,
+            [status, a.to]);
+          if (!legal) {
+            ilegales++;
+            console.error(`      ${status} → ${a.to} (${a.verb}, ${role}) no es legal en SQL`);
+          }
+        }
+  ok(`las ${ofrecidas} acciones ofrecidas por actionsFor() son legales en SQL`, ilegales === 0);
+}
 
 // ── CONTRACT: TS canMove() === DB transition_allowed() over ALL pairs ──
 // The board dims illegal columns using the TS map; the trigger enforces the SQL

@@ -18,8 +18,20 @@ export type TaskAction = {
   /** Pide un texto obligatorio antes de ejecutarse. */
   needsBody?: boolean;
   /** Qué RPC semántica la ejecuta. */
-  verb: "start" | "submit_review" | "request_changes" | "approve";
+  verb: TaskVerb;
 };
+
+/**
+ * Los verbos existen como tipo aparte para que quien ejecute use un mapa
+ * EXHAUSTIVO (Record<TaskVerb, …>): un verbo nuevo sin implementar debe ser
+ * error de compilación, no un `else` que cae en la acción equivocada.
+ */
+export type TaskVerb =
+  | "start"
+  | "submit_review"
+  | "request_changes"
+  | "approve"
+  | "send_client";
 
 export type TaskContext = {
   isAssignee: boolean;
@@ -80,7 +92,21 @@ export function actionsFor(status: AssetStatus, ctx: TaskContext): TaskAction[] 
         ? [{ to: "in_progress", label: "Retomar", tone: "primary", verb: "start" }]
         : [];
 
-    // Publicar y entregar viven en el menú "Mover" (P6/P7).
+    case "completed":
+      // Enviar al cliente es un paso APARTE de aprobar (decisión de Pedro):
+      // dos puertas del lead, nada llega al cliente sin pasar por él.
+      return isLead(ctx.role)
+        ? [
+            {
+              to: "published",
+              label: "Enviar a cliente",
+              tone: "primary",
+              verb: "send_client",
+            },
+          ]
+        : [];
+
+    // Entregar vive en el menú "Mover" (P7).
     default:
       return [];
   }

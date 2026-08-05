@@ -128,7 +128,12 @@ eq("en revisión el lead aprueba o pide cambios", labels("under_review", lead), 
 eq("mandar cambios exige texto", actionsFor("under_review", lead).find(a => a.tone === "danger").needsBody, true);
 eq("correcciones → retomar", labels("in_corrections", asignado), "Retomar");
 eq("el cliente no mueve nada", ["todo","in_progress","under_review","in_corrections"].every(s => actionsFor(s, { isAssignee: false, role: "client", hasAssignee: true }).length === 0), true);
-eq("completado no tiene botón (vive en Mover)", labels("completed", lead), "");
+// Enviar al cliente es un paso APARTE de aprobar (decisión de Pedro): dos
+// puertas del lead. El especialista no lo ve.
+eq("completado: el lead puede enviar a cliente", labels("completed", lead), "Enviar a cliente");
+eq("completado: el especialista no ve el botón", labels("completed", asignado), "");
+eq("enviar a cliente usa el verbo send_client",
+   actionsFor("completed", lead)[0].verb, "send_client");
 
 
 // ── Plantilla de trabajo ──

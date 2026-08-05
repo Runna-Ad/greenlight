@@ -165,6 +165,27 @@ export async function approveTask(ideaId: string, note?: string): Promise<Action
   return { ok: true };
 }
 
+/** El lead publica al cliente → Publicado. Paso APARTE de aprobar (Pedro). */
+export async function sendToClient(ideaId: string, note?: string): Promise<ActionResult> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const { role, soyId } = await context();
+  if (!canOverrideStatus(role)) {
+    return { ok: false, error: "Sólo un lead puede enviar al cliente." };
+  }
+
+  const db = supabaseAdmin();
+  const { error } = await db.rpc("rpc_task_send_client", {
+    p_idea_id: ideaId,
+    p_actor_member: soyId,
+    p_actor: await actorId(db),
+    p_note: note?.trim() || null,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  await revalidateFor(db, ideaId);
+  return { ok: true };
+}
+
 /**
  * Fijar exactamente quién trabaja una tarea.
  *
