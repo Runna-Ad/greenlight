@@ -247,3 +247,14 @@ sombra + micro-hover. Segunda instancia al FINAL del workspace (variante
 encabezado al terminar. Misma decisión (actionsFor), no un botón aparte.
 Verificado en prod por CSS: 2 botones con gradiente/sombra/ícono, barra final
 presente, sin crash.
+
+## 2026-08-05 (cont.) — Vista del cliente: Acción, diálogo por locutor, planos
+
+Tres mejoras al preview del cliente (PreviewSlide), verificadas escribiendo en
+vivo en prod:
+- Acción rotulada ("Acción: camina hacia los tomates").
+- Diálogo: (paréntesis) → quién habla, en negritas + seccionado + entre
+  comillas. Parser puro lib/dialogo.ts + 6 tests. Separa actor/narrador.
+- Cada plano con banda "Plano N" a todo lo ancho.
+Nota: al probar escribiendo en los campos, el autoguardado persistió el texto
+de prueba en A1; se limpió después (plano 1 de vuelta a null). 112 lib, 0 fallos.
