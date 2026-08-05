@@ -1,5 +1,35 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-05 — La plantilla de trabajo (guión + estático)
+
+**Desplegado.** Al hacer clic en una tarjeta ya se abre la pantalla donde el
+equipo trabaja. Reemplaza el deck de 45 slides que llenaban a mano.
+
+El deck del cliente resultó estar compartido por link, así que se pudo leer
+entero (PDF + texto + XML del pptx). La cabecera y las dos columnas salen de la
+plantilla real, no de una interpretación.
+
+**Hallazgo del deck:** conviven DOS textos legales distintos — 12 slides con el
+CAT de mayo y 9 con el de enero. Es el argumento de por qué los legales se
+seleccionan de una biblioteca en vez de pegarse.
+
+**Deuda pagada:** `seed.sql` nunca se aplicó a producción. La biblioteca de
+legales estaba vacía y faltaba la matriz base de tamaño×plataforma entera.
+Los datos de referencia se mudaron a migración; el harness ahora aplica el seed
+en una instancia aparte y falla si se desfasa — al añadir ese guard apareció
+una segunda constraint muerta.
+
+**También:** `is_assigned()` llevaba roto desde la 0008 (la policy de `planos`
+era falsa para todos) y `Referencias` era la tercera columna que el import leía
+y tiraba — se rescataron 15.
+
+**Decisión:** un estático multiplataforma recibe reglas contradictorias (GG sin
+CTA, FB con CTA). Se muestran AGRUPADAS por plataforma; elegir una sería decidir
+por el creativo.
+
+**Sigue:** Copies (la página lo dice en vez de fingir), curar los selling points,
+y cablear el selector de biblioteca.
+
 ## 2026-08-04 — Repo propio, tablero interactivo, asignación real
 
 **Lo primero: el proyecto ya tiene git.** `git init` en la carpeta del proyecto

@@ -199,6 +199,31 @@ briefs"; la mitad de briefs no se puede cumplir hasta conectar ese formulario.
 Es el momento natural para mover la creación a una RPC atómica (`rpc_create_task`),
 que además resolvería el hueco del constraint de Asignación.
 
+## Plantilla de trabajo (2026-08-05) — DESPLEGADO
+Plan: /Users/work/.claude/plans/ahora-pregunta-q-opinas-drifting-wolf.md
+Deck del cliente (leído entero, 45 slides): docs.google.com/presentation/d/1A65dKEPqURqoXpnNdcCMcpEtrMqBOio0KpHI5Sr1XxU
+
+- [x] Ruta `/[cliente]/tareas/[id]` — la tarjeta del tablero por fin enlaza a algo
+- [x] Plantilla de GUIÓN: Plano / Acción / Copy in / SFX / GFX / Edición | Diálogo
+- [x] Plantilla de ESTÁTICO: Copy in (Título/Subtítulo/Botón CTA/Legales) | Referencia
+- [x] Autoguardado por CAMPO con compare-and-set + resolución de conflicto
+- [x] Reglas contextuales agrupadas POR PLATAFORMA (las 7, evaluables)
+- [x] Read-time en vivo contra la Duración, con 3 estados
+- [x] Preview tipo slide en vivo, pleca de degradado si es multiplataforma
+- [x] Migraciones 0011 + 0012 aplicadas. S.P.A.M idéntico (42/31/6)
+- [x] Rescatadas 15 referencias que el import venía tirando
+- [x] Tests: 70 lib + 111 db + 44 sync
+- [ ] **Copies sigue pendiente** — la página lo dice en vez de fingir. No existe
+      en el deck (ese slide enlaza a otra hoja), así que sería UI inventada.
+      Acordado: temas con cuota, headline + descripción, contador por tema.
+- [ ] Curar los 33 selling points sembrados del deck — hay casi-duplicados a
+      propósito ("Hasta 6% de CASHBACK*" vs sin asterisco son dos claims).
+- [ ] Legales: sólo está el de Card. Falta el de Préstamos.
+- [ ] El selector de legales/selling points desde la biblioteca todavía no se
+      cablea a la UI (la tabla y las acciones ya existen).
+- [ ] `src/lib/vocab.ts` sigue siendo copia hardcodeada de `vocab_terms` — dos
+      fuentes de verdad para el mismo vocabulario.
+
 ## Parking lot
 - Final product name (placeholder: Rünna On Deck)
 - Blueprint v2 for team review (Pedro said "not yet" — revisit before launch)
