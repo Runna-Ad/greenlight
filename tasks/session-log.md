@@ -270,3 +270,13 @@ Al final del guión (después de todos los planos): bloque "Cortinilla de Cierre
 Nota: sólo el legal de Card está sembrado; Préstamos aún no (es un dato
 financiero que debe dar Pedro, o llegará por Notion). Para tareas de Préstamos
 sólo aplica el texto libre por ahora. S.P.A.M idéntico 42/31/6.
+
+## 2026-08-05 (cont.) — Reglas con tooltip + nota del guión editable
+
+- Panel de reglas: encabezado "Reglas que aplican" + read-time, y cada chip
+  abre su regla COMPLETA en un tooltip al pasar el mouse (verificado: "De 20 a
+  30s van al menos 4 beneficios; de 30s en adelante, 5; de 40s, 6"). El título
+  corto se queda; el detalle vive en el tooltip.
+- La nota "1 actriz / 1 actor · # outfits" pasó de fija a CUADRO EDITABLE
+  (ideas.nota_guion, migración 0019). El texto del tipo queda de placeholder.
+S.P.A.M idéntico 42/31/6.
