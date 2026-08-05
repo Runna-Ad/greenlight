@@ -52,6 +52,7 @@ DB: S.P.A.M Supabase project `ybbrpqzbedaxsmotgtkh`, dedicated schema `produccio
 ## P6 — Delivery + ops (1.5d)
 - [ ] Auto ENTREGA FINAL on upload; delivery verification queue (/entrega-check)
 - [ ] /entregas calendar; /carga workload; /admin (clientes/equipo/vocab/snippets)
+- [ ] NOTA: los 4 enlaces (/carga, /entrega-check, /[cliente]/entregas, /admin) están marcados `soon: true` en `sidebar.tsx` — se ven "Pronto" y no navegan. Al construir cada página, quitar su `soon: true`.
 
 ## P7 — Client portal (2d)
 - [ ] Magic-link auth (client role); published-only idea cards; Revisión/Cambios/Aprobado; threaded change requests; per-wave view

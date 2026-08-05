@@ -19,7 +19,16 @@ import { cn } from "@/lib/utils";
 import { canSee, DEFAULT_ROLE, type NavKey, type ViewRole } from "@/lib/roles";
 import { Wordmark } from "./wordmark";
 
-type NavItem = { key: NavKey; href: string; label: string; icon: LucideIcon };
+// `soon` = la pantalla está en el roadmap pero la ruta todavía no existe.
+// Se pinta apagada y SIN <Link>, porque un Link a una ruta inexistente lo
+// prefetchea Next y devuelve 404 en producción aunque nadie lo haya clicado.
+type NavItem = {
+  key: NavKey;
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  soon?: boolean;
+};
 
 // Cross-client items live at the root; client-scoped items take the active slug.
 function navFor(slug: string | null): { section: string; items: NavItem[] }[] {
@@ -30,12 +39,13 @@ function navFor(slug: string | null): { section: string; items: NavItem[] }[] {
       items: [
         { key: "clientes", href: "/clientes", label: "Clientes", icon: Users },
         { key: "mi-trabajo", href: "/mi-trabajo", label: "Mi trabajo", icon: LayoutGrid },
-        { key: "carga", href: "/carga", label: "Carga", icon: GaugeCircle },
+        { key: "carga", href: "/carga", label: "Carga", icon: GaugeCircle, soon: true },
         {
           key: "entrega-check",
           href: "/entrega-check",
           label: "Entregas por revisar",
           icon: CheckCheck,
+          soon: true,
         },
       ],
     },
@@ -52,6 +62,7 @@ function navFor(slug: string | null): { section: string; items: NavItem[] }[] {
                 href: `${clientBase}/entregas`,
                 label: "Entregas",
                 icon: CalendarClock,
+                soon: true,
               },
               { key: "portal", href: `${clientBase}/portal`, label: "Portal", icon: Eye },
             ] as NavItem[],
@@ -60,7 +71,9 @@ function navFor(slug: string | null): { section: string; items: NavItem[] }[] {
       : []),
     {
       section: "Admin",
-      items: [{ key: "admin", href: "/admin", label: "Configuración", icon: Settings }],
+      items: [
+        { key: "admin", href: "/admin", label: "Configuración", icon: Settings, soon: true },
+      ],
     },
   ];
 }
@@ -119,12 +132,34 @@ export function Sidebar({ role = DEFAULT_ROLE }: { role?: ViewRole }) {
                 const active =
                   pathname === item.href || pathname.startsWith(`${item.href}/`);
                 const Icon = item.icon;
+                const row = "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm";
+
+                // Pendiente de construir: se enseña, no se navega.
+                if (item.soon) {
+                  return (
+                    <li key={item.href}>
+                      <span
+                        aria-disabled="true"
+                        title="Todavía no está construida"
+                        className={cn(row, "cursor-default text-sidebar-foreground/35")}
+                      >
+                        <Icon className="size-4 shrink-0" />
+                        {item.label}
+                        <span className="ml-auto rounded-sm bg-sidebar-accent/40 px-1.5 py-px text-[9px] font-semibold uppercase tracking-[0.08em]">
+                          Pronto
+                        </span>
+                      </span>
+                    </li>
+                  );
+                }
+
                 return (
                   <li key={item.href}>
                     <Link
                       href={item.href}
                       className={cn(
-                        "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                        row,
+                        "transition-colors",
                         active
                           ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
                           : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
