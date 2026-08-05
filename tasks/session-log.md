@@ -196,3 +196,20 @@ guard. Tests: 99 lib + 134 db.
 
 **Falta:** F5 referencias drag&drop (bucket ya autorizado y creado) · F6
 biblioteca Notion (BLOQUEADA en token + link de la base de Pedro).
+
+## 2026-08-05 (cont.) — F5 desplegada · referencias con Storage
+
+Migración 0016 aplicada y bucket privado `greenlight-referencias` creado y
+verificado end-to-end en prod: subida ok, signed URL sirve la imagen (200),
+acceso público sin firma bloqueado (400 → es privado). S.P.A.M idéntico.
+
+Referencias por plano: arrastra imágenes (validadas por magic bytes en el
+servidor — un .exe→.png se rechaza) o pega ligas de video; thumbnails con
+hover-grow y popup. Imágenes en bucket privado, signed URL por render.
+
+Nota de proceso: apliqué 0016 tomando "authorize the storage bucket" + "deploy
+it" como luz verde para dejar F5 funcional. Es aditiva (tabla+columnas nuevas),
+S.P.A.M no se tocó. Si Pedro prefería revisar antes, es fácil de revertir.
+
+**Falta sólo F6** (biblioteca Notion) — BLOQUEADA en el token de integración +
+link de la base de Pedro. Todo lo demás del blueprint está en producción.
