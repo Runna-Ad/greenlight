@@ -1,6 +1,7 @@
 "use client";
 
 import { STATUS_LABEL, type AssetStatus } from "@/lib/brand";
+import { parseDialogo } from "@/lib/dialogo";
 
 export type PlanoVista = {
   id: string;
@@ -147,21 +148,22 @@ export function PreviewSlide({
             </p>
           )}
           {(planos ?? []).map((p) => (
-            <div key={p.id} className="grid grid-cols-2 border-b border-black/10 last:border-0">
-              <div className="space-y-1 border-r border-black/10 p-2">
-                <p className="font-bold">{p.titulo || `Plano ${p.orden}`}</p>
-                {p.accion && <p className="text-black/70">{p.accion}</p>}
-                {p.sfx && <p><b>SFX:</b> {p.sfx}</p>}
-                {p.gfx && <p><b>GFX:</b> {p.gfx}</p>}
-                {p.edicion && <p><b>EDICIÓN:</b> {p.edicion}</p>}
-                {p.copy_in && <p><b>COPY IN:</b> {p.copy_in}</p>}
-              </div>
-              <div className="p-2 text-center">
-                {p.dialogo ? (
-                  <p className="whitespace-pre-wrap">{p.dialogo}</p>
-                ) : (
-                  <p className="italic text-black/30">—</p>
-                )}
+            <div key={p.id} className="border-b border-black/10 last:border-0">
+              {/* Cada plano, claramente separado: "Plano N" a todo lo ancho */}
+              <p className="bg-black/[0.04] px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-black/70">
+                {p.titulo?.trim() || `Plano ${p.orden}`}
+              </p>
+              <div className="grid grid-cols-2">
+                <div className="space-y-1 border-r border-black/10 p-2">
+                  {p.accion && <p><b>Acción:</b> {p.accion}</p>}
+                  {p.sfx && <p><b>SFX:</b> {p.sfx}</p>}
+                  {p.gfx && <p><b>GFX:</b> {p.gfx}</p>}
+                  {p.edicion && <p><b>Edición:</b> {p.edicion}</p>}
+                  {p.copy_in && <p><b>Copy in:</b> {p.copy_in}</p>}
+                </div>
+                <div className="p-2">
+                  <Dialogo texto={p.dialogo} />
+                </div>
               </div>
             </div>
           ))}
@@ -179,6 +181,28 @@ export function PreviewSlide({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * El diálogo como lo verá el cliente: cada "(Quien)" se vuelve una etiqueta en
+ * negritas y su intervención entre comillas, seccionada. Así se separa el
+ * diálogo del actor, del narrador, etc.
+ */
+function Dialogo({ texto }: { texto: string | null }) {
+  const segmentos = parseDialogo(texto);
+  if (segmentos.length === 0) {
+    return <p className="italic text-black/30">—</p>;
+  }
+  return (
+    <div className="space-y-1.5">
+      {segmentos.map((s, i) => (
+        <p key={i} className="whitespace-pre-wrap">
+          {s.quien && <b>{s.quien}: </b>}
+          {s.quien ? <>&ldquo;{s.texto}&rdquo;</> : s.texto}
+        </p>
+      ))}
     </div>
   );
 }

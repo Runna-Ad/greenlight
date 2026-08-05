@@ -264,5 +264,22 @@ eq("TikTok detectado", plataformaDeUrl("https://www.tiktok.com/@x/video/1"), "ti
 eq("Drive detectado", plataformaDeUrl("https://drive.google.com/file/d/abc"), "drive");
 eq("basura → otro", plataformaDeUrl("no soy url"), "otro");
 
+// ── Diálogo: (Quien) marca quién habla en la vista del cliente ──
+console.log("\n▶ Diálogo del cliente");
+const { parseDialogo } = await import("../src/lib/dialogo.ts");
+eq("vacío → sin segmentos", parseDialogo("").length, 0);
+eq("sin paréntesis → un segmento sin quien",
+   JSON.stringify(parseDialogo("Me encanta como sabe")),
+   JSON.stringify([{ quien: null, texto: "Me encanta como sabe" }]));
+eq("(Actor) texto → quien + texto",
+   JSON.stringify(parseDialogo("(Actor) Me encanta como sabe")),
+   JSON.stringify([{ quien: "Actor", texto: "Me encanta como sabe" }]));
+eq("dos intervenciones se separan",
+   parseDialogo("(Narrador) En un pueblo (Actor) ¡Hola!").length, 2);
+eq("segunda intervención es del actor",
+   parseDialogo("(Narrador) En un pueblo (Actor) ¡Hola!")[1].quien, "Actor");
+eq("texto antes del primer paréntesis queda sin quien",
+   parseDialogo("Intro... (Actor) hola")[0].quien, null);
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);
