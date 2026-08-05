@@ -16,6 +16,7 @@ import { CabeceraTarea } from "@/components/tarea/cabecera";
 import { AccionesTarea } from "@/components/tarea/acciones-tarea";
 import { NavBundle } from "@/components/tarea/nav-bundle";
 import { RunnaDetails } from "@/components/tarea/runna-details";
+import { BandaMarca } from "@/components/tarea/banda-marca";
 import type { EstaticoVista, PlanoVista } from "@/components/tarea/preview-slide";
 
 export const dynamic = "force-dynamic";
@@ -86,10 +87,10 @@ export default async function TareaPage({
     );
   }
 
-  const [{ data: marca }, { data: reglas }, { data: archivos }, { data: durVocab }, { data: asignaciones }] =
+  const [{ data: marca }, { data: reglas }, { data: archivos }, { data: durVocab }, { data: asignaciones }, { data: brief }] =
     await Promise.all([
       idea.marca_id
-        ? db.from("marcas").select("name, slug").eq("id", idea.marca_id).maybeSingle()
+        ? db.from("marcas").select("name, slug, logo_url").eq("id", idea.marca_id).maybeSingle()
         : Promise.resolve({ data: null }),
       db.from("reglas").select("*").eq("activo", true).returns<Regla[]>(),
       db
@@ -118,6 +119,10 @@ export default async function TareaPage({
           es_lead: boolean;
           track_members: { id: string; name: string; color: string } | null;
         }[]>(),
+      // El "Resumen del brief" de la banda de marca (briefs.description).
+      db.from("briefs").select("description").eq("id", idea.brief_id).maybeSingle<{
+        description: string | null;
+      }>(),
     ]);
   const memberIds = (asignaciones ?? []).map((a) => a.member_id).filter(Boolean) as string[];
   const personas = (asignaciones ?? [])
@@ -260,6 +265,20 @@ export default async function TareaPage({
           Dinos quién eres arriba a la derecha para que quede registrado quién escribe.
         </p>
       )}
+
+      {/* Banda de marca: logo + topic + resumen del brief + content type + channels */}
+      <div className="mb-4">
+        <BandaMarca
+          briefId={idea.brief_id}
+          marca={marca?.name ?? null}
+          logoUrl={marca?.logo_url ?? null}
+          topic={idea.naming_base ?? idea.concepto}
+          tipoAsset={idea.tipo_asset}
+          plataformas={idea.plataformas ?? []}
+          resumen={brief?.description ?? null}
+          puedeEditar={canOverrideStatus(role)}
+        />
+      </div>
 
       {/* Rünna details — SÓLO INTERNO. El panel no se construye para el cliente:
           se decide en el servidor, no con CSS. Ocultar con `hidden` dejaría los

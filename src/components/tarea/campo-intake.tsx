@@ -1,20 +1,26 @@
 "use client";
 
 import { useId } from "react";
-import { guardarIntake, type IntakeResultado } from "@/app/(app)/[cliente]/tareas/[id]/actions";
+import {
+  guardarIntake,
+  guardarBrief,
+  type IntakeResultado,
+} from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { cn } from "@/lib/utils";
 import { Indicador, PanelConflicto, useAutoguardado } from "./campo";
 
+type CampoIdea = "duracion" | "trend" | "notas" | "entrega_url" | "entrega_num";
+type CampoBrief = "description";
+
 /**
- * Un campo de la CABECERA (vive en `ideas`, no en la tabla de la plantilla).
- *
- * Mismo autoguardado que el cuerpo — el hook es compartido — pero con la forma
- * de un dato del intake: una línea, etiqueta chiquita arriba, sin marco cuando
- * no se está editando. La cabecera es de lectura rápida; un textarea con borde
- * por cada campo la convertiría en un formulario.
+ * Un campo del intake, con autoguardado por campo (hook compartido con el
+ * cuerpo). Escribe a `ideas` (pasar `ideaId`) o a `briefs` (pasar `briefId`) —
+ * exactamente uno de los dos. La forma es la de un dato del intake: una línea,
+ * etiqueta chiquita, sin marco hasta enfocar; la cabecera es de lectura rápida.
  */
 export function CampoIntake({
   ideaId,
+  briefId,
   campo,
   label,
   valorInicial,
@@ -25,8 +31,9 @@ export function CampoIntake({
   soloLectura,
   onGuardado,
 }: {
-  ideaId: string;
-  campo: "duracion" | "trend" | "notas" | "entrega_url" | "entrega_num";
+  ideaId?: string;
+  briefId?: string;
+  campo: CampoIdea | CampoBrief;
   label: string;
   valorInicial: string | null;
   placeholder?: string;
@@ -39,7 +46,9 @@ export function CampoIntake({
 }) {
   const listaId = useId();
   const g = useAutoguardado(valorInicial, async (anterior, nuevo) => {
-    const res = await guardarIntake(ideaId, campo, anterior, nuevo);
+    const res = briefId
+      ? await guardarBrief(briefId, campo as CampoBrief, anterior, nuevo)
+      : await guardarIntake(ideaId!, campo as CampoIdea, anterior, nuevo);
     onGuardado?.(res);
     return res;
   });

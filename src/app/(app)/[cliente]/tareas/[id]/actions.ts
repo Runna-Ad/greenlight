@@ -121,6 +121,48 @@ export async function guardarIntake(
   return { ok: true, filenames: (archivos ?? []).map((a) => a.filename).filter(Boolean) as string[] };
 }
 
+/** Campos editables del BRIEF (viven en `briefs`, no en `ideas`). */
+const CAMPOS_BRIEF = new Set(["description"]);
+
+/**
+ * Guarda un campo del BRIEF (el "Resumen del brief" de la banda de marca), con
+ * el mismo compare-and-set. Aparte de guardarIntake porque escribe otra tabla
+ * y su permiso es de lead (el resumen lo pone quien arma el brief).
+ */
+export async function guardarBrief(
+  briefId: string,
+  campo: string,
+  valorAnterior: string | null,
+  valorNuevo: string | null,
+): Promise<IntakeResultado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!CAMPOS_BRIEF.has(campo)) return { ok: false, error: `Campo no permitido: ${campo}` };
+
+  const role = await getViewAs();
+  if (!canOverrideStatus(role)) {
+    return { ok: false, error: "Sólo un lead edita el resumen del brief." };
+  }
+
+  const db = supabaseAdmin();
+  const limpio = valorNuevo?.trim() ? valorNuevo.trim() : null;
+
+  const base = db.from("briefs").update({ [campo]: limpio }).eq("id", briefId);
+  const { data, error } =
+    valorAnterior === null
+      ? await base.is(campo, null).select("id")
+      : await base.eq(campo, valorAnterior).select("id");
+
+  if (error) return { ok: false, error: error.message };
+
+  if (!data?.length) {
+    const { data: actual } = await db
+      .from("briefs").select(campo).eq("id", briefId).maybeSingle();
+    const v = (actual as Record<string, string | null> | null)?.[campo] ?? null;
+    if (v !== limpio) return { ok: false, conflicto: true, valorActual: v };
+  }
+  return { ok: true };
+}
+
 /**
  * Guarda UN campo, con compare-and-set.
  *

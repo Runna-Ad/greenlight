@@ -239,5 +239,15 @@ eq("javascript: NO pasa", urlSegura("javascript:alert(1)"), false);
 eq("data: NO pasa", urlSegura("data:text/html,<script>"), false);
 eq("texto suelto NO pasa", urlSegura("drive.google.com"), false);
 
+// ── Íconos: content type derivado del Tipo de Asset ──
+console.log("\n▶ Content type");
+const { contentType, canales } = await import("../src/lib/iconos.ts");
+eq("RP Video → persona real", contentType("RP Video").label, "Video persona real");
+eq("Normal Video → animado", contentType("Normal Video").label, "Video animado");
+eq("Images → estática", contentType("Images").label, "Imagen estática");
+eq("desconocido → animado (no revienta)", contentType("Loquesea").label, "Video animado");
+eq("FB trae su etiqueta", canales(["FB"])[0].label, "Facebook");
+eq("EC cae en neutro", canales(["EC"])[0].color, "var(--muted-foreground)");
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);
