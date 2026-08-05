@@ -7,9 +7,11 @@ import { toast } from "sonner";
 import { agregarPlano, borrarPlano } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import {
   PLACEHOLDER_ESTATICO,
-  PLACEHOLDER_GUION,
   compararDuracion,
+  notaGlobal,
+  placeholdersGuion,
   readTimeS,
+  voz,
 } from "@/lib/plantilla";
 import { reglasQueAplican, type Regla } from "@/lib/reglas";
 import { Button } from "@/components/ui/button";
@@ -49,6 +51,11 @@ export function EditorTarea({
   const [, startTransition] = useTransition();
 
   const esEstatico = estatico !== null;
+  // Real Person y Normal no son la misma plantilla: cambian los placeholders,
+  // el título del plano y quién habla en la columna del diálogo.
+  const PH = placeholdersGuion(cabecera.tipoAsset);
+  const quienHabla = voz(cabecera.tipoAsset);
+  const nota = notaGlobal(cabecera.tipoAsset);
 
   const editarPlano = (id: string, campo: keyof PlanoVista, valor: string) =>
     setPlanos((prev) =>
@@ -168,7 +175,7 @@ export function EditorTarea({
                   Acción + Copy in + GFX / SFX (Motion)
                 </p>
                 <p className="bg-[#ff6d01] px-2 py-1.5 text-center text-[10px] font-bold uppercase text-white">
-                  Diálogo
+                  Diálogo · {quienHabla}
                 </p>
               </div>
 
@@ -180,6 +187,11 @@ export function EditorTarea({
 
               {planos.map((p) => (
                 <div key={p.id} className="rounded-lg border border-border bg-card p-3">
+                  {p.orden === 1 && nota && (
+                    <p className="mb-2 rounded bg-secondary/70 px-2 py-1 text-[11px] font-medium text-secondary-foreground">
+                      {nota}
+                    </p>
+                  )}
                   <div className="mb-2 flex items-center gap-2">
                     <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">
                       Plano {p.orden}
@@ -202,35 +214,35 @@ export function EditorTarea({
                     <div className="space-y-3">
                       <Campo tabla="planos" filaId={p.id} campo="titulo" label="Plano"
                         valorInicial={p.titulo} rows={1} soloLectura={soloLectura}
-                        placeholder={PLACEHOLDER_GUION.titulo}
+                        placeholder={PH.titulo}
                         onCambio={(v) => editarPlano(p.id, "titulo", v)} />
                       <Campo tabla="planos" filaId={p.id} campo="accion" label="Acción"
                         valorInicial={p.accion} rows={2} soloLectura={soloLectura}
-                        placeholder={PLACEHOLDER_GUION.accion}
+                        placeholder={PH.accion}
                         onCambio={(v) => editarPlano(p.id, "accion", v)} />
                       <Campo tabla="planos" filaId={p.id} campo="copy_in" label="Copy in"
                         valorInicial={p.copy_in} rows={2} soloLectura={soloLectura}
-                        placeholder={PLACEHOLDER_GUION.copy_in}
+                        placeholder={PH.copy_in}
                         onCambio={(v) => editarPlano(p.id, "copy_in", v)} />
                       <div className="grid gap-2 sm:grid-cols-3">
                         <Campo tabla="planos" filaId={p.id} campo="sfx" label="SFX"
                           valorInicial={p.sfx} rows={2} soloLectura={soloLectura}
-                          placeholder={PLACEHOLDER_GUION.sfx}
+                          placeholder={PH.sfx}
                           onCambio={(v) => editarPlano(p.id, "sfx", v)} />
                         <Campo tabla="planos" filaId={p.id} campo="gfx" label="GFX"
                           valorInicial={p.gfx} rows={2} soloLectura={soloLectura}
-                          placeholder={PLACEHOLDER_GUION.gfx}
+                          placeholder={PH.gfx}
                           onCambio={(v) => editarPlano(p.id, "gfx", v)} />
                         <Campo tabla="planos" filaId={p.id} campo="edicion" label="Edición"
                           valorInicial={p.edicion} rows={2} soloLectura={soloLectura}
-                          placeholder={PLACEHOLDER_GUION.edicion}
+                          placeholder={PH.edicion}
                           onCambio={(v) => editarPlano(p.id, "edicion", v)} />
                       </div>
                     </div>
 
-                    <Campo tabla="planos" filaId={p.id} campo="dialogo" label="Diálogo"
+                    <Campo tabla="planos" filaId={p.id} campo="dialogo" label={quienHabla}
                       valorInicial={p.dialogo} rows={10} soloLectura={soloLectura}
-                      placeholder={PLACEHOLDER_GUION.dialogo}
+                      placeholder={PH.dialogo}
                       onCambio={(v) => editarPlano(p.id, "dialogo", v)} />
                   </div>
                 </div>

@@ -96,8 +96,20 @@ export async function guardarCampo(
     return { ok: false, conflicto: true, valorActual: v };
   }
 
+  // Empezar a escribir ES empezar a trabajar. Si la tarea seguía en "Por hacer",
+  // se mueve sola — es lo que pidió Pedro: "una vez que el asignado le da click
+  // y empieza a trabajar en ella se mueve en automático a en progreso".
+  // Pasa por rpc_task_start (la única puerta), así que queda en el historial con
+  // quién fue. Si falla, NO se tira el guardado: el texto ya está a salvo.
+  if (status === "todo" && limpio) {
+    const { error: movErr } = await db.rpc("rpc_task_start", {
+      p_idea_id: fila.idea_id,
+      p_actor_member: soy?.id ?? null,
+    });
+    if (!movErr) revalidatePath("/mi-trabajo");
+  }
+
   revalidatePath(`/[cliente]/tareas/${filaId}`, "page");
-  void soy; // la identidad se usará para el aviso de "quién lo cambió"
   return { ok: true };
 }
 

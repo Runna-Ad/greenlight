@@ -3,7 +3,7 @@
 import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.ts";
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
 import { actionsFor, waitingLabel } from "../src/lib/task-actions.ts";
-import { plantillaPara, readTimeS, parseDuracion, compararDuracion, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO } from "../src/lib/plantilla.ts";
+import { plantillaPara, readTimeS, parseDuracion, compararDuracion, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 
 let pass = 0,
   fail = 0;
@@ -184,6 +184,29 @@ eq("un estático nuevo también",
 eq("ninguna instrucción del deck aparece como dato",
    [...Object.values(plano), ...Object.values(estatico)]
      .some(v => typeof v === "string" && textos.includes(v)), false);
+
+
+// ── Real Person vs Normal: no son la misma plantilla ──
+console.log("\n▶ Variantes del guión");
+eq("RP Video es la variante Real", varianteGuion("RP Video"), "real");
+eq("Normal Video es Normal", varianteGuion("Normal Video"), "normal");
+eq("AIGC video también es Normal", varianteGuion("AIGC video"), "normal");
+eq("GIF también", varianteGuion("GIF"), "normal");
+
+eq("en Real habla la Actriz / Actor", voz("RP Video"), "Actriz / Actor");
+eq("en Normal habla una voz en off", voz("Normal Video"), "Mujer/Hombre (V.O)");
+
+eq("Real numera el plano por locación", placeholdersGuion("RP Video").titulo, "Plano 1 - int. locación - MS");
+eq("Normal lo numera por fondo", placeholdersGuion("Normal Video").titulo, "Plano 1 - fondo");
+ok("Normal guía el diálogo con el máximo de 5 seg",
+   placeholdersGuion("Normal Video").dialogo.includes("5 seg"));
+
+ok("sólo Real lleva la nota de actriz/outfits", notaGlobal("RP Video")?.includes("outfits"));
+eq("Normal no lleva nota global", notaGlobal("Normal Video"), null);
+
+eq("las dos variantes difieren en el hook",
+   placeholdersGuion("RP Video").hook_narrativo === placeholdersGuion("Normal Video").hook_narrativo,
+   false);
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

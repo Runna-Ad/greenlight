@@ -98,12 +98,36 @@ export function compararDuracion(totalS: number, duracion: string | null | undef
 // Por eso van como placeholder y nunca como valor inicial — hay un test que
 // afirma que ninguno de estos strings aparece jamás como dato.
 
-export const PLACEHOLDER_GUION = {
+/**
+ * Real Person y Normal NO son la misma plantilla.
+ *
+ * Diferencias que salen del deck del cliente:
+ *   Real Person  → "Plano N - int. locación - MS", Hook narrativo + Hook visual
+ *                  con viñetas, y habla una "Actriz / Actor". Nota global:
+ *                  "1 actriz / 1 actor en todo el video / # outfits."
+ *   Normal       → "Plano N - fondo", guía entre corchetes (Informativo /
+ *                  Conversaciones / Testimoniales / Formato innovador), y habla
+ *                  una voz en off: "Mujer/Hombre (V.O)".
+ */
+export type VarianteGuion = "real" | "normal";
+
+const VARIANTE_POR_TIPO: Record<string, VarianteGuion> = {
+  "RP Video": "real",
+  "Normal Video": "normal",
+  "AIGC video": "normal",
+  GIF: "normal",
+};
+
+export function varianteGuion(tipo: string | undefined | null): VarianteGuion {
+  return VARIANTE_POR_TIPO[(tipo ?? "").trim()] ?? "normal";
+}
+
+const GUION_REAL = {
   titulo: "Plano 1 - int. locación - MS",
   hook_narrativo:
-    "Compra aspiracional o solución a un problema · Recompensa inmediata en 1ra persona · Tendencia · Curiosidad",
+    "Problema urgente y cómo se resolvió · Recompensa inmediata en 1ra persona (ya me aprobaron, ya la tengo) · Tendencia · Curiosidad o morbo",
   hook_visual:
-    "Tomas experimentales (ángulos, cenitales, manos, copy en objetos) · Tema o estilo visual",
+    "Tomas experimentales (ángulos creativos, cenitales, manos haciendo algo random, copy en objetos) · Tema o estilo visual (sketch, canciones, personajes, testimonios)",
   accion: "Cambio de fondo y/o acción",
   copy_in: "Texto que aparece en pantalla",
   sfx: "Música / sonidos",
@@ -111,6 +135,38 @@ export const PLACEHOLDER_GUION = {
   edicion: "Reencuadre / B-roll / insert / transición",
   dialogo: "Lo que dice la actriz o el actor",
 } as const;
+
+const GUION_NORMAL = {
+  titulo: "Plano 1 - fondo",
+  hook_narrativo:
+    "Informativo: hablar directo al usuario e iniciar con pregunta · Conversaciones entre personajes · Testimoniales con problema al iniciar · Información práctica: qué es y cómo pedirlo",
+  hook_visual: "Formato innovador: DIY, collage, stickers…",
+  accion: "Cambio de fondo / acción",
+  copy_in: "Texto que aparece en pantalla",
+  sfx: "Música / sonidos",
+  gfx: "Imágenes / emojis",
+  edicion: "Reencuadre / B-roll / insert / transición",
+  dialogo: "1 o 2 selling points · máx. 5 seg de diálogo",
+} as const;
+
+export function placeholdersGuion(tipo: string | undefined | null) {
+  return varianteGuion(tipo) === "real" ? GUION_REAL : GUION_NORMAL;
+}
+
+/** Quién habla, según la variante. Sale literal del deck. */
+export function voz(tipo: string | undefined | null): string {
+  return varianteGuion(tipo) === "real" ? "Actriz / Actor" : "Mujer/Hombre (V.O)";
+}
+
+/** Nota que en el deck va sobre el Plano 1 de Real Person, y sólo ahí. */
+export function notaGlobal(tipo: string | undefined | null): string | null {
+  return varianteGuion(tipo) === "real"
+    ? "1 actriz / 1 actor en todo el video · # outfits"
+    : null;
+}
+
+/** Se conserva para los tests que ya lo usan (es la variante Real). */
+export const PLACEHOLDER_GUION = GUION_REAL;
 
 export const PLACEHOLDER_ESTATICO = {
   copy_titulo: "Beneficio principal",

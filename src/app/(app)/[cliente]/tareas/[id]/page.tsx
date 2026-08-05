@@ -10,6 +10,7 @@ import { STATUS_LABEL, STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
 import { ESTADOS_CERRADOS, plantillaPara } from "@/lib/plantilla";
 import type { Regla } from "@/lib/reglas";
 import { EditorTarea } from "@/components/tarea/editor-tarea";
+import { CabeceraTarea } from "@/components/tarea/cabecera";
 import type { EstaticoVista, PlanoVista } from "@/components/tarea/preview-slide";
 
 export const dynamic = "force-dynamic";
@@ -79,13 +80,20 @@ export default async function TareaPage({
     );
   }
 
-  const [{ data: marca }, { data: reglas }, { count: numArchivos }] = await Promise.all([
+  const [{ data: marca }, { data: reglas }, { data: archivos }] = await Promise.all([
     idea.marca_id
       ? db.from("marcas").select("name, slug").eq("id", idea.marca_id).maybeSingle()
       : Promise.resolve({ data: null }),
     db.from("reglas").select("*").eq("activo", true).returns<Regla[]>(),
-    db.from("assets").select("id", { count: "exact", head: true }).eq("idea_id", idea.id),
+    db
+      .from("assets")
+      .select("filename, tamano_code, plataforma_code")
+      .eq("idea_id", idea.id)
+      .order("tamano_code")
+      .order("plataforma_code")
+      .returns<{ filename: string | null }[]>(),
   ]);
+  const filenames = (archivos ?? []).map((a) => a.filename).filter(Boolean) as string[];
 
   // El cuerpo: se crea la primera fila al abrir, para que la persona escriba ya.
   let planos: PlanoVista[] = [];
@@ -165,7 +173,7 @@ export default async function TareaPage({
               </span>
             )}
             <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <Files className="size-3" /> {numArchivos ?? 0} archivos
+              <Files className="size-3" /> {filenames.length} archivos
             </span>
           </div>
           <h2 className="mt-1.5 font-mono text-xl font-semibold text-foreground">
@@ -189,6 +197,24 @@ export default async function TareaPage({
           Dinos quién eres arriba a la derecha para que quede registrado quién escribe.
         </p>
       )}
+
+      {/* La cabecera va aquí y no como prop del editor: pasar JSX por prop hacía
+          que React reportara una key faltante contra el componente equivocado. */}
+      <div className="mb-4">
+        <CabeceraTarea
+          tipoAsset={idea.tipo_asset}
+          plantilla={plantilla}
+          plataformas={idea.plataformas ?? []}
+          tamanos={idea.tamanos ?? []}
+          duracion={idea.duracion}
+          marca={marca?.name ?? null}
+          formato={idea.formato_code}
+          entregaNum={idea.entrega_num}
+          entregaFinal={idea.entrega_final}
+          entregaUrl={idea.entrega_url}
+          filenames={filenames}
+        />
+      </div>
 
       <EditorTarea
         ideaId={idea.id}
