@@ -212,6 +212,46 @@ export default async function TareaPage({
     }
   }
 
+  // Referencias del ESTÁTICO — sólo imágenes, mismo bucket privado + signed URL.
+  const refsEstatico: RefVista[] = [];
+  if (plantilla === "estatico" && estatico) {
+    const { data: vinculos } = await db
+      .from("estatico_references")
+      .select("position, references(id, kind, url, storage_path, thumbnail_url, platform)")
+      .eq("estatico_id", estatico.id)
+      .order("position")
+      .returns<
+        {
+          references: {
+            id: string;
+            kind: "imagen" | "video";
+            url: string;
+            storage_path: string | null;
+            thumbnail_url: string | null;
+            platform: string | null;
+          } | null;
+        }[]
+      >();
+    for (const v of vinculos ?? []) {
+      const r = v.references;
+      if (!r) continue;
+      let displayUrl: string | null = r.kind === "video" ? r.url : null;
+      if (r.kind === "imagen" && r.storage_path) {
+        const { data: firmada } = await db.storage
+          .from("greenlight-referencias")
+          .createSignedUrl(r.storage_path, 60 * 60);
+        displayUrl = firmada?.signedUrl ?? null;
+      }
+      refsEstatico.push({
+        id: r.id,
+        kind: r.kind,
+        displayUrl,
+        thumbnail: r.thumbnail_url,
+        platform: r.platform,
+      });
+    }
+  }
+
   // Legales: la BIBLIOTECA disponible (por marca) + cuáles están SELECCIONADOS
   // en esta tarea (idea_snippets). El picker agrega/quita; el texto libre es
   // aparte (ideas.legales_libres).
@@ -378,6 +418,7 @@ export default async function TareaPage({
         planosIniciales={planos}
         estaticoInicial={estatico}
         refsPorPlano={refsPorPlano}
+        refsEstatico={refsEstatico}
         reglas={reglas ?? []}
         legales={legalesPreview}
         notaGuion={idea.nota_guion}

@@ -8,6 +8,7 @@ import {
   subirReferencia,
   agregarReferenciaLink,
   quitarReferencia,
+  type RefOwner,
 } from "@/app/(app)/[cliente]/tareas/[id]/referencias-actions";
 import {
   Dialog,
@@ -34,12 +35,17 @@ export type RefVista = {
  * abren en grande. Imágenes suben al bucket privado; videos van por link.
  */
 export function ReferenciasPlano({
-  planoId,
+  owner,
   refs,
+  soloImagenes,
+  etiqueta = "Referencia",
   soloLectura,
 }: {
-  planoId: string;
+  owner: RefOwner;
   refs: RefVista[];
+  /** Estáticos: sólo imágenes, sin el botón de link de video. */
+  soloImagenes?: boolean;
+  etiqueta?: string;
   soloLectura?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
@@ -55,7 +61,7 @@ export function ReferenciasPlano({
       for (const file of Array.from(files)) {
         const form = new FormData();
         form.set("file", file);
-        const res = await subirReferencia(planoId, form);
+        const res = await subirReferencia(owner, form);
         if (!res.ok) toast.error(res.error);
       }
     });
@@ -63,7 +69,7 @@ export function ReferenciasPlano({
 
   const agregarLink = () =>
     startTransition(async () => {
-      const res = await agregarReferenciaLink(planoId, link);
+      const res = await agregarReferenciaLink(owner, link);
       if (!res.ok) toast.error(res.error);
       else {
         setLink("");
@@ -73,14 +79,14 @@ export function ReferenciasPlano({
 
   const quitar = (referenceId: string) =>
     startTransition(async () => {
-      const res = await quitarReferencia(planoId, referenceId);
+      const res = await quitarReferencia(owner, referenceId);
       if (!res.ok) toast.error(res.error);
     });
 
   return (
     <div>
       <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Referencia
+        {etiqueta}
       </p>
 
       <div
@@ -117,16 +123,18 @@ export function ReferenciasPlano({
                 {pending ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
                 <span className="text-[8px]">Imagen</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setPidiendoLink(true)}
-                disabled={pending}
-                title="Pegar link de video"
-                className="flex size-14 flex-col items-center justify-center gap-0.5 rounded-md border border-border text-center text-muted-foreground hover:border-primary hover:text-primary"
-              >
-                <Link2 className="size-4" />
-                <span className="text-[8px] leading-tight">Link de video</span>
-              </button>
+              {!soloImagenes && (
+                <button
+                  type="button"
+                  onClick={() => setPidiendoLink(true)}
+                  disabled={pending}
+                  title="Pegar link de video"
+                  className="flex size-14 flex-col items-center justify-center gap-0.5 rounded-md border border-border text-center text-muted-foreground hover:border-primary hover:text-primary"
+                >
+                  <Link2 className="size-4" />
+                  <span className="text-[8px] leading-tight">Link de video</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -139,7 +147,9 @@ export function ReferenciasPlano({
         {!soloLectura && (
           <p className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground/70">
             <UploadCloud className="size-3" />
-            Arrastra imágenes aquí, o usa los botones. Videos van por link.
+            {soloImagenes
+              ? "Arrastra imágenes aquí, o usa el botón."
+              : "Arrastra imágenes aquí, o usa los botones. Videos van por link."}
           </p>
         )}
 

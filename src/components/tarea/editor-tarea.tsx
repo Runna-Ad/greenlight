@@ -33,6 +33,7 @@ export function EditorTarea({
   planosIniciales,
   estaticoInicial,
   refsPorPlano,
+  refsEstatico,
   reglas,
   legales,
   cortinilla,
@@ -45,6 +46,7 @@ export function EditorTarea({
   planosIniciales: PlanoVista[];
   estaticoInicial: EstaticoVista | null;
   refsPorPlano: Record<string, RefVista[]>;
+  refsEstatico: RefVista[];
   reglas: Regla[];
   legales: string[];
   notaGuion: string | null;
@@ -195,10 +197,15 @@ export function EditorTarea({
                 <p className="rounded bg-[#ff6d01] px-2 py-1 text-center text-[10px] font-bold uppercase text-white">
                   Referencia / Imagen
                 </p>
-                <Campo tabla="estaticos" filaId={estatico.id} campo="referencia_url" label="Liga"
-                  valorInicial={estatico.referencia_url} rows={1} mono soloLectura={soloLectura}
-                  placeholder={PLACEHOLDER_ESTATICO.referencia_url}
-                  onCambio={(v) => editarEstatico("referencia_url", v)} />
+                {/* En estático, la referencia es el drag & drop de IMÁGENES (sin
+                    video): sube al bucket privado, thumbnails con popup grande. */}
+                <ReferenciasPlano
+                  owner={{ tipo: "estatico", id: estatico.id }}
+                  refs={refsEstatico}
+                  soloImagenes
+                  etiqueta="Imágenes de referencia"
+                  soloLectura={soloLectura}
+                />
                 <Campo tabla="estaticos" filaId={estatico.id} campo="referencia_nota" label="Nota de diseño"
                   valorInicial={estatico.referencia_nota} rows={4} soloLectura={soloLectura}
                   placeholder={PLACEHOLDER_ESTATICO.referencia_nota}
@@ -279,7 +286,7 @@ export function EditorTarea({
                         onCambio={(v) => editarPlano(p.id, "dialogo", v)} />
                       {/* La caja REFERENCIA del wireframe, junto al diálogo */}
                       <ReferenciasPlano
-                        planoId={p.id}
+                        owner={{ tipo: "plano", id: p.id }}
                         refs={refsPorPlano[p.id] ?? []}
                         soloLectura={soloLectura}
                       />

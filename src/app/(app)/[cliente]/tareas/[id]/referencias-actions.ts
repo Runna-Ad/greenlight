@@ -17,18 +17,32 @@ const BUCKET = "greenlight-referencias";
 
 export type RefResultado = { ok: true } | { ok: false; error: string };
 
+/**
+ * A qué se ancla la referencia: un PLANO (guión) o un ESTÁTICO. Cada uno tiene
+ * su tabla de vínculo, pero comparten el registro (produccion.references) y toda
+ * la lógica de subida. Antes esto sólo servía para planos.
+ */
+export type RefOwner = { tipo: "plano" | "estatico"; id: string };
+
+/** La tabla de vínculo y su columna, según el dueño. */
+function vinculoDe(owner: RefOwner): { tabla: "plano_references" | "estatico_references"; col: string } {
+  return owner.tipo === "plano"
+    ? { tabla: "plano_references", col: "plano_id" }
+    : { tabla: "estatico_references", col: "estatico_id" };
+}
+
 async function puedeEditar(): Promise<boolean> {
   return canMoveStatus(await getViewAs());
 }
 
 /**
- * Sube una IMAGEN de referencia y la ancla a un plano.
+ * Sube una IMAGEN de referencia y la ancla a su dueño (plano o estático).
  *
  * Toda la validación es del SERVIDOR: el tipo se decide por magic bytes (no por
  * el nombre ni el Content-Type que manda el cliente — un .exe renombrado a .png
  * mentiría), el tamaño se corta a 10 MB, y la extensión sale del tipo sniffado.
  */
-export async function subirReferencia(planoId: string, form: FormData): Promise<RefResultado> {
+export async function subirReferencia(owner: RefOwner, form: FormData): Promise<RefResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   if (!(await puedeEditar())) return { ok: false, error: "Este rol no edita referencias." };
 
@@ -44,19 +58,17 @@ export async function subirReferencia(planoId: string, form: FormData): Promise<
 
   const soy = await getSoy();
   const db = supabaseAdmin();
+  const { tabla, col } = vinculoDe(owner);
 
-  // Ruta con timestamp-libre: el id de la fila lo pone la BD, así que el nombre
-  // se arma con un valor único de la BD para no depender de Date.now().
+  // Ruta timestamp-libre: el nombre se arma con un uuid, no con Date.now().
   const ext = EXT_POR_MIME[mime];
-  const nombre = `${planoId}/${crypto.randomUUID()}.${ext}`;
+  const nombre = `${owner.id}/${crypto.randomUUID()}.${ext}`;
 
   const { error: upErr } = await db.storage
     .from(BUCKET)
     .upload(nombre, bytes, { contentType: mime, upsert: false });
   if (upErr) return { ok: false, error: `No se pudo subir: ${upErr.message}` };
 
-  // El registro. url debe ser único (constraint de la 0001), y una imagen no
-  // tiene url pública — se usa una url interna estable basada en el storage_path.
   const urlInterna = `storage://${BUCKET}/${nombre}`;
   const { data: ref, error: refErr } = await db
     .from("references")
@@ -72,14 +84,11 @@ export async function subirReferencia(planoId: string, form: FormData): Promise<
     .select("id")
     .single();
   if (refErr) {
-    // Rollback del archivo si el registro falla — no dejar huérfanos en el bucket.
-    await db.storage.from(BUCKET).remove([nombre]);
+    await db.storage.from(BUCKET).remove([nombre]); // rollback, no huérfanos
     return { ok: false, error: refErr.message };
   }
 
-  const { error: linkErr } = await db
-    .from("plano_references")
-    .insert({ plano_id: planoId, reference_id: ref.id });
+  const { error: linkErr } = await db.from(tabla).insert({ [col]: owner.id, reference_id: ref.id });
   if (linkErr) return { ok: false, error: linkErr.message };
 
   revalidatePath("/[cliente]/tareas/[id]", "page");
@@ -87,11 +96,12 @@ export async function subirReferencia(planoId: string, form: FormData): Promise<
 }
 
 /**
- * Agrega un VIDEO/referencia por LINK a un plano. Dedup por references.url
- * (unique): si el link ya existe, se reusa el registro en vez de duplicar.
+ * Agrega un VIDEO/referencia por LINK. Dedup por references.url (unique): si el
+ * link ya existe, se reusa el registro en vez de duplicar. (Los estáticos no
+ * usan esto — su UI es sólo imágenes — pero la acción sirve para ambos dueños.)
  */
 export async function agregarReferenciaLink(
-  planoId: string,
+  owner: RefOwner,
   url: string,
   note?: string,
 ): Promise<RefResultado> {
@@ -103,8 +113,8 @@ export async function agregarReferenciaLink(
 
   const soy = await getSoy();
   const db = supabaseAdmin();
+  const { tabla, col } = vinculoDe(owner);
 
-  // ¿Ya existe ese link? (dedup global — references.url es único)
   const { data: existente } = await db
     .from("references").select("id").eq("url", limpia).maybeSingle();
 
@@ -125,37 +135,32 @@ export async function agregarReferenciaLink(
   }
 
   const { error: linkErr } = await db
-    .from("plano_references")
-    .upsert({ plano_id: planoId, reference_id: refId, note: note?.trim() || null });
+    .from(tabla)
+    .upsert({ [col]: owner.id, reference_id: refId, note: note?.trim() || null });
   if (linkErr) return { ok: false, error: linkErr.message };
 
   revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true };
 }
 
-/** Quita una referencia de un plano. El archivo del bucket se limpia si queda huérfano. */
-export async function quitarReferencia(
-  planoId: string,
-  referenceId: string,
-): Promise<RefResultado> {
+/** Quita una referencia de su dueño. El archivo del bucket se limpia si queda huérfano. */
+export async function quitarReferencia(owner: RefOwner, referenceId: string): Promise<RefResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   if (!(await puedeEditar())) return { ok: false, error: "Este rol no edita referencias." };
 
   const db = supabaseAdmin();
-  const { error } = await db
-    .from("plano_references")
-    .delete()
-    .eq("plano_id", planoId)
-    .eq("reference_id", referenceId);
+  const { tabla, col } = vinculoDe(owner);
+  const { error } = await db.from(tabla).delete().eq(col, owner.id).eq("reference_id", referenceId);
   if (error) return { ok: false, error: error.message };
 
-  // ¿La referencia quedó sin ningún plano ni idea que la use? Si es una imagen
-  // subida, se borra el archivo y el registro para no acumular basura.
-  const [{ count: enPlanos }, { count: enIdeas }] = await Promise.all([
+  // ¿Quedó sin ningún dueño (plano / estático / idea)? Si es imagen subida, se
+  // borra el archivo y el registro para no acumular basura.
+  const [{ count: enPlanos }, { count: enEstaticos }, { count: enIdeas }] = await Promise.all([
     db.from("plano_references").select("*", { count: "exact", head: true }).eq("reference_id", referenceId),
+    db.from("estatico_references").select("*", { count: "exact", head: true }).eq("reference_id", referenceId),
     db.from("idea_references").select("*", { count: "exact", head: true }).eq("reference_id", referenceId),
   ]);
-  if ((enPlanos ?? 0) === 0 && (enIdeas ?? 0) === 0) {
+  if ((enPlanos ?? 0) === 0 && (enEstaticos ?? 0) === 0 && (enIdeas ?? 0) === 0) {
     const { data: ref } = await db
       .from("references").select("kind, storage_path").eq("id", referenceId).maybeSingle();
     if (ref?.kind === "imagen" && ref.storage_path) {

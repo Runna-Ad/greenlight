@@ -27,8 +27,6 @@ import {
   type AssetStatus,
 } from "@/lib/brand";
 import { moveTask, setAssignees } from "@/app/(app)/[cliente]/tablero/actions";
-import { EJECUTA_VERBO, TOAST_VERBO } from "@/components/board/verbos";
-import { actionsFor, waitingLabel, type TaskAction } from "@/lib/task-actions";
 import {
   DEFAULT_ROLE,
   canAssign,
@@ -36,6 +34,7 @@ import {
   canOverrideStatus,
   type ViewRole,
 } from "@/lib/roles";
+import { contentType } from "@/lib/iconos";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 
@@ -178,24 +177,6 @@ export function Board({
     applyMove(task, e.over.id as AssetStatus);
   };
 
-  /** Ejecuta un verbo del flujo. La BD sigue siendo la autoridad. */
-  const runAction = (task: Task, action: TaskAction, body?: string) => {
-    const from = task.status;
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: action.to } : t)));
-
-    startTransition(async () => {
-      const res = await EJECUTA_VERBO[action.verb](task.id, body);
-
-      if (!res.ok) {
-        setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: from } : t)));
-        toast.error(res.error ?? "No se pudo completar la acción.");
-        return;
-      }
-      const msg = TOAST_VERBO[action.verb];
-      if (msg) toast.success(msg);
-    });
-  };
-
   const applyAssignees = (task: Task, memberIds: string[]) => {
     const before = task.members;
     const next = memberIds
@@ -260,7 +241,6 @@ export function Board({
               soyId={soyId}
               onAssign={applyAssignees}
               onMove={mayMove ? applyMove : undefined}
-              onAction={runAction}
             />
           ))}
         </div>
@@ -287,7 +267,6 @@ function Column({
   soyId,
   onAssign,
   onMove,
-  onAction,
 }: {
   cliente: string;
   status: AssetStatus;
@@ -299,7 +278,6 @@ function Column({
   soyId: string | null;
   onAssign: (t: Task, ids: string[]) => void;
   onMove?: (t: Task, to: AssetStatus) => void;
-  onAction: (t: Task, a: TaskAction, body?: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const token = STATUS_TOKEN[status];
@@ -366,7 +344,6 @@ function Column({
               soyId={soyId}
               onAssign={onAssign}
               onMove={onMove}
-              onAction={onAction}
             />
           ))
         )}
@@ -387,7 +364,6 @@ function TaskCard({
   soyId,
   onAssign,
   onMove,
-  onAction,
 }: {
   cliente: string;
   task: Task;
@@ -397,7 +373,6 @@ function TaskCard({
   soyId: string | null;
   onAssign: (t: Task, ids: string[]) => void;
   onMove?: (t: Task, to: AssetStatus) => void;
-  onAction: (t: Task, a: TaskAction, body?: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: task.id,
@@ -415,7 +390,6 @@ function TaskCard({
         soyId={soyId}
         onAssign={onAssign}
         onMove={onMove}
-        onAction={onAction}
         handleProps={onMove ? { ...listeners, ...attributes } : undefined}
       />
     </div>
@@ -427,11 +401,8 @@ function CardBody({
   task,
   members,
   mayOverride,
-  role = DEFAULT_ROLE,
-  soyId = null,
   onAssign,
   onMove,
-  onAction,
   handleProps,
   dragging,
 }: {
@@ -439,22 +410,19 @@ function CardBody({
   task: Task;
   members?: Member[];
   mayOverride?: boolean;
+  /** role/soyId ya no se usan aquí (se quitaron los botones del tablero: el
+      trabajo se empuja arrastrando o desde el workspace), pero se dejan en el
+      tipo por si vuelven — los padres los siguen pasando sin costo. */
   role?: ViewRole;
   soyId?: string | null;
   onAssign?: (t: Task, ids: string[]) => void;
   onMove?: (t: Task, to: AssetStatus) => void;
-  onAction?: (t: Task, a: TaskAction, body?: string) => void;
   handleProps?: Record<string, unknown>;
   dragging?: boolean;
 }) {
   const typeToken = task.track === "real" ? "real" : "normal";
-  const ctx = {
-    isAssignee: !!soyId && task.members.some((m) => m.id === soyId),
-    role,
-    hasAssignee: task.members.length > 0,
-  };
-  const acciones = onAction ? actionsFor(task.status, ctx) : [];
-  const espera = waitingLabel(task.status, ctx);
+  const tipo = contentType(task.tipo_asset);
+  const IconoTipo = tipo.icon;
   const enCorrecciones = task.status === "in_corrections";
   const targets = ALLOWED_TRANSITIONS[task.status];
   // Todo lo demás sólo aparece para quien puede sacar la tarea del flujo.
@@ -490,13 +458,17 @@ function CardBody({
             {task.code}
           </span>
         )}
+        {/* Ícono del tipo de asset (video persona real / animado / estático),
+            para reconocerlo de un vistazo junto al código. */}
         <span
-          className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
+          title={tipo.label}
           style={{
             color: `var(--type-${typeToken})`,
             backgroundColor: `color-mix(in srgb, var(--type-${typeToken}) 12%, transparent)`,
           }}
         >
+          <IconoTipo className="size-3" />
           {task.track}
         </span>
 
@@ -545,29 +517,9 @@ function CardBody({
         )}
       </div>
 
-      {/* El camino normal: el trabajo empuja la tarjeta. */}
-      {(acciones.length > 0 || espera) && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-2">
-          {acciones.map((a) =>
-            a.needsBody ? (
-              <RequestChangesButton key={a.verb} task={task} action={a} onAction={onAction!} />
-            ) : (
-              <Button
-                key={a.verb}
-                size="sm"
-                variant={a.tone === "danger" ? "destructive" : "default"}
-                className="h-7 px-2.5 text-[11px]"
-                onClick={() => onAction!(task, a)}
-              >
-                {a.label}
-              </Button>
-            ),
-          )}
-          {espera && acciones.length === 0 && (
-            <span className="text-[11px] italic text-muted-foreground">{espera}</span>
-          )}
-        </div>
-      )}
+      {/* Sin botones de flujo aquí: en el tablero el trabajo se empuja
+          arrastrando (o con "Mover"), y el auto-move + la barra del workspace
+          los hacían redundantes. (Decisión de Pedro.) */}
 
       {/* people + the no-drag way to change status (mobile, keyboard) */}
       <div className="mt-2 flex items-center gap-1 border-t border-border/60 pt-2">
@@ -637,64 +589,6 @@ function CardBody({
         )}
       </div>
     </article>
-  );
-}
-
-/**
- * "Mandar cambios" nunca es un clic suelto: pedir cambios sin decir cuáles no
- * le sirve a nadie. La RPC también lo rechaza — esto sólo evita el viaje.
- */
-function RequestChangesButton({
-  task,
-  action,
-  onAction,
-}: {
-  task: Task;
-  action: TaskAction;
-  onAction: (t: Task, a: TaskAction, body?: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [body, setBody] = useState("");
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button size="sm" variant="destructive" className="h-7 px-2.5 text-[11px]">
-          {action.label}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-2">
-        <p className="px-1 pb-1.5 text-[11px] font-medium text-foreground">
-          ¿Qué hay que corregir?
-        </p>
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={3}
-          autoFocus
-          placeholder="Ej. El hook de los primeros 3 segundos no cierra la idea…"
-          className="w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-[10px] text-muted-foreground">
-            Le llega a quien la trabaja.
-          </span>
-          <Button
-            size="sm"
-            variant="destructive"
-            className="h-7 px-2.5 text-[11px]"
-            disabled={!body.trim()}
-            onClick={() => {
-              onAction(task, action, body.trim());
-              setBody("");
-              setOpen(false);
-            }}
-          >
-            Mandar
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
   );
 }
 
