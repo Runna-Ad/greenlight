@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ChevronDown, ExternalLink, Crown, Check, Pencil } from "lucide-react";
+import { ChevronDown, ExternalLink, Crown, Check, Pencil, Link as LinkIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { setLeads } from "@/app/(app)/[cliente]/tablero/actions";
@@ -61,41 +61,15 @@ export function RunnaDetails({
           {/* Lo más importante, hasta arriba: el nombre final + los demás. */}
           <NombresFinales filenames={filenames} />
 
-          <div className="grid gap-x-8 gap-y-3 sm:grid-cols-[1fr_1fr_auto]">
-          {/* Lead + Team */}
-          <div className="space-y-2">
-            <GrupoPersonas
-              titulo="Lead asignado"
-              personas={leads}
-              vacio="Sin lead marcado"
-            />
-            <GrupoPersonas titulo="Team asignado" personas={team} vacio="Sin equipo" />
-            {puedeEditar && personas.length > 0 && (
-              <EditorLeads ideaId={ideaId} personas={personas} />
-            )}
-          </div>
-
-          {/* Liga de entrega */}
-          <div className="space-y-1">
-            <CampoIntake
-              ideaId={ideaId}
-              campo="entrega_url"
-              label="Link de entrega"
-              valorInicial={entregaUrl}
-              placeholder="https://drive.google.com/…"
-              soloLectura={!puedeEditar}
-            />
-            {entregaUrl && (
-              <a
-                href={entregaUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-              >
-                <ExternalLink className="size-3" /> Abrir entregable
-              </a>
-            )}
-          </div>
+          <div className="grid gap-x-8 gap-y-3 sm:grid-cols-[1fr_auto]">
+            {/* Lead + Team */}
+            <div className="space-y-2">
+              <GrupoPersonas titulo="Lead asignado" personas={leads} vacio="Sin lead marcado" />
+              <GrupoPersonas titulo="Team asignado" personas={team} vacio="Sin equipo" />
+              {puedeEditar && personas.length > 0 && (
+                <EditorLeads ideaId={ideaId} personas={personas} />
+              )}
+            </div>
 
             {/* Prioridad */}
             <CampoIntake
@@ -107,6 +81,42 @@ export function RunnaDetails({
               ancho="w-24"
               soloLectura={!puedeEditar}
             />
+          </div>
+
+          {/* Link de entrega — destacado: es donde el lead pega el link final
+              (Drive/Dropbox), y de aquí sale el botón "Abrir entregable" que
+              verá el CLIENTE en su portal. Caja obvia para que se lea "pega
+              aquí el link". */}
+          <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+            <div className="flex items-center gap-1.5">
+              <LinkIcon className="size-3.5 text-primary" />
+              <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
+                Link de entrega
+              </span>
+            </div>
+            <p className="mt-0.5 mb-2 text-[10px] text-muted-foreground">
+              Pega aquí el link del entregable (Drive / Dropbox). El cliente verá
+              un botón <b>Abrir entregable</b> que abre este link.
+            </p>
+            <CampoIntake
+              ideaId={ideaId}
+              campo="entrega_url"
+              label=""
+              valorInicial={entregaUrl}
+              placeholder="https://drive.google.com/…"
+              caja
+              soloLectura={!puedeEditar}
+            />
+            {entregaUrl && (
+              <a
+                href={entregaUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground hover:opacity-90"
+              >
+                <ExternalLink className="size-3.5" /> Abrir entregable
+              </a>
+            )}
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { ImagePlus, Link2, X, ExternalLink, Loader2 } from "lucide-react";
+import { ImagePlus, Link2, X, ExternalLink, Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -121,11 +121,11 @@ export function ReferenciasPlano({
                 type="button"
                 onClick={() => setPidiendoLink(true)}
                 disabled={pending}
-                title="Pegar liga de video"
-                className="flex size-14 flex-col items-center justify-center gap-0.5 rounded-md border border-border text-muted-foreground hover:border-primary hover:text-primary"
+                title="Pegar link de video"
+                className="flex size-14 flex-col items-center justify-center gap-0.5 rounded-md border border-border text-center text-muted-foreground hover:border-primary hover:text-primary"
               >
                 <Link2 className="size-4" />
-                <span className="text-[8px]">Link</span>
+                <span className="text-[8px] leading-tight">Link de video</span>
               </button>
             </div>
           )}
@@ -134,6 +134,14 @@ export function ReferenciasPlano({
             <span className="py-4 text-center text-[11px] text-muted-foreground/70">Sin referencias</span>
           )}
         </div>
+
+        {/* Leyenda de que la zona es drag & drop */}
+        {!soloLectura && (
+          <p className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground/70">
+            <UploadCloud className="size-3" />
+            Arrastra imágenes aquí, o usa los botones. Videos van por link.
+          </p>
+        )}
 
         <input
           ref={inputFile}

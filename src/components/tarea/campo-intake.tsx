@@ -76,15 +76,21 @@ export function CampoIntake({
     soloLectura && "cursor-default hover:border-transparent",
   );
 
+  // Cuando el contenedor ya trae su propia etiqueta (p. ej. el bloque de Link
+  // de entrega), se pasa label="" y no se pinta el encabezado interno.
+  const ariaLabel = label || placeholder || "campo";
+
   return (
     <div className={cn("min-w-0 leading-tight", ancho)}>
-      <div className="flex items-center gap-1.5">
-        <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-          {label}
-        </span>
-        {caja && !soloLectura && <Pencil className="size-2.5 text-muted-foreground/50" />}
-        <Indicador estado={g.estado} />
-      </div>
+      {label && (
+        <div className="flex items-center gap-1.5">
+          <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+            {label}
+          </span>
+          {caja && !soloLectura && <Pencil className="size-2.5 text-muted-foreground/50" />}
+          <Indicador estado={g.estado} />
+        </div>
+      )}
 
       {rows > 1 ? (
         <textarea
@@ -94,7 +100,7 @@ export function CampoIntake({
           onChange={(e) => g.alEscribir(e.target.value)}
           onBlur={g.alSalir}
           placeholder={placeholder}
-          aria-label={label}
+          aria-label={ariaLabel}
           className={cn(clase, "resize-y")}
         />
       ) : (
@@ -110,7 +116,7 @@ export function CampoIntake({
             onChange={(e) => g.alEscribir(e.target.value)}
             onBlur={g.alSalir}
             placeholder={placeholder}
-            aria-label={label}
+            aria-label={ariaLabel}
             className={clase}
           />
           {sugerencias?.length ? (
