@@ -70,8 +70,9 @@ const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
     "entregas",
     "portal",
   ],
-  // El especialista entra a trabajar lo suyo: su lista y el tablero.
-  creative: ["mi-trabajo", "tablero"],
+  // El especialista entra a trabajar lo suyo: su lista, el tablero y los
+  // bundles (donde sólo ve las tareas que tiene asignadas).
+  creative: ["mi-trabajo", "tablero", "briefs"],
   // El cliente no entra a la app interna en absoluto — sólo a su portal.
   client: ["portal"],
 };
@@ -91,3 +92,10 @@ export const canAssign = (role: ViewRole): boolean =>
 
 /** Quién puede mover una tarea por el flujo normal. */
 export const canMoveStatus = (role: ViewRole): boolean => role !== "client";
+
+/**
+ * Quién puede CREAR un brief. Aparte de canSee("briefs"): el especialista ahora
+ * ve los bundles, pero capturar un brief sigue siendo del lead.
+ */
+export const canCreateBrief = (role: ViewRole): boolean =>
+  role === "admin" || role === "lead";

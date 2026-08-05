@@ -9,9 +9,12 @@ import { ROLE_LABEL, canSee, canOverrideStatus } from "@/lib/roles";
 import { STATUS_LABEL, STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
 import { ESTADOS_CERRADOS, plantillaPara } from "@/lib/plantilla";
 import type { Regla } from "@/lib/reglas";
+import { posicionEnBundle } from "@/lib/bundle";
+import { cargarBundle } from "@/lib/bundle-data";
 import { EditorTarea } from "@/components/tarea/editor-tarea";
 import { CabeceraTarea } from "@/components/tarea/cabecera";
 import { AccionesTarea } from "@/components/tarea/acciones-tarea";
+import { NavBundle } from "@/components/tarea/nav-bundle";
 import type { EstaticoVista, PlanoVista } from "@/components/tarea/preview-slide";
 
 export const dynamic = "force-dynamic";
@@ -111,6 +114,11 @@ export default async function TareaPage({
         .returns<{ member_id: string | null }[]>(),
     ]);
   const memberIds = (asignaciones ?? []).map((a) => a.member_id).filter(Boolean) as string[];
+
+  // El bundle: las tareas hermanas de este brief, con el MISMO filtro y orden
+  // que los cards de /briefs (lib/bundle.ts es la única fuente).
+  const bundle = await cargarBundle(idea.brief_id, role, soy?.id ?? null);
+  const posicion = posicionEnBundle(bundle, idea.id);
   const filenames = (archivos ?? []).map((a) => a.filename).filter(Boolean) as string[];
 
   // El cuerpo: se crea la primera fila al abrir, para que la persona escriba ya.
@@ -164,7 +172,17 @@ export default async function TareaPage({
 
   return (
     <div>
-      <Volver cliente={cliente} />
+      <div className="flex items-center justify-between">
+        <Volver cliente={cliente} />
+        {/* Wireframe: flechas ← 2/10 → arriba a la derecha para recorrer el bundle. */}
+        <NavBundle
+          cliente={cliente}
+          indice={posicion.indice}
+          total={posicion.total}
+          anterior={posicion.anterior}
+          siguiente={posicion.siguiente}
+        />
+      </div>
 
       <div className="mb-4 mt-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">

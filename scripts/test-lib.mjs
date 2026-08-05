@@ -204,5 +204,31 @@ eq("las dos variantes difieren en el hook",
    placeholdersGuion("RP Video").hook_narrativo === placeholdersGuion("Normal Video").hook_narrativo,
    false);
 
+// ── Bundle: filtro por rol + orden estable ──
+console.log("\n▶ Bundle");
+const { filtroBundle, compararBundle, posicionEnBundle } = await import("../src/lib/bundle.ts");
+
+const T = (id, code, member_ids = []) => ({ id, code, member_ids });
+const tareas = [T("b", "A2", ["m1"]), T("a", "A1", ["m2"]), T("c", null, ["m1"]), T("d", "B1", [])];
+
+eq("el lead ve todo", tareas.filter(filtroBundle("lead", null)).length, 4);
+eq("el especialista sólo lo suyo", tareas.filter(filtroBundle("creative", "m1")).length, 2);
+eq("especialista SIN identidad → bundle vacío, no 'todo'",
+   tareas.filter(filtroBundle("creative", null)).length, 0);
+
+const orden = [...tareas].sort(compararBundle).map((t) => t.id).join(",");
+eq("orden por código, sin código al final", orden, "a,b,d,c");
+eq("el orden es estable entre cargas",
+   [...tareas].reverse().sort(compararBundle).map((t) => t.id).join(","), orden);
+
+const ordenadas = [...tareas].sort(compararBundle);
+const pos = posicionEnBundle(ordenadas, "b");
+eq("posición 2/4 con vecinos correctos",
+   `${pos.indice + 1}/${pos.total}:${pos.anterior?.id}→${pos.siguiente?.id}`, "2/4:a→d");
+eq("tarea fuera del bundle filtrado → índice -1 (flechas apagadas)",
+   posicionEnBundle(ordenadas.filter(filtroBundle("creative", "m1")), "a").indice, -1);
+eq("la primera no tiene anterior", posicionEnBundle(ordenadas, "a").anterior, null);
+eq("la última no tiene siguiente", posicionEnBundle(ordenadas, "c").siguiente, null);
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);
