@@ -54,7 +54,10 @@ profiles=1 (Pedro admin) · track_members=14 · vocab_terms=37 · clients=1 (DiD
   en `src/components/shell/sidebar.tsx`.
 
 ## Riesgos conocidos
-1. **SIN REPO DE GIT PROPIO** — git root es `/Users/work`. Todo sin versionar. ARREGLAR PRIMERO.
+1. **SIN REMOTO** — el repo propio existe desde el 2026-08-04 (ya no cuelga de
+   `/Users/work`), pero no tiene remoto: todo el historial vive sólo en este
+   disco y un fallo de hardware se lo lleva. Los deploys van por `vercel --prod`
+   desde la CLI, no por git. Decidir cuenta y visibilidad y añadir el remoto.
 2. `SHEETS_SCRIPT_SECRET` estuvo público ~4 min (leak RSC, ya corregido) — rotar
 3. App pública sin login — decisión de Pedro, revisar antes del lanzamiento
 4. `database.types.ts` es manual, no generado
