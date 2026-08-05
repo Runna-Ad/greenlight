@@ -145,15 +145,20 @@ export function ReferenciasPlano({
         />
       </div>
 
-      {/* pop-up en grande */}
+      {/* pop-up en grande — la referencia se ve para juzgarla, no de miniatura.
+          Se fuerza sm:max-w para ganarle al sm:max-w-sm por defecto de Dialog. */}
       <Dialog open={grande !== null} onOpenChange={(o) => !o && setGrande(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle className="text-sm">Referencia</DialogTitle>
           </DialogHeader>
           {grande?.kind === "imagen" && grande.displayUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={grande.displayUrl} alt="Referencia" className="max-h-[70vh] w-full rounded object-contain" />
+            <img
+              src={grande.displayUrl}
+              alt="Referencia"
+              className="max-h-[85vh] w-full rounded object-contain"
+            />
           ) : (
             <a
               href={grande?.displayUrl ?? "#"}
