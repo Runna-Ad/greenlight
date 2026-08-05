@@ -335,6 +335,7 @@ export default async function TareaPage({
             personas={personas}
             entregaUrl={idea.entrega_url}
             entregaNum={idea.entrega_num}
+            filenames={filenames}
             puedeEditar={canOverrideStatus(role)}
           />
         </div>
@@ -354,10 +355,7 @@ export default async function TareaPage({
           notas={idea.notas}
           marca={marca?.name ?? null}
           formato={idea.formato_code}
-          entregaNum={idea.entrega_num}
           entregaFinal={idea.entrega_final}
-          entregaUrl={idea.entrega_url}
-          filenames={filenames}
           duracionesSugeridas={(durVocab ?? []).map((v) => v.label_es)}
           soloLectura={soloLectura}
         />

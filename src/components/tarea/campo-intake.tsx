@@ -1,6 +1,8 @@
 "use client";
 
 import { useId } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
 import {
   guardarIntake,
   guardarBrief,
@@ -29,6 +31,8 @@ export function CampoIntake({
   rows = 1,
   ancho,
   soloLectura,
+  caja,
+  refrescar,
   onGuardado,
 }: {
   ideaId?: string;
@@ -42,21 +46,32 @@ export function CampoIntake({
   rows?: number;
   ancho?: string;
   soloLectura?: boolean;
+  /** Recuadro visible siempre (para que se lea "aquí se escribe", no un dato). */
+  caja?: boolean;
+  /** Al guardar bien, refresca la página (p. ej. duración → renombra archivos). */
+  refrescar?: boolean;
   onGuardado?: (res: IntakeResultado) => void;
 }) {
   const listaId = useId();
+  const router = useRouter();
   const g = useAutoguardado(valorInicial, async (anterior, nuevo) => {
     const res = briefId
       ? await guardarBrief(briefId, campo as CampoBrief, anterior, nuevo)
       : await guardarIntake(ideaId!, campo as CampoIdea, anterior, nuevo);
     onGuardado?.(res);
+    // La duración reescribe los nombres en la BD; refrescar re-renderiza para
+    // que "Nombres de archivos" (en Rünna details) muestre los nuevos.
+    if (refrescar && res.ok) router.refresh();
     return res;
   });
 
+  // Recuadro visible (caja) vs. estilo dato (borde sólo al enfocar).
   const clase = cn(
-    "w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-foreground outline-none transition-colors",
-    "hover:border-input focus-visible:border-input focus-visible:ring-2 focus-visible:ring-ring",
-    "placeholder:text-muted-foreground/55",
+    "w-full rounded text-xs text-foreground outline-none transition-colors",
+    "placeholder:text-muted-foreground/55 focus-visible:ring-2 focus-visible:ring-ring",
+    caja
+      ? "border border-input bg-background px-2 py-1.5"
+      : "border border-transparent bg-transparent px-1 py-0.5 hover:border-input focus-visible:border-input",
     g.conflicto !== null && "border-status-corrections",
     soloLectura && "cursor-default hover:border-transparent",
   );
@@ -67,6 +82,7 @@ export function CampoIntake({
         <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
           {label}
         </span>
+        {caja && !soloLectura && <Pencil className="size-2.5 text-muted-foreground/50" />}
         <Indicador estado={g.estado} />
       </div>
 

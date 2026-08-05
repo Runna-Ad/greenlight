@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { setLeads } from "@/app/(app)/[cliente]/tablero/actions";
 import { CampoIntake } from "./campo-intake";
+import { NombresFinales } from "./nombres-finales";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 
@@ -25,12 +26,15 @@ export function RunnaDetails({
   personas,
   entregaUrl,
   entregaNum,
+  filenames,
   puedeEditar,
 }: {
   ideaId: string;
   personas: Persona[];
   entregaUrl: string | null;
   entregaNum: string | null;
+  /** Los nombres finales que entrega la tarea, ya calculados por la BD. */
+  filenames: string[];
   /** El lead edita; el especialista sólo lee. */
   puedeEditar: boolean;
 }) {
@@ -53,7 +57,11 @@ export function RunnaDetails({
       </button>
 
       {abierto && (
-        <div className="grid gap-x-8 gap-y-3 border-t border-border/60 px-4 py-3 sm:grid-cols-[1fr_1fr_auto]">
+        <div className="space-y-3 border-t border-border/60 px-4 py-3">
+          {/* Lo más importante, hasta arriba: el nombre final + los demás. */}
+          <NombresFinales filenames={filenames} />
+
+          <div className="grid gap-x-8 gap-y-3 sm:grid-cols-[1fr_1fr_auto]">
           {/* Lead + Team */}
           <div className="space-y-2">
             <GrupoPersonas
@@ -89,16 +97,17 @@ export function RunnaDetails({
             )}
           </div>
 
-          {/* Prioridad */}
-          <CampoIntake
-            ideaId={ideaId}
-            campo="entrega_num"
-            label="Prioridad de entrega"
-            valorInicial={entregaNum}
-            placeholder="1ra"
-            ancho="w-24"
-            soloLectura={!puedeEditar}
-          />
+            {/* Prioridad */}
+            <CampoIntake
+              ideaId={ideaId}
+              campo="entrega_num"
+              label="Prioridad de entrega"
+              valorInicial={entregaNum}
+              placeholder="1ra"
+              ancho="w-24"
+              soloLectura={!puedeEditar}
+            />
+          </div>
         </div>
       )}
     </section>

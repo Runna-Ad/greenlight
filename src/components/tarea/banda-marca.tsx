@@ -75,8 +75,9 @@ export function BandaMarca({
               campo="description"
               label="Resumen del brief"
               valorInicial={resumen}
-              placeholder="En una o dos líneas: de qué va este brief."
+              placeholder="Escribe aquí de qué va este brief, en una o dos líneas…"
               rows={2}
+              caja
               soloLectura={!puedeEditar}
             />
           </div>

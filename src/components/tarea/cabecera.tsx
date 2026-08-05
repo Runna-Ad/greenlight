@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, Copy, ExternalLink, Check } from "lucide-react";
 import { varianteGuion, type Plantilla } from "@/lib/plantilla";
 import { PLATAFORMA_LABEL } from "@/lib/vocab";
 import { CampoIntake } from "./campo-intake";
@@ -63,10 +61,7 @@ export function CabeceraTarea({
   notas,
   marca,
   formato,
-  entregaNum,
   entregaFinal,
-  entregaUrl,
-  filenames,
   duracionesSugeridas = [],
   soloLectura,
 }: {
@@ -80,20 +75,12 @@ export function CabeceraTarea({
   notas: string | null;
   marca: string | null;
   formato: string | null;
-  entregaNum: string | null;
   entregaFinal: string | null;
-  entregaUrl: string | null;
-  /** Los nombres finales que entrega esta tarea, ya calculados por la BD. */
-  filenames: string[];
   duracionesSugeridas?: string[];
   soloLectura?: boolean;
 }) {
   const panel = panelTipo(tipoAsset, plantilla);
   const esEstatico = plantilla === "estatico";
-
-  // Los nombres se recalculan en la base al cambiar la Duración. Se guardan en
-  // estado para enseñar los NUEVOS sin recargar — nunca los arma el navegador.
-  const [nombres, setNombres] = useState(filenames);
 
   return (
     <div className="overflow-hidden rounded-xl border border-border">
@@ -110,7 +97,26 @@ export function CabeceraTarea({
 
         {/* datos del intake */}
         <div className="flex flex-1 flex-wrap items-start gap-x-6 gap-y-2 bg-card px-4 py-3">
-          <Dato titulo="Formatos" valor={tamanos.length ? tamanos.join(" · ") : "—"} />
+          {/* Formato ratio como pastillas, igual que el wireframe */}
+          <div className="leading-tight">
+            <span className="block text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+              Formato ratio
+            </span>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {tamanos.length ? (
+                tamanos.map((t) => (
+                  <span
+                    key={t}
+                    className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground"
+                  >
+                    {t}
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground">—</span>
+              )}
+            </div>
+          </div>
           {esEstatico ? (
             // Un estático no dura. build_filename ni siquiera emite el token, así
             // que un campo editable aquí prometería algo que no pasa.
@@ -124,32 +130,14 @@ export function CabeceraTarea({
               placeholder="15-30s"
               sugerencias={duracionesSugeridas}
               ancho="w-24"
+              caja
+              refrescar
               soloLectura={soloLectura}
-              onGuardado={(res) => {
-                if (res.ok && res.filenames) setNombres(res.filenames);
-              }}
             />
           )}
           <Dato titulo="Marca" valor={marca ?? "—"} />
           <Dato titulo="Formato" valor={formato ?? "—"} />
-          <Dato titulo="# Entrega" valor={entregaNum ?? "—"} />
           <Dato titulo="Entrega final" valor={entregaFinal ?? "—"} />
-          <div className="ml-auto">
-            {entregaUrl ? (
-              <a
-                href={entregaUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md bg-[#ff6d01] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white hover:opacity-90"
-              >
-                <ExternalLink className="size-3" /> Entrega final
-              </a>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-3 py-1.5 text-[11px] font-medium text-muted-foreground">
-                Sin liga de entrega
-              </span>
-            )}
-          </div>
         </div>
 
         {/* panel de tipo — el mismo código de color del deck */}
@@ -170,8 +158,8 @@ export function CabeceraTarea({
         </div>
       </div>
 
-      {/* TREND y NOTAS — las dos cajas libres de la cabecera del deck */}
-      <div className="grid gap-x-6 gap-y-2 border-t border-border bg-card px-4 py-2 sm:grid-cols-2">
+      {/* TREND y NOTAS — cajas para escribir (recuadro visible) */}
+      <div className="grid gap-x-6 gap-y-2 border-t border-border bg-card px-4 py-3 sm:grid-cols-2">
         <CampoIntake
           ideaId={ideaId}
           campo="trend"
@@ -179,6 +167,7 @@ export function CabeceraTarea({
           valorInicial={trend}
           placeholder="Tendencia o referencia que sigue esta pieza"
           rows={2}
+          caja
           soloLectura={soloLectura}
         />
         <CampoIntake
@@ -188,90 +177,10 @@ export function CabeceraTarea({
           valorInicial={notas}
           placeholder="Lo que el equipo tiene que saber y no cabe en otro campo"
           rows={2}
+          caja
           soloLectura={soloLectura}
         />
       </div>
-
-      <NombresFinales filenames={nombres} />
-    </div>
-  );
-}
-
-/**
- * El nombre final. Es lo más importante de la cabecera — el equipo lo copia
- * literal al entregar, y equivocarse ahí rompe la entrega.
- *
- * Una tarea entrega VARIOS archivos (uno por Tamaño × Plataforma), así que se
- * muestra el primero con su leyenda y los demás se despliegan. Salen calculados
- * por la BD (trigger build_filename), no se escriben a mano.
- */
-function NombresFinales({ filenames }: { filenames: string[] }) {
-  const [abierto, setAbierto] = useState(false);
-  const [copiado, setCopiado] = useState<string | null>(null);
-
-  if (!filenames.length) {
-    return (
-      <p className="border-t border-border bg-secondary/40 px-4 py-2 text-center text-[11px] text-muted-foreground">
-        Sin archivos generados todavía
-      </p>
-    );
-  }
-
-  const copiar = (f: string) => {
-    void navigator.clipboard?.writeText(f);
-    setCopiado(f);
-    setTimeout(() => setCopiado(null), 1500);
-  };
-
-  return (
-    <div className="border-t border-border bg-secondary/40 px-4 py-2">
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        <button
-          onClick={() => copiar(filenames[0])}
-          title="Copiar"
-          className="group inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold tracking-tight text-foreground hover:text-primary"
-        >
-          {filenames[0]}
-          {copiado === filenames[0] ? (
-            <Check className="size-3 text-status-completed" />
-          ) : (
-            <Copy className="size-3 opacity-0 transition-opacity group-hover:opacity-60" />
-          )}
-        </button>
-        {filenames.length > 1 && (
-          <button
-            onClick={() => setAbierto((v) => !v)}
-            className="inline-flex items-center gap-0.5 rounded-full bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
-          >
-            +{filenames.length - 1}
-            <ChevronDown className={`size-3 transition-transform ${abierto ? "rotate-180" : ""}`} />
-          </button>
-        )}
-      </div>
-
-      <p className="mt-0.5 text-center font-mono text-[9px] uppercase tracking-wide text-muted-foreground/70">
-        topic _ format _ duration _ gender _ kvfocus _ filetype _ idea# _ rrss _ v# _ monthyy _ rn
-      </p>
-
-      {abierto && (
-        <ul className="mt-2 space-y-0.5 border-t border-border/60 pt-2">
-          {filenames.slice(1).map((f) => (
-            <li key={f}>
-              <button
-                onClick={() => copiar(f)}
-                className="group flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left font-mono text-[10px] text-muted-foreground hover:bg-card hover:text-foreground"
-              >
-                {f}
-                {copiado === f ? (
-                  <Check className="size-2.5 shrink-0 text-status-completed" />
-                ) : (
-                  <Copy className="size-2.5 shrink-0 opacity-0 group-hover:opacity-60" />
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
