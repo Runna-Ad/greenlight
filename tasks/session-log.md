@@ -107,3 +107,35 @@ REFERENCIA/IMAGEN · Preview = ambos, en vivo. Detalle en todo.md.
 3. App is public with no login — Pedro's decision; revisit at pre-launch.
 
 **Pick up next session:** see `tasks/next-session-prompt.md`.
+
+## 2026-08-05 (tarde) — Cabecera editable: TREND, NOTAS y Duración
+
+**Desplegado.** Migración 0013 aplicada a la base viva; S.P.A.M idéntico antes
+y después (42 tablas public / 31 migraciones / 6 usuarios).
+
+TREND y NOTAS existían en el slide del deck y no tenían dónde guardarse — se
+llenaban a mano y se perdían. Ya son campos de `ideas`, con el mismo
+autoguardado del cuerpo.
+
+**Lo importante fue la Duración.** `assets.duracion_code` es una COPIA hecha al
+crear cada archivo ("for filename stability", 0001). Hacerla editable sin
+propagarla habría dejado los 12 nombres de la tarea diciendo la duración vieja
+— y el nombre es justo lo que el equipo copia literal al entregar. La
+propagación va en TRIGGER, no en la acción del servidor: así el import, un fix
+a mano o una RPC futura quedan cubiertos.
+
+Verificado en producción sobre SPAPVOYTOURISM: `10-40s → 30-40s` reescribió los
+**12 archivos**, el nombre se actualizó en pantalla sin recargar, y quedó en
+`activity_log`. Datos de prueba restaurados a sus valores importados.
+
+**Quitado a petición de Pedro:** el veredicto que juzgaba el diálogo contra la
+Duración. El read-time se queda como dato ("11s de lectura en total"), sin
+semáforo. Ver PEDRO_OVERRIDE en lessons.md.
+
+**Hallazgo aparte:** 4 enlaces del menú lateral apuntan a rutas inexistentes y
+dan 404 al prefetch — `/carga`, `/entrega-check`, `/admin`, `/[cliente]/entregas`.
+Levantado como tarea aparte; no se tocó.
+
+**Sigue:** Copies, curar los selling points, cablear el selector de biblioteca,
+y el bloque de Simulación de Préstamos del plano 4 (falta decidir si es campo
+del plano, tipo de plano, o pieza de biblioteca).
