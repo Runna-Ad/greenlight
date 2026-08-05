@@ -230,5 +230,14 @@ eq("tarea fuera del bundle filtrado → índice -1 (flechas apagadas)",
 eq("la primera no tiene anterior", posicionEnBundle(ordenadas, "a").anterior, null);
 eq("la última no tiene siguiente", posicionEnBundle(ordenadas, "c").siguiente, null);
 
+// ── Liga de entrega: sólo http/https (se pinta como href) ──
+console.log("\n▶ URL de entrega");
+const { urlSegura } = await import("../src/lib/url-segura.ts");
+ok("https pasa", urlSegura("https://drive.google.com/abc"));
+ok("http pasa", urlSegura("http://dropbox.com/x"));
+eq("javascript: NO pasa", urlSegura("javascript:alert(1)"), false);
+eq("data: NO pasa", urlSegura("data:text/html,<script>"), false);
+eq("texto suelto NO pasa", urlSegura("drive.google.com"), false);
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

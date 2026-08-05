@@ -6,6 +6,7 @@ import { canMoveStatus, canOverrideStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { ESTADOS_CERRADOS } from "@/lib/plantilla";
+import { urlSegura } from "@/lib/url-segura";
 import type { AssetStatus } from "@/lib/brand";
 
 export type Tabla = "planos" | "estaticos";
@@ -37,8 +38,17 @@ export type GuardarResultado =
  * `duracion` está aquí a propósito y `tamanos`/`plataformas` no: cambiar la
  * duración reescribe un token del nombre; cambiar los tamaños crearía o
  * borraría archivos, que es una operación estructural, no un campo de texto.
+ *
+ * `url: true` valida el esquema http/https en el servidor: entrega_url se pinta
+ * como href, así que un `javascript:…` guardado se volvería clicable.
  */
-const CAMPOS_INTAKE = new Set(["duracion", "trend", "notas"]);
+const CAMPOS_INTAKE: Record<string, { url?: boolean }> = {
+  duracion: {},
+  trend: {},
+  notas: {},
+  entrega_url: { url: true },
+  entrega_num: {},
+};
 
 export type IntakeResultado =
   | { ok: true; filenames?: string[] }
@@ -60,10 +70,16 @@ export async function guardarIntake(
   valorNuevo: string | null,
 ): Promise<IntakeResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
-  if (!CAMPOS_INTAKE.has(campo)) return { ok: false, error: `Campo no permitido: ${campo}` };
+  const regla = CAMPOS_INTAKE[campo];
+  if (!regla) return { ok: false, error: `Campo no permitido: ${campo}` };
 
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+
+  // La liga de entrega se pinta como href — un javascript:/data: sería clicable.
+  if (regla.url && valorNuevo?.trim() && !urlSegura(valorNuevo.trim())) {
+    return { ok: false, error: "La liga debe empezar con http:// o https://" };
+  }
 
   const db = supabaseAdmin();
   const { data: idea } = await db
@@ -184,7 +200,10 @@ export async function guardarCampo(
     if (!movErr) revalidatePath("/mi-trabajo");
   }
 
-  revalidatePath(`/[cliente]/tareas/${filaId}`, "page");
+  // La ruta lleva el id de la IDEA, no el de la fila (plano/estático). Antes
+  // se revalidaba con filaId → una ruta inexistente, un no-op silencioso.
+  // Se revalida el patrón de la ruta para no depender del slug del cliente.
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true };
 }
 

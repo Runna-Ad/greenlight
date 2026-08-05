@@ -15,6 +15,7 @@ import { EditorTarea } from "@/components/tarea/editor-tarea";
 import { CabeceraTarea } from "@/components/tarea/cabecera";
 import { AccionesTarea } from "@/components/tarea/acciones-tarea";
 import { NavBundle } from "@/components/tarea/nav-bundle";
+import { RunnaDetails } from "@/components/tarea/runna-details";
 import type { EstaticoVista, PlanoVista } from "@/components/tarea/preview-slide";
 
 export const dynamic = "force-dynamic";
@@ -106,14 +107,27 @@ export default async function TareaPage({
         .eq("set", "duracion")
         .order("sort_order")
         .returns<{ label_es: string }[]>(),
-      // Quién la trabaja — alimenta la decisión de botones (actionsFor).
+      // Quién la trabaja (con lead/team y nombres) — alimenta la decisión de
+      // botones (actionsFor) y el panel Rünna details.
       db
         .from("idea_assignments")
-        .select("member_id")
+        .select("member_id, es_lead, track_members(id, name, color)")
         .eq("idea_id", idea.id)
-        .returns<{ member_id: string | null }[]>(),
+        .returns<{
+          member_id: string | null;
+          es_lead: boolean;
+          track_members: { id: string; name: string; color: string } | null;
+        }[]>(),
     ]);
   const memberIds = (asignaciones ?? []).map((a) => a.member_id).filter(Boolean) as string[];
+  const personas = (asignaciones ?? [])
+    .filter((a) => a.track_members)
+    .map((a) => ({
+      id: a.track_members!.id,
+      name: a.track_members!.name,
+      color: a.track_members!.color,
+      es_lead: a.es_lead,
+    }));
 
   // El bundle: las tareas hermanas de este brief, con el MISMO filtro y orden
   // que los cards de /briefs (lib/bundle.ts es la única fuente).
@@ -245,6 +259,21 @@ export default async function TareaPage({
         <p className="mb-3 rounded-md border border-primary/30 bg-primary/8 px-3 py-2 text-xs">
           Dinos quién eres arriba a la derecha para que quede registrado quién escribe.
         </p>
+      )}
+
+      {/* Rünna details — SÓLO INTERNO. El panel no se construye para el cliente:
+          se decide en el servidor, no con CSS. Ocultar con `hidden` dejaría los
+          nombres y la liga en el payload RSC — la familia del leak del secreto. */}
+      {role !== "client" && (
+        <div className="mb-4">
+          <RunnaDetails
+            ideaId={idea.id}
+            personas={personas}
+            entregaUrl={idea.entrega_url}
+            entregaNum={idea.entrega_num}
+            puedeEditar={canOverrideStatus(role)}
+          />
+        </div>
       )}
 
       {/* La cabecera va aquí y no como prop del editor: pasar JSX por prop hacía

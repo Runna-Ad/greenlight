@@ -964,6 +964,34 @@ await resetRole();
                  delete from produccion.notifications`);
 }
 
+// ── 0014: marcar leads entre los asignados (lo que hace setLeads) ──
+console.log("\n▶ Lead vs Team en las asignaciones");
+{
+  const IDEA = "00000000-0000-0000-0000-0000000000d1";
+  await resetRole();
+  // Dos asignados; marcar uno como lead.
+  const dos = await q(`select id from produccion.track_members order by sort_order limit 2`);
+  await db.query(`delete from produccion.idea_assignments where idea_id=$1`, [IDEA]);
+  await db.query(
+    `insert into produccion.idea_assignments (idea_id, member_id) values ($1,$2),($1,$3)`,
+    [IDEA, dos[0].id, dos[1].id]);
+
+  // setLeads: todos a false, el elegido a true.
+  await db.query(`update produccion.idea_assignments set es_lead=false where idea_id=$1`, [IDEA]);
+  await db.query(`update produccion.idea_assignments set es_lead=true
+                   where idea_id=$1 and member_id=$2`, [IDEA, dos[0].id]);
+
+  const fila = (await q(`select leads, team, lead_ids, team_ids from produccion.board_tasks
+                          where id='${IDEA}'`))[0];
+  eq("board_tasks: un lead marcado", (fila.lead_ids ?? []).length, 1);
+  eq("board_tasks: el otro queda en team", (fila.team_ids ?? []).length, 1);
+  ok("el lead es el que marcamos", (fila.lead_ids ?? [])[0] === dos[0].id);
+  ok("leads trae nombre y color para el chip",
+     Array.isArray(fila.leads) && fila.leads[0]?.name != null && fila.leads[0]?.color != null);
+
+  await db.query(`delete from produccion.idea_assignments where idea_id=$1`, [IDEA]);
+}
+
 // ── CONTRACT: toda acción que ofrece actionsFor() es legal en SQL ──
 // El botón vive en TS; el candado en transition_allowed. Si divergen, la UI
 // ofrece un movimiento que la BD rechaza — o peor, deja de ofrecer uno legal.

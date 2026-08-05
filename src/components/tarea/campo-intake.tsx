@@ -26,7 +26,7 @@ export function CampoIntake({
   onGuardado,
 }: {
   ideaId: string;
-  campo: "duracion" | "trend" | "notas";
+  campo: "duracion" | "trend" | "notas" | "entrega_url" | "entrega_num";
   label: string;
   valorInicial: string | null;
   placeholder?: string;

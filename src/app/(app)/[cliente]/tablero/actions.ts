@@ -187,6 +187,37 @@ export async function sendToClient(ideaId: string, note?: string): Promise<Actio
 }
 
 /**
+ * Marcar cuáles de los asignados son LEAD de esta tarea (wireframe: LEAD vs
+ * TEAM). No agrega gente — sólo pone el flag es_lead sobre asignaciones que ya
+ * existen. Añadir o quitar personas sigue siendo setAssignees, en el tablero.
+ */
+export async function setLeads(
+  ideaId: string,
+  leadMemberIds: string[],
+): Promise<ActionResult> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const { role } = await context();
+  if (!canAssign(role)) return { ok: false, error: "Este rol no puede marcar leads." };
+
+  const db = supabaseAdmin();
+  // Primero todos a false, luego los elegidos a true — en dos updates, para que
+  // el conjunto quede exactamente como se pidió.
+  const { error: e1 } = await db
+    .from("idea_assignments").update({ es_lead: false }).eq("idea_id", ideaId);
+  if (e1) return { ok: false, error: e1.message };
+
+  if (leadMemberIds.length) {
+    const { error: e2 } = await db
+      .from("idea_assignments").update({ es_lead: true })
+      .eq("idea_id", ideaId).in("member_id", leadMemberIds);
+    if (e2) return { ok: false, error: e2.message };
+  }
+
+  await revalidateFor(db, ideaId);
+  return { ok: true };
+}
+
+/**
  * Fijar exactamente quién trabaja una tarea.
  *
  * La "Asignación" del sheet es multi-persona y sin rol ("Galie, Mony"), así que
