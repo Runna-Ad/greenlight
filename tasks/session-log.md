@@ -170,3 +170,29 @@ Levantado como tarea aparte; no se tocó.
 **Sigue:** Copies, curar los selling points, cablear el selector de biblioteca,
 y el bloque de Simulación de Préstamos del plano 4 (falta decidir si es campo
 del plano, tipo de plano, o pieza de biblioteca).
+
+## 2026-08-05 (noche) — Blueprint del workspace: F1–F4 desplegadas
+
+Pedro entregó un blueprint en wireframes (Brief View + Workspace por tipo).
+Plan aprobado de 6 fases; construidas y desplegadas las 4 primeras.
+
+**Desplegado a producción** (migraciones 0014+0015 aplicadas; S.P.A.M idéntico
+42/31/6; bucket privado `greenlight-referencias` creado):
+- F1 · 5º verbo "Enviar a cliente" (paso aparte de aprobar) + barra de acciones
+  en el workspace. Despacho de verbos ahora por mapa exhaustivo (verbos.ts) —
+  antes un verbo nuevo caía al else y aprobaba en silencio.
+- F2 · Bundles por brief: /briefs deja de ser placeholder; cards con conteo,
+  clic → workspace con flechas ← n/N →. Una sola fuente (bundle.ts) filtra por
+  rol y ordena; el especialista sólo ve sus tareas.
+- F3 · Panel "Rünna details" colapsable, SÓLO INTERNO (verificado por curl: el
+  panel no está en el HTML del rol cliente). Lead/Team, liga de entrega
+  editable con validación http/https, prioridad, "Marcar leads".
+- F4 · Banda de marca: logo + topic + resumen del brief editable + íconos de
+  content type y canales.
+
+**Verificado en vivo:** las 3 secciones rinden en prod, consola limpia,
+send_client alcanzable por PostgREST (grants ok, sin PGRST203) y respeta el
+guard. Tests: 99 lib + 134 db.
+
+**Falta:** F5 referencias drag&drop (bucket ya autorizado y creado) · F6
+biblioteca Notion (BLOQUEADA en token + link de la base de Pedro).
