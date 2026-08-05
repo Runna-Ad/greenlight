@@ -225,3 +225,16 @@ para escribir (resumen, trend, notas). banda-marca.tsx eliminado.
 FIX: Duración mostraba un dropdown tipo fecha (era el <datalist>). Quitado +
 autocomplete="off". Verificado en prod: 0 datalists, sin flecha, una sola
 tarjeta, sin crash.
+
+## 2026-08-05 (cont.) — Link de entrega prominente + claridad en referencias
+
+- Pedro aclaró: ÉL borró la imagen de referencia, no una limpieza mía (falsa
+  alarma; lección corregida en lessons.md).
+- Link de entrega: bloque destacado (borde/fondo primario, caja obvia) con la
+  nota de que de ahí sale el botón "Abrir entregable" del CLIENTE. Confirmado
+  el modelo: el campo se EDITA en Rünna details (interno), pero su VALOR
+  alimenta el botón del cliente cuando se construya el portal.
+- Referencias: "Link" → "Link de video"; leyenda de drag & drop añadida
+  (confirmado que la zona acepta arrastrar imágenes).
+- Popup de referencia agrandado a 90vw / sm:max-w-5xl (antes topado en
+  sm:max-w-sm ≈ 384px).
