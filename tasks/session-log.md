@@ -238,3 +238,12 @@ tarjeta, sin crash.
   (confirmado que la zona acepta arrastrar imágenes).
 - Popup de referencia agrandado a 90vw / sm:max-w-5xl (antes topado en
   sm:max-w-sm ≈ 384px).
+
+## 2026-08-05 (cont.) — Botón de flujo más bonito + copia al final
+
+Botón de acción (Mandar a revisión / etc.): gradiente + ícono por verbo +
+sombra + micro-hover. Segunda instancia al FINAL del workspace (variante
+"prominente", barra "¿Lista esta tarea?" + botón grande) para no subir al
+encabezado al terminar. Misma decisión (actionsFor), no un botón aparte.
+Verificado en prod por CSS: 2 botones con gradiente/sombra/ícono, barra final
+presente, sin crash.
