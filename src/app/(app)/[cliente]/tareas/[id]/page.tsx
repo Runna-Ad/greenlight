@@ -27,7 +27,7 @@ type Idea = {
   formato_code: string | null; duracion: string | null; tamanos: string[] | null;
   plataformas: string[] | null; marca_id: string | null; brief_id: string;
   entrega_num: string | null; entrega_final: string | null; entrega_url: string | null;
-  trend: string | null; notas: string | null;
+  trend: string | null; notas: string | null; legales_libres: string | null;
 };
 
 export default async function TareaPage({
@@ -49,7 +49,7 @@ export default async function TareaPage({
   const { data: idea } = await db
     .from("ideas")
     .select(
-      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas",
+      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres",
     )
     .eq("id", id)
     .maybeSingle<Idea>();
@@ -212,14 +212,33 @@ export default async function TareaPage({
     }
   }
 
-  // Legales de la biblioteca, por marca. Se seleccionan, no se pegan.
-  const { data: legalesData } = await db
-    .from("snippets")
-    .select("body")
-    .eq("kind", "legal")
-    .eq("active", true)
-    .or(idea.marca_id ? `marca_id.eq.${idea.marca_id},scope.eq.global` : "scope.eq.global")
-    .returns<{ body: string }[]>();
+  // Legales: la BIBLIOTECA disponible (por marca) + cuáles están SELECCIONADOS
+  // en esta tarea (idea_snippets). El picker agrega/quita; el texto libre es
+  // aparte (ideas.legales_libres).
+  const [{ data: bibliotecaLegal }, { data: idSnippets }] = await Promise.all([
+    db
+      .from("snippets")
+      .select("id, title, body")
+      .eq("kind", "legal")
+      .eq("active", true)
+      .or(idea.marca_id ? `marca_id.eq.${idea.marca_id},scope.eq.global` : "scope.eq.global")
+      .order("title")
+      .returns<{ id: string; title: string; body: string }[]>(),
+    db
+      .from("idea_snippets")
+      .select("snippet_id")
+      .eq("idea_id", idea.id)
+      .returns<{ snippet_id: string }[]>(),
+  ]);
+  const seleccionadosIds = new Set((idSnippets ?? []).map((s) => s.snippet_id));
+  const legalesSeleccionados = (bibliotecaLegal ?? []).filter((s) => seleccionadosIds.has(s.id));
+  const legalesDisponibles = (bibliotecaLegal ?? []).filter((s) => !seleccionadosIds.has(s.id));
+
+  // Lo que verá el cliente en la cortinilla: los seleccionados + el texto libre.
+  const legalesPreview = [
+    ...legalesSeleccionados.map((s) => s.body),
+    ...(idea.legales_libres?.trim() ? [idea.legales_libres.trim()] : []),
+  ];
 
   const cerrada = ESTADOS_CERRADOS.includes(idea.status);
   const soloLectura = cerrada && !canOverrideStatus(role);
@@ -360,7 +379,12 @@ export default async function TareaPage({
         estaticoInicial={estatico}
         refsPorPlano={refsPorPlano}
         reglas={reglas ?? []}
-        legales={(legalesData ?? []).map((l) => l.body)}
+        legales={legalesPreview}
+        cortinilla={{
+          legalesLibres: idea.legales_libres,
+          seleccionados: legalesSeleccionados,
+          biblioteca: legalesDisponibles,
+        }}
         soloLectura={soloLectura}
       />
 

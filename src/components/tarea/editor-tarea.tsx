@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Campo } from "./campo";
 import { ChipsReglas } from "./chips-reglas";
 import { ReferenciasPlano, type RefVista } from "./referencias-plano";
+import { CortinillaCierre, type LegalSnippet } from "./cortinilla-cierre";
 import {
   PreviewSlide,
   type CabeceraVista,
@@ -33,6 +34,7 @@ export function EditorTarea({
   refsPorPlano,
   reglas,
   legales,
+  cortinilla,
   soloLectura,
 }: {
   ideaId: string;
@@ -43,6 +45,11 @@ export function EditorTarea({
   refsPorPlano: Record<string, RefVista[]>;
   reglas: Regla[];
   legales: string[];
+  cortinilla: {
+    legalesLibres: string | null;
+    seleccionados: LegalSnippet[];
+    biblioteca: LegalSnippet[];
+  };
   soloLectura: boolean;
 }) {
   // El preview se alimenta de ESTE estado: se actualiza en la misma tecla, sin
@@ -257,6 +264,16 @@ export function EditorTarea({
                   <Plus className="size-4" /> Agregar plano
                 </Button>
               )}
+
+              {/* La Cortinilla de Cierre va al FINAL, después de todos los
+                  planos: los legales de la pieza entera. */}
+              <CortinillaCierre
+                ideaId={ideaId}
+                legalesLibres={cortinilla.legalesLibres}
+                seleccionados={cortinilla.seleccionados}
+                biblioteca={cortinilla.biblioteca}
+                soloLectura={soloLectura}
+              />
             </>
           )}
         </div>

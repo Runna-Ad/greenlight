@@ -1,0 +1,11 @@
+-- ═══════════════════════════════════════════════════════════════
+-- 0018 — Cortinilla de Cierre: legales libres + seleccionados
+-- ═══════════════════════════════════════════════════════════════
+-- Al final del guión va una "Cortinilla de Cierre" con los legales. Pedro:
+-- se pueden SELECCIONAR de la biblioteca (idea_snippets, que ya existe y que
+-- mañana se llena desde Notion) Y TAMBIÉN escribir/editar a mano. Este campo
+-- es el texto libre; los seleccionados ya viven en idea_snippets.
+--
+-- Va en `ideas` y no en `planos` porque la cortinilla es de la pieza entera,
+-- no de un plano. Un solo campo de texto (no parser) — la regla de Pedro.
+alter table produccion.ideas add column legales_libres text;
