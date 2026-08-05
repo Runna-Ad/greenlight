@@ -1,5 +1,5 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-07-31
+Última actualización: 2026-08-05
 
 ## Qué es
 App interna de producción de anuncios que reemplaza el Google Sheet de DiDi.
@@ -48,7 +48,10 @@ profiles=1 (Pedro admin) · track_members=14 · vocab_terms=37 · clients=1 (DiD
 - Sin revisión, sin Gary, sin versiones
 - Sin portal del cliente
 - Sin login (a propósito)
-- Carga y Entregas siguen vacíos
+- Carga, Entregas por revisar, Entregas y Configuración no existen (P6). En el
+  menú se ven apagados con "Pronto" y no navegan — antes eran enlaces que
+  devolvían 404 por prefetch. Al construir cada página, quitar su `soon: true`
+  en `src/components/shell/sidebar.tsx`.
 
 ## Riesgos conocidos
 1. **SIN REPO DE GIT PROPIO** — git root es `/Users/work`. Todo sin versionar. ARREGLAR PRIMERO.

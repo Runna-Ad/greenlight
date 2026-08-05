@@ -1,5 +1,36 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-05 (tarde) — Los 4 enlaces muertos del menú
+
+**Desplegado.** Sesión corta y de una sola cosa: el sidebar tenía 4 enlaces a
+rutas que no existen — `/carga`, `/entrega-check`, `/admin` ("Configuración") y
+`/[cliente]/entregas`.
+
+**Por qué importaba más de lo que parecía:** no hacía falta clicarlos. `<Link>`
+de Next prefetchea el segmento RSC en cuanto el enlace entra en el viewport, así
+que **cada carga de la app en producción disparaba 4 peticiones `?_rsc=` con
+404**. Invisible en pantalla, visible en la pestaña de red.
+
+**Decisión de Pedro (preguntado, no asumido):** los cuatro son trabajo de P6 y
+tres de ellos ni siquiera se pueden construir todavía (falta asignación, subida
+de archivos y la tabla de entregas). `/admin` sí era construible — los datos ya
+están en Supabase — pero Pedro eligió respetar el orden del roadmap y dejarlo
+también para P6.
+
+**Solución:** `soon?: boolean` en `NavItem`. Un item pendiente se pinta apagado
+con distintivo "Pronto" y se renderiza como `<span>`, no como `<Link>` — sin
+ancla no hay prefetch. El menú sigue enseñando el roadmap completo sin mentir
+sobre lo que ya existe. Al construir cada página se quita su `soon: true`
+(anotado en todo.md).
+
+**Verificado en producción**, no sólo en local: dos cargas completas de
+`/didi/tablero` y `/clientes` con cero 404 y cero `?_rsc=` a las rutas muertas.
+El árbol de accesibilidad confirma que los cuatro ya no tienen `href` — un
+screenshot no habría distinguido eso.
+
+**Sigue:** lo que ya estaba — Copies, curar selling points, selector de
+biblioteca de legales.
+
 ## 2026-08-05 — La plantilla de trabajo (guión + estático)
 
 **Desplegado.** Al hacer clic en una tarjeta ya se abre la pantalla donde el
