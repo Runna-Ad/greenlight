@@ -363,6 +363,21 @@ export default async function TareaPage({
         legales={(legalesData ?? []).map((l) => l.body)}
         soloLectura={soloLectura}
       />
+
+      {/* La MISMA acción de flujo, otra vez al final: cuando terminas de
+          trabajar no tienes que subir hasta el encabezado para mandarla. */}
+      <div className="mt-5">
+        <AccionesTarea
+          ideaId={idea.id}
+          status={idea.status}
+          variante="prominente"
+          ctx={{
+            role,
+            isAssignee: soy ? memberIds.includes(soy.id) : false,
+            hasAssignee: memberIds.length > 0,
+          }}
+        />
+      </div>
     </div>
   );
 }
