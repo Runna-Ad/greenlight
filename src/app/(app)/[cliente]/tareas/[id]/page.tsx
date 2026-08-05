@@ -17,6 +17,7 @@ import { AccionesTarea } from "@/components/tarea/acciones-tarea";
 import { NavBundle } from "@/components/tarea/nav-bundle";
 import { RunnaDetails } from "@/components/tarea/runna-details";
 import { BandaMarca } from "@/components/tarea/banda-marca";
+import type { RefVista } from "@/components/tarea/referencias-plano";
 import type { EstaticoVista, PlanoVista } from "@/components/tarea/preview-slide";
 
 export const dynamic = "force-dynamic";
@@ -173,6 +174,50 @@ export default async function TareaPage({
         .select("id, copy_titulo, copy_subtitulo, copy_cta, legales_extra, referencia_url, referencia_nota")
         .single<EstaticoVista>();
       estatico = creado ?? null;
+    }
+  }
+
+  // Referencias por plano (imágenes subidas + links de video). Las imágenes
+  // viven en un bucket PRIVADO — se firma una URL por render (la página es
+  // force-dynamic), nunca se expone el bucket.
+  const refsPorPlano: Record<string, RefVista[]> = {};
+  if (plantilla === "guion" && planos.length) {
+    const { data: vinculos } = await db
+      .from("plano_references")
+      .select("plano_id, position, references(id, kind, url, storage_path, thumbnail_url, platform)")
+      .in("plano_id", planos.map((p) => p.id))
+      .order("position")
+      .returns<
+        {
+          plano_id: string;
+          references: {
+            id: string;
+            kind: "imagen" | "video";
+            url: string;
+            storage_path: string | null;
+            thumbnail_url: string | null;
+            platform: string | null;
+          } | null;
+        }[]
+      >();
+
+    for (const v of vinculos ?? []) {
+      const r = v.references;
+      if (!r) continue;
+      let displayUrl: string | null = r.kind === "video" ? r.url : null;
+      if (r.kind === "imagen" && r.storage_path) {
+        const { data: firmada } = await db.storage
+          .from("greenlight-referencias")
+          .createSignedUrl(r.storage_path, 60 * 60); // 1h
+        displayUrl = firmada?.signedUrl ?? null;
+      }
+      (refsPorPlano[v.plano_id] ??= []).push({
+        id: r.id,
+        kind: r.kind,
+        displayUrl,
+        thumbnail: r.thumbnail_url,
+        platform: r.platform,
+      });
     }
   }
 
@@ -333,6 +378,7 @@ export default async function TareaPage({
         }}
         planosIniciales={planos}
         estaticoInicial={estatico}
+        refsPorPlano={refsPorPlano}
         reglas={reglas ?? []}
         legales={(legalesData ?? []).map((l) => l.body)}
         soloLectura={soloLectura}

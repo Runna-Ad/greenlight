@@ -992,6 +992,37 @@ console.log("\n▶ Lead vs Team en las asignaciones");
   await db.query(`delete from produccion.idea_assignments where idea_id=$1`, [IDEA]);
 }
 
+// ── 0016: la misma referencia puede colgar de DOS planos ──
+// Es la razón de existir de plano_references (idea_references no puede: su PK
+// es (idea_id, reference_id)).
+console.log("\n▶ Referencias por plano");
+{
+  const IDEA = "00000000-0000-0000-0000-0000000000d1";
+  await resetRole();
+  await db.exec(`delete from produccion.planos where idea_id='${IDEA}';
+    insert into produccion.planos (idea_id, orden) values ('${IDEA}',1),('${IDEA}',2);`);
+  const planos = await q(`select id from produccion.planos where idea_id='${IDEA}' order by orden`);
+  const ref = (await q(`insert into produccion.references (url, kind, platform)
+    values ('https://tiktok.com/@x/video/999','video','tiktok') returning id`))[0];
+
+  await db.query(`insert into produccion.plano_references (plano_id, reference_id)
+                   values ($1,$3),($2,$3)`, [planos[0].id, planos[1].id, ref.id]);
+  eq("la misma referencia cuelga de 2 planos",
+     Number(await scalar(`select count(*) from produccion.plano_references where reference_id=$1`, [ref.id])),
+     2);
+
+  // El CHECK: una imagen SIEMPRE tiene storage_path.
+  let bloqueado = false;
+  try {
+    await db.exec(`insert into produccion.references (url, kind) values ('x://y','imagen')`);
+  } catch { bloqueado = true; }
+  ok("una imagen sin storage_path se rechaza", bloqueado);
+
+  await db.exec(`delete from produccion.plano_references where reference_id='${ref.id}';
+                 delete from produccion.references where id='${ref.id}';
+                 delete from produccion.planos where idea_id='${IDEA}'`);
+}
+
 // ── CONTRACT: toda acción que ofrece actionsFor() es legal en SQL ──
 // El botón vive en TS; el candado en transition_allowed. Si divergen, la UI
 // ofrece un movimiento que la BD rechaza — o peor, deja de ofrecer uno legal.

@@ -249,5 +249,20 @@ eq("desconocido → animado (no revienta)", contentType("Loquesea").label, "Vide
 eq("FB trae su etiqueta", canales(["FB"])[0].label, "Facebook");
 eq("EC cae en neutro", canales(["EC"])[0].color, "var(--muted-foreground)");
 
+// ── Referencias: sniff por magic bytes + plataforma ──
+console.log("\n▶ Referencias");
+const { sniffImageMime, plataformaDeUrl } = await import("../src/lib/referencia.ts");
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+const JPG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]);
+const WEBP = new Uint8Array([0x52,0x49,0x46,0x46,0,0,0,0,0x57,0x45,0x42,0x50]);
+const EXE = new Uint8Array([0x4d, 0x5a, 0x90, 0x00, 0, 0, 0, 0, 0, 0, 0, 0]); // MZ
+eq("PNG por magic bytes", sniffImageMime(PNG), "image/png");
+eq("JPEG por magic bytes", sniffImageMime(JPG), "image/jpeg");
+eq("WebP por magic bytes", sniffImageMime(WEBP), "image/webp");
+eq("un .exe (MZ) renombrado a .png se rechaza", sniffImageMime(EXE), null);
+eq("TikTok detectado", plataformaDeUrl("https://www.tiktok.com/@x/video/1"), "tiktok");
+eq("Drive detectado", plataformaDeUrl("https://drive.google.com/file/d/abc"), "drive");
+eq("basura → otro", plataformaDeUrl("no soy url"), "otro");
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

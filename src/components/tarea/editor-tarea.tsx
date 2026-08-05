@@ -16,6 +16,7 @@ import { reglasQueAplican, type Regla } from "@/lib/reglas";
 import { Button } from "@/components/ui/button";
 import { Campo } from "./campo";
 import { ChipsReglas } from "./chips-reglas";
+import { ReferenciasPlano, type RefVista } from "./referencias-plano";
 import {
   PreviewSlide,
   type CabeceraVista,
@@ -29,6 +30,7 @@ export function EditorTarea({
   marcaSlug,
   planosIniciales,
   estaticoInicial,
+  refsPorPlano,
   reglas,
   legales,
   soloLectura,
@@ -38,6 +40,7 @@ export function EditorTarea({
   marcaSlug: string | null;
   planosIniciales: PlanoVista[];
   estaticoInicial: EstaticoVista | null;
+  refsPorPlano: Record<string, RefVista[]>;
   reglas: Regla[];
   legales: string[];
   soloLectura: boolean;
@@ -233,10 +236,18 @@ export function EditorTarea({
                       </div>
                     </div>
 
-                    <Campo tabla="planos" filaId={p.id} campo="dialogo" label={quienHabla}
-                      valorInicial={p.dialogo} rows={10} soloLectura={soloLectura}
-                      placeholder={PH.dialogo}
-                      onCambio={(v) => editarPlano(p.id, "dialogo", v)} />
+                    <div className="space-y-3">
+                      <Campo tabla="planos" filaId={p.id} campo="dialogo" label={quienHabla}
+                        valorInicial={p.dialogo} rows={8} soloLectura={soloLectura}
+                        placeholder={PH.dialogo}
+                        onCambio={(v) => editarPlano(p.id, "dialogo", v)} />
+                      {/* La caja REFERENCIA del wireframe, junto al diálogo */}
+                      <ReferenciasPlano
+                        planoId={p.id}
+                        refs={refsPorPlano[p.id] ?? []}
+                        soloLectura={soloLectura}
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
