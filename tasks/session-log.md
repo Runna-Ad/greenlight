@@ -280,3 +280,16 @@ sólo aplica el texto libre por ahora. S.P.A.M idéntico 42/31/6.
 - La nota "1 actriz / 1 actor · # outfits" pasó de fija a CUADRO EDITABLE
   (ideas.nota_guion, migración 0019). El texto del tipo queda de placeholder.
 S.P.A.M idéntico 42/31/6.
+
+## 2026-08-05 (cont.) — Design God Mode · fase 1 (fundación)
+
+Pedro pidió el pase de diseño completo (/design-god-mode). Diagnóstico: el app
+era PLANO (sin elevación), por eso todo se perdía con el fondo.
+Fundación (propaga a todo): escala de sombras teñida con el ink morado
+(override de --shadow-* de Tailwind), borde más definido, motion sutil global,
+helpers gl-card/gl-card-interactive/gl-eyebrow. Aplicado a superficies clave:
+clientes, bundles y tablero (lift al hover), workspace (cabecera, reglas,
+planos, Rünna details), barra de acciones (gradiente), topbar sticky con blur.
+Contraste AA verificado (4.84–12.01). Notion sigue en pausa (falta acceso).
+Falta (si Pedro quiere ir más profundo): tipografía escala, login/sync/forms,
+empty states, y capa emil-design-eng de micro-interacciones.
