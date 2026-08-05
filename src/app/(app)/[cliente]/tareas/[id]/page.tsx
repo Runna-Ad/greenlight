@@ -79,7 +79,7 @@ export default async function TareaPage({
     );
   }
 
-  const [{ data: marca }, { data: reglas }, { data: assets }] = await Promise.all([
+  const [{ data: marca }, { data: reglas }, { count: numArchivos }] = await Promise.all([
     idea.marca_id
       ? db.from("marcas").select("name, slug").eq("id", idea.marca_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -165,7 +165,7 @@ export default async function TareaPage({
               </span>
             )}
             <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <Files className="size-3" /> {assets?.length ?? 0} archivos
+              <Files className="size-3" /> {numArchivos ?? 0} archivos
             </span>
           </div>
           <h2 className="mt-1.5 font-mono text-xl font-semibold text-foreground">

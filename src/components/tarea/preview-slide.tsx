@@ -36,13 +36,27 @@ export type CabeceraVista = {
   status: AssetStatus;
 };
 
-/** Color de pleca por plataforma. EC no tiene el suyo — cae en neutro. */
-function plecaColor(plataformas: string[]): string {
-  const p = plataformas[0];
-  if (p === "GG") return "var(--plat-gg)";
-  if (p === "FB") return "var(--plat-fb)";
-  if (p === "TT") return "var(--plat-tt)";
-  return "var(--muted-foreground)";
+const COLOR_PLATAFORMA: Record<string, string> = {
+  GG: "var(--plat-gg)",
+  FB: "var(--plat-fb)",
+  TT: "var(--plat-tt)",
+};
+
+/**
+ * La pleca. Una plataforma = su color; varias = un degradado con todas.
+ *
+ * Tomar la primera sería arbitrario: las 5 tareas de Images son FB+GG+TT, y
+ * pintarlas de azul haría pensar que son sólo de Facebook. El degradado dice de
+ * un vistazo que la pieza va a varios lados — que es exactamente por lo que sus
+ * reglas pueden contradecirse.
+ *
+ * EC no tiene color propio; cae en neutro.
+ */
+function plecaFondo(plataformas: string[]): string {
+  const colores = plataformas.map((p) => COLOR_PLATAFORMA[p]).filter(Boolean);
+  if (colores.length === 0) return "var(--muted-foreground)";
+  if (colores.length === 1) return colores[0];
+  return `linear-gradient(160deg, ${colores.join(", ")})`;
 }
 
 /**
@@ -63,7 +77,9 @@ export function PreviewSlide({
   estatico?: EstaticoVista | null;
   legales: string[];
 }) {
-  const color = plecaColor(cabecera.plataformas);
+  const fondo = plecaFondo(cabecera.plataformas);
+  // El tinte de la franja de datos usa un solo color para no competir.
+  const tinte = COLOR_PLATAFORMA[cabecera.plataformas[0]] ?? "var(--muted-foreground)";
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-white text-[#111114] shadow-sm">
@@ -71,13 +87,13 @@ export function PreviewSlide({
       <div className="flex items-stretch">
         <div
           className="flex w-9 shrink-0 items-center justify-center py-2"
-          style={{ backgroundColor: color }}
+          style={{ background: fondo }}
         >
           <span className="rotate-180 text-[9px] font-bold uppercase tracking-widest text-white [writing-mode:vertical-rl]">
             {cabecera.tipoAsset?.toLowerCase().includes("image") ? "Static" : "Video"}
           </span>
         </div>
-        <div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-[9px]" style={{ backgroundColor: `color-mix(in srgb, ${color} 12%, white)` }}>
+        <div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-[9px]" style={{ backgroundColor: `color-mix(in srgb, ${tinte} 12%, white)` }}>
           <Dato titulo="Formatos" valor={cabecera.tamanos.join(" · ") || "—"} />
           <Dato titulo="Duración" valor={cabecera.duracion || "—"} />
           <Dato titulo="Marca" valor={cabecera.marca || "—"} />
