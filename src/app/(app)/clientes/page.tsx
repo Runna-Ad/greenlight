@@ -23,7 +23,7 @@ export default function ClientesPage() {
           <Link
             key={client.slug}
             href={`/${client.slug}/tablero`}
-            className="group flex flex-col rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="group gl-card-interactive flex flex-col p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <div className="flex items-center gap-3">
               <span

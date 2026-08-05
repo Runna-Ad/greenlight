@@ -127,7 +127,7 @@ export function EditorTarea({
       {/* Reglas de la pieza + read-time — arriba de todo, con encabezado claro.
           Cada chip abre su regla completa en un tooltip al pasar el mouse. */}
       {(reglasActivas.length > 0 || !esEstatico) && (
-        <div className="space-y-2.5 rounded-xl border border-border bg-card p-3">
+        <div className="space-y-2.5 rounded-xl border border-border bg-card p-3 shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
               <ShieldCheck className="size-3.5" />
@@ -170,7 +170,7 @@ export function EditorTarea({
         {/* ── cuerpo ── */}
         <div className="min-w-0 space-y-3">
           {esEstatico && estatico ? (
-            <div className="grid gap-3 rounded-xl border border-border bg-card p-3 md:grid-cols-2">
+            <div className="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm md:grid-cols-2">
               <div className="space-y-3">
                 <p className="rounded bg-[#4a86e8] px-2 py-1 text-center text-[10px] font-bold uppercase text-white">
                   Copy in
@@ -223,7 +223,7 @@ export function EditorTarea({
               )}
 
               {planos.map((p) => (
-                <div key={p.id} className="rounded-lg border border-border bg-card p-3">
+                <div key={p.id} className="rounded-lg border border-border bg-card p-3 shadow-sm">
                   <div className="mb-2 flex items-center gap-2">
                     <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">
                       Plano {p.orden}

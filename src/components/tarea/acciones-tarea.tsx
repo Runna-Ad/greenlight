@@ -128,7 +128,7 @@ export function AccionesTarea({
 
   if (prominente) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-secondary/30 px-4 py-5 sm:flex-row sm:justify-between">
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-primary/20 bg-gradient-to-r from-primary/[0.07] to-secondary/40 px-4 py-5 shadow-sm sm:flex-row sm:justify-between">
         <div className="text-center sm:text-left">
           <p className="text-sm font-semibold text-foreground">
             {espera ? espera : "¿Lista esta tarea?"}

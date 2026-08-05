@@ -24,7 +24,7 @@ export function Topbar({
   avisos?: number;
 }) {
   return (
-    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-4 md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card/85 px-4 shadow-sm backdrop-blur-md md:px-6">
       {title ? (
         <h1 className="text-base font-semibold text-foreground font-[family-name:var(--font-poppins)]">
           {title}

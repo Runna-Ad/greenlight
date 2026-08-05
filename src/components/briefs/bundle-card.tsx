@@ -22,7 +22,7 @@ export function BundleCard({ bundle, cliente }: { bundle: Bundle; cliente: strin
   const primera = bundle.tasks[0];
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card transition-shadow hover:shadow-md">
+    <div className="gl-card-interactive overflow-hidden">
       <button
         onClick={() => primera && router.push(`/${cliente}/tareas/${primera.id}`)}
         className="block w-full p-4 text-left"

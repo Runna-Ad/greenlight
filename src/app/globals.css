@@ -70,6 +70,20 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* ── Sistema de elevación (Design God Mode) ──
+     Sombras TEÑIDAS con el ink morado (#2d2b55), no negro puro: sobre un app
+     lavanda, una sombra negra se ve sucia; una teñida se integra y hace que las
+     cards blancas "floten" sobre el fondo. Esto arregla el "todo se pierde con
+     el fondo" de raíz — cada `shadow-sm`/`shadow-md` del app se vuelve nítido. */
+  --shadow-2xs: 0 1px 2px rgba(45, 43, 85, 0.04);
+  --shadow-xs: 0 1px 3px rgba(45, 43, 85, 0.05);
+  --shadow-sm: 0 1px 2px rgba(45, 43, 85, 0.04), 0 2px 6px rgba(45, 43, 85, 0.06);
+  --shadow: 0 1px 2px rgba(45, 43, 85, 0.04), 0 3px 10px rgba(45, 43, 85, 0.07);
+  --shadow-md: 0 2px 4px rgba(45, 43, 85, 0.05), 0 8px 22px rgba(45, 43, 85, 0.09);
+  --shadow-lg: 0 4px 8px rgba(45, 43, 85, 0.06), 0 16px 40px rgba(45, 43, 85, 0.12);
+  --shadow-xl: 0 8px 16px rgba(45, 43, 85, 0.08), 0 28px 60px rgba(45, 43, 85, 0.16);
+  --shadow-2xl: 0 16px 32px rgba(45, 43, 85, 0.12), 0 40px 80px rgba(45, 43, 85, 0.22);
 }
 
 :root {
@@ -129,6 +143,11 @@
   /* Greenlight wordmark */
   --greenlight: #00e676;            /* signal green — on dark surfaces only */
   --greenlight-ink: #00a854;        /* deep green — legible as text on white */
+
+  /* Borde un pelín más definido para que las cards tengan filo sin depender
+     sólo de la sombra (antes #e4e0f0 casi no se veía sobre el lavanda). */
+  --border: #ddd7f0;
+  --input: #d7d1ea;
 }
 
 .dark {
@@ -183,6 +202,16 @@
 
   --greenlight: #00e676;
   --greenlight-ink: #4adca5;        /* on dark ground the bright green is fine */
+
+  /* En oscuro la sombra sí es negra (no teñida) para que dé profundidad real. */
+  --shadow-2xs: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 3px 10px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 8px 22px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 8px 16px rgba(0, 0, 0, 0.45), 0 28px 60px rgba(0, 0, 0, 0.55);
+  --shadow-2xl: 0 16px 32px rgba(0, 0, 0, 0.5), 0 40px 80px rgba(0, 0, 0, 0.65);
 }
 
 @layer base {
@@ -191,6 +220,12 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Textura casi imperceptible: dos halos de marca en las esquinas para que
+       el fondo lavanda no se sienta muerto. No compite con el contenido. */
+    background-image:
+      radial-gradient(60rem 40rem at 100% -10%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 60%),
+      radial-gradient(50rem 40rem at -10% 110%, color-mix(in srgb, var(--primary) 5%, transparent), transparent 60%);
+    background-attachment: fixed;
   }
   button:not(:disabled), [role="button"]:not(:disabled) {
     cursor: pointer;
@@ -201,5 +236,36 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-poppins), system-ui, sans-serif;
     text-wrap: balance;
+    letter-spacing: -0.01em;   /* headings más apretados = más pro */
+  }
+  /* Motion sutil, global: transiciones suaves en todo lo interactivo, sin
+     exagerar (es una herramienta de trabajo). Respeta prefers-reduced-motion. */
+  a, button, [role="button"], input, textarea, select, summary {
+    transition:
+      color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease,
+      box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+}
+
+@layer components {
+  /* La "card" canónica del app: blanca, elevada, con filo. Antes cada sección
+     inventaba su propio borde; esto las unifica. */
+  .gl-card {
+    @apply rounded-xl border border-border bg-card shadow-sm;
+  }
+  /* Card interactiva (bundles, board): se levanta al pasar el mouse. */
+  .gl-card-interactive {
+    @apply rounded-xl border border-border bg-card shadow-sm transition-all duration-200;
+  }
+  .gl-card-interactive:hover {
+    @apply -translate-y-0.5 shadow-md;
+    border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  }
+  /* Encabezado de sección consistente (mayúsculas, tracking, icono). */
+  .gl-eyebrow {
+    @apply text-[10px] font-bold uppercase tracking-widest text-muted-foreground;
   }
 }

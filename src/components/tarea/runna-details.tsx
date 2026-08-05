@@ -44,7 +44,7 @@ export function RunnaDetails({
   const team = personas.filter((p) => !p.es_lead);
 
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-secondary/30">
+    <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <button
         onClick={() => setAbierto((v) => !v)}
         className="flex w-full items-center gap-1.5 px-4 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"

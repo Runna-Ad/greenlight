@@ -464,7 +464,7 @@ function CardBody({
 
   return (
     <article
-      className={`rounded-lg border bg-card p-2.5 shadow-[0_1px_2px_rgba(45,43,85,0.04)] ${
+      className={`rounded-lg border bg-card p-2.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
         enCorrecciones
           ? "border-status-corrections ring-1 ring-[color-mix(in_srgb,var(--status-corrections)_35%,transparent)]"
           : "border-border"

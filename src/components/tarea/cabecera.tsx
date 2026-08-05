@@ -102,7 +102,7 @@ export function CabeceraTarea({
   const chans = canales(plataformas);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border">
+    <div className="overflow-hidden rounded-xl border border-border shadow-sm">
       {/* ── franja superior, enmarcada por los colores-guía ── */}
       <div className="flex flex-col sm:flex-row">
         {/* pleca de plataforma */}
