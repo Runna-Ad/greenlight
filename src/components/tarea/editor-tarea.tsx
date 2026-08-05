@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Plus, Trash2, Eye, EyeOff, Clock } from "lucide-react";
+import { Plus, Trash2, Eye, EyeOff, Clock, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { agregarPlano, borrarPlano } from "@/app/(app)/[cliente]/tareas/[id]/actions";
@@ -15,6 +15,7 @@ import {
 import { reglasQueAplican, type Regla } from "@/lib/reglas";
 import { Button } from "@/components/ui/button";
 import { Campo } from "./campo";
+import { CampoIntake } from "./campo-intake";
 import { ChipsReglas } from "./chips-reglas";
 import { ReferenciasPlano, type RefVista } from "./referencias-plano";
 import { CortinillaCierre, type LegalSnippet } from "./cortinilla-cierre";
@@ -35,6 +36,7 @@ export function EditorTarea({
   reglas,
   legales,
   cortinilla,
+  notaGuion,
   soloLectura,
 }: {
   ideaId: string;
@@ -45,6 +47,7 @@ export function EditorTarea({
   refsPorPlano: Record<string, RefVista[]>;
   reglas: Regla[];
   legales: string[];
+  notaGuion: string | null;
   cortinilla: {
     legalesLibres: string | null;
     seleccionados: LegalSnippet[];
@@ -121,16 +124,47 @@ export function EditorTarea({
 
   return (
     <div className="space-y-4">
-      {/* reglas + read-time */}
-      <div className="space-y-3 rounded-xl border border-border bg-card p-3">
-        <ChipsReglas reglas={reglasActivas} plataformas={cabecera.plataformas} />
-        {!esEstatico && (
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Clock className="size-3.5 shrink-0" />
-            {totalS}s de lectura en total
-          </p>
-        )}
-      </div>
+      {/* Reglas de la pieza + read-time — arriba de todo, con encabezado claro.
+          Cada chip abre su regla completa en un tooltip al pasar el mouse. */}
+      {(reglasActivas.length > 0 || !esEstatico) && (
+        <div className="space-y-2.5 rounded-xl border border-border bg-card p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+              <ShieldCheck className="size-3.5" />
+              Reglas que aplican
+            </span>
+            {!esEstatico && (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="size-3.5 shrink-0" />
+                {totalS}s de lectura en total
+              </span>
+            )}
+          </div>
+          {reglasActivas.length > 0 ? (
+            <ChipsReglas reglas={reglasActivas} plataformas={cabecera.plataformas} />
+          ) : (
+            <p className="text-[11px] text-muted-foreground/70">
+              No hay reglas especiales para esta combinación. Pasa el mouse por un
+              chip para ver el detalle cuando aparezcan.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Nota del guión — editable (Real Person: actriz/actor/outfits). El texto
+          del tipo queda de placeholder para seguir guiando. */}
+      {!esEstatico && (
+        <CampoIntake
+          ideaId={ideaId}
+          campo="nota_guion"
+          label="Nota del guión"
+          valorInicial={notaGuion}
+          placeholder={nota ?? "Nota general del guión (p. ej. # de outfits, tono, continuidad)…"}
+          rows={2}
+          caja
+          soloLectura={soloLectura}
+        />
+      )}
 
       <div className={verPreview ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]" : ""}>
         {/* ── cuerpo ── */}
@@ -190,11 +224,6 @@ export function EditorTarea({
 
               {planos.map((p) => (
                 <div key={p.id} className="rounded-lg border border-border bg-card p-3">
-                  {p.orden === 1 && nota && (
-                    <p className="mb-2 rounded bg-secondary/70 px-2 py-1 text-[11px] font-medium text-secondary-foreground">
-                      {nota}
-                    </p>
-                  )}
                   <div className="mb-2 flex items-center gap-2">
                     <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">
                       Plano {p.orden}

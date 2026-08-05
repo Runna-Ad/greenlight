@@ -49,6 +49,7 @@ const CAMPOS_INTAKE: Record<string, { url?: boolean }> = {
   entrega_url: { url: true },
   entrega_num: {},
   legales_libres: {},
+  nota_guion: {},
 };
 
 export type IntakeResultado =

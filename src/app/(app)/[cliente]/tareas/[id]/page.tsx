@@ -27,7 +27,7 @@ type Idea = {
   formato_code: string | null; duracion: string | null; tamanos: string[] | null;
   plataformas: string[] | null; marca_id: string | null; brief_id: string;
   entrega_num: string | null; entrega_final: string | null; entrega_url: string | null;
-  trend: string | null; notas: string | null; legales_libres: string | null;
+  trend: string | null; notas: string | null; legales_libres: string | null; nota_guion: string | null;
 };
 
 export default async function TareaPage({
@@ -49,7 +49,7 @@ export default async function TareaPage({
   const { data: idea } = await db
     .from("ideas")
     .select(
-      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres",
+      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion",
     )
     .eq("id", id)
     .maybeSingle<Idea>();
@@ -380,6 +380,7 @@ export default async function TareaPage({
         refsPorPlano={refsPorPlano}
         reglas={reglas ?? []}
         legales={legalesPreview}
+        notaGuion={idea.nota_guion}
         cortinilla={{
           legalesLibres: idea.legales_libres,
           seleccionados: legalesSeleccionados,
