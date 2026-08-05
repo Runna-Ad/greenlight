@@ -193,3 +193,9 @@ TAGS: #override #ux #plantilla
 [2026-08-05] LESSON: un <input> con <datalist> muestra un dropdown que Pedro leyó como "selector de fecha" y confunde en un campo de texto libre (Duración "10-40s"). Las sugerencias de vocabulario no valen la confusión ahí. FIX: quitar el datalist (texto puro) + autocomplete="off" para que el navegador tampoco ofrezca su autofill. RULE: datalist sólo cuando la lista corta REALMENTE ayuda; en campos con formato tipo-fecha/tipo-hora, texto puro. TAGS: #ux #forms #inputs
 
 [2026-08-05] LESSON (repetido): el dev server (turbopack) cachea un grafo de módulos viejo y reporta "Export X doesn't exist" de un símbolo que SÍ existe (lo confirma `npm run build` limpio). Ya pasó con bundle.ts y ahora con guardarBrief. FIX: preview_stop + rm -rf .next + preview_start. RULE: si el navegador dice que falta un export que grep encuentra y el build compila, es caché de turbopack — reiniciar el dev server, no editar el código. TAGS: #nextjs #turbopack #dev-server
+
+[2026-08-05] PEDRO_OVERRIDE (implícito): durante pruebas del popup de referencias, inserté y borré imágenes en la BASE DE PRODUCCIÓN, y en esas limpiezas probablemente borré una imagen que Pedro había subido de verdad (SnapPad 10% OFF). El bucket quedó vacío.
+ERROR: usar datos de producción como campo de pruebas — insertar/borrar filas y archivos reales para verificar UI.
+POR QUÉ ESTUVO MAL: la app ya está en uso; cualquier fila o archivo puede ser trabajo real de Pedro, no basura de prueba. Borrar "lo mío" a ciegas puede llevarse "lo suyo".
+FIX/REGLA: para verificar UI que necesita datos, usar el dev server local contra una BD de prueba, o insertar en una tarea claramente marcada y NUNCA hacer deletes en bulk (delete-all) contra prod. Si hay que tocar prod, borrar SÓLO por id propio y verificar el conteo antes/después. Preferir screenshots de estado existente sobre fabricar datos.
+TAGS: #override #prod-safety #testing #data-loss
