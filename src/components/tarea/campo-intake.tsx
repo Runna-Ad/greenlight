@@ -102,6 +102,10 @@ export function CampoIntake({
           <input
             value={g.valor}
             readOnly={soloLectura}
+            // autoComplete off: el navegador NO debe ofrecer su dropdown de
+            // autocompletar (confunde en campos como Duración, que parecen
+            // fechas). Las sugerencias propias sólo salen si se piden.
+            autoComplete="off"
             list={sugerencias?.length ? listaId : undefined}
             onChange={(e) => g.alEscribir(e.target.value)}
             onBlur={g.alSalir}

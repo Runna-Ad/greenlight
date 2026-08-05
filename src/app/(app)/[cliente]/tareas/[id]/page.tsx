@@ -16,7 +16,6 @@ import { CabeceraTarea } from "@/components/tarea/cabecera";
 import { AccionesTarea } from "@/components/tarea/acciones-tarea";
 import { NavBundle } from "@/components/tarea/nav-bundle";
 import { RunnaDetails } from "@/components/tarea/runna-details";
-import { BandaMarca } from "@/components/tarea/banda-marca";
 import type { RefVista } from "@/components/tarea/referencias-plano";
 import type { EstaticoVista, PlanoVista } from "@/components/tarea/preview-slide";
 
@@ -88,7 +87,7 @@ export default async function TareaPage({
     );
   }
 
-  const [{ data: marca }, { data: reglas }, { data: archivos }, { data: durVocab }, { data: asignaciones }, { data: brief }] =
+  const [{ data: marca }, { data: reglas }, { data: archivos }, { data: asignaciones }, { data: brief }] =
     await Promise.all([
       idea.marca_id
         ? db.from("marcas").select("name, slug, logo_url").eq("id", idea.marca_id).maybeSingle()
@@ -101,14 +100,6 @@ export default async function TareaPage({
         .order("tamano_code")
         .order("plataforma_code")
         .returns<{ filename: string | null }[]>(),
-      // Sugerencias para la Duración. Salen de vocab_terms (una sola fuente) y
-      // NO limitan: el campo acepta lo que sea, como el "Otro" de los dropdowns.
-      db
-        .from("vocab_terms")
-        .select("label_es")
-        .eq("set", "duracion")
-        .order("sort_order")
-        .returns<{ label_es: string }[]>(),
       // Quién la trabaja (con lead/team y nombres) — alimenta la decisión de
       // botones (actionsFor) y el panel Rünna details.
       db
@@ -312,19 +303,6 @@ export default async function TareaPage({
       )}
 
       {/* Banda de marca: logo + topic + resumen del brief + content type + channels */}
-      <div className="mb-4">
-        <BandaMarca
-          briefId={idea.brief_id}
-          marca={marca?.name ?? null}
-          logoUrl={marca?.logo_url ?? null}
-          topic={idea.naming_base ?? idea.concepto}
-          tipoAsset={idea.tipo_asset}
-          plataformas={idea.plataformas ?? []}
-          resumen={brief?.description ?? null}
-          puedeEditar={canOverrideStatus(role)}
-        />
-      </div>
-
       {/* Rünna details — SÓLO INTERNO. El panel no se construye para el cliente:
           se decide en el servidor, no con CSS. Ocultar con `hidden` dejaría los
           nombres y la liga en el payload RSC — la familia del leak del secreto. */}
@@ -346,6 +324,7 @@ export default async function TareaPage({
       <div className="mb-4">
         <CabeceraTarea
           ideaId={idea.id}
+          briefId={idea.brief_id}
           tipoAsset={idea.tipo_asset}
           plantilla={plantilla}
           plataformas={idea.plataformas ?? []}
@@ -354,10 +333,13 @@ export default async function TareaPage({
           trend={idea.trend}
           notas={idea.notas}
           marca={marca?.name ?? null}
+          logoUrl={marca?.logo_url ?? null}
+          topic={idea.naming_base ?? idea.concepto}
+          resumen={brief?.description ?? null}
           formato={idea.formato_code}
           entregaFinal={idea.entrega_final}
-          duracionesSugeridas={(durVocab ?? []).map((v) => v.label_es)}
           soloLectura={soloLectura}
+          puedeEditarResumen={canOverrideStatus(role)}
         />
       </div>
 

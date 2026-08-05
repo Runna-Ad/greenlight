@@ -1,6 +1,9 @@
 "use client";
 
+import Image from "next/image";
+
 import { varianteGuion, type Plantilla } from "@/lib/plantilla";
+import { contentType, canales } from "@/lib/iconos";
 import { PLATAFORMA_LABEL } from "@/lib/vocab";
 import { CampoIntake } from "./campo-intake";
 
@@ -44,14 +47,19 @@ function panelTipo(tipoAsset: string | null, plantilla: Plantilla) {
 }
 
 /**
- * La cabecera de la VERSIÓN DE TRABAJO.
+ * La cabecera de la VERSIÓN DE TRABAJO — una sola tarjeta.
  *
- * Los colores no son decoración del preview: le dicen al especialista de un
- * vistazo a qué plataforma va la pieza y de qué tipo es. Por eso viven aquí
- * también, no sólo en la vista del cliente (Pedro).
+ * Antes eran dos secciones (banda de marca + datos del intake) que se sentían
+ * partidas. Se fusionaron en un solo bloque que se lee de arriba a abajo:
+ *   1. identidad de la pieza (marca + topic) · content type · channels
+ *   2. los datos del intake (formato ratio, duración, formato, entrega)
+ *   3. las cajas para escribir (resumen del brief, trend, notas)
+ * La pleca de plataforma (izq) y el panel de tipo (der) son los colores-guía
+ * del deck para el especialista; enmarcan la parte de arriba.
  */
 export function CabeceraTarea({
   ideaId,
+  briefId,
   tipoAsset,
   plantilla,
   plataformas,
@@ -60,12 +68,16 @@ export function CabeceraTarea({
   trend,
   notas,
   marca,
+  logoUrl,
+  topic,
+  resumen,
   formato,
   entregaFinal,
-  duracionesSugeridas = [],
   soloLectura,
+  puedeEditarResumen,
 }: {
   ideaId: string;
+  briefId: string;
   tipoAsset: string | null;
   plantilla: Plantilla;
   plataformas: string[];
@@ -74,20 +86,28 @@ export function CabeceraTarea({
   trend: string | null;
   notas: string | null;
   marca: string | null;
+  logoUrl: string | null;
+  topic: string | null;
+  resumen: string | null;
   formato: string | null;
   entregaFinal: string | null;
-  duracionesSugeridas?: string[];
   soloLectura?: boolean;
+  /** El resumen del brief lo edita el lead; lo demás, cualquiera del equipo. */
+  puedeEditarResumen?: boolean;
 }) {
   const panel = panelTipo(tipoAsset, plantilla);
   const esEstatico = plantilla === "estatico";
+  const ct = contentType(tipoAsset);
+  const IconCT = ct.icon;
+  const chans = canales(plataformas);
 
   return (
     <div className="overflow-hidden rounded-xl border border-border">
+      {/* ── franja superior, enmarcada por los colores-guía ── */}
       <div className="flex flex-col sm:flex-row">
         {/* pleca de plataforma */}
         <div
-          className="flex items-center justify-center px-2 py-2 sm:w-10 sm:py-0"
+          className="flex items-center justify-center px-2 py-2 sm:w-9 sm:py-0"
           style={{ background: plecaFondo(plataformas) }}
         >
           <span className="text-[10px] font-bold uppercase tracking-widest text-white sm:rotate-180 sm:[writing-mode:vertical-rl]">
@@ -95,49 +115,100 @@ export function CabeceraTarea({
           </span>
         </div>
 
-        {/* datos del intake */}
-        <div className="flex flex-1 flex-wrap items-start gap-x-6 gap-y-2 bg-card px-4 py-3">
-          {/* Formato ratio como pastillas, igual que el wireframe */}
-          <div className="leading-tight">
-            <span className="block text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-              Formato ratio
-            </span>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {tamanos.length ? (
-                tamanos.map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground"
-                  >
-                    {t}
-                  </span>
-                ))
+        <div className="flex-1 bg-card">
+          {/* identidad + content type + channels */}
+          <div className="flex flex-wrap items-start justify-between gap-4 px-4 pt-3">
+            <div className="flex items-center gap-2.5">
+              {logoUrl ? (
+                <Image
+                  src={logoUrl}
+                  alt={marca ?? "Marca"}
+                  width={32}
+                  height={32}
+                  className="size-8 rounded object-contain"
+                  unoptimized
+                />
               ) : (
-                <span className="text-xs text-muted-foreground">—</span>
+                <span className="flex size-8 items-center justify-center rounded bg-secondary text-[10px] font-bold text-secondary-foreground">
+                  {(marca ?? "·").slice(0, 2).toUpperCase()}
+                </span>
               )}
+              <div className="min-w-0">
+                {marca && (
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {marca}
+                  </p>
+                )}
+                <h3 className="truncate font-mono text-base font-bold text-foreground">
+                  {topic ?? "Sin topic"}
+                </h3>
+              </div>
+            </div>
+
+            <div className="flex gap-5">
+              <Grupo titulo="Content type">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-secondary-foreground">
+                  <IconCT className="size-3.5" /> {ct.label}
+                </span>
+              </Grupo>
+              <Grupo titulo="Channels">
+                <div className="flex flex-wrap gap-1.5">
+                  {chans.length === 0 ? (
+                    <span className="text-[11px] text-muted-foreground/70">—</span>
+                  ) : (
+                    chans.map((c) => (
+                      <span
+                        key={c.code}
+                        title={c.label}
+                        className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white"
+                        style={{ backgroundColor: c.color }}
+                      >
+                        {c.label}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </Grupo>
             </div>
           </div>
-          {esEstatico ? (
-            // Un estático no dura. build_filename ni siquiera emite el token, así
-            // que un campo editable aquí prometería algo que no pasa.
-            <Dato titulo="Duración" valor="—" />
-          ) : (
-            <CampoIntake
-              ideaId={ideaId}
-              campo="duracion"
-              label="Duración"
-              valorInicial={duracion && duracion !== "-" ? duracion : null}
-              placeholder="15-30s"
-              sugerencias={duracionesSugeridas}
-              ancho="w-24"
-              caja
-              refrescar
-              soloLectura={soloLectura}
-            />
-          )}
-          <Dato titulo="Marca" valor={marca ?? "—"} />
-          <Dato titulo="Formato" valor={formato ?? "—"} />
-          <Dato titulo="Entrega final" valor={entregaFinal ?? "—"} />
+
+          {/* datos del intake — una fila limpia */}
+          <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-2 border-t border-border/60 px-4 py-3">
+            <Grupo titulo="Formato ratio">
+              <div className="flex flex-wrap gap-1">
+                {tamanos.length ? (
+                  tamanos.map((t) => (
+                    <span
+                      key={t}
+                      className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground"
+                    >
+                      {t}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </div>
+            </Grupo>
+            {esEstatico ? (
+              // Un estático no dura. build_filename ni emite el token.
+              <Dato titulo="Duración" valor="—" />
+            ) : (
+              <CampoIntake
+                ideaId={ideaId}
+                campo="duracion"
+                label="Duración"
+                valorInicial={duracion && duracion !== "-" ? duracion : null}
+                placeholder="15-30s"
+                ancho="w-24"
+                caja
+                refrescar
+                soloLectura={soloLectura}
+              />
+            )}
+            <Dato titulo="Formato" valor={formato ?? "—"} />
+            <Dato titulo="Entrega final" valor={entregaFinal ?? "—"} />
+          </div>
         </div>
 
         {/* panel de tipo — el mismo código de color del deck */}
@@ -158,29 +229,52 @@ export function CabeceraTarea({
         </div>
       </div>
 
-      {/* TREND y NOTAS — cajas para escribir (recuadro visible) */}
-      <div className="grid gap-x-6 gap-y-2 border-t border-border bg-card px-4 py-3 sm:grid-cols-2">
+      {/* ── cajas para escribir: resumen, trend, notas ── */}
+      <div className="space-y-3 border-t border-border bg-card px-4 py-3">
         <CampoIntake
-          ideaId={ideaId}
-          campo="trend"
-          label="Trend"
-          valorInicial={trend}
-          placeholder="Tendencia o referencia que sigue esta pieza"
+          briefId={briefId}
+          campo="description"
+          label="Resumen del brief"
+          valorInicial={resumen}
+          placeholder="Escribe aquí de qué va este brief, en una o dos líneas…"
           rows={2}
           caja
-          soloLectura={soloLectura}
+          soloLectura={!puedeEditarResumen}
         />
-        <CampoIntake
-          ideaId={ideaId}
-          campo="notas"
-          label="Notas"
-          valorInicial={notas}
-          placeholder="Lo que el equipo tiene que saber y no cabe en otro campo"
-          rows={2}
-          caja
-          soloLectura={soloLectura}
-        />
+        <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+          <CampoIntake
+            ideaId={ideaId}
+            campo="trend"
+            label="Trend"
+            valorInicial={trend}
+            placeholder="Tendencia o referencia que sigue esta pieza"
+            rows={2}
+            caja
+            soloLectura={soloLectura}
+          />
+          <CampoIntake
+            ideaId={ideaId}
+            campo="notas"
+            label="Notas"
+            valorInicial={notas}
+            placeholder="Lo que el equipo tiene que saber y no cabe en otro campo"
+            rows={2}
+            caja
+            soloLectura={soloLectura}
+          />
+        </div>
       </div>
+    </div>
+  );
+}
+
+function Grupo({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="leading-tight">
+      <span className="block text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+        {titulo}
+      </span>
+      <div className="mt-1">{children}</div>
     </div>
   );
 }
@@ -191,7 +285,7 @@ function Dato({ titulo, valor }: { titulo: string; valor: string }) {
       <span className="block text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
         {titulo}
       </span>
-      <span className="block text-xs text-foreground">{valor}</span>
+      <span className="mt-1 block text-xs text-foreground">{valor}</span>
     </span>
   );
 }
