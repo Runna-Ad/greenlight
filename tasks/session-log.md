@@ -213,3 +213,15 @@ S.P.A.M no se tocó. Si Pedro prefería revisar antes, es fácil de revertir.
 
 **Falta sólo F6** (biblioteca Notion) — BLOQUEADA en el token de integración +
 link de la base de Pedro. Todo lo demás del blueprint está en producción.
+
+## 2026-08-05 (cont.) — Fusión de la cabecera + fix del dropdown de Duración
+
+Pedro: las dos secciones (banda de marca + datos del intake) se sentían
+partidas → fusionadas en UNA tarjeta que se lee de arriba a abajo, enmarcada
+por los colores-guía (pleca izq · panel de tipo der): identidad + content type
++ channels · formato ratio (pastillas) + duración + formato + entrega · cajas
+para escribir (resumen, trend, notas). banda-marca.tsx eliminado.
+
+FIX: Duración mostraba un dropdown tipo fecha (era el <datalist>). Quitado +
+autocomplete="off". Verificado en prod: 0 datalists, sin flecha, una sola
+tarjeta, sin crash.
