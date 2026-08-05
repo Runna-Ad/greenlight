@@ -7,6 +7,86 @@ import { cn } from "@/lib/utils";
 
 export type EstadoGuardado = "limpio" | "pendiente" | "guardando" | "guardado" | "error";
 
+/** Lo mínimo que el autoguardado necesita saber de una respuesta del servidor. */
+export type ResultadoGuardado =
+  | { ok: true }
+  | { ok: false; conflicto: true; valorActual: string | null }
+  | { ok: false; conflicto?: false; error: string };
+
+/**
+ * El autoguardado, sin UI: debounce, flush al salir y resolución de conflicto.
+ *
+ * Vive en un hook porque hay dos superficies que lo necesitan con formas muy
+ * distintas — el cuerpo de la plantilla (`Campo`, textarea grande) y la
+ * cabecera (`CampoIntake`, una línea entre los datos del intake). Duplicar la
+ * lógica haría que un arreglo en una se olvidara en la otra.
+ */
+export function useAutoguardado(
+  valorInicial: string | null,
+  guardar: (anterior: string | null, nuevo: string | null) => Promise<ResultadoGuardado>,
+  onCambio?: (valor: string) => void,
+) {
+  const [valor, setValor] = useState(valorInicial ?? "");
+  const [estado, setEstado] = useState<EstadoGuardado>("limpio");
+  const [conflicto, setConflicto] = useState<string | null>(null);
+  const guardado = useRef<string | null>(valorInicial);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // `guardar` se toma de ESTA renderización a propósito: el debounce se arma
+  // dentro de alEscribir, que se recrea con cada tecla, así que la función que
+  // acaba disparando es la de la misma renderización que el texto que manda.
+  const persistir = async (v: string) => {
+    if ((guardado.current ?? "") === v) return;
+    setEstado("guardando");
+    const res = await guardar(guardado.current, v || null);
+    if (res.ok) {
+      guardado.current = v || null;
+      setEstado("guardado");
+      return;
+    }
+    if ("conflicto" in res && res.conflicto) setConflicto(res.valorActual ?? "");
+    setEstado("error");
+  };
+
+  const alEscribir = (v: string) => {
+    setValor(v);
+    onCambio?.(v);
+    setEstado("pendiente");
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => void persistir(v), 800);
+  };
+
+  const alSalir = () => {
+    if (timer.current) clearTimeout(timer.current);
+    void persistir(valor);
+  };
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  return {
+    valor,
+    estado,
+    conflicto,
+    alEscribir,
+    alSalir,
+    /** Me quedo con lo mío: se acepta el valor ajeno como base y se reescribe. */
+    quedarme: () => {
+      guardado.current = conflicto || null;
+      setConflicto(null);
+      void persistir(valor);
+    },
+    /** Tomo lo suyo: se descarta lo mío, sin escribir nada. */
+    tomarSuyo: () => {
+      const suyo = conflicto ?? "";
+      setValor(suyo);
+      onCambio?.(suyo);
+      guardado.current = suyo || null;
+      setConflicto(null);
+      setEstado("limpio");
+    },
+  };
+}
+
 /**
  * Un campo de la plantilla, con autoguardado por CAMPO.
  *
@@ -40,39 +120,12 @@ export function Campo({
   /** Para que el preview se actualice en la misma tecla, sin ir al servidor. */
   onCambio?: (valor: string) => void;
 }) {
-  const [valor, setValor] = useState(valorInicial ?? "");
-  const [estado, setEstado] = useState<EstadoGuardado>("limpio");
-  const [conflicto, setConflicto] = useState<string | null>(null);
-  const guardado = useRef<string | null>(valorInicial);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const persistir = async (v: string) => {
-    if ((guardado.current ?? "") === v) return;
-    setEstado("guardando");
-    const res = await guardarCampo(tabla, filaId, campo, guardado.current, v || null);
-    if (res.ok) {
-      guardado.current = v || null;
-      setEstado("guardado");
-      return;
-    }
-    if ("conflicto" in res && res.conflicto) {
-      setConflicto(res.valorActual ?? "");
-      setEstado("error");
-      return;
-    }
-    setEstado("error");
-  };
-
-  const alEscribir = (v: string) => {
-    setValor(v);
-    onCambio?.(v);
-    setEstado("pendiente");
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void persistir(v), 800);
-  };
-
-  // Flush al desmontar: navegar no debe tragarse lo último escrito.
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const g = useAutoguardado(
+    valorInicial,
+    (anterior, nuevo) => guardarCampo(tabla, filaId, campo, anterior, nuevo),
+    onCambio,
+  );
+  const { valor, estado, conflicto } = g;
 
   return (
     <div className="min-w-0">
@@ -87,11 +140,8 @@ export function Campo({
         value={valor}
         rows={rows}
         readOnly={soloLectura}
-        onChange={(e) => alEscribir(e.target.value)}
-        onBlur={() => {
-          if (timer.current) clearTimeout(timer.current);
-          void persistir(valor);
-        }}
+        onChange={(e) => g.alEscribir(e.target.value)}
+        onBlur={g.alSalir}
         placeholder={placeholder}
         aria-label={label}
         className={cn(
@@ -104,45 +154,53 @@ export function Campo({
       />
 
       {conflicto !== null && (
-        <div className="mt-1.5 rounded-md border border-status-corrections bg-[color-mix(in_srgb,var(--status-corrections)_8%,transparent)] p-2 text-[11px]">
-          <p className="flex items-center gap-1.5 font-medium text-status-corrections">
-            <AlertTriangle className="size-3.5 shrink-0" />
-            Alguien más cambió este campo mientras escribías
-          </p>
-          <p className="mt-1.5 text-muted-foreground">
-            Ahora dice: <span className="text-foreground">{conflicto || "(vacío)"}</span>
-          </p>
-          <div className="mt-2 flex gap-2">
-            <button
-              onClick={() => {
-                guardado.current = conflicto || null;
-                setConflicto(null);
-                void persistir(valor);
-              }}
-              className="rounded bg-status-corrections px-2 py-1 font-medium text-white"
-            >
-              Quedarme con lo mío
-            </button>
-            <button
-              onClick={() => {
-                setValor(conflicto);
-                onCambio?.(conflicto);
-                guardado.current = conflicto || null;
-                setConflicto(null);
-                setEstado("limpio");
-              }}
-              className="rounded border border-border px-2 py-1 font-medium text-foreground hover:bg-secondary"
-            >
-              Tomar lo suyo
-            </button>
-          </div>
-        </div>
+        <PanelConflicto valorAjeno={conflicto} quedarme={g.quedarme} tomarSuyo={g.tomarSuyo} />
       )}
     </div>
   );
 }
 
-function Indicador({ estado }: { estado: EstadoGuardado }) {
+/**
+ * Dos valores, una decisión. Nunca se descarta nada en silencio — es la misma
+ * familia de fallo que el `row_hash: "imported"`: perder trabajo sin error.
+ */
+export function PanelConflicto({
+  valorAjeno,
+  quedarme,
+  tomarSuyo,
+}: {
+  valorAjeno: string;
+  quedarme: () => void;
+  tomarSuyo: () => void;
+}) {
+  return (
+    <div className="mt-1.5 rounded-md border border-status-corrections bg-[color-mix(in_srgb,var(--status-corrections)_8%,transparent)] p-2 text-[11px]">
+      <p className="flex items-center gap-1.5 font-medium text-status-corrections">
+        <AlertTriangle className="size-3.5 shrink-0" />
+        Alguien más cambió este campo mientras escribías
+      </p>
+      <p className="mt-1.5 text-muted-foreground">
+        Ahora dice: <span className="text-foreground">{valorAjeno || "(vacío)"}</span>
+      </p>
+      <div className="mt-2 flex gap-2">
+        <button
+          onClick={quedarme}
+          className="rounded bg-status-corrections px-2 py-1 font-medium text-white"
+        >
+          Quedarme con lo mío
+        </button>
+        <button
+          onClick={tomarSuyo}
+          className="rounded border border-border px-2 py-1 font-medium text-foreground hover:bg-secondary"
+        >
+          Tomar lo suyo
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function Indicador({ estado }: { estado: EstadoGuardado }) {
   if (estado === "limpio") return null;
   const texto = {
     pendiente: "sin guardar",

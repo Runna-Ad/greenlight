@@ -3,7 +3,7 @@
 import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.ts";
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
 import { actionsFor, waitingLabel } from "../src/lib/task-actions.ts";
-import { plantillaPara, readTimeS, parseDuracion, compararDuracion, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
+import { plantillaPara, readTimeS, parseDuracion, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 
 let pass = 0,
   fail = 0;
@@ -163,15 +163,6 @@ eq("'30s' es un punto", JSON.stringify(parseDuracion("30s")), '{"min":30,"max":3
 eq("'-' no es duración", parseDuracion("-"), null);
 eq("vacío tampoco", parseDuracion(""), null);
 eq("texto libre tampoco", parseDuracion("lo que salga"), null);
-
-// Tres estados, nunca dos: un ✓ por defecto sería un falso verde.
-eq("dentro de rango", compararDuracion(20, "15-30s").estado, "dentro");
-eq("se pasa", compararDuracion(45, "15-30s").estado, "excede");
-eq("se queda corto", compararDuracion(8, "15-30s").estado, "corto");
-eq("sin duración legible NO dice que está bien",
-   compararDuracion(20, "-").estado, "sin-referencia");
-ok("y lo explica en vez de callarse",
-   compararDuracion(20, "-").mensaje.includes("sin duración"));
 
 // Las instrucciones del deck son PLACEHOLDER, jamás valor inicial.
 const plano = nuevoPlano(1);

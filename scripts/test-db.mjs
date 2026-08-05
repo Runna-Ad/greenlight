@@ -831,6 +831,62 @@ for (const e of ESCENARIOS) {
 }
 ok(`TS reglasQueAplican() === SQL reglas_para_tarea() en ${ESCENARIOS.length} escenarios`, regMismatch === 0);
 
+// ── 0013: la Duración arrastra el nombre de los archivos ──
+// assets.duracion_code es una COPIA hecha al crear el archivo. Sin el trigger,
+// editar la Duración dejaría los nombres diciendo la duración vieja — y el
+// nombre es justo lo que el equipo copia literal al entregar.
+console.log("\n▶ Duración editable — propagación al nombre");
+await resetRole();
+await db.exec(`delete from produccion.assets where idea_id='00000000-0000-0000-0000-0000000000d1';
+  insert into produccion.assets
+    (idea_id, brief_id, naming_kind, naming_base, tamano_code, plataforma_code,
+     duracion_code, genero_code, idea_code, mes_code)
+  values ('00000000-0000-0000-0000-0000000000d1','00000000-0000-0000-0000-0000000000b1',
+          'real','DURTEST','9:16','FB','25s','WOMAN','A1','AUG26'),
+         ('00000000-0000-0000-0000-0000000000d1','00000000-0000-0000-0000-0000000000b1',
+          'static','DURTEST','1:1','GG',null,'WOMAN','A1','AUG26');`);
+
+const nombreDe = (kind) =>
+  scalar(`select filename from produccion.assets
+           where idea_id='00000000-0000-0000-0000-0000000000d1' and naming_kind=$1`, [kind]);
+
+await db.exec(`update produccion.ideas set duracion='40-50s'
+                where id='00000000-0000-0000-0000-0000000000d1'`);
+ok("cambiar la Duración reescribe el nombre del video",
+   (await nombreDe("real")).includes("_40-50S_"));
+ok("el estático no gana token de duración",
+   !(await nombreDe("static")).includes("40-50S"));
+
+// '-' es como el sheet escribe "sin duración". Guardarlo tal cual metería un
+// token "-" al nombre, que es peor que no tener duración.
+await db.exec(`update produccion.ideas set duracion='-'
+                where id='00000000-0000-0000-0000-0000000000d1'`);
+eq("'-' se guarda como null en el archivo",
+   await scalar(`select duracion_code from produccion.assets
+                  where idea_id='00000000-0000-0000-0000-0000000000d1' and naming_kind='real'`),
+   null);
+eq("y el nombre queda sin token de duración",
+   await nombreDe("real"), "DURTEST_9X16_WOMAN_REAL_VIDEO_IDEAA1_FB_V1_AUG26_RN");
+
+// Un nombre forzado a mano sigue mandando: la propagación no lo pisa.
+await db.exec(`update produccion.assets set filename_override='MANUAL_NAME_RN'
+                where idea_id='00000000-0000-0000-0000-0000000000d1' and naming_kind='real'`);
+await db.exec(`update produccion.ideas set duracion='15-30s'
+                where id='00000000-0000-0000-0000-0000000000d1'`);
+eq("un filename_override no lo pisa la propagación",
+   await nombreDe("real"), "MANUAL_NAME_RN");
+
+ok("el cambio de duración queda en el historial",
+   Number(await scalar(`select count(*) from produccion.activity_log
+                         where verb='duracion_cambiada'`)) >= 3);
+
+eq("TREND y NOTAS ya tienen dónde guardarse",
+   Number(await scalar(`select count(*) from information_schema.columns
+                         where table_schema='produccion' and table_name='ideas'
+                           and column_name in ('trend','notas')`)), 2);
+
+await db.exec(`delete from produccion.assets where idea_id='00000000-0000-0000-0000-0000000000d1'`);
+
 // ── CONTRACT: TS canMove() === DB transition_allowed() over ALL pairs ──
 // The board dims illegal columns using the TS map; the trigger enforces the SQL
 // one. If they ever drift, the UI would offer a drop the DB then rejects.

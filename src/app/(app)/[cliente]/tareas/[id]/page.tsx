@@ -21,6 +21,7 @@ type Idea = {
   formato_code: string | null; duracion: string | null; tamanos: string[] | null;
   plataformas: string[] | null; marca_id: string | null; brief_id: string;
   entrega_num: string | null; entrega_final: string | null; entrega_url: string | null;
+  trend: string | null; notas: string | null;
 };
 
 export default async function TareaPage({
@@ -42,7 +43,7 @@ export default async function TareaPage({
   const { data: idea } = await db
     .from("ideas")
     .select(
-      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url",
+      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas",
     )
     .eq("id", id)
     .maybeSingle<Idea>();
@@ -80,19 +81,28 @@ export default async function TareaPage({
     );
   }
 
-  const [{ data: marca }, { data: reglas }, { data: archivos }] = await Promise.all([
-    idea.marca_id
-      ? db.from("marcas").select("name, slug").eq("id", idea.marca_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    db.from("reglas").select("*").eq("activo", true).returns<Regla[]>(),
-    db
-      .from("assets")
-      .select("filename, tamano_code, plataforma_code")
-      .eq("idea_id", idea.id)
-      .order("tamano_code")
-      .order("plataforma_code")
-      .returns<{ filename: string | null }[]>(),
-  ]);
+  const [{ data: marca }, { data: reglas }, { data: archivos }, { data: durVocab }] =
+    await Promise.all([
+      idea.marca_id
+        ? db.from("marcas").select("name, slug").eq("id", idea.marca_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      db.from("reglas").select("*").eq("activo", true).returns<Regla[]>(),
+      db
+        .from("assets")
+        .select("filename, tamano_code, plataforma_code")
+        .eq("idea_id", idea.id)
+        .order("tamano_code")
+        .order("plataforma_code")
+        .returns<{ filename: string | null }[]>(),
+      // Sugerencias para la Duración. Salen de vocab_terms (una sola fuente) y
+      // NO limitan: el campo acepta lo que sea, como el "Otro" de los dropdowns.
+      db
+        .from("vocab_terms")
+        .select("label_es")
+        .eq("set", "duracion")
+        .order("sort_order")
+        .returns<{ label_es: string }[]>(),
+    ]);
   const filenames = (archivos ?? []).map((a) => a.filename).filter(Boolean) as string[];
 
   // El cuerpo: se crea la primera fila al abrir, para que la persona escriba ya.
@@ -202,17 +212,22 @@ export default async function TareaPage({
           que React reportara una key faltante contra el componente equivocado. */}
       <div className="mb-4">
         <CabeceraTarea
+          ideaId={idea.id}
           tipoAsset={idea.tipo_asset}
           plantilla={plantilla}
           plataformas={idea.plataformas ?? []}
           tamanos={idea.tamanos ?? []}
           duracion={idea.duracion}
+          trend={idea.trend}
+          notas={idea.notas}
           marca={marca?.name ?? null}
           formato={idea.formato_code}
           entregaNum={idea.entrega_num}
           entregaFinal={idea.entrega_final}
           entregaUrl={idea.entrega_url}
           filenames={filenames}
+          duracionesSugeridas={(durVocab ?? []).map((v) => v.label_es)}
+          soloLectura={soloLectura}
         />
       </div>
 

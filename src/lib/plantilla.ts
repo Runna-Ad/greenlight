@@ -63,33 +63,12 @@ export function parseDuracion(texto: string | null | undefined): Rango | null {
   return { min: n[0], max: n.length > 1 ? n[n.length - 1] : n[0] };
 }
 
-export type Veredicto =
-  | { estado: "dentro"; mensaje: string }
-  | { estado: "excede"; mensaje: string }
-  | { estado: "corto"; mensaje: string }
-  | { estado: "sin-referencia"; mensaje: string };
-
-/**
- * Tres estados, nunca dos. Cuando la Duración no se puede leer NO se dice que
- * todo está bien: un ✓ por defecto sería un falso verde, y el equipo aprendería
- * a ignorarlo.
- */
-export function compararDuracion(totalS: number, duracion: string | null | undefined): Veredicto {
-  const r = parseDuracion(duracion);
-  if (!r) {
-    return {
-      estado: "sin-referencia",
-      mensaje: `${totalS}s de lectura · sin duración con la cual comparar`,
-    };
-  }
-  if (totalS > r.max) {
-    return { estado: "excede", mensaje: `${totalS}s · se pasa ${totalS - r.max}s de ${r.max}s` };
-  }
-  if (totalS > 0 && totalS < r.min) {
-    return { estado: "corto", mensaje: `${totalS}s · faltan ${r.min - totalS}s para ${r.min}s` };
-  }
-  return { estado: "dentro", mensaje: `${totalS}s · dentro de ${r.min}-${r.max}s` };
-}
+// Aquí vivía compararDuracion(): juzgaba el diálogo contra la Duración y pintaba
+// el read-time de verde/rojo. Se quitó a petición de Pedro — "no lo adaptes
+// basado en cuánto escrito está en el diálogo, no hay necesidad". La Duración se
+// escribe a mano en la cabecera y es la que manda sobre el nombre del archivo;
+// el read-time se queda como dato, sin veredicto.
+// parseDuracion SÍ se conserva: las reglas contextuales la usan (DUR30_MIN5_BENEF).
 
 // ─────────────────────────────────────────────────────────────
 // Placeholders

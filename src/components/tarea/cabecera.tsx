@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, Copy, ExternalLink, Check } from "lucide-react";
 import { varianteGuion, type Plantilla } from "@/lib/plantilla";
 import { PLATAFORMA_LABEL } from "@/lib/vocab";
+import { CampoIntake } from "./campo-intake";
 
 const COLOR_PLATAFORMA: Record<string, string> = {
   GG: "var(--plat-gg)",
@@ -52,23 +53,31 @@ function panelTipo(tipoAsset: string | null, plantilla: Plantilla) {
  * también, no sólo en la vista del cliente (Pedro).
  */
 export function CabeceraTarea({
+  ideaId,
   tipoAsset,
   plantilla,
   plataformas,
   tamanos,
   duracion,
+  trend,
+  notas,
   marca,
   formato,
   entregaNum,
   entregaFinal,
   entregaUrl,
   filenames,
+  duracionesSugeridas = [],
+  soloLectura,
 }: {
+  ideaId: string;
   tipoAsset: string | null;
   plantilla: Plantilla;
   plataformas: string[];
   tamanos: string[];
   duracion: string | null;
+  trend: string | null;
+  notas: string | null;
   marca: string | null;
   formato: string | null;
   entregaNum: string | null;
@@ -76,9 +85,15 @@ export function CabeceraTarea({
   entregaUrl: string | null;
   /** Los nombres finales que entrega esta tarea, ya calculados por la BD. */
   filenames: string[];
+  duracionesSugeridas?: string[];
+  soloLectura?: boolean;
 }) {
   const panel = panelTipo(tipoAsset, plantilla);
   const esEstatico = plantilla === "estatico";
+
+  // Los nombres se recalculan en la base al cambiar la Duración. Se guardan en
+  // estado para enseñar los NUEVOS sin recargar — nunca los arma el navegador.
+  const [nombres, setNombres] = useState(filenames);
 
   return (
     <div className="overflow-hidden rounded-xl border border-border">
@@ -96,7 +111,25 @@ export function CabeceraTarea({
         {/* datos del intake */}
         <div className="flex flex-1 flex-wrap items-start gap-x-6 gap-y-2 bg-card px-4 py-3">
           <Dato titulo="Formatos" valor={tamanos.length ? tamanos.join(" · ") : "—"} />
-          <Dato titulo="Duración" valor={duracion && duracion !== "-" ? duracion : "—"} />
+          {esEstatico ? (
+            // Un estático no dura. build_filename ni siquiera emite el token, así
+            // que un campo editable aquí prometería algo que no pasa.
+            <Dato titulo="Duración" valor="—" />
+          ) : (
+            <CampoIntake
+              ideaId={ideaId}
+              campo="duracion"
+              label="Duración"
+              valorInicial={duracion && duracion !== "-" ? duracion : null}
+              placeholder="15-30s"
+              sugerencias={duracionesSugeridas}
+              ancho="w-24"
+              soloLectura={soloLectura}
+              onGuardado={(res) => {
+                if (res.ok && res.filenames) setNombres(res.filenames);
+              }}
+            />
+          )}
           <Dato titulo="Marca" valor={marca ?? "—"} />
           <Dato titulo="Formato" valor={formato ?? "—"} />
           <Dato titulo="# Entrega" valor={entregaNum ?? "—"} />
@@ -137,7 +170,29 @@ export function CabeceraTarea({
         </div>
       </div>
 
-      <NombresFinales filenames={filenames} />
+      {/* TREND y NOTAS — las dos cajas libres de la cabecera del deck */}
+      <div className="grid gap-x-6 gap-y-2 border-t border-border bg-card px-4 py-2 sm:grid-cols-2">
+        <CampoIntake
+          ideaId={ideaId}
+          campo="trend"
+          label="Trend"
+          valorInicial={trend}
+          placeholder="Tendencia o referencia que sigue esta pieza"
+          rows={2}
+          soloLectura={soloLectura}
+        />
+        <CampoIntake
+          ideaId={ideaId}
+          campo="notas"
+          label="Notas"
+          valorInicial={notas}
+          placeholder="Lo que el equipo tiene que saber y no cabe en otro campo"
+          rows={2}
+          soloLectura={soloLectura}
+        />
+      </div>
+
+      <NombresFinales filenames={nombres} />
     </div>
   );
 }

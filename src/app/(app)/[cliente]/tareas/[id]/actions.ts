@@ -31,6 +31,81 @@ export type GuardarResultado =
   | { ok: false; conflicto?: false; error: string };
 
 /**
+ * Los campos de la CABECERA que se editan (no del cuerpo). Whitelist aparte
+ * porque viven en `ideas`, no en la tabla de la plantilla.
+ *
+ * `duracion` está aquí a propósito y `tamanos`/`plataformas` no: cambiar la
+ * duración reescribe un token del nombre; cambiar los tamaños crearía o
+ * borraría archivos, que es una operación estructural, no un campo de texto.
+ */
+const CAMPOS_INTAKE = new Set(["duracion", "trend", "notas"]);
+
+export type IntakeResultado =
+  | { ok: true; filenames?: string[] }
+  | { ok: false; conflicto: true; valorActual: string | null }
+  | { ok: false; conflicto?: false; error: string };
+
+/**
+ * Guarda un campo de la cabecera, con el mismo compare-and-set del cuerpo.
+ *
+ * Al cambiar la Duración devuelve los nombres YA recalculados por la base
+ * (trigger `ideas_duracion_propaga` → `assets_filename_biu`). Se devuelven en
+ * vez de recalcularlos aquí para que la pantalla no pueda enseñar un nombre que
+ * la base no tiene: el nombre es lo que el equipo copia literal al entregar.
+ */
+export async function guardarIntake(
+  ideaId: string,
+  campo: string,
+  valorAnterior: string | null,
+  valorNuevo: string | null,
+): Promise<IntakeResultado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!CAMPOS_INTAKE.has(campo)) return { ok: false, error: `Campo no permitido: ${campo}` };
+
+  const role = await getViewAs();
+  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+
+  const db = supabaseAdmin();
+  const { data: idea } = await db
+    .from("ideas").select("status").eq("id", ideaId).maybeSingle();
+  if (!idea) return { ok: false, error: "La tarea ya no existe." };
+
+  const status = idea.status as AssetStatus;
+  if (ESTADOS_CERRADOS.includes(status) && !canOverrideStatus(role)) {
+    return { ok: false, error: "Esta tarea ya está cerrada. Pídele a un lead que la reabra." };
+  }
+
+  const limpio = valorNuevo?.trim() ? valorNuevo.trim() : null;
+
+  const base = db.from("ideas").update({ [campo]: limpio }).eq("id", ideaId);
+  const { data, error } =
+    valorAnterior === null
+      ? await base.is(campo, null).select("id")
+      : await base.eq(campo, valorAnterior).select("id");
+
+  if (error) return { ok: false, error: error.message };
+
+  if (!data?.length) {
+    const { data: actual } = await db
+      .from("ideas").select(campo).eq("id", ideaId).maybeSingle();
+    const v = (actual as Record<string, string | null> | null)?.[campo] ?? null;
+    if (v !== limpio) return { ok: false, conflicto: true, valorActual: v };
+  }
+
+  if (campo !== "duracion") return { ok: true };
+
+  const { data: archivos } = await db
+    .from("assets")
+    .select("filename")
+    .eq("idea_id", ideaId)
+    .order("tamano_code")
+    .order("plataforma_code")
+    .returns<{ filename: string | null }[]>();
+
+  return { ok: true, filenames: (archivos ?? []).map((a) => a.filename).filter(Boolean) as string[] };
+}
+
+/**
  * Guarda UN campo, con compare-and-set.
  *
  * Nunca se manda el objeto entero: eso es read-modify-write, y con varias

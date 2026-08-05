@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { agregarPlano, borrarPlano } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import {
   PLACEHOLDER_ESTATICO,
-  compararDuracion,
   notaGlobal,
   placeholdersGuion,
   readTimeS,
@@ -88,11 +87,13 @@ export function EditorTarea({
     [reglas, cabecera, marcaSlug, textoTotal],
   );
 
+  // Informativo, no un juicio. La Duración la decide la persona en la cabecera
+  // (Pedro: "no lo adaptes basado en cuánto escrito está en el diálogo"), así
+  // que aquí sólo se suma lo que tarda en leerse.
   const totalS = useMemo(
     () => planos.reduce((n, p) => n + readTimeS(p.dialogo), 0),
     [planos],
   );
-  const veredicto = compararDuracion(totalS, cabecera.duracion);
 
   const nuevoPlano = () =>
     startTransition(async () => {
@@ -114,17 +115,9 @@ export function EditorTarea({
       <div className="space-y-3 rounded-xl border border-border bg-card p-3">
         <ChipsReglas reglas={reglasActivas} plataformas={cabecera.plataformas} />
         {!esEstatico && (
-          <p
-            className={`flex items-center gap-1.5 text-xs ${
-              veredicto.estado === "excede"
-                ? "text-status-corrections"
-                : veredicto.estado === "dentro"
-                  ? "text-status-completed"
-                  : "text-muted-foreground"
-            }`}
-          >
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Clock className="size-3.5 shrink-0" />
-            {veredicto.mensaje}
+            {totalS}s de lectura en total
           </p>
         )}
       </div>
