@@ -293,3 +293,16 @@ planos, Rünna details), barra de acciones (gradiente), topbar sticky con blur.
 Contraste AA verificado (4.84–12.01). Notion sigue en pausa (falta acceso).
 Falta (si Pedro quiere ir más profundo): tipografía escala, login/sync/forms,
 empty states, y capa emil-design-eng de micro-interacciones.
+
+## 2026-08-05 (cont.) — Tablero sin botones, ícono de tipo, dropzone en estático
+
+- Board: quitados los botones de flujo de las tarjetas (drag + workspace los
+  hacen redundantes; Pedro). Se removió todo el plumbing (runAction/onAction/
+  RequestChangesButton). /mi-trabajo conserva los suyos (sin drag ahí).
+- Board: ícono del tipo de asset junto al código (con tooltip).
+- Estático: campo "Liga" → drag & drop de IMÁGENES (sin video). Migración 0020
+  estatico_references (espejo de plano_references); acciones generalizadas a un
+  `owner {plano|estático}`. Upload verificado end-to-end en prod.
+- Pregunta abierta de Pedro: los bundles viven en la pestaña Briefs; el Tablero
+  es kanban por estado. Falta decidir si el Tablero también se agrupa por brief.
+S.P.A.M idéntico 42/31/6.
