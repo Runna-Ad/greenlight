@@ -10,10 +10,18 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { EmptyState } from "@/components/ui/empty-state";
 import { EquipoTab } from "./equipo-tab";
 import { PerfilTab } from "./perfil-tab";
+import { ActividadTab } from "./actividad-tab";
+import { IntegracionesTab } from "./integraciones-tab";
+import { BibliotecaTab } from "./biblioteca-tab";
 import type { MiembroRow } from "@/lib/equipo";
+import type {
+  ActividadRow,
+  IntegracionesEstado,
+  MarcaOpt,
+  SnippetRow,
+} from "@/lib/admin-tipos";
 
 type Soy = { id: string; name: string; color: string; track: string } | null;
 
@@ -29,9 +37,15 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
 export function AdminShell({
   equipoInicial,
   soy,
+  actividad,
+  integraciones,
+  biblioteca,
 }: {
   equipoInicial: MiembroRow[];
   soy: Soy;
+  actividad: ActividadRow[];
+  integraciones: IntegracionesEstado;
+  biblioteca: { snippets: SnippetRow[]; marcas: MarcaOpt[] };
 }) {
   const [tab, setTab] = useState<TabKey>("equipo");
 
@@ -72,20 +86,11 @@ export function AdminShell({
         <div className="min-w-0">
           {tab === "perfil" && <PerfilTab soy={soy} />}
           {tab === "equipo" && <EquipoTab inicial={equipoInicial} />}
-          {tab === "actividad" && <EnConstruccion titulo="Actividad" />}
-          {tab === "integraciones" && <EnConstruccion titulo="Integraciones" />}
-          {tab === "biblioteca" && <EnConstruccion titulo="Biblioteca" />}
+          {tab === "actividad" && <ActividadTab rows={actividad} />}
+          {tab === "integraciones" && <IntegracionesTab estado={integraciones} />}
+          {tab === "biblioteca" && <BibliotecaTab snippets={biblioteca.snippets} marcas={biblioteca.marcas} />}
         </div>
       </div>
     </div>
-  );
-}
-
-function EnConstruccion({ titulo }: { titulo: string }) {
-  return (
-    <EmptyState
-      titulo={`${titulo} — en construcción`}
-      descripcion="Esta sección llega en breve."
-    />
   );
 }

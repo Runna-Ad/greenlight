@@ -4,7 +4,12 @@ import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { ROLE_LABEL, canAdmin } from "@/lib/roles";
 import { AdminShell } from "@/components/admin/admin-shell";
-import { listarEquipo } from "./actions";
+import {
+  listarEquipo,
+  listarActividad,
+  estadoIntegraciones,
+  listarBiblioteca,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +30,21 @@ export default async function AdminPage() {
     );
   }
 
-  const [equipo, soy] = await Promise.all([listarEquipo(), getSoy()]);
+  const [equipo, soy, actividad, integraciones, biblioteca] = await Promise.all([
+    listarEquipo(),
+    getSoy(),
+    listarActividad(),
+    estadoIntegraciones(),
+    listarBiblioteca(),
+  ]);
 
-  return <AdminShell equipoInicial={equipo} soy={soy} />;
+  return (
+    <AdminShell
+      equipoInicial={equipo}
+      soy={soy}
+      actividad={actividad}
+      integraciones={integraciones}
+      biblioteca={biblioteca}
+    />
+  );
 }

@@ -3,6 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import type { MiembroRow, RolAsignable } from "@/lib/equipo";
+import type {
+  ActividadRow,
+  IntegracionesEstado,
+  MarcaOpt,
+  SnippetKind,
+  SnippetRow,
+} from "@/lib/admin-tipos";
 
 // published/delivered ya salieron del tablero — no cuentan como carga viva.
 const TERMINALES = new Set(["published", "delivered"]);
@@ -127,4 +134,171 @@ export async function crearMiembro(data: {
   }
   revalidatePath("/admin");
   return { ok: true, miembro: { ...(creado as Omit<MiembroRow, "carga">), carga: 0 } };
+}
+
+// ── Actividad ──────────────────────────────────────────────
+// El feed de "quién hizo qué": los cambios de estado de tareas (status_events),
+// con quién actuó resuelto (member o profile). Los datos ya se capturan solos.
+export async function listarActividad(limit = 40): Promise<ActividadRow[]> {
+  if (!hasSupabase()) return [];
+  const db = supabaseAdmin();
+
+  const { data: eventos } = await db
+    .from("status_events")
+    .select("id, idea_id, from_status, to_status, actor_id, actor_member_id, reason, override, created_at")
+    .not("idea_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  const rows = (eventos ?? []) as {
+    id: string; idea_id: string; from_status: string | null; to_status: string;
+    actor_id: string | null; actor_member_id: string | null; reason: string | null;
+    override: boolean; created_at: string;
+  }[];
+  if (!rows.length) return [];
+
+  const ideaIds = [...new Set(rows.map((r) => r.idea_id))];
+  const memberIds = [...new Set(rows.map((r) => r.actor_member_id).filter(Boolean))] as string[];
+  const profileIds = [...new Set(rows.map((r) => r.actor_id).filter(Boolean))] as string[];
+
+  const [ideasRes, membersRes, profilesRes] = await Promise.all([
+    db.from("ideas").select("id, code, naming_base").in("id", ideaIds),
+    memberIds.length
+      ? db.from("track_members").select("id, name, color").in("id", memberIds)
+      : Promise.resolve({ data: [] as { id: string; name: string; color: string }[] }),
+    profileIds.length
+      ? db.from("profiles").select("id, full_name").in("id", profileIds)
+      : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
+  ]);
+
+  const ideaById = new Map(
+    ((ideasRes.data ?? []) as { id: string; code: string | null; naming_base: string | null }[])
+      .map((i) => [i.id, i]),
+  );
+  const memberById = new Map(
+    ((membersRes.data ?? []) as { id: string; name: string; color: string }[]).map((m) => [m.id, m]),
+  );
+  const profileById = new Map(
+    ((profilesRes.data ?? []) as { id: string; full_name: string }[]).map((p) => [p.id, p]),
+  );
+
+  return rows.map((r) => {
+    const idea = ideaById.get(r.idea_id);
+    const member = r.actor_member_id ? memberById.get(r.actor_member_id) : undefined;
+    const profile = r.actor_id ? profileById.get(r.actor_id) : undefined;
+    return {
+      id: r.id,
+      ideaCode: idea?.code ?? null,
+      ideaNaming: idea?.naming_base ?? null,
+      from: r.from_status,
+      to: r.to_status,
+      actor: member?.name ?? profile?.full_name ?? null,
+      actorColor: member?.color ?? null,
+      override: r.override,
+      reason: r.reason,
+      createdAt: r.created_at,
+    };
+  });
+}
+
+// ── Integraciones ──────────────────────────────────────────
+export async function estadoIntegraciones(): Promise<IntegracionesEstado> {
+  const sheetConfigurado = Boolean(
+    process.env.SHEETS_SCRIPT_URL && process.env.SHEETS_SCRIPT_SECRET,
+  );
+  const notionConfigurado = Boolean(process.env.NOTION_TOKEN && process.env.NOTION_DB_ID);
+
+  let ultimaSync: string | null = null;
+  let tareasImportadas = 0;
+  if (hasSupabase()) {
+    const db = supabaseAdmin();
+    const { data: ult } = await db
+      .from("staged_rows")
+      .select("reviewed_at")
+      .not("reviewed_at", "is", null)
+      .order("reviewed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    ultimaSync = (ult?.reviewed_at as string) ?? null;
+    const { count } = await db
+      .from("staged_rows")
+      .select("id", { count: "exact", head: true })
+      .not("idea_id", "is", null);
+    tareasImportadas = count ?? 0;
+  }
+
+  return { sheetConfigurado, ultimaSync, tareasImportadas, notionConfigurado };
+}
+
+// ── Biblioteca (snippets) ──────────────────────────────────
+export async function listarBiblioteca(): Promise<{ snippets: SnippetRow[]; marcas: MarcaOpt[] }> {
+  if (!hasSupabase()) return { snippets: [], marcas: [] };
+  const db = supabaseAdmin();
+  const [snipRes, marcaRes] = await Promise.all([
+    db.from("snippets").select("id, kind, title, body, scope, marca_id, active, sort_order")
+      .order("kind", { ascending: true })
+      .order("sort_order", { ascending: true }),
+    db.from("marcas").select("id, name").order("name", { ascending: true }),
+  ]);
+  return {
+    snippets: (snipRes.data ?? []) as SnippetRow[],
+    marcas: (marcaRes.data ?? []) as MarcaOpt[],
+  };
+}
+
+type SnipGuardado = { ok: boolean; error?: string; snippet?: SnippetRow };
+
+export async function crearSnippet(data: {
+  kind: SnippetKind;
+  title: string;
+  body: string;
+  marca_id?: string | null;
+}): Promise<SnipGuardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!data.title.trim() || !data.body.trim()) {
+    return { ok: false, error: "Título y texto son obligatorios." };
+  }
+  const db = supabaseAdmin();
+  // scope = 'marca' si se ata a una marca; si no, 'global'.
+  const scope = data.marca_id ? "marca" : "global";
+  const { data: creado, error } = await db
+    .from("snippets")
+    .insert({
+      kind: data.kind,
+      title: data.title.trim(),
+      body: data.body.trim(),
+      scope,
+      marca_id: data.marca_id ?? null,
+    })
+    .select("id, kind, title, body, scope, marca_id, active, sort_order")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin");
+  return { ok: true, snippet: creado as SnippetRow };
+}
+
+export async function editarSnippet(
+  id: string,
+  patch: { title?: string; body?: string; marca_id?: string | null },
+): Promise<SnipGuardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const limpio: Record<string, unknown> = {};
+  if (typeof patch.title === "string") limpio.title = patch.title.trim();
+  if (typeof patch.body === "string") limpio.body = patch.body.trim();
+  if (patch.marca_id !== undefined) {
+    limpio.marca_id = patch.marca_id;
+    limpio.scope = patch.marca_id ? "marca" : "global";
+  }
+  if (!Object.keys(limpio).length) return { ok: false, error: "Nada que guardar." };
+  const { error } = await supabaseAdmin().from("snippets").update(limpio).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function alternarSnippetActivo(id: string, active: boolean): Promise<SnipGuardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const { error } = await supabaseAdmin().from("snippets").update({ active }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin");
+  return { ok: true };
 }
