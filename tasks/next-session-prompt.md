@@ -14,25 +14,33 @@ verificado en vivo (S.P.A.M intacto 42/31/6):
 - **Referencias (imágenes/videos) al lado del cliente** en el preview.
 - **Panel `/admin`** completo: Perfil · Equipo/roles (con **Master Builder**) ·
   Actividad · Integraciones · Biblioteca (CRUD de snippets).
-- Fixes: Trend "-" ya no genera falsa referencia · # Idea alineado.
+- **Emails de notificación** (Gmail SMTP, sender `unique@runna.com.mx`) —
+  dispatcher inline con `after()`; avisa en nuevo-brief · a-revisión · cambios ·
+  aprobada · enviada-al-cliente. Probado en vivo a petedv31@.
+- Fixes: Trend "-" ya no genera falsa referencia · # Idea alineado · Notas ya no
+  se pasa al cliente (es interno).
 
-**Migraciones 0001–0024 aplicadas** (⚠️ no existe 0017 — Notion, diferida; salta
+**Migraciones 0001–0026 aplicadas** (⚠️ no existe 0017 — Notion, diferida; salta
 0016→0018 a propósito). Últimas: 0022 rpc_crear_brief · 0023 enum master · 0024
-track_members role/email/slack. La próxima migración usa un timestamp NUEVO
-(`20260806120004` o superior), NUNCA reciclar 0017.
+track_members role/email/slack · 0025 canal email + notify_email · 0026
+rpc_notificar_brief. La próxima migración usa un timestamp NUEVO
+(`20260806120006` o superior), NUNCA reciclar 0017.
 
-Todo está commiteado **y pusheado**: remoto `origin →
-github.com/Runna-Ad/runna-command-center`, sincronizado (`git push` = up-to-date).
-Deploys por `npx vercel --prod --yes` (CLI). Login sigue apagado (beta, hasta el
-final — NO re-abrir el tema).
+Todo commiteado + pusheado a `Runna-Ad/runna-command-center` (público).
+⚠️ **Deploys por `npx vercel --prod --yes` (CLI)** — el auto-deploy por git push
+NO es confiable (repo privado/org en Vercel Hobby; ver lección). Verificar con
+`npx vercel ls`. Login sigue apagado (beta, hasta el final — NO re-abrir el tema).
+Secretos de email en `.env.local` (gitignoreado) + Vercel env — nunca commitear.
 
 ## Qué sigue (elige; ninguno comprometido)
+- **Llenar los emails del equipo** en /admin ▸ Equipo — con eso los emails de
+  notificación empiezan a llegarles solos (hoy la columna `email` está vacía →
+  las notificaciones se marcan `skipped`, sin error).
 - **F6 · Biblioteca Notion** — bloqueado en el **token de integración** + el
   **link/ID de la base**. El CRUD de Biblioteca en /admin ya existe; falta el
   sync con Notion (espejo a `snippets`).
-- **Notificaciones que SÍ envían** (email/Slack) — hoy sólo in-app (campanita).
-  Falta el dispatcher (Resend/Slack) + prefs por evento + capturar email/slack de
-  cada persona (ya se puede en /admin ▸ Equipo). Necesita keys de Resend/Slack.
+- **Slack** de notificación (el email ya está) + **prefs por-evento por usuario**
+  (hoy un toggle global `notify_email` por persona).
 - **API / MCP con tokens para Claude** — greenfield (API + auth de token + tabla
   hasheada). Su propia fase. Referencia: la de SnapTrack (`ApiTokensTab.tsx`).
 - **Portal del cliente** · **Copies** · **legal de Préstamos** (agregarlo por

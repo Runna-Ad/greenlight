@@ -1,5 +1,47 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-06 (cont.) — Emails de notificación (Gmail SMTP) + varios
+
+Segunda mitad de una sesión muy larga. Todo en producción, S.P.A.M idéntico
+42/31/6, commiteado y pusheado a `Runna-Ad/runna-command-center`.
+
+**Antes del email (fixes):**
+- **Notas ya NO va al cliente** — era interno; se quitó `peloteo` del PreviewSlide
+  (revierte una agrupación mía previa; qué es interno vs cliente es decisión
+  por-campo). Comentarios Leads y Notas = internos; Resumen y Trend = del cliente.
+- **Git**: el repo YA tenía remoto (`Runna-Ad/runna-command-center`) y estaba
+  sincronizado; corregí las notas obsoletas que decían "no hay remoto". Ahora es
+  público bajo org Runna-Ad. ⚠️ Vercel Hobby NO auto-deploya repos privados de
+  org — deploys por `npx vercel --prod --yes` (ver lección).
+- Agregué Greenlight a Mission Control (`~/Downloads/mission-control_3.html`).
+
+**Sistema de emails de notificación** (patrón "Brooklyn" de SnapTrack):
+- **Gmail SMTP** (nodemailer), sender **`unique@runna.com.mx`** (cuenta Workspace
+  + App Password → Gmail resuelve SPF/DKIM). NO Resend.
+- **Autocontenido en el Vercel de Greenlight**, NO en Supabase edge functions —
+  para no pisar los secretos de S.P.A.M en el proyecto compartido.
+- Piezas: `email.ts` (envío), `notif-routing.ts` (doble compuerta, testeada),
+  `notif-email.ts` (dispatcher: drena cola pending → resuelve email por persona
+  → manda → marca), disparo **inline con `after()`** tras cada cambio de estado.
+- **Migración 0025**: canal `email` activo + `track_members.notify_email`.
+- **/admin ▸ Equipo**: toggle "Recibe emails" por persona.
+- **Migración 0026 + `rpc_notificar_brief`**: al crear un brief, un aviso
+  **agregado por especialista** ("Nuevo brief · tienes X tareas → /mi-trabajo").
+- **PEDRO_OVERRIDE**: Pedro revocó su regla #3 ("no tocar .env/secretos") para
+  que yo pusiera el App Password. Lo escribí a `.env.local` (gitignoreado,
+  verificado no-trackeado) + a Vercel env por CLI. Nunca commiteado.
+
+**Verificado en vivo** (todos los emails de prueba → **petedv31@gmail.com**):
+SMTP directo ✅ · dispatcher end-to-end ✅ · aviso de brief "2 tareas" ✅. Scripts
+`send-test-email.mjs`, `test-dispatch.mjs`, `test-brief-notif.mjs` (reversibles).
+Tests: 176 lib + 160 db, 0 fallos.
+
+**Cómo opera**: emails en nuevo-brief · lista-para-revisar · cambios · aprobada ·
+enviada-al-cliente. Gateados por el toggle + que la persona tenga email. Como
+Pedro pidió "ignorar los emails por ahora", los 14 tienen `email` vacío → esas
+notificaciones se marcan `skipped`. **Se activan solos al llenar los correos en
+/admin ▸ Equipo.**
+
 ## 2026-08-06 — Constructor de brief, referencias al cliente y panel /admin
 
 Sesión larga y muy productiva. **7 commits de features en `main`, todo en

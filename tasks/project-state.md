@@ -14,8 +14,10 @@ Unbounded (wordmark)
 
 ## Desplegado
 - **https://runna-command-center.vercel.app** — público, sin login (decisión de Pedro)
-- Deploy: **`git push main → auto-deploy`** (Vercel git-connected, 2026-08-06). La
-  CLI `npx vercel --prod --yes` sigue funcionando como respaldo.
+- Deploy: **`npx vercel --prod --yes`** (CLI, confiable). ⚠️ El auto-deploy por
+  `git push` NO es confiable: repo privado/org en Vercel Hobby no auto-deploya
+  (ver lección). Verificar con `npx vercel ls` que el último Production = el
+  último commit; ante la duda, forzar con la CLI.
 - Repo: **`github.com/Runna-Ad/runna-command-center`** — público (org Runna-Ad)
 
 ## Base de datos (LIVE)
@@ -26,11 +28,13 @@ Unbounded (wordmark)
   migraciones / 6 usuarios, antes y después de todo.
 - Migraciones: ledger propio en `produccion._migrations`, `npm run migrate`
   (NUNCA `supabase db push` — dañaría el historial de S.P.A.M).
-- **Migraciones aplicadas 0001–0024** (OJO: **no existe 0017** — era la de
+- **Migraciones aplicadas 0001–0026** (OJO: **no existe 0017** — era la de
   Notion, que se difirió; la numeración salta 0016→0018. F6/Notion cuando se
-  haga usa un timestamp NUEVO, no 0017). Últimas: **0022** `rpc_crear_brief`
-  (constructor de brief atómico), **0023** enum `app_role += 'master'`, **0024**
-  `track_members += role/email/slack_user_id` + helpers RLS con master.
+  haga usa un timestamp NUEVO, no 0017). Últimas: **0022** `rpc_crear_brief`,
+  **0023** enum `app_role += 'master'`, **0024** `track_members += role/email/
+  slack_user_id` + helpers RLS con master, **0025** canal `email` activo +
+  `track_members.notify_email`, **0026** `rpc_notificar_brief` (aviso al crear
+  brief).
 - **Storage**: bucket privado `greenlight-referencias` (creado con
   `npm run setup:storage`, fuera de migraciones). Imágenes se sirven por signed
   URL firmada por render. Verificado: privado (acceso público = 400).
@@ -93,10 +97,15 @@ snippets legal=1 (sólo Card) · references(links del sheet)=15
 - **F6 · Biblioteca Notion** — bloqueado en el token de integración + link de la
   base. La tabla destino (`snippets`) + el picker + el CRUD de Biblioteca en
   /admin ya existen; falta cablear la sincronización con Notion.
-- **Notificaciones que SÍ envían** (email/Slack) — las tablas + el trigger + las
-  prefs (columnas) existen, pero NADIE drena la cola `pending`: sólo se entrega
-  in-app (la campanita). Falta el dispatcher (Resend/Slack) + prefs por evento +
-  los contactos (email/slack por persona, que ya se pueden capturar en /admin).
+- **Emails de notificación — YA FUNCIONAN** (Gmail SMTP, sender `unique@runna.
+  com.mx`, dispatcher inline con `after()` en el Vercel de Greenlight). Salen en
+  nuevo-brief · a-revisión · cambios · aprobada · enviada-al-cliente. **Falta
+  sólo llenar el `email` de cada persona en /admin ▸ Equipo** (hoy vacíos → esas
+  notificaciones se marcan `skipped`; se activan solos al llenarlos). Env
+  (Vercel + `.env.local`): `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `APP_URL`.
+- **Slack** de notificación — pendiente (el enum de canal lo contempla; falta el
+  sender). Prefs por-evento por usuario — pendiente (hoy un toggle global
+  `notify_email` por persona).
 - **API / MCP con tokens para Claude** — no existe (greenfield: API + auth de
   token + tabla hasheada). Es su propia fase.
 - **Portal del cliente** — no construido (fuera de alcance). "Enviar a cliente"
