@@ -416,7 +416,7 @@ export default async function TareaPage({
           status: idea.status,
           concepto: idea.concepto,
           trend: idea.trend,
-          peloteo: idea.peloteo_raw,
+          // Notas (peloteo) NO va al cliente — es interno (Pedro).
         }}
         planosIniciales={planos}
         estaticoInicial={estatico}

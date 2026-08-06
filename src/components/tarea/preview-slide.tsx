@@ -38,10 +38,10 @@ export type CabeceraVista = {
   marca: string | null;
   formato: string | null;
   status: AssetStatus;
-  /** Estas tres SÍ las ve el cliente (Pedro): Resumen/Trend/Notas del brief. */
+  /** Resumen (concepto) y Trend SÍ los ve el cliente. Las Notas (peloteo) son
+      INTERNAS y NO se exponen aquí (Pedro). */
   concepto: string | null;
   trend: string | null;
-  peloteo: string | null;
 };
 
 const COLOR_PLATAFORMA: Record<string, string> = {
@@ -123,9 +123,9 @@ export function PreviewSlide({
         {cabecera.naming ?? "SIN NAMING"}
       </p>
 
-      {/* Resumen / Trend / Notas — estas SÍ las ve el cliente (Pedro).
-          El Trend sale como "Referencia 1, 2…" en vez del URL largo. */}
-      {(cabecera.concepto || cabecera.trend || cabecera.peloteo) && (
+      {/* Resumen / Trend — esto SÍ lo ve el cliente. Las NOTAS son internas y
+          NO se pasan al cliente (Pedro). El Trend sale como "Referencia 1, 2…". */}
+      {(cabecera.concepto || cabecera.trend) && (
         <div className="space-y-1.5 border-b border-black/10 p-2 text-[10px]">
           {cabecera.concepto && <BriefLinea rotulo="Resumen del brief" texto={cabecera.concepto} />}
           {trendRefs.length > 0 && (
@@ -152,7 +152,7 @@ export function PreviewSlide({
               )}
             </p>
           )}
-          {cabecera.peloteo && <BriefLinea rotulo="Notas" texto={cabecera.peloteo} />}
+          {/* Notas: NO va aquí — es interno (Pedro). */}
         </div>
       )}
 
