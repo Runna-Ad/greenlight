@@ -21,9 +21,10 @@ verificado en vivo (S.P.A.M intacto 42/31/6):
 track_members role/email/slack. La próxima migración usa un timestamp NUEVO
 (`20260806120004` o superior), NUNCA reciclar 0017.
 
-Todo está commiteado. **No hay remoto git** — los deploys van por
-`npx vercel --prod --yes`. Login sigue apagado (beta, hasta el final — NO
-re-abrir el tema).
+Todo está commiteado **y pusheado**: remoto `origin →
+github.com/Runna-Ad/runna-command-center`, sincronizado (`git push` = up-to-date).
+Deploys por `npx vercel --prod --yes` (CLI). Login sigue apagado (beta, hasta el
+final — NO re-abrir el tema).
 
 ## Qué sigue (elige; ninguno comprometido)
 - **F6 · Biblioteca Notion** — bloqueado en el **token de integración** + el
