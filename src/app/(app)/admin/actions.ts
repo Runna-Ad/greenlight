@@ -25,7 +25,7 @@ export async function listarEquipo(): Promise<MiembroRow[]> {
 
   const { data: miembros } = await db
     .from("track_members")
-    .select("id, name, track, color, role, email, slack_user_id, es_lead, active, sort_order")
+    .select("id, name, track, color, role, email, slack_user_id, es_lead, active, notify_email, sort_order")
     .order("track", { ascending: true })
     .order("sort_order", { ascending: true });
 
@@ -61,6 +61,7 @@ const CAMPOS_EDITABLES = new Set([
   "slack_user_id",
   "es_lead",
   "active",
+  "notify_email",
 ]);
 
 /** Edita un miembro (guardado inmediato, como en SnapTrack). */
@@ -123,7 +124,7 @@ export async function crearMiembro(data: {
       es_lead: data.es_lead ?? false,
       sort_order,
     })
-    .select("id, name, track, color, role, email, slack_user_id, es_lead, active, sort_order")
+    .select("id, name, track, color, role, email, slack_user_id, es_lead, active, notify_email, sort_order")
     .single();
   if (error) {
     // unique (track, name) — nombre repetido dentro del mismo track.

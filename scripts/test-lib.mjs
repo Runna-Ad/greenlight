@@ -396,5 +396,19 @@ ok("especialista NO entra a admin", !canAdmin("creative"));
 ok("master ve la sección admin", canSee("master", "admin"));
 ok("master ve el tablero", canSee("master", "tablero"));
 
+// ── Ruteo de emails de notificación ──
+console.log("\n▶ Ruteo de emails");
+const { tipoEmailea, decisionEmail } = await import("../src/lib/notif-routing.ts");
+ok("task_approved emailea", tipoEmailea("task_approved"));
+ok("task_submitted emailea", tipoEmailea("task_submitted"));
+ok("un tipo desconocido NO emailea", !tipoEmailea("task_started"));
+ok("null NO emailea", !tipoEmailea(null));
+const D = (a) => decisionEmail(a).enviar;
+ok("envía cuando todo ok", D({ type: "task_approved", notifyEmail: true, email: "vero@runna.com.mx" }));
+ok("skip si el tipo no emailea", !D({ type: "task_started", notifyEmail: true, email: "vero@runna.com.mx" }));
+ok("skip si la persona desactivó email", !D({ type: "task_approved", notifyEmail: false, email: "vero@runna.com.mx" }));
+ok("skip si no hay email", !D({ type: "task_approved", notifyEmail: true, email: null }));
+ok("skip si el email es inválido", !D({ type: "task_approved", notifyEmail: true, email: "no-es-email" }));
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

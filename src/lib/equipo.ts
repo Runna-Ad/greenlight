@@ -18,6 +18,8 @@ export type MiembroRow = {
   es_lead: boolean;
   active: boolean;
   sort_order: number;
+  /** ¿Recibe emails de notificación? (in-app siempre le llega). */
+  notify_email: boolean;
   /** Tareas NO terminales asignadas a esta persona (el badge de carga). */
   carga: number;
 };

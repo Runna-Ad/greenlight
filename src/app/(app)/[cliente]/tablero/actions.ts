@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
+import { dispatchPendingEmails } from "@/lib/notif-email";
 import { canAssign, canMoveStatus, canOverrideStatus, type ViewRole } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
@@ -75,6 +77,10 @@ export async function moveTask(
   if (error) return { ok: false, error: error.message };
 
   await revalidateFor(db, ideaId);
+  // Después de responder, drena la cola de emails (Gmail SMTP). Off the response
+  // path (after) para no frenar el botón; cada acción también sirve de reintento
+  // por si un envío anterior no completó.
+  after(() => dispatchPendingEmails());
   return { ok: true };
 }
 
@@ -101,6 +107,10 @@ export async function startTask(ideaId: string): Promise<ActionResult> {
   if (error) return { ok: false, error: error.message };
 
   await revalidateFor(db, ideaId);
+  // Después de responder, drena la cola de emails (Gmail SMTP). Off the response
+  // path (after) para no frenar el botón; cada acción también sirve de reintento
+  // por si un envío anterior no completó.
+  after(() => dispatchPendingEmails());
   return { ok: true };
 }
 
@@ -119,6 +129,10 @@ export async function submitForReview(ideaId: string, note?: string): Promise<Ac
   if (error) return { ok: false, error: error.message };
 
   await revalidateFor(db, ideaId);
+  // Después de responder, drena la cola de emails (Gmail SMTP). Off the response
+  // path (after) para no frenar el botón; cada acción también sirve de reintento
+  // por si un envío anterior no completó.
+  after(() => dispatchPendingEmails());
   return { ok: true };
 }
 
@@ -141,6 +155,10 @@ export async function requestChanges(ideaId: string, body: string): Promise<Acti
   if (error) return { ok: false, error: error.message };
 
   await revalidateFor(db, ideaId);
+  // Después de responder, drena la cola de emails (Gmail SMTP). Off the response
+  // path (after) para no frenar el botón; cada acción también sirve de reintento
+  // por si un envío anterior no completó.
+  after(() => dispatchPendingEmails());
   return { ok: true };
 }
 
@@ -162,6 +180,10 @@ export async function approveTask(ideaId: string, note?: string): Promise<Action
   if (error) return { ok: false, error: error.message };
 
   await revalidateFor(db, ideaId);
+  // Después de responder, drena la cola de emails (Gmail SMTP). Off the response
+  // path (after) para no frenar el botón; cada acción también sirve de reintento
+  // por si un envío anterior no completó.
+  after(() => dispatchPendingEmails());
   return { ok: true };
 }
 
@@ -183,6 +205,10 @@ export async function sendToClient(ideaId: string, note?: string): Promise<Actio
   if (error) return { ok: false, error: error.message };
 
   await revalidateFor(db, ideaId);
+  // Después de responder, drena la cola de emails (Gmail SMTP). Off the response
+  // path (after) para no frenar el botón; cada acción también sirve de reintento
+  // por si un envío anterior no completó.
+  after(() => dispatchPendingEmails());
   return { ok: true };
 }
 
@@ -214,6 +240,10 @@ export async function setLeads(
   }
 
   await revalidateFor(db, ideaId);
+  // Después de responder, drena la cola de emails (Gmail SMTP). Off the response
+  // path (after) para no frenar el botón; cada acción también sirve de reintento
+  // por si un envío anterior no completó.
+  after(() => dispatchPendingEmails());
   return { ok: true };
 }
 
@@ -253,5 +283,9 @@ export async function setAssignees(
   }
 
   await revalidateFor(db, ideaId);
+  // Después de responder, drena la cola de emails (Gmail SMTP). Off the response
+  // path (after) para no frenar el botón; cada acción también sirve de reintento
+  // por si un envío anterior no completó.
+  after(() => dispatchPendingEmails());
   return { ok: true };
 }

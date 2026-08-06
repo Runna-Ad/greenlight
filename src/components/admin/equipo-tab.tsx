@@ -225,6 +225,10 @@ function MiembroCard({
           <Switch checked={m.es_lead} onCheckedChange={(v) => guardar(m.id, { es_lead: v })} aria-label="Puede ser lead" />
           Puede ser lead
         </label>
+        <label className="flex items-center gap-2 text-sm text-foreground" title="Recibe emails de notificación (in-app siempre le llega)">
+          <Switch checked={m.notify_email} onCheckedChange={(v) => guardar(m.id, { notify_email: v })} aria-label="Recibe emails" />
+          Recibe emails
+        </label>
       </div>
     </div>
   );
