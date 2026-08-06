@@ -4,7 +4,7 @@ import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.t
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
 import { actionsFor, waitingLabel } from "../src/lib/task-actions.ts";
 import { plantillaPara, readTimeS, parseDuracion, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
-import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco } from "../src/lib/intake-crear.ts";
+import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 
 let pass = 0,
   fail = 0;
@@ -361,6 +361,14 @@ eq("construirTarea → member resuelto", JSON.stringify(payload.member_ids), JSO
 eq("construirTarea → formato label→code", payload.formato_code, "STOCK");
 eq("construirTarea → naming_kind normal", payload.naming_kind, "normal");
 eq("construirTarea → 1 combo (9:16×TT válido)", payload.assets.length, 1);
+
+// camposLlenos — el multi-copy sólo ofrece campos con valor
+const llenos = camposLlenos(draft({ naming: "SPAPX", tamano: ["9:16"], concepto: "" }));
+const claves = llenos.map((c) => c.key);
+ok("naming lleno está disponible", claves.includes("naming"));
+ok("tamano lleno está disponible", claves.includes("tamano"));
+ok("concepto vacío NO está disponible", !claves.includes("concepto"));
+ok("# Idea nunca es copiable (identidad)", !claves.includes("numIdea"));
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -287,6 +287,40 @@ export function construirTarea(t: TaskDraft, track: Track, r: Resuelto): TaskPay
   };
 }
 
+/**
+ * Los campos que se pueden copiar a otras tarjetas (por campo o en lote).
+ * `# Idea` NO está: es la identidad y se maneja aparte (duplicar autoincrementa).
+ * El orden es el de lectura de la tarjeta.
+ */
+export const CAMPOS_COPIABLES: { key: keyof TaskDraft; label: string }[] = [
+  { key: "naming", label: "Naming" },
+  { key: "version", label: "Versión" },
+  { key: "marca", label: "Marca" },
+  { key: "entrega", label: "# Entrega" },
+  { key: "asignacion", label: "Asignación" },
+  { key: "tipoAsset", label: "Tipo de Asset" },
+  { key: "formato", label: "Formato" },
+  { key: "plataforma", label: "Plataforma" },
+  { key: "tamano", label: "Tamaño" },
+  { key: "genero", label: "Género" },
+  { key: "duracion", label: "Duración" },
+  { key: "concepto", label: "Concepto" },
+  { key: "comentariosLeads", label: "Comentarios Leads" },
+  { key: "peloteo", label: "Peloteo" },
+  { key: "sellingPoints", label: "Selling Points" },
+  { key: "referencias", label: "Referencias" },
+];
+
+/** ¿El campo de una tarjeta tiene valor? (para ofrecer sólo lo lleno al copiar). */
+export function campoLleno(v: string | string[]): boolean {
+  return Array.isArray(v) ? v.length > 0 : v.trim().length > 0;
+}
+
+/** Los campos copiables que YA tienen valor en una tarjeta. */
+export function camposLlenos(t: TaskDraft): { key: keyof TaskDraft; label: string }[] {
+  return CAMPOS_COPIABLES.filter((c) => campoLleno(t[c.key]));
+}
+
 /** Una tarjeta en blanco lista para editar. `id` lo pone quien llama. */
 export function tarjetaEnBlanco(id: string): TaskDraft {
   return {

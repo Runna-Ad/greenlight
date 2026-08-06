@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { ChipSelect } from "./chip-select";
-import { CopyFieldButton, type PickCard } from "./copy-to-picker";
+import { CopyFieldButton, MultiCopyButton, type PickCard } from "./copy-to-picker";
 import {
   ASIGNACION,
   ENTREGA,
@@ -19,7 +19,7 @@ import {
   TIPO_ASSET,
   type Track,
 } from "@/lib/vocab";
-import { combosDeTarjeta, nombresDeTarjeta, type TaskDraft } from "@/lib/intake-crear";
+import { camposLlenos, combosDeTarjeta, nombresDeTarjeta, type TaskDraft } from "@/lib/intake-crear";
 
 type ChipKey =
   | "entrega" | "asignacion" | "marca" | "plataforma"
@@ -37,6 +37,7 @@ export function TaskCard({
   onChip,
   onText,
   onCopy,
+  onCopyFields,
   onDuplicate,
   onRemove,
   cards,
@@ -53,6 +54,7 @@ export function TaskCard({
   onChip: (key: ChipKey, updater: (prev: string[]) => string[]) => void;
   onText: (key: TextKey, value: string) => void;
   onCopy: (key: keyof TaskDraft, targetIds: string[]) => void;
+  onCopyFields: (keys: (keyof TaskDraft)[], targetIds: string[]) => void;
   onDuplicate: () => void;
   onRemove: () => void;
   cards: PickCard[];
@@ -130,6 +132,15 @@ export function TaskCard({
             {combos.length} entregable{combos.length === 1 ? "" : "s"}
           </span>
         </button>
+        <MultiCopyButton
+          sourceId={task.id}
+          cards={cards}
+          srcMarca={task.marca[0] ?? ""}
+          srcTipo={task.tipoAsset[0] ?? ""}
+          campos={camposLlenos(task)}
+          lastTargets={lastTargets}
+          onCopy={onCopyFields}
+        />
         <Button type="button" variant="ghost" size="icon-sm" aria-label="Duplicar tarjeta" title="Duplicar tarjeta (todos los campos)" onClick={onDuplicate}>
           <Copy />
         </Button>

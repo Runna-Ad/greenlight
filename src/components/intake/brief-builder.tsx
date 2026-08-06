@@ -94,6 +94,18 @@ export function BriefBuilder({ cliente }: { cliente: string }) {
     setLastTargets(targetIds); // recuerda para el próximo campo
   };
 
+  // Copiar VARIOS campos a la vez a las tarjetas elegidas (3er gesto).
+  const copyFields = (sourceId: string, keys: (keyof TaskDraft)[], targetIds: string[]) => {
+    setTasks((prev) => {
+      const src = prev.find((t) => t.id === sourceId);
+      if (!src) return prev;
+      const patch: Partial<TaskDraft> = {};
+      for (const k of keys) (patch as Record<string, unknown>)[k] = clone(src[k]);
+      return prev.map((t) => (targetIds.includes(t.id) ? { ...t, ...patch } : t));
+    });
+    setLastTargets(targetIds);
+  };
+
   const addTasks = (n: number) => {
     const nuevas = Array.from({ length: Math.max(1, n) }, () => tarjetaEnBlanco(uid()));
     setTasks((prev) => [...prev, ...nuevas]);
@@ -254,6 +266,7 @@ export function BriefBuilder({ cliente }: { cliente: string }) {
             onChip={(key, updater) => setChip(t.id, key)(updater)}
             onText={(key, value) => setText(t.id, key, value)}
             onCopy={(key, ids) => copyField(t.id, key, ids)}
+            onCopyFields={(keys, ids) => copyFields(t.id, keys, ids)}
             onDuplicate={() => duplicate(t.id)}
             onRemove={() => remove(t.id)}
             cards={pickCards}
