@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Files } from "lucide-react";
+import { Files, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { EmptyState } from "@/components/ui/empty-state";
 
 import { STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
 import { actionsFor, waitingLabel, type TaskAction } from "@/lib/task-actions";
@@ -140,11 +141,19 @@ export function MyTasks({
         );
       })}
       {rows.length === 0 && (
-        <li className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-          Nada por aquí.{" "}
-          <Link href="/clientes" className="underline underline-offset-2">
-            Ver tableros
-          </Link>
+        <li>
+          <EmptyState
+            icon={CheckCircle2}
+            titulo="Nada por aquí"
+            descripcion="No tienes tareas asignadas ahora mismo."
+          >
+            <Link
+              href="/clientes"
+              className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+            >
+              Ver tableros
+            </Link>
+          </EmptyState>
         </li>
       )}
     </ul>

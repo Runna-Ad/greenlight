@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { RefreshCw, Lock } from "lucide-react";
+import { RefreshCw, Lock, LayoutGrid } from "lucide-react";
 import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Board, type BriefOption, type Member, type Task } from "@/components/board/board";
 
 export const dynamic = "force-dynamic";
@@ -104,16 +105,17 @@ export default async function TableroPage({
       </div>
 
       {data !== null && data.tasks.length === 0 ? (
-        <div className="flex flex-col items-center rounded-xl border border-dashed border-border py-12 text-center">
-          <p className="text-sm text-muted-foreground">
-            Todavía no hay tareas. Trae un proyecto del Google Sheet para empezar.
-          </p>
-          <Button asChild variant="outline" className="mt-4">
+        <EmptyState
+          icon={LayoutGrid}
+          titulo="Todavía no hay tareas"
+          descripcion="Trae un proyecto del Google Sheet para empezar a producir."
+        >
+          <Button asChild variant="outline">
             <Link href={`/${cliente}/sync`}>
               <RefreshCw className="size-4" /> Sincronizar
             </Link>
           </Button>
-        </div>
+        </EmptyState>
       ) : (
         <Board
           cliente={cliente}

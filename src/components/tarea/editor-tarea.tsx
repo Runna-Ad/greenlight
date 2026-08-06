@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Plus, Trash2, Eye, EyeOff, Clock, ShieldCheck } from "lucide-react";
+import { Plus, Trash2, Eye, EyeOff, Clock, ShieldCheck, Clapperboard } from "lucide-react";
 import { toast } from "sonner";
 
 import { agregarPlano, borrarPlano } from "@/app/(app)/[cliente]/tareas/[id]/actions";
@@ -18,6 +18,7 @@ import { Campo } from "./campo";
 import { CampoIntake } from "./campo-intake";
 import { ChipsReglas } from "./chips-reglas";
 import { ReferenciasPlano, type RefVista } from "./referencias-plano";
+import { EmptyState } from "@/components/ui/empty-state";
 import { CortinillaCierre, type LegalSnippet } from "./cortinilla-cierre";
 import {
   PreviewSlide,
@@ -224,9 +225,11 @@ export function EditorTarea({
               </div>
 
               {planos.length === 0 && (
-                <p className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
-                  Todavía no hay planos. Agrega el primero para empezar el guión.
-                </p>
+                <EmptyState
+                  icon={Clapperboard}
+                  titulo="Todavía no hay planos"
+                  descripcion="Agrega el primero para empezar el guión."
+                />
               )}
 
               {planos.map((p) => (
