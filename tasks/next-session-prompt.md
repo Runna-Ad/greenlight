@@ -27,10 +27,11 @@ rpc_notificar_brief. La próxima migración usa un timestamp NUEVO
 (`20260806120006` o superior), NUNCA reciclar 0017.
 
 Todo commiteado + pusheado a `Runna-Ad/runna-command-center` (público).
-⚠️ **Deploys por `npx vercel --prod --yes` (CLI)** — el auto-deploy por git push
-NO es confiable (repo privado/org en Vercel Hobby; ver lección). Verificar con
-`npx vercel ls`. Login sigue apagado (beta, hasta el final — NO re-abrir el tema).
-Secretos de email en `.env.local` (gitignoreado) + Vercel env — nunca commitear.
+**Deploys por `git push main` → auto-deploy** (Vercel git-connected; funciona
+porque el repo es PÚBLICO — Hobby no auto-deploya repos PRIVADOS de org).
+`npx vercel --prod --yes` queda como respaldo. Login sigue apagado (beta, hasta
+el final — NO re-abrir el tema). Secretos de email en `.env.local` (gitignoreado)
++ Vercel env — nunca commitear (repo público).
 
 ## Qué sigue (elige; ninguno comprometido)
 - **Llenar los emails del equipo** en /admin ▸ Equipo — con eso los emails de

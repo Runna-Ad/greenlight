@@ -14,10 +14,11 @@ Unbounded (wordmark)
 
 ## Desplegado
 - **https://runna-command-center.vercel.app** — público, sin login (decisión de Pedro)
-- Deploy: **`npx vercel --prod --yes`** (CLI, confiable). ⚠️ El auto-deploy por
-  `git push` NO es confiable: repo privado/org en Vercel Hobby no auto-deploya
-  (ver lección). Verificar con `npx vercel ls` que el último Production = el
-  último commit; ante la duda, forzar con la CLI.
+- Deploy: **`git push main` → auto-deploy** (Vercel git-connected). Funciona
+  porque el repo es **PÚBLICO** — se hizo público justo para esto (Hobby NO
+  auto-deploya repos PRIVADOS de org; ver lección). Verificado 2026-08-06: un
+  push genera solo el deploy `…-git-main-…`. `npx vercel --prod --yes` queda
+  como respaldo manual.
 - Repo: **`github.com/Runna-Ad/runna-command-center`** — público (org Runna-Ad)
 
 ## Base de datos (LIVE)
