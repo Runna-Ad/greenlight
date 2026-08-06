@@ -163,8 +163,7 @@ export function TaskCard({
 
           {/* Identidad */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <TextField label="# Idea" value={task.numIdea} onChange={(v) => onText("numIdea", v.toUpperCase())} placeholder={PLACEHOLDER.idea} mono
-              hint="A1, A2… la identidad de la tarea" />
+            <TextField label="# Idea" value={task.numIdea} onChange={(v) => onText("numIdea", v.toUpperCase())} placeholder="A1 · su identidad" mono />
             <TextField label="Naming" value={task.naming} onChange={(v) => onText("naming", v.toUpperCase())} placeholder={PLACEHOLDER.naming} mono copy={copyBtn("naming", "Naming")} />
             <TextField label="Versión" value={task.version} onChange={(v) => onText("version", v.toUpperCase())} placeholder={PLACEHOLDER.version} mono copy={copyBtn("version", "Versión")} />
             {chip("marca", "Marca", MARCA)}
