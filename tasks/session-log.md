@@ -1,5 +1,60 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-06 — Constructor de brief, referencias al cliente y panel /admin
+
+Sesión larga y muy productiva. **7 commits de features en `main`, todo en
+producción, S.P.A.M idéntico 42/31/6 en todo momento.** Migraciones 0022–0024
+aplicadas a la base viva.
+
+**1. Constructor de brief nuevo** (`/[cliente]/briefs/nuevo`). Reemplazó el
+formulario demo que no persistía. Pool de tarjetas + **3 gestos de duplicación**
+(diseñados con Pedro): copiar UN campo a las tarjetas elegidas · copiar VARIOS
+campos · duplicar tarjeta entera (# Idea autoincrementa A1→A2). Persistencia
+atómica vía RPC nuevo `rpc_crear_brief(jsonb)` (0022) — todo-o-nada. Lógica pura
+compartida extraída a `src/lib/intake-crear.ts` (import.ts refactorizado para
+reusarla). Puerta de obligatorios = la misma del import; # Idea únicos se bloquean
+(no se renombran en silencio).
+
+**2. Fix del Trend** — un `-` (centinela "sin valor" del sheet) generaba una
+falsa pastilla "Referencia 1". `parseReferencias` ahora devuelve segmentos
+tipados: sólo una URL real se numera; el texto no-URL se deja tal cual;
+centinelas se descartan. Arreglado en la raíz + los 2 renderers.
+
+**3. Alineación de `# Idea`** — el hint envolvía y descuadraba la fila; pasó al
+placeholder.
+
+**4. Referencias (imágenes/videos) al lado del cliente** — Pedro: las referencias
+también las ve el cliente. El preview "Como lo verá el cliente" ahora muestra las
+miniaturas por plano/estático (imágenes por signed URL, videos con thumbnail).
+Cambio presentacional: el RefVista ya estaba cargado; sólo se enhebró al
+PreviewSlide.
+
+**5. Panel `/admin`** (modelado en la sección de Settings de SnapTrack). 5
+pestañas: **Perfil · Equipo · Actividad · Integraciones · Biblioteca**.
+- **Equipo/roles**: gestiona los 14 (track_members) con edición inline + guardado
+  inmediato (rol, track, color, email, Slack, lead), badge de carga, alta y
+  desactivación con confirmación. Rol **Master Builder** nuevo (tier sobre admin):
+  enum (0023) + roles.ts + helpers RLS (0024). Atributos de persona en
+  track_members, NO profiles falsos (listo para el login vía profile_id).
+- **Actividad**: feed de quién movió qué tarea (status_events), sin tabla nueva.
+- **Integraciones**: estado del Sheet (conectado · última sync · 32 tareas) +
+  pasos para rotar el secreto + placeholder Notion.
+- **Biblioteca**: CRUD de snippets por kind (legales incl. donde meter el de
+  Préstamos, selling points, instrucciones).
+
+**Verificación**: cada feature verificada en vivo (aserciones al DOM; el write
+path de Equipo probado creando+borrando una persona de prueba por id). Tests
+finales: 166 lib + 154 db + 44 sync, 0 fallos. tsc/lint/build limpios.
+
+**Un PEDRO_OVERRIDE**: me clavé en la seguridad al planear admin ("sin login sería
+público") cuando la regla del proyecto ya decía "no re-abrir el tema de
+seguridad". Corregido: es beta sin login hasta el final; dejar el modelo listo,
+no empujar el login. (Ver lessons.md.)
+
+**Sigue**: F6 Notion (bloqueado en token+base de Pedro) · notificaciones que SÍ
+envían (email/Slack — necesita Resend/Slack + contactos) · API/MCP con tokens
+para Claude · portal del cliente · legal de Préstamos (agregarlo por Biblioteca).
+
 ## 2026-08-05 (tarde) — Los 4 enlaces muertos del menú
 
 **Desplegado.** Sesión corta y de una sola cosa: el sidebar tenía 4 enlaces a

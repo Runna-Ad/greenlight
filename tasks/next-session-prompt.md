@@ -6,21 +6,38 @@
 3. `tasks/lessons.md` — mistakes/overrides/wins. **Lee los PEDRO_OVERRIDE.**
 4. Este archivo — qué sigue y cómo.
 
-## Dónde quedamos (fin de sesión 2026-08-05, larga)
-La **vista de trabajo (workspace) está COMPLETA y desplegada**. En una sola
-sesión se construyó todo el pipeline interno: bundles → workspace de 3 secciones
-→ referencias drag&drop → cortinilla con legales → reglas con tooltips → flujo
-de aprobación → enviar a cliente → 2 pases de diseño (Design God Mode). Todo en
-producción, verificado en vivo, S.P.A.M intacto (42/31/6).
+## Dónde quedamos (fin de sesión 2026-08-06, larga)
+El **workspace** ya estaba completo. Esta sesión se agregó, todo en producción y
+verificado en vivo (S.P.A.M intacto 42/31/6):
+- **Constructor de brief nuevo** (`/[cliente]/briefs/nuevo`) con 3 gestos de
+  duplicación + RPC atómico `rpc_crear_brief`.
+- **Referencias (imágenes/videos) al lado del cliente** en el preview.
+- **Panel `/admin`** completo: Perfil · Equipo/roles (con **Master Builder**) ·
+  Actividad · Integraciones · Biblioteca (CRUD de snippets).
+- Fixes: Trend "-" ya no genera falsa referencia · # Idea alineado.
 
-**Migraciones 0013–0021 aplicadas** (⚠️ no existe 0017 — era Notion, diferida;
-la numeración salta 0016→0018 a propósito). La próxima migración usa un
-timestamp nuevo (`20260806*` o superior), NUNCA reciclar 0017.
+**Migraciones 0001–0024 aplicadas** (⚠️ no existe 0017 — Notion, diferida; salta
+0016→0018 a propósito). Últimas: 0022 rpc_crear_brief · 0023 enum master · 0024
+track_members role/email/slack. La próxima migración usa un timestamp NUEVO
+(`20260806120004` o superior), NUNCA reciclar 0017.
 
 Todo está commiteado. **No hay remoto git** — los deploys van por
-`npx vercel --prod --yes`.
+`npx vercel --prod --yes`. Login sigue apagado (beta, hasta el final — NO
+re-abrir el tema).
 
-## LO ÚNICO PENDIENTE DEL PLAN: F6 · Biblioteca Notion
+## Qué sigue (elige; ninguno comprometido)
+- **F6 · Biblioteca Notion** — bloqueado en el **token de integración** + el
+  **link/ID de la base**. El CRUD de Biblioteca en /admin ya existe; falta el
+  sync con Notion (espejo a `snippets`).
+- **Notificaciones que SÍ envían** (email/Slack) — hoy sólo in-app (campanita).
+  Falta el dispatcher (Resend/Slack) + prefs por evento + capturar email/slack de
+  cada persona (ya se puede en /admin ▸ Equipo). Necesita keys de Resend/Slack.
+- **API / MCP con tokens para Claude** — greenfield (API + auth de token + tabla
+  hasheada). Su propia fase. Referencia: la de SnapTrack (`ApiTokensTab.tsx`).
+- **Portal del cliente** · **Copies** · **legal de Préstamos** (agregarlo por
+  /admin ▸ Biblioteca — hoy sólo está el de Card) · **dark mode**.
+
+## (histórico) F6 · Biblioteca Notion — detalle del plan
 **Bloqueado en Pedro**: necesita darte el **token de integración de Notion** y
 el **link/ID de la base** (la "Biblioteca Central"). Sin eso NO se puede avanzar.
 

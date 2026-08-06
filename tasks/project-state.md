@@ -1,5 +1,5 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-05 (fin de sesión larga)
+Última actualización: 2026-08-06 (constructor de brief + panel /admin)
 
 ## Qué es
 App interna de producción de anuncios que reemplaza el Google Sheet de DiDi + el
@@ -24,9 +24,11 @@ Unbounded (wordmark)
   migraciones / 6 usuarios, antes y después de todo.
 - Migraciones: ledger propio en `produccion._migrations`, `npm run migrate`
   (NUNCA `supabase db push` — dañaría el historial de S.P.A.M).
-- **Migraciones aplicadas 0001–0021** (OJO: **no existe 0017** — era la de
+- **Migraciones aplicadas 0001–0024** (OJO: **no existe 0017** — era la de
   Notion, que se difirió; la numeración salta 0016→0018. F6/Notion cuando se
-  haga usa un timestamp NUEVO, no 0017).
+  haga usa un timestamp NUEVO, no 0017). Últimas: **0022** `rpc_crear_brief`
+  (constructor de brief atómico), **0023** enum `app_role += 'master'`, **0024**
+  `track_members += role/email/slack_user_id` + helpers RLS con master.
 - **Storage**: bucket privado `greenlight-referencias` (creado con
   `npm run setup:storage`, fuera de migraciones). Imágenes se sirven por signed
   URL firmada por render. Verificado: privado (acceso público = 400).
@@ -74,20 +76,37 @@ snippets legal=1 (sólo Card) · references(links del sheet)=15
 - **Nombres de archivo**: contrato TS↔BD probado con 75 combos.
 - **Diseño**: 2 pases de Design God Mode (elevación/sombras teñidas + radio de
   marca en primitivas + EmptyState + skeletons + login pulido). Contraste AA.
+- **Constructor de brief nuevo** (`/[cliente]/briefs/nuevo`): pool de tarjetas +
+  3 gestos de duplicación (copiar campo · copiar varios · duplicar tarjeta).
+  Persiste atómico vía `rpc_crear_brief`. Lógica pura en `src/lib/intake-crear.ts`.
+- **Referencias al cliente**: el preview "Como lo verá el cliente" muestra las
+  imágenes/videos de referencia por plano/estático (signed URL).
+- **Panel `/admin`** (5 pestañas): Perfil · **Equipo/roles** (track_members con
+  rol/email/slack, edición inline, Master Builder, carga, alta/desactivar) ·
+  **Actividad** (feed de status_events) · **Integraciones** (estado del Sheet +
+  rotar secreto + Notion) · **Biblioteca** (CRUD de snippets por kind). Sin login:
+  atributos de persona en track_members, listo para el login vía profile_id.
 
 ## Qué NO existe todavía
-- **F6 · Biblioteca Notion** (ÚNICO pendiente del plan) — bloqueado en el token
-  de integración + link de la base. La tabla destino (`snippets`) y el picker
-  ya existen; falta cablear la sincronización.
+- **F6 · Biblioteca Notion** — bloqueado en el token de integración + link de la
+  base. La tabla destino (`snippets`) + el picker + el CRUD de Biblioteca en
+  /admin ya existen; falta cablear la sincronización con Notion.
+- **Notificaciones que SÍ envían** (email/Slack) — las tablas + el trigger + las
+  prefs (columnas) existen, pero NADIE drena la cola `pending`: sólo se entrega
+  in-app (la campanita). Falta el dispatcher (Resend/Slack) + prefs por evento +
+  los contactos (email/slack por persona, que ya se pueden capturar en /admin).
+- **API / MCP con tokens para Claude** — no existe (greenfield: API + auth de
+  token + tabla hasheada). Es su propia fase.
 - **Portal del cliente** — no construido (fuera de alcance). "Enviar a cliente"
   deja la tarea en `published` pero el cliente aún no tiene dónde verla. `portal/
   page.tsx` lo dice honestamente.
 - **Copies** — plantilla no construida (la página lo dice; no existe en el deck).
 - **Login** — apagado a propósito hasta pre-lanzamiento (`AUTH_ENABLED` listo).
   Con auth off, identidad = cookies `gl_soy`/`gl_view_as` resueltas en servidor.
-- **Menú lateral**: Carga, Entregas por revisar, Entregas, Configuración están
-  apagados con "Pronto" (no navegan). Al construir cada uno, quitar `soon:true`
-  en `src/components/shell/sidebar.tsx`.
+- **Menú lateral**: Carga, Entregas por revisar, Entregas siguen apagados con
+  "Pronto" (no navegan). **Configuración YA está construido** (se le quitó
+  `soon`). Al construir cada uno de los otros, quitar su `soon:true` en
+  `src/components/shell/sidebar.tsx`.
 - **Sin backward-move** sin un lead mientras auth esté off.
 
 ## Riesgos / deuda conocida
