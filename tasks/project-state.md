@@ -1,66 +1,110 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-05
+Última actualización: 2026-08-05 (fin de sesión larga)
 
 ## Qué es
-App interna de producción de anuncios que reemplaza el Google Sheet de DiDi.
-Multi-cliente. UI en español. Pipeline: intake → ejecución → revisión → portal
-del cliente → entrega.
+App interna de producción de anuncios que reemplaza el Google Sheet de DiDi + el
+deck de Google Slides de 45 slides. Multi-cliente. UI en español. Pipeline:
+intake → workspace de trabajo → revisión → aprobación → enviar a cliente → (portal).
 
 ## Stack
-Next 16.2 (App Router) · React 19 · Tailwind v4 · shadcn/ui · Supabase · Vercel
+Next 16.2 (App Router, `proxy.ts` no `middleware.ts`) · React 19 · Tailwind v4
+(`oklch()`) · shadcn/ui · @dnd-kit · Supabase · Vercel
 Fuentes: Poppins (títulos) · Inter (datos) · Geist Mono (nombres de archivo) ·
 Unbounded (wordmark)
 
 ## Desplegado
 - **https://runna-command-center.vercel.app** — público, sin login (decisión de Pedro)
-- Vercel: cuenta pedro-3338, proyecto runna-command-center
+- Deploy: `npx vercel --prod --yes` desde la CLI (NO por git push — no hay remoto)
 
 ## Base de datos (LIVE)
-- Proyecto Supabase **S.P.A.M** `ybbrpqzbedaxsmotgtkh`, esquema propio **`produccion`** (29 tablas)
-- S.P.A.M vive en `public` (42 tablas) y NO se toca — `npm run check:isolation` lo impide
-- Migraciones: ledger propio en `produccion._migrations`, aplicadas con `npm run migrate`
-  (NUNCA `supabase db push` — ver lessons.md)
-- 7 migraciones aplicadas (0001 init … 0007 task-is-a-row)
+- Proyecto Supabase **S.P.A.M** `ybbrpqzbedaxsmotgtkh`, esquema propio **`produccion`**
+- S.P.A.M vive en `public` (42 tablas) y NO se toca — `npm run check:isolation`
+  mata cualquier migración que mencione `public.`/`storage.` (por eso el bucket
+  se crea fuera de migraciones). **S.P.A.M verificado idéntico**: 42 tablas / 31
+  migraciones / 6 usuarios, antes y después de todo.
+- Migraciones: ledger propio en `produccion._migrations`, `npm run migrate`
+  (NUNCA `supabase db push` — dañaría el historial de S.P.A.M).
+- **Migraciones aplicadas 0001–0021** (OJO: **no existe 0017** — era la de
+  Notion, que se difirió; la numeración salta 0016→0018. F6/Notion cuando se
+  haga usa un timestamp NUEVO, no 0017).
+- **Storage**: bucket privado `greenlight-referencias` (creado con
+  `npm run setup:storage`, fuera de migraciones). Imágenes se sirven por signed
+  URL firmada por render. Verificado: privado (acceso público = 400).
 
-### Datos actuales
-briefs=2 · ideas(tareas)=32 · assets(archivos)=227 · staged_rows=32
-profiles=1 (Pedro admin) · track_members=14 · vocab_terms=37 · clients=1 (DiDi)
+### Datos actuales (cliente DiDi, marcas Card + Préstamos)
+briefs=2 · ideas(tareas)=32 · assets(archivos)=227 · track_members=14
+snippets legal=1 (sólo Card) · references(links del sheet)=15
 
 ## Integraciones
-- **Google Sheets** vía Apps Script desplegado por Pedro (solo lectura).
-  `scripts/apps-script/Code.gs`; secreto en Propiedades del script.
-  Lista las 31 pestañas con nombre completo; 6 son proyectos válidos.
+- **Google Sheets** vía Apps Script (solo lectura). `scripts/apps-script/Code.gs`.
 - **Vercel env**: SHEETS_SCRIPT_URL/SECRET, NEXT_PUBLIC_SUPABASE_URL/ANON_KEY,
-  SUPABASE_SERVICE_ROLE_KEY
+  SUPABASE_SERVICE_ROLE_KEY. (Falta NOTION_TOKEN/NOTION_DB_ID para F6.)
+- `.env.local` local tiene las mismas; los scripts node lo cargan a mano.
 
-## Qué funciona
-- Selector de clientes → espacio por cliente
-- Sincronizar: descubre proyectos, clasifica pestañas, previsualiza, importa de verdad
-- Tarjetas de revisión editables (chips del vocabulario real, deshacer por campo)
-- Dedup entre sesiones (probado)
-- Tablero lee datos reales (32 tareas)
-- Nombres de archivo: 3 fórmulas, contrato TS↔BD probado con 75 combinaciones
-- Formulario de intake manual (21 columnas, Real/Normal, "Otro" en todo dropdown)
+## Qué funciona (workspace COMPLETO — construido esta sesión)
+- **Clientes** → espacio por cliente.
+- **Sincronizar**: descubre/clasifica/previsualiza/importa del sheet. Dedup probado.
+- **Briefs** = vista de BUNDLES: card por brief con sus tareas; clic → workspace.
+- **Tablero** = kanban por estado, interactivo (arrastrar, asignar, filtros).
+  Las tarjetas YA NO tienen botones de flujo (drag + auto-move); traen ícono de
+  tipo de asset. "Mover" para teclado/móvil.
+- **Workspace de tarea** (`/[cliente]/tareas/[id]`) — la pieza central:
+  - Flechas ← n/N → para recorrer el bundle (lib/bundle.ts = fuente única).
+  - Barra de acciones arriba y abajo: Empezar → Mandar a revisión → (lead)
+    Aprobar/Mandar cambios → Enviar a cliente. Botón con gradiente. Auto-move al
+    escribir (rpc_task_start).
+  - **Rünna details** (colapsable, SÓLO INTERNO — no se construye para rol
+    cliente): Nombres de archivo (calculados por la BD) + Lead/Team + Link de
+    entrega prominente (de ahí saldrá el botón "Abrir entregable" del cliente) +
+    Prioridad.
+  - **Cabecera fusionada**: logo marca + topic + Content Type (ícono) + Channels
+    + Formato ratio (pastillas) + Duración (editable, reescribe los nombres) +
+    Resumen del brief + Trend + Notas.
+  - **Campos pre-llenados del SHEET** (editables): Resumen ← Concepto ·
+    Trend ← Referencias (como "Referencia 1, 2…" clicables) · Notas ← Peloteo.
+    Comentarios Leads → subtítulo bajo el título (interno). Cualquier URL en
+    texto mostrado es clicable (`<Linkify>`).
+  - **Cuerpo**: planos (guión) con Acción/Copy in/SFX/GFX/Edición/Diálogo +
+    referencias drag&drop por plano (imágenes suben, videos por link) + read-time.
+    Estático: COPY IN (título/subtítulo/CTA) + dropzone de imágenes.
+  - **Reglas contextuales** (chips con tooltip del detalle), agrupadas por plataforma.
+  - **Cortinilla de Cierre**: legales de biblioteca (picker) + texto libre.
+  - **Preview del cliente** en vivo: Resumen/Trend/Notas, Acción rotulada,
+    diálogo por locutor `(Actor)` → **Actor:** "…", planos separados, cortinilla.
+- **Nombres de archivo**: contrato TS↔BD probado con 75 combos.
+- **Diseño**: 2 pases de Design God Mode (elevación/sombras teñidas + radio de
+  marca en primitivas + EmptyState + skeletons + login pulido). Contraste AA.
 
-## Qué NO funciona todavía
-- Tablero no es interactivo (sin asignar, sin arrastrar)
-- Sin plantilla de trabajo (guión por planos / estático / copies)
-- Sin revisión, sin Gary, sin versiones
-- Sin portal del cliente
-- Sin login (a propósito)
-- Carga, Entregas por revisar, Entregas y Configuración no existen (P6). En el
-  menú se ven apagados con "Pronto" y no navegan — antes eran enlaces que
-  devolvían 404 por prefetch. Al construir cada página, quitar su `soon: true`
+## Qué NO existe todavía
+- **F6 · Biblioteca Notion** (ÚNICO pendiente del plan) — bloqueado en el token
+  de integración + link de la base. La tabla destino (`snippets`) y el picker
+  ya existen; falta cablear la sincronización.
+- **Portal del cliente** — no construido (fuera de alcance). "Enviar a cliente"
+  deja la tarea en `published` pero el cliente aún no tiene dónde verla. `portal/
+  page.tsx` lo dice honestamente.
+- **Copies** — plantilla no construida (la página lo dice; no existe en el deck).
+- **Login** — apagado a propósito hasta pre-lanzamiento (`AUTH_ENABLED` listo).
+  Con auth off, identidad = cookies `gl_soy`/`gl_view_as` resueltas en servidor.
+- **Menú lateral**: Carga, Entregas por revisar, Entregas, Configuración están
+  apagados con "Pronto" (no navegan). Al construir cada uno, quitar `soon:true`
   en `src/components/shell/sidebar.tsx`.
+- **Sin backward-move** sin un lead mientras auth esté off.
 
-## Riesgos conocidos
-1. **SIN REMOTO** — el repo propio existe desde el 2026-08-04 (ya no cuelga de
-   `/Users/work`), pero no tiene remoto: todo el historial vive sólo en este
-   disco y un fallo de hardware se lo lleva. Los deploys van por `vercel --prod`
-   desde la CLI, no por git. Decidir cuenta y visibilidad y añadir el remoto.
-2. `SHEETS_SCRIPT_SECRET` estuvo público ~4 min (leak RSC, ya corregido) — rotar
-3. App pública sin login — decisión de Pedro, revisar antes del lanzamiento
-4. `database.types.ts` es manual, no generado
+## Riesgos / deuda conocida
+1. **SIN REMOTO GIT** — el repo vive sólo en este disco. Deploys por CLI, no por
+   git. Decidir cuenta/visibilidad y añadir remoto (un fallo de disco = todo).
+2. `SHEETS_SCRIPT_SECRET` estuvo público ~4 min (ya corregido) — rotar.
+3. App pública sin login — decisión de Pedro; revisar en pre-lanzamiento.
+4. `database.types.ts` es manual, no generado.
+5. `src/lib/vocab.ts` es copia hardcodeada de vocab_terms/track_members (2 fuentes).
+6. Sólo el legal de **Card** está sembrado; falta el de **Préstamos** (dato
+   financiero — lo da Pedro, o llega por Notion).
+7. `references.url` es único GLOBAL (sin client_id) — coherente hoy, decible
+   antes del 2º cliente.
+8. **PROD-SAFETY**: NO usar datos de prod como campo de pruebas. Un par de veces
+   escribí en campos reales para verificar y tuve que restaurar desde el sheet.
+   Probar con dev local o borrar sólo por id propio verificando conteo.
 
 ## Tests
-`npm test` → isolation (7) + lib (15) + db/PGlite (35) + sync/red en vivo (56)
+`npm test` → isolation + lib (124) + db/PGlite (141) + sync/red en vivo (44).
+Los de red (sync) son intermitentes por naturaleza — re-correr antes de investigar.

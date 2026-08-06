@@ -1,127 +1,90 @@
-# Prompt para la próxima sesión — Greenlight · by Rünna
+# Próxima sesión — Greenlight · by Rünna
 
-Copy everything below into a new session.
+## Arranque (lee esto primero, en orden)
+1. `tasks/project-state.md` — el estado real y completo (recién actualizado).
+2. `tasks/session-log.md` — bitácora cronológica (lo de arriba es lo más reciente).
+3. `tasks/lessons.md` — mistakes/overrides/wins. **Lee los PEDRO_OVERRIDE.**
+4. Este archivo — qué sigue y cómo.
 
----
+## Dónde quedamos (fin de sesión 2026-08-05, larga)
+La **vista de trabajo (workspace) está COMPLETA y desplegada**. En una sola
+sesión se construyó todo el pipeline interno: bundles → workspace de 3 secciones
+→ referencias drag&drop → cortinilla con legales → reglas con tooltips → flujo
+de aprobación → enviar a cliente → 2 pases de diseño (Design God Mode). Todo en
+producción, verificado en vivo, S.P.A.M intacto (42/31/6).
 
-Continuamos **Greenlight · by Rünna** (`/Users/work/Projects/runna-command-center`) —
-la app de producción de anuncios que reemplaza el Google Sheet de DiDi.
+**Migraciones 0013–0021 aplicadas** (⚠️ no existe 0017 — era Notion, diferida;
+la numeración salta 0016→0018 a propósito). La próxima migración usa un
+timestamp nuevo (`20260806*` o superior), NUNCA reciclar 0017.
 
-**Antes de escribir código, lee en este orden:**
-1. `tasks/session-log.md` — dónde quedamos (2026-07-31)
-2. `tasks/lessons.md` — **hay 5 PEDRO_OVERRIDE, respétalos**
-3. `tasks/todo.md` — estado por fase
-4. `/Users/work/.claude/plans/flickering-plotting-brook.md` — el plan completo
+Todo está commiteado. **No hay remoto git** — los deploys van por
+`npx vercel --prod --yes`.
 
-## Estado actual (todo desplegado y funcionando)
+## LO ÚNICO PENDIENTE DEL PLAN: F6 · Biblioteca Notion
+**Bloqueado en Pedro**: necesita darte el **token de integración de Notion** y
+el **link/ID de la base** (la "Biblioteca Central"). Sin eso NO se puede avanzar.
 
-- **En vivo:** https://runna-command-center.vercel.app
-- **Base de datos LIVE** — proyecto Supabase de S.P.A.M, esquema propio `produccion` (29 tablas).
-  S.P.A.M no se toca nunca. `npm run check:isolation` lo garantiza.
-- **Sync de Google Sheets funciona de punta a punta** vía Apps Script. Ya importó
-  Brief 24/07: **32 tareas, 227 archivos**. Re-sincronizar da "0 nuevas · todo al día".
-- **Tablero lee datos reales** pero NO es interactivo todavía.
+Cuando los tenga:
+- Es un **espejo sincronizado**: Greenlight jala la biblioteca a la tabla
+  `produccion.snippets` (kinds: legal, selling_point, instruccion…). La UI ya
+  lee de snippets (el picker de la Cortinilla de Cierre ya funciona con lo que
+  hay sembrado). Falta el sync.
+- Plan ya pensado (en `/Users/work/.claude/plans/ahora-pregunta-q-opinas-drifting-wolf.md`,
+  fase F6): migración con columnas `external_source/external_id/external_url/
+  synced_at` en snippets + tabla `library_syncs`; `src/lib/notion.ts` (fetch
+  server-only, secreto jamás al cliente — patrón `resolveConfig` de
+  sync/actions.ts); `notion-map.ts` VACÍO con TODO (no inventar el esquema de la
+  base de Notion — mapear viendo la base real de Pedro); panel "Biblioteca" en
+  `/[cliente]/sync` con previsualizar→confirmar (patrón `diffRows` del sheet sync);
+  upsert idempotente, NUNCA delete (lo que desaparece → `active=false`).
+- Env: `NOTION_TOKEN`, `NOTION_DB_ID` en `.env.local` + Vercel.
+- Después: `npm run check:leak <url>` (que el token no se filtró al HTML).
 
-## Reglas que NO se discuten (decisiones de Pedro)
+## Cosas que Pedro podría pedir después (no comprometidas)
+- **Portal del cliente** — la vista donde el cliente ve lo `published`, pone
+  Revisión/Cambios/Aprobado y abre el entregable (el Link de entrega ya alimenta
+  ese botón). Es otra RUTA con otra vista, no el workspace con menos props.
+- **Copies** — plantilla no construida (no existe en el deck). Acordado: temas
+  con cuota (lead define temas + cuántos; copy llena headline+descripción).
+- **Legal de Préstamos** — sólo el de Card está sembrado. Es un dato financiero
+  (CAT) — que lo dé Pedro, no inventarlo.
+- **Tablero agrupado por brief** — Pedro preguntó, decidió que NO (bundles en
+  Briefs, Tablero por estado). No hacer salvo que lo pida.
+- **Miniaturas reales de video** en referencias (oEmbed de TikTok) — quedó fuera;
+  hoy un link de video muestra un recuadro con el nombre de la plataforma.
+- **3ª capa de diseño** — `PageHeader` compartido para unificar títulos; **dark
+  mode** (los tokens ya están en globals.css, falta un pase de contraste).
 
-- **Una TAREA = una fila del sheet.** Los tamaños × plataformas son ARCHIVOS que esa
-  tarea entrega, no tareas separadas. (Ya me equivoqué en esto una vez: 32 filas
-  se volvieron 227 tarjetas.)
-- **Los nombres de las columnas del sheet son literales** — # Entrega, Asignación,
-  Comentarios Leads, Peloteo, Marca, Plataforma, Tipo de Asset, Formato, Concepto,
-  Selling Points, Referencias, Tamaño, Duración, # Idea, Versión, Género, Naming,
-  Mes, Brief Name, Entrega final. No renombrar nunca.
-- **El login queda apagado hasta justo antes del lanzamiento.** No insistir en
-  seguridad; ya se decidió. El flag `AUTH_ENABLED` está listo.
-- **Campos definidos, no parsers "inteligentes".**
-- **Todo dropdown lleva opción "Otro"** de texto libre.
+## Reglas duras de este proyecto (violarlas = fallo)
+- **Una TAREA = una fila del sheet.** Tamaños × plataformas son ARCHIVOS que la
+  tarea entrega, no tareas separadas.
+- **Nombres de columnas del sheet, literales** — nunca renombrar.
+- **Login apagado hasta pre-lanzamiento** — NO re-abrir el tema de seguridad.
+- **Campos definidos, no parsers "inteligentes".** Todo dropdown lleva "Otro".
+- **Migraciones**: timestamp (nunca `0001_`), `npm run migrate`, NUNCA
+  `supabase db push`. Cada archivo = 1 transacción (los `alter type add value`
+  van en archivo aparte). Vistas: `create or replace`, jamás `drop view`.
+  Grants explícitos en tablas nuevas.
+- **Secretos jamás como props a client components** (Next los serializa al HTML).
+- **PROD-SAFETY**: no escribir datos de prueba en campos reales de prod para
+  verificar UI. Usar dev local, o insertar/borrar SÓLO por id propio y verificar
+  el conteo antes/después. (Pasó 2-3 veces esta sesión; siempre restaurar.)
+- **Deploy**: producción necesita "deploy it"/"ship it" explícito de Pedro
+  en-sesión. Preview OK. (En sesiones de iteración rápida Pedro suele autorizar
+  por lote; si dudas, pregunta.)
+- **PGlite no ve 3 fallos**: resolución de nombres PostgREST (PGRST203), esquema
+  storage, y grants (42501). Por eso grants explícitos + una llamada REAL contra
+  la base antes de cantar victoria.
 
-## Lo primero, antes que nada
+## Verificación (cómo probar)
+- `npm test` (isolation + lib + db + sync). Los de sync (red) son intermitentes.
+- Navegador: el preview se va solo a /clientes cada tanto — verifica con
+  consultas a la BD/`curl`, no sólo screenshots. Los screenshots del MCP salen
+  en blanco a veces (quirk conocido) — usar aserciones al DOM vía javascript_tool.
+- Para migraciones a la base viva: `npm run migrate`, y verificar S.P.A.M
+  idéntico antes/después (42 public / 31 migraciones / 6 usuarios).
 
-**El proyecto NO tiene repo de git propio** — `git rev-parse --show-toplevel`
-devuelve `/Users/work`. Todo lo construido está sin versionar. Hacer `git init`
-en la carpeta del proyecto, `.gitignore` correcto (que `.env.local` quede fuera),
-primer commit. Es media hora y protege semanas de trabajo.
-
-## Trabajo pendiente, en orden
-
-### 1. Tablero interactivo
-- Asignar personas a una tarea (`idea_assignments`; los 14 nombres ya están en
-  `produccion.track_members`, separados por track Real/Normal)
-- Arrastrar entre estados (@dnd-kit ya instalado) con el guard de transiciones
-  que ya existe en la BD
-- Filtros: pod, persona, brief, plataforma
-
-### 2. La plantilla de trabajo (ya está planeada — ver abajo)
-Cuando se asigna una tarea, la persona abre **una página por tarea**:
-- **Arriba, automático desde el intake**: pleca de color por plataforma, Formatos,
-  Duración, Referencia, Marca, Tipo de Asset, Formato, naming + la lista de
-  archivos que entrega
-- **Abajo, la plantilla — CAMBIA SEGÚN "Tipo de Asset"**:
-  | Tipo de Asset | Plantilla | Columnas |
-  |---|---|---|
-  | RP Video · Normal Video · AIGC video · GIF | Guión por planos | `ACCIÓN + COPY IN + GFX/SFX (Motion)` \| `DIÁLOGO` |
-  | Images | Pieza estática | `COPY IN` \| `REFERENCIA / IMAGEN` |
-  | Copies | Lista de copies | headlines numerados + descripción, con meta de cantidad |
-- Read-time automático del diálogo (ya existe el trigger en la BD), comparado
-  contra la Duración de la tarea
-- Reglas contextuales como chips, SOLO las que aplican a esa tarea:
-  GG estático → NO CTA · FB estático → WITH CTA · FB → safe zones ·
-  Card → mencionar timeframes · Préstamos → no timeframes ·
-  CASHBACK/MSI → `*Aplican` en TyC · ≥30s → mínimo 5 beneficios
-- Legales desde la biblioteca por marca (se seleccionan, no se pegan)
-
-**PEDRO TIENE QUE CONTESTAR 3 COSAS ANTES DE CONSTRUIR ESTO:**
-1. **Copies** — ¿es una lista numerada con meta de cantidad ("15 headlines"), o
-   tiene estructura propia?
-2. **Estáticos** — ¿`COPY IN | REFERENCIA/IMAGEN` es toda la plantilla, o los
-   diseñadores también necesitan campos de legales / ubicación del CTA?
-3. **Preview** — ¿la persona asignada ve la vista tipo slide mientras trabaja, o
-   sólo el lead al revisar?
-
-### 3. Revisión + Gary
-Checklist antes de enviar · revisión de gramática es-MX con Claude (marca el
-texto exacto, no bloquea, se puede sobreescribir y queda registrado) ·
-lead aprueba o pide cambios · V1→V2 automático
-
-### 4. Portal del cliente + "Ver como cliente"
-Ideas publicadas, Revisión / Cambios / Aprobado, hilo de comentarios.
-Para admins: selector de cliente + banner permanente "vista previa" (no dar dos
-roles a una cuenta).
-
-### 5. Captura múltiple en la app
-Ya hay un spec de agente + validación con datos reales: agrupando por
-Marca+Formato+Tamaño+Duración, **el 76% de las tareas caen en grupos de 2+, el
-mayor de 5** — o sea "base + tabla de diferencias" con columnas sólo para lo que
-cambia (# Idea, Concepto, Naming, **y Asignación** — ésta varía dentro del grupo,
-corrección contra el spec original). El check de nombres de archivo duplicados
-NO es opcional: si Naming y # Idea se comparten, todas las tareas generan el
-mismo nombre.
-
-## Comandos
-
-```bash
-npm run dev            # puerto 3100 vía preview
-npm test               # isolation + lib + db (PGlite) + sync (red en vivo)
-npm run migrate        # aplica migraciones pendientes (NO usar supabase db push)
-npm run check:leak URL # verifica que no se filtren secretos al HTML
-```
-
-## Trampas conocidas (ya me costaron tiempo)
-
-- **Nunca `supabase db push`** — pide reparar el historial de S.P.A.M y lo dañaría.
-  Usar `npm run migrate`.
-- **Migraciones con timestamp**, nunca `0001_` — choca con las de S.P.A.M y no
-  crea nada, en silencio.
-- **Nunca pasar secretos como props a client components** — Next los serializa
-  al HTML. Ya pasó una vez.
-- El preview del navegador se va solo a `/clientes` cada cierto tiempo; verificar
-  con consultas a la BD o `curl`, no sólo con screenshots.
-- Los tests de red (`test:sync`) son intermitentes por naturaleza — re-correr
-  antes de investigar un fallo.
-
-## Deuda menor
-
-- Rotar `SHEETS_SCRIPT_SECRET` (estuvo público ~4 min por el leak ya corregido)
-- `src/lib/database.types.ts` es manual — regenerar cuando haya login
-- `check:leak` sólo cubre 3 rutas
+## Tarea aparte pendiente (chip de sesión)
+Había 4 enlaces del menú lateral que daban 404 (Carga/Entregas por revisar/
+Entregas/Configuración) — ya están apagados con "Pronto" y no navegan. Al
+construir cada página, quitar su `soon:true` en `src/components/shell/sidebar.tsx`.
