@@ -320,3 +320,11 @@ Concepto→Resumen; Referencias→Trend (backfill 0021 + import); Peloteo→Nota
 (peloteo_raw); Comentarios Leads→subtítulo bajo el título (interno). Resumen/
 Trend/Notas ahora se muestran en el preview del cliente. Verificado en 2 tareas
 (una con peloteo, una sin). S.P.A.M idéntico.
+
+## 2026-08-05 (cont.) — Trend como "Referencia 1, 2…" (URLs achicadas)
+
+Los URLs del Trend (columna Referencias) ahora salen como chips "Referencia 1",
+"Referencia 2"… clicables, en el workspace (con lápiz para editar el crudo) y en
+el preview del cliente. parseReferencias() parte por salto de línea (no espacios)
++ 7 tests. CampoIntake gana onCambio para el valor en vivo. Verificado en prod
+con una tarea de URL Drive. Sin migración. 119 lib, 0 fallos.
