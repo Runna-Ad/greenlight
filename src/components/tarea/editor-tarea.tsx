@@ -336,6 +336,8 @@ export function EditorTarea({
               planos={esEstatico ? undefined : planos}
               estatico={estatico}
               legales={legales}
+              refsPorPlano={refsPorPlano}
+              refsEstatico={refsEstatico}
             />
           </aside>
         )}

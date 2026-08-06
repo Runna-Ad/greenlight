@@ -4,6 +4,7 @@ import { STATUS_LABEL, type AssetStatus } from "@/lib/brand";
 import { parseDialogo } from "@/lib/dialogo";
 import { parseReferencias } from "@/lib/referencia";
 import { Linkify } from "@/components/ui/linkify";
+import type { RefVista } from "./referencias-plano";
 
 export type PlanoVista = {
   id: string;
@@ -78,11 +79,16 @@ export function PreviewSlide({
   planos,
   estatico,
   legales,
+  refsPorPlano,
+  refsEstatico,
 }: {
   cabecera: CabeceraVista;
   planos?: PlanoVista[];
   estatico?: EstaticoVista | null;
   legales: string[];
+  /** Las referencias (imágenes/videos) también las ve el cliente (Pedro). */
+  refsPorPlano?: Record<string, RefVista[]>;
+  refsEstatico?: RefVista[];
 }) {
   const fondo = plecaFondo(cabecera.plataformas);
   // El tinte de la franja de datos usa un solo color para no competir.
@@ -168,11 +174,12 @@ export function PreviewSlide({
               Referencia / Imagen
             </p>
             <div className="p-2 text-[10px] text-black/60">
+              {(refsEstatico ?? []).length > 0 && <RefsSlide refs={refsEstatico ?? []} />}
               {estatico.referencia_url || estatico.referencia_nota ? (
-                <Linkify>{estatico.referencia_url || estatico.referencia_nota}</Linkify>
-              ) : (
+                <div className="mt-1"><Linkify>{estatico.referencia_url || estatico.referencia_nota}</Linkify></div>
+              ) : (refsEstatico ?? []).length === 0 ? (
                 "—"
-              )}
+              ) : null}
             </div>
           </div>
         </div>
@@ -209,6 +216,12 @@ export function PreviewSlide({
                   <Dialogo texto={p.dialogo} />
                 </div>
               </div>
+              {(refsPorPlano?.[p.id] ?? []).length > 0 && (
+                <div className="border-t border-black/10 px-2 pb-2">
+                  <p className="py-1 text-[8px] font-bold uppercase tracking-wide text-black/45">Referencias</p>
+                  <RefsSlide refs={refsPorPlano![p.id]} />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -247,6 +260,41 @@ function Dialogo({ texto }: { texto: string | null }) {
           {s.quien ? <>&ldquo;{s.texto}&rdquo;</> : s.texto}
         </p>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Las referencias como las ve el cliente: miniaturas (imágenes por signed URL,
+ * videos con su thumbnail o etiqueta de plataforma). Clic abre en grande en una
+ * pestaña nueva. Sólo lectura — el cliente mira, no sube.
+ */
+function RefsSlide({ refs }: { refs: RefVista[] }) {
+  if (!refs || refs.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {refs.map((r) => {
+        const img = r.kind === "imagen" ? r.displayUrl : r.thumbnail;
+        return (
+          <a
+            key={r.id}
+            href={r.displayUrl ?? "#"}
+            target="_blank"
+            rel="noreferrer"
+            title={r.kind === "imagen" ? "Ver referencia" : `Abrir ${r.platform ?? "video"}`}
+            className="block size-12 overflow-hidden rounded border border-black/10 transition-transform hover:scale-105"
+          >
+            {img ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={img} alt="Referencia" className="size-full object-cover" />
+            ) : (
+              <span className="flex size-full items-center justify-center bg-black/[0.05] text-center text-[7px] font-semibold uppercase leading-tight text-black/50">
+                {r.platform ?? "video"}
+              </span>
+            )}
+          </a>
+        );
+      })}
     </div>
   );
 }
