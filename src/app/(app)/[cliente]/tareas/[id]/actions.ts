@@ -50,6 +50,9 @@ const CAMPOS_INTAKE: Record<string, { url?: boolean }> = {
   entrega_num: {},
   legales_libres: {},
   nota_guion: {},
+  // Vienen llenas del sheet (Concepto / Comentarios Leads) y son editables.
+  concepto: {},
+  comentarios_creativo: {},
 };
 
 export type IntakeResultado =

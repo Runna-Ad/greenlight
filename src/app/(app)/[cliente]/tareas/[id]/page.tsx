@@ -28,6 +28,7 @@ type Idea = {
   plataformas: string[] | null; marca_id: string | null; brief_id: string;
   entrega_num: string | null; entrega_final: string | null; entrega_url: string | null;
   trend: string | null; notas: string | null; legales_libres: string | null; nota_guion: string | null;
+  comentarios_creativo: string | null;
 };
 
 export default async function TareaPage({
@@ -49,7 +50,7 @@ export default async function TareaPage({
   const { data: idea } = await db
     .from("ideas")
     .select(
-      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion",
+      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo",
     )
     .eq("id", id)
     .maybeSingle<Idea>();
@@ -87,7 +88,7 @@ export default async function TareaPage({
     );
   }
 
-  const [{ data: marca }, { data: reglas }, { data: archivos }, { data: asignaciones }, { data: brief }] =
+  const [{ data: marca }, { data: reglas }, { data: archivos }, { data: asignaciones }] =
     await Promise.all([
       idea.marca_id
         ? db.from("marcas").select("name, slug, logo_url").eq("id", idea.marca_id).maybeSingle()
@@ -111,10 +112,6 @@ export default async function TareaPage({
           es_lead: boolean;
           track_members: { id: string; name: string; color: string } | null;
         }[]>(),
-      // El "Resumen del brief" de la banda de marca (briefs.description).
-      db.from("briefs").select("description").eq("id", idea.brief_id).maybeSingle<{
-        description: string | null;
-      }>(),
     ]);
   const memberIds = (asignaciones ?? []).map((a) => a.member_id).filter(Boolean) as string[];
   const personas = (asignaciones ?? [])
@@ -329,9 +326,8 @@ export default async function TareaPage({
           <h2 className="mt-1.5 font-mono text-xl font-semibold text-foreground">
             {idea.naming_base ?? "Sin naming"}
           </h2>
-          <p className="mt-0.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            {idea.concepto ?? "Sin concepto"}
-          </p>
+          {/* El concepto ya no se duplica aquí: vive en "Resumen del brief"
+              (editable) dentro de la cabecera. */}
         </div>
 
         <div className="flex items-center gap-2">
@@ -383,22 +379,20 @@ export default async function TareaPage({
       <div className="mb-4">
         <CabeceraTarea
           ideaId={idea.id}
-          briefId={idea.brief_id}
           tipoAsset={idea.tipo_asset}
           plantilla={plantilla}
           plataformas={idea.plataformas ?? []}
           tamanos={idea.tamanos ?? []}
           duracion={idea.duracion}
           trend={idea.trend}
-          notas={idea.notas}
+          concepto={idea.concepto}
+          comentariosLeads={idea.comentarios_creativo}
           marca={marca?.name ?? null}
           logoUrl={marca?.logo_url ?? null}
-          topic={idea.naming_base ?? idea.concepto}
-          resumen={brief?.description ?? null}
+          topic={idea.naming_base}
           formato={idea.formato_code}
           entregaFinal={idea.entrega_final}
           soloLectura={soloLectura}
-          puedeEditarResumen={canOverrideStatus(role)}
         />
       </div>
 

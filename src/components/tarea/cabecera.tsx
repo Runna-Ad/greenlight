@@ -59,36 +59,35 @@ function panelTipo(tipoAsset: string | null, plantilla: Plantilla) {
  */
 export function CabeceraTarea({
   ideaId,
-  briefId,
   tipoAsset,
   plantilla,
   plataformas,
   tamanos,
   duracion,
   trend,
-  notas,
+  concepto,
+  comentariosLeads,
   marca,
   logoUrl,
   topic,
-  resumen,
   formato,
   entregaFinal,
   soloLectura,
-  puedeEditarResumen,
 }: {
   ideaId: string;
-  briefId: string;
   tipoAsset: string | null;
   plantilla: Plantilla;
   plataformas: string[];
   tamanos: string[];
   duracion: string | null;
   trend: string | null;
-  notas: string | null;
+  /** Resumen del brief = la columna Concepto del sheet (ya viene llena). */
+  concepto: string | null;
+  /** Notas = la columna Comentarios Leads del sheet (ya viene llena). */
+  comentariosLeads: string | null;
   marca: string | null;
   logoUrl: string | null;
   topic: string | null;
-  resumen: string | null;
   formato: string | null;
   entregaFinal: string | null;
   soloLectura?: boolean;
@@ -229,17 +228,20 @@ export function CabeceraTarea({
         </div>
       </div>
 
-      {/* ── cajas para escribir: resumen, trend, notas ── */}
+      {/* ── cajas para escribir: resumen, trend, notas ──
+          Resumen y Notas YA vienen llenas del sheet (Concepto y Comentarios
+          Leads); son editables por si el equipo agrega algo. Trend no tiene
+          columna en el sheet, así que empieza vacío. */}
       <div className="space-y-3 border-t border-border bg-card px-4 py-3">
         <CampoIntake
-          briefId={briefId}
-          campo="description"
+          ideaId={ideaId}
+          campo="concepto"
           label="Resumen del brief"
-          valorInicial={resumen}
-          placeholder="Escribe aquí de qué va este brief, en una o dos líneas…"
+          valorInicial={concepto}
+          placeholder="El concepto del brief (viene del sheet — edítalo si hace falta)…"
           rows={2}
           caja
-          soloLectura={!puedeEditarResumen}
+          soloLectura={soloLectura}
         />
         <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           <CampoIntake
@@ -254,10 +256,10 @@ export function CabeceraTarea({
           />
           <CampoIntake
             ideaId={ideaId}
-            campo="notas"
+            campo="comentarios_creativo"
             label="Notas"
-            valorInicial={notas}
-            placeholder="Lo que el equipo tiene que saber y no cabe en otro campo"
+            valorInicial={comentariosLeads}
+            placeholder="Comentarios del lead (vienen del sheet — agrega lo que haga falta)…"
             rows={2}
             caja
             soloLectura={soloLectura}

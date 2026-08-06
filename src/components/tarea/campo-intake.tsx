@@ -18,7 +18,9 @@ type CampoIdea =
   | "entrega_url"
   | "entrega_num"
   | "legales_libres"
-  | "nota_guion";
+  | "nota_guion"
+  | "concepto"
+  | "comentarios_creativo";
 type CampoBrief = "description";
 
 /**
