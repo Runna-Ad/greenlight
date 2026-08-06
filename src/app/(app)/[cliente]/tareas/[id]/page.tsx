@@ -14,6 +14,7 @@ import { cargarBundle } from "@/lib/bundle-data";
 import { EditorTarea } from "@/components/tarea/editor-tarea";
 import { CabeceraTarea } from "@/components/tarea/cabecera";
 import { AccionesTarea } from "@/components/tarea/acciones-tarea";
+import { Linkify } from "@/components/ui/linkify";
 import { NavBundle } from "@/components/tarea/nav-bundle";
 import { RunnaDetails } from "@/components/tarea/runna-details";
 import type { RefVista } from "@/components/tarea/referencias-plano";
@@ -329,9 +330,9 @@ export default async function TareaPage({
           {/* Justo bajo el título: los Comentarios del Lead (columna del sheet).
               Es contexto interno de un vistazo — no pasa al cliente. */}
           {idea.comentarios_creativo && (
-            <p className="mt-1 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+            <Linkify className="mt-1 block max-w-2xl text-sm leading-relaxed text-muted-foreground">
               {idea.comentarios_creativo}
-            </p>
+            </Linkify>
           )}
         </div>
 

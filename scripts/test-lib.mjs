@@ -277,6 +277,13 @@ eq("un nombre con espacios NO se parte por espacios",
 eq("un nombre (no URL) no es abrible",
    parseReferencias("TOURISM_9X16 IDEA 1_TT.mp4")[0].url, null);
 
+const { urlDeLinea } = await import("../src/lib/referencia.ts");
+eq("http se abre tal cual", urlDeLinea("https://drive.google.com/x"), "https://drive.google.com/x");
+eq("www. se le antepone https", urlDeLinea("www.tiktok.com/@x"), "https://www.tiktok.com/@x");
+eq("dominio con path se abre", urlDeLinea("drive.google.com/file/d/abc"), "https://drive.google.com/file/d/abc");
+eq("un archivo .mp4 NO es URL", urlDeLinea("asset_final.mp4"), null);
+eq("texto suelto NO es URL", urlDeLinea("recrear este asset"), null);
+
 // ── Diálogo: (Quien) marca quién habla en la vista del cliente ──
 console.log("\n▶ Diálogo del cliente");
 const { parseDialogo } = await import("../src/lib/dialogo.ts");

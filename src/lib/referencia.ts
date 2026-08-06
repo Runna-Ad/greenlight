@@ -60,6 +60,21 @@ export function plataformaDeUrl(url: string): string {
 export type RefTrend = { label: string; url: string | null; texto: string };
 
 /**
+ * ¿Esta línea es un link abrible? Acepta http(s):// y también "www." o un
+ * dominio pelón ("drive.google.com/…") — le antepone https:// al href. Un
+ * nombre de archivo ("VIDEO_IDEA 1.mp4", con espacio) NO cuenta.
+ */
+export function urlDeLinea(linea: string): string | null {
+  const t = linea.trim();
+  if (/^https?:\/\/\S+$/i.test(t)) return t;
+  if (/^www\.\S+$/i.test(t)) return `https://${t}`;
+  // dominio pelón: exige un PATH con "/" para no confundir un nombre de archivo
+  // ("asset.mp4") con un dominio. "drive.google.com/file/…" sí; "video.mp4" no.
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+\/\S*$/i.test(t)) return `https://${t}`;
+  return null;
+}
+
+/**
  * Parte el Trend (columna Referencias del sheet) en referencias cortas:
  * "Referencia 1", "Referencia 2"… Cada línea es una referencia; si es un link
  * (http/https) se puede abrir. Se parte por SALTO DE LÍNEA — no por espacios —
@@ -76,7 +91,7 @@ export function parseReferencias(texto: string | null | undefined): RefTrend[] {
     .filter(Boolean);
   return lineas.map((linea, i) => ({
     label: `Referencia ${i + 1}`,
-    url: /^https?:\/\//i.test(linea) ? linea : null,
+    url: urlDeLinea(linea),
     texto: linea,
   }));
 }

@@ -3,6 +3,7 @@
 import { STATUS_LABEL, type AssetStatus } from "@/lib/brand";
 import { parseDialogo } from "@/lib/dialogo";
 import { parseReferencias } from "@/lib/referencia";
+import { Linkify } from "@/components/ui/linkify";
 
 export type PlanoVista = {
   id: string;
@@ -170,7 +171,11 @@ export function PreviewSlide({
               Referencia / Imagen
             </p>
             <div className="p-2 text-[10px] text-black/60">
-              {estatico.referencia_url || estatico.referencia_nota || "—"}
+              {estatico.referencia_url || estatico.referencia_nota ? (
+                <Linkify>{estatico.referencia_url || estatico.referencia_nota}</Linkify>
+              ) : (
+                "—"
+              )}
             </div>
           </div>
         </div>
@@ -197,11 +202,11 @@ export function PreviewSlide({
               </p>
               <div className="grid grid-cols-2">
                 <div className="space-y-1 border-r border-black/10 p-2">
-                  {p.accion && <p><b>Acción:</b> {p.accion}</p>}
+                  {p.accion && <p><b>Acción:</b> <Linkify>{p.accion}</Linkify></p>}
                   {p.sfx && <p><b>SFX:</b> {p.sfx}</p>}
                   {p.gfx && <p><b>GFX:</b> {p.gfx}</p>}
                   {p.edicion && <p><b>Edición:</b> {p.edicion}</p>}
-                  {p.copy_in && <p><b>Copy in:</b> {p.copy_in}</p>}
+                  {p.copy_in && <p><b>Copy in:</b> <Linkify>{p.copy_in}</Linkify></p>}
                 </div>
                 <div className="p-2">
                   <Dialogo texto={p.dialogo} />
@@ -253,7 +258,7 @@ function BriefLinea({ rotulo, texto }: { rotulo: string; texto: string }) {
   return (
     <p className="leading-snug">
       <span className="font-bold text-black/55">{rotulo}: </span>
-      <span className="whitespace-pre-line text-black/75">{texto}</span>
+      <Linkify className="text-black/75">{texto}</Linkify>
     </p>
   );
 }
@@ -271,7 +276,7 @@ function Linea({ rotulo, texto, fuerte }: { rotulo: string; texto: string | null
   return (
     <p className={fuerte ? "font-bold" : ""}>
       <span className="text-black/45">{rotulo}: </span>
-      {texto || <span className="italic text-black/30">—</span>}
+      {texto ? <Linkify>{texto}</Linkify> : <span className="italic text-black/30">—</span>}
     </p>
   );
 }
