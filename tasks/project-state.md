@@ -14,7 +14,9 @@ Unbounded (wordmark)
 
 ## Desplegado
 - **https://runna-command-center.vercel.app** — público, sin login (decisión de Pedro)
-- Deploy: `npx vercel --prod --yes` desde la CLI (NO por git push — no hay remoto)
+- Deploy: **`git push main → auto-deploy`** (Vercel git-connected, 2026-08-06). La
+  CLI `npx vercel --prod --yes` sigue funcionando como respaldo.
+- Repo: **`github.com/Runna-Ad/runna-command-center`** — público (org Runna-Ad)
 
 ## Base de datos (LIVE)
 - Proyecto Supabase **S.P.A.M** `ybbrpqzbedaxsmotgtkh`, esquema propio **`produccion`**
@@ -110,11 +112,10 @@ snippets legal=1 (sólo Card) · references(links del sheet)=15
 - **Sin backward-move** sin un lead mientras auth esté off.
 
 ## Riesgos / deuda conocida
-1. ~~SIN REMOTO GIT~~ **RESUELTO (2026-08-06)** — el repo YA tiene remoto:
-   `origin → github.com/Runna-Ad/runna-command-center`, sincronizado (`git push`
-   dice "up-to-date"). Deploys siguen por CLI (`npx vercel --prod --yes`); si el
-   `git push` auto-deploya depende de si Vercel está Git-linked a ese repo — sin
-   verificar, por ahora usar la CLI.
+1. ~~SIN REMOTO GIT~~ **RESUELTO (2026-08-06)** — repo en
+   `github.com/Runna-Ad/runna-command-center` (org Runna-Ad, público) y
+   **Vercel git-connected**: `git push main` auto-deploya a producción (verificado).
+   La CLI sigue como respaldo. NOTA: el repo es público — no commitear secretos.
 2. `SHEETS_SCRIPT_SECRET` estuvo público ~4 min (ya corregido) — rotar.
 3. App pública sin login — decisión de Pedro; revisar en pre-lanzamiento.
 4. `database.types.ts` es manual, no generado.

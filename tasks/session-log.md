@@ -401,3 +401,25 @@ mi-trabajo, guión); loading.tsx con skeletons (tablero/tarea/briefs); login
 pulido (fondo de marca + G de Google + entrada); botón primario con sombra+lift.
 Verificado en prod: login rediseñado, botones con radio 8px, consola limpia.
 124 lib + 141 db + 44 sync, 0 fallos.
+
+## 2026-08-06 — Infra: migración de los 6 repos Rünna a la org `Runna-Ad` + auto-deploy
+
+Sesión de infraestructura (no de features). Se creó la organización de GitHub
+**`Runna-Ad`** (owner: Moisty-Mango) como hogar permanente de todos los proyectos
+Rünna. Acciones:
+- **Transferidos** a `Runna-Ad` (con historial/issues/redirects): runna-pitch,
+  spam-runnareach, runna-hunter, runna-barcode-studio.
+- **Repos nuevos creados + push**: `Runna-Ad/runna-command-center` (Greenlight,
+  76 commits — antes no tenía remoto) y `Runna-Ad/runna-website` (antes sin git).
+- Remotos locales de los 6 repuntados a `Runna-Ad`.
+- **Bloqueo Vercel**: el plan Hobby NO permite git-deploy de repos PRIVADOS de una
+  org (409 → Pro). Pedro eligió hacer los 6 repos **públicos** (escaneé historial
+  + contenido: 0 secretos, sólo nombres de env vars). Instalada la Vercel GitHub
+  App en `Runna-Ad`; **git-connect de los 6** → `git push main → auto-deploy` vivo.
+- Verificado: Greenlight redeploya desde git (el "No Production Deployment" era
+  sólo el dashboard sin refrescar — la ranura de producción-git se llenó al primer
+  deploy). Dominio sirve (307). Deploy CLI (`vercel --prod`) ya no hace falta.
+- Actualizado `~/Downloads/mission-control_3.html` (links → Runna-Ad, deploy status).
+- Lección durable guardada en memoria global: `vercel_hobby_private_org_repos.md`.
+- Pendiente (no bloqueante): añadir gente (Nils) a la org; desenredar el repo
+  cajón-de-sastre `/Users/work` (runna-website vivía dentro de él sin git propio).
