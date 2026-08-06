@@ -6,41 +6,50 @@
 3. `tasks/lessons.md` — mistakes/overrides/wins. **Lee los PEDRO_OVERRIDE.**
 4. Este archivo — qué sigue y cómo.
 
-## 🎯 FOCO DE ESTA SESIÓN (lo que Pedro quiere trabajar)
-Dos temas ligados: **cómo se hacen las CORRECCIONES/REVISIONES** y la **jerarquía
-de roles**. Es DISEÑO primero — usar beast-mode-dev, explorar el estado actual,
-proponer y CONFIRMAR con Pedro antes de construir.
+## 🎯 THIS SESSION'S FOCUS (what Pedro wants to work on)
+(Note: Pedro & Claude converse in ENGLISH; the Greenlight platform UI/copy stays
+in SPANISH for the team.) Two linked topics: the **review / corrections flow**
+and the **role hierarchy**. This is DESIGN-FIRST — use beast-mode-dev, explore
+the current state, then propose and CONFIRM with Pedro before building anything.
 
-**1. Flujo de revisión/corrección — empezando por las INTERNAS.**
-- Diseñar cómo un revisor marca correcciones sobre una tarea y cómo el
-  especialista las atiende. Lo interno se hará PRIMERO porque **luego se emula
-  para la versión del CLIENTE** (el portal: el cliente revisa lo `published` y
-  pide cambios). Diseñarlo REUSABLE desde el arranque.
-- Ya existe base a reusar: verbo `requestChanges` → estado `in_corrections` +
-  un comentario `kind='correction_request'` (tabla `comments`); la transición
-  `published → in_corrections` ya está en `transition_allowed` (para cuando el
-  cliente pida cambios). Pregunta de diseño a resolver con Pedro: ¿las
-  correcciones son texto libre (hoy) o ESTRUCTURADAS (por plano / por campo,
-  checklist, hilos que se resuelven)? ¿Cómo las ve y marca-como-resueltas el
-  especialista? ¿Historial de rondas de corrección?
-- OJO auth-off: hoy sin login `is_lead()` es false para todos → NO hay
-  movimiento hacia atrás (ya logueado como gap). El diseño de correcciones tiene
-  que contemplar cómo se mueve a `in_corrections` sin login en la beta.
+**1. Review / corrections flow — start with INTERNAL reviews.**
+- Design how a reviewer marks corrections on a task and how the specialist
+  addresses them. Internal goes FIRST because it will later be **emulated for the
+  CLIENT version** (the portal: the client reviews `published` work and requests
+  changes). Design it REUSABLE from the start.
+- ⭐ **Pedro's core vision — visual, location-anchored corrections:** the reviewer
+  should be able to **select a specific field or zone** (a plano's Acción, the
+  Copy in, a reference image/zone, a whole section…) and write whatever change
+  they want FOR THAT EXACT SPOT. On save / send-back-to-production, the specialist
+  sees a **very visual representation** — "this is the change for THIS specific
+  field/section" — pinned/highlighted in-context on that exact field, not a wall
+  of free text. Goal: make it super visual and easy for BOTH sides, and eliminate
+  "I didn't understand what you wanted" moments. Think design-review / Figma-style
+  inline comments anchored to a target, with a clear resolved/unresolved state.
+- What exists to reuse: the `requestChanges` verb → `in_corrections` status + a
+  `comments` row `kind='correction_request'` (today it's a single free-text blob
+  — the new model needs the comment to TARGET a location: which plano id, which
+  field/section key). The `published → in_corrections` transition already exists
+  in `transition_allowed` (for when the client requests changes). Open design
+  questions for Pedro: correction rounds/history? who marks a correction
+  resolved (reviewer vs specialist)? does re-submitting clear/resolve them?
+- ⚠️ auth-off gotcha: with login off, `is_lead()` is false for everyone → NO
+  backward status moves today (logged gap). The corrections design must account
+  for how a task reaches `in_corrections` during the login-off beta.
 
-**2. Distinción de roles: especialistas · leads · (¿dept heads?).**
-- Pedro quiere distinguir más que hoy. Roles actuales: `master/admin/lead/
-  creative(especialista)/client` (enum `app_role`, ver 0023/0024) + flag
-  `es_lead` en `track_members`/`idea_assignments` + tabla `pods` (tripletas,
-  `pod_id` casi sin usar). Referencia: SnapTrack usa `owner/dept_head/team_head/
-  employee/junior` (`org_role`).
-- Pedro NO está seguro del modelo ("general leads o más bien Dept heads chance")
-  — es una DECISIÓN a trabajar juntos. Preguntas: ¿`dept_head` es un tier NUEVO
-  por encima de lead? ¿Scopeado a un pod/departamento? ¿Quién revisa/aprueba a
-  quién (dept head → lead → especialista)? Esto ATA con el flujo de revisión (la
-  cadena de revisión por rol/depto).
-- Al tocar el enum `app_role`: valor nuevo en su PROPIO archivo de migración +
-  auditar cada filtro que ramifica por rol (roles.ts predicados, helpers RLS
-  is_lead/is_team/is_delivery, NAV_BY_ROLE) — misma disciplina que con 'master'.
+**2. Role distinction: specialists · leads · (dept heads?).**
+- Pedro wants more distinction than today. Current roles: `master/admin/lead/
+  creative(specialist)/client` (`app_role` enum, see 0023/0024) + an `es_lead`
+  flag on `track_members`/`idea_assignments` + a `pods` table (tripletas, `pod_id`
+  mostly unused). Reference: SnapTrack uses `owner/dept_head/team_head/employee/
+  junior` (`org_role`).
+- Pedro is NOT sure of the model ("general leads, or rather Dept heads maybe") —
+  DECIDE IT TOGETHER. Questions: is `dept_head` a NEW tier above lead? Scoped to
+  a pod/department? Who reviews/approves whom (dept head → lead → specialist)?
+  This TIES INTO the review flow (the review chain by role/dept).
+- If touching the `app_role` enum: new value in its OWN migration file + audit
+  every role-branching filter (roles.ts predicates, RLS helpers is_lead/is_team/
+  is_delivery, NAV_BY_ROLE) — same discipline used for 'master'.
 
 ## Dónde quedamos (fin de sesión 2026-08-06, larga)
 El **workspace** ya estaba completo. Esta sesión se agregó, todo en producción y
