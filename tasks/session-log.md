@@ -313,3 +313,10 @@ Resumen del brief ← ideas.concepto; Notas ← ideas.comentarios_creativo (colu
 "Comentarios Leads" del sheet). Editables encima. Concepto quitado del subtítulo
 de arriba (ya no se duplica). Trend sigue vacío (sin columna en el sheet).
 Verificado en prod. Sin migración (columnas ya existían).
+
+## 2026-08-05 (cont.) — Mapeo correcto del sheet + campos al preview del cliente
+
+Concepto→Resumen; Referencias→Trend (backfill 0021 + import); Peloteo→Notas
+(peloteo_raw); Comentarios Leads→subtítulo bajo el título (interno). Resumen/
+Trend/Notas ahora se muestran en el preview del cliente. Verificado en 2 tareas
+(una con peloteo, una sin). S.P.A.M idéntico.
