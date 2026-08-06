@@ -328,3 +328,12 @@ Los URLs del Trend (columna Referencias) ahora salen como chips "Referencia 1",
 el preview del cliente. parseReferencias() parte por salto de línea (no espacios)
 + 7 tests. CampoIntake gana onCambio para el valor en vivo. Verificado en prod
 con una tarea de URL Drive. Sin migración. 119 lib, 0 fallos.
+
+## 2026-08-05 (cont.) — URLs clicables en todo el texto mostrado
+
+Componente <Linkify> (server+client) vuelve clicable cualquier http(s)/www. en
+texto de sólo lectura: preview del cliente (Resumen, Notas, Acción, Copy in,
+referencia estático) + subtítulo de Comentarios Leads. urlDeLinea() más robusta
+para Trend (http/www/dominio-con-path; no confunde "asset.mp4"). Verificado en
+prod. 124 lib, 0 fallos. (Volví a escribir en un campo real para probar y lo
+restauré desde el sheet — cuidar esto.)
