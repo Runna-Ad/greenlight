@@ -306,3 +306,10 @@ empty states, y capa emil-design-eng de micro-interacciones.
 - Pregunta abierta de Pedro: los bundles viven en la pestaña Briefs; el Tablero
   es kanban por estado. Falta decidir si el Tablero también se agrupa por brief.
 S.P.A.M idéntico 42/31/6.
+
+## 2026-08-05 (cont.) — Resumen y Notas pre-llenados del sheet
+
+Resumen del brief ← ideas.concepto; Notas ← ideas.comentarios_creativo (columna
+"Comentarios Leads" del sheet). Editables encima. Concepto quitado del subtítulo
+de arriba (ya no se duplica). Trend sigue vacío (sin columna en el sheet).
+Verificado en prod. Sin migración (columnas ya existían).
