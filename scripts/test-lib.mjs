@@ -251,7 +251,7 @@ eq("EC cae en neutro", canales(["EC"])[0].color, "var(--muted-foreground)");
 
 // ── Referencias: sniff por magic bytes + plataforma ──
 console.log("\n▶ Referencias");
-const { sniffImageMime, plataformaDeUrl } = await import("../src/lib/referencia.ts");
+const { sniffImageMime, plataformaDeUrl, parseReferencias } = await import("../src/lib/referencia.ts");
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 const JPG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]);
 const WEBP = new Uint8Array([0x52,0x49,0x46,0x46,0,0,0,0,0x57,0x45,0x42,0x50]);
@@ -263,6 +263,19 @@ eq("un .exe (MZ) renombrado a .png se rechaza", sniffImageMime(EXE), null);
 eq("TikTok detectado", plataformaDeUrl("https://www.tiktok.com/@x/video/1"), "tiktok");
 eq("Drive detectado", plataformaDeUrl("https://drive.google.com/file/d/abc"), "drive");
 eq("basura → otro", plataformaDeUrl("no soy url"), "otro");
+
+// parseReferencias: URLs largas → "Referencia N"
+eq("vacío → sin referencias", parseReferencias("").length, 0);
+eq("una URL → Referencia 1", parseReferencias("https://drive.google.com/x")[0].label, "Referencia 1");
+ok("y es abrible", parseReferencias("https://drive.google.com/x")[0].url !== null);
+eq("dos líneas → 2 referencias",
+   parseReferencias("https://a.com/1\nhttps://b.com/2").length, 2);
+eq("la segunda es Referencia 2",
+   parseReferencias("https://a.com/1\nhttps://b.com/2")[1].label, "Referencia 2");
+eq("un nombre con espacios NO se parte por espacios",
+   parseReferencias("TOURISM_9X16 IDEA 1_TT.mp4").length, 1);
+eq("un nombre (no URL) no es abrible",
+   parseReferencias("TOURISM_9X16 IDEA 1_TT.mp4")[0].url, null);
 
 // ── Diálogo: (Quien) marca quién habla en la vista del cliente ──
 console.log("\n▶ Diálogo del cliente");

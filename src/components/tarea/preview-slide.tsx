@@ -2,6 +2,7 @@
 
 import { STATUS_LABEL, type AssetStatus } from "@/lib/brand";
 import { parseDialogo } from "@/lib/dialogo";
+import { parseReferencias } from "@/lib/referencia";
 
 export type PlanoVista = {
   id: string;
@@ -85,6 +86,7 @@ export function PreviewSlide({
   const fondo = plecaFondo(cabecera.plataformas);
   // El tinte de la franja de datos usa un solo color para no competir.
   const tinte = COLOR_PLATAFORMA[cabecera.plataformas[0]] ?? "var(--muted-foreground)";
+  const trendRefs = parseReferencias(cabecera.trend);
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-white text-[#111114] shadow-sm">
@@ -114,11 +116,38 @@ export function PreviewSlide({
         {cabecera.naming ?? "SIN NAMING"}
       </p>
 
-      {/* Resumen / Trend / Notas — estas SÍ las ve el cliente (Pedro) */}
+      {/* Resumen / Trend / Notas — estas SÍ las ve el cliente (Pedro).
+          El Trend sale como "Referencia 1, 2…" en vez del URL largo. */}
       {(cabecera.concepto || cabecera.trend || cabecera.peloteo) && (
         <div className="space-y-1.5 border-b border-black/10 p-2 text-[10px]">
           {cabecera.concepto && <BriefLinea rotulo="Resumen del brief" texto={cabecera.concepto} />}
-          {cabecera.trend && <BriefLinea rotulo="Trend" texto={cabecera.trend} />}
+          {trendRefs.length > 0 && (
+            <p className="flex flex-wrap items-center gap-1 leading-snug">
+              <span className="font-bold text-black/55">Trend: </span>
+              {trendRefs.map((r) =>
+                r.url ? (
+                  <a
+                    key={r.label}
+                    href={r.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={r.texto}
+                    className="inline-flex items-center gap-0.5 rounded-full bg-black/[0.06] px-1.5 py-0.5 font-medium text-[#775cbf] underline-offset-2 hover:underline"
+                  >
+                    {r.label}
+                  </a>
+                ) : (
+                  <span
+                    key={r.label}
+                    title={r.texto}
+                    className="rounded-full bg-black/[0.06] px-1.5 py-0.5 font-medium text-black/70"
+                  >
+                    {r.label}
+                  </span>
+                ),
+              )}
+            </p>
+          )}
           {cabecera.peloteo && <BriefLinea rotulo="Notas" texto={cabecera.peloteo} />}
         </div>
       )}

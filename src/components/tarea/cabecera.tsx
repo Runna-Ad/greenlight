@@ -6,6 +6,7 @@ import { varianteGuion, type Plantilla } from "@/lib/plantilla";
 import { contentType, canales } from "@/lib/iconos";
 import { PLATAFORMA_LABEL } from "@/lib/vocab";
 import { CampoIntake } from "./campo-intake";
+import { CampoReferencias } from "./campo-referencias";
 
 const COLOR_PLATAFORMA: Record<string, string> = {
   GG: "var(--plat-gg)",
@@ -243,16 +244,7 @@ export function CabeceraTarea({
           soloLectura={soloLectura}
         />
         <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-          <CampoIntake
-            ideaId={ideaId}
-            campo="trend"
-            label="Trend"
-            valorInicial={trend}
-            placeholder="Referencia que sigue esta pieza (viene del sheet)…"
-            rows={2}
-            caja
-            soloLectura={soloLectura}
-          />
+          <CampoReferencias ideaId={ideaId} valorInicial={trend} soloLectura={soloLectura} />
           <CampoIntake
             ideaId={ideaId}
             campo="peloteo_raw"

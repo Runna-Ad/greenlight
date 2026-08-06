@@ -56,3 +56,27 @@ export function plataformaDeUrl(url: string): string {
   if (host.includes("facebook") || host.includes("fb.watch")) return "facebook";
   return "otro";
 }
+
+export type RefTrend = { label: string; url: string | null; texto: string };
+
+/**
+ * Parte el Trend (columna Referencias del sheet) en referencias cortas:
+ * "Referencia 1", "Referencia 2"… Cada línea es una referencia; si es un link
+ * (http/https) se puede abrir. Se parte por SALTO DE LÍNEA — no por espacios —
+ * porque un nombre de archivo de referencia puede llevar espacios
+ * ("...IDEA 1_TT..."). Sólo achica lo largo (URLs/nombres); el texto suelto
+ * corto se deja tal cual.
+ */
+export function parseReferencias(texto: string | null | undefined): RefTrend[] {
+  const t = (texto ?? "").trim();
+  if (!t) return [];
+  const lineas = t
+    .split(/[\n\r]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return lineas.map((linea, i) => ({
+    label: `Referencia ${i + 1}`,
+    url: /^https?:\/\//i.test(linea) ? linea : null,
+    texto: linea,
+  }));
+}
