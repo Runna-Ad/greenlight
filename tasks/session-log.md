@@ -337,3 +337,12 @@ referencia estático) + subtítulo de Comentarios Leads. urlDeLinea() más robus
 para Trend (http/www/dominio-con-path; no confunde "asset.mp4"). Verificado en
 prod. 124 lib, 0 fallos. (Volví a escribir en un campo real para probar y lo
 restauré desde el sheet — cuidar esto.)
+
+## 2026-08-05 (cont.) — Design God Mode · fase 2 (profundidad)
+
+Radio de marca en las 15 primitivas shadcn (rounded-none → md/xl/sm) — arregla
+botones/inputs/diálogos de todo el app; <EmptyState> reutilizable (tablero,
+mi-trabajo, guión); loading.tsx con skeletons (tablero/tarea/briefs); login
+pulido (fondo de marca + G de Google + entrada); botón primario con sombra+lift.
+Verificado en prod: login rediseñado, botones con radio 8px, consola limpia.
+124 lib + 141 db + 44 sync, 0 fallos.
