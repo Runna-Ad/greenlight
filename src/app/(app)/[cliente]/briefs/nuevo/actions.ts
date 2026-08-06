@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
+import { dispatchPendingEmails } from "@/lib/notif-email";
 import {
   construirTarea,
   faltantesDraft,
@@ -141,6 +143,14 @@ export async function crearBrief(
   res.code = out.code;
   res.created = out.created_tasks ?? payloadTasks.length;
   res.assets = out.created_assets ?? 0;
+
+  // Avisar a cada especialista: "nuevo brief, tienes X tareas". No es crítico
+  // (el brief ya se creó); si falla, se traga sin romper la creación.
+  if (out.brief_id) {
+    const { error: notifErr } = await db.rpc("rpc_notificar_brief", { p_brief_id: out.brief_id });
+    if (notifErr) res.errors.push(`aviso: ${notifErr.message}`);
+    else after(() => dispatchPendingEmails());
+  }
 
   revalidatePath(`/${clienteSlug}/briefs`);
   revalidatePath(`/${clienteSlug}/tablero`);

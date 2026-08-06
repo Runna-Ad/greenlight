@@ -648,7 +648,7 @@ ok("y el fallo queda registrado, no invisible",
 await db.exec(`
   create or replace function produccion.active_notify_channels()
   returns produccion.notify_channel[] language sql immutable as $$
-    select array['in_app']::produccion.notify_channel[];
+    select array['in_app','email']::produccion.notify_channel[];  -- restaurar al valor de la 0025
   $$;`);
 
 // ── CONTRACT: missingRequired() TS === missing_required() SQL ──
@@ -1204,6 +1204,19 @@ eq("nada quedó a medias (rollback del brief entero)", await scalar(`select coun
 // code único: reusar el mismo code sufija en vez de chocar
 const dupCode = await callCrear({ ...okPayload, tasks: [okPayload.tasks[2]] });
 eq("code duplicado se sufija", await scalar(`select code from produccion.briefs where id=$1`, [dupCode.brief_id]), "DIDI-CREARTEST-REAL-2");
+
+// ── rpc_notificar_brief: nuevo brief avisa a cada especialista con su conteo ──
+console.log("\n▶ rpc_notificar_brief — nuevo brief avisa a especialistas");
+const nAvisos = await scalar(`select produccion.rpc_notificar_brief($1)`, [BRIEF]);
+eq("crea 1 aviso (sólo Vero está asignada en el brief)", nAvisos, 1);
+eq("aviso es tipo brief_created para Vero",
+   await scalar(`select type from produccion.notifications where recipient_member_id=$1 and type='brief_created' limit 1`, [MEM_VERO]), "brief_created");
+eq("el cuerpo dice 1 tarea + call to action",
+   await scalar(`select body from produccion.notifications where type='brief_created' limit 1`),
+   "Tienes 1 tarea en este brief. Da click para ir a tus tareas.");
+eq("entregas: in_app sent + email pending",
+   await scalar(`select string_agg(d.channel||':'||d.status, ',' order by d.channel) from produccion.notification_deliveries d join produccion.notifications n on n.id=d.notification_id where n.type='brief_created'`),
+   "email:pending,in_app:sent");
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

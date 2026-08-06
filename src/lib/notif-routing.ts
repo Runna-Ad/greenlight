@@ -4,6 +4,7 @@
 
 /** Los tipos que SÍ mandan email (los demás sólo in-app). */
 export const EMAIL_TYPES = new Set<string>([
+  "brief_created", // "nuevo brief, tienes X tareas" → a cada especialista asignado
   "task_submitted", // "lista para revisar" → a leads
   "task_changes_requested", // "te pidieron cambios" → al asignado
   "task_approved", // "tu tarea fue aprobada" → al asignado
