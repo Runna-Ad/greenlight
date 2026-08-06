@@ -2,7 +2,7 @@ import { Lock } from "lucide-react";
 
 import { getViewAs } from "@/lib/view-as";
 import { ROLE_LABEL, canCreateBrief } from "@/lib/roles";
-import { IntakeForm } from "@/components/intake/intake-form";
+import { BriefBuilder } from "@/components/intake/brief-builder";
 
 // Puerta propia: el especialista ahora VE /briefs (los bundles), pero capturar
 // un brief sigue siendo del lead. Sin esta puerta heredaría el permiso.
@@ -25,5 +25,5 @@ export default async function NuevoBriefPage({
     );
   }
 
-  return <IntakeForm cliente={cliente} />;
+  return <BriefBuilder cliente={cliente} />;
 }

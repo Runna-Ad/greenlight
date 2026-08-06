@@ -4,6 +4,7 @@ import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.t
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
 import { actionsFor, waitingLabel } from "../src/lib/task-actions.ts";
 import { plantillaPara, readTimeS, parseDuracion, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
+import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco } from "../src/lib/intake-crear.ts";
 
 let pass = 0,
   fail = 0;
@@ -300,6 +301,66 @@ eq("segunda intervención es del actor",
    parseDialogo("(Narrador) En un pueblo (Actor) ¡Hola!")[1].quien, "Actor");
 eq("texto antes del primer paréntesis queda sin quien",
    parseDialogo("Intro... (Actor) hola")[0].quien, null);
+
+// ── Captura de brief: identidad, duplicación, combos, gate ──
+console.log("\n▶ Captura de brief (intake-crear)");
+
+// splitIdeaCode
+eq("splitIdeaCode A4", JSON.stringify(splitIdeaCode("A4")), JSON.stringify({ letter: "A", variant: 4 }));
+eq("splitIdeaCode B (sin número → 1)", JSON.stringify(splitIdeaCode("B")), JSON.stringify({ letter: "B", variant: 1 }));
+eq("splitIdeaCode vacío → X1", JSON.stringify(splitIdeaCode("")), JSON.stringify({ letter: "X", variant: 1 }));
+
+// draft factory
+const draft = (over = {}) => ({ ...tarjetaEnBlanco("id-" + Math.random().toString(36).slice(2)), ...over });
+const A1 = draft({ id: "a1", numIdea: "A1" });
+const A2 = draft({ id: "a2", numIdea: "A2" });
+const B1 = draft({ id: "b1", numIdea: "B1" });
+
+// nextVariantForLetter — al duplicar, la siguiente variante libre
+eq("nextVariant A con A1,A2 → 3", nextVariantForLetter([A1, A2, B1], "A"), 3);
+eq("nextVariant B con B1 → 2", nextVariantForLetter([A1, A2, B1], "B"), 2);
+eq("nextVariant C sin ninguna → 1", nextVariantForLetter([A1, A2, B1], "C"), 1);
+
+// idsIdeaRepetida — dos "A1" chocan; distintos no
+const dupSet = idsIdeaRepetida([draft({ id: "x", numIdea: "A1" }), draft({ id: "y", numIdea: "A1" }), B1]);
+ok("A1 repetido marca ambas tarjetas", dupSet.has("x") && dupSet.has("y"));
+ok("B1 no está en el set de repetidas", !dupSet.has("b1"));
+eq("sin repetidos → set vacío", idsIdeaRepetida([A1, A2, B1]).size, 0);
+
+// combosDeTarjeta — WYSIWYG del preview y de los assets
+const video = draft({ tipoAsset: ["RP Video"], tamano: ["9:16", "1:1"], plataforma: ["GG", "FB"] });
+eq("video 2 tamaños × 2 plataformas válidas → 4 combos", combosDeTarjeta(video).length, 4);
+const copies = draft({ tipoAsset: ["Copies"], tamano: ["9:16"], plataforma: ["GG"] });
+eq("Copies no genera archivos → 0 combos", combosDeTarjeta(copies).length, 0);
+const staticBad = draft({ tipoAsset: ["Images"], tamano: ["4:5"], plataforma: ["TT"] });
+eq("estático 4:5×TT no es válido → 0 combos", combosDeTarjeta(staticBad).length, 0);
+
+// faltantesDraft — mismo gate que el import
+ok("draft en blanco falta obligatorios", faltantesDraft(draft()).length > 0);
+const copyOk = draft({
+  entrega: ["1ra entrega"], asignacion: ["Vero"], marca: ["Card"],
+  tipoAsset: ["Copies"], concepto: "Texto", plataforma: ["GG"],
+});
+eq("Copies completo no exige Naming/#Idea/Tamaño/Duración", faltantesDraft(copyOk).length, 0);
+
+// construirTarea — resuelve member_ids, marca_id, codes, combos
+const resuelto = {
+  vocab: [{ set: "formato", code: "STOCK", label_es: "Stock", track: "normal" }],
+  memberIdPorNombre: new Map([["vero", "mem-vero"]]),
+  marcaIdPorNombre: new Map([["card", "marca-card"]]),
+};
+const src = draft({
+  numIdea: "A3", naming: "SPAPX", tipoAsset: ["Normal Video"], formato: ["Stock"],
+  marca: ["Card"], asignacion: ["Vero"], tamano: ["9:16"], plataforma: ["TT"], duracion: "30s",
+});
+const payload = construirTarea(src, "normal", resuelto);
+eq("construirTarea → letra A", payload.family_letter, "A");
+eq("construirTarea → variante 3", payload.variant_number, 3);
+eq("construirTarea → marca resuelta", payload.marca_id, "marca-card");
+eq("construirTarea → member resuelto", JSON.stringify(payload.member_ids), JSON.stringify(["mem-vero"]));
+eq("construirTarea → formato label→code", payload.formato_code, "STOCK");
+eq("construirTarea → naming_kind normal", payload.naming_kind, "normal");
+eq("construirTarea → 1 combo (9:16×TT válido)", payload.assets.length, 1);
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

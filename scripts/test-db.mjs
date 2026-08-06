@@ -1127,5 +1127,83 @@ for (const kind of kinds)
     }
 ok(`TS===DB across ${contractChecked} combos`, contractMismatch === 0);
 
+// ── rpc_crear_brief: crear un brief nuevo, atómico ──
+console.log("\n▶ rpc_crear_brief — captura de brief (atómica)");
+
+const callCrear = async (payload) => {
+  const r = (await db.query(`select produccion.rpc_crear_brief($1::jsonb) as out`, [JSON.stringify(payload)])).rows[0].out;
+  return typeof r === "string" ? JSON.parse(r) : r;
+};
+
+const CLIENT = "00000000-0000-0000-0000-000000000001";
+const MARCA_CARD = "00000000-0000-0000-0000-0000000000a1";
+// Un miembro real ya sembrado por la migración (unique (track, name)).
+const MEM_VERO = await scalar(`select id from produccion.track_members where track='real' order by sort_order limit 1`);
+
+const okPayload = {
+  client_id: CLIENT,
+  code: "DIDI-CREARTEST-REAL",
+  title: "Brief de prueba",
+  track: "real",
+  mes_code: "AUG26",
+  created_by: null,
+  tasks: [
+    {
+      family_letter: "A", variant_number: 1, marca_id: MARCA_CARD,
+      naming_base: "SPAPX", naming_kind: "real", tipo_asset: "RP Video",
+      plataformas: ["GG", "FB"], tamanos: ["9:16"], duracion: "25s",
+      concepto: "Concepto A", member_ids: [MEM_VERO],
+      assets: [{ tamano_code: "9:16", plataforma_code: "GG" }, { tamano_code: "9:16", plataforma_code: "FB" }],
+    },
+    {
+      family_letter: "A", variant_number: 2, marca_id: MARCA_CARD,
+      naming_base: "SPAPX", naming_kind: "real", tipo_asset: "RP Video",
+      plataformas: ["GG"], tamanos: ["9:16"], duracion: "25s",
+      concepto: "Concepto A2", member_ids: [],
+      assets: [{ tamano_code: "9:16", plataforma_code: "GG" }],
+    },
+    {
+      family_letter: "B", variant_number: 1, marca_id: MARCA_CARD,
+      naming_kind: "static", tipo_asset: "Copies",
+      plataformas: [], tamanos: [], concepto: "Un copy", member_ids: [],
+      assets: [], // un copy es texto: 0 archivos
+    },
+  ],
+};
+
+const out = await callCrear(okPayload);
+eq("crea 3 tareas", out.created_tasks, 3);
+eq("crea 3 assets (copies → 0)", out.created_assets, 3);
+
+const BRIEF = out.brief_id;
+eq("2 familias (A, B)", await scalar(`select count(*)::int from produccion.idea_families where brief_id=$1`, [BRIEF]), 2);
+eq("códigos de idea A1/A2/B1", await scalar(`select string_agg(code, ',' order by code) from produccion.ideas where brief_id=$1`, [BRIEF]), "A1,A2,B1");
+eq("3 assets bajo el brief", await scalar(`select count(*)::int from produccion.assets where brief_id=$1`, [BRIEF]), 3);
+eq(
+  "filename lo pone el trigger",
+  await scalar(`select a.filename from produccion.assets a join produccion.ideas i on i.id=a.idea_id where i.brief_id=$1 and i.code='A1' and a.plataforma_code='GG' limit 1`, [BRIEF]),
+  "SPAPX_9X16_25S_REAL_VIDEO_IDEAA1_GG_V1_AUG26_RN",
+);
+eq("Vero quedó asignada a A1", await scalar(`select count(*)::int from produccion.idea_assignments ia join produccion.ideas i on i.id=ia.idea_id where i.brief_id=$1 and i.code='A1' and ia.member_id=$2`, [BRIEF, MEM_VERO]), 1);
+
+// atomicidad: dos tareas con la MISMA variante en la misma familia → choca la
+// unique (family_id, variant_number) → la función entera revierte, sin brief a medias.
+const badPayload = {
+  ...okPayload,
+  code: "DIDI-ATOMIC-REAL",
+  tasks: [
+    { family_letter: "C", variant_number: 1, naming_kind: "real", tipo_asset: "RP Video", plataformas: [], tamanos: [], concepto: "C1", member_ids: [], assets: [] },
+    { family_letter: "C", variant_number: 1, naming_kind: "real", tipo_asset: "RP Video", plataformas: [], tamanos: [], concepto: "C1 dup", member_ids: [], assets: [] },
+  ],
+};
+let threw = false;
+try { await callCrear(badPayload); } catch { threw = true; }
+ok("una tarea inválida hace fallar el RPC", threw);
+eq("nada quedó a medias (rollback del brief entero)", await scalar(`select count(*)::int from produccion.briefs where code like 'DIDI-ATOMIC%'`), 0);
+
+// code único: reusar el mismo code sufija en vez de chocar
+const dupCode = await callCrear({ ...okPayload, tasks: [okPayload.tasks[2]] });
+eq("code duplicado se sufija", await scalar(`select code from produccion.briefs where id=$1`, [dupCode.brief_id]), "DIDI-CREARTEST-REAL-2");
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -4,6 +4,9 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { classifyTab, type SheetRow } from "@/lib/sheet-sync";
 import { namingKindForTipo } from "@/lib/filename";
 import { generatesFiles, missingRequired } from "@/lib/required";
+// Helpers de mapeo del sheet → tarea: una sola definición compartida con la
+// captura a mano (BriefBuilder / crearBrief). Ver src/lib/intake-crear.ts.
+import { list, cleanSize, labelToCode, splitIdeaCode, fold } from "@/lib/intake-crear";
 
 export type ImportRow = {
   key: string;
@@ -26,45 +29,6 @@ export type ImportResult = {
   blocked: BlockedRow[];
   errors: string[];
 };
-
-const list = (v?: string) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
-
-/**
- * Sheet sizes sometimes carry pixel dimensions: "1:1 (1080*1080)".
- * Only the ratio belongs in a filename — the parenthetical is a note to the
- * designer. Without this, the token came out as "1X110801080".
- */
-const cleanSize = (s: string) => s.replace(/\s*\(.*?\)\s*/g, "").trim();
-
-/**
- * The sheet stores human LABELS ("Ilustración"); filenames need vocab CODES
- * ("ILLUS"). Passing the label straight through produced "ILUSTRACIN" — the
- * accent stripped by tokenisation, and the wrong token entirely.
- */
-function labelToCode(
-  vocab: { set: string; code: string; label_es: string; track: string }[],
-  set: string,
-  track: string,
-  label: string,
-): string {
-  if (!label) return "";
-  const norm = (s: string) =>
-    s.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
-  const target = norm(label);
-  const match =
-    vocab.find(
-      (v) => v.set === set && norm(v.label_es) === target && (v.track === track || v.track === "both"),
-    ) ??
-    vocab.find((v) => v.set === set && norm(v.code) === target);
-  return match?.code ?? label; // unknown values pass through rather than vanish
-}
-
-/** "A4" → family "A", variant 4.  "B" → family "B", variant 1. */
-function splitIdeaCode(raw: string): { letter: string; variant: number } {
-  const m = (raw || "").trim().match(/^([A-Za-z]+)\s*(\d*)$/);
-  if (!m) return { letter: "X", variant: 1 };
-  return { letter: m[1].toUpperCase(), variant: m[2] ? Number(m[2]) : 1 };
-}
 
 /**
  * Create real work from approved sheet rows.
@@ -116,9 +80,6 @@ export async function importRows(
   const { data: marcaRows } = await db
     .from("marcas").select("id, name").eq("client_id", client.id);
   const MARCAS = (marcaRows ?? []) as { id: string; name: string }[];
-
-  const fold = (s: string) =>
-    s.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
 
   /** "Galie, Mony" → the two member ids, matched within the row's own track. */
   const resolveMembers = (raw: string, track: string): string[] =>
