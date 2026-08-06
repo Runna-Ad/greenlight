@@ -6,6 +6,42 @@
 3. `tasks/lessons.md` — mistakes/overrides/wins. **Lee los PEDRO_OVERRIDE.**
 4. Este archivo — qué sigue y cómo.
 
+## 🎯 FOCO DE ESTA SESIÓN (lo que Pedro quiere trabajar)
+Dos temas ligados: **cómo se hacen las CORRECCIONES/REVISIONES** y la **jerarquía
+de roles**. Es DISEÑO primero — usar beast-mode-dev, explorar el estado actual,
+proponer y CONFIRMAR con Pedro antes de construir.
+
+**1. Flujo de revisión/corrección — empezando por las INTERNAS.**
+- Diseñar cómo un revisor marca correcciones sobre una tarea y cómo el
+  especialista las atiende. Lo interno se hará PRIMERO porque **luego se emula
+  para la versión del CLIENTE** (el portal: el cliente revisa lo `published` y
+  pide cambios). Diseñarlo REUSABLE desde el arranque.
+- Ya existe base a reusar: verbo `requestChanges` → estado `in_corrections` +
+  un comentario `kind='correction_request'` (tabla `comments`); la transición
+  `published → in_corrections` ya está en `transition_allowed` (para cuando el
+  cliente pida cambios). Pregunta de diseño a resolver con Pedro: ¿las
+  correcciones son texto libre (hoy) o ESTRUCTURADAS (por plano / por campo,
+  checklist, hilos que se resuelven)? ¿Cómo las ve y marca-como-resueltas el
+  especialista? ¿Historial de rondas de corrección?
+- OJO auth-off: hoy sin login `is_lead()` es false para todos → NO hay
+  movimiento hacia atrás (ya logueado como gap). El diseño de correcciones tiene
+  que contemplar cómo se mueve a `in_corrections` sin login en la beta.
+
+**2. Distinción de roles: especialistas · leads · (¿dept heads?).**
+- Pedro quiere distinguir más que hoy. Roles actuales: `master/admin/lead/
+  creative(especialista)/client` (enum `app_role`, ver 0023/0024) + flag
+  `es_lead` en `track_members`/`idea_assignments` + tabla `pods` (tripletas,
+  `pod_id` casi sin usar). Referencia: SnapTrack usa `owner/dept_head/team_head/
+  employee/junior` (`org_role`).
+- Pedro NO está seguro del modelo ("general leads o más bien Dept heads chance")
+  — es una DECISIÓN a trabajar juntos. Preguntas: ¿`dept_head` es un tier NUEVO
+  por encima de lead? ¿Scopeado a un pod/departamento? ¿Quién revisa/aprueba a
+  quién (dept head → lead → especialista)? Esto ATA con el flujo de revisión (la
+  cadena de revisión por rol/depto).
+- Al tocar el enum `app_role`: valor nuevo en su PROPIO archivo de migración +
+  auditar cada filtro que ramifica por rol (roles.ts predicados, helpers RLS
+  is_lead/is_team/is_delivery, NAV_BY_ROLE) — misma disciplina que con 'master'.
+
 ## Dónde quedamos (fin de sesión 2026-08-06, larga)
 El **workspace** ya estaba completo. Esta sesión se agregó, todo en producción y
 verificado en vivo (S.P.A.M intacto 42/31/6):
