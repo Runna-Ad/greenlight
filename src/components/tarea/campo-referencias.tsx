@@ -61,26 +61,23 @@ export function CampoReferencias({
           onCambio={setValor}
         />
       ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {refs.map((r) =>
-            r.url ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {refs.map((r, i) =>
+            r.tipo === "ref" ? (
               <a
-                key={r.label}
+                key={i}
                 href={r.url}
                 target="_blank"
                 rel="noreferrer"
-                title={r.texto}
+                title={r.url}
                 className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/[0.06] px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10"
               >
                 {r.label} <ExternalLink className="size-3" />
               </a>
             ) : (
-              <span
-                key={r.label}
-                title={r.texto}
-                className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-medium text-secondary-foreground"
-              >
-                {r.label}
+              // No es un link: se deja como texto, sin inventar una pastilla.
+              <span key={i} title={r.texto} className="max-w-full truncate text-[12px] text-foreground">
+                {r.texto}
               </span>
             ),
           )}

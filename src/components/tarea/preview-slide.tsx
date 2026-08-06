@@ -125,25 +125,22 @@ export function PreviewSlide({
           {trendRefs.length > 0 && (
             <p className="flex flex-wrap items-center gap-1 leading-snug">
               <span className="font-bold text-black/55">Trend: </span>
-              {trendRefs.map((r) =>
-                r.url ? (
+              {trendRefs.map((r, i) =>
+                r.tipo === "ref" ? (
                   <a
-                    key={r.label}
+                    key={i}
                     href={r.url}
                     target="_blank"
                     rel="noreferrer"
-                    title={r.texto}
+                    title={r.url}
                     className="inline-flex items-center gap-0.5 rounded-full bg-black/[0.06] px-1.5 py-0.5 font-medium text-[#775cbf] underline-offset-2 hover:underline"
                   >
                     {r.label}
                   </a>
                 ) : (
-                  <span
-                    key={r.label}
-                    title={r.texto}
-                    className="rounded-full bg-black/[0.06] px-1.5 py-0.5 font-medium text-black/70"
-                  >
-                    {r.label}
+                  // No es un link: texto tal cual, sin pastilla de referencia.
+                  <span key={i} title={r.texto} className="font-medium text-black/70">
+                    {r.texto}
                   </span>
                 ),
               )}

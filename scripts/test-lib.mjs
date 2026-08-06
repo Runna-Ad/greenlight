@@ -265,18 +265,29 @@ eq("TikTok detectado", plataformaDeUrl("https://www.tiktok.com/@x/video/1"), "ti
 eq("Drive detectado", plataformaDeUrl("https://drive.google.com/file/d/abc"), "drive");
 eq("basura → otro", plataformaDeUrl("no soy url"), "otro");
 
-// parseReferencias: URLs largas → "Referencia N"
-eq("vacío → sin referencias", parseReferencias("").length, 0);
+// parseReferencias: SÓLO una URL real se numera "Referencia N"; el resto es texto
+eq("vacío → sin segmentos", parseReferencias("").length, 0);
+// El bug que reportó Pedro: "-" (sin valor del sheet) NO debe generar pastilla.
+eq("un guion '-' → NADA (era un falso Referencia 1)", parseReferencias("-").length, 0);
+eq("centinela n/a → nada", parseReferencias("N/A").length, 0);
 eq("una URL → Referencia 1", parseReferencias("https://drive.google.com/x")[0].label, "Referencia 1");
-ok("y es abrible", parseReferencias("https://drive.google.com/x")[0].url !== null);
-eq("dos líneas → 2 referencias",
+eq("una URL es tipo ref", parseReferencias("https://drive.google.com/x")[0].tipo, "ref");
+ok("y es abrible", !!parseReferencias("https://drive.google.com/x")[0].url);
+eq("dos URLs → 2 referencias",
    parseReferencias("https://a.com/1\nhttps://b.com/2").length, 2);
 eq("la segunda es Referencia 2",
    parseReferencias("https://a.com/1\nhttps://b.com/2")[1].label, "Referencia 2");
-eq("un nombre con espacios NO se parte por espacios",
-   parseReferencias("TOURISM_9X16 IDEA 1_TT.mp4").length, 1);
-eq("un nombre (no URL) no es abrible",
-   parseReferencias("TOURISM_9X16 IDEA 1_TT.mp4")[0].url, null);
+eq("un nombre (no URL) es tipo texto, no una pastilla",
+   parseReferencias("TOURISM_9X16 IDEA 1_TT.mp4")[0].tipo, "texto");
+eq("el texto se conserva tal cual",
+   parseReferencias("TOURISM_9X16 IDEA 1_TT.mp4")[0].texto, "TOURISM_9X16 IDEA 1_TT.mp4");
+// mezcla: el "-" se descarta, la URL se numera desde 1, el texto queda como texto
+{
+  const segs = parseReferencias("-\nhttps://a.com/1\nRecrear el tono");
+  eq("mezcla → 2 segmentos (el '-' fuera)", segs.length, 2);
+  eq("mezcla: la URL es Referencia 1 (numera sólo URLs)", segs[0].label, "Referencia 1");
+  eq("mezcla: el texto queda como texto", segs[1].tipo, "texto");
+}
 
 const { urlDeLinea } = await import("../src/lib/referencia.ts");
 eq("http se abre tal cual", urlDeLinea("https://drive.google.com/x"), "https://drive.google.com/x");

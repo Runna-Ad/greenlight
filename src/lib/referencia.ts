@@ -57,7 +57,17 @@ export function plataformaDeUrl(url: string): string {
   return "otro";
 }
 
-export type RefTrend = { label: string; url: string | null; texto: string };
+/**
+ * Un segmento del Trend: o es una REFERENCIA abrible (URL real → pastilla
+ * "Referencia N" clicable), o es TEXTO suelto (un nombre de asset a recrear,
+ * una nota) que se muestra tal cual, sin pastilla.
+ */
+export type TrendSegmento =
+  | { tipo: "ref"; label: string; url: string }
+  | { tipo: "texto"; texto: string };
+
+/** Valores centinela del sheet para "sin valor" — no son contenido. */
+const SENTINELA = new Set(["-", "–", "—", "n/a", "na", "."]);
 
 /**
  * ¿Esta línea es un link abrible? Acepta http(s):// y también "www." o un
@@ -75,23 +85,29 @@ export function urlDeLinea(linea: string): string | null {
 }
 
 /**
- * Parte el Trend (columna Referencias del sheet) en referencias cortas:
- * "Referencia 1", "Referencia 2"… Cada línea es una referencia; si es un link
- * (http/https) se puede abrir. Se parte por SALTO DE LÍNEA — no por espacios —
- * porque un nombre de archivo de referencia puede llevar espacios
- * ("...IDEA 1_TT..."). Sólo achica lo largo (URLs/nombres); el texto suelto
- * corto se deja tal cual.
+ * Parte el Trend (columna Referencias del sheet) en segmentos. SÓLO una URL
+ * real se numera como "Referencia 1", "Referencia 2"… (y se puede abrir); el
+ * texto que no es link se deja tal cual, sin inventar una pastilla de
+ * referencia. Un "-" (o cualquier centinela de "sin valor" del sheet) no genera
+ * NADA — antes producía un falso "Referencia 1".
+ *
+ * Se parte por SALTO DE LÍNEA — no por espacios — porque un nombre de archivo
+ * de referencia puede llevar espacios ("...IDEA 1_TT...").
  */
-export function parseReferencias(texto: string | null | undefined): RefTrend[] {
+export function parseReferencias(texto: string | null | undefined): TrendSegmento[] {
   const t = (texto ?? "").trim();
   if (!t) return [];
   const lineas = t
     .split(/[\n\r]+/)
     .map((s) => s.trim())
-    .filter(Boolean);
-  return lineas.map((linea, i) => ({
-    label: `Referencia ${i + 1}`,
-    url: urlDeLinea(linea),
-    texto: linea,
-  }));
+    .filter((l) => l && !SENTINELA.has(l.toLowerCase()));
+
+  let n = 0;
+  const out: TrendSegmento[] = [];
+  for (const linea of lineas) {
+    const url = urlDeLinea(linea);
+    if (url) out.push({ tipo: "ref", label: `Referencia ${++n}`, url });
+    else out.push({ tipo: "texto", texto: linea });
+  }
+  return out;
 }
