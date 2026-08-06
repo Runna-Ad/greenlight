@@ -35,6 +35,10 @@ export type CabeceraVista = {
   marca: string | null;
   formato: string | null;
   status: AssetStatus;
+  /** Estas tres SÍ las ve el cliente (Pedro): Resumen/Trend/Notas del brief. */
+  concepto: string | null;
+  trend: string | null;
+  peloteo: string | null;
 };
 
 const COLOR_PLATAFORMA: Record<string, string> = {
@@ -109,6 +113,15 @@ export function PreviewSlide({
       <p className="border-b border-black/10 px-3 py-1.5 text-center font-mono text-[9px] tracking-tight">
         {cabecera.naming ?? "SIN NAMING"}
       </p>
+
+      {/* Resumen / Trend / Notas — estas SÍ las ve el cliente (Pedro) */}
+      {(cabecera.concepto || cabecera.trend || cabecera.peloteo) && (
+        <div className="space-y-1.5 border-b border-black/10 p-2 text-[10px]">
+          {cabecera.concepto && <BriefLinea rotulo="Resumen del brief" texto={cabecera.concepto} />}
+          {cabecera.trend && <BriefLinea rotulo="Trend" texto={cabecera.trend} />}
+          {cabecera.peloteo && <BriefLinea rotulo="Notas" texto={cabecera.peloteo} />}
+        </div>
+      )}
 
       {/* cuerpo */}
       {estatico ? (
@@ -204,6 +217,15 @@ function Dialogo({ texto }: { texto: string | null }) {
         </p>
       ))}
     </div>
+  );
+}
+
+function BriefLinea({ rotulo, texto }: { rotulo: string; texto: string }) {
+  return (
+    <p className="leading-snug">
+      <span className="font-bold text-black/55">{rotulo}: </span>
+      <span className="whitespace-pre-line text-black/75">{texto}</span>
+    </p>
   );
 }
 

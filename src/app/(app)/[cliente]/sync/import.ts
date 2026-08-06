@@ -269,6 +269,9 @@ export async function importRows(
           selling_points: v("Selling Points") ? [v("Selling Points")] : [],
           comentarios_creativo: v("Comentarios Leads") || null,
           peloteo_raw: v("Peloteo") || null,
+          // Trend = columna Referencias; Notas se lee de peloteo_raw. Así estos
+          // campos del workspace ya vienen llenos del sheet (Pedro).
+          trend: v("Referencias") || null,
           created_by: actor?.id ?? null,
         })
         .select("id, code").single();

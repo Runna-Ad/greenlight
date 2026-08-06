@@ -66,7 +66,7 @@ export function CabeceraTarea({
   duracion,
   trend,
   concepto,
-  comentariosLeads,
+  peloteo,
   marca,
   logoUrl,
   topic,
@@ -80,19 +80,18 @@ export function CabeceraTarea({
   plataformas: string[];
   tamanos: string[];
   duracion: string | null;
+  /** Trend = la columna Referencias del sheet (ya viene llena). */
   trend: string | null;
   /** Resumen del brief = la columna Concepto del sheet (ya viene llena). */
   concepto: string | null;
-  /** Notas = la columna Comentarios Leads del sheet (ya viene llena). */
-  comentariosLeads: string | null;
+  /** Notas = la columna Peloteo del sheet (ya viene llena). */
+  peloteo: string | null;
   marca: string | null;
   logoUrl: string | null;
   topic: string | null;
   formato: string | null;
   entregaFinal: string | null;
   soloLectura?: boolean;
-  /** El resumen del brief lo edita el lead; lo demás, cualquiera del equipo. */
-  puedeEditarResumen?: boolean;
 }) {
   const panel = panelTipo(tipoAsset, plantilla);
   const esEstatico = plantilla === "estatico";
@@ -249,17 +248,17 @@ export function CabeceraTarea({
             campo="trend"
             label="Trend"
             valorInicial={trend}
-            placeholder="Tendencia o referencia que sigue esta pieza"
+            placeholder="Referencia que sigue esta pieza (viene del sheet)…"
             rows={2}
             caja
             soloLectura={soloLectura}
           />
           <CampoIntake
             ideaId={ideaId}
-            campo="comentarios_creativo"
+            campo="peloteo_raw"
             label="Notas"
-            valorInicial={comentariosLeads}
-            placeholder="Comentarios del lead (vienen del sheet — agrega lo que haga falta)…"
+            valorInicial={peloteo}
+            placeholder="El peloteo del brief (viene del sheet — agrega lo que haga falta)…"
             rows={2}
             caja
             soloLectura={soloLectura}

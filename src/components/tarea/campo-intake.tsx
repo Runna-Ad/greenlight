@@ -20,7 +20,7 @@ type CampoIdea =
   | "legales_libres"
   | "nota_guion"
   | "concepto"
-  | "comentarios_creativo";
+  | "peloteo_raw";
 type CampoBrief = "description";
 
 /**

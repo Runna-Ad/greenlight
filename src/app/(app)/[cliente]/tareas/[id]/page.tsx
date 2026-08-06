@@ -28,7 +28,7 @@ type Idea = {
   plataformas: string[] | null; marca_id: string | null; brief_id: string;
   entrega_num: string | null; entrega_final: string | null; entrega_url: string | null;
   trend: string | null; notas: string | null; legales_libres: string | null; nota_guion: string | null;
-  comentarios_creativo: string | null;
+  comentarios_creativo: string | null; peloteo_raw: string | null;
 };
 
 export default async function TareaPage({
@@ -50,7 +50,7 @@ export default async function TareaPage({
   const { data: idea } = await db
     .from("ideas")
     .select(
-      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo",
+      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo, peloteo_raw",
     )
     .eq("id", id)
     .maybeSingle<Idea>();
@@ -326,8 +326,13 @@ export default async function TareaPage({
           <h2 className="mt-1.5 font-mono text-xl font-semibold text-foreground">
             {idea.naming_base ?? "Sin naming"}
           </h2>
-          {/* El concepto ya no se duplica aquí: vive en "Resumen del brief"
-              (editable) dentro de la cabecera. */}
+          {/* Justo bajo el título: los Comentarios del Lead (columna del sheet).
+              Es contexto interno de un vistazo — no pasa al cliente. */}
+          {idea.comentarios_creativo && (
+            <p className="mt-1 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+              {idea.comentarios_creativo}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -386,7 +391,7 @@ export default async function TareaPage({
           duracion={idea.duracion}
           trend={idea.trend}
           concepto={idea.concepto}
-          comentariosLeads={idea.comentarios_creativo}
+          peloteo={idea.peloteo_raw}
           marca={marca?.name ?? null}
           logoUrl={marca?.logo_url ?? null}
           topic={idea.naming_base}
@@ -408,6 +413,9 @@ export default async function TareaPage({
           marca: marca?.name ?? null,
           formato: idea.formato_code,
           status: idea.status,
+          concepto: idea.concepto,
+          trend: idea.trend,
+          peloteo: idea.peloteo_raw,
         }}
         planosIniciales={planos}
         estaticoInicial={estatico}
