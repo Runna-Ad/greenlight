@@ -1,0 +1,401 @@
+"use client";
+
+import { useState } from "react";
+import { toast } from "sonner";
+import { Plus, UserRoundX } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+import { chipTextColor } from "@/lib/vocab";
+import { ROLE_LABEL, type ViewRole } from "@/lib/roles";
+import { ROLES_ASIGNABLES, type MiembroRow, type RolAsignable } from "@/lib/equipo";
+import { crearMiembro, guardarMiembro } from "@/app/(app)/admin/actions";
+
+const rolLabel = (r: string) => ROLE_LABEL[r as ViewRole] ?? r;
+
+export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
+  const [miembros, setMiembros] = useState<MiembroRow[]>(inicial);
+  const [confirmar, setConfirmar] = useState<MiembroRow | null>(null);
+  const [agregando, setAgregando] = useState(false);
+
+  async function guardar(id: string, patch: Partial<MiembroRow>) {
+    const prev = miembros.find((m) => m.id === id);
+    setMiembros((ms) => ms.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+    const r = await guardarMiembro(id, patch);
+    if (!r.ok) {
+      if (prev) setMiembros((ms) => ms.map((m) => (m.id === id ? prev : m)));
+      toast.error(r.error ?? "No se pudo guardar.");
+    }
+  }
+
+  // Desactivar: si tiene carga, se confirma; si no, directo. Reactivar es directo.
+  function alternarActivo(m: MiembroRow, next: boolean) {
+    if (!next && m.carga > 0) setConfirmar(m);
+    else guardar(m.id, { active: next });
+  }
+
+  const real = miembros.filter((m) => m.track === "real");
+  const normal = miembros.filter((m) => m.track === "normal");
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {miembros.filter((m) => m.active).length} activos · {miembros.length} en total
+        </p>
+        <Button type="button" size="sm" onClick={() => setAgregando(true)}>
+          <Plus /> Agregar persona
+        </Button>
+      </div>
+
+      <Grupo titulo="Equipo Real" miembros={real} guardar={guardar} onActivo={alternarActivo} />
+      <Grupo titulo="Equipo Normal" miembros={normal} guardar={guardar} onActivo={alternarActivo} />
+
+      {/* Confirmar desactivación de alguien con carga */}
+      <Dialog open={!!confirmar} onOpenChange={(o) => !o && setConfirmar(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Desactivar a {confirmar?.name}?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tiene <strong className="text-foreground">{confirmar?.carga} tarea{confirmar?.carga === 1 ? "" : "s"} activa{confirmar?.carga === 1 ? "" : "s"}</strong>. No se borran, pero ya no
+            se le podrá asignar trabajo ni aparecerá en “¿Quién eres?”. Puedes
+            reactivarla cuando quieras.
+          </p>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirmar(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (confirmar) guardar(confirmar.id, { active: false });
+                setConfirmar(null);
+              }}
+            >
+              <UserRoundX /> Desactivar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AgregarPersona
+        open={agregando}
+        onOpenChange={setAgregando}
+        onCreado={(m) => setMiembros((ms) => [...ms, m])}
+      />
+    </div>
+  );
+}
+
+function Grupo({
+  titulo,
+  miembros,
+  guardar,
+  onActivo,
+}: {
+  titulo: string;
+  miembros: MiembroRow[];
+  guardar: (id: string, patch: Partial<MiembroRow>) => void;
+  onActivo: (m: MiembroRow, next: boolean) => void;
+}) {
+  if (miembros.length === 0) return null;
+  return (
+    <section className="mb-6">
+      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {titulo}
+      </h3>
+      <div className="space-y-2">
+        {miembros.map((m) => (
+          <MiembroCard key={m.id} m={m} guardar={guardar} onActivo={onActivo} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MiembroCard({
+  m,
+  guardar,
+  onActivo,
+}: {
+  m: MiembroRow;
+  guardar: (id: string, patch: Partial<MiembroRow>) => void;
+  onActivo: (m: MiembroRow, next: boolean) => void;
+}) {
+  // El rol actual puede no estar en la lista corta (p.ej. un valor viejo): se
+  // agrega para no perderlo del selector.
+  const roles: string[] = ROLES_ASIGNABLES.includes(m.role as RolAsignable)
+    ? [...ROLES_ASIGNABLES]
+    : [m.role, ...ROLES_ASIGNABLES];
+
+  return (
+    <div
+      className={cn(
+        "gl-card rounded-xl border border-border bg-card p-3",
+        !m.active && "opacity-55",
+      )}
+    >
+      {/* fila 1: identidad + carga + activo */}
+      <div className="flex items-center gap-3">
+        <input
+          type="color"
+          value={m.color}
+          onChange={(e) => guardar(m.id, { color: e.target.value })}
+          aria-label={`Color de ${m.name}`}
+          title="Color"
+          className="size-7 shrink-0 cursor-pointer rounded-full border border-border bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0.5 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0"
+          style={{ backgroundColor: m.color }}
+        />
+        <InlineText
+          value={m.name}
+          onSave={(v) => v.trim() && guardar(m.id, { name: v.trim() })}
+          className="min-w-0 flex-1 font-medium"
+          ariaLabel="Nombre"
+        />
+        {m.es_lead && (
+          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+            Lead
+          </span>
+        )}
+        <span
+          className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
+          style={{ backgroundColor: `${m.color}40`, color: chipTextColor(m.color) }}
+          title="Tareas activas asignadas"
+        >
+          {m.carga} activa{m.carga === 1 ? "" : "s"}
+        </span>
+        <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Switch checked={m.active} onCheckedChange={(v) => onActivo(m, v)} aria-label="Activo" />
+          Activo
+        </label>
+      </div>
+
+      {/* fila 2: controles */}
+      <div className="mt-3 grid gap-2 border-t border-border pt-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Campo label="Rol">
+          <select
+            value={m.role}
+            onChange={(e) => guardar(m.id, { role: e.target.value })}
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {roles.map((r) => (
+              <option key={r} value={r}>{rolLabel(r)}</option>
+            ))}
+          </select>
+        </Campo>
+        <Campo label="Track">
+          <select
+            value={m.track}
+            onChange={(e) => guardar(m.id, { track: e.target.value as "real" | "normal" })}
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="real">Real</option>
+            <option value="normal">Normal</option>
+          </select>
+        </Campo>
+        <Campo label="Email">
+          <InlineText
+            value={m.email ?? ""}
+            onSave={(v) => guardar(m.id, { email: v })}
+            placeholder="correo@…"
+            ariaLabel="Email"
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+          />
+        </Campo>
+        <Campo label="Slack" hint="member ID">
+          <InlineText
+            value={m.slack_user_id ?? ""}
+            onSave={(v) => guardar(m.id, { slack_user_id: v })}
+            placeholder="U01234…"
+            ariaLabel="Slack member ID"
+            className="h-8 w-full rounded-md border border-input bg-background px-2 font-mono text-sm"
+          />
+        </Campo>
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <Switch checked={m.es_lead} onCheckedChange={(v) => guardar(m.id, { es_lead: v })} aria-label="Puede ser lead" />
+          Puede ser lead
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function Campo({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+        {hint && <span className="ml-1 font-normal normal-case">· {hint}</span>}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+// Texto editable inline: guarda al salir/Enter, sólo si cambió.
+function InlineText({
+  value,
+  onSave,
+  placeholder,
+  className,
+  ariaLabel,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+  ariaLabel: string;
+}) {
+  const [v, setV] = useState(value);
+  // Baseline = último valor externo. Si la prop cambia (p.ej. un revert tras un
+  // guardado fallido), se re-sincroniza en render — patrón oficial de React,
+  // sin useEffect (evita renders en cascada).
+  const [base, setBase] = useState(value);
+  if (value !== base) {
+    setBase(value);
+    setV(value);
+  }
+  const commit = () => {
+    if (v !== base) {
+      onSave(v);
+      setBase(v);
+    }
+  };
+  return (
+    <input
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          setV(base);
+          e.currentTarget.blur();
+        }
+      }}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      className={cn(
+        "bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        className,
+      )}
+    />
+  );
+}
+
+function AgregarPersona({
+  open,
+  onOpenChange,
+  onCreado,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onCreado: (m: MiembroRow) => void;
+}) {
+  const [name, setName] = useState("");
+  const [track, setTrack] = useState<"real" | "normal">("real");
+  const [role, setRole] = useState<RolAsignable>("creative");
+  const [color, setColor] = useState("#775cbf");
+  const [email, setEmail] = useState("");
+  const [slack, setSlack] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const reset = () => {
+    setName(""); setTrack("real"); setRole("creative");
+    setColor("#775cbf"); setEmail(""); setSlack("");
+  };
+
+  const crear = async () => {
+    setGuardando(true);
+    const r = await crearMiembro({
+      name, track, role, color,
+      email: email || undefined,
+      slack_user_id: slack || undefined,
+    });
+    setGuardando(false);
+    if (r.ok && r.miembro) {
+      onCreado(r.miembro);
+      toast.success(`${r.miembro.name} agregado`);
+      reset();
+      onOpenChange(false);
+    } else {
+      toast.error(r.error ?? "No se pudo crear.");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Agregar persona</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Label className="mb-1 block">Nombre</Label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Nombre"
+                autoFocus
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              aria-label="Color"
+              className="size-9 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="mb-1 block">Track</Label>
+              <select value={track} onChange={(e) => setTrack(e.target.value as "real" | "normal")}
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <option value="real">Real</option>
+                <option value="normal">Normal</option>
+              </select>
+            </div>
+            <div>
+              <Label className="mb-1 block">Rol</Label>
+              <select value={role} onChange={(e) => setRole(e.target.value as RolAsignable)}
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                {ROLES_ASIGNABLES.map((r) => (
+                  <option key={r} value={r}>{rolLabel(r)}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <Label className="mb-1 block">Email <span className="text-muted-foreground">(opcional)</span></Label>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@…"
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+          </div>
+          <div>
+            <Label className="mb-1 block">Slack member ID <span className="text-muted-foreground">(opcional)</span></Label>
+            <input value={slack} onChange={(e) => setSlack(e.target.value)} placeholder="U01234…"
+              className="h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button type="button" disabled={!name.trim() || guardando} onClick={crear}>
+            {guardando ? "Agregando…" : "Agregar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

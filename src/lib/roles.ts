@@ -10,11 +10,16 @@
  * El día que se encienda AUTH_ENABLED hay que volver a verificar cada vista,
  * porque RLS puede esconder más de lo que la vista previa enseñaba.
  */
-export type ViewRole = "admin" | "lead" | "creative" | "client";
+// `master` = Master Builder: el dueño de la plataforma (Pedro), el tier superior
+// por encima de admin. Espeja el valor de enum produccion.app_role 'master'
+// (migración 0023). Hoy, con el login apagado, es sobre todo etiqueta + jerarquía
+// lista para cuando el login entre; en permisos se comporta como admin.
+export type ViewRole = "master" | "admin" | "lead" | "creative" | "client";
 
-export const VIEW_ROLES: ViewRole[] = ["admin", "lead", "creative", "client"];
+export const VIEW_ROLES: ViewRole[] = ["master", "admin", "lead", "creative", "client"];
 
 export const ROLE_LABEL: Record<ViewRole, string> = {
+  master: "Master Builder",
   admin: "Admin",
   lead: "Lead",
   creative: "Especialista",
@@ -22,6 +27,7 @@ export const ROLE_LABEL: Record<ViewRole, string> = {
 };
 
 export const ROLE_HINT: Record<ViewRole, string> = {
+  master: "El dueño de la plataforma — ve y hace todo",
   admin: "Ve y hace todo, incluida la configuración",
   lead: "Reparte trabajo, revisa y aprueba",
   creative: "Sólo sus tareas asignadas",
@@ -45,19 +51,23 @@ export type NavKey =
   | "admin"
   | "portal";
 
+const NAV_ALL: NavKey[] = [
+  "clientes",
+  "mi-trabajo",
+  "carga",
+  "entrega-check",
+  "tablero",
+  "briefs",
+  "sync",
+  "entregas",
+  "portal",
+  "admin",
+];
+
 const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
-  admin: [
-    "clientes",
-    "mi-trabajo",
-    "carga",
-    "entrega-check",
-    "tablero",
-    "briefs",
-    "sync",
-    "entregas",
-    "portal",
-    "admin",
-  ],
+  // El Master Builder ve todo, igual que admin.
+  master: NAV_ALL,
+  admin: NAV_ALL,
   // El lead reparte y revisa, pero no toca la configuración del sistema.
   lead: [
     "clientes",
@@ -82,13 +92,17 @@ export const canSee = (role: ViewRole, key: NavKey): boolean =>
 
 // ── Permisos ────────────────────────────────────────────────
 
+/** Nivel admin o superior (master/admin). */
+const esNivelAdmin = (role: ViewRole): boolean =>
+  role === "master" || role === "admin";
+
 /** Quién puede sacar una tarea de las transiciones permitidas (queda auditado). */
 export const canOverrideStatus = (role: ViewRole): boolean =>
-  role === "admin" || role === "lead";
+  esNivelAdmin(role) || role === "lead";
 
 /** Quién puede cambiar quién trabaja una tarea. */
 export const canAssign = (role: ViewRole): boolean =>
-  role === "admin" || role === "lead";
+  esNivelAdmin(role) || role === "lead";
 
 /** Quién puede mover una tarea por el flujo normal. */
 export const canMoveStatus = (role: ViewRole): boolean => role !== "client";
@@ -98,4 +112,7 @@ export const canMoveStatus = (role: ViewRole): boolean => role !== "client";
  * ve los bundles, pero capturar un brief sigue siendo del lead.
  */
 export const canCreateBrief = (role: ViewRole): boolean =>
-  role === "admin" || role === "lead";
+  esNivelAdmin(role) || role === "lead";
+
+/** Quién entra al panel de administración. Sólo master/admin. */
+export const canAdmin = (role: ViewRole): boolean => esNivelAdmin(role);

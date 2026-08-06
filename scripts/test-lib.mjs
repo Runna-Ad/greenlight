@@ -381,5 +381,20 @@ ok("tamano lleno está disponible", claves.includes("tamano"));
 ok("concepto vacío NO está disponible", !claves.includes("concepto"));
 ok("# Idea nunca es copiable (identidad)", !claves.includes("numIdea"));
 
+// ── Roles: Master Builder es el tope ──
+console.log("\n▶ Roles (Master Builder)");
+const { canOverrideStatus, canAssign, canCreateBrief, canAdmin, canSee, VIEW_ROLES, ROLE_LABEL } = await import("../src/lib/roles.ts");
+ok("master está en VIEW_ROLES", VIEW_ROLES.includes("master"));
+eq("master tiene etiqueta", ROLE_LABEL.master, "Master Builder");
+ok("master puede override", canOverrideStatus("master"));
+ok("master puede asignar", canAssign("master"));
+ok("master puede crear brief", canCreateBrief("master"));
+ok("master entra a admin", canAdmin("master"));
+ok("admin entra a admin", canAdmin("admin"));
+ok("lead NO entra a admin", !canAdmin("lead"));
+ok("especialista NO entra a admin", !canAdmin("creative"));
+ok("master ve la sección admin", canSee("master", "admin"));
+ok("master ve el tablero", canSee("master", "tablero"));
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

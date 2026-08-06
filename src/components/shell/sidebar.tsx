@@ -72,7 +72,7 @@ function navFor(slug: string | null): { section: string; items: NavItem[] }[] {
     {
       section: "Admin",
       items: [
-        { key: "admin", href: "/admin", label: "Configuración", icon: Settings, soon: true },
+        { key: "admin", href: "/admin", label: "Configuración", icon: Settings },
       ],
     },
   ];
