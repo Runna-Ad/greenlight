@@ -20,7 +20,7 @@ const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
   db: { schema: "produccion" }, auth: { persistSession: false },
 });
 
-let memberId, oldEmail, oldNotify, briefId;
+let memberId, oldEmail, oldNotify, briefId, avisoId;
 try {
   const { data: client } = await db.from("clients").select("id").eq("slug", "didi").single();
   const { data: mem } = await db.from("track_members").select("id,name,email,notify_email").eq("active", true).order("sort_order").limit(1).single();
@@ -43,6 +43,7 @@ try {
   console.log(`· rpc_notificar_brief → ${n} aviso(s)`);
 
   const { data: notif } = await db.from("notifications").select("id,type,title,body,url,recipient_member_id").eq("recipient_member_id", memberId).eq("type", "brief_created").order("created_at", { ascending: false }).limit(1).single();
+  avisoId = notif.id;
   console.log(`· aviso: "${notif.title}" — ${notif.body}`);
 
   // dispatcher (misma lógica que notif-email.ts)
@@ -58,7 +59,10 @@ try {
   const okBody = notif.body.startsWith("Tienes 2 tareas");
   console.log(okBody ? "\n✅ END-TO-END OK (aviso dice 2 tareas, email enviado)" : `\n❌ el cuerpo no dice 2 tareas: ${notif.body}`);
 } finally {
-  if (briefId) await db.from("briefs").delete().eq("id", briefId); // cascade: ideas, assignments, notifs, deliveries
+  // Las notificaciones NO tienen FK al brief (van por recipient_member_id), así
+  // que hay que borrar el aviso aparte (su entrega cascada por notification_id).
+  if (avisoId) await db.from("notifications").delete().eq("id", avisoId);
+  if (briefId) await db.from("briefs").delete().eq("id", briefId); // cascade: ideas, assignments
   if (memberId) await db.from("track_members").update({ email: oldEmail, notify_email: oldNotify }).eq("id", memberId);
-  console.log("· limpieza: brief de prueba borrado (cascade), email restaurado");
+  console.log("· limpieza: aviso + brief de prueba borrados, email restaurado");
 }
