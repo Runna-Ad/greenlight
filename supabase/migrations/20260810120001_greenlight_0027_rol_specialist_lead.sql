@@ -1,0 +1,12 @@
+-- Greenlight — rol 'specialist_lead' (0027)
+--
+-- Un tercer rol en la cadena creativa, decidido con Pedro:
+--   Dept Head / Lead (enum 'lead')  → revisa todo, aprueba, envía al cliente
+--   Especialista Lead ('specialist_lead') → especialista que ADEMÁS puede
+--       asignar tareas a otros especialistas; NO revisa ni aprueba
+--   Especialista ('creative')       → trabaja sus tareas asignadas
+--
+-- Va SOLO en su archivo: `alter type ... add value` no se puede USAR en la misma
+-- transacción donde se añade, y migrate.mjs envuelve cada archivo en una
+-- (lección de la 0011/0023). Todo lo que use este valor va en la 0028.
+alter type produccion.app_role add value if not exists 'specialist_lead';

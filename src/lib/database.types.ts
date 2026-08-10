@@ -4,7 +4,14 @@
 // (Lesson: gen overwrites the whole file & drops manual aliases — keep aliases separate,
 //  and run `tsc -b` after any regen.)
 
-export type AppRole = "admin" | "lead" | "creative" | "delivery" | "client";
+export type AppRole =
+  | "master"
+  | "admin"
+  | "lead"
+  | "specialist_lead"
+  | "creative"
+  | "delivery"
+  | "client";
 export type BriefStatus = "draft" | "active" | "delivered" | "archived";
 export type AssetStatus =
   | "todo"
@@ -205,4 +212,14 @@ export type Comment = {
   resolved_at: string | null;
   resolved_by: string | null;
   created_at: string;
+  // Corrección localizada (0028): a qué campo apunta + dos estados de resolución.
+  author_member_id: string | null;
+  target_tabla: string | null;
+  target_fila_id: string | null;
+  target_campo: string | null;
+  target_label: string | null;
+  ronda: number | null;
+  atendido_at: string | null;
+  atendido_by: string | null;
+  resolved_member_id: string | null;
 };

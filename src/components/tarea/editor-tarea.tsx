@@ -178,19 +178,19 @@ export function EditorTarea({
                 <p className="rounded bg-[#4a86e8] px-2 py-1 text-center text-[10px] font-bold uppercase text-white">
                   Copy in
                 </p>
-                <Campo tabla="estaticos" filaId={estatico.id} campo="copy_titulo" label="Título"
+                <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="copy_titulo" label="Título"
                   valorInicial={estatico.copy_titulo} rows={2} soloLectura={soloLectura}
                   placeholder={PLACEHOLDER_ESTATICO.copy_titulo}
                   onCambio={(v) => editarEstatico("copy_titulo", v)} />
-                <Campo tabla="estaticos" filaId={estatico.id} campo="copy_subtitulo" label="Subtítulo"
+                <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="copy_subtitulo" label="Subtítulo"
                   valorInicial={estatico.copy_subtitulo} rows={3} soloLectura={soloLectura}
                   placeholder={PLACEHOLDER_ESTATICO.copy_subtitulo}
                   onCambio={(v) => editarEstatico("copy_subtitulo", v)} />
-                <Campo tabla="estaticos" filaId={estatico.id} campo="copy_cta" label="Botón CTA"
+                <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="copy_cta" label="Botón CTA"
                   valorInicial={estatico.copy_cta} rows={1} soloLectura={soloLectura}
                   placeholder={PLACEHOLDER_ESTATICO.copy_cta}
                   onCambio={(v) => editarEstatico("copy_cta", v)} />
-                <Campo tabla="estaticos" filaId={estatico.id} campo="legales_extra" label="Legales extra"
+                <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="legales_extra" label="Legales extra"
                   valorInicial={estatico.legales_extra} rows={2} soloLectura={soloLectura}
                   placeholder={PLACEHOLDER_ESTATICO.legales_extra} />
               </div>
@@ -207,7 +207,7 @@ export function EditorTarea({
                   etiqueta="Imágenes de referencia"
                   soloLectura={soloLectura}
                 />
-                <Campo tabla="estaticos" filaId={estatico.id} campo="referencia_nota" label="Nota de diseño"
+                <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="referencia_nota" label="Nota de diseño"
                   valorInicial={estatico.referencia_nota} rows={4} soloLectura={soloLectura}
                   placeholder={PLACEHOLDER_ESTATICO.referencia_nota}
                   onCambio={(v) => editarEstatico("referencia_nota", v)} />
@@ -254,28 +254,28 @@ export function EditorTarea({
 
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-3">
-                      <Campo tabla="planos" filaId={p.id} campo="titulo" label="Plano"
+                      <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="titulo" label="Plano"
                         valorInicial={p.titulo} rows={1} soloLectura={soloLectura}
                         placeholder={PH.titulo}
                         onCambio={(v) => editarPlano(p.id, "titulo", v)} />
-                      <Campo tabla="planos" filaId={p.id} campo="accion" label="Acción"
+                      <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="accion" label="Acción"
                         valorInicial={p.accion} rows={2} soloLectura={soloLectura}
                         placeholder={PH.accion}
                         onCambio={(v) => editarPlano(p.id, "accion", v)} />
-                      <Campo tabla="planos" filaId={p.id} campo="copy_in" label="Copy in"
+                      <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="copy_in" label="Copy in"
                         valorInicial={p.copy_in} rows={2} soloLectura={soloLectura}
                         placeholder={PH.copy_in}
                         onCambio={(v) => editarPlano(p.id, "copy_in", v)} />
                       <div className="grid gap-2 sm:grid-cols-3">
-                        <Campo tabla="planos" filaId={p.id} campo="sfx" label="SFX"
+                        <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="sfx" label="SFX"
                           valorInicial={p.sfx} rows={2} soloLectura={soloLectura}
                           placeholder={PH.sfx}
                           onCambio={(v) => editarPlano(p.id, "sfx", v)} />
-                        <Campo tabla="planos" filaId={p.id} campo="gfx" label="GFX"
+                        <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="gfx" label="GFX"
                           valorInicial={p.gfx} rows={2} soloLectura={soloLectura}
                           placeholder={PH.gfx}
                           onCambio={(v) => editarPlano(p.id, "gfx", v)} />
-                        <Campo tabla="planos" filaId={p.id} campo="edicion" label="Edición"
+                        <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="edicion" label="Edición"
                           valorInicial={p.edicion} rows={2} soloLectura={soloLectura}
                           placeholder={PH.edicion}
                           onCambio={(v) => editarPlano(p.id, "edicion", v)} />
@@ -283,7 +283,7 @@ export function EditorTarea({
                     </div>
 
                     <div className="space-y-3">
-                      <Campo tabla="planos" filaId={p.id} campo="dialogo" label={quienHabla}
+                      <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="dialogo" label={quienHabla}
                         valorInicial={p.dialogo} rows={8} soloLectura={soloLectura}
                         placeholder={PH.dialogo}
                         onCambio={(v) => editarPlano(p.id, "dialogo", v)} />

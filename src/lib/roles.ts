@@ -14,14 +14,18 @@
 // por encima de admin. Espeja el valor de enum produccion.app_role 'master'
 // (migración 0023). Hoy, con el login apagado, es sobre todo etiqueta + jerarquía
 // lista para cuando el login entre; en permisos se comporta como admin.
-export type ViewRole = "master" | "admin" | "lead" | "creative" | "client";
+// `specialist_lead` = un especialista que ADEMÁS puede asignar tareas a otros
+// especialistas (nada más — NO revisa ni aprueba: eso es del Dept Head/Lead).
+// Espeja el valor de enum produccion.app_role 'specialist_lead' (migración 0027).
+export type ViewRole = "master" | "admin" | "lead" | "specialist_lead" | "creative" | "client";
 
-export const VIEW_ROLES: ViewRole[] = ["master", "admin", "lead", "creative", "client"];
+export const VIEW_ROLES: ViewRole[] = ["master", "admin", "lead", "specialist_lead", "creative", "client"];
 
 export const ROLE_LABEL: Record<ViewRole, string> = {
   master: "Master Builder",
   admin: "Admin",
-  lead: "Lead",
+  lead: "Dept Head / Lead",
+  specialist_lead: "Especialista Lead",
   creative: "Especialista",
   client: "Cliente",
 };
@@ -29,7 +33,8 @@ export const ROLE_LABEL: Record<ViewRole, string> = {
 export const ROLE_HINT: Record<ViewRole, string> = {
   master: "El dueño de la plataforma — ve y hace todo",
   admin: "Ve y hace todo, incluida la configuración",
-  lead: "Reparte trabajo, revisa y aprueba",
+  lead: "Revisa todo, aprueba y envía al cliente",
+  specialist_lead: "Trabaja sus tareas y además asigna a otros especialistas",
   creative: "Sólo sus tareas asignadas",
   client: "Sólo lo publicado para su cliente",
 };
@@ -80,6 +85,10 @@ const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
     "entregas",
     "portal",
   ],
+  // El especialista lead ve lo mismo que un especialista (su lista, el tablero,
+  // los bundles); su único poder extra —asignar tareas— vive en el tablero, no
+  // en una sección aparte.
+  specialist_lead: ["mi-trabajo", "tablero", "briefs"],
   // El especialista entra a trabajar lo suyo: su lista, el tablero y los
   // bundles (donde sólo ve las tareas que tiene asignadas).
   creative: ["mi-trabajo", "tablero", "briefs"],
@@ -100,9 +109,13 @@ const esNivelAdmin = (role: ViewRole): boolean =>
 export const canOverrideStatus = (role: ViewRole): boolean =>
   esNivelAdmin(role) || role === "lead";
 
-/** Quién puede cambiar quién trabaja una tarea. */
+/**
+ * Quién puede cambiar quién trabaja una tarea. El `specialist_lead` se agrega
+ * AQUÍ y sólo aquí: asignar es su único poder extra sobre un especialista —
+ * nunca revisa/aprueba (canOverrideStatus) ni entra a /admin (canAdmin).
+ */
 export const canAssign = (role: ViewRole): boolean =>
-  esNivelAdmin(role) || role === "lead";
+  esNivelAdmin(role) || role === "lead" || role === "specialist_lead";
 
 /** Quién puede mover una tarea por el flujo normal. */
 export const canMoveStatus = (role: ViewRole): boolean => role !== "client";

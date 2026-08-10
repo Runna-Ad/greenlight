@@ -651,6 +651,124 @@ await db.exec(`
     select array['in_app','email']::produccion.notify_channel[];  -- restaurar al valor de la 0025
   $$;`);
 
+// ── Correcciones localizadas (0028) ──
+console.log("\n▶ Correcciones localizadas");
+// reset: flIdea a revisión, sin comentarios ni avisos previos. Viene 'completed'
+// del test de aprobar; completed→under_review es ilegal, así que se baja con el
+// override de lead (mismo mecanismo que usan los otros setups del harness).
+await db.query(`delete from produccion.comments where idea_id=$1`, [flIdea]);
+await db.query(`delete from produccion.notifications where entity_id=$1`, [flIdea]);
+await db.exec(`select set_config('produccion.lead_override','on',false)`);
+await db.query(`update produccion.ideas set status='under_review' where id=$1`, [flIdea]);
+await db.exec(`select set_config('produccion.lead_override','',false)`);
+const flPlano = await scalar(
+  `insert into produccion.planos (idea_id, orden, accion) values ($1, 1, 'x')
+     on conflict (idea_id, orden) do update set accion=excluded.accion returning id`, [flIdea]);
+
+// fijar una corrección a un campo concreto — no mueve el estado
+const c1 = await scalar(
+  `select produccion.rpc_add_correction($1,'planos',$2,'accion','Plano 1 · Acción','Que sonría',$3,null)`,
+  [flIdea, flPlano, mGalie]);
+eq("add_correction fija al campo (target_campo)",
+   await scalar(`select target_campo from produccion.comments where id=$1`, [c1]), "accion");
+eq("y guarda la etiqueta humana del destino",
+   await scalar(`select target_label from produccion.comments where id=$1`, [c1]), "Plano 1 · Acción");
+eq("arranca en ronda 1", Number(await scalar(`select ronda from produccion.comments where id=$1`, [c1])), 1);
+eq("y NO mueve el estado (sigue en revisión)",
+   await scalar(`select status::text from produccion.ideas where id=$1`, [flIdea]), "under_review");
+
+// segunda corrección abierta → misma ronda
+const c2 = await scalar(
+  `select produccion.rpc_add_correction($1,'planos',$2,'copy_in','Plano 1 · Copy in','Sube el copy',$3,null)`,
+  [flIdea, flPlano, mGalie]);
+eq("otra corrección con la ronda abierta = misma ronda",
+   Number(await scalar(`select ronda from produccion.comments where id=$1`, [c2])), 1);
+
+// resueltas todas → la siguiente empieza ronda 2
+await db.query(`update produccion.comments set resolved_at=now() where idea_id=$1 and kind='correction_request'`, [flIdea]);
+const c3 = await scalar(
+  `select produccion.rpc_add_correction($1,'planos',$2,'dialogo','Plano 1 · Diálogo','Otro tono',$3,null)`,
+  [flIdea, flPlano, mGalie]);
+eq("con la ronda anterior cerrada, la nueva es ronda 2",
+   Number(await scalar(`select ronda from produccion.comments where id=$1`, [c3])), 2);
+
+// mandar a correcciones: exige pendientes, mueve a in_corrections, avisa
+await db.query(`delete from produccion.notifications where entity_id=$1`, [flIdea]);
+eq("send_corrections → in_corrections",
+   await scalar(`select produccion.rpc_task_send_corrections($1,$2)::text`, [flIdea, mGalie]), "in_corrections");
+ok("y avisa a los asignados", (await notifs()).length > 0);
+
+// sin correcciones pendientes, se rechaza
+await db.query(`update produccion.comments set resolved_at=now() where idea_id=$1`, [flIdea]);
+await db.query(`update produccion.ideas set status='under_review' where id=$1`, [flIdea]);
+let sinPend = false;
+try { await db.query(`select produccion.rpc_task_send_corrections($1,$2)`, [flIdea, mGalie]); } catch { sinPend = true; }
+ok("mandar sin correcciones pendientes se rechaza", sinPend);
+
+// devolver a revisión: in_corrections → under_review (transición nueva) + avisa al lead
+await db.query(`update produccion.ideas set status='in_corrections' where id=$1`, [flIdea]);
+await db.query(`delete from produccion.notifications where entity_id=$1`, [flIdea]);
+eq("return_review → under_review (transición nueva)",
+   await scalar(`select produccion.rpc_task_return_review($1,$2)::text`, [flIdea, mGalie]), "under_review");
+ok("devolver avisa (al lead)", (await notifs()).length > 0);
+
+// dos lados: atendido (especialista) → confirmado (revisor)
+const c4 = await scalar(
+  `select produccion.rpc_add_correction($1,'planos',$2,'accion','Plano 1 · Acción','y',$3,null)`,
+  [flIdea, flPlano, mGalie]);
+await db.query(`update produccion.comments set atendido_at=now(), atendido_by=$2 where id=$1`, [c4, mGalie]);
+eq("marcado atendido por el especialista (amber)",
+   await scalar(`select case when atendido_at is not null and resolved_at is null then 'done' end from produccion.comments where id=$1`, [c4]), "done");
+await db.query(`update produccion.comments set resolved_at=now(), resolved_member_id=$2 where id=$1`, [c4, mGalie]);
+eq("confirmado por el revisor (green)",
+   await scalar(`select case when resolved_at is not null then 'closed' end from produccion.comments where id=$1`, [c4]), "closed");
+
+// regresión (reap #1): una corrección SIN ronda (camino legacy del tablero) no
+// debe contaminar el cálculo — la ronda nueva nunca puede ser NULL.
+await db.exec(`select set_config('produccion.lead_override','on',false)`);
+await db.query(`update produccion.ideas set status='under_review' where id=$1`, [flIdea]);
+await db.exec(`select set_config('produccion.lead_override','',false)`);
+await db.query(`update produccion.comments set resolved_at=now() where idea_id=$1 and kind='correction_request'`, [flIdea]);
+await db.query(`insert into produccion.comments (idea_id, body, kind) values ($1,'cambio legacy sin ronda','correction_request')`, [flIdea]);
+const cN = await scalar(
+  `select produccion.rpc_add_correction($1,'planos',$2,'copy_in','Plano 1 · Copy in','x',$3,null)`,
+  [flIdea, flPlano, mGalie]);
+ok("con una corrección sin ronda presente, la nueva NO es NULL",
+   (await scalar(`select ronda from produccion.comments where id=$1`, [cN])) != null);
+
+// regresión (reap #1): el botón legacy (rpc_task_request_changes) ahora estampa ronda
+await db.exec(`select set_config('produccion.lead_override','on',false)`);
+await db.query(`update produccion.ideas set status='under_review' where id=$1`, [flIdea]);
+await db.exec(`select set_config('produccion.lead_override','',false)`);
+await scalar(`select produccion.rpc_task_request_changes($1,$2,$3)`, [flIdea, "cambio via boton legacy", mGalie]);
+ok("request_changes (legacy) ahora estampa una ronda",
+   (await scalar(`select ronda from produccion.comments where idea_id=$1 and body='cambio via boton legacy'`, [flIdea])) != null);
+
+// regresión (reap #2): aprobar CIERRA la ronda — no quedan correcciones sin resolver
+await db.exec(`select set_config('produccion.lead_override','on',false)`);
+await db.query(`update produccion.ideas set status='under_review' where id=$1`, [flIdea]);
+await db.exec(`select set_config('produccion.lead_override','',false)`);
+ok("antes de aprobar sí quedan correcciones sin resolver",
+   Number(await scalar(`select count(*) from produccion.comments where idea_id=$1 and kind='correction_request' and resolved_at is null`, [flIdea])) > 0);
+await scalar(`select produccion.rpc_task_approve($1,$2,$3,$4)`, [flIdea, mGalie, null, null]);
+eq("aprobar deja 0 correcciones sin resolver (la ronda queda cerrada)",
+   Number(await scalar(`select count(*) from produccion.comments where idea_id=$1 and kind='correction_request' and resolved_at is null`, [flIdea])), 0);
+
+// specialist_lead: es equipo (ve la plantilla) pero NO revisa
+eq("'specialist_lead' existe en el enum app_role",
+   await scalar(`select 'specialist_lead' = any(enum_range(null::produccion.app_role)::text[])`), true);
+const anyP = (await q(`select id, role::text as role from produccion.profiles limit 1`))[0];
+if (anyP) {
+  await db.query(`update produccion.profiles set role='specialist_lead' where id=$1`, [anyP.id]);
+  await db.exec(`select set_config('request.jwt.claims', json_build_object('sub','${anyP.id}')::text, false);`);
+  eq("specialist_lead ve la plantilla (is_team)", await scalar(`select produccion.is_team()`), true);
+  eq("pero specialist_lead NO revisa (is_lead false)", await scalar(`select produccion.is_lead()`), false);
+  await db.exec(`select set_config('request.jwt.claims','', false);`);
+  await db.query(`update produccion.profiles set role=$2 where id=$1`, [anyP.id, anyP.role]);
+} else {
+  ok("(sin profiles en el harness — is_team specialist_lead se verifica en vivo)", true);
+}
+
 // ── CONTRACT: missingRequired() TS === missing_required() SQL ──
 console.log("\n▶ Obligatorios — contrato TS vs DB");
 const TIPOS = ["RP Video", "Normal Video", "AIGC video", "GIF", "Images", "Copies", "Podcast"];

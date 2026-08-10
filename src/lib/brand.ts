@@ -42,7 +42,7 @@ export const ALLOWED_TRANSITIONS: Record<AssetStatus, AssetStatus[]> = {
   todo: ["in_progress"],
   in_progress: ["under_review"],
   under_review: ["in_corrections", "completed"],
-  in_corrections: ["in_progress"],
+  in_corrections: ["in_progress", "under_review"],
   completed: ["published", "delivered"],
   published: ["in_corrections", "delivered"],
   delivered: [],

@@ -40,7 +40,10 @@ export type TaskContext = {
   hasAssignee: boolean;
 };
 
-const isLead = (role: ViewRole) => role === "admin" || role === "lead";
+// master = Master Builder, el tier sobre admin: se comporta como lead para el
+// flujo (aprobar, pedir cambios, enviar a cliente). Sin esto un master no veía
+// "Enviar a cliente" en una tarea completada.
+const isLead = (role: ViewRole) => role === "master" || role === "admin" || role === "lead";
 
 /**
  * Ojo con el orden: el primero es la acción principal de la tarjeta.

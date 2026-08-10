@@ -268,4 +268,16 @@
   .gl-eyebrow {
     @apply text-[10px] font-bold uppercase tracking-widest text-muted-foreground;
   }
+  /* Destello al saltar a un campo desde el panel de correcciones. */
+  .gl-flash textarea,
+  .gl-flash {
+    animation: gl-flash 1.1s ease;
+  }
+  @keyframes gl-flash {
+    0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-corrections) 16%, transparent); }
+    40% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--status-corrections) 38%, transparent); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gl-flash textarea, .gl-flash { animation: none; }
+  }
 }

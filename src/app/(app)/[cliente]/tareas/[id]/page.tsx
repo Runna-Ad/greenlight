@@ -14,6 +14,9 @@ import { cargarBundle } from "@/lib/bundle-data";
 import { EditorTarea } from "@/components/tarea/editor-tarea";
 import { CabeceraTarea } from "@/components/tarea/cabecera";
 import { AccionesTarea } from "@/components/tarea/acciones-tarea";
+import { CorreccionesProvider } from "@/components/tarea/correcciones/contexto";
+import { PanelCorrecciones } from "@/components/tarea/correcciones/panel";
+import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
 import { Linkify } from "@/components/ui/linkify";
 import { NavBundle } from "@/components/tarea/nav-bundle";
 import { RunnaDetails } from "@/components/tarea/runna-details";
@@ -278,11 +281,55 @@ export default async function TareaPage({
     ...(idea.legales_libres?.trim() ? [idea.legales_libres.trim()] : []),
   ];
 
+  // Correcciones localizadas (0028): comentarios kind='correction_request' que
+  // apuntan a un campo. Se muestran fijados al campo + en el panel lateral.
+  type CorrRow = {
+    id: string; body: string; ronda: number | null;
+    target_tabla: string | null; target_fila_id: string | null;
+    target_campo: string | null; target_label: string | null;
+    atendido_at: string | null; resolved_at: string | null; author_member_id: string | null;
+  };
+  const { data: corrRows } = await db
+    .from("comments")
+    .select(
+      "id, body, ronda, target_tabla, target_fila_id, target_campo, target_label, atendido_at, resolved_at, author_member_id",
+    )
+    .eq("idea_id", idea.id)
+    .eq("kind", "correction_request")
+    .order("created_at")
+    .returns<CorrRow[]>();
+
+  const autorIds = [...new Set((corrRows ?? []).map((r) => r.author_member_id).filter(Boolean) as string[])];
+  const { data: autores } = autorIds.length
+    ? await db.from("track_members").select("id, name").in("id", autorIds).returns<{ id: string; name: string }[]>()
+    : { data: [] as { id: string; name: string }[] };
+  const nombrePorId = new Map((autores ?? []).map((a) => [a.id, a.name]));
+
+  const correcciones: Correccion[] = (corrRows ?? []).map((r) => ({
+    id: r.id,
+    targetTabla: r.target_tabla,
+    targetFilaId: r.target_fila_id,
+    targetCampo: r.target_campo,
+    targetLabel: r.target_label,
+    body: r.body,
+    autor: r.author_member_id ? nombrePorId.get(r.author_member_id) ?? null : null,
+    ronda: r.ronda ?? 1,
+    estado: estadoDeTimestamps(r),
+  }));
+  const abiertasN = correcciones.filter((c) => c.estado === "open").length;
+
   const cerrada = ESTADOS_CERRADOS.includes(idea.status);
   const soloLectura = cerrada && !canOverrideStatus(role);
   const token = STATUS_TOKEN[idea.status];
 
   return (
+    <CorreccionesProvider
+      ideaId={idea.id}
+      clienteSlug={cliente}
+      esRevisor={canOverrideStatus(role)}
+      esEquipo={role !== "client"}
+      correcciones={correcciones}
+    >
     <div>
       <div className="flex items-center justify-between">
         <Volver cliente={cliente} />
@@ -347,7 +394,9 @@ export default async function TareaPage({
               de botones que el tablero (actionsFor), no una copia. */}
           <AccionesTarea
             ideaId={idea.id}
+            clienteSlug={cliente}
             status={idea.status}
+            abiertas={abiertasN}
             ctx={{
               role,
               isAssignee: soy ? memberIds.includes(soy.id) : false,
@@ -402,6 +451,13 @@ export default async function TareaPage({
         />
       </div>
 
+      {/* Panel de correcciones: sólo aparece si hay correcciones fijadas. */}
+      {role !== "client" && correcciones.length > 0 && (
+        <div className="mb-4">
+          <PanelCorrecciones />
+        </div>
+      )}
+
       <EditorTarea
         ideaId={idea.id}
         marcaSlug={marca?.slug ?? null}
@@ -438,8 +494,10 @@ export default async function TareaPage({
       <div className="mt-5">
         <AccionesTarea
           ideaId={idea.id}
+          clienteSlug={cliente}
           status={idea.status}
           variante="prominente"
+          abiertas={abiertasN}
           ctx={{
             role,
             isAssignee: soy ? memberIds.includes(soy.id) : false,
@@ -448,6 +506,7 @@ export default async function TareaPage({
         />
       </div>
     </div>
+    </CorreccionesProvider>
   );
 }
 

@@ -4,6 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { guardarCampo, type Tabla } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { cn } from "@/lib/utils";
+import { useCorrecciones } from "./correcciones/contexto";
+import { CampoCorrecciones } from "./correcciones/campo-correcciones";
+import { estadoCampo, keyCampo, type EstadoCorreccion } from "@/lib/correcciones";
+
+const ANILLO: Record<EstadoCorreccion, string> = {
+  open: "0 0 0 3px color-mix(in srgb, var(--status-corrections) 16%, transparent)",
+  done: "0 0 0 3px color-mix(in srgb, var(--status-progress) 16%, transparent)",
+  closed: "0 0 0 3px color-mix(in srgb, var(--status-completed) 14%, transparent)",
+};
+const ANILLO_BORDE: Record<EstadoCorreccion, string> = {
+  open: "color-mix(in srgb, var(--status-corrections) 55%, transparent)",
+  done: "color-mix(in srgb, var(--status-progress) 55%, transparent)",
+  closed: "color-mix(in srgb, var(--status-completed) 50%, transparent)",
+};
 
 export type EstadoGuardado = "limpio" | "pendiente" | "guardando" | "guardado" | "error";
 
@@ -107,6 +121,7 @@ export function Campo({
   mono,
   soloLectura,
   onCambio,
+  grupoCorreccion,
 }: {
   tabla: Tabla;
   filaId: string;
@@ -119,6 +134,8 @@ export function Campo({
   soloLectura?: boolean;
   /** Para que el preview se actualice en la misma tecla, sin ir al servidor. */
   onCambio?: (valor: string) => void;
+  /** Prefijo de la etiqueta de la corrección, p. ej. "Plano 1". */
+  grupoCorreccion?: string;
 }) {
   const g = useAutoguardado(
     valorInicial,
@@ -127,8 +144,17 @@ export function Campo({
   );
   const { valor, estado, conflicto } = g;
 
+  // Correcciones fijadas a ESTE campo (si el workspace las provee).
+  const ctx = useCorrecciones();
+  const cs = ctx ? ctx.deCampo(tabla, filaId, campo) : [];
+  const estadoCorr = estadoCampo(cs);
+  const etiqueta = grupoCorreccion ? `${grupoCorreccion} · ${label}` : label;
+
   return (
-    <div className="min-w-0">
+    <div
+      className="group relative min-w-0 scroll-mt-24"
+      data-campo-key={ctx ? keyCampo(tabla, filaId, campo) : undefined}
+    >
       <div className="mb-1 flex items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           {label}
@@ -144,6 +170,11 @@ export function Campo({
         onBlur={g.alSalir}
         placeholder={placeholder}
         aria-label={label}
+        style={
+          conflicto === null && estadoCorr
+            ? { boxShadow: ANILLO[estadoCorr], borderColor: ANILLO_BORDE[estadoCorr] }
+            : undefined
+        }
         className={cn(
           "w-full resize-y rounded-md border bg-background px-2.5 py-1.5 text-[13px] leading-relaxed outline-none transition-colors",
           "placeholder:text-muted-foreground/55 focus-visible:ring-2 focus-visible:ring-ring",
@@ -155,6 +186,10 @@ export function Campo({
 
       {conflicto !== null && (
         <PanelConflicto valorAjeno={conflicto} quedarme={g.quedarme} tomarSuyo={g.tomarSuyo} />
+      )}
+
+      {ctx && (
+        <CampoCorrecciones tabla={tabla} filaId={filaId} campo={campo} etiqueta={etiqueta} cs={cs} />
       )}
     </div>
   );

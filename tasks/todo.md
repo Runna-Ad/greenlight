@@ -1,5 +1,57 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔨 IN PROGRESS (2026-08-10) — Correcciones localizadas + rol specialist_lead
+Design locked with Pedro via clickable mockup (scratchpad/correcciones-mockup.html).
+Building to a PREVIEW deploy (frontend on Vercel preview URL). DB migrations are
+ADDITIVE to `produccion` only (S.P.A.M `public` untouched) but hit the shared LIVE
+project → apply ONLY after Pedro's explicit "apply it".
+
+DONE means: a Dept Head/Lead can pin a change to an exact field (plano/estático/
+cabecera); the specialist sees it in-context (pin + hover/tap tooltip) and in a
+grouped "Correcciones" panel with red/amber/green state; specialist marks
+atendido → "Devolver a revisión" (notifies the lead); lead confirms each green;
+button morphs Mandar-a-correcciones → Aprobar → Enviar a cliente (two-step);
+`specialist_lead` role can assign but not review. Verified live, S.P.A.M 42/31/6.
+
+- [x] **Mig 0027** (own file): `app_role += 'specialist_lead'` (written, PGlite-tested)
+- [x] **Mig 0028**: comments target cols, `in_corrections→under_review` transition,
+      `is_team()` += specialist_lead, rpc_add_correction (round calc),
+      rpc_task_send_corrections, rpc_task_return_review, grants (PGlite-tested)
+- [x] PGlite tests (round calc, two-sided state, new transition, notify, is_team) — 178 db pass
+- [x] database.types.ts (manual): specialist_lead + master + comment cols
+- [x] roles.ts: specialist_lead → VIEW_ROLES/labels/hint/NAV(=creative)/canAssign ONLY
+- [x] brand.ts ALLOWED_TRANSITIONS += in_corrections→under_review (contract test caught the drift)
+- [x] Server actions: agregarCorreccion, setEstadoCorreccion, confirmarCampo,
+      mandarCorrecciones, devolverARevision
+- [x] UI: lib/correcciones.ts + CorreccionesProvider + CampoCorrecciones (pin/tooltip/
+      composer/confirmar) + PanelCorrecciones + morphing AccionesTarea + Devolver
+- [x] tsc clean, build clean, 176 lib + 178 db pass, page smoke-tested (renders + UI mounts,
+      graceful pre-migration)
+- [x] Adversarial reap (subagent) — found 5 real + 1 pre-existing win, ALL fixed + regression-tested:
+      (1) correction_next_round could return NULL via legacy board path → coalesce+scope+stamp ronda;
+      (2) Aprobar left amber corrections unresolved forever → rpc_task_approve now closes the round;
+      (3) no reopen for a confirmed correction → panel Reabrir for revisor on closed;
+      (4) client_change latent desync → round calc scoped to correction_request + TODO;
+      (5) master excluded from isLead (no "Enviar a cliente") → fixed. 182 db pass.
+- [x] ✅ Applied Mig 0027+0028 to live `produccion` (Pedro "apply it" 2026-08-10). S.P.A.M
+      byte-identical 42/31/6; GL ledger 25→27; enum + 4 comment cols verified live.
+- [x] Live verification: inserted 3 test corrections (red/amber/green) on a real task,
+      confirmed render + measured contrast in-browser, then DELETED them (comments back to 0).
+- [x] CONTRAST PASS (Pedro flagged readability): amber aligned to --status-progress token;
+      fixed a white-on-white hover (Confirmar btn); switched status badges to solid darkened
+      pills + white text (colored-text-on-same-hue-tint failed AA — chips lesson); measured
+      every element — all corrections elements now 4.5–13.2 (only the app's own muted eyebrow
+      text is <4.5, app-wide & pre-existing).
+- [x] Frontend PREVIEW deployed: https://runna-command-center-89pq973fn-pedros-projects-c43384db.vercel.app
+      (Vercel SSO-protected — opens for Pedro). Prod untouched (no git push).
+- [ ] ⛔ SHIP GATE: on Pedro's "ship it" → git commit + push main (auto-deploys prod frontend;
+      DB already migrated). Then fill team emails so correction notifications send.
+- [ ] FOLLOW-ON (Pedro asked): nicer Runna/Greenlight-branded notification email + CTA button
+      to /mi-trabajo. Reminder: emails MUST declare UTF-8 charset (Spanish copy mojibakes otherwise).
+- [ ] (follow-on, Pedro also asked) nicer Runna/Greenlight-branded notification
+      email w/ CTA button to /mi-trabajo — AFTER corrections flow
+
+
 Full plan: /Users/work/.claude/plans/flickering-plotting-brook.md (approved 2026-07-30)
 Pipeline: lead intake → execution workspace (script editor) → lead review + Gary check → client portal (publish/approve) → delivery.
 DB: S.P.A.M Supabase project `ybbrpqzbedaxsmotgtkh`, dedicated schema `produccion`. Migrations schema-scoped, tested locally first. NEVER touch `public` (live S.P.A.M).
