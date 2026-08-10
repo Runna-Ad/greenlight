@@ -1,5 +1,5 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-06 (constructor de brief + panel /admin)
+Última actualización: 2026-08-10 (correcciones localizadas + rol specialist_lead + email rediseñado)
 
 ## Qué es
 App interna de producción de anuncios que reemplaza el Google Sheet de DiDi + el
@@ -29,13 +29,18 @@ Unbounded (wordmark)
   migraciones / 6 usuarios, antes y después de todo.
 - Migraciones: ledger propio en `produccion._migrations`, `npm run migrate`
   (NUNCA `supabase db push` — dañaría el historial de S.P.A.M).
-- **Migraciones aplicadas 0001–0026** (OJO: **no existe 0017** — era la de
+- **Migraciones aplicadas 0001–0028** (OJO: **no existe 0017** — era la de
   Notion, que se difirió; la numeración salta 0016→0018. F6/Notion cuando se
   haga usa un timestamp NUEVO, no 0017). Últimas: **0022** `rpc_crear_brief`,
   **0023** enum `app_role += 'master'`, **0024** `track_members += role/email/
   slack_user_id` + helpers RLS con master, **0025** canal `email` activo +
-  `track_members.notify_email`, **0026** `rpc_notificar_brief` (aviso al crear
-  brief).
+  `track_members.notify_email`, **0026** `rpc_notificar_brief`, **0027** enum
+  `app_role += 'specialist_lead'` (archivo propio), **0028** correcciones
+  localizadas: columnas de destino en `comments` (target_*, ronda, atendido_at/by,
+  resolved_member_id) + transición `in_corrections→under_review` + `is_team()` +=
+  specialist_lead + RPCs rpc_add_correction/send_corrections/return_review +
+  rpc_task_approve ahora CIERRA la ronda (resuelve lo pendiente). La próxima
+  migración usa un timestamp NUEVO ≥ 20260810120003.
 - **Storage**: bucket privado `greenlight-referencias` (creado con
   `npm run setup:storage`, fuera de migraciones). Imágenes se sirven por signed
   URL firmada por render. Verificado: privado (acceso público = 400).
@@ -93,6 +98,23 @@ snippets legal=1 (sólo Card) · references(links del sheet)=15
   **Actividad** (feed de status_events) · **Integraciones** (estado del Sheet +
   rotar secreto + Notion) · **Biblioteca** (CRUD de snippets por kind). Sin login:
   atributos de persona en track_members, listo para el login vía profile_id.
+- **Correcciones localizadas** (0027/0028, shipped 2026-08-10): el Dept Head/Lead
+  fija un cambio a un CAMPO exacto (pin sobre el campo + tooltip hover/tap/foco);
+  el especialista lo ve en contexto + en el panel "Correcciones" (agrupado por
+  ronda, rojo/ámbar/verde), lo marca atendido y **Devuelve a revisión** (dispara
+  el aviso al lead). El botón del revisor MUTA: Mandar a correcciones → Aprobar →
+  Enviar a cliente. Reusable tal cual para el portal del cliente (mismo modelo,
+  kind `client_change`, entra por `published→in_corrections`). Piezas:
+  `lib/correcciones.ts` (puro) · `components/tarea/correcciones/*` (Provider, panel,
+  campo-correcciones) · `<Campo>` consume el contexto · `AccionesTarea` muta ·
+  server actions en `tareas/[id]/correcciones-actions.ts`.
+- **Rol `specialist_lead`** (Especialista Lead): un especialista que ADEMÁS asigna
+  tareas (canAssign) — NUNCA revisa/aprueba. En roles.ts + is_team (no is_lead).
+  Cadena: Dept Head/Lead (revisa+aprueba+envía) · Especialista Lead (asigna) ·
+  Especialista (trabaja).
+- **Email de notificación REDISEÑADO** (`lib/email-template.ts`, 2026-08-10):
+  branded Greenlight, chip+acento neón por tipo (aprobada=verde-logo en pastilla
+  oscura), CTA inteligente (email de tarea → la tarea; brief → /mi-trabajo), UTF-8.
 
 ## Qué NO existe todavía
 - **F6 · Biblioteca Notion** — bloqueado en el token de integración + link de la

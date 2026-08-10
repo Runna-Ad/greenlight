@@ -52,8 +52,12 @@ button morphs Mandar-a-correcciones → Aprobar → Enviar a cliente (two-step);
       red/amber/green) so Pedro can SEE it in prod. REVERT PENDING: on "revert the demo" →
       delete [DEMO] corrections + restore status to in_progress (its original).
 - [ ] Fill team emails in /admin ▸ Equipo so correction notifications actually send (today empty → skipped).
-- [ ] FOLLOW-ON (Pedro asked): nicer Runna/Greenlight-branded notification email + CTA button
-      to /mi-trabajo. Reminder: emails MUST declare UTF-8 charset (Spanish copy mojibakes otherwise).
+- [x] ✅ SHIPPED (a1c2fdc): Greenlight-branded NEON notification email (email-template.ts):
+      navy wordmark header, per-type neon chip+accent (aprobada = logo green #00e676 on a dark
+      pill so it glows like the wordmark — Pedro's pick "A"), chip text auto-picked by measured
+      contrast, UTF-8, message box. Smart CTA: task emails → the specific task; brief → /mi-trabajo.
+      Full send path verified live end-to-end (gate → routing → send → marked sent → cleaned up).
+- [ ] Fill team emails in /admin ▸ Equipo so notifications actually send (today empty → skipped).
 - [ ] (follow-on, Pedro also asked) nicer Runna/Greenlight-branded notification
       email w/ CTA button to /mi-trabajo — AFTER corrections flow
 

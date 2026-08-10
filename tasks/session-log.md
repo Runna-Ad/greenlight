@@ -1,5 +1,56 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-10 — Correcciones localizadas + rol specialist_lead + rediseño del email
+
+Sesión larga, DESIGN-FIRST. Dos entregas grandes, **todo en producción**, S.P.A.M
+idéntico 42/31/6 en todo momento (migraciones GL 25→27). 3 commits en `main`
+(dfad2aa correcciones · 2ad834a mover panel · a1c2fdc email).
+
+**1. Flujo de correcciones localizadas** (la pieza central).
+Diseñado con Pedro vía un MOCKUP clicable (scratchpad/correcciones-mockup.html,
+iterado ~5 veces: tooltip hover+tap+foco, botón que MUTA, Devolver a revisión,
+3 estados rojo/ámbar/verde, fixes de contraste y de encoding). Modelo cerrado:
+- **Migración 0027** (archivo propio): `app_role += 'specialist_lead'`.
+- **Migración 0028**: columnas de destino en `comments` (target_tabla/fila/campo/
+  label, ronda, atendido_at/by, resolved_member_id), transición nueva
+  `in_corrections→under_review`, `is_team()` += specialist_lead, RPCs
+  rpc_add_correction (cálculo de ronda), rpc_task_send_corrections,
+  rpc_task_return_review; + reconcilió rpc_task_request_changes (estampa ronda) y
+  rpc_task_approve (cierra la ronda) — hallazgos del reap.
+- **Rol specialist_lead**: en roles.ts (VIEW_ROLES/labels/NAV=creative/**canAssign
+  SÓLO**), en is_team pero NO is_lead. Un especialista que además asigna.
+- **UI**: pins sobre cada campo + tooltip (hover/tap/foco) + barra flotante que
+  muta (Mandar a correcciones → Aprobar → Enviar a cliente) + Devolver a revisión
+  + panel "Correcciones" agrupado por ronda. `CorreccionesProvider` envuelve el
+  workspace; `<Campo>` consume el contexto. El panel se movió AL FINAL (antes
+  partía cabecera→guión — Pedro).
+- **Reap adversarial** (subagente opus) encontró 5 bugs reales + 1 pre-existente,
+  TODOS arreglados y con test de regresión (round=NULL vía botón legacy; aprobar
+  dejaba ámbar sin resolver para siempre; sin reabrir un confirmado; client_change
+  latente; master fuera de isLead). 182 db + 176 lib tests.
+- **Contraste** (Pedro lo pidió): pins/pastillas = fondo sólido oscurecido + texto
+  blanco; ámbar alineado a --status-progress; se arregló un white-on-white real
+  (hover de Confirmar). Medido en navegador: todo 4.5–13.2 AA.
+- **Verificado en vivo** por PostgREST (14/14: mandar→devolver→pin→atendido→
+  confirmar→aprobar) + render + demo sembrada/revertida. Deploy prod verificado.
+
+**2. Rediseño del email de notificación** (email-template.ts, puro/testeable).
+Header navy con wordmark, chip+acento NEÓN por tipo (coral cambios / púrpura
+revisar / **verde-logo aprobada** / azul enviada / ámbar brief), texto del chip
+auto-elegido por contraste medido, UTF-8. **Aprobada = verde del logo #00e676 en
+pastilla oscura** para que BRILLE como el wordmark (opción "A" de Pedro, sobre un
+fill más brillante). **CTA inteligente**: los emails de tarea van directo a LA
+TAREA (caes sobre los pins rojos), el de brief a /mi-trabajo. Revisado enviándome
+correos reales por variante (el inbox = la review). Send path verificado
+end-to-end en vivo (gate→ruteo→envío→marcado sent→limpieza).
+
+**PEDRO_OVERRIDE / correcciones aplicadas esta sesión** (todas ya integradas):
+mockup ≠ diseño final (aclarar que el mockup es de INTERACCIÓN); panel al final,
+no en medio; aprobada debe ser el verde del logo brillante.
+
+**Pendiente (setup de Pedro, no código):** llenar los emails del equipo en
+/admin ▸ Equipo — hoy vacíos → las notificaciones se marcan `skipped`.
+
 ## 2026-08-06 (cont.) — Emails de notificación (Gmail SMTP) + varios
 
 Segunda mitad de una sesión muy larga. Todo en producción, S.P.A.M idéntico

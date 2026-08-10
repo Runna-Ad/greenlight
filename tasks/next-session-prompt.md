@@ -8,75 +8,62 @@
 
 ## 🎯 THIS SESSION'S FOCUS (what Pedro wants to work on)
 (Note: Pedro & Claude converse in ENGLISH; the Greenlight platform UI/copy stays
-in SPANISH for the team.) Two linked topics: the **review / corrections flow**
-and the **role hierarchy**. This is DESIGN-FIRST — use beast-mode-dev, explore
-the current state, then propose and CONFIRM with Pedro before building anything.
+in SPANISH for the team.) **Ask Pedro what he wants to tackle** — the two big
+2026-08-10 pieces (corrections flow + specialist_lead role, and the email
+redesign) are SHIPPED. Nothing is committed to below; pick with Pedro.
 
-**1. Review / corrections flow — start with INTERNAL reviews.**
-- Design how a reviewer marks corrections on a task and how the specialist
-  addresses them. Internal goes FIRST because it will later be **emulated for the
-  CLIENT version** (the portal: the client reviews `published` work and requests
-  changes). Design it REUSABLE from the start.
-- ⭐ **Pedro's core vision — visual, location-anchored corrections:** the reviewer
-  should be able to **select a specific field or zone** (a plano's Acción, the
-  Copy in, a reference image/zone, a whole section…) and write whatever change
-  they want FOR THAT EXACT SPOT. On save / send-back-to-production, the specialist
-  sees a **very visual representation** — "this is the change for THIS specific
-  field/section" — pinned/highlighted in-context on that exact field, not a wall
-  of free text. Goal: make it super visual and easy for BOTH sides, and eliminate
-  "I didn't understand what you wanted" moments. Think design-review / Figma-style
-  inline comments anchored to a target, with a clear resolved/unresolved state.
-- What exists to reuse: the `requestChanges` verb → `in_corrections` status + a
-  `comments` row `kind='correction_request'` (today it's a single free-text blob
-  — the new model needs the comment to TARGET a location: which plano id, which
-  field/section key). The `published → in_corrections` transition already exists
-  in `transition_allowed` (for when the client requests changes). Open design
-  questions for Pedro: correction rounds/history? who marks a correction
-  resolved (reviewer vs specialist)? does re-submitting clear/resolve them?
-- ⚠️ auth-off gotcha: with login off, `is_lead()` is false for everyone → NO
-  backward status moves today (logged gap). The corrections design must account
-  for how a task reaches `in_corrections` during the login-off beta.
+**✅ DONE & LIVE (2026-08-10) — don't rebuild, just know it exists:**
+- **Correcciones localizadas** (migs 0027/0028): pin-a-field corrections + tooltip
+  + panel by round (red/amber/green) + morphing reviewer button + Devolver a
+  revisión. Role **specialist_lead** (assign-only). Built REUSABLE for the client
+  portal (`client_change` kind, `published→in_corrections`). See project-state.md.
+- **Email redesign** (`lib/email-template.ts`): branded neon, smart CTA.
 
-**2. Role distinction: specialists · leads · (dept heads?).**
-- Pedro wants more distinction than today. Current roles: `master/admin/lead/
-  creative(specialist)/client` (`app_role` enum, see 0023/0024) + an `es_lead`
-  flag on `track_members`/`idea_assignments` + a `pods` table (tripletas, `pod_id`
-  mostly unused). Reference: SnapTrack uses `owner/dept_head/team_head/employee/
-  junior` (`org_role`).
-- Pedro is NOT sure of the model ("general leads, or rather Dept heads maybe") —
-  DECIDE IT TOGETHER. Questions: is `dept_head` a NEW tier above lead? Scoped to
-  a pod/department? Who reviews/approves whom (dept head → lead → specialist)?
-  This TIES INTO the review flow (the review chain by role/dept).
-- If touching the `app_role` enum: new value in its OWN migration file + audit
-  every role-branching filter (roles.ts predicates, RLS helpers is_lead/is_team/
-  is_delivery, NAV_BY_ROLE) — same discipline used for 'master'.
+**Likely next candidates (Pedro picks):**
+1. **Portal del cliente** — the natural next build. The corrections model was
+   designed to be reused: the client reviews `published` work and requests changes
+   via `kind='client_change'` + `published→in_corrections` (already legal). It's
+   another ROUTE/view (not the workspace with fewer props). "Enviar a cliente" ya
+   deja la tarea en `published`; falta dónde el cliente la vea.
+2. **F6 · Biblioteca Notion** — BLOCKED on Pedro's Notion integration token + base
+   link/ID. CRUD de Biblioteca en /admin ya existe; falta el sync.
+3. **Slack notifications** (email ya está) + **prefs por-evento por usuario** (hoy
+   un toggle global `notify_email`).
+4. **API / MCP con tokens para Claude** — greenfield (referencia SnapTrack).
+5. **Copies template · legal de Préstamos · dark mode · agrupar corrections/pods.**
 
-## Dónde quedamos (fin de sesión 2026-08-06, larga)
-El **workspace** ya estaba completo. Esta sesión se agregó, todo en producción y
-verificado en vivo (S.P.A.M intacto 42/31/6):
-- **Constructor de brief nuevo** (`/[cliente]/briefs/nuevo`) con 3 gestos de
-  duplicación + RPC atómico `rpc_crear_brief`.
-- **Referencias (imágenes/videos) al lado del cliente** en el preview.
-- **Panel `/admin`** completo: Perfil · Equipo/roles (con **Master Builder**) ·
-  Actividad · Integraciones · Biblioteca (CRUD de snippets).
-- **Emails de notificación** (Gmail SMTP, sender `unique@runna.com.mx`) —
-  dispatcher inline con `after()`; avisa en nuevo-brief · a-revisión · cambios ·
-  aprobada · enviada-al-cliente. Probado en vivo a petedv31@.
-- Fixes: Trend "-" ya no genera falsa referencia · # Idea alineado · Notas ya no
-  se pasa al cliente (es interno).
+**⚠️ NON-CODE SETUP Pedro owes:** fill team emails in **/admin ▸ Equipo** — until
+then correction/review notifications are computed but marked `skipped` (no send).
 
-**Migraciones 0001–0026 aplicadas** (⚠️ no existe 0017 — Notion, diferida; salta
-0016→0018 a propósito). Últimas: 0022 rpc_crear_brief · 0023 enum master · 0024
-track_members role/email/slack · 0025 canal email + notify_email · 0026
-rpc_notificar_brief. La próxima migración usa un timestamp NUEVO
-(`20260806120006` o superior), NUNCA reciclar 0017.
+**Discipline reminders that bit us this session (see lessons.md):**
+- Adversarial reap on any non-trivial feature BEFORE deploy — it found 5 real bugs.
+- Contrast: solid darkened pill + white (or auto-picked text), and MEASURE in the
+  browser — never white-on-mid-tone or colored-text-on-same-hue-tint.
+- Any new `app_role` value → own migration + teach EVERY role branch (is_team etc.).
+- Emails: table layout + inline styles + explicit UTF-8; the inbox is the review.
 
-Todo commiteado + pusheado a `Runna-Ad/runna-command-center` (público).
-**Deploys por `git push main` → auto-deploy** (Vercel git-connected; funciona
-porque el repo es PÚBLICO — Hobby no auto-deploya repos PRIVADOS de org).
-`npx vercel --prod --yes` queda como respaldo. Login sigue apagado (beta, hasta
-el final — NO re-abrir el tema). Secretos de email en `.env.local` (gitignoreado)
-+ Vercel env — nunca commitear (repo público).
+## Dónde quedamos (fin de sesión 2026-08-10)
+Se shippearon dos piezas grandes, todo en producción y verificado en vivo
+(S.P.A.M intacto 42/31/6; migraciones GL 25→27). Detalle completo en
+session-log.md ▸ 2026-08-10 y project-state.md.
+- **Correcciones localizadas + rol specialist_lead** (migs 0027/0028, commit
+  dfad2aa; panel movido al final 2ad834a). Diseñado design-first con un mockup
+  clicable, verificado por reap (5 bugs reales arreglados) + PostgREST 14/14 +
+  contraste medido AA. Reusable para el portal del cliente.
+- **Email de notificación rediseñado** (commit a1c2fdc): branded neón, aprobada =
+  verde-logo en pastilla oscura, CTA inteligente (tarea/mi-trabajo), UTF-8. Send
+  path verificado end-to-end.
+
+**Migraciones 0001–0028 aplicadas** (⚠️ no existe 0017 — Notion, diferida; salta
+0016→0018 a propósito). La próxima migración usa un timestamp NUEVO
+(`20260810120003` o superior), NUNCA reciclar 0017.
+
+Todo commiteado + pusheado a `Runna-Ad/runna-command-center` (público) —
+**`git push main` → auto-deploy** a prod (Vercel git-connected, repo PÚBLICO).
+`npx vercel` (sin `--prod`) = preview, pero el env de PREVIEW NO tiene las claves
+Supabase (da "base de datos no está configurada") — por eso el preview no sirve
+para revisar; usa localhost:3100 (`.env.local`) o prod. Login apagado (beta — NO
+re-abrir). Secretos en `.env.local` (gitignoreado) + Vercel env — nunca commitear.
 
 ## Qué sigue (elige; ninguno comprometido)
 - **Llenar los emails del equipo** en /admin ▸ Equipo — con eso los emails de
