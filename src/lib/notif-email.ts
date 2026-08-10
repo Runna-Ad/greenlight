@@ -3,31 +3,7 @@ import "server-only";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { sendEmail, hasEmail } from "@/lib/email";
 import { decisionEmail } from "@/lib/notif-routing";
-
-const APP_URL = process.env.APP_URL ?? "https://runna-command-center.vercel.app";
-
-function urlAbsoluta(url: string | null): string {
-  if (!url) return APP_URL;
-  if (/^https?:\/\//i.test(url)) return url;
-  return `${APP_URL}${url.startsWith("/") ? "" : "/"}${url}`;
-}
-
-function htmlEmail(titulo: string, cuerpo: string | null, url: string): string {
-  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;color:#1f1d2e">
-  <div style="background:#00E676;height:4px;border-radius:4px 4px 0 0"></div>
-  <div style="border:1px solid #ece8f5;border-top:none;border-radius:0 0 10px 10px;padding:24px">
-    <p style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#775cbf;margin:0 0 8px">Greenlight</p>
-    <h1 style="font-size:18px;margin:0 0 10px;color:#2d2b55">${escapeHtml(titulo)}</h1>
-    ${cuerpo ? `<p style="font-size:14px;line-height:1.5;color:#555;margin:0 0 20px">${escapeHtml(cuerpo)}</p>` : ""}
-    <a href="${url}" style="display:inline-block;background:#2d2b55;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:8px">Abrir en Greenlight →</a>
-    <p style="font-size:11px;color:#999;margin:24px 0 0">Recibes esto porque tienes tareas en Greenlight · Rünna. Puedes desactivar los emails en tu perfil.</p>
-  </div>
-</div>`;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-}
+import { htmlFor, textFor, ctaUrl } from "@/lib/email-template";
 
 export type DispatchResult = { sent: number; skipped: number; failed: number; sinConfig?: boolean };
 
@@ -55,10 +31,11 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
   const notifIds = [...new Set(rows.map((r) => r.notification_id))];
   const { data: notifs } = await db
     .from("notifications")
-    .select("id, type, title, body, url, recipient_member_id, recipient_id")
+    .select("id, type, title, body, url, entity_type, entity_id, recipient_member_id, recipient_id")
     .in("id", notifIds);
   type Notif = {
     id: string; type: string | null; title: string; body: string | null; url: string | null;
+    entity_type: string | null; entity_id: string | null;
     recipient_member_id: string | null; recipient_id: string | null;
   };
   const notifById = new Map<string, Notif>(((notifs ?? []) as Notif[]).map((n) => [n.id, n]));
@@ -97,12 +74,12 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
     const decision = decisionEmail({ type: n.type, notifyEmail, email });
     if (!decision.enviar) { await marcar(d.id, { status: "skipped", error: decision.razon }); skipped++; continue; }
 
-    const url = urlAbsoluta(n.url);
+    const cta = ctaUrl(n);
     const res = await sendEmail({
       to: email!,
       subject: n.title,
-      text: `${n.body ?? ""}\n\nAbrir en Greenlight: ${url}`.trim(),
-      html: htmlEmail(n.title, n.body, url),
+      text: textFor(n.title, n.body, cta),
+      html: htmlFor({ type: n.type, title: n.title, body: n.body, ctaUrl: cta }),
     });
     if (res.ok) {
       await marcar(d.id, { status: "sent", sent_at: new Date().toISOString(), provider_id: res.id ?? null });
