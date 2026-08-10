@@ -451,13 +451,6 @@ export default async function TareaPage({
         />
       </div>
 
-      {/* Panel de correcciones: sólo aparece si hay correcciones fijadas. */}
-      {role !== "client" && correcciones.length > 0 && (
-        <div className="mb-4">
-          <PanelCorrecciones />
-        </div>
-      )}
-
       <EditorTarea
         ideaId={idea.id}
         marcaSlug={marca?.slug ?? null}
@@ -488,6 +481,15 @@ export default async function TareaPage({
         }}
         soloLectura={soloLectura}
       />
+
+      {/* Panel de correcciones AL FINAL, junto a la barra de acción: no parte el
+          flujo cabecera→guión y queda al lado del botón de aprobar/enviar. Los
+          pins siguen sobre cada campo; esto es sólo el resumen. */}
+      {role !== "client" && correcciones.length > 0 && (
+        <div className="mt-5">
+          <PanelCorrecciones />
+        </div>
+      )}
 
       {/* La MISMA acción de flujo, otra vez al final: cuando terminas de
           trabajar no tienes que subir hasta el encabezado para mandarla. */}

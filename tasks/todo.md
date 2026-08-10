@@ -44,8 +44,14 @@ button morphs Mandar-a-correcciones → Aprobar → Enviar a cliente (two-step);
       text is <4.5, app-wide & pre-existing).
 - [x] Frontend PREVIEW deployed: https://runna-command-center-89pq973fn-pedros-projects-c43384db.vercel.app
       (Vercel SSO-protected — opens for Pedro). Prod untouched (no git push).
-- [ ] ⛔ SHIP GATE: on Pedro's "ship it" → git commit + push main (auto-deploys prod frontend;
-      DB already migrated). Then fill team emails so correction notifications send.
+- [x] ✅ SHIPPED (Pedro "ship it" 2026-08-10): committed dfad2aa + pushed origin/main →
+      Vercel auto-deployed prod. New code LIVE (prod SSR serves the panel + field anchors);
+      no secret leak (service key + gmail pw both 0 in served HTML). Full flow verified live
+      via PostgREST (14/14: mandar→devolver→pin→atendido→confirmar→aprobar).
+- [x] Demo seeded on task SPAPFISHFILTER (31a14ee5, set to under_review, 3 [DEMO] corrections
+      red/amber/green) so Pedro can SEE it in prod. REVERT PENDING: on "revert the demo" →
+      delete [DEMO] corrections + restore status to in_progress (its original).
+- [ ] Fill team emails in /admin ▸ Equipo so correction notifications actually send (today empty → skipped).
 - [ ] FOLLOW-ON (Pedro asked): nicer Runna/Greenlight-branded notification email + CTA button
       to /mi-trabajo. Reminder: emails MUST declare UTF-8 charset (Spanish copy mojibakes otherwise).
 - [ ] (follow-on, Pedro also asked) nicer Runna/Greenlight-branded notification
