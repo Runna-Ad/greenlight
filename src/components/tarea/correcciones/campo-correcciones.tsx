@@ -90,6 +90,11 @@ export function CampoCorrecciones({
                   {ETIQUETA_ESTADO[c.estado]}
                 </span>
               </div>
+              {c.targetQuote && (
+                <p className="mb-1 truncate text-[11px] italic text-status-corrections" title={c.targetQuote}>
+                  &laquo;{c.targetQuote}&raquo;
+                </p>
+              )}
               <p className="text-[12.5px] leading-snug text-foreground">{c.body}</p>
               {c.autor && <p className="mt-1 text-[10px] text-muted-foreground">{c.autor}</p>}
             </div>

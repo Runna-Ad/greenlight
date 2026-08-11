@@ -754,6 +754,19 @@ await scalar(`select produccion.rpc_task_approve($1,$2,$3,$4)`, [flIdea, mGalie,
 eq("aprobar deja 0 correcciones sin resolver (la ronda queda cerrada)",
    Number(await scalar(`select count(*) from produccion.comments where idea_id=$1 and kind='correction_request' and resolved_at is null`, [flIdea])), 0);
 
+// corrección anclada a una SELECCIÓN (0029): guarda quote + offsets
+const cQuote = await scalar(
+  `select produccion.rpc_add_correction($1,'planos',$2,'copy_in','Plano 1 · Copy in','sube a 8%',$3,null,'correction_request','6% de CASHBACK*',6,20)`,
+  [flIdea, flPlano, mGalie]);
+eq("selección: guarda el texto citado (ancla)",
+   await scalar(`select target_quote from produccion.comments where id=$1`, [cQuote]), "6% de CASHBACK*");
+eq("selección: guarda el offset inicial", Number(await scalar(`select target_start from produccion.comments where id=$1`, [cQuote])), 6);
+eq("selección: guarda el offset final", Number(await scalar(`select target_end from produccion.comments where id=$1`, [cQuote])), 20);
+const cWhole = await scalar(
+  `select produccion.rpc_add_correction($1,'planos',$2,'accion','Plano 1 · Acción','cambia el hook',$3,null)`,
+  [flIdea, flPlano, mGalie]);
+ok("corrección de campo entero → quote null", (await scalar(`select target_quote from produccion.comments where id=$1`, [cWhole])) === null);
+
 // specialist_lead: es equipo (ve la plantilla) pero NO revisa
 eq("'specialist_lead' existe en el enum app_role",
    await scalar(`select 'specialist_lead' = any(enum_range(null::produccion.app_role)::text[])`), true);

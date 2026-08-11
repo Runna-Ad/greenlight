@@ -58,6 +58,26 @@ button morphs Mandar-a-correcciones → Aprobar → Enviar a cliente (two-step);
       contrast, UTF-8, message box. Smart CTA: task emails → the specific task; brief → /mi-trabajo.
       Full send path verified live end-to-end (gate → routing → send → marked sent → cleaned up).
 - [ ] Fill team emails in /admin ▸ Equipo so notifications actually send (today empty → skipped).
+
+## 🔨 IN PROGRESS (2026-08-11) — Correcciones ancladas a SELECCIÓN de texto
+Plan aprobado: /Users/work/.claude/plans/question-for-the-changes-glowing-hopper.md
+Fidelidad "B" (Pedro): ancla = quote snapshot + resaltado en vivo best-effort (mirror
+overlay) que se apaga al editar. Aditivo sobre las correcciones por-campo.
+- [x] Mig 0029: comments += target_quote/target_start/target_end; rpc_add_correction extendido
+      (DROP firma vieja de 9 args primero) + grants. PGlite test (187 db pass).
+- [x] Tipos: CorreccionTarget/Correccion/database.types/page.tsx select/agregarCorreccion +
+      helper puro resaltadosEnTexto (best-effort re-find). 183 lib pass.
+- [x] UI: captura de selección (onSelect/mouseup/keyup) + popover "Pedir cambio aquí" +
+      compositor con el quote; mirror overlay <mark> por estado detrás del textarea
+      transparente (scroll-sync); quote en tooltip/panel. Desktop-first; botón de campo se queda.
+- [x] tsc + build clean; page render smoke (graceful pre-migration, sin crash).
+- [x] Reap adversarial — limpio en lo grande; 4 fixes aplicados: (1) mandar los params del
+      quote SÓLO si hay quote (desacopla el path de campo-entero de la migración → no rompe si
+      se despliega antes); (2) tinte read-only sólo si !hayResaltado (twMerge lo tapaba); (3)
+      scrollbar-gutter:stable en textarea+mirror (alinea el <mark> con scrollbar); (4) botón de
+      selección movido a top-left z-30 (no choca con la barra de campo). Todo verde.
+- [ ] ⛔ GATE: aplicar Mig 0029 a live (Pedro "apply it") — DEBE ir ANTES del push (el path de
+      selección se rompe si no; reap #1) → verificar en navegador → ship (git push).
 - [ ] (follow-on, Pedro also asked) nicer Runna/Greenlight-branded notification
       email w/ CTA button to /mi-trabajo — AFTER corrections flow
 

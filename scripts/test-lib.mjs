@@ -411,5 +411,33 @@ ok("skip si la persona desactivó email", !D({ type: "task_approved", notifyEmai
 ok("skip si no hay email", !D({ type: "task_approved", notifyEmail: true, email: null }));
 ok("skip si el email es inválido", !D({ type: "task_approved", notifyEmail: true, email: "no-es-email" }));
 
+// ── Resaltado en vivo de correcciones por selección (best-effort) ──
+console.log("\n▶ Resaltado por selección");
+const { resaltadosEnTexto } = await import("../src/lib/correcciones.ts");
+const corr = (o) => ({ id: o.id ?? "x", targetTabla: "planos", targetFilaId: "p", targetCampo: "copy_in", targetLabel: null, targetQuote: o.q, targetStart: o.s ?? null, targetEnd: o.e ?? null, body: "b", autor: null, ronda: 1, estado: o.estado ?? "open" });
+const VTX = "Hasta 6% de CASHBACK* en todas tus compras";
+{
+  const r = resaltadosEnTexto(VTX, [corr({ q: "6% de CASHBACK*", s: 6, e: 21 })]);
+  eq("offset exacto: 1 resaltado", r.length, 1);
+  eq("y en la posición guardada", `${r[0].start}-${r[0].end}`, "6-21");
+}
+{
+  const r = resaltadosEnTexto("xx " + VTX, [corr({ q: "6% de CASHBACK*", s: 6, e: 20 })]);
+  eq("offset desfasado → re-encuentra por contenido", r.length, 1);
+  eq("en la nueva posición", r[0].start, ("xx " + VTX).indexOf("6% de CASHBACK*"));
+}
+{
+  const r = resaltadosEnTexto("Hasta 8% en todas tus compras", [corr({ q: "6% de CASHBACK*", s: 6, e: 20 })]);
+  eq("frase borrada → 0 resaltados", r.length, 0);
+}
+{
+  const r = resaltadosEnTexto(VTX, [{ ...corr({ q: null }), targetQuote: null }]);
+  eq("corrección de campo entero → 0 resaltados", r.length, 0);
+}
+{
+  const r = resaltadosEnTexto("aaaa", [corr({ id: "1", q: "aaa", s: 0, e: 3 }), corr({ id: "2", q: "aa", s: 1, e: 3 })]);
+  eq("solapes: se queda 1 (el primero gana)", r.length, 1);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

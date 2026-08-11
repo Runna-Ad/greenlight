@@ -25,6 +25,10 @@ export type CorreccionTarget = {
   filaId: string | null;
   campo: string;
   label: string;
+  /** Ancla por selección de texto (opcional): el substring citado + offsets. */
+  quote?: string | null;
+  start?: number | null;
+  end?: number | null;
 };
 
 const TABLAS_VALIDAS = new Set(["planos", "estaticos", "ideas", "brief"]);
@@ -53,7 +57,11 @@ export async function agregarCorreccion(
   if (!body.trim()) return { ok: false, error: "Escribe qué hay que corregir." };
 
   const db = supabaseAdmin();
-  const { data, error } = await db.rpc("rpc_add_correction", {
+  // Los params del ancla por selección se mandan SÓLO si hay quote. PostgREST
+  // resuelve por NOMBRE de argumento: una corrección de campo entero manda los 8
+  // args base y sigue funcionando contra la firma vieja (0028) O la nueva (0029)
+  // — así el path común no se rompe si el código se despliega antes de la migración.
+  const params: Record<string, unknown> = {
     p_idea_id: ideaId,
     p_target_tabla: target.tabla,
     p_target_fila: target.filaId,
@@ -62,7 +70,14 @@ export async function agregarCorreccion(
     p_body: body.trim(),
     p_actor_member: soy?.id ?? null,
     p_actor: await actorId(db),
-  });
+  };
+  const quote = target.quote?.trim();
+  if (quote) {
+    params.p_target_quote = quote;
+    params.p_target_start = target.start ?? null;
+    params.p_target_end = target.end ?? null;
+  }
+  const { data, error } = await db.rpc("rpc_add_correction", params);
   if (error) return { ok: false, error: error.message };
   return { ok: true, id: (data as string) ?? undefined };
 }

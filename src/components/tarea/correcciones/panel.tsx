@@ -115,6 +115,11 @@ export function PanelCorrecciones() {
                           {ETIQUETA[c.estado]}
                         </span>
                       </div>
+                      {c.targetQuote && (
+                        <p className="mb-0.5 text-[11px] italic text-status-corrections" title={c.targetQuote}>
+                          En &laquo;{c.targetQuote}&raquo;:
+                        </p>
+                      )}
                       <p className="text-[12.5px] leading-snug text-foreground">{c.body}</p>
                       {c.autor && <p className="mt-1 text-[10.5px] text-muted-foreground">{c.autor}</p>}
 

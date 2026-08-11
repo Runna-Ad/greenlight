@@ -222,4 +222,8 @@ export type Comment = {
   atendido_at: string | null;
   atendido_by: string | null;
   resolved_member_id: string | null;
+  // Ancla por selección de texto (0029): el substring citado + offsets best-effort.
+  target_quote: string | null;
+  target_start: number | null;
+  target_end: number | null;
 };

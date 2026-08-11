@@ -15,6 +15,10 @@ export type Correccion = {
   targetFilaId: string | null;
   targetCampo: string | null;
   targetLabel: string | null;
+  /** Ancla por selección: el texto citado + offsets best-effort (null = campo entero). */
+  targetQuote: string | null;
+  targetStart: number | null;
+  targetEnd: number | null;
   body: string;
   autor: string | null;
   ronda: number;
@@ -63,6 +67,38 @@ export const sinResolver = (cs: Correccion[]): number =>
 /** Cuántas siguen abiertas (rojas, sin atender). El botón del lead mira esto. */
 export const abiertas = (cs: Correccion[]): number =>
   cs.filter((c) => c.estado === "open").length;
+
+export type Resaltado = { id: string; start: number; end: number; estado: EstadoCorreccion };
+
+/**
+ * Rangos a resaltar sobre el texto ACTUAL de un campo (best-effort, maneja la
+ * edición): si el offset guardado sigue apuntando al quote, se usa; si no, se
+ * re-encuentra el quote por contenido; si ya no existe en el texto, no se
+ * resalta (el quote sigue en el panel). Se quitan solapes (el primero gana).
+ */
+export function resaltadosEnTexto(valor: string, cs: Correccion[]): Resaltado[] {
+  const found: Resaltado[] = [];
+  for (const c of cs) {
+    if (!c.targetQuote) continue;
+    let start = -1;
+    if (
+      c.targetStart != null &&
+      c.targetEnd != null &&
+      valor.slice(c.targetStart, c.targetEnd) === c.targetQuote
+    ) {
+      start = c.targetStart;
+    } else {
+      const i = valor.indexOf(c.targetQuote);
+      if (i >= 0) start = i;
+    }
+    if (start >= 0) found.push({ id: c.id, start, end: start + c.targetQuote.length, estado: c.estado });
+  }
+  found.sort((a, b) => a.start - b.start);
+  const limpio: Resaltado[] = [];
+  let lastEnd = -1;
+  for (const r of found) if (r.start >= lastEnd) { limpio.push(r); lastEnd = r.end; }
+  return limpio;
+}
 
 /** Agrupa por ronda, descendente (la actual primero). */
 export function porRonda(correcciones: Correccion[]): { ronda: number; items: Correccion[] }[] {
