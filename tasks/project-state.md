@@ -1,5 +1,5 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-10 (correcciones localizadas + rol specialist_lead + email rediseñado)
+Última actualización: 2026-08-11 (correcciones ancladas a selección de texto)
 
 ## Qué es
 App interna de producción de anuncios que reemplaza el Google Sheet de DiDi + el
@@ -39,8 +39,10 @@ Unbounded (wordmark)
   localizadas: columnas de destino en `comments` (target_*, ronda, atendido_at/by,
   resolved_member_id) + transición `in_corrections→under_review` + `is_team()` +=
   specialist_lead + RPCs rpc_add_correction/send_corrections/return_review +
-  rpc_task_approve ahora CIERRA la ronda (resuelve lo pendiente). La próxima
-  migración usa un timestamp NUEVO ≥ 20260810120003.
+  rpc_task_approve ahora CIERRA la ronda (resuelve lo pendiente), **0029**
+  correcciones ancladas a selección (comments += target_quote/start/end;
+  rpc_add_correction extendido, firma vieja de 9 args DROPeada). La próxima
+  migración usa un timestamp NUEVO ≥ 20260811120001.
 - **Storage**: bucket privado `greenlight-referencias` (creado con
   `npm run setup:storage`, fuera de migraciones). Imágenes se sirven por signed
   URL firmada por render. Verificado: privado (acceso público = 400).
@@ -108,6 +110,12 @@ snippets legal=1 (sólo Card) · references(links del sheet)=15
   `lib/correcciones.ts` (puro) · `components/tarea/correcciones/*` (Provider, panel,
   campo-correcciones) · `<Campo>` consume el contexto · `AccionesTarea` muta ·
   server actions en `tareas/[id]/correcciones-actions.ts`.
+  - **Anclaje por SELECCIÓN** (0029, shipped 2026-08-11): el revisor resalta un
+    substring de un campo y la corrección se ancla a esa FRASE (target_quote = ancla
+    de record; offsets best-effort). Resaltado en vivo por MIRROR OVERLAY detrás del
+    <textarea> transparente (`<mark>` por estado, re-encuentra el quote por contenido;
+    se apaga si el texto cambia). Helper puro `resaltadosEnTexto`. El botón de campo
+    entero sigue para notas de campo. Desktop-first.
 - **Rol `specialist_lead`** (Especialista Lead): un especialista que ADEMÁS asigna
   tareas (canAssign) — NUNCA revisa/aprueba. En roles.ts + is_team (no is_lead).
   Cadena: Dept Head/Lead (revisa+aprueba+envía) · Especialista Lead (asigna) ·

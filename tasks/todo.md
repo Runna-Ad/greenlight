@@ -76,8 +76,11 @@ overlay) que se apaga al editar. Aditivo sobre las correcciones por-campo.
       se despliega antes); (2) tinte read-only sólo si !hayResaltado (twMerge lo tapaba); (3)
       scrollbar-gutter:stable en textarea+mirror (alinea el <mark> con scrollbar); (4) botón de
       selección movido a top-left z-30 (no choca con la barra de campo). Todo verde.
-- [ ] ⛔ GATE: aplicar Mig 0029 a live (Pedro "apply it") — DEBE ir ANTES del push (el path de
-      selección se rompe si no; reap #1) → verificar en navegador → ship (git push).
+- [x] ✅ SHIPPED (Pedro "apply it" + "ship it" 2026-08-11): Mig 0029 aplicada a live ANTES del
+      push (S.P.A.M 42/31/6; GL 28; 1 sola rpc_add_correction, sin overload). Commit 1e2fb7d
+      pusheado. Verificado END-TO-END EN PROD (runna-command-center.vercel.app): el <mark>
+      resalta «6% de CASHBACK*», panel muestra el quote, best-effort drop al editar. Datos de
+      prueba limpiados (copy_in restaurado, 0 correcciones). Feature LIVE.
 - [ ] (follow-on, Pedro also asked) nicer Runna/Greenlight-branded notification
       email w/ CTA button to /mi-trabajo — AFTER corrections flow
 

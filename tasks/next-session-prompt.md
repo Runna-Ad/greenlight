@@ -8,18 +8,44 @@
 
 ## 🎯 THIS SESSION'S FOCUS (what Pedro wants to work on)
 (Note: Pedro & Claude converse in ENGLISH; the Greenlight platform UI/copy stays
-in SPANISH for the team.) **Ask Pedro what he wants to tackle** — the two big
-2026-08-10 pieces (corrections flow + specialist_lead role, and the email
-redesign) are SHIPPED. Nothing is committed to below; pick with Pedro.
+in SPANISH for the team.) TWO features Pedro named for next time. Both touch the
+corrections/workspace code shipped 2026-08-10/11 — read project-state.md + the
+correcciones plan first. DESIGN-FIRST where there's ambiguity; use beast-mode-dev.
 
-**✅ DONE & LIVE (2026-08-10) — don't rebuild, just know it exists:**
-- **Correcciones localizadas** (migs 0027/0028): pin-a-field corrections + tooltip
-  + panel by round (red/amber/green) + morphing reviewer button + Devolver a
-  revisión. Role **specialist_lead** (assign-only). Built REUSABLE for the client
-  portal (`client_change` kind, `published→in_corrections`). See project-state.md.
-- **Email redesign** (`lib/email-template.ts`): branded neon, smart CTA.
+**1. "Cancelar" / descartar una corrección — el revisor cambió de opinión.**
+- The composers (field-level in `campo-correcciones.tsx`, selection-level in
+  `campo.tsx`) ALREADY have a "Cancelar" that closes the composer without creating.
+  So Pedro's ask is almost certainly the OTHER gap: **delete/undo a correction the
+  reviewer already PINNED** (right now, once created, a reviewer can only Confirmar
+  or Reabrir — there's no "remove this, I changed my mind"). CONFIRM with Pedro which
+  he means at session start.
+- Likely build: a "Descartar" (trash) action for the REVISOR on each correction in
+  the panel (and/or the field toolbar) → new server action `descartarCorreccion(id)`
+  that deletes the `comments` row (revisor-only, canOverrideStatus). Consider: only
+  allow deleting one you're mid-review on (not one already sent to the specialist),
+  or allow always with a confirm. No migration needed (just a delete). Watch the
+  round-close math: deleting the last open correction shouldn't strand the task.
 
-**Likely next candidates (Pedro picks):**
+**2. "Pegar guión" — bulk paste an entire script → auto-fill the plano fields.**
+- A button (near "Agregar plano") opens a POPUP textarea; the reviewer/specialist
+  pastes a whole deck-format script (Pedro's example: rows of "ACCIÓN + COPY IN +
+  GFX/SFX (Motion) | DIÁLOGO", "Plano N - int. Sala - MCU", "Copy in: …", "SFX: …",
+  "Botón CTA: …", dialogue by speaker). Parse it and POPULATE the plano fields
+  (titulo/accion/copy_in/sfx/gfx/dialogo, CTA for estáticos), CREATING extra planos
+  as needed (Plano 1, 2, 3…).
+- ⚠️ **PEDRO_OVERRIDE tension — read lessons.md "Peloteo/parser".** Pedro previously
+  KILLED an "auto-detect smart parser" in favor of defined labeled fields. This is
+  DIFFERENT (the deck format is KNOWN/consistent, so it's a structured importer, not
+  freeform guessing) — but respect the spirit: parse a DEFINED format, show a PREVIEW
+  before writing (like the sync review cards — the editable staged-row pattern in
+  `components/sync/`), let Pedro edit/confirm, and NEVER silently invent field
+  boundaries. Confirm the exact deck format + the preview-then-confirm UX with Pedro
+  before building the parser. Pure parser in `src/lib/` + tests (mirror `peloteo.ts`).
+- The plano fields are `<textarea>`s via `<Campo>` (tabla="planos"); creation is
+  `agregarPlano` (server action) + per-field autosave. A bulk import likely wants an
+  atomic RPC (like `rpc_crear_brief`) or a loop of inserts + field writes.
+
+**Likely OTHER candidates (if Pedro picks something else):**
 1. **Portal del cliente** — the natural next build. The corrections model was
    designed to be reused: the client reviews `published` work and requests changes
    via `kind='client_change'` + `published→in_corrections` (already legal). It's
@@ -42,21 +68,21 @@ then correction/review notifications are computed but marked `skipped` (no send)
 - Any new `app_role` value → own migration + teach EVERY role branch (is_team etc.).
 - Emails: table layout + inline styles + explicit UTF-8; the inbox is the review.
 
-## Dónde quedamos (fin de sesión 2026-08-10)
-Se shippearon dos piezas grandes, todo en producción y verificado en vivo
-(S.P.A.M intacto 42/31/6; migraciones GL 25→27). Detalle completo en
-session-log.md ▸ 2026-08-10 y project-state.md.
-- **Correcciones localizadas + rol specialist_lead** (migs 0027/0028, commit
-  dfad2aa; panel movido al final 2ad834a). Diseñado design-first con un mockup
-  clicable, verificado por reap (5 bugs reales arreglados) + PostgREST 14/14 +
-  contraste medido AA. Reusable para el portal del cliente.
-- **Email de notificación rediseñado** (commit a1c2fdc): branded neón, aprobada =
-  verde-logo en pastilla oscura, CTA inteligente (tarea/mi-trabajo), UTF-8. Send
-  path verificado end-to-end.
+## Dónde quedamos (fin de sesión 2026-08-11)
+Se shippearon TRES piezas grandes, todo en producción y verificado en vivo
+(S.P.A.M intacto 42/31/6; migraciones GL 25→28). Detalle en session-log.md ▸
+2026-08-10 y 2026-08-11 + project-state.md.
+- **Correcciones localizadas + rol specialist_lead** (migs 0027/0028, dfad2aa;
+  panel al final 2ad834a). Reusable para el portal del cliente.
+- **Email de notificación rediseñado** (a1c2fdc): branded neón, verde-logo en
+  aprobada, CTA inteligente, UTF-8. Send path verificado end-to-end.
+- **Correcciones ancladas a SELECCIÓN** (mig 0029, 1e2fb7d): resaltar una frase de un
+  campo y anclar la corrección ahí (mirror overlay, quote-snapshot). Reap limpio (4
+  fixes), verificado end-to-end EN PROD.
 
-**Migraciones 0001–0028 aplicadas** (⚠️ no existe 0017 — Notion, diferida; salta
+**Migraciones 0001–0029 aplicadas** (⚠️ no existe 0017 — Notion, diferida; salta
 0016→0018 a propósito). La próxima migración usa un timestamp NUEVO
-(`20260810120003` o superior), NUNCA reciclar 0017.
+(`20260811120001` o superior), NUNCA reciclar 0017.
 
 Todo commiteado + pusheado a `Runna-Ad/runna-command-center` (público) —
 **`git push main` → auto-deploy** a prod (Vercel git-connected, repo PÚBLICO).

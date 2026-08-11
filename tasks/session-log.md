@@ -1,5 +1,43 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-11 — Correcciones ancladas a SELECCIÓN de texto (+ follow-ups)
+
+Continuación de la sesión larga. Todo en producción, S.P.A.M idéntico 42/31/6
+(migraciones GL 27→28). Commit principal **1e2fb7d**.
+
+**Follow-ups rápidos primero** (todos en prod):
+- Panel de correcciones movido AL FINAL (antes partía cabecera→guión — Pedro). 2ad834a.
+- Email de notificación: iteración a colores NEÓN + aprobada = verde-logo en pastilla
+  oscura ("A" de Pedro). Enviado end-to-end. a1c2fdc.
+- Limpieza de 2 correcciones fantasma (test viejo del botón "Mandar cambios" del tablero,
+  2026-08-04) que el panel nuevo sacaba a la luz.
+
+**Correcciones ancladas a selección** (DESIGN-FIRST, plan aprobado en
+/Users/work/.claude/plans/question-for-the-changes-glowing-hopper.md, fidelidad "B"):
+el revisor resalta un substring de un campo ("6% de CASHBACK*" en Copy in) y la
+corrección se ancla a ESA frase, no a todo el campo.
+- **Ancla de record = el QUOTE** (target_quote), NO los offsets: el campo es un
+  <textarea> y el especialista edita el texto para arreglarlo → los offsets se
+  desincronizan. Offsets = best-effort para el resaltado inicial.
+- **Resaltado en vivo = mirror overlay**: un div idéntico en caja detrás del textarea
+  transparente, pinta un <mark> (color de estado) sobre la frase; se re-encuentra por
+  contenido (indexOf) si el offset ya no calza; si la frase desaparece, se apaga (el
+  quote sigue en el panel). Helper puro `resaltadosEnTexto` + tests.
+- **Mig 0029**: comments += target_quote/start/end; rpc_add_correction extendido (DROP
+  firma vieja de 9 args → sin overload PGRST203).
+- **Reap adversarial** (opus): limpio en lo grande, 4 fixes aplicados — el más importante,
+  mandar los params del quote SÓLO si hay quote (desacopla el path de campo-entero de la
+  migración; PostgREST resuelve por NOMBRE → si el código va antes que la migración, sin
+  el fix se rompía TODA corrección con PGRST202). Aplicar migración ANTES del push.
+- **Verificado END-TO-END EN PROD** (no sólo localhost): el <mark> resalta la frase, el
+  panel muestra el quote, best-effort drop al editar. Datos de prueba limpiados.
+- Tests: 183 lib + 187 db. tsc + build limpios.
+
+**Aprendizajes clave** (en lessons.md): mirror-overlay para resaltar dentro de un
+<textarea>; ancla por quote-snapshot no por offsets; footgun de PostgREST por-nombre +
+orden de deploy (migración antes del push); twMerge tapa bg conflictivos; verificar
+features client-side en el target REAL (prod), no sólo localhost.
+
 ## 2026-08-10 — Correcciones localizadas + rol specialist_lead + rediseño del email
 
 Sesión larga, DESIGN-FIRST. Dos entregas grandes, **todo en producción**, S.P.A.M
