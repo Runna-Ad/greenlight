@@ -439,5 +439,116 @@ const VTX = "Hasta 6% de CASHBACK* en todas tus compras";
   eq("solapes: se queda 1 (el primero gana)", r.length, 1);
 }
 
+console.log("\n▶ Guión (paste importer)");
+{
+  const { parseGuion, parseEstatico, contarPlanos, convertirDialogo, mismoContenido } =
+    await import("../src/lib/guion.ts");
+  const { parseDialogo } = await import("../src/lib/dialogo.ts");
+
+  // ── Gold: la muestra REAL de Pedro (reconstruida con saltos de línea, como
+  //    sale de un <textarea>). La acción se define una vez y se reusa en el
+  //    input y en el expected para no arriesgar un typo de transcripción.
+  const acc1 = 'Actriz frente a cámara, concentrada, haciendo movimientos de "manifestación" con las manos. Cierra el puño y aparecen destellos. Al abrirlo, aparece mágicamente la DiDi Card. Mira la tarjeta de crédito y rompe personaje con expresión de "era obvio".';
+  const acc2 = "Jump cut a un encuadre más cerrado. La actriz muestra la DiDi Card a cámara. Al moverla de un lado a otro, aparecen íconos de categorías participantes alrededor.";
+  const acc3 = "Whip pan. La actriz aparece en otro punto de la habitación. Dos gráficos entran con cada movimiento de sus manos, acompañados de una palomita.";
+  const acc6 = 'La actriz hace el mismo movimiento de "manifestación" del inicio, pero esta vez aparece un celular mostrando la solicitud de DiDi Card. Termina mostrando nuevamente la DiDi Card y señala el CTA.';
+  const SAMPLE = [
+    "ACCIÓN + COPY IN + GFX / SFX (Motion)",   // fila de títulos de columna → se descarta
+    "DIÁLOGO",
+    "Plano 1 - int. Sala - MCU",
+    acc1,
+    "Copy in: Manifestando ✨ una línea de crédito de hasta $60,000 m.n. ✨",
+    "SFX: Brillo mágico + pop.",
+    "Actriz (V.O)",
+    "Manifestando una línea de crédito de hasta $60,000 m.n....",
+    "Actriz",
+    "Ah, claro. La DiDi Card.",
+    "Plano 2 - int. Sala - CU",
+    acc2,
+    "Copy in: Hasta 6% de CASHBACK* diario",
+    "Actriz",
+    "Además, mis compras me recompensan con hasta 6% de CASHBACK diario*, así disfruto más lo que ya iba a comprar.",
+    "Plano 3 - int. Sala - MS",
+    acc3,
+    "Copy in: ✓ Sin anualidad de por vida",
+    "Copy in: ✓ Sin comisiones ocultas",
+    "Actriz",
+    "Y no tiene anualidad de por vida ni comisiones ocultas. Eso me da tranquilidad al usar mi tarjeta de crédito.",
+    "Plano 4 - int. Sala - MCU",
+    "Corte rápido. La actriz gira hacia cámara y señala al espectador.",
+    "Copy in: Sin historial crediticio",
+    "Actriz",
+    "¿Y si vas empezando? Puedes solicitarla sin historial crediticio.",
+    "Plano 5 - int. Sala - CU",
+    "La actriz lanza la DiDi Card hacia un costado y hacemos match cut para recibirla desde otro ángulo.",
+    "Copy in: Respaldada por Mastercard",
+    "Actriz",
+    "Además, está respaldada por Mastercard, así que puedes usarla en miles de establecimientos.",
+    "Plano 6 - int. Sala - MCU",
+    acc6,
+    "Botón CTA: Pídela desde tu celular",
+    "Actriz",
+    "No necesitas manifestarla. La puedes solicitar en línea. Pídela desde tu celular.",
+  ].join("\n");
+
+  const p = parseGuion(SAMPLE);
+  eq("detecta 6 planos (descarta la fila de títulos)", p.length, 6);
+  eq("contarPlanos = 6 (señal de confianza)", contarPlanos(SAMPLE), 6);
+
+  // Plano 1 — todos los campos
+  eq("p1 titulo", p[0].titulo, "Plano 1 - int. Sala - MCU");
+  eq("p1 accion (verbatim, no se le cuela el diálogo)", p[0].accion, acc1);
+  eq("p1 copy_in", p[0].copy_in, "Manifestando ✨ una línea de crédito de hasta $60,000 m.n. ✨");
+  eq("p1 sfx", p[0].sfx, "Brillo mágico + pop.");
+  eq("p1 gfx = null (no había)", p[0].gfx, null);
+  eq("p1 edicion = null (transiciones van en acción)", p[0].edicion, null);
+  eq(
+    "p1 dialogo → formato (Quien) texto",
+    p[0].dialogo,
+    "(Actriz V.O) Manifestando una línea de crédito de hasta $60,000 m.n....\n(Actriz) Ah, claro. La DiDi Card.",
+  );
+
+  // Plano 3 — dos "Copy in:" se unen
+  eq("p3 copy_in une los dos Copy in", p[2].copy_in, "✓ Sin anualidad de por vida\n✓ Sin comisiones ocultas");
+  eq("p3 dialogo", p[2].dialogo, "(Actriz) Y no tiene anualidad de por vida ni comisiones ocultas. Eso me da tranquilidad al usar mi tarjeta de crédito.");
+
+  // Plano 6 — "Botón CTA:" alimenta copy_in
+  eq("p6 titulo", p[5].titulo, "Plano 6 - int. Sala - MCU");
+  eq("p6 copy_in viene del Botón CTA", p[5].copy_in, "Pídela desde tu celular");
+  eq("p6 accion no se traga el CTA ni el diálogo", p[5].accion, acc6);
+
+  // El diálogo generado round-trip-ea con parseDialogo (la vista del cliente)
+  const seg = parseDialogo(p[0].dialogo);
+  eq("round-trip: 2 intervenciones", seg.length, 2);
+  eq("round-trip: quien 1", seg[0].quien, "Actriz V.O");
+  eq("round-trip: quien 2", seg[1].quien, "Actriz");
+
+  // ── Bordes ──
+  const soloAccion = parseGuion("Plano 1 - x - CU\nDescribe algo sin etiquetas ni diálogo.");
+  eq("sin etiquetas → todo es acción", soloAccion[0].accion, "Describe algo sin etiquetas ni diálogo.");
+  eq("sin etiquetas → dialogo null (no adivina)", soloAccion[0].dialogo, null);
+  eq("sin etiquetas → copy_in null", soloAccion[0].copy_in, null);
+
+  const antesDelPlano = parseGuion("Basura de encabezado\nMás basura\nPlano 1 - a - MS\nAcción.");
+  eq("descarta todo lo anterior al primer Plano", antesDelPlano.length, 1);
+
+  // convertirDialogo directo (varias intervenciones, cue con V.O)
+  eq(
+    "convertirDialogo agrupa por cue",
+    convertirDialogo(["Locutor (V.O)", "Hola a todos.", "Actriz", "Qué tal."]),
+    "(Locutor V.O) Hola a todos.\n(Actriz) Qué tal.",
+  );
+
+  // Guardarraíl del normalizador con IA: sólo cambios de whitespace pasan.
+  ok("guard: sólo saltos de línea → mismo contenido", mismoContenido("aaAbb", "aa\nA bb"));
+  ok("guard: cambiar un número → NO pasa", !mismoContenido("$60,000", "$50,000"));
+  ok("guard: quitar un asterisco de legal → NO pasa", !mismoContenido("6% CASHBACK*", "6% CASHBACK"));
+
+  // Estático (PROVISIONAL — sin muestra real de Pedro todavía)
+  const est = parseEstatico("Título: Beneficio principal\nSubtítulo: Dos beneficios\nBotón CTA: Solicítala");
+  eq("estatico copy_titulo", est.copy_titulo, "Beneficio principal");
+  eq("estatico copy_cta", est.copy_cta, "Solicítala");
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);
