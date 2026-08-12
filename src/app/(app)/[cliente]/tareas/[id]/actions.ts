@@ -8,7 +8,7 @@ import { getSoy } from "@/lib/soy";
 import { ESTADOS_CERRADOS } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
 import type { AssetStatus } from "@/lib/brand";
-import { mismoContenido, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
+import { mismoContenido, desdeElPrimerPlano, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
 import Anthropic from "@anthropic-ai/sdk";
 
 export type Tabla = "planos" | "estaticos";
@@ -383,7 +383,9 @@ export async function normalizarGuion(
       .trim();
 
     if (!salida) return { ok: false, error: "La IA no devolvió texto." };
-    if (!mismoContenido(texto, salida)) {
+    // Ancla el guard al contenido que se vuelve planos: la IA puede quitar la
+    // fila de títulos de columna del deck (que el parser igual descarta).
+    if (!mismoContenido(desdeElPrimerPlano(texto), desdeElPrimerPlano(salida))) {
       // La IA alteró el contenido (no sólo espacios) → se rechaza por seguridad.
       return {
         ok: false,

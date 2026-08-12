@@ -47,7 +47,10 @@ const HEADER = /^plano\s+\d+\b/i;
  * sus saltos de línea y hay que normalizarlo antes (structure-only, con IA).
  */
 export function contarPlanos(texto: string): number {
-  return (texto.match(/\bplano\s+\d+\b/gi) ?? []).length;
+  // Sin `\b` inicial a propósito: en un pegado sin saltos el primer "Plano 1"
+  // viene PEGADO al header ("…MotionDIÁLOGOPlano 1"), sin frontera de palabra
+  // antes de la P; con `\b` se saltaba y contaba de menos.
+  return (texto.match(/plano\s+\d+\b/gi) ?? []).length;
 }
 
 // Etiquetas de campo del deck → a qué campo del plano alimentan. "Botón CTA" no
@@ -198,14 +201,51 @@ export function parseEstatico(texto: string): EstaticoParsed {
 }
 
 // ── Guardarraíl del normalizador con IA (structure-only) ──────────────────────
+/** El texto DESDE el primer marcador "Plano N". Descarta lo anterior (la fila de
+ *  títulos de columna del deck, "ACCIÓN + COPY IN…/DIÁLOGO"), que el parser IGUAL
+ *  ignora. Ancla el guardarraíl al contenido que SÍ se vuelve planos: la IA puede
+ *  quitar o dejar ese encabezado de columnas libremente, sin fallar el guard. */
+export function desdeElPrimerPlano(texto: string): string {
+  // Sin `\b` inicial: el primer "Plano 1" puede venir pegado al header del deck
+  // ("…DIÁLOGOPlano 1"); con `\b` se anclaba mal (saltaba al "Plano 2") y el
+  // guard comparaba blob-desde-Plano-2 vs IA-desde-Plano-1 → nunca igual.
+  const i = (texto ?? "").search(/plano\s+\d+\b/i);
+  return i >= 0 ? (texto ?? "").slice(i) : (texto ?? "");
+}
+
 /**
- * ¿Dos textos tienen EXACTAMENTE el mismo contenido salvo espacios en blanco?
- * Es el guardarraíl del normalizador con IA: la IA sólo puede AGREGAR/mover
- * saltos de línea y espacios; si cambió, agregó o quitó UN solo carácter que no
- * sea espacio (un número, un asterisco de legal, una letra del copy), esto lo
- * caza y se rechaza su salida. El copy al cliente jamás se altera en silencio.
+ * ¿Dos textos tienen el mismo CONTENIDO fact-shaped? Es el guardarraíl del
+ * normalizador con IA. La IA sólo debe INSERTAR saltos de línea, pero es no
+ * determinista y a veces toca algo cosmético (una coma, una comilla curva, un
+ * espacio). Exigir identidad byte a byte es demasiado frágil (a veces pasa, a
+ * veces no). En vez de eso verificamos que lo que DE VERDAD no puede cambiar
+ * quede intacto:
+ *   - la SECUENCIA de dígitos (protege $60,000, 6%… — un número cambiado se caza),
+ *   - la CUENTA de signos de legal/oferta * % $ (un asterisco perdido se caza),
+ *   - el MULTISET de letras (una palabra agregada/quitada/cambiada se caza).
+ * Tolera whitespace, puntuación y tipografía cosmética (comillas curvas↔rectas,
+ * "…"↔"...", guiones). NO cubre un reordenamiento de palabras con las mismas
+ * letras — pero la IA no reordena al insertar saltos, y el humano revisa la vista
+ * previa antes de importar. (Anclar con desdeElPrimerPlano para ignorar la fila
+ * de títulos de columna, que la IA puede quitar.)
  */
 export function mismoContenido(a: string, b: string): boolean {
-  const strip = (s: string) => s.replace(/\s+/g, "");
-  return strip(a) === strip(b);
+  const norm = (s: string) =>
+    (s ?? "")
+      .replace(/[“”„‟″]/g, '"')
+      .replace(/[‘’‚‛′]/g, "'")
+      .replace(/…/g, "...")
+      .replace(/[–—―]/g, "-");
+  const digitos = (s: string) => (s.match(/\d/g) ?? []).join("");
+  const letras = (s: string) => (s.match(/\p{L}/gu) ?? []).sort().join("");
+  const cuenta = (s: string, re: RegExp) => (s.match(re) ?? []).length;
+
+  const na = norm(a), nb = norm(b);
+  return (
+    digitos(na) === digitos(nb) &&
+    letras(na) === letras(nb) &&
+    cuenta(na, /\*/g) === cuenta(nb, /\*/g) &&
+    cuenta(na, /%/g) === cuenta(nb, /%/g) &&
+    cuenta(na, /\$/g) === cuenta(nb, /\$/g)
+  );
 }

@@ -441,7 +441,7 @@ const VTX = "Hasta 6% de CASHBACK* en todas tus compras";
 
 console.log("\n▶ Guión (paste importer)");
 {
-  const { parseGuion, parseEstatico, contarPlanos, convertirDialogo, mismoContenido } =
+  const { parseGuion, parseEstatico, contarPlanos, convertirDialogo, mismoContenido, desdeElPrimerPlano } =
     await import("../src/lib/guion.ts");
   const { parseDialogo } = await import("../src/lib/dialogo.ts");
 
@@ -546,10 +546,30 @@ console.log("\n▶ Guión (paste importer)");
     "(Locutor V.O) Hola a todos.\n(Actriz) Qué tal.",
   );
 
-  // Guardarraíl del normalizador con IA: sólo cambios de whitespace pasan.
+  // Guardarraíl del normalizador con IA: whitespace + tipografía cosmética pasan;
+  // cambios de contenido fact-shaped NO.
   ok("guard: sólo saltos de línea → mismo contenido", mismoContenido("aaAbb", "aa\nA bb"));
+  ok("guard: comillas curvas↔rectas → pasa (glifo cosmético)", mismoContenido('dijo "hola"', "dijo “hola”"));
+  ok("guard: '…' ↔ '...' → pasa", mismoContenido("espera...", "espera…"));
   ok("guard: cambiar un número → NO pasa", !mismoContenido("$60,000", "$50,000"));
   ok("guard: quitar un asterisco de legal → NO pasa", !mismoContenido("6% CASHBACK*", "6% CASHBACK"));
+  ok("guard: cambiar % del copy → NO pasa", !mismoContenido("6% CASHBACK", "8% CASHBACK"));
+  ok("guard: quitar una PALABRA del copy → NO pasa", !mismoContenido("sin comisiones ocultas", "sin comisiones"));
+  ok("guard: coma/puntuación cosmética → pasa", mismoContenido("Ah, claro.", "Ah claro"));
+  // Ancla desde el primer Plano: la IA puede quitar la fila de títulos de columna.
+  ok("guard ancla: quitar el encabezado de columnas → pasa",
+     mismoContenido(desdeElPrimerPlano("ACCIÓN + COPY IN\nDIÁLOGO\nPlano 1 - x - CU\nAcción."),
+                    desdeElPrimerPlano("Plano 1 - x - CU\nAcción.")));
+  ok("guard ancla: pero un cambio DENTRO de un plano → NO pasa",
+     !mismoContenido(desdeElPrimerPlano("Plano 1 - x - CU\nCopy in: 6%"),
+                     desdeElPrimerPlano("Plano 1 - x - CU\nCopy in: 8%")));
+  // Regresión: el primer "Plano 1" PEGADO al header (sin salto ni frontera de
+  // palabra) debe seguir anclando ahí — no saltar al "Plano 2".
+  eq("desdeElPrimerPlano ancla en Plano 1 aunque venga pegado al header",
+     desdeElPrimerPlano("Motion)DIÁLOGOPlano 1 - x - CU\nAcción.Plano 2 - y - CU"),
+     "Plano 1 - x - CU\nAcción.Plano 2 - y - CU");
+  eq("contarPlanos cuenta el Plano 1 pegado al header",
+     contarPlanos("ACCIÓN + GFX / SFX (Motion)DIÁLOGOPlano 1 - a - CU foo.Plano 2 - b - CU bar."), 2);
 
   // Estático (PROVISIONAL — sin muestra real de Pedro todavía)
   const est = parseEstatico("Título: Beneficio principal\nSubtítulo: Dos beneficios\nBotón CTA: Solicítala");
