@@ -1,5 +1,60 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-12 — Descartar corrección + Importador "Pegar guión" (Feature 2, completo)
+
+Sesión larga, todo en prod. S.P.A.M **byte-idéntico 42/31/6** de punta a punta.
+13 commits (a4335e2→2421cbd), +1201 líneas / 16 archivos. GL migraciones 29→30.
+
+**Qué se hizo (build/fix/deploy):**
+1. **Descartar una corrección fijada** (revisor cambió de opinión) — server action
+   `descartarCorreccion` (hard delete, revisor-only, la ronda se auto-cura) + botón
+   trash con confirmación en dos pasos en el panel. 4 db tests. Commit **09b60f4**.
+2. **"Pedir cambio" de campo entero sólo en campos VACÍOS** (con texto la selección
+   lo cubre; vacío igual se flaggea). Commit **b21611a**.
+3. **Importador "Pegar guión" (Feature 2)** — 4 pasos: (1) parser determinista
+   `src/lib/guion.ts` + gold test contra el guión REAL de DiDi (`4c0b068`); (2) RPC
+   atómico mig **0030** `rpc_import_planos` + server actions + 11 db tests, aplicada
+   a prod con "apply it" (`e787157`); (3) UI diálogo + preview editable montado en
+   editor-tarea (`21ac7e4`); (4) normalizador **H.Ü.E** con guardarraíl para pegados
+   sin saltos (`8c113cf`). Dep nueva `@anthropic-ai/sdk` + `ANTHROPIC_API_KEY`.
+4. **Iteración con Pedro (todo shipped):** botón importador movido ARRIBA como CTA de
+   arranque (PEDRO_OVERRIDE, `d2f3d39`); diálogo con alto fijo + body scrollable +
+   más ancho (`73b377e`); botón renombrado a "Deja que H.Ü.E lo arregle" (`56092ea`);
+   **fix del guard** (`227d0ab`): (a) bug de regex `\bplano` que se saltaba el "Plano 1"
+   pegado al header → guard comparaba slices desalineados; (b) guard ahora verifica
+   contenido FACT-SHAPED (dígitos + * % $ + multiset de letras) en vez de bytes.
+   Verificado 3/3 en vivo con el guión real.
+5. **Limpieza infra:** re-apuntado y luego ELIMINADO el alias manual `-pedro-3338-`
+   (se quedaba stale, caché-inmune, confundió a Pedro). Una sola URL canónica.
+
+**Estado actual:** todo en prod y verificado. `npm test` 220 lib + 214 db pass
+(nuevos tests de importador + guard + regresiones). Deploy `nxfcr4fxg` Ready.
+
+**Trabajo sin commitear:** ninguno. **Sin pushear:** 1 commit docs (`2421cbd`,
+lección Vercel-alias) — se pushea al arrancar la próxima o con el próximo código.
+
+**Decisiones (para no re-debatir):**
+- Guard del LLM = fact-shaped, no byte-identity (el modelo es no determinista →
+  byte-identity da falsos-negativos intermitentes). El humano igual revisa la preview.
+- Modelo del normalizador: `claude-sonnet-5` (mecánico + guard). Subir a opus si
+  la tasa de rechazo sube.
+- Deploy = git push a main (auto). `vercel --prod` sólo como respaldo. UNA URL canónica.
+
+**Verificación clave:** RPC de escritura probado en prod dentro de una txn con
+rollback (0 residuo); LLM+guard probado 3/3 contra la API real con el guión de DiDi.
+El MCP del navegador NO puede driblar clicks de React (sí lee DOM) — por eso muchas
+verificaciones fueron por DOM-read + pruebas directas, no por click.
+
+**Pick up next (sin comprometer):**
+1. **Muestra REAL de estático** de Pedro → reemplazar el parseEstatico PROVISIONAL
+   con gold-test.
+2. **Llenar emails del equipo** en /admin ▸ Equipo (notificaciones hoy `skipped`).
+3. **Rotar `ANTHROPIC_API_KEY`** (se compartió en texto plano en el chat).
+4. Otros candidatos viejos: Portal del cliente · F6 Notion · Slack · API/MCP tokens.
+
+**Cambios de entorno:** dep `@anthropic-ai/sdk` (^0.100.1); `ANTHROPIC_API_KEY` en
+Vercel + `.env.local`; alias `-pedro-3338-` eliminado.
+
 ## 2026-08-11 — Correcciones ancladas a SELECCIÓN de texto (+ follow-ups)
 
 Continuación de la sesión larga. Todo en producción, S.P.A.M idéntico 42/31/6

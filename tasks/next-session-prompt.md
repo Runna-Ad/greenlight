@@ -6,11 +6,27 @@
 3. `tasks/lessons.md` — mistakes/overrides/wins. **Lee los PEDRO_OVERRIDE.**
 4. Este archivo — qué sigue y cómo.
 
-## 🎯 THIS SESSION'S FOCUS (what Pedro wants to work on)
-(Note: Pedro & Claude converse in ENGLISH; the Greenlight platform UI/copy stays
-in SPANISH for the team.) TWO features Pedro named for next time. Both touch the
-corrections/workspace code shipped 2026-08-10/11 — read project-state.md + the
-correcciones plan first. DESIGN-FIRST where there's ambiguity; use beast-mode-dev.
+## ✅ HECHO 2026-08-12 (ya NO son focus — shipped, ver session-log)
+Las DOS features que estaban aquí abajo ya se shippearon:
+- **Descartar una corrección fijada** + **"Pedir cambio" sólo en campos vacíos**.
+- **Importador "Pegar guión" (Feature 2)** completo: parser determinista + RPC
+  atómico (mig 0030) + UI diálogo/preview + normalizador **H.Ü.E** con guard
+  fact-shaped. CTA arriba, diálogo scrollable. Verificado 3/3 en vivo.
+
+## 🎯 PRÓXIMOS CANDIDATOS (ninguno comprometido — Pedro elige)
+(Note: Pedro & Claude converse in ENGLISH; la UI/copy de Greenlight queda en
+SPANISH. DESIGN-FIRST donde haya ambigüedad; use beast-mode-dev.)
+1. **Muestra REAL de estático** de Pedro → reemplazar el `parseEstatico` PROVISIONAL
+   de `src/lib/guion.ts` con un gold-test (hoy es best-effort, sin muestra real).
+2. **Rotar `ANTHROPIC_API_KEY`** — se compartió en texto plano en el chat; está en
+   Vercel env + `.env.local`. Generar nueva en console.anthropic.com, revocar, y
+   actualizar ambos lados.
+3. **Llenar emails del equipo** en /admin ▸ Equipo (hoy las notificaciones salen
+   `skipped` porque la columna `email` está vacía).
+4. Candidatos viejos: **Portal del cliente** · **F6 Notion** (bloqueado en token) ·
+   **Slack** de notificación · **API/MCP con tokens** · **legal de Préstamos** · dark mode.
+
+## (histórico — ya hecho) Las dos features originales de esta tanda
 
 **1. "Cancelar" / descartar una corrección — el revisor cambió de opinión.**
 - The composers (field-level in `campo-correcciones.tsx`, selection-level in

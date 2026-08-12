@@ -1,5 +1,5 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-11 (correcciones ancladas a selección de texto)
+Última actualización: 2026-08-12 (importador "Pegar guión" + descartar corrección; mig 0030)
 
 ## Qué es
 App interna de producción de anuncios que reemplaza el Google Sheet de DiDi + el
@@ -41,8 +41,11 @@ Unbounded (wordmark)
   specialist_lead + RPCs rpc_add_correction/send_corrections/return_review +
   rpc_task_approve ahora CIERRA la ronda (resuelve lo pendiente), **0029**
   correcciones ancladas a selección (comments += target_quote/start/end;
-  rpc_add_correction extendido, firma vieja de 9 args DROPeada). La próxima
-  migración usa un timestamp NUEVO ≥ 20260811120001.
+  rpc_add_correction extendido, firma vieja de 9 args DROPeada), **0030**
+  `rpc_import_planos(idea_id, planos jsonb, modo)` — inserta N planos de un guión
+  pegado en UNA transacción (replace/append; read_time por trigger). Aplicada a
+  prod 2026-08-11, **S.P.A.M byte-idéntico 42/31/6**. La próxima migración usa un
+  timestamp NUEVO ≥ 20260812120001.
 - **Storage**: bucket privado `greenlight-referencias` (creado con
   `npm run setup:storage`, fuera de migraciones). Imágenes se sirven por signed
   URL firmada por render. Verificado: privado (acceso público = 400).
@@ -53,9 +56,33 @@ snippets legal=1 (sólo Card) · references(links del sheet)=15
 
 ## Integraciones
 - **Google Sheets** vía Apps Script (solo lectura). `scripts/apps-script/Code.gs`.
+- **Anthropic (H.Ü.E)** — dep `@anthropic-ai/sdk`; `ANTHROPIC_API_KEY` en Vercel
+  env + `.env.local`. Sólo el server action `normalizarGuion` la usa (Sonnet 5,
+  thinking off) para reordenar un guión pegado SIN saltos de línea. ⚠️ La key se
+  compartió en texto plano en el chat de la sesión → considerar rotarla.
 - **Vercel env**: SHEETS_SCRIPT_URL/SECRET, NEXT_PUBLIC_SUPABASE_URL/ANON_KEY,
-  SUPABASE_SERVICE_ROLE_KEY. (Falta NOTION_TOKEN/NOTION_DB_ID para F6.)
+  SUPABASE_SERVICE_ROLE_KEY, GMAIL_USER/APP_PASSWORD, APP_URL, ANTHROPIC_API_KEY.
+  (Falta NOTION_TOKEN/NOTION_DB_ID para F6.)
 - `.env.local` local tiene las mismas; los scripts node lo cargan a mano.
+- **URL de prod: UNA sola canónica** `runna-command-center.vercel.app` (git-connected,
+  se refresca en cada push). Se eliminó el alias manual `-pedro-3338-` que se
+  quedaba stale (era caché-inmune, causó confusión). Ver lección Vercel-alias.
+
+## Nuevo 2026-08-12
+- **Importador "Pegar guión" / "Pegar copy"** (Feature 2, shipped): CTA prominente
+  ARRIBA del cuerpo del workspace → diálogo (alto fijo, body scrollable, header/
+  footer pinned) → pega el guión del deck → vista previa EDITABLE (una tarjeta por
+  plano, radio Reemplazar/Agregar) → confirma → escritura atómica (`rpc_import_planos`).
+  Parser determinista `src/lib/guion.ts` (parseGuion/parseEstatico/contarPlanos +
+  guard `mismoContenido`/`desdeElPrimerPlano`). Para pegados SIN saltos de línea,
+  botón **"Deja que H.Ü.E lo arregle"** → `normalizarGuion` (Sonnet, structure-only)
+  + guard fact-shaped (dígitos + * % $ + multiset de letras; tolera coma/comilla/
+  espacios). Verificado 3/3 en vivo con el guión real de DiDi. Estático: parser
+  PROVISIONAL (falta muestra real de Pedro para gold-test).
+- **Descartar una corrección fijada** (revisor cambió de opinión): botón trash con
+  confirmación en dos pasos en el panel; server action `descartarCorreccion` (hard
+  delete, la ronda se auto-cura). Y **"Pedir cambio" de campo entero sólo en campos
+  VACÍOS** (con texto, la selección lo cubre; un campo vacío igual se puede flaggear).
 
 ## Qué funciona (workspace COMPLETO — construido esta sesión)
 - **Clientes** → espacio por cliente.
