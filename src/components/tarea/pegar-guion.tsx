@@ -90,7 +90,7 @@ export function PegarGuion({ ideaId, modo }: { ideaId: string; modo: "guion" | "
       setTexto(res.texto);
       setPlanos(p);
       setAvisoSaltos(contarPlanos(res.texto) > p.length);
-      toast.success("Guión reordenado con IA — revísalo abajo.");
+      toast.success("H.Ü.E reordenó el guión — revísalo abajo.");
     });
 
   const editarPlano = (i: number, k: keyof PlanoParsed, v: string) =>
@@ -173,7 +173,7 @@ export function PegarGuion({ ideaId, modo }: { ideaId: string; modo: "guion" | "
                       disabled={arreglando}
                       onClick={arreglarConIA}
                     >
-                      <Sparkles className="size-3.5" /> {arreglando ? "Arreglando…" : "Arreglar con IA"}
+                      <Sparkles className="size-3.5" /> {arreglando ? "H.Ü.E está arreglando…" : "Deja que H.Ü.E lo arregle"}
                     </Button>
                   </div>
                 </div>
