@@ -120,7 +120,7 @@ export function PegarGuion({ ideaId, modo }: { ideaId: string; modo: "guion" | "
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setAbierto(true)} className="w-full">
+      <Button size="sm" onClick={() => setAbierto(true)} className="w-full shrink-0 sm:w-auto">
         <ClipboardPaste className="size-4" /> {modo === "guion" ? "Pegar guión" : "Pegar copy"}
       </Button>
 

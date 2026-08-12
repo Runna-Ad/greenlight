@@ -173,13 +173,31 @@ export function EditorTarea({
       <div className={verPreview ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]" : ""}>
         {/* ── cuerpo ── */}
         <div className="min-w-0 space-y-3">
+          {/* CTA para ARRANCAR la tarea: pegar el guión/copy completo y llenar
+              todo de una vez. Va ARRIBA (acción de inicio), no abajo junto a
+              "Agregar plano" (que es incremental, a mitad de flujo). */}
+          {!soloLectura && (
+            <div className="flex flex-col gap-2 rounded-xl border border-dashed border-[color-mix(in_srgb,var(--primary)_45%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-foreground">
+                  {esEstatico ? "¿Ya tienes el copy?" : "¿Ya tienes el guión?"}
+                </p>
+                <p className="text-[12px] text-muted-foreground">
+                  {esEstatico
+                    ? "Pégalo del deck y llena los campos de una vez."
+                    : "Pégalo completo del deck y llena todos los planos de una vez."}
+                </p>
+              </div>
+              <PegarGuion ideaId={ideaId} modo={esEstatico ? "estatico" : "guion"} />
+            </div>
+          )}
+
           {esEstatico && estatico ? (
             <div className="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm md:grid-cols-2">
               <div className="space-y-3">
                 <p className="rounded bg-[#4a86e8] px-2 py-1 text-center text-[10px] font-bold uppercase text-white">
                   Copy in
                 </p>
-                {!soloLectura && <PegarGuion ideaId={ideaId} modo="estatico" />}
                 <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="copy_titulo" label="Título"
                   valorInicial={estatico.copy_titulo} rows={2} soloLectura={soloLectura}
                   placeholder={PLACEHOLDER_ESTATICO.copy_titulo}
@@ -301,12 +319,9 @@ export function EditorTarea({
               ))}
 
               {!soloLectura && (
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button variant="outline" size="sm" onClick={nuevoPlano} className="w-full">
-                    <Plus className="size-4" /> Agregar plano
-                  </Button>
-                  <PegarGuion ideaId={ideaId} modo="guion" />
-                </div>
+                <Button variant="outline" size="sm" onClick={nuevoPlano} className="w-full">
+                  <Plus className="size-4" /> Agregar plano
+                </Button>
               )}
 
               {/* La Cortinilla de Cierre va al FINAL, después de todos los
