@@ -125,7 +125,11 @@ export function PegarGuion({ ideaId, modo }: { ideaId: string; modo: "guion" | "
       </Button>
 
       <Dialog open={abierto} onOpenChange={(o) => (o ? setAbierto(true) : cerrar())}>
-        <DialogContent className="max-w-2xl">
+        {/* Alto fijo con la parte de en medio scrollable y el header/footer
+            SIEMPRE visibles — así "Analizar"/"Importar" nunca se salen de la
+            pantalla por más largo que sea el guión. Más ancho para que las
+            tarjetas no se apachurren. */}
+        <DialogContent className="grid max-h-[88svh] w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-3 sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-sm">
               {modo === "guion" ? "Pegar guión" : "Pegar copy del estático"}
@@ -133,8 +137,8 @@ export function PegarGuion({ ideaId, modo }: { ideaId: string; modo: "guion" | "
           </DialogHeader>
 
           {paso === "pegar" ? (
-            <div className="space-y-3">
-              <p className="text-[12px] text-muted-foreground">
+            <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
+              <p className="shrink-0 text-[12px] text-muted-foreground">
                 Pega el {modo === "guion" ? "guión" : "copy"} tal cual del deck. Verás una vista
                 previa para revisar y editar antes de crear nada; un campo que no aparezca queda
                 en blanco.
@@ -142,7 +146,6 @@ export function PegarGuion({ ideaId, modo }: { ideaId: string; modo: "guion" | "
               <Textarea
                 value={texto}
                 onChange={(e) => setTexto(e.target.value)}
-                rows={12}
                 autoFocus
                 aria-label="Texto del guión"
                 placeholder={
@@ -150,11 +153,11 @@ export function PegarGuion({ ideaId, modo }: { ideaId: string; modo: "guion" | "
                     ? "Plano 1 - int. Sala - MCU\nAcción…\nCopy in: …\nSFX: …\nActriz\nDiálogo…\n\nPlano 2 - …"
                     : "Título: …\nSubtítulo: …\nBotón CTA: …"
                 }
-                className="min-h-[240px] font-mono"
+                className="min-h-0 flex-1 resize-none overflow-y-auto font-mono [field-sizing:fixed]"
               />
             </div>
           ) : (
-            <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+            <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
               {avisoSaltos && (
                 <div className="flex items-start gap-2 rounded-md border border-status-progress/40 bg-[color-mix(in_srgb,var(--status-progress)_10%,transparent)] p-2.5 text-[12px]">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-progress" />
