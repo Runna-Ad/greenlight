@@ -16,6 +16,7 @@ import { reglasQueAplican, type Regla } from "@/lib/reglas";
 import { Button } from "@/components/ui/button";
 import { Campo } from "./campo";
 import { CampoIntake } from "./campo-intake";
+import { PegarGuion } from "./pegar-guion";
 import { ChipsReglas } from "./chips-reglas";
 import { ReferenciasPlano, type RefVista } from "./referencias-plano";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -178,6 +179,7 @@ export function EditorTarea({
                 <p className="rounded bg-[#4a86e8] px-2 py-1 text-center text-[10px] font-bold uppercase text-white">
                   Copy in
                 </p>
+                {!soloLectura && <PegarGuion ideaId={ideaId} modo="estatico" />}
                 <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="copy_titulo" label="Título"
                   valorInicial={estatico.copy_titulo} rows={2} soloLectura={soloLectura}
                   placeholder={PLACEHOLDER_ESTATICO.copy_titulo}
@@ -299,9 +301,12 @@ export function EditorTarea({
               ))}
 
               {!soloLectura && (
-                <Button variant="outline" size="sm" onClick={nuevoPlano} className="w-full">
-                  <Plus className="size-4" /> Agregar plano
-                </Button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button variant="outline" size="sm" onClick={nuevoPlano} className="w-full">
+                    <Plus className="size-4" /> Agregar plano
+                  </Button>
+                  <PegarGuion ideaId={ideaId} modo="guion" />
+                </div>
               )}
 
               {/* La Cortinilla de Cierre va al FINAL, después de todos los

@@ -41,12 +41,13 @@ const juntar = (xs: string[]): string | null => nn(xs.filter((x) => x.trim()).jo
 const HEADER = /^plano\s+\d+\b/i;
 
 /**
- * Cuántos planos DECLARA el texto (por sus encabezados "Plano N"). Señal de
- * confianza para la UI: si parseGuion saca menos planos que esto, el pegado
- * perdió sus saltos de línea y hay que normalizarlo antes (structure-only).
+ * Cuántos planos DECLARA el texto (marcadores "Plano N" en CUALQUIER parte, no
+ * sólo a principio de línea). Señal de confianza para la UI: si parseGuion —que
+ * SÍ separa por principio de línea— saca menos bloques que esto, el pegado perdió
+ * sus saltos de línea y hay que normalizarlo antes (structure-only, con IA).
  */
 export function contarPlanos(texto: string): number {
-  return (texto.match(/^[ \t]*plano\s+\d+\b/gim) ?? []).length;
+  return (texto.match(/\bplano\s+\d+\b/gi) ?? []).length;
 }
 
 // Etiquetas de campo del deck → a qué campo del plano alimentan. "Botón CTA" no

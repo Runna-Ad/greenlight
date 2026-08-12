@@ -495,6 +495,13 @@ console.log("\n▶ Guión (paste importer)");
   eq("detecta 6 planos (descarta la fila de títulos)", p.length, 6);
   eq("contarPlanos = 6 (señal de confianza)", contarPlanos(SAMPLE), 6);
 
+  // Pegado SIN saltos de línea: los marcadores "Plano N" siguen en el texto pero
+  // parseGuion —que separa por principio de línea— saca menos bloques. Ese
+  // desfase es la señal para el normalizador con IA (paso 4).
+  const blob = SAMPLE.replace(/\s*\n\s*/g, "");
+  ok("pegado sin saltos: marcadores > bloques (dispara el normalizador)",
+     contarPlanos(blob) > parseGuion(blob).length);
+
   // Plano 1 — todos los campos
   eq("p1 titulo", p[0].titulo, "Plano 1 - int. Sala - MCU");
   eq("p1 accion (verbatim, no se le cuela el diálogo)", p[0].accion, acc1);
