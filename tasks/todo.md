@@ -16,9 +16,13 @@ adivina; campo no encontrado → blank.
 - [x] ✅ **SHIPPED** (Pedro "apply + ship"): mig 0030 aplicada a prod — **S.P.A.M
       byte-idéntico 42/31/6**, GL ledger 28→29, RPC + grants live. Push a main →
       deploy Ready. RPC verificado en prod end-to-end (txn con rollback, 0 residuo).
-- [ ] **Paso 4 — normalizador con IA** (BLOQUEADO en Pedro: `ANTHROPIC_API_KEY` +
-      `@anthropic-ai/sdk`). Structure-only + guardarraíl `mismoContenido`. Pedro dijo
-      que SÍ tiene key → la pega y lo construyo. El path determinista ya sirve sin esto.
+- [x] **Paso 4 — normalizador con IA** (commit 8c113cf): botón "Arreglar con IA" →
+      normalizarGuion (claude-sonnet-5, thinking off) re-inserta SÓLO saltos de línea +
+      guardarraíl `mismoContenido` (rechaza si cambió cualquier carácter no-espacio) →
+      re-parseo determinista. Dep `@anthropic-ai/sdk`; `ANTHROPIC_API_KEY` en .env.local.
+      Verificado en vivo contra la API real (guard PASA, 6 planos, copy intacto).
+      ⚠️ FALTA: (a) el "ship it" de Pedro para pushear; (b) agregar ANTHROPIC_API_KEY al
+      env de Vercel (sin ella el path de IA en prod degrada a "no configurado").
 - [ ] **Estático**: parser PROVISIONAL — falta la muestra real de estático de Pedro
       para fijar el gold test.
 
