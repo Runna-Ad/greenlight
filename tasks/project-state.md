@@ -58,8 +58,8 @@ snippets legal=1 (sólo Card) · references(links del sheet)=15
 - **Google Sheets** vía Apps Script (solo lectura). `scripts/apps-script/Code.gs`.
 - **Anthropic (H.Ü.E)** — dep `@anthropic-ai/sdk`; `ANTHROPIC_API_KEY` en Vercel
   env + `.env.local`. Sólo el server action `normalizarGuion` la usa (Sonnet 5,
-  thinking off) para reordenar un guión pegado SIN saltos de línea. ⚠️ La key se
-  compartió en texto plano en el chat de la sesión → considerar rotarla.
+  thinking off) para reordenar un guión pegado SIN saltos de línea. (Pedro: la key
+  está bien, NO rotar.)
 - **Vercel env**: SHEETS_SCRIPT_URL/SECRET, NEXT_PUBLIC_SUPABASE_URL/ANON_KEY,
   SUPABASE_SERVICE_ROLE_KEY, GMAIL_USER/APP_PASSWORD, APP_URL, ANTHROPIC_API_KEY.
   (Falta NOTION_TOKEN/NOTION_DB_ID para F6.)
@@ -159,7 +159,9 @@ snippets legal=1 (sólo Card) · references(links del sheet)=15
   com.mx`, dispatcher inline con `after()` en el Vercel de Greenlight). Salen en
   nuevo-brief · a-revisión · cambios · aprobada · enviada-al-cliente. **Falta
   sólo llenar el `email` de cada persona en /admin ▸ Equipo** (hoy vacíos → esas
-  notificaciones se marcan `skipped`; se activan solos al llenarlos). Env
+  notificaciones se marcan `skipped`). NOTA (Pedro): esto es POR DISEÑO — al salir
+  a live la columna `email` se reinicia vacía y se llena SOLA cuando cada quien
+  hace login. No es pendiente ni se llena a mano. Env
   (Vercel + `.env.local`): `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `APP_URL`.
 - **Slack** de notificación — pendiente (el enum de canal lo contempla; falta el
   sender). Prefs por-evento por usuario — pendiente (hoy un toggle global

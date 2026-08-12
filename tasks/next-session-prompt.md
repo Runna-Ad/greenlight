@@ -18,13 +18,14 @@ Las DOS features que estaban aquí abajo ya se shippearon:
 SPANISH. DESIGN-FIRST donde haya ambigüedad; use beast-mode-dev.)
 1. **Muestra REAL de estático** de Pedro → reemplazar el `parseEstatico` PROVISIONAL
    de `src/lib/guion.ts` con un gold-test (hoy es best-effort, sin muestra real).
-2. **Rotar `ANTHROPIC_API_KEY`** — se compartió en texto plano en el chat; está en
-   Vercel env + `.env.local`. Generar nueva en console.anthropic.com, revocar, y
-   actualizar ambos lados.
-3. **Llenar emails del equipo** en /admin ▸ Equipo (hoy las notificaciones salen
-   `skipped` porque la columna `email` está vacía).
-4. Candidatos viejos: **Portal del cliente** · **F6 Notion** (bloqueado en token) ·
+2. Candidatos viejos: **Portal del cliente** · **F6 Notion** (bloqueado en token) ·
    **Slack** de notificación · **API/MCP con tokens** · **legal de Préstamos** · dark mode.
+
+**NO son pendientes (decisión de Pedro 2026-08-12):**
+- `ANTHROPIC_API_KEY`: NO rotar — Pedro dice que está bien. No lo re-plantees.
+- Emails del equipo vacíos: es POR DISEÑO. La columna `email` se reinicia vacía
+  cuando salga a live tras el testing, y se llena SOLA cuando cada quien haga
+  login. No es un todo — no lo flaggees ni pidas llenarlo a mano.
 
 ## (histórico — ya hecho) Las dos features originales de esta tanda
 
