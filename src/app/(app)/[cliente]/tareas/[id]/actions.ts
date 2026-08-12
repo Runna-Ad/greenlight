@@ -8,6 +8,7 @@ import { getSoy } from "@/lib/soy";
 import { ESTADOS_CERRADOS } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
 import type { AssetStatus } from "@/lib/brand";
+import type { PlanoParsed, EstaticoParsed } from "@/lib/guion";
 
 export type Tabla = "planos" | "estaticos";
 
@@ -278,6 +279,57 @@ export async function borrarPlano(planoId: string): Promise<GuardarResultado> {
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
 
   const { error } = await supabaseAdmin().from("planos").delete().eq("id", planoId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Importa varios planos de un guión pegado (ya parseado en el cliente con
+ * src/lib/guion.ts). Atómico vía rpc_import_planos: "replace" reemplaza todos,
+ * "append" los agrega al final. El humano YA revisó/editó la vista previa antes
+ * de confirmar; aquí sólo se escribe.
+ */
+export async function importarGuion(
+  ideaId: string,
+  planos: PlanoParsed[],
+  modo: "append" | "replace",
+): Promise<GuardarResultado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const role = await getViewAs();
+  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  if (!planos.length) return { ok: false, error: "No hay planos que importar." };
+
+  const { error } = await supabaseAdmin().rpc("rpc_import_planos", {
+    p_idea_id: ideaId,
+    p_planos: planos,
+    p_modo: modo,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Importa el copy de un estático pegado (parseado con src/lib/guion.ts). Escribe
+ * SÓLO los campos que el parser encontró — nunca pisa con vacío un campo que ya
+ * tenía contenido (lección never-let-empty-overwrite-good-data).
+ */
+export async function importarEstatico(
+  ideaId: string,
+  campos: EstaticoParsed,
+): Promise<GuardarResultado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const role = await getViewAs();
+  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+
+  const CAMPOS_ESTATICO = ["copy_titulo", "copy_subtitulo", "copy_cta", "legales_extra"] as const;
+  const patch: Record<string, string> = {};
+  for (const k of CAMPOS_ESTATICO) {
+    const v = campos[k]?.trim();
+    if (v) patch[k] = v;
+  }
+  if (!Object.keys(patch).length) return { ok: false, error: "No se encontró copy que importar." };
+
+  const { error } = await supabaseAdmin().from("estaticos").update(patch).eq("idea_id", ideaId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

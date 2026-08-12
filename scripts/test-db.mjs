@@ -1368,5 +1368,52 @@ eq("entregas: in_app sent + email pending",
    await scalar(`select string_agg(d.channel||':'||d.status, ',' order by d.channel) from produccion.notification_deliveries d join produccion.notifications n on n.id=d.notification_id where n.type='brief_created'`),
    "email:pending,in_app:sent");
 
+// ── rpc_import_planos: importar un guión pegado (replace / append) ──
+console.log("\n▶ rpc_import_planos — importar guión pegado");
+{
+  const IDEA = "00000000-0000-0000-0000-0000000000d1";
+  await resetRole();
+  await db.exec(`delete from produccion.planos where idea_id='${IDEA}';
+    insert into produccion.planos (idea_id, orden, titulo) values ('${IDEA}',1,'viejo 1'),('${IDEA}',2,'viejo 2');`);
+
+  const imp = (planos, modo) =>
+    scalar(`select produccion.rpc_import_planos($1, $2::jsonb, $3)`, [IDEA, JSON.stringify(planos), modo]);
+  const planos = [
+    { titulo: "Plano 1", accion: "hace algo", copy_in: "compra ya", dialogo: "(Actriz) hola cómo estás tú" },
+    { titulo: "Plano 2", accion: "otra cosa", sfx: "pop" },
+    { titulo: "Plano 3" }, // sin más campos → todos null
+  ];
+
+  // replace: reemplaza los 2 viejos por 3 nuevos, orden 1..3
+  eq("replace crea 3 planos", Number(await imp(planos, "replace")), 3);
+  eq("replace deja exactamente 3 (borró los viejos)",
+     Number(await scalar(`select count(*) from produccion.planos where idea_id=$1`, [IDEA])), 3);
+  eq("replace reordena desde 1",
+     await scalar(`select string_agg(orden::text,',' order by orden) from produccion.planos where idea_id=$1`, [IDEA]), "1,2,3");
+  eq("los planos viejos ya no están",
+     Number(await scalar(`select count(*) from produccion.planos where idea_id=$1 and titulo like 'viejo%'`, [IDEA])), 0);
+  eq("un campo no provisto queda null (plano 3 sin accion)",
+     await scalar(`select accion from produccion.planos where idea_id=$1 and orden=3`, [IDEA]), null);
+  ok("read_time_s lo pone el trigger desde el diálogo (>0 con diálogo)",
+     Number(await scalar(`select read_time_s from produccion.planos where idea_id=$1 and orden=1`, [IDEA])) > 0);
+
+  // append: agrega 2 al final → orden 4,5, sin borrar los previos
+  eq("append crea 2", Number(await imp([{ titulo: "Plano 4" }, { titulo: "Plano 5" }], "append")), 2);
+  eq("append continúa el orden (max = 5)",
+     await scalar(`select max(orden)::text from produccion.planos where idea_id=$1`, [IDEA]), "5");
+  eq("append no borró los previos (5 en total)",
+     Number(await scalar(`select count(*) from produccion.planos where idea_id=$1`, [IDEA])), 5);
+
+  // vacío y modo inválido → se rechazan (rollback)
+  let vacio = false;
+  try { await db.query(`select produccion.rpc_import_planos($1, '[]'::jsonb, 'replace')`, [IDEA]); } catch { vacio = true; }
+  ok("importar 0 planos se rechaza", vacio);
+  let malModo = false;
+  try { await db.query(`select produccion.rpc_import_planos($1, $2::jsonb, 'nope')`, [IDEA, JSON.stringify([{ titulo: "x" }])]); } catch { malModo = true; }
+  ok("modo inválido se rechaza", malModo);
+
+  await db.exec(`delete from produccion.planos where idea_id='${IDEA}'`);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);
