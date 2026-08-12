@@ -8,7 +8,8 @@ import { getSoy } from "@/lib/soy";
 import { ESTADOS_CERRADOS } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
 import type { AssetStatus } from "@/lib/brand";
-import type { PlanoParsed, EstaticoParsed } from "@/lib/guion";
+import { mismoContenido, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
+import Anthropic from "@anthropic-ai/sdk";
 
 export type Tabla = "planos" | "estaticos";
 
@@ -332,6 +333,67 @@ export async function importarEstatico(
   const { error } = await supabaseAdmin().from("estaticos").update(patch).eq("idea_id", ideaId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * Normalizador structure-only: cuando un guión se pegó SIN saltos de línea, la IA
+ * (Sonnet) re-inserta los saltos para que el parser determinista pueda separarlo.
+ * GUARDARRAÍL DURO: la salida se acepta SÓLO si `mismoContenido` confirma que la IA
+ * cambió únicamente espacios/saltos — ni un número, ni un asterisco de legal, ni una
+ * letra del copy. Si tocó algo, se rechaza (el copy al cliente jamás se altera en
+ * silencio). El humano igual revisa la vista previa después.
+ */
+export async function normalizarGuion(
+  texto: string,
+): Promise<{ ok: true; texto: string } | { ok: false; error: string }> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { ok: false, error: "El arreglo con IA no está configurado (falta la clave)." };
+  }
+  const role = await getViewAs();
+  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  if (!texto.trim()) return { ok: false, error: "No hay texto que arreglar." };
+
+  const prompt =
+    "Te doy el texto de un guión de anuncio que perdió sus saltos de línea al " +
+    "pegarse. Tu ÚNICA tarea es INSERTAR saltos de línea para separar: cada " +
+    'encabezado de plano ("Plano N - ...") en su renglón; cada etiqueta ("Copy in:", ' +
+    '"SFX:", "GFX:", "Edición:", "Botón CTA:") en su renglón; y el nombre de cada ' +
+    "locutor y su diálogo en renglones aparte.\n\n" +
+    "REGLAS ABSOLUTAS:\n" +
+    "- NO cambies, agregues ni quites NINGÚN carácter que no sea un salto de línea " +
+    "o un espacio. Ni una letra, ni un número, ni un signo, ni un acento, ni un asterisco.\n" +
+    "- NO corrijas ortografía, NO traduzcas, NO reescribas, NO resumas.\n" +
+    "- Devuelve SÓLO el texto reformateado, sin explicaciones ni comillas.\n\n" +
+    "Texto:\n<<<\n" +
+    texto +
+    "\n>>>";
+
+  try {
+    const client = new Anthropic();
+    const res = await client.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 16000,
+      thinking: { type: "disabled" },
+      messages: [{ role: "user", content: prompt }],
+    });
+    const salida = res.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+
+    if (!salida) return { ok: false, error: "La IA no devolvió texto." };
+    if (!mismoContenido(texto, salida)) {
+      // La IA alteró el contenido (no sólo espacios) → se rechaza por seguridad.
+      return {
+        ok: false,
+        error: "El arreglo con IA cambió el texto, así que no se aplicó. Pega el guión con saltos de línea.",
+      };
+    }
+    return { ok: true, texto: salida };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error al llamar a la IA." };
+  }
 }
 
 /** Asocia un snippet de la biblioteca (legal o selling point) a la tarea. */

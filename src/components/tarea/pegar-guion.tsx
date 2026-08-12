@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ClipboardPaste, Trash2, AlertTriangle } from "lucide-react";
+import { ClipboardPaste, Trash2, AlertTriangle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { importarGuion, importarEstatico } from "@/app/(app)/[cliente]/tareas/[id]/actions";
+import { importarGuion, importarEstatico, normalizarGuion } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import {
   parseGuion,
   parseEstatico,
@@ -53,6 +53,7 @@ export function PegarGuion({ ideaId, modo }: { ideaId: string; modo: "guion" | "
   const [reemplazar, setReemplazar] = useState(true);
   const [avisoSaltos, setAvisoSaltos] = useState(false);
   const [pendiente, start] = useTransition();
+  const [arreglando, startArreglo] = useTransition();
 
   const reset = () => {
     setTexto("");
@@ -75,6 +76,22 @@ export function PegarGuion({ ideaId, modo }: { ideaId: string; modo: "guion" | "
     }
     setPaso("revisar");
   };
+
+  // Pegado sin saltos → la IA re-inserta la estructura (structure-only, con
+  // guardarraíl en el servidor), y se vuelve a parsear determinísticamente.
+  const arreglarConIA = () =>
+    startArreglo(async () => {
+      const res = await normalizarGuion(texto);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      const p = parseGuion(res.texto);
+      setTexto(res.texto);
+      setPlanos(p);
+      setAvisoSaltos(contarPlanos(res.texto) > p.length);
+      toast.success("Guión reordenado con IA — revísalo abajo.");
+    });
 
   const editarPlano = (i: number, k: keyof PlanoParsed, v: string) =>
     setPlanos((prev) => prev.map((p, j) => (j === i ? { ...p, [k]: v || null } : p)));
@@ -141,10 +158,21 @@ export function PegarGuion({ ideaId, modo }: { ideaId: string; modo: "guion" | "
               {avisoSaltos && (
                 <div className="flex items-start gap-2 rounded-md border border-status-progress/40 bg-[color-mix(in_srgb,var(--status-progress)_10%,transparent)] p-2.5 text-[12px]">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-progress" />
-                  <span>
-                    Parece que el texto perdió sus saltos de línea, así que la separación por
-                    planos puede no estar bien. Revísala y corrige abajo antes de importar.
-                  </span>
+                  <div className="min-w-0">
+                    <p>
+                      Parece que el texto perdió sus saltos de línea, así que la separación por
+                      planos puede no estar bien.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      disabled={arreglando}
+                      onClick={arreglarConIA}
+                    >
+                      <Sparkles className="size-3.5" /> {arreglando ? "Arreglando…" : "Arreglar con IA"}
+                    </Button>
+                  </div>
                 </div>
               )}
 
