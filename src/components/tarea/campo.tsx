@@ -327,7 +327,14 @@ export function Campo({
       )}
 
       {ctx && (
-        <CampoCorrecciones tabla={tabla} filaId={filaId} campo={campo} etiqueta={etiqueta} cs={cs} />
+        <CampoCorrecciones
+          tabla={tabla}
+          filaId={filaId}
+          campo={campo}
+          etiqueta={etiqueta}
+          cs={cs}
+          campoVacio={valor.trim() === ""}
+        />
       )}
     </div>
   );

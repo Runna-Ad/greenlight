@@ -32,12 +32,16 @@ export function CampoCorrecciones({
   campo,
   etiqueta,
   cs,
+  campoVacio,
 }: {
   tabla: "planos" | "estaticos" | "ideas" | "brief";
   filaId: string | null;
   campo: string;
   etiqueta: string;
   cs: Correccion[];
+  /** El campo no tiene texto. Sólo entonces mostramos "Pedir cambio" de campo
+   *  entero: con texto, anclar a la SELECCIÓN cubre lo mismo y el botón sobra. */
+  campoVacio: boolean;
 }) {
   const ctx = useCorrecciones();
   const [fijado, setFijado] = useState(false);
@@ -115,14 +119,18 @@ export function CampoCorrecciones({
               <Check className="size-3" /> Confirmar
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setComponiendo((v) => !v)}
-            className="inline-flex items-center gap-1 rounded-full border bg-card px-2 py-0.5 text-[11px] font-bold text-status-corrections shadow-sm transition-colors hover:bg-status-corrections hover:text-white"
-            style={{ borderColor: "color-mix(in srgb, var(--status-corrections) 40%, transparent)" }}
-          >
-            <Plus className="size-3" /> Pedir cambio
-          </button>
+          {/* Campo entero: sólo cuando está VACÍO (no hay texto que resaltar). Con
+              texto, el revisor ancla a la selección ("Pedir cambio aquí"). */}
+          {campoVacio && (
+            <button
+              type="button"
+              onClick={() => setComponiendo((v) => !v)}
+              className="inline-flex items-center gap-1 rounded-full border bg-card px-2 py-0.5 text-[11px] font-bold text-status-corrections shadow-sm transition-colors hover:bg-status-corrections hover:text-white"
+              style={{ borderColor: "color-mix(in srgb, var(--status-corrections) 40%, transparent)" }}
+            >
+              <Plus className="size-3" /> Pedir cambio
+            </button>
+          )}
         </div>
       )}
 
