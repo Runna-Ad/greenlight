@@ -1,5 +1,29 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🚧 IN PROGRESS (2026-08-11 pm) — "Pegar guión" importer (Feature 2)
+Deck-script paste → parse → editable preview → confirm → atomic write. Both video
+(N planos) y estático (fila única). Diseño: parser DETERMINISTA (verbatim) +
+normalizador con IA guardado (structure-only) para el caso sin saltos de línea.
+Respeta el PEDRO_OVERRIDE del parser: formato DEFINIDO + preview-then-confirm, no
+adivina; campo no encontrado → blank.
+- [x] **Paso 1 — parser** `src/lib/guion.ts` (parseGuion/parseEstatico/contarPlanos/
+      mismoContenido). Gold test contra la muestra REAL de Pedro (6 planos DiDi).
+      Mapeo: CTA→copy_in, Copy in múltiples unidos, dialogo→"(Quien) texto". Commit 4c0b068.
+- [x] **Paso 2 — RPC + actions** mig 0030 `rpc_import_planos` (replace/append, atómico,
+      read_time por trigger) + importarGuion/importarEstatico. 11 db tests. Commit e787157.
+- [x] **Paso 3 — UI** `pegar-guion.tsx` (diálogo + preview editable + radio replace/append)
+      montado en editor-tarea.tsx. Aviso de pegado-sin-saltos. Commit 21ac7e4.
+- [x] ✅ **SHIPPED** (Pedro "apply + ship"): mig 0030 aplicada a prod — **S.P.A.M
+      byte-idéntico 42/31/6**, GL ledger 28→29, RPC + grants live. Push a main →
+      deploy Ready. RPC verificado en prod end-to-end (txn con rollback, 0 residuo).
+- [ ] **Paso 4 — normalizador con IA** (BLOQUEADO en Pedro: `ANTHROPIC_API_KEY` +
+      `@anthropic-ai/sdk`). Structure-only + guardarraíl `mismoContenido`. Pedro dijo
+      que SÍ tiene key → la pega y lo construyo. El path determinista ya sirve sin esto.
+- [ ] **Estático**: parser PROVISIONAL — falta la muestra real de estático de Pedro
+      para fijar el gold test.
+
+
+
 ## ✅ DONE (2026-08-11 pm) — Descartar una corrección fijada (revisor cambió de opinión)
 Feature 1 del next-session-prompt. Design locked with Pedro: **hard delete**, **anytime**,
 behind a **two-step inline confirm**. NOT deployed yet — awaiting Pedro's "ship it".
