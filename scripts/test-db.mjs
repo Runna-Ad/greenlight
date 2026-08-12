@@ -767,6 +767,25 @@ const cWhole = await scalar(
   [flIdea, flPlano, mGalie]);
 ok("corrección de campo entero → quote null", (await scalar(`select target_quote from produccion.comments where id=$1`, [cWhole])) === null);
 
+// descartar (borrado duro): el revisor borra una corrección que fijó porque
+// cambió de opinión. Espeja el DELETE del server action (scope id+idea_id+kind).
+// Se cura solo: correction_next_round mira "¿queda alguna sin resolver?" y el
+// botón de acción mira el conteo vivo. cQuote + cWhole están abiertas en la ronda
+// actual → fixture limpio de "dos abiertas, borro una".
+const rondaViva = Number(await scalar(`select ronda from produccion.comments where id=$1`, [cQuote]));
+const abiertasAntes = Number(await scalar(
+  `select count(*) from produccion.comments where idea_id=$1 and kind='correction_request' and resolved_at is null`, [flIdea]));
+await db.query(`delete from produccion.comments where id=$1 and idea_id=$2 and kind='correction_request'`, [cWhole, flIdea]);
+eq("descartar borra la fila", Number(await scalar(`select count(*) from produccion.comments where id=$1`, [cWhole])), 0);
+eq("descartar baja el conteo de abiertas en 1",
+   Number(await scalar(`select count(*) from produccion.comments where idea_id=$1 and kind='correction_request' and resolved_at is null`, [flIdea])), abiertasAntes - 1);
+eq("con otra abierta viva, la ronda NO se bumpea (misma ronda)",
+   Number(await scalar(`select produccion.correction_next_round($1)`, [flIdea])), rondaViva);
+// borrar la última abierta → 0 sin resolver: el botón revierte a Aprobar, no cuelga la tarea.
+await db.query(`delete from produccion.comments where id=$1 and idea_id=$2 and kind='correction_request'`, [cQuote, flIdea]);
+eq("borrar la última abierta deja 0 sin resolver (no cuelga la tarea)",
+   Number(await scalar(`select count(*) from produccion.comments where idea_id=$1 and kind='correction_request' and resolved_at is null`, [flIdea])), 0);
+
 // specialist_lead: es equipo (ve la plantilla) pero NO revisa
 eq("'specialist_lead' existe en el enum app_role",
    await scalar(`select 'specialist_lead' = any(enum_range(null::produccion.app_role)::text[])`), true);

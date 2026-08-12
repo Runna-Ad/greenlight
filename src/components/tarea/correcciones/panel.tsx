@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Trash2 } from "lucide-react";
 import { useCorrecciones } from "./contexto";
 import { keyCampo, porRonda, sinResolver, type Correccion, type EstadoCorreccion } from "@/lib/correcciones";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,9 @@ function verCampo(c: Correccion) {
 export function PanelCorrecciones() {
   const ctx = useCorrecciones();
   const [colapsadas, setColapsadas] = useState<Set<number>>(new Set());
+  // Confirmación en dos pasos del descarte: el id de la corrección cuyo botón
+  // "Descartar" está pidiendo confirmación (sólo una a la vez).
+  const [confirmando, setConfirmando] = useState<string | null>(null);
   if (!ctx || !ctx.correcciones.length) return null;
 
   const grupos = porRonda(ctx.correcciones);
@@ -148,6 +152,38 @@ export function PanelCorrecciones() {
                           </BtnAccion>
                         )}
                         <BtnAccion onClick={() => verCampo(c)}>Ver campo</BtnAccion>
+
+                        {/* Revisor: descarta la corrección que fijó (borrado duro).
+                            Dos pasos — un clic pide confirmación en el mismo sitio. */}
+                        {ctx.esRevisor &&
+                          (confirmando === c.id ? (
+                            <span className="ml-auto inline-flex items-center gap-1.5">
+                              <span className="text-[11px] font-semibold text-muted-foreground">
+                                ¿Descartar?
+                              </span>
+                              <BtnAccion
+                                disabled={ctx.pendiente}
+                                tone="danger"
+                                onClick={() => {
+                                  ctx.descartar(c.id);
+                                  setConfirmando(null);
+                                }}
+                              >
+                                Sí, descartar
+                              </BtnAccion>
+                              <BtnAccion autoFocus onClick={() => setConfirmando(null)}>Cancelar</BtnAccion>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={ctx.pendiente}
+                              onClick={() => setConfirmando(c.id)}
+                              aria-label="Descartar corrección"
+                              className="ml-auto inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-[color-mix(in_srgb,var(--status-corrections)_45%,transparent)] hover:text-status-corrections disabled:opacity-50"
+                            >
+                              <Trash2 className="size-3" /> Descartar
+                            </button>
+                          ))}
                       </div>
                     </div>
                   ))}
@@ -166,22 +202,31 @@ function BtnAccion({
   onClick,
   disabled,
   tone,
+  autoFocus,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  tone?: "primary" | "go";
+  tone?: "primary" | "go" | "danger";
+  autoFocus?: boolean;
 }) {
   return (
     <button
       type="button"
+      autoFocus={autoFocus}
       disabled={disabled}
       onClick={onClick}
       className={cn(
         "rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50",
         tone ? "border-transparent text-white" : "border-border bg-card text-foreground hover:bg-secondary",
       )}
-      style={tone === "primary" ? { background: BG_CORAL } : tone === "go" ? { background: BG_GREEN } : undefined}
+      style={
+        tone === "primary" || tone === "danger"
+          ? { background: BG_CORAL }
+          : tone === "go"
+            ? { background: BG_GREEN }
+            : undefined
+      }
     >
       {children}
     </button>

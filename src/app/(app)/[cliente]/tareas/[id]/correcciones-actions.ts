@@ -114,6 +114,38 @@ export async function setEstadoCorreccion(
   return { ok: true };
 }
 
+/**
+ * El revisor DESCARTA una corrección que fijó (cambió de opinión). Borrado duro
+ * de la fila de `comments` — no queda historial (esa es la intención: "nunca la
+ * quise pedir"). Sólo el revisor (canOverrideStatus). El scope por id + idea_id +
+ * kind evita borrar por error otra tarea u otro tipo de comentario.
+ *
+ * No mueve el estado ni avisa. La ronda se auto-cura: correction_next_round mira
+ * "¿queda alguna sin resolver?" y el botón de acción mira el conteo vivo; al
+ * refrescar, ambos recalculan solos (borrar la última abierta NO deja colgada la
+ * tarea — mandar-a-correcciones ya exige conteo>0, y aprobar sigue disponible).
+ */
+export async function descartarCorreccion(
+  ideaId: string,
+  commentId: string,
+): Promise<CorreccionResultado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const role = await getViewAs();
+  if (!canOverrideStatus(role)) {
+    return { ok: false, error: "Sólo un lead descarta una corrección." };
+  }
+
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("comments")
+    .delete()
+    .eq("id", commentId)
+    .eq("idea_id", ideaId)
+    .eq("kind", "correction_request");
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 /** El revisor confirma (verde) TODAS las correcciones abiertas de un campo. */
 export async function confirmarCampo(
   ideaId: string,

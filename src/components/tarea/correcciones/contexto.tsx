@@ -8,6 +8,7 @@ import {
   agregarCorreccion,
   setEstadoCorreccion,
   confirmarCampo as confirmarCampoAction,
+  descartarCorreccion,
   type CorreccionTarget,
 } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
 
@@ -25,6 +26,8 @@ type Ctx = {
   pedir: (t: CorreccionTarget, body: string) => void;
   marcar: (id: string, estado: "open" | "done" | "closed") => void;
   confirmarCampo: (tabla: string, filaId: string | null, campo: string) => void;
+  /** El revisor descarta una corrección que fijó (borrado duro). */
+  descartar: (id: string) => void;
 };
 
 const CorreccionesCtx = createContext<Ctx | null>(null);
@@ -82,6 +85,7 @@ export function CorreccionesProvider({
       ),
     confirmarCampo: (tabla, filaId, campo) =>
       run(confirmarCampoAction(ideaId, tabla, filaId, campo), "Campo confirmado"),
+    descartar: (id) => run(descartarCorreccion(ideaId, id), "Corrección descartada"),
   };
 
   return <CorreccionesCtx.Provider value={value}>{children}</CorreccionesCtx.Provider>;

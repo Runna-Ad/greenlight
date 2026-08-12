@@ -1,5 +1,28 @@
 # Greenlight · by Rünna — Build Todo
 
+## ✅ DONE (2026-08-11 pm) — Descartar una corrección fijada (revisor cambió de opinión)
+Feature 1 del next-session-prompt. Design locked with Pedro: **hard delete**, **anytime**,
+behind a **two-step inline confirm**. NOT deployed yet — awaiting Pedro's "ship it".
+- [x] Server action `descartarCorreccion(ideaId, commentId)` en `correcciones-actions.ts`
+      — reviewer-only (`canOverrideStatus`), hard delete scoped by id+idea_id+kind (mirror `borrarPlano`).
+- [x] `descartar(id)` wired into `CorreccionesProvider` context (toast "Corrección descartada").
+- [x] Panel: reviewer-only **Descartar** (Trash2, `ml-auto`, destructive-ghost) → two-step
+      confirm "¿Descartar? · Sí, descartar (danger) · Cancelar (autoFocus = safe default)".
+      Added `tone="danger"` + `autoFocus` to `BtnAccion`.
+- [x] DB test (test-db.mjs): delete self-heals — deleting one of two open keeps the round
+      (no spurious bump); deleting the last open leaves 0 unresolved (button reverts, no strand).
+- [x] Reap (5-pass): 1 a11y fix applied (autofocus the safe option). No other findings.
+- [x] Gates: tsc clean · eslint clean (only pre-existing line-86 ternary warning) ·
+      `npm test` 183+191+44 pass (incl. 4 new) · `npm run build` OK.
+- [x] Live render check on task A12 (seeded 1 correction, panel + Descartar trigger render for
+      reviewer, then cleaned up → A12 back to 0). ⚠️ Click-through NOT drivable: browser MCP can't
+      reach React handlers this session (even the pre-existing round-collapse toggle didn't respond;
+      read_page/screenshot blank). Interaction is trivial useState; logged the tooling limit in lessons.md.
+### Review / follow-ups
+- No migration (hard delete). No new secret surface. Same auth model as siblings (service-role + role gate).
+- Descartar shows for the reviewer on ALL states (open/done/closed) per the "anytime" decision.
+- Discard doesn't notify or move state (by design). Round math + morphing button self-heal on refresh.
+
 ## 🔨 IN PROGRESS (2026-08-10) — Correcciones localizadas + rol specialist_lead
 Design locked with Pedro via clickable mockup (scratchpad/correcciones-mockup.html).
 Building to a PREVIEW deploy (frontend on Vercel preview URL). DB migrations are
