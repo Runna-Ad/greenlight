@@ -1,5 +1,24 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🚀 CAMINO A LIVE (aclarado con Pedro 2026-08-13)
+Modelo: TODO es pre-launch salvo el **portal del cliente**, que es lo ÚLTIMO que se
+construye antes de lanzar (depende de que el lado-agencia esté 100% listo). Luego
+**login**, luego go-live. Orden agencia-side → portal → login → live.
+- [x] **Workload** (antes "Carga"): tablero de capacidad por persona (estado+cliente).
+      SHIPPED 4203559. (Pedro pidió el label en inglés "Workload".)
+- [ ] **Entregas** (pre-launch): CONSOLIDAR "Entregas" + "Entregas por revisar" en UNA
+      sección = tablero de estado de entrega (enviado / en revisión del cliente /
+      aceptado / cambios / deadlines). Se construye JUNTO al portal (misma feature,
+      dos lados). Quitar el stub duplicado "Entregas por revisar" cuando se haga.
+- [ ] **Portal del cliente** (ÚLTIMO pre-launch): el cliente ve lo `published`, pide
+      Revisión/Cambios/Aprobado; alimenta el tablero de Entregas.
+- [ ] **Login** (final, antes de live). Emails del equipo se llenan solos al login.
+- [ ] Dato: **legal de Préstamos** (sólo Card sembrado; lo da Pedro, no inventar).
+- POST-LAUNCH (no bloquean): **Copies** template (Pedro: post-launch) · Slack notif ·
+  prefs notif por-usuario · F6 Notion (bloqueado en token) · API/MCP tokens.
+
+
+
 ## 🎨 IN PROGRESS (2026-08-12) — Design God Mode pass (Pedro: full pass = A+B+D)
 4-dimension audit done via parallel agents (color/contrast, consistency, motion, typography).
 Scope chosen: contrast fixes + unified <Pill> + motion. Dark-mode (C) deferred.
