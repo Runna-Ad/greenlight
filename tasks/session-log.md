@@ -1,5 +1,43 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-13 — Design God Mode pass (contraste + Pill + motion + mobile nav) + code-review
+
+Auditoría completa de UX/UI en 4 dimensiones vía agentes en paralelo
+(color/contraste, consistencia, motion, tipografía). Pedro eligió el full pass.
+Todo en prod. Commits **1207a10 → 1173bf1**.
+
+**Qué se hizo:**
+- **Contraste / Pill unificado** (`src/components/ui/pill.tsx`): un solo componente
+  reemplaza ~10 pastillas a mano. `parSolido()` garantiza ≥4.5:1 para cualquier
+  color (oscurece el fondo si un tono medio no pasa). Bug de Pedro (nombres
+  invisibles) 1.4→13.2:1; canales, avatares, badges de estado, contador de
+  notif, gradientes del panel de tipo, bandas del deck (tokenizadas+oscurecidas).
+  **0 fails AA medidos en el workspace** (auditor de contraste por DOM en vivo).
+  Tokens nuevos: --status-warning, --deck-blue/orange.
+- **Motion** (reduced-motion-safe, 120–220ms): indicador de autoguardado animado
+  + auto-descarte; pin de corrección "pop"; entrada de items nuevos; delay de
+  tooltip; pickup/landing del drag; acordeón de rondas; **reload→optimista** en
+  agregar plano e importar guión (server actions devuelven la fila creada).
+- **Mobile nav** (<768px): hamburguesa + Sheet lateral (antes NO había nav móvil).
+- **Tipografía/semántica**: textarea principal 13→14px; piso 8→10px; cada página
+  con `<h1>` real; `<h3>/<h4>` mal usados como micro-labels → `<p>`; `.gl-eyebrow`
+  en los 2 close-matches.
+- **/code-review** del diff completo (high): 3 hallazgos, 2 reales arreglados
+  (importarGuion no borra el workspace / importarEstatico no falso-errorea si el
+  refetch falla tras un write exitoso), 1 negligible sin cambio.
+
+**Estado:** todo en prod, tsc+build limpios, deploy Ready. S.P.A.M intacto (no se
+tocó BD; sólo UI + 2 server actions que devuelven filas ya existentes).
+
+**Decisiones:** contraste se resuelve UNA vez en `<Pill>`/`parSolido` (no por
+callsite); las bandas deck se oscurecieron a AA (Pedro puede revertir si quiere
+fidelidad exacta al deck); ~58 labels con tamaños variados NO se forzaron a
+gl-eyebrow (aplanaría la jerarquía).
+
+**Pick up next (sin comprometer):** DRY opcional de los color-maps duplicados de
+correcciones (ya pasan AA, cosmético) · muestra real de estático para el
+gold-test del parser · candidatos viejos (portal cliente, Notion, Slack, API).
+
 ## 2026-08-12 — Descartar corrección + Importador "Pegar guión" (Feature 2, completo)
 
 Sesión larga, todo en prod. S.P.A.M **byte-idéntico 42/31/6** de punta a punta.

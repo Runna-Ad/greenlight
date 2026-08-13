@@ -1,5 +1,21 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-12 (importador "Pegar guión" + descartar corrección; mig 0030)
+Última actualización: 2026-08-13 (Design God Mode pass: Pill/contraste + motion + mobile nav)
+
+## Sistema de diseño (design pass 2026-08-13)
+- **`<Pill>`** (`src/components/ui/pill.tsx`) — pastilla ÚNICA de toda la app (reemplazó
+  ~10 a mano). `parSolido(color)` garantiza texto ≥4.5:1 para cualquier color
+  (oscurece el fondo si un tono medio no pasa). Modos: color dinámico soft/solid |
+  status semántico. **Toda pastilla nueva usa `<Pill>`** — no re-inventar el contraste.
+- **Contraste**: 0 fails AA medidos en el workspace (auditor por DOM en vivo). Tokens
+  nuevos: `--status-warning`, `--deck-blue/orange`. Bandas deck oscurecidas a AA.
+- **Motion**: reduced-motion-safe global (globals.css). Autoguardado animado+auto-descarte,
+  pin de corrección pop, entrada de items, drag pickup/landing, acordeón rondas.
+  **reload→optimista**: agregarPlano/importarGuion/importarEstatico devuelven la fila
+  creada; el editor actualiza estado sin recargar (con fallback a reload si el refetch
+  falla — ver lección refetch-tras-write).
+- **Mobile nav** (<768px): `MobileNav` (hamburguesa + Sheet) en la Topbar.
+- **Tipografía**: textarea principal 14px; piso 10px; `<h1>` por página; `.gl-eyebrow`.
+- Pendiente cosmético: DRY de los 2 color-maps duplicados de correcciones (ya pasan AA).
 
 ## Qué es
 App interna de producción de anuncios que reemplaza el Google Sheet de DiDi + el
