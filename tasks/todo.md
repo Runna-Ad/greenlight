@@ -9,12 +9,14 @@ Scope chosen: contrast fixes + unified <Pill> + motion. Dark-mode (C) deferred.
 - [x] `src/components/ui/pill.tsx` — un componente: soft (tinte+tinta+punto) | solid (parSolido, AA garantizado, maneja hex Y var()) | status (darkened+blanco)
 - [x] Convert name pills (ChipPersona), channels, avatars (perfil/actividad), equipo chip, notif count, asset-type panel gradients, deck bands (oscurecidas), status badges (bundle-card + board), amber-*→--status-warning
 - [x] VERIFICADO en vivo: page de tarea 16→0 fails medibles; tablero AA; tsc+build
-**Phase D — motion — ✅ PARCIAL (e96902f):**
+**Phase D — motion — ✅ CASI COMPLETO (e96902f, 57e8648):**
 - [x] Keyframes gl-rise-in/gl-pop/gl-enter · autosave indicator (fade+auto-dismiss+✓) · pin de corrección pop · planos nuevos gl-enter
-- [ ] PENDIENTE: kill 2× reload()→optimistic (state plumbing) · accordion rondas height+chevron · board drag pickup/landing · tooltip timing
+- [x] Tooltip delay 0→200ms · board drag pickup scale-1.03 · chevron rotante en rondas
+- [ ] PENDIENTE (único): kill 2× reload()→optimistic insert (state plumbing, riesgo medio — el reload igual funciona con gl-enter). Board "landing confirm" opcional.
+**Mobile nav — ✅ SHIPPED (57e8648):** <SidebarNav> reusable + <MobileNav> (hamburguesa + Sheet lateral) en la Topbar. Verificado a 375px.
 **Type — ✅ PARCIAL:** [x] textarea principal 13→14px · [ ] 8px→10px floor · [ ] adoptar `.gl-eyebrow` (60 dups)
 **PENDIENTE color menor:** botón "Pedir cambio" texto 3.66 (legible, sub-AA) · unify DRY de los color-maps de correcciones (ya pasan AA)
-**FLAGGED (decisión de Pedro):** no mobile nav <768px (hamburger+Sheet); no <h1> + h3 mal usados como micro-labels.
+**FLAGGED restante:** no <h1> + h3 mal usados como micro-labels (a11y/semántica).
 
 ## 🚧 IN PROGRESS (2026-08-11 pm) — "Pegar guión" importer (Feature 2)
 Deck-script paste → parse → editable preview → confirm → atomic write. Both video
