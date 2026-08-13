@@ -7,6 +7,7 @@ import { contentType, canales } from "@/lib/iconos";
 import { PLATAFORMA_LABEL } from "@/lib/vocab";
 import { CampoIntake } from "./campo-intake";
 import { CampoReferencias } from "./campo-referencias";
+import { Pill } from "@/components/ui/pill";
 
 const COLOR_PLATAFORMA: Record<string, string> = {
   GG: "var(--plat-gg)",
@@ -156,14 +157,9 @@ export function CabeceraTarea({
                     <span className="text-[11px] text-muted-foreground/70">—</span>
                   ) : (
                     chans.map((c) => (
-                      <span
-                        key={c.code}
-                        title={c.label}
-                        className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white"
-                        style={{ backgroundColor: c.color }}
-                      >
+                      <Pill key={c.code} color={c.color} fill="solid" title={c.label}>
                         {c.label}
-                      </span>
+                      </Pill>
                     ))
                   )}
                 </div>

@@ -26,10 +26,13 @@
   --color-status-completed: var(--status-completed);
   --color-status-published: var(--status-published);
   --color-status-delivered: var(--status-delivered);
+  --color-status-warning: var(--status-warning);
   /* Platform pleca colors (TikTok black, Facebook blue, Google green) */
   --color-plat-tt: var(--plat-tt);
   --color-plat-fb: var(--plat-fb);
   --color-plat-gg: var(--plat-gg);
+  --color-deck-blue: var(--deck-blue);
+  --color-deck-orange: var(--deck-orange);
   /* Asset-type card colors (static light purple, normal dark purple, real person DiDi orange) */
   --color-type-static: var(--type-static);
   --color-type-normal: var(--type-normal);
@@ -129,11 +132,16 @@
   --status-completed: #0b8a5f;      /* green (text-safe) / bar uses #00cc88 */
   --status-published: #2563a8;      /* blue — in client portal */
   --status-delivered: #0b8a5f;
+  --status-warning: #b45309;        /* amber-700 — "fuera de flujo"/avisos (antes amber-* suelto) */
 
   /* Platform pleca */
   --plat-tt: #111114;               /* TikTok black */
   --plat-fb: #1877f2;               /* Facebook blue */
   --plat-gg: #34a853;               /* Google green */
+
+  /* Deck-mimic (encabezados tipo Google Slides). Tokenizados para no repetir el hex. */
+  --deck-blue: #4a86e8;
+  --deck-orange: #ff6d01;
 
   /* Asset-type card */
   --type-static: #b9a7e6;           /* light purple */
@@ -191,6 +199,7 @@
   --status-completed: #4adca5;
   --status-published: #6ba3e8;
   --status-delivered: #4adca5;
+  --status-warning: #f4b45c;
 
   --plat-tt: #e6e6ea;
   --plat-fb: #4a95f5;

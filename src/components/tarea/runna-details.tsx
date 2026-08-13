@@ -9,6 +9,7 @@ import { CampoIntake } from "./campo-intake";
 import { NombresFinales } from "./nombres-finales";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Pill } from "@/components/ui/pill";
 
 export type Persona = { id: string; name: string; color: string; es_lead: boolean };
 
@@ -148,18 +149,13 @@ function GrupoPersonas({
 }
 
 function ChipPersona({ persona }: { persona: Persona }) {
-  // Fondo tenue + texto y punto sólidos: el patrón de contraste AA del tablero.
+  // Tinte del color + TINTA OSCURA (no el color como texto: eso fallaba AA, 1.2–1.5:1).
+  // Lead → corona; si no, un punto del color para conservar la identidad visual.
   return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
-      style={{
-        backgroundColor: `color-mix(in srgb, ${persona.color} 26%, transparent)`,
-        color: persona.color,
-      }}
-    >
-      {persona.es_lead && <Crown className="size-2.5" />}
+    <Pill color={persona.color} dot={!persona.es_lead}>
+      {persona.es_lead && <Crown className="size-2.5" style={{ color: persona.color }} />}
       {persona.name}
-    </span>
+    </Pill>
   );
 }
 

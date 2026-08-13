@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { chipTextColor } from "@/lib/vocab";
+import { Pill } from "@/components/ui/pill";
 import { ROLE_LABEL, type ViewRole } from "@/lib/roles";
 import { ROLES_ASIGNABLES, type MiembroRow, type RolAsignable } from "@/lib/equipo";
 import { crearMiembro, guardarMiembro } from "@/app/(app)/admin/actions";
@@ -167,13 +167,9 @@ function MiembroCard({
             Lead
           </span>
         )}
-        <span
-          className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
-          style={{ backgroundColor: `${m.color}40`, color: chipTextColor(m.color) }}
-          title="Tareas activas asignadas"
-        >
+        <Pill color={m.color} title="Tareas activas asignadas" className="shrink-0">
           {m.carga} activa{m.carga === 1 ? "" : "s"}
-        </span>
+        </Pill>
         <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
           <Switch checked={m.active} onCheckedChange={(v) => onActivo(m, v)} aria-label="Activo" />
           Activo

@@ -1,5 +1,18 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🎨 IN PROGRESS (2026-08-12) — Design God Mode pass (Pedro: full pass = A+B+D)
+4-dimension audit done via parallel agents (color/contrast, consistency, motion, typography).
+Scope chosen: contrast fixes + unified <Pill> + motion. Dark-mode (C) deferred.
+
+**Phase A+B — color/pill layer (unify + fix all WCAG AA fails):**
+- [ ] globals.css: add `--status-warning` (light+dark) + tokenize deck colors (`--deck-blue` #4a86e8, `--deck-orange` #ff6d01)
+- [ ] NEW `src/components/ui/pill.tsx` — one component: `color` (dynamic → chipTextColor solid, or soft tint+ink+dot) | `status` (semantic → darkened-solid+white, the correcciones recipe)
+- [ ] Convert name pills (ChipPersona = THE bug), channels (cabecera:162), avatars (perfil/actividad), equipo chip, status badges (5 files), correcciones panel+campo-correcciones (kill dup color map), deck tags
+- [ ] amber-* literals → `--status-warning`; VERIFY in-browser contrast auditor → 0 AA fails; tsc+build
+**Phase D — motion (top 6, reduced-motion-safe, 120–220ms):** autosave indicator+auto-dismiss · kill 2× reload()→optimistic+enter · correction pin pop+optimistic · enter anim new items · accordion rondas · drag pickup/landing
+**Cheap type wins:** campo textarea 13→14px · 8px→10px floor · adopt `.gl-eyebrow`
+**FLAGGED (out of scope, decide later):** no mobile nav <768px (needs hamburger+Sheet); no <h1> + h3 misused as micro-labels.
+
 ## 🚧 IN PROGRESS (2026-08-11 pm) — "Pegar guión" importer (Feature 2)
 Deck-script paste → parse → editable preview → confirm → atomic write. Both video
 (N planos) y estático (fila única). Diseño: parser DETERMINISTA (verbatim) +

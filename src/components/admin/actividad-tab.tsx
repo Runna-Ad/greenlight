@@ -4,6 +4,7 @@ import { Activity, ArrowRight, ShieldAlert } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { STATUS_LABEL, type AssetStatus } from "@/lib/brand";
 import type { ActividadRow } from "@/lib/admin-tipos";
+import { chipTextColor } from "@/lib/vocab";
 
 const label = (s: string | null) => (s ? STATUS_LABEL[s as AssetStatus] ?? s : "—");
 
@@ -36,8 +37,8 @@ export function ActividadTab({ rows }: { rows: ActividadRow[] }) {
         {rows.map((r) => (
           <li key={r.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
             <span
-              className="flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-              style={{ backgroundColor: r.actorColor ?? "var(--muted-foreground)" }}
+              className="flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+              style={{ backgroundColor: r.actorColor ?? "#6b6885", color: chipTextColor(r.actorColor ?? "#6b6885") }}
               title={r.actor ?? "Sistema"}
             >
               {(r.actor ?? "··").slice(0, 2).toUpperCase()}

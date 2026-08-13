@@ -2,6 +2,7 @@
 
 import { UserRound } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { chipTextColor } from "@/lib/vocab";
 
 type Soy = { id: string; name: string; color: string; track: string } | null;
 
@@ -22,8 +23,8 @@ export function PerfilTab({ soy }: { soy: Soy }) {
     <div className="gl-card rounded-xl border border-border bg-card p-5">
       <div className="flex items-center gap-3">
         <span
-          className="flex size-11 items-center justify-center rounded-full text-sm font-semibold text-white"
-          style={{ backgroundColor: soy.color }}
+          className="flex size-11 items-center justify-center rounded-full text-sm font-semibold"
+          style={{ backgroundColor: soy.color, color: chipTextColor(soy.color) }}
         >
           {soy.name.slice(0, 2).toUpperCase()}
         </span>
