@@ -49,7 +49,7 @@ export function ChipsReglas({
                 r.severidad === "bloqueo"
                   ? "border-status-corrections text-status-corrections bg-[color-mix(in_srgb,var(--status-corrections)_10%,transparent)]"
                   : r.severidad === "aviso"
-                    ? "border-amber-500/50 text-amber-800 bg-amber-500/10"
+                    ? "border-status-warning/50 text-status-warning bg-status-warning/10"
                     : "border-border text-muted-foreground bg-secondary/60";
               return (
                 <Tooltip key={r.codigo}>

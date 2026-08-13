@@ -37,6 +37,7 @@ import {
 import { contentType } from "@/lib/iconos";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Pill, type PillStatus } from "@/components/ui/pill";
 
 export type Member = { id: string; name: string; color: string; track: "real" | "normal" };
 
@@ -304,15 +305,15 @@ function Column({
           backgroundColor: `color-mix(in srgb, var(--status-${token}) 8%, var(--card))`,
         }}
       >
-        <span className="text-sm font-semibold" style={{ color: `var(--status-${token})` }}>
+        <span
+          className="text-sm font-semibold"
+          style={{ color: `color-mix(in srgb, var(--status-${token}) 78%, #000)` }}
+        >
           {STATUS_LABEL[status]}
         </span>
-        <span
-          className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white"
-          style={{ backgroundColor: `var(--status-${token})` }}
-        >
+        <Pill status={token as PillStatus} className="text-[11px]">
           {tasks.length}
-        </span>
+        </Pill>
       </div>
 
       <div
@@ -324,7 +325,7 @@ function Column({
         }`}
       >
         {dragging && !isSource && reachable && fueraDeFlujo && (
-          <p className="mb-1 rounded bg-amber-500/15 px-2 py-1 text-center text-[10px] font-medium text-amber-800">
+          <p className="mb-1 rounded bg-status-warning/15 px-2 py-1 text-center text-[10px] font-medium text-status-warning">
             Fuera del flujo · queda registrado
           </p>
         )}
@@ -566,14 +567,14 @@ function CardBody({
                   clic indistinguible de seguirlo. Queda registrado con motivo. */}
               {fueraDeFlujo.length > 0 && (
                 <>
-                  <p className="mt-1 border-t border-border px-2 pb-1 pt-2 text-[10px] uppercase tracking-wide text-amber-700">
+                  <p className="mt-1 border-t border-border px-2 pb-1 pt-2 text-[10px] uppercase tracking-wide text-status-warning">
                     Fuera del flujo · queda registrado
                   </p>
                   {fueraDeFlujo.map((to) => (
                     <button
                       key={to}
                       onClick={() => onMove(task, to)}
-                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-amber-500/10"
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-status-warning/10"
                     >
                       <span
                         className="size-2 rounded-full opacity-60"

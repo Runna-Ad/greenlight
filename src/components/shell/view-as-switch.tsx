@@ -74,15 +74,15 @@ export function PreviewBanner({ role }: { role: ViewRole }) {
   if (role === DEFAULT_ROLE) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-amber-500/40 bg-amber-500/12 px-4 py-1.5 text-xs text-foreground md:px-6">
-      <Eye className="size-3.5 shrink-0 text-amber-700" />
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-status-warning/40 bg-status-warning/12 px-4 py-1.5 text-xs text-foreground md:px-6">
+      <Eye className="size-3.5 shrink-0 text-status-warning" />
       <span>
         Estás viendo la app como <strong>{ROLE_LABEL[role]}</strong>. No es tu rol real.
       </span>
       <button
         onClick={() => startTransition(() => void setViewAs(DEFAULT_ROLE))}
         disabled={pending}
-        className="ml-auto rounded px-2 py-0.5 font-medium text-amber-800 underline underline-offset-2 hover:bg-amber-500/20"
+        className="ml-auto rounded px-2 py-0.5 font-medium text-status-warning underline underline-offset-2 hover:bg-status-warning/20"
       >
         Volver a ser {ROLE_LABEL[DEFAULT_ROLE]}
       </button>

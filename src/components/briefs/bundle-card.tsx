@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Pill, type PillStatus } from "@/components/ui/pill";
 import { ChevronDown, Files, Layers } from "lucide-react";
 
 import type { Bundle } from "@/lib/bundle";
@@ -45,13 +46,13 @@ export function BundleCard({ bundle, cliente }: { bundle: Bundle; cliente: strin
         {/* mini-resumen por estado */}
         <div className="mt-3 flex flex-wrap gap-1.5">
           {resumenEstados(bundle).map(([status, n]) => (
-            <span
+            <Pill
               key={status}
-              className="rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
-              style={{ backgroundColor: `var(--status-${STATUS_TOKEN[status as keyof typeof STATUS_TOKEN]})` }}
+              status={STATUS_TOKEN[status as keyof typeof STATUS_TOKEN] as PillStatus}
+              className="text-[10px]"
             >
               {n} {STATUS_LABEL[status as keyof typeof STATUS_LABEL]}
-            </span>
+            </Pill>
           ))}
         </div>
       </button>
@@ -83,12 +84,9 @@ export function BundleCard({ bundle, cliente }: { bundle: Bundle; cliente: strin
                 <span className="min-w-0 truncate font-mono font-medium text-foreground">
                   {t.naming_base ?? "Sin naming"}
                 </span>
-                <span
-                  className="ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase text-white"
-                  style={{ backgroundColor: `var(--status-${STATUS_TOKEN[t.status]})` }}
-                >
+                <Pill status={STATUS_TOKEN[t.status] as PillStatus} className="ml-auto shrink-0 text-[9px] uppercase">
                   {STATUS_LABEL[t.status]}
-                </span>
+                </Pill>
                 <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
                   <Files className="size-3" /> {t.file_count}
                 </span>
