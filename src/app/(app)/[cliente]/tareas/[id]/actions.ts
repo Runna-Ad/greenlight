@@ -332,7 +332,7 @@ export async function importarGuion(
 export async function importarEstatico(
   ideaId: string,
   campos: EstaticoParsed,
-): Promise<{ ok: true; estatico: EstaticoVista } | { ok: false; error: string }> {
+): Promise<{ ok: true; estatico: EstaticoVista | null } | { ok: false; error: string }> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
@@ -348,9 +348,10 @@ export async function importarEstatico(
   const db = supabaseAdmin();
   const { error } = await db.from("estaticos").update(patch).eq("idea_id", ideaId);
   if (error) return { ok: false, error: error.message };
+  // El update YA fue exitoso; si el refetch no trae fila (transitorio), NO es un
+  // fallo de escritura — devolvemos null y el cliente recarga para reconciliar.
   const { data } = await db.from("estaticos").select(COLS_ESTATICO).eq("idea_id", ideaId).single();
-  if (!data) return { ok: false, error: "No se encontró el estático." };
-  return { ok: true, estatico: data as EstaticoVista };
+  return { ok: true, estatico: (data ?? null) as EstaticoVista | null };
 }
 
 /**

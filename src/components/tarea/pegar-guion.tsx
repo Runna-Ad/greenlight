@@ -119,11 +119,21 @@ export function PegarGuion({
           toast.error(res.error);
           return;
         }
+        // Un import siempre crea ≥1 plano; lista vacía = el refetch falló (raro) →
+        // recarga segura en vez de dejar el workspace en blanco (los datos SÍ están).
+        if (!res.planos.length) {
+          window.location.reload();
+          return;
+        }
         onPlanos?.(res.planos); // el editor reemplaza su estado; entra con animación
       } else {
         const res = await importarEstatico(ideaId, estatico!);
         if (!res.ok) {
           toast.error(res.error);
+          return;
+        }
+        if (!res.estatico) {
+          window.location.reload();
           return;
         }
         onEstatico?.(res.estatico);
