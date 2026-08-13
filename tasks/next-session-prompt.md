@@ -13,9 +13,18 @@ Las DOS features que estaban aquí abajo ya se shippearon:
   atómico (mig 0030) + UI diálogo/preview + normalizador **H.Ü.E** con guard
   fact-shaped. CTA arriba, diálogo scrollable. Verificado 3/3 en vivo.
 
-## 🎯 PRÓXIMOS CANDIDATOS (ninguno comprometido — Pedro elige)
+## 🎯 FOCO: CAMINO A LIVE (aclarado con Pedro 2026-08-13)
+Orden: lado-agencia (✅ core + Workload + Entregas) → **PORTAL DEL CLIENTE** (lo
+siguiente, el ÚLTIMO gran build; alimenta los estados finos de Entregas + prende
+`published→in_corrections`) → **LOGIN** → go-live. Dato pendiente de Pedro:
+**legal de Préstamos**. NO son focus (post-launch): Copies, Slack, Notion, API.
+Design pass + Workload + Entregas ya shippeados (ver session-log 2026-08-13).
+
 (Note: Pedro & Claude converse in ENGLISH; la UI/copy de Greenlight queda en
-SPANISH. DESIGN-FIRST donde haya ambigüedad; use beast-mode-dev.)
+SPANISH — excepción: el label "Workload" es en inglés por decisión de Pedro.
+DESIGN-FIRST donde haya ambigüedad; use beast-mode-dev.)
+
+## (viejos) PRÓXIMOS CANDIDATOS
 1. **Muestra REAL de estático** de Pedro → reemplazar el `parseEstatico` PROVISIONAL
    de `src/lib/guion.ts` con un gold-test (hoy es best-effort, sin muestra real).
 2. Candidatos viejos: **Portal del cliente** · **F6 Notion** (bloqueado en token) ·

@@ -1,5 +1,47 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-13 (cont.) — Camino a live: Workload + Entregas + fix de nav fantasma
+
+Aclaración clave de Pedro sobre el lanzamiento y dos secciones nuevas del lado-
+agencia. Todo en prod. Commits **4203559 → 14de08d**.
+
+**Modelo de lanzamiento (aclarado):** TODO es pre-launch salvo el **portal del
+cliente**, que es lo ÚLTIMO (depende de que el lado-agencia esté 100% listo).
+Luego **login**, luego go-live. Orden: agencia → portal → login → live.
+Las secciones "Pronto" NO estaban specificadas — eran placeholders del scaffold;
+sus nombres/iconos no cuadraban. Se redefinieron con Pedro.
+
+**Qué se hizo:**
+- **Workload** (antes el stub "Carga" — nombre ambiguo con upload): tablero de
+  capacidad por persona. Activas = asignadas y no publicadas/entregadas (mismo
+  criterio que la carga de Equipo), barra + flag "Cargado" (≥6), desglose por
+  ESTADO (Pill) y por CLIENTE (aparece con >1 cliente). Global, grupo GENERAL.
+  Pedro pidió el label en INGLÉS "Workload" (excepción a la UI-en-español). 4203559.
+- **Entregas** (consolida los 2 stubs "Entregas por revisar" + per-cliente
+  "Entregas" en UNO global): rastrea lo `published` (Con el cliente / En cambios /
+  Entregado) por cliente, con link de entrega, fecha, asignados. Los estados finos
+  del cliente (revisando/aceptó) llegan con el PORTAL. 5abbe88.
+- **Fix de nav fantasma** (14de08d): al agregar /workload y /entregas no las metí
+  en el set `RESERVED` del sidebar → en esas páginas creía que el cliente era
+  "workload" → sección fantasma con links /workload/tablero → vacío ("de Workload
+  a Tablero sale vacío", reportó Pedro). RESERVED ahora lista TODA ruta general.
+  Auditado en vivo route-by-route: 0 fantasmas; el board siempre renderizó bien.
+
+**Estado:** todo en prod, tsc+build+lint limpios, deploys Ready. No se tocó BD
+(sólo UI + loaders de lectura). S.P.A.M intacto.
+
+**Decisiones:** Workload label en inglés (Pedro) · Entregas global (no per-cliente)
+· "Con el cliente" = published hasta que exista el portal.
+
+**Camino a live restante:** **Portal del cliente** (último; alimenta los estados
+finos de Entregas + prende published→in_corrections) → **Login** → live. Dato
+pendiente de Pedro: **legal de Préstamos**. Post-launch: Copies, Slack, Notion, API.
+
+**Lecciones:** refetch-tras-write (no borrar/falso-errorear en refetch fallido) ·
+Pill/parSolido (contraste una vez, medir en navegador) · **nav RESERVED**
+(new-enum-value aplicado a RUTAS; grep el guard al agregar una ruta top-level; e
+investiga artefactos de UI raros en vez de racionalizarlos).
+
 ## 2026-08-13 — Design God Mode pass (contraste + Pill + motion + mobile nav) + code-review
 
 Auditoría completa de UX/UI en 4 dimensiones vía agentes en paralelo

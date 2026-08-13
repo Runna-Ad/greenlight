@@ -1,5 +1,16 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-13 (Design God Mode pass: Pill/contraste + motion + mobile nav)
+Última actualización: 2026-08-13 (Workload + Entregas + fix nav; camino a live)
+
+## Camino a LIVE (aclarado con Pedro 2026-08-13)
+TODO es pre-launch salvo el **portal del cliente** (lo ÚLTIMO — depende de que el
+lado-agencia esté 100% listo). Orden: agencia → **portal** → **login** → live.
+- Lado-agencia: core loop ✅ · Workload ✅ · Entregas ✅ (v1 agency-side).
+- Falta: **Portal del cliente** (alimenta los estados finos de Entregas +
+  prende published→in_corrections) · **Login** · dato **legal de Préstamos** (Pedro).
+- Post-launch (no bloquean): Copies template · Slack notif · prefs notif por-usuario
+  · F6 Notion (bloqueado en token) · API/MCP tokens.
+- Nav: `RESERVED` en sidebar DEBE listar toda ruta general de primer nivel; al
+  agregar una página general nueva, agrégala ahí (si no → sección de cliente fantasma).
 
 ## Sistema de diseño (design pass 2026-08-13)
 - **`<Pill>`** (`src/components/ui/pill.tsx`) — pastilla ÚNICA de toda la app (reemplazó
