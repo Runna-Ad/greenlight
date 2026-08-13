@@ -262,9 +262,9 @@ function Chip({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
-      <h4 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
         {title}
-      </h4>
+      </p>
       {children}
     </section>
   );

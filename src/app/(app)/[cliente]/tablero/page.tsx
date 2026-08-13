@@ -95,7 +95,7 @@ export default async function TableroPage({
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
             {cliente} · Tablero
           </p>
-          <h2 className="mt-1 text-2xl font-semibold text-foreground">Producción</h2>
+          <h1 className="mt-1 text-2xl font-semibold text-foreground">Producción</h1>
         </div>
         <p className="text-xs text-muted-foreground">
           {data === null

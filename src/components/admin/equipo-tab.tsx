@@ -111,9 +111,9 @@ function Grupo({
   if (miembros.length === 0) return null;
   return (
     <section className="mb-6">
-      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         {titulo}
-      </h3>
+      </p>
       <div className="space-y-2">
         {miembros.map((m) => (
           <MiembroCard key={m.id} m={m} guardar={guardar} onActivo={onActivo} />

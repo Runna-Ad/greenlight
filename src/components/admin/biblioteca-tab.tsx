@@ -60,10 +60,10 @@ export function BibliotecaTab({
         return (
           <section key={kind}>
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {SNIPPET_KIND_LABEL[kind]}{" "}
                 <span className="font-normal normal-case text-muted-foreground/70">· {delKind.length}</span>
-              </h3>
+              </p>
               <Button type="button" size="xs" variant="outline" onClick={() => setEdicion({ modo: "nuevo", kind })}>
                 <Plus /> Agregar
               </Button>

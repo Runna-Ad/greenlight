@@ -115,7 +115,7 @@ export function CampoCorrecciones({
               type="button"
               disabled={ctx.pendiente}
               onClick={() => ctx.confirmarCampo(tabla, filaId, campo)}
-              className="inline-flex items-center gap-1 rounded-full border border-status-completed/45 bg-card px-2 py-0.5 text-[11px] font-bold text-status-completed shadow-sm transition-colors hover:bg-status-completed hover:text-white"
+              className="inline-flex items-center gap-1 rounded-full border border-status-completed/45 bg-card px-2 py-0.5 text-[11px] font-bold text-[color-mix(in_srgb,var(--status-completed)_82%,#000)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--status-completed)_88%,#000)] hover:text-white"
             >
               <Check className="size-3" /> Confirmar
             </button>
@@ -126,7 +126,7 @@ export function CampoCorrecciones({
             <button
               type="button"
               onClick={() => setComponiendo((v) => !v)}
-              className="inline-flex items-center gap-1 rounded-full border bg-card px-2 py-0.5 text-[11px] font-bold text-status-corrections shadow-sm transition-colors hover:bg-status-corrections hover:text-white"
+              className="inline-flex items-center gap-1 rounded-full border bg-card px-2 py-0.5 text-[11px] font-bold text-[color-mix(in_srgb,var(--status-corrections)_72%,#000)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--status-corrections)_80%,#000)] hover:text-white"
               style={{ borderColor: "color-mix(in srgb, var(--status-corrections) 40%, transparent)" }}
             >
               <Plus className="size-3" /> Pedir cambio

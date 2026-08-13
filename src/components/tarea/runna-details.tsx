@@ -48,10 +48,10 @@ export function RunnaDetails({
     <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <button
         onClick={() => setAbierto((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-4 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
+        className="flex w-full items-center gap-1.5 px-4 py-2 text-left gl-eyebrow hover:text-foreground"
       >
         Rünna details
-        <span className="ml-1 rounded bg-secondary px-1.5 py-0.5 text-[8px] font-semibold normal-case tracking-normal">
+        <span className="ml-1 rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal">
           sólo interno
         </span>
         <ChevronDown className={`ml-auto size-4 transition-transform ${abierto ? "rotate-180" : ""}`} />

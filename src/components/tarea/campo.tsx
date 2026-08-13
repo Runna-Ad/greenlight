@@ -290,7 +290,7 @@ export function Campo({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => { setComponiendoSel(true); setTextoSel(""); }}
-            className="absolute left-1.5 top-1.5 z-30 inline-flex items-center gap-1 rounded-full border border-status-corrections/50 bg-card px-2 py-0.5 text-[11px] font-bold text-status-corrections shadow-sm transition-colors hover:bg-status-corrections hover:text-white"
+            className="absolute left-1.5 top-1.5 z-30 inline-flex items-center gap-1 rounded-full border border-status-corrections/50 bg-card px-2 py-0.5 text-[11px] font-bold text-[color-mix(in_srgb,var(--status-corrections)_72%,#000)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--status-corrections)_80%,#000)] hover:text-white"
           >
             <Plus className="size-3" /> Pedir cambio aquí
           </button>
@@ -316,7 +316,7 @@ export function Campo({
               type="button"
               disabled={ctx?.pendiente || !textoSel.trim()}
               onClick={fijarSeleccion}
-              className="rounded-md bg-status-corrections px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-50"
+              className="rounded-md bg-[color-mix(in_srgb,var(--status-corrections)_78%,#000)] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-50"
             >
               Fijar cambio
             </button>

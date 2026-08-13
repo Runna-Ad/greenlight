@@ -121,7 +121,7 @@ export function ReferenciasPlano({
                 className="flex size-14 flex-col items-center justify-center gap-0.5 rounded-md border border-border text-muted-foreground hover:border-primary hover:text-primary"
               >
                 {pending ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
-                <span className="text-[8px]">Imagen</span>
+                <span className="text-[10px]">Imagen</span>
               </button>
               {!soloImagenes && (
                 <button
@@ -132,7 +132,7 @@ export function ReferenciasPlano({
                   className="flex size-14 flex-col items-center justify-center gap-0.5 rounded-md border border-border text-center text-muted-foreground hover:border-primary hover:text-primary"
                 >
                   <Link2 className="size-4" />
-                  <span className="text-[8px] leading-tight">Link de video</span>
+                  <span className="text-[10px] leading-tight">Link de video</span>
                 </button>
               )}
             </div>
@@ -240,7 +240,7 @@ function Thumb({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={fondo} alt="" className="size-full object-cover" />
         ) : (
-          <span className="flex size-full items-center justify-center bg-secondary text-[8px] font-semibold uppercase text-muted-foreground">
+          <span className="flex size-full items-center justify-center bg-secondary text-[10px] font-semibold uppercase text-muted-foreground">
             {r.platform ?? "link"}
           </span>
         )}

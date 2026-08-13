@@ -147,9 +147,9 @@ export function SyncPanel({ cliente }: { cliente: string }) {
       {/* 1 — pick projects */}
       <section className="rounded-xl border border-border bg-card p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             1 · ¿Qué proyectos quieres traer?
-          </h3>
+          </p>
           {projects.length > 0 && (
             <div className="flex gap-2 text-xs">
               <button className="text-primary hover:underline" onClick={() => setChosen(new Set(projects.map((p) => p.name)))}>
@@ -270,9 +270,9 @@ export function SyncPanel({ cliente }: { cliente: string }) {
       {/* 2 — summary */}
       {previews && (
         <section className="rounded-xl border border-border bg-card p-5">
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             2 · Lo que encontramos
-          </h3>
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             {previews.map((p) => (
               <div key={p.name} className="rounded-lg border border-border p-3">
@@ -305,9 +305,9 @@ export function SyncPanel({ cliente }: { cliente: string }) {
       {previews && importable.length > 0 && (
         <section className="rounded-xl border border-border bg-card p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               3 · Revisa antes de crear
-            </h3>
+            </p>
             <div className="flex gap-2 text-xs">
               <button className="text-primary hover:underline" onClick={() => setAccepted(new Set(importable.map((r) => r.key)))}>
                 Seleccionar todo

@@ -9,9 +9,9 @@ export default function ClientesPage() {
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
           La entrada
         </p>
-        <h2 className="mt-1 text-2xl font-semibold text-foreground">
+        <h1 className="mt-1 text-2xl font-semibold text-foreground">
           Elige un cliente
-        </h2>
+        </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Cada cliente tiene su propio espacio: sus briefs, su tablero, su equipo
           asignado, sus instrucciones y legales. Nada se mezcla entre clientes.

@@ -169,7 +169,7 @@ export function BriefBuilder({ cliente }: { cliente: string }) {
       <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
         {cliente} · Nuevo brief
       </div>
-      <h2 className="mb-5 text-2xl font-semibold text-foreground">Capturar brief</h2>
+      <h1 className="mb-5 text-2xl font-semibold text-foreground">Capturar brief</h1>
 
       {/* ── Encabezado del brief (aplica a todas las tareas) ── */}
       <section className="gl-card mb-5 rounded-xl border border-border bg-card p-5">

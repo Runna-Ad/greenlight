@@ -138,7 +138,7 @@ export function EditorTarea({
       {(reglasActivas.length > 0 || !esEstatico) && (
         <div className="space-y-2.5 rounded-xl border border-border bg-card p-3 shadow-sm">
           <div className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+            <span className="flex items-center gap-1.5 gl-eyebrow">
               <ShieldCheck className="size-3.5" />
               Reglas que aplican
             </span>

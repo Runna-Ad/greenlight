@@ -68,7 +68,7 @@ export default async function MiTrabajoPage() {
             <span className="size-2 rounded-full" style={{ backgroundColor: soy.color }} />
             {soy.name} · {soy.track}
           </p>
-          <h2 className="mt-1 text-2xl font-semibold text-foreground">Mi trabajo</h2>
+          <h1 className="mt-1 text-2xl font-semibold text-foreground">Mi trabajo</h1>
         </div>
         <p className="text-xs text-muted-foreground">
           {tasks.length === 0

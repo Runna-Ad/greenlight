@@ -54,7 +54,7 @@ export function AdminShell({
       <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
         Configuración
       </div>
-      <h2 className="mb-5 text-2xl font-semibold text-foreground">Administración</h2>
+      <h1 className="mb-5 text-2xl font-semibold text-foreground">Administración</h1>
 
       <div className="grid gap-6 sm:grid-cols-[200px_1fr]">
         {/* Sub-nav lateral */}

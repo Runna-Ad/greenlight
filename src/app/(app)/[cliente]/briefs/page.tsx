@@ -47,7 +47,7 @@ export default async function BriefsPage({
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
             {cliente} · Briefs
           </p>
-          <h2 className="mt-1 text-2xl font-semibold text-foreground">Briefs</h2>
+          <h1 className="mt-1 text-2xl font-semibold text-foreground">Briefs</h1>
           {esEspecialista && (
             <p className="mt-0.5 text-xs text-muted-foreground">
               Sólo ves las tareas que tienes asignadas dentro de cada brief.
