@@ -48,7 +48,6 @@ export type NavKey =
   | "clientes"
   | "mi-trabajo"
   | "workload"
-  | "entrega-check"
   | "tablero"
   | "briefs"
   | "sync"
@@ -60,7 +59,6 @@ const NAV_ALL: NavKey[] = [
   "clientes",
   "mi-trabajo",
   "workload",
-  "entrega-check",
   "tablero",
   "briefs",
   "sync",
@@ -78,7 +76,6 @@ const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
     "clientes",
     "mi-trabajo",
     "workload",
-    "entrega-check",
     "tablero",
     "briefs",
     "sync",
