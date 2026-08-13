@@ -14,9 +14,14 @@ Scope chosen: contrast fixes + unified <Pill> + motion. Dark-mode (C) deferred.
 - [x] Tooltip delay 0→200ms · board drag pickup scale-1.03 · chevron rotante en rondas
 - [ ] PENDIENTE (único): kill 2× reload()→optimistic insert (state plumbing, riesgo medio — el reload igual funciona con gl-enter). Board "landing confirm" opcional.
 **Mobile nav — ✅ SHIPPED (57e8648):** <SidebarNav> reusable + <MobileNav> (hamburguesa + Sheet lateral) en la Topbar. Verificado a 375px.
-**Type — ✅ PARCIAL:** [x] textarea principal 13→14px · [ ] 8px→10px floor · [ ] adoptar `.gl-eyebrow` (60 dups)
-**PENDIENTE color menor:** botón "Pedir cambio" texto 3.66 (legible, sub-AA) · unify DRY de los color-maps de correcciones (ya pasan AA)
-**FLAGGED restante:** no <h1> + h3 mal usados como micro-labels (a11y/semántica).
+**Type — ✅ COMPLETO:** [x] textarea 13→14px · [x] 8px→10px floor · [x] `.gl-eyebrow` en los 2 close-matches (los ~58 restantes tienen tamaños variados a propósito)
+**Color menor — ✅:** [x] botones de corrección (Confirmar/Pedir cambio/Fijar) oscurecidos a AA. Pendiente opcional: unify DRY de los color-maps de correcciones (ya pasan AA).
+**Headings — ✅:** [x] cada página con <h1> real (h2→h1); [x] h3/h4 mal usados como micro-labels → <p>.
+
+### 🎨 DESIGN PASS COMPLETO (2026-08-12/13, live). Commits: 09b60f4→e3f3d10.
+Contraste (Pill unificado, 0 AA fails en workspace) · motion (indicador, pin pop, enter,
+tooltip, drag, chevron, reload→optimista) · mobile nav (hamburguesa+Sheet) · tipografía/
+headings. Único opcional restante: DRY de color-maps de correcciones (cosmético).
 
 ## 🚧 IN PROGRESS (2026-08-11 pm) — "Pegar guión" importer (Feature 2)
 Deck-script paste → parse → editable preview → confirm → atomic write. Both video
