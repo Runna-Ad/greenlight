@@ -28,7 +28,7 @@ function panelTipo(tipoAsset: string | null, plantilla: Plantilla) {
   if (plantilla === "estatico") {
     return {
       titulo: "Static",
-      fondo: "linear-gradient(135deg, #b9a7e6, #7c5cbf)",
+      fondo: "linear-gradient(135deg, #6e5aa8, #4a2f80)",
       etiqueta: null as string | null,
       opciones: [] as string[],
     };
@@ -36,7 +36,7 @@ function panelTipo(tipoAsset: string | null, plantilla: Plantilla) {
   return varianteGuion(tipoAsset) === "real"
     ? {
         titulo: "Real Person",
-        fondo: "linear-gradient(135deg, #ff8a3d, #e03131)",
+        fondo: "linear-gradient(135deg, #c44a14, #a8252a)",
         etiqueta: null,
         opciones: ["In-house", "UGC"],
       }

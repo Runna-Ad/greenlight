@@ -38,7 +38,10 @@ export function NotificationsBell({ initialCount }: { initialCount: number }) {
         <Button variant="ghost" size="icon" className="relative" aria-label="Notificaciones">
           <Bell className="size-4" />
           {count > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-status-corrections px-1 text-[9px] font-bold text-white">
+            <span
+              className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
+              style={{ backgroundColor: "color-mix(in srgb, var(--status-corrections) 78%, #000)" }}
+            >
               {count > 9 ? "9+" : count}
             </span>
           )}
