@@ -47,7 +47,7 @@ export const DEFAULT_ROLE: ViewRole = "admin";
 export type NavKey =
   | "clientes"
   | "mi-trabajo"
-  | "carga"
+  | "workload"
   | "entrega-check"
   | "tablero"
   | "briefs"
@@ -59,7 +59,7 @@ export type NavKey =
 const NAV_ALL: NavKey[] = [
   "clientes",
   "mi-trabajo",
-  "carga",
+  "workload",
   "entrega-check",
   "tablero",
   "briefs",
@@ -77,7 +77,7 @@ const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
   lead: [
     "clientes",
     "mi-trabajo",
-    "carga",
+    "workload",
     "entrega-check",
     "tablero",
     "briefs",

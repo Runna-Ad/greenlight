@@ -43,7 +43,7 @@ function navFor(slug: string | null): { section: string; items: NavItem[] }[] {
       items: [
         { key: "clientes", href: "/clientes", label: "Clientes", icon: Users },
         { key: "mi-trabajo", href: "/mi-trabajo", label: "Mi trabajo", icon: LayoutGrid },
-        { key: "carga", href: "/carga", label: "Carga", icon: GaugeCircle, soon: true },
+        { key: "workload", href: "/workload", label: "Workload", icon: GaugeCircle },
         {
           key: "entrega-check",
           href: "/entrega-check",
