@@ -68,12 +68,15 @@ function navFor(slug: string | null): { section: string; items: NavItem[] }[] {
   ];
 }
 
-// Root-level sections that are NOT client slugs.
+// Rutas top-level que NO son slugs de cliente. DEBE listar TODA ruta general de
+// primer nivel (ver src/app/(app)/*): si falta una, el sidebar la toma como
+// cliente y arma una sección fantasma (/<ruta>/tablero → vacío). Al agregar una
+// página general nueva, agrégala AQUÍ.
 const RESERVED = new Set([
   "clientes",
   "mi-trabajo",
-  "carga",
-  "entrega-check",
+  "workload",
+  "entregas",
   "admin",
   "login",
 ]);
