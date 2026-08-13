@@ -437,7 +437,7 @@ function CardBody({
         enCorrecciones
           ? "border-status-corrections ring-1 ring-[color-mix(in_srgb,var(--status-corrections)_35%,transparent)]"
           : "border-border"
-      } ${dragging ? "rotate-1 shadow-lg" : ""}`}
+      } ${dragging ? "rotate-1 scale-[1.03] shadow-lg" : ""}`}
     >
       {enCorrecciones && (
         <p className="mb-1.5 rounded bg-[color-mix(in_srgb,var(--status-corrections)_12%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-status-corrections">

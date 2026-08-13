@@ -6,7 +6,9 @@ import { Tooltip as TooltipPrimitive } from "radix-ui"
 import { cn } from "@/lib/utils"
 
 function TooltipProvider({
-  delayDuration = 0,
+  // Un pequeño delay evita que los tooltips parpadeen al pasar el mouse rápido
+  // por una UI densa; se abren al posarse, no al rozar.
+  delayDuration = 200,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (

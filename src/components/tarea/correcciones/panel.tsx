@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, ChevronDown } from "lucide-react";
 import { useCorrecciones } from "./contexto";
 import { keyCampo, porRonda, sinResolver, type Correccion, type EstadoCorreccion } from "@/lib/correcciones";
 import { cn } from "@/lib/utils";
@@ -89,7 +89,8 @@ export function PanelCorrecciones() {
                 }
                 className="flex w-full items-center gap-2 px-3.5 pb-1.5 pt-2.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground"
               >
-                {visible ? "▾" : "▸"} Ronda {ronda}
+                <ChevronDown className={cn("size-3.5 transition-transform", visible ? "" : "-rotate-90")} />
+                Ronda {ronda}
                 <span
                   className="ml-auto rounded-full px-2 py-0.5 text-[10.5px] font-semibold normal-case tracking-normal text-white"
                   style={{ background: ronda === rondaActual ? PILL.open : PILL.closed }}
