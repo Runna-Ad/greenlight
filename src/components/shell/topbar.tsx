@@ -9,6 +9,7 @@ import { ViewAsSwitch } from "./view-as-switch";
 import { SoySwitch, type PoolMember } from "./soy-switch";
 import { NotificationsBell } from "./notifications-bell";
 import { Wordmark } from "./wordmark";
+import { MobileNav } from "./sidebar";
 
 export function Topbar({
   title,
@@ -25,6 +26,7 @@ export function Topbar({
 }) {
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card/85 px-4 shadow-sm backdrop-blur-md md:px-6">
+      <MobileNav role={role} />
       {title ? (
         <h1 className="text-base font-semibold text-foreground font-[family-name:var(--font-poppins)]">
           {title}

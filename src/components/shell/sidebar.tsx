@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -13,11 +14,14 @@ import {
   Settings,
   RefreshCw,
   Eye,
+  Menu,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canSee, DEFAULT_ROLE, type NavKey, type ViewRole } from "@/lib/roles";
 import { Wordmark } from "./wordmark";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 
 // `soon` = la pantalla está en el roadmap pero la ruta todavía no existe.
 // Se pinta apagada y SIN <Link>, porque un Link a una ruta inexistente lo
@@ -88,7 +92,17 @@ const RESERVED = new Set([
   "login",
 ]);
 
-export function Sidebar({ role = DEFAULT_ROLE }: { role?: ViewRole }) {
+/**
+ * El contenido del menú, reutilizable por el rail de escritorio (<aside>) y por
+ * el Sheet móvil. `onNavigate` cierra el Sheet al tocar un link.
+ */
+function SidebarNav({
+  role = DEFAULT_ROLE,
+  onNavigate,
+}: {
+  role?: ViewRole;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const first = pathname.split("/")[1] ?? "";
   const activeClient = first && !RESERVED.has(first) ? first : null;
@@ -100,7 +114,7 @@ export function Sidebar({ role = DEFAULT_ROLE }: { role?: ViewRole }) {
     .filter((g) => g.items.length > 0);
 
   return (
-    <aside className="hidden md:flex w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground">
+    <>
       <div className="flex h-16 flex-col justify-center gap-1 px-5 border-b border-sidebar-border">
         <Wordmark on="dark" className="text-[17px]" />
         <span className="flex items-center gap-1.5 pl-[15px] text-[10px] text-sidebar-foreground/45">
@@ -157,6 +171,7 @@ export function Sidebar({ role = DEFAULT_ROLE }: { role?: ViewRole }) {
                   <li key={item.href}>
                     <Link
                       href={item.href}
+                      onClick={onNavigate}
                       className={cn(
                         row,
                         "transition-colors",
@@ -179,6 +194,39 @@ export function Sidebar({ role = DEFAULT_ROLE }: { role?: ViewRole }) {
       <div className="border-t border-sidebar-border p-4 text-[11px] text-sidebar-foreground/40">
         Producción de anuncios
       </div>
+    </>
+  );
+}
+
+/** Rail de escritorio (≥ md). Debajo de md el menú vive en <MobileNav>. */
+export function Sidebar({ role = DEFAULT_ROLE }: { role?: ViewRole }) {
+  return (
+    <aside className="hidden md:flex w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground">
+      <SidebarNav role={role} />
     </aside>
+  );
+}
+
+/**
+ * Menú móvil (< md): un botón de hamburguesa que abre el mismo menú en un Sheet
+ * lateral. Se cierra al navegar. Vive en la Topbar (que ya recibe el rol).
+ */
+export function MobileNav({ role = DEFAULT_ROLE }: { role?: ViewRole }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button variant="ghost" size="icon" className="md:hidden" aria-label="Abrir menú">
+          <Menu className="size-5" />
+        </Button>
+      </SheetTrigger>
+      <SheetContent
+        side="left"
+        className="flex w-64 flex-col bg-sidebar p-0 text-sidebar-foreground [&>button]:top-5 [&>button]:text-sidebar-foreground/70"
+      >
+        <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
+        <SidebarNav role={role} onNavigate={() => setOpen(false)} />
+      </SheetContent>
+    </Sheet>
   );
 }
