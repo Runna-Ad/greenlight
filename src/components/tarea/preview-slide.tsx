@@ -160,7 +160,7 @@ export function PreviewSlide({
       {estatico ? (
         <div className="grid grid-cols-2 text-[10px]">
           <div className="border-r border-black/10">
-            <p className="bg-[#4a86e8] px-2 py-1 text-center text-[9px] font-bold uppercase text-white">
+            <p className="bg-deck-blue px-2 py-1 text-center text-[9px] font-bold uppercase text-white">
               Copy in
             </p>
             <div className="space-y-1.5 p-2">
@@ -170,7 +170,7 @@ export function PreviewSlide({
             </div>
           </div>
           <div>
-            <p className="bg-[#ff6d01] px-2 py-1 text-center text-[9px] font-bold uppercase text-white">
+            <p className="bg-deck-orange px-2 py-1 text-center text-[9px] font-bold uppercase text-white">
               Referencia / Imagen
             </p>
             <div className="p-2 text-[10px] text-black/60">
@@ -186,10 +186,10 @@ export function PreviewSlide({
       ) : (
         <div className="text-[10px]">
           <div className="grid grid-cols-2">
-            <p className="border-r border-white/20 bg-[#4a86e8] px-2 py-1 text-center text-[9px] font-bold uppercase text-white">
+            <p className="border-r border-white/20 bg-deck-blue px-2 py-1 text-center text-[9px] font-bold uppercase text-white">
               Acción + Copy in + GFX / SFX
             </p>
-            <p className="bg-[#ff6d01] px-2 py-1 text-center text-[9px] font-bold uppercase text-white">
+            <p className="bg-deck-orange px-2 py-1 text-center text-[9px] font-bold uppercase text-white">
               Diálogo
             </p>
           </div>

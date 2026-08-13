@@ -139,9 +139,10 @@
   --plat-fb: #1877f2;               /* Facebook blue */
   --plat-gg: #34a853;               /* Google green */
 
-  /* Deck-mimic (encabezados tipo Google Slides). Tokenizados para no repetir el hex. */
-  --deck-blue: #4a86e8;
-  --deck-orange: #ff6d01;
+  /* Deck-mimic (encabezados tipo Google Slides). Oscurecidos vs el deck original
+     (#4a86e8/#ff6d01) para que el texto blanco de 9–10px pase AA (~4.7:1). */
+  --deck-blue: #2f6fd6;
+  --deck-orange: #c44a00;
 
   /* Asset-type card */
   --type-static: #b9a7e6;           /* light purple */

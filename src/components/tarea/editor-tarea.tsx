@@ -195,7 +195,7 @@ export function EditorTarea({
           {esEstatico && estatico ? (
             <div className="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm md:grid-cols-2">
               <div className="space-y-3">
-                <p className="rounded bg-[#4a86e8] px-2 py-1 text-center text-[10px] font-bold uppercase text-white">
+                <p className="rounded bg-deck-blue px-2 py-1 text-center text-[10px] font-bold uppercase text-white">
                   Copy in
                 </p>
                 <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="copy_titulo" label="Título"
@@ -215,7 +215,7 @@ export function EditorTarea({
                   placeholder={PLACEHOLDER_ESTATICO.legales_extra} />
               </div>
               <div className="space-y-3">
-                <p className="rounded bg-[#ff6d01] px-2 py-1 text-center text-[10px] font-bold uppercase text-white">
+                <p className="rounded bg-deck-orange px-2 py-1 text-center text-[10px] font-bold uppercase text-white">
                   Referencia / Imagen
                 </p>
                 {/* En estático, la referencia es el drag & drop de IMÁGENES (sin
@@ -236,10 +236,10 @@ export function EditorTarea({
           ) : (
             <>
               <div className="grid grid-cols-2 gap-0 overflow-hidden rounded-t-lg">
-                <p className="bg-[#4a86e8] px-2 py-1.5 text-center text-[10px] font-bold uppercase text-white">
+                <p className="bg-deck-blue px-2 py-1.5 text-center text-[10px] font-bold uppercase text-white">
                   Acción + Copy in + GFX / SFX (Motion)
                 </p>
-                <p className="bg-[#ff6d01] px-2 py-1.5 text-center text-[10px] font-bold uppercase text-white">
+                <p className="bg-deck-orange px-2 py-1.5 text-center text-[10px] font-bold uppercase text-white">
                   Diálogo · {quienHabla}
                 </p>
               </div>
