@@ -9,6 +9,13 @@ import { ESTADOS_CERRADOS } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
 import type { AssetStatus } from "@/lib/brand";
 import { mismoContenido, desdeElPrimerPlano, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
+import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
+
+// Columnas que alimentan a PlanoVista/EstaticoVista (para devolver la fila creada
+// al cliente y que actualice su estado sin recargar la página).
+const COLS_PLANO = "id, orden, titulo, accion, copy_in, sfx, gfx, edicion, dialogo, es_cierre";
+const COLS_ESTATICO =
+  "id, copy_titulo, copy_subtitulo, copy_cta, legales_extra, referencia_url, referencia_nota";
 import Anthropic from "@anthropic-ai/sdk";
 
 export type Tabla = "planos" | "estaticos";
@@ -258,7 +265,9 @@ export async function guardarCampo(
 }
 
 /** Añadir un plano al final del guión. Operación estructural: explícita. */
-export async function agregarPlano(ideaId: string): Promise<GuardarResultado> {
+export async function agregarPlano(
+  ideaId: string,
+): Promise<{ ok: true; plano: PlanoVista } | { ok: false; error: string }> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
@@ -268,10 +277,12 @@ export async function agregarPlano(ideaId: string): Promise<GuardarResultado> {
     .from("planos").select("orden").eq("idea_id", ideaId)
     .order("orden", { ascending: false }).limit(1).maybeSingle();
 
-  const { error } = await db
-    .from("planos").insert({ idea_id: ideaId, orden: (ultimo?.orden ?? 0) + 1 });
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  // Devuelve la fila creada para insertarla en el estado del editor sin recargar.
+  const { data, error } = await db
+    .from("planos").insert({ idea_id: ideaId, orden: (ultimo?.orden ?? 0) + 1 })
+    .select(COLS_PLANO).single();
+  if (error || !data) return { ok: false, error: error?.message ?? "No se pudo agregar el plano." };
+  return { ok: true, plano: data as PlanoVista };
 }
 
 export async function borrarPlano(planoId: string): Promise<GuardarResultado> {
@@ -294,19 +305,23 @@ export async function importarGuion(
   ideaId: string,
   planos: PlanoParsed[],
   modo: "append" | "replace",
-): Promise<GuardarResultado> {
+): Promise<{ ok: true; planos: PlanoVista[] } | { ok: false; error: string }> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
   if (!planos.length) return { ok: false, error: "No hay planos que importar." };
 
-  const { error } = await supabaseAdmin().rpc("rpc_import_planos", {
+  const db = supabaseAdmin();
+  const { error } = await db.rpc("rpc_import_planos", {
     p_idea_id: ideaId,
     p_planos: planos,
     p_modo: modo,
   });
   if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  // Devuelve la lista COMPLETA resultante (replace o append) para que el editor
+  // reemplace su estado sin recargar; los planos nuevos entran con animación.
+  const { data } = await db.from("planos").select(COLS_PLANO).eq("idea_id", ideaId).order("orden");
+  return { ok: true, planos: (data ?? []) as PlanoVista[] };
 }
 
 /**
@@ -317,7 +332,7 @@ export async function importarGuion(
 export async function importarEstatico(
   ideaId: string,
   campos: EstaticoParsed,
-): Promise<GuardarResultado> {
+): Promise<{ ok: true; estatico: EstaticoVista } | { ok: false; error: string }> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
@@ -330,9 +345,12 @@ export async function importarEstatico(
   }
   if (!Object.keys(patch).length) return { ok: false, error: "No se encontró copy que importar." };
 
-  const { error } = await supabaseAdmin().from("estaticos").update(patch).eq("idea_id", ideaId);
+  const db = supabaseAdmin();
+  const { error } = await db.from("estaticos").update(patch).eq("idea_id", ideaId);
   if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  const { data } = await db.from("estaticos").select(COLS_ESTATICO).eq("idea_id", ideaId).single();
+  if (!data) return { ok: false, error: "No se encontró el estático." };
+  return { ok: true, estatico: data as EstaticoVista };
 }
 
 /**

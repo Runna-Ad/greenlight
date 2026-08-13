@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { importarGuion, importarEstatico, normalizarGuion } from "@/app/(app)/[cliente]/tareas/[id]/actions";
+import type { PlanoVista, EstaticoVista } from "./preview-slide";
 import {
   parseGuion,
   parseEstatico,
@@ -44,7 +45,18 @@ const CAMPOS_ESTATICO: { k: keyof EstaticoParsed; label: string; rows: number }[
  * revisa antes de escribir. Un pegado sin saltos de línea se detecta y se avisa
  * (el arreglo automático con IA llega en el paso 4).
  */
-export function PegarGuion({ ideaId, modo }: { ideaId: string; modo: "guion" | "estatico" }) {
+export function PegarGuion({
+  ideaId,
+  modo,
+  onPlanos,
+  onEstatico,
+}: {
+  ideaId: string;
+  modo: "guion" | "estatico";
+  /** Al importar, el editor actualiza su estado con las filas resultantes (sin recargar). */
+  onPlanos?: (planos: PlanoVista[]) => void;
+  onEstatico?: (estatico: EstaticoVista) => void;
+}) {
   const [abierto, setAbierto] = useState(false);
   const [texto, setTexto] = useState("");
   const [paso, setPaso] = useState<"pegar" | "revisar">("pegar");
@@ -101,15 +113,23 @@ export function PegarGuion({ ideaId, modo }: { ideaId: string; modo: "guion" | "
 
   const confirmar = () =>
     start(async () => {
-      const res =
-        modo === "guion"
-          ? await importarGuion(ideaId, planos, reemplazar ? "replace" : "append")
-          : await importarEstatico(ideaId, estatico!);
-      if (!res.ok) {
-        toast.error("error" in res ? res.error : "No se pudo importar.");
-        return;
+      if (modo === "guion") {
+        const res = await importarGuion(ideaId, planos, reemplazar ? "replace" : "append");
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        onPlanos?.(res.planos); // el editor reemplaza su estado; entra con animación
+      } else {
+        const res = await importarEstatico(ideaId, estatico!);
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        onEstatico?.(res.estatico);
       }
-      window.location.reload();
+      toast.success(modo === "guion" ? "Guión importado" : "Copy importado");
+      cerrar();
     });
 
   const nPlanos = planos.length;

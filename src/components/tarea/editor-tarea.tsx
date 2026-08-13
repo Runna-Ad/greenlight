@@ -115,8 +115,13 @@ export function EditorTarea({
   const nuevoPlano = () =>
     startTransition(async () => {
       const res = await agregarPlano(ideaId);
-      if (!res.ok) toast.error("error" in res ? res.error : "No se pudo agregar el plano.");
-      else window.location.reload();
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      // Optimista: se agrega al estado y entra con animación (gl-enter), sin
+      // recargar la página (antes un reload perdía scroll y foco).
+      setPlanos((prev) => [...prev, res.plano]);
     });
 
   const quitarPlano = (id: string) =>
@@ -188,7 +193,12 @@ export function EditorTarea({
                     : "Pégalo completo del deck y llena todos los planos de una vez."}
                 </p>
               </div>
-              <PegarGuion ideaId={ideaId} modo={esEstatico ? "estatico" : "guion"} />
+              <PegarGuion
+                ideaId={ideaId}
+                modo={esEstatico ? "estatico" : "guion"}
+                onPlanos={setPlanos}
+                onEstatico={setEstatico}
+              />
             </div>
           )}
 
