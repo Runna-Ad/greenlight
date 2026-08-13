@@ -4,14 +4,17 @@
 4-dimension audit done via parallel agents (color/contrast, consistency, motion, typography).
 Scope chosen: contrast fixes + unified <Pill> + motion. Dark-mode (C) deferred.
 
-**Phase A+B — color/pill layer (unify + fix all WCAG AA fails):**
-- [ ] globals.css: add `--status-warning` (light+dark) + tokenize deck colors (`--deck-blue` #4a86e8, `--deck-orange` #ff6d01)
-- [ ] NEW `src/components/ui/pill.tsx` — one component: `color` (dynamic → chipTextColor solid, or soft tint+ink+dot) | `status` (semantic → darkened-solid+white, the correcciones recipe)
-- [ ] Convert name pills (ChipPersona = THE bug), channels (cabecera:162), avatars (perfil/actividad), equipo chip, status badges (5 files), correcciones panel+campo-correcciones (kill dup color map), deck tags
-- [ ] amber-* literals → `--status-warning`; VERIFY in-browser contrast auditor → 0 AA fails; tsc+build
-**Phase D — motion (top 6, reduced-motion-safe, 120–220ms):** autosave indicator+auto-dismiss · kill 2× reload()→optimistic+enter · correction pin pop+optimistic · enter anim new items · accordion rondas · drag pickup/landing
-**Cheap type wins:** campo textarea 13→14px · 8px→10px floor · adopt `.gl-eyebrow`
-**FLAGGED (out of scope, decide later):** no mobile nav <768px (needs hamburger+Sheet); no <h1> + h3 misused as micro-labels.
+**Phase A+B — color/pill layer — ✅ SHIPPED (ff20540, live p69irdwen):**
+- [x] globals.css: `--status-warning` (light+dark) + `--deck-blue/--deck-orange`
+- [x] `src/components/ui/pill.tsx` — un componente: soft (tinte+tinta+punto) | solid (parSolido, AA garantizado, maneja hex Y var()) | status (darkened+blanco)
+- [x] Convert name pills (ChipPersona), channels, avatars (perfil/actividad), equipo chip, notif count, asset-type panel gradients, deck bands (oscurecidas), status badges (bundle-card + board), amber-*→--status-warning
+- [x] VERIFICADO en vivo: page de tarea 16→0 fails medibles; tablero AA; tsc+build
+**Phase D — motion — ✅ PARCIAL (e96902f):**
+- [x] Keyframes gl-rise-in/gl-pop/gl-enter · autosave indicator (fade+auto-dismiss+✓) · pin de corrección pop · planos nuevos gl-enter
+- [ ] PENDIENTE: kill 2× reload()→optimistic (state plumbing) · accordion rondas height+chevron · board drag pickup/landing · tooltip timing
+**Type — ✅ PARCIAL:** [x] textarea principal 13→14px · [ ] 8px→10px floor · [ ] adoptar `.gl-eyebrow` (60 dups)
+**PENDIENTE color menor:** botón "Pedir cambio" texto 3.66 (legible, sub-AA) · unify DRY de los color-maps de correcciones (ya pasan AA)
+**FLAGGED (decisión de Pedro):** no mobile nav <768px (hamburger+Sheet); no <h1> + h3 mal usados como micro-labels.
 
 ## 🚧 IN PROGRESS (2026-08-11 pm) — "Pegar guión" importer (Feature 2)
 Deck-script paste → parse → editable preview → confirm → atomic write. Both video
