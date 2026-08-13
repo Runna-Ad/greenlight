@@ -6,10 +6,10 @@ construye antes de lanzar (depende de que el lado-agencia esté 100% listo). Lue
 **login**, luego go-live. Orden agencia-side → portal → login → live.
 - [x] **Workload** (antes "Carga"): tablero de capacidad por persona (estado+cliente).
       SHIPPED 4203559. (Pedro pidió el label en inglés "Workload".)
-- [ ] **Entregas** (pre-launch): CONSOLIDAR "Entregas" + "Entregas por revisar" en UNA
-      sección = tablero de estado de entrega (enviado / en revisión del cliente /
-      aceptado / cambios / deadlines). Se construye JUNTO al portal (misma feature,
-      dos lados). Quitar el stub duplicado "Entregas por revisar" cuando se haga.
+- [x] **Entregas** (agency-side v1): SHIPPED 5abbe88. Tablero global que consolida los
+      2 stubs → una sección `/entregas` (GENERAL). Rastrea lo `published` (Con el
+      cliente / En cambios / Entregado) por cliente. FALTA (con el portal): subdividir
+      "Con el cliente" en revisando/aceptó — los estados finos los produce el portal.
 - [ ] **Portal del cliente** (ÚLTIMO pre-launch): el cliente ve lo `published`, pide
       Revisión/Cambios/Aprobado; alimenta el tablero de Entregas.
 - [ ] **Login** (final, antes de live). Emails del equipo se llenan solos al login.
