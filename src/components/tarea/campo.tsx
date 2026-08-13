@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { guardarCampo, type Tabla } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { cn } from "@/lib/utils";
 import { useCorrecciones } from "./correcciones/contexto";
@@ -59,6 +59,9 @@ export function useAutoguardado(
   const [conflicto, setConflicto] = useState<string | null>(null);
   const guardado = useRef<string | null>(valorInicial);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Auto-descarta el "guardado" tras un momento: un campo en reposo no debe
+  // cargar chrome permanente (lección de motion: el 20º uso no debe tener ruido).
+  const limpioTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // `guardar` se toma de ESTA renderización a propósito: el debounce se arma
   // dentro de alEscribir, que se recrea con cada tecla, así que la función que
@@ -70,6 +73,8 @@ export function useAutoguardado(
     if (res.ok) {
       guardado.current = v || null;
       setEstado("guardado");
+      if (limpioTimer.current) clearTimeout(limpioTimer.current);
+      limpioTimer.current = setTimeout(() => setEstado("limpio"), 1200);
       return;
     }
     if ("conflicto" in res && res.conflicto) setConflicto(res.valorActual ?? "");
@@ -80,6 +85,7 @@ export function useAutoguardado(
     setValor(v);
     onCambio?.(v);
     setEstado("pendiente");
+    if (limpioTimer.current) clearTimeout(limpioTimer.current);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => void persistir(v), 800);
   };
@@ -89,7 +95,10 @@ export function useAutoguardado(
     void persistir(valor);
   };
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    if (limpioTimer.current) clearTimeout(limpioTimer.current);
+  }, []);
 
   return {
     valor,
@@ -230,7 +239,7 @@ export function Campo({
             ref={mirrorRef}
             aria-hidden
             className={cn(
-              "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words rounded-md border border-transparent bg-background px-2.5 py-1.5 text-[13px] leading-relaxed text-transparent [scrollbar-gutter:stable]",
+              "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words rounded-md border border-transparent bg-background px-2.5 py-1.5 text-sm leading-relaxed text-transparent [scrollbar-gutter:stable]",
               mono && "font-mono",
             )}
           >
@@ -265,7 +274,7 @@ export function Campo({
               : undefined
           }
           className={cn(
-            "relative w-full resize-y rounded-md border px-2.5 py-1.5 text-[13px] leading-relaxed outline-none transition-colors [scrollbar-gutter:stable]",
+            "relative w-full resize-y rounded-md border px-2.5 py-1.5 text-sm leading-relaxed outline-none transition-colors [scrollbar-gutter:stable]",
             hayResaltado ? "bg-transparent" : "bg-background",
             "placeholder:text-muted-foreground/55 focus-visible:ring-2 focus-visible:ring-ring",
             mono && "font-mono",
@@ -394,5 +403,12 @@ export function Indicador({ estado }: { estado: EstadoGuardado }) {
       : estado === "error"
         ? "text-status-corrections"
         : "text-muted-foreground";
-  return <span className={cn("text-[10px]", color)}>{texto}</span>;
+  // key={estado} re-monta el span en cada cambio → re-dispara la animación de
+  // entrada. El "guardado" se auto-descarta (timer en useAutoguardado).
+  return (
+    <span key={estado} className={cn("gl-rise-in inline-flex items-center gap-1 text-[10px]", color)}>
+      {estado === "guardado" && <Check className="size-3" />}
+      {texto}
+    </span>
+  );
 }

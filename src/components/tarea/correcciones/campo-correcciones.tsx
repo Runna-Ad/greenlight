@@ -65,9 +65,10 @@ export function CampoCorrecciones({
       {hay && estado && (
         <button
           type="button"
+          key={estado}
           onClick={() => setFijado((v) => !v)}
           aria-label={`${cs.length} corrección(es) en ${etiqueta}`}
-          className="absolute -left-2.5 top-6 z-20 grid size-[22px] place-items-center rounded-full border-2 border-background text-[11px] font-extrabold text-white shadow-sm"
+          className="gl-pop absolute -left-2.5 top-6 z-20 grid size-[22px] place-items-center rounded-full border-2 border-background text-[11px] font-extrabold text-white shadow-sm"
           style={{ background: PIN_BG[estado] }}
         >
           {estado === "open" ? cs.length : "✓"}

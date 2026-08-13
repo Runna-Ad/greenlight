@@ -253,7 +253,7 @@ export function EditorTarea({
               )}
 
               {planos.map((p) => (
-                <div key={p.id} className="rounded-lg border border-border bg-card p-3 shadow-sm">
+                <div key={p.id} className="gl-enter rounded-lg border border-border bg-card p-3 shadow-sm">
                   <div className="mb-2 flex items-center gap-2">
                     <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">
                       Plano {p.orden}
