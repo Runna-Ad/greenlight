@@ -1,5 +1,24 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔜 ACORDADO (siguiente build) — H.Ü.E como EXTRACTOR format-agnostic (Opción 1)
+Pedro (2026-08-13): "push this version so i can test it and then build option 1."
+La versión con `limpiarPegado` (maneja tabla Markdown/Notion en el parser NO-IA) YA
+está en prod (29230e8) — Pedro la prueba primero. DESPUÉS:
+- Subir H.Ü.E de "insertar saltos de línea" a **entender CUALQUIER formato pegado**
+  (Docs, bullets, labels distintas, screenplay) y MAPEARLO a los campos de plano de
+  Greenlight (titulo/accion/copy_in/sfx/gfx/edicion/dialogo; estático: copy_*).
+- Mantener el MISMO guardarraíl de preservación de PALABRAS: no cambiar/agregar/
+  quitar palabras, números ni marcas legales (* % $). Mover/quitar `-` `,` `>` `:`
+  espacios y formato = OK (Pedro lo confirmó explícitamente).
+- Salida ESTRUCTURADA (JSON de planos, no texto con saltos) → validar cada campo
+  contra el guard (multiset de letras/dígitos/marcas del input vs. la suma de campos)
+  antes de mostrar el preview. Preview editable + confirmar siguen igual.
+- Probar contra VARIOS formatos reales (deck plano, tabla Notion, Doc con labels
+  distintas, lista con viñetas). Determinista-primero se queda para los formatos
+  conocidos; H.Ü.E extractor es el fallback más capaz.
+
+
+
 ## 🚀 CAMINO A LIVE (aclarado con Pedro 2026-08-13)
 Modelo: TODO es pre-launch salvo el **portal del cliente**, que es lo ÚLTIMO que se
 construye antes de lanzar (depende de que el lado-agencia esté 100% listo). Luego
