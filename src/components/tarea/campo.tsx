@@ -218,29 +218,39 @@ export function Campo({
     cs.find((c) => c.estado !== "closed" && idsResaltados.has(c.id)) ??
     cs.find((c) => idsResaltados.has(c.id)) ??
     null;
+  const anchorId = primaria?.id ?? null;
+  const cardAbierta =
+    hayCorr && !editando && !seleccion && !componiendoSel && (fijado || hovering);
 
-  const { refs, floatingStyles, isPositioned } = useFloating({
+  // Elementos controlados por estado (en vez del objeto `refs` de Floating UI):
+  // así no leemos un ref-like en render y la posición vive en floatingStyles.
+  const [referenceEl, setReferenceEl] = useState<HTMLElement | null>(null);
+  const [floatingEl, setFloatingEl] = useState<HTMLElement | null>(null);
+  // `open` es clave: al cerrar resetea isPositioned → al reabrir la tarjeta espera
+  // a una posición fresca antes de aparecer (opacity), evitando un flash en 0,0 si
+  // el ancla anterior se quedó viejo/desmontado (p. ej. tras Descartar/Confirmar).
+  const { floatingStyles, isPositioned } = useFloating({
     placement: "bottom-start",
     strategy: "fixed",
+    open: cardAbierta,
     middleware: [
       offset(8),
       flip({ fallbackPlacements: ["top-start", "right-start", "left-start"] }),
       shift({ padding: 8 }),
     ],
     whileElementsMounted: autoUpdate,
+    elements: { reference: referenceEl, floating: floatingEl },
   });
 
-  const cardAbierta =
-    hayCorr && !editando && !seleccion && !componiendoSel && (fijado || hovering);
-
-  // Apunta el ancla de Floating UI a la marca primaria (o al pin como respaldo)
-  // cuando la tarjeta está abierta; autoUpdate la mantiene posicionada al hacer
-  // scroll/resize. Re-corre si cambia el texto o el conjunto de correcciones.
+  // Ancla la tarjeta a la marca primaria (o al pin como respaldo) cuando está
+  // abierta; autoUpdate la mantiene posicionada al hacer scroll/resize. Re-corre
+  // si cambia el texto o el conjunto de correcciones (la marca se remonta al
+  // editar → hay que re-apuntar al nodo fresco).
   useEffect(() => {
     if (!cardAbierta) return;
-    const el = (primaria && marcaRefs.current.get(primaria.id)) || pinRef.current;
-    if (el) refs.setReference(el);
-  }, [cardAbierta, primaria?.id, valor, cs.length, refs]);
+    const el = (anchorId && marcaRefs.current.get(anchorId)) || pinRef.current;
+    if (el) setReferenceEl(el);
+  }, [cardAbierta, anchorId, valor, cs.length]);
 
   const puedeSeleccionar = !!ctx?.esRevisor && !soloLectura;
   const capturarSeleccion = () => {
@@ -420,7 +430,7 @@ export function Campo({
         typeof document !== "undefined" &&
         createPortal(
           <div
-            ref={refs.setFloating}
+            ref={setFloatingEl}
             role="tooltip"
             style={{
               ...floatingStyles,
