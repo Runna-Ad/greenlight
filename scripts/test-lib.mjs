@@ -613,6 +613,18 @@ console.log("\n▶ Guión (paste importer)");
   ok("extractor: OMITIR un plano entero → el guard NO lo rechaza (lo caza el humano)",
      sinInventar("Plano 1 - a - CU foo. Plano 2 - b - CU bar.", "Plano 1 - a - CU foo."));
 
+  // Emoji: los shortcodes (Notion/Slack) se vuelven emoji real en limpiarPegado,
+  // así el parser Y H.Ü.E ven 🧡, no `:orange_heart:` ni "orange heart".
+  eq("limpiarPegado: :orange_heart: → 🧡", limpiarPegado("Copy in: paro :orange_heart:"), "Copy in: paro 🧡");
+  eq("limpiarPegado: varios shortcodes seguidos", limpiarPegado(":sparkles::handshake:"), "✨🤝");
+  eq("limpiarPegado: shortcode desconocido se deja igual", limpiarPegado("hola :no_existe_xyz: chau"), "hola :no_existe_xyz: chau");
+  eq("limpiarPegado: NO toca la etiqueta 'Copy in:'", limpiarPegado("Copy in: hola"), "Copy in: hola");
+  // El guard ignora emoji (no son letras/dígitos/marcas): entra con emoji, sale con emoji → pasa.
+  ok("extractor: emoji conservado (entrada y salida) → pasa",
+     sinInventar("Copy in: paro 🧡", "paro 🧡"));
+  ok("extractor: emoji quitado por la IA → el guard igual pasa (lo caza el humano)",
+     sinInventar("Copy in: paro 🧡", "paro"));
+
   // Estático (PROVISIONAL — sin muestra real de Pedro todavía)
   const est = parseEstatico("Título: Beneficio principal\nSubtítulo: Dos beneficios\nBotón CTA: Solicítala");
   eq("estatico copy_titulo", est.copy_titulo, "Beneficio principal");

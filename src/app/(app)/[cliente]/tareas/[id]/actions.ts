@@ -439,6 +439,8 @@ export async function extraerGuion(
     "NO expandas abreviaturas (deja \"V.O\" como \"V.O\", nunca \"Voz en Off\"), NO cambies ningún número, " +
     "porcentaje, precio ni signo de legal (* % $).\n" +
     "- NO agregues palabras que no estén en el texto. Si un campo no aparece, déjalo como cadena vacía.\n" +
+    "- Conserva los emoji (🧡 🤝 ✨ ⭐ 👀) EXACTAMENTE como están; nunca los traduzcas a palabras " +
+    "ni los describas (no escribas \"orange heart\" ni \"clapping hands\"). Si ves un `:shortcode:`, déjalo igual.\n" +
     "- Sólo puedes MOVER el texto a su campo y agregar los paréntesis del formato de diálogo.\n\n" +
     "Texto:\n<<<\n" + limpio + "\n>>>";
 
