@@ -312,6 +312,11 @@ eq("segunda intervención es del actor",
    parseDialogo("(Narrador) En un pueblo (Actor) ¡Hola!")[1].quien, "Actor");
 eq("texto antes del primer paréntesis queda sin quien",
    parseDialogo("Intro... (Actor) hola")[0].quien, null);
+// Formato con dos puntos (deck del equipo / tareas ya importadas): también en negritas.
+eq("colon: 'Actor: texto' → quien Actor", parseDialogo("Actor: Uso mi DiDi Card.")[0].quien, "Actor");
+eq("colon: el texto sale limpio", parseDialogo("Actor: Uso mi DiDi Card.")[0].texto, "Uso mi DiDi Card.");
+eq("colon: 'Actriz V.O:' conserva el rol", parseDialogo("Actriz V.O: Manifestando.")[0].quien, "Actriz V.O");
+eq("colon: 'Y le dije: hola' NO es locutor", parseDialogo("Y le dije: hola")[0].quien, null);
 
 // ── Captura de brief: identidad, duplicación, combos, gate ──
 console.log("\n▶ Captura de brief (intake-crear)");
@@ -480,6 +485,11 @@ console.log("\n▶ Guión (paste importer)");
   eq("md: copy_in preserva el * legal (CASHBACK*)", mdP[0].copy_in, "Hasta 6% de CASHBACK* diario");
   eq("md: $60,000 intacto", mdP[1].copy_in, "Línea de hasta $60,000 m.n.");
   eq("md: dialogo convertido", mdP[0].dialogo, "(Actor) Uso mi DiDi Card.");
+  // Diálogo con DOS PUNTOS (el formato real del equipo): "Actor: texto" → "(Actor) texto".
+  eq("dialogo colon inline", convertirDialogo(["Actor: Uso mi DiDi Card."]), "(Actor) Uso mi DiDi Card.");
+  eq("dialogo colon en líneas separadas", convertirDialogo(["Actriz V.O:", "Manifestando crédito."]), "(Actriz V.O) Manifestando crédito.");
+  eq("dialogo colon dos locutores", convertirDialogo(["Actor: Hola.", "Narrador: Fin."]), "(Actor) Hola.\n(Narrador) Fin.");
+  ok("dialogo colon: 'Y le dije: hola' NO es locutor", convertirDialogo(["Y le dije: hola"]) === "Y le dije: hola");
   ok("limpiarPegado quita ** en par pero deja el * suelto", limpiarPegado("**hola CASHBACK* mundo**") === "hola CASHBACK* mundo");
   const { parseDialogo } = await import("../src/lib/dialogo.ts");
 

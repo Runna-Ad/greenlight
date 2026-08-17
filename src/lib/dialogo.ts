@@ -14,13 +14,35 @@ export type SegmentoDialogo = {
   texto: string;
 };
 
+// Un locutor con DOS PUNTOS al inicio de una línea ("Actor: texto", "Narrador:",
+// "Actriz V.O: ...") se trata como "(Actor) texto" — así el diálogo del deck del
+// equipo (que usa dos puntos) sale en negritas aunque no venga entre paréntesis,
+// incluso en tareas ya importadas antes de que el importador lo normalizara.
+// El rótulo antes del ":" debe ser un cue (capitalizado, corto) para no confundir
+// una línea de diálogo con dos puntos ("Y le dije: hola") con un locutor.
+const CUE_COLON = /^([\p{Lu}][\p{L}.]*(?:\s+[\p{Lu}\d][\p{L}.]*){0,3}(?:\s*\([^)]+\))?)\s*:\s*(.*)$/u;
+
+function parenizarLocutores(dialogo: string): string {
+  return dialogo
+    .split("\n")
+    .map((linea) => {
+      const m = linea.match(CUE_COLON);
+      if (!m) return linea;
+      const quien = m[1].replace(/[()]/g, " ").replace(/\s+/g, " ").trim();
+      const resto = m[2].trim();
+      return resto ? `(${quien}) ${resto}` : `(${quien})`;
+    })
+    .join("\n");
+}
+
 /**
  * Parte el diálogo en intervenciones. Cada "(Quien) texto" es una intervención;
  * el texto antes del primer paréntesis (si lo hay) queda como intervención sin
- * "quien". Funciona con varias intervenciones en una línea o en varias.
+ * "quien". Funciona con varias intervenciones en una línea o en varias. También
+ * acepta el formato con dos puntos ("Actor: texto"), que se normaliza a paréntesis.
  */
 export function parseDialogo(dialogo: string | null | undefined): SegmentoDialogo[] {
-  const t = (dialogo ?? "").trim();
+  const t = parenizarLocutores((dialogo ?? "").trim());
   if (!t) return [];
 
   const segmentos: SegmentoDialogo[] = [];

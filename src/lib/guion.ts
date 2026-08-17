@@ -189,7 +189,30 @@ function esCue(linea: string): boolean {
   return palabras.length > 0 && palabras.length <= 4 && CUE.test(linea);
 }
 
-/** Convierte el bloque de diálogo del deck al formato "(Quien) texto". */
+// "Actriz (V.O)" → "Actriz V.O" (quitamos los paréntesis internos porque nosotros
+// envolvemos en paréntesis).
+const limpiaQuien = (s: string): string => s.replace(/[()]/g, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * Un locutor con DOS PUNTOS: "Actor: texto" | "Actriz V.O:" | "Narrador: ...".
+ * Es como llega el deck del equipo. Lo previo al PRIMER ":" debe ser un cue válido
+ * (corto, capitalizado) — así una línea de diálogo con dos puntos ("Y le dije:
+ * hola") NO se confunde con un locutor. Devuelve el quién + lo que quede tras el ":".
+ */
+function cueConColon(linea: string): { quien: string; resto: string } | null {
+  const i = linea.indexOf(":");
+  if (i <= 0) return null;
+  const etiqueta = linea.slice(0, i).trim();
+  const palabras = etiqueta.split(/\s+/).filter(Boolean);
+  if (palabras.length === 0 || palabras.length > 4 || !CUE.test(etiqueta)) return null;
+  return { quien: limpiaQuien(etiqueta), resto: linea.slice(i + 1).trim() };
+}
+
+/**
+ * Convierte el bloque de diálogo del deck al formato "(Quien) texto" que espera
+ * parseDialogo. Reconoce el locutor tanto en su PROPIA línea ("Actriz (V.O)")
+ * como con DOS PUNTOS ("Actor: texto" / "Narrador:"), el formato real del equipo.
+ */
 export function convertirDialogo(lineas: string[]): string {
   const segmentos: string[] = [];
   let quien: string | null = null;
@@ -201,11 +224,14 @@ export function convertirDialogo(lineas: string[]): string {
     buffer = [];
   };
   for (const linea of lineas) {
-    if (esCue(linea)) {
+    const conColon = cueConColon(linea);
+    if (conColon) {
       cerrar();
-      // "Actriz (V.O)" → "Actriz V.O" (quitamos los paréntesis internos porque
-      // nosotros envolvemos en paréntesis).
-      quien = linea.replace(/[()]/g, " ").replace(/\s+/g, " ").trim();
+      quien = conColon.quien;
+      if (conColon.resto) buffer.push(conColon.resto);
+    } else if (esCue(linea)) {
+      cerrar();
+      quien = limpiaQuien(linea);
     } else {
       buffer.push(linea);
     }
