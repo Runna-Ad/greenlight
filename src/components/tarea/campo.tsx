@@ -315,16 +315,16 @@ export function Campo({
     <div
       className={cn(
         "group relative min-w-0 scroll-mt-24",
-        inline && "grid grid-cols-[64px_minmax(0,1fr)] items-start gap-x-2",
+        inline && "grid grid-cols-[80px_minmax(0,1fr)] items-start gap-x-2",
       )}
       data-campo-key={ctx ? keyCampo(tabla, filaId, campo) : undefined}
       onMouseEnter={ctx ? () => setHovering(true) : undefined}
       onMouseLeave={ctx ? () => setHovering(false) : undefined}
     >
       {inline ? (
-        <span className="flex min-w-0 items-center gap-1 pt-1.5 text-[11px] font-semibold text-muted-foreground">
+        <span className="flex items-center gap-1 pt-1.5 text-[11px] font-semibold text-muted-foreground">
           {icono}
-          <span className="truncate">{label}</span>
+          <span className="whitespace-nowrap">{label}</span>
         </span>
       ) : (
         <div className="mb-1 flex items-center gap-2">

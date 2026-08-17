@@ -267,10 +267,10 @@ function CampoDoc({
   if (modo === "lectura") {
     if (!valor?.trim()) return null;
     return (
-      <div className="grid grid-cols-[64px_minmax(0,1fr)] items-start gap-x-2">
-        <span className="flex min-w-0 items-center gap-1 pt-1 text-[11px] font-semibold text-muted-foreground">
+      <div className="grid grid-cols-[80px_minmax(0,1fr)] items-start gap-x-2">
+        <span className="flex items-center gap-1 pt-1 text-[11px] font-semibold text-muted-foreground">
           <Icono className={`size-3.5 shrink-0 ${colorIcono}`} />
-          <span className="truncate">{label}</span>
+          <span className="whitespace-nowrap">{label}</span>
         </span>
         <div className="px-1.5 py-1 text-[13px] leading-relaxed text-foreground">
           <Linkify>{valor}</Linkify>
@@ -307,10 +307,10 @@ function DialogoLectura({
   const segmentos = parseDialogo(texto);
   if (segmentos.length === 0) return null;
   return (
-    <div className="grid grid-cols-[64px_minmax(0,1fr)] items-start gap-x-2">
-      <span className="flex min-w-0 items-center gap-1 pt-1 text-[11px] font-semibold text-muted-foreground">
+    <div className="grid grid-cols-[80px_minmax(0,1fr)] items-start gap-x-2">
+      <span className="flex items-center gap-1 pt-1 text-[11px] font-semibold text-muted-foreground">
         <IconoDialogo className="size-3.5 shrink-0 text-deck-orange" />
-        <span className="truncate">{label}</span>
+        <span className="whitespace-nowrap">{label}</span>
       </span>
       <div className="space-y-1.5 px-1.5 py-1 text-[13px] leading-relaxed text-foreground">
         {segmentos.map((s, i) => (
