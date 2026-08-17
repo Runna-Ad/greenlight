@@ -275,12 +275,6 @@ export default async function TareaPage({
   const legalesSeleccionados = (bibliotecaLegal ?? []).filter((s) => seleccionadosIds.has(s.id));
   const legalesDisponibles = (bibliotecaLegal ?? []).filter((s) => !seleccionadosIds.has(s.id));
 
-  // Lo que verá el cliente en la cortinilla: los seleccionados + el texto libre.
-  const legalesPreview = [
-    ...legalesSeleccionados.map((s) => s.body),
-    ...(idea.legales_libres?.trim() ? [idea.legales_libres.trim()] : []),
-  ];
-
   // Correcciones localizadas (0028): comentarios kind='correction_request' que
   // apuntan a un campo. Se muestran fijados al campo + en el panel lateral.
   type CorrRow = {
@@ -476,7 +470,6 @@ export default async function TareaPage({
         refsPorPlano={refsPorPlano}
         refsEstatico={refsEstatico}
         reglas={reglas ?? []}
-        legales={legalesPreview}
         notaGuion={idea.nota_guion}
         cortinilla={{
           legalesLibres: idea.legales_libres,

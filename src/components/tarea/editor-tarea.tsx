@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Plus, Trash2, Eye, EyeOff, Clock, ShieldCheck, Clapperboard } from "lucide-react";
+import { Eye, Pencil, Clock, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { agregarPlano, borrarPlano } from "@/app/(app)/[cliente]/tareas/[id]/actions";
@@ -13,16 +13,14 @@ import {
   voz,
 } from "@/lib/plantilla";
 import { reglasQueAplican, type Regla } from "@/lib/reglas";
-import { Button } from "@/components/ui/button";
-import { Campo } from "./campo";
+import { cn } from "@/lib/utils";
 import { CampoIntake } from "./campo-intake";
 import { PegarGuion } from "./pegar-guion";
 import { ChipsReglas } from "./chips-reglas";
-import { ReferenciasPlano, type RefVista } from "./referencias-plano";
-import { EmptyState } from "@/components/ui/empty-state";
+import { type RefVista } from "./referencias-plano";
 import { CortinillaCierre, type LegalSnippet } from "./cortinilla-cierre";
+import { DocumentoTarea } from "./documento-tarea";
 import {
-  PreviewSlide,
   type CabeceraVista,
   type EstaticoVista,
   type PlanoVista,
@@ -37,7 +35,6 @@ export function EditorTarea({
   refsPorPlano,
   refsEstatico,
   reglas,
-  legales,
   cortinilla,
   notaGuion,
   soloLectura,
@@ -50,7 +47,6 @@ export function EditorTarea({
   refsPorPlano: Record<string, RefVista[]>;
   refsEstatico: RefVista[];
   reglas: Regla[];
-  legales: string[];
   notaGuion: string | null;
   cortinilla: {
     legalesLibres: string | null;
@@ -59,11 +55,12 @@ export function EditorTarea({
   };
   soloLectura: boolean;
 }) {
-  // El preview se alimenta de ESTE estado: se actualiza en la misma tecla, sin
+  // El documento se alimenta de ESTE estado: se actualiza en la misma tecla, sin
   // ir al servidor. Los campos persisten aparte, con su propio autoguardado.
   const [planos, setPlanos] = useState(planosIniciales);
   const [estatico, setEstatico] = useState(estaticoInicial);
-  const [verPreview, setVerPreview] = useState(true);
+  // El toggle: por defecto editable (agencia); "ver como cliente" lo pasa a lectura.
+  const [verCliente, setVerCliente] = useState(false);
   const [, startTransition] = useTransition();
 
   const esEstatico = estatico !== null;
@@ -134,7 +131,8 @@ export function EditorTarea({
   return (
     <div className="space-y-4">
       {/* Reglas de la pieza + read-time — arriba de todo, con encabezado claro.
-          Cada chip abre su regla completa en un tooltip al pasar el mouse. */}
+          Cada chip abre su regla completa en un tooltip al pasar el mouse.
+          (Sección interna — se queda como estaba.) */}
       {(reglasActivas.length > 0 || !esEstatico) && (
         <div className="space-y-2.5 rounded-xl border border-border bg-card p-3 shadow-sm">
           <div className="flex items-center justify-between gap-2">
@@ -160,8 +158,8 @@ export function EditorTarea({
         </div>
       )}
 
-      {/* Nota del guión — editable (Real Person: actriz/actor/outfits). El texto
-          del tipo queda de placeholder para seguir guiando. */}
+      {/* Nota del guión — editable (Real Person: actriz/actor/outfits).
+          (Sección interna — se queda como estaba.) */}
       {!esEstatico && (
         <CampoIntake
           ideaId={ideaId}
@@ -175,208 +173,89 @@ export function EditorTarea({
         />
       )}
 
-      <div className={verPreview ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]" : ""}>
-        {/* ── cuerpo ── */}
-        <div className="min-w-0 space-y-3">
-          {/* CTA para ARRANCAR la tarea: pegar el guión/copy completo y llenar
-              todo de una vez. Va ARRIBA (acción de inicio), no abajo junto a
-              "Agregar plano" (que es incremental, a mitad de flujo). */}
-          {!soloLectura && (
-            <div className="flex flex-col gap-2 rounded-xl border border-dashed border-[color-mix(in_srgb,var(--primary)_45%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="text-[13px] font-semibold text-foreground">
-                  {esEstatico ? "¿Ya tienes el copy?" : "¿Ya tienes el guión?"}
-                </p>
-                <p className="text-[12px] text-muted-foreground">
-                  {esEstatico
-                    ? "Pégalo del deck y llena los campos de una vez."
-                    : "Pégalo completo del deck y llena todos los planos de una vez."}
-                </p>
-              </div>
-              <PegarGuion
-                ideaId={ideaId}
-                modo={esEstatico ? "estatico" : "guion"}
-                onPlanos={setPlanos}
-                onEstatico={setEstatico}
-              />
-            </div>
-          )}
-
-          {esEstatico && estatico ? (
-            <div className="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm md:grid-cols-2">
-              <div className="space-y-3">
-                <p className="rounded bg-deck-blue px-2 py-1 text-center text-[10px] font-bold uppercase text-white">
-                  Copy in
-                </p>
-                <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="copy_titulo" label="Título"
-                  valorInicial={estatico.copy_titulo} rows={2} soloLectura={soloLectura}
-                  placeholder={PLACEHOLDER_ESTATICO.copy_titulo}
-                  onCambio={(v) => editarEstatico("copy_titulo", v)} />
-                <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="copy_subtitulo" label="Subtítulo"
-                  valorInicial={estatico.copy_subtitulo} rows={3} soloLectura={soloLectura}
-                  placeholder={PLACEHOLDER_ESTATICO.copy_subtitulo}
-                  onCambio={(v) => editarEstatico("copy_subtitulo", v)} />
-                <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="copy_cta" label="Botón CTA"
-                  valorInicial={estatico.copy_cta} rows={1} soloLectura={soloLectura}
-                  placeholder={PLACEHOLDER_ESTATICO.copy_cta}
-                  onCambio={(v) => editarEstatico("copy_cta", v)} />
-                <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="legales_extra" label="Legales extra"
-                  valorInicial={estatico.legales_extra} rows={2} soloLectura={soloLectura}
-                  placeholder={PLACEHOLDER_ESTATICO.legales_extra} />
-              </div>
-              <div className="space-y-3">
-                <p className="rounded bg-deck-orange px-2 py-1 text-center text-[10px] font-bold uppercase text-white">
-                  Referencia / Imagen
-                </p>
-                {/* En estático, la referencia es el drag & drop de IMÁGENES (sin
-                    video): sube al bucket privado, thumbnails con popup grande. */}
-                <ReferenciasPlano
-                  owner={{ tipo: "estatico", id: estatico.id }}
-                  refs={refsEstatico}
-                  soloImagenes
-                  etiqueta="Imágenes de referencia"
-                  soloLectura={soloLectura}
-                />
-                <Campo tabla="estaticos" filaId={estatico.id} grupoCorreccion="Estático" campo="referencia_nota" label="Nota de diseño"
-                  valorInicial={estatico.referencia_nota} rows={4} soloLectura={soloLectura}
-                  placeholder={PLACEHOLDER_ESTATICO.referencia_nota}
-                  onCambio={(v) => editarEstatico("referencia_nota", v)} />
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-0 overflow-hidden rounded-t-lg">
-                <p className="bg-deck-blue px-2 py-1.5 text-center text-[10px] font-bold uppercase text-white">
-                  Acción + Copy in + GFX / SFX (Motion)
-                </p>
-                <p className="bg-deck-orange px-2 py-1.5 text-center text-[10px] font-bold uppercase text-white">
-                  Diálogo · {quienHabla}
-                </p>
-              </div>
-
-              {planos.length === 0 && (
-                <EmptyState
-                  icon={Clapperboard}
-                  titulo="Todavía no hay planos"
-                  descripcion="Agrega el primero para empezar el guión."
-                />
-              )}
-
-              {planos.map((p) => (
-                <div key={p.id} className="gl-enter rounded-lg border border-border bg-card p-3 shadow-sm">
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">
-                      Plano {p.orden}
-                    </span>
-                    <span className="ml-auto text-[10px] text-muted-foreground">
-                      {readTimeS(p.dialogo)}s de lectura
-                    </span>
-                    {!soloLectura && (
-                      <button
-                        onClick={() => quitarPlano(p.id)}
-                        aria-label={`Borrar plano ${p.orden}`}
-                        className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-status-corrections"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-3">
-                      <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="titulo" label="Plano"
-                        valorInicial={p.titulo} rows={1} soloLectura={soloLectura}
-                        placeholder={PH.titulo}
-                        onCambio={(v) => editarPlano(p.id, "titulo", v)} />
-                      <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="accion" label="Acción"
-                        valorInicial={p.accion} rows={2} soloLectura={soloLectura}
-                        placeholder={PH.accion}
-                        onCambio={(v) => editarPlano(p.id, "accion", v)} />
-                      <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="copy_in" label="Copy in"
-                        valorInicial={p.copy_in} rows={2} soloLectura={soloLectura}
-                        placeholder={PH.copy_in}
-                        onCambio={(v) => editarPlano(p.id, "copy_in", v)} />
-                      <div className="grid gap-2 sm:grid-cols-3">
-                        <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="sfx" label="SFX"
-                          valorInicial={p.sfx} rows={2} soloLectura={soloLectura}
-                          placeholder={PH.sfx}
-                          onCambio={(v) => editarPlano(p.id, "sfx", v)} />
-                        <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="gfx" label="GFX"
-                          valorInicial={p.gfx} rows={2} soloLectura={soloLectura}
-                          placeholder={PH.gfx}
-                          onCambio={(v) => editarPlano(p.id, "gfx", v)} />
-                        <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="edicion" label="Edición"
-                          valorInicial={p.edicion} rows={2} soloLectura={soloLectura}
-                          placeholder={PH.edicion}
-                          onCambio={(v) => editarPlano(p.id, "edicion", v)} />
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <Campo tabla="planos" filaId={p.id} grupoCorreccion={`Plano ${p.orden}`} campo="dialogo" label={quienHabla}
-                        valorInicial={p.dialogo} rows={8} soloLectura={soloLectura}
-                        placeholder={PH.dialogo}
-                        onCambio={(v) => editarPlano(p.id, "dialogo", v)} />
-                      {/* La caja REFERENCIA del wireframe, junto al diálogo */}
-                      <ReferenciasPlano
-                        owner={{ tipo: "plano", id: p.id }}
-                        refs={refsPorPlano[p.id] ?? []}
-                        soloLectura={soloLectura}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {!soloLectura && (
-                <Button variant="outline" size="sm" onClick={nuevoPlano} className="w-full">
-                  <Plus className="size-4" /> Agregar plano
-                </Button>
-              )}
-
-              {/* La Cortinilla de Cierre va al FINAL, después de todos los
-                  planos: los legales de la pieza entera. */}
-              <CortinillaCierre
-                ideaId={ideaId}
-                legalesLibres={cortinilla.legalesLibres}
-                seleccionados={cortinilla.seleccionados}
-                biblioteca={cortinilla.biblioteca}
-                soloLectura={soloLectura}
-              />
-            </>
-          )}
+      {/* CTA para ARRANCAR la tarea: pegar el guión/copy completo y llenar todo de
+          una vez. Es una acción de EDICIÓN → se oculta en "ver como cliente". */}
+      {!soloLectura && !verCliente && (
+        <div className="flex flex-col gap-2 rounded-xl border border-dashed border-[color-mix(in_srgb,var(--primary)_45%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-foreground">
+              {esEstatico ? "¿Ya tienes el copy?" : "¿Ya tienes el guión?"}
+            </p>
+            <p className="text-[12px] text-muted-foreground">
+              {esEstatico
+                ? "Pégalo del deck y llena los campos de una vez."
+                : "Pégalo completo del deck y llena todos los planos de una vez."}
+            </p>
+          </div>
+          <PegarGuion
+            ideaId={ideaId}
+            modo={esEstatico ? "estatico" : "guion"}
+            onPlanos={setPlanos}
+            onEstatico={setEstatico}
+          />
         </div>
+      )}
 
-        {/* ── preview ── */}
-        {verPreview && (
-          <aside className="lg:sticky lg:top-4 lg:self-start">
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Como lo verá el cliente
-              </span>
-              <button
-                onClick={() => setVerPreview(false)}
-                className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
-              >
-                <EyeOff className="size-3" /> Ocultar
-              </button>
-            </div>
-            <PreviewSlide
-              cabecera={cabecera}
-              planos={esEstatico ? undefined : planos}
-              estatico={estatico}
-              legales={legales}
-              refsPorPlano={refsPorPlano}
-              refsEstatico={refsEstatico}
-            />
-          </aside>
-        )}
+      {/* Toggle Editar / Ver como cliente — el documento es el mismo; sólo cambia
+          si los campos son editables o se ven como el slide final del cliente. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="gl-eyebrow">
+          {verCliente ? "Como lo verá el cliente" : "Documento de la tarea"}
+        </span>
+        <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-[12px] font-medium shadow-sm">
+          <button
+            type="button"
+            onClick={() => setVerCliente(false)}
+            aria-pressed={!verCliente}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-2.5 py-1 transition-colors",
+              !verCliente ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Pencil className="size-3.5" /> Editar
+          </button>
+          <button
+            type="button"
+            onClick={() => setVerCliente(true)}
+            aria-pressed={verCliente}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-2.5 py-1 transition-colors",
+              verCliente ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Eye className="size-3.5" /> Ver como cliente
+          </button>
+        </div>
       </div>
 
-      {!verPreview && (
-        <Button variant="outline" size="sm" onClick={() => setVerPreview(true)}>
-          <Eye className="size-4" /> Ver preview
-        </Button>
+      {/* EL DOCUMENTO — editable en su lugar (agencia) o de lectura (cliente). */}
+      <DocumentoTarea
+        modo={verCliente ? "lectura" : "editable"}
+        esEstatico={esEstatico}
+        planos={planos}
+        estatico={estatico}
+        refsPorPlano={refsPorPlano}
+        refsEstatico={refsEstatico}
+        quienHabla={quienHabla}
+        ph={PH}
+        phEstatico={PLACEHOLDER_ESTATICO}
+        soloLectura={soloLectura}
+        onEditarPlano={editarPlano}
+        onEditarEstatico={editarEstatico}
+        onNuevoPlano={nuevoPlano}
+        onQuitarPlano={quitarPlano}
+      />
+
+      {/* La Cortinilla de Cierre va al FINAL (sólo video). Sección aparte —
+          se queda como estaba. */}
+      {!esEstatico && (
+        <CortinillaCierre
+          ideaId={ideaId}
+          legalesLibres={cortinilla.legalesLibres}
+          seleccionados={cortinilla.seleccionados}
+          biblioteca={cortinilla.biblioteca}
+          soloLectura={soloLectura}
+        />
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Check, Plus } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate } from "@floating-ui/react-dom";
@@ -148,6 +148,8 @@ export function Campo({
   soloLectura,
   onCambio,
   grupoCorreccion,
+  inline,
+  icono,
 }: {
   tabla: Tabla;
   filaId: string;
@@ -162,6 +164,11 @@ export function Campo({
   onCambio?: (valor: string) => void;
   /** Prefijo de la etiqueta de la corrección, p. ej. "Plano 1". */
   grupoCorreccion?: string;
+  /** Variante "documento": campo sin bordes, auto-alto, con ícono a la izquierda,
+   *  para que EDITAR se vea igual que el slide del cliente (WYSIWYG). */
+  inline?: boolean;
+  /** Ícono que precede la etiqueta en la variante inline (del mockup de Pedro). */
+  icono?: ReactNode;
 }) {
   const g = useAutoguardado(
     valorInicial,
@@ -274,21 +281,68 @@ export function Campo({
     setSeleccion(null);
   };
 
+  // Clases del textarea y su mirror. La variante INLINE (documento WYSIWYG) va sin
+  // bordes, auto-alto y compacta para verse como el slide; la normal conserva el
+  // look de formulario. Ambas comparten padding/tamaño para que el <mark> alinee.
+  const taClass = cn(
+    "relative w-full outline-none transition-colors",
+    inline
+      ? "resize-none rounded border border-transparent px-1.5 py-1 text-[13px] leading-relaxed [field-sizing:content] focus:border-input focus:bg-background focus-visible:ring-2 focus-visible:ring-ring"
+      : "resize-y rounded-md border px-2.5 py-1.5 text-sm leading-relaxed [scrollbar-gutter:stable] focus-visible:ring-2 focus-visible:ring-ring",
+    inline
+      ? hayResaltado
+        ? "bg-transparent"
+        : "bg-transparent hover:bg-secondary/30"
+      : hayResaltado
+        ? "bg-transparent"
+        : "bg-background",
+    inline ? "placeholder:text-muted-foreground/45 placeholder:italic" : "placeholder:text-muted-foreground/55",
+    mono && "font-mono",
+    conflicto !== null ? "border-status-corrections" : inline ? "" : "border-input",
+    soloLectura && "cursor-default",
+    soloLectura && !inline && !hayResaltado && "bg-secondary/40",
+    soloLectura && inline && "hover:bg-transparent",
+  );
+  const mirrorClass = cn(
+    "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words border border-transparent text-transparent",
+    inline
+      ? "rounded px-1.5 py-1 text-[13px] leading-relaxed"
+      : "rounded-md bg-background px-2.5 py-1.5 text-sm leading-relaxed [scrollbar-gutter:stable]",
+    mono && "font-mono",
+  );
+
   return (
     <div
-      className="group relative min-w-0 scroll-mt-24"
+      className={cn(
+        "group relative min-w-0 scroll-mt-24",
+        inline && "grid grid-cols-[64px_minmax(0,1fr)] items-start gap-x-2",
+      )}
       data-campo-key={ctx ? keyCampo(tabla, filaId, campo) : undefined}
       onMouseEnter={ctx ? () => setHovering(true) : undefined}
       onMouseLeave={ctx ? () => setHovering(false) : undefined}
     >
-      <div className="mb-1 flex items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {label}
+      {inline ? (
+        <span className="flex min-w-0 items-center gap-1 pt-1.5 text-[11px] font-semibold text-muted-foreground">
+          {icono}
+          <span className="truncate">{label}</span>
         </span>
-        <Indicador estado={estado} />
-      </div>
+      ) : (
+        <div className="mb-1 flex items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {label}
+          </span>
+          <Indicador estado={estado} />
+        </div>
+      )}
 
-      <div className="relative">
+      <div className="relative min-w-0">
+        {/* En inline el indicador de guardado va como marca sutil en la esquina
+            (no cabe junto a la etiqueta de 64px). */}
+        {inline && (
+          <div className="pointer-events-none absolute right-1 top-1 z-10">
+            <Indicador estado={estado} />
+          </div>
+        )}
         {/* Mirror BAJO el textarea: pinta el fondo del <mark> de cada frase
             corregida; el texto real (y el cursor) van en el textarea de encima
             (fondo transparente). Best-effort: si el texto cambia y la frase ya
@@ -297,10 +351,7 @@ export function Campo({
           <div
             ref={mirrorRef}
             aria-hidden
-            className={cn(
-              "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words rounded-md border border-transparent bg-background px-2.5 py-1.5 text-sm leading-relaxed text-transparent [scrollbar-gutter:stable]",
-              mono && "font-mono",
-            )}
+            className={mirrorClass}
           >
             {segmentos.map((sg, i) =>
               sg.estado ? (
@@ -345,15 +396,7 @@ export function Campo({
               ? { boxShadow: ANILLO[estadoCorr], borderColor: ANILLO_BORDE[estadoCorr] }
               : undefined
           }
-          className={cn(
-            "relative w-full resize-y rounded-md border px-2.5 py-1.5 text-sm leading-relaxed outline-none transition-colors [scrollbar-gutter:stable]",
-            hayResaltado ? "bg-transparent" : "bg-background",
-            "placeholder:text-muted-foreground/55 focus-visible:ring-2 focus-visible:ring-ring",
-            mono && "font-mono",
-            conflicto !== null ? "border-status-corrections" : "border-input",
-            soloLectura && "cursor-default",
-            soloLectura && !hayResaltado && "bg-secondary/40",
-          )}
+          className={taClass}
         />
 
         {/* Al resaltar texto (sólo revisor): "Pedir cambio aquí" anclado a la frase. */}
@@ -371,7 +414,7 @@ export function Campo({
 
       {/* Compositor de la corrección anclada a la selección. */}
       {componiendoSel && seleccion && (
-        <div className="relative z-30 mt-2 rounded-lg border border-border-strong bg-secondary p-2.5 shadow-sm">
+        <div className={cn("relative z-30 mt-2 rounded-lg border border-border-strong bg-secondary p-2.5 shadow-sm", inline && "col-span-2")}>
           <p className="mb-1.5 text-[11px] text-muted-foreground">
             Cambio para <b className="text-status-corrections">&laquo;{seleccion.quote}&raquo;</b> en {etiqueta}
           </p>
@@ -403,9 +446,14 @@ export function Campo({
         </div>
       )}
 
-      {conflicto !== null && (
-        <PanelConflicto valorAjeno={conflicto} quedarme={g.quedarme} tomarSuyo={g.tomarSuyo} />
-      )}
+      {conflicto !== null &&
+        (inline ? (
+          <div className="col-span-2">
+            <PanelConflicto valorAjeno={conflicto} quedarme={g.quedarme} tomarSuyo={g.tomarSuyo} />
+          </div>
+        ) : (
+          <PanelConflicto valorAjeno={conflicto} quedarme={g.quedarme} tomarSuyo={g.tomarSuyo} />
+        ))}
 
       {/* Pin anclado al campo (respaldo de ancla cuando no hay frase resaltada);
           clic = fija/suelta la tarjeta de lectura. */}
@@ -416,7 +464,10 @@ export function Campo({
           onClick={() => setFijado((v) => !v)}
           aria-label={`${cs.length} corrección(es) en ${etiqueta}`}
           aria-expanded={cardAbierta}
-          className="gl-pop absolute -left-2.5 top-6 z-20 grid size-[22px] place-items-center rounded-full border-2 border-background text-[11px] font-extrabold text-white shadow-sm"
+          className={cn(
+            "gl-pop absolute -left-2.5 z-20 grid size-[22px] place-items-center rounded-full border-2 border-background text-[11px] font-extrabold text-white shadow-sm",
+            inline ? "top-1" : "top-6",
+          )}
           style={{ background: PIN_BG[estadoCorr] }}
         >
           {estadoCorr === "open" ? cs.length : "✓"}
@@ -462,16 +513,28 @@ export function Campo({
           document.body,
         )}
 
-      {ctx && (
-        <CampoCorrecciones
-          tabla={tabla}
-          filaId={filaId}
-          campo={campo}
-          etiqueta={etiqueta}
-          cs={cs}
-          campoVacio={valor.trim() === ""}
-        />
-      )}
+      {ctx &&
+        (inline ? (
+          <div className="col-span-2">
+            <CampoCorrecciones
+              tabla={tabla}
+              filaId={filaId}
+              campo={campo}
+              etiqueta={etiqueta}
+              cs={cs}
+              campoVacio={valor.trim() === ""}
+            />
+          </div>
+        ) : (
+          <CampoCorrecciones
+            tabla={tabla}
+            filaId={filaId}
+            campo={campo}
+            etiqueta={etiqueta}
+            cs={cs}
+            campoVacio={valor.trim() === ""}
+          />
+        ))}
     </div>
   );
 }
