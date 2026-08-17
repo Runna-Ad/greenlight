@@ -296,6 +296,20 @@ export async function borrarPlano(planoId: string): Promise<GuardarResultado> {
 }
 
 /**
+ * Si la tarea está en "todo", la arranca (todo→in_progress) al importar contenido
+ * — igual que guardarCampo con el primer texto. Sin esto, pegar un guión llenaba
+ * los planos pero el botón seguía en "Empezar" en vez de "Mandar a revisión"
+ * (Pedro). Revalida la página para que el nuevo status llegue a AccionesTarea.
+ */
+async function iniciarTareaSiTodo(db: ReturnType<typeof supabaseAdmin>, ideaId: string): Promise<void> {
+  const { data: idea } = await db.from("ideas").select("status").eq("id", ideaId).maybeSingle();
+  if ((idea?.status as AssetStatus | undefined) !== "todo") return;
+  const soy = await getSoy();
+  const { error } = await db.rpc("rpc_task_start", { p_idea_id: ideaId, p_actor_member: soy?.id ?? null });
+  if (!error) revalidatePath("/mi-trabajo");
+}
+
+/**
  * Importa varios planos de un guión pegado (ya parseado en el cliente con
  * src/lib/guion.ts). Atómico vía rpc_import_planos: "replace" reemplaza todos,
  * "append" los agrega al final. El humano YA revisó/editó la vista previa antes
@@ -318,6 +332,8 @@ export async function importarGuion(
     p_modo: modo,
   });
   if (error) return { ok: false, error: error.message };
+  await iniciarTareaSiTodo(db, ideaId); // pegar contenido = empezar a trabajar
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   // Devuelve la lista COMPLETA resultante (replace o append) para que el editor
   // reemplace su estado sin recargar; los planos nuevos entran con animación.
   const { data } = await db.from("planos").select(COLS_PLANO).eq("idea_id", ideaId).order("orden");
@@ -348,6 +364,8 @@ export async function importarEstatico(
   const db = supabaseAdmin();
   const { error } = await db.from("estaticos").update(patch).eq("idea_id", ideaId);
   if (error) return { ok: false, error: error.message };
+  await iniciarTareaSiTodo(db, ideaId); // pegar copy = empezar a trabajar
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   // El update YA fue exitoso; si el refetch no trae fila (transitorio), NO es un
   // fallo de escritura — devolvemos null y el cliente recarga para reconciliar.
   const { data } = await db.from("estaticos").select(COLS_ESTATICO).eq("idea_id", ideaId).single();
