@@ -441,7 +441,7 @@ const VTX = "Hasta 6% de CASHBACK* en todas tus compras";
 
 console.log("\n▶ Guión (paste importer)");
 {
-  const { parseGuion, parseEstatico, contarPlanos, convertirDialogo, mismoContenido, desdeElPrimerPlano, limpiarPegado } =
+  const { parseGuion, parseEstatico, contarPlanos, convertirDialogo, mismoContenido, sinInventar, desdeElPrimerPlano, limpiarPegado } =
     await import("../src/lib/guion.ts");
 
   // Pegado RICO: tabla Markdown/Notion (| celda |, **negrita**, <br>, |---|). Debe
@@ -587,6 +587,31 @@ console.log("\n▶ Guión (paste importer)");
      "Plano 1 - x - CU\nAcción.Plano 2 - y - CU");
   eq("contarPlanos cuenta el Plano 1 pegado al header",
      contarPlanos("ACCIÓN + GFX / SFX (Motion)DIÁLOGOPlano 1 - a - CU foo.Plano 2 - b - CU bar."), 2);
+
+  // Guardarraíl del EXTRACTOR (sinInventar): extraer SELECCIONA de la entrada
+  // (submultiset), nunca inventa. Descartar rótulos pasa; inventar/alterar NO.
+  const entrada =
+    "Plano 1 - int Sala - MCU\nAcción: entra al cuarto.\nCopy in: 6% CASHBACK*\nSFX: puerta\nActriz\nAh, claro.";
+  ok("extractor: descartar rótulos y distribuir en campos → pasa",
+     sinInventar(entrada, "Plano 1 - int Sala - MCU entra al cuarto. 6% CASHBACK* puerta (Actriz) Ah, claro."));
+  ok("extractor: formato (Locutor) agrega paréntesis → pasa (no son letras/dígitos/signos)",
+     sinInventar("Actriz Ah claro", "(Actriz) Ah claro"));
+  ok("extractor: comillas curvas / '…' cosméticas → pasa",
+     sinInventar('dijo "hola"... espera', "dijo “hola”… espera"));
+  ok("extractor: mayúsculas/minúsculas cosméticas → pasa",
+     sinInventar("plano uno", "PLANO UNO"));
+  ok("extractor: INVENTAR una palabra que no está → NO pasa",
+     !sinInventar("sin comisiones", "sin comisiones ocultas"));
+  ok("extractor: CAMBIAR un número → NO pasa",
+     !sinInventar("Copy in: $60,000 m.n.", "Copy in: $50,000 m.n."));
+  ok("extractor: AGREGAR un asterisco de legal → NO pasa",
+     !sinInventar("6% CASHBACK", "6% CASHBACK*"));
+  ok("extractor: EXPANDIR una abreviatura (V.O → Voz en Off) → NO pasa",
+     !sinInventar("Actriz V.O texto", "(Actriz Voz en Off) texto"));
+  // Documenta el límite: OMITIR un plano NO lo caza el guard (lo caza la vista
+  // previa humana) — su contenido es igual un subconjunto de la entrada.
+  ok("extractor: OMITIR un plano entero → el guard NO lo rechaza (lo caza el humano)",
+     sinInventar("Plano 1 - a - CU foo. Plano 2 - b - CU bar.", "Plano 1 - a - CU foo."));
 
   // Estático (PROVISIONAL — sin muestra real de Pedro todavía)
   const est = parseEstatico("Título: Beneficio principal\nSubtítulo: Dos beneficios\nBotón CTA: Solicítala");

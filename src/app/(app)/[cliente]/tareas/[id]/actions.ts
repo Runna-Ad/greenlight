@@ -8,7 +8,7 @@ import { getSoy } from "@/lib/soy";
 import { ESTADOS_CERRADOS } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
 import type { AssetStatus } from "@/lib/brand";
-import { mismoContenido, desdeElPrimerPlano, limpiarPegado, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
+import { sinInventar, limpiarPegado, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
 import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
 
 // Columnas que alimentan a PlanoVista/EstaticoVista (para devolver la fila creada
@@ -373,42 +373,74 @@ export async function importarEstatico(
 }
 
 /**
- * Normalizador structure-only: cuando un guión se pegó SIN saltos de línea, la IA
- * (Sonnet) re-inserta los saltos para que el parser determinista pueda separarlo.
- * GUARDARRAÍL DURO: la salida se acepta SÓLO si `mismoContenido` confirma que la IA
- * cambió únicamente espacios/saltos — ni un número, ni un asterisco de legal, ni una
- * letra del copy. Si tocó algo, se rechaza (el copy al cliente jamás se altera en
- * silencio). El humano igual revisa la vista previa después.
+ * H.Ü.E — extractor format-agnostic. El parser determinista (parseGuion) maneja el
+ * formato del deck sin IA; esto es el FALLBACK para cuando el pegado viene en
+ * CUALQUIER otro formato (tabla, bullets, screenplay, etiquetas distintas, o el deck
+ * con los saltos de línea perdidos). H.Ü.E lee el texto crudo y lo MAPEA a los campos
+ * de plano de Greenlight, devolviendo planos estructurados (no texto con saltos).
+ *
+ * GUARDARRAÍL DURO (`sinInventar`): se acepta SÓLO si cada letra, dígito y signo de
+ * legal/oferta (* % $) de lo extraído aparece en la entrada — H.Ü.E puede seleccionar
+ * y reordenar el texto en campos, pero JAMÁS inventar, cambiar, traducir ni expandir
+ * una palabra/número/legal. Si mete algo que no estaba, se rechaza. OMITIR contenido
+ * lo caza la vista previa humana obligatoria (nunca escribe sin que el humano confirme).
  */
-export async function normalizarGuion(
+export async function extraerGuion(
   texto: string,
-): Promise<{ ok: true; texto: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; planos: PlanoParsed[] } | { ok: false; error: string }> {
   if (!process.env.ANTHROPIC_API_KEY) {
-    return { ok: false, error: "El arreglo con IA no está configurado (falta la clave)." };
+    return { ok: false, error: "H.Ü.E no está configurado (falta la clave)." };
   }
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
-  if (!texto.trim()) return { ok: false, error: "No hay texto que arreglar." };
+  if (!texto.trim()) return { ok: false, error: "No hay texto que leer." };
 
-  // Limpia markdown/tabla ANTES de la IA: así H.Ü.E recibe texto plano (sin `**`,
-  // `|`, `<br>`) y no tiene que reescribir formato — el guardarraíl deja de
-  // rechazar por los asteriscos de negrita. El guard compara contra ESTE limpio.
+  // Limpia markdown/tabla (`**`, `|`, `<br>`) ANTES de mandarlo — así H.Ü.E recibe el
+  // texto crudo del guión sin ruido de formato. El guard compara contra ESTE limpio.
   const limpio = limpiarPegado(texto);
 
+  const CAMPO = { type: "string" as const };
+  const schema = {
+    type: "object" as const,
+    properties: {
+      planos: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            titulo: CAMPO, accion: CAMPO, copy_in: CAMPO,
+            sfx: CAMPO, gfx: CAMPO, edicion: CAMPO, dialogo: CAMPO,
+          },
+          required: ["titulo", "accion", "copy_in", "sfx", "gfx", "edicion", "dialogo"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["planos"],
+    additionalProperties: false,
+  };
+
   const prompt =
-    "Te doy el texto de un guión de anuncio que perdió sus saltos de línea al " +
-    "pegarse. Tu ÚNICA tarea es INSERTAR saltos de línea para separar: cada " +
-    'encabezado de plano ("Plano N - ...") en su renglón; cada etiqueta ("Copy in:", ' +
-    '"SFX:", "GFX:", "Edición:", "Botón CTA:") en su renglón; y el nombre de cada ' +
-    "locutor y su diálogo en renglones aparte.\n\n" +
-    "REGLAS ABSOLUTAS:\n" +
-    "- NO cambies, agregues ni quites NINGÚN carácter que no sea un salto de línea " +
-    "o un espacio. Ni una letra, ni un número, ni un signo, ni un acento, ni un asterisco.\n" +
-    "- NO corrijas ortografía, NO traduzcas, NO reescribas, NO resumas.\n" +
-    "- Devuelve SÓLO el texto reformateado, sin explicaciones ni comillas.\n\n" +
-    "Texto:\n<<<\n" +
-    limpio +
-    "\n>>>";
+    "Te doy el texto crudo de un guión de anuncio, en el formato en que lo pegó el " +
+    "usuario (puede ser una tabla, bullets, un screenplay, columnas, o el deck con los " +
+    "saltos de línea perdidos). Tu tarea es LEERLO y mapearlo a los campos de un plano " +
+    "de Greenlight, un objeto por cada plano/toma, con la herramienta emitir_planos.\n\n" +
+    "Campos de cada plano:\n" +
+    "- titulo: el encabezado del plano (ej. \"Plano 1 - int Sala - MCU\").\n" +
+    "- accion: la descripción de lo que pasa en pantalla.\n" +
+    "- copy_in: el texto que aparece SOBRE la pantalla (incluye el valor de \"Botón CTA\" si lo hay).\n" +
+    "- sfx: efectos de sonido.\n" +
+    "- gfx: gráficos / lettering.\n" +
+    "- edicion: notas de edición o transición SÓLO si hay una etiqueta explícita; si no, cadena vacía.\n" +
+    "- dialogo: lo que se habla, en el formato \"(Locutor) texto\" — envuelve el nombre/rol del " +
+    "locutor en paréntesis y déjalo antes de su línea. Junta varios locutores con saltos de línea.\n\n" +
+    "REGLAS ABSOLUTAS — el copy va tal cual al cliente:\n" +
+    "- Copia las PALABRAS VERBATIM. NO inventes, NO reescribas, NO traduzcas, NO corrijas ortografía, " +
+    "NO expandas abreviaturas (deja \"V.O\" como \"V.O\", nunca \"Voz en Off\"), NO cambies ningún número, " +
+    "porcentaje, precio ni signo de legal (* % $).\n" +
+    "- NO agregues palabras que no estén en el texto. Si un campo no aparece, déjalo como cadena vacía.\n" +
+    "- Sólo puedes MOVER el texto a su campo y agregar los paréntesis del formato de diálogo.\n\n" +
+    "Texto:\n<<<\n" + limpio + "\n>>>";
 
   try {
     const client = new Anthropic();
@@ -416,27 +448,45 @@ export async function normalizarGuion(
       model: "claude-sonnet-5",
       max_tokens: 16000,
       thinking: { type: "disabled" },
+      tools: [{
+        name: "emitir_planos",
+        description: "Emite los planos extraídos del guión, un objeto por plano.",
+        input_schema: schema,
+      }],
+      tool_choice: { type: "tool", name: "emitir_planos" },
       messages: [{ role: "user", content: prompt }],
     });
-    const salida = res.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-      .trim();
 
-    if (!salida) return { ok: false, error: "La IA no devolvió texto." };
-    // Ancla el guard al contenido que se vuelve planos: la IA puede quitar la
-    // fila de títulos de columna del deck (que el parser igual descarta).
-    if (!mismoContenido(desdeElPrimerPlano(limpio), desdeElPrimerPlano(salida))) {
-      // La IA alteró el contenido (no sólo espacios) → se rechaza por seguridad.
+    const bloque = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    const crudos = (bloque?.input as { planos?: unknown[] } | undefined)?.planos;
+    if (!Array.isArray(crudos) || crudos.length === 0) {
+      return { ok: false, error: "H.Ü.E no pudo leer ningún plano. Revisá el texto." };
+    }
+
+    const s = (v: unknown): string | null =>
+      typeof v === "string" && v.trim() ? v.trim() : null;
+    const planos: PlanoParsed[] = crudos.map((p) => {
+      const o = (p ?? {}) as Record<string, unknown>;
+      return {
+        titulo: s(o.titulo), accion: s(o.accion), copy_in: s(o.copy_in),
+        sfx: s(o.sfx), gfx: s(o.gfx), edicion: s(o.edicion), dialogo: s(o.dialogo),
+      };
+    });
+
+    // Guardarraíl: junta TODO lo extraído y verifica que no inventó nada.
+    const extraido = planos
+      .flatMap((p) => Object.values(p).filter((x): x is string => !!x))
+      .join(" ");
+    if (!sinInventar(limpio, extraido)) {
       return {
         ok: false,
-        error: "El arreglo con IA cambió el texto, así que no se aplicó. Pega el guión con saltos de línea.",
+        error: "H.Ü.E cambió o agregó texto, así que no se aplicó. Pegá el guión o edítalo a mano.",
       };
     }
-    return { ok: true, texto: salida };
+
+    return { ok: true, planos };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error al llamar a la IA." };
+    return { ok: false, error: e instanceof Error ? e.message : "Error al llamar a H.Ü.E." };
   }
 }
 

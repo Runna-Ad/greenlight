@@ -1,21 +1,22 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🔜 ACORDADO (siguiente build) — H.Ü.E como EXTRACTOR format-agnostic (Opción 1)
-Pedro (2026-08-13): "push this version so i can test it and then build option 1."
-La versión con `limpiarPegado` (maneja tabla Markdown/Notion en el parser NO-IA) YA
-está en prod (29230e8) — Pedro la prueba primero. DESPUÉS:
-- Subir H.Ü.E de "insertar saltos de línea" a **entender CUALQUIER formato pegado**
-  (Docs, bullets, labels distintas, screenplay) y MAPEARLO a los campos de plano de
-  Greenlight (titulo/accion/copy_in/sfx/gfx/edicion/dialogo; estático: copy_*).
-- Mantener el MISMO guardarraíl de preservación de PALABRAS: no cambiar/agregar/
-  quitar palabras, números ni marcas legales (* % $). Mover/quitar `-` `,` `>` `:`
-  espacios y formato = OK (Pedro lo confirmó explícitamente).
-- Salida ESTRUCTURADA (JSON de planos, no texto con saltos) → validar cada campo
-  contra el guard (multiset de letras/dígitos/marcas del input vs. la suma de campos)
-  antes de mostrar el preview. Preview editable + confirmar siguen igual.
-- Probar contra VARIOS formatos reales (deck plano, tabla Notion, Doc con labels
-  distintas, lista con viñetas). Determinista-primero se queda para los formatos
-  conocidos; H.Ü.E extractor es el fallback más capaz.
+## ✅ HECHO — H.Ü.E como EXTRACTOR format-agnostic (Opción 1) (2026-08-17)
+Construido y verificado (tsc + build + 236 tests limpios). Pedro lo prueba en prod.
+- `extraerGuion(texto)` (server action) reemplaza a `normalizarGuion`: usa Sonnet 5
+  con tool-use forzado (`emitir_planos`, schema de 7 campos) → devuelve `PlanoParsed[]`
+  ESTRUCTURADO (no texto con saltos). Lee CUALQUIER formato (tabla, bullets, screenplay,
+  labels distintas, deck sin saltos) y lo mapea a los campos del plano.
+- Guardarraíl `sinInventar(entrada, extraído)` en guion.ts: cada letra/dígito/marca
+  (* % $) del extraído debe existir en la entrada (SUBMULTISET, no igualdad — el
+  extractor descarta rótulos, así que el contenido es subconjunto). Caza inventar/
+  cambiar/expandir; OMITIR lo caza la vista previa humana. (Distinto de `mismoContenido`,
+  que exige IGUALDAD para el normalizador structure-only, ya retirado.)
+- Cliente: el botón "Deja que H.Ü.E lo lea" ahora aparece también cuando el parser
+  determinista saca 0 planos (formato desconocido), no sólo cuando perdió saltos. La
+  vista previa que viene de H.Ü.E muestra una nota persistente: "revisá que no haya
+  omitido nada". Determinista-primero sigue: el parser plano maneja el deck sin IA.
+- PENDIENTE (Pedro): probar en prod contra varios formatos reales. Requiere
+  ANTHROPIC_API_KEY (ya en Vercel; falta en .env.local para probar en localhost).
 
 
 

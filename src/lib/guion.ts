@@ -272,3 +272,53 @@ export function mismoContenido(a: string, b: string): boolean {
     cuenta(na, /\$/g) === cuenta(nb, /\$/g)
   );
 }
+
+// ── Guardarraíl del EXTRACTOR format-agnostic (H.Ü.E) ─────────────────────────
+/**
+ * ¿El texto EXTRAÍDO no INVENTÓ nada respecto de la ENTRADA? Es el guardarraíl del
+ * extractor: H.Ü.E lee un guión en CUALQUIER formato (deck, tabla, bullets, labels
+ * distintas, screenplay) y lo mapea a los campos de plano de Greenlight.
+ *
+ * A diferencia de `mismoContenido` —el normalizador structure-only sólo INSERTA
+ * saltos, así que exige IGUALDAD de contenido— el extractor DISTRIBUYE el texto en
+ * campos y DESCARTA los rótulos ("Copy in:", "SFX:", encabezados de columna). El
+ * contenido extraído es entonces un SUBCONJUNTO de la entrada, nunca idéntico.
+ *
+ * Invariante que SIEMPRE vale, sin importar el formato de origen: extraer sólo
+ * SELECCIONA y REORDENA lo que ya está; jamás introduce contenido nuevo. Verificamos
+ * que cada letra, dígito y signo de legal/oferta (* % $) del extraído exista en la
+ * entrada con AL MENOS esa frecuencia (submultiset). Un número cambiado, una palabra
+ * inventada, un legal agregado o una abreviatura expandida ("V.O"→"Voz en Off") meten
+ * caracteres que no están en la entrada → se caza y se rechaza.
+ *
+ * OMITIR contenido (un rótulo —correcto— o, por error, un plano) NO lo caza este
+ * guard: eso lo caza la VISTA PREVIA humana obligatoria (se ven todos los campos
+ * extraídos y se nota lo que falte). El extractor nunca escribe; el humano confirma.
+ * Las letras se comparan sin distinción de mayúsculas (cosmético, como la tipografía).
+ */
+export function sinInventar(entrada: string, extraido: string): boolean {
+  const norm = (s: string) =>
+    (s ?? "")
+      .replace(/[“”„‟″]/g, '"')
+      .replace(/[‘’‚‛′]/g, "'")
+      .replace(/…/g, "...")
+      .replace(/[–—―]/g, "-");
+  const cuentas = (s: string, re: RegExp): Map<string, number> => {
+    const m = new Map<string, number>();
+    for (const c of s.match(re) ?? []) m.set(c, (m.get(c) ?? 0) + 1);
+    return m;
+  };
+  const subconjunto = (chico: Map<string, number>, grande: Map<string, number>): boolean => {
+    for (const [c, n] of chico) if ((grande.get(c) ?? 0) < n) return false;
+    return true;
+  };
+  const ne = norm(entrada), nx = norm(extraido);
+  const letras = (s: string) => cuentas(s.toLowerCase(), /\p{L}/gu);
+  const digitos = (s: string) => cuentas(s, /\d/g);
+  const signos = (s: string) => cuentas(s, /[*%$]/g);
+  return (
+    subconjunto(letras(nx), letras(ne)) &&
+    subconjunto(digitos(nx), digitos(ne)) &&
+    subconjunto(signos(nx), signos(ne))
+  );
+}

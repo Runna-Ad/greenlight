@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { importarGuion, importarEstatico, normalizarGuion } from "@/app/(app)/[cliente]/tareas/[id]/actions";
+import { importarGuion, importarEstatico, extraerGuion } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import type { PlanoVista, EstaticoVista } from "./preview-slide";
 import {
   parseGuion,
@@ -63,9 +63,13 @@ export function PegarGuion({
   const [planos, setPlanos] = useState<PlanoParsed[]>([]);
   const [estatico, setEstatico] = useState<EstaticoParsed | null>(null);
   const [reemplazar, setReemplazar] = useState(true);
-  const [avisoSaltos, setAvisoSaltos] = useState(false);
+  // El parser determinista salió débil (menos planos que marcadores, o cero) →
+  // ofrecemos que H.Ü.E lo lea. `extraidoPorIA` marca la vista previa que vino de
+  // H.Ü.E para nudgear a revisar que no falte ni cambie nada.
+  const [ofrecerHue, setOfrecerHue] = useState(false);
+  const [extraidoPorIA, setExtraidoPorIA] = useState(false);
   const [pendiente, start] = useTransition();
-  const [arreglando, startArreglo] = useTransition();
+  const [leyendo, startLectura] = useTransition();
 
   const reset = () => {
     setTexto("");
@@ -73,7 +77,8 @@ export function PegarGuion({
     setPlanos([]);
     setEstatico(null);
     setReemplazar(true);
-    setAvisoSaltos(false);
+    setOfrecerHue(false);
+    setExtraidoPorIA(false);
   };
   const cerrar = () => { setAbierto(false); reset(); };
 
@@ -82,27 +87,29 @@ export function PegarGuion({
     if (modo === "guion") {
       const p = parseGuion(texto);
       setPlanos(p);
-      setAvisoSaltos(contarPlanos(texto) > p.length);
+      // Débil = perdió saltos (marcadores ≫ parseados) o formato desconocido (0 planos).
+      setOfrecerHue(contarPlanos(texto) > p.length || p.length === 0);
+      setExtraidoPorIA(false);
     } else {
       setEstatico(parseEstatico(texto));
     }
     setPaso("revisar");
   };
 
-  // Pegado sin saltos → la IA re-inserta la estructura (structure-only, con
-  // guardarraíl en el servidor), y se vuelve a parsear determinísticamente.
-  const arreglarConIA = () =>
-    startArreglo(async () => {
-      const res = await normalizarGuion(texto);
+  // Formato que el parser determinista no separó bien → H.Ü.E lee el texto crudo
+  // (cualquier formato) y devuelve los planos ya estructurados, con guardarraíl en
+  // el servidor (no inventa/cambia copy). El humano igual revisa la vista previa.
+  const extraerConHue = () =>
+    startLectura(async () => {
+      const res = await extraerGuion(texto);
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      const p = parseGuion(res.texto);
-      setTexto(res.texto);
-      setPlanos(p);
-      setAvisoSaltos(contarPlanos(res.texto) > p.length);
-      toast.success("H.Ü.E reordenó el guión — revísalo abajo.");
+      setPlanos(res.planos);
+      setOfrecerHue(false);
+      setExtraidoPorIA(true);
+      toast.success("H.Ü.E leyó el guión — revisalo abajo.");
     });
 
   const editarPlano = (i: number, k: keyof PlanoParsed, v: string) =>
@@ -188,24 +195,37 @@ export function PegarGuion({
             </div>
           ) : (
             <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
-              {avisoSaltos && (
+              {ofrecerHue && (
                 <div className="flex items-start gap-2 rounded-md border border-status-progress/40 bg-[color-mix(in_srgb,var(--status-progress)_10%,transparent)] p-2.5 text-[12px]">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-progress" />
                   <div className="min-w-0">
                     <p>
-                      Parece que el texto perdió sus saltos de línea, así que la separación por
-                      planos puede no estar bien.
+                      {nPlanos === 0
+                        ? "No se reconoció el formato del guión."
+                        : "Parece que el texto perdió sus saltos de línea, así que la separación por planos puede no estar bien."}{" "}
+                      H.Ü.E puede leerlo en cualquier formato y llenar los campos.
                     </p>
                     <Button
                       variant="outline"
                       size="sm"
                       className="mt-2"
-                      disabled={arreglando}
-                      onClick={arreglarConIA}
+                      disabled={leyendo}
+                      onClick={extraerConHue}
                     >
-                      <Sparkles className="size-3.5" /> {arreglando ? "H.Ü.E está arreglando…" : "Deja que H.Ü.E lo arregle"}
+                      <Sparkles className="size-3.5" /> {leyendo ? "H.Ü.E está leyendo…" : "Deja que H.Ü.E lo lea"}
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {extraidoPorIA && (
+                <div className="flex items-start gap-2 rounded-md border border-border bg-secondary/40 p-2.5 text-[12px] text-muted-foreground">
+                  <Sparkles className="mt-0.5 size-4 shrink-0 text-status-progress" />
+                  <p>
+                    H.Ü.E leyó el guión. Copia el texto tal cual —no inventa ni cambia palabras—,
+                    pero revisá que no haya <strong>omitido</strong> nada y que cada campo esté en su lugar
+                    antes de importar.
+                  </p>
                 </div>
               )}
 
