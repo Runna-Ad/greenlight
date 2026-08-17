@@ -16,21 +16,31 @@ cabecera/runna-details) quedó IGUAL.
   vista cliente 100% aislada es el portal. Dead code para limpiar luego: `voz()` sin
   llamadas, `PreviewSlide` component sin render (sólo tipos), `referencia_url` legacy.
 
-## 🔜 SIGUIENTE (acordado con Pedro 2026-08-17) — H.Ü.E chequeo ortografía/gramática
-Al clic en "Mandar a revisión": H.Ü.E hace un pase de ortografía+gramática es-MX sobre
-los campos de la tarea → lista errores con fix propuesto → el especialista hace clic en
-"Aplicar" y se cambia en el campo (find-replace anclado). Decisiones de Pedro:
-- **Después** de Fase 1 (ya shippeada). **Surface + override**: muestra la lista, deja
-  aplicar fixes, pero SIEMPRE puede "Enviar de todos modos" (nunca bloquea).
-- Reusar infra H.Ü.E (Claude SDK, structured output + guardarraíl). Server action
-  `revisarOrtografia(ideaId)` → tool `emitir_errores` schema [{campo,filaId,original,
-  sugerencia,tipo}]. Aplicar = find-replace anclado (patrón target_quote) + guardarCampo.
-- GUARDARRAÍL fact-shaped (crítico): el fix NUNCA toca números/legales(* % $)/marcas/
-  significado — sólo ortografía/acento/concordancia; guard determinista rechaza fixes
-  que cambien dígitos o marcas legales; el humano hace clic para aplicar (compuerta final).
-- Conservador con estilo de copy (slang/tú/mayúsculas de marca = no flaggear). Legales
-  de la cortinilla: excluir del auto-fix (o flag-only con warning). Modelo: Sonnet.
-- Era el "Gary grammar check" del plan original (P4).
+## ✅ SHIPPED (2026-08-17 pm) — H.Ü.E chequeo ortografía/gramática es-MX [Pedro]
+Commits fb81ff8/edaf383/b25792f → main → deploy kc8aguhjt **Ready** en prod. Al clic en
+"Mandar a revisión": H.Ü.E revisa los campos (es-MX, Sonnet tool-use), si hay errores
+abre un diálogo con cada error + fix; "Aplicar" hace find-replace anclado + guardarCampo;
+SIEMPRE hay "Enviar de todos modos" (surface + override, nunca bloquea). Sin clave/DB →
+degrada a enviar directo. `src/lib/ortografia.ts` (guard `fixSeguro`, 15 tests) +
+`ortografia-actions.ts` (revisar/aplicar) + `dialogo-ortografia.tsx` + intercept en
+acciones-tarea.tsx.
+- Verificado contra API real: 5 fixes es-MX correctos, "6% de CASHBACK*" intacto.
+- Reap (FIX-FIRST → resuelto): HIGH fixSeguro comparaba dígitos pelados → aceptaba
+  mover el punto decimal (1.5%→15%, $60,000→$60.000); ahora compara tokens numéricos
+  CON separadores (+3 tests). LOW auth: aplicarOrtografia ya gatea rol + valida tabla.
+- Guardarraíl: números (con separadores) + legales (* % $) intactos; legales_extra y
+  cortinilla EXCLUIDOS del chequeo; el humano hace clic para aplicar.
+- PENDIENTE menor (aceptado por diseño): reemplazo de 1ª ocurrencia (self-heal para
+  typos repetidos); cross-instance del botón top+bottom = 2× llamada posible (envío
+  idempotente server-side). Campo aplicado no se refleja en el editor hasta recargar
+  (Campo es uncontrolled) — el fix SÍ se guardó; el envío se lleva la tarea igual.
+
+## 🔜 CANDIDATOS (post estas 2 features, sin comprometer)
+- Portal del cliente (Fase 2): "ver como cliente" 100% aislado (render de cortinilla en
+  formato cliente + ocultar Nota interna) → ruta del portal + login + client_change.
+- Limpieza: `voz()` sin uso, `PreviewSlide` component muerto (sólo tipos), `referencia_url`
+  legacy no se muestra en el doc.
+- (viejos) Slack notif · Notion sync · prefs notif por-usuario · legal de Préstamos.
 
 ## ✅ HECHO — H.Ü.E como EXTRACTOR format-agnostic (Opción 1) (2026-08-17)
 Construido y verificado (tsc + build + 236 tests limpios). Pedro lo prueba en prod.
