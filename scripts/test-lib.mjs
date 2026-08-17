@@ -616,7 +616,16 @@ console.log("\n▶ Guión (paste importer)");
   // Emoji: los shortcodes (Notion/Slack) se vuelven emoji real en limpiarPegado,
   // así el parser Y H.Ü.E ven 🧡, no `:orange_heart:` ni "orange heart".
   eq("limpiarPegado: :orange_heart: → 🧡", limpiarPegado("Copy in: paro :orange_heart:"), "Copy in: paro 🧡");
-  eq("limpiarPegado: varios shortcodes seguidos", limpiarPegado(":sparkles::handshake:"), "✨🤝");
+  // Mapa completo (github+iamcal+emojibase): usa emoji totalmente calificado (con
+  // VS16 U+FE0F), así que asertamos que reemplazó el shortcode, no los codepoints.
+  const dos = limpiarPegado(":sparkles::handshake:");
+  ok("limpiarPegado: varios shortcodes seguidos se reemplazan",
+     !dos.includes(":sparkles:") && !dos.includes(":handshake:") && dos.includes("🤝"));
+  // Nombres de Slack/GitHub que el mapa curado viejo NO tenía — ahora sí resuelven.
+  ok("limpiarPegado: :shopping_bags: (Slack) → emoji",
+     limpiarPegado(":shopping_bags:").includes("🛍") && !limpiarPegado(":shopping_bags:").includes(":"));
+  ok("limpiarPegado: :thumbsup: (Slack) → 👍",
+     limpiarPegado(":thumbsup:").includes("👍"));
   eq("limpiarPegado: shortcode desconocido se deja igual", limpiarPegado("hola :no_existe_xyz: chau"), "hola :no_existe_xyz: chau");
   eq("limpiarPegado: NO toca la etiqueta 'Copy in:'", limpiarPegado("Copy in: hola"), "Copy in: hola");
   // El guard ignora emoji (no son letras/dígitos/marcas): entra con emoji, sale con emoji → pasa.

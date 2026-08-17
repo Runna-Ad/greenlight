@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check } from "lucide-react";
+import { createPortal } from "react-dom";
+import { AlertTriangle, Check, Plus } from "lucide-react";
+import { useFloating, offset, flip, shift, autoUpdate } from "@floating-ui/react-dom";
 import { guardarCampo, type Tabla } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { cn } from "@/lib/utils";
 import { useCorrecciones } from "./correcciones/contexto";
 import { CampoCorrecciones } from "./correcciones/campo-correcciones";
-import { Plus } from "lucide-react";
 import {
   estadoCampo,
   keyCampo,
   resaltadosEnTexto,
+  PIN_BG,
+  ETIQUETA_ESTADO,
   type EstadoCorreccion,
 } from "@/lib/correcciones";
 
@@ -183,17 +186,61 @@ export function Campo({
   const resaltados = ctx ? resaltadosEnTexto(valor, cs) : [];
   const hayResaltado = resaltados.length > 0;
 
-  // Partir el texto en segmentos [texto | frase resaltada] para el mirror.
-  const segmentos: { texto: string; estado?: EstadoCorreccion }[] = [];
+  // Partir el texto en segmentos [texto | frase resaltada] para el mirror. Cada
+  // segmento resaltado lleva el id de su corrección para poder anclar la tarjeta.
+  const segmentos: { texto: string; estado?: EstadoCorreccion; id?: string }[] = [];
   {
     let i = 0;
     for (const r of resaltados) {
       if (r.start > i) segmentos.push({ texto: valor.slice(i, r.start) });
-      segmentos.push({ texto: valor.slice(r.start, r.end), estado: r.estado });
+      segmentos.push({ texto: valor.slice(r.start, r.end), estado: r.estado, id: r.id });
       i = r.end;
     }
     if (i < valor.length) segmentos.push({ texto: valor.slice(i) });
   }
+
+  // --- Tarjeta de lectura de correcciones (B-proper) ---
+  // Se ancla a la FRASE resaltada (no a una esquina fija) y esquiva el texto con
+  // flip/shift; y CEDE EL PASO: se esconde mientras editas (foco), seleccionas o
+  // compones — para que llegar a la palabra nunca invoque lo que la tapa.
+  const [editando, setEditando] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const [fijado, setFijado] = useState(false);
+  const marcaRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const pinRef = useRef<HTMLButtonElement>(null);
+  const hayCorr = cs.length > 0;
+
+  // La corrección "primaria" a la que se ancla la tarjeta: la primera sin cerrar
+  // con un resaltado vivo; si ninguna, la primera con resaltado; si nada está
+  // anclado a texto (campo entero / quote no encontrado), cae al pin.
+  const idsResaltados = new Set(resaltados.map((r) => r.id));
+  const primaria =
+    cs.find((c) => c.estado !== "closed" && idsResaltados.has(c.id)) ??
+    cs.find((c) => idsResaltados.has(c.id)) ??
+    null;
+
+  const { refs, floatingStyles, isPositioned } = useFloating({
+    placement: "bottom-start",
+    strategy: "fixed",
+    middleware: [
+      offset(8),
+      flip({ fallbackPlacements: ["top-start", "right-start", "left-start"] }),
+      shift({ padding: 8 }),
+    ],
+    whileElementsMounted: autoUpdate,
+  });
+
+  const cardAbierta =
+    hayCorr && !editando && !seleccion && !componiendoSel && (fijado || hovering);
+
+  // Apunta el ancla de Floating UI a la marca primaria (o al pin como respaldo)
+  // cuando la tarjeta está abierta; autoUpdate la mantiene posicionada al hacer
+  // scroll/resize. Re-corre si cambia el texto o el conjunto de correcciones.
+  useEffect(() => {
+    if (!cardAbierta) return;
+    const el = (primaria && marcaRefs.current.get(primaria.id)) || pinRef.current;
+    if (el) refs.setReference(el);
+  }, [cardAbierta, primaria?.id, valor, cs.length, refs]);
 
   const puedeSeleccionar = !!ctx?.esRevisor && !soloLectura;
   const capturarSeleccion = () => {
@@ -221,6 +268,8 @@ export function Campo({
     <div
       className="group relative min-w-0 scroll-mt-24"
       data-campo-key={ctx ? keyCampo(tabla, filaId, campo) : undefined}
+      onMouseEnter={ctx ? () => setHovering(true) : undefined}
+      onMouseLeave={ctx ? () => setHovering(false) : undefined}
     >
       <div className="mb-1 flex items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -245,7 +294,19 @@ export function Campo({
           >
             {segmentos.map((sg, i) =>
               sg.estado ? (
-                <mark key={i} style={{ background: MARCA[sg.estado], color: "transparent", borderRadius: "2px" }}>
+                <mark
+                  key={i}
+                  ref={
+                    sg.id
+                      ? (el) => {
+                          const id = sg.id!;
+                          if (el) marcaRefs.current.set(id, el);
+                          else marcaRefs.current.delete(id);
+                        }
+                      : undefined
+                  }
+                  style={{ background: MARCA[sg.estado], color: "transparent", borderRadius: "2px" }}
+                >
                   {sg.texto}
                 </mark>
               ) : (
@@ -261,7 +322,8 @@ export function Campo({
           rows={rows}
           readOnly={soloLectura}
           onChange={(e) => g.alEscribir(e.target.value)}
-          onBlur={g.alSalir}
+          onFocus={() => setEditando(true)}
+          onBlur={() => { setEditando(false); g.alSalir(); }}
           onScroll={hayResaltado ? sincronizarScroll : undefined}
           onSelect={puedeSeleccionar ? capturarSeleccion : undefined}
           onMouseUp={puedeSeleccionar ? capturarSeleccion : undefined}
@@ -334,6 +396,61 @@ export function Campo({
       {conflicto !== null && (
         <PanelConflicto valorAjeno={conflicto} quedarme={g.quedarme} tomarSuyo={g.tomarSuyo} />
       )}
+
+      {/* Pin anclado al campo (respaldo de ancla cuando no hay frase resaltada);
+          clic = fija/suelta la tarjeta de lectura. */}
+      {ctx && hayCorr && estadoCorr && (
+        <button
+          type="button"
+          ref={pinRef}
+          onClick={() => setFijado((v) => !v)}
+          aria-label={`${cs.length} corrección(es) en ${etiqueta}`}
+          aria-expanded={cardAbierta}
+          className="gl-pop absolute -left-2.5 top-6 z-20 grid size-[22px] place-items-center rounded-full border-2 border-background text-[11px] font-extrabold text-white shadow-sm"
+          style={{ background: PIN_BG[estadoCorr] }}
+        >
+          {estadoCorr === "open" ? cs.length : "✓"}
+        </button>
+      )}
+
+      {/* Tarjeta de lectura: portal al body + posición de Floating UI, así nunca
+          la recorta un overflow y siempre esquiva la frase que describe. */}
+      {ctx &&
+        cardAbierta &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={refs.setFloating}
+            role="tooltip"
+            style={{
+              ...floatingStyles,
+              opacity: isPositioned ? 1 : 0,
+              borderColor: "color-mix(in srgb, var(--status-corrections) 40%, var(--border))",
+            }}
+            className="pointer-events-none z-[60] w-64 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border bg-card shadow-lg transition-opacity"
+          >
+            {cs.map((c) => (
+              <div key={c.id} className="border-t border-border p-2.5 first:border-t-0">
+                <div className="mb-1 flex items-center gap-2">
+                  <span
+                    className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
+                    style={{ background: PIN_BG[c.estado] }}
+                  >
+                    {ETIQUETA_ESTADO[c.estado]}
+                  </span>
+                </div>
+                {c.targetQuote && (
+                  <p className="mb-1 truncate text-[11px] italic text-status-corrections" title={c.targetQuote}>
+                    &laquo;{c.targetQuote}&raquo;
+                  </p>
+                )}
+                <p className="text-[12.5px] leading-snug text-foreground">{c.body}</p>
+                {c.autor && <p className="mt-1 text-[10px] text-muted-foreground">{c.autor}</p>}
+              </div>
+            ))}
+          </div>,
+          document.body,
+        )}
 
       {ctx && (
         <CampoCorrecciones

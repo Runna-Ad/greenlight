@@ -12,6 +12,8 @@
 // El campo `dialogo` sale en el formato "(Quien) texto" que espera parseDialogo
 // (src/lib/dialogo.ts), para que la vista del cliente lo seccione por locutor.
 
+import { EMOJI } from "./emoji-map.ts";
+
 export type PlanoParsed = {
   titulo: string | null;
   accion: string | null;
@@ -47,35 +49,11 @@ const HEADER = /^plano\s+\d+\b/i;
  * sus saltos de línea y hay que normalizarlo antes (structure-only, con IA).
  */
 // Shortcodes de emoji (Notion / Slack / GitHub) → el emoji real. Los guiones del
-// equipo traen reacciones como `:orange_heart:` que deben quedar como 🧡, no como
-// el texto `:orange_heart:` ni como "orange heart" (H.Ü.E los expandía a palabras).
-// Mapa CURADO: los que se usan de verdad (los del guión de DiDi) + reacciones
-// comunes de marketing. Un shortcode fuera del mapa se deja tal cual (raro; el
-// humano lo edita en la vista previa) — nunca convertimos un `:foo:` desconocido.
-const EMOJI: Record<string, string> = {
-  orange_heart: "🧡", yellow_heart: "💛", green_heart: "💚", blue_heart: "💙",
-  purple_heart: "💜", heart: "❤️", red_heart: "❤️", sparkling_heart: "💖",
-  two_hearts: "💕", heartpulse: "💗", revolving_hearts: "💞", heart_eyes: "😍",
-  sparkles: "✨", star: "⭐", star2: "🌟", glowing_star: "🌟", star_struck: "🤩",
-  dizzy: "💫", fire: "🔥", boom: "💥", collision: "💥", zap: "⚡", high_voltage: "⚡",
-  handshake: "🤝", clap: "👏", clapping_hands: "👏", raised_hands: "🙌", wave: "👋",
-  muscle: "💪", pray: "🙏", folded_hands: "🙏", ok_hand: "👌", thumbsup: "👍",
-  "+1": "👍", thumbsdown: "👎", "-1": "👎", point_right: "👉", point_left: "👈",
-  point_up: "👆", point_down: "👇", eyes: "👀",
-  white_check_mark: "✅", check: "✅", heavy_check_mark: "✔️", ballot_box_with_check: "☑️",
-  x: "❌", cross_mark: "❌", warning: "⚠️", rotating_light: "🚨", bangbang: "‼️",
-  exclamation: "❗", question: "❓",
-  tada: "🎉", party_popper: "🎉", confetti_ball: "🎊", gift: "🎁", rocket: "🚀",
-  "100": "💯", hundred_points: "💯",
-  money_with_wings: "💸", moneybag: "💰", dollar: "💵", money_mouth_face: "🤑",
-  credit_card: "💳", shopping_bags: "🛍️", shopping_cart: "🛒", shopping: "🛍️",
-  bulb: "💡", light_bulb: "💡", bell: "🔔", key: "🔑", lock: "🔒", unlock: "🔓",
-  closed_lock_with_key: "🔐", calling: "📲", iphone: "📱", mobile_phone: "📱",
-  identification_card: "🪪",
-  smile: "😄", smiley: "😃", grin: "😁", wink: "😉", blush: "😊", sunglasses: "😎",
-  joy: "😂", rofl: "🤣", hugs: "🤗",
-  arrow_right: "➡️", arrow_left: "⬅️",
-};
+// equipo traen reacciones como `:orange_heart:` que deben quedar como 🧡, no como el
+// texto `:orange_heart:` ni como "orange heart" (H.Ü.E los expandía a palabras). El
+// mapa es COMPLETO (3.4k shortcodes: github + iamcal/Slack + emojibase) generado por
+// scripts/gen-emoji-map.mjs — así ninguna convención de nombre falla. Un shortcode
+// fuera del mapa (raro) se deja tal cual; nunca convertimos un `:foo:` desconocido.
 const EMOJI_RE = /:([a-z0-9_+-]+):/gi;
 
 /** Convierte shortcodes conocidos a su emoji; deja intacto lo desconocido. */

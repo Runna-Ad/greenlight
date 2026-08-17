@@ -9,6 +9,24 @@
 
 export type EstadoCorreccion = "open" | "done" | "closed";
 
+// --- Estilo compartido de correcciones (usado por campo.tsx y campo-correcciones.tsx) ---
+// Fondo SÓLIDO del pin / chip de estado (texto blanco encima). Un pelín más oscuro
+// que el token para que el blanco pase AA (lección de contraste: los tonos medios
+// fallan blanco Y oscuro). Son sólo cadenas CSS — sin React — así que viven aquí,
+// en una fuente única, en vez de duplicarse por componente.
+export const PIN_BG: Record<EstadoCorreccion, string> = {
+  open: "color-mix(in srgb, var(--status-corrections) 78%, #000)",
+  done: "color-mix(in srgb, var(--status-progress) 80%, #000)",
+  closed: "color-mix(in srgb, var(--status-completed) 92%, #000)",
+};
+
+/** Etiqueta legible del estado de resolución de una corrección. */
+export const ETIQUETA_ESTADO: Record<EstadoCorreccion, string> = {
+  open: "Sin atender",
+  done: "Atendido · por confirmar",
+  closed: "Confirmado",
+};
+
 export type Correccion = {
   id: string;
   targetTabla: string | null;

@@ -3,28 +3,16 @@
 import { useState } from "react";
 import { Plus, Check } from "lucide-react";
 import { useCorrecciones } from "./contexto";
-import { estadoCampo, type Correccion, type EstadoCorreccion } from "@/lib/correcciones";
-import { cn } from "@/lib/utils";
-
-// Fondo SÓLIDO (texto blanco encima) — un pelín más oscuro que el token para que
-// el blanco pase AA. Y color de TEXTO sobre fondo claro. Mismos colores, más
-// legibles (lección de contraste: los tonos medios fallan blanco Y oscuro).
-const PIN_BG: Record<EstadoCorreccion, string> = {
-  open: "color-mix(in srgb, var(--status-corrections) 78%, #000)",
-  done: "color-mix(in srgb, var(--status-progress) 80%, #000)",
-  closed: "color-mix(in srgb, var(--status-completed) 92%, #000)",
-};
-const ETIQUETA_ESTADO: Record<EstadoCorreccion, string> = {
-  open: "Sin atender",
-  done: "Atendido · por confirmar",
-  closed: "Confirmado",
-};
+import { estadoCampo, PIN_BG, type Correccion } from "@/lib/correcciones";
 
 /**
- * La capa de correcciones que se dibuja SOBRE un campo: el pin (con su color de
- * estado), el tooltip de lectura (hover/tap/foco) y, para el revisor, la barra
- * flotante "Pedir cambio / Confirmar" con su compositor. Vive dentro del wrapper
- * `.group.relative` de <Campo>; si no hay contexto de correcciones, no pinta nada.
+ * Los AFFORDANCES DEL REVISOR sobre un campo: la barra flotante "Confirmar /
+ * Pedir cambio" (aparece al pasar el mouse) y su compositor de campo entero.
+ *
+ * El pin, el resaltado en vivo y la tarjeta de LECTURA viven ahora en <Campo>,
+ * junto a la geometría de la frase — así la tarjeta se ancla a la selección y
+ * cede el paso mientras editas. Aquí sólo quedan las acciones del revisor; si no
+ * hay contexto o no eres revisor, no se pinta nada.
  */
 export function CampoCorrecciones({
   tabla,
@@ -44,10 +32,9 @@ export function CampoCorrecciones({
   campoVacio: boolean;
 }) {
   const ctx = useCorrecciones();
-  const [fijado, setFijado] = useState(false);
   const [componiendo, setComponiendo] = useState(false);
   const [texto, setTexto] = useState("");
-  if (!ctx) return null;
+  if (!ctx || !ctx.esRevisor) return null;
 
   const estado = estadoCampo(cs);
   const hay = cs.length > 0;
@@ -61,79 +48,31 @@ export function CampoCorrecciones({
 
   return (
     <>
-      {/* Pin anclado al campo */}
-      {hay && estado && (
-        <button
-          type="button"
-          key={estado}
-          onClick={() => setFijado((v) => !v)}
-          aria-label={`${cs.length} corrección(es) en ${etiqueta}`}
-          className="gl-pop absolute -left-2.5 top-6 z-20 grid size-[22px] place-items-center rounded-full border-2 border-background text-[11px] font-extrabold text-white shadow-sm"
-          style={{ background: PIN_BG[estado] }}
-        >
-          {estado === "open" ? cs.length : "✓"}
-        </button>
-      )}
-
-      {/* Tooltip de lectura: hover / foco del campo, o fijado con clic en el pin */}
-      {hay && (
-        <div
-          role="tooltip"
-          className={cn(
-            "pointer-events-none absolute right-0 top-8 z-30 w-64 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border bg-card shadow-lg transition-opacity",
-            fijado ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-          )}
-          style={{ borderColor: "color-mix(in srgb, var(--status-corrections) 40%, var(--border))" }}
-        >
-          {cs.map((c) => (
-            <div key={c.id} className="border-t border-border p-2.5 first:border-t-0">
-              <div className="mb-1 flex items-center gap-2">
-                <span
-                  className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
-                  style={{ background: PIN_BG[c.estado] }}
-                >
-                  {ETIQUETA_ESTADO[c.estado]}
-                </span>
-              </div>
-              {c.targetQuote && (
-                <p className="mb-1 truncate text-[11px] italic text-status-corrections" title={c.targetQuote}>
-                  &laquo;{c.targetQuote}&raquo;
-                </p>
-              )}
-              <p className="text-[12.5px] leading-snug text-foreground">{c.body}</p>
-              {c.autor && <p className="mt-1 text-[10px] text-muted-foreground">{c.autor}</p>}
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Barra del revisor: aparece al pasar el mouse por el campo */}
-      {ctx.esRevisor && (
-        <div className="absolute right-0 top-0 z-20 hidden gap-1.5 group-hover:flex group-focus-within:flex">
-          {hay && estado !== "closed" && (
-            <button
-              type="button"
-              disabled={ctx.pendiente}
-              onClick={() => ctx.confirmarCampo(tabla, filaId, campo)}
-              className="inline-flex items-center gap-1 rounded-full border border-status-completed/45 bg-card px-2 py-0.5 text-[11px] font-bold text-[color-mix(in_srgb,var(--status-completed)_82%,#000)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--status-completed)_88%,#000)] hover:text-white"
-            >
-              <Check className="size-3" /> Confirmar
-            </button>
-          )}
-          {/* Campo entero: sólo cuando está VACÍO (no hay texto que resaltar). Con
-              texto, el revisor ancla a la selección ("Pedir cambio aquí"). */}
-          {campoVacio && (
-            <button
-              type="button"
-              onClick={() => setComponiendo((v) => !v)}
-              className="inline-flex items-center gap-1 rounded-full border bg-card px-2 py-0.5 text-[11px] font-bold text-[color-mix(in_srgb,var(--status-corrections)_72%,#000)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--status-corrections)_80%,#000)] hover:text-white"
-              style={{ borderColor: "color-mix(in srgb, var(--status-corrections) 40%, transparent)" }}
-            >
-              <Plus className="size-3" /> Pedir cambio
-            </button>
-          )}
-        </div>
-      )}
+      <div className="absolute right-0 top-0 z-20 hidden gap-1.5 group-hover:flex group-focus-within:flex">
+        {hay && estado !== "closed" && (
+          <button
+            type="button"
+            disabled={ctx.pendiente}
+            onClick={() => ctx.confirmarCampo(tabla, filaId, campo)}
+            className="inline-flex items-center gap-1 rounded-full border border-status-completed/45 bg-card px-2 py-0.5 text-[11px] font-bold text-[color-mix(in_srgb,var(--status-completed)_82%,#000)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--status-completed)_88%,#000)] hover:text-white"
+          >
+            <Check className="size-3" /> Confirmar
+          </button>
+        )}
+        {/* Campo entero: sólo cuando está VACÍO (no hay texto que resaltar). Con
+            texto, el revisor ancla a la selección ("Pedir cambio aquí"). */}
+        {campoVacio && (
+          <button
+            type="button"
+            onClick={() => setComponiendo((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-full border bg-card px-2 py-0.5 text-[11px] font-bold text-[color-mix(in_srgb,var(--status-corrections)_72%,#000)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--status-corrections)_80%,#000)] hover:text-white"
+            style={{ borderColor: "color-mix(in srgb, var(--status-corrections) 40%, transparent)" }}
+          >
+            <Plus className="size-3" /> Pedir cambio
+          </button>
+        )}
+      </div>
 
       {/* Compositor anclado bajo el campo */}
       {componiendo && (
