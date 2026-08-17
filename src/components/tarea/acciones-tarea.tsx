@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Send, Check, RotateCcw, PlayCircle, CornerUpLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +13,11 @@ import {
   mandarCorrecciones,
   devolverARevision,
 } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
+import {
+  revisarOrtografia,
+  type ErrorOrtografia,
+} from "@/app/(app)/[cliente]/tareas/[id]/ortografia-actions";
+import { DialogoOrtografia } from "./dialogo-ortografia";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -63,26 +68,62 @@ export function AccionesTarea({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const esRevisor = canOverrideStatus(ctx.role);
+  // Chequeo de ortografía (H.Ü.E) al mandar a revisión: si hay errores se abre el
+  // diálogo; el especialista aplica los que quiera y SIEMPRE puede enviar igual.
+  const [errores, setErrores] = useState<ErrorOrtografia[] | null>(null);
+  const [pendiente, setPendiente] = useState<Accion | null>(null);
 
   const acciones = accionesDe(status, ctx, esRevisor, abiertas);
   const espera = waitingLabel(status, ctx);
 
+  const ejecutarVerbo = async (a: Accion) => {
+    const res =
+      a.verb === "mandar_correcciones"
+        ? await mandarCorrecciones(clienteSlug, ideaId)
+        : a.verb === "devolver"
+          ? await devolverARevision(clienteSlug, ideaId)
+          : await EJECUTA_VERBO[a.verb](ideaId);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo completar la acción.");
+      return;
+    }
+    const msg = TOAST_EXTRA[a.verb] ?? TOAST_VERBO[a.verb as TaskVerb];
+    if (msg) toast.success(msg);
+    router.refresh();
+  };
+
   const ejecutar = (a: Accion) =>
     startTransition(async () => {
-      const res =
-        a.verb === "mandar_correcciones"
-          ? await mandarCorrecciones(clienteSlug, ideaId)
-          : a.verb === "devolver"
-            ? await devolverARevision(clienteSlug, ideaId)
-            : await EJECUTA_VERBO[a.verb](ideaId);
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo completar la acción.");
-        return;
+      // "Mandar a revisión" pasa primero por el corrector de H.Ü.E (surface+override).
+      if (a.verb === "submit_review") {
+        const r = await revisarOrtografia(ideaId);
+        if (r.ok && r.errores.length > 0) {
+          setErrores(r.errores);
+          setPendiente(a);
+          return;
+        }
+        // Sin errores, o el chequeo no corrió (sin clave/DB) → manda directo.
       }
-      const msg = TOAST_EXTRA[a.verb] ?? TOAST_VERBO[a.verb as TaskVerb];
-      if (msg) toast.success(msg);
-      router.refresh();
+      await ejecutarVerbo(a);
     });
+
+  const enviarDeTodosModos = () =>
+    startTransition(async () => {
+      const a = pendiente;
+      setErrores(null);
+      setPendiente(null);
+      if (a) await ejecutarVerbo(a);
+    });
+
+  const dialogoOrtografia = errores && (
+    <DialogoOrtografia
+      errores={errores}
+      enviando={pending}
+      onAplicado={(id) => setErrores((prev) => prev?.filter((e) => e.id !== id) ?? null)}
+      onEnviar={enviarDeTodosModos}
+      onCerrar={() => { setErrores(null); setPendiente(null); }}
+    />
+  );
 
   if (!acciones.length && !espera) return null;
 
@@ -112,31 +153,37 @@ export function AccionesTarea({
 
   if (prominente) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-xl border border-primary/20 bg-gradient-to-r from-primary/[0.07] to-secondary/40 px-4 py-5 shadow-sm sm:flex-row sm:justify-between">
-        <div className="text-center sm:text-left">
-          <p className="text-sm font-semibold text-foreground">
-            {espera ? espera : "¿Lista esta tarea?"}
-          </p>
-          {!espera && (
-            <p className="text-xs text-muted-foreground">
-              Cuando termines, mándala al siguiente paso desde aquí.
+      <>
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-primary/20 bg-gradient-to-r from-primary/[0.07] to-secondary/40 px-4 py-5 shadow-sm sm:flex-row sm:justify-between">
+          <div className="text-center sm:text-left">
+            <p className="text-sm font-semibold text-foreground">
+              {espera ? espera : "¿Lista esta tarea?"}
             </p>
-          )}
+            {!espera && (
+              <p className="text-xs text-muted-foreground">
+                Cuando termines, mándala al siguiente paso desde aquí.
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2">{botones}</div>
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-2">{botones}</div>
-      </div>
+        {dialogoOrtografia}
+      </>
     );
   }
 
   return (
-    <div className="flex items-center gap-2">
-      {espera && (
-        <span className="rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] text-muted-foreground">
-          {espera}
-        </span>
-      )}
-      {botones}
-    </div>
+    <>
+      <div className="flex items-center gap-2">
+        {espera && (
+          <span className="rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] text-muted-foreground">
+            {espera}
+          </span>
+        )}
+        {botones}
+      </div>
+      {dialogoOrtografia}
+    </>
   );
 }
 

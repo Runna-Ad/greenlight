@@ -439,6 +439,24 @@ const VTX = "Hasta 6% de CASHBACK* en todas tus compras";
   eq("solapes: se queda 1 (el primero gana)", r.length, 1);
 }
 
+// ── Guard del chequeo de ortografía (H.Ü.E): números y legales intactos ──
+console.log("\n▶ fixSeguro (chequeo de ortografía)");
+{
+  const { fixSeguro } = await import("../src/lib/ortografia.ts");
+  ok("acento faltante se acepta", fixSeguro("comprar mas", "comprar más"));
+  ok("ortografía se acepta", fixSeguro("aser el pago", "hacer el pago"));
+  ok("concordancia se acepta", fixSeguro("las niño", "los niños"));
+  ok("corrige letra junto a un número (dígitos intactos)", fixSeguro("6% de casback", "6% de cashback"));
+  ok("no-op (idéntico) se rechaza", !fixSeguro("hola", "hola"));
+  ok("vacío se rechaza", !fixSeguro("", "algo"));
+  ok("cambiar un número se RECHAZA", !fixSeguro("hasta 6% diario", "hasta 9% diario"));
+  ok("cambiar un precio se RECHAZA", !fixSeguro("$60,000", "$60,00"));
+  ok("quitar el asterisco de legal se RECHAZA", !fixSeguro("CASHBACK*", "CASHBACK"));
+  ok("quitar el % se RECHAZA", !fixSeguro("hasta 6%", "hasta 6"));
+  ok("reescritura larga se RECHAZA", !fixSeguro("hola", "hola qué tal cómo estás amigo mío"));
+  ok("párrafo entero como 'fix' se rechaza", !fixSeguro("x".repeat(161), "y".repeat(161)));
+}
+
 console.log("\n▶ Guión (paste importer)");
 {
   const { parseGuion, parseEstatico, contarPlanos, convertirDialogo, mismoContenido, sinInventar, desdeElPrimerPlano, limpiarPegado } =
