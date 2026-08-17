@@ -72,6 +72,11 @@ export function AccionesTarea({
   // diálogo; el especialista aplica los que quiera y SIEMPRE puede enviar igual.
   const [errores, setErrores] = useState<ErrorOrtografia[] | null>(null);
   const [pendiente, setPendiente] = useState<Accion | null>(null);
+  // Cuántos fixes aplicó el usuario en el diálogo. El editor tiene el texto en
+  // estado propio (Campo uncontrolled) y el fix lo escribe una acción HERMANA
+  // (el diálogo), así que el campo no refleja el cambio hasta recargar. Si aplicó
+  // algo, recargamos al cerrar/enviar para que VEA el cambio (bug reportado por Pedro).
+  const [aplicados, setAplicados] = useState(0);
 
   const acciones = accionesDe(status, ctx, esRevisor, abiertas);
   const espera = waitingLabel(status, ctx);
@@ -110,18 +115,34 @@ export function AccionesTarea({
   const enviarDeTodosModos = () =>
     startTransition(async () => {
       const a = pendiente;
+      const recargar = aplicados > 0;
       setErrores(null);
       setPendiente(null);
+      setAplicados(0);
       if (a) await ejecutarVerbo(a);
+      // Si se aplicaron fixes, recargar para que el campo muestre el texto corregido
+      // (la tarea ya se envió; el reviewer ya lo ve — esto es para la vista del envío).
+      if (recargar) window.location.reload();
     });
+
+  const cerrarOrtografia = () => {
+    const recargar = aplicados > 0;
+    setErrores(null);
+    setPendiente(null);
+    setAplicados(0);
+    if (recargar) window.location.reload();
+  };
 
   const dialogoOrtografia = errores && (
     <DialogoOrtografia
       errores={errores}
       enviando={pending}
-      onAplicado={(id) => setErrores((prev) => prev?.filter((e) => e.id !== id) ?? null)}
+      onAplicado={(id) => {
+        setErrores((prev) => prev?.filter((e) => e.id !== id) ?? null);
+        setAplicados((n) => n + 1);
+      }}
       onEnviar={enviarDeTodosModos}
-      onCerrar={() => { setErrores(null); setPendiente(null); }}
+      onCerrar={cerrarOrtografia}
     />
   );
 
