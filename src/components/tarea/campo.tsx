@@ -287,12 +287,12 @@ export function Campo({
   const taClass = cn(
     "relative w-full outline-none transition-colors",
     inline
-      ? "resize-none rounded border border-transparent px-1.5 py-1 text-[13px] leading-relaxed [field-sizing:content] focus:border-input focus:bg-background focus-visible:ring-2 focus-visible:ring-ring"
+      ? "resize-none rounded border border-transparent px-1.5 py-1 text-[13px] leading-relaxed [field-sizing:content] [scrollbar-gutter:stable] focus:border-input focus-visible:ring-2 focus-visible:ring-ring"
       : "resize-y rounded-md border px-2.5 py-1.5 text-sm leading-relaxed [scrollbar-gutter:stable] focus-visible:ring-2 focus-visible:ring-ring",
     inline
       ? hayResaltado
         ? "bg-transparent"
-        : "bg-transparent hover:bg-secondary/30"
+        : "bg-transparent hover:bg-secondary/30 focus:bg-background"
       : hayResaltado
         ? "bg-transparent"
         : "bg-background",
@@ -306,7 +306,7 @@ export function Campo({
   const mirrorClass = cn(
     "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words border border-transparent text-transparent",
     inline
-      ? "rounded px-1.5 py-1 text-[13px] leading-relaxed"
+      ? "rounded px-1.5 py-1 text-[13px] leading-relaxed [scrollbar-gutter:stable]"
       : "rounded-md bg-background px-2.5 py-1.5 text-sm leading-relaxed [scrollbar-gutter:stable]",
     mono && "font-mono",
   );

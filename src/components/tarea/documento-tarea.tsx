@@ -108,7 +108,7 @@ export function DocumentoTarea({
               rows={1} soloLectura={soloLectura} onCambio={(v) => onEditarEstatico("copy_cta", v)} />
             <CampoDoc modo={modo} icono={IconoEdicion} label="Legales" tabla="estaticos" filaId={estatico.id}
               campo="legales_extra" grupo="Estático" valor={estatico.legales_extra} placeholder={phEstatico.legales_extra}
-              rows={2} soloLectura={soloLectura} />
+              rows={2} soloLectura={soloLectura} onCambio={(v) => onEditarEstatico("legales_extra", v)} />
             <CampoDoc modo={modo} icono={IconoRefe} label="Nota de diseño" tabla="estaticos" filaId={estatico.id}
               campo="referencia_nota" grupo="Estático" valor={estatico.referencia_nota} placeholder={phEstatico.referencia_nota}
               rows={3} soloLectura={soloLectura} onCambio={(v) => onEditarEstatico("referencia_nota", v)} />
