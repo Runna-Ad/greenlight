@@ -689,3 +689,39 @@ Rünna. Acciones:
 - Lección durable guardada en memoria global: `vercel_hobby_private_org_repos.md`.
 - Pendiente (no bloqueante): añadir gente (Nils) a la org; desenredar el repo
   cajón-de-sastre `/Users/work` (runna-website vivía dentro de él sin git propio).
+
+---
+
+## Sesión 2026-08-17 — H.Ü.E extractor format-agnostic + emoji (Opción 1)
+Commits en `main` (auto-deploy Vercel): 71d1260 → 1a38a64. Todo verificado en prod por Pedro.
+
+**Hecho:**
+1. **Bugfix (arranque de tarea al importar)** [71d1260]: importarGuion/importarEstatico
+   escribían planos por RPC/update directo, saltándose el auto-start de guardarCampo →
+   el botón seguía en "Empezar". Helper compartido `iniciarTareaSiTodo(db, ideaId)`
+   llamado por ambos importadores. Pedro confirmó fix.
+2. **Opción 1 — H.Ü.E como EXTRACTOR format-agnostic** [86437f0]: `extraerGuion` (server
+   action, Sonnet 5, tool-use forzado `emitir_planos` con schema de 7 campos) reemplaza
+   a `normalizarGuion`. Lee CUALQUIER formato → PlanoParsed[] estructurado. Guardarraíl
+   nuevo `sinInventar` (SUBMULTISET: cada letra/dígito/marca del extraído existe en la
+   entrada — caza inventar/alterar; omitir lo caza la vista previa humana). Cliente:
+   botón "Deja que H.Ü.E lo lea" también aparece con 0 planos (formato desconocido);
+   nota persistente de revisión en previews de IA. Determinista-primero se queda.
+3. **Emoji shortcodes → emoji real** [da18cb5 → 05586bb]: guiones de Notion traen
+   `:orange_heart:` etc.; el parser los dejaba como texto y H.Ü.E los expandía a palabras.
+   `limpiarPegado` ahora emojifica. Empecé con mapa curado (~55) — Pedro pidió cobertura
+   completa → mapa GENERADO de 3.4k shortcodes (emojibase-data, presets github+iamcal+
+   emojibase; `scripts/gen-emoji-map.mjs` → `src/lib/emoji-map.ts`, 24KB gzip). node-emoji
+   descartado (naming emojibase ≠ github/slack). La tabla DiDi entera parsea determinista
+   con emoji + legal `*` intactos. Pedro: "emojis work now".
+
+**Tests:** test-lib 227 → 244 (guard sinInventar + emoji). tsc + build limpios en cada paso.
+**Lecciones:** 4 nuevas en lessons.md (side-effect compartido, subset-vs-equality guard,
+emoji shortcode determinista, curado→completo + naming-preset gotcha).
+
+**⚠️ Pendiente / heads-up:**
+- `src/components/tarea/campo.tsx` quedó MODIFICADO sin commitear — NO es mío (otra sesión
+  con dev server corriendo en la carpeta lo está editando: refactor de Floating UI
+  `refs`→`elements` controlados). Lo dejé intacto; que la otra sesión lo cierre.
+- Probar H.Ü.E en localhost necesita ANTHROPIC_API_KEY en .env.local (ya está en Vercel).
+- Estático (parseEstatico) sigue provisional — falta muestra real del copy de Pedro.

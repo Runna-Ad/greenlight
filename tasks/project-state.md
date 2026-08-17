@@ -84,9 +84,10 @@ snippets legal=1 (sólo Card) · references(links del sheet)=15
 ## Integraciones
 - **Google Sheets** vía Apps Script (solo lectura). `scripts/apps-script/Code.gs`.
 - **Anthropic (H.Ü.E)** — dep `@anthropic-ai/sdk`; `ANTHROPIC_API_KEY` en Vercel
-  env + `.env.local`. Sólo el server action `normalizarGuion` la usa (Sonnet 5,
-  thinking off) para reordenar un guión pegado SIN saltos de línea. (Pedro: la key
-  está bien, NO rotar.)
+  env (falta en `.env.local` → H.Ü.E no corre en localhost). Server action
+  `extraerGuion` (Sonnet 5, thinking off, tool-use forzado `emitir_planos`) — extractor
+  format-agnostic que lee CUALQUIER formato pegado → PlanoParsed[]. Reemplazó a
+  `normalizarGuion`. (Pedro: la key está bien, NO rotar.)
 - **Vercel env**: SHEETS_SCRIPT_URL/SECRET, NEXT_PUBLIC_SUPABASE_URL/ANON_KEY,
   SUPABASE_SERVICE_ROLE_KEY, GMAIL_USER/APP_PASSWORD, APP_URL, ANTHROPIC_API_KEY.
   (Falta NOTION_TOKEN/NOTION_DB_ID para F6.)
@@ -100,12 +101,14 @@ snippets legal=1 (sólo Card) · references(links del sheet)=15
   ARRIBA del cuerpo del workspace → diálogo (alto fijo, body scrollable, header/
   footer pinned) → pega el guión del deck → vista previa EDITABLE (una tarjeta por
   plano, radio Reemplazar/Agregar) → confirma → escritura atómica (`rpc_import_planos`).
-  Parser determinista `src/lib/guion.ts` (parseGuion/parseEstatico/contarPlanos +
-  guard `mismoContenido`/`desdeElPrimerPlano`). Para pegados SIN saltos de línea,
-  botón **"Deja que H.Ü.E lo arregle"** → `normalizarGuion` (Sonnet, structure-only)
-  + guard fact-shaped (dígitos + * % $ + multiset de letras; tolera coma/comilla/
-  espacios). Verificado 3/3 en vivo con el guión real de DiDi. Estático: parser
-  PROVISIONAL (falta muestra real de Pedro para gold-test).
+  Parser determinista `src/lib/guion.ts` (parseGuion/parseEstatico/contarPlanos).
+  `limpiarPegado` des-markdowniza (tabla/negrita/`<br>`) Y emojifica (mapa COMPLETO
+  de 3.4k shortcodes `src/lib/emoji-map.ts`, generado por scripts/gen-emoji-map.mjs) →
+  el deck de DiDi con emoji parsea DETERMINISTA (sin IA). Para formatos raros o 0
+  planos, botón **"Deja que H.Ü.E lo lea"** → `extraerGuion` (extractor format-agnostic,
+  Opción 1) → PlanoParsed[] estructurado, guardarraíl `sinInventar` (SUBMULTISET:
+  no inventa/altera; omitir lo caza la vista previa). Verificado en prod por Pedro
+  (guión DiDi + emoji). Estático: parser PROVISIONAL (falta muestra real de Pedro).
 - **Descartar una corrección fijada** (revisor cambió de opinión): botón trash con
   confirmación en dos pasos en el panel; server action `descartarCorreccion` (hard
   delete, la ronda se auto-cura). Y **"Pedir cambio" de campo entero sólo en campos
