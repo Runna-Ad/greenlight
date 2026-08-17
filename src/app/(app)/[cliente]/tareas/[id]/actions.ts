@@ -8,7 +8,7 @@ import { getSoy } from "@/lib/soy";
 import { ESTADOS_CERRADOS } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
 import type { AssetStatus } from "@/lib/brand";
-import { mismoContenido, desdeElPrimerPlano, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
+import { mismoContenido, desdeElPrimerPlano, limpiarPegado, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
 import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
 
 // Columnas que alimentan a PlanoVista/EstaticoVista (para devolver la fila creada
@@ -372,6 +372,11 @@ export async function normalizarGuion(
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
   if (!texto.trim()) return { ok: false, error: "No hay texto que arreglar." };
 
+  // Limpia markdown/tabla ANTES de la IA: así H.Ü.E recibe texto plano (sin `**`,
+  // `|`, `<br>`) y no tiene que reescribir formato — el guardarraíl deja de
+  // rechazar por los asteriscos de negrita. El guard compara contra ESTE limpio.
+  const limpio = limpiarPegado(texto);
+
   const prompt =
     "Te doy el texto de un guión de anuncio que perdió sus saltos de línea al " +
     "pegarse. Tu ÚNICA tarea es INSERTAR saltos de línea para separar: cada " +
@@ -384,7 +389,7 @@ export async function normalizarGuion(
     "- NO corrijas ortografía, NO traduzcas, NO reescribas, NO resumas.\n" +
     "- Devuelve SÓLO el texto reformateado, sin explicaciones ni comillas.\n\n" +
     "Texto:\n<<<\n" +
-    texto +
+    limpio +
     "\n>>>";
 
   try {
@@ -404,7 +409,7 @@ export async function normalizarGuion(
     if (!salida) return { ok: false, error: "La IA no devolvió texto." };
     // Ancla el guard al contenido que se vuelve planos: la IA puede quitar la
     // fila de títulos de columna del deck (que el parser igual descarta).
-    if (!mismoContenido(desdeElPrimerPlano(texto), desdeElPrimerPlano(salida))) {
+    if (!mismoContenido(desdeElPrimerPlano(limpio), desdeElPrimerPlano(salida))) {
       // La IA alteró el contenido (no sólo espacios) → se rechaza por seguridad.
       return {
         ok: false,

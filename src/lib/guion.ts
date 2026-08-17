@@ -46,11 +46,34 @@ const HEADER = /^plano\s+\d+\b/i;
  * SÍ separa por principio de línea— saca menos bloques que esto, el pegado perdió
  * sus saltos de línea y hay que normalizarlo antes (structure-only, con IA).
  */
+/**
+ * Limpia un pegado "rico" (tabla Markdown/Notion/Docs) a texto plano deck-style,
+ * ANTES de parsear o de mandarlo a H.Ü.E. Un guión copiado de Notion trae tabla
+ * (`| celda |`), negritas `**…**`, `<br>`, filas separadoras `|---|`. Sin esto el
+ * parser no encuentra los "Plano N" (van dentro de una celda) y H.Ü.E tiene que
+ * REESCRIBIR la tabla → cambia caracteres (quita los `**`) → el guardarraíl lo
+ * rechaza con razón. Limpiando primero, el parser plano lo procesa directo (sin IA)
+ * y el `*` legal SUELTO de "CASHBACK*" sobrevive (sólo se quitan los `**…**` en PAR).
+ */
+export function limpiarPegado(texto: string): string {
+  return (texto ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/<br\s*\/?>/gi, "\n") // <br> → salto de línea
+    .replace(/^[\s|:]*-[\s|:\-]*$/gm, "") // filas separadoras de tabla (|---|:--|)
+    .replace(/\*\*(.+?)\*\*/g, "$1") // **negrita** → texto (el * suelto no forma par → sobrevive)
+    .replace(/__(.+?)__/g, "$1") // __negrita__
+    .replace(/[ \t]*\|[ \t]*/g, "\n") // bordes/columnas de tabla → salto
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function contarPlanos(texto: string): number {
   // Sin `\b` inicial a propósito: en un pegado sin saltos el primer "Plano 1"
   // viene PEGADO al header ("…MotionDIÁLOGOPlano 1"), sin frontera de palabra
   // antes de la P; con `\b` se saltaba y contaba de menos.
-  return (texto.match(/plano\s+\d+\b/gi) ?? []).length;
+  return (limpiarPegado(texto).match(/plano\s+\d+\b/gi) ?? []).length;
 }
 
 // Etiquetas de campo del deck → a qué campo del plano alimentan. "Botón CTA" no
@@ -76,7 +99,7 @@ const valorEtiqueta = (l: string, re: RegExp): string => l.replace(re, "").trim(
  * izquierda —acción + etiquetas— va primero y el diálogo al final).
  */
 export function parseGuion(texto: string): PlanoParsed[] {
-  const lineas = (texto ?? "").replace(/\r\n?/g, "\n").split("\n");
+  const lineas = limpiarPegado(texto).split("\n");
 
   const bloques: string[][] = [];
   let actual: string[] | null = null;
@@ -184,7 +207,7 @@ const EST_ETIQUETAS: { re: RegExp; campo: keyof EstaticoParsed }[] = [
 ];
 
 export function parseEstatico(texto: string): EstaticoParsed {
-  const lineas = (texto ?? "").replace(/\r\n?/g, "\n").split("\n").map((l) => l.trim()).filter(Boolean);
+  const lineas = limpiarPegado(texto).split("\n").map((l) => l.trim()).filter(Boolean);
   const buckets: Record<keyof EstaticoParsed, string[]> = {
     copy_titulo: [], copy_subtitulo: [], copy_cta: [], legales_extra: [],
   };

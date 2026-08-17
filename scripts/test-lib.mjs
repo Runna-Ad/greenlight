@@ -441,8 +441,25 @@ const VTX = "Hasta 6% de CASHBACK* en todas tus compras";
 
 console.log("\n▶ Guión (paste importer)");
 {
-  const { parseGuion, parseEstatico, contarPlanos, convertirDialogo, mismoContenido, desdeElPrimerPlano } =
+  const { parseGuion, parseEstatico, contarPlanos, convertirDialogo, mismoContenido, desdeElPrimerPlano, limpiarPegado } =
     await import("../src/lib/guion.ts");
+
+  // Pegado RICO: tabla Markdown/Notion (| celda |, **negrita**, <br>, |---|). Debe
+  // parsear DIRECTO (sin IA) y preservar el `*` legal suelto de "CASHBACK*".
+  const MD = [
+    "| **ACCIÓN + COPY IN** | **DIÁLOGO** |",
+    "| --- | --- |",
+    "| **Plano 1 - int. Sala - MS**<br>Actor con la **DiDi Card**.<br>**Copy in:** Hasta 6% de CASHBACK* diario | **Actor**<br>Uso mi DiDi Card. |",
+    "| **Plano 2 - int. Sala - MCU**<br>Contador sube.<br>**Copy in:** Línea de hasta $60,000 m.n. | **Actor**<br>Tengo crédito. |",
+  ].join("\n");
+  const mdP = parseGuion(MD);
+  eq("md: cuenta 2 planos", contarPlanos(MD), 2);
+  eq("md: parsea 2 planos", mdP.length, 2);
+  eq("md: titulo sin ** ", mdP[0].titulo, "Plano 1 - int. Sala - MS");
+  eq("md: copy_in preserva el * legal (CASHBACK*)", mdP[0].copy_in, "Hasta 6% de CASHBACK* diario");
+  eq("md: $60,000 intacto", mdP[1].copy_in, "Línea de hasta $60,000 m.n.");
+  eq("md: dialogo convertido", mdP[0].dialogo, "(Actor) Uso mi DiDi Card.");
+  ok("limpiarPegado quita ** en par pero deja el * suelto", limpiarPegado("**hola CASHBACK* mundo**") === "hola CASHBACK* mundo");
   const { parseDialogo } = await import("../src/lib/dialogo.ts");
 
   // ── Gold: la muestra REAL de Pedro (reconstruida con saltos de línea, como
