@@ -67,7 +67,6 @@ export function DocumentoTarea({
   estatico,
   refsPorPlano,
   refsEstatico,
-  quienHabla,
   ph,
   phEstatico,
   soloLectura,
@@ -82,7 +81,6 @@ export function DocumentoTarea({
   estatico: EstaticoVista | null;
   refsPorPlano: Record<string, RefVista[]>;
   refsEstatico: RefVista[];
-  quienHabla: string;
   ph: PH;
   phEstatico: PHEstatico;
   soloLectura: boolean;
@@ -197,9 +195,9 @@ export function DocumentoTarea({
 
               <div className="min-w-0">
                 {lectura ? (
-                  <DialogoLectura icono={IconoDialogo} label={quienHabla} texto={p.dialogo} />
+                  <DialogoLectura label="Diálogos" texto={p.dialogo} />
                 ) : (
-                  <CampoDoc modo={modo} icono={IconoDialogo} label={quienHabla} tabla="planos" filaId={p.id}
+                  <CampoDoc modo={modo} icono={IconoDialogo} label="Diálogos" tono="orange" tabla="planos" filaId={p.id}
                     campo="dialogo" grupo={`Plano ${p.orden}`} valor={p.dialogo} placeholder={ph.dialogo}
                     rows={6} soloLectura={soloLectura} onCambio={(v) => onEditarPlano(p.id, "dialogo", v)} />
                 )}
@@ -246,6 +244,7 @@ function CampoDoc({
   rows,
   soloLectura,
   onCambio,
+  tono = "blue",
 }: {
   modo: ModoDoc;
   icono: ComponentType<{ className?: string }>;
@@ -259,14 +258,18 @@ function CampoDoc({
   rows?: number;
   soloLectura: boolean;
   onCambio?: (valor: string) => void;
+  /** Color del ícono para separar visualmente las dos secciones: la columna de
+   *  motion va en AZUL, la de diálogos en NARANJA (como las plecas del deck). */
+  tono?: "blue" | "orange";
 }) {
   const Icono = icono;
+  const colorIcono = tono === "orange" ? "text-deck-orange" : "text-deck-blue";
   if (modo === "lectura") {
     if (!valor?.trim()) return null;
     return (
       <div className="grid grid-cols-[64px_minmax(0,1fr)] items-start gap-x-2">
         <span className="flex min-w-0 items-center gap-1 pt-1 text-[11px] font-semibold text-muted-foreground">
-          <Icono className="size-3.5 shrink-0" />
+          <Icono className={`size-3.5 shrink-0 ${colorIcono}`} />
           <span className="truncate">{label}</span>
         </span>
         <div className="px-1.5 py-1 text-[13px] leading-relaxed text-foreground">
@@ -278,7 +281,7 @@ function CampoDoc({
   return (
     <Campo
       inline
-      icono={<Icono className="size-3.5 shrink-0" />}
+      icono={<Icono className={`size-3.5 shrink-0 ${colorIcono}`} />}
       tabla={tabla}
       filaId={filaId}
       campo={campo}
@@ -295,11 +298,9 @@ function CampoDoc({
 
 /** El diálogo en lectura: (Quien) → **Quien:** "texto", como lo ve el cliente. */
 function DialogoLectura({
-  icono: Icono,
   label,
   texto,
 }: {
-  icono: ComponentType<{ className?: string }>;
   label: string;
   texto: string | null;
 }) {
@@ -308,7 +309,7 @@ function DialogoLectura({
   return (
     <div className="grid grid-cols-[64px_minmax(0,1fr)] items-start gap-x-2">
       <span className="flex min-w-0 items-center gap-1 pt-1 text-[11px] font-semibold text-muted-foreground">
-        <Icono className="size-3.5 shrink-0" />
+        <IconoDialogo className="size-3.5 shrink-0 text-deck-orange" />
         <span className="truncate">{label}</span>
       </span>
       <div className="space-y-1.5 px-1.5 py-1 text-[13px] leading-relaxed text-foreground">

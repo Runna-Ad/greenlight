@@ -10,7 +10,6 @@ import {
   notaGlobal,
   placeholdersGuion,
   readTimeS,
-  voz,
 } from "@/lib/plantilla";
 import { reglasQueAplican, type Regla } from "@/lib/reglas";
 import { cn } from "@/lib/utils";
@@ -64,10 +63,9 @@ export function EditorTarea({
   const [, startTransition] = useTransition();
 
   const esEstatico = estatico !== null;
-  // Real Person y Normal no son la misma plantilla: cambian los placeholders,
-  // el título del plano y quién habla en la columna del diálogo.
+  // Real Person y Normal no son la misma plantilla: cambian los placeholders y
+  // la nota del guión.
   const PH = placeholdersGuion(cabecera.tipoAsset);
-  const quienHabla = voz(cabecera.tipoAsset);
   const nota = notaGlobal(cabecera.tipoAsset);
 
   const editarPlano = (id: string, campo: keyof PlanoVista, valor: string) =>
@@ -236,7 +234,6 @@ export function EditorTarea({
         estatico={estatico}
         refsPorPlano={refsPorPlano}
         refsEstatico={refsEstatico}
-        quienHabla={quienHabla}
         ph={PH}
         phEstatico={PLACEHOLDER_ESTATICO}
         soloLectura={soloLectura}

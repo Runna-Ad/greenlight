@@ -410,6 +410,22 @@ export function Campo({
             <Plus className="size-3" /> Pedir cambio aquí
           </button>
         )}
+
+        {/* Pin de corrección — anclado a la esquina SUP-IZQ del CAMPO (no tapa el
+            ícono de la etiqueta). Es el respaldo de ancla de la tarjeta; clic = fija. */}
+        {ctx && hayCorr && estadoCorr && (
+          <button
+            type="button"
+            ref={pinRef}
+            onClick={() => setFijado((v) => !v)}
+            aria-label={`${cs.length} corrección(es) en ${etiqueta}`}
+            aria-expanded={cardAbierta}
+            className="gl-pop absolute -left-1.5 -top-1.5 z-20 grid size-[20px] place-items-center rounded-full border-2 border-background text-[10px] font-extrabold text-white shadow-sm"
+            style={{ background: PIN_BG[estadoCorr] }}
+          >
+            {estadoCorr === "open" ? cs.length : "✓"}
+          </button>
+        )}
       </div>
 
       {/* Compositor de la corrección anclada a la selección. */}
@@ -454,25 +470,6 @@ export function Campo({
         ) : (
           <PanelConflicto valorAjeno={conflicto} quedarme={g.quedarme} tomarSuyo={g.tomarSuyo} />
         ))}
-
-      {/* Pin anclado al campo (respaldo de ancla cuando no hay frase resaltada);
-          clic = fija/suelta la tarjeta de lectura. */}
-      {ctx && hayCorr && estadoCorr && (
-        <button
-          type="button"
-          ref={pinRef}
-          onClick={() => setFijado((v) => !v)}
-          aria-label={`${cs.length} corrección(es) en ${etiqueta}`}
-          aria-expanded={cardAbierta}
-          className={cn(
-            "gl-pop absolute -left-2.5 z-20 grid size-[22px] place-items-center rounded-full border-2 border-background text-[11px] font-extrabold text-white shadow-sm",
-            inline ? "top-1" : "top-6",
-          )}
-          style={{ background: PIN_BG[estadoCorr] }}
-        >
-          {estadoCorr === "open" ? cs.length : "✓"}
-        </button>
-      )}
 
       {/* Tarjeta de lectura: portal al body + posición de Floating UI, así nunca
           la recorta un overflow y siempre esquiva la frase que describe. */}
