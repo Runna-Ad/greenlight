@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Eye, Pencil, Clock, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,6 +19,7 @@ import { ChipsReglas } from "./chips-reglas";
 import { type RefVista } from "./referencias-plano";
 import { CortinillaCierre, type LegalSnippet } from "./cortinilla-cierre";
 import { DocumentoTarea } from "./documento-tarea";
+import { useBorrador } from "./borrador-tarea";
 import {
   type CabeceraVista,
   type EstaticoVista,
@@ -61,6 +62,14 @@ export function EditorTarea({
   // El toggle: por defecto editable (agencia); "ver como cliente" lo pasa a lectura.
   const [verCliente, setVerCliente] = useState(false);
   const [, startTransition] = useTransition();
+
+  // Mantener el borrador VIVO para el chequeo de ortografía: revisa el texto
+  // ACTUAL en pantalla (no la BD), así no se pierde lo recién tecleado que aún no
+  // se autoguardó (la carrera que hizo que el chequeo no viera los cambios).
+  const borrador = useBorrador();
+  useEffect(() => {
+    borrador?.set({ planos, estatico });
+  }, [planos, estatico, borrador]);
 
   const esEstatico = estatico !== null;
   // Real Person y Normal no son la misma plantilla: cambian los placeholders y

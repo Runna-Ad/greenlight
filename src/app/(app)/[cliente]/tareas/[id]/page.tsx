@@ -15,6 +15,7 @@ import { EditorTarea } from "@/components/tarea/editor-tarea";
 import { CabeceraTarea } from "@/components/tarea/cabecera";
 import { AccionesTarea } from "@/components/tarea/acciones-tarea";
 import { CorreccionesProvider } from "@/components/tarea/correcciones/contexto";
+import { BorradorProvider } from "@/components/tarea/borrador-tarea";
 import { PanelCorrecciones } from "@/components/tarea/correcciones/panel";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
 import { Linkify } from "@/components/ui/linkify";
@@ -328,6 +329,7 @@ export default async function TareaPage({
       esEquipo={role !== "client"}
       correcciones={correcciones}
     >
+    <BorradorProvider>
     <div>
       <div className="flex items-center justify-between">
         <Volver cliente={cliente} />
@@ -505,6 +507,7 @@ export default async function TareaPage({
         />
       </div>
     </div>
+    </BorradorProvider>
     </CorreccionesProvider>
   );
 }

@@ -42,6 +42,36 @@ const MAX_ERRORES = 50;
 
 type Campo = { campoId: string; tabla: Tabla; filaId: string; campo: string; label: string; texto: string };
 
+/** Arma la lista de campos a revisar desde planos/estático (de la BD o del cliente). */
+function reunirCampos(
+  planos: Record<string, unknown>[],
+  estatico: Record<string, unknown> | null,
+): Campo[] {
+  const campos: Campo[] = [];
+  if (planos.length > 0) {
+    for (const p of planos) {
+      const filaId = typeof p.id === "string" ? p.id : "";
+      if (!filaId) continue;
+      const orden = typeof p.orden === "number" ? p.orden : 0;
+      for (const campo of Object.keys(LABEL_PLANO)) {
+        const texto = typeof p[campo] === "string" ? (p[campo] as string).trim() : "";
+        if (!texto) continue;
+        campos.push({ campoId: `${filaId}:${campo}`, tabla: "planos", filaId, campo, label: `Plano ${orden} · ${LABEL_PLANO[campo]}`, texto });
+      }
+    }
+  } else if (estatico) {
+    const filaId = typeof estatico.id === "string" ? estatico.id : "";
+    if (filaId) {
+      for (const campo of Object.keys(LABEL_ESTATICO)) {
+        const texto = typeof estatico[campo] === "string" ? (estatico[campo] as string).trim() : "";
+        if (!texto) continue;
+        campos.push({ campoId: `${filaId}:${campo}`, tabla: "estaticos", filaId, campo, label: LABEL_ESTATICO[campo], texto });
+      }
+    }
+  }
+  return campos;
+}
+
 /**
  * Revisa ortografía + gramática (es-MX) de los campos de la tarea con H.Ü.E y
  * devuelve una lista de errores con su fix propuesto. NO escribe nada — el
@@ -54,6 +84,10 @@ type Campo = { campoId: string; tabla: Tabla; filaId: string; campo: string; lab
  */
 export async function revisarOrtografia(
   ideaId: string,
+  // El editor pasa su BORRADOR vivo (lo que hay en pantalla) para revisar el texto
+  // ACTUAL, incl. lo recién tecleado que aún no se autoguardó (evita la carrera con
+  // el autosave). Si no viene, cae a leer la BD.
+  datos?: { planos?: unknown[]; estatico?: unknown } | null,
 ): Promise<{ ok: true; errores: ErrorOrtografia[] } | { ok: false; error: string }> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -62,53 +96,31 @@ export async function revisarOrtografia(
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
 
-  const db = supabaseAdmin();
-
-  // Reúne los campos con texto. Video (planos) o estático — lo que tenga la tarea.
-  const campos: Campo[] = [];
-  const { data: planos } = await db
-    .from("planos")
-    .select("id, orden, titulo, accion, copy_in, sfx, gfx, edicion, dialogo")
-    .eq("idea_id", ideaId)
-    .order("orden");
-
-  if (planos && planos.length > 0) {
-    for (const p of planos as Record<string, unknown>[]) {
-      for (const campo of Object.keys(LABEL_PLANO)) {
-        const texto = typeof p[campo] === "string" ? (p[campo] as string).trim() : "";
-        if (!texto) continue;
-        campos.push({
-          campoId: `${p.id}:${campo}`,
-          tabla: "planos",
-          filaId: p.id as string,
-          campo,
-          label: `Plano ${p.orden} · ${LABEL_PLANO[campo]}`,
-          texto,
-        });
-      }
-    }
+  let campos: Campo[];
+  if (datos && ((Array.isArray(datos.planos) && datos.planos.length > 0) || datos.estatico)) {
+    campos = reunirCampos(
+      (Array.isArray(datos.planos) ? datos.planos : []) as Record<string, unknown>[],
+      (datos.estatico ?? null) as Record<string, unknown> | null,
+    );
   } else {
-    const { data: est } = await db
-      .from("estaticos")
-      .select("id, copy_titulo, copy_subtitulo, copy_cta, referencia_nota")
+    const db = supabaseAdmin();
+    const { data: planos } = await db
+      .from("planos")
+      .select("id, orden, titulo, accion, copy_in, sfx, gfx, edicion, dialogo")
       .eq("idea_id", ideaId)
-      .order("orden")
-      .maybeSingle();
-    if (est) {
-      const e = est as Record<string, unknown>;
-      for (const campo of Object.keys(LABEL_ESTATICO)) {
-        const texto = typeof e[campo] === "string" ? (e[campo] as string).trim() : "";
-        if (!texto) continue;
-        campos.push({
-          campoId: `${e.id}:${campo}`,
-          tabla: "estaticos",
-          filaId: e.id as string,
-          campo,
-          label: LABEL_ESTATICO[campo],
-          texto,
-        });
-      }
+      .order("orden");
+    const planosArr = (planos ?? []) as Record<string, unknown>[];
+    let estatico: Record<string, unknown> | null = null;
+    if (planosArr.length === 0) {
+      const { data: est } = await db
+        .from("estaticos")
+        .select("id, copy_titulo, copy_subtitulo, copy_cta, referencia_nota")
+        .eq("idea_id", ideaId)
+        .order("orden")
+        .maybeSingle();
+      estatico = (est ?? null) as Record<string, unknown> | null;
     }
+    campos = reunirCampos(planosArr, estatico);
   }
 
   if (campos.length === 0) return { ok: true, errores: [] };
