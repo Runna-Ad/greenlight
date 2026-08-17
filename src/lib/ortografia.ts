@@ -20,7 +20,11 @@ const normaliza = (s: string): string =>
     .replace(/…/g, "...")
     .replace(/[–—―]/g, "-");
 
-const digitos = (s: string): string => (s.match(/\d/g) ?? []).join("");
+// Tokens numéricos CON sus separadores internos (. ,) — NO el run de dígitos
+// pelado. Así "1.5" ≠ "15" y "$60,000" ≠ "$60.000": mover/quitar un punto o una
+// coma cambia el VALOR aunque los dígitos sean los mismos, y eso NUNCA es un
+// arreglo de ortografía (sería un cambio de cifra disfrazado de "puntuación").
+const numeros = (s: string): string => (s.match(/\d[\d.,]*\d|\d/g) ?? []).join(" ");
 const conteoSigno = (s: string, c: string): number => s.split(c).length - 1;
 
 /**
@@ -39,8 +43,8 @@ export function fixSeguro(original: string, sugerencia: string): boolean {
   if (o === s) return false;
   // Un fragmento con error es palabra/frase corta, nunca un párrafo entero.
   if (o.length > 160) return false;
-  // Números y legales: intactos.
-  if (digitos(o) !== digitos(s)) return false;
+  // Números (con separadores) y legales: intactos.
+  if (numeros(o) !== numeros(s)) return false;
   for (const c of ["*", "%", "$"]) if (conteoSigno(o, c) !== conteoSigno(s, c)) return false;
   // Arreglo, no reescritura: la longitud cambia poco.
   if (Math.abs(s.length - o.length) > Math.max(12, o.length * 0.5)) return false;

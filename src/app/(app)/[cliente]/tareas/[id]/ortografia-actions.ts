@@ -232,6 +232,14 @@ export async function aplicarOrtografia(
   sugerencia: string,
 ): Promise<GuardarResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  // Auth + whitelist ANTES de la lectura directa (el write ya lo re-valida
+  // guardarCampo, pero la lectura usa `tabla`/`campo` del cliente — no dejamos
+  // que un `tabla` arbitrario se lea, ni un rol sin permiso).
+  const role = await getViewAs();
+  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  if (tabla !== "planos" && tabla !== "estaticos") {
+    return { ok: false, error: "Tabla no permitida." };
+  }
   if (!fixSeguro(original, sugerencia)) {
     return { ok: false, error: "Ese cambio no es seguro de aplicar automáticamente." };
   }
