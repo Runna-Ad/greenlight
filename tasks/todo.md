@@ -1,5 +1,37 @@
 # Greenlight · by Rünna — Build Todo
 
+## ✅ SHIPPED (2026-08-17 pm) — Workspace WYSIWYG unificado (Fase 1) [Pedro]
+Commits 0004dbb→eb99971 (4), pusheados a main → deploy 54ih2ey18 **Ready** en prod.
+Verificado en prod (curl): "Documento de la tarea" + "Ver como cliente" + "Diálogos"
+×14 sirviéndose. UN documento que se ve como el slide del cliente pero editable EN SU
+LUGAR (agencia); toggle "Editar / Ver como cliente" (lectura oculta vacíos, formatea
+diálogo) reemplaza el preview lateral chico. `documento-tarea.tsx` nuevo + `Campo`
+variante `inline` (conserva autoguardado/conflicto/correcciones). Iconos por sección:
+motion AZUL / diálogos NARANJA. El resto de la página (Reglas/Nota/Pegar/Cortinilla/
+cabecera/runna-details) quedó IGUAL.
+- Reap adversarial (FIX-FIRST → resuelto): HIGH legales_extra sin onCambio (arreglado);
+  LOW focus tapaba resaltado + scrollbar-gutter (arreglados); pin NO se recorta (confirmado).
+- PENDIENTE (scope Fase 1, para el portal/Fase 2): "ver como cliente" NO muestra aún
+  la Cortinilla en formato cliente ni oculta la Nota interna — es preview parcial; la
+  vista cliente 100% aislada es el portal. Dead code para limpiar luego: `voz()` sin
+  llamadas, `PreviewSlide` component sin render (sólo tipos), `referencia_url` legacy.
+
+## 🔜 SIGUIENTE (acordado con Pedro 2026-08-17) — H.Ü.E chequeo ortografía/gramática
+Al clic en "Mandar a revisión": H.Ü.E hace un pase de ortografía+gramática es-MX sobre
+los campos de la tarea → lista errores con fix propuesto → el especialista hace clic en
+"Aplicar" y se cambia en el campo (find-replace anclado). Decisiones de Pedro:
+- **Después** de Fase 1 (ya shippeada). **Surface + override**: muestra la lista, deja
+  aplicar fixes, pero SIEMPRE puede "Enviar de todos modos" (nunca bloquea).
+- Reusar infra H.Ü.E (Claude SDK, structured output + guardarraíl). Server action
+  `revisarOrtografia(ideaId)` → tool `emitir_errores` schema [{campo,filaId,original,
+  sugerencia,tipo}]. Aplicar = find-replace anclado (patrón target_quote) + guardarCampo.
+- GUARDARRAÍL fact-shaped (crítico): el fix NUNCA toca números/legales(* % $)/marcas/
+  significado — sólo ortografía/acento/concordancia; guard determinista rechaza fixes
+  que cambien dígitos o marcas legales; el humano hace clic para aplicar (compuerta final).
+- Conservador con estilo de copy (slang/tú/mayúsculas de marca = no flaggear). Legales
+  de la cortinilla: excluir del auto-fix (o flag-only con warning). Modelo: Sonnet.
+- Era el "Gary grammar check" del plan original (P4).
+
 ## ✅ HECHO — H.Ü.E como EXTRACTOR format-agnostic (Opción 1) (2026-08-17)
 Construido y verificado (tsc + build + 236 tests limpios). Pedro lo prueba en prod.
 - `extraerGuion(texto)` (server action) reemplaza a `normalizarGuion`: usa Sonnet 5
