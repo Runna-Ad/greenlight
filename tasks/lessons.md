@@ -321,3 +321,43 @@ TAGS: #design #contrast #a11y #pill #wcab #motion #hmr #gotcha #pedro #greenligh
 [2026-08-17] BUG (parser: rechazar TODO el delimitador también mata el caso real — reportado por Pedro): el deck del equipo escribe el locutor con DOS PUNTOS ("Actor: texto", "Actriz V.O:", "Narrador:"), pero `convertirDialogo` no lo envolvía en () → el cliente no lo ponía en negritas (parseDialogo sólo resalta "(Quien)"). RAÍZ: `esCue` hacía `if (/[.,;:!?…]$/.test(linea)) return false` — rechazaba TODA línea terminada en ":" para no confundir diálogo con locutor, pero eso también rechaza el locutor REAL (que USA dos puntos). REGLA: cuando un delimitador (aquí ":") aparece TANTO en el ruido como en la señal, no lo rechaces en bloque — valida la parte ANTES del delimitador (¿es un cue: corto, capitalizado?). Así "Actor:" pasa y "Y le dije: hola" no (palabras en minúscula rompen el patrón de cue). FIX EN DOS CAPAS (importante): normalizá en el IMPORTADOR (guarda "(Quien)") Y sé tolerante en el RENDER (parseDialogo también acepta "Speaker:") — así las tareas YA importadas con el formato viejo salen bien sin re-importar; si sólo arreglas el importador, dejas varada toda la data histórica. Emparenta con [[silent-exclusion-needs-false-positive-tests]] (un filtro que descarta necesita tests del falso-positivo) y con el patrón markdown/notion (normalizar formatos ricos de pegado). 8 tests: inline, líneas separadas, dos locutores, V.O, y el falso-positivo "Y le dije:". TAGS: #bug #parser #dialogo #importer #render-robustness #false-positive #greenlight #pedro
 
 [2026-08-17] BUG (chequeo lee la BD → carrera con el autosave debounced — reportado por Pedro): el chequeo de ortografía "no detectaba" misspells obvios que Pedro acababa de teclear; al RE-TESTEAR sí. DIAGNÓSTICO clave: correr el modelo contra el texto en aislado + contra una tarea grande (7 campos, 14 misspells) dio 14/14 en 2 corridas deterministas → NO era recall del modelo. La señal "cacha al re-test pero no la 1ª vez" = CARRERA: `revisarOrtografia` leía la BD, pero el autosave del campo (debounce 800ms + flush async en blur) aún no había escrito lo recién tecleado → el chequeo veía texto viejo. REGLA 1 (diagnóstico): "funciona al reintentar pero no la primera vez" casi nunca es el LLM — es una carrera de lectura/escritura; verificá el núcleo en aislado (script contra la API real) ANTES de culpar al modelo. REGLA 2 (fix): cuando una acción debe operar sobre "lo que el usuario ve AHORA", dale el ESTADO VIVO del cliente, no una lectura fresca de la BD. Aquí: BorradorProvider (contexto set/get) que el editor mantiene al día y el chequeo lee al mandar a revisión → revisa el texto en pantalla. GOTCHA de la regla react-hooks/refs: no mutes desde un consumidor un ref devuelto por un hook — expón set/get (la mutación vive dentro del provider) en vez del ref crudo. El apply sigue por guardarCampo (para entonces el autosave ya escribió). TAGS: #bug #race #autosave #llm #diagnosis #react-context #react-hooks-refs #greenlight #pedro
+
+---
+
+## 2026-08-17 — Phase 1 top-sections overhaul (reap + dev-cache lessons)
+
+### LESSON: A client provider seeded from server props must be `key`ed on the dynamic route param
+`WorkspaceProvider` held `planos`/`estatico`/`verCliente` via `useState(...props)`.
+Navigating between sibling tasks with the bundle pager (`<Link>` to a `[id]`-only
+change) does NOT re-seed that useState — Next preserves the subtree across the
+param change, so task B rendered task A's body state, and edits would autosave to
+A's rows (`guardarCampo(tabla, filaIdOfA, …)`). Fix: `key={idea.id}` on the
+provider forces a remount with fresh props. VERIFIED live: paging reset
+`verCliente` to its default on the new task. (Caught by the Opus reap, not by
+tsc/build/tests — state-lifecycle bugs need a live nav check.)
+Rule: any `'use client'` provider/component whose `useState` is seeded from
+server data on a dynamic route MUST carry `key={<param>}`.
+
+### LESSON: deleting an imported module wedges `next dev` (Turbopack) — restart + fresh tab
+After removing `reglas-card.tsx` and its import, the dev server kept throwing
+`ReferenceError: ReglasCard is not defined` in the RSC at runtime — even though
+`grep` showed the source clean AND `npm run build` passed. Symptoms: repeated
+`webpack-hmr` WebSocket failures + an empty `<main>` + identical stale error
+digests. `preview_stop`/`preview_start` alone did NOT clear it. What worked:
+`pkill -f "next dev"` + `rm -rf .next` + `preview_start` + open a BRAND-NEW
+browser tab (the old tab's HMR client and cached RSC also lie).
+Rule: when a dev-only runtime error contradicts a clean `tsc` + `build`, it's
+stale dev cache — restart the server and use a fresh tab; don't hunt a phantom
+reference in already-clean source.
+
+### LESSON: server-action compare-and-set belongs in the UPDATE's WHERE, never SELECT-then-UPDATE
+`guardarConsideraciones` first shipped as SELECT → compare-in-JS → unconditional
+`UPDATE …eq("id")` — a TOCTOU where two assignees editing the same task overwrite
+each other silently (the row_hash-'imported' family). Fixed to guard the UPDATE
+on the raw columns as-read (`.eq/.is` per column) + row-count check + re-read on 0
+rows, matching `guardarCampo`. Also: the client stores the RAW textarea value as
+"last known", so server-side `.trim()` on save caused spurious "someone changed
+this" conflicts + a silently-unsaved edit — aligned the intake savers to store
+raw (like `guardarCampo`) and made `combinarConsideraciones` not trim.
+Rule: mirror the codebase's established compare-and-set (in the WHERE) for every
+new mutating action, and keep client-remembered value == server-stored value.
