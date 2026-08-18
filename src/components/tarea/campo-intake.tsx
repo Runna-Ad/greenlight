@@ -42,6 +42,7 @@ export function CampoIntake({
   soloLectura,
   caja,
   refrescar,
+  accion,
   onGuardado,
   onCambio,
 }: {
@@ -60,6 +61,9 @@ export function CampoIntake({
   caja?: boolean;
   /** Al guardar bien, refresca la página (p. ej. duración → renombra archivos). */
   refrescar?: boolean;
+  /** Acción de guardado a la medida (p. ej. Consideraciones, que consolida dos
+   *  columnas). Si se pasa, reemplaza a guardarIntake/guardarBrief. */
+  accion?: (anterior: string | null, nuevo: string | null) => Promise<IntakeResultado>;
   onGuardado?: (res: IntakeResultado) => void;
   /** Se llama en cada tecla (para vistas que reaccionan al valor en vivo). */
   onCambio?: (valor: string) => void;
@@ -69,9 +73,11 @@ export function CampoIntake({
   const g = useAutoguardado(
     valorInicial,
     async (anterior, nuevo) => {
-      const res = briefId
-        ? await guardarBrief(briefId, campo as CampoBrief, anterior, nuevo)
-        : await guardarIntake(ideaId!, campo as CampoIdea, anterior, nuevo);
+      const res = accion
+        ? await accion(anterior, nuevo)
+        : briefId
+          ? await guardarBrief(briefId, campo as CampoBrief, anterior, nuevo)
+          : await guardarIntake(ideaId!, campo as CampoIdea, anterior, nuevo);
       onGuardado?.(res);
       // La duración reescribe los nombres en la BD; refrescar re-renderiza para
       // que "Nombres de archivos" (en Rünna details) muestre los nuevos.

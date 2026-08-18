@@ -18,7 +18,7 @@ import {
   type ErrorOrtografia,
 } from "@/app/(app)/[cliente]/tareas/[id]/ortografia-actions";
 import { DialogoOrtografia } from "./dialogo-ortografia";
-import { useBorrador } from "./borrador-tarea";
+import { useWorkspace } from "./workspace-provider";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -78,9 +78,9 @@ export function AccionesTarea({
   // (el diálogo), así que el campo no refleja el cambio hasta recargar. Si aplicó
   // algo, recargamos al cerrar/enviar para que VEA el cambio (bug reportado por Pedro).
   const [aplicados, setAplicados] = useState(0);
-  // El borrador vivo del editor (texto actual en pantalla) para que el chequeo no
+  // El cuerpo vivo del editor (texto actual en pantalla) para que el chequeo no
   // dependa de que el autosave ya haya escrito en la BD.
-  const borrador = useBorrador();
+  const { planos, estatico } = useWorkspace();
 
   const acciones = accionesDe(status, ctx, esRevisor, abiertas);
   const espera = waitingLabel(status, ctx);
@@ -105,7 +105,7 @@ export function AccionesTarea({
     startTransition(async () => {
       // "Mandar a revisión" pasa primero por el corrector de H.Ü.E (surface+override).
       if (a.verb === "submit_review") {
-        const r = await revisarOrtografia(ideaId, borrador?.get());
+        const r = await revisarOrtografia(ideaId, { planos, estatico });
         if (r.ok && r.errores.length > 0) {
           setErrores(r.errores);
           setPendiente(a);

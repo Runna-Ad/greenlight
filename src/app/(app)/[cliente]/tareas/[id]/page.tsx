@@ -1,26 +1,25 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Files, Hammer, Lock } from "lucide-react";
+import { ArrowLeft, Hammer, Lock } from "lucide-react";
 
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { ROLE_LABEL, canSee, canOverrideStatus } from "@/lib/roles";
-import { STATUS_LABEL, STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
-import { ESTADOS_CERRADOS, plantillaPara } from "@/lib/plantilla";
-import type { Regla } from "@/lib/reglas";
+import { type AssetStatus } from "@/lib/brand";
+import { ESTADOS_CERRADOS, plantillaPara, notaGlobal } from "@/lib/plantilla";
 import { posicionEnBundle } from "@/lib/bundle";
 import { cargarBundle } from "@/lib/bundle-data";
-import { EditorTarea } from "@/components/tarea/editor-tarea";
-import { CabeceraTarea } from "@/components/tarea/cabecera";
-import { AccionesTarea } from "@/components/tarea/acciones-tarea";
 import { CorreccionesProvider } from "@/components/tarea/correcciones/contexto";
-import { BorradorProvider } from "@/components/tarea/borrador-tarea";
+import { WorkspaceProvider } from "@/components/tarea/workspace-provider";
 import { PanelCorrecciones } from "@/components/tarea/correcciones/panel";
+import { SubHeaderTarea } from "@/components/tarea/sub-header-tarea";
+import { HeroTarea } from "@/components/tarea/hero-tarea";
+import { TabsTarea } from "@/components/tarea/tabs-tarea";
+import { BannerPegarGuion } from "@/components/tarea/banner-pegar-guion";
+import { DocumentoGuion } from "@/components/tarea/documento-guion";
+import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
-import { Linkify } from "@/components/ui/linkify";
-import { NavBundle } from "@/components/tarea/nav-bundle";
-import { RunnaDetails } from "@/components/tarea/runna-details";
 import type { RefVista } from "@/components/tarea/referencias-plano";
 import type { EstaticoVista, PlanoVista } from "@/components/tarea/preview-slide";
 
@@ -93,12 +92,11 @@ export default async function TareaPage({
     );
   }
 
-  const [{ data: marca }, { data: reglas }, { data: archivos }, { data: asignaciones }] =
+  const [{ data: marca }, { data: archivos }, { data: asignaciones }, { data: brief }] =
     await Promise.all([
       idea.marca_id
         ? db.from("marcas").select("name, slug, logo_url").eq("id", idea.marca_id).maybeSingle()
         : Promise.resolve({ data: null }),
-      db.from("reglas").select("*").eq("activo", true).returns<Regla[]>(),
       db
         .from("assets")
         .select("filename, tamano_code, plataforma_code")
@@ -107,7 +105,7 @@ export default async function TareaPage({
         .order("plataforma_code")
         .returns<{ filename: string | null }[]>(),
       // Quién la trabaja (con lead/team y nombres) — alimenta la decisión de
-      // botones (actionsFor) y el panel Rünna details.
+      // botones (actionsFor) y el panel Rünna tools.
       db
         .from("idea_assignments")
         .select("member_id, es_lead, track_members(id, name, color)")
@@ -117,6 +115,8 @@ export default async function TareaPage({
           es_lead: boolean;
           track_members: { id: string; name: string; color: string } | null;
         }[]>(),
+      // El número de Brief para el pill de la hero ("Brief 24/07").
+      db.from("briefs").select("brief_name, code, brief_date").eq("id", idea.brief_id).maybeSingle(),
     ]);
   const memberIds = (asignaciones ?? []).map((a) => a.member_id).filter(Boolean) as string[];
   const personas = (asignaciones ?? [])
@@ -127,6 +127,20 @@ export default async function TareaPage({
       color: a.track_members!.color,
       es_lead: a.es_lead,
     }));
+
+  const brf = brief as
+    | { brief_name: string | null; code: string | null; brief_date: string | null }
+    | null;
+  // Preferir la FECHA del brief en formato compacto "DD/MM" (igual que el
+  // tablero) — el brief_name es la etiqueta libre del cliente y a veces es un
+  // título largo. Cae a brief_name y luego a code.
+  const md = brf?.brief_date?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const fechaBrief = md ? `${md[3]}/${md[2]}` : null;
+  // Con fecha → "Brief 24/07" (compacto, como el mockup y el tablero). Sin fecha,
+  // el brief_name ya es un nombre propio (no se le antepone "Brief"); cae a code.
+  const briefLabel = fechaBrief
+    ? `Brief ${fechaBrief}`
+    : brf?.brief_name?.trim() || brf?.code?.trim() || null;
 
   // El bundle: las tareas hermanas de este brief, con el MISMO filtro y orden
   // que los cards de /briefs (lib/bundle.ts es la única fuente).
@@ -319,195 +333,133 @@ export default async function TareaPage({
 
   const cerrada = ESTADOS_CERRADOS.includes(idea.status);
   const soloLectura = cerrada && !canOverrideStatus(role);
-  const token = STATUS_TOKEN[idea.status];
+  const esEstatico = plantilla === "estatico";
+  const esEquipo = role !== "client";
+  const puedeEditar = canOverrideStatus(role);
+
+  const notaG = notaGlobal(idea.tipo_asset);
+  const notaPlaceholder = notaG
+    ? `Notas de guión: ${notaG}`
+    : "Notas de guión (p. ej. # de outfits, tono, continuidad)…";
+
+  const ctx = {
+    role,
+    isAssignee: soy ? memberIds.includes(soy.id) : false,
+    hasAssignee: memberIds.length > 0,
+  };
 
   return (
     <CorreccionesProvider
       ideaId={idea.id}
       clienteSlug={cliente}
       esRevisor={canOverrideStatus(role)}
-      esEquipo={role !== "client"}
+      esEquipo={esEquipo}
       correcciones={correcciones}
     >
-    <BorradorProvider>
-    <div>
-      <div className="flex items-center justify-between">
-        <Volver cliente={cliente} />
-        {/* Wireframe: flechas ← 2/10 → arriba a la derecha para recorrer el bundle. */}
-        <NavBundle
-          cliente={cliente}
-          indice={posicion.indice}
-          total={posicion.total}
-          anterior={posicion.anterior}
-          siguiente={posicion.siguiente}
-        />
-      </div>
+      {/* key por idea.id: al pasar de una tarea a otra con las flechas del bundle
+          (nav client-side que sólo cambia [id]), React conservaría el useState de
+          este provider y mostraría/editaría el CUERPO de la tarea anterior. El key
+          fuerza un remount con el estado fresco de la nueva tarea. */}
+      <WorkspaceProvider key={idea.id} planosIniciales={planos} estaticoInicial={estatico}>
+        <div className="space-y-4">
+          {/* ── SECCIÓN DE ARRIBA (Fase 2: contenedor sticky del menú superior) ── */}
+          <div className="space-y-4">
+            <SubHeaderTarea
+              cliente={cliente}
+              ideaId={idea.id}
+              status={idea.status}
+              ctx={ctx}
+              abiertas={abiertasN}
+              indice={posicion.indice}
+              total={posicion.total}
+              anterior={posicion.anterior}
+              siguiente={posicion.siguiente}
+            />
 
-      <div className="mb-4 mt-3 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            {idea.code && (
-              <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] font-semibold text-secondary-foreground">
-                {idea.code}
-              </span>
+            {soloLectura && (
+              <p className="flex items-center gap-1.5 rounded-md border border-border bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+                <Lock className="size-3.5 shrink-0" />
+                Cerrada — sólo un lead puede reabrirla
+              </p>
             )}
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase text-white"
-              style={{ backgroundColor: `var(--status-${token})` }}
-            >
-              {STATUS_LABEL[idea.status]}
-            </span>
-            {marca?.name && (
-              <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
-                {marca.name}
-              </span>
+
+            {!soy && (
+              <p className="rounded-md border border-primary/30 bg-primary/8 px-3 py-2 text-xs">
+                Dinos quién eres arriba a la derecha para que quede registrado quién escribe.
+              </p>
             )}
-            {idea.tipo_asset && (
-              <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
-                {idea.tipo_asset}
-              </span>
-            )}
-            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <Files className="size-3" /> {filenames.length} archivos
-            </span>
+
+            <HeroTarea
+              ideaId={idea.id}
+              marca={marca?.name ?? null}
+              logoUrl={marca?.logo_url ?? null}
+              briefLabel={briefLabel}
+              naming={idea.naming_base}
+              status={idea.status}
+              notaGuion={idea.nota_guion}
+              notaPlaceholder={notaPlaceholder}
+              esEstatico={esEstatico}
+              entregaUrl={idea.entrega_url}
+              soloLectura={soloLectura}
+            />
+
+            <TabsTarea
+              ideaId={idea.id}
+              esEstatico={esEstatico}
+              soloLectura={soloLectura}
+              detalles={{
+                tipoAsset: idea.tipo_asset,
+                plataformas: idea.plataformas ?? [],
+                tamanos: idea.tamanos ?? [],
+                duracion: idea.duracion,
+                concepto: idea.concepto,
+                trend: idea.trend,
+              }}
+              // Rünna tools SÓLO para el equipo — no se construye para el cliente
+              // (no se filtra en el payload RSC, no sólo se oculta con CSS).
+              runna={
+                esEquipo
+                  ? {
+                      personas,
+                      entregaUrl: idea.entrega_url,
+                      filenames,
+                      comentariosCreativo: idea.comentarios_creativo,
+                      peloteo: idea.peloteo_raw,
+                      puedeEditar,
+                    }
+                  : undefined
+              }
+            />
+
+            <BannerPegarGuion ideaId={idea.id} esEstatico={esEstatico} soloLectura={soloLectura} />
           </div>
-          <h2 className="mt-1.5 font-mono text-xl font-semibold text-foreground">
-            {idea.naming_base ?? "Sin naming"}
-          </h2>
-          {/* Justo bajo el título: los Comentarios del Lead (columna del sheet).
-              Es contexto interno de un vistazo — no pasa al cliente. */}
-          {idea.comentarios_creativo && (
-            <Linkify className="mt-1 block max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              {idea.comentarios_creativo}
-            </Linkify>
+
+          {/* ── SECCIÓN DEL GUIÓN (Fase 2: contenedor sticky del menú inferior) ── */}
+          <div className="space-y-4">
+            <DocumentoGuion
+              ideaId={idea.id}
+              tipoAsset={idea.tipo_asset}
+              esEstatico={esEstatico}
+              refsPorPlano={refsPorPlano}
+              refsEstatico={refsEstatico}
+              soloLectura={soloLectura}
+              cortinilla={{
+                legalesLibres: idea.legales_libres,
+                seleccionados: legalesSeleccionados,
+                biblioteca: legalesDisponibles,
+              }}
+            />
+
+            <BottomBarTarea esEstatico={esEstatico} />
+          </div>
+
+          {esEquipo && correcciones.length > 0 && (
+            <div className="mt-2">
+              <PanelCorrecciones />
+            </div>
           )}
         </div>
-
-        <div className="flex items-center gap-2">
-          {soloLectura && (
-            <p className="flex items-center gap-1.5 rounded-md border border-border bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground">
-              <Lock className="size-3.5 shrink-0" />
-              Cerrada — sólo un lead puede reabrirla
-            </p>
-          )}
-          {/* Wireframe: "Enviar a revisión" arriba a la derecha. Misma decisión
-              de botones que el tablero (actionsFor), no una copia. */}
-          <AccionesTarea
-            ideaId={idea.id}
-            clienteSlug={cliente}
-            status={idea.status}
-            abiertas={abiertasN}
-            ctx={{
-              role,
-              isAssignee: soy ? memberIds.includes(soy.id) : false,
-              hasAssignee: memberIds.length > 0,
-            }}
-          />
-        </div>
-      </div>
-
-      {!soy && (
-        <p className="mb-3 rounded-md border border-primary/30 bg-primary/8 px-3 py-2 text-xs">
-          Dinos quién eres arriba a la derecha para que quede registrado quién escribe.
-        </p>
-      )}
-
-      {/* Banda de marca: logo + topic + resumen del brief + content type + channels */}
-      {/* Rünna details — SÓLO INTERNO. El panel no se construye para el cliente:
-          se decide en el servidor, no con CSS. Ocultar con `hidden` dejaría los
-          nombres y la liga en el payload RSC — la familia del leak del secreto. */}
-      {role !== "client" && (
-        <div className="mb-4">
-          <RunnaDetails
-            ideaId={idea.id}
-            personas={personas}
-            entregaUrl={idea.entrega_url}
-            entregaNum={idea.entrega_num}
-            filenames={filenames}
-            puedeEditar={canOverrideStatus(role)}
-          />
-        </div>
-      )}
-
-      {/* La cabecera va aquí y no como prop del editor: pasar JSX por prop hacía
-          que React reportara una key faltante contra el componente equivocado. */}
-      <div className="mb-4">
-        <CabeceraTarea
-          ideaId={idea.id}
-          tipoAsset={idea.tipo_asset}
-          plantilla={plantilla}
-          plataformas={idea.plataformas ?? []}
-          tamanos={idea.tamanos ?? []}
-          duracion={idea.duracion}
-          trend={idea.trend}
-          concepto={idea.concepto}
-          peloteo={idea.peloteo_raw}
-          marca={marca?.name ?? null}
-          logoUrl={marca?.logo_url ?? null}
-          topic={idea.naming_base}
-          formato={idea.formato_code}
-          entregaFinal={idea.entrega_final}
-          soloLectura={soloLectura}
-        />
-      </div>
-
-      <EditorTarea
-        ideaId={idea.id}
-        marcaSlug={marca?.slug ?? null}
-        cabecera={{
-          naming: idea.naming_base,
-          tipoAsset: idea.tipo_asset,
-          plataformas: idea.plataformas ?? [],
-          tamanos: idea.tamanos ?? [],
-          duracion: idea.duracion,
-          marca: marca?.name ?? null,
-          formato: idea.formato_code,
-          status: idea.status,
-          concepto: idea.concepto,
-          trend: idea.trend,
-          // Notas (peloteo) NO va al cliente — es interno (Pedro).
-        }}
-        planosIniciales={planos}
-        estaticoInicial={estatico}
-        refsPorPlano={refsPorPlano}
-        refsEstatico={refsEstatico}
-        reglas={reglas ?? []}
-        notaGuion={idea.nota_guion}
-        cortinilla={{
-          legalesLibres: idea.legales_libres,
-          seleccionados: legalesSeleccionados,
-          biblioteca: legalesDisponibles,
-        }}
-        soloLectura={soloLectura}
-      />
-
-      {/* Panel de correcciones AL FINAL, junto a la barra de acción: no parte el
-          flujo cabecera→guión y queda al lado del botón de aprobar/enviar. Los
-          pins siguen sobre cada campo; esto es sólo el resumen. */}
-      {role !== "client" && correcciones.length > 0 && (
-        <div className="mt-5">
-          <PanelCorrecciones />
-        </div>
-      )}
-
-      {/* La MISMA acción de flujo, otra vez al final: cuando terminas de
-          trabajar no tienes que subir hasta el encabezado para mandarla. */}
-      <div className="mt-5">
-        <AccionesTarea
-          ideaId={idea.id}
-          clienteSlug={cliente}
-          status={idea.status}
-          variante="prominente"
-          abiertas={abiertasN}
-          ctx={{
-            role,
-            isAssignee: soy ? memberIds.includes(soy.id) : false,
-            hasAssignee: memberIds.length > 0,
-          }}
-        />
-      </div>
-    </div>
-    </BorradorProvider>
+      </WorkspaceProvider>
     </CorreccionesProvider>
   );
 }

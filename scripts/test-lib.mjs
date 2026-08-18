@@ -5,6 +5,7 @@ import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/
 import { actionsFor, waitingLabel } from "../src/lib/task-actions.ts";
 import { plantillaPara, readTimeS, parseDuracion, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
+import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 
 let pass = 0,
   fail = 0;
@@ -670,6 +671,18 @@ console.log("\n▶ Guión (paste importer)");
   eq("estatico copy_titulo", est.copy_titulo, "Beneficio principal");
   eq("estatico copy_cta", est.copy_cta, "Solicítala");
 }
+
+// ── Consideraciones: combina comentarios del lead + peloteo en una caja ──
+console.log("\n▶ Consideraciones (combinar dos columnas)");
+eq("ambas → divididas por línea en blanco",
+   combinarConsideraciones("Comentario del lead", "El peloteo"),
+   "Comentario del lead\n\nEl peloteo");
+eq("sólo comentarios → tal cual", combinarConsideraciones("Sólo comentario", null), "Sólo comentario");
+eq("sólo peloteo → tal cual", combinarConsideraciones(null, "Sólo peloteo"), "Sólo peloteo");
+eq("ambas null → null", combinarConsideraciones(null, null), null);
+eq("ambas vacío/espacios → null", combinarConsideraciones("   ", ""), null);
+eq("NO recorta el contenido (evita conflicto espurio)", combinarConsideraciones("  A  ", "  B  "), "  A  \n\n  B  ");
+eq("una vacía (sólo espacios) no deja separador colgando", combinarConsideraciones("  ", "B"), "B");
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

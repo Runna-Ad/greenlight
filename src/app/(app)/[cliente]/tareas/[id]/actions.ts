@@ -7,6 +7,7 @@ import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { ESTADOS_CERRADOS } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
+import { combinarConsideraciones } from "@/lib/consideraciones";
 import type { AssetStatus } from "@/lib/brand";
 import { sinInventar, limpiarPegado, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
 import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
@@ -106,7 +107,10 @@ export async function guardarIntake(
     return { ok: false, error: "Esta tarea ya está cerrada. Pídele a un lead que la reabra." };
   }
 
-  const limpio = valorNuevo?.trim() ? valorNuevo.trim() : null;
+  // Se guarda SIN recortar (como guardarCampo): el valor que el cliente recuerda
+  // debe coincidir con el guardado, o el siguiente compare-and-set marca un
+  // conflicto espurio y no escribe (pasa con un salto de línea final en textareas).
+  const limpio = valorNuevo?.trim() ? valorNuevo : null;
 
   const base = db.from("ideas").update({ [campo]: limpio }).eq("id", ideaId);
   const { data, error } =
@@ -134,6 +138,84 @@ export async function guardarIntake(
     .returns<{ filename: string | null }[]>();
 
   return { ok: true, filenames: (archivos ?? []).map((a) => a.filename).filter(Boolean) as string[] };
+}
+
+/**
+ * Guarda "Consideraciones" (Rünna tools): la caja única que combina Comentarios
+ * del lead (comentarios_creativo) + Peloteo (peloteo_raw). Escribe TODO a
+ * `peloteo_raw` y, en el mismo write, CONSOLIDA poniendo `comentarios_creativo`
+ * a null — así en cargas siguientes no se vuelve a prepender (sin duplicar, sin
+ * migración de datos).
+ *
+ * El compare-and-set NO es contra `peloteo_raw` crudo (que sería sólo la mitad),
+ * sino contra el valor COMBINADO que vio la persona: se releen ambas columnas,
+ * se combinan igual que en el cliente, y si no coincide con `valorAnterior` es
+ * que alguien más lo tocó (conflicto), como en guardarIntake/guardarCampo.
+ */
+export async function guardarConsideraciones(
+  ideaId: string,
+  valorAnterior: string | null,
+  valorNuevo: string | null,
+): Promise<IntakeResultado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+
+  const role = await getViewAs();
+  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+
+  const db = supabaseAdmin();
+  const { data: idea } = await db
+    .from("ideas")
+    .select("status, comentarios_creativo, peloteo_raw")
+    .eq("id", ideaId)
+    .maybeSingle();
+  if (!idea) return { ok: false, error: "La tarea ya no existe." };
+
+  const status = idea.status as AssetStatus;
+  if (ESTADOS_CERRADOS.includes(status) && !canOverrideStatus(role)) {
+    return { ok: false, error: "Esta tarea ya está cerrada. Pídele a un lead que la reabra." };
+  }
+
+  const fila = idea as { comentarios_creativo: string | null; peloteo_raw: string | null };
+  const combinadoActual = combinarConsideraciones(fila.comentarios_creativo, fila.peloteo_raw);
+  // Se guarda SIN recortar (como guardarCampo): así el valor que el cliente
+  // recuerda coincide con el guardado y no dispara un conflicto espurio.
+  const limpio = valorNuevo?.trim() ? valorNuevo : null;
+
+  // Ya vale lo que queremos → nada que hacer (idempotente).
+  if ((combinadoActual ?? null) === (limpio ?? null)) return { ok: true };
+  // Cambió desde que se cargó → conflicto (lo decide la persona).
+  if ((valorAnterior ?? null) !== (combinadoActual ?? null)) {
+    return { ok: false, conflicto: true, valorActual: combinadoActual };
+  }
+
+  // Consolidar de forma ATÓMICA: el UPDATE sólo escribe si las DOS columnas
+  // siguen EXACTAMENTE como se leyeron (compare-and-set en el WHERE, no
+  // read-modify-write). Si otra escritura ganó la carrera entre el SELECT y
+  // este UPDATE, 0 filas → se re-lee y se reporta el conflicto. (Sin esto sería
+  // un TOCTOU: dos asignados podrían pisarse sin aviso — la familia del
+  // row_hash 'imported' que guardarCampo evita.)
+  let q = db.from("ideas").update({ peloteo_raw: limpio, comentarios_creativo: null }).eq("id", ideaId);
+  q = fila.peloteo_raw === null ? q.is("peloteo_raw", null) : q.eq("peloteo_raw", fila.peloteo_raw);
+  q = fila.comentarios_creativo === null
+    ? q.is("comentarios_creativo", null)
+    : q.eq("comentarios_creativo", fila.comentarios_creativo);
+  const { data, error } = await q.select("id");
+  if (error) return { ok: false, error: error.message };
+
+  if (!data?.length) {
+    const { data: fresca } = await db
+      .from("ideas")
+      .select("comentarios_creativo, peloteo_raw")
+      .eq("id", ideaId)
+      .maybeSingle();
+    const f2 = (fresca ?? {}) as { comentarios_creativo: string | null; peloteo_raw: string | null };
+    const combinado2 = combinarConsideraciones(f2.comentarios_creativo, f2.peloteo_raw);
+    if ((combinado2 ?? null) === (limpio ?? null)) return { ok: true };
+    return { ok: false, conflicto: true, valorActual: combinado2 };
+  }
+
+  revalidatePath("/[cliente]/tareas/[id]", "page");
+  return { ok: true };
 }
 
 /** Campos editables del BRIEF (viven en `briefs`, no en `ideas`). */
