@@ -472,17 +472,17 @@ function CardBody({
           <img
             src={task.marca_logo_url}
             alt={task.marca ?? "Marca"}
-            className="h-6 w-auto max-w-[84px] object-contain object-left"
+            className="h-9 w-auto max-w-[132px] object-contain object-left"
           />
         ) : task.marca ? (
           <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">
             {task.marca}
           </span>
         ) : null}
-        {/* Ícono del tipo de asset (video persona real / animado / estático),
-            para reconocerlo de un vistazo junto al código. */}
+        {/* Tipo (real/animado/estático) + conteo de archivos van a la DERECHA,
+            para dejarle todo el ancho de la izquierda al logo de la marca. */}
         <span
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
+          className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
           title={tipo.label}
           style={{
             color: `var(--type-${typeToken})`,
@@ -495,7 +495,7 @@ function CardBody({
 
         {/* Files this ONE task delivers — a count, never separate cards. */}
         <span
-          className="ml-auto flex items-center gap-1 rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground"
+          className="flex items-center gap-1 rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground"
           title={`${(task.tamanos ?? []).join(", ")} × ${(task.plataformas ?? []).join(", ")}`}
         >
           <Files className="size-2.5" />
