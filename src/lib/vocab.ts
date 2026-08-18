@@ -31,6 +31,17 @@ export const TAMANO = ["1:1", "16:9", "9:16", "4:5", "2736 x 1260"];
 // rango. Cada duración es una pastilla y genera su propio juego de archivos.
 export const DURACION = ["10-15s", "15-30s", "20-30s", "30-40s", "40-50s", "50-60s"];
 
+/**
+ * Un número o rango SUELTO se lee como SEGUNDOS y gana su "s": "6" → "6s",
+ * "40-50" → "40-50s", "40 - 50" → "40-50s". Lo que ya trae unidad se deja igual
+ * ("15s-30s", "6 seg"). Así el token del nombre de archivo nunca queda como un
+ * "6" pelón cuando la persona quiso decir 6 segundos.
+ */
+export function normalizarDuracion(v: string): string {
+  const compacto = v.trim().replace(/\s+/g, "");
+  return /^\d+(-\d+)?$/.test(compacto) ? `${compacto}s` : v.trim();
+}
+
 // ── Track-specific ──
 // Note: the Real tab carries TWO Tipo de Asset validations (rows 2–6 use the
 // short list, 7+ the long one) — sheet drift. We use the fuller list for Real.

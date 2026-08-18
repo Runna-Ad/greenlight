@@ -344,6 +344,16 @@ ok("A1 repetido marca ambas tarjetas", dupSet.has("x") && dupSet.has("y"));
 ok("B1 no está en el set de repetidas", !dupSet.has("b1"));
 eq("sin repetidos → set vacío", idsIdeaRepetida([A1, A2, B1]).size, 0);
 
+// normalizarDuracion — un número/rango suelto se lee como SEGUNDOS y gana su "s"
+const { normalizarDuracion } = await import("../src/lib/vocab.ts");
+eq("normalizar '6' → '6s'", normalizarDuracion("6"), "6s");
+eq("normalizar '35' → '35s'", normalizarDuracion("35"), "35s");
+eq("normalizar '40-50' → '40-50s'", normalizarDuracion("40-50"), "40-50s");
+eq("normalizar '40 - 50' → '40-50s'", normalizarDuracion("40 - 50"), "40-50s");
+eq("normalizar '15s-30s' se deja igual", normalizarDuracion("15s-30s"), "15s-30s");
+eq("normalizar '6 seg' (unidad explícita) se deja igual", normalizarDuracion("6 seg"), "6 seg");
+eq("normalizar recorta espacios", normalizarDuracion("  20-30s  "), "20-30s");
+
 // combosDeTarjeta — WYSIWYG del preview y de los assets
 const video = draft({ tipoAsset: ["RP Video"], tamano: ["9:16", "1:1"], plataforma: ["GG", "FB"] });
 eq("video 2 tamaños × 2 plataformas válidas → 4 combos", combosDeTarjeta(video).length, 4);
