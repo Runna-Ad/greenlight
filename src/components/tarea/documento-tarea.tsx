@@ -16,6 +16,7 @@ import {
 import type { ComponentType } from "react";
 
 import { Campo } from "./campo";
+import { CampoLectura } from "./campo-lectura";
 import { ReferenciasPlano, type RefVista } from "./referencias-plano";
 import { Linkify } from "@/components/ui/linkify";
 import { parseDialogo } from "@/lib/dialogo";
@@ -195,7 +196,23 @@ export function DocumentoTarea({
 
               <div className="min-w-0">
                 {lectura ? (
-                  <DialogoLectura label="Diálogos" texto={p.dialogo} />
+                  // Guarda con la MISMA definición de vacío que DialogoContenido
+                  // (parseDialogo): un diálogo no vacío pero no parseable no debe
+                  // pintar una fila "Diálogos" vacía.
+                  parseDialogo(p.dialogo).length > 0 ? (
+                    // Lectura: el partner ve el diálogo formateado; el revisor
+                    // puede además pedir cambios sobre el texto crudo.
+                    <CampoLectura
+                      tabla="planos"
+                      filaId={p.id}
+                      campo="dialogo"
+                      label="Diálogos"
+                      grupo={`Plano ${p.orden}`}
+                      valor={p.dialogo ?? ""}
+                      icono={<IconoDialogo className="size-3.5 shrink-0 text-deck-orange" />}
+                      pretty={<DialogoContenido texto={p.dialogo} />}
+                    />
+                  ) : null
                 ) : (
                   <CampoDoc modo={modo} icono={IconoDialogo} label="Diálogos" tono="orange" tabla="planos" filaId={p.id}
                     campo="dialogo" grupo={`Plano ${p.orden}`} valor={p.dialogo} placeholder={ph.dialogo}
@@ -268,16 +285,23 @@ function CampoDoc({
   const colorIcono = tono === "orange" ? "text-deck-orange" : "text-deck-blue";
   if (modo === "lectura") {
     if (!valor?.trim()) return null;
+    // Sólo-lectura, pero con correcciones para el revisor (ver/pedir/gestionar);
+    // el partner ve `pretty` limpio. Los estáticos/planos son tablas válidas.
     return (
-      <div className="grid grid-cols-[80px_minmax(0,1fr)] items-start gap-x-2">
-        <span className="flex items-center gap-1 pt-1 text-[11px] font-semibold text-muted-foreground">
-          <Icono className={`size-3.5 shrink-0 ${colorIcono}`} />
-          <span className="whitespace-nowrap">{label}</span>
-        </span>
-        <div className="px-1.5 py-1 text-[13px] leading-relaxed text-foreground">
-          <Linkify>{valor}</Linkify>
-        </div>
-      </div>
+      <CampoLectura
+        tabla={tabla}
+        filaId={filaId}
+        campo={campo}
+        label={label}
+        grupo={grupo}
+        valor={valor}
+        icono={<Icono className={`size-3.5 shrink-0 ${colorIcono}`} />}
+        pretty={
+          <div className="px-1.5 py-1 text-[13px] leading-relaxed text-foreground">
+            <Linkify>{valor}</Linkify>
+          </div>
+        }
+      />
     );
   }
   return (
@@ -298,30 +322,20 @@ function CampoDoc({
   );
 }
 
-/** El diálogo en lectura: (Quien) → **Quien:** "texto", como lo ve el cliente. */
-function DialogoLectura({
-  label,
-  texto,
-}: {
-  label: string;
-  texto: string | null;
-}) {
+/** El diálogo formateado (Quien: "texto"), SÓLO el contenido — sin la etiqueta.
+ *  Lo envuelve CampoLectura, que pone la etiqueta y (para el revisor) las
+ *  correcciones. Devuelve null si no hay diálogo. */
+function DialogoContenido({ texto }: { texto: string | null }) {
   const segmentos = parseDialogo(texto);
   if (segmentos.length === 0) return null;
   return (
-    <div className="grid grid-cols-[80px_minmax(0,1fr)] items-start gap-x-2">
-      <span className="flex items-center gap-1 pt-1 text-[11px] font-semibold text-muted-foreground">
-        <IconoDialogo className="size-3.5 shrink-0 text-deck-orange" />
-        <span className="whitespace-nowrap">{label}</span>
-      </span>
-      <div className="space-y-1.5 px-1.5 py-1 text-[13px] leading-relaxed text-foreground">
-        {segmentos.map((s, i) => (
-          <p key={i} className="whitespace-pre-wrap">
-            {s.quien && <b>{s.quien}: </b>}
-            {s.quien ? <>&ldquo;{s.texto}&rdquo;</> : s.texto}
-          </p>
-        ))}
-      </div>
+    <div className="space-y-1.5 px-1.5 py-1 text-[13px] leading-relaxed text-foreground">
+      {segmentos.map((s, i) => (
+        <p key={i} className="whitespace-pre-wrap">
+          {s.quien && <b>{s.quien}: </b>}
+          {s.quien ? <>&ldquo;{s.texto}&rdquo;</> : s.texto}
+        </p>
+      ))}
     </div>
   );
 }

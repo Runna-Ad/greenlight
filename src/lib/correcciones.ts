@@ -20,6 +20,15 @@ export const PIN_BG: Record<EstadoCorreccion, string> = {
   closed: "color-mix(in srgb, var(--status-completed) 92%, #000)",
 };
 
+// Fondo del <mark> del resaltado de una frase corregida: un tinte del color de
+// estado. Fuente única para el editor (Campo) y la vista de lectura (CampoLectura),
+// para que no se separen.
+export const MARCA: Record<EstadoCorreccion, string> = {
+  open: "color-mix(in srgb, var(--status-corrections) 32%, transparent)",
+  done: "color-mix(in srgb, var(--status-progress) 34%, transparent)",
+  closed: "color-mix(in srgb, var(--status-completed) 30%, transparent)",
+};
+
 /** Etiqueta legible del estado de resolución de una corrección. */
 export const ETIQUETA_ESTADO: Record<EstadoCorreccion, string> = {
   open: "Sin atender",

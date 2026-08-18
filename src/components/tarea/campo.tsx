@@ -13,17 +13,10 @@ import {
   keyCampo,
   resaltadosEnTexto,
   PIN_BG,
+  MARCA,
   ETIQUETA_ESTADO,
   type EstadoCorreccion,
 } from "@/lib/correcciones";
-
-// Fondo del <mark> del resaltado en vivo: un tinte del color de estado, suave para
-// que el texto (que va encima, en el textarea) siga legible.
-const MARCA: Record<EstadoCorreccion, string> = {
-  open: "color-mix(in srgb, var(--status-corrections) 32%, transparent)",
-  done: "color-mix(in srgb, var(--status-progress) 34%, transparent)",
-  closed: "color-mix(in srgb, var(--status-completed) 30%, transparent)",
-};
 
 const ANILLO: Record<EstadoCorreccion, string> = {
   open: "0 0 0 3px color-mix(in srgb, var(--status-corrections) 16%, transparent)",

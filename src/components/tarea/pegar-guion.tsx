@@ -157,7 +157,13 @@ export function PegarGuion({
 
   return (
     <>
-      <Button size="sm" onClick={() => setAbierto(true)} className="w-full shrink-0 sm:w-auto">
+      {/* Botón BLANCO con texto morado: sobre la banda morada, el morado sobre
+          morado se perdía. (Pedro.) */}
+      <Button
+        size="sm"
+        onClick={() => setAbierto(true)}
+        className="w-full shrink-0 bg-white font-semibold text-primary shadow-sm hover:bg-white/90 hover:text-primary sm:w-auto"
+      >
         <ClipboardPaste className="size-4" /> {modo === "guion" ? "Pegar guión" : "Pegar copy"}
       </Button>
 
