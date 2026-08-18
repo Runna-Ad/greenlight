@@ -43,15 +43,19 @@ const WorkspaceCtx = createContext<WorkspaceApi | null>(null);
 export function WorkspaceProvider({
   planosIniciales,
   estaticoInicial,
+  verClienteInicial = false,
   children,
 }: {
   planosIniciales: PlanoVista[];
   estaticoInicial: EstaticoVista | null;
+  /** Vista inicial: los leads/admin arrancan en "Vista cliente" (revisan), los
+      especialistas en "Vista editor" (producen). Sigue siendo un toggle. */
+  verClienteInicial?: boolean;
   children: ReactNode;
 }) {
-  // Por defecto editable (agencia); "Vista cliente" lo pasa a lectura. Es un
-  // toggle en memoria (no cookie), a diferencia del rol gl_view_as del sistema.
-  const [verCliente, setVerCliente] = useState(false);
+  // "Vista cliente" pasa el documento a lectura; el toggle vive en memoria (no
+  // cookie), a diferencia del rol gl_view_as del sistema.
+  const [verCliente, setVerCliente] = useState(verClienteInicial);
   const [planos, setPlanos] = useState(planosIniciales);
   const [estatico, setEstatico] = useState(estaticoInicial);
 

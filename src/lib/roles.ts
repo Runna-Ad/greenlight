@@ -14,29 +14,31 @@
 // por encima de admin. Espeja el valor de enum produccion.app_role 'master'
 // (migración 0023). Hoy, con el login apagado, es sobre todo etiqueta + jerarquía
 // lista para cuando el login entre; en permisos se comporta como admin.
-// `specialist_lead` = un especialista que ADEMÁS puede asignar tareas a otros
-// especialistas (nada más — NO revisa ni aprueba: eso es del Dept Head/Lead).
-// Espeja el valor de enum produccion.app_role 'specialist_lead' (migración 0027).
-export type ViewRole = "master" | "admin" | "lead" | "specialist_lead" | "creative" | "client";
+// El antiguo `specialist_lead` se FUSIONÓ con `lead` (Dept Head / Lead): el lead
+// ya asigna Y revisa/aprueba/envía al cliente, así que no hacía falta un rol
+// aparte. El valor sigue en el enum de la base (histórico, sin filas) pero la app
+// ya no lo usa.
+// `client` es el rol EXTERNO. Se MUESTRA como "Partner"; el id interno sigue
+// siendo `client` a propósito, para no tocar el enum ni las policies de la base —
+// sólo cambia la etiqueta de cara al usuario.
+export type ViewRole = "master" | "admin" | "lead" | "creative" | "client";
 
-export const VIEW_ROLES: ViewRole[] = ["master", "admin", "lead", "specialist_lead", "creative", "client"];
+export const VIEW_ROLES: ViewRole[] = ["master", "admin", "lead", "creative", "client"];
 
 export const ROLE_LABEL: Record<ViewRole, string> = {
   master: "Master Builder",
   admin: "Admin",
   lead: "Dept Head / Lead",
-  specialist_lead: "Especialista Lead",
   creative: "Especialista",
-  client: "Cliente",
+  client: "Partner",
 };
 
 export const ROLE_HINT: Record<ViewRole, string> = {
-  master: "El dueño de la plataforma — ve y hace todo",
+  master: "El dueño de la plataforma — ve y hace todo, incluso asignar admins",
   admin: "Ve y hace todo, incluida la configuración",
-  lead: "Revisa todo, aprueba y envía al cliente",
-  specialist_lead: "Trabaja sus tareas y además asigna a otros especialistas",
+  lead: "Asigna, revisa, aprueba y envía al cliente",
   creative: "Sólo sus tareas asignadas",
-  client: "Sólo lo publicado para su cliente",
+  client: "Sólo lo publicado para su marca (Partner)",
 };
 
 /** El rol real de la cuenta. Con el login apagado, Pedro es admin. */
@@ -53,6 +55,7 @@ export type NavKey =
   | "sync"
   | "entregas"
   | "admin"
+  | "mi-perfil"
   | "portal";
 
 const NAV_ALL: NavKey[] = [
@@ -81,14 +84,11 @@ const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
     "sync",
     "entregas",
     "portal",
+    "mi-perfil",
   ],
-  // El especialista lead ve lo mismo que un especialista (su lista, el tablero,
-  // los bundles); su único poder extra —asignar tareas— vive en el tablero, no
-  // en una sección aparte.
-  specialist_lead: ["mi-trabajo", "tablero", "briefs"],
   // El especialista entra a trabajar lo suyo: su lista, el tablero y los
-  // bundles (donde sólo ve las tareas que tiene asignadas).
-  creative: ["mi-trabajo", "tablero", "briefs"],
+  // bundles (donde sólo ve las tareas que tiene asignadas) + su Mi perfil.
+  creative: ["mi-trabajo", "tablero", "briefs", "mi-perfil"],
   // El cliente no entra a la app interna en absoluto — sólo a su portal.
   client: ["portal"],
 };
@@ -106,13 +106,10 @@ const esNivelAdmin = (role: ViewRole): boolean =>
 export const canOverrideStatus = (role: ViewRole): boolean =>
   esNivelAdmin(role) || role === "lead";
 
-/**
- * Quién puede cambiar quién trabaja una tarea. El `specialist_lead` se agrega
- * AQUÍ y sólo aquí: asignar es su único poder extra sobre un especialista —
- * nunca revisa/aprueba (canOverrideStatus) ni entra a /admin (canAdmin).
- */
+/** Quién puede cambiar quién trabaja una tarea (asignar). El Dept Head / Lead
+ *  asigna; el especialista no. */
 export const canAssign = (role: ViewRole): boolean =>
-  esNivelAdmin(role) || role === "lead" || role === "specialist_lead";
+  esNivelAdmin(role) || role === "lead";
 
 /** Quién puede mover una tarea por el flujo normal. */
 export const canMoveStatus = (role: ViewRole): boolean => role !== "client";
@@ -126,3 +123,9 @@ export const canCreateBrief = (role: ViewRole): boolean =>
 
 /** Quién entra al panel de administración. Sólo master/admin. */
 export const canAdmin = (role: ViewRole): boolean => esNivelAdmin(role);
+
+/**
+ * Quién puede CREAR o ASCENDER admins (o master). Sólo el Master Builder — un
+ * admin gestiona al equipo pero no puede nombrar a otro admin. (Pedro.)
+ */
+export const canAssignAdmins = (role: ViewRole): boolean => role === "master";

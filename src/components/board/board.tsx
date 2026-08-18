@@ -34,7 +34,7 @@ import {
   canOverrideStatus,
   type ViewRole,
 } from "@/lib/roles";
-import { contentType } from "@/lib/iconos";
+import { contentType, canales } from "@/lib/iconos";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Pill, type PillStatus } from "@/components/ui/pill";
@@ -463,23 +463,22 @@ function CardBody({
           <GripVertical className="size-3.5" />
         </button>
 
-        {/* La MARCA (Card / Préstamos) en lugar del código A2/B1 — con su logo
-            chiquito si lo tiene. */}
-        {task.marca && (
-          <span className="flex items-center gap-1 rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">
-            {task.marca_logo_url && (
-              // Logo diminuto (≤14px) en muchos cards → un <img> plano es más
-              // ligero que next/image; el archivo ya es chico y público.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={task.marca_logo_url}
-                alt=""
-                className="h-3.5 w-auto max-w-[32px] object-contain"
-              />
-            )}
+        {/* La MARCA en lugar del código A2/B1: si tiene logo, SÓLO el logo (más
+            grande, sin repetir el nombre); si no, el nombre como pastilla. */}
+        {task.marca_logo_url ? (
+          // Logo por card → un <img> plano es más ligero que next/image; el
+          // archivo ya es chico y público.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={task.marca_logo_url}
+            alt={task.marca ?? "Marca"}
+            className="h-6 w-auto max-w-[84px] object-contain object-left"
+          />
+        ) : task.marca ? (
+          <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">
             {task.marca}
           </span>
-        )}
+        ) : null}
         {/* Ícono del tipo de asset (video persona real / animado / estático),
             para reconocerlo de un vistazo junto al código. */}
         <span
@@ -513,23 +512,19 @@ function CardBody({
         {task.concepto ?? "Sin concepto"}
       </p>
 
+      {/* Los CANALES a los que va la pieza (Google / Facebook / TikTok), cada uno
+          en su color — más útil de un vistazo que tipo/formato/duración. */}
       <div className="mt-1.5 flex flex-wrap gap-1">
-        {task.tipo_asset && (
-          <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
-            {task.tipo_asset}
-          </span>
-        )}
-        {task.formato_code && (
-          <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
-            {task.formato_code}
-          </span>
-        )}
-        {task.duracion?.map((d) => (
+        {canales(task.plataformas ?? []).map((c) => (
           <span
-            key={d}
-            className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-secondary-foreground"
+            key={c.code}
+            className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+            style={{
+              color: c.color,
+              backgroundColor: `color-mix(in srgb, ${c.color} 14%, transparent)`,
+            }}
           >
-            {d}
+            {c.label}
           </span>
         ))}
       </div>

@@ -35,7 +35,7 @@ export default async function PortalPage({
           <Hammer className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 text-sm leading-relaxed text-muted-foreground">
             <p className="text-foreground">
-              Esta pantalla existe para que el menú del rol Cliente sea real, no
+              Esta pantalla existe para que el menú del rol Partner sea real, no
               para simular el portal.
             </p>
             <p className="mt-3">
@@ -58,7 +58,7 @@ export default async function PortalPage({
         <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
           <Eye className="size-3.5 shrink-0" />
           Estás viéndolo como {ROLE_LABEL[role]}: el menú de la izquierda quedó
-          reducido a lo que un cliente vería.
+          reducido a lo que un Partner vería.
         </p>
       )}
 

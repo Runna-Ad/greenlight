@@ -26,7 +26,14 @@ import type {
   SnippetRow,
 } from "@/lib/admin-tipos";
 
-type Soy = { id: string; name: string; color: string; track: string } | null;
+type Soy = {
+  id: string;
+  name: string;
+  color: string;
+  track: string;
+  notify_email: boolean;
+  notify_slack: boolean;
+} | null;
 
 type TabKey = "perfil" | "equipo" | "marcas" | "actividad" | "integraciones" | "biblioteca";
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [

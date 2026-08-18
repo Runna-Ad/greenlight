@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
-import { canAdmin } from "@/lib/roles";
+import { getSoyId } from "@/lib/soy";
+import { canAdmin, canAssignAdmins } from "@/lib/roles";
 import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
 import type { MiembroRow, RolAsignable } from "@/lib/equipo";
 import type {
@@ -29,7 +30,7 @@ export async function listarEquipo(): Promise<MiembroRow[]> {
 
   const { data: miembros } = await db
     .from("track_members")
-    .select("id, name, track, color, role, email, slack_user_id, es_lead, active, notify_email, sort_order")
+    .select("id, name, track, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
     .order("track", { ascending: true })
     .order("sort_order", { ascending: true });
 
@@ -66,14 +67,25 @@ const CAMPOS_EDITABLES = new Set([
   "es_lead",
   "active",
   "notify_email",
+  "notify_slack",
 ]);
 
-/** Edita un miembro (guardado inmediato, como en SnapTrack). */
+// Sólo el Master Builder puede nombrar admins/master; un admin gestiona al
+// resto del equipo pero no crea otro admin.
+const ROLES_SOLO_MASTER = new Set(["admin", "master"]);
+
+/** Edita un miembro (guardado inmediato, como en SnapTrack). Sólo admin+; y sólo
+ *  el master puede poner el rol en admin/master. */
 export async function guardarMiembro(
   id: string,
   patch: Record<string, unknown>,
 ): Promise<Guardado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const rol = await getViewAs();
+  if (!canAdmin(rol)) return { ok: false, error: "Sólo un admin edita el equipo." };
+  if (ROLES_SOLO_MASTER.has(String(patch.role)) && !canAssignAdmins(rol)) {
+    return { ok: false, error: "Sólo el Master Builder puede nombrar admins." };
+  }
   const limpio: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!CAMPOS_EDITABLES.has(k)) continue;
@@ -92,6 +104,42 @@ export async function guardarMiembro(
   return { ok: true };
 }
 
+/**
+ * "Mi perfil" — cada persona edita LO SUYO: nombre y sus notificaciones (email
+ * y/o Slack). No necesita ser admin; se identifica por la cookie "¿Quién eres?"
+ * (getSoyId) y sólo puede tocar su propia fila, con una whitelist mínima. Así un
+ * lead/especialista gestiona su perfil sin entrar a Configuración.
+ */
+export async function guardarMiPerfil(patch: {
+  name?: string;
+  notify_email?: boolean;
+  notify_slack?: boolean;
+}): Promise<Guardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const soyId = await getSoyId();
+  if (!soyId) return { ok: false, error: "Primero dinos quién eres en “¿Quién eres?”." };
+
+  const limpio: Record<string, unknown> = {};
+  if (typeof patch.name === "string") {
+    const nombre = patch.name.trim();
+    if (!nombre) return { ok: false, error: "El nombre no puede quedar vacío." };
+    limpio.name = nombre;
+  }
+  if (typeof patch.notify_email === "boolean") limpio.notify_email = patch.notify_email;
+  if (typeof patch.notify_slack === "boolean") limpio.notify_slack = patch.notify_slack;
+  if (!Object.keys(limpio).length) return { ok: false, error: "Nada que guardar." };
+
+  const { error } = await supabaseAdmin()
+    .from("track_members")
+    .update(limpio)
+    .eq("id", soyId)
+    .eq("active", true); // sólo tu propia fila ACTIVA, igual que getSoy
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/mi-perfil");
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
 /** Da de alta una persona nueva en el equipo. Devuelve la fila creada (carga 0). */
 export async function crearMiembro(data: {
   name: string;
@@ -103,6 +151,11 @@ export async function crearMiembro(data: {
   es_lead?: boolean;
 }): Promise<Guardado & { miembro?: MiembroRow }> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const rol = await getViewAs();
+  if (!canAdmin(rol)) return { ok: false, error: "Sólo un admin da de alta al equipo." };
+  if (ROLES_SOLO_MASTER.has(String(data.role)) && !canAssignAdmins(rol)) {
+    return { ok: false, error: "Sólo el Master Builder puede nombrar admins." };
+  }
   if (!data.name.trim()) return { ok: false, error: "El nombre es obligatorio." };
 
   const db = supabaseAdmin();
@@ -128,7 +181,7 @@ export async function crearMiembro(data: {
       es_lead: data.es_lead ?? false,
       sort_order,
     })
-    .select("id, name, track, color, role, email, slack_user_id, es_lead, active, notify_email, sort_order")
+    .select("id, name, track, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
     .single();
   if (error) {
     // unique (track, name) — nombre repetido dentro del mismo track.

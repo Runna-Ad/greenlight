@@ -1,4 +1,7 @@
+import { Lock } from "lucide-react";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
+import { getViewAs } from "@/lib/view-as";
+import { ROLE_LABEL, canSee } from "@/lib/roles";
 import {
   EntregasBoard,
   type ClienteEntregas,
@@ -102,6 +105,19 @@ async function cargarEntregas(): Promise<ClienteEntregas[]> {
 }
 
 export default async function EntregasPage() {
+  // Entregas es sólo para leads y arriba — un especialista no entra (ni por URL).
+  const role = await getViewAs();
+  if (!canSee(role, "entregas")) {
+    return (
+      <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
+        <Lock className="mx-auto size-5 text-muted-foreground" />
+        <p className="mt-3 text-sm text-foreground">
+          Un {ROLE_LABEL[role]} no entra a Entregas.
+        </p>
+      </div>
+    );
+  }
+
   const clientes = await cargarEntregas();
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">

@@ -20,6 +20,8 @@ export type MiembroRow = {
   sort_order: number;
   /** ¿Recibe emails de notificación? (in-app siempre le llega). */
   notify_email: boolean;
+  /** ¿Recibe avisos por Slack? */
+  notify_slack: boolean;
   /** Tareas NO terminales asignadas a esta persona (el badge de carga). */
   carga: number;
 };

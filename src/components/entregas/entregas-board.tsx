@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { Pill, type PillStatus } from "@/components/ui/pill";
 import { chipTextColor } from "@/lib/vocab";
@@ -68,7 +69,7 @@ export function EntregasBoard({ clientes }: { clientes: ClienteEntregas[] }) {
             </div>
             <div className="space-y-2">
               {orden.map((e) => (
-                <FilaEntrega key={e.id} e={e} />
+                <FilaEntrega key={e.id} e={e} slug={c.slug} />
               ))}
             </div>
           </section>
@@ -78,10 +79,17 @@ export function EntregasBoard({ clientes }: { clientes: ClienteEntregas[] }) {
   );
 }
 
-function FilaEntrega({ e }: { e: Entrega }) {
+function FilaEntrega({ e, slug }: { e: Entrega; slug: string }) {
   const meta = META[e.estado];
   return (
-    <div className="gl-card flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
+    <div className="gl-card relative flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
+      {/* Toda la fila abre la tarea (link estirado); "Abrir entregable" va con
+          z-10 encima para no chocar con la navegación. */}
+      <Link
+        href={`/${slug}/tareas/${e.id}`}
+        aria-label={`Abrir ${e.namingBase ?? "tarea"}`}
+        className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
       <Pill status={meta.token}>{meta.label}</Pill>
 
       {e.code && (
@@ -121,7 +129,7 @@ function FilaEntrega({ e }: { e: Entrega }) {
           href={e.entregaUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-secondary"
+          className="relative z-10 inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-secondary"
         >
           <ExternalLink className="size-3" /> Abrir entregable
         </a>

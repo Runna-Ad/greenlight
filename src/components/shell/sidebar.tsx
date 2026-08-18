@@ -14,6 +14,8 @@ import {
   RefreshCw,
   Eye,
   Menu,
+  UserRound,
+  ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -37,7 +39,11 @@ type NavItem = {
 };
 
 // Cross-client items live at the root; client-scoped items take the active slug.
-function navFor(slug: string | null): { section: string; items: NavItem[] }[] {
+// La sección del partner (DIDI…) es COLAPSABLE: se conserva en las páginas
+// generales (colapsada) en vez de desaparecer.
+function navFor(
+  slug: string | null,
+): { section: string; items: NavItem[]; collapsible?: boolean }[] {
   const clientBase = slug ? `/${slug}` : null;
   return [
     {
@@ -47,12 +53,16 @@ function navFor(slug: string | null): { section: string; items: NavItem[] }[] {
         { key: "mi-trabajo", href: "/mi-trabajo", label: "Mi trabajo", icon: LayoutGrid },
         { key: "workload", href: "/workload", label: "Workload", icon: GaugeCircle },
         { key: "entregas", href: "/entregas", label: "Entregas", icon: PackageCheck },
+        // Sólo leads/especialistas lo ven (canSee); los admin editan su perfil
+        // dentro de Configuración.
+        { key: "mi-perfil", href: "/mi-perfil", label: "Mi perfil", icon: UserRound },
       ],
     },
     ...(clientBase
       ? [
           {
             section: slug!.toUpperCase(),
+            collapsible: true,
             items: [
               { key: "tablero", href: `${clientBase}/tablero`, label: "Tablero", icon: LayoutGrid },
               { key: "briefs", href: `${clientBase}/briefs`, label: "Briefs", icon: FileText },
@@ -81,6 +91,7 @@ const RESERVED = new Set([
   "workload",
   "entregas",
   "admin",
+  "mi-perfil",
   "login",
 ]);
 
@@ -103,9 +114,27 @@ function SidebarNav({
   const first = pathname.split("/")[1] ?? "";
   const activeClient = first && !RESERVED.has(first) ? first : null;
 
+  // Recuerda el último partner para que su sección NO desaparezca en las páginas
+  // generales — se muestra colapsada. Vive en estado (no efecto ni localStorage):
+  // el layout del App Router no se desmonta entre navegaciones, así que persiste
+  // durante la sesión. Se ajusta EN RENDER (patrón recomendado por React).
+  const [lastClient, setLastClient] = useState<string | null>(activeClient);
+  if (activeClient && activeClient !== lastClient) setLastClient(activeClient);
+  const clienteMostrado = activeClient ?? lastClient;
+
+  // La sección del partner arranca DESPLEGADA en sus páginas y COLAPSADA en las
+  // generales; se puede abrir/cerrar a mano (click en el nombre). El default se
+  // recalcula en render cuando entras/sales del partner.
+  const [prevActive, setPrevActive] = useState(activeClient);
+  const [colapsada, setColapsada] = useState(!activeClient);
+  if (activeClient !== prevActive) {
+    setPrevActive(activeClient);
+    setColapsada(!activeClient);
+  }
+
   // Filtrado por rol: en una vista previa el menú debe ENCOGER, que es
   // justamente lo que no se podía comprobar antes.
-  const groups = navFor(activeClient)
+  const groups = navFor(clienteMostrado)
     .map((g) => ({ ...g, items: g.items.filter((i) => canSee(role, i.key)) }))
     .filter((g) => g.items.length > 0);
 
@@ -132,11 +161,27 @@ function SidebarNav({
             Este rol no entra a la app interna.
           </p>
         )}
-        {groups.map((group) => (
+        {groups.map((group) => {
+          const cerrada = group.collapsible && colapsada;
+          return (
           <div key={group.section} className="mb-5">
-            <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40">
-              {group.section}
-            </p>
+            {group.collapsible ? (
+              // El nombre del partner es un botón: colapsa/despliega sus páginas.
+              <button
+                type="button"
+                onClick={() => setColapsada((v) => !v)}
+                aria-expanded={!cerrada}
+                className="flex w-full items-center gap-1 px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40 transition-colors hover:text-sidebar-foreground/75"
+              >
+                <ChevronDown className={cn("size-3 shrink-0 transition-transform", cerrada && "-rotate-90")} />
+                {group.section}
+              </button>
+            ) : (
+              <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40">
+                {group.section}
+              </p>
+            )}
+            {!cerrada && (
             <ul className="space-y-0.5">
               {group.items.map((item) => {
                 const active =
@@ -183,8 +228,10 @@ function SidebarNav({
                 );
               })}
             </ul>
+            )}
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* Sesión: quién eres (honor-system) + ver la app como otro rol. Antes

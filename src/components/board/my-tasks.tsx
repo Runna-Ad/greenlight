@@ -23,6 +23,7 @@ export type MyTask = {
   duracion: string[] | null;
   marca: string | null;
   brief_tab: string | null;
+  client_slug: string | null;
   file_count: number;
   member_ids: string[];
 };
@@ -76,12 +77,21 @@ export function MyTasks({
         return (
           <li
             key={t.id}
-            className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-card p-3 ${
+            className={`relative flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-card p-3 ${
               enCorrecciones
                 ? "border-status-corrections ring-1 ring-[color-mix(in_srgb,var(--status-corrections)_35%,transparent)]"
                 : "border-border"
             }`}
           >
+            {/* Toda la fila abre la tarea (link estirado); los botones de acción
+                van con relative z-10 para seguir clicables encima. */}
+            {t.client_slug && (
+              <Link
+                href={`/${t.client_slug}/tareas/${t.id}`}
+                aria-label={`Abrir ${t.naming_base ?? "tarea"}`}
+                className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            )}
             <span
               className="h-8 w-1 shrink-0 rounded-full"
               style={{ backgroundColor: `var(--status-${STATUS_TOKEN[t.status]})` }}
@@ -120,7 +130,7 @@ export function MyTasks({
               )}
             </div>
 
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="relative z-10 flex shrink-0 items-center gap-1.5">
               {acciones
                 .filter((a) => !a.needsBody) // pedir cambios se hace desde el tablero
                 .map((a) => (

@@ -10,6 +10,9 @@ export type Soy = {
   name: string;
   color: string;
   track: "real" | "normal";
+  /** Preferencias de notificación (para "Mi perfil"). in-app siempre llega. */
+  notify_email: boolean;
+  notify_slack: boolean;
 };
 
 /**
@@ -40,7 +43,7 @@ export const getSoy = cache(async (): Promise<Soy | null> => {
 
   const { data } = await supabaseAdmin()
     .from("track_members")
-    .select("id, name, color, track")
+    .select("id, name, color, track, notify_email, notify_slack")
     .eq("id", id)
     .eq("active", true)
     .maybeSingle();

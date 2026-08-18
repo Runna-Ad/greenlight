@@ -5,6 +5,7 @@ import { ArrowLeft, RefreshCw, Check } from "lucide-react";
 
 import type { AssetStatus } from "@/lib/brand";
 import type { TaskContext } from "@/lib/task-actions";
+import { canOverrideStatus } from "@/lib/roles";
 import { AccionesTarea } from "./acciones-tarea";
 import { NavBundle } from "./nav-bundle";
 import { useWorkspace } from "./workspace-provider";
@@ -15,12 +16,13 @@ import type { BundleTask } from "@/lib/bundle";
  * Izquierda: "Volver al tablero". Derecha: los botones de flujo + el paginador
  * del bundle (← 2/10 →).
  *
- * En "Vista cliente" (preview) muestra los botones que verá el cliente cuando
- * revise —"Pedir cambios" / "Aprobar"—, pero DESHABILITADOS: las acciones reales
- * del cliente aún no existen (el portal es un build aparte); esto es sólo para
- * que la agencia vea la disposición. En "Vista editor" muestra AccionesTarea
- * (los botones reales del flujo, p. ej. "Mandar a revisión", que dispara el
- * chequeo de ortografía H.Ü.E).
+ * Botones según vista Y rol:
+ *  - Un REVISOR (lead/admin/master) ve SIEMPRE las acciones reales
+ *    (AccionesTarea) — también en "Vista cliente", porque su trabajo es revisar
+ *    y pedir cambios desde ahí (Pedro). Es su vista por defecto.
+ *  - Un no-revisor en "Vista cliente" ve la PREVIEW deshabilitada (así la
+ *    agencia ve la disposición del cliente); en "Vista editor" ve AccionesTarea
+ *    (p. ej. "Mandar a revisión", que dispara el chequeo H.Ü.E).
  */
 export function SubHeaderTarea({
   cliente,
@@ -55,7 +57,7 @@ export function SubHeaderTarea({
       </Link>
 
       <div className="flex flex-wrap items-center justify-end gap-2">
-        {verCliente ? (
+        {verCliente && !canOverrideStatus(ctx.role) ? (
           <BotonesClientePreview />
         ) : (
           <AccionesTarea

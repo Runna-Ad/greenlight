@@ -360,7 +360,15 @@ export default async function TareaPage({
           (nav client-side que sólo cambia [id]), React conservaría el useState de
           este provider y mostraría/editaría el CUERPO de la tarea anterior. El key
           fuerza un remount con el estado fresco de la nueva tarea. */}
-      <WorkspaceProvider key={idea.id} planosIniciales={planos} estaticoInicial={estatico}>
+      {/* Vista por defecto por rol: los revisores (lead/admin/master) arrancan en
+          "Vista cliente" (sobre todo revisan); los especialistas en "Vista
+          editor" (producen). Sigue siendo un toggle en la barra inferior. */}
+      <WorkspaceProvider
+        key={idea.id}
+        planosIniciales={planos}
+        estaticoInicial={estatico}
+        verClienteInicial={puedeEditar}
+      >
         {/* Un solo flujo. Los DOS menús son PERSISTENTES (Pedro): el de arriba
             (sub-header) se queda pegado arriba TODA la página — como el de abajo
             está en el borde inferior, ya no necesita cederle el turno a mitad de
