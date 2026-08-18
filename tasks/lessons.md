@@ -361,3 +361,29 @@ this" conflicts + a silently-unsaved edit — aligned the intake savers to store
 raw (like `guardarCampo`) and made `combinarConsideraciones` not trim.
 Rule: mirror the codebase's established compare-and-set (in the WHERE) for every
 new mutating action, and keep client-remembered value == server-stored value.
+
+---
+
+## 2026-08-17 — Phase 3 client logos (reap lesson)
+
+### LESSON: a Supabase UPDATE `.eq("id", …)` on a valid-but-missing id returns 0 rows and NO error — treat 0 rows as failure, especially after a side effect
+`subirLogoMarca` uploaded the file to a PUBLIC bucket, then did
+`update({logo_url}).eq("id", marcaId)` with no error check on row count. A valid
+UUID that matches no marca (deleted row, or a crafted id) → file uploaded,
+`getPublicUrl` returns a working URL, UPDATE touches 0 rows WITHOUT error → the
+action returned `{ok:true}` and left an orphaned public file that no DB row
+references (uncleanable via logo_url). Fix: (1) verify the marca EXISTS before
+uploading; (2) make the UPDATE prove it hit a row —
+`.update(...).eq("id",id).select("id").maybeSingle()` and roll back the uploaded
+file if the result is null. Caught by the Opus reap. Same family as
+[[rls-writes-fail-silently]] and [[well-formed-but-wrong]]: a green check that
+lied. Rule: any mutating action whose write follows an irreversible side effect
+(file upload, external call) must prove the write landed and roll back the side
+effect if it didn't.
+
+### NOTE (launch-gate, intentional for beta): the logo upload is effectively
+unauthenticated (cookie-only `gl_view_as` gate, login off) writing to a PUBLIC
+bucket with no storage RLS. This matches Pedro's "build auth, keep app OPEN
+until launch" stance and is stricter than subirReferencia. When AUTH_ENABLED
+lands it needs a real admin gate + storage RLS on greenlight-logos. Not a bug
+now — a launch checklist item.
