@@ -44,6 +44,18 @@ export const SNIPPET_KIND_LABEL: Record<string, string> = {
 
 export type MarcaOpt = { id: string; name: string };
 
+/** Una marca (sub-marca) con su logo, para el panel de Marcas. */
+export type MarcaLogo = { id: string; name: string; slug: string; logo_url: string | null };
+
+/** Un cliente con sus marcas (sub-marcas) — DiDi → Card / Préstamos. */
+export type ClienteConMarcas = {
+  id: string;
+  name: string;
+  slug: string;
+  logo_url: string | null;
+  marcas: MarcaLogo[];
+};
+
 export type IntegracionesEstado = {
   sheetConfigurado: boolean;
   ultimaSync: string | null;

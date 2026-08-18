@@ -7,6 +7,7 @@ import {
   Activity,
   Plug,
   BookText,
+  Images,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,9 +16,11 @@ import { PerfilTab } from "./perfil-tab";
 import { ActividadTab } from "./actividad-tab";
 import { IntegracionesTab } from "./integraciones-tab";
 import { BibliotecaTab } from "./biblioteca-tab";
+import { MarcasTab } from "./marcas-tab";
 import type { MiembroRow } from "@/lib/equipo";
 import type {
   ActividadRow,
+  ClienteConMarcas,
   IntegracionesEstado,
   MarcaOpt,
   SnippetRow,
@@ -25,10 +28,11 @@ import type {
 
 type Soy = { id: string; name: string; color: string; track: string } | null;
 
-type TabKey = "perfil" | "equipo" | "actividad" | "integraciones" | "biblioteca";
+type TabKey = "perfil" | "equipo" | "marcas" | "actividad" | "integraciones" | "biblioteca";
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "perfil", label: "Mi perfil", icon: UserRound },
   { key: "equipo", label: "Equipo", icon: Users },
+  { key: "marcas", label: "Marcas", icon: Images },
   { key: "actividad", label: "Actividad", icon: Activity },
   { key: "integraciones", label: "Integraciones", icon: Plug },
   { key: "biblioteca", label: "Biblioteca", icon: BookText },
@@ -37,12 +41,14 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
 export function AdminShell({
   equipoInicial,
   soy,
+  marcas,
   actividad,
   integraciones,
   biblioteca,
 }: {
   equipoInicial: MiembroRow[];
   soy: Soy;
+  marcas: ClienteConMarcas[];
   actividad: ActividadRow[];
   integraciones: IntegracionesEstado;
   biblioteca: { snippets: SnippetRow[]; marcas: MarcaOpt[] };
@@ -86,6 +92,7 @@ export function AdminShell({
         <div className="min-w-0">
           {tab === "perfil" && <PerfilTab soy={soy} />}
           {tab === "equipo" && <EquipoTab inicial={equipoInicial} />}
+          {tab === "marcas" && <MarcasTab clientes={marcas} />}
           {tab === "actividad" && <ActividadTab rows={actividad} />}
           {tab === "integraciones" && <IntegracionesTab estado={integraciones} />}
           {tab === "biblioteca" && <BibliotecaTab snippets={biblioteca.snippets} marcas={biblioteca.marcas} />}

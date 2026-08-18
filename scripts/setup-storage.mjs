@@ -1,15 +1,26 @@
-// Crea (si no existe) el bucket de referencias en el proyecto Supabase.
+// Crea (si no existen) los buckets de Storage del proyecto Supabase.
 //
 // FUERA de las migraciones a propósito: check-isolation.mjs mata cualquier .sql
 // que mencione `storage.` (protege a S.P.A.M), y PGlite no tiene el esquema
-// storage. Así que el bucket se crea por la API de Storage, con service-role.
+// storage. Así que los buckets se crean por la API de Storage, con service-role.
 //
 // Idempotente: se puede correr las veces que sea. NO está en `npm test`.
 //   node scripts/setup-storage.mjs
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
-const BUCKET = "greenlight-referencias";
+const IMAGENES = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"];
+
+// Dos buckets, distinta política:
+//  - referencias: PRIVADO. La app no tiene login; público lo volvería indexable.
+//    Se lee por signed URL desde el servidor.
+//  - logos: PÚBLICO. Son logos de marca (assets públicos, sin PII), se muestran
+//    en muchos lados (la cabecera usa next/image `unoptimized`) y así se evita
+//    firmar una URL por render. Se guarda getPublicUrl en marcas.logo_url.
+const BUCKETS = [
+  { name: "greenlight-referencias", public: false, fileSizeLimit: "10MB", allowedMimeTypes: IMAGENES },
+  { name: "greenlight-logos", public: true, fileSizeLimit: "10MB", allowedMimeTypes: IMAGENES },
+];
 
 // Cargar .env.local sin dependencias (los scripts de este repo no usan dotenv).
 function cargarEnv() {
@@ -41,21 +52,19 @@ if (listErr) {
   process.exit(1);
 }
 
-if (buckets.some((b) => b.name === BUCKET)) {
-  console.log(`✓ El bucket "${BUCKET}" ya existe — nada que hacer.`);
-  process.exit(0);
+for (const b of BUCKETS) {
+  if (buckets.some((x) => x.name === b.name)) {
+    console.log(`✓ El bucket "${b.name}" ya existe — nada que hacer.`);
+    continue;
+  }
+  const { error: createErr } = await db.storage.createBucket(b.name, {
+    public: b.public,
+    fileSizeLimit: b.fileSizeLimit,
+    allowedMimeTypes: b.allowedMimeTypes,
+  });
+  if (createErr) {
+    console.error(`No se pudo crear "${b.name}":`, createErr.message);
+    process.exit(1);
+  }
+  console.log(`✅ Bucket ${b.public ? "público" : "privado"} "${b.name}" creado.`);
 }
-
-// PRIVADO: la app no tiene login; un bucket público volvería cada referencia
-// una URL permanente e indexable. La lectura va por signed URL desde el servidor.
-const { error: createErr } = await db.storage.createBucket(BUCKET, {
-  public: false,
-  fileSizeLimit: "10MB",
-  allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"],
-});
-
-if (createErr) {
-  console.error(`No se pudo crear "${BUCKET}":`, createErr.message);
-  process.exit(1);
-}
-console.log(`✅ Bucket privado "${BUCKET}" creado (límite 10 MB, sólo imágenes).`);

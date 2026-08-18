@@ -2,9 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
+import { getViewAs } from "@/lib/view-as";
+import { canAdmin } from "@/lib/roles";
+import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
 import type { MiembroRow, RolAsignable } from "@/lib/equipo";
 import type {
   ActividadRow,
+  ClienteConMarcas,
   IntegracionesEstado,
   MarcaOpt,
   SnippetKind,
@@ -300,6 +304,140 @@ export async function alternarSnippetActivo(id: string, active: boolean): Promis
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const { error } = await supabaseAdmin().from("snippets").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+// ── Marcas: logos de sub-marca ─────────────────────────────
+// Un cliente tiene varias marcas (DiDi → Card / Préstamos), cada una con su
+// logo. El logo se muestra en la cabecera de la tarea (marcas.logo_url). El
+// bucket "greenlight-logos" es PÚBLICO (assets de marca, sin PII); se guarda la
+// URL pública en logo_url y se lee directo, sin firmar por render.
+const LOGOS_BUCKET = "greenlight-logos";
+
+/**
+ * El path dentro del bucket, extraído de una URL pública NUESTRA (o null). Se
+ * valida host + prefijo exacto con `new URL` (no un substring suelto), para no
+ * intentar borrar por una URL externa que casualmente contenga el nombre del
+ * bucket, ni confundir un bucket con prefijo parecido.
+ */
+function pathEnBucketLogos(publicUrl: string | null): string | null {
+  if (!publicUrl) return null;
+  let u: URL;
+  try {
+    u = new URL(publicUrl);
+  } catch {
+    return null;
+  }
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (base) {
+    try {
+      if (u.host !== new URL(base).host) return null;
+    } catch {
+      /* base mal formado — se ignora el chequeo de host */
+    }
+  }
+  const prefijo = `/storage/v1/object/public/${LOGOS_BUCKET}/`;
+  return u.pathname.startsWith(prefijo)
+    ? decodeURIComponent(u.pathname.slice(prefijo.length))
+    : null;
+}
+
+/** Los clientes con sus marcas (y logo) para el panel de Marcas. */
+export async function listarMarcasPorCliente(): Promise<ClienteConMarcas[]> {
+  if (!hasSupabase()) return [];
+  const db = supabaseAdmin();
+  const [cliRes, marcaRes] = await Promise.all([
+    db.from("clients").select("id, name, slug, logo_url").order("name", { ascending: true }),
+    db.from("marcas").select("id, client_id, name, slug, logo_url").order("name", { ascending: true }),
+  ]);
+  const clientes = (cliRes.data ?? []) as { id: string; name: string; slug: string; logo_url: string | null }[];
+  const marcas = (marcaRes.data ?? []) as {
+    id: string; client_id: string; name: string; slug: string; logo_url: string | null;
+  }[];
+  return clientes.map((c) => ({
+    id: c.id,
+    name: c.name,
+    slug: c.slug,
+    logo_url: c.logo_url,
+    marcas: marcas
+      .filter((m) => m.client_id === c.id)
+      .map((m) => ({ id: m.id, name: m.name, slug: m.slug, logo_url: m.logo_url })),
+  }));
+}
+
+type LogoGuardado = { ok: true; logoUrl: string } | { ok: false; error: string };
+
+/**
+ * Sube (o reemplaza) el logo de una MARCA. Sólo admin. Valida por magic bytes
+ * (no por nombre), corta a 10 MB, sube al bucket público y guarda la URL pública
+ * en marcas.logo_url. Si había un logo anterior nuestro, borra ese archivo para
+ * no dejar huérfanos. Sólo raster (PNG/JPG/WebP/GIF/AVIF) — el mismo sniff seguro
+ * que las referencias (SVG no, por el riesgo de script embebido).
+ */
+export async function subirLogoMarca(marcaId: string, form: FormData): Promise<LogoGuardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin sube logos." };
+
+  const file = form.get("file");
+  if (!(file instanceof File)) return { ok: false, error: "No llegó ningún archivo." };
+  if (file.size > MAX_BYTES) return { ok: false, error: "El logo pasa de 10 MB." };
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const mime = sniffImageMime(bytes);
+  if (!mime) return { ok: false, error: "Sólo imágenes (PNG, JPG, WebP, GIF, AVIF)." };
+
+  const db = supabaseAdmin();
+  // La marca DEBE existir ANTES de subir: un id válido pero inexistente subiría
+  // el archivo y el UPDATE tocaría 0 filas SIN error → un huérfano público que
+  // ninguna fila referencia. Se comprueba primero (y de paso se lee el logo
+  // anterior para borrarlo después).
+  const { data: prev } = await db
+    .from("marcas").select("id, logo_url").eq("id", marcaId).maybeSingle();
+  if (!prev) return { ok: false, error: "La marca ya no existe." };
+  const prevPath = pathEnBucketLogos((prev as { logo_url: string | null }).logo_url ?? null);
+
+  const ext = EXT_POR_MIME[mime];
+  const nombre = `${marcaId}/${crypto.randomUUID()}.${ext}`;
+  const { error: upErr } = await db.storage
+    .from(LOGOS_BUCKET)
+    .upload(nombre, bytes, { contentType: mime, upsert: false });
+  if (upErr) return { ok: false, error: `No se pudo subir: ${upErr.message}` };
+
+  const { data: pub } = db.storage.from(LOGOS_BUCKET).getPublicUrl(nombre);
+  const logoUrl = pub.publicUrl;
+
+  // El UPDATE debe PROBAR que tocó la fila (.select). 0 filas (p. ej. la marca
+  // se borró en la carrera) → se revierte el archivo recién subido, sin huérfano.
+  const { data: updRow, error: updErr } = await db
+    .from("marcas").update({ logo_url: logoUrl }).eq("id", marcaId).select("id").maybeSingle();
+  if (updErr || !updRow) {
+    await db.storage.from(LOGOS_BUCKET).remove([nombre]); // rollback, sin huérfanos
+    return { ok: false, error: updErr?.message ?? "La marca ya no existe." };
+  }
+
+  // Ya guardado el nuevo: limpiar el archivo viejo (best-effort).
+  if (prevPath && prevPath !== nombre) {
+    await db.storage.from(LOGOS_BUCKET).remove([prevPath]);
+  }
+
+  revalidatePath("/admin");
+  return { ok: true, logoUrl };
+}
+
+/** Quita el logo de una marca (borra el archivo y pone logo_url = null). Sólo admin. */
+export async function quitarLogoMarca(marcaId: string): Promise<Guardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin quita logos." };
+
+  const db = supabaseAdmin();
+  const { data: prev } = await db.from("marcas").select("logo_url").eq("id", marcaId).maybeSingle();
+  const path = pathEnBucketLogos((prev as { logo_url: string | null } | null)?.logo_url ?? null);
+
+  const { error } = await db.from("marcas").update({ logo_url: null }).eq("id", marcaId);
+  if (error) return { ok: false, error: error.message };
+  if (path) await db.storage.from(LOGOS_BUCKET).remove([path]);
+
   revalidatePath("/admin");
   return { ok: true };
 }

@@ -9,6 +9,7 @@ import {
   listarActividad,
   estadoIntegraciones,
   listarBiblioteca,
+  listarMarcasPorCliente,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -30,18 +31,20 @@ export default async function AdminPage() {
     );
   }
 
-  const [equipo, soy, actividad, integraciones, biblioteca] = await Promise.all([
+  const [equipo, soy, actividad, integraciones, biblioteca, marcas] = await Promise.all([
     listarEquipo(),
     getSoy(),
     listarActividad(),
     estadoIntegraciones(),
     listarBiblioteca(),
+    listarMarcasPorCliente(),
   ]);
 
   return (
     <AdminShell
       equipoInicial={equipo}
       soy={soy}
+      marcas={marcas}
       actividad={actividad}
       integraciones={integraciones}
       biblioteca={biblioteca}
