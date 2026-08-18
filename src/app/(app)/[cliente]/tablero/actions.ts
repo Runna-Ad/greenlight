@@ -266,19 +266,37 @@ export async function setAssignees(
 
   const db = supabaseAdmin();
 
-  // Sólo se limpian las filas que gestiona esta pantalla. Una asignación hecha
-  // por la vía antigua (con cuenta real) no es nuestra para borrarla.
-  const { error: delErr } = await db
+  // DIFF, no borrar-y-reinsertar: las filas que SIGUEN asignadas conservan su
+  // assigned_at (0034). Si borráramos todo y reinsertáramos, cada reasignación
+  // (agregar/quitar a una persona) resetearía la hora de asignación de TODOS a
+  // now() — y esa hora es justo lo que la Evaluación va a medir. Sólo tocamos lo
+  // que cambió. Se ignoran las filas de la vía antigua (member_id null): no son
+  // nuestras para borrarlas.
+  const deseado = new Set(memberIds);
+  const { data: actuales, error: readErr } = await db
     .from("idea_assignments")
-    .delete()
+    .select("member_id")
     .eq("idea_id", ideaId)
-    .not("member_id", "is", null);
-  if (delErr) return { ok: false, error: delErr.message };
+    .not("member_id", "is", null)
+    .returns<{ member_id: string }[]>();
+  if (readErr) return { ok: false, error: readErr.message };
+  const yaAsignados = new Set((actuales ?? []).map((r) => r.member_id));
 
-  if (memberIds.length) {
+  const quitar = [...yaAsignados].filter((id) => !deseado.has(id));
+  const agregar = memberIds.filter((id) => !yaAsignados.has(id));
+
+  if (quitar.length) {
+    const { error: delErr } = await db
+      .from("idea_assignments")
+      .delete()
+      .eq("idea_id", ideaId)
+      .in("member_id", quitar);
+    if (delErr) return { ok: false, error: delErr.message };
+  }
+  if (agregar.length) {
     const { error: insErr } = await db
       .from("idea_assignments")
-      .insert(memberIds.map((member_id) => ({ idea_id: ideaId, member_id })));
+      .insert(agregar.map((member_id) => ({ idea_id: ideaId, member_id })));
     if (insErr) return { ok: false, error: insErr.message };
   }
 

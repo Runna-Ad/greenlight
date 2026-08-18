@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Plus, Check } from "lucide-react";
 import { useCorrecciones } from "./contexto";
+import { SelectorTipoCambio } from "../selector-tipo-cambio";
+import { type CategoriaCambio } from "@/lib/tipos-cambio";
 import { estadoCampo, PIN_BG, type Correccion } from "@/lib/correcciones";
 
 /**
@@ -34,16 +36,23 @@ export function CampoCorrecciones({
   const ctx = useCorrecciones();
   const [componiendo, setComponiendo] = useState(false);
   const [texto, setTexto] = useState("");
+  const [categoria, setCategoria] = useState<CategoriaCambio | null>(null);
   if (!ctx || !ctx.esRevisor) return null;
 
   const estado = estadoCampo(cs);
   const hay = cs.length > 0;
 
   const fijar = () => {
-    if (!texto.trim()) return;
-    ctx.pedir({ tabla, filaId, campo, label: etiqueta }, texto.trim());
+    if (!texto.trim() || !categoria) return;
+    ctx.pedir({ tabla, filaId, campo, label: etiqueta, categoria }, texto.trim());
     setTexto("");
+    setCategoria(null);
     setComponiendo(false);
+  };
+  const cerrarCompositor = () => {
+    setComponiendo(false);
+    setTexto("");
+    setCategoria(null);
   };
 
   return (
@@ -80,18 +89,22 @@ export function CampoCorrecciones({
           <p className="mb-1.5 text-[11px] text-muted-foreground">
             Cambio para <b className="text-status-corrections">{etiqueta}</b>
           </p>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Tipo de cambio
+          </p>
+          <SelectorTipoCambio value={categoria} onChange={setCategoria} />
           <textarea
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
             rows={2}
             autoFocus
             placeholder="Describe el cambio que quieres para este campo…"
-            className="w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mt-2 w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <div className="mt-2 flex gap-2">
             <button
               type="button"
-              disabled={ctx.pendiente || !texto.trim()}
+              disabled={ctx.pendiente || !texto.trim() || !categoria}
               onClick={fijar}
               style={{ background: PIN_BG.open }}
               className="rounded-md px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-50"
@@ -100,7 +113,7 @@ export function CampoCorrecciones({
             </button>
             <button
               type="button"
-              onClick={() => setComponiendo(false)}
+              onClick={cerrarCompositor}
               className="rounded-md border border-border px-3 py-1 text-[12px] font-medium hover:bg-secondary"
             >
               Cancelar

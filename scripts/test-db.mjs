@@ -678,6 +678,17 @@ eq("arranca en ronda 1", Number(await scalar(`select ronda from produccion.comme
 eq("y NO mueve el estado (sigue en revisión)",
    await scalar(`select status::text from produccion.ideas where id=$1`, [flIdea]), "under_review");
 
+// 0034: la categoría del cambio (tipo de la rúbrica) se guarda; sin ella queda null
+const cCat = await scalar(
+  `select produccion.rpc_add_correction(p_idea_id=>$1, p_target_tabla=>'planos', p_target_fila=>$2,
+     p_target_campo=>'accion', p_target_label=>'Plano 1 · Acción', p_body=>'Falta acento',
+     p_actor_member=>$3, p_categoria=>'ortografia')`,
+  [flIdea, flPlano, mGalie]);
+eq("0034 · guarda la categoría del cambio",
+   await scalar(`select categoria from produccion.comments where id=$1`, [cCat]), "ortografia");
+eq("0034 · sin categoría queda null (cambio de campo entero / legacy)",
+   await scalar(`select categoria from produccion.comments where id=$1`, [c1]), null);
+
 // segunda corrección abierta → misma ronda
 const c2 = await scalar(
   `select produccion.rpc_add_correction($1,'planos',$2,'copy_in','Plano 1 · Copy in','Sube el copy',$3,null)`,

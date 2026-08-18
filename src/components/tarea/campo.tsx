@@ -8,6 +8,8 @@ import { guardarCampo, type Tabla } from "@/app/(app)/[cliente]/tareas/[id]/acti
 import { cn } from "@/lib/utils";
 import { useCorrecciones } from "./correcciones/contexto";
 import { CampoCorrecciones } from "./correcciones/campo-correcciones";
+import { SelectorTipoCambio, TagTipoCambio } from "./selector-tipo-cambio";
+import { type CategoriaCambio } from "@/lib/tipos-cambio";
 import {
   estadoCampo,
   keyCampo,
@@ -182,6 +184,7 @@ export function Campo({
   const [seleccion, setSeleccion] = useState<{ start: number; end: number; quote: string } | null>(null);
   const [componiendoSel, setComponiendoSel] = useState(false);
   const [textoSel, setTextoSel] = useState("");
+  const [categoriaSel, setCategoriaSel] = useState<CategoriaCambio | null>(null);
 
   const resaltados = ctx ? resaltadosEnTexto(valor, cs) : [];
   const hayResaltado = resaltados.length > 0;
@@ -264,12 +267,13 @@ export function Campo({
     if (mirrorRef.current && taRef.current) mirrorRef.current.scrollTop = taRef.current.scrollTop;
   };
   const fijarSeleccion = () => {
-    if (!ctx || !seleccion || !textoSel.trim()) return;
+    if (!ctx || !seleccion || !textoSel.trim() || !categoriaSel) return;
     ctx.pedir(
-      { tabla, filaId, campo, label: etiqueta, quote: seleccion.quote, start: seleccion.start, end: seleccion.end },
+      { tabla, filaId, campo, label: etiqueta, quote: seleccion.quote, start: seleccion.start, end: seleccion.end, categoria: categoriaSel },
       textoSel.trim(),
     );
     setTextoSel("");
+    setCategoriaSel(null);
     setComponiendoSel(false);
     setSeleccion(null);
   };
@@ -429,18 +433,22 @@ export function Campo({
           <p className="mb-1.5 text-[11px] text-muted-foreground">
             Cambio para <b className="text-status-corrections">&laquo;{seleccion.quote}&raquo;</b> en {etiqueta}
           </p>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Tipo de cambio
+          </p>
+          <SelectorTipoCambio value={categoriaSel} onChange={setCategoriaSel} />
           <textarea
             value={textoSel}
             onChange={(e) => setTextoSel(e.target.value)}
             rows={2}
             autoFocus
             placeholder="Describe el cambio que quieres para este texto…"
-            className="w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mt-2 w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <div className="mt-2 flex gap-2">
             <button
               type="button"
-              disabled={ctx?.pendiente || !textoSel.trim()}
+              disabled={ctx?.pendiente || !textoSel.trim() || !categoriaSel}
               onClick={fijarSeleccion}
               className="rounded-md bg-[color-mix(in_srgb,var(--status-corrections)_78%,#000)] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-50"
             >
@@ -448,7 +456,7 @@ export function Campo({
             </button>
             <button
               type="button"
-              onClick={() => { setComponiendoSel(false); setSeleccion(null); }}
+              onClick={() => { setComponiendoSel(false); setSeleccion(null); setCategoriaSel(null); }}
               className="rounded-md border border-border px-3 py-1 text-[12px] font-medium hover:bg-secondary"
             >
               Cancelar
@@ -484,13 +492,14 @@ export function Campo({
           >
             {cs.map((c) => (
               <div key={c.id} className="border-t border-border p-2.5 first:border-t-0">
-                <div className="mb-1 flex items-center gap-2">
+                <div className="mb-1 flex flex-wrap items-center gap-1.5">
                   <span
                     className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
                     style={{ background: PIN_BG[c.estado] }}
                   >
                     {ETIQUETA_ESTADO[c.estado]}
                   </span>
+                  <TagTipoCambio slug={c.categoria} />
                 </div>
                 {c.targetQuote && (
                   <p className="mb-1 truncate text-[11px] italic text-status-corrections" title={c.targetQuote}>

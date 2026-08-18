@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { dispatchPendingEmails } from "@/lib/notif-email";
 import { canMoveStatus, canOverrideStatus } from "@/lib/roles";
+import { esCategoria } from "@/lib/tipos-cambio";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 
@@ -29,6 +30,9 @@ export type CorreccionTarget = {
   quote?: string | null;
   start?: number | null;
   end?: number | null;
+  /** Tipo de cambio (rúbrica). OBLIGATORIO para un cambio interno — alimenta la
+   *  Evaluación. El lado del cliente no manda categoría. */
+  categoria?: string | null;
 };
 
 const TABLAS_VALIDAS = new Set(["planos", "estaticos", "ideas", "brief"]);
@@ -55,12 +59,18 @@ export async function agregarCorreccion(
   }
   if (!TABLAS_VALIDAS.has(target.tabla)) return { ok: false, error: "Destino inválido." };
   if (!body.trim()) return { ok: false, error: "Escribe qué hay que corregir." };
+  // El tipo de cambio es obligatorio para un cambio interno: es lo que puntúa la
+  // Evaluación. Sin categoría válida no se fija.
+  if (!esCategoria(target.categoria)) {
+    return { ok: false, error: "Elige el tipo de cambio." };
+  }
 
   const db = supabaseAdmin();
-  // Los params del ancla por selección se mandan SÓLO si hay quote. PostgREST
-  // resuelve por NOMBRE de argumento: una corrección de campo entero manda los 8
-  // args base y sigue funcionando contra la firma vieja (0028) O la nueva (0029)
-  // — así el path común no se rompe si el código se despliega antes de la migración.
+  // Los params del ancla por selección se mandan SÓLO si hay quote (PostgREST
+  // resuelve por NOMBRE de argumento). OJO: desde 0034 SIEMPRE mandamos
+  // p_categoria, así que este código EXIGE la firma de 0034 — la migración 0034
+  // debe aplicarse CON o ANTES del deploy de este código; si no, la RPC no existe
+  // y crear un cambio falla. Mismo acoplamiento que el `select categoria` de page.tsx.
   const params: Record<string, unknown> = {
     p_idea_id: ideaId,
     p_target_tabla: target.tabla,
@@ -70,6 +80,7 @@ export async function agregarCorreccion(
     p_body: body.trim(),
     p_actor_member: soy?.id ?? null,
     p_actor: await actorId(db),
+    p_categoria: target.categoria,
   };
   const quote = target.quote?.trim();
   if (quote) {

@@ -50,6 +50,8 @@ export type Correccion = {
   autor: string | null;
   ronda: number;
   estado: EstadoCorreccion;
+  /** Tipo de cambio (rúbrica). null en cambios de cliente / legacy sin etiqueta. */
+  categoria: string | null;
 };
 
 /** El estado de una fila de `comments` a partir de sus timestamps. */

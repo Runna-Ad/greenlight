@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Trash2, ChevronDown } from "lucide-react";
 import { useCorrecciones } from "./contexto";
+import { TagTipoCambio } from "../selector-tipo-cambio";
 import { keyCampo, porRonda, sinResolver, type Correccion, type EstadoCorreccion } from "@/lib/correcciones";
 import { cn } from "@/lib/utils";
 
@@ -107,12 +108,13 @@ export function PanelCorrecciones() {
                       className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--status-corrections)_50%,transparent)]"
                       onClick={() => verCampo(c)}
                     >
-                      <div className="mb-1 flex items-center gap-2">
+                      <div className="mb-1 flex flex-wrap items-center gap-1.5">
                         {c.targetLabel && (
                           <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-bold text-secondary-foreground">
                             {c.targetLabel}
                           </span>
                         )}
+                        <TagTipoCambio slug={c.categoria} />
                         <span
                           className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
                           style={{ background: PILL[c.estado] }}

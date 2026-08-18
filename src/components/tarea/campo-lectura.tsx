@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { Plus, X, Check, ArrowRight } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate } from "@floating-ui/react-dom";
 import { useCorrecciones } from "./correcciones/contexto";
+import { SelectorTipoCambio, TagTipoCambio } from "./selector-tipo-cambio";
+import { type CategoriaCambio } from "@/lib/tipos-cambio";
 import {
   resaltadosEnTexto,
   PIN_BG,
@@ -54,6 +56,7 @@ export function CampoLectura({
   const [sel, setSel] = useState<{ quote: string; start: number; end: number } | null>(null);
   const [componiendo, setComponiendo] = useState(false);
   const [texto, setTexto] = useState("");
+  const [categoria, setCategoria] = useState<CategoriaCambio | null>(null);
 
   // --- Tarjeta flotante en hover (reemplaza las cajas de antes) ---
   // `abierta` = id de la corrección cuya tarjeta se muestra. Un pequeño timer al
@@ -170,12 +173,13 @@ export function CampoLectura({
   const etiqueta = grupo ? `${grupo} · ${label}` : label;
 
   const fijar = () => {
-    if (!sel || !texto.trim()) return;
+    if (!sel || !texto.trim() || !categoria) return;
     ctx.pedir(
-      { tabla, filaId, campo, label: etiqueta, quote: sel.quote, start: sel.start, end: sel.end },
+      { tabla, filaId, campo, label: etiqueta, quote: sel.quote, start: sel.start, end: sel.end, categoria },
       texto.trim(),
     );
     setTexto("");
+    setCategoria(null);
     setComponiendo(false);
     setSel(null);
   };
@@ -255,18 +259,22 @@ export function CampoLectura({
             Cambio para{" "}
             <b className="text-status-corrections">&laquo;{sel.quote}&raquo;</b> en {etiqueta}
           </p>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Tipo de cambio
+          </p>
+          <SelectorTipoCambio value={categoria} onChange={setCategoria} />
           <textarea
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
             rows={2}
             autoFocus
             placeholder="Describe el cambio que quieres…"
-            className="w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mt-2 w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <div className="mt-2 flex gap-2">
             <button
               type="button"
-              disabled={ctx.pendiente || !texto.trim()}
+              disabled={ctx.pendiente || !texto.trim() || !categoria}
               onClick={fijar}
               style={{ background: PIN_BG.open }}
               className="rounded-md px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-50"
@@ -278,6 +286,7 @@ export function CampoLectura({
               onClick={() => {
                 setComponiendo(false);
                 setSel(null);
+                setCategoria(null);
               }}
               className="rounded-md border border-border px-3 py-1 text-[12px] font-medium hover:bg-background"
             >
@@ -307,12 +316,15 @@ export function CampoLectura({
             className="z-[60] w-72 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-3 shadow-lg transition-opacity"
           >
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span
-                className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
-                style={{ background: PIN_BG[corrAbierta.estado] }}
-              >
-                {ETIQUETA_ESTADO[corrAbierta.estado]}
-              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span
+                  className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
+                  style={{ background: PIN_BG[corrAbierta.estado] }}
+                >
+                  {ETIQUETA_ESTADO[corrAbierta.estado]}
+                </span>
+                <TagTipoCambio slug={corrAbierta.categoria} />
+              </div>
               <div className="flex items-center gap-1">
                 {corrAbierta.estado === "done" && (
                   <button

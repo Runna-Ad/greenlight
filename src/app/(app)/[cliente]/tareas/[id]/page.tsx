@@ -298,11 +298,12 @@ export default async function TareaPage({
     target_campo: string | null; target_label: string | null;
     target_quote: string | null; target_start: number | null; target_end: number | null;
     atendido_at: string | null; resolved_at: string | null; author_member_id: string | null;
+    categoria: string | null;
   };
   const { data: corrRows } = await db
     .from("comments")
     .select(
-      "id, body, ronda, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, atendido_at, resolved_at, author_member_id",
+      "id, body, ronda, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, atendido_at, resolved_at, author_member_id, categoria",
     )
     .eq("idea_id", idea.id)
     .eq("kind", "correction_request")
@@ -328,6 +329,7 @@ export default async function TareaPage({
     autor: r.author_member_id ? nombrePorId.get(r.author_member_id) ?? null : null,
     ronda: r.ronda ?? 1,
     estado: estadoDeTimestamps(r),
+    categoria: r.categoria,
   }));
   const abiertasN = correcciones.filter((c) => c.estado === "open").length;
 
