@@ -362,19 +362,25 @@ export default async function TareaPage({
           fuerza un remount con el estado fresco de la nueva tarea. */}
       <WorkspaceProvider key={idea.id} planosIniciales={planos} estaticoInicial={estatico}>
         <div className="space-y-4">
-          {/* ── SECCIÓN DE ARRIBA (Fase 2: contenedor sticky del menú superior) ── */}
+          {/* ── SECCIÓN DE ARRIBA: su menú (sub-header) se queda pegado ARRIBA
+                mientras se ve esta sección; al pasar el banner "Pegar guión"
+                (último hijo) se despega y toma el relevo el menú de abajo. Pega
+                a top-16 = debajo del topbar (h-16). El fondo sangra a los bordes
+                de main (-mx) para que el contenido no se asome al costado. ── */}
           <div className="space-y-4">
-            <SubHeaderTarea
-              cliente={cliente}
-              ideaId={idea.id}
-              status={idea.status}
-              ctx={ctx}
-              abiertas={abiertasN}
-              indice={posicion.indice}
-              total={posicion.total}
-              anterior={posicion.anterior}
-              siguiente={posicion.siguiente}
-            />
+            <div className="sticky top-16 z-20 -mx-4 bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6">
+              <SubHeaderTarea
+                cliente={cliente}
+                ideaId={idea.id}
+                status={idea.status}
+                ctx={ctx}
+                abiertas={abiertasN}
+                indice={posicion.indice}
+                total={posicion.total}
+                anterior={posicion.anterior}
+                siguiente={posicion.siguiente}
+              />
+            </div>
 
             {soloLectura && (
               <p className="flex items-center gap-1.5 rounded-md border border-border bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground">
@@ -434,7 +440,8 @@ export default async function TareaPage({
             <BannerPegarGuion ideaId={idea.id} esEstatico={esEstatico} soloLectura={soloLectura} />
           </div>
 
-          {/* ── SECCIÓN DEL GUIÓN (Fase 2: contenedor sticky del menú inferior) ── */}
+          {/* ── SECCIÓN DEL GUIÓN: su menú (barra inferior) se queda pegado ABAJO
+                mientras se ve esta sección. Es el relevo del menú de arriba. ── */}
           <div className="space-y-4">
             <DocumentoGuion
               ideaId={idea.id}
@@ -450,7 +457,9 @@ export default async function TareaPage({
               }}
             />
 
-            <BottomBarTarea esEstatico={esEstatico} />
+            <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6">
+              <BottomBarTarea esEstatico={esEstatico} />
+            </div>
           </div>
 
           {esEquipo && correcciones.length > 0 && (

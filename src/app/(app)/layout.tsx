@@ -40,7 +40,12 @@ export default async function AppLayout({
         <Topbar role={role} soy={soy} pool={pool} avisos={avisos} />
         <PreviewBanner role={role} />
         <SoyBanner soy={soy} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        {/* Sin overflow-y-auto: con la altura sin tope, main no hace scroll (lo
+            hace la ventana), y un overflow≠visible aquí ROMPERÍA position:sticky
+            de los menús internos (se anclarían a main, que no scrollea). Así el
+            contexto de scroll es la ventana y los sticky (sidebar, sub-header,
+            barra inferior) funcionan. */}
+        <main className="flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

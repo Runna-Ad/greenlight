@@ -190,7 +190,7 @@ function SidebarNav({
 /** Rail de escritorio (≥ md). Debajo de md el menú vive en <MobileNav>. */
 export function Sidebar({ role = DEFAULT_ROLE }: { role?: ViewRole }) {
   return (
-    <aside className="hidden md:flex w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground">
+    <aside className="sticky top-0 hidden h-dvh shrink-0 flex-col self-start bg-sidebar text-sidebar-foreground md:flex md:w-60">
       <SidebarNav role={role} />
     </aside>
   );
