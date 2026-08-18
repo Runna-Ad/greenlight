@@ -52,16 +52,19 @@ export function HeroTarea({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           {logoUrl ? (
+            // Alto fijo, ancho natural: un logo horizontal (p. ej. "DiDi Card")
+            // se ve a tamaño real en vez de aplastarse dentro de un cuadro. El
+            // max-w evita que un logo muy ancho domine la cabecera.
             <Image
               src={logoUrl}
               alt={marca ?? "Marca"}
-              width={40}
-              height={40}
-              className="size-10 rounded object-contain"
+              width={240}
+              height={48}
+              className="h-12 w-auto max-w-[220px] object-contain object-left"
               unoptimized
             />
           ) : (
-            <span className="flex size-10 items-center justify-center rounded bg-secondary text-xs font-bold text-secondary-foreground">
+            <span className="flex h-12 min-w-12 items-center justify-center rounded-lg bg-secondary px-3 text-sm font-bold text-secondary-foreground">
               {(marca ?? "·").slice(0, 2).toUpperCase()}
             </span>
           )}
