@@ -112,7 +112,7 @@ function SidebarNav({
   return (
     <>
       <div className="flex h-16 flex-col justify-center gap-1 px-5 border-b border-sidebar-border">
-        <Wordmark on="dark" className="text-[17px]" />
+        <Wordmark on="dark" className="text-[22px]" />
         <span className="flex items-center gap-1.5 pl-[15px] text-[10px] text-sidebar-foreground/45">
           by
           <Image
@@ -120,7 +120,7 @@ function SidebarNav({
             alt="Rünna"
             width={104}
             height={26}
-            className="h-[15px] w-auto opacity-90"
+            className="h-[16px] w-auto opacity-90"
             priority
           />
         </span>

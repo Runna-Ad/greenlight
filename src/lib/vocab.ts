@@ -27,6 +27,9 @@ export const PLATAFORMA_LABEL: Record<string, string> = {
 };
 export const GENERO = ["WOMANMAN", "WOMAN", "MAN", "N/A"];
 export const TAMANO = ["1:1", "16:9", "9:16", "4:5", "2736 x 1260"];
+// Buckets de duración (sugerencias). No limitan: se puede escribir cualquier
+// rango. Cada duración es una pastilla y genera su propio juego de archivos.
+export const DURACION = ["10-15s", "15-30s", "20-30s", "30-40s", "40-50s", "50-60s"];
 
 // ── Track-specific ──
 // Note: the Real tab carries TWO Tipo de Asset validations (rows 2–6 use the

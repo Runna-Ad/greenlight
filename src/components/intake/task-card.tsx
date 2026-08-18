@@ -8,6 +8,7 @@ import { ChipSelect } from "./chip-select";
 import { CopyFieldButton, MultiCopyButton, type PickCard } from "./copy-to-picker";
 import {
   ASIGNACION,
+  DURACION,
   ENTREGA,
   FORMATO,
   GENERO,
@@ -23,10 +24,10 @@ import { camposLlenos, combosDeTarjeta, nombresDeTarjeta, type TaskDraft } from 
 
 type ChipKey =
   | "entrega" | "asignacion" | "marca" | "plataforma"
-  | "tipoAsset" | "formato" | "tamano" | "genero";
+  | "tipoAsset" | "formato" | "tamano" | "genero" | "duracion";
 type TextKey =
   | "comentariosLeads" | "peloteo" | "concepto" | "sellingPoints"
-  | "referencias" | "duracion" | "numIdea" | "version" | "naming";
+  | "referencias" | "numIdea" | "version" | "naming";
 
 export function TaskCard({
   task,
@@ -183,16 +184,7 @@ export function TaskCard({
             {chip("tamano", "Tamaño", TAMANO, { multi: true, hint: "Puede ser más de uno" })}
             {chip("genero", "Género", GENERO)}
           </div>
-          <div className="max-w-xs">
-            <FieldHead label="Duración" copy={copyBtn("duracion", "Duración")} />
-            <input
-              value={task.duracion}
-              onChange={(e) => onText("duracion", e.target.value)}
-              placeholder={PLACEHOLDER.duracion}
-              autoComplete="off"
-              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
+          {chip("duracion", "Duración", DURACION, { multi: true, hint: "Cada duración genera su propio nombre de archivo" })}
 
           {/* Contenido */}
           <TextField label="Concepto" value={task.concepto} onChange={(v) => onText("concepto", v)} placeholder={PLACEHOLDER.concepto} copy={copyBtn("concepto", "Concepto")} />

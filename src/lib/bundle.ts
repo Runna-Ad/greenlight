@@ -17,7 +17,7 @@ export type BundleTask = {
   naming_base: string | null;
   concepto: string | null;
   tipo_asset: string | null;
-  duracion: string | null;
+  duracion: string[] | null;
   marca: string | null;
   plataformas: string[] | null;
   file_count: number;

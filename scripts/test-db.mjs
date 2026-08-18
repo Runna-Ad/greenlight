@@ -187,18 +187,19 @@ eq(
   "RECOMMENDRUMORS_9X16_25S_WOMAN_REAL_VIDEO_IDEAA1_FB_V2_MAR26_RN",
 );
 
-// unique render guard
+// unique render guard — la clave ahora incluye la duración (0031): misma
+// (idea, tamaño, plataforma, DURACIÓN, versión) choca.
 let dupBlocked = false;
 try {
   await db.exec(`
     insert into produccion.assets
-      (idea_id, brief_id, naming_kind, naming_base, tamano_code, plataforma_code, idea_code, mes_code, version)
+      (idea_id, brief_id, naming_kind, naming_base, tamano_code, plataforma_code, duracion_code, idea_code, mes_code, version)
     values ('00000000-0000-0000-0000-0000000000d1','00000000-0000-0000-0000-0000000000b1',
-            'real','RECOMMENDRUMORS','9:16','FB','A1','MAR26',2);`);
+            'real','RECOMMENDRUMORS','9:16','FB','25s','A1','MAR26',2);`);
 } catch {
   dupBlocked = true;
 }
-ok("duplicate render (idea+size+platform+version) blocked", dupBlocked);
+ok("duplicate render (idea+size+platform+duración+version) blocked", dupBlocked);
 
 // vocab code shape guard
 let vocabBlocked = false;
@@ -837,9 +838,9 @@ eq("se sembraron las 7 reglas",
 eq("las reglas de marca emparejan por slug, no por uuid",
    Number(await scalar(`select count(*) from produccion.reglas where scope='marca' and cond_marca_slug is not null`)), 2);
 
-// Una tarea de VIDEO de 10-40s en FB
+// Una tarea de VIDEO de 10-40s en FB (duracion ahora es text[]: una pastilla).
 await db.query(
-  `update produccion.ideas set tipo_asset='RP Video', plataformas='{FB,TT}', duracion='10-40s',
+  `update produccion.ideas set tipo_asset='RP Video', plataformas='{FB,TT}', duracion='{10-40s}',
           marca_id=(select id from produccion.marcas where slug='card')
     where id='00000000-0000-0000-0000-0000000000d1'`);
 const reglasDe = async (texto = null) =>
@@ -864,7 +865,7 @@ ok("y también con MSI",
 // EL CASO QUE IMPORTA: un estático multiplataforma recibe las DOS reglas
 // contradictorias. El diseño tiene que enseñarlas agrupadas, no elegir una.
 await db.query(
-  `update produccion.ideas set tipo_asset='Images', plataformas='{FB,GG,TT}', duracion='-'
+  `update produccion.ideas set tipo_asset='Images', plataformas='{FB,GG,TT}', duracion='{}'
     where id='00000000-0000-0000-0000-0000000000d1'`);
 const rEstatico = await reglasDe();
 ok("estático multiplataforma trae la de GG (sin CTA)", rEstatico.includes("GG_STATIC_SIN_CTA"));
@@ -952,14 +953,17 @@ const todasLasReglas = await q(`select codigo, titulo, mensaje, severidad, scope
   cond_media, cond_tipo_group, cond_plataformas, cond_marca_slug,
   cond_duracion_min_s, cond_texto_contiene, sort_order from produccion.reglas where activo`);
 
+// duracion ahora es text[]: cada escenario trae un arreglo de pastillas ([] = sin).
 const ESCENARIOS = [
-  { tipo: "RP Video",     plats: ["FB","TT"],      dur: "10-40s", marca: "card",      texto: "" },
-  { tipo: "RP Video",     plats: ["GG"],           dur: "15-30s", marca: "prestamos", texto: "" },
-  { tipo: "Images",       plats: ["FB","GG","TT"], dur: "-",      marca: "card",      texto: "" },
-  { tipo: "Images",       plats: ["GG"],           dur: "-",      marca: "card",      texto: "6% de CASHBACK" },
-  { tipo: "Normal Video", plats: ["TT"],           dur: "50-60s", marca: "card",      texto: "12 MSI" },
-  { tipo: "Copies",       plats: ["GG"],           dur: "-",      marca: "prestamos", texto: "" },
-  { tipo: "Podcast",      plats: [],               dur: "",       marca: null,        texto: "" },
+  { tipo: "RP Video",     plats: ["FB","TT"],      dur: ["10-40s"], marca: "card",      texto: "" },
+  { tipo: "RP Video",     plats: ["GG"],           dur: ["15-30s"], marca: "prestamos", texto: "" },
+  { tipo: "Images",       plats: ["FB","GG","TT"], dur: [],         marca: "card",      texto: "" },
+  { tipo: "Images",       plats: ["GG"],           dur: [],         marca: "card",      texto: "6% de CASHBACK" },
+  { tipo: "Normal Video", plats: ["TT"],           dur: ["50-60s"], marca: "card",      texto: "12 MSI" },
+  // Dos pastillas: la regla mira la MÁS larga (10-15s ignora el mínimo, 30-40s lo dispara).
+  { tipo: "Normal Video", plats: ["TT"],           dur: ["10-15s","30-40s"], marca: "card", texto: "" },
+  { tipo: "Copies",       plats: ["GG"],           dur: [],         marca: "prestamos", texto: "" },
+  { tipo: "Podcast",      plats: [],               dur: [],         marca: null,        texto: "" },
 ];
 let regMismatch = 0;
 for (const e of ESCENARIOS) {
@@ -982,54 +986,114 @@ for (const e of ESCENARIOS) {
 }
 ok(`TS reglasQueAplican() === SQL reglas_para_tarea() en ${ESCENARIOS.length} escenarios`, regMismatch === 0);
 
-// ── 0013: la Duración arrastra el nombre de los archivos ──
-// assets.duracion_code es una COPIA hecha al crear el archivo. Sin el trigger,
-// editar la Duración dejaría los nombres diciendo la duración vieja — y el
-// nombre es justo lo que el equipo copia literal al entregar.
-console.log("\n▶ Duración editable — propagación al nombre");
+// ── 0031: la Duración es un arreglo (pastillas); cada una es su propio archivo ──
+// Ya NO hay trigger que copie una duración única a los assets: el fan-out lo hacen
+// las rutas de creación (rpc_crear_brief / import) y, al editar, la acción de
+// servidor guardarDuraciones (que reconcilia los assets, no probable desde aquí).
+// Cada asset guarda SU duración; build_filename la mete en el nombre por-asset.
+console.log("\n▶ Duración multi (0031) — arreglo + índice por duración");
 await resetRole();
-await db.exec(`delete from produccion.assets where idea_id='00000000-0000-0000-0000-0000000000d1';
-  insert into produccion.assets
+
+eq("ideas.duracion es un arreglo (text[])",
+   await scalar(`select data_type from information_schema.columns
+                  where table_schema='produccion' and table_name='ideas' and column_name='duracion'`),
+   "ARRAY");
+ok("el trigger propagar_duracion ya no existe",
+   Number(await scalar(`select count(*)::int from pg_trigger where tgname='ideas_duracion_propaga'`)) === 0);
+
+// El índice único ahora incluye la duración: dos videos del mismo tamaño×plataforma
+// pero distinta duración conviven; repetir la misma choca.
+await db.exec(`delete from produccion.assets where idea_id='00000000-0000-0000-0000-0000000000d1'`);
+await db.exec(`insert into produccion.assets
     (idea_id, brief_id, naming_kind, naming_base, tamano_code, plataforma_code,
      duracion_code, genero_code, idea_code, mes_code)
   values ('00000000-0000-0000-0000-0000000000d1','00000000-0000-0000-0000-0000000000b1',
-          'real','DURTEST','9:16','FB','25s','WOMAN','A1','AUG26'),
+          'real','DURTEST','9:16','FB','15-30s','WOMAN','A1','AUG26'),
          ('00000000-0000-0000-0000-0000000000d1','00000000-0000-0000-0000-0000000000b1',
-          'static','DURTEST','1:1','GG',null,'WOMAN','A1','AUG26');`);
+          'real','DURTEST','9:16','FB','40-50s','WOMAN','A1','AUG26');`);
+eq("dos duraciones del mismo tamaño×plataforma conviven",
+   Number(await scalar(`select count(*)::int from produccion.assets
+                         where idea_id='00000000-0000-0000-0000-0000000000d1'`)), 2);
 
-const nombreDe = (kind) =>
+let duraDupChoco = false;
+try {
+  await db.exec(`insert into produccion.assets
+      (idea_id, brief_id, naming_kind, naming_base, tamano_code, plataforma_code,
+       duracion_code, genero_code, idea_code, mes_code)
+    values ('00000000-0000-0000-0000-0000000000d1','00000000-0000-0000-0000-0000000000b1',
+            'real','DURTEST','9:16','FB','40-50s','WOMAN','A1','AUG26');`);
+} catch { duraDupChoco = true; }
+ok("repetir (tamaño,plataforma,duración,versión) choca con el índice único", duraDupChoco);
+
+// Cada asset lleva SU duración en el nombre (build_filename por-asset).
+const nombrePorDur = (d) =>
   scalar(`select filename from produccion.assets
-           where idea_id='00000000-0000-0000-0000-0000000000d1' and naming_kind=$1`, [kind]);
+           where idea_id='00000000-0000-0000-0000-0000000000d1' and duracion_code=$1`, [d]);
+ok("el archivo de 15-30s lleva su token", (await nombrePorDur("15-30s")).includes("_15-30S_"));
+ok("el archivo de 40-50s lleva su token", (await nombrePorDur("40-50s")).includes("_40-50S_"));
 
-await db.exec(`update produccion.ideas set duracion='40-50s'
-                where id='00000000-0000-0000-0000-0000000000d1'`);
-ok("cambiar la Duración reescribe el nombre del video",
-   (await nombreDe("real")).includes("_40-50S_"));
-ok("el estático no gana token de duración",
-   !(await nombreDe("static")).includes("40-50S"));
+// Un asset sin duración (null) no gana token — igual que un estático.
+await db.exec(`delete from produccion.assets where idea_id='00000000-0000-0000-0000-0000000000d1'`);
+await db.exec(`insert into produccion.assets
+    (idea_id, brief_id, naming_kind, naming_base, tamano_code, plataforma_code,
+     duracion_code, genero_code, idea_code, mes_code)
+  values ('00000000-0000-0000-0000-0000000000d1','00000000-0000-0000-0000-0000000000b1',
+          'real','DURTEST','9:16','FB',null,'WOMAN','A1','AUG26');`);
+eq("sin duracion_code el nombre queda sin token",
+   await scalar(`select filename from produccion.assets
+                  where idea_id='00000000-0000-0000-0000-0000000000d1'`),
+   "DURTEST_9X16_WOMAN_REAL_VIDEO_IDEAA1_FB_V1_AUG26_RN");
 
-// '-' es como el sheet escribe "sin duración". Guardarlo tal cual metería un
-// token "-" al nombre, que es peor que no tener duración.
-await db.exec(`update produccion.ideas set duracion='-'
-                where id='00000000-0000-0000-0000-0000000000d1'`);
-eq("'-' se guarda como null en el archivo",
-   await scalar(`select duracion_code from produccion.assets
-                  where idea_id='00000000-0000-0000-0000-0000000000d1' and naming_kind='real'`),
-   null);
-eq("y el nombre queda sin token de duración",
-   await nombreDe("real"), "DURTEST_9X16_WOMAN_REAL_VIDEO_IDEAA1_FB_V1_AUG26_RN");
+// ── rpc_set_duraciones: editar pastillas reconciliando entregables (atómico) ──
+console.log("\n▶ rpc_set_duraciones — reconciliar por duración");
+const IDEA_D = "00000000-0000-0000-0000-0000000000d1";
+await db.exec(`delete from produccion.assets where idea_id='${IDEA_D}';
+  insert into produccion.assets
+    (idea_id, brief_id, naming_kind, naming_base, tamano_code, plataforma_code, duracion_code, genero_code, idea_code, mes_code)
+  values ('${IDEA_D}','00000000-0000-0000-0000-0000000000b1','real','DURTEST','9:16','FB',null,'WOMAN','A1','AUG26'),
+         ('${IDEA_D}','00000000-0000-0000-0000-0000000000b1','real','DURTEST','1:1','FB',null,'WOMAN','A1','AUG26');`);
 
-// Un nombre forzado a mano sigue mandando: la propagación no lo pisa.
-await db.exec(`update produccion.assets set filename_override='MANUAL_NAME_RN'
-                where idea_id='00000000-0000-0000-0000-0000000000d1' and naming_kind='real'`);
-await db.exec(`update produccion.ideas set duracion='15-30s'
-                where id='00000000-0000-0000-0000-0000000000d1'`);
-eq("un filename_override no lo pisa la propagación",
-   await nombreDe("real"), "MANUAL_NAME_RN");
+// Agregar dos pastillas: cada par (2) se despliega en 2 duraciones → 4 filas.
+await db.exec(`select produccion.rpc_set_duraciones('${IDEA_D}', array['15-30s','40s'])`);
+eq("agregar 2 duraciones → 2 pares × 2 = 4 assets",
+   Number(await scalar(`select count(*)::int from produccion.assets where idea_id='${IDEA_D}'`)), 4);
+eq("ideas.duracion guarda ambas pastillas en orden",
+   await scalar(`select array_to_string(duracion,',') from produccion.ideas where id='${IDEA_D}'`), "15-30s,40s");
+ok("las 4 filas nacen en 'todo'/versión 1 (no heredan estado del hermano)",
+   Number(await scalar(`select count(*)::int from produccion.assets where idea_id='${IDEA_D}' and status='todo' and version=1`)) === 4);
+eq("ya no queda la fila sin duración (null dejó de ser objetivo)",
+   Number(await scalar(`select count(*)::int from produccion.assets where idea_id='${IDEA_D}' and duracion_code is null`)), 0);
 
-ok("el cambio de duración queda en el historial",
-   Number(await scalar(`select count(*) from produccion.activity_log
-                         where verb='duracion_cambiada'`)) >= 3);
+// Quitar una pastilla VIRGEN → se borran sus filas.
+await db.exec(`select produccion.rpc_set_duraciones('${IDEA_D}', array['15-30s'])`);
+eq("quitar '40s' (virgen) → 2 assets",
+   Number(await scalar(`select count(*)::int from produccion.assets where idea_id='${IDEA_D}'`)), 2);
+
+// GUARDA: subir una entrega a 15-30s/9:16 (storage_path = archivo subido), luego
+// intentar quitar 15-30s → RECHAZO. (Se deja status='todo' para no chocar con el
+// trigger de transiciones; storage_path ya es señal de trabajo producido.)
+await db.exec(`update produccion.assets set storage_path='x/y.mp4', version=2
+                where idea_id='${IDEA_D}' and duracion_code='15-30s' and tamano_code='9:16'`);
+let duraGuard = false;
+try {
+  await db.exec(`select produccion.rpc_set_duraciones('${IDEA_D}', array['40s'])`);
+} catch { duraGuard = true; }
+ok("quitar una duración con entrega subida/en revisión se RECHAZA", duraGuard);
+eq("tras el rechazo NO se borró nada (siguen 2 assets)",
+   Number(await scalar(`select count(*)::int from produccion.assets where idea_id='${IDEA_D}'`)), 2);
+eq("tras el rechazo ideas.duracion no cambió (atómico)",
+   await scalar(`select array_to_string(duracion,',') from produccion.ideas where id='${IDEA_D}'`), "15-30s");
+
+// Estático: no se despliega por duración — sólo se guarda el arreglo.
+await db.exec(`delete from produccion.assets where idea_id='${IDEA_D}';
+  insert into produccion.assets
+    (idea_id, brief_id, naming_kind, naming_base, tamano_code, plataforma_code, duracion_code, genero_code, idea_code, mes_code)
+  values ('${IDEA_D}','00000000-0000-0000-0000-0000000000b1','static','DURTEST','1:1','GG',null,'WOMAN','A1','AUG26');`);
+await db.exec(`select produccion.rpc_set_duraciones('${IDEA_D}', array['15-30s','40s'])`);
+eq("estático: guarda el arreglo de pastillas",
+   await scalar(`select array_to_string(duracion,',') from produccion.ideas where id='${IDEA_D}'`), "15-30s,40s");
+eq("estático: NO se despliega por duración (sigue 1 asset)",
+   Number(await scalar(`select count(*)::int from produccion.assets where idea_id='${IDEA_D}'`)), 1);
 
 eq("TREND y NOTAS ya tienen dónde guardarse",
    Number(await scalar(`select count(*) from information_schema.columns
@@ -1301,16 +1365,20 @@ const okPayload = {
     {
       family_letter: "A", variant_number: 1, marca_id: MARCA_CARD,
       naming_base: "SPAPX", naming_kind: "real", tipo_asset: "RP Video",
-      plataformas: ["GG", "FB"], tamanos: ["9:16"], duracion: "25s",
+      plataformas: ["GG", "FB"], tamanos: ["9:16"], duracion: ["25s"],
       concepto: "Concepto A", member_ids: [MEM_VERO],
-      assets: [{ tamano_code: "9:16", plataforma_code: "GG" }, { tamano_code: "9:16", plataforma_code: "FB" }],
+      // duracion ahora es text[] y cada combo trae su duracion_code (lo despliega TS).
+      assets: [
+        { tamano_code: "9:16", plataforma_code: "GG", duracion_code: "25s" },
+        { tamano_code: "9:16", plataforma_code: "FB", duracion_code: "25s" },
+      ],
     },
     {
       family_letter: "A", variant_number: 2, marca_id: MARCA_CARD,
       naming_base: "SPAPX", naming_kind: "real", tipo_asset: "RP Video",
-      plataformas: ["GG"], tamanos: ["9:16"], duracion: "25s",
+      plataformas: ["GG"], tamanos: ["9:16"], duracion: ["25s"],
       concepto: "Concepto A2", member_ids: [],
-      assets: [{ tamano_code: "9:16", plataforma_code: "GG" }],
+      assets: [{ tamano_code: "9:16", plataforma_code: "GG", duracion_code: "25s" }],
     },
     {
       family_letter: "B", variant_number: 1, marca_id: MARCA_CARD,
@@ -1354,6 +1422,31 @@ eq("nada quedó a medias (rollback del brief entero)", await scalar(`select coun
 // code único: reusar el mismo code sufija en vez de chocar
 const dupCode = await callCrear({ ...okPayload, tasks: [okPayload.tasks[2]] });
 eq("code duplicado se sufija", await scalar(`select code from produccion.briefs where id=$1`, [dupCode.brief_id]), "DIDI-CREARTEST-REAL-2");
+
+// ── 0031: fan-out por duración en el RPC — dos pastillas → dos archivos ──
+// Una tarea de un solo tamaño×plataforma pero DOS duraciones crea DOS assets,
+// cada uno con su duracion_code y su propio nombre (TS despliega los combos).
+const fanOut = await callCrear({
+  ...okPayload,
+  code: "DIDI-FANOUT-REAL",
+  tasks: [{
+    family_letter: "A", variant_number: 1, marca_id: MARCA_CARD,
+    naming_base: "SPAPX", naming_kind: "real", tipo_asset: "RP Video",
+    plataformas: ["GG"], tamanos: ["9:16"], duracion: ["15-30s", "40s"],
+    concepto: "Fan-out", member_ids: [],
+    assets: [
+      { tamano_code: "9:16", plataforma_code: "GG", duracion_code: "15-30s" },
+      { tamano_code: "9:16", plataforma_code: "GG", duracion_code: "40s" },
+    ],
+  }],
+});
+eq("fan-out: 2 duraciones → 2 assets", fanOut.created_assets, 2);
+eq("la idea guarda ambas pastillas (text[])",
+   await scalar(`select array_to_string(duracion,',') from produccion.ideas where brief_id=$1`, [fanOut.brief_id]),
+   "15-30s,40s");
+eq("los dos archivos difieren sólo por la duración",
+   await scalar(`select string_agg(filename, '|' order by duracion_code) from produccion.assets where brief_id=$1`, [fanOut.brief_id]),
+   "SPAPX_9X16_15-30S_REAL_VIDEO_IDEAA1_GG_V1_AUG26_RN|SPAPX_9X16_40S_REAL_VIDEO_IDEAA1_GG_V1_AUG26_RN");
 
 // ── rpc_notificar_brief: nuevo brief avisa a cada especialista con su conteo ──
 console.log("\n▶ rpc_notificar_brief — nuevo brief avisa a especialistas");

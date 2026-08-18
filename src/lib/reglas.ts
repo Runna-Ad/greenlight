@@ -29,7 +29,7 @@ export type Regla = {
 export type ContextoTarea = {
   tipoAsset: string | null;
   plataformas: string[];
-  duracion: string | null;
+  duracion: string[];
   marcaSlug: string | null;
   /** Lo que la persona lleva escrito, para las reglas que miran contenido. */
   texto?: string;
@@ -53,8 +53,9 @@ function mediaDe(tipo: string | null): "video" | "static" {
 export function reglasQueAplican(reglas: Regla[], ctx: ContextoTarea): Regla[] {
   const media = mediaDe(ctx.tipoAsset);
   const grupo = grupoDe(ctx.tipoAsset);
-  const rango = parseDuracion(ctx.duracion);
-  const durS = rango?.max ?? 0;
+  // La duración es un arreglo de pastillas; la regla mira la MÁS larga (espejo
+  // del max(...) en reglas_para_tarea). Sin pastillas → 0.
+  const durS = Math.max(0, ...ctx.duracion.map((d) => parseDuracion(d)?.max ?? 0));
   const texto = (ctx.texto ?? "").toUpperCase();
 
   return reglas

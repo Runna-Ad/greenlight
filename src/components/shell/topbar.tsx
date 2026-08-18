@@ -1,13 +1,11 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DEFAULT_ROLE, type ViewRole } from "@/lib/roles";
 import type { Soy } from "@/lib/soy";
 import { type PoolMember } from "./soy-switch";
 import { NotificationsBell } from "./notifications-bell";
-import { Wordmark } from "./wordmark";
 import { MobileNav } from "./sidebar";
 
 export function Topbar({
@@ -26,18 +24,16 @@ export function Topbar({
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground shadow-sm md:px-6">
       <MobileNav role={role} soy={soy} pool={pool} />
+      {/* La marca vive UNA sola vez, en el sidebar. Aquí el topbar lleva el
+          contexto: el título de la página, o el saludo personalizado
+          "Hola, {nombre}" (de "¿Quién eres?") — nunca el logo repetido. */}
       {title ? (
-        <h1 className="text-base font-semibold text-white font-[family-name:var(--font-poppins)]">
+        <h1 className="truncate text-base font-semibold text-white font-[family-name:var(--font-poppins)]">
           {title}
         </h1>
-      ) : (
-        <Wordmark on="dark" className="text-[15px]" />
-      )}
-      {/* Saludo personalizado, como en los mockups: "Hola, {nombre}" (viene de
-          "¿Quién eres?"). Se oculta en móvil para no apretar el topbar. */}
-      {soy && (
-        <span className="hidden text-lg font-bold text-white sm:inline">Hola, {soy.name}</span>
-      )}
+      ) : soy ? (
+        <span className="truncate text-lg font-bold text-white">Hola, {soy.name}</span>
+      ) : null}
 
       <div className="ml-auto flex items-center gap-2">
         <div className="relative hidden sm:block">

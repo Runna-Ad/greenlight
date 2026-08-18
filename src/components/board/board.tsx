@@ -50,7 +50,7 @@ export type Task = {
   concepto: string | null;
   tipo_asset: string | null;
   formato_code: string | null;
-  duracion: string | null;
+  duracion: string[] | null;
   tamanos: string[] | null;
   plataformas: string[] | null;
   marca: string | null;
@@ -511,11 +511,14 @@ function CardBody({
             {task.formato_code}
           </span>
         )}
-        {task.duracion && task.duracion !== "-" && (
-          <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-secondary-foreground">
-            {task.duracion}
+        {task.duracion?.map((d) => (
+          <span
+            key={d}
+            className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-secondary-foreground"
+          >
+            {d}
           </span>
-        )}
+        ))}
       </div>
 
       {/* Sin botones de flujo aquí: en el tablero el trabajo se empuja

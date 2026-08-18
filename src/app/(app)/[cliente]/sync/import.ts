@@ -221,7 +221,9 @@ export async function importRows(
           mes_code: mesToken || null,
           plataformas: list(v("Plataforma")),
           tamanos: list(v("Tamaño")).map(cleanSize),
-          duracion: v("Duración") || null,
+          // duracion ahora es text[]: cada duración es una pastilla. La celda del
+          // sheet puede traer varias separadas por coma ("15-30s, 40s").
+          duracion: list(v("Duración")),
           tipo_code: tipo || null,
           tipo_asset: tipo || null,
           entrega_num: v("# Entrega") || null,
@@ -258,25 +260,34 @@ export async function importRows(
       const sizes = list(v("Tamaño")).map(cleanSize).filter(Boolean);
       const plats = list(v("Plataforma"));
       const ideaToken = v("# Idea") || idea.code || letter;
+      // Fan-out por duración: cada duración es su propio archivo (tamaño × plat ×
+      // duración). Los estáticos no duran → una sola fila por tamaño×plat
+      // (duracion_code null). Un video sin duración → también una fila (null).
+      // Dedupe: una celda sucia ("15-30s, 15-30s") no debe crear dos filas
+      // idénticas → chocarían con el índice único y tumbarían TODA la fila.
+      const durs = [...new Set(list(v("Duración")))];
+      const durCodes = namingKind === "static" ? [null] : durs.length ? durs : [null];
       const assetRows = [];
       for (const size of generatesFiles(tipo) ? sizes : []) {
         for (const plat of plats) {
-          assetRows.push({
-            idea_id: idea.id,
-            brief_id: briefId,
-            track,
-            naming_kind: namingKind,
-            naming_base: v("Naming") || "SINNAMING",
-            tamano_code: size,
-            plataforma_code: plat,
-            duracion_code: namingKind === "static" ? null : v("Duración") || null,
-            genero_code: labelToCode(V, "genero", track, v("Género")) || null,
-            formato_code: labelToCode(V, "formato", track, v("Formato")) || null,
-            idea_code: ideaToken,     // verbatim from the sheet, so filenames match
-            mes_code: mesToken || "SINMES",
-            version: 1,
-            status: "todo",
-          });
+          for (const dur of durCodes) {
+            assetRows.push({
+              idea_id: idea.id,
+              brief_id: briefId,
+              track,
+              naming_kind: namingKind,
+              naming_base: v("Naming") || "SINNAMING",
+              tamano_code: size,
+              plataforma_code: plat,
+              duracion_code: dur,
+              genero_code: labelToCode(V, "genero", track, v("Género")) || null,
+              formato_code: labelToCode(V, "formato", track, v("Formato")) || null,
+              idea_code: ideaToken,     // verbatim from the sheet, so filenames match
+              mes_code: mesToken || "SINMES",
+              version: 1,
+              status: "todo",
+            });
+          }
         }
       }
       if (assetRows.length) {

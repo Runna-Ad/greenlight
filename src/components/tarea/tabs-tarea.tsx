@@ -12,7 +12,7 @@ type DetallesProps = {
   tipoAsset: string | null;
   plataformas: string[];
   tamanos: string[];
-  duracion: string | null;
+  duracion: string[];
   concepto: string | null;
   trend: string | null;
 };

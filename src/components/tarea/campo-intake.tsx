@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import { Indicador, PanelConflicto, useAutoguardado } from "./campo";
 
 type CampoIdea =
-  | "duracion"
   | "trend"
   | "notas"
   | "entrega_url"

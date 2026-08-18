@@ -87,7 +87,7 @@ export type TaskDraft = {
   tipoAsset: string[]; // single
   formato: string[]; // single
   tamano: string[];
-  duracion: string;
+  duracion: string[]; // pastillas de duración (10-15, 20-30…); cada una es un juego de archivos
   numIdea: string; // # Idea, ej. "A1"
   version: string; // "V1"
   genero: string[]; // single
@@ -124,7 +124,7 @@ export function draftToSheetRow(t: TaskDraft): SheetRow {
     "Selling Points": t.sellingPoints,
     Referencias: t.referencias,
     Tamaño: t.tamano.join(", "),
-    Duración: t.duracion,
+    Duración: t.duracion.join(", "),
     "# Idea": t.numIdea,
     Versión: t.version,
     Género: first(t.genero),
@@ -171,13 +171,16 @@ export function idsIdeaRepetida(drafts: TaskDraft[]): Set<string> {
   return dup;
 }
 
-// ── Cálculo de entregables (tamaño × plataforma válidos), reusado en preview y payload ──
-export type AssetCombo = { tamano_code: string; plataforma_code: string };
+// ── Cálculo de entregables (tamaño × plataforma × duración), reusado en preview y payload ──
+export type AssetCombo = { tamano_code: string; plataforma_code: string; duracion_code: string };
 
 /**
- * Los combos válidos tamaño×plataforma de una tarjeta. Los Copies (que no
- * generan archivos) devuelven []. WYSIWYG: esto alimenta el conteo del preview
- * Y las filas de assets que crea el RPC — nunca pueden discrepar.
+ * Los combos válidos de una tarjeta: tamaño × plataforma × DURACIÓN. Cada
+ * duración (pastilla) genera su propio juego de archivos. Los estáticos no duran
+ * → una sola "duración" vacía. Un video sin duración también usa la vacía (el
+ * token se omite del nombre, como antes con "-"). Los Copies (que no generan
+ * archivos) devuelven []. WYSIWYG: esto alimenta el conteo del preview Y las
+ * filas de assets que crea el RPC — nunca pueden discrepar.
  */
 export function combosDeTarjeta(t: TaskDraft): AssetCombo[] {
   const tipo = first(t.tipoAsset);
@@ -186,10 +189,17 @@ export function combosDeTarjeta(t: TaskDraft): AssetCombo[] {
   if (tipo === "Copies") return [];
   const kind = namingKindForTipo(tipo);
   const media = kind === "static" ? "static" : "video";
+  // Dedupe: dos pastillas iguales generarían dos combos idénticos (mismo nombre
+  // de archivo). El intake ya lo evita, pero se blinda aquí también.
+  const cleanDurs = [...new Set(t.duracion.map((d) => d.trim()).filter(Boolean))];
+  const durs = media === "static" ? [""] : cleanDurs.length ? cleanDurs : [""];
   const out: AssetCombo[] = [];
   for (const size of t.tamano.map(cleanSize).filter(Boolean)) {
     for (const plat of t.plataforma) {
-      if (isAllowed(media, size, plat)) out.push({ tamano_code: size, plataforma_code: plat });
+      if (!isAllowed(media, size, plat)) continue;
+      for (const dur of durs) {
+        out.push({ tamano_code: size, plataforma_code: plat, duracion_code: dur });
+      }
     }
   }
   return out;
@@ -207,7 +217,7 @@ export function nombresDeTarjeta(t: TaskDraft, mes: string): string[] {
       kind,
       base: t.naming,
       tamano: c.tamano_code,
-      duracion: t.duracion,
+      duracion: c.duracion_code,
       genero: first(t.genero),
       formato: first(t.formato),
       idea: t.numIdea,
@@ -231,7 +241,7 @@ export type TaskPayload = {
   formato_code: string | null;
   plataformas: string[];
   tamanos: string[];
-  duracion: string | null;
+  duracion: string[];
   tipo_code: string | null;
   tipo_asset: string | null;
   entrega_num: string | null;
@@ -272,7 +282,7 @@ export function construirTarea(t: TaskDraft, track: Track, r: Resuelto): TaskPay
     formato_code: labelToCode(r.vocab, "formato", track, first(t.formato)) || null,
     plataformas: t.plataforma,
     tamanos: t.tamano.map(cleanSize).filter(Boolean),
-    duracion: nn(t.duracion),
+    duracion: t.duracion.map((d) => d.trim()).filter(Boolean),
     tipo_code: nn(tipo),
     tipo_asset: nn(tipo),
     entrega_num: nn(first(t.entrega)),
@@ -337,7 +347,7 @@ export function tarjetaEnBlanco(id: string): TaskDraft {
     tipoAsset: [],
     formato: [],
     tamano: [],
-    duracion: "",
+    duracion: [],
     numIdea: "",
     version: "V1",
     genero: [],

@@ -136,6 +136,7 @@ export type Idea = {
   formato_code: string | null;
   mes_code: string | null;
   plataformas: string[];
+  duracion: string[];
   tipo_code: string | null;
   topico: string | null;
   concepto: string | null;

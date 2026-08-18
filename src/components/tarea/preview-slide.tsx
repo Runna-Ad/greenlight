@@ -34,7 +34,7 @@ export type CabeceraVista = {
   tipoAsset: string | null;
   plataformas: string[];
   tamanos: string[];
-  duracion: string | null;
+  duracion: string[];
   marca: string | null;
   formato: string | null;
   status: AssetStatus;
@@ -109,7 +109,7 @@ export function PreviewSlide({
         </div>
         <div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-[9px]" style={{ backgroundColor: `color-mix(in srgb, ${tinte} 12%, white)` }}>
           <Dato titulo="Formatos" valor={cabecera.tamanos.join(" · ") || "—"} />
-          <Dato titulo="Duración" valor={cabecera.duracion || "—"} />
+          <Dato titulo="Duración" valor={cabecera.duracion.join(" · ") || "—"} />
           <Dato titulo="Marca" valor={cabecera.marca || "—"} />
           <Dato titulo="Formato" valor={cabecera.formato || "—"} />
           <span className="ml-auto rounded-full bg-white px-2 py-0.5 font-semibold uppercase tracking-wide">

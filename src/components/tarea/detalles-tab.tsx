@@ -4,6 +4,7 @@ import { contentType, canales } from "@/lib/iconos";
 import { varianteGuion } from "@/lib/plantilla";
 import { Pill } from "@/components/ui/pill";
 import { CampoIntake } from "./campo-intake";
+import { CampoDuraciones } from "./campo-duraciones";
 import { BotonReferencia } from "./boton-referencia";
 import { useWorkspace } from "./workspace-provider";
 
@@ -29,7 +30,7 @@ export function DetallesTab({
   tipoAsset: string | null;
   plataformas: string[];
   tamanos: string[];
-  duracion: string | null;
+  duracion: string[];
   concepto: string | null;
   trend: string | null;
   esEstatico: boolean;
@@ -87,21 +88,11 @@ export function DetallesTab({
           )}
         </Grupo>
 
-        {/* Duraciones — Fase 1: campo único (como hoy). Fase 4 lo convierte en
-            pastillas editables que se despliegan a los nombres de archivo. */}
+        {/* Duraciones — pastillas editables; cada una despliega su propio juego
+            de nombres de archivo (tamaño × plataforma × duración). */}
         {!esEstatico && (
           <Grupo titulo="Duraciones">
-            <CampoIntake
-              ideaId={ideaId}
-              campo="duracion"
-              label=""
-              valorInicial={duracion && duracion !== "-" ? duracion : null}
-              placeholder="15-30s"
-              ancho="w-28"
-              caja
-              refrescar
-              soloLectura={lectura}
-            />
+            <CampoDuraciones ideaId={ideaId} valorInicial={duracion} soloLectura={lectura} />
           </Grupo>
         )}
       </div>

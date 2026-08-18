@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 type Idea = {
   id: string; code: string | null; status: AssetStatus; track: string;
   naming_base: string | null; concepto: string | null; tipo_asset: string | null;
-  formato_code: string | null; duracion: string | null; tamanos: string[] | null;
+  formato_code: string | null; duracion: string[] | null; tamanos: string[] | null;
   plataformas: string[] | null; marca_id: string | null; brief_id: string;
   entrega_num: string | null; entrega_final: string | null; entrega_url: string | null;
   trend: string | null; notas: string | null; legales_libres: string | null; nota_guion: string | null;
@@ -411,7 +411,7 @@ export default async function TareaPage({
               tipoAsset: idea.tipo_asset,
               plataformas: idea.plataformas ?? [],
               tamanos: idea.tamanos ?? [],
-              duracion: idea.duracion,
+              duracion: idea.duracion ?? [],
               concepto: idea.concepto,
               trend: idea.trend,
             }}

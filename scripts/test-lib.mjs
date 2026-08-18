@@ -4,7 +4,7 @@ import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.t
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
 import { actionsFor, waitingLabel } from "../src/lib/task-actions.ts";
 import { plantillaPara, readTimeS, parseDuracion, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
-import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
+import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 
 let pass = 0,
@@ -347,10 +347,35 @@ eq("sin repetidos → set vacío", idsIdeaRepetida([A1, A2, B1]).size, 0);
 // combosDeTarjeta — WYSIWYG del preview y de los assets
 const video = draft({ tipoAsset: ["RP Video"], tamano: ["9:16", "1:1"], plataforma: ["GG", "FB"] });
 eq("video 2 tamaños × 2 plataformas válidas → 4 combos", combosDeTarjeta(video).length, 4);
+eq("video sin duración → combo con duracion_code vacío", combosDeTarjeta(video)[0].duracion_code, "");
 const copies = draft({ tipoAsset: ["Copies"], tamano: ["9:16"], plataforma: ["GG"] });
 eq("Copies no genera archivos → 0 combos", combosDeTarjeta(copies).length, 0);
 const staticBad = draft({ tipoAsset: ["Images"], tamano: ["4:5"], plataforma: ["TT"] });
 eq("estático 4:5×TT no es válido → 0 combos", combosDeTarjeta(staticBad).length, 0);
+
+// Fan-out por duración: cada pastilla multiplica los entregables (tamaño × plat × dur).
+const videoDur = draft({
+  tipoAsset: ["RP Video"], tamano: ["9:16", "1:1"], plataforma: ["GG", "FB"],
+  duracion: ["15-30s", "40s"],
+});
+eq("video 2×2 × 2 duraciones → 8 combos", combosDeTarjeta(videoDur).length, 8);
+ok(
+  "cada combo lleva su duracion_code",
+  combosDeTarjeta(videoDur).filter((c) => c.duracion_code === "40s").length === 4 &&
+    combosDeTarjeta(videoDur).filter((c) => c.duracion_code === "15-30s").length === 4,
+);
+// El estático NO se despliega por duración (una imagen no dura). EC es una
+// plataforma abierta (sin regla de tamaño), así el combo existe sí o sí.
+const staticDur = draft({
+  tipoAsset: ["Images"], tamano: ["9:16"], plataforma: ["EC"], duracion: ["15-30s", "40s"],
+});
+eq("estático ignora duraciones → 1 combo", combosDeTarjeta(staticDur).length, 1);
+eq("estático → duracion_code vacío", combosDeTarjeta(staticDur)[0].duracion_code, "");
+// nombresDeTarjeta despliega un nombre por combo, y la duración entra en el token.
+const nombres = nombresDeTarjeta(videoDur, "AUG");
+eq("fan-out → 8 nombres", nombres.length, 8);
+ok("un nombre lleva el token 40S", nombres.some((n) => n.includes("_40S_")));
+ok("un nombre lleva el token 15-30S", nombres.some((n) => n.includes("_15-30S_")));
 
 // faltantesDraft — mismo gate que el import
 ok("draft en blanco falta obligatorios", faltantesDraft(draft()).length > 0);
@@ -368,7 +393,7 @@ const resuelto = {
 };
 const src = draft({
   numIdea: "A3", naming: "SPAPX", tipoAsset: ["Normal Video"], formato: ["Stock"],
-  marca: ["Card"], asignacion: ["Vero"], tamano: ["9:16"], plataforma: ["TT"], duracion: "30s",
+  marca: ["Card"], asignacion: ["Vero"], tamano: ["9:16"], plataforma: ["TT"], duracion: ["30s"],
 });
 const payload = construirTarea(src, "normal", resuelto);
 eq("construirTarea → letra A", payload.family_letter, "A");

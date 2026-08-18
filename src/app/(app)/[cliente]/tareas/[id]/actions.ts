@@ -43,17 +43,15 @@ export type GuardarResultado =
 
 /**
  * Los campos de la CABECERA que se editan (no del cuerpo). Whitelist aparte
- * porque viven en `ideas`, no en la tabla de la plantilla.
- *
- * `duracion` está aquí a propósito y `tamanos`/`plataformas` no: cambiar la
- * duración reescribe un token del nombre; cambiar los tamaños crearía o
- * borraría archivos, que es una operación estructural, no un campo de texto.
+ * porque viven en `ideas`, no en la tabla de la plantilla. Todos son texto
+ * suelto: `tamanos`/`plataformas`/`duracion` NO están porque cambiarlos crea o
+ * borra archivos (operación estructural). `duracion` se edita con las pastillas
+ * de `guardarDuraciones`, que reconcilia los assets.
  *
  * `url: true` valida el esquema http/https en el servidor: entrega_url se pinta
  * como href, así que un `javascript:…` guardado se volvería clicable.
  */
 const CAMPOS_INTAKE: Record<string, { url?: boolean }> = {
-  duracion: {},
   trend: {},
   notas: {},
   entrega_url: { url: true },
@@ -73,11 +71,8 @@ export type IntakeResultado =
 
 /**
  * Guarda un campo de la cabecera, con el mismo compare-and-set del cuerpo.
- *
- * Al cambiar la Duración devuelve los nombres YA recalculados por la base
- * (trigger `ideas_duracion_propaga` → `assets_filename_biu`). Se devuelven en
- * vez de recalcularlos aquí para que la pantalla no pueda enseñar un nombre que
- * la base no tiene: el nombre es lo que el equipo copia literal al entregar.
+ * (La duración ya no pasa por aquí: son pastillas y las reconcilia
+ * `guardarDuraciones`, que devuelve los nombres recalculados por la base.)
  */
 export async function guardarIntake(
   ideaId: string,
@@ -127,16 +122,51 @@ export async function guardarIntake(
     if (v !== limpio) return { ok: false, conflicto: true, valorActual: v };
   }
 
-  if (campo !== "duracion") return { ok: true };
+  return { ok: true };
+}
 
+/**
+ * Guarda las DURACIONES (pastillas) de una tarea. La reconciliación de los
+ * entregables (agregar filas por duración nueva, quitar las de las duraciones
+ * borradas) ocurre ATÓMICAMENTE en `rpc_set_duraciones` — una sola transacción,
+ * con una guarda dura que ABORTA si se intenta quitar una duración cuya entrega
+ * ya se subió o está en revisión (nunca destruye trabajo producido ni su
+ * historial). Aquí sólo va la puerta de rol/estado; el resto lo hace la base.
+ * Devuelve los nombres YA recalculados para que la pantalla no muestre un nombre
+ * que la base no tiene.
+ */
+export async function guardarDuraciones(
+  ideaId: string,
+  duraciones: string[],
+): Promise<{ ok: true; filenames: string[] } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const role = await getViewAs();
+  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+
+  const db = supabaseAdmin();
+  const { data: idea } = await db
+    .from("ideas").select("status").eq("id", ideaId).maybeSingle();
+  if (!idea) return { ok: false, error: "La tarea ya no existe." };
+  const status = (idea as { status: AssetStatus }).status;
+  if (ESTADOS_CERRADOS.includes(status) && !canOverrideStatus(role)) {
+    return { ok: false, error: "Esta tarea ya está cerrada. Pídele a un lead que la reabra." };
+  }
+
+  const { error } = await db.rpc("rpc_set_duraciones", {
+    p_idea_id: ideaId,
+    p_duraciones: duraciones,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   const { data: archivos } = await db
     .from("assets")
     .select("filename")
     .eq("idea_id", ideaId)
     .order("tamano_code")
     .order("plataforma_code")
+    .order("duracion_code")
     .returns<{ filename: string | null }[]>();
-
   return { ok: true, filenames: (archivos ?? []).map((a) => a.filename).filter(Boolean) as string[] };
 }
 
