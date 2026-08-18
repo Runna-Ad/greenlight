@@ -399,13 +399,15 @@ export function Campo({
           className={taClass}
         />
 
-        {/* Al resaltar texto (sólo revisor): "Pedir cambio aquí" anclado a la frase. */}
+        {/* Al resaltar texto (sólo revisor): "Pedir cambio aquí" anclado a la frase.
+            Flota ARRIBA del campo (bottom-full), alineado a la derecha, para NO
+            taparle el texto — antes salía encima de la primera línea. */}
         {seleccion && puedeSeleccionar && !componiendoSel && (
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => { setComponiendoSel(true); setTextoSel(""); }}
-            className="absolute left-1.5 top-1.5 z-30 inline-flex items-center gap-1 rounded-full border border-status-corrections/50 bg-card px-2 py-0.5 text-[11px] font-bold text-[color-mix(in_srgb,var(--status-corrections)_72%,#000)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--status-corrections)_80%,#000)] hover:text-white"
+            className="absolute bottom-full right-0 z-30 mb-1 inline-flex items-center gap-1 rounded-full border border-status-corrections/50 bg-card px-2 py-0.5 text-[11px] font-bold text-[color-mix(in_srgb,var(--status-corrections)_72%,#000)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--status-corrections)_80%,#000)] hover:text-white"
           >
             <Plus className="size-3" /> Pedir cambio aquí
           </button>
