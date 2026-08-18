@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, RefreshCw, Check } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import type { AssetStatus } from "@/lib/brand";
 import type { TaskContext } from "@/lib/task-actions";
 import { canOverrideStatus } from "@/lib/roles";
@@ -58,7 +59,7 @@ export function SubHeaderTarea({
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         {verCliente && !canOverrideStatus(ctx.role) ? (
-          <BotonesClientePreview />
+          <BotonesClientePreview abiertas={abiertas} />
         ) : (
           <AccionesTarea
             ideaId={ideaId}
@@ -81,23 +82,32 @@ export function SubHeaderTarea({
 }
 
 /**
- * Los botones de revisión del cliente, SÓLO como vista previa. No hacen nada
- * (las acciones reales del cliente son un build posterior — el portal). Se
- * muestran para que la agencia vea, en "Vista cliente", lo que tendrá el
- * cliente al revisar.
+ * El botón de revisión del cliente, SÓLO como vista previa (las acciones reales
+ * del cliente son un build posterior — el portal). Es UN botón que cambia, como
+ * el flujo real: "Aprobar" por defecto, y si hay cambios pedidos (correcciones
+ * abiertas) se convierte en "Pedir cambios" — nunca los dos a la vez (Pedro).
  */
-function BotonesClientePreview() {
+function BotonesClientePreview({ abiertas }: { abiertas: number }) {
+  const hayCambios = abiertas > 0;
   return (
-    <div
-      className="flex items-center gap-2"
-      title="Vista previa — así verá el cliente sus botones de revisión"
+    <span
+      className={cn(
+        "inline-flex cursor-default items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold opacity-90",
+        hayCambios
+          ? "border border-status-corrections text-status-corrections"
+          : "bg-status-completed text-white",
+      )}
+      title="Vista previa — así verá el cliente su botón de revisión"
     >
-      <span className="inline-flex cursor-default items-center gap-2 rounded-md border border-status-corrections px-4 py-2 text-sm font-semibold text-status-corrections opacity-90">
-        <RefreshCw className="size-4" /> Pedir cambios
-      </span>
-      <span className="inline-flex cursor-default items-center gap-2 rounded-md bg-status-completed px-4 py-2 text-sm font-semibold text-white opacity-90">
-        Aprobar <Check className="size-4" />
-      </span>
-    </div>
+      {hayCambios ? (
+        <>
+          <RefreshCw className="size-4" /> Pedir cambios
+        </>
+      ) : (
+        <>
+          Aprobar <Check className="size-4" />
+        </>
+      )}
+    </span>
   );
 }

@@ -226,7 +226,7 @@ function accionesDe(
 
   if (status === "under_review" && esRevisor) {
     return abiertas > 0
-      ? [{ verb: "mandar_correcciones", label: "Mandar a correcciones", tone: "danger" }]
+      ? [{ verb: "mandar_correcciones", label: "Pedir cambios", tone: "danger" }]
       : [{ verb: "approve", label: "Aprobar", tone: "primary" }];
   }
   if (status === "in_corrections" && puedeTrabajarla) {
