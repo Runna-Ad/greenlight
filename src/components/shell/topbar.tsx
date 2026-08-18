@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DEFAULT_ROLE, type ViewRole } from "@/lib/roles";
 import type { Soy } from "@/lib/soy";
-import { ViewAsSwitch } from "./view-as-switch";
-import { SoySwitch, type PoolMember } from "./soy-switch";
+import { type PoolMember } from "./soy-switch";
 import { NotificationsBell } from "./notifications-bell";
 import { Wordmark } from "./wordmark";
 import { MobileNav } from "./sidebar";
@@ -26,7 +25,7 @@ export function Topbar({
 }) {
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card/85 px-4 shadow-sm backdrop-blur-md md:px-6">
-      <MobileNav role={role} />
+      <MobileNav role={role} soy={soy} pool={pool} />
       {title ? (
         <h1 className="text-base font-semibold text-foreground font-[family-name:var(--font-poppins)]">
           {title}
@@ -45,8 +44,6 @@ export function Topbar({
             className="h-9 w-64 rounded-md border border-input bg-background pl-8 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
-        <SoySwitch soy={soy} pool={pool} />
-        <ViewAsSwitch role={role} />
         <NotificationsBell initialCount={avisos} />
         <Avatar className="size-8">
           <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">

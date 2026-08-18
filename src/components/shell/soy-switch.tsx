@@ -102,8 +102,8 @@ export function SoyBanner({ soy }: { soy: Soy | null }) {
     <div className="flex flex-wrap items-center gap-2 border-b border-primary/30 bg-primary/8 px-4 py-1.5 text-xs text-foreground md:px-6">
       <UserRound className="size-3.5 shrink-0 text-primary" />
       <span>
-        Dinos quién eres para ver tus tareas y poder empezarlas — arriba a la
-        derecha.
+        Dinos quién eres para ver tus tareas y poder empezarlas — en el menú de la
+        izquierda.
       </span>
     </div>
   );

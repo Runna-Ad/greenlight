@@ -361,112 +361,97 @@ export default async function TareaPage({
           este provider y mostraría/editaría el CUERPO de la tarea anterior. El key
           fuerza un remount con el estado fresco de la nueva tarea. */}
       <WorkspaceProvider key={idea.id} planosIniciales={planos} estaticoInicial={estatico}>
+        {/* Un solo flujo. Los DOS menús son PERSISTENTES (Pedro): el de arriba
+            (sub-header) se queda pegado arriba TODA la página — como el de abajo
+            está en el borde inferior, ya no necesita cederle el turno a mitad de
+            camino. El de abajo (read-time + Vista) va al final, pegado abajo.
+            Arriba pega a top-16 (debajo del topbar h-16); el fondo sangra a los
+            bordes de main (-mx) para que el contenido no se asome al costado. */}
         <div className="space-y-4">
-          {/* ── SECCIÓN DE ARRIBA: su menú (sub-header) se queda pegado ARRIBA
-                mientras se ve esta sección; al pasar el banner "Pegar guión"
-                (último hijo) se despega y toma el relevo el menú de abajo. Pega
-                a top-16 = debajo del topbar (h-16). El fondo sangra a los bordes
-                de main (-mx) para que el contenido no se asome al costado. ── */}
-          <div className="space-y-4">
-            <div className="sticky top-16 z-20 -mx-4 bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6">
-              <SubHeaderTarea
-                cliente={cliente}
-                ideaId={idea.id}
-                status={idea.status}
-                ctx={ctx}
-                abiertas={abiertasN}
-                indice={posicion.indice}
-                total={posicion.total}
-                anterior={posicion.anterior}
-                siguiente={posicion.siguiente}
-              />
-            </div>
-
-            {soloLectura && (
-              <p className="flex items-center gap-1.5 rounded-md border border-border bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground">
-                <Lock className="size-3.5 shrink-0" />
-                Cerrada — sólo un lead puede reabrirla
-              </p>
-            )}
-
-            {!soy && (
-              <p className="rounded-md border border-primary/30 bg-primary/8 px-3 py-2 text-xs">
-                Dinos quién eres arriba a la derecha para que quede registrado quién escribe.
-              </p>
-            )}
-
-            <HeroTarea
+          <div className="sticky top-16 z-20 -mx-4 bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6">
+            <SubHeaderTarea
+              cliente={cliente}
               ideaId={idea.id}
-              marca={marca?.name ?? null}
-              logoUrl={marca?.logo_url ?? null}
-              briefLabel={briefLabel}
-              naming={idea.naming_base}
               status={idea.status}
-              notaGuion={idea.nota_guion}
-              notaPlaceholder={notaPlaceholder}
-              esEstatico={esEstatico}
-              entregaUrl={idea.entrega_url}
-              soloLectura={soloLectura}
+              ctx={ctx}
+              abiertas={abiertasN}
+              indice={posicion.indice}
+              total={posicion.total}
+              anterior={posicion.anterior}
+              siguiente={posicion.siguiente}
             />
-
-            <TabsTarea
-              ideaId={idea.id}
-              esEstatico={esEstatico}
-              soloLectura={soloLectura}
-              detalles={{
-                tipoAsset: idea.tipo_asset,
-                plataformas: idea.plataformas ?? [],
-                tamanos: idea.tamanos ?? [],
-                duracion: idea.duracion,
-                concepto: idea.concepto,
-                trend: idea.trend,
-              }}
-              // Rünna tools SÓLO para el equipo — no se construye para el cliente
-              // (no se filtra en el payload RSC, no sólo se oculta con CSS).
-              runna={
-                esEquipo
-                  ? {
-                      personas,
-                      entregaUrl: idea.entrega_url,
-                      filenames,
-                      comentariosCreativo: idea.comentarios_creativo,
-                      peloteo: idea.peloteo_raw,
-                      puedeEditar,
-                    }
-                  : undefined
-              }
-            />
-
-            <BannerPegarGuion ideaId={idea.id} esEstatico={esEstatico} soloLectura={soloLectura} />
           </div>
 
-          {/* ── SECCIÓN DEL GUIÓN: su menú (barra inferior) se queda pegado ABAJO
-                mientras se ve esta sección. Es el relevo del menú de arriba. ── */}
-          <div className="space-y-4">
-            <DocumentoGuion
-              ideaId={idea.id}
-              tipoAsset={idea.tipo_asset}
-              esEstatico={esEstatico}
-              refsPorPlano={refsPorPlano}
-              refsEstatico={refsEstatico}
-              soloLectura={soloLectura}
-              cortinilla={{
-                legalesLibres: idea.legales_libres,
-                seleccionados: legalesSeleccionados,
-                biblioteca: legalesDisponibles,
-              }}
-            />
-
-            <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6">
-              <BottomBarTarea esEstatico={esEstatico} />
-            </div>
-          </div>
-
-          {esEquipo && correcciones.length > 0 && (
-            <div className="mt-2">
-              <PanelCorrecciones />
-            </div>
+          {soloLectura && (
+            <p className="flex items-center gap-1.5 rounded-md border border-border bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+              <Lock className="size-3.5 shrink-0" />
+              Cerrada — sólo un lead puede reabrirla
+            </p>
           )}
+
+          <HeroTarea
+            ideaId={idea.id}
+            marca={marca?.name ?? null}
+            logoUrl={marca?.logo_url ?? null}
+            briefLabel={briefLabel}
+            naming={idea.naming_base}
+            status={idea.status}
+            notaGuion={idea.nota_guion}
+            notaPlaceholder={notaPlaceholder}
+            esEstatico={esEstatico}
+            entregaUrl={idea.entrega_url}
+            soloLectura={soloLectura}
+          />
+
+          <TabsTarea
+            ideaId={idea.id}
+            esEstatico={esEstatico}
+            soloLectura={soloLectura}
+            detalles={{
+              tipoAsset: idea.tipo_asset,
+              plataformas: idea.plataformas ?? [],
+              tamanos: idea.tamanos ?? [],
+              duracion: idea.duracion,
+              concepto: idea.concepto,
+              trend: idea.trend,
+            }}
+            // Rünna tools SÓLO para el equipo — no se construye para el cliente
+            // (no se filtra en el payload RSC, no sólo se oculta con CSS).
+            runna={
+              esEquipo
+                ? {
+                    personas,
+                    entregaUrl: idea.entrega_url,
+                    filenames,
+                    comentariosCreativo: idea.comentarios_creativo,
+                    peloteo: idea.peloteo_raw,
+                    puedeEditar,
+                  }
+                : undefined
+            }
+          />
+
+          <BannerPegarGuion ideaId={idea.id} esEstatico={esEstatico} soloLectura={soloLectura} />
+
+          <DocumentoGuion
+            ideaId={idea.id}
+            tipoAsset={idea.tipo_asset}
+            esEstatico={esEstatico}
+            refsPorPlano={refsPorPlano}
+            refsEstatico={refsEstatico}
+            soloLectura={soloLectura}
+            cortinilla={{
+              legalesLibres: idea.legales_libres,
+              seleccionados: legalesSeleccionados,
+              biblioteca: legalesDisponibles,
+            }}
+          />
+
+          {esEquipo && correcciones.length > 0 && <PanelCorrecciones />}
+
+          <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6">
+            <BottomBarTarea esEstatico={esEstatico} />
+          </div>
         </div>
       </WorkspaceProvider>
     </CorreccionesProvider>

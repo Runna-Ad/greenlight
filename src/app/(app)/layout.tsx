@@ -35,7 +35,7 @@ export default async function AppLayout({
 
   return (
     <div className="flex min-h-screen w-full bg-background">
-      <Sidebar role={role} />
+      <Sidebar role={role} soy={soy} pool={pool} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar role={role} soy={soy} pool={pool} avisos={avisos} />
         <PreviewBanner role={role} />
