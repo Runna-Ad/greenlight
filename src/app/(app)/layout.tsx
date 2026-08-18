@@ -1,7 +1,7 @@
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 import { PreviewBanner } from "@/components/shell/view-as-switch";
-import { SoyBanner, type PoolMember } from "@/components/shell/soy-switch";
+import { type PoolMember } from "@/components/shell/soy-switch";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { countSinLeer } from "./notification-actions";
@@ -39,7 +39,6 @@ export default async function AppLayout({
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar role={role} soy={soy} pool={pool} avisos={avisos} />
         <PreviewBanner role={role} />
-        <SoyBanner soy={soy} />
         {/* Sin overflow-y-auto: con la altura sin tope, main no hace scroll (lo
             hace la ventana), y un overflow≠visible aquí ROMPERÍA position:sticky
             de los menús internos (se anclarían a main, que no scrollea). Así el

@@ -94,17 +94,3 @@ export function SoySwitch({ soy, pool }: { soy: Soy | null; pool: PoolMember[] }
     </Popover>
   );
 }
-
-/** Franja cuando nadie ha dicho quién es — sin "yo" no hay "mi trabajo". */
-export function SoyBanner({ soy }: { soy: Soy | null }) {
-  if (soy) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-primary/30 bg-primary/8 px-4 py-1.5 text-xs text-foreground md:px-6">
-      <UserRound className="size-3.5 shrink-0 text-primary" />
-      <span>
-        Dinos quién eres para ver tus tareas y poder empezarlas — en el menú de la
-        izquierda.
-      </span>
-    </div>
-  );
-}

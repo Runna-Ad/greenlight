@@ -24,14 +24,19 @@ export function Topbar({
   avisos?: number;
 }) {
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card/85 px-4 shadow-sm backdrop-blur-md md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground shadow-sm md:px-6">
       <MobileNav role={role} soy={soy} pool={pool} />
       {title ? (
-        <h1 className="text-base font-semibold text-foreground font-[family-name:var(--font-poppins)]">
+        <h1 className="text-base font-semibold text-white font-[family-name:var(--font-poppins)]">
           {title}
         </h1>
       ) : (
-        <Wordmark on="light" className="text-[15px]" />
+        <Wordmark on="dark" className="text-[15px]" />
+      )}
+      {/* Saludo personalizado, como en los mockups: "Hola, {nombre}" (viene de
+          "¿Quién eres?"). Se oculta en móvil para no apretar el topbar. */}
+      {soy && (
+        <span className="hidden text-lg font-bold text-white sm:inline">Hola, {soy.name}</span>
       )}
 
       <div className="ml-auto flex items-center gap-2">
@@ -41,7 +46,7 @@ export function Topbar({
             type="search"
             placeholder="Buscar idea, brief, archivo…"
             aria-label="Buscar"
-            className="h-9 w-64 rounded-md border border-input bg-background pl-8 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 w-64 rounded-md border border-input bg-background pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
         <NotificationsBell initialCount={avisos} />
