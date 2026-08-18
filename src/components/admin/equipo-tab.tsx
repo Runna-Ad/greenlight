@@ -217,10 +217,8 @@ function MiembroCard({
             className="h-8 w-full rounded-md border border-input bg-background px-2 font-mono text-sm"
           />
         </Campo>
-        <label className="flex items-center gap-2 text-sm text-foreground">
-          <Switch checked={m.es_lead} onCheckedChange={(v) => guardar(m.id, { es_lead: v })} aria-label="Puede ser lead" />
-          Puede ser lead
-        </label>
+        {/* "Puede ser lead" se ELIMINÓ: ser lead se deriva del ROL (Dept Head /
+            Lead). El badge "Lead" de arriba y la corona de Workload salen de ahí. */}
         <label className="flex items-center gap-2 text-sm text-foreground" title="Recibe emails de notificación (in-app siempre le llega)">
           <Switch checked={m.notify_email} onCheckedChange={(v) => guardar(m.id, { notify_email: v })} aria-label="Recibe emails" />
           Recibe emails

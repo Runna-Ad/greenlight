@@ -64,11 +64,14 @@ const CAMPOS_EDITABLES = new Set([
   "role",
   "email",
   "slack_user_id",
-  "es_lead",
   "active",
   "notify_email",
   "notify_slack",
 ]);
+
+// Ser lead se DERIVA del rol: un Dept Head / Lead es lead, nadie más. (Antes era
+// un toggle "Puede ser lead" aparte — redundante con el rol.)
+const esLeadDeRol = (role: unknown): boolean => role === "lead";
 
 // Sólo el Master Builder puede nombrar admins/master; un admin gestiona al
 // resto del equipo pero no crea otro admin.
@@ -97,6 +100,8 @@ export async function guardarMiembro(
     }
   }
   if (!Object.keys(limpio).length) return { ok: false, error: "Nada que guardar." };
+  // es_lead se deriva del rol: si cambia el rol, se re-sincroniza la bandera.
+  if ("role" in limpio) limpio.es_lead = esLeadDeRol(limpio.role);
 
   const { error } = await supabaseAdmin().from("track_members").update(limpio).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -148,7 +153,6 @@ export async function crearMiembro(data: {
   role?: RolAsignable;
   email?: string;
   slack_user_id?: string;
-  es_lead?: boolean;
 }): Promise<Guardado & { miembro?: MiembroRow }> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const rol = await getViewAs();
@@ -178,7 +182,7 @@ export async function crearMiembro(data: {
       role: data.role ?? "creative",
       email: data.email?.trim() || null,
       slack_user_id: data.slack_user_id?.trim() || null,
-      es_lead: data.es_lead ?? false,
+      es_lead: esLeadDeRol(data.role ?? "creative"),
       sort_order,
     })
     .select("id, name, track, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
