@@ -54,6 +54,7 @@ export type Task = {
   tamanos: string[] | null;
   plataformas: string[] | null;
   marca: string | null;
+  marca_logo_url: string | null;
   brief_id: string;
   brief_title: string | null;
   file_count: number;
@@ -433,12 +434,20 @@ function CardBody({
 
   return (
     <article
-      className={`rounded-lg border bg-card p-2.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+      className={`relative rounded-lg border bg-card p-2.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
         enCorrecciones
           ? "border-status-corrections ring-1 ring-[color-mix(in_srgb,var(--status-corrections)_35%,transparent)]"
           : "border-border"
       } ${dragging ? "rotate-1 scale-[1.03] shadow-lg" : ""}`}
     >
+      {/* Toda la tarjeta abre la tarea: un link estirado por debajo. Los
+          controles (asa de arrastre, gente, Mover) van con `relative z-10` para
+          quedar por encima y seguir siendo clicables. */}
+      <Link
+        href={`/${cliente}/tareas/${task.id}`}
+        aria-label={`Abrir ${task.naming_base ?? "tarea"}`}
+        className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
       {enCorrecciones && (
         <p className="mb-1.5 rounded bg-[color-mix(in_srgb,var(--status-corrections)_12%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-status-corrections">
           Cambios pedidos
@@ -449,14 +458,26 @@ function CardBody({
         <button
           {...handleProps}
           aria-label="Arrastrar tarea"
-          className="-ml-1 cursor-grab touch-none rounded p-0.5 text-muted-foreground hover:bg-secondary active:cursor-grabbing"
+          className="relative z-10 -ml-1 cursor-grab touch-none rounded p-0.5 text-muted-foreground hover:bg-secondary active:cursor-grabbing"
         >
           <GripVertical className="size-3.5" />
         </button>
 
-        {task.code && (
-          <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] font-semibold text-secondary-foreground">
-            {task.code}
+        {/* La MARCA (Card / Préstamos) en lugar del código A2/B1 — con su logo
+            chiquito si lo tiene. */}
+        {task.marca && (
+          <span className="flex items-center gap-1 rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">
+            {task.marca_logo_url && (
+              // Logo diminuto (≤14px) en muchos cards → un <img> plano es más
+              // ligero que next/image; el archivo ya es chico y público.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={task.marca_logo_url}
+                alt=""
+                className="h-3.5 w-auto max-w-[32px] object-contain"
+              />
+            )}
+            {task.marca}
           </span>
         )}
         {/* Ícono del tipo de asset (video persona real / animado / estático),
@@ -483,24 +504,16 @@ function CardBody({
         </span>
       </div>
 
-      {/* La puerta a la plantilla de trabajo. El asa de arrastre está aislada
-          arriba, así que abrir y arrastrar no compiten. */}
-      <Link
-        href={`/${cliente}/tareas/${task.id}`}
-        className="mt-1.5 block font-mono text-[11px] font-semibold text-foreground underline-offset-2 hover:underline"
-      >
+      {/* Toda la tarjeta es el link (arriba); el título es sólo texto para no
+          anidar un <a> dentro de otro. */}
+      <p className="mt-1.5 font-mono text-[11px] font-semibold text-foreground">
         {task.naming_base ?? "Abrir tarea"}
-      </Link>
+      </p>
       <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-muted-foreground">
         {task.concepto ?? "Sin concepto"}
       </p>
 
       <div className="mt-1.5 flex flex-wrap gap-1">
-        {task.marca && (
-          <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
-            {task.marca}
-          </span>
-        )}
         {task.tipo_asset && (
           <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
             {task.tipo_asset}
@@ -525,8 +538,9 @@ function CardBody({
           arrastrando (o con "Mover"), y el auto-move + la barra del workspace
           los hacían redundantes. (Decisión de Pedro.) */}
 
-      {/* people + the no-drag way to change status (mobile, keyboard) */}
-      <div className="mt-2 flex items-center gap-1 border-t border-border/60 pt-2">
+      {/* people + the no-drag way to change status (mobile, keyboard).
+          relative z-10: por encima del link estirado, para seguir clicables. */}
+      <div className="relative z-10 mt-2 flex items-center gap-1 border-t border-border/60 pt-2">
         {members && onAssign ? (
           <AssignPicker task={task} members={members} onAssign={onAssign} />
         ) : (

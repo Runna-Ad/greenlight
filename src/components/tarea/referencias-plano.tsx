@@ -45,7 +45,9 @@ export function ReferenciasPlano({
   refs: RefVista[];
   /** Estáticos: sólo imágenes, sin el botón de link de video. */
   soloImagenes?: boolean;
-  etiqueta?: string;
+  /** Título de la caja. `null` la deja sin título — cuando ya hay un encabezado
+      de sección arriba, para no repetir "Referencia" dos veces. */
+  etiqueta?: string | null;
   soloLectura?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
@@ -85,9 +87,11 @@ export function ReferenciasPlano({
 
   return (
     <div>
-      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {etiqueta}
-      </p>
+      {etiqueta && (
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {etiqueta}
+        </p>
+      )}
 
       <div
         onDragOver={(e) => {

@@ -211,7 +211,9 @@ export function DocumentoTarea({
                 <p className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
                   <IconoRefe className="size-3.5" /> Referencias
                 </p>
-                <RefsDoc modo={modo} owner={{ tipo: "plano", id: p.id }} refs={refs} soloLectura={soloLectura} />
+                {/* etiqueta={null}: el encabezado de sección de arriba ya dice
+                    "Referencias" — la caja no repite el título. */}
+                <RefsDoc modo={modo} owner={{ tipo: "plano", id: p.id }} refs={refs} etiqueta={null} soloLectura={soloLectura} />
               </div>
             )}
           </div>
@@ -337,7 +339,7 @@ function RefsDoc({
   owner: { tipo: "plano" | "estatico"; id: string };
   refs: RefVista[];
   soloImagenes?: boolean;
-  etiqueta?: string;
+  etiqueta?: string | null;
   soloLectura: boolean;
 }) {
   // En lectura: sólo lectura de miniaturas (sin dropzone). En editable: dropzone
