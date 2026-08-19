@@ -69,6 +69,7 @@ export function CorreccionesProvider({
         return;
       }
       if (!res.veredictos.length) {
+        setVeredictos(new Map()); // limpia veredictos viejos si ya no hay nada pendiente
         toast.info("No hay cambios pendientes que validar.");
         return;
       }

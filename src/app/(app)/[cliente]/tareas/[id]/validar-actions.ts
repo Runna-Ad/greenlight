@@ -81,7 +81,9 @@ export async function validarCambios(
       .eq("idea_id", ideaId),
     db
       .from("estaticos")
-      .select("id, copy_titulo, copy_subtitulo, copy_cta, legales_extra")
+      // referencia_nota va incluido: CAMPOS_ESTATICO lo itera y sin traerlo la IA
+      // vería "(campo vacío)" y daría un veredicto falso para ese campo.
+      .select("id, copy_titulo, copy_subtitulo, copy_cta, legales_extra, referencia_nota")
       .eq("idea_id", ideaId)
       .order("orden")
       .limit(1)
