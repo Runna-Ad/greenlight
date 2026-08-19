@@ -1,18 +1,18 @@
 "use client";
 
-import { useState, useRef, useEffect, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronDown, FileText, PackageOpen } from "lucide-react";
+import { FileText, PackageOpen, CheckCircle2, RefreshCw, Eye, ArrowRight } from "lucide-react";
 import type { PortalBrief, PortalTarea } from "@/app/(app)/[cliente]/portal/portal-data";
 import { cn } from "@/lib/utils";
 
 // Estado en palabras del cliente (no la máquina de estados interna).
-const ESTADO_CLIENTE: Record<string, { label: string; tone: string }> = {
-  delivered: { label: "Aprobado", tone: "var(--status-completed)" },
-  in_corrections: { label: "En cambios", tone: "var(--status-corrections)" },
+const ESTADO_CLIENTE: Record<string, { label: string; tone: string; Icon: typeof Eye }> = {
+  delivered: { label: "Aprobado", tone: "var(--status-completed)", Icon: CheckCircle2 },
+  in_corrections: { label: "En cambios", tone: "var(--status-corrections)", Icon: RefreshCw },
 };
 const estadoCliente = (s: string) =>
-  ESTADO_CLIENTE[s] ?? { label: "Por revisar", tone: "var(--status-progress)" };
+  ESTADO_CLIENTE[s] ?? { label: "Por revisar", tone: "var(--status-progress)", Icon: Eye };
 
 const href = (brief: string, tarea: string) => `?brief=${brief}&tarea=${tarea}`;
 
@@ -31,10 +31,21 @@ export function PortalShell({
   vista: ReactNode;
 }) {
   const brief = briefs.find((b) => b.id === selBriefId) ?? briefs[0] ?? null;
+  const marca = cliente.brandColor;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-      <header className="mb-6 flex items-center gap-3">
+    <div className="relative mx-auto max-w-3xl px-4 py-6 sm:px-6">
+      {/* Glow sutil con el color de marca del cliente — hace sentir el portal
+          "suyo" sin robar protagonismo al contenido. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-56"
+        style={{
+          background: `radial-gradient(60rem 20rem at 50% -8rem, color-mix(in srgb, ${marca} 22%, transparent), transparent 70%)`,
+        }}
+      />
+
+      <header className="mb-6 flex items-center gap-3 gl-rise-in">
         {cliente.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -44,8 +55,8 @@ export function PortalShell({
           />
         ) : (
           <span
-            className="grid size-10 place-items-center rounded-xl text-sm font-bold text-white"
-            style={{ background: cliente.brandColor }}
+            className="grid size-10 place-items-center rounded-xl text-sm font-bold text-white shadow-sm"
+            style={{ background: marca }}
           >
             {cliente.name.slice(0, 2).toUpperCase()}
           </span>
@@ -57,7 +68,7 @@ export function PortalShell({
       </header>
 
       {!briefs.length ? (
-        <div className="rounded-xl border border-dashed border-border p-10 text-center">
+        <div className="rounded-xl border border-dashed border-border p-10 text-center gl-rise-in">
           <PackageOpen className="mx-auto size-6 text-muted-foreground" />
           <p className="mt-3 text-sm text-muted-foreground">
             Todavía no hay nada para revisar. Cuando el equipo te envíe una idea, aparecerá aquí.
@@ -66,7 +77,7 @@ export function PortalShell({
       ) : (
         <>
           {/* Selector de brief */}
-          <div className="mb-3 flex flex-wrap gap-1.5">
+          <div className="mb-4 flex flex-wrap gap-1.5">
             {briefs.map((b) => {
               const activo = b.id === brief?.id;
               return (
@@ -75,17 +86,17 @@ export function PortalShell({
                   href={href(b.id, b.tasks[0]?.id ?? "")}
                   scroll={false}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors",
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-all duration-200 active:scale-95",
                     activo
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-card text-foreground hover:bg-secondary",
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                      : "border-border bg-card text-foreground hover:-translate-y-0.5 hover:border-primary/40 hover:bg-secondary",
                   )}
                 >
                   <FileText className="size-3.5" />
                   {b.label}
                   <span
                     className={cn(
-                      "rounded-full px-1.5 text-[11px]",
+                      "rounded-full px-1.5 text-[11px] tabular-nums",
                       activo ? "bg-white/20" : "bg-secondary",
                     )}
                   >
@@ -96,18 +107,17 @@ export function PortalShell({
             })}
           </div>
 
-          {/* Dropdown de tareas del brief */}
-          {brief && (
-            <TareaDropdown brief={brief} selTareaId={selTareaId} />
-          )}
+          {/* Riel de tareas del brief — tarjetas visuales, no un dropdown. */}
+          {brief && <TareaRail brief={brief} selTareaId={selTareaId} marca={marca} />}
 
-          {/* La vista de la tarea (incluye su barra de acción pegada arriba) */}
+          {/* La vista de la tarea (incluye su barra de acción pegada arriba). El
+              key por tarea la remonta al cambiar → entra con un fade sutil. */}
           {vista ? (
-            <div className="mt-5">{vista}</div>
+            <div key={selTareaId ?? "none"} className="mt-5 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+              {vista}
+            </div>
           ) : (
-            <p className="mt-6 text-center text-sm text-muted-foreground">
-              Elige una idea para revisarla.
-            </p>
+            <p className="mt-6 text-center text-sm text-muted-foreground">Elige una idea para revisarla.</p>
           )}
         </>
       )}
@@ -115,73 +125,100 @@ export function PortalShell({
   );
 }
 
-function TareaDropdown({ brief, selTareaId }: { brief: PortalBrief; selTareaId: string | null }) {
-  const [abierto, setAbierto] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const sel = brief.tasks.find((t) => t.id === selTareaId) ?? brief.tasks[0] ?? null;
-
-  useEffect(() => {
-    if (!abierto) return;
-    const cerrar = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setAbierto(false);
-    };
-    document.addEventListener("mousedown", cerrar);
-    return () => document.removeEventListener("mousedown", cerrar);
-  }, [abierto]);
-
-  if (!sel) return null;
+/**
+ * El riel de tareas: una fila de tarjetas que se desliza en horizontal. Cada una
+ * muestra la marca, el nombre y su estado en palabras del cliente. La activa lleva
+ * el color de marca; al pasar el ratón se levanta. Entran escalonadas.
+ */
+function TareaRail({
+  brief,
+  selTareaId,
+  marca,
+}: {
+  brief: PortalBrief;
+  selTareaId: string | null;
+  marca: string;
+}) {
+  const selId = brief.tasks.find((t) => t.id === selTareaId)?.id ?? brief.tasks[0]?.id ?? null;
+  if (!brief.tasks.length) return null;
 
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setAbierto((v) => !v)}
-        aria-expanded={abierto}
-        className="flex w-full items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2.5 text-left transition-colors hover:bg-secondary/50"
-      >
-        <TareaLinea t={sel} />
-        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", abierto && "rotate-180")} />
-      </button>
-
-      {abierto && (
-        <div className="absolute z-30 mt-1.5 max-h-80 w-full overflow-auto rounded-xl border border-border bg-card p-1 shadow-lg">
-          {brief.tasks.map((t) => (
-            <Link
-              key={t.id}
-              href={href(brief.id, t.id)}
-              scroll={false}
-              onClick={() => setAbierto(false)}
-              className={cn(
-                "flex items-center gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-secondary",
-                t.id === sel.id && "bg-secondary",
-              )}
-            >
-              <TareaLinea t={t} />
-            </Link>
-          ))}
-        </div>
-      )}
+    <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex gap-2.5">
+        {brief.tasks.map((t, i) => (
+          <TareaCard
+            key={t.id}
+            briefId={brief.id}
+            t={t}
+            activo={t.id === selId}
+            marca={marca}
+            indice={i}
+          />
+        ))}
+      </div>
     </div>
   );
 }
 
-function TareaLinea({ t }: { t: PortalTarea }) {
+function TareaCard({
+  briefId,
+  t,
+  activo,
+  marca,
+  indice,
+}: {
+  briefId: string;
+  t: PortalTarea;
+  activo: boolean;
+  marca: string;
+  indice: number;
+}) {
   const est = estadoCliente(t.status);
   return (
-    <span className="flex min-w-0 flex-1 items-center gap-2">
-      {t.marcaLogo ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={t.marcaLogo} alt="" className="h-5 w-auto max-w-[40px] shrink-0 object-contain" />
-      ) : null}
-      <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-foreground">
+    <Link
+      href={href(briefId, t.id)}
+      scroll={false}
+      style={{
+        animationDelay: `${Math.min(indice, 8) * 45}ms`,
+        boxShadow: activo ? `0 0 0 2px color-mix(in srgb, ${marca} 55%, transparent)` : undefined,
+      }}
+      className={cn(
+        "group relative flex w-[170px] shrink-0 flex-col gap-2.5 rounded-2xl border bg-card p-3 fill-mode-both duration-300 animate-in fade-in-0 slide-in-from-bottom-3",
+        "transition-transform hover:-translate-y-1 hover:shadow-lg",
+        activo ? "border-transparent shadow-md" : "border-border hover:border-primary/30",
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        {t.marcaLogo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={t.marcaLogo} alt="" className="h-6 w-auto max-w-[52px] object-contain" />
+        ) : (
+          <span className="grid size-6 place-items-center rounded-md bg-secondary text-[10px] font-bold text-muted-foreground">
+            {(t.marcaName ?? t.code ?? "·").slice(0, 2).toUpperCase()}
+          </span>
+        )}
+        <span
+          className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold text-white"
+          style={{ background: `color-mix(in srgb, ${est.tone} 82%, #000)` }}
+        >
+          <est.Icon className="size-2.5" /> {est.label}
+        </span>
+      </div>
+
+      <p className="line-clamp-2 min-h-[2.4em] text-[13px] font-semibold leading-snug text-foreground">
         {t.naming ?? t.code ?? "Idea"}
-      </span>
+      </p>
+
+      {/* Pista de acción: en la activa se ve fija; en las demás aparece al hover. */}
       <span
-        className="shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-bold text-white"
-        style={{ background: `color-mix(in srgb, ${est.tone} 82%, #000)` }}
+        className={cn(
+          "inline-flex items-center gap-1 text-[11px] font-semibold transition-opacity",
+          activo ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+        )}
+        style={{ color: `color-mix(in srgb, ${marca} 70%, #000)` }}
       >
-        {est.label}
+        {activo ? "Revisando" : "Revisar"} <ArrowRight className="size-3" />
       </span>
-    </span>
+    </Link>
   );
 }
