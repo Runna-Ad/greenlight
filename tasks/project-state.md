@@ -1,14 +1,22 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-13 (Workload + Entregas + fix nav; camino a live)
+Última actualización: 2026-08-18 (Correcciones+H.Ü.E · Performance/Evaluación · Portal v1)
 
-## Camino a LIVE (aclarado con Pedro 2026-08-13)
-TODO es pre-launch salvo el **portal del cliente** (lo ÚLTIMO — depende de que el
-lado-agencia esté 100% listo). Orden: agencia → **portal** → **login** → live.
-- Lado-agencia: core loop ✅ · Workload ✅ · Entregas ✅ (v1 agency-side).
-- Falta: **Portal del cliente** (alimenta los estados finos de Entregas +
-  prende published→in_corrections) · **Login** · dato **legal de Préstamos** (Pedro).
+## Camino a LIVE (aclarado con Pedro 2026-08-13; avance 2026-08-18)
+TODO es pre-launch. Orden: agencia → **portal** → **login** → live.
+- Lado-agencia: core loop ✅ · Performance (Workload+Evaluación) ✅ · Entregas ✅
+  · Correcciones tipadas + hover cards + H.Ü.E validator ✅.
+- **Portal del cliente ✅ v1** (`/[cliente]/portal`): briefs + dropdown de tareas +
+  Vista cliente read-only + Aprobar/Pedir cambios (prende published→in_corrections /
+  →delivered; el texto del cliente llega por notificación + tarjeta en la tarea).
+  Preview-gated: confía en el slug de la URL — falta el binding cliente↔sesión.
+- Falta para LIVE: **Login** (Google/@runna.com.mx → roles reales; hace desaparecer
+  `view-as`/`soy` y da el binding real del portal) · dato **legal de Préstamos** (Pedro).
+- **Going-forward** (se llenan con el uso real, no son bugs): Evaluación/autoría
+  (`field_edits` empieza vacío; se llena cuando los especialistas trabajen bajo su
+  identidad real, rol `creative`) · datos tipados de correcciones.
 - Post-launch (no bloquean): Copies template · Slack notif · prefs notif por-usuario
-  · F6 Notion (bloqueado en token) · API/MCP tokens.
+  · F6 Notion (bloqueado en token) · API/MCP tokens · surface `approval` del cliente
+  en la tarea (hoy sólo se muestra client_change) · rúbrica: score AI de craft.
 - Nav: `RESERVED` en sidebar DEBE listar toda ruta general de primer nivel; al
   agregar una página general nueva, agrégala ahí (si no → sección de cliente fantasma).
 

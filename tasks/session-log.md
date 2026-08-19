@@ -1,5 +1,49 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-18 — Correcciones + Performance/Evaluación + Portal del cliente + H.Ü.E validator
+
+Sesión enorme (12 commits, migraciones 0034/0035/0036 a prod). Todo shippeado tras
+gate + verificación en navegador + reap Opus, con "ship it" explícito de Pedro por
+cada pieza.
+
+**Qué se construyó (de arriba a abajo):**
+- **Correcciones**: las correcciones en Vista cliente ahora son TARJETAS DE HOVER
+  (no cajas). Cada cambio interno lleva TIPO obligatorio (los criterios del rúbrica).
+  Reencuadre de "Sin ubicar" → "El texto cambió — revisa si ya quedó" (cuando el
+  quote desaparece porque SÍ se hizo el cambio). **H.Ü.E validator**: el lead pulsa
+  "Revisar cambios con H.Ü.E" y por cada corrección la IA dice "parece hecho / no /
+  a medias" + razón — ADVISORY, el lead confirma. Verificado en vivo: acertó
+  ("sigue en plural" a medias, "el copy no cambió" no).
+- **Performance/Evaluación** (era Workload): sección Performance con sub-tabs
+  Workload + Evaluación. Puntaje 0–10 por criterio, POR AUTOR (atribución por
+  sección: `field_edits` registra quién escribió cada campo; una corrección se le
+  cuenta a quien escribió esa sección → tareas co-asignadas se reparten bien).
+  Unidad = tarea APROBADA en el mes (reproducible). Lead ve su equipo, admin todos.
+- **Portal del cliente**: `/[cliente]/portal` real — briefs + dropdown de tareas +
+  Vista cliente de sólo lectura + **Aprobar / Pedir cambios**. El texto del cliente
+  llega al equipo por notificación Y como tarjeta "El cliente pidió cambios" en la
+  tarea.
+
+**Decisiones de Pedro (grabadas):**
+- Scoring automático, por tarea binario, promediado; el tipo de cambio es OBLIGATORIO.
+- "Workload" NO "Carga" (override). Cualquier IA se llama "H.Ü.E".
+- Atribución por AUTOR de la sección (co-asignados per-person), no por asignado.
+- Autoría = clean/going-forward (tablero vacío hasta que el equipo trabaje aquí),
+  NO híbrido.
+- Portal preview-gated; el binding real cliente↔auth es tarea de launch.
+
+**Bugs arreglados en el camino:** autoría gateada por view-as (mostraba 0 →
+ahora por soy.role); "Ver campo" no funcionaba en Vista cliente (faltaba
+data-campo-key en CampoLectura); H.Ü.E select sin referencia_nota (veredicto falso).
+
+**Reaps (Opus) atraparon:** el bug del period-scoping en Evaluación (→ atribución
+por aprobación, reproducible); importaciones sin autoría (Pegar guión); edición de
+revisor robando autoría; el select/iteration desincronizado de H.Ü.E. Todos fixeados.
+
+**Pendientes (fast-follows, no urgentes):** el tablero de Evaluación/autoría se
+llena a medida que los especialistas trabajen bajo su identidad real. Launch:
+auth Google + binding cliente↔sesión (hoy el portal confía en el slug de la URL).
+
 ## 2026-08-13 (cont.) — Camino a live: Workload + Entregas + fix de nav fantasma
 
 Aclaración clave de Pedro sobre el lanzamiento y dos secciones nuevas del lado-
