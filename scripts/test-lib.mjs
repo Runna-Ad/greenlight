@@ -6,7 +6,7 @@ import { actionsFor, waitingLabel } from "../src/lib/task-actions.ts";
 import { plantillaPara, readTimeS, parseDuracion, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
-import { evaluarEquipo } from "../src/lib/evaluacion.ts";
+import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
 
 let pass = 0,
   fail = 0;
@@ -720,49 +720,83 @@ eq("ambas vacío/espacios → null", combinarConsideraciones("   ", ""), null);
 eq("NO recorta el contenido (evita conflicto espurio)", combinarConsideraciones("  A  ", "  B  "), "  A  \n\n  B  ");
 eq("una vacía (sólo espacios) no deja separador colgando", combinarConsideraciones("  ", "B"), "B");
 
-// ── Evaluación por especialista (scoring binario por tarea, promediado) ──
-console.log("\n▶ evaluarEquipo()");
+// ── Atribución de autor (quién escribió la sección corregida) ──
+console.log("\n▶ atribuirAutor()");
+{
+  const edits = [
+    { ideaId: "A", tabla: "planos", filaId: "P1", campo: "accion", memberId: "m1", at: "2026-08-05T00:00:00Z" }, // Ana escribió Plano1
+    { ideaId: "A", tabla: "planos", filaId: "P2", campo: "accion", memberId: "m2", at: "2026-08-06T00:00:00Z" }, // Beto escribió Plano2
+  ];
+  const raw = [
+    { ideaId: "A", categoria: "storytelling", ronda: 1, tabla: "planos", filaId: "P2", campo: "accion", createdAt: "2026-08-15T00:00:00Z" },
+    { ideaId: "A", categoria: "ortografia", ronda: 1, tabla: "planos", filaId: "P1", campo: "accion", createdAt: "2026-08-16T00:00:00Z" },
+  ];
+  const atr = atribuirAutor(raw, edits);
+  const autorDe = (cat) => atr.find((a) => a.categoria === cat).autorId;
+  eq("atribuir · storytelling en Plano2 → Beto (m2)", autorDe("storytelling"), "m2");
+  eq("atribuir · ortografia en Plano1 → Ana (m1)", autorDe("ortografia"), "m1");
+  const sinAutor = atribuirAutor(
+    [{ ideaId: "A", categoria: "hook", ronda: 1, tabla: "planos", filaId: "P1", campo: "dialogo", createdAt: "2026-08-04T00:00:00Z" }],
+    [{ ideaId: "A", tabla: "planos", filaId: "P1", campo: "dialogo", memberId: "m1", at: "2026-08-10T00:00:00Z" }],
+  );
+  eq("atribuir · edición POSTERIOR a la corrección → sin autor (null)", sinAutor[0].autorId, null);
+}
+
+// ── Evaluación por AUTOR (una tarea co-asignada se reparte por quién escribió qué) ──
+console.log("\n▶ evaluarEquipo() — por autor");
 {
   const P = { desde: "2026-08-01T00:00:00Z", hasta: "2026-09-01T00:00:00Z" };
+  const edits = [
+    { ideaId: "A", tabla: "planos", filaId: "P1", campo: "accion", memberId: "m1", at: "2026-08-05T00:00:00Z" }, // Ana → Plano1 de A
+    { ideaId: "A", tabla: "planos", filaId: "P2", campo: "accion", memberId: "m2", at: "2026-08-06T00:00:00Z" }, // Beto → Plano2 de A
+    { ideaId: "B", tabla: "planos", filaId: "P3", campo: "accion", memberId: "m1", at: "2026-08-01T00:00:00Z" }, // Ana → Plano3 de B (limpia)
+  ];
+  const raw = [
+    { ideaId: "A", categoria: "storytelling", ronda: 1, tabla: "planos", filaId: "P2", campo: "accion", createdAt: "2026-08-15T00:00:00Z" }, // en la sección de Beto
+    { ideaId: "A", categoria: "ortografia", ronda: 1, tabla: "planos", filaId: "P1", campo: "accion", createdAt: "2026-08-16T00:00:00Z" }, // en la sección de Ana
+  ];
+  const atr = atribuirAutor(raw, edits);
+  const autoria = [
+    { ideaId: "A", memberId: "m1" },
+    { ideaId: "A", memberId: "m2" },
+    { ideaId: "B", memberId: "m1" },
+  ];
+  const asignaciones = [
+    { ideaId: "A", memberId: "m1", assignedAt: "2026-08-04T00:00:00Z" },
+    { ideaId: "B", memberId: "m1", assignedAt: "2026-08-01T00:00:00Z" },
+    { ideaId: "A", memberId: "m2", assignedAt: "2026-08-04T00:00:00Z" },
+  ];
+  const ideas = [
+    { id: "A", completedAt: "2026-08-20T00:00:00Z" },
+    { id: "B", completedAt: "2026-08-25T00:00:00Z" },
+  ];
   const evs = evaluarEquipo(
     [
       { id: "m1", name: "Ana", color: "#fff", track: "real" },
-      { id: "m2", name: "Beto", color: "#000", track: "normal" },
+      { id: "m2", name: "Beto", color: "#000", track: "real" },
     ],
-    [
-      { ideaId: "A", memberId: "m1", esLead: false, assignedAt: "2026-08-05T00:00:00Z" },
-      { ideaId: "B", memberId: "m1", esLead: false, assignedAt: "2026-08-01T00:00:00Z" },
-      { ideaId: "C", memberId: "m1", esLead: true, assignedAt: "2026-08-02T00:00:00Z" }, // es lead → no cuenta
-      { ideaId: "D", memberId: "m2", esLead: false, assignedAt: "2026-07-01T00:00:00Z" },
-    ],
-    [
-      { ideaId: "A", categoria: "storytelling", ronda: 1 },
-      { ideaId: "A", categoria: "ortografia", ronda: 1 },
-      { ideaId: "A", categoria: "storytelling", ronda: 2 },
-    ],
-    [
-      { id: "A", completedAt: "2026-08-20T00:00:00Z" }, // aprobada en el mes
-      { id: "B", completedAt: "2026-08-25T00:00:00Z" }, // aprobada en el mes, limpia
-      { id: "C", completedAt: "2026-08-18T00:00:00Z" }, // en el mes, pero Ana es LEAD → no cuenta
-      { id: "D", completedAt: "2026-07-10T00:00:00Z" }, // aprobada FUERA del mes
-    ],
+    autoria,
+    atr,
+    asignaciones,
+    ideas,
     P,
   );
   const ana = evs.find((e) => e.memberId === "m1");
   const beto = evs.find((e) => e.memberId === "m2");
   const sc = (e, slug) => e.scorePorCriterio.find((s) => s.slug === slug).score;
-  eq("eval · Ana: 2 tareas evaluables (C excluida por ser lead)", ana.tareas, 2);
-  eq("eval · storytelling = 5 (1 de 2 con cambio)", sc(ana, "storytelling"), 5);
-  eq("eval · ortografia = 5", sc(ana, "ortografia"), 5);
-  eq("eval · hook = 10 (sin cambios)", sc(ana, "hook"), 10);
-  eq("eval · overall = 8.8", ana.overall, 8.8);
-  eq("eval · rondas por tarea = 1", ana.rondasPorTarea, 1);
-  eq("eval · cambios por ronda = 1.5", ana.cambiosPorRonda, 1.5);
-  eq("eval · ciclo mediano = 19.5 días (mediana de 15 y 24)", ana.cicloMedianoDias, 19.5);
-  eq("eval · Beto sin tareas en el periodo → 0", beto.tareas, 0);
-  eq("eval · Beto overall = null (sin dato)", beto.overall, null);
-  eq("eval · Beto criterio sin dato → score null", sc(beto, "hook"), null);
-  eq("eval · Beto ciclo = null", beto.cicloMedianoDias, null);
+  // Ana autoró A y B → 2 tareas. La ortografía cae en SU sección (A); el storytelling NO (es de Beto).
+  eq("eval · Ana: 2 tareas (autoró A y B)", ana.tareas, 2);
+  eq("eval · Ana ortografia = 5 (su sección tuvo el cambio)", sc(ana, "ortografia"), 5);
+  eq("eval · Ana storytelling = 10 (ese cambio fue en la sección de Beto)", sc(ana, "storytelling"), 10);
+  eq("eval · Ana overall = 9.4", ana.overall, 9.4);
+  eq("eval · Ana rondas/tarea = 0.5", ana.rondasPorTarea, 0.5);
+  eq("eval · Ana ciclo mediano = 20 (mediana de 16 y 24)", ana.cicloMedianoDias, 20);
+  // Beto autoró sólo Plano2 de A → 1 tarea. El storytelling es SUYO.
+  eq("eval · Beto: 1 tarea (autoró Plano2 de A)", beto.tareas, 1);
+  eq("eval · Beto storytelling = 0 (su sección tuvo el cambio)", sc(beto, "storytelling"), 0);
+  eq("eval · Beto ortografia = 10 (ese cambio fue en la sección de Ana)", sc(beto, "ortografia"), 10);
+  eq("eval · Beto overall = 8.8", beto.overall, 8.8);
+  eq("eval · Beto ciclo mediano = 16", beto.cicloMedianoDias, 16);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

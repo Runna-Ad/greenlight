@@ -5,10 +5,13 @@ import type { PillStatus } from "@/components/ui/pill";
 import type { Track } from "@/lib/vocab";
 import {
   evaluarEquipo,
+  atribuirAutor,
   type EvalMiembro,
   type Periodo,
   type AsignacionInput,
+  type AutoriaInput,
   type CorreccionInput,
+  type EditInput,
   type IdeaInput,
   type MiembroInput,
 } from "@/lib/evaluacion";
@@ -144,21 +147,30 @@ export async function cargarEvaluacion(
   const ideasRows = (ideasP ?? []) as { id: string; completed_at: string | null }[];
   const ideaIds = ideasRows.map((i) => i.id);
 
-  const [asigs, corrs] = ideaIds.length
+  const [asigs, corrs, edits] = ideaIds.length
     ? await Promise.all([
         db
           .from("idea_assignments")
-          .select("idea_id, member_id, es_lead, assigned_at")
+          .select("idea_id, member_id, assigned_at")
           .in("idea_id", ideaIds)
           .then((r) => r.data ?? []),
         db
           .from("comments")
-          .select("idea_id, categoria, ronda")
+          .select("idea_id, categoria, ronda, target_tabla, target_fila_id, target_campo, created_at")
           .eq("kind", "correction_request")
           .in("idea_id", ideaIds)
           .then((r) => r.data ?? []),
+        db
+          .from("field_edits")
+          .select("idea_id, tabla, fila_id, campo, member_id, at")
+          .in("idea_id", ideaIds)
+          // Orden estable: la atribución "última edición <= T" debe ser
+          // reproducible aun con ediciones en el mismo milisegundo.
+          .order("at", { ascending: true })
+          .order("id", { ascending: true })
+          .then((r) => r.data ?? []),
       ])
-    : [[], []];
+    : [[], [], []];
 
   const miembrosIn: MiembroInput[] = ((miembros ?? []) as {
     id: string;
@@ -167,29 +179,67 @@ export async function cargarEvaluacion(
     track: Track;
   }[]).map((m) => ({ id: m.id, name: m.name, color: m.color, track: m.track }));
 
-  const asigsIn: AsignacionInput[] = (asigs as {
+  // Ediciones = la AUTORÍA (quién escribió cada sección). Sólo las que tienen autor.
+  const editsIn: EditInput[] = (edits as {
     idea_id: string;
+    tabla: string;
+    fila_id: string | null;
+    campo: string;
     member_id: string | null;
-    es_lead: boolean;
-    assigned_at: string | null;
+    at: string;
   }[])
-    .filter((a) => a.member_id)
-    .map((a) => ({
-      ideaId: a.idea_id,
-      memberId: a.member_id as string,
-      esLead: !!a.es_lead,
-      assignedAt: a.assigned_at,
+    .filter((e) => e.member_id)
+    .map((e) => ({
+      ideaId: e.idea_id,
+      tabla: e.tabla,
+      filaId: e.fila_id,
+      campo: e.campo,
+      memberId: e.member_id as string,
+      at: e.at,
     }));
 
-  const corrsIn: CorreccionInput[] = (corrs as {
+  // Autoría por tarea: pares distintos (idea, miembro) que editaron algo.
+  const vistos = new Set<string>();
+  const autoria: AutoriaInput[] = [];
+  for (const e of editsIn) {
+    const k = `${e.ideaId}|${e.memberId}`;
+    if (!vistos.has(k)) {
+      vistos.add(k);
+      autoria.push({ ideaId: e.ideaId, memberId: e.memberId });
+    }
+  }
+
+  // Correcciones crudas (con destino + hora) → atribuidas al autor de su sección.
+  const correccionesRaw: CorreccionInput[] = (corrs as {
     idea_id: string;
     categoria: string | null;
     ronda: number | null;
-  }[]).map((c) => ({ ideaId: c.idea_id, categoria: c.categoria, ronda: c.ronda }));
+    target_tabla: string | null;
+    target_fila_id: string | null;
+    target_campo: string | null;
+    created_at: string;
+  }[]).map((c) => ({
+    ideaId: c.idea_id,
+    categoria: c.categoria,
+    ronda: c.ronda,
+    tabla: c.target_tabla,
+    filaId: c.target_fila_id,
+    campo: c.target_campo,
+    createdAt: c.created_at,
+  }));
+  const correcciones = atribuirAutor(correccionesRaw, editsIn);
+
+  const asigsIn: AsignacionInput[] = (asigs as {
+    idea_id: string;
+    member_id: string | null;
+    assigned_at: string | null;
+  }[])
+    .filter((a) => a.member_id)
+    .map((a) => ({ ideaId: a.idea_id, memberId: a.member_id as string, assignedAt: a.assigned_at }));
 
   const ideasIn: IdeaInput[] = ideasRows.map((i) => ({ id: i.id, completedAt: i.completed_at }));
 
-  return evaluarEquipo(miembrosIn, asigsIn, corrsIn, ideasIn, periodo);
+  return evaluarEquipo(miembrosIn, autoria, correcciones, asigsIn, ideasIn, periodo);
 }
 
 // ── Periodo (mes) ──

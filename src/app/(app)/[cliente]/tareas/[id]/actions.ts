@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canMoveStatus, canOverrideStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
@@ -305,6 +306,37 @@ export async function guardarBrief(
  * Se compara por CAMPO y no por updated_at: el trigger de updated_at es por
  * fila, así que editar el campo A haría conflictar el campo B sin razón.
  */
+// Campos de contenido de un plano que pueden recibir correcciones (para atribuir
+// autoría al importar un guión). Excluye id/orden/es_cierre.
+const PLANO_CONTENT = ["titulo", "accion", "copy_in", "sfx", "gfx", "edicion", "dialogo"];
+
+/**
+ * Registra la AUTORÍA (field_edits, 0035) de las secciones que una persona del
+ * equipo CREATIVO escribió — para la Evaluación por autor. NO se llama para
+ * revisores (su retoque no es autoría) ni sin identidad; el gate vive en cada
+ * caller. Best-effort, fuera del path de respuesta (after): si falla, el contenido
+ * ya está guardado.
+ */
+function registrarAutoria(
+  db: ReturnType<typeof supabaseAdmin>,
+  ideaId: string,
+  tabla: "planos" | "estaticos",
+  filas: { filaId: string | null; campo: string }[],
+  memberId: string,
+): void {
+  if (!filas.length) return;
+  const rows = filas.map((f) => ({
+    idea_id: ideaId,
+    tabla,
+    fila_id: f.filaId,
+    campo: f.campo,
+    member_id: memberId,
+  }));
+  after(() => {
+    void db.from("field_edits").insert(rows);
+  });
+}
+
 export async function guardarCampo(
   tabla: Tabla,
   filaId: string,
@@ -354,6 +386,13 @@ export async function guardarCampo(
     // Si ya vale lo que queríamos escribir, no hay nada que resolver.
     if (v === limpio) return { ok: true };
     return { ok: false, conflicto: true, valorActual: v };
+  }
+
+  // Autoría (0035): sólo el equipo CREATIVO (el retoque de un revisor NO es
+  // autoría — si no, un lead que arregla un campo se robaría la corrección del
+  // especialista) y sólo en planos/estáticos (donde caen las correcciones).
+  if (soy?.id && !canOverrideStatus(role) && (tabla === "planos" || tabla === "estaticos")) {
+    registrarAutoria(db, fila.idea_id, tabla, [{ filaId, campo }], soy.id);
   }
 
   // Empezar a escribir ES empezar a trabajar. Si la tarea seguía en "Por hacer",
@@ -449,6 +488,20 @@ export async function importarGuion(
   // Devuelve la lista COMPLETA resultante (replace o append) para que el editor
   // reemplace su estado sin recargar; los planos nuevos entran con animación.
   const { data } = await db.from("planos").select(COLS_PLANO).eq("idea_id", ideaId).order("orden");
+  // Autoría (0035): pegar un guión ES escribirlo. Se atribuye cada sección con
+  // contenido al que pegó (si es del equipo creativo). Sin esto, quien pega todo su
+  // guión y no edita inline no autoraría nada y quedaría invisible en la Evaluación.
+  const soy = await getSoy();
+  if (soy?.id && !canOverrideStatus(role)) {
+    const filas: { filaId: string; campo: string }[] = [];
+    for (const p of (data ?? []) as Record<string, unknown>[]) {
+      for (const campo of PLANO_CONTENT) {
+        const v = p[campo];
+        if (typeof v === "string" && v.trim()) filas.push({ filaId: p.id as string, campo });
+      }
+    }
+    registrarAutoria(db, ideaId, "planos", filas, soy.id);
+  }
   return { ok: true, planos: (data ?? []) as PlanoVista[] };
 }
 
@@ -481,6 +534,19 @@ export async function importarEstatico(
   // El update YA fue exitoso; si el refetch no trae fila (transitorio), NO es un
   // fallo de escritura — devolvemos null y el cliente recarga para reconciliar.
   const { data } = await db.from("estaticos").select(COLS_ESTATICO).eq("idea_id", ideaId).single();
+  // Autoría (0035): pegar el copy ES escribirlo — cada campo escrito se atribuye al
+  // que pegó (si es del equipo creativo).
+  const soy = await getSoy();
+  const estId = (data as { id?: string } | null)?.id;
+  if (soy?.id && !canOverrideStatus(role) && estId) {
+    registrarAutoria(
+      db,
+      ideaId,
+      "estaticos",
+      Object.keys(patch).map((campo) => ({ filaId: estId, campo })),
+      soy.id,
+    );
+  }
   return { ok: true, estatico: (data ?? null) as EstaticoVista | null };
 }
 

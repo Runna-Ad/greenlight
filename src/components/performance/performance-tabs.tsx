@@ -87,9 +87,10 @@ export function PerformanceTabs({
           </div>
           <EvaluacionBoard miembros={evaluacion} />
           <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-            El puntaje es por tarea: un cambio de un tipo pone 0 en ese criterio para esa tarea; sin
-            cambios, 10. El puntaje del especialista es el promedio de sus tareas. Los datos se
-            acumulan desde que se activó la Evaluación, así que al principio habrá pocas tareas.
+            El puntaje es por tarea y por AUTOR: un cambio en una sección que la persona escribió pone
+            0 en ese criterio para esa tarea; si no, 10. Su puntaje es el promedio de sus tareas. La
+            autoría sale de quién editó cada sección en la plataforma, así que el tablero se llena a
+            medida que el equipo trabaja aquí — al principio se verá vacío.
           </p>
         </>
       ) : (
