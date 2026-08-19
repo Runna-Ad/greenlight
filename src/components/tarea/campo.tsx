@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { useCorrecciones } from "./correcciones/contexto";
 import { CampoCorrecciones } from "./correcciones/campo-correcciones";
 import { SelectorTipoCambio, TagTipoCambio } from "./selector-tipo-cambio";
+import { VeredictoChip } from "./veredicto-chip";
 import { type CategoriaCambio } from "@/lib/tipos-cambio";
 import {
   estadoCampo,
@@ -500,6 +501,7 @@ export function Campo({
                     {ETIQUETA_ESTADO[c.estado]}
                   </span>
                   <TagTipoCambio slug={c.categoria} />
+                  <VeredictoChip v={ctx.veredictos.get(c.id)} />
                 </div>
                 {c.targetQuote && (
                   <p className="mb-1 truncate text-[11px] italic text-status-corrections" title={c.targetQuote}>

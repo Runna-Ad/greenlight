@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, ChevronDown } from "lucide-react";
+import { Trash2, ChevronDown, Sparkles } from "lucide-react";
 import { useCorrecciones } from "./contexto";
 import { TagTipoCambio } from "../selector-tipo-cambio";
+import { VeredictoChip } from "../veredicto-chip";
 import { keyCampo, porRonda, sinResolver, type Correccion, type EstadoCorreccion } from "@/lib/correcciones";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +70,19 @@ export function PanelCorrecciones() {
             ? "Confirma cada una al revisarla; la tarea se aprueba cuando no quede ninguna en rojo."
             : "Atiende cada cambio y márcalo; luego devuelve la tarea a revisión."}
         </p>
+        {/* H.Ü.E revisa si cada cambio ya se hizo — ADVISORY, ayuda a confirmar más
+            rápido (y a no perder los anclados a texto que ya cambió). El lead decide. */}
+        {ctx.esRevisor && pendientes > 0 && (
+          <button
+            type="button"
+            disabled={ctx.validando}
+            onClick={() => ctx.validar()}
+            className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-card px-2.5 py-1 text-[11.5px] font-semibold text-primary transition-colors hover:bg-secondary disabled:opacity-50"
+          >
+            <Sparkles className="size-3.5" />
+            {ctx.validando ? "Revisando con H.Ü.E…" : "Revisar cambios con H.Ü.E"}
+          </button>
+        )}
       </div>
 
       <div>
@@ -115,6 +129,7 @@ export function PanelCorrecciones() {
                           </span>
                         )}
                         <TagTipoCambio slug={c.categoria} />
+                        <VeredictoChip v={ctx.veredictos.get(c.id)} />
                         <span
                           className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
                           style={{ background: PILL[c.estado] }}

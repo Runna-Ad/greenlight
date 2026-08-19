@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useTransition, type ReactNode } from "react";
+import { createContext, useContext, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { keyCampo, type Correccion } from "@/lib/correcciones";
@@ -11,6 +11,7 @@ import {
   descartarCorreccion,
   type CorreccionTarget,
 } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
+import { validarCambios, type VeredictoCambio } from "@/app/(app)/[cliente]/tareas/[id]/validar-actions";
 
 type Ctx = {
   ideaId: string;
@@ -28,6 +29,11 @@ type Ctx = {
   confirmarCampo: (tabla: string, filaId: string | null, campo: string) => void;
   /** El revisor descarta una corrección que fijó (borrado duro). */
   descartar: (id: string) => void;
+  /** Veredicto ADVISORY de la IA por corrección (¿ya se hizo el cambio?). */
+  veredictos: Map<string, VeredictoCambio>;
+  validando: boolean;
+  /** Corre la validación con IA de todas las correcciones vivas. */
+  validar: () => void;
 };
 
 const CorreccionesCtx = createContext<Ctx | null>(null);
@@ -52,6 +58,23 @@ export function CorreccionesProvider({
 }) {
   const router = useRouter();
   const [pendiente, start] = useTransition();
+  const [validando, startValidar] = useTransition();
+  const [veredictos, setVeredictos] = useState<Map<string, VeredictoCambio>>(new Map());
+
+  const validar = () =>
+    startValidar(async () => {
+      const res = await validarCambios(ideaId);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      if (!res.veredictos.length) {
+        toast.info("No hay cambios pendientes que validar.");
+        return;
+      }
+      setVeredictos(new Map(res.veredictos.map((v) => [v.correccionId, v])));
+      toast.success("Cambios revisados con H.Ü.E");
+    });
 
   const run = (p: Promise<{ ok: boolean; error?: string }>, okMsg?: string) =>
     start(async () => {
@@ -86,6 +109,9 @@ export function CorreccionesProvider({
     confirmarCampo: (tabla, filaId, campo) =>
       run(confirmarCampoAction(ideaId, tabla, filaId, campo), "Campo confirmado"),
     descartar: (id) => run(descartarCorreccion(ideaId, id), "Corrección descartada"),
+    veredictos,
+    validando,
+    validar,
   };
 
   return <CorreccionesCtx.Provider value={value}>{children}</CorreccionesCtx.Provider>;

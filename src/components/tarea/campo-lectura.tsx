@@ -6,6 +6,7 @@ import { Plus, X, Check, ArrowRight } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate } from "@floating-ui/react-dom";
 import { useCorrecciones } from "./correcciones/contexto";
 import { SelectorTipoCambio, TagTipoCambio } from "./selector-tipo-cambio";
+import { VeredictoChip } from "./veredicto-chip";
 import { type CategoriaCambio } from "@/lib/tipos-cambio";
 import {
   resaltadosEnTexto,
@@ -219,11 +220,14 @@ export function CampoLectura({
         )}
       </div>
 
-      {/* Cambios cuya frase ya no está en el texto: no se pierden, se listan como
-          chips diminutos con la misma tarjeta al pasar el ratón. */}
+      {/* Cambios cuya frase ya NO está en el texto — casi siempre porque el
+          especialista YA HIZO el cambio pedido. No es un error: se reencuadra como
+          "el texto cambió, confírmalo", anclado al campo, con su tarjeta al hover. */}
       {huerfanas.length > 0 && (
         <div className="mt-1 flex flex-wrap items-center gap-1">
-          <span className="text-[10px] text-muted-foreground/70">Sin ubicar:</span>
+          <span className="text-[10px] font-medium text-muted-foreground">
+            El texto cambió — revisa si ya quedó:
+          </span>
           {huerfanas.map((c) => (
             <button
               key={c.id}
@@ -330,6 +334,7 @@ export function CampoLectura({
                   {ETIQUETA_ESTADO[corrAbierta.estado]}
                 </span>
                 <TagTipoCambio slug={corrAbierta.categoria} />
+                <VeredictoChip v={ctx.veredictos.get(corrAbierta.id)} />
               </div>
               <div className="flex items-center gap-1">
                 {corrAbierta.estado === "done" && (
