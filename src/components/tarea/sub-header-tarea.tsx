@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, RefreshCw, Check } from "lucide-react";
+import { ArrowLeft, RefreshCw, Check, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { AssetStatus } from "@/lib/brand";
 import type { TaskContext } from "@/lib/task-actions";
 import { canOverrideStatus } from "@/lib/roles";
+import { sinResolver } from "@/lib/correcciones";
 import { AccionesTarea } from "./acciones-tarea";
 import { NavBundle } from "./nav-bundle";
+import { useCorrecciones } from "./correcciones/contexto";
 import { useWorkspace } from "./workspace-provider";
 import type { BundleTask } from "@/lib/bundle";
 
@@ -47,6 +49,11 @@ export function SubHeaderTarea({
   siguiente: BundleTask | null;
 }) {
   const { verCliente } = useWorkspace();
+  // El botón de H.Ü.E vive también AQUÍ (barra sticky de arriba), no sólo en el
+  // panel de correcciones al fondo — durante la revisión el lead mira arriba, así
+  // que el validador quedaba "perdido". Se muestra cuando hay cambios sin resolver.
+  const corr = useCorrecciones();
+  const pendientes = corr ? sinResolver(corr.correcciones) : 0;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -58,6 +65,18 @@ export function SubHeaderTarea({
       </Link>
 
       <div className="flex flex-wrap items-center justify-end gap-2">
+        {corr?.esRevisor && pendientes > 0 && (
+          <button
+            type="button"
+            disabled={corr.validando}
+            onClick={() => corr.validar()}
+            title="H.Ü.E revisa si cada cambio pedido ya se hizo (te ayuda a confirmar)"
+            className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-card px-2.5 py-2 text-[12.5px] font-semibold text-primary transition-colors hover:bg-secondary disabled:opacity-50"
+          >
+            <Sparkles className="size-3.5" />
+            {corr.validando ? "Revisando con H.Ü.E…" : "Revisar con H.Ü.E"}
+          </button>
+        )}
         {verCliente && !canOverrideStatus(ctx.role) ? (
           <BotonesClientePreview abiertas={abiertas} />
         ) : (

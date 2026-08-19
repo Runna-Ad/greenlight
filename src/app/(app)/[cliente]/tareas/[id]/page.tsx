@@ -145,8 +145,8 @@ export default async function TareaPage({
 
   // El bundle: las tareas hermanas de este brief, con el MISMO filtro y orden
   // que los cards de /briefs (lib/bundle.ts es la única fuente).
-  const bundle = await cargarBundle(idea.brief_id, role, soy?.id ?? null);
-  const posicion = posicionEnBundle(bundle, idea.id);
+  // (bundle + legales + correcciones + feedback del cliente se cargan más abajo en
+  // UN Promise.all — sólo necesitan idea.*, no hay que serializarlos.)
   const filenames = (archivos ?? []).map((a) => a.filename).filter(Boolean) as string[];
 
   // El cuerpo: se crea la primera fila al abrir, para que la persona escriba ya.
@@ -209,24 +209,26 @@ export default async function TareaPage({
         }[]
       >();
 
-    for (const v of vinculos ?? []) {
-      const r = v.references;
-      if (!r) continue;
-      let displayUrl: string | null = r.kind === "video" ? r.url : null;
-      if (r.kind === "imagen" && r.storage_path) {
-        const { data: firmada } = await db.storage
-          .from("greenlight-referencias")
-          .createSignedUrl(r.storage_path, 60 * 60); // 1h
-        displayUrl = firmada?.signedUrl ?? null;
-      }
-      (refsPorPlano[v.plano_id] ??= []).push({
-        id: r.id,
-        kind: r.kind,
-        displayUrl,
-        thumbnail: r.thumbnail_url,
-        platform: r.platform,
-      });
-    }
+    // Las URLs firmadas se generan EN PARALELO (antes era una llamada de storage
+    // secuencial por imagen → N viajes en serie, lento con varias referencias).
+    const firmados = await Promise.all(
+      (vinculos ?? []).map(async (v) => {
+        const r = v.references;
+        if (!r) return null;
+        let displayUrl: string | null = r.kind === "video" ? r.url : null;
+        if (r.kind === "imagen" && r.storage_path) {
+          const { data: firmada } = await db.storage
+            .from("greenlight-referencias")
+            .createSignedUrl(r.storage_path, 60 * 60); // 1h
+          displayUrl = firmada?.signedUrl ?? null;
+        }
+        return {
+          plano_id: v.plano_id,
+          ref: { id: r.id, kind: r.kind, displayUrl, thumbnail: r.thumbnail_url, platform: r.platform },
+        };
+      }),
+    );
+    for (const f of firmados) if (f) (refsPorPlano[f.plano_id] ??= []).push(f.ref);
   }
 
   // Referencias del ESTÁTICO — sólo imágenes, mismo bucket privado + signed URL.
@@ -249,50 +251,25 @@ export default async function TareaPage({
           } | null;
         }[]
       >();
-    for (const v of vinculos ?? []) {
-      const r = v.references;
-      if (!r) continue;
-      let displayUrl: string | null = r.kind === "video" ? r.url : null;
-      if (r.kind === "imagen" && r.storage_path) {
-        const { data: firmada } = await db.storage
-          .from("greenlight-referencias")
-          .createSignedUrl(r.storage_path, 60 * 60);
-        displayUrl = firmada?.signedUrl ?? null;
-      }
-      refsEstatico.push({
-        id: r.id,
-        kind: r.kind,
-        displayUrl,
-        thumbnail: r.thumbnail_url,
-        platform: r.platform,
-      });
-    }
+    const firmados = await Promise.all(
+      (vinculos ?? []).map(async (v) => {
+        const r = v.references;
+        if (!r) return null;
+        let displayUrl: string | null = r.kind === "video" ? r.url : null;
+        if (r.kind === "imagen" && r.storage_path) {
+          const { data: firmada } = await db.storage
+            .from("greenlight-referencias")
+            .createSignedUrl(r.storage_path, 60 * 60);
+          displayUrl = firmada?.signedUrl ?? null;
+        }
+        return { id: r.id, kind: r.kind, displayUrl, thumbnail: r.thumbnail_url, platform: r.platform };
+      }),
+    );
+    for (const f of firmados) if (f) refsEstatico.push(f);
   }
 
-  // Legales: la BIBLIOTECA disponible (por marca) + cuáles están SELECCIONADOS
-  // en esta tarea (idea_snippets). El picker agrega/quita; el texto libre es
-  // aparte (ideas.legales_libres).
-  const [{ data: bibliotecaLegal }, { data: idSnippets }] = await Promise.all([
-    db
-      .from("snippets")
-      .select("id, title, body")
-      .eq("kind", "legal")
-      .eq("active", true)
-      .or(idea.marca_id ? `marca_id.eq.${idea.marca_id},scope.eq.global` : "scope.eq.global")
-      .order("title")
-      .returns<{ id: string; title: string; body: string }[]>(),
-    db
-      .from("idea_snippets")
-      .select("snippet_id")
-      .eq("idea_id", idea.id)
-      .returns<{ snippet_id: string }[]>(),
-  ]);
-  const seleccionadosIds = new Set((idSnippets ?? []).map((s) => s.snippet_id));
-  const legalesSeleccionados = (bibliotecaLegal ?? []).filter((s) => seleccionadosIds.has(s.id));
-  const legalesDisponibles = (bibliotecaLegal ?? []).filter((s) => !seleccionadosIds.has(s.id));
-
-  // Correcciones localizadas (0028): comentarios kind='correction_request' que
-  // apuntan a un campo. Se muestran fijados al campo + en el panel lateral.
+  // Correcciones localizadas (0028): comentarios kind='correction_request'. Tipo
+  // de fila definido antes del Promise.all para tiparlo dentro.
   type CorrRow = {
     id: string; body: string; ronda: number | null;
     target_tabla: string | null; target_fila_id: string | null;
@@ -301,15 +278,47 @@ export default async function TareaPage({
     atendido_at: string | null; resolved_at: string | null; author_member_id: string | null;
     categoria: string | null;
   };
-  const { data: corrRows } = await db
-    .from("comments")
-    .select(
-      "id, body, ronda, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, atendido_at, resolved_at, author_member_id, categoria",
-    )
-    .eq("idea_id", idea.id)
-    .eq("kind", "correction_request")
-    .order("created_at")
-    .returns<CorrRow[]>();
+  // TODO lo que sólo depende de idea.* corre EN PARALELO (antes: bundle, legales,
+  // correcciones y feedback del cliente iban en serie, un viaje de red tras otro).
+  const [bundle, [{ data: bibliotecaLegal }, { data: idSnippets }], { data: corrRows }, { data: cambiosCliente }] =
+    await Promise.all([
+      cargarBundle(idea.brief_id, role, soy?.id ?? null),
+      Promise.all([
+        db
+          .from("snippets")
+          .select("id, title, body")
+          .eq("kind", "legal")
+          .eq("active", true)
+          .or(idea.marca_id ? `marca_id.eq.${idea.marca_id},scope.eq.global` : "scope.eq.global")
+          .order("title")
+          .returns<{ id: string; title: string; body: string }[]>(),
+        db
+          .from("idea_snippets")
+          .select("snippet_id")
+          .eq("idea_id", idea.id)
+          .returns<{ snippet_id: string }[]>(),
+      ]),
+      db
+        .from("comments")
+        .select(
+          "id, body, ronda, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, atendido_at, resolved_at, author_member_id, categoria",
+        )
+        .eq("idea_id", idea.id)
+        .eq("kind", "correction_request")
+        .order("created_at")
+        .returns<CorrRow[]>(),
+      db
+        .from("comments")
+        .select("id, body, created_at")
+        .eq("idea_id", idea.id)
+        .eq("kind", "client_change")
+        .order("created_at", { ascending: false })
+        .returns<{ id: string; body: string; created_at: string | null }[]>(),
+    ]);
+  const posicion = posicionEnBundle(bundle, idea.id);
+  const seleccionadosIds = new Set((idSnippets ?? []).map((s) => s.snippet_id));
+  const legalesSeleccionados = (bibliotecaLegal ?? []).filter((s) => seleccionadosIds.has(s.id));
+  const legalesDisponibles = (bibliotecaLegal ?? []).filter((s) => !seleccionadosIds.has(s.id));
 
   const autorIds = [...new Set((corrRows ?? []).map((r) => r.author_member_id).filter(Boolean) as string[])];
   const { data: autores } = autorIds.length
@@ -334,15 +343,9 @@ export default async function TareaPage({
   }));
   const abiertasN = correcciones.filter((c) => c.estado === "open").length;
 
-  // Lo que el cliente pidió desde el portal (texto libre, kind='client_change').
-  // Va como tarjeta propia — no al panel de correcciones internas.
-  const { data: cambiosCliente } = await db
-    .from("comments")
-    .select("id, body, created_at")
-    .eq("idea_id", idea.id)
-    .eq("kind", "client_change")
-    .order("created_at", { ascending: false });
-  const feedbackCliente = ((cambiosCliente ?? []) as { id: string; body: string; created_at: string | null }[]).map(
+  // Feedback del cliente (client_change) — ya cargado arriba en el Promise.all.
+  // Va como tarjeta propia, no al panel de correcciones internas.
+  const feedbackCliente = (cambiosCliente ?? []).map(
     (c) => ({
       id: c.id,
       body: c.body,
