@@ -74,7 +74,18 @@ export function CorreccionesProvider({
         return;
       }
       setVeredictos(new Map(res.veredictos.map((v) => [v.correccionId, v])));
-      toast.success("Cambios revisados con H.Ü.E");
+      // Resumen legible del veredicto — para que se ENTIENDA qué hizo H.Ü.E, no
+      // sólo "listo". Cada cambio también lleva su chip (parece hecho / a medias /
+      // no parece hecho) en su tarjeta.
+      const si = res.veredictos.filter((v) => v.hecho === "si").length;
+      const parc = res.veredictos.filter((v) => v.hecho === "parcial").length;
+      const no = res.veredictos.filter((v) => v.hecho === "no").length;
+      const partes = [
+        si ? `${si} ${si === 1 ? "hecho" : "hechos"}` : null,
+        parc ? `${parc} a medias` : null,
+        no ? `${no} sin hacer` : null,
+      ].filter(Boolean);
+      toast.success(`H.Ü.E revisó ${res.veredictos.length}: ${partes.join(" · ")}`);
     });
 
   const run = (p: Promise<{ ok: boolean; error?: string }>, okMsg?: string) =>

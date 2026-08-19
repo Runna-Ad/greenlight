@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import type { AssetStatus } from "@/lib/brand";
 import type { TaskContext } from "@/lib/task-actions";
 import { canOverrideStatus } from "@/lib/roles";
-import { sinResolver } from "@/lib/correcciones";
 import { AccionesTarea } from "./acciones-tarea";
 import { NavBundle } from "./nav-bundle";
 import { useCorrecciones } from "./correcciones/contexto";
@@ -51,9 +50,14 @@ export function SubHeaderTarea({
   const { verCliente } = useWorkspace();
   // El botón de H.Ü.E vive también AQUÍ (barra sticky de arriba), no sólo en el
   // panel de correcciones al fondo — durante la revisión el lead mira arriba, así
-  // que el validador quedaba "perdido". Se muestra cuando hay cambios sin resolver.
+  // que el validador quedaba "perdido".
+  //
+  // Se muestra en el MOMENTO de revisar: la tarea tiene cambios de esta ronda y
+  // aún no está entregada. NO se ata a "cambios sin cerrar" — antes, en cuanto el
+  // lead confirmaba todos los cambios, el botón desaparecía justo cuando quería
+  // repasarlos con H.Ü.E. Ahora sigue disponible para revisar la ronda entera.
   const corr = useCorrecciones();
-  const pendientes = corr ? sinResolver(corr.correcciones) : 0;
+  const mostrarHue = !!corr?.esRevisor && corr.correcciones.length > 0 && status !== "delivered";
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -65,7 +69,7 @@ export function SubHeaderTarea({
       </Link>
 
       <div className="flex flex-wrap items-center justify-end gap-2">
-        {corr?.esRevisor && pendientes > 0 && (
+        {mostrarHue && corr && (
           <button
             type="button"
             disabled={corr.validando}

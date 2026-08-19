@@ -95,6 +95,11 @@ export function CampoLectura({
   // misma tarjeta al pasar el ratón, para poder verlas/descartarlas.
   const ubicadas = new Set(resaltados.map((r) => r.id));
   const huerfanas = cs.filter((c) => !ubicadas.has(c.id));
+  // Un huérfano SIN confirmar (open/done) casi siempre es "el especialista ya lo
+  // cambió → revisa si quedó". Uno YA confirmado (closed) no debe volver a pedir
+  // revisión: se muestra aparte como "confirmado" para no confundir (Pedro).
+  const huerfanasPend = huerfanas.filter((c) => c.estado !== "closed");
+  const huerfanasOk = huerfanas.filter((c) => c.estado === "closed");
 
   const corrAbierta = abierta ? byId.get(abierta) : undefined;
   const cardAbierta = !!corrAbierta && !componiendo && !sel;
@@ -191,6 +196,26 @@ export function CampoLectura({
     setSel(null);
   };
 
+  // Un chip de huérfana (frase citada que ya no está en el texto), con su tarjeta
+  // flotante al pasar el ratón (misma que los resaltados: lleva el veredicto de
+  // H.Ü.E y confirmar/descartar).
+  const chipHuerfana = (c: Correccion) => (
+    <button
+      key={c.id}
+      type="button"
+      ref={(el) => {
+        if (el) marcaRefs.current.set(c.id, el);
+        else marcaRefs.current.delete(c.id);
+      }}
+      onMouseEnter={() => abrir(c.id)}
+      onMouseLeave={cerrarPronto}
+      className="max-w-[140px] truncate rounded-full px-1.5 py-0.5 text-[10px] italic text-foreground"
+      style={{ background: MARCA[c.estado] }}
+    >
+      &laquo;{c.targetQuote ?? "campo"}&raquo;
+    </button>
+  );
+
   return fila(
     <div className="relative">
       <div
@@ -220,30 +245,23 @@ export function CampoLectura({
         )}
       </div>
 
-      {/* Cambios cuya frase ya NO está en el texto — casi siempre porque el
-          especialista YA HIZO el cambio pedido. No es un error: se reencuadra como
-          "el texto cambió, confírmalo", anclado al campo, con su tarjeta al hover. */}
-      {huerfanas.length > 0 && (
+      {/* Cambios cuya frase ya NO está en el texto — el especialista la cambió.
+          Si SIGUEN sin confirmar: "revisa si ya quedó". Si el lead YA los confirmó:
+          se muestran como "confirmado" (no vuelven a pedir revisión). */}
+      {huerfanasPend.length > 0 && (
         <div className="mt-1 flex flex-wrap items-center gap-1">
           <span className="text-[10px] font-medium text-muted-foreground">
             El texto cambió — revisa si ya quedó:
           </span>
-          {huerfanas.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              ref={(el) => {
-                if (el) marcaRefs.current.set(c.id, el);
-                else marcaRefs.current.delete(c.id);
-              }}
-              onMouseEnter={() => abrir(c.id)}
-              onMouseLeave={cerrarPronto}
-              className="max-w-[140px] truncate rounded-full px-1.5 py-0.5 text-[10px] italic text-foreground"
-              style={{ background: MARCA[c.estado] }}
-            >
-              &laquo;{c.targetQuote ?? "campo"}&raquo;
-            </button>
-          ))}
+          {huerfanasPend.map((c) => chipHuerfana(c))}
+        </div>
+      )}
+      {huerfanasOk.length > 0 && (
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-status-completed">
+            <Check className="size-3" /> Ya confirmado:
+          </span>
+          {huerfanasOk.map((c) => chipHuerfana(c))}
         </div>
       )}
 

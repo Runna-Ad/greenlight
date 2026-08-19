@@ -46,9 +46,13 @@ type Corr = {
 };
 
 /**
- * Para cada corrección VIVA (sin resolver) de la tarea, pregunta a la IA si el
- * texto ACTUAL del campo ya refleja el cambio pedido. Sólo lectura + una llamada a
- * Claude; no escribe nada. Lo llama el revisor desde el panel.
+ * Para cada cambio de la RONDA MÁS RECIENTE de la tarea, pregunta a la IA si el
+ * texto ACTUAL del campo ya refleja lo pedido. Incluye cambios que el lead ya
+ * confirmó: H.Ü.E es un asistente de revisión que debe estar disponible en el
+ * momento de revisar, no sólo mientras quedan cambios sin cerrar (antes se ataba
+ * a `resolved_at is null`, así que desaparecía justo cuando el lead ya había
+ * confirmado todo — que es cuando lo buscaba). Sólo lectura + una llamada a
+ * Claude; no escribe nada ni cierra nada. Lo llama el revisor.
  */
 export async function validarCambios(
   ideaId: string,
@@ -63,13 +67,16 @@ export async function validarCambios(
   const db = supabaseAdmin();
   const { data: corrs } = await db
     .from("comments")
-    .select("id, body, target_tabla, target_fila_id, target_campo, target_quote")
+    .select("id, body, ronda, target_tabla, target_fila_id, target_campo, target_quote")
     .eq("idea_id", ideaId)
     .eq("kind", "correction_request")
-    .is("resolved_at", null)
     .order("created_at")
-    .returns<Corr[]>();
-  const correcciones = corrs ?? [];
+    .returns<(Corr & { ronda: number | null })[]>();
+  const todas = corrs ?? [];
+  // La ronda más reciente = lo último que el especialista trabajó. Se revisa esa
+  // ronda completa (confirmados incluidos), no sólo lo que sigue sin cerrar.
+  const maxRonda = todas.length ? Math.max(...todas.map((c) => c.ronda ?? 1)) : 0;
+  const correcciones: Corr[] = todas.filter((c) => (c.ronda ?? 1) === maxRonda);
   if (!correcciones.length) return { ok: true, veredictos: [] };
 
   // Texto ACTUAL de cada campo (planos/estáticos). La corrección se pidió sobre una
