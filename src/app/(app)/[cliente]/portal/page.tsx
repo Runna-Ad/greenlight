@@ -4,7 +4,6 @@ import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { cargarPortal, cargarTareaPortal } from "./portal-data";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { PortalTarea } from "@/components/portal/portal-tarea";
-import { PortalAcciones } from "@/components/portal/portal-acciones";
 
 export const dynamic = "force-dynamic";
 
@@ -53,11 +52,6 @@ export default async function PortalPage({
       selBriefId={briefSel}
       selTareaId={tareaSel}
       vista={tareaData ? <PortalTarea t={tareaData} /> : null}
-      acciones={
-        tareaData ? (
-          <PortalAcciones clienteSlug={cliente} ideaId={tareaData.ideaId} status={tareaData.status} />
-        ) : null
-      }
     />
   );
 }

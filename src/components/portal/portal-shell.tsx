@@ -22,16 +22,13 @@ export function PortalShell({
   selBriefId,
   selTareaId,
   vista,
-  acciones,
 }: {
   cliente: { name: string; logoUrl: string | null; brandColor: string };
   briefs: PortalBrief[];
   selBriefId: string | null;
   selTareaId: string | null;
-  /** La vista de sólo lectura de la tarea seleccionada (o null). */
+  /** La vista de sólo lectura de la tarea seleccionada (con su barra de acción). */
   vista: ReactNode;
-  /** Los botones Aprobar / Pedir cambios (o null). */
-  acciones: ReactNode;
 }) {
   const brief = briefs.find((b) => b.id === selBriefId) ?? briefs[0] ?? null;
 
@@ -104,12 +101,9 @@ export function PortalShell({
             <TareaDropdown brief={brief} selTareaId={selTareaId} />
           )}
 
-          {/* La vista de la tarea + acciones */}
+          {/* La vista de la tarea (incluye su barra de acción pegada arriba) */}
           {vista ? (
-            <div className="mt-5">
-              {vista}
-              {acciones}
-            </div>
+            <div className="mt-5">{vista}</div>
           ) : (
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Elige una idea para revisarla.

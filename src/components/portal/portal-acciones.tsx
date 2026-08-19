@@ -1,17 +1,21 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, MessageSquarePlus, Clock } from "lucide-react";
-import { clienteAprobar, clientePedirCambios } from "@/app/(app)/[cliente]/portal/portal-actions";
+import { Check, RefreshCw, Clock } from "lucide-react";
+import { clienteAprobar, clienteEnviarCambios } from "@/app/(app)/[cliente]/portal/portal-actions";
+import { useCorrecciones } from "@/components/tarea/correcciones/contexto";
 import type { AssetStatus } from "@/lib/brand";
 
 /**
- * Los botones del partner: Aprobar / Pedir cambios. Si la idea ya fue resuelta por
- * el cliente (aprobada = delivered, o en cambios = in_corrections) se muestra el
- * estado en vez de las acciones — no puede aprobar dos veces ni pedir cambios sobre
- * algo que ya volvió al equipo.
+ * La barra de acción del cliente, PEGADA ARRIBA (sticky). UN botón que cambia,
+ * como pidió Pedro: por defecto "Aprobar" (verde); en cuanto anota ≥1 cambio se
+ * convierte en "Pedir cambios" — nunca los dos a la vez. El conteo de cambios se
+ * lee del contexto del cliente (se actualiza al anotar/quitar un pin).
+ *
+ * Si la idea ya fue resuelta por el cliente (delivered/in_corrections) se muestra
+ * el estado en vez del botón.
  */
 export function PortalAcciones({
   clienteSlug,
@@ -24,18 +28,21 @@ export function PortalAcciones({
 }) {
   const router = useRouter();
   const [pend, start] = useTransition();
-  const [modo, setModo] = useState<"idle" | "cambios">("idle");
-  const [texto, setTexto] = useState("");
+  const corr = useCorrecciones();
+  const n = corr?.correcciones.length ?? 0;
+  const hayCambios = n > 0;
 
   if (status === "delivered")
-    return <Estado tono="var(--status-completed)" Icon={Check} texto="Aprobaste esta idea. ¡Gracias!" />;
+    return (
+      <Barra>
+        <Estado tono="var(--status-completed)" Icon={Check} texto="Aprobaste esta idea. ¡Gracias!" />
+      </Barra>
+    );
   if (status === "in_corrections")
     return (
-      <Estado
-        tono="var(--status-corrections)"
-        Icon={Clock}
-        texto="Pediste cambios — el equipo está trabajando en ellos."
-      />
+      <Barra>
+        <Estado tono="var(--status-corrections)" Icon={Clock} texto="Pediste cambios — el equipo está en ello." />
+      </Barra>
     );
 
   const aprobar = () =>
@@ -49,79 +56,60 @@ export function PortalAcciones({
       router.refresh();
     });
 
-  const enviarCambios = () =>
+  const enviar = () =>
     start(async () => {
-      if (!texto.trim()) return;
-      const res = await clientePedirCambios(clienteSlug, ideaId, texto.trim());
+      const res = await clienteEnviarCambios(clienteSlug, ideaId);
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
       toast.success("Cambios enviados al equipo.");
-      setModo("idle");
-      setTexto("");
       router.refresh();
     });
 
   return (
-    <div className="mt-5 rounded-xl border border-border bg-card p-4">
-      {modo === "idle" ? (
-        <>
-          <p className="mb-3 text-sm font-medium text-foreground">¿Qué te parece esta idea?</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={aprobar}
-              disabled={pend}
-              className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              style={{ background: "color-mix(in srgb, var(--status-completed) 90%, #000)" }}
-            >
-              <Check className="size-4" /> Aprobar
-            </button>
-            <button
-              type="button"
-              onClick={() => setModo("cambios")}
-              disabled={pend}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
-            >
-              <MessageSquarePlus className="size-4" /> Pedir cambios
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="mb-2 text-sm font-medium text-foreground">¿Qué te gustaría cambiar?</p>
-          <textarea
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            rows={3}
-            autoFocus
-            placeholder="Cuéntale al equipo qué ajustar…"
-            className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={enviarCambios}
-              disabled={pend || !texto.trim()}
-              className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              style={{ background: "color-mix(in srgb, var(--status-corrections) 82%, #000)" }}
-            >
-              Enviar cambios
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setModo("idle");
-                setTexto("");
-              }}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
-            >
-              Cancelar
-            </button>
-          </div>
-        </>
-      )}
+    <Barra>
+      <p className="hidden text-[13px] text-muted-foreground sm:block">
+        {hayCambios
+          ? `${n} ${n === 1 ? "cambio anotado" : "cambios anotados"}`
+          : "Selecciona el texto que quieras cambiar, o aprueba la idea."}
+      </p>
+      {/* Un solo botón que se transforma — Aprobar ⇄ Pedir cambios. La transición
+          de color/tamaño le da el "click" de que algo cambió. */}
+      <button
+        type="button"
+        onClick={hayCambios ? enviar : aprobar}
+        disabled={pend}
+        className="group inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:brightness-110 hover:shadow-md active:scale-[0.98] disabled:opacity-60"
+        style={{
+          background: hayCambios
+            ? "color-mix(in srgb, var(--status-corrections) 82%, #000)"
+            : "color-mix(in srgb, var(--status-completed) 90%, #000)",
+        }}
+      >
+        {hayCambios ? (
+          <>
+            <RefreshCw className="size-4 transition-transform duration-500 group-hover:rotate-180" />
+            Pedir {n === 1 ? "cambio" : "cambios"}
+            <span className="ml-0.5 grid min-w-5 place-items-center rounded-full bg-white/25 px-1 text-xs tabular-nums">
+              {n}
+            </span>
+          </>
+        ) : (
+          <>
+            <Check className="size-4" /> Aprobar
+          </>
+        )}
+      </button>
+    </Barra>
+  );
+}
+
+/** La barra pegada arriba: bleed a los bordes del contenedor + blur de fondo. */
+function Barra({ children }: { children: ReactNode }) {
+  return (
+    <div className="sticky top-0 z-30 -mx-4 mb-4 flex items-center justify-between gap-3 border-b border-border bg-background/85 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:-mx-6 sm:px-6">
+      {children}
     </div>
   );
 }
@@ -137,12 +125,8 @@ function Estado({
 }) {
   return (
     <div
-      className="mt-5 flex items-center gap-2 rounded-xl border p-4 text-sm font-medium"
-      style={{
-        borderColor: `color-mix(in srgb, ${tono} 40%, var(--border))`,
-        background: `color-mix(in srgb, ${tono} 8%, transparent)`,
-        color: `color-mix(in srgb, ${tono} 78%, #000)`,
-      }}
+      className="flex w-full items-center gap-2 text-sm font-medium"
+      style={{ color: `color-mix(in srgb, ${tono} 78%, #000)` }}
     >
       <Icon className="size-4 shrink-0" />
       {texto}

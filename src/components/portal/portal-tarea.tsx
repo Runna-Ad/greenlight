@@ -4,6 +4,8 @@ import { WorkspaceProvider, useWorkspace } from "@/components/tarea/workspace-pr
 import { HeroTarea } from "@/components/tarea/hero-tarea";
 import { TabsTarea } from "@/components/tarea/tabs-tarea";
 import { DocumentoTarea } from "@/components/tarea/documento-tarea";
+import { CorreccionesClienteProvider } from "@/components/portal/correcciones-cliente-provider";
+import { PortalAcciones } from "@/components/portal/portal-acciones";
 import { PLACEHOLDER_ESTATICO, placeholdersGuion } from "@/lib/plantilla";
 import type { TareaPortal } from "@/app/(app)/[cliente]/portal/portal-data";
 
@@ -24,6 +26,18 @@ export function PortalTarea({ t }: { t: TareaPortal }) {
       estaticoInicial={t.estatico}
       verClienteInicial={true}
     >
+      {/* El cliente pide cambios seleccionando texto (igual que un lead), sólo
+          mientras la idea siga en su cancha (published). Al enviarlos vuelve al
+          equipo y la vista queda sólo-lectura. */}
+      <CorreccionesClienteProvider
+        ideaId={t.ideaId}
+        clienteSlug={t.clienteSlug}
+        cambios={t.cambios}
+        editable={t.status === "published"}
+      >
+      {/* Barra de acción PEGADA ARRIBA (Aprobar ⇄ Pedir cambios). Vive dentro del
+          provider para leer cuántos cambios anotó el cliente. */}
+      <PortalAcciones clienteSlug={t.clienteSlug} ideaId={t.ideaId} status={t.status} />
       <div className="space-y-4">
         <HeroTarea
           ideaId={t.ideaId}
@@ -54,6 +68,7 @@ export function PortalTarea({ t }: { t: TareaPortal }) {
         />
         <CuerpoDoc t={t} />
       </div>
+      </CorreccionesClienteProvider>
     </WorkspaceProvider>
   );
 }

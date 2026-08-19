@@ -70,9 +70,12 @@ export function CampoLectura({
   const [referenceEl, setReferenceEl] = useState<HTMLElement | null>(null);
   const [floatingEl, setFloatingEl] = useState<HTMLElement | null>(null);
 
-  // Correcciones del campo (vacío si no hay contexto o no es revisor — así los
-  // hooks de abajo corren siempre, sin condicionar el orden).
-  const cs = ctx?.esRevisor ? ctx.deCampo(tabla, filaId, campo) : [];
+  // Quién puede fijar cambios aquí: el revisor (correcciones internas) o el
+  // cliente en el portal (sus pins). Ambos comparten el mismo mecanismo.
+  const puedeCorregir = !!ctx && (ctx.esRevisor || ctx.esCliente);
+  // Correcciones/pins del campo (vacío si no hay contexto o es sólo-lectura — así
+  // los hooks de abajo corren siempre, sin condicionar el orden).
+  const cs = puedeCorregir ? ctx!.deCampo(tabla, filaId, campo) : [];
   const resaltados = resaltadosEnTexto(valor, cs);
   const byId = new Map(cs.map((c) => [c.id, c]));
 
@@ -153,8 +156,9 @@ export function CampoLectura({
     </div>
   );
 
-  // Partner real (o fuera del workspace): la vista bonita, sin tocar.
-  if (!ctx || !ctx.esRevisor) return fila(pretty);
+  // Partner en sólo-lectura (o fuera del workspace): la vista bonita, sin tocar.
+  // Interactivo para el revisor (correcciones) o el cliente del portal (pins).
+  if (!ctx || (!ctx.esRevisor && !ctx.esCliente)) return fila(pretty);
 
   // Captura la selección DEL NAVEGADOR dentro de este campo y calcula la cita +
   // offsets exactos (rango desde el inicio del contenedor hasta el inicio de la
@@ -185,9 +189,21 @@ export function CampoLectura({
   const etiqueta = grupo ? `${grupo} · ${label}` : label;
 
   const fijar = () => {
-    if (!sel || !texto.trim() || !categoria) return;
+    if (!sel || !texto.trim()) return;
+    // El tipo de cambio es obligatorio SÓLO para el revisor (alimenta Evaluación);
+    // el cliente pide cambios sin categoría.
+    if (ctx.esRevisor && !categoria) return;
     ctx.pedir(
-      { tabla, filaId, campo, label: etiqueta, quote: sel.quote, start: sel.start, end: sel.end, categoria },
+      {
+        tabla,
+        filaId,
+        campo,
+        label: etiqueta,
+        quote: sel.quote,
+        start: sel.start,
+        end: sel.end,
+        categoria: ctx.esRevisor ? categoria : null,
+      },
       texto.trim(),
     );
     setTexto("");
@@ -245,10 +261,10 @@ export function CampoLectura({
         )}
       </div>
 
-      {/* Cambios cuya frase ya NO está en el texto — el especialista la cambió.
-          Si SIGUEN sin confirmar: "revisa si ya quedó". Si el lead YA los confirmó:
-          se muestran como "confirmado" (no vuelven a pedir revisión). */}
-      {huerfanasPend.length > 0 && (
+      {/* Huérfanas (frase citada ya no está en el texto) — sólo del lado del
+          revisor. Los pins del cliente no se quedan huérfanos (el cliente no edita
+          el texto), así que esta reencuadre es sólo interna. */}
+      {ctx.esRevisor && huerfanasPend.length > 0 && (
         <div className="mt-1 flex flex-wrap items-center gap-1">
           <span className="text-[10px] font-medium text-muted-foreground">
             El texto cambió — revisa si ya quedó:
@@ -256,7 +272,7 @@ export function CampoLectura({
           {huerfanasPend.map((c) => chipHuerfana(c))}
         </div>
       )}
-      {huerfanasOk.length > 0 && (
+      {ctx.esRevisor && huerfanasOk.length > 0 && (
         <div className="mt-1 flex flex-wrap items-center gap-1">
           <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-status-completed">
             <Check className="size-3" /> Ya confirmado:
@@ -287,10 +303,16 @@ export function CampoLectura({
             Cambio para{" "}
             <b className="text-status-corrections">&laquo;{sel.quote}&raquo;</b> en {etiqueta}
           </p>
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Tipo de cambio
-          </p>
-          <SelectorTipoCambio value={categoria} onChange={setCategoria} />
+          {/* El tipo de cambio es SÓLO interno (rúbrica de Evaluación). El cliente
+              no lo ve — pide el cambio y ya. */}
+          {ctx.esRevisor && (
+            <>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Tipo de cambio
+              </p>
+              <SelectorTipoCambio value={categoria} onChange={setCategoria} />
+            </>
+          )}
           <textarea
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
@@ -302,12 +324,12 @@ export function CampoLectura({
           <div className="mt-2 flex gap-2">
             <button
               type="button"
-              disabled={ctx.pendiente || !texto.trim() || !categoria}
+              disabled={ctx.pendiente || !texto.trim() || (ctx.esRevisor && !categoria)}
               onClick={fijar}
               style={{ background: PIN_BG.open }}
               className="rounded-md px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-50"
             >
-              Fijar cambio
+              {ctx.esCliente ? "Anotar cambio" : "Fijar cambio"}
             </button>
             <button
               type="button"
@@ -344,43 +366,67 @@ export function CampoLectura({
             className="z-[60] w-72 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-3 shadow-lg transition-opacity"
           >
             <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span
-                  className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
-                  style={{ background: PIN_BG[corrAbierta.estado] }}
-                >
-                  {ETIQUETA_ESTADO[corrAbierta.estado]}
-                </span>
-                <TagTipoCambio slug={corrAbierta.categoria} />
-                <VeredictoChip v={ctx.veredictos.get(corrAbierta.id)} />
-              </div>
-              <div className="flex items-center gap-1">
-                {corrAbierta.estado === "done" && (
+              {ctx.esRevisor ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
+                      style={{ background: PIN_BG[corrAbierta.estado] }}
+                    >
+                      {ETIQUETA_ESTADO[corrAbierta.estado]}
+                    </span>
+                    <TagTipoCambio slug={corrAbierta.categoria} />
+                    <VeredictoChip v={ctx.veredictos.get(corrAbierta.id)} />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {corrAbierta.estado === "done" && (
+                      <button
+                        type="button"
+                        disabled={ctx.pendiente}
+                        onClick={() => ctx.marcar(corrAbierta.id, "closed")}
+                        aria-label="Confirmar corrección"
+                        title="Confirmar"
+                        className="rounded p-0.5 text-status-completed hover:bg-secondary disabled:opacity-50"
+                      >
+                        <Check className="size-4" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={ctx.pendiente}
+                      onClick={() => {
+                        ctx.descartar(corrAbierta.id);
+                        setAbierta(null);
+                      }}
+                      aria-label="Descartar corrección"
+                      title="Descartar"
+                      className="rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-status-corrections disabled:opacity-50"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                // El cliente: su cambio, con la opción de quitarlo antes de enviar.
+                <>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-status-corrections">
+                    Tu cambio
+                  </span>
                   <button
                     type="button"
                     disabled={ctx.pendiente}
-                    onClick={() => ctx.marcar(corrAbierta.id, "closed")}
-                    aria-label="Confirmar corrección"
-                    title="Confirmar"
-                    className="rounded p-0.5 text-status-completed hover:bg-secondary disabled:opacity-50"
+                    onClick={() => {
+                      ctx.descartar(corrAbierta.id);
+                      setAbierta(null);
+                    }}
+                    aria-label="Quitar cambio"
+                    title="Quitar"
+                    className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-secondary hover:text-status-corrections disabled:opacity-50"
                   >
-                    <Check className="size-4" />
+                    <X className="size-3.5" /> Quitar
                   </button>
-                )}
-                <button
-                  type="button"
-                  disabled={ctx.pendiente}
-                  onClick={() => {
-                    ctx.descartar(corrAbierta.id);
-                    setAbierta(null);
-                  }}
-                  aria-label="Descartar corrección"
-                  title="Descartar"
-                  className="rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-status-corrections disabled:opacity-50"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
+                </>
+              )}
             </div>
 
             {/* El cambio: «de qué» → «a qué». */}

@@ -1153,6 +1153,48 @@ await resetRole();
      Number(await scalar(`select count(*) from produccion.notifications
                            where type='task_published'`)) >= 1);
 
+  // ── 0037 — cambios LOCALIZADOS del cliente (portal) ──
+  // El cliente selecciona texto → escribe el cambio (sin categoría). Cada uno es
+  // un pin client_change anclado al campo, pendiente hasta que "Pedir cambios".
+  await db.exec(`delete from produccion.comments where idea_id='${IDEA}' and kind='client_change'`);
+  const cPin = "00000000-0000-0000-0000-0000000000e1";
+  const pin1 = await scalar(
+    `select produccion.rpc_client_add_change('${IDEA}'::uuid,'planos','${cPin}'::uuid,'copy_in',
+      'Plano 1 · Copy in','Cámbialo a algo más corto','texto viejo',0,10)`);
+  ok("client_add_change crea un pin", typeof pin1 === "string" && pin1.length === 36);
+  eq("el pin se ancla al campo (localizado)",
+     await scalar(`select target_campo from produccion.comments where id='${pin1}'`), "copy_in");
+  ok("el pin no lleva categoría (el cliente no puntúa)",
+     (await scalar(`select categoria from produccion.comments where id='${pin1}'`)) === null);
+  ok("el pin queda pendiente (resolved_at null)",
+     (await scalar(`select resolved_at from produccion.comments where id='${pin1}'`)) === null);
+  await db.query(
+    `select produccion.rpc_client_add_change($1::uuid,'planos',$2::uuid,'dialogo',
+      'Plano 1 · Diálogos','Otro ajuste',null,null,null)`, [IDEA, cPin]);
+  ok("dos pins pendientes",
+     Number(await scalar(`select count(*) from produccion.comments
+       where idea_id='${IDEA}' and kind='client_change' and resolved_at is null`)) === 2);
+
+  await db.exec(`delete from produccion.notifications`);
+  const stSubmit = await scalar(`select produccion.rpc_client_submit_changes('${IDEA}'::uuid)`);
+  eq("submit mueve published→in_corrections", stSubmit, "in_corrections");
+  ok("submit resuelve los pins (separa de la próxima ronda)",
+     Number(await scalar(`select count(*) from produccion.comments
+       where idea_id='${IDEA}' and kind='client_change' and resolved_at is null`)) === 0);
+  // Tras el submit la idea está in_corrections (no publicada) → añadir un pin se rechaza.
+  let addRechazado = false;
+  try {
+    await scalar(`select produccion.rpc_client_add_change('${IDEA}'::uuid,'planos','${cPin}'::uuid,
+      'copy_in','x','y',null,null,null)`);
+  } catch { addRechazado = true; }
+  ok("un pin sobre idea NO publicada se rechaza", addRechazado);
+
+  // Dejar la idea publicada para el bloque siguiente (revisión del lead).
+  await db.exec(`select set_config('produccion.lead_override','on',false);
+                 update produccion.ideas set status='published' where id='${IDEA}';
+                 select set_config('produccion.lead_override','',false);
+                 delete from produccion.notifications`);
+
   // Un lead miembro asignado recibe el aviso de revisión.
   const LEAD_M = await scalar(
     `select member_id from produccion.idea_assignments

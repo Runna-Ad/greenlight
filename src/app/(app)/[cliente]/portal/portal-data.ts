@@ -2,6 +2,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { plantillaPara } from "@/lib/plantilla";
 import type { AssetStatus } from "@/lib/brand";
 import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
+import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
 
 // El portal muestra SÓLO lo que ya se envió al cliente: published_at != null (el
 // mismo criterio que Entregas). Su estado ACTUAL puede ser published (en su
@@ -105,6 +106,7 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
 
 export type TareaPortal = {
   ideaId: string;
+  clienteSlug: string;
   naming: string | null;
   status: AssetStatus;
   tipoAsset: string | null;
@@ -121,6 +123,23 @@ export type TareaPortal = {
   duracion: string[];
   planos: PlanoVista[];
   estatico: EstaticoVista | null;
+  /** Cambios que el cliente ya fijó y todavía no envía (pins pendientes). */
+  cambios: Correccion[];
+};
+
+type PinRow = {
+  id: string;
+  body: string;
+  target_tabla: string | null;
+  target_fila_id: string | null;
+  target_campo: string | null;
+  target_label: string | null;
+  target_quote: string | null;
+  target_start: number | null;
+  target_end: number | null;
+  ronda: number | null;
+  atendido_at: string | null;
+  resolved_at: string | null;
 };
 
 /**
@@ -169,7 +188,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     }>();
   if (!brief || brief.clients?.slug !== clienteSlug) return null;
 
-  const [{ data: marca }, planosRes, estaticoRes] = await Promise.all([
+  const [{ data: marca }, planosRes, estaticoRes, pinsRes] = await Promise.all([
     idea.marca_id
       ? db.from("marcas").select("name, logo_url").eq("id", idea.marca_id).maybeSingle<{ name: string; logo_url: string | null }>()
       : Promise.resolve({ data: null }),
@@ -186,12 +205,41 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
       .order("orden")
       .limit(1)
       .maybeSingle<EstaticoVista>(),
+    // Los pins del cliente aún sin enviar (resolved_at null) — se pintan como
+    // resaltados y se pueden quitar antes de "Pedir cambios".
+    db
+      .from("comments")
+      .select(
+        "id, body, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, ronda, atendido_at, resolved_at",
+      )
+      .eq("idea_id", idea.id)
+      .eq("kind", "client_change")
+      .is("resolved_at", null)
+      .order("created_at")
+      .returns<PinRow[]>(),
   ]);
+
+  const cambios: Correccion[] = (pinsRes.data ?? []).map((r) => ({
+    id: r.id,
+    targetTabla: r.target_tabla,
+    targetFilaId: r.target_fila_id,
+    targetCampo: r.target_campo,
+    targetLabel: r.target_label,
+    targetQuote: r.target_quote,
+    targetStart: r.target_start,
+    targetEnd: r.target_end,
+    body: r.body,
+    autor: null,
+    ronda: r.ronda ?? 1,
+    estado: estadoDeTimestamps(r),
+    categoria: null,
+  }));
 
   const esEstatico = plantillaPara(idea.tipo_asset) === "estatico";
 
   return {
     ideaId: idea.id,
+    clienteSlug,
     naming: idea.naming_base,
     status: idea.status,
     tipoAsset: idea.tipo_asset,
@@ -208,5 +256,6 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     duracion: idea.duracion ?? [],
     planos: (planosRes.data ?? []) as PlanoVista[],
     estatico: (estaticoRes.data ?? null) as EstaticoVista | null,
+    cambios,
   };
 }

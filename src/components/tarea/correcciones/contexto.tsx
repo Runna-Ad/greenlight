@@ -13,11 +13,15 @@ import {
 } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
 import { validarCambios, type VeredictoCambio } from "@/app/(app)/[cliente]/tareas/[id]/validar-actions";
 
-type Ctx = {
+export type Ctx = {
   ideaId: string;
   clienteSlug: string;
   /** Puede pedir/confirmar cambios (Dept Head/Lead/admin/master). */
   esRevisor: boolean;
+  /** Es el CLIENTE en el portal: pide cambios seleccionando texto igual que un
+   *  lead, pero SIN tipo de cambio y sin confirmar/atender (esas son del equipo).
+   *  Comparte el mismo contexto para reusar CampoLectura tal cual. */
+  esCliente: boolean;
   /** Equipo interno (puede marcar atendido como especialista). */
   esEquipo: boolean;
   correcciones: Correccion[];
@@ -36,7 +40,7 @@ type Ctx = {
   validar: () => void;
 };
 
-const CorreccionesCtx = createContext<Ctx | null>(null);
+export const CorreccionesCtx = createContext<Ctx | null>(null);
 
 /** Devuelve el contexto de correcciones, o null si el campo vive fuera del workspace. */
 export const useCorrecciones = () => useContext(CorreccionesCtx);
@@ -103,6 +107,7 @@ export function CorreccionesProvider({
     ideaId,
     clienteSlug,
     esRevisor,
+    esCliente: false,
     esEquipo,
     correcciones,
     pendiente,

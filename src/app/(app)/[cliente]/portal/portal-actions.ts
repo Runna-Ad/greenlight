@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { dispatchPendingEmails } from "@/lib/notif-email";
+import type { CorreccionTarget } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
 
 export type PortalResultado = { ok: true } | { ok: false; error: string };
 
@@ -32,23 +33,78 @@ async function esDelCliente(
   return brief?.clients?.slug === clienteSlug;
 }
 
-/** El cliente pide cambios (texto libre) sobre una idea publicada. */
-export async function clientePedirCambios(
+/**
+ * El cliente FIJA un cambio localizado (selección de texto → nota), igual que un
+ * lead pide una corrección, pero sin tipo de cambio. Se guarda al instante como
+ * un "pin" pendiente; NO mueve el estado ni avisa hasta "Pedir cambios".
+ */
+export async function clienteFijarCambio(
   clienteSlug: string,
   ideaId: string,
-  texto: string,
+  target: CorreccionTarget,
+  body: string,
 ): Promise<PortalResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
-  if (!texto.trim()) return { ok: false, error: "Escribe qué quieres cambiar." };
+  if (!body.trim()) return { ok: false, error: "Escribe qué quieres cambiar." };
 
   const db = supabaseAdmin();
   if (!(await esDelCliente(db, clienteSlug, ideaId))) {
     return { ok: false, error: "Esta idea no está disponible para revisión." };
   }
-  const { error } = await db.rpc("rpc_client_request_changes", {
+  const { error } = await db.rpc("rpc_client_add_change", {
     p_idea_id: ideaId,
-    p_body: texto.trim(),
+    p_target_tabla: target.tabla,
+    p_target_fila: target.filaId,
+    p_target_campo: target.campo,
+    p_target_label: target.label,
+    p_body: body.trim(),
+    p_target_quote: target.quote ?? null,
+    p_target_start: target.start ?? null,
+    p_target_end: target.end ?? null,
   });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/${clienteSlug}/portal`);
+  return { ok: true };
+}
+
+/** El cliente quita un cambio que fijó y aún no ha enviado (borra el pin). */
+export async function clienteQuitarCambio(
+  clienteSlug: string,
+  ideaId: string,
+  commentId: string,
+): Promise<PortalResultado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+
+  const db = supabaseAdmin();
+  if (!(await esDelCliente(db, clienteSlug, ideaId))) {
+    return { ok: false, error: "Esta idea no está disponible para revisión." };
+  }
+  const { error } = await db
+    .from("comments")
+    .delete()
+    .eq("id", commentId)
+    .eq("idea_id", ideaId)
+    .eq("kind", "client_change")
+    .is("resolved_at", null); // sólo pins que todavía no se enviaron
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/${clienteSlug}/portal`);
+  return { ok: true };
+}
+
+/** El cliente ENVÍA todos sus cambios pendientes al equipo (published→in_corrections). */
+export async function clienteEnviarCambios(
+  clienteSlug: string,
+  ideaId: string,
+): Promise<PortalResultado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+
+  const db = supabaseAdmin();
+  if (!(await esDelCliente(db, clienteSlug, ideaId))) {
+    return { ok: false, error: "Esta idea no está disponible para revisión." };
+  }
+  const { error } = await db.rpc("rpc_client_submit_changes", { p_idea_id: ideaId });
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/${clienteSlug}/portal`);
