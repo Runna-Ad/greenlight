@@ -21,6 +21,8 @@
 // `client` es el rol EXTERNO. Se MUESTRA como "Partner"; el id interno sigue
 // siendo `client` a propósito, para no tocar el enum ni las policies de la base —
 // sólo cambia la etiqueta de cara al usuario.
+import type { Track } from "./vocab";
+
 export type ViewRole = "master" | "admin" | "lead" | "creative" | "client";
 
 export const VIEW_ROLES: ViewRole[] = ["master", "admin", "lead", "creative", "client"];
@@ -49,7 +51,7 @@ export const DEFAULT_ROLE: ViewRole = "admin";
 export type NavKey =
   | "clientes"
   | "mi-trabajo"
-  | "workload"
+  | "performance"
   | "tablero"
   | "briefs"
   | "sync"
@@ -61,7 +63,7 @@ export type NavKey =
 const NAV_ALL: NavKey[] = [
   "clientes",
   "mi-trabajo",
-  "workload",
+  "performance",
   "tablero",
   "briefs",
   "sync",
@@ -78,7 +80,7 @@ const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
   lead: [
     "clientes",
     "mi-trabajo",
-    "workload",
+    "performance",
     "tablero",
     "briefs",
     "sync",
@@ -129,3 +131,15 @@ export const canAdmin = (role: ViewRole): boolean => esNivelAdmin(role);
  * admin gestiona al equipo pero no puede nombrar a otro admin. (Pedro.)
  */
 export const canAssignAdmins = (role: ViewRole): boolean => role === "master";
+
+/**
+ * Qué EQUIPOS (tracks) ve un rol en Performance/Evaluación. `null` = todos.
+ * Admin y Master ven todos los equipos; el Lead sólo el SUYO (puede haber varios
+ * leads por equipo). Sin identidad (`soy`) el lead no puede acotar a "su equipo",
+ * así que no ve a nadie — mejor vacío honesto que enseñar a todos por error.
+ */
+export function tracksVisibles(role: ViewRole, soyTrack: Track | null): Track[] | null {
+  if (esNivelAdmin(role)) return null;
+  if (role === "lead") return soyTrack ? [soyTrack] : [];
+  return []; // creative/client no entran a la Evaluación
+}

@@ -51,7 +51,7 @@ function navFor(
       items: [
         { key: "clientes", href: "/clientes", label: "Clientes", icon: Users },
         { key: "mi-trabajo", href: "/mi-trabajo", label: "Mi trabajo", icon: LayoutGrid },
-        { key: "workload", href: "/workload", label: "Workload", icon: GaugeCircle },
+        { key: "performance", href: "/performance", label: "Performance", icon: GaugeCircle },
         { key: "entregas", href: "/entregas", label: "Entregas", icon: PackageCheck },
         // Sólo leads/especialistas lo ven (canSee); los admin editan su perfil
         // dentro de Configuración.
@@ -88,6 +88,7 @@ function navFor(
 const RESERVED = new Set([
   "clientes",
   "mi-trabajo",
+  "performance",
   "workload",
   "entregas",
   "admin",

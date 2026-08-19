@@ -6,6 +6,7 @@ import { actionsFor, waitingLabel } from "../src/lib/task-actions.ts";
 import { plantillaPara, readTimeS, parseDuracion, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
+import { evaluarEquipo } from "../src/lib/evaluacion.ts";
 
 let pass = 0,
   fail = 0;
@@ -718,6 +719,51 @@ eq("ambas null → null", combinarConsideraciones(null, null), null);
 eq("ambas vacío/espacios → null", combinarConsideraciones("   ", ""), null);
 eq("NO recorta el contenido (evita conflicto espurio)", combinarConsideraciones("  A  ", "  B  "), "  A  \n\n  B  ");
 eq("una vacía (sólo espacios) no deja separador colgando", combinarConsideraciones("  ", "B"), "B");
+
+// ── Evaluación por especialista (scoring binario por tarea, promediado) ──
+console.log("\n▶ evaluarEquipo()");
+{
+  const P = { desde: "2026-08-01T00:00:00Z", hasta: "2026-09-01T00:00:00Z" };
+  const evs = evaluarEquipo(
+    [
+      { id: "m1", name: "Ana", color: "#fff", track: "real" },
+      { id: "m2", name: "Beto", color: "#000", track: "normal" },
+    ],
+    [
+      { ideaId: "A", memberId: "m1", esLead: false, assignedAt: "2026-08-05T00:00:00Z" },
+      { ideaId: "B", memberId: "m1", esLead: false, assignedAt: "2026-08-01T00:00:00Z" },
+      { ideaId: "C", memberId: "m1", esLead: true, assignedAt: "2026-08-02T00:00:00Z" }, // es lead → no cuenta
+      { ideaId: "D", memberId: "m2", esLead: false, assignedAt: "2026-07-01T00:00:00Z" },
+    ],
+    [
+      { ideaId: "A", categoria: "storytelling", ronda: 1 },
+      { ideaId: "A", categoria: "ortografia", ronda: 1 },
+      { ideaId: "A", categoria: "storytelling", ronda: 2 },
+    ],
+    [
+      { id: "A", completedAt: "2026-08-20T00:00:00Z" }, // aprobada en el mes
+      { id: "B", completedAt: "2026-08-25T00:00:00Z" }, // aprobada en el mes, limpia
+      { id: "C", completedAt: "2026-08-18T00:00:00Z" }, // en el mes, pero Ana es LEAD → no cuenta
+      { id: "D", completedAt: "2026-07-10T00:00:00Z" }, // aprobada FUERA del mes
+    ],
+    P,
+  );
+  const ana = evs.find((e) => e.memberId === "m1");
+  const beto = evs.find((e) => e.memberId === "m2");
+  const sc = (e, slug) => e.scorePorCriterio.find((s) => s.slug === slug).score;
+  eq("eval · Ana: 2 tareas evaluables (C excluida por ser lead)", ana.tareas, 2);
+  eq("eval · storytelling = 5 (1 de 2 con cambio)", sc(ana, "storytelling"), 5);
+  eq("eval · ortografia = 5", sc(ana, "ortografia"), 5);
+  eq("eval · hook = 10 (sin cambios)", sc(ana, "hook"), 10);
+  eq("eval · overall = 8.8", ana.overall, 8.8);
+  eq("eval · rondas por tarea = 1", ana.rondasPorTarea, 1);
+  eq("eval · cambios por ronda = 1.5", ana.cambiosPorRonda, 1.5);
+  eq("eval · ciclo mediano = 19.5 días (mediana de 15 y 24)", ana.cicloMedianoDias, 19.5);
+  eq("eval · Beto sin tareas en el periodo → 0", beto.tareas, 0);
+  eq("eval · Beto overall = null (sin dato)", beto.overall, null);
+  eq("eval · Beto criterio sin dato → score null", sc(beto, "hook"), null);
+  eq("eval · Beto ciclo = null", beto.cicloMedianoDias, null);
+}
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);
