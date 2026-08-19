@@ -16,6 +16,7 @@ import { PanelCorrecciones } from "@/components/tarea/correcciones/panel";
 import { SubHeaderTarea } from "@/components/tarea/sub-header-tarea";
 import { HeroTarea } from "@/components/tarea/hero-tarea";
 import { TabsTarea } from "@/components/tarea/tabs-tarea";
+import { ClienteFeedback } from "@/components/tarea/cliente-feedback";
 import { BannerPegarGuion } from "@/components/tarea/banner-pegar-guion";
 import { DocumentoGuion } from "@/components/tarea/documento-guion";
 import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
@@ -333,6 +334,24 @@ export default async function TareaPage({
   }));
   const abiertasN = correcciones.filter((c) => c.estado === "open").length;
 
+  // Lo que el cliente pidió desde el portal (texto libre, kind='client_change').
+  // Va como tarjeta propia — no al panel de correcciones internas.
+  const { data: cambiosCliente } = await db
+    .from("comments")
+    .select("id, body, created_at")
+    .eq("idea_id", idea.id)
+    .eq("kind", "client_change")
+    .order("created_at", { ascending: false });
+  const feedbackCliente = ((cambiosCliente ?? []) as { id: string; body: string; created_at: string | null }[]).map(
+    (c) => ({
+      id: c.id,
+      body: c.body,
+      fecha: c.created_at
+        ? new Date(c.created_at).toLocaleDateString("es-MX", { day: "numeric", month: "short" })
+        : null,
+    }),
+  );
+
   const cerrada = ESTADOS_CERRADOS.includes(idea.status);
   const soloLectura = cerrada && !canOverrideStatus(role);
   const esEstatico = plantilla === "estatico";
@@ -412,6 +431,10 @@ export default async function TareaPage({
             entregaUrl={idea.entrega_url}
             soloLectura={soloLectura}
           />
+
+          {esEquipo && feedbackCliente.length > 0 && (
+            <ClienteFeedback comentarios={feedbackCliente} />
+          )}
 
           <TabsTarea
             ideaId={idea.id}
