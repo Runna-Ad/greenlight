@@ -310,6 +310,14 @@ export async function guardarBrief(
 // autoría al importar un guión). Excluye id/orden/es_cierre.
 const PLANO_CONTENT = ["titulo", "accion", "copy_in", "sfx", "gfx", "edicion", "dialogo"];
 
+// ¿El trabajo de esta persona cuenta como AUTORÍA? Sólo el equipo creativo, y por
+// su IDENTIDAD REAL (soy.role), NO por el view-as: un especialista puede estar
+// viendo la app como admin/lead y seguir siendo el autor de lo que escribe. Antes
+// se filtraba por el view-as, así que trabajar bajo el rol admin por defecto no
+// dejaba autoría — y la Evaluación salía en cero. null = default 'creative'.
+const dejaAutoria = (soyRole: string | null | undefined): boolean =>
+  !["lead", "admin", "master"].includes(soyRole ?? "creative");
+
 /**
  * Registra la AUTORÍA (field_edits, 0035) de las secciones que una persona del
  * equipo CREATIVO escribió — para la Evaluación por autor. NO se llama para
@@ -391,7 +399,7 @@ export async function guardarCampo(
   // Autoría (0035): sólo el equipo CREATIVO (el retoque de un revisor NO es
   // autoría — si no, un lead que arregla un campo se robaría la corrección del
   // especialista) y sólo en planos/estáticos (donde caen las correcciones).
-  if (soy?.id && !canOverrideStatus(role) && (tabla === "planos" || tabla === "estaticos")) {
+  if (soy?.id && dejaAutoria(soy.role) && (tabla === "planos" || tabla === "estaticos")) {
     registrarAutoria(db, fila.idea_id, tabla, [{ filaId, campo }], soy.id);
   }
 
@@ -492,7 +500,7 @@ export async function importarGuion(
   // contenido al que pegó (si es del equipo creativo). Sin esto, quien pega todo su
   // guión y no edita inline no autoraría nada y quedaría invisible en la Evaluación.
   const soy = await getSoy();
-  if (soy?.id && !canOverrideStatus(role)) {
+  if (soy?.id && dejaAutoria(soy.role)) {
     const filas: { filaId: string; campo: string }[] = [];
     for (const p of (data ?? []) as Record<string, unknown>[]) {
       for (const campo of PLANO_CONTENT) {
@@ -538,7 +546,7 @@ export async function importarEstatico(
   // que pegó (si es del equipo creativo).
   const soy = await getSoy();
   const estId = (data as { id?: string } | null)?.id;
-  if (soy?.id && !canOverrideStatus(role) && estId) {
+  if (soy?.id && dejaAutoria(soy.role) && estId) {
     registrarAutoria(
       db,
       ideaId,

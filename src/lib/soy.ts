@@ -10,6 +10,9 @@ export type Soy = {
   name: string;
   color: string;
   track: "real" | "normal";
+  /** El rol REAL de la identidad (no el view-as). Para saber si su trabajo cuenta
+   *  como autoría (sólo el equipo creativo la deja). null = default 'creative'. */
+  role: string | null;
   /** Preferencias de notificación (para "Mi perfil"). in-app siempre llega. */
   notify_email: boolean;
   notify_slack: boolean;
@@ -43,7 +46,7 @@ export const getSoy = cache(async (): Promise<Soy | null> => {
 
   const { data } = await supabaseAdmin()
     .from("track_members")
-    .select("id, name, color, track, notify_email, notify_slack")
+    .select("id, name, color, track, role, notify_email, notify_slack")
     .eq("id", id)
     .eq("active", true)
     .maybeSingle();

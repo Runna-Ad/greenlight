@@ -9,6 +9,7 @@ import { SelectorTipoCambio, TagTipoCambio } from "./selector-tipo-cambio";
 import { type CategoriaCambio } from "@/lib/tipos-cambio";
 import {
   resaltadosEnTexto,
+  keyCampo,
   PIN_BG,
   MARCA,
   ETIQUETA_ESTADO,
@@ -132,7 +133,12 @@ export function CampoLectura({
   };
 
   const fila = (contenido: ReactNode) => (
-    <div className="grid grid-cols-[80px_minmax(0,1fr)] items-start gap-x-2">
+    <div
+      // Ancla para "Ver campo" del panel de correcciones (mismo data-campo-key que
+      // el editor) — así el salto+flash también funciona en la Vista cliente.
+      data-campo-key={ctx ? keyCampo(tabla, filaId, campo) : undefined}
+      className="grid scroll-mt-24 grid-cols-[80px_minmax(0,1fr)] items-start gap-x-2"
+    >
       <span className="flex items-center gap-1 pt-1 text-[11px] font-semibold text-muted-foreground">
         {icono}
         <span className="whitespace-nowrap">{label}</span>
