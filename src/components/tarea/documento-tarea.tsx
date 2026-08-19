@@ -18,8 +18,9 @@ import type { ComponentType } from "react";
 import { Campo } from "./campo";
 import { CampoLectura } from "./campo-lectura";
 import { ReferenciasPlano, type RefVista } from "./referencias-plano";
-import { Linkify } from "@/components/ui/linkify";
+import { TextoRico, Negrita } from "@/components/ui/linkify";
 import { parseDialogo } from "@/lib/dialogo";
+import { sinNegrita } from "@/lib/negrita";
 import { readTimeS } from "@/lib/plantilla";
 import type { PlanoVista, EstaticoVista } from "./preview-slide";
 
@@ -145,8 +146,10 @@ export function DocumentoTarea({
                   en editable es sólo "Plano N" y el título se edita como campo
                   (primera fila) para conservar autoguardado + correcciones. */}
               {lectura ? (
+                // El encabezado ya va en negrita; si el título trae marcadores
+                // `**…**` se quitan para no mostrarlos literales aquí (display only).
                 <span className="truncate text-[11px] font-bold uppercase tracking-wide text-foreground">
-                  {p.titulo?.trim() || `Plano ${p.orden}`}
+                  {sinNegrita(p.titulo)?.trim() || `Plano ${p.orden}`}
                 </span>
               ) : (
                 <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -298,7 +301,7 @@ function CampoDoc({
         icono={<Icono className={`size-3.5 shrink-0 ${colorIcono}`} />}
         pretty={
           <div className="px-1.5 py-1 text-[13px] leading-relaxed text-foreground">
-            <Linkify>{valor}</Linkify>
+            <TextoRico>{valor}</TextoRico>
           </div>
         }
       />
@@ -333,7 +336,11 @@ function DialogoContenido({ texto }: { texto: string | null }) {
       {segmentos.map((s, i) => (
         <p key={i} className="whitespace-pre-wrap">
           {s.quien && <b>{s.quien}: </b>}
-          {s.quien ? <>&ldquo;{s.texto}&rdquo;</> : s.texto}
+          {s.quien ? (
+            <>&ldquo;<Negrita>{s.texto}</Negrita>&rdquo;</>
+          ) : (
+            <Negrita>{s.texto}</Negrita>
+          )}
         </p>
       ))}
     </div>

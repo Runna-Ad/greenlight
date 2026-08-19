@@ -702,10 +702,58 @@ console.log("\n▶ Guión (paste importer)");
   ok("extractor: emoji quitado por la IA → el guard igual pasa (lo caza el humano)",
      sinInventar("Copy in: paro 🧡", "paro"));
 
+  // ── Negrita (**…**): inicio-de-línea = andamiaje (se quita), mitad = copy (se conserva) ──
+  eq("negrita: **…** a MITAD de línea se CONSERVA",
+     limpiarPegado("Copy in: Gana **$46,800 m.n.** hoy"), "Copy in: Gana **$46,800 m.n.** hoy");
+  eq("negrita: etiqueta **Copy in:** en negrita → se des-negrita y el valor conserva su negrita",
+     parseGuion("Plano 1 - x - CU\n**Copy in:** **$46,800 m.n.**")[0].copy_in, "**$46,800 m.n.**");
+  eq("negrita: encabezado **Plano 1** → titulo sin marcadores",
+     parseGuion("**Plano 1 - int Sala - CU**\nAcción.")[0].titulo, "Plano 1 - int Sala - CU");
+  eq("negrita: locutor **Actor** en negrita → cue detectado",
+     parseGuion("Plano 1 - x - CU\nCopy in: hola\n**Actor**\nDiálogo aquí.")[0].dialogo, "(Actor) Diálogo aquí.");
+  eq("negrita: __x__ se normaliza a **x** (conservado a mitad de línea)",
+     limpiarPegado("Copy in: gana __mucho__ dinero"), "Copy in: gana **mucho** dinero");
+  eq("negrita: negrita inline en la acción se conserva",
+     parseGuion("Plano 1 - x - CU\nActor con la **DiDi Card**.\nCopy in: hola")[0].accion, "Actor con la **DiDi Card**.");
+  ok("negrita: el * legal SUELTO no se toca (no forma par)",
+     limpiarPegado("Copy in: 6% CASHBACK*") === "Copy in: 6% CASHBACK*");
+
   // Estático (PROVISIONAL — sin muestra real de Pedro todavía)
   const est = parseEstatico("Título: Beneficio principal\nSubtítulo: Dos beneficios\nBotón CTA: Solicítala");
   eq("estatico copy_titulo", est.copy_titulo, "Beneficio principal");
   eq("estatico copy_cta", est.copy_cta, "Solicítala");
+}
+
+// ── Negrita: helper de render (partirNegrita) + strip para la IA (sinNegrita) ──
+console.log("\n▶ Negrita (render helper)");
+{
+  const { partirNegrita, sinNegrita, desmarcarNegrita } = await import("../src/lib/negrita.ts");
+  eq("sinNegrita: quita ** en par, deja el * suelto", sinNegrita("**$46,800** y CASHBACK*"), "$46,800 y CASHBACK*");
+  eq("sinNegrita: sin negrita → igual", sinNegrita("hola mundo"), "hola mundo");
+  eq("sinNegrita: null → cadena vacía", sinNegrita(null), "");
+  const runs = partirNegrita("Gana **$46,800 m.n.** hoy");
+  eq("partirNegrita: 3 runs (normal · fuerte · normal)", runs.length, 3);
+  eq("partirNegrita: run 0 normal", JSON.stringify(runs[0]), JSON.stringify({ texto: "Gana ", fuerte: false }));
+  eq("partirNegrita: run 1 fuerte SIN marcadores", JSON.stringify(runs[1]), JSON.stringify({ texto: "$46,800 m.n.", fuerte: true }));
+  ok("partirNegrita: el * suelto NO es negrita", partirNegrita("CASHBACK*").every((r) => !r.fuerte));
+  eq("partirNegrita: dos negritas → dos runs fuertes", partirNegrita("**a** **b**").filter((r) => r.fuerte).length, 2);
+  eq("partirNegrita: sin negrita → un run normal", partirNegrita("hola").length, 1);
+  ok("partirNegrita: reconstruye el texto sin marcadores", partirNegrita("x **y** z").map((r) => r.texto).join("") === "x y z");
+
+  // desmarcarNegrita: texto LIMPIO + rangos de negrita en coordenadas de limpio
+  // (base del fix S1 — correcciones ancladas por offset comparten espacio con la negrita).
+  const dm = desmarcarNegrita("Copy in: **$46,800 m.n.** hoy");
+  eq("desmarcarNegrita: texto limpio sin marcadores", dm.texto, "Copy in: $46,800 m.n. hoy");
+  eq("desmarcarNegrita: .texto === sinNegrita", dm.texto, sinNegrita("Copy in: **$46,800 m.n.** hoy"));
+  eq("desmarcarNegrita: un rango", dm.negritas.length, 1);
+  eq("desmarcarNegrita: el rango apunta al contenido en el texto LIMPIO",
+     dm.texto.slice(dm.negritas[0].start, dm.negritas[0].end), "$46,800 m.n.");
+  eq("desmarcarNegrita: dos rangos", desmarcarNegrita("a **b** c **d**").negritas.length, 2);
+  eq("desmarcarNegrita: rangos ordenados y en coords limpias",
+     desmarcarNegrita("a **b** c **d**").negritas.map((r) => r.start).join(","), "2,6");
+  ok("desmarcarNegrita: el * suelto no crea rango", desmarcarNegrita("6% CASHBACK*").negritas.length === 0);
+  eq("desmarcarNegrita: sin negrita → texto igual, cero rangos",
+     JSON.stringify(desmarcarNegrita("hola")), JSON.stringify({ texto: "hola", negritas: [] }));
 }
 
 // ── Consideraciones: combina comentarios del lead + peloteo en una caja ──

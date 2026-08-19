@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canOverrideStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
+import { sinNegrita } from "@/lib/negrita";
 
 /**
  * Veredicto ADVISORY de la IA sobre si un cambio pedido ya se hizo en el texto
@@ -127,10 +128,15 @@ export async function validarCambios(
     return base;
   };
 
+  // Se quitan los marcadores de negrita `**` del texto actual y de la cita: la IA
+  // juzga el copy limpio (los `**` son formato, no contenido) — así el veredicto no
+  // se confunde por los marcadores.
   const bloques = correcciones
     .map((c) => {
-      const texto = textoDe.get(`${c.target_tabla}|${c.target_fila_id}|${c.target_campo}`) ?? "(campo vacío)";
-      const sobre = c.target_quote ? `«${c.target_quote}»` : "(todo el campo)";
+      const texto = sinNegrita(
+        textoDe.get(`${c.target_tabla}|${c.target_fila_id}|${c.target_campo}`) ?? "(campo vacío)",
+      );
+      const sobre = c.target_quote ? `«${sinNegrita(c.target_quote)}»` : "(todo el campo)";
       return `[id=${c.id}] ${etiqueta(c)}\nCambio pedido sobre ${sobre}: ${c.body}\nTexto ACTUAL del campo:\n${texto}`;
     })
     .join("\n\n---\n\n");

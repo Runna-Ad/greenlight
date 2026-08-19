@@ -1,5 +1,74 @@
 # Greenlight · by Rünna — Build Todo
 
+## ✅ DONE (2026-08-19 pm) — Negrita en el guión pegado (bold detection) — SIN pushear (falta "ship it")
+Construido + verificado (tsc · eslint · lib 328 · db 234 · build · 2 render-proofs). NO commiteado/pusheado.
+- [x] `src/lib/negrita.ts`: `partirNegrita` (runs por marcadores) · `sinNegrita` · `desmarcarNegrita`
+      (texto limpio + rangos de negrita en coords limpias — base del fix S1).
+- [x] `guion.ts` `limpiarPegado`: conserva negrita a mitad de línea, des-negrita el andamiaje
+      inicio-de-línea, `__x__`→`**x**`. HEADER sin cambio (el andamiaje llega des-negritado).
+- [x] `linkify.tsx`: `linkificarTexto()` + `<TextoRico>` (negrita+links) + `<Negrita>` (sólo negrita).
+- [x] `documento-tarea.tsx`: pretty→`<TextoRico>`, DialogoContenido→`<Negrita>`, header→`sinNegrita`.
+- [x] `campo-lectura.tsx`: TODO el modo interactivo en espacio LIMPIO (desmarcarNegrita) + negrita
+      por RANGO (pintarNegrita) → resaltados de corrección NUNCA parten un par `**` (fix S1).
+- [x] `ortografia-actions.ts` + `validar-actions.ts`: `sinNegrita()` antes del prompt (texto y cita).
+- [x] `actions.ts` `extraerGuion`: prompt conserva `**`; `sinInventar(sinNegrita(limpio), sinNegrita(extraido))` (fix M2).
+- [x] Tests: fixtures de negrita en guión + partirNegrita/sinNegrita/desmarcarNegrita.
+
+### Review — reap adversarial (Opus) sobre el diff → FIX-FIRST
+- **S1 (SERIO, arreglado + probado)**: correcciones ancladas por offset partían el par `**` en el
+  portal del cliente (dejaban `**` literales + perdían la negrita en precios/ofertas). Fix: anclar el
+  modo interactivo en espacio limpio + negrita por rango. Probado: `<mark><strong>$46,800</strong></mark>`,
+  cero `**` en 3 escenarios (frase completa / subset / adyacente).
+- **M2 (menor, arreglado)**: el `*`-budget de `sinInventar` se aflojaba con los `**` → contar sobre
+  `sinNegrita`. **M3 (menor, NO arreglado)**: `__x__`→`**x**` false-positive en `foo__bar` literal —
+  raro en copy es-MX y NO es regresión nueva (el código viejo también lo maltrataba). Aceptado.
+- Verificación prod-safe (sin tocar prod, sin preview): componentes reales renderizados con
+  `typescript` + `react-dom/server`. Patrón nuevo para verificar render cuando el preview falla.
+- **Limitación conocida v1 (aceptada)**: (a) una línea de CONTENIDO que empieza con palabra en negrita
+  pierde esa negrita inicial (heurística inicio-de-línea); (b) si el revisor selecciona en el EDITOR
+  (textarea crudo) una frase INCLUYENDO los `**`, esa corrección no resalta en Vista cliente (degrada
+  sin fugar `**`). Casos raros; el humano revisa la vista previa/campo.
+- PENDIENTE de Pedro: **"ship it"** (migración: ninguna). Aceptación real = pegar un guión con
+  `**…**` en el deploy live → negrita en Vista cliente + portal. Y confirmar en el editor que los `**`
+  se ven literales (por diseño).
+
+## (histórico) plan original — Negrita en el guión pegado
+Pedro: al pegar el guión en "Pegar guión", parte del texto viene con marcadores
+literales `**…**` (p. ej. `**$46,800 m.n.**`). Hoy `limpiarPegado` los BORRA
+(guion.ts:82). Objetivo: conservarlos como markdown, y renderizarlos en **negrita**
+en las vistas de lectura/cliente. Decisiones de Pedro (esta sesión):
+- FUENTE: los `**` ya vienen como caracteres literales en el pegado (NO es formato
+  rico de Google Docs) → se DESCARTA la captura de `text/html` en onPaste.
+- SCOPE: TODOS los campos de texto del documento (planos + estático).
+- MODELO: `**…**` viven DENTRO de los campos de texto existentes (SIN migración).
+  Negrita real en vistas de lectura/cliente; las cajas de edición muestran los `**`
+  literales (un textarea no puede pintar media-negrita — límite del navegador).
+  H.Ü.E ve el texto con los `**` quitados para no descuadrar sus guardarraíles.
+
+**Piezas:**
+- [ ] `src/lib/negrita.ts` (NUEVO, puro): `partirNegrita(texto)` → runs {texto,fuerte};
+      `sinNegrita(s)` → quita `**`. Sin deps (test node + bundle-safe).
+- [ ] `src/lib/guion.ts` · `limpiarPegado`: dejar de borrar `**`; normalizar `__x__`→`**x**`.
+      HEADER tolera `**` inicial (un "Plano N" en negrita NO debe perder el plano).
+- [ ] `src/components/ui/linkify.tsx`: extraer `linkificarTexto()`; `<TextoRico>` (negrita+links)
+      y `<Negrita>` (sólo negrita). Server-safe.
+- [ ] `documento-tarea.tsx`: pretty → `<TextoRico>`; DialogoContenido → negrita;
+      encabezado del plano → `sinNegrita` (display only).
+- [ ] `campo-lectura.tsx`: cada segmento → `<Negrita>` (cliente/revisor ven negrita real).
+- [ ] `ortografia-actions.ts` + `validar-actions.ts`: `sinNegrita()` al texto ANTES del prompt
+      (evita que el `*`-counting de fixSeguro y la IA se confundan — lección brain-recall).
+- [ ] `actions.ts` `extraerGuion`: instruir al extractor que CONSERVE `**bold**`
+      (limpio ya trae `**`; `sinInventar` sigue OK por submultiset).
+- [ ] `scripts/test-lib.mjs`: actualizar el test que esperaba borrar `**`; añadir fixture con
+      negrita real (partirNegrita, parseGuion conserva `**`, `__`→`**`, sinNegrita).
+
+**Verificación:** tsc + eslint + `npm run build` + `npm test`. DOM: pegar fixture con
+`**$46,800 m.n.**` → cajas de edición muestran `**` → importar → `<strong>` en Vista
+cliente + portal (querySelector, no innerText — preview flaky). Reap adversarial del diff.
+**Limitación conocida (v1, aceptada):** si una ETIQUETA o un CUE de locutor viene TODO
+en negrita (`**Copy in:**`, `**Actor:**`), la detección estructural puede fallar — lo caza
+la vista previa humana. El caso real de Pedro es negrita en VALORES (mitad de línea), OK.
+
 ## ✅ SHIPPED (2026-08-19) — Portal v2 + H.Ü.E v2 + perf [Pedro]
 Commits c90b17b, 6903b48, a6237f5, 8282125, fd25f99 → main. Migración **0037** en prod.
 - Perf loader de tarea (batch queries + parallel signed URLs) + H.Ü.E en barra sticky.

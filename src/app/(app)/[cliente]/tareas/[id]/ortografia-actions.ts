@@ -5,6 +5,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canMoveStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { fixSeguro } from "@/lib/ortografia";
+import { sinNegrita } from "@/lib/negrita";
 import { guardarCampo, type Tabla, type GuardarResultado } from "./actions";
 
 /** Un error de ortografía/gramática que H.Ü.E encontró, con su fix propuesto. */
@@ -149,8 +150,12 @@ export async function revisarOrtografia(
     additionalProperties: false,
   };
 
+  // Se quitan los marcadores de negrita `**` ANTES de mandarlos: la IA revisa el
+  // copy limpio (los `**` no son errores) y el guard `fixSeguro` —que cuenta `*`—
+  // no se descuadra. El `original` volverá sin `**`; el guard `includes` sobre el
+  // texto crudo lo reencuentra (la negrita envuelve la frase, no la parte por dentro).
   const bloques = campos
-    .map((c) => `[id=${c.campoId}] ${c.label}:\n${c.texto}`)
+    .map((c) => `[id=${c.campoId}] ${c.label}:\n${sinNegrita(c.texto)}`)
     .join("\n\n");
 
   const prompt =

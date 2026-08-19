@@ -1,27 +1,18 @@
 import type { ReactNode } from "react";
+import { partirNegrita } from "@/lib/negrita";
 
 /**
- * Muestra un texto volviendo CLICABLE cualquier URL que contenga. Para
- * superficies de SÓLO LECTURA (preview del cliente, subtítulos, notas) — en un
- * textarea editable no aplica. Sin "use client": sirve en server y client.
+ * Convierte las URLs de un texto en nodos clicables (más el texto entre ellas).
+ * Núcleo puro y reutilizable: `Linkify` y `TextoRico` lo comparten. Los dominios
+ * pelones se dejan fuera (falsos positivos con "p.ej.").
  */
-export function Linkify({
-  children,
-  className,
-}: {
-  children: string | null | undefined;
-  className?: string;
-}) {
-  const texto = children ?? "";
-  if (!texto) return null;
-
-  // Regex FRESCO por llamada: http(s):// o www. Los dominios pelones se dejan
-  // fuera del inline (falsos positivos con "p.ej."); parseReferencias sí los
-  // acepta porque ahí cada línea es una referencia entera.
+function linkificarTexto(texto: string, keyBase = 0): ReactNode[] {
+  if (!texto) return [];
+  // Regex FRESCO por llamada (lastIndex propio): http(s):// o www.
   const re = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
   const out: ReactNode[] = [];
   let last = 0;
-  let key = 0;
+  let key = keyBase;
   let m: RegExpExecArray | null;
 
   while ((m = re.exec(texto)) !== null) {
@@ -51,9 +42,80 @@ export function Linkify({
   }
   if (last < texto.length) out.push(texto.slice(last));
 
+  return out;
+}
+
+/**
+ * Muestra un texto volviendo CLICABLE cualquier URL que contenga. Para
+ * superficies de SÓLO LECTURA (preview del cliente, subtítulos, notas) — en un
+ * textarea editable no aplica. Sin "use client": sirve en server y client.
+ */
+export function Linkify({
+  children,
+  className,
+}: {
+  children: string | null | undefined;
+  className?: string;
+}) {
+  const texto = children ?? "";
+  if (!texto) return null;
   return (
     <span className={className} style={{ whiteSpace: "pre-line" }}>
-      {out}
+      {linkificarTexto(texto)}
+    </span>
+  );
+}
+
+/**
+ * Renderiza un texto pintando en <strong> los tramos `**…**` (negrita del copy).
+ * SÓLO negrita (sin links) — para segmentos donde no queremos linkificar (p. ej.
+ * el diálogo, o los segmentos de corrección de CampoLectura). Devuelve un Fragment
+ * (sin wrapper) para poder anidarlo dentro de un <mark>/<span>/<p> existente.
+ */
+export function Negrita({ children }: { children: string | null | undefined }) {
+  const runs = partirNegrita(children ?? "");
+  return (
+    <>
+      {runs.map((r, i) =>
+        r.fuerte ? (
+          <strong key={i} className="font-semibold">
+            {r.texto}
+          </strong>
+        ) : (
+          <span key={i}>{r.texto}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+/**
+ * Texto rico de sólo lectura: negrita `**…**` + URLs clicables, compuestos. Cada
+ * tramo (negrita o normal) se linkifica por dentro, así una URL dentro de una
+ * negrita también queda clicable. Reemplaza a `Linkify` en las vistas de documento.
+ */
+export function TextoRico({
+  children,
+  className,
+}: {
+  children: string | null | undefined;
+  className?: string;
+}) {
+  const texto = children ?? "";
+  if (!texto) return null;
+  const runs = partirNegrita(texto);
+  return (
+    <span className={className} style={{ whiteSpace: "pre-line" }}>
+      {runs.map((r, i) => {
+        const nodos = linkificarTexto(r.texto, i * 1000);
+        return r.fuerte ? (
+          <strong key={i} className="font-semibold">
+            {nodos}
+          </strong>
+        ) : (
+          <span key={i}>{nodos}</span>
+        );
+      })}
     </span>
   );
 }

@@ -11,6 +11,7 @@ import { urlSegura } from "@/lib/url-segura";
 import { combinarConsideraciones } from "@/lib/consideraciones";
 import type { AssetStatus } from "@/lib/brand";
 import { sinInventar, limpiarPegado, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
+import { sinNegrita } from "@/lib/negrita";
 import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
 
 // Columnas que alimentan a PlanoVista/EstaticoVista (para devolver la fila creada
@@ -627,6 +628,8 @@ export async function extraerGuion(
     "- NO agregues palabras que no estén en el texto. Si un campo no aparece, déjalo como cadena vacía.\n" +
     "- Conserva los emoji (🧡 🤝 ✨ ⭐ 👀) EXACTAMENTE como están; nunca los traduzcas a palabras " +
     "ni los describas (no escribas \"orange heart\" ni \"clapping hands\"). Si ves un `:shortcode:`, déjalo igual.\n" +
+    "- Conserva los marcadores de negrita markdown `**así**` EXACTAMENTE donde aparezcan (envuelven texto " +
+    "en negrita); no los quites ni agregues.\n" +
     "- Sólo puedes MOVER el texto a su campo y agregar los paréntesis del formato de diálogo.\n\n" +
     "Texto:\n<<<\n" + limpio + "\n>>>";
 
@@ -661,11 +664,14 @@ export async function extraerGuion(
       };
     });
 
-    // Guardarraíl: junta TODO lo extraído y verifica que no inventó nada.
+    // Guardarraíl: junta TODO lo extraído y verifica que no inventó nada. Se quitan
+    // los marcadores de negrita `**` de AMBOS lados antes de comparar: si no, cada par
+    // `**` infla el presupuesto de `*` del guard y dejaría colar un `*` legal inventado.
+    // La negrita es formato (como la puntuación/emoji), no contenido — no se cuenta.
     const extraido = planos
       .flatMap((p) => Object.values(p).filter((x): x is string => !!x))
       .join(" ");
-    if (!sinInventar(limpio, extraido)) {
+    if (!sinInventar(sinNegrita(limpio), sinNegrita(extraido))) {
       return {
         ok: false,
         error: "H.Ü.E cambió o agregó texto, así que no se aplicó. Pegá el guión o edítalo a mano.",

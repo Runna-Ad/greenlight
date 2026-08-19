@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Plus, X, Check, ArrowRight } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate } from "@floating-ui/react-dom";
+import { desmarcarNegrita, type RangoNegrita } from "@/lib/negrita";
 import { useCorrecciones } from "./correcciones/contexto";
 import { SelectorTipoCambio, TagTipoCambio } from "./selector-tipo-cambio";
 import { VeredictoChip } from "./veredicto-chip";
@@ -16,6 +17,32 @@ import {
   ETIQUETA_ESTADO,
   type Correccion,
 } from "@/lib/correcciones";
+
+/**
+ * Pinta el tramo [a, b) del texto LIMPIO aplicando negrita POR RANGO (los `negritas`
+ * vienen en coordenadas de `limpio`, ordenados y sin traslape). Se usa por segmento
+ * de corrección: como la negrita y los resaltados comparten el mismo espacio, un
+ * resaltado puede quedar dentro/encima de una negrita sin partir ningún marcador `**`.
+ */
+function pintarNegrita(limpio: string, negritas: RangoNegrita[], a: number, b: number): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let i = a;
+  let k = 0;
+  for (const r of negritas) {
+    if (r.end <= a || r.start >= b) continue; // sin traslape con este segmento
+    const bs = Math.max(r.start, a);
+    const be = Math.min(r.end, b);
+    if (bs > i) nodes.push(<span key={k++}>{limpio.slice(i, bs)}</span>);
+    nodes.push(
+      <strong key={k++} className="font-semibold">
+        {limpio.slice(bs, be)}
+      </strong>,
+    );
+    i = be;
+  }
+  if (i < b) nodes.push(<span key={k++}>{limpio.slice(i, b)}</span>);
+  return nodes;
+}
 
 /**
  * Campo de SÓLO LECTURA en "Vista cliente", pero con correcciones para el
@@ -76,21 +103,28 @@ export function CampoLectura({
   // Correcciones/pins del campo (vacío si no hay contexto o es sólo-lectura — así
   // los hooks de abajo corren siempre, sin condicionar el orden).
   const cs = puedeCorregir ? ctx!.deCampo(tabla, filaId, campo) : [];
-  const resaltados = resaltadosEnTexto(valor, cs);
+  // Trabajamos TODO el modo interactivo en "espacio limpio" (sin marcadores `**`):
+  // el DOM muestra `limpio`, la selección/cita/offsets se calculan sobre `limpio`, y
+  // la negrita se re-aplica POR RANGO (pintarNegrita). Así un resaltado de corrección
+  // nunca parte un par `**` (no hay marcadores que partir) — el cliente ve negrita
+  // real Y el resaltado limpio, y la cita/offset guardada vive en el mismo espacio
+  // que el texto que se ve y se selecciona.
+  const { texto: limpio, negritas } = desmarcarNegrita(valor);
+  const resaltados = resaltadosEnTexto(limpio, cs);
   const byId = new Map(cs.map((c) => [c.id, c]));
 
-  // Partir el texto en segmentos [normal | resaltado] para pintar las frases
-  // corregidas sin perder el resto del texto. Cada resaltado lleva su corrección
-  // para anclar la tarjeta.
-  const segmentos: { texto: string; corr?: Correccion }[] = [];
+  // Partir el texto en segmentos [normal | resaltado] (coordenadas de `limpio`) para
+  // pintar las frases corregidas sin perder el resto. Cada resaltado lleva su
+  // corrección para anclar la tarjeta.
+  const segmentos: { start: number; end: number; corr?: Correccion }[] = [];
   {
     let i = 0;
     for (const r of resaltados) {
-      if (r.start > i) segmentos.push({ texto: valor.slice(i, r.start) });
-      segmentos.push({ texto: valor.slice(r.start, r.end), corr: byId.get(r.id) });
+      if (r.start > i) segmentos.push({ start: i, end: r.start });
+      segmentos.push({ start: r.start, end: r.end, corr: byId.get(r.id) });
       i = r.end;
     }
-    if (i < valor.length) segmentos.push({ texto: valor.slice(i) });
+    if (i < limpio.length) segmentos.push({ start: i, end: limpio.length });
   }
 
   // Correcciones que ya no se pueden ubicar en el texto (la frase citada se
@@ -253,10 +287,10 @@ export function CampoLectura({
               style={{ background: MARCA[sg.corr.estado], borderRadius: "2px" }}
               className="cursor-help text-foreground"
             >
-              {sg.texto}
+              {pintarNegrita(limpio, negritas, sg.start, sg.end)}
             </mark>
           ) : (
-            <span key={i}>{sg.texto}</span>
+            <span key={i}>{pintarNegrita(limpio, negritas, sg.start, sg.end)}</span>
           ),
         )}
       </div>

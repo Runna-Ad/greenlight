@@ -39,7 +39,8 @@ const nn = (s: string): string | null => {
 
 const juntar = (xs: string[]): string | null => nn(xs.filter((x) => x.trim()).join("\n"));
 
-// Un renglón "Plano N ..." abre un plano.
+// Un renglón "Plano N ..." abre un plano. (Un encabezado en negrita ya llega
+// des-negritado por limpiarPegado — la heurística inicio-de-línea.)
 const HEADER = /^plano\s+\d+\b/i;
 
 /**
@@ -64,13 +65,26 @@ function emojificar(texto: string): string {
 /**
  * Limpia un pegado "rico" (tabla Markdown/Notion/Docs) a texto plano deck-style,
  * ANTES de parsear o de mandarlo a H.Ü.E. Un guión copiado de Notion trae tabla
- * (`| celda |`), negritas `**…**`, `<br>`, filas separadoras `|---|`, y shortcodes
- * de emoji (`:orange_heart:`). Sin esto el parser no encuentra los "Plano N" (van
- * dentro de una celda) y H.Ü.E tiene que REESCRIBIR la tabla → cambia caracteres →
- * el guardarraíl lo rechaza. Limpiando primero, el parser plano lo procesa directo
- * (sin IA), el `*` legal SUELTO de "CASHBACK*" sobrevive (sólo se quitan los `**…**`
- * en PAR), y los shortcodes se vuelven emoji real ANTES de la IA (así H.Ü.E ve 🧡,
- * no `:orange_heart:`, y no puede expandirlo a "orange heart"). Los emoji no son
+ * (`| celda |`), `<br>`, filas separadoras `|---|`, negritas `**…**`/`__…__`, y
+ * shortcodes de emoji (`:orange_heart:`). Sin esto el parser no encuentra los
+ * "Plano N" (van dentro de una celda) y H.Ü.E tiene que REESCRIBIR la tabla →
+ * cambia caracteres → el guardarraíl lo rechaza.
+ *
+ * NEGRITA — heurística inicio-de-línea = estructura, mitad-de-línea = contenido:
+ *   - Los `**…**` que van en MITAD de una línea SE CONSERVAN — son la negrita del
+ *     copy (`Copy in: **$46,800 m.n.**`), y las vistas de lectura/cliente los pintan
+ *     en <strong> (ver src/lib/negrita.ts).
+ *   - Un `**…**` al INICIO de una línea se DES-negrita — casi siempre es andamiaje
+ *     que el deck/Notion pone en negrita: un encabezado `**Plano 1 - …**`, una
+ *     etiqueta `**Copy in:**` o un locutor `**Actor**`. Si se dejara, el parser no
+ *     encontraría el "Plano N"/la etiqueta (empiezan con `*`) y perdería el campo.
+ * Normalizamos `__x__` → `**x**` primero (un solo marcador). El `*` legal SUELTO de
+ * "CASHBACK*" no forma par y sigue intacto. Antes de mandar copy a H.Ü.E
+ * (ortografía/validador) se quitan TODOS con `sinNegrita`, así la IA y sus
+ * guardarraíles de `*` ven el copy limpio.
+ *
+ * Los shortcodes se vuelven emoji real ANTES de la IA (así H.Ü.E ve 🧡, no
+ * `:orange_heart:`, y no puede expandirlo a "orange heart"). Los emoji no son
  * letras/dígitos/marcas → el guard `sinInventar` los ignora, como a la puntuación.
  */
 export function limpiarPegado(texto: string): string {
@@ -79,11 +93,13 @@ export function limpiarPegado(texto: string): string {
       .replace(/\r\n?/g, "\n")
       .replace(/<br\s*\/?>/gi, "\n") // <br> → salto de línea
       .replace(/^[\s|:]*-[\s|:\-]*$/gm, "") // filas separadoras de tabla (|---|:--|)
-      .replace(/\*\*(.+?)\*\*/g, "$1") // **negrita** → texto (el * suelto no forma par → sobrevive)
-      .replace(/__(.+?)__/g, "$1") // __negrita__
-      .replace(/[ \t]*\|[ \t]*/g, "\n") // bordes/columnas de tabla → salto
+      .replace(/__(.+?)__/g, "**$1**") // __negrita__ → **negrita** (un solo marcador)
+      .replace(/[ \t]*\|[ \t]*/g, "\n") // bordes/columnas de tabla → salto (fija los límites de línea)
       .replace(/[ \t]+\n/g, "\n")
       .replace(/\n[ \t]+/g, "\n")
+      // Andamiaje en negrita al INICIO de línea → sin negrita (header/etiqueta/locutor);
+      // sólo el PRIMER `**…**` de cada línea, lo demás (negrita del copy) se conserva.
+      .replace(/^\*\*([^\n]*?)\*\*/gm, "$1")
       .replace(/\n{3,}/g, "\n\n")
       .trim(),
   );
