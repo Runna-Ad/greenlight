@@ -105,10 +105,13 @@ export function PortalAcciones({
   );
 }
 
-/** La barra pegada arriba: bleed a los bordes del contenedor + blur de fondo. */
+/** La barra pegada arriba: bleed a los bordes del contenedor + blur de fondo.
+ *  Pega a `top-16` (bajo el Topbar de la app, h-16 sticky top-0 z-30) con z-20 — como
+ *  el sub-header interno. Antes iba `top-0 z-30`: chocaba con el Topbar al hacer scroll
+ *  (la búsqueda "Buscar idea" se asomaba por el borde derecho de la barra centrada). */
 function Barra({ children }: { children: ReactNode }) {
   return (
-    <div className="sticky top-0 z-30 -mx-4 mb-4 flex items-center justify-between gap-3 border-b border-border bg-background/85 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:-mx-6 sm:px-6">
+    <div className="sticky top-16 z-20 -mx-4 mb-4 flex items-center justify-between gap-3 border-b border-border bg-background/85 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:-mx-6 sm:px-6">
       {children}
     </div>
   );

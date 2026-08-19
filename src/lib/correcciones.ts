@@ -52,6 +52,11 @@ export type Correccion = {
   estado: EstadoCorreccion;
   /** Tipo de cambio (rúbrica). null en cambios de cliente / legacy sin etiqueta. */
   categoria: string | null;
+  /** true = lo pidió el CLIENTE desde el portal (kind='client_change'). Se RESALTA
+   *  en el plano (rojo) y se lista, pero NO entra al lifecycle interno (atendido /
+   *  confirmar / descartar) ni al gate de aprobación — el equipo lo atiende editando.
+   *  Ausente/false = corrección interna del revisor (comportamiento de siempre). */
+  cliente?: boolean;
 };
 
 /** El estado de una fila de `comments` a partir de sus timestamps. */

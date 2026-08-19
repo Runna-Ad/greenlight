@@ -278,6 +278,14 @@ export default async function TareaPage({
     atendido_at: string | null; resolved_at: string | null; author_member_id: string | null;
     categoria: string | null;
   };
+  // client_change (0037): el cambio del cliente, anclado a un campo igual que una
+  // corrección (pero sin categoría ni lifecycle). Se resalta en el plano y se lista.
+  type ClientChangeRow = {
+    id: string; body: string; created_at: string | null; resolved_at: string | null;
+    target_tabla: string | null; target_fila_id: string | null; target_campo: string | null;
+    target_label: string | null; target_quote: string | null;
+    target_start: number | null; target_end: number | null;
+  };
   // TODO lo que sólo depende de idea.* corre EN PARALELO (antes: bundle, legales,
   // correcciones y feedback del cliente iban en serie, un viaje de red tras otro).
   const [bundle, [{ data: bibliotecaLegal }, { data: idSnippets }], { data: corrRows }, { data: cambiosCliente }] =
@@ -309,11 +317,13 @@ export default async function TareaPage({
         .returns<CorrRow[]>(),
       db
         .from("comments")
-        .select("id, body, created_at")
+        .select(
+          "id, body, created_at, resolved_at, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end",
+        )
         .eq("idea_id", idea.id)
         .eq("kind", "client_change")
         .order("created_at", { ascending: false })
-        .returns<{ id: string; body: string; created_at: string | null }[]>(),
+        .returns<ClientChangeRow[]>(),
     ]);
   const posicion = posicionEnBundle(bundle, idea.id);
   const seleccionadosIds = new Set((idSnippets ?? []).map((s) => s.snippet_id));
@@ -343,23 +353,59 @@ export default async function TareaPage({
   }));
   const abiertasN = correcciones.filter((c) => c.estado === "open").length;
 
-  // Feedback del cliente (client_change) — ya cargado arriba en el Promise.all.
-  // Va como tarjeta propia, no al panel de correcciones internas.
-  const feedbackCliente = (cambiosCliente ?? []).map(
-    (c) => ({
-      id: c.id,
-      body: c.body,
-      fecha: c.created_at
-        ? new Date(c.created_at).toLocaleDateString("es-MX", { day: "numeric", month: "short" })
-        : null,
-    }),
-  );
+  // Cambios del cliente (client_change) — DOS usos del mismo dato:
+  //  (1) `cambiosClienteCorr` alimenta `deCampo` → se RESALTAN en el plano (rojo),
+  //      pero FUERA del array de correcciones internas (no tocan el gate de aprobación
+  //      ni el lifecycle atendido/confirmar — el equipo los atiende editando);
+  //  (2) `feedbackCliente` es la lista CLICABLE en la columna derecha (salta al campo).
+  // SÓLO LA RONDA ACTUAL: rpc_client_submit_changes (0037) marca resolved_at=now() a
+  // TODO el lote en un solo UPDATE → un lote comparte un resolved_at idéntico, y
+  // NUNCA borra las filas. Los client_change llevan ronda=NULL, así que la "ronda
+  // actual" = el lote con el resolved_at MÁS RECIENTE. Sin esto, cada ciclo de
+  // cambios del cliente reaparecería como resaltados rojos permanentes (los de rondas
+  // pasadas ya se atendieron). Los no enviados (resolved_at=null) no se muestran aún.
+  const ccRows = cambiosCliente ?? [];
+  const resueltos = ccRows.map((c) => c.resolved_at).filter((x): x is string => !!x);
+  const ultimoLote = resueltos.length ? resueltos.reduce((a, b) => (a > b ? a : b)) : null;
+  const ccActuales = ultimoLote ? ccRows.filter((c) => c.resolved_at === ultimoLote) : [];
+
+  const cambiosClienteCorr: Correccion[] = ccActuales.map((c) => ({
+    id: c.id,
+    targetTabla: c.target_tabla,
+    targetFilaId: c.target_fila_id,
+    targetCampo: c.target_campo,
+    targetLabel: c.target_label,
+    targetQuote: c.target_quote,
+    targetStart: c.target_start,
+    targetEnd: c.target_end,
+    body: c.body,
+    autor: "Cliente",
+    ronda: 1,
+    estado: "open",
+    categoria: null,
+    cliente: true,
+  }));
+  const feedbackCliente = ccActuales.map((c) => ({
+    id: c.id,
+    body: c.body,
+    fecha: c.created_at
+      ? new Date(c.created_at).toLocaleDateString("es-MX", { day: "numeric", month: "short" })
+      : null,
+    targetTabla: c.target_tabla,
+    targetFilaId: c.target_fila_id,
+    targetCampo: c.target_campo,
+    targetQuote: c.target_quote,
+  }));
 
   const cerrada = ESTADOS_CERRADOS.includes(idea.status);
   const soloLectura = cerrada && !canOverrideStatus(role);
   const esEstatico = plantilla === "estatico";
   const esEquipo = role !== "client";
   const puedeEditar = canOverrideStatus(role);
+  // El panel de correcciones + los cambios del cliente viven en una COLUMNA DERECHA
+  // fija, junto al documento (antes iban al fondo / arriba). Sólo se arma la rejilla
+  // de 2 columnas cuando hay algo que mostrar; si no, el documento va a todo el ancho.
+  const mostrarPanel = esEquipo && (correcciones.length > 0 || feedbackCliente.length > 0);
 
   const notaG = notaGlobal(idea.tipo_asset);
   const notaPlaceholder = notaG
@@ -379,6 +425,7 @@ export default async function TareaPage({
       esRevisor={canOverrideStatus(role)}
       esEquipo={esEquipo}
       correcciones={correcciones}
+      cambiosCliente={cambiosClienteCorr}
     >
       {/* key por idea.id: al pasar de una tarea a otra con las flechas del bundle
           (nav client-side que sólo cambia [id]), React conservaría el useState de
@@ -435,10 +482,6 @@ export default async function TareaPage({
             soloLectura={soloLectura}
           />
 
-          {esEquipo && feedbackCliente.length > 0 && (
-            <ClienteFeedback comentarios={feedbackCliente} />
-          )}
-
           <TabsTarea
             ideaId={idea.id}
             esEstatico={esEstatico}
@@ -467,23 +510,39 @@ export default async function TareaPage({
             }
           />
 
-          <BannerPegarGuion ideaId={idea.id} esEstatico={esEstatico} soloLectura={soloLectura} />
+          {/* Documento (izq) + panel FIJO a la derecha. La rejilla sólo se arma
+              cuando hay panel; en móvil (<lg) todo se apila (aside debajo). El aside
+              es sticky para seguir visible mientras se recorren los planos. */}
+          <div
+            className={
+              mostrarPanel ? "lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5" : ""
+            }
+          >
+            <div className="min-w-0 space-y-4">
+              <BannerPegarGuion ideaId={idea.id} esEstatico={esEstatico} soloLectura={soloLectura} />
 
-          <DocumentoGuion
-            ideaId={idea.id}
-            tipoAsset={idea.tipo_asset}
-            esEstatico={esEstatico}
-            refsPorPlano={refsPorPlano}
-            refsEstatico={refsEstatico}
-            soloLectura={soloLectura}
-            cortinilla={{
-              legalesLibres: idea.legales_libres,
-              seleccionados: legalesSeleccionados,
-              biblioteca: legalesDisponibles,
-            }}
-          />
+              <DocumentoGuion
+                ideaId={idea.id}
+                tipoAsset={idea.tipo_asset}
+                esEstatico={esEstatico}
+                refsPorPlano={refsPorPlano}
+                refsEstatico={refsEstatico}
+                soloLectura={soloLectura}
+                cortinilla={{
+                  legalesLibres: idea.legales_libres,
+                  seleccionados: legalesSeleccionados,
+                  biblioteca: legalesDisponibles,
+                }}
+              />
+            </div>
 
-          {esEquipo && correcciones.length > 0 && <PanelCorrecciones />}
+            {mostrarPanel && (
+              <div className="mt-4 space-y-3 lg:mt-0 lg:sticky lg:top-32">
+                {correcciones.length > 0 && <PanelCorrecciones />}
+                {feedbackCliente.length > 0 && <ClienteFeedback comentarios={feedbackCliente} />}
+              </div>
+            )}
+          </div>
 
           <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6">
             <BottomBarTarea esEstatico={esEstatico} />

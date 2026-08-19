@@ -1,7 +1,54 @@
 # Greenlight · by Rünna — Build Todo
 
-## ✅ DONE (2026-08-19 pm) — Negrita en el guión pegado (bold detection) — SIN pushear (falta "ship it")
-Construido + verificado (tsc · eslint · lib 328 · db 234 · build · 2 render-proofs). NO commiteado/pusheado.
+## ✅ CONSTRUIDO (2026-08-19 pm) — Correcciones a la derecha + cambios cliente resaltados + fixes [Pedro] — SIN pushear
+Construido + reap adversarial (Opus) FIX-FIRST + gates verdes. NO commiteado/pusheado (falta "ship it").
+- [x] #4 Panel de correcciones en columna DERECHA fija (2-col, `mostrarPanel ? grid : ""`, aside
+      `lg:sticky lg:top-32`, stack en móvil). page.tsx.
+- [x] #1 Cambios del cliente RESALTADOS en el plano (rojo): `cambiosCliente` aparte → `deCampo` los
+      mezcla sólo para display; flag `cliente:true`; FUERA del gate/lifecycle (`csRev`). ClienteFeedback
+      reubicado a la derecha + clicable (salta al campo). campo.tsx / campo-lectura.tsx / cliente-feedback.tsx /
+      contexto.tsx / correcciones.ts / page.tsx.
+- [x] #2 Bug scroll portal: PortalAcciones `top-0 z-30` → `top-16 z-20` (chocaba con el Topbar de la app).
+- [x] #3 Mock del riel denso (15+ tareas): artifact **8d889afb** (Opción A grid / Opción B lista+filtros).
+- [x] Reap (Opus) → FIX-FIRST: **S1 (serio)** cambios de cliente de rondas pasadas reaparecían como rojos
+      permanentes (query sin scope de ronda) → filtrado a `max(resolved_at)` = ronda actual. **M2** non-inline
+      CampoCorrecciones cs→csRev. **M3** pin badge/aria cs.length→csRev.length. **M4** excluir cliente de
+      huerfanas + comentario. Todo verificado limpio: gate de aprobación NO incluye cliente; única acción
+      destructiva (setEstado) inalcanzable sobre cliente; portal client sin regresión; layout sin clip.
+- [x] Gates: tsc · eslint 0-err · lib 328 · db 234 · build.
+- PENDIENTE: (a) elegir Opción A/B del riel #3 (Pedro) → construir; (b) "ship it" para pushear (sin migración);
+      (c) verificación VISUAL en preview/deploy (build-verificado; el look final lo revisa Pedro). Sin migración.
+
+## (histórico) plan — Correcciones al lado del guión + fixes de UX
+Pedro (feedback en live + aprobó un mockup: artifact 541fe65d). Cuatro cosas:
+- **#4 Panel de correcciones a la DERECHA** (no al fondo): la página de tarea interna
+  pasa a 2 columnas — documento (izq) + `PanelCorrecciones` FIJO (der, sticky), stack
+  en móvil (desktop-first). Clic en corrección → salta+flash del campo (ya existe verCampo).
+- **#1 Cambios del cliente RESALTADOS en el plano**: hoy `client_change` sólo sale como
+  tarjeta arriba (ClienteFeedback) SIN ubicación. Fix: cargar los target_* del client_change,
+  mapearlos a Correccion (kind='client_change', estado rojo), y ALIMENTAR `deCampo` con un
+  ARRAY SEPARADO (no el de reviewer) → resaltan inline GRATIS. NO entran al gate/conteo de
+  aprobación (que sólo cuenta reviewer correction_request). Panel: sección "Del cliente"
+  (coral, sin acciones de lifecycle). Hover card: rama cliente (sin confirmar/descartar/categoría).
+- **#2 Bug de scroll en el portal**: la barra sticky (PortalAcciones) se encima del contenido
+  al hacer scroll. Fix CSS (z-index/width/bg). Archivo: portal-acciones.tsx / portal-tarea.tsx.
+- **#3 Mock del riel denso** (15+ tareas): subagente en paralelo → HTML → publico artifact.
+
+Piezas #1/#4: `correcciones.ts` (Correccion += kind; color cliente) · `contexto.tsx`
+(cambiosCliente + merge en deCampo) · `page.tsx` (cargar target_* de client_change + 2-col
++ quitar ClienteFeedback redundante) · `panel.tsx` (sección cliente) · `campo-lectura.tsx`
+(hover card rama cliente) · `campo.tsx` (verificar overlay pinta marcas cliente).
+Reglas: key={idea.id} en providers (lección route-param) · NO tocar el gate de aprobación ·
+reap adversarial antes de shippear · NADA a prod sin "ship it".
+Verificación: tsc·eslint·lib·db·build + render-proof + navegación (route-param).
+
+
+
+## ✅ SHIPPED (2026-08-19 pm) — Negrita en el guión pegado (bold detection) [Pedro "ship it"]
+Commit **1750def** → push a main (auto-deploy Vercel). SIN migración. Verificado
+antes de pushear (tsc · eslint · lib 328 · db 234 · build · 2 render-proofs react-dom/server).
+Aceptación real PENDIENTE de Pedro en el deploy live: pegar un guión con `**…**` →
+negrita en Vista cliente + portal; y confirmar que el editor muestra los `**` literales.
 - [x] `src/lib/negrita.ts`: `partirNegrita` (runs por marcadores) · `sinNegrita` · `desmarcarNegrita`
       (texto limpio + rangos de negrita en coords limpias — base del fix S1).
 - [x] `guion.ts` `limpiarPegado`: conserva negrita a mitad de línea, des-negrita el andamiaje
@@ -78,9 +125,12 @@ Commits c90b17b, 6903b48, a6237f5, 8282125, fd25f99 → main. Migración **0037*
 - Portal: cambios LOCALIZADOS del cliente (select→escribe, sin tipo) + botón sticky
   Aprobar⇄Pedir cambios + fallback emoji + **riel visual** de tareas + efectos.
 - CampoLectura compartido con rama `esCliente` (ruta revisor byte-preservada, re-verificada).
-- **PENDIENTE de confirmar EN EL DEPLOY LIVE** (dev local inservible esta sesión):
-  (1) veredicto H.Ü.E «elementos» = "hecho" + sugerir "el elemento importante";
-  (2) round-trip cliente: anota pin → Pedir cambios → llega al equipo (RPC PGlite-tested).
+- **CONFIRMADO en live (2026-08-19)** — las dos pendientes:
+  (1) H.Ü.E «elementos»: da `parcial` (ámbar) + razón + sugerencia exacta "usa el elemento importante"
+      (bug viejo 'no' resuelto). Pedro ACEPTÓ ámbar ("keep it") — NO tunear a 'si' (ver lección 08-19).
+  (2) round-trip cliente: PROBADO en prod con txn rolled-back (DO+raise) → published→in_corrections
+      + client_change creado+resuelto, 0 persistido. UI DOM-verificado la sesión pasada; puppeteo de
+      clicks no fiable (limitación de herramienta, logueada) → se probó el DATA path en prod.
 - Siguiente si Pedro quiere: empujar más el riel (tarjetas más grandes / thumbnails /
   más motion). Login sigue siendo el bloqueador para LIVE (binding cliente↔sesión).
 

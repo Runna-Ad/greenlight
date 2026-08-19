@@ -51,6 +51,7 @@ export function CorreccionesProvider({
   esRevisor,
   esEquipo,
   correcciones,
+  cambiosCliente = [],
   children,
 }: {
   ideaId: string;
@@ -58,6 +59,11 @@ export function CorreccionesProvider({
   esRevisor: boolean;
   esEquipo: boolean;
   correcciones: Correccion[];
+  /** Cambios del CLIENTE (kind='client_change'), anclados a un campo. Se MEZCLAN en
+   *  `deCampo` para resaltarse en el plano, pero se mantienen FUERA de `correcciones`
+   *  —el array que alimenta el panel, el conteo y el gate de aprobación— porque no
+   *  siguen el lifecycle interno. Cada uno lleva `cliente:true`. */
+  cambiosCliente?: Correccion[];
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -113,7 +119,9 @@ export function CorreccionesProvider({
     pendiente,
     deCampo: (tabla, filaId, campo) => {
       const k = keyCampo(tabla, filaId, campo);
-      return correcciones.filter(
+      // Reviewer + cliente: ambos se resaltan sobre el campo. El flag `cliente` deja
+      // que los componentes distingan (el cliente no lleva acciones de lifecycle).
+      return [...correcciones, ...cambiosCliente].filter(
         (c) => keyCampo(c.targetTabla, c.targetFilaId, c.targetCampo) === k,
       );
     },
