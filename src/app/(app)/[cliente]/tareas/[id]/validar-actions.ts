@@ -15,6 +15,8 @@ export type VeredictoCambio = {
   correccionId: string;
   hecho: "si" | "no" | "parcial";
   razon: string;
+  /** Qué hacer: si no está (o quedó a medias), cómo lograrlo; si está, confírmalo. */
+  sugerencia: string;
 };
 
 const LABEL_PLANO: Record<string, string> = {
@@ -144,8 +146,9 @@ export async function validarCambios(
             correccion_id: { type: "string" as const },
             hecho: { type: "string" as const, enum: ["si", "no", "parcial"] },
             razon: { type: "string" as const },
+            sugerencia: { type: "string" as const },
           },
-          required: ["correccion_id", "hecho", "razon"],
+          required: ["correccion_id", "hecho", "razon", "sugerencia"],
           additionalProperties: false,
         },
       },
@@ -155,22 +158,29 @@ export async function validarCambios(
   };
 
   const prompt =
-    "Eres el asistente de un LEAD creativo que revisa si un especialista ya HIZO los " +
-    "cambios que se le pidieron. Te doy una lista de cambios pedidos y, para cada uno, el " +
-    "texto ACTUAL del campo. Para cada cambio, decide si el texto actual YA REFLEJA lo " +
-    "pedido y repórtalo con la herramienta emitir_veredictos.\n\n" +
-    "Para cada correccion_id:\n" +
-    "- hecho='si' → el texto actual ya cumple lo pedido (el cambio se hizo).\n" +
-    "- hecho='no' → el texto sigue igual o ignora la petición (no se hizo).\n" +
-    "- hecho='parcial' → se intentó pero quedó incompleto, distinto a lo pedido, o no puedes " +
-    "estar seguro.\n" +
-    "- razon → UNA frase corta (máx ~15 palabras) en español explicando por qué.\n\n" +
-    "REGLAS:\n" +
-    "- Juzga por el SIGNIFICADO, no por coincidencia exacta de palabras: el texto original de " +
-    "la cita casi siempre YA cambió (por eso se pidió el cambio) — eso es normal, no lo tomes " +
-    "como 'no hecho'.\n" +
-    "- Sé estricto pero justo. Ante la duda real, 'parcial'.\n" +
-    "- Devuelve EXACTAMENTE un veredicto por cada correccion_id que te di.\n\n" +
+    "Eres el asistente de un LEAD creativo. Tu trabajo tiene DOS partes: (1) decidir si el " +
+    "especialista ya hizo el cambio pedido, y (2) — aquí está tu mayor valor como IA — detectar si " +
+    "el cambio dejó un PROBLEMA NUEVO. Te doy, para cada cambio: la frase original citada, lo que se " +
+    "pidió, y el texto ACTUAL del campo. Repórtalo con la herramienta emitir_veredictos.\n\n" +
+    "Para cada correccion_id devuelve:\n" +
+    "- hecho='si' → el texto actual ya cumple lo pedido (aunque el cambio sea pequeño).\n" +
+    "- hecho='parcial' → se intentó (el texto CAMBIÓ respecto a la cita) pero quedó incompleto o " +
+    "distinto a lo pedido.\n" +
+    "- hecho='no' → SÓLO si el texto NO cambió o sigue con el mismo problema original.\n" +
+    "- razon → UNA frase corta (máx ~15 palabras) que explique tu veredicto.\n" +
+    "- sugerencia → UNA frase concreta y accionable. AUNQUE el cambio esté HECHO, revisa si dejó un " +
+    "problema NUEVO (concordancia de número/género, gramática, coherencia, sentido) y proponlo con el " +
+    "arreglo exacto. Si no está o quedó a medias, propón cómo lograrlo.\n\n" +
+    "CÓMO LEER LA PETICIÓN (aquí se falla más):\n" +
+    "- La petición a veces ES el reemplazo deseado: cita «X» + petición 'Y' significa 'cambia «X» por " +
+    "Y'. Si el texto ya dice Y, está HECHO ('si'). EJEMPLO: cita «elementos», petición 'elemento' = " +
+    "hazlo singular; si ahora el texto dice 'elemento', es 'si' — y si quedó 'elemento importantes' " +
+    "(no concuerda en número), la sugerencia debe ser 'usa el elemento importante'.\n" +
+    "- La cita original CASI SIEMPRE ya cambió (por eso se pidió): eso es un INTENTO, nunca 'no'. Si el " +
+    "texto cambió respecto a la cita, el mínimo es 'parcial'.\n" +
+    "- Peticiones vagas o telegráficas ('más punch', 'especificar'): interpreta la intención con " +
+    "generosidad; juzga por SIGNIFICADO, no por palabras exactas; ante duda real usa 'parcial', no 'no'.\n" +
+    "- Sé justo, no castigues. Devuelve EXACTAMENTE un veredicto por cada correccion_id.\n\n" +
     "Cambios pedidos:\n" + bloques;
 
   try {
@@ -209,8 +219,9 @@ export async function validarCambios(
       const id = typeof o.correccion_id === "string" ? o.correccion_id : "";
       const hecho = o.hecho === "si" || o.hecho === "no" || o.hecho === "parcial" ? o.hecho : "parcial";
       const razon = typeof o.razon === "string" ? o.razon.slice(0, 160) : "";
+      const sugerencia = typeof o.sugerencia === "string" ? o.sugerencia.slice(0, 240) : "";
       if (!validas.has(id)) continue; // sólo veredictos de correcciones reales
-      veredictos.push({ correccionId: id, hecho, razon });
+      veredictos.push({ correccionId: id, hecho, razon, sugerencia });
     }
     return { ok: true, veredictos };
   } catch (e) {

@@ -70,9 +70,10 @@ export function PanelCorrecciones() {
             ? "Confirma cada una al revisarla; la tarea se aprueba cuando no quede ninguna en rojo."
             : "Atiende cada cambio y márcalo; luego devuelve la tarea a revisión."}
         </p>
-        {/* H.Ü.E revisa si cada cambio ya se hizo — ADVISORY, ayuda a confirmar más
-            rápido (y a no perder los anclados a texto que ya cambió). El lead decide. */}
-        {ctx.esRevisor && pendientes > 0 && (
+        {/* H.Ü.E revisa cada cambio de la ronda y da dictamen + sugerencia — ADVISORY,
+            ayuda a revisar; el lead decide. Disponible siempre que haya cambios que
+            revisar (no sólo mientras quedan sin confirmar). */}
+        {ctx.esRevisor && (
           <button
             type="button"
             disabled={ctx.validando}
