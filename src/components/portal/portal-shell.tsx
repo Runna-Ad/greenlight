@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { FileText, PackageOpen, CheckCircle2, RefreshCw, Eye, ArrowRight } from "lucide-react";
 import type { PortalBrief, PortalTarea } from "@/app/(app)/[cliente]/portal/portal-data";
@@ -107,8 +107,10 @@ export function PortalShell({
             })}
           </div>
 
-          {/* Riel de tareas del brief — tarjetas visuales, no un dropdown. */}
-          {brief && <TareaRail brief={brief} selTareaId={selTareaId} marca={marca} />}
+          {/* Lista densa de tareas del brief (Opción B): una fila por tarea con
+              filtro por estado + encabezado fijo — escala a briefs de 15+ tareas
+              sin scroll horizontal. */}
+          {brief && <TareaLista brief={brief} selTareaId={selTareaId} marca={marca} />}
 
           {/* La vista de la tarea (incluye su barra de acción pegada arriba). El
               key por tarea la remonta al cambiar → entra con un fade sutil. */}
@@ -125,12 +127,24 @@ export function PortalShell({
   );
 }
 
+// El estado del cliente en "cubetas" para el filtro (mismas 3 que ESTADO_CLIENTE).
+type Bucket = "todas" | "revisar" | "cambios" | "aprobado";
+const bucketDe = (s: string): Exclude<Bucket, "todas"> =>
+  s === "delivered" ? "aprobado" : s === "in_corrections" ? "cambios" : "revisar";
+const FILTROS: { k: Bucket; label: string }[] = [
+  { k: "todas", label: "Todas" },
+  { k: "revisar", label: "Por revisar" },
+  { k: "cambios", label: "En cambios" },
+  { k: "aprobado", label: "Aprobadas" },
+];
+
 /**
- * El riel de tareas: una fila de tarjetas que se desliza en horizontal. Cada una
- * muestra la marca, el nombre y su estado en palabras del cliente. La activa lleva
- * el color de marca; al pasar el ratón se levanta. Entran escalonadas.
+ * Lista DENSA de tareas del brief (Opción B). Una fila por tarea — estado · nombre ·
+ * acción — con filtro por estado y encabezado FIJO al hacer scroll. Reemplaza al riel
+ * horizontal: escala a briefs de 15+ tareas sin scroll horizontal. La activa lleva
+ * una pleca del color de marca. Navega igual (Link a ?brief&tarea, sin saltar scroll).
  */
-function TareaRail({
+function TareaLista({
   brief,
   selTareaId,
   marca,
@@ -139,85 +153,114 @@ function TareaRail({
   selTareaId: string | null;
   marca: string;
 }) {
+  const [filtro, setFiltro] = useState<Bucket>("todas");
   const selId = brief.tasks.find((t) => t.id === selTareaId)?.id ?? brief.tasks[0]?.id ?? null;
   if (!brief.tasks.length) return null;
 
+  const cuenta = (k: Bucket) =>
+    k === "todas" ? brief.tasks.length : brief.tasks.filter((t) => bucketDe(t.status) === k).length;
+  const visibles = brief.tasks.filter((t) => filtro === "todas" || bucketDe(t.status) === filtro);
+
   return (
-    <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <div className="flex gap-2.5">
-        {brief.tasks.map((t, i) => (
-          <TareaCard
-            key={t.id}
-            briefId={brief.id}
-            t={t}
-            activo={t.id === selId}
-            marca={marca}
-            indice={i}
-          />
-        ))}
+    <div className="space-y-2.5">
+      {/* Filtro por estado */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {FILTROS.map((f) => {
+          const n = cuenta(f.k);
+          const activo = filtro === f.k;
+          return (
+            <button
+              key={f.k}
+              type="button"
+              onClick={() => setFiltro(f.k)}
+              disabled={n === 0 && f.k !== "todas"}
+              aria-pressed={activo}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors active:scale-95 disabled:cursor-default disabled:opacity-40",
+                activo
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-secondary",
+              )}
+            >
+              {f.label}
+              <span
+                className={cn(
+                  "rounded-full px-1.5 text-[10.5px] tabular-nums",
+                  activo ? "bg-background/25" : "bg-secondary",
+                )}
+              >
+                {n}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Lista con encabezado fijo */}
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="max-h-[60vh] overflow-y-auto">
+          <div className="sticky top-0 z-[1] grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 border-b border-border bg-secondary/85 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground backdrop-blur">
+            <span>Estado</span>
+            <span>Tarea</span>
+            <span className="text-right">Acción</span>
+          </div>
+          {visibles.length === 0 ? (
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+              Ninguna tarea en este estado.
+            </p>
+          ) : (
+            visibles.map((t) => (
+              <TareaFila key={t.id} briefId={brief.id} t={t} activo={t.id === selId} marca={marca} />
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function TareaCard({
+function TareaFila({
   briefId,
   t,
   activo,
   marca,
-  indice,
 }: {
   briefId: string;
   t: PortalTarea;
   activo: boolean;
   marca: string;
-  indice: number;
 }) {
   const est = estadoCliente(t.status);
   return (
     <Link
       href={href(briefId, t.id)}
       scroll={false}
+      aria-current={activo ? "true" : undefined}
       style={{
-        animationDelay: `${Math.min(indice, 8) * 45}ms`,
-        boxShadow: activo ? `0 0 0 2px color-mix(in srgb, ${marca} 55%, transparent)` : undefined,
+        boxShadow: activo ? `inset 3px 0 0 ${marca}` : undefined,
+        background: activo ? `color-mix(in srgb, ${marca} 8%, transparent)` : undefined,
       }}
       className={cn(
-        "group relative flex w-[170px] shrink-0 flex-col gap-2.5 rounded-2xl border bg-card p-3 fill-mode-both duration-300 animate-in fade-in-0 slide-in-from-bottom-3",
-        "transition-transform hover:-translate-y-1 hover:shadow-lg",
-        activo ? "border-transparent shadow-md" : "border-border hover:border-primary/30",
+        "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-3 py-2.5 text-[13px] transition-colors last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+        !activo && "hover:bg-secondary/50",
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        {t.marcaLogo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={t.marcaLogo} alt="" className="h-6 w-auto max-w-[52px] object-contain" />
-        ) : (
-          <span className="grid size-6 place-items-center rounded-md bg-secondary text-[10px] font-bold text-muted-foreground">
-            {(t.marcaName ?? t.code ?? "·").slice(0, 2).toUpperCase()}
-          </span>
-        )}
-        <span
-          className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold text-white"
-          style={{ background: `color-mix(in srgb, ${est.tone} 82%, #000)` }}
-        >
-          <est.Icon className="size-2.5" /> {est.label}
-        </span>
-      </div>
-
-      <p className="line-clamp-2 min-h-[2.4em] text-[13px] font-semibold leading-snug text-foreground">
-        {t.naming ?? t.code ?? "Idea"}
-      </p>
-
-      {/* Pista de acción: en la activa se ve fija; en las demás aparece al hover. */}
       <span
-        className={cn(
-          "inline-flex items-center gap-1 text-[11px] font-semibold transition-opacity",
-          activo ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-        )}
-        style={{ color: `color-mix(in srgb, ${marca} 70%, #000)` }}
+        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+        style={{ background: `color-mix(in srgb, ${est.tone} 82%, #000)` }}
       >
-        {activo ? "Revisando" : "Revisar"} <ArrowRight className="size-3" />
+        <est.Icon className="size-2.5" /> {est.label}
+      </span>
+      <span className="min-w-0 truncate font-semibold text-foreground">
+        {t.naming ?? t.code ?? "Idea"}
+      </span>
+      <span
+        className="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-semibold"
+        style={{
+          color: activo ? `color-mix(in srgb, ${marca} 72%, #000)` : "var(--muted-foreground)",
+        }}
+      >
+        {activo ? "Revisando" : "Ver"} <ArrowRight className="size-3" />
       </span>
     </Link>
   );

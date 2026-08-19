@@ -16,8 +16,10 @@ Construido + reap adversarial (Opus) FIX-FIRST + gates verdes. NO commiteado/pus
       huerfanas + comentario. Todo verificado limpio: gate de aprobación NO incluye cliente; única acción
       destructiva (setEstado) inalcanzable sobre cliente; portal client sin regresión; layout sin clip.
 - [x] Gates: tsc · eslint 0-err · lib 328 · db 234 · build.
-- PENDIENTE: (a) elegir Opción A/B del riel #3 (Pedro) → construir; (b) "ship it" para pushear (sin migración);
-      (c) verificación VISUAL en preview/deploy (build-verificado; el look final lo revisa Pedro). Sin migración.
+- [x] SHIPPED #4/#1/#2 (commit e43b29e → main, sin migración). Pedro "ship it".
+- [x] #3 riel: Pedro eligió **Opción B** (lista/tabla) → CONSTRUIDO en portal-shell.tsx (TareaRail→TareaLista:
+      una fila por tarea estado·nombre·acción, encabezado fijo, filtro por estado, sin scroll horizontal).
+      Gates tsc·eslint·build. Se pushea con "ship it and option B".
 
 ## (histórico) plan — Correcciones al lado del guión + fixes de UX
 Pedro (feedback en live + aprobó un mockup: artifact 541fe65d). Cuatro cosas:
