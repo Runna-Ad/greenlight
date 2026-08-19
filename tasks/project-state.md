@@ -1,14 +1,24 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-18 (Correcciones+H.Ü.E · Performance/Evaluación · Portal v1)
+Última actualización: 2026-08-19 (Portal v2 · H.Ü.E v2 · perf loader · migración 0037)
 
-## Camino a LIVE (aclarado con Pedro 2026-08-13; avance 2026-08-18)
+## Camino a LIVE (aclarado con Pedro 2026-08-13; avance 2026-08-19)
 TODO es pre-launch. Orden: agencia → **portal** → **login** → live.
 - Lado-agencia: core loop ✅ · Performance (Workload+Evaluación) ✅ · Entregas ✅
-  · Correcciones tipadas + hover cards + H.Ü.E validator ✅.
-- **Portal del cliente ✅ v1** (`/[cliente]/portal`): briefs + dropdown de tareas +
-  Vista cliente read-only + Aprobar/Pedir cambios (prende published→in_corrections /
-  →delivered; el texto del cliente llega por notificación + tarjeta en la tarea).
-  Preview-gated: confía en el slug de la URL — falta el binding cliente↔sesión.
+  · Correcciones tipadas + hover cards ✅.
+- **H.Ü.E v2 (validador de cambios) ✅**: aparece en el MOMENTO de revisar (tarea no
+  entregada con cambios de la ronda), valida la ronda completa; por cada cambio un CHIP
+  (verde/ámbar/rojo) con razón + **sugerencia** al hover; detecta que un cambio se hizo
+  Y avisa el problema nuevo que dejó (gramática/concordancia). Advisory — el lead
+  confirma. Migraciones 0034/0035 (tipos+field_edits) ya en prod.
+- **Portal del cliente ✅ v2** (`/[cliente]/portal`): briefs + **riel visual de tareas**
+  (no dropdown) + Vista cliente read-only + **cambios LOCALIZADOS** (el cliente
+  selecciona texto → escribe, sin tipo de cambio; `client_change` anclado al campo) +
+  **botón sticky Aprobar⇄Pedir cambios** (migración 0037: rpc_client_add_change /
+  rpc_client_submit_changes). Emojis pintan (fallback en el font-stack). Efectos: glow
+  de marca, riel escalonado, hover-lift, fade al cambiar. Preview-gated: confía en el
+  slug de la URL — falta el binding cliente↔sesión.
+  ⚠️ A CONFIRMAR en el deploy live: veredicto H.Ü.E del caso «elementos» + round-trip
+  completo del cliente (dev local se puso inservible — ver session-log/lecciones).
 - Falta para LIVE: **Login** (Google/@runna.com.mx → roles reales; hace desaparecer
   `view-as`/`soy` y da el binding real del portal) · dato **legal de Préstamos** (Pedro).
 - **Going-forward** (se llenan con el uso real, no son bugs): Evaluación/autoría

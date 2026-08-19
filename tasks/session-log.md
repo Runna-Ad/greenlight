@@ -1,5 +1,60 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-19 — Portal v2 (cambios localizados del cliente + riel + efectos) + H.Ü.E v2 + perf
+
+5 commits a prod (c90b17b, 6903b48, a6237f5, 8282125, fd25f99), migración **0037**
+aplicada. Todo con "ship it" explícito de Pedro por pieza. Pedro probando en el
+deploy LIVE toda la sesión.
+
+**Qué se construyó:**
+- **Perf de la página de tarea** (c90b17b): el waterfall de queries del loader se
+  batchea en UN `Promise.all` (~5 viajes en serie → 1); las signed URLs de imágenes
+  se firman en paralelo (antes 1 viaje por imagen). + botón H.Ü.E también en la barra
+  sticky de arriba.
+- **H.Ü.E como compañero de revisión** (6903b48): antes se ataba a "correcciones sin
+  cerrar" y DESAPARECÍA justo cuando el lead iba a revisar (todo ya confirmado).
+  Ahora aparece si el revisor está en una tarea no-entregada con cambios de la ronda,
+  y valida la ronda COMPLETA (confirmados incluidos). Huérfanas ya confirmadas dicen
+  "✓ Ya confirmado" (antes seguían pidiendo "revisa si ya quedó"). Toast legible.
+- **Cambios LOCALIZADOS del cliente** (a6237f5, migración 0037): el cliente pide
+  cambios IGUAL que un lead (selecciona texto → escribe), pero SIN tipo de cambio.
+  `CampoLectura` compartido gana rama `esCliente` (ruta del revisor byte-preservada);
+  `CorreccionesClienteProvider` reusa el mismo contexto. Cada cambio es un
+  `client_change` localizado (rpc_client_add_change). **Botón sticky que cambia**:
+  "Aprobar" verde por defecto → "Pedir cambios (N)" al anotar ≥1 (rpc_client_submit_changes
+  resuelve pins + published→in_corrections). Reemplaza la tarjeta de abajo. + **fallback
+  de emoji en el font-stack** (no pintaban en el portal).
+- **H.Ü.E v2 — más listo + accionable** (8282125): añade `sugerencia` por cambio;
+  el prompt lee la nota como el cambio deseado (cita «X» + petición 'Y' = cambia X por
+  Y) y — el valor de usar IA — detecta PROBLEMAS NUEVOS que el cambio introdujo
+  (concordancia/gramática) aunque esté hecho (caso «elementos»→«elemento» deja
+  "elemento importantes"). Veredictos como CHIPS (verde/ámbar/rojo) en el panel Y en
+  las tarjetas hover; razón + sugerencia al pasar el ratón. Advisory.
+- **Riel de tareas + efectos** (fd25f99): dropdown → RIEL de tarjetas visuales (logo,
+  nombre, chip de estado, activa con anillo del color de marca del cliente + "Revisando
+  →"). Glow de marca en el header, entradas escalonadas, hover-lift, fade al cambiar de
+  tarea, flip del botón sticky. Todo bajo el kill-switch global de reduced-motion.
+
+**Decisiones de Pedro (grabadas):**
+- El cliente pide cambios EXACTO como el lead, sólo sin el selector de tipo.
+- Botón sticky arriba que se transforma Aprobar⇄Pedir cambios (no dos botones).
+- H.Ü.E debe ser LISTO: detectar que un cambio se hizo Y avisar el problema nuevo que
+  dejó (gramática), y dar sugerencia. Veredictos como chips con razón al hover.
+- Pins del cliente se guardan al instante (sobreviven reload); "Pedir cambios" los envía.
+
+**Verificado:** tsc/lint/build en verde por pieza; PGlite +8 asserts para las RPC del
+cliente (234 pass); riel + rama esCliente confirmados por DOM+screenshot; ruta del
+revisor re-verificada intacta tras tocar CampoLectura compartido. H.Ü.E v2 dio buenos
+per-change (sugerencias + mezcla justa de veredictos) en una corrida temprana.
+
+**A CONFIRMAR EN EL DEPLOY (dev local se puso inservible — ver lección):** (1) el
+veredicto de H.Ü.E en «elementos» debe leer "hecho" + sugerir "el elemento importante";
+(2) el round-trip completo del cliente (anota pin → Pedir cambios → llega al equipo).
+
+**Time sink:** ~25 llamadas peleando con el preview pane / turbopack (innerText daba
+85 chars, screenshots en blanco, caché de dev servía módulos viejos). `npm run build`
+fue el gate real. Lecciones logueadas.
+
 ## 2026-08-18 — Correcciones + Performance/Evaluación + Portal del cliente + H.Ü.E validator
 
 Sesión enorme (12 commits, migraciones 0034/0035/0036 a prod). Todo shippeado tras

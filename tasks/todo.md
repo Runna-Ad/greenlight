@@ -1,5 +1,21 @@
 # Greenlight · by Rünna — Build Todo
 
+## ✅ SHIPPED (2026-08-19) — Portal v2 + H.Ü.E v2 + perf [Pedro]
+Commits c90b17b, 6903b48, a6237f5, 8282125, fd25f99 → main. Migración **0037** en prod.
+- Perf loader de tarea (batch queries + parallel signed URLs) + H.Ü.E en barra sticky.
+- H.Ü.E v2: aparece al revisar (no atado a "sin cerrar"), valida la ronda completa,
+  chips verde/ámbar/rojo con razón+**sugerencia** al hover, detecta cambio-hecho +
+  problema-nuevo-introducido. Huérfanas confirmadas = "✓ Ya confirmado".
+- Portal: cambios LOCALIZADOS del cliente (select→escribe, sin tipo) + botón sticky
+  Aprobar⇄Pedir cambios + fallback emoji + **riel visual** de tareas + efectos.
+- CampoLectura compartido con rama `esCliente` (ruta revisor byte-preservada, re-verificada).
+- **PENDIENTE de confirmar EN EL DEPLOY LIVE** (dev local inservible esta sesión):
+  (1) veredicto H.Ü.E «elementos» = "hecho" + sugerir "el elemento importante";
+  (2) round-trip cliente: anota pin → Pedir cambios → llega al equipo (RPC PGlite-tested).
+- Siguiente si Pedro quiere: empujar más el riel (tarjetas más grandes / thumbnails /
+  más motion). Login sigue siendo el bloqueador para LIVE (binding cliente↔sesión).
+
+
 ## ✅ SHIPPED (2026-08-17 pm) — Workspace WYSIWYG unificado (Fase 1) [Pedro]
 Commits 0004dbb→eb99971 (4), pusheados a main → deploy 54ih2ey18 **Ready** en prod.
 Verificado en prod (curl): "Documento de la tarea" + "Ver como cliente" + "Diálogos"
