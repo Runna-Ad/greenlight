@@ -7,6 +7,7 @@ import { Check, RefreshCw, Clock } from "lucide-react";
 import { clienteAprobar, clienteEnviarCambios } from "@/app/(app)/[cliente]/portal/portal-actions";
 import { useCorrecciones } from "@/components/tarea/correcciones/contexto";
 import type { AssetStatus } from "@/lib/brand";
+import { cn } from "@/lib/utils";
 
 /**
  * La barra de acción del cliente, PEGADA ARRIBA (sticky). UN botón que cambia,
@@ -21,10 +22,16 @@ export function PortalAcciones({
   clienteSlug,
   ideaId,
   status,
+  reReview = false,
+  nRevisados = 0,
 }: {
   clienteSlug: string;
   ideaId: string;
   status: AssetStatus;
+  /** La tarea volvió tras una ronda: el equipo ya aplicó lo que el cliente pidió. */
+  reReview?: boolean;
+  /** Cuántos cambios aplicó el equipo (para el copy de la barra). */
+  nRevisados?: number;
 }) {
   const router = useRouter();
   const [pend, start] = useTransition();
@@ -67,12 +74,23 @@ export function PortalAcciones({
       router.refresh();
     });
 
+  // Copy de la barra: al anotar cambios, el conteo; en la re-revisión (el equipo ya
+  // aplicó lo pedido), un aviso claro de "revísalos"; si no, la instrucción base.
+  const ayuda = hayCambios
+    ? `${n} ${n === 1 ? "cambio anotado" : "cambios anotados"}`
+    : reReview
+      ? `El equipo aplicó ${nRevisados} ${nRevisados === 1 ? "cambio que pediste" : "cambios que pediste"} — revísalos y aprueba, o pide más.`
+      : "Selecciona el texto que quieras cambiar, o aprueba la idea.";
+
   return (
     <Barra>
-      <p className="hidden text-[13px] text-muted-foreground sm:block">
-        {hayCambios
-          ? `${n} ${n === 1 ? "cambio anotado" : "cambios anotados"}`
-          : "Selecciona el texto que quieras cambiar, o aprueba la idea."}
+      <p
+        className={cn(
+          "hidden text-[13px] sm:block",
+          reReview && !hayCambios ? "font-medium text-status-completed" : "text-muted-foreground",
+        )}
+      >
+        {ayuda}
       </p>
       {/* Un solo botón que se transforma — Aprobar ⇄ Pedir cambios. La transición
           de color/tamaño le da el "click" de que algo cambió. */}

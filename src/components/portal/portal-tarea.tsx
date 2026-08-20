@@ -6,6 +6,7 @@ import { TabsTarea } from "@/components/tarea/tabs-tarea";
 import { DocumentoTarea } from "@/components/tarea/documento-tarea";
 import { CorreccionesClienteProvider } from "@/components/portal/correcciones-cliente-provider";
 import { PortalAcciones } from "@/components/portal/portal-acciones";
+import { PanelRevisionesCliente } from "@/components/portal/panel-revisiones-cliente";
 import { PLACEHOLDER_ESTATICO, placeholdersGuion } from "@/lib/plantilla";
 import type { TareaPortal } from "@/app/(app)/[cliente]/portal/portal-data";
 
@@ -33,12 +34,24 @@ export function PortalTarea({ t }: { t: TareaPortal }) {
         ideaId={t.ideaId}
         clienteSlug={t.clienteSlug}
         cambios={t.cambios}
+        revisiones={t.revisiones}
         editable={t.status === "published"}
       >
       {/* Barra de acción PEGADA ARRIBA (Aprobar ⇄ Pedir cambios). Vive dentro del
-          provider para leer cuántos cambios anotó el cliente. */}
-      <PortalAcciones clienteSlug={t.clienteSlug} ideaId={t.ideaId} status={t.status} />
+          provider para leer cuántos cambios anotó el cliente. `reReview` cambia el
+          copy a "el equipo aplicó los N cambios que pediste" en la re-revisión. */}
+      <PortalAcciones
+        clienteSlug={t.clienteSlug}
+        ideaId={t.ideaId}
+        status={t.status}
+        reReview={t.status === "published" && t.revisiones.length > 0}
+        nRevisados={t.revisiones.length}
+      />
       <div className="space-y-4">
+        {/* Resumen read-only de "lo que pediste, ya aplicado" — sólo en la re-revisión
+            (published con cambios de rondas pasadas). Encabeza el contenido para que el
+            cliente sepa de una que esto es una vuelta con cambios hechos. */}
+        {t.status === "published" && t.revisiones.length > 0 && <PanelRevisionesCliente />}
         <HeroTarea
           ideaId={t.ideaId}
           marca={t.marcaName}

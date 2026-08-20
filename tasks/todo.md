@@ -1,6 +1,37 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🔧 CONSTRUIDO (2026-08-19 noche, 2º) — H.Ü.E analiza cambios del cliente + badge color de marca [Pedro] — SIN pushear
+## 🔧 CONSTRUIDO (2026-08-19 noche, 3º) — Vuelta al cliente: "cambios listos + dónde se hicieron" [Pedro] — SIN pushear
+Pedro: hizo el flujo, envió los cambios de vuelta al cliente, pero en el portal se ve SIN distinción
+— debería decir "cambios listos para revisar" y mostrar CLARAMENTE dónde se hicieron. Hoy: la tarea vuelve
+como `published` (idéntica a una nueva), y el portal sólo carga/pinta los pins BORRADOR (ronda null) →
+los cambios ya atendidos (ronda!=null, closed) desaparecen. El cliente queda adivinando. Scope elegido:
+FULL MIRROR (estado + banner + resaltado a nivel campo + panel read-only). SIN migración (los datos existen).
+- [x] portal-data.ts: PortalTarea += `reReview` (lista); cargarPortal cuenta client_change aplicados por idea.
+      TareaPortal += `revisiones: Correccion[]` (ronda!=null, closed, con target); cargarTareaPortal carga+mapea.
+- [x] Ctx (contexto.tsx): += `revisiones?` + `revisionesDeCampo?` (opcionales; provider interno los omite).
+- [x] correcciones-cliente-provider.tsx: acepta+expone revisiones/revisionesDeCampo.
+- [x] campo-lectura.tsx: fila con revisiones → acento verde + chips "Cambio(s) que pediste — aplicado(s)"
+      (reusa patrón chipHuerfana + tarjeta flotante); tarjeta variante read-only "Aplicado" (estado closed, cliente).
+- [x] panel-revisiones-cliente.tsx (NUEVO): panel read-only colapsable, agrupado por ronda, Ver→salto+flash.
+- [x] portal-acciones.tsx: prop `reReview`+`nRevisados` → copy "El equipo aplicó los N cambios que pediste…".
+- [x] portal-shell.tsx: estado "Cambios listos" (verde CheckCheck) para published+reReview (vs "Por revisar").
+- [x] portal-tarea.tsx: pasa revisiones al provider + renderiza panel (gated published) + reReview a la barra.
+- [x] Reap (Opus) FIX-FIRST: **S1 divergencia de filtros** — el badge `conRonda` (lista) era MÁS LAXO que
+      `revisiones` (vista): sin `resolved_at`/`target_campo` → un client_change legacy sin target (0036) en una
+      idea published encendía "Cambios listos" pero la tarea abría VACÍA. Arreglado: mismo predicado exacto en
+      ambas queries. (Set de fuga en prod hoy = 0 filas, pero la divergencia era real.) Resto del reap: limpio.
+- [x] Gates: tsc·eslint·build verdes. Verificado LIVE en la tarea real DiDi/SPAPVOYSHOPPINGFUT (Plano 3·SFX):
+      badge "Cambios listos", banner, panel Ronda 1 «canción chida»→Aplicado, chip verde en el campo. 0 errores consola.
+- PENDIENTE: "ship it" para pushear (sin migración).
+
+## Review (2026-08-19, 3º)
+- Deuda: el badge de la lista ("Cambios listos") deja las tareas en el filtro "Por revisar" (bucketDe no
+  distingue reReview). Aceptable — igual necesitan revisión. Si se quiere un filtro propio, es follow-up.
+- Deuda arrastrada: page.tsx (tareas internas) aún tiene firma de refs inline → migrar a lib/referencias-data.ts.
+- El banner de la barra de acción es `hidden sm:block` (móvil lo oculta); el panel carga el mismo mensaje y NO
+  se oculta en móvil, así que el cliente móvil igual lo ve. Intencional.
+
+## ✅ SHIPPED (2026-08-19 noche, 2º) — H.Ü.E analiza cambios del cliente + badge color de marca [Pedro] — commit d5bfb2c
 Pedro corrigió mi decisión de "sin veredicto para cliente" (ver lesson). Sin migración.
 - [x] validar-actions.ts: `.or(correction_request OR (client_change AND ronda not null))` → H.Ü.E analiza
       también los cambios del cliente. Verificado live: la query trae el client_change + las 2 internas.
@@ -8,7 +39,7 @@ Pedro corrigió mi decisión de "sin veredicto para cliente" (ver lesson). Sin m
 - [x] BadgeCliente usa `color` = clients.brand_color del cliente (DiDi #ff6b1a naranja); threaded via
       CorreccionesProvider.marcaColor (page.tsx carga brand_color por slug). Fallback a --primary si null.
 - [x] Gates: tsc·eslint·build. .or verificado contra prod (3 filas: 2 correction_request + 1 client_change con ronda).
-- PENDIENTE: "ship it" para pushear (sin migración).
+- [x] SHIPPED: commit d5bfb2c, deploy Vercel success (sin migración).
 
 ## ✅ SHIPPED (2026-08-19 noche) — Cambios cliente first-class + lista colapsable + refs en portal [Pedro] — commit d70c73f (mig 0038 en prod)
 Construido + reap (Opus) FIX-FIRST (3 SERIOS + 3 MINOR) + gates verdes. NO commiteado; migración 0038 SÓLO PGlite (falta "ship it" para aplicarla a prod).

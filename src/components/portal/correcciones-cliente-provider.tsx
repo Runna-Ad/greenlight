@@ -23,6 +23,7 @@ export function CorreccionesClienteProvider({
   ideaId,
   clienteSlug,
   cambios,
+  revisiones,
   editable,
   children,
 }: {
@@ -30,6 +31,8 @@ export function CorreccionesClienteProvider({
   clienteSlug: string;
   /** Los cambios que el cliente ya fijó y aún no envía (pins pendientes). */
   cambios: Correccion[];
+  /** Los cambios de rondas pasadas que el equipo YA aplicó (read-only, "aplicado"). */
+  revisiones: Correccion[];
   editable: boolean;
   children: ReactNode;
 }) {
@@ -55,10 +58,17 @@ export function CorreccionesClienteProvider({
     esCliente: editable,
     esEquipo: false,
     correcciones: cambios,
+    revisiones,
     pendiente,
     deCampo: (tabla, filaId, campo) => {
       const k = keyCampo(tabla, filaId, campo);
       return cambios.filter(
+        (c) => keyCampo(c.targetTabla, c.targetFilaId, c.targetCampo) === k,
+      );
+    },
+    revisionesDeCampo: (tabla, filaId, campo) => {
+      const k = keyCampo(tabla, filaId, campo);
+      return revisiones.filter(
         (c) => keyCampo(c.targetTabla, c.targetFilaId, c.targetCampo) === k,
       );
     },

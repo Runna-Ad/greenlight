@@ -27,9 +27,14 @@ export type Ctx = {
   /** Equipo interno (puede marcar atendido como especialista). */
   esEquipo: boolean;
   correcciones: Correccion[];
+  /** Cambios de rondas PASADAS ya aplicados por el equipo (read-only). Sólo el portal
+   *  los usa: al re-revisar, el cliente ve DÓNDE y QUÉ se cambió. Vacío en el interno. */
+  revisiones?: Correccion[];
   pendiente: boolean;
   /** Correcciones que apuntan a un campo exacto. */
   deCampo: (tabla: string, filaId: string | null, campo: string) => Correccion[];
+  /** Revisiones (cambios ya aplicados) que apuntan a un campo exacto. Portal-only. */
+  revisionesDeCampo?: (tabla: string, filaId: string | null, campo: string) => Correccion[];
   pedir: (t: CorreccionTarget, body: string) => void;
   marcar: (id: string, estado: "open" | "done" | "closed") => void;
   confirmarCampo: (tabla: string, filaId: string | null, campo: string) => void;

@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { FileText, PackageOpen, CheckCircle2, RefreshCw, Eye, ArrowRight, ChevronDown } from "lucide-react";
+import { FileText, PackageOpen, CheckCircle2, CheckCheck, RefreshCw, Eye, ArrowRight, ChevronDown } from "lucide-react";
 import type { PortalBrief, PortalTarea } from "@/app/(app)/[cliente]/portal/portal-data";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +13,11 @@ const ESTADO_CLIENTE: Record<string, { label: string; tone: string; Icon: typeof
 };
 const estadoCliente = (s: string) =>
   ESTADO_CLIENTE[s] ?? { label: "Por revisar", tone: "var(--status-progress)", Icon: Eye };
+// La tarea volvió tras una ronda de cambios (published + reReview): distinta de una
+// idea nueva "Por revisar" — el equipo ya aplicó lo que el cliente pidió.
+const ESTADO_RE_REVIEW = { label: "Cambios listos", tone: "var(--status-completed)", Icon: CheckCheck };
+const estadoDeTarea = (t: PortalTarea) =>
+  t.status === "published" && t.reReview ? ESTADO_RE_REVIEW : estadoCliente(t.status);
 
 const href = (brief: string, tarea: string) => `?brief=${brief}&tarea=${tarea}`;
 
@@ -261,7 +266,7 @@ function TareaFila({
   activo: boolean;
   marca: string;
 }) {
-  const est = estadoCliente(t.status);
+  const est = estadoDeTarea(t);
   return (
     <Link
       href={href(briefId, t.id)}

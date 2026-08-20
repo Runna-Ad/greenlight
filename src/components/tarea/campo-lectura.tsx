@@ -17,6 +17,7 @@ import {
   ETIQUETA_ESTADO,
   type Correccion,
 } from "@/lib/correcciones";
+import { cn } from "@/lib/utils";
 
 /**
  * Pinta el tramo [a, b) del texto LIMPIO aplicando negrita POR RANGO (los `negritas`
@@ -111,7 +112,14 @@ export function CampoLectura({
   // que el texto que se ve y se selecciona.
   const { texto: limpio, negritas } = desmarcarNegrita(valor);
   const resaltados = resaltadosEnTexto(limpio, cs);
-  const byId = new Map(cs.map((c) => [c.id, c]));
+  // Revisiones = cambios de rondas PASADAS ya aplicados (read-only). Sólo el portal
+  // los provee; en el interno la lista viene vacía. NO se resaltan inline (su cita es
+  // del texto VIEJO, casi siempre ya editado → no la encontraríamos): se muestran a
+  // nivel campo como chips "aplicado" + acento verde, honesto y sin depender de offsets.
+  const rev = ctx?.revisionesDeCampo?.(tabla, filaId, campo) ?? [];
+  // byId incluye cs (pins vivos) Y rev (aplicados) para que la tarjeta flotante
+  // abra con cualquiera de los dos al pasar el ratón.
+  const byId = new Map([...cs, ...rev].map((c) => [c.id, c]));
 
   // Partir el texto en segmentos [normal | resaltado] (coordenadas de `limpio`) para
   // pintar las frases corregidas sin perder el resto. Cada resaltado lleva su
@@ -160,7 +168,7 @@ export function CampoLectura({
     if (!cardAbierta || !abierta) return;
     const el = marcaRefs.current.get(abierta);
     if (el) setReferenceEl(el);
-  }, [cardAbierta, abierta, valor, cs.length]);
+  }, [cardAbierta, abierta, valor, cs.length, rev.length]);
 
   useEffect(() => () => {
     if (cerrarTimer.current) clearTimeout(cerrarTimer.current);
@@ -266,8 +274,38 @@ export function CampoLectura({
     </button>
   );
 
+  // Chip de una REVISIÓN (cambio que el cliente pidió y el equipo ya aplicó): verde,
+  // con check, y su tarjeta flotante read-only «lo que pediste» → «aplicado» al pasar
+  // el ratón. Es cómo el portal "muestra dónde se hizo el cambio" sin depender de que
+  // la cita vieja siga en el texto editado.
+  const chipRevision = (c: Correccion) => (
+    <button
+      key={c.id}
+      type="button"
+      ref={(el) => {
+        if (el) marcaRefs.current.set(c.id, el);
+        else marcaRefs.current.delete(c.id);
+      }}
+      onMouseEnter={() => abrir(c.id)}
+      onMouseLeave={cerrarPronto}
+      className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] italic text-foreground"
+      style={{ background: MARCA.closed }}
+    >
+      <Check className="size-2.5 shrink-0 text-status-completed" />
+      &laquo;{c.targetQuote ?? "este campo"}&raquo;
+    </button>
+  );
+
   return fila(
-    <div className="relative">
+    <div
+      className={cn(
+        "relative",
+        // Campo con un cambio ya aplicado (portal, re-revisión): acento verde para que
+        // salte a la vista DÓNDE se cambió algo que el cliente pidió.
+        rev.length > 0 &&
+          "rounded-md border-l-2 border-[color-mix(in_srgb,var(--status-completed)_50%,transparent)] bg-[color-mix(in_srgb,var(--status-completed)_5%,transparent)] pl-1.5",
+      )}
+    >
       <div
         ref={contRef}
         onMouseUp={capturar}
@@ -312,6 +350,18 @@ export function CampoLectura({
             <Check className="size-3" /> Ya confirmado:
           </span>
           {huerfanasOk.map((c) => chipHuerfana(c))}
+        </div>
+      )}
+
+      {/* Revisiones (portal): los cambios que el cliente pidió y el equipo ya aplicó
+          en este campo. Read-only — pasar el ratón muestra qué pidió. */}
+      {rev.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-status-completed">
+            <Check className="size-3" />
+            {rev.length === 1 ? "Cambio que pediste — aplicado" : "Cambios que pediste — aplicados"}:
+          </span>
+          {rev.map((c) => chipRevision(c))}
         </div>
       )}
 
@@ -447,8 +497,14 @@ export function CampoLectura({
                     </button>
                   </div>
                 </>
+              ) : corrAbierta.estado === "closed" ? (
+                // Cambio de una ronda pasada que el equipo YA aplicó — read-only (el
+                // cliente no lo quita; es el registro de "esto lo pediste y ya está").
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-status-completed">
+                  <Check className="size-3.5" /> Aplicado
+                </span>
               ) : (
-                // El cliente: su cambio, con la opción de quitarlo antes de enviar.
+                // El cliente: su cambio (borrador), con la opción de quitarlo antes de enviar.
                 <>
                   <span className="text-[10px] font-bold uppercase tracking-wide text-status-corrections">
                     Tu cambio

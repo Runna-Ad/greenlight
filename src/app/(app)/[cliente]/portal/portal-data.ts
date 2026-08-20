@@ -17,6 +17,10 @@ export type PortalTarea = {
   status: AssetStatus;
   marcaName: string | null;
   marcaLogo: string | null;
+  /** La tarea volvió al cliente DESPUÉS de una ronda de cambios (published + tiene
+   *  client_change enviados). Distingue "vuelve a revisión, ya aplicamos lo que
+   *  pediste" de una idea nueva por revisar. */
+  reReview: boolean;
 };
 
 export type PortalBrief = {
@@ -74,15 +78,36 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
     .not("published_at", "is", null)
     .order("code", { ascending: true });
 
-  const porBrief = new Map<string, PortalTarea[]>();
-  for (const i of (ideas ?? []) as {
+  const ideaRows = (ideas ?? []) as {
     id: string;
     code: string | null;
     naming_base: string | null;
     status: AssetStatus;
     marca_id: string | null;
     brief_id: string;
-  }[]) {
+  }[];
+
+  // ¿Qué tareas tienen un cambio del cliente YA APLICADO que el portal puede mostrar?
+  // El badge "Cambios listos" debe encender SÓLO cuando la vista de la tarea tendrá algo
+  // que enseñar — así que este filtro debe ser IDÉNTICO al de `revisiones` en
+  // cargarTareaPortal: enviado (ronda!=null) + aplicado (resolved_at!=null) + anclado
+  // (target_campo!=null). Si divergen, el badge miente: promete cambios listos y la
+  // tarea abre vacía (los client_change legacy sin target de 0036 caían justo ahí).
+  const conRonda = new Set<string>();
+  if (ideaRows.length) {
+    const { data: sent } = await db
+      .from("comments")
+      .select("idea_id")
+      .in("idea_id", ideaRows.map((i) => i.id))
+      .eq("kind", "client_change")
+      .not("ronda", "is", null)
+      .not("resolved_at", "is", null)
+      .not("target_campo", "is", null);
+    for (const r of (sent ?? []) as { idea_id: string }[]) conRonda.add(r.idea_id);
+  }
+
+  const porBrief = new Map<string, PortalTarea[]>();
+  for (const i of ideaRows) {
     const m = i.marca_id ? marcaById.get(i.marca_id) : undefined;
     (porBrief.get(i.brief_id) ?? porBrief.set(i.brief_id, []).get(i.brief_id)!).push({
       id: i.id,
@@ -91,6 +116,7 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
       status: i.status,
       marcaName: m?.name ?? null,
       marcaLogo: m?.logo_url ?? null,
+      reReview: i.status === "published" && conRonda.has(i.id),
     });
   }
 
@@ -130,6 +156,10 @@ export type TareaPortal = {
   refsEstatico: RefVista[];
   /** Cambios que el cliente ya fijó y todavía no envía (pins pendientes). */
   cambios: Correccion[];
+  /** Cambios que el cliente pidió en rondas PASADAS y el equipo YA aplicó (ronda!=null,
+   *  confirmados). Se muestran read-only ("aplicado") para que el cliente vea dónde y
+   *  qué se cambió al re-revisar — no lo dejan adivinando. */
+  revisiones: Correccion[];
 };
 
 type PinRow = {
@@ -193,7 +223,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     }>();
   if (!brief || brief.clients?.slug !== clienteSlug) return null;
 
-  const [{ data: marca }, planosRes, estaticoRes, pinsRes] = await Promise.all([
+  const [{ data: marca }, planosRes, estaticoRes, pinsRes, revsRes] = await Promise.all([
     idea.marca_id
       ? db.from("marcas").select("name, logo_url").eq("id", idea.marca_id).maybeSingle<{ name: string; logo_url: string | null }>()
       : Promise.resolve({ data: null }),
@@ -226,6 +256,24 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
       .not("target_campo", "is", null)
       .order("created_at")
       .returns<PinRow[]>(),
+    // Los cambios YA ENVIADOS (ronda!=null) — las rondas pasadas que el equipo atendió.
+    // Anclados (con target) para poder ubicarlos en un campo. Read-only: son el registro
+    // de "qué pediste y ya se aplicó". Se agrupan por ronda en el panel/campo.
+    db
+      .from("comments")
+      .select(
+        "id, body, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, ronda, atendido_at, resolved_at",
+      )
+      .eq("idea_id", idea.id)
+      .eq("kind", "client_change")
+      .not("ronda", "is", null)
+      // Sólo los YA APLICADOS (confirmados por el equipo). Un sent aún sin resolver
+      // (la ronda en curso durante in_corrections) NO es "aplicado" — no se muestra
+      // como tal. En published (re-revisión) el gate garantiza que todos estén resueltos.
+      .not("resolved_at", "is", null)
+      .not("target_campo", "is", null)
+      .order("created_at")
+      .returns<PinRow[]>(),
   ]);
 
   const planos = (planosRes.data ?? []) as PlanoVista[];
@@ -236,7 +284,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
   const refsPorPlano = !esEstatico ? await cargarRefsPorPlano(db, planos.map((p) => p.id)) : {};
   const refsEstatico = esEstatico && estatico ? await cargarRefsEstatico(db, estatico.id) : [];
 
-  const cambios: Correccion[] = (pinsRes.data ?? []).map((r) => ({
+  const aCorreccion = (r: PinRow): Correccion => ({
     id: r.id,
     targetTabla: r.target_tabla,
     targetFilaId: r.target_fila_id,
@@ -250,7 +298,10 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     ronda: r.ronda ?? 1,
     estado: estadoDeTimestamps(r),
     categoria: null,
-  }));
+    cliente: true,
+  });
+  const cambios: Correccion[] = (pinsRes.data ?? []).map(aCorreccion);
+  const revisiones: Correccion[] = (revsRes.data ?? []).map(aCorreccion);
 
   return {
     ideaId: idea.id,
@@ -274,5 +325,6 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     refsPorPlano,
     refsEstatico,
     cambios,
+    revisiones,
   };
 }
