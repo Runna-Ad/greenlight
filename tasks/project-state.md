@@ -1,5 +1,18 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-19 (Portal v2 · H.Ü.E v2 · perf loader · migración 0037)
+Última actualización: 2026-08-19 (cont.) — vuelta al cliente · reap full-platform + fixes · migración **0039** · revisión de roles
+
+## 🔎 Reap full-platform (2026-08-19) + fixes aplicados
+- Auditoría de 7 lentes en `tasks/reap-2026-08-19.md`. 0 CRITICAL reales; codebase sólido.
+- Fixes shipeados (commits 8eaa140 / 10e54a9 / f6233e7, migración 0039): vuelta al cliente
+  ("cambios listos + dónde"), quick wins (confirmaciones destructivas, avatar, error.tsx, Ver
+  teclado), perf (scoping entregas/performance, signed URLs batched, contexto memoizado, sync
+  maxDuration + fix duplicados), integrity (trigger de correcciones huérfanas + claim atómico
+  de emails), roles (Mi perfil admin/master + tooltip H.Ü.E).
+- **Launch-hardening set** (construir JUNTO con el login — ver todo.md): Gap 1 escritura del
+  especialista → assignee-scoped · Gap 2 **lead → track-scoped** (DECISIÓN: lead departamental,
+  admins agency-wide) · batch de seguridad (server actions re-chequean rol).
+- **Diferidos con razón**: emoji-map lazy (cascada async), rewrite N+1 de import (test primero),
+  S2 (scoring de board — decisión), S3 (advisory lock de ronda — migración con test de concurrencia).
 
 ## Camino a LIVE (aclarado con Pedro 2026-08-13; avance 2026-08-19)
 TODO es pre-launch. Orden: agencia → **portal** → **login** → live.

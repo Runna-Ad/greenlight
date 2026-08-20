@@ -1,5 +1,54 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-19 (cont.) — Vuelta al cliente + reap full-platform + fixes + revisión de roles
+
+Sesión larga de continuación. Commits a prod: **8eaa140** (vuelta al cliente), **10e54a9**
+(fixes de reap + migración **0039**), **f6233e7** (roles + tooltip). d5bfb2c (H.Ü.E analiza
+cambios del cliente + badge color de marca) se shipeó al arrancar. Todo con "ship it" explícito.
+
+**Qué se construyó:**
+- **Vuelta al cliente "cambios listos + dónde"** (8eaa140, sin migración): cuando una tarea
+  vuelve al cliente tras una ronda (published con client_change aplicados) el portal ya no se ve
+  igual que una idea nueva. Badge "Cambios listos" en la lista, banner en la barra, resaltado
+  VERDE a nivel campo + chips "Cambio que pediste — aplicado: «…»", y panel read-only
+  "Cambios que pediste — ya aplicados" (por ronda, con Ver→salto). Espejo del panel interno.
+  Verificado LIVE en DiDi/SPAPVOYSHOPPINGFUT. Reap (Opus) cazó 1 bug real: la query del badge
+  (conRonda) era más laxa que la de contenido (revisiones) → badge sin nada que mostrar; alineadas.
+- **Reap FULL-PLATFORM** (7 agentes en paralelo: correctness, security, DB, perf, a11y, ui/ux,
+  ts-safety). Reporte en `tasks/reap-2026-08-19.md`. 0 CRITICAL reales; ~18 SERIOUS, ~20 MINOR.
+  Codebase sólido (0 `any`, boundary de cliente correcto, code↔schema limpio, isolation limpio).
+- **Fixes de reap** (10e54a9 + migración 0039) — Pedro eligió 3 de 4 batches:
+  · Quick wins: botón "Ver" teclado en panel-revisiones, confirmación 2-pasos en 3 acciones
+    destructivas (borrar plano / Aprobar cliente / quitar referencia), avatar deriva de `soy`
+    (no más "PV"), error.tsx + global-error.tsx.
+  · Perf: entregas/performance scopeados (no full-table por cliente), createSignedUrls batched,
+    CorreccionesProvider memoizado (mata re-render storm), sync maxDuration=60 + fix de error
+    tragado en staged_rows (P1b, evita re-import duplicado).
+  · Integrity (0039): trigger BEFORE DELETE limpia correcciones huérfanas al borrar/re-importar
+    planos (desbloquea cierre de ronda) + claim atómico en dispatchPendingEmails (no doble-envío).
+- **Revisión de roles + fixes** (f6233e7): mapa completo de qué ve/hace cada rol (verificado
+  contra el código). Fix: "Mi perfil" para admin/master (NAV_ALL). Fix: tooltip de H.Ü.E se
+  cortaba en el panel derecho → anclado a la derecha (right-0).
+
+**Decisiones de Pedro (grabadas en lessons.md):**
+- **LEAD = DEPARTAMENTAL** (dueño sólo de SU track); los aprobadores agency-wide son los ADMINS.
+  → al encender auth, scopear las acciones del lead por track (hoy agency-wide). Ver launch-hardening.
+- Cambios del cliente = correcciones de PRIMERA CLASE (mismo lifecycle; sólo cambia que dice
+  "Cliente"); H.Ü.E también los analiza (override de sesiones previas).
+- Scope de la reap: 3 batches sí, seguridad diferida. Emoji-lazy + rewrite N+1 de import diferidos.
+
+**Estado actual:** todo en prod, deploys verdes. Migración 0039 aplicada (isolation verificada:
+public_tables 42 / auth_users 6 sin cambio; ledger 37→38). Gates: tsc·eslint·build·lib 328·db 245.
+
+**Retomar la próxima sesión (prioridad):**
+1. **Launch-hardening set** (construir JUNTO con el login, ver todo.md): Gap 1 (escritura del
+   especialista → assignee-scoped), Gap 2 (lead → track-scoped, decisión de Pedro), batch de
+   seguridad diferido (server actions que re-chequean rol — priorizar crearBrief + snippet legal).
+2. **Diferidos con razón**: emoji-map lazy (cascada async en funciones puras con test), rewrite
+   N+1 de import (escribir test harness PRIMERO), S2 (decisión de scoring: ¿board "pedir cambios"
+   cuenta en rúbrica?), S3 (advisory lock de ronda como migración propia con test de concurrencia).
+3. Login (Google/@runna.com.mx) sigue siendo el gran bloque hacia LIVE.
+
 ## 2026-08-19 — Portal v2 (cambios localizados del cliente + riel + efectos) + H.Ü.E v2 + perf
 
 5 commits a prod (c90b17b, 6903b48, a6237f5, 8282125, fd25f99), migración **0037**
