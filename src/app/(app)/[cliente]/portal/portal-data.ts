@@ -1,7 +1,9 @@
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { plantillaPara } from "@/lib/plantilla";
+import { cargarRefsPorPlano, cargarRefsEstatico } from "@/lib/referencias-data";
 import type { AssetStatus } from "@/lib/brand";
 import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
+import type { RefVista } from "@/components/tarea/referencias-plano";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
 
 // El portal muestra SÓLO lo que ya se envió al cliente: published_at != null (el
@@ -123,6 +125,9 @@ export type TareaPortal = {
   duracion: string[];
   planos: PlanoVista[];
   estatico: EstaticoVista | null;
+  /** Referencias visuales (imágenes firmadas + videos) — el cliente las ve igual que el equipo. */
+  refsPorPlano: Record<string, RefVista[]>;
+  refsEstatico: RefVista[];
   /** Cambios que el cliente ya fijó y todavía no envía (pins pendientes). */
   cambios: Correccion[];
 };
@@ -205,8 +210,9 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
       .order("orden")
       .limit(1)
       .maybeSingle<EstaticoVista>(),
-    // Los pins del cliente aún sin enviar (resolved_at null) — se pintan como
-    // resaltados y se pueden quitar antes de "Pedir cambios".
+    // Los pins del cliente aún SIN ENVIAR (ronda null = borrador) — se pintan como
+    // resaltados y se pueden quitar antes de "Pedir cambios". Al enviar se les asigna
+    // ronda (0038); enviado ya no es borrador y entra al lifecycle interno.
     db
       .from("comments")
       .select(
@@ -214,10 +220,21 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
       )
       .eq("idea_id", idea.id)
       .eq("kind", "client_change")
-      .is("resolved_at", null)
+      .is("ronda", null)
+      // Sólo pins ANCLADOS (0037): los client_change de texto libre legacy (0036, sin
+      // target) no son pins que el cliente pueda ver/quitar — no inflan el conteo.
+      .not("target_campo", "is", null)
       .order("created_at")
       .returns<PinRow[]>(),
   ]);
+
+  const planos = (planosRes.data ?? []) as PlanoVista[];
+  const estatico = (estaticoRes.data ?? null) as EstaticoVista | null;
+  const esEstatico = plantillaPara(idea.tipo_asset) === "estatico";
+  // Referencias visuales, firmadas por render (bucket privado). El cliente ve la
+  // misma dirección visual que el equipo — antes el portal las ocultaba.
+  const refsPorPlano = !esEstatico ? await cargarRefsPorPlano(db, planos.map((p) => p.id)) : {};
+  const refsEstatico = esEstatico && estatico ? await cargarRefsEstatico(db, estatico.id) : [];
 
   const cambios: Correccion[] = (pinsRes.data ?? []).map((r) => ({
     id: r.id,
@@ -234,8 +251,6 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     estado: estadoDeTimestamps(r),
     categoria: null,
   }));
-
-  const esEstatico = plantillaPara(idea.tipo_asset) === "estatico";
 
   return {
     ideaId: idea.id,
@@ -254,8 +269,10 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     plataformas: idea.plataformas ?? [],
     tamanos: idea.tamanos ?? [],
     duracion: idea.duracion ?? [],
-    planos: (planosRes.data ?? []) as PlanoVista[],
-    estatico: (estaticoRes.data ?? null) as EstaticoVista | null,
+    planos,
+    estatico,
+    refsPorPlano,
+    refsEstatico,
     cambios,
   };
 }

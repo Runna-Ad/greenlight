@@ -1,5 +1,46 @@
 # Greenlight · by Rünna — Build Todo
 
+## ✅ CONSTRUIDO (2026-08-19 noche) — Cambios cliente first-class + lista colapsable + refs en portal [Pedro] — SIN pushear
+Construido + reap (Opus) FIX-FIRST (3 SERIOS + 3 MINOR) + gates verdes. NO commiteado; migración 0038 SÓLO PGlite (falta "ship it" para aplicarla a prod).
+- [x] Task 1 lista colapsable (portal-shell).
+- [x] Task 2 client_change first-class: migración 0038 (ronda=marcador enviado; correction_next_round/
+      rpc_task_approve/rpc_task_send_corrections/rpc_task_return_review cuentan client_change enviados;
+      submit asigna ronda no resuelve; data-migration SCOPEADA a tareas activas). Código: revert aislamiento,
+      client_change en `correcciones`, BadgeCliente, descartar/confirmarCampo incluyen client_change.
+- [x] Reap FIX-FIRST: **S1** send_corrections/return_review no contaban client_change → botón "Pedir cambios"
+      del lead reventaba (arreglado + test PGlite). **S2** clienteQuitarCambio usaba resolved_at→ronda.
+      **S3** data-migration resucitaba tareas terminadas → scopeada a in_corrections/under_review. M4 doc,
+      M5 notif, M6 drafts fantasma (portal query .not target_campo is null).
+- [x] **Referencias en el portal** (Pedro): portal-data.ts carga+firma refs (helper nuevo `lib/referencias-data.ts`);
+      portal-tarea.tsx las pasa (antes `{}`/`[]`). El cliente ve imágenes/videos de referencia.
+- [x] Gates: tsc·eslint·lib 328·db 239·build. cliente-feedback.tsx borrado (muerto).
+- PENDIENTE: (a) "ship it" → aplicar 0038 (`npm run migrate`, pin ybbrpqzbedaxsmotgtkh) ANTES del push; (b) verificar live.
+- DEUDA: page.tsx aún tiene su copia inline de firma de refs → migrar al helper `referencias-data.ts` (post-reap).
+
+## (histórico) plan — Cambios del cliente = correcciones de PRIMERA CLASE + lista colapsable [Pedro OVERRIDE]
+Ver PEDRO_OVERRIDE en lessons.md. Pedro: los client_change deben tener el MISMO lifecycle interno
+(atendido→confirmar→gate→rondas), única diferencia = badge "Cliente". Decisión: **lifecycle sí, Evaluación NO**
+(sin categoría, no puntúa). Y la lista de tareas del portal COLAPSABLE.
+- [x] **Task 1 — lista colapsable** (portal-shell.tsx TareaLista): toggle de colapso, muestra "revisando X"
+      al plegar. tsc+lint ok.
+- [ ] **Task 2 — client_change first-class**:
+  - CLAVE: `ronda` = marcador draft/enviado (null=borrador, asignada=enviado) → libera `resolved_at` para el
+    lifecycle (antes rpc_client_submit_changes ponía resolved_at=enviado → chocaba con "confirmado").
+  - **Migración 0038** (PGlite ANTES de prod): (1) correction_next_round cuenta `correction_request OR
+    (client_change AND ronda is not null)`; (2) rpc_task_approve resuelve ambos; (3) rpc_client_submit_changes:
+    seleccionar drafts por `ronda is null`, asignar `ronda=correction_next_round` (una vez), NO tocar resolved_at,
+    mover published→in_corrections; (4) data-migrate: client_change existentes con resolved_at set → asignar ronda
+    + limpiar resolved_at (re-entran OPEN).
+  - **Portal** (portal-data.ts): query de drafts `resolved_at is null` → `ronda is null`.
+  - **Revertir mi aislamiento** (code): client_change vuelve al array `correcciones` (cliente:true), estado por
+    timestamps; QUITAR cambiosClienteCorr/max-resolved-at + la tarjeta ClienteFeedback (ahora en el panel).
+    contexto.tsx quita cambiosCliente/merge. campo.tsx quita csRev (vuelve a cs; badge "Cliente" en hover).
+    campo-lectura.tsx quita exclusión de huerfanas + la rama read-only → acciones completas + badge. panel.tsx
+    badge "Cliente" donde va la categoría. correcciones-actions.ts: descartar/confirmarCampo incluyen client_change.
+  - VERIFY: PGlite (round-calc+approve+submit con client_change) + tsc/lint/build + reap adversarial + live.
+  - Reglas: migrar SÓLO tras "ship it"; `npm run migrate` (pin ybbrpqzbedaxsmotgtkh); drop firma vieja si cambia args.
+
+
 ## ✅ CONSTRUIDO (2026-08-19 pm) — Correcciones a la derecha + cambios cliente resaltados + fixes [Pedro] — SIN pushear
 Construido + reap adversarial (Opus) FIX-FIRST + gates verdes. NO commiteado/pusheado (falta "ship it").
 - [x] #4 Panel de correcciones en columna DERECHA fija (2-col, `mostrarPanel ? grid : ""`, aside

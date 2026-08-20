@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Trash2, ChevronDown, Sparkles } from "lucide-react";
 import { useCorrecciones } from "./contexto";
-import { TagTipoCambio } from "../selector-tipo-cambio";
+import { TagTipoCambio, BadgeCliente } from "../selector-tipo-cambio";
 import { VeredictoChip } from "../veredicto-chip";
 import { keyCampo, porRonda, sinResolver, type Correccion, type EstadoCorreccion } from "@/lib/correcciones";
 import { cn } from "@/lib/utils";
@@ -129,8 +129,16 @@ export function PanelCorrecciones() {
                             {c.targetLabel}
                           </span>
                         )}
-                        <TagTipoCambio slug={c.categoria} />
-                        <VeredictoChip v={ctx.veredictos.get(c.id)} />
+                        {/* Cambio del cliente: badge "Cliente" (sin categoría/veredicto);
+                            corrección interna: su categoría de rúbrica + dictamen de H.Ü.E. */}
+                        {c.cliente ? (
+                          <BadgeCliente />
+                        ) : (
+                          <>
+                            <TagTipoCambio slug={c.categoria} />
+                            <VeredictoChip v={ctx.veredictos.get(c.id)} />
+                          </>
+                        )}
                         <span
                           className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
                           style={{ background: PILL[c.estado] }}

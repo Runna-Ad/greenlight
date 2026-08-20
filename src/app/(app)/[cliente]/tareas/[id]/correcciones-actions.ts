@@ -147,12 +147,14 @@ export async function descartarCorreccion(
   }
 
   const db = supabaseAdmin();
+  // Incluye client_change: los cambios del cliente son correcciones de primera clase
+  // (0038) — el lead puede descartarlos igual (decidir no honrar el pedido).
   const { error } = await db
     .from("comments")
     .delete()
     .eq("id", commentId)
     .eq("idea_id", ideaId)
-    .eq("kind", "correction_request");
+    .in("kind", ["correction_request", "client_change"]);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
@@ -174,7 +176,7 @@ export async function confirmarCampo(
     .from("comments")
     .update({ resolved_at: new Date().toISOString(), resolved_member_id: soy?.id ?? null, resolved_by: await actorId(db) })
     .eq("idea_id", ideaId)
-    .eq("kind", "correction_request")
+    .in("kind", ["correction_request", "client_change"])
     .is("resolved_at", null)
     .eq("target_tabla", tabla)
     .eq("target_campo", campo);

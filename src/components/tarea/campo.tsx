@@ -8,7 +8,7 @@ import { guardarCampo, type Tabla } from "@/app/(app)/[cliente]/tareas/[id]/acti
 import { cn } from "@/lib/utils";
 import { useCorrecciones } from "./correcciones/contexto";
 import { CampoCorrecciones } from "./correcciones/campo-correcciones";
-import { SelectorTipoCambio, TagTipoCambio } from "./selector-tipo-cambio";
+import { SelectorTipoCambio, TagTipoCambio, BadgeCliente } from "./selector-tipo-cambio";
 import { VeredictoChip } from "./veredicto-chip";
 import { type CategoriaCambio } from "@/lib/tipos-cambio";
 import {
@@ -176,10 +176,7 @@ export function Campo({
   // Correcciones fijadas a ESTE campo (si el workspace las provee).
   const ctx = useCorrecciones();
   const cs = ctx ? ctx.deCampo(tabla, filaId, campo) : [];
-  // Los cambios del CLIENTE se RESALTAN (van en `cs`) pero NO participan del lifecycle
-  // del revisor (pin/anillo/estado del campo/afordancias). Ésos miran sólo `csRev`.
-  const csRev = cs.filter((c) => !c.cliente);
-  const estadoCorr = estadoCampo(csRev);
+  const estadoCorr = estadoCampo(cs);
   const etiqueta = grupoCorreccion ? `${grupoCorreccion} · ${label}` : label;
 
   // Resaltado en vivo de las frases corregidas + captura de nuevas selecciones.
@@ -421,12 +418,12 @@ export function Campo({
             type="button"
             ref={pinRef}
             onClick={() => setFijado((v) => !v)}
-            aria-label={`${csRev.length} corrección(es) en ${etiqueta}`}
+            aria-label={`${cs.length} corrección(es) en ${etiqueta}`}
             aria-expanded={cardAbierta}
             className="gl-pop absolute -left-1.5 -top-1.5 z-20 grid size-[20px] place-items-center rounded-full border-2 border-background text-[10px] font-extrabold text-white shadow-sm"
             style={{ background: PIN_BG[estadoCorr] }}
           >
-            {estadoCorr === "open" ? csRev.length : "✓"}
+            {estadoCorr === "open" ? cs.length : "✓"}
           </button>
         )}
       </div>
@@ -497,21 +494,16 @@ export function Campo({
             {cs.map((c) => (
               <div key={c.id} className="border-t border-border p-2.5 first:border-t-0">
                 <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                  <span
+                    className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
+                    style={{ background: PIN_BG[c.estado] }}
+                  >
+                    {ETIQUETA_ESTADO[c.estado]}
+                  </span>
                   {c.cliente ? (
-                    <span
-                      className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
-                      style={{ background: PIN_BG.open }}
-                    >
-                      Cliente
-                    </span>
+                    <BadgeCliente />
                   ) : (
                     <>
-                      <span
-                        className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
-                        style={{ background: PIN_BG[c.estado] }}
-                      >
-                        {ETIQUETA_ESTADO[c.estado]}
-                      </span>
                       <TagTipoCambio slug={c.categoria} />
                       <VeredictoChip v={ctx.veredictos.get(c.id)} />
                     </>
@@ -538,7 +530,7 @@ export function Campo({
               filaId={filaId}
               campo={campo}
               etiqueta={etiqueta}
-              cs={csRev}
+              cs={cs}
               campoVacio={valor.trim() === ""}
             />
           </div>
@@ -548,7 +540,7 @@ export function Campo({
             filaId={filaId}
             campo={campo}
             etiqueta={etiqueta}
-            cs={csRev}
+            cs={cs}
             campoVacio={valor.trim() === ""}
           />
         ))}

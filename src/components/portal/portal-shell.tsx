@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { FileText, PackageOpen, CheckCircle2, RefreshCw, Eye, ArrowRight } from "lucide-react";
+import { FileText, PackageOpen, CheckCircle2, RefreshCw, Eye, ArrowRight, ChevronDown } from "lucide-react";
 import type { PortalBrief, PortalTarea } from "@/app/(app)/[cliente]/portal/portal-data";
 import { cn } from "@/lib/utils";
 
@@ -154,15 +154,44 @@ function TareaLista({
   marca: string;
 }) {
   const [filtro, setFiltro] = useState<Bucket>("todas");
+  // La lista es COLAPSABLE (Pedro): al revisar una tarea a fondo, se pliega para
+  // dejar el contenido al frente; se despliega para cambiar de tarea. Default abierta.
+  const [colapsado, setColapsado] = useState(false);
   const selId = brief.tasks.find((t) => t.id === selTareaId)?.id ?? brief.tasks[0]?.id ?? null;
   if (!brief.tasks.length) return null;
 
   const cuenta = (k: Bucket) =>
     k === "todas" ? brief.tasks.length : brief.tasks.filter((t) => bucketDe(t.status) === k).length;
   const visibles = brief.tasks.filter((t) => filtro === "todas" || bucketDe(t.status) === filtro);
+  const activa = brief.tasks.find((t) => t.id === selId);
 
   return (
     <div className="space-y-2.5">
+      {/* Cabecera con toggle de colapso: muestra el conteo y, si está plegada, cuál
+          se está revisando — para que colapsar no pierda el contexto. */}
+      <button
+        type="button"
+        onClick={() => setColapsado((v) => !v)}
+        aria-expanded={!colapsado}
+        className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-secondary/50"
+      >
+        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", colapsado && "-rotate-90")} />
+        <span className="text-[13px] font-semibold text-foreground">Tareas</span>
+        <span className="rounded-full bg-secondary px-1.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+          {brief.tasks.length}
+        </span>
+        {colapsado && activa && (
+          <span className="min-w-0 truncate text-[12px] text-muted-foreground">
+            · revisando <span className="font-medium text-foreground">{activa.naming ?? activa.code ?? "Idea"}</span>
+          </span>
+        )}
+        <span className="ml-auto shrink-0 text-[11px] font-medium text-muted-foreground">
+          {colapsado ? "Mostrar" : "Ocultar"}
+        </span>
+      </button>
+
+      {!colapsado && (
+      <>
       {/* Filtro por estado */}
       <div className="flex flex-wrap items-center gap-1.5">
         {FILTROS.map((f) => {
@@ -215,6 +244,8 @@ function TareaLista({
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

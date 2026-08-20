@@ -52,10 +52,11 @@ export type Correccion = {
   estado: EstadoCorreccion;
   /** Tipo de cambio (rúbrica). null en cambios de cliente / legacy sin etiqueta. */
   categoria: string | null;
-  /** true = lo pidió el CLIENTE desde el portal (kind='client_change'). Se RESALTA
-   *  en el plano (rojo) y se lista, pero NO entra al lifecycle interno (atendido /
-   *  confirmar / descartar) ni al gate de aprobación — el equipo lo atiende editando.
-   *  Ausente/false = corrección interna del revisor (comportamiento de siempre). */
+  /** true = lo pidió el CLIENTE desde el portal (kind='client_change'). Es una
+   *  corrección de PRIMERA CLASE — MISMO lifecycle (atendido/confirmar/descartar),
+   *  gate de aprobación y rondas que una interna (0038). Este flag SÓLO cambia la
+   *  presentación: badge "Cliente" en vez de la categoría de rúbrica, y sin veredicto
+   *  de H.Ü.E (los cambios del cliente no puntúan en Evaluación). */
   cliente?: boolean;
 };
 

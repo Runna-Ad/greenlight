@@ -1171,16 +1171,42 @@ await resetRole();
   await db.query(
     `select produccion.rpc_client_add_change($1::uuid,'planos',$2::uuid,'dialogo',
       'Plano 1 · Diálogos','Otro ajuste',null,null,null)`, [IDEA, cPin]);
-  ok("dos pins pendientes",
+  ok("dos pins pendientes (borrador = ronda null)",
      Number(await scalar(`select count(*) from produccion.comments
-       where idea_id='${IDEA}' and kind='client_change' and resolved_at is null`)) === 2);
+       where idea_id='${IDEA}' and kind='client_change' and ronda is null`)) === 2);
 
   await db.exec(`delete from produccion.notifications`);
   const stSubmit = await scalar(`select produccion.rpc_client_submit_changes('${IDEA}'::uuid)`);
   eq("submit mueve published→in_corrections", stSubmit, "in_corrections");
-  ok("submit resuelve los pins (separa de la próxima ronda)",
+  // 0038: submit ASIGNA ronda (marca enviado) pero NO resuelve — el client_change
+  // entra OPEN al lifecycle (rojo), como una corrección interna; lo confirma el lead.
+  ok("submit asigna ronda a los pins (enviado)",
      Number(await scalar(`select count(*) from produccion.comments
-       where idea_id='${IDEA}' and kind='client_change' and resolved_at is null`)) === 0);
+       where idea_id='${IDEA}' and kind='client_change' and ronda is not null`)) === 2);
+  ok("submit NO resuelve los pins (siguen OPEN para el lifecycle)",
+     Number(await scalar(`select count(*) from produccion.comments
+       where idea_id='${IDEA}' and kind='client_change' and resolved_at is null`)) === 2);
+  // El client_change enviado cuenta en la ronda: correction_next_round lo ve OPEN →
+  // devuelve la ronda actual (no abre una nueva), como con una corrección interna viva.
+  const rondaCC = Number(await scalar(`select ronda from produccion.comments
+     where idea_id='${IDEA}' and kind='client_change' and ronda is not null limit 1`));
+  eq("correction_next_round cuenta el client_change enviado (misma ronda)",
+     Number(await scalar(`select produccion.correction_next_round('${IDEA}'::uuid)`)), rondaCC);
+  // 0038 fix: "Pedir cambios" (send_corrections) cuenta los client_change enviados —
+  // antes reventaba ("no hay correcciones") cuando lo pendiente era del cliente.
+  await db.exec(`select set_config('produccion.lead_override','on',false);
+                 update produccion.ideas set status='under_review' where id='${IDEA}';
+                 select set_config('produccion.lead_override','',false)`);
+  eq("send_corrections con SÓLO client_change enviados → in_corrections",
+     await scalar(`select produccion.rpc_task_send_corrections('${IDEA}'::uuid,null,null)`), "in_corrections");
+  // rpc_task_approve CIERRA la ronda incluyendo los client_change enviados sin resolver.
+  await db.exec(`select set_config('produccion.lead_override','on',false);
+                 update produccion.ideas set status='under_review' where id='${IDEA}';
+                 select set_config('produccion.lead_override','',false)`);
+  await scalar(`select produccion.rpc_task_approve('${IDEA}'::uuid,null,null,null)`);
+  ok("aprobar resuelve también los client_change enviados",
+     Number(await scalar(`select count(*) from produccion.comments
+       where idea_id='${IDEA}' and kind='client_change' and ronda is not null and resolved_at is null`)) === 0);
   // Tras el submit la idea está in_corrections (no publicada) → añadir un pin se rechaza.
   let addRechazado = false;
   try {

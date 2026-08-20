@@ -86,7 +86,8 @@ export async function clienteQuitarCambio(
     .eq("id", commentId)
     .eq("idea_id", ideaId)
     .eq("kind", "client_change")
-    .is("resolved_at", null); // sólo pins que todavía no se enviaron
+    .is("ronda", null); // sólo BORRADORES sin enviar (0038: enviado = ronda asignada,
+                        // ya no es borrador y no se puede quitar — sigue el lifecycle interno)
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/${clienteSlug}/portal`);

@@ -74,8 +74,8 @@ export function PortalTarea({ t }: { t: TareaPortal }) {
 }
 
 // El documento lee planos/estático del workspace (sembrados con los iniciales); en
-// el portal nunca cambian. modo="lectura" y refs vacías (el portal no muestra las
-// referencias internas de producción).
+// el portal nunca cambian. modo="lectura". Las referencias (imágenes/videos) SÍ se
+// muestran al cliente — es la dirección visual del anuncio (Pedro).
 function CuerpoDoc({ t }: { t: TareaPortal }) {
   const { planos, estatico } = useWorkspace();
   return (
@@ -84,8 +84,8 @@ function CuerpoDoc({ t }: { t: TareaPortal }) {
       esEstatico={t.esEstatico}
       planos={planos}
       estatico={estatico}
-      refsPorPlano={{}}
-      refsEstatico={[]}
+      refsPorPlano={t.refsPorPlano}
+      refsEstatico={t.refsEstatico}
       ph={placeholdersGuion(t.tipoAsset)}
       phEstatico={PLACEHOLDER_ESTATICO}
       soloLectura={true}

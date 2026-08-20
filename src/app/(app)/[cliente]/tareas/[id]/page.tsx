@@ -16,7 +16,6 @@ import { PanelCorrecciones } from "@/components/tarea/correcciones/panel";
 import { SubHeaderTarea } from "@/components/tarea/sub-header-tarea";
 import { HeroTarea } from "@/components/tarea/hero-tarea";
 import { TabsTarea } from "@/components/tarea/tabs-tarea";
-import { ClienteFeedback } from "@/components/tarea/cliente-feedback";
 import { BannerPegarGuion } from "@/components/tarea/banner-pegar-guion";
 import { DocumentoGuion } from "@/components/tarea/documento-guion";
 import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
@@ -278,13 +277,16 @@ export default async function TareaPage({
     atendido_at: string | null; resolved_at: string | null; author_member_id: string | null;
     categoria: string | null;
   };
-  // client_change (0037): el cambio del cliente, anclado a un campo igual que una
-  // corrección (pero sin categoría ni lifecycle). Se resalta en el plano y se lista.
+  // client_change (0037/0038): el cambio del cliente es una CORRECCIÓN de primera
+  // clase — mismo lifecycle (atendido/confirmar/gate/rondas), única diferencia: badge
+  // "Cliente" + sin categoría. Enviado = `ronda is not null` (0038). Se fusiona con
+  // las correcciones internas; el flag `cliente` sólo cambia la presentación.
   type ClientChangeRow = {
-    id: string; body: string; created_at: string | null; resolved_at: string | null;
+    id: string; ronda: number | null;
     target_tabla: string | null; target_fila_id: string | null; target_campo: string | null;
     target_label: string | null; target_quote: string | null;
     target_start: number | null; target_end: number | null;
+    body: string; atendido_at: string | null; resolved_at: string | null;
   };
   // TODO lo que sólo depende de idea.* corre EN PARALELO (antes: bundle, legales,
   // correcciones y feedback del cliente iban en serie, un viaje de red tras otro).
@@ -315,14 +317,17 @@ export default async function TareaPage({
         .eq("kind", "correction_request")
         .order("created_at")
         .returns<CorrRow[]>(),
+      // Sólo los ENVIADOS (ronda is not null); los borradores del cliente (ronda null)
+      // viven en el portal, no en el lado interno.
       db
         .from("comments")
         .select(
-          "id, body, created_at, resolved_at, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end",
+          "id, ronda, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, body, atendido_at, resolved_at",
         )
         .eq("idea_id", idea.id)
         .eq("kind", "client_change")
-        .order("created_at", { ascending: false })
+        .not("ronda", "is", null)
+        .order("created_at")
         .returns<ClientChangeRow[]>(),
     ]);
   const posicion = posicionEnBundle(bundle, idea.id);
@@ -336,66 +341,44 @@ export default async function TareaPage({
     : { data: [] as { id: string; name: string }[] };
   const nombrePorId = new Map((autores ?? []).map((a) => [a.id, a.name]));
 
-  const correcciones: Correccion[] = (corrRows ?? []).map((r) => ({
-    id: r.id,
-    targetTabla: r.target_tabla,
-    targetFilaId: r.target_fila_id,
-    targetCampo: r.target_campo,
-    targetLabel: r.target_label,
-    targetQuote: r.target_quote,
-    targetStart: r.target_start,
-    targetEnd: r.target_end,
-    body: r.body,
-    autor: r.author_member_id ? nombrePorId.get(r.author_member_id) ?? null : null,
-    ronda: r.ronda ?? 1,
-    estado: estadoDeTimestamps(r),
-    categoria: r.categoria,
-  }));
+  // Correcciones = internas (correction_request) + cambios del cliente ENVIADOS
+  // (client_change, ronda not null). Ambos son de PRIMERA CLASE: mismo lifecycle
+  // (estado por timestamps), mismo panel, mismo gate, mismas rondas. La ÚNICA
+  // diferencia del cliente: `cliente:true` (badge "Cliente") + sin categoría.
+  const correcciones: Correccion[] = [
+    ...(corrRows ?? []).map((r) => ({
+      id: r.id,
+      targetTabla: r.target_tabla,
+      targetFilaId: r.target_fila_id,
+      targetCampo: r.target_campo,
+      targetLabel: r.target_label,
+      targetQuote: r.target_quote,
+      targetStart: r.target_start,
+      targetEnd: r.target_end,
+      body: r.body,
+      autor: r.author_member_id ? nombrePorId.get(r.author_member_id) ?? null : null,
+      ronda: r.ronda ?? 1,
+      estado: estadoDeTimestamps(r),
+      categoria: r.categoria,
+    })),
+    ...(cambiosCliente ?? []).map((c) => ({
+      id: c.id,
+      targetTabla: c.target_tabla,
+      targetFilaId: c.target_fila_id,
+      targetCampo: c.target_campo,
+      targetLabel: c.target_label,
+      targetQuote: c.target_quote,
+      targetStart: c.target_start,
+      targetEnd: c.target_end,
+      body: c.body,
+      autor: "Cliente",
+      ronda: c.ronda ?? 1,
+      estado: estadoDeTimestamps(c),
+      categoria: null,
+      cliente: true,
+    })),
+  ];
   const abiertasN = correcciones.filter((c) => c.estado === "open").length;
-
-  // Cambios del cliente (client_change) — DOS usos del mismo dato:
-  //  (1) `cambiosClienteCorr` alimenta `deCampo` → se RESALTAN en el plano (rojo),
-  //      pero FUERA del array de correcciones internas (no tocan el gate de aprobación
-  //      ni el lifecycle atendido/confirmar — el equipo los atiende editando);
-  //  (2) `feedbackCliente` es la lista CLICABLE en la columna derecha (salta al campo).
-  // SÓLO LA RONDA ACTUAL: rpc_client_submit_changes (0037) marca resolved_at=now() a
-  // TODO el lote en un solo UPDATE → un lote comparte un resolved_at idéntico, y
-  // NUNCA borra las filas. Los client_change llevan ronda=NULL, así que la "ronda
-  // actual" = el lote con el resolved_at MÁS RECIENTE. Sin esto, cada ciclo de
-  // cambios del cliente reaparecería como resaltados rojos permanentes (los de rondas
-  // pasadas ya se atendieron). Los no enviados (resolved_at=null) no se muestran aún.
-  const ccRows = cambiosCliente ?? [];
-  const resueltos = ccRows.map((c) => c.resolved_at).filter((x): x is string => !!x);
-  const ultimoLote = resueltos.length ? resueltos.reduce((a, b) => (a > b ? a : b)) : null;
-  const ccActuales = ultimoLote ? ccRows.filter((c) => c.resolved_at === ultimoLote) : [];
-
-  const cambiosClienteCorr: Correccion[] = ccActuales.map((c) => ({
-    id: c.id,
-    targetTabla: c.target_tabla,
-    targetFilaId: c.target_fila_id,
-    targetCampo: c.target_campo,
-    targetLabel: c.target_label,
-    targetQuote: c.target_quote,
-    targetStart: c.target_start,
-    targetEnd: c.target_end,
-    body: c.body,
-    autor: "Cliente",
-    ronda: 1,
-    estado: "open",
-    categoria: null,
-    cliente: true,
-  }));
-  const feedbackCliente = ccActuales.map((c) => ({
-    id: c.id,
-    body: c.body,
-    fecha: c.created_at
-      ? new Date(c.created_at).toLocaleDateString("es-MX", { day: "numeric", month: "short" })
-      : null,
-    targetTabla: c.target_tabla,
-    targetFilaId: c.target_fila_id,
-    targetCampo: c.target_campo,
-    targetQuote: c.target_quote,
-  }));
 
   const cerrada = ESTADOS_CERRADOS.includes(idea.status);
   const soloLectura = cerrada && !canOverrideStatus(role);
@@ -405,7 +388,7 @@ export default async function TareaPage({
   // El panel de correcciones + los cambios del cliente viven en una COLUMNA DERECHA
   // fija, junto al documento (antes iban al fondo / arriba). Sólo se arma la rejilla
   // de 2 columnas cuando hay algo que mostrar; si no, el documento va a todo el ancho.
-  const mostrarPanel = esEquipo && (correcciones.length > 0 || feedbackCliente.length > 0);
+  const mostrarPanel = esEquipo && correcciones.length > 0;
 
   const notaG = notaGlobal(idea.tipo_asset);
   const notaPlaceholder = notaG
@@ -425,7 +408,6 @@ export default async function TareaPage({
       esRevisor={canOverrideStatus(role)}
       esEquipo={esEquipo}
       correcciones={correcciones}
-      cambiosCliente={cambiosClienteCorr}
     >
       {/* key por idea.id: al pasar de una tarea a otra con las flechas del bundle
           (nav client-side que sólo cambia [id]), React conservaría el useState de
@@ -537,9 +519,8 @@ export default async function TareaPage({
             </div>
 
             {mostrarPanel && (
-              <div className="mt-4 space-y-3 lg:mt-0 lg:sticky lg:top-32">
-                {correcciones.length > 0 && <PanelCorrecciones />}
-                {feedbackCliente.length > 0 && <ClienteFeedback comentarios={feedbackCliente} />}
+              <div className="mt-4 lg:mt-0 lg:sticky lg:top-32">
+                <PanelCorrecciones />
               </div>
             )}
           </div>

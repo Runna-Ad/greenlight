@@ -6,7 +6,7 @@ import { Plus, X, Check, ArrowRight } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate } from "@floating-ui/react-dom";
 import { desmarcarNegrita, type RangoNegrita } from "@/lib/negrita";
 import { useCorrecciones } from "./correcciones/contexto";
-import { SelectorTipoCambio, TagTipoCambio } from "./selector-tipo-cambio";
+import { SelectorTipoCambio, TagTipoCambio, BadgeCliente } from "./selector-tipo-cambio";
 import { VeredictoChip } from "./veredicto-chip";
 import { type CategoriaCambio } from "@/lib/tipos-cambio";
 import {
@@ -131,10 +131,7 @@ export function CampoLectura({
   // editó). No se pierden: se listan como chips diminutos "sin ubicar" con la
   // misma tarjeta al pasar el ratón, para poder verlas/descartarlas.
   const ubicadas = new Set(resaltados.map((r) => r.id));
-  // Sólo correcciones INTERNAS se reencuadran como "huérfanas" aquí. Un cambio del
-  // cliente cuya cita ya no está (el equipo editó el campo) NO se convierte en chip
-  // huérfano — vive en la lista clicable "El cliente pidió…" de la columna derecha.
-  const huerfanas = cs.filter((c) => !ubicadas.has(c.id) && !c.cliente);
+  const huerfanas = cs.filter((c) => !ubicadas.has(c.id));
   // Un huérfano SIN confirmar (open/done) casi siempre es "el especialista ya lo
   // cambió → revisa si quedó". Uno YA confirmado (closed) no debe volver a pedir
   // revisión: se muestra aparte como "confirmado" para no confundir (Pedro).
@@ -298,9 +295,9 @@ export function CampoLectura({
         )}
       </div>
 
-      {/* Huérfanas (frase citada ya no está en el texto) — sólo correcciones INTERNAS
-          del revisor. Los cambios del cliente se excluyen de `huerfanas` (arriba): si
-          su cita ya no está, se ven en la lista clicable de la derecha, no como chip. */}
+      {/* Huérfanas (frase citada ya no está en el texto) — del lado del revisor.
+          Incluye cambios del cliente (mismo lifecycle): si su cita ya no está, el
+          "El texto cambió — revisa si ya quedó" aplica igual, y se pueden confirmar. */}
       {ctx.esRevisor && huerfanasPend.length > 0 && (
         <div className="mt-1 flex flex-wrap items-center gap-1">
           <span className="text-[10px] font-medium text-muted-foreground">
@@ -403,17 +400,10 @@ export function CampoLectura({
             className="z-[60] w-72 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-3 shadow-lg transition-opacity"
           >
             <div className="mb-2 flex items-center justify-between gap-2">
-              {corrAbierta.cliente ? (
-                // Cambio del CLIENTE visto en el lado interno: SÓLO lectura — el
-                // equipo lo atiende editando, no lo confirma/descarta por el lifecycle
-                // (setEstadoCorreccion no filtra por kind → nunca se le ofrece la acción).
-                <span
-                  className="text-[10px] font-bold uppercase tracking-wide"
-                  style={{ color: "color-mix(in srgb, var(--status-corrections) 80%, #000)" }}
-                >
-                  Cambio del cliente
-                </span>
-              ) : ctx.esRevisor ? (
+              {ctx.esRevisor ? (
+                // Interno: correcciones Y cambios del cliente comparten el MISMO
+                // lifecycle (confirmar/descartar). La única diferencia visible es el
+                // badge — "Cliente" (morado) en vez de la categoría de rúbrica.
                 <>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span
@@ -422,8 +412,14 @@ export function CampoLectura({
                     >
                       {ETIQUETA_ESTADO[corrAbierta.estado]}
                     </span>
-                    <TagTipoCambio slug={corrAbierta.categoria} />
-                    <VeredictoChip v={ctx.veredictos.get(corrAbierta.id)} />
+                    {corrAbierta.cliente ? (
+                      <BadgeCliente />
+                    ) : (
+                      <>
+                        <TagTipoCambio slug={corrAbierta.categoria} />
+                        <VeredictoChip v={ctx.veredictos.get(corrAbierta.id)} />
+                      </>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     {corrAbierta.estado === "done" && (
