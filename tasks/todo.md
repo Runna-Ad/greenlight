@@ -780,3 +780,12 @@ delivered_at YA existe (auto-stamp) → sin migración (verificar que el trigger
 - [x] Gates tsc·eslint·build. Sin migración. PENDIENTE "ship it".
 - [x] DECISIÓN Pedro: archivo = REGISTRO COMPLETO de todos los delivered (no sólo >7d). Quitado el filtro
       de 7 días; ordenado por delivered_at desc, limit 1000 (deuda: paginar si crece). Recientes en board Y archivo.
+
+## ✅ (2026-08-20) — "Control de Cambios" en el portal (formato interno) [Pedro] — SIN pushear
+- [x] Rename ambos paneles → "Control de Cambios" (panel.tsx interno + panel del portal).
+- [x] Portal: panel a la DERECHA (2-col sticky en desktop, mismo formato que el interno) + COLAPSABLE
+      arriba en móvil (colapsado por defecto). portal-shell max-w-3xl→5xl; portal-tarea CuerpoTarea 2-col.
+- [x] panel-control-cambios.tsx (nuevo): muestra los cambios del cliente — SIN ENVIAR (coral + Quitar) y
+      APLICADOS (morado read-only, por ronda) + Ver campo (salto+flash). Sin H.Ü.E (esRevisor=false).
+- [x] Borrado panel-revisiones-cliente.tsx (reemplazado). Gates tsc·eslint·build. Verificado live desktop+móvil.
+- PENDIENTE: "ship it".

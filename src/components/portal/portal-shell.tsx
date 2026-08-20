@@ -41,7 +41,7 @@ export function PortalShell({
   const marca = cliente.brandColor;
 
   return (
-    <div className="relative mx-auto max-w-3xl px-4 py-6 sm:px-6">
+    <div className="relative mx-auto max-w-5xl px-4 py-6 sm:px-6">
       {/* Glow sutil con el color de marca del cliente — hace sentir el portal
           "suyo" sin robar protagonismo al contenido. */}
       <div

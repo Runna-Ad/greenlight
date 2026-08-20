@@ -6,7 +6,7 @@ import { TabsTarea } from "@/components/tarea/tabs-tarea";
 import { DocumentoTarea } from "@/components/tarea/documento-tarea";
 import { CorreccionesClienteProvider } from "@/components/portal/correcciones-cliente-provider";
 import { PortalAcciones } from "@/components/portal/portal-acciones";
-import { PanelRevisionesCliente } from "@/components/portal/panel-revisiones-cliente";
+import { PanelControlCambios } from "@/components/portal/panel-control-cambios";
 import { PLACEHOLDER_ESTATICO, placeholdersGuion } from "@/lib/plantilla";
 import type { TareaPortal } from "@/app/(app)/[cliente]/portal/portal-data";
 
@@ -47,42 +47,64 @@ export function PortalTarea({ t }: { t: TareaPortal }) {
         reReview={t.status === "published" && t.revisiones.length > 0}
         nRevisados={t.revisiones.length}
       />
-      <div className="space-y-4">
-        {/* Resumen read-only de "lo que pediste, ya aplicado" — sólo en la re-revisión
-            (published con cambios de rondas pasadas). Encabeza el contenido para que el
-            cliente sepa de una que esto es una vuelta con cambios hechos. */}
-        {t.status === "published" && t.revisiones.length > 0 && <PanelRevisionesCliente />}
-        <HeroTarea
-          ideaId={t.ideaId}
-          marca={t.marcaName}
-          logoUrl={t.marcaLogo}
-          briefLabel={t.briefLabel}
-          naming={t.naming}
-          status={t.status}
-          notaGuion={t.notaGuion}
-          notaPlaceholder=""
-          esEstatico={t.esEstatico}
-          entregaUrl={t.entregaUrl}
-          soloLectura={true}
-        />
-        <TabsTarea
-          ideaId={t.ideaId}
-          esEstatico={t.esEstatico}
-          soloLectura={true}
-          detalles={{
-            tipoAsset: t.tipoAsset,
-            plataformas: t.plataformas,
-            tamanos: t.tamanos,
-            duracion: t.duracion,
-            concepto: t.concepto,
-            trend: t.trend,
-          }}
-          runna={undefined}
-        />
-        <CuerpoDoc t={t} />
-      </div>
+      <CuerpoTarea t={t} />
       </CorreccionesClienteProvider>
     </WorkspaceProvider>
+  );
+}
+
+// El cuerpo de la tarea: contenido (Hero + Tabs + documento) y, cuando el cliente tiene
+// cambios (sin enviar o aplicados), el panel "Control de Cambios" — a la DERECHA en
+// desktop (sticky, mismo formato que el interno) y COLAPSABLE arriba en móvil (Pedro).
+function CuerpoTarea({ t }: { t: TareaPortal }) {
+  const hayPanel = t.cambios.length > 0 || t.revisiones.length > 0;
+  const contenido = (
+    <>
+      <HeroTarea
+        ideaId={t.ideaId}
+        marca={t.marcaName}
+        logoUrl={t.marcaLogo}
+        briefLabel={t.briefLabel}
+        naming={t.naming}
+        status={t.status}
+        notaGuion={t.notaGuion}
+        notaPlaceholder=""
+        esEstatico={t.esEstatico}
+        entregaUrl={t.entregaUrl}
+        soloLectura={true}
+      />
+      <TabsTarea
+        ideaId={t.ideaId}
+        esEstatico={t.esEstatico}
+        soloLectura={true}
+        detalles={{
+          tipoAsset: t.tipoAsset,
+          plataformas: t.plataformas,
+          tamanos: t.tamanos,
+          duracion: t.duracion,
+          concepto: t.concepto,
+          trend: t.trend,
+        }}
+        runna={undefined}
+      />
+      <CuerpoDoc t={t} />
+    </>
+  );
+
+  if (!hayPanel) return <div className="space-y-4">{contenido}</div>;
+
+  return (
+    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5">
+      <div className="min-w-0 space-y-4">
+        <div className="lg:hidden">
+          <PanelControlCambios mobile />
+        </div>
+        {contenido}
+      </div>
+      <aside className="mt-4 hidden lg:mt-0 lg:block lg:sticky lg:top-16">
+        <PanelControlCambios />
+      </aside>
+    </div>
   );
 }
 

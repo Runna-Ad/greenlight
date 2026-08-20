@@ -55,7 +55,7 @@ export function PanelCorrecciones() {
     <aside className="rounded-xl border border-border bg-card shadow-sm">
       <div className="border-b border-border p-3.5">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
-          Correcciones
+          Control de Cambios
           {pendientes > 0 && (
             <span
               className="ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
