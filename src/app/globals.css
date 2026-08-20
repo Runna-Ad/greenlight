@@ -95,7 +95,7 @@
 
 :root {
   /* Runna brand — light theme (from Runna_Manual_de_Marca_2026) */
-  --background: #f5f3fa;              /* app surface */
+  --background: #fbfbfb;              /* app surface (near-white; antes leve morado #f5f3fa) */
   --foreground: #2d2b55;             /* ink — headings & body */
   --card: #ffffff;
   --card-foreground: #2d2b55;
