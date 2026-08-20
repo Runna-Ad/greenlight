@@ -99,7 +99,8 @@ export function PanelCorrecciones() {
                 onClick={() =>
                   setColapsadas((prev) => {
                     const n = new Set(prev);
-                    n.has(ronda) ? n.delete(ronda) : n.add(ronda);
+                    if (n.has(ronda)) n.delete(ronda);
+                    else n.add(ronda);
                     return n;
                   })
                 }
@@ -151,6 +152,26 @@ export function PanelCorrecciones() {
                       )}
                       <p className="text-[12.5px] leading-snug text-foreground">{c.body}</p>
                       {c.autor && <p className="mt-1 text-[10.5px] text-muted-foreground">{c.autor}</p>}
+
+                      {/* H.Ü.E propuso un texto concreto → el lead lo aplica de un clic
+                          directo al campo (ADVISORY→acción; el lead decide). */}
+                      {ctx.esRevisor && ctx.veredictos.get(c.id)?.aplicar && (
+                        <div className="mt-2 rounded-md border border-primary/30 bg-[color-mix(in_srgb,var(--primary)_7%,transparent)] p-2">
+                          <p className="text-[11px] leading-snug text-foreground">
+                            <b className="text-primary">H.Ü.E sugiere:</b> {ctx.veredictos.get(c.id)!.sugerencia}
+                          </p>
+                          <button
+                            type="button"
+                            disabled={ctx.pendiente}
+                            onClick={() => ctx.aplicarSugerencia?.(c.id, ctx.veredictos.get(c.id)!.aplicar!)}
+                            className="mt-1.5 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:brightness-110 disabled:opacity-50"
+                            style={{ background: "color-mix(in srgb, var(--primary) 82%, #000)" }}
+                            title="Reemplaza el texto del campo con la versión sugerida por H.Ü.E"
+                          >
+                            <Sparkles className="size-3" /> Aplicar
+                          </button>
+                        </div>
+                      )}
 
                       <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
                         {/* Especialista: marca atendido (rojo→ámbar) o reabre (ámbar→rojo) */}

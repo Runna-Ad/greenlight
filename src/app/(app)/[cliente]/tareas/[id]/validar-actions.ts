@@ -1,6 +1,7 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
+import { revalidatePath } from "next/cache";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canOverrideStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
@@ -18,6 +19,9 @@ export type VeredictoCambio = {
   razon: string;
   /** Qué hacer: si no está (o quedó a medias), cómo lograrlo; si está, confírmalo. */
   sugerencia: string;
+  /** Texto COMPLETO y final que debería tener el campo con la sugerencia ya aplicada,
+   *  listo para reemplazar de un clic ("Aplicar"). null si no hay algo concreto que aplicar. */
+  aplicar: string | null;
 };
 
 const LABEL_PLANO: Record<string, string> = {
@@ -156,8 +160,9 @@ export async function validarCambios(
             hecho: { type: "string" as const, enum: ["si", "no", "parcial"] },
             razon: { type: "string" as const },
             sugerencia: { type: "string" as const },
+            aplicar: { type: "string" as const },
           },
-          required: ["correccion_id", "hecho", "razon", "sugerencia"],
+          required: ["correccion_id", "hecho", "razon", "sugerencia", "aplicar"],
           additionalProperties: false,
         },
       },
@@ -179,7 +184,11 @@ export async function validarCambios(
     "- razon → UNA frase corta (máx ~15 palabras) que explique tu veredicto.\n" +
     "- sugerencia → UNA frase concreta y accionable. AUNQUE el cambio esté HECHO, revisa si dejó un " +
     "problema NUEVO (concordancia de número/género, gramática, coherencia, sentido) y proponlo con el " +
-    "arreglo exacto. Si no está o quedó a medias, propón cómo lograrlo.\n\n" +
+    "arreglo exacto. Si no está o quedó a medias, propón cómo lograrlo.\n" +
+    "- aplicar → el TEXTO COMPLETO Y FINAL que debería tener el campo con tu sugerencia YA aplicada " +
+    "(todo el campo, no sólo la frase; edición MÍNIMA sobre el texto actual, conservando lo demás tal " +
+    "cual), listo para reemplazar el campo de un clic. Deja aplicar='' (vacío) SÓLO si no hay un texto " +
+    "concreto que aplicar (petición ambigua, o ya está perfecto y sólo hay que confirmarlo).\n\n" +
     "CÓMO LEER LA PETICIÓN (aquí se falla más):\n" +
     "- La petición a veces ES el reemplazo deseado: cita «X» + petición 'Y' significa 'cambia «X» por " +
     "Y'. Si el texto ya dice Y, está HECHO ('si'). EJEMPLO: cita «elementos», petición 'elemento' = " +
@@ -229,11 +238,59 @@ export async function validarCambios(
       const hecho = o.hecho === "si" || o.hecho === "no" || o.hecho === "parcial" ? o.hecho : "parcial";
       const razon = typeof o.razon === "string" ? o.razon.slice(0, 160) : "";
       const sugerencia = typeof o.sugerencia === "string" ? o.sugerencia.slice(0, 240) : "";
+      // aplicar: el texto completo del campo con la sugerencia; vacío → null (nada que aplicar).
+      const aplicar = typeof o.aplicar === "string" && o.aplicar.trim() ? o.aplicar : null;
       if (!validas.has(id)) continue; // sólo veredictos de correcciones reales
-      veredictos.push({ correccionId: id, hecho, razon, sugerencia });
+      veredictos.push({ correccionId: id, hecho, razon, sugerencia, aplicar });
     }
     return { ok: true, veredictos };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error al llamar a H.Ü.E." };
   }
+}
+
+/**
+ * Aplica la sugerencia de H.Ü.E directo al campo: escribe `textoNuevo` (el texto
+ * completo que propuso H.Ü.E) en el campo al que apunta la corrección. Sólo el lead
+ * (canOverrideStatus). ADVISORY→acción: el lead decide aplicar; la IA sólo propuso.
+ * No cierra la corrección — el lead revisa el resultado y confirma.
+ */
+export async function aplicarSugerencia(
+  ideaId: string,
+  clienteSlug: string,
+  correccionId: string,
+  textoNuevo: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const role = await getViewAs();
+  if (!canOverrideStatus(role)) return { ok: false, error: "Sólo un lead aplica sugerencias." };
+  if (!textoNuevo.trim()) return { ok: false, error: "No hay texto que aplicar." };
+
+  const db = supabaseAdmin();
+  // La corrección dice a qué campo aplicar. Scope por idea_id: no se toca otra tarea.
+  const { data: corr } = await db
+    .from("comments")
+    .select("target_tabla, target_fila_id, target_campo")
+    .eq("id", correccionId)
+    .eq("idea_id", ideaId)
+    .maybeSingle<{ target_tabla: string | null; target_fila_id: string | null; target_campo: string | null }>();
+  if (!corr?.target_tabla || !corr.target_fila_id || !corr.target_campo) {
+    return { ok: false, error: "Esta corrección no apunta a un campo." };
+  }
+  // Whitelist de tabla + campo (nunca un nombre de columna arbitrario).
+  if (corr.target_tabla !== "planos" && corr.target_tabla !== "estaticos") {
+    return { ok: false, error: "Destino no válido." };
+  }
+  const campos = corr.target_tabla === "estaticos" ? CAMPOS_ESTATICO : CAMPOS_PLANO;
+  if (!campos.includes(corr.target_campo)) return { ok: false, error: "Campo no válido." };
+
+  const { error } = await db
+    .from(corr.target_tabla)
+    .update({ [corr.target_campo]: textoNuevo })
+    .eq("id", corr.target_fila_id)
+    .eq("idea_id", ideaId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/${clienteSlug}/tareas/${ideaId}`);
+  return { ok: true };
 }

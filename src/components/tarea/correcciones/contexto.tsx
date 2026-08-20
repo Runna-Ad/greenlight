@@ -11,7 +11,11 @@ import {
   descartarCorreccion,
   type CorreccionTarget,
 } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
-import { validarCambios, type VeredictoCambio } from "@/app/(app)/[cliente]/tareas/[id]/validar-actions";
+import {
+  validarCambios,
+  aplicarSugerencia as aplicarSugerenciaAction,
+  type VeredictoCambio,
+} from "@/app/(app)/[cliente]/tareas/[id]/validar-actions";
 
 export type Ctx = {
   ideaId: string;
@@ -45,6 +49,8 @@ export type Ctx = {
   validando: boolean;
   /** Corre la validación con IA de todas las correcciones vivas. */
   validar: () => void;
+  /** Aplica la sugerencia de H.Ü.E directo al campo (sólo revisor). Recarga al terminar. */
+  aplicarSugerencia?: (correccionId: string, textoNuevo: string) => void;
 };
 
 export const CorreccionesCtx = createContext<Ctx | null>(null);
@@ -151,6 +157,18 @@ export function CorreccionesProvider({
       veredictos,
       validando,
       validar,
+      aplicarSugerencia: (correccionId, textoNuevo) =>
+        start(async () => {
+          const res = await aplicarSugerenciaAction(ideaId, clienteSlug, correccionId, textoNuevo);
+          if (!res.ok) {
+            toast.error(res.error);
+            return;
+          }
+          // Recarga: el campo del editor vive en estado del workspace y no se re-siembra
+          // solo tras el write (lección refetch-tras-write); un reload lo trae limpio.
+          toast.success("Sugerencia aplicada — recargando…");
+          window.location.reload();
+        }),
     }),
     [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, correcciones, pendiente, veredictos, validando, validar, run],
   );

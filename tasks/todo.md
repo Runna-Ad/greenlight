@@ -789,3 +789,24 @@ delivered_at YA existe (auto-stamp) → sin migración (verificar que el trigger
       APLICADOS (morado read-only, por ronda) + Ver campo (salto+flash). Sin H.Ü.E (esRevisor=false).
 - [x] Borrado panel-revisiones-cliente.tsx (reemplazado). Gates tsc·eslint·build. Verificado live desktop+móvil.
 - PENDIENTE: "ship it".
+
+## 📋 PLAN (2026-08-20) — "Aplicar sugerencia" de H.Ü.E [Pedro]
+Que el lead pueda aplicar la sugerencia de H.Ü.E directo al campo con un botón "Aplicar".
+- [x] validar-actions + aplicarSugerencia action + contexto + panel: HECHO.
+      aplicada; null si no hay algo concreto). schema + prompt + parse.
+- [ ] Nueva server action aplicarSugerencia(ideaId, clienteSlug, correccionId, textoNuevo): role-check
+      canOverrideStatus, resuelve el campo (target_tabla/fila/campo del comment, whitelist), escribe, revalida.
+- [ ] contexto.tsx: Ctx += aplicarSugerencia; provider lo llama → window.location.reload() (re-siembra el campo).
+- [ ] panel.tsx: cuando el veredicto trae `aplicar` (y esRevisor), muestra la sugerencia inline + botón "Aplicar".
+- [ ] Gates + verificar. Nota: reload por simplicidad (el estado del workspace no re-siembra solo); follow-up sin reload.
+
+## ✅ (2026-08-20) — "Aplicar sugerencia" de H.Ü.E — SIN pushear
+- [x] H.Ü.E devuelve `aplicar` (texto completo del campo con la sugerencia). schema+prompt+parse.
+- [x] aplicarSugerencia(ideaId, clienteSlug, correccionId, textoNuevo): role-check, resuelve campo (whitelist), escribe, revalida.
+- [x] contexto: ctx.aplicarSugerencia → llama la action → window.location.reload() (re-siembra el campo).
+- [x] panel: cuando el veredicto trae `aplicar` (esRevisor), muestra "H.Ü.E sugiere: …" + botón "Aplicar".
+- [x] Verificado LIVE: corrí H.Ü.E en SPAPVOYTOURISM → veredicto + "H.Ü.E sugiere: …" + botón "Aplicar" renderizó.
+      (NO cliqué Aplicar = escritura en prod; el write+reload es código gateado.) Gates tsc·eslint·build.
+- Refinamiento posible: H.Ü.E a veces llena `aplicar` en sugerencias de "verificar" (no un cambio de texto);
+  tunear el prompt para dejar aplicar='' salvo cambio concreto. Y follow-up: aplicar sin reload completo.
+- PENDIENTE: "ship it".
