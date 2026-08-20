@@ -1,5 +1,17 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-20 — H.Ü.E "Aplicar" (no-reload + reap) · rediseño nav del portal
+Última actualización: 2026-08-20 — Evaluación v2 (Resolución + Eficiencia) + desglose por brief
+
+## 📊 Evaluación (v2 + por brief) — 2026-08-20 (commits 5d30cba mig 0040 · 5707ef5)
+- Grade en DOS ejes: **Calidad** = avg de 9 criterios binarios por tarea (8 de contenido + **Resolución
+  de cambios**) + **Eficiencia** (de rondas/tarea + cambios/ronda, curvas ajustables en `evaluacion.ts`).
+  **Overall = 0.70·Calidad + 0.30·Eficiencia**.
+- **Resolución** = 0 si alguna nota del autor tuvo rework fallido = el lead APLICÓ la sugerencia de H.Ü.E
+  sobre una nota YA atendida. Se sella en `comments.hue_aplicado_at` (mig 0040) al aplicar. Going-forward:
+  10 para todos hasta que fluyan H.Ü.E-applies. Se califica la ACCIÓN del lead, NO el veredicto crudo de H.Ü.E.
+- **Desglose por brief**: la nota mensual se descompone por brief (persona → brief → tareas + criterios);
+  la mensual es el promedio ponderado por nº de tareas → reconcilia. `puntuar()` reusado mes/brief.
+- Lib pura + 356 tests. Curvas de Eficiencia (RONDA_IDEAL/PENAL, CAMBIOS_IDEAL/PENAL) y peso 70/30 son
+  constantes AJUSTABLES en `evaluacion.ts` — calibrar con un mes real.
 
 ## 🤖 H.Ü.E "Aplicar sugerencia" (2026-08-20, commits b2725b7 + d6041f9)
 - El lead puede APLICAR la sugerencia de H.Ü.E directo al campo. Flujo endurecido tras reap adversarial:

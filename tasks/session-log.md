@@ -1,5 +1,49 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-20 (cont) — Evaluación v2 (Resolución + Eficiencia) + desglose por brief
+Continuación de la misma sesión. 2 commits más, ambos deploy verde.
+
+**Lo que hicimos:**
+- **`5d30cba` — Evaluación v2 (migración 0040 aplicada a prod).** El grade pasa a DOS ejes:
+  **Calidad** = promedio de 9 criterios binarios (los 8 de contenido + **"Resolución de cambios"**
+  nuevo, grupo "Proceso") + **Eficiencia** (de rondas/tarea + cambios/ronda, curvas ajustables).
+  **Overall = 0.70·Calidad + 0.30·Eficiencia**. "Resolución" = 0 en una tarea si alguna nota del
+  autor tuvo un REWORK FALLIDO: el lead aplicó la sugerencia de H.Ü.E sobre una nota YA ATENDIDA (su
+  arreglo fue malo). Captura: `comments.hue_aplicado_at` (migración 0040, nullable, sin backfill),
+  sellado en `aplicarSugerencia`. Going-forward: Resolución = 10 hasta que se apliquen H.Ü.E fixes.
+- **`5707ef5` — desglose POR BRIEF (sin migración).** La nota mensual se descompone por brief:
+  persona (nota mensual) → una nota por brief → tareas de las que salió (chip rojo=con notas,
+  verde=limpia) + criterios + proceso del brief. Refactor: `puntuar(ideaIds,...)` reusado para el mes
+  y para cada brief → la mensual es el promedio ponderado por nº de tareas (reconcilia). Sin captura
+  nueva (la tarea ya sabe su brief).
+- **2 mockups (show_widget)** para iterar el diseño con Pedro: (1) el board con 5 usuarios/10 tareas —
+  ¿se ve el grade + el porqué?; (2) el desglose por brief. Pedro validó ambos antes de construir.
+
+**Estado actual:** todo deployado y verde. Working tree limpio (sólo los HANDOFF-*.md de Pedro,
+sin trackear, intactos). Nada sin pushear.
+
+**Decisiones (Pedro):**
+- **Calificar la ACCIÓN del humano, no la OPINIÓN de la IA**: Resolución cuenta SÓLO cuando el lead
+  APLICA la sugerencia de H.Ü.E (decisión deliberada), no el veredicto crudo parcial/no (advisory/
+  ruidoso, a veces ámbar aceptado). Binaria, atribuida al autor de la nota, sólo si estaba atendida.
+- Eficiencia con curvas ajustables (defaults); peso **70/30** quality-heavy.
+- Brief: mantener la nota mensual como titular + desglose por brief (no brief-first); reconcilia.
+
+**Decisión PENDIENTE (Pedro no cerró): ¿reap masivo antes del go-live?** Mi recomendación firme:
+NO hacer un reap general ahora (código ya muy reapeado: full reap 08-19 + cada feature esta sesión;
+un reap ahora re-flaggearía lo intencional-abierto = ruido). En su lugar: reapear los CAMBIOS del
+go-live adversarialmente (RLS/auth/scoping) mientras se construyen + verificación de aislamiento tras
+el lockdown. La próxima sesión = **GO-LIVE**.
+
+**Pick up next session — GO-LIVE:**
+- Arrancar del **launch-hardening set** en todo.md: Gap 1 (escritura especialista → assignee-scoped),
+  Gap 2 (lead → track-scoped), batch de seguridad (server actions re-chequean rol) — TODO junto con el
+  LOGIN (auth). Portal ya está listo (era la última pieza pre-launch). Reapear el lockdown adversarial.
+- Follow-ups menores en espera: etiquetas de brief "DD/MM for <mes>", pasada móvil del nav del portal,
+  caching en ortografia/extraerGuion, de-dupe de ids de veredicto duplicados.
+
+**Cambios de entorno:** migración **0040** aplicada a prod (`comments.hue_aplicado_at`). Sin deps nuevas.
+
 ## 2026-08-20 — H.Ü.E "Aplicar" (no-reload + reap) + rediseño nav del portal
 Tres bloques, 3 commits, todos shippeados con deploy Vercel verde. Sin migración, sin deps nuevas.
 
