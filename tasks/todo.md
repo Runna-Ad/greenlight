@@ -769,7 +769,14 @@ delivered_at YA existe (auto-stamp) → sin migración (verificar que el trigger
 - [x] Verificado live: 7 columnas, colores exactos, Con Cliente=2 / Greenlit=1, colapso OK. Gates verdes.
 - PENDIENTE: "ship it" (sin migración).
 
-### Fase 2 — Entregas como ARCHIVO
-- [ ] Tareas greenlit (delivered) con delivered_at > 7 días → aquí (salen del board).
-- [ ] Bundle por BRIEF (brief cards) expandibles → tareas dentro + fecha de greenlit c/u.
-- [ ] Abrir tarea (re-consultar / reabrir vía override, delivered no tiene transición normal).
+### Fase 2 — Entregas como ARCHIVO ✅ CONSTRUIDO + verificado live (SIN pushear)
+- [x] Loader (entregas/page.tsx): delivered con delivered_at < hace 7 días, agrupado por BRIEF.
+      Ya NO muestra con_cliente/en_cambios (eso vive en el tablero ahora).
+- [x] Componente (entregas-board.tsx, reescrito, "use client"): brief cards expandibles (useState) →
+      tareas dentro con code, naming, asignados, fecha de Greenlit, link para abrir/reabrir/consultar.
+      Empty state cuando no hay >7d. Header "Archivo".
+- [x] Verificado live (ventana ampliada temporalmente, revertida): brief card "Voyager Recreation Local
+      - August" · DiDi · ✨1 Greenlit → expande a SPAPVOYSHOPPINGFUT · Greenlit 19 ago · link a la tarea.
+- [x] Gates tsc·eslint·build. Sin migración. PENDIENTE "ship it".
+- [x] DECISIÓN Pedro: archivo = REGISTRO COMPLETO de todos los delivered (no sólo >7d). Quitado el filtro
+      de 7 días; ordenado por delivered_at desc, limit 1000 (deuda: paginar si crece). Recientes en board Y archivo.

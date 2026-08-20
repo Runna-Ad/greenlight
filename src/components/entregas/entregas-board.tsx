@@ -1,168 +1,133 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { ExternalLink, Sparkles } from "lucide-react";
-import { Pill, type PillStatus } from "@/components/ui/pill";
+import { PackageCheck, ChevronDown, Sparkles, ArrowRight, FileText } from "lucide-react";
+import { Pill } from "@/components/ui/pill";
 import { chipTextColor } from "@/lib/vocab";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PackageCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Verde neón del logo (= --greenlight). Se pasa como HEX para que <Pill> pueda medir
-// el contraste (var(--…) no es medible en JS) y devuelva tinta oscura sobre el neón.
+// Verde neón del logo (Greenlit).
 const GREENLIT = "#00e676";
 
-// Estado de una ENTREGA (una tarea que ya se envió al cliente = published_at set).
-// Hoy son 3 buckets; cuando exista el portal del cliente, "con_cliente" se
-// subdividirá (cliente revisando / aceptó) sin cambiar el resto.
-export type EstadoEntrega = "con_cliente" | "en_cambios" | "entregado";
-
-export type Entrega = {
+// Una tarea ARCHIVADA: Greenlit (delivered). El archivo tiene TODAS; las recientes
+// también salen en el tablero (columna Greenlit ≤7d).
+export type TareaArchivada = {
   id: string;
   code: string | null;
   namingBase: string | null;
-  entregaNum: string | null;
-  entregaUrl: string | null;
-  estado: EstadoEntrega;
-  enviadaEl: string | null; // ya formateada por el server
+  greenlitEl: string | null; // fecha ya formateada por el server
   asignados: { name: string; color: string }[];
 };
 
-export type ClienteEntregas = {
-  slug: string;
-  name: string;
-  color: string;
-  entregas: Entrega[];
+// El archivo se BUNDLEA por brief: una tarjeta por brief, expandible.
+export type BriefArchivo = {
+  briefId: string;
+  briefLabel: string;
+  clienteName: string;
+  clienteColor: string;
+  clienteSlug: string;
+  tareas: TareaArchivada[];
 };
 
-const META: Record<EstadoEntrega, { label: string; token: PillStatus; orden: number }> = {
-  con_cliente: { label: "Con el cliente", token: "published", orden: 0 },
-  en_cambios: { label: "En cambios", token: "corrections", orden: 1 },
-  // "Greenlit" = el cliente lo aprobó (delivered). El momento de marca: verde neón + ✨.
-  entregado: { label: "Greenlit", token: "delivered", orden: 2 },
-};
-
-export function EntregasBoard({ clientes }: { clientes: ClienteEntregas[] }) {
-  const total = clientes.reduce((n, c) => n + c.entregas.length, 0);
+/**
+ * Entregas = ARCHIVO. Registro COMPLETO de todo el trabajo Greenlit (aprobado por el
+ * cliente), agrupado por brief. Cada brief es una tarjeta expandible con sus tareas +
+ * la fecha en que se hicieron Greenlit; al abrir una tarea el lead puede consultarla o
+ * reabrirla (override, delivered es terminal). Las Greenlit recientes también están en
+ * el tablero (columna Greenlit ≤7d); aquí están TODAS.
+ */
+export function EntregasBoard({ briefs }: { briefs: BriefArchivo[] }) {
+  const total = briefs.reduce((n, b) => n + b.tareas.length, 0);
   if (!total) {
     return (
       <EmptyState
         icon={PackageCheck}
-        titulo="Todavía no hay entregas"
-        descripcion="Cuando una tarea se envíe al cliente (Enviar a cliente), aparecerá aquí para seguir su estado."
+        titulo="Archivo vacío"
+        descripcion="Cuando el cliente apruebe una tarea (Greenlit), aparecerá aquí agrupada por brief."
       />
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        {total} entrega{total === 1 ? "" : "s"} enviada{total === 1 ? "" : "s"} al cliente.
+        {total} tarea{total === 1 ? "" : "s"} Greenlit archivada{total === 1 ? "" : "s"} en{" "}
+        {briefs.length} brief{briefs.length === 1 ? "" : "s"}.
       </p>
-
-      {clientes.map((c) => {
-        // Con el cliente primero (necesita atención), luego cambios, luego entregado.
-        const orden = [...c.entregas].sort((a, b) => META[a.estado].orden - META[b.estado].orden);
-        const conteo = (e: EstadoEntrega) => c.entregas.filter((x) => x.estado === e).length;
-        return (
-          <section key={c.slug}>
-            <div className="mb-2 flex items-center gap-2">
-              <Pill color={c.color} dot>
-                {c.name}
-              </Pill>
-              <span className="text-[11px] text-muted-foreground">
-                {conteo("con_cliente")} con el cliente · {conteo("en_cambios")} en cambios ·{" "}
-                {conteo("entregado")} Greenlit
-              </span>
-            </div>
-            <div className="space-y-2">
-              {orden.map((e) => (
-                <FilaEntrega key={e.id} e={e} slug={c.slug} />
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      {briefs.map((b) => (
+        <BriefCard key={b.briefId} b={b} />
+      ))}
     </div>
   );
 }
 
-function FilaEntrega({ e, slug }: { e: Entrega; slug: string }) {
-  const meta = META[e.estado];
-  // Greenlit (aprobado por el cliente) resalta: pleca verde neón + tinte sutil, para
-  // que el estado feliz salte a la vista entre "con el cliente" y "en cambios".
-  const esGreenlit = e.estado === "entregado";
+function BriefCard({ b }: { b: BriefArchivo }) {
+  const [abierto, setAbierto] = useState(false);
   return (
-    <div
-      className={cn(
-        "gl-card relative flex flex-wrap items-center gap-x-3 gap-y-2 p-3",
-        esGreenlit && "border-[color-mix(in_srgb,var(--greenlight-ink)_38%,var(--border))]",
-      )}
-      style={
-        esGreenlit
-          ? {
-              boxShadow: "inset 3px 0 0 var(--greenlight-ink)",
-              background: "color-mix(in srgb, var(--greenlight) 7%, var(--card))",
-            }
-          : undefined
-      }
-    >
-      {/* Toda la fila abre la tarea (link estirado); "Abrir entregable" va con
-          z-10 encima para no chocar con la navegación. */}
-      <Link
-        href={`/${slug}/tareas/${e.id}`}
-        aria-label={`Abrir ${e.namingBase ?? "tarea"}`}
-        className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      />
-      {esGreenlit ? (
-        <Pill color={GREENLIT} fill="solid" className="font-bold">
-          <Sparkles className="size-3" /> {meta.label}
+    <div className="gl-card overflow-hidden p-0">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        aria-expanded={abierto}
+        className="flex w-full items-center gap-2 p-3 text-left transition-colors hover:bg-secondary/40"
+      >
+        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", abierto && "rotate-180")} />
+        <FileText className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 truncate font-semibold text-foreground">{b.briefLabel}</span>
+        <Pill color={b.clienteColor} dot className="shrink-0">
+          {b.clienteName}
         </Pill>
-      ) : (
-        <Pill status={meta.token}>{meta.label}</Pill>
-      )}
-
-      {e.code && (
-        <span className="rounded bg-secondary px-1.5 py-0.5 text-[11px] font-semibold text-secondary-foreground">
-          {e.code}
+        <span
+          className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold"
+          style={{ background: `color-mix(in srgb, ${GREENLIT} 20%, transparent)`, color: "var(--greenlight-ink)" }}
+        >
+          <Sparkles className="size-3" /> {b.tareas.length} Greenlit
         </span>
-      )}
-      <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-foreground">
-        {e.namingBase ?? "—"}
-      </span>
+      </button>
 
-      {e.entregaNum && <span className="text-[11px] text-muted-foreground">{e.entregaNum}</span>}
-      {e.enviadaEl && (
-        <span className="text-[11px] text-muted-foreground" title="Enviada al cliente">
-          {e.enviadaEl}
-        </span>
-      )}
-
-      {/* Asignados: avatares pequeños con contraste AA. */}
-      {e.asignados.length > 0 && (
-        <div className="flex -space-x-1.5">
-          {e.asignados.slice(0, 4).map((a, i) => (
-            <span
-              key={i}
-              title={a.name}
-              className="grid size-6 place-items-center rounded-full border-2 border-background text-[9px] font-semibold"
-              style={{ backgroundColor: a.color, color: chipTextColor(a.color) }}
+      {abierto && (
+        <div className="border-t border-border">
+          {b.tareas.map((t) => (
+            <Link
+              key={t.id}
+              href={`/${b.clienteSlug}/tareas/${t.id}`}
+              aria-label={`Abrir ${t.namingBase ?? t.code ?? "tarea"}`}
+              className="flex items-center gap-3 border-b border-border px-3 py-2 text-[13px] transition-colors last:border-b-0 hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
-              {a.name.slice(0, 2).toUpperCase()}
-            </span>
+              <Sparkles className="size-3 shrink-0" style={{ color: "var(--greenlight-ink)" }} />
+              {t.code && (
+                <span className="shrink-0 rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">
+                  {t.code}
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate font-mono text-foreground">
+                {t.namingBase ?? "—"}
+              </span>
+              {t.asignados.length > 0 && (
+                <div className="flex -space-x-1.5">
+                  {t.asignados.slice(0, 3).map((a, i) => (
+                    <span
+                      key={i}
+                      title={a.name}
+                      className="grid size-5 place-items-center rounded-full border-2 border-card text-[8px] font-semibold"
+                      style={{ backgroundColor: a.color, color: chipTextColor(a.color) }}
+                    >
+                      {a.name.slice(0, 2).toUpperCase()}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {t.greenlitEl && (
+                <span className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground" title="Fecha de Greenlit">
+                  Greenlit {t.greenlitEl}
+                </span>
+              )}
+              <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+            </Link>
           ))}
         </div>
-      )}
-
-      {e.entregaUrl ? (
-        <a
-          href={e.entregaUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="relative z-10 inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-secondary"
-        >
-          <ExternalLink className="size-3" /> Abrir entregable
-        </a>
-      ) : (
-        <span className="text-[11px] text-muted-foreground/70">Sin link</span>
       )}
     </div>
   );
