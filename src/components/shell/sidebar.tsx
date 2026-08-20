@@ -14,7 +14,6 @@ import {
   RefreshCw,
   Eye,
   Menu,
-  UserRound,
   ChevronDown,
   type LucideIcon,
 } from "lucide-react";
@@ -53,9 +52,8 @@ function navFor(
         { key: "mi-trabajo", href: "/mi-trabajo", label: "Mi trabajo", icon: LayoutGrid },
         { key: "performance", href: "/performance", label: "Performance", icon: GaugeCircle },
         { key: "entregas", href: "/entregas", label: "Entregas", icon: PackageCheck },
-        // Todos los roles internos lo ven (canSee); los admin además gestionan
-        // perfiles del equipo dentro de Configuración.
-        { key: "mi-perfil", href: "/mi-perfil", label: "Mi perfil", icon: UserRound },
+        // "Mi perfil" ya NO vive en la nav lateral (secciones de trabajo): las acciones
+        // de CUENTA van en el menú del avatar (arriba a la derecha) — ver Topbar. (Pedro)
       ],
     },
     ...(clientBase

@@ -1,9 +1,14 @@
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Sparkles } from "lucide-react";
 import { Pill, type PillStatus } from "@/components/ui/pill";
 import { chipTextColor } from "@/lib/vocab";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PackageCheck } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+// Verde neón del logo (= --greenlight). Se pasa como HEX para que <Pill> pueda medir
+// el contraste (var(--…) no es medible en JS) y devuelva tinta oscura sobre el neón.
+const GREENLIT = "#00e676";
 
 // Estado de una ENTREGA (una tarea que ya se envió al cliente = published_at set).
 // Hoy son 3 buckets; cuando exista el portal del cliente, "con_cliente" se
@@ -31,7 +36,8 @@ export type ClienteEntregas = {
 const META: Record<EstadoEntrega, { label: string; token: PillStatus; orden: number }> = {
   con_cliente: { label: "Con el cliente", token: "published", orden: 0 },
   en_cambios: { label: "En cambios", token: "corrections", orden: 1 },
-  entregado: { label: "Entregado", token: "delivered", orden: 2 },
+  // "Greenlit" = el cliente lo aprobó (delivered). El momento de marca: verde neón + ✨.
+  entregado: { label: "Greenlit", token: "delivered", orden: 2 },
 };
 
 export function EntregasBoard({ clientes }: { clientes: ClienteEntregas[] }) {
@@ -64,7 +70,7 @@ export function EntregasBoard({ clientes }: { clientes: ClienteEntregas[] }) {
               </Pill>
               <span className="text-[11px] text-muted-foreground">
                 {conteo("con_cliente")} con el cliente · {conteo("en_cambios")} en cambios ·{" "}
-                {conteo("entregado")} entregadas
+                {conteo("entregado")} Greenlit
               </span>
             </div>
             <div className="space-y-2">
@@ -81,8 +87,24 @@ export function EntregasBoard({ clientes }: { clientes: ClienteEntregas[] }) {
 
 function FilaEntrega({ e, slug }: { e: Entrega; slug: string }) {
   const meta = META[e.estado];
+  // Greenlit (aprobado por el cliente) resalta: pleca verde neón + tinte sutil, para
+  // que el estado feliz salte a la vista entre "con el cliente" y "en cambios".
+  const esGreenlit = e.estado === "entregado";
   return (
-    <div className="gl-card relative flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
+    <div
+      className={cn(
+        "gl-card relative flex flex-wrap items-center gap-x-3 gap-y-2 p-3",
+        esGreenlit && "border-[color-mix(in_srgb,var(--greenlight-ink)_38%,var(--border))]",
+      )}
+      style={
+        esGreenlit
+          ? {
+              boxShadow: "inset 3px 0 0 var(--greenlight-ink)",
+              background: "color-mix(in srgb, var(--greenlight) 7%, var(--card))",
+            }
+          : undefined
+      }
+    >
       {/* Toda la fila abre la tarea (link estirado); "Abrir entregable" va con
           z-10 encima para no chocar con la navegación. */}
       <Link
@@ -90,7 +112,13 @@ function FilaEntrega({ e, slug }: { e: Entrega; slug: string }) {
         aria-label={`Abrir ${e.namingBase ?? "tarea"}`}
         className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
-      <Pill status={meta.token}>{meta.label}</Pill>
+      {esGreenlit ? (
+        <Pill color={GREENLIT} fill="solid" className="font-bold">
+          <Sparkles className="size-3" /> {meta.label}
+        </Pill>
+      ) : (
+        <Pill status={meta.token}>{meta.label}</Pill>
+      )}
 
       {e.code && (
         <span className="rounded bg-secondary px-1.5 py-0.5 text-[11px] font-semibold text-secondary-foreground">

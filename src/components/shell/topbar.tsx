@@ -1,8 +1,17 @@
 "use client";
 
-import { Search, User } from "lucide-react";
+import Link from "next/link";
+import { Search, User, UserRound } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { DEFAULT_ROLE, type ViewRole } from "@/lib/roles";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { DEFAULT_ROLE, canSee, type ViewRole } from "@/lib/roles";
 import type { Soy } from "@/lib/soy";
 import { type PoolMember } from "./soy-switch";
 import { NotificationsBell } from "./notifications-bell";
@@ -46,20 +55,43 @@ export function Topbar({
           />
         </div>
         <NotificationsBell initialCount={avisos} />
-        {/* El avatar refleja QUIÉN eres (de "¿Quién eres?"/soy), no una inicial fija —
-            en una herramienta de identidad por honor, "PV" fijo se leía como bug. Sin
-            soy elegido, un ícono neutro en vez de inventar iniciales. */}
-        <Avatar className="size-8" title={soy ? soy.name : "Sin identidad"} aria-label={soy ? soy.name : "Sin identidad"}>
-          <AvatarFallback
-            className="text-xs font-semibold"
-            style={{
-              background: soy ? "var(--primary)" : "var(--secondary)",
-              color: soy ? "var(--primary-foreground)" : "var(--muted-foreground)",
-            }}
-          >
-            {soy ? inicialesDe(soy.name) : <User className="size-4" aria-hidden />}
-          </AvatarFallback>
-        </Avatar>
+        {/* Menú de CUENTA (arriba a la derecha): el avatar abre "Mi perfil" — las
+            acciones de cuenta viven aquí, no en la nav lateral (Pedro). El avatar
+            refleja QUIÉN eres (soy); sin identidad, un ícono neutro (nada de "PV" fijo). */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Menú de cuenta"
+              className="rounded-full outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Avatar className="size-8">
+                <AvatarFallback
+                  className="text-xs font-semibold"
+                  style={{
+                    background: soy ? "var(--primary)" : "var(--secondary)",
+                    color: soy ? "var(--primary-foreground)" : "var(--muted-foreground)",
+                  }}
+                >
+                  {soy ? inicialesDe(soy.name) : <User className="size-4" aria-hidden />}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel className="truncate">{soy ? soy.name : "Sin identidad"}</DropdownMenuLabel>
+            {canSee(role, "mi-perfil") && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/mi-perfil" className="cursor-pointer">
+                    <UserRound className="size-4" /> Mi perfil
+                  </Link>
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

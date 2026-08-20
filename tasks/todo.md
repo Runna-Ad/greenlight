@@ -743,3 +743,12 @@ Deck del cliente (leído entero, 45 slides): docs.google.com/presentation/d/1A65
 - Final product name (placeholder: Rünna On Deck)
 - Blueprint v2 for team review (Pedro said "not yet" — revisit before launch)
 - Dark mode v1.5; Pro upgrade decision when platform grows
+
+## ✅ (2026-08-19 cont2) — Greenlit + Mi perfil al avatar [Pedro] — SHIPPED
+- [x] Entregas: "Entregado" → "Greenlit" (Pill neón #00e676 + ✨) + fila con pleca/tinte verde; copys
+      de conteo/descripción. (entregas-board.tsx, entregas/page.tsx)
+- [x] Mi perfil FUERA del sidebar → menú del avatar top-right (DropdownMenu). canSee(mi-perfil) se
+      mantiene para el guard de la página. (sidebar.tsx: quitado item + import UserRound; roles.ts comment;
+      topbar.tsx: avatar → DropdownMenu con "Mi perfil").
+- [x] Gates tsc·eslint·build·lib 328. Verificado LIVE (Greenlit en Entregas; Mi perfil abre desde avatar).
+      PEDRO_OVERRIDE logueado (perfil/cuenta van en avatar, no en nav lateral).

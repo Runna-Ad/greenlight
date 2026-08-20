@@ -70,8 +70,9 @@ const NAV_ALL: NavKey[] = [
   "entregas",
   "portal",
   "admin",
-  "mi-perfil", // admin/master también tienen su "Mi perfil" directo (antes sólo editable
-               // desde Configuración; Pedro lo quiere consistente con los demás roles).
+  // `mi-perfil` se queda en los sets de rol para el GUARD de la página (canSee), pero ya
+  // NO se muestra en la nav lateral: se accede desde el menú del avatar (Topbar). (Pedro)
+  "mi-perfil",
 ];
 
 const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {

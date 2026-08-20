@@ -130,7 +130,7 @@ export default async function EntregasPage() {
         <p className="gl-eyebrow">Entregas</p>
         <h1 className="mt-1 text-2xl font-semibold text-foreground">Entregas</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Todo lo enviado al cliente y su estado — con el cliente, en cambios, o entregado.
+          Todo lo enviado al cliente y su estado — con el cliente, en cambios, o Greenlit (aprobado).
         </p>
       </header>
       <EntregasBoard clientes={clientes} />
