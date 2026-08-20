@@ -1,5 +1,21 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-19 (cont2) — Greenlit + Mi perfil al avatar
+
+Commit **4b4701b** (sin migración, verificado live).
+- **Entregas → "Greenlit"**: el estado aprobado-por-el-cliente (delivered) pasó de "Entregado" a
+  **"Greenlit"** con el verde neón del logo (#00e676 vía `<Pill>`, tinta oscura auto-AA) + ✨, y la
+  fila resalta (pleca + tinte verde). Copys de conteo/descripción al día. El momento de marca que
+  Pedro quería al aprobar el cliente.
+- **Mi perfil → menú del avatar (top-right)**: sale de la nav lateral (todos los roles) y vive en un
+  DropdownMenu sobre el avatar de la Topbar. `canSee(mi-perfil)` se mantiene para el guard de la
+  página. **PEDRO_OVERRIDE** (lessons.md): corrige la sesión pasada (lo había metido al sidebar) —
+  acciones de CUENTA van en el avatar, la nav lateral es para secciones de trabajo.
+- Verificado LIVE (Greenlit en Entregas; Mi perfil abre desde el avatar). Gates: tsc·eslint·build·lib 328.
+- **Sin pendientes nuevos.** Sigue vigente el launch-hardening set del (cont.): Gap 1 (escritura del
+  especialista → assignee-scoped), Gap 2 (lead → track-scoped, decisión), batch de seguridad; +
+  diferidos (emoji-lazy, rewrite N+1 import, S2 scoring, S3 lock de ronda). Login = gran bloque a LIVE.
+
 ## 2026-08-19 (cont.) — Vuelta al cliente + reap full-platform + fixes + revisión de roles
 
 Sesión larga de continuación. Commits a prod: **8eaa140** (vuelta al cliente), **10e54a9**

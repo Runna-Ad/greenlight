@@ -1,5 +1,12 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-19 (cont.) — vuelta al cliente · reap full-platform + fixes · migración **0039** · revisión de roles
+Última actualización: 2026-08-19 (cont2) — Greenlit en Entregas · Mi perfil al avatar (top-right)
+
+## ✨ Marca / nav (2026-08-19 cont2, commit 4b4701b)
+- **Entregas**: el estado aprobado-por-cliente se muestra como **"Greenlit"** (verde neón del logo
+  #00e676 + ✨, fila resaltada) en vez de "Entregado". `--greenlight`/`--greenlight-ink` ya en tokens.
+- **Mi perfil** vive en el menú del avatar (Topbar, top-right), NO en la nav lateral (todos los roles).
+  Regla: acciones de cuenta/sesión → avatar; nav izquierda = secciones. (El "¿Quién eres?/Ver como"
+  sigue en el sidebar "Sesión" por decisión previa de Pedro.)
 
 ## 🔎 Reap full-platform (2026-08-19) + fixes aplicados
 - Auditoría de 7 lentes en `tasks/reap-2026-08-19.md`. 0 CRITICAL reales; codebase sólido.
