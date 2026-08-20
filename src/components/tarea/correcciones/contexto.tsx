@@ -4,6 +4,8 @@ import { createContext, useCallback, useContext, useMemo, useState, useTransitio
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { keyCampo, type Correccion } from "@/lib/correcciones";
+import { useWorkspace } from "@/components/tarea/workspace-provider";
+import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
 import {
   agregarCorreccion,
   setEstadoCorreccion,
@@ -49,8 +51,9 @@ export type Ctx = {
   validando: boolean;
   /** Corre la validación con IA de todas las correcciones vivas. */
   validar: () => void;
-  /** Aplica la sugerencia de H.Ü.E directo al campo (sólo revisor). Recarga al terminar. */
-  aplicarSugerencia?: (correccionId: string, textoNuevo: string) => void;
+  /** Aplica la sugerencia de H.Ü.E directo al campo (sólo revisor). Parchea el campo en
+   *  memoria (SIN recargar) y quita el botón sólo de ESE cambio; los demás veredictos siguen. */
+  aplicarSugerencia?: (correccion: Correccion, textoNuevo: string) => void;
 };
 
 export const CorreccionesCtx = createContext<Ctx | null>(null);
@@ -81,6 +84,11 @@ export function CorreccionesProvider({
   const [pendiente, start] = useTransition();
   const [validando, startValidar] = useTransition();
   const [veredictos, setVeredictos] = useState<Map<string, VeredictoCambio>>(new Map());
+  // Setters ESTABLES del workspace (identidad fija de React) para parchear el campo tras
+  // "Aplicar" sin recargar. Se destructuran aparte para NO meter el objeto `ws` completo
+  // (que cambia en cada edición de planos) en las deps del useMemo de abajo — eso reventaría
+  // la memo de perf. Este provider vive DENTRO de <WorkspaceProvider> (page.tsx).
+  const { setPlanos: setWsPlanos, setEstatico: setWsEstatico } = useWorkspace();
 
   const validar = useCallback(
     () =>
@@ -157,20 +165,41 @@ export function CorreccionesProvider({
       veredictos,
       validando,
       validar,
-      aplicarSugerencia: (correccionId, textoNuevo) =>
+      aplicarSugerencia: (correccion, textoNuevo) =>
         start(async () => {
-          const res = await aplicarSugerenciaAction(ideaId, clienteSlug, correccionId, textoNuevo);
+          const res = await aplicarSugerenciaAction(ideaId, clienteSlug, correccion.id, textoNuevo);
           if (!res.ok) {
             toast.error(res.error);
             return;
           }
-          // Recarga: el campo del editor vive en estado del workspace y no se re-siembra
-          // solo tras el write (lección refetch-tras-write); un reload lo trae limpio.
-          toast.success("Sugerencia aplicada — recargando…");
-          window.location.reload();
+          // SIN reload: parchea el campo EN MEMORIA (el documento lee de useWorkspace). Antes
+          // recargaba (el estado del workspace no se re-siembra tras el write) — pero el reload
+          // borraba TODOS los veredictos de H.Ü.E, obligando a re-correrlo (llamada pagada) tras
+          // cada Aplicar. Ahora el campo se actualiza al instante y los demás veredictos siguen.
+          const campo = correccion.targetCampo;
+          if (campo) {
+            if (correccion.targetTabla === "planos" && correccion.targetFilaId) {
+              const filaId = correccion.targetFilaId;
+              setWsPlanos((prev) =>
+                prev.map((p) => (p.id === filaId ? ({ ...p, [campo]: textoNuevo } as PlanoVista) : p)),
+              );
+            } else if (correccion.targetTabla === "estaticos") {
+              setWsEstatico((prev) => (prev ? ({ ...prev, [campo]: textoNuevo } as EstaticoVista) : prev));
+            }
+          }
+          // El cambio ya está aplicado → quita SÓLO el `aplicar` de su veredicto (el botón
+          // desaparece), conservando el resto del veredicto y TODOS los demás intactos.
+          setVeredictos((prev) => {
+            const v = prev.get(correccion.id);
+            if (!v) return prev;
+            const n = new Map(prev);
+            n.set(correccion.id, { ...v, aplicar: null });
+            return n;
+          });
+          toast.success("Sugerencia aplicada");
         }),
     }),
-    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, correcciones, pendiente, veredictos, validando, validar, run],
+    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, correcciones, pendiente, veredictos, validando, validar, run, setWsPlanos, setWsEstatico],
   );
 
   return <CorreccionesCtx.Provider value={value}>{children}</CorreccionesCtx.Provider>;

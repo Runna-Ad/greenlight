@@ -6,6 +6,7 @@ import { useCorrecciones } from "./contexto";
 import { TagTipoCambio, BadgeCliente } from "../selector-tipo-cambio";
 import { VeredictoChip } from "../veredicto-chip";
 import { keyCampo, porRonda, sinResolver, type Correccion, type EstadoCorreccion } from "@/lib/correcciones";
+import type { VeredictoCambio } from "@/app/(app)/[cliente]/tareas/[id]/validar-actions";
 import { cn } from "@/lib/utils";
 
 // Fondos sólidos de botón (texto blanco) — un pelín más oscuros para AA.
@@ -45,6 +46,17 @@ export function PanelCorrecciones() {
   // Confirmación en dos pasos del descarte: el id de la corrección cuyo botón
   // "Descartar" está pidiendo confirmación (sólo una a la vez).
   const [confirmando, setConfirmando] = useState<string | null>(null);
+  // Cambios que el usuario alternó a mano (XOR contra el default compacto/expandido) —
+  // para que un panel con muchos cambios no sea gigante (Pedro): resueltos y abiertos
+  // más allá de los primeros 5 arrancan compactos; un clic los expande y viceversa.
+  const [alternados, setAlternados] = useState<Set<string>>(new Set());
+  const alternar = (id: string) =>
+    setAlternados((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   if (!ctx || !ctx.correcciones.length) return null;
 
   const grupos = porRonda(ctx.correcciones);
@@ -118,12 +130,36 @@ export function PanelCorrecciones() {
 
               {visible && (
                 <div className="grid gap-2 px-2.5 pb-2.5">
-                  {items.map((c) => (
-                    <div
-                      key={c.id}
-                      className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--status-corrections)_50%,transparent)]"
-                      onClick={() => verCampo(c)}
-                    >
+                  {(() => {
+                    // Resueltos (atendido/confirmado) → compactos siempre. Abiertos (rojo) →
+                    // los primeros 5 expandidos, el resto compacto. El default se invierte con
+                    // el toggle manual (alternados). Así el panel encoge al ir resolviendo.
+                    let abiertasVistas = 0;
+                    return items.map((c) => {
+                      const resuelta = c.estado !== "open";
+                      let compactaDefault: boolean;
+                      if (resuelta) compactaDefault = true;
+                      else {
+                        compactaDefault = abiertasVistas >= 5;
+                        abiertasVistas++;
+                      }
+                      const compacta = compactaDefault !== alternados.has(c.id);
+                      if (compacta) {
+                        return (
+                          <TarjetaCompacta
+                            key={c.id}
+                            c={c}
+                            veredicto={ctx.veredictos.get(c.id)}
+                            onExpandir={() => alternar(c.id)}
+                          />
+                        );
+                      }
+                      return (
+                        <div
+                          key={c.id}
+                          className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--status-corrections)_50%,transparent)]"
+                          onClick={() => verCampo(c)}
+                        >
                       <div className="mb-1 flex flex-wrap items-center gap-1.5">
                         {c.targetLabel && (
                           <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-bold text-secondary-foreground">
@@ -144,6 +180,21 @@ export function PanelCorrecciones() {
                         >
                           {ETIQUETA[c.estado]}
                         </span>
+                        {/* Sólo las tarjetas que arrancan compactas (resueltas o abiertas >5)
+                            traen el botón para volver a compactarlas. */}
+                        {compactaDefault && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              alternar(c.id);
+                            }}
+                            aria-label="Compactar"
+                            className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <ChevronDown className="size-3.5" />
+                          </button>
+                        )}
                       </div>
                       {c.targetQuote && (
                         <p className="mb-0.5 text-[11px] italic text-status-corrections" title={c.targetQuote}>
@@ -163,7 +214,7 @@ export function PanelCorrecciones() {
                           <button
                             type="button"
                             disabled={ctx.pendiente}
-                            onClick={() => ctx.aplicarSugerencia?.(c.id, ctx.veredictos.get(c.id)!.aplicar!)}
+                            onClick={() => ctx.aplicarSugerencia?.(c, ctx.veredictos.get(c.id)!.aplicar!)}
                             className="mt-1.5 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:brightness-110 disabled:opacity-50"
                             style={{ background: "color-mix(in srgb, var(--primary) 82%, #000)" }}
                             title="Reemplaza el texto del campo con la versión sugerida por H.Ü.E"
@@ -232,7 +283,9 @@ export function PanelCorrecciones() {
                           ))}
                       </div>
                     </div>
-                  ))}
+                      );
+                    });
+                  })()}
                 </div>
               )}
             </div>
@@ -240,6 +293,42 @@ export function PanelCorrecciones() {
         })}
       </div>
     </aside>
+  );
+}
+
+/**
+ * Fila compacta de una corrección (label + veredicto + estado). Un clic la expande.
+ * Es el formato "encogido" del panel para que 30+ cambios no lo hagan gigante (Pedro).
+ */
+function TarjetaCompacta({
+  c,
+  veredicto,
+  onExpandir,
+}: {
+  c: Correccion;
+  veredicto: VeredictoCambio | undefined;
+  onExpandir: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onExpandir}
+      className="flex w-full items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-left transition-colors hover:bg-secondary/40"
+    >
+      {c.targetLabel && (
+        <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-bold text-secondary-foreground">
+          {c.targetLabel}
+        </span>
+      )}
+      <VeredictoChip v={veredicto} />
+      <span
+        className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
+        style={{ background: PILL[c.estado] }}
+      >
+        {ETIQUETA[c.estado]}
+      </span>
+      <ChevronDown className="size-3.5 -rotate-90 text-muted-foreground" />
+    </button>
   );
 }
 

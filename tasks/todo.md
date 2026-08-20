@@ -1,5 +1,42 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔧 CONSTRUIDO (2026-08-20) — H.Ü.E: persistencia de Aplicar + compactar cambios + caching [Pedro] — SIN pushear
+Tres cosas de la sesión de Pedro sobre "Revisar cambios con H.Ü.E". Gates VERDES (tsc·eslint 0-err
+en archivos tocados·build·tests 44 pass). Smoke-verificado live: la página de tarea hidrata con el
+nuevo anidamiento (panel "Control de Cambios" + botón H.Ü.E renderizan, CERO error de useWorkspace)
+→ el swap de providers funciona en runtime. Aceptación de Pedro pendiente en el deploy (click de
+Aplicar + correr H.Ü.E: no drivables en localhost — sin ANTHROPIC_API_KEY + handlers React flaky).
+- [x] **1. Aplicar NO reinicia los demás veredictos.** Root cause: `aplicarSugerencia` termina en
+      `window.location.reload()` → borra el Map `veredictos` (estado React) → hay que re-correr H.Ü.E
+      (llamada pagada) tras cada Aplicar. FIX: parchear el campo EN MEMORIA (no reload). El
+      CorreccionesProvider hoy envuelve al WorkspaceProvider (no puede `useWorkspace`) → **invertir el
+      anidamiento en page.tsx** (Workspace afuera, Correcciones adentro, key=idea.id en Workspace).
+      Luego `aplicarSugerencia(correccion, textoNuevo)`: server write → `setPlanos/setEstatico` del
+      campo (`[targetCampo]=textoNuevo`) + quitar SÓLO su `aplicar` del veredicto (los demás intactos).
+      Sin reload. Esto además ELIMINA las re-corridas redundantes = el mayor ahorro real de costo.
+- [x] **2. Compactar cambios en el panel interno (panel.tsx).** Resueltos (atendido/confirmado) →
+      pastilla compacta (label + veredicto + badge, 1 fila, click para expandir). Abiertos (rojo) →
+      expandidos, pero sólo los PRIMEROS 5; el resto también compacto. Toggle manual `alternados`
+      (XOR con el default, patrón de `colapsadas`) + chevron para re-compactar. Componente
+      `TarjetaCompacta`. Sólo panel interno (el portal ya colapsa rondas + el cliente ve su pedido).
+- [x] **3. Prompt caching en validarCambios.** Mantiene Sonnet 5 (la calidad es el punto: detectar el
+      error nuevo es-MX; Haiku degrada justo ahí; ~1-2¢/llamada). Split del user content en
+      [instrucciones estables + cache_control][bloques variables] → cachea el prefijo estable (tools +
+      instrucciones) sin cambiar NI un byte del prompt tuneado. thinking sigue disabled.
+- Gates: tsc·eslint(0 err en tocados)·build·tests 44. Smoke live OK. NADA a prod sin "ship it".
+
+### Review (2026-08-20)
+- No migración, no secreto nuevo. Mismo modelo de auth (aplicarSugerencia ya gateaba canOverrideStatus).
+- El swap de providers (Workspace afuera) espeja al portal (que ya lo tenía así) → estructura probada.
+  Beneficio extra: Correcciones ahora vive en el subtree con key=idea.id → sus veredictos se resetean
+  por tarea (antes el provider exterior persistía entre tareas por nav client-side).
+- Caching: si el prefijo estable no llega al mínimo cacheable del modelo, es no-op silencioso (sin error)
+  — nunca empeora. El mayor ahorro real es el fix #1 (mata las re-corridas por reload).
+- Deuda menor (opcional): misma técnica de caching en ortografia-actions y extraerGuion (mismo patrón),
+  no tocadas — bajo volumen. Compactación del panel del PORTAL: follow-up si Pedro lo pide.
+
+
+
 ## 🔒 LAUNCH-HARDENING SET (activar cuando entre AUTH_ENABLED) — de la revisión de roles 2026-08-19
 El modelo de roles es coherente A NIVEL rol, pero dos intenciones son sólo FILTROS de vista,
 no permisos — hoy no muerde (app abierta a propósito), pero hay que volverlas reales al encender auth.

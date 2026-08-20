@@ -405,26 +405,31 @@ export default async function TareaPage({
   };
 
   return (
-    <CorreccionesProvider
-      ideaId={idea.id}
-      clienteSlug={cliente}
-      marcaColor={marcaColor}
-      esRevisor={canOverrideStatus(role)}
-      esEquipo={esEquipo}
-      correcciones={correcciones}
+    <WorkspaceProvider
+      key={idea.id}
+      planosIniciales={planos}
+      estaticoInicial={estatico}
+      verClienteInicial={puedeEditar}
     >
-      {/* key por idea.id: al pasar de una tarea a otra con las flechas del bundle
-          (nav client-side que sólo cambia [id]), React conservaría el useState de
-          este provider y mostraría/editaría el CUERPO de la tarea anterior. El key
-          fuerza un remount con el estado fresco de la nueva tarea. */}
+      {/* key por idea.id en el Workspace (provider EXTERIOR): al pasar de una tarea a
+          otra con las flechas del bundle (nav client-side que sólo cambia [id]), React
+          conservaría el estado y mostraría/editaría el CUERPO de la tarea anterior. El
+          key fuerza un remount con el estado fresco — y como Correcciones vive DENTRO,
+          sus veredictos de H.Ü.E también se resetean por tarea.
+          Orden Workspace-afuera / Correcciones-adentro (Pedro 2026-08-20): así el
+          provider de correcciones puede `useWorkspace()` y aplicar la sugerencia de
+          H.Ü.E al campo EN MEMORIA (sin recargar). Antes, con Correcciones afuera, no
+          alcanzaba el estado del documento y recargaba — borrando los demás veredictos. */}
       {/* Vista por defecto por rol: los revisores (lead/admin/master) arrancan en
           "Vista cliente" (sobre todo revisan); los especialistas en "Vista
           editor" (producen). Sigue siendo un toggle en la barra inferior. */}
-      <WorkspaceProvider
-        key={idea.id}
-        planosIniciales={planos}
-        estaticoInicial={estatico}
-        verClienteInicial={puedeEditar}
+      <CorreccionesProvider
+        ideaId={idea.id}
+        clienteSlug={cliente}
+        marcaColor={marcaColor}
+        esRevisor={canOverrideStatus(role)}
+        esEquipo={esEquipo}
+        correcciones={correcciones}
       >
         {/* Un solo flujo. Los DOS menús son PERSISTENTES (Pedro): el de arriba
             (sub-header) se queda pegado arriba TODA la página — como el de abajo
@@ -533,8 +538,8 @@ export default async function TareaPage({
             <BottomBarTarea esEstatico={esEstatico} />
           </div>
         </div>
-      </WorkspaceProvider>
-    </CorreccionesProvider>
+      </CorreccionesProvider>
+    </WorkspaceProvider>
   );
 }
 

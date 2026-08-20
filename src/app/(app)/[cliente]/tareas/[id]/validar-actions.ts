@@ -171,7 +171,9 @@ export async function validarCambios(
     additionalProperties: false,
   };
 
-  const prompt =
+  // Instrucciones ESTABLES (idénticas en cada llamada y en cada tarea). Se mandan como un
+  // bloque de contenido aparte de los `bloques` variables para poder cachearlas (abajo).
+  const instrucciones =
     "Eres el asistente de un LEAD creativo. Tu trabajo tiene DOS partes: (1) decidir si el " +
     "especialista ya hizo el cambio pedido, y (2) — aquí está tu mayor valor como IA — detectar si " +
     "el cambio dejó un PROBLEMA NUEVO. Te doy, para cada cambio: la frase original citada, lo que se " +
@@ -199,7 +201,7 @@ export async function validarCambios(
     "- Peticiones vagas o telegráficas ('más punch', 'especificar'): interpreta la intención con " +
     "generosidad; juzga por SIGNIFICADO, no por palabras exactas; ante duda real usa 'parcial', no 'no'.\n" +
     "- Sé justo, no castigues. Devuelve EXACTAMENTE un veredicto por cada correccion_id.\n\n" +
-    "Cambios pedidos:\n" + bloques;
+    "Cambios pedidos:\n";
 
   try {
     const client = new Anthropic();
@@ -215,7 +217,21 @@ export async function validarCambios(
         },
       ],
       tool_choice: { type: "tool", name: "emitir_veredictos" },
-      messages: [{ role: "user", content: prompt }],
+      // Prompt caching: el prefijo estable (tools + instrucciones, idéntico en cada llamada
+      // y tarea) se marca cacheable con un breakpoint en el bloque de instrucciones. Un cache
+      // hit cuesta 0.1x el precio de input (y baja la latencia). El modelo ve el MISMO texto
+      // concatenado (instrucciones + bloques), sólo repartido en dos bloques de contenido →
+      // cero cambio de comportamiento sobre el prompt ya tuneado. Los `bloques` variables
+      // quedan después del breakpoint, así que no rompen el cache.
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: instrucciones, cache_control: { type: "ephemeral" } },
+            { type: "text", text: bloques },
+          ],
+        },
+      ],
     });
 
     const bloque = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
