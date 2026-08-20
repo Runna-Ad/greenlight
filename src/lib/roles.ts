@@ -70,6 +70,8 @@ const NAV_ALL: NavKey[] = [
   "entregas",
   "portal",
   "admin",
+  "mi-perfil", // admin/master también tienen su "Mi perfil" directo (antes sólo editable
+               // desde Configuración; Pedro lo quiere consistente con los demás roles).
 ];
 
 const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {

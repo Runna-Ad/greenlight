@@ -53,8 +53,8 @@ function navFor(
         { key: "mi-trabajo", href: "/mi-trabajo", label: "Mi trabajo", icon: LayoutGrid },
         { key: "performance", href: "/performance", label: "Performance", icon: GaugeCircle },
         { key: "entregas", href: "/entregas", label: "Entregas", icon: PackageCheck },
-        // Sólo leads/especialistas lo ven (canSee); los admin editan su perfil
-        // dentro de Configuración.
+        // Todos los roles internos lo ven (canSee); los admin además gestionan
+        // perfiles del equipo dentro de Configuración.
         { key: "mi-perfil", href: "/mi-perfil", label: "Mi perfil", icon: UserRound },
       ],
     },

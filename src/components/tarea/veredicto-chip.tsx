@@ -35,7 +35,11 @@ export function VeredictoChip({ v }: { v: VeredictoCambio | undefined }) {
       {(v.razon || v.sugerencia) && (
         <span
           role="tooltip"
-          className="pointer-events-none absolute left-0 top-full z-[70] mt-1 hidden w-60 max-w-[70vw] rounded-lg border bg-card p-2 text-left shadow-lg group-hover/hue:block"
+          // Anclado a la DERECHA (abre hacia la izquierda): el chip de H.Ü.E es el
+          // último de su fila y el panel vive pegado al borde derecho de la pantalla,
+          // así que `left-0` lo empujaba fuera de vista y se cortaba. `right-0` lo abre
+          // hacia adentro del panel/tarjeta, donde siempre hay espacio.
+          className="pointer-events-none absolute right-0 top-full z-[70] mt-1 hidden w-64 max-w-[min(20rem,80vw)] rounded-lg border bg-card p-2 text-left shadow-lg group-hover/hue:block"
           style={{ borderColor: `color-mix(in srgb, ${tint} 40%, var(--border))` }}
         >
           {v.razon && <span className="block text-[11px] leading-snug text-foreground">{v.razon}</span>}

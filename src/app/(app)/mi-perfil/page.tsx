@@ -7,8 +7,8 @@ import { PerfilTab } from "@/components/admin/perfil-tab";
 export const dynamic = "force-dynamic";
 
 /**
- * "Mi perfil" para leads y especialistas (los admin lo editan dentro de
- * Configuración). Reusa el MISMO componente PerfilTab que la pestaña de admin.
+ * "Mi perfil" para todos los roles internos (admin/master además gestionan al
+ * equipo dentro de Configuración). Reusa el MISMO PerfilTab que la pestaña de admin.
  */
 export default async function MiPerfilPage() {
   const [soy, role] = await Promise.all([getSoy(), getViewAs()]);

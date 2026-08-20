@@ -1,5 +1,23 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔒 LAUNCH-HARDENING SET (activar cuando entre AUTH_ENABLED) — de la revisión de roles 2026-08-19
+El modelo de roles es coherente A NIVEL rol, pero dos intenciones son sólo FILTROS de vista,
+no permisos — hoy no muerde (app abierta a propósito), pero hay que volverlas reales al encender auth.
+- [ ] **Gap 1 — Especialista = sólo sus tareas asignadas** es hoy sólo filtro de LO QUE VE. Las acciones
+      de escritura (guardarCampo/borrarPlano/importar, start/submit_review, marcar atendido) gatean por
+      `canMoveStatus` (cualquier interno), NO por `isAssignee`. Un especialista puede editar/mover una
+      tarea que NO es suya si llega por URL. → hacerlas assignee-aware.
+- [ ] **Gap 2 — Lead = DEPARTAMENTAL** [DECISIÓN Pedro 2026-08-19]: un lead sólo es dueño del trabajo de
+      SU track; los aprobadores agency-wide son los ADMINS. Hoy aprobar/mandar-cambios/enviar-cliente y
+      el tablero/briefs son agency-wide (isLead/canOverrideStatus sin scope). → scopear por track, igual
+      que ya lo hace `tracksVisibles` en Evaluación. Admin/master siguen agency-wide. (Ver lessons.md.)
+- [ ] **Security batch (diferido de la reap)** — server actions que confían sólo en el gate de página:
+      sync/*, importRows, crearBrief (¡manda emails!), snippets de admin (texto legal global), lecturas de
+      admin. Re-chequear rol server-side. Priorizar crearBrief + snippet legal (efectos reales ya hoy).
+- Nota: estas 3 se construyen JUNTO con el login, no antes (añadirían fricción a una app abierta a propósito).
+
+
+
 ## 📋 PLAN (2026-08-19 noche, 4º) — Reap fixes: Quick wins + Perf + Integrity [Pedro] — SIN pushear
 De la reap full-platform (tasks/reap-2026-08-19.md). Pedro eligió 3 de 4 batches (Seguridad diferida).
 Orden: código primero (gate+ship), migración al final (PGlite → "ship it"). import.ts se toca UNA vez
