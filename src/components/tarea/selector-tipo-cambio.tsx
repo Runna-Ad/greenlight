@@ -92,11 +92,13 @@ export function TagTipoCambio({ slug, className }: { slug: string | null; classN
 
 /**
  * Badge que marca que un cambio vino del CLIENTE (no una corrección interna). Va
- * DONDE iría la categoría de rúbrica — el cliente no elige tipo. Tono morado
- * (primary) para distinguirse de las pastillas de estado rojo/ámbar/verde del
- * lifecycle: eso comunica el ESTADO; esto comunica el ORIGEN.
+ * DONDE iría la categoría de rúbrica — el cliente no elige tipo. Se pinta con el
+ * COLOR DE MARCA del cliente (Pedro) — hace suyo el cambio; distinto de las
+ * pastillas de estado rojo/ámbar/verde del lifecycle (esas comunican el ESTADO,
+ * ésta el ORIGEN). Fallback al morado del sistema si el cliente no tiene color.
  */
-export function BadgeCliente({ className }: { className?: string }) {
+export function BadgeCliente({ color, className }: { color?: string | null; className?: string }) {
+  const c = color || "var(--primary)";
   return (
     <span
       className={cn(
@@ -104,8 +106,8 @@ export function BadgeCliente({ className }: { className?: string }) {
         className,
       )}
       style={{
-        background: "color-mix(in srgb, var(--primary) 14%, transparent)",
-        color: "color-mix(in srgb, var(--primary) 82%, #000)",
+        background: `color-mix(in srgb, ${c} 16%, transparent)`,
+        color: `color-mix(in srgb, ${c} 82%, #000)`,
       }}
       title="Pedido por el cliente"
     >

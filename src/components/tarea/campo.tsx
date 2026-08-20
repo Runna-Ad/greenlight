@@ -501,13 +501,11 @@ export function Campo({
                     {ETIQUETA_ESTADO[c.estado]}
                   </span>
                   {c.cliente ? (
-                    <BadgeCliente />
+                    <BadgeCliente color={ctx.marcaColor} />
                   ) : (
-                    <>
-                      <TagTipoCambio slug={c.categoria} />
-                      <VeredictoChip v={ctx.veredictos.get(c.id)} />
-                    </>
+                    <TagTipoCambio slug={c.categoria} />
                   )}
+                  <VeredictoChip v={ctx.veredictos.get(c.id)} />
                 </div>
                 {c.targetQuote && (
                   <p className="mb-1 truncate text-[11px] italic text-status-corrections" title={c.targetQuote}>

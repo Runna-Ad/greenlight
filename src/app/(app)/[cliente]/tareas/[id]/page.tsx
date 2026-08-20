@@ -92,7 +92,7 @@ export default async function TareaPage({
     );
   }
 
-  const [{ data: marca }, { data: archivos }, { data: asignaciones }, { data: brief }] =
+  const [{ data: marca }, { data: archivos }, { data: asignaciones }, { data: brief }, { data: clienteRow }] =
     await Promise.all([
       idea.marca_id
         ? db.from("marcas").select("name, slug, logo_url").eq("id", idea.marca_id).maybeSingle()
@@ -117,7 +117,10 @@ export default async function TareaPage({
         }[]>(),
       // El número de Brief para el pill de la hero ("Brief 24/07").
       db.from("briefs").select("brief_name, code, brief_date").eq("id", idea.brief_id).maybeSingle(),
+      // Color de marca del cliente — pinta el badge "Cliente" de sus cambios (Pedro).
+      db.from("clients").select("brand_color").eq("slug", cliente).maybeSingle<{ brand_color: string | null }>(),
     ]);
+  const marcaColor = clienteRow?.brand_color ?? null;
   const memberIds = (asignaciones ?? []).map((a) => a.member_id).filter(Boolean) as string[];
   const personas = (asignaciones ?? [])
     .filter((a) => a.track_members)
@@ -405,6 +408,7 @@ export default async function TareaPage({
     <CorreccionesProvider
       ideaId={idea.id}
       clienteSlug={cliente}
+      marcaColor={marcaColor}
       esRevisor={canOverrideStatus(role)}
       esEquipo={esEquipo}
       correcciones={correcciones}

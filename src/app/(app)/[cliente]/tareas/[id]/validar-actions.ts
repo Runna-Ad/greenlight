@@ -68,11 +68,14 @@ export async function validarCambios(
   if (!canOverrideStatus(role)) return { ok: false, error: "Sólo un lead valida cambios." };
 
   const db = supabaseAdmin();
+  // Incluye los cambios del CLIENTE enviados (ronda not null): son correcciones de
+  // primera clase (0038) → H.Ü.E también los analiza (¿ya se hizo lo que pidió el
+  // cliente?). Los borradores (ronda null) no existen en revisión, no entran.
   const { data: corrs } = await db
     .from("comments")
     .select("id, body, ronda, target_tabla, target_fila_id, target_campo, target_quote")
     .eq("idea_id", ideaId)
-    .eq("kind", "correction_request")
+    .or("kind.eq.correction_request,and(kind.eq.client_change,ronda.not.is.null)")
     .order("created_at")
     .returns<(Corr & { ronda: number | null })[]>();
   const todas = corrs ?? [];

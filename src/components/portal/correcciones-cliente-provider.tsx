@@ -50,6 +50,7 @@ export function CorreccionesClienteProvider({
   const value: Ctx = {
     ideaId,
     clienteSlug,
+    marcaColor: null, // el portal no pinta el badge "Cliente" (el cliente ES el cliente)
     esRevisor: false,
     esCliente: editable,
     esEquipo: false,

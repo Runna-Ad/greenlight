@@ -1,6 +1,16 @@
 # Greenlight · by Rünna — Build Todo
 
-## ✅ CONSTRUIDO (2026-08-19 noche) — Cambios cliente first-class + lista colapsable + refs en portal [Pedro] — SIN pushear
+## 🔧 CONSTRUIDO (2026-08-19 noche, 2º) — H.Ü.E analiza cambios del cliente + badge color de marca [Pedro] — SIN pushear
+Pedro corrigió mi decisión de "sin veredicto para cliente" (ver lesson). Sin migración.
+- [x] validar-actions.ts: `.or(correction_request OR (client_change AND ronda not null))` → H.Ü.E analiza
+      también los cambios del cliente. Verificado live: la query trae el client_change + las 2 internas.
+- [x] VeredictoChip se muestra para cliente también (panel/campo/campo-lectura; antes gateado a !cliente).
+- [x] BadgeCliente usa `color` = clients.brand_color del cliente (DiDi #ff6b1a naranja); threaded via
+      CorreccionesProvider.marcaColor (page.tsx carga brand_color por slug). Fallback a --primary si null.
+- [x] Gates: tsc·eslint·build. .or verificado contra prod (3 filas: 2 correction_request + 1 client_change con ronda).
+- PENDIENTE: "ship it" para pushear (sin migración).
+
+## ✅ SHIPPED (2026-08-19 noche) — Cambios cliente first-class + lista colapsable + refs en portal [Pedro] — commit d70c73f (mig 0038 en prod)
 Construido + reap (Opus) FIX-FIRST (3 SERIOS + 3 MINOR) + gates verdes. NO commiteado; migración 0038 SÓLO PGlite (falta "ship it" para aplicarla a prod).
 - [x] Task 1 lista colapsable (portal-shell).
 - [x] Task 2 client_change first-class: migración 0038 (ronda=marcador enviado; correction_next_round/

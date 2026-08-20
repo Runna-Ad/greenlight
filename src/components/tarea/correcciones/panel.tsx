@@ -129,16 +129,14 @@ export function PanelCorrecciones() {
                             {c.targetLabel}
                           </span>
                         )}
-                        {/* Cambio del cliente: badge "Cliente" (sin categoría/veredicto);
-                            corrección interna: su categoría de rúbrica + dictamen de H.Ü.E. */}
+                        {/* Cambio del cliente: badge "Cliente" (color de marca) donde iría
+                            la categoría de rúbrica. El veredicto de H.Ü.E aplica a AMBOS. */}
                         {c.cliente ? (
-                          <BadgeCliente />
+                          <BadgeCliente color={ctx.marcaColor} />
                         ) : (
-                          <>
-                            <TagTipoCambio slug={c.categoria} />
-                            <VeredictoChip v={ctx.veredictos.get(c.id)} />
-                          </>
+                          <TagTipoCambio slug={c.categoria} />
                         )}
+                        <VeredictoChip v={ctx.veredictos.get(c.id)} />
                         <span
                           className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
                           style={{ background: PILL[c.estado] }}

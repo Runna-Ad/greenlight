@@ -413,13 +413,11 @@ export function CampoLectura({
                       {ETIQUETA_ESTADO[corrAbierta.estado]}
                     </span>
                     {corrAbierta.cliente ? (
-                      <BadgeCliente />
+                      <BadgeCliente color={ctx.marcaColor} />
                     ) : (
-                      <>
-                        <TagTipoCambio slug={corrAbierta.categoria} />
-                        <VeredictoChip v={ctx.veredictos.get(corrAbierta.id)} />
-                      </>
+                      <TagTipoCambio slug={corrAbierta.categoria} />
                     )}
+                    <VeredictoChip v={ctx.veredictos.get(corrAbierta.id)} />
                   </div>
                   <div className="flex items-center gap-1">
                     {corrAbierta.estado === "done" && (

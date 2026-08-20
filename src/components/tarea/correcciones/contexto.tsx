@@ -16,6 +16,8 @@ import { validarCambios, type VeredictoCambio } from "@/app/(app)/[cliente]/tare
 export type Ctx = {
   ideaId: string;
   clienteSlug: string;
+  /** Color de marca del cliente — pinta el badge "Cliente" (Pedro). null = fallback. */
+  marcaColor: string | null;
   /** Puede pedir/confirmar cambios (Dept Head/Lead/admin/master). */
   esRevisor: boolean;
   /** Es el CLIENTE en el portal: pide cambios seleccionando texto igual que un
@@ -48,6 +50,7 @@ export const useCorrecciones = () => useContext(CorreccionesCtx);
 export function CorreccionesProvider({
   ideaId,
   clienteSlug,
+  marcaColor,
   esRevisor,
   esEquipo,
   correcciones,
@@ -55,6 +58,7 @@ export function CorreccionesProvider({
 }: {
   ideaId: string;
   clienteSlug: string;
+  marcaColor: string | null;
   esRevisor: boolean;
   esEquipo: boolean;
   /** Correcciones internas + cambios del cliente ENVIADOS (con `cliente:true`) —
@@ -108,6 +112,7 @@ export function CorreccionesProvider({
   const value: Ctx = {
     ideaId,
     clienteSlug,
+    marcaColor,
     esRevisor,
     esCliente: false,
     esEquipo,
