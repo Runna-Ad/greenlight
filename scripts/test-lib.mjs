@@ -836,15 +836,56 @@ console.log("\n▶ evaluarEquipo() — por autor");
   eq("eval · Ana: 2 tareas (autoró A y B)", ana.tareas, 2);
   eq("eval · Ana ortografia = 5 (su sección tuvo el cambio)", sc(ana, "ortografia"), 5);
   eq("eval · Ana storytelling = 10 (ese cambio fue en la sección de Beto)", sc(ana, "storytelling"), 10);
-  eq("eval · Ana overall = 9.4", ana.overall, 9.4);
+  eq("eval · Ana resolución = 10 (sin rework fallido)", sc(ana, "resolucion"), 10);
+  eq("eval · Ana calidad = 9.4 (avg de 9: 7×10 + orto 5 + resol 10)", ana.calidad, 9.4);
+  eq("eval · Ana eficiencia = 10 (0.5 rondas, 1 cambio/ronda)", ana.eficiencia, 10);
+  eq("eval · Ana overall = 9.6 (0.7·9.44 + 0.3·10)", ana.overall, 9.6);
   eq("eval · Ana rondas/tarea = 0.5", ana.rondasPorTarea, 0.5);
   eq("eval · Ana ciclo mediano = 20 (mediana de 16 y 24)", ana.cicloMedianoDias, 20);
   // Beto autoró sólo Plano2 de A → 1 tarea. El storytelling es SUYO.
   eq("eval · Beto: 1 tarea (autoró Plano2 de A)", beto.tareas, 1);
   eq("eval · Beto storytelling = 0 (su sección tuvo el cambio)", sc(beto, "storytelling"), 0);
   eq("eval · Beto ortografia = 10 (ese cambio fue en la sección de Ana)", sc(beto, "ortografia"), 10);
-  eq("eval · Beto overall = 8.8", beto.overall, 8.8);
+  eq("eval · Beto calidad = 8.9 (avg de 9: 7×10 + story 0 + resol 10)", beto.calidad, 8.9);
+  eq("eval · Beto eficiencia = 10", beto.eficiencia, 10);
+  eq("eval · Beto overall = 9.2 (0.7·8.89 + 0.3·10)", beto.overall, 9.2);
   eq("eval · Beto ciclo mediano = 16", beto.cicloMedianoDias, 16);
+}
+
+// ── Evaluación v2: Resolución (rework fallido de H.Ü.E) + Eficiencia (rondas + cambios/ronda) ──
+console.log("\n▶ evaluarEquipo() — Resolución + Eficiencia");
+{
+  const P = { desde: "2026-08-01T00:00:00Z", hasta: "2026-09-01T00:00:00Z" };
+  const edits = [
+    { ideaId: "C", tabla: "planos", filaId: "P4", campo: "accion", memberId: "m3", at: "2026-08-05T00:00:00Z" },
+  ];
+  // 8 notas en la sección de Caro (todas storytelling): 5 en ronda 1 + 3 en ronda 2. UNA con
+  // rework fallido (el lead aplicó H.Ü.E sobre una nota ya atendida).
+  const raw = [];
+  for (let i = 0; i < 5; i++)
+    raw.push({ ideaId: "C", categoria: "storytelling", ronda: 1, tabla: "planos", filaId: "P4", campo: "accion", createdAt: "2026-08-10T00:00:00Z", reworkFallido: i === 0 });
+  for (let i = 0; i < 3; i++)
+    raw.push({ ideaId: "C", categoria: "storytelling", ronda: 2, tabla: "planos", filaId: "P4", campo: "accion", createdAt: "2026-08-14T00:00:00Z", reworkFallido: false });
+  const atr = atribuirAutor(raw, edits);
+  const evs = evaluarEquipo(
+    [{ id: "m3", name: "Caro", color: "#0af", track: "real" }],
+    [{ ideaId: "C", memberId: "m3" }],
+    atr,
+    [{ ideaId: "C", memberId: "m3", assignedAt: "2026-08-04T00:00:00Z" }],
+    [{ id: "C", completedAt: "2026-08-20T00:00:00Z" }],
+    P,
+  );
+  const caro = evs.find((e) => e.memberId === "m3");
+  const sc = (e, slug) => e.scorePorCriterio.find((s) => s.slug === slug).score;
+  eq("evalv2 · Caro: 1 tarea", caro.tareas, 1);
+  eq("evalv2 · Caro storytelling = 0", sc(caro, "storytelling"), 0);
+  eq("evalv2 · Caro cumplimiento_brief = 10 (sin nota de ese tipo)", sc(caro, "cumplimiento_brief"), 10);
+  eq("evalv2 · Caro Resolución = 0 (hubo rework fallido)", sc(caro, "resolucion"), 0);
+  eq("evalv2 · Caro calidad = 7.8 (avg de 9: 7×10 + story 0 + resol 0)", caro.calidad, 7.8);
+  eq("evalv2 · Caro rondas/tarea = 2", caro.rondasPorTarea, 2);
+  eq("evalv2 · Caro cambios/ronda = 4 (8 notas / 2 rondas)", caro.cambiosPorRonda, 4);
+  eq("evalv2 · Caro eficiencia = 6.5 (rondas 2→7, cambios 4→6)", caro.eficiencia, 6.5);
+  eq("evalv2 · Caro overall = 7.4 (0.7·7.78 + 0.3·6.5)", caro.overall, 7.4);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

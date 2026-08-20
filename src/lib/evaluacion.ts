@@ -1,10 +1,13 @@
 // Cálculo PURO de la Evaluación por especialista (sin React ni Supabase), para
 // probarlo con el harness de node y compartirlo entre el loader y la UI.
 //
-// MODELO (decidido con Pedro):
-// - Por TAREA y por CRITERIO es BINARIO: si una tarea tuvo ≥1 cambio de tipo X en
-//   una sección que ESA persona escribió → 0 en X para esa tarea; si no → 10. El
-//   puntaje del especialista en X = promedio de sus tareas.
+// MODELO (decidido con Pedro; v2 2026-08-20 = dos ejes):
+// - CALIDAD = promedio de 9 criterios BINARIOS por tarea (8 de contenido + "Resolución"):
+//   si una tarea tuvo ≥1 cambio de tipo X en una sección que ESA persona escribió → 0 en X
+//   para esa tarea; si no → 10. "Resolución" = 0 si alguna nota suya tuvo un rework fallido
+//   (el lead aplicó la sugerencia de H.Ü.E sobre una nota ya atendida = su arreglo fue malo).
+// - EFICIENCIA = de rondas/tarea + cambios/ronda (curvas ajustables; menos = mejor).
+// - OVERALL = 0.70·Calidad + 0.30·Eficiencia.
 // - ATRIBUCIÓN POR AUTOR (fase 2.5): un cambio se le cuenta a quien REALMENTE
 //   escribió la sección corregida (no a todos los asignados). Así una tarea
 //   co-asignada se reparte bien: el cambio en el Plano 2 es de quien escribió el
@@ -16,7 +19,7 @@
 // Cambios SIN autor (contenido importado que nadie editó por la app, o sin
 // identidad) NO penalizan a nadie — mejor no atribuir que culpar al que no fue.
 
-import { CRITERIOS_PUNTUABLES, GRUPO_LABEL, type CategoriaCambio, type GrupoCriterio } from "./tipos-cambio.ts";
+import { CRITERIOS_PUNTUABLES, GRUPO_LABEL, type GrupoCriterio } from "./tipos-cambio.ts";
 
 export type Track = "real" | "normal";
 
@@ -41,6 +44,9 @@ export type CorreccionInput = {
   filaId: string | null;
   campo: string | null;
   createdAt: string;
+  /** Rework fallido: el lead aplicó la sugerencia de H.Ü.E sobre esta nota YA atendida
+   *  (hue_aplicado_at set && atendido_at set) → el arreglo del especialista fue incompleto. */
+  reworkFallido: boolean;
 };
 /** Una corrección ya atribuida a su autor (o null si no se pudo). */
 export type CorreccionAtribuida = {
@@ -48,6 +54,7 @@ export type CorreccionAtribuida = {
   categoria: string | null;
   ronda: number | null;
   autorId: string | null;
+  reworkFallido: boolean;
 };
 export type AsignacionInput = { ideaId: string; memberId: string; assignedAt: string | null };
 export type IdeaInput = { id: string; completedAt: string | null };
@@ -55,7 +62,8 @@ export type IdeaInput = { id: string; completedAt: string | null };
 export type Periodo = { desde: string; hasta: string };
 
 export type ScoreCriterio = {
-  slug: CategoriaCambio;
+  /** slug de un tipo de cambio, o "resolucion" (criterio sintético de proceso). */
+  slug: string;
   label: string;
   grupo: GrupoCriterio;
   grupoLabel: string;
@@ -73,6 +81,11 @@ export type EvalMiembro = {
   /** Tareas evaluables (aprobadas en el mes) que esta persona AUTORÓ. */
   tareas: number;
   scorePorCriterio: ScoreCriterio[];
+  /** Promedio de los 9 criterios binarios (8 de contenido + Resolución). 0–10. */
+  calidad: number | null;
+  /** De rondas + cambios/ronda (curvas ajustables abajo). 0–10. */
+  eficiencia: number | null;
+  /** Nota global = PESO_CALIDAD·Calidad + PESO_EFICIENCIA·Eficiencia. 0–10. */
   overall: number | null;
   rondasPorTarea: number | null;
   cambiosPorRonda: number | null;
@@ -97,6 +110,16 @@ function mediana(xs: number[]): number | null {
 }
 
 const round1 = (x: number) => Math.round(x * 10) / 10;
+const clamp10 = (x: number) => Math.max(0, Math.min(10, x));
+
+// Eficiencia — curvas AJUSTABLES (defaults; calibrar con datos reales). Menos rondas y
+// menos cambios por ronda = mejor. Overall = PESO_CALIDAD·Calidad + PESO_EFICIENCIA·Eficiencia.
+const RONDA_IDEAL = 1; // 1 ronda por tarea = 10
+const RONDA_PENAL = 3; // −3 por cada ronda promedio extra (2→7, 3→4, 4→1)
+const CAMBIOS_IDEAL = 2; // ≤2 cambios/ronda = 10
+const CAMBIOS_PENAL = 2; // −2 por cada cambio/ronda extra (3→8, 5→4, 7→0)
+const PESO_CALIDAD = 0.7;
+const PESO_EFICIENCIA = 0.3;
 
 /**
  * Atribuye cada corrección a QUIEN escribió la sección corregida: la última
@@ -124,7 +147,7 @@ export function atribuirAutor(
         autorId = e.memberId;
       }
     }
-    return { ideaId: c.ideaId, categoria: c.categoria, ronda: c.ronda, autorId };
+    return { ideaId: c.ideaId, categoria: c.categoria, ronda: c.ronda, autorId, reworkFallido: c.reworkFallido };
   });
 }
 
@@ -165,29 +188,33 @@ export function evaluarEquipo(
     );
   }
 
-  // miembro → ideaId → {cats, rondas, total} de las correcciones EN SUS secciones.
-  const corrDe = new Map<string, Map<string, { cats: Set<string>; rondas: Set<number>; total: number }>>();
+  // miembro → ideaId → {cats, rondas, total, reworkFallido} de las correcciones EN SUS secciones.
+  type CorrIdea = { cats: Set<string>; rondas: Set<number>; total: number; reworkFallido: boolean };
+  const corrDe = new Map<string, Map<string, CorrIdea>>();
   for (const c of correcciones) {
     if (!c.autorId || !completadaEnP.has(c.ideaId)) continue;
     const byIdea = corrDe.get(c.autorId) ?? corrDe.set(c.autorId, new Map()).get(c.autorId)!;
-    const e = byIdea.get(c.ideaId) ?? { cats: new Set<string>(), rondas: new Set<number>(), total: 0 };
+    const e = byIdea.get(c.ideaId) ?? { cats: new Set<string>(), rondas: new Set<number>(), total: 0, reworkFallido: false };
     e.total += 1;
     if (c.ronda != null) e.rondas.add(c.ronda);
     if (c.categoria) e.cats.add(c.categoria);
+    if (c.reworkFallido) e.reworkFallido = true;
     byIdea.set(c.ideaId, e);
   }
 
   return miembros.map((mem) => {
     const ideaIds = [...(tareasAutor.get(mem.id) ?? new Set<string>())];
     const tareas = ideaIds.length;
-    const misCorr = corrDe.get(mem.id) ?? new Map<string, { cats: Set<string>; rondas: Set<number>; total: number }>();
+    const misCorr = corrDe.get(mem.id) ?? new Map<string, CorrIdea>();
     const asig = asigDe.get(mem.id) ?? new Map<string, string | null>();
 
-    let sumaRaw = 0;
+    // Los 8 criterios de CONTENIDO (binarios por tarea): 0 si hubo ≥1 nota de ese tipo
+    // en una sección que ÉL escribió, 10 si no.
+    let sumaContent = 0;
     const scorePorCriterio: ScoreCriterio[] = CRITERIOS_PUNTUABLES.map((crit) => {
       const conCambio = ideaIds.filter((id) => misCorr.get(id)?.cats.has(crit.slug)).length;
       const raw = tareas ? ((tareas - conCambio) / tareas) * 10 : null;
-      if (raw != null) sumaRaw += raw;
+      if (raw != null) sumaContent += raw;
       return {
         slug: crit.slug,
         label: crit.label,
@@ -197,7 +224,23 @@ export function evaluarEquipo(
         tareasConCambio: conCambio,
       };
     });
-    const overall = tareas ? round1(sumaRaw / CRITERIOS_PUNTUABLES.length) : null;
+
+    // Criterio SINTÉTICO "Resolución de cambios" (binario por tarea): 0 si alguna nota del
+    // autor en esa tarea tuvo un rework fallido (el lead aplicó H.Ü.E sobre una nota ya
+    // atendida), 10 si no. Se cuenta como un 9º criterio de Calidad.
+    const conFallo = ideaIds.filter((id) => misCorr.get(id)?.reworkFallido).length;
+    const resolRaw = tareas ? ((tareas - conFallo) / tareas) * 10 : null;
+    scorePorCriterio.push({
+      slug: "resolucion",
+      label: "Resolución de cambios",
+      grupo: "proceso",
+      grupoLabel: GRUPO_LABEL.proceso,
+      score: resolRaw == null ? null : round1(resolRaw),
+      tareasConCambio: conFallo,
+    });
+
+    // Calidad = promedio de los 9 criterios binarios (8 de contenido + Resolución).
+    const calidadRaw = tareas ? (sumaContent + (resolRaw ?? 0)) / (CRITERIOS_PUNTUABLES.length + 1) : null;
 
     let totalRondas = 0;
     let totalCambios = 0;
@@ -217,6 +260,20 @@ export function evaluarEquipo(
     }
 
     const mCiclo = mediana(ciclos);
+    // Raw (sin redondear) para las curvas de Eficiencia; el display se redondea aparte.
+    const rondasRaw = tareas ? totalRondas / tareas : null;
+    const cambiosRaw = totalRondas ? totalCambios / totalRondas : null;
+    // Eficiencia: sub-nota por rondas y por cambios/ronda (curvas ajustables). Una tarea
+    // sin rondas (0 notas) puntúa 10 en ambas → Eficiencia 10.
+    const scoreRondas = rondasRaw == null ? null : clamp10(10 - Math.max(0, rondasRaw - RONDA_IDEAL) * RONDA_PENAL);
+    const scoreCambios = cambiosRaw == null ? 10 : clamp10(10 - Math.max(0, cambiosRaw - CAMBIOS_IDEAL) * CAMBIOS_PENAL);
+    const eficienciaRaw = tareas ? ((scoreRondas ?? 10) + scoreCambios) / 2 : null;
+
+    const overall =
+      calidadRaw == null || eficienciaRaw == null
+        ? null
+        : round1(PESO_CALIDAD * calidadRaw + PESO_EFICIENCIA * eficienciaRaw);
+
     return {
       memberId: mem.id,
       name: mem.name,
@@ -224,9 +281,11 @@ export function evaluarEquipo(
       track: mem.track,
       tareas,
       scorePorCriterio,
+      calidad: calidadRaw == null ? null : round1(calidadRaw),
+      eficiencia: eficienciaRaw == null ? null : round1(eficienciaRaw),
       overall,
-      rondasPorTarea: tareas ? round1(totalRondas / tareas) : null,
-      cambiosPorRonda: totalRondas ? round1(totalCambios / totalRondas) : null,
+      rondasPorTarea: rondasRaw == null ? null : round1(rondasRaw),
+      cambiosPorRonda: cambiosRaw == null ? null : round1(cambiosRaw),
       cicloMedianoDias: mCiclo == null ? null : round1(mCiclo),
     };
   });

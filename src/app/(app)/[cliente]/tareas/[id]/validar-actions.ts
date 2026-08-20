@@ -338,6 +338,15 @@ export async function aplicarSugerencia(
   // cliente parchearía memoria con un texto que la DB no tiene (reap 2026-08-20).
   if (!escritos?.length) return { ok: false, error: "El campo ya no existe (¿se borró el plano?)." };
 
+  // Evaluación v2: sella que el lead APLICÓ la sugerencia de H.Ü.E sobre esta corrección
+  // (rework fallido del especialista si la nota ya estaba atendida). Best-effort — el apply
+  // ya valió; si el sello falla no revertimos ni bloqueamos.
+  await db
+    .from("comments")
+    .update({ hue_aplicado_at: new Date().toISOString() })
+    .eq("id", correccionId)
+    .eq("idea_id", ideaId);
+
   // Ruta como PATRÓN (no con ids concretos, que serían un no-op silencioso — lección guardarCampo).
   revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true };

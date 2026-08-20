@@ -227,4 +227,6 @@ export type Comment = {
   target_quote: string | null;
   target_start: number | null;
   target_end: number | null;
+  // Evaluación v2 (0040): cuándo el lead aplicó la sugerencia de H.Ü.E sobre esta nota.
+  hue_aplicado_at: string | null;
 };

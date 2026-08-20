@@ -22,12 +22,15 @@ export type CategoriaCambio =
   | "dinamismo"
   | "otro";
 
-export type GrupoCriterio = "entrega" | "craft" | "aterrizaje" | "otro";
+// "proceso" es un grupo SINTÉTICO de la Evaluación (no un tipo de cambio que el revisor
+// elige): aloja el criterio "Resolución de cambios" (rework fallido detectado por H.Ü.E).
+export type GrupoCriterio = "entrega" | "craft" | "aterrizaje" | "proceso" | "otro";
 
 export const GRUPO_LABEL: Record<GrupoCriterio, string> = {
   entrega: "Calidad de entrega",
   craft: "Craft creativo",
   aterrizaje: "Aterrizaje a video/estático",
+  proceso: "Proceso / ejecución",
   otro: "Otro",
 };
 
@@ -36,6 +39,7 @@ export const GRUPO_TONO: Record<GrupoCriterio, string> = {
   entrega: "var(--status-corrections)", // rojo — errores objetivos
   craft: "var(--primary)", // morado de marca
   aterrizaje: "var(--status-progress)", // ámbar
+  proceso: "var(--status-published)", // azul — ejecución/rework
   otro: "var(--muted-foreground)", // neutro
 };
 

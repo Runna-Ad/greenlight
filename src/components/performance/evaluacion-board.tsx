@@ -78,10 +78,10 @@ function TarjetaMiembro({ m }: { m: EvalMiembro }) {
           </p>
         </div>
 
+        {/* Los dos ejes que componen el Overall (0.7·Calidad + 0.3·Eficiencia). */}
         <div className="hidden items-center gap-4 sm:flex">
-          <Stat label="rondas/tarea" value={fmt(m.rondasPorTarea)} />
-          <Stat label="cambios/ronda" value={fmt(m.cambiosPorRonda)} />
-          <Stat label="días" value={fmt(m.cicloMedianoDias)} />
+          <MiniScore label="Calidad" v={m.calidad} />
+          <MiniScore label="Eficiencia" v={m.eficiencia} />
         </div>
 
         <Puntaje v={m.overall} />
@@ -106,13 +106,34 @@ function TarjetaMiembro({ m }: { m: EvalMiembro }) {
             </div>
           ))}
 
-          <div className="mt-3 flex gap-6 sm:hidden">
+          {/* Métricas de proceso que alimentan Eficiencia (rondas + cambios/ronda) + ciclo.
+              En móvil se repiten Calidad/Eficiencia porque el encabezado las oculta. */}
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-3">
+            <div className="flex gap-6 sm:hidden">
+              <MiniScore label="Calidad" v={m.calidad} />
+              <MiniScore label="Eficiencia" v={m.eficiencia} />
+            </div>
             <Stat label="rondas/tarea" value={fmt(m.rondasPorTarea)} />
             <Stat label="cambios/ronda" value={fmt(m.cambiosPorRonda)} />
             <Stat label="días (mediana)" value={fmt(m.cicloMedianoDias)} />
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Puntaje pequeño y coloreado (Calidad / Eficiencia) — los dos ejes del Overall. */
+function MiniScore({ label, v }: { label: string; v: number | null }) {
+  return (
+    <div className="text-center">
+      <div
+        className="text-sm font-bold tabular-nums"
+        style={{ color: v != null ? scoreColor(v) : "var(--muted-foreground)" }}
+      >
+        {fmt(v)}
+      </div>
+      <div className="text-[9px] uppercase tracking-wide text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -191,8 +212,9 @@ function Vacio({ texto }: { texto: string }) {
 }
 
 // Agrupa los criterios por sección del rúbrica, en orden, para pintarlos juntos.
+// "proceso" (Resolución de cambios) va al final.
 function gruposDe(scores: ScoreCriterio[]) {
-  const orden: GrupoCriterio[] = ["entrega", "craft", "aterrizaje"];
+  const orden: GrupoCriterio[] = ["entrega", "craft", "aterrizaje", "proceso"];
   return orden
     .map((g) => ({
       grupo: g,

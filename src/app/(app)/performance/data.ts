@@ -160,7 +160,9 @@ export async function cargarEvaluacion(
           .then((r) => r.data ?? []),
         db
           .from("comments")
-          .select("idea_id, categoria, ronda, target_tabla, target_fila_id, target_campo, created_at")
+          .select(
+            "idea_id, categoria, ronda, target_tabla, target_fila_id, target_campo, created_at, atendido_at, hue_aplicado_at",
+          )
           .eq("kind", "correction_request")
           .in("idea_id", ideaIds)
           .then((r) => r.data ?? []),
@@ -214,6 +216,8 @@ export async function cargarEvaluacion(
   }
 
   // Correcciones crudas (con destino + hora) → atribuidas al autor de su sección.
+  // reworkFallido = el lead aplicó H.Ü.E (hue_aplicado_at) sobre una nota YA atendida
+  // (atendido_at) → el arreglo del especialista fue incompleto (criterio "Resolución").
   const correccionesRaw: CorreccionInput[] = (corrs as {
     idea_id: string;
     categoria: string | null;
@@ -222,6 +226,8 @@ export async function cargarEvaluacion(
     target_fila_id: string | null;
     target_campo: string | null;
     created_at: string;
+    atendido_at: string | null;
+    hue_aplicado_at: string | null;
   }[]).map((c) => ({
     ideaId: c.idea_id,
     categoria: c.categoria,
@@ -230,6 +236,7 @@ export async function cargarEvaluacion(
     filaId: c.target_fila_id,
     campo: c.target_campo,
     createdAt: c.created_at,
+    reworkFallido: !!c.hue_aplicado_at && !!c.atendido_at,
   }));
   const correcciones = atribuirAutor(correccionesRaw, editsIn);
 

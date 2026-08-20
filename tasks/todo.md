@@ -1,5 +1,31 @@
 # Greenlight · by Rünna — Build Todo
 
+## 📊 CONSTRUIDO (2026-08-20) — Evaluación v2: Resolución + Eficiencia [Pedro, diseño aprobado] — SIN pushear
+Gates VERDES: tsc·eslint·build·lib 342·db 246 (migración 0040 aplica limpia en PGlite). Todos los
+asserts nuevos pasan (Ana 9.6/Beto 9.2/Caro 7.4 recomputados a mano y verificados). Reap: edge cases
+OK (sin-autor→no penaliza · aplicado-sobre-client_change→ignorado por el grade · aplicado-sin-atender→
+no cuenta · curvas clamp sin negativos). PENDIENTE "ship it" (migrar 0040 ANTES del push).
+Grade en DOS ejes: **Calidad** (avg de 9 criterios binarios = 8 de contenido + "Resolución") +
+**Eficiencia** (de rondas + cambios/ronda). **Overall = 0.70·Calidad + 0.30·Eficiencia**.
+Decisiones de Pedro: Resolución binaria · atribuida al autor de la nota · sólo cuenta cuando el lead
+APLICA la sugerencia de H.Ü.E sobre una nota ya atendida (no el veredicto crudo) · peso 70/30.
+- [ ] **Migración 0040**: `comments.hue_aplicado_at timestamptz` (aditiva, sin backfill). PGlite test.
+- [ ] **aplicarSugerencia** (validar-actions): tras el write del campo, sella `hue_aplicado_at=now()` en
+      la corrección (best-effort; no bloquea el apply).
+- [ ] **evaluacion.ts**: CorreccionInput/Atribuida += `reworkFallido` (hue_aplicado_at && atendido_at);
+      criterio sintético "Resolución" (grupo nuevo "proceso"): por tarea, si alguna nota del autor tuvo
+      reworkFallido → 0, si no → 10. Calidad = avg de los 9. Eficiencia = avg(score_rondas, score_cambios)
+      con curvas ajustables (1 ronda=10, -3/extra; ≤2 cambios/ronda=10, -2/extra). Overall = 70/30.
+- [ ] **tipos-cambio.ts**: GrupoCriterio += "proceso" + GRUPO_LABEL/TONO. (Resolución NO es una categoria
+      que el revisor elige — es sintética; ScoreCriterio.slug pasa a string.)
+- [ ] **performance/data.ts**: cargar hue_aplicado_at + atendido_at en las corrs → reworkFallido.
+- [ ] **evaluacion-board.tsx**: fila "Resolución" en su grupo + mostrar Calidad · Eficiencia junto al Overall.
+- [ ] **database.types.ts**: comments += hue_aplicado_at.
+- [ ] Tests: lib (Resolución 0/10, curvas de Eficiencia, blend 70/30) + db (columna). Gates tsc·eslint·build.
+- Nota: captura going-forward — Resolución = 10 para todos hasta que se apliquen H.Ü.E fixes (no es bug).
+- PENDIENTE "ship it" → aplicar 0040 (`npm run migrate`, pin ybbrpqzbedaxsmotgtkh) ANTES del push.
+
+
 ## 🎨 CONSTRUIDO (2026-08-20) — Rediseño nav del portal del cliente [Pedro, mockup confirmado] — SIN pushear
 Pedro dio 3 screenshots como TARGET (el 4º es referencia del espacio desperdiciado). Consolidar la
 navegación de briefs/tareas en un HEADER STICKY compacto y usar ANCHO COMPLETO. Gates tsc·eslint·build

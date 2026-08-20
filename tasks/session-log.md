@@ -1,5 +1,50 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-20 — H.Ü.E "Aplicar" (no-reload + reap) + rediseño nav del portal
+Tres bloques, 3 commits, todos shippeados con deploy Vercel verde. Sin migración, sin deps nuevas.
+
+**Lo que hicimos:**
+- **`b2725b7` — H.Ü.E Aplicar sin recargar + panel compacto + caching.** (1) "Aplicar sugerencia"
+  dejaba de recargar la página: parchea el campo EN MEMORIA (setPlanos/setEstatico) y conserva los
+  demás veredictos (antes el `reload()` los borraba → había que re-correr H.Ü.E, llamada pagada).
+  Requirió INVERTIR el anidamiento de providers en la página de tarea (Workspace AFUERA, Correcciones
+  ADENTRO) para que el contexto de correcciones pudiera `useWorkspace()`. (2) Panel interno: los
+  cambios resueltos y los abiertos más allá de los 5 primeros se COMPACTAN a una pastilla (click para
+  expandir). (3) Prompt caching en `validarCambios` (prefijo estable en un content-block con
+  cache_control) — se mantiene Sonnet 5.
+- **`d6041f9` — reap del flujo H.Ü.E (Pedro: "Aplicar no mostró el cambio").** Reap adversarial (Opus)
+  de todo el flujo validar→aplicar→display. Root cause del reporte: el `<Campo>` es uncontrolled
+  (siembra su textarea una vez) → parchear el workspace no lo repinta → FIX: nonce `reseed` por campo
+  que fuerza el remount de ese Campo (también resetea el baseline del autosave = mata el falso
+  "alguien más cambió este campo" que halló el reap). CRITICAL: `aplicar` era un overwrite de TODO el
+  campo a ciegas (el lead sólo veía la sugerencia de 1 línea) → ahora el panel MUESTRA el texto
+  completo antes de aplicar + guardas deterministas (negrita perdida / "(campo vacío)" / len>8000 →
+  no se ofrece). Serios: write de 0 filas reportaba ok (→ `.select("id")` + error); compactación XOR
+  posicional colapsaba tarjetas solas (→ intención absoluta). + minors.
+- **`2b2f0e3` — rediseño nav del portal (mockup de Pedro).** Challenge protocol PRIMERO: confirmé que
+  los screenshots eran el TARGET (no el código actual — grep lo probó). Nuevo `portal-nav.tsx`: header
+  STICKY compacto = logo + dropdown de Brief (agrupado por mes) + "Ver detalle de tareas" (tabla
+  Estado·Tarea navegable) + filtro por estado + flechas ← N/M →. Ancho completo (portal-shell w-full).
+  Restack de las 3 barras sticky sin colisión. Verificado live (dropdown abre, pager 1/2, 0 errores).
+
+**Estado actual:** todo deployado y verde en prod. Working tree limpio, nada sin pushear.
+
+**Decisiones:**
+- **Modelo H.Ü.E = Sonnet 5, no bajar a Haiku** — la calidad (detectar el error es-MX NUEVO) es el
+  punto; Haiku degrada justo ahí y cada llamada es ~1-2¢. El ahorro real = fix del reload (mata las
+  re-corridas) + prompt caching, no cambiar de modelo.
+- **Una acción de IA que ESCRIBE = preview al humano + guarda determinista**, nunca overwrite a ciegas.
+- **Portal ancho completo confirmado** (Pedro); "fine as is for now" para los follow-ups.
+
+**Pick up next (nada urgente, Pedro cerró la sesión conforme):**
+- Follow-ups del portal SI Pedro los pide: etiquetas de brief "DD/MM for <mes>" del mockup, y pasada
+  de móvil al nav sticky (verificado sólo a desktop 1400px).
+- Deuda anotada (baja prob): de-dupe de ids de veredicto duplicados en validarCambios.
+- Diferidos de siempre: caching en ortografia/extraerGuion (misma técnica), emoji-lazy, rewrite N+1
+  import, S2/S3. Launch-hardening set + LOGIN siguen siendo el camino a LIVE.
+
+**Cambios de entorno:** ninguno (sin migración, sin deps, sin env vars).
+
 ## 2026-08-19 (cont2) — Greenlit + Mi perfil al avatar
 
 Commit **4b4701b** (sin migración, verificado live).

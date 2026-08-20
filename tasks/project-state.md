@@ -1,5 +1,23 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-19 (cont2) — Greenlit en Entregas · Mi perfil al avatar (top-right)
+Última actualización: 2026-08-20 — H.Ü.E "Aplicar" (no-reload + reap) · rediseño nav del portal
+
+## 🤖 H.Ü.E "Aplicar sugerencia" (2026-08-20, commits b2725b7 + d6041f9)
+- El lead puede APLICAR la sugerencia de H.Ü.E directo al campo. Flujo endurecido tras reap adversarial:
+  el panel MUESTRA el texto completo que quedaría ("El campo quedaría así:") antes de aplicar (no un
+  overwrite a ciegas) + guardas deterministas (no aplica si perdería negrita, si trae "(campo vacío)",
+  o si len>8000). Aplica EN MEMORIA sin recargar (nonce `reseed` remonta el `<Campo>` uncontrolled),
+  conservando los demás veredictos; el write server checa 0 filas (`.select`).
+- **Modelo H.Ü.E = `claude-sonnet-5`** en las 3 llamadas (validarCambios, ortografia, extraerGuion),
+  thinking off, tool-use forzado. validarCambios usa prompt caching (prefijo estable). NO bajar a Haiku
+  (la calidad es-MX es el punto). Deuda: mismo caching en ortografia/extraerGuion (opcional, bajo volumen).
+- Panel de correcciones interno: compacta los cambios resueltos y los abiertos >5 (pastilla, click expande).
+
+## 🖥️ Portal del cliente — nav (2026-08-20, commit 2b2f0e3)
+- Navegación consolidada en un HEADER STICKY compacto (`portal-nav.tsx`): dropdown de Brief (agrupado por
+  mes) + "Ver detalle de tareas" (tabla Estado·Tarea navegable) + filtro por estado + flechas ← N/M →
+  que recorren las tareas (filtradas) del brief. Layout de ANCHO COMPLETO (w-full, sin max-w central).
+- 3 barras sticky apiladas sin colisión: nav `top-16` · PortalAcciones `top-[7.5rem]` · panel `lg:top-[11.75rem]`.
+- Follow-ups abiertos (Pedro: "fine as is"): etiquetas "DD/MM for <mes>", pasada de móvil.
 
 ## ✨ Marca / nav (2026-08-19 cont2, commit 4b4701b)
 - **Entregas**: el estado aprobado-por-cliente se muestra como **"Greenlit"** (verde neón del logo
