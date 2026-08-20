@@ -35,11 +35,11 @@ export function PanelRevisionesCliente() {
   const rondaActual = grupos[0]?.ronda;
 
   return (
-    <aside className="rounded-xl border border-[color-mix(in_srgb,var(--status-completed)_40%,var(--border))] bg-card shadow-sm">
+    <aside className="rounded-xl border border-[color-mix(in_srgb,var(--primary)_40%,var(--border))] bg-card shadow-sm">
       <div className="flex items-start gap-2 border-b border-border p-3.5">
         <span
           className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full text-white"
-          style={{ background: "color-mix(in srgb, var(--status-completed) 88%, #000)" }}
+          style={{ background: "color-mix(in srgb, var(--primary) 88%, #000)" }}
         >
           <Check className="size-3.5" />
         </span>
@@ -84,7 +84,7 @@ export function PanelRevisionesCliente() {
                   {items.map((c) => (
                     <div
                       key={c.id}
-                      className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--status-completed)_45%,transparent)]"
+                      className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--primary)_45%,transparent)]"
                       onClick={() => verCampo(c)}
                     >
                       <div className="mb-1 flex flex-wrap items-center gap-1.5">
@@ -95,7 +95,7 @@ export function PanelRevisionesCliente() {
                         )}
                         <span
                           className="ml-auto inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
-                          style={{ background: "color-mix(in srgb, var(--status-completed) 88%, #000)" }}
+                          style={{ background: "color-mix(in srgb, var(--primary) 88%, #000)" }}
                         >
                           <Check className="size-2.5" /> Aplicado
                         </span>

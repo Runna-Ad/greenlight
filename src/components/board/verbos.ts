@@ -31,7 +31,8 @@ export const TOAST_VERBO: Partial<Record<TaskVerb, string>> = {
   submit_review: "Mandada a revisión — el lead ya tiene el aviso.",
   request_changes: "Cambios pedidos — quien la trabaja ya tiene el aviso.",
   approve: "Aprobada.",
-  // El botón dice la verdad: el portal del cliente todavía no existe, así que
-  // "enviada" significa lista para el cliente, no visible para él.
-  send_client: "Enviada al cliente. El portal aún no existe: avísale tú, la app todavía no puede.",
+  // El portal del cliente YA existe y funciona; lo que falta es el AVISO automático
+  // al cliente (llega con el login/binding cliente↔sesión). Así que "enviada" = ya
+  // visible en su portal, pero por ahora el lead le comparte el link a mano.
+  send_client: "Enviada al cliente. Ya puede revisarla en su portal — compártele el link; el aviso automático llegará con el login del cliente.",
 };

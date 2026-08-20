@@ -91,7 +91,7 @@ export function PortalAcciones({
       <p
         className={cn(
           "hidden text-[13px] sm:block",
-          reReview && !hayCambios ? "font-medium text-status-completed" : "text-muted-foreground",
+          reReview && !hayCambios ? "font-medium text-primary" : "text-muted-foreground",
         )}
       >
         {ayuda}

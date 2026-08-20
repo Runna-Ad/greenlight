@@ -15,7 +15,9 @@ const estadoCliente = (s: string) =>
   ESTADO_CLIENTE[s] ?? { label: "Por revisar", tone: "var(--status-progress)", Icon: Eye };
 // La tarea volvió tras una ronda de cambios (published + reReview): distinta de una
 // idea nueva "Por revisar" — el equipo ya aplicó lo que el cliente pidió.
-const ESTADO_RE_REVIEW = { label: "Cambios listos", tone: "var(--status-completed)", Icon: CheckCheck };
+// Morado (marca --primary), NO verde: el verde queda reservado a "Aprobado". "Cambios
+// listos" = listo para RE-revisar (acción pendiente del cliente), no aprobado. (Pedro)
+const ESTADO_RE_REVIEW = { label: "Cambios listos", tone: "var(--primary)", Icon: CheckCheck };
 const estadoDeTarea = (t: PortalTarea) =>
   t.status === "published" && t.reReview ? ESTADO_RE_REVIEW : estadoCliente(t.status);
 

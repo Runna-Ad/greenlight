@@ -289,9 +289,9 @@ export function CampoLectura({
       onMouseEnter={() => abrir(c.id)}
       onMouseLeave={cerrarPronto}
       className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] italic text-foreground"
-      style={{ background: MARCA.closed }}
+      style={{ background: "color-mix(in srgb, var(--primary) 26%, transparent)" }}
     >
-      <Check className="size-2.5 shrink-0 text-status-completed" />
+      <Check className="size-2.5 shrink-0 text-primary" />
       &laquo;{c.targetQuote ?? "este campo"}&raquo;
     </button>
   );
@@ -303,7 +303,7 @@ export function CampoLectura({
         // Campo con un cambio ya aplicado (portal, re-revisión): acento verde para que
         // salte a la vista DÓNDE se cambió algo que el cliente pidió.
         rev.length > 0 &&
-          "rounded-md border-l-2 border-[color-mix(in_srgb,var(--status-completed)_50%,transparent)] bg-[color-mix(in_srgb,var(--status-completed)_5%,transparent)] pl-1.5",
+          "rounded-md border-l-2 border-[color-mix(in_srgb,var(--primary)_50%,transparent)] bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] pl-1.5",
       )}
     >
       <div
@@ -357,7 +357,7 @@ export function CampoLectura({
           en este campo. Read-only — pasar el ratón muestra qué pidió. */}
       {rev.length > 0 && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-status-completed">
+          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-primary">
             <Check className="size-3" />
             {rev.length === 1 ? "Cambio que pediste — aplicado" : "Cambios que pediste — aplicados"}:
           </span>
@@ -500,7 +500,7 @@ export function CampoLectura({
               ) : corrAbierta.estado === "closed" ? (
                 // Cambio de una ronda pasada que el equipo YA aplicó — read-only (el
                 // cliente no lo quita; es el registro de "esto lo pediste y ya está").
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-status-completed">
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-primary">
                   <Check className="size-3.5" /> Aplicado
                 </span>
               ) : (
