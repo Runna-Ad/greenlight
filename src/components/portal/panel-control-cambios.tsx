@@ -6,10 +6,11 @@ import { useCorrecciones } from "@/components/tarea/correcciones/contexto";
 import { keyCampo, porRonda, type Correccion } from "@/lib/correcciones";
 import { cn } from "@/lib/utils";
 
-// Colores de estado (mismo lenguaje que el interno): coral = sin enviar (acción del
-// cliente), morado = ya aplicado (el equipo lo hizo, revísalo). Verde queda para aprobado.
+// Semáforo del flujo de cambios (Pedro): SOLICITADO=rojo (sin enviar) → HECHO/APLICADO=
+// amarillo (el equipo lo hizo) → APROBADO=verde (a nivel tarea). Mismo lenguaje que el
+// panel interno (open=coral, done=amber, closed=green).
 const CORAL = "color-mix(in srgb, var(--status-corrections) 78%, #000)";
-const MORADO = "color-mix(in srgb, var(--primary) 82%, #000)";
+const AMARILLO = "color-mix(in srgb, var(--status-progress) 80%, #000)";
 
 // Salta al campo del cambio y lo hace parpadear (mismo data-campo-key + gl-flash que el
 // panel interno) — así "Ver" lleva al cliente justo a donde está el cambio.
@@ -88,7 +89,7 @@ export function PanelControlCambios({ mobile = false }: { mobile?: boolean }) {
             {visible && (
               <div className="grid gap-2 px-2.5 pb-2.5">
                 {items.map((c) => (
-                  <Tarjeta key={c.id} c={c} tono={MORADO} etiqueta="Aplicado" />
+                  <Tarjeta key={c.id} c={c} tono={AMARILLO} etiqueta="Aplicado" />
                 ))}
               </div>
             )}

@@ -810,3 +810,14 @@ Que el lead pueda aplicar la sugerencia de H.Ü.E directo al campo con un botón
 - Refinamiento posible: H.Ü.E a veces llena `aplicar` en sugerencias de "verificar" (no un cambio de texto);
   tunear el prompt para dejar aplicar='' salvo cambio concreto. Y follow-up: aplicar sin reload completo.
 - PENDIENTE: "ship it".
+
+## ✅ (2026-08-20) — Portal: panel junto a planos + no se corta + semáforo de cambios [Pedro] — SIN pushear
+- [x] Sticky del panel: (1) ya no se corta → sticky top-32 (bajo la barra de acción) + max-h[calc(100vh-9rem)]
+      + overflow-y-auto (scroll interno para paneles altos). (2) vive JUNTO A LOS PLANOS: Hero+Tabs a todo el
+      ancho arriba; 2-col sólo alrededor del documento (portal-tarea CuerpoTarea reorganizado).
+- [x] Color del flujo de cambios (semáforo): HECHO/APLICADO morado→AMARILLO (--status-progress) en el panel
+      Control de Cambios y en los chips "aplicado" del campo. Solicitado=rojo (ya), aprobado=verde (ya).
+      Sólo los ITEMS de cambio; badges de tarea y demás quedan igual (Pedro). Ver lessons.md.
+- [x] Fix: wrapper del panel desktop era <aside> anidado sobre otro <aside> → <div>.
+- [x] Verificado live (JS): Aplicado=amber rgb(148,95,6); panel sticky top-133 junto a planos; móvil oculto en desktop.
+- [x] Gates tsc·eslint·build. PENDIENTE "ship it".

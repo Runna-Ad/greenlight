@@ -58,52 +58,66 @@ export function PortalTarea({ t }: { t: TareaPortal }) {
 // desktop (sticky, mismo formato que el interno) y COLAPSABLE arriba en móvil (Pedro).
 function CuerpoTarea({ t }: { t: TareaPortal }) {
   const hayPanel = t.cambios.length > 0 || t.revisiones.length > 0;
-  const contenido = (
-    <>
-      <HeroTarea
-        ideaId={t.ideaId}
-        marca={t.marcaName}
-        logoUrl={t.marcaLogo}
-        briefLabel={t.briefLabel}
-        naming={t.naming}
-        status={t.status}
-        notaGuion={t.notaGuion}
-        notaPlaceholder=""
-        esEstatico={t.esEstatico}
-        entregaUrl={t.entregaUrl}
-        soloLectura={true}
-      />
-      <TabsTarea
-        ideaId={t.ideaId}
-        esEstatico={t.esEstatico}
-        soloLectura={true}
-        detalles={{
-          tipoAsset: t.tipoAsset,
-          plataformas: t.plataformas,
-          tamanos: t.tamanos,
-          duracion: t.duracion,
-          concepto: t.concepto,
-          trend: t.trend,
-        }}
-        runna={undefined}
-      />
-      <CuerpoDoc t={t} />
-    </>
+  const hero = (
+    <HeroTarea
+      ideaId={t.ideaId}
+      marca={t.marcaName}
+      logoUrl={t.marcaLogo}
+      briefLabel={t.briefLabel}
+      naming={t.naming}
+      status={t.status}
+      notaGuion={t.notaGuion}
+      notaPlaceholder=""
+      esEstatico={t.esEstatico}
+      entregaUrl={t.entregaUrl}
+      soloLectura={true}
+    />
+  );
+  const tabs = (
+    <TabsTarea
+      ideaId={t.ideaId}
+      esEstatico={t.esEstatico}
+      soloLectura={true}
+      detalles={{
+        tipoAsset: t.tipoAsset,
+        plataformas: t.plataformas,
+        tamanos: t.tamanos,
+        duracion: t.duracion,
+        concepto: t.concepto,
+        trend: t.trend,
+      }}
+      runna={undefined}
+    />
   );
 
-  if (!hayPanel) return <div className="space-y-4">{contenido}</div>;
+  if (!hayPanel)
+    return (
+      <div className="space-y-4">
+        {hero}
+        {tabs}
+        <CuerpoDoc t={t} />
+      </div>
+    );
 
   return (
-    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5">
-      <div className="min-w-0 space-y-4">
-        <div className="lg:hidden">
-          <PanelControlCambios mobile />
-        </div>
-        {contenido}
+    <div className="space-y-4">
+      {/* Móvil: Control de Cambios colapsable arriba del contenido. */}
+      <div className="lg:hidden">
+        <PanelControlCambios mobile />
       </div>
-      <aside className="mt-4 hidden lg:mt-0 lg:block lg:sticky lg:top-16">
-        <PanelControlCambios />
-      </aside>
+      {hero}
+      {tabs}
+      {/* El panel vive JUNTO A LOS PLANOS (ahí están los cambios), no arriba con los
+          detalles. 2-col sólo alrededor del documento; sticky BAJO la barra de acción
+          (top-32) y con scroll interno (max-h) para que un panel alto no se corte (Pedro). */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5">
+        <div className="min-w-0">
+          <CuerpoDoc t={t} />
+        </div>
+        <div className="hidden lg:sticky lg:top-32 lg:block lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
+          <PanelControlCambios />
+        </div>
+      </div>
     </div>
   );
 }
