@@ -17,6 +17,7 @@ import { useState, type ComponentType } from "react";
 
 import { Campo } from "./campo";
 import { CampoLectura } from "./campo-lectura";
+import { useWorkspace, reseedKey } from "./workspace-provider";
 import { ReferenciasPlano, type RefVista } from "./referencias-plano";
 import { TextoRico, Negrita } from "@/components/ui/linkify";
 import { parseDialogo } from "@/lib/dialogo";
@@ -322,6 +323,9 @@ function CampoDoc({
 }) {
   const Icono = icono;
   const colorIcono = tono === "orange" ? "text-deck-orange" : "text-deck-blue";
+  // Nonce de re-siembra del campo: al aplicar una sugerencia de H.Ü.E sube y fuerza el
+  // remount del <Campo> uncontrolled para que muestre el texto nuevo (ver workspace-provider).
+  const { reseed } = useWorkspace();
   if (modo === "lectura") {
     if (!valor?.trim()) return null;
     // Sólo-lectura, pero con correcciones para el revisor (ver/pedir/gestionar);
@@ -345,6 +349,9 @@ function CampoDoc({
   }
   return (
     <Campo
+      // key = nonce de re-siembra: cuando "Aplicar" reescribe este campo, el nonce sube y
+      // React remonta el <Campo> con el `valorInicial` nuevo (la textarea se siembra una vez).
+      key={reseed[reseedKey(tabla, filaId, campo)] ?? 0}
       inline
       icono={<Icono className={`size-3.5 shrink-0 ${colorIcono}`} />}
       tabla={tabla}

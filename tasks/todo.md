@@ -35,6 +35,42 @@ Aplicar + correr H.Ü.E: no drivables en localhost — sin ANTHROPIC_API_KEY + h
 - Deuda menor (opcional): misma técnica de caching en ortografia-actions y extraerGuion (mismo patrón),
   no tocadas — bajo volumen. Compactación del panel del PORTAL: follow-up si Pedro lo pide.
 
+## 🔎 REAP full del flujo H.Ü.E (2026-08-20 pm) — Pedro: "Aplicar no mostró el cambio" [FIX-FIRST, SIN pushear]
+Pedro probó Aplicar en prod: los demás veredictos SÍ sobrevivieron (fix #1 previo OK) pero el texto NO
+apareció en el campo. Reap adversarial (Opus, subagente) sobre TODO el flujo validar→aplicar→display.
+Root cause del reporte + 1 CRITICAL + varios SERIOS. Gates: tsc·eslint(0 err en tocados)·build verdes.
+Smoke live: la página de tarea hidrata sin error (panel + botón H.Ü.E + toggle Vista; 0 error de hook/
+useWorkspace en consola). Aceptación de Aplicar/H.Ü.E = Pedro en el deploy (sin API key local + clicks flaky).
+- [x] **S1 (root cause del reporte) — el editor no repintaba.** `Campo` es uncontrolled (siembra su
+      textarea una vez con `useState(valorInicial)`); parchear `ws.planos` no lo repinta, y como el tecleo
+      reescribe `ws.planos`, un keystroke posterior lo revertía. FIX: nonce `reseed` por campo en el
+      workspace (`bumpReseed`) → al aplicar sube y fuerza el REMOUNT sólo de ese `<Campo>` (key=nonce) →
+      re-siembra `valorInicial` con el texto nuevo. La Vista cliente (CampoLectura) ya lo reflejaba sola.
+      Esto TAMBIÉN mata el **falso auto-conflicto** que halló el reap (el remount deja `guardado`=texto
+      nuevo = DB, así el compare-and-set del autosave ya no dispara "alguien más cambió este campo").
+- [x] **CRITICAL — `aplicar` era un overwrite de TODO el campo, a ciegas y sin guarda.** El lead sólo veía
+      la sugerencia de UNA línea, no el texto completo que se escribía → podía normalizar `$999`, tirar un
+      legal `*` o reescribir cláusulas intactas de un clic. FIX (prompt + guarda determinista + humano):
+      (a) el panel ahora MUESTRA el texto completo ("El campo quedaría así:") antes de Aplicar; (b) guardas
+      en el parse: negrita perdida→null, contiene "(campo vacío)"→null, longitud >8000→null; (c) el prompt
+      pide conservar `**` exactos. (Números/legales legítimamente cambian → no se pueden hard-guardar; los
+      cubre el preview humano.) [[prompt-plus-deterministic-guard]]
+- [x] **S2 — negrita borrada.** `aplicar` se generaba desde `sinNegrita` → perdía `**`. FIX: H.Ü.E ve el
+      texto CON `**`, instrucción de conservarlos + guarda (a) de arriba.
+- [x] **SERIO — write de 0 filas reportaba ok.** `aplicarSugerencia` (action) no tenía `.select()` ni check
+      de filas → si el plano se borró, update tocaba 0 filas, error=null, "aplicado" en falso. FIX:
+      `.select("id")` + error si `!escritos.length`.
+- [x] **SERIO — compactación XOR posicional.** `alternados` (XOR contra un default que depende de la
+      posición entre los 5) colapsaba sola una tarjeta expandida a mano al confirmar otra. FIX:
+      `expandidoManual: Map<id,bool>` = intención ABSOLUTA (no XOR).
+- [x] **MENOR — chip veredicto stale**: al aplicar se marca `hecho:'si'` (no sólo `aplicar:null`) → el chip
+      no queda en "no parece hecho" contradiciendo. **MENOR — round bucketing**: null-ronda internas van a
+      la ronda ACTUAL (no la 1). **MENOR — respuesta no parseable** → error (no "no hay pendientes"). **MENOR
+      — revalidatePath** por patrón. **MENOR — estático**: patch en memoria sólo si `id` coincide.
+- Deuda anotada (no arreglada, baja prob): de-dupe de ids de veredicto duplicados (el Map se queda con el
+  último) — el subagente lo marcó baja probabilidad; si algún día pega, de-dupe/rechaza ids repetidos.
+- PENDIENTE "ship it".
+
 
 
 ## 🔒 LAUNCH-HARDENING SET (activar cuando entre AUTH_ENABLED) — de la revisión de roles 2026-08-19

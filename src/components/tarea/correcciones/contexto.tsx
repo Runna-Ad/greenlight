@@ -88,7 +88,7 @@ export function CorreccionesProvider({
   // "Aplicar" sin recargar. Se destructuran aparte para NO meter el objeto `ws` completo
   // (que cambia en cada edición de planos) en las deps del useMemo de abajo — eso reventaría
   // la memo de perf. Este provider vive DENTRO de <WorkspaceProvider> (page.tsx).
-  const { setPlanos: setWsPlanos, setEstatico: setWsEstatico } = useWorkspace();
+  const { setPlanos: setWsPlanos, setEstatico: setWsEstatico, bumpReseed } = useWorkspace();
 
   const validar = useCallback(
     () =>
@@ -177,29 +177,40 @@ export function CorreccionesProvider({
           // borraba TODOS los veredictos de H.Ü.E, obligando a re-correrlo (llamada pagada) tras
           // cada Aplicar. Ahora el campo se actualiza al instante y los demás veredictos siguen.
           const campo = correccion.targetCampo;
-          if (campo) {
-            if (correccion.targetTabla === "planos" && correccion.targetFilaId) {
-              const filaId = correccion.targetFilaId;
+          const tabla = correccion.targetTabla;
+          const filaId = correccion.targetFilaId;
+          if (campo && tabla && filaId) {
+            if (tabla === "planos") {
               setWsPlanos((prev) =>
                 prev.map((p) => (p.id === filaId ? ({ ...p, [campo]: textoNuevo } as PlanoVista) : p)),
               );
-            } else if (correccion.targetTabla === "estaticos") {
-              setWsEstatico((prev) => (prev ? ({ ...prev, [campo]: textoNuevo } as EstaticoVista) : prev));
+            } else if (tabla === "estaticos") {
+              // Guarda por id: sólo parchea si el estático en memoria es el que la corrección
+              // apunta (defensa por si algún día hay más de un estático por idea).
+              setWsEstatico((prev) =>
+                prev && prev.id === filaId ? ({ ...prev, [campo]: textoNuevo } as EstaticoVista) : prev,
+              );
             }
+            // Fuerza el remount del <Campo> (uncontrolled) para que el editor muestre el
+            // texto nuevo — sin esto, el patch al estado del workspace NO repinta la textarea
+            // (siembra su valor una sola vez). La Vista cliente (CampoLectura) ya reflejaba
+            // el cambio sola (lee `valor` directo); esto arregla el modo editor.
+            bumpReseed(tabla, filaId, campo);
           }
-          // El cambio ya está aplicado → quita SÓLO el `aplicar` de su veredicto (el botón
-          // desaparece), conservando el resto del veredicto y TODOS los demás intactos.
+          // El cambio ya está aplicado → marca su veredicto como HECHO ('si': el chip pasa a
+          // verde, ya no un "no parece hecho" contradiciendo que el lead aplicó la sugerencia)
+          // y quita su `aplicar` (el botón desaparece). El resto y TODOS los demás, intactos.
           setVeredictos((prev) => {
             const v = prev.get(correccion.id);
             if (!v) return prev;
             const n = new Map(prev);
-            n.set(correccion.id, { ...v, aplicar: null });
+            n.set(correccion.id, { ...v, hecho: "si", aplicar: null });
             return n;
           });
           toast.success("Sugerencia aplicada");
         }),
     }),
-    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, correcciones, pendiente, veredictos, validando, validar, run, setWsPlanos, setWsEstatico],
+    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, correcciones, pendiente, veredictos, validando, validar, run, setWsPlanos, setWsEstatico, bumpReseed],
   );
 
   return <CorreccionesCtx.Provider value={value}>{children}</CorreccionesCtx.Provider>;

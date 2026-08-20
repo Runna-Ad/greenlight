@@ -46,17 +46,15 @@ export function PanelCorrecciones() {
   // Confirmación en dos pasos del descarte: el id de la corrección cuyo botón
   // "Descartar" está pidiendo confirmación (sólo una a la vez).
   const [confirmando, setConfirmando] = useState<string | null>(null);
-  // Cambios que el usuario alternó a mano (XOR contra el default compacto/expandido) —
-  // para que un panel con muchos cambios no sea gigante (Pedro): resueltos y abiertos
-  // más allá de los primeros 5 arrancan compactos; un clic los expande y viceversa.
-  const [alternados, setAlternados] = useState<Set<string>>(new Set());
-  const alternar = (id: string) =>
-    setAlternados((prev) => {
-      const n = new Set(prev);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
+  // Intención EXPANDIDO/compacto elegida a mano por el lead, por id — valor ABSOLUTO, no un
+  // XOR contra el default. (Si guardáramos "alternado" y el default de una tarjeta se moviera
+  // —al confirmar otra y correrse la frontera de los 5 abiertos— una tarjeta que el lead
+  // expandió a mano se colapsaría sola. La intención absoluta lo evita.) reap 2026-08-20.
+  // Sin entrada => sigue el default (resueltos y abiertos >5 compactos). Un panel con muchos
+  // cambios no se hace gigante y encoge al ir resolviendo (Pedro).
+  const [expandidoManual, setExpandidoManual] = useState<Map<string, boolean>>(new Map());
+  const fijarExpandido = (id: string, expandido: boolean) =>
+    setExpandidoManual((prev) => new Map(prev).set(id, expandido));
   if (!ctx || !ctx.correcciones.length) return null;
 
   const grupos = porRonda(ctx.correcciones);
@@ -143,14 +141,15 @@ export function PanelCorrecciones() {
                         compactaDefault = abiertasVistas >= 5;
                         abiertasVistas++;
                       }
-                      const compacta = compactaDefault !== alternados.has(c.id);
+                      const manual = expandidoManual.get(c.id); // boolean | undefined
+                      const compacta = manual === undefined ? compactaDefault : !manual;
                       if (compacta) {
                         return (
                           <TarjetaCompacta
                             key={c.id}
                             c={c}
                             veredicto={ctx.veredictos.get(c.id)}
-                            onExpandir={() => alternar(c.id)}
+                            onExpandir={() => fijarExpandido(c.id, true)}
                           />
                         );
                       }
@@ -180,21 +179,18 @@ export function PanelCorrecciones() {
                         >
                           {ETIQUETA[c.estado]}
                         </span>
-                        {/* Sólo las tarjetas que arrancan compactas (resueltas o abiertas >5)
-                            traen el botón para volver a compactarlas. */}
-                        {compactaDefault && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              alternar(c.id);
-                            }}
-                            aria-label="Compactar"
-                            className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-                          >
-                            <ChevronDown className="size-3.5" />
-                          </button>
-                        )}
+                        {/* Cualquier tarjeta expandida se puede volver a compactar. */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fijarExpandido(c.id, false);
+                          }}
+                          aria-label="Compactar"
+                          className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <ChevronDown className="size-3.5" />
+                        </button>
                       </div>
                       {c.targetQuote && (
                         <p className="mb-0.5 text-[11px] italic text-status-corrections" title={c.targetQuote}>
@@ -211,13 +207,22 @@ export function PanelCorrecciones() {
                           <p className="text-[11px] leading-snug text-foreground">
                             <b className="text-primary">H.Ü.E sugiere:</b> {ctx.veredictos.get(c.id)!.sugerencia}
                           </p>
+                          {/* H.Ü.E reescribe TODO el campo — se muestra el texto COMPLETO que
+                              quedaría para que el lead lo LEA antes de aplicar (no un overwrite a
+                              ciegas): "Aplicar" escribe exactamente esto. */}
+                          <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            El campo quedaría así:
+                          </p>
+                          <p className="mt-0.5 max-h-32 overflow-y-auto whitespace-pre-wrap rounded border border-border bg-card px-1.5 py-1 text-[11px] leading-snug text-foreground">
+                            {ctx.veredictos.get(c.id)!.aplicar}
+                          </p>
                           <button
                             type="button"
                             disabled={ctx.pendiente}
                             onClick={() => ctx.aplicarSugerencia?.(c, ctx.veredictos.get(c.id)!.aplicar!)}
                             className="mt-1.5 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:brightness-110 disabled:opacity-50"
                             style={{ background: "color-mix(in srgb, var(--primary) 82%, #000)" }}
-                            title="Reemplaza el texto del campo con la versión sugerida por H.Ü.E"
+                            title="Reemplaza el campo con el texto de arriba"
                           >
                             <Sparkles className="size-3" /> Aplicar
                           </button>

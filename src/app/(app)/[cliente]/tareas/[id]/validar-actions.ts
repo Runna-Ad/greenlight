@@ -84,9 +84,11 @@ export async function validarCambios(
     .returns<(Corr & { ronda: number | null })[]>();
   const todas = corrs ?? [];
   // La ronda más reciente = lo último que el especialista trabajó. Se revisa esa
-  // ronda completa (confirmados incluidos), no sólo lo que sigue sin cerrar.
-  const maxRonda = todas.length ? Math.max(...todas.map((c) => c.ronda ?? 1)) : 0;
-  const correcciones: Corr[] = todas.filter((c) => (c.ronda ?? 1) === maxRonda);
+  // ronda completa (confirmados incluidos), no sólo lo que sigue sin cerrar. Las
+  // correcciones legacy SIN ronda (ronda=null) se bucketean en la ronda ACTUAL (no en la
+  // 1), para no quedar fuera si un client_change ya va en ronda ≥2 (reap 2026-08-20).
+  const maxRonda = todas.length ? Math.max(1, ...todas.map((c) => c.ronda ?? 0)) : 0;
+  const correcciones: Corr[] = todas.filter((c) => (c.ronda ?? maxRonda) === maxRonda);
   if (!correcciones.length) return { ok: true, veredictos: [] };
 
   // Texto ACTUAL de cada campo (planos/estáticos). La corrección se pidió sobre una
@@ -138,11 +140,18 @@ export async function validarCambios(
   // Se quitan los marcadores de negrita `**` del texto actual y de la cita: la IA
   // juzga el copy limpio (los `**` son formato, no contenido) — así el veredicto no
   // se confunde por los marcadores.
+  // Texto ACTUAL con su negrita markdown INTACTA (`**…**`): H.Ü.E debe CONSERVAR esos
+  // marcadores en `aplicar`, o "Aplicar" borraría la negrita del campo (precios/ofertas
+  // llevan negrita). Sólo la CITA va limpia (se capturó en espacio limpio). Para contenido
+  // SIN negrita el input es idéntico al de antes (no hay `**` que mostrar) → el veredicto no
+  // cambia; sólo difiere cuando el campo trae `**`, que es justo lo que hay que preservar.
+  const rawDe = new Map<string, string>();
+  for (const c of correcciones) {
+    rawDe.set(c.id, textoDe.get(`${c.target_tabla}|${c.target_fila_id}|${c.target_campo}`) ?? "(campo vacío)");
+  }
   const bloques = correcciones
     .map((c) => {
-      const texto = sinNegrita(
-        textoDe.get(`${c.target_tabla}|${c.target_fila_id}|${c.target_campo}`) ?? "(campo vacío)",
-      );
+      const texto = rawDe.get(c.id) ?? "(campo vacío)";
       const sobre = c.target_quote ? `«${sinNegrita(c.target_quote)}»` : "(todo el campo)";
       return `[id=${c.id}] ${etiqueta(c)}\nCambio pedido sobre ${sobre}: ${c.body}\nTexto ACTUAL del campo:\n${texto}`;
     })
@@ -189,8 +198,10 @@ export async function validarCambios(
     "arreglo exacto. Si no está o quedó a medias, propón cómo lograrlo.\n" +
     "- aplicar → el TEXTO COMPLETO Y FINAL que debería tener el campo con tu sugerencia YA aplicada " +
     "(todo el campo, no sólo la frase; edición MÍNIMA sobre el texto actual, conservando lo demás tal " +
-    "cual), listo para reemplazar el campo de un clic. Deja aplicar='' (vacío) SÓLO si no hay un texto " +
-    "concreto que aplicar (petición ambigua, o ya está perfecto y sólo hay que confirmarlo).\n\n" +
+    "cual). Si el texto trae **negrita** en markdown, CONSÉRVALA EXACTA en aplicar (los mismos `**`, sin " +
+    "quitarlos ni agregarlos). Debe quedar listo para reemplazar el campo de un clic. Deja aplicar='' " +
+    "(vacío) SÓLO si no hay un texto concreto que aplicar (petición ambigua, o ya está perfecto y sólo " +
+    "hay que confirmarlo).\n\n" +
     "CÓMO LEER LA PETICIÓN (aquí se falla más):\n" +
     "- La petición a veces ES el reemplazo deseado: cita «X» + petición 'Y' significa 'cambia «X» por " +
     "Y'. Si el texto ya dice Y, está HECHO ('si'). EJEMPLO: cita «elementos», petición 'elemento' = " +
@@ -244,7 +255,10 @@ export async function validarCambios(
         crudos = undefined;
       }
     }
-    if (!Array.isArray(crudos)) return { ok: true, veredictos: [] };
+    // Respuesta no parseable ≠ "no hay nada que validar": devolvemos error (si no, el
+    // cliente muestra "no hay cambios pendientes" cuando en realidad H.Ü.E falló) (reap).
+    if (!Array.isArray(crudos))
+      return { ok: false, error: "H.Ü.E no devolvió un resultado válido. Intenta de nuevo." };
 
     const validas = new Set(correcciones.map((c) => c.id));
     const veredictos: VeredictoCambio[] = [];
@@ -255,8 +269,20 @@ export async function validarCambios(
       const razon = typeof o.razon === "string" ? o.razon.slice(0, 160) : "";
       const sugerencia = typeof o.sugerencia === "string" ? o.sugerencia.slice(0, 240) : "";
       // aplicar: el texto completo del campo con la sugerencia; vacío → null (nada que aplicar).
-      const aplicar = typeof o.aplicar === "string" && o.aplicar.trim() ? o.aplicar : null;
+      let aplicar = typeof o.aplicar === "string" && o.aplicar.trim() ? o.aplicar : null;
       if (!validas.has(id)) continue; // sólo veredictos de correcciones reales
+      // Guardas DETERMINISTAS sobre el texto que se escribiría de un clic (el prompt no basta
+      // — H.Ü.E reescribe TODO el campo). El lead además ve el texto completo antes de aplicar.
+      const orig = rawDe.get(id) ?? "";
+      if (aplicar) {
+        // (a) Negrita: si el campo traía `**` y aplicar los perdió, aplicarlo borraría la
+        //     negrita (precios/ofertas) → no ofrecer el botón.
+        if (orig.includes("**") && !aplicar.includes("**")) aplicar = null;
+        // (b) El placeholder "(campo vacío)" NUNCA es contenido real → nunca escribirlo.
+        else if (aplicar.includes("(campo vacío)")) aplicar = null;
+        // (c) Longitud desbocada (el modelo se fue de largo) → no ofrecer un reemplazo gigante.
+        else if (aplicar.length > 8000) aplicar = null;
+      }
       veredictos.push({ correccionId: id, hecho, razon, sugerencia, aplicar });
     }
     return { ok: true, veredictos };
@@ -300,13 +326,19 @@ export async function aplicarSugerencia(
   const campos = corr.target_tabla === "estaticos" ? CAMPOS_ESTATICO : CAMPOS_PLANO;
   if (!campos.includes(corr.target_campo)) return { ok: false, error: "Campo no válido." };
 
-  const { error } = await db
+  const { data: escritos, error } = await db
     .from(corr.target_tabla)
     .update({ [corr.target_campo]: textoNuevo })
     .eq("id", corr.target_fila_id)
-    .eq("idea_id", ideaId);
+    .eq("idea_id", ideaId)
+    .select("id");
   if (error) return { ok: false, error: error.message };
+  // 0 filas = la fila objetivo ya no existe (p. ej. el plano se borró): el update no tocó
+  // nada pero devuelve error=null. Sin este check reportaríamos "aplicado" en falso y el
+  // cliente parchearía memoria con un texto que la DB no tiene (reap 2026-08-20).
+  if (!escritos?.length) return { ok: false, error: "El campo ya no existe (¿se borró el plano?)." };
 
-  revalidatePath(`/${clienteSlug}/tareas/${ideaId}`);
+  // Ruta como PATRÓN (no con ids concretos, que serían un no-op silencioso — lección guardarCampo).
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true };
 }
