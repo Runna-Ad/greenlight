@@ -1,5 +1,32 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🎨 CONSTRUIDO (2026-08-20) — Rediseño nav del portal del cliente [Pedro, mockup confirmado] — SIN pushear
+Pedro dio 3 screenshots como TARGET (el 4º es referencia del espacio desperdiciado). Consolidar la
+navegación de briefs/tareas en un HEADER STICKY compacto y usar ANCHO COMPLETO. Gates tsc·eslint·build
+verdes. Verificado LIVE en browser (/didi/portal): nav sticky renderiza, dropdown "Ver detalle de tareas"
+abre y muestra la tabla Estado·Tarea navegable, pager 1/2 + flechas, ancho completo, 0 error de consola.
+- [x] **PortalNav (nuevo `portal-nav.tsx`, sticky top-16 z-30, ancho completo, UNA fila con overflow-x)**:
+      logo + "Portal de Revisión" + dropdown de Brief (agrupado por mes con brief_date) + dropdown "Ver
+      detalle de tareas" (tabla Estado·Tarea del brief, navega, cierra al elegir) + dropdown Filtro (funnel:
+      Todas/Por revisar/En cambios/Aprobadas con conteos) + flechas ← N/M → (prev/next por la lista
+      FILTRADA del brief; "– / N" si la abierta no está en el filtro). Popovers (shadcn/radix) controlados.
+- [x] **Ancho completo**: portal-shell `max-w-5xl mx-auto` → `w-full` + padding. El (app) layout main NO
+      tiene max-w; el cliente NO tiene sidebar → ancho de viewport completo (el admin sí ve sidebar en el
+      preview, por eso mide ~1048 ahí). La columna del guión queda ~930px → su 2-col interno la mantiene
+      legible; sólo ultrawide querría un cap (follow-up opcional).
+- [x] **Restack sticky**: PortalNav top-16 z-30; PortalAcciones (Barra) → top-[7.5rem] z-20; panel de la
+      tarea (portal-tarea) → lg:top-[11.75rem]. Bleed -mx-4/6/8 iguala el padding full-width.
+- [x] **portal-data.ts**: PortalBrief += `date` (brief_date) para agrupar por mes.
+- [x] Quitado el bloque viejo (header + pills de brief + TareaLista) — la lista vive ahora en el dropdown.
+- Sin migración, sin cambios de datos server (sólo +date en el mapeo). PENDIENTE "ship it".
+
+### Review (rediseño portal)
+- Deuda menor: nav en móvil usa overflow-x scroll (una fila) — las flechas pueden quedar tras scroll en
+  pantallas muy angostas; el portal se revisa sobre todo en desktop. Cap de columna de lectura sólo si
+  Pedro lo pide para ultrawide. La etiqueta del brief usa el label existente (no el "DD/MM for <mes>" del
+  mockup) — enriquecer es follow-up si lo quiere. Offsets sticky verificados a 1400px; re-mirar en móvil.
+
+
 ## 🔧 CONSTRUIDO (2026-08-20) — H.Ü.E: persistencia de Aplicar + compactar cambios + caching [Pedro] — SIN pushear
 Tres cosas de la sesión de Pedro sobre "Revisar cambios con H.Ü.E". Gates VERDES (tsc·eslint 0-err
 en archivos tocados·build·tests 44 pass). Smoke-verificado live: la página de tarea hidrata con el

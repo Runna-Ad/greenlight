@@ -26,6 +26,8 @@ export type PortalTarea = {
 export type PortalBrief = {
   id: string;
   label: string;
+  /** Fecha del brief (ISO) — para agrupar por mes en el selector del portal. null si no tiene. */
+  date: string | null;
   tasks: PortalTarea[];
 };
 
@@ -123,7 +125,7 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
   // Sólo briefs CON tareas enviadas; los de más tareas primero.
   const conTareas: PortalBrief[] = briefRows
     .filter((b) => porBrief.has(b.id))
-    .map((b) => ({ id: b.id, label: briefLabel(b), tasks: porBrief.get(b.id)! }))
+    .map((b) => ({ id: b.id, label: briefLabel(b), date: b.brief_date, tasks: porBrief.get(b.id)! }))
     .sort((a, b) => b.tasks.length - a.tasks.length || a.label.localeCompare(b.label));
 
   return {

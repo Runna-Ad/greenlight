@@ -114,7 +114,7 @@ function CuerpoTarea({ t }: { t: TareaPortal }) {
         <div className="min-w-0">
           <CuerpoDoc t={t} />
         </div>
-        <div className="hidden lg:sticky lg:top-32 lg:block lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
+        <div className="hidden lg:sticky lg:top-[11.75rem] lg:block lg:max-h-[calc(100vh-13rem)] lg:overflow-y-auto">
           <PanelControlCambios />
         </div>
       </div>
