@@ -1,6 +1,21 @@
 # Greenlight · by Rünna — Build Todo
 
-## 📊 CONSTRUIDO (2026-08-20) — Evaluación v2: Resolución + Eficiencia [Pedro, diseño aprobado] — SIN pushear
+## 📊 CONSTRUIDO (2026-08-20, 2º) — Evaluación: desglose POR BRIEF [Pedro, mockup aprobado] — SIN pushear
+Sobre la Evaluación v2: la nota mensual ahora se desglosa POR BRIEF. Persona → abre → una nota por
+brief (Cal/Efi/Overall) → abre un brief → sus criterios + las TAREAS de las que salió (chip rojo=con
+notas, verde=limpia) + proceso del brief. SIN migración, SIN captura nueva (la tarea ya sabe su brief).
+- [x] evaluacion.ts: extraído `puntuar(ideaIds,...)` (reusa el modelo binario+Eficiencia); IdeaInput +=
+      briefId/briefLabel/code; tipos Puntaje/BriefEval/TareaEval; EvalMiembro += `briefs` (mensual =
+      promedio ponderado por nº de tareas de los briefs → RECONCILIA). La mensual reusa `puntuar`.
+- [x] performance/data.ts: ideas query += brief_id/naming_base/code; carga etiquetas de briefs (helper
+      briefLabelDe); IdeaInput con briefId/briefLabel/code.
+- [x] evaluacion-board.tsx: detalle de persona = "Nota por brief" (BriefRow colapsable) → criterios +
+      chips de tarea (TareaChip) + proceso. El header de persona sigue con Calidad/Eficiencia/Overall.
+- [x] Tests: asserts de brief (Ana 2 briefs bfV 9.2 / bfP 10; Caro 1 brief == mensual; conNotas/code).
+- Gates: tsc·eslint·build·lib 356. NO se verificó en browser (el board necesita datos reales del mes
+  para el desglose; lógica cubierta por tests). PENDIENTE "ship it" (sin migración → sólo push).
+
+## 📊 CONSTRUIDO (2026-08-20) — Evaluación v2: Resolución + Eficiencia [Pedro, diseño aprobado] — SHIPPED 5d30cba
 Gates VERDES: tsc·eslint·build·lib 342·db 246 (migración 0040 aplica limpia en PGlite). Todos los
 asserts nuevos pasan (Ana 9.6/Beto 9.2/Caro 7.4 recomputados a mano y verificados). Reap: edge cases
 OK (sin-autor→no penaliza · aplicado-sobre-client_change→ignorado por el grade · aplicado-sin-atender→

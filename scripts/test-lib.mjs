@@ -815,8 +815,8 @@ console.log("\n▶ evaluarEquipo() — por autor");
     { ideaId: "A", memberId: "m2", assignedAt: "2026-08-04T00:00:00Z" },
   ];
   const ideas = [
-    { id: "A", completedAt: "2026-08-20T00:00:00Z" },
-    { id: "B", completedAt: "2026-08-25T00:00:00Z" },
+    { id: "A", completedAt: "2026-08-20T00:00:00Z", briefId: "bfV", briefLabel: "Brief 20/08", code: "AAA" },
+    { id: "B", completedAt: "2026-08-25T00:00:00Z", briefId: "bfP", briefLabel: "Brief 25/08", code: "BBB" },
   ];
   const evs = evaluarEquipo(
     [
@@ -850,6 +850,17 @@ console.log("\n▶ evaluarEquipo() — por autor");
   eq("eval · Beto eficiencia = 10", beto.eficiencia, 10);
   eq("eval · Beto overall = 9.2 (0.7·8.89 + 0.3·10)", beto.overall, 9.2);
   eq("eval · Beto ciclo mediano = 16", beto.cicloMedianoDias, 16);
+  // Desglose por brief: A vive en bfV (con la nota de orto de Ana), B en bfP (limpia).
+  var bf = function (e, id) { return e.briefs.find(function (b) { return b.briefId === id; }); };
+  eq("brief · Ana: 2 briefs", ana.briefs.length, 2);
+  eq("brief · Ana bfV (tarea A) calidad = 8.9", bf(ana, "bfV").calidad, 8.9);
+  eq("brief · Ana bfV overall = 9.2", bf(ana, "bfV").overall, 9.2);
+  eq("brief · Ana bfP (tarea B, limpia) overall = 10", bf(ana, "bfP").overall, 10);
+  ok("brief · Ana bfV tarea A tuvo notas", bf(ana, "bfV").tareasDetalle[0].conNotas);
+  ok("brief · Ana bfP tarea B limpia", !bf(ana, "bfP").tareasDetalle[0].conNotas);
+  eq("brief · Ana bfP etiqueta = Brief 25/08", bf(ana, "bfP").briefLabel, "Brief 25/08");
+  eq("brief · Beto: 1 brief (sólo tarea A)", beto.briefs.length, 1);
+  eq("brief · Beto bfV overall = 9.2", bf(beto, "bfV").overall, 9.2);
 }
 
 // ── Evaluación v2: Resolución (rework fallido de H.Ü.E) + Eficiencia (rondas + cambios/ronda) ──
@@ -872,7 +883,7 @@ console.log("\n▶ evaluarEquipo() — Resolución + Eficiencia");
     [{ ideaId: "C", memberId: "m3" }],
     atr,
     [{ ideaId: "C", memberId: "m3", assignedAt: "2026-08-04T00:00:00Z" }],
-    [{ id: "C", completedAt: "2026-08-20T00:00:00Z" }],
+    [{ id: "C", completedAt: "2026-08-20T00:00:00Z", briefId: "bfC", briefLabel: "Brief 20/08", code: "CCC" }],
     P,
   );
   const caro = evs.find((e) => e.memberId === "m3");
@@ -886,6 +897,11 @@ console.log("\n▶ evaluarEquipo() — Resolución + Eficiencia");
   eq("evalv2 · Caro cambios/ronda = 4 (8 notas / 2 rondas)", caro.cambiosPorRonda, 4);
   eq("evalv2 · Caro eficiencia = 6.5 (rondas 2→7, cambios 4→6)", caro.eficiencia, 6.5);
   eq("evalv2 · Caro overall = 7.4 (0.7·7.78 + 0.3·6.5)", caro.overall, 7.4);
+  eq("evalv2 · Caro: 1 brief (bfC)", caro.briefs.length, 1);
+  eq("evalv2 · Caro brief overall = 7.4 (== mensual, 1 brief)", caro.briefs[0].overall, 7.4);
+  eq("evalv2 · Caro brief: 1 tarea", caro.briefs[0].tareas, 1);
+  ok("evalv2 · Caro brief tarea C tuvo notas", caro.briefs[0].tareasDetalle[0].conNotas);
+  eq("evalv2 · Caro brief tarea C code = CCC", caro.briefs[0].tareasDetalle[0].code, "CCC");
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

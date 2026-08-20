@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
-import type { EvalMiembro, ScoreCriterio, Track } from "@/lib/evaluacion";
+import { ChevronDown, FileText, Check } from "lucide-react";
+import type { EvalMiembro, ScoreCriterio, BriefEval, TareaEval, Track } from "@/lib/evaluacion";
 import { GRUPO_TONO, type GrupoCriterio } from "@/lib/tipos-cambio";
 import { chipTextColor } from "@/lib/vocab";
 import { cn } from "@/lib/utils";
@@ -92,30 +92,20 @@ function TarjetaMiembro({ m }: { m: EvalMiembro }) {
 
       {abierto && (
         <div className="border-t border-border p-4 pt-3">
-          {gruposDe(m.scorePorCriterio).map((g) => (
-            <div key={g.grupo} className="mb-3 last:mb-0">
-              <p className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                <span className="size-1.5 rounded-full" style={{ background: GRUPO_TONO[g.grupo] }} />
-                {g.grupoLabel}
-              </p>
-              <div className="space-y-1.5">
-                {g.items.map((s) => (
-                  <Barra key={s.slug} s={s} />
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {/* Métricas de proceso que alimentan Eficiencia (rondas + cambios/ronda) + ciclo.
-              En móvil se repiten Calidad/Eficiencia porque el encabezado las oculta. */}
-          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-3">
-            <div className="flex gap-6 sm:hidden">
-              <MiniScore label="Calidad" v={m.calidad} />
-              <MiniScore label="Eficiencia" v={m.eficiencia} />
-            </div>
-            <Stat label="rondas/tarea" value={fmt(m.rondasPorTarea)} />
-            <Stat label="cambios/ronda" value={fmt(m.cambiosPorRonda)} />
-            <Stat label="días (mediana)" value={fmt(m.cicloMedianoDias)} />
+          {/* La nota mensual, desglosada por BRIEF: cada brief con su propia nota; abre uno
+              para ver sus criterios y las tareas de las que salió. */}
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Nota por brief
+          </p>
+          <div className="space-y-2">
+            {m.briefs.map((b) => (
+              <BriefRow key={b.briefId} b={b} />
+            ))}
+          </div>
+          {/* Móvil: repetir Calidad/Eficiencia (el encabezado las oculta). */}
+          <div className="mt-3 flex gap-6 border-t border-border pt-3 sm:hidden">
+            <MiniScore label="Calidad" v={m.calidad} />
+            <MiniScore label="Eficiencia" v={m.eficiencia} />
           </div>
         </div>
       )}
@@ -208,6 +198,101 @@ function Vacio({ texto }: { texto: string }) {
     <div className="mx-auto max-w-md rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
       {texto}
     </div>
+  );
+}
+
+/** Un brief dentro del detalle de una persona: su nota (Cal/Efi/Overall), y al abrir, los
+ *  criterios de ese brief + las tareas de las que salió (chip verde = limpia, rojo = con notas). */
+function BriefRow({ b }: { b: BriefEval }) {
+  const [open, setOpen] = useState(false);
+  const conNotas = b.tareasDetalle.filter((t) => t.conNotas).length;
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-secondary/20">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-secondary/50"
+      >
+        <span className="grid size-6 shrink-0 place-items-center rounded-md bg-secondary text-muted-foreground">
+          <FileText className="size-3.5" />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-foreground">
+          {b.briefLabel}
+          <span className="ml-1.5 text-[10.5px] font-normal text-muted-foreground">
+            · {b.tareas} tarea{b.tareas === 1 ? "" : "s"}
+          </span>
+        </span>
+        <span className="hidden items-center gap-3 sm:flex">
+          <MiniScore label="Cal" v={b.calidad} />
+          <MiniScore label="Efi" v={b.eficiencia} />
+        </span>
+        <span
+          className="text-base font-extrabold tabular-nums"
+          style={{ color: b.overall != null ? scoreColor(b.overall) : "var(--muted-foreground)" }}
+        >
+          {fmt(b.overall)}
+        </span>
+        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="border-t border-border bg-card px-3 py-3">
+          {gruposDe(b.scorePorCriterio).map((g) => (
+            <div key={g.grupo} className="mb-2.5 last:mb-0">
+              <p className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <span className="size-1.5 rounded-full" style={{ background: GRUPO_TONO[g.grupo] }} />
+                {g.grupoLabel}
+              </p>
+              <div className="space-y-1.5">
+                {g.items.map((s) => (
+                  <Barra key={s.slug} s={s} />
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Las tareas de las que salió la nota — rojo = tuvo notas, verde = limpia. */}
+          <p className="mb-1.5 mt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {b.tareas} tarea{b.tareas === 1 ? "" : "s"} · {conNotas} con notas
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {b.tareasDetalle.map((t) => (
+              <TareaChip key={t.ideaId} t={t} />
+            ))}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-2.5">
+            <Stat label="rondas/tarea" value={fmt(b.rondasPorTarea)} />
+            <Stat label="cambios/ronda" value={fmt(b.cambiosPorRonda)} />
+            <Stat label="días (mediana)" value={fmt(b.cicloMedianoDias)} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Chip de una tarea del brief: rojo con punto = tuvo ≥1 nota; verde con check = limpia. */
+function TareaChip({ t }: { t: TareaEval }) {
+  const estilo = t.conNotas
+    ? {
+        background: "color-mix(in srgb, var(--status-corrections) 13%, transparent)",
+        color: "color-mix(in srgb, var(--status-corrections) 78%, #000)",
+      }
+    : {
+        background: "color-mix(in srgb, var(--status-completed) 12%, transparent)",
+        color: "color-mix(in srgb, var(--status-completed) 74%, #000)",
+      };
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold" style={estilo}>
+      {t.conNotas ? (
+        <span className="size-1.5 rounded-full" style={{ background: "currentColor" }} />
+      ) : (
+        <Check className="size-2.5" />
+      )}
+      {t.code ?? "—"}
+    </span>
   );
 }
 

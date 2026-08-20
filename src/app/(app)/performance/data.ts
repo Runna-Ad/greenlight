@@ -109,6 +109,16 @@ export async function cargarWorkload(): Promise<WorkloadMember[]> {
   });
 }
 
+/** Etiqueta de un brief: "Brief DD/MM" (por fecha), o su nombre, o su código. */
+function briefLabelDe(b: { brief_name: string | null; code: string | null; brief_date: string | null }): string {
+  if (b.brief_date) {
+    const d = new Date(b.brief_date);
+    if (!Number.isNaN(d.getTime()))
+      return `Brief ${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+  return b.brief_name || b.code || "Brief";
+}
+
 // ── Evaluación ──
 /**
  * Devuelve la Evaluación por especialista para el periodo. `tracks` = equipos
@@ -142,16 +152,23 @@ export async function cargarEvaluacion(
     qMiembros,
     db
       .from("ideas")
-      .select("id, completed_at")
+      .select("id, completed_at, brief_id, naming_base, code")
       .not("completed_at", "is", null)
       .gte("completed_at", periodo.desde)
       .lt("completed_at", periodo.hasta),
   ]);
 
-  const ideasRows = (ideasP ?? []) as { id: string; completed_at: string | null }[];
+  const ideasRows = (ideasP ?? []) as {
+    id: string;
+    completed_at: string | null;
+    brief_id: string;
+    naming_base: string | null;
+    code: string | null;
+  }[];
   const ideaIds = ideasRows.map((i) => i.id);
+  const briefIdsUniq = [...new Set(ideasRows.map((i) => i.brief_id).filter(Boolean))];
 
-  const [asigs, corrs, edits] = ideaIds.length
+  const [asigs, corrs, edits, briefsData] = ideaIds.length
     ? await Promise.all([
         db
           .from("idea_assignments")
@@ -175,8 +192,19 @@ export async function cargarEvaluacion(
           .order("at", { ascending: true })
           .order("id", { ascending: true })
           .then((r) => r.data ?? []),
+        // Etiquetas de los briefs de estas tareas (para el desglose por brief).
+        db
+          .from("briefs")
+          .select("id, brief_name, code, brief_date")
+          .in("id", briefIdsUniq)
+          .then((r) => r.data ?? []),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
+
+  const labelDe = new Map<string, string>();
+  for (const b of briefsData as { id: string; brief_name: string | null; code: string | null; brief_date: string | null }[]) {
+    labelDe.set(b.id, briefLabelDe(b));
+  }
 
   const miembrosIn: MiembroInput[] = ((miembros ?? []) as {
     id: string;
@@ -248,7 +276,13 @@ export async function cargarEvaluacion(
     .filter((a) => a.member_id)
     .map((a) => ({ ideaId: a.idea_id, memberId: a.member_id as string, assignedAt: a.assigned_at }));
 
-  const ideasIn: IdeaInput[] = ideasRows.map((i) => ({ id: i.id, completedAt: i.completed_at }));
+  const ideasIn: IdeaInput[] = ideasRows.map((i) => ({
+    id: i.id,
+    completedAt: i.completed_at,
+    briefId: i.brief_id,
+    briefLabel: labelDe.get(i.brief_id) ?? "Brief",
+    code: i.naming_base ?? i.code ?? null,
+  }));
 
   return evaluarEquipo(miembrosIn, autoria, correcciones, asigsIn, ideasIn, periodo);
 }

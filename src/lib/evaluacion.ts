@@ -57,7 +57,14 @@ export type CorreccionAtribuida = {
   reworkFallido: boolean;
 };
 export type AsignacionInput = { ideaId: string; memberId: string; assignedAt: string | null };
-export type IdeaInput = { id: string; completedAt: string | null };
+export type IdeaInput = {
+  id: string;
+  completedAt: string | null;
+  /** Brief de la tarea + su etiqueta legible + el código/naming (chip del desglose). */
+  briefId: string;
+  briefLabel: string;
+  code: string | null;
+};
 /** Ventana del reporte [desde, hasta) en ISO; `hasta` exclusivo. */
 export type Periodo = { desde: string; hasta: string };
 
@@ -73,12 +80,10 @@ export type ScoreCriterio = {
   tareasConCambio: number;
 };
 
-export type EvalMiembro = {
-  memberId: string;
-  name: string;
-  color: string;
-  track: Track;
-  /** Tareas evaluables (aprobadas en el mes) que esta persona AUTORÓ. */
+/** El bundle de puntaje de un CONJUNTO de tareas — el mes completo de un miembro, o las
+ *  tareas de UN brief. Mismo modelo binario + Eficiencia; sólo cambia el conjunto. */
+export type Puntaje = {
+  /** Tareas evaluables (aprobadas en el periodo) en este conjunto. */
   tareas: number;
   scorePorCriterio: ScoreCriterio[];
   /** Promedio de los 9 criterios binarios (8 de contenido + Resolución). 0–10. */
@@ -91,6 +96,29 @@ export type EvalMiembro = {
   cambiosPorRonda: number | null;
   cicloMedianoDias: number | null;
 };
+
+/** Una tarea del desglose por brief: su código + si tuvo ≥1 nota del autor (para el chip). */
+export type TareaEval = { ideaId: string; code: string | null; conNotas: boolean };
+
+/** El puntaje de un miembro en UN brief + de qué tareas salió. */
+export type BriefEval = Puntaje & {
+  briefId: string;
+  briefLabel: string;
+  tareasDetalle: TareaEval[];
+};
+
+export type EvalMiembro = Puntaje & {
+  memberId: string;
+  name: string;
+  color: string;
+  track: Track;
+  /** El mismo mes, agrupado por el brief de cada tarea (la nota mensual es el promedio
+   *  ponderado por nº de tareas de estos → reconcilian). Ordenado por nota desc. */
+  briefs: BriefEval[];
+};
+
+/** Acumulado de correcciones de UN autor en UNA tarea (categorías, rondas, total, fallo). */
+type CorrIdea = { cats: Set<string>; rondas: Set<number>; total: number; reworkFallido: boolean };
 
 // Compara instantes por valor numérico (los ISO de la app "…Z" y los de PostgREST
 // "…+00:00" NO ordenan igual como texto en el borde exacto del mes).
@@ -152,10 +180,94 @@ export function atribuirAutor(
 }
 
 /**
+ * Puntúa un CONJUNTO de tareas de un miembro (el mes completo, o las de un brief) con el
+ * mismo modelo binario + Eficiencia. Se reusa para el rollup mensual y para cada brief —
+ * así la nota mensual es, por construcción, el promedio ponderado (por nº de tareas) de las
+ * notas de brief. `misCorr`/`asig`/`completadaEnP` son los mapas del miembro.
+ */
+function puntuar(
+  ideaIds: string[],
+  misCorr: Map<string, CorrIdea>,
+  asig: Map<string, string | null>,
+  completadaEnP: Map<string, string>,
+): Puntaje {
+  const tareas = ideaIds.length;
+
+  // Los 8 criterios de CONTENIDO (binarios por tarea): 0 si hubo ≥1 nota de ese tipo en una
+  // sección que ÉL escribió, 10 si no.
+  let sumaContent = 0;
+  const scorePorCriterio: ScoreCriterio[] = CRITERIOS_PUNTUABLES.map((crit) => {
+    const conCambio = ideaIds.filter((id) => misCorr.get(id)?.cats.has(crit.slug)).length;
+    const raw = tareas ? ((tareas - conCambio) / tareas) * 10 : null;
+    if (raw != null) sumaContent += raw;
+    return {
+      slug: crit.slug,
+      label: crit.label,
+      grupo: crit.grupo,
+      grupoLabel: GRUPO_LABEL[crit.grupo],
+      score: raw == null ? null : round1(raw),
+      tareasConCambio: conCambio,
+    };
+  });
+
+  // Criterio SINTÉTICO "Resolución de cambios" (9º): 0 si alguna nota tuvo rework fallido.
+  const conFallo = ideaIds.filter((id) => misCorr.get(id)?.reworkFallido).length;
+  const resolRaw = tareas ? ((tareas - conFallo) / tareas) * 10 : null;
+  scorePorCriterio.push({
+    slug: "resolucion",
+    label: "Resolución de cambios",
+    grupo: "proceso",
+    grupoLabel: GRUPO_LABEL.proceso,
+    score: resolRaw == null ? null : round1(resolRaw),
+    tareasConCambio: conFallo,
+  });
+
+  const calidadRaw = tareas ? (sumaContent + (resolRaw ?? 0)) / (CRITERIOS_PUNTUABLES.length + 1) : null;
+
+  let totalRondas = 0;
+  let totalCambios = 0;
+  const ciclos: number[] = [];
+  for (const id of ideaIds) {
+    const c = misCorr.get(id);
+    if (c) {
+      totalRondas += c.rondas.size;
+      totalCambios += c.total;
+    }
+    const comp = completadaEnP.get(id);
+    const a = asig.get(id);
+    if (comp && a) {
+      const dias = (Date.parse(comp) - Date.parse(a)) / 86_400_000;
+      if (dias >= 0) ciclos.push(dias);
+    }
+  }
+  const mCiclo = mediana(ciclos);
+  const rondasRaw = tareas ? totalRondas / tareas : null;
+  const cambiosRaw = totalRondas ? totalCambios / totalRondas : null;
+  const scoreRondas = rondasRaw == null ? null : clamp10(10 - Math.max(0, rondasRaw - RONDA_IDEAL) * RONDA_PENAL);
+  const scoreCambios = cambiosRaw == null ? 10 : clamp10(10 - Math.max(0, cambiosRaw - CAMBIOS_IDEAL) * CAMBIOS_PENAL);
+  const eficienciaRaw = tareas ? ((scoreRondas ?? 10) + scoreCambios) / 2 : null;
+  const overall =
+    calidadRaw == null || eficienciaRaw == null
+      ? null
+      : round1(PESO_CALIDAD * calidadRaw + PESO_EFICIENCIA * eficienciaRaw);
+
+  return {
+    tareas,
+    scorePorCriterio,
+    calidad: calidadRaw == null ? null : round1(calidadRaw),
+    eficiencia: eficienciaRaw == null ? null : round1(eficienciaRaw),
+    overall,
+    rondasPorTarea: rondasRaw == null ? null : round1(rondasRaw),
+    cambiosPorRonda: cambiosRaw == null ? null : round1(cambiosRaw),
+    cicloMedianoDias: mCiclo == null ? null : round1(mCiclo),
+  };
+}
+
+/**
  * Evalúa a cada miembro de `miembros` (ya filtrados por el equipo visible) sobre
  * el `periodo`. Una tarea es evaluable para un miembro si él AUTORÓ ≥1 sección y
- * la idea fue APROBADA (completed_at) dentro del periodo. Un criterio le pone 0 en
- * una tarea sólo si hay un cambio de ese tipo en una sección que ÉL escribió.
+ * la idea fue APROBADA (completed_at) dentro del periodo. Devuelve la nota mensual +
+ * el desglose por brief (mismas tareas agrupadas por su brief).
  */
 export function evaluarEquipo(
   miembros: MiembroInput[],
@@ -166,8 +278,14 @@ export function evaluarEquipo(
   periodo: Periodo,
 ): EvalMiembro[] {
   const completadaEnP = new Map<string, string>();
+  const briefDe = new Map<string, string>(); // ideaId → briefId
+  const labelDe = new Map<string, string>(); // briefId → etiqueta
+  const codeDe = new Map<string, string | null>(); // ideaId → código/naming
   for (const i of ideas) {
     if (i.completedAt && enRango(i.completedAt, periodo)) completadaEnP.set(i.id, i.completedAt);
+    briefDe.set(i.id, i.briefId);
+    labelDe.set(i.briefId, i.briefLabel);
+    codeDe.set(i.id, i.code);
   }
 
   // miembro → tareas que AUTORÓ (dentro de las aprobadas en el periodo).
@@ -189,7 +307,6 @@ export function evaluarEquipo(
   }
 
   // miembro → ideaId → {cats, rondas, total, reworkFallido} de las correcciones EN SUS secciones.
-  type CorrIdea = { cats: Set<string>; rondas: Set<number>; total: number; reworkFallido: boolean };
   const corrDe = new Map<string, Map<string, CorrIdea>>();
   for (const c of correcciones) {
     if (!c.autorId || !completadaEnP.has(c.ideaId)) continue;
@@ -204,89 +321,39 @@ export function evaluarEquipo(
 
   return miembros.map((mem) => {
     const ideaIds = [...(tareasAutor.get(mem.id) ?? new Set<string>())];
-    const tareas = ideaIds.length;
     const misCorr = corrDe.get(mem.id) ?? new Map<string, CorrIdea>();
     const asig = asigDe.get(mem.id) ?? new Map<string, string | null>();
 
-    // Los 8 criterios de CONTENIDO (binarios por tarea): 0 si hubo ≥1 nota de ese tipo
-    // en una sección que ÉL escribió, 10 si no.
-    let sumaContent = 0;
-    const scorePorCriterio: ScoreCriterio[] = CRITERIOS_PUNTUABLES.map((crit) => {
-      const conCambio = ideaIds.filter((id) => misCorr.get(id)?.cats.has(crit.slug)).length;
-      const raw = tareas ? ((tareas - conCambio) / tareas) * 10 : null;
-      if (raw != null) sumaContent += raw;
-      return {
-        slug: crit.slug,
-        label: crit.label,
-        grupo: crit.grupo,
-        grupoLabel: GRUPO_LABEL[crit.grupo],
-        score: raw == null ? null : round1(raw),
-        tareasConCambio: conCambio,
-      };
-    });
+    // Nota MENSUAL: puntúa todas sus tareas del periodo.
+    const mensual = puntuar(ideaIds, misCorr, asig, completadaEnP);
 
-    // Criterio SINTÉTICO "Resolución de cambios" (binario por tarea): 0 si alguna nota del
-    // autor en esa tarea tuvo un rework fallido (el lead aplicó H.Ü.E sobre una nota ya
-    // atendida), 10 si no. Se cuenta como un 9º criterio de Calidad.
-    const conFallo = ideaIds.filter((id) => misCorr.get(id)?.reworkFallido).length;
-    const resolRaw = tareas ? ((tareas - conFallo) / tareas) * 10 : null;
-    scorePorCriterio.push({
-      slug: "resolucion",
-      label: "Resolución de cambios",
-      grupo: "proceso",
-      grupoLabel: GRUPO_LABEL.proceso,
-      score: resolRaw == null ? null : round1(resolRaw),
-      tareasConCambio: conFallo,
-    });
-
-    // Calidad = promedio de los 9 criterios binarios (8 de contenido + Resolución).
-    const calidadRaw = tareas ? (sumaContent + (resolRaw ?? 0)) / (CRITERIOS_PUNTUABLES.length + 1) : null;
-
-    let totalRondas = 0;
-    let totalCambios = 0;
-    const ciclos: number[] = [];
+    // Desglose POR BRIEF: agrupa sus tareas por el brief de cada una y puntúa cada grupo con
+    // EL MISMO modelo. Ordenado por nota desc; cada brief lista sus tareas (chip + si tuvo notas).
+    const porBrief = new Map<string, string[]>();
     for (const id of ideaIds) {
-      const c = misCorr.get(id);
-      if (c) {
-        totalRondas += c.rondas.size;
-        totalCambios += c.total;
-      }
-      const comp = completadaEnP.get(id);
-      const a = asig.get(id);
-      if (comp && a) {
-        const dias = (Date.parse(comp) - Date.parse(a)) / 86_400_000;
-        if (dias >= 0) ciclos.push(dias);
-      }
+      const bId = briefDe.get(id);
+      if (!bId) continue;
+      (porBrief.get(bId) ?? porBrief.set(bId, []).get(bId)!).push(id);
     }
-
-    const mCiclo = mediana(ciclos);
-    // Raw (sin redondear) para las curvas de Eficiencia; el display se redondea aparte.
-    const rondasRaw = tareas ? totalRondas / tareas : null;
-    const cambiosRaw = totalRondas ? totalCambios / totalRondas : null;
-    // Eficiencia: sub-nota por rondas y por cambios/ronda (curvas ajustables). Una tarea
-    // sin rondas (0 notas) puntúa 10 en ambas → Eficiencia 10.
-    const scoreRondas = rondasRaw == null ? null : clamp10(10 - Math.max(0, rondasRaw - RONDA_IDEAL) * RONDA_PENAL);
-    const scoreCambios = cambiosRaw == null ? 10 : clamp10(10 - Math.max(0, cambiosRaw - CAMBIOS_IDEAL) * CAMBIOS_PENAL);
-    const eficienciaRaw = tareas ? ((scoreRondas ?? 10) + scoreCambios) / 2 : null;
-
-    const overall =
-      calidadRaw == null || eficienciaRaw == null
-        ? null
-        : round1(PESO_CALIDAD * calidadRaw + PESO_EFICIENCIA * eficienciaRaw);
+    const briefs: BriefEval[] = [...porBrief.entries()]
+      .map(([briefId, ids]) => {
+        const pb = puntuar(ids, misCorr, asig, completadaEnP);
+        const tareasDetalle: TareaEval[] = ids.map((id) => ({
+          ideaId: id,
+          code: codeDe.get(id) ?? null,
+          conNotas: (misCorr.get(id)?.total ?? 0) > 0,
+        }));
+        return { briefId, briefLabel: labelDe.get(briefId) ?? "Brief", ...pb, tareasDetalle };
+      })
+      .sort((a, b) => (b.overall ?? -1) - (a.overall ?? -1));
 
     return {
       memberId: mem.id,
       name: mem.name,
       color: mem.color,
       track: mem.track,
-      tareas,
-      scorePorCriterio,
-      calidad: calidadRaw == null ? null : round1(calidadRaw),
-      eficiencia: eficienciaRaw == null ? null : round1(eficienciaRaw),
-      overall,
-      rondasPorTarea: rondasRaw == null ? null : round1(rondasRaw),
-      cambiosPorRonda: cambiosRaw == null ? null : round1(cambiosRaw),
-      cicloMedianoDias: mCiclo == null ? null : round1(mCiclo),
+      ...mensual,
+      briefs,
     };
   });
 }
