@@ -54,8 +54,27 @@ async function loadBoard(clienteSlug: string): Promise<BoardData | null> {
       .returns<{ id: string; title: string | null; source_tab: string | null }[]>(),
   ]);
 
+  // La vista board_tasks no expone delivered_at; lo traemos SÓLO para las tareas
+  // delivered (para que la columna Greenlit muestre las de ≤7 días). Consulta chica
+  // y acotada — sin migración (delivered_at ya existe en ideas, auto-estampado).
+  const rows = (tasks ?? []) as Task[];
+  const deliveredIds = rows.filter((t) => t.status === "delivered").map((t) => t.id);
+  let conFecha = rows;
+  if (deliveredIds.length) {
+    const { data: dd } = await db
+      .from("ideas")
+      .select("id, delivered_at")
+      .in("id", deliveredIds);
+    const fecha = new Map(
+      ((dd ?? []) as { id: string; delivered_at: string | null }[]).map((r) => [r.id, r.delivered_at]),
+    );
+    conFecha = rows.map((t) =>
+      t.status === "delivered" ? { ...t, deliveredAt: fecha.get(t.id) ?? null } : t,
+    );
+  }
+
   return {
-    tasks: tasks ?? [],
+    tasks: conFecha,
     members: members ?? [],
     briefs: (briefs ?? []).map((b) => ({ id: b.id, title: b.title, tab: b.source_tab })),
   };

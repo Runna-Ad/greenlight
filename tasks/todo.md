@@ -752,3 +752,24 @@ Deck del cliente (leído entero, 45 slides): docs.google.com/presentation/d/1A65
       topbar.tsx: avatar → DropdownMenu con "Mi perfil").
 - [x] Gates tsc·eslint·build·lib 328. Verificado LIVE (Greenlit en Entregas; Mi perfil abre desde avatar).
       PEDRO_OVERRIDE logueado (perfil/cuenta van en avatar, no en nav lateral).
+
+## 📋 PLAN (2026-08-20) — Board lifecycle completo + Entregas archivo [Pedro]
+Decisión: keep "Completado"→renombrar "Listo para enviar" (interno, teal, NO verde) + añadir
+"Con Cliente" (published, azul #2563a8, drag-lock) + "Greenlit" (delivered ≤7 días, verde neón).
+delivered_at YA existe (auto-stamp) → sin migración (verificar que el trigger vigente aún lo estampa).
+
+### Fase 1 — Board (Tablero) ✅ CONSTRUIDO + verificado live (SIN pushear)
+- [x] "Completado" → "Listo para enviar" (label del board), TEAL #0d9488 (no verde). boardLabel() helper.
+- [x] Columna "Con Cliente" (published), azul #2563a8, drag-lock (useDraggable disabled + sin grip; el
+      drop-in sigue = enviar a cliente; menú "Mover" del lead sigue). KANBAN_STATUSES += published,delivered.
+- [x] Columna "Greenlit" (delivered), verde neón #00e676, filtro delivered_at ≤7 días (esGreenlitReciente).
+      Loader trae delivered_at (query chica, sin migración — la vista board_tasks no lo exponía).
+- [x] Auto-colapso de columnas vacías → tira vertical (writing-mode) cuando !dragging; expande al arrastrar.
+- [x] Trigger delivered_at: verificado vigente (0009 lo estampa) + prod (1 delivered con fecha, ≤7d).
+- [x] Verificado live: 7 columnas, colores exactos, Con Cliente=2 / Greenlit=1, colapso OK. Gates verdes.
+- PENDIENTE: "ship it" (sin migración).
+
+### Fase 2 — Entregas como ARCHIVO
+- [ ] Tareas greenlit (delivered) con delivered_at > 7 días → aquí (salen del board).
+- [ ] Bundle por BRIEF (brief cards) expandibles → tareas dentro + fecha de greenlit c/u.
+- [ ] Abrir tarea (re-consultar / reabrir vía override, delivered no tiene transición normal).

@@ -59,11 +59,38 @@ export type Task = {
   brief_title: string | null;
   file_count: number;
   members: { id: string; name: string; color: string }[];
+  /** Cuándo se hizo Greenlit (delivered). Sólo lo trae el loader para tareas delivered;
+   *  la columna Greenlit muestra únicamente las de ≤7 días (el resto va a Entregas). */
+  deliveredAt?: string | null;
 };
 
 export type BriefOption = { id: string; title: string | null; tab: string | null };
 
 const ALL = "__todas__";
+
+// El tablero re-etiqueta y re-colorea las columnas del ciclo cliente (propio del board,
+// sin tocar STATUS_LABEL/STATUS_TOKEN globales que usan otras vistas): interno
+// "Listo para enviar" (teal, NO verde — el verde es sólo para aprobado/Greenlit),
+// "Con Cliente" (azul --status-published) y "Greenlit" (verde neón del logo).
+const BOARD_LABEL: Partial<Record<AssetStatus, string>> = {
+  completed: "Listo para enviar",
+  published: "Con Cliente",
+  delivered: "Greenlit",
+};
+/** Label del tablero: el propio (Con Cliente/Greenlit/Listo para enviar) o el global. */
+const boardLabel = (s: AssetStatus): string => BOARD_LABEL[s] ?? STATUS_LABEL[s];
+// Acentos propios (hex, para que <Pill color> mida el contraste). published no se
+// sobreescribe: su token --status-published ya es azul. Sólo completed→teal, delivered→neón.
+const BOARD_ACCENT: Partial<Record<AssetStatus, string>> = {
+  completed: "#0d9488", // teal — acción pendiente (listo para enviar), no aprobado
+  delivered: "#00e676", // verde neón del logo — Greenlit
+};
+
+const MS_7D = 7 * 24 * 60 * 60 * 1000;
+/** ¿Greenlit hace ≤7 días? Las más viejas salen del board y viven en Entregas-archivo. */
+function esGreenlitReciente(t: Task): boolean {
+  return !!t.deliveredAt && Date.now() - new Date(t.deliveredAt).getTime() <= MS_7D;
+}
 
 /**
  * The sheet's people colours are NOT all pastel — Sebas is #666666, Mony a
@@ -158,7 +185,7 @@ export function Board({
         cliente,
         task.id,
         to,
-        esOverride ? `${STATUS_LABEL[from]} → ${STATUS_LABEL[to]} fuera del flujo` : undefined,
+        esOverride ? `${boardLabel(from)} → ${boardLabel(to)} fuera del flujo` : undefined,
       );
       if (!res.ok) {
         setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: from } : t)));
@@ -235,7 +262,11 @@ export function Board({
               key={status}
               cliente={cliente}
               status={status}
-              tasks={visible.filter((t) => t.status === status)}
+              // La columna Greenlit (delivered) muestra SÓLO las de ≤7 días; las más
+              // viejas viven en Entregas-archivo. El resto de columnas, todo su estado.
+              tasks={visible.filter(
+                (t) => t.status === status && (status !== "delivered" || esGreenlitReciente(t)),
+              )}
               members={mayAssign ? members : undefined}
               dragging={dragging}
               mayOverride={mayOverride}
@@ -283,6 +314,10 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const token = STATUS_TOKEN[status];
+  // Label y acento propios del tablero (Con Cliente / Greenlit / Listo para enviar);
+  // el resto cae a los globales.
+  const accent = BOARD_ACCENT[status] ?? `var(--status-${token})`;
+  const label = boardLabel(status);
 
   // While dragging, say up front which columns this card can reach. The DB
   // enforces it either way; showing it beats an error toast after the drop.
@@ -293,6 +328,27 @@ function Column({
     dragging && mayOverride && !canMove(dragging.status, status);
   const isSource = dragging?.status === status;
 
+  // Auto-colapso (estilo Trello): una columna VACÍA se pliega a una tira delgada para
+  // ahorrar espacio horizontal. Durante un drag se expande (para poder soltar ahí).
+  const collapsed = tasks.length === 0 && !dragging;
+  if (collapsed) {
+    return (
+      <div
+        className="flex w-full shrink-0 items-center gap-2 rounded-lg border border-t-[3px] border-border bg-secondary/25 px-3 py-2 lg:w-11 lg:flex-col lg:justify-start lg:px-0 lg:py-3"
+        style={{ borderTopColor: accent }}
+        title={`${label} · 0`}
+      >
+        <span
+          className="text-[13px] font-semibold lg:tracking-wide lg:[writing-mode:vertical-rl]"
+          style={{ color: `color-mix(in srgb, ${accent} 78%, #000)` }}
+        >
+          {label}
+        </span>
+        <span className="text-[11px] tabular-nums text-muted-foreground lg:mt-1">0</span>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`w-full transition-opacity lg:w-72 lg:shrink-0 ${
@@ -302,19 +358,25 @@ function Column({
       <div
         className="flex items-center justify-between rounded-t-lg border-t-[3px] px-3 py-2"
         style={{
-          borderColor: `var(--status-${token})`,
-          backgroundColor: `color-mix(in srgb, var(--status-${token}) 8%, var(--card))`,
+          borderColor: accent,
+          backgroundColor: `color-mix(in srgb, ${accent} 8%, var(--card))`,
         }}
       >
         <span
           className="text-sm font-semibold"
-          style={{ color: `color-mix(in srgb, var(--status-${token}) 78%, #000)` }}
+          style={{ color: `color-mix(in srgb, ${accent} 78%, #000)` }}
         >
-          {STATUS_LABEL[status]}
+          {label}
         </span>
-        <Pill status={token as PillStatus} className="text-[11px]">
-          {tasks.length}
-        </Pill>
+        {BOARD_ACCENT[status] ? (
+          <Pill color={accent} fill="solid" className="text-[11px]">
+            {tasks.length}
+          </Pill>
+        ) : (
+          <Pill status={token as PillStatus} className="text-[11px]">
+            {tasks.length}
+          </Pill>
+        )}
       </div>
 
       <div
@@ -376,9 +438,13 @@ function TaskCard({
   onAssign: (t: Task, ids: string[]) => void;
   onMove?: (t: Task, to: AssetStatus) => void;
 }) {
+  // "Con Cliente" (published) queda DRAG-LOCKED: la tarjeta no se arrastra hacia
+  // adelante — el cliente la mueve desde el portal (aprobar / pedir cambios). Sí se
+  // puede SOLTAR una tarjeta EN esta columna (= enviar a cliente) porque el drop-target
+  // es la columna, no la tarjeta; y el lead conserva el menú "Mover" para overrides.
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: task.id,
-    disabled: !onMove,
+    disabled: !onMove || task.status === "published",
   });
 
   return (
@@ -392,7 +458,8 @@ function TaskCard({
         soyId={soyId}
         onAssign={onAssign}
         onMove={onMove}
-        handleProps={onMove ? { ...listeners, ...attributes } : undefined}
+        // Sin grip de arrastre en "Con Cliente" (drag-locked); el menú "Mover" (onMove) sí sigue.
+        handleProps={onMove && task.status !== "published" ? { ...listeners, ...attributes } : undefined}
       />
     </div>
   );
@@ -569,7 +636,7 @@ function CardBody({
                         className="size-2 rounded-full"
                         style={{ backgroundColor: `var(--status-${STATUS_TOKEN[to]})` }}
                       />
-                      {STATUS_LABEL[to]}
+                      {boardLabel(to)}
                     </button>
                   ))}
                 </>
@@ -592,7 +659,7 @@ function CardBody({
                         className="size-2 rounded-full opacity-60"
                         style={{ backgroundColor: `var(--status-${STATUS_TOKEN[to]})` }}
                       />
-                      {STATUS_LABEL[to]}
+                      {boardLabel(to)}
                     </button>
                   ))}
                 </>

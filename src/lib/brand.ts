@@ -10,13 +10,16 @@ export type AssetStatus =
   | "published"
   | "delivered";
 
-// The 5 internal kanban states (published/delivered live past the board).
+// El tablero muestra el ciclo COMPLETO: los 5 estados internos + "Con Cliente"
+// (published) + "Greenlit" (delivered ≤7 días; los más viejos viven en Entregas-archivo).
 export const KANBAN_STATUSES: AssetStatus[] = [
   "todo",
   "in_progress",
   "under_review",
   "in_corrections",
   "completed",
+  "published",
+  "delivered",
 ];
 
 export const STATUS_LABEL: Record<AssetStatus, string> = {
