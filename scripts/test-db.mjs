@@ -1587,5 +1587,37 @@ console.log("\n▶ rpc_import_planos — importar guión pegado");
   await db.exec(`delete from produccion.planos where idea_id='${IDEA}'`);
 }
 
+// ── 0039 S1 (reap): borrar un plano/estático borra sus correcciones ancladas ──
+// Sin FK en comments.target_fila_id, borrar/re-importar planos dejaba correcciones
+// huérfanas que jamás cerraban la ronda. El trigger BEFORE DELETE las limpia.
+console.log("\n▶ 0039 — correcciones huérfanas se limpian con su plano (S1)");
+{
+  const IDEA = "00000000-0000-0000-0000-0000000000d1";
+  const pid = await scalar(`insert into produccion.planos (idea_id, orden) values ($1, 91) returning id`, [IDEA]);
+  const otro = await scalar(`insert into produccion.planos (idea_id, orden) values ($1, 92) returning id`, [IDEA]);
+  await db.query(
+    `insert into produccion.comments (idea_id, body, kind, target_tabla, target_fila_id)
+     values ($1,'arregla esto','correction_request','planos',$2), ($1,'y esto','client_change','planos',$2)`,
+    [IDEA, pid],
+  );
+  await db.query(
+    `insert into produccion.comments (idea_id, body, kind, target_tabla, target_fila_id)
+     values ($1,'de otro plano','correction_request','planos',$2)`,
+    [IDEA, otro],
+  );
+  eq("2 correcciones ancladas antes de borrar el plano",
+     Number(await scalar(`select count(*) from produccion.comments where target_tabla='planos' and target_fila_id=$1`, [pid])), 2);
+  await db.query(`delete from produccion.planos where id=$1`, [pid]);
+  eq("borrar el plano borró SUS correcciones ancladas (trigger)",
+     Number(await scalar(`select count(*) from produccion.comments where target_tabla='planos' and target_fila_id=$1`, [pid])), 0);
+  eq("la corrección de OTRO plano quedó intacta",
+     Number(await scalar(`select count(*) from produccion.comments where target_tabla='planos' and target_fila_id=$1`, [otro])), 1);
+  eq("existe el trigger en planos",
+     Number(await scalar(`select count(*) from pg_trigger where tgname='before_delete_plano_correcciones'`)), 1);
+  eq("existe el trigger en estaticos",
+     Number(await scalar(`select count(*) from pg_trigger where tgname='before_delete_estatico_correcciones'`)), 1);
+  await db.query(`delete from produccion.planos where id=$1`, [otro]);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useTransition, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { keyCampo, type Correccion } from "@/lib/correcciones";
@@ -76,7 +76,8 @@ export function CorreccionesProvider({
   const [validando, startValidar] = useTransition();
   const [veredictos, setVeredictos] = useState<Map<string, VeredictoCambio>>(new Map());
 
-  const validar = () =>
+  const validar = useCallback(
+    () =>
     startValidar(async () => {
       const res = await validarCambios(ideaId);
       if (!res.ok) {
@@ -101,47 +102,58 @@ export function CorreccionesProvider({
         no ? `${no} sin hacer` : null,
       ].filter(Boolean);
       toast.success(`H.Ü.E revisó ${res.veredictos.length}: ${partes.join(" · ")}`);
-    });
+    }),
+    [ideaId],
+  );
 
-  const run = (p: Promise<{ ok: boolean; error?: string }>, okMsg?: string) =>
-    start(async () => {
-      const res = await p;
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo completar la acción.");
-        return;
-      }
-      if (okMsg) toast.success(okMsg);
-      router.refresh();
-    });
+  const run = useCallback(
+    (p: Promise<{ ok: boolean; error?: string }>, okMsg?: string) =>
+      start(async () => {
+        const res = await p;
+        if (!res.ok) {
+          toast.error(res.error ?? "No se pudo completar la acción.");
+          return;
+        }
+        if (okMsg) toast.success(okMsg);
+        router.refresh();
+      }),
+    [router],
+  );
 
-  const value: Ctx = {
-    ideaId,
-    clienteSlug,
-    marcaColor,
-    esRevisor,
-    esCliente: false,
-    esEquipo,
-    correcciones,
-    pendiente,
-    deCampo: (tabla, filaId, campo) => {
-      const k = keyCampo(tabla, filaId, campo);
-      return correcciones.filter(
-        (c) => keyCampo(c.targetTabla, c.targetFilaId, c.targetCampo) === k,
-      );
-    },
-    pedir: (t, body) => run(agregarCorreccion(ideaId, t, body), "Cambio fijado a " + t.label),
-    marcar: (id, estado) =>
-      run(
-        setEstadoCorreccion(ideaId, id, estado),
-        estado === "done" ? "Marcado como atendido" : estado === "closed" ? "Confirmado" : "Reabierto",
-      ),
-    confirmarCampo: (tabla, filaId, campo) =>
-      run(confirmarCampoAction(ideaId, tabla, filaId, campo), "Campo confirmado"),
-    descartar: (id) => run(descartarCorreccion(ideaId, id), "Corrección descartada"),
-    veredictos,
-    validando,
-    validar,
-  };
+  // El value se MEMOIZA: sin esto era un objeto nuevo cada render, y como cada Campo/
+  // CampoLectura del documento (30+ instancias) lo lee vía useCorrecciones(), cualquier
+  // cambio de estado del provider re-renderizaba TODO el documento (reap perf).
+  const value: Ctx = useMemo(
+    () => ({
+      ideaId,
+      clienteSlug,
+      marcaColor,
+      esRevisor,
+      esCliente: false,
+      esEquipo,
+      correcciones,
+      pendiente,
+      deCampo: (tabla, filaId, campo) => {
+        const k = keyCampo(tabla, filaId, campo);
+        return correcciones.filter(
+          (c) => keyCampo(c.targetTabla, c.targetFilaId, c.targetCampo) === k,
+        );
+      },
+      pedir: (t, body) => run(agregarCorreccion(ideaId, t, body), "Cambio fijado a " + t.label),
+      marcar: (id, estado) =>
+        run(
+          setEstadoCorreccion(ideaId, id, estado),
+          estado === "done" ? "Marcado como atendido" : estado === "closed" ? "Confirmado" : "Reabierto",
+        ),
+      confirmarCampo: (tabla, filaId, campo) =>
+        run(confirmarCampoAction(ideaId, tabla, filaId, campo), "Campo confirmado"),
+      descartar: (id) => run(descartarCorreccion(ideaId, id), "Corrección descartada"),
+      veredictos,
+      validando,
+      validar,
+    }),
+    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, correcciones, pendiente, veredictos, validando, validar, run],
+  );
 
   return <CorreccionesCtx.Provider value={value}>{children}</CorreccionesCtx.Provider>;
 }

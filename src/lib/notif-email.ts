@@ -11,21 +11,36 @@ export type DispatchResult = { sent: number; skipped: number; failed: number; si
  * Drena la cola de emails pendientes y los manda (Gmail SMTP, sender
  * unique@runna.com.mx). Se llama INLINE después de cada cambio de estado —
  * corre en el servidor de Vercel, así no depende de la frecuencia de un cron.
- * Idempotente: sólo toma filas 'pending' y las marca sent/skipped/failed.
+ * CLAIM atómico: reclama las filas (pending→sending) antes de mandar, así dos
+ * drains concurrentes reclaman conjuntos disjuntos y ninguna se manda dos veces
+ * (antes: select→send→update sin claim = doble envío bajo concurrencia; reap).
  */
 export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult> {
   if (!hasSupabase()) return { sent: 0, skipped: 0, failed: 0 };
   if (!hasEmail()) return { sent: 0, skipped: 0, failed: 0, sinConfig: true };
   const db = supabaseAdmin();
 
+  // 1) candidatos (los 'pending' más viejos), 2) CLAIM atómico. El UPDATE con
+  // `.eq('status','pending')` sólo pasa a 'sending' las que siguen pending y devuelve
+  // EXACTAMENTE las que esta corrida reclamó — el lock de fila de Postgres serializa
+  // el claim, así un segundo drain concurrente ve las suyas ya en 'sending' y no las toca.
   const { data: pend } = await db
     .from("notification_deliveries")
-    .select("id, notification_id")
+    .select("id")
     .eq("channel", "email")
     .eq("status", "pending")
     .order("created_at", { ascending: true })
     .limit(limit);
-  const rows = (pend ?? []) as { id: string; notification_id: string }[];
+  const candidatos = (pend ?? []) as { id: string }[];
+  if (!candidatos.length) return { sent: 0, skipped: 0, failed: 0 };
+
+  const { data: claimed } = await db
+    .from("notification_deliveries")
+    .update({ status: "sending" })
+    .eq("status", "pending")
+    .in("id", candidatos.map((r) => r.id))
+    .select("id, notification_id");
+  const rows = (claimed ?? []) as { id: string; notification_id: string }[];
   if (!rows.length) return { sent: 0, skipped: 0, failed: 0 };
 
   const notifIds = [...new Set(rows.map((r) => r.notification_id))];

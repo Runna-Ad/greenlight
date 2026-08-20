@@ -298,7 +298,10 @@ export async function importRows(
       }
 
       // ── remember it, so a future sync knows this row is done ──
-      await db.from("staged_rows").upsert(
+      // Este upsert ES el marcador de dedup. Si falla en silencio, la próxima sync no
+      // encuentra el registro y RE-IMPORTA la fila → tarea duplicada en prod. Antes se
+      // ignoraba su error; ahora se revisa y se avisa para reconciliar a mano (reap).
+      const { error: stErr } = await db.from("staged_rows").upsert(
         {
           client_id: client.id,
           source_tab: row.tab,
@@ -316,6 +319,11 @@ export async function importRows(
         },
         { onConflict: "client_id,natural_key" },
       );
+      if (stErr) {
+        res.errors.push(
+          `Se creó la tarea de «${v("Naming") || row.key}» pero no se pudo marcar como importada — re-sincronizar podría duplicarla. Revísalo: ${stErr.message}`,
+        );
+      }
     } catch (e) {
       res.errors.push(`${v("Naming") || row.key}: ${e instanceof Error ? e.message : String(e)}`);
     }

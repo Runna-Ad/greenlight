@@ -41,7 +41,11 @@ export async function cargarWorkload(): Promise<WorkloadMember[]> {
         .order("track", { ascending: true })
         .order("sort_order", { ascending: true }),
       db.from("idea_assignments").select("member_id, idea_id"),
-      db.from("ideas").select("id, status, brief_id"),
+      // Filtro de estado en SQL, no en JS: el enum sólo tiene 7 valores y ESTADOS_ACTIVOS
+      // == exactamente el complemento de TERMINALES (published/delivered), así que esto
+      // es equivalente al `!TERMINALES.has()` de abajo — sin traer ideas terminales (la
+      // tabla que más crece con el histórico). Verificado contra el enum (reap perf).
+      db.from("ideas").select("id, status, brief_id").in("status", ESTADOS_ACTIVOS),
       db.from("briefs").select("id, client_id"),
       db.from("clients").select("id, name, slug, brand_color"),
     ]);

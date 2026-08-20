@@ -13,7 +13,7 @@ import {
   Plus,
   Clock,
 } from "lucide-react";
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 
 import { Campo } from "./campo";
 import { CampoLectura } from "./campo-lectura";
@@ -162,13 +162,7 @@ export function DocumentoTarea({
                 </span>
               )}
               {!lectura && !soloLectura && (
-                <button
-                  onClick={() => onQuitarPlano(p.id)}
-                  aria-label={`Borrar plano ${p.orden}`}
-                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-background hover:text-status-corrections"
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
+                <BotonBorrarPlano orden={p.orden} onConfirm={() => onQuitarPlano(p.id)} />
               )}
             </div>
 
@@ -253,6 +247,48 @@ export function DocumentoTarea({
 }
 
 /** Un campo del documento: editable (Campo inline) o de lectura (oculto si vacío). */
+/**
+ * Borrar un plano es un DELETE duro sin deshacer (borra escena + todos sus campos +
+ * referencias). Confirmación en dos pasos (patrón del panel de correcciones) para que
+ * un clic accidental en el ícono de basura no destruya una escena entera.
+ */
+function BotonBorrarPlano({ orden, onConfirm }: { orden: number; onConfirm: () => void }) {
+  const [confirmando, setConfirmando] = useState(false);
+  if (confirmando) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1">
+        <span className="text-[10px] font-semibold text-muted-foreground">¿Borrar plano?</span>
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
+          style={{ background: "color-mix(in srgb, var(--status-corrections) 80%, #000)" }}
+        >
+          Sí
+        </button>
+        <button
+          type="button"
+          autoFocus
+          onClick={() => setConfirmando(false)}
+          className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-foreground hover:bg-background"
+        >
+          No
+        </button>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setConfirmando(true)}
+      aria-label={`Borrar plano ${orden}`}
+      className="shrink-0 rounded p-1 text-muted-foreground hover:bg-background hover:text-status-corrections"
+    >
+      <Trash2 className="size-3.5" />
+    </button>
+  );
+}
+
 function CampoDoc({
   modo,
   icono,

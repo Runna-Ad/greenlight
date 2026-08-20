@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, type ReactNode } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, RefreshCw, Clock } from "lucide-react";
@@ -35,6 +35,10 @@ export function PortalAcciones({
 }) {
   const router = useRouter();
   const [pend, start] = useTransition();
+  // Aprobar es la acción MÁS consecuente del portal (pasa a delivered + avisa al
+  // equipo, sin deshacer en la UI). Confirmación en dos pasos para que un toque
+  // accidental en la barra pegada no la dispare (Pedro / reap).
+  const [confirmando, setConfirmando] = useState(false);
   const corr = useCorrecciones();
   const n = corr?.correcciones.length ?? 0;
   const hayCambios = n > 0;
@@ -93,32 +97,58 @@ export function PortalAcciones({
         {ayuda}
       </p>
       {/* Un solo botón que se transforma — Aprobar ⇄ Pedir cambios. La transición
-          de color/tamaño le da el "click" de que algo cambió. */}
-      <button
-        type="button"
-        onClick={hayCambios ? enviar : aprobar}
-        disabled={pend}
-        className="group inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:brightness-110 hover:shadow-md active:scale-[0.98] disabled:opacity-60"
-        style={{
-          background: hayCambios
-            ? "color-mix(in srgb, var(--status-corrections) 82%, #000)"
-            : "color-mix(in srgb, var(--status-completed) 90%, #000)",
-        }}
-      >
-        {hayCambios ? (
-          <>
-            <RefreshCw className="size-4 transition-transform duration-500 group-hover:rotate-180" />
-            Pedir {n === 1 ? "cambio" : "cambios"}
-            <span className="ml-0.5 grid min-w-5 place-items-center rounded-full bg-white/25 px-1 text-xs tabular-nums">
-              {n}
-            </span>
-          </>
-        ) : (
-          <>
-            <Check className="size-4" /> Aprobar
-          </>
-        )}
-      </button>
+          de color/tamaño le da el "click" de que algo cambió. Pedir cambios es
+          reversible (va al equipo); Aprobar pide confirmación en dos pasos. */}
+      {hayCambios ? (
+        <button
+          type="button"
+          onClick={enviar}
+          disabled={pend}
+          className="group inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:brightness-110 hover:shadow-md active:scale-[0.98] disabled:opacity-60"
+          style={{ background: "color-mix(in srgb, var(--status-corrections) 82%, #000)" }}
+        >
+          <RefreshCw className="size-4 transition-transform duration-500 group-hover:rotate-180" />
+          Pedir {n === 1 ? "cambio" : "cambios"}
+          <span className="ml-0.5 grid min-w-5 place-items-center rounded-full bg-white/25 px-1 text-xs tabular-nums">
+            {n}
+          </span>
+        </button>
+      ) : confirmando ? (
+        <div className="inline-flex items-center gap-2">
+          <span className="hidden text-[13px] font-medium text-foreground sm:block">¿Aprobar esta idea?</span>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmando(false);
+              aprobar();
+            }}
+            disabled={pend}
+            autoFocus
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
+            style={{ background: "color-mix(in srgb, var(--status-completed) 90%, #000)" }}
+          >
+            <Check className="size-4" /> Sí, aprobar
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmando(false)}
+            disabled={pend}
+            className="rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmando(true)}
+          disabled={pend}
+          className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:brightness-110 hover:shadow-md active:scale-[0.98] disabled:opacity-60"
+          style={{ background: "color-mix(in srgb, var(--status-completed) 90%, #000)" }}
+        >
+          <Check className="size-4" /> Aprobar
+        </button>
+      )}
     </Barra>
   );
 }

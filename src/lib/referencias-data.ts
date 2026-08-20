@@ -16,19 +16,33 @@ type RefRow = {
   platform: string | null;
 };
 
-/** Firma la URL de una imagen (bucket privado) o deja el link del video tal cual. */
-async function firmar(db: Db, r: RefRow): Promise<RefVista> {
-  let displayUrl: string | null = r.kind === "video" ? r.url : null;
-  if (r.kind === "imagen" && r.storage_path) {
-    const { data } = await db.storage
-      .from("greenlight-referencias")
-      .createSignedUrl(r.storage_path, 60 * 60); // 1h
-    displayUrl = data?.signedUrl ?? null;
-  }
+/**
+ * Firma en LOTE todas las imágenes (bucket privado) con UNA sola llamada
+ * `createSignedUrls` en vez de una por imagen. Devuelve un mapa storage_path→URL.
+ * (Antes: N round-trips de Storage por render, en cada carga de página interna y del
+ * portal — reap perf.)
+ */
+async function firmarLote(db: Db, rows: RefRow[]): Promise<Map<string, string>> {
+  const urls = new Map<string, string>();
+  const paths = [
+    ...new Set(
+      rows.filter((r) => r.kind === "imagen" && r.storage_path).map((r) => r.storage_path as string),
+    ),
+  ];
+  if (!paths.length) return urls;
+  const { data } = await db.storage.from("greenlight-referencias").createSignedUrls(paths, 60 * 60); // 1h
+  for (const s of data ?? []) if (s.path && s.signedUrl) urls.set(s.path, s.signedUrl);
+  return urls;
+}
+
+/** RefRow → RefVista: link del video tal cual, imagen con su URL firmada del lote. */
+function aVista(r: RefRow, urls: Map<string, string>): RefVista {
+  const displayUrl =
+    r.kind === "video" ? r.url : r.storage_path ? urls.get(r.storage_path) ?? null : null;
   return { id: r.id, kind: r.kind, displayUrl, thumbnail: r.thumbnail_url, platform: r.platform };
 }
 
-/** Referencias por plano (imágenes firmadas + videos por link), firmadas en paralelo. */
+/** Referencias por plano (imágenes firmadas en lote + videos por link). */
 export async function cargarRefsPorPlano(
   db: Db,
   planoIds: string[],
@@ -41,14 +55,13 @@ export async function cargarRefsPorPlano(
     .in("plano_id", planoIds)
     .order("position")
     .returns<{ plano_id: string; references: RefRow | null }[]>();
-  const firmados = await Promise.all(
-    (data ?? []).map(async (v) => (v.references ? { plano_id: v.plano_id, ref: await firmar(db, v.references) } : null)),
-  );
-  for (const f of firmados) if (f) (out[f.plano_id] ??= []).push(f.ref);
+  const filas = (data ?? []).filter((v): v is { plano_id: string; references: RefRow } => !!v.references);
+  const urls = await firmarLote(db, filas.map((v) => v.references));
+  for (const v of filas) (out[v.plano_id] ??= []).push(aVista(v.references, urls));
   return out;
 }
 
-/** Referencias del estático, firmadas en paralelo. */
+/** Referencias del estático (imágenes firmadas en lote). */
 export async function cargarRefsEstatico(db: Db, estaticoId: string): Promise<RefVista[]> {
   const { data } = await db
     .from("estatico_references")
@@ -56,8 +69,7 @@ export async function cargarRefsEstatico(db: Db, estaticoId: string): Promise<Re
     .eq("estatico_id", estaticoId)
     .order("position")
     .returns<{ references: RefRow | null }[]>();
-  const firmados = await Promise.all(
-    (data ?? []).map(async (v) => (v.references ? await firmar(db, v.references) : null)),
-  );
-  return firmados.filter((x): x is RefVista => !!x);
+  const refs = (data ?? []).map((v) => v.references).filter((r): r is RefRow => !!r);
+  const urls = await firmarLote(db, refs);
+  return refs.map((r) => aVista(r, urls));
 }

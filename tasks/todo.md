@@ -1,5 +1,42 @@
 # Greenlight · by Rünna — Build Todo
 
+## 📋 PLAN (2026-08-19 noche, 4º) — Reap fixes: Quick wins + Perf + Integrity [Pedro] — SIN pushear
+De la reap full-platform (tasks/reap-2026-08-19.md). Pedro eligió 3 de 4 batches (Seguridad diferida).
+Orden: código primero (gate+ship), migración al final (PGlite → "ship it"). import.ts se toca UNA vez
+(el fix de error tragado se absorbe en el rewrite batched de perf).
+
+### Batch A — Quick wins (sin migración) — ✅ 5/6 (emoji diferido)
+- [x] panel-revisiones-cliente.tsx: botón "Ver" (teclado) añadido.
+- [x] Confirmación 2 pasos en las 3 acciones destructivas: borrar plano (BotonBorrarPlano),
+      Aprobar del cliente (portal-acciones), quitar referencia (RefThumb + group-focus-within a11y).
+- [x] topbar.tsx: avatar deriva iniciales de `soy` (ícono neutro sin soy) + aria-label; no más "PV".
+- [~] emoji-map: DIFERIDO — parseGuion/parseEstatico/contarPlanos (que el cliente corre en preview)
+      llaman a limpiarPegado→emojificar→EMOJI, así que se necesita en cliente; lazy = cascada async en
+      funciones puras con test de contrato → no es "quick win", va como tarea propia.
+- [x] (app)/error.tsx + global-error.tsx: pantallas de error en español + reintentar.
+
+### Batch B — Perf pass (sin migración) — ✅ (rewrite de import diferido)
+- [~] import.ts: rewrite completo del N+1 DIFERIDO (asignación de family/variant es stateful y el
+      archivo NO tiene tests → riesgo alto en prod). HECHO en su lugar: `maxDuration=60` en sync/page
+      (mitiga el timeout) + CHECK del error del upsert staged_rows (P1b: evita duplicados silenciosos).
+- [x] entregas/page.tsx: briefs/idea_assignments scopeados con .in(...) a las ideas cargadas.
+- [x] performance/data.ts: filtro ESTADOS_ACTIVOS en SQL (verificado == complemento de TERMINALES).
+- [x] referencias-data.ts: createSignedUrls batched (1 llamada) — firmarLote + aVista.
+- [x] contexto.tsx: useMemo del value + useCallback en run/validar del CorreccionesProvider.
+
+### Batch C — Correctness/integrity — ✅ S1 + email (migración 0039 + PGlite); S2/S3 diferidos
+- [x] S1: migración 0039 — trigger BEFORE DELETE en planos/estaticos borra correcciones ancladas
+      huérfanas (desbloquea el cierre de ronda). PGlite test añadido (test-db 245 pass).
+- [x] Email double-send: claim atómico en dispatchPendingEmails (pending→sending con .eq/.in/.select).
+- [~] S2: DIFERIDO — es decisión de PRODUCTO (¿las "pedir cambios" de board cuentan en la rúbrica y bajo
+      qué categoría?). No cambiar scoring sin decisión de Pedro.
+- [~] S3: DIFERIDO — advisory lock exige recrear VERBATIM 3 RPCs de lifecycle (0010/0034/0038) para
+      añadir 1 línea; race de baja probabilidad (equipo interno). Va como migración propia con test de
+      concurrencia, no apurada dentro de 0039.
+- Gates: tsc·eslint·build·lib 328·db 245·isolation 38. PENDIENTE "ship it": aplicar 0039
+      (`npm run migrate`, pin ybbrpqzbedaxsmotgtkh) ANTES del push del código.
+
+
 ## 🔧 CONSTRUIDO (2026-08-19 noche, 3º) — Vuelta al cliente: "cambios listos + dónde se hicieron" [Pedro] — SIN pushear
 Pedro: hizo el flujo, envió los cambios de vuelta al cliente, pero en el portal se ve SIN distinción
 — debería decir "cambios listos para revisar" y mostrar CLARAMENTE dónde se hicieron. Hoy: la tarea vuelve

@@ -99,6 +99,19 @@ export function PanelRevisionesCliente() {
                         >
                           <Check className="size-2.5" /> Aplicado
                         </span>
+                        {/* Control REAL (teclado): la tarjeta es un <div onClick> para el ratón,
+                            pero un cliente con teclado necesita un botón enfocable para saltar
+                            al campo — igual que el panel interno (correcciones/panel.tsx). */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            verCampo(c);
+                          }}
+                          className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          Ver <ArrowRight className="size-2.5" />
+                        </button>
                       </div>
                       {c.targetQuote && (
                         <p className="mb-0.5 flex flex-wrap items-center gap-1 text-[11px] italic text-muted-foreground">

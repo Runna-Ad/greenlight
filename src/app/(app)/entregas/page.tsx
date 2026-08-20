@@ -44,11 +44,16 @@ async function cargarEntregas(): Promise<ClienteEntregas[]> {
   }[];
   if (!rows.length) return [];
 
+  // Los lookups se ACOTAN a las ideas cargadas (antes traían TODOS los briefs y
+  // asignaciones de todos los clientes en cada carga — reap perf). clients/miembros
+  // son tablas de referencia pequeñas (por cliente / por miembro), se dejan íntegras.
+  const briefIds = [...new Set(rows.map((r) => r.brief_id))];
+  const ideaIds = rows.map((r) => r.id);
   const [{ data: briefs }, { data: clients }, { data: asigs }, { data: miembros }] =
     await Promise.all([
-      db.from("briefs").select("id, client_id"),
+      db.from("briefs").select("id, client_id").in("id", briefIds),
       db.from("clients").select("id, name, slug, brand_color").order("name"),
-      db.from("idea_assignments").select("member_id, idea_id"),
+      db.from("idea_assignments").select("member_id, idea_id").in("idea_id", ideaIds),
       db.from("track_members").select("id, name, color"),
     ]);
 

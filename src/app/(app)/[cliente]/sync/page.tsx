@@ -1,6 +1,11 @@
 import { SyncPanel } from "@/components/sync/sync-panel";
 import { getSyncMode } from "./actions";
 
+// La server action `importRows` hace una tanda de inserts por fila (todavía secuencial
+// — el rewrite batched está pendiente, ver tasks/reap). Un sheet grande (50-100 filas)
+// puede tardar; subimos el techo de Vercel a 60s para que no aborte a media importación.
+export const maxDuration = 60;
+
 export default async function SyncPage({
   params,
 }: {

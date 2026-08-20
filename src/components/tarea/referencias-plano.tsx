@@ -232,6 +232,10 @@ function Thumb({
   onQuitar: () => void;
 }) {
   const fondo = r.kind === "imagen" ? r.displayUrl : r.thumbnail;
+  // Quitar es un borrado duro; confirmación en dos pasos. La X se revela con hover
+  // Y con foco de teclado (group-focus-within) — antes sólo hover, inalcanzable por
+  // teclado y poco fiable en táctil (reap a11y + UI/UX).
+  const [confirmando, setConfirmando] = useState(false);
   return (
     <div className="group relative">
       <button
@@ -249,16 +253,39 @@ function Thumb({
           </span>
         )}
       </button>
-      {!soloLectura && (
-        <button
-          type="button"
-          onClick={onQuitar}
-          aria-label="Quitar referencia"
-          className="absolute -right-1 -top-1 hidden size-4 items-center justify-center rounded-full bg-status-corrections text-white group-hover:flex"
-        >
-          <X className="size-2.5" />
-        </button>
-      )}
+      {!soloLectura &&
+        (confirmando ? (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1 rounded-md bg-background/90 p-1 backdrop-blur-sm">
+            <span className="text-[9px] font-semibold text-foreground">¿Quitar?</span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={onQuitar}
+                className="rounded px-1.5 py-0.5 text-[9px] font-bold text-white"
+                style={{ background: "color-mix(in srgb, var(--status-corrections) 80%, #000)" }}
+              >
+                Sí
+              </button>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setConfirmando(false)}
+                className="rounded border border-border bg-card px-1.5 py-0.5 text-[9px] font-medium text-foreground"
+              >
+                No
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmando(true)}
+            aria-label="Quitar referencia"
+            className="absolute -right-1 -top-1 z-10 hidden size-5 items-center justify-center rounded-full bg-status-corrections text-white shadow-sm group-hover:flex group-focus-within:flex"
+          >
+            <X className="size-3" />
+          </button>
+        ))}
     </div>
   );
 }
