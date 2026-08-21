@@ -30,7 +30,7 @@ export function RequestForm() {
         <CheckCircle2 className="mx-auto size-6 text-[color:var(--greenlight)]" />
         <p className="mt-2 text-sm font-medium text-foreground">Tu solicitud fue enviada</p>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-          Recibirás un correo con tu enlace de acceso en cuanto un miembro del equipo la apruebe.
+          Recibirás un correo con tu enlace de acceso en cuanto H.Ü.E la apruebe.
         </p>
       </div>
     );

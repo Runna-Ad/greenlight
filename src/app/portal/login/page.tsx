@@ -33,14 +33,14 @@ export default async function PortalLoginPage({
       <div className="relative w-full max-w-sm animate-in fade-in zoom-in-95 duration-500">
         <div className="overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-white/10">
           <div className="flex flex-col items-center gap-3 border-b border-border bg-secondary/40 px-8 pt-8 pb-6">
-            <Image src="/brand/logo-h-color.png" alt="Rünna" width={132} height={33} className="h-8 w-auto" priority />
+            <Image src="/brand/logo-h-color.png" alt="Rünna" width={192} height={48} className="h-12 w-auto" priority />
             <Wordmark on="light" className="text-[24px]" />
           </div>
 
           <div className="px-8 py-7">
             <h1 className="text-center text-lg font-semibold text-foreground">Portal de clientes</h1>
             <p className="mt-1 text-center text-sm leading-relaxed text-muted-foreground">
-              Pide acceso a tu portal. Un miembro del equipo lo aprueba y te llega un enlace de entrada por correo.
+              Pide acceso a tu portal. H.Ü.E lo aprueba y te manda un enlace de entrada por correo.
             </p>
 
             {error && (

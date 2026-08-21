@@ -40,18 +40,18 @@ export default async function LoginPage({
             <Image
               src="/brand/logo-h-color.png"
               alt="Rünna"
-              width={132}
-              height={33}
-              className="h-8 w-auto"
+              width={192}
+              height={48}
+              className="h-12 w-auto"
               priority
             />
             <Wordmark on="light" className="text-[24px]" />
           </div>
 
           <div className="px-8 py-7">
-            <h1 className="text-center text-lg font-semibold text-foreground">Bienvenido de vuelta</h1>
+            <h1 className="text-center text-lg font-semibold text-foreground">Bienvenido</h1>
             <p className="mt-1 text-center text-sm leading-relaxed text-muted-foreground">
-              Producción de anuncios. Inicia sesión con tu cuenta de Rünna.
+              Smart production platform. H.Ü.E included.
             </p>
 
             {error && (
