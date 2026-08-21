@@ -1,5 +1,28 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 ACTIVE (2026-08-21) — TRACK A: live-test go-live Fases 2/3/4 en prod
+Go-live LIVE; Pedro logged in as master. Verificar los flujos construidos+reapeados end-to-end
+en producción (RLS aún abierta a propósito — el hardening es Track C, después). DONE = cada fase
+observada funcionando en vivo + verificada en la DB; cualquier bug → fix + lección.
+
+**Fase 4 — Marca CRUD (Admin → tab "Marcas") — EN CURSO:**
+- [ ] CREAR (happy): DiDi → "Nueva marca…" = "Test QA" → Agregar. Espera toast "creada" + fila.
+      VERIFY DB: marca nueva (client=DiDi, slug `test-qa`, 0 ideas/snippets/reglas).
+- [ ] GUARD borrar (negativo, NO destructivo): borrar **Card** (34 snippets) → espera toast
+      "Esta marca tiene tareas, legales o reglas…" y Card SIGUE. VERIFY: Card intacta en DB.
+- [ ] UNIQUE (opcional): crear "Card" de nuevo → espera "Ya existe una marca con ese nombre…".
+- [ ] BORRAR (happy): borrar "Test QA" (0 refs) → toast "borrada" + fila desaparece.
+      VERIFY DB: marcas de DiDi vuelven a 2 (Card, Préstamos).
+- [ ] Nota clave: el gate admin usa `getViewAs()` → confirma que tu identidad master autenticada
+      lee como admin post-cutover (si no, crearMarca diría "Sólo un admin crea marcas").
+**Fase 4 — User mgmt (Admin → tab "Equipo"):** add/edit + guard "sólo master borra admin" +
+guard "tiene historial → desactiva". (Después de marcas.)
+**Fase 3 — Brief fail-safe:** crear brief nombrando agency-person que no existe → prompt de alta + email.
+**Fase 2 — Client onboarding (el grande):** /portal/login pide acceso → aprobar en Admin →
+magic-link → clic → aterriza ligado al portal del cliente correcto. Usar cliente de PRUEBA.
+Guardrail: NO invitar clientes reales hasta terminar Track C (RLS lockdown).
+
+
 ## 📊 CONSTRUIDO (2026-08-20, 2º) — Evaluación: desglose POR BRIEF [Pedro, mockup aprobado] — SIN pushear
 Sobre la Evaluación v2: la nota mensual ahora se desglosa POR BRIEF. Persona → abre → una nota por
 brief (Cal/Efi/Overall) → abre un brief → sus criterios + las TAREAS de las que salió (chip rojo=con
