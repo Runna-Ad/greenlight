@@ -83,21 +83,37 @@ export async function importRows(
   // used to drop both — Asignación was read for the dedup key and then thrown
   // away. Resolve them here so a re-sync can't lose them again.
   const { data: memberRows } = await db
-    .from("track_members").select("id, name, track").eq("active", true);
-  const MEMBERS = (memberRows ?? []) as { id: string; name: string; track: string }[];
+    .from("track_members").select("id, name, track, role, es_lead").eq("active", true);
+  const MEMBERS = (memberRows ?? []) as {
+    id: string; name: string; track: string; role: string; es_lead: boolean;
+  }[];
+  // Pool de LEADS: el sheet trae al LEAD (dept head). Lead-capable = es_lead o rol
+  // lead/admin/master. (Pedro: a confirmar en test — Nils=admin califica.)
+  const LEADS = MEMBERS.filter(
+    (m) => m.es_lead || m.role === "lead" || m.role === "admin" || m.role === "master",
+  );
 
   const { data: marcaRows } = await db
     .from("marcas").select("id, name").eq("client_id", client.id);
   const MARCAS = (marcaRows ?? []) as { id: string; name: string }[];
 
-  /** "Galie, Mony" → the two member ids, matched within the row's own track. */
-  const resolveMembers = (raw: string, track: string): string[] =>
-    raw
-      .split(",")
-      .map((n) => fold(n))
-      .filter(Boolean)
-      .map((n) => MEMBERS.find((m) => m.track === track && fold(m.name) === n)?.id)
-      .filter((id): id is string => Boolean(id));
+  /**
+   * El lead del sheet → el track_member lead que le corresponde, con match INTELIGENTE:
+   * "Nils" (sheet) casa con "Nils Vera" (plataforma). Insensible a acento/caso (fold),
+   * por nombre completo, por prefijo ("nils " → "nils vera"), o por token. SÓLO si es
+   * INEQUÍVOCO (exactamente 1 candidato) — si "Nils" casara con dos leads se deja SIN
+   * lead (no adivinamos). Sin match → null → la tarea se crea igual, sin lead
+   * ("Falta responsable"), para asignar a mano. Los leads NUNCA se auto-crean (Pedro).
+   */
+  const matchLead = (raw: string): string | null => {
+    const fN = fold(raw.split(",")[0] ?? ""); // a futuro el sheet trae 1 lead; toma el 1º
+    if (!fN) return null;
+    const cands = LEADS.filter((m) => {
+      const fm = fold(m.name);
+      return fm === fN || fm.startsWith(`${fN} `) || fm.split(" ").includes(fN);
+    });
+    return cands.length === 1 ? cands[0].id : null;
+  };
 
   const resolveMarca = (raw: string): string | null =>
     MARCAS.find((m) => fold(m.name) === fold(raw))?.id ?? null;
@@ -167,14 +183,15 @@ export async function importRows(
       // La UI también avisa, pero esto es una server action: un POST público.
       // Antes se creaba la tarea y DESPUÉS se reportaba que faltaba la
       // Asignación — así entraron 2 tareas sin responsable a la base.
-      const faltan = missingRequired({ ...row.data, ...row.edited });
-
-      // Un nombre que el pool no conoce es tan inválido como la celda vacía:
-      // se comprueba ANTES de crear nada, no después.
-      const memberIds = resolveMembers(v("Asignación"), track);
-      if (!faltan.includes("Asignación") && memberIds.length === 0) {
-        faltan.push("Asignación");
-      }
+      // Asignación ya NO bloquea la creación: el sheet trae el LEAD, y si su nombre no
+      // hace match con el pool de leads, la tarea se crea IGUAL "sin lead" para
+      // asignarla a mano (decisión de Pedro). Se quita de los obligatorios SÓLO en
+      // este path de sync — ALWAYS_REQUIRED y su contract test quedan intactos.
+      const faltan = missingRequired({ ...row.data, ...row.edited }).filter(
+        (c) => c !== "Asignación",
+      );
+      // El lead con match inteligente ("Nils" → "Nils Vera"); null = sin lead.
+      const leadId = matchLead(v("Asignación"));
 
       if (faltan.length) {
         res.blocked.push({
@@ -250,12 +267,15 @@ export async function importRows(
 
       res.created++;
 
-      // ── people: "Asignación" is multi-person and carries no role ──
-      // memberIds ya se resolvió y validó arriba: si llegamos aquí, hay gente.
-      const { error: asgErr } = await db
-        .from("idea_assignments")
-        .insert(memberIds.map((member_id) => ({ idea_id: idea.id, member_id })));
-      if (asgErr) res.errors.push(`asignación de ${v("Naming")}: ${asgErr.message}`);
+      // ── lead ── el sheet trae al LEAD → idea_assignments con es_lead=true. Si no
+      // hubo match, la tarea queda SIN lead (se asigna a mano; luego el lead elige a
+      // los especialistas dentro de la app, es_lead=false — Fase 2).
+      if (leadId) {
+        const { error: asgErr } = await db
+          .from("idea_assignments")
+          .insert({ idea_id: idea.id, member_id: leadId, es_lead: true, assigned_by: actor.id });
+        if (asgErr) res.errors.push(`lead de ${v("Naming")}: ${asgErr.message}`);
+      }
 
       // ── assets: every Tamaño × Plataforma the row asks for ──
       // Un copy es texto: no tiene proporción ni archivo. El fallback de antes
