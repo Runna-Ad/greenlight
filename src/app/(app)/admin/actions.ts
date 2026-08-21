@@ -290,7 +290,9 @@ export async function estadoIntegraciones(): Promise<IntegracionesEstado> {
   const sheetConfigurado = Boolean(
     process.env.SHEETS_SCRIPT_URL && process.env.SHEETS_SCRIPT_SECRET,
   );
-  const notionConfigurado = Boolean(process.env.NOTION_TOKEN && process.env.NOTION_DB_ID);
+  // El ID de la página de legales es una constante en código (NOTION_LEGALES_PAGE_ID,
+  // override por env) — así basta con setear el NOTION_TOKEN (secreto) en Vercel.
+  const notionConfigurado = Boolean(process.env.NOTION_TOKEN);
 
   let ultimaSync: string | null = null;
   let tareasImportadas = 0;

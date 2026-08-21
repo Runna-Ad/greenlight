@@ -1,7 +1,13 @@
 "use client";
 
-import { FileSpreadsheet, KeyRound, BookText, CheckCircle2, XCircle } from "lucide-react";
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { FileSpreadsheet, KeyRound, BookText, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { IntegracionesEstado } from "@/lib/admin-tipos";
+import { sincronizarLegales } from "@/app/(app)/admin/legales-actions";
 
 function fecha(iso: string | null): string {
   if (!iso) return "nunca";
@@ -11,6 +17,24 @@ function fecha(iso: string | null): string {
 }
 
 export function IntegracionesTab({ estado }: { estado: IntegracionesEstado }) {
+  const router = useRouter();
+  const [pend, start] = useTransition();
+  const sync = () =>
+    start(async () => {
+      const r = await sincronizarLegales();
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      const partes = [`${r.nuevos} nuevos`, `${r.actualizados} actualizados`];
+      if (r.desactivados) partes.push(`${r.desactivados} desactivados`);
+      toast.success(`Legales sincronizados — ${partes.join(" · ")}`);
+      if (r.sinMarca.length) {
+        toast.warning(`${r.sinMarca.length} sin marca reconocible: ${r.sinMarca.join("; ")}`);
+      }
+      router.refresh();
+    });
+
   return (
     <div className="space-y-4">
       {/* Google Sheets */}
@@ -45,17 +69,33 @@ export function IntegracionesTab({ estado }: { estado: IntegracionesEstado }) {
         </ol>
       </section>
 
-      {/* Notion */}
+      {/* Notion — Legales */}
       <section className="gl-card rounded-xl border border-border bg-card p-4">
         <div className="flex items-center gap-2">
           <BookText className="size-4 text-muted-foreground" />
-          <h3 className="font-medium text-foreground">Notion — Biblioteca central</h3>
+          <h3 className="font-medium text-foreground">Notion — Legales</h3>
           <Pill on={estado.notionConfigurado} onLabel="Conectado" offLabel="Sin conectar" />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          Espejo de la biblioteca de legales/selling points desde Notion. Pendiente del token de
-          integración + el ID de la base (F6).
+          Notion es la fuente de verdad de los legales. Sincroniza para traer los últimos a la
+          Biblioteca, etiquetados por marca (Card / Préstamos). Los legales creados a mano no se tocan.
         </p>
+        <div className="mt-3 flex items-center gap-3 border-t border-border pt-3">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!estado.notionConfigurado || pend}
+            onClick={sync}
+            className="gap-1.5"
+          >
+            <RefreshCw className={cn("size-3.5", pend && "animate-spin")} />
+            {pend ? "Sincronizando…" : "Sincronizar"}
+          </Button>
+          {!estado.notionConfigurado && (
+            <span className="text-[11px] text-muted-foreground">Falta NOTION_TOKEN en el entorno.</span>
+          )}
+        </div>
       </section>
     </div>
   );
