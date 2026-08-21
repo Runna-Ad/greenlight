@@ -393,6 +393,33 @@ export async function alternarSnippetActivo(id: string, active: boolean): Promis
   return { ok: true };
 }
 
+/**
+ * Borra un snippet de la biblioteca (HARD delete). Sólo admin+. Guarda de uso: si
+ * está atado a alguna tarea (idea_snippets) se BLOQUEA — quítalo de esas tareas o
+ * desactívalo primero (mismo patrón que eliminarMarca; no se pierde trabajo en
+ * silencio). Nota: un legal que sigue en Notion RE-APARECE en el próximo sync —
+ * para retirarlo de forma permanente, bórralo también en Notion.
+ */
+export async function eliminarSnippet(id: string): Promise<SnipGuardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin edita la biblioteca." };
+  const db = supabaseAdmin();
+  const { count } = await db
+    .from("idea_snippets")
+    .select("idea_id", { count: "exact", head: true })
+    .eq("snippet_id", id);
+  if ((count ?? 0) > 0) {
+    return {
+      ok: false,
+      error: `Está en uso en ${count} tarea(s). Quítalo de ellas o desactívalo antes de borrarlo.`,
+    };
+  }
+  const { error } = await db.from("snippets").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
 // ── Marcas: logos de sub-marca ─────────────────────────────
 // Un cliente tiene varias marcas (DiDi → Card / Préstamos), cada una con su
 // logo. El logo se muestra en la cabecera de la tarea (marcas.logo_url). El

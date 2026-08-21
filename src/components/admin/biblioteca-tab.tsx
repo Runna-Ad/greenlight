@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -25,6 +25,7 @@ import {
   alternarSnippetActivo,
   crearSnippet,
   editarSnippet,
+  eliminarSnippet,
 } from "@/app/(app)/admin/actions";
 
 type Edicion =
@@ -41,8 +42,20 @@ export function BibliotecaTab({
 }) {
   const [snippets, setSnippets] = useState<SnippetRow[]>(inicial);
   const [edicion, setEdicion] = useState<Edicion>(null);
+  const [confirmarId, setConfirmarId] = useState<string | null>(null);
 
   const marcaName = (id: string | null) => marcas.find((m) => m.id === id)?.name ?? null;
+
+  async function borrar(s: SnippetRow) {
+    const r = await eliminarSnippet(s.id);
+    setConfirmarId(null);
+    if (!r.ok) {
+      toast.error(r.error ?? "No se pudo borrar.");
+      return;
+    }
+    setSnippets((xs) => xs.filter((x) => x.id !== s.id));
+    toast.success("Borrado");
+  }
 
   async function toggle(s: SnippetRow, active: boolean) {
     setSnippets((xs) => xs.map((x) => (x.id === s.id ? { ...x, active } : x)));
@@ -109,6 +122,31 @@ export function BibliotecaTab({
                         onCheckedChange={(v) => toggle(s, v)}
                         aria-label="Activo"
                       />
+                      {confirmarId === s.id ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            aria-label="Cancelar"
+                            onClick={() => setConfirmarId(null)}
+                            className="rounded p-1 text-muted-foreground hover:bg-secondary"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                          <Button type="button" size="xs" variant="destructive" onClick={() => borrar(s)}>
+                            Borrar
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label="Borrar"
+                          title="Borrar"
+                          onClick={() => setConfirmarId(s.id)}
+                          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-secondary hover:text-destructive"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Plus, X, Scale } from "lucide-react";
+import { BookOpen, Plus, X, Scale, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { alternarSnippet } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { CampoIntake } from "./campo-intake";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import type { Sugerencia } from "@/lib/legal-sugerido";
 
 export type LegalSnippet = { id: string; title: string; body: string };
 
@@ -25,6 +26,7 @@ export function CortinillaCierre({
   legalesLibres,
   seleccionados,
   biblioteca,
+  sugerencia,
   soloLectura,
 }: {
   ideaId: string;
@@ -32,10 +34,23 @@ export function CortinillaCierre({
   seleccionados: LegalSnippet[];
   /** Legales de la biblioteca que aún NO están en esta tarea. */
   biblioteca: LegalSnippet[];
+  /** Legal determinista sugerido para este guión (Phase B). */
+  sugerencia?: Sugerencia;
   soloLectura?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
+  // Phase B — resuelve el legal sugerido (y alternativas) contra las listas que ya
+  // tenemos. Se muestra sólo si hay uno y no estás en sólo-lectura.
+  const todos = [...seleccionados, ...biblioteca];
+  const principal = sugerencia?.principalId
+    ? todos.find((l) => l.id === sugerencia.principalId) ?? null
+    : null;
+  const principalYaEsta = principal ? seleccionados.some((s) => s.id === principal.id) : false;
+  const alternativas = (sugerencia?.alternativaIds ?? [])
+    .map((id) => biblioteca.find((l) => l.id === id))
+    .filter((l): l is LegalSnippet => Boolean(l));
 
   const alternar = (snippetId: string, activar: boolean) =>
     startTransition(async () => {
@@ -87,6 +102,51 @@ export function CortinillaCierre({
               </li>
             ))}
           </ul>
+        )}
+
+        {/* Phase B — legal sugerido para este guión (determinista; el humano confirma). */}
+        {!soloLectura && principal && (
+          <div className="mb-3 rounded-lg border border-primary/30 bg-primary/[0.06] px-3 py-2.5">
+            <div className="flex items-start gap-2">
+              <Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1">
+                {principalYaEsta ? (
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    <span className="font-semibold text-primary">Sugerido para este guión</span> — ya está adjunto:{" "}
+                    {principal.title}.{sugerencia?.motivo ? ` ${sugerencia.motivo}` : ""}
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-[11px] leading-snug text-foreground">
+                      <span className="font-semibold text-primary">Sugerido para este guión:</span> {principal.title}
+                      {sugerencia?.motivo ? (
+                        <span className="text-muted-foreground"> — {sugerencia.motivo}</span>
+                      ) : null}
+                    </p>
+                    <Button size="xs" className="mt-1.5" disabled={pending} onClick={() => alternar(principal.id, true)}>
+                      <Plus className="size-3" /> Adjuntar
+                    </Button>
+                  </>
+                )}
+                {alternativas.length > 0 && (
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    ¿Es promoción?{" "}
+                    {alternativas.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        disabled={pending}
+                        onClick={() => alternar(a.id, true)}
+                        className="font-medium text-primary underline-offset-2 hover:underline"
+                      >
+                        Usa «{a.title}»
+                      </button>
+                    ))}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Agregar desde la biblioteca */}

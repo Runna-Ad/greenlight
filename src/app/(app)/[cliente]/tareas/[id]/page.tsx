@@ -18,6 +18,7 @@ import { HeroTarea } from "@/components/tarea/hero-tarea";
 import { TabsTarea } from "@/components/tarea/tabs-tarea";
 import { BannerPegarGuion } from "@/components/tarea/banner-pegar-guion";
 import { DocumentoGuion } from "@/components/tarea/documento-guion";
+import { legalSugerido } from "@/lib/legal-sugerido";
 import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
 import type { RefVista } from "@/components/tarea/referencias-plano";
@@ -338,6 +339,20 @@ export default async function TareaPage({
   const legalesSeleccionados = (bibliotecaLegal ?? []).filter((s) => seleccionadosIds.has(s.id));
   const legalesDisponibles = (bibliotecaLegal ?? []).filter((s) => !seleccionadosIds.has(s.id));
 
+  // Phase B — legal sugerido para este guión (determinista, por marca). Se computa
+  // sobre el guión GUARDADO (la fuente legalmente relevante); el humano confirma.
+  const guionTexto = [
+    idea.concepto,
+    idea.peloteo_raw,
+    ...planos.flatMap((p) => [p.titulo, p.accion, p.copy_in, p.sfx, p.gfx, p.edicion, p.dialogo]),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const sugerenciaLegal = legalSugerido(marca?.slug ?? null, guionTexto, [
+    ...legalesSeleccionados,
+    ...legalesDisponibles,
+  ]);
+
   const autorIds = [...new Set((corrRows ?? []).map((r) => r.author_member_id).filter(Boolean) as string[])];
   const { data: autores } = autorIds.length
     ? await db.from("track_members").select("id, name").in("id", autorIds).returns<{ id: string; name: string }[]>()
@@ -523,6 +538,7 @@ export default async function TareaPage({
                   legalesLibres: idea.legales_libres,
                   seleccionados: legalesSeleccionados,
                   biblioteca: legalesDisponibles,
+                  sugerencia: sugerenciaLegal,
                 }}
               />
             </div>

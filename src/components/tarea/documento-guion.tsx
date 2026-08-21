@@ -7,6 +7,7 @@ import { agregarPlano, borrarPlano } from "@/app/(app)/[cliente]/tareas/[id]/act
 import { PLACEHOLDER_ESTATICO, placeholdersGuion } from "@/lib/plantilla";
 import { DocumentoTarea } from "./documento-tarea";
 import { CortinillaCierre, type LegalSnippet } from "./cortinilla-cierre";
+import type { Sugerencia } from "@/lib/legal-sugerido";
 import { type RefVista } from "./referencias-plano";
 import { useWorkspace } from "./workspace-provider";
 import type { PlanoVista, EstaticoVista } from "./preview-slide";
@@ -37,6 +38,7 @@ export function DocumentoGuion({
     legalesLibres: string | null;
     seleccionados: LegalSnippet[];
     biblioteca: LegalSnippet[];
+    sugerencia: Sugerencia;
   };
 }) {
   const { verCliente, planos, setPlanos, estatico, setEstatico } = useWorkspace();
@@ -90,6 +92,7 @@ export function DocumentoGuion({
           legalesLibres={cortinilla.legalesLibres}
           seleccionados={cortinilla.seleccionados}
           biblioteca={cortinilla.biblioteca}
+          sugerencia={cortinilla.sugerencia}
           // En "Vista cliente" los legales también son de lectura (el preview
           // debe verse como lo del cliente, y no editar legales por accidente).
           soloLectura={soloLectura || verCliente}
