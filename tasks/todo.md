@@ -43,6 +43,42 @@ del cliente (fijar/quitar/enviar cambios). Pedro no quiere que un usuario de age
       (permite master) en las 4 acciones. Neto: lead/creative fuera · admin VE read-only · master +
       client actúan. tsc/lint OK. Falta live-verify: master full (Pedro), admin read-only (Nils).
 
+## 📥 (2026-08-21) Notion → Legales (sync + reglas + H.Ü.E) — APROBADO, en PoC
+Fuente: página Notion (NO database) "Legales DiDi Préstamos & Card"
+(id `201724f6-221e-8045-ace4-db7b6e590863`), conexión "Greenlight" (read-only) ya la comparte.
+Es TEXTO → pull = PARSEAR bloques, no query. Estructura (de screenshots de Pedro):
+2 toggles de marca (DiDi Préstamos / DiDi Card) → cada legal es un label subrayado + su cuerpo.
+Los 5 legales + su trigger:
+  P1 Préstamos general (Consulta) · P2 Préstamos promoción (*Aplican; trigger: promo)
+  C3 Card general (Consulta; trigger: ni CASHBACK ni MSI) · C4 Card CASHBACK (*Aplican; trigger: "CASHBACK")
+  C5 Card MSI (Aplican SIN *; trigger: "MSI" sin CASHBACK)
+⚠️ C3/C4/C5 idénticos salvo las últimas 2 palabras (Consulta/*Aplican/Aplican) + el ASTERISCO
+es significativo → pull VERBATIM, preservar `*`, sin "limpieza" de IA (fact-shaped).
+Insight: los triggers son DETERMINISTAS (keyword CASHBACK/MSI/promo) → encajan en el motor
+`reglas` (cond_texto_contiene + cond_marca_slug); H.Ü.E = red de seguridad, no el decisor.
+Fases: A) sync legales→snippets con marca_id + pill en Biblioteca (el picker por-marca en la tarea
+YA existe, page.tsx:305). B) reglas keyword→legal (motor reglas ya existe). C) H.Ü.E sugiere en casos borrosos, human-confirm.
+Sync: key estable = notion block/page id (edit→update, no duplica); borrado en Notion→desactivar.
+- [ ] PoC read-only: `scratchpad/notion-legales-poc.mjs` (fetch plano, GET, no dep, no imprime token).
+      BLOQUEA EN: Pedro añade `NOTION_TOKEN=...` a `.env.local` (yo nunca lo veo) → corro
+      `node --env-file=.env.local` → volcamos el árbol de bloques real y confirmamos el parser.
+
+## 👥 (2026-08-21) Asignación de 2 niveles (lead + especialista) — EN CURSO
+Modelo (Pedro): el sheet trae el LEAD (a futuro sólo el lead). El lead luego elige
+especialista(s) del pool DENTRO de la plataforma. Esquema YA lo soporta:
+`idea_assignments.es_lead` (bool) + role + assigned_by; la página de tarea ya lee es_lead.
+Bug de raíz: el picker de Asignación sale de `vocab.ts ASIGNACION` (lista HARDCODEADA de 14
+nombres pre-reset) en vez del pool vivo (`track_members`) → nadie real hace match → "no asignado".
+Decisiones Pedro: (1) leads NO se auto-crean — si el nombre del sheet NO hace match con un lead
+del pool → tarea se crea IGUAL marcada "sin lead" (manual), NO bloquea. (2) matching INTELIGENTE:
+"Nils" (sheet) = "Nils Vera" (plataforma); insensible a acento/caso; SÓLO si es inequívoco.
+- [ ] FASE 1 (sync/import.ts, acotado): pool con role+es_lead; matchLead inteligente (exact/prefix/
+      token, unambiguous); match→es_lead=true+assigned_by; sin match→crear igual sin lead; dejar de
+      bloquear por Asignación (sólo en el path de sync; ALWAYS_REQUIRED queda igual + su contract test).
+      ASUNCIÓN a confirmar en test: lead pool = role lead/admin/master o es_lead (Nils=admin califica).
+- [ ] FASE 2: retirar vocab.ts ASIGNACION → picker in-task del pool vivo; el lead asigna especialistas (es_lead=false).
+
+
 
 
 ## 📊 CONSTRUIDO (2026-08-20, 2º) — Evaluación: desglose POR BRIEF [Pedro, mockup aprobado] — SIN pushear
