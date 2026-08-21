@@ -56,12 +56,20 @@ Los 5 legales + su trigger:
 es significativo → pull VERBATIM, preservar `*`, sin "limpieza" de IA (fact-shaped).
 Insight: los triggers son DETERMINISTAS (keyword CASHBACK/MSI/promo) → encajan en el motor
 `reglas` (cond_texto_contiene + cond_marca_slug); H.Ü.E = red de seguridad, no el decisor.
-Fases: A) sync legales→snippets con marca_id + pill en Biblioteca (el picker por-marca en la tarea
-YA existe, page.tsx:305). B) reglas keyword→legal (motor reglas ya existe). C) H.Ü.E sugiere en casos borrosos, human-confirm.
+Fases: A) sync legales→snippets con marca_id. **YA EXISTE** (no construir): el PILL de marca en
+Biblioteca (biblioteca-tab.tsx:89-93, hoy ya muestra "Card" en el legal actual), el SELECTOR de
+marca en el editor, y el PICKER por-marca en la tarea (page.tsx:305). Lo ÚNICO que falta de A = el
+SYNC de Notion (poblar los otros 4 legales con su marca). B) reglas keyword→legal (motor reglas ya
+existe). C) H.Ü.E sugiere en casos borrosos, human-confirm. (Opcional: colorear los pills por marca.)
 Sync: key estable = notion block/page id (edit→update, no duplica); borrado en Notion→desactivar.
-- [ ] PoC read-only: `scratchpad/notion-legales-poc.mjs` (fetch plano, GET, no dep, no imprime token).
-      BLOQUEA EN: Pedro añade `NOTION_TOKEN=...` a `.env.local` (yo nunca lo veo) → corro
-      `node --env-file=.env.local` → volcamos el árbol de bloques real y confirmamos el parser.
+- [x] PoC read-only + verify: parser corrido contra el doc EN VIVO (transpile de notion-legales-parse.ts)
+      → 5 legales verbatim (asteriscos/Consulta/*Aplican/Aplican intactos) + 1 nota. Estructura del doc:
+      Préstamos anida el cuerpo como HIJO del label subrayado; Card usa bulleted_list_item HERMANO.
+- [x] FASE A construida + shippeada (mig 0043 `notion_block_id` aplicada; parser puro + fetch server-only;
+      `sincronizarLegales()` upsert por block-id + desactiva removidos, no toca los manuales; botón
+      "Sincronizar" en Integraciones; `notionConfigurado`=Boolean(NOTION_TOKEN)).
+      PENDIENTE: (a) Pedro añade NOTION_TOKEN a Vercel; (b) click Sincronizar en prod → verificar 5
+      legales en DB; (c) desactivar el manual dup "Legal CAT — Card"; (d) Fase B (reglas keyword→legal), Fase C (H.Ü.E).
 
 ## 👥 (2026-08-21) Asignación de 2 niveles (lead + especialista) — EN CURSO
 Modelo (Pedro): el sheet trae el LEAD (a futuro sólo el lead). El lead luego elige
