@@ -5,22 +5,44 @@ Go-live LIVE; Pedro logged in as master. Verificar los flujos construidos+reapea
 en producción (RLS aún abierta a propósito — el hardening es Track C, después). DONE = cada fase
 observada funcionando en vivo + verificada en la DB; cualquier bug → fix + lección.
 
-**Fase 4 — Marca CRUD (Admin → tab "Marcas") — EN CURSO:**
-- [ ] CREAR (happy): DiDi → "Nueva marca…" = "Test QA" → Agregar. Espera toast "creada" + fila.
-      VERIFY DB: marca nueva (client=DiDi, slug `test-qa`, 0 ideas/snippets/reglas).
-- [ ] GUARD borrar (negativo, NO destructivo): borrar **Card** (34 snippets) → espera toast
-      "Esta marca tiene tareas, legales o reglas…" y Card SIGUE. VERIFY: Card intacta en DB.
-- [ ] UNIQUE (opcional): crear "Card" de nuevo → espera "Ya existe una marca con ese nombre…".
-- [ ] BORRAR (happy): borrar "Test QA" (0 refs) → toast "borrada" + fila desaparece.
-      VERIFY DB: marcas de DiDi vuelven a 2 (Card, Préstamos).
-- [ ] Nota clave: el gate admin usa `getViewAs()` → confirma que tu identidad master autenticada
-      lee como admin post-cutover (si no, crearMarca diría "Sólo un admin crea marcas").
-**Fase 4 — User mgmt (Admin → tab "Equipo"):** add/edit + guard "sólo master borra admin" +
-guard "tiene historial → desactiva". (Después de marcas.)
+**Fase 4 — Marca CRUD (Admin → tab "Marcas") — ✅ PASÓ (2026-08-21):**
+- [x] CREAR (happy): Test QA creada; VERIFY DB OK (client=DiDi, slug `test-qa`, 0 refs).
+- [x] GUARD borrar (negativo): borrar **Card** (34 snippets) → refusado; Card intacta en DB. ✅
+- [ ] UNIQUE (opcional, no corrido): crear "Card" duplicada → "Ya existe…". (skip, no crítico.)
+- [x] BORRAR (happy): Test QA borrada; VERIFY DB: DiDi de vuelta a 2 (Card, Préstamos). ✅
+- [x] Gate admin (`getViewAs`) lee master autenticado como admin — confirmado (crear/borrar pasaron).
+- [x] BUG UX pescado+arreglado+shipped [257c3fe]: dos papeleras idénticas por fila (quitar-logo vs
+      borrar-marca) → quitar-logo pasó a ✕ en la miniatura; 1 papelera = borrar marca. Lección logueada.
+**Fase 4 — User mgmt (Admin → tab "Equipo") — ✅ PASÓ (2026-08-21):**
+- [x] add/edit/delete happy path — Pedro lo verificó él mismo (Test Persona, sin problemas).
+- [~] Guards cross-role ("sólo master edita/borra admin") + historial ("tiene trabajo → desactiva"):
+      CODE-VERIFIED (leí ambos guards en la función, no sólo el botón). Live-verify en TRACK C
+      ("verify from the user's seat") — necesita 2º asiento admin (Nils) o historial sembrado.
+- Nota: roster real = Runna Advertising (master, Pedro) + Nils Vera (admin, nils@runna.com.mx) —
+  Pedro añadió a Nils a propósito (no es gap del reset).
 **Fase 3 — Brief fail-safe:** crear brief nombrando agency-person que no existe → prompt de alta + email.
 **Fase 2 — Client onboarding (el grande):** /portal/login pide acceso → aprobar en Admin →
 magic-link → clic → aterriza ligado al portal del cliente correcto. Usar cliente de PRUEBA.
 Guardrail: NO invitar clientes reales hasta terminar Track C (RLS lockdown).
+
+## 🔒 (2026-08-21) Portal cliente = master+admin only (Pedro) — EN CURSO
+El item "Portal" del sidebar (`/{slug}/portal`) NO es preview — es el portal FUNCIONAL
+del cliente (fijar/quitar/enviar cambios). Pedro no quiere que un usuario de agencia actúe
+"como el cliente" por accidente. La preview ya existe (Vista cliente/editor en la tarea).
+- Decisión Pedro: dejar acceso a **master + admin** (quitar a **lead**); gatear server-side.
+- HALLAZGO: el write-path YA está a salvo — las 3 acciones del portal
+  (`clienteFijar/Quitar/EnviarCambios`) exigen `esSesionDelCliente()` = `role==='client'`
+  + clientId==slug → un rol de agencia (incl. master/admin) NO puede escribir como cliente.
+  Y la PÁGINA ya gatea con `canSee(role,'portal')` (server component) → quitar 'portal' de
+  lead cierra nav + ruta de una.
+- [x] roles.ts: quitar 'portal' de `lead` (master/admin siguen por NAV_ALL; client intacto).
+- [x] Vista de agencia READ-ONLY (Pedro: master queda TOTALMENTE abierto para reproducir quejas):
+      `puedeActuar = master || (client && suyo)` calculado en page.tsx → pasa a PortalTarea →
+      (a) provider `editable = puedeActuar && published` (apaga select→cambio), (b) PortalAcciones
+      barra de sólo-lectura si `!puedeActuar`. Server: `esSesionDelCliente`→`puedeActuarComoCliente`
+      (permite master) en las 4 acciones. Neto: lead/creative fuera · admin VE read-only · master +
+      client actúan. tsc/lint OK. Falta live-verify: master full (Pedro), admin read-only (Nils).
+
 
 
 ## 📊 CONSTRUIDO (2026-08-20, 2º) — Evaluación: desglose POR BRIEF [Pedro, mockup aprobado] — SIN pushear
