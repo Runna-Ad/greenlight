@@ -314,3 +314,90 @@ export async function setAssignees(
   after(() => dispatchPendingEmails());
   return { ok: true };
 }
+
+/**
+ * Asigna una tarea en DOS niveles de una sola vez: un LEAD (es_lead=true) y sus
+ * ESPECIALISTAS (es_lead=false). Reemplaza el conjunto completo (diff para
+ * preservar assigned_at, igual que setAssignees). Enforcea la regla de negocio en
+ * el SERVIDOR (no confía en la UI): sólo personas ACTIVAS del MISMO track de la
+ * tarea, y con el rol correcto — lead = rol `lead`, especialistas = rol `creative`.
+ * Admins/master NO son asignables (no son "doers"). Funciona aunque la tarea no
+ * tenga a nadie (arregla el hueco de "sin lead, no se puede asignar después").
+ */
+export async function asignarTarea(
+  ideaId: string,
+  leadId: string | null,
+  especialistaIds: string[],
+): Promise<ActionResult> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const { role } = await context();
+  if (!canAssign(role)) return { ok: false, error: "Este rol no puede asignar." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+
+  const db = supabaseAdmin();
+
+  const { data: idea } = await db
+    .from("ideas").select("track").eq("id", ideaId).maybeSingle<{ track: string }>();
+  const track = idea?.track ?? null;
+
+  // Validación de rol+track (la frontera REAL, no sólo el filtro de la UI).
+  const ids = [...(leadId ? [leadId] : []), ...especialistaIds];
+  const dedupIds = [...new Set(ids)];
+  if (dedupIds.length) {
+    const { data: rows } = await db
+      .from("track_members")
+      .select("id, role, track, active")
+      .in("id", dedupIds)
+      .returns<{ id: string; role: string; track: string; active: boolean }[]>();
+    const byId = new Map((rows ?? []).map((m) => [m.id, m]));
+    if (leadId) {
+      const m = byId.get(leadId);
+      if (!m || !m.active || m.role !== "lead" || m.track !== track) {
+        return { ok: false, error: "El lead debe ser un Lead activo del track de la tarea." };
+      }
+    }
+    for (const eid of especialistaIds) {
+      const m = byId.get(eid);
+      if (!m || !m.active || m.role !== "creative" || m.track !== track) {
+        return { ok: false, error: "Los especialistas deben ser del track de la tarea." };
+      }
+    }
+  }
+
+  // DIFF (preserva assigned_at de quien sigue) sobre el conjunto deseado completo.
+  const deseado = new Set(dedupIds);
+  const { data: actuales, error: readErr } = await db
+    .from("idea_assignments")
+    .select("member_id")
+    .eq("idea_id", ideaId)
+    .not("member_id", "is", null)
+    .returns<{ member_id: string }[]>();
+  if (readErr) return { ok: false, error: readErr.message };
+  const ya = new Set((actuales ?? []).map((r) => r.member_id));
+  const quitar = [...ya].filter((id) => !deseado.has(id));
+  const agregar = [...deseado].filter((id) => !ya.has(id));
+
+  if (quitar.length) {
+    const { error } = await db
+      .from("idea_assignments").delete().eq("idea_id", ideaId).in("member_id", quitar);
+    if (error) return { ok: false, error: error.message };
+  }
+  if (agregar.length) {
+    const { error } = await db
+      .from("idea_assignments").insert(agregar.map((member_id) => ({ idea_id: ideaId, member_id })));
+    if (error) return { ok: false, error: error.message };
+  }
+
+  // Sella es_lead: todos a false, el lead a true.
+  await db.from("idea_assignments").update({ es_lead: false }).eq("idea_id", ideaId);
+  if (leadId) {
+    await db
+      .from("idea_assignments").update({ es_lead: true })
+      .eq("idea_id", ideaId).eq("member_id", leadId);
+  }
+
+  await revalidateFor(db, ideaId);
+  after(() => dispatchPendingEmails());
+  return { ok: true };
+}

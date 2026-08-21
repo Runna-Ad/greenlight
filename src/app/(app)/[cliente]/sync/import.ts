@@ -87,11 +87,10 @@ export async function importRows(
   const MEMBERS = (memberRows ?? []) as {
     id: string; name: string; track: string; role: string; es_lead: boolean;
   }[];
-  // Pool de LEADS: el sheet trae al LEAD (dept head). Lead-capable = es_lead o rol
-  // lead/admin/master. (Pedro: a confirmar en test — Nils=admin califica.)
-  const LEADS = MEMBERS.filter(
-    (m) => m.es_lead || m.role === "lead" || m.role === "admin" || m.role === "master",
-  );
+  // Pool de LEADS del sheet: SÓLO rol `lead` (dept head). Admins/master son globales,
+  // no son doers → no asignables como lead (Pedro 2026-08-21). Se matchea DENTRO del
+  // track de la fila.
+  const LEADS = MEMBERS.filter((m) => m.role === "lead");
 
   const { data: marcaRows } = await db
     .from("marcas").select("id, name").eq("client_id", client.id);
@@ -105,10 +104,11 @@ export async function importRows(
    * lead (no adivinamos). Sin match → null → la tarea se crea igual, sin lead
    * ("Falta responsable"), para asignar a mano. Los leads NUNCA se auto-crean (Pedro).
    */
-  const matchLead = (raw: string): string | null => {
+  const matchLead = (raw: string, track: string): string | null => {
     const fN = fold(raw.split(",")[0] ?? ""); // a futuro el sheet trae 1 lead; toma el 1º
     if (!fN) return null;
     const cands = LEADS.filter((m) => {
+      if (m.track !== track) return false; // atado al track de la tarea
       const fm = fold(m.name);
       return fm === fN || fm.startsWith(`${fN} `) || fm.split(" ").includes(fN);
     });
@@ -195,8 +195,8 @@ export async function importRows(
       const faltan = missingRequired({ ...row.data, ...row.edited }).filter(
         (c) => c !== "Asignación",
       );
-      // El lead con match inteligente ("Nils" → "Nils Vera"); null = sin lead.
-      const leadId = matchLead(v("Asignación"));
+      // El lead con match inteligente ("Nils" → "Nils Vera"), dentro del track; null = sin lead.
+      const leadId = matchLead(v("Asignación"), track);
 
       if (faltan.length) {
         res.blocked.push({

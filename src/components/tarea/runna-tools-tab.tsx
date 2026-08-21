@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ExternalLink, Crown, Check, Pencil } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ExternalLink, Crown, Check, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
-import { setLeads } from "@/app/(app)/[cliente]/tablero/actions";
+import { asignarTarea } from "@/app/(app)/[cliente]/tablero/actions";
 import { guardarConsideraciones } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { combinarConsideraciones } from "@/lib/consideraciones";
 import { CampoIntake } from "./campo-intake";
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Pill } from "@/components/ui/pill";
 
 export type Persona = { id: string; name: string; color: string; es_lead: boolean };
+export type PoolPersona = { id: string; name: string; color: string };
 
 /**
  * La pestaña "Rünna tools" (mockup): la info INTERNA de la tarea — jamás la ve
@@ -32,6 +34,9 @@ export function RunnaToolsTab({
   comentariosCreativo,
   peloteo,
   puedeEditar,
+  puedeAsignar,
+  leadsPool,
+  especialistasPool,
   soloLectura,
 }: {
   ideaId: string;
@@ -43,6 +48,11 @@ export function RunnaToolsTab({
   peloteo: string | null;
   /** El lead edite (leads + link); el especialista sólo lee esos. */
   puedeEditar: boolean;
+  /** Puede cambiar la asignación (lead/admin/master). */
+  puedeAsignar: boolean;
+  /** Pool vivo por rol+track (lead/creative de este track) para el editor. */
+  leadsPool: PoolPersona[];
+  especialistasPool: PoolPersona[];
   /** Estado cerrado (bloquea Consideraciones para quien no es lead). */
   soloLectura: boolean;
 }) {
@@ -54,22 +64,47 @@ export function RunnaToolsTab({
     <div className="grid gap-x-8 gap-y-6 md:grid-cols-2">
       {/* Columna izquierda: gente + consideraciones */}
       <div className="space-y-4">
-        <GrupoPersonas titulo="Lead asignado" personas={leads} vacio="Sin lead marcado" />
-        <div className="space-y-1.5">
+        {/* Asignación — Lead + Especialistas del pool VIVO por rol+track (Phase 2).
+            Editable por lead/admin/master; funciona aunque no haya nadie asignado
+            (arregla el hueco de "sin lead → no se podía asignar después"). */}
+        <div className="space-y-2.5">
           <div className="flex items-center gap-1.5">
             <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-              Team asignado
+              Asignación
             </p>
-            {puedeEditar && personas.length > 0 && (
-              <EditorLeads ideaId={ideaId} personas={personas} />
+            {puedeAsignar && (
+              <EditorAsignacion
+                ideaId={ideaId}
+                leadActual={leads[0] ?? null}
+                especialistasActuales={team}
+                leadsPool={leadsPool}
+                especialistasPool={especialistasPool}
+              />
             )}
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {team.length === 0 ? (
-              <span className="text-[11px] text-muted-foreground/70">Sin equipo</span>
-            ) : (
-              team.map((p) => <ChipPersona key={p.id} persona={p} />)
-            )}
+          <div>
+            <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+              Lead
+            </p>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {leads.length === 0 ? (
+                <span className="text-[11px] text-muted-foreground/70">Sin lead marcado</span>
+              ) : (
+                leads.map((p) => <ChipPersona key={p.id} persona={p} />)
+              )}
+            </div>
+          </div>
+          <div>
+            <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+              Especialistas
+            </p>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {team.length === 0 ? (
+                <span className="text-[11px] text-muted-foreground/70">Sin equipo</span>
+              ) : (
+                team.map((p) => <ChipPersona key={p.id} persona={p} />)
+              )}
+            </div>
           </div>
         </div>
 
@@ -128,29 +163,6 @@ export function RunnaToolsTab({
   );
 }
 
-function GrupoPersonas({
-  titulo,
-  personas,
-  vacio,
-}: {
-  titulo: string;
-  personas: Persona[];
-  vacio: string;
-}) {
-  return (
-    <div>
-      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{titulo}</p>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        {personas.length === 0 ? (
-          <span className="text-[11px] text-muted-foreground/70">{vacio}</span>
-        ) : (
-          personas.map((p) => <ChipPersona key={p.id} persona={p} />)
-        )}
-      </div>
-    </div>
-  );
-}
-
 function ChipPersona({ persona }: { persona: Persona }) {
   return (
     <Pill color={persona.color} dot={!persona.es_lead}>
@@ -161,14 +173,34 @@ function ChipPersona({ persona }: { persona: Persona }) {
 }
 
 /** Marcar quién es lead entre los asignados. No agrega gente (eso es el tablero). */
-function EditorLeads({ ideaId, personas }: { ideaId: string; personas: Persona[] }) {
+/**
+ * Editor de asignación (Phase 2): elige el LEAD (uno, del pool de Leads de este
+ * track) y los ESPECIALISTAS (varios, del pool de Especialistas del track). Guarda
+ * ambos de una vez con `asignarTarea`, que re-valida rol+track en el SERVIDOR.
+ * Funciona aunque la tarea no tenga a nadie asignado.
+ */
+function EditorAsignacion({
+  ideaId,
+  leadActual,
+  especialistasActuales,
+  leadsPool,
+  especialistasPool,
+}: {
+  ideaId: string;
+  leadActual: Persona | null;
+  especialistasActuales: Persona[];
+  leadsPool: PoolPersona[];
+  especialistasPool: PoolPersona[];
+}) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [sel, setSel] = useState<Set<string>>(
-    new Set(personas.filter((p) => p.es_lead).map((p) => p.id)),
+  const [leadId, setLeadId] = useState<string | null>(leadActual?.id ?? null);
+  const [esp, setEsp] = useState<Set<string>>(
+    new Set(especialistasActuales.map((p) => p.id)),
   );
 
-  const alternar = (id: string) =>
-    setSel((prev) => {
+  const toggleEsp = (id: string) =>
+    setEsp((prev) => {
       const s = new Set(prev);
       if (s.has(id)) s.delete(id);
       else s.add(id);
@@ -177,44 +209,102 @@ function EditorLeads({ ideaId, personas }: { ideaId: string; personas: Persona[]
 
   const guardar = () =>
     startTransition(async () => {
-      const res = await setLeads(ideaId, [...sel]);
-      if (!res.ok) toast.error(res.error ?? "No se pudo guardar.");
-      else toast.success("Leads actualizados.");
+      const res = await asignarTarea(ideaId, leadId, [...esp]);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo asignar.");
+        return;
+      }
+      toast.success("Asignación guardada.");
+      router.refresh();
     });
+
+  const hayAlgo = Boolean(leadActual) || especialistasActuales.length > 0;
 
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground">
-          <Pencil className="size-3" /> Marcar leads
+          <UserPlus className="size-3" /> {hayAlgo ? "Editar" : "Asignar"}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-2" align="start">
-        <p className="mb-1.5 px-1 text-[10px] text-muted-foreground">
-          ¿Quién es lead de esta tarea?
+      <PopoverContent className="w-64 p-2" align="start">
+        <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Lead <span className="font-normal normal-case text-muted-foreground/60">· uno</span>
         </p>
-        <ul className="space-y-0.5">
-          {personas.map((p) => (
-            <li key={p.id}>
+        {leadsPool.length === 0 ? (
+          <p className="px-1 py-1 text-[11px] text-muted-foreground/70">
+            No hay Leads en este track.
+          </p>
+        ) : (
+          <ul className="space-y-0.5">
+            <li>
               <button
-                onClick={() => alternar(p.id)}
+                onClick={() => setLeadId(null)}
                 className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-secondary"
               >
-                <span
-                  className="flex size-4 items-center justify-center rounded border"
-                  style={{ borderColor: p.color }}
-                >
-                  {sel.has(p.id) && <Check className="size-3" style={{ color: p.color }} />}
-                </span>
-                {p.name}
+                <Radio activo={leadId === null} />
+                Sin lead
               </button>
             </li>
-          ))}
-        </ul>
+            {leadsPool.map((l) => (
+              <li key={l.id}>
+                <button
+                  onClick={() => setLeadId(l.id)}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-secondary"
+                >
+                  <Radio activo={leadId === l.id} />
+                  <Crown className="size-3" style={{ color: l.color }} /> {l.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <p className="mb-1 mt-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Especialistas <span className="font-normal normal-case text-muted-foreground/60">· varios</span>
+        </p>
+        {especialistasPool.length === 0 ? (
+          <p className="px-1 py-1 text-[11px] text-muted-foreground/70">
+            No hay Especialistas en este track.
+          </p>
+        ) : (
+          <ul className="max-h-40 space-y-0.5 overflow-y-auto">
+            {especialistasPool.map((e) => (
+              <li key={e.id}>
+                <button
+                  onClick={() => toggleEsp(e.id)}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-secondary"
+                >
+                  <span
+                    className="flex size-4 items-center justify-center rounded border"
+                    style={{ borderColor: e.color }}
+                  >
+                    {esp.has(e.id) && <Check className="size-3" style={{ color: e.color }} />}
+                  </span>
+                  {e.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
         <Button size="sm" className="mt-2 w-full" disabled={pending} onClick={guardar}>
-          Guardar
+          Guardar asignación
         </Button>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Círculo estilo radio (lead = uno solo). */
+function Radio({ activo }: { activo: boolean }) {
+  return (
+    <span
+      className={`flex size-4 shrink-0 items-center justify-center rounded-full border ${
+        activo ? "border-primary bg-primary" : "border-muted-foreground/40"
+      }`}
+    >
+      {activo && <span className="size-1.5 rounded-full bg-white" />}
+    </span>
   );
 }

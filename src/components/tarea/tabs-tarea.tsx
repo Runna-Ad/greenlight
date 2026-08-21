@@ -17,6 +17,7 @@ type DetallesProps = {
   trend: string | null;
 };
 
+type PoolPersona = { id: string; name: string; color: string };
 type RunnaProps = {
   personas: Persona[];
   entregaUrl: string | null;
@@ -24,6 +25,11 @@ type RunnaProps = {
   comentariosCreativo: string | null;
   peloteo: string | null;
   puedeEditar: boolean;
+  /** Puede cambiar la asignación (lead/admin/master). */
+  puedeAsignar: boolean;
+  /** Pool vivo por rol+track para el editor de asignación. */
+  leadsPool: PoolPersona[];
+  especialistasPool: PoolPersona[];
 };
 
 /**
@@ -73,6 +79,9 @@ export function TabsTarea({
             comentariosCreativo={runna.comentariosCreativo}
             peloteo={runna.peloteo}
             puedeEditar={runna.puedeEditar}
+            puedeAsignar={runna.puedeAsignar}
+            leadsPool={runna.leadsPool}
+            especialistasPool={runna.especialistasPool}
             soloLectura={soloLectura}
           />
         ) : (
