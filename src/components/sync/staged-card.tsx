@@ -163,11 +163,14 @@ export function StagedCard({
               <Picker label="Marca" required={isRequired("Marca")} options={MARCA} value={val("Marca")} edited={isEdited("Marca")}
                 onChange={(v) => onEdit("Marca", v[0] ?? "")} onReset={() => onResetField("Marca")} />
             </Grid>
+            {/* El sheet trae al LEAD (uno). Picker de UN solo lead, del pool de
+                Leads (rol `lead`) de este track. Los especialistas se asignan en la
+                tarea (Rünna tools). */}
             <Picker
-              label="Asignación" multi required={isRequired("Asignación")}
-              options={pool.filter((p) => p.track === track).map((p) => ({ value: p.name, color: p.color }))}
+              label="Lead" required={isRequired("Asignación")}
+              options={pool.filter((p) => p.track === track && p.role === "lead").map((p) => ({ value: p.name, color: p.color }))}
               value={val("Asignación")} edited={isEdited("Asignación")}
-              onChange={(v) => onEdit("Asignación", fromList(v))} onReset={() => onResetField("Asignación")}
+              onChange={(v) => onEdit("Asignación", v[0] ?? "")} onReset={() => onResetField("Asignación")}
             />
             <Grid cols={3}>
               <Text label="Mes" value={val("Mes")} mono edited={isEdited("Mes")}

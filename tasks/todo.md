@@ -1,5 +1,22 @@
 # Greenlight · by Rünna — Build Todo
 
+## ⏭️ NEXT FOCUSED BUILD (2026-08-21) — split lead/especialista AT MANUAL CREATION
+Contexto: asignación de 2 niveles ya funciona POST-creación (editor in-task, Rünna tools) y en el
+SYNC (import matchLead → es_lead=true; staged-card ya muestra picker "Lead" single de rol=lead). FALTA:
+el BRIEF BUILDER manual todavía tiene un picker plano `asignacion` (pool combinado). Para separar
+lead+especialistas al CREAR a mano hay que tocar el **RPC de Postgres `rpc_crear_brief`** — ahí se
+insertan las idea_assignments (no en el app code). Plan:
+- Migración: `rpc_crear_brief` acepta `lead_member_id` por tarea → inserta ese con es_lead=true y el
+  resto de member_ids con es_lead=false. Actualizar su contract test (test-db).
+- `TaskDraft`: add `lead: string[]` (single). `tarjetaEnBlanco` add `lead:[]`. `TaskPayload` add
+  `lead_member_id`. `construirTarea` resuelve `first(t.lead)` → lead_member_id (defensivo: `t.lead ?? []`
+  por los tests .mjs). `draftToSheetRow`: Asignación = [lead, ...especialistas] para missingRequired.
+- task-card: chip "Lead" (single, leadsPool por track) + "Especialistas" (multi, especialistasPool).
+  ChipKey add "lead". (El pool YA trae `role` — filtrar por rol+track.)
+- Tests test-lib: literales de TaskDraft add `lead`; caso construirTarea con lead → es_lead.
+- RIESGO: es el path crítico de creación → hacerlo con la suite verde como gate (test-db + test-lib).
+
+
 ## 🟢 ACTIVE (2026-08-21) — TRACK A: live-test go-live Fases 2/3/4 en prod
 Go-live LIVE; Pedro logged in as master. Verificar los flujos construidos+reapeados end-to-end
 en producción (RLS aún abierta a propósito — el hardening es Track C, después). DONE = cada fase

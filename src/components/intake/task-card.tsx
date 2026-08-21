@@ -28,7 +28,7 @@ type TextKey =
   | "comentariosLeads" | "peloteo" | "concepto" | "sellingPoints"
   | "referencias" | "numIdea" | "version" | "naming";
 
-export type PoolMember = { name: string; color: string; track: Track };
+export type PoolMember = { name: string; color: string; track: Track; role: string };
 
 export function TaskCard({
   task,

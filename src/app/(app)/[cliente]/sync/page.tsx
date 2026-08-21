@@ -22,7 +22,7 @@ export default async function SyncPage({
   const { data: poolRows } = hasSupabase()
     ? await supabaseAdmin()
         .from("track_members")
-        .select("name, color, track")
+        .select("name, color, track, role")
         .eq("active", true)
         .in("role", ["lead", "creative"])
         .order("name")
