@@ -978,3 +978,47 @@ emoji shortcode determinista, curado→completo + naming-preset gotcha).
   `refs`→`elements` controlados). Lo dejé intacto; que la otra sesión lo cierre.
 - Probar H.Ü.E en localhost necesita ANTHROPIC_API_KEY en .env.local (ya está en Vercel).
 - Estático (parseEstatico) sigue provisional — falta muestra real del copy de Pedro.
+
+---
+
+## 2026-08-20 (pm) — 🟢 GO-LIVE: login real en producción + fix /clientes DB-backed
+
+**Contexto:** continuación tras /compact. La sesión previa ya había construido las 5
+fases del go-live (reset · login core · acceso cliente · brief fail-safe · settings CRUD),
+reapeado y aplicado migraciones. Esta parte = SHIP + verificación en vivo + un bug.
+
+**Hecho:**
+1. **GO-LIVE shipped y en vivo** [3918960 feat(go-live) + 3dd1b13 polish(login)]: con
+   "ship it" de Pedro — `AUTH_ENABLED=true` en Vercel, Google OAuth + magic-link cliente,
+   identidad real (getCurrentUser: JWT→profiles→track_member), migs 0041/0042 a prod,
+   reset blank-slate corrido (754 filas borradas, KEEP intactas). Copy de login pulido a
+   pedido de Pedro: "Bienvenido" (no "de vuelta") + "Smart production platform. H.Ü.E
+   included." + logo Rünna más grande; portal: "H.Ü.E lo aprueba y te manda un enlace…".
+2. **Login verificado end-to-end**: Pedro entró como master (`unique@runna.com.mx`).
+   Confirmé provisioning en la DB: `profiles.role=master` (activo) + `track_members`
+   ligado por profile_id, role master. Fase 1 (Google→identidad→provisioning) OK.
+3. **BUG /clientes — números fantasma** [7695455 fix(clientes)]: la tarjeta DiDi mostraba
+   4 BRIEFS / 37 ABIERTOS / 3 ATRASADOS tras el reset a cero. Raíz: `/clientes/page.tsx`
+   leía `MOCK_CLIENTS` hardcodeado (mock.ts), no la DB. Reescrita como server component
+   DB-backed (force-dynamic, service-role, mismo patrón que las demás páginas de datos):
+   briefs=draft/active · abiertos=5 estados no-terminales (espejo ESTADOS_ACTIVOS) ·
+   atrasados=abiertas con due_date vencido. Borré MOCK_CLIENTS + su tipo. Verificado en
+   render real (DOM leído, no sólo screenshot): DiDi 0/0/0, 0 errores server/consola.
+   Pedro confirmó 0/0/0 en el sitio en vivo.
+
+**Elección técnica de nota:** filtro de ideas abiertas con `.in("status", [5 estados])`
+POSITIVO en vez de `.not(status,'in','(...)')` — un `.not.in` mal formado devuelve null→0,
+que POST-RESET se ve correcto y ENMASCARA el bug. (Ver lección nueva.)
+
+**Gates:** tsc + eslint limpios en archivos tocados. Verificación en render local real.
+**Deploy:** push a main → Vercel auto-deploy (repo público Runna-Ad). Todo commiteado y pusheado.
+**Lecciones:** 2 nuevas (mock sobrevive al reset · forma de query robusta cuando el fallo
+se ve igual que la respuesta correcta).
+
+**⚠️ Pendiente / próxima sesión:**
+- **Test en vivo Fases 2/3/4**: aprobar cliente → magic-link → binding portal · brief
+  fail-safe (añadir agency people) · marca/user CRUD en Admin (empezar por crear/borrar
+  una marca de prueba bajo DiDi).
+- 2 docs `tasks/HANDOFF-*.md` (golive + hue-hub) siguen untracked — decidir si commitear.
+- Siguiente hito grande planeado: **H.Ü.E HUB fase 1** (analytics + brain self-learning),
+  handoff en `tasks/HANDOFF-hue-hub-phase1.md`.

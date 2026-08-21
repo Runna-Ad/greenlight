@@ -487,9 +487,15 @@ construye antes de lanzar (depende de que el lado-agencia esté 100% listo). Lue
       2 stubs → una sección `/entregas` (GENERAL). Rastrea lo `published` (Con el
       cliente / En cambios / Entregado) por cliente. FALTA (con el portal): subdividir
       "Con el cliente" en revisando/aceptó — los estados finos los produce el portal.
-- [ ] **Portal del cliente** (ÚLTIMO pre-launch): el cliente ve lo `published`, pide
-      Revisión/Cambios/Aprobado; alimenta el tablero de Entregas.
-- [ ] **Login** (final, antes de live). Emails del equipo se llenan solos al login.
+- [x] **Portal del cliente** (ÚLTIMO pre-launch): el cliente ve lo `published`, pide
+      Revisión/Cambios/Aprobado; alimenta el tablero de Entregas. SHIPPED.
+- [x] **Login** — ✅ **SHIPPED + LIVE 2026-08-20** (commit 3918960 go-live + 3dd1b13
+      copy). Google OAuth (equipo @runna.com.mx) + magic-link aprobado para clientes;
+      identidad real (profiles→track_member) reemplazó los shims soy/view-as;
+      AUTH_ENABLED=true en Vercel; migs 0041/0042 aplicadas; reset blank-slate corrido.
+      Pedro entró como master (unique@runna.com.mx) y verificó login end-to-end.
+      **PENDIENTE próxima sesión: correr el test en vivo de las Fases 2/3/4**
+      (aprobar cliente→magic-link→binding portal · brief fail-safe · marca/user CRUD).
 - [ ] Dato: **legal de Préstamos** (sólo Card sembrado; lo da Pedro, no inventar).
 - POST-LAUNCH (no bloquean): **Copies** template (Pedro: post-launch) · Slack notif ·
   prefs notif por-usuario · F6 Notion (bloqueado en token) · API/MCP tokens.

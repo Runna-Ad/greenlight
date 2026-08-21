@@ -1,5 +1,20 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-20 — Evaluación v2 (Resolución + Eficiencia) + desglose por brief
+Última actualización: 2026-08-20 (pm) — 🟢 **GO-LIVE: login REAL activo en producción**
+
+## 🟢 GO-LIVE — login real en vivo (2026-08-20, commits 3918960 · 3dd1b13 · 7695455)
+- **La app ya NO es pública.** `AUTH_ENABLED=true` en Vercel; el middleware (`proxy.ts`)
+  exige sesión salvo en `/login`, `/auth`, `/portal/login`.
+- **Identidad real**: Google OAuth (equipo `@runna.com.mx`) → `provisionAgencyLogin`
+  (profile + track_member idempotente) → `getCurrentUser()` (JWT sub → profiles →
+  track_member). Los shims `gl_soy`/`gl_view_as` quedaron gutted (delegan a la sesión).
+  Clientes entran por magic-link **aprobado** (pending_invites → aprobar → generateLink).
+  `unique@runna.com.mx` = master (sembrado). Migs **0041** (pending_invites) + **0042**
+  (track_members_profile_uq) aplicadas a prod. Reset blank-slate corrido (754 filas, KEEP intactas).
+- **Verificado en vivo**: Pedro entró como master; provisioning correcto en DB
+  (profiles.role=master + track_member ligado). `/clientes` ahora DB-backed (fix 7695455)
+  muestra 0/0/0 real tras el reset (antes: MOCK_CLIENTS congelado 4/37/3).
+- **PENDIENTE (próxima sesión)**: test en vivo de Fases 2/3/4 — aprobar cliente→magic-link
+  →binding portal · brief fail-safe (añadir agency people faltantes) · marca/user CRUD en Admin.
 
 ## 📊 Evaluación (v2 + por brief) — 2026-08-20 (commits 5d30cba mig 0040 · 5707ef5)
 - Grade en DOS ejes: **Calidad** = avg de 9 criterios binarios por tarea (8 de contenido + **Resolución
@@ -284,7 +299,9 @@ snippets legal=1 (sólo Card) · references(links del sheet)=15
    **Vercel git-connected**: `git push main` auto-deploya a producción (verificado).
    La CLI sigue como respaldo. NOTA: el repo es público — no commitear secretos.
 2. `SHEETS_SCRIPT_SECRET` estuvo público ~4 min (ya corregido) — rotar.
-3. App pública sin login — decisión de Pedro; revisar en pre-lanzamiento.
+3. ~~App pública sin login~~ **RESUELTO (2026-08-20)** — login real en vivo
+   (`AUTH_ENABLED=true`). Ver sección "🟢 GO-LIVE" arriba. Queda el test en vivo de
+   Fases 2/3/4 para la próxima sesión.
 4. `database.types.ts` es manual, no generado.
 5. `src/lib/vocab.ts` es copia hardcodeada de vocab_terms/track_members (2 fuentes).
 6. Sólo el legal de **Card** está sembrado; falta el de **Préstamos** (dato
