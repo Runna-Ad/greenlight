@@ -1,8 +1,108 @@
 import Link from "next/link";
 import { ArrowRight, Plus, FileText, Layers, AlertTriangle } from "lucide-react";
-import { MOCK_CLIENTS } from "@/lib/mock";
+import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 
-export default function ClientesPage() {
+// Counts are LIVE from the DB — never hardcode them. The old MOCK_CLIENTS froze
+// DiDi at 4/37/3 and survived a full platform reset, showing phantom work.
+// Definitions mirror the rest of the app:
+//   · briefs    = briefs en curso (draft/active) — no delivered ni archived.
+//   · abiertos  = ideas NO terminales (mirror TERMINALES en performance/data.ts).
+//   · atrasados = esas ideas abiertas con due_date ya vencido.
+export const dynamic = "force-dynamic";
+
+// Estados "abiertos" de una idea = los 5 no terminales (todo lo que no es
+// published/delivered). Mismo conjunto que ESTADOS_ACTIVOS en performance/data.ts.
+const OPEN_IDEA_STATES = [
+  "todo",
+  "in_progress",
+  "under_review",
+  "in_corrections",
+  "completed",
+];
+const INFLIGHT_BRIEF = ["draft", "active"];
+
+type ClientCard = {
+  slug: string;
+  name: string;
+  tagline: string | null;
+  brandColor: string;
+  initial: string;
+  briefs: number;
+  abiertos: number;
+  atrasados: number;
+};
+
+async function cargarClientes(): Promise<ClientCard[]> {
+  if (!hasSupabase()) return [];
+  const db = supabaseAdmin();
+
+  const { data: clientsRaw } = await db
+    .from("clients")
+    .select("id, slug, name, tagline, brand_color")
+    .eq("active", true)
+    .order("name");
+  const clients = (clientsRaw ?? []) as {
+    id: string;
+    slug: string;
+    name: string;
+    tagline: string | null;
+    brand_color: string | null;
+  }[];
+  if (!clients.length) return [];
+
+  const clientIds = clients.map((c) => c.id);
+
+  // Briefs de estos clientes + todas las ideas ABIERTAS (ideas no tiene client_id;
+  // se mapea vía brief_id → briefs.client_id). Cota de 5000 en ideas abiertas
+  // (deuda: paginar/agregar en SQL si el volumen abierto llega a crecer tanto).
+  const [{ data: briefsRaw }, { data: ideasRaw }] = await Promise.all([
+    db.from("briefs").select("id, client_id, status").in("client_id", clientIds),
+    db
+      .from("ideas")
+      .select("brief_id, due_date, status")
+      .in("status", OPEN_IDEA_STATES)
+      .limit(5000),
+  ]);
+  const briefs = (briefsRaw ?? []) as { id: string; client_id: string; status: string }[];
+  const ideas = (ideasRaw ?? []) as {
+    brief_id: string;
+    due_date: string | null;
+    status: string;
+  }[];
+
+  const clientByBrief = new Map(briefs.map((b) => [b.id, b.client_id]));
+  const hoy = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (vencido = due_date < hoy)
+
+  const briefCt = new Map<string, number>();
+  const abiertosCt = new Map<string, number>();
+  const atrasadosCt = new Map<string, number>();
+  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+
+  for (const b of briefs) {
+    if (INFLIGHT_BRIEF.includes(b.status)) bump(briefCt, b.client_id);
+  }
+  for (const i of ideas) {
+    const cid = clientByBrief.get(i.brief_id);
+    if (!cid) continue; // idea de un brief de cliente inactivo/desconocido
+    bump(abiertosCt, cid);
+    if (i.due_date && i.due_date < hoy) bump(atrasadosCt, cid);
+  }
+
+  return clients.map((c) => ({
+    slug: c.slug,
+    name: c.name,
+    tagline: c.tagline,
+    brandColor: c.brand_color || "#775cbf",
+    initial: (c.name.trim()[0] ?? "?").toUpperCase(),
+    briefs: briefCt.get(c.id) ?? 0,
+    abiertos: abiertosCt.get(c.id) ?? 0,
+    atrasados: atrasadosCt.get(c.id) ?? 0,
+  }));
+}
+
+export default async function ClientesPage() {
+  const clientes = await cargarClientes();
+
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-6">
@@ -19,7 +119,7 @@ export default function ClientesPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {MOCK_CLIENTS.map((client) => (
+        {clientes.map((client) => (
           <Link
             key={client.slug}
             href={`/${client.slug}/tablero`}
@@ -44,13 +144,13 @@ export default function ClientesPage() {
             </div>
 
             <div className="mt-5 grid grid-cols-3 gap-2 border-t border-border pt-4">
-              <Stat icon={FileText} value={client.activeBriefs} label="briefs" />
-              <Stat icon={Layers} value={client.openAssets} label="abiertos" />
+              <Stat icon={FileText} value={client.briefs} label="briefs" />
+              <Stat icon={Layers} value={client.abiertos} label="abiertos" />
               <Stat
                 icon={AlertTriangle}
-                value={client.overdue}
+                value={client.atrasados}
                 label="atrasados"
-                alert={client.overdue > 0}
+                alert={client.atrasados > 0}
               />
             </div>
           </Link>

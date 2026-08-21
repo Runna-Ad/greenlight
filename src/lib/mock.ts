@@ -1,18 +1,7 @@
 // P0 mock data — stand-in until P1 wires Supabase. Shape mirrors the planned schema
 // so screens built on it swap to real queries with minimal churn.
-import type { Marca } from "@/lib/brand";
-
-export type MockClient = {
-  slug: string;
-  name: string;
-  tagline: string;
-  marcas: Marca[];
-  activeBriefs: number;
-  openAssets: number;
-  overdue: number;
-  brandColor: string;
-  initial: string;
-};
+// NOTE: the client picker (/clientes) is now DB-backed. The old MOCK_CLIENTS lived
+// here and froze DiDi at 4/37/3 even after a full reset — removed 2026-08-20.
 
 // Vocab options (mirror seed.sql) — swap for a Supabase query once linked.
 export const MOCK_VOCAB = {
@@ -60,18 +49,4 @@ export const MOCK_SNIPPETS = [
   { id: "s1", kind: "instruccion", title: "Indicaciones para la producción" },
   { id: "s2", kind: "legal", title: "Legal CASHBACK (Regigold)" },
   { id: "s3", kind: "consideracion", title: "Regla estáticos CASHBACK/MSI" },
-];
-
-export const MOCK_CLIENTS: MockClient[] = [
-  {
-    slug: "didi",
-    name: "DiDi",
-    tagline: "Card + Préstamos · cliente principal",
-    marcas: ["Card", "Préstamos"],
-    activeBriefs: 4,
-    openAssets: 37,
-    overdue: 3,
-    brandColor: "#ff6b1a",
-    initial: "D",
-  },
 ];
