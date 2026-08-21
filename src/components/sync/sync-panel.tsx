@@ -13,10 +13,11 @@ import {
 } from "@/app/(app)/[cliente]/sync/actions";
 import type { SheetRow, TabInfo } from "@/lib/sheet-sync";
 import { StagedCard } from "./staged-card";
+import { type PoolMember } from "@/components/intake/task-card";
 import { missingRequired } from "@/lib/required";
 import { importRows, knownRows } from "@/app/(app)/[cliente]/sync/import";
 
-export function SyncPanel({ cliente }: { cliente: string }) {
+export function SyncPanel({ cliente, pool }: { cliente: string; pool: PoolMember[] }) {
   const [tabs, setTabs] = useState<TabInfo[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
@@ -327,6 +328,7 @@ export function SyncPanel({ cliente }: { cliente: string }) {
                 edits={edits[r.key] ?? {}}
                 included={accepted.has(r.key)}
                 expanded={open === r.key}
+                pool={pool}
                 onToggleIncluded={() =>
                   setAccepted((prev) => {
                     const next = new Set(prev);

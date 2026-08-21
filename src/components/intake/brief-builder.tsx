@@ -19,13 +19,13 @@ import {
   type TaskDraft,
 } from "@/lib/intake-crear";
 import { crearBrief, type NuevaPersona } from "@/app/(app)/[cliente]/briefs/nuevo/actions";
-import { TaskCard } from "./task-card";
+import { TaskCard, type PoolMember } from "./task-card";
 import type { PickCard } from "./copy-to-picker";
 
 const uid = () => crypto.randomUUID();
 const clone = <T,>(v: T): T => (Array.isArray(v) ? ([...v] as T) : v);
 
-export function BriefBuilder({ cliente }: { cliente: string }) {
+export function BriefBuilder({ cliente, pool }: { cliente: string; pool: PoolMember[] }) {
   const router = useRouter();
 
   const [header, setHeader] = useState<BriefHeader>({
@@ -268,6 +268,7 @@ export function BriefBuilder({ cliente }: { cliente: string }) {
             task={t}
             index={i}
             track={header.track}
+            pool={pool}
             expanded={!!expanded[t.id]}
             onToggle={() => setExpanded((e) => ({ ...e, [t.id]: !e[t.id] }))}
             onChip={(key, updater) => setChip(t.id, key)(updater)}

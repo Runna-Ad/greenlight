@@ -1,4 +1,6 @@
 import { SyncPanel } from "@/components/sync/sync-panel";
+import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
+import { type PoolMember } from "@/components/intake/task-card";
 import { getSyncMode } from "./actions";
 
 // La server action `importRows` hace una tanda de inserts por fila (todavía secuencial
@@ -14,6 +16,18 @@ export default async function SyncPage({
   const { cliente } = await params;
   // Only the MODE crosses to the client — credentials stay on the server.
   const { kind } = await getSyncMode();
+
+  // Pool VIVO de asignables (lead + creative), por track — reemplaza la lista
+  // hardcodeada de vocab.ts en el preview de la sync.
+  const { data: poolRows } = hasSupabase()
+    ? await supabaseAdmin()
+        .from("track_members")
+        .select("name, color, track")
+        .eq("active", true)
+        .in("role", ["lead", "creative"])
+        .order("name")
+    : { data: [] };
+  const pool = (poolRows ?? []) as PoolMember[];
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -32,7 +46,7 @@ export default async function SyncPage({
         )}
       </p>
 
-      <SyncPanel cliente={cliente} />
+      <SyncPanel cliente={cliente} pool={pool} />
     </div>
   );
 }

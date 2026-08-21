@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import { ChipSelect } from "./chip-select";
 import { CopyFieldButton, MultiCopyButton, type PickCard } from "./copy-to-picker";
 import {
-  ASIGNACION,
   DURACION,
   ENTREGA,
   FORMATO,
@@ -29,10 +28,13 @@ type TextKey =
   | "comentariosLeads" | "peloteo" | "concepto" | "sellingPoints"
   | "referencias" | "numIdea" | "version" | "naming";
 
+export type PoolMember = { name: string; color: string; track: Track };
+
 export function TaskCard({
   task,
   index,
   track,
+  pool,
   expanded,
   onToggle,
   onChip,
@@ -50,6 +52,8 @@ export function TaskCard({
   task: TaskDraft;
   index: number;
   track: Track;
+  /** Pool VIVO de asignables (lead + creative) por track — reemplaza vocab.ts. */
+  pool: PoolMember[];
   expanded: boolean;
   onToggle: () => void;
   onChip: (key: ChipKey, updater: (prev: string[]) => string[]) => void;
@@ -172,7 +176,7 @@ export function TaskCard({
 
           {/* Entrega + gente */}
           {chip("entrega", "# Entrega", ENTREGA)}
-          {chip("asignacion", "Asignación", ASIGNACION[track].map((p) => ({ value: p.name, color: p.color })), { multi: true, hint: "Puede ser más de una persona" })}
+          {chip("asignacion", "Asignación", pool.filter((p) => p.track === track).map((p) => ({ value: p.name, color: p.color })), { multi: true, hint: "Lead + especialistas de este track" })}
 
           {/* Especificaciones */}
           <div className="grid gap-4 sm:grid-cols-2">

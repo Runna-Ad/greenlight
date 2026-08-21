@@ -4,10 +4,10 @@ import { ChevronDown, Sparkles, Pencil, AlertCircle, Undo2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ChipSelect } from "@/components/intake/chip-select";
+import { type PoolMember } from "@/components/intake/task-card";
 import type { SheetRow } from "@/lib/sheet-sync";
 import { missingRequired, requiredFor } from "@/lib/required";
 import {
-  ASIGNACION,
   ENTREGA,
   FORMATO,
   GENERO,
@@ -42,6 +42,7 @@ export function StagedCard({
   edits,
   included,
   expanded,
+  pool,
   onToggleIncluded,
   onToggleExpanded,
   onEdit,
@@ -51,6 +52,8 @@ export function StagedCard({
   edits: Partial<SheetRow>;
   included: boolean;
   expanded: boolean;
+  /** Pool VIVO de asignables (lead + creative) por track — reemplaza vocab.ts. */
+  pool: PoolMember[];
   onToggleIncluded: () => void;
   onToggleExpanded: () => void;
   onEdit: (field: keyof SheetRow, value: string) => void;
@@ -162,7 +165,7 @@ export function StagedCard({
             </Grid>
             <Picker
               label="Asignación" multi required={isRequired("Asignación")}
-              options={ASIGNACION[track].map((p) => ({ value: p.name, color: p.color }))}
+              options={pool.filter((p) => p.track === track).map((p) => ({ value: p.name, color: p.color }))}
               value={val("Asignación")} edited={isEdited("Asignación")}
               onChange={(v) => onEdit("Asignación", fromList(v))} onReset={() => onResetField("Asignación")}
             />
