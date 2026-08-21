@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Plus, ClipboardList } from "lucide-react";
+import { Check, Plus, ClipboardList, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -18,7 +18,7 @@ import {
   type BriefHeader,
   type TaskDraft,
 } from "@/lib/intake-crear";
-import { crearBrief } from "@/app/(app)/[cliente]/briefs/nuevo/actions";
+import { crearBrief, type NuevaPersona } from "@/app/(app)/[cliente]/briefs/nuevo/actions";
 import { TaskCard } from "./task-card";
 import type { PickCard } from "./copy-to-picker";
 
@@ -42,6 +42,7 @@ export function BriefBuilder({ cliente }: { cliente: string }) {
   const [lastTargets, setLastTargets] = useState<string[]>([]);
   const [nBulk, setNBulk] = useState(5);
   const [submitting, setSubmitting] = useState(false);
+  const [faltantes, setFaltantes] = useState<string[] | null>(null);
 
   // ── validación en vivo (mismo gate que el servidor, para bloquear el botón) ──
   const problemas = useMemo(() => {
@@ -144,16 +145,22 @@ export function BriefBuilder({ cliente }: { cliente: string }) {
   const remove = (id: string) =>
     setTasks((prev) => (prev.length === 1 ? prev : prev.filter((t) => t.id !== id)));
 
-  const submit = async () => {
+  const submit = async (nuevos?: NuevaPersona[]) => {
     setSubmitting(true);
     try {
-      const r = await crearBrief(cliente, { header, tasks });
+      const r = await crearBrief(cliente, { header, tasks }, nuevos);
       if (r.ok) {
         toast.success(`Brief creado — ${r.created} tarea${r.created === 1 ? "" : "s"}, ${r.assets} entregable${r.assets === 1 ? "" : "s"}`);
         router.push(`/${cliente}/briefs`);
         router.refresh();
         return;
       }
+      // Fail-safe: hay personas nombradas que no están en la plataforma → preguntar.
+      if (r.personasFaltantes?.length && !nuevos) {
+        setFaltantes(r.personasFaltantes);
+        return;
+      }
+      setFaltantes(null);
       if (r.blocked.length) {
         toast.error(`${r.blocked.length} tarjeta(s) con datos faltantes: ${r.blocked.map((b) => b.titulo).join(", ")}`);
       } else {
@@ -291,10 +298,94 @@ export function BriefBuilder({ cliente }: { cliente: string }) {
                 {header.title.trim() ? `${problemas.size} tarjeta(s) por completar` : "Falta el título del brief"}
               </span>
             )}
-            <Button type="button" disabled={!ready || submitting} onClick={submit}>
+            <Button type="button" disabled={!ready || submitting} onClick={() => submit()}>
               {submitting ? "Creando…" : "Crear brief"}
             </Button>
           </div>
+        </div>
+      </div>
+
+      {faltantes && (
+        <FaltantesDialog
+          nombres={faltantes}
+          submitting={submitting}
+          onCancel={() => setFaltantes(null)}
+          onConfirm={(nuevos) => submit(nuevos)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Fail-safe: el brief nombró personas que no están en la plataforma. Se listan
+ * para darlas de alta como Especialista, con correo opcional (se llena solo al
+ * entrar) y la opción de mandarles un correo de bienvenida.
+ */
+function FaltantesDialog({
+  nombres,
+  submitting,
+  onCancel,
+  onConfirm,
+}: {
+  nombres: string[];
+  submitting: boolean;
+  onCancel: () => void;
+  onConfirm: (nuevos: NuevaPersona[]) => void;
+}) {
+  const [emails, setEmails] = useState<Record<string, string>>({});
+  const [enviar, setEnviar] = useState(true);
+
+  const confirmar = () =>
+    onConfirm(nombres.map((n) => ({ nombre: n, email: emails[n]?.trim() || null, enviarCorreo: enviar })));
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-2xl">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+            <UserPlus className="size-4 text-primary" />
+          </span>
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Personas nuevas en el brief</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Estas personas todavía no están en la plataforma. ¿Las agrego al equipo como Especialista?
+              El correo es opcional — se llena solo cuando entren.
+            </p>
+          </div>
+        </div>
+
+        <ul className="mt-4 space-y-2">
+          {nombres.map((n) => (
+            <li key={n} className="flex items-center gap-2">
+              <span className="w-28 shrink-0 truncate text-sm font-medium text-foreground">{n}</span>
+              <input
+                type="email"
+                placeholder="correo (opcional)"
+                value={emails[n] ?? ""}
+                onChange={(e) => setEmails((m) => ({ ...m, [n]: e.target.value }))}
+                className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </li>
+          ))}
+        </ul>
+
+        <label className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" checked={enviar} onChange={(e) => setEnviar(e.target.checked)} className="size-4" />
+          Enviarles un correo de bienvenida (a quienes tengan correo)
+        </label>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="outline" disabled={submitting} onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button type="button" disabled={submitting} onClick={confirmar}>
+            {submitting ? "Agregando…" : "Agregar y crear brief"}
+          </Button>
         </div>
       </div>
     </div>

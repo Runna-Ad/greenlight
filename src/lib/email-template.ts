@@ -17,6 +17,9 @@ const TIPO: Record<string, TipoConfig> = {
   task_changes_requested: { chip: "Cambios pedidos", color: "#ff2d6f", cta: "Ver los cambios" }, // rosa-rojo neón
   task_approved: { chip: "Aprobada", color: "#00e676", cta: "Ver la tarea", darkChip: true }, // verde logo, brilla en pastilla oscura
   task_published: { chip: "Enviada al cliente", color: "#00c2ff", cta: "Ver la tarea" }, // azul neón
+  client_access_request: { chip: "Solicitud de acceso", color: "#ff9e2c", cta: "Ver solicitudes" }, // ámbar neón
+  client_invite: { chip: "Tu acceso está listo", color: "#00e676", cta: "Entrar a mi portal", darkChip: true }, // verde logo
+  team_welcome: { chip: "Bienvenido al equipo", color: "#9d4edd", cta: "Ver mis tareas" }, // púrpura neón
 };
 const DEFECTO: TipoConfig = { chip: "Aviso", color: "#9d4edd", cta: "Abrir en Greenlight" };
 
@@ -47,7 +50,7 @@ export function textFor(title: string, body: string | null, ctaUrl: string): str
   return `${title}${body ? `\n\n${body}` : ""}\n\nAbrir en Greenlight: ${ctaUrl}`.trim();
 }
 
-const APP_URL = process.env.APP_URL ?? "https://runna-command-center.vercel.app";
+const APP_URL = process.env.APP_URL ?? "https://runna-greenlight.vercel.app";
 
 function urlAbsoluta(url: string | null): string {
   if (!url) return APP_URL;

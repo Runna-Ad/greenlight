@@ -6,6 +6,8 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canMoveStatus, canOverrideStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
+import { getCurrentUser } from "@/lib/identity";
+import { assertCanActOnTask, assertCanActOnRow } from "@/lib/auth/task-scope";
 import { ESTADOS_CERRADOS } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
 import { combinarConsideraciones } from "@/lib/consideraciones";
@@ -88,6 +90,8 @@ export async function guardarIntake(
 
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   // La liga de entrega se pinta como href — un javascript:/data: sería clicable.
   if (regla.url && valorNuevo?.trim() && !urlSegura(valorNuevo.trim())) {
@@ -144,6 +148,8 @@ export async function guardarDuraciones(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
   const { data: idea } = await db
@@ -193,6 +199,8 @@ export async function guardarConsideraciones(
 
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
   const { data: idea } = await db
@@ -273,6 +281,21 @@ export async function guardarBrief(
   }
 
   const db = supabaseAdmin();
+
+  // Un lead es departamental: sólo edita briefs que tocan SU equipo. Los briefs no
+  // llevan track propio, así que se mira si tienen alguna idea del track del lead.
+  if (role === "lead") {
+    const u = await getCurrentUser();
+    const { data: suyo } = await db
+      .from("ideas")
+      .select("id")
+      .eq("brief_id", briefId)
+      .eq("track", u?.member?.track ?? "__none__")
+      .limit(1)
+      .maybeSingle();
+    if (!suyo) return { ok: false, error: "Este brief es de otro equipo." };
+  }
+
   const limpio = valorNuevo?.trim() ? valorNuevo.trim() : null;
 
   const base = db.from("briefs").update({ [campo]: limpio }).eq("id", briefId);
@@ -366,6 +389,8 @@ export async function guardarCampo(
   const { data: fila } = await db
     .from(tabla).select("idea_id").eq("id", filaId).maybeSingle();
   if (!fila) return { ok: false, error: "La fila ya no existe." };
+  const scope = await assertCanActOnTask(fila.idea_id);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const { data: idea } = await db
     .from("ideas").select("status").eq("id", fila.idea_id).maybeSingle();
@@ -431,6 +456,8 @@ export async function agregarPlano(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
   const { data: ultimo } = await db
@@ -449,6 +476,8 @@ export async function borrarPlano(planoId: string): Promise<GuardarResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnRow("planos", planoId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const { error } = await supabaseAdmin().from("planos").delete().eq("id", planoId);
   if (error) return { ok: false, error: error.message };
@@ -483,6 +512,8 @@ export async function importarGuion(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
   if (!planos.length) return { ok: false, error: "No hay planos que importar." };
 
   const db = supabaseAdmin();
@@ -526,6 +557,8 @@ export async function importarEstatico(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const CAMPOS_ESTATICO = ["copy_titulo", "copy_subtitulo", "copy_cta", "legales_extra"] as const;
   const patch: Record<string, string> = {};
@@ -693,6 +726,8 @@ export async function alternarSnippet(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
   const { error } = activar

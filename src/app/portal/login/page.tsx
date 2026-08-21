@@ -1,28 +1,24 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Wordmark } from "@/components/shell/wordmark";
-import { GoogleSignIn } from "@/components/shell/google-sign-in";
+import { RequestForm } from "./request-form";
 
-// Friendly Spanish for the reasons /auth/callback can bounce someone back.
 function mensajeDeError(code: string): string {
   switch (code) {
-    case "not-allowed":
-      return "Esa cuenta no tiene acceso. Entra con tu correo @runna.com.mx — o si eres cliente, pide acceso abajo.";
-    case "missing-code":
-    case "exchange-failed":
-    case "no-user":
-      return "No se pudo completar el inicio de sesión. Vuelve a intentarlo.";
+    case "link-invalid":
+    case "link-expired":
+      return "Ese enlace ya no es válido o expiró. Pide acceso de nuevo y te mandaremos uno nuevo.";
     default:
-      return "No se pudo iniciar sesión. Vuelve a intentarlo.";
+      return "Algo salió mal. Intenta de nuevo.";
   }
 }
 
-export default async function LoginPage({
+export default async function PortalLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; next?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
-  const { error, next } = await searchParams;
+  const { error } = await searchParams;
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-sidebar p-6">
@@ -37,21 +33,14 @@ export default async function LoginPage({
       <div className="relative w-full max-w-sm animate-in fade-in zoom-in-95 duration-500">
         <div className="overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-white/10">
           <div className="flex flex-col items-center gap-3 border-b border-border bg-secondary/40 px-8 pt-8 pb-6">
-            <Image
-              src="/brand/logo-h-color.png"
-              alt="Rünna"
-              width={132}
-              height={33}
-              className="h-8 w-auto"
-              priority
-            />
+            <Image src="/brand/logo-h-color.png" alt="Rünna" width={132} height={33} className="h-8 w-auto" priority />
             <Wordmark on="light" className="text-[24px]" />
           </div>
 
           <div className="px-8 py-7">
-            <h1 className="text-center text-lg font-semibold text-foreground">Bienvenido de vuelta</h1>
+            <h1 className="text-center text-lg font-semibold text-foreground">Portal de clientes</h1>
             <p className="mt-1 text-center text-sm leading-relaxed text-muted-foreground">
-              Producción de anuncios. Inicia sesión con tu cuenta de Rünna.
+              Pide acceso a tu portal. Un miembro del equipo lo aprueba y te llega un enlace de entrada por correo.
             </p>
 
             {error && (
@@ -63,12 +52,12 @@ export default async function LoginPage({
               </p>
             )}
 
-            <GoogleSignIn next={next} />
+            <RequestForm />
 
             <p className="mt-4 border-t border-border pt-4 text-center text-xs text-muted-foreground">
-              ¿Eres cliente?{" "}
-              <Link href="/portal/login" className="font-medium text-foreground underline-offset-2 hover:underline">
-                Solicita acceso a tu portal
+              ¿Eres del equipo Rünna?{" "}
+              <Link href="/login" className="font-medium text-foreground underline-offset-2 hover:underline">
+                Inicia sesión aquí
               </Link>
             </p>
           </div>

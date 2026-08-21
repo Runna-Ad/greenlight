@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, UserRoundX } from "lucide-react";
+import { Plus, UserRoundX, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -17,14 +17,25 @@ import { cn } from "@/lib/utils";
 import { Pill } from "@/components/ui/pill";
 import { ROLE_LABEL, type ViewRole } from "@/lib/roles";
 import { ROLES_ASIGNABLES, type MiembroRow, type RolAsignable } from "@/lib/equipo";
-import { crearMiembro, guardarMiembro } from "@/app/(app)/admin/actions";
+import { crearMiembro, guardarMiembro, eliminarMiembro } from "@/app/(app)/admin/actions";
 
 const rolLabel = (r: string) => ROLE_LABEL[r as ViewRole] ?? r;
 
 export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
   const [miembros, setMiembros] = useState<MiembroRow[]>(inicial);
   const [confirmar, setConfirmar] = useState<MiembroRow | null>(null);
+  const [confirmarBorrar, setConfirmarBorrar] = useState<MiembroRow | null>(null);
   const [agregando, setAgregando] = useState(false);
+
+  async function borrar(m: MiembroRow) {
+    const r = await eliminarMiembro(m.id);
+    if (!r.ok) {
+      toast.error(r.error ?? "No se pudo borrar.");
+      return;
+    }
+    setMiembros((ms) => ms.filter((x) => x.id !== m.id));
+    toast.success(`${m.name} eliminado.`);
+  }
 
   async function guardar(id: string, patch: Partial<MiembroRow>) {
     const prev = miembros.find((m) => m.id === id);
@@ -56,8 +67,8 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
         </Button>
       </div>
 
-      <Grupo titulo="Equipo Real" miembros={real} guardar={guardar} onActivo={alternarActivo} />
-      <Grupo titulo="Equipo Normal" miembros={normal} guardar={guardar} onActivo={alternarActivo} />
+      <Grupo titulo="Equipo Real" miembros={real} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
+      <Grupo titulo="Equipo Normal" miembros={normal} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
 
       {/* Confirmar desactivación de alguien con carga */}
       <Dialog open={!!confirmar} onOpenChange={(o) => !o && setConfirmar(null)}>
@@ -67,8 +78,7 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             Tiene <strong className="text-foreground">{confirmar?.carga} tarea{confirmar?.carga === 1 ? "" : "s"} activa{confirmar?.carga === 1 ? "" : "s"}</strong>. No se borran, pero ya no
-            se le podrá asignar trabajo ni aparecerá en “¿Quién eres?”. Puedes
-            reactivarla cuando quieras.
+            se le podrá asignar trabajo. Puedes reactivarla cuando quieras.
           </p>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setConfirmar(null)}>
@@ -88,6 +98,36 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
         </DialogContent>
       </Dialog>
 
+      {/* Confirmar BORRADO (hard delete) */}
+      <Dialog open={!!confirmarBorrar} onOpenChange={(o) => !o && setConfirmarBorrar(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Borrar a {confirmarBorrar?.name}?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Se elimina de forma permanente. Si ya tiene historial en tareas, no se podrá
+            borrar — mejor desactívala. Un admin no puede borrar a otro admin: sólo el
+            Master Builder.
+          </p>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirmarBorrar(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                const m = confirmarBorrar;
+                setConfirmarBorrar(null);
+                if (m) borrar(m);
+              }}
+            >
+              <Trash2 /> Borrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AgregarPersona
         open={agregando}
         onOpenChange={setAgregando}
@@ -102,11 +142,13 @@ function Grupo({
   miembros,
   guardar,
   onActivo,
+  onBorrar,
 }: {
   titulo: string;
   miembros: MiembroRow[];
   guardar: (id: string, patch: Partial<MiembroRow>) => void;
   onActivo: (m: MiembroRow, next: boolean) => void;
+  onBorrar: (m: MiembroRow) => void;
 }) {
   if (miembros.length === 0) return null;
   return (
@@ -116,7 +158,7 @@ function Grupo({
       </p>
       <div className="space-y-2">
         {miembros.map((m) => (
-          <MiembroCard key={m.id} m={m} guardar={guardar} onActivo={onActivo} />
+          <MiembroCard key={m.id} m={m} guardar={guardar} onActivo={onActivo} onBorrar={onBorrar} />
         ))}
       </div>
     </section>
@@ -127,10 +169,12 @@ function MiembroCard({
   m,
   guardar,
   onActivo,
+  onBorrar,
 }: {
   m: MiembroRow;
   guardar: (id: string, patch: Partial<MiembroRow>) => void;
   onActivo: (m: MiembroRow, next: boolean) => void;
+  onBorrar: (m: MiembroRow) => void;
 }) {
   // El rol actual puede no estar en la lista corta (p.ej. un valor viejo): se
   // agrega para no perderlo del selector.
@@ -174,6 +218,15 @@ function MiembroCard({
           <Switch checked={m.active} onCheckedChange={(v) => onActivo(m, v)} aria-label="Activo" />
           Activo
         </label>
+        <button
+          type="button"
+          onClick={() => onBorrar(m)}
+          aria-label={`Borrar a ${m.name}`}
+          title="Borrar persona"
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-destructive"
+        >
+          <Trash2 className="size-4" />
+        </button>
       </div>
 
       {/* fila 2: controles */}

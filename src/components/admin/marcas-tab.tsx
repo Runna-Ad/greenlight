@@ -2,10 +2,10 @@
 
 import { useRef, useState, useTransition } from "react";
 import Image from "next/image";
-import { Upload, Trash2, Building2 } from "lucide-react";
+import { Upload, Trash2, Building2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { subirLogoMarca, quitarLogoMarca } from "@/app/(app)/admin/actions";
+import { subirLogoMarca, quitarLogoMarca, crearMarca, eliminarMarca } from "@/app/(app)/admin/actions";
 import { Button } from "@/components/ui/button";
 import type { ClienteConMarcas, MarcaLogo } from "@/lib/admin-tipos";
 
@@ -24,6 +24,11 @@ export function MarcasTab({ clientes: inicial }: { clientes: ClienteConMarcas[] 
         marcas: c.marcas.map((m) => (m.id === marcaId ? { ...m, logo_url } : m)),
       })),
     );
+
+  const addMarca = (clientId: string, marca: MarcaLogo) =>
+    setClientes((prev) => prev.map((c) => (c.id === clientId ? { ...c, marcas: [...c.marcas, marca] } : c)));
+  const removeMarca = (marcaId: string) =>
+    setClientes((prev) => prev.map((c) => ({ ...c, marcas: c.marcas.filter((m) => m.id !== marcaId) })));
 
   return (
     <div>
@@ -55,11 +60,12 @@ export function MarcasTab({ clientes: inicial }: { clientes: ClienteConMarcas[] 
                 <ul className="divide-y divide-border/60">
                   {c.marcas.map((m) => (
                     <li key={m.id}>
-                      <MarcaRow marca={m} onLogo={setLogo} />
+                      <MarcaRow marca={m} onLogo={setLogo} onDelete={removeMarca} />
                     </li>
                   ))}
                 </ul>
               )}
+              <AgregarMarca clientId={c.id} onCreated={(m) => addMarca(c.id, m)} />
             </section>
           ))}
         </div>
@@ -71,12 +77,27 @@ export function MarcasTab({ clientes: inicial }: { clientes: ClienteConMarcas[] 
 function MarcaRow({
   marca,
   onLogo,
+  onDelete,
 }: {
   marca: MarcaLogo;
   onLogo: (marcaId: string, logoUrl: string | null) => void;
+  onDelete: (marcaId: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pending, start] = useTransition();
+  const [confirmarBorrar, setConfirmarBorrar] = useState(false);
+
+  const borrarMarca = () =>
+    start(async () => {
+      const res = await eliminarMarca(marca.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        setConfirmarBorrar(false);
+        return;
+      }
+      toast.success(`Marca ${marca.name} borrada.`);
+      onDelete(marca.id);
+    });
 
   const subir = (file: File) =>
     start(async () => {
@@ -156,6 +177,75 @@ function MarcaRow({
           <Trash2 className="size-4" />
         </button>
       )}
+
+      {confirmarBorrar ? (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setConfirmarBorrar(false)}
+            disabled={pending}
+            aria-label="Cancelar"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary"
+          >
+            <X className="size-4" />
+          </button>
+          <Button size="sm" variant="destructive" disabled={pending} onClick={borrarMarca}>
+            Borrar marca
+          </Button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmarBorrar(true)}
+          disabled={pending}
+          aria-label={`Borrar marca ${marca.name}`}
+          title="Borrar marca"
+          className="rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-destructive disabled:opacity-50"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Alta rápida de una marca dentro de la tarjeta de su cliente. */
+function AgregarMarca({
+  clientId,
+  onCreated,
+}: {
+  clientId: string;
+  onCreated: (marca: MarcaLogo) => void;
+}) {
+  const [nombre, setNombre] = useState("");
+  const [pending, start] = useTransition();
+
+  const crear = () =>
+    start(async () => {
+      const res = await crearMarca(clientId, nombre);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      onCreated(res.marca);
+      setNombre("");
+      toast.success(`Marca ${res.marca.name} creada.`);
+    });
+
+  return (
+    <div className="flex items-center gap-2 border-t border-border/60 px-4 py-2.5">
+      <input
+        value={nombre}
+        onChange={(e) => setNombre(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && nombre.trim() && !pending) crear();
+        }}
+        placeholder="Nueva marca…"
+        className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+      <Button size="sm" variant="outline" disabled={pending || !nombre.trim()} onClick={crear} className="gap-1.5">
+        <Plus className="size-3.5" /> Agregar
+      </Button>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import type {
   ActividadRow,
   ClienteConMarcas,
   IntegracionesEstado,
+  MarcaLogo,
   MarcaOpt,
   SnippetKind,
   SnippetRow,
@@ -89,6 +90,20 @@ export async function guardarMiembro(
   if (ROLES_SOLO_MASTER.has(String(patch.role)) && !canAssignAdmins(rol)) {
     return { ok: false, error: "Sólo el Master Builder puede nombrar admins." };
   }
+
+  const db = supabaseAdmin();
+  // Un admin no-master no puede TOCAR la fila de otro admin/master (ni degradarlo
+  // ni desactivarlo) — el guard de arriba sólo miraba el rol NUEVO, no el actual.
+  const { data: actual } = await db
+    .from("track_members")
+    .select("role, profile_id")
+    .eq("id", id)
+    .maybeSingle<{ role: string; profile_id: string | null }>();
+  if (!actual) return { ok: false, error: "Esa persona ya no existe." };
+  if (ROLES_SOLO_MASTER.has(String(actual.role)) && !canAssignAdmins(rol)) {
+    return { ok: false, error: "Sólo el Master Builder puede editar a un admin." };
+  }
+
   const limpio: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!CAMPOS_EDITABLES.has(k)) continue;
@@ -103,17 +118,25 @@ export async function guardarMiembro(
   // es_lead se deriva del rol: si cambia el rol, se re-sincroniza la bandera.
   if ("role" in limpio) limpio.es_lead = esLeadDeRol(limpio.role);
 
-  const { error } = await supabaseAdmin().from("track_members").update(limpio).eq("id", id);
+  const { error } = await db.from("track_members").update(limpio).eq("id", id);
   if (error) return { ok: false, error: error.message };
+
+  // La fuente de permisos es profiles.role. Si esta persona YA tiene cuenta y le
+  // cambiamos el rol, se propaga al profile — si no, "ascender a Lead/Admin" en
+  // Equipo no le daría permisos reales (la cuenta seguiría como al hacer login).
+  if ("role" in limpio && actual.profile_id) {
+    await db.from("profiles").update({ role: limpio.role }).eq("id", actual.profile_id);
+  }
+
   revalidatePath("/admin");
   return { ok: true };
 }
 
 /**
  * "Mi perfil" — cada persona edita LO SUYO: nombre y sus notificaciones (email
- * y/o Slack). No necesita ser admin; se identifica por la cookie "¿Quién eres?"
- * (getSoyId) y sólo puede tocar su propia fila, con una whitelist mínima. Así un
- * lead/especialista gestiona su perfil sin entrar a Configuración.
+ * y/o Slack). No necesita ser admin; se identifica por su SESIÓN (getSoyId) y sólo
+ * puede tocar su propia fila, con una whitelist mínima. Así un lead/especialista
+ * gestiona su perfil sin entrar a Configuración.
  */
 export async function guardarMiPerfil(patch: {
   name?: string;
@@ -122,7 +145,7 @@ export async function guardarMiPerfil(patch: {
 }): Promise<Guardado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const soyId = await getSoyId();
-  if (!soyId) return { ok: false, error: "Primero dinos quién eres en “¿Quién eres?”." };
+  if (!soyId) return { ok: false, error: "Inicia sesión para editar tu perfil." };
 
   const limpio: Record<string, unknown> = {};
   if (typeof patch.name === "string") {
@@ -316,6 +339,7 @@ export async function crearSnippet(data: {
   marca_id?: string | null;
 }): Promise<SnipGuardado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin edita la biblioteca." };
   if (!data.title.trim() || !data.body.trim()) {
     return { ok: false, error: "Título y texto son obligatorios." };
   }
@@ -343,6 +367,7 @@ export async function editarSnippet(
   patch: { title?: string; body?: string; marca_id?: string | null },
 ): Promise<SnipGuardado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin edita la biblioteca." };
   const limpio: Record<string, unknown> = {};
   if (typeof patch.title === "string") limpio.title = patch.title.trim();
   if (typeof patch.body === "string") limpio.body = patch.body.trim();
@@ -359,6 +384,7 @@ export async function editarSnippet(
 
 export async function alternarSnippetActivo(id: string, active: boolean): Promise<SnipGuardado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin edita la biblioteca." };
   const { error } = await supabaseAdmin().from("snippets").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
@@ -495,6 +521,103 @@ export async function quitarLogoMarca(marcaId: string): Promise<Guardado> {
   if (error) return { ok: false, error: error.message };
   if (path) await db.storage.from(LOGOS_BUCKET).remove([path]);
 
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+// ── Marcas: alta y baja (Phase 4) ───────────────────────────
+function slugify(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // quita acentos
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+type MarcaGuardada = { ok: true; marca: MarcaLogo } | { ok: false; error: string };
+
+/** Crea una marca de un cliente. Respeta unique(client_id, slug). Sólo admin+. */
+export async function crearMarca(clientId: string, name: string): Promise<MarcaGuardada> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin crea marcas." };
+  const nombre = name.trim();
+  if (!nombre) return { ok: false, error: "Escribe el nombre de la marca." };
+  const slug = slugify(nombre);
+  if (!slug) return { ok: false, error: "Ese nombre no genera un identificador válido." };
+
+  const { data, error } = await supabaseAdmin()
+    .from("marcas")
+    .insert({ client_id: clientId, name: nombre, slug })
+    .select("id, name, slug, logo_url")
+    .single();
+  if (error) {
+    if (error.code === "23505") return { ok: false, error: "Ya existe una marca con ese nombre en este cliente." };
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/admin");
+  return { ok: true, marca: data as MarcaLogo };
+}
+
+/** Borra una marca. Sólo admin+. Los FK de la marca son SET NULL (ideas) / CASCADE
+ *  (snippets, reglas), así que un delete "tiene éxito" aunque haya cosas colgando y
+ *  se pierden en silencio — por eso se BLOQUEA a nivel app si la marca está en uso. */
+export async function eliminarMarca(marcaId: string): Promise<Guardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin borra marcas." };
+
+  const db = supabaseAdmin();
+  const [ideas, snippets, reglas] = await Promise.all([
+    db.from("ideas").select("id", { count: "exact", head: true }).eq("marca_id", marcaId),
+    db.from("snippets").select("id", { count: "exact", head: true }).eq("marca_id", marcaId),
+    db.from("reglas").select("id", { count: "exact", head: true }).eq("marca_id", marcaId),
+  ]);
+  const enUso = (ideas.count ?? 0) + (snippets.count ?? 0) + (reglas.count ?? 0);
+  if (enUso > 0) {
+    return { ok: false, error: "Esta marca tiene tareas, legales o reglas — quítalos antes de borrarla." };
+  }
+
+  const { error } = await db.from("marcas").delete().eq("id", marcaId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+/**
+ * Borra a una persona del equipo (hard delete). Guarda: un admin borra miembros
+ * regulares, pero SÓLO el Master Builder borra a otro admin/master. Si la persona
+ * tiene historial referenciado, se bloquea y se sugiere desactivarla.
+ */
+export async function eliminarMiembro(id: string): Promise<Guardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const rol = await getViewAs();
+  if (!canAdmin(rol)) return { ok: false, error: "Sólo un admin borra personas." };
+
+  const db = supabaseAdmin();
+  const { data: target } = await db
+    .from("track_members")
+    .select("role")
+    .eq("id", id)
+    .maybeSingle<{ role: string }>();
+  if (!target) return { ok: false, error: "Esa persona ya no existe." };
+  if (ROLES_SOLO_MASTER.has(String(target.role)) && !canAssignAdmins(rol)) {
+    return { ok: false, error: "Sólo el Master Builder puede borrar a un admin." };
+  }
+
+  // Sus FK son CASCADE/SET NULL: borrar "tiene éxito" aunque tenga trabajo o autoría,
+  // y se pierde en silencio (asignaciones borradas, autoría desligada). Se bloquea a
+  // nivel app si tiene historial; para eso está el toggle "desactivar".
+  const [asigs, edits] = await Promise.all([
+    db.from("idea_assignments").select("id", { count: "exact", head: true }).eq("member_id", id),
+    db.from("field_edits").select("id", { count: "exact", head: true }).eq("member_id", id),
+  ]);
+  if ((asigs.count ?? 0) + (edits.count ?? 0) > 0) {
+    return { ok: false, error: "Esta persona tiene tareas o autoría — desactívala en vez de borrarla." };
+  }
+
+  const { error } = await db.from("track_members").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
   return { ok: true };
 }

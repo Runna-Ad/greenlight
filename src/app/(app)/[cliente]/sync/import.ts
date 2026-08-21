@@ -1,6 +1,8 @@
 "use server";
 
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
+import { getCurrentUser } from "@/lib/identity";
+import { canCreateBrief } from "@/lib/roles";
 import { classifyTab, type SheetRow } from "@/lib/sheet-sync";
 import { namingKindForTipo } from "@/lib/filename";
 import { generatesFiles, missingRequired } from "@/lib/required";
@@ -56,6 +58,13 @@ export async function importRows(
     return res;
   }
 
+  // Server-side gate: importar crea briefs/tareas → sólo lead/admin/master.
+  const u = await getCurrentUser();
+  if (!u || !canCreateBrief(u.role)) {
+    res.errors.push("Sólo un lead o un admin puede importar del sheet.");
+    return res;
+  }
+
   const db = supabaseAdmin();
 
   const { data: client } = await db
@@ -93,9 +102,8 @@ export async function importRows(
   const resolveMarca = (raw: string): string | null =>
     MARCAS.find((m) => fold(m.name) === fold(raw))?.id ?? null;
 
-  // Whoever is acting — until login exists, attribute to the admin.
-  const { data: actor } = await db
-    .from("profiles").select("id").eq("role", "admin").limit(1).maybeSingle();
+  // Attribute the import to the authenticated user (login is on).
+  const actor = { id: u.userId };
 
   // ── 1. one brief per tab ──
   const briefByTab = new Map<string, string>();

@@ -66,7 +66,7 @@ export default async function BriefsPage({
       {esEspecialista && !soy && (
         <p className="mb-4 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/8 px-3 py-2 text-xs">
           <UserRound className="size-3.5 shrink-0" />
-          Dinos quién eres arriba a la derecha para ver tus tareas.
+          Inicia sesión con tu cuenta de Rünna para ver tus tareas.
         </p>
       )}
 

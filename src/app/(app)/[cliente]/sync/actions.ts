@@ -10,6 +10,8 @@ import {
   type SheetRow,
   type TabInfo,
 } from "@/lib/sheet-sync";
+import { getCurrentUser } from "@/lib/identity";
+import { canCreateBrief } from "@/lib/roles";
 
 type SyncConfig =
   | { kind: "apps_script"; scriptUrl: string; secret: string }
@@ -59,6 +61,8 @@ export type ProjectPreview = TabInfo & {
 
 /** Step 1 — list what's in the spreadsheet, classified. No row data yet. */
 export async function listProjects(): Promise<{ tabs: TabInfo[]; error?: string }> {
+  const u = await getCurrentUser();
+  if (!u || !canCreateBrief(u.role)) return { tabs: [], error: "No autorizado." };
   const config = resolveConfig();
   if (config.kind === "csv") {
     // CSV export can't enumerate tabs; we can only look at the configured ones.
@@ -81,6 +85,8 @@ export async function previewProjects(
   tabs: TabInfo[],
   known: Record<string, string> = {},
 ): Promise<ProjectPreview[]> {
+  const u = await getCurrentUser();
+  if (!u || !canCreateBrief(u.role)) return [];
   const config = resolveConfig();
   const knownMap = new Map(Object.entries(known));
 

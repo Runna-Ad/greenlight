@@ -33,10 +33,9 @@ export default async function MiTrabajoPage() {
     return (
       <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
         <UserRound className="mx-auto size-5 text-muted-foreground" />
-        <p className="mt-3 text-sm text-foreground">¿Quién eres?</p>
+        <p className="mt-3 text-sm text-foreground">Inicia sesión</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Elige tu nombre arriba a la derecha para ver tus tareas. Mientras no
-          haya login, la app no sabe quién está del otro lado.
+          Entra con tu cuenta de Rünna para ver las tareas asignadas a ti.
         </p>
       </div>
     );

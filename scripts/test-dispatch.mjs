@@ -59,7 +59,7 @@ try {
   const t = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: gmailUser, pass: gmailPass } });
   const info = await t.sendMail({
     from: `Greenlight <${gmailUser}>`, to: m.email,
-    subject: notif.title, text: `${notif.body}\n\nAbrir: https://runna-command-center.vercel.app${notif.url}`,
+    subject: notif.title, text: `${notif.body}\n\nAbrir: https://runna-greenlight.vercel.app${notif.url}`,
   });
   t.close();
   await db.from("notification_deliveries").update({ status: "sent", sent_at: new Date().toISOString(), provider_id: info.messageId }).eq("id", delivId);

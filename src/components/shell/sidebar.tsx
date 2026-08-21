@@ -20,11 +20,8 @@ import {
 import { cn } from "@/lib/utils";
 import { canSee, DEFAULT_ROLE, type NavKey, type ViewRole } from "@/lib/roles";
 import { Wordmark } from "./wordmark";
-import { SoySwitch, type PoolMember } from "./soy-switch";
-import { ViewAsSwitch } from "./view-as-switch";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import type { Soy } from "@/lib/soy";
 
 // `soon` = la pantalla está en el roadmap pero la ruta todavía no existe.
 // Se pinta apagada y SIN <Link>, porque un Link a una ruta inexistente lo
@@ -100,13 +97,9 @@ const RESERVED = new Set([
  */
 function SidebarNav({
   role = DEFAULT_ROLE,
-  soy = null,
-  pool = [],
   onNavigate,
 }: {
   role?: ViewRole;
-  soy?: Soy | null;
-  pool?: PoolMember[];
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -233,18 +226,7 @@ function SidebarNav({
         })}
       </nav>
 
-      {/* Sesión: quién eres (honor-system) + ver la app como otro rol. Antes
-          vivían arriba a la derecha en el topbar; Pedro los movió aquí, bajo el
-          menú (debajo de Admin / Configuración). */}
-      <div className="mt-auto space-y-1.5 border-t border-sidebar-border px-3 py-3">
-        <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40">
-          Sesión
-        </p>
-        <SoySwitch soy={soy} pool={pool} />
-        <ViewAsSwitch role={role} />
-      </div>
-
-      <div className="border-t border-sidebar-border px-4 py-3 text-[11px] text-sidebar-foreground/40">
+      <div className="mt-auto border-t border-sidebar-border px-4 py-3 text-[11px] text-sidebar-foreground/40">
         Producción de anuncios
       </div>
     </>
@@ -254,16 +236,12 @@ function SidebarNav({
 /** Rail de escritorio (≥ md). Debajo de md el menú vive en <MobileNav>. */
 export function Sidebar({
   role = DEFAULT_ROLE,
-  soy = null,
-  pool = [],
 }: {
   role?: ViewRole;
-  soy?: Soy | null;
-  pool?: PoolMember[];
 }) {
   return (
     <aside className="sticky top-0 hidden h-dvh shrink-0 flex-col self-start bg-sidebar text-sidebar-foreground md:flex md:w-60">
-      <SidebarNav role={role} soy={soy} pool={pool} />
+      <SidebarNav role={role} />
     </aside>
   );
 }
@@ -274,12 +252,8 @@ export function Sidebar({
  */
 export function MobileNav({
   role = DEFAULT_ROLE,
-  soy = null,
-  pool = [],
 }: {
   role?: ViewRole;
-  soy?: Soy | null;
-  pool?: PoolMember[];
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -294,7 +268,7 @@ export function MobileNav({
         className="flex w-64 flex-col bg-sidebar p-0 text-sidebar-foreground [&>button]:top-5 [&>button]:text-sidebar-foreground/70"
       >
         <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
-        <SidebarNav role={role} soy={soy} pool={pool} onNavigate={() => setOpen(false)} />
+        <SidebarNav role={role} onNavigate={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
   );

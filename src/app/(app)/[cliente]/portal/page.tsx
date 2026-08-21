@@ -1,11 +1,22 @@
 import { Lock } from "lucide-react";
 import { getViewAs } from "@/lib/view-as";
+import { getCurrentUser } from "@/lib/identity";
+import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { cargarPortal, cargarTareaPortal } from "./portal-data";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { PortalTarea } from "@/components/portal/portal-tarea";
 
 export const dynamic = "force-dynamic";
+
+function PortalDenegado({ mensaje }: { mensaje: string }) {
+  return (
+    <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
+      <Lock className="mx-auto size-5 text-muted-foreground" />
+      <p className="mt-3 text-sm text-foreground">{mensaje}</p>
+    </div>
+  );
+}
 
 export default async function PortalPage({
   params,
@@ -16,15 +27,28 @@ export default async function PortalPage({
 }) {
   const { cliente } = await params;
   const sp = await searchParams;
-  const role = await getViewAs();
+  const [role, user] = await Promise.all([getViewAs(), getCurrentUser()]);
 
   if (!canSee(role, "portal")) {
-    return (
-      <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
-        <Lock className="mx-auto size-5 text-muted-foreground" />
-        <p className="mt-3 text-sm text-foreground">Un {ROLE_LABEL[role]} no entra al portal.</p>
-      </div>
-    );
+    return <PortalDenegado mensaje={`Un ${ROLE_LABEL[role]} no entra al portal.`} />;
+  }
+
+  // Client↔session binding: a Partner sees ONLY their own brand's portal — never
+  // another client's by editing the URL slug. Internal roles (master/admin/lead)
+  // can still preview any portal. Dormant while login is off (no client session).
+  if (role === "client") {
+    let esSuyo = false;
+    if (user?.clientId && hasSupabase()) {
+      const { data: reqClient } = await supabaseAdmin()
+        .from("clients")
+        .select("id")
+        .eq("slug", cliente)
+        .maybeSingle();
+      esSuyo = (reqClient as { id: string } | null)?.id === user.clientId;
+    }
+    if (!esSuyo) {
+      return <PortalDenegado mensaje="Este portal no es de tu marca." />;
+    }
   }
 
   const data = await cargarPortal(cliente);

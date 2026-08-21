@@ -2,9 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { getSoy } from "@/lib/soy";
-import { getViewAs } from "@/lib/view-as";
-import { canOverrideStatus } from "@/lib/roles";
+import { getCurrentUser } from "@/lib/identity";
 
 export type Aviso = {
   id: string;
@@ -17,28 +15,18 @@ export type Aviso = {
 };
 
 /**
- * Un aviso puede llegar por dos vías: a una persona del pool
- * (recipient_member_id) o a un perfil (recipient_id) — a los leads se les avisa
- * por perfil, porque no están en el pool del sheet.
- *
- * Sin login, el único perfil es el admin. Así que quien mira con rol de lead
- * también tiene que ver los avisos de ese perfil, o "Mandar a revisión" avisaría
- * a un buzón que nadie abre. Se detectó justo así: la notificación se creaba
- * bien y la campanita seguía en cero.
+ * Un aviso puede llegar por dos vías: a la PERSONA del equipo (recipient_member_id
+ * → track_member) o al PERFIL (recipient_id → cuenta). Con login real, cada quien
+ * ve los suyos: los avisos a su track_member Y los avisos a su perfil (así es como
+ * llegan, p.ej., las solicitudes de acceso de clientes a los admins). Antes esto
+ * miraba "el primer admin" — con login eso enseñaba el buzón de otra persona.
  */
 async function misBuzones(): Promise<string | null> {
-  const [soy, role] = await Promise.all([getSoy(), getViewAs()]);
-  const clauses: string[] = [];
-
-  if (soy) clauses.push(`recipient_member_id.eq.${soy.id}`);
-
-  if (canOverrideStatus(role) && hasSupabase()) {
-    const { data } = await supabaseAdmin()
-      .from("profiles").select("id").eq("role", "admin").limit(1).maybeSingle();
-    if (data?.id) clauses.push(`recipient_id.eq.${data.id}`);
-  }
-
-  return clauses.length ? clauses.join(",") : null;
+  const u = await getCurrentUser();
+  if (!u) return null;
+  const clauses: string[] = [`recipient_id.eq.${u.userId}`];
+  if (u.member) clauses.push(`recipient_member_id.eq.${u.member.id}`);
+  return clauses.join(",");
 }
 
 /**

@@ -32,10 +32,9 @@ export type BundleTask = {
 /**
  * El filtro por rol, como función pura y probada aparte.
  *
- * Especialista → sólo sus tareas asignadas (necesita haberse identificado con
- * "¿Quién eres?" — sin identidad, su bundle es vacío, no "todo"). Los demás
- * roles internos ven el bundle completo. El cliente no llega aquí: la página
- * lo bloquea antes.
+ * Especialista → sólo sus tareas asignadas (necesita una sesión con un miembro
+ * ligado — sin identidad, su bundle es vacío, no "todo"). Los demás roles internos
+ * ven el bundle completo. El cliente no llega aquí: la página lo bloquea antes.
  */
 export function filtroBundle(
   role: ViewRole,

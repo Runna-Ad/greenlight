@@ -8,6 +8,8 @@ import {
   Plug,
   BookText,
   Images,
+  Inbox,
+  UserCheck,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,6 +19,13 @@ import { ActividadTab } from "./actividad-tab";
 import { IntegracionesTab } from "./integraciones-tab";
 import { BibliotecaTab } from "./biblioteca-tab";
 import { MarcasTab } from "./marcas-tab";
+import { InvitacionesTab } from "./invitaciones-tab";
+import { ClientesTab } from "./clientes-tab";
+import type {
+  InvitacionRow,
+  ClienteOpt,
+  ClienteUsuarioRow,
+} from "@/app/(app)/admin/clientes-actions";
 import type { MiembroRow } from "@/lib/equipo";
 import type {
   ActividadRow,
@@ -35,10 +44,14 @@ type Soy = {
   notify_slack: boolean;
 } | null;
 
-type TabKey = "perfil" | "equipo" | "marcas" | "actividad" | "integraciones" | "biblioteca";
+type TabKey =
+  | "perfil" | "equipo" | "invitaciones" | "clientes"
+  | "marcas" | "actividad" | "integraciones" | "biblioteca";
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "perfil", label: "Mi perfil", icon: UserRound },
   { key: "equipo", label: "Equipo", icon: Users },
+  { key: "invitaciones", label: "Invitaciones", icon: Inbox },
+  { key: "clientes", label: "Clientes", icon: UserCheck },
   { key: "marcas", label: "Marcas", icon: Images },
   { key: "actividad", label: "Actividad", icon: Activity },
   { key: "integraciones", label: "Integraciones", icon: Plug },
@@ -52,6 +65,8 @@ export function AdminShell({
   actividad,
   integraciones,
   biblioteca,
+  invitaciones,
+  clientesUsuarios,
 }: {
   equipoInicial: MiembroRow[];
   soy: Soy;
@@ -59,6 +74,8 @@ export function AdminShell({
   actividad: ActividadRow[];
   integraciones: IntegracionesEstado;
   biblioteca: { snippets: SnippetRow[]; marcas: MarcaOpt[] };
+  invitaciones: { pendientes: InvitacionRow[]; clientes: ClienteOpt[] };
+  clientesUsuarios: ClienteUsuarioRow[];
 }) {
   const [tab, setTab] = useState<TabKey>("equipo");
 
@@ -99,6 +116,10 @@ export function AdminShell({
         <div className="min-w-0">
           {tab === "perfil" && <PerfilTab soy={soy} />}
           {tab === "equipo" && <EquipoTab inicial={equipoInicial} />}
+          {tab === "invitaciones" && (
+            <InvitacionesTab pendientes={invitaciones.pendientes} clientes={invitaciones.clientes} />
+          )}
+          {tab === "clientes" && <ClientesTab usuarios={clientesUsuarios} />}
           {tab === "marcas" && <MarcasTab clientes={marcas} />}
           {tab === "actividad" && <ActividadTab rows={actividad} />}
           {tab === "integraciones" && <IntegracionesTab estado={integraciones} />}

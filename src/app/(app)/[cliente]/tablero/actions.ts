@@ -5,20 +5,13 @@ import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { dispatchPendingEmails } from "@/lib/notif-email";
 import { canAssign, canMoveStatus, canOverrideStatus, type ViewRole } from "@/lib/roles";
-import { getViewAs } from "@/lib/view-as";
-import { getSoy } from "@/lib/soy";
+import { getCurrentUser } from "@/lib/identity";
+import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import type { AssetStatus } from "@/lib/brand";
 
 export type ActionResult = { ok: boolean; error?: string };
 
 type Db = ReturnType<typeof supabaseAdmin>;
-
-/** El perfil al que se atribuye la acción mientras no hay login. */
-async function actorId(db: Db): Promise<string | null> {
-  const { data } = await db
-    .from("profiles").select("id").eq("role", "admin").limit(1).maybeSingle();
-  return data?.id ?? null;
-}
 
 /**
  * Estas acciones se llaman desde el tablero Y desde /mi-trabajo, que no lleva
@@ -36,10 +29,11 @@ async function revalidateFor(db: Db, ideaId: string) {
   revalidatePath("/mi-trabajo");
 }
 
-/** Contexto común: quién eres y con qué rol miras. Siempre desde el servidor. */
-async function context(): Promise<{ role: ViewRole; soyId: string | null }> {
-  const [role, soy] = await Promise.all([getViewAs(), getSoy()]);
-  return { role, soyId: soy?.id ?? null };
+/** Contexto común: quién eres, con qué rol miras, y tu perfil (para atribución).
+ *  Todo desde la SESIÓN autenticada — nada de cookies falsificables. */
+async function context(): Promise<{ role: ViewRole; soyId: string | null; profileId: string | null }> {
+  const u = await getCurrentUser();
+  return { role: u?.role ?? "creative", soyId: u?.member?.id ?? null, profileId: u?.userId ?? null };
 }
 
 /**
@@ -60,17 +54,19 @@ export async function moveTask(
 ): Promise<ActionResult> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
 
-  const { role, soyId } = await context();
+  const { role, soyId, profileId } = await context();
   if (!canMoveStatus(role)) {
     return { ok: false, error: "Este rol no puede cambiar el estado de una tarea." };
   }
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
   const { error } = await db.rpc("rpc_move_task", {
     p_idea_id: ideaId,
     p_to: toStatus,
     p_as_lead: canOverrideStatus(role),
-    p_actor: await actorId(db),
+    p_actor: profileId,
     p_reason: reason ?? null,
     p_actor_member: soyId,
   });
@@ -95,9 +91,8 @@ export async function startTask(ideaId: string): Promise<ActionResult> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const { role, soyId } = await context();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no puede trabajar tareas." };
-  if (!soyId && role === "creative") {
-    return { ok: false, error: "Dinos quién eres antes de empezar una tarea." };
-  }
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
   const { error } = await db.rpc("rpc_task_start", {
@@ -119,6 +114,8 @@ export async function submitForReview(ideaId: string, note?: string): Promise<Ac
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const { role, soyId } = await context();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no puede mandar a revisión." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
   const { error } = await db.rpc("rpc_task_submit_review", {
@@ -139,10 +136,12 @@ export async function submitForReview(ideaId: string, note?: string): Promise<Ac
 /** El lead pide cambios → En correcciones, y los responsables se enteran. */
 export async function requestChanges(ideaId: string, body: string): Promise<ActionResult> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
-  const { role, soyId } = await context();
+  const { role, soyId, profileId } = await context();
   if (!canOverrideStatus(role)) {
     return { ok: false, error: "Sólo un lead puede pedir cambios." };
   }
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
   if (!body.trim()) return { ok: false, error: "Escribe qué hay que corregir." };
 
   const db = supabaseAdmin();
@@ -150,7 +149,7 @@ export async function requestChanges(ideaId: string, body: string): Promise<Acti
     p_idea_id: ideaId,
     p_body: body.trim(),
     p_actor_member: soyId,
-    p_actor: await actorId(db),
+    p_actor: profileId,
   });
   if (error) return { ok: false, error: error.message };
 
@@ -165,16 +164,18 @@ export async function requestChanges(ideaId: string, body: string): Promise<Acti
 /** El lead aprueba → Completado. */
 export async function approveTask(ideaId: string, note?: string): Promise<ActionResult> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
-  const { role, soyId } = await context();
+  const { role, soyId, profileId } = await context();
   if (!canOverrideStatus(role)) {
     return { ok: false, error: "Sólo un lead puede aprobar." };
   }
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
   const { error } = await db.rpc("rpc_task_approve", {
     p_idea_id: ideaId,
     p_actor_member: soyId,
-    p_actor: await actorId(db),
+    p_actor: profileId,
     p_note: note?.trim() || null,
   });
   if (error) return { ok: false, error: error.message };
@@ -190,16 +191,18 @@ export async function approveTask(ideaId: string, note?: string): Promise<Action
 /** El lead publica al cliente → Publicado. Paso APARTE de aprobar (Pedro). */
 export async function sendToClient(ideaId: string, note?: string): Promise<ActionResult> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
-  const { role, soyId } = await context();
+  const { role, soyId, profileId } = await context();
   if (!canOverrideStatus(role)) {
     return { ok: false, error: "Sólo un lead puede enviar al cliente." };
   }
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
   const { error } = await db.rpc("rpc_task_send_client", {
     p_idea_id: ideaId,
     p_actor_member: soyId,
-    p_actor: await actorId(db),
+    p_actor: profileId,
     p_note: note?.trim() || null,
   });
   if (error) return { ok: false, error: error.message };
@@ -224,6 +227,8 @@ export async function setLeads(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const { role } = await context();
   if (!canAssign(role)) return { ok: false, error: "Este rol no puede marcar leads." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
   // Primero todos a false, luego los elegidos a true — en dos updates, para que
@@ -263,6 +268,8 @@ export async function setAssignees(
 
   const { role } = await context();
   if (!canAssign(role)) return { ok: false, error: "Este rol no puede cambiar la asignación." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
 

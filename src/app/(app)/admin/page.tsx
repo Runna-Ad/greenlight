@@ -11,6 +11,7 @@ import {
   listarBiblioteca,
   listarMarcasPorCliente,
 } from "./actions";
+import { listarInvitaciones, listarClientesUsuarios } from "./clientes-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,14 +32,17 @@ export default async function AdminPage() {
     );
   }
 
-  const [equipo, soy, actividad, integraciones, biblioteca, marcas] = await Promise.all([
-    listarEquipo(),
-    getSoy(),
-    listarActividad(),
-    estadoIntegraciones(),
-    listarBiblioteca(),
-    listarMarcasPorCliente(),
-  ]);
+  const [equipo, soy, actividad, integraciones, biblioteca, marcas, invitaciones, clientesUsuarios] =
+    await Promise.all([
+      listarEquipo(),
+      getSoy(),
+      listarActividad(),
+      estadoIntegraciones(),
+      listarBiblioteca(),
+      listarMarcasPorCliente(),
+      listarInvitaciones(),
+      listarClientesUsuarios(),
+    ]);
 
   return (
     <AdminShell
@@ -48,6 +52,8 @@ export default async function AdminPage() {
       actividad={actividad}
       integraciones={integraciones}
       biblioteca={biblioteca}
+      invitaciones={invitaciones}
+      clientesUsuarios={clientesUsuarios}
     />
   );
 }

@@ -51,7 +51,7 @@ try {
   const decision = decisionEmail({ type: notif.type, notifyEmail: true, email: TO });
   if (!decision.enviar) throw new Error("ruteo dijo skip");
   const t = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: env.GMAIL_USER, pass: env.GMAIL_APP_PASSWORD } });
-  const info = await t.sendMail({ from: `Greenlight <${env.GMAIL_USER}>`, to: TO, subject: notif.title, text: `${notif.body}\n\nAbrir: https://runna-command-center.vercel.app${notif.url}` });
+  const info = await t.sendMail({ from: `Greenlight <${env.GMAIL_USER}>`, to: TO, subject: notif.title, text: `${notif.body}\n\nAbrir: https://runna-greenlight.vercel.app${notif.url}` });
   t.close();
   await db.from("notification_deliveries").update({ status: "sent", sent_at: new Date().toISOString(), provider_id: info.messageId }).eq("id", deliv.id);
   console.log(`· ENVIADO: ${info.messageId} → ${TO}`);

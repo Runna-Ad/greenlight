@@ -1,23 +1,23 @@
 import "server-only";
-import { cookies } from "next/headers";
-import { DEFAULT_ROLE, VIEW_ROLES, type ViewRole } from "./roles";
+import { getCurrentUser } from "./identity";
+import type { ViewRole } from "./roles";
 
-export const VIEW_AS_COOKIE = "gl_view_as";
+// "What role am I" — now the AUTHENTICATED account's real role. Impersonation
+// ("Ver como") is gone: this used to read the gl_view_as cookie and default to
+// admin when unset, which meant no-identity silently became admin. That fallback
+// is removed. The accessor name is kept so callers keep working unchanged.
 
 /**
- * El rol con el que se está mirando la app ahora mismo.
- *
- * Se lee en el SERVIDOR (cookie, no localStorage) para que el menú y las
- * páginas ya salgan filtrados del render. Con localStorage se vería un
- * parpadeo del menú completo antes de recortarse — y en una vista previa de
- * cliente ese parpadeo enseña justo lo que no debe verse.
+ * The signed-in account's role. No session → the LEAST-privileged internal role
+ * ('creative'), never admin. In production the middleware redirects unauthenticated
+ * requests to /login, so this floor is only a defensive value.
  */
 export async function getViewAs(): Promise<ViewRole> {
-  const raw = (await cookies()).get(VIEW_AS_COOKIE)?.value;
-  return VIEW_ROLES.includes(raw as ViewRole) ? (raw as ViewRole) : DEFAULT_ROLE;
+  const u = await getCurrentUser();
+  return u?.role ?? "creative";
 }
 
-/** true cuando se está viendo la app como alguien que no eres. */
+/** Impersonation is gone — there is no "previewing as someone else" anymore. */
 export async function isPreviewing(): Promise<boolean> {
-  return (await getViewAs()) !== DEFAULT_ROLE;
+  return false;
 }

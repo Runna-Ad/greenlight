@@ -43,8 +43,14 @@ export const ROLE_HINT: Record<ViewRole, string> = {
   client: "Sólo lo publicado para su marca (Partner)",
 };
 
-/** El rol real de la cuenta. Con el login apagado, Pedro es admin. */
-export const DEFAULT_ROLE: ViewRole = "admin";
+/**
+ * Fallback role for client-component PROPS only (the server always passes the real
+ * role down). This is NOT an auth fallback anymore: with login on, the role comes
+ * from the authenticated session (see lib/identity.ts). No session ⇒ least
+ * privilege, NEVER admin — the old `= "admin"` default meant "no identity = admin",
+ * which is exactly the hole login closes. Kept at 'creative' (least internal role).
+ */
+export const DEFAULT_ROLE: ViewRole = "creative";
 
 // ── Secciones del menú ──────────────────────────────────────
 // Los ids son estables; el orden y las etiquetas viven en el sidebar.

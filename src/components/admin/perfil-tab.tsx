@@ -17,7 +17,7 @@ type Soy = {
   notify_slack: boolean;
 } | null;
 
-// En la beta sin login, "tu perfil" = la persona que elegiste en "¿Quién eres?".
+// "Tu perfil" = la persona ligada a tu sesión (vacío si no has iniciado sesión).
 // Editable: nombre + notificaciones (email y/o Slack). Los avisos in-app siempre
 // llegan; esto sólo cambia correo y Slack.
 export function PerfilTab({ soy }: { soy: Soy }) {
@@ -30,8 +30,8 @@ export function PerfilTab({ soy }: { soy: Soy }) {
     return (
       <EmptyState
         icon={UserRound}
-        titulo="No te has identificado"
-        descripcion="Elige quién eres en “¿Quién eres?”, en el menú de la izquierda, para ver y editar tu perfil."
+        titulo="Inicia sesión"
+        descripcion="Entra con tu cuenta de Rünna para ver y editar tu perfil."
       />
     );
   }

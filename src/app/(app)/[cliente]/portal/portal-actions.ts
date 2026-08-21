@@ -4,9 +4,26 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { dispatchPendingEmails } from "@/lib/notif-email";
+import { getCurrentUser } from "@/lib/identity";
 import type { CorreccionTarget } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
 
 export type PortalResultado = { ok: true } | { ok: false; error: string };
+
+/**
+ * Binding cliente↔sesión: el usuario autenticado ES el cliente de ESTE slug (no
+ * otro tenant, no un usuario interno). Cierra el hueco de que el path de ESCRITURA
+ * confiaba en el slug de la URL — un Partner sólo actúa sobre SU marca. Con el login
+ * apagado no hay sesión de cliente → estas acciones no proceden (correcto).
+ */
+async function esSesionDelCliente(
+  db: ReturnType<typeof supabaseAdmin>,
+  clienteSlug: string,
+): Promise<boolean> {
+  const u = await getCurrentUser();
+  if (!u || u.role !== "client" || !u.clientId) return false;
+  const { data } = await db.from("clients").select("id").eq("slug", clienteSlug).maybeSingle();
+  return (data as { id: string } | null)?.id === u.clientId;
+}
 
 /**
  * ¿La idea es de ESTE cliente y está publicada? El server action no confía en el
@@ -48,6 +65,9 @@ export async function clienteFijarCambio(
   if (!body.trim()) return { ok: false, error: "Escribe qué quieres cambiar." };
 
   const db = supabaseAdmin();
+  if (!(await esSesionDelCliente(db, clienteSlug))) {
+    return { ok: false, error: "No tienes acceso a este portal." };
+  }
   if (!(await esDelCliente(db, clienteSlug, ideaId))) {
     return { ok: false, error: "Esta idea no está disponible para revisión." };
   }
@@ -77,6 +97,9 @@ export async function clienteQuitarCambio(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
 
   const db = supabaseAdmin();
+  if (!(await esSesionDelCliente(db, clienteSlug))) {
+    return { ok: false, error: "No tienes acceso a este portal." };
+  }
   if (!(await esDelCliente(db, clienteSlug, ideaId))) {
     return { ok: false, error: "Esta idea no está disponible para revisión." };
   }
@@ -102,6 +125,9 @@ export async function clienteEnviarCambios(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
 
   const db = supabaseAdmin();
+  if (!(await esSesionDelCliente(db, clienteSlug))) {
+    return { ok: false, error: "No tienes acceso a este portal." };
+  }
   if (!(await esDelCliente(db, clienteSlug, ideaId))) {
     return { ok: false, error: "Esta idea no está disponible para revisión." };
   }
@@ -121,6 +147,9 @@ export async function clienteAprobar(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
 
   const db = supabaseAdmin();
+  if (!(await esSesionDelCliente(db, clienteSlug))) {
+    return { ok: false, error: "No tienes acceso a este portal." };
+  }
   if (!(await esDelCliente(db, clienteSlug, ideaId))) {
     return { ok: false, error: "Esta idea no está disponible para revisión." };
   }

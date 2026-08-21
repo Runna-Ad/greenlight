@@ -1,61 +1,34 @@
 import "server-only";
-import { cache } from "react";
-import { cookies } from "next/headers";
-import { supabaseAdmin, hasSupabase } from "./supabase-admin";
+import { getCurrentUser } from "./identity";
 
-export const SOY_COOKIE = "gl_soy";
+// "Who am I" — now resolved from the AUTHENTICATED session, not a cookie.
+//
+// This file used to hold the gl_soy honor-system shim (pick your name from a
+// dropdown). Login is real now: identity comes from the Supabase session via
+// getCurrentUser(). The accessor names below are kept so every caller keeps
+// working; only their guts changed. A client (Partner) has no roster identity, so
+// getSoy() is null for them — exactly as before.
 
 export type Soy = {
   id: string;
   name: string;
   color: string;
   track: "real" | "normal";
-  /** El rol REAL de la identidad (no el view-as). Para saber si su trabajo cuenta
-   *  como autoría (sólo el equipo creativo la deja). null = default 'creative'. */
+  /** El rol REAL de la identidad. Para saber si su trabajo cuenta como autoría
+   *  (sólo el equipo creativo la deja). null = default 'creative'. */
   role: string | null;
-  /** Preferencias de notificación (para "Mi perfil"). in-app siempre llega. */
   notify_email: boolean;
   notify_slack: boolean;
 };
 
-/**
- * Quién dice ser la persona que está usando la app.
- *
- * Mientras no haya login, el flujo necesita un "yo": sin él nadie puede tener
- * "sus" tareas ni pulsar "Empezar". Se elige el nombre del pool del sheet
- * (track_members) y se guarda en una cookie leída en el SERVIDOR, igual que
- * gl_view_as — con localStorage se vería un parpadeo antes de recortar.
- *
- * Es honor system: nadie verifica que seas quien dices. Aceptable con 14
- * personas de confianza y sin login, pero hay que decirlo en la UI.
- *
- * DIFERENCIA DELIBERADA con view-as: aquella cookie muere con la sesión para
- * que nadie quede atrapado en una vista ajena. Ésta dura, porque re-elegir tu
- * nombre cada mañana mata la adopción.
- *
- * La cookie guarda SÓLO el uuid: si se guardara el nombre, un cambio en admin
- * dejaría los chips mintiendo.
- *
- * Camino a auth: el día de AUTH_ENABLED esto resuelve
- * profiles.id → track_members.profile_id y la cookie queda de respaldo.
- * Ninguna llamada cambia.
- */
-export const getSoy = cache(async (): Promise<Soy | null> => {
-  const id = (await cookies()).get(SOY_COOKIE)?.value;
-  if (!id || !hasSupabase()) return null;
+/** The signed-in team member, or null (not signed in, or a client with no roster row). */
+export async function getSoy(): Promise<Soy | null> {
+  const u = await getCurrentUser();
+  return u?.member ?? null;
+}
 
-  const { data } = await supabaseAdmin()
-    .from("track_members")
-    .select("id, name, color, track, role, notify_email, notify_slack")
-    .eq("id", id)
-    .eq("active", true)
-    .maybeSingle();
-
-  // Un id que ya no existe (o alguien inactivo) equivale a no haber elegido.
-  return (data as Soy | null) ?? null;
-});
-
-/** El id sin resolver, para comprobaciones baratas. */
+/** The signed-in member's track_members id, for cheap checks / authorship writes. */
 export async function getSoyId(): Promise<string | null> {
-  return (await cookies()).get(SOY_COOKIE)?.value ?? null;
+  const u = await getCurrentUser();
+  return u?.member?.id ?? null;
 }
