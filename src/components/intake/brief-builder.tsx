@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Plus, ClipboardList, UserPlus } from "lucide-react";
+import { Check, Plus, ClipboardList, UserPlus, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -354,22 +354,31 @@ function FaltantesDialog({
             <h2 className="text-base font-semibold text-foreground">Personas nuevas en el brief</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
               Estas personas todavía no están en la plataforma. ¿Las agrego al equipo como Especialista?
-              El correo es opcional — se llena solo cuando entren.
+              Pon su correo <span className="font-medium text-foreground">@runna.com.mx</span> — el mismo
+              con el que iniciarán sesión: así al entrar reclaman su usuario y ven estas tareas.
             </p>
           </div>
         </div>
 
         <ul className="mt-4 space-y-2">
           {nombres.map((n) => (
-            <li key={n} className="flex items-center gap-2">
-              <span className="w-28 shrink-0 truncate text-sm font-medium text-foreground">{n}</span>
-              <input
-                type="email"
-                placeholder="correo (opcional)"
-                value={emails[n] ?? ""}
-                onChange={(e) => setEmails((m) => ({ ...m, [n]: e.target.value }))}
-                className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
+            <li key={n} className="flex items-start gap-2">
+              <span className="mt-2 w-28 shrink-0 truncate text-sm font-medium text-foreground">{n}</span>
+              <div className="flex-1">
+                <input
+                  type="email"
+                  placeholder="correo @runna.com.mx"
+                  value={emails[n] ?? ""}
+                  onChange={(e) => setEmails((m) => ({ ...m, [n]: e.target.value }))}
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                {!emails[n]?.trim() && (
+                  <p className="mt-1 flex items-start gap-1 text-[11px] leading-snug text-status-corrections">
+                    <AlertTriangle className="mt-px size-3 shrink-0" />
+                    Sin correo entrará como usuario nuevo y no verá estas tareas.
+                  </p>
+                )}
+              </div>
             </li>
           ))}
         </ul>
