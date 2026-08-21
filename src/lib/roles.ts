@@ -86,6 +86,10 @@ const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
   master: NAV_ALL,
   admin: NAV_ALL,
   // El lead reparte y revisa, pero no toca la configuración del sistema.
+  // NO ve el "Portal": es el portal FUNCIONAL del cliente (actuar como cliente),
+  // reservado a master/admin (Pedro 2026-08-21). La preview del cliente vive en la
+  // tarea (Vista cliente/editor). `canSee(role,'portal')` gatea nav Y la ruta
+  // /{slug}/portal (server component), así que quitarlo aquí cierra ambas.
   lead: [
     "clientes",
     "mi-trabajo",
@@ -94,7 +98,6 @@ const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
     "briefs",
     "sync",
     "entregas",
-    "portal",
     "mi-perfil",
   ],
   // El especialista entra a trabajar lo suyo: su lista, el tablero y los

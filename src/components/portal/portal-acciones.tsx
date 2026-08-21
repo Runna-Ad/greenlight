@@ -3,7 +3,7 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, RefreshCw, Clock } from "lucide-react";
+import { Check, RefreshCw, Clock, Eye } from "lucide-react";
 import { clienteAprobar, clienteEnviarCambios } from "@/app/(app)/[cliente]/portal/portal-actions";
 import { useCorrecciones } from "@/components/tarea/correcciones/contexto";
 import type { AssetStatus } from "@/lib/brand";
@@ -24,6 +24,7 @@ export function PortalAcciones({
   status,
   reReview = false,
   nRevisados = 0,
+  puedeActuar = true,
 }: {
   clienteSlug: string;
   ideaId: string;
@@ -32,6 +33,9 @@ export function PortalAcciones({
   reReview?: boolean;
   /** Cuántos cambios aplicó el equipo (para el copy de la barra). */
   nRevisados?: number;
+  /** ¿El visor puede aprobar / pedir cambios? (cliente de esta marca o master).
+   *  Un admin en sólo-lectura ve la barra informativa, sin botones. */
+  puedeActuar?: boolean;
 }) {
   const router = useRouter();
   const [pend, start] = useTransition();
@@ -42,6 +46,19 @@ export function PortalAcciones({
   const corr = useCorrecciones();
   const n = corr?.correcciones.length ?? 0;
   const hayCambios = n > 0;
+
+  // Sólo-lectura: un usuario de agencia sin permiso de actuar (admin) VE el portal
+  // pero no aprueba ni pide cambios como el cliente. (El server también lo bloquea:
+  // puedeActuarComoCliente en portal-actions.) Va tras los hooks para no romper su orden.
+  if (!puedeActuar)
+    return (
+      <Barra>
+        <div className="flex w-full items-center gap-2 text-[13px] text-muted-foreground">
+          <Eye className="size-4 shrink-0" />
+          Vista de solo lectura — sólo el cliente (o el Master Builder) puede aprobar o pedir cambios.
+        </div>
+      </Barra>
+    );
 
   if (status === "delivered")
     return (

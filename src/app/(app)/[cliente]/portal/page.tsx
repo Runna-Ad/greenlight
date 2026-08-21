@@ -33,9 +33,14 @@ export default async function PortalPage({
     return <PortalDenegado mensaje={`Un ${ROLE_LABEL[role]} no entra al portal.`} />;
   }
 
-  // Client↔session binding: a Partner sees ONLY their own brand's portal — never
-  // another client's by editing the URL slug. Internal roles (master/admin/lead)
-  // can still preview any portal. Dormant while login is off (no client session).
+  // Quién puede ACTUAR como cliente en el portal (aprobar / pedir cambios), vs. sólo
+  // VERLO. El portal es FUNCIONAL, no una preview (esa vive en la tarea: Vista
+  // cliente/editor). Reglas (Pedro 2026-08-21):
+  //   · client → sólo SU marca (nunca otra por editar el slug).
+  //   · master → puede actuar (reproducir/probar una queja del cliente).
+  //   · admin  → VE el portal pero SÓLO-LECTURA (no actúa como cliente).
+  //   · lead   → ni entra (lo corta canSee arriba).
+  let puedeActuar = role === "master";
   if (role === "client") {
     let esSuyo = false;
     if (user?.clientId && hasSupabase()) {
@@ -49,6 +54,7 @@ export default async function PortalPage({
     if (!esSuyo) {
       return <PortalDenegado mensaje="Este portal no es de tu marca." />;
     }
+    puedeActuar = true;
   }
 
   const data = await cargarPortal(cliente);
@@ -75,7 +81,7 @@ export default async function PortalPage({
       briefs={data.briefs}
       selBriefId={briefSel}
       selTareaId={tareaSel}
-      vista={tareaData ? <PortalTarea t={tareaData} /> : null}
+      vista={tareaData ? <PortalTarea t={tareaData} puedeActuar={puedeActuar} /> : null}
     />
   );
 }

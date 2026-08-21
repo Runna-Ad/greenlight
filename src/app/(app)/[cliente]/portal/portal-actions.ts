@@ -10,17 +10,24 @@ import type { CorreccionTarget } from "@/app/(app)/[cliente]/tareas/[id]/correcc
 export type PortalResultado = { ok: true } | { ok: false; error: string };
 
 /**
- * Binding cliente↔sesión: el usuario autenticado ES el cliente de ESTE slug (no
- * otro tenant, no un usuario interno). Cierra el hueco de que el path de ESCRITURA
- * confiaba en el slug de la URL — un Partner sólo actúa sobre SU marca. Con el login
- * apagado no hay sesión de cliente → estas acciones no proceden (correcto).
+ * ¿El usuario autenticado puede ACTUAR en el portal de ESTE slug (fijar/quitar/
+ * enviar cambios, aprobar)? Sí cuando:
+ *   · ES el cliente de esta marca (Partner — no otro tenant), o
+ *   · es el MASTER BUILDER (Pedro), que puede actuar como cliente para reproducir
+ *     o probar una queja ("el portal no me deja X").
+ * Los demás roles de agencia (admin/lead) NO actúan: admin ve el portal en modo
+ * SÓLO-LECTURA; lead ni siquiera entra (canSee). Cierra el hueco de que el path de
+ * ESCRITURA confiaba en el slug de la URL. Con el login apagado no hay sesión → no
+ * procede (correcto).
  */
-async function esSesionDelCliente(
+async function puedeActuarComoCliente(
   db: ReturnType<typeof supabaseAdmin>,
   clienteSlug: string,
 ): Promise<boolean> {
   const u = await getCurrentUser();
-  if (!u || u.role !== "client" || !u.clientId) return false;
+  if (!u) return false;
+  if (u.role === "master") return true; // master actúa como cliente (test/soporte)
+  if (u.role !== "client" || !u.clientId) return false;
   const { data } = await db.from("clients").select("id").eq("slug", clienteSlug).maybeSingle();
   return (data as { id: string } | null)?.id === u.clientId;
 }
@@ -65,7 +72,7 @@ export async function clienteFijarCambio(
   if (!body.trim()) return { ok: false, error: "Escribe qué quieres cambiar." };
 
   const db = supabaseAdmin();
-  if (!(await esSesionDelCliente(db, clienteSlug))) {
+  if (!(await puedeActuarComoCliente(db, clienteSlug))) {
     return { ok: false, error: "No tienes acceso a este portal." };
   }
   if (!(await esDelCliente(db, clienteSlug, ideaId))) {
@@ -97,7 +104,7 @@ export async function clienteQuitarCambio(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
 
   const db = supabaseAdmin();
-  if (!(await esSesionDelCliente(db, clienteSlug))) {
+  if (!(await puedeActuarComoCliente(db, clienteSlug))) {
     return { ok: false, error: "No tienes acceso a este portal." };
   }
   if (!(await esDelCliente(db, clienteSlug, ideaId))) {
@@ -125,7 +132,7 @@ export async function clienteEnviarCambios(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
 
   const db = supabaseAdmin();
-  if (!(await esSesionDelCliente(db, clienteSlug))) {
+  if (!(await puedeActuarComoCliente(db, clienteSlug))) {
     return { ok: false, error: "No tienes acceso a este portal." };
   }
   if (!(await esDelCliente(db, clienteSlug, ideaId))) {
@@ -147,7 +154,7 @@ export async function clienteAprobar(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
 
   const db = supabaseAdmin();
-  if (!(await esSesionDelCliente(db, clienteSlug))) {
+  if (!(await puedeActuarComoCliente(db, clienteSlug))) {
     return { ok: false, error: "No tienes acceso a este portal." };
   }
   if (!(await esDelCliente(db, clienteSlug, ideaId))) {

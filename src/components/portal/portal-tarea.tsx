@@ -19,7 +19,7 @@ const noop = () => {};
  * `runna` se omite (oculta lead/equipo/consideraciones/archivos), verCliente=true y
  * todos los callbacks de edición son no-op.
  */
-export function PortalTarea({ t }: { t: TareaPortal }) {
+export function PortalTarea({ t, puedeActuar }: { t: TareaPortal; puedeActuar: boolean }) {
   return (
     <WorkspaceProvider
       key={t.ideaId}
@@ -28,24 +28,26 @@ export function PortalTarea({ t }: { t: TareaPortal }) {
       verClienteInicial={true}
     >
       {/* El cliente pide cambios seleccionando texto (igual que un lead), sólo
-          mientras la idea siga en su cancha (published). Al enviarlos vuelve al
-          equipo y la vista queda sólo-lectura. */}
+          mientras la idea siga en su cancha (published). Un visor SIN permiso de
+          actuar (admin en sólo-lectura) NUNCA edita, aunque la idea esté published. */}
       <CorreccionesClienteProvider
         ideaId={t.ideaId}
         clienteSlug={t.clienteSlug}
         cambios={t.cambios}
         revisiones={t.revisiones}
-        editable={t.status === "published"}
+        editable={puedeActuar && t.status === "published"}
       >
       {/* Barra de acción PEGADA ARRIBA (Aprobar ⇄ Pedir cambios). Vive dentro del
           provider para leer cuántos cambios anotó el cliente. `reReview` cambia el
-          copy a "el equipo aplicó los N cambios que pediste" en la re-revisión. */}
+          copy a "el equipo aplicó los N cambios que pediste" en la re-revisión.
+          `puedeActuar=false` (admin viendo) → barra de sólo-lectura, sin botones. */}
       <PortalAcciones
         clienteSlug={t.clienteSlug}
         ideaId={t.ideaId}
         status={t.status}
         reReview={t.status === "published" && t.revisiones.length > 0}
         nRevisados={t.revisiones.length}
+        puedeActuar={puedeActuar}
       />
       <CuerpoTarea t={t} />
       </CorreccionesClienteProvider>
