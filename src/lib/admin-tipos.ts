@@ -25,21 +25,16 @@ export type SnippetRow = {
   sort_order: number;
 };
 
-export const SNIPPET_KINDS = [
-  "legal",
-  "selling_point",
-  "instruccion",
-  "consideracion",
-  "referencia",
-] as const;
+// La Biblioteca ahora es SÓLO Legales (Pedro 2026-08-21). Los otros kinds
+// (selling_point/instruccion/consideracion/referencia) se retiraron: sólo se
+// administraban aquí y nada más en la app los consume — la tarea sólo lee
+// snippets `kind='legal'`. El enum `snippet_kind` en la DB conserva esos valores
+// (dropear un valor de enum en Postgres no vale la pena); simplemente no se usan.
+export const SNIPPET_KINDS = ["legal"] as const;
 export type SnippetKind = (typeof SNIPPET_KINDS)[number];
 
 export const SNIPPET_KIND_LABEL: Record<string, string> = {
   legal: "Legales",
-  selling_point: "Selling points",
-  instruccion: "Instrucciones",
-  consideracion: "Consideraciones",
-  referencia: "Referencias",
 };
 
 export type MarcaOpt = { id: string; name: string };
