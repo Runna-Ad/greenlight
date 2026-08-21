@@ -124,16 +124,30 @@ function MarcaRow({
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       {marca.logo_url ? (
-        <Image
-          src={marca.logo_url}
-          alt={marca.name}
-          width={44}
-          height={44}
-          unoptimized
-          className="size-11 rounded-md border border-border bg-secondary object-contain p-0.5"
-        />
+        <div className="relative shrink-0">
+          <Image
+            src={marca.logo_url}
+            alt={marca.name}
+            width={44}
+            height={44}
+            unoptimized
+            className="size-11 rounded-md border border-border bg-secondary object-contain p-0.5"
+          />
+          {/* Quitar el LOGO (no la marca) vive aquí, como ✕ en la miniatura — así el
+              único ícono de basura de la fila significa sólo "borrar marca". */}
+          <button
+            type="button"
+            onClick={quitar}
+            disabled={pending}
+            aria-label={`Quitar logo de ${marca.name}`}
+            title="Quitar logo"
+            className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm hover:bg-secondary hover:text-status-corrections disabled:opacity-50"
+          >
+            <X className="size-3" />
+          </button>
+        </div>
       ) : (
-        <span className="flex size-11 items-center justify-center rounded-md border border-dashed border-border bg-secondary text-xs font-bold text-muted-foreground">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-secondary text-xs font-bold text-muted-foreground">
           {marca.name.slice(0, 2).toUpperCase()}
         </span>
       )}
@@ -166,18 +180,6 @@ function MarcaRow({
         <Upload className="size-3.5" />
         {marca.logo_url ? "Reemplazar" : "Subir logo"}
       </Button>
-      {marca.logo_url && (
-        <button
-          type="button"
-          onClick={quitar}
-          disabled={pending}
-          aria-label={`Quitar logo de ${marca.name}`}
-          className="rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-status-corrections disabled:opacity-50"
-        >
-          <Trash2 className="size-4" />
-        </button>
-      )}
-
       {confirmarBorrar ? (
         <div className="flex items-center gap-1">
           <button
