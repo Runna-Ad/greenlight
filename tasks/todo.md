@@ -70,6 +70,14 @@ Sync: key estable = notion block/page id (edit→update, no duplica); borrado en
       "Sincronizar" en Integraciones; `notionConfigurado`=Boolean(NOTION_TOKEN)).
       PENDIENTE: (a) Pedro añade NOTION_TOKEN a Vercel; (b) click Sincronizar en prod → verificar 5
       legales en DB; (c) desactivar el manual dup "Legal CAT — Card"; (d) Fase B (reglas keyword→legal), Fase C (H.Ü.E).
+      ✅ (a) NOTION_TOKEN en Vercel + sync corrido: 5 legales verbatim en DB (marca correcta, asteriscos intactos).
+      ✅ (b) verificado en DB. (c) dup "Legal CAT — Card" desactivado.
+- [x] FASE B construida + shippeada: `legalSugerido()` puro (clasifica por título Notion, orden msi→cashback,
+      determinista) + banner "Sugerido · Adjuntar" en la Cortinilla (Card: CASHBACK/MSI/general; Préstamos:
+      general + promo como alternativa humana). Suggest-not-auto (compliance). Verificado logic vs 5 títulos reales.
+- [x] BIBLIOTECA: opción de BORRAR legal (hard delete) con guarda de uso (bloquea si está en N tareas) + confirm.
+      Nota: un legal de Notion re-aparece en el próximo sync (borrar también en Notion para retirarlo).
+- Pendiente Fase C (H.Ü.E red de seguridad para casos borrosos) — futuro.
 
 ## 👥 (2026-08-21) Asignación de 2 niveles (lead + especialista) — EN CURSO
 Modelo (Pedro): el sheet trae el LEAD (a futuro sólo el lead). El lead luego elige
