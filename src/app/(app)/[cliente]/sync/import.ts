@@ -123,6 +123,10 @@ export async function importRows(
 
   // ── 1. one brief per tab ──
   const briefByTab = new Map<string, string>();
+  // Briefs CREADOS en este run (no los reusados). Si al final alguno quedó SIN
+  // ideas (todas sus filas se bloquearon/omitieron) se borra: un brief vacío de
+  // una sync fallida es basura que ensucia el tablero y la tarjeta de cliente.
+  const nuevosBriefIds = new Set<string>();
   for (const tab of new Set(rows.map((r) => r.tab))) {
     const info = classifyTab(tab);
     const sample = rows.find((r) => r.tab === tab)!;
@@ -156,6 +160,7 @@ export async function importRows(
       continue;
     }
     briefByTab.set(tab, brief.id);
+    nuevosBriefIds.add(brief.id);
   }
 
   // ── 2. rows → ideas + assets ──
@@ -354,6 +359,20 @@ export async function importRows(
       }
     } catch (e) {
       res.errors.push(`${v("Naming") || row.key}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // Limpieza: borra los briefs creados ESTE run que quedaron SIN ideas (todas sus
+  // filas se bloquearon/omitieron). Un brief vacío no debe existir — 0 downstream
+  // (0 ideas/assets/asignaciones), así que borrarlo es seguro y evita el "1 BRIEF"
+  // fantasma en la tarjeta de cliente. Sólo toca los creados este run.
+  for (const briefId of nuevosBriefIds) {
+    const { count } = await db
+      .from("ideas")
+      .select("id", { count: "exact", head: true })
+      .eq("brief_id", briefId);
+    if ((count ?? 0) === 0) {
+      await db.from("briefs").delete().eq("id", briefId);
     }
   }
 
