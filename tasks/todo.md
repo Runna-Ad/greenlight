@@ -1,8 +1,11 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🔥 CURRENT BATCH (2026-08-21) — 4 asks de Pedro (una sesión)
-Orden: B (contenido, tests) → A-safe (pura adición) → C (delete) → D (track nullable).
-Gate: `npm run test:lib` + `npm run test:db` verdes; deploy sólo con "ship it" explícito.
+## 🔥 CURRENT BATCH (2026-08-21) — 4 asks de Pedro — ✅ SHIPPED & VERIFICADO
+Push `main` 0abcede → deploy PRODUCTION Ready (runna-greenlight.vercel.app). Migración 0044 aplicada
+a prod + VERIFICADA: track nullable=YES; admin(Hermann)/master(Runna Advertising)→null; lead(Nils)/
+creative(Christian)→normal. Tests 359 lib + 250 db; tsc + eslint limpios. Falta: live-test en el
+navegador (Pedro logueado como master) de B/A/C/D — checklist abajo.
+Orden ejecutado: B → A → C → D.
 
 - **B — split botones doer/reviewer.** `submit_review` (y `start`/"Empezar") SÓLO al especialista
   (`isAssignee && !isLead`); el lead/admin/master es REVISOR → sólo aprobar/mandar cambios + enviar

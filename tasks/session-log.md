@@ -1,5 +1,50 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-21 — MARATÓN post-go-live: integridad, Notion→legales, asignación 2-niveles, y batch B/A/C/D
+Sesión larga (varios /compact). Todo shippeado a prod verde. Lo más fresco (y el cierre) fue un batch
+de 4 asks de Pedro; antes, una tanda de fixes/features post-go-live.
+
+**Batch final — 4 asks (1 commit `0abcede`, deploy PRODUCTION Ready + migración 0044 verificada):**
+- **B — botones doer/reviewer.** `actionsFor` (fuente compartida board/workspace/mi-trabajo): los verbos
+  de doer (Empezar, Mandar a revisión, Retomar/Devolver) SÓLO al especialista asignado
+  (`isAssignee && !isLead`); lead/admin/master es revisor (Aprobar/Mandar cambios/Enviar a cliente).
+  Nils (lead) ya no ve "Mandar a revisión". Actualicé el test que afirmaba lo viejo.
+- **A — legal del estático desde la biblioteca.** La Cortinilla (biblioteca + sugerencia Phase-B) sólo
+  se renderizaba para VIDEO; el estático sólo tenía texto libre. Ahora el estático usa el MISMO bloque
+  (titulado "Legales"). Pedro eligió RETIRAR el `legales_extra` libre → quitado del documento + del
+  "Pegar copy" (+ anulado al parsear). Columna DB queda vestigial.
+- **C — master/admin borran tareas y briefs.** `eliminarTarea` (tarea actions) + `eliminarBrief`
+  (briefs/actions nuevo), gate `canAdmin`, confirm 2 pasos (BundleCard footer + SubHeaderTarea).
+  Cascada de FKs verificada contra el catálogo (`confdeltype`) → un delete plano basta. UI: trash en
+  bundle-card + "Borrar" en el top bar de la tarea. Nota: storage de refs queda huérfano (inocuo).
+- **D — track nullable para admin/master (global, sin track).** Migración 0044 (drop NOT NULL +
+  backfill role in admin/master → null). Pre-flight de esquema descubrió que `track` FUE parte de la PK
+  compuesta (0003) pero 0008 la movió a `id` → sólo quedaba unique(track,name). Código: provision,
+  equipo-tab (grupo "Vista global" + selector oculto + invariante optimista), guardar/crearMiembro
+  (invariante track↔rol server-side), performance/data (workload sólo doers), identity/soy/perfil/
+  mi-trabajo (track nullable). Datos prod: 4 personas; backfill puso null a admin(Hermann)+master(Runna
+  Advertising), lead(Nils)/creative(Christian) conservan normal — VERIFICADO en prod.
+- Gates: 359 lib + 250 db, tsc + eslint limpios. Deploy: push main → prod Ready (runna-greenlight.
+  vercel.app, alias -git-main-) → `npm run migrate` (0044) → verificado por query.
+
+**Antes del batch (mismo día, ya shippeado en la sesión):** fix `/clientes` DB-backed · live-test Fase 4
+(marca CRUD) + doble-trash · email nudge Fase 3 · pipeline Notion→Legales (A: espejo por marca; B:
+sugerencia determinista + borrar en Biblioteca) · Biblioteca reducida a Legales · fix "1 BRIEF" fantasma
+(limpieza de brief huérfano vacío) · asignación 2-niveles (lead + especialista) desde pool vivo por
+rol+track (editor in-task + sync + pickers de creación).
+
+**Decisiones de Pedro:** (1) admin/master = vista global, sin track (track particiona sólo doers).
+(2) legal del estático se SELECCIONA de la biblioteca, no se re-escribe → retirar el texto libre.
+(3) botones por rol-en-el-flujo (doer vs revisor), no por "puede tocar la tarjeta".
+
+**Pendiente / próxima sesión:**
+- Live-test en el navegador de B/A/C/D (Pedro como master) — checklist en todo.md CURRENT BATCH.
+- Split lead/especialista AT MANUAL CREATION (brief builder) — necesita RPC `rpc_crear_brief` (ver
+  "NEXT FOCUSED BUILD" en todo.md).
+- PROMPT #2 = H.Ü.E HUB (no empezado). Live-test Fases 2/3 (magic-link cliente).
+- Limpieza opcional: worktree stale `.claude/worktrees/agitated-agnesi-9d386f/`; dropear columna
+  vestigial `estaticos.legales_extra` algún día; cleanup de storage huérfano al borrar.
+
 ## 2026-08-20 (cont) — Evaluación v2 (Resolución + Eficiencia) + desglose por brief
 Continuación de la misma sesión. 2 commits más, ambos deploy verde.
 

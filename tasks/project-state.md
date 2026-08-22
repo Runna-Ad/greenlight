@@ -1,5 +1,26 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-20 (pm) — 🟢 **GO-LIVE: login REAL activo en producción**
+Última actualización: 2026-08-21 — post-go-live: integridad + Notion→legales + asignación 2-niveles + batch B/A/C/D
+
+## 🟢 2026-08-21 — batch B/A/C/D (commit 0abcede, prod Ready + mig 0044 verificada)
+- **Roles/flujo**: los botones de flujo se parten por DOER vs REVISOR. Especialista asignado
+  (`isAssignee && !isLead`) ve Empezar/Mandar a revisión/Retomar; lead/admin/master sólo revisa
+  (Aprobar/Mandar cambios/Enviar a cliente). Fuente: `lib/task-actions.ts` `actionsFor` + `esEspecialista`.
+- **Legal del estático**: usa la MISMA biblioteca que el video (bloque `CortinillaCierre`, titulado
+  "Legales", con sugerencia Phase-B). El campo libre `estaticos.legales_extra` se RETIRÓ de la UI
+  (documento + Pegar copy); la columna DB sigue existiendo pero vestigial (no se escribe/muestra).
+- **Borrado (master/admin)**: `eliminarTarea(cliente,ideaId)` (tarea actions) + `eliminarBrief(cliente,
+  briefId)` (`briefs/actions.ts` nuevo), gate `canAdmin`, confirm 2 pasos. Cascada de FKs hace el resto
+  (verificado). Storage de refs NO se limpia (huérfano inocuo).
+- **Track nullable (admin/master = global)**: mig **0044** aplicada a prod. `track_members.track` ahora
+  nullable; admin/master → null (vista global, sin equipo); lead/creative conservan track. Equipo tiene
+  grupo "Vista global · Admins y Master"; el selector Track se oculta para roles globales; el invariante
+  track↔rol se enforcea en `guardarMiembro`/`crearMiembro` + `provision`. Workload (performance/data)
+  excluye no-doers. Tipos nullable en identity/soy/equipo/perfil.
+- Estado datos prod (4 personas): admin Hermann Fink=null, master Runna Advertising=null, lead Nils
+  Vera=normal, creative Christian M=normal.
+- **Falta**: live-test en navegador de los 4 (Pedro como master).
+
+
 
 ## 🟢 GO-LIVE — login real en vivo (2026-08-20, commits 3918960 · 3dd1b13 · 7695455)
 - **La app ya NO es pública.** `AUTH_ENABLED=true` en Vercel; el middleware (`proxy.ts`)
