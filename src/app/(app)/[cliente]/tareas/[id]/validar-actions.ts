@@ -2,10 +2,13 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canOverrideStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
+import { getSoyId } from "@/lib/soy";
 import { sinNegrita } from "@/lib/negrita";
+import { registrarVeredictos, marcarVeredictoAplicado, ignorarVeredicto } from "@/lib/hue-log";
 
 /**
  * Veredicto ADVISORY de la IA sobre si un cambio pedido ya se hizo en el texto
@@ -285,6 +288,23 @@ export async function validarCambios(
       }
       veredictos.push({ correccionId: id, hecho, razon, sugerencia, aplicar });
     }
+    // Bitácora de adopción (best-effort): registra lo que H.Ü.E ofreció, con el campo
+    // destino de cada corrección. Idempotente por corrección (upsert). Se DIFIERE con
+    // after() para no acoplar la latencia de la respuesta a este write.
+    const porCorr = new Map(correcciones.map((c) => [c.id, c]));
+    const soyId = await getSoyId();
+    const filas = veredictos.map((v) => {
+      const c = porCorr.get(v.correccionId);
+      return {
+        correccionId: v.correccionId,
+        hecho: v.hecho,
+        sugerencia: v.sugerencia,
+        targetTabla: c?.target_tabla ?? null,
+        targetFilaId: c?.target_fila_id ?? null,
+        targetCampo: c?.target_campo ?? null,
+      };
+    });
+    after(() => registrarVeredictos(ideaId, soyId, filas));
     return { ok: true, veredictos };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error al llamar a H.Ü.E." };
@@ -347,7 +367,26 @@ export async function aplicarSugerencia(
     .eq("id", correccionId)
     .eq("idea_id", ideaId);
 
+  // Bitácora de adopción: sella la sugerencia como APLICADA (best-effort, diferido).
+  after(() => marcarVeredictoAplicado(ideaId, correccionId));
+
   // Ruta como PATRÓN (no con ids concretos, que serían un no-op silencioso — lección guardarCampo).
   revalidatePath("/[cliente]/tareas/[id]", "page");
+  return { ok: true };
+}
+
+/**
+ * Marca el veredicto de una corrección como IGNORADO (el lead la confirmó/cerró sin
+ * aplicar la sugerencia de H.Ü.E). Señal de adopción; best-effort, no pisa un 'applied'.
+ * La llama el provider al confirmar una corrección.
+ */
+export async function marcarVeredictoIgnorado(
+  ideaId: string,
+  correccionId: string,
+): Promise<{ ok: boolean }> {
+  if (!hasSupabase()) return { ok: false };
+  const role = await getViewAs();
+  if (!canOverrideStatus(role)) return { ok: false };
+  await ignorarVeredicto(ideaId, correccionId);
   return { ok: true };
 }

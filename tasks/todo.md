@@ -1,5 +1,63 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🧠 H.Ü.E HUB — Fase 1 (HANDOFF-hue-hub-phase1.md) — ETAPA 1 CONSTRUIDA, SIN pushear
+Plan aprobado: `/Users/work/.claude/plans/dynamic-wondering-flame.md`. Estrategia: STAGE IT (Pedro:
+"whatever you recommend"). Etapa 1 = esquema + captura (bajo riesgo, datos going-forward YA). Etapa 2
+(pendiente, tras review de Pedro) = HUB tab (analítica + training inputs + KB upload) + loop de síntesis.
+Gates VERDES: tsc · eslint · **test:db 267** · **test:lib 359** · build. Reap adversarial (Opus) → 0 CRITICAL,
+0 SERIO-vivo; findings aplicados (abajo). ⛔ **Nada a prod sin "ship it"** (migración 0045 + bucket + push).
+
+### ETAPA 1 — hecho
+- [x] **A · Migración 0045** (`20260821120003_greenlight_0045_hue_hub.sql`): 5 tablas `produccion.hue_*`
+      (`hue_suggestions` bitácora de adopción · `hue_instructions` Cerebro versionado · `hue_kb_documents`
+      KB+texto extraído · `hue_top_performers` ganadores · `hue_adaptations` auditoría auto). RLS master-only
+      (`auth_role()='master'`), trigger `set_updated_at` EXPLÍCITO en hue_instructions, unique
+      `(idea_id,correccion_id)` p/ idempotencia de veredictos. Seam `indexed_at` (SIN pgvector). PGlite-probada
+      (CHECKs, unique, trigger pisa updated_at viejo, RLS niega asiento no-master + permite master).
+- [x] **A′ · Bucket `greenlight-kb`** (privado, pdf/docx/txt/md) en `setup-storage.mjs`. Config sólo — NO corrido.
+- [x] **A″ · `canHue`** (`role==='master'`) en roles.ts — gate propio del HUB (canAdmin deja entrar admins).
+- [x] **B · Bitácora de adopción** (`src/lib/hue-log.ts`): cableada en validarCambios/aplicarSugerencia +
+      revisarOrtografia/aplicarOrtografia. Veredictos = upsert idempotente por corrección (re-validate no
+      duplica ni pisa decisión). Señal ignored: al confirmar corrección (contexto.tsx) + cerrar/enviar
+      ortografía (acciones-tarea.tsx). **Cache split de validarCambios INTACTO** (logging tras la llamada,
+      vía `after()`). Escribe por service_role.
+- [x] **C · Estrella "top performer"** en Entregas (`entregas/actions.ts` + entregas-board.tsx): master/admin
+      togglea; lead ve indicador read-only. Copy honesto ("la estrella la pones tú", "patrones de tus
+      ganadores"). Trigger de síntesis = seam de Etapa 2.
+- [x] **Reap fixes aplicados**: (SERIO observabilidad) `console.error` en cada catch de hue-log (un fallo
+      silencioso dejaba de capturar sin señal); (MINOR) logging diferido con `after()` (no acopla latencia);
+      (MINOR) `offered_at` = primer ofrecimiento (fuera del payload del upsert).
+- **Deuda anotada (no bloquea)**: tipar `supabaseAdmin()` con `Database` (payloads sin chequeo de compilador —
+      app-wide, fuera de alcance) · `ignorarOrtografia` hace N updates secuenciales (≤50, vía void) → batch · enum
+      `decision='dismissed'` sin escritor (reservado) · dedupe/manejo de decision=null en la analítica de adopción (Etapa 2).
+
+### ETAPA 2 — CONSTRUIDA (gates verdes, reap Opus aplicado; SIN pushear)
+Deps nuevas: `unpdf`@1.8 + `mammoth`@1.12 (server-only, 0 impacto en el bundle cliente). Migración 0045
+extendida (misma migración sin aplicar): `hue_settings.last_synth_at` + RPC `hue_top_snippets()`.
+- [x] **D-1 Analítica** (`src/lib/hue-data.ts` `cargarHubIntelligence`+`cargarWinners`; tab Inteligencia):
+      adopción validador vs ortografía (offered/applied/ignored+rechazadas), tareas limpias, correcciones/tarea,
+      bounce (status_events→in_corrections), ciclo mediano, selling points/legales más usados (RPC SQL, no JS).
+      Nav por mes (reusa `resolverMes`). Empty-states honestos + "próximamente" para métricas de texto libre.
+      Filtros marca/brief/especialista = refinamiento futuro (anotado).
+- [x] **D-2 Training inputs** (tab Entrenamiento): Cerebro (`hue_instructions` — crear/editar/activar/borrar,
+      badge auto/manual, versión, reason); Biblioteca de Ganadores (guiones estrellados + su contenido);
+      KB upload a `greenlight-kb` con extracción `unpdf`/`mammoth`/txt-md (`hue-kb-extract.ts`), lista/preview/borrar.
+- [x] **E Loop de auto-aprendizaje** (`src/lib/hue-sintesis.ts`): job de síntesis (lee ganadores → propone
+      lecciones `source='auto'` con reason) + auditoría (`hue_adaptations`) + switch global `auto_learn` +
+      "Correr síntesis ahora". Seam de estrella→síntesis (after()). Copy honesto: "patrones observados", nunca causas.
+- [x] **UI**: `src/components/admin/hue-hub/{hue-hub-tab,hue-intelligence,hue-training}.tsx`; tab master-only en
+      admin-shell (esMaster) + gate real `canHue` server-side en cada action (`hue-actions.ts`).
+- [x] **Reap Opus (0 CRITICAL) — fixes aplicados**: (S1) queries de métricas ya no tragan `error` → un fallo
+      no se muestra como "mes vacío" falso (helper `must`, loaders devuelven Fail). (S2) revert DURABLE: la síntesis
+      dedupe vs TODAS las lecciones (activas+inactivas) → una revertida no resucita. (S3) lecciones auto entran
+      INACTIVAS (propose→master activa) + debounce `last_synth_at` (no re-sintetizar sin ganador nuevo). (S4)
+      snippets agregados en SQL (RPC), no toda `idea_snippets` en JS. Menores: dismissed en el denominador de
+      adopción, ext de KB saneada, checks de filas afectadas en editar/setAutoLearn, log de errores de storage.
+- **Deuda anotada**: filtros marca/brief/especialista en analítica · dedupe semántico de parafraseos (hoy inactivas
+      + dedupe exacto) · lock de síntesis concurrente (baja prob) · admin (no-master) dispara síntesis al estrellar
+      con auto_learn on (aceptado: master opt-in) · tipar `supabaseAdmin()` con Database (app-wide).
+- **Pendiente**: review de Pedro → "ship it" (migrar 0045 + `npm run setup:storage` + push) → live-verify del HUB.
+
 ## 🔥 CURRENT BATCH (2026-08-21) — 4 asks de Pedro — ✅ SHIPPED & VERIFICADO
 Push `main` 0abcede → deploy PRODUCTION Ready (runna-greenlight.vercel.app). Migración 0044 aplicada
 a prod + VERIFICADA: track nullable=YES; admin(Hermann)/master(Runna Advertising)→null; lead(Nils)/

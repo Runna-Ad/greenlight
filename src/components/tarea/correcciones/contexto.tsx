@@ -16,6 +16,7 @@ import {
 import {
   validarCambios,
   aplicarSugerencia as aplicarSugerenciaAction,
+  marcarVeredictoIgnorado,
   type VeredictoCambio,
 } from "@/app/(app)/[cliente]/tareas/[id]/validar-actions";
 
@@ -154,11 +155,15 @@ export function CorreccionesProvider({
         );
       },
       pedir: (t, body) => run(agregarCorreccion(ideaId, t, body), "Cambio fijado a " + t.label),
-      marcar: (id, estado) =>
+      marcar: (id, estado) => {
+        // Señal de adopción (best-effort): al CONFIRMAR una corrección, si su veredicto de
+        // H.Ü.E seguía sin aplicarse, cuenta como IGNORADO. No pisa un 'applied' (server).
+        if (estado === "closed") void marcarVeredictoIgnorado(ideaId, id);
         run(
           setEstadoCorreccion(ideaId, id, estado),
           estado === "done" ? "Marcado como atendido" : estado === "closed" ? "Confirmado" : "Reabierto",
-        ),
+        );
+      },
       confirmarCampo: (tabla, filaId, campo) =>
         run(confirmarCampoAction(ideaId, tabla, filaId, campo), "Campo confirmado"),
       descartar: (id) => run(descartarCorreccion(ideaId, id), "Corrección descartada"),

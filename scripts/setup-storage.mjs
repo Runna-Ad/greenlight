@@ -11,6 +11,14 @@ import { createClient } from "@supabase/supabase-js";
 
 const IMAGENES = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"];
 
+// Documentos del KB de H.Ü.E: pdf/docx/txt/md → se extrae el texto al subir.
+const KB_DOCS = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+  "text/plain",
+  "text/markdown",
+];
+
 // Dos buckets, distinta política:
 //  - referencias: PRIVADO. La app no tiene login; público lo volvería indexable.
 //    Se lee por signed URL desde el servidor.
@@ -20,6 +28,8 @@ const IMAGENES = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/a
 const BUCKETS = [
   { name: "greenlight-referencias", public: false, fileSizeLimit: "10MB", allowedMimeTypes: IMAGENES },
   { name: "greenlight-logos", public: true, fileSizeLimit: "10MB", allowedMimeTypes: IMAGENES },
+  // KB de H.Ü.E: PRIVADO (docs de entrenamiento, se leen server-side por signed URL).
+  { name: "greenlight-kb", public: false, fileSizeLimit: "20MB", allowedMimeTypes: KB_DOCS },
 ];
 
 // Cargar .env.local sin dependencias (los scripts de este repo no usan dotenv).

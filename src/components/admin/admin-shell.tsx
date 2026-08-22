@@ -10,9 +10,11 @@ import {
   Images,
   Inbox,
   UserCheck,
+  Brain,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { HueHubTab } from "./hue-hub/hue-hub-tab";
 import { EquipoTab } from "./equipo-tab";
 import { PerfilTab } from "./perfil-tab";
 import { ActividadTab } from "./actividad-tab";
@@ -46,7 +48,7 @@ type Soy = {
 
 type TabKey =
   | "perfil" | "equipo" | "invitaciones" | "clientes"
-  | "marcas" | "actividad" | "integraciones" | "biblioteca";
+  | "marcas" | "actividad" | "integraciones" | "biblioteca" | "hue";
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "perfil", label: "Mi perfil", icon: UserRound },
   { key: "equipo", label: "Equipo", icon: Users },
@@ -67,6 +69,7 @@ export function AdminShell({
   biblioteca,
   invitaciones,
   clientesUsuarios,
+  esMaster,
 }: {
   equipoInicial: MiembroRow[];
   soy: Soy;
@@ -76,8 +79,14 @@ export function AdminShell({
   biblioteca: { snippets: SnippetRow[]; marcas: MarcaOpt[] };
   invitaciones: { pendientes: InvitacionRow[]; clientes: ClienteOpt[] };
   clientesUsuarios: ClienteUsuarioRow[];
+  /** El H.Ü.E HUB es master-only; sólo entonces se muestra su pestaña. */
+  esMaster: boolean;
 }) {
   const [tab, setTab] = useState<TabKey>("equipo");
+  // El HUB sólo aparece para el master (además el gate real está en cada action = canHue).
+  const tabs: typeof TABS = esMaster
+    ? [...TABS, { key: "hue", label: "H.Ü.E HUB", icon: Brain }]
+    : TABS;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -89,7 +98,7 @@ export function AdminShell({
       <div className="grid gap-6 sm:grid-cols-[200px_1fr]">
         {/* Sub-nav lateral */}
         <nav className="flex gap-1 overflow-x-auto sm:flex-col sm:overflow-visible">
-          {TABS.map((t) => {
+          {tabs.map((t) => {
             const Icon = t.icon;
             const active = tab === t.key;
             return (
@@ -124,6 +133,7 @@ export function AdminShell({
           {tab === "actividad" && <ActividadTab rows={actividad} />}
           {tab === "integraciones" && <IntegracionesTab estado={integraciones} />}
           {tab === "biblioteca" && <BibliotecaTab snippets={biblioteca.snippets} marcas={biblioteca.marcas} />}
+          {tab === "hue" && esMaster && <HueHubTab />}
         </div>
       </div>
     </div>

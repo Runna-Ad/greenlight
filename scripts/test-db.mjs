@@ -1619,5 +1619,101 @@ console.log("\n▶ 0039 — correcciones huérfanas se limpian con su plano (S1)
   await db.query(`delete from produccion.planos where id=$1`, [otro]);
 }
 
+// ── H.Ü.E HUB (0045): captura de adopción + Cerebro + KB + ganadores + RLS master-only ──
+console.log("\n▶ 0045 — H.Ü.E HUB: captura + entrenamiento + RLS master-only");
+{
+  const IDEA = "00000000-0000-0000-0000-0000000000d1";
+  const GALIE = await scalar(`select id from produccion.track_members where track='real' and name='Galie'`);
+
+  // 1) hue_suggestions — ofrecida (decision null) → aplicada; CHECKs
+  const sug = await scalar(
+    `insert into produccion.hue_suggestions (idea_id, kind, hecho, sugerencia)
+     values ($1,'correction_verdict','parcial','usa «el elemento importante»') returning id`, [IDEA]);
+  eq("hue_suggestions arranca sin decisión (ofrecida)",
+     await scalar(`select decision from produccion.hue_suggestions where id=$1`, [sug]), null);
+  await db.query(`update produccion.hue_suggestions set decision='applied', decided_at=now() where id=$1`, [sug]);
+  eq("hue_suggestions sella la decisión aplicada",
+     await scalar(`select decision from produccion.hue_suggestions where id=$1`, [sug]), "applied");
+  let badKind = false;
+  try { await db.query(`insert into produccion.hue_suggestions (idea_id, kind) values ($1,'otro')`, [IDEA]); } catch { badKind = true; }
+  ok("hue_suggestions rechaza un kind fuera del CHECK", badKind);
+  let badHecho = false;
+  try { await db.query(`insert into produccion.hue_suggestions (idea_id, kind, hecho) values ($1,'ortografia','maybe')`, [IDEA]); } catch { badHecho = true; }
+  ok("hue_suggestions rechaza un hecho fuera del CHECK", badHecho);
+  // idempotencia del veredicto: unique(idea_id, correccion_id) — un re-run hace upsert, no duplica
+  const cmt = await scalar(`insert into produccion.comments (idea_id, body, kind) values ($1,'nota','correction_request') returning id`, [IDEA]);
+  await db.query(`insert into produccion.hue_suggestions (idea_id, kind, correccion_id, hecho) values ($1,'correction_verdict',$2,'si')`, [IDEA, cmt]);
+  let dupVer = false;
+  try { await db.query(`insert into produccion.hue_suggestions (idea_id, kind, correccion_id, hecho) values ($1,'correction_verdict',$2,'no')`, [IDEA, cmt]); } catch { dupVer = true; }
+  ok("hue_suggestions: dos veredictos de la MISMA corrección chocan (unique idea,correccion)", dupVer);
+  await db.query(`insert into produccion.hue_suggestions (idea_id, kind) values ($1,'ortografia'),($1,'ortografia')`, [IDEA]);
+  eq("hue_suggestions: ortografía (correccion_id null) NO colisiona — nulls distintos",
+     Number(await scalar(`select count(*) from produccion.hue_suggestions where idea_id=$1 and kind='ortografia'`, [IDEA])), 2);
+
+  // 2) hue_instructions — versionado + el trigger set_updated_at PISA un updated_at viejo (prueba determinista)
+  const ins = await scalar(
+    `insert into produccion.hue_instructions (title, body, source) values ('Hooks cortos','Beneficio en 2s','human') returning id`);
+  eq("hue_instructions arranca v1 / activa / human",
+     `${await scalar(`select version from produccion.hue_instructions where id=$1`,[ins])}/${await scalar(`select active from produccion.hue_instructions where id=$1`,[ins])}/${await scalar(`select source from produccion.hue_instructions where id=$1`,[ins])}`,
+     "1/true/human");
+  await db.query(`update produccion.hue_instructions set updated_at='2000-01-01T00:00:00Z', body='Beneficio en los primeros 2s' where id=$1`, [ins]);
+  const uForced = await scalar(`select updated_at from produccion.hue_instructions where id=$1`, [ins]);
+  ok("hue_instructions: el trigger set_updated_at PISA el updated_at viejo con now()", new Date(uForced).getUTCFullYear() >= 2026);
+  let badScope = false;
+  try { await db.query(`insert into produccion.hue_instructions (title, body, scope) values ('x','y','equipo')`); } catch { badScope = true; }
+  ok("hue_instructions rechaza scope fuera del CHECK", badScope);
+
+  // 3) hue_kb_documents — texto extraído + seam indexed_at null
+  const kb = await scalar(
+    `insert into produccion.hue_kb_documents (title, storage_path, mime_type, size_bytes, extracted_text)
+     values ('Playbook','storage://greenlight-kb/x.pdf','application/pdf',1234,'texto extraído') returning id`);
+  eq("hue_kb_documents guarda el texto extraído",
+     await scalar(`select extracted_text from produccion.hue_kb_documents where id=$1`, [kb]), "texto extraído");
+  eq("hue_kb_documents: indexed_at arranca null (seam de retrieval futuro)",
+     await scalar(`select indexed_at from produccion.hue_kb_documents where id=$1`, [kb]), null);
+
+  // 4) hue_top_performers — unique(idea_id)
+  await db.query(`insert into produccion.hue_top_performers (idea_id, starred_by, reason) values ($1,$2,'ganó')`, [IDEA, GALIE]);
+  let dupStar = false;
+  try { await db.query(`insert into produccion.hue_top_performers (idea_id) values ($1)`, [IDEA]); } catch { dupStar = true; }
+  ok("hue_top_performers: estrellar dos veces la misma idea se rechaza (unique)", dupStar);
+
+  // 5) hue_adaptations — auditoría del cambio auto
+  const adap = await scalar(
+    `insert into produccion.hue_adaptations (trigger_summary, changed_instruction_id, from_version, to_version)
+     values ('estrellado nuevo guión', $1, 1, 2) returning id`, [ins]);
+  ok("hue_adaptations registra un cambio auto", adap != null);
+
+  // 6) hue_settings — singleton del interruptor auto_learn
+  eq("hue_settings arranca con auto_learn=false (opt-in)",
+     await scalar(`select auto_learn from produccion.hue_settings where id=1`), false);
+  let dupSettings = false;
+  try { await db.query(`insert into produccion.hue_settings (id) values (2)`); } catch { dupSettings = true; }
+  ok("hue_settings rechaza id≠1 (singleton)", dupSettings);
+  ok("hue_top_snippets() es callable (agrega en SQL, no en JS)",
+     Array.isArray(await q(`select * from produccion.hue_top_snippets()`)));
+
+  // RLS — verificar DESDE EL ASIENTO no-master (negativo), no sólo que el master pasa
+  const MASTER = "00000000-0000-0000-0000-00000000ea09";
+  await db.exec(`insert into produccion.profiles (id, email, full_name, role) values ('${MASTER}','master@runna.mx','Master','master') on conflict (id) do nothing;`);
+  await asRole(CREA);
+  eq("RLS: un creative (no master) ve 0 filas de hue_instructions",
+     Number(await scalar(`select count(*) from produccion.hue_instructions`)), 0);
+  let creaWriteBlocked = false;
+  try { await db.query(`insert into produccion.hue_instructions (title, body) values ('hack','x')`); } catch { creaWriteBlocked = true; }
+  ok("RLS: un creative no puede escribir en hue_instructions", creaWriteBlocked);
+  await resetRole();
+  await asRole(MASTER);
+  ok("RLS: el master SÍ ve las instrucciones del HUB",
+     Number(await scalar(`select count(*) from produccion.hue_instructions`)) >= 1);
+  await resetRole();
+  await db.exec(`select set_config('request.jwt.claims','', false);`);
+
+  // limpieza del fixture propio de este bloque
+  await db.query(`delete from produccion.hue_top_performers where idea_id=$1`, [IDEA]);
+  await db.query(`delete from produccion.hue_suggestions where idea_id=$1`, [IDEA]);
+  await db.query(`delete from produccion.comments where idea_id=$1 and body='nota'`, [IDEA]);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -1,7 +1,7 @@
 import { Lock } from "lucide-react";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
-import { ROLE_LABEL, canSee } from "@/lib/roles";
+import { ROLE_LABEL, canSee, canAdmin } from "@/lib/roles";
 import { EntregasBoard, type BriefArchivo } from "@/components/entregas/entregas-board";
 
 // Entregas = ARCHIVO: registro COMPLETO de todo el trabajo Greenlit (delivered),
@@ -46,13 +46,15 @@ async function cargarArchivo(): Promise<BriefArchivo[]> {
   // son tablas de referencia pequeñas.
   const briefIds = [...new Set(rows.map((r) => r.brief_id))];
   const ideaIds = rows.map((r) => r.id);
-  const [{ data: briefs }, { data: clients }, { data: asigs }, { data: miembros }] =
+  const [{ data: briefs }, { data: clients }, { data: asigs }, { data: miembros }, { data: stars }] =
     await Promise.all([
       db.from("briefs").select("id, brief_name, code, brief_date, client_id").in("id", briefIds),
       db.from("clients").select("id, name, slug, brand_color"),
       db.from("idea_assignments").select("member_id, idea_id").in("idea_id", ideaIds),
       db.from("track_members").select("id, name, color"),
+      db.from("hue_top_performers").select("idea_id").in("idea_id", ideaIds),
     ]);
+  const starredSet = new Set(((stars ?? []) as { idea_id: string }[]).map((s) => s.idea_id));
 
   const briefById = new Map(
     ((briefs ?? []) as {
@@ -103,6 +105,7 @@ async function cargarArchivo(): Promise<BriefArchivo[]> {
       namingBase: r.naming_base,
       greenlitEl: fmtFecha(r.delivered_at),
       asignados: asigsByIdea.get(r.id) ?? [],
+      starred: starredSet.has(r.id),
     });
   }
 
@@ -122,6 +125,7 @@ export default async function EntregasPage() {
   }
 
   const briefs = await cargarArchivo();
+  const puedeEstrellar = canAdmin(role);
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
       <header className="mb-5">
@@ -131,8 +135,14 @@ export default async function EntregasPage() {
           Todo el trabajo Greenlit (aprobado por el cliente), agrupado por brief. Las recientes también
           están en el tablero, en la columna Greenlit. Ábrelas para consultarlas o reabrirlas.
         </p>
+        {puedeEstrellar && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Marca con la estrella los mejores guiones: alimentan la Biblioteca de Ganadores de H.Ü.E
+            (aprende de los patrones de tus ganadores; la estrella la pones tú).
+          </p>
+        )}
       </header>
-      <EntregasBoard briefs={briefs} />
+      <EntregasBoard briefs={briefs} puedeEstrellar={puedeEstrellar} />
     </div>
   );
 }

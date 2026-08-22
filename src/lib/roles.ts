@@ -145,6 +145,13 @@ export const canAdmin = (role: ViewRole): boolean => esNivelAdmin(role);
 export const canAssignAdmins = (role: ViewRole): boolean => role === "master";
 
 /**
+ * Quién entra al H.Ü.E HUB. Sólo el Master Builder — el HUB entrena y mide a
+ * H.Ü.E (Cerebro, KB, ganadores, adopción) y es exclusivo del master. `canAdmin`
+ * dejaría entrar a admins, por eso el HUB tiene su propio gate. (Pedro.)
+ */
+export const canHue = (role: ViewRole): boolean => role === "master";
+
+/**
  * Qué EQUIPOS (tracks) ve un rol en Performance/Evaluación. `null` = todos.
  * Admin y Master ven todos los equipos; el Lead sólo el SUYO (puede haber varios
  * leads por equipo). Sin identidad (`soy`) el lead no puede acotar a "su equipo",

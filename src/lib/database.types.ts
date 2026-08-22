@@ -230,3 +230,77 @@ export type Comment = {
   // Evaluación v2 (0040): cuándo el lead aplicó la sugerencia de H.Ü.E sobre esta nota.
   hue_aplicado_at: string | null;
 };
+
+// ── H.Ü.E HUB (0045) ────────────────────────────────────────
+export type HueSuggestionKind = "correction_verdict" | "ortografia";
+export type HueDecision = "applied" | "dismissed" | "ignored";
+export type HueScope = "global" | "client" | "marca";
+export type HueSource = "human" | "auto";
+
+export type HueSuggestion = {
+  id: string;
+  idea_id: string;
+  kind: HueSuggestionKind;
+  correccion_id: string | null;
+  target_tabla: string | null;
+  target_fila_id: string | null;
+  target_campo: string | null;
+  hecho: "si" | "no" | "parcial" | null;
+  tipo: string | null;
+  sugerencia: string | null;
+  decision: HueDecision | null;
+  offered_at: string;
+  decided_at: string | null;
+  actor_member_id: string | null;
+  created_at: string;
+};
+
+export type HueInstruction = {
+  id: string;
+  scope: HueScope;
+  client_id: string | null;
+  marca_id: string | null;
+  title: string;
+  body: string;
+  version: number;
+  active: boolean;
+  source: HueSource;
+  reason: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HueKbDocument = {
+  id: string;
+  scope: HueScope;
+  client_id: string | null;
+  marca_id: string | null;
+  title: string;
+  storage_path: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  extracted_text: string | null;
+  indexed_at: string | null;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
+export type HueTopPerformer = {
+  id: string;
+  idea_id: string;
+  starred_by: string | null;
+  reason: string | null;
+  starred_at: string;
+};
+
+export type HueAdaptation = {
+  id: string;
+  at: string;
+  trigger_summary: string | null;
+  changed_instruction_id: string | null;
+  from_version: number | null;
+  to_version: number | null;
+  applied_by: string;
+  reverted_at: string | null;
+};

@@ -1,11 +1,14 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
+import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canMoveStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
+import { getSoyId } from "@/lib/soy";
 import { fixSeguro } from "@/lib/ortografia";
 import { sinNegrita } from "@/lib/negrita";
+import { registrarOrtografia, marcarOrtografiaAplicada, ignorarOrtografia } from "@/lib/hue-log";
 import { guardarCampo, type Tabla, type GuardarResultado } from "./actions";
 
 /** Un error de ortografía/gramática que H.Ü.E encontró, con su fix propuesto. */
@@ -229,6 +232,12 @@ export async function revisarOrtografia(
       if (errores.length >= MAX_ERRORES) break;
     }
 
+    // Bitácora de adopción (best-effort): registra las sugerencias ofrecidas. Diferida
+    // con after() para no acoplar la latencia de la respuesta al write.
+    const soyId = await getSoyId();
+    const filasLog = errores.map((e) => ({ tabla: e.tabla, filaId: e.filaId, campo: e.campo, sugerencia: e.sugerencia, tipo: e.tipo }));
+    after(() => registrarOrtografia(ideaId, soyId, filasLog));
+
     return { ok: true, errores };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error al llamar a H.Ü.E." };
@@ -271,5 +280,22 @@ export async function aplicarOrtografia(
   // Función replacer para que un `$` en la sugerencia (p. ej. "$60,000 pesos") no
   // se interprete como patrón de reemplazo — se inserta literal.
   const nuevo = actual.replace(original, () => sugerencia);
-  return guardarCampo(tabla, filaId, campo, actual, nuevo);
+  const r = await guardarCampo(tabla, filaId, campo, actual, nuevo);
+  // Bitácora de adopción: sella la sugerencia de ortografía como aplicada (best-effort, diferido).
+  if (r.ok) after(() => marcarOrtografiaAplicada(filaId, campo, sugerencia));
+  return r;
+}
+
+/**
+ * Marca como IGNORADAS las sugerencias de ortografía que quedaron sin aplicar al
+ * cerrar el diálogo o mandar de todos modos. Señal de adopción; best-effort.
+ */
+export async function marcarOrtografiaIgnorada(
+  filas: { filaId: string; campo: string; sugerencia: string }[],
+): Promise<{ ok: boolean }> {
+  if (!hasSupabase()) return { ok: false };
+  const role = await getViewAs();
+  if (!canMoveStatus(role)) return { ok: false };
+  await ignorarOrtografia(filas);
+  return { ok: true };
 }

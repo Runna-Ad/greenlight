@@ -54,6 +54,7 @@ export default async function AdminPage() {
       biblioteca={biblioteca}
       invitaciones={invitaciones}
       clientesUsuarios={clientesUsuarios}
+      esMaster={role === "master"}
     />
   );
 }

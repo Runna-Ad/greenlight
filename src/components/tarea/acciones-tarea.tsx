@@ -15,6 +15,7 @@ import {
 } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
 import {
   revisarOrtografia,
+  marcarOrtografiaIgnorada,
   type ErrorOrtografia,
 } from "@/app/(app)/[cliente]/tareas/[id]/ortografia-actions";
 import { DialogoOrtografia } from "./dialogo-ortografia";
@@ -120,9 +121,14 @@ export function AccionesTarea({
     startTransition(async () => {
       const a = pendiente;
       const recargar = aplicados > 0;
+      const restantes = errores ?? [];
       setErrores(null);
       setPendiente(null);
       setAplicados(0);
+      // Adopción: las sugerencias que quedaron sin aplicar al mandar de todos modos =
+      // ignoradas (best-effort, no bloquea el envío).
+      if (restantes.length)
+        void marcarOrtografiaIgnorada(restantes.map((e) => ({ filaId: e.filaId, campo: e.campo, sugerencia: e.sugerencia })));
       if (a) await ejecutarVerbo(a);
       // Si se aplicaron fixes, recargar para que el campo muestre el texto corregido
       // (la tarea ya se envió; el reviewer ya lo ve — esto es para la vista del envío).
@@ -131,9 +137,13 @@ export function AccionesTarea({
 
   const cerrarOrtografia = () => {
     const recargar = aplicados > 0;
+    const restantes = errores ?? [];
     setErrores(null);
     setPendiente(null);
     setAplicados(0);
+    // Adopción: lo que quedó sin aplicar al cerrar el diálogo = ignorado (best-effort).
+    if (restantes.length)
+      void marcarOrtografiaIgnorada(restantes.map((e) => ({ filaId: e.filaId, campo: e.campo, sugerencia: e.sugerencia })));
     if (recargar) window.location.reload();
   };
 

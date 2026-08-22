@@ -1,5 +1,40 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-21 — post-go-live: integridad + Notion→legales + asignación 2-niveles + batch B/A/C/D
+Última actualización: 2026-08-21 — H.Ü.E HUB Fase 1 (Etapa 1 + 2) construida + reapeada, SIN pushear
+
+## 🧠 H.Ü.E HUB — Fase 1 COMPLETA (2026-08-21) — CONSTRUIDA + REAPEADA, SIN pushear (gate "ship it")
+- **Qué es**: hace a H.Ü.E medible y entrenable. Etapa 1 = ESQUEMA + CAPTURA (plumbing going-forward).
+  Etapa 2 = el HUB tab master-only (analítica + Cerebro/Ganadores/KB) + loop de auto-aprendizaje. Ambas
+  construidas. Plan: `/Users/work/.claude/plans/dynamic-wondering-flame.md`; detalle en todo.md (sección 🧠).
+- **Etapa 2 (el HUB)**: tab master-only en `admin-shell` (gate real `canHue` en cada action de `hue-actions.ts`).
+  · **Inteligencia** (`hue-data.ts`): adopción de sugerencias (validador/ortografía), tareas limpias,
+    correcciones/tarea, bounce, ciclo mediano, top selling points/legales (RPC SQL). Nav por mes. Empty-states honestos.
+  · **Entrenamiento**: Cerebro (editor `hue_instructions` versionado + activar/revert + badge auto/manual),
+    Biblioteca de Ganadores (guiones estrellados + contenido), KB upload (`greenlight-kb` + extracción
+    unpdf/mammoth/txt-md → `extracted_text`), switch auto_learn + "Correr síntesis ahora".
+  · **Loop** (`hue-sintesis.ts`): al estrellar (auto_learn on) o a mano, H.Ü.E mina patrones de los ganadores
+    → propone lecciones `source='auto'` **INACTIVAS** (el master las activa) + auditoría `hue_adaptations`.
+    Honestidad: "patrones observados", nunca causas. Seatbelt: visible + revert durable + switch.
+  · Deps nuevas: `unpdf`/`mammoth` (server-only, 0 impacto bundle cliente). Migración 0045 extendida
+    (`hue_settings.last_synth_at` + RPC `hue_top_snippets`).
+- **Reap Opus (0 CRITICAL en ambas etapas)** — fixes clave: metric queries fallan honesto (no "mes vacío" falso);
+  revert durable (dedupe vs todas las lecciones); auto-lecciones inactivas + debounce; snippets agregados en SQL.
+- **Gates**: tsc·eslint·**test:db 270**·**test:lib 359**·build. Migración 0045 NO aplicada a prod.
+- **Pendiente**: review de Pedro → "ship it" = `npm run migrate` (pin ybbrpqzbedaxsmotgtkh) + `npm run setup:storage`
+  (bucket greenlight-kb) + commit (git add explícito) + push → live-verify del HUB (necesita las tablas en prod).
+- **Migración 0045** (`20260821120003_greenlight_0045_hue_hub.sql`) — 5 tablas `produccion.hue_*`:
+  `hue_suggestions` (adopción validador+ortografía) · `hue_instructions` (Cerebro versionado) ·
+  `hue_kb_documents` (KB + `extracted_text`; seam `indexed_at`, sin pgvector) · `hue_top_performers`
+  (ganadores estrellados) · `hue_adaptations` (auditoría auto). RLS master-only (`auth_role()='master'`),
+  trigger updated_at explícito en hue_instructions, unique `(idea_id,correccion_id)` p/ idempotencia.
+  **NO aplicada a prod** — `npm run migrate` (pin ybbrpqzbedaxsmotgtkh) va con el "ship it".
+- **Bucket `greenlight-kb`** (privado) añadido a `setup-storage.mjs` — NO corrido aún (Etapa 2 lo usa).
+- **Captura** (`src/lib/hue-log.ts`, service_role, `after()`-diferida, catches con console.error): adopción
+  de sugerencias (offered→applied/ignored, upsert idempotente por corrección) en las acciones H.Ü.E; el
+  cache split de validarCambios quedó intacto. **Estrella "top performer"** en Entregas (master/admin).
+- **Gate `canHue`** (role==='master') en roles.ts. Tipos `Hue*` a mano en database.types.ts.
+- **Gates**: tsc·eslint·test:db 267·test:lib 359·build. Reap Opus: 0 CRITICAL; findings menores aplicados
+  (console.error en catches, after(), offered_at=primer-ofrecimiento). Deuda en todo.md.
+- **Pendiente**: review de Pedro de Etapa 1 → "ship it" (migrar 0045 + setup:storage + push) → construir Etapa 2.
 
 ## 🟢 2026-08-21 — batch B/A/C/D (commit 0abcede, prod Ready + mig 0044 verificada)
 - **Roles/flujo**: los botones de flujo se parten por DOER vs REVISOR. Especialista asignado
