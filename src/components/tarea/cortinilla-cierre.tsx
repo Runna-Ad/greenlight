@@ -28,6 +28,7 @@ export function CortinillaCierre({
   biblioteca,
   sugerencia,
   soloLectura,
+  titulo = "Cortinilla de Cierre",
 }: {
   ideaId: string;
   legalesLibres: string | null;
@@ -37,6 +38,9 @@ export function CortinillaCierre({
   /** Legal determinista sugerido para este guión (Phase B). */
   sugerencia?: Sugerencia;
   soloLectura?: boolean;
+  /** El estático no tiene "cortinilla de cierre" (es un arte, no un video): mismo
+   *  bloque de biblioteca, pero titulado "Legales". Default = el del guión. */
+  titulo?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -65,7 +69,7 @@ export function CortinillaCierre({
           fondo y se lea como el cierre de la pieza (como en el deck). */}
       <div className="flex items-center gap-2 bg-[#2d2b55] px-4 py-2.5 text-white">
         <Scale className="size-4" />
-        <h3 className="text-[12px] font-bold uppercase tracking-widest">Cortinilla de Cierre</h3>
+        <h3 className="text-[12px] font-bold uppercase tracking-widest">{titulo}</h3>
         <span className="ml-auto text-[10px] font-medium uppercase tracking-wide text-white/60">
           Legales
         </span>

@@ -24,7 +24,7 @@ export type CurrentMember = {
   id: string; // track_members.id — what assignment/authorship columns store
   name: string;
   color: string;
-  track: "real" | "normal";
+  track: "real" | "normal" | null; // null = rol global (admin/master), sin track
   role: string | null; // the profile's REAL role (authorship counts for creatives)
   notify_email: boolean;
   notify_slack: boolean;

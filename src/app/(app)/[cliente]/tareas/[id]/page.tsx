@@ -345,6 +345,12 @@ export default async function TareaPage({
     idea.concepto,
     idea.peloteo_raw,
     ...planos.flatMap((p) => [p.titulo, p.accion, p.copy_in, p.sfx, p.gfx, p.edicion, p.dialogo]),
+    // El estático no tiene planos: su "guión" es el copy del arte (título/subtítulo/
+    // CTA + legal libre). Incluirlo deja que la sugerencia detecte cashback/MSI/etc.
+    estatico?.copy_titulo,
+    estatico?.copy_subtitulo,
+    estatico?.copy_cta,
+    estatico?.legales_extra,
   ]
     .filter(Boolean)
     .join(" ");

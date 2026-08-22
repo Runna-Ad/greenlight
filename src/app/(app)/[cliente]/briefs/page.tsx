@@ -4,7 +4,7 @@ import { FileText, Lock, Plus, UserRound } from "lucide-react";
 import { hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
-import { ROLE_LABEL, canCreateBrief, canSee } from "@/lib/roles";
+import { ROLE_LABEL, canAdmin, canCreateBrief, canSee } from "@/lib/roles";
 import { cargarBundles } from "@/lib/bundle-data";
 import { BundleCard } from "@/components/briefs/bundle-card";
 import { Button } from "@/components/ui/button";
@@ -87,7 +87,7 @@ export default async function BriefsPage({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {bundles.map((b) => (
-            <BundleCard key={b.brief_id} bundle={b} cliente={cliente} />
+            <BundleCard key={b.brief_id} bundle={b} cliente={cliente} puedeBorrar={canAdmin(role)} />
           ))}
         </div>
       )}

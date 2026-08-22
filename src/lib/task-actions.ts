@@ -46,25 +46,36 @@ export type TaskContext = {
 const isLead = (role: ViewRole) => role === "master" || role === "admin" || role === "lead";
 
 /**
+ * El ESPECIALISTA que ejecuta: asignado a la tarea y NO lead/admin/master.
+ *
+ * Los verbos de "doer" (empezar, mandar a revisión, retomar correcciones) son
+ * SUYOS — nadie más los ve. El lead/admin/master es REVISOR: aprueba, pide
+ * cambios y envía al cliente; NO produce, así que no tiene a quién mandarle una
+ * revisión (se la mandaría a sí mismo). Decisión de Pedro (2026-08-21): un lead
+ * viendo una tarea en progreso ya no ve "Mandar a revisión". Si necesita empujar
+ * una tarea que hizo él mismo, usa el menú "Mover" (la escotilla del lead).
+ */
+const esEspecialista = (ctx: TaskContext) => ctx.isAssignee && !isLead(ctx.role);
+
+/**
  * Ojo con el orden: el primero es la acción principal de la tarjeta.
- * Devuelve [] cuando no toca hacer nada (p. ej. el creativo esperando revisión).
+ * Devuelve [] cuando no toca hacer nada (p. ej. el creativo esperando revisión,
+ * o el lead esperando a que el especialista mande a revisión).
  */
 export function actionsFor(status: AssetStatus, ctx: TaskContext): TaskAction[] {
   // El cliente nunca mueve trabajo interno.
   if (ctx.role === "client") return [];
 
-  const puedeTrabajarla = ctx.isAssignee || isLead(ctx.role);
-
   switch (status) {
     case "todo":
       // Sin responsable no hay quién la empiece — la tarjeta ofrece asignar.
       if (!ctx.hasAssignee) return [];
-      return puedeTrabajarla
+      return esEspecialista(ctx)
         ? [{ to: "in_progress", label: "Empezar", tone: "primary", verb: "start" }]
         : [];
 
     case "in_progress":
-      return puedeTrabajarla
+      return esEspecialista(ctx)
         ? [
             {
               to: "under_review",
@@ -76,7 +87,7 @@ export function actionsFor(status: AssetStatus, ctx: TaskContext): TaskAction[] 
         : [];
 
     case "under_review":
-      // Sólo el lead resuelve una revisión. El asignado espera.
+      // Sólo el lead/admin/master resuelve una revisión. El especialista espera.
       return isLead(ctx.role)
         ? [
             { to: "completed", label: "Aprobar", tone: "primary", verb: "approve" },
@@ -91,7 +102,8 @@ export function actionsFor(status: AssetStatus, ctx: TaskContext): TaskAction[] 
         : [];
 
     case "in_corrections":
-      return puedeTrabajarla
+      // Retomar correcciones lo hace quien las trabaja: el especialista.
+      return esEspecialista(ctx)
         ? [{ to: "in_progress", label: "Retomar", tone: "primary", verb: "start" }]
         : [];
 

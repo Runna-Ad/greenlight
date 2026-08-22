@@ -109,9 +109,9 @@ export function DocumentoTarea({
             <CampoDoc modo={modo} icono={IconoCopy} label="Botón CTA" tabla="estaticos" filaId={estatico.id}
               campo="copy_cta" grupo="Estático" valor={estatico.copy_cta} placeholder={phEstatico.copy_cta}
               rows={1} soloLectura={soloLectura} onCambio={(v) => onEditarEstatico("copy_cta", v)} />
-            <CampoDoc modo={modo} icono={IconoEdicion} label="Legales" tabla="estaticos" filaId={estatico.id}
-              campo="legales_extra" grupo="Estático" valor={estatico.legales_extra} placeholder={phEstatico.legales_extra}
-              rows={2} soloLectura={soloLectura} onCambio={(v) => onEditarEstatico("legales_extra", v)} />
+            {/* El legal del estático ya NO es un texto libre aquí: sale de la
+                biblioteca (bloque "Legales" abajo, igual que el video). Se retiró el
+                campo `legales_extra` — el legal se selecciona, no se re-escribe. (Pedro 2026-08-21.) */}
             <CampoDoc modo={modo} icono={IconoRefe} label="Nota de diseño" tabla="estaticos" filaId={estatico.id}
               campo="referencia_nota" grupo="Estático" valor={estatico.referencia_nota} placeholder={phEstatico.referencia_nota}
               rows={3} soloLectura={soloLectura} onCambio={(v) => onEditarEstatico("referencia_nota", v)} />

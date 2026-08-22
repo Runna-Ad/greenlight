@@ -96,9 +96,9 @@ export async function guardarMiembro(
   // ni desactivarlo) — el guard de arriba sólo miraba el rol NUEVO, no el actual.
   const { data: actual } = await db
     .from("track_members")
-    .select("role, profile_id")
+    .select("role, profile_id, track")
     .eq("id", id)
-    .maybeSingle<{ role: string; profile_id: string | null }>();
+    .maybeSingle<{ role: string; profile_id: string | null; track: string | null }>();
   if (!actual) return { ok: false, error: "Esa persona ya no existe." };
   if (ROLES_SOLO_MASTER.has(String(actual.role)) && !canAssignAdmins(rol)) {
     return { ok: false, error: "Sólo el Master Builder puede editar a un admin." };
@@ -117,6 +117,18 @@ export async function guardarMiembro(
   if (!Object.keys(limpio).length) return { ok: false, error: "Nada que guardar." };
   // es_lead se deriva del rol: si cambia el rol, se re-sincroniza la bandera.
   if ("role" in limpio) limpio.es_lead = esLeadDeRol(limpio.role);
+
+  // Invariante track ↔ rol (Pedro 2026-08-21): admin/master son GLOBALES → sin
+  // track; lead/creative SÍ tienen track. Se fuerza aquí, sea cual sea la UI:
+  //  - si el rol EFECTIVO es global → track = null (ignora cualquier track del patch).
+  //  - si pasa de global a doer y quedaría sin track → default 'normal'.
+  const rolEfectivo = ("role" in limpio ? limpio.role : actual.role) as string;
+  const esGlobal = rolEfectivo === "admin" || rolEfectivo === "master";
+  if (esGlobal) {
+    limpio.track = null;
+  } else if (limpio.track == null && actual.track == null) {
+    limpio.track = "normal";
+  }
 
   const { error } = await db.from("track_members").update(limpio).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -186,26 +198,35 @@ export async function crearMiembro(data: {
   if (!data.name.trim()) return { ok: false, error: "El nombre es obligatorio." };
 
   const db = supabaseAdmin();
-  // sort_order = siguiente en su track (para que aparezca al final).
-  const { data: ultimo } = await db
+  // admin/master son GLOBALES → sin track (aunque la UI mande uno). lead/creative
+  // conservan el suyo. (Pedro 2026-08-21.)
+  const rolNuevo = data.role ?? "creative";
+  const esGlobal = rolNuevo === "admin" || rolNuevo === "master";
+  const track: "real" | "normal" | null = esGlobal ? null : data.track;
+
+  // sort_order = siguiente en su track (para que aparezca al final). Con track
+  // null (globales), `.is` — `.eq(null)` no matchea NULLs en Postgres.
+  const qUltimo = db
     .from("track_members")
     .select("sort_order")
-    .eq("track", data.track)
     .order("sort_order", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+  const { data: ultimo } = await (track == null
+    ? qUltimo.is("track", null)
+    : qUltimo.eq("track", track)
+  ).maybeSingle();
   const sort_order = (((ultimo?.sort_order as number) ?? 0) || 0) + 1;
 
   const { data: creado, error } = await db
     .from("track_members")
     .insert({
       name: data.name.trim(),
-      track: data.track,
+      track,
       color: data.color ?? "#775cbf",
-      role: data.role ?? "creative",
+      role: rolNuevo,
       email: data.email?.trim() || null,
       slack_user_id: data.slack_user_id?.trim() || null,
-      es_lead: esLeadDeRol(data.role ?? "creative"),
+      es_lead: esLeadDeRol(rolNuevo),
       sort_order,
     })
     .select("id, name, track, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")

@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, RefreshCw, Check, Sparkles } from "lucide-react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { ArrowLeft, RefreshCw, Check, Sparkles, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { AssetStatus } from "@/lib/brand";
 import type { TaskContext } from "@/lib/task-actions";
-import { canOverrideStatus } from "@/lib/roles";
+import { canAdmin, canOverrideStatus } from "@/lib/roles";
+import { eliminarTarea } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { AccionesTarea } from "./acciones-tarea";
 import { NavBundle } from "./nav-bundle";
 import { useCorrecciones } from "./correcciones/contexto";
@@ -61,12 +65,15 @@ export function SubHeaderTarea({
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <Link
-        href={`/${cliente}/tablero`}
-        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" /> Volver al tablero
-      </Link>
+      <div className="flex items-center gap-3">
+        <Link
+          href={`/${cliente}/tablero`}
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" /> Volver al tablero
+        </Link>
+        {canAdmin(ctx.role) && <BorrarTarea cliente={cliente} ideaId={ideaId} />}
+      </div>
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         {mostrarHue && corr && (
@@ -101,6 +108,64 @@ export function SubHeaderTarea({
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Borrar la tarea entera — sólo master/admin. Confirmación en dos pasos (patrón
+ * del panel de correcciones) para que un clic accidental no destruya una tarea con
+ * todo su cuerpo. Al borrar, vuelve al tablero (la tarea ya no existe).
+ */
+function BorrarTarea({ cliente, ideaId }: { cliente: string; ideaId: string }) {
+  const router = useRouter();
+  const [confirmando, setConfirmando] = useState(false);
+  const [borrando, start] = useTransition();
+
+  const borrar = () =>
+    start(async () => {
+      const r = await eliminarTarea(cliente, ideaId);
+      if (!r.ok) {
+        toast.error(r.error ?? "No se pudo borrar la tarea.");
+        return;
+      }
+      toast.success("Tarea borrada.");
+      router.push(`/${cliente}/tablero`);
+    });
+
+  if (confirmando) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+        ¿Borrar tarea?
+        <button
+          type="button"
+          onClick={borrar}
+          disabled={borrando}
+          className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white disabled:opacity-60"
+          style={{ background: "color-mix(in srgb, var(--status-corrections) 80%, #000)" }}
+        >
+          {borrando ? "…" : "Sí"}
+        </button>
+        <button
+          type="button"
+          autoFocus
+          onClick={() => setConfirmando(false)}
+          className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-foreground hover:bg-background"
+        >
+          No
+        </button>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setConfirmando(true)}
+      aria-label="Borrar tarea"
+      title="Borrar tarea (master/admin)"
+      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-status-corrections"
+    >
+      <Trash2 className="size-3.5" /> Borrar
+    </button>
   );
 }
 

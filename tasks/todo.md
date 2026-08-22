@@ -1,5 +1,35 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔥 CURRENT BATCH (2026-08-21) — 4 asks de Pedro (una sesión)
+Orden: B (contenido, tests) → A-safe (pura adición) → C (delete) → D (track nullable).
+Gate: `npm run test:lib` + `npm run test:db` verdes; deploy sólo con "ship it" explícito.
+
+- **B — split botones doer/reviewer.** `submit_review` (y `start`/"Empezar") SÓLO al especialista
+  (`isAssignee && !isLead`); el lead/admin/master es REVISOR → sólo aprobar/mandar cambios + enviar
+  a cliente. Nils (lead) ya no ve "Mandar a revisión" (no hay a quién). Toca `lib/task-actions.ts`
+  (`actionsFor` + `in_corrections` "Retomar" a especialista) + `acciones-tarea.tsx` (`accionesDe`
+  in_corrections "Devolver" a especialista) + `scripts/test-lib.mjs` (línea 125 "lead sí empieza"
+  CAMBIA: ahora lead NO empieza). ✅ HECHO
+- **A — legal estático desde biblioteca.** Hoy la Cortinilla (biblioteca + sugerencia Phase-B) sólo
+  se renderiza para VIDEO (`documento-guion.tsx:89 !esEstatico`). El estático sólo tiene el texto
+  libre `legales_extra`. A-SAFE (pura adición, cero regresión): ungate la Cortinilla para estáticos
+  en la vista de edición interna. FORK RESUELTO (Pedro eligió "retirar"): estáticos usan SÓLO la
+  biblioteca (mismo bloque que video, titulado "Legales"). Retirado el campo inline `legales_extra`
+  del documento + del "Pegar copy" (CAMPOS_ESTATICO) + se anula al parsear (no escribe columna oculta).
+  Columna DB queda vestigial (no se dropea; portal-data la lee → null → no se muestra). ✅ A COMPLETO.
+- **C — master/admin borran tareas y/o briefs.** ✅ HECHO. `eliminarTarea(cliente,ideaId)` en tarea
+  actions + `eliminarBrief(cliente,briefId)` en briefs/actions (nuevo), ambos gate `canAdmin`. Cascada
+  de FKs verificada contra el catálogo (borra planos/estáticos/assets/asignaciones/comentarios/refs/
+  snippets; brief → ideas → todo). UI: BundleCard (footer, confirm 2 pasos) + SubHeaderTarea (junto a
+  Volver, confirm 2 pasos, navega al tablero). NOTA: objetos de storage de refs quedan huérfanos (inocuo).
+- **D — track nullable para admin/master.** ✅ HECHO (código). Migración 0044 (drop NOT NULL + backfill
+  role in admin/master → null). PK ya era `id` (0008), track sólo tenía unique(track,name) que con null
+  deja de aplicar a globales (ok). Código: provision (track null p/ globales), equipo-tab (grupo "Vista
+  global" + selector Track oculto p/ globales + invariante optimista), guardar/crearMiembro (invariante
+  track↔rol server-side), performance/data (workload sólo doers), perfil-tab/mi-trabajo/identity/soy
+  (track nullable). ⚠️ MIGRACIÓN NO APLICADA A PROD — gate "ship it" (`npm run migrate`). Datos actuales:
+  4 personas, todas track=normal; backfill pondrá null a admin+master (Pedro).
+
 ## ⏭️ NEXT FOCUSED BUILD (2026-08-21) — split lead/especialista AT MANUAL CREATION
 Contexto: asignación de 2 niveles ya funciona POST-creación (editor in-task, Rünna tools) y en el
 SYNC (import matchLead → es_lead=true; staged-card ya muestra picker "Lead" single de rol=lead). FALTA:

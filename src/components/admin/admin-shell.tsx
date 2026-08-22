@@ -39,7 +39,7 @@ type Soy = {
   id: string;
   name: string;
   color: string;
-  track: string;
+  track: string | null;
   notify_email: boolean;
   notify_slack: boolean;
 } | null;

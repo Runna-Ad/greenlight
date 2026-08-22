@@ -32,11 +32,12 @@ const CAMPOS_PLANO: { k: keyof PlanoParsed; label: string; rows: number; ancho?:
   { k: "dialogo", label: "Diálogo", rows: 3, ancho: true },
 ];
 
+// El legal ya no se pega por pieza: sale de la biblioteca (bloque "Legales" del
+// documento). Por eso el pegado de copy ya NO ofrece un campo de legal. (Pedro.)
 const CAMPOS_ESTATICO: { k: keyof EstaticoParsed; label: string; rows: number }[] = [
   { k: "copy_titulo", label: "Título", rows: 1 },
   { k: "copy_subtitulo", label: "Subtítulo", rows: 2 },
   { k: "copy_cta", label: "Botón CTA", rows: 1 },
-  { k: "legales_extra", label: "Legales extra", rows: 2 },
 ];
 
 /**
@@ -91,7 +92,9 @@ export function PegarGuion({
       setOfrecerHue(contarPlanos(texto) > p.length || p.length === 0);
       setExtraidoPorIA(false);
     } else {
-      setEstatico(parseEstatico(texto));
+      // legales_extra se retiró del estático (el legal sale de la biblioteca): se
+      // anula al parsear para que un "Legales:" pegado no escriba a una columna oculta.
+      setEstatico({ ...parseEstatico(texto), legales_extra: null });
     }
     setPaso("revisar");
   };

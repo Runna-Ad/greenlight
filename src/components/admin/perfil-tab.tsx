@@ -12,7 +12,7 @@ type Soy = {
   id: string;
   name: string;
   color: string;
-  track: string;
+  track: string | null;
   notify_email: boolean;
   notify_slack: boolean;
 } | null;
@@ -74,7 +74,7 @@ export function PerfilTab({ soy }: { soy: Soy }) {
         <div>
           <p className="text-lg font-semibold text-foreground">{soy.name}</p>
           <p className="text-xs text-muted-foreground">
-            Equipo {soy.track === "real" ? "Real" : "Normal"}
+            {soy.track ? `Equipo ${soy.track === "real" ? "Real" : "Normal"}` : "Vista global"}
           </p>
         </div>
       </div>

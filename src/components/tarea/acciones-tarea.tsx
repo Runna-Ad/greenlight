@@ -222,14 +222,17 @@ function accionesDe(
   esRevisor: boolean,
   abiertas: number,
 ): Accion[] {
-  const puedeTrabajarla = ctx.isAssignee || esRevisor;
+  // El especialista ejecuta; el revisor (lead/admin/master) revisa. `esRevisor`
+  // (canOverrideStatus) es exactamente lead/admin/master, así que un asignado que
+  // NO es revisor es el especialista. Devolver una corrección la trabajó él.
+  const esEspecialista = ctx.isAssignee && !esRevisor;
 
   if (status === "under_review" && esRevisor) {
     return abiertas > 0
       ? [{ verb: "mandar_correcciones", label: "Pedir cambios", tone: "danger" }]
       : [{ verb: "approve", label: "Aprobar", tone: "primary" }];
   }
-  if (status === "in_corrections" && puedeTrabajarla) {
+  if (status === "in_corrections" && esEspecialista) {
     return [{ verb: "devolver", label: "Devolver a revisión", tone: "primary" }];
   }
   // Resto de fases: la misma decisión que el tablero.

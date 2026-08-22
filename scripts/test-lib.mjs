@@ -115,6 +115,7 @@ console.log("\n▶ Botones — estado × rol × si es tu tarea");
 
 const asignado = { isAssignee: true, role: "creative", hasAssignee: true };
 const lead = { isAssignee: false, role: "lead", hasAssignee: true };
+const leadAsignado = { isAssignee: true, role: "lead", hasAssignee: true };
 const ajeno = { isAssignee: false, role: "creative", hasAssignee: true };
 const labels = (s, c) => actionsFor(s, c).map(a => a.label).join(" · ");
 
@@ -122,14 +123,19 @@ eq("el asignado empieza una tarea por hacer", labels("todo", asignado), "Empezar
 eq("sin responsable no hay botón de empezar", labels("todo", { ...asignado, hasAssignee: false }), "");
 eq("y se explica por qué", waitingLabel("todo", { ...asignado, hasAssignee: false }), "Falta responsable");
 eq("un creativo ajeno no empieza tu tarea", labels("todo", ajeno), "");
-eq("el lead sí puede empezar cualquiera", labels("todo", lead), "Empezar");
+// El lead/admin/master es REVISOR, no doer (Pedro 2026-08-21): no ve "Empezar"
+// ni "Mandar a revisión", ni aunque esté asignado a la tarea. Usa "Mover".
+eq("el lead NO empieza (es revisor, no doer)", labels("todo", lead), "");
+eq("un lead asignado tampoco empieza", labels("todo", leadAsignado), "");
 
-eq("en progreso → mandar a revisión", labels("in_progress", asignado), "Mandar a revisión");
+eq("en progreso → mandar a revisión (especialista)", labels("in_progress", asignado), "Mandar a revisión");
+eq("en progreso el lead NO manda a revisión (no hay a quién)", labels("in_progress", lead), "");
 eq("en revisión el asignado sólo espera", labels("under_review", asignado), "");
 eq("y se le dice", waitingLabel("under_review", asignado), "Esperando revisión");
 eq("en revisión el lead aprueba o pide cambios", labels("under_review", lead), "Aprobar · Mandar cambios");
 eq("mandar cambios exige texto", actionsFor("under_review", lead).find(a => a.tone === "danger").needsBody, true);
-eq("correcciones → retomar", labels("in_corrections", asignado), "Retomar");
+eq("correcciones → retomar (especialista)", labels("in_corrections", asignado), "Retomar");
+eq("correcciones: el lead no retoma", labels("in_corrections", lead), "");
 eq("el cliente no mueve nada", ["todo","in_progress","under_review","in_corrections"].every(s => actionsFor(s, { isAssignee: false, role: "client", hasAssignee: true }).length === 0), true);
 // Enviar al cliente es un paso APARTE de aprobar (decisión de Pedro): dos
 // puertas del lead. El especialista no lo ve.

@@ -65,7 +65,7 @@ export default async function MiTrabajoPage() {
         <div>
           <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
             <span className="size-2 rounded-full" style={{ backgroundColor: soy.color }} />
-            {soy.name} · {soy.track}
+            {soy.name}{soy.track ? ` · ${soy.track}` : ""}
           </p>
           <h1 className="mt-1 text-2xl font-semibold text-foreground">Mi trabajo</h1>
         </div>

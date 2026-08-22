@@ -86,18 +86,21 @@ export function DocumentoGuion({
         onQuitarPlano={quitarPlano}
       />
 
-      {!esEstatico && (
-        <CortinillaCierre
-          ideaId={ideaId}
-          legalesLibres={cortinilla.legalesLibres}
-          seleccionados={cortinilla.seleccionados}
-          biblioteca={cortinilla.biblioteca}
-          sugerencia={cortinilla.sugerencia}
-          // En "Vista cliente" los legales también son de lectura (el preview
-          // debe verse como lo del cliente, y no editar legales por accidente).
-          soloLectura={soloLectura || verCliente}
-        />
-      )}
+      {/* La biblioteca de legales aplica a AMBAS plantillas (Pedro 2026-08-21): el
+          estático también saca su legal de la biblioteca — no era sólo texto libre.
+          El estático no tiene "cortinilla de cierre" (es un arte), así que el bloque
+          se titula "Legales". El video conserva su título. */}
+      <CortinillaCierre
+        ideaId={ideaId}
+        titulo={esEstatico ? "Legales" : "Cortinilla de Cierre"}
+        legalesLibres={cortinilla.legalesLibres}
+        seleccionados={cortinilla.seleccionados}
+        biblioteca={cortinilla.biblioteca}
+        sugerencia={cortinilla.sugerencia}
+        // En "Vista cliente" los legales también son de lectura (el preview
+        // debe verse como lo del cliente, y no editar legales por accidente).
+        soloLectura={soloLectura || verCliente}
+      />
     </div>
   );
 }

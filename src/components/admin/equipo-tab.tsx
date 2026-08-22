@@ -39,7 +39,16 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
 
   async function guardar(id: string, patch: Partial<MiembroRow>) {
     const prev = miembros.find((m) => m.id === id);
-    setMiembros((ms) => ms.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+    // Espejo del invariante del server (track ↔ rol): al cambiar el rol a global se
+    // limpia el track localmente; al pasar de global a doer sin track, default normal.
+    // Así la UI no muestra un estado imposible entre el guardado y el revalidate.
+    const local: Partial<MiembroRow> = { ...patch };
+    if ("role" in patch) {
+      const esGlobal = patch.role === "admin" || patch.role === "master";
+      if (esGlobal) local.track = null;
+      else if (prev && prev.track == null) local.track = "normal";
+    }
+    setMiembros((ms) => ms.map((m) => (m.id === id ? { ...m, ...local } : m)));
     const r = await guardarMiembro(id, patch);
     if (!r.ok) {
       if (prev) setMiembros((ms) => ms.map((m) => (m.id === id ? prev : m)));
@@ -53,6 +62,9 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
     else guardar(m.id, { active: next });
   }
 
+  // Admin/master son GLOBALES (track null): van a su propio grupo, no a Real/Normal
+  // — si no, se caían de ambas columnas y desaparecían de la lista. (Pedro 2026-08-21.)
+  const global = miembros.filter((m) => m.track == null);
   const real = miembros.filter((m) => m.track === "real");
   const normal = miembros.filter((m) => m.track === "normal");
 
@@ -67,6 +79,7 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
         </Button>
       </div>
 
+      <Grupo titulo="Vista global · Admins y Master" miembros={global} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
       <Grupo titulo="Equipo Real" miembros={real} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
       <Grupo titulo="Equipo Normal" miembros={normal} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
 
@@ -181,6 +194,8 @@ function MiembroCard({
   const roles: string[] = ROLES_ASIGNABLES.includes(m.role as RolAsignable)
     ? [...ROLES_ASIGNABLES]
     : [m.role, ...ROLES_ASIGNABLES];
+  // admin/master son globales: no tienen track (vista de todos los equipos).
+  const esGlobal = m.role === "admin" || m.role === "master";
 
   return (
     <div
@@ -243,14 +258,23 @@ function MiembroCard({
           </select>
         </Campo>
         <Campo label="Track">
-          <select
-            value={m.track}
-            onChange={(e) => guardar(m.id, { track: e.target.value as "real" | "normal" })}
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="real">Real</option>
-            <option value="normal">Normal</option>
-          </select>
+          {esGlobal ? (
+            <span
+              className="flex h-8 items-center rounded-md border border-dashed border-border px-2 text-sm text-muted-foreground"
+              title="Admin/Master ven todos los equipos — no se acotan a un track"
+            >
+              Global · sin track
+            </span>
+          ) : (
+            <select
+              value={m.track ?? "normal"}
+              onChange={(e) => guardar(m.id, { track: e.target.value as "real" | "normal" })}
+              className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="real">Real</option>
+              <option value="normal">Normal</option>
+            </select>
+          )}
         </Campo>
         <Campo label="Email">
           <InlineText
@@ -360,6 +384,8 @@ function AgregarPersona({
   const [email, setEmail] = useState("");
   const [slack, setSlack] = useState("");
   const [guardando, setGuardando] = useState(false);
+  // admin/master son globales: sin track (el server lo pone null de todos modos).
+  const esGlobalNuevo = role === "admin" || role === "master";
 
   const reset = () => {
     setName(""); setTrack("real"); setRole("creative");
@@ -413,11 +439,20 @@ function AgregarPersona({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="mb-1 block">Track</Label>
-              <select value={track} onChange={(e) => setTrack(e.target.value as "real" | "normal")}
-                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <option value="real">Real</option>
-                <option value="normal">Normal</option>
-              </select>
+              {esGlobalNuevo ? (
+                <span
+                  className="flex h-9 items-center rounded-md border border-dashed border-border px-2 text-sm text-muted-foreground"
+                  title="Admin/Master ven todos los equipos — no se acotan a un track"
+                >
+                  Global · sin track
+                </span>
+              ) : (
+                <select value={track} onChange={(e) => setTrack(e.target.value as "real" | "normal")}
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <option value="real">Real</option>
+                  <option value="normal">Normal</option>
+                </select>
+              )}
             </div>
             <div>
               <Label className="mb-1 block">Rol</Label>

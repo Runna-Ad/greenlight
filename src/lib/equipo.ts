@@ -10,7 +10,8 @@ export type RolAsignable = (typeof ROLES_ASIGNABLES)[number];
 export type MiembroRow = {
   id: string;
   name: string;
-  track: "real" | "normal";
+  /** null = rol global (admin/master): sin track, vista de todos los equipos. */
+  track: "real" | "normal" | null;
   color: string;
   role: string;
   email: string | null;

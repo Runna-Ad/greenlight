@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { canMoveStatus, canOverrideStatus } from "@/lib/roles";
+import { canAdmin, canMoveStatus, canOverrideStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { getCurrentUser } from "@/lib/identity";
@@ -481,6 +481,28 @@ export async function borrarPlano(planoId: string): Promise<GuardarResultado> {
 
   const { error } = await supabaseAdmin().from("planos").delete().eq("id", planoId);
   if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Borra una TAREA (idea) entera — sólo master/admin (Pedro 2026-08-21). Es un
+ * DELETE duro; los FKs con ON DELETE CASCADE limpian planos, estáticos, assets,
+ * asignaciones, comentarios, referencias y snippets de la idea (verificado contra
+ * el catálogo). Los objetos en el bucket de referencias quedan huérfanos (inocuo).
+ * No se puede deshacer: la confirmación vive en la UI.
+ */
+export async function eliminarTarea(
+  cliente: string,
+  ideaId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const role = await getViewAs();
+  if (!canAdmin(role)) return { ok: false, error: "Sólo un admin o master puede borrar una tarea." };
+
+  const { error } = await supabaseAdmin().from("ideas").delete().eq("id", ideaId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/${cliente}/tablero`);
+  revalidatePath(`/${cliente}/briefs`);
   return { ok: true };
 }
 

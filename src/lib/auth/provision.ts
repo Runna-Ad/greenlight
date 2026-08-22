@@ -3,9 +3,9 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { agencyRoleForEmail } from "./allowlist";
 import type { Track } from "@/lib/vocab";
 
-// Track a newly-provisioned person lands in. track_members.track is NOT NULL with
-// no neutral value, so a fresh agency account needs a default the admin can move in
-// Equipo. 'normal' is the safest default (the smaller specialist team).
+// Track a newly-provisioned DOER (lead/creative) lands in — the admin can move
+// them in Equipo. 'normal' is the safest default (the smaller specialist team).
+// admin/master are global (track = null); see bindOrCreateMember.
 const DEFAULT_TRACK: Track = "normal";
 
 export type ProvisionResult =
@@ -111,10 +111,13 @@ async function bindOrCreateMember(
   // 3) create a fresh member. Unique(track,name) can collide on a shared name —
   //    fall back to a disambiguated name rather than failing the login.
   const appRole = m.role === "client" ? "creative" : m.role; // clients never reach here
+  // admin/master are GLOBAL roles → no track (they see every team). Only doers
+  // (lead/creative) land in a track. (Pedro 2026-08-21.)
+  const track: Track | null = appRole === "admin" || appRole === "master" ? null : DEFAULT_TRACK;
   const attempt = async (name: string) =>
     admin
       .from("track_members")
-      .insert({ track: DEFAULT_TRACK, name, color: "#775cbf", role: appRole, email: m.email, profile_id: m.userId })
+      .insert({ track, name, color: "#775cbf", role: appRole, email: m.email, profile_id: m.userId })
       .select("id")
       .maybeSingle();
 

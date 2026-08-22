@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Pill, type PillStatus } from "@/components/ui/pill";
-import { ChevronDown, Files, Layers } from "lucide-react";
+import { ChevronDown, Files, Layers, Trash2 } from "lucide-react";
 
 import type { Bundle } from "@/lib/bundle";
 import { STATUS_LABEL, STATUS_TOKEN } from "@/lib/brand";
+import { eliminarBrief } from "@/app/(app)/[cliente]/briefs/actions";
 
 /**
  * El card de un bundle (wireframe "Brief View"): el brief con cuántas tareas
@@ -17,10 +19,33 @@ import { STATUS_LABEL, STATUS_TOKEN } from "@/lib/brand";
  * Para el especialista el conteo ya viene filtrado (sólo sus tareas) — el
  * filtro vive en lib/bundle.ts, no aquí.
  */
-export function BundleCard({ bundle, cliente }: { bundle: Bundle; cliente: string }) {
+export function BundleCard({
+  bundle,
+  cliente,
+  puedeBorrar = false,
+}: {
+  bundle: Bundle;
+  cliente: string;
+  /** master/admin: puede borrar el brief entero (con todas sus tareas). */
+  puedeBorrar?: boolean;
+}) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
+  const [borrando, startBorrar] = useTransition();
   const primera = bundle.tasks[0];
+
+  const borrar = () =>
+    startBorrar(async () => {
+      const r = await eliminarBrief(cliente, bundle.brief_id);
+      if (!r.ok) {
+        toast.error(r.error ?? "No se pudo borrar el brief.");
+        return;
+      }
+      toast.success("Brief borrado — con todas sus tareas.");
+      setConfirmando(false);
+      router.refresh();
+    });
 
   return (
     <div className="gl-card-interactive overflow-hidden">
@@ -57,13 +82,48 @@ export function BundleCard({ bundle, cliente }: { bundle: Bundle; cliente: strin
         </div>
       </button>
 
-      <button
-        onClick={() => setAbierto((v) => !v)}
-        className="flex w-full items-center justify-center gap-1 border-t border-border/60 py-1.5 text-[11px] text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
-      >
-        {abierto ? "Ocultar tareas" : "Ver tareas"}
-        <ChevronDown className={`size-3.5 transition-transform ${abierto ? "rotate-180" : ""}`} />
-      </button>
+      <div className="flex items-stretch border-t border-border/60">
+        <button
+          onClick={() => setAbierto((v) => !v)}
+          className="flex flex-1 items-center justify-center gap-1 py-1.5 text-[11px] text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+        >
+          {abierto ? "Ocultar tareas" : "Ver tareas"}
+          <ChevronDown className={`size-3.5 transition-transform ${abierto ? "rotate-180" : ""}`} />
+        </button>
+        {puedeBorrar &&
+          (confirmando ? (
+            <span className="flex items-center gap-1 border-l border-border/60 px-2 text-[11px] text-muted-foreground">
+              ¿Borrar todo?
+              <button
+                type="button"
+                onClick={borrar}
+                disabled={borrando}
+                className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white disabled:opacity-60"
+                style={{ background: "color-mix(in srgb, var(--status-corrections) 80%, #000)" }}
+              >
+                {borrando ? "…" : "Sí"}
+              </button>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setConfirmando(false)}
+                className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-foreground hover:bg-background"
+              >
+                No
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmando(true)}
+              aria-label="Borrar brief y todas sus tareas"
+              title="Borrar brief y todas sus tareas"
+              className="flex items-center border-l border-border/60 px-3 text-muted-foreground hover:bg-secondary/40 hover:text-status-corrections"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          ))}
+      </div>
 
       {abierto && (
         <ul className="border-t border-border/60">

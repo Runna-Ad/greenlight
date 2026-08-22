@@ -38,6 +38,9 @@ export async function cargarWorkload(): Promise<WorkloadMember[]> {
         .from("track_members")
         .select("id, name, track, color, es_lead")
         .eq("active", true)
+        // Sólo doers (lead/creative): admin/master son globales, sin track ni carga
+        // asignable — no entran al Workload particionado por equipo. (Pedro 2026-08-21.)
+        .in("role", ["lead", "creative"])
         .order("track", { ascending: true })
         .order("sort_order", { ascending: true }),
       db.from("idea_assignments").select("member_id, idea_id"),

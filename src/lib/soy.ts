@@ -13,7 +13,8 @@ export type Soy = {
   id: string;
   name: string;
   color: string;
-  track: "real" | "normal";
+  /** null = rol global (admin/master): sin track. */
+  track: "real" | "normal" | null;
   /** El rol REAL de la identidad. Para saber si su trabajo cuenta como autoría
    *  (sólo el equipo creativo la deja). null = default 'creative'. */
   role: string | null;
