@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { importarGuion, importarEstatico, extraerGuion } from "@/app/(app)/[cliente]/tareas/[id]/actions";
+import { crearGuion, crearCopy } from "@/app/(app)/[cliente]/tareas/[id]/writer-actions";
 import type { PlanoVista, EstaticoVista } from "./preview-slide";
 import {
   parseGuion,
@@ -49,11 +50,14 @@ const CAMPOS_ESTATICO: { k: keyof EstaticoParsed; label: string; rows: number }[
 export function PegarGuion({
   ideaId,
   modo,
+  intent = "pegar",
   onPlanos,
   onEstatico,
 }: {
   ideaId: string;
   modo: "guion" | "estatico";
+  /** "pegar" = pega+parsea (default). "crear" = H.Ü.E ESCRIBE desde el brief (Fase 2). */
+  intent?: "pegar" | "crear";
   /** Al importar, el editor actualiza su estado con las filas resultantes (sin recargar). */
   onPlanos?: (planos: PlanoVista[]) => void;
   onEstatico?: (estatico: EstaticoVista) => void;
@@ -69,8 +73,12 @@ export function PegarGuion({
   // H.Ü.E para nudgear a revisar que no falte ni cambie nada.
   const [ofrecerHue, setOfrecerHue] = useState(false);
   const [extraidoPorIA, setExtraidoPorIA] = useState(false);
+  // Fase 2: cuando H.Ü.E ESCRIBIÓ el guión (no lo extrajo de un pegado) → nudge distinto
+  // (revisá datos/precios/legales, no "omisiones").
+  const [escritoPorIA, setEscritoPorIA] = useState(false);
   const [pendiente, start] = useTransition();
   const [leyendo, startLectura] = useTransition();
+  const [generando, startGenerar] = useTransition();
 
   const reset = () => {
     setTexto("");
@@ -80,8 +88,28 @@ export function PegarGuion({
     setReemplazar(true);
     setOfrecerHue(false);
     setExtraidoPorIA(false);
+    setEscritoPorIA(false);
   };
   const cerrar = () => { setAbierto(false); reset(); };
+
+  // "Crear guión": H.Ü.E ESCRIBE desde el brief y cae en la MISMA vista previa editable.
+  // Si falla, el diálogo queda en el paso "pegar" (fallback: pégalo tú mismo).
+  const generar = () =>
+    startGenerar(async () => {
+      if (modo === "guion") {
+        const res = await crearGuion(ideaId);
+        if (!res.ok) { toast.error(res.error); return; }
+        setPlanos(res.planos);
+      } else {
+        const res = await crearCopy(ideaId);
+        if (!res.ok) { toast.error(res.error); return; }
+        setEstatico(res.estatico);
+      }
+      setOfrecerHue(false);
+      setExtraidoPorIA(false);
+      setEscritoPorIA(true);
+      setPaso("revisar");
+    });
 
   const analizar = () => {
     if (!texto.trim()) return;
@@ -96,6 +124,7 @@ export function PegarGuion({
       // anula al parsear para que un "Legales:" pegado no escriba a una columna oculta.
       setEstatico({ ...parseEstatico(texto), legales_extra: null });
     }
+    setEscritoPorIA(false);
     setPaso("revisar");
   };
 
@@ -112,6 +141,7 @@ export function PegarGuion({
       setPlanos(res.planos);
       setOfrecerHue(false);
       setExtraidoPorIA(true);
+      setEscritoPorIA(false);
       toast.success("H.Ü.E leyó el guión — revisalo abajo.");
     });
 
@@ -164,10 +194,20 @@ export function PegarGuion({
           morado se perdía. (Pedro.) */}
       <Button
         size="sm"
-        onClick={() => setAbierto(true)}
+        onClick={() => {
+          setAbierto(true);
+          if (intent === "crear") generar();
+        }}
         className="w-full shrink-0 bg-white font-semibold text-primary shadow-sm hover:bg-white/90 hover:text-primary sm:w-auto"
       >
-        <ClipboardPaste className="size-4" /> {modo === "guion" ? "Pegar guión" : "Pegar copy"}
+        {intent === "crear" ? <Sparkles className="size-4" /> : <ClipboardPaste className="size-4" />}{" "}
+        {intent === "crear"
+          ? modo === "guion"
+            ? "Crear guión con H.Ü.E"
+            : "Crear copy con H.Ü.E"
+          : modo === "guion"
+            ? "Pegar guión"
+            : "Pegar copy"}
       </Button>
 
       <Dialog open={abierto} onOpenChange={(o) => (o ? setAbierto(true) : cerrar())}>
@@ -178,11 +218,28 @@ export function PegarGuion({
         <DialogContent className="grid max-h-[88svh] w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-3 sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-sm">
-              {modo === "guion" ? "Pegar guión" : "Pegar copy del estático"}
+              {intent === "crear"
+                ? modo === "guion"
+                  ? "Crear guión con H.Ü.E"
+                  : "Crear copy con H.Ü.E"
+                : modo === "guion"
+                  ? "Pegar guión"
+                  : "Pegar copy del estático"}
             </DialogTitle>
           </DialogHeader>
 
-          {paso === "pegar" ? (
+          {generando ? (
+            <div role="status" aria-live="polite" className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 py-8 text-center">
+              <Sparkles className="size-7 animate-pulse text-primary" />
+              <p className="text-sm font-medium text-foreground">
+                H.Ü.E está escribiendo {modo === "guion" ? "el guión" : "el copy"} desde el brief…
+              </p>
+              <p className="max-w-sm text-[12px] text-muted-foreground">
+                Usa el concepto, los selling points, las reglas de marca y lo que le enseñaste (el Cerebro,
+                los ganadores). Lo revisas antes de importar.
+              </p>
+            </div>
+          ) : paso === "pegar" ? (
             <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
               <p className="shrink-0 text-[12px] text-muted-foreground">
                 Pega el {modo === "guion" ? "guión" : "copy"} tal cual del deck. Verás una vista
@@ -233,6 +290,17 @@ export function PegarGuion({
                   <p>
                     H.Ü.E leyó el guión. Copia el texto tal cual —no inventa ni cambia palabras—,
                     pero revisá que no haya <strong>omitido</strong> nada y que cada campo esté en su lugar
+                    antes de importar.
+                  </p>
+                </div>
+              )}
+
+              {escritoPorIA && (
+                <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/[0.06] p-2.5 text-[12px]">
+                  <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <p className="text-foreground">
+                    H.Ü.E <strong>escribió</strong> este {modo === "guion" ? "guión" : "copy"} desde el brief.
+                    Revisá que los datos, precios y legales sean correctos —no debe inventarlos— y ajústalo
                     antes de importar.
                   </p>
                 </div>
@@ -299,12 +367,12 @@ export function PegarGuion({
           )}
 
           <DialogFooter className="gap-2 sm:items-center sm:justify-between">
-            {paso === "revisar" && modo === "guion" && nPlanos > 0 ? (
+            {paso === "revisar" && !generando && modo === "guion" && nPlanos > 0 ? (
               <div className="flex items-center gap-3 text-[12px]">
                 <label className="flex cursor-pointer items-center gap-1.5">
                   <input
                     type="radio"
-                    name="modo-import"
+                    name={`modo-import-${intent}`}
                     checked={reemplazar}
                     onChange={() => setReemplazar(true)}
                   />
@@ -313,7 +381,7 @@ export function PegarGuion({
                 <label className="flex cursor-pointer items-center gap-1.5">
                   <input
                     type="radio"
-                    name="modo-import"
+                    name={`modo-import-${intent}`}
                     checked={!reemplazar}
                     onChange={() => setReemplazar(false)}
                   />
@@ -325,7 +393,7 @@ export function PegarGuion({
             )}
 
             <div className="flex gap-2">
-              {paso === "revisar" && (
+              {paso === "revisar" && !generando && (
                 <Button variant="outline" size="sm" onClick={() => setPaso("pegar")}>
                   Volver
                 </Button>
@@ -333,17 +401,18 @@ export function PegarGuion({
               <Button variant="outline" size="sm" onClick={cerrar}>
                 Cancelar
               </Button>
-              {paso === "pegar" ? (
-                <Button size="sm" disabled={!texto.trim()} onClick={analizar}>
-                  Analizar
-                </Button>
-              ) : (
-                <Button size="sm" disabled={pendiente || !puedeConfirmar} onClick={confirmar}>
-                  {modo === "guion"
-                    ? `Importar ${nPlanos} plano${nPlanos === 1 ? "" : "s"}`
-                    : "Importar copy"}
-                </Button>
-              )}
+              {!generando &&
+                (paso === "pegar" ? (
+                  <Button size="sm" disabled={!texto.trim()} onClick={analizar}>
+                    Analizar
+                  </Button>
+                ) : (
+                  <Button size="sm" disabled={pendiente || !puedeConfirmar} onClick={confirmar}>
+                    {modo === "guion"
+                      ? `Importar ${nPlanos} plano${nPlanos === 1 ? "" : "s"}`
+                      : "Importar copy"}
+                  </Button>
+                ))}
             </div>
           </DialogFooter>
         </DialogContent>

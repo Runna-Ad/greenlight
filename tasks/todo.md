@@ -1,5 +1,32 @@
 # Greenlight · by Rünna — Build Todo
 
+## ✍️ H.Ü.E Fase 2 — el WRITER "Crear guión" — CONSTRUIDO + REAPEADO, SIN pushear
+Plan: `/Users/work/.claude/plans/dynamic-wondering-flame.md`. H.Ü.E ESCRIBE el guión/copy desde el brief,
+consumiendo el Cerebro/KB/Ganadores de Fase 1. Reusa la preview→import de "Pegar guión" (coexisten; Pegar
+se retira sólo cuando Crear esté perfeccionado — Pedro). Gates VERDES: tsc·eslint·test:db 270·test:lib 359·build.
+Reap Opus aplicado. NO migración → ship = commit + push (sin migrate/setup:storage).
+- [x] **`src/lib/hue-writer.ts`** (server-only): `reunirContextoTarea(ideaId)` reúne inputs de la tarea
+      (concepto/comunicación/tópico/selling_points/peloteo p_*/plataformas/duración/track+voz/marca/brief/familia)
+      + reglas (`reglas_para_tarea` con p_texto proxy → dispara CASHBACK/MSI) + legal sugerido (`legalSugerido`)
+      + Cerebro (hue_instructions activas) + KB (extracted_text) + Ganadores (`cargarWinners`), TODO scopeado
+      global+cliente+marca. `escribirGuion`/`escribirCopy`: Anthropic sonnet-5, tool forzado, prompt cache-split
+      (prefijo estable = instrucciones+Cerebro+KB+ganadores; variable = datos de la tarea+reglas+legal).
+- [x] **`writer-actions.ts`** (use server): `crearGuion(ideaId)`→PlanoParsed[] · `crearCopy(ideaId)`→EstaticoParsed.
+      Gates: hasSupabase · ANTHROPIC_API_KEY · canMoveStatus · **assertCanActOnTask** (lee la tarea).
+- [x] **UI**: `pegar-guion.tsx` gana `intent:"pegar"|"crear"`; el banner muestra AMBOS CTAs. "Crear" genera →
+      cae en la MISMA vista previa editable (Reemplazar/Agregar) → import. Loading "H.Ü.E está escribiendo…",
+      nudge distinto ("revisá datos/precios/legales"), fallback a pegar si falla.
+- [x] **maxDuration=60** en la ruta de tarea (una generación de 16k tokens revienta el default).
+- [x] **Reap Opus (fixes aplicados)**: **C1** fuga cross-cliente — el filtro de ganadores comparaba slug de
+      MARCA vs slug de CLIENTE (nunca matcheaba) y caía a TODOS los clientes → ahora filtra por slug de CLIENTE
+      real, SIN fallback. **S1** las 4 sub-queries del gatherer chequean `.error` (no degradar en silencio a
+      "sin reglas/legal"). Menores: winners "ignora sus precios/legales"; reset de `escritoPorIA`; radio-group
+      único por intent; `.order`+caps del prompt; rechazo de guión/copy vacío; aria-live en loading.
+- **Deuda/notas**: Copies (tipo_asset) sigue sin template · el writer trabaja day-1 con Cerebro/KB/Ganadores
+      vacíos (mejora al sembrarlos) · modelo Sonnet 5 (subir a Opus si la calidad no alcanza) · si hace falta,
+      partir en pipeline 2-calls (outline→desarrollo).
+- **PENDIENTE**: "ship it" (commit + push) → live-test de generación en el deploy (Pedro, en una tarea real).
+
 ## 🧠 H.Ü.E HUB — Fase 1 (HANDOFF-hue-hub-phase1.md) — ETAPA 1 CONSTRUIDA, SIN pushear
 Plan aprobado: `/Users/work/.claude/plans/dynamic-wondering-flame.md`. Estrategia: STAGE IT (Pedro:
 "whatever you recommend"). Etapa 1 = esquema + captura (bajo riesgo, datos going-forward YA). Etapa 2

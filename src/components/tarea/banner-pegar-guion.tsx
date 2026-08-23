@@ -28,20 +28,30 @@ export function BannerPegarGuion({
     <div className="flex flex-col gap-3 rounded-2xl bg-primary px-6 py-5 text-primary-foreground shadow-sm sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="text-lg font-bold">
-          {esEstatico ? "¿Ya tienes el copy?" : "¿Ya tienes el guión?"}
+          {esEstatico ? "¿El copy?" : "¿El guión?"}
         </p>
         <p className="text-[13px] text-primary-foreground/80">
           {esEstatico
-            ? "Pégalo del deck para llenar los campos automáticamente."
-            : "Pégalo completo del deck para llenar todos los planos automáticamente."}
+            ? "Deja que H.Ü.E lo escriba desde el brief, o pégalo del deck."
+            : "Deja que H.Ü.E lo escriba desde el brief, o pégalo completo del deck."}
         </p>
       </div>
-      <PegarGuion
-        ideaId={ideaId}
-        modo={esEstatico ? "estatico" : "guion"}
-        onPlanos={setPlanos}
-        onEstatico={setEstatico}
-      />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <PegarGuion
+          ideaId={ideaId}
+          modo={esEstatico ? "estatico" : "guion"}
+          intent="crear"
+          onPlanos={setPlanos}
+          onEstatico={setEstatico}
+        />
+        <PegarGuion
+          ideaId={ideaId}
+          modo={esEstatico ? "estatico" : "guion"}
+          intent="pegar"
+          onPlanos={setPlanos}
+          onEstatico={setEstatico}
+        />
+      </div>
     </div>
   );
 }

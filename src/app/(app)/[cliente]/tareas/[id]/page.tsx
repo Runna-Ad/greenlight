@@ -25,6 +25,9 @@ import type { RefVista } from "@/components/tarea/referencias-plano";
 import type { EstaticoVista, PlanoVista } from "@/components/tarea/preview-slide";
 
 export const dynamic = "force-dynamic";
+// Las acciones de H.Ü.E de esta ruta (crearGuion escribe un guión completo, extraerGuion,
+// validarCambios) pueden tardar >10s — sube el techo del serverless para que no corten.
+export const maxDuration = 60;
 
 type Idea = {
   id: string; code: string | null; status: AssetStatus; track: string;

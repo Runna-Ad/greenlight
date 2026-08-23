@@ -1,5 +1,22 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-21 — H.Ü.E HUB Fase 1 (Etapa 1 + 2) construida + reapeada, SIN pushear
+Última actualización: 2026-08-22 — H.Ü.E Fase 2 (writer "Crear guión") construido + reapeado, SIN pushear
+
+## ✍️ H.Ü.E Fase 2 — writer "Crear guión" (2026-08-22) — CONSTRUIDO + REAPEADO, SIN pushear
+- **Qué es**: H.Ü.E ESCRIBE el guión (video → planos) o el copy (estático → título/subtítulo/CTA) desde el
+  brief de la tarea, consumiendo lo que Fase 1 hizo entrenable (Cerebro, KB, Biblioteca de Ganadores). Es el
+  sucesor "escribir de cero" del flujo "arreglar un guión pegado". COEXISTE con "Pegar guión"/"Pegar copy"
+  (se retira Pegar sólo cuando Crear esté perfeccionado — Pedro).
+- **Arquitectura**: `src/lib/hue-writer.ts` (server-only) reúne el contexto (inputs de la tarea + reglas de
+  marca vía `reglas_para_tarea` + legal sugerido + Cerebro/KB/Ganadores, TODO scopeado global+cliente+marca) y
+  llama a Claude (sonnet-5, prompt cache-split). `writer-actions.ts` (`crearGuion`/`crearCopy`, gate
+  canMoveStatus + assertCanActOnTask). Devuelve el MISMO `PlanoParsed[]`/`EstaticoParsed` que `extraerGuion` →
+  cae en la preview→import ya probada (el humano revisa antes de escribir; `sinInventar` NO aplica a un writer).
+  UI: `pegar-guion.tsx` gana `intent:"crear"`; el banner muestra ambos CTAs. `maxDuration=60` en la ruta.
+- **Reap Opus**: 0 crítico de exfiltración; fix clave = fuga cross-cliente en el fallback de ganadores (filtro
+  por slug de CLIENTE, sin fallback) + gatherer falla honesto (chequea `.error`). Menores aplicados.
+- **Gates**: tsc·eslint·test:db 270·test:lib 359·build. SIN migración → ship = commit + push.
+- **Pendiente**: "ship it" → live-test de la calidad de generación en el deploy (Pedro, tarea real).
+  Day-1 escribe desde el brief aunque el Cerebro/KB/Ganadores estén vacíos; mejora al sembrarlos.
 
 ## 🧠 H.Ü.E HUB — Fase 1 COMPLETA (2026-08-21) — CONSTRUIDA + REAPEADA, SIN pushear (gate "ship it")
 - **Qué es**: hace a H.Ü.E medible y entrenable. Etapa 1 = ESQUEMA + CAPTURA (plumbing going-forward).
@@ -179,7 +196,9 @@ Fuentes: Poppins (títulos) · Inter (datos) · Geist Mono (nombres de archivo) 
 Unbounded (wordmark)
 
 ## Desplegado
-- **https://runna-command-center.vercel.app** — público, sin login (decisión de Pedro)
+- **https://runna-greenlight.vercel.app** — dominio de prod ACTUAL (alias → deploy más reciente).
+  Login ON (`AUTH_ENABLED=true`) → `/` da 307 a `/login`. ⚠️ El viejo `runna-command-center.vercel.app`
+  ya NO sirve (404) — corregido 2026-08-21 al verificar el ship del HUB.
 - Deploy: **`git push main` → auto-deploy** (Vercel git-connected). Funciona
   porque el repo es **PÚBLICO** — se hizo público justo para esto (Hobby NO
   auto-deploya repos PRIVADOS de org; ver lección). Verificado 2026-08-06: un
