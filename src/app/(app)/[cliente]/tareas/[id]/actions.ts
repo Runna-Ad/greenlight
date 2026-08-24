@@ -485,6 +485,24 @@ export async function borrarPlano(planoId: string): Promise<GuardarResultado> {
 }
 
 /**
+ * Vacía el guión: borra TODOS los planos de la tarea de un golpe ("Descartar guión" /
+ * empezar de cero — p. ej. tras un "Crear guión" que no gustó). El trigger BEFORE DELETE
+ * (0039) limpia las correcciones ancladas de cada plano. La confirmación (2 pasos) vive
+ * en la UI. Mismo gate que editar: rol que edita + poder actuar sobre ESTA tarea.
+ */
+export async function vaciarGuion(ideaId: string): Promise<GuardarResultado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const role = await getViewAs();
+  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+
+  const { error } = await supabaseAdmin().from("planos").delete().eq("idea_id", ideaId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
  * Borra una TAREA (idea) entera — sólo master/admin (Pedro 2026-08-21). Es un
  * DELETE duro; los FKs con ON DELETE CASCADE limpian planos, estáticos, assets,
  * asignaciones, comentarios, referencias y snippets de la idea (verificado contra

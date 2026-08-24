@@ -1,9 +1,10 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { agregarPlano, borrarPlano } from "@/app/(app)/[cliente]/tareas/[id]/actions";
+import { agregarPlano, borrarPlano, vaciarGuion } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { PLACEHOLDER_ESTATICO, placeholdersGuion } from "@/lib/plantilla";
 import { DocumentoTarea } from "./documento-tarea";
 import { CortinillaCierre, type LegalSnippet } from "./cortinilla-cierre";
@@ -68,8 +69,27 @@ export function DocumentoGuion({
       else setPlanos((prev) => prev.filter((p) => p.id !== id));
     });
 
+  // "Descartar guión": borra TODOS los planos de un golpe (empezar de cero tras un
+  // Crear/Pegar que no gustó). Sólo video, editable, con planos. Confirmación 2 pasos.
+  const vaciar = () =>
+    startTransition(async () => {
+      const res = await vaciarGuion(ideaId);
+      if (!res.ok) {
+        toast.error("error" in res ? res.error : "No se pudo descartar el guión.");
+        return;
+      }
+      setPlanos([]);
+      toast.success("Guión descartado — crea o pega uno nuevo.");
+    });
+
   return (
     <div className="space-y-4">
+      {!esEstatico && !verCliente && !soloLectura && planos.length > 0 && (
+        <div className="flex justify-end">
+          <BotonVaciarGuion n={planos.length} onConfirm={vaciar} />
+        </div>
+      )}
+
       <DocumentoTarea
         modo={verCliente ? "lectura" : "editable"}
         esEstatico={esEstatico}
@@ -102,5 +122,44 @@ export function DocumentoGuion({
         soloLectura={soloLectura || verCliente}
       />
     </div>
+  );
+}
+
+/** "Descartar guión" con confirmación en 2 pasos (mismo patrón que borrar un plano). */
+function BotonVaciarGuion({ n, onConfirm }: { n: number; onConfirm: () => void }) {
+  const [confirmando, setConfirmando] = useState(false);
+  if (confirmando) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[11px]">
+        <span className="font-semibold text-muted-foreground">
+          ¿Descartar {n === 1 ? "el plano" : `los ${n} planos`}?
+        </span>
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="rounded px-2 py-0.5 font-bold text-white"
+          style={{ background: "color-mix(in srgb, var(--status-corrections) 80%, #000)" }}
+        >
+          Sí, descartar
+        </button>
+        <button
+          type="button"
+          autoFocus
+          onClick={() => setConfirmando(false)}
+          className="rounded border border-border px-2 py-0.5 font-medium text-foreground hover:bg-background"
+        >
+          No
+        </button>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setConfirmando(true)}
+      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-status-corrections/50 hover:text-status-corrections"
+    >
+      <Trash2 className="size-3.5" /> Descartar guión
+    </button>
   );
 }

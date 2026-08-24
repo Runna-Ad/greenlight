@@ -17,6 +17,9 @@ Reap Opus aplicado. NO migración → ship = commit + push (sin migrate/setup:st
       cae en la MISMA vista previa editable (Reemplazar/Agregar) → import. Loading "H.Ü.E está escribiendo…",
       nudge distinto ("revisá datos/precios/legales"), fallback a pegar si falla.
 - [x] **maxDuration=60** en la ruta de tarea (una generación de 16k tokens revienta el default).
+- [x] **"Descartar guión"** (2026-08-23, follow-on): botón 1-clic con confirm 2 pasos que borra TODOS los
+      planos (`vaciarGuion(ideaId)`, gate canMoveStatus + assertCanActOnTask; trigger 0039 limpia correcciones
+      ancladas; setPlanos([]) en memoria). Sólo video/editable/con-planos. No toca assets. `documento-guion.tsx`.
 - [x] **Reap Opus (fixes aplicados)**: **C1** fuga cross-cliente — el filtro de ganadores comparaba slug de
       MARCA vs slug de CLIENTE (nunca matcheaba) y caía a TODOS los clientes → ahora filtra por slug de CLIENTE
       real, SIN fallback. **S1** las 4 sub-queries del gatherer chequean `.error` (no degradar en silencio a
