@@ -1672,6 +1672,35 @@ console.log("\n▶ 0045 — H.Ü.E HUB: captura + entrenamiento + RLS master-onl
   eq("hue_kb_documents: indexed_at arranca null (seam de retrieval futuro)",
      await scalar(`select indexed_at from produccion.hue_kb_documents where id=$1`, [kb]), null);
 
+  // 3b) AISLAMIENTO de scope (reap CRITICAL) — un doc de MARCA no se filtra a la marca
+  // hermana. Espeja el filtro OR-PLANO del writer (hue-writer.ts): un doc entra si
+  //   scope='global' OR client_id=<clienteTarea> OR marca_id=<marcaTarea>.
+  // El fix vive en resolverScope: un doc de marca guarda client_id=NULL. Si llevara
+  // client_id=DiDi, la clause client_id.eq lo pescaría para AMBAS marcas de DiDi → un
+  // doc de "DiDi Card" se filtraría a un guión de "DiDi Préstamos".
+  const DIDI = "00000000-0000-0000-0000-000000000001";
+  const CARD = "00000000-0000-0000-0000-0000000000a1";
+  const PREST = "00000000-0000-0000-0000-0000000000a2";
+  await db.exec(`
+    insert into produccion.hue_kb_documents (title, storage_path, scope, client_id, marca_id) values
+      ('iso-G','s://k/g','global', null, null),
+      ('iso-DiDi','s://k/c','client','${DIDI}', null),
+      ('iso-Card','s://k/card','marca', null, '${CARD}'),
+      ('iso-Prest','s://k/prest','marca', null, '${PREST}');
+  `);
+  const paraPrestamos = (await q(
+    `select title from produccion.hue_kb_documents
+      where (scope='global' or client_id='${DIDI}' or marca_id='${PREST}')
+        and title like 'iso-%' order by title`)).map((r) => r.title).join(",");
+  eq("scope: un guión de DiDi Préstamos NO lee docs de DiDi Card (aislamiento)",
+     paraPrestamos, "iso-DiDi,iso-G,iso-Prest");
+  const paraCard = (await q(
+    `select title from produccion.hue_kb_documents
+      where (scope='global' or client_id='${DIDI}' or marca_id='${CARD}')
+        and title like 'iso-%' order by title`)).map((r) => r.title).join(",");
+  eq("scope: un guión de DiDi Card NO lee docs de DiDi Préstamos (aislamiento)",
+     paraCard, "iso-Card,iso-DiDi,iso-G");
+
   // 4) hue_top_performers — unique(idea_id)
   await db.query(`insert into produccion.hue_top_performers (idea_id, starred_by, reason) values ($1,$2,'ganó')`, [IDEA, GALIE]);
   let dupStar = false;

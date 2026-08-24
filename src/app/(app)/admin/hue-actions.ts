@@ -16,6 +16,45 @@ const MAX_KB_BYTES = 20 * 1024 * 1024;
 type Fail = { ok: false; error: string };
 type Ok<T = object> = { ok: true } & T;
 
+/** Un cliente con sus marcas, para el selector de scope del HUB (KB + Cerebro). */
+export type ClienteScope = { id: string; name: string; marcas: { id: string; name: string }[] };
+
+type ScopeResuelto = { scope: HueScope; client_id: string | null; marca_id: string | null };
+
+/**
+ * Resuelve el scope de un doc/lección desde lo que manda el picker (`scope` + `scopeId`),
+ * validando que el id exista (no confía en el cliente).
+ *
+ * ⚠️ INVARIANTE DE AISLAMIENTO — un doc de MARCA guarda `client_id = NULL` a propósito
+ * (igual que los snippets legales por marca). El writer filtra con un OR PLANO:
+ *   `scope.eq.global, client_id.eq.<clienteDeLaTarea>, marca_id.eq.<marcaDeLaTarea>`
+ * Si un doc de marca llevara `client_id`, la clause `client_id.eq` lo pescaría para
+ * TODAS las marcas del cliente → un doc de "DiDi Card" se filtraría a un guión de
+ * "DiDi Préstamos" (fuga cross-marca). Con `client_id = NULL` sólo `marca_id.eq` lo
+ * pesca → queda aislado a su marca. **NO derivar client_id en la rama de marca.**
+ *
+ * Fail-closed: marca/cliente SIN id NO degrada a global (global = visible para TODOS
+ * los clientes — el peor default para una feature de aislamiento).
+ */
+async function resolverScope(scope: string, scopeId: string | null): Promise<ScopeResuelto | Fail> {
+  const db = supabaseAdmin();
+  if (scope === "marca") {
+    if (!scopeId) return { ok: false, error: "Elige la marca a la que aplica." };
+    const { data, error } = await db.from("marcas").select("id").eq("id", scopeId).maybeSingle<{ id: string }>();
+    if (error) return { ok: false, error: error.message };
+    if (!data) return { ok: false, error: "Esa marca ya no existe." };
+    return { scope: "marca", client_id: null, marca_id: scopeId };
+  }
+  if (scope === "client") {
+    if (!scopeId) return { ok: false, error: "Elige el cliente al que aplica." };
+    const { data, error } = await db.from("clients").select("id").eq("id", scopeId).maybeSingle<{ id: string }>();
+    if (error) return { ok: false, error: error.message };
+    if (!data) return { ok: false, error: "Ese cliente ya no existe." };
+    return { scope: "client", client_id: scopeId, marca_id: null };
+  }
+  return { scope: "global", client_id: null, marca_id: null };
+}
+
 /** Gate del HUB: sólo master. Devuelve null si pasa, o un Fail si no. */
 async function noMaster(): Promise<Fail | null> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
@@ -48,27 +87,38 @@ export async function hubWinners(): Promise<Ok<{ winners: Winner[] }> | Fail> {
 /** El Cerebro + su auditoría + los ajustes, en una sola llamada (lo que la pestaña
  *  Entrenamiento necesita para pintar de un jalón). */
 export async function hubTraining(): Promise<
-  | Ok<{ instrucciones: HueInstruction[]; kb: HueKbDocument[]; adaptaciones: AdaptacionRow[]; autoLearn: boolean }>
+  | Ok<{ instrucciones: HueInstruction[]; kb: HueKbDocument[]; adaptaciones: AdaptacionRow[]; autoLearn: boolean; clientes: ClienteScope[] }>
   | Fail
 > {
   const no = await noMaster();
   if (no) return no;
   const db = supabaseAdmin();
-  const [ri, rk, ra, rs] = await Promise.all([
+  const [ri, rk, ra, rs, rc, rm] = await Promise.all([
     db.from("hue_instructions").select("*").order("active", { ascending: false }).order("created_at", { ascending: false }),
     db.from("hue_kb_documents").select("*").order("created_at", { ascending: false }),
     db.from("hue_adaptations").select("id, at, trigger_summary, changed_instruction_id, reverted_at").order("at", { ascending: false }).limit(50),
     db.from("hue_settings").select("auto_learn").eq("id", 1).maybeSingle(),
+    db.from("clients").select("id, name").order("name"),
+    db.from("marcas").select("id, name, client_id").order("name"),
   ]);
   // Un error de query NO debe leerse como "Cerebro vacío" — fallar honesto (reap S1).
   if (ri.error) return { ok: false, error: `Cerebro: ${ri.error.message}` };
   if (rk.error) return { ok: false, error: `KB: ${rk.error.message}` };
   if (ra.error) return { ok: false, error: `Auditoría: ${ra.error.message}` };
   if (rs.error) return { ok: false, error: `Ajustes: ${rs.error.message}` };
+  if (rc.error) return { ok: false, error: `Clientes: ${rc.error.message}` };
+  if (rm.error) return { ok: false, error: `Marcas: ${rm.error.message}` };
   const { data: instr } = ri;
   const { data: kb } = rk;
   const { data: adap } = ra;
   const { data: settings } = rs;
+  // Clientes con sus marcas (agrupadas), para el selector de scope.
+  const marcaRows = (rm.data ?? []) as { id: string; name: string; client_id: string | null }[];
+  const clientes: ClienteScope[] = ((rc.data ?? []) as { id: string; name: string }[]).map((c) => ({
+    id: c.id,
+    name: c.name,
+    marcas: marcaRows.filter((m) => m.client_id === c.id).map((m) => ({ id: m.id, name: m.name })),
+  }));
   const instrucciones = (instr ?? []) as HueInstruction[];
   const titleById = new Map(instrucciones.map((i) => [i.id, i.title]));
   const adaptaciones: AdaptacionRow[] = ((adap ?? []) as {
@@ -90,6 +140,7 @@ export async function hubTraining(): Promise<
     kb: (kb ?? []) as HueKbDocument[],
     adaptaciones,
     autoLearn: (settings as { auto_learn: boolean } | null)?.auto_learn === true,
+    clientes,
   };
 }
 
@@ -99,14 +150,19 @@ export async function crearInstruccion(
   title: string,
   body: string,
   scope: HueScope = "global",
+  scopeId: string | null = null,
 ): Promise<Ok | Fail> {
   const no = await noMaster();
   if (no) return no;
   const t = title.trim();
   const b = body.trim();
   if (!t || !b) return { ok: false, error: "El título y el cuerpo son obligatorios." };
+  const sc = await resolverScope(scope, scopeId);
+  if ("ok" in sc) return sc; // Fail
   const { error } = await supabaseAdmin().from("hue_instructions").insert({
-    scope,
+    scope: sc.scope,
+    client_id: sc.client_id,
+    marca_id: sc.marca_id,
     title: t,
     body: b,
     source: "human",
@@ -165,6 +221,11 @@ export async function subirKb(form: FormData): Promise<Ok | Fail> {
   if (file.size > MAX_KB_BYTES) return { ok: false, error: "El archivo supera los 20MB." };
   if (!esKbValido(file.type, file.name)) return { ok: false, error: "Tipo no permitido (usa pdf, docx, txt o md)." };
 
+  // Scope (marca/cliente/global) del picker — se resuelve ANTES de subir el objeto, para
+  // no dejar un archivo huérfano en el bucket si el scope es inválido.
+  const sc = await resolverScope(String(form.get("scope") ?? "global"), String(form.get("scope_id") ?? "").trim() || null);
+  if ("ok" in sc) return sc; // Fail
+
   const bytes = new Uint8Array(await file.arrayBuffer());
   // Extensión saneada (sólo [a-z0-9]) — un nombre raro como "x.pd/f" no debe meter el
   // objeto en un sub-path del bucket.
@@ -187,7 +248,9 @@ export async function subirKb(form: FormData): Promise<Ok | Fail> {
   }
 
   const { error: insErr } = await db.from("hue_kb_documents").insert({
-    scope: "global",
+    scope: sc.scope,
+    client_id: sc.client_id,
+    marca_id: sc.marca_id,
     title: title || file.name,
     storage_path: key,
     mime_type: file.type || null,

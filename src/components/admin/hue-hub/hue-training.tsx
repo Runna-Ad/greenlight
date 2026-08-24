@@ -32,18 +32,78 @@ import {
   kbTexto,
   setAutoLearn,
   correrSintesisAhora,
+  type ClienteScope,
 } from "@/app/(app)/admin/hue-actions";
-import type { HueInstruction, HueKbDocument } from "@/lib/database.types";
+import type { HueInstruction, HueKbDocument, HueScope } from "@/lib/database.types";
 import type { Winner, AdaptacionRow } from "@/lib/hue-data";
 
 const fecha = (iso: string) => new Date(iso).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
 const kb = (bytes: number | null) => (bytes === null ? "" : `${Math.max(1, Math.round(bytes / 1024))} KB`);
+
+/** El scope elegido en el picker. `id` = client_id o marca_id según `scope`; null en global. */
+type ScopeVal = { scope: HueScope; id: string | null };
+const GLOBAL_SCOPE: ScopeVal = { scope: "global", id: null };
+
+/**
+ * Selector de scope compartido (KB + Cerebro): Global · un cliente entero · una marca.
+ * Native `<select>` con `<optgroup>` por cliente (mismo idiom que biblioteca-tab). El valor
+ * codifica `global` | `client:<id>` | `marca:<id>`.
+ */
+function ScopeSelect({ clientes, value, onChange, disabled }: {
+  clientes: ClienteScope[];
+  value: ScopeVal;
+  onChange: (v: ScopeVal) => void;
+  disabled?: boolean;
+}) {
+  const raw = value.scope === "global" || !value.id ? "global" : `${value.scope}:${value.id}`;
+  return (
+    <select
+      value={raw}
+      disabled={disabled}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (v === "global") return onChange(GLOBAL_SCOPE);
+        const [kind, id] = v.split(":");
+        onChange({ scope: kind as HueScope, id });
+      }}
+      className="h-8 max-w-[220px] rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      title="A qué cliente/marca aplica"
+    >
+      <option value="global">Global · todos los clientes</option>
+      {clientes.map((c) => (
+        <optgroup key={c.id} label={c.name}>
+          <option value={`client:${c.id}`}>{c.name} · todo el cliente</option>
+          {c.marcas.map((m) => (
+            <option key={m.id} value={`marca:${m.id}`}>
+              {c.name} › {m.name}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
+  );
+}
+
+/** Etiqueta legible del scope de un doc/lección (para el badge de la lista). */
+function scopeLabel(scope: HueScope, clientId: string | null, marcaId: string | null, clientes: ClienteScope[]): string | null {
+  if (scope === "global") return null;
+  if (scope === "marca" && marcaId) {
+    for (const c of clientes) {
+      const m = c.marcas.find((x) => x.id === marcaId);
+      if (m) return `${c.name} › ${m.name}`;
+    }
+    return "marca";
+  }
+  if (scope === "client" && clientId) return clientes.find((c) => c.id === clientId)?.name ?? "cliente";
+  return null;
+}
 
 type TrainingData = {
   instrucciones: HueInstruction[];
   kb: HueKbDocument[];
   adaptaciones: AdaptacionRow[];
   autoLearn: boolean;
+  clientes: ClienteScope[];
 };
 
 export function HueTraining() {
@@ -53,7 +113,7 @@ export function HueTraining() {
 
   const recargar = () => {
     hubTraining().then((res) => {
-      if (res.ok) setData({ instrucciones: res.instrucciones, kb: res.kb, adaptaciones: res.adaptaciones, autoLearn: res.autoLearn });
+      if (res.ok) setData({ instrucciones: res.instrucciones, kb: res.kb, adaptaciones: res.adaptaciones, autoLearn: res.autoLearn, clientes: res.clientes });
       else toast.error(res.error);
     });
   };
@@ -62,7 +122,7 @@ export function HueTraining() {
     let vivo = true;
     Promise.all([hubTraining(), hubWinners()]).then(([t, w]) => {
       if (!vivo) return;
-      if (t.ok) setData({ instrucciones: t.instrucciones, kb: t.kb, adaptaciones: t.adaptaciones, autoLearn: t.autoLearn });
+      if (t.ok) setData({ instrucciones: t.instrucciones, kb: t.kb, adaptaciones: t.adaptaciones, autoLearn: t.autoLearn, clientes: t.clientes });
       else toast.error(t.error);
       if (w.ok) setWinners(w.winners);
       setCargando(false);
@@ -77,9 +137,9 @@ export function HueTraining() {
   return (
     <div className="space-y-6">
       <AutoLearn autoLearn={data.autoLearn} onReload={recargar} />
-      <Cerebro instrucciones={data.instrucciones} onReload={recargar} />
+      <Cerebro instrucciones={data.instrucciones} clientes={data.clientes} onReload={recargar} />
       <Ganadores winners={winners} />
-      <KBDocs docs={data.kb} onReload={recargar} />
+      <KBDocs docs={data.kb} clientes={data.clientes} onReload={recargar} />
       <Auditoria filas={data.adaptaciones} />
     </div>
   );
@@ -136,7 +196,7 @@ function AutoLearn({ autoLearn, onReload }: { autoLearn: boolean; onReload: () =
 }
 
 // ── El Cerebro (hue_instructions) ────────────────────────────
-function Cerebro({ instrucciones, onReload }: { instrucciones: HueInstruction[]; onReload: () => void }) {
+function Cerebro({ instrucciones, clientes, onReload }: { instrucciones: HueInstruction[]; clientes: ClienteScope[]; onReload: () => void }) {
   const [creando, setCreando] = useState(false);
   return (
     <section className="space-y-3">
@@ -153,9 +213,10 @@ function Cerebro({ instrucciones, onReload }: { instrucciones: HueInstruction[];
 
       {creando && (
         <LessonForm
+          clientes={clientes}
           onCancel={() => setCreando(false)}
-          onSave={async (title, body) => {
-            const r = await crearInstruccion(title, body);
+          onSave={async (title, body, scope) => {
+            const r = await crearInstruccion(title, body, scope?.scope ?? "global", scope?.id ?? null);
             if (!r.ok) {
               toast.error(r.error);
               return;
@@ -174,7 +235,7 @@ function Cerebro({ instrucciones, onReload }: { instrucciones: HueInstruction[];
       ) : (
         <ul className="space-y-2">
           {instrucciones.map((i) => (
-            <LessonCard key={i.id} i={i} onReload={onReload} />
+            <LessonCard key={i.id} i={i} clientes={clientes} onReload={onReload} />
           ))}
         </ul>
       )}
@@ -184,27 +245,37 @@ function Cerebro({ instrucciones, onReload }: { instrucciones: HueInstruction[];
 
 function LessonForm({
   inicial,
+  clientes,
   onSave,
   onCancel,
 }: {
   inicial?: { title: string; body: string };
-  onSave: (title: string, body: string) => void | Promise<void>;
+  /** Presente sólo al CREAR → muestra el selector de scope (marca/cliente/global). */
+  clientes?: ClienteScope[];
+  onSave: (title: string, body: string, scope?: ScopeVal) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const [title, setTitle] = useState(inicial?.title ?? "");
   const [body, setBody] = useState(inicial?.body ?? "");
+  const [scope, setScope] = useState<ScopeVal>(GLOBAL_SCOPE);
   const [pend, setPend] = useState(false);
   const guardar = async () => {
     if (!title.trim() || !body.trim()) return toast.error("Título y cuerpo son obligatorios.");
     setPend(true);
-    await onSave(title, body);
+    await onSave(title, body, clientes ? scope : undefined);
     setPend(false);
   };
   return (
     <div className="gl-card space-y-2 p-3">
       <Input placeholder="Título de la lección" value={title} onChange={(e) => setTitle(e.target.value)} />
       <Textarea placeholder="La guía accionable…" value={body} onChange={(e) => setBody(e.target.value)} rows={3} />
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {clientes && clientes.length > 0 && (
+          <div className="mr-auto flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Aplica a</span>
+            <ScopeSelect clientes={clientes} value={scope} onChange={setScope} disabled={pend} />
+          </div>
+        )}
         <Button variant="ghost" size="sm" onClick={onCancel}>Cancelar</Button>
         <Button size="sm" onClick={guardar} disabled={pend}>Guardar</Button>
       </div>
@@ -212,9 +283,10 @@ function LessonForm({
   );
 }
 
-function LessonCard({ i, onReload }: { i: HueInstruction; onReload: () => void }) {
+function LessonCard({ i, clientes, onReload }: { i: HueInstruction; clientes: ClienteScope[]; onReload: () => void }) {
   const [editando, setEditando] = useState(false);
   const [confirmar, setConfirmar] = useState(false);
+  const scopeTxt = scopeLabel(i.scope, i.client_id, i.marca_id, clientes);
 
   if (editando) {
     return (
@@ -245,7 +317,7 @@ function LessonCard({ i, onReload }: { i: HueInstruction; onReload: () => void }
             <span className="font-medium text-foreground">{i.title}</span>
             <Badge tone={i.source === "auto" ? "auto" : "human"}>{i.source === "auto" ? "auto" : "manual"}</Badge>
             <Badge tone="neutral">v{i.version}</Badge>
-            {i.scope !== "global" && <Badge tone="neutral">{i.scope}</Badge>}
+            {scopeTxt && <Badge tone="neutral">{scopeTxt}</Badge>}
             {!i.active && <Badge tone="off">inactiva</Badge>}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{i.body}</p>
@@ -345,9 +417,10 @@ function WinnerCard({ w }: { w: Winner }) {
 }
 
 // ── KB (hue_kb_documents) ────────────────────────────────────
-function KBDocs({ docs, onReload }: { docs: HueKbDocument[]; onReload: () => void }) {
+function KBDocs({ docs, clientes, onReload }: { docs: HueKbDocument[]; clientes: ClienteScope[]; onReload: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
+  const [scope, setScope] = useState<ScopeVal>(GLOBAL_SCOPE);
   const [subiendo, setSubiendo] = useState(false);
   const [preview, setPreview] = useState<{ id: string; texto: string } | null>(null);
 
@@ -357,12 +430,15 @@ function KBDocs({ docs, onReload }: { docs: HueKbDocument[]; onReload: () => voi
     const form = new FormData();
     form.set("file", file);
     form.set("title", title);
+    form.set("scope", scope.scope);
+    form.set("scope_id", scope.id ?? "");
     setSubiendo(true);
     const r = await subirKb(form);
     setSubiendo(false);
     if (!r.ok) return toast.error(r.error);
     toast.success("Documento subido");
     setTitle("");
+    // El scope NO se resetea: subir varios docs de la MISMA marca es lo común.
     if (fileRef.current) fileRef.current.value = "";
     onReload();
   };
@@ -382,11 +458,14 @@ function KBDocs({ docs, onReload }: { docs: HueKbDocument[]; onReload: () => voi
       </div>
       <p className="text-xs text-muted-foreground">
         Sube docs (pdf, docx, txt, md). H.Ü.E extrae el texto para leerlo entero al escribir guiones (Fase 2).
+        Elige a qué <span className="font-medium text-foreground">marca</span> aplica: H.Ü.E sólo lee los docs de
+        esa marca (o del cliente / globales) al escribir — así los facts de una marca no se cruzan con otra.
       </p>
 
       <div className="gl-card flex flex-wrap items-center gap-2 p-3">
         <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.md" className="max-w-[220px] text-xs text-muted-foreground file:mr-2 file:rounded file:border-0 file:bg-secondary file:px-2 file:py-1 file:text-xs file:text-secondary-foreground" />
         <Input placeholder="Título (opcional)" value={title} onChange={(e) => setTitle(e.target.value)} className="h-8 max-w-[200px]" />
+        <ScopeSelect clientes={clientes} value={scope} onChange={setScope} disabled={subiendo} />
         <Button size="sm" onClick={subir} disabled={subiendo}>
           <Upload className="size-3.5" /> {subiendo ? "Subiendo…" : "Subir"}
         </Button>
@@ -394,10 +473,13 @@ function KBDocs({ docs, onReload }: { docs: HueKbDocument[]; onReload: () => voi
 
       {docs.length > 0 && (
         <ul className="space-y-1.5">
-          {docs.map((d) => (
+          {docs.map((d) => {
+            const scopeTxt = scopeLabel(d.scope, d.client_id, d.marca_id, clientes);
+            return (
             <li key={d.id} className="gl-card flex items-center gap-2 p-2.5 text-sm">
               <FileText className="size-4 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate text-foreground">{d.title}</span>
+              <Badge tone={scopeTxt ? "neutral" : "off"}>{scopeTxt ?? "Global"}</Badge>
               <span className="shrink-0 text-xs text-muted-foreground">{kb(d.size_bytes)}</span>
               <Button variant="ghost" size="xs" onClick={() => verTexto(d.id)}>Ver texto</Button>
               <Button variant="ghost" size="icon-xs" aria-label="Borrar" onClick={async () => {
@@ -408,7 +490,8 @@ function KBDocs({ docs, onReload }: { docs: HueKbDocument[]; onReload: () => voi
                 <Trash2 />
               </Button>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 

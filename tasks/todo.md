@@ -1,5 +1,21 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🧠 H.Ü.E HUB — selector de scope (marca/cliente) en KB + Cerebro — CONSTRUIDO + REAPEADO, SIN pushear
+**Por qué:** la subida al KB y "Añadir lección" hardcodeaban `scope:"global"` (sin picker), pero el schema (0045)
+y el writer YA soportan scope/client_id/marca_id. Sin picker, docs de DiDi Card y DiDi Préstamos se mezclaban.
+SIN migración (columnas ya existen). Gates VERDES: tsc·eslint·**test:db 284**·test:lib 359·build.
+- [x] `hue-actions.ts`: `hubTraining()` +`clientes` (clients+marcas agrupados) · `subirKb`/`crearInstruccion`
+      resuelven scope vía `resolverScope`. `hue-training.tsx`: `<ScopeSelect>` reusable (Global·cliente·marca vía
+      optgroup) en KBDocs (subida + badge por doc) y creación de lección. Reusa el patrón de biblioteca-tab.
+- [x] **Reap Opus — CRITICAL arreglado (fuga cross-marca)**: `resolverScope` DERIVABA client_id=DiDi en docs de
+      marca → el OR plano del writer (`client_id.eq.DiDi`) lo pescaba para AMBAS marcas → un doc de Card se filtraba
+      a un guión de Préstamos. FIX: docs de marca guardan **client_id=NULL** (como los snippets legales por marca) →
+      sólo `marca_id.eq` los pesca. **Test PGlite de aislamiento** (Card no llega a Préstamos y viceversa, +2).
+      **SERIOUS**: `resolverScope` con scope marca/cliente sin id degradaba a global → ahora fail-closed (Fail).
+- **Deuda (minors, no bloquean)**: síntesis dedupe por título cruza scopes (una lección de cliente podría suprimir
+      una auto global homónima — raro, auto-lecciones son global) · no se puede re-scopear en EDIT (borrar+recrear;
+      por diseño). Follow-on: mismo selector para estrellar Ganadores por marca (hoy vienen de Entregas, ya scopeados).
+
 ## 📄 Plantilla "Copies" (temas con cuota) — CONSTRUIDA + CLIENT-FACING (portal) — SIN pushear
 **DECISIÓN de Pedro (2026-08-24): Copies ES entregable al cliente → va al portal para revisión/aprobación.**
 S1 resuelto opción (b). Forma acordada: temas con cuota → el lead define temas + cuántos; el copy llena

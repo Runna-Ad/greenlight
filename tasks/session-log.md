@@ -1,5 +1,50 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-24 — Copies → entregable CLIENT-FACING en el portal (shippeado + live)
+Sesión enfocada. Retomé la plantilla Copies (construida+reapeada la sesión pasada, sin pushear, con 1 decisión
+abierta: S1 "¿Copies va al cliente?"). Pedro decidió: **Copies ES entregable al cliente → va al portal para
+revisión/aprobación** (S1=b). Construí el render + round-trip completo, reap 2×Opus, fixes, y **shippeado a prod**.
+
+**Qué se hizo:**
+- **Render de copies en el portal + round-trip de correcciones** (el cliente ancla pins en un copy → el equipo
+  los ve/gestiona → re-revisión). Casi nada nuevo hizo falta: `comments.target_tabla` es texto libre (sin
+  FK/whitelist), el trigger de `published_at` es plantilla-agnóstico y page.tsx interno ya cargaba correcciones
+  de cualquier target_tabla. Sólo amplié `CorreccionTarget.tabla`/`TABLAS_VALIDAS`/`CampoLectura` con copies, y le
+  di a `DocumentoCopies` un modo **lectura** (`CampoLectura` anclable) derivado de `verCliente`, reusado por el
+  portal Y la Vista cliente interna. `cargarTareaPortal` carga temas+copies; `TareaPortal` +plantilla +temas.
+- **Reap 2×Opus** (round-trip/auth + rendering/types) → fixes:
+  - **SERIO (integridad DB)**: 0046 se saltaba los triggers `before_delete` de limpieza de correcciones huérfanas
+    que 0039 añadió a planos/estáticos (comments.target_fila_id polimórfico sin FK) → borrar un copy/tema dejaría
+    pins con resolved_at=null (ronda no cierra). Enmendé 0046 con los 2 triggers (reusa la función de 0039) + test
+    PGlite del borrado directo Y en cascada.
+  - **SERIO (client-facing)**: Hero/DetallesTab/BottomBar ramificaban por `esEstatico` binario → copies salía como
+    "Animado Video / 0 s / notas de guión". Enhebré `plantilla: Plantilla` por esos componentes.
+  - Menores: "Copy N" indexa sobre lista completa (matchea el editor); "Validar con H.Ü.E" oculto para copies; a11y `<h3>`.
+  - Limpio: authz cross-cliente, round-trip interno, transiciones de estado.
+
+**Estado actual:** deployado & LIVE. Deploy Vercel `hq1mlr423` **Ready** (39s, Production) tras `bacdfa0`.
+Migración **0046 aplicada a prod** (`ybbrpqzbedaxsmotgtkh`), tablas+triggers verificados, cache PostgREST recargado.
+
+**Gates:** tsc · eslint · **test:db 282** · test:lib 359 · build — todos verdes.
+
+**Uncommitted:** ninguno del feature (todo en `bacdfa0`, pusheado). Sólo 2 untracked ajenos: `tasks/HANDOFF-golive-build.md`
+y `tasks/HANDOFF-hue-hub-phase1.md` (notas de handoff de sesiones previas; Pedro decide si quedan/se borran).
+
+**Decisiones (para NO re-litigar):**
+- Copies ES client-facing (portal, revisión/aprobación) — no interno-only.
+- Full round-trip parity con guión/estático (no sólo "aprobar"): el cliente ancla pins por campo, el equipo los
+  ve inline en Vista cliente con el MISMO CampoLectura. Un componente (`DocumentoCopies`) en dos modos, no dos.
+- Sin migración de TABLAS nueva más allá de 0046 (la maquinaria de correcciones ya es genérica por target_tabla).
+
+**Pick up próxima sesión (en orden):**
+1. **LIVE-VERIFY Copies (Pedro, necesita tarea real en prod)**: crear Copies → llenar → Enviar a cliente → portal
+   (cliente) ve copies, ancla cambio, "Pedir cambios" → equipo lo ve (panel + inline) → arreglar → re-revisión "aplicado".
+2. Follow-ons Copies (no piden): writer "Crear copies con H.Ü.E" (`escribirCopies`) · "Validar" copies-aware ·
+   autoría (field_edits)/Evaluación para copies.
+3. **Del plan mayor pendiente**: live-test Fases 2/3/4 de go-live + **PROMPT #2 = H.Ü.E HUB** (no empezado).
+
+**Env:** ninguna dep nueva. Migración 0046 aplicada (2 tablas + 2 triggers de limpieza).
+
 ## 2026-08-21 — MARATÓN post-go-live: integridad, Notion→legales, asignación 2-niveles, y batch B/A/C/D
 Sesión larga (varios /compact). Todo shippeado a prod verde. Lo más fresco (y el cierre) fue un batch
 de 4 asks de Pedro; antes, una tanda de fixes/features post-go-live.
