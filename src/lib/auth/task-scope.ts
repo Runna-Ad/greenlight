@@ -51,10 +51,17 @@ export async function assertCanActOnTask(ideaId: string): Promise<ScopeResult> {
 
 /** Same check, but resolving the idea from a child row (plano/estático/etc.). */
 export async function assertCanActOnRow(
-  tabla: "planos" | "estaticos",
+  tabla: "planos" | "estaticos" | "copies_temas" | "copies",
   filaId: string,
 ): Promise<ScopeResult> {
   const admin = supabaseAdmin();
+  // `copies` llega por tema_id → hay que saltar a copies_temas para el idea_id (2 saltos).
+  if (tabla === "copies") {
+    const { data } = await admin.from("copies").select("tema_id").eq("id", filaId).maybeSingle();
+    const temaId = (data as { tema_id: string } | null)?.tema_id;
+    if (!temaId) return { ok: false, error: "La fila ya no existe." };
+    return assertCanActOnRow("copies_temas", temaId);
+  }
   const { data } = await admin.from(tabla).select("idea_id").eq("id", filaId).maybeSingle();
   const ideaId = (data as { idea_id: string } | null)?.idea_id;
   if (!ideaId) return { ok: false, error: "La fila ya no existe." };

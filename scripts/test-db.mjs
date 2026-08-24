@@ -1715,5 +1715,58 @@ console.log("\n▶ 0045 — H.Ü.E HUB: captura + entrenamiento + RLS master-onl
   await db.query(`delete from produccion.comments where idea_id=$1 and body='nota'`, [IDEA]);
 }
 
+// ── Plantilla Copies (0046): temas con cuota + copies (headline/descripción) ──
+console.log("\n▶ 0046 — Copies: temas con cuota + FK cascade + unique + trigger");
+{
+  const IDEA = "00000000-0000-0000-0000-0000000000d1";
+  const tema = await scalar(
+    `insert into produccion.copies_temas (idea_id, tema, cuota, orden) values ($1,'Ahorro',5,1) returning id`, [IDEA]);
+  eq("copies_temas guarda la cuota", Number(await scalar(`select cuota from produccion.copies_temas where id=$1`, [tema])), 5);
+  let badCuota = false;
+  try { await db.query(`insert into produccion.copies_temas (idea_id, cuota, orden) values ($1,-1,2)`, [IDEA]); } catch { badCuota = true; }
+  ok("copies_temas rechaza cuota negativa (CHECK)", badCuota);
+  let dupTema = false;
+  try { await db.query(`insert into produccion.copies_temas (idea_id, orden) values ($1,1)`, [IDEA]); } catch { dupTema = true; }
+  ok("copies_temas: (idea_id, orden) único", dupTema);
+
+  await db.query(`insert into produccion.copies (tema_id, headline, descripcion, orden) values ($1,'H1','D1',1),($1,'H2','D2',2)`, [tema]);
+  eq("2 copies bajo el tema", Number(await scalar(`select count(*) from produccion.copies where tema_id=$1`, [tema])), 2);
+  let dupCopy = false;
+  try { await db.query(`insert into produccion.copies (tema_id, orden) values ($1,1)`, [tema]); } catch { dupCopy = true; }
+  ok("copies: (tema_id, orden) único", dupCopy);
+
+  await db.query(`update produccion.copies_temas set updated_at='2000-01-01T00:00:00Z', tema='Ahorro+' where id=$1`, [tema]);
+  ok("copies_temas: el trigger set_updated_at pisa un updated_at viejo",
+     new Date(await scalar(`select updated_at from produccion.copies_temas where id=$1`, [tema])).getUTCFullYear() >= 2026);
+
+  // Correcciones huérfanas al borrar (0046 espeja el trigger de 0039). Copies es
+  // entregable al cliente: el cliente ancla pins (client_change) a un copy/tema y el
+  // equipo puede borrarlo — el pin debe limpiarse o queda con resolved_at=null y la
+  // ronda nunca cierra. Se prueban los dos caminos: borrado directo del copy y borrado
+  // en cascada (borrar el tema → sus copies → sus pins).
+  const copy1 = await scalar(`select id from produccion.copies where tema_id=$1 and orden=1`, [tema]);
+  const copy2 = await scalar(`select id from produccion.copies where tema_id=$1 and orden=2`, [tema]);
+  // Aísla el sub-test: limpia cualquier client_change previo de esta idea semilla.
+  await db.query(`delete from produccion.comments where idea_id=$1 and kind='client_change'`, [IDEA]);
+  await db.query(`insert into produccion.comments (idea_id, body, kind, target_tabla, target_fila_id, target_campo)
+                  values ($1,'sube el gancho','client_change','copies',$2,'headline')`, [IDEA, copy1]);
+  await db.query(`insert into produccion.comments (idea_id, body, kind, target_tabla, target_fila_id, target_campo)
+                  values ($1,'renombra el tema','client_change','copies_temas',$2,'tema')`, [IDEA, tema]);
+  await db.query(`insert into produccion.comments (idea_id, body, kind, target_tabla, target_fila_id, target_campo)
+                  values ($1,'ajusta el copy 2','client_change','copies',$2,'descripcion')`, [IDEA, copy2]);
+
+  await db.query(`delete from produccion.copies where id=$1`, [copy1]);
+  eq("borrar un copy limpia SU pin (trigger 0046)",
+     Number(await scalar(`select count(*) from produccion.comments where target_tabla='copies' and target_fila_id=$1`, [copy1])), 0);
+  eq("borrar un copy NO toca el pin del tema ni de otro copy",
+     Number(await scalar(`select count(*) from produccion.comments where kind='client_change' and idea_id=$1`, [IDEA])), 2);
+
+  await db.query(`delete from produccion.copies_temas where id=$1`, [tema]);
+  eq("borrar el tema cascada a sus copies (0)", Number(await scalar(`select count(*) from produccion.copies where tema_id=$1`, [tema])), 0);
+  eq("borrar el tema limpia SU pin + los de sus copies en cascada",
+     Number(await scalar(`select count(*) from produccion.comments where kind='client_change' and idea_id=$1`, [IDEA])), 0);
+  eq("limpieza: 0 temas en la idea", Number(await scalar(`select count(*) from produccion.copies_temas where idea_id=$1`, [IDEA])), 0);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

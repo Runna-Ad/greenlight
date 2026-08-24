@@ -21,15 +21,21 @@ import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide
 const COLS_PLANO = "id, orden, titulo, accion, copy_in, sfx, gfx, edicion, dialogo, es_cierre";
 const COLS_ESTATICO =
   "id, copy_titulo, copy_subtitulo, copy_cta, legales_extra, referencia_url, referencia_nota";
+const COLS_TEMA = "id, idea_id, tema, cuota, orden";
+const COLS_COPY = "id, tema_id, headline, descripcion, orden";
 import Anthropic from "@anthropic-ai/sdk";
+import type { CopyTema, Copy } from "@/lib/database.types";
 
 export type Tabla = "planos" | "estaticos";
+/** Tablas cuyos campos autoguarda `guardarCampo` — incluye las de Copies. `Campo` y las
+ *  correcciones usan `Tabla` (planos/estaticos); Copies usa su propio campo (CampoCopy). */
+export type TablaGuardable = Tabla | "copies_temas" | "copies";
 
 /**
  * Whitelist en el SERVIDOR. El nombre del campo llega del cliente y termina
  * dentro de un identificador SQL — jamás se interpola algo que no esté aquí.
  */
-const CAMPOS: Record<Tabla, Set<string>> = {
+const CAMPOS: Record<TablaGuardable, Set<string>> = {
   planos: new Set([
     "titulo", "hook_narrativo", "hook_visual", "accion",
     "copy_in", "sfx", "gfx", "edicion", "dialogo",
@@ -38,6 +44,8 @@ const CAMPOS: Record<Tabla, Set<string>> = {
     "copy_titulo", "copy_subtitulo", "copy_cta", "legales_extra",
     "referencia_url", "referencia_nota", "notas",
   ]),
+  copies_temas: new Set(["tema"]),
+  copies: new Set(["headline", "descripcion"]),
 };
 
 export type GuardarResultado =
@@ -370,7 +378,7 @@ function registrarAutoria(
 }
 
 export async function guardarCampo(
-  tabla: Tabla,
+  tabla: TablaGuardable,
   filaId: string,
   campo: string,
   valorAnterior: string | null,
@@ -386,14 +394,24 @@ export async function guardarCampo(
 
   // ¿La tarea está cerrada? Un guión aprobado no debe cambiar después de
   // aprobado sin que nadie se entere.
-  const { data: fila } = await db
-    .from(tabla).select("idea_id").eq("id", filaId).maybeSingle();
-  if (!fila) return { ok: false, error: "La fila ya no existe." };
-  const scope = await assertCanActOnTask(fila.idea_id);
+  // idea_id de la fila. `copies` NO tiene idea_id (llega por tema_id) → 2 saltos.
+  let ideaId: string | null;
+  if (tabla === "copies") {
+    const { data: c } = await db.from("copies").select("tema_id").eq("id", filaId).maybeSingle();
+    const temaId = (c as { tema_id: string } | null)?.tema_id ?? null;
+    if (!temaId) return { ok: false, error: "La fila ya no existe." };
+    const { data: t } = await db.from("copies_temas").select("idea_id").eq("id", temaId).maybeSingle();
+    ideaId = (t as { idea_id: string } | null)?.idea_id ?? null;
+  } else {
+    const { data: fila } = await db.from(tabla).select("idea_id").eq("id", filaId).maybeSingle();
+    ideaId = (fila as { idea_id: string } | null)?.idea_id ?? null;
+  }
+  if (!ideaId) return { ok: false, error: "La fila ya no existe." };
+  const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
 
   const { data: idea } = await db
-    .from("ideas").select("status").eq("id", fila.idea_id).maybeSingle();
+    .from("ideas").select("status").eq("id", ideaId).maybeSingle();
   const status = idea?.status as AssetStatus | undefined;
   if (status && ESTADOS_CERRADOS.includes(status) && !canOverrideStatus(role)) {
     return { ok: false, error: "Esta tarea ya está cerrada. Pídele a un lead que la reabra." };
@@ -426,7 +444,7 @@ export async function guardarCampo(
   // autoría — si no, un lead que arregla un campo se robaría la corrección del
   // especialista) y sólo en planos/estáticos (donde caen las correcciones).
   if (soy?.id && dejaAutoria(soy.role) && (tabla === "planos" || tabla === "estaticos")) {
-    registrarAutoria(db, fila.idea_id, tabla, [{ filaId, campo }], soy.id);
+    registrarAutoria(db, ideaId, tabla, [{ filaId, campo }], soy.id);
   }
 
   // Empezar a escribir ES empezar a trabajar. Si la tarea seguía en "Por hacer",
@@ -436,7 +454,7 @@ export async function guardarCampo(
   // quién fue. Si falla, NO se tira el guardado: el texto ya está a salvo.
   if (status === "todo" && limpio) {
     const { error: movErr } = await db.rpc("rpc_task_start", {
-      p_idea_id: fila.idea_id,
+      p_idea_id: ideaId,
       p_actor_member: soy?.id ?? null,
     });
     if (!movErr) revalidatePath("/mi-trabajo");
@@ -470,6 +488,88 @@ export async function agregarPlano(
     .select(COLS_PLANO).single();
   if (error || !data) return { ok: false, error: error?.message ?? "No se pudo agregar el plano." };
   return { ok: true, plano: data as PlanoVista };
+}
+
+// ── Plantilla Copies (0046): temas con cuota + copies ──────────
+// El tema (topic + cuota) lo define el lead; el copy llena headline + descripción.
+// Mismo gate que editar (canMoveStatus + assertCanActOnTask/Row). El nombre del tema
+// y los campos del copy autoguardan por `guardarCampo` (tablas en el whitelist arriba).
+
+/** Añade un tema a un Copies task. Devuelve la fila para el estado del editor. */
+export async function agregarTema(
+  ideaId: string,
+): Promise<{ ok: true; tema: CopyTema } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+  const db = supabaseAdmin();
+  const { data: ultimo } = await db
+    .from("copies_temas").select("orden").eq("idea_id", ideaId)
+    .order("orden", { ascending: false }).limit(1).maybeSingle();
+  const { data, error } = await db
+    .from("copies_temas")
+    .insert({ idea_id: ideaId, orden: ((ultimo as { orden: number } | null)?.orden ?? 0) + 1 })
+    .select(COLS_TEMA).single();
+  if (error || !data) return { ok: false, error: error?.message ?? "No se pudo agregar el tema." };
+  return { ok: true, tema: data as CopyTema };
+}
+
+/** Cambia la cuota (nº objetivo de copies) de un tema. */
+export async function guardarCuota(
+  temaId: string,
+  cuota: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnRow("copies_temas", temaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+  const n = Math.max(0, Math.min(999, Math.round(Number.isFinite(cuota) ? cuota : 1)));
+  const { error } = await supabaseAdmin().from("copies_temas").update({ cuota: n }).eq("id", temaId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Borra un tema (cascada a sus copies). */
+export async function borrarTema(temaId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnRow("copies_temas", temaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+  const { error } = await supabaseAdmin().from("copies_temas").delete().eq("id", temaId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Añade un copy vacío a un tema. Devuelve la fila creada. */
+export async function agregarCopy(
+  temaId: string,
+): Promise<{ ok: true; copy: Copy } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnRow("copies_temas", temaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+  const db = supabaseAdmin();
+  const { data: ultimo } = await db
+    .from("copies").select("orden").eq("tema_id", temaId)
+    .order("orden", { ascending: false }).limit(1).maybeSingle();
+  const { data, error } = await db
+    .from("copies")
+    .insert({ tema_id: temaId, orden: ((ultimo as { orden: number } | null)?.orden ?? 0) + 1 })
+    .select(COLS_COPY).single();
+  if (error || !data) return { ok: false, error: error?.message ?? "No se pudo agregar el copy." };
+  return { ok: true, copy: data as Copy };
+}
+
+/** Borra un copy. */
+export async function borrarCopy(copyId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnRow("copies", copyId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+  const { error } = await supabaseAdmin().from("copies").delete().eq("id", copyId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 export async function borrarPlano(planoId: string): Promise<GuardarResultado> {

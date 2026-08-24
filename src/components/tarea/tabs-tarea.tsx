@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Lightbulb, Puzzle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import type { Plantilla } from "@/lib/plantilla";
 import { DetallesTab } from "./detalles-tab";
 import { RunnaToolsTab, type Persona } from "./runna-tools-tab";
 import { useWorkspace } from "./workspace-provider";
@@ -40,13 +41,13 @@ type RunnaProps = {
  */
 export function TabsTarea({
   ideaId,
-  esEstatico,
+  plantilla,
   soloLectura,
   detalles,
   runna,
 }: {
   ideaId: string;
-  esEstatico: boolean;
+  plantilla: Plantilla;
   soloLectura: boolean;
   detalles: DetallesProps;
   runna?: RunnaProps;
@@ -93,7 +94,7 @@ export function TabsTarea({
             duracion={detalles.duracion}
             concepto={detalles.concepto}
             trend={detalles.trend}
-            esEstatico={esEstatico}
+            plantilla={plantilla}
             soloLectura={soloLectura}
           />
         )}

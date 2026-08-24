@@ -1,5 +1,24 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-22 — H.Ü.E Fase 2 (writer "Crear guión") construido + reapeado, SIN pushear
+Última actualización: 2026-08-24 — plantilla "Copies" CLIENT-FACING (portal), reapeada 2×Opus, SIN pushear
+
+## 📄 Plantilla "Copies" (temas con cuota) — 2026-08-24 — CONSTRUIDA + CLIENT-FACING — SIN pushear
+- El único tipo de entregable sin plantilla (la página decía "no construido"). Forma: temas con cuota → el lead
+  define TEMAS + cuántos copies; el copy llena headline+descripción, con contador X/cuota.
+- **DECISIÓN Pedro 2026-08-24: Copies ES entregable al cliente** → va al portal para revisión/aprobación (S1=b).
+- Migración **0046** (`copies_temas` + `copies`, RLS/trigger/grant explícitos + **triggers before_delete de limpieza
+  de correcciones huérfanas**, como 0039; copies llega por tema_id → 2 saltos al idea_id). Actions: `TablaGuardable`
+  (guardarCampo tabla-aware) + CRUD gateado. UI `documento-copies.tsx` con DOS modos: editable (CampoCopy autosave)
+  y **lectura** (`CampoLectura` anclable), derivado de `verCliente` — reusado por el portal Y la Vista cliente interna.
+- **Portal client-facing**: `cargarTareaPortal` carga temas+copies; `TareaPortal` +plantilla +temas; `CuerpoDoc`
+  ramifica a `<DocumentoCopies>`. Round-trip de correcciones completo (cliente ancla pins → equipo ve/gestiona →
+  re-revisión) reusa la maquinaria genérica: `comments.target_tabla` texto libre, `TABLAS_VALIDAS`/`CampoLectura`/
+  `CorreccionTarget` ampliados con copies. Hero/DetallesTab/BottomBar ahora ramifican por `plantilla` (no `esEstatico`).
+- Reap **2×Opus** (round-trip/auth + rendering/types): 1 SERIO de integridad DB (triggers de limpieza faltantes en
+  0046 → arreglado + test) + 3 fugas del flag `esEstatico` binario (copies como "Video/Animado/0 s" → arreglado) +
+  Copy-N index + Validar oculto para copies. Authz/round-trip/transiciones limpios.
+- Gates: tsc·eslint·**test:db 282**·test:lib 359·build. **Migración 0046 NO aplicada a prod.**
+- Pendiente: LIVE-VERIFY post-ship (crear una Copies real → portal → pin → re-revisión). Detalle + minors en todo.md.
+
 
 ## ✍️ H.Ü.E Fase 2 — writer "Crear guión" (2026-08-22) — CONSTRUIDO + REAPEADO, SIN pushear
 - **Qué es**: H.Ü.E ESCRIBE el guión (video → planos) o el copy (estático → título/subtítulo/CTA) desde el

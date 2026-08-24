@@ -1,7 +1,7 @@
 "use client";
 
 import { contentType, canales } from "@/lib/iconos";
-import { varianteGuion } from "@/lib/plantilla";
+import { varianteGuion, type Plantilla } from "@/lib/plantilla";
 import { Pill } from "@/components/ui/pill";
 import { CampoIntake } from "./campo-intake";
 import { CampoDuraciones } from "./campo-duraciones";
@@ -23,7 +23,7 @@ export function DetallesTab({
   duracion,
   concepto,
   trend,
-  esEstatico,
+  plantilla,
   soloLectura,
 }: {
   ideaId: string;
@@ -33,7 +33,7 @@ export function DetallesTab({
   duracion: string[];
   concepto: string | null;
   trend: string | null;
-  esEstatico: boolean;
+  plantilla: Plantilla;
   soloLectura: boolean;
 }) {
   const { verCliente } = useWorkspace();
@@ -41,13 +41,11 @@ export function DetallesTab({
   const ct = contentType(tipoAsset);
   const IconCT = ct.icon;
   const chans = canales(plataformas);
-  // Tipo de contenido como en el mockup: media + variante en dos pastillas.
-  const media = esEstatico ? "Imagen" : "Video";
-  const variante = esEstatico
-    ? null
-    : varianteGuion(tipoAsset) === "real"
-      ? "Real Person"
-      : "Animado";
+  // Tipo de contenido como en el mockup: media + variante en dos pastillas. Copies no
+  // es ni imagen ni video — se etiqueta como "Copies" y no lleva variante ni duración.
+  const media = plantilla === "copies" ? "Copies" : plantilla === "estatico" ? "Imagen" : "Video";
+  const variante =
+    plantilla === "guion" ? (varianteGuion(tipoAsset) === "real" ? "Real Person" : "Animado") : null;
 
   return (
     <div className="grid gap-x-8 gap-y-6 md:grid-cols-2">
@@ -89,8 +87,9 @@ export function DetallesTab({
         </Grupo>
 
         {/* Duraciones — pastillas editables; cada una despliega su propio juego
-            de nombres de archivo (tamaño × plataforma × duración). */}
-        {!esEstatico && (
+            de nombres de archivo (tamaño × plataforma × duración). Sólo el guión/video
+            tiene duraciones (estático y copies no). */}
+        {plantilla === "guion" && (
           <Grupo titulo="Duraciones">
             <CampoDuraciones ideaId={ideaId} valorInicial={duracion} soloLectura={lectura} />
           </Grupo>

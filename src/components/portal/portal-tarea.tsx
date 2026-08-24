@@ -4,6 +4,7 @@ import { WorkspaceProvider, useWorkspace } from "@/components/tarea/workspace-pr
 import { HeroTarea } from "@/components/tarea/hero-tarea";
 import { TabsTarea } from "@/components/tarea/tabs-tarea";
 import { DocumentoTarea } from "@/components/tarea/documento-tarea";
+import { DocumentoCopies } from "@/components/tarea/documento-copies";
 import { CorreccionesClienteProvider } from "@/components/portal/correcciones-cliente-provider";
 import { PortalAcciones } from "@/components/portal/portal-acciones";
 import { PanelControlCambios } from "@/components/portal/panel-control-cambios";
@@ -70,7 +71,7 @@ function CuerpoTarea({ t }: { t: TareaPortal }) {
       status={t.status}
       notaGuion={t.notaGuion}
       notaPlaceholder=""
-      esEstatico={t.esEstatico}
+      plantilla={t.plantilla}
       entregaUrl={t.entregaUrl}
       soloLectura={true}
     />
@@ -78,7 +79,7 @@ function CuerpoTarea({ t }: { t: TareaPortal }) {
   const tabs = (
     <TabsTarea
       ideaId={t.ideaId}
-      esEstatico={t.esEstatico}
+      plantilla={t.plantilla}
       soloLectura={true}
       detalles={{
         tipoAsset: t.tipoAsset,
@@ -129,6 +130,11 @@ function CuerpoTarea({ t }: { t: TareaPortal }) {
 // muestran al cliente — es la dirección visual del anuncio (Pedro).
 function CuerpoDoc({ t }: { t: TareaPortal }) {
   const { planos, estatico } = useWorkspace();
+  // Copies: documento propio en modo lectura (el WorkspaceProvider siembra
+  // verCliente=true → DocumentoCopies renderiza `CampoLectura`, con lo que el cliente
+  // ancla cambios igual que en un plano/estático). No usa planos/estático.
+  if (t.plantilla === "copies")
+    return <DocumentoCopies ideaId={t.ideaId} temasIniciales={t.temas} soloLectura />;
   return (
     <DocumentoTarea
       modo="lectura"

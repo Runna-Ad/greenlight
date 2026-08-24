@@ -4,16 +4,16 @@ import { useMemo } from "react";
 import { Timer, Eye, Puzzle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { readTimeS } from "@/lib/plantilla";
+import { readTimeS, type Plantilla } from "@/lib/plantilla";
 import { useWorkspace } from "./workspace-provider";
 
 /**
  * La barra inferior (fila B del mockup) = el MENÚ de la sección del guión.
  * Izquierda: el read-time total ("N s de lectura total"). Derecha: el toggle
  * "Vista cliente / Vista editor" (page-level: pasa TODO el workspace a lectura).
- * Un estático no tiene read-time (no hay diálogo).
+ * Sólo el guión tiene read-time (diálogo por plano); estático y copies no.
  */
-export function BottomBarTarea({ esEstatico }: { esEstatico: boolean }) {
+export function BottomBarTarea({ plantilla }: { plantilla: Plantilla }) {
   const { verCliente, setVerCliente, planos } = useWorkspace();
   const totalS = useMemo(
     () => planos.reduce((n, p) => n + readTimeS(p.dialogo), 0),
@@ -24,7 +24,7 @@ export function BottomBarTarea({ esEstatico }: { esEstatico: boolean }) {
     <div className="flex flex-wrap items-center justify-between gap-3">
       <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <Timer className="size-4 text-status-progress" />
-        <b className="font-semibold text-foreground">{esEstatico ? "—" : `${totalS} s`}</b>{" "}
+        <b className="font-semibold text-foreground">{plantilla === "guion" ? `${totalS} s` : "—"}</b>{" "}
         de lectura total
       </span>
 

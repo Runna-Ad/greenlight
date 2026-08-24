@@ -1,9 +1,10 @@
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { plantillaPara } from "@/lib/plantilla";
+import { plantillaPara, type Plantilla } from "@/lib/plantilla";
 import { cargarRefsPorPlano, cargarRefsEstatico } from "@/lib/referencias-data";
 import type { AssetStatus } from "@/lib/brand";
 import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
 import type { RefVista } from "@/components/tarea/referencias-plano";
+import type { TemaRow } from "@/components/tarea/documento-copies";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
 
 // El portal muestra SÓLO lo que ya se envió al cliente: published_at != null (el
@@ -140,7 +141,12 @@ export type TareaPortal = {
   naming: string | null;
   status: AssetStatus;
   tipoAsset: string | null;
+  /** Qué plantilla es la tarea — el portal ramifica el documento (guion/estatico usan
+   *  DocumentoTarea; copies usa DocumentoCopies en modo lectura). */
+  plantilla: Plantilla;
   esEstatico: boolean;
+  /** Temas + copies de la tarea (sólo si plantilla === "copies"; vacío si no). */
+  temas: TemaRow[];
   marcaName: string | null;
   marcaLogo: string | null;
   briefLabel: string | null;
@@ -280,7 +286,36 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
 
   const planos = (planosRes.data ?? []) as PlanoVista[];
   const estatico = (estaticoRes.data ?? null) as EstaticoVista | null;
-  const esEstatico = plantillaPara(idea.tipo_asset) === "estatico";
+  const plantilla = plantillaPara(idea.tipo_asset);
+  const esEstatico = plantilla === "estatico";
+
+  // Copies: cargar los temas + sus copies (ordenados), anidados igual que el editor
+  // interno. Sólo para plantilla "copies"; el resto lo deja vacío.
+  let temas: TemaRow[] = [];
+  if (plantilla === "copies") {
+    const { data: temasRaw } = await db
+      .from("copies_temas")
+      .select("id, tema, cuota, orden")
+      .eq("idea_id", idea.id)
+      .order("orden")
+      .returns<{ id: string; tema: string | null; cuota: number; orden: number }[]>();
+    const filasTema = temasRaw ?? [];
+    if (filasTema.length) {
+      const { data: copiesRaw } = await db
+        .from("copies")
+        .select("id, tema_id, headline, descripcion, orden")
+        .in("tema_id", filasTema.map((t) => t.id))
+        .order("orden")
+        .returns<{ id: string; tema_id: string; headline: string | null; descripcion: string | null; orden: number }[]>();
+      const porTema = new Map<string, TemaRow["copies"]>();
+      for (const c of copiesRaw ?? []) {
+        (porTema.get(c.tema_id) ?? porTema.set(c.tema_id, []).get(c.tema_id)!).push({
+          id: c.id, headline: c.headline, descripcion: c.descripcion, orden: c.orden,
+        });
+      }
+      temas = filasTema.map((t) => ({ id: t.id, tema: t.tema, cuota: t.cuota, orden: t.orden, copies: porTema.get(t.id) ?? [] }));
+    }
+  }
   // Referencias visuales, firmadas por render (bucket privado). El cliente ve la
   // misma dirección visual que el equipo — antes el portal las ocultaba.
   const refsPorPlano = !esEstatico ? await cargarRefsPorPlano(db, planos.map((p) => p.id)) : {};
@@ -311,7 +346,9 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     naming: idea.naming_base,
     status: idea.status,
     tipoAsset: idea.tipo_asset,
+    plantilla,
     esEstatico,
+    temas,
     marcaName: marca?.name ?? null,
     marcaLogo: marca?.logo_url ?? null,
     briefLabel: briefLabel(brief),

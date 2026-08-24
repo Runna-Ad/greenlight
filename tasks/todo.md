@@ -1,5 +1,52 @@
 # Greenlight · by Rünna — Build Todo
 
+## 📄 Plantilla "Copies" (temas con cuota) — CONSTRUIDA + CLIENT-FACING (portal) — SIN pushear
+**DECISIÓN de Pedro (2026-08-24): Copies ES entregable al cliente → va al portal para revisión/aprobación.**
+S1 resuelto opción (b). Forma acordada: temas con cuota → el lead define temas + cuántos; el copy llena
+headline+descripción, con contador X/cuota. Migración **0046** (`copies_temas` + `copies`). Reusa el patrón de
+estaticos + el round-trip de correcciones de guión/estático. Gates VERDES: tsc·eslint·**test:db 282**·test:lib 359·build.
+- [x] **Migración 0046**: `copies_temas` (idea_id, tema, cuota, orden) + `copies` (tema_id, headline, descripcion,
+      orden). RLS explícita (2 saltos en copies: tema_id→copies_temas→idea_id), trigger+grant explícitos. PGlite-probada.
+- [x] **Actions** (actions.ts): `Tabla` angosto + `TablaGuardable` (guardarCampo tabla-aware para copies, 2 saltos
+      al idea_id); CRUD agregarTema/borrarTema/guardarCuota/agregarCopy/borrarCopy (gate canMoveStatus +
+      assertCanActOnTask/Row, 2 saltos en assertCanActOnRow). Autoría (field_edits) NO cubre copies (Evaluación
+      no puntúa copies aún — gap intencional).
+- [x] **UI**: `documento-copies.tsx` (DocumentoCopies + TemaCard + CampoCopy con useAutoguardado, sin correcciones);
+      contador X/cuota (verde al cumplir), stepper de cuota, add/del tema+copy con confirm. page.tsx: quitado el
+      early-return "no construido" + loader de copies + branch del documento (dentro del body compartido).
+- [x] **Reap fixes**: **S2** verCliente = read-only (un revisor en Vista cliente ya no borra un copy de un clic);
+      **M4** cuota revierte si el server rechaza; **M7** prop vestigial quitado.
+- [x] **S1 RESUELTO (b) — render de copies en el portal + round-trip de correcciones**:
+      · `CorreccionTarget.tabla` + `TABLAS_VALIDAS` + `CampoLectura.tabla` ampliados con copies_temas/copies.
+      · `DocumentoCopies` ahora tiene modo **lectura** (`CopiesLectura` → `CampoLectura` anclable) derivado de
+        `verCliente`; reusado por el PORTAL y por la Vista cliente INTERNA (el revisor ve/gestiona los pins del
+        cliente inline). CampoCopy (editor) ganó `data-campo-key` para que "Ver campo" salte también en modo editor.
+      · `cargarTareaPortal` carga temas+copies; `TareaPortal` +plantilla +temas; `CuerpoDoc` ramifica a DocumentoCopies.
+      · SIN migración nueva de tablas: `comments.target_tabla` es texto libre (sin FK/whitelist); el trigger de
+        published_at es plantilla-agnóstico; page.tsx interno ya cargaba correcciones de cualquier target_tabla.
+- [x] **Reap Opus (2 agentes, portal client-facing) — fixes aplicados**:
+      · **A1 SERIO (integridad DB)**: 0046 se saltaba el trigger `before_delete` de limpieza de correcciones
+        huérfanas que 0039 añadió a planos/estáticos → borrar un copy/tema dejaba pins con resolved_at=null (ronda
+        no cierra, badge miente). FIX: enmendé **0046** con los 2 triggers (reusa la función genérica de 0039);
+        test PGlite del borrado directo Y en cascada (+3 asserts → test:db 282).
+      · **B1 SERIO (client-facing)** + **B2/B3**: Hero/DetallesTab/BottomBar ramificaban por `esEstatico` binario →
+        copies salía como "Animado Video / 0 s / notas de guión". FIX: enhebrar `plantilla: Plantilla` por esos
+        componentes (media="Copies", sin variante/duraciones/notas/read-time). `esEstatico` sólo donde la
+        distinción es binaria (DocumentoTarea).
+      · **A2/B(ii)**: "Copy N" indexaba sobre la lista filtrada → número inconsistente vs editor. FIX: índice sobre
+        la lista COMPLETA en ambos modos.
+      · **B6**: "Validar con H.Ü.E" (lee sólo planos/estáticos) oculto para copies (daría "(campo vacío)").
+      · a11y: nombre de tema como `<h3>`.
+- **Deuda anotada (minors, no bloquean)**: M1 (structural actions sin check de tarea cerrada — espeja gap de
+      agregarPlano) · M3 (ortografía no revisa copies, intencional) · M5 (stepper closure stale en clicks rápidos) ·
+      M6 (race de unique(orden) en add concurrente) · M8 (recargar el schema cache de PostgREST post-deploy) ·
+      **A3** (chip "aplicado" no se ve si el fix vació/borró el copy — paridad con guión, el borrado ya lo cubre el
+      trigger A1; el cambio sigue en el panel). Follow-ons: "Crear copies con H.Ü.E" (escribirCopies) · Validar
+      copies-aware · autoría (field_edits)/Evaluación para copies.
+- **⏳ LIVE-VERIFY post-ship (necesita una tarea Copies real en prod)**: crear Copies → llenar temas/copies →
+      Enviar a cliente → abrir el portal (cliente): ve los copies, ancla un cambio, "Pedir cambios" → el equipo lo
+      ve en el panel + inline (Vista cliente) → arreglar → re-revisión muestra "aplicado".
+
 ## ✍️ H.Ü.E Fase 2 — el WRITER "Crear guión" — CONSTRUIDO + REAPEADO, SIN pushear
 Plan: `/Users/work/.claude/plans/dynamic-wondering-flame.md`. H.Ü.E ESCRIBE el guión/copy desde el brief,
 consumiendo el Cerebro/KB/Ganadores de Fase 1. Reusa la preview→import de "Pegar guión" (coexisten; Pegar

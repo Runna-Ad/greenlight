@@ -30,8 +30,14 @@ export function plantillaPara(tipo: string | undefined | null): Plantilla {
   return PLANTILLA_POR_TIPO[(tipo ?? "").trim()] ?? "guion";
 }
 
-/** Copies todavía no se construye — la página lo dice en vez de fingir. */
-export const PLANTILLAS_LISTAS: Plantilla[] = ["guion", "estatico"];
+/** Las plantillas construidas (la página sólo trabaja estas). */
+export const PLANTILLAS_LISTAS: Plantilla[] = ["guion", "estatico", "copies"];
+
+/** Placeholders del copy (instrucción, no dato). */
+export const PLACEHOLDER_COPY = {
+  headline: "Titular / gancho",
+  descripcion: "El cuerpo del copy (beneficio + CTA)",
+} as const;
 
 // ─────────────────────────────────────────────────────────────
 // Read-time

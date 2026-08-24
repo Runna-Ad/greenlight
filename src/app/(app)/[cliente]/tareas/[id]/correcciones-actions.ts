@@ -18,9 +18,11 @@ async function actorId(): Promise<string | null> {
   return (await getCurrentUser())?.userId ?? null;
 }
 
-/** Ubicación exacta a la que apunta una corrección. */
+/** Ubicación exacta a la que apunta una corrección. `copies_temas`/`copies` entran
+ *  aquí porque los Copies son entregables al cliente: el cliente ancla cambios a un
+ *  tema/copy en el portal, igual que a un plano/estático (0046). */
 export type CorreccionTarget = {
-  tabla: "planos" | "estaticos" | "ideas" | "brief";
+  tabla: "planos" | "estaticos" | "ideas" | "brief" | "copies_temas" | "copies";
   filaId: string | null;
   campo: string;
   label: string;
@@ -33,7 +35,7 @@ export type CorreccionTarget = {
   categoria?: string | null;
 };
 
-const TABLAS_VALIDAS = new Set(["planos", "estaticos", "ideas", "brief"]);
+const TABLAS_VALIDAS = new Set(["planos", "estaticos", "ideas", "brief", "copies_temas", "copies"]);
 
 function revalida(clienteSlug: string) {
   revalidatePath("/[cliente]/tareas/[id]", "page");

@@ -304,3 +304,19 @@ export type HueAdaptation = {
   applied_by: string;
   reverted_at: string | null;
 };
+
+// ── Plantilla Copies (0046) ──────────────────────────────────
+export type CopyTema = {
+  id: string;
+  idea_id: string;
+  tema: string | null;
+  cuota: number;
+  orden: number;
+};
+export type Copy = {
+  id: string;
+  tema_id: string;
+  headline: string | null;
+  descripcion: string | null;
+  orden: number;
+};

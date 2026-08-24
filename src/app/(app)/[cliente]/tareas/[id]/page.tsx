@@ -1,6 +1,5 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Hammer, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
@@ -18,6 +17,7 @@ import { HeroTarea } from "@/components/tarea/hero-tarea";
 import { TabsTarea } from "@/components/tarea/tabs-tarea";
 import { BannerPegarGuion } from "@/components/tarea/banner-pegar-guion";
 import { DocumentoGuion } from "@/components/tarea/documento-guion";
+import { DocumentoCopies, type TemaRow } from "@/components/tarea/documento-copies";
 import { legalSugerido } from "@/lib/legal-sugerido";
 import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
@@ -66,35 +66,6 @@ export default async function TareaPage({
   if (!idea) notFound();
 
   const plantilla = plantillaPara(idea.tipo_asset);
-
-  // Copies todavía no se construye. Se dice, en vez de fingir una plantilla.
-  if (plantilla === "copies") {
-    return (
-      <div className="mx-auto max-w-2xl">
-        <Volver cliente={cliente} />
-        <div className="mt-4 rounded-xl border border-dashed border-border p-6">
-          <div className="flex items-start gap-3">
-            <Hammer className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
-            <div className="text-sm leading-relaxed text-muted-foreground">
-              <p className="text-foreground">
-                La plantilla de <strong>Copies</strong> todavía no está construida.
-              </p>
-              <p className="mt-2">
-                A diferencia del guión y del estático, esta no existe en el deck del
-                cliente — ese slide sólo enlaza a otra hoja de cálculo. Construirla
-                a ciegas sería inventarla, así que se hará con su preview antes de
-                cablear nada.
-              </p>
-              <p className="mt-2 text-xs">
-                Acordado: temas con cuota (el lead define los temas y cuántos por
-                tema; el copy llena headline + descripción, con contador).
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const [{ data: marca }, { data: archivos }, { data: asignaciones }, { data: brief }, { data: clienteRow }] =
     await Promise.all([
@@ -158,6 +129,7 @@ export default async function TareaPage({
   // El cuerpo: se crea la primera fila al abrir, para que la persona escriba ya.
   let planos: PlanoVista[] = [];
   let estatico: EstaticoVista | null = null;
+  let temas: TemaRow[] = [];
 
   if (plantilla === "guion") {
     const { data } = await db
@@ -174,7 +146,7 @@ export default async function TareaPage({
         .single<PlanoVista>();
       if (creado) planos = [creado];
     }
-  } else {
+  } else if (plantilla === "estatico") {
     const { data } = await db
       .from("estaticos")
       .select("id, copy_titulo, copy_subtitulo, copy_cta, legales_extra, referencia_url, referencia_nota")
@@ -188,6 +160,26 @@ export default async function TareaPage({
         .select("id, copy_titulo, copy_subtitulo, copy_cta, legales_extra, referencia_url, referencia_nota")
         .single<EstaticoVista>();
       estatico = creado ?? null;
+    }
+  } else {
+    // copies: cargar los temas + sus copies (ordenados). NO se auto-siembra: el lead
+    // define los temas. Vacío → empty-state en el documento.
+    const { data: temasRaw } = await db
+      .from("copies_temas").select("id, tema, cuota, orden").eq("idea_id", idea.id).order("orden")
+      .returns<{ id: string; tema: string | null; cuota: number; orden: number }[]>();
+    const filasTema = temasRaw ?? [];
+    if (filasTema.length) {
+      const { data: copiesRaw } = await db
+        .from("copies").select("id, tema_id, headline, descripcion, orden")
+        .in("tema_id", filasTema.map((t) => t.id)).order("orden")
+        .returns<{ id: string; tema_id: string; headline: string | null; descripcion: string | null; orden: number }[]>();
+      const porTema = new Map<string, TemaRow["copies"]>();
+      for (const c of copiesRaw ?? []) {
+        (porTema.get(c.tema_id) ?? porTema.set(c.tema_id, []).get(c.tema_id)!).push({
+          id: c.id, headline: c.headline, descripcion: c.descripcion, orden: c.orden,
+        });
+      }
+      temas = filasTema.map((t) => ({ id: t.id, tema: t.tema, cuota: t.cuota, orden: t.orden, copies: porTema.get(t.id) ?? [] }));
     }
   }
 
@@ -511,14 +503,14 @@ export default async function TareaPage({
             status={idea.status}
             notaGuion={idea.nota_guion}
             notaPlaceholder={notaPlaceholder}
-            esEstatico={esEstatico}
+            plantilla={plantilla}
             entregaUrl={idea.entrega_url}
             soloLectura={soloLectura}
           />
 
           <TabsTarea
             ideaId={idea.id}
-            esEstatico={esEstatico}
+            plantilla={plantilla}
             soloLectura={soloLectura}
             detalles={{
               tipoAsset: idea.tipo_asset,
@@ -556,22 +548,28 @@ export default async function TareaPage({
             }
           >
             <div className="min-w-0 space-y-4">
-              <BannerPegarGuion ideaId={idea.id} esEstatico={esEstatico} soloLectura={soloLectura} />
+              {plantilla === "copies" ? (
+                <DocumentoCopies ideaId={idea.id} temasIniciales={temas} soloLectura={soloLectura} />
+              ) : (
+                <>
+                  <BannerPegarGuion ideaId={idea.id} esEstatico={esEstatico} soloLectura={soloLectura} />
 
-              <DocumentoGuion
-                ideaId={idea.id}
-                tipoAsset={idea.tipo_asset}
-                esEstatico={esEstatico}
-                refsPorPlano={refsPorPlano}
-                refsEstatico={refsEstatico}
-                soloLectura={soloLectura}
-                cortinilla={{
-                  legalesLibres: idea.legales_libres,
-                  seleccionados: legalesSeleccionados,
-                  biblioteca: legalesDisponibles,
-                  sugerencia: sugerenciaLegal,
-                }}
-              />
+                  <DocumentoGuion
+                    ideaId={idea.id}
+                    tipoAsset={idea.tipo_asset}
+                    esEstatico={esEstatico}
+                    refsPorPlano={refsPorPlano}
+                    refsEstatico={refsEstatico}
+                    soloLectura={soloLectura}
+                    cortinilla={{
+                      legalesLibres: idea.legales_libres,
+                      seleccionados: legalesSeleccionados,
+                      biblioteca: legalesDisponibles,
+                      sugerencia: sugerenciaLegal,
+                    }}
+                  />
+                </>
+              )}
             </div>
 
             {mostrarPanel && (
@@ -582,7 +580,7 @@ export default async function TareaPage({
           </div>
 
           <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6">
-            <BottomBarTarea esEstatico={esEstatico} />
+            <BottomBarTarea plantilla={plantilla} />
           </div>
         </div>
       </CorreccionesProvider>
@@ -590,16 +588,6 @@ export default async function TareaPage({
   );
 }
 
-function Volver({ cliente }: { cliente: string }) {
-  return (
-    <Link
-      href={`/${cliente}/tablero`}
-      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-    >
-      <ArrowLeft className="size-3.5" /> Volver al tablero
-    </Link>
-  );
-}
 
 function Denegado({ texto }: { texto: string }) {
   return (

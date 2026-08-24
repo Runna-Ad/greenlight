@@ -4,6 +4,7 @@ import Image from "next/image";
 import { MessageSquareText, Link2 } from "lucide-react";
 
 import { STATUS_LABEL, STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
+import type { Plantilla } from "@/lib/plantilla";
 import { CampoIntake } from "./campo-intake";
 import { useWorkspace } from "./workspace-provider";
 
@@ -27,7 +28,7 @@ export function HeroTarea({
   status,
   notaGuion,
   notaPlaceholder,
-  esEstatico,
+  plantilla,
   entregaUrl,
   soloLectura,
 }: {
@@ -39,7 +40,7 @@ export function HeroTarea({
   status: AssetStatus;
   notaGuion: string | null;
   notaPlaceholder: string;
-  esEstatico: boolean;
+  plantilla: Plantilla;
   entregaUrl: string | null;
   soloLectura: boolean;
 }) {
@@ -94,9 +95,10 @@ export function HeroTarea({
         {naming ?? "Sin naming"}
       </h1>
 
-      {/* notas de guión (sólo video) + botón de entrega del cliente */}
+      {/* notas de guión (SÓLO guión/video — estático y copies no las tienen) + botón
+          de entrega del cliente */}
       <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-        {!esEstatico ? (
+        {plantilla === "guion" ? (
           <div className="flex min-w-0 flex-1 items-start gap-2">
             <MessageSquareText className="mt-2 size-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">

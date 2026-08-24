@@ -67,7 +67,7 @@ export function CampoLectura({
   icono,
   pretty,
 }: {
-  tabla: "planos" | "estaticos";
+  tabla: "planos" | "estaticos" | "copies_temas" | "copies";
   filaId: string;
   campo: string;
   /** El nombre del campo, que se muestra en la etiqueta (p. ej. "Diálogos"). */
