@@ -1,5 +1,26 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-24 — plantilla "Copies" CLIENT-FACING (portal), reapeada 2×Opus, SIN pushear
+Última actualización: 2026-08-25 — fixes de brief (referencias/selling points) + Apps Script lee ligas Drive + reglas de selling points en H.Ü.E — **shippeado + live**
+
+## 🔧 Fixes de brief + Apps Script + reglas de H.Ü.E (2026-08-25) — SHIPPEADO + LIVE
+- **Referencias (`BotonReferencia`)**: se guardaban sólo en la 1ª edición. Causa: el editor se desmonta al colapsar
+  en botón y re-sembraba el compare-and-set con el `valorInicial` ORIGINAL → conflicto espurio en la 2ª edición.
+  Fix: sembrar del valor VIVO. Check chiquito → botón "Listo". (`7530f99`)
+- **Campo Selling Points (nuevo)**: `ideas.selling_points` no tenía editor tras crear el brief. Añadido en la
+  pestaña Detalles ("Resumen de brief"), **team-only** (oculto en Vista cliente/portal — prop omitida + gate
+  `!lectura`). `guardarSellingPoints` (actions.ts): compare-and-set a nivel app + guard por id (NO array `.eq`,
+  que PostgREST no compara fiable — `duracion` usa RPC por eso). Campo de un solo autor, TOCTOU documentado. (`7530f99`)
+- **Apps Script lee ligas Drive** (`scripts/apps-script/Code.gs`, `a577d3b`): `readTab` lee
+  `getRichTextValues().getLinkUrl()` SÓLO en la columna Referencias y anexa la URL escondida del chip/hipervínculo
+  ("etiqueta\nURL" → botón "Ver referencia"). Antes gviz CSV y `getDisplayValues()` sólo veían el texto visible.
+  **DiDi ya estaba en apps_script mode en prod** (env `SHEETS_SCRIPT_*` de hace 25 días); el bug era el Code.gs viejo.
+  Live: nuevo deploy /exec (`AKfycby…`), `SHEETS_SCRIPT_URL` actualizada por CLI, secreto reseteado por Pedro,
+  redeploy `ray21v4li`. Sync lista TODAS las pestañas.
+- **H.Ü.E writer — reglas de selling points** (`hue-writer.ts`, `465aeae`): usa los selling points del brief si
+  cumplen el KB, si no → elige del KB; reformular OK pero cifras/legales EXACTOS; en video 1er plano (3-5s) siempre
+  un selling point o el servicio. Anti-invención ampliado a "brief O KB — nunca inventado".
+- **Gates**: tsc·eslint·test:lib 365·test:db 288·test:sync 44·build. **Sin migración nueva.**
+- **Pendiente**: LIVE-VERIFY (Pedro) de los 4 puntos. Si un chip Drive no da botón → fallback plain-URL.
+
 
 ## 📄 Plantilla "Copies" (temas con cuota) — 2026-08-24 — CONSTRUIDA + CLIENT-FACING — SIN pushear
 - El único tipo de entregable sin plantilla (la página decía "no construido"). Forma: temas con cuota → el lead

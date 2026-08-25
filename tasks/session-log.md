@@ -1,5 +1,55 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-25 — Fix flujo de brief (referencias/selling points) + Apps Script lee ligas Drive + reglas de selling points en H.Ü.E (shippeado + live)
+Sesión de fixes sobre el "Resumen de brief", conectar el Apps Script, y una regla de prompt para H.Ü.E. **3 commits, todos pusheados + deployados.**
+
+**Qué se hizo (3 entregables):**
+1. **Referencias se guardaban sólo en la 1ª edición + campo Selling Points nuevo** (`7530f99`):
+   - `BotonReferencia` re-sembraba `useAutoguardado` con el `valorInicial` ORIGINAL al reabrir el editor (que se
+     DESMONTA al colapsar en botón) → el compare-and-set de la 2ª edición chocaba contra lo ya guardado → conflicto
+     espurio → "no se guardó". Fix: sembrar del valor VIVO. El check chiquito ahora es botón **"Listo"**.
+   - `ideas.selling_points` (text[]) NO tenía editor tras crear el brief → el equipo escribía selling points y
+     "desaparecían" (nunca se re-mostraban). Añadí campo editable en la pestaña Detalles ("Resumen de brief"),
+     **team-only** (oculto en Vista cliente/portal). `guardarSellingPoints`: compare-and-set a nivel app + guard
+     por id (array `.eq` evitado como en `duracion`/RPC; contención baja, TOCTOU documentado).
+2. **Apps Script recupera ligas Drive escondidas** (`a577d3b` + deploy + env):
+   - Raíz del bug #3: las celdas de Referencias son texto hipervinculado / chips de Drive; TANTO gviz CSV como
+     `getDisplayValues()` sólo leen el texto visible → la URL se cae en el ORIGEN. Actualicé `Code.gs`: `readTab`
+     lee `getRichTextValues().getLinkUrl()` SÓLO en la columna Referencias y anexa la URL escondida ("etiqueta\nURL"
+     → el parser la vuelve botón "Ver referencia"). Test en test-lib.
+   - **Descubrimiento clave**: DiDi YA estaba en modo apps_script en prod (env `SHEETS_SCRIPT_*` seteadas hace
+     25 días) — NO en CSV como asumí del código local. Las ligas se caían por el Code.gs viejo (getDisplayValues).
+   - Setup con Pedro: pegó el nuevo Code.gs, deployó (nueva URL /exec), actualicé `SHEETS_SCRIPT_URL` por CLI,
+     Pedro reseteó `SHEETS_SCRIPT_SECRET` (no toqué el secreto), redeploy (`ray21v4li` Ready). Sync lista TODAS
+     las pestañas → apps_script mode confirmado.
+3. **Reglas de selling points en el writer de H.Ü.E** (`465aeae`):
+   - `hue-writer.ts`: PRIMERO usa los "Selling points del brief" si cumplen el KB; si vacíos/no cumplen → elige
+     del KB. La integración puede reformular para variedad PERO cifras/términos legales van EXACTOS. Video: en el
+     1er plano (3-5s) SIEMPRE menciona un selling point o nombra el servicio (DiDi Card/Préstamos). Guard
+     anti-invención ampliado a "brief O selling point del KB — nunca inventado". Source-selection = guión Y copy;
+     placement = sólo guión.
+
+**Estado:** los 3 shippeados + deployados. Sin migración nueva. Apps Script live en prod (env + redeploy `ray21v4li`).
+
+**Gates:** tsc · eslint · test:lib 365 · test:db 288 · test:sync 44 · build — verdes.
+
+**Decisiones (para NO re-litigar):**
+- Selling Points editor = **team-only** (oculto al cliente); es guía creativa interna, no copy.
+- Ligas Drive: camino elegido = **Apps Script upgradeado** sobre plain-URLs. DiDi ya estaba en apps_script mode.
+- `guardarSellingPoints`: compare-and-set a nivel app (no array `.eq`, no RPC) — campo de un solo autor,
+  contención baja; TOCTOU documentado. Si sube la contención, migrar a RPC como `duracion`.
+- H.Ü.E puede usar cifras de un **selling point del KB** (no sólo del brief), nunca inventar. Pedro aprobó.
+- **No manejo secretos en claro** aunque Pedro lo autorice: le di el camino CLI para que él lo pusiera.
+
+**Pick up próxima sesión (LIVE-VERIFY, Pedro):**
+1. (a) editar una referencia 2× seguidas → persiste; (b) escribir selling points en Resumen de brief → recarga →
+   persiste; (c) sync un brief con chip de Drive (nuevo) → botón "Ver referencia"; (d) Crear guión con H.Ü.E →
+   selling point en 3-5s + del brief/KB.
+2. Si algún chip de Drive NO da botón → mandar el contenido de la celda (tipo de chip que Apps Script no expone →
+   fallback plain-URL). Tareas YA importadas no re-jalan del sheet → pegar la URL directo en el campo referencia.
+
+**Uncommitted:** ninguno (3 commits pusheados). Sólo 2 untracked ajenos: `tasks/HANDOFF-*.md`.
+
 ## 2026-08-24 — Copies → entregable CLIENT-FACING en el portal (shippeado + live)
 Sesión enfocada. Retomé la plantilla Copies (construida+reapeada la sesión pasada, sin pushear, con 1 decisión
 abierta: S1 "¿Copies va al cliente?"). Pedro decidió: **Copies ES entregable al cliente → va al portal para
