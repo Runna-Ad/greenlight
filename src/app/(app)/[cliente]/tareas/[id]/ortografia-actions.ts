@@ -211,10 +211,13 @@ export async function revisarOrtografia(
     "porcentaje o rango inconsistente; una cifra que se contradice con otra del guión. En 'problema' " +
     "DESCRIBE la inconsistencia concreta (qué cifras y por qué no cuadran). NO propongas el número " +
     "correcto (no lo sabes con certeza) — sólo señálalo para revisión humana. Si las cuentas cuadran, no marques nada.\n" +
-    "- 'legal': falta o está mal un marcador legal REQUERIDO. Ej.: 'CASHBACK' sin el asterisco '*'; " +
-    "'MSI'/'meses sin intereses' sin '*'; una simulación de crédito SIN su nota al pie " +
-    "('*Ejemplo de un crédito … interés ordinario anual del …%'); una cifra MÁXIMA (línea de crédito, " +
-    "cashback, quincenas, minutos) sin la palabra 'hasta'. En 'problema' di QUÉ falta y dónde. " +
+    "- 'legal': falta o está mal un marcador legal REQUERIDO. Reglas ESTRICTAS:\n" +
+    "  · Todo VALOR MONETARIO en pesos (p. ej. '$48,000', '$4,836') DEBE terminar con 'M.N.' o 'm.n.' " +
+    "(moneda nacional). Si un monto en pesos NO lleva 'M.N.'/'m.n.', márcalo — es obligatorio y muy específico.\n" +
+    "  · 'CASHBACK' sin el asterisco '*'; 'MSI'/'meses sin intereses' sin '*'.\n" +
+    "  · una simulación de crédito SIN su nota al pie ('*Ejemplo de un crédito … interés ordinario anual del …%').\n" +
+    "  · una cifra MÁXIMA (línea de crédito, cashback, quincenas, minutos) sin la palabra 'hasta'.\n" +
+    "  En 'problema' di QUÉ falta y dónde (cita el fragmento). " +
     "(NO escribas el texto legal completo; sólo señala la falta.)\n" +
     "- 'campo_id' del flag = el id entre corchetes del campo. Si no hay avisos, devuelve 'flags' vacío.\n\n" +
     "Campos:\n" + bloques;

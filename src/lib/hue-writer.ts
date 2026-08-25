@@ -191,6 +191,10 @@ function bloqueEstable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
     "- Usa SÓLO datos del brief. NO inventes precios, porcentajes, montos, plazos/quincenas, fechas ni " +
     "cifras: si no están en el brief, NO los pongas.\n" +
     "- Usa los SELLING POINTS que te doy TAL CUAL (verbatim); no cambies sus números ni sus términos.\n" +
+    "- NEGRITA obligatoria: encierra en `**…**` cada NOMBRE DE MARCA (DiDi, DiDi Card, DiDi Préstamos, " +
+    "DiDi Finanzas) y cada SELLING POINT / beneficio clave (línea de crédito, CASHBACK*, sin anualidad, " +
+    "MSI, aprobación en minutos, etc.) DENTRO del copy y del diálogo. Ej.: `con tu **DiDi Card** obtienes " +
+    "**hasta 6% de CASHBACK***`. Es negrita de énfasis (markdown `**`), no toques su texto.\n" +
     "- NO escribas el texto legal ni el CAT: el legal se adjunta aparte desde la biblioteca. Sólo, si una " +
     "regla lo pide (p. ej. CASHBACK/MSI → `*Aplican`), deja el asterisco `*` donde corresponda en el copy.\n" +
     "- RESPETA las reglas de marca que te paso (CTA por plataforma, timeframes por marca, conteo de " +

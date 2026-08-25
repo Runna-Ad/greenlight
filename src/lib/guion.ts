@@ -165,18 +165,25 @@ function parseBloque(lineas: string[]): PlanoParsed {
   const accion: string[] = [];
   const dialogo: string[] = [];
 
-  // La zona de diálogo empieza DESPUÉS de la última etiqueta.
+  // La zona de diálogo empieza DESPUÉS de la última etiqueta (Copy in:/SFX:/…).
   let ultimaEtiqueta = -1;
   cuerpo.forEach((l, i) => { if (esEtiqueta(l)) ultimaEtiqueta = i; });
+  // Fallback: si el plano NO trae etiquetas, el diálogo empieza en el primer CUE de
+  // locutor SUELTO ("Actriz", "Gata 1", "Actriz (V.O)") — así un diálogo con locutor no
+  // se va entero a Acción sólo porque no hubo una etiqueta que marcara el corte (bug del
+  // plano 4 en "Pegar guión": el diálogo de la Actriz caía en Acción). `esCue` es
+  // conservador (≤4 palabras, capitalizado, sin puntuación final) → no toma "Simulación:"
+  // (dos puntos al final) ni descripciones de acción.
+  const primerCue = ultimaEtiqueta === -1 ? cuerpo.findIndex((l) => esCue(l)) : -1;
+  const inicioDialogo =
+    ultimaEtiqueta >= 0 ? ultimaEtiqueta + 1 : primerCue >= 0 ? primerCue : Infinity;
 
   cuerpo.forEach((linea, i) => {
     const et = ETIQUETAS.find((e) => e.re.test(linea));
     if (et) { bucket[et.campo].push(valorEtiqueta(linea, et.re)); return; }
     if (CTA.test(linea)) { copy_in.push(valorEtiqueta(linea, CTA)); return; }
-    // No es etiqueta. Diálogo si va después de la última etiqueta; si no, acción.
-    // Sin etiquetas (ultimaEtiqueta === -1) TODO es acción — no adivinamos dónde
-    // empezaría el diálogo (el humano lo separa en la vista previa).
-    if (ultimaEtiqueta >= 0 && i > ultimaEtiqueta) dialogo.push(linea);
+    // No es etiqueta → diálogo desde `inicioDialogo`; antes de eso, acción.
+    if (i >= inicioDialogo) dialogo.push(linea);
     else accion.push(linea);
   });
 

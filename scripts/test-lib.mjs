@@ -534,6 +534,20 @@ console.log("\n▶ Guión (paste importer)");
   eq("dialogo colon dos locutores", convertirDialogo(["Actor: Hola.", "Narrador: Fin."]), "(Actor) Hola.\n(Narrador) Fin.");
   ok("dialogo colon: 'Y le dije: hola' NO es locutor", convertirDialogo(["Y le dije: hola"]) === "Y le dije: hola");
   ok("limpiarPegado quita ** en par pero deja el * suelto", limpiarPegado("**hola CASHBACK* mundo**") === "hola CASHBACK* mundo");
+
+  // SIN etiqueta (Copy in:/SFX:/…): un diálogo con locutor SUELTO igual se detecta —
+  // antes caía entero en Acción (bug del plano 4 en "Pegar guión": simulación sin
+  // etiqueta → la actriz y su línea se iban a Acción).
+  const sinEt = parseGuion([
+    "Plano 4 - int. recámara - MS",
+    "La actriz sostiene su celular.",
+    "Monto del crédito: $46,800 m.n.",
+    "Actriz",
+    "Yo pediría $46,800 m.n.",
+  ].join("\n"));
+  eq("sin etiqueta: el cue de locutor arranca el diálogo", sinEt[0].dialogo, "(Actriz) Yo pediría $46,800 m.n.");
+  ok("sin etiqueta: lo previo (monto) queda en Acción", (sinEt[0].accion ?? "").includes("Monto del crédito"));
+
   const { parseDialogo } = await import("../src/lib/dialogo.ts");
 
   // ── Gold: la muestra REAL de Pedro (reconstruida con saltos de línea, como
