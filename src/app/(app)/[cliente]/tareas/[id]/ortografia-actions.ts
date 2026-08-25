@@ -23,6 +23,19 @@ export type ErrorOrtografia = {
   tipo: string;
 };
 
+/**
+ * Un AVISO (no un fix auto-aplicable): matemática o legal. A diferencia de un error
+ * de ortografía, NO trae un {original→sugerencia} que se pueda aplicar de un clic
+ * —cambiar un número/legal jamás es automático—: describe el problema para que el
+ * humano lo verifique y corrija a mano.
+ */
+export type FlagRevision = {
+  id: string;
+  campoLabel: string;
+  problema: string;
+  tipo: "matemática" | "legal";
+};
+
 // Campos que SÍ se revisan (con su etiqueta visible). Se EXCLUYEN los legales
 // (legales_extra, cortinilla) — el texto legal es exacto, no lo toca un corrector.
 const LABEL_PLANO: Record<string, string> = {
@@ -92,7 +105,7 @@ export async function revisarOrtografia(
   // ACTUAL, incl. lo recién tecleado que aún no se autoguardó (evita la carrera con
   // el autosave). Si no viene, cae a leer la BD.
   datos?: { planos?: unknown[]; estatico?: unknown } | null,
-): Promise<{ ok: true; errores: ErrorOrtografia[] } | { ok: false; error: string }> {
+): Promise<{ ok: true; errores: ErrorOrtografia[]; flags: FlagRevision[] } | { ok: false; error: string }> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   if (!process.env.ANTHROPIC_API_KEY) {
     return { ok: false, error: "H.Ü.E no está configurado (falta la clave)." };
@@ -127,7 +140,7 @@ export async function revisarOrtografia(
     campos = reunirCampos(planosArr, estatico);
   }
 
-  if (campos.length === 0) return { ok: true, errores: [] };
+  if (campos.length === 0) return { ok: true, errores: [], flags: [] };
 
   const porId = new Map(campos.map((c) => [c.campoId, c]));
 
@@ -148,8 +161,22 @@ export async function revisarOrtografia(
           additionalProperties: false,
         },
       },
+      // AVISOS (no auto-aplicables): matemática y legal.
+      flags: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            campo_id: { type: "string" as const },
+            problema: { type: "string" as const },
+            tipo: { type: "string" as const, enum: ["matemática", "legal"] },
+          },
+          required: ["campo_id", "problema", "tipo"],
+          additionalProperties: false,
+        },
+      },
     },
-    required: ["errores"],
+    required: ["errores", "flags"],
     additionalProperties: false,
   };
 
@@ -177,6 +204,19 @@ export async function revisarOrtografia(
     "'sugerencia' es ese MISMO fragmento ya corregido.\n" +
     "- 'campo_id' es el id entre corchetes del campo donde está el error.\n" +
     "- Si un campo no tiene errores, no lo incluyas. Si no hay ninguno, devuelve la lista vacía.\n\n" +
+    "ADEMÁS, en 'flags' emite AVISOS (no correcciones automáticas — son para que un humano " +
+    "verifique y corrija a mano). Dos tipos:\n" +
+    "- 'matemática': una cifra o cuenta que NO cuadra. Ej.: en una simulación de crédito, el pago " +
+    "quincenal × el nº de quincenas no corresponde al monto + intereses; un total mal sumado; un " +
+    "porcentaje o rango inconsistente; una cifra que se contradice con otra del guión. En 'problema' " +
+    "DESCRIBE la inconsistencia concreta (qué cifras y por qué no cuadran). NO propongas el número " +
+    "correcto (no lo sabes con certeza) — sólo señálalo para revisión humana. Si las cuentas cuadran, no marques nada.\n" +
+    "- 'legal': falta o está mal un marcador legal REQUERIDO. Ej.: 'CASHBACK' sin el asterisco '*'; " +
+    "'MSI'/'meses sin intereses' sin '*'; una simulación de crédito SIN su nota al pie " +
+    "('*Ejemplo de un crédito … interés ordinario anual del …%'); una cifra MÁXIMA (línea de crédito, " +
+    "cashback, quincenas, minutos) sin la palabra 'hasta'. En 'problema' di QUÉ falta y dónde. " +
+    "(NO escribas el texto legal completo; sólo señala la falta.)\n" +
+    "- 'campo_id' del flag = el id entre corchetes del campo. Si no hay avisos, devuelve 'flags' vacío.\n\n" +
     "Campos:\n" + bloques;
 
   try {
@@ -207,10 +247,10 @@ export async function revisarOrtografia(
         crudos = undefined;
       }
     }
-    if (!Array.isArray(crudos)) return { ok: true, errores: [] };
+    const erroresCrudos = Array.isArray(crudos) ? crudos : [];
 
     const errores: ErrorOrtografia[] = [];
-    for (const raw of crudos) {
+    for (const raw of erroresCrudos) {
       const o = (raw ?? {}) as Record<string, unknown>;
       const campoId = typeof o.campo_id === "string" ? o.campo_id : "";
       const original = typeof o.original === "string" ? o.original : "";
@@ -232,13 +272,33 @@ export async function revisarOrtografia(
       if (errores.length >= MAX_ERRORES) break;
     }
 
+    // Avisos (matemática/legal): NO pasan por fixSeguro (no se auto-aplican); sólo se
+    // validan la forma (campo conocido, problema no vacío, tipo válido).
+    let flagsCrudos: unknown = (bloque?.input as { flags?: unknown } | undefined)?.flags;
+    if (typeof flagsCrudos === "string") {
+      try {
+        const p: unknown = JSON.parse(flagsCrudos);
+        flagsCrudos = Array.isArray(p) ? p : (p as { flags?: unknown } | null)?.flags;
+      } catch { flagsCrudos = undefined; }
+    }
+    const flags: FlagRevision[] = [];
+    for (const raw of Array.isArray(flagsCrudos) ? flagsCrudos : []) {
+      const o = (raw ?? {}) as Record<string, unknown>;
+      const c = porId.get(typeof o.campo_id === "string" ? o.campo_id : "");
+      const problema = typeof o.problema === "string" ? o.problema.trim() : "";
+      const tipo = o.tipo === "matemática" || o.tipo === "legal" ? o.tipo : null;
+      if (!c || !problema || !tipo) continue;
+      flags.push({ id: `f${flags.length}`, campoLabel: c.label, problema, tipo });
+      if (flags.length >= MAX_ERRORES) break;
+    }
+
     // Bitácora de adopción (best-effort): registra las sugerencias ofrecidas. Diferida
     // con after() para no acoplar la latencia de la respuesta al write.
     const soyId = await getSoyId();
     const filasLog = errores.map((e) => ({ tabla: e.tabla, filaId: e.filaId, campo: e.campo, sugerencia: e.sugerencia, tipo: e.tipo }));
     after(() => registrarOrtografia(ideaId, soyId, filasLog));
 
-    return { ok: true, errores };
+    return { ok: true, errores, flags };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error al llamar a H.Ü.E." };
   }

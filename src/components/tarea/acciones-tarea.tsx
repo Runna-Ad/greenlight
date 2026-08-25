@@ -17,6 +17,7 @@ import {
   revisarOrtografia,
   marcarOrtografiaIgnorada,
   type ErrorOrtografia,
+  type FlagRevision,
 } from "@/app/(app)/[cliente]/tareas/[id]/ortografia-actions";
 import { DialogoOrtografia } from "./dialogo-ortografia";
 import { useWorkspace } from "./workspace-provider";
@@ -73,6 +74,7 @@ export function AccionesTarea({
   // Chequeo de ortografía (H.Ü.E) al mandar a revisión: si hay errores se abre el
   // diálogo; el especialista aplica los que quiera y SIEMPRE puede enviar igual.
   const [errores, setErrores] = useState<ErrorOrtografia[] | null>(null);
+  const [flags, setFlags] = useState<FlagRevision[]>([]);
   const [pendiente, setPendiente] = useState<Accion | null>(null);
   // Cuántos fixes aplicó el usuario en el diálogo. El editor tiene el texto en
   // estado propio (Campo uncontrolled) y el fix lo escribe una acción HERMANA
@@ -107,8 +109,9 @@ export function AccionesTarea({
       // "Mandar a revisión" pasa primero por el corrector de H.Ü.E (surface+override).
       if (a.verb === "submit_review") {
         const r = await revisarOrtografia(ideaId, { planos, estatico });
-        if (r.ok && r.errores.length > 0) {
+        if (r.ok && (r.errores.length > 0 || r.flags.length > 0)) {
           setErrores(r.errores);
+          setFlags(r.flags);
           setPendiente(a);
           return;
         }
@@ -150,6 +153,7 @@ export function AccionesTarea({
   const dialogoOrtografia = errores && (
     <DialogoOrtografia
       errores={errores}
+      flags={flags}
       enviando={pending}
       onAplicado={(id) => {
         setErrores((prev) => prev?.filter((e) => e.id !== id) ?? null);

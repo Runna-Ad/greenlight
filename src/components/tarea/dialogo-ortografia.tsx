@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { toast } from "sonner";
-import { Check, SpellCheck, Send } from "lucide-react";
+import { Check, SpellCheck, Send, Calculator, Scale } from "lucide-react";
 
 import {
   Dialog,
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import {
   aplicarOrtografia,
   type ErrorOrtografia,
+  type FlagRevision,
 } from "@/app/(app)/[cliente]/tareas/[id]/ortografia-actions";
 
 /**
@@ -27,12 +28,15 @@ import {
  */
 export function DialogoOrtografia({
   errores,
+  flags,
   enviando,
   onAplicado,
   onEnviar,
   onCerrar,
 }: {
   errores: ErrorOrtografia[];
+  /** Avisos de matemática/legal — advisory, NO se auto-aplican (el humano revisa). */
+  flags: FlagRevision[];
   enviando: boolean;
   onAplicado: (id: string) => void;
   onEnviar: () => void;
@@ -60,22 +64,23 @@ export function DialogoOrtografia({
       <DialogContent className="grid max-h-[85svh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <SpellCheck className="size-4 text-primary" /> Revisión de ortografía
+            <SpellCheck className="size-4 text-primary" /> Revisión con H.Ü.E
           </DialogTitle>
           <DialogDescription>
-            {errores.length > 0
-              ? `H.Ü.E encontró ${errores.length} posible${errores.length === 1 ? "" : "s"} ${errores.length === 1 ? "error" : "errores"} en es-MX. Aplica los que veas bien; los números y legales no se tocan.`
-              : "No quedan sugerencias. Puedes mandarla a revisión."}
+            {errores.length + flags.length > 0
+              ? "H.Ü.E revisó ortografía, matemática y legal. Aplica las correcciones que veas bien; los avisos (⚠️) no se auto-corrigen — verifícalos y arréglalos a mano."
+              : "Todo en orden. Puedes mandarla a revisión."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 space-y-3 overflow-y-auto py-2 pr-1">
-          {errores.length === 0 ? (
+          {errores.length === 0 && flags.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               ¡Listo! No quedan sugerencias por revisar.
             </p>
           ) : (
-            [...grupos.entries()].map(([label, items]) => (
+            <>
+            {[...grupos.entries()].map(([label, items]) => (
               <div key={label}>
                 <p className="mb-1 gl-eyebrow">{label}</p>
                 <div className="space-y-1.5">
@@ -109,7 +114,35 @@ export function DialogoOrtografia({
                   ))}
                 </div>
               </div>
-            ))
+            ))}
+
+            {flags.length > 0 && (
+              <div>
+                <p className="mb-1 flex items-center gap-1 gl-eyebrow text-status-progress">
+                  ⚠️ Avisos — verifícalos y corrígelos a mano
+                </p>
+                <div className="space-y-1.5">
+                  {flags.map((f) => (
+                    <div
+                      key={f.id}
+                      className="flex items-start gap-2 rounded-lg border border-status-progress/40 bg-[color-mix(in_srgb,var(--status-progress)_8%,transparent)] p-2 text-[13px] leading-relaxed"
+                    >
+                      {f.tipo === "matemática"
+                        ? <Calculator className="mt-0.5 size-4 shrink-0 text-status-progress" />
+                        : <Scale className="mt-0.5 size-4 shrink-0 text-status-progress" />}
+                      <div className="min-w-0 flex-1">
+                        <span className="mr-1.5 inline-block rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          {f.tipo}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">{f.campoLabel}</span>
+                        <p className="mt-0.5 text-foreground">{f.problema}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
 
@@ -126,7 +159,7 @@ export function DialogoOrtografia({
             )}
           >
             <Send className="size-4" />
-            {errores.length > 0 ? "Enviar de todos modos" : "Enviar a revisión"}
+            {errores.length + flags.length > 0 ? "Enviar de todos modos" : "Enviar a revisión"}
           </Button>
         </DialogFooter>
       </DialogContent>

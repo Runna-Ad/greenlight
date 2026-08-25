@@ -1797,5 +1797,48 @@ console.log("\n▶ 0046 — Copies: temas con cuota + FK cascade + unique + trig
   eq("limpieza: 0 temas en la idea", Number(await scalar(`select count(*) from produccion.copies_temas where idea_id=$1`, [IDEA])), 0);
 }
 
+// ── 0047 — el cambio del CLIENTE avisa al LEAD, no al especialista ──
+console.log("\n▶ 0047 — cambios del cliente enrutan al lead");
+{
+  // flIdea trae a Galie y Mony como ESPECIALISTAS (es_lead=false). El trigger de
+  // notificación decide el destinatario de in_corrections según la bandera
+  // `notify_to_lead` que prende rpc_client_submit_changes.
+  // Asegura ESPECIALISTAS asignados (Galie/Mony, es_lead=false) — otros tests
+  // pudieron limpiar las asignaciones de flIdea.
+  await db.query(
+    `insert into produccion.idea_assignments (idea_id, member_id)
+     select $1, id from produccion.track_members where track='real' and name in ('Galie','Mony')
+     on conflict do nothing`, [flIdea]);
+  const notifsPara = async () => (await q(
+    `select tm.name as para from produccion.notifications n
+       left join produccion.track_members tm on tm.id = n.recipient_member_id
+      where n.entity_id=$1`, [flIdea])).map((r) => r.para);
+
+  // Los cambios de estado pasan por el guard `guard_idea_status`; se mueve con
+  // rpc_move_task (override de lead para el setup a published; y el MISMO llamado
+  // que hace el cliente en prod para el paso probado: in_corrections sin actor).
+  const aPublished = () => db.query(`select produccion.rpc_move_task($1,'published',true,$2,'setup 0047')`, [flIdea, LEAD]);
+  const aCorrecciones = () => db.query(`select produccion.rpc_move_task($1,'in_corrections',false,null,null,null)`, [flIdea]);
+
+  // CASO LEAD (primero, sesión limpia SIN bandera): avisa a los que la trabajan.
+  await aPublished();
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [flIdea]);
+  await aCorrecciones();
+  const lead = await notifsPara();
+  ok("sin bandera (cambio del lead), SÍ avisa a los especialistas",
+     lead.some((n) => n === "Galie" || n === "Mony"));
+
+  // CASO CLIENTE: la bandera (que prende rpc_client_submit_changes) enruta al lead.
+  await aPublished();
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [flIdea]);
+  await db.query(`select set_config('produccion.notify_to_lead','true',false)`);
+  await aCorrecciones();
+  await db.query(`select set_config('produccion.notify_to_lead','false',false)`); // apagar
+  const cli = await notifsPara();
+  ok("cambio del cliente NO avisa a los especialistas (Galie/Mony)",
+     !cli.some((n) => n === "Galie" || n === "Mony"));
+  ok("y sí genera aviso (al lead/admin)", cli.length > 0);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);
