@@ -296,6 +296,17 @@ eq("el texto se conserva tal cual",
   eq("mezcla: la URL es Referencia 1 (numera sólo URLs)", segs[0].label, "Referencia 1");
   eq("mezcla: el texto queda como texto", segs[1].tipo, "texto");
 }
+// El shape que produce el Apps Script mejorado para un chip/hipervínculo de Drive:
+// "ETIQUETA VISIBLE\nURL_REAL". La etiqueta queda como texto y la URL escondida
+// se vuelve el botón "Ver referencia" (antes la URL se perdía por completo).
+{
+  const drive = "https://drive.google.com/file/d/1ABlmVKU588gts6k2ONGghDiKulSQLJ9J/view?usp=share_link";
+  const segs = parseReferencias(`VIDEO_IDEA 1.mp4\n${drive}`);
+  eq("chip → 2 segmentos (etiqueta + liga)", segs.length, 2);
+  eq("chip: la etiqueta visible queda como texto", segs[0].tipo, "texto");
+  eq("chip: la liga recuperada es una referencia abrible", segs[1].tipo, "ref");
+  eq("chip: conserva la URL completa de Drive", segs[1].url, drive);
+}
 
 const { urlDeLinea } = await import("../src/lib/referencia.ts");
 eq("http se abre tal cual", urlDeLinea("https://drive.google.com/x"), "https://drive.google.com/x");
