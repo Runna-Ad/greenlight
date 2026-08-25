@@ -3,7 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { cargarWinners } from "@/lib/hue-data";
 import { legalSugerido, type LegalLite } from "@/lib/legal-sugerido";
-import { voz, varianteGuion } from "@/lib/plantilla";
+import { voz, varianteGuion, parseDuracion } from "@/lib/plantilla";
+import { convertirDialogo } from "@/lib/guion";
 import type { PlanoParsed, EstaticoParsed } from "@/lib/guion";
 
 /**
@@ -201,7 +202,10 @@ function bloqueEstable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
       "dialogo. El diálogo va en el formato \"(Quién) texto\", con el locutor entre paréntesis; junta varios locutores " +
       "con saltos de línea.\n" +
       "- Arranca con un HOOK fuerte en los primeros segundos. Escribe un guión coherente de principio a fin " +
-      "(no incluyas la cortinilla legal final: se agrega desde la biblioteca).\n";
+      "(no incluyas la cortinilla legal final: se agrega desde la biblioteca).\n" +
+      "- ⏱️ RESPETA LA DURACIÓN OBJETIVO: el diálogo TOTAL (todos los planos) debe LEERSE dentro del tiempo " +
+      "indicado. El sistema mide 'tiempo de lectura' = palabras de diálogo ÷ 2.5 (≈2.5 palabras/seg locutadas). " +
+      "Si te pasas, recorta líneas o planos — un guión que cabe en el tiempo vale más que uno que lo excede.\n";
   } else {
     s +=
       "- Devuelve copy_titulo (beneficio principal), copy_subtitulo (2–3 beneficios secundarios) y copy_cta " +
@@ -252,6 +256,13 @@ function bloqueVariable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
   s += `- Plataformas: ${lista(i.plataformas)}\n`;
   if (modo === "guion") {
     s += `- Duración: ${lista(i.duracion)}\n`;
+    // Presupuesto de palabras de diálogo para caber en el tiempo objetivo (tiempo de
+    // lectura = palabras/2.5). Toma la duración MÁS LARGA del fan-out como objetivo.
+    const segs = (i.duracion ?? []).map((d) => parseDuracion(d)?.max).filter((n): n is number => typeof n === "number");
+    const targetSec = segs.length ? Math.max(...segs) : null;
+    if (targetSec) {
+      s += `- ⏱️ PRESUPUESTO DE TIEMPO: la duración objetivo es ${targetSec}s. El diálogo TOTAL de TODO el guión debe caber en ese tiempo: a ~2.5 palabras/seg son ~${Math.round(targetSec * 2.5)} palabras de diálogo como TOPE (sumando todos los planos). No te pases — recorta antes que exceder.\n`;
+    }
     s += `- Estilo: ${ctx.variante === "real" ? "Real Person (persona real a cuadro)" : "Normal (V.O / formato innovador)"}\n`;
     s += `- Quién habla (locutor del diálogo): ${ctx.voz}\n`;
   } else {
@@ -319,7 +330,11 @@ export async function escribirGuion(ctx: ContextoWriter): Promise<{ ok: true; pl
         const o = (p ?? {}) as Record<string, unknown>;
         return {
           titulo: s0(o.titulo), accion: s0(o.accion), copy_in: s0(o.copy_in),
-          sfx: s0(o.sfx), gfx: s0(o.gfx), edicion: s0(o.edicion), dialogo: s0(o.dialogo),
+          sfx: s0(o.sfx), gfx: s0(o.gfx), edicion: s0(o.edicion),
+          // El diálogo pasa por la MISMA normalización que "Pegar guión"
+          // (convertirDialogo → "(Quién) texto"), para que la Vista cliente ponga el
+          // locutor en negritas. Antes se guardaba crudo del modelo y no se seccionaba.
+          dialogo: typeof o.dialogo === "string" ? s0(convertirDialogo(o.dialogo.split("\n"))) : null,
         };
       })
       .filter((p) => Object.values(p).some(Boolean)); // descarta planos totalmente vacíos (reap M6)

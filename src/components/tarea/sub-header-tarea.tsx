@@ -4,17 +4,15 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, RefreshCw, Check, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, Sparkles, Trash2 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
 import type { AssetStatus } from "@/lib/brand";
 import type { TaskContext } from "@/lib/task-actions";
-import { canAdmin, canOverrideStatus } from "@/lib/roles";
+import { canAdmin } from "@/lib/roles";
 import { eliminarTarea } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { AccionesTarea } from "./acciones-tarea";
 import { NavBundle } from "./nav-bundle";
 import { useCorrecciones } from "./correcciones/contexto";
-import { useWorkspace } from "./workspace-provider";
 import type { BundleTask } from "@/lib/bundle";
 
 /**
@@ -51,7 +49,6 @@ export function SubHeaderTarea({
   anterior: BundleTask | null;
   siguiente: BundleTask | null;
 }) {
-  const { verCliente } = useWorkspace();
   // El botón de H.Ü.E vive también AQUÍ (barra sticky de arriba), no sólo en el
   // panel de correcciones al fondo — durante la revisión el lead mira arriba, así
   // que el validador quedaba "perdido".
@@ -88,17 +85,17 @@ export function SubHeaderTarea({
             {corr.validando ? "Revisando con H.Ü.E…" : "Revisar con H.Ü.E"}
           </button>
         )}
-        {verCliente && !canOverrideStatus(ctx.role) ? (
-          <BotonesClientePreview abiertas={abiertas} />
-        ) : (
-          <AccionesTarea
-            ideaId={ideaId}
-            clienteSlug={cliente}
-            status={status}
-            abiertas={abiertas}
-            ctx={ctx}
-          />
-        )}
+        {/* Las acciones del equipo NO cambian con "Vista cliente" (es sólo un toggle de
+            PREVIEW del documento). Antes, un especialista en Vista cliente veía la
+            vista-previa del botón del cliente ("Aprobar") en vez de su "Mandar a
+            revisión" — un error. El botón correcto por rol lo decide AccionesTarea. */}
+        <AccionesTarea
+          ideaId={ideaId}
+          clienteSlug={cliente}
+          status={status}
+          abiertas={abiertas}
+          ctx={ctx}
+        />
         <NavBundle
           cliente={cliente}
           indice={indice}
@@ -166,36 +163,5 @@ function BorrarTarea({ cliente, ideaId }: { cliente: string; ideaId: string }) {
     >
       <Trash2 className="size-3.5" /> Borrar
     </button>
-  );
-}
-
-/**
- * El botón de revisión del cliente, SÓLO como vista previa (las acciones reales
- * del cliente son un build posterior — el portal). Es UN botón que cambia, como
- * el flujo real: "Aprobar" por defecto, y si hay cambios pedidos (correcciones
- * abiertas) se convierte en "Pedir cambios" — nunca los dos a la vez (Pedro).
- */
-function BotonesClientePreview({ abiertas }: { abiertas: number }) {
-  const hayCambios = abiertas > 0;
-  return (
-    <span
-      className={cn(
-        "inline-flex cursor-default items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold opacity-90",
-        hayCambios
-          ? "border border-status-corrections text-status-corrections"
-          : "bg-status-completed text-white",
-      )}
-      title="Vista previa — así verá el cliente su botón de revisión"
-    >
-      {hayCambios ? (
-        <>
-          <RefreshCw className="size-4" /> Pedir cambios
-        </>
-      ) : (
-        <>
-          Aprobar <Check className="size-4" />
-        </>
-      )}
-    </span>
   );
 }
