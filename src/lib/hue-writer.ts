@@ -188,9 +188,15 @@ function bloqueEstable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
       : "ESCRIBIR el copy de un anuncio ESTÁTICO (título, subtítulo, botón CTA) desde el brief de la tarea. ") +
     "Repórtalo con la herramienta.\n\n" +
     "REGLAS ABSOLUTAS (aterriza en el brief, no inventes):\n" +
-    "- Usa SÓLO datos del brief. NO inventes precios, porcentajes, montos, plazos/quincenas, fechas ni " +
-    "cifras: si no están en el brief, NO los pongas.\n" +
-    "- Usa los SELLING POINTS que te doy TAL CUAL (verbatim); no cambies sus números ni sus términos.\n" +
+    "- NO INVENTES cifras: precios, porcentajes, montos, plazos/quincenas y fechas van SÓLO si aparecen " +
+    "explícitamente en el brief o en un Selling Point del KB. Si un dato no está en ninguno de los dos, NO lo pongas.\n" +
+    "- SELLING POINTS · DE DÓNDE SALEN: PRIMERO revisa los \"Selling points del brief\" de la tarea. Si traen " +
+    "contenido y respetan las reglas del KB, úsalos. Si están VACÍOS o NO cumplen el KB, ELIGE los Selling " +
+    "Points más relevantes de la BASE DE CONOCIMIENTO.\n" +
+    "- SELLING POINTS · CÓMO SE USAN: intégralos de forma natural y lógica según las reglas del KB. Puedes " +
+    "REDACTARLOS distinto para dar variedad, siempre que se respete el mensaje — PERO nunca cambies sus cifras, " +
+    "montos, porcentajes, plazos ni términos legales/de marca (p. ej. \"6% de CASHBACK\", \"sin anualidad\", " +
+    "\"MSI\"): esos van EXACTOS.\n" +
     "- NEGRITA obligatoria: encierra en `**…**` cada NOMBRE DE MARCA (DiDi, DiDi Card, DiDi Préstamos, " +
     "DiDi Finanzas) y cada SELLING POINT / beneficio clave (línea de crédito, CASHBACK*, sin anualidad, " +
     "MSI, aprobación en minutos, etc.) DENTRO del copy y del diálogo. Ej.: `con tu **DiDi Card** obtienes " +
@@ -207,6 +213,8 @@ function bloqueEstable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
       "con saltos de línea.\n" +
       "- Arranca con un HOOK fuerte en los primeros segundos. Escribe un guión coherente de principio a fin " +
       "(no incluyas la cortinilla legal final: se agrega desde la biblioteca).\n" +
+      "- En el PRIMER plano (los primeros 3–5 segundos) SIEMPRE menciona un Selling Point o nombra el " +
+      "servicio (\"DiDi Card\" o \"DiDi Préstamos\").\n" +
       "- ⏱️ RESPETA LA DURACIÓN OBJETIVO: el diálogo TOTAL (todos los planos) debe LEERSE dentro del tiempo " +
       "indicado. El sistema mide 'tiempo de lectura' = palabras de diálogo ÷ 2.5 (≈2.5 palabras/seg locutadas). " +
       "Si te pasas, recorta líneas o planos — un guión que cabe en el tiempo vale más que uno que lo excede.\n";
@@ -242,7 +250,7 @@ function bloqueVariable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
   s += linea("Tópico", i.topico);
   s += linea("Concepto", i.concepto);
   s += linea("Comunicación", i.comunicacion);
-  s += `- Selling points aprobados (usa VERBATIM): ${lista(i.selling_points)}\n`;
+  s += `- Selling points del brief (si están vacíos o no cumplen el KB, elige del KB — ver reglas): ${lista(i.selling_points)}\n`;
   s += linea("Tema (familia)", ctx.familyTema);
   s += linea("Insight (familia)", ctx.familyInsight);
   s += linea("Tendencia/referencia", i.trend);
