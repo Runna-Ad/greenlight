@@ -870,10 +870,19 @@ export async function alternarSnippet(
   if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
-  const { error } = activar
-    ? await db.from("idea_snippets").upsert({ idea_id: ideaId, snippet_id: snippetId })
-    : await db.from("idea_snippets").delete().eq("idea_id", ideaId).eq("snippet_id", snippetId);
+  let error;
+  if (activar) {
+    // UN SOLO legal por guión (Pedro): al elegir uno de la biblioteca se QUITAN los
+    // demás y se borra el texto libre — nunca dos legales, nunca pick + texto libre.
+    // (idea_snippets sólo guarda legales; alternarSnippet es su único escritor.)
+    await db.from("idea_snippets").delete().eq("idea_id", ideaId).neq("snippet_id", snippetId);
+    await db.from("ideas").update({ legales_libres: null }).eq("id", ideaId);
+    ({ error } = await db.from("idea_snippets").upsert({ idea_id: ideaId, snippet_id: snippetId }));
+  } else {
+    ({ error } = await db.from("idea_snippets").delete().eq("idea_id", ideaId).eq("snippet_id", snippetId));
+  }
 
   if (error) return { ok: false, error: error.message };
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true };
 }

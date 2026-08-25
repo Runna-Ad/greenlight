@@ -13,11 +13,14 @@ import { useWorkspace } from "./workspace-provider";
  * "Vista cliente / Vista editor" (page-level: pasa TODO el workspace a lectura).
  * Sólo el guión tiene read-time (diálogo por plano); estático y copies no.
  */
-export function BottomBarTarea({ plantilla }: { plantilla: Plantilla }) {
+export function BottomBarTarea({ plantilla, cortinillaS = 0 }: { plantilla: Plantilla; cortinillaS?: number }) {
   const { verCliente, setVerCliente, planos } = useWorkspace();
+  // El tiempo de lectura suma el diálogo de los planos + la CORTINILLA DE CIERRE
+  // (el legal también se lee en pantalla) — Pedro. `cortinillaS` se calcula en el
+  // servidor sobre el legal guardado (snippet elegido o texto libre).
   const totalS = useMemo(
-    () => planos.reduce((n, p) => n + readTimeS(p.dialogo), 0),
-    [planos],
+    () => planos.reduce((n, p) => n + readTimeS(p.dialogo), 0) + cortinillaS,
+    [planos, cortinillaS],
   );
 
   return (

@@ -6,7 +6,7 @@ import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { ROLE_LABEL, canSee, canOverrideStatus, canAssign } from "@/lib/roles";
 import { type AssetStatus } from "@/lib/brand";
-import { ESTADOS_CERRADOS, plantillaPara, notaGlobal } from "@/lib/plantilla";
+import { ESTADOS_CERRADOS, plantillaPara, notaGlobal, readTimeS } from "@/lib/plantilla";
 import { posicionEnBundle } from "@/lib/bundle";
 import { cargarBundle } from "@/lib/bundle-data";
 import { CorreccionesProvider } from "@/components/tarea/correcciones/contexto";
@@ -333,6 +333,10 @@ export default async function TareaPage({
   const seleccionadosIds = new Set((idSnippets ?? []).map((s) => s.snippet_id));
   const legalesSeleccionados = (bibliotecaLegal ?? []).filter((s) => seleccionadosIds.has(s.id));
   const legalesDisponibles = (bibliotecaLegal ?? []).filter((s) => !seleccionadosIds.has(s.id));
+  // El legal ÚNICO de la tarea (snippet elegido o texto libre) → su tiempo de lectura
+  // se suma a la barra inferior (la cortinilla también se lee en pantalla — Pedro).
+  const cortinillaTexto = legalesSeleccionados[0]?.body ?? idea.legales_libres ?? "";
+  const cortinillaS = readTimeS(cortinillaTexto);
 
   // Phase B — legal sugerido para este guión (determinista, por marca). Se computa
   // sobre el guión GUARDADO (la fuente legalmente relevante); el humano confirma.
@@ -580,7 +584,7 @@ export default async function TareaPage({
           </div>
 
           <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6">
-            <BottomBarTarea plantilla={plantilla} />
+            <BottomBarTarea plantilla={plantilla} cortinillaS={cortinillaS} />
           </div>
         </div>
       </CorreccionesProvider>

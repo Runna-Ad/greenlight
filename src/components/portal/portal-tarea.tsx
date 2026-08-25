@@ -1,5 +1,6 @@
 "use client";
 
+import { Scale } from "lucide-react";
 import { WorkspaceProvider, useWorkspace } from "@/components/tarea/workspace-provider";
 import { HeroTarea } from "@/components/tarea/hero-tarea";
 import { TabsTarea } from "@/components/tarea/tabs-tarea";
@@ -133,23 +134,47 @@ function CuerpoDoc({ t }: { t: TareaPortal }) {
   // Copies: documento propio en modo lectura (el WorkspaceProvider siembra
   // verCliente=true → DocumentoCopies renderiza `CampoLectura`, con lo que el cliente
   // ancla cambios igual que en un plano/estático). No usa planos/estático.
-  if (t.plantilla === "copies")
-    return <DocumentoCopies ideaId={t.ideaId} temasIniciales={t.temas} soloLectura />;
+  const doc =
+    t.plantilla === "copies" ? (
+      <DocumentoCopies ideaId={t.ideaId} temasIniciales={t.temas} soloLectura />
+    ) : (
+      <DocumentoTarea
+        modo="lectura"
+        esEstatico={t.esEstatico}
+        planos={planos}
+        estatico={estatico}
+        refsPorPlano={t.refsPorPlano}
+        refsEstatico={t.refsEstatico}
+        ph={placeholdersGuion(t.tipoAsset)}
+        phEstatico={PLACEHOLDER_ESTATICO}
+        soloLectura={true}
+        onEditarPlano={noop}
+        onEditarEstatico={noop}
+        onNuevoPlano={noop}
+        onQuitarPlano={noop}
+      />
+    );
+  // El cliente también ve la CORTINILLA/legales (Pedro) — read-only, al cierre.
   return (
-    <DocumentoTarea
-      modo="lectura"
-      esEstatico={t.esEstatico}
-      planos={planos}
-      estatico={estatico}
-      refsPorPlano={t.refsPorPlano}
-      refsEstatico={t.refsEstatico}
-      ph={placeholdersGuion(t.tipoAsset)}
-      phEstatico={PLACEHOLDER_ESTATICO}
-      soloLectura={true}
-      onEditarPlano={noop}
-      onEditarEstatico={noop}
-      onNuevoPlano={noop}
-      onQuitarPlano={noop}
-    />
+    <div className="space-y-3">
+      {doc}
+      {t.legal && <LegalPortal legal={t.legal} esEstatico={t.esEstatico} />}
+    </div>
+  );
+}
+
+/** La cortinilla de legales para el portal — read-only, mismo look que el interno. */
+function LegalPortal({ legal, esEstatico }: { legal: string; esEstatico: boolean }) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-[#2d2b55]/20 bg-card shadow-sm">
+      <div className="flex items-center gap-2 bg-[#2d2b55] px-4 py-2.5 text-white">
+        <Scale className="size-4" />
+        <h3 className="text-[12px] font-bold uppercase tracking-widest">
+          {esEstatico ? "Legales" : "Cortinilla de Cierre"}
+        </h3>
+        <span className="ml-auto text-[10px] font-medium uppercase tracking-wide text-white/60">Legales</span>
+      </div>
+      <p className="whitespace-pre-wrap p-4 text-[11px] leading-snug text-foreground">{legal}</p>
+    </section>
   );
 }

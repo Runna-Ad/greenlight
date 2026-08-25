@@ -56,6 +56,11 @@ export function CortinillaCierre({
     .map((id) => biblioteca.find((l) => l.id === id))
     .filter((l): l is LegalSnippet => Boolean(l));
 
+  // UN SOLO legal por guión (Pedro): o eliges UNO de la biblioteca, o escribes a mano —
+  // nunca los dos, nunca dos. Con un legal de biblioteca elegido, se ocultan el
+  // sugerido, "agregar de biblioteca" y el texto libre (quítalo para cambiar).
+  const tienePick = seleccionados.length > 0;
+
   const alternar = (snippetId: string, activar: boolean) =>
     startTransition(async () => {
       const res = await alternarSnippet(ideaId, snippetId, activar);
@@ -108,8 +113,9 @@ export function CortinillaCierre({
           </ul>
         )}
 
-        {/* Phase B — legal sugerido para este guión (determinista; el humano confirma). */}
-        {!soloLectura && principal && (
+        {/* Phase B — legal sugerido para este guión (determinista; el humano confirma).
+            Sólo si aún NO hay un legal elegido (uno por guión). */}
+        {!soloLectura && !tienePick && principal && (
           <div className="mb-3 rounded-lg border border-primary/30 bg-primary/[0.06] px-3 py-2.5">
             <div className="flex items-start gap-2">
               <Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" />
@@ -153,8 +159,8 @@ export function CortinillaCierre({
           </div>
         )}
 
-        {/* Agregar desde la biblioteca */}
-        {!soloLectura && (
+        {/* Agregar desde la biblioteca — sólo si aún no hay un legal (uno por guión). */}
+        {!soloLectura && !tienePick && (
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="mb-3 border-primary/40 text-primary hover:bg-primary/5" disabled={pending}>
@@ -196,17 +202,25 @@ export function CortinillaCierre({
         </Popover>
       )}
 
-        {/* Texto libre — escribir/editar a mano */}
-        <CampoIntake
-          ideaId={ideaId}
-          campo="legales_libres"
-          label="Legales (texto libre)"
-          valorInicial={legalesLibres}
-          placeholder="Escribe aquí un legal a mano, o agrégalo de la biblioteca arriba…"
-          rows={3}
-          caja
-          soloLectura={soloLectura}
-        />
+        {/* Texto libre — SÓLO si no hay un legal de biblioteca elegido (uno por guión). */}
+        {tienePick ? (
+          !soloLectura && (
+            <p className="text-[11px] text-muted-foreground">
+              Un legal por guión. Quita el legal de arriba para elegir otro o escribir a mano.
+            </p>
+          )
+        ) : (
+          <CampoIntake
+            ideaId={ideaId}
+            campo="legales_libres"
+            label="Legales (texto libre)"
+            valorInicial={legalesLibres}
+            placeholder="Escribe aquí un legal a mano, o agrégalo de la biblioteca arriba…"
+            rows={3}
+            caja
+            soloLectura={soloLectura}
+          />
+        )}
       </div>
     </section>
   );

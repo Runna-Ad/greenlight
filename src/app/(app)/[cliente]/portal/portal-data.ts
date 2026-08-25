@@ -145,6 +145,9 @@ export type TareaPortal = {
    *  DocumentoTarea; copies usa DocumentoCopies en modo lectura). */
   plantilla: Plantilla;
   esEstatico: boolean;
+  /** El legal ÚNICO de la tarea (snippet de biblioteca elegido o texto libre); el
+   *  portal lo muestra al cliente como cortinilla de cierre. null si no hay. */
+  legal: string | null;
   /** Temas + copies de la tarea (sólo si plantilla === "copies"; vacío si no). */
   temas: TemaRow[];
   marcaName: string | null;
@@ -196,7 +199,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
   const { data: idea } = await db
     .from("ideas")
     .select(
-      "id, naming_base, status, tipo_asset, concepto, trend, plataformas, tamanos, duracion, nota_guion, entrega_url, marca_id, brief_id, published_at",
+      "id, naming_base, status, tipo_asset, concepto, trend, plataformas, tamanos, duracion, nota_guion, legales_libres, entrega_url, marca_id, brief_id, published_at",
     )
     .eq("id", ideaId)
     .maybeSingle<{
@@ -210,6 +213,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
       tamanos: string[] | null;
       duracion: string[] | null;
       nota_guion: string | null;
+      legales_libres: string | null;
       entrega_url: string | null;
       marca_id: string | null;
       brief_id: string;
@@ -321,6 +325,17 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
   const refsPorPlano = !esEstatico ? await cargarRefsPorPlano(db, planos.map((p) => p.id)) : {};
   const refsEstatico = esEstatico && estatico ? await cargarRefsEstatico(db, estatico.id) : [];
 
+  // El LEGAL de la tarea para el portal: el cliente también debe ver la cortinilla
+  // (Pedro). Un solo legal por guión: el snippet de biblioteca elegido, o el texto
+  // libre. (idea_snippets sólo guarda legales.)
+  const { data: legalSnip } = await db
+    .from("idea_snippets")
+    .select("snippets(body)")
+    .eq("idea_id", idea.id)
+    .limit(1)
+    .maybeSingle<{ snippets: { body: string | null } | null }>();
+  const legal = legalSnip?.snippets?.body?.trim() || idea.legales_libres?.trim() || null;
+
   const aCorreccion = (r: PinRow): Correccion => ({
     id: r.id,
     targetTabla: r.target_tabla,
@@ -348,6 +363,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     tipoAsset: idea.tipo_asset,
     plantilla,
     esEstatico,
+    legal,
     temas,
     marcaName: marca?.name ?? null,
     marcaLogo: marca?.logo_url ?? null,
