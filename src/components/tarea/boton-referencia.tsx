@@ -30,24 +30,28 @@ export function BotonReferencia({
   if (!soloLectura && editando) {
     return (
       <div className="min-w-0">
-        <div className="mb-1 flex items-center gap-1.5">
+        <div className="mb-1 flex items-center justify-between gap-1.5">
           <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-            Referencia
+            Referencia · una liga por línea
           </span>
           <button
             type="button"
             onClick={() => setEditando(false)}
-            aria-label="Listo"
-            className="text-muted-foreground/60 hover:text-foreground"
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/45 hover:text-foreground"
           >
-            <Check className="size-3" />
+            <Check className="size-3" /> Listo
           </button>
         </div>
         <CampoIntake
           ideaId={ideaId}
           campo="trend"
           label=""
-          valorInicial={valorInicial}
+          // El valor VIVO (no `valorInicial`), porque este editor se desmonta al
+          // colapsar en botón: si re-sembramos `useAutoguardado` con el valor
+          // ORIGINAL, su compare-and-set choca contra lo ya guardado en la 2ª
+          // edición y NO escribe (conflicto espurio → "no se guardó"). Con el
+          // valor vivo la base de comparación es lo que de verdad está en la BD.
+          valorInicial={valor}
           placeholder="Pega aquí la liga de referencia (una por línea)…"
           rows={2}
           caja

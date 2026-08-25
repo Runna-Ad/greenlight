@@ -7,6 +7,7 @@ import { CampoIntake } from "./campo-intake";
 import { CampoDuraciones } from "./campo-duraciones";
 import { BotonReferencia } from "./boton-referencia";
 import { useWorkspace } from "./workspace-provider";
+import { guardarSellingPoints } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 
 /**
  * La pestaña "Detalles asset" (mockup): los datos de la pieza que el CLIENTE sí
@@ -22,6 +23,7 @@ export function DetallesTab({
   tamanos,
   duracion,
   concepto,
+  sellingPoints,
   trend,
   plantilla,
   soloLectura,
@@ -32,6 +34,8 @@ export function DetallesTab({
   tamanos: string[];
   duracion: string[];
   concepto: string | null;
+  /** Selling points del brief. `undefined` = no se muestra (portal/cliente). */
+  sellingPoints?: string | null;
   trend: string | null;
   plantilla: Plantilla;
   soloLectura: boolean;
@@ -110,6 +114,28 @@ export function DetallesTab({
             soloLectura={lectura}
           />
         </Grupo>
+
+        {/* Selling Points — interno del equipo (lead/especialista). Se oculta en
+            "Vista cliente"/portal (gate !lectura + prop provista) porque es guía
+            creativa, no copy para el cliente. Se guarda como arreglo de un elemento
+            en `ideas.selling_points` con su propio compare-and-set. */}
+        {sellingPoints !== undefined && !lectura && (
+          <div className="mt-3">
+            <Grupo titulo="Selling Points">
+              <CampoIntake
+                ideaId={ideaId}
+                campo="selling_points"
+                label=""
+                valorInicial={sellingPoints}
+                placeholder="Los selling points de la pieza (los edita el equipo)…"
+                rows={4}
+                caja
+                accion={(anterior, nuevo) => guardarSellingPoints(ideaId, anterior, nuevo)}
+              />
+            </Grupo>
+          </div>
+        )}
+
         <div className="mt-3 flex justify-end">
           <BotonReferencia ideaId={ideaId} valorInicial={trend} soloLectura={lectura} />
         </div>

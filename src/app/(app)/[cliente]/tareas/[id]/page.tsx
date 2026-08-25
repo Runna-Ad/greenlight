@@ -36,7 +36,7 @@ type Idea = {
   plataformas: string[] | null; marca_id: string | null; brief_id: string;
   entrega_num: string | null; entrega_final: string | null; entrega_url: string | null;
   trend: string | null; notas: string | null; legales_libres: string | null; nota_guion: string | null;
-  comentarios_creativo: string | null; peloteo_raw: string | null;
+  comentarios_creativo: string | null; peloteo_raw: string | null; selling_points: string[] | null;
 };
 
 export default async function TareaPage({
@@ -58,7 +58,7 @@ export default async function TareaPage({
   const { data: idea } = await db
     .from("ideas")
     .select(
-      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo, peloteo_raw",
+      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo, peloteo_raw, selling_points",
     )
     .eq("id", id)
     .maybeSingle<Idea>();
@@ -522,6 +522,9 @@ export default async function TareaPage({
               tamanos: idea.tamanos ?? [],
               duracion: idea.duracion ?? [],
               concepto: idea.concepto,
+              // Selling points → texto (arreglo unido). Sólo la página interna lo
+              // pasa; el portal omite la prop, así el cliente no ve la guía interna.
+              sellingPoints: (idea.selling_points ?? []).join("\n"),
               trend: idea.trend,
             }}
             // Rünna tools SÓLO para el equipo — no se construye para el cliente

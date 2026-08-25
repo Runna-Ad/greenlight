@@ -19,6 +19,7 @@ type CampoIdea =
   | "legales_libres"
   | "nota_guion"
   | "concepto"
+  | "selling_points"
   | "peloteo_raw";
 type CampoBrief = "description";
 

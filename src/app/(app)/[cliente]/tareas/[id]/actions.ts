@@ -266,6 +266,65 @@ export async function guardarConsideraciones(
   return { ok: true };
 }
 
+/**
+ * Guarda los SELLING POINTS de una tarea (columna `text[]` en `ideas`). El equipo
+ * los escribe como texto libre en el "Resumen de brief"; se persisten como un
+ * arreglo de UN elemento — igual que el import del sheet y la creación a mano
+ * (construirTarea). Antes NO existía forma de verlos ni editarlos después de crear
+ * el brief, así que lo que el equipo escribía se "perdía" a la vista (Pedro).
+ *
+ * Compare-and-set a nivel de APLICACIÓN: se lee el arreglo, se compara contra lo
+ * que la persona tenía (unido por saltos de línea) y sólo entonces se escribe,
+ * con guard por `id`. NO se guarda por el arreglo en el WHERE: PostgREST no
+ * compara arreglos con la fiabilidad del texto (por eso el otro campo de arreglo,
+ * `duracion`, va por RPC — `guardarDuraciones`), y un guard de arreglo que fallara
+ * daría un CONFLICTO ESPURIO — justo el fallo "no se guardó" que estamos quitando.
+ * Los selling points son contexto de brief de un solo autor (el lead los pone), no
+ * un campo de carrera entre asignados como Consideraciones, así que la verificación
+ * previa cubre el caso real y la ventana TOCTOU es de milisegundos.
+ */
+export async function guardarSellingPoints(
+  ideaId: string,
+  valorAnterior: string | null,
+  valorNuevo: string | null,
+): Promise<IntakeResultado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+
+  const role = await getViewAs();
+  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+
+  const db = supabaseAdmin();
+  const { data: idea } = await db
+    .from("ideas").select("status, selling_points").eq("id", ideaId).maybeSingle();
+  if (!idea) return { ok: false, error: "La tarea ya no existe." };
+
+  const status = idea.status as AssetStatus;
+  if (ESTADOS_CERRADOS.includes(status) && !canOverrideStatus(role)) {
+    return { ok: false, error: "Esta tarea ya está cerrada. Pídele a un lead que la reabra." };
+  }
+
+  // La columna puede ser NULL (creada a mano sin selling points), [] (import sin
+  // valor) o ["texto"]. El texto que vio la persona es el arreglo unido.
+  const arrActual = (idea as { selling_points: string[] | null }).selling_points ?? [];
+  const actual = arrActual.join("\n") || null;
+  const limpio = valorNuevo?.trim() ? valorNuevo.trim() : null;
+
+  if ((actual ?? null) === (limpio ?? null)) return { ok: true }; // idempotente
+  if ((valorAnterior ?? null) !== (actual ?? null)) {
+    return { ok: false, conflicto: true, valorActual: actual };
+  }
+
+  const nuevoArr = limpio ? [limpio] : [];
+  const { error } = await db.from("ideas").update({ selling_points: nuevoArr }).eq("id", ideaId);
+  if (error) return { ok: false, error: error.message };
+
+  // Sin revalidatePath: como `concepto` (guardarIntake), el autoguardado mantiene
+  // el valor en el cliente; recargar lo relee. Evita un refresco a mitad de escritura.
+  return { ok: true };
+}
+
 /** Campos editables del BRIEF (viven en `briefs`, no en `ideas`). */
 const CAMPOS_BRIEF = new Set(["description"]);
 

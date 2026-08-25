@@ -15,6 +15,8 @@ type DetallesProps = {
   tamanos: string[];
   duracion: string[];
   concepto: string | null;
+  /** Selling points del brief (texto). `undefined` en el portal → no se muestra al cliente. */
+  sellingPoints?: string | null;
   trend: string | null;
 };
 
@@ -93,6 +95,7 @@ export function TabsTarea({
             tamanos={detalles.tamanos}
             duracion={detalles.duracion}
             concepto={detalles.concepto}
+            sellingPoints={detalles.sellingPoints}
             trend={detalles.trend}
             plantilla={plantilla}
             soloLectura={soloLectura}
