@@ -1,5 +1,42 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-26 (sesión larga) — DEEP REAP + 3 features de notificaciones + fix de CI (TODO shippeado + verificado en prod)
+**Qué hicimos** (6 commits en main: 80c8d5e → afd8556; 60 archivos, +2020/−371):
+1. **Deep reap (6 agentes)** [80c8d5e]: audit de seguridad/correctness/DB/perf/a11y/funcionalidad.
+   - **CRITICAL arreglado**: IDOR de LECTURA — `tareas/[id]/page.tsx` + `tablero loadBoard` cargaban por id/cliente
+     con sólo `canSee` → cualquier rol interno leía tareas de otro cliente por URL + firmaba URLs del bucket privado.
+     FIX: `assertCanActOnTask` + board acotado por rol (lead→track, creative→asignado).
+   - **SERIOUS**: fuga cross-marca de legal (legales-actions guardaba client_id en filas de marca; writer usaba la pata
+     client_id) → arreglado en ambos extremos; IDORs en validar/aplicarSugerencia/referencias/ortografia → gateados;
+     winners auto-synth no-atómico (doble llamada pagada) → claim atómico; edits-synth watermark en imported_at; 8
+     mutaciones sin revalidatePath; sync dedup de Tamaño/Plataforma (idea con 0 assets); NFC + emoji regex.
+   - **Migración 0049** (aplicada + verificada): repara datos de legal + CHECK scope↔ids en hue_*.
+2. **Batch 2** [9164e98]: rate-limit del portal público; Copies puede adjuntar legal (`<BloqueLegal>`); WorkspaceProvider
+   partido en 2 contextos (no re-render de hermanos al teclear); board memoizado; lazy-load tabla emoji 39KB; tarjeta de
+   corrección accesible por teclado; CI (ci.yml + dependabot).
+3. **Notification prefs internas** [ee10550, migración 0050]: cada quien elige QUÉ le llega por correo (por evento) +
+   scope (todo/mi-track/sólo-mío). Campana amplia dentro del scope, email curado en la capa de envío. Arregla el firehose
+   del lead + añade `task_assigned`. Matriz en Mi perfil. Verificado en prod.
+4. **Fase 3b + backlog 1-5** [d79cac8, migración 0051]: **cliente ahora recibe aviso** al publicar (`ready_for_review`,
+   link al PORTAL). + perf del editor (memo por-campo), a11y (FaltantesDialog→Dialog, skip-link, touch targets, etc.),
+   func ("Ver campo" del legal), perf-minor (firmarLote, lazy admin tabs, moveTask 1 query), DB minors (field_edits
+   cleanup + policy de notification_deliveries). Verificado en prod.
+5. **Fix de CI** [42c301d]: el CI salía rojo (Node 20 no corre imports `.ts`; local usa Node 24 con type-stripping).
+   FIX: `node-version: 24` + `.nvmrc`; y gatear el fetch en vivo de test-sync fuera de CI. CI ahora VERDE (verificado).
+   Cerrado el PR #6 de Dependabot (bump eslint 10, no lo queremos).
+
+**Estado actual**: TODO en vivo y verificado a nivel DB. Gates verdes (tsc·eslint·test:lib 380·test:db 310·test:sync 44·build). CI verde.
+**Decisiones**: shippear cada batch con "ship it" de Pedro; migraciones 0049/0050/0051 aplicadas a prod; PR #6 dependabot cerrado.
+**PEDRO_OVERRIDE de la sesión**: hablar en LENGUAJE LLANO, sin jerga amontonada — Pedro está aprendiendo (ver lessons.md, alta prioridad).
+**Pick up next**:
+- LIVE-VERIFY de Pedro (con sesión): email al cliente al publicar; firehose del lead; matriz de Mi perfil; board acotado.
+- Opcionales diferidos: toggle de notificaciones del cliente EN EL PORTAL; evento `changes_resolved`; mover `reseed` a su
+  contexto; normalizar caminos de creación de snippets → luego CHECK de scope.
+- Ruido de Dependabot: quedan 5 PRs del bot (incl. saltos MAYORES typescript 7 / @types/node 26) — decidir cerrar/agrupar.
+- Pendientes viejos (pre-sesión): live-test go-live Fases 2/3/4; H.Ü.E HUB.
+
+---
+
 ## 2026-08-26 — H.Ü.E aprende de ediciones (#4) + fixes de guardado/legal/sync + Apps Script lee CHIPS de Drive (todo shippeado + live)
 Sesión larga y densa (continuación del mismo día). Se cerró el #4 (H.Ü.E aprende de tus ediciones, con reap Opus + 4 serios arreglados), varios fixes que Pedro probó en vivo, y por fin el link de referencias (era un CHIP de Drive, no texto plano).
 

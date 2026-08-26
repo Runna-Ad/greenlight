@@ -1,5 +1,29 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-26 — #4 (H.Ü.E aprende de ediciones) + fixes guardado/legal/sync + Apps Script lee CHIPS de Drive — **shippeado + live**
+Última actualización: 2026-08-26 (sesión larga) — DEEP REAP + notificaciones (internas + cliente) + fix de CI — **todo shippeado + verificado en prod**
+
+## 🔔 Sistema de notificaciones (2026-08-26) — SHIPPEADO + LIVE (migs 0050 + 0051)
+- **Preferencias por persona**: cada quien elige QUÉ le llega por CORREO (por evento) + SCOPE (todo/mi-track/sólo-mío).
+  La campana (in-app) es amplia dentro del scope; el email es el canal curado (se decide en la capa de envío,
+  `notif-email`/`notif-routing`, por `notification_prefs`). Matriz de toggles en **Mi perfil**. Defaults por rol.
+- **Arregla el firehose**: un lead ya sólo recibe la actividad de SU track (antes: todos los tracks). `notify_scope`.
+- **Evento nuevo `task_assigned`** (trigger en idea_assignments) + **`watch_all`** (opt-in "avísame de cada movimiento").
+- **Cliente (Fase 3b, mig 0051)**: el cliente AHORA recibe `ready_for_review` al publicar (email + link al PORTAL) —
+  antes no recibía nada. Prefs de cliente sembradas. (Toggle en el portal: diferido — el cliente tiene 1 evento default-ON.)
+- Fan_out scope-aware con pata de watchers + bloque aparte para el cliente. Tablas: `notification_prefs`,
+  `profiles.notify_scope`/`notify_watch_all`. Todo probado en PGlite (test:db 310).
+
+## 🔒 Deep reap 2026-08-26 — SHIPPEADO + LIVE (mig 0049)
+- Cerrado un **IDOR de LECTURA crítico** (cualquier rol interno leía tareas de otro cliente por URL); fuga cross-marca
+  de legal; IDORs de acción (validar/aplicar/referencias/ortografia); races de synth pagadas; 8 revalidatePath; sync dedup.
+- Mig 0049 (CHECK scope↔ids en hue_*). Detalle en todo.md (sección DEEP REAP) y lessons.md.
+
+## ⚙️ CI (2026-08-26) — VERDE
+- `.github/workflows/ci.yml` (tsc·lint·test en PR + push a main) corre en **Node 24** (los tests importan `.ts`, requiere
+  type-stripping nativo). `.nvmrc=24`. El fetch en vivo de test-sync se omite en CI (flakey). PR #6 dependabot cerrado.
+- ⚠️ Quedan 5 PRs de Dependabot (incl. MAYORES: typescript 7, @types/node 26) — decidir cerrar/agrupar/ignorar.
+
+## 🧠 H.Ü.E aprende de tus EDICIONES (#4) — 2026-08-26 — SHIPPEADO + LIVE (mig 0048)
+- 2º motor de aprendizaje (junto al de Ganadores). Captura el borrador de H.Ü.E (`hue_generations`,
 
 ## 🧠 H.Ü.E aprende de tus EDICIONES (#4) — 2026-08-26 — SHIPPEADO + LIVE (mig 0048)
 - 2º motor de aprendizaje (junto al de Ganadores). Captura el borrador de H.Ü.E (`hue_generations`,
