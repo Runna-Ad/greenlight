@@ -1,12 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canHue } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getSoyId } from "@/lib/soy";
-import { cargarHubIntelligence, cargarWinners, type HubIntel, type Winner, type AdaptacionRow } from "@/lib/hue-data";
-import { correrSintesis, type SintesisResultado } from "@/lib/hue-sintesis";
+import { cargarHubIntelligence, cargarWinners, cargarEdiciones, type HubIntel, type Winner, type AdaptacionRow, type EdicionesResumen } from "@/lib/hue-data";
+import { correrSintesis, correrSintesisEdiciones, sintetizarEdicionesSiAuto, type SintesisResultado } from "@/lib/hue-sintesis";
 import { extraerTextoKb, esKbValido } from "@/lib/hue-kb-extract";
 import type { HueInstruction, HueKbDocument, HueScope } from "@/lib/database.types";
 
@@ -87,7 +88,7 @@ export async function hubWinners(): Promise<Ok<{ winners: Winner[] }> | Fail> {
 /** El Cerebro + su auditoría + los ajustes, en una sola llamada (lo que la pestaña
  *  Entrenamiento necesita para pintar de un jalón). */
 export async function hubTraining(): Promise<
-  | Ok<{ instrucciones: HueInstruction[]; kb: HueKbDocument[]; adaptaciones: AdaptacionRow[]; autoLearn: boolean; clientes: ClienteScope[] }>
+  | Ok<{ instrucciones: HueInstruction[]; kb: HueKbDocument[]; adaptaciones: AdaptacionRow[]; autoLearn: boolean; autoLearnEdits: boolean; clientes: ClienteScope[] }>
   | Fail
 > {
   const no = await noMaster();
@@ -97,7 +98,7 @@ export async function hubTraining(): Promise<
     db.from("hue_instructions").select("*").order("active", { ascending: false }).order("created_at", { ascending: false }),
     db.from("hue_kb_documents").select("*").order("created_at", { ascending: false }),
     db.from("hue_adaptations").select("id, at, trigger_summary, changed_instruction_id, reverted_at").order("at", { ascending: false }).limit(50),
-    db.from("hue_settings").select("auto_learn").eq("id", 1).maybeSingle(),
+    db.from("hue_settings").select("auto_learn, auto_learn_edits").eq("id", 1).maybeSingle(),
     db.from("clients").select("id, name").order("name"),
     db.from("marcas").select("id, name, client_id").order("name"),
   ]);
@@ -134,14 +135,31 @@ export async function hubTraining(): Promise<
     instruccionTitle: a.changed_instruction_id ? titleById.get(a.changed_instruction_id) ?? null : null,
     reverted_at: a.reverted_at,
   }));
+  const st = settings as { auto_learn: boolean; auto_learn_edits: boolean } | null;
   return {
     ok: true,
     instrucciones,
     kb: (kb ?? []) as HueKbDocument[],
     adaptaciones,
-    autoLearn: (settings as { auto_learn: boolean } | null)?.auto_learn === true,
+    autoLearn: st?.auto_learn === true,
+    autoLearnEdits: st?.auto_learn_edits === true,
     clientes,
   };
+}
+
+/** El material del loop de ediciones para el HUB (visor + métrica). Dispara la
+ *  síntesis auto (si `auto_learn_edits`) en background al cargar. */
+export async function hubEdiciones(): Promise<Ok<{ ediciones: EdicionesResumen }> | Fail> {
+  const no = await noMaster();
+  if (no) return no;
+  try {
+    const ediciones = await cargarEdiciones();
+    const soyId = await getSoyId();
+    after(() => sintetizarEdicionesSiAuto(soyId));
+    return { ok: true, ediciones };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo cargar el aprendizaje de ediciones." };
+  }
 }
 
 // ── Cerebro (hue_instructions) ───────────────────────────────
@@ -308,6 +326,25 @@ export async function correrSintesisAhora(): Promise<SintesisResultado> {
   const no = await noMaster();
   if (no) return no;
   const res = await correrSintesis(await getSoyId());
+  if (res.ok) revalidatePath("/admin");
+  return res;
+}
+
+/** Switch del loop de EDICIONES (independiente de auto_learn). */
+export async function setAutoLearnEdits(on: boolean): Promise<Ok | Fail> {
+  const no = await noMaster();
+  if (no) return no;
+  const { data: upd, error } = await supabaseAdmin().from("hue_settings").update({ auto_learn_edits: on }).eq("id", 1).select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!upd?.length) return { ok: false, error: "No se encontró la configuración de H.Ü.E." };
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function correrSintesisEdicionesAhora(): Promise<SintesisResultado> {
+  const no = await noMaster();
+  if (no) return no;
+  const res = await correrSintesisEdiciones(await getSoyId());
   if (res.ok) revalidatePath("/admin");
   return res;
 }

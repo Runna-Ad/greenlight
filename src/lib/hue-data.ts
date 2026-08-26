@@ -1,6 +1,8 @@
 import "server-only";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { resolverMes } from "@/app/(app)/performance/data";
+import { diffGuion, esEdicionUtil, type DiffGuion } from "@/lib/hue-diff";
+import type { PlanoParsed } from "@/lib/guion";
 
 /**
  * Loaders de datos del H.Ü.E HUB (server-only, sin gate — el gate lo pone hue-actions).
@@ -243,4 +245,111 @@ export async function cargarWinners(): Promise<Winner[]> {
       planos: planosByIdea.get(s.idea_id) ?? [],
     };
   });
+}
+
+// ── Aprender de ediciones (borrador de H.Ü.E → guión publicado) ──────────────
+export type EdicionTarea = {
+  ideaId: string;
+  code: string | null;
+  namingBase: string | null;
+  clientId: string | null;
+  clienteName: string;
+  clienteSlug: string;
+  generatedAt: string;
+  diff: DiffGuion;
+  /** Sirve para minar (editado, no descartado ni intacto). */
+  esUtil: boolean;
+};
+
+export type EdicionesResumen = {
+  tareas: EdicionTarea[];      // recientes primero (para el visor)
+  total: number;               // tareas publicadas con borrador de H.Ü.E
+  conEdicion: number;          // cuántas se tocaron (editRate > 0)
+  utiles: number;              // cuántas sirven para aprender
+  editRateMediano: number | null;
+};
+
+// El guión "se mandó" = estados ESTABLES ya fuera del ciclo interno de edición.
+// Se excluye `in_corrections` a propósito: es un estado de edición ACTIVA (y se
+// alcanza desde under_review, antes de que el cliente lo vea) → leer sus planos en
+// vivo daría un diff a media escritura. under_review también queda fuera (interno).
+const ESTADOS_ENVIADOS = ["published", "completed", "delivered"];
+
+/**
+ * El material del loop de ediciones: por cada tarea de GUIÓN ya publicada que tuvo
+ * un borrador de H.Ü.E, el diff borrador→publicado (leído EN VIVO de los planos).
+ * Alimenta el visor del HUB Y la síntesis (`correrSintesisEdiciones`). Copies se
+ * capturan (kind='copy') pero aún no se minan (v1 = guión). Sin gate — lo pone el
+ * caller (hue-actions/síntesis).
+ */
+export async function cargarEdiciones(): Promise<EdicionesResumen> {
+  const vacio: EdicionesResumen = { tareas: [], total: 0, conEdicion: 0, utiles: 0, editRateMediano: null };
+  if (!hasSupabase()) return vacio;
+  const db = supabaseAdmin();
+
+  // Sólo generaciones IMPORTADAS: el borrador que DE VERDAD se usó (imported_at
+  // sellado en importarGuion), no una regeneración posterior que nunca se importó.
+  const gens =
+    must<{ idea_id: string; draft: unknown; generated_at: string }[]>(
+      await db.from("hue_generations").select("idea_id, draft, generated_at").eq("kind", "guion").not("imported_at", "is", null).order("generated_at", { ascending: false }).limit(400),
+      "hue_generations",
+    ) ?? [];
+  // La generación MÁS reciente por idea (el orden desc ya la trae primero).
+  const ultimaPorIdea = new Map<string, { draft: unknown; generated_at: string }>();
+  for (const g of gens) if (!ultimaPorIdea.has(g.idea_id)) ultimaPorIdea.set(g.idea_id, { draft: g.draft, generated_at: g.generated_at });
+  if (!ultimaPorIdea.size) return vacio;
+
+  const ideas =
+    must<{ id: string; code: string | null; naming_base: string | null; brief_id: string; status: string }[]>(
+      await db.from("ideas").select("id, code, naming_base, brief_id, status").in("id", [...ultimaPorIdea.keys()]),
+      "ideas",
+    ) ?? [];
+  const enviadas = ideas.filter((i) => ESTADOS_ENVIADOS.includes(i.status));
+  if (!enviadas.length) return vacio;
+
+  const planos =
+    must<{ idea_id: string; orden: number; accion: string | null; copy_in: string | null; dialogo: string | null }[]>(
+      await db.from("planos").select("idea_id, orden, accion, copy_in, dialogo").in("idea_id", enviadas.map((i) => i.id)).order("orden"),
+      "planos",
+    ) ?? [];
+  const planosByIdea = new Map<string, PlanoParsed[]>();
+  for (const p of planos) {
+    const arr = planosByIdea.get(p.idea_id) ?? planosByIdea.set(p.idea_id, []).get(p.idea_id)!;
+    arr.push({ titulo: null, accion: p.accion, copy_in: p.copy_in, sfx: null, gfx: null, edicion: null, dialogo: p.dialogo });
+  }
+
+  const briefIds = [...new Set(enviadas.map((i) => i.brief_id))];
+  const briefs = must<{ id: string; client_id: string }[]>(await db.from("briefs").select("id, client_id").in("id", briefIds), "briefs") ?? [];
+  const clients = must<{ id: string; name: string; slug: string }[]>(await db.from("clients").select("id, name, slug"), "clients") ?? [];
+  const briefById = new Map(briefs.map((b) => [b.id, b]));
+  const clientById = new Map(clients.map((c) => [c.id, c]));
+
+  const tareas: EdicionTarea[] = enviadas
+    .map((i) => {
+      const gen = ultimaPorIdea.get(i.id)!;
+      const borrador = Array.isArray(gen.draft) ? (gen.draft as PlanoParsed[]) : [];
+      const diff = diffGuion(borrador, planosByIdea.get(i.id) ?? []);
+      const clientId = briefById.get(i.brief_id)?.client_id ?? null;
+      const cli = clientById.get(clientId ?? "");
+      return {
+        ideaId: i.id,
+        code: i.code,
+        namingBase: i.naming_base,
+        clientId,
+        clienteName: cli?.name ?? "Sin cliente",
+        clienteSlug: cli?.slug ?? "?",
+        generatedAt: gen.generated_at,
+        diff,
+        esUtil: esEdicionUtil(diff),
+      };
+    })
+    .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt));
+
+  return {
+    tareas,
+    total: tareas.length,
+    conEdicion: tareas.filter((t) => t.diff.editRate > 0).length,
+    utiles: tareas.filter((t) => t.esUtil).length,
+    editRateMediano: mediana(tareas.map((t) => t.diff.editRate)),
+  };
 }

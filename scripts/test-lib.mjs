@@ -315,6 +315,38 @@ eq("dominio con path se abre", urlDeLinea("drive.google.com/file/d/abc"), "https
 eq("un archivo .mp4 NO es URL", urlDeLinea("asset_final.mp4"), null);
 eq("texto suelto NO es URL", urlDeLinea("recrear este asset"), null);
 
+// ── hue-diff: borrador→publicado (aprender de ediciones) ──
+console.log("\n▶ hue-diff · aprender de ediciones");
+const { diffGuion, diffCopy, esEdicionUtil, esCambioDeEstilo } = await import("../src/lib/hue-diff.ts");
+const P = (accion, copy_in, dialogo) => ({ titulo: null, accion, copy_in, sfx: null, gfx: null, edicion: null, dialogo });
+const borrador = [
+  P("Mujer camina", "DiDi Card", "(Actriz) Pide tu préstamo hoy"),
+  P("Cierre", "Descarga", "(VO) Descarga la app"),
+];
+// Sólo cambió el diálogo del plano 1 (6 campos comparables, 1 cambiado → editRate 1/6).
+const publicado = [
+  P("Mujer camina", "DiDi Card", "(Actriz) Solicita tu préstamo hoy"),
+  P("Cierre", "Descarga", "(VO) Descarga la app"),
+];
+const dg = diffGuion(borrador, publicado);
+eq("diffGuion: 1 cambio", dg.cambios.length, 1);
+eq("diffGuion: el cambio es el Diálogo del Plano 1", dg.cambios[0].campo, "Diálogo");
+eq("diffGuion: editRate 1/6 ≈ 17%", Math.round(dg.editRate * 100), 17);
+ok("una edición moderada SÍ sirve para aprender", esEdicionUtil(dg));
+ok("un guión intacto NO sirve (nada que aprender)", !esEdicionUtil(diffGuion(borrador, borrador)));
+const reemplazo = [P("Algo distinto", "Otro copy", "(X) Otra cosa"), P("Y otro", "Más", "(Y) Distinto")];
+ok("un reemplazo total NO sirve (no fue una edición)", !esEdicionUtil(diffGuion(borrador, reemplazo)));
+// esCambioDeEstilo: separa correcciones de HECHO (cifras/legales) de las de redacción.
+eq("cambio SÓLO de cifra no es estilo", esCambioDeEstilo({ plano: 1, campo: "Copy", antes: "Hasta $46,800 M.N.", despues: "Hasta $50,000 M.N." }), false);
+eq("cambio de redacción sí es estilo", esCambioDeEstilo({ plano: 1, campo: "Diálogo", antes: "Pide tu préstamo", despues: "Solicita tu préstamo" }), true);
+// diffCopy: mismo shape para estáticos (plano 0).
+const dc = diffCopy(
+  { copy_titulo: "Tu DiDi Card", copy_subtitulo: "Sin anualidad", copy_cta: "Pídela", legales_extra: null },
+  { copy_titulo: "Tu DiDi Card", copy_subtitulo: "Sin anualidad", copy_cta: "Solicítala", legales_extra: null },
+);
+eq("diffCopy: 1 cambio (CTA)", dc.cambios.length, 1);
+eq("diffCopy: el campo es CTA", dc.cambios[0].campo, "CTA");
+
 // ── Diálogo: (Quien) marca quién habla en la vista del cliente ──
 console.log("\n▶ Diálogo del cliente");
 const { parseDialogo } = await import("../src/lib/dialogo.ts");

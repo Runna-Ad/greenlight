@@ -12,6 +12,7 @@ import {
   Upload,
   ChevronDown,
   Sparkles,
+  Wand2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -32,10 +33,13 @@ import {
   kbTexto,
   setAutoLearn,
   correrSintesisAhora,
+  hubEdiciones,
+  setAutoLearnEdits,
+  correrSintesisEdicionesAhora,
   type ClienteScope,
 } from "@/app/(app)/admin/hue-actions";
 import type { HueInstruction, HueKbDocument, HueScope } from "@/lib/database.types";
-import type { Winner, AdaptacionRow } from "@/lib/hue-data";
+import type { Winner, AdaptacionRow, EdicionesResumen, EdicionTarea } from "@/lib/hue-data";
 
 const fecha = (iso: string) => new Date(iso).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
 const kb = (bytes: number | null) => (bytes === null ? "" : `${Math.max(1, Math.round(bytes / 1024))} KB`);
@@ -103,6 +107,7 @@ type TrainingData = {
   kb: HueKbDocument[];
   adaptaciones: AdaptacionRow[];
   autoLearn: boolean;
+  autoLearnEdits: boolean;
   clientes: ClienteScope[];
 };
 
@@ -113,7 +118,7 @@ export function HueTraining() {
 
   const recargar = () => {
     hubTraining().then((res) => {
-      if (res.ok) setData({ instrucciones: res.instrucciones, kb: res.kb, adaptaciones: res.adaptaciones, autoLearn: res.autoLearn, clientes: res.clientes });
+      if (res.ok) setData({ instrucciones: res.instrucciones, kb: res.kb, adaptaciones: res.adaptaciones, autoLearn: res.autoLearn, autoLearnEdits: res.autoLearnEdits, clientes: res.clientes });
       else toast.error(res.error);
     });
   };
@@ -122,7 +127,7 @@ export function HueTraining() {
     let vivo = true;
     Promise.all([hubTraining(), hubWinners()]).then(([t, w]) => {
       if (!vivo) return;
-      if (t.ok) setData({ instrucciones: t.instrucciones, kb: t.kb, adaptaciones: t.adaptaciones, autoLearn: t.autoLearn, clientes: t.clientes });
+      if (t.ok) setData({ instrucciones: t.instrucciones, kb: t.kb, adaptaciones: t.adaptaciones, autoLearn: t.autoLearn, autoLearnEdits: t.autoLearnEdits, clientes: t.clientes });
       else toast.error(t.error);
       if (w.ok) setWinners(w.winners);
       setCargando(false);
@@ -137,11 +142,131 @@ export function HueTraining() {
   return (
     <div className="space-y-6">
       <AutoLearn autoLearn={data.autoLearn} onReload={recargar} />
+      <AprendizajeEdiciones autoLearnEdits={data.autoLearnEdits} onReload={recargar} />
       <Cerebro instrucciones={data.instrucciones} clientes={data.clientes} onReload={recargar} />
       <Ganadores winners={winners} />
       <KBDocs docs={data.kb} clientes={data.clientes} onReload={recargar} />
       <Auditoria filas={data.adaptaciones} />
     </div>
+  );
+}
+
+// ── Aprender de ediciones (borrador de H.Ü.E → guión publicado) ──────────────
+function AprendizajeEdiciones({ autoLearnEdits, onReload }: { autoLearnEdits: boolean; onReload: () => void }) {
+  const [on, setOn] = useState(autoLearnEdits);
+  const [pend, setPend] = useState(false);
+  const [res, setRes] = useState<EdicionesResumen | null>(null);
+
+  const cargar = () => hubEdiciones().then((r) => setRes(r.ok ? r.ediciones : null));
+  useEffect(() => {
+    cargar();
+  }, []);
+
+  const toggle = async (v: boolean) => {
+    setOn(v);
+    const r = await setAutoLearnEdits(v);
+    if (!r.ok) {
+      toast.error(r.error);
+      setOn(!v);
+    } else toast.success(v ? "Aprendizaje de ediciones encendido" : "Aprendizaje de ediciones apagado");
+  };
+
+  const sintetizar = async () => {
+    setPend(true);
+    const r = await correrSintesisEdicionesAhora();
+    setPend(false);
+    if (!r.ok) toast.error(r.error);
+    else {
+      toast.success(r.mensaje);
+      onReload();
+      cargar();
+    }
+  };
+
+  // "% conservado" = 1 − mediana del editRate; el resto lo editó el equipo.
+  const conservado = res && res.editRateMediano !== null ? Math.round((1 - res.editRateMediano) * 100) : null;
+  const editadas = (res?.tareas ?? []).filter((t) => t.diff.cambios.length > 0).slice(0, 12);
+
+  return (
+    <section className="gl-card space-y-3 p-4">
+      <div className="flex items-center gap-2">
+        <Wand2 className="size-4 text-primary" />
+        <h3 className="text-sm font-semibold text-foreground">Aprender de tus ediciones</h3>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        H.Ü.E compara el <span className="font-medium text-foreground">borrador</span> que generó contra el guión{" "}
+        <span className="font-medium text-foreground">publicado</span> y propone lecciones{" "}
+        <span className="font-medium text-foreground">inactivas</span> a partir de cómo el equipo lo corrige. Sólo mira{" "}
+        estilo/redacción — <span className="font-medium text-foreground">enmascara las cifras</span> para no aprender montos
+        de una tarea específica. Tú decides cuáles activar.
+      </p>
+
+      {res && res.total > 0 && (
+        <div className="flex flex-wrap gap-4 rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm">
+          {conservado !== null && (
+            <span className="text-foreground">
+              <b className="font-semibold">{conservado}%</b> del borrador se conserva
+            </span>
+          )}
+          <span className="text-muted-foreground">{res.total} guiones publicados con borrador</span>
+          <span className="text-muted-foreground">{res.utiles} útiles para aprender</span>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <Switch checked={on} onCheckedChange={toggle} />
+          Aprender solo de mis ediciones
+        </label>
+        <Button variant="outline" size="sm" onClick={sintetizar} disabled={pend}>
+          {pend ? "Analizando…" : "Correr síntesis de ediciones"}
+        </Button>
+      </div>
+
+      {editadas.length > 0 && (
+        <div className="space-y-2 border-t border-border pt-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Cambios recientes (borrador → publicado)</p>
+          <ul className="space-y-2">
+            {editadas.map((t) => (
+              <DiffTarea key={t.ideaId} t={t} />
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Una tarjeta expandible: la tarea + su tasa de edición + el diff campo a campo. */
+function DiffTarea({ t }: { t: EdicionTarea }) {
+  const [abierto, setAbierto] = useState(false);
+  const pct = Math.round(t.diff.editRate * 100);
+  return (
+    <li className="gl-card p-3">
+      <button type="button" onClick={() => setAbierto((v) => !v)} className="flex w-full items-center gap-2 text-left">
+        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", abierto && "rotate-180")} />
+        <span className="min-w-0 flex-1 truncate font-mono text-xs font-medium text-foreground">{t.namingBase ?? t.code ?? "s/n"}</span>
+        <span className="shrink-0 text-[11px] text-muted-foreground">{t.clienteName}</span>
+        <Badge tone={t.esUtil ? "auto" : "neutral"}>{pct}% editado</Badge>
+      </button>
+      {abierto && (
+        <ul className="mt-2 space-y-2 border-t border-border pt-2">
+          {t.diff.cambios.map((c, idx) => (
+            <li key={idx} className="text-xs">
+              <p className="mb-1 font-semibold text-muted-foreground">Plano {c.plano} · {c.campo}</p>
+              <p className="rounded bg-[color-mix(in_srgb,var(--status-corrections)_10%,transparent)] px-2 py-1 text-foreground">
+                <span className="mr-1 font-semibold text-status-corrections">H.Ü.E:</span>
+                {c.antes || "(vacío)"}
+              </p>
+              <p className="mt-1 rounded bg-[color-mix(in_srgb,var(--status-completed)_12%,transparent)] px-2 py-1 text-foreground">
+                <span className="mr-1 font-semibold text-status-completed">Publicado:</span>
+                {c.despues || "(vacío)"}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }
 
@@ -315,13 +440,15 @@ function LessonCard({ i, clientes, onReload }: { i: HueInstruction; clientes: Cl
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-medium text-foreground">{i.title}</span>
-            <Badge tone={i.source === "auto" ? "auto" : "human"}>{i.source === "auto" ? "auto" : "manual"}</Badge>
+            <Badge tone={i.source === "human" ? "human" : "auto"}>
+              {i.source === "auto_edit" ? "ediciones" : i.source === "auto" ? "auto" : "manual"}
+            </Badge>
             <Badge tone="neutral">v{i.version}</Badge>
             {scopeTxt && <Badge tone="neutral">{scopeTxt}</Badge>}
             {!i.active && <Badge tone="off">inactiva</Badge>}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{i.body}</p>
-          {i.source === "auto" && i.reason && (
+          {i.source !== "human" && i.reason && (
             <p className="mt-1 text-xs italic text-muted-foreground">Patrón observado: {i.reason}</p>
           )}
         </div>

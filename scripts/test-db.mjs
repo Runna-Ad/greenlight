@@ -1744,6 +1744,59 @@ console.log("\n▶ 0045 — H.Ü.E HUB: captura + entrenamiento + RLS master-onl
   await db.query(`delete from produccion.comments where idea_id=$1 and body='nota'`, [IDEA]);
 }
 
+// ── H.Ü.E aprende de ediciones (0048): hue_generations + source auto_edit + settings ──
+console.log("\n▶ 0048 — H.Ü.E ediciones: hue_generations + FK cascade + source auto_edit + settings");
+{
+  const IDEA = "00000000-0000-0000-0000-0000000000d1";
+
+  // draft jsonb round-trip + kind CHECK
+  const gen = await scalar(
+    `insert into produccion.hue_generations (idea_id, kind, draft, model)
+     values ($1,'guion','[{"titulo":"Plano 1","dialogo":"(A) Hola"}]'::jsonb,'claude-sonnet-5') returning id`, [IDEA]);
+  eq("hue_generations guarda el draft jsonb",
+     await scalar(`select draft->0->>'dialogo' from produccion.hue_generations where id=$1`, [gen]), "(A) Hola");
+  eq("hue_generations.imported_at arranca null (se sella al importar el borrador)",
+     await scalar(`select imported_at from produccion.hue_generations where id=$1`, [gen]), null);
+  let badKind = false;
+  try { await db.query(`insert into produccion.hue_generations (idea_id, kind, draft) values ($1,'video','[]'::jsonb)`, [IDEA]); } catch { badKind = true; }
+  ok("hue_generations rechaza kind fuera del CHECK (guion|copy)", badKind);
+
+  // FK cascade: borrar la idea borra sus generaciones (idea desechable, no la semilla)
+  const chain = (await q(`select brief_id, family_id from produccion.ideas where id=$1`, [IDEA]))[0];
+  const tmpIdea = await scalar(
+    `insert into produccion.ideas (brief_id, family_id, variant_number) values ($1,$2,99) returning id`, [chain.brief_id, chain.family_id]);
+  await db.query(`insert into produccion.hue_generations (idea_id, kind, draft) values ($1,'guion','[]'::jsonb)`, [tmpIdea]);
+  await db.query(`delete from produccion.ideas where id=$1`, [tmpIdea]);
+  eq("hue_generations: borrar la idea borra sus generaciones (cascade)",
+     Number(await scalar(`select count(*) from produccion.hue_generations where idea_id=$1`, [tmpIdea])), 0);
+
+  // hue_instructions.source ahora acepta 'auto_edit' (lección aprendida de ediciones)
+  const le = await scalar(
+    `insert into produccion.hue_instructions (title, body, source) values ('De ediciones','Acorta el 1er plano','auto_edit') returning id`);
+  eq("hue_instructions acepta source='auto_edit'",
+     await scalar(`select source from produccion.hue_instructions where id=$1`, [le]), "auto_edit");
+  let badSrc = false;
+  try { await db.query(`insert into produccion.hue_instructions (title, body, source) values ('x','y','robot')`); } catch { badSrc = true; }
+  ok("hue_instructions sigue rechazando source fuera del CHECK ampliado", badSrc);
+
+  // hue_settings: switch + debounce del loop de ediciones
+  eq("hue_settings.auto_learn_edits arranca false (opt-in, independiente)",
+     await scalar(`select auto_learn_edits from produccion.hue_settings where id=1`), false);
+  eq("hue_settings.last_synth_edits_at arranca null",
+     await scalar(`select last_synth_edits_at from produccion.hue_settings where id=1`), null);
+
+  // RLS master-only (defensa en profundidad; la app escribe por service_role)
+  await asRole(CREA);
+  eq("RLS: un creative (no master) ve 0 filas de hue_generations",
+     Number(await scalar(`select count(*) from produccion.hue_generations`)), 0);
+  await resetRole();
+  await db.exec(`select set_config('request.jwt.claims','', false);`);
+
+  // limpieza del fixture propio
+  await db.query(`delete from produccion.hue_generations where idea_id=$1`, [IDEA]);
+  await db.query(`delete from produccion.hue_instructions where id=$1`, [le]);
+}
+
 // ── Plantilla Copies (0046): temas con cuota + copies (headline/descripción) ──
 console.log("\n▶ 0046 — Copies: temas con cuota + FK cascade + unique + trigger");
 {

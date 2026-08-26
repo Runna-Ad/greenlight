@@ -723,6 +723,10 @@ export async function importarGuion(
   });
   if (error) return { ok: false, error: error.message };
   await iniciarTareaSiTodo(db, ideaId); // pegar contenido = empezar a trabajar
+  // Enlaza el borrador de H.Ü.E que se está importando (si lo hubo) con esta tarea:
+  // el loop "aprender de ediciones" sólo mina generaciones IMPORTADAS. Si el guión se
+  // pegó a mano (sin generación), 0 filas → inocuo.
+  await db.from("hue_generations").update({ imported_at: new Date().toISOString() }).eq("idea_id", ideaId).is("imported_at", null);
   revalidatePath("/[cliente]/tareas/[id]", "page");
   // Devuelve la lista COMPLETA resultante (replace o append) para que el editor
   // reemplace su estado sin recargar; los planos nuevos entran con animación.

@@ -235,7 +235,7 @@ export type Comment = {
 export type HueSuggestionKind = "correction_verdict" | "ortografia";
 export type HueDecision = "applied" | "dismissed" | "ignored";
 export type HueScope = "global" | "client" | "marca";
-export type HueSource = "human" | "auto";
+export type HueSource = "human" | "auto" | "auto_edit";
 
 export type HueSuggestion = {
   id: string;
