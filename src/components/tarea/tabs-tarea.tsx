@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lightbulb, Puzzle } from "lucide-react";
+import { Lightbulb, Puzzle, EyeOff } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { Plantilla } from "@/lib/plantilla";
@@ -55,7 +55,9 @@ export function TabsTarea({
 }) {
   const { verCliente } = useWorkspace();
   const [tab, setTab] = useState<"detalles" | "runna">("detalles");
-  const mostrarRunna = !!runna && !verCliente;
+  // Rünna tools sigue ACCESIBLE en Vista cliente (el equipo puede entrar), sólo se
+  // atenúa + marca "no lo ve el cliente" — antes desaparecía por completo (Pedro).
+  const mostrarRunna = !!runna;
   const activa = tab === "runna" && mostrarRunna ? "runna" : "detalles";
 
   return (
@@ -65,8 +67,14 @@ export function TabsTarea({
           Detalles asset
         </TabBtn>
         {mostrarRunna && (
-          <TabBtn activa={activa === "runna"} onClick={() => setTab("runna")} icon={Puzzle}>
-            Rünna tools
+          <TabBtn
+            activa={activa === "runna"}
+            onClick={() => setTab("runna")}
+            icon={verCliente ? EyeOff : Puzzle}
+            atenuado={verCliente}
+            title={verCliente ? "Interno — el cliente no ve esta pestaña" : undefined}
+          >
+            Rünna tools{verCliente && " · interno"}
           </TabBtn>
         )}
       </div>
@@ -110,22 +118,29 @@ function TabBtn({
   onClick,
   icon: Icon,
   children,
+  atenuado,
+  title,
 }: {
   activa: boolean;
   onClick: () => void;
   icon: typeof Lightbulb;
   children: React.ReactNode;
+  /** Atenúa la pestaña (Rünna tools en Vista cliente): sigue clickable, sólo marcada. */
+  atenuado?: boolean;
+  title?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={activa}
+      title={title}
       className={cn(
         "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
         activa
           ? "border border-primary/30 bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary"
           : "bg-secondary text-muted-foreground hover:text-foreground",
+        atenuado && "opacity-55",
       )}
     >
       <Icon className="size-4" /> {children}

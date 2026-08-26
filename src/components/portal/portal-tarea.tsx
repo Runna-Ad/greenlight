@@ -1,7 +1,7 @@
 "use client";
 
-import { Scale } from "lucide-react";
 import { WorkspaceProvider, useWorkspace } from "@/components/tarea/workspace-provider";
+import { LegalLectura } from "@/components/tarea/legal-lectura";
 import { HeroTarea } from "@/components/tarea/hero-tarea";
 import { TabsTarea } from "@/components/tarea/tabs-tarea";
 import { DocumentoTarea } from "@/components/tarea/documento-tarea";
@@ -154,27 +154,18 @@ function CuerpoDoc({ t }: { t: TareaPortal }) {
         onQuitarPlano={noop}
       />
     );
-  // El cliente también ve la CORTINILLA/legales (Pedro) — read-only, al cierre.
+  // El cliente también ve la CORTINILLA/legales (Pedro), y ahora puede PEDIR CAMBIOS
+  // sobre ella: LegalLectura reusa el mismo anclado de selección de los planos.
   return (
     <div className="space-y-3">
       {doc}
-      {t.legal && <LegalPortal legal={t.legal} esEstatico={t.esEstatico} />}
+      {t.legal && (
+        <LegalLectura
+          ideaId={t.ideaId}
+          legal={t.legal}
+          titulo={t.esEstatico ? "Legales" : "Cortinilla de Cierre"}
+        />
+      )}
     </div>
-  );
-}
-
-/** La cortinilla de legales para el portal — read-only, mismo look que el interno. */
-function LegalPortal({ legal, esEstatico }: { legal: string; esEstatico: boolean }) {
-  return (
-    <section className="overflow-hidden rounded-xl border border-[#2d2b55]/20 bg-card shadow-sm">
-      <div className="flex items-center gap-2 bg-[#2d2b55] px-4 py-2.5 text-white">
-        <Scale className="size-4" />
-        <h3 className="text-[12px] font-bold uppercase tracking-widest">
-          {esEstatico ? "Legales" : "Cortinilla de Cierre"}
-        </h3>
-        <span className="ml-auto text-[10px] font-medium uppercase tracking-wide text-white/60">Legales</span>
-      </div>
-      <p className="whitespace-pre-wrap p-4 text-[11px] leading-snug text-foreground">{legal}</p>
-    </section>
   );
 }

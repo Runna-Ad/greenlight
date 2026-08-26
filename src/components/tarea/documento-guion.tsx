@@ -8,6 +8,7 @@ import { agregarPlano, borrarPlano, vaciarGuion } from "@/app/(app)/[cliente]/ta
 import { PLACEHOLDER_ESTATICO, placeholdersGuion } from "@/lib/plantilla";
 import { DocumentoTarea } from "./documento-tarea";
 import { CortinillaCierre, type LegalSnippet } from "./cortinilla-cierre";
+import { LegalLectura } from "./legal-lectura";
 import type { Sugerencia } from "@/lib/legal-sugerido";
 import { type RefVista } from "./referencias-plano";
 import { useWorkspace } from "./workspace-provider";
@@ -110,17 +111,29 @@ export function DocumentoGuion({
           estático también saca su legal de la biblioteca — no era sólo texto libre.
           El estático no tiene "cortinilla de cierre" (es un arte), así que el bloque
           se titula "Legales". El video conserva su título. */}
-      <CortinillaCierre
-        ideaId={ideaId}
-        titulo={esEstatico ? "Legales" : "Cortinilla de Cierre"}
-        legalesLibres={cortinilla.legalesLibres}
-        seleccionados={cortinilla.seleccionados}
-        biblioteca={cortinilla.biblioteca}
-        sugerencia={cortinilla.sugerencia}
-        // En "Vista cliente" los legales también son de lectura (el preview
-        // debe verse como lo del cliente, y no editar legales por accidente).
-        soloLectura={soloLectura || verCliente}
-      />
+      {/* En "Vista cliente" el legal se ve ANCLABLE (LegalLectura): así el revisor ve
+          y gestiona los cambios que el cliente pidió sobre el legal en el portal —
+          mismo round-trip que un plano. En modo editor va el CortinillaCierre normal.
+          El texto del legal es el snippet elegido, o el texto libre (uno por guión). */}
+      {verCliente ? (
+        (cortinilla.seleccionados[0]?.body ?? cortinilla.legalesLibres) ? (
+          <LegalLectura
+            ideaId={ideaId}
+            legal={(cortinilla.seleccionados[0]?.body ?? cortinilla.legalesLibres)!}
+            titulo={esEstatico ? "Legales" : "Cortinilla de Cierre"}
+          />
+        ) : null
+      ) : (
+        <CortinillaCierre
+          ideaId={ideaId}
+          titulo={esEstatico ? "Legales" : "Cortinilla de Cierre"}
+          legalesLibres={cortinilla.legalesLibres}
+          seleccionados={cortinilla.seleccionados}
+          biblioteca={cortinilla.biblioteca}
+          sugerencia={cortinilla.sugerencia}
+          soloLectura={soloLectura}
+        />
+      )}
     </div>
   );
 }
