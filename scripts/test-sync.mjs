@@ -128,8 +128,14 @@ console.log("\n▶ Tab classification (a project = one tab: track + date)");
   eq("templates/control sink to the bottom", sorted[sorted.length - 1].kind, "control");
 }
 
-console.log("\n▶ LIVE fetch from the real DiDi sheet");
-try {
+if (process.env.CI) {
+  // El fetch a un Google Sheet PÚBLICO externo es inherentemente flakey para CI
+  // (rate-limit de IPs de GitHub, hoja despublicada, red caída). Los tests OFFLINE de
+  // arriba ya cubren parser/dedup/clasificación; el live-fetch se corre en LOCAL. (2026-08-26)
+  console.log("\n▶ LIVE fetch — omitido en CI (fetch a Google Sheet externo)");
+} else {
+  console.log("\n▶ LIVE fetch from the real DiDi sheet");
+  try {
   for (const [label, tab] of [
     ["REAL", REAL_TAB],
     ["NORMAL", NORMAL_TAB],
@@ -167,8 +173,9 @@ try {
   const bogus = await fetch(csvUrl(SHEET, "__no_existe__"));
   const bogusParsed = parseSheetCsv(await bogus.text());
   ok("tab inexistente ⇒ error, NO importa la primera pestaña", "error" in bogusParsed);
-} catch (e) {
-  ok("live fetch", false, e.message);
+  } catch (e) {
+    ok("live fetch", false, e.message);
+  }
 }
 
 // ── Apps Script adapter, end to end (only when configured) ──

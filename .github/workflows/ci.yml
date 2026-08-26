@@ -16,7 +16,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 24 — los scripts de test importan .ts directamente (import("../src/lib/x.ts")),
+          # que sólo funciona con el type-stripping nativo de Node ≥22.18/24 (local usa v24).
+          # Con Node 20 el `npm test` revienta con ERR_UNKNOWN_FILE_EXTENSION para ".ts".
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
