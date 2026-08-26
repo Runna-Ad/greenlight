@@ -112,13 +112,21 @@ export async function reunirContextoTarea(ideaId: string): Promise<ContextoWrite
   if (idea.marca_id) scopeOr.push(`marca_id.eq.${idea.marca_id}`);
   const scopeFilter = scopeOr.join(",");
 
+  // Los LEGALES NO usan la pata `client_id` (a diferencia de Cerebro/KB): el legal de
+  // marca es por-marca, no por-cliente. La pata client_id pescaría el legal de una
+  // marca HERMANA (Card → Préstamos) por dos motivos: (1) el sync viejo guardaba mal
+  // client_id en filas de marca, (2) aunque se corrija a NULL, un legal scope='client'
+  // no es un patrón que la app soporte (la página de la tarea tampoco lo usa). Espeja
+  // el filtro de page.tsx: marca_id + global. (reap 2026-08-26)
+  const legalFilter = idea.marca_id ? `marca_id.eq.${idea.marca_id},scope.eq.global` : "scope.eq.global";
+
   // Proxy del "guión" (aún no escrito) desde el brief, para (a) las reglas condicionadas
   // por texto (CASHBACK/MSI → *Aplican) y (b) el legal sugerido determinista.
   const proxyTexto = [idea.concepto, idea.comunicacion, idea.peloteo_raw, ...(idea.selling_points ?? [])].filter(Boolean).join(" ");
 
   const [reglasRes, legalesRes, brainRes, kbRes] = await Promise.all([
     db.rpc("reglas_para_tarea", { p_idea_id: ideaId, p_texto: proxyTexto }),
-    db.from("snippets").select("id, title, body").eq("kind", "legal").eq("active", true).or(scopeFilter),
+    db.from("snippets").select("id, title, body").eq("kind", "legal").eq("active", true).or(legalFilter),
     db.from("hue_instructions").select("title, body").eq("active", true).or(scopeFilter).order("created_at"),
     db.from("hue_kb_documents").select("title, extracted_text").or(scopeFilter).order("created_at"),
   ]);

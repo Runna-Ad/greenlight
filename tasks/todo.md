@@ -1,5 +1,62 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🌾 DEEP REAP 2026-08-26 — 6-agent audit (security · correctness · DB · perf · a11y · funcionalidad)
+Baseline y post-fix VERDES: tsc · eslint (0 errores) · test:lib 375 · test:db 298 · test:sync 44 · build.
+Cambios sin commitear aún (working tree) — Pedro revisa antes de push.
+
+### ✅ ARREGLADO (Critical + Serious + quick-wins de alto valor)
+- **[CRITICAL] Read/scope IDOR**: `tareas/[id]/page.tsx` + `tablero/page.tsx loadBoard` cargaban por id/cliente
+  con sólo `canSee` → cualquier rol interno leía tareas de otro cliente/marca por URL + firmaba URLs del bucket
+  privado. FIX: `assertCanActOnTask(id)`→notFound() + `visibleParaRol()` (creative→asignado, lead→track). ⚠️ CAMBIO
+  DE COMPORTAMIENTO: el tablero ahora se ACOTA por rol (Pedro=master ve todo; Nils=lead sólo su track).
+- **[SERIOUS] Fuga cross-marca de legal**: `legales-actions` guardaba client_id en filas de marca → legal de Card
+  llegaba a Préstamos vía el writer. FIX: client_id=NULL en marca + `hue-writer` usa marca_id+global para legal.
+- **[SERIOUS] IDORs de acción**: `validarCambios`, `aplicarSugerencia`, `referencias-*` (subir/link/quitar) sin
+  `assertCanActOnTask/Row` → un lead escribía texto arbitrario / adjuntaba refs en tarea de otro track. FIX: gate en las 6.
+- **[SERIOUS] Winners auto-synth no-atómico**: dos estrellados rápidos → 2 llamadas pagadas a Anthropic + lecciones
+  duplicadas. FIX: reclamo atómico compare-and-set antes del modelo (espeja el camino de ediciones).
+- **[SERIOUS] Edits auto-synth**: watermark sobre `generated_at` en vez de `imported_at` → ediciones no se minaban. FIX.
+- **[SERIOUS] revalidatePath faltante** en 8 mutaciones estructurales (agregar/borrar plano/tema/copy, vaciarGuion,
+  guardarCuota) → "guardó pero revierte al recargar". FIX: revalidate en las 8.
+- **[data] Sync dedup**: `Tamaño`/`Plataforma` no dedupeados (sí `Duración`) → celda sucia → idea con 0 assets. FIX.
+- **[MINOR] `revisarOrtografia`** sin scope gate; **guardrail** `sinInventar` sin NFC; **emoji regex** matcheaba
+  `:100:` en `1:100:1` (borraba dígitos). FIX en los 3.
+- **[a11y/func] quick wins**: confirm "Aprobar" del portal auto-enfocaba "Sí" (→ Cancelar); "Validar con H.Ü.E" daba
+  veredicto falso en correcciones de legal (→ oculto, como copies); `aria-live` en el indicador de guardado (única
+  afordancia de guardado); `break-words` en lectura client-facing; `not-found.tsx` de marca; quité dep sin usar
+  `@dnd-kit/utilities`.
+
+### 🔵 ESPERA "ship it" de Pedro
+- **Migración 0049** (`..._greenlight_0049_scope_invariants.sql`) — repara datos de legal en prod (client_id→NULL en
+  filas de marca) + CHECK scope↔ids en hue_instructions/hue_kb_documents (DB reap S1). NO aplicada.
+  Ship = `npm run migrate` (pin `ybbrpqzbedaxsmotgtkh`). **Sin esto la fuga de datos VIEJOS del legal sigue** (el
+  código ya no la produce, pero las filas malas existentes sólo se limpian con la migración).
+- **Pre-ship (read-only)**: confirmar en prod los 4 triggers before_delete (`select tgname from pg_trigger where
+  tgname like 'before_delete_%_correcciones'` → planos/estaticos/copy/tema), por si un 0046 local viejo se aplicó sin ellos.
+
+### 📋 MENÚ diferido (deep-reap findings, no bloquean — decidir cuáles tomar)
+- **Perf (heavy)**: board sin memoización (React.memo/useCallback/useMemo — re-render total al arrastrar);
+  `WorkspaceProvider` re-renderiza 8 componentes por tecla (partir contexto, como ya se hizo en `correcciones/contexto`);
+  lazy-load de `PegarGuion` (tabla emoji 39KB gzip carga en CADA tarea); `page.tsx` reusar `firmarLote`/`cargarRefs*`;
+  `admin-shell` tabs con next/dynamic; `moveTask` usar `board_tasks.client_slug` (1 query menos).
+- **a11y (medio)**: teclado no entra a la tarjeta de corrección (`campo-lectura`: `role="tooltip"` con controles +
+  marks sin focus); `FaltantesDialog` (brief-builder) sin focus-trap → usar `<Dialog>`; skip-to-content; targets 20px;
+  aria-expanded en DiffTarea; label en input file del KB; h1 del portal `hidden`→`sr-only` en móvil; "Ver campo" no mueve
+  foco; labels en inputs de email del brief; confirmar borrado de doc KB / copy (paridad con tema).
+- **Funcionalidad**: Copies NO puede adjuntar legal (CortinillaCierre no monta en DocumentoCopies); "Ver campo" del legal
+  no-op (cortinilla-cierre sin `data-campo-key`); empty-state de KB docs; tope en "Agregar varias" del brief; CRUD de
+  cliente top-level no existe (¿intencional?).
+- **Tech-scout**: **[HIGH] rate-limit** en `portal/login solicitarAcceso` (endpoint público sin throttle → spam a admins);
+  CI (.github/workflows con `npm run test` + tsc + Dependabot); (M2) política/comentario en `notification_deliveries`;
+  (M3) trigger de limpieza + CHECK tabla en `field_edits`; (M4) `SnippetKind` en database.types.ts sin `selling_point`.
+
+### ❓ DECISIONES para Pedro (no toqué — necesitan tu intención)
+- **Portal ¿por marca o por cliente?** Hoy un Partner ve TODO lo publicado de su CLIENTE (todas las marcas). Si Card y
+  Préstamos tienen stakeholders externos DISTINTOS, hay que acotar el portal por `marca_id`. Si comparten contacto, está bien.
+- **Copies + legal**: ¿construir el editor de legal para Copies (el portal/data ya lo soportarían) o dejarlo fuera a propósito?
+
+---
+
 ## 🧠 H.Ü.E HUB — selector de scope (marca/cliente) en KB + Cerebro — CONSTRUIDO + REAPEADO, SIN pushear
 **Por qué:** la subida al KB y "Añadir lección" hardcodeaban `scope:"global"` (sin picker), pero el schema (0045)
 y el writer YA soportan scope/client_id/marca_id. Sin picker, docs de DiDi Card y DiDi Préstamos se mezclaban.

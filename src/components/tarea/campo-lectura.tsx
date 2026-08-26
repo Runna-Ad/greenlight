@@ -309,7 +309,7 @@ export function CampoLectura({
       <div
         ref={contRef}
         onMouseUp={capturar}
-        className="whitespace-pre-wrap px-1.5 py-1 text-[13px] leading-relaxed text-foreground"
+        className="whitespace-pre-wrap break-words px-1.5 py-1 text-[13px] leading-relaxed text-foreground"
       >
         {segmentos.map((sg, i) =>
           sg.corr ? (

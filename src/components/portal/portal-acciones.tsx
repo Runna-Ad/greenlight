@@ -140,7 +140,6 @@ export function PortalAcciones({
               aprobar();
             }}
             disabled={pend}
-            autoFocus
             className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
             style={{ background: "color-mix(in srgb, var(--status-completed) 90%, #000)" }}
           >
@@ -150,6 +149,7 @@ export function PortalAcciones({
             type="button"
             onClick={() => setConfirmando(false)}
             disabled={pend}
+            autoFocus
             className="rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
           >
             Cancelar

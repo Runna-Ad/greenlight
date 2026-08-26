@@ -4,6 +4,7 @@ import { Lock } from "lucide-react";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
+import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { ROLE_LABEL, canSee, canOverrideStatus, canAssign } from "@/lib/roles";
 import { type AssetStatus } from "@/lib/brand";
 import { ESTADOS_CERRADOS, plantillaPara, notaGlobal, readTimeS } from "@/lib/plantilla";
@@ -64,6 +65,16 @@ export default async function TareaPage({
     .maybeSingle<Idea>();
 
   if (!idea) notFound();
+
+  // Scope de LECTURA: además del gate de rol (canSee), el usuario debe poder
+  // actuar sobre ESTA tarea — creative → asignado, lead → su track, admin/master
+  // → todo. Sin esto cualquier rol interno abría cualquier tarea de cualquier
+  // cliente por URL (la ruta cargaba por `id` e ignoraba el slug) y le firmaba
+  // URLs de 1h al bucket PRIVADO de referencias. Espeja el gate del lado de
+  // escritura (assertCanActOnTask). notFound() en vez de "denegado" para no
+  // revelar que la tarea existe. (reap 2026-08-26)
+  const scope = await assertCanActOnTask(id);
+  if (!scope.ok) notFound();
 
   const plantilla = plantillaPara(idea.tipo_asset);
 

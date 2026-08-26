@@ -55,7 +55,11 @@ const HEADER = /^plano\s+\d+\b/i;
 // mapa es COMPLETO (3.4k shortcodes: github + iamcal/Slack + emojibase) generado por
 // scripts/gen-emoji-map.mjs — así ninguna convención de nombre falla. Un shortcode
 // fuera del mapa (raro) se deja tal cual; nunca convertimos un `:foo:` desconocido.
-const EMOJI_RE = /:([a-z0-9_+-]+):/gi;
+// Las fronteras `(?<!\d)`/`(?!\d)` evitan que un patrón NUMÉRICO como `1:100:1`
+// (tiempo/ratio) matchee el shortcode real `:100:` (💯) y BORRE los dígitos `100`
+// del texto antes del guard de integridad numérica de sinInventar. Un `:100:`
+// suelto (rodeado de espacio/puntuación) sigue expandiendo normal. (reap 2026-08-26)
+const EMOJI_RE = /(?<!\d):([a-z0-9_+-]+):(?!\d)/gi;
 
 /** Convierte shortcodes conocidos a su emoji; deja intacto lo desconocido. */
 function emojificar(texto: string): string {
@@ -324,6 +328,10 @@ export function desdeElPrimerPlano(texto: string): string {
 export function mismoContenido(a: string, b: string): boolean {
   const norm = (s: string) =>
     (s ?? "")
+      // NFC primero: si el modelo devuelve un acento DESCOMPUESTO (a + U+0301) y la
+      // entrada lo trae PRECOMPUESTO (á), los multisets de letras difieren y una
+      // extracción buena se rechazaría. El corpus es español (á é í ó ú ñ). (reap 2026-08-26)
+      .normalize("NFC")
       .replace(/[“”„‟″]/g, '"')
       .replace(/[‘’‚‛′]/g, "'")
       .replace(/…/g, "...")
@@ -368,6 +376,10 @@ export function mismoContenido(a: string, b: string): boolean {
 export function sinInventar(entrada: string, extraido: string): boolean {
   const norm = (s: string) =>
     (s ?? "")
+      // NFC primero: si el modelo devuelve un acento DESCOMPUESTO (a + U+0301) y la
+      // entrada lo trae PRECOMPUESTO (á), los multisets de letras difieren y una
+      // extracción buena se rechazaría. El corpus es español (á é í ó ú ñ). (reap 2026-08-26)
+      .normalize("NFC")
       .replace(/[“”„‟″]/g, '"')
       .replace(/[‘’‚‛′]/g, "'")
       .replace(/…/g, "...")

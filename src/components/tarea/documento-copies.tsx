@@ -385,13 +385,16 @@ function CampoCopy({
     <label className="block scroll-mt-24" data-campo-key={keyCampo(tabla, filaId, campo)}>
       <div className="mb-0.5 flex items-center justify-between gap-2">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-        {g.estado === "guardando" && <span className="text-[10px] text-muted-foreground">Guardando…</span>}
-        {g.estado === "guardado" && (
-          <span className="text-[10px]" style={{ color: "var(--greenlight-ink)" }}>Guardado</span>
-        )}
-        {g.estado === "error" && g.conflicto === null && (
-          <span className="text-[10px] text-status-corrections">No se guardó</span>
-        )}
+        {/* Estado de autoguardado en una región viva (no hay botón de guardar). (reap 2026-08-26) */}
+        <span role="status" aria-live="polite">
+          {g.estado === "guardando" && <span className="text-[10px] text-muted-foreground">Guardando…</span>}
+          {g.estado === "guardado" && (
+            <span className="text-[10px]" style={{ color: "var(--greenlight-ink)" }}>Guardado</span>
+          )}
+          {g.estado === "error" && g.conflicto === null && (
+            <span className="text-[10px] text-status-corrections">No se guardó</span>
+          )}
+        </span>
       </div>
       <Textarea
         value={g.valor}

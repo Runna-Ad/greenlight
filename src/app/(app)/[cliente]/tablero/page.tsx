@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { RefreshCw, Lock, LayoutGrid } from "lucide-react";
-import { ROLE_LABEL, canSee } from "@/lib/roles";
+import { ROLE_LABEL, canSee, type ViewRole } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
-import { getSoy } from "@/lib/soy";
+import { getSoy, type Soy } from "@/lib/soy";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Board, type BriefOption, type Member, type Task } from "@/components/board/board";
@@ -16,7 +16,27 @@ export const dynamic = "force-dynamic";
  */
 type BoardData = { tasks: Task[]; members: Member[]; briefs: BriefOption[] };
 
-async function loadBoard(clienteSlug: string): Promise<BoardData | null> {
+/**
+ * Qué tareas ve cada rol en el tablero. Espeja el gate de ESCRITURA
+ * (assertCanActOnTask) del lado del servidor, que ya restringe: creative → sólo
+ * asignado, lead → su track, admin/master → todo. El tablero SÓLO gateaba por
+ * canSee (nav), así que un creative veía —y el payload RSC entregaba— el tablero
+ * COMPLETO del cliente (todos los tracks, todas las asignaciones), e incluso el de
+ * OTRO cliente por URL. Se filtra en el servidor (no sólo se oculta en el cliente:
+ * `board.tsx` ya no filtra por soyId). (reap 2026-08-26)
+ */
+function visibleParaRol(tasks: Task[], role: ViewRole, soy: Soy | null): Task[] {
+  if (role === "master" || role === "admin") return tasks;
+  if (role === "lead") return soy?.track ? tasks.filter((t) => t.track === soy.track) : [];
+  if (role === "creative") return soy ? tasks.filter((t) => t.members.some((m) => m.id === soy.id)) : [];
+  return []; // client nunca llega aquí (canSee lo bloquea)
+}
+
+async function loadBoard(
+  clienteSlug: string,
+  role: ViewRole,
+  soy: Soy | null,
+): Promise<BoardData | null> {
   if (!hasSupabase()) return null;
   const db = supabaseAdmin();
 
@@ -57,7 +77,9 @@ async function loadBoard(clienteSlug: string): Promise<BoardData | null> {
   // La vista board_tasks no expone delivered_at; lo traemos SÓLO para las tareas
   // delivered (para que la columna Greenlit muestre las de ≤7 días). Consulta chica
   // y acotada — sin migración (delivered_at ya existe en ideas, auto-estampado).
-  const rows = (tasks ?? []) as Task[];
+  // Filtra por rol ANTES de enriquecer/entregar: un rol acotado no debe recibir
+  // (ni en el payload RSC) las tareas que no le tocan.
+  const rows = visibleParaRol((tasks ?? []) as Task[], role, soy);
   const deliveredIds = rows.filter((t) => t.status === "delivered").map((t) => t.id);
   let conFecha = rows;
   if (deliveredIds.length) {
@@ -104,7 +126,7 @@ export default async function TableroPage({
     );
   }
 
-  const data = await loadBoard(cliente);
+  const data = await loadBoard(cliente, role, soy);
   const totalFiles = (data?.tasks ?? []).reduce((n, t) => n + t.file_count, 0);
 
   return (

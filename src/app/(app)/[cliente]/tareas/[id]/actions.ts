@@ -550,6 +550,9 @@ export async function agregarPlano(
     .from("planos").insert({ idea_id: ideaId, orden: (ultimo?.orden ?? 0) + 1 })
     .select(COLS_PLANO).single();
   if (error || !data) return { ok: false, error: error?.message ?? "No se pudo agregar el plano." };
+  // Sin revalidar, un soft-nav ida-y-vuelta servía el RSC cacheado PRE-mutación → el
+  // plano recién agregado "desaparecía" hasta un reload duro. (reap 2026-08-26)
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true, plano: data as PlanoVista };
 }
 
@@ -575,6 +578,7 @@ export async function agregarTema(
     .insert({ idea_id: ideaId, orden: ((ultimo as { orden: number } | null)?.orden ?? 0) + 1 })
     .select(COLS_TEMA).single();
   if (error || !data) return { ok: false, error: error?.message ?? "No se pudo agregar el tema." };
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true, tema: data as CopyTema };
 }
 
@@ -590,6 +594,7 @@ export async function guardarCuota(
   const n = Math.max(0, Math.min(999, Math.round(Number.isFinite(cuota) ? cuota : 1)));
   const { error } = await supabaseAdmin().from("copies_temas").update({ cuota: n }).eq("id", temaId);
   if (error) return { ok: false, error: error.message };
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true };
 }
 
@@ -601,6 +606,7 @@ export async function borrarTema(temaId: string): Promise<{ ok: true } | { ok: f
   if (!scope.ok) return { ok: false, error: scope.error };
   const { error } = await supabaseAdmin().from("copies_temas").delete().eq("id", temaId);
   if (error) return { ok: false, error: error.message };
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true };
 }
 
@@ -621,6 +627,7 @@ export async function agregarCopy(
     .insert({ tema_id: temaId, orden: ((ultimo as { orden: number } | null)?.orden ?? 0) + 1 })
     .select(COLS_COPY).single();
   if (error || !data) return { ok: false, error: error?.message ?? "No se pudo agregar el copy." };
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true, copy: data as Copy };
 }
 
@@ -632,6 +639,7 @@ export async function borrarCopy(copyId: string): Promise<{ ok: true } | { ok: f
   if (!scope.ok) return { ok: false, error: scope.error };
   const { error } = await supabaseAdmin().from("copies").delete().eq("id", copyId);
   if (error) return { ok: false, error: error.message };
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true };
 }
 
@@ -644,6 +652,7 @@ export async function borrarPlano(planoId: string): Promise<GuardarResultado> {
 
   const { error } = await supabaseAdmin().from("planos").delete().eq("id", planoId);
   if (error) return { ok: false, error: error.message };
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true };
 }
 
@@ -662,6 +671,7 @@ export async function vaciarGuion(ideaId: string): Promise<GuardarResultado> {
 
   const { error } = await supabaseAdmin().from("planos").delete().eq("idea_id", ideaId);
   if (error) return { ok: false, error: error.message };
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true };
 }
 

@@ -5,6 +5,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canMoveStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
+import { assertCanActOnRow } from "@/lib/auth/task-scope";
 import { urlSegura } from "@/lib/url-segura";
 import {
   MAX_BYTES,
@@ -36,6 +37,19 @@ async function puedeEditar(): Promise<boolean> {
 }
 
 /**
+ * Scope de la tarea DUEÑA de la referencia. `canMoveStatus` (puedeEditar) sólo dice
+ * que el ROL edita referencias; esto verifica que el usuario pueda actuar sobre
+ * ESTA tarea (creative → asignado, lead → su track). Sin esto, cualquier rol
+ * interno adjuntaba/quitaba referencias en el plano/estático de otra tarea —
+ * incluso de otro cliente — por su id, inyectando o borrando arte en el portal
+ * del cliente ajeno. (reap 2026-08-26)
+ */
+async function puedeSobreOwner(owner: RefOwner): Promise<RefResultado> {
+  const scope = await assertCanActOnRow(owner.tipo === "plano" ? "planos" : "estaticos", owner.id);
+  return scope.ok ? { ok: true } : { ok: false, error: scope.error };
+}
+
+/**
  * Sube una IMAGEN de referencia y la ancla a su dueño (plano o estático).
  *
  * Toda la validación es del SERVIDOR: el tipo se decide por magic bytes (no por
@@ -45,6 +59,8 @@ async function puedeEditar(): Promise<boolean> {
 export async function subirReferencia(owner: RefOwner, form: FormData): Promise<RefResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   if (!(await puedeEditar())) return { ok: false, error: "Este rol no edita referencias." };
+  const scoped = await puedeSobreOwner(owner);
+  if (!scoped.ok) return scoped;
 
   const file = form.get("file");
   if (!(file instanceof File)) return { ok: false, error: "No llegó ningún archivo." };
@@ -107,6 +123,8 @@ export async function agregarReferenciaLink(
 ): Promise<RefResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   if (!(await puedeEditar())) return { ok: false, error: "Este rol no edita referencias." };
+  const scoped = await puedeSobreOwner(owner);
+  if (!scoped.ok) return scoped;
 
   const limpia = url.trim();
   if (!urlSegura(limpia)) return { ok: false, error: "La liga debe empezar con http:// o https://" };
@@ -147,6 +165,8 @@ export async function agregarReferenciaLink(
 export async function quitarReferencia(owner: RefOwner, referenceId: string): Promise<RefResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   if (!(await puedeEditar())) return { ok: false, error: "Este rol no edita referencias." };
+  const scoped = await puedeSobreOwner(owner);
+  if (!scoped.ok) return scoped;
 
   const db = supabaseAdmin();
   const { tabla, col } = vinculoDe(owner);

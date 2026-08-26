@@ -219,6 +219,16 @@ export async function sintetizarSiAuto(actorMemberId: string | null): Promise<vo
       .maybeSingle();
     const ultStar = (ultimo as { starred_at: string } | null)?.starred_at ?? null;
     if (s.last_synth_at && ultStar && ultStar <= s.last_synth_at) return;
+
+    // Reclamo ATÓMICO del debounce ANTES de llamar al modelo — mismo patrón que la
+    // síntesis de ediciones (abajo). Sin esto, dos estrellados dentro de la ventana
+    // de latencia (o los dos primeros, con last_synth_at null) pasaban ambos el guard
+    // y disparaban DOS llamadas pagadas a Anthropic + lecciones duplicadas. Con el
+    // compare-and-set sólo una corrida gana el claim. (reap 2026-08-26)
+    const base = db.from("hue_settings").update({ last_synth_at: new Date().toISOString() }).eq("id", 1);
+    const claim = s.last_synth_at === null ? base.is("last_synth_at", null) : base.eq("last_synth_at", s.last_synth_at);
+    const { data: claimed } = await claim.select("id");
+    if (!claimed?.length) return; // otro estrellado ya reclamó este debounce
     await correrSintesis(actorMemberId);
   } catch (e) {
     console.error("[hue-sintesis] sintetizarSiAuto falló", e);
@@ -413,18 +423,23 @@ export async function sintetizarEdicionesSiAuto(actorMemberId: string | null): P
     const { data: st } = await db.from("hue_settings").select("auto_learn_edits, last_synth_edits_at").eq("id", 1).maybeSingle();
     const s = st as { auto_learn_edits: boolean; last_synth_edits_at: string | null } | null;
     if (!s?.auto_learn_edits) return;
-    // ¿Hay material nuevo? La última generación IMPORTADA vs el último run.
+    // ¿Hay material nuevo? El evento que APORTA material de edición es el IMPORT
+    // (borrador → publicado), no la generación. Se marca de agua sobre `imported_at`,
+    // no `generated_at`: un borrador generado ANTES del último run pero importado/
+    // editado DESPUÉS quedaba fuera (ultGen ≤ watermark) y sus ediciones humanas nunca
+    // se minaban solas. `cargarEdiciones` ya filtra por imported_at; el debounce debe
+    // coincidir. (reap 2026-08-26)
     const { data: ultimo } = await db
       .from("hue_generations")
-      .select("generated_at")
+      .select("imported_at")
       .eq("kind", "guion")
       .not("imported_at", "is", null)
-      .order("generated_at", { ascending: false })
+      .order("imported_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    const ultGen = (ultimo as { generated_at: string } | null)?.generated_at ?? null;
-    if (!ultGen) return;
-    if (s.last_synth_edits_at && ultGen <= s.last_synth_edits_at) return; // sin material nuevo
+    const ultImport = (ultimo as { imported_at: string } | null)?.imported_at ?? null;
+    if (!ultImport) return;
+    if (s.last_synth_edits_at && ultImport <= s.last_synth_edits_at) return; // sin material nuevo
 
     // Reclamo ATÓMICO del debounce (compare-and-set sobre el timestamp que leímos):
     // avanza last_synth_edits_at ANTES de llamar al modelo. Así un error de la API o

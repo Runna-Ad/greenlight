@@ -60,12 +60,15 @@ export function PanelCorrecciones() {
   const grupos = porRonda(ctx.correcciones);
   const rondaActual = grupos[0]?.ronda;
   const pendientes = sinResolver(ctx.correcciones);
-  // H.Ü.E "Validar" sólo lee texto de planos/estáticos — para una tarea de copies
-  // (todas sus correcciones apuntan a copies/copies_temas) daría dictámenes sobre
-  // "(campo vacío)". Se oculta hasta que el validador sea copies-aware (follow-on).
+  // H.Ü.E "Validar" sólo lee texto de planos/estáticos — para copies (correcciones
+  // que apuntan a copies/copies_temas) o para el LEGAL (tabla "ideas") daría
+  // dictámenes sobre "(campo vacío)". Se oculta hasta que el validador sea
+  // copies/legal-aware (follow-on). El validador del servidor ya rechaza esos
+  // targets; esto evita ofrecer el botón para no dar un veredicto falso. (reap 2026-08-26)
   const esCopies = ctx.correcciones.some(
     (c) => c.targetTabla === "copies" || c.targetTabla === "copies_temas",
   );
+  const esLegal = ctx.correcciones.some((c) => c.targetTabla === "ideas");
 
   return (
     <aside className="rounded-xl border border-border bg-card shadow-sm">
@@ -89,7 +92,7 @@ export function PanelCorrecciones() {
         {/* H.Ü.E revisa cada cambio de la ronda y da dictamen + sugerencia — ADVISORY,
             ayuda a revisar; el lead decide. Disponible siempre que haya cambios que
             revisar (no sólo mientras quedan sin confirmar). */}
-        {ctx.esRevisor && !esCopies && (
+        {ctx.esRevisor && !esCopies && !esLegal && (
           <button
             type="button"
             disabled={ctx.validando}

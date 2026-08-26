@@ -7,6 +7,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canOverrideStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getSoyId } from "@/lib/soy";
+import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { sinNegrita } from "@/lib/negrita";
 import { registrarVeredictos, marcarVeredictoAplicado, ignorarVeredicto } from "@/lib/hue-log";
 
@@ -73,6 +74,11 @@ export async function validarCambios(
   }
   const role = await getViewAs();
   if (!canOverrideStatus(role)) return { ok: false, error: "Sólo un lead valida cambios." };
+  // Scope: el lead sólo valida tareas de SU track (admin/master, todas). Sin esto
+  // se podían leer correcciones + texto actual de una tarea de otro track/cliente
+  // por ideaId. (reap 2026-08-26)
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
   // Incluye los cambios del CLIENTE enviados (ronda not null): son correcciones de
@@ -326,6 +332,11 @@ export async function aplicarSugerencia(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canOverrideStatus(role)) return { ok: false, error: "Sólo un lead aplica sugerencias." };
+  // Scope: sin esto un lead podía ESCRIBIR texto arbitrario en el campo de una
+  // tarea de otro track/cliente (sólo se validaba correccionId↔ideaId, no que la
+  // tarea fuera suya). (reap 2026-08-26)
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
   if (!textoNuevo.trim()) return { ok: false, error: "No hay texto que aplicar." };
 
   const db = supabaseAdmin();

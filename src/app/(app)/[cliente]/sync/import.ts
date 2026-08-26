@@ -290,8 +290,11 @@ export async function importRows(
       // inventados apilados, camino a una entrega. Sin fallback: si un tipo que
       // sí entrega archivos llega sin Tamaño o Plataforma, el gate de arriba ya
       // lo bloqueó.
-      const sizes = list(v("Tamaño")).map(cleanSize).filter(Boolean);
-      const plats = list(v("Plataforma"));
+      // Dedupe igual que `durs` (abajo): una celda sucia ("9:16, 9:16" / "Meta, Meta")
+      // generaría filas idénticas de asset → chocan con el índice único y tumban TODO
+      // el insert → la idea queda con CERO archivos aunque se marcó importada. (reap 2026-08-26)
+      const sizes = [...new Set(list(v("Tamaño")).map(cleanSize).filter(Boolean))];
+      const plats = [...new Set(list(v("Plataforma")))];
       const ideaToken = v("# Idea") || idea.code || letter;
       // Fan-out por duración: cada duración es su propio archivo (tamaño × plat ×
       // duración). Los estáticos no duran → una sola fila por tamaño×plat

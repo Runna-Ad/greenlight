@@ -602,8 +602,16 @@ export function Indicador({ estado }: { estado: EstadoGuardado }) {
         : "text-muted-foreground";
   // key={estado} re-monta el span en cada cambio → re-dispara la animación de
   // entrada. El "guardado" se auto-descarta (timer en useAutoguardado).
+  // role="status"/aria-live: NO hay botón de guardar — este indicador ES la única
+  // afordancia de guardado, así que un lector de pantalla necesita oír
+  // "guardando…/guardado/no se pudo guardar" al teclear en cualquier campo. (reap 2026-08-26)
   return (
-    <span key={estado} className={cn("gl-rise-in inline-flex items-center gap-1 text-[10px]", color)}>
+    <span
+      key={estado}
+      role="status"
+      aria-live="polite"
+      className={cn("gl-rise-in inline-flex items-center gap-1 text-[10px]", color)}
+    >
       {estado === "guardado" && <Check className="size-3" />}
       {texto}
     </span>

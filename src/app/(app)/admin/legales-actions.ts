@@ -61,7 +61,11 @@ export async function sincronizarLegales(): Promise<SyncLegalesResultado> {
         title: l.title,
         body: l.body,
         marca_id: marca.id,
-        client_id: marca.client_id,
+        // INVARIANTE: una fila scope='marca' guarda client_id = NULL. Si llevara el
+        // client_id de la marca, el filtro OR del writer (`client_id.eq.<cliente>`)
+        // la pescaría para OTRA marca del MISMO cliente (Card → Préstamos). Espeja
+        // cómo hue_instructions/hue_kb_documents guardan las filas de marca. (reap 2026-08-26)
+        client_id: null,
         scope: "marca",
         active: true,
         notion_block_id: l.blockId,

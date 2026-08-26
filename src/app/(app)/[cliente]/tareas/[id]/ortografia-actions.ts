@@ -6,6 +6,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canMoveStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getSoyId } from "@/lib/soy";
+import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { fixSeguro } from "@/lib/ortografia";
 import { sinNegrita } from "@/lib/negrita";
 import { registrarOrtografia, marcarOrtografiaAplicada, ignorarOrtografia } from "@/lib/hue-log";
@@ -112,6 +113,10 @@ export async function revisarOrtografia(
   }
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  // Scope: sin esto se leía el texto de planos/estáticos de una tarea de otro
+  // track/cliente por ideaId (cuando `datos` no viene). (reap 2026-08-26)
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   let campos: Campo[];
   if (datos && ((Array.isArray(datos.planos) && datos.planos.length > 0) || datos.estatico)) {
