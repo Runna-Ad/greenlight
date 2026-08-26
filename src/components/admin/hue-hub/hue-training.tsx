@@ -216,7 +216,7 @@ function AprendizajeEdiciones({ autoLearnEdits, onReload }: { autoLearnEdits: bo
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm text-foreground">
           <Switch checked={on} onCheckedChange={toggle} />
-          Aprender solo de mis ediciones
+          Aprender automáticamente de mis ediciones
         </label>
         <Button variant="outline" size="sm" onClick={sintetizar} disabled={pend}>
           {pend ? "Analizando…" : "Correr síntesis de ediciones"}
@@ -310,7 +310,7 @@ function AutoLearn({ autoLearn, onReload }: { autoLearn: boolean; onReload: () =
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm text-foreground">
           <Switch checked={on} onCheckedChange={toggle} />
-          Aprender solo al estrellar un ganador
+          Aprender automáticamente al estrellar un ganador
         </label>
         <Button variant="outline" size="sm" onClick={sintetizar} disabled={pend}>
           {pend ? "Analizando…" : "Correr síntesis ahora"}
