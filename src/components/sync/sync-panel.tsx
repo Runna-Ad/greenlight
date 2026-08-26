@@ -14,7 +14,7 @@ import {
 import type { SheetRow, TabInfo } from "@/lib/sheet-sync";
 import { StagedCard } from "./staged-card";
 import { type PoolMember } from "@/components/intake/task-card";
-import { missingRequired } from "@/lib/required";
+import { missingBloqueante } from "@/lib/required";
 import { importRows, knownRows } from "@/app/(app)/[cliente]/sync/import";
 
 export function SyncPanel({ cliente, pool }: { cliente: string; pool: PoolMember[] }) {
@@ -71,7 +71,7 @@ export function SyncPanel({ cliente, pool }: { cliente: string; pool: PoolMember
       const fresh = new Set<string>();
       res.forEach((p) =>
         p.rows
-          .filter((r) => r.status !== "unchanged" && missingRequired(r.data).length === 0)
+          .filter((r) => r.status !== "unchanged" && missingBloqueante(r.data).length === 0)
           .forEach((r) => fresh.add(r.key)),
       );
       setAccepted(fresh);
@@ -136,7 +136,7 @@ export function SyncPanel({ cliente, pool }: { cliente: string; pool: PoolMember
   // vivo, sin volver a sincronizar.
   const blocked = new Set(
     importable
-      .filter((r) => missingRequired({ ...r.data, ...edits[r.key] }).length > 0)
+      .filter((r) => missingBloqueante({ ...r.data, ...edits[r.key] }).length > 0)
       .map((r) => r.key),
   );
   // Lo que de verdad se va a crear. Una fila puede haberse marcado y luego

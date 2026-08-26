@@ -5,6 +5,7 @@ import { cargarWinners } from "@/lib/hue-data";
 import { legalSugerido, type LegalLite } from "@/lib/legal-sugerido";
 import { voz, varianteGuion, parseDuracion } from "@/lib/plantilla";
 import { convertirDialogo } from "@/lib/guion";
+import { combinarConsideraciones } from "@/lib/consideraciones";
 import type { PlanoParsed, EstaticoParsed } from "@/lib/guion";
 
 /**
@@ -256,7 +257,11 @@ function bloqueVariable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
   s += linea("Tendencia/referencia", i.trend);
   s += linea("Notas", i.notas);
   s += linea("Nota de guión", i.nota_guion);
-  s += linea("Comentarios del lead", i.comentarios_creativo);
+  // "Dile a H.Ü.E que quieres" — lo que el equipo pide EXPLÍCITAMENTE para esta tarea.
+  // Vive consolidado en peloteo_raw (guardarConsideraciones deja comentarios_creativo en
+  // null); se combinan por si es una tarea vieja sin consolidar. Guía de alta prioridad:
+  // si trae algo relevante, tómalo como parte de todo lo que usas para escribir el guión.
+  s += linea("LO QUE EL EQUIPO TE PIDE PARA ESTA TAREA (considéralo al escribir)", combinarConsideraciones(i.comentarios_creativo, i.peloteo_raw));
   // Peloteo (brief estructurado del lead)
   s += linea("Peloteo · tema", i.p_tema);
   s += linea("Peloteo · mensaje", i.p_mensaje);

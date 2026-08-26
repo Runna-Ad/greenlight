@@ -15,8 +15,6 @@ type DetallesProps = {
   tamanos: string[];
   duracion: string[];
   concepto: string | null;
-  /** Selling points del brief (texto). `undefined` en el portal → no se muestra al cliente. */
-  sellingPoints?: string | null;
   trend: string | null;
 };
 
@@ -27,6 +25,7 @@ type RunnaProps = {
   filenames: string[];
   comentariosCreativo: string | null;
   peloteo: string | null;
+  sellingPoints: string | null;
   puedeEditar: boolean;
   /** Puede cambiar la asignación (lead/admin/master). */
   puedeAsignar: boolean;
@@ -81,6 +80,7 @@ export function TabsTarea({
             filenames={runna.filenames}
             comentariosCreativo={runna.comentariosCreativo}
             peloteo={runna.peloteo}
+            sellingPoints={runna.sellingPoints}
             puedeEditar={runna.puedeEditar}
             puedeAsignar={runna.puedeAsignar}
             leadsPool={runna.leadsPool}
@@ -95,7 +95,6 @@ export function TabsTarea({
             tamanos={detalles.tamanos}
             duracion={detalles.duracion}
             concepto={detalles.concepto}
-            sellingPoints={detalles.sellingPoints}
             trend={detalles.trend}
             plantilla={plantilla}
             soloLectura={soloLectura}

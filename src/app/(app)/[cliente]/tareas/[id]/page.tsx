@@ -522,13 +522,11 @@ export default async function TareaPage({
               tamanos: idea.tamanos ?? [],
               duracion: idea.duracion ?? [],
               concepto: idea.concepto,
-              // Selling points → texto (arreglo unido). Sólo la página interna lo
-              // pasa; el portal omite la prop, así el cliente no ve la guía interna.
-              sellingPoints: (idea.selling_points ?? []).join("\n"),
               trend: idea.trend,
             }}
             // Rünna tools SÓLO para el equipo — no se construye para el cliente
-            // (no se filtra en el payload RSC, no sólo se oculta con CSS).
+            // (no se filtra en el payload RSC, no sólo se oculta con CSS). Los Selling
+            // Points viven aquí (guía interna): el cliente nunca los recibe.
             runna={
               esEquipo
                 ? {
@@ -537,6 +535,7 @@ export default async function TareaPage({
                     filenames,
                     comentariosCreativo: idea.comentarios_creativo,
                     peloteo: idea.peloteo_raw,
+                    sellingPoints: (idea.selling_points ?? []).join("\n"),
                     puedeEditar,
                     puedeAsignar: canAssign(role),
                     leadsPool,

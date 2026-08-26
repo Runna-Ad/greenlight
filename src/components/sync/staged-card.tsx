@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { ChipSelect } from "@/components/intake/chip-select";
 import { type PoolMember } from "@/components/intake/task-card";
 import type { SheetRow } from "@/lib/sheet-sync";
-import { missingRequired, requiredFor } from "@/lib/required";
+import { missingBloqueante, requiredFor, faltaLead } from "@/lib/required";
 import {
   ENTREGA,
   FORMATO,
@@ -66,7 +66,10 @@ export function StagedCard({
   // Se recalcula con las ediciones de la lead: corregir el campo desbloquea la
   // fila en vivo, sin tener que volver a sincronizar.
   const effective = { ...row.data, ...edits } as SheetRow;
-  const missing = missingRequired(effective);
+  // `missing` = SÓLO lo que BLOQUEA (sin la Asignación). Un lead faltante no bloquea:
+  // se crea sin responsable y se marca "sin lead" para asignarlo después (Pedro).
+  const missing = missingBloqueante(effective);
+  const sinLead = faltaLead(effective);
   const required = requiredFor(effective["Tipo de Asset"]);
   const isRequired = (f: keyof SheetRow) => required.includes(f as never);
 
@@ -140,6 +143,12 @@ export function StagedCard({
               No se puede crear: falta {missing.join(" · ")}
             </p>
           )}
+          {sinLead && (
+            <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+              <AlertCircle className="size-3.5 shrink-0" />
+              Sin lead — se creará igual, sin responsable; asígnalo después en la tarea.
+            </p>
+          )}
         </div>
 
         <button
@@ -166,8 +175,10 @@ export function StagedCard({
             {/* El sheet trae al LEAD (uno). Picker de UN solo lead, del pool de
                 Leads (rol `lead`) de este track. Los especialistas se asignan en la
                 tarea (Rünna tools). */}
+            {/* El lead NO es obligatorio para sincronizar: si falta, la tarea se crea
+                sin responsable (se asigna después). Por eso required={false}. */}
             <Picker
-              label="Lead" required={isRequired("Asignación")}
+              label="Lead (opcional)" required={false}
               options={pool.filter((p) => p.track === track && p.role === "lead").map((p) => ({ value: p.name, color: p.color }))}
               value={val("Asignación")} edited={isEdited("Asignación")}
               onChange={(v) => onEdit("Asignación", v[0] ?? "")} onReset={() => onResetField("Asignación")}

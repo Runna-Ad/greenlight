@@ -73,6 +73,21 @@ export function missingRequired(row: SheetRow): SheetColumn[] {
 }
 
 /**
+ * Los obligatorios que BLOQUEAN el sync — como missingRequired pero SIN la
+ * Asignación: una tarea sin lead se crea IGUAL (se asigna a mano después), sólo se
+ * marca "sin lead". Espeja el filtro del importador (import.ts), para que la UI no
+ * bloquee lo que el servidor sí importaría.
+ */
+export function missingBloqueante(row: SheetRow): SheetColumn[] {
+  return missingRequired(row).filter((c) => c !== "Asignación");
+}
+
+/** ¿A esta fila le falta el lead (Asignación)? NO bloquea el sync; sólo se marca. */
+export function faltaLead(row: SheetRow): boolean {
+  return isBlank(row["Asignación"]);
+}
+
+/**
  * Un copy no es un archivo con proporción.
  *
  * El importador tenía un fallback que inventaba `9:16 × FB` cuando la fila no

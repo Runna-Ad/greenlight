@@ -6,7 +6,7 @@ import { ExternalLink, Crown, Check, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { asignarTarea } from "@/app/(app)/[cliente]/tablero/actions";
-import { guardarConsideraciones } from "@/app/(app)/[cliente]/tareas/[id]/actions";
+import { guardarConsideraciones, guardarSellingPoints } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { combinarConsideraciones } from "@/lib/consideraciones";
 import { CampoIntake } from "./campo-intake";
 import { NombresFinales } from "./nombres-finales";
@@ -33,6 +33,7 @@ export function RunnaToolsTab({
   filenames,
   comentariosCreativo,
   peloteo,
+  sellingPoints,
   puedeEditar,
   puedeAsignar,
   leadsPool,
@@ -43,9 +44,11 @@ export function RunnaToolsTab({
   personas: Persona[];
   entregaUrl: string | null;
   filenames: string[];
-  /** Las dos fuentes de "Consideraciones" (se combinan en una caja). */
+  /** Las dos fuentes de "Dile a H.Ü.E qué quieres" (se combinan en una caja). */
   comentariosCreativo: string | null;
   peloteo: string | null;
+  /** Selling points del brief (texto). Vive aquí — guía interna del equipo. */
+  sellingPoints: string | null;
   /** El lead edite (leads + link); el especialista sólo lee esos. */
   puedeEditar: boolean;
   /** Puede cambiar la asignación (lead/admin/master). */
@@ -110,7 +113,7 @@ export function RunnaToolsTab({
 
         <div className="leading-tight">
           <span className="block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-            Consideraciones
+            Dile a H.Ü.E qué quieres
           </span>
           <div className="mt-1.5">
             <CampoIntake
@@ -118,11 +121,32 @@ export function RunnaToolsTab({
               campo="peloteo_raw"
               label=""
               valorInicial={consideracionesInicial}
-              placeholder="Campo para que el lead le deje comentarios al equipo asignado…"
+              placeholder="Lo que el equipo quiere para este guión: tono, gancho, qué resaltar, qué evitar… H.Ü.E lo lee y lo toma en cuenta."
               rows={5}
               caja
               soloLectura={soloLectura}
               accion={(anterior, nuevo) => guardarConsideraciones(ideaId, anterior, nuevo)}
+            />
+          </div>
+        </div>
+
+        {/* Selling Points — guía interna del equipo (movido aquí desde Detalles).
+            Rünna tools nunca se construye para el cliente, así que ya es team-only. */}
+        <div className="leading-tight">
+          <span className="block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            Selling Points
+          </span>
+          <div className="mt-1.5">
+            <CampoIntake
+              ideaId={ideaId}
+              campo="selling_points"
+              label=""
+              valorInicial={sellingPoints}
+              placeholder="Los selling points de la pieza (los edita el equipo)…"
+              rows={3}
+              caja
+              soloLectura={soloLectura}
+              accion={(anterior, nuevo) => guardarSellingPoints(ideaId, anterior, nuevo)}
             />
           </div>
         </div>
