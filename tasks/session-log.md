@@ -1,5 +1,37 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-26 — H.Ü.E aprende de ediciones (#4) + fixes de guardado/legal/sync + Apps Script lee CHIPS de Drive (todo shippeado + live)
+Sesión larga y densa (continuación del mismo día). Se cerró el #4 (H.Ü.E aprende de tus ediciones, con reap Opus + 4 serios arreglados), varios fixes que Pedro probó en vivo, y por fin el link de referencias (era un CHIP de Drive, no texto plano).
+
+**Qué se hizo (5 commits, todos pusheados + deployados):**
+1. **H.Ü.E aprende de ediciones (#4)** (`82c11ab`, mig **0048**): 2do motor de aprendizaje. Captura el BORRADOR que H.Ü.E genera (`hue_generations`, sella `imported_at` al importar), lo compara contra el guión publicado (`hue-diff.ts`, computado en código), mina patrones de ESTILO de las correcciones → propone lecciones al Cerebro (`source=auto_edit`) con los mismos seatbelts. HUB: toggle `auto_learn_edits`, síntesis manual, métrica "% conservado" + visor de diff. **Reap Opus (4 serios arreglados)**: debounce compare-and-set atómico (no bucle de llamadas pagadas), minar sólo borradores IMPORTADOS (no envenenar el corpus), enmascarar cifras al modelo, lecciones scopeadas al cliente (no fuga cross-cliente), y quitar `in_corrections` de "publicado".
+2. **Toggles: "automáticamente" no "solo"** (`740c97d`): "solo" se leía como "sólo de esta fuente" (restrictivo); era "aprende solo/automáticamente". Ambos loops alimentan el Cerebro ADITIVAMENTE.
+3. **Persistencia al guardar** (`6becad5`): `guardarIntake`/`guardarSellingPoints` escribían a la BD pero NO llamaban `revalidatePath` → al recargar Next servía la copia cacheada → parecía "no guardó". Evidencia (Supabase MCP): prod tenía "jojojo" guardado. Fix: `revalidatePath` como los hermanos.
+4. **Selling Points → Rünna tools + H.Ü.E lee consideraciones + lead opcional** (`115cf13`): Selling Points movido a Rünna tools (team-only ahí). "Consideraciones" → **"Dile a H.Ü.E qué quieres"**; el writer AHORA lo lee (`combinarConsideraciones` — leía `comentarios_creativo`, que `guardarConsideraciones` deja en null al consolidar en `peloteo_raw`). Sync ya no bloquea filas sin lead: `missingBloqueante` (= missingRequired sin Asignación) espeja el import; se marcan "sin lead".
+5. **Legal pedir cambios + Rünna tab en Vista cliente + Apps Script CHIPS** (`3448f96`): (a) el legal ahora es anclable (`LegalLectura`, target `ideas/legal`) en portal + Vista cliente interna → el cliente pide cambios sobre el legal como un plano. (b) La pestaña Rünna tools ya NO desaparece en Vista cliente: se atenúa + ícono EyeOff + "· interno". (c) Apps Script lee URLs de CHIPS de archivo de Drive vía el servicio avanzado Sheets (`chipRuns.chip.richLinkProperties.uri`) — `getLinkUrl()` NO los expone.
+
+**Apps Script (setup con Pedro, LIVE):** activó el servicio avanzado "Sheets" (Identifier=Sheets, v4), pegó el `Code.gs` nuevo, deployó nueva versión (MISMA URL `/exec`, sin cambio en Vercel). Probado en el editor (`testChipLinks`) → devuelve las URLs de Drive.
+
+**Diagnósticos con evidencia de prod (Supabase MCP execute_sql):**
+- "no guarda" → la BD SÍ tenía el valor ("jojojo"); era CACHÉ (revalidatePath).
+- "referencia no detecta el link" → **me EQUIVOQUÉ** (dije "texto plano" por el XLSX sin `<hyperlink>`); Pedro mostró que era un CHIP de Drive; los chips NO exportan como `<hyperlink>` y `getLinkUrl()` no los lee → fix con la API avanzada de Sheets.
+
+**Gates (cada commit):** tsc · eslint · test:db 298 · test:lib 375 · test:sync 44 · build — verdes. **Migración 0048 aplicada a prod.**
+
+**Decisiones (para NO re-litigar):**
+- #4 aprende del borrador→PUBLICADO (no del importado), "build it all at once", con visor de diff.
+- Selling Points vive en Rünna tools (team-only); "Dile a H.Ü.E qué quieres" = el campo de consideraciones que H.Ü.E lee.
+- Lead NO obligatorio para sincronizar (se marca, no bloquea) — la UI espeja al servidor.
+- Legal anclable con target `ideas/legal` (sin tabla nueva); Rünna tab atenuado, no oculto, en Vista cliente.
+- Chips de Drive: sólo se leen con el servicio avanzado Sheets (getLinkUrl no basta).
+
+**Pick up próxima sesión (LIVE-VERIFY, Pedro):**
+1. #4: generar guión con H.Ü.E → importar → editar → publicar; correr "síntesis de ediciones" y revisar las lecciones `auto_edit` en el Cerebro.
+2. Legal pedir cambios: portal → seleccionar legal → pedir cambio → equipo lo ve/gestiona.
+3. Chips: sync de una tarea NUEVA con chip → botón "Ver referencia".
+
+**Uncommitted:** ninguno (9 commits del período, pusheados). Sólo 2 untracked ajenos: `tasks/HANDOFF-*.md`.
+
 ## 2026-08-25 — Fix flujo de brief (referencias/selling points) + Apps Script lee ligas Drive + reglas de selling points en H.Ü.E (shippeado + live)
 Sesión de fixes sobre el "Resumen de brief", conectar el Apps Script, y una regla de prompt para H.Ü.E. **3 commits, todos pusheados + deployados.**
 

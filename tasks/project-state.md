@@ -1,5 +1,32 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-25 — fixes de brief (referencias/selling points) + Apps Script lee ligas Drive + reglas de selling points en H.Ü.E — **shippeado + live**
+Última actualización: 2026-08-26 — #4 (H.Ü.E aprende de ediciones) + fixes guardado/legal/sync + Apps Script lee CHIPS de Drive — **shippeado + live**
+
+## 🧠 H.Ü.E aprende de tus EDICIONES (#4) — 2026-08-26 — SHIPPEADO + LIVE (mig 0048)
+- 2º motor de aprendizaje (junto al de Ganadores). Captura el borrador de H.Ü.E (`hue_generations`,
+  `imported_at` sellado en `importarGuion`), diffea borrador→publicado (`hue-diff.ts`, computado en código),
+  mina patrones de ESTILO de las correcciones → propone lecciones `auto_edit` al Cerebro (mismos seatbelts).
+- HUB (`hue-training.tsx`): toggle `auto_learn_edits` (independiente), "Correr síntesis de ediciones", métrica
+  "% del borrador se conserva" + visor de diff borrador→publicado por tarea.
+- Guards: masking de cifras al corpus, `esCambioDeEstilo` (no minar cambios de sólo-números), scope al cliente
+  del corpus (no global), sólo mina borradores IMPORTADOS + editRate en (0,0.7). Debounce compare-and-set atómico
+  en el auto-trigger (no bucle de llamadas a la API). Reap Opus: 4 serios arreglados.
+- Migración **0048** (`hue_generations` + `imported_at`, `hue_instructions.source += auto_edit`, `hue_settings`
+  += `auto_learn_edits`/`last_synth_edits_at`). Aplicada a prod.
+
+## 🔧 Fixes de la sesión 2026-08-26 — SHIPPEADO + LIVE (sin migración)
+- **Guardado persiste al recargar**: `guardarIntake`/`guardarSellingPoints` faltaba `revalidatePath` → Next servía
+  caché vieja (parecía "no guardó", pero la BD sí tenía el valor). Arreglado.
+- **Selling Points** movido de Detalles → **Rünna tools** (team-only). "Consideraciones" → **"Dile a H.Ü.E qué
+  quieres"**, y el writer AHORA lo lee (`combinarConsideraciones`; antes leía `comentarios_creativo`, nulificado
+  al consolidar en `peloteo_raw`).
+- **Sync sin lead**: `missingBloqueante` (missingRequired − Asignación) → filas sin lead ya NO se bloquean, se
+  marcan "sin lead" y siguen seleccionables (la UI espeja al import).
+- **Legal pedir cambios**: `LegalLectura` (target `ideas/legal`) en portal + Vista cliente interna → el cliente
+  ancla cambios sobre el legal como un plano; el equipo los ve/gestiona. Sin tabla nueva.
+- **Rünna tools en Vista cliente**: la pestaña ya no desaparece — atenuada + EyeOff + "· interno", clickable.
+- **Apps Script lee CHIPS de Drive**: `Code.gs` usa el servicio avanzado Sheets (`chipRuns.chip.richLinkProperties.uri`)
+  — `getLinkUrl()` no expone los chips de archivo. Requiere el servicio "Google Sheets API" activado (ya lo hizo Pedro).
+
 
 ## 🔧 Fixes de brief + Apps Script + reglas de H.Ü.E (2026-08-25) — SHIPPEADO + LIVE
 - **Referencias (`BotonReferencia`)**: se guardaban sólo en la 1ª edición. Causa: el editor se desmonta al colapsar
