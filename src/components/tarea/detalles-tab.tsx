@@ -6,7 +6,7 @@ import { Pill } from "@/components/ui/pill";
 import { CampoIntake } from "./campo-intake";
 import { CampoDuraciones } from "./campo-duraciones";
 import { BotonReferencia } from "./boton-referencia";
-import { useWorkspace } from "./workspace-provider";
+import { useWorkspaceView } from "./workspace-provider";
 
 /**
  * La pestaña "Detalles asset" (mockup): los datos de la pieza que el CLIENTE sí
@@ -36,7 +36,7 @@ export function DetallesTab({
   plantilla: Plantilla;
   soloLectura: boolean;
 }) {
-  const { verCliente } = useWorkspace();
+  const { verCliente } = useWorkspaceView();
   const lectura = soloLectura || verCliente;
   const ct = contentType(tipoAsset);
   const IconCT = ct.icon;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { memo, useCallback, useMemo, useState, useTransition } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -92,6 +92,10 @@ function esGreenlitReciente(t: Task): boolean {
   return !!t.deliveredAt && Date.now() - new Date(t.deliveredAt).getTime() <= MS_7D;
 }
 
+// Referencia estable para columnas sin tarjetas: evita crear un [] nuevo por
+// render, que rompería el React.memo de <Column>.
+const EMPTY_TASKS: Task[] = [];
+
 /**
  * The sheet's people colours are NOT all pastel — Sebas is #666666, Mony a
  * mid purple. Used as a text background they failed contrast badly (2.3:1 and
@@ -158,6 +162,22 @@ export function Board({
     [tasks, fPersona, fBrief, fPlataforma, fMarca],
   );
 
+  // Agrupa las tarjetas visibles por columna UNA sola vez por render. Así cada
+  // <Column> recibe su propio array (misma referencia mientras `visible` no
+  // cambie) y su React.memo puede saltarse el re-render — antes se hacía un
+  // visible.filter(...) inline por columna, creando un array nuevo cada vez.
+  // La columna Greenlit (delivered) sólo lista las de ≤7 días (el resto vive en
+  // Entregas-archivo); las demás columnas, todo su estado.
+  const tasksByStatus = useMemo(() => {
+    const map = new Map<AssetStatus, Task[]>();
+    for (const status of KANBAN_STATUSES) map.set(status, []);
+    for (const t of visible) {
+      if (t.status === "delivered" && !esGreenlitReciente(t)) continue;
+      map.get(t.status)?.push(t);
+    }
+    return map;
+  }, [visible]);
+
   const filtersOn = [fPersona, fBrief, fPlataforma, fMarca].some((f) => f !== ALL);
   const clearFilters = () => {
     setFPersona(ALL);
@@ -173,56 +193,69 @@ export function Board({
     useSensor(KeyboardSensor),
   );
 
-  /** Optimistic move; the DB is still the authority, so revert on error. */
-  const applyMove = (task: Task, to: AssetStatus) => {
-    if (task.status === to || !mayMove) return;
-    const from = task.status;
-    const esOverride = !canMove(from, to);
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: to } : t)));
+  /** Optimistic move; the DB is still the authority, so revert on error.
+   *  useCallback: su identidad estable deja que <Column>/<TaskCard> memoizados
+   *  se salten el re-render (se pasa como onMove). */
+  const applyMove = useCallback(
+    (task: Task, to: AssetStatus) => {
+      if (task.status === to || !mayMove) return;
+      const from = task.status;
+      const esOverride = !canMove(from, to);
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: to } : t)));
 
-    startTransition(async () => {
-      const res = await moveTask(
-        cliente,
-        task.id,
-        to,
-        esOverride ? `${boardLabel(from)} → ${boardLabel(to)} fuera del flujo` : undefined,
-      );
-      if (!res.ok) {
-        setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: from } : t)));
-        toast.error(res.error ?? "No se pudo mover la tarea.");
-      } else if (esOverride) {
-        toast.success(`Movida fuera del flujo — queda registrada.`);
-      }
-    });
-  };
+      startTransition(async () => {
+        const res = await moveTask(
+          cliente,
+          task.id,
+          to,
+          esOverride ? `${boardLabel(from)} → ${boardLabel(to)} fuera del flujo` : undefined,
+        );
+        if (!res.ok) {
+          setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: from } : t)));
+          toast.error(res.error ?? "No se pudo mover la tarea.");
+        } else if (esOverride) {
+          toast.success(`Movida fuera del flujo — queda registrada.`);
+        }
+      });
+    },
+    [cliente, mayMove],
+  );
 
-  const onDragStart = (e: DragStartEvent) =>
-    setDragging(tasks.find((t) => t.id === e.active.id) ?? null);
+  const onDragStart = useCallback(
+    (e: DragStartEvent) => setDragging(tasks.find((t) => t.id === e.active.id) ?? null),
+    [tasks],
+  );
 
-  const onDragEnd = (e: DragEndEvent) => {
-    const task = dragging;
-    setDragging(null);
-    if (!task || !e.over) return;
-    applyMove(task, e.over.id as AssetStatus);
-  };
+  const onDragEnd = useCallback(
+    (e: DragEndEvent) => {
+      const task = dragging;
+      setDragging(null);
+      if (!task || !e.over) return;
+      applyMove(task, e.over.id as AssetStatus);
+    },
+    [dragging, applyMove],
+  );
 
-  const applyAssignees = (task: Task, memberIds: string[]) => {
-    const before = task.members;
-    const next = memberIds
-      .map((id) => members.find((m) => m.id === id))
-      .filter(Boolean)
-      .map((m) => ({ id: m!.id, name: m!.name, color: m!.color }));
+  const applyAssignees = useCallback(
+    (task: Task, memberIds: string[]) => {
+      const before = task.members;
+      const next = memberIds
+        .map((id) => members.find((m) => m.id === id))
+        .filter(Boolean)
+        .map((m) => ({ id: m!.id, name: m!.name, color: m!.color }));
 
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, members: next } : t)));
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, members: next } : t)));
 
-    startTransition(async () => {
-      const res = await setAssignees(cliente, task.id, memberIds);
-      if (!res.ok) {
-        setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, members: before } : t)));
-        toast.error(res.error ?? "No se pudo guardar la asignación.");
-      }
-    });
-  };
+      startTransition(async () => {
+        const res = await setAssignees(cliente, task.id, memberIds);
+        if (!res.ok) {
+          setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, members: before } : t)));
+          toast.error(res.error ?? "No se pudo guardar la asignación.");
+        }
+      });
+    },
+    [cliente, members],
+  );
 
   return (
     <div>
@@ -262,11 +295,10 @@ export function Board({
               key={status}
               cliente={cliente}
               status={status}
-              // La columna Greenlit (delivered) muestra SÓLO las de ≤7 días; las más
-              // viejas viven en Entregas-archivo. El resto de columnas, todo su estado.
-              tasks={visible.filter(
-                (t) => t.status === status && (status !== "delivered" || esGreenlitReciente(t)),
-              )}
+              // Slice ya agrupado (ver tasksByStatus): la columna Greenlit
+              // (delivered) trae SÓLO las de ≤7 días; las más viejas viven en
+              // Entregas-archivo. Referencia estable → React.memo puede saltar.
+              tasks={tasksByStatus.get(status) ?? EMPTY_TASKS}
               members={mayAssign ? members : undefined}
               dragging={dragging}
               mayOverride={mayOverride}
@@ -289,7 +321,7 @@ export function Board({
 // ─────────────────────────────────────────────────────────────
 // Column
 // ─────────────────────────────────────────────────────────────
-function Column({
+const Column = memo(function Column({
   cliente,
   status,
   tasks,
@@ -414,12 +446,12 @@ function Column({
       </div>
     </div>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────
 // Card
 // ─────────────────────────────────────────────────────────────
-function TaskCard({
+const TaskCard = memo(function TaskCard({
   cliente,
   task,
   members,
@@ -447,6 +479,15 @@ function TaskCard({
     disabled: !onMove || task.status === "published",
   });
 
+  // dnd-kit ya memoiza `listeners` y `attributes`; el spread creaba un objeto
+  // nuevo por render que rompía el React.memo de <CardBody>. Lo fijamos aquí.
+  // Sin grip de arrastre en "Con Cliente" (drag-locked); el menú "Mover" (onMove) sí sigue.
+  const handleProps = useMemo<Record<string, unknown> | undefined>(
+    () =>
+      onMove && task.status !== "published" ? { ...listeners, ...attributes } : undefined,
+    [onMove, task.status, listeners, attributes],
+  );
+
   return (
     <div ref={setNodeRef} className={isDragging ? "opacity-40" : ""}>
       <CardBody
@@ -458,14 +499,13 @@ function TaskCard({
         soyId={soyId}
         onAssign={onAssign}
         onMove={onMove}
-        // Sin grip de arrastre en "Con Cliente" (drag-locked); el menú "Mover" (onMove) sí sigue.
-        handleProps={onMove && task.status !== "published" ? { ...listeners, ...attributes } : undefined}
+        handleProps={handleProps}
       />
     </div>
   );
-}
+});
 
-function CardBody({
+const CardBody = memo(function CardBody({
   cliente,
   task,
   members,
@@ -670,7 +710,7 @@ function CardBody({
       </div>
     </article>
   );
-}
+});
 
 function MemberChip({ name, color }: { name: string; color: string }) {
   return (

@@ -30,26 +30,47 @@ import type { PlanoVista, EstaticoVista } from "./preview-slide";
  * planos DEBE re-renderizar el documento, así que el estado reactivo es lo
  * correcto y no hay ref que mutar.
  */
-export type WorkspaceApi = {
+/**
+ * El estado se parte en DOS contextos por FRECUENCIA de cambio (reap perf 2026-08-26):
+ *
+ *   - VISTA (`WorkspaceView`): `verCliente` + los setters (estables). Cambia sólo
+ *     al alternar Vista cliente/editor — es decir, casi nunca.
+ *   - DOCUMENTO (`WorkspaceDoc`): `planos`/`estatico`/`reseed`. Cambia en CADA tecla
+ *     (el autoguardado escribe el cuerpo vivo).
+ *
+ * Antes todo vivía en UN objeto de contexto, así que teclear un carácter cambiaba su
+ * identidad y re-renderizaba a TODOS los consumidores — incluidos hero/pestañas/
+ * detalles/banner que sólo leen `verCliente`. Con la partición, esos leen `useWorkspaceView`
+ * y ya no re-renderizan al teclear. Los consumidores del documento usan `useWorkspace`
+ * (mezcla ambos) como antes — su API no cambia.
+ */
+type WorkspaceView = {
   verCliente: boolean;
   setVerCliente: (v: boolean) => void;
-  planos: PlanoVista[];
   setPlanos: Dispatch<SetStateAction<PlanoVista[]>>;
-  estatico: EstaticoVista | null;
   setEstatico: Dispatch<SetStateAction<EstaticoVista | null>>;
+  /** Sube el nonce de re-siembra de un campo (setter estable). */
+  bumpReseed: (tabla: string, filaId: string, campo: string) => void;
+};
+
+type WorkspaceDoc = {
+  planos: PlanoVista[];
+  estatico: EstaticoVista | null;
   /** Nonce de "re-siembra" por campo (`tabla|filaId|campo` → contador). Sube cuando algo
    *  EXTERNO reescribe un campo (p. ej. "Aplicar" de H.Ü.E) para forzar el REMOUNT de ese
    *  <Campo> — que es uncontrolled (siembra su textarea una sola vez con `valorInicial`),
    *  así que sin remount no mostraría el texto nuevo. El TECLEO no lo sube (no queremos
    *  remontar mientras se escribe). Lo lee CampoDoc para keyear su <Campo>. */
   reseed: Record<string, number>;
-  bumpReseed: (tabla: string, filaId: string, campo: string) => void;
 };
+
+export type WorkspaceApi = WorkspaceView & WorkspaceDoc;
 
 /** Clave de re-siembra de un campo — estable entre el que sube el nonce y el que lo lee. */
 export const reseedKey = (tabla: string, filaId: string, campo: string) => `${tabla}|${filaId}|${campo}`;
 
-const WorkspaceCtx = createContext<WorkspaceApi | null>(null);
+const ViewCtx = createContext<WorkspaceView | null>(null);
+const DocCtx = createContext<WorkspaceDoc | null>(null);
 
 export function WorkspaceProvider({
   planosIniciales,
@@ -76,17 +97,35 @@ export function WorkspaceProvider({
     setReseed((prev) => ({ ...prev, [k]: (prev[k] ?? 0) + 1 }));
   }, []);
 
-  const api = useMemo<WorkspaceApi>(
-    () => ({ verCliente, setVerCliente, planos, setPlanos, estatico, setEstatico, reseed, bumpReseed }),
-    [verCliente, planos, estatico, reseed, bumpReseed],
+  // VISTA: cambia identidad SÓLO cuando `verCliente` alterna (los setters son estables).
+  const view = useMemo<WorkspaceView>(
+    () => ({ verCliente, setVerCliente, setPlanos, setEstatico, bumpReseed }),
+    [verCliente, bumpReseed],
   );
+  // DOCUMENTO: cambia identidad en cada tecla (planos/estatico) o re-siembra.
+  const doc = useMemo<WorkspaceDoc>(() => ({ planos, estatico, reseed }), [planos, estatico, reseed]);
 
-  return <WorkspaceCtx.Provider value={api}>{children}</WorkspaceCtx.Provider>;
+  return (
+    <ViewCtx.Provider value={view}>
+      <DocCtx.Provider value={doc}>{children}</DocCtx.Provider>
+    </ViewCtx.Provider>
+  );
 }
 
-/** El estado del workspace. Lanza si se usa fuera del provider (siempre dentro). */
-export function useWorkspace(): WorkspaceApi {
-  const ctx = useContext(WorkspaceCtx);
-  if (!ctx) throw new Error("useWorkspace debe usarse dentro de <WorkspaceProvider>.");
+/** Sólo el estado de VISTA (verCliente + setters). Los consumidores que sólo leen esto
+ *  (hero, pestañas, detalles, banner, correcciones, copies) NO re-renderizan al teclear. */
+export function useWorkspaceView(): WorkspaceView {
+  const ctx = useContext(ViewCtx);
+  if (!ctx) throw new Error("useWorkspaceView debe usarse dentro de <WorkspaceProvider>.");
   return ctx;
+}
+
+/** El estado COMPLETO del workspace (vista + documento). Lo usan los consumidores del
+ *  cuerpo (documento, portal, acciones, read-time). Re-renderiza al teclear — es lo que
+ *  necesitan. API idéntica a antes. */
+export function useWorkspace(): WorkspaceApi {
+  const view = useContext(ViewCtx);
+  const doc = useContext(DocCtx);
+  if (!view || !doc) throw new Error("useWorkspace debe usarse dentro de <WorkspaceProvider>.");
+  return useMemo<WorkspaceApi>(() => ({ ...view, ...doc }), [view, doc]);
 }

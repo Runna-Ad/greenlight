@@ -6,7 +6,7 @@ import { MessageSquareText, Link2 } from "lucide-react";
 import { STATUS_LABEL, STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
 import type { Plantilla } from "@/lib/plantilla";
 import { CampoIntake } from "./campo-intake";
-import { useWorkspace } from "./workspace-provider";
+import { useWorkspaceView } from "./workspace-provider";
 
 /**
  * La HERO de la tarea (mockup): la tarjeta cálida con la identidad de la pieza.
@@ -44,7 +44,7 @@ export function HeroTarea({
   entregaUrl: string | null;
   soloLectura: boolean;
 }) {
-  const { verCliente } = useWorkspace();
+  const { verCliente } = useWorkspaceView();
   const token = STATUS_TOKEN[status];
 
   return (

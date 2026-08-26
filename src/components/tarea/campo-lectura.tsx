@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Plus, X, Check, ArrowRight } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate } from "@floating-ui/react-dom";
@@ -148,6 +148,11 @@ export function CampoLectura({
 
   const corrAbierta = abierta ? byId.get(abierta) : undefined;
   const cardAbierta = !!corrAbierta && !componiendo && !sel;
+  // ¿La tarjeta lleva controles operables (confirmar/descartar/quitar)? Sí para el
+  // revisor y para el cliente sobre un cambio vivo; NO en el único caso read-only
+  // (cliente + cambio ya aplicado `closed`). Con controles debe ser role="dialog"
+  // (ARIA prohíbe controles dentro de un tooltip); sin ellos sigue siendo tooltip.
+  const tarjetaConControles = !!corrAbierta && (!!ctx?.esRevisor || corrAbierta.estado !== "closed");
 
   // Floating UI: ancla la tarjeta a la marca (o chip) y la mantiene posicionada;
   // flip/shift para que nunca tape la frase ni se recorte.
@@ -181,6 +186,56 @@ export function CampoLectura({
   const cerrarPronto = () => {
     if (cerrarTimer.current) clearTimeout(cerrarTimer.current);
     cerrarTimer.current = setTimeout(() => setAbierta(null), 140);
+  };
+
+  // --- Acceso por TECLADO a la tarjeta (paridad con el hover del ratón) ---
+  // La tarjeta se PORTALa a <body>, así que Tab no la alcanza siguiendo el orden
+  // natural del DOM: hay que puentear el foco a mano. El disparador (marca o chip)
+  // ABRE la tarjeta al recibir foco —igual que al pasar el ratón—; Escape la cierra;
+  // Enter/Espacio/Tab meten el foco DENTRO, hacia sus botones (Confirmar/Descartar/
+  // Quitar). `evitarReapertura` corta el ciclo Escape→foco-al-disparador→onFocus→reabrir.
+  const evitarReapertura = useRef(false);
+
+  const primerControlTarjeta = () =>
+    floatingEl?.querySelector<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) ?? null;
+
+  const alEnfocarDisparador = (id: string) => {
+    if (evitarReapertura.current) {
+      evitarReapertura.current = false;
+      return;
+    }
+    abrir(id);
+  };
+  const alTeclearDisparador = (e: ReactKeyboardEvent<HTMLElement>, id: string) => {
+    if (e.key === "Escape") {
+      if (abierta === id) setAbierta(null);
+      return;
+    }
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault(); // semántica de botón (y evita el scroll del Espacio)
+      if (abierta !== id) abrir(id);
+      else primerControlTarjeta()?.focus();
+      return;
+    }
+    if (e.key === "Tab" && !e.shiftKey && abierta === id) {
+      const primero = primerControlTarjeta();
+      if (primero) {
+        e.preventDefault(); // el portal deja la tarjeta fuera del tab-order → puente
+        primero.focus();
+      }
+    }
+  };
+  // Escape DENTRO de la tarjeta: cierra y DEVUELVE el foco al disparador (sin que su
+  // onFocus la reabra), para no perder el foco en el <body> al desmontarse la tarjeta.
+  const alTeclearTarjeta = (e: ReactKeyboardEvent<HTMLElement>, id: string) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      evitarReapertura.current = true;
+      setAbierta(null);
+      marcaRefs.current.get(id)?.focus();
+    }
   };
 
   const fila = (contenido: ReactNode) => (
@@ -267,6 +322,11 @@ export function CampoLectura({
       }}
       onMouseEnter={() => abrir(c.id)}
       onMouseLeave={cerrarPronto}
+      onFocus={() => alEnfocarDisparador(c.id)}
+      onBlur={cerrarPronto}
+      onKeyDown={(e) => alTeclearDisparador(e, c.id)}
+      aria-haspopup="dialog"
+      aria-expanded={abierta === c.id}
       className="max-w-[140px] truncate rounded-full px-1.5 py-0.5 text-[10px] italic text-foreground"
       style={{ background: MARCA[c.estado] }}
     >
@@ -288,6 +348,11 @@ export function CampoLectura({
       }}
       onMouseEnter={() => abrir(c.id)}
       onMouseLeave={cerrarPronto}
+      onFocus={() => alEnfocarDisparador(c.id)}
+      onBlur={cerrarPronto}
+      onKeyDown={(e) => alTeclearDisparador(e, c.id)}
+      aria-haspopup="dialog"
+      aria-expanded={abierta === c.id}
       className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] italic text-foreground"
       style={{ background: "color-mix(in srgb, var(--status-progress) 26%, transparent)" }}
     >
@@ -320,8 +385,19 @@ export function CampoLectura({
                 if (el) marcaRefs.current.set(id, el);
                 else marcaRefs.current.delete(id);
               }}
+              // Foco de teclado: la frase resaltada es la afordancia inline (no hay
+              // pin como en el editor), así que se vuelve enfocable/operable para que
+              // el teclado abra la MISMA tarjeta que el ratón. Aditivo al hover.
+              tabIndex={0}
+              role="button"
+              aria-haspopup="dialog"
+              aria-expanded={abierta === sg.corr!.id}
+              aria-label={`Ver corrección en «${limpio.slice(sg.start, sg.end)}»`}
               onMouseEnter={() => abrir(sg.corr!.id)}
               onMouseLeave={cerrarPronto}
+              onFocus={() => alEnfocarDisparador(sg.corr!.id)}
+              onBlur={cerrarPronto}
+              onKeyDown={(e) => alTeclearDisparador(e, sg.corr!.id)}
               style={{ background: MARCA[sg.corr.estado], borderRadius: "2px" }}
               className="cursor-help text-foreground"
             >
@@ -439,9 +515,21 @@ export function CampoLectura({
         createPortal(
           <div
             ref={setFloatingEl}
-            role="tooltip"
+            // Con controles operables debe ser role="dialog" (ARIA prohíbe controles
+            // dentro de un role="tooltip", que muchos lectores exponen sólo vía
+            // aria-describedby, no como región alcanzable). Popover, no modal → sin
+            // aria-modal; se cierra con Escape (alTeclearTarjeta) devolviendo el foco.
+            role={tarjetaConControles ? "dialog" : "tooltip"}
+            aria-label={
+              tarjetaConControles
+                ? `Acciones de la corrección «${corrAbierta.targetQuote ?? "este campo"}»`
+                : undefined
+            }
             onMouseEnter={() => abrir(corrAbierta.id)}
             onMouseLeave={cerrarPronto}
+            onFocus={() => abrir(corrAbierta.id)}
+            onBlur={cerrarPronto}
+            onKeyDown={(e) => alTeclearTarjeta(e, corrAbierta.id)}
             style={{
               ...floatingStyles,
               opacity: isPositioned ? 1 : 0,

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import type { Plantilla } from "@/lib/plantilla";
 import { DetallesTab } from "./detalles-tab";
 import { RunnaToolsTab, type Persona } from "./runna-tools-tab";
-import { useWorkspace } from "./workspace-provider";
+import { useWorkspaceView } from "./workspace-provider";
 
 type DetallesProps = {
   tipoAsset: string | null;
@@ -53,7 +53,7 @@ export function TabsTarea({
   detalles: DetallesProps;
   runna?: RunnaProps;
 }) {
-  const { verCliente } = useWorkspace();
+  const { verCliente } = useWorkspaceView();
   const [tab, setTab] = useState<"detalles" | "runna">("detalles");
   // Rünna tools sigue ACCESIBLE en Vista cliente (el equipo puede entrar), sólo se
   // atenúa + marca "no lo ve el cliente" — antes desaparecía por completo (Pedro).

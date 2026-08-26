@@ -1,7 +1,7 @@
 "use client";
 
 import { PegarGuion } from "./pegar-guion";
-import { useWorkspace } from "./workspace-provider";
+import { useWorkspaceView } from "./workspace-provider";
 
 /**
  * La banda "¿Ya tienes el guión? / Pegar Guión". Además de su función (pegar el
@@ -21,7 +21,7 @@ export function BannerPegarGuion({
   esEstatico: boolean;
   soloLectura: boolean;
 }) {
-  const { verCliente, setPlanos, setEstatico } = useWorkspace();
+  const { verCliente, setPlanos, setEstatico } = useWorkspaceView();
   if (soloLectura || verCliente) return null;
 
   return (

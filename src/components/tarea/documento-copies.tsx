@@ -5,7 +5,7 @@ import { Plus, Trash2, Minus, FileText, Type, AlignLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useAutoguardado } from "./campo";
 import { CampoLectura } from "./campo-lectura";
-import { useWorkspace } from "./workspace-provider";
+import { useWorkspaceView } from "./workspace-provider";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { TextoRico } from "@/components/ui/linkify";
@@ -51,7 +51,7 @@ export function DocumentoCopies({
 }) {
   const [temas, setTemas] = useState<TemaRow[]>(temasIniciales);
   const [creando, setCreando] = useState(false);
-  const { verCliente } = useWorkspace();
+  const { verCliente } = useWorkspaceView();
   const modo = verCliente ? "lectura" : "editable";
 
   // ── Vista cliente / portal: sólo lectura, con correcciones ancladas ──

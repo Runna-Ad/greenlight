@@ -50,10 +50,33 @@ Cambios sin commitear aún (working tree) — Pedro revisa antes de push.
   CI (.github/workflows con `npm run test` + tsc + Dependabot); (M2) política/comentario en `notification_deliveries`;
   (M3) trigger de limpieza + CHECK tabla en `field_edits`; (M4) `SnippetKind` en database.types.ts sin `selling_point`.
 
-### ❓ DECISIONES para Pedro (no toqué — necesitan tu intención)
-- **Portal ¿por marca o por cliente?** Hoy un Partner ve TODO lo publicado de su CLIENTE (todas las marcas). Si Card y
-  Préstamos tienen stakeholders externos DISTINTOS, hay que acotar el portal por `marca_id`. Si comparten contacto, está bien.
-- **Copies + legal**: ¿construir el editor de legal para Copies (el portal/data ya lo soportarían) o dejarlo fuera a propósito?
+### ✅ BATCH 2 (2026-08-26 cont.) — rate-limit + Copies legal + top-5 perf/a11y/CI (gates VERDES, SIN pushear aún)
+- **Rate-limit del portal público** (`solicitarAcceso`): por-IP (memoria) + circuit-breaker global durable (cuenta
+  pending_invites recientes) + NO re-avisar a admins en re-envío del mismo correo. Cierra el vector de spam a buzones.
+- **Copies legal** (decisión Pedro: SÍ): `<BloqueLegal>` (extraído de documento-guion, idea-level, editor vs Vista
+  cliente anclable) montado en la rama copies de page.tsx; sugerencia determinista ahora lee headlines/descripciones de copies.
+- **Perf**: WorkspaceProvider partido en 2 contextos por frecuencia (`useWorkspaceView` para hero/pestañas/detalles/
+  banner/copies/correcciones → no re-render al teclear); board memoizado (memo Column/TaskCard/CardBody + tasksByStatus
+  Map + handleProps estable); `PegarGuion` difiere la tabla de emojis 39KB (`await import` en el handler).
+- **a11y**: la tarjeta de corrección (campo-lectura) ahora es teclado/lector accesible (role=dialog con controles,
+  onFocus/onBlur en chips+marks, Escape cierra y devuelve foco).
+- **CI**: `.github/workflows/ci.yml` (tsc·lint·test en PR + push a main) + `.github/dependabot.yml`. ⚠️ `test-sync.mjs`
+  hace un fetch a un Google Sheet público → CI podría ponerse rojo raramente por red (follow-up: gatearlo en CI).
+- **Decisión Pedro**: **Portal se queda por-CLIENTE** (un Partner ve todo lo de su cliente — intencional, NO tocar).
+
+### 📋 QUÉ QUEDA (backlog tras batch 2, por importancia)
+1. **Perf profundo**: memoizar CampoDoc/Campo + estabilizar los `onCambio` → que teclear re-renderice SÓLO el campo
+   editado, no todo el subárbol del documento (el split de contexto ya frenó a los HERMANOS; falta el subárbol).
+2. **a11y (medio)**: `FaltantesDialog` (brief-builder) → `<Dialog>` (focus-trap); skip-to-content; targets <24px
+   (icon-xs, pin de corrección, X de referencia); aria-expanded en DiffTarea; label en input file del KB; h1 del portal
+   `hidden`→`sr-only` en móvil; "Ver campo" no mueve foco; labels en emails del brief; confirmar borrado de doc KB/copy.
+3. **Funcionalidad**: "Ver campo" del LEGAL no-op (falta `data-campo-key` en cortinilla-cierre/legal-lectura); tope en
+   "Agregar varias" del brief; empty-state de KB docs.
+4. **Perf menor**: page.tsx reusar `firmarLote`/`cargarRefs*` (N round-trips de storage); admin tabs con next/dynamic;
+   `moveTask` usar `board_tasks.client_slug`; `/clientes` force-dynamic → revalidate.
+5. **DB minors (ship-gated)**: M2 policy/comentario en notification_deliveries; M3 trigger+CHECK en field_edits; M4
+   `SnippetKind` sin `selling_point`; CHECK de scope en snippets (tras auditar el dominio).
+6. **CI hardening**: gatear el fetch de red de test-sync en CI (evitar rojos por red).
 
 ---
 

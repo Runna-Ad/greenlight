@@ -15,13 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { importarGuion, importarEstatico, extraerGuion } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { crearGuion, crearCopy } from "@/app/(app)/[cliente]/tareas/[id]/writer-actions";
 import type { PlanoVista, EstaticoVista } from "./preview-slide";
-import {
-  parseGuion,
-  parseEstatico,
-  contarPlanos,
-  type PlanoParsed,
-  type EstaticoParsed,
-} from "@/lib/guion";
+import type { PlanoParsed, EstaticoParsed } from "@/lib/guion";
 
 const CAMPOS_PLANO: { k: keyof PlanoParsed; label: string; rows: number; ancho?: boolean }[] = [
   { k: "titulo", label: "Plano", rows: 1, ancho: true },
@@ -111,8 +105,13 @@ export function PegarGuion({
       setPaso("revisar");
     });
 
-  const analizar = () => {
+  const analizar = async () => {
     if (!texto.trim()) return;
+    // Carga PEREZOSA del parser: guion.ts arrastra la tabla de emojis (~39KB gzip) y
+    // era el único import CLIENTE que la metía en el bundle de CADA tarea. Al importarlo
+    // aquí, dentro del handler, sólo se baja cuando el usuario de verdad pega y analiza
+    // (raro comparado con abrir la tarea). Los botones siguen siendo eager. (reap 2026-08-26)
+    const { parseGuion, parseEstatico, contarPlanos } = await import("@/lib/guion");
     if (modo === "guion") {
       const p = parseGuion(texto);
       setPlanos(p);

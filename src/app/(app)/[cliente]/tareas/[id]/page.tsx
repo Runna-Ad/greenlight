@@ -19,6 +19,7 @@ import { TabsTarea } from "@/components/tarea/tabs-tarea";
 import { BannerPegarGuion } from "@/components/tarea/banner-pegar-guion";
 import { DocumentoGuion } from "@/components/tarea/documento-guion";
 import { DocumentoCopies, type TemaRow } from "@/components/tarea/documento-copies";
+import { BloqueLegal } from "@/components/tarea/bloque-legal";
 import { legalSugerido } from "@/lib/legal-sugerido";
 import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
@@ -361,6 +362,9 @@ export default async function TareaPage({
     estatico?.copy_subtitulo,
     estatico?.copy_cta,
     estatico?.legales_extra,
+    // Copies: el "guión" son los headlines/descripciones de cada copy — así la
+    // sugerencia determinista de legal también dispara para una tarea de Copies.
+    ...temas.flatMap((t) => t.copies.flatMap((c) => [c.headline, c.descripcion])),
   ]
     .filter(Boolean)
     .join(" ");
@@ -566,7 +570,21 @@ export default async function TareaPage({
           >
             <div className="min-w-0 space-y-4">
               {plantilla === "copies" ? (
-                <DocumentoCopies ideaId={idea.id} temasIniciales={temas} soloLectura={soloLectura} />
+                <>
+                  <DocumentoCopies ideaId={idea.id} temasIniciales={temas} soloLectura={soloLectura} />
+                  {/* Legal para Copies (uno por tarea): antes no había forma de adjuntarlo,
+                      y una Copies con CASHBACK/MSI no podía completarse. Mismo bloque
+                      idea-level que el guión (editor vs Vista cliente anclable). */}
+                  <BloqueLegal
+                    ideaId={idea.id}
+                    titulo="Legales"
+                    legalesLibres={idea.legales_libres}
+                    seleccionados={legalesSeleccionados}
+                    biblioteca={legalesDisponibles}
+                    sugerencia={sugerenciaLegal}
+                    soloLectura={soloLectura}
+                  />
+                </>
               ) : (
                 <>
                   <BannerPegarGuion ideaId={idea.id} esEstatico={esEstatico} soloLectura={soloLectura} />

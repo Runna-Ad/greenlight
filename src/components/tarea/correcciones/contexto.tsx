@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useMemo, useState, useTransitio
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { keyCampo, type Correccion } from "@/lib/correcciones";
-import { useWorkspace } from "@/components/tarea/workspace-provider";
+import { useWorkspaceView } from "@/components/tarea/workspace-provider";
 import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
 import {
   agregarCorreccion,
@@ -89,7 +89,7 @@ export function CorreccionesProvider({
   // "Aplicar" sin recargar. Se destructuran aparte para NO meter el objeto `ws` completo
   // (que cambia en cada edición de planos) en las deps del useMemo de abajo — eso reventaría
   // la memo de perf. Este provider vive DENTRO de <WorkspaceProvider> (page.tsx).
-  const { setPlanos: setWsPlanos, setEstatico: setWsEstatico, bumpReseed } = useWorkspace();
+  const { setPlanos: setWsPlanos, setEstatico: setWsEstatico, bumpReseed } = useWorkspaceView();
 
   const validar = useCallback(
     () =>
