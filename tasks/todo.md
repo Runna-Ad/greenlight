@@ -1,5 +1,27 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔔 Preferencias de notificación por persona (0050) — CONSTRUIDO + TESTEADO, migración SIN aplicar
+Cada quien decide QUÉ le llega por correo (por evento) + con qué SCOPE. La campana (in-app) sigue amplia
+dentro del scope; el email es el canal curado. Arregla el firehose (un lead recibía TODA la actividad de todos
+los tracks) y añade el aviso "se te asignó una tarea" (no existía).
+- **Migración 0050** (`..._0050_notification_prefs.sql`, SIN aplicar): `notification_prefs`(profile×evento→email/slack) +
+  `profiles.notify_scope`/`notify_watch_all` + seed de defaults por rol (existentes) + trigger AFTER INSERT que siembra
+  a los NUEVOS (una vez, sin clobber en re-login) + trigger `task_assigned` en idea_assignments + `fan_out` scope-aware
+  (lead→su track) + pata `watch_all` (opt-in del firehose).
+- **Capa de envío**: `decisionEmail` (puro) + `notif-email` leen la pref por-evento; MANDA sobre el default del catálogo.
+- **UI**: matriz en Mi perfil (`perfil-tab`): selector de Alcance (lead/admin), toggle "avísame de cada movimiento",
+  switches de email por evento. Actions: `cargarMisPrefs`/`guardarPrefEvento`/`guardarNotifScope`/`guardarWatchAll`.
+- **Defaults email**: admin=off (opt-in; la campana ya le muestra todo) · lead=submitted/changes/approved/published/brief ·
+  especialista=task_assigned+changes. Scope: admin=all, lead=my_track, especialista=only_mine.
+- **Tests**: test:lib 379 (eventPref MANDA), test:db 305 (task_assigned dispara, scope excluye otro track, watch_all recibe).
+  tsc·eslint·build VERDES. **Migración 0050 NO aplicada** → ship = `npm run migrate` (pin ybbrpqzbedaxsmotgtkh) + push.
+- **⏳ LIVE-VERIFY post-ship** (Pedro, con sesión): abrir Mi perfil como lead/especialista, cambiar toggles, confirmar que
+  el correo respeta la matriz y que el lead ya no ve otros tracks.
+- **Fase 3b (siguiente)**: notificaciones al CLIENTE (hoy el cliente NO recibe nada cuando le mandan una tarea a revisar) +
+  sus toggles en el portal. La tabla de prefs ya es genérica (soporta clientes sin rework).
+
+
+
 ## 🌾 DEEP REAP 2026-08-26 — 6-agent audit (security · correctness · DB · perf · a11y · funcionalidad)
 Baseline y post-fix VERDES: tsc · eslint (0 errores) · test:lib 375 · test:db 298 · test:sync 44 · build.
 Cambios sin commitear aún (working tree) — Pedro revisa antes de push.

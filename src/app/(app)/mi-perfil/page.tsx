@@ -3,6 +3,7 @@ import { getSoy } from "@/lib/soy";
 import { getViewAs } from "@/lib/view-as";
 import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { PerfilTab } from "@/components/admin/perfil-tab";
+import { cargarMisPrefs } from "@/app/(app)/admin/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
  * equipo dentro de Configuración). Reusa el MISMO PerfilTab que la pestaña de admin.
  */
 export default async function MiPerfilPage() {
-  const [soy, role] = await Promise.all([getSoy(), getViewAs()]);
+  const [soy, role, misPrefs] = await Promise.all([getSoy(), getViewAs(), cargarMisPrefs()]);
 
   if (!canSee(role, "mi-perfil")) {
     return (
@@ -29,7 +30,7 @@ export default async function MiPerfilPage() {
       <h1 className="text-lg font-semibold text-foreground font-[family-name:var(--font-poppins)]">
         Mi perfil
       </h1>
-      <PerfilTab soy={soy} />
+      <PerfilTab soy={soy} notif={misPrefs} role={role} />
     </div>
   );
 }

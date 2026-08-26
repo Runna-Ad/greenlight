@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
 import { getSoyId } from "@/lib/soy";
+import { getCurrentUser } from "@/lib/identity";
+import { EVENTOS_VALIDOS, SCOPES_VALIDOS, type MisPrefs } from "@/lib/notif-eventos";
 import { canAdmin, canAssignAdmins } from "@/lib/roles";
 import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
 import type { MiembroRow, RolAsignable } from "@/lib/equipo";
@@ -177,6 +179,70 @@ export async function guardarMiPerfil(patch: {
   if (error) return { ok: false, error: error.message };
   revalidatePath("/mi-perfil");
   revalidatePath("/admin");
+  return { ok: true };
+}
+
+// ── Preferencias de notificación (0050) — cada quien gestiona LAS SUYAS ─────────
+// Se llavean por el PROFILE id (getCurrentUser().userId), no por el member id: las
+// prefs y el scope/watch viven en profiles/notification_prefs. In-app siempre llega
+// dentro del scope; esto cura el EMAIL por evento + el scope + el watch-all.
+
+/** Carga las prefs de la persona actual (para pintar Mi perfil). null si no hay sesión. */
+export async function cargarMisPrefs(): Promise<MisPrefs | null> {
+  if (!hasSupabase()) return null;
+  const u = await getCurrentUser();
+  if (!u) return null;
+  const db = supabaseAdmin();
+  const [{ data: prof }, { data: rows }] = await Promise.all([
+    db.from("profiles").select("notify_scope, notify_watch_all").eq("id", u.userId).maybeSingle(),
+    db.from("notification_prefs").select("event_type, email").eq("profile_id", u.userId),
+  ]);
+  const p = prof as { notify_scope: MisPrefs["scope"]; notify_watch_all: boolean } | null;
+  const prefs: Record<string, boolean> = {};
+  for (const r of (rows ?? []) as { event_type: string; email: boolean }[]) prefs[r.event_type] = r.email;
+  return { scope: p?.notify_scope ?? "my_track", watchAll: p?.notify_watch_all ?? false, prefs };
+}
+
+/** Enciende/apaga el EMAIL de un evento para la persona actual. */
+export async function guardarPrefEvento(eventType: string, email: boolean): Promise<Guardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const u = await getCurrentUser();
+  if (!u) return { ok: false, error: "Inicia sesión para editar tus notificaciones." };
+  if (!EVENTOS_VALIDOS.has(eventType)) return { ok: false, error: "Evento no válido." };
+  const { error } = await supabaseAdmin()
+    .from("notification_prefs")
+    .upsert(
+      { profile_id: u.userId, event_type: eventType, email, updated_at: new Date().toISOString() },
+      { onConflict: "profile_id,event_type" },
+    );
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/mi-perfil");
+  return { ok: true };
+}
+
+/** Cambia el SCOPE (todo / mi equipo / sólo lo mío) de la persona actual. */
+export async function guardarNotifScope(scope: string): Promise<Guardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const u = await getCurrentUser();
+  if (!u) return { ok: false, error: "Inicia sesión." };
+  if (!SCOPES_VALIDOS.has(scope)) return { ok: false, error: "Scope no válido." };
+  const { error } = await supabaseAdmin().from("profiles").update({ notify_scope: scope }).eq("id", u.userId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/mi-perfil");
+  return { ok: true };
+}
+
+/** Enciende/apaga "avísame de cada movimiento" (opt-in del firehose) — admin/lead. */
+export async function guardarWatchAll(on: boolean): Promise<Guardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const u = await getCurrentUser();
+  if (!u) return { ok: false, error: "Inicia sesión." };
+  if (u.role !== "admin" && u.role !== "master" && u.role !== "lead") {
+    return { ok: false, error: "Sólo un lead o admin ve todo." };
+  }
+  const { error } = await supabaseAdmin().from("profiles").update({ notify_watch_all: on }).eq("id", u.userId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/mi-perfil");
   return { ok: true };
 }
 

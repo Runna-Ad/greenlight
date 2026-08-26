@@ -239,6 +239,11 @@ await db.exec(`
   on conflict do nothing;
   insert into produccion.idea_assignments (idea_id, profile_id, role)
    values ('00000000-0000-0000-0000-0000000000d1','${CREA}','creativo');
+  -- El lead de prueba es un perfil "pelón" (sin track_member); en prod TODO lead ES
+  -- track_member de su track. Para las pruebas generales de notificación lo dejamos
+  -- notify_scope='all' (ve todo) — el scope por-track de 0050 se prueba aparte, abajo,
+  -- con leads ligados a un track real.
+  update produccion.profiles set notify_scope='all' where id='${LEAD}';
 `);
 
 // clear the manual filename-test asset so the workflow section starts clean
@@ -1892,6 +1897,60 @@ console.log("\n▶ 0047 — cambios del cliente enrutan al lead");
      !cli.some((n) => n === "Galie" || n === "Mony"));
   ok("y sí genera aviso (al lead/admin)", cli.length > 0);
 }
+
+// ── Preferencias de notificación (0050): task_assigned + scope por-track + watch_all ──
+console.log("\n▶ Notificaciones 0050 — task_assigned, scope por-track, watch_all");
+await db.exec(`select set_config('produccion.acting_member','',false);`);
+await db.exec(`select set_config('produccion.notify_to_lead','false',false);`);
+
+// task_assigned: asignar un miembro (con perfil) crea el aviso al asignado.
+const nP = "00000000-0000-0000-0000-0000000000e5";
+await db.exec(`
+  insert into produccion.profiles (id,email,full_name,role) values ('${nP}','espn@runna.mx','EspN','creative') on conflict (id) do nothing;
+  insert into produccion.track_members (track,name,color,role,profile_id) values ('real','EspNotif0050','#775cbf','creative','${nP}') on conflict do nothing;
+`);
+const nM = await scalar(`select id from produccion.track_members where name='EspNotif0050'`);
+const nIdea = await scalar(`select id from produccion.ideas where track='real' limit 1`);
+await db.query(`delete from produccion.notifications where entity_id=$1`, [nIdea]);
+await db.query(`delete from produccion.idea_assignments where idea_id=$1 and member_id=$2`, [nIdea, nM]);
+await db.query(`insert into produccion.idea_assignments (idea_id, member_id) values ($1,$2)`, [nIdea, nM]);
+eq("asignar dispara task_assigned al asignado", Number(await scalar(
+  `select count(*) from produccion.notifications where entity_id=$1 and type='task_assigned' and recipient_id=$2`, [nIdea, nP])), 1);
+
+// scope: un lead 'my_track' sólo recibe SU track (arregla el firehose).
+const lrP = "00000000-0000-0000-0000-0000000000f1", lnP = "00000000-0000-0000-0000-0000000000f2";
+await db.exec(`
+  insert into produccion.profiles (id,email,full_name,role) values
+   ('${lrP}','lrn@runna.mx','LeadReal','lead'),('${lnP}','lnn@runna.mx','LeadNormal','lead') on conflict (id) do nothing;
+  insert into produccion.track_members (track,name,color,role,profile_id) values
+   ('real','LeadRealN','#775cbf','lead','${lrP}'),('normal','LeadNormalN','#775cbf','lead','${lnP}') on conflict do nothing;
+`);
+eq("un lead nuevo arranca con notify_scope='my_track' (trigger 0050)",
+   await scalar(`select notify_scope from produccion.profiles where id='${lrP}'`), "my_track");
+await db.query(`delete from produccion.notifications where entity_id=$1`, [nIdea]);
+await db.exec(`select set_config('produccion.acting_member','',false);`);
+await db.query(`update produccion.ideas set status='in_progress' where id=$1`, [nIdea]);
+await db.query(`update produccion.ideas set status='under_review' where id=$1`, [nIdea]);
+eq("el lead del track REAL recibe la revisión de una tarea real", Number(await scalar(
+  `select count(*) from produccion.notifications where entity_id=$1 and recipient_id=$2`, [nIdea, lrP])), 1);
+eq("el lead de OTRO track (normal) NO la recibe — scope my_track", Number(await scalar(
+  `select count(*) from produccion.notifications where entity_id=$1 and recipient_id=$2`, [nIdea, lnP])), 0);
+
+// watch_all: un admin con notify_watch_all recibe hasta eventos que no son su tarea.
+const awP = "00000000-0000-0000-0000-0000000000f3";
+await db.exec(`
+  insert into produccion.profiles (id,email,full_name,role,notify_watch_all,notify_scope)
+   values ('${awP}','awn@runna.mx','AdminWatch','admin',true,'all')
+   on conflict (id) do update set notify_watch_all=true, notify_scope='all';
+`);
+await db.query(`delete from produccion.notifications where entity_id=$1`, [nIdea]);
+await db.exec(`select set_config('produccion.acting_member','',false);`);
+// nIdea está en 'under_review' (de la prueba de scope). Transición VÁLIDA → 'completed'
+// (aprobar) dispara task_approved: el admin watch_all NO es asignado de la tarea, así
+// que sólo la pata (d) del fan_out se la entrega.
+await db.query(`update produccion.ideas set status='completed' where id=$1`, [nIdea]);
+eq("admin con watch_all recibe un evento donde NO es stakeholder (task_approved)", Number(await scalar(
+  `select count(*) from produccion.notifications where entity_id=$1 and recipient_id=$2`, [nIdea, awP])), 1);
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

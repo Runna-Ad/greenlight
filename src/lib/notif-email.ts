@@ -59,14 +59,28 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
   const profileIds = [...new Set(((notifs ?? []) as Notif[]).map((n) => n.recipient_id).filter(Boolean))] as string[];
   const [membersRes, profilesRes] = await Promise.all([
     memberIds.length
-      ? db.from("track_members").select("id, email, notify_email, name").in("id", memberIds)
-      : Promise.resolve({ data: [] as { id: string; email: string | null; notify_email: boolean; name: string }[] }),
+      ? db.from("track_members").select("id, email, notify_email, name, profile_id").in("id", memberIds)
+      : Promise.resolve({ data: [] as { id: string; email: string | null; notify_email: boolean; name: string; profile_id: string | null }[] }),
     profileIds.length
       ? db.from("profiles").select("id, email, notify_email, full_name").in("id", profileIds)
       : Promise.resolve({ data: [] as { id: string; email: string | null; notify_email: boolean; full_name: string }[] }),
   ]);
-  const memberById = new Map(((membersRes.data ?? []) as { id: string; email: string | null; notify_email: boolean }[]).map((m) => [m.id, m]));
+  const memberById = new Map(((membersRes.data ?? []) as { id: string; email: string | null; notify_email: boolean; profile_id: string | null }[]).map((m) => [m.id, m]));
   const profileById = new Map(((profilesRes.data ?? []) as { id: string; email: string | null; notify_email: boolean }[]).map((p) => [p.id, p]));
+
+  // Preferencia por-evento (0050): el email de cada notificación se decide por la fila
+  // notification_prefs (profile_id, type) de la persona — MANDA sobre el default del
+  // catálogo. Resuelve el profile del destinatario (directo, o vía el member) y precarga
+  // sus filas para los tipos en juego. El in-app ya se entregó en el trigger (amplio).
+  const perfilDe = (n: Notif): string | null =>
+    n.recipient_id ?? (n.recipient_member_id ? memberById.get(n.recipient_member_id)?.profile_id ?? null : null);
+  const prefProfileIds = [...new Set(((notifs ?? []) as Notif[]).map(perfilDe).filter(Boolean))] as string[];
+  const { data: prefsRows } = prefProfileIds.length
+    ? await db.from("notification_prefs").select("profile_id, event_type, email").in("profile_id", prefProfileIds)
+    : { data: [] as { profile_id: string; event_type: string; email: boolean }[] };
+  const prefByKey = new Map(
+    ((prefsRows ?? []) as { profile_id: string; event_type: string; email: boolean }[]).map((r) => [`${r.profile_id}|${r.event_type}`, r.email]),
+  );
 
   const marcar = (id: string, patch: Record<string, unknown>) =>
     db.from("notification_deliveries").update(patch).eq("id", id);
@@ -86,7 +100,9 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
       email = p?.email ?? null; notifyEmail = p?.notify_email ?? false;
     }
 
-    const decision = decisionEmail({ type: n.type, notifyEmail, email });
+    const pid = perfilDe(n);
+    const eventPref = pid && n.type ? prefByKey.get(`${pid}|${n.type}`) : undefined;
+    const decision = decisionEmail({ type: n.type, notifyEmail, email, eventPref });
     if (!decision.enviar) { await marcar(d.id, { status: "skipped", error: decision.razon }); skipped++; continue; }
 
     const cta = ctaUrl(n);

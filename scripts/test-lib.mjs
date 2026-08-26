@@ -501,6 +501,15 @@ ok("skip si el tipo no emailea", !D({ type: "task_started", notifyEmail: true, e
 ok("skip si la persona desactivó email", !D({ type: "task_approved", notifyEmail: false, email: "vero@runna.com.mx" }));
 ok("skip si no hay email", !D({ type: "task_approved", notifyEmail: true, email: null }));
 ok("skip si el email es inválido", !D({ type: "task_approved", notifyEmail: true, email: "no-es-email" }));
+// Preferencia por-evento (0050): la fila de la persona MANDA sobre el default del catálogo.
+ok("pref=false apaga un tipo que emailea por defecto",
+   !D({ type: "task_approved", notifyEmail: true, email: "vero@runna.com.mx", eventPref: false }));
+ok("pref=true prende un tipo aunque el default no emaileara",
+   D({ type: "evento_raro", notifyEmail: true, email: "vero@runna.com.mx", eventPref: true }));
+ok("sin fila (undefined) cae al default del catálogo",
+   D({ type: "task_approved", notifyEmail: true, email: "vero@runna.com.mx", eventPref: undefined }));
+ok("pref=true NO salva si la persona apagó el email maestro",
+   !D({ type: "task_approved", notifyEmail: false, email: "vero@runna.com.mx", eventPref: true }));
 
 // ── Resaltado en vivo de correcciones por selección (best-effort) ──
 console.log("\n▶ Resaltado por selección");
