@@ -136,6 +136,9 @@ export async function guardarIntake(
     if (v !== limpio) return { ok: false, conflicto: true, valorActual: v };
   }
 
+  // Invalida el caché de la ruta: sin esto el write SÍ persiste en la BD, pero al
+  // recargar/navegar Next sirve la copia cacheada (valor viejo) y parece "no guardó".
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true };
 }
 
@@ -320,8 +323,9 @@ export async function guardarSellingPoints(
   const { error } = await db.from("ideas").update({ selling_points: nuevoArr }).eq("id", ideaId);
   if (error) return { ok: false, error: error.message };
 
-  // Sin revalidatePath: como `concepto` (guardarIntake), el autoguardado mantiene
-  // el valor en el cliente; recargar lo relee. Evita un refresco a mitad de escritura.
+  // Invalida el caché de la ruta para que el valor guardado se vea al recargar/navegar
+  // (sin esto el write persiste pero Next sirve la copia vieja → parece que "no guardó").
+  revalidatePath("/[cliente]/tareas/[id]", "page");
   return { ok: true };
 }
 
