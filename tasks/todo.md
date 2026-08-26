@@ -1,5 +1,31 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔔 Fase 3b (cliente) + backlog 1-5 — CONSTRUIDO + TESTEADO, migración 0051 SIN aplicar
+Gates VERDES: tsc·eslint(0 err)·test:lib 380·test:db 310·test:sync 44·build. 21 archivos + mig 0051.
+- **Fase 3b — notificaciones al CLIENTE** (mig 0051, SIN aplicar): antes el cliente NO recibía NADA al mandarle
+  una pieza. Ahora `ready_for_review` al publicar → avisa a los perfiles cliente del cliente, título de cara al
+  cliente + URL del PORTAL (bloque aparte del loop interno). Pref sembrada (existentes + trigger nuevos). Tests:
+  publicar avisa al cliente, URL al portal, el cliente NO recibe el task_published interno. **UI de toggle en el
+  portal: DIFERIDA** (el cliente sólo tiene 1 evento, default ON razonable; falta superficie de settings en el portal).
+- **[1] Perf editor**: `Campo`+`CampoDoc` memoizados (cascarón delgado lee contexto → cuerpo memo con props estables);
+  teclear re-renderiza SÓLO el campo editado. + touch target del pin de corrección ≥24px.
+- **[2] a11y**: `FaltantesDialog`→`<Dialog>` (focus trap/Esc/restore) + labels de email + tope bulk; skip-to-content;
+  h1 del portal `sr-only` en móvil; touch targets (icon-xs, X de referencia); aria-expanded en DiffTarea; label del
+  input file KB; confirmar borrado de doc KB.
+- **[3] Func**: "Ver campo" del legal ya no no-op (data-campo-key en cortinilla + legal-lectura) + mueve el foco;
+  empty state de KB docs; tope "Agregar varias" del brief.
+- **[4] Perf minor**: `firmarLote` (page.tsx, N signed-URLs → 1 batch); admin tabs con next/dynamic; `moveTask` 1 query
+  (board_tasks.client_slug). `/clientes` NO se tocó (el layout ya fuerza dynamic → revalidate sería config muerta).
+- **[5] DB minors** (en mig 0051): política de lectura en notification_deliveries (era deny-all); trigger de limpieza
+  + CHECK en field_edits. `SnippetKind` += selling_point (código). CHECK de scope en snippets: DEJADO FUERA (las
+  pruebas insertan snippets no-conformes → algún camino de creación no cumple el invariante; normalizar primero).
+- **⏳ LIVE-VERIFY post-ship**: publicar una tarea → el cliente recibe el aviso (email) con link al portal; typing
+  fluido en el editor; "Ver campo" del legal salta+enfoca; el brief dialog atrapa el foco.
+- **Follow-ups**: UI de prefs en el portal (cliente); mover `reseed` a su propio contexto (elimina hasta el cascarón);
+  normalizar caminos de creación de snippets → luego el CHECK de scope; changes_resolved como evento cliente distinto.
+
+
+
 ## 🔔 Preferencias de notificación por persona (0050) — CONSTRUIDO + TESTEADO, migración SIN aplicar
 Cada quien decide QUÉ le llega por correo (por evento) + con qué SCOPE. La campana (in-app) sigue amplia
 dentro del scope; el email es el canal curado. Arregla el firehose (un lead recibía TODA la actividad de todos

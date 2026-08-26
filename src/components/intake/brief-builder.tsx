@@ -6,6 +6,14 @@ import { toast } from "sonner";
 import { Check, Plus, ClipboardList, UserPlus, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { TRACK_HINT, TRACK_LABEL, PLACEHOLDER, type Track } from "@/lib/vocab";
 import {
@@ -24,6 +32,9 @@ import type { PickCard } from "./copy-to-picker";
 
 const uid = () => crypto.randomUUID();
 const clone = <T,>(v: T): T => (Array.isArray(v) ? ([...v] as T) : v);
+
+// Tope para "Agregar varias": evita que un click cree cientos de tarjetas en blanco.
+const MAX_BULK = 50;
 
 export function BriefBuilder({ cliente, pool }: { cliente: string; pool: PoolMember[] }) {
   const router = useRouter();
@@ -108,7 +119,8 @@ export function BriefBuilder({ cliente, pool }: { cliente: string; pool: PoolMem
   };
 
   const addTasks = (n: number) => {
-    const nuevas = Array.from({ length: Math.max(1, n) }, () => tarjetaEnBlanco(uid()));
+    const count = Math.min(MAX_BULK, Math.max(1, n));
+    const nuevas = Array.from({ length: count }, () => tarjetaEnBlanco(uid()));
     setTasks((prev) => [...prev, ...nuevas]);
     setExpanded((e) => ({ ...e, [nuevas[0].id]: true }));
   };
@@ -249,8 +261,9 @@ export function BriefBuilder({ cliente, pool }: { cliente: string; pool: PoolMem
             <input
               type="number"
               min={1}
+              max={MAX_BULK}
               value={nBulk}
-              onChange={(e) => setNBulk(Math.max(1, Number(e.target.value) || 1))}
+              onChange={(e) => setNBulk(Math.min(MAX_BULK, Math.max(1, Number(e.target.value) || 1)))}
               aria-label="Cuántas tareas agregar"
               className="h-8 w-12 bg-transparent text-center text-sm outline-none"
             />
@@ -341,34 +354,39 @@ function FaltantesDialog({
     onConfirm(nombres.map((n) => ({ nombre: n, email: emails[n]?.trim() || null, enviarCorreo: enviar })));
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-2xl">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-            <UserPlus className="size-4 text-primary" />
-          </span>
-          <div>
-            <h2 className="text-base font-semibold text-foreground">Personas nuevas en el brief</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Estas personas todavía no están en la plataforma. ¿Las agrego al equipo como Especialista?
-              Pon su correo <span className="font-medium text-foreground">@runna.com.mx</span> — el mismo
-              con el que iniciarán sesión: así al entrar reclaman su usuario y ven estas tareas.
-            </p>
+    // Dialog compartido (Radix): trampa de foco, Escape para cerrar y restauración
+    // del foco de forma nativa. Se mantiene abierto mientras se está guardando para
+    // que no se pueda cancelar a media creación (igual que el botón Cancelar deshabilitado).
+    <Dialog open onOpenChange={(o) => { if (!o && !submitting) onCancel(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+              <UserPlus className="size-4 text-primary" />
+            </span>
+            <div>
+              <DialogTitle className="text-base font-semibold text-foreground">
+                Personas nuevas en el brief
+              </DialogTitle>
+              <DialogDescription className="mt-0.5 text-sm text-muted-foreground">
+                Estas personas todavía no están en la plataforma. ¿Las agrego al equipo como Especialista?
+                Pon su correo <span className="font-medium text-foreground">@runna.com.mx</span> — el mismo
+                con el que iniciarán sesión: así al entrar reclaman su usuario y ven estas tareas.
+              </DialogDescription>
+            </div>
           </div>
-        </div>
+        </DialogHeader>
 
-        <ul className="mt-4 space-y-2">
-          {nombres.map((n) => (
+        <ul className="space-y-2">
+          {nombres.map((n, i) => (
             <li key={n} className="flex items-start gap-2">
               <span className="mt-2 w-28 shrink-0 truncate text-sm font-medium text-foreground">{n}</span>
               <div className="flex-1">
                 <input
                   type="email"
                   placeholder="correo @runna.com.mx"
+                  aria-label={`Correo de ${n}`}
+                  autoFocus={i === 0}
                   value={emails[n] ?? ""}
                   onChange={(e) => setEmails((m) => ({ ...m, [n]: e.target.value }))}
                   className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -384,20 +402,20 @@ function FaltantesDialog({
           ))}
         </ul>
 
-        <label className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input type="checkbox" checked={enviar} onChange={(e) => setEnviar(e.target.checked)} className="size-4" />
           Enviarles un correo de bienvenida (a quienes tengan correo)
         </label>
 
-        <div className="mt-5 flex justify-end gap-2">
+        <DialogFooter>
           <Button type="button" variant="outline" disabled={submitting} onClick={onCancel}>
             Cancelar
           </Button>
           <Button type="button" disabled={submitting} onClick={confirmar}>
             {submitting ? "Agregando…" : "Agregar y crear brief"}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

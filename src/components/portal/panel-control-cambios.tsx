@@ -22,6 +22,12 @@ function verCampo(c: Correccion) {
   el.classList.remove("gl-flash");
   void el.offsetWidth;
   el.classList.add("gl-flash");
+  // Además del scroll+flash, RELOCALIZA el foco (teclado/lector de pantalla) al campo:
+  // si el ancla no es enfocable de origen, la hacemos enfocable con tabindex="-1"
+  // (fuera del orden de tabulación) antes de enfocarla. preventScroll evita pisar el
+  // scroll suave de arriba.
+  if (el.tabIndex < 0) el.setAttribute("tabindex", "-1");
+  el.focus({ preventScroll: true });
 }
 
 /**

@@ -243,7 +243,7 @@ function DiffTarea({ t }: { t: EdicionTarea }) {
   const pct = Math.round(t.diff.editRate * 100);
   return (
     <li className="gl-card p-3">
-      <button type="button" onClick={() => setAbierto((v) => !v)} className="flex w-full items-center gap-2 text-left">
+      <button type="button" onClick={() => setAbierto((v) => !v)} aria-expanded={abierto} className="flex w-full items-center gap-2 text-left">
         <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", abierto && "rotate-180")} />
         <span className="min-w-0 flex-1 truncate font-mono text-xs font-medium text-foreground">{t.namingBase ?? t.code ?? "s/n"}</span>
         <span className="shrink-0 text-[11px] text-muted-foreground">{t.clienteName}</span>
@@ -590,7 +590,7 @@ function KBDocs({ docs, clientes, onReload }: { docs: HueKbDocument[]; clientes:
       </p>
 
       <div className="gl-card flex flex-wrap items-center gap-2 p-3">
-        <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.md" className="max-w-[220px] text-xs text-muted-foreground file:mr-2 file:rounded file:border-0 file:bg-secondary file:px-2 file:py-1 file:text-xs file:text-secondary-foreground" />
+        <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.md" aria-label="Subir documento al Base de conocimiento" className="max-w-[220px] text-xs text-muted-foreground file:mr-2 file:rounded file:border-0 file:bg-secondary file:px-2 file:py-1 file:text-xs file:text-secondary-foreground" />
         <Input placeholder="Título (opcional)" value={title} onChange={(e) => setTitle(e.target.value)} className="h-8 max-w-[200px]" />
         <ScopeSelect clientes={clientes} value={scope} onChange={setScope} disabled={subiendo} />
         <Button size="sm" onClick={subir} disabled={subiendo}>
@@ -598,27 +598,15 @@ function KBDocs({ docs, clientes, onReload }: { docs: HueKbDocument[]; clientes:
         </Button>
       </div>
 
-      {docs.length > 0 && (
+      {docs.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+          Aún no hay documentos. Sube un pdf, docx, txt o md para que H.Ü.E lo lea al escribir guiones.
+        </p>
+      ) : (
         <ul className="space-y-1.5">
-          {docs.map((d) => {
-            const scopeTxt = scopeLabel(d.scope, d.client_id, d.marca_id, clientes);
-            return (
-            <li key={d.id} className="gl-card flex items-center gap-2 p-2.5 text-sm">
-              <FileText className="size-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-foreground">{d.title}</span>
-              <Badge tone={scopeTxt ? "neutral" : "off"}>{scopeTxt ?? "Global"}</Badge>
-              <span className="shrink-0 text-xs text-muted-foreground">{kb(d.size_bytes)}</span>
-              <Button variant="ghost" size="xs" onClick={() => verTexto(d.id)}>Ver texto</Button>
-              <Button variant="ghost" size="icon-xs" aria-label="Borrar" onClick={async () => {
-                const r = await borrarKb(d.id);
-                if (!r.ok) toast.error(r.error);
-                else { toast.success("Documento borrado"); onReload(); }
-              }}>
-                <Trash2 />
-              </Button>
-            </li>
-            );
-          })}
+          {docs.map((d) => (
+            <KbDocRow key={d.id} d={d} clientes={clientes} onReload={onReload} onVerTexto={verTexto} />
+          ))}
         </ul>
       )}
 
@@ -634,6 +622,34 @@ function KBDocs({ docs, clientes, onReload }: { docs: HueKbDocument[]; clientes:
         </div>
       )}
     </section>
+  );
+}
+
+/** Una fila de doc del KB con borrado en dos pasos (mismo patrón que LessonCard). */
+function KbDocRow({ d, clientes, onReload, onVerTexto }: { d: HueKbDocument; clientes: ClienteScope[]; onReload: () => void; onVerTexto: (id: string) => void }) {
+  const [confirmar, setConfirmar] = useState(false);
+  const scopeTxt = scopeLabel(d.scope, d.client_id, d.marca_id, clientes);
+  return (
+    <li className="gl-card flex items-center gap-2 p-2.5 text-sm">
+      <FileText className="size-4 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1 truncate text-foreground">{d.title}</span>
+      <Badge tone={scopeTxt ? "neutral" : "off"}>{scopeTxt ?? "Global"}</Badge>
+      <span className="shrink-0 text-xs text-muted-foreground">{kb(d.size_bytes)}</span>
+      <Button variant="ghost" size="xs" onClick={() => onVerTexto(d.id)}>Ver texto</Button>
+      {confirmar ? (
+        <Button variant="destructive" size="xs" onClick={async () => {
+          const r = await borrarKb(d.id);
+          if (!r.ok) toast.error(r.error);
+          else { toast.success("Documento borrado"); onReload(); }
+        }}>
+          Confirmar
+        </Button>
+      ) : (
+        <Button variant="ghost" size="icon-xs" aria-label="Borrar" onClick={() => setConfirmar(true)}>
+          <Trash2 />
+        </Button>
+      )}
+    </li>
   );
 }
 

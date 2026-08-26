@@ -281,7 +281,9 @@ function Thumb({
             type="button"
             onClick={() => setConfirmando(true)}
             aria-label="Quitar referencia"
-            className="absolute -right-1 -top-1 z-10 hidden size-5 items-center justify-center rounded-full bg-status-corrections text-white shadow-sm group-hover:flex group-focus-within:flex"
+            // after: expande el área táctil a ~28px (WCAG 2.5.8) sin agrandar el
+            // círculo visible — el pseudo-elemento no tiene fondo ni contenido.
+            className="absolute -right-1 -top-1 z-10 hidden size-5 items-center justify-center rounded-full bg-status-corrections text-white shadow-sm after:absolute after:-inset-1 after:content-[''] group-hover:flex group-focus-within:flex"
           >
             <X className="size-3" />
           </button>

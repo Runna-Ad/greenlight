@@ -13,7 +13,7 @@ import {
   Plus,
   Clock,
 } from "lucide-react";
-import { useState, type ComponentType } from "react";
+import { memo, useCallback, useState, type ComponentType } from "react";
 
 import { Campo } from "./campo";
 import { CampoLectura } from "./campo-lectura";
@@ -102,19 +102,19 @@ export function DocumentoTarea({
           <div className="space-y-2">
             <CampoDoc modo={modo} icono={IconoCopy} label="Título" tabla="estaticos" filaId={estatico.id}
               campo="copy_titulo" grupo="Estático" valor={estatico.copy_titulo} placeholder={phEstatico.copy_titulo}
-              rows={2} soloLectura={soloLectura} onCambio={(v) => onEditarEstatico("copy_titulo", v)} />
+              rows={2} soloLectura={soloLectura} onEditarEstatico={onEditarEstatico} />
             <CampoDoc modo={modo} icono={IconoCopy} label="Subtítulo" tabla="estaticos" filaId={estatico.id}
               campo="copy_subtitulo" grupo="Estático" valor={estatico.copy_subtitulo} placeholder={phEstatico.copy_subtitulo}
-              rows={3} soloLectura={soloLectura} onCambio={(v) => onEditarEstatico("copy_subtitulo", v)} />
+              rows={3} soloLectura={soloLectura} onEditarEstatico={onEditarEstatico} />
             <CampoDoc modo={modo} icono={IconoCopy} label="Botón CTA" tabla="estaticos" filaId={estatico.id}
               campo="copy_cta" grupo="Estático" valor={estatico.copy_cta} placeholder={phEstatico.copy_cta}
-              rows={1} soloLectura={soloLectura} onCambio={(v) => onEditarEstatico("copy_cta", v)} />
+              rows={1} soloLectura={soloLectura} onEditarEstatico={onEditarEstatico} />
             {/* El legal del estático ya NO es un texto libre aquí: sale de la
                 biblioteca (bloque "Legales" abajo, igual que el video). Se retiró el
                 campo `legales_extra` — el legal se selecciona, no se re-escribe. (Pedro 2026-08-21.) */}
             <CampoDoc modo={modo} icono={IconoRefe} label="Nota de diseño" tabla="estaticos" filaId={estatico.id}
               campo="referencia_nota" grupo="Estático" valor={estatico.referencia_nota} placeholder={phEstatico.referencia_nota}
-              rows={3} soloLectura={soloLectura} onCambio={(v) => onEditarEstatico("referencia_nota", v)} />
+              rows={3} soloLectura={soloLectura} onEditarEstatico={onEditarEstatico} />
           </div>
           <RefsDoc modo={modo} owner={{ tipo: "estatico", id: estatico.id }} refs={refsEstatico}
             soloImagenes etiqueta="Imágenes de referencia" soloLectura={soloLectura} />
@@ -173,23 +173,23 @@ export function DocumentoTarea({
                 {!lectura && (
                   <CampoDoc modo={modo} icono={IconoPlano} label="Plano" tabla="planos" filaId={p.id}
                     campo="titulo" grupo={`Plano ${p.orden}`} valor={p.titulo} placeholder={ph.titulo}
-                    rows={1} soloLectura={soloLectura} onCambio={(v) => onEditarPlano(p.id, "titulo", v)} />
+                    rows={1} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 )}
                 <CampoDoc modo={modo} icono={IconoAccion} label="Acción" tabla="planos" filaId={p.id}
                   campo="accion" grupo={`Plano ${p.orden}`} valor={p.accion} placeholder={ph.accion}
-                  rows={2} soloLectura={soloLectura} onCambio={(v) => onEditarPlano(p.id, "accion", v)} />
+                  rows={2} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 <CampoDoc modo={modo} icono={IconoCopy} label="Copy in" tabla="planos" filaId={p.id}
                   campo="copy_in" grupo={`Plano ${p.orden}`} valor={p.copy_in} placeholder={ph.copy_in}
-                  rows={2} soloLectura={soloLectura} onCambio={(v) => onEditarPlano(p.id, "copy_in", v)} />
+                  rows={2} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 <CampoDoc modo={modo} icono={IconoSfx} label="SFX" tabla="planos" filaId={p.id}
                   campo="sfx" grupo={`Plano ${p.orden}`} valor={p.sfx} placeholder={ph.sfx}
-                  rows={1} soloLectura={soloLectura} onCambio={(v) => onEditarPlano(p.id, "sfx", v)} />
+                  rows={1} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 <CampoDoc modo={modo} icono={IconoGfx} label="GFX" tabla="planos" filaId={p.id}
                   campo="gfx" grupo={`Plano ${p.orden}`} valor={p.gfx} placeholder={ph.gfx}
-                  rows={1} soloLectura={soloLectura} onCambio={(v) => onEditarPlano(p.id, "gfx", v)} />
+                  rows={1} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 <CampoDoc modo={modo} icono={IconoEdicion} label="Edición" tabla="planos" filaId={p.id}
                   campo="edicion" grupo={`Plano ${p.orden}`} valor={p.edicion} placeholder={ph.edicion}
-                  rows={1} soloLectura={soloLectura} onCambio={(v) => onEditarPlano(p.id, "edicion", v)} />
+                  rows={1} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
               </div>
 
               <div className="min-w-0">
@@ -214,7 +214,7 @@ export function DocumentoTarea({
                 ) : (
                   <CampoDoc modo={modo} icono={IconoDialogo} label="Diálogos" tono="orange" tabla="planos" filaId={p.id}
                     campo="dialogo" grupo={`Plano ${p.orden}`} valor={p.dialogo} placeholder={ph.dialogo}
-                    rows={6} soloLectura={soloLectura} onCambio={(v) => onEditarPlano(p.id, "dialogo", v)} />
+                    rows={6} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 )}
               </div>
             </div>
@@ -290,21 +290,11 @@ function BotonBorrarPlano({ orden, onConfirm }: { orden: number; onConfirm: () =
   );
 }
 
-function CampoDoc({
-  modo,
-  icono,
-  label,
-  tabla,
-  filaId,
-  campo,
-  grupo,
-  valor,
-  placeholder,
-  rows,
-  soloLectura,
-  onCambio,
-  tono = "blue",
-}: {
+/** Props del campo del documento. `onEditarPlano`/`onEditarEstatico` son los editores
+ *  ESTABLES del workspace (envueltos en useCallback en DocumentoGuion); el cierre por
+ *  campo se arma DENTRO del cuerpo memoizado — no en el `.map` de DocumentoTarea, donde
+ *  sería un cierre nuevo por render que rompería el memo. */
+type CampoDocProps = {
   modo: ModoDoc;
   icono: ComponentType<{ className?: string }>;
   label: string;
@@ -316,16 +306,64 @@ function CampoDoc({
   placeholder?: string;
   rows?: number;
   soloLectura: boolean;
-  onCambio?: (valor: string) => void;
+  onEditarPlano?: (id: string, campo: keyof PlanoVista, valor: string) => void;
+  onEditarEstatico?: (campo: keyof EstaticoVista, valor: string) => void;
   /** Color del ícono para separar visualmente las dos secciones: la columna de
    *  motion va en AZUL, la de diálogos en NARANJA (como las plecas del deck). */
   tono?: "blue" | "orange";
-}) {
-  const Icono = icono;
-  const colorIcono = tono === "orange" ? "text-deck-orange" : "text-deck-blue";
+};
+
+/** Un campo del documento: editable (Campo inline) o de lectura (oculto si vacío).
+ *
+ *  Cascarón DELGADO a propósito: SÓLO lee el nonce de re-siembra del contexto del
+ *  documento (`useWorkspace` → DocCtx, cuya identidad cambia en CADA tecla) y lo baja
+ *  como prop al cuerpo memoizado. Si el memo leyera el contexto, el DocCtx lo
+ *  re-renderizaría en cada tecla pasara lo que pasara con las props — el contexto se
+ *  salta a React.memo. Partido así, el DocCtx re-renderiza este cascarón barato mientras
+ *  el <Campo> pesado detrás del memo se salta cuando sus props no cambian: teclear en un
+ *  campo ya no re-renderiza los otros N×7. (reap perf 2026-08-26) */
+function CampoDoc(props: CampoDocProps) {
+  const { reseed } = useWorkspace();
   // Nonce de re-siembra del campo: al aplicar una sugerencia de H.Ü.E sube y fuerza el
   // remount del <Campo> uncontrolled para que muestre el texto nuevo (ver workspace-provider).
-  const { reseed } = useWorkspace();
+  const nonce = reseed[reseedKey(props.tabla, props.filaId, props.campo)] ?? 0;
+  return <CampoDocCuerpo {...props} nonce={nonce} />;
+}
+
+/** El cuerpo memoizado: aquí vive el render pesado (Campo con su textarea/mirror/
+ *  correcciones/floating). Se salta cuando sus props no cambian, así que teclear en el
+ *  campo A no re-renderiza los campos del plano B. */
+const CampoDocCuerpo = memo(function CampoDocCuerpo({
+  nonce,
+  modo,
+  icono,
+  label,
+  tabla,
+  filaId,
+  campo,
+  grupo,
+  valor,
+  placeholder,
+  rows,
+  soloLectura,
+  onEditarPlano,
+  onEditarEstatico,
+  tono = "blue",
+}: CampoDocProps & { nonce: number }) {
+  const Icono = icono;
+  const colorIcono = tono === "orange" ? "text-deck-orange" : "text-deck-blue";
+  // El cierre por campo se construye AQUÍ (dentro del memo, no en el `.map`): keyado a las
+  // piezas estables del campo + el editor estable del workspace, su identidad sobrevive al
+  // tecleo, que es lo que hace que el memo se salte. El `campo` ya viene fijado por la tabla
+  // en cada call-site, de ahí el cast al `keyof` que corresponde.
+  const alCambiar = useCallback(
+    (v: string) => {
+      if (tabla === "planos") onEditarPlano?.(filaId, campo as keyof PlanoVista, v);
+      else onEditarEstatico?.(campo as keyof EstaticoVista, v);
+    },
+    [tabla, filaId, campo, onEditarPlano, onEditarEstatico],
+  );
+
   if (modo === "lectura") {
     if (!valor?.trim()) return null;
     // Sólo-lectura, pero con correcciones para el revisor (ver/pedir/gestionar);
@@ -351,7 +389,7 @@ function CampoDoc({
     <Campo
       // key = nonce de re-siembra: cuando "Aplicar" reescribe este campo, el nonce sube y
       // React remonta el <Campo> con el `valorInicial` nuevo (la textarea se siembra una vez).
-      key={reseed[reseedKey(tabla, filaId, campo)] ?? 0}
+      key={nonce}
       inline
       icono={<Icono className={`size-3.5 shrink-0 ${colorIcono}`} />}
       tabla={tabla}
@@ -363,10 +401,10 @@ function CampoDoc({
       placeholder={placeholder}
       rows={rows}
       soloLectura={soloLectura}
-      onCambio={onCambio}
+      onCambio={alCambiar}
     />
   );
-}
+});
 
 /** El diálogo formateado (Quien: "texto"), SÓLO el contenido — sin la etiqueta.
  *  Lo envuelve CampoLectura, que pone la etiqueta y (para el revisor) las

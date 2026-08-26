@@ -10,6 +10,7 @@ import { CampoIntake } from "./campo-intake";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import type { Sugerencia } from "@/lib/legal-sugerido";
+import { keyCampo } from "@/lib/correcciones";
 
 export type LegalSnippet = { id: string; title: string; body: string };
 
@@ -69,7 +70,13 @@ export function CortinillaCierre({
     });
 
   return (
-    <section className="overflow-hidden rounded-xl border border-[#2d2b55]/20 bg-card shadow-sm">
+    <section
+      // Ancla para "Ver campo" del panel de correcciones (mismo data-campo-key que
+      // los campos): el legal se ancla como (ideas · idea · "legal") — así el salto+
+      // flash del panel cae en el EDITOR del legal, no sólo en la vista de lectura.
+      data-campo-key={keyCampo("ideas", ideaId, "legal")}
+      className="overflow-hidden rounded-xl border border-[#2d2b55]/20 bg-card shadow-sm"
+    >
       {/* Header tipo "documento legal" — oscuro, para que no se pierda con el
           fondo y se lea como el cierre de la pieza (como en el deck). */}
       <div className="flex items-center gap-2 bg-[#2d2b55] px-4 py-2.5 text-white">

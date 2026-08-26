@@ -11,6 +11,7 @@ export const EMAIL_TYPES = new Set<string>([
   "task_changes_requested", // "te pidieron cambios" → al asignado
   "task_approved", // "tu tarea fue aprobada" → al asignado
   "task_published", // "se envió al cliente" → al asignado
+  "ready_for_review", // "lista para TU revisión" → al CLIENTE (0051)
 ]);
 
 export function tipoEmailea(type: string | null | undefined): boolean {

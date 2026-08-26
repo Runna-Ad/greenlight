@@ -1952,5 +1952,27 @@ await db.query(`update produccion.ideas set status='completed' where id=$1`, [nI
 eq("admin con watch_all recibe un evento donde NO es stakeholder (task_approved)", Number(await scalar(
   `select count(*) from produccion.notifications where entity_id=$1 and recipient_id=$2`, [nIdea, awP])), 1);
 
+// ── Notificación al CLIENTE (0051): publicar avisa al cliente con ready_for_review ──
+console.log("\n▶ Notificación al cliente 0051 — ready_for_review al publicar");
+const cliP = "00000000-0000-0000-0000-0000000000f4";
+const cliId = await scalar(
+  `select b.client_id from produccion.ideas i join produccion.briefs b on b.id=i.brief_id where i.id=$1`, [nIdea]);
+await db.query(
+  `insert into produccion.profiles (id,email,full_name,role,client_id)
+   values ($1,'cli@didi.mx','Cliente DiDi','client',$2) on conflict (id) do nothing`, [cliP, cliId]);
+eq("un cliente nuevo arranca con la pref ready_for_review sembrada (trigger 0051)", Number(await scalar(
+  `select count(*) from produccion.notification_prefs where profile_id=$1 and event_type='ready_for_review' and email`, [cliP])), 1);
+await db.query(`delete from produccion.notifications where entity_id=$1`, [nIdea]);
+await db.exec(`select set_config('produccion.acting_member','',false);`);
+await db.query(`update produccion.ideas set status='published' where id=$1`, [nIdea]); // completed→published (válido)
+eq("publicar avisa al CLIENTE con ready_for_review", Number(await scalar(
+  `select count(*) from produccion.notifications where entity_id=$1 and type='ready_for_review' and recipient_id=$2`, [nIdea, cliP])), 1);
+eq("la URL del aviso al cliente apunta al PORTAL",
+  await scalar(`select url from produccion.notifications where entity_id=$1 and type='ready_for_review' and recipient_id=$2`, [nIdea, cliP]),
+  await scalar(`select '/'||c.slug||'/portal' from produccion.clients c
+                 join produccion.briefs b on b.client_id=c.id join produccion.ideas i on i.brief_id=b.id where i.id=$1`, [nIdea]));
+eq("el cliente NO recibe el task_published INTERNO (ese va a los asignados)", Number(await scalar(
+  `select count(*) from produccion.notifications where entity_id=$1 and type='task_published' and recipient_id=$2`, [nIdea, cliP])), 0);
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

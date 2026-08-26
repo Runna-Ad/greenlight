@@ -493,6 +493,7 @@ const { tipoEmailea, decisionEmail } = await import("../src/lib/notif-routing.ts
 ok("task_approved emailea", tipoEmailea("task_approved"));
 ok("task_submitted emailea", tipoEmailea("task_submitted"));
 ok("brief_created emailea (nuevo brief → especialistas)", tipoEmailea("brief_created"));
+ok("ready_for_review emailea (→ cliente, 0051)", tipoEmailea("ready_for_review"));
 ok("un tipo desconocido NO emailea", !tipoEmailea("task_started"));
 ok("null NO emailea", !tipoEmailea(null));
 const D = (a) => decisionEmail(a).enviar;

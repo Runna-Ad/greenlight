@@ -23,7 +23,7 @@ export type AssetStatus =
   | "delivered";
 export type AssignmentRole = "creativo" | "produccion" | "diseno" | "copy" | "edicion";
 export type CommentKind = "comment" | "correction_request" | "approval" | "client_change";
-export type SnippetKind = "instruccion" | "legal" | "consideracion" | "referencia";
+export type SnippetKind = "instruccion" | "legal" | "consideracion" | "referencia" | "selling_point";
 export type NamingKind = "real" | "normal" | "static";
 export type NotifyChannel = "email" | "slack" | "in_app";
 export type VocabSet =

@@ -19,13 +19,14 @@ type Db = ReturnType<typeof supabaseAdmin>;
  * rutas: si no, una queda con datos viejos y parece que el botón no hizo nada.
  */
 async function revalidateFor(db: Db, ideaId: string) {
+  // board_tasks ya expone client_slug directo (0032) — evita el segundo viaje a
+  // `clients` que sólo traducía client_id → slug.
   const { data } = await db
-    .from("board_tasks").select("client_id").eq("id", ideaId).maybeSingle();
-  if (data?.client_id) {
-    const { data: c } = await db
-      .from("clients").select("slug").eq("id", data.client_id).maybeSingle();
-    if (c?.slug) revalidatePath(`/${c.slug}/tablero`);
-  }
+    .from("board_tasks")
+    .select("client_slug")
+    .eq("id", ideaId)
+    .maybeSingle<{ client_slug: string | null }>();
+  if (data?.client_slug) revalidatePath(`/${data.client_slug}/tablero`);
   revalidatePath("/mi-trabajo");
 }
 

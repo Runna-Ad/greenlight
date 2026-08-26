@@ -4,6 +4,7 @@ import { Lock } from "lucide-react";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
+import { cargarRefsPorPlano, cargarRefsEstatico } from "@/lib/referencias-data";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { ROLE_LABEL, canSee, canOverrideStatus, canAssign } from "@/lib/roles";
 import { type AssetStatus } from "@/lib/brand";
@@ -196,87 +197,18 @@ export default async function TareaPage({
   }
 
   // Referencias por plano (imágenes subidas + links de video). Las imágenes
-  // viven en un bucket PRIVADO — se firma una URL por render (la página es
-  // force-dynamic), nunca se expone el bucket.
-  const refsPorPlano: Record<string, RefVista[]> = {};
-  if (plantilla === "guion" && planos.length) {
-    const { data: vinculos } = await db
-      .from("plano_references")
-      .select("plano_id, position, references(id, kind, url, storage_path, thumbnail_url, platform)")
-      .in("plano_id", planos.map((p) => p.id))
-      .order("position")
-      .returns<
-        {
-          plano_id: string;
-          references: {
-            id: string;
-            kind: "imagen" | "video";
-            url: string;
-            storage_path: string | null;
-            thumbnail_url: string | null;
-            platform: string | null;
-          } | null;
-        }[]
-      >();
+  // viven en un bucket PRIVADO — cargarRefsPorPlano firma TODAS las URLs en UN
+  // solo lote (createSignedUrls) en vez de una llamada de Storage por referencia
+  // (reap perf — misma lógica que consume el portal del cliente).
+  const refsPorPlano: Record<string, RefVista[]> =
+    plantilla === "guion" && planos.length
+      ? await cargarRefsPorPlano(db, planos.map((p) => p.id))
+      : {};
 
-    // Las URLs firmadas se generan EN PARALELO (antes era una llamada de storage
-    // secuencial por imagen → N viajes en serie, lento con varias referencias).
-    const firmados = await Promise.all(
-      (vinculos ?? []).map(async (v) => {
-        const r = v.references;
-        if (!r) return null;
-        let displayUrl: string | null = r.kind === "video" ? r.url : null;
-        if (r.kind === "imagen" && r.storage_path) {
-          const { data: firmada } = await db.storage
-            .from("greenlight-referencias")
-            .createSignedUrl(r.storage_path, 60 * 60); // 1h
-          displayUrl = firmada?.signedUrl ?? null;
-        }
-        return {
-          plano_id: v.plano_id,
-          ref: { id: r.id, kind: r.kind, displayUrl, thumbnail: r.thumbnail_url, platform: r.platform },
-        };
-      }),
-    );
-    for (const f of firmados) if (f) (refsPorPlano[f.plano_id] ??= []).push(f.ref);
-  }
-
-  // Referencias del ESTÁTICO — sólo imágenes, mismo bucket privado + signed URL.
-  const refsEstatico: RefVista[] = [];
-  if (plantilla === "estatico" && estatico) {
-    const { data: vinculos } = await db
-      .from("estatico_references")
-      .select("position, references(id, kind, url, storage_path, thumbnail_url, platform)")
-      .eq("estatico_id", estatico.id)
-      .order("position")
-      .returns<
-        {
-          references: {
-            id: string;
-            kind: "imagen" | "video";
-            url: string;
-            storage_path: string | null;
-            thumbnail_url: string | null;
-            platform: string | null;
-          } | null;
-        }[]
-      >();
-    const firmados = await Promise.all(
-      (vinculos ?? []).map(async (v) => {
-        const r = v.references;
-        if (!r) return null;
-        let displayUrl: string | null = r.kind === "video" ? r.url : null;
-        if (r.kind === "imagen" && r.storage_path) {
-          const { data: firmada } = await db.storage
-            .from("greenlight-referencias")
-            .createSignedUrl(r.storage_path, 60 * 60);
-          displayUrl = firmada?.signedUrl ?? null;
-        }
-        return { id: r.id, kind: r.kind, displayUrl, thumbnail: r.thumbnail_url, platform: r.platform };
-      }),
-    );
-    for (const f of firmados) if (f) refsEstatico.push(f);
-  }
+  // Referencias del ESTÁTICO — sólo imágenes, mismo bucket privado, firmadas en
+  // UN solo lote vía cargarRefsEstatico (reap perf).
+  const refsEstatico: RefVista[] =
+    plantilla === "estatico" && estatico ? await cargarRefsEstatico(db, estatico.id) : [];
 
   // Correcciones localizadas (0028): comentarios kind='correction_request'. Tipo
   // de fila definido antes del Promise.all para tiparlo dentro.

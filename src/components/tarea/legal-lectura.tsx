@@ -2,6 +2,7 @@
 
 import { Scale } from "lucide-react";
 import { CampoLectura } from "./campo-lectura";
+import { keyCampo } from "@/lib/correcciones";
 
 /**
  * El bloque de LEGALES en modo lectura ANCLABLE. Reusa CampoLectura (el mismo
@@ -22,7 +23,13 @@ export function LegalLectura({
   titulo: string;
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-[#2d2b55]/20 bg-card shadow-sm">
+    <section
+      // Ancla para "Ver campo" del panel de correcciones (mismo data-campo-key que
+      // el editor y que CampoLectura): el legal se ancla como (ideas · idea · "legal"),
+      // así el salto+flash del panel cae en la vista de lectura del legal.
+      data-campo-key={keyCampo("ideas", ideaId, "legal")}
+      className="overflow-hidden rounded-xl border border-[#2d2b55]/20 bg-card shadow-sm"
+    >
       <div className="flex items-center gap-2 bg-[#2d2b55] px-4 py-2.5 text-white">
         <Scale className="size-4" />
         <h3 className="text-[12px] font-bold uppercase tracking-widest">{titulo}</h3>

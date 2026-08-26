@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import {
   UserRound,
   Users,
@@ -14,15 +15,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { HueHubTab } from "./hue-hub/hue-hub-tab";
-import { EquipoTab } from "./equipo-tab";
-import { PerfilTab } from "./perfil-tab";
-import { ActividadTab } from "./actividad-tab";
-import { IntegracionesTab } from "./integraciones-tab";
-import { BibliotecaTab } from "./biblioteca-tab";
-import { MarcasTab } from "./marcas-tab";
-import { InvitacionesTab } from "./invitaciones-tab";
-import { ClientesTab } from "./clientes-tab";
 import type {
   InvitacionRow,
   ClienteOpt,
@@ -36,6 +28,26 @@ import type {
   MarcaOpt,
   SnippetRow,
 } from "@/lib/admin-tipos";
+
+// Cada pestaña carga su código sólo cuando se selecciona — antes las 8 (incl. el
+// HUB y Equipo, los más pesados) se importaban eager aunque sólo una se muestra
+// a la vez (reap perf). ssr:false: son tabs de cliente, nunca se ven en el HTML
+// inicial (arranca en "equipo", pero ese tab tampoco necesita SSR aquí).
+const HueHubTab = dynamic(() => import("./hue-hub/hue-hub-tab").then((m) => m.HueHubTab), { ssr: false });
+const EquipoTab = dynamic(() => import("./equipo-tab").then((m) => m.EquipoTab), { ssr: false });
+const PerfilTab = dynamic(() => import("./perfil-tab").then((m) => m.PerfilTab), { ssr: false });
+const ActividadTab = dynamic(() => import("./actividad-tab").then((m) => m.ActividadTab), { ssr: false });
+const IntegracionesTab = dynamic(
+  () => import("./integraciones-tab").then((m) => m.IntegracionesTab),
+  { ssr: false },
+);
+const BibliotecaTab = dynamic(() => import("./biblioteca-tab").then((m) => m.BibliotecaTab), { ssr: false });
+const MarcasTab = dynamic(() => import("./marcas-tab").then((m) => m.MarcasTab), { ssr: false });
+const InvitacionesTab = dynamic(
+  () => import("./invitaciones-tab").then((m) => m.InvitacionesTab),
+  { ssr: false },
+);
+const ClientesTab = dynamic(() => import("./clientes-tab").then((m) => m.ClientesTab), { ssr: false });
 
 type Soy = {
   id: string;

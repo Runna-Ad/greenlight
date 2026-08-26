@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Check, Plus } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate } from "@floating-ui/react-dom";
@@ -132,7 +132,11 @@ export function useAutoguardado(
  * Si otra persona cambió el mismo campo mientras escribías, no se descarta nada
  * en silencio: se enseñan los dos valores y decides.
  */
-export function Campo({
+// React.memo: dentro del subárbol del documento, DocumentoTarea re-renderiza en cada
+// tecla (el cuerpo vivo cambia). Con las props del campo ya estabilizadas por CampoDoc
+// (onCambio vía useCallback, resto por-valor/estable), el memo hace que un campo NO se
+// re-renderice cuando lo que cambió fue OTRO campo. (reap perf 2026-08-26)
+export const Campo = memo(function Campo({
   tabla,
   filaId,
   campo,
@@ -412,7 +416,10 @@ export function Campo({
         )}
 
         {/* Pin de corrección — anclado a la esquina SUP-IZQ del CAMPO (no tapa el
-            ícono de la etiqueta). Es el respaldo de ancla de la tarjeta; clic = fija. */}
+            ícono de la etiqueta). Es el respaldo de ancla de la tarjeta; clic = fija.
+            El círculo visible mide 20px, por debajo del mínimo de 24px de WCAG 2.5.8;
+            `before:-inset-1` le suma un anillo invisible de 4px → área táctil de 28px
+            sin tocar el tamaño del ícono ni la maquetación. (reap a11y 2026-08-26) */}
         {ctx && hayCorr && estadoCorr && (
           <button
             type="button"
@@ -420,7 +427,7 @@ export function Campo({
             onClick={() => setFijado((v) => !v)}
             aria-label={`${cs.length} corrección(es) en ${etiqueta}`}
             aria-expanded={cardAbierta}
-            className="gl-pop absolute -left-1.5 -top-1.5 z-20 grid size-[20px] place-items-center rounded-full border-2 border-background text-[10px] font-extrabold text-white shadow-sm"
+            className="gl-pop absolute -left-1.5 -top-1.5 z-20 grid size-[20px] place-items-center rounded-full border-2 border-background text-[10px] font-extrabold text-white shadow-sm before:absolute before:-inset-1 before:content-['']"
             style={{ background: PIN_BG[estadoCorr] }}
           >
             {estadoCorr === "open" ? cs.length : "✓"}
@@ -544,7 +551,7 @@ export function Campo({
         ))}
     </div>
   );
-}
+});
 
 /**
  * Dos valores, una decisión. Nunca se descarta nada en silencio — es la misma

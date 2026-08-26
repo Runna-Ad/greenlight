@@ -19,10 +19,20 @@ export const NOTIF_EVENTOS: { key: NotifEvento; label: string; hint: string }[] 
   { key: "brief_created", label: "Nuevo brief", hint: "Cuando entra un brief nuevo" },
 ];
 
-export const EVENTOS_VALIDOS = new Set<string>(NOTIF_EVENTOS.map((e) => e.key));
+// Eventos de cara al CLIENTE (portal). Separados del catálogo interno: el cliente no
+// ve la matriz interna. Hoy sólo "ready_for_review" (0051); su default de email es ON.
+export const NOTIF_EVENTOS_CLIENTE: { key: string; label: string; hint: string }[] = [
+  { key: "ready_for_review", label: "Listo para tu revisión", hint: "Cuando te mandan una pieza a revisar" },
+];
 
-/** Los eventos que un rol PUEDE recibir (los que se le muestran en la matriz). */
-export function eventosParaRol(role: string): NotifEvento[] {
+export const EVENTOS_VALIDOS = new Set<string>([
+  ...NOTIF_EVENTOS.map((e) => e.key),
+  ...NOTIF_EVENTOS_CLIENTE.map((e) => e.key),
+]);
+
+/** Los eventos que un rol PUEDE recibir (los que se le muestran en su matriz). */
+export function eventosParaRol(role: string): string[] {
+  if (role === "client") return NOTIF_EVENTOS_CLIENTE.map((e) => e.key);
   if (role === "admin" || role === "master") return NOTIF_EVENTOS.map((e) => e.key);
   if (role === "lead")
     return ["task_submitted", "task_changes_requested", "task_approved", "task_published", "brief_created"];

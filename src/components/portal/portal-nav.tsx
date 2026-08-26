@@ -123,7 +123,9 @@ export function PortalNav({
               {cliente.name.slice(0, 2).toUpperCase()}
             </span>
           )}
-          <div className="hidden md:block">
+          {/* sr-only en vez de hidden: en mobile el h1 sigue en el árbol de accesibilidad
+              (es el único encabezado de la página) aunque se oculte visualmente. */}
+          <div className="sr-only md:not-sr-only">
             <p className="gl-eyebrow leading-none">Portal de revisión</p>
             <h1 className="text-sm font-semibold leading-tight text-foreground">{cliente.name}</h1>
           </div>

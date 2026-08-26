@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,11 +47,20 @@ export function DocumentoGuion({
   const [, startTransition] = useTransition();
   const ph = placeholdersGuion(tipoAsset);
 
-  const editarPlano = (id: string, campo: keyof PlanoVista, valor: string) =>
-    setPlanos((prev) => prev.map((p) => (p.id === id ? { ...p, [campo]: valor || null } : p)));
+  // Envueltos en useCallback: su identidad debe sobrevivir al tecleo para que el memo de
+  // CampoDoc se salte los campos NO editados. setPlanos/setEstatico ya son estables (vienen
+  // del contexto); estos cierres eran lo único que se recreaba cada render. (reap perf 2026-08-26)
+  const editarPlano = useCallback(
+    (id: string, campo: keyof PlanoVista, valor: string) =>
+      setPlanos((prev) => prev.map((p) => (p.id === id ? { ...p, [campo]: valor || null } : p))),
+    [setPlanos],
+  );
 
-  const editarEstatico = (campo: keyof EstaticoVista, valor: string) =>
-    setEstatico((prev) => (prev ? { ...prev, [campo]: valor || null } : prev));
+  const editarEstatico = useCallback(
+    (campo: keyof EstaticoVista, valor: string) =>
+      setEstatico((prev) => (prev ? { ...prev, [campo]: valor || null } : prev)),
+    [setEstatico],
+  );
 
   const nuevoPlano = () =>
     startTransition(async () => {
