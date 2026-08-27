@@ -215,7 +215,9 @@ export function AccionesTarea({
     <>
       <div className="flex items-center gap-2">
         {espera && (
-          <span className="rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] text-muted-foreground">
+          // Ámbar = "en espera / pendiente" (antes gris punteado, casi invisible — Pedro).
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-status-warning/40 bg-status-warning/10 px-2.5 py-1.5 text-[11px] font-semibold text-status-warning">
+            <span className="size-1.5 rounded-full bg-status-warning" />
             {espera}
           </span>
         )}

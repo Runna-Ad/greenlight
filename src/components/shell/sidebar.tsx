@@ -114,14 +114,15 @@ function SidebarNav({
   if (activeClient && activeClient !== lastClient) setLastClient(activeClient);
   const clienteMostrado = activeClient ?? lastClient;
 
-  // La sección del partner arranca DESPLEGADA en sus páginas y COLAPSADA en las
-  // generales; se puede abrir/cerrar a mano (click en el nombre). El default se
-  // recalcula en render cuando entras/sales del partner.
+  // La sección del partner arranca DESPLEGADA y sólo se colapsa A MANO (click en el
+  // nombre). Entrar a un cliente la despliega; SALIR a una página general (p. ej. Mi
+  // trabajo) YA NO la colapsa — antes se auto-colapsaba en cada navegación y era
+  // molesto: la sección de DiDi debe quedarse visible. (Pedro)
   const [prevActive, setPrevActive] = useState(activeClient);
-  const [colapsada, setColapsada] = useState(!activeClient);
+  const [colapsada, setColapsada] = useState(false);
   if (activeClient !== prevActive) {
     setPrevActive(activeClient);
-    setColapsada(!activeClient);
+    if (activeClient) setColapsada(false); // entrar a un cliente → desplegar; salir → dejar como está
   }
 
   // Filtrado por rol: en una vista previa el menú debe ENCOGER, que es

@@ -1,5 +1,18 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔵 2026-08-27 (tarde) — fixes UI + workflow cambios-cliente
+- ✅ Sidebar ya NO auto-colapsa la sección del cliente al ir a Mi Trabajo (queda desplegada; colapso manual respetado).
+- ✅ Pill "Esperando revisión" → ámbar (status-warning) + dot, antes gris casi invisible.
+- ✅ Verificado: la negrita del diálogo (marca `**` + locutor "(…)") sobrevive el flujo (render la recomputa; writers preservan el formato).
+- ⏳ **PRÓXIMO — #1 workflow: cambios del CLIENTE van SÓLO al lead responsable** (Pedro confirmó el diseño):
+  cliente pide cambios → tarea a "En correcciones" en la cancha del LEAD; el especialista NO la ve (fuera de su Mi
+  Trabajo/tablero) hasta que se le reasigne. El lead decide: (a) "Hacer los cambios yo" → lead es el doer → in_progress
+  → edita → envía al cliente DIRECTO (sin ronda de revisión); (b) "Reasignar a especialista" → el especialista la trabaja
+  → loop normal de revisión. Necesita: migración (señal clientChangesPending / lead-es-doer), TaskContext nuevo,
+  filtro de visibilidad en Mi Trabajo + tablero, UI de 2 botones del lead, ruta lead-doer→enviar-cliente, tests.
+- 🟡 EVALUANDO (Pedro preguntó, NO construir aún): warning que recuerde a leads+ asignar un LEAD a tareas sin lead
+  antes de que se trabajen (hoy sólo se checa "sin responsable"=sin nadie; no distingue "sin lead").
+
 ## 🔴 2026-08-27 — Tablero locks + H.Ü.E tiempo + multi-track de leads (Pedro, deploy juntos)
 ✅ LOS 3 CONSTRUIDOS + VERIFICADOS. Gates VERDES: tsc·eslint(0)·test:lib 388·test:db 310·test:sync 44. Mig 0052 SIN aplicar.
 ⏳ Falta: deploy junto (push main + aplicar mig 0052) — Pedro dijo "deploy everything together" (autorizado).
