@@ -1,5 +1,44 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-27 (sesión muy larga) — 4 tandas de Pedro + workflow cambios-cliente + REAP PRE-LAUNCH (todo shippeado + LIVE)
+**6 commits en main (d9cad2d → 845d7ce), migraciones 0052/0053/0054, ~40 archivos. Prod verificada Ready en runna-greenlight.vercel.app.**
+
+1. **UI del asset/tarea** [d9cad2d]: pestaña activa RELLENA (morado sólido + texto blanco, antes tinte suave); "Rünna tools"
+   siempre igual (se quitó el atenuado/eye-off/"· interno" al cambiar de modo); toggle inferior renombrado **Modo Lectura**
+   (icono libro) / **Modo Edición** (puzzle = símbolo Rünna, Pedro lo quiso mantener).
+2. **Tablero locks + H.Ü.E tiempo + multi-track de leads** [9b87181, migs 0052/0053]:
+   - Asignación del TABLERO ahora usa las MISMAS locks que el task section (`asignarTarea`: Lead rol `lead` + Especialistas
+     rol `creative`, del track; server re-valida). Se ELIMINÓ el `setAssignees` sin validar. — el bug era "cualquiera entra como Especialista".
+   - H.Ü.E respeta la duración: LEGAL = 2s fijos (antes read-time del texto = +12s); presupuesto de diálogo = cap − 2 + GUARD
+     determinista que MIDE el guión generado y reintenta (máx 2) si se pasa. [[prompt-plus-deterministic-guard]]
+   - Multi-track de leads (mig 0052 `lead_tracks`): un admin elige qué track(s) toca cada lead; identidad computa `member.tracks`.
+3. **Retomar abre la tarea + portal negrita + emails multi-track** [fb0e6b7, mig 0053]: Mi Trabajo "Retomar" navega a la tarea;
+   el locutor "(Actriz 1)" sale en negrita en el portal (rangosLocutor+unirRangos, por rango sin romper offsets); fan_out
+   respeta el grant multi-track. GOTCHA cazado por test:db: rebasé la RPC encadenada sobre 0051 (no 0050) para no borrar la pata cliente.
+4. **Sidebar + pill** [acb17f7]: el menú del cliente ya NO se auto-colapsa al ir a Mi Trabajo; pill "Esperando revisión" → ÁMBAR.
+5. **Cambios del CLIENTE → cancha del LEAD** [5a304bf, mig 0054]: el cliente pide cambios → sólo el lead la ve (el especialista
+   la pierde de su lista hasta que se reasigne); banner con "Enviar a cliente" (el lead edita y reenvía directo, `rpc_lead_reenvia_cliente`)
+   o "Reasignar a especialista". + warning **"Sin lead"** (no bloqueante) en el tablero. Señal DERIVADA (in_corrections + client_change
+   sin resolver), sin columna-flag.
+6. **REAP PRE-LAUNCH** [845d7ce] — el gran hito: primero MEJORÉ el skill de reap (Pass 0 = barrida de PARIDAD cross-surface,
+   render-and-diff real, matriz de roles conducida, modo "invariant sweep"). Luego lo corrí (4 revisores en paralelo, todo el repo).
+   **16 hallazgos, todos arreglados** (sin migración):
+   - **CRÍTICO escalada de privilegios**: el ARRASTRE del tablero dejaba a un creativo auto-aprobar/publicar/entregar
+     (rpc_move_task sólo checa rol en transiciones ilegales). FIX: `transicionRequiereLead` compartido server+UI.
+   - **CRÍTICO cross-tenant**: `/clientes` y `/{slug}/sync` sin guard → un cliente veía métricas de todos. FIX: guards + **client
+     tether en el middleware** (un cliente sólo su portal). El guard portal-a-portal ya estaba vivo (era otra puerta).
+   - **CRÍTICO multi-track (mi feature, audit incompleto)**: Workload/Briefs/Entregas/guardarBrief usaban el track HOME → lead veía
+     el otro equipo. FIX: todos al grant efectivo. **Lección**: al cambiar un invariante, auditar también las superficies de LECTURA.
+   - **CRÍTICO render**: rangosLocutor no boleaba cues con ":"; legal-lectura sin TextoRico. + S1 importRows lead-track; S2 5
+     loaders admin con canAdmin; I2/I4 scope+validación; S5/I3 Mi Trabajo abre la tarea en fases de corrección/revisión.
+
+**Decisiones de Pedro**: puzzle = símbolo Rünna (mantener); multi-track "selectable" (no lock a un track); cliente atado a su
+portal (tether); reap improvements horneadas al skill; fix del reap set completo + deploy.
+**Gates finales**: tsc·eslint(0)·test:lib 417·test:db 318·test:sync 44·build. Todo en `origin/main`, prod Ready.
+**Fuera del repo**: `~/.claude/skills/beast-mode-dev/SKILL.md` (Pass 0 + modos) — config global, no commiteada al repo.
+**Siguiente**: live-verify manual del reap (creative no arrastra a completed; cliente sólo su portal; lead multi-track ve ambos
+equipos; legal con `**` en negrita). Cosmético menor: WorkloadBoard pinta header de track vacío para un lead de 1 track (sin fuga).
+
 ## 2026-08-26 (sesión larga) — DEEP REAP + 3 features de notificaciones + fix de CI (TODO shippeado + verificado en prod)
 **Qué hicimos** (6 commits en main: 80c8d5e → afd8556; 60 archivos, +2020/−371):
 1. **Deep reap (6 agentes)** [80c8d5e]: audit de seguridad/correctness/DB/perf/a11y/funcionalidad.

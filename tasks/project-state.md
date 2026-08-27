@@ -1,5 +1,29 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-26 (sesión larga) — DEEP REAP + notificaciones (internas + cliente) + fix de CI — **todo shippeado + verificado en prod**
+Última actualización: 2026-08-27 (sesión muy larga) — multi-track leads + workflow cambios-cliente + REAP PRE-LAUNCH (16 fixes de seguridad/paridad) — **todo shippeado + LIVE en runna-greenlight.vercel.app**
+
+## 🔐 Postura de seguridad (post reap pre-launch 2026-08-27) — SHIPPEADO + LIVE
+- **La frontera de autorización es el CÓDIGO** (las server actions usan la service-role key → se salta RLS). RLS sigue
+  permisivo A PROPÓSITO (build-then-lock de Pedro); NO es un bug. Al LANZAR: encender RLS real + verificar cada vista es su
+  propio paso gateado. El reap revisó los gates de código, no RLS.
+- **Cliente (Partner) amarrado a su portal**: el MIDDLEWARE confina al rol `client` a `/{slug}/portal`; cualquier otra ruta lo
+  regresa. Además cada página interna tiene su guard `canSee`/`canAdmin` (se taparon los 2 huecos: `/clientes`, `/{slug}/sync`).
+  El portal valida la MARCA (no ve la de otro cliente).
+- **Gate por transición**: `transicionRequiereLead(from,to)` (allowlist de doer) — compartido por `moveTask` (server) y el
+  tablero (menú Mover + droppable). Un creativo NO puede auto-aprobar/publicar/entregar (antes el arrastre lo saltaba).
+- **Multi-track de leads**: TODO scoping por track (enforcement Y lectura: assertCanActOnTask, visibleParaRol, tracksVisibles,
+  briefs, Workload, lista Briefs, Entregas, guardarBrief, notif fan_out) usa el grant efectivo `member.tracks`/`lead_tracks`.
+- **REAP mejorado**: `~/.claude/skills/beast-mode-dev` ahora tiene Pass 0 (barrida de paridad cross-surface) + modo "invariant
+  sweep" (todo el repo, no sólo el diff). Correrlo otra vez antes del launch real.
+
+## 🧩 Multi-track de leads (mig 0052) — SHIPPEADO + LIVE
+- Un lead puede tener grant de 1 o 2 tracks (`track_members.lead_tracks`); un admin lo elige en Equipo (multi-select). La
+  identidad computa `member.tracks` (grant | [track home]). Emails multi-track vía fan_out (mig 0053).
+
+## 🔁 Cambios del CLIENTE → cancha del LEAD (mig 0054) — SHIPPEADO + LIVE
+- Cliente pide cambios → tarea a in_corrections, SÓLO el lead la ve (el especialista la pierde de su lista hasta reasignar).
+  Lead: "Enviar a cliente" (edita y reenvía directo, `rpc_lead_reenvia_cliente`) o "Reasignar a especialista". + warning
+  "Sin lead" (no bloqueante) en el tablero para tareas con especialistas pero sin lead.
+
 
 ## 🔔 Sistema de notificaciones (2026-08-26) — SHIPPEADO + LIVE (migs 0050 + 0051)
 - **Preferencias por persona**: cada quien elige QUÉ le llega por CORREO (por evento) + SCOPE (todo/mi-track/sólo-mío).
