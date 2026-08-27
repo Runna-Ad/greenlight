@@ -9,6 +9,7 @@
 
 import type { ViewRole } from "@/lib/roles";
 import type { AssetStatus } from "@/lib/brand";
+import type { Track } from "@/lib/vocab";
 
 export type BundleTask = {
   id: string;
@@ -21,6 +22,7 @@ export type BundleTask = {
   marca: string | null;
   plataformas: string[] | null;
   file_count: number;
+  track: "real" | "normal";
   member_ids: string[];
   members: { id: string; name: string; color: string }[];
   brief_id: string;
@@ -32,17 +34,25 @@ export type BundleTask = {
 /**
  * El filtro por rol, como función pura y probada aparte.
  *
- * Especialista → sólo sus tareas asignadas (necesita una sesión con un miembro
- * ligado — sin identidad, su bundle es vacío, no "todo"). Los demás roles internos
- * ven el bundle completo. El cliente no llega aquí: la página lo bloquea antes.
+ * Especialista → sólo sus tareas asignadas (sin identidad, bundle vacío, no "todo").
+ * LEAD → sólo sus track(s) otorgados (grant multi-track) — antes veía AMBOS tracks,
+ * inconsistente con el tablero/Evaluación que sí acotan (reap S3). Admin/master → todo.
+ * El cliente no llega aquí: la página lo bloquea antes.
  */
 export function filtroBundle(
   role: ViewRole,
   soyId: string | null,
-): (t: Pick<BundleTask, "member_ids">) => boolean {
-  if (role !== "creative") return () => true;
-  if (!soyId) return () => false;
-  return (t) => t.member_ids.includes(soyId);
+  tracks: Track[] | null,
+): (t: Pick<BundleTask, "member_ids" | "track">) => boolean {
+  if (role === "creative") {
+    if (!soyId) return () => false;
+    return (t) => t.member_ids.includes(soyId);
+  }
+  if (role === "lead") {
+    if (!tracks || !tracks.length) return () => false;
+    return (t) => tracks.includes(t.track);
+  }
+  return () => true; // admin/master: vista global
 }
 
 /**
@@ -90,7 +100,7 @@ export function agruparBundles(visibles: BundleTask[]): Bundle[] {
 
 /** Las columnas que la vista board_tasks expone para un bundle. */
 export const BUNDLE_SELECT =
-  "id, code, status, naming_base, concepto, tipo_asset, duracion, marca, plataformas, file_count, member_ids, members, brief_id, brief_title, brief_tab, client_slug";
+  "id, code, status, naming_base, concepto, tipo_asset, duracion, marca, plataformas, file_count, track, member_ids, members, brief_id, brief_title, brief_tab, client_slug";
 
 /** Dónde está esta tarea dentro de su bundle — alimenta las flechas ← n/N →. */
 export function posicionEnBundle(tasks: BundleTask[], ideaId: string) {

@@ -398,6 +398,9 @@ export async function marcarVeredictoIgnorado(
   if (!hasSupabase()) return { ok: false };
   const role = await getViewAs();
   if (!canOverrideStatus(role)) return { ok: false };
+  // Scope: un lead sólo sobre tareas de su track — como sus hermanas del archivo. (reap I2)
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false };
   await ignorarVeredicto(ideaId, correccionId);
   return { ok: true };
 }

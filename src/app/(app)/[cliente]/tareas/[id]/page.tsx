@@ -236,7 +236,7 @@ export default async function TareaPage({
   // correcciones y feedback del cliente iban en serie, un viaje de red tras otro).
   const [bundle, [{ data: bibliotecaLegal }, { data: idSnippets }], { data: corrRows }, { data: cambiosCliente }] =
     await Promise.all([
-      cargarBundle(idea.brief_id, role, soy?.id ?? null),
+      cargarBundle(idea.brief_id, role, soy?.id ?? null, soy?.tracks ?? null),
       Promise.all([
         db
           .from("snippets")

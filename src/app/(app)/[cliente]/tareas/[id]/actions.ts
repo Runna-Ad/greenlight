@@ -353,17 +353,16 @@ export async function guardarBrief(
 
   const db = supabaseAdmin();
 
-  // Un lead es departamental: sólo edita briefs que tocan SU equipo. Los briefs no
-  // llevan track propio, así que se mira si tienen alguna idea del track del lead.
+  // Un lead es departamental: sólo edita briefs que tocan SU(S) equipo(s). Los briefs no
+  // llevan track propio, así que se mira si tienen alguna idea de sus track(s) OTORGADOS
+  // (grant multi-track — antes usaba el track HOME y bloqueaba a un lead multi-track de un
+  // brief legítimo de su otro track). (reap I1)
   if (role === "lead") {
     const u = await getCurrentUser();
-    const { data: suyo } = await db
-      .from("ideas")
-      .select("id")
-      .eq("brief_id", briefId)
-      .eq("track", u?.member?.track ?? "__none__")
-      .limit(1)
-      .maybeSingle();
+    const tracks = u?.member?.tracks ?? [];
+    const { data: suyo } = tracks.length
+      ? await db.from("ideas").select("id").eq("brief_id", briefId).in("track", tracks).limit(1).maybeSingle()
+      : { data: null };
     if (!suyo) return { ok: false, error: "Este brief es de otro equipo." };
   }
 

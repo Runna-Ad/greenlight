@@ -25,10 +25,22 @@ import type { RangoNegrita } from "./negrita";
  */
 export function rangosLocutor(limpio: string): RangoNegrita[] {
   const rangos: RangoNegrita[] = [];
-  const re = /\([^)]+\)/g;
+  // (1) Cues entre paréntesis "(Quién)", en cualquier parte (varias por línea).
+  const reParen = /\([^)]+\)/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(limpio)) !== null) {
+  while ((m = reParen.exec(limpio)) !== null) {
     rangos.push({ start: m.index, end: m.index + m[0].length });
+  }
+  // (2) Cues con DOS PUNTOS al inicio de línea ("Actor: texto") — MISMA convención que
+  // parseDialogo (CUE_COLON), para que el locutor del deck del equipo salga en negrita
+  // igual que la vista bonita. Se bolea el rótulo EN SU LUGAR (sin reformatear), así los
+  // offsets/cita de las correcciones siguen válidos. Antes sólo se cubrían los paréntesis
+  // → el locutor con dos puntos no salía en negrita en la vista interactiva (reap C5).
+  let offset = 0;
+  for (const linea of limpio.split("\n")) {
+    const mc = linea.match(CUE_COLON);
+    if (mc) rangos.push({ start: offset, end: offset + mc[1].length });
+    offset += linea.length + 1; // +1 por el "\n"
   }
   return rangos;
 }

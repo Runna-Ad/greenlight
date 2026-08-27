@@ -64,6 +64,20 @@ export async function importRows(
     res.errors.push("Sólo un lead o un admin puede importar del sheet.");
     return res;
   }
+  // Un lead es DEPARTAMENTAL: sólo importa pestañas de sus track(s) otorgados (grant
+  // multi-track) — igual que crearBrief. Admins/master son globales. Sin esto, un lead
+  // de un track podía crear briefs/tareas del OTRO metiendo filas cuyo tab clasifica al
+  // otro track (rows es un POST controlable por el cliente). (reap S1)
+  if (u.role === "lead" && u.member) {
+    const fuera = [...new Set(rows.map((r) => r.tab))].some((tab) => {
+      const t = classifyTab(tab).track;
+      return t != null && !u.member!.tracks.includes(t as "real" | "normal");
+    });
+    if (fuera) {
+      res.errors.push("Un lead sólo importa pestañas de su propio equipo.");
+      return res;
+    }
+  }
 
   const db = supabaseAdmin();
 

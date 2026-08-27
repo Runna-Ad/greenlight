@@ -2,7 +2,8 @@
 // Node 24 strips TS types on import; the `import type` in filename.ts is erased.
 import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.ts";
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
-import { actionsFor, waitingLabel } from "../src/lib/task-actions.ts";
+import { actionsFor, waitingLabel, transicionRequiereLead } from "../src/lib/task-actions.ts";
+import { filtroBundle } from "../src/lib/bundle.ts";
 import { plantillaPara, readTimeS, parseDuracion, presupuestoDialogoS, LEGAL_SECONDS, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
@@ -136,6 +137,35 @@ eq("en revisión el lead aprueba o pide cambios", labels("under_review", lead), 
 eq("mandar cambios exige texto", actionsFor("under_review", lead).find(a => a.tone === "danger").needsBody, true);
 eq("correcciones → retomar (especialista)", labels("in_corrections", asignado), "Retomar");
 eq("correcciones: el lead no retoma", labels("in_corrections", lead), "");
+
+// ── transicionRequiereLead (reap C1): el arrastre del tablero no salta el gate del lead ──
+console.log("\n▶ transicionRequiereLead — gate por transición");
+// Transiciones de DOER (un creativo asignado SÍ puede) → NO requieren lead.
+eq("todo→in_progress es doer", transicionRequiereLead("todo", "in_progress"), false);
+eq("in_progress→under_review es doer", transicionRequiereLead("in_progress", "under_review"), false);
+eq("in_corrections→in_progress es doer", transicionRequiereLead("in_corrections", "in_progress"), false);
+eq("in_corrections→under_review es doer", transicionRequiereLead("in_corrections", "under_review"), false);
+// Transiciones de REVISOR → requieren lead (un creativo NO puede auto-aprobar/publicar/entregar).
+ok("under_review→completed (aprobar) requiere lead", transicionRequiereLead("under_review", "completed"));
+ok("completed→published (enviar a cliente) requiere lead", transicionRequiereLead("completed", "published"));
+ok("completed→delivered (entregar) requiere lead", transicionRequiereLead("completed", "delivered"));
+ok("under_review→in_corrections (pedir cambios) requiere lead", transicionRequiereLead("under_review", "in_corrections"));
+ok("published→delivered requiere lead", transicionRequiereLead("published", "delivered"));
+
+// ── filtroBundle (reap S3): lead acotado a su(s) track(s); multi-track ve AMBOS ──
+console.log("\n▶ filtroBundle — scope por rol + track");
+const bReal = { member_ids: ["m1"], track: "real" };
+const bNormal = { member_ids: ["m2"], track: "normal" };
+// Creative: sólo lo suyo (por member_ids), sin importar track.
+eq("creative ve sólo lo asignado", [bReal, bNormal].filter(filtroBundle("creative", "m1", null)).length, 1);
+eq("creative sin identidad no ve nada", [bReal, bNormal].filter(filtroBundle("creative", null, null)).length, 0);
+// Lead Real: sólo Real.
+eq("lead Real ve sólo Real", [bReal, bNormal].filter(filtroBundle("lead", null, ["real"])).map((b) => b.track).join(), "real");
+// FALSE-POSITIVE guard: un lead MULTI-TRACK debe ver AMBOS (no se le esconde el suyo).
+eq("lead multi-track ve AMBOS tracks", [bReal, bNormal].filter(filtroBundle("lead", null, ["real", "normal"])).length, 2);
+eq("lead sin tracks no ve nada (falla seguro)", [bReal, bNormal].filter(filtroBundle("lead", null, [])).length, 0);
+// Admin/master: todo.
+eq("admin ve todo", [bReal, bNormal].filter(filtroBundle("admin", null, null)).length, 2);
 // Cambios del CLIENTE (clientChangesPending): cancha del lead. El especialista NO
 // retoma (la tarea sale de su lista); el lead los resuelve en la propia tarea (banner).
 eq("cambios del cliente: el especialista NO retoma", labels("in_corrections", { ...asignado, clientChangesPending: true }), "");
@@ -233,15 +263,17 @@ eq("las dos variantes difieren en el hook",
 
 // ── Bundle: filtro por rol + orden estable ──
 console.log("\n▶ Bundle");
-const { filtroBundle, compararBundle, posicionEnBundle } = await import("../src/lib/bundle.ts");
+const { compararBundle, posicionEnBundle } = await import("../src/lib/bundle.ts");
 
-const T = (id, code, member_ids = []) => ({ id, code, member_ids });
+const T = (id, code, member_ids = [], track = "real") => ({ id, code, member_ids, track });
 const tareas = [T("b", "A2", ["m1"]), T("a", "A1", ["m2"]), T("c", null, ["m1"]), T("d", "B1", [])];
 
-eq("el lead ve todo", tareas.filter(filtroBundle("lead", null)).length, 4);
-eq("el especialista sólo lo suyo", tareas.filter(filtroBundle("creative", "m1")).length, 2);
+// El lead ahora se acota a su(s) track(s) (reap S3): con su track ve los suyos (aquí
+// todos son 'real'); sin track otorgado no ve nada (falla seguro).
+eq("el lead ve su track", tareas.filter(filtroBundle("lead", null, ["real"])).length, 4);
+eq("el especialista sólo lo suyo", tareas.filter(filtroBundle("creative", "m1", null)).length, 2);
 eq("especialista SIN identidad → bundle vacío, no 'todo'",
-   tareas.filter(filtroBundle("creative", null)).length, 0);
+   tareas.filter(filtroBundle("creative", null, null)).length, 0);
 
 const orden = [...tareas].sort(compararBundle).map((t) => t.id).join(",");
 eq("orden por código, sin código al final", orden, "a,b,d,c");
@@ -393,6 +425,11 @@ const { rangosLocutor } = await import("../src/lib/dialogo.ts");
 eq("locutor: '(Actriz 1) hola' → rango 0..10", JSON.stringify(rangosLocutor("(Actriz 1) hola")), JSON.stringify([{ start: 0, end: 10 }]));
 eq("locutor: sin paréntesis → sin rangos", rangosLocutor("hola mundo").length, 0);
 eq("locutor: dos intervenciones → dos rangos", rangosLocutor("(A) hola (B) adios").length, 2);
+// Cue con DOS PUNTOS (deck del equipo) también en negrita — antes sólo paréntesis (reap C5).
+eq("locutor colon: 'Actor: hola' → rótulo 0..5", JSON.stringify(rangosLocutor("Actor: hola")), JSON.stringify([{ start: 0, end: 5 }]));
+eq("locutor colon: 'Actriz V.O:' conserva el rol", rangosLocutor("Actriz V.O: Manifestando.")[0].end, 10);
+eq("locutor: 'Y le dije: hola' NO es locutor", rangosLocutor("Y le dije: hola").length, 0);
+eq("locutor colon en 2da línea respeta offset", JSON.stringify(rangosLocutor("(A) hi\nBeto: chau")), JSON.stringify([{ start: 0, end: 3 }, { start: 7, end: 11 }]));
 // unirRangos: funde negrita de marca + locutor en una lista ordenada y sin traslape.
 const { unirRangos } = await import("../src/lib/negrita.ts");
 eq("unir: ordena por start", JSON.stringify(unirRangos([{ start: 10, end: 14 }], [{ start: 0, end: 3 }])), JSON.stringify([{ start: 0, end: 3 }, { start: 10, end: 14 }]));

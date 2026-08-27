@@ -1,7 +1,9 @@
 import { Lock } from "lucide-react";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
-import { ROLE_LABEL, canSee, canAdmin } from "@/lib/roles";
+import { getSoy } from "@/lib/soy";
+import { ROLE_LABEL, canSee, canAdmin, tracksVisibles } from "@/lib/roles";
+import type { Track } from "@/lib/vocab";
 import { EntregasBoard, type BriefArchivo } from "@/components/entregas/entregas-board";
 
 // Entregas = ARCHIVO: registro COMPLETO de todo el trabajo Greenlit (delivered),
@@ -21,18 +23,22 @@ function briefLabel(b: { brief_name: string | null; code: string | null; brief_d
   return b.brief_name || b.code || "Brief";
 }
 
-async function cargarArchivo(): Promise<BriefArchivo[]> {
+async function cargarArchivo(tracks: Track[] | null): Promise<BriefArchivo[]> {
   if (!hasSupabase()) return [];
   const db = supabaseAdmin();
   // TODO el trabajo Greenlit (delivered), más reciente primero. Cota de seguridad de
   // 1000 (deuda: paginar si el archivo llega a crecer tanto — reap "sin caps silenciosos").
-  const { data: ideas } = await db
+  // Acotado por track: `null` = todos (admin/master); un lead ve sólo su(s) track(s)
+  // (grant multi-track) — antes veía el archivo de AMBOS equipos. (reap S4)
+  let q = db
     .from("ideas")
     .select("id, code, naming_base, brief_id, delivered_at")
     .eq("status", "delivered")
     .not("delivered_at", "is", null)
     .order("delivered_at", { ascending: false })
     .limit(1000);
+  if (tracks) q = q.in("track", tracks);
+  const { data: ideas } = await q;
   const rows = (ideas ?? []) as {
     id: string;
     code: string | null;
@@ -124,7 +130,9 @@ export default async function EntregasPage() {
     );
   }
 
-  const briefs = await cargarArchivo();
+  // Scope por track: un lead ve sólo su(s) equipo(s); admin/master (null) ven todo. (reap S4)
+  const soy = await getSoy();
+  const briefs = await cargarArchivo(tracksVisibles(role, soy?.tracks ?? null));
   const puedeEstrellar = canAdmin(role);
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">

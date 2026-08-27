@@ -28,6 +28,9 @@ const TERMINALES = new Set(["published", "delivered"]);
  * con el embedding de PostgREST.
  */
 export async function listarEquipo(): Promise<MiembroRow[]> {
+  // Gate propio (no sólo el de la página): devuelve el roster con emails + Slack IDs;
+  // sólo admin+. Espeja lo que ya hacían los loaders hermanos (invitaciones/HUB). (reap S2)
+  if (!canAdmin(await getViewAs())) return [];
   if (!hasSupabase()) return [];
   const db = supabaseAdmin();
 
@@ -332,6 +335,7 @@ export async function crearMiembro(data: {
 // El feed de "quién hizo qué": los cambios de estado de tareas (status_events),
 // con quién actuó resuelto (member o profile). Los datos ya se capturan solos.
 export async function listarActividad(limit = 40): Promise<ActividadRow[]> {
+  if (!canAdmin(await getViewAs())) return []; // feed interno de actividad — sólo admin+ (reap S2)
   if (!hasSupabase()) return [];
   const db = supabaseAdmin();
 
@@ -394,6 +398,8 @@ export async function listarActividad(limit = 40): Promise<ActividadRow[]> {
 
 // ── Integraciones ──────────────────────────────────────────
 export async function estadoIntegraciones(): Promise<IntegracionesEstado> {
+  if (!canAdmin(await getViewAs())) // config de integraciones — sólo admin+ (reap S2)
+    return { sheetConfigurado: false, notionConfigurado: false, ultimaSync: null, tareasImportadas: 0 };
   const sheetConfigurado = Boolean(
     process.env.SHEETS_SCRIPT_URL && process.env.SHEETS_SCRIPT_SECRET,
   );
@@ -425,6 +431,7 @@ export async function estadoIntegraciones(): Promise<IntegracionesEstado> {
 
 // ── Biblioteca (snippets) ──────────────────────────────────
 export async function listarBiblioteca(): Promise<{ snippets: SnippetRow[]; marcas: MarcaOpt[] }> {
+  if (!canAdmin(await getViewAs())) return { snippets: [], marcas: [] }; // sólo admin+ (reap S2)
   if (!hasSupabase()) return { snippets: [], marcas: [] };
   const db = supabaseAdmin();
   const [snipRes, marcaRes] = await Promise.all([
@@ -564,6 +571,7 @@ function pathEnBucketLogos(publicUrl: string | null): string | null {
 
 /** Los clientes con sus marcas (y logo) para el panel de Marcas. */
 export async function listarMarcasPorCliente(): Promise<ClienteConMarcas[]> {
+  if (!canAdmin(await getViewAs())) return []; // sólo admin+ (reap S2)
   if (!hasSupabase()) return [];
   const db = supabaseAdmin();
   const [cliRes, marcaRes] = await Promise.all([

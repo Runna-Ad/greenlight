@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { dispatchPendingEmails } from "@/lib/notif-email";
 import { canAssign, canMoveStatus, canOverrideStatus, type ViewRole } from "@/lib/roles";
+import { transicionRequiereLead } from "@/lib/task-actions";
 import { getCurrentUser } from "@/lib/identity";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import type { AssetStatus } from "@/lib/brand";
@@ -63,6 +64,19 @@ export async function moveTask(
   if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
+
+  // Gate POR TRANSICIÓN (no sólo por rol): un no-lead sólo hace transiciones de doer.
+  // Aprobar / enviar-a-cliente / entregar / pedir-cambios son del lead — el arrastre
+  // y el menú "Mover" del tablero NO deben saltarse lo que los botones ya bloquean.
+  // rpc_move_task sólo valida el rol en transiciones ILEGALES; una transición legal
+  // pasaba sin mirar el rol → un creativo podía auto-aprobar/publicar su propia tarea.
+  const { data: cur } = await db
+    .from("ideas").select("status").eq("id", ideaId).maybeSingle<{ status: AssetStatus }>();
+  const from = cur?.status;
+  if (from && transicionRequiereLead(from, toStatus) && !canOverrideStatus(role)) {
+    return { ok: false, error: "Sólo un lead puede aprobar, enviar al cliente o entregar." };
+  }
+
   const { error } = await db.rpc("rpc_move_task", {
     p_idea_id: ideaId,
     p_to: toStatus,
@@ -240,6 +254,15 @@ export async function setLeads(
   if (e1) return { ok: false, error: e1.message };
 
   if (leadMemberIds.length) {
+    // Sólo un miembro con rol `lead` puede marcarse como lead — igual que asignarTarea.
+    // (Hoy no hay caller en la app, pero deja la función segura si se cablea. reap I4)
+    const { data: rows } = await db
+      .from("track_members").select("id").eq("role", "lead").in("id", leadMemberIds)
+      .returns<{ id: string }[]>();
+    const validos = new Set((rows ?? []).map((r) => r.id));
+    if (leadMemberIds.some((id) => !validos.has(id))) {
+      return { ok: false, error: "Sólo un Lead puede marcarse como lead." };
+    }
     const { error: e2 } = await db
       .from("idea_assignments").update({ es_lead: true })
       .eq("idea_id", ideaId).in("member_id", leadMemberIds);

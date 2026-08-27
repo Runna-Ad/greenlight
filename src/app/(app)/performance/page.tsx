@@ -27,7 +27,7 @@ export default async function PerformancePage({
   const hoyId = resolverMes(null).mesActual;
   const tracks = tracksVisibles(role, soy?.tracks ?? null);
   const [carga, evaluacion] = await Promise.all([
-    cargarWorkload(),
+    cargarWorkload(tracks),
     cargarEvaluacion(tracks, periodo),
   ]);
 

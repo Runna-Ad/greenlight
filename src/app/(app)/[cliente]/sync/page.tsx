@@ -1,6 +1,9 @@
+import { Lock } from "lucide-react";
 import { SyncPanel } from "@/components/sync/sync-panel";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { type PoolMember } from "@/components/intake/task-card";
+import { getViewAs } from "@/lib/view-as";
+import { canSee, ROLE_LABEL } from "@/lib/roles";
 import { getSyncMode } from "./actions";
 
 // La server action `importRows` hace una tanda de inserts por fila (todavía secuencial
@@ -14,6 +17,17 @@ export default async function SyncPage({
   params: Promise<{ cliente: string }>;
 }) {
   const { cliente } = await params;
+  // Guard de ruta: sync trae el roster + la herramienta de import — no para
+  // creative/client aunque tecleen la URL (el middleware ya los amarra). (reap pre-launch)
+  const role = await getViewAs();
+  if (!canSee(role, "sync")) {
+    return (
+      <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
+        <Lock className="mx-auto size-5 text-muted-foreground" />
+        <p className="mt-3 text-sm text-foreground">Un {ROLE_LABEL[role]} no entra a Sync.</p>
+      </div>
+    );
+  }
   // Only the MODE crosses to the client — credentials stay on the server.
   const { kind } = await getSyncMode();
 

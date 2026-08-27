@@ -27,6 +27,7 @@ import {
   type AssetStatus,
 } from "@/lib/brand";
 import { moveTask, asignarTarea } from "@/app/(app)/[cliente]/tablero/actions";
+import { transicionRequiereLead } from "@/lib/task-actions";
 import {
   DEFAULT_ROLE,
   canAssign,
@@ -398,9 +399,13 @@ const Column = memo(function Column({
 
   // While dragging, say up front which columns this card can reach. The DB
   // enforces it either way; showing it beats an error toast after the drop.
-  // A lead reaches everywhere — the move is logged as an override.
+  // A lead reaches everywhere — the move is logged as an override. A non-lead only
+  // reaches DOER targets: approve/send-to-client/deliver are lead-only, so those
+  // columns aren't drop targets for a creative (the server also blocks it). (reap C1)
   const reachable =
-    !dragging || mayOverride || canMove(dragging.status, status);
+    !dragging ||
+    mayOverride ||
+    (canMove(dragging.status, status) && !transicionRequiereLead(dragging.status, status));
   const fueraDeFlujo =
     dragging && mayOverride && !canMove(dragging.status, status);
   const isSource = dragging?.status === status;
@@ -578,7 +583,12 @@ const CardBody = memo(function CardBody({
   const tipo = contentType(task.tipo_asset);
   const IconoTipo = tipo.icon;
   const enCorrecciones = task.status === "in_corrections";
-  const targets = ALLOWED_TRANSITIONS[task.status];
+  // Un no-lead sólo ve destinos de DOER (empezar/mandar a revisión/retomar/devolver);
+  // aprobar/enviar-a-cliente/entregar son del lead (el server también lo bloquea). Así
+  // el menú "Mover" no ofrece un movimiento que el servidor rechazaría. (reap C1)
+  const targets = ALLOWED_TRANSITIONS[task.status].filter(
+    (to) => mayOverride || !transicionRequiereLead(task.status, to),
+  );
   // Todo lo demás sólo aparece para quien puede sacar la tarea del flujo.
   const fueraDeFlujo = mayOverride
     ? KANBAN_STATUSES.filter((s) => s !== task.status && !targets.includes(s))

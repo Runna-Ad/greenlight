@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, Plus, FileText, Layers, AlertTriangle } from "lucide-react";
+import { ArrowRight, Plus, FileText, Layers, AlertTriangle, Lock } from "lucide-react";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
+import { getViewAs } from "@/lib/view-as";
+import { canSee, ROLE_LABEL } from "@/lib/roles";
 
 // Counts are LIVE from the DB — never hardcode them. The old MOCK_CLIENTS froze
 // DiDi at 4/37/3 and survived a full platform reset, showing phantom work.
@@ -101,6 +103,19 @@ async function cargarClientes(): Promise<ClientCard[]> {
 }
 
 export default async function ClientesPage() {
+  // Guard de ruta (no sólo nav): un rol sin acceso no debe recibir el índice de
+  // clientes por teclear la URL. El middleware ya amarra al cliente a su portal;
+  // esto lo respalda (creative/client → Denegado). (reap pre-launch)
+  const role = await getViewAs();
+  if (!canSee(role, "clientes")) {
+    return (
+      <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
+        <Lock className="mx-auto size-5 text-muted-foreground" />
+        <p className="mt-3 text-sm text-foreground">Un {ROLE_LABEL[role]} no entra a Clientes.</p>
+      </div>
+    );
+  }
+
   const clientes = await cargarClientes();
 
   return (

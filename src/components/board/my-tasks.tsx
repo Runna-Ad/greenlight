@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Files, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -48,7 +47,6 @@ export function MyTasks({
 }) {
   const [rows, setRows] = useState(tasks);
   const [, startTransition] = useTransition();
-  const router = useRouter();
 
   const run = (task: MyTask, action: TaskAction, body?: string) => {
     const from = task.status;
@@ -67,21 +65,6 @@ export function MyTasks({
     });
   };
 
-  // "Retomar" (correcciones → en progreso): retomar SIN ver los cambios no sirve —
-  // el especialista tiene que ENTRAR a la tarea a trabajarlos. Así que además de
-  // mover el estado, abre la tarea. (Pedro: "debería mandarlo a la tarea".)
-  const retomarYAbrir = (task: MyTask, action: TaskAction) => {
-    const url = task.client_slug ? `/${task.client_slug}/tareas/${task.id}` : null;
-    startTransition(async () => {
-      const res = await EJECUTA_VERBO[action.verb](task.id);
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo retomar la tarea.");
-        return;
-      }
-      if (url) router.push(url);
-    });
-  };
-
   return (
     <ul className="space-y-2">
       {rows.map((t) => {
@@ -94,6 +77,10 @@ export function MyTasks({
         const acciones = actionsFor(t.status, ctx);
         const espera = waitingLabel(t.status, ctx);
         const enCorrecciones = t.status === "in_corrections";
+        // Las fases de CORRECCIONES (especialista) y REVISIÓN (lead) se trabajan dentro
+        // de la tarea — la fila la abre, sin botón inline que difiera del task page. (reap S5/I3)
+        const necesitaContexto =
+          (t.status === "in_corrections" || t.status === "under_review") && acciones.length > 0;
 
         return (
           <li
@@ -152,22 +139,32 @@ export function MyTasks({
             </div>
 
             <div className="relative z-10 flex shrink-0 items-center gap-1.5">
-              {acciones
-                .filter((a) => !a.needsBody) // pedir cambios se hace desde el tablero
-                .map((a) => (
-                  <Button
-                    key={a.verb}
-                    size="sm"
-                    className="h-7 px-2.5 text-[11px]"
-                    onClick={() =>
-                      a.verb === "start" && enCorrecciones ? retomarYAbrir(t, a) : run(t, a)
-                    }
-                  >
-                    {a.label}
-                  </Button>
-                ))}
-              {espera && acciones.length === 0 && (
-                <span className="text-[11px] italic text-muted-foreground">{espera}</span>
+              {necesitaContexto ? (
+                // Correcciones (especialista) y revisión (lead) se HACEN dentro de la
+                // tarea (ahí están los cambios): la fila la abre — no un botón inline que
+                // divergía del task page (Retomar vs Devolver; Aprobar-con-correcciones-
+                // abiertas). Cue con pointer-events-none → el clic cae al link de la fila. (reap S5/I3)
+                <span className="pointer-events-none text-[11px] font-medium text-primary">
+                  {t.status === "under_review" ? "Revisar →" : "Abrir para corregir →"}
+                </span>
+              ) : (
+                <>
+                  {acciones
+                    .filter((a) => !a.needsBody)
+                    .map((a) => (
+                      <Button
+                        key={a.verb}
+                        size="sm"
+                        className="h-7 px-2.5 text-[11px]"
+                        onClick={() => run(t, a)}
+                      >
+                        {a.label}
+                      </Button>
+                    ))}
+                  {espera && acciones.length === 0 && (
+                    <span className="text-[11px] italic text-muted-foreground">{espera}</span>
+                  )}
+                </>
               )}
             </div>
           </li>

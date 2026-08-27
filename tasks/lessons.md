@@ -1,5 +1,35 @@
 # Lessons — Greenlight · by Rünna
 
+[2026-08-27] LESSON (REAP pre-launch: la barrida de PARIDAD (Pass 0) cazó 16 hallazgos que los reaps por-diff se saltaron):
+Se corrió el modo "invariant sweep" nuevo (Pass 0 sobre TODO el repo, no sólo el diff) con 4 revisores en paralelo. Casi
+todo hallazgo fue la MISMA clase que los 2 bugs que Pedro reportó: un gate/scope/render en UNA superficie pero no en su
+hermana. Los grandes:
+(1) ⚠️ ESCALADA DE PRIVILEGIOS (C1): `moveTask` (arrastre/menú "Mover" del tablero) gateaba sólo `canMoveStatus` (cualquier
+no-cliente), y `rpc_move_task` SÓLO valida el rol en transiciones ILEGALES — una transición LEGAL pasaba sin mirar el rol.
+→ un creativo podía arrastrar su tarjeta under_review→completed (auto-aprobar), →published (enviar a cliente), →delivered.
+Los BOTONES sí gateaban (isLead); el ARRASTRE no. FIX: regla ÚNICA `transicionRequiereLead(from,to)` (allowlist de
+transiciones de doer) compartida por el server (`moveTask`) y la UI (menú Mover + droppable). REGLA: cuando la autorización
+depende de la transición, el gate va en la capa compartida (o el DB), NO sólo en los botones; el arrastre es otra superficie
+de la misma operación [[guard-both-the-button-and-the-function]].
+(2) FUGA CROSS-TENANT (C2/C3): `/clientes` y `/{slug}/sync` nunca recibieron guard de rol (las otras 6 secciones sí) → un
+cliente Partner podía teclear la URL y ver métricas de TODOS los clientes / el roster. El guard portal-a-portal ("este portal
+no es de tu marca") SÍ estaba vivo — era OTRA puerta. FIX: guard por página + TETHER en el MIDDLEWARE (un cliente sólo puede
+estar en `/{slug}/portal`; cualquier otra ruta lo regresa). REGLA: para amarrar un rol, confínalo UNA vez en la capa de
+arriba (middleware/layout), no confíes en que cada página futura recuerde su guard.
+(3) MI PROPIO FEATURE, AUDITORÍA INCOMPLETA (C4/S3/S4/I1): al meter multi-track de leads actualicé los 4 puntos de
+ENFORCEMENT (assertCanActOnTask, visibleParaRol, tracksVisibles, briefs/nuevo) pero me salté 4 superficies de LECTURA
+(Workload, lista de Briefs, Entregas, guardarBrief) que seguían usando el track HOME → un lead veía el otro equipo. REGLA
+(la más importante): cuando un feature cambia un invariante (1 track → N), audita TODO consumidor —incluyendo las
+superficies de LECTURA/visibilidad, no sólo las de escritura/gate—; mi audit por-feature fue parcial y la barrida de paridad
+cazó lo que olvidé. [[fix-the-class-not-the-instance]]
+(4) RENDER (C5/C6): `rangosLocutor` boleaba cues con paréntesis pero no con dos puntos (parseDialogo sí) → el locutor con
+":" no salía en negrita en la vista interactiva. Y `legal-lectura` pintaba el `pretty` sin `TextoRico` → el `**` del legal
+salía literal. Mismo patrón: dos renders de lo mismo, uno se quedó atrás.
+(5) TEST QUE AFIRMA EL BUG: "el lead ve todo" (bundle) probaba el comportamiento VIEJO (lead sin acotar). Al arreglar S3
+ese test se puso rojo — hay que ACTUALIZAR el test que codificaba la conducta buggy, no sólo el código. Y para un filtro que
+EXCLUYE, testear el FALSO POSITIVO: un lead multi-track debe seguir viendo AMBOS tracks [[silent-exclusion-needs-false-positive-tests]].
+16 fixes, sin migración (todo código). Gates: tsc·eslint·lib 417·db 318·sync 44·build. TAGS: #reap-parity-sweep #privilege-escalation-drag-bypasses-button-gate #transition-role-in-shared-layer #client-tether-in-middleware #cross-tenant-page-guard #audit-read-surfaces-not-just-enforcement #multi-track #render-parity #update-tests-that-assert-the-bug #greenlight #pedro
+
 [2026-08-27] LESSON (#1 workflow: cambios del cliente → cancha del lead; + warning "Sin lead"):
 (1) UN HANDOFF DE WORKFLOW SE MODELA CON VISIBILIDAD + ACCIONES-POR-ROL, NO CON UNA EXPLOSIÓN DE ESTADOS NI UNA COLUMNA-FLAG. Cambios del cliente deben ir SÓLO al lead (él edita+reenvía o reasigna). Primer instinto: agregar `ideas.cliente_cambios_por_rutear` + un sub-estado de triage. SIMPLIFICACIÓN que evitó la columna: la SEÑAL de triage se DERIVA de lo que ya existe — `status=in_corrections AND existe client_change enviado (ronda not null) sin resolver (resolved_at null)`. Con eso: (a) el especialista NO ve la tarea (filtro de visibilidad en Mi Trabajo + tablero, igual que el patrón de scope por rol), (b) el lead ve SIEMPRE dos acciones (Enviar a cliente / Reasignar) — no hace falta un flag de 3 estados porque "hacerlo yo" = editar inline (in_corrections ya es editable para el lead) + Enviar. REGLA: antes de agregar una columna de estado, pregunta si el estado ya está IMPLÍCITO en (status × datos existentes); si sí, deriva la señal y gobierna con visibilidad+acciones. Ata con [[effective-scope-one-field]].
 (2) UN SALTO "FUERA DEL FLUJO" LEGÍTIMO VA COMO OVERRIDE CON MOTIVO, NO COMO TRANSICIÓN GENERAL. El lead reenvía directo = in_corrections→published, que NO está en el flujo normal (a propósito: que un especialista no brinque la revisión). En vez de meter esa transición al state-machine general (abriría el drag del tablero a "publicar desde correcciones" para cualquiera), la RPC `rpc_lead_reenvia_cliente` usa `rpc_move_task(p_as_lead=true, motivo='El lead aplicó los cambios del cliente y reenvió')` — queda en status_events como override CON motivo claro, no un "fuera de flujo" ciego, y el poder queda acotado a la RPC. GOTCHA de test: ese override exige `service_role`/`is_lead()` en rpc_move_task; en PGlite (sin JWT) se simula con `set_config('request.jwt.claims','{"role":"service_role"}')` — en prod lo pone la service key del server action. Sin eso el test revienta "Transición no permitida".

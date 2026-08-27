@@ -63,6 +63,25 @@ const isLead = (role: ViewRole) => role === "master" || role === "admin" || role
 const esEspecialista = (ctx: TaskContext) => ctx.isAssignee && !isLead(ctx.role);
 
 /**
+ * Las transiciones que un DOER (especialista) produce por el flujo normal:
+ * empezar, mandar a revisión, retomar y devolver correcciones. CUALQUIER otra —
+ * aprobar (→completed), enviar al cliente (→published), entregar (→delivered), pedir
+ * cambios (under_review→in_corrections), o mover una tarea ya publicada — exige
+ * autoridad de LEAD. Fuente ÚNICA compartida por el gate del servidor (`moveTask`) y
+ * por el menú "Mover" del tablero, para que el ARRASTRE no salte lo que los BOTONES ya
+ * bloquean (un creativo no puede auto-aprobar/publicar arrastrando su tarjeta).
+ */
+const DOER_TRANSITIONS = new Set<string>([
+  "todo>in_progress",
+  "in_progress>under_review",
+  "in_corrections>in_progress",
+  "in_corrections>under_review",
+]);
+export function transicionRequiereLead(from: AssetStatus, to: AssetStatus): boolean {
+  return !DOER_TRANSITIONS.has(`${from}>${to}`);
+}
+
+/**
  * Ojo con el orden: el primero es la acción principal de la tarjeta.
  * Devuelve [] cuando no toca hacer nada (p. ej. el creativo esperando revisión,
  * o el lead esperando a que el especialista mande a revisión).

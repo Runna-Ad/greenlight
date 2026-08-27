@@ -2,6 +2,7 @@
 
 import { Scale } from "lucide-react";
 import { CampoLectura } from "./campo-lectura";
+import { TextoRico } from "@/components/ui/linkify";
 import { keyCampo } from "@/lib/correcciones";
 
 /**
@@ -43,7 +44,11 @@ export function LegalLectura({
           label="Legal"
           valor={legal}
           icono={<Scale className="size-3" />}
-          pretty={<span className="whitespace-pre-wrap text-[11px] leading-snug text-foreground">{legal}</span>}
+          pretty={
+            <span className="whitespace-pre-wrap text-[11px] leading-snug text-foreground">
+              <TextoRico>{legal}</TextoRico>
+            </span>
+          }
         />
       </div>
     </section>

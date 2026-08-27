@@ -1,5 +1,24 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔒 2026-08-27 (tarde) — REAP pre-launch: 16 hallazgos de paridad ARREGLADOS + deploy
+Gates VERDES: tsc·eslint(0)·lib 417·db 318·sync 44·build. Sin migración (todo código).
+- **C1 escalada de privilegios**: `moveTask` + menú/arrastre del tablero dejaban a un creativo auto-aprobar/publicar/
+  entregar (rpc_move_task sólo checa rol en transiciones ilegales). FIX: `transicionRequiereLead` (allowlist doer)
+  compartida por server + UI (menú Mover + droppable).
+- **C2/C3 fuga cross-tenant**: `/clientes` y `/{slug}/sync` sin guard. FIX: guard por página + **client tether en el
+  middleware** (un cliente sólo su `/{slug}/portal`; cualquier otra ruta lo regresa). El guard portal-a-portal ya estaba vivo.
+- **C4/S3/S4/I1 multi-track (mi feature, audit incompleto)**: Workload, lista Briefs (filtroBundle), Entregas (cargarArchivo),
+  guardarBrief usaban el track HOME → un lead veía el otro equipo. FIX: todos usan el grant efectivo (member.tracks/tracksVisibles).
+- **C5/C6 render**: rangosLocutor ahora también bolea cues con dos puntos; legal-lectura envuelve el pretty en TextoRico.
+- **S1** importRows con gate lead-track (paridad con crearBrief). **S2** 5 loaders de admin con `canAdmin`. **I2** scope en
+  marcarVeredictoIgnorado. **I4** setLeads valida rol. **S5/I3** Mi Trabajo: correcciones/revisión ABREN la tarea (no botón
+  inline divergente; ya no se aprueba con correcciones abiertas desde la lista).
+- Tests nuevos: transicionRequiereLead, filtroBundle (incl. falso-positivo lead multi-track ve AMBOS), rangosLocutor colon.
+- ⏳ LIVE-VERIFY: creative NO puede arrastrar a completed/published; cliente sólo su portal (probar /clientes, /otro/portal,
+  /slug/sync → redirige/deniega); lead multi-track ve ambos equipos en Workload/Briefs/Entregas; legal con `**` sale en negrita.
+- Cosmético diferido: WorkloadBoard aún pinta el header del track vacío para un lead de un solo track (sin fuga de datos).
+
+
 ## 🔵 2026-08-27 (tarde) — fixes UI + workflow cambios-cliente
 - ✅ Sidebar ya NO auto-colapsa la sección del cliente al ir a Mi Trabajo (queda desplegada; colapso manual respetado).
 - ✅ Pill "Esperando revisión" → ámbar (status-warning) + dot, antes gris casi invisible.

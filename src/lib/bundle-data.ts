@@ -3,6 +3,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { ViewRole } from "@/lib/roles";
+import type { Track } from "@/lib/vocab";
 import {
   BUNDLE_SELECT,
   agruparBundles,
@@ -17,6 +18,7 @@ export async function cargarBundle(
   briefId: string,
   role: ViewRole,
   soyId: string | null,
+  tracks: Track[] | null,
 ): Promise<BundleTask[]> {
   const { data } = await supabaseAdmin()
     .from("board_tasks")
@@ -24,7 +26,7 @@ export async function cargarBundle(
     .eq("brief_id", briefId)
     .returns<BundleTask[]>();
 
-  return (data ?? []).filter(filtroBundle(role, soyId)).sort(compararBundle);
+  return (data ?? []).filter(filtroBundle(role, soyId, tracks)).sort(compararBundle);
 }
 
 /** Todos los bundles de un cliente (la página de briefs). */
@@ -32,6 +34,7 @@ export async function cargarBundles(
   clienteSlug: string,
   role: ViewRole,
   soyId: string | null,
+  tracks: Track[] | null,
 ): Promise<Bundle[]> {
   const { data } = await supabaseAdmin()
     .from("board_tasks")
@@ -39,5 +42,5 @@ export async function cargarBundles(
     .eq("client_slug", clienteSlug)
     .returns<BundleTask[]>();
 
-  return agruparBundles((data ?? []).filter(filtroBundle(role, soyId)));
+  return agruparBundles((data ?? []).filter(filtroBundle(role, soyId, tracks)));
 }

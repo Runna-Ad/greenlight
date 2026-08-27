@@ -61,5 +61,37 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // ── Client tether ──────────────────────────────────────────────────────────
+  // Un cliente (Partner) SÓLO puede estar en SU portal (`/{slug}/portal`). Cualquier
+  // otra ruta interna lo regresa a su portal — así queda amarrado a su marca aunque
+  // una página interna futura olvide su guard `canSee` (defensa por encima de las
+  // páginas). El portal en sí valida la MARCA (no puede ver la de otro). No consulta
+  // el rol en rutas públicas ni de portal, para no pegarle a la mayoría de requests.
+  const esRutaPortal = /^\/[^/]+\/portal(\/|$)/.test(path);
+  if (user && !isPublic && !esRutaPortal) {
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("role, client_id")
+      .eq("id", user.id)
+      .maybeSingle();
+    const p = prof as { role: string; client_id: string | null } | null;
+    if (p?.role === "client") {
+      let dest = "/portal/login";
+      if (p.client_id) {
+        const { data: c } = await supabase
+          .from("clients")
+          .select("slug")
+          .eq("id", p.client_id)
+          .maybeSingle();
+        const slug = (c as { slug: string } | null)?.slug;
+        if (slug) dest = `/${slug}/portal`;
+      }
+      const url = request.nextUrl.clone();
+      url.pathname = dest;
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+  }
+
   return response;
 }

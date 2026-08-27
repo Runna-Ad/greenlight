@@ -28,21 +28,27 @@ const ESTADOS_ACTIVOS: AssetStatus[] = [
   "completed",
 ];
 
-export async function cargarWorkload(): Promise<WorkloadMember[]> {
+export async function cargarWorkload(tracks: Track[] | null): Promise<WorkloadMember[]> {
   if (!hasSupabase()) return [];
   const db = supabaseAdmin();
 
+  // Mismo scope por track que cargarEvaluacion: `null` = todos (admin/master); un lead
+  // ve sólo su(s) track(s) (grant multi-track). Antes NO se acotaba → un lead veía la
+  // carga del OTRO equipo. (reap C4)
+  let qMiembros = db
+    .from("track_members")
+    .select("id, name, track, color, es_lead")
+    .eq("active", true)
+    // Sólo doers (lead/creative): admin/master son globales, sin track ni carga
+    // asignable — no entran al Workload particionado por equipo. (Pedro 2026-08-21.)
+    .in("role", ["lead", "creative"])
+    .order("track", { ascending: true })
+    .order("sort_order", { ascending: true });
+  if (tracks) qMiembros = qMiembros.in("track", tracks);
+
   const [{ data: miembros }, { data: asigs }, { data: ideas }, { data: briefs }, { data: clients }] =
     await Promise.all([
-      db
-        .from("track_members")
-        .select("id, name, track, color, es_lead")
-        .eq("active", true)
-        // Sólo doers (lead/creative): admin/master son globales, sin track ni carga
-        // asignable — no entran al Workload particionado por equipo. (Pedro 2026-08-21.)
-        .in("role", ["lead", "creative"])
-        .order("track", { ascending: true })
-        .order("sort_order", { ascending: true }),
+      qMiembros,
       db.from("idea_assignments").select("member_id, idea_id"),
       // Filtro de estado en SQL, no en JS: el enum sólo tiene 7 valores y ESTADOS_ACTIVOS
       // == exactamente el complemento de TERMINALES (published/delivered), así que esto

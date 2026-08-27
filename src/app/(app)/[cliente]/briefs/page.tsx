@@ -37,7 +37,7 @@ export default async function BriefsPage({
     );
   }
 
-  const bundles = hasSupabase() ? await cargarBundles(cliente, role, soy?.id ?? null) : [];
+  const bundles = hasSupabase() ? await cargarBundles(cliente, role, soy?.id ?? null, soy?.tracks ?? null) : [];
   const esEspecialista = role === "creative";
 
   return (
