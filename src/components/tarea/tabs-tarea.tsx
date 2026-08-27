@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Lightbulb, Puzzle, EyeOff } from "lucide-react";
+import { Lightbulb, Puzzle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { Plantilla } from "@/lib/plantilla";
 import { DetallesTab } from "./detalles-tab";
 import { RunnaToolsTab, type Persona } from "./runna-tools-tab";
-import { useWorkspaceView } from "./workspace-provider";
 
 type DetallesProps = {
   tipoAsset: string | null;
@@ -36,9 +35,10 @@ type RunnaProps = {
 
 /**
  * El bloque de pestañas del mockup: "Detalles asset" / "Rünna tools".
- * "Rünna tools" sólo existe para el equipo (`runna` presente) y se oculta en
- * "Vista cliente"; el cliente sólo ve "Detalles asset". El servidor decide si
- * `runna` llega (no se manda al rol cliente) — aquí sólo se oculta la pestaña.
+ * "Rünna tools" sólo existe para el equipo (`runna` presente): es una pestaña
+ * normal, SIEMPRE igual — ya no cambia con Modo Lectura (antes se atenuaba +
+ * marcaba "· interno", confuso — Pedro). El gate real es el servidor: al rol
+ * cliente no le manda `runna`, así que nunca ve la pestaña.
  */
 export function TabsTarea({
   ideaId,
@@ -53,10 +53,7 @@ export function TabsTarea({
   detalles: DetallesProps;
   runna?: RunnaProps;
 }) {
-  const { verCliente } = useWorkspaceView();
   const [tab, setTab] = useState<"detalles" | "runna">("detalles");
-  // Rünna tools sigue ACCESIBLE en Vista cliente (el equipo puede entrar), sólo se
-  // atenúa + marca "no lo ve el cliente" — antes desaparecía por completo (Pedro).
   const mostrarRunna = !!runna;
   const activa = tab === "runna" && mostrarRunna ? "runna" : "detalles";
 
@@ -67,14 +64,8 @@ export function TabsTarea({
           Detalles asset
         </TabBtn>
         {mostrarRunna && (
-          <TabBtn
-            activa={activa === "runna"}
-            onClick={() => setTab("runna")}
-            icon={verCliente ? EyeOff : Puzzle}
-            atenuado={verCliente}
-            title={verCliente ? "Interno — el cliente no ve esta pestaña" : undefined}
-          >
-            Rünna tools{verCliente && " · interno"}
+          <TabBtn activa={activa === "runna"} onClick={() => setTab("runna")} icon={Puzzle}>
+            Rünna tools
           </TabBtn>
         )}
       </div>
@@ -118,29 +109,23 @@ function TabBtn({
   onClick,
   icon: Icon,
   children,
-  atenuado,
-  title,
 }: {
   activa: boolean;
   onClick: () => void;
   icon: typeof Lightbulb;
   children: React.ReactNode;
-  /** Atenúa la pestaña (Rünna tools en Vista cliente): sigue clickable, sólo marcada. */
-  atenuado?: boolean;
-  title?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={activa}
-      title={title}
       className={cn(
         "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
+        // Activa = relleno sólido (morado + texto blanco); inactiva = suave/gris.
         activa
-          ? "border border-primary/30 bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary"
+          ? "bg-primary text-primary-foreground shadow-sm"
           : "bg-secondary text-muted-foreground hover:text-foreground",
-        atenuado && "opacity-55",
       )}
     >
       <Icon className="size-4" /> {children}

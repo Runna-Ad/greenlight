@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Timer, Eye, Puzzle } from "lucide-react";
+import { Timer, BookOpen, Puzzle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { readTimeS, type Plantilla } from "@/lib/plantilla";
@@ -43,7 +43,7 @@ export function BottomBarTarea({ plantilla, cortinillaS = 0 }: { plantilla: Plan
               : "text-muted-foreground hover:text-foreground",
           )}
         >
-          <Eye className="size-3.5" /> Vista cliente
+          <BookOpen className="size-3.5" /> Modo Lectura
         </button>
         <button
           type="button"
@@ -56,7 +56,7 @@ export function BottomBarTarea({ plantilla, cortinillaS = 0 }: { plantilla: Plan
               : "text-muted-foreground hover:text-foreground",
           )}
         >
-          <Puzzle className="size-3.5" /> Vista editor
+          <Puzzle className="size-3.5" /> Modo Edición
         </button>
       </div>
     </div>
