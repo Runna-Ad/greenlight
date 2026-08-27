@@ -283,9 +283,10 @@ function bloqueVariable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
   s += `- Plataformas: ${lista(i.plataformas)}\n`;
   if (modo === "guion") {
     s += `- Duración: ${lista(i.duracion)}\n`;
-    // Presupuesto de diálogo = duración más larga del fan-out − 2s de cortinilla legal
-    // (reservada). El writer debe caber aquí; el guard determinista de escribirGuion lo
-    // vuelve a medir y pide recortar si se pasa.
+    // Presupuesto de diálogo = objetivo (tope del rango − colchón: mitad del rango, mín 4s)
+    // − 2s de cortinilla legal reservada, para que el video aterrice bajo el tope y no
+    // pegado al borde. Un valor único ("30") apunta ≥4s por debajo (26). El writer debe
+    // caber aquí; el guard determinista de escribirGuion lo vuelve a medir y pide recortar.
     const budget = presupuestoDialogoS(i.duracion);
     if (budget !== null) {
       s += `- ⏱️ PRESUPUESTO DE TIEMPO: el diálogo TOTAL de TODO el guión (sumando todos los planos) debe caber en ${budget}s de LECTURA — la cortinilla legal ocupa 2s aparte, ya descontados. A ~2.5 palabras/seg son ~${Math.round(budget * 2.5)} palabras de diálogo como TOPE. No te pases: recorta líneas o planos antes que exceder.\n`;
@@ -389,7 +390,7 @@ async function generarUnGuion(
 
 /**
  * Escribe el guión de video con un GUARD de tiempo determinista: genera, MIDE el
- * read-time total del diálogo y, si excede el presupuesto (duración más larga − 2s de
+ * read-time total del diálogo y, si excede el presupuesto (objetivo bajo el tope − 2s de
  * cortinilla legal), REINTENTA (máx 2) dándole al modelo el sobrante exacto a recortar.
  * El prompt ya pedía caber en el tiempo pero el modelo se pasaba igual (guión de 48s en
  * un tope de ~38s): el prompt sugiere, el código mide y obliga — prompt + guard

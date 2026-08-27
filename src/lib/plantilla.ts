@@ -63,6 +63,14 @@ export function readTimeS(dialogo: string | null | undefined): number {
  */
 export const LEGAL_SECONDS = 2;
 
+/**
+ * Colchón MÍNIMO en segundos entre la duración objetivo del guión y el TOPE del rango
+ * (Pedro, 2026-08-27). Para un valor único ("30") el rango es de 0, así que este mínimo
+ * es lo único que separa el objetivo del tope: "30" → objetivo 26, y el 30 nunca se
+ * rebasa. Para un rango ancho, la mitad del rango ya supera este mínimo y manda ella.
+ */
+export const COLCHON_MIN_S = 4;
+
 export type Rango = { min: number; max: number };
 
 /**
@@ -79,18 +87,31 @@ export function parseDuracion(texto: string | null | undefined): Rango | null {
 }
 
 /**
- * Presupuesto de DIÁLOGO en segundos para el writer: la duración objetivo (la más
- * larga del fan-out) MENOS la cortinilla legal fija ({@link LEGAL_SECONDS}). El
- * diálogo total del guión debe caber aquí; el legal se agrega aparte y ocupa esos
- * 2s reservados, de modo que (diálogo + legal) ≤ duración. `null` si no hay duración
- * legible (entonces no se enforcea tope). Piso de 1s para no dar un tope ≤0.
+ * Presupuesto de DIÁLOGO en segundos para el writer: la duración OBJETIVO MENOS la
+ * cortinilla legal fija ({@link LEGAL_SECONDS}). El diálogo total del guión debe caber
+ * aquí; el legal se agrega aparte y ocupa esos 2s reservados, de modo que
+ * (diálogo + legal) ≤ duración. `null` si no hay duración legible (entonces no se
+ * enforcea tope). Piso de 1s para no dar un tope ≤0.
+ *
+ * La duración objetivo NUNCA se sienta pegada al tope (Pedro, 2026-08-27): apuntar al
+ * máximo dejaba el video en el borde superior y los guiones fallaban por tiempo. La
+ * regla es una sola: OBJETIVO = tope − colchón, donde el colchón es la mitad del rango
+ * PERO al menos {@link COLCHON_MIN_S}s. Así:
+ *   · rango ancho "30-40" → colchón 5 → objetivo 35 (el centro, "no more than 35").
+ *   · valor único "30" (rango de 0) → colchón mínimo 4 → objetivo 26; el 30 es un TOPE
+ *     DURO que nunca se debe rebasar, y el colchón garantiza aterrizar ≥4s por debajo.
+ *   · rango angosto "30-35" → medio colchón 2.5 < 4 → se fuerza a 4 → objetivo 31.
+ * El máx del rango es siempre el límite crítico; el colchón deja aire para el redondeo y
+ * la locución real. Fan-out: se toma el objetivo más largo (el guión maestro cabe en
+ * todas). Floor para sesgar apenas por debajo, nunca por encima.
  */
 export function presupuestoDialogoS(duracion: string[] | null | undefined): number | null {
-  const segs = (duracion ?? [])
-    .map((d) => parseDuracion(d)?.max)
-    .filter((n): n is number => typeof n === "number");
-  if (!segs.length) return null;
-  return Math.max(1, Math.max(...segs) - LEGAL_SECONDS);
+  const objetivos = (duracion ?? [])
+    .map((d) => parseDuracion(d))
+    .filter((r): r is Rango => r !== null)
+    .map((r) => r.max - Math.max(COLCHON_MIN_S, (r.max - r.min) / 2));
+  if (!objetivos.length) return null;
+  return Math.max(1, Math.floor(Math.max(...objetivos)) - LEGAL_SECONDS);
 }
 
 // Aquí vivía compararDuracion(): juzgaba el diálogo contra la Duración y pintaba

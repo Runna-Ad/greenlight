@@ -4,7 +4,7 @@ import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.t
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
 import { actionsFor, waitingLabel, transicionRequiereLead } from "../src/lib/task-actions.ts";
 import { filtroBundle } from "../src/lib/bundle.ts";
-import { plantillaPara, readTimeS, parseDuracion, presupuestoDialogoS, LEGAL_SECONDS, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
+import { plantillaPara, readTimeS, parseDuracion, presupuestoDialogoS, LEGAL_SECONDS, COLCHON_MIN_S, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
@@ -214,17 +214,25 @@ eq("'-' no es duración", parseDuracion("-"), null);
 eq("vacío tampoco", parseDuracion(""), null);
 eq("texto libre tampoco", parseDuracion("lo que salga"), null);
 
-// Presupuesto de diálogo del writer = duración MÁS LARGA − 2s de cortinilla legal.
-// Es lo que arregla "cap 30-40s → generó 48s → +legales=60": el guard mide contra esto.
+// Presupuesto de diálogo del writer = OBJETIVO − 2s de cortinilla legal, donde el
+// objetivo = tope del rango − colchón (mitad del rango, mín COLCHON_MIN_S s). El objetivo
+// nunca se sienta pegado al tope: apuntar al máx dejaba el video en el borde y los guiones
+// fallaban por tiempo (Pedro, 2026-08-27). Rango ancho "30-40" → centro 35; valor único
+// "30" → 4s por debajo (26) con 30 como TOPE DURO; el guard mide contra esto.
 eq("la cortinilla legal son 2s fijos", LEGAL_SECONDS, 2);
-eq("'30-40s' → presupuesto 38s (40 − 2)", presupuestoDialogoS(["30-40s"]), 38);
-eq("'30s' punto → 28s", presupuestoDialogoS(["30s"]), 28);
-eq("toma la MÁS LARGA del fan-out", presupuestoDialogoS(["15s", "30-40s", "20s"]), 38);
+eq("el colchón mínimo bajo el tope son 4s", COLCHON_MIN_S, 4);
+eq("'30-40s' rango ancho → objetivo 35 (centro), presupuesto 33", presupuestoDialogoS(["30-40s"]), 33);
+eq("'30s' punto → objetivo 26 (4s bajo el tope duro 30), presupuesto 24", presupuestoDialogoS(["30s"]), 24);
+eq("'40s' punto → objetivo 36 (4s bajo 40), presupuesto 34", presupuestoDialogoS(["40s"]), 34);
+eq("rango angosto '30-35s' → colchón forzado a 4 → objetivo 31, presupuesto 29", presupuestoDialogoS(["30-35s"]), 29);
+eq("toma el objetivo MÁS LARGO del fan-out (30-40 → 35)", presupuestoDialogoS(["15s", "30-40s", "20s"]), 33);
+eq("rango impar → floor ('15-30s' colchón 7.5 → objetivo 22.5 → 22, −2 = 20)", presupuestoDialogoS(["15-30s"]), 20);
 eq("sin duración legible → null (sin tope)", presupuestoDialogoS([]), null);
 eq("'-' y null no dan tope", presupuestoDialogoS(["-"]), null);
 eq("piso de 1s (nunca ≤0)", presupuestoDialogoS(["1s"]), 1);
-// El total que ve la barra (diálogo + 2s legal) cabe en el cap: 38 de diálogo + 2 = 40.
-eq("diálogo dentro del presupuesto + legal ≤ cap", presupuestoDialogoS(["40s"]) + LEGAL_SECONDS, 40);
+// El TOPE DURO nunca se rebasa: para un punto "40s" el total (diálogo + 2s legal) aterriza
+// en 36 = 40 − 4, dejando el colchón entero por debajo del límite crítico.
+eq("valor único aterriza 4s bajo el tope duro ('40s' → 34 + 2 = 36 ≤ 40)", presupuestoDialogoS(["40s"]) + LEGAL_SECONDS, 36);
 
 // Las instrucciones del deck son PLACEHOLDER, jamás valor inicial.
 const plano = nuevoPlano(1);

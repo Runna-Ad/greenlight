@@ -1,5 +1,15 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-08-27 — HÜE apunta al MEDIO del rango de duración (no al borde)
+Problema (Pedro): los guiones fallan por tiempo; HÜE los deja pegados al tope (30-40 → sale a ~40).
+Objetivo: HÜE deja SIEMPRE colchón bajo el tope. Rango ancho → centro (30-40 → 35).
+Valor único → 4s menos + el número es TOPE DURO (30 → apunta a 26, jamás pasa de 30).
+Regla unificada: objetivo = tope − max(4, mitad del rango); budget = objetivo − 2s legal.
+- [x] `presupuestoDialogoS` (src/lib/plantilla.ts) + const `COLCHON_MIN_S=4`.
+- [x] Comentarios doc (plantilla.ts + hue-writer.ts) + tests (test-lib.mjs) a semántica de colchón.
+- [x] Gates VERDES: tsc 0 · eslint 0 · lib 421 pass. (Cambio 100% código, sin migración.)
+- [x] Log lesson. ⏳ Falta: OK de Pedro + deploy (push, sin migración).
+
 ## 🔒 2026-08-27 (tarde) — REAP pre-launch: 16 hallazgos de paridad ARREGLADOS + deploy
 Gates VERDES: tsc·eslint(0)·lib 417·db 318·sync 44·build. Sin migración (todo código).
 - **C1 escalada de privilegios**: `moveTask` + menú/arrastre del tablero dejaban a un creativo auto-aprobar/publicar/
