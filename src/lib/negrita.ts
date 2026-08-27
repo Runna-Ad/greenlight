@@ -76,3 +76,21 @@ export function desmarcarNegrita(texto: string): { texto: string; negritas: Rang
   out += s.slice(last);
   return { texto: out, negritas };
 }
+
+/**
+ * Une dos listas de rangos de negrita (en el MISMO espacio de coordenadas) en una
+ * sola lista ORDENADA y SIN TRASLAPE — el contrato que espera `pintarNegrita`.
+ * Coalesce rangos que se tocan o se solapan. Se usa para sumar la negrita del
+ * LOCUTOR del diálogo ("(Actriz 1)") a la negrita de marca (`**…**`) sin que un par
+ * se parta ni un rango quede desordenado.
+ */
+export function unirRangos(a: RangoNegrita[], b: RangoNegrita[]): RangoNegrita[] {
+  const todos = [...a, ...b].filter((r) => r.end > r.start).sort((x, y) => x.start - y.start);
+  const out: RangoNegrita[] = [];
+  for (const r of todos) {
+    const ult = out[out.length - 1];
+    if (ult && r.start <= ult.end) ult.end = Math.max(ult.end, r.end); // solapa/toca → funde
+    else out.push({ ...r });
+  }
+  return out;
+}

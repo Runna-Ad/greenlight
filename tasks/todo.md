@@ -3,8 +3,10 @@
 ## 🔴 2026-08-27 — Tablero locks + H.Ü.E tiempo + multi-track de leads (Pedro, deploy juntos)
 ✅ LOS 3 CONSTRUIDOS + VERIFICADOS. Gates VERDES: tsc·eslint(0)·test:lib 388·test:db 310·test:sync 44. Mig 0052 SIN aplicar.
 ⏳ Falta: deploy junto (push main + aplicar mig 0052) — Pedro dijo "deploy everything together" (autorizado).
-⏳ FOLLOW-UP no-security: `my_track` de notificaciones se enforcea en el fan-out de la BASE → un lead multi-track sólo
-   recibe avisos `my_track` de su track home hasta extender ese trigger. (Interactuar = ver/asignar/crear SÍ cubierto.)
+✅ FOLLOW-UP HECHO (mig 0053): `fan_out_task_notification` ahora empata `my_track` por track HOME **o** grant
+   (`new.track = any(lead_tracks)`) → un lead multi-track recibe avisos de AMBOS tracks. (rebasado sobre 0051, no 0050.)
+✅ 2026-08-27 fixes B: Mi Trabajo "Retomar" abre la tarea (router.push, gated enCorrecciones); portal del cliente
+   pinta el locutor "(Actriz 1)" en negrita POR RANGO (rangosLocutor+unirRangos en CampoLectura) sin romper offsets.
 ⏳ LIVE-VERIFY post-ship: en el tablero, asignar Lead+Especialistas respeta rol+track; H.Ü.E de una tarea 30-40s cabe
    en tiempo (barra ≤ cap, legal=+2s); un lead con grant de ambos tracks ve/asigna en los dos.
 - **[A] Tablero asignación = MISMAS locks que el task section** ✅ HECHO+VERIFICADO (tsc/eslint/tests verdes, sin deploy):

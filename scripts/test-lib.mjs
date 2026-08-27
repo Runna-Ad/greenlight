@@ -381,6 +381,18 @@ eq("colon: el texto sale limpio", parseDialogo("Actor: Uso mi DiDi Card.")[0].te
 eq("colon: 'Actriz V.O:' conserva el rol", parseDialogo("Actriz V.O: Manifestando.")[0].quien, "Actriz V.O");
 eq("colon: 'Y le dije: hola' NO es locutor", parseDialogo("Y le dije: hola")[0].quien, null);
 
+// rangosLocutor: los "(Quién)" van en negrita EN SU LUGAR (sin reformatear) para
+// que el portal del cliente se vea como Modo Lectura sin romper offsets/cita.
+const { rangosLocutor } = await import("../src/lib/dialogo.ts");
+eq("locutor: '(Actriz 1) hola' → rango 0..10", JSON.stringify(rangosLocutor("(Actriz 1) hola")), JSON.stringify([{ start: 0, end: 10 }]));
+eq("locutor: sin paréntesis → sin rangos", rangosLocutor("hola mundo").length, 0);
+eq("locutor: dos intervenciones → dos rangos", rangosLocutor("(A) hola (B) adios").length, 2);
+// unirRangos: funde negrita de marca + locutor en una lista ordenada y sin traslape.
+const { unirRangos } = await import("../src/lib/negrita.ts");
+eq("unir: ordena por start", JSON.stringify(unirRangos([{ start: 10, end: 14 }], [{ start: 0, end: 3 }])), JSON.stringify([{ start: 0, end: 3 }, { start: 10, end: 14 }]));
+eq("unir: coalesce solapados", JSON.stringify(unirRangos([{ start: 0, end: 6 }], [{ start: 4, end: 10 }])), JSON.stringify([{ start: 0, end: 10 }]));
+eq("unir: descarta vacíos", unirRangos([{ start: 5, end: 5 }], []).length, 0);
+
 // ── Captura de brief: identidad, duplicación, combos, gate ──
 console.log("\n▶ Captura de brief (intake-crear)");
 

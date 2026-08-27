@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, 
 import { createPortal } from "react-dom";
 import { Plus, X, Check, ArrowRight } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate } from "@floating-ui/react-dom";
-import { desmarcarNegrita, type RangoNegrita } from "@/lib/negrita";
+import { desmarcarNegrita, unirRangos, type RangoNegrita } from "@/lib/negrita";
+import { rangosLocutor } from "@/lib/dialogo";
 import { useCorrecciones } from "./correcciones/contexto";
 import { SelectorTipoCambio, TagTipoCambio, BadgeCliente } from "./selector-tipo-cambio";
 import { VeredictoChip } from "./veredicto-chip";
@@ -111,6 +112,12 @@ export function CampoLectura({
   // real Y el resaltado limpio, y la cita/offset guardada vive en el mismo espacio
   // que el texto que se ve y se selecciona.
   const { texto: limpio, negritas } = desmarcarNegrita(valor);
+  // El LOCUTOR del diálogo ("(Actriz 1)") también va en negrita en lectura — igual que
+  // la vista bonita (DialogoContenido) — pero SIN reformatear el texto, para no romper
+  // los offsets ni la cita de las correcciones. Se suma a la negrita de marca POR RANGO.
+  // Así el portal del cliente (que puede anclar cambios) se ve igual que Modo Lectura. (Pedro)
+  const negritasVista =
+    campo === "dialogo" ? unirRangos(negritas, rangosLocutor(limpio)) : negritas;
   const resaltados = resaltadosEnTexto(limpio, cs);
   // Revisiones = cambios de rondas PASADAS ya aplicados (read-only). Sólo el portal
   // los provee; en el interno la lista viene vacía. NO se resaltan inline (su cita es
@@ -401,10 +408,10 @@ export function CampoLectura({
               style={{ background: MARCA[sg.corr.estado], borderRadius: "2px" }}
               className="cursor-help text-foreground"
             >
-              {pintarNegrita(limpio, negritas, sg.start, sg.end)}
+              {pintarNegrita(limpio, negritasVista, sg.start, sg.end)}
             </mark>
           ) : (
-            <span key={i}>{pintarNegrita(limpio, negritas, sg.start, sg.end)}</span>
+            <span key={i}>{pintarNegrita(limpio, negritasVista, sg.start, sg.end)}</span>
           ),
         )}
       </div>

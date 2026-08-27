@@ -14,6 +14,25 @@ export type SegmentoDialogo = {
   texto: string;
 };
 
+import type { RangoNegrita } from "./negrita";
+
+/**
+ * Los rangos [start,end) de los LOCUTORES en un texto LIMPIO de diálogo —cada
+ * "(Quién)"— para pintarlos en negrita SIN reformatear el texto (así los offsets y
+ * la cita de las correcciones siguen siendo válidos). Es la MISMA convención que
+ * `parseDialogo`: cada "(…)" marca quién habla. Incluye los paréntesis en el rango.
+ * Sólo tiene sentido para el campo de diálogo.
+ */
+export function rangosLocutor(limpio: string): RangoNegrita[] {
+  const rangos: RangoNegrita[] = [];
+  const re = /\([^)]+\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(limpio)) !== null) {
+    rangos.push({ start: m.index, end: m.index + m[0].length });
+  }
+  return rangos;
+}
+
 // Un locutor con DOS PUNTOS al inicio de una línea ("Actor: texto", "Narrador:",
 // "Actriz V.O: ...") se trata como "(Actor) texto" — así el diálogo del deck del
 // equipo (que usa dos puntos) sale en negritas aunque no venga entre paréntesis,
