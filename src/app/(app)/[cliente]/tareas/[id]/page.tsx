@@ -8,7 +8,7 @@ import { cargarRefsPorPlano, cargarRefsEstatico } from "@/lib/referencias-data";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { ROLE_LABEL, canSee, canOverrideStatus, canAssign } from "@/lib/roles";
 import { type AssetStatus } from "@/lib/brand";
-import { ESTADOS_CERRADOS, plantillaPara, notaGlobal, readTimeS } from "@/lib/plantilla";
+import { ESTADOS_CERRADOS, plantillaPara, notaGlobal, LEGAL_SECONDS } from "@/lib/plantilla";
 import { posicionEnBundle } from "@/lib/bundle";
 import { cargarBundle } from "@/lib/bundle-data";
 import { CorreccionesProvider } from "@/components/tarea/correcciones/contexto";
@@ -277,10 +277,11 @@ export default async function TareaPage({
   const seleccionadosIds = new Set((idSnippets ?? []).map((s) => s.snippet_id));
   const legalesSeleccionados = (bibliotecaLegal ?? []).filter((s) => seleccionadosIds.has(s.id));
   const legalesDisponibles = (bibliotecaLegal ?? []).filter((s) => !seleccionadosIds.has(s.id));
-  // El legal ÚNICO de la tarea (snippet elegido o texto libre) → su tiempo de lectura
-  // se suma a la barra inferior (la cortinilla también se lee en pantalla — Pedro).
+  // La cortinilla legal cuenta 2s FIJOS (regla dura, Pedro) — no el read-time de su
+  // texto, que inflaba el total (un legal largo saltaba a +12s en vez de +2s). Suma
+  // los 2s SÓLO si la tarea lleva legal (snippet elegido o texto libre); 0 si no.
   const cortinillaTexto = legalesSeleccionados[0]?.body ?? idea.legales_libres ?? "";
-  const cortinillaS = readTimeS(cortinillaTexto);
+  const cortinillaS = cortinillaTexto.trim() ? LEGAL_SECONDS : 0;
 
   // Phase B — legal sugerido para este guión (determinista, por marca). Se computa
   // sobre el guión GUARDADO (la fuente legalmente relevante); el humano confirma.

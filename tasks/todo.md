@@ -1,5 +1,26 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔴 2026-08-27 — Tablero locks + H.Ü.E tiempo + multi-track de leads (Pedro, deploy juntos)
+✅ LOS 3 CONSTRUIDOS + VERIFICADOS. Gates VERDES: tsc·eslint(0)·test:lib 388·test:db 310·test:sync 44. Mig 0052 SIN aplicar.
+⏳ Falta: deploy junto (push main + aplicar mig 0052) — Pedro dijo "deploy everything together" (autorizado).
+⏳ FOLLOW-UP no-security: `my_track` de notificaciones se enforcea en el fan-out de la BASE → un lead multi-track sólo
+   recibe avisos `my_track` de su track home hasta extender ese trigger. (Interactuar = ver/asignar/crear SÍ cubierto.)
+⏳ LIVE-VERIFY post-ship: en el tablero, asignar Lead+Especialistas respeta rol+track; H.Ü.E de una tarea 30-40s cabe
+   en tiempo (barra ≤ cap, legal=+2s); un lead con grant de ambos tracks ve/asigna en los dos.
+- **[A] Tablero asignación = MISMAS locks que el task section** ✅ HECHO+VERIFICADO (tsc/eslint/tests verdes, sin deploy):
+  el picker del tablero era lista plana por `setAssignees` (0 validación → todos Especialista). Ahora Lead(rol `lead`)
+  + Especialistas(rol `creative`) del track de la tarea, vía `asignarTarea` (re-valida rol+track+activo en server).
+  `setAssignees` ELIMINADO. Sólo lead+ asignan (canAssign, ambas capas). — board.tsx, tablero/page.tsx, tablero/actions.ts.
+- **[B] H.Ü.E respeta la duración** (bug: cap 30-40s → generó 48s → +legales=60):
+  - Legal = SIEMPRE 2s (regla dura). `LEGAL_SECONDS=2` en plantilla.ts; page.tsx cortinillaS = tiene-legal?2:0 (antes readTimeS del texto → 12s).
+  - Presupuesto de diálogo del writer = targetSec − 2 (reserva la cortinilla). + GUARD determinista: mide read-time del guión generado; si excede, retry correctivo (máx 2) que le da el sobrante exacto y le pide recortar. (prompt-plus-deterministic-guard)
+- **[C] Multi-track de leads** (sólo rol `lead`; Pedro eligió "selectable"): mig `track_members.lead_tracks track[]` (null=usa track home).
+  Identity computa `member.tracks` (lead: lead_tracks ?? [track]; creative: [track]; admin/master: global). Consumers→`tracks`:
+  assertCanActOnTask, visibleParaRol (tablero), tracksVisibles (roles), briefs/nuevo. + soy.tracks. + Equipo admin: multi-select de tracks por lead (setLeadTracks, guard canAdmin).
+- Deploy: push main (Vercel) + aplicar migración al ref de Greenlight. Test local ANTES.
+
+
+
 ## 🔔 Fase 3b (cliente) + backlog 1-5 — CONSTRUIDO + TESTEADO, migración 0051 SIN aplicar
 Gates VERDES: tsc·eslint(0 err)·test:lib 380·test:db 310·test:sync 44·build. 21 archivos + mig 0051.
 - **Fase 3b — notificaciones al CLIENTE** (mig 0051, SIN aplicar): antes el cliente NO recibía NADA al mandarle

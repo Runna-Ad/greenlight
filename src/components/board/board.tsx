@@ -15,7 +15,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import Link from "next/link";
-import { Files, Plus, X, GripVertical, Users } from "lucide-react";
+import { Files, Plus, X, GripVertical, Users, Crown, Check } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -26,7 +26,7 @@ import {
   canMove,
   type AssetStatus,
 } from "@/lib/brand";
-import { moveTask, setAssignees } from "@/app/(app)/[cliente]/tablero/actions";
+import { moveTask, asignarTarea } from "@/app/(app)/[cliente]/tablero/actions";
 import {
   DEFAULT_ROLE,
   canAssign,
@@ -39,7 +39,16 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Pill, type PillStatus } from "@/components/ui/pill";
 
-export type Member = { id: string; name: string; color: string; track: "real" | "normal" };
+export type Member = {
+  id: string;
+  name: string;
+  color: string;
+  track: "real" | "normal";
+  /** Rol REAL del miembro (track_members.role). El picker sólo hace asignable al
+   *  `lead` (como Lead) y al `creative` (como Especialista) del track de la tarea;
+   *  admin/master no son "doers", así que quedan fuera por rol. */
+  role: string;
+};
 
 export type Task = {
   id: string;
@@ -59,6 +68,11 @@ export type Task = {
   brief_title: string | null;
   file_count: number;
   members: { id: string; name: string; color: string }[];
+  /** Asignados partidos por es_lead (los expone board_tasks: `leads` / `team`).
+   *  El picker usa `leads[0]` como el Lead actual y `team` como Especialistas —
+   *  así editar no pierde al lead ni degrada a nadie a Especialista por error. */
+  leads: { id: string; name: string; color: string }[];
+  team: { id: string; name: string; color: string }[];
   /** Cuándo se hizo Greenlit (delivered). Sólo lo trae el loader para tareas delivered;
    *  la columna Greenlit muestra únicamente las de ≤7 días (el resto va a Entregas). */
   deliveredAt?: string | null;
@@ -236,25 +250,37 @@ export function Board({
     [dragging, applyMove],
   );
 
+  // Asignar en el tablero = MISMA regla que el task section: un Lead (rol `lead`)
+  // + Especialistas (rol `creative`), atados al track de la tarea, vía `asignarTarea`
+  // (re-valida rol+track+activo en el SERVIDOR). Antes iba por `setAssignees`, que no
+  // validaba nada y metía a todos como Especialista (es_lead=false). (Pedro)
   const applyAssignees = useCallback(
-    (task: Task, memberIds: string[]) => {
-      const before = task.members;
-      const next = memberIds
-        .map((id) => members.find((m) => m.id === id))
-        .filter(Boolean)
-        .map((m) => ({ id: m!.id, name: m!.name, color: m!.color }));
+    (task: Task, leadId: string | null, especialistaIds: string[]) => {
+      const before = { members: task.members, leads: task.leads, team: task.team };
+      const chip = (id: string) => {
+        const m = members.find((x) => x.id === id);
+        return m ? { id: m.id, name: m.name, color: m.color } : null;
+      };
+      const leadChip = leadId ? chip(leadId) : null;
+      const teamChips = especialistaIds.map(chip).filter(Boolean) as Task["team"];
+      const nextLeads = leadChip ? [leadChip] : [];
+      const nextMembers = [...nextLeads, ...teamChips];
 
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, members: next } : t)));
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === task.id ? { ...t, members: nextMembers, leads: nextLeads, team: teamChips } : t,
+        ),
+      );
 
       startTransition(async () => {
-        const res = await setAssignees(cliente, task.id, memberIds);
+        const res = await asignarTarea(task.id, leadId, especialistaIds);
         if (!res.ok) {
-          setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, members: before } : t)));
+          setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...before } : t)));
           toast.error(res.error ?? "No se pudo guardar la asignación.");
         }
       });
     },
-    [cliente, members],
+    [members],
   );
 
   return (
@@ -341,7 +367,7 @@ const Column = memo(function Column({
   mayOverride: boolean;
   role: ViewRole;
   soyId: string | null;
-  onAssign: (t: Task, ids: string[]) => void;
+  onAssign: (t: Task, leadId: string | null, especialistaIds: string[]) => void;
   onMove?: (t: Task, to: AssetStatus) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -467,7 +493,7 @@ const TaskCard = memo(function TaskCard({
   mayOverride: boolean;
   role: ViewRole;
   soyId: string | null;
-  onAssign: (t: Task, ids: string[]) => void;
+  onAssign: (t: Task, leadId: string | null, especialistaIds: string[]) => void;
   onMove?: (t: Task, to: AssetStatus) => void;
 }) {
   // "Con Cliente" (published) queda DRAG-LOCKED: la tarjeta no se arrastra hacia
@@ -524,7 +550,7 @@ const CardBody = memo(function CardBody({
       tipo por si vuelven — los padres los siguen pasando sin costo. */
   role?: ViewRole;
   soyId?: string | null;
-  onAssign?: (t: Task, ids: string[]) => void;
+  onAssign?: (t: Task, leadId: string | null, especialistaIds: string[]) => void;
   onMove?: (t: Task, to: AssetStatus) => void;
   handleProps?: Record<string, unknown>;
   dragging?: boolean;
@@ -712,13 +738,17 @@ const CardBody = memo(function CardBody({
   );
 });
 
-function MemberChip({ name, color }: { name: string; color: string }) {
+function MemberChip({ name, color, lead }: { name: string; color: string; lead?: boolean }) {
   return (
     <span
       className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium text-foreground"
       style={chipStyle(color)}
     >
-      <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      {lead ? (
+        <Crown className="size-2 shrink-0" style={{ color }} />
+      ) : (
+        <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      )}
       {name}
     </span>
   );
@@ -737,8 +767,13 @@ function PeopleChips({ members }: { members: { id: string; name: string; color: 
 }
 
 /**
- * Assignación picker. The pool is scoped to the task's track — "Clau J" is a
- * Real person and "Clau T" a Normal one; they must not cross.
+ * Picker de asignación del tablero — PARIDAD con el task section: un Lead (rol
+ * `lead`) y Especialistas (rol `creative`), ambos del TRACK de la tarea. Los pools
+ * salen de `members` filtrando por track+rol, así admin/master no aparecen (no son
+ * "doers"). Controlado por `task` (lee leads/team en cada render) y auto-guarda cada
+ * cambio vía `onAssign` → `asignarTarea`, que re-valida rol+track+activo en el
+ * SERVIDOR. Antes era una lista plana por `setAssignees` sin validar, que metía a
+ * todos como Especialista aunque fueran Lead. (Pedro)
  */
 function AssignPicker({
   task,
@@ -747,16 +782,19 @@ function AssignPicker({
 }: {
   task: Task;
   members: Member[];
-  onAssign: (t: Task, ids: string[]) => void;
+  onAssign: (t: Task, leadId: string | null, especialistaIds: string[]) => void;
 }) {
-  const pool = members.filter((m) => m.track === task.track);
-  const selected = new Set(task.members.map((m) => m.id));
+  const leadsPool = members.filter((m) => m.track === task.track && m.role === "lead");
+  const espPool = members.filter((m) => m.track === task.track && m.role === "creative");
+  const leadId = task.leads[0]?.id ?? null;
+  const teamIds = new Set(task.team.map((m) => m.id));
 
-  const toggle = (id: string) => {
-    const next = new Set(selected);
+  const pickLead = (id: string | null) => onAssign(task, id, [...teamIds]);
+  const toggleEsp = (id: string) => {
+    const next = new Set(teamIds);
     if (next.has(id)) next.delete(id);
     else next.add(id);
-    onAssign(task, [...next]);
+    onAssign(task, leadId, [...next]);
   };
 
   return (
@@ -768,7 +806,10 @@ function AssignPicker({
         >
           {task.members.length ? (
             <span className="flex flex-wrap gap-1">
-              {task.members.map((m) => (
+              {task.leads.map((m) => (
+                <MemberChip key={m.id} name={m.name} color={m.color} lead />
+              ))}
+              {task.team.map((m) => (
                 <MemberChip key={m.id} name={m.name} color={m.color} />
               ))}
             </span>
@@ -780,32 +821,87 @@ function AssignPicker({
         </button>
       </PopoverTrigger>
 
-      <PopoverContent align="start" className="w-56 p-1">
-        <p className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+      <PopoverContent align="start" className="w-60 p-1.5">
+        <p className="flex items-center gap-1.5 px-1 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
           <Users className="size-3" />
           Asignación · {task.track}
         </p>
-        <div className="max-h-64 overflow-y-auto">
-          {pool.map((m) => {
-            const on = selected.has(m.id);
-            return (
+
+        <p className="mt-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Lead <span className="font-normal normal-case text-muted-foreground/60">· uno</span>
+        </p>
+        {leadsPool.length === 0 ? (
+          <p className="px-1 py-1 text-[11px] text-muted-foreground/70">No hay Leads en este track.</p>
+        ) : (
+          <ul className="space-y-0.5">
+            <li>
               <button
-                key={m.id}
-                onClick={() => toggle(m.id)}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-secondary"
+                onClick={() => pickLead(null)}
+                className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-secondary"
               >
-                <span
-                  className="size-3 shrink-0 rounded-sm border border-black/10"
-                  style={{ backgroundColor: m.color }}
-                />
-                <span className="flex-1">{m.name}</span>
-                {on && <X className="size-3 text-muted-foreground" />}
+                <Radio activo={leadId === null} />
+                Sin lead
               </button>
-            );
-          })}
-        </div>
+            </li>
+            {leadsPool.map((l) => (
+              <li key={l.id}>
+                <button
+                  onClick={() => pickLead(l.id)}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-secondary"
+                >
+                  <Radio activo={leadId === l.id} />
+                  <Crown className="size-3 shrink-0" style={{ color: l.color }} /> {l.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <p className="mt-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Especialistas <span className="font-normal normal-case text-muted-foreground/60">· varios</span>
+        </p>
+        {espPool.length === 0 ? (
+          <p className="px-1 py-1 text-[11px] text-muted-foreground/70">
+            No hay Especialistas en este track.
+          </p>
+        ) : (
+          <ul className="max-h-40 space-y-0.5 overflow-y-auto">
+            {espPool.map((e) => {
+              const on = teamIds.has(e.id);
+              return (
+                <li key={e.id}>
+                  <button
+                    onClick={() => toggleEsp(e.id)}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-secondary"
+                  >
+                    <span
+                      className="flex size-4 shrink-0 items-center justify-center rounded border"
+                      style={{ borderColor: e.color }}
+                    >
+                      {on && <Check className="size-3" style={{ color: e.color }} />}
+                    </span>
+                    <span className="flex-1">{e.name}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Círculo estilo radio (el Lead es uno solo). */
+function Radio({ activo }: { activo: boolean }) {
+  return (
+    <span
+      className={`flex size-4 shrink-0 items-center justify-center rounded-full border ${
+        activo ? "border-primary bg-primary" : "border-muted-foreground/40"
+      }`}
+    >
+      {activo && <span className="size-1.5 rounded-full bg-white" />}
+    </span>
   );
 }
 

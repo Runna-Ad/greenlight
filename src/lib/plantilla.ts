@@ -54,6 +54,15 @@ export function readTimeS(dialogo: string | null | undefined): number {
   return Math.ceil(t.split(/\s+/).length / 2.5);
 }
 
+/**
+ * La cortinilla legal SIEMPRE dura 2 segundos en pantalla — regla dura (Pedro),
+ * sin importar cuánto texto tenga el legal. El total de lectura suma exactamente
+ * estos 2s cuando la tarea lleva legal (0 si no), y el writer los RESERVA del
+ * presupuesto de diálogo. Nunca medir el read-time del texto legal: inflaba el total
+ * (un legal largo saltaba a +12s en vez de +2s).
+ */
+export const LEGAL_SECONDS = 2;
+
 export type Rango = { min: number; max: number };
 
 /**
@@ -67,6 +76,21 @@ export function parseDuracion(texto: string | null | undefined): Rango | null {
   if (!nums?.length) return null;
   const n = nums.map(Number);
   return { min: n[0], max: n.length > 1 ? n[n.length - 1] : n[0] };
+}
+
+/**
+ * Presupuesto de DIÁLOGO en segundos para el writer: la duración objetivo (la más
+ * larga del fan-out) MENOS la cortinilla legal fija ({@link LEGAL_SECONDS}). El
+ * diálogo total del guión debe caber aquí; el legal se agrega aparte y ocupa esos
+ * 2s reservados, de modo que (diálogo + legal) ≤ duración. `null` si no hay duración
+ * legible (entonces no se enforcea tope). Piso de 1s para no dar un tope ≤0.
+ */
+export function presupuestoDialogoS(duracion: string[] | null | undefined): number | null {
+  const segs = (duracion ?? [])
+    .map((d) => parseDuracion(d)?.max)
+    .filter((n): n is number => typeof n === "number");
+  if (!segs.length) return null;
+  return Math.max(1, Math.max(...segs) - LEGAL_SECONDS);
 }
 
 // Aquí vivía compararDuracion(): juzgaba el diálogo contra la Duración y pintaba

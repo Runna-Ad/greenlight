@@ -153,12 +153,13 @@ export const canHue = (role: ViewRole): boolean => role === "master";
 
 /**
  * Qué EQUIPOS (tracks) ve un rol en Performance/Evaluación. `null` = todos.
- * Admin y Master ven todos los equipos; el Lead sólo el SUYO (puede haber varios
- * leads por equipo). Sin identidad (`soy`) el lead no puede acotar a "su equipo",
- * así que no ve a nadie — mejor vacío honesto que enseñar a todos por error.
+ * Admin y Master ven todos los equipos; el Lead sólo los SUYOS — su alcance efectivo
+ * de tracks (`member.tracks`/`soy.tracks`), que con el grant multi-track puede ser uno
+ * o ambos. Sin identidad (tracks vacío) el lead no ve a nadie — mejor vacío honesto que
+ * enseñar a todos por error.
  */
-export function tracksVisibles(role: ViewRole, soyTrack: Track | null): Track[] | null {
+export function tracksVisibles(role: ViewRole, soyTracks: Track[] | null): Track[] | null {
   if (esNivelAdmin(role)) return null;
-  if (role === "lead") return soyTrack ? [soyTrack] : [];
+  if (role === "lead") return soyTracks && soyTracks.length ? soyTracks : [];
   return []; // creative/client no entran a la Evaluación
 }

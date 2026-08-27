@@ -3,7 +3,7 @@
 import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.ts";
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
 import { actionsFor, waitingLabel } from "../src/lib/task-actions.ts";
-import { plantillaPara, readTimeS, parseDuracion, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
+import { plantillaPara, readTimeS, parseDuracion, presupuestoDialogoS, LEGAL_SECONDS, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
@@ -177,6 +177,18 @@ eq("'30s' es un punto", JSON.stringify(parseDuracion("30s")), '{"min":30,"max":3
 eq("'-' no es duración", parseDuracion("-"), null);
 eq("vacío tampoco", parseDuracion(""), null);
 eq("texto libre tampoco", parseDuracion("lo que salga"), null);
+
+// Presupuesto de diálogo del writer = duración MÁS LARGA − 2s de cortinilla legal.
+// Es lo que arregla "cap 30-40s → generó 48s → +legales=60": el guard mide contra esto.
+eq("la cortinilla legal son 2s fijos", LEGAL_SECONDS, 2);
+eq("'30-40s' → presupuesto 38s (40 − 2)", presupuestoDialogoS(["30-40s"]), 38);
+eq("'30s' punto → 28s", presupuestoDialogoS(["30s"]), 28);
+eq("toma la MÁS LARGA del fan-out", presupuestoDialogoS(["15s", "30-40s", "20s"]), 38);
+eq("sin duración legible → null (sin tope)", presupuestoDialogoS([]), null);
+eq("'-' y null no dan tope", presupuestoDialogoS(["-"]), null);
+eq("piso de 1s (nunca ≤0)", presupuestoDialogoS(["1s"]), 1);
+// El total que ve la barra (diálogo + 2s legal) cabe en el cap: 38 de diálogo + 2 = 40.
+eq("diálogo dentro del presupuesto + legal ≤ cap", presupuestoDialogoS(["40s"]) + LEGAL_SECONDS, 40);
 
 // Las instrucciones del deck son PLACEHOLDER, jamás valor inicial.
 const plano = nuevoPlano(1);

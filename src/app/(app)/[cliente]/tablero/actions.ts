@@ -219,7 +219,8 @@ export async function sendToClient(ideaId: string, note?: string): Promise<Actio
 /**
  * Marcar cuáles de los asignados son LEAD de esta tarea (wireframe: LEAD vs
  * TEAM). No agrega gente — sólo pone el flag es_lead sobre asignaciones que ya
- * existen. Añadir o quitar personas sigue siendo setAssignees, en el tablero.
+ * existen. Añadir o quitar personas (con validación rol+track) es `asignarTarea`,
+ * que usan tanto el task section como el tablero.
  */
 export async function setLeads(
   ideaId: string,
@@ -254,73 +255,11 @@ export async function setLeads(
 }
 
 /**
- * Fijar exactamente quién trabaja una tarea.
- *
- * La "Asignación" del sheet es multi-persona y sin rol ("Galie, Mony"), así que
- * esto reemplaza el conjunto entero en vez de ir sumando de a uno — es editar
- * esa celda.
- */
-export async function setAssignees(
-  _clienteSlug: string,
-  ideaId: string,
-  memberIds: string[],
-): Promise<ActionResult> {
-  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
-
-  const { role } = await context();
-  if (!canAssign(role)) return { ok: false, error: "Este rol no puede cambiar la asignación." };
-  const scope = await assertCanActOnTask(ideaId);
-  if (!scope.ok) return { ok: false, error: scope.error };
-
-  const db = supabaseAdmin();
-
-  // DIFF, no borrar-y-reinsertar: las filas que SIGUEN asignadas conservan su
-  // assigned_at (0034). Si borráramos todo y reinsertáramos, cada reasignación
-  // (agregar/quitar a una persona) resetearía la hora de asignación de TODOS a
-  // now() — y esa hora es justo lo que la Evaluación va a medir. Sólo tocamos lo
-  // que cambió. Se ignoran las filas de la vía antigua (member_id null): no son
-  // nuestras para borrarlas.
-  const deseado = new Set(memberIds);
-  const { data: actuales, error: readErr } = await db
-    .from("idea_assignments")
-    .select("member_id")
-    .eq("idea_id", ideaId)
-    .not("member_id", "is", null)
-    .returns<{ member_id: string }[]>();
-  if (readErr) return { ok: false, error: readErr.message };
-  const yaAsignados = new Set((actuales ?? []).map((r) => r.member_id));
-
-  const quitar = [...yaAsignados].filter((id) => !deseado.has(id));
-  const agregar = memberIds.filter((id) => !yaAsignados.has(id));
-
-  if (quitar.length) {
-    const { error: delErr } = await db
-      .from("idea_assignments")
-      .delete()
-      .eq("idea_id", ideaId)
-      .in("member_id", quitar);
-    if (delErr) return { ok: false, error: delErr.message };
-  }
-  if (agregar.length) {
-    const { error: insErr } = await db
-      .from("idea_assignments")
-      .insert(agregar.map((member_id) => ({ idea_id: ideaId, member_id })));
-    if (insErr) return { ok: false, error: insErr.message };
-  }
-
-  await revalidateFor(db, ideaId);
-  // Después de responder, drena la cola de emails (Gmail SMTP). Off the response
-  // path (after) para no frenar el botón; cada acción también sirve de reintento
-  // por si un envío anterior no completó.
-  after(() => dispatchPendingEmails());
-  return { ok: true };
-}
-
-/**
  * Asigna una tarea en DOS niveles de una sola vez: un LEAD (es_lead=true) y sus
- * ESPECIALISTAS (es_lead=false). Reemplaza el conjunto completo (diff para
- * preservar assigned_at, igual que setAssignees). Enforcea la regla de negocio en
- * el SERVIDOR (no confía en la UI): sólo personas ACTIVAS del MISMO track de la
+ * ESPECIALISTAS (es_lead=false). Reemplaza el conjunto completo con un DIFF (sólo
+ * toca lo que cambió) para preservar assigned_at de quien sigue asignado — esa hora
+ * es la que mide la Evaluación (0034). Enforcea la regla de negocio en el
+ * SERVIDOR (no confía en la UI): sólo personas ACTIVAS del MISMO track de la
  * tarea, y con el rol correcto — lead = rol `lead`, especialistas = rol `creative`.
  * Admins/master NO son asignables (no son "doers"). Funciona aunque la tarea no
  * tenga a nadie (arregla el hueco de "sin lead, no se puede asignar después").

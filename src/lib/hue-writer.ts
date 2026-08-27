@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { cargarWinners } from "@/lib/hue-data";
 import { legalSugerido, type LegalLite } from "@/lib/legal-sugerido";
-import { voz, varianteGuion, parseDuracion } from "@/lib/plantilla";
+import { voz, varianteGuion, readTimeS, presupuestoDialogoS } from "@/lib/plantilla";
 import { convertirDialogo } from "@/lib/guion";
 import { combinarConsideraciones } from "@/lib/consideraciones";
 import type { PlanoParsed, EstaticoParsed } from "@/lib/guion";
@@ -224,9 +224,11 @@ function bloqueEstable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
       "(no incluyas la cortinilla legal final: se agrega desde la biblioteca).\n" +
       "- En el PRIMER plano (los primeros 3–5 segundos) SIEMPRE menciona un Selling Point o nombra el " +
       "servicio (\"DiDi Card\" o \"DiDi Préstamos\").\n" +
-      "- ⏱️ RESPETA LA DURACIÓN OBJETIVO: el diálogo TOTAL (todos los planos) debe LEERSE dentro del tiempo " +
-      "indicado. El sistema mide 'tiempo de lectura' = palabras de diálogo ÷ 2.5 (≈2.5 palabras/seg locutadas). " +
-      "Si te pasas, recorta líneas o planos — un guión que cabe en el tiempo vale más que uno que lo excede.\n";
+      "- ⏱️ RESPETA LA DURACIÓN OBJETIVO: el diálogo TOTAL (todos los planos) debe LEERSE dentro del PRESUPUESTO " +
+      "que te doy abajo. El sistema mide 'tiempo de lectura' = palabras de diálogo ÷ 2.5 (≈2.5 palabras/seg " +
+      "locutadas). La cortinilla legal ocupa 2s aparte y YA está descontada del presupuesto, así que no la sumes. " +
+      "Caber en el tiempo es OBLIGATORIO: si te pasas, recorta líneas o planos — un guión que cabe vale más que " +
+      "uno que excede.\n";
   } else {
     s +=
       "- Devuelve copy_titulo (beneficio principal), copy_subtitulo (2–3 beneficios secundarios) y copy_cta " +
@@ -281,12 +283,12 @@ function bloqueVariable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
   s += `- Plataformas: ${lista(i.plataformas)}\n`;
   if (modo === "guion") {
     s += `- Duración: ${lista(i.duracion)}\n`;
-    // Presupuesto de palabras de diálogo para caber en el tiempo objetivo (tiempo de
-    // lectura = palabras/2.5). Toma la duración MÁS LARGA del fan-out como objetivo.
-    const segs = (i.duracion ?? []).map((d) => parseDuracion(d)?.max).filter((n): n is number => typeof n === "number");
-    const targetSec = segs.length ? Math.max(...segs) : null;
-    if (targetSec) {
-      s += `- ⏱️ PRESUPUESTO DE TIEMPO: la duración objetivo es ${targetSec}s. El diálogo TOTAL de TODO el guión debe caber en ese tiempo: a ~2.5 palabras/seg son ~${Math.round(targetSec * 2.5)} palabras de diálogo como TOPE (sumando todos los planos). No te pases — recorta antes que exceder.\n`;
+    // Presupuesto de diálogo = duración más larga del fan-out − 2s de cortinilla legal
+    // (reservada). El writer debe caber aquí; el guard determinista de escribirGuion lo
+    // vuelve a medir y pide recortar si se pasa.
+    const budget = presupuestoDialogoS(i.duracion);
+    if (budget !== null) {
+      s += `- ⏱️ PRESUPUESTO DE TIEMPO: el diálogo TOTAL de TODO el guión (sumando todos los planos) debe caber en ${budget}s de LECTURA — la cortinilla legal ocupa 2s aparte, ya descontados. A ~2.5 palabras/seg son ~${Math.round(budget * 2.5)} palabras de diálogo como TOPE. No te pases: recorta líneas o planos antes que exceder.\n`;
     }
     s += `- Estilo: ${ctx.variante === "real" ? "Real Person (persona real a cuadro)" : "Normal (V.O / formato innovador)"}\n`;
     s += `- Quién habla (locutor del diálogo): ${ctx.voz}\n`;
@@ -307,8 +309,18 @@ function bloqueVariable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
 
 const s0 = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
-/** Escribe el guión de video → PlanoParsed[]. Reusa la misma tool-schema que extraerGuion. */
-export async function escribirGuion(ctx: ContextoWriter): Promise<{ ok: true; planos: PlanoParsed[] } | { ok: false; error: string }> {
+/** Suma el read-time de TODO el diálogo del guión — MISMO cálculo que la barra
+ *  inferior de la tarea (readTimeS por plano), para medir contra el mismo tope. */
+function totalReadTimeS(planos: PlanoParsed[]): number {
+  return planos.reduce((n, p) => n + readTimeS(p.dialogo), 0);
+}
+
+/** Una pasada del writer → PlanoParsed[]. `feedback` (en un retry) le entrega el
+ *  sobrante EXACTO de tiempo a recortar. Reusa la misma tool-schema que extraerGuion. */
+async function generarUnGuion(
+  ctx: ContextoWriter,
+  feedback: string | null,
+): Promise<{ ok: true; planos: PlanoParsed[] } | { ok: false; error: string }> {
   const CAMPO = { type: "string" as const };
   const schema = {
     type: "object" as const,
@@ -337,9 +349,14 @@ export async function escribirGuion(ctx: ContextoWriter): Promise<{ ok: true; pl
       messages: [
         {
           role: "user",
+          // El bloque estable queda cacheado; en un retry sólo se agrega el feedback
+          // al final, así el prefijo (rol+Cerebro+KB+ganadores) sigue haciendo cache hit.
           content: [
-            { type: "text", text: bloqueEstable(ctx, "guion"), cache_control: { type: "ephemeral" } },
-            { type: "text", text: bloqueVariable(ctx, "guion") },
+            { type: "text" as const, text: bloqueEstable(ctx, "guion"), cache_control: { type: "ephemeral" as const } },
+            { type: "text" as const, text: bloqueVariable(ctx, "guion") },
+            ...(feedback
+              ? [{ type: "text" as const, text: `CORRECCIÓN OBLIGATORIA DE TIEMPO:\n${feedback}` }]
+              : []),
           ],
         },
       ],
@@ -368,6 +385,45 @@ export async function escribirGuion(ctx: ContextoWriter): Promise<{ ok: true; pl
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error al llamar a H.Ü.E." };
   }
+}
+
+/**
+ * Escribe el guión de video con un GUARD de tiempo determinista: genera, MIDE el
+ * read-time total del diálogo y, si excede el presupuesto (duración más larga − 2s de
+ * cortinilla legal), REINTENTA (máx 2) dándole al modelo el sobrante exacto a recortar.
+ * El prompt ya pedía caber en el tiempo pero el modelo se pasaba igual (guión de 48s en
+ * un tope de ~38s): el prompt sugiere, el código mide y obliga — prompt + guard
+ * determinista. Si tras los reintentos ninguno cabe, devuelve el MÁS CORTO (el humano
+ * revisa/edita la vista previa igual). Sin duración legible, una sola pasada sin tope.
+ */
+export async function escribirGuion(ctx: ContextoWriter): Promise<{ ok: true; planos: PlanoParsed[] } | { ok: false; error: string }> {
+  const budget = presupuestoDialogoS(ctx.idea.duracion);
+  const MAX_INTENTOS = budget !== null ? 3 : 1;
+  let mejor: { planos: PlanoParsed[]; segs: number } | null = null;
+  let feedback: string | null = null;
+
+  for (let intento = 0; intento < MAX_INTENTOS; intento++) {
+    const r = await generarUnGuion(ctx, feedback);
+    // Un error después de tener un candidato: quédate con el candidato (mejor eso que
+    // fallar). Sin candidato: propaga el error.
+    if (!r.ok) return mejor ? { ok: true, planos: mejor.planos } : r;
+    if (budget === null) return { ok: true, planos: r.planos };
+
+    const segs = totalReadTimeS(r.planos);
+    if (segs <= budget) return { ok: true, planos: r.planos }; // cabe → listo
+    if (!mejor || segs < mejor.segs) mejor = { planos: r.planos, segs }; // respaldo: el más corto
+
+    const sobra = segs - budget;
+    feedback =
+      `Tu guión anterior dura ${segs}s de lectura y el TOPE es ${budget}s: se pasa por ${sobra}s ` +
+      `(~${Math.round(sobra * 2.5)} palabras de más). Reescríbelo MÁS BREVE para caber en ${budget}s — quita o ` +
+      `acorta líneas de diálogo (y planos enteros si hace falta), conservando el hook inicial y los selling ` +
+      `points. CABER en el tiempo es la prioridad número uno.`;
+  }
+  // Ninguno cupo tras los reintentos → el más corto que logramos (el humano lo ajusta).
+  return mejor
+    ? { ok: true, planos: mejor.planos }
+    : { ok: false, error: "H.Ü.E no devolvió un guión. Intenta de nuevo." };
 }
 
 /** Escribe el copy del estático → EstaticoParsed (legales_extra siempre null: el legal es de biblioteca). */

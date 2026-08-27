@@ -29,9 +29,11 @@ export async function assertCanActOnTask(ideaId: string): Promise<ScopeResult> {
 
   if (u.role === "lead") {
     const { data } = await admin.from("ideas").select("track").eq("id", ideaId).maybeSingle();
-    const track = (data as { track: string } | null)?.track;
+    const track = (data as { track: "real" | "normal" } | null)?.track;
     if (!track) return { ok: false, error: "La tarea ya no existe." };
-    if (track !== u.member.track) {
+    // El alcance del lead es su conjunto EFECTIVO de tracks (grant multi-track): uno
+    // o ambos. `member.tracks` ya lo resuelve (grant | [track home]).
+    if (!u.member.tracks.includes(track)) {
       return { ok: false, error: "Esta tarea es de otro equipo." };
     }
     return { ok: true };

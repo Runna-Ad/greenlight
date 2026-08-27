@@ -3,6 +3,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import type { ViewRole } from "@/lib/roles";
+import type { Track } from "@/lib/vocab";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The ONE place identity is resolved, now that login is real.
@@ -24,11 +25,29 @@ export type CurrentMember = {
   id: string; // track_members.id — what assignment/authorship columns store
   name: string;
   color: string;
-  track: "real" | "normal" | null; // null = rol global (admin/master), sin track
+  track: "real" | "normal" | null; // null = rol global (admin/master), sin track. HOME track.
+  /** Alcance EFECTIVO de tracks (la fuente para todo scoping por track):
+   *  lead → tracks otorgados (grant multi-track) | [track home];
+   *  creative → [track]; admin/master → [] (globales, ver `tracksVisibles`). */
+  tracks: Track[];
   role: string | null; // the profile's REAL role (authorship counts for creatives)
   notify_email: boolean;
   notify_slack: boolean;
 };
+
+/**
+ * El alcance efectivo de tracks de un miembro. Una sola fuente para que identity y
+ * soy coincidan. Un lead puede tener grant multi-track (`lead_tracks`); si no, cae a
+ * su track home. Creative = su único track. Admin/master (track null) = [] (globales).
+ */
+function tracksEfectivos(
+  role: string | null,
+  track: "real" | "normal" | null,
+  leadTracks: ("real" | "normal")[] | null,
+): Track[] {
+  if (role === "lead" && leadTracks && leadTracks.length) return [...new Set(leadTracks)];
+  return track ? [track] : [];
+}
 
 export type CurrentUser = {
   userId: string; // auth.users.id === profiles.id
@@ -85,13 +104,30 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   if (appRoleToViewRole(p.role) !== "client") {
     const { data: m } = await admin
       .from("track_members")
-      .select("id, name, color, track, notify_email, notify_slack")
+      .select("id, name, color, track, lead_tracks, notify_email, notify_slack")
       .eq("profile_id", user.id)
       .eq("active", true)
       .maybeSingle();
     if (m) {
-      const mm = m as Omit<CurrentMember, "role">;
-      member = { ...mm, role: p.role }; // authorship role = the profile's real role
+      const mm = m as {
+        id: string;
+        name: string;
+        color: string;
+        track: "real" | "normal" | null;
+        lead_tracks: ("real" | "normal")[] | null;
+        notify_email: boolean;
+        notify_slack: boolean;
+      };
+      member = {
+        id: mm.id,
+        name: mm.name,
+        color: mm.color,
+        track: mm.track,
+        tracks: tracksEfectivos(p.role, mm.track, mm.lead_tracks),
+        role: p.role, // authorship role = the profile's real role
+        notify_email: mm.notify_email,
+        notify_slack: mm.notify_slack,
+      };
     }
   }
 

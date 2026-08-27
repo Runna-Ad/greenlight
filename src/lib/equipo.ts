@@ -10,8 +10,11 @@ export type RolAsignable = (typeof ROLES_ASIGNABLES)[number];
 export type MiembroRow = {
   id: string;
   name: string;
-  /** null = rol global (admin/master): sin track, vista de todos los equipos. */
+  /** null = rol global (admin/master): sin track, vista de todos los equipos. HOME track. */
   track: "real" | "normal" | null;
+  /** Sólo rol lead: track(s) que puede tocar (grant multi-track). null/[] = usa el track
+   *  home. El [0] es el home cuando hay grant. Ignorado para creative/admin/master. */
+  lead_tracks: ("real" | "normal")[] | null;
   color: string;
   role: string;
   email: string | null;

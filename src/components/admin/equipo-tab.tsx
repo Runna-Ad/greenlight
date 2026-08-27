@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, UserRoundX, Trash2 } from "lucide-react";
+import { Plus, UserRoundX, Trash2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -196,6 +196,11 @@ function MiembroCard({
     : [m.role, ...ROLES_ASIGNABLES];
   // admin/master son globales: no tienen track (vista de todos los equipos).
   const esGlobal = m.role === "admin" || m.role === "master";
+  // Un LEAD puede tener grant multi-track (Real, Normal o ambos); un creative es
+  // single-track. El grant efectivo cae al track home si aún no se ha otorgado nada.
+  const esLead = m.role === "lead";
+  const tracksLead =
+    m.lead_tracks && m.lead_tracks.length ? m.lead_tracks : m.track ? [m.track] : [];
 
   return (
     <div
@@ -257,7 +262,7 @@ function MiembroCard({
             ))}
           </select>
         </Campo>
-        <Campo label="Track">
+        <Campo label={esLead ? "Tracks" : "Track"} hint={esLead ? "uno o ambos" : undefined}>
           {esGlobal ? (
             <span
               className="flex h-8 items-center rounded-md border border-dashed border-border px-2 text-sm text-muted-foreground"
@@ -265,6 +270,9 @@ function MiembroCard({
             >
               Global · sin track
             </span>
+          ) : esLead ? (
+            // El lead puede trabajar Real, Normal o AMBOS: multi-select del grant.
+            <TrackMultiSelect value={tracksLead} onChange={(ts) => guardar(m.id, { lead_tracks: ts })} />
           ) : (
             <select
               value={m.track ?? "normal"}
@@ -301,6 +309,45 @@ function MiembroCard({
           Recibe emails
         </label>
       </div>
+    </div>
+  );
+}
+
+// Grant de tracks de un LEAD: Real / Normal / ambos. Requiere ≥1 (no se puede dejar
+// a un lead sin ningún track — no podría ver ni asignar nada).
+function TrackMultiSelect({
+  value,
+  onChange,
+}: {
+  value: ("real" | "normal")[];
+  onChange: (tracks: ("real" | "normal")[]) => void;
+}) {
+  const has = (t: "real" | "normal") => value.includes(t);
+  const toggle = (t: "real" | "normal") => {
+    const next = has(t) ? value.filter((x) => x !== t) : [...value, t];
+    if (!next.length) return; // un lead necesita al menos un track
+    onChange(next);
+  };
+  const chip = (t: "real" | "normal", label: string) => (
+    <button
+      type="button"
+      onClick={() => toggle(t)}
+      aria-pressed={has(t)}
+      className={cn(
+        "flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md border px-2 text-sm transition-colors",
+        has(t)
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-input text-muted-foreground hover:border-primary",
+      )}
+    >
+      {has(t) && <Check className="size-3.5" />}
+      {label}
+    </button>
+  );
+  return (
+    <div className="flex gap-1.5" role="group" aria-label="Tracks del lead">
+      {chip("real", "Real")}
+      {chip("normal", "Normal")}
     </div>
   );
 }

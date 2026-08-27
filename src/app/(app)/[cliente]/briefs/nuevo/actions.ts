@@ -71,8 +71,9 @@ export async function crearBrief(
   const { header, tasks } = input;
   const track = header.track;
 
-  // Un lead es departamental: sólo crea briefs de SU equipo (Gap 2).
-  if (u.role === "lead" && u.member && track !== u.member.track) {
+  // Un lead es departamental: sólo crea briefs de sus track(s) otorgados (grant
+  // multi-track — uno o ambos). `member.tracks` resuelve el alcance efectivo.
+  if (u.role === "lead" && u.member && !u.member.tracks.includes(track)) {
     res.errors.push("Un lead sólo crea briefs de su propio equipo.");
     return res;
   }

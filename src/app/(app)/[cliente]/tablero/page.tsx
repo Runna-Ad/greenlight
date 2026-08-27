@@ -27,7 +27,8 @@ type BoardData = { tasks: Task[]; members: Member[]; briefs: BriefOption[] };
  */
 function visibleParaRol(tasks: Task[], role: ViewRole, soy: Soy | null): Task[] {
   if (role === "master" || role === "admin") return tasks;
-  if (role === "lead") return soy?.track ? tasks.filter((t) => t.track === soy.track) : [];
+  // Lead: su alcance EFECTIVO de tracks (grant multi-track puede ser uno o ambos).
+  if (role === "lead") return soy?.tracks?.length ? tasks.filter((t) => soy.tracks.includes(t.track)) : [];
   if (role === "creative") return soy ? tasks.filter((t) => t.members.some((m) => m.id === soy.id)) : [];
   return []; // client nunca llega aquí (canSee lo bloquea)
 }
@@ -61,7 +62,9 @@ async function loadBoard(
       .returns<Task[]>(),
     db
       .from("track_members")
-      .select("id, name, color, track")
+      // `role` viaja para que el picker del tablero separe Lead (rol `lead`) de
+      // Especialistas (rol `creative`) — la misma regla rol+track del task section.
+      .select("id, name, color, track, role")
       .eq("active", true)
       .order("track")
       .order("sort_order")
