@@ -1226,6 +1226,33 @@ await resetRole();
                  select set_config('produccion.lead_override','',false);
                  delete from produccion.notifications`);
 
+  // ── 0054 — el LEAD aplica los cambios del cliente y REENVÍA directo al cliente ──
+  // (in_corrections→published, sin ronda de revisión). Resuelve los client_change.
+  await db.exec(`delete from produccion.comments where idea_id='${IDEA}' and kind='client_change'`);
+  await db.query(
+    `select produccion.rpc_client_add_change($1::uuid,'planos',$2::uuid,'copy_in',
+      'Plano 1 · Copy in','Acórtalo','viejo',0,5)`, [IDEA, cPin]);
+  await scalar(`select produccion.rpc_client_submit_changes('${IDEA}'::uuid)`);
+  eq("reenvia: precondición in_corrections con cambios sin resolver",
+     await scalar(`select status from produccion.ideas where id='${IDEA}'`), "in_corrections");
+  await db.exec(`delete from produccion.notifications`);
+  // La server action corre con service-role → rpc_move_task permite el override de lead
+  // (in_corrections→published no es transición normal). Se simula con el claim service_role.
+  await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false)`);
+  const stReenvio = await scalar(
+    `select produccion.rpc_lead_reenvia_cliente($1::uuid,$2::uuid,null)::text`, [IDEA, mGalie]);
+  eq("reenvia mueve in_corrections→published", stReenvio, "published");
+  ok("reenvia RESUELVE los client_change enviados sin resolver",
+     Number(await scalar(`select count(*) from produccion.comments
+       where idea_id='${IDEA}' and kind='client_change' and ronda is not null and resolved_at is null`)) === 0);
+  ok("reenvia notifica el published (asignados + cliente ready_for_review)",
+     Number(await scalar(`select count(*) from produccion.notifications where entity_id='${IDEA}'`)) >= 1);
+  let reenvioRechazado = false;
+  try { await scalar(`select produccion.rpc_lead_reenvia_cliente($1::uuid,null,null)`, [IDEA]); }
+  catch { reenvioRechazado = true; }
+  ok("reenvia se rechaza si la idea NO está en correcciones", reenvioRechazado);
+  await db.exec(`select set_config('request.jwt.claims','',false)`);
+
   // Un lead miembro asignado recibe el aviso de revisión.
   const LEAD_M = await scalar(
     `select member_id from produccion.idea_assignments

@@ -136,6 +136,12 @@ eq("en revisión el lead aprueba o pide cambios", labels("under_review", lead), 
 eq("mandar cambios exige texto", actionsFor("under_review", lead).find(a => a.tone === "danger").needsBody, true);
 eq("correcciones → retomar (especialista)", labels("in_corrections", asignado), "Retomar");
 eq("correcciones: el lead no retoma", labels("in_corrections", lead), "");
+// Cambios del CLIENTE (clientChangesPending): cancha del lead. El especialista NO
+// retoma (la tarea sale de su lista); el lead los resuelve en la propia tarea (banner).
+eq("cambios del cliente: el especialista NO retoma", labels("in_corrections", { ...asignado, clientChangesPending: true }), "");
+eq("cambios del cliente: en el tablero no hay botón inline", labels("in_corrections", { ...lead, clientChangesPending: true }), "");
+eq("cambios del cliente: al lead se le marca", waitingLabel("in_corrections", { ...lead, clientChangesPending: true }), "Cambios del cliente");
+eq("sin cambios del cliente: el lead no ve esa marca", waitingLabel("in_corrections", lead), null);
 eq("el cliente no mueve nada", ["todo","in_progress","under_review","in_corrections"].every(s => actionsFor(s, { isAssignee: false, role: "client", hasAssignee: true }).length === 0), true);
 // Enviar al cliente es un paso APARTE de aprobar (decisión de Pedro): dos
 // puertas del lead. El especialista no lo ve.

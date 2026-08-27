@@ -38,6 +38,11 @@ export type TaskContext = {
   role: ViewRole;
   /** Sin responsable no se puede empezar: primero hay que asignarla. */
   hasAssignee: boolean;
+  /** La tarea está en `in_corrections` con cambios del CLIENTE enviados y SIN resolver.
+   *  Esos son cancha del LEAD (él edita y reenvía, o reasigna); el especialista NO los
+   *  retoma — la tarea sale de su lista por visibilidad hasta que se le reasigne. Las
+   *  acciones del lead viven en la propia tarea (AccionesTarea), no en el tablero. */
+  clientChangesPending?: boolean;
 };
 
 // master = Master Builder, el tier sobre admin: se comporta como lead para el
@@ -102,7 +107,11 @@ export function actionsFor(status: AssetStatus, ctx: TaskContext): TaskAction[] 
         : [];
 
     case "in_corrections":
-      // Retomar correcciones lo hace quien las trabaja: el especialista.
+      // Cambios del CLIENTE → cancha del LEAD: se resuelven DENTRO de la tarea
+      // (AccionesTarea: "Enviar a cliente" / "Reasignar"). En el tablero no hay botón
+      // inline, y el especialista ni la ve (visibilidad). Cambios pedidos por el LEAD
+      // (sin bandera) → el especialista los RETOMA como siempre.
+      if (ctx.clientChangesPending) return [];
       return esEspecialista(ctx)
         ? [{ to: "in_progress", label: "Retomar", tone: "primary", verb: "start" }]
         : [];
@@ -131,6 +140,11 @@ export function actionsFor(status: AssetStatus, ctx: TaskContext): TaskAction[] 
 export function waitingLabel(status: AssetStatus, ctx: TaskContext): string | null {
   if (status === "under_review" && ctx.isAssignee && !isLead(ctx.role)) {
     return "Esperando revisión";
+  }
+  // Cambios del cliente esperando al lead: en el tablero se marca (el lead los
+  // resuelve abriendo la tarea). El especialista no llega aquí (no la ve).
+  if (status === "in_corrections" && ctx.clientChangesPending && isLead(ctx.role)) {
+    return "Cambios del cliente";
   }
   if (status === "todo" && !ctx.hasAssignee) return "Falta responsable";
   return null;

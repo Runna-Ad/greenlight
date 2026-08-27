@@ -43,13 +43,33 @@ export default async function MiTrabajoPage() {
 
   let tasks: MyTask[] = [];
   if (hasSupabase()) {
-    const { data } = await supabaseAdmin()
+    const db = supabaseAdmin();
+    const { data } = await db
       .from("board_tasks")
       .select("*")
       .contains("member_ids", [soy.id])
       .limit(300)
       .returns<MyTask[]>();
     tasks = data ?? [];
+
+    // Cambios del CLIENTE son cancha del LEAD: para un especialista (creative), una
+    // tarea en in_corrections con cambios del cliente sin resolver NO es suya hasta que
+    // se la reasignen — fuera de su lista. El lead SÍ la ve (se marca "Cambios del cliente").
+    const enCorr = tasks.filter((t) => t.status === "in_corrections").map((t) => t.id);
+    if (enCorr.length) {
+      const { data: pend } = await db
+        .from("comments")
+        .select("idea_id")
+        .in("idea_id", enCorr)
+        .eq("kind", "client_change")
+        .not("ronda", "is", null)
+        .is("resolved_at", null)
+        .returns<{ idea_id: string }[]>();
+      const conCambios = new Set((pend ?? []).map((r) => r.idea_id));
+      tasks = tasks
+        .map((t) => ({ ...t, clientChangesPending: conCambios.has(t.id) }))
+        .filter((t) => !(role === "creative" && t.clientChangesPending));
+    }
   }
 
   const grupos = ORDEN.map((status) => ({

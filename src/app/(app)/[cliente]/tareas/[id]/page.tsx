@@ -15,6 +15,7 @@ import { CorreccionesProvider } from "@/components/tarea/correcciones/contexto";
 import { WorkspaceProvider } from "@/components/tarea/workspace-provider";
 import { PanelCorrecciones } from "@/components/tarea/correcciones/panel";
 import { SubHeaderTarea } from "@/components/tarea/sub-header-tarea";
+import { BannerCambiosCliente } from "@/components/tarea/banner-cambios-cliente";
 import { HeroTarea } from "@/components/tarea/hero-tarea";
 import { TabsTarea } from "@/components/tarea/tabs-tarea";
 import { BannerPegarGuion } from "@/components/tarea/banner-pegar-guion";
@@ -385,10 +386,19 @@ export default async function TareaPage({
     ? `Notas de guión: ${notaG}`
     : "Notas de guión (p. ej. # de outfits, tono, continuidad)…";
 
+  // Cambios del CLIENTE enviados sin resolver → la tarea es cancha del LEAD (él edita y
+  // reenvía, o reasigna); el especialista no la retoma. (Enviado = ronda asignada; sin
+  // resolver = resolved_at null — espeja el gate de rpc_lead_reenvia_cliente.)
+  const cambiosClientePend = (cambiosCliente ?? []).filter((c) => c.ronda != null && !c.resolved_at);
+  const clientChangesPending = idea.status === "in_corrections" && cambiosClientePend.length > 0;
+  // El lead responsable ACTUAL (para conservarlo al reasignar).
+  const leadActualId = personas.find((p) => p.es_lead)?.id ?? null;
+
   const ctx = {
     role,
     isAssignee: soy ? memberIds.includes(soy.id) : false,
     hasAssignee: memberIds.length > 0,
+    clientChangesPending,
   };
 
   return (
@@ -438,6 +448,17 @@ export default async function TareaPage({
               siguiente={posicion.siguiente}
             />
           </div>
+
+          {/* Cambios del cliente: cancha del LEAD. Él edita y reenvía, o reasigna. El
+              especialista no ve esta tarea (visibilidad). Sólo para lead/admin/master. */}
+          {clientChangesPending && canOverrideStatus(role) && (
+            <BannerCambiosCliente
+              ideaId={idea.id}
+              nCambios={cambiosClientePend.length}
+              leadActualId={leadActualId}
+              especialistasPool={especialistasPool}
+            />
+          )}
 
           {soloLectura && (
             <p className="flex items-center gap-1.5 rounded-md border border-border bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground">

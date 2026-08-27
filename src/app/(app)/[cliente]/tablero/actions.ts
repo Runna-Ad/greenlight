@@ -341,3 +341,59 @@ export async function asignarTarea(
   after(() => dispatchPendingEmails());
   return { ok: true };
 }
+
+// ─────────────────────────────────────────────────────────────
+// Cambios del CLIENTE (in_corrections) → cancha del LEAD
+// ─────────────────────────────────────────────────────────────
+// Cuando el cliente pide cambios, la tarea es del LEAD (el especialista no la ve hasta
+// que se reasigne — eso lo gobierna task-actions + la visibilidad). El lead decide:
+//   · HACERLOS ÉL → edita en in_corrections (ya editable) y reenvía directo → reenviarACliente.
+//   · REASIGNAR → fija especialista y la manda a EN PROGRESO → reasignarCambios.
+
+/** El lead APLICÓ los cambios del cliente él mismo y reenvía la pieza directo (sin
+ *  ronda de revisión, él es el revisor). Sólo lead+; desde in_corrections. */
+export async function reenviarACliente(ideaId: string): Promise<ActionResult> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const { role, soyId, profileId } = await context();
+  if (!canOverrideStatus(role)) return { ok: false, error: "Sólo un lead reenvía al cliente." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+
+  const db = supabaseAdmin();
+  const { error } = await db.rpc("rpc_lead_reenvia_cliente", {
+    p_idea_id: ideaId,
+    p_actor_member: soyId,
+    p_actor: profileId,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  await revalidateFor(db, ideaId);
+  after(() => dispatchPendingEmails());
+  return { ok: true };
+}
+
+/** El lead REASIGNA los cambios del cliente a un especialista: fija la asignación
+ *  (lead + especialistas, RE-validada en asignarTarea) y mueve la tarea a EN PROGRESO
+ *  para que el especialista la trabaje. Exige al menos un especialista. */
+export async function reasignarCambios(
+  ideaId: string,
+  leadId: string | null,
+  especialistaIds: string[],
+): Promise<ActionResult> {
+  if (!especialistaIds.length) {
+    return { ok: false, error: "Elige al menos un especialista para reasignar." };
+  }
+  // asignarTarea re-valida rol+track+activo y canAssign en el SERVIDOR.
+  const asign = await asignarTarea(ideaId, leadId, especialistaIds);
+  if (!asign.ok) return asign;
+
+  const { soyId } = await context();
+  const db = supabaseAdmin();
+  // in_corrections → in_progress (misma RPC que "Retomar"): ahora es del especialista.
+  const { error } = await db.rpc("rpc_task_start", { p_idea_id: ideaId, p_actor_member: soyId });
+  if (error) return { ok: false, error: error.message };
+
+  await revalidateFor(db, ideaId);
+  after(() => dispatchPendingEmails());
+  return { ok: true };
+}

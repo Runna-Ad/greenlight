@@ -15,7 +15,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import Link from "next/link";
-import { Files, Plus, X, GripVertical, Users, Crown, Check } from "lucide-react";
+import { Files, Plus, X, GripVertical, Users, Crown, Check, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -76,6 +76,9 @@ export type Task = {
   /** Cuándo se hizo Greenlit (delivered). Sólo lo trae el loader para tareas delivered;
    *  la columna Greenlit muestra únicamente las de ≤7 días (el resto va a Entregas). */
   deliveredAt?: string | null;
+  /** in_corrections con cambios del cliente sin resolver — cancha del lead; se oculta al
+   *  especialista y en la tarjeta se marca "Sin especialista"/aviso al lead. */
+  clientChangesPending?: boolean;
 };
 
 export type BriefOption = { id: string; title: string | null; tab: string | null };
@@ -283,8 +286,24 @@ export function Board({
     [members],
   );
 
+  // Aviso agregado "Sin lead": tareas con especialistas pero sin lead responsable.
+  // Sólo para quien asigna (lead/admin/master) — el especialista no puede arreglarlo.
+  const sinLeadN = mayAssign
+    ? visible.filter((t) => t.team.length > 0 && t.leads.length === 0).length
+    : 0;
+
   return (
     <div>
+      {sinLeadN > 0 && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-[13px] text-status-warning">
+          <AlertTriangle className="size-4 shrink-0" />
+          <span>
+            <b className="font-semibold">{sinLeadN}</b> tarea{sinLeadN === 1 ? "" : "s"} con
+            especialistas pero <b className="font-semibold">sin lead responsable</b> — asígnales un
+            lead antes de que se trabajen (revisa/aprueba/enruta los cambios del cliente).
+          </span>
+        </div>
+      )}
       <FilterBar
         members={members}
         briefs={briefs}
@@ -673,6 +692,18 @@ const CardBody = memo(function CardBody({
           <AssignPicker task={task} members={members} onAssign={onAssign} />
         ) : (
           <PeopleChips members={task.members} />
+        )}
+
+        {/* Aviso "Sin lead": tiene especialistas pero NADIE marcado como lead. Toda
+            tarea necesita un lead responsable (revisa/aprueba/enruta los cambios del
+            cliente). Sólo para quien asigna (mayAssign → members presente). (Pedro) */}
+        {members && task.team.length > 0 && task.leads.length === 0 && (
+          <span
+            className="inline-flex shrink-0 items-center gap-1 rounded border border-status-warning/40 bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-semibold text-status-warning"
+            title="Sin lead responsable — asígnale uno"
+          >
+            <AlertTriangle className="size-2.5" /> Sin lead
+          </span>
         )}
 
         {onMove && (targets.length > 0 || fueraDeFlujo.length > 0) && (

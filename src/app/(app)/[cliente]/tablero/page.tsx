@@ -29,7 +29,16 @@ function visibleParaRol(tasks: Task[], role: ViewRole, soy: Soy | null): Task[] 
   if (role === "master" || role === "admin") return tasks;
   // Lead: su alcance EFECTIVO de tracks (grant multi-track puede ser uno o ambos).
   if (role === "lead") return soy?.tracks?.length ? tasks.filter((t) => soy.tracks.includes(t.track)) : [];
-  if (role === "creative") return soy ? tasks.filter((t) => t.members.some((m) => m.id === soy.id)) : [];
+  // Creative: sólo lo asignado, y NO las tareas con cambios del cliente sin resolver
+  // (esas son cancha del lead hasta que se reasignen).
+  if (role === "creative")
+    return soy
+      ? tasks.filter(
+          (t) =>
+            t.members.some((m) => m.id === soy.id) &&
+            !(t.status === "in_corrections" && t.clientChangesPending),
+        )
+      : [];
   return []; // client nunca llega aquí (canSee lo bloquea)
 }
 
@@ -77,12 +86,30 @@ async function loadBoard(
       .returns<{ id: string; title: string | null; source_tab: string | null }[]>(),
   ]);
 
+  // Anota qué tareas en in_corrections tienen cambios del CLIENTE sin resolver (cancha
+  // del lead): el especialista no debe verlas. Se calcula ANTES de filtrar por rol para
+  // que visibleParaRol pueda excluirlas del payload RSC del creative.
+  let base = (tasks ?? []) as Task[];
+  const enCorr = base.filter((t) => t.status === "in_corrections").map((t) => t.id);
+  if (enCorr.length) {
+    const { data: pend } = await db
+      .from("comments")
+      .select("idea_id")
+      .in("idea_id", enCorr)
+      .eq("kind", "client_change")
+      .not("ronda", "is", null)
+      .is("resolved_at", null)
+      .returns<{ idea_id: string }[]>();
+    const conCambios = new Set((pend ?? []).map((r) => r.idea_id));
+    if (conCambios.size) base = base.map((t) => (conCambios.has(t.id) ? { ...t, clientChangesPending: true } : t));
+  }
+
   // La vista board_tasks no expone delivered_at; lo traemos SÓLO para las tareas
   // delivered (para que la columna Greenlit muestre las de ≤7 días). Consulta chica
   // y acotada — sin migración (delivered_at ya existe en ideas, auto-estampado).
   // Filtra por rol ANTES de enriquecer/entregar: un rol acotado no debe recibir
   // (ni en el payload RSC) las tareas que no le tocan.
-  const rows = visibleParaRol((tasks ?? []) as Task[], role, soy);
+  const rows = visibleParaRol(base, role, soy);
   const deliveredIds = rows.filter((t) => t.status === "delivered").map((t) => t.id);
   let conFecha = rows;
   if (deliveredIds.length) {

@@ -243,6 +243,11 @@ function accionesDe(
   // NO es revisor es el especialista. Devolver una corrección la trabajó él.
   const esEspecialista = ctx.isAssignee && !esRevisor;
 
+  // Cambios del CLIENTE en in_corrections: no hay acciones de flujo aquí — el lead los
+  // resuelve con el banner "Cambios del cliente" (Enviar a cliente / Reasignar), y el
+  // especialista ni llega (la tarea no está en su lista).
+  if (status === "in_corrections" && ctx.clientChangesPending) return [];
+
   if (status === "under_review" && esRevisor) {
     return abiertas > 0
       ? [{ verb: "mandar_correcciones", label: "Pedir cambios", tone: "danger" }]

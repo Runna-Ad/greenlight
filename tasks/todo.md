@@ -4,7 +4,27 @@
 - ✅ Sidebar ya NO auto-colapsa la sección del cliente al ir a Mi Trabajo (queda desplegada; colapso manual respetado).
 - ✅ Pill "Esperando revisión" → ámbar (status-warning) + dot, antes gris casi invisible.
 - ✅ Verificado: la negrita del diálogo (marca `**` + locutor "(…)") sobrevive el flujo (render la recomputa; writers preservan el formato).
-- ⏳ **PRÓXIMO — #1 workflow: cambios del CLIENTE van SÓLO al lead responsable** (Pedro confirmó el diseño):
+- ✅ **HECHO + TESTEADO (SIN deploy) — #1 workflow cambios-cliente + warning Sin lead.** Gates: tsc·eslint·lib 398·
+  db 318 (mig 0054 aplica)·sync 44. Falta: revisión de Pedro + deploy (mig 0054 + push). Live-verify: cliente pide
+  cambios → sólo el lead la ve; banner "Cambios del cliente" (Enviar a cliente / Reasignar); reasignar la manda al esp;
+  reenviar publica directo; tablero muestra "Sin lead" en tareas con esp sin lead + banner agregado.
+- 🔨 ~~EN CURSO~~ (detalle de diseño, ya construido) — #1 workflow: cambios del CLIENTE van SÓLO al lead (sin columna-flag):
+  - Señal `clientChangesPending` = tarea en `in_corrections` CON client_change enviados sin resolver (ronda not null,
+    resolved_at null). Se computa en app (query), NO en el view (sin migración de view).
+  - VISIBILIDAD: el especialista NO ve tareas `in_corrections + clientChangesPending` en Mi Trabajo/tablero hasta que
+    se reasigne (pasa a in_progress). Lead/admin sí las ve.
+  - ACCIONES del lead en esa tarea (in_corrections ya es EDITABLE por el lead → "hacer los cambios yo" = editar inline):
+    · "Enviar a cliente" → RPC nueva `rpc_lead_reenvia_cliente`: resuelve los client_change + mueve in_corrections→
+      published (override de lead con motivo claro, NO "fuera de flujo" ciego). = lead hizo los cambios, reenvía directo.
+    · "Reasignar a especialista" → server action: asignarTarea(lead+esp) + rpc_task_start (in_corrections→in_progress) →
+      el especialista lo trabaja normal → revisión → lead aprueba/envía. (notify_on_assignment le avisa al esp.)
+  - task-actions: in_corrections + clientChangesPending → LEAD [Enviar a cliente, Reasignar]; ESP []. Sin client_change
+    (cambios del lead) → ESP [Retomar] (igual que hoy).
+  - MIGRACIÓN 0054 = SÓLO `rpc_lead_reenvia_cliente` (chica). Resto es TS.
+  - FOLDED-IN: warning "Sin lead" (no bloqueante) para leads/admin en el tablero — chip "Sin lead" en tarjetas con
+    especialistas pero sin es_lead (board_tasks.leads vacío) + banner agregado "N tareas sin responsable de equipo".
+  - Tests: PGlite (rpc_lead_reenvia_cliente resuelve+publica; reasignar mueve a in_progress) + lib (task-actions branch).
+- ⏳ ~~PRÓXIMO~~ (diseño previo, reemplazado por lo de arriba): cambios del CLIENTE van SÓLO al lead responsable (Pedro confirmó):
   cliente pide cambios → tarea a "En correcciones" en la cancha del LEAD; el especialista NO la ve (fuera de su Mi
   Trabajo/tablero) hasta que se le reasigne. El lead decide: (a) "Hacer los cambios yo" → lead es el doer → in_progress
   → edita → envía al cliente DIRECTO (sin ronda de revisión); (b) "Reasignar a especialista" → el especialista la trabaja

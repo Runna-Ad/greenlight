@@ -27,6 +27,9 @@ export type MyTask = {
   client_slug: string | null;
   file_count: number;
   member_ids: string[];
+  /** in_corrections con cambios del cliente sin resolver — cancha del lead. El
+   *  especialista no llega aquí (se filtra); al lead se le marca "Cambios del cliente". */
+  clientChangesPending?: boolean;
 };
 
 /**
@@ -86,6 +89,7 @@ export function MyTasks({
           isAssignee: t.member_ids.includes(soyId),
           role,
           hasAssignee: t.member_ids.length > 0,
+          clientChangesPending: t.clientChangesPending,
         };
         const acciones = actionsFor(t.status, ctx);
         const espera = waitingLabel(t.status, ctx);
