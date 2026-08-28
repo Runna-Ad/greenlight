@@ -4,7 +4,7 @@ import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.t
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
 import { actionsFor, waitingLabel, transicionRequiereLead } from "../src/lib/task-actions.ts";
 import { filtroBundle } from "../src/lib/bundle.ts";
-import { plantillaPara, readTimeS, parseDuracion, presupuestoDialogoS, LEGAL_SECONDS, COLCHON_MIN_S, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
+import { plantillaPara, readTimeS, soloHablado, PALABRAS_POR_MINUTO, parseDuracion, presupuestoDialogoS, LEGAL_SECONDS, COLCHON_MIN_S, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
@@ -197,15 +197,27 @@ eq("plantillaPara y tipoGroup siguen de acuerdo en los 6 tipos + desconocido",
    ["RP Video","Normal Video","AIGC video","GIF","Images","Copies","Podcast"]
      .every(t => equivalente[plantillaPara(t)] === tipoGroup(t)), true);
 
-// Read-time: espejo del trigger
+// Read-time: espejo del trigger — sólo lo HABLADO, a 200 pal/min (ceil(palabras × 3/10)).
 eq("sin diálogo, 0s", readTimeS(""), 0);
 eq("sólo espacios, 0s", readTimeS("   "), 0);
 eq("null, 0s", readTimeS(null), 0);
 eq("1 palabra → 1s", readTimeS("Hola"), 1);
-eq("11 palabras / 2.5 → 5s",
-   readTimeS("Hasta seis por ciento de cashback en todas tus compras diarias"), 5);
+eq("11 palabras habladas → 4s (200 pal/min: ceil(11×3/10)=ceil(3.3))",
+   readTimeS("Hasta seis por ciento de cashback en todas tus compras diarias"), 4);
 eq("espacios múltiples y saltos cuentan como uno",
    readTimeS("Hola   mundo\n\ncruel"), readTimeS("Hola mundo cruel"));
+// No hablado: etiquetas de locutor "(...)" y negrita "**" NO cuentan.
+eq("etiqueta de locutor no cuenta ('(Actriz 1) Hola mundo' → 2 palabras → 1s)",
+   readTimeS("(Actriz 1) Hola mundo"), 1);
+eq("dos locutores en una línea sólo cuentan lo hablado",
+   readTimeS("(Actriz 1) ¿Y sin historial? (Actriz 2) Así es"),
+   readTimeS("¿Y sin historial? Así es"));
+eq("los ** de negrita no cuentan ('**tasa del 4%**' = 3 palabras)",
+   readTimeS("con **tasa del 4%**"), readTimeS("con tasa del 4%"));
+eq("línea que es SÓLO etiqueta → 0s", readTimeS("(Ambas)"), 0);
+eq("soloHablado quita etiquetas y negrita (el conteo colapsa espacios, no importa el doble)",
+   soloHablado("(Actriz 1) Pídelo en **DiDi**").replace(/\s+/g, " "), "Pídelo en DiDi");
+eq("PALABRAS_POR_MINUTO = 200", PALABRAS_POR_MINUTO, 200);
 
 // Duración
 eq("'15-30s' se lee como rango", JSON.stringify(parseDuracion("15-30s")), '{"min":15,"max":30}');

@@ -216,11 +216,11 @@ await db.exec(`
   insert into produccion.planos (idea_id, orden, dialogo)
   values ('00000000-0000-0000-0000-0000000000d1', 1,
           'Te ofrecemos un crédito de hasta cuarenta y cinco mil pesos en minutos');
-`); // 13 words / 2.5 = 5.2 → ceil 6
+`); // 13 palabras habladas × 3/10 = 3.9 → ceil 4 (200 pal/min)
 eq(
-  "read-time from dialogo (13 words → 6s)",
+  "read-time from dialogo (13 words → 4s)",
   Number(await scalar(`select read_time_s from produccion.planos limit 1`)),
-  6,
+  4,
 );
 
 // Simulate a signed-in user by setting the JWT 'sub' claim.
@@ -910,7 +910,7 @@ await db.query(
            'Hasta seis por ciento de cashback en todas tus compras diarias', false)`);
 const pl = (await q(`select sfx, gfx, read_time_s from produccion.planos where orden=9`))[0];
 eq("SFX y GFX son campos distintos", `${pl.sfx} | ${pl.gfx}`, "Música alegre | Emoji de confeti");
-eq("el read-time se calcula solo (11 palabras / 2.5 → 5s)", Number(pl.read_time_s), 5);
+eq("el read-time se calcula solo (11 palabras habladas × 3/10 → 4s)", Number(pl.read_time_s), 4);
 ok("existe la marca de Cortinilla de Cierre",
    (await scalar(`select count(*) from information_schema.columns
                    where table_schema='produccion' and table_name='planos' and column_name='es_cierre'`)) > 0);
@@ -951,6 +951,13 @@ const DIALOGOS = [
   "Hasta seis por ciento de cashback en todas tus compras diarias",
   "Uno  dos   tres", "Con\nsaltos\nde línea", "Acentuación en español mexicano",
   "a b c d e f g h i j k l m n o p q r s t",
+  // No hablado: etiquetas de locutor "(...)" y negrita "**" (deben coincidir TS vs DB).
+  "(Actriz 1) Hola mundo",
+  "(Actriz 1) ¿Y sin historial crediticio? (Actriz 2) Así es, con **tasa del 4%**",
+  "(Ambas) Pídelo ya en **DiDi Finanzas**.",
+  "**sólo negrita sin locutor**",
+  "(Ambos actores)",
+  "(sólo una etiqueta larga sin nada hablado afuera)",
 ];
 let rtMismatch = 0;
 for (const d of DIALOGOS) {

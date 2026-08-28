@@ -1,5 +1,22 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-27 (sesión corta, tarde 2) — HÜE apunta con COLCHÓN bajo el tope de duración (LIVE)
+**1 commit en main (d276834 → d3f36f7), 3 archivos de código, sin migración. Push = auto-deploy Vercel.**
+
+- **Problema (Pedro):** los guiones seguían fallando por tiempo; HÜE los dejaba pegados al borde superior
+  del rango ("30-40 seg" salía a ~40).
+- **Causa:** `presupuestoDialogoS` (src/lib/plantilla.ts) usaba el MÁXIMO del rango como objetivo (cap − 2s legal).
+- **Fix (2 pasadas de Pedro, unificadas):** objetivo = tope − colchón, colchón = mitad del rango pero mínimo 4s
+  (nueva const `COLCHON_MIN_S=4`). Rango ancho "30-40" → 35 (centro); valor único "30" → 26 (4s bajo el tope
+  DURO 30, nunca lo rebasa); rango angosto "30-35" → 31 (colchón forzado a 4). budget = floor(objetivo) − 2.
+- **Por qué es limpio:** una sola fuente (`budget`) alimenta el prompt Y el guard determinista de reintento de
+  `escribirGuion`, así ambos bajan juntos. El guard enforza ≤ objetivo (ya ≥4s bajo el tope) → el "hard stop"
+  se cumple por construcción, sin segundo umbral.
+- **Gates:** tsc 0 · eslint 0 · lib 421 pass (añadí casos: valor único, rango angosto, hard-stop). Comentarios doc
+  actualizados en plantilla.ts + hue-writer.ts. Lección logueada.
+- **Siguiente:** verificar en vivo un guión nuevo tras el deploy (debe aterrizar al centro/bajo el tope, no pegado).
+  Si el colchón de 4s se siente mucho/poco, es un solo número (`COLCHON_MIN_S`).
+
 ## 2026-08-27 (sesión muy larga) — 4 tandas de Pedro + workflow cambios-cliente + REAP PRE-LAUNCH (todo shippeado + LIVE)
 **6 commits en main (d9cad2d → 845d7ce), migraciones 0052/0053/0054, ~40 archivos. Prod verificada Ready en runna-greenlight.vercel.app.**
 

@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { cargarWinners } from "@/lib/hue-data";
 import { legalSugerido, type LegalLite } from "@/lib/legal-sugerido";
-import { voz, varianteGuion, readTimeS, presupuestoDialogoS } from "@/lib/plantilla";
+import { voz, varianteGuion, readTimeS, presupuestoDialogoS, PALABRAS_POR_MINUTO } from "@/lib/plantilla";
 import { convertirDialogo } from "@/lib/guion";
 import { combinarConsideraciones } from "@/lib/consideraciones";
 import type { PlanoParsed, EstaticoParsed } from "@/lib/guion";
@@ -225,8 +225,9 @@ function bloqueEstable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
       "- En el PRIMER plano (los primeros 3–5 segundos) SIEMPRE menciona un Selling Point o nombra el " +
       "servicio (\"DiDi Card\" o \"DiDi Préstamos\").\n" +
       "- ⏱️ RESPETA LA DURACIÓN OBJETIVO: el diálogo TOTAL (todos los planos) debe LEERSE dentro del PRESUPUESTO " +
-      "que te doy abajo. El sistema mide 'tiempo de lectura' = palabras de diálogo ÷ 2.5 (≈2.5 palabras/seg " +
-      "locutadas). La cortinilla legal ocupa 2s aparte y YA está descontada del presupuesto, así que no la sumes. " +
+      "que te doy abajo. El sistema mide 'tiempo de lectura' = palabras HABLADAS (NO cuenta la etiqueta '(Quién)' " +
+      "ni los ** de negrita) a ~200 palabras/min de locución. La cortinilla legal ocupa 2s aparte y YA está " +
+      "descontada del presupuesto, así que no la sumes. " +
       "Caber en el tiempo es OBLIGATORIO: si te pasas, recorta líneas o planos — un guión que cabe vale más que " +
       "uno que excede.\n";
   } else {
@@ -289,7 +290,7 @@ function bloqueVariable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
     // caber aquí; el guard determinista de escribirGuion lo vuelve a medir y pide recortar.
     const budget = presupuestoDialogoS(i.duracion);
     if (budget !== null) {
-      s += `- ⏱️ PRESUPUESTO DE TIEMPO: el diálogo TOTAL de TODO el guión (sumando todos los planos) debe caber en ${budget}s de LECTURA — la cortinilla legal ocupa 2s aparte, ya descontados. A ~2.5 palabras/seg son ~${Math.round(budget * 2.5)} palabras de diálogo como TOPE. No te pases: recorta líneas o planos antes que exceder.\n`;
+      s += `- ⏱️ PRESUPUESTO DE TIEMPO: el diálogo TOTAL de TODO el guión (sumando todos los planos) debe caber en ${budget}s de LECTURA — la cortinilla legal ocupa 2s aparte, ya descontados. A ~200 palabras/min son ~${Math.round((budget * PALABRAS_POR_MINUTO) / 60)} palabras HABLADAS como TOPE (sin contar las etiquetas '(Quién)'). No te pases: recorta líneas o planos antes que exceder.\n`;
     }
     s += `- Estilo: ${ctx.variante === "real" ? "Real Person (persona real a cuadro)" : "Normal (V.O / formato innovador)"}\n`;
     s += `- Quién habla (locutor del diálogo): ${ctx.voz}\n`;
@@ -417,7 +418,7 @@ export async function escribirGuion(ctx: ContextoWriter): Promise<{ ok: true; pl
     const sobra = segs - budget;
     feedback =
       `Tu guión anterior dura ${segs}s de lectura y el TOPE es ${budget}s: se pasa por ${sobra}s ` +
-      `(~${Math.round(sobra * 2.5)} palabras de más). Reescríbelo MÁS BREVE para caber en ${budget}s — quita o ` +
+      `(~${Math.round((sobra * PALABRAS_POR_MINUTO) / 60)} palabras habladas de más). Reescríbelo MÁS BREVE para caber en ${budget}s — quita o ` +
       `acorta líneas de diálogo (y planos enteros si hace falta), conservando el hook inicial y los selling ` +
       `points. CABER en el tiempo es la prioridad número uno.`;
   }

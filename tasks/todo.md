@@ -1,5 +1,16 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟠 2026-08-27 — Read-time REAL: contar sólo lo hablado + 200 pal/min (⏳ pendiente SHIP)
+Pedro: los videos salían CORTOS — un guión "de 32s" leído relajado dura ~20s. El modelo
+read-time sobre-estimaba por 2 razones: contaba etiquetas "(Actriz 1)"/negrita "**" (~13%
+de tokens en prod) y asumía 150 pal/min (muy lento). Con el objetivo ya bajo, el video salía corto.
+- [x] `soloHablado()` + `PALABRAS_POR_MINUTO=200`; `readTimeS = ceil(palabras habladas × 3/10)` (plantilla.ts).
+- [x] Migración **0055**: trigger `set_plano_read_time` replica EXACTO + recalcula filas existentes.
+- [x] hue-writer: prompt/feedback a 200 pal/min y "sin contar (Quién)". Tests: contract TS↔SQL con casos de etiqueta.
+- [x] Gates VERDES: tsc 0 · lib 427 · db 319 (PGlite aplica 0055 y verifica el contrato).
+- [x] Validado con datos reales: guión de prod 30s→19s (== la queja); a futuro ~55% más palabras → llena el tiempo.
+- [ ] ⏳ **SHIP** (necesita OK de Pedro): push código + `npm run migrate` (ref ybbrpqzbedaxsmotgtkh). Es migración.
+
 ## 🟡 2026-08-27 — HÜE apunta al MEDIO del rango de duración (no al borde)
 Problema (Pedro): los guiones fallan por tiempo; HÜE los deja pegados al tope (30-40 → sale a ~40).
 Objetivo: HÜE deja SIEMPRE colchón bajo el tope. Rango ancho → centro (30-40 → 35).

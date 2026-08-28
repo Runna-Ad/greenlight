@@ -44,14 +44,37 @@ export const PLACEHOLDER_COPY = {
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Espejo EXACTO de produccion.set_plano_read_time (migración 0002):
- * ceil(palabras / 2.5), y 0 cuando no hay diálogo. ~2.5 palabras por segundo
- * de locución en es-MX. Fijado con contract test contra el trigger.
+ * Deja SÓLO lo que se lee en voz alta: quita las etiquetas de locutor entre paréntesis
+ * ("(Actriz 1)", "(Ambas)") y los marcadores de negrita "**". Antes se contaban como
+ * palabras e inflaban el read-time (Pedro, 2026-08-27) → el video salía corto. Espejo
+ * EXACTO de la limpieza del trigger set_plano_read_time (migración 0055). "" si no queda
+ * nada hablado. Los dos regex se aplican en el MISMO orden que el SQL.
+ */
+export function soloHablado(dialogo: string | null | undefined): string {
+  return (dialogo ?? "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\*\*/g, " ")
+    .trim();
+}
+
+/**
+ * Ritmo de locución asumido: ~200 palabras/min de VO en es-MX (Pedro, 2026-08-27; antes
+ * 150/min = 2.5 pal/seg, que salía LARGO — un guión "de 32s" se leía relajado en ~20s).
+ * 200/min = 0.3s por palabra → read_time = ceil(palabras × 3 / 10). Para cambiar el ritmo,
+ * ajusta ESTE número Y el trigger set_plano_read_time (van atados por contract test).
+ */
+export const PALABRAS_POR_MINUTO = 200;
+
+/**
+ * Espejo EXACTO de produccion.set_plano_read_time (migración 0055): cuenta SÓLO las
+ * palabras habladas ({@link soloHablado}) y devuelve ceil(palabras × 3 / 10) — 200 pal/min
+ * ({@link PALABRAS_POR_MINUTO}) — y 0 cuando no hay diálogo. Fijado con contract test
+ * contra el trigger (test-db).
  */
 export function readTimeS(dialogo: string | null | undefined): number {
-  const t = (dialogo ?? "").trim();
+  const t = soloHablado(dialogo);
   if (!t) return 0;
-  return Math.ceil(t.split(/\s+/).length / 2.5);
+  return Math.ceil((t.split(/\s+/).length * 3) / 10);
 }
 
 /**
