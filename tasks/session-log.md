@@ -1,5 +1,24 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-27 (sesión corta, tarde 3) — Read-time REAL: sólo lo hablado + 200 pal/min (SHIPPEADO + LIVE, con migración)
+**1 commit en main (d3f36f7 → 9ea8b02) + migración 0055 aplicada. Push = auto-deploy Vercel.**
+
+- **Problema (Pedro, seguimiento del colchón):** con el objetivo ya más bajo, los videos salían CORTOS —
+  un guión que el sistema marcaba "de 32s" leído relajado dura ~20s.
+- **Diagnóstico (con datos reales de prod, no supuestos):** el read-time (`readTimeS` / trigger
+  `set_plano_read_time`) SOBRE-estimaba por 2 razones: (1) contaba tokens NO hablados — etiqueta de locutor
+  "(Actriz 1)" y negrita "**" (medido: ~13% de tokens); (2) asumía 150 pal/min (2.5 pal/seg), muy lento.
+- **Decisión de Pedro (le pregunté, no adiviné):** ritmo = **200 pal/min**. El label-strip lo hice igual (bug claro).
+- **Fix:** `soloHablado()` quita "(...)" y "**"; `readTimeS = ceil(palabras habladas × 3/10)` (const
+  `PALABRAS_POR_MINUTO=200`). **Migración 0055** replica el trigger EXACTO + recalcula filas existentes.
+  hue-writer: prompt/feedback a 200 pal/min, "sin contar (Quién)".
+- **Verificación:** contract test TS↔SQL en PGlite con casos de etiqueta (db 319). Gates tsc 0 · lib 427 · db 319.
+  Datos reales antes/después: guión A 49→33s, guión B **30→19s** (== la queja). A igual presupuesto HÜE
+  escribe ~55% más palabras habladas → llena el tiempo.
+- **Deploy:** `npm run migrate` aplicó 0055 al proyecto linked **ybbrpqzbedaxsmotgtkh (S.P.A.M, compartido)**;
+  verifiqué en vivo que las filas quedaron en 33s/19s. Código push 9ea8b02.
+- **Palanca a futuro:** si ahora se siente LARGO, es UN número (`PALABRAS_POR_MINUTO`).
+
 ## 2026-08-27 (sesión corta, tarde 2) — HÜE apunta con COLCHÓN bajo el tope de duración (LIVE)
 **1 commit en main (d276834 → d3f36f7), 3 archivos de código, sin migración. Push = auto-deploy Vercel.**
 
