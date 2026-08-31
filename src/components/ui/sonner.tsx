@@ -1,15 +1,16 @@
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CheckCircleIcon, InfoIcon, WarningIcon, XCircleIcon, SpinnerIcon } from "@phosphor-icons/react"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
+  // La app es light-only (no hay ThemeProvider ni toggle). Antes esto leía el
+  // tema del SO vía useTheme()="system", así que en una Mac/PC con modo oscuro
+  // los toasts salían oscuros sobre una UI clara. Fijado a "light" para que
+  // coincidan con el resto de la app. (reap pre-launch)
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="light"
       className="toaster group"
       icons={{
         success: (

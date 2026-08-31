@@ -96,7 +96,9 @@ export async function hubTraining(): Promise<
   const db = supabaseAdmin();
   const [ri, rk, ra, rs, rc, rm] = await Promise.all([
     db.from("hue_instructions").select("*").order("active", { ascending: false }).order("created_at", { ascending: false }),
-    db.from("hue_kb_documents").select("*").order("created_at", { ascending: false }),
+    // Lista del KB: SIN extracted_text (el texto completo se pide por-id al abrir "Ver
+    // texto"). Antes select("*") bajaba el texto entero de CADA doc sólo para pintar la lista.
+    db.from("hue_kb_documents").select("id, scope, client_id, marca_id, title, storage_path, mime_type, size_bytes, indexed_at, uploaded_by, created_at").order("created_at", { ascending: false }),
     db.from("hue_adaptations").select("id, at, trigger_summary, changed_instruction_id, reverted_at").order("at", { ascending: false }).limit(50),
     db.from("hue_settings").select("auto_learn, auto_learn_edits").eq("id", 1).maybeSingle(),
     db.from("clients").select("id, name").order("name"),
@@ -139,7 +141,8 @@ export async function hubTraining(): Promise<
   return {
     ok: true,
     instrucciones,
-    kb: (kb ?? []) as HueKbDocument[],
+    // extracted_text no viaja en la lista (se carga por-id); lo fijamos null para cumplir el tipo.
+    kb: ((kb ?? []) as Omit<HueKbDocument, "extracted_text">[]).map((d) => ({ ...d, extracted_text: null })),
     adaptaciones,
     autoLearn: st?.auto_learn === true,
     autoLearnEdits: st?.auto_learn_edits === true,

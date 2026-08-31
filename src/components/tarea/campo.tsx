@@ -430,7 +430,7 @@ export const Campo = memo(function Campo({
             className="gl-pop absolute -left-1.5 -top-1.5 z-20 grid size-[20px] place-items-center rounded-full border-2 border-background text-[10px] font-extrabold text-white shadow-sm before:absolute before:-inset-1 before:content-['']"
             style={{ background: PIN_BG[estadoCorr] }}
           >
-            {estadoCorr === "open" ? cs.length : "✓"}
+            {estadoCorr === "open" ? cs.length : <Check className="size-3" />}
           </button>
         )}
       </div>

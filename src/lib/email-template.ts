@@ -120,7 +120,7 @@ export function htmlFor(args: {
       <tr><td style="padding:22px 28px 6px;">
         <table role="presentation" cellpadding="0" cellspacing="0"><tr>
           <td style="border-radius:10px;background:#00E676;">
-            <a href="${args.ctaUrl}" style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:700;color:#0c2b1c;text-decoration:none;border-radius:10px;">${escapeHtml(cta)} &rarr;</a>
+            <a href="${escapeHtml(args.ctaUrl)}" style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:700;color:#0c2b1c;text-decoration:none;border-radius:10px;">${escapeHtml(cta)} &rarr;</a>
           </td>
         </tr></table>
       </td></tr>

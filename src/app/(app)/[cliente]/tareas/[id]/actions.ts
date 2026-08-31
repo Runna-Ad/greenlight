@@ -35,7 +35,7 @@ export type TablaGuardable = Tabla | "copies_temas" | "copies";
  * Whitelist en el SERVIDOR. El nombre del campo llega del cliente y termina
  * dentro de un identificador SQL — jamás se interpola algo que no esté aquí.
  */
-const CAMPOS: Record<TablaGuardable, Set<string>> = {
+export const CAMPOS: Record<TablaGuardable, Set<string>> = {
   planos: new Set([
     "titulo", "hook_narrativo", "hook_visual", "accion",
     "copy_in", "sfx", "gfx", "edicion", "dialogo",
@@ -519,7 +519,14 @@ export async function guardarCampo(
       p_idea_id: ideaId,
       p_actor_member: soy?.id ?? null,
     });
-    if (!movErr) revalidatePath("/mi-trabajo");
+    // Best-effort: si falla, el guardado del texto ya quedó a salvo — pero NO lo
+    // tragamos en silencio (regla "no silent failures"). Al arrancar, refrescamos
+    // también el tablero: el status pasó de "Por hacer" a "En progreso".
+    if (movErr) console.error("[guardarCampo] rpc_task_start (auto-start) falló:", movErr.message);
+    else {
+      revalidatePath("/mi-trabajo");
+      revalidatePath("/[cliente]/tablero", "page");
+    }
   }
 
   // La ruta lleva el id de la IDEA, no el de la fila (plano/estático). Antes
@@ -707,7 +714,9 @@ async function iniciarTareaSiTodo(db: ReturnType<typeof supabaseAdmin>, ideaId: 
   if ((idea?.status as AssetStatus | undefined) !== "todo") return;
   const soy = await getSoy();
   const { error } = await db.rpc("rpc_task_start", { p_idea_id: ideaId, p_actor_member: soy?.id ?? null });
-  if (!error) revalidatePath("/mi-trabajo");
+  if (error) { console.error("[iniciarTareaSiTodo] rpc_task_start falló:", error.message); return; }
+  revalidatePath("/mi-trabajo");
+  revalidatePath("/[cliente]/tablero", "page");
 }
 
 /**
@@ -739,7 +748,8 @@ export async function importarGuion(
   // Enlaza el borrador de H.Ü.E que se está importando (si lo hubo) con esta tarea:
   // el loop "aprender de ediciones" sólo mina generaciones IMPORTADAS. Si el guión se
   // pegó a mano (sin generación), 0 filas → inocuo.
-  await db.from("hue_generations").update({ imported_at: new Date().toISOString() }).eq("idea_id", ideaId).is("imported_at", null);
+  const { error: linkErr } = await db.from("hue_generations").update({ imported_at: new Date().toISOString() }).eq("idea_id", ideaId).is("imported_at", null);
+  if (linkErr) console.error("[importarGuion] enlazar hue_generations.imported_at falló:", linkErr.message);
   revalidatePath("/[cliente]/tareas/[id]", "page");
   // Devuelve la lista COMPLETA resultante (replace o append) para que el editor
   // reemplace su estado sin recargar; los planos nuevos entran con animación.

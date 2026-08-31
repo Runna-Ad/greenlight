@@ -4,8 +4,9 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, 
 import { createPortal } from "react-dom";
 import { Plus, X, Check, ArrowRight } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate } from "@floating-ui/react-dom";
-import { desmarcarNegrita, unirRangos, type RangoNegrita } from "@/lib/negrita";
+import { desmarcarNegrita, unirRangos } from "@/lib/negrita";
 import { rangosLocutor } from "@/lib/dialogo";
+import { pintarNegrita } from "./dialogo-lectura";
 import { useCorrecciones } from "./correcciones/contexto";
 import { SelectorTipoCambio, TagTipoCambio, BadgeCliente } from "./selector-tipo-cambio";
 import { VeredictoChip } from "./veredicto-chip";
@@ -19,32 +20,6 @@ import {
   type Correccion,
 } from "@/lib/correcciones";
 import { cn } from "@/lib/utils";
-
-/**
- * Pinta el tramo [a, b) del texto LIMPIO aplicando negrita POR RANGO (los `negritas`
- * vienen en coordenadas de `limpio`, ordenados y sin traslape). Se usa por segmento
- * de corrección: como la negrita y los resaltados comparten el mismo espacio, un
- * resaltado puede quedar dentro/encima de una negrita sin partir ningún marcador `**`.
- */
-function pintarNegrita(limpio: string, negritas: RangoNegrita[], a: number, b: number): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  let i = a;
-  let k = 0;
-  for (const r of negritas) {
-    if (r.end <= a || r.start >= b) continue; // sin traslape con este segmento
-    const bs = Math.max(r.start, a);
-    const be = Math.min(r.end, b);
-    if (bs > i) nodes.push(<span key={k++}>{limpio.slice(i, bs)}</span>);
-    nodes.push(
-      <strong key={k++} className="font-semibold">
-        {limpio.slice(bs, be)}
-      </strong>,
-    );
-    i = be;
-  }
-  if (i < b) nodes.push(<span key={k++}>{limpio.slice(i, b)}</span>);
-  return nodes;
-}
 
 /**
  * Campo de SÓLO LECTURA en "Vista cliente", pero con correcciones para el

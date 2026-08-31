@@ -57,6 +57,17 @@ async function esDelCliente(
   return brief?.clients?.slug === clienteSlug;
 }
 
+/** Tras una acción del cliente que CAMBIA el estado (enviar cambios / aprobar), refresca
+ *  el portal Y las superficies internas (tablero, Mi Trabajo, Entregas) — igual que las
+ *  mutaciones internas (revalidateFor). Sin esto, "cliente aprobó → Greenlit" / "cliente
+ *  pidió cambios" no llegaba al caché del router del equipo en una navegación suave. */
+function revalidarPortalYEquipo(clienteSlug: string) {
+  revalidatePath(`/${clienteSlug}/portal`);
+  revalidatePath(`/${clienteSlug}/tablero`);
+  revalidatePath("/mi-trabajo");
+  revalidatePath("/entregas");
+}
+
 /**
  * El cliente FIJA un cambio localizado (selección de texto → nota), igual que un
  * lead pide una corrección, pero sin tipo de cambio. Se guarda al instante como
@@ -141,7 +152,7 @@ export async function clienteEnviarCambios(
   const { error } = await db.rpc("rpc_client_submit_changes", { p_idea_id: ideaId });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/${clienteSlug}/portal`);
+  revalidarPortalYEquipo(clienteSlug);
   after(() => dispatchPendingEmails());
   return { ok: true };
 }
@@ -163,7 +174,7 @@ export async function clienteAprobar(
   const { error } = await db.rpc("rpc_client_approve", { p_idea_id: ideaId });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/${clienteSlug}/portal`);
+  revalidarPortalYEquipo(clienteSlug);
   after(() => dispatchPendingEmails());
   return { ok: true };
 }

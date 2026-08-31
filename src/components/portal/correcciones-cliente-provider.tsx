@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, type ReactNode } from "react";
+import { useMemo, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { keyCampo, type Correccion } from "@/lib/correcciones";
@@ -39,48 +39,55 @@ export function CorreccionesClienteProvider({
   const router = useRouter();
   const [pendiente, start] = useTransition();
 
-  const run = (p: Promise<{ ok: boolean; error?: string }>, okMsg?: string) =>
-    start(async () => {
-      const res = await p;
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo completar la acción.");
-        return;
-      }
-      if (okMsg) toast.success(okMsg);
-      router.refresh();
-    });
+  // El value se memoiza (igual que el provider interno, contexto.tsx): sin esto era un
+  // objeto NUEVO cada render, y como CADA CampoLectura del documento (10-40 en un guión
+  // largo del portal) lo lee vía useCorrecciones(), un cambio de estado del provider
+  // (p. ej. `pendiente` del useTransition al fijar/quitar un cambio, o un router.refresh)
+  // re-renderizaba TODO el documento del cliente. (reap perf pre-launch)
+  const value = useMemo<Ctx>(() => {
+    const run = (p: Promise<{ ok: boolean; error?: string }>, okMsg?: string) =>
+      start(async () => {
+        const res = await p;
+        if (!res.ok) {
+          toast.error(res.error ?? "No se pudo completar la acción.");
+          return;
+        }
+        if (okMsg) toast.success(okMsg);
+        router.refresh();
+      });
 
-  const value: Ctx = {
-    ideaId,
-    clienteSlug,
-    marcaColor: null, // el portal no pinta el badge "Cliente" (el cliente ES el cliente)
-    esRevisor: false,
-    esCliente: editable,
-    esEquipo: false,
-    correcciones: cambios,
-    revisiones,
-    pendiente,
-    deCampo: (tabla, filaId, campo) => {
-      const k = keyCampo(tabla, filaId, campo);
-      return cambios.filter(
-        (c) => keyCampo(c.targetTabla, c.targetFilaId, c.targetCampo) === k,
-      );
-    },
-    revisionesDeCampo: (tabla, filaId, campo) => {
-      const k = keyCampo(tabla, filaId, campo);
-      return revisiones.filter(
-        (c) => keyCampo(c.targetTabla, c.targetFilaId, c.targetCampo) === k,
-      );
-    },
-    pedir: (t, body) => run(clienteFijarCambio(clienteSlug, ideaId, t, body), "Cambio anotado"),
-    // El cliente no atiende ni confirma — esas acciones son del equipo.
-    marcar: () => {},
-    confirmarCampo: () => {},
-    descartar: (id) => run(clienteQuitarCambio(clienteSlug, ideaId, id), "Cambio quitado"),
-    veredictos: new Map(),
-    validando: false,
-    validar: () => {},
-  };
+    return {
+      ideaId,
+      clienteSlug,
+      marcaColor: null, // el portal no pinta el badge "Cliente" (el cliente ES el cliente)
+      esRevisor: false,
+      esCliente: editable,
+      esEquipo: false,
+      correcciones: cambios,
+      revisiones,
+      pendiente,
+      deCampo: (tabla, filaId, campo) => {
+        const k = keyCampo(tabla, filaId, campo);
+        return cambios.filter(
+          (c) => keyCampo(c.targetTabla, c.targetFilaId, c.targetCampo) === k,
+        );
+      },
+      revisionesDeCampo: (tabla, filaId, campo) => {
+        const k = keyCampo(tabla, filaId, campo);
+        return revisiones.filter(
+          (c) => keyCampo(c.targetTabla, c.targetFilaId, c.targetCampo) === k,
+        );
+      },
+      pedir: (t, body) => run(clienteFijarCambio(clienteSlug, ideaId, t, body), "Cambio anotado"),
+      // El cliente no atiende ni confirma — esas acciones son del equipo.
+      marcar: () => {},
+      confirmarCampo: () => {},
+      descartar: (id) => run(clienteQuitarCambio(clienteSlug, ideaId, id), "Cambio quitado"),
+      veredictos: new Map(),
+      validando: false,
+      validar: () => {},
+    };
+  }, [ideaId, clienteSlug, editable, cambios, revisiones, pendiente, router, start]);
 
   return <CorreccionesCtx.Provider value={value}>{children}</CorreccionesCtx.Provider>;
 }

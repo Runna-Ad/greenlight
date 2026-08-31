@@ -17,10 +17,10 @@ import { memo, useCallback, useState, type ComponentType } from "react";
 
 import { Campo } from "./campo";
 import { CampoLectura } from "./campo-lectura";
+import { DialogoLectura } from "./dialogo-lectura";
 import { useWorkspace, reseedKey } from "./workspace-provider";
 import { ReferenciasPlano, type RefVista } from "./referencias-plano";
-import { TextoRico, Negrita } from "@/components/ui/linkify";
-import { parseDialogo } from "@/lib/dialogo";
+import { TextoRico } from "@/components/ui/linkify";
 import { sinNegrita } from "@/lib/negrita";
 import { readTimeS } from "@/lib/plantilla";
 import type { PlanoVista, EstaticoVista } from "./preview-slide";
@@ -194,12 +194,12 @@ export function DocumentoTarea({
 
               <div className="min-w-0">
                 {lectura ? (
-                  // Guarda con la MISMA definición de vacío que DialogoContenido
-                  // (parseDialogo): un diálogo no vacío pero no parseable no debe
-                  // pintar una fila "Diálogos" vacía.
-                  parseDialogo(p.dialogo).length > 0 ? (
-                    // Lectura: el partner ve el diálogo formateado; el revisor
-                    // puede además pedir cambios sobre el texto crudo.
+                  // Sólo pinta la fila "Diálogos" si hay diálogo (misma definición de
+                  // vacío que DialogoLectura, que devuelve null sin texto).
+                  (p.dialogo ?? "").trim().length > 0 ? (
+                    // Lectura: partner y revisor ven el MISMO diálogo (texto crudo con el
+                    // locutor en negrita, DialogoLectura); el revisor/cliente además puede
+                    // anclar cambios sobre ESE mismo texto. Una sola forma en toda ruta.
                     <CampoLectura
                       tabla="planos"
                       filaId={p.id}
@@ -208,7 +208,7 @@ export function DocumentoTarea({
                       grupo={`Plano ${p.orden}`}
                       valor={p.dialogo ?? ""}
                       icono={<IconoDialogo className="size-3.5 shrink-0 text-deck-orange" />}
-                      pretty={<DialogoContenido texto={p.dialogo} />}
+                      pretty={<DialogoLectura texto={p.dialogo} />}
                     />
                   ) : null
                 ) : (
@@ -405,28 +405,6 @@ const CampoDocCuerpo = memo(function CampoDocCuerpo({
     />
   );
 });
-
-/** El diálogo formateado (Quien: "texto"), SÓLO el contenido — sin la etiqueta.
- *  Lo envuelve CampoLectura, que pone la etiqueta y (para el revisor) las
- *  correcciones. Devuelve null si no hay diálogo. */
-function DialogoContenido({ texto }: { texto: string | null }) {
-  const segmentos = parseDialogo(texto);
-  if (segmentos.length === 0) return null;
-  return (
-    <div className="space-y-1.5 px-1.5 py-1 text-[13px] leading-relaxed text-foreground">
-      {segmentos.map((s, i) => (
-        <p key={i} className="whitespace-pre-wrap">
-          {s.quien && <b>{s.quien}: </b>}
-          {s.quien ? (
-            <>&ldquo;<Negrita>{s.texto}</Negrita>&rdquo;</>
-          ) : (
-            <Negrita>{s.texto}</Negrita>
-          )}
-        </p>
-      ))}
-    </div>
-  );
-}
 
 /** Referencias del plano/estático — dropzone en editable, miniaturas en lectura. */
 function RefsDoc({

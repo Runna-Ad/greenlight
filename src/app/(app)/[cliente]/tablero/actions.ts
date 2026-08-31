@@ -231,53 +231,6 @@ export async function sendToClient(ideaId: string, note?: string): Promise<Actio
 }
 
 /**
- * Marcar cuáles de los asignados son LEAD de esta tarea (wireframe: LEAD vs
- * TEAM). No agrega gente — sólo pone el flag es_lead sobre asignaciones que ya
- * existen. Añadir o quitar personas (con validación rol+track) es `asignarTarea`,
- * que usan tanto el task section como el tablero.
- */
-export async function setLeads(
-  ideaId: string,
-  leadMemberIds: string[],
-): Promise<ActionResult> {
-  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
-  const { role } = await context();
-  if (!canAssign(role)) return { ok: false, error: "Este rol no puede marcar leads." };
-  const scope = await assertCanActOnTask(ideaId);
-  if (!scope.ok) return { ok: false, error: scope.error };
-
-  const db = supabaseAdmin();
-  // Primero todos a false, luego los elegidos a true — en dos updates, para que
-  // el conjunto quede exactamente como se pidió.
-  const { error: e1 } = await db
-    .from("idea_assignments").update({ es_lead: false }).eq("idea_id", ideaId);
-  if (e1) return { ok: false, error: e1.message };
-
-  if (leadMemberIds.length) {
-    // Sólo un miembro con rol `lead` puede marcarse como lead — igual que asignarTarea.
-    // (Hoy no hay caller en la app, pero deja la función segura si se cablea. reap I4)
-    const { data: rows } = await db
-      .from("track_members").select("id").eq("role", "lead").in("id", leadMemberIds)
-      .returns<{ id: string }[]>();
-    const validos = new Set((rows ?? []).map((r) => r.id));
-    if (leadMemberIds.some((id) => !validos.has(id))) {
-      return { ok: false, error: "Sólo un Lead puede marcarse como lead." };
-    }
-    const { error: e2 } = await db
-      .from("idea_assignments").update({ es_lead: true })
-      .eq("idea_id", ideaId).in("member_id", leadMemberIds);
-    if (e2) return { ok: false, error: e2.message };
-  }
-
-  await revalidateFor(db, ideaId);
-  // Después de responder, drena la cola de emails (Gmail SMTP). Off the response
-  // path (after) para no frenar el botón; cada acción también sirve de reintento
-  // por si un envío anterior no completó.
-  after(() => dispatchPendingEmails());
-  return { ok: true };
-}
-
-/**
  * Asigna una tarea en DOS niveles de una sola vez: un LEAD (es_lead=true) y sus
  * ESPECIALISTAS (es_lead=false). Reemplaza el conjunto completo con un DIFF (sólo
  * toca lo que cambió) para preservar assigned_at de quien sigue asignado — esa hora

@@ -10,7 +10,7 @@ import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { fixSeguro } from "@/lib/ortografia";
 import { sinNegrita } from "@/lib/negrita";
 import { registrarOrtografia, marcarOrtografiaAplicada, ignorarOrtografia } from "@/lib/hue-log";
-import { guardarCampo, type Tabla, type GuardarResultado } from "./actions";
+import { guardarCampo, CAMPOS, type Tabla, type GuardarResultado } from "./actions";
 
 /** Un error de ortografía/gramática que H.Ü.E encontró, con su fix propuesto. */
 export type ErrorOrtografia = {
@@ -333,6 +333,12 @@ export async function aplicarOrtografia(
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
   if (tabla !== "planos" && tabla !== "estaticos") {
     return { ok: false, error: "Tabla no permitida." };
+  }
+  // Whitelist del CAMPO antes de la lectura directa (misma fuente que guardarCampo).
+  // El write ya re-valida, pero no dejamos que un `campo` arbitrario del cliente llegue
+  // al select(campo) — validar-antes-de-usar, con UN solo whitelist compartido.
+  if (!CAMPOS[tabla].has(campo)) {
+    return { ok: false, error: "Campo no permitido." };
   }
   if (!fixSeguro(original, sugerencia)) {
     return { ok: false, error: "Ese cambio no es seguro de aplicar automáticamente." };

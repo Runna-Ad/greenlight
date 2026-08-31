@@ -24,7 +24,8 @@ export function VeredictoChip({ v }: { v: VeredictoCambio | undefined }) {
   return (
     <span className="group/hue relative inline-flex align-middle">
       <span
-        className="inline-flex cursor-help items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+        tabIndex={0}
+        className="inline-flex cursor-help items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
         style={{
           background: `color-mix(in srgb, ${tint} 16%, transparent)`,
           color: `color-mix(in srgb, ${tint} 78%, #000)`,
@@ -39,7 +40,7 @@ export function VeredictoChip({ v }: { v: VeredictoCambio | undefined }) {
           // último de su fila y el panel vive pegado al borde derecho de la pantalla,
           // así que `left-0` lo empujaba fuera de vista y se cortaba. `right-0` lo abre
           // hacia adentro del panel/tarjeta, donde siempre hay espacio.
-          className="pointer-events-none absolute right-0 top-full z-[70] mt-1 hidden w-64 max-w-[min(20rem,80vw)] rounded-lg border bg-card p-2 text-left shadow-lg group-hover/hue:block"
+          className="pointer-events-none absolute right-0 top-full z-[70] mt-1 hidden w-64 max-w-[min(20rem,80vw)] rounded-lg border bg-card p-2 text-left shadow-lg group-hover/hue:block group-focus-within/hue:block"
           style={{ borderColor: `color-mix(in srgb, ${tint} 40%, var(--border))` }}
         >
           {v.razon && <span className="block text-[11px] leading-snug text-foreground">{v.razon}</span>}

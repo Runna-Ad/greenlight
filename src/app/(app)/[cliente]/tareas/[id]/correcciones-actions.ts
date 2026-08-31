@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { dispatchPendingEmails } from "@/lib/notif-email";
 import { canMoveStatus, canOverrideStatus } from "@/lib/roles";
+import { transicionRequiereLead } from "@/lib/task-actions";
 import { esCategoria } from "@/lib/tipos-cambio";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
@@ -202,7 +203,10 @@ export async function mandarCorrecciones(
 ): Promise<CorreccionResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const [role, soy] = await Promise.all([getViewAs(), getSoy()]);
-  if (!canOverrideStatus(role)) return { ok: false, error: "Sólo un lead manda correcciones." };
+  // Gate derivado del MISMO allowlist que moveTask (DOER_TRANSITIONS), no hardcodeado:
+  // así este mover no puede driftar del tablero si la lista de transiciones cambia.
+  if (transicionRequiereLead("under_review", "in_corrections") ? !canOverrideStatus(role) : !canMoveStatus(role))
+    return { ok: false, error: "Sólo un lead manda correcciones." };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
 
@@ -225,7 +229,9 @@ export async function devolverARevision(
 ): Promise<CorreccionResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const [role, soy] = await Promise.all([getViewAs(), getSoy()]);
-  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no devuelve a revisión." };
+  // Mismo allowlist compartido (in_corrections→under_review es transición de doer).
+  if (transicionRequiereLead("in_corrections", "under_review") ? !canOverrideStatus(role) : !canMoveStatus(role))
+    return { ok: false, error: "Este rol no devuelve a revisión." };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
 

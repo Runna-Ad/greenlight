@@ -127,8 +127,12 @@ export async function reunirContextoTarea(ideaId: string): Promise<ContextoWrite
   const [reglasRes, legalesRes, brainRes, kbRes] = await Promise.all([
     db.rpc("reglas_para_tarea", { p_idea_id: ideaId, p_texto: proxyTexto }),
     db.from("snippets").select("id, title, body").eq("kind", "legal").eq("active", true).or(legalFilter),
-    db.from("hue_instructions").select("title, body").eq("active", true).or(scopeFilter).order("created_at"),
-    db.from("hue_kb_documents").select("title, extracted_text").or(scopeFilter).order("created_at"),
+    // Caps en SQL, no en JS: antes traíamos TODO el Cerebro/KB del scope (incl. el
+    // extracted_text completo de cada doc) y recortábamos a 30/6 en memoria — el
+    // payload cruzaba la red entero en cada generación. El KB filtra los null en SQL
+    // para que el límite rinda 6 docs con texto. (reap perf pre-launch)
+    db.from("hue_instructions").select("title, body").eq("active", true).or(scopeFilter).order("created_at").limit(30),
+    db.from("hue_kb_documents").select("title, extracted_text").or(scopeFilter).not("extracted_text", "is", null).order("created_at").limit(6),
   ]);
   // Un error de query NO debe degradar en silencio a "sin reglas / sin legal / sin Cerebro"
   // (el writer produciría copy sin *Aplican, sin CTA correcto, etc.) — fallar honesto (reap S1).
