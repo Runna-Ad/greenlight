@@ -70,10 +70,18 @@ export async function GET(request: NextRequest) {
   const admin = supabaseAdmin();
   const { data: profile } = await admin
     .from("profiles")
-    .select("role, client_id")
+    .select("role, client_id, active")
     .eq("id", user.id)
     .maybeSingle();
-  const p = profile as { role: string; client_id: string | null } | null;
+  const p = profile as { role: string; client_id: string | null; active: boolean } | null;
+
+  // Acceso revocado (Clientes → "Revocar", profiles.active=false) → no entra, aunque su
+  // login de Google siga siendo válido. Se corta EN LA PUERTA para que reciba un mensaje
+  // claro en vez de una pantalla de "denegado" más adentro. (reap I4)
+  if (p && !p.active) {
+    await supabase.auth.signOut();
+    return deny("access-revoked");
+  }
 
   if (p?.role === "client" && p.client_id) {
     const { data: client } = await admin

@@ -92,13 +92,23 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const admin = supabaseAdmin();
   const { data: profile } = await admin
     .from("profiles")
-    .select("id, email, role, client_id")
+    .select("id, email, role, client_id, active")
     .eq("id", user.id)
     .maybeSingle();
 
   // Authenticated but not provisioned yet (should not happen after /auth/callback).
   if (!profile) return null;
-  const p = profile as { id: string; email: string; role: string; client_id: string | null };
+  const p = profile as {
+    id: string; email: string; role: string; client_id: string | null; active: boolean;
+  };
+
+  // ACCESO REVOCADO = SIN identidad. `cambiarAccesoCliente` ("Revocar" en Clientes) pone
+  // profiles.active=false, pero NADIE leía esa bandera para autorizar: un cliente revocado
+  // seguía entrando con su sesión viva Y podía volver a entrar con un magic link válido —
+  // el botón "Revocar" no revocaba nada. Como éste es el ÚNICO resolutor de identidad de la
+  // app, negar aquí cierra TODA superficie de golpe (páginas y server actions caen a "sin
+  // identidad" = denegado), en vez de parchear cada pantalla. (reap I4 — alcance real)
+  if (!p.active) return null;
 
   let member: CurrentMember | null = null;
   if (appRoleToViewRole(p.role) !== "client") {

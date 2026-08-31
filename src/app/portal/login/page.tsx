@@ -8,6 +8,8 @@ function mensajeDeError(code: string): string {
     case "link-invalid":
     case "link-expired":
       return "Ese enlace ya no es válido o expiró. Pide acceso de nuevo y te mandaremos uno nuevo.";
+    case "access-revoked":
+      return "Tu acceso fue dado de baja. Si crees que es un error, escríbele a tu contacto en Rünna.";
     default:
       return "Algo salió mal. Intenta de nuevo.";
   }

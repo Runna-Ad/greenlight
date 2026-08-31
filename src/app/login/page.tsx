@@ -8,6 +8,8 @@ function mensajeDeError(code: string): string {
   switch (code) {
     case "not-allowed":
       return "Esa cuenta no tiene acceso. Entra con tu correo @runna.com.mx — o si eres cliente, pide acceso abajo.";
+    case "access-revoked":
+      return "Tu acceso fue dado de baja. Si crees que es un error, escríbele a tu contacto en Rünna.";
     case "missing-code":
     case "exchange-failed":
     case "no-user":

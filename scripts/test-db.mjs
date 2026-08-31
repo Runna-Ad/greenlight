@@ -332,6 +332,45 @@ eq(
   1,
 );
 
+// ── Candado RLS 0056: la llave PÚBLICA no toca `produccion` ──
+// Corre ANTES del bloque de abajo (que re-concede a `authenticated` a propósito para
+// probar las políticas). Esto vigila el ESTADO POST-MIGRACIONES: si una migración futura
+// vuelve a conceder el esquema a anon/authenticated, el candado se abriría en silencio y
+// la anon key (pública, va en el bundle del navegador) podría volver a pegarle a la API
+// REST saltándose los gates del código. Aquí truena en CI en vez de en producción.
+console.log("\n▶ Candado RLS 0056 (anon/authenticated fuera de produccion)");
+{
+  const priv = async (sql) => Number((await db.query(sql)).rows[0].n);
+
+  for (const rol of ["anon", "authenticated"]) {
+    ok(
+      `${rol} NO tiene usage sobre el esquema produccion`,
+      !(await db.query(`select has_schema_privilege('${rol}','produccion','usage') as n`)).rows[0].n,
+    );
+    eq(
+      `${rol} no conserva privilegios en ninguna tabla de produccion`,
+      await priv(`select count(*)::int as n from pg_class c
+                    join pg_namespace ns on ns.oid = c.relnamespace
+                   where ns.nspname='produccion' and c.relkind in ('r','v')
+                     and c.relacl::text like '%${rol}=%'`),
+      0,
+    );
+  }
+
+  // El otro lado de la moneda: si esto se rompiera, la APP dejaría de funcionar.
+  ok(
+    "service_role conserva usage sobre produccion",
+    (await db.query(`select has_schema_privilege('service_role','produccion','usage') as n`)).rows[0].n,
+  );
+  eq(
+    "toda tabla de produccion tiene RLS habilitada",
+    await priv(`select count(*)::int as n from pg_class c
+                  join pg_namespace ns on ns.oid = c.relnamespace
+                 where ns.nspname='produccion' and c.relkind='r' and not c.relrowsecurity`),
+    0,
+  );
+}
+
 // ── RLS enforcement (run queries as the authenticated role) ──
 console.log("\n▶ RLS enforcement");
 await db.exec(`create role authenticated;`).catch(() => {});
