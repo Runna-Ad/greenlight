@@ -11,7 +11,8 @@ import {
   type TabInfo,
 } from "@/lib/sheet-sync";
 import { getCurrentUser } from "@/lib/identity";
-import { canCreateBrief } from "@/lib/roles";
+import { canCreateBrief, tracksVisibles } from "@/lib/roles";
+import type { Track } from "@/lib/vocab";
 
 type SyncConfig =
   | { kind: "apps_script"; scriptUrl: string; secret: string }
@@ -59,19 +60,30 @@ export type ProjectPreview = TabInfo & {
   }[];
 };
 
+/** Un lead DEPARTAMENTAL sólo ve/pre-visualiza las pestañas de su(s) track(s) otorgado(s)
+ *  — igual que el IMPORT (import.ts) ya lo hace, y que crearBrief. `tracksVisibles` da null
+ *  para admin/master (ven todas) y el grant del lead (1 o 2 tracks) para un lead; un lead de
+ *  AMBOS tracks las ve todas, uno de un solo track sólo el suyo. Las pestañas sin track
+ *  (control/plantillas) pasan siempre. (reap track-scope — paridad con import) */
+function tabsVisibles(tabs: TabInfo[], tv: Track[] | null): TabInfo[] {
+  if (tv === null) return tabs; // admin/master: todas
+  return tabs.filter((t) => t.track === null || tv.includes(t.track));
+}
+
 /** Step 1 — list what's in the spreadsheet, classified. No row data yet. */
 export async function listProjects(): Promise<{ tabs: TabInfo[]; error?: string }> {
   const u = await getCurrentUser();
   if (!u || !canCreateBrief(u.role)) return { tabs: [], error: "No autorizado." };
+  const tv = tracksVisibles(u.role, u.member?.tracks ?? null);
   const config = resolveConfig();
   if (config.kind === "csv") {
     // CSV export can't enumerate tabs; we can only look at the configured ones.
-    return { tabs: classifyTabs(config.tabs) };
+    return { tabs: tabsVisibles(classifyTabs(config.tabs), tv) };
   }
   try {
     const tabs = await fetchTabsViaScript(config.scriptUrl, config.secret);
     // Hidden tabs are almost always scratch work — keep them out of the list.
-    return { tabs: classifyTabs(tabs.filter((t) => !t.hidden).map((t) => t.name)) };
+    return { tabs: tabsVisibles(classifyTabs(tabs.filter((t) => !t.hidden).map((t) => t.name)), tv) };
   } catch (e) {
     return { tabs: [], error: e instanceof Error ? e.message : "Error desconocido." };
   }
@@ -87,11 +99,14 @@ export async function previewProjects(
 ): Promise<ProjectPreview[]> {
   const u = await getCurrentUser();
   if (!u || !canCreateBrief(u.role)) return [];
+  // Mismo scope por track que listProjects/import: un lead sólo pre-visualiza sus tracks
+  // (previewProjects recibe `tabs` del cliente → hay que re-filtrar, no confiar en la UI).
+  const tv = tracksVisibles(u.role, u.member?.tracks ?? null);
   const config = resolveConfig();
   const knownMap = new Map(Object.entries(known));
 
   return Promise.all(
-    tabs.map(async (info): Promise<ProjectPreview> => {
+    tabsVisibles(tabs, tv).map(async (info): Promise<ProjectPreview> => {
       const base: ProjectPreview = { ...info, nuevas: 0, actualizadas: 0, sinCambios: 0, rows: [] };
       try {
         const parsed =

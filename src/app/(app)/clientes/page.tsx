@@ -2,7 +2,9 @@ import Link from "next/link";
 import { ArrowRight, Plus, FileText, Layers, AlertTriangle, Lock } from "lucide-react";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
-import { canSee, ROLE_LABEL } from "@/lib/roles";
+import { getCurrentUser } from "@/lib/identity";
+import { canSee, tracksVisibles, ROLE_LABEL } from "@/lib/roles";
+import type { Track } from "@/lib/vocab";
 
 // Counts are LIVE from the DB — never hardcode them. The old MOCK_CLIENTS froze
 // DiDi at 4/37/3 and survived a full platform reset, showing phantom work.
@@ -34,7 +36,7 @@ type ClientCard = {
   atrasados: number;
 };
 
-async function cargarClientes(): Promise<ClientCard[]> {
+async function cargarClientes(tracks: Track[] | null): Promise<ClientCard[]> {
   if (!hasSupabase()) return [];
   const db = supabaseAdmin();
 
@@ -57,13 +59,20 @@ async function cargarClientes(): Promise<ClientCard[]> {
   // Briefs de estos clientes + todas las ideas ABIERTAS (ideas no tiene client_id;
   // se mapea vía brief_id → briefs.client_id). Cota de 5000 en ideas abiertas
   // (deuda: paginar/agregar en SQL si el volumen abierto llega a crecer tanto).
+  // Un lead DEPARTAMENTAL sólo cuenta el trabajo (ideas) de su(s) track(s) otorgado(s):
+  // tracksVisibles da null=admin/master (cuentan todo) o el grant del lead (1 o 2 tracks) —
+  // un lead de AMBOS tracks cuenta ambos, uno de un solo track sólo el suyo. Sin esto, los
+  // conteos abiertos/atrasados sumaban AMBOS tracks y un lead de un solo track veía cuánto
+  // del OTRO tenía cada cliente. Los briefs NO llevan track (un brief puede tener trabajo de
+  // cualquier track) → su cuenta queda a nivel cliente. (reap track-scope)
+  let ideasQ = db
+    .from("ideas")
+    .select("brief_id, due_date, status")
+    .in("status", OPEN_IDEA_STATES);
+  if (tracks) ideasQ = ideasQ.in("track", tracks);
   const [{ data: briefsRaw }, { data: ideasRaw }] = await Promise.all([
     db.from("briefs").select("id, client_id, status").in("client_id", clientIds),
-    db
-      .from("ideas")
-      .select("brief_id, due_date, status")
-      .in("status", OPEN_IDEA_STATES)
-      .limit(5000),
+    ideasQ.limit(5000),
   ]);
   const briefs = (briefsRaw ?? []) as { id: string; client_id: string; status: string }[];
   const ideas = (ideasRaw ?? []) as {
@@ -116,7 +125,10 @@ export default async function ClientesPage() {
     );
   }
 
-  const clientes = await cargarClientes();
+  // Scope por track del que MIRA: admin/master → null (todos), lead → su grant (1 o 2).
+  const u = await getCurrentUser();
+  const tracksVis = tracksVisibles(role, u?.member?.tracks ?? null);
+  const clientes = await cargarClientes(tracksVis);
 
   return (
     <div className="mx-auto max-w-5xl">
