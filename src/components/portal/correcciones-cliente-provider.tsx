@@ -63,6 +63,10 @@ export function CorreccionesClienteProvider({
       esRevisor: false,
       esCliente: editable,
       esEquipo: false,
+      // El cliente no arma "rondas en borrador": lo que fija lo manda él con su propio
+      // botón, y hasta entonces sólo lo ve él (sus pins son suyos). Nunca es borrador
+      // en el sentido interno (lead armando una ronda que el especialista no debe ver).
+      borrador: false,
       correcciones: cambios,
       revisiones,
       pendiente,

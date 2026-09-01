@@ -33,6 +33,18 @@ export type Ctx = {
   esCliente: boolean;
   /** Equipo interno (puede marcar atendido como especialista). */
   esEquipo: boolean;
+  /**
+   * BORRADOR: el lead sigue ARMANDO la ronda y aún no la ha mandado (la tarea está en
+   * `under_review`). Es la etapa que le faltaba al ciclo de vida de una corrección
+   * —borrador → enviada → atendida → confirmada—: sin ella, una corrección recién
+   * fijada nacía como `open` ("Sin atender") y arrastraba dos problemas (Pedro
+   * 2026-09-01): al lead se le ofrecían Confirmar y "Revisar con H.Ü.E" cuando todavía
+   * no hay nada que confirmar ni que revisar, y el ESPECIALISTA ya las veía con sólo
+   * recargar, antes de que se las mandaran.
+   * No hace falta columna nueva: el envío ES la transición de estado
+   * (`rpc_task_send_corrections`: under_review → in_corrections), que es la única puerta.
+   */
+  borrador: boolean;
   correcciones: Correccion[];
   /** Cambios de rondas PASADAS ya aplicados por el equipo (read-only). Sólo el portal
    *  los usa: al re-revisar, el cliente ve DÓNDE y QUÉ se cambió. Vacío en el interno. */
@@ -68,6 +80,7 @@ export function CorreccionesProvider({
   marcaColor,
   esRevisor,
   esEquipo,
+  borrador,
   correcciones,
   children,
 }: {
@@ -76,6 +89,8 @@ export function CorreccionesProvider({
   marcaColor: string | null;
   esRevisor: boolean;
   esEquipo: boolean;
+  /** El lead sigue armando la ronda (tarea en `under_review`): aún no se mandó. */
+  borrador: boolean;
   /** Correcciones internas + cambios del cliente ENVIADOS (con `cliente:true`) —
    *  ambos de primera clase, mismo lifecycle/panel/gate/rondas (0038). */
   correcciones: Correccion[];
@@ -144,6 +159,7 @@ export function CorreccionesProvider({
       clienteSlug,
       marcaColor,
       esRevisor,
+      borrador,
       esCliente: false,
       esEquipo,
       correcciones,
@@ -215,7 +231,7 @@ export function CorreccionesProvider({
           toast.success("Sugerencia aplicada");
         }),
     }),
-    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, correcciones, pendiente, veredictos, validando, validar, run, setWsPlanos, setWsEstatico, bumpReseed],
+    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, borrador, correcciones, pendiente, veredictos, validando, validar, run, setWsPlanos, setWsEstatico, bumpReseed],
   );
 
   return <CorreccionesCtx.Provider value={value}>{children}</CorreccionesCtx.Provider>;

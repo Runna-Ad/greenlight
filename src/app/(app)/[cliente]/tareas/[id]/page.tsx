@@ -385,10 +385,24 @@ export default async function TareaPage({
   const esEstatico = plantilla === "estatico";
   const esEquipo = role !== "client";
   const puedeEditar = canOverrideStatus(role);
+
+  // ── Ronda en BORRADOR ────────────────────────────────────────────────────────
+  // Mientras la tarea está en `under_review`, el lead está ARMANDO la ronda: lo que fija
+  // todavía no se ha mandado (mandar = `rpc_task_send_corrections`, under_review →
+  // in_corrections, la única puerta). Dos consecuencias:
+  //   1) al lead no se le ofrece Confirmar ni "Revisar con H.Ü.E" (no hay nada hecho aún);
+  //   2) el ESPECIALISTA no las ve. Antes las veía con sólo recargar, ANTES de que se las
+  //      mandaran — el lead pensaba en privado y el otro ya estaba leyendo (Pedro 2026-09-01).
+  // Los cambios del CLIENTE no entran aquí: llegan ya enviados (ronda not null).
+  const borrador = idea.status === "under_review";
+  const correccionesVisibles =
+    borrador && !puedeEditar
+      ? correcciones.filter((c) => c.cliente) // sólo lo que el cliente ya mandó
+      : correcciones;
   // El panel de correcciones + los cambios del cliente viven en una COLUMNA DERECHA
   // fija, junto al documento (antes iban al fondo / arriba). Sólo se arma la rejilla
   // de 2 columnas cuando hay algo que mostrar; si no, el documento va a todo el ancho.
-  const mostrarPanel = esEquipo && correcciones.length > 0;
+  const mostrarPanel = esEquipo && correccionesVisibles.length > 0;
 
   const notaG = notaGlobal(idea.tipo_asset);
   const notaPlaceholder = notaG
@@ -435,7 +449,8 @@ export default async function TareaPage({
         marcaColor={marcaColor}
         esRevisor={canOverrideStatus(role)}
         esEquipo={esEquipo}
-        correcciones={correcciones}
+        borrador={borrador}
+        correcciones={correccionesVisibles}
       >
         {/* Un solo flujo. Los DOS menús son PERSISTENTES (Pedro): el de arriba
             (sub-header) se queda pegado arriba TODA la página — como el de abajo

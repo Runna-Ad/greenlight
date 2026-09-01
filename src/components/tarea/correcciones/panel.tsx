@@ -92,13 +92,16 @@ export function PanelCorrecciones() {
         </h2>
         <p className="mt-1 text-[11.5px] text-muted-foreground">
           {ctx.esRevisor
-            ? "Confirma cada una al revisarla; la tarea se aprueba cuando no quede ninguna en rojo."
+            ? ctx.borrador
+              // Ronda en BORRADOR: todavía no se manda nada. Nada que confirmar ni revisar.
+              ? "Anota los cambios que quieras y mándalos cuando termines: hasta entonces sólo los ves tú."
+              : "Confirma cada una al revisarla; la tarea se aprueba cuando no quede ninguna en rojo."
             : "Atiende cada cambio y márcalo; luego devuelve la tarea a revisión."}
         </p>
         {/* H.Ü.E revisa cada cambio de la ronda y da dictamen + sugerencia — ADVISORY,
             ayuda a revisar; el lead decide. Disponible siempre que haya cambios que
             revisar (no sólo mientras quedan sin confirmar). */}
-        {ctx.esRevisor && !esCopies && !esLegal && (
+        {ctx.esRevisor && !ctx.borrador && !esCopies && !esLegal && (
           <button
             type="button"
             disabled={ctx.validando}
@@ -163,6 +166,7 @@ export function PanelCorrecciones() {
                           <TarjetaCompacta
                             key={c.id}
                             c={c}
+                            borrador={ctx.borrador}
                             veredicto={ctx.veredictos.get(c.id)}
                             onExpandir={() => fijarExpandido(c.id, true)}
                           />
@@ -192,7 +196,7 @@ export function PanelCorrecciones() {
                           className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
                           style={{ background: PILL[c.estado] }}
                         >
-                          {ETIQUETA[c.estado]}
+                          {ctx.borrador && c.estado === "open" ? "Por enviar" : ETIQUETA[c.estado]}
                         </span>
                         {/* Cualquier tarjeta expandida se puede volver a compactar. */}
                         <button
@@ -258,7 +262,7 @@ export function PanelCorrecciones() {
                         )}
                         {/* Revisor: confirma cualquiera sin cerrar; reabre lo que ya
                             tocó (ámbar o verde) — un confirm por error tiene vuelta. */}
-                        {ctx.esRevisor && c.estado !== "closed" && (
+                        {ctx.esRevisor && !ctx.borrador && c.estado !== "closed" && (
                           <BtnAccion disabled={ctx.pendiente} tone="go" onClick={() => ctx.marcar(c.id, "closed")}>
                             Confirmar
                           </BtnAccion>
@@ -321,10 +325,13 @@ export function PanelCorrecciones() {
  * Es el formato "encogido" del panel para que 30+ cambios no lo hagan gigante (Pedro).
  */
 function TarjetaCompacta({
+  borrador,
   c,
   veredicto,
   onExpandir,
 }: {
+  /** Misma etiqueta que la tarjeta expandida (ver panel): en borrador, "Por enviar". */
+  borrador: boolean;
   c: Correccion;
   veredicto: VeredictoCambio | undefined;
   onExpandir: () => void;
@@ -345,7 +352,7 @@ function TarjetaCompacta({
         className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
         style={{ background: PILL[c.estado] }}
       >
-        {ETIQUETA[c.estado]}
+        {borrador && c.estado === "open" ? "Por enviar" : ETIQUETA[c.estado]}
       </span>
       <ChevronDown className="size-3.5 -rotate-90 text-muted-foreground" />
     </button>
