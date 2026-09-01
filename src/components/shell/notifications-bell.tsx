@@ -23,6 +23,21 @@ export function NotificationsBell({ initialCount }: { initialCount: number }) {
     startTransition(async () => setAvisos(await listAvisos()));
   };
 
+  /** Abrir un aviso lo marca LEÍDO: si hiciste clic, ya lo viste — obligar a
+   *  "marcar todas" para que baje el contador es trabajo que la app puede hacer sola.
+   *  Optimista: el contador y el resaltado bajan al instante y la navegación no espera
+   *  al servidor (si fallara, el aviso sigue sin leer, que es el lado seguro). */
+  const abrirAviso = (a: Aviso) => {
+    if (a.read_at) return;
+    setCount((n) => Math.max(0, n - 1));
+    setAvisos((prev) =>
+      prev?.map((x) => (x.id === a.id ? { ...x, read_at: new Date().toISOString() } : x)) ?? null,
+    );
+    startTransition(async () => {
+      await marcarLeidas([a.id]);
+    });
+  };
+
   const leerTodas = () =>
     startTransition(async () => {
       await marcarLeidas();
@@ -92,7 +107,7 @@ export function NotificationsBell({ initialCount }: { initialCount: number }) {
                 }`}
               >
                 {a.url ? (
-                  <Link href={a.url} className="block hover:opacity-80">
+                  <Link href={a.url} className="block hover:opacity-80" onClick={() => abrirAviso(a)}>
                     {cuerpo}
                   </Link>
                 ) : (

@@ -260,5 +260,26 @@ export function nuevoEstatico(orden: number) {
   };
 }
 
-/** Estados en los que el cuerpo se congela para quien no es lead. */
+/** Estados TERMINALES: el trabajo ya salió de producción. */
 export const ESTADOS_CERRADOS: AssetStatus[] = ["completed", "published", "delivered"];
+
+/**
+ * Estados en los que el cuerpo se CONGELA para quien no es lead.
+ *
+ * = los terminales + `under_review`. Entregar a revisión es soltar la pluma: mientras
+ * el lead revisa, el especialista no sigue editando — si no, el lead revisa un blanco
+ * móvil y las correcciones que fija apuntan a un texto que ya cambió (Pedro 2026-09-01).
+ * El LEAD sí puede editar (canOverrideStatus): es su turno.
+ * Vuelve a estar editable al mandarlo a correcciones (in_corrections), que es cuando
+ * la tarea regresa a la cancha del especialista.
+ */
+export const ESTADOS_SOLO_LECTURA: AssetStatus[] = [...ESTADOS_CERRADOS, "under_review"];
+
+/** Por qué está congelada, en palabras del usuario. Los dos casos de
+ *  `ESTADOS_SOLO_LECTURA` no son lo mismo: "en revisión" es temporal y vuelve sola;
+ *  "cerrada" es terminal y necesita que un lead la reabra. */
+export function motivoSoloLectura(status: AssetStatus): string {
+  return status === "under_review"
+    ? "Está en revisión con el lead — no se edita hasta que te la devuelva."
+    : "Esta tarea ya está cerrada. Pídele a un lead que la reabra.";
+}

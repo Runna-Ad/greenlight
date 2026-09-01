@@ -8,7 +8,7 @@ import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { getCurrentUser } from "@/lib/identity";
 import { assertCanActOnTask, assertCanActOnRow } from "@/lib/auth/task-scope";
-import { ESTADOS_CERRADOS } from "@/lib/plantilla";
+import { ESTADOS_SOLO_LECTURA, motivoSoloLectura } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
 import { combinarConsideraciones } from "@/lib/consideraciones";
 import type { AssetStatus } from "@/lib/brand";
@@ -96,8 +96,8 @@ export async function guardarIntake(
   if (!idea) return { ok: false, error: "La tarea ya no existe." };
 
   const status = idea.status as AssetStatus;
-  if (ESTADOS_CERRADOS.includes(status) && !canOverrideStatus(role)) {
-    return { ok: false, error: "Esta tarea ya está cerrada. Pídele a un lead que la reabra." };
+  if (ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role)) {
+    return { ok: false, error: motivoSoloLectura(status) };
   }
 
   // Se guarda SIN recortar (como guardarCampo): el valor que el cliente recuerda
@@ -151,8 +151,8 @@ export async function guardarDuraciones(
     .from("ideas").select("status").eq("id", ideaId).maybeSingle();
   if (!idea) return { ok: false, error: "La tarea ya no existe." };
   const status = (idea as { status: AssetStatus }).status;
-  if (ESTADOS_CERRADOS.includes(status) && !canOverrideStatus(role)) {
-    return { ok: false, error: "Esta tarea ya está cerrada. Pídele a un lead que la reabra." };
+  if (ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role)) {
+    return { ok: false, error: motivoSoloLectura(status) };
   }
 
   const { error } = await db.rpc("rpc_set_duraciones", {
@@ -206,8 +206,8 @@ export async function guardarConsideraciones(
   if (!idea) return { ok: false, error: "La tarea ya no existe." };
 
   const status = idea.status as AssetStatus;
-  if (ESTADOS_CERRADOS.includes(status) && !canOverrideStatus(role)) {
-    return { ok: false, error: "Esta tarea ya está cerrada. Pídele a un lead que la reabra." };
+  if (ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role)) {
+    return { ok: false, error: motivoSoloLectura(status) };
   }
 
   const fila = idea as { comentarios_creativo: string | null; peloteo_raw: string | null };
@@ -288,8 +288,8 @@ export async function guardarSellingPoints(
   if (!idea) return { ok: false, error: "La tarea ya no existe." };
 
   const status = idea.status as AssetStatus;
-  if (ESTADOS_CERRADOS.includes(status) && !canOverrideStatus(role)) {
-    return { ok: false, error: "Esta tarea ya está cerrada. Pídele a un lead que la reabra." };
+  if (ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role)) {
+    return { ok: false, error: motivoSoloLectura(status) };
   }
 
   // La columna puede ser NULL (creada a mano sin selling points), [] (import sin
@@ -459,8 +459,8 @@ export async function guardarCampo(
   const { data: idea } = await db
     .from("ideas").select("status").eq("id", ideaId).maybeSingle();
   const status = idea?.status as AssetStatus | undefined;
-  if (status && ESTADOS_CERRADOS.includes(status) && !canOverrideStatus(role)) {
-    return { ok: false, error: "Esta tarea ya está cerrada. Pídele a un lead que la reabra." };
+  if (status && ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role)) {
+    return { ok: false, error: motivoSoloLectura(status) };
   }
 
   const limpio = valorNuevo?.trim() ? valorNuevo : null;

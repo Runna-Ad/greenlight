@@ -101,6 +101,14 @@ export function AccionesTarea({
     }
     const msg = TOAST_EXTRA[a.verb] ?? TOAST_VERBO[a.verb as TaskVerb];
     if (msg) toast.success(msg);
+    // Mandar a revisión es SOLTAR la tarea: pasa a la cancha del lead y se congela
+    // para el especialista (ESTADOS_SOLO_LECTURA). Quedarse en una página que ya no
+    // se puede editar sólo invita a pelearse con ella; se vuelve al tablero, que es
+    // donde está el resto de su trabajo. (Pedro 2026-09-01)
+    if (a.verb === "submit_review") {
+      router.push(`/${clienteSlug}/tablero`);
+      return;
+    }
     router.refresh();
   };
 

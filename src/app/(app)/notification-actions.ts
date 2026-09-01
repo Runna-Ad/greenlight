@@ -39,16 +39,58 @@ async function misBuzones(): Promise<string | null> {
 export async function listAvisos(limit = 30): Promise<Aviso[]> {
   const buzones = await misBuzones();
   if (!buzones || !hasSupabase()) return [];
+  const u = await getCurrentUser();
 
-  const { data } = await supabaseAdmin()
+  const db = supabaseAdmin();
+  const { data } = await db
     .from("notifications")
-    .select("id, type, title, body, url, read_at, created_at")
+    .select("id, type, title, body, url, read_at, created_at, entity_type, entity_id")
     .or(buzones)
     .order("created_at", { ascending: false })
     .limit(limit)
-    .returns<Aviso[]>();
+    .returns<(Aviso & { entity_type: string | null; entity_id: string | null })[]>();
 
-  return data ?? [];
+  const avisos = data ?? [];
+
+  // ── El aviso lleva A LA TAREA, no al tablero ────────────────────────────────
+  // El trigger guarda `url = /{slug}/tablero` para TODOS (misma línea en 4 migraciones),
+  // aunque ya guarda `entity_id` = la tarea. Resultado: te avisan de una tarea concreta
+  // y aterrizas en el tablero a buscarla (Pedro 2026-09-01).
+  // Se resuelve al LEER en vez de con una migración: así también se arreglan los avisos
+  // que YA estaban guardados, no sólo los nuevos.
+  // El CLIENTE queda fuera a propósito: su aviso apunta al PORTAL y no entra a /tareas.
+  const esCliente = u?.role === "client";
+  const ideaIds = esCliente
+    ? []
+    : [...new Set(avisos.filter((a) => a.entity_type === "idea" && a.entity_id).map((a) => a.entity_id!))];
+
+  if (!ideaIds.length) return avisos.map(({ ...a }) => a);
+
+  // slug del cliente por tarea, en lote (idea → brief → client). Sin N+1.
+  const { data: ideas } = await db
+    .from("ideas")
+    .select("id, briefs(clients(slug))")
+    .in("id", ideaIds)
+    .is("deleted_at", null); // una tarea en la papelera no tiene a dónde llevar
+
+  const slugPorIdea = new Map<string, string>();
+  for (const fila of (ideas ?? []) as unknown as {
+    id: string;
+    briefs: { clients: { slug: string } | { slug: string }[] | null } | { clients: unknown }[] | null;
+  }[]) {
+    // El embed de PostgREST llega como objeto en muchos-a-uno, pero los tipos generados
+    // lo declaran array: se aceptan las dos formas (si falla la conjetura, el aviso
+    // simplemente cae a su `url` de siempre — degrada, no rompe).
+    const brief = Array.isArray(fila.briefs) ? fila.briefs[0] : fila.briefs;
+    const cliente = brief && "clients" in brief ? brief.clients : null;
+    const slug = (Array.isArray(cliente) ? cliente[0] : cliente)?.slug;
+    if (slug) slugPorIdea.set(fila.id, slug);
+  }
+
+  return avisos.map(({ entity_type, entity_id, ...a }) => {
+    const slug = entity_type === "idea" && entity_id ? slugPorIdea.get(entity_id) : undefined;
+    return slug ? { ...a, url: `/${slug}/tareas/${entity_id}` } : a;
+  });
 }
 
 export async function countSinLeer(): Promise<number> {

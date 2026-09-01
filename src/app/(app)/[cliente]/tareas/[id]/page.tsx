@@ -11,7 +11,7 @@ import {
 } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
 import { type AssetStatus } from "@/lib/brand";
-import { ESTADOS_CERRADOS, plantillaPara, notaGlobal, LEGAL_SECONDS } from "@/lib/plantilla";
+import { ESTADOS_SOLO_LECTURA, plantillaPara, notaGlobal, LEGAL_SECONDS } from "@/lib/plantilla";
 import { posicionEnBundle } from "@/lib/bundle";
 import { cargarBundle } from "@/lib/bundle-data";
 import { CorreccionesProvider } from "@/components/tarea/correcciones/contexto";
@@ -380,7 +380,9 @@ export default async function TareaPage({
   ];
   const abiertasN = correcciones.filter((c) => c.estado === "open").length;
 
-  const cerrada = ESTADOS_CERRADOS.includes(idea.status);
+  // Congelada para el especialista: terminales + `under_review` (mientras el lead
+  // revisa, no se sigue editando). El lead conserva la pluma. (Pedro 2026-09-01)
+  const cerrada = ESTADOS_SOLO_LECTURA.includes(idea.status);
   const soloLectura = cerrada && !canOverrideStatus(role);
   const esEstatico = plantilla === "estatico";
   const esEquipo = role !== "client";
