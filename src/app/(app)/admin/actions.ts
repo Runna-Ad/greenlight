@@ -36,7 +36,7 @@ export async function listarEquipo(): Promise<MiembroRow[]> {
 
   const { data: miembros } = await db
     .from("track_members")
-    .select("id, name, track, lead_tracks, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
+    .select("id, name, track, tracks, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
     .order("track", { ascending: true })
     .order("sort_order", { ascending: true });
 
@@ -68,7 +68,7 @@ const CAMPOS_EDITABLES = new Set([
   "name",
   "color",
   "track",
-  "lead_tracks",
+  "tracks",
   "role",
   "email",
   "slack_user_id",
@@ -119,12 +119,12 @@ export async function guardarMiembro(
     // Los campos de texto opcionales se normalizan a null cuando quedan vacíos.
     if ((k === "email" || k === "slack_user_id") && typeof v === "string") {
       limpio[k] = v.trim() || null;
-    } else if (k === "lead_tracks") {
+    } else if (k === "tracks") {
       // Sanea el grant: array de tracks válidos, sin duplicados; vacío → null.
       const ts = Array.isArray(v)
         ? [...new Set(v.filter((x): x is "real" | "normal" => TRACKS_VALIDOS.has(x as string)))]
         : [];
-      limpio.lead_tracks = ts.length ? ts : null;
+      limpio.tracks = ts.length ? ts : null;
     } else {
       limpio[k] = v;
     }
@@ -145,15 +145,16 @@ export async function guardarMiembro(
     limpio.track = "normal";
   }
 
-  // Grant multi-track (lead_tracks): EXCLUSIVO del rol lead. Coherencia:
-  //  - global (admin/master) o creative → sin grant (lead_tracks = null; creative es
-  //    single-track por su `track`).
-  //  - lead con grant → su `track` HOME = el primero del grant (mantiene agrupación/orden
-  //    en Equipo y que siempre tenga un track home ∈ su alcance).
-  if (rolEfectivo !== "lead") {
-    limpio.lead_tracks = null;
-  } else if (Array.isArray(limpio.lead_tracks) && limpio.lead_tracks.length) {
-    limpio.track = (limpio.lead_tracks as string[])[0];
+  // Grant multi-track (`tracks`, 0059): ahora de CUALQUIER doer — lead o creative. Un
+  // especialista que trabaja Real y Normal ya no queda atado a uno (Pedro 2026-09-01).
+  // Coherencia:
+  //  - global (admin/master) → sin grant: no viven en un track, lo miran todo.
+  //  - doer con grant → su `track` HOME = el primero del grant, para que siempre tenga un
+  //    track home DENTRO de su alcance (agrupa y ordena Equipo, y evita un home huérfano).
+  if (esGlobal) {
+    limpio.tracks = null;
+  } else if (Array.isArray(limpio.tracks) && limpio.tracks.length) {
+    limpio.track = (limpio.tracks as string[])[0];
   }
 
   const { error } = await db.from("track_members").update(limpio).eq("id", id);
@@ -319,7 +320,7 @@ export async function crearMiembro(data: {
       es_lead: esLeadDeRol(rolNuevo),
       sort_order,
     })
-    .select("id, name, track, lead_tracks, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
+    .select("id, name, track, tracks, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
     .single();
   if (error) {
     // unique (track, name) — nombre repetido dentro del mismo track.

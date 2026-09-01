@@ -36,16 +36,19 @@ export type CurrentMember = {
 };
 
 /**
- * El alcance efectivo de tracks de un miembro. Una sola fuente para que identity y
- * soy coincidan. Un lead puede tener grant multi-track (`lead_tracks`); si no, cae a
- * su track home. Creative = su único track. Admin/master (track null) = [] (globales).
+ * El alcance efectivo de tracks de un miembro. Una sola fuente para que identity y soy
+ * coincidan. El grant (`tracks`, 0059) vale para CUALQUIER doer — lead o creative: un
+ * especialista que trabaja Real y Normal ya no queda atado a uno solo (Pedro
+ * 2026-09-01). Sin grant se cae al track HOME. Admin/master (track null) = [] (globales,
+ * ver `tracksVisibles`). Antes esto exigía `role === "lead"`, que era lo único que dejaba
+ * fuera a los creativos.
  */
 function tracksEfectivos(
   role: string | null,
   track: "real" | "normal" | null,
-  leadTracks: ("real" | "normal")[] | null,
+  grant: ("real" | "normal")[] | null,
 ): Track[] {
-  if (role === "lead" && leadTracks && leadTracks.length) return [...new Set(leadTracks)];
+  if (grant && grant.length) return [...new Set(grant)];
   return track ? [track] : [];
 }
 
@@ -114,7 +117,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   if (appRoleToViewRole(p.role) !== "client") {
     const { data: m } = await admin
       .from("track_members")
-      .select("id, name, color, track, lead_tracks, notify_email, notify_slack")
+      .select("id, name, color, track, tracks, notify_email, notify_slack")
       .eq("profile_id", user.id)
       .eq("active", true)
       .maybeSingle();
@@ -124,7 +127,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
         name: string;
         color: string;
         track: "real" | "normal" | null;
-        lead_tracks: ("real" | "normal")[] | null;
+        tracks: ("real" | "normal")[] | null;
         notify_email: boolean;
         notify_slack: boolean;
       };
@@ -133,7 +136,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
         name: mm.name,
         color: mm.color,
         track: mm.track,
-        tracks: tracksEfectivos(p.role, mm.track, mm.lead_tracks),
+        tracks: tracksEfectivos(p.role, mm.track, mm.tracks),
         role: p.role, // authorship role = the profile's real role
         notify_email: mm.notify_email,
         notify_slack: mm.notify_slack,

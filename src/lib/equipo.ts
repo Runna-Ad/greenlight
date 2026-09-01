@@ -14,7 +14,8 @@ export type MiembroRow = {
   track: "real" | "normal" | null;
   /** Sólo rol lead: track(s) que puede tocar (grant multi-track). null/[] = usa el track
    *  home. El [0] es el home cuando hay grant. Ignorado para creative/admin/master. */
-  lead_tracks: ("real" | "normal")[] | null;
+  /** Tracks OTORGADOS (lead o creative, 0059). null/vacío = usa el track HOME. */
+  tracks: ("real" | "normal")[] | null;
   color: string;
   role: string;
   email: string | null;

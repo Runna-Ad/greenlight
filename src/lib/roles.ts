@@ -152,13 +152,6 @@ export const canAssignAdmins = (role: ViewRole): boolean => role === "master";
 export const canHue = (role: ViewRole): boolean => role === "master";
 
 /**
- * Qué EQUIPOS (tracks) ve un rol en Performance/Evaluación. `null` = todos.
- * Admin y Master ven todos los equipos; el Lead sólo los SUYOS — su alcance efectivo
- * de tracks (`member.tracks`/`soy.tracks`), que con el grant multi-track puede ser uno
- * o ambos. Sin identidad (tracks vacío) el lead no ve a nadie — mejor vacío honesto que
- * enseñar a todos por error.
- */
-/**
  * ¿Este miembro puede ser el LEAD de una tarea de `trackTarea`?
  *
  * FUENTE ÚNICA — la usan el gate del SERVIDOR (`asignarTarea`) y los DOS pickers
@@ -175,24 +168,38 @@ export const canHue = (role: ViewRole): boolean => role === "master";
  *  · `creative` → nunca lead (va de especialista); inactivos, nunca.
  */
 export function puedeSerLead(
-  m: { role: string | null; track: Track | null; active?: boolean },
+  m: { role: string | null; track: Track | null; tracks?: Track[] | null; active?: boolean },
   trackTarea: Track | null,
 ): boolean {
   if (m.active === false) return false;
   if (m.role === "admin" || m.role === "master") return true; // globales, sin track
-  return m.role === "lead" && m.track === trackTarea;
+  if (m.role !== "lead") return false;
+  // Mismo grant multi-track que los especialistas (0059): pertenencia, no igualdad.
+  const suyos = m.tracks && m.tracks.length ? m.tracks : m.track ? [m.track] : [];
+  return trackTarea !== null && suyos.includes(trackTarea);
 }
 
 /** ¿Puede ser ESPECIALISTA (doer) de una tarea de `trackTarea`? Sólo `creative` de su
  *  track — los globales llevan, no ejecutan. Espejo de `puedeSerLead`. */
 export function puedeSerEspecialista(
-  m: { role: string | null; track: Track | null; active?: boolean },
+  m: { role: string | null; track: Track | null; tracks?: Track[] | null; active?: boolean },
   trackTarea: Track | null,
 ): boolean {
   if (m.active === false) return false;
-  return m.role === "creative" && m.track === trackTarea;
+  if (m.role !== "creative") return false;
+  // PERTENENCIA, no igualdad: un creativo puede tener grant de varios tracks (0059).
+  // Sin grant se cae a su track HOME — mismo comportamiento que antes.
+  const suyos = m.tracks && m.tracks.length ? m.tracks : m.track ? [m.track] : [];
+  return trackTarea !== null && suyos.includes(trackTarea);
 }
 
+/**
+ * Qué EQUIPOS (tracks) ve un rol en Performance/Evaluación. `null` = todos.
+ * Admin y Master ven todos los equipos; el Lead sólo los SUYOS — su alcance efectivo
+ * de tracks (`member.tracks`/`soy.tracks`), que con el grant multi-track puede ser uno
+ * o ambos. Sin identidad (tracks vacío) el lead no ve a nadie — mejor vacío honesto que
+ * enseñar a todos por error.
+ */
 export function tracksVisibles(role: ViewRole, soyTracks: Track[] | null): Track[] | null {
   if (esNivelAdmin(role)) return null;
   if (role === "lead") return soyTracks && soyTracks.length ? soyTracks : [];

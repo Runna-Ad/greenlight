@@ -1126,6 +1126,19 @@ console.log("\n▶ evaluarEquipo() — Resolución + Eficiencia");
   ok("creative NO es Especialista de otro track", !puedeSerEspecialista(crea, "normal"));
   ok("un admin NO ejecuta como Especialista (lleva, no produce)", !puedeSerEspecialista(admin, "real"));
   ok("un lead NO es Especialista", !puedeSerEspecialista(lead, "real"));
+
+  // Grant multi-track (0059): vale para lead Y creative — pertenencia, no igualdad.
+  const creaAmbos = { role: "creative", track: "real", tracks: ["real", "normal"], active: true };
+  const leadAmbos = { role: "lead", track: "real", tracks: ["real", "normal"], active: true };
+  ok("un especialista con grant de AMBOS es Especialista en Real", puedeSerEspecialista(creaAmbos, "real"));
+  ok("…y también en Normal, aunque su home sea Real", puedeSerEspecialista(creaAmbos, "normal"));
+  ok("un lead con grant de ambos es Lead en el track que NO es su home", puedeSerLead(leadAmbos, "normal"));
+  ok("sin grant se cae al track HOME (comportamiento de siempre)",
+     puedeSerEspecialista({ role: "creative", track: "real", tracks: null, active: true }, "real"));
+  ok("…y sigue sin alcanzar el otro track", 
+     !puedeSerEspecialista({ role: "creative", track: "real", tracks: [], active: true }, "normal"));
+  ok("un grant no salva a un miembro INACTIVO",
+     !puedeSerEspecialista({ ...creaAmbos, active: false }, "normal"));
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

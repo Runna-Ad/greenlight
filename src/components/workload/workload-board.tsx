@@ -9,7 +9,12 @@ import { GaugeCircle } from "lucide-react";
 export type WorkloadMember = {
   id: string;
   name: string;
+  /** Track HOME (agrupa y ordena). Para lo que la persona ABARCA, usa `tracks`. */
   track: "real" | "normal";
+  /** Tracks a los que pertenece (0059). Una persona puede ser de uno o de ambos. */
+  tracks: ("real" | "normal")[];
+  /** Rol real (lead / creative) — se muestra como pastilla junto a los tracks. */
+  role: string;
   color: string;
   es_lead: boolean;
   total: number;
@@ -35,38 +40,31 @@ export function WorkloadBoard({ miembros }: { miembros: WorkloadMember[] }) {
   // La barra se escala contra la persona MÁS cargada, para comparar de un vistazo.
   const maxTotal = Math.max(1, ...miembros.map((m) => m.total));
   const totalActivo = miembros.reduce((n, m) => n + m.total, 0);
-  const grupos = [
-    { titulo: "Equipo Real", track: "real" as const },
-    { titulo: "Equipo Normal", track: "normal" as const },
-  ];
+
+  // UNA fila por persona, con sus tracks como pastillas — ya NO secciones por equipo
+  // (Pedro 2026-09-01). Desde que alguien puede ser de VARIOS tracks, agrupar obliga a
+  // elegir entre duplicar a la persona (y que su carga se lea dos veces) o esconder la
+  // mitad de su realidad. La pertenencia es un ATRIBUTO suyo, no el eje de la lista.
+  const gente = [...miembros].sort((a, b) => b.total - a.total);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
         {totalActivo} tarea{totalActivo === 1 ? "" : "s"} activa{totalActivo === 1 ? "" : "s"} repartida
         {totalActivo === 1 ? "" : "s"} entre {conCarga.length} persona{conCarga.length === 1 ? "" : "s"}.
       </p>
 
-      {grupos.map((g) => {
-        // Ordenadas por carga desc: la persona más cargada, arriba.
-        const gente = miembros
-          .filter((m) => m.track === g.track)
-          .sort((a, b) => b.total - a.total);
-        if (!gente.length) return null;
-        return (
-          <section key={g.track}>
-            <p className="mb-2 gl-eyebrow">{g.titulo}</p>
-            <div className="space-y-2">
-              {gente.map((m) => (
-                <MemberRow key={m.id} m={m} maxTotal={maxTotal} />
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      <div className="space-y-2">
+        {gente.map((m) => (
+          <MemberRow key={m.id} m={m} maxTotal={maxTotal} />
+        ))}
+      </div>
     </div>
   );
 }
+
+const TRACK_LABEL: Record<string, string> = { real: "Real", normal: "Normal" };
+const ROL_LABEL: Record<string, string> = { lead: "Lead", creative: "Especialista" };
 
 function MemberRow({ m, maxTotal }: { m: WorkloadMember; maxTotal: number }) {
   const cargado = m.total >= UMBRAL;
@@ -83,9 +81,23 @@ function MemberRow({ m, maxTotal }: { m: WorkloadMember; maxTotal: number }) {
         </span>
 
         <div className="min-w-0 flex-1">
-          <span className="flex items-center gap-1 text-sm font-medium text-foreground">
-            {m.es_lead && <Crown className="size-3 text-muted-foreground" />}
+          <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground">
+            {m.es_lead && <Crown className="size-3 shrink-0 text-muted-foreground" />}
             {m.name}
+            {/* Rol + tracks como pastillas: la persona se lee entera en su fila, sin
+                depender de bajo qué encabezado esté. */}
+            <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+              {ROL_LABEL[m.role] ?? m.role}
+            </span>
+            {m.tracks.map((t) => (
+              <span
+                key={t}
+                className="rounded-full border border-border px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                title={`Trabaja en el equipo ${TRACK_LABEL[t] ?? t}`}
+              >
+                {TRACK_LABEL[t] ?? t}
+              </span>
+            ))}
           </span>
           {/* Barra de carga: primaria normal, ámbar oscuro si va cargado. */}
           <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-secondary" aria-hidden>

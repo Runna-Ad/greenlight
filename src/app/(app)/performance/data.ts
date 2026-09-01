@@ -35,16 +35,17 @@ export async function cargarWorkload(tracks: Track[] | null): Promise<WorkloadMe
   // Mismo scope por track que cargarEvaluacion: `null` = todos (admin/master); un lead
   // ve sólo su(s) track(s) (grant multi-track). Antes NO se acotaba → un lead veía la
   // carga del OTRO equipo. (reap C4)
-  let qMiembros = db
+  const qMiembros = db
     .from("track_members")
-    .select("id, name, track, color, es_lead")
+    .select("id, name, track, tracks, role, color, es_lead")
     .eq("active", true)
     // Sólo doers (lead/creative): admin/master son globales, sin track ni carga
-    // asignable — no entran al Workload particionado por equipo. (Pedro 2026-08-21.)
+    // asignable — no entran al Workload. (Pedro 2026-08-21.)
     .in("role", ["lead", "creative"])
     .order("track", { ascending: true })
     .order("sort_order", { ascending: true });
-  if (tracks) qMiembros = qMiembros.in("track", tracks);
+  // El acotado por track se hace ABAJO (en memoria) contra el GRANT completo: filtrar en
+  // SQL por `track` dejaba fuera a quien tiene el otro como home pero grant en éste (0059).
 
   const [{ data: miembros }, { data: asigs }, { data: ideas }, { data: briefs }, { data: clients }] =
     await Promise.all([
@@ -60,7 +61,7 @@ export async function cargarWorkload(tracks: Track[] | null): Promise<WorkloadMe
     ]);
 
   const ideaById = new Map(
-    ((ideas ?? []) as { id: string; status: string; brief_id: string }[]).map((i) => [i.id, i]),
+    ((ideas ?? []) as { id: string; status: string; brief_id: string; track: string | null }[]).map((i) => [i.id, i]),
   );
   const briefClient = new Map(
     ((briefs ?? []) as { id: string; client_id: string }[]).map((b) => [b.id, b.client_id]),
@@ -72,32 +73,51 @@ export async function cargarWorkload(tracks: Track[] | null): Promise<WorkloadMe
     ]),
   );
 
-  type Acc = { total: number; porEstado: Record<string, number>; porCliente: Map<string, number> };
+  type Acc = {
+    total: number;
+    porEstado: Record<string, number>;
+    porCliente: Map<string, number>;
+    /** Carga por track DE LA TAREA. La persona puede ser multi-track; la tarea no. */
+    porTrack: Map<string, number>;
+  };
   const acc = new Map<string, Acc>();
   for (const a of (asigs ?? []) as { member_id: string | null; idea_id: string }[]) {
     if (!a.member_id) continue;
     const idea = ideaById.get(a.idea_id);
     if (!idea || TERMINALES.has(idea.status)) continue;
-    const m: Acc = acc.get(a.member_id) ?? { total: 0, porEstado: {}, porCliente: new Map() };
+    const m: Acc = acc.get(a.member_id) ?? {
+      total: 0, porEstado: {}, porCliente: new Map(), porTrack: new Map(),
+    };
     m.total += 1;
     m.porEstado[idea.status] = (m.porEstado[idea.status] ?? 0) + 1;
     const cid = briefClient.get(idea.brief_id);
     if (cid) m.porCliente.set(cid, (m.porCliente.get(cid) ?? 0) + 1);
+    if (idea.track) m.porTrack.set(idea.track, (m.porTrack.get(idea.track) ?? 0) + 1);
     acc.set(a.member_id, m);
   }
 
-  return ((miembros ?? []) as {
+  const filas = ((miembros ?? []) as {
     id: string;
     name: string;
     track: "real" | "normal";
+    tracks: ("real" | "normal")[] | null;
+    role: string;
     color: string;
     es_lead: boolean;
-  }[]).map((mem) => {
+  }[])
+    // Grant efectivo (0059): sin grant se cae al home. Un lead/creativo con grant en
+    // ESTE track entra aunque su home sea el otro.
+    .map((mem) => ({ ...mem, misTracks: mem.tracks?.length ? mem.tracks : [mem.track] }))
+    .filter((mem) => !tracks || mem.misTracks.some((t) => tracks.includes(t)));
+
+  return filas.map((mem) => {
     const d = acc.get(mem.id);
     return {
       id: mem.id,
       name: mem.name,
       track: mem.track,
+      tracks: mem.misTracks,
+      role: mem.role,
       color: mem.color,
       es_lead: mem.es_lead,
       total: d?.total ?? 0,
@@ -146,13 +166,15 @@ export async function cargarEvaluacion(
   if (tracks && tracks.length === 0) return [];
   const db = supabaseAdmin();
 
-  let qMiembros = db
+  const qMiembros = db
     .from("track_members")
-    .select("id, name, color, track")
+    .select("id, name, color, track, tracks")
     .eq("active", true)
     .eq("role", "creative")
     .order("name", { ascending: true });
-  if (tracks) qMiembros = qMiembros.in("track", tracks);
+  // Igual que Workload (0059): el acotado se hace contra el GRANT completo, en memoria.
+  // Filtrar en SQL por `track` dejaba fuera a quien tiene el otro track como home pero
+  // grant en éste — y entonces la Evaluación y el Workload no cuadrarían.
 
   // La UNIDAD del reporte es la tarea APROBADA dentro del mes: se traen primero
   // esas ideas y todo lo demás se acota a ellas (queries chicas, no toda la
@@ -221,7 +243,15 @@ export async function cargarEvaluacion(
     name: string;
     color: string;
     track: Track;
-  }[]).map((m) => ({ id: m.id, name: m.name, color: m.color, track: m.track }));
+    tracks: Track[] | null;
+  }[])
+    // Scope por GRANT (0059), no por track home — mismo criterio que Workload.
+    .filter((m) => {
+      if (!tracks) return true; // admin/master: todos
+      const suyos = m.tracks?.length ? m.tracks : [m.track];
+      return suyos.some((t) => tracks.includes(t));
+    })
+    .map((m) => ({ id: m.id, name: m.name, color: m.color, track: m.track }));
 
   // Ediciones = la AUTORÍA (quién escribió cada sección). Sólo las que tienen autor.
   const editsIn: EditInput[] = (edits as {

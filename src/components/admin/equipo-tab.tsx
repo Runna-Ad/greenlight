@@ -196,11 +196,12 @@ function MiembroCard({
     : [m.role, ...ROLES_ASIGNABLES];
   // admin/master son globales: no tienen track (vista de todos los equipos).
   const esGlobal = m.role === "admin" || m.role === "master";
-  // Un LEAD puede tener grant multi-track (Real, Normal o ambos); un creative es
-  // single-track. El grant efectivo cae al track home si aún no se ha otorgado nada.
-  const esLead = m.role === "lead";
-  const tracksLead =
-    m.lead_tracks && m.lead_tracks.length ? m.lead_tracks : m.track ? [m.track] : [];
+  // CUALQUIER doer —lead o especialista— puede tener grant multi-track: Real, Normal o
+  // ambos (0059, Pedro 2026-09-01). Antes el multi-select era exclusivo del lead y el
+  // creative quedaba atado a un solo track con un <select>. El grant efectivo cae al
+  // track home mientras no se otorgue nada, así nadie se queda sin alcance.
+  const tracksOtorgados =
+    m.tracks && m.tracks.length ? m.tracks : m.track ? [m.track] : [];
 
   return (
     <div
@@ -262,7 +263,7 @@ function MiembroCard({
             ))}
           </select>
         </Campo>
-        <Campo label={esLead ? "Tracks" : "Track"} hint={esLead ? "uno o ambos" : undefined}>
+        <Campo label="Tracks" hint={esGlobal ? undefined : "uno o ambos"}>
           {esGlobal ? (
             <span
               className="flex h-8 items-center rounded-md border border-dashed border-border px-2 text-sm text-muted-foreground"
@@ -270,18 +271,9 @@ function MiembroCard({
             >
               Global · sin track
             </span>
-          ) : esLead ? (
-            // El lead puede trabajar Real, Normal o AMBOS: multi-select del grant.
-            <TrackMultiSelect value={tracksLead} onChange={(ts) => guardar(m.id, { lead_tracks: ts })} />
           ) : (
-            <select
-              value={m.track ?? "normal"}
-              onChange={(e) => guardar(m.id, { track: e.target.value as "real" | "normal" })}
-              className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="real">Real</option>
-              <option value="normal">Normal</option>
-            </select>
+            // Lead o especialista: uno o ambos tracks, mismo control.
+            <TrackMultiSelect value={tracksOtorgados} onChange={(ts) => guardar(m.id, { tracks: ts })} />
           )}
         </Campo>
         <Campo label="Email">
