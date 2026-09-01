@@ -1,5 +1,39 @@
 # Greenlight · by Rünna — Build Todo
 
+## ✅ 2026-08-31 → 09-01 — Reap pre-launch · CANDADO RLS · Papelera · flujo (SHIPPEADO + LIVE)
+18 commits · migraciones 0056–0059 aplicadas · gates: actions 21 · isolation 58 · lib 458 · db 346 · lint 0 err · build OK.
+- [x] Reap de invariantes (repo entero, 5 agentes): colapsado el fork de renderers de DIÁLOGO; los
+      cambios del cliente refrescan las superficies internas; gates de correcciones derivados del
+      allowlist; `setLeads` muerto eliminado; a11y (Cerrar/toasts/tooltip/emojis→Lucide).
+- [x] **0056 candado RLS** + `AUTH_ENABLED` que ruge + `profiles.active` aplicado de verdad + test de CI.
+- [x] **0057 Papelera 30d** (sellar la raíz, purga perezosa, UI master-only) + sync que la respeta.
+- [x] Hotfix 500 `"use server"` + **guard `check-server-actions.mjs`** en `npm test`.
+- [x] Admin/master pueden ser LEAD · **0058** brief Greenlit (7 días, derivado) · correo de tarea propia.
+- [x] **0059** `lead_tracks`→`tracks`: multi-track para especialistas + Workload por persona con pastillas.
+- [x] Avisos → a la TAREA, clic = leído, tarea congelada en revisión, vuelta al tablero al mandar.
+
+### Review — lo que queda (NADA bloquea el lanzamiento salvo el punto 1)
+- [ ] **1. Paso de pruebas de Pedro** (la única puerta): Fases 2/3/4 · borrador de correcciones ·
+      congelado en revisión (**necesita cuenta `creative`**) · correo de tarea propia (**necesita una
+      SEGUNDA persona**: todo camino de aviso excluye al actor) · brief Greenlit y su vuelta al reabrir ·
+      avisos · formato del diálogo en el portal · cliente revocado.
+- [ ] **2. Paso B del Workload**: pastilla de carga clicable → sus tareas por estado. ⚠️ el desglose DEBE
+      heredar el scope por track de quien mira (`tracksVisibles`/`visibleParaRol`) o es una puerta lateral.
+- [ ] **3. Perf** (deuda conocida, no bloquea):
+      - [ ] N+1 de `sync/import.ts` (~6 consultas por fila) — arriesgado, sesión propia.
+      - [ ] Cap de `bundle-data.ts`. ⚠️ **el Greenlit NO lo arregló** (me equivoqué al decirlo): un LIMIT
+            puede truncar las tareas NO entregadas de un brief y hacerlo parecer terminado → hace falta un
+            agregado en SQL, no un `.limit()`.
+      - [ ] `cargarWorkload`: `idea_assignments` y `briefs` se leen completos.
+- [ ] **4.** 5 PRs de Dependabot (TypeScript 7, @types/node 26) · pulido a11y (áreas táctiles <44px,
+      sobre todo en el PORTAL en móvil) · `CommandDialog` muerto · autoFocus del request-form.
+- [ ] **5. Decisión abierta**: hoy "borrador" = sólo `under_review`. Si el lead fija un cambio con la
+      tarea EN PROGRESO, el especialista lo ve al instante (feedback deliberado). Pedro puede querer que
+      NADA se vea hasta "Mandar cambios" — es un cambio de una línea.
+- [ ] **6. No construir** (recomendación explícita): ajustes de notificación dentro del portal del
+      cliente. Tiene UN evento, default ON; una pantalla de ajustes sólo da un switch para romperlo.
+
+
 ## ✅ 2026-08-27 — Read-time REAL: contar sólo lo hablado + 200 pal/min (SHIPPEADO + LIVE)
 Pedro: los videos salían CORTOS — un guión "de 32s" leído relajado dura ~20s. El modelo
 read-time sobre-estimaba por 2 razones: contaba etiquetas "(Actriz 1)"/negrita "**" (~13%

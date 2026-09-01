@@ -1,5 +1,79 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-08-31 → 09-01 (sesión LARGA) — Reap pre-launch → CANDADO RLS → Papelera 30d → arreglos de flujo (TODO SHIPPEADO + LIVE)
+**18 commits en main (270d1d4 → 818f19e) · 65 archivos · +2295/−398 · migraciones 0056, 0057, 0058 y 0059 APLICADAS a prod.**
+
+### Qué se hizo (en orden)
+1. **Reap pre-launch (barrida de invariantes, repo completo).** 5 agentes en paralelo (seguridad y
+   paridad en Opus). 0 CRÍTICOS. Hallazgo estrella: el DIÁLOGO se le mostraba al cliente en DOS
+   formatos —crudo con locutor en negrita mientras revisaba, reformateado «Actor: "texto"» tras
+   aprobar—. Colapsado a UN renderer (`dialogo-lectura.tsx`). Además: los cambios del cliente no
+   refrescaban las superficies internas; los gates de correcciones no derivaban del allowlist
+   compartido; `setLeads` muerto; a11y (Cerrar, toasts light, tooltip con teclado, 2 emojis→Lucide).
+2. **Track-scope**: conteos de /clientes y preview del sheet respetan el grant del lead.
+3. **🔒 CANDADO RLS (0056) — el corte de seguridad del lanzamiento.** Se auditó y confirmó que el
+   100% de los datos va por SERVICE-ROLE y que la anon key sólo se usa para AUTH. En vez de
+   reimplementar el modelo de permisos como políticas RLS (2 fuentes de verdad que driftan), se le
+   QUITA el esquema a la llave pública. **Antes de aplicar se probó con la anon key REAL sacada del
+   bundle: `board_tasks` devolvía 2,355 bytes de tareas reales sin login** (las vistas NO tienen RLS;
+   la 0006 concedió el esquema asumiendo que RLS filtraría). Después: 401 en todo. Verificado en prod:
+   0 objetos con grant público, 0 tablas sin RLS, service_role intacto. + `AUTH_ENABLED` que RUGE en
+   producción + **descubierto y arreglado: el botón "Revocar" NUNCA revocó** (`profiles.active` se
+   escribía y no lo leía nadie) + test en CI que vigila que el candado no se reabra.
+4. **🗑 Papelera 30 días (0057).** Borrar sella (`deleted_at`) en vez de destruir; el master restaura
+   30 días desde /admin; purga PEREZOSA al abrir (sin cron, decisión de Pedro). Se sella SÓLO la raíz
+   (ideas/briefs) porque a los hijos se llega por el padre → ~10 loaders filtrados, no 54.
+5. **🚨 500 en producción (mío).** `export const CAMPOS` en un archivo `"use server"` tumbó TODA acción
+   de la página de tarea. El build NO lo caza cuando el símbolo sólo lo importa otro archivo de
+   servidor. Arreglado + `scripts/check-server-actions.mjs` en `npm test`.
+6. **Sync ↔ papelera.** Borrar una tarea la volvía imposible de reimportar. Dos intentos: el primero
+   arregló un caso con CERO ocurrencias en prod. El bueno: "ya sincronizada" = HAY UNA TAREA VIVA
+   detrás (54 filas contaban como sincronizadas → 25; 29 volvieron a ser importables).
+7. **Admin puede ser Lead** (PEDRO_OVERRIDE de su decisión del 08-21) con `puedeSerLead`/
+   `puedeSerEspecialista` como fuente única del servidor y los dos pickers.
+8. **Correcciones en BORRADOR.** Faltaba una etapa en el ciclo de vida: el especialista veía los pins
+   del lead ANTES de que se los mandaran, y al lead se le ofrecían Confirmar/H.Ü.E sin nada que
+   confirmar. Derivado del estado (`under_review`), sin columna nueva.
+9. **Avisos**: llevan A LA TAREA (no al tablero) resolviéndolo al LEER —arregla también los ya
+   guardados—, clic = leído, y **la tarea se congela en revisión** (idea de Pedro: el candado ya
+   existía, sólo le faltaba `under_review`) + vuelta al tablero al mandar a revisión.
+10. **Correo de MIS tareas siempre** (admin/master quedaban mudos por la siembra de 0050) y
+    **BRIEF GREENLIT (0058)**: entregado por completo → distintivo + 7 días → sólo Entregas. Derivado.
+11. **Multi-track para especialistas (0059)**: `lead_tracks` → `tracks`, grant para cualquier doer,
+    Workload pasa a UNA fila por persona con pastillas de rol+tracks (idea de Pedro: agrupar por track
+    obligaba a duplicar a la persona o esconder media realidad). La migración RE-CREA el fan-out
+    porque Postgres guarda el cuerpo de las funciones como TEXTO.
+12. **Bug del multi-track**: 3 consultas no traían la columna nueva → el fallback las mandaba al track
+    home en silencio. `tracks` pasa a OBLIGATORIO para que el compilador enumere los call sites.
+
+### Estado actual
+**TODO shippeado y LIVE** en runna-greenlight.vercel.app. Árbol limpio, nada sin pushear.
+Gates finales: check:actions 21 · check:isolation 58 · test:lib 458 · test:db 346 · lint 0 err · build OK.
+
+### Decisiones de Pedro
+- Purga de la papelera: PEREZOSA, sin cron. · Borrar un brief se lleva su árbol y lo devuelve entero.
+- Admin (y master) pueden ser LEAD de una tarea (cambia su decisión del 2026-08-21).
+- Especialistas multi-track, igual que los leads; en Workload los tracks son PASTILLAS de la persona,
+  no secciones. · NO construir ajustes de notificación en el portal del cliente.
+- Correcciones en borrador = sólo mientras la tarea está en `under_review` (si el lead fija algo con
+  la tarea en progreso, el especialista SÍ lo ve — es feedback deliberado).
+
+### Pick up next session
+1. **PASO DE PRUEBAS DE PEDRO** (única puerta al lanzamiento): Fases 2/3/4 · borrador de correcciones ·
+   congelado en revisión (**necesita una cuenta `creative`**) · correo de tarea propia (**necesita una
+   SEGUNDA persona**: todo camino excluye al actor) · brief Greenlit · avisos · formato de diálogo ·
+   cliente revocado.
+2. **Paso B** del Workload: pastilla clicable → sus tareas por estado. OJO: el desglose DEBE heredar el
+   scope por track de quien mira, o es una puerta lateral.
+3. **Perf** (ninguno bloquea): N+1 del sync · cap de bundle-data (⚠️ el greenlit NO lo arregló: un
+   LIMIT podría truncar las tareas no entregadas de un brief y hacerlo parecer terminado → hace falta
+   un agregado en SQL) · lecturas de tabla completa en cargarWorkload.
+4. Dependabot (5 PRs) · pulido a11y (áreas táctiles del portal en móvil).
+
+### Cambios de entorno
+Ninguna variable nueva. 4 migraciones aplicadas a prod (0056–0059). `npm test` ahora corre también
+`check-server-actions.mjs`.
+
 ## 2026-08-27 (sesión corta, tarde 3) — Read-time REAL: sólo lo hablado + 200 pal/min (SHIPPEADO + LIVE, con migración)
 **1 commit en main (d3f36f7 → 9ea8b02) + migración 0055 aplicada. Push = auto-deploy Vercel.**
 

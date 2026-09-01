@@ -1,10 +1,55 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-08-27 (sesión muy larga) — multi-track leads + workflow cambios-cliente + REAP PRE-LAUNCH (16 fixes de seguridad/paridad) — **todo shippeado + LIVE en runna-greenlight.vercel.app**
+Última actualización: 2026-09-01 — CANDADO RLS + Papelera 30d + Greenlit de briefs + multi-track para todos — **todo shippeado + LIVE en runna-greenlight.vercel.app**
 
-## 🔐 Postura de seguridad (post reap pre-launch 2026-08-27) — SHIPPEADO + LIVE
-- **La frontera de autorización es el CÓDIGO** (las server actions usan la service-role key → se salta RLS). RLS sigue
-  permisivo A PROPÓSITO (build-then-lock de Pedro); NO es un bug. Al LANZAR: encender RLS real + verificar cada vista es su
-  propio paso gateado. El reap revisó los gates de código, no RLS.
+## 🔒 Postura de seguridad (2026-09-01) — CANDADO ECHADO, SHIPPEADO + LIVE
+- **⚠️ EL "BUILD-THEN-LOCK" YA TERMINÓ. La llave pública NO entra a `produccion`.** La migración **0056**
+  revocó `usage` + todos los privilegios de tablas/secuencias/rutinas a `anon` y `authenticated`, revirtió
+  los DEFAULT PRIVILEGES de la 0006 (lo nuevo nace cerrado) y habilitó RLS en toda tabla que no la tenía.
+  `service_role` conserva todo — por ahí va la app entera. **Verificado en prod: 0 objetos con grant
+  público, 0 tablas sin RLS.** No re-conceder a anon/authenticated en NINGUNA migración futura: el test
+  "Candado RLS 0056" (test-db) truena si se reabre.
+- **Por qué así y no con políticas RLS por tabla:** el 100% de los datos va por SERVICE-ROLE y la anon key
+  sólo se usa para AUTH (login Google, logout, magic link, getUser) — cero queries de datos, sin Realtime.
+  Escribir políticas para `authenticated` habría duplicado el modelo de permisos en SQL para un camino
+  que la app no usa: dos fuentes de verdad que driftan.
+- **NO era teórico:** con la anon key sacada del bundle desplegado, `board_tasks` devolvía tareas REALES
+  (2,355 bytes, todos los clientes) SIN login. **Las VISTAS no tienen RLS**, y la 0006 concedió el esquema
+  asumiendo que RLS filtraría. Tras la 0056: 401 `permission denied for schema produccion` en todo.
+- **La frontera de autorización sigue siendo el CÓDIGO** (service-role se salta RLS): los gates de rol y
+  `assertCanActOnTask` son lo que manda; RLS es el segundo cerrojo por si alguien vuelve a conceder.
+- `AUTH_ENABLED`: en producción (VERCEL_ENV) la app REVIENTA si no vale exactamente "true" — el muro de
+  login ya no se puede apagar en silencio.
+- **`profiles.active` YA SE APLICA**: "Revocar" en Clientes no revocaba nada (se escribía y nadie lo leía).
+  Ahora `getCurrentUser` niega identidad a un perfil inactivo y las dos puertas de auth lo sacan.
+
+## 🗑 Papelera de 30 días (0057) — SHIPPEADO + LIVE
+- Borrar una tarea o un brief SELLA (`deleted_at`/`deleted_by`), ya no destruye. El **Master Builder**
+  restaura 30 días desde /admin → Papelera. Purga PEREZOSA al abrirla (sin cron, decisión de Pedro).
+- Se sella SÓLO la raíz (`ideas`/`briefs`): a los hijos se llega por su padre, así que quedan
+  inalcanzables solos e intactos para restaurar. Filtrar ~10 loaders de lista, no 54.
+- Borrar un brief se lleva su árbol con el MISMO timestamp; restaurar devuelve exactamente ese árbol.
+- A PROPÓSITO sin filtrar: el contador de `eliminarMarca` (una tarea recuperable sigue usando la marca) y
+  la numeración de variantes del import (reusar un número colisionaría al restaurar).
+- **El sync lo respeta**: "ya sincronizada" = HAY UNA TAREA VIVA detrás (no que exista el vínculo), así
+  una tarea borrada se puede reimportar del sheet y al restaurarla el vínculo vuelve a valer solo.
+
+## 🟢 Brief GREENLIT (0058) + multi-track para todos (0059) — SHIPPEADO + LIVE
+- Un brief con TODAS sus tareas vivas entregadas queda **Greenlit**: distintivo + 7 días en /briefs y
+  después vive sólo en Entregas. DERIVADO de sus tareas (reabrir una lo devuelve solo); `briefs.status
+  ='archived'` sigue SIN usarse a propósito. La ventana de 7 días es UNA constante compartida con el
+  tablero (`MS_VENTANA_GREENLIT`).
+- `track_members.lead_tracks` → **`tracks`**: el grant multi-track vale para CUALQUIER doer (lead o
+  especialista), lo fija un admin+ en Equipo. Sin grant se cae al track HOME.
+- Workload: **UNA fila por persona** con rol y tracks como PASTILLAS (ya no secciones por equipo) y la
+  carga se acumula por track DE LA TAREA. Workload y Evaluación acotan por GRANT, no por track home.
+- ⚠️ Al renombrar una columna, Postgres NO reescribe el cuerpo de las funciones (es TEXTO): la 0059
+  RE-CREA `fan_out_task_notification`. Verificado en prod: 0 funciones citan `lead_tracks`.
+
+## 🛡 Guard nuevo en CI: `scripts/check-server-actions.mjs` (en `npm test`)
+- Un archivo `"use server"` SÓLO puede exportar funciones async. Exportar una constante NO falla el build
+  cuando sólo la importan otros archivos de servidor — **revienta en RUNTIME** al evaluar el módulo y
+  tumba la primera server action de esa ruta (pasó en prod el 2026-09-01 con `export const CAMPOS`).
+  Las constantes/tipos compartidos van a un módulo puro: `lib/campos.ts`, `lib/papelera.ts`, `lib/equipo.ts`.
 - **Cliente (Partner) amarrado a su portal**: el MIDDLEWARE confina al rol `client` a `/{slug}/portal`; cualquier otra ruta lo
   regresa. Además cada página interna tiene su guard `canSee`/`canAdmin` (se taparon los 2 huecos: `/clientes`, `/{slug}/sync`).
   El portal valida la MARCA (no ve la de otro cliente).
