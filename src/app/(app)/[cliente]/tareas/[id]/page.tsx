@@ -320,13 +320,14 @@ export default async function TareaPage({
   const { data: poolRows } = hasSupabase()
     ? await db
         .from("track_members")
-        .select("id, name, color, role, track")
+        .select("id, name, color, role, track, tracks")
         .eq("active", true)
         .in("role", ["lead", "creative", "admin", "master"])
         .order("name")
     : { data: [] };
   const pool = (poolRows ?? []) as {
-    id: string; name: string; color: string; role: string; track: Track | null;
+    id: string; name: string; color: string; role: string;
+    track: Track | null; tracks: Track[] | null;
   }[];
   const leadsPool = pool
     .filter((m) => puedeSerLead(m, idea.track as Track | null))

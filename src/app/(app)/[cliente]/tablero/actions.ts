@@ -11,7 +11,7 @@ import {
 import type { Track } from "@/lib/vocab";
 
 /** La forma mínima que necesitan `puedeSerLead`/`puedeSerEspecialista`. */
-type MiembroAsignable = { role: string | null; track: Track | null; active?: boolean };
+type MiembroAsignable = { role: string | null; track: Track | null; tracks: Track[] | null; active?: boolean };
 import { transicionRequiereLead } from "@/lib/task-actions";
 import { getCurrentUser } from "@/lib/identity";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
@@ -270,9 +270,9 @@ export async function asignarTarea(
   if (dedupIds.length) {
     const { data: rows } = await db
       .from("track_members")
-      .select("id, role, track, active")
+      .select("id, role, track, tracks, active")
       .in("id", dedupIds)
-      .returns<{ id: string; role: string; track: string; active: boolean }[]>();
+      .returns<{ id: string; role: string; track: string; tracks: string[] | null; active: boolean }[]>();
     const byId = new Map((rows ?? []).map((m) => [m.id, m]));
     // `puedeSerLead`/`puedeSerEspecialista` (lib/roles) son la fuente ÚNICA que
     // comparten este gate y los dos pickers — así la UI nunca ofrece a alguien que

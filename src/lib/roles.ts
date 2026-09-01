@@ -166,9 +166,14 @@ export const canHue = (role: ViewRole): boolean => role === "master";
  *    [PEDRO 2026-09-01, cambia su decisión del 2026-08-21 de "admins/master NO son
  *    asignables": un admin puede llevar tareas como lead si así lo decide.]
  *  · `creative` → nunca lead (va de especialista); inactivos, nunca.
+ *
+ * `tracks` es OBLIGATORIO a propósito (aunque acepte null): cuando era opcional, tres
+ * llamadas se quedaron sin traerlo de la BD, el fallback las mandó al track HOME y un
+ * especialista multi-track sólo aparecía en un equipo — sin un solo error de tipos.
+ * Obligatorio, el compilador señala a quien no lo pase. (Pedro lo cazó, 2026-09-01)
  */
 export function puedeSerLead(
-  m: { role: string | null; track: Track | null; tracks?: Track[] | null; active?: boolean },
+  m: { role: string | null; track: Track | null; tracks: Track[] | null; active?: boolean },
   trackTarea: Track | null,
 ): boolean {
   if (m.active === false) return false;
@@ -182,7 +187,7 @@ export function puedeSerLead(
 /** ¿Puede ser ESPECIALISTA (doer) de una tarea de `trackTarea`? Sólo `creative` de su
  *  track — los globales llevan, no ejecutan. Espejo de `puedeSerLead`. */
 export function puedeSerEspecialista(
-  m: { role: string | null; track: Track | null; tracks?: Track[] | null; active?: boolean },
+  m: { role: string | null; track: Track | null; tracks: Track[] | null; active?: boolean },
   trackTarea: Track | null,
 ): boolean {
   if (m.active === false) return false;

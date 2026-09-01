@@ -73,7 +73,7 @@ async function loadBoard(
       .from("track_members")
       // `role` viaja para que el picker del tablero separe Lead (rol `lead`) de
       // Especialistas (rol `creative`) — la misma regla rol+track del task section.
-      .select("id, name, color, track, role")
+      .select("id, name, color, track, tracks, role")
       .eq("active", true)
       .order("track")
       .order("sort_order")

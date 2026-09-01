@@ -49,6 +49,9 @@ export type Member = {
   color: string;
   /** `null` en los roles GLOBALES (admin/master): no viven en un track. */
   track: "real" | "normal" | null;
+  /** Tracks OTORGADOS (0059). null/vacío = usa el HOME. Sin esto el picker mandaba a
+   *  todo el mundo a su track home y un multi-track sólo salía en un equipo. */
+  tracks: ("real" | "normal")[] | null;
   /** Rol REAL del miembro (track_members.role). Quién puede ser Lead o Especialista
    *  lo deciden `puedeSerLead`/`puedeSerEspecialista` (lib/roles), compartidas con el
    *  gate del servidor: `lead` sólo en su track, `creative` sólo en su track, y
