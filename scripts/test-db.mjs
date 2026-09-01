@@ -2144,7 +2144,8 @@ console.log("\n▶ Papelera 30 días (0057)");
        values ($1,'Real (01/09)','KEY-PAP-1','hash1','{}'::jsonb,$2)`,
       [CLIENT, pIdea1],
     );
-    // La consulta que hace el dedup: la fila + el estado de su idea.
+    // "Ya sincronizada" = HAY UNA TAREA VIVA detrás. Un INNER JOIN lo expresa: si no
+    // hay idea (vínculo nulo) o está sellada, no hay fila → importable.
     const dedup = async () =>
       Number(await scalar(
         `select count(*) from produccion.staged_rows s
@@ -2156,10 +2157,34 @@ console.log("\n▶ Papelera 30 días (0057)");
     eq("con la tarea EN LA PAPELERA el sync la deja reimportar", await dedup(), 0);
     await db.query(`update produccion.ideas set deleted_at=null where id=$1`, [pIdea1]);
     eq("al RESTAURARLA el vínculo vuelve a valer solo (sin duplicar)", await dedup(), 1);
+
+    // EL CASO QUE FALLÓ EN PROD (2026-09-01): la fila quedó HUÉRFANA porque su tarea se
+    // borró en DURO antes de que existiera la papelera (el FK `on delete set null` la
+    // desvinculó). Mirar sólo `idea_id is not null` la daba por sincronizada y el preview
+    // decía "sin cambios" para siempre. Sin tarea detrás = importable.
+    await db.query(`update produccion.staged_rows set idea_id=null where natural_key='KEY-PAP-1'`);
+    eq("una fila HUÉRFANA (borrado duro viejo) se puede reimportar", await dedup(), 0);
+    // …y la simetría con el borrado DURO de verdad: al purgar, la fila queda huérfana sola.
+    // (pIdea2 ya no existe: se la llevó el assert de la purga de arriba, así que va una nueva.)
+    const pIdea3 = "00000000-0000-0000-0000-0000000fa013";
+    await db.query(
+      `insert into produccion.ideas (id, family_id, brief_id, variant_number, naming_kind, naming_base, genero_code, mes_code)
+       values ($1,$2,$3,9,'real','PAP3','RE','AGO')`,
+      [pIdea3, pFam, pBrief],
+    );
+    await db.query(
+      `insert into produccion.staged_rows (client_id, source_tab, natural_key, row_hash, data, idea_id)
+       values ($1,'Real (01/09)','KEY-PAP-2','hash2','{}'::jsonb,$2)`,
+      [CLIENT, pIdea3],
+    );
+    await db.query(`delete from produccion.ideas where id=$1`, [pIdea3]);
+    eq("purgar la tarea desvincula su fila (FK set null) → reimportable",
+       Number(await scalar(
+         `select count(*) from produccion.staged_rows where natural_key='KEY-PAP-2' and idea_id is null`)), 1);
   }
 
   // Limpieza: no dejar fixtures que ensucien otros asserts si se reordena el archivo
-  await db.query(`delete from produccion.staged_rows where natural_key='KEY-PAP-1'`);
+  await db.query(`delete from produccion.staged_rows where natural_key like 'KEY-PAP-%'`);
   await db.query(`delete from produccion.briefs where id=$1`, [pBrief]);
 }
 

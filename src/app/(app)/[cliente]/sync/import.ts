@@ -201,7 +201,7 @@ export async function importRows(
         .from("staged_rows").select("id, idea_id, ideas(deleted_at)")
         .eq("client_id", client.id).eq("natural_key", row.key).maybeSingle();
       const st = staged as { idea_id: string | null; ideas: unknown } | null;
-      if (st?.idea_id && !ideaEnPapelera(st.ideas)) {
+      if (st && tieneIdeaViva(st.ideas)) {
         res.skipped++;
         continue;
       }
@@ -406,17 +406,29 @@ export async function importRows(
 }
 
 /**
- * ¿La idea enlazada a una fila del staging está en la PAPELERA (0057)?
+ * ¿Esta fila del staging tiene detrás una tarea VIVA? Ésa es la única definición de
+ * "ya sincronizada" — y la comparten el dedup del import y el mapa de la vista previa.
+ *
+ * Tres casos, uno solo cuenta como sincronizada:
+ *  · con tarea viva            → SÍ  (saltar: ya está en la plataforma)
+ *  · con tarea en la papelera  → no  (0057: se puede reimportar; al restaurarla vuelve a contar)
+ *  · SIN vínculo (`idea_id` null) → no. Aquí caen las tareas borradas en DURO antes de que
+ *    existiera la papelera: el FK `on delete set null` dejó la fila huérfana. Mirar sólo el
+ *    vínculo daba "sin cambios" en el preview y la fila no se podía volver a importar nunca
+ *    (29 filas así en prod el 2026-09-01 — el bug que reportó Pedro). También cubre lo
+ *    stageado que nunca se aprobó: si no está en la plataforma, es importable.
  *
  * El embed de PostgREST (`ideas(deleted_at)`) llega como OBJETO en una relación
- * muchos-a-uno, pero los tipos generados lo declaran como ARRAY — y esos tipos van
- * por detrás del esquema. Se aceptan LAS DOS formas en vez de apostar por una: si
- * la conjetura fallara, `deleted_at` saldría siempre undefined y volveríamos justo
- * al bug (una tarea borrada que nunca se puede reimportar), en silencio.
+ * muchos-a-uno, pero los tipos generados lo declaran como ARRAY — y esos tipos van por
+ * detrás del esquema. Se aceptan LAS DOS formas en vez de apostar por una: si la
+ * conjetura fallara, esto diría "no hay tarea viva" siempre y re-importaríamos duplicados.
  */
-function ideaEnPapelera(ideas: unknown): boolean {
-  const fila = Array.isArray(ideas) ? ideas[0] : ideas;
-  return Boolean((fila as { deleted_at?: string | null } | null | undefined)?.deleted_at);
+function tieneIdeaViva(ideas: unknown): boolean {
+  const fila = (Array.isArray(ideas) ? ideas[0] : ideas) as
+    | { deleted_at?: string | null }
+    | null
+    | undefined;
+  return Boolean(fila) && !fila!.deleted_at;
 }
 
 /** naturalKey → rowHash for everything already imported, so sync skips it. */
@@ -440,7 +452,7 @@ export async function knownRows(clienteSlug: string): Promise<Record<string, str
   }[];
   return Object.fromEntries(
     filas
-      .filter((r) => !(r.idea_id && ideaEnPapelera(r.ideas)))
+      .filter((r) => tieneIdeaViva(r.ideas))
       .map((r) => [r.natural_key, r.row_hash]),
   );
 }
