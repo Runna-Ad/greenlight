@@ -42,3 +42,19 @@ REST — encontrando una fuga de datos VIVA (`board_tasks`, 2,355 bytes sin logi
 la llave real convirtió un cambio teórico en una prueba.
 RECOMMENDATION: para cualquier cambio de seguridad, exigir prueba ANTES/DESPUÉS ejecutada con la
 credencial real del atacante, no razonamiento sobre el código. Un 200 con `[]` parece seguro y no lo es.
+
+[2026-09-01] OBSERVATION: missing-rule (ALTA — fallo real de 6 horas)
+CONTEXTO: dejé un watcher de deploy sondeando ~6 h; sólo se paró porque Pedro preguntó. La lección ya
+estaba en el Brain y el hook me la mostró DOS veces en la sesión; incluso se la cité a Pedro mientras el
+zombi corría. El wrap-up dio la sesión por "limpia" mirando sólo git.
+RECOMMENDATION (dos cambios concretos en `beast-mode-dev`):
+ 1. **SESSION WRAP-UP**: añadir un paso OBLIGATORIO "enumerar y parar tareas en background" junto al de
+    "revisar trabajo sin commitear". Hoy el wrap-up sólo mira git, así que un proceso vivo pasa el
+    checklist sin que nadie lo vea. `ps` no vale como prueba: la fuente de verdad es el registro de
+    tareas del harness (TaskStop responde si seguía viva).
+ 2. **Regla de watchers**: prohibido el bucle de sondeo sin tope; comprobar la condición UNA vez en
+    primer plano antes de armarla; y al relanzar, parar el anterior en el MISMO bloque de tool calls.
+META-OBSERVACIÓN (lo más importante): el sistema de recall FUNCIONÓ —me dio la lección exacta, dos
+veces— y aun así el fallo ocurrió. Una lección que se lee y se cita pero no cambia la conducta necesita
+un GUARD, no otra redacción. Es exactamente [[encode-recurring-agent-steps-as-hooks]] aplicado a mí
+mismo: si el cumplimiento depende de acordarse en el momento, el cumplimiento será 0%.
