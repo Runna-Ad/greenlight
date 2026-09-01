@@ -33,6 +33,8 @@ import {
   canAssign,
   canMoveStatus,
   canOverrideStatus,
+  puedeSerLead,
+  puedeSerEspecialista,
   type ViewRole,
 } from "@/lib/roles";
 import { contentType, canales } from "@/lib/iconos";
@@ -44,10 +46,12 @@ export type Member = {
   id: string;
   name: string;
   color: string;
-  track: "real" | "normal";
-  /** Rol REAL del miembro (track_members.role). El picker sólo hace asignable al
-   *  `lead` (como Lead) y al `creative` (como Especialista) del track de la tarea;
-   *  admin/master no son "doers", así que quedan fuera por rol. */
+  /** `null` en los roles GLOBALES (admin/master): no viven en un track. */
+  track: "real" | "normal" | null;
+  /** Rol REAL del miembro (track_members.role). Quién puede ser Lead o Especialista
+   *  lo deciden `puedeSerLead`/`puedeSerEspecialista` (lib/roles), compartidas con el
+   *  gate del servidor: `lead` sólo en su track, `creative` sólo en su track, y
+   *  admin/master como Lead en cualquiera (Pedro 2026-09-01). */
   role: string;
 };
 
@@ -825,8 +829,10 @@ function AssignPicker({
   members: Member[];
   onAssign: (t: Task, leadId: string | null, especialistaIds: string[]) => void;
 }) {
-  const leadsPool = members.filter((m) => m.track === task.track && m.role === "lead");
-  const espPool = members.filter((m) => m.track === task.track && m.role === "creative");
+  // Mismas funciones que el gate del servidor y que el picker de la tarea — un
+  // admin/master puede ser lead de cualquier track (es global). (Pedro 2026-09-01)
+  const leadsPool = members.filter((m) => puedeSerLead(m, task.track));
+  const espPool = members.filter((m) => puedeSerEspecialista(m, task.track));
   const leadId = task.leads[0]?.id ?? null;
   const teamIds = new Set(task.team.map((m) => m.id));
 

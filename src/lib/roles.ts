@@ -158,6 +158,41 @@ export const canHue = (role: ViewRole): boolean => role === "master";
  * o ambos. Sin identidad (tracks vacío) el lead no ve a nadie — mejor vacío honesto que
  * enseñar a todos por error.
  */
+/**
+ * ¿Este miembro puede ser el LEAD de una tarea de `trackTarea`?
+ *
+ * FUENTE ÚNICA — la usan el gate del SERVIDOR (`asignarTarea`) y los DOS pickers
+ * (el de la tarea y el del tablero). Si cada uno decidiera por su cuenta, la UI
+ * ofrecería a alguien que el servidor rechaza (o al revés): exactamente el drift de
+ * asignación que ya nos mordió una vez.
+ *
+ * Reglas:
+ *  · `lead` → sí, pero SÓLO en su track (es departamental).
+ *  · `admin`/`master` → sí, en CUALQUIER track: son globales (track = null), así que
+ *    exigirles coincidencia de track los dejaría fuera de todo.
+ *    [PEDRO 2026-09-01, cambia su decisión del 2026-08-21 de "admins/master NO son
+ *    asignables": un admin puede llevar tareas como lead si así lo decide.]
+ *  · `creative` → nunca lead (va de especialista); inactivos, nunca.
+ */
+export function puedeSerLead(
+  m: { role: string | null; track: Track | null; active?: boolean },
+  trackTarea: Track | null,
+): boolean {
+  if (m.active === false) return false;
+  if (m.role === "admin" || m.role === "master") return true; // globales, sin track
+  return m.role === "lead" && m.track === trackTarea;
+}
+
+/** ¿Puede ser ESPECIALISTA (doer) de una tarea de `trackTarea`? Sólo `creative` de su
+ *  track — los globales llevan, no ejecutan. Espejo de `puedeSerLead`. */
+export function puedeSerEspecialista(
+  m: { role: string | null; track: Track | null; active?: boolean },
+  trackTarea: Track | null,
+): boolean {
+  if (m.active === false) return false;
+  return m.role === "creative" && m.track === trackTarea;
+}
+
 export function tracksVisibles(role: ViewRole, soyTracks: Track[] | null): Track[] | null {
   if (esNivelAdmin(role)) return null;
   if (role === "lead") return soyTracks && soyTracks.length ? soyTracks : [];

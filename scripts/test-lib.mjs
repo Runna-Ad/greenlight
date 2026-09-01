@@ -8,6 +8,7 @@ import { plantillaPara, readTimeS, soloHablado, PALABRAS_POR_MINUTO, parseDuraci
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
+import { puedeSerLead, puedeSerEspecialista } from "../src/lib/roles.ts";
 
 let pass = 0,
   fail = 0;
@@ -1062,6 +1063,28 @@ console.log("\n▶ evaluarEquipo() — Resolución + Eficiencia");
   eq("evalv2 · Caro brief: 1 tarea", caro.briefs[0].tareas, 1);
   ok("evalv2 · Caro brief tarea C tuvo notas", caro.briefs[0].tareasDetalle[0].conNotas);
   eq("evalv2 · Caro brief tarea C code = CCC", caro.briefs[0].tareasDetalle[0].code, "CCC");
+}
+
+// ── Quién puede ser Lead / Especialista (fuente única: gate del servidor + 2 pickers) ──
+{
+  const lead = { role: "lead", track: "real", active: true };
+  const leadOtro = { role: "lead", track: "normal", active: true };
+  const admin = { role: "admin", track: null, active: true };
+  const master = { role: "master", track: null, active: true };
+  const crea = { role: "creative", track: "real", active: true };
+
+  ok("lead es Lead de SU track", puedeSerLead(lead, "real"));
+  ok("lead NO es Lead de otro track (es departamental)", !puedeSerLead(leadOtro, "real"));
+  ok("admin SÍ puede ser Lead (Pedro 2026-09-01)", puedeSerLead(admin, "real"));
+  ok("admin puede ser Lead del OTRO track también (es global)", puedeSerLead(admin, "normal"));
+  ok("master también puede ser Lead", puedeSerLead(master, "real"));
+  ok("creative NUNCA es Lead", !puedeSerLead(crea, "real"));
+  ok("un miembro INACTIVO nunca es Lead", !puedeSerLead({ ...admin, active: false }, "real"));
+
+  ok("creative es Especialista de su track", puedeSerEspecialista(crea, "real"));
+  ok("creative NO es Especialista de otro track", !puedeSerEspecialista(crea, "normal"));
+  ok("un admin NO ejecuta como Especialista (lleva, no produce)", !puedeSerEspecialista(admin, "real"));
+  ok("un lead NO es Especialista", !puedeSerEspecialista(lead, "real"));
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

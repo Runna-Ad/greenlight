@@ -6,7 +6,10 @@ import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { cargarRefsPorPlano, cargarRefsEstatico } from "@/lib/referencias-data";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
-import { ROLE_LABEL, canSee, canOverrideStatus, canAssign } from "@/lib/roles";
+import {
+  ROLE_LABEL, canSee, canOverrideStatus, canAssign, puedeSerLead, puedeSerEspecialista,
+} from "@/lib/roles";
+import type { Track } from "@/lib/vocab";
 import { type AssetStatus } from "@/lib/brand";
 import { ESTADOS_CERRADOS, plantillaPara, notaGlobal, LEGAL_SECONDS } from "@/lib/plantilla";
 import { posicionEnBundle } from "@/lib/bundle";
@@ -308,23 +311,28 @@ export default async function TareaPage({
     ...legalesDisponibles,
   ]);
 
-  // Phase 2 — pool ASIGNABLE del track de la tarea: leads (rol `lead`) +
-  // especialistas (rol `creative`), activos. Admins/master NO son asignables (no
-  // son doers). El editor de asignación de la tarea usa esto (fuente viva, por rol
-  // y track — nunca la lista hardcodeada de vocab.ts).
+  // Phase 2 — pool ASIGNABLE (fuente viva por rol+track, nunca la lista hardcodeada de
+  // vocab.ts). Ya NO se filtra por track NI por rol en SQL: los admins/master son
+  // globales (`track = null`) y un `.eq("track", …)` los dejaba fuera. Se traen los
+  // activos y decide `puedeSerLead`/`puedeSerEspecialista` — las MISMAS funciones que
+  // usa el gate del servidor, así el picker no puede ofrecer a quien el servidor
+  // rechazaría. (Admin/master como lead: Pedro 2026-09-01.)
   const { data: poolRows } = hasSupabase()
     ? await db
         .from("track_members")
-        .select("id, name, color, role")
+        .select("id, name, color, role, track")
         .eq("active", true)
-        .eq("track", idea.track)
-        .in("role", ["lead", "creative"])
+        .in("role", ["lead", "creative", "admin", "master"])
         .order("name")
     : { data: [] };
-  const pool = (poolRows ?? []) as { id: string; name: string; color: string; role: string }[];
-  const leadsPool = pool.filter((m) => m.role === "lead").map(({ id, name, color }) => ({ id, name, color }));
+  const pool = (poolRows ?? []) as {
+    id: string; name: string; color: string; role: string; track: Track | null;
+  }[];
+  const leadsPool = pool
+    .filter((m) => puedeSerLead(m, idea.track as Track | null))
+    .map(({ id, name, color }) => ({ id, name, color }));
   const especialistasPool = pool
-    .filter((m) => m.role === "creative")
+    .filter((m) => puedeSerEspecialista(m, idea.track as Track | null))
     .map(({ id, name, color }) => ({ id, name, color }));
 
   const autorIds = [...new Set((corrRows ?? []).map((r) => r.author_member_id).filter(Boolean) as string[])];

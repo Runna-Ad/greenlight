@@ -189,11 +189,19 @@ export async function importRows(
     const v = (f: keyof SheetRow) => (row.edited?.[f] ?? row.data[f] ?? "").trim();
 
     try {
-      // skip anything already imported — this is what makes re-sync safe
+      // skip anything already imported — this is what makes re-sync safe.
+      // …salvo que la tarea importada esté en la PAPELERA (0057): antes el borrado era
+      // DURO y el FK `on delete set null` limpiaba `staged_rows.idea_id` solo, así que la
+      // fila se podía volver a importar. Con el borrado suave la idea sigue existiendo y
+      // el dedup la daba por importada para siempre — borrabas una tarea y ya no había
+      // forma de traerla del sheet (Pedro, 2026-09-01). Se mira el ESTADO de la idea, no
+      // sólo el vínculo: si está sellada, la fila vuelve a ser importable; si se restaura
+      // desde la papelera, el vínculo vuelve a valer solo (sin tocar nada).
       const { data: staged } = await db
-        .from("staged_rows").select("id, idea_id")
+        .from("staged_rows").select("id, idea_id, ideas(deleted_at)")
         .eq("client_id", client.id).eq("natural_key", row.key).maybeSingle();
-      if (staged?.idea_id) {
+      const st = staged as { idea_id: string | null; ideas: unknown } | null;
+      if (st?.idea_id && !ideaEnPapelera(st.ideas)) {
         res.skipped++;
         continue;
       }
@@ -397,6 +405,20 @@ export async function importRows(
   return res;
 }
 
+/**
+ * ¿La idea enlazada a una fila del staging está en la PAPELERA (0057)?
+ *
+ * El embed de PostgREST (`ideas(deleted_at)`) llega como OBJETO en una relación
+ * muchos-a-uno, pero los tipos generados lo declaran como ARRAY — y esos tipos van
+ * por detrás del esquema. Se aceptan LAS DOS formas en vez de apostar por una: si
+ * la conjetura fallara, `deleted_at` saldría siempre undefined y volveríamos justo
+ * al bug (una tarea borrada que nunca se puede reimportar), en silencio.
+ */
+function ideaEnPapelera(ideas: unknown): boolean {
+  const fila = Array.isArray(ideas) ? ideas[0] : ideas;
+  return Boolean((fila as { deleted_at?: string | null } | null | undefined)?.deleted_at);
+}
+
 /** naturalKey → rowHash for everything already imported, so sync skips it. */
 export async function knownRows(clienteSlug: string): Promise<Record<string, string>> {
   if (!hasSupabase()) return {};
@@ -404,7 +426,21 @@ export async function knownRows(clienteSlug: string): Promise<Record<string, str
   const { data: client } = await db
     .from("clients").select("id").eq("slug", clienteSlug).maybeSingle();
   if (!client) return {};
+  // MISMA regla que el dedup de importRows (arriba): una fila cuya tarea está en la
+  // PAPELERA deja de contar como "ya conocida", para que la vista previa la muestre
+  // como NUEVA y se pueda volver a importar. Si las dos no coincidieran, el preview
+  // diría "sin cambios" y el import la aceptaría (o al revés) — la misma pregunta
+  // respondida en dos sitios tiene que dar lo mismo.
   const { data } = await db
-    .from("staged_rows").select("natural_key, row_hash").eq("client_id", client.id);
-  return Object.fromEntries((data ?? []).map((r) => [r.natural_key, r.row_hash]));
+    .from("staged_rows")
+    .select("natural_key, row_hash, idea_id, ideas(deleted_at)")
+    .eq("client_id", client.id);
+  const filas = (data ?? []) as unknown as {
+    natural_key: string; row_hash: string; idea_id: string | null; ideas: unknown;
+  }[];
+  return Object.fromEntries(
+    filas
+      .filter((r) => !(r.idea_id && ideaEnPapelera(r.ideas)))
+      .map((r) => [r.natural_key, r.row_hash]),
+  );
 }

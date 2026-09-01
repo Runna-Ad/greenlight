@@ -2131,7 +2131,35 @@ console.log("\n▶ Papelera 30 días (0057)");
     1,
   );
 
+  // ── Re-importar del sheet una tarea que está en la papelera (regresión 2026-09-01) ──
+  // El dedup del sync salta lo que ya importó mirando `staged_rows.idea_id`. Con el
+  // borrado DURO, el FK `on delete set null` limpiaba ese vínculo solo y la fila se
+  // podía reimportar. Con el borrado suave la idea sigue ahí, así que el dedup tiene
+  // que mirar el ESTADO de la idea, no sólo el vínculo — si no, borrar una tarea la
+  // vuelve imposible de traer del sheet para siempre (lo que reportó Pedro).
+  {
+    await db.query(`update produccion.ideas set deleted_at=null where id=$1`, [pIdea1]);
+    await db.query(
+      `insert into produccion.staged_rows (client_id, source_tab, natural_key, row_hash, data, idea_id)
+       values ($1,'Real (01/09)','KEY-PAP-1','hash1','{}'::jsonb,$2)`,
+      [CLIENT, pIdea1],
+    );
+    // La consulta que hace el dedup: la fila + el estado de su idea.
+    const dedup = async () =>
+      Number(await scalar(
+        `select count(*) from produccion.staged_rows s
+           join produccion.ideas i on i.id = s.idea_id
+          where s.natural_key='KEY-PAP-1' and i.deleted_at is null`));
+
+    eq("con la tarea VIVA el sync la salta (ya importada)", await dedup(), 1);
+    await db.query(`update produccion.ideas set deleted_at=now() where id=$1`, [pIdea1]);
+    eq("con la tarea EN LA PAPELERA el sync la deja reimportar", await dedup(), 0);
+    await db.query(`update produccion.ideas set deleted_at=null where id=$1`, [pIdea1]);
+    eq("al RESTAURARLA el vínculo vuelve a valer solo (sin duplicar)", await dedup(), 1);
+  }
+
   // Limpieza: no dejar fixtures que ensucien otros asserts si se reordena el archivo
+  await db.query(`delete from produccion.staged_rows where natural_key='KEY-PAP-1'`);
   await db.query(`delete from produccion.briefs where id=$1`, [pBrief]);
 }
 

@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { dispatchPendingEmails } from "@/lib/notif-email";
-import { canAssign, canMoveStatus, canOverrideStatus, type ViewRole } from "@/lib/roles";
+import {
+  canAssign, canMoveStatus, canOverrideStatus, puedeSerLead, puedeSerEspecialista,
+  type ViewRole,
+} from "@/lib/roles";
+import type { Track } from "@/lib/vocab";
+
+/** La forma mínima que necesitan `puedeSerLead`/`puedeSerEspecialista`. */
+type MiembroAsignable = { role: string | null; track: Track | null; active?: boolean };
 import { transicionRequiereLead } from "@/lib/task-actions";
 import { getCurrentUser } from "@/lib/identity";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
@@ -267,15 +274,18 @@ export async function asignarTarea(
       .in("id", dedupIds)
       .returns<{ id: string; role: string; track: string; active: boolean }[]>();
     const byId = new Map((rows ?? []).map((m) => [m.id, m]));
+    // `puedeSerLead`/`puedeSerEspecialista` (lib/roles) son la fuente ÚNICA que
+    // comparten este gate y los dos pickers — así la UI nunca ofrece a alguien que
+    // el servidor rechaza. Un admin/master SÍ puede ser lead (Pedro 2026-09-01).
     if (leadId) {
       const m = byId.get(leadId);
-      if (!m || !m.active || m.role !== "lead" || m.track !== track) {
-        return { ok: false, error: "El lead debe ser un Lead activo del track de la tarea." };
+      if (!m || !puedeSerLead(m as MiembroAsignable, track as Track | null)) {
+        return { ok: false, error: "El lead debe ser un Lead de ese track, o un admin/master." };
       }
     }
     for (const eid of especialistaIds) {
       const m = byId.get(eid);
-      if (!m || !m.active || m.role !== "creative" || m.track !== track) {
+      if (!m || !puedeSerEspecialista(m as MiembroAsignable, track as Track | null)) {
         return { ok: false, error: "Los especialistas deben ser del track de la tarea." };
       }
     }
