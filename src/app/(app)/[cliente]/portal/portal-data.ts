@@ -59,7 +59,9 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
   if (!cli) return null;
 
   const [{ data: briefs }, { data: marcas }] = await Promise.all([
-    db.from("briefs").select("id, brief_name, code, brief_date").eq("client_id", cli.id),
+    // `.is("deleted_at", null)`: lo mandado a la papelera (0057) desaparece del portal
+    // del cliente de inmediato — no espera a la purga de 30 días.
+    db.from("briefs").select("id, brief_name, code, brief_date").eq("client_id", cli.id).is("deleted_at", null),
     db.from("marcas").select("id, name, logo_url").eq("client_id", cli.id),
   ]);
   const briefRows = (briefs ?? []) as { id: string; brief_name: string | null; code: string | null; brief_date: string | null }[];
@@ -79,6 +81,7 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
     .select("id, code, naming_base, status, marca_id, brief_id")
     .in("brief_id", briefIds)
     .not("published_at", "is", null)
+    .is("deleted_at", null) // papelera (0057): fuera del portal al instante
     .order("code", { ascending: true });
 
   const ideaRows = (ideas ?? []) as {
@@ -199,7 +202,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
   const { data: idea } = await db
     .from("ideas")
     .select(
-      "id, naming_base, status, tipo_asset, concepto, trend, plataformas, tamanos, duracion, nota_guion, legales_libres, entrega_url, marca_id, brief_id, published_at",
+      "id, naming_base, status, tipo_asset, concepto, trend, plataformas, tamanos, duracion, nota_guion, legales_libres, entrega_url, marca_id, brief_id, published_at, deleted_at",
     )
     .eq("id", ideaId)
     .maybeSingle<{
@@ -218,8 +221,10 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
       marca_id: string | null;
       brief_id: string;
       published_at: string | null;
+      deleted_at: string | null;
     }>();
-  if (!idea || !idea.published_at) return null;
+  // En la papelera (0057) = inexistente para el cliente, aunque tenga el link directo.
+  if (!idea || !idea.published_at || idea.deleted_at) return null;
 
   // La tarea debe pertenecer a ESTE cliente (por su brief).
   const { data: brief } = await db

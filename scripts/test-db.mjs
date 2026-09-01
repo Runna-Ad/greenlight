@@ -2047,5 +2047,93 @@ eq("la URL del aviso al cliente apunta al PORTAL",
 eq("el cliente NO recibe el task_published INTERNO (ese va a los asignados)", Number(await scalar(
   `select count(*) from produccion.notifications where entity_id=$1 and type='task_published' and recipient_id=$2`, [nIdea, cliP])), 0);
 
+// ── Papelera de 30 días (0057) ──────────────────────────────────────────────
+// Lo que importa probar no es "la columna existe", sino el CONTRATO: lo borrado
+// desaparece de las superficies, vuelve entero al restaurar, y el corte de 30 días
+// separa lo recuperable de lo purgable.
+console.log("\n▶ Papelera 30 días (0057)");
+{
+  const pBrief = "00000000-0000-0000-0000-0000000fa001";
+  const pFam = "00000000-0000-0000-0000-0000000fa002";
+  const pIdea1 = "00000000-0000-0000-0000-0000000fa011";
+  const pIdea2 = "00000000-0000-0000-0000-0000000fa012";
+  await db.query(
+    `insert into produccion.briefs (id, client_id, code, title) values ($1,$2,'PAPEL-01','Papelera')`,
+    [pBrief, CLIENT],
+  );
+  await db.query(
+    `insert into produccion.idea_families (id, brief_id, letter) values ($1,$2,'P')`,
+    [pFam, pBrief],
+  );
+  let vn = 0;
+  for (const [id, base] of [[pIdea1, "PAP1"], [pIdea2, "PAP2"]]) {
+    await db.query(
+      `insert into produccion.ideas (id, family_id, brief_id, variant_number, naming_kind, naming_base, genero_code, mes_code)
+       values ($1,$2,$3,$4,'real',$5,'RE','AGO')`,
+      [id, pFam, pBrief, ++vn, base],
+    );
+  }
+  const enBoard = async (id) =>
+    Number(await scalar(`select count(*) from produccion.board_tasks where id=$1`, [id]));
+
+  eq("board_tasks ve una tarea viva", await enBoard(pIdea1), 1);
+
+  // Sellar UNA tarea (borrado individual)
+  await db.query(`update produccion.ideas set deleted_at=now() where id=$1`, [pIdea1]);
+  eq("una tarea en la papelera SALE de board_tasks", await enBoard(pIdea1), 0);
+  eq("su hermana viva sigue en board_tasks", await enBoard(pIdea2), 1);
+  eq(
+    "sus hijos NO se tocaron (se llega a ellos por la tarea)",
+    Number(await scalar(`select count(*) from produccion.ideas where id=$1`, [pIdea1])),
+    1,
+  );
+
+  // Restaurar
+  await db.query(`update produccion.ideas set deleted_at=null where id=$1`, [pIdea1]);
+  eq("restaurar la devuelve a board_tasks", await enBoard(pIdea1), 1);
+
+  // Sellar el BRIEF con su árbol (lo que hace eliminarBrief)
+  const sello = await scalar(`select now()`);
+  await db.query(`update produccion.ideas set deleted_at=$2 where brief_id=$1 and deleted_at is null`, [pBrief, sello]);
+  await db.query(`update produccion.briefs set deleted_at=$2 where id=$1`, [pBrief, sello]);
+  eq("borrar el brief saca TODAS sus tareas del board", await enBoard(pIdea1), 0);
+  eq("…también la segunda", await enBoard(pIdea2), 0);
+
+  // Restaurar el brief devuelve sólo lo sellado en ESE instante (el árbol que se fue con él)
+  await db.query(`update produccion.ideas set deleted_at=null where brief_id=$1 and deleted_at=$2`, [pBrief, sello]);
+  await db.query(`update produccion.briefs set deleted_at=null where id=$1`, [pBrief]);
+  eq("restaurar el brief devuelve su árbol completo", await enBoard(pIdea1) + await enBoard(pIdea2), 2);
+
+  // El corte de 30 días: 29 días = recuperable, 31 = purgable
+  await db.query(`update produccion.ideas set deleted_at=now()-interval '29 days' where id=$1`, [pIdea1]);
+  await db.query(`update produccion.ideas set deleted_at=now()-interval '31 days' where id=$1`, [pIdea2]);
+  const corte = `now()-interval '30 days'`;
+  eq(
+    "a los 29 días sigue siendo recuperable",
+    Number(await scalar(`select count(*) from produccion.ideas where id=$1 and deleted_at >= ${corte}`, [pIdea1])),
+    1,
+  );
+  eq(
+    "a los 31 días ya es purgable",
+    Number(await scalar(`select count(*) from produccion.ideas where id=$1 and deleted_at < ${corte}`, [pIdea2])),
+    1,
+  );
+  // La purga perezosa borra DURO lo vencido (y sólo eso)
+  await db.query(`delete from produccion.ideas where deleted_at < ${corte}`);
+  eq(
+    "la purga elimina la vencida",
+    Number(await scalar(`select count(*) from produccion.ideas where id=$1`, [pIdea2])),
+    0,
+  );
+  eq(
+    "la purga NO toca la de 29 días",
+    Number(await scalar(`select count(*) from produccion.ideas where id=$1`, [pIdea1])),
+    1,
+  );
+
+  // Limpieza: no dejar fixtures que ensucien otros asserts si se reordena el archivo
+  await db.query(`delete from produccion.briefs where id=$1`, [pBrief]);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

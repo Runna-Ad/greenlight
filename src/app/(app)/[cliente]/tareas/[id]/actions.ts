@@ -682,11 +682,14 @@ export async function vaciarGuion(ideaId: string): Promise<GuardarResultado> {
 }
 
 /**
- * Borra una TAREA (idea) entera — sólo master/admin (Pedro 2026-08-21). Es un
- * DELETE duro; los FKs con ON DELETE CASCADE limpian planos, estáticos, assets,
- * asignaciones, comentarios, referencias y snippets de la idea (verificado contra
- * el catálogo). Los objetos en el bucket de referencias quedan huérfanos (inocuo).
- * No se puede deshacer: la confirmación vive en la UI.
+ * Manda una TAREA (idea) a la PAPELERA — sólo master/admin (Pedro 2026-08-21).
+ *
+ * Ya NO es un DELETE duro (0057): sella `deleted_at`/`deleted_by` y la tarea
+ * desaparece de todas las superficies (la vista `board_tasks` y los loaders la
+ * filtran). Sus hijos —planos, estáticos, assets, comentarios— NO se tocan: sólo
+ * se llega a ellos a través de la tarea, así que quedan intactos esperando una
+ * posible restauración. El Master Builder puede restaurarla 30 días desde la
+ * Papelera; después el borrado duro (con sus cascadas) ocurre al vaciarla.
  */
 export async function eliminarTarea(
   cliente: string,
@@ -695,11 +698,18 @@ export async function eliminarTarea(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canAdmin(role)) return { ok: false, error: "Sólo un admin o master puede borrar una tarea." };
+  const actor = (await getCurrentUser())?.userId ?? null;
 
-  const { error } = await supabaseAdmin().from("ideas").delete().eq("id", ideaId);
+  const { error } = await supabaseAdmin()
+    .from("ideas")
+    .update({ deleted_at: new Date().toISOString(), deleted_by: actor })
+    .eq("id", ideaId)
+    .is("deleted_at", null); // idempotente: no re-sella (ni pisa quién la borró)
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/${cliente}/tablero`);
   revalidatePath(`/${cliente}/briefs`);
+  revalidatePath("/mi-trabajo");
+  revalidatePath("/entregas");
   return { ok: true };
 }
 

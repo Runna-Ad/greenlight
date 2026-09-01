@@ -54,7 +54,7 @@ export async function cargarWorkload(tracks: Track[] | null): Promise<WorkloadMe
       // == exactamente el complemento de TERMINALES (published/delivered), así que esto
       // es equivalente al `!TERMINALES.has()` de abajo — sin traer ideas terminales (la
       // tabla que más crece con el histórico). Verificado contra el enum (reap perf).
-      db.from("ideas").select("id, status, brief_id").in("status", ESTADOS_ACTIVOS),
+      db.from("ideas").select("id, status, brief_id").in("status", ESTADOS_ACTIVOS).is("deleted_at", null),
       db.from("briefs").select("id, client_id"),
       db.from("clients").select("id, name, slug, brand_color"),
     ]);
@@ -163,6 +163,7 @@ export async function cargarEvaluacion(
       .from("ideas")
       .select("id, completed_at, brief_id, naming_base, code")
       .not("completed_at", "is", null)
+      .is("deleted_at", null) // papelera 0057: lo borrado no puntúa en la Evaluación
       .gte("completed_at", periodo.desde)
       .lt("completed_at", periodo.hasta),
   ]);

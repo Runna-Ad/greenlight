@@ -12,6 +12,7 @@ import {
   Inbox,
   UserCheck,
   Brain,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,7 @@ const InvitacionesTab = dynamic(
   { ssr: false },
 );
 const ClientesTab = dynamic(() => import("./clientes-tab").then((m) => m.ClientesTab), { ssr: false });
+const PapeleraTab = dynamic(() => import("./papelera-tab").then((m) => m.PapeleraTab), { ssr: false });
 
 type Soy = {
   id: string;
@@ -60,7 +62,7 @@ type Soy = {
 
 type TabKey =
   | "perfil" | "equipo" | "invitaciones" | "clientes"
-  | "marcas" | "actividad" | "integraciones" | "biblioteca" | "hue";
+  | "marcas" | "actividad" | "integraciones" | "biblioteca" | "hue" | "papelera";
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "perfil", label: "Mi perfil", icon: UserRound },
   { key: "equipo", label: "Equipo", icon: Users },
@@ -96,8 +98,15 @@ export function AdminShell({
 }) {
   const [tab, setTab] = useState<TabKey>("equipo");
   // El HUB sólo aparece para el master (además el gate real está en cada action = canHue).
+  // Papelera: sólo Master Builder, igual que el HUB — restaurar/vaciar es suyo
+  // (borrar sí lo puede hacer un admin). El gate REAL vive en papelera-actions
+  // (`noMaster`); esto sólo evita ofrecer una pestaña que no podría usar.
   const tabs: typeof TABS = esMaster
-    ? [...TABS, { key: "hue", label: "H.Ü.E HUB", icon: Brain }]
+    ? [
+        ...TABS,
+        { key: "hue", label: "H.Ü.E HUB", icon: Brain },
+        { key: "papelera", label: "Papelera", icon: Trash2 },
+      ]
     : TABS;
 
   return (
@@ -146,6 +155,7 @@ export function AdminShell({
           {tab === "integraciones" && <IntegracionesTab estado={integraciones} />}
           {tab === "biblioteca" && <BibliotecaTab snippets={biblioteca.snippets} marcas={biblioteca.marcas} />}
           {tab === "hue" && esMaster && <HueHubTab />}
+          {tab === "papelera" && esMaster && <PapeleraTab />}
         </div>
       </div>
     </div>

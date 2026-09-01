@@ -35,6 +35,7 @@ async function cargarArchivo(tracks: Track[] | null): Promise<BriefArchivo[]> {
     .select("id, code, naming_base, brief_id, delivered_at")
     .eq("status", "delivered")
     .not("delivered_at", "is", null)
+    .is("deleted_at", null) // papelera 0057: lo borrado sale también del ARCHIVO
     .order("delivered_at", { ascending: false })
     .limit(1000);
   if (tracks) q = q.in("track", tracks);

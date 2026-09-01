@@ -45,10 +45,12 @@ async function esDelCliente(
 ): Promise<boolean> {
   const { data: idea } = await db
     .from("ideas")
-    .select("brief_id, published_at")
+    .select("brief_id, published_at, deleted_at")
     .eq("id", ideaId)
-    .maybeSingle<{ brief_id: string; published_at: string | null }>();
-  if (!idea || !idea.published_at) return false;
+    .maybeSingle<{ brief_id: string; published_at: string | null; deleted_at: string | null }>();
+  // En la papelera (0057) → el cliente no puede aprobar ni pedir cambios sobre ella,
+  // aunque tuviera la pantalla abierta cuando la borraron.
+  if (!idea || !idea.published_at || idea.deleted_at) return false;
   const { data: brief } = await db
     .from("briefs")
     .select("clients(slug)")

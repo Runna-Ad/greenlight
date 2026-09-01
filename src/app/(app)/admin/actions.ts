@@ -44,7 +44,8 @@ export async function listarEquipo(): Promise<MiembroRow[]> {
 
   const [{ data: asigs }, { data: ideas }] = await Promise.all([
     db.from("idea_assignments").select("member_id, idea_id"),
-    db.from("ideas").select("id, status"),
+    // Papelera 0057: una tarea borrada no le pesa a nadie en la carga.
+    db.from("ideas").select("id, status").is("deleted_at", null),
   ]);
   const statusById = new Map(
     ((ideas ?? []) as { id: string; status: string }[]).map((i) => [i.id, i.status]),
@@ -713,6 +714,10 @@ export async function eliminarMarca(marcaId: string): Promise<Guardado> {
 
   const db = supabaseAdmin();
   const [ideas, snippets, reglas] = await Promise.all([
+    // A PROPÓSITO sin filtrar la papelera: una tarea borrada pero AÚN RECUPERABLE
+    // sigue apuntando a esta marca. Si dejáramos borrar la marca, al restaurar la
+    // tarea volvería sin marca (o peor, se la llevaría la cascada). Bloquear de más
+    // aquí es reversible — vaciar la papelera libera la marca. (0057)
     db.from("ideas").select("id", { count: "exact", head: true }).eq("marca_id", marcaId),
     db.from("snippets").select("id", { count: "exact", head: true }).eq("marca_id", marcaId),
     db.from("reglas").select("id", { count: "exact", head: true }).eq("marca_id", marcaId),

@@ -82,6 +82,7 @@ async function loadBoard(
       .from("briefs")
       .select("id, title, source_tab")
       .eq("client_id", client.id)
+      .is("deleted_at", null) // papelera 0057 (las tareas ya las filtra la vista board_tasks)
       .order("created_at", { ascending: false })
       .returns<{ id: string; title: string | null; source_tab: string | null }[]>(),
   ]);

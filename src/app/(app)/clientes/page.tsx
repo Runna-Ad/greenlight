@@ -68,10 +68,11 @@ async function cargarClientes(tracks: Track[] | null): Promise<ClientCard[]> {
   let ideasQ = db
     .from("ideas")
     .select("brief_id, due_date, status")
-    .in("status", OPEN_IDEA_STATES);
+    .in("status", OPEN_IDEA_STATES)
+    .is("deleted_at", null); // papelera 0057: no se cuenta lo borrado
   if (tracks) ideasQ = ideasQ.in("track", tracks);
   const [{ data: briefsRaw }, { data: ideasRaw }] = await Promise.all([
-    db.from("briefs").select("id, client_id, status").in("client_id", clientIds),
+    db.from("briefs").select("id, client_id, status").in("client_id", clientIds).is("deleted_at", null),
     ideasQ.limit(5000),
   ]);
   const briefs = (briefsRaw ?? []) as { id: string; client_id: string; status: string }[];

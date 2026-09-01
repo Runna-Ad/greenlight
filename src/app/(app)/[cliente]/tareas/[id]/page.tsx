@@ -65,6 +65,7 @@ export default async function TareaPage({
       "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo, peloteo_raw, selling_points",
     )
     .eq("id", id)
+    .is("deleted_at", null) // en la papelera (0057) = 404; se restaura desde /admin
     .maybeSingle<Idea>();
 
   if (!idea) notFound();
