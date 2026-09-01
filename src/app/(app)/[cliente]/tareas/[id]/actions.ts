@@ -14,6 +14,7 @@ import { combinarConsideraciones } from "@/lib/consideraciones";
 import type { AssetStatus } from "@/lib/brand";
 import { sinInventar, limpiarPegado, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
 import { sinNegrita } from "@/lib/negrita";
+import { CAMPOS, type TablaGuardable } from "@/lib/campos";
 import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
 
 // Columnas que alimentan a PlanoVista/EstaticoVista (para devolver la fila creada
@@ -26,27 +27,10 @@ const COLS_COPY = "id, tema_id, headline, descripcion, orden";
 import Anthropic from "@anthropic-ai/sdk";
 import type { CopyTema, Copy } from "@/lib/database.types";
 
-export type Tabla = "planos" | "estaticos";
-/** Tablas cuyos campos autoguarda `guardarCampo` — incluye las de Copies. `Campo` y las
- *  correcciones usan `Tabla` (planos/estaticos); Copies usa su propio campo (CampoCopy). */
-export type TablaGuardable = Tabla | "copies_temas" | "copies";
-
-/**
- * Whitelist en el SERVIDOR. El nombre del campo llega del cliente y termina
- * dentro de un identificador SQL — jamás se interpola algo que no esté aquí.
- */
-export const CAMPOS: Record<TablaGuardable, Set<string>> = {
-  planos: new Set([
-    "titulo", "hook_narrativo", "hook_visual", "accion",
-    "copy_in", "sfx", "gfx", "edicion", "dialogo",
-  ]),
-  estaticos: new Set([
-    "copy_titulo", "copy_subtitulo", "copy_cta", "legales_extra",
-    "referencia_url", "referencia_nota", "notas",
-  ]),
-  copies_temas: new Set(["tema"]),
-  copies: new Set(["headline", "descripcion"]),
-};
+// La whitelist y sus tipos viven en `@/lib/campos` (módulo puro): este archivo es
+// "use server" y exportar una CONSTANTE desde aquí revienta en runtime. Se re-exportan
+// los TIPOS (se borran al compilar) para no romper a quien ya los importa de aquí.
+export type { Tabla, TablaGuardable } from "@/lib/campos";
 
 export type GuardarResultado =
   | { ok: true }

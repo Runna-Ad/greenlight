@@ -10,7 +10,8 @@ import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { fixSeguro } from "@/lib/ortografia";
 import { sinNegrita } from "@/lib/negrita";
 import { registrarOrtografia, marcarOrtografiaAplicada, ignorarOrtografia } from "@/lib/hue-log";
-import { guardarCampo, CAMPOS, type Tabla, type GuardarResultado } from "./actions";
+import { guardarCampo, type GuardarResultado } from "./actions";
+import { CAMPOS, type Tabla } from "@/lib/campos";
 
 /** Un error de ortografía/gramática que H.Ü.E encontró, con su fix propuesto. */
 export type ErrorOrtografia = {
