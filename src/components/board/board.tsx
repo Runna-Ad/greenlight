@@ -28,6 +28,7 @@ import {
 } from "@/lib/brand";
 import { moveTask, asignarTarea } from "@/app/(app)/[cliente]/tablero/actions";
 import { transicionRequiereLead } from "@/lib/task-actions";
+import { esGreenlitReciente as esGreenlitRecienteFecha } from "@/lib/bundle";
 import {
   DEFAULT_ROLE,
   canAssign,
@@ -108,10 +109,11 @@ const BOARD_ACCENT: Partial<Record<AssetStatus, string>> = {
   delivered: "#00e676", // verde neón del logo — Greenlit
 };
 
-const MS_7D = 7 * 24 * 60 * 60 * 1000;
-/** ¿Greenlit hace ≤7 días? Las más viejas salen del board y viven en Entregas-archivo. */
+/** ¿Greenlit hace ≤7 días? Las más viejas salen del board y viven en Entregas-archivo.
+ *  La VENTANA vive en lib/bundle (MS_VENTANA_GREENLIT), compartida con la lista de
+ *  briefs: dos definiciones de "7 días" acabarían diciendo cosas distintas. */
 function esGreenlitReciente(t: Task): boolean {
-  return !!t.deliveredAt && Date.now() - new Date(t.deliveredAt).getTime() <= MS_7D;
+  return esGreenlitRecienteFecha(t.deliveredAt);
 }
 
 // Referencia estable para columnas sin tarjetas: evita crear un [] nuevo por

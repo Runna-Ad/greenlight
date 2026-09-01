@@ -3,7 +3,7 @@
 import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.ts";
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
 import { actionsFor, waitingLabel, transicionRequiereLead } from "../src/lib/task-actions.ts";
-import { filtroBundle } from "../src/lib/bundle.ts";
+import { filtroBundle, greenlitDeBundle, bundleEnCurso, esGreenlitReciente, MS_VENTANA_GREENLIT } from "../src/lib/bundle.ts";
 import { plantillaPara, readTimeS, soloHablado, PALABRAS_POR_MINUTO, parseDuracion, presupuestoDialogoS, LEGAL_SECONDS, COLCHON_MIN_S, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
@@ -152,6 +152,35 @@ ok("completed→published (enviar a cliente) requiere lead", transicionRequiereL
 ok("completed→delivered (entregar) requiere lead", transicionRequiereLead("completed", "delivered"));
 ok("under_review→in_corrections (pedir cambios) requiere lead", transicionRequiereLead("under_review", "in_corrections"));
 ok("published→delivered requiere lead", transicionRequiereLead("published", "delivered"));
+
+// ── Brief GREENLIT: derivado de sus tareas, visible 7 días (Pedro 2026-09-01) ──
+console.log("\n▶ Brief Greenlit + ventana de 7 días");
+{
+  const AYER = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const HOY = new Date().toISOString();
+  const VIEJO = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+  const d = (status, delivered_at) => ({ status, delivered_at });
+
+  eq("un brief SIN tareas no está greenlit (si no, uno recién creado desaparecería)",
+     greenlitDeBundle([]), null);
+  eq("con una tarea en curso NO está greenlit",
+     greenlitDeBundle([d("delivered", AYER), d("in_progress", null)]), null);
+  eq("todas entregadas → greenlit con la fecha de la ÚLTIMA",
+     greenlitDeBundle([d("delivered", AYER), d("delivered", HOY)]), HOY);
+  eq("delivered SIN fecha no cuenta como entregada",
+     greenlitDeBundle([d("delivered", null)]), null);
+
+  ok("un brief en curso se sigue mostrando", bundleEnCurso({ greenlitAt: null }));
+  ok("un brief greenlit AYER se sigue mostrando", bundleEnCurso({ greenlitAt: AYER }));
+  ok("uno greenlit hace 10 días ya NO (vive en Entregas)", !bundleEnCurso({ greenlitAt: VIEJO }));
+
+  // Reabrir una tarea revierte el greenlit SOLO — por eso se deriva y no se guarda.
+  eq("reabrir una tarea quita el greenlit del brief",
+     greenlitDeBundle([d("delivered", AYER), d("in_corrections", AYER)]), null);
+
+  ok("la ventana del tablero y la de briefs son LA MISMA", MS_VENTANA_GREENLIT === 7 * 24 * 60 * 60 * 1000);
+  ok("esGreenlitReciente(null) = false", !esGreenlitReciente(null));
+}
 
 // ── filtroBundle (reap S3): lead acotado a su(s) track(s); multi-track ve AMBOS ──
 console.log("\n▶ filtroBundle — scope por rol + track");
@@ -599,6 +628,18 @@ ok("sin fila (undefined) cae al default del catálogo",
    D({ type: "task_approved", notifyEmail: true, email: "vero@runna.com.mx", eventPref: undefined }));
 ok("pref=true NO salva si la persona apagó el email maestro",
    !D({ type: "task_approved", notifyEmail: false, email: "vero@runna.com.mx", eventPref: true }));
+// `esMiTarea`: el aviso va dirigido a la persona ASIGNADA (el fan_out sólo llena
+// recipient_member_id en esas ramas). Lo TUYO siempre llega por correo; la preferencia
+// por-evento gobierna el volumen de tu ALCANCE, no tu propia tarea. Sin esto un
+// admin/master quedaba mudo: la siembra de 0050 los dejó en false para todo.
+ok("tarea PROPIA se manda aunque la pref del evento esté en false",
+   D({ type: "task_submitted", notifyEmail: true, email: "vero@runna.com.mx", eventPref: false, esMiTarea: true }));
+ok("el MISMO evento en su alcance (no asignado) respeta la pref en false",
+   !D({ type: "task_submitted", notifyEmail: true, email: "vero@runna.com.mx", eventPref: false, esMiTarea: false }));
+ok("el interruptor MAESTRO gana incluso en una tarea propia",
+   !D({ type: "task_submitted", notifyEmail: false, email: "vero@runna.com.mx", eventPref: false, esMiTarea: true }));
+ok("sin email válido no se manda aunque sea tarea propia",
+   !D({ type: "task_submitted", notifyEmail: true, email: null, esMiTarea: true }));
 
 // ── Resaltado en vivo de correcciones por selección (best-effort) ──
 console.log("\n▶ Resaltado por selección");

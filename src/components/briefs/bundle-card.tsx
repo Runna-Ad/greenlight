@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Pill, type PillStatus } from "@/components/ui/pill";
-import { ChevronDown, Files, Layers, Trash2 } from "lucide-react";
+import { ChevronDown, Files, Layers, Sparkles, Trash2 } from "lucide-react";
 
 import type { Bundle } from "@/lib/bundle";
 import { STATUS_LABEL, STATUS_TOKEN } from "@/lib/brand";
@@ -63,9 +63,26 @@ export function BundleCard({
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{bundle.brief_tab}</p>
             )}
           </div>
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-secondary-foreground">
-            <Layers className="size-3" /> {bundle.tasks.length}
-          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* Brief GREENLIT: todas sus tareas entregadas. Se queda 7 días en la lista y
+                luego vive sólo en Entregas — mismo verde neón que la columna Greenlit del
+                tablero, para que se lea como lo mismo. (Pedro 2026-09-01) */}
+            {bundle.greenlitAt && (
+              <span
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold"
+                style={{
+                  background: "color-mix(in srgb, #00e676 18%, transparent)",
+                  color: "color-mix(in srgb, #00e676 72%, #000)",
+                }}
+                title="Todas sus tareas están entregadas. Vive en Entregas."
+              >
+                <Sparkles className="size-3" /> Greenlit
+              </span>
+            )}
+            <span className="flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-secondary-foreground">
+              <Layers className="size-3" /> {bundle.tasks.length}
+            </span>
+          </div>
         </div>
 
         {/* mini-resumen por estado */}

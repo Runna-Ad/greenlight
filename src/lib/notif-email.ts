@@ -102,7 +102,11 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
 
     const pid = perfilDe(n);
     const eventPref = pid && n.type ? prefByKey.get(`${pid}|${n.type}`) : undefined;
-    const decision = decisionEmail({ type: n.type, notifyEmail, email, eventPref });
+    // `recipient_member_id` sólo lo llena el fan_out en las ramas de ASIGNADOS
+    // (y el trigger de task_assigned): si viene, el aviso es de UNA TAREA SUYA.
+    const decision = decisionEmail({
+      type: n.type, notifyEmail, email, eventPref, esMiTarea: !!n.recipient_member_id,
+    });
     if (!decision.enviar) { await marcar(d.id, { status: "skipped", error: decision.razon }); skipped++; continue; }
 
     const cta = ctaUrl(n);

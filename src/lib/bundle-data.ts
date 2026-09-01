@@ -9,6 +9,7 @@ import {
   agruparBundles,
   compararBundle,
   filtroBundle,
+  bundleEnCurso,
   type Bundle,
   type BundleTask,
 } from "@/lib/bundle";
@@ -29,7 +30,15 @@ export async function cargarBundle(
   return (data ?? []).filter(filtroBundle(role, soyId, tracks)).sort(compararBundle);
 }
 
-/** Todos los bundles de un cliente (la página de briefs). */
+/**
+ * Todos los bundles de un cliente PARA LA LISTA de briefs: los que siguen en curso, más
+ * los cerrados hace ≤7 días. Un brief entregado por completo se queda una semana a la
+ * vista y luego vive en Entregas (que ya los agrupa por brief) — la misma regla que las
+ * tareas en el tablero, para que la lista no crezca sin fin. (Pedro 2026-09-01)
+ *
+ * `cargarBundle` (singular) NO filtra: las flechas ← n/N → de una tarea tienen que
+ * seguir funcionando dentro de un brief ya archivado.
+ */
 export async function cargarBundles(
   clienteSlug: string,
   role: ViewRole,
@@ -42,5 +51,6 @@ export async function cargarBundles(
     .eq("client_slug", clienteSlug)
     .returns<BundleTask[]>();
 
-  return agruparBundles((data ?? []).filter(filtroBundle(role, soyId, tracks)));
+  return agruparBundles((data ?? []).filter(filtroBundle(role, soyId, tracks)))
+    .filter((b) => bundleEnCurso(b));
 }

@@ -29,7 +29,19 @@ export type BundleTask = {
   brief_title: string | null;
   brief_tab: string | null;
   client_slug: string | null;
+  /** Cuándo se entregó (Greenlit). null = aún no. Lo expone la vista desde 0058. */
+  delivered_at: string | null;
 };
+
+/** La ventana en la que el trabajo ya entregado sigue A LA VISTA antes de vivir sólo
+ *  en Entregas. UNA constante: la usan la columna Greenlit del tablero y la lista de
+ *  briefs. Si cada pantalla tuviera la suya, un día dirían cosas distintas. */
+export const MS_VENTANA_GREENLIT = 7 * 24 * 60 * 60 * 1000;
+
+/** ¿Se entregó hace ≤7 días? (null = nunca entregado → false) */
+export function esGreenlitReciente(deliveredAt: string | null | undefined, ahora = Date.now()): boolean {
+  return !!deliveredAt && ahora - new Date(deliveredAt).getTime() <= MS_VENTANA_GREENLIT;
+}
 
 /**
  * El filtro por rol, como función pura y probada aparte.
@@ -75,7 +87,39 @@ export type Bundle = {
   brief_title: string | null;
   brief_tab: string | null;
   tasks: BundleTask[];
+  /**
+   * El brief está GREENLIT: todas sus tareas vivas están entregadas. Vale la fecha de
+   * la ÚLTIMA entrega (la que cierra el brief) — o null si aún queda trabajo.
+   * DERIVADO de las tareas, nunca guardado: si alguien reabre una entregada, el brief
+   * deja de estar greenlit solo. (Pedro 2026-09-01)
+   */
+  greenlitAt: string | null;
 };
+
+/**
+ * ¿El brief está entregado por completo? Sí cuando tiene AL MENOS una tarea y todas
+ * están `delivered` con fecha. La condición de "al menos una" no es un detalle: sin
+ * ella un brief vacío cumple "todas entregadas" por vacuidad y desaparecería de la
+ * lista recién creado. Devuelve la fecha de la última entrega, o null.
+ */
+export function greenlitDeBundle(tasks: Pick<BundleTask, "status" | "delivered_at">[]): string | null {
+  if (!tasks.length) return null;
+  let ultima: string | null = null;
+  for (const t of tasks) {
+    if (t.status !== "delivered" || !t.delivered_at) return null;
+    if (!ultima || t.delivered_at > ultima) ultima = t.delivered_at;
+  }
+  return ultima;
+}
+
+/**
+ * ¿Este brief se sigue mostrando en /briefs? Sí mientras tenga trabajo en curso, o si
+ * se cerró hace ≤7 días. Los más viejos viven en Entregas (que los agrupa por brief),
+ * así que la lista deja de crecer para siempre. MISMA ventana que el tablero.
+ */
+export function bundleEnCurso(b: Pick<Bundle, "greenlitAt">, ahora = Date.now()): boolean {
+  return !b.greenlitAt || esGreenlitReciente(b.greenlitAt, ahora);
+}
 
 /** Agrupa las tareas visibles por brief y las ordena (lógica pura, testeable). */
 export function agruparBundles(visibles: BundleTask[]): Bundle[] {
@@ -83,12 +127,18 @@ export function agruparBundles(visibles: BundleTask[]): Bundle[] {
   for (const t of visibles) {
     let b = porBrief.get(t.brief_id);
     if (!b) {
-      b = { brief_id: t.brief_id, brief_title: t.brief_title, brief_tab: t.brief_tab, tasks: [] };
+      b = {
+        brief_id: t.brief_id, brief_title: t.brief_title, brief_tab: t.brief_tab,
+        tasks: [], greenlitAt: null,
+      };
       porBrief.set(t.brief_id, b);
     }
     b.tasks.push(t);
   }
-  for (const b of porBrief.values()) b.tasks.sort(compararBundle);
+  for (const b of porBrief.values()) {
+    b.tasks.sort(compararBundle);
+    b.greenlitAt = greenlitDeBundle(b.tasks);
+  }
 
   // Briefs con más tareas primero; empate → por título, estable.
   return [...porBrief.values()].sort(
@@ -100,7 +150,7 @@ export function agruparBundles(visibles: BundleTask[]): Bundle[] {
 
 /** Las columnas que la vista board_tasks expone para un bundle. */
 export const BUNDLE_SELECT =
-  "id, code, status, naming_base, concepto, tipo_asset, duracion, marca, plataformas, file_count, track, member_ids, members, brief_id, brief_title, brief_tab, client_slug";
+  "id, code, status, naming_base, concepto, tipo_asset, duracion, marca, plataformas, file_count, track, member_ids, members, brief_id, brief_title, brief_tab, client_slug, delivered_at";
 
 /** Dónde está esta tarea dentro de su bundle — alimenta las flechas ← n/N →. */
 export function posicionEnBundle(tasks: BundleTask[], ideaId: string) {

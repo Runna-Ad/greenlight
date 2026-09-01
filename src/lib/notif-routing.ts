@@ -34,10 +34,25 @@ export function decisionEmail(args: {
   email: string | null | undefined;
   /** Preferencia por-evento de la persona (notification_prefs.email). undefined = sin fila → default. */
   eventPref?: boolean | null;
+  /**
+   * El aviso es de una tarea SUYA (va dirigido a la persona ASIGNADA, no a un rol).
+   * Se deriva de `notifications.recipient_member_id`: el fan_out sólo lo llena en las
+   * ramas de ASIGNADOS; las de alcance/rol y los watchers dejan el member en null.
+   */
+  esMiTarea?: boolean;
 }): { enviar: boolean; razon: string } {
-  const emailea = args.eventPref ?? tipoEmailea(args.type);
+  // Lo TUYO siempre te llega por correo. La preferencia por-evento gobierna el
+  // volumen de lo que pasa en tu ALCANCE ("avísame de cada tarea que se manda a
+  // revisión"), no lo que pasa en la tarea que llevas tú.
+  // Sin esto, un admin/master no recibía NADA por correo: la siembra de 0050 sólo
+  // encendió eventos para `lead` y `creative`, y dejó admin/master en false para
+  // todo — se escribió cuando un admin no podía ser lead de una tarea. Desde que
+  // sí puede (2026-09-01), ese default lo dejaba mudo sobre su propio trabajo.
+  // El interruptor MAESTRO (`notify_email`) sigue mandando: quien apaga el correo,
+  // lo apaga entero.
+  const emailea = args.esMiTarea ? true : args.eventPref ?? tipoEmailea(args.type);
   if (!emailea) return { enviar: false, razon: "evento no emailea (pref/def)" };
   if (!args.notifyEmail) return { enviar: false, razon: "persona desactivó email" };
   if (!esEmail(args.email)) return { enviar: false, razon: "sin email válido" };
-  return { enviar: true, razon: "ok" };
+  return { enviar: true, razon: args.esMiTarea ? "ok (tarea propia)" : "ok" };
 }
