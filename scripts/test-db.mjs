@@ -10,6 +10,7 @@ import { missingRequired } from "../src/lib/required.ts";
 import { readTimeS } from "../src/lib/plantilla.ts";
 import { reglasQueAplican } from "../src/lib/reglas.ts";
 import { actionsFor } from "../src/lib/task-actions.ts";
+import { greenlitDeBundle } from "../src/lib/bundle.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migDir = join(__dirname, "..", "supabase", "migrations");
@@ -2186,6 +2187,86 @@ console.log("\n▶ Papelera 30 días (0057)");
   // Limpieza: no dejar fixtures que ensucien otros asserts si se reordena el archivo
   await db.query(`delete from produccion.staged_rows where natural_key like 'KEY-PAP-%'`);
   await db.query(`delete from produccion.briefs where id=$1`, [pBrief]);
+}
+
+// ── brief_estado (0060): "en curso" calculado en la BD, MISMA regla que bundle.ts ──
+// Lo que importa es el CONTRATO con greenlitDeBundle(): si la vista y el JS discreparan,
+// la lista de briefs enseñaría (u ocultaría) briefs distintos según quién calcule.
+console.log("\n▶ brief_estado (0060) — contrato con greenlitDeBundle()");
+{
+  const eBrief = "00000000-0000-0000-0000-0000000be001";
+  const eFam = "00000000-0000-0000-0000-0000000be002";
+  const eIdea1 = "00000000-0000-0000-0000-0000000be011";
+  const eIdea2 = "00000000-0000-0000-0000-0000000be012";
+  const eVacio = "00000000-0000-0000-0000-0000000be003";
+  await db.query(`insert into produccion.briefs (id, client_id, code, title) values ($1,$2,'BE-01','Estado')`, [eBrief, CLIENT]);
+  await db.query(`insert into produccion.briefs (id, client_id, code, title) values ($1,$2,'BE-02','Vacío')`, [eVacio, CLIENT]);
+  await db.query(`insert into produccion.idea_families (id, brief_id, letter) values ($1,$2,'E')`, [eFam, eBrief]);
+  let vn = 0;
+  for (const [id, base] of [[eIdea1, "EST1"], [eIdea2, "EST2"]]) {
+    await db.query(
+      `insert into produccion.ideas (id, family_id, brief_id, variant_number, naming_kind, naming_base, genero_code, mes_code)
+       values ($1,$2,$3,$4,'real',$5,'RE','AGO')`,
+      [id, eFam, eBrief, ++vn, base],
+    );
+  }
+  const estado = async (id) => (await q(`select n_tareas, n_pendientes, greenlit_at from produccion.brief_estado where brief_id=$1`, [id]))[0];
+  // Lo que diría el JS con las mismas filas (board_tasks expone status + delivered_at).
+  const enJs = async (id) => greenlitDeBundle(
+    await q(`select status, delivered_at from produccion.board_tasks where brief_id=$1`, [id]),
+  );
+  const iso = (v) => (v ? new Date(v).toISOString() : null);
+  // El trigger de transiciones no deja saltar todo → delivered: se recorre el camino.
+  const entregar = async (id, fecha) => {
+    for (const st of ["in_progress", "under_review", "completed"]) await db.query(`update produccion.ideas set status=$2 where id=$1`, [id, st]);
+    await db.query(`update produccion.ideas set status='delivered', delivered_at=$2 where id=$1`, [id, fecha]);
+  };
+
+  let e = await estado(eBrief);
+  eq("2 tareas vivas", Number(e.n_tareas), 2);
+  eq("2 pendientes", Number(e.n_pendientes), 2);
+  eq("sin entregar → greenlit_at null", e.greenlit_at, null);
+  eq("…igual que el JS", await enJs(eBrief), null);
+
+  const v = await estado(eVacio);
+  eq("brief sin tareas: 0 tareas", Number(v.n_tareas), 0);
+  eq("brief sin tareas NO es greenlit (por vacuidad)", v.greenlit_at, null);
+
+  // Entregar UNA: sigue en curso
+  await entregar(eIdea1, "2026-08-20T10:00:00Z");
+  e = await estado(eBrief);
+  eq("1 pendiente tras entregar una", Number(e.n_pendientes), 1);
+  eq("una entregada de dos → sigue sin greenlit", e.greenlit_at, null);
+
+  // Entregar la otra más tarde: greenlit = la ÚLTIMA entrega
+  await entregar(eIdea2, "2026-08-25T10:00:00Z");
+  e = await estado(eBrief);
+  eq("0 pendientes", Number(e.n_pendientes), 0);
+  eq("greenlit_at = la última entrega", iso(e.greenlit_at), "2026-08-25T10:00:00.000Z");
+  eq("…igual que greenlitDeBundle()", iso(await enJs(eBrief)), iso(e.greenlit_at));
+
+  // delivered SIN fecha (anómalo) cuenta como pendiente — igual que el JS
+  await db.query(`update produccion.ideas set delivered_at=null where id=$1`, [eIdea2]);
+  e = await estado(eBrief);
+  eq("delivered sin fecha → pendiente", Number(e.n_pendientes), 1);
+  eq("…y el JS tampoco lo da por greenlit", await enJs(eBrief), null);
+  await db.query(`update produccion.ideas set delivered_at='2026-08-25T10:00:00Z' where id=$1`, [eIdea2]);
+
+  // Papelera: una tarea sellada no cuenta (ni como pendiente ni como entregada)
+  await db.query(`update produccion.ideas set deleted_at=now() where id=$1`, [eIdea1]);
+  e = await estado(eBrief);
+  eq("tarea en la papelera no cuenta", Number(e.n_tareas), 1);
+  eq("…el brief queda greenlit por la viva", iso(e.greenlit_at), "2026-08-25T10:00:00.000Z");
+  eq("…igual que el JS (board_tasks tampoco la ve)", iso(await enJs(eBrief)), iso(e.greenlit_at));
+
+  // Brief sellado: desaparece de la vista
+  await db.query(`update produccion.briefs set deleted_at=now() where id=$1`, [eBrief]);
+  eq("brief en la papelera sale de brief_estado", (await q(`select 1 from produccion.brief_estado where brief_id=$1`, [eBrief])).length, 0);
+
+  // (El grant público lo vigila el test "Candado RLS 0056", que barre TODAS las
+  // relaciones de produccion justo tras las migraciones — incluida esta vista.)
+
+  await db.query(`delete from produccion.briefs where id in ($1,$2)`, [eBrief, eVacio]);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
