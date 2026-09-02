@@ -1,5 +1,61 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-02 — Paso B (drill-down del Workload) + housekeeping + perf de Workload (TODO SHIPPEADO + LIVE)
+**6 commits en main (bef6530 → db2ca7b) · 13 archivos · +876/−608 · SIN migración. Árbol limpio, todo pusheado.**
+
+### Qué se hizo (en orden)
+1. **Paso B — pastilla de carga clicable → tareas por estado** [22dc54c]: cada pastilla de estado del Workload
+   es un botón (teclado: aria-expanded/controls) que despliega inline las tareas de esa persona en ese estado,
+   cada una enlaza a `/{slug}/tareas/{id}`. El scope por track de quien mira se aplica a la TAREA
+   (`idea.track ∈ tracks`, espeja `visibleParaRol`) → conteos + lista + total + por-cliente heredan el filtro;
+   `count` se DERIVA de la lista. **Cerró una fuga de CONTEO pre-existente**: los conteos NO estaban acotados por
+   track, sólo la lista de miembros → un lead veía inflados los de una persona multi-track. Lógica pura extraída a
+   `src/lib/workload.ts` (patrón bundle.ts) con 12 tests incl. falso-positivo multi-track. Quité el acumulador
+   muerto `porTrack`. El detalle re-autoriza (assertCanActOnTask) → no hay IDOR.
+2. **Housekeeping — 3 PRs seguros de Dependabot** [64f2e50]: grupo npm minor/patch (11 paquetes: Next 16.2→16.3,
+   React 19.2.4→19.2.8, Anthropic SDK 0.100→0.120, Supabase JS, lucide, sonner, shadcn, nodemailer, pglite,
+   eslint-config-next) + actions checkout/setup-node v7. **Aplicados sobre main y PRs cerrados, NO merge ciego**:
+   bases rancias — #1 (checkout) nació antes del pin `node:24` (su CI corría en Node 20 → ERR_UNKNOWN_FILE_EXTENSION,
+   no era incompat de checkout@v7); #3 (npm) nació antes del guard `check-server-actions` y su lock estaba detrás de
+   main → un merge de texto "CLEAN" habría dejado el lock rancio (`npm ci` roto). Lock regenerado sobre main, guard
+   intacto. Los 2 MAJORS (#4 @types/node 26, #5 TS 7) quedan abiertos a propósito.
+3. **`npm audit fix`** [e717129]: 4 vulns transitivas pre-existentes (js-yaml/fast-uri/hono/nanoid) → **0**. Sólo lock.
+4. **a11y polish** [0e44697]: quité `CommandDialog`/`command.tsx` (100% muerto) + la dep `cmdk` (−1 dep); `autoFocus`
+   en el request-form del portal; tap targets a 44px donde es SEGURO (CTAs de PortalAcciones + chips del panel de
+   cambios, que estaban al borde de AA). DIFERIDO: los controles del PortalNav (ya cumplen AA 24px, falta AAA 44px) —
+   crecerlos rompe el offset sticky `top-[7.5rem]` acoplado a la altura del nav → necesita pasada de layout + móvil.
+5. **Perf de `cargarWorkload`** [db2ca7b]: `idea_assignments` y `briefs` ya no se leen ENTERAS (crecen con el
+   histórico → truncación silenciosa al tope de PostgREST). Patrón de 2 fases acotado al working set activo, igual
+   que `cargarEvaluacion`. **Resultado IDÉNTICO** (agruparCarga ya tiraba lo no-activo) → perf pura.
+
+### Estado actual
+**TODO shippeado y LIVE** en runna-greenlight.vercel.app. Árbol limpio, nada sin pushear, 0 vulnerabilities.
+Gates finales por commit: tsc·eslint(0)·test:lib 470·test:db 346·test:sync 44·check:actions 21·isolation 58·build.
+CI en main VERDE con checkout@v7 + setup-node@v7 sobre Node 24 (verificado con `gh run watch`).
+
+### Decisiones de Pedro
+- Paso B: drill-down inline + acotar TAMBIÉN los conteos (no sólo la lista) al scope del que mira.
+- Housekeeping: aplicar los 3 seguros ahora, majors (TS7/@types-node26) en sesión aparte con su verificación.
+- Orden: Paso B → housekeeping → npm audit fix → a11y → perf de Workload.
+
+### Pick up next session (todo deuda conocida, nada bloquea)
+1. **Perf N+1 de `sync/import.ts`** (~6-8 queries por fila) — reescribir el loop a inserts en lote; alto riesgo
+   (es el write-path de creación de tareas/assets en prod) → sesión propia con `test:sync` de red.
+2. **Cap de `bundle-data.ts`** — `cargarBundles` lee todos los board_tasks del cliente y filtra en JS → se trunca
+   en silencio al tope de PostgREST y un brief podría parecer terminado. Fix = VISTA/RPC en SQL (computa "en curso"
+   en la BD) = **migración → deploy-gated + Opus-tier**. NO usar materialized rollup (necesitaría writer + no publicar
+   periodo a medias — [[materialised-aggregates-need-a-writer]]); una vista read-time no envejece.
+3. **Majors**: #5 TypeScript 5→7, #4 @types/node 20→26 — correr tsc+build antes de mergear (TS7 puede sacar errores nuevos).
+4. **a11y AAA del PortalNav** — resolver el offset sticky por stacking/medición en vez del `top-[7.5rem]` mágico, luego
+   subir flechas/selectores a 44px, verify en móvil real.
+5. **Paso de pruebas de Pedro** (la puerta al lanzamiento, sigue pendiente): Fases 2/3/4 · borrador de correcciones ·
+   congelado en revisión (cuenta `creative`) · correo de tarea propia (2ª persona) · avisos · cliente revocado.
+   + LIVE-VERIFY del Paso B (lead de un track ve sólo su track en el drill-down).
+
+### Cambios de entorno
+Ninguna variable nueva. Dep `cmdk` ELIMINADA; 11 deps bumpeadas (minor/patch) + lock regenerado; 0 vulnerabilities.
+GitHub Actions: checkout@v4→v7, setup-node@v4→v7 en ci.yml. SIN migración.
+
 ## 2026-08-31 → 09-01 (sesión LARGA) — Reap pre-launch → CANDADO RLS → Papelera 30d → arreglos de flujo (TODO SHIPPEADO + LIVE)
 **18 commits en main (270d1d4 → 818f19e) · 65 archivos · +2295/−398 · migraciones 0056, 0057, 0058 y 0059 APLICADAS a prod.**
 

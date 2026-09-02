@@ -1,5 +1,21 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-09-01 — CANDADO RLS + Papelera 30d + Greenlit de briefs + multi-track para todos — **todo shippeado + LIVE en runna-greenlight.vercel.app**
+Última actualización: 2026-09-02 — Paso B (drill-down del Workload) + housekeeping (deps + 0 vulns + a11y) + perf de Workload — **todo shippeado + LIVE en runna-greenlight.vercel.app**
+
+## 🔧 2026-09-02 — Paso B + housekeeping + perf (SHIPPEADO + LIVE, sin migración)
+- **Workload (Performance → sub-tab)**: la pastilla de estado ahora ES un botón que despliega inline las tareas de
+  la persona en ese estado (enlaza a la tarea). Scope por track del que mira aplicado a la TAREA → conteos + lista +
+  total heredan el filtro (`count` derivado de la lista). Cerró una fuga de conteo pre-existente (los conteos no
+  estaban acotados por track, sólo la lista de miembros). Lógica pura en `src/lib/workload.ts` (partida de
+  performance/data.ts, patrón bundle.ts) con tests, incl. el falso-positivo multi-track.
+- **Perf de `cargarWorkload`**: `idea_assignments` y `briefs` ya no se leen enteras — patrón de 2 fases acotado al
+  working set activo, igual que `cargarEvaluacion` (evita la truncación silenciosa al tope de PostgREST). Idéntico.
+- **Deps**: 11 paquetes minor/patch bumpeados (Next 16.3, React 19.2.8, Anthropic SDK 0.120, etc.) + GitHub Actions
+  checkout/setup-node v7. Dep **`cmdk` eliminada** (con `CommandDialog`/command.tsx, 100% muertos). **0 vulnerabilities**
+  (npm audit fix). Majors DIFERIDOS: TypeScript 7 (#5), @types/node 26 (#4).
+- **a11y**: `autoFocus` en el request-form del portal; tap targets a 44px en los CTAs de PortalAcciones y los chips
+  del panel de cambios. Pendiente (AAA): controles del PortalNav — acoplados al offset sticky `top-[7.5rem]`.
+- **Deuda de perf que queda**: N+1 de `sync/import.ts` (write-path, sesión propia) y cap de `bundle-data.ts`
+  (necesita vista/RPC en SQL = migración, deploy-gated).
 
 ## 🔒 Postura de seguridad (2026-09-01) — CANDADO ECHADO, SHIPPEADO + LIVE
 - **⚠️ EL "BUILD-THEN-LOCK" YA TERMINÓ. La llave pública NO entra a `produccion`.** La migración **0056**

@@ -2,6 +2,17 @@
 
 Qué falló (o funcionó) en el PROCESO, no en el código. Alimenta el ajuste de las skills.
 
+[2026-09-02] OBSERVATION: replicable-win
+CONTEXTO: al hacer "merge the safe Dependabot PRs", NO confié en el `mergeStateStatus: CLEAN` de GitHub. Un
+chequeo de antigüedad (`git log <pr-branch>..origin/main -- <archivos>`) reveló que las bases eran rancias: un
+PR habría hecho `npm ci` fallar (lock rancio tras un merge de texto "limpio") y otro tenía CI rojo sólo por su
+base pre-`node:24`. Apliqué las mismas versiones sobre el main actual (regenerando el lock) y cerré los PRs a
+favor del commit, en vez de click-mergear. Cero regresión, guard preservado, npm audit 7→4→0.
+RECOMMENDATION: añadir a `beast-mode-dev` una mini-checklist de "merge de PR de bot" — (1) mirar antigüedad de la
+base y qué cambió en main desde entonces; (2) `CLEAN` de GitHub = sin conflicto de LÍNEAS, NO lock consistente ni
+base al día; (3) si la base es vieja, regenerar sobre main (o `gh pr update-branch`) antes de mergear; (4) separar
+siempre majors de minor/patch. Se explicó el mecanismo a Pedro (no click-merge) y lo aceptó sin fricción.
+
 [2026-09-01] OBSERVATION: replicable-win
 CONTEXTO: la reap "invariant sweep" (Pass 0 sobre el repo ENTERO, no sobre el diff) encontró dos bugs
 PREEXISTENTES que 6+ reaps por-diff no vieron, porque vivían en código sin tocar: el fork de renderers
