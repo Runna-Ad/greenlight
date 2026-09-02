@@ -450,6 +450,7 @@ export const Campo = memo(function Campo({
             onChange={(e) => setTextoSel(e.target.value)}
             rows={2}
             autoFocus
+            aria-label="Describe el cambio"
             placeholder="Describe el cambio que quieres para este texto…"
             className="mt-2 w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />

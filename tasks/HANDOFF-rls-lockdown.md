@@ -1,6 +1,6 @@
 # HANDOFF — RLS Lockdown (the auth cutover before official go-live)
 
-**Status:** ✅ **BUILT 2026-08-31 (on Opus). ⛔ NOT DEPLOYED — migration 0056 NOT applied.**
+**Status:** ✅ **SHIPPED + LIVE 2026-09-01** — migración 0056 aplicada, código en prod. Prueba de la llave pública re-verificada 2026-09-02 (401 en todas las tablas y en la vista `brief_estado`). Esta nota queda como historial del diseño.
 **Deploy gate:** needs Pedro's explicit "ship it". Apply 0056 (`npm run migrate`, pin
 `ybbrpqzbedaxsmotgtkh`) and deploy the code TOGETHER — the middleware refactor must land
 with (or before) the revoke, or the client tether breaks.

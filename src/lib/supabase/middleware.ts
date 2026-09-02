@@ -98,18 +98,33 @@ export async function updateSession(request: NextRequest) {
     // el amarre es defensa EN PROFUNDIDAD, cada página interna conserva su propio guard
     // `canSee`/`canAdmin` y las server actions su `assertCanActOnTask`. Preferimos
     // degradar una capa a caer todas.
-    let p: { role: string; client_id: string | null } | null = null;
+    let p: { role: string; client_id: string | null; active: boolean } | null = null;
+    let leido = false;
     try {
       const admin = supabaseAdmin();
       const { data: prof, error } = await admin
         .from("profiles")
-        .select("role, client_id")
+        .select("role, client_id, active")
         .eq("id", user.id)
         .maybeSingle();
       if (error) throw new Error(error.message);
-      p = prof as { role: string; client_id: string | null } | null;
+      p = prof as { role: string; client_id: string | null; active: boolean } | null;
+      leido = true;
     } catch (e) {
       console.error("[proxy] amarre de cliente: no se pudo leer el perfil —", e);
+    }
+    // ── Sin perfil o dado de baja = FUERA ─────────────────────────────────────
+    // Un token válido de Supabase (la anon key es pública) sin fila en profiles, o con
+    // active=false, seguía de largo: identity.ts lo resolvía como "sin identidad" y
+    // getViewAs() lo dejaba en 'creative' — bastante para leer el roster del tablero.
+    // Sólo cuando la lectura FUNCIONÓ (una caída de la BD sigue degradando, no
+    // bloquea a todos). La página de login explica el motivo con `error=access-revoked`.
+    // (reap pre-lanzamiento 2026-09-02)
+    if (leido && (!p || p.active === false)) {
+      const url = request.nextUrl.clone();
+      url.pathname = p?.role === "client" || path.startsWith("/portal") ? "/portal/login" : "/login";
+      url.search = "?error=access-revoked";
+      return NextResponse.redirect(url);
     }
     if (p?.role === "client") {
       let dest = "/portal/login";

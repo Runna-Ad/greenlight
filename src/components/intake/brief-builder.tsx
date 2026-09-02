@@ -219,8 +219,8 @@ export function BriefBuilder({ cliente, pool }: { cliente: string; pool: PoolMem
 
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <div>
-            <Label className="mb-1 block">Título del brief</Label>
-            <input
+            <Label htmlFor="f-t-tulo-del-brief" className="mb-1 block">Título del brief</Label>
+            <input id="f-t-tulo-del-brief"
               value={header.title}
               onChange={(e) => setHeader((h) => ({ ...h, title: e.target.value }))}
               placeholder="Brief 05/08"
@@ -228,8 +228,8 @@ export function BriefBuilder({ cliente, pool }: { cliente: string; pool: PoolMem
             />
           </div>
           <div>
-            <Label className="mb-1 block">Brief Name</Label>
-            <input
+            <Label htmlFor="f-brief-name" className="mb-1 block">Brief Name</Label>
+            <input id="f-brief-name"
               value={header.briefName}
               onChange={(e) => setHeader((h) => ({ ...h, briefName: e.target.value }))}
               placeholder={PLACEHOLDER.brief_name}
@@ -237,8 +237,8 @@ export function BriefBuilder({ cliente, pool }: { cliente: string; pool: PoolMem
             />
           </div>
           <div>
-            <Label className="mb-1 block">Mes</Label>
-            <input
+            <Label htmlFor="f-mes" className="mb-1 block">Mes</Label>
+            <input id="f-mes"
               value={header.mes}
               onChange={(e) => setHeader((h) => ({ ...h, mes: e.target.value }))}
               placeholder={PLACEHOLDER.mes}

@@ -3,6 +3,7 @@ import { UserRound, Lock } from "lucide-react";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getSoy } from "@/lib/soy";
 import { getViewAs } from "@/lib/view-as";
+import { ideasConCambiosDelCliente } from "@/lib/cambios-pendientes";
 import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { STATUS_LABEL, STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
 import { MyTasks, type MyTask } from "@/components/board/my-tasks";
@@ -55,17 +56,11 @@ export default async function MiTrabajoPage() {
     // Cambios del CLIENTE son cancha del LEAD: para un especialista (creative), una
     // tarea en in_corrections con cambios del cliente sin resolver NO es suya hasta que
     // se la reasignen — fuera de su lista. El lead SÍ la ve (se marca "Cambios del cliente").
-    const enCorr = tasks.filter((t) => t.status === "in_corrections").map((t) => t.id);
-    if (enCorr.length) {
-      const { data: pend } = await db
-        .from("comments")
-        .select("idea_id")
-        .in("idea_id", enCorr)
-        .eq("kind", "client_change")
-        .not("ronda", "is", null)
-        .is("resolved_at", null)
-        .returns<{ idea_id: string }[]>();
-      const conCambios = new Set((pend ?? []).map((r) => r.idea_id));
+    const conCambios = await ideasConCambiosDelCliente(
+      db,
+      tasks.filter((t) => t.status === "in_corrections").map((t) => t.id),
+    );
+    if (conCambios.size) {
       tasks = tasks
         .map((t) => ({ ...t, clientChangesPending: conCambios.has(t.id) }))
         .filter((t) => !(role === "creative" && t.clientChangesPending));
@@ -126,12 +121,15 @@ export default async function MiTrabajoPage() {
         </div>
       )}
 
-      <p className="mt-8 text-xs text-muted-foreground">
-        ¿Buscas el panorama completo?{" "}
-        <Link href="/clientes" className="underline underline-offset-2">
-          Ir a los tableros
-        </Link>
-      </p>
+      {/* Un especialista no ve /clientes: el enlace lo mandaba a una tarjeta de "no entra". */}
+      {canSee(role, "clientes") && (
+        <p className="mt-8 text-xs text-muted-foreground">
+          ¿Buscas el panorama completo?{" "}
+          <Link href="/clientes" className="underline underline-offset-2">
+            Ir a los tableros
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

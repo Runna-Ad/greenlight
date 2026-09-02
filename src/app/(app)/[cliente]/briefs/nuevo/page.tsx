@@ -27,14 +27,15 @@ export default async function NuevoBriefPage({
     );
   }
 
-  // Pool VIVO de asignables (lead + creative), por track — reemplaza la lista
-  // hardcodeada de vocab.ts. Admins/master no son asignables (no salen).
+  // Pool VIVO del roster. Quién es asignable a CADA track lo decide `puedeSerAsignado`
+  // (lib/roles) en el picker — la misma regla que el tablero y el gate del servidor:
+  // grant multi-track, y admin/master pueden ser lead (Pedro 2026-09-01). `tracks` es
+  // obligatorio en el select (sin él el grant no cuenta). (reap 2026-09-02, sweep C1)
   const { data: poolRows } = hasSupabase()
     ? await supabaseAdmin()
         .from("track_members")
-        .select("name, color, track, role")
+        .select("name, color, track, tracks, role")
         .eq("active", true)
-        .in("role", ["lead", "creative"])
         .order("name")
     : { data: [] };
   const pool = (poolRows ?? []) as PoolMember[];

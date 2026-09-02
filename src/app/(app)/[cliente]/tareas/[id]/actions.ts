@@ -15,7 +15,7 @@ import type { AssetStatus } from "@/lib/brand";
 import { sinInventar, limpiarPegado, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
 import { sinNegrita } from "@/lib/negrita";
 import { CAMPOS, type TablaGuardable } from "@/lib/campos";
-import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
+import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
 
 // Columnas que alimentan a PlanoVista/EstaticoVista (para devolver la fila creada
 // al cliente y que actualice su estado sin recargar la página).
@@ -26,6 +26,9 @@ const COLS_TEMA = "id, idea_id, tema, cuota, orden";
 const COLS_COPY = "id, tema_id, headline, descripcion, orden";
 import Anthropic from "@anthropic-ai/sdk";
 import type { CopyTema, Copy } from "@/lib/database.types";
+
+/** Tope de caracteres que se mandan a H.Ü.E en una llamada (≈ 10k palabras). */
+const MAX_TEXTO_HUE = 40_000;
 
 // La whitelist y sus tipos viven en `@/lib/campos` (módulo puro): este archivo es
 // "use server" y exportar una CONSTANTE desde aquí revienta en runtime. Se re-exportan
@@ -831,9 +834,18 @@ export async function extraerGuion(
   if (!process.env.ANTHROPIC_API_KEY) {
     return { ok: false, error: "H.Ü.E no está configurado (falta la clave)." };
   }
-  const role = await getViewAs();
-  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  // Esta acción no recibe ideaId (lee texto pegado, no una tarea), así que no pasa por
+  // assertCanActOnTask como sus hermanas — pero SÍ exige identidad real: sin sesión,
+  // getViewAs() cae a 'creative' y este era un endpoint de Anthropic abierto a cualquier
+  // token. Tope de tamaño: un guión real no pasa de unos miles de caracteres; el body
+  // de las server actions admite 10 MB. (reap pre-lanzamiento 2026-09-02)
+  const u = await getCurrentUser();
+  if (!u) return { ok: false, error: "Inicia sesión para usar H.Ü.E." };
+  if (!canMoveStatus(u.role)) return { ok: false, error: "Este rol no edita la plantilla." };
   if (!texto.trim()) return { ok: false, error: "No hay texto que leer." };
+  if (texto.length > MAX_TEXTO_HUE) {
+    return { ok: false, error: "El texto es demasiado largo para leerlo de una vez. Pega sólo el guión." };
+  }
 
   // Limpia markdown/tabla (`**`, `|`, `<br>`) ANTES de mandarlo — así H.Ü.E recibe el
   // texto crudo del guión sin ruido de formato. El guard compara contra ESTE limpio.

@@ -31,14 +31,14 @@ export default async function SyncPage({
   // Only the MODE crosses to the client — credentials stay on the server.
   const { kind } = await getSyncMode();
 
-  // Pool VIVO de asignables (lead + creative), por track — reemplaza la lista
-  // hardcodeada de vocab.ts en el preview de la sync.
+  // Pool VIVO del roster; el picker de lead filtra con `puedeSerLead` (lib/roles), la
+  // misma regla que el tablero: grant multi-track + admin/master como lead. `tracks`
+  // obligatorio en el select. (reap 2026-09-02, sweep C1)
   const { data: poolRows } = hasSupabase()
     ? await supabaseAdmin()
         .from("track_members")
-        .select("name, color, track, role")
+        .select("name, color, track, tracks, role")
         .eq("active", true)
-        .in("role", ["lead", "creative"])
         .order("name")
     : { data: [] };
   const pool = (poolRows ?? []) as PoolMember[];

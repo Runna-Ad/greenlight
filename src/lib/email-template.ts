@@ -20,6 +20,7 @@ const TIPO: Record<string, TipoConfig> = {
   client_access_request: { chip: "Solicitud de acceso", color: "#ff9e2c", cta: "Ver solicitudes" }, // ámbar neón
   client_invite: { chip: "Tu acceso está listo", color: "#00e676", cta: "Entrar a mi portal", darkChip: true }, // verde logo
   team_welcome: { chip: "Bienvenido al equipo", color: "#9d4edd", cta: "Ver mis tareas" }, // púrpura neón
+  ready_for_review: { chip: "Lista para tu revisión", color: "#00c2ff", cta: "Abrir mi portal" }, // azul neón — al CLIENTE
 };
 const DEFECTO: TipoConfig = { chip: "Aviso", color: "#9d4edd", cta: "Abrir en Greenlight" };
 
@@ -64,8 +65,16 @@ function urlAbsoluta(url: string | null): string {
  * demás (nuevo brief → /mi-trabajo), el url que ya trae el aviso. El slug se saca
  * del propio url (`/didi/tablero` → `didi`).
  */
-export function ctaUrl(n: { url: string | null; entity_type: string | null; entity_id: string | null }): string {
-  if (n.entity_type === "idea" && n.entity_id && n.url) {
+export function ctaUrl(n: {
+  url: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  /** Aviso dirigido a un CLIENTE: su url ya apunta al portal y NO se reescribe a /tareas
+   *  (no entra ahí — el proxy lo rebotaría al portal sin la tarea). Espeja la misma
+   *  exclusión que hace la campana in-app (notification-actions). (reap 2026-09-02) */
+  esCliente?: boolean;
+}): string {
+  if (!n.esCliente && n.entity_type === "idea" && n.entity_id && n.url) {
     const slug = n.url.split("/").filter(Boolean)[0];
     if (slug && slug !== "mi-trabajo") return urlAbsoluta(`/${slug}/tareas/${n.entity_id}`);
   }

@@ -3,6 +3,17 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { agencyRoleForEmail } from "./allowlist";
 import type { Track } from "@/lib/vocab";
 
+/**
+ * `.ilike()` trata `_` y `%` como COMODINES. Aquí el patrón es el correo que ENTRA:
+ * "ana_perez@…" casaba con "ana.perez@…" (y con cualquier otro de una letra distinta),
+ * y ese match HEREDA el rol pre-designado y RECLAMA la fila del roster de otra persona.
+ * Se escapan para que el correo sea literal (sigue insensible a mayúsculas).
+ * (reap pre-lanzamiento 2026-09-02)
+ */
+function sinComodines(email: string): string {
+  return email.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 // Track a newly-provisioned DOER (lead/creative) lands in — the admin can move
 // them in Equipo. 'normal' is the safest default (the smaller specialist team).
 // admin/master are global (track = null); see bindOrCreateMember.
@@ -53,7 +64,7 @@ export async function provisionAgencyLogin(params: {
   const { data: designadoRow } = await admin
     .from("track_members")
     .select("role")
-    .ilike("email", email)
+    .ilike("email", sinComodines(email))
     .is("profile_id", null)
     .limit(1)
     .maybeSingle();
@@ -93,7 +104,7 @@ async function bindOrCreateMember(
   const { data: byEmail } = await admin
     .from("track_members")
     .select("id, profile_id")
-    .ilike("email", m.email)
+    .ilike("email", sinComodines(m.email))
     .is("profile_id", null)
     .limit(1)
     .maybeSingle();

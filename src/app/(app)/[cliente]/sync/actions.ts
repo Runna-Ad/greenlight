@@ -42,6 +42,9 @@ function resolveConfig(): SyncConfig {
 
 /** Safe for the client: which mode we're in, and nothing else. */
 export async function getSyncMode(): Promise<SyncMode> {
+  // Sólo revela {kind}, pero es un export "use server": mismo gate que sus hermanas.
+  const u = await getCurrentUser();
+  if (!u || !canCreateBrief(u.role)) return { kind: "csv" };
   return { kind: resolveConfig().kind };
 }
 

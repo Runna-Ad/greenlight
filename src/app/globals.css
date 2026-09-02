@@ -133,7 +133,10 @@
   --status-progress: #b97708;       /* amber (text-safe) / bar uses #fbae42 */
   --status-review: #775cbf;         /* purple */
   --status-corrections: #de5a5f;    /* coral */
-  --status-completed: #0b8a5f;      /* green (text-safe) / bar uses #00cc88 */
+  --status-completed: #0d9488;      /* teal — "listo para enviar", acción pendiente. El VERDE
+                                       queda sólo para aprobado (delivered/Greenlit). Antes era el
+                                       mismo verde que delivered y el tablero lo sobreescribía a
+                                       teal por su cuenta → 6 superficies discrepaban (reap 2026-09-02) */
   --status-published: #2563a8;      /* blue — in client portal */
   --status-delivered: #0b8a5f;
   --status-warning: #b45309;        /* amber-700 — "fuera de flujo"/avisos (antes amber-* suelto) */
@@ -201,7 +204,7 @@
   --status-progress: #f4b45c;
   --status-review: #a78fe0;
   --status-corrections: #ee8489;
-  --status-completed: #4adca5;
+  --status-completed: #2dd4bf;      /* teal (dark) — ver nota en :root */
   --status-published: #6ba3e8;
   --status-delivered: #4adca5;
   --status-warning: #f4b45c;

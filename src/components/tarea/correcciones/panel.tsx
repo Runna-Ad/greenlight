@@ -175,8 +175,14 @@ export function PanelCorrecciones() {
                       return (
                         <div
                           key={c.id}
-                          className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--status-corrections)_50%,transparent)]"
+                          role="button"
+                          tabIndex={0}
+                          className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--status-corrections)_50%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
                           onClick={() => verCampo(c)}
+                          onKeyDown={(e) => {
+                            if (e.target !== e.currentTarget) return;
+                            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); verCampo(c); }
+                          }}
                         >
                       <div className="mb-1 flex flex-wrap items-center gap-1.5">
                         {c.targetLabel && (

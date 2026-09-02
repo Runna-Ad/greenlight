@@ -153,8 +153,15 @@ function Tarjeta({
 }) {
   return (
     <div
-      className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--primary)_45%,transparent)]"
+      // Tarjeta clicable: también por TECLADO (Enter/Espacio) — antes sólo con ratón.
+      role="button"
+      tabIndex={0}
+      className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--primary)_45%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
       onClick={() => verCampo(c)}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return; // los botones de dentro manejan lo suyo
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); verCampo(c); }
+      }}
     >
       <div className="mb-1 flex flex-wrap items-center gap-1.5">
         {c.targetLabel && (
@@ -182,7 +189,7 @@ function Tarjeta({
         <button
           type="button"
           onClick={() => verCampo(c)}
-          className="inline-flex items-center rounded-md border border-border bg-card min-h-9 px-3 py-1.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-secondary"
+          className="inline-flex items-center rounded-md border border-border bg-card min-h-11 px-3 py-1.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-secondary"
         >
           Ver campo
         </button>
@@ -191,7 +198,7 @@ function Tarjeta({
             type="button"
             disabled={pendiente}
             onClick={onQuitar}
-            className="ml-auto inline-flex items-center gap-1 rounded-md border border-border bg-card min-h-9 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-[color-mix(in_srgb,var(--status-corrections)_45%,transparent)] hover:text-status-corrections disabled:opacity-50"
+            className="ml-auto inline-flex items-center gap-1 rounded-md border border-border bg-card min-h-11 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-[color-mix(in_srgb,var(--status-corrections)_45%,transparent)] hover:text-status-corrections disabled:opacity-50"
           >
             <Trash2 className="size-3" /> Quitar
           </button>

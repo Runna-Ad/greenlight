@@ -6,7 +6,8 @@ import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { dispatchPendingEmails } from "@/lib/notif-email";
 import { getCurrentUser } from "@/lib/identity";
-import { canCreateBrief } from "@/lib/roles";
+import { canCreateBrief, puedeSerAsignado } from "@/lib/roles";
+import type { Track } from "@/lib/vocab";
 import { sendEmail, hasEmail } from "@/lib/email";
 import { htmlFor, textFor } from "@/lib/email-template";
 import {
@@ -100,11 +101,16 @@ export async function crearBrief(
     .from("vocab_terms").select("set, code, label_es, track");
   const V = (vocab ?? []) as { set: string; code: string; label_es: string; track: string }[];
 
-  // Personas del track de ESTE brief (Real y Normal tienen pools distintos).
+  // Personas asignables a ESTE track — decidido por `puedeSerAsignado` (lib/roles), la
+  // MISMA regla que el picker del builder, el tablero y `asignarTarea`. Antes se filtraba
+  // por `track = track` a secas: sin grant multi-track, sin rol (un lead de OTRO track
+  // entraba como especialista) y sin admin/master como lead. (reap 2026-09-02, sweep C1)
   const { data: memberRows } = await db
-    .from("track_members").select("id, name, track").eq("active", true).eq("track", track);
+    .from("track_members").select("id, name, track, tracks, role, active").eq("active", true);
   const memberIdPorNombre = new Map<string, string>(
-    (memberRows ?? []).map((m) => [fold(m.name), m.id as string]),
+    ((memberRows ?? []) as { id: string; name: string; track: Track | null; tracks: Track[] | null; role: string; active: boolean }[])
+      .filter((m) => puedeSerAsignado(m, track))
+      .map((m) => [fold(m.name), m.id]),
   );
 
   // ── Fail-safe: personas nombradas en la asignación que NO están en el pool ──

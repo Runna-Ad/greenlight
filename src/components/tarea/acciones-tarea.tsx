@@ -123,7 +123,9 @@ export function AccionesTarea({
           setPendiente(a);
           return;
         }
-        // Sin errores, o el chequeo no corrió (sin clave/DB) → manda directo.
+        // Sin errores → manda directo. Si el chequeo NO corrió (sin clave, modelo caído),
+        // se manda igual pero se DICE: antes fallaba en silencio y parecía revisado.
+        if (!r.ok) toast.warning("H.Ü.E no pudo revisar la ortografía; se manda sin revisar.", { description: r.error });
       }
       await ejecutarVerbo(a);
     });

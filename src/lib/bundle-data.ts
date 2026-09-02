@@ -2,6 +2,7 @@
 // pura (filtro, orden, agrupación) se pruebe sin base ni `server-only`.
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { ideasConCambiosDelCliente } from "@/lib/cambios-pendientes";
 import type { ViewRole } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
 import {
@@ -21,13 +22,29 @@ export async function cargarBundle(
   soyId: string | null,
   tracks: Track[] | null,
 ): Promise<BundleTask[]> {
-  const { data } = await supabaseAdmin()
+  const db = supabaseAdmin();
+  const { data } = await db
     .from("board_tasks")
     .select(BUNDLE_SELECT)
     .eq("brief_id", briefId)
     .returns<BundleTask[]>();
 
-  return (data ?? []).filter(filtroBundle(role, soyId, tracks)).sort(compararBundle);
+  const conCambios = await cambiosParaFiltro(db, role, data ?? []);
+  return (data ?? []).filter(filtroBundle(role, soyId, tracks, conCambios)).sort(compararBundle);
+}
+
+/** Sólo el especialista necesita saber qué tareas tienen cambios del cliente (los demás
+ *  las ven igual): para otros roles no se consulta nada. */
+async function cambiosParaFiltro(
+  db: ReturnType<typeof supabaseAdmin>,
+  role: ViewRole,
+  tasks: BundleTask[],
+): Promise<Set<string>> {
+  if (role !== "creative") return new Set();
+  return ideasConCambiosDelCliente(
+    db,
+    tasks.filter((t) => t.status === "in_corrections").map((t) => t.id),
+  );
 }
 
 /**
@@ -81,6 +98,7 @@ export async function cargarBundles(
     .returns<BundleTask[]>();
   if (error) throw new Error(`board_tasks: ${error.message}`);
 
-  return agruparBundles((data ?? []).filter(filtroBundle(role, soyId, tracks)))
+  const conCambios = await cambiosParaFiltro(db, role, data ?? []);
+  return agruparBundles((data ?? []).filter(filtroBundle(role, soyId, tracks, conCambios)))
     .filter((b) => bundleEnCurso(b));
 }

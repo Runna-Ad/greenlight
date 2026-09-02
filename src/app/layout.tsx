@@ -33,6 +33,8 @@ const unbounded = Unbounded({
 export const metadata: Metadata = {
   title: "Greenlight · by Rünna",
   description: "Producción de anuncios — de la solicitud a la entrega.",
+  // Herramienta PRIVADA: nada de esto debe indexarse (ni la pantalla de login).
+  robots: { index: false, follow: false, nocache: true },
 };
 
 export default function RootLayout({

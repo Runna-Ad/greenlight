@@ -29,7 +29,7 @@ import { legalSugerido } from "@/lib/legal-sugerido";
 import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
 import type { RefVista } from "@/components/tarea/referencias-plano";
-import type { EstaticoVista, PlanoVista } from "@/components/tarea/preview-slide";
+import type { EstaticoVista, PlanoVista } from "@/lib/vista-tipos";
 
 export const dynamic = "force-dynamic";
 // Las acciones de H.Ü.E de esta ruta (crearGuion escribe un guión completo, extraerGuion,
@@ -82,6 +82,17 @@ export default async function TareaPage({
   // revelar que la tarea existe. (reap 2026-08-26)
   const scope = await assertCanActOnTask(id);
   if (!scope.ok) notFound();
+
+  // La tarea tiene que ser DEL cliente de la URL: la ruta cargaba por `id` y usaba el
+  // slug sólo para el color de marca, así /{clienteA}/tareas/{idea-de-B} pintaba la
+  // tarea de B con los colores de A. El portal ya hace este amarre. (reap 2026-09-02)
+  const { data: dueño } = await db
+    .from("briefs")
+    .select("clients(slug)")
+    .eq("id", idea.brief_id)
+    .maybeSingle<{ clients: { slug: string } | { slug: string }[] | null }>();
+  const slugDueño = Array.isArray(dueño?.clients) ? dueño?.clients[0]?.slug : dueño?.clients?.slug;
+  if (slugDueño !== cliente) notFound();
 
   const plantilla = plantillaPara(idea.tipo_asset);
 

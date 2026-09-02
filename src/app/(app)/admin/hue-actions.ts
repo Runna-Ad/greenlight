@@ -254,8 +254,16 @@ export async function subirKb(form: FormData): Promise<Ok | Fail> {
   const key = `${crypto.randomUUID()}.${ext}`;
   const db = supabaseAdmin();
 
+  // Content-Type por EXTENSIÓN (whitelist), no el que declara el navegador: un .html
+  // subido como "text/plain" sería XSS almacenado el día que este bucket firme URLs.
+  const MIME_POR_EXT: Record<string, string> = {
+    pdf: "application/pdf",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    txt: "text/plain",
+    md: "text/markdown",
+  };
   const { error: upErr } = await db.storage.from(KB_BUCKET).upload(key, bytes, {
-    contentType: file.type || "application/octet-stream",
+    contentType: MIME_POR_EXT[ext] ?? "application/octet-stream",
     upsert: false,
   });
   if (upErr) return { ok: false, error: `No se pudo subir: ${upErr.message}` };

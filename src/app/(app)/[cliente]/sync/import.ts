@@ -76,6 +76,11 @@ export async function importRows(
 /** naturalKey → rowHash for everything already imported, so sync skips it. */
 export async function knownRows(clienteSlug: string): Promise<Record<string, string>> {
   if (!hasSupabase()) return {};
+  // Mismo gate que listProjects/previewProjects/importRows: sin él cualquier sesión (un
+  // cliente incluido) enumeraba las claves de fila de cualquier cliente por slug.
+  // (reap pre-lanzamiento 2026-09-02)
+  const u = await getCurrentUser();
+  if (!u || !canCreateBrief(u.role)) return {};
   const db = supabaseAdmin();
   const { data: client } = await db
     .from("clients").select("id").eq("slug", clienteSlug).maybeSingle();

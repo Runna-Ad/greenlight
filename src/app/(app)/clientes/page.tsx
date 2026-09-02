@@ -5,6 +5,7 @@ import { getViewAs } from "@/lib/view-as";
 import { getCurrentUser } from "@/lib/identity";
 import { canSee, tracksVisibles, ROLE_LABEL } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
+import { ESTADOS_ACTIVOS } from "@/lib/workload";
 
 // Counts are LIVE from the DB — never hardcode them. The old MOCK_CLIENTS froze
 // DiDi at 4/37/3 and survived a full platform reset, showing phantom work.
@@ -14,15 +15,9 @@ import type { Track } from "@/lib/vocab";
 //   · atrasados = esas ideas abiertas con due_date ya vencido.
 export const dynamic = "force-dynamic";
 
-// Estados "abiertos" de una idea = los 5 no terminales (todo lo que no es
-// published/delivered). Mismo conjunto que ESTADOS_ACTIVOS en performance/data.ts.
-const OPEN_IDEA_STATES = [
-  "todo",
-  "in_progress",
-  "under_review",
-  "in_corrections",
-  "completed",
-];
+// Estados "abiertos" de una idea = ESTADOS_ACTIVOS (lib/workload): UNA definición para
+// Clientes, Workload, Performance y Equipo — antes cada uno tenía su copia.
+const OPEN_IDEA_STATES = ESTADOS_ACTIVOS;
 const INFLIGHT_BRIEF = ["draft", "active"];
 
 type ClientCard = {

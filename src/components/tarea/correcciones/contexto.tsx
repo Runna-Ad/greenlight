@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { keyCampo, type Correccion } from "@/lib/correcciones";
 import { useWorkspaceView } from "@/components/tarea/workspace-provider";
-import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
+import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
 import {
   agregarCorreccion,
   setEstadoCorreccion,

@@ -58,9 +58,12 @@ export async function solicitarAcceso(input: {
 }): Promise<SolicitudResult> {
   if (!hasSupabase()) return { ok: false, error: "El sistema no está disponible ahora mismo." };
 
-  const email = input.email.trim().toLowerCase();
-  const name = input.name.trim();
-  const brand = input.brand?.trim() || null;
+  // Formulario PÚBLICO: se acota el tamaño y se quitan saltos de línea — `name` acaba en
+  // el título de un aviso y en el ASUNTO de un correo. (reap pre-lanzamiento 2026-09-02)
+  const unaLinea = (s: string) => s.replace(/[\r\n\t]+/g, " ").trim().slice(0, 120);
+  const email = input.email.trim().toLowerCase().slice(0, 254);
+  const name = unaLinea(input.name);
+  const brand = input.brand ? unaLinea(input.brand) || null : null;
   if (!esEmail(email)) return { ok: false, error: "Escribe un correo válido." };
   if (!name) return { ok: false, error: "Escribe tu nombre." };
 

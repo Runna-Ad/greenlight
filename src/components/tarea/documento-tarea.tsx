@@ -23,7 +23,7 @@ import { ReferenciasPlano, type RefVista } from "./referencias-plano";
 import { TextoRico } from "@/components/ui/linkify";
 import { sinNegrita } from "@/lib/negrita";
 import { readTimeS } from "@/lib/plantilla";
-import type { PlanoVista, EstaticoVista } from "./preview-slide";
+import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
 
 export type ModoDoc = "editable" | "lectura";
 

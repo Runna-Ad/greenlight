@@ -9,6 +9,9 @@ import type { CorreccionTarget } from "@/app/(app)/[cliente]/tareas/[id]/correcc
 
 export type PortalResultado = { ok: true } | { ok: false; error: string };
 
+/** Tope de un cambio pedido por el cliente (se guarda, se pinta y va al modelo). */
+const MAX_CAMBIO_CHARS = 4000;
+
 /**
  * ¿El usuario autenticado puede ACTUAR en el portal de ESTE slug (fijar/quitar/
  * enviar cambios, aprobar)? Sí cuando:
@@ -83,6 +86,11 @@ export async function clienteFijarCambio(
 ): Promise<PortalResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   if (!body.trim()) return { ok: false, error: "Escribe qué quieres cambiar." };
+  // Tope: el body de las server actions admite 10 MB y este texto se guarda, se pinta y
+  // se manda al modelo de H.Ü.E. Un cambio pedido no necesita más de un par de párrafos.
+  if (body.length > MAX_CAMBIO_CHARS) {
+    return { ok: false, error: `El cambio es muy largo (máximo ${MAX_CAMBIO_CHARS} caracteres).` };
+  }
 
   const db = supabaseAdmin();
   if (!(await puedeActuarComoCliente(db, clienteSlug))) {

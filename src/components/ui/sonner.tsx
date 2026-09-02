@@ -1,7 +1,7 @@
 "use client"
 
 import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { CheckCircleIcon, InfoIcon, WarningIcon, XCircleIcon, SpinnerIcon } from "@phosphor-icons/react"
+import { CircleCheck as CheckCircleIcon, Info as InfoIcon, TriangleAlert as WarningIcon, CircleX as XCircleIcon, Loader2 as SpinnerIcon } from "lucide-react"
 
 const Toaster = ({ ...props }: ToasterProps) => {
   // La app es light-only (no hay ThemeProvider ni toggle). Antes esto leía el

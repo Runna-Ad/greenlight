@@ -2,7 +2,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { plantillaPara, type Plantilla } from "@/lib/plantilla";
 import { cargarRefsPorPlano, cargarRefsEstatico } from "@/lib/referencias-data";
 import type { AssetStatus } from "@/lib/brand";
-import type { PlanoVista, EstaticoVista } from "@/components/tarea/preview-slide";
+import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
 import type { RefVista } from "@/components/tarea/referencias-plano";
 import type { TemaRow } from "@/components/tarea/documento-copies";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";

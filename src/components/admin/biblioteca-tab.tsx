@@ -229,8 +229,8 @@ function EditorSnippet({
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label className="mb-1 block">Título</Label>
-            <input
+            <Label htmlFor="f-t-tulo" className="mb-1 block">Título</Label>
+            <input id="f-t-tulo"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Ej. Legal CAT — Préstamos"
@@ -239,8 +239,8 @@ function EditorSnippet({
             />
           </div>
           <div>
-            <Label className="mb-1 block">Texto</Label>
-            <textarea
+            <Label htmlFor="f-texto" className="mb-1 block">Texto</Label>
+            <textarea id="f-texto"
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={5}
@@ -249,8 +249,8 @@ function EditorSnippet({
             />
           </div>
           <div>
-            <Label className="mb-1 block">Marca <span className="text-muted-foreground">(opcional)</span></Label>
-            <select
+            <Label htmlFor="f-marca" className="mb-1 block">Marca <span className="text-muted-foreground">(opcional)</span></Label>
+            <select id="f-marca"
               value={marcaId}
               onChange={(e) => setMarcaId(e.target.value)}
               className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"

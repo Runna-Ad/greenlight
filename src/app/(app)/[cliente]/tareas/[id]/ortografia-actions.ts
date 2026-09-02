@@ -6,7 +6,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canMoveStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getSoyId } from "@/lib/soy";
-import { assertCanActOnTask } from "@/lib/auth/task-scope";
+import { assertCanActOnTask, assertCanActOnRow } from "@/lib/auth/task-scope";
 import { fixSeguro } from "@/lib/ortografia";
 import { sinNegrita } from "@/lib/negrita";
 import { registrarOrtografia, marcarOrtografiaAplicada, ignorarOrtografia } from "@/lib/hue-log";
@@ -344,6 +344,11 @@ export async function aplicarOrtografia(
   if (!fixSeguro(original, sugerencia)) {
     return { ok: false, error: "Ese cambio no es seguro de aplicar automáticamente." };
   }
+  // Scope de la FILA antes de leerla: el write ya lo hace guardarCampo, pero el mensaje
+  // "ese fragmento ya no está" revelaba si un texto existe en cualquier plano de la BD.
+  // Misma puerta que revisarOrtografia. (reap pre-lanzamiento 2026-09-02, sweep I1)
+  const scope = await assertCanActOnRow(tabla, filaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
   const { data: fila } = await db.from(tabla).select(campo).eq("id", filaId).maybeSingle();

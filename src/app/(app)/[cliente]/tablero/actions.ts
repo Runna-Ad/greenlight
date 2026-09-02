@@ -34,8 +34,15 @@ async function revalidateFor(db: Db, ideaId: string) {
     .select("client_slug")
     .eq("id", ideaId)
     .maybeSingle<{ client_slug: string | null }>();
-  if (data?.client_slug) revalidatePath(`/${data.client_slug}/tablero`);
+  if (data?.client_slug) {
+    revalidatePath(`/${data.client_slug}/tablero`);
+    revalidatePath(`/${data.client_slug}/tareas/${ideaId}`);
+    // El portal del cliente también cambia con un movimiento/borrado (una pieza
+    // publicada que se manda a la papelera seguía visible en navegación suave).
+    revalidatePath(`/${data.client_slug}/portal`);
+  }
   revalidatePath("/mi-trabajo");
+  revalidatePath("/entregas");
 }
 
 /** Contexto común: quién eres, con qué rol miras, y tu perfil (para atribución).

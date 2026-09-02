@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { importarGuion, importarEstatico, extraerGuion } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { crearGuion, crearCopy } from "@/app/(app)/[cliente]/tareas/[id]/writer-actions";
-import type { PlanoVista, EstaticoVista } from "./preview-slide";
+import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
 import type { PlanoParsed, EstaticoParsed } from "@/lib/guion";
 
 const CAMPOS_PLANO: { k: keyof PlanoParsed; label: string; rows: number; ancho?: boolean }[] = [

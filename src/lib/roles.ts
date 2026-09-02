@@ -172,8 +172,27 @@ export const canHue = (role: ViewRole): boolean => role === "master";
  * especialista multi-track sólo aparecía en un equipo — sin un solo error de tipos.
  * Obligatorio, el compilador señala a quien no lo pase. (Pedro lo cazó, 2026-09-01)
  */
+/** Lo mínimo que hay que traer de `track_members` para decidir si alguien es asignable. */
+export type MiembroAsignable = {
+  role: string | null;
+  track: Track | null;
+  tracks: Track[] | null;
+  active?: boolean;
+};
+
+/**
+ * ¿Puede esta persona trabajar una tarea de `trackTarea` en ALGÚN papel (lead o
+ * especialista)? Es la UNIÓN de las dos reglas de abajo — el pool que ofrecen el brief
+ * builder y la sync, que asignan sin distinguir papel. Antes cada uno filtraba por
+ * `track === track` a mano: se saltaban el grant multi-track y dejaban a un lead de OTRO
+ * track colarse como especialista. (reap pre-lanzamiento 2026-09-02, sweep C1)
+ */
+export function puedeSerAsignado(m: MiembroAsignable, trackTarea: Track | null): boolean {
+  return puedeSerLead(m, trackTarea) || puedeSerEspecialista(m, trackTarea);
+}
+
 export function puedeSerLead(
-  m: { role: string | null; track: Track | null; tracks: Track[] | null; active?: boolean },
+  m: MiembroAsignable,
   trackTarea: Track | null,
 ): boolean {
   if (m.active === false) return false;
@@ -187,7 +206,7 @@ export function puedeSerLead(
 /** ¿Puede ser ESPECIALISTA (doer) de una tarea de `trackTarea`? Sólo `creative` de su
  *  track — los globales llevan, no ejecutan. Espejo de `puedeSerLead`. */
 export function puedeSerEspecialista(
-  m: { role: string | null; track: Track | null; tracks: Track[] | null; active?: boolean },
+  m: MiembroAsignable,
   trackTarea: Track | null,
 ): boolean {
   if (m.active === false) return false;

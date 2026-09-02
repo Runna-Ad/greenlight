@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 
@@ -8,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
  *  what actually enforces who's allowed in; this just starts it. */
 export function GoogleSignIn({ next }: { next?: string }) {
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   async function signIn() {
     setLoading(true);
@@ -20,7 +22,7 @@ export function GoogleSignIn({ next }: { next?: string }) {
     });
     if (error) {
       setLoading(false);
-      window.location.href = `/login?error=${encodeURIComponent(error.message)}`;
+      router.replace(`/login?error=${encodeURIComponent(error.message)}`);
     }
     // on success the browser is redirected to Google; nothing else to do.
   }

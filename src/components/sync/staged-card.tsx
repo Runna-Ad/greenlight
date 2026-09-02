@@ -7,6 +7,7 @@ import { ChipSelect } from "@/components/intake/chip-select";
 import { type PoolMember } from "@/components/intake/task-card";
 import type { SheetRow } from "@/lib/sheet-sync";
 import { missingBloqueante, requiredFor, faltaLead } from "@/lib/required";
+import { puedeSerLead } from "@/lib/roles";
 import {
   ENTREGA,
   FORMATO,
@@ -105,8 +106,9 @@ export function StagedCard({
               <Badge variant="secondary" className="font-mono text-[10px]">{val("# Idea")}</Badge>
             )}
             <span className="text-[11px] text-muted-foreground">{row.label}</span>
+            {/* "nueva" en morado de marca, no verde: el verde queda sólo para "Aprobado" (Pedro). */}
             {row.status === "new" ? (
-              <Badge className="gap-0.5 bg-status-completed text-[10px] text-white">
+              <Badge className="gap-0.5 bg-primary text-[10px] text-primary-foreground">
                 <Sparkles className="size-2.5" /> nueva
               </Badge>
             ) : (
@@ -179,7 +181,7 @@ export function StagedCard({
                 sin responsable (se asigna después). Por eso required={false}. */}
             <Picker
               label="Lead (opcional)" required={false}
-              options={pool.filter((p) => p.track === track && p.role === "lead").map((p) => ({ value: p.name, color: p.color }))}
+              options={pool.filter((p) => puedeSerLead(p, track)).map((p) => ({ value: p.name, color: p.color }))}
               value={val("Asignación")} edited={isEdited("Asignación")}
               onChange={(v) => onEdit("Asignación", v[0] ?? "")} onReset={() => onResetField("Asignación")}
             />

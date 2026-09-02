@@ -55,10 +55,17 @@ export function filtroBundle(
   role: ViewRole,
   soyId: string | null,
   tracks: Track[] | null,
-): (t: Pick<BundleTask, "member_ids" | "track">) => boolean {
+  /** Tareas en in_corrections con cambios del CLIENTE sin resolver (cancha del lead):
+   *  el especialista NO las ve — la MISMA exclusión que el tablero y Mi Trabajo. Sin
+   *  esto la tarea desaparecía de esas dos superficies y seguía en el bundle, editable.
+   *  (reap 2026-09-02, sweep S2) */
+  conCambiosDelCliente: ReadonlySet<string> = new Set(),
+): (t: Pick<BundleTask, "id" | "status" | "member_ids" | "track">) => boolean {
   if (role === "creative") {
     if (!soyId) return () => false;
-    return (t) => t.member_ids.includes(soyId);
+    return (t) =>
+      t.member_ids.includes(soyId) &&
+      !(t.status === "in_corrections" && conCambiosDelCliente.has(t.id));
   }
   if (role === "lead") {
     if (!tracks || !tracks.length) return () => false;

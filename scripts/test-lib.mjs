@@ -197,6 +197,17 @@ eq("lead multi-track ve AMBOS tracks", [bReal, bNormal].filter(filtroBundle("lea
 eq("lead sin tracks no ve nada (falla seguro)", [bReal, bNormal].filter(filtroBundle("lead", null, [])).length, 0);
 // Admin/master: todo.
 eq("admin ve todo", [bReal, bNormal].filter(filtroBundle("admin", null, null)).length, 2);
+// Cambios del CLIENTE sin resolver (cancha del lead): el especialista NO ve esa tarea en
+// el bundle — la MISMA exclusión que el tablero y Mi Trabajo (reap 2026-09-02, sweep S2).
+{
+  const enCorr = { id: "t1", status: "in_corrections", member_ids: ["m1"], track: "real" };
+  const enProg = { id: "t2", status: "in_progress", member_ids: ["m1"], track: "real" };
+  const conCambios = new Set(["t1"]);
+  eq("creative NO ve su tarea in_corrections con cambios del cliente",
+     [enCorr, enProg].filter(filtroBundle("creative", "m1", null, conCambios)).map((t) => t.id).join(), "t2");
+  eq("sin cambios pendientes, la ve", [enCorr, enProg].filter(filtroBundle("creative", "m1", null)).length, 2);
+  eq("el lead SÍ la ve (es su cancha)", [enCorr, enProg].filter(filtroBundle("lead", null, ["real"], conCambios)).length, 2);
+}
 // Cambios del CLIENTE (clientChangesPending): cancha del lead. El especialista NO
 // retoma (la tarea sale de su lista); el lead los resuelve en la propia tarea (banner).
 eq("cambios del cliente: el especialista NO retoma", labels("in_corrections", { ...asignado, clientChangesPending: true }), "");

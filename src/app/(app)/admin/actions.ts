@@ -7,6 +7,7 @@ import { getSoyId } from "@/lib/soy";
 import { getCurrentUser } from "@/lib/identity";
 import { EVENTOS_VALIDOS, SCOPES_VALIDOS, type MisPrefs } from "@/lib/notif-eventos";
 import { canAdmin, canAssignAdmins } from "@/lib/roles";
+import { ESTADOS_ACTIVOS } from "@/lib/workload";
 import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
 import type { MiembroRow, RolAsignable } from "@/lib/equipo";
 import type {
@@ -19,8 +20,8 @@ import type {
   SnippetRow,
 } from "@/lib/admin-tipos";
 
-// published/delivered ya salieron del tablero — no cuentan como carga viva.
-const TERMINALES = new Set(["published", "delivered"]);
+// "Carga viva" = ESTADOS_ACTIVOS (complemento de TERMINALES) — UNA sola definición,
+// compartida con Workload/Performance/Clientes, en lib/workload (importada arriba).
 
 /**
  * El equipo (track_members), activos e inactivos, con su carga de trabajo viva.
@@ -42,19 +43,22 @@ export async function listarEquipo(): Promise<MiembroRow[]> {
 
   const rows = (miembros ?? []) as Omit<MiembroRow, "carga">[];
 
-  const [{ data: asigs }, { data: ideas }] = await Promise.all([
-    db.from("idea_assignments").select("member_id, idea_id"),
-    // Papelera 0057: una tarea borrada no le pesa a nadie en la carga.
-    db.from("ideas").select("id, status").is("deleted_at", null),
-  ]);
-  const statusById = new Map(
-    ((ideas ?? []) as { id: string; status: string }[]).map((i) => [i.id, i.status]),
-  );
+  // Acotado al working set (patrón de cargarWorkload): sólo ideas VIVAS y activas, y
+  // sólo las asignaciones de ésas. Antes se leían las dos tablas ENTERAS — crecen con el
+  // histórico y PostgREST corta en silencio al tope de filas. (reap 2026-09-02)
+  const { data: ideas } = await db
+    .from("ideas")
+    .select("id")
+    .is("deleted_at", null) // Papelera 0057: una tarea borrada no le pesa a nadie.
+    .in("status", ESTADOS_ACTIVOS);
+  const activas = ((ideas ?? []) as { id: string }[]).map((i) => i.id);
+  const { data: asigs } = activas.length
+    ? await db.from("idea_assignments").select("member_id, idea_id").in("idea_id", activas).not("member_id", "is", null)
+    : { data: [] as { member_id: string | null; idea_id: string }[] };
   const carga = new Map<string, number>();
   for (const a of (asigs ?? []) as { member_id: string | null; idea_id: string }[]) {
     if (!a.member_id) continue;
-    const st = statusById.get(a.idea_id);
-    if (st && !TERMINALES.has(st)) carga.set(a.member_id, (carga.get(a.member_id) ?? 0) + 1);
+    carga.set(a.member_id, (carga.get(a.member_id) ?? 0) + 1);
   }
 
   return rows.map((r) => ({ ...r, carga: carga.get(r.id) ?? 0 }));
@@ -163,8 +167,16 @@ export async function guardarMiembro(
   // La fuente de permisos es profiles.role. Si esta persona YA tiene cuenta y le
   // cambiamos el rol, se propaga al profile — si no, "ascender a Lead/Admin" en
   // Equipo no le daría permisos reales (la cuenta seguiría como al hacer login).
-  if ("role" in limpio && actual.profile_id) {
-    await db.from("profiles").update({ role: limpio.role }).eq("id", actual.profile_id);
+  // Lo MISMO con `active`: la identidad (identity.ts) niega por profiles.active, y el
+  // switch "Activo" sólo escribía el roster — una persona dada de baja seguía entrando
+  // con su rol completo. Mismo hueco que ya se cerró para clientes ("Revocar").
+  // (reap pre-lanzamiento 2026-09-02)
+  if (actual.profile_id && ("role" in limpio || "active" in limpio)) {
+    const patchPerfil: Record<string, unknown> = {};
+    if ("role" in limpio) patchPerfil.role = limpio.role;
+    if ("active" in limpio) patchPerfil.active = limpio.active;
+    const { error: pErr } = await db.from("profiles").update(patchPerfil).eq("id", actual.profile_id);
+    if (pErr) return { ok: false, error: `Se guardó el roster pero no la cuenta: ${pErr.message}` };
   }
 
   revalidatePath("/admin");

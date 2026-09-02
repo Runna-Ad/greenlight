@@ -346,13 +346,14 @@ function TrackMultiSelect({
 
 function Campo({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
+    // <label> y no <span>: asocia el rótulo al control de dentro (lector de pantalla).
+    <label className="block">
       <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
         {hint && <span className="ml-1 font-normal normal-case">· {hint}</span>}
       </span>
       {children}
-    </div>
+    </label>
   );
 }
 
@@ -458,8 +459,8 @@ function AgregarPersona({
         <div className="space-y-3">
           <div className="flex items-end gap-2">
             <div className="flex-1">
-              <Label className="mb-1 block">Nombre</Label>
-              <input
+              <Label htmlFor="f-nombre" className="mb-1 block">Nombre</Label>
+              <input id="f-nombre"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Nombre"
@@ -477,7 +478,7 @@ function AgregarPersona({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="mb-1 block">Track</Label>
+              <Label htmlFor="f-track-esglobalnuevo-global-sin-track-settrack-classname-h-9-w-full-rounded-md-border-border-input-bg-background-px-2-text-sm-outline-none-focus-visible-ring-2-focus-visible-ring-ring-real-normal-rol" className="mb-1 block">Track</Label>
               {esGlobalNuevo ? (
                 <span
                   className="flex h-9 items-center rounded-md border border-dashed border-border px-2 text-sm text-muted-foreground"
@@ -495,7 +496,7 @@ function AgregarPersona({
             </div>
             <div>
               <Label className="mb-1 block">Rol</Label>
-              <select value={role} onChange={(e) => setRole(e.target.value as RolAsignable)}
+              <select id="f-track-esglobalnuevo-global-sin-track-settrack-classname-h-9-w-full-rounded-md-border-border-input-bg-background-px-2-text-sm-outline-none-focus-visible-ring-2-focus-visible-ring-ring-real-normal-rol" value={role} onChange={(e) => setRole(e.target.value as RolAsignable)}
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {ROLES_ASIGNABLES.map((r) => (
                   <option key={r} value={r}>{rolLabel(r)}</option>
@@ -504,13 +505,13 @@ function AgregarPersona({
             </div>
           </div>
           <div>
-            <Label className="mb-1 block">Email <span className="text-muted-foreground">(opcional)</span></Label>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@…"
+            <Label htmlFor="f-email" className="mb-1 block">Email <span className="text-muted-foreground">(opcional)</span></Label>
+            <input id="f-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@…"
               className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
           </div>
           <div>
-            <Label className="mb-1 block">Slack member ID <span className="text-muted-foreground">(opcional)</span></Label>
-            <input value={slack} onChange={(e) => setSlack(e.target.value)} placeholder="U01234…"
+            <Label htmlFor="f-slack-member-id" className="mb-1 block">Slack member ID <span className="text-muted-foreground">(opcional)</span></Label>
+            <input id="f-slack-member-id" value={slack} onChange={(e) => setSlack(e.target.value)} placeholder="U01234…"
               className="h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
           </div>
         </div>

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { RefreshCw, Lock, LayoutGrid } from "lucide-react";
-import { ROLE_LABEL, canSee, type ViewRole } from "@/lib/roles";
+import { ROLE_LABEL, canSee, canAssign, type ViewRole } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
+import { ideasConCambiosDelCliente } from "@/lib/cambios-pendientes";
 import { getSoy, type Soy } from "@/lib/soy";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -69,15 +70,20 @@ async function loadBoard(
       .order("created_at", { ascending: true })
       .limit(500)
       .returns<Task[]>(),
-    db
-      .from("track_members")
-      // `role` viaja para que el picker del tablero separe Lead (rol `lead`) de
-      // Especialistas (rol `creative`) — la misma regla rol+track del task section.
-      .select("id, name, color, track, tracks, role")
-      .eq("active", true)
-      .order("track")
-      .order("sort_order")
-      .returns<Member[]>(),
+    // El roster sólo viaja a quien puede ASIGNAR (lead/admin/master): un especialista no
+    // tiene picker, y mandarle el equipo entero en el payload era la única lectura que
+    // una sesión sin identidad real conseguía. (reap pre-lanzamiento 2026-09-02)
+    canAssign(role)
+      ? db
+          .from("track_members")
+          // `role` viaja para que el picker del tablero separe Lead (rol `lead`) de
+          // Especialistas (rol `creative`) — la misma regla rol+track del task section.
+          .select("id, name, color, track, tracks, role")
+          .eq("active", true)
+          .order("track")
+          .order("sort_order")
+          .returns<Member[]>()
+      : Promise.resolve({ data: [] as Member[] }),
     db
       .from("briefs")
       .select("id, title, source_tab")
@@ -91,19 +97,11 @@ async function loadBoard(
   // del lead): el especialista no debe verlas. Se calcula ANTES de filtrar por rol para
   // que visibleParaRol pueda excluirlas del payload RSC del creative.
   let base = (tasks ?? []) as Task[];
-  const enCorr = base.filter((t) => t.status === "in_corrections").map((t) => t.id);
-  if (enCorr.length) {
-    const { data: pend } = await db
-      .from("comments")
-      .select("idea_id")
-      .in("idea_id", enCorr)
-      .eq("kind", "client_change")
-      .not("ronda", "is", null)
-      .is("resolved_at", null)
-      .returns<{ idea_id: string }[]>();
-    const conCambios = new Set((pend ?? []).map((r) => r.idea_id));
-    if (conCambios.size) base = base.map((t) => (conCambios.has(t.id) ? { ...t, clientChangesPending: true } : t));
-  }
+  const conCambios = await ideasConCambiosDelCliente(
+    db,
+    base.filter((t) => t.status === "in_corrections").map((t) => t.id),
+  );
+  if (conCambios.size) base = base.map((t) => (conCambios.has(t.id) ? { ...t, clientChangesPending: true } : t));
 
   // La vista board_tasks no expone delivered_at; lo traemos SÓLO para las tareas
   // delivered (para que la columna Greenlit muestre las de ≤7 días). Consulta chica
@@ -151,7 +149,7 @@ export default async function TableroPage({
           Un {ROLE_LABEL[role]} no entra al tablero de producción.
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Estás en una vista previa. Vuelve a tu rol en la franja de arriba.
+          Si crees que deberías verlo, pídele acceso a tu lead o a un admin.
         </p>
       </div>
     );
@@ -182,11 +180,13 @@ export default async function TableroPage({
           titulo="Todavía no hay tareas"
           descripcion="Trae un proyecto del Google Sheet para empezar a producir."
         >
-          <Button asChild variant="outline">
-            <Link href={`/${cliente}/sync`}>
-              <RefreshCw className="size-4" /> Sincronizar
-            </Link>
-          </Button>
+          {canSee(role, "sync") && (
+            <Button asChild variant="outline">
+              <Link href={`/${cliente}/sync`}>
+                <RefreshCw className="size-4" /> Sincronizar
+              </Link>
+            </Button>
+          )}
         </EmptyState>
       ) : (
         <Board

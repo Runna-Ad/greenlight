@@ -204,6 +204,8 @@ function TemaCard({
   onQuitar: () => void;
 }) {
   const [confirmando, setConfirmando] = useState(false);
+  // Qué copy está pidiendo confirmación de borrado (id) — uno a la vez.
+  const [confirmandoCopy, setConfirmandoCopy] = useState<string | null>(null);
   const cumplida = tema.copies.length >= tema.cuota;
 
   const setCuota = async (n: number) => {
@@ -326,16 +328,28 @@ function TemaCard({
           <div key={c.id} className="rounded-lg border border-border bg-card p-2.5">
             <div className="mb-1.5 flex items-center gap-2">
               <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">Copy {i + 1}</span>
-              {!soloLectura && (
-                <button
-                  type="button"
-                  onClick={() => quitarCopy(c.id)}
-                  aria-label={`Borrar copy ${i + 1}`}
-                  className="ml-auto rounded p-1 text-muted-foreground hover:bg-secondary hover:text-status-corrections"
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
-              )}
+              {/* Confirmación en línea, igual que "Borrar tema": borraba al primer clic. */}
+              {!soloLectura &&
+                (confirmandoCopy === c.id ? (
+                  <span className="ml-auto inline-flex items-center gap-1.5 text-[11px]">
+                    <span className="font-semibold text-muted-foreground">¿Borrar copy {i + 1}?</span>
+                    <button type="button" onClick={() => { setConfirmandoCopy(null); quitarCopy(c.id); }} className="rounded px-2 py-0.5 font-bold text-white" style={{ background: "color-mix(in srgb, var(--status-corrections) 80%, #000)" }}>
+                      Sí
+                    </button>
+                    <button type="button" autoFocus onClick={() => setConfirmandoCopy(null)} className="rounded border border-border px-2 py-0.5 font-medium text-foreground hover:bg-background">
+                      No
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmandoCopy(c.id)}
+                    aria-label={`Borrar copy ${i + 1}`}
+                    className="ml-auto rounded p-1 text-muted-foreground hover:bg-secondary hover:text-status-corrections"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                ))}
             </div>
             <div className="grid gap-2">
               <CampoCopy tabla="copies" filaId={c.id} campo="headline" label="Headline" valorInicial={c.headline} placeholder={PLACEHOLDER_COPY.headline} rows={1} soloLectura={soloLectura} />

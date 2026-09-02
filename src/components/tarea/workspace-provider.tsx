@@ -10,7 +10,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
-import type { PlanoVista, EstaticoVista } from "./preview-slide";
+import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
 
 /**
  * El estado compartido del workspace de una tarea. Reemplaza al viejo

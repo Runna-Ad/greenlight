@@ -185,9 +185,12 @@ export function PerfilTab({
             Slack{" "}
             <span className="text-[11px] font-normal text-muted-foreground">· pronto</span>
           </span>
+          {/* Apagado hasta que exista el envío por Slack: el switch decía "pronto" pero
+              guardaba de verdad — un control vivo que no hace nada. */}
           <Switch
             checked={slack}
-            disabled={pending}
+            disabled
+            aria-label="Slack (próximamente)"
             onCheckedChange={(v) => {
               setSlack(v);
               guardar({ notify_slack: v });

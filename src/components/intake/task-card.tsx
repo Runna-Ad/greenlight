@@ -20,6 +20,7 @@ import {
   type Track,
 } from "@/lib/vocab";
 import { camposLlenos, combosDeTarjeta, nombresDeTarjeta, type TaskDraft } from "@/lib/intake-crear";
+import { puedeSerAsignado } from "@/lib/roles";
 
 type ChipKey =
   | "entrega" | "asignacion" | "marca" | "plataforma"
@@ -28,7 +29,10 @@ type TextKey =
   | "comentariosLeads" | "peloteo" | "concepto" | "sellingPoints"
   | "referencias" | "numIdea" | "version" | "naming";
 
-export type PoolMember = { name: string; color: string; track: Track; role: string };
+/** Una persona del roster tal como la ven los pickers. `tracks` (grant multi-track, 0059)
+ *  es OBLIGATORIO para que `puedeSerAsignado` decida bien — sin él, un especialista
+ *  multi-track sólo aparecía en un equipo. */
+export type PoolMember = { name: string; color: string; track: Track | null; tracks: Track[] | null; role: string };
 
 export function TaskCard({
   task,
@@ -176,7 +180,8 @@ export function TaskCard({
 
           {/* Entrega + gente */}
           {chip("entrega", "# Entrega", ENTREGA)}
-          {chip("asignacion", "Asignación", pool.filter((p) => p.track === track).map((p) => ({ value: p.name, color: p.color })), { multi: true, hint: "Lead + especialistas de este track" })}
+          {/* MISMA regla que el gate del servidor y el picker del tablero (lib/roles). */}
+          {chip("asignacion", "Asignación", pool.filter((p) => puedeSerAsignado(p, track)).map((p) => ({ value: p.name, color: p.color })), { multi: true, hint: "Lead + especialistas de este track" })}
 
           {/* Especificaciones */}
           <div className="grid gap-4 sm:grid-cols-2">

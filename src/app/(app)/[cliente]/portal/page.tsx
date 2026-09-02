@@ -1,4 +1,5 @@
 import { Lock } from "lucide-react";
+import { redirect } from "next/navigation";
 import { getViewAs } from "@/lib/view-as";
 import { getCurrentUser } from "@/lib/identity";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
@@ -28,6 +29,12 @@ export default async function PortalPage({
   const { cliente } = await params;
   const sp = await searchParams;
   const [role, user] = await Promise.all([getViewAs(), getCurrentUser()]);
+
+  // Sesión viva pero SIN identidad (cliente revocado a media sesión): sin esto el rol caía
+  // a 'creative' y el cliente veía "Un Especialista no entra al portal" + nav interna.
+  // El proxy no cubre las rutas del portal (no consulta el rol ahí), así que se cierra
+  // aquí. Sólo con el muro de login encendido: con él apagado no hay sesión que revocar.
+  if (process.env.AUTH_ENABLED === "true" && !user) redirect("/portal/login?error=access-revoked");
 
   if (!canSee(role, "portal")) {
     return <PortalDenegado mensaje={`Un ${ROLE_LABEL[role]} no entra al portal.`} />;

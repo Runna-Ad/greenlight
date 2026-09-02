@@ -42,6 +42,7 @@ export async function eliminarBrief(
 
   revalidatePath(`/${cliente}/briefs`);
   revalidatePath(`/${cliente}/tablero`);
+  revalidatePath(`/${cliente}/portal`); // sus piezas publicadas salen del portal
   revalidatePath("/mi-trabajo");
   revalidatePath("/entregas");
   return { ok: true };

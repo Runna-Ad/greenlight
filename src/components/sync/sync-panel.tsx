@@ -53,7 +53,6 @@ export function SyncPanel({ cliente, pool }: { cliente: string; pool: PoolMember
       const newest = res.tabs.filter((t) => t.kind === "project").slice(0, 2);
       setChosen(new Set(newest.map((t) => t.name)));
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const projects = tabs?.filter((t) => t.kind === "project") ?? [];
@@ -71,7 +70,7 @@ export function SyncPanel({ cliente, pool }: { cliente: string; pool: PoolMember
       const fresh = new Set<string>();
       res.forEach((p) =>
         p.rows
-          .filter((r) => r.status !== "unchanged" && missingBloqueante(r.data).length === 0)
+          .filter((r) => r.status === "new" && missingBloqueante(r.data).length === 0)
           .forEach((r) => fresh.add(r.key)),
       );
       setAccepted(fresh);
@@ -125,12 +124,21 @@ export function SyncPanel({ cliente, pool }: { cliente: string; pool: PoolMember
       setAccepted(new Set());
     });
 
+  // Sólo filas NUEVAS se importan. Una fila que YA está en el tablero y cambió en el
+  // sheet ("actualizada") no tiene camino de actualización: el importador la saltaba
+  // por clave natural y el panel igual decía "0 tareas · Ya están en el tablero" y la
+  // quitaba de la lista, para reaparecer en la siguiente sync — para siempre. Ahora se
+  // muestra pero no se puede marcar (ver staged-card): las ediciones se hacen en la
+  // tarea. (reap pre-lanzamiento 2026-09-02)
   const importable =
     previews?.flatMap((p) =>
       p.rows
-        .filter((r) => r.status !== "unchanged")
+        .filter((r) => r.status === "new")
         .map((r) => ({ ...r, tab: p.name, label: p.label, track: p.track })),
     ) ?? [];
+
+  // Filas que ya viven en el tablero y cambiaron en el sheet — se informan, no se importan.
+  const actualizadas = previews?.reduce((n, p) => n + p.actualizadas, 0) ?? 0;
 
   // Se recalcula con las ediciones: corregir el campo desbloquea la fila en
   // vivo, sin volver a sincronizar.
@@ -186,7 +194,8 @@ export function SyncPanel({ cliente, pool }: { cliente: string; pool: PoolMember
                       onClick={() =>
                         setChosen((prev) => {
                           const next = new Set(prev);
-                          next.has(p.name) ? next.delete(p.name) : next.add(p.name);
+                          if (next.has(p.name)) next.delete(p.name);
+                          else next.add(p.name);
                           return next;
                         })
                       }
@@ -332,7 +341,8 @@ export function SyncPanel({ cliente, pool }: { cliente: string; pool: PoolMember
                 onToggleIncluded={() =>
                   setAccepted((prev) => {
                     const next = new Set(prev);
-                    next.has(r.key) ? next.delete(r.key) : next.add(r.key);
+                    if (next.has(r.key)) next.delete(r.key);
+                    else next.add(r.key);
                     return next;
                   })
                 }
@@ -361,9 +371,17 @@ export function SyncPanel({ cliente, pool }: { cliente: string; pool: PoolMember
         </section>
       )}
 
+      {previews && actualizadas > 0 && (
+        <p className="rounded-xl border border-border bg-secondary/40 p-4 text-sm text-muted-foreground">
+          {actualizadas} fila{actualizadas === 1 ? "" : "s"} que ya {actualizadas === 1 ? "está" : "están"} en el
+          tablero cambi{actualizadas === 1 ? "ó" : "aron"} en el sheet. Esos cambios no se importan: la tarea
+          ya vive aquí — edítala en la plataforma.
+        </p>
+      )}
+
       {previews && importable.length === 0 && !previews.some((p) => p.error) && (
         <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          Todo al día. No hay filas nuevas ni cambios en los proyectos seleccionados.
+          Todo al día. No hay filas nuevas en los proyectos seleccionados.
         </p>
       )}
     </div>

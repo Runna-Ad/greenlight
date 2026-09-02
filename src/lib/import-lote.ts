@@ -26,6 +26,8 @@
 
 import type { supabaseAdmin } from "@/lib/supabase-admin";
 import { classifyTab, type SheetRow } from "./sheet-sync.ts";
+import { puedeSerLead } from "./roles.ts";
+import type { Track } from "./vocab.ts";
 import { namingKindForTipo } from "./filename.ts";
 import { generatesFiles, missingRequired } from "./required.ts";
 import { list, cleanSize, labelToCode, splitIdeaCode, fold } from "./intake-crear.ts";
@@ -188,14 +190,15 @@ export async function ejecutarImport(
   // used to drop both — Asignación was read for the dedup key and then thrown
   // away. Resolve them here so a re-sync can't lose them again.
   const { data: memberRows } = await db
-    .from("track_members").select("id, name, track, role, es_lead").eq("active", true);
+    .from("track_members").select("id, name, track, tracks, role, es_lead").eq("active", true);
   const MEMBERS = (memberRows ?? []) as {
-    id: string; name: string; track: string; role: string; es_lead: boolean;
+    id: string; name: string; track: Track | null; tracks: Track[] | null; role: string; es_lead: boolean;
   }[];
-  // Pool de LEADS del sheet: SÓLO rol `lead` (dept head). Admins/master son globales,
-  // no son doers → no asignables como lead (Pedro 2026-08-21). Se matchea DENTRO del
-  // track de la fila.
-  const LEADS = MEMBERS.filter((m) => m.role === "lead");
+  // Quién puede ser LEAD de una fila lo decide `puedeSerLead` (lib/roles) — la misma
+  // regla que el tablero y `asignarTarea`: lead de su(s) track(s) (grant multi-track) o
+  // admin/master (Pedro 2026-09-01, que REVIERTE el "admins no asignables" del 08-21 que
+  // esta copia local seguía aplicando). (reap 2026-09-02, sweep C1)
+  const leadsDe = (track: string) => MEMBERS.filter((m) => puedeSerLead(m, track as Track));
 
   const { data: marcaRows } = await db
     .from("marcas").select("id, name").eq("client_id", clientId);
@@ -212,8 +215,7 @@ export async function ejecutarImport(
   const matchLead = (raw: string, track: string): string | null => {
     const fN = fold(raw.split(",")[0] ?? ""); // a futuro el sheet trae 1 lead; toma el 1º
     if (!fN) return null;
-    const cands = LEADS.filter((m) => {
-      if (m.track !== track) return false; // atado al track de la tarea
+    const cands = leadsDe(track).filter((m) => {
       const fm = fold(m.name);
       return fm === fN || fm.startsWith(`${fN} `) || fm.split(" ").includes(fN);
     });

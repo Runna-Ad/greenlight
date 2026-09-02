@@ -12,7 +12,7 @@ import { BloqueLegal } from "./bloque-legal";
 import type { Sugerencia } from "@/lib/legal-sugerido";
 import { type RefVista } from "./referencias-plano";
 import { useWorkspace } from "./workspace-provider";
-import type { PlanoVista, EstaticoVista } from "./preview-slide";
+import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
 
 /**
  * La sección del GUIÓN: el documento (editable o "vista cliente") + la
