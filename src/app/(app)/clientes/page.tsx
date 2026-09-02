@@ -3,7 +3,7 @@ import { ArrowRight, Plus, FileText, Layers, AlertTriangle, Lock } from "lucide-
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
 import { getCurrentUser } from "@/lib/identity";
-import { canSee, tracksVisibles, ROLE_LABEL } from "@/lib/roles";
+import { canSee, canAdmin, tracksVisibles, ROLE_LABEL } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
 import { ESTADOS_ACTIVOS } from "@/lib/workload";
 
@@ -179,14 +179,16 @@ export default async function ClientesPage() {
           </Link>
         ))}
 
-        <button
-          type="button"
-          className="flex min-h-[168px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-transparent p-5 text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Plus className="size-6" />
-          <span className="text-sm font-medium">Nuevo cliente</span>
-          <span className="text-xs text-muted-foreground">Se agrega desde Admin</span>
-        </button>
+        {canAdmin(role) && (
+          <Link
+            href="/admin?tab=clientes"
+            className="flex min-h-[168px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-transparent p-5 text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Plus className="size-6" />
+            <span className="text-sm font-medium">Nuevo cliente</span>
+            <span className="text-xs text-muted-foreground">Se crea en Admin › Clientes</span>
+          </Link>
+        )}
       </div>
     </div>
   );

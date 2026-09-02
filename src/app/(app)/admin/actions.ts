@@ -8,6 +8,9 @@ import { getCurrentUser } from "@/lib/identity";
 import { EVENTOS_VALIDOS, SCOPES_VALIDOS, type MisPrefs } from "@/lib/notif-eventos";
 import { canAdmin, canAssignAdmins } from "@/lib/roles";
 import { ESTADOS_ACTIVOS } from "@/lib/workload";
+import { slugify } from "@/lib/slug";
+import { sendEmail, hasEmail } from "@/lib/email";
+import { htmlFor, textFor } from "@/lib/email-template";
 import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
 import type { MiembroRow, RolAsignable } from "@/lib/equipo";
 import type {
@@ -19,6 +22,8 @@ import type {
   SnippetKind,
   SnippetRow,
 } from "@/lib/admin-tipos";
+
+const APP_URL = process.env.APP_URL ?? "https://runna-greenlight.vercel.app";
 
 // "Carga viva" = ESTADOS_ACTIVOS (complemento de TERMINALES) — UNA sola definición,
 // compartida con Workload/Performance/Clientes, en lib/workload (importada arriba).
@@ -684,16 +689,6 @@ export async function quitarLogoMarca(marcaId: string): Promise<Guardado> {
 }
 
 // ── Marcas: alta y baja (Phase 4) ───────────────────────────
-function slugify(s: string): string {
-  return s
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "") // quita acentos
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 type MarcaGuardada = { ok: true; marca: MarcaLogo } | { ok: false; error: string };
 
 /** Crea una marca de un cliente. Respeta unique(client_id, slug). Sólo admin+. */
@@ -781,5 +776,36 @@ export async function eliminarMiembro(id: string): Promise<Guardado> {
   const { error } = await db.from("track_members").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
+  return { ok: true };
+}
+
+/**
+ * Envía (o RE-envía) la invitación a una persona del equipo: el mismo correo de
+ * bienvenida que manda el brief builder, pero A PROPÓSITO manual — un admin lo dispara
+ * desde Equipo cuando la persona está lista para entrar. No hay envío automático al
+ * darla de alta (decisión de Pedro 2026-09-02). Sólo admin+. Requiere email.
+ */
+export async function enviarInvitacion(memberId: string): Promise<Guardado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin envía invitaciones." };
+  if (!hasEmail()) return { ok: false, error: "El correo no está configurado en este entorno." };
+
+  const db = supabaseAdmin();
+  const { data: m } = await db
+    .from("track_members").select("name, email").eq("id", memberId).maybeSingle<{ name: string; email: string | null }>();
+  if (!m) return { ok: false, error: "Esa persona ya no existe." };
+  if (!m.email) return { ok: false, error: "Agrégale un correo antes de invitarla." };
+
+  const title = "Te agregaron a Greenlight";
+  const body =
+    "Ya eres parte del equipo en Greenlight. Entra con tu correo @runna.com.mx para ver y trabajar tus tareas.";
+  const ctaUrl = `${APP_URL}/mi-trabajo`;
+  const res = await sendEmail({
+    to: m.email,
+    subject: "Greenlight · Te agregaron al equipo",
+    text: textFor(title, body, ctaUrl),
+    html: htmlFor({ type: "team_welcome", title, body, ctaUrl }),
+  });
+  if (!res.ok) return { ok: false, error: res.error ?? "No se pudo enviar el correo." };
   return { ok: true };
 }

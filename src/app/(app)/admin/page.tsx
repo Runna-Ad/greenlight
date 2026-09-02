@@ -18,8 +18,18 @@ export const dynamic = "force-dynamic";
 // El panel de administración. Sólo master/admin. Con el login apagado (beta)
 // todos son admin, así que en la práctica está abierto — es a propósito: la app
 // no sale de beta test sin login (decisión de Pedro).
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const role = await getViewAs();
+  const { tab } = await searchParams;
+  const TABS_VALIDAS = new Set([
+    "perfil", "equipo", "invitaciones", "clientes", "marcas",
+    "actividad", "integraciones", "biblioteca", "hue", "papelera",
+  ]);
+  const initialTab = tab && TABS_VALIDAS.has(tab) ? (tab as never) : undefined;
 
   if (!canAdmin(role)) {
     return (
@@ -55,6 +65,7 @@ export default async function AdminPage() {
       invitaciones={invitaciones}
       clientesUsuarios={clientesUsuarios}
       esMaster={role === "master"}
+      initialTab={initialTab}
     />
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, User, UserRound, LogOut } from "lucide-react";
+import { User, UserRound, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -14,6 +14,7 @@ import {
 import { DEFAULT_ROLE, canSee, type ViewRole } from "@/lib/roles";
 import type { Soy } from "@/lib/soy";
 import { NotificationsBell } from "./notifications-bell";
+import { SearchBox } from "./search-box";
 import { MobileNav } from "./sidebar";
 import { cerrarSesion } from "@/app/(app)/logout-actions";
 
@@ -43,15 +44,8 @@ export function Topbar({
       ) : null}
 
       <div className="ml-auto flex items-center gap-2">
-        <div className="relative hidden sm:block">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="search"
-            placeholder="Buscar idea, brief, archivo…"
-            aria-label="Buscar"
-            className="h-9 w-64 rounded-md border border-input bg-background pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
+        {/* El buscador sólo para el equipo interno; el cliente no busca en la app. */}
+        {role !== "client" && <SearchBox />}
         <NotificationsBell initialCount={avisos} />
         {/* Menú de CUENTA (arriba a la derecha): el avatar abre "Mi perfil" — las
             acciones de cuenta viven aquí, no en la nav lateral (Pedro). El avatar

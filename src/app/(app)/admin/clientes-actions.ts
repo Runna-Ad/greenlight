@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getCurrentUser } from "@/lib/identity";
 import { canAdmin } from "@/lib/roles";
+import { slugify } from "@/lib/slug";
 import { sendEmail, hasEmail } from "@/lib/email";
 import { htmlFor, textFor } from "@/lib/email-template";
 
@@ -216,4 +217,49 @@ export async function cambiarAccesoCliente(profileId: string, active: boolean): 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
   return { ok: true };
+}
+
+export type EmpresaCliente = { id: string; name: string; slug: string; brandColor: string };
+export type CrearClienteResult = { ok: true; empresa: EmpresaCliente } | { ok: false; error: string };
+
+/**
+ * Crea una EMPRESA cliente (el tenant: DiDi). Distinto de "cliente con acceso"
+ * (un usuario del portal). El slug se deriva del nombre y es la RAÍZ de sus URLs
+ * (/{slug}/tablero…), así que es único. Sólo admin+. Antes no había forma de
+ * onboardear un cliente sin tocar la BD a mano. (reap 2026-09-02)
+ */
+export async function crearCliente(input: {
+  name: string;
+  tagline?: string | null;
+  brandColor?: string | null;
+}): Promise<CrearClienteResult> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!(await gate())) return { ok: false, error: "Sólo un admin crea clientes." };
+
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "Escribe el nombre del cliente." };
+  const slug = slugify(name);
+  if (!slug) return { ok: false, error: "Ese nombre no genera un identificador de URL válido." };
+
+  const tagline = input.tagline?.trim() || null;
+  // brand_color: hex #rgb/#rrggbb; si no viene o no valida, cae al default del esquema.
+  const bc = input.brandColor?.trim();
+  const brand_color = bc && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(bc) ? bc : "#775cbf";
+
+  const { data, error } = await supabaseAdmin()
+    .from("clients")
+    .insert({ name, slug, tagline, brand_color })
+    .select("id, name, slug, brand_color")
+    .single();
+  if (error) {
+    if (error.code === "23505") {
+      return { ok: false, error: `Ya existe un cliente con el identificador "${slug}". Usa un nombre distinto.` };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/clientes");
+  const c = data as { id: string; name: string; slug: string; brand_color: string };
+  return { ok: true, empresa: { id: c.id, name: c.name, slug: c.slug, brandColor: c.brand_color } };
 }

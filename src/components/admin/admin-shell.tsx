@@ -84,6 +84,7 @@ export function AdminShell({
   invitaciones,
   clientesUsuarios,
   esMaster,
+  initialTab,
 }: {
   equipoInicial: MiembroRow[];
   soy: Soy;
@@ -95,8 +96,10 @@ export function AdminShell({
   clientesUsuarios: ClienteUsuarioRow[];
   /** El H.Ü.E HUB es master-only; sólo entonces se muestra su pestaña. */
   esMaster: boolean;
+  /** Pestaña inicial (de ?tab= en la URL); cae a 'equipo' si no es válida. */
+  initialTab?: TabKey;
 }) {
-  const [tab, setTab] = useState<TabKey>("equipo");
+  const [tab, setTab] = useState<TabKey>(initialTab ?? "equipo");
   // El HUB sólo aparece para el master (además el gate real está en cada action = canHue).
   // Papelera: sólo Master Builder, igual que el HUB — restaurar/vaciar es suyo
   // (borrar sí lo puede hacer un admin). El gate REAL vive en papelera-actions
@@ -149,7 +152,12 @@ export function AdminShell({
           {tab === "invitaciones" && (
             <InvitacionesTab pendientes={invitaciones.pendientes} clientes={invitaciones.clientes} />
           )}
-          {tab === "clientes" && <ClientesTab usuarios={clientesUsuarios} />}
+          {tab === "clientes" && (
+            <ClientesTab
+              usuarios={clientesUsuarios}
+              empresas={marcas.map((c) => ({ id: c.id, name: c.name, slug: c.slug }))}
+            />
+          )}
           {tab === "marcas" && <MarcasTab clientes={marcas} />}
           {tab === "actividad" && <ActividadTab rows={actividad} />}
           {tab === "integraciones" && <IntegracionesTab estado={integraciones} />}

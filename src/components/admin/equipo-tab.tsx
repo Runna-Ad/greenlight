@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Plus, UserRoundX, Trash2, Check } from "lucide-react";
+import { Plus, UserRoundX, Trash2, Check, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { Pill } from "@/components/ui/pill";
 import { ROLE_LABEL, type ViewRole } from "@/lib/roles";
 import { ROLES_ASIGNABLES, type MiembroRow, type RolAsignable } from "@/lib/equipo";
-import { crearMiembro, guardarMiembro, eliminarMiembro } from "@/app/(app)/admin/actions";
+import { crearMiembro, guardarMiembro, eliminarMiembro, enviarInvitacion } from "@/app/(app)/admin/actions";
 
 const rolLabel = (r: string) => ROLE_LABEL[r as ViewRole] ?? r;
 
@@ -150,6 +150,31 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
   );
 }
 
+/** Envío MANUAL de la invitación (correo de bienvenida). No hay envío automático al
+ *  dar de alta: el admin lo dispara cuando la persona está lista. Necesita email. */
+function BotonInvitar({ m }: { m: MiembroRow }) {
+  const [pending, start] = useTransition();
+  const enviar = () =>
+    start(async () => {
+      const res = await enviarInvitacion(m.id);
+      if (res.ok) toast.success(`Invitación enviada a ${m.name}.`);
+      else toast.error(res.error ?? "No se pudo enviar.");
+    });
+  const sinEmail = !m.email;
+  return (
+    <button
+      type="button"
+      onClick={enviar}
+      disabled={pending || sinEmail}
+      aria-label={`Enviar invitación a ${m.name}`}
+      title={sinEmail ? "Agrégale un correo para invitarla" : "Enviar invitación por correo"}
+      className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-primary disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+    >
+      <Mail className="size-4" />
+    </button>
+  );
+}
+
 function Grupo({
   titulo,
   miembros,
@@ -239,6 +264,7 @@ function MiembroCard({
           <Switch checked={m.active} onCheckedChange={(v) => onActivo(m, v)} aria-label="Activo" />
           Activo
         </label>
+        <BotonInvitar m={m} />
         <button
           type="button"
           onClick={() => onBorrar(m)}
