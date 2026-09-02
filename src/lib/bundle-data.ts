@@ -57,11 +57,15 @@ export async function cargarBundles(
   tracks: Track[] | null,
 ): Promise<Bundle[]> {
   const db = supabaseAdmin();
-  const { data: estados } = await db
+  const { data: estados, error: eErr } = await db
     .from("brief_estado")
     .select("brief_id, n_tareas, greenlit_at")
     .eq("client_slug", clienteSlug)
     .returns<{ brief_id: string; n_tareas: number; greenlit_at: string | null }[]>();
+  // Un error aquí NO puede degradar a "lista vacía": si la vista no existiera en prod
+  // (código antes que la migración 0060), todos los clientes verían 0 briefs sin
+  // ninguna señal. Mejor la página de error que un vacío convincente. (review 2026-09-02)
+  if (eErr) throw new Error(`brief_estado: ${eErr.message}`);
 
   // Misma regla que abajo (bundleEnCurso), aplicada al brief entero. Un brief sin
   // tareas no puede formar bundle: fuera.
@@ -70,11 +74,12 @@ export async function cargarBundles(
     .map((e) => e.brief_id);
   if (!enCurso.length) return [];
 
-  const { data } = await db
+  const { data, error } = await db
     .from("board_tasks")
     .select(BUNDLE_SELECT)
     .in("brief_id", enCurso)
     .returns<BundleTask[]>();
+  if (error) throw new Error(`board_tasks: ${error.message}`);
 
   return agruparBundles((data ?? []).filter(filtroBundle(role, soyId, tracks)))
     .filter((b) => bundleEnCurso(b));
