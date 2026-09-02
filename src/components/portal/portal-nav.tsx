@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Ref } from "react";
 import Link from "next/link";
 import {
   FileText,
@@ -73,14 +73,20 @@ function agruparPorMes(briefs: PortalBrief[]): { titulo: string; items: PortalBr
  * una sola barra que se queda arriba al hacer scroll — así el cliente cambia de tarea sin
  * volver arriba. Tres popovers (Brief · Ver detalle de tareas · Filtro) + flechas ← N/M →
  * que recorren SECUENCIALMENTE las tareas (filtradas) del brief seleccionado. Pega bajo el
- * Topbar de la app (top-16); la barra de acción del cliente (PortalAcciones) baja debajo.
+ * Topbar de la app (top-16); la barra de acción del cliente (PortalAcciones) baja debajo,
+ * a la altura que el shell MIDE de este nav (`ref` → `--portal-nav-h`), no a un número fijo.
+ *
+ * Todos los controles miden ≥44px (WCAG 2.5.5 AAA): el portal se usa desde el teléfono.
  */
 export function PortalNav({
+  ref,
   cliente,
   briefs,
   selBriefId,
   selTareaId,
 }: {
+  /** El shell lo usa para medir la altura del nav (ResizeObserver). */
+  ref?: Ref<HTMLDivElement>;
   cliente: { name: string; logoUrl: string | null; brandColor: string };
   briefs: PortalBrief[];
   selBriefId: string | null;
@@ -106,9 +112,9 @@ export function PortalNav({
   const next = idx < 0 ? visibles[0] ?? null : idx < visibles.length - 1 ? visibles[idx + 1] : null;
 
   return (
-    <div className="sticky top-16 z-30 w-full border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      {/* UNA sola fila de altura constante (scroll horizontal si no cabe) para que la barra
-          de acción de abajo pueda pegarse a un offset fijo sin solaparse (sticky-collision). */}
+    <div ref={ref} className="sticky top-16 z-30 w-full border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+      {/* UNA sola fila (scroll horizontal si no cabe). La barra de acción de abajo se pega
+          justo debajo leyendo la altura medida de este nav (sin sticky-collision). */}
       <div className="flex items-center gap-3 overflow-x-auto px-4 py-2.5 sm:px-6 lg:px-8">
         {/* Identidad del portal */}
         <div className="flex shrink-0 items-center gap-2.5">
@@ -136,7 +142,7 @@ export function PortalNav({
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="inline-flex w-[11rem] shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
+              className="inline-flex min-h-11 w-[11rem] shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
             >
               <FileText className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate text-left">{brief?.label ?? "Selecciona brief"}</span>
@@ -158,7 +164,7 @@ export function PortalNav({
                       scroll={false}
                       onClick={() => setOpenBrief(false)}
                       className={cn(
-                        "flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors",
+                        "flex min-h-11 items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors",
                         activo ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-secondary",
                       )}
                     >
@@ -184,7 +190,7 @@ export function PortalNav({
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
             >
               <ListChecks className="size-3.5 shrink-0" />
               <span className="hidden sm:inline">Ver detalle de tareas</span>
@@ -215,7 +221,7 @@ export function PortalNav({
                       background: activo ? `color-mix(in srgb, ${marca} 8%, transparent)` : undefined,
                     }}
                     className={cn(
-                      "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 border-b border-border px-3 py-2.5 text-[13px] transition-colors last:border-b-0",
+                      "grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 border-b border-border px-3 py-2 text-[13px] transition-colors last:border-b-0",
                       !activo && "hover:bg-secondary/60",
                     )}
                   >
@@ -240,7 +246,7 @@ export function PortalNav({
               type="button"
               aria-label="Filtrar por estado"
               className={cn(
-                "relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors",
+                "relative inline-flex size-11 shrink-0 items-center justify-center rounded-lg border transition-colors",
                 filtro === "todas"
                   ? "border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-secondary"
                   : "border-primary bg-primary/10 text-primary",
@@ -267,7 +273,7 @@ export function PortalNav({
                     setOpenFiltro(false);
                   }}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors disabled:cursor-default disabled:opacity-40",
+                    "flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors disabled:cursor-default disabled:opacity-40",
                     activo ? "bg-secondary font-semibold text-foreground" : "text-foreground hover:bg-secondary",
                   )}
                 >
@@ -299,7 +305,7 @@ function FlechaTarea({ brief, tarea, dir }: { brief?: string; tarea?: string; di
   const Icon = dir === "prev" ? ChevronLeft : ChevronRight;
   const label = dir === "prev" ? "Tarea anterior" : "Tarea siguiente";
   const clase =
-    "inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors";
+    "inline-flex size-11 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors";
   if (!brief || !tarea) {
     return (
       <span aria-hidden className={cn(clase, "cursor-default text-muted-foreground opacity-40")}>

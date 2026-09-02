@@ -171,12 +171,14 @@ export function PortalAcciones({
 }
 
 /** La barra pegada arriba: bleed a los bordes del contenedor + blur de fondo.
- *  Pega DEBAJO del PortalNav sticky (top-16, ~3.5rem de alto) → top-[7.5rem], con z-20
- *  (bajo el nav, z-30). El bleed -mx iguala el padding del contenedor full-width del shell
- *  (px-4 sm:px-6 lg:px-8) para tocar los bordes del viewport. */
+ *  Pega DEBAJO del PortalNav sticky: top = topbar (4rem) + la altura MEDIDA del nav, que
+ *  el shell publica como `--portal-nav-h` (antes era un número fijo acoplado a la altura
+ *  del nav — crecer un botón lo desalineaba). El fallback 4rem es la altura del nav sin
+ *  envolver. z-20 (bajo el nav, z-30). El bleed -mx iguala el padding del contenedor
+ *  full-width del shell (px-4 sm:px-6 lg:px-8) para tocar los bordes del viewport. */
 function Barra({ children }: { children: ReactNode }) {
   return (
-    <div className="sticky top-[7.5rem] z-20 -mx-4 mb-4 flex items-center justify-between gap-3 border-b border-border bg-background/85 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+    <div className="sticky top-[calc(4rem+var(--portal-nav-h,4rem))] z-20 -mx-4 mb-4 flex items-center justify-between gap-3 border-b border-border bg-background/85 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
       {children}
     </div>
   );

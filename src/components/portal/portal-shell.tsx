@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { PackageOpen } from "lucide-react";
 import type { PortalBrief } from "@/app/(app)/[cliente]/portal/portal-data";
 import { PortalNav } from "./portal-nav";
@@ -20,6 +20,24 @@ export function PortalShell({
   vista: ReactNode;
 }) {
   const marca = cliente.brandColor;
+
+  // La barra de acción del cliente (PortalAcciones, dentro de `vista`) es sticky y pega
+  // DEBAJO del nav, así que necesita saber cuánto mide. Se MIDE (ResizeObserver: cambia
+  // si la fila se envuelve, con zoom o con otra fuente) y se publica como variable CSS en
+  // el contenedor común; la barra lee `--portal-nav-h`. Antes de medir (SSR) la barra
+  // usa su fallback, que es la altura del nav sin envolver.
+  const navRef = useRef<HTMLDivElement>(null);
+  const [navH, setNavH] = useState<number | null>(null);
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const medir = () => setNavH(el.getBoundingClientRect().height);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [briefs.length]);
+  const varNav = (navH != null ? { "--portal-nav-h": `${navH}px` } : undefined) as CSSProperties | undefined;
 
   // Glow sutil con el color de marca — hace sentir el portal "suyo". Full-bleed arriba.
   const glow = (
@@ -64,11 +82,11 @@ export function PortalShell({
   }
 
   return (
-    <div className="relative w-full">
+    <div className="relative w-full" style={varNav}>
       {glow}
 
       {/* Navegación STICKY (briefs · tareas · filtro · flechas) — ancho completo. */}
-      <PortalNav cliente={cliente} briefs={briefs} selBriefId={selBriefId} selTareaId={selTareaId} />
+      <PortalNav ref={navRef} cliente={cliente} briefs={briefs} selBriefId={selBriefId} selTareaId={selTareaId} />
 
       {/* El contenido usa el ANCHO COMPLETO (con padding) — más aire, sin el margen central
           que dejaba mucho espacio muerto a los lados (Pedro). El key por tarea la remonta al
