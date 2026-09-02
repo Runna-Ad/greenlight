@@ -121,7 +121,7 @@ export function PortalAcciones({
           type="button"
           onClick={enviar}
           disabled={pend}
-          className="group inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:brightness-110 hover:shadow-md active:scale-[0.98] disabled:opacity-60"
+          className="group inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:brightness-110 hover:shadow-md active:scale-[0.98] disabled:opacity-60"
           style={{ background: "color-mix(in srgb, var(--status-corrections) 82%, #000)" }}
         >
           <RefreshCw className="size-4 transition-transform duration-500 group-hover:rotate-180" />
@@ -140,7 +140,7 @@ export function PortalAcciones({
               aprobar();
             }}
             disabled={pend}
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
             style={{ background: "color-mix(in srgb, var(--status-completed) 90%, #000)" }}
           >
             <Check className="size-4" /> Sí, aprobar
@@ -150,7 +150,7 @@ export function PortalAcciones({
             onClick={() => setConfirmando(false)}
             disabled={pend}
             autoFocus
-            className="rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+            className="rounded-xl border border-border bg-card px-3.5 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
           >
             Cancelar
           </button>
@@ -160,7 +160,7 @@ export function PortalAcciones({
           type="button"
           onClick={() => setConfirmando(true)}
           disabled={pend}
-          className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:brightness-110 hover:shadow-md active:scale-[0.98] disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:brightness-110 hover:shadow-md active:scale-[0.98] disabled:opacity-60"
           style={{ background: "color-mix(in srgb, var(--status-completed) 90%, #000)" }}
         >
           <Check className="size-4" /> Aprobar

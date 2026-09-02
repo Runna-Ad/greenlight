@@ -39,9 +39,18 @@
             sobre main (guard `check-server-actions` intacto). npm audit 7→4 vulns. Gates verdes, sin migración.
       - [ ] **2 majors DIFERIDOS** (sesión propia, verificación aparte): #5 TypeScript 5→7 · #4 @types/node 20→26.
             TS 7 puede sacar errores de tipos nuevos; @types/node 26 salta 6 majors. Correr tsc+build antes de mergear.
-      - [ ] **`npm audit fix`** (no-major): 4 vulns transitivas pre-existentes (js-yaml/fast-uri/hono/nanoid highs+1 mod).
-      - [ ] **pulido a11y**: áreas táctiles <44px (sobre todo el PORTAL en móvil) · `CommandDialog` muerto ·
-            autoFocus del request-form. (+ nota Paso B: las pastillas del Workload y su lista quedan <44px en desktop.)
+      - [x] **`npm audit fix`** (2026-09-02): 4 vulns transitivas → **0** (sólo lock, no-major). Commit e717129.
+      - [~] **pulido a11y** (2026-09-02, parcial):
+            - [x] `CommandDialog`/`command.tsx` MUERTO eliminado + dep `cmdk` quitada (−1 dependencia).
+            - [x] `autoFocus` en el primer campo del request-form del portal.
+            - [x] tap targets SEGUROS a 44px: CTAs de PortalAcciones (Aprobar/Pedir cambios/confirm) + chips
+                  «Ver campo»/«Quitar» del panel de cambios (estaban ~24px, borde de AA → ahora min-h-9).
+            - [ ] **DIFERIDO — controles del PortalNav a 44px**: flechas prev/next (size-9) y selectores (py-1.5)
+                  ya cumplen AA (24px+) pero no AAA (44px). Crecerlos rompe el offset sticky `top-[7.5rem]` de
+                  PortalAcciones (acoplado a la altura del nav) → necesita pasada de layout + verify en móvil real.
+                  Follow-up limpio: resolver el offset por stacking/medición en vez del número mágico.
+            - [ ] nota Paso B: las pastillas del Workload y su lista quedan <44px en desktop (superficie interna, AA ok).
+            - [ ] nota: el panel de cambios INTERNO (agency, desktop) tiene los mismos chips — bump opcional si se usa en móvil.
 - [ ] **5. Decisión abierta**: hoy "borrador" = sólo `under_review`. Si el lead fija un cambio con la
       tarea EN PROGRESO, el especialista lo ve al instante (feedback deliberado). Pedro puede querer que
       NADA se vea hasta "Mandar cambios" — es un cambio de una línea.

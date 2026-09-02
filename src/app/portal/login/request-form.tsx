@@ -47,6 +47,7 @@ export function RequestForm() {
           value={form.name}
           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           required
+          autoFocus
         />
       </div>
       <div className="space-y-1">
