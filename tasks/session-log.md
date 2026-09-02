@@ -1,7 +1,7 @@
 # Session log — Greenlight · by Rünna
 
 ## 2026-09-02 (tarde) — Deuda de perf (import N+1 · cap de bundles) + majors + a11y AAA del PortalNav (LISTO · SIN PUSH)
-**4 commits: 3 en `main` SIN pushear (ee673da → 6424531, sin migración) + 1 en la rama `perf/bundles-sql` (cc1a3c5, migración 0060).
+**main: 5 commits SIN pushear (ee673da → fix del review, sin migración) + rama `perf/bundles-sql`: 2 commits (migración 0060 + fix del review).
 Nada desplegado: pushear main = deploy (Vercel auto), así que espera el "ship it".**
 
 ### Qué se hizo (en orden)
@@ -26,11 +26,20 @@ Nada desplegado: pushear main = deploy (Vercel auto), así que espera el "ship i
    qué briefs siguen en curso (filas = briefs) → tareas SÓLO de ésos. Contract test TS↔SQL en test-db (364 pass).
    Review de seguridad (Opus) sobre 1 y 4 — ver lessons/estado.
 
+5. **Review de seguridad (Opus, `security-reviewer`) → 4 arreglos** [main 2 commits + rama 1]: (M1) una pestaña
+   que no clasifica tenía track null y el importador ponía "real" — un lead de Normal podía crear tareas de Real
+   con una pestaña inventada en el POST (hueco PRE-EXISTENTE): la action rechaza el run y el lib aparta la fila.
+   (M2) la limpieza del brief vacío confiaba en memoria: con dos imports a la vez, borrar en cascada podía
+   destruir las ideas del otro — ahora recuenta en la BD. (L3) claves con comillas romperían el `.in()` del dedup:
+   se aparta la fila. (M4) `cargarBundles` ignoraba errores → si el código llegara antes que la 0060, TODOS los
+   clientes verían 0 briefs sin señal: ahora revienta. Sin hallazgos de fuga cross-tenant ni en el grant de la vista.
+   test-import 70 → 81.
+
 ### Gates por commit
-tsc 0 · eslint 0 err · check:actions 21 · isolation 59 · lib 470 · db 364 · import 70 · sync 44 · build OK · 0 vulns.
+tsc 0 · eslint 0 err · check:actions 21 · isolation 59 · lib 470 · db 364 · import 81 · sync 44 · build OK · 0 vulns.
 
 ### Cómo se shippea (cuando Pedro diga)
-- **main** (3 commits, sin migración): `git push origin main` → Vercel auto-deploy. Después cerrar PRs #4/#5 de
+- **main** (sin migración): `git push origin main` → Vercel auto-deploy. Después cerrar PRs #4/#5 de
   Dependabot con comentario (a favor del commit, como el 2026-09-02 am).
 - **rama `perf/bundles-sql`**: `npm run migrate` (aplica 0060 al ref `ybbrpqzbedaxsmotgtkh`) → `git merge` a main
   → push. La vista tiene que existir en prod ANTES de que ese código llegue a main.

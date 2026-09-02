@@ -1,5 +1,5 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-09-02 (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **LISTO, SIN PUSH (espera "ship it"): 3 commits en main + 1 en rama `perf/bundles-sql`**
+Última actualización: 2026-09-02 (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **LISTO, SIN PUSH (espera "ship it"): 5 commits en main + 2 en rama `perf/bundles-sql`** (incluye los arreglos del review de seguridad Opus)
 
 ## ⏳ 2026-09-02 (tarde) — LISTO Y SIN DESPLEGAR: 3 commits en `main` + rama `perf/bundles-sql` (migración 0060)
 - **`main` (sin pushear, SIN migración)**: import del sheet en lotes (12 consultas fijas por run; write-path en
@@ -9,6 +9,9 @@
 - **Rama `perf/bundles-sql`** (1 commit): migración **0060** vista `produccion.brief_estado` + `cargarBundles` en 2
   fases (briefs en curso → tareas sólo de ésos). Shippear = `npm run migrate` (ref `ybbrpqzbedaxsmotgtkh`) ANTES
   de mergear/pushear. Sin esto la lista de briefs sigue leyendo TODOS los board_tasks del cliente (cap silencioso).
+- **Review de seguridad (Opus) aplicado**: pestaña sin equipo ya no cae a "real" (un lead de Normal podía crear
+  tareas de Real con una pestaña inventada); recuento en BD antes de borrar un brief vacío (cascade vs import
+  concurrente); claves con comillas se apartan; cargarBundles revienta en vez de listar vacío si falta la vista.
 - **Decisiones mías a confirmar**: TS 6 (no 7: typescript-eslint rechaza 7.0 → lint roto en CI) · @types/node del
   runtime (24) · el import no cuelga tareas de un brief en la papelera (crea uno vivo).
 - Deuda de perf conocida: **cerrada** (Workload, import, bundles). Queda el cosmético móvil del PortalNav (flechas
@@ -439,9 +442,9 @@ snippets legal=1 (sólo Card) · references(links del sheet)=15
   SUPABASE_SERVICE_ROLE_KEY, GMAIL_USER/APP_PASSWORD, APP_URL, ANTHROPIC_API_KEY.
   (Falta NOTION_TOKEN/NOTION_DB_ID para F6.)
 - `.env.local` local tiene las mismas; los scripts node lo cargan a mano.
-- **URL de prod: UNA sola canónica** `runna-command-center.vercel.app` (git-connected,
-  se refresca en cada push). Se eliminó el alias manual `-pedro-3338-` que se
-  quedaba stale (era caché-inmune, causó confusión). Ver lección Vercel-alias.
+- **URL de prod: UNA sola canónica** — hoy **`runna-greenlight.vercel.app`** (ver "Desplegado" arriba;
+  `runna-command-center.vercel.app` se retiró el 2026-08-21). Se eliminó el alias manual `-pedro-3338-`
+  que se quedaba stale (era caché-inmune, causó confusión). Ver lección Vercel-alias.
 
 ## Nuevo 2026-08-12
 - **Importador "Pegar guión" / "Pegar copy"** (Feature 2, shipped): CTA prominente
