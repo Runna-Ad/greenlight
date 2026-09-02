@@ -374,5 +374,48 @@ console.log("\n▶ Dos pestañas (dos briefs, dos tracks) en un run");
   eq("Nils (real) no se asigna a las de Normal", db.t.idea_assignments.length, 3);
 }
 
+// ── 11. Review de seguridad 2026-09-02 ───────────────────────────────────────
+console.log("\n▶ Pestaña sin equipo y claves con comillas se apartan (no se adivina 'real')");
+{
+  const db = conFixtures();
+  const r = await ejecutarImport(db, ctx, [fila(1), fila(2, {}, "Zzz inventada"), { ...fila(3), key: 'real|"rara"' }]);
+  eq("sólo la fila buena se crea", r.created, 1);
+  eq("2 apartadas", r.skipped, 2);
+  ok("error nombra la pestaña sin equipo", r.errors.some((e) => e.includes("Zzz inventada") && e.includes("sin equipo")));
+  ok("error nombra la clave con comillas", r.errors.some((e) => e.includes("comillas")));
+  eq("no se creó brief para la pestaña inventada", db.t.briefs.length, 1);
+  eq("la idea creada es del track real de su pestaña", db.t.ideas[0].track, "real");
+}
+
+console.log("\n▶ Limpieza del brief vacío recuenta en la base (no borra lo de otro import)");
+{
+  // Todos los inserts de idea del brief nuevo fallan → el brief queda vacío → se borra.
+  const db = conFixtures();
+  db.fallar({ tabla: "ideas", cuando: (r) => r?.naming_base === "NAM1", msg: "boom" });
+  const r = await ejecutarImport(db, ctx, [fila(1)]);
+  eq("0 creadas", r.created, 0);
+  eq("el brief vacío se borró", db.t.briefs.length, 0);
+}
+{
+  // Igual, pero "otro import" cuelga una idea del brief mientras este run falla:
+  // el recuento en la base la ve y NO borra el brief (borrarlo la destruiría en cascada).
+  const db = conFixtures();
+  db.fallar({
+    tabla: "ideas",
+    cuando: (r) => {
+      if (r?.naming_base !== "NAM1") return false;
+      if (!db.t.ideas.some((i) => i.naming_base === "AJENA")) {
+        db.t.ideas.push({ id: "ajena", brief_id: r.brief_id, family_id: r.family_id, variant_number: 99, naming_base: "AJENA", deleted_at: null });
+      }
+      return true;
+    },
+    msg: "boom",
+  });
+  const r = await ejecutarImport(db, ctx, [fila(1)]);
+  eq("0 creadas en este run", r.created, 0);
+  eq("el brief NO se borró (tiene una idea ajena)", db.t.briefs.length, 1);
+  eq("la idea ajena sigue viva", db.t.ideas.filter((i) => i.naming_base === "AJENA").length, 1);
+}
+
 console.log(`\n${fail ? "❌" : "✅"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail ? 1 : 0);

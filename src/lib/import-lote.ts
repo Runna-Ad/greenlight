@@ -223,8 +223,32 @@ export async function ejecutarImport(
   const resolveMarca = (raw: string): string | null =>
     MARCAS.find((m) => fold(m.name) === fold(raw))?.id ?? null;
 
+  // ── 0. filas que NO entran a los lotes ──
+  // · Pestaña sin equipo: classifyTab devuelve track null para lo que no es Real/Normal.
+  //   Antes se le ponía "real" por defecto — un lead de Normal podía crear tareas de
+  //   Real mandando una pestaña inventada (rows es un POST). La server action ya lo
+  //   rechaza entero; aquí se vuelve a defender fila a fila.
+  // · Comillas o barra invertida en la clave/pestaña: supabase-js entrecomilla los
+  //   valores de `.in()` pero no escapa `"` → la consulta del dedup rompería y se
+  //   abortaría TODO el run por una fila. Se aparta sólo esa fila, con aviso.
+  const filas: ImportRow[] = [];
+  for (const row of rows) {
+    if (/["\\]/.test(row.key) || /["\\]/.test(row.tab)) {
+      res.errors.push(`Fila «${row.key}»: la clave o la pestaña traen comillas — no se importa.`);
+      res.skipped++;
+      continue;
+    }
+    if (!classifyTab(row.tab).track) {
+      res.errors.push(`Pestaña «${row.tab}» sin equipo (Real/Normal): no se importa.`);
+      res.skipped++;
+      continue;
+    }
+    filas.push(row);
+  }
+  if (!filas.length) return res;
+
   // ── 1. one brief per tab ──
-  const tabs = [...new Set(rows.map((r) => r.tab))];
+  const tabs = [...new Set(filas.map((r) => r.tab))];
   const briefByTab = new Map<string, string>();
   // Briefs CREADOS en este run (no los reusados). Si al final alguno quedó SIN
   // ideas (todas sus filas se bloquearon/omitieron) se borra: un brief vacío de
@@ -254,7 +278,7 @@ export async function ejecutarImport(
   // sólo el vínculo: si está sellada, la fila vuelve a ser importable; si se restaura
   // desde la papelera, el vínculo vuelve a valer solo (sin tocar nada).
   const yaVivas = new Set<string>();
-  for (const lote of enLotes([...new Set(rows.map((r) => r.key))], LOTE_IN)) {
+  for (const lote of enLotes([...new Set(filas.map((r) => r.key))], LOTE_IN)) {
     const { data, error } = await db
       .from("staged_rows").select("natural_key, ideas(deleted_at)")
       .eq("client_id", clientId).in("natural_key", lote);
@@ -281,7 +305,7 @@ export async function ejecutarImport(
   // Claves ya planeadas en ESTE run: dos filas con la misma clave natural sólo crean
   // una tarea (antes lo garantizaba el orden: la 2ª veía el staged de la 1ª).
   const vistas = new Set<string>();
-  for (const row of rows) {
+  for (const row of filas) {
     // skip anything already imported — this is what makes re-sync safe.
     if (yaVivas.has(row.key) || vistas.has(row.key)) {
       res.skipped++;
@@ -310,8 +334,7 @@ export async function ejecutarImport(
       continue;
     }
 
-    const info = classifyTab(row.tab);
-    const track = info.track ?? "real";
+    const track = classifyTab(row.tab).track!; // no-null: filtrado en el paso 0
     vistas.add(row.key);
     planes0.push({
       row,
@@ -330,7 +353,7 @@ export async function ejecutarImport(
   for (const tab of new Set(planes0.map((p) => p.row.tab))) {
     if (briefByTab.has(tab)) continue;
     const info = classifyTab(tab);
-    const sample = rows.find((r) => r.tab === tab)!;
+    const sample = filas.find((r) => r.tab === tab)!;
     const v = (f: keyof SheetRow) => sample.edited?.[f] ?? sample.data[f] ?? "";
 
     const { data: brief, error } = await db
@@ -561,12 +584,20 @@ export async function ejecutarImport(
   );
 
   // ── 10. limpieza: briefs creados ESTE run que quedaron SIN ideas ──
-  // Un brief nuevo sólo puede tener las ideas que entraron aquí, así que se sabe en
-  // memoria (antes: una consulta de conteo por brief nuevo). 0 downstream → borrarlo
-  // es seguro y evita el "1 BRIEF" fantasma en la tarjeta de cliente.
+  // Sólo pasa si TODOS los inserts de idea de ese brief fallaron (los briefs se crean
+  // sólo para pestañas con filas planeadas). Un brief vacío es basura que ensucia el
+  // tablero y la tarjeta de cliente ("1 BRIEF" fantasma).
   const conIdeas = new Set(vivas.map((c) => c.briefId));
   const vacios = [...nuevosBriefIds].filter((id) => !conIdeas.has(id));
-  if (vacios.length) await db.from("briefs").delete().in("id", vacios);
+  if (vacios.length) {
+    // Re-contar en la BASE antes de borrar: otro import a la vez pudo haber reusado
+    // este brief (lo encuentra por source_tab) y colgado ideas — borrarlo en cascada
+    // las destruiría. Sólo se borra el que sigue vacío DE VERDAD. (review 2026-09-02)
+    const { data: conAlgo } = await db.from("ideas").select("brief_id").in("brief_id", vacios);
+    const ocupados = new Set(((conAlgo ?? []) as { brief_id: string }[]).map((i) => i.brief_id));
+    const borrar = vacios.filter((id) => !ocupados.has(id));
+    if (borrar.length) await db.from("briefs").delete().in("id", borrar);
+  }
 
   res.ok = res.errors.length === 0;
   return res;

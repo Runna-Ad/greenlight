@@ -37,15 +37,23 @@ export async function importRows(
     res.errors.push("Sólo un lead o un admin puede importar del sheet.");
     return res;
   }
+  // Sólo pestañas de un equipo (Real/Normal). Una pestaña que no clasifica no tiene
+  // track, y el importador le ponía "real" por defecto — así un lead de Normal podía
+  // crear tareas de Real con una pestaña inventada (rows es un POST controlable).
+  // Se rechaza ANTES del gate de track, para que ese gate no tenga hueco. (review 2026-09-02)
+  const tabs = [...new Set(rows.map((r) => r.tab))];
+  if (tabs.some((tab) => classifyTab(tab).track == null)) {
+    res.errors.push("Sólo se importan pestañas de un equipo (Real/Normal).");
+    return res;
+  }
   // Un lead es DEPARTAMENTAL: sólo importa pestañas de sus track(s) otorgados (grant
   // multi-track) — igual que crearBrief. Admins/master son globales. Sin esto, un lead
   // de un track podía crear briefs/tareas del OTRO metiendo filas cuyo tab clasifica al
-  // otro track (rows es un POST controlable por el cliente). (reap S1)
+  // otro track. (reap S1)
   if (u.role === "lead" && u.member) {
-    const fuera = [...new Set(rows.map((r) => r.tab))].some((tab) => {
-      const t = classifyTab(tab).track;
-      return t != null && !u.member!.tracks.includes(t as "real" | "normal");
-    });
+    const fuera = tabs.some(
+      (tab) => !u.member!.tracks.includes(classifyTab(tab).track as "real" | "normal"),
+    );
     if (fuera) {
       res.errors.push("Un lead sólo importa pestañas de su propio equipo.");
       return res;
