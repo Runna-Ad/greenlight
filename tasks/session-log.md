@@ -1,5 +1,19 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-02 (noche) — UN solo nombre: Greenlight (renombre de repo, Vercel y carpeta)
+Pedro: "greenlight y runna command center son el mismo proyecto, no quiero confusión". Hecho con su OK:
+- GitHub `Runna-Ad/runna-command-center` → **`Runna-Ad/greenlight`** (redirect automático del viejo). Remoto local actualizado.
+- Vercel proyecto `runna-command-center` → **`greenlight`** (mismo ID, alias runna-greenlight.vercel.app intacto).
+- En el repo: `name` de package.json/lock, `project_id` de supabase/config.toml, APP_URL del env example
+  (apuntaba al dominio retirado), `.vercel/project.json`, `settings.local.json` (rutas nuevas). Worktree viejo
+  `.claude/worktrees/agitated-agnesi-*` eliminado (limpio, HEAD suelto de un agente de agosto).
+- La carpeta de MARCA (Documents/…/Greenlight) se queda como está: es marca, no código, y el repo es PÚBLICO.
+- ⏳ **Pendiente (paso de Pedro o de la próxima sesión, con el desktop app CERRADO)**: `mv
+  /Users/work/Projects/runna-command-center /Users/work/Projects/greenlight` + renombrar
+  `~/.claude/projects/-Users-work-Projects-runna-command-center` → `…-greenlight` + editar `cwd`/`originCwd` en
+  `~/Library/Application Support/Claude/claude-code-sessions/**/local_*.json` (lección del renombre anterior).
+- Verificación: el push de este commit tiene que disparar el deploy en Vercel con el repo ya renombrado.
+
 ## 2026-09-02 (tarde) — Deuda de perf (import N+1 · cap de bundles) + majors + a11y AAA del PortalNav (SHIPPEADO + LIVE)
 **SHIPPEADO 2026-09-02 ~10:43 MDT con el "ship it" de Pedro: main ee673da → 3e81636 (merge de `perf/bundles-sql`), migración 0060 aplicada al esquema `produccion` (ref ybbrpqzbedaxsmotgtkh) ANTES del merge, Vercel Ready, CI verde, PRs #4/#5 cerrados (Dependabot los cerró solo al mover main). Verificado en prod: vista `brief_estado` viva, 2 briefs en curso, 0 grants públicos, prod responde 307→login.**
 

@@ -1,4 +1,11 @@
 # Project state — Greenlight · by Rünna
+
+> **Nombre único: GREENLIGHT** (2026-09-02). Antes el repo/proyecto se llamaba "runna-command-center"
+> (Rünna Command Center); las menciones en el histórico de abajo son ese mismo proyecto.
+> GitHub `Runna-Ad/greenlight` · Vercel proyecto `greenlight` (prod: runna-greenlight.vercel.app) ·
+> carpeta de código `/Users/work/Projects/greenlight` (⏳ pendiente el `mv` local con el desktop app cerrado) ·
+> carpeta de MARCA `/Users/work/Documents/Claude/Projects/Greenlight` (no es código; el repo es público) ·
+> base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-02 (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
 ## ✅ 2026-09-02 (tarde) — SHIPPEADO + LIVE: perf import/bundles · TS 6 · a11y PortalNav · review Opus (migración 0060 aplicada)
