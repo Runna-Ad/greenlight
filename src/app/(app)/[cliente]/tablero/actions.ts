@@ -249,10 +249,11 @@ export async function sendToClient(ideaId: string, note?: string): Promise<Actio
  * ESPECIALISTAS (es_lead=false). Reemplaza el conjunto completo con un DIFF (sólo
  * toca lo que cambió) para preservar assigned_at de quien sigue asignado — esa hora
  * es la que mide la Evaluación (0034). Enforcea la regla de negocio en el
- * SERVIDOR (no confía en la UI): sólo personas ACTIVAS del MISMO track de la
- * tarea, y con el rol correcto — lead = rol `lead`, especialistas = rol `creative`.
- * Admins/master NO son asignables (no son "doers"). Funciona aunque la tarea no
- * tenga a nadie (arregla el hueco de "sin lead, no se puede asignar después").
+ * SERVIDOR (no confía en la UI) con puedeSerLead/puedeSerEspecialista (lib/roles):
+ * personas ACTIVAS con grant sobre el track de la tarea; lead = rol `lead` de ese track
+ * o admin/master (globales, Pedro 2026-09-01); especialistas = rol `creative`.
+ * Funciona aunque la tarea no tenga a nadie (arregla el hueco de "sin lead, no se
+ * puede asignar después").
  */
 export async function asignarTarea(
   ideaId: string,
@@ -298,37 +299,19 @@ export async function asignarTarea(
     }
   }
 
-  // DIFF (preserva assigned_at de quien sigue) sobre el conjunto deseado completo.
-  const deseado = new Set(dedupIds);
-  const { data: actuales, error: readErr } = await db
-    .from("idea_assignments")
-    .select("member_id")
-    .eq("idea_id", ideaId)
-    .not("member_id", "is", null)
-    .returns<{ member_id: string }[]>();
-  if (readErr) return { ok: false, error: readErr.message };
-  const ya = new Set((actuales ?? []).map((r) => r.member_id));
-  const quitar = [...ya].filter((id) => !deseado.has(id));
-  const agregar = [...deseado].filter((id) => !ya.has(id));
-
-  if (quitar.length) {
-    const { error } = await db
-      .from("idea_assignments").delete().eq("idea_id", ideaId).in("member_id", quitar);
-    if (error) return { ok: false, error: error.message };
-  }
-  if (agregar.length) {
-    const { error } = await db
-      .from("idea_assignments").insert(agregar.map((member_id) => ({ idea_id: ideaId, member_id })));
-    if (error) return { ok: false, error: error.message };
-  }
-
-  // Sella es_lead: todos a false, el lead a true.
-  await db.from("idea_assignments").update({ es_lead: false }).eq("idea_id", ideaId);
-  if (leadId) {
-    await db
-      .from("idea_assignments").update({ es_lead: true })
-      .eq("idea_id", ideaId).eq("member_id", leadId);
-  }
+  // La escritura va por rpc_set_assignees (0061): hace el DIFF (preserva assigned_at de
+  // quien sigue), sella es_lead y assigned_by, y — lo que un insert directo por PostgREST
+  // no podía — fija `produccion.acting_member`, así el trigger notify_on_assignment NO
+  // avisa "se te asignó" a quien se asigna a sí mismo. (reap 2026-09-02, sweep S1)
+  const u = await getCurrentUser();
+  const { error } = await db.rpc("rpc_set_assignees", {
+    p_idea_id: ideaId,
+    p_lead_id: leadId,
+    p_especialista_ids: especialistaIds,
+    p_actor_member: u?.member?.id ?? null,
+    p_actor_profile: u?.userId ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
 
   await revalidateFor(db, ideaId);
   after(() => dispatchPendingEmails());
