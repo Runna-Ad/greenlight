@@ -1,6 +1,6 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-09-02 (noche) — REAP PRE-LANZAMIENTO (deep, repo entero) — código en main SIN push · 0061 SIN aplicar
+## ✅ 2026-09-02 (noche) — REAP PRE-LANZAMIENTO (deep, repo entero) — SHIPPEADO + LIVE (main 977d7cf · 0061 aplicada)
 6 agentes (invariantes · seguridad · salud/perf · a11y/UX · funcionalidad · tech-scout) + verificación propia.
 2 críticos + 11 serios + ~25 mejoras arreglados. Gates: tsc 0 · lint 0 · lib 473 · db 377 · import 81 · sync 44 · build OK.
 Llave pública re-probada en prod: 401 en todas las tablas y en `brief_estado`.
@@ -14,9 +14,11 @@ Llave pública re-probada en prod: 401 en todas las tablas y en `brief_estado`.
 - [x] Cabeceras de seguridad · noindex/robots · topes de texto · cerca `<peticion>` en validarCambios · scope en aplicarOrtografia ·
       tarea 404 si no es del cliente de la URL · toast si H.Ü.E no revisó · Slack apagado · verde sólo Aprobado (`--status-completed` → teal) ·
       loading ×6 · error.tsx raíz · phosphor→lucide · shadcn a devDeps · listarEquipo acotado · PreviewSlide muerto fuera · a11y (teclado, labels, confirm, 44px).
-- [ ] **SHIP (orden)**: (1) `git push origin main` (sólo código; no depende de 0061). (2) `npm run migrate` → aplica **0061**
-      (esquema `produccion` de Greenlight, ref `ybbrpqzbedaxsmotgtkh`). (3) mergear `reap/asignar-rpc` (asignarTarea → `rpc_set_assignees`)
-      y push. La rama NO puede llegar a main antes de la 0061 (llama a una RPC que aún no existe en prod).
+- [x] **SHIP** (2026-09-02 noche, "ship it" de Pedro): push → 0061 aplicada y verificada → merge `reap/asignar-rpc` → hotfix
+      `/robots.txt` público (977d7cf). Prod: 200, cabeceras, robots Disallow, llave pública 401.
+- [ ] **LIVE-VERIFY de Pedro (sesión autenticada)**: como lead, asignarse a sí mismo → SIN aviso "se te asignó"; dar de baja a
+      alguien en Equipo → ya no entra; apagar "Recibe emails" como lead → no llegan correos de revisión; el builder de briefs ofrece
+      a un especialista multi-track en ambos tracks y a un admin como lead.
 - [ ] **Decisiones de Pedro** (no se tocó): crear clientes en la app (el botón dice "desde Admin" y Admin no lo tiene) · sheet por cliente
       (fallback hardcodeado a DiDi si falta SHEETS_SCRIPT_URL; prod lo tiene) · buscador global (stub en todas las páginas, portal incluido) ·
       "reenviar mi link" para clientes / invitación por correo al equipo · Papelera sólo master (admin borra pero no deshace) · el cliente no

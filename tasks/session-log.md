@@ -1,6 +1,6 @@
 # Session log — Greenlight · by Rünna
 
-## 2026-09-02 (noche 2) — REAP PRE-LANZAMIENTO deep · repo entero (código en main SIN push · 0061 SIN aplicar)
+## 2026-09-02 (noche 2) — REAP PRE-LANZAMIENTO deep · repo entero — **SHIPPEADO + LIVE** (main 977d7cf · 0061 aplicada · Vercel Ready)
 **Qué se hizo:** carpeta confirmada (`/Users/work/Projects/greenlight`, memoria y sesiones ya renombradas; `S.P.A.M`
 es OTRO proyecto). Push del bloque auto-generado del session-log (d914783, Vercel Ready). Luego el reap: 6 agentes
 paralelos de SOLO lectura (invariantes Opus · seguridad Opus · salud/perf Sonnet · a11y/UX Sonnet · funcionalidad
@@ -25,7 +25,8 @@ live (dev, auth off): rutas 200/307, cabeceras presentes, robots Disallow, sin e
 update; alternativa = construirlo) · `--status-completed` a teal en TODA la app (el tablero ya lo hacía solo) ·
 Slack switch deshabilitado · rate limit por identidad en H.Ü.E queda pendiente (sólo tope de tamaño).
 **Uncommitted:** nada tras el commit de docs.
-**Pick up next session (orden de SHIP, con el "ship it"):** (1) `git push origin main`; (2) `npm run migrate` →
+**SHIPPEADO con el "ship it" de Pedro (2026-09-02 noche):** push 24927cb → `npm run migrate` aplicó **0061** al esquema `produccion` de Greenlight (verificado en prod: rpc_set_assignees existe, 0 rutinas ejecutables por PUBLIC, service_role con execute en todas, última migración 20260902120002) → merge `reap/asignar-rpc` (edb3371, rama borrada) → hotfix `977d7cf` (/robots.txt era redirigido a /login por el muro; ahora es público). Prod: /login 200, cabeceras de seguridad presentes, robots `Disallow: /`, llave pública 401 en todo.
+**Pick up next session (lo que era el orden de ship ya está hecho):** (1) `git push origin main`; (2) `npm run migrate` →
 0061 en el esquema `produccion` de Greenlight (ref ybbrpqzbedaxsmotgtkh); (3) merge `reap/asignar-rpc` + push;
 (4) verificar en prod: `npx vercel ls | head`, curl 200, y como lead: asignarse a sí mismo → sin aviso. Luego
 las decisiones de producto listadas en todo.md (crear cliente en la app, sheet por cliente, buscador stub, etc.).
