@@ -33,8 +33,15 @@
             puede truncar las tareas NO entregadas de un brief y hacerlo parecer terminado → hace falta un
             agregado en SQL, no un `.limit()`.
       - [ ] `cargarWorkload`: `idea_assignments` y `briefs` se leen completos.
-- [ ] **4.** 5 PRs de Dependabot (TypeScript 7, @types/node 26) · pulido a11y (áreas táctiles <44px,
-      sobre todo en el PORTAL en móvil) · `CommandDialog` muerto · autoFocus del request-form.
+- [~] **4. Dependabot + a11y** (parcial):
+      - [x] **3 PRs SEGUROS aplicados** (2026-09-02, commit 64f2e50, cerrados a favor del commit — bases rancias,
+            no merge ciego): grupo npm minor/patch (11 paquetes) + actions checkout/setup-node v7. Lock regenerado
+            sobre main (guard `check-server-actions` intacto). npm audit 7→4 vulns. Gates verdes, sin migración.
+      - [ ] **2 majors DIFERIDOS** (sesión propia, verificación aparte): #5 TypeScript 5→7 · #4 @types/node 20→26.
+            TS 7 puede sacar errores de tipos nuevos; @types/node 26 salta 6 majors. Correr tsc+build antes de mergear.
+      - [ ] **`npm audit fix`** (no-major): 4 vulns transitivas pre-existentes (js-yaml/fast-uri/hono/nanoid highs+1 mod).
+      - [ ] **pulido a11y**: áreas táctiles <44px (sobre todo el PORTAL en móvil) · `CommandDialog` muerto ·
+            autoFocus del request-form. (+ nota Paso B: las pastillas del Workload y su lista quedan <44px en desktop.)
 - [ ] **5. Decisión abierta**: hoy "borrador" = sólo `under_review`. Si el lead fija un cambio con la
       tarea EN PROGRESO, el especialista lo ve al instante (feedback deliberado). Pedro puede querer que
       NADA se vea hasta "Mandar cambios" — es un cambio de una línea.
