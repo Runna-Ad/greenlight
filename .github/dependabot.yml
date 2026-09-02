@@ -10,6 +10,18 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # TypeScript 7 (compilador nativo) no trae la API de JS que usa
+      # typescript-eslint (via eslint-config-next): `npm run lint` revienta en CI.
+      # Se sube A MANO cuando typescript-eslint lo soporte
+      # (github.com/typescript-eslint/typescript-eslint/issues/10940). 2026-09-02.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # @types/node sigue al runtime pinneado (node 24 en CI y Vercel), no al último
+      # Node: un major de tipos por encima del runtime deja compilar APIs que no existen.
+      # Se sube junto con el runtime.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
