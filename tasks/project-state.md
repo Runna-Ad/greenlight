@@ -6,7 +6,19 @@
 > carpeta de código `/Users/work/Projects/greenlight` (⏳ pendiente el `mv` local con el desktop app cerrado) ·
 > carpeta de MARCA `/Users/work/Documents/Claude/Projects/Greenlight` (no es código; el repo es público) ·
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
-Última actualización: 2026-09-02 (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
+Última actualización: 2026-09-02 (noche) — REAP PRE-LANZAMIENTO deep: 2 críticos + 11 serios + ~25 mejoras en main **SIN push** (4077c52, dc39caa) · migración **0061 escrita, NO aplicada** · rama `reap/asignar-rpc` esperando a 0061. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
+
+## 🟡 2026-09-02 (noche) — REAP PRE-LANZAMIENTO (deep) — LISTO, SIN SHIPPEAR
+- **main** (2 commits sin push): `4077c52` fixes (auth cerrada: proxy/portal/baja de equipo/provision; un solo pool
+  de asignación; "Recibe emails" honesto; email del cliente al portal; bundle con la misma regla que tablero;
+  cabeceras de seguridad; noindex; topes; a11y…) · `dc39caa` migración **0061** + tests. Ver session-log/todo.
+- **Orden de ship:** push main → `npm run migrate` (0061, esquema `produccion` de Greenlight, ref
+  ybbrpqzbedaxsmotgtkh) → merge `reap/asignar-rpc` → push. La rama llama a `rpc_set_assignees`, que sólo existe
+  tras 0061.
+- **Verificado en prod (sin cambios):** llave pública → 401 en todas las tablas y en `brief_estado`; prod Ready.
+- **Pendiente de Pedro (producto):** crear clientes en la app · sheet por cliente · buscador global (stub) ·
+  reenviar link a clientes / invitar equipo por correo · Papelera para admin · lista de cambios visible para el
+  cliente tras "Pedir cambios" · rate limit + tope de gasto de H.Ü.E · update de filas del sheet.
 
 ## ✅ 2026-09-02 (tarde) — SHIPPEADO + LIVE: perf import/bundles · TS 6 · a11y PortalNav · review Opus (migración 0060 aplicada)
 - **`main`** (pusheado): import del sheet en lotes (12 consultas fijas por run; write-path en

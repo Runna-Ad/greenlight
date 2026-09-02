@@ -1,5 +1,30 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-09-02 (noche) — REAP PRE-LANZAMIENTO (deep, repo entero) — código en main SIN push · 0061 SIN aplicar
+6 agentes (invariantes · seguridad · salud/perf · a11y/UX · funcionalidad · tech-scout) + verificación propia.
+2 críticos + 11 serios + ~25 mejoras arreglados. Gates: tsc 0 · lint 0 · lib 473 · db 377 · import 81 · sync 44 · build OK.
+Llave pública re-probada en prod: 401 en todas las tablas y en `brief_estado`.
+- [x] C1 un solo pool de asignación (`puedeSerAsignado` en lib/roles) en builder, sync, crearBrief e import-lote.
+- [x] C2 "Recibe emails" resuelto desde el roster también para avisos por rol (profiles.notify_email era huérfana).
+- [x] Baja de equipo propaga `active` al profile · proxy cierra sesión sin perfil/inactiva · portal cierra cliente revocado.
+- [x] provision sin comodines · extraerGuion con identidad + tope · knownRows/getSyncMode con gate · roster sólo a quien asigna.
+- [x] notif-email verifica sus updates + reclama `sending` atascados · email del cliente apunta al portal (ready_for_review).
+- [x] Bundle excluye al especialista las tareas con cambios del cliente (`lib/cambios-pendientes`, compartido con tablero y Mi Trabajo).
+- [x] Sync: filas "actualizadas" ya no se ofrecen (no había camino de update y decía éxito) · aterrizaje por rol en `/`.
+- [x] Cabeceras de seguridad · noindex/robots · topes de texto · cerca `<peticion>` en validarCambios · scope en aplicarOrtografia ·
+      tarea 404 si no es del cliente de la URL · toast si H.Ü.E no revisó · Slack apagado · verde sólo Aprobado (`--status-completed` → teal) ·
+      loading ×6 · error.tsx raíz · phosphor→lucide · shadcn a devDeps · listarEquipo acotado · PreviewSlide muerto fuera · a11y (teclado, labels, confirm, 44px).
+- [ ] **SHIP (orden)**: (1) `git push origin main` (sólo código; no depende de 0061). (2) `npm run migrate` → aplica **0061**
+      (esquema `produccion` de Greenlight, ref `ybbrpqzbedaxsmotgtkh`). (3) mergear `reap/asignar-rpc` (asignarTarea → `rpc_set_assignees`)
+      y push. La rama NO puede llegar a main antes de la 0061 (llama a una RPC que aún no existe en prod).
+- [ ] **Decisiones de Pedro** (no se tocó): crear clientes en la app (el botón dice "desde Admin" y Admin no lo tiene) · sheet por cliente
+      (fallback hardcodeado a DiDi si falta SHEETS_SCRIPT_URL; prod lo tiene) · buscador global (stub en todas las páginas, portal incluido) ·
+      "reenviar mi link" para clientes / invitación por correo al equipo · Papelera sólo master (admin borra pero no deshace) · el cliente no
+      ve su lista de cambios tras "Pedir cambios" · rate limit por identidad en acciones de H.Ü.E + tope de gasto en la consola de Anthropic ·
+      camino de UPDATE para filas del sheet que cambiaron.
+- [ ] Deuda menor anotada: hex duplicados (#2d2b55/#d9d2f0, #00e676 fuera de var) · empty states ad-hoc en board/briefs · setup-storage no
+      reconcilia buckets existentes · AUTH_ENABLED assert atado a VERCEL_ENV · CSP de scripts (nonces) · copy del tablero vacío para especialista.
+
 ## ✅ 2026-08-31 → 09-01 — Reap pre-launch · CANDADO RLS · Papelera · flujo (SHIPPEADO + LIVE)
 18 commits · migraciones 0056–0059 aplicadas · gates: actions 21 · isolation 58 · lib 458 · db 346 · lint 0 err · build OK.
 - [x] Reap de invariantes (repo entero, 5 agentes): colapsado el fork de renderers de DIÁLOGO; los

@@ -69,3 +69,22 @@ META-OBSERVACIÓN (lo más importante): el sistema de recall FUNCIONÓ —me dio
 veces— y aun así el fallo ocurrió. Una lección que se lee y se cita pero no cambia la conducta necesita
 un GUARD, no otra redacción. Es exactamente [[encode-recurring-agent-steps-as-hooks]] aplicado a mí
 mismo: si el cumplimiento depende de acordarse en el momento, el cumplimiento será 0%.
+
+[2026-09-02] OBSERVATION: conflict
+CONTEXT: El hook "MODEL GUARD" afirma cada vez "Session model is opusplan → this will EXECUTE on Sonnet" y exige
+avisar a Pedro; la sesión corría en Fable 5.1 (system prompt). El hook lee settings.json, no el modelo real.
+RECOMMENDATION: que el hook lea el modelo efectivo (o que sólo dispare si no hay forma de saberlo) y que diga
+"según settings.json" en vez de afirmar el modelo; hoy obliga a desmentirlo en cada mensaje.
+
+[2026-09-02] OBSERVATION: replicable-win
+CONTEXT: "Pre-launch reap" como 6 agentes de SOLO lectura en paralelo con prompts que exigen file:line +
+escenario + fix, seguido de verificación propia de cada crítico/serio ANTES de listarlo y un lote único de fixes
+con gates por tanda. 2C + 11S + ~25I en una sesión; 0 falsos positivos actuados.
+RECOMMENDATION: codificar en beast-mode-dev "invariant sweep / pre-launch reap" el molde exacto (los 6 prompts) y
+la regla "el orquestador re-lee ambos lados de cada C/S antes de fijarlo" — y pedir a cada agente el COMANDO con
+el que verificó (el code-reviewer dio por verificado algo que un grep desmintió).
+
+[2026-09-02] OBSERVATION: missing-rule
+CONTEXT: El PostToolUse hook de Edit pide "abre el preview y verifica" tras CADA edición, incluso a mitad de un
+lote de 40 archivos; verificar por edición sería absurdo. Se verificó al final del lote (correcto).
+RECOMMENDATION: que el hook lo pida una vez por turno/lote, o sólo cuando no haya más ediciones pendientes.

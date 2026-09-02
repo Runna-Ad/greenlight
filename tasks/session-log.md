@@ -1,5 +1,36 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-02 (noche 2) — REAP PRE-LANZAMIENTO deep · repo entero (código en main SIN push · 0061 SIN aplicar)
+**Qué se hizo:** carpeta confirmada (`/Users/work/Projects/greenlight`, memoria y sesiones ya renombradas; `S.P.A.M`
+es OTRO proyecto). Push del bloque auto-generado del session-log (d914783, Vercel Ready). Luego el reap: 6 agentes
+paralelos de SOLO lectura (invariantes Opus · seguridad Opus · salud/perf Sonnet · a11y/UX Sonnet · funcionalidad
+Opus · tech-scout Sonnet) + verificación propia de cada crítico/serio leyendo ambos lados. Gates de entrada ya
+verdes; llave pública re-probada en prod → 401 en todas las tablas y en `brief_estado`.
+**Arreglado (main, 2 commits SIN push):**
+- `4077c52` — 2 críticos (un solo pool de asignación en lib/roles para builder/sync/crearBrief/import-lote; "Recibe
+  emails" leído del roster también para avisos por rol) + 11 serios (baja de equipo revoca de verdad; proxy cierra
+  sesión sin perfil/inactiva; portal cierra cliente revocado; provision sin comodines; extraerGuion con identidad y
+  tope; knownRows/getSyncMode con gate; roster sólo a quien asigna; notif-email verifica updates y reclama
+  `sending` atascados; email al cliente apunta al portal; bundle excluye cambios del cliente al especialista vía
+  `lib/cambios-pendientes` compartido; sync no ofrece filas "actualizadas"; aterrizaje por rol en `/`) + ~25
+  mejoras (cabeceras de seguridad, noindex/robots, topes, cerca `<peticion>`, scope en aplicarOrtografia, tarea
+  404 fuera de su cliente, toast H.Ü.E, Slack apagado, `--status-completed` → teal, loading ×6, error.tsx raíz,
+  phosphor→lucide, shadcn a devDeps, listarEquipo acotado, PreviewSlide borrado, a11y).
+- `dc39caa` — migración **0061** (fan_out (a) excluye al actor, (b)/(c) sólo activos; rpc_notificar_brief sólo
+  activos; `rpc_set_assignees`; revoke execute from PUBLIC + grant a service_role) + 13 tests en test-db.
+- Rama **`reap/asignar-rpc`** (`20f5703`): asignarTarea → rpc_set_assignees. NO mergear antes de aplicar 0061.
+**Gates finales:** tsc 0 · lint 0 · isolation 60 · actions 21 · lib 473 · db 377 · import 81 · sync 44 · build OK ·
+live (dev, auth off): rutas 200/307, cabeceras presentes, robots Disallow, sin errores de consola/servidor, móvil OK.
+**Decisiones que tomé (a confirmar):** filas "actualizadas" del sheet = informar, no importar (no había camino de
+update; alternativa = construirlo) · `--status-completed` a teal en TODA la app (el tablero ya lo hacía solo) ·
+Slack switch deshabilitado · rate limit por identidad en H.Ü.E queda pendiente (sólo tope de tamaño).
+**Uncommitted:** nada tras el commit de docs.
+**Pick up next session (orden de SHIP, con el "ship it"):** (1) `git push origin main`; (2) `npm run migrate` →
+0061 en el esquema `produccion` de Greenlight (ref ybbrpqzbedaxsmotgtkh); (3) merge `reap/asignar-rpc` + push;
+(4) verificar en prod: `npx vercel ls | head`, curl 200, y como lead: asignarse a sí mismo → sin aviso. Luego
+las decisiones de producto listadas en todo.md (crear cliente en la app, sheet por cliente, buscador stub, etc.).
+**Procesos:** dev server (preview) parado; ningún watcher armado; 6 agentes terminaron.
+
 ## 2026-09-02 (noche) — UN solo nombre: Greenlight (renombre de repo, Vercel y carpeta)
 Pedro: "greenlight y runna command center son el mismo proyecto, no quiero confusión". Hecho con su OK:
 - GitHub `Runna-Ad/runna-command-center` → **`Runna-Ad/greenlight`** (redirect automático del viejo). Remoto local actualizado.
