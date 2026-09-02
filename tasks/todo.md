@@ -1,5 +1,21 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-02 (noche 3) — 3 features del reap de funcionalidad (código en main, SIN push · sin migración)
+Commit 689dc93. Pedro pidió construir 1, 2 y 3b; 3 (auto-link a clientes) se deja como está; 3a ya existía.
+- [x] **1. Crear cliente en la app**: `crearCliente` (Admin › Clientes, sección "Empresas cliente", alta inline);
+      tarjeta "Nuevo cliente" de /clientes → `/admin?tab=clientes` (sólo admin); admin-shell honra `?tab=`.
+- [x] **2. Buscador global**: `buscar()` acotado por identidad + `SearchBox` (debounce, dropdown, teclado);
+      oculto para el cliente. `slugify` extraído a `lib/slug`.
+- [x] **3b. Invitación manual al equipo**: `enviarInvitacion` + botón de sobre por persona en Equipo (sin envío
+      automático al dar de alta, decisión de Pedro).
+- [x] **3a. Aviso al admin en solicitud de acceso**: ya lo hacía `solicitarAcceso` (in-app + email a admin/master
+      activos). Verificado por lectura de código; sin cambios.
+- [ ] **SHIP** (necesita "ship it" de Pedro; sólo `git push origin main`, sin migración): despliega estas 3.
+- [ ] **LIVE-VERIFY de Pedro (sesión autenticada, no visible en local con login apagado)**: Admin › Clientes crea
+      una empresa (aparece en la lista y en /clientes, su slug es la URL); el botón de sobre en Equipo manda el
+      correo (deshabilitado sin email); el buscador como lead sólo trae sus tracks, como especialista sólo lo suyo;
+      un cliente NO ve el buscador en su portal.
+
 ## ✅ 2026-09-02 (noche) — REAP PRE-LANZAMIENTO (deep, repo entero) — SHIPPEADO + LIVE (main 977d7cf · 0061 aplicada)
 6 agentes (invariantes · seguridad · salud/perf · a11y/UX · funcionalidad · tech-scout) + verificación propia.
 2 críticos + 11 serios + ~25 mejoras arreglados. Gates: tsc 0 · lint 0 · lib 473 · db 377 · import 81 · sync 44 · build OK.
