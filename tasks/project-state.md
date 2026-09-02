@@ -1,5 +1,18 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-09-02 — Paso B (drill-down del Workload) + housekeeping (deps + 0 vulns + a11y) + perf de Workload — **todo shippeado + LIVE en runna-greenlight.vercel.app**
+Última actualización: 2026-09-02 (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **LISTO, SIN PUSH (espera "ship it"): 3 commits en main + 1 en rama `perf/bundles-sql`**
+
+## ⏳ 2026-09-02 (tarde) — LISTO Y SIN DESPLEGAR: 3 commits en `main` + rama `perf/bundles-sql` (migración 0060)
+- **`main` (sin pushear, SIN migración)**: import del sheet en lotes (12 consultas fijas por run; write-path en
+  `src/lib/import-lote.ts` + `scripts/test-import.mjs` con base falsa, en `npm test`) · PortalNav a 44px con offset
+  sticky MEDIDO (`--portal-nav-h`) · TypeScript **6.0.3** + @types/node **24** + `dependabot.yml` ignora majors de
+  esos dos · 0 vulns. Shippear = `git push origin main` (Vercel auto) + cerrar PRs #4/#5.
+- **Rama `perf/bundles-sql`** (1 commit): migración **0060** vista `produccion.brief_estado` + `cargarBundles` en 2
+  fases (briefs en curso → tareas sólo de ésos). Shippear = `npm run migrate` (ref `ybbrpqzbedaxsmotgtkh`) ANTES
+  de mergear/pushear. Sin esto la lista de briefs sigue leyendo TODOS los board_tasks del cliente (cap silencioso).
+- **Decisiones mías a confirmar**: TS 6 (no 7: typescript-eslint rechaza 7.0 → lint roto en CI) · @types/node del
+  runtime (24) · el import no cuelga tareas de un brief en la papelera (crea uno vivo).
+- Deuda de perf conocida: **cerrada** (Workload, import, bundles). Queda el cosmético móvil del PortalNav (flechas
+  fuera de pantalla en fila con scroll horizontal — pre-existente).
 
 ## 🔧 2026-09-02 — Paso B + housekeeping + perf (SHIPPEADO + LIVE, sin migración)
 - **Workload (Performance → sub-tab)**: la pastilla de estado ahora ES un botón que despliega inline las tareas de

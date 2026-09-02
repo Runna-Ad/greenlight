@@ -1,5 +1,49 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-02 (tarde) — Deuda de perf (import N+1 · cap de bundles) + majors + a11y AAA del PortalNav (LISTO · SIN PUSH)
+**4 commits: 3 en `main` SIN pushear (ee673da → 6424531, sin migración) + 1 en la rama `perf/bundles-sql` (cc1a3c5, migración 0060).
+Nada desplegado: pushear main = deploy (Vercel auto), así que espera el "ship it".**
+
+### Qué se hizo (en orden)
+1. **Import del sheet en LOTES** [ee673da]: cada fila costaba ~7 viajes seriados a la base (staged → familia →
+   hermanas → idea → lead → assets → staged); una pestaña de 40 filas eran ~280. Ahora: lecturas una vez por lote
+   (acotadas a las claves/briefs de ESTE run, nunca "toda la tabla") y un insert por tabla → **12 consultas para 5
+   filas y 12 para 40**. El write-path vive en `src/lib/import-lote.ts` y recibe la conexión por parámetro → se
+   prueba en Node contra una base FALSA (`scripts/test-import.mjs`, 70 casos, dentro de `npm test`). Se conserva
+   el aislamiento por fila (lote atómico → si falla, reintento fila a fila; el error nombra a la mala). Ids de idea
+   generados en la app (uuid). Dos arreglos de paso: si falla la LECTURA del dedup se aborta (antes se ignoraba →
+   duplicados); un brief en la PAPELERA ya no recibe tareas nuevas (quedaban invisibles) — se crea uno vivo.
+2. **a11y AAA del PortalNav** [97c597a]: flechas, selectores, filtro y las filas de los 3 popovers a ≥44px. El
+   offset mágico `top-[7.5rem]` de la barra del cliente se sustituyó por MEDICIÓN: el shell mide el nav
+   (ResizeObserver → `--portal-nav-h`) y la barra pega a `calc(4rem + var(--portal-nav-h, 4rem))`. Verificado en
+   render real (desktop 1280 y móvil 375): gap nav→barra 0, mínimo 44×44, sin scroll horizontal de página.
+3. **Majors de Dependabot** [6424531]: TS 7.0.2 compila y buildea, pero **`npm run lint` REVIENTA** (typescript-eslint
+   rechaza TS 7.0: el compilador nativo no trae la API de JS; soporte para ≥7.1). Se subió a **TypeScript 6.0.3**
+   (última línea con API, dentro del rango del linter) y **@types/node 24** (el del runtime pinneado, no 26).
+   `dependabot.yml` ignora los majors de esos dos con la razón en comentario. `npm audit fix` → 0 vulns.
+4. **Cap de bundles → vista SQL** [cc1a3c5, rama `perf/bundles-sql`]: migración **0060** `produccion.brief_estado`
+   (n_tareas · n_pendientes · greenlit_at, misma definición que `greenlitDeBundle()`). `cargarBundles` en 2 fases:
+   qué briefs siguen en curso (filas = briefs) → tareas SÓLO de ésos. Contract test TS↔SQL en test-db (364 pass).
+   Review de seguridad (Opus) sobre 1 y 4 — ver lessons/estado.
+
+### Gates por commit
+tsc 0 · eslint 0 err · check:actions 21 · isolation 59 · lib 470 · db 364 · import 70 · sync 44 · build OK · 0 vulns.
+
+### Cómo se shippea (cuando Pedro diga)
+- **main** (3 commits, sin migración): `git push origin main` → Vercel auto-deploy. Después cerrar PRs #4/#5 de
+  Dependabot con comentario (a favor del commit, como el 2026-09-02 am).
+- **rama `perf/bundles-sql`**: `npm run migrate` (aplica 0060 al ref `ybbrpqzbedaxsmotgtkh`) → `git merge` a main
+  → push. La vista tiene que existir en prod ANTES de que ese código llegue a main.
+
+### Decisiones que tomé (a confirmar por Pedro)
+- TS **6.0.3** en vez de 7 y @types/node **24** en vez de 26 (evidencia: lint roto en CI; tipos ≠ runtime).
+- El import ya no cuelga tareas de un brief en la papelera (crea uno vivo).
+
+### Pick up next
+- El "ship it" de arriba. Luego el **paso de pruebas de Pedro** (sigue siendo la puerta al lanzamiento).
+- Cosmético pre-existente: en móvil las flechas del PortalNav quedan fuera de pantalla (fila con scroll
+  horizontal); si el portal se usa mucho desde el teléfono, convendría envolver la fila o mover las flechas.
+
 ## 2026-09-02 — Paso B (drill-down del Workload) + housekeeping + perf de Workload (TODO SHIPPEADO + LIVE)
 **6 commits en main (bef6530 → db2ca7b) · 13 archivos · +876/−608 · SIN migración. Árbol limpio, todo pusheado.**
 
