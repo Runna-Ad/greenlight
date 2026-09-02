@@ -1503,3 +1503,27 @@ se ve igual que la respuesta correcta).
 - 2 docs `tasks/HANDOFF-*.md` (golive + hue-hub) siguen untracked — decidir si commitear.
 - Siguiente hito grande planeado: **H.Ü.E HUB fase 1** (analytics + brain self-learning),
   handoff en `tasks/HANDOFF-hue-hub-phase1.md`.
+
+## 2026-09-02 11:30
+**Shipped (recent commits):**
+  - docs(lessons): PEDRO_OVERRIDE — nombrar por lo que es para Pedro (esquema de Greenlight, no "S.P.A.M"); un solo nombre por proyecto
+  - chore: un solo nombre — Greenlight (repo Runna-Ad/greenlight · Vercel greenlight · package/config/docs)
+  - docs: estado → shippeado + live (main 3e81636, migración 0060 aplicada)
+  - merge: perf/bundles-sql — cargarBundles en 2 fases sobre brief_estado (migración 0060 YA aplicada a prod)
+  - docs: review de seguridad aplicado + URL de prod canónica corregida en project-state
+  - fix(briefs): cargarBundles revienta si la vista o board_tasks fallan, en vez de listar vacío (review Opus)
+  - fix(sync): cierra el hueco de track por pestaña inventada + recuento antes de borrar un brief vacío (review Opus)
+  - docs(wrap-up): session log + lessons + project-state + todo (perf import/bundles · majors · a11y PortalNav — listo, sin push)
+
+**Still open:**
+- [ ] **1. Paso de pruebas de Pedro** (la única puerta): Fases 2/3/4 · borrador de correcciones ·
+- [ ] **5. Decisión abierta**: hoy "borrador" = sólo `under_review`. Si el lead fija un cambio con la
+- [ ] **6. No construir** (recomendación explícita): ajustes de notificación dentro del portal del
+- [ ] UNIQUE (opcional, no corrido): crear "Card" duplicada → "Ya existe…". (skip, no crítico.)
+- [ ] FASE 1 (sync/import.ts, acotado): pool con role+es_lead; matchLead inteligente (exact/prefix/
+- [ ] FASE 2: retirar vocab.ts ASIGNACION → picker in-task del pool vivo; el lead asigna especialistas (es_lead=false).
+- [ ] **Migración 0040**: `comments.hue_aplicado_at timestamptz` (aditiva, sin backfill). PGlite test.
+- [ ] **aplicarSugerencia** (validar-actions): tras el write del campo, sella `hue_aplicado_at=now()` en
+- [ ] **evaluacion.ts**: CorreccionInput/Atribuida += `reworkFallido` (hue_aplicado_at && atendido_at);
+- [ ] **tipos-cambio.ts**: GrupoCriterio += "proceso" + GRUPO_LABEL/TONO. (Resolución NO es una categoria
+
