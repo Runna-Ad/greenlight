@@ -375,8 +375,12 @@ console.log("\n▶ Candado RLS 0056 (anon/authenticated fuera de produccion)");
 // ── RLS enforcement (run queries as the authenticated role) ──
 console.log("\n▶ RLS enforcement");
 await db.exec(`create role authenticated;`).catch(() => {});
+// Simulación del mundo PRE-0056 (rol authenticated con acceso): el candado real se
+// prueba aparte ("Candado RLS 0056" + "Avisos 0061"). Desde 0061 las rutinas ya no son
+// ejecutables por PUBLIC, así que la simulación también tiene que conceder EXECUTE.
 await db.exec(`grant usage on schema produccion to authenticated;
-  grant all on all tables in schema produccion to authenticated;`);
+  grant all on all tables in schema produccion to authenticated;
+  grant execute on all routines in schema produccion to authenticated;`);
 
 const asRole = async (uuid) => {
   // session-level (false) so the claim survives across PGlite statement boundaries
@@ -402,7 +406,7 @@ await asRole(LEAD);
 let leadOverride = true;
 try {
   await db.query(`update produccion.assets set status='todo' where id=$1`, [anAsset]);
-} catch (e) {
+} catch {
   leadOverride = false;
 }
 ok("lead can override to a non-mapped status", leadOverride);
@@ -2047,6 +2051,78 @@ eq("la URL del aviso al cliente apunta al PORTAL",
                  join produccion.briefs b on b.client_id=c.id join produccion.ideas i on i.brief_id=b.id where i.id=$1`, [nIdea]));
 eq("el cliente NO recibe el task_published INTERNO (ese va a los asignados)", Number(await scalar(
   `select count(*) from produccion.notifications where entity_id=$1 and type='task_published' and recipient_id=$2`, [nIdea, cliP])), 0);
+
+// ── 0061: el actor no se avisa a sí mismo · dados de baja sin avisos · rpc_set_assignees ──
+// Contrato, no columnas: quien MUEVE una tarea no recibe su propio aviso por la pata (a)
+// (antes sólo la (d) lo excluía); una persona dada de baja no recibe nada; asignar por
+// RPC fija al actor (sin "se te asignó" a uno mismo) y sella es_lead/assigned_by.
+console.log("\n▶ Avisos 0061 — actor excluido en (a), inactivos fuera, rpc_set_assignees, candado de rutinas");
+{
+  const leadM = await scalar(`select id from produccion.track_members where name='LeadRealN'`);
+  // nIdea está en 'published'. El LEAD REAL (perfil lrP, scope my_track) la mueve a
+  // in_corrections como "cambios del cliente" (notify_to_lead) → pata (a): avisa a los
+  // admins/leads en scope… menos al ACTOR.
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [nIdea]);
+  await db.query(`select set_config('produccion.acting_member',$1,false)`, [leadM]);
+  await db.query(`select set_config('produccion.notify_to_lead','true',false)`);
+  await db.query(`update produccion.ideas set status='in_corrections' where id=$1`, [nIdea]);
+  await db.query(`select set_config('produccion.notify_to_lead','false',false)`);
+  await db.exec(`select set_config('produccion.acting_member','',false);`);
+  eq("(a) el lead que ACTÚA no recibe su propio aviso", Number(await scalar(
+    `select count(*) from produccion.notifications where entity_id=$1 and recipient_id=$2`, [nIdea, lrP])), 0);
+  eq("(a)/(d) el admin watch_all (no es el actor) SÍ lo recibe — el trigger disparó", Number(await scalar(
+    `select count(*) from produccion.notifications where entity_id=$1 and recipient_id=$2`, [nIdea, awP])), 1);
+
+  // (c) un asignado DADO DE BAJA no recibe la aprobación (antes sí: sin filtro active).
+  await db.query(`update produccion.track_members set active=false where id=$1`, [nM]);
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [nIdea]);
+  await db.query(`update produccion.ideas set status='in_progress' where id=$1`, [nIdea]);
+  await db.query(`update produccion.ideas set status='under_review' where id=$1`, [nIdea]);
+  await db.query(`update produccion.ideas set status='completed' where id=$1`, [nIdea]);
+  eq("(c) un asignado dado de baja NO recibe task_approved", Number(await scalar(
+    `select count(*) from produccion.notifications where entity_id=$1 and recipient_id=$2 and type='task_approved'`, [nIdea, nP])), 0);
+  await db.query(`update produccion.track_members set active=true where id=$1`, [nM]);
+
+  // rpc_notificar_brief: un asignado dado de baja tampoco recibe "Nuevo brief".
+  await db.query(`update produccion.track_members set active=false where id=$1`, [MEM_VERO]);
+  await db.query(`delete from produccion.notifications where type='brief_created'`);
+  eq("rpc_notificar_brief no avisa a un asignado dado de baja",
+     Number(await scalar(`select produccion.rpc_notificar_brief($1)`, [BRIEF])), 0);
+  await db.query(`update produccion.track_members set active=true where id=$1`, [MEM_VERO]);
+
+  // rpc_set_assignees: el lead se pone a sí mismo → sin "se te asignó"; sella es_lead y assigned_by.
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [nIdea]);
+  await db.query(`select produccion.rpc_set_assignees($1,$2,$3::uuid[],$4,$5)`, [nIdea, leadM, `{${nM}}`, leadM, lrP]);
+  eq("auto-asignación del lead: sin task_assigned para él mismo", Number(await scalar(
+    `select count(*) from produccion.notifications where entity_id=$1 and type='task_assigned' and recipient_id=$2`, [nIdea, lrP])), 0);
+  eq("es_lead sellado en el lead",
+     await scalar(`select es_lead from produccion.idea_assignments where idea_id=$1 and member_id=$2`, [nIdea, leadM]), true);
+  eq("assigned_by = perfil del actor",
+     await scalar(`select assigned_by from produccion.idea_assignments where idea_id=$1 and member_id=$2`, [nIdea, leadM]), lrP);
+  eq("el especialista que ya estaba conserva su fila (DIFF) y no es lead", Number(await scalar(
+    `select count(*) from produccion.idea_assignments where idea_id=$1 and member_id=$2 and not es_lead`, [nIdea, nM])), 1);
+  // Asignar a OTRO sí avisa (el actor no es el destinatario): el trigger sigue vivo.
+  await db.query(`delete from produccion.idea_assignments where idea_id=$1 and member_id=$2`, [nIdea, nM]);
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [nIdea]);
+  await db.query(`select produccion.rpc_set_assignees($1,$2,$3::uuid[],$4,$5)`, [nIdea, leadM, `{${nM}}`, leadM, lrP]);
+  eq("asignar a otra persona SÍ dispara task_assigned para ella", Number(await scalar(
+    `select count(*) from produccion.notifications where entity_id=$1 and type='task_assigned' and recipient_id=$2`, [nIdea, nP])), 1);
+  // El conjunto deseado manda: quitar al lead lo saca.
+  await db.query(`select produccion.rpc_set_assignees($1,null,$2::uuid[],$3,$4)`, [nIdea, `{${nM}}`, leadM, lrP]);
+  eq("quitar al lead lo saca del conjunto", Number(await scalar(
+    `select count(*) from produccion.idea_assignments where idea_id=$1 and member_id=$2`, [nIdea, leadM])), 0);
+
+  // Candado completo (I6): ninguna rutina ni tabla de produccion con privilegio a PUBLIC
+  // (grantee vacío en el ACL) — el test 0056 sólo miraba anon/authenticated por nombre.
+  eq("ninguna rutina de produccion es ejecutable por PUBLIC", Number(await scalar(
+    `select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+      where n.nspname='produccion'
+        and (p.proacl is null or exists (select 1 from unnest(p.proacl) a where a::text like '=%'))`)), 0);
+  eq("ninguna tabla/vista de produccion con privilegio a PUBLIC", Number(await scalar(
+    `select count(*) from pg_class c join pg_namespace ns on ns.oid=c.relnamespace
+      where ns.nspname='produccion' and c.relkind in ('r','v')
+        and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+}
 
 // ── Papelera de 30 días (0057) ──────────────────────────────────────────────
 // Lo que importa probar no es "la columna existe", sino el CONTRATO: lo borrado
