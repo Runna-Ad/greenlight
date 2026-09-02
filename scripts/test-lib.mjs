@@ -9,6 +9,7 @@ import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, 
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
 import { puedeSerLead, puedeSerEspecialista } from "../src/lib/roles.ts";
+import { agruparCarga } from "../src/lib/workload.ts";
 
 let pass = 0,
   fail = 0;
@@ -1139,6 +1140,66 @@ console.log("\n▶ evaluarEquipo() — Resolución + Eficiencia");
      !puedeSerEspecialista({ role: "creative", track: "real", tracks: [], active: true }, "normal"));
   ok("un grant no salva a un miembro INACTIVO",
      !puedeSerEspecialista({ ...creaAmbos, active: false }, "normal"));
+}
+
+// ── Workload: el desglose HEREDA el scope por track de quien mira (Paso B) ──
+// Reproduce la puerta lateral: un especialista multi-track (Real + Normal); un lead de
+// Normal no debe contar ni listar sus tareas de Real, pero un lead multi-track sí ve
+// ambos (falso-positivo, la lección silent-exclusion-needs-false-positive-tests).
+console.log("\n▶ agruparCarga() — scope por track del Workload (Paso B)");
+{
+  const clients = [{ id: "c1", name: "DiDi", slug: "didi", brand_color: "#f60" }];
+  const briefs = [
+    { id: "b1", client_id: "c1" },
+    { id: "b2", client_id: "c1" },
+  ];
+  const ideas = [
+    { id: "i1", status: "in_progress", brief_id: "b1", track: "normal", naming_base: "TAREA1", code: null },
+    { id: "i2", status: "in_progress", brief_id: "b2", track: "real", naming_base: "TAREA2", code: null },
+    { id: "i3", status: "under_review", brief_id: "b1", track: "normal", naming_base: "TAREA3", code: null },
+    // Terminal (published) → jamás cuenta como carga viva, en ningún scope.
+    { id: "i4", status: "published", brief_id: "b1", track: "normal", naming_base: "TAREA4", code: null },
+  ];
+  const esp = { id: "esp", name: "Espe", track: "normal", tracks: ["real", "normal"], role: "creative", color: "#111", es_lead: false };
+  const leadN = { id: "leadN", name: "LeadN", track: "normal", tracks: ["normal"], role: "lead", color: "#222", es_lead: true };
+  const miembros = [esp, leadN];
+  const asigs = [
+    { member_id: "esp", idea_id: "i1" },
+    { member_id: "esp", idea_id: "i2" },
+    { member_id: "esp", idea_id: "i3" },
+    { member_id: "esp", idea_id: "i4" }, // terminal
+    { member_id: null, idea_id: "i1" }, // asignación huérfana → se ignora
+  ];
+  const de = (rows, id) => rows.find((r) => r.id === id);
+  const cnt = (mem, status) => mem?.porEstado.find((e) => e.status === status)?.tareas.length ?? 0;
+  const listaTiene = (mem, ideaId) => !!mem?.porEstado.some((e) => e.tareas.some((t) => t.id === ideaId));
+
+  // admin/master (tracks = null): ve todo lo vivo
+  const all = agruparCarga(miembros, asigs, ideas, briefs, clients, null);
+  eq("admin: total vivo del esp = 3 (sin la published)", de(all, "esp").total, 3);
+  eq("admin: in_progress del esp = 2", cnt(de(all, "esp"), "in_progress"), 2);
+  ok("admin: la tarea terminal NUNCA aparece", !listaTiene(de(all, "esp"), "i4"));
+
+  // lead 'normal': la tarea REAL del esp NO cuenta NI se lista (cierre de la fuga)
+  const soloNormal = agruparCarga(miembros, asigs, ideas, briefs, clients, ["normal"]);
+  eq("lead normal: total del esp acotado = 2", de(soloNormal, "esp").total, 2);
+  eq("lead normal: in_progress del esp = 1 (la real i2 excluida)", cnt(de(soloNormal, "esp"), "in_progress"), 1);
+  ok("lead normal: la tarea REAL (i2) NO está en ninguna lista", !listaTiene(de(soloNormal, "esp"), "i2"));
+
+  // FALSO POSITIVO: un lead multi-track SÍ ve AMBOS tracks
+  const ambos = agruparCarga(miembros, asigs, ideas, briefs, clients, ["real", "normal"]);
+  eq("lead multi-track: ve el total completo del esp = 3", de(ambos, "esp").total, 3);
+  ok("lead multi-track: la tarea REAL (i2) SÍ aparece", listaTiene(de(ambos, "esp"), "i2"));
+
+  // el miembro SIN grant en el track visible desaparece de la lista
+  const soloReal = agruparCarga(miembros, asigs, ideas, briefs, clients, ["real"]);
+  ok("lead real: el leadN (sólo normal) no aparece", !de(soloReal, "leadN"));
+  eq("lead real: al esp le queda sólo su tarea real = 1", de(soloReal, "esp").total, 1);
+
+  // etiqueta + enlace de cada tarea (naming/cliente)
+  const t = de(all, "esp").porEstado.find((e) => e.status === "under_review").tareas[0];
+  eq("la tarea usa su naming como label", t.label, "TAREA3");
+  eq("la tarea trae el slug del cliente para el enlace", t.clientSlug, "didi");
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

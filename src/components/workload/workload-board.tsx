@@ -1,11 +1,18 @@
-import { Crown } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { Crown, GaugeCircle, ChevronDown } from "lucide-react";
 import { Pill, type PillStatus } from "@/components/ui/pill";
 import { chipTextColor } from "@/lib/vocab";
 import { EmptyState } from "@/components/ui/empty-state";
-import { GaugeCircle } from "lucide-react";
+import type { AssetStatus } from "@/lib/brand";
+import type { CargaTarea } from "@/lib/workload";
 
 // Una persona con su carga de trabajo VIVA (tareas asignadas no publicadas/entregadas),
 // desglosada por estado y por cliente. La calcula la página (server); esto sólo pinta.
+// El desglose YA viene acotado al scope de quien mira (lib/workload) — la lista de una
+// pastilla nunca muestra tareas de un track que el usuario no puede ver.
 export type WorkloadMember = {
   id: string;
   name: string;
@@ -18,7 +25,8 @@ export type WorkloadMember = {
   color: string;
   es_lead: boolean;
   total: number;
-  porEstado: { token: PillStatus; label: string; count: number }[];
+  /** Cada estado con al menos una tarea; `tareas` es la lista clicable del desglose. */
+  porEstado: { status: AssetStatus; token: PillStatus; label: string; count: number; tareas: CargaTarea[] }[];
   porCliente: { name: string; slug: string; color: string; count: number }[];
 };
 
@@ -67,8 +75,11 @@ const TRACK_LABEL: Record<string, string> = { real: "Real", normal: "Normal" };
 const ROL_LABEL: Record<string, string> = { lead: "Lead", creative: "Especialista" };
 
 function MemberRow({ m, maxTotal }: { m: WorkloadMember; maxTotal: number }) {
+  // Un estado abierto a la vez por fila; clic en la misma pastilla la cierra.
+  const [abierto, setAbierto] = useState<AssetStatus | null>(null);
   const cargado = m.total >= UMBRAL;
   const pct = Math.round((m.total / maxTotal) * 100);
+  const expandido = m.porEstado.find((e) => e.status === abierto) ?? null;
 
   return (
     <div className="gl-card p-3">
@@ -119,13 +130,30 @@ function MemberRow({ m, maxTotal }: { m: WorkloadMember; maxTotal: number }) {
         </div>
       </div>
 
-      {/* Desglose: por ESTADO (pastilla de estado) y por CLIENTE (color de marca). */}
+      {/* Desglose: por ESTADO (pastilla clicable → sus tareas) y por CLIENTE (color de marca). */}
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-border pt-2.5">
-        {m.porEstado.map((e) => (
-          <Pill key={e.token} status={e.token}>
-            {e.label}: {e.count}
-          </Pill>
-        ))}
+        {m.porEstado.map((e) => {
+          const abierta = abierto === e.status;
+          return (
+            <button
+              key={e.status}
+              type="button"
+              onClick={() => setAbierto(abierta ? null : e.status)}
+              aria-expanded={abierta}
+              aria-controls={`wl-${m.id}-${e.status}`}
+              title={`Ver las tareas de ${m.name} en «${e.label}»`}
+              className="inline-flex cursor-pointer items-center rounded-full outline-none transition-transform hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-ring aria-expanded:ring-2 aria-expanded:ring-ring"
+            >
+              <Pill status={e.token}>
+                {e.label}: {e.count}
+                <ChevronDown
+                  className={`size-3 transition-transform ${abierta ? "rotate-180" : ""}`}
+                  aria-hidden
+                />
+              </Pill>
+            </button>
+          );
+        })}
         {m.porCliente.length > 1 && (
           <>
             <span className="mx-0.5 h-3.5 w-px bg-border" aria-hidden />
@@ -137,6 +165,45 @@ function MemberRow({ m, maxTotal }: { m: WorkloadMember; maxTotal: number }) {
           </>
         )}
       </div>
+
+      {/* Lista desplegable: las tareas de la persona EN ese estado, dentro del scope de
+          quien mira. Cada una abre su tarea. */}
+      {expandido && (
+        <ul
+          id={`wl-${m.id}-${expandido.status}`}
+          className="mt-1.5 space-y-0.5 rounded-lg bg-secondary/40 p-1"
+        >
+          {expandido.tareas.map((t) => (
+            <li key={t.id}>
+              <TareaLink t={t} />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
+  );
+}
+
+/** Una tarea del desglose. Si por algún dato faltante no hay slug, se muestra sin
+ *  enlace (mejor un texto inerte que un enlace roto a `//tareas/id`). */
+function TareaLink({ t }: { t: CargaTarea }) {
+  const contenido = (
+    <>
+      <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: t.clientColor }} aria-hidden />
+      <span className="min-w-0 flex-1 truncate text-foreground">{t.label}</span>
+      <span className="shrink-0 text-[10px] text-muted-foreground">{t.clientName}</span>
+    </>
+  );
+  const base = "flex items-center gap-2 rounded-md px-2 py-1.5 text-xs";
+  if (!t.clientSlug) {
+    return <span className={`${base} cursor-default`}>{contenido}</span>;
+  }
+  return (
+    <Link
+      href={`/${t.clientSlug}/tareas/${t.id}`}
+      className={`${base} transition-colors hover:bg-secondary`}
+    >
+      {contenido}
+    </Link>
   );
 }

@@ -1,8 +1,17 @@
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { STATUS_LABEL, STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
+import { STATUS_LABEL, STATUS_TOKEN } from "@/lib/brand";
 import type { WorkloadMember } from "@/components/workload/workload-board";
 import type { PillStatus } from "@/components/ui/pill";
 import type { Track } from "@/lib/vocab";
+import {
+  agruparCarga,
+  ESTADOS_ACTIVOS,
+  type MiembroRow,
+  type AsigRow,
+  type IdeaRow,
+  type BriefRow,
+  type ClientRow,
+} from "@/lib/workload";
 import {
   evaluarEquipo,
   atribuirAutor,
@@ -17,24 +26,15 @@ import {
 } from "@/lib/evaluacion";
 
 // ── Carga (Workload) — movida aquí desde /workload (ahora sub-tab de Performance) ──
-// "Activa" = asignada y NO publicada/entregada. Se cuenta en JS sobre queries
-// pequeñas (mismo patrón que listarEquipo, evita el embedding de PostgREST).
-const TERMINALES = new Set<string>(["published", "delivered"]);
-const ESTADOS_ACTIVOS: AssetStatus[] = [
-  "todo",
-  "in_progress",
-  "under_review",
-  "in_corrections",
-  "completed",
-];
-
+// La lógica pura (acotado por track, agrupación por estado/cliente, lista de tareas)
+// vive en `@/lib/workload` para poder probarla sin BD. Aquí sólo se traen las queries
+// pequeñas y se le pasa el scope de quien mira. `null` = todos (admin/master); un lead
+// pasa su(s) track(s). El acotado se aplica a la TAREA, así que conteos + lista + total
+// heredan el scope — un lead ya no ve la carga del OTRO equipo. (reap C4 + Paso B)
 export async function cargarWorkload(tracks: Track[] | null): Promise<WorkloadMember[]> {
   if (!hasSupabase()) return [];
   const db = supabaseAdmin();
 
-  // Mismo scope por track que cargarEvaluacion: `null` = todos (admin/master); un lead
-  // ve sólo su(s) track(s) (grant multi-track). Antes NO se acotaba → un lead veía la
-  // carga del OTRO equipo. (reap C4)
   const qMiembros = db
     .from("track_members")
     .select("id, name, track, tracks, role, color, es_lead")
@@ -44,98 +44,54 @@ export async function cargarWorkload(tracks: Track[] | null): Promise<WorkloadMe
     .in("role", ["lead", "creative"])
     .order("track", { ascending: true })
     .order("sort_order", { ascending: true });
-  // El acotado por track se hace ABAJO (en memoria) contra el GRANT completo: filtrar en
-  // SQL por `track` dejaba fuera a quien tiene el otro como home pero grant en éste (0059).
+  // El acotado por track se hace en la lib (en memoria) contra el GRANT completo: filtrar
+  // en SQL por `track` dejaba fuera a quien tiene el otro como home pero grant en éste (0059).
 
   const [{ data: miembros }, { data: asigs }, { data: ideas }, { data: briefs }, { data: clients }] =
     await Promise.all([
       qMiembros,
       db.from("idea_assignments").select("member_id, idea_id"),
-      // Filtro de estado en SQL, no en JS: el enum sólo tiene 7 valores y ESTADOS_ACTIVOS
-      // == exactamente el complemento de TERMINALES (published/delivered), así que esto
-      // es equivalente al `!TERMINALES.has()` de abajo — sin traer ideas terminales (la
-      // tabla que más crece con el histórico). Verificado contra el enum (reap perf).
-      db.from("ideas").select("id, status, brief_id").in("status", ESTADOS_ACTIVOS).is("deleted_at", null),
+      // Filtro de estado en SQL: ESTADOS_ACTIVOS == complemento exacto de TERMINALES sobre
+      // el enum de 7 valores → no se traen las ideas terminales (la tabla que más crece).
+      // `track` alimenta el acotado por scope; `naming_base`/`code` etiquetan cada tarea.
+      db
+        .from("ideas")
+        .select("id, status, brief_id, track, naming_base, code")
+        .in("status", ESTADOS_ACTIVOS)
+        .is("deleted_at", null),
       db.from("briefs").select("id, client_id"),
       db.from("clients").select("id, name, slug, brand_color"),
     ]);
 
-  const ideaById = new Map(
-    ((ideas ?? []) as { id: string; status: string; brief_id: string; track: string | null }[]).map((i) => [i.id, i]),
-  );
-  const briefClient = new Map(
-    ((briefs ?? []) as { id: string; client_id: string }[]).map((b) => [b.id, b.client_id]),
-  );
-  const clientById = new Map(
-    ((clients ?? []) as { id: string; name: string; slug: string; brand_color: string }[]).map((c) => [
-      c.id,
-      c,
-    ]),
+  const carga = agruparCarga(
+    (miembros ?? []) as MiembroRow[],
+    (asigs ?? []) as AsigRow[],
+    (ideas ?? []) as IdeaRow[],
+    (briefs ?? []) as BriefRow[],
+    (clients ?? []) as ClientRow[],
+    tracks,
   );
 
-  type Acc = {
-    total: number;
-    porEstado: Record<string, number>;
-    porCliente: Map<string, number>;
-    /** Carga por track DE LA TAREA. La persona puede ser multi-track; la tarea no. */
-    porTrack: Map<string, number>;
-  };
-  const acc = new Map<string, Acc>();
-  for (const a of (asigs ?? []) as { member_id: string | null; idea_id: string }[]) {
-    if (!a.member_id) continue;
-    const idea = ideaById.get(a.idea_id);
-    if (!idea || TERMINALES.has(idea.status)) continue;
-    const m: Acc = acc.get(a.member_id) ?? {
-      total: 0, porEstado: {}, porCliente: new Map(), porTrack: new Map(),
-    };
-    m.total += 1;
-    m.porEstado[idea.status] = (m.porEstado[idea.status] ?? 0) + 1;
-    const cid = briefClient.get(idea.brief_id);
-    if (cid) m.porCliente.set(cid, (m.porCliente.get(cid) ?? 0) + 1);
-    if (idea.track) m.porTrack.set(idea.track, (m.porTrack.get(idea.track) ?? 0) + 1);
-    acc.set(a.member_id, m);
-  }
-
-  const filas = ((miembros ?? []) as {
-    id: string;
-    name: string;
-    track: "real" | "normal";
-    tracks: ("real" | "normal")[] | null;
-    role: string;
-    color: string;
-    es_lead: boolean;
-  }[])
-    // Grant efectivo (0059): sin grant se cae al home. Un lead/creativo con grant en
-    // ESTE track entra aunque su home sea el otro.
-    .map((mem) => ({ ...mem, misTracks: mem.tracks?.length ? mem.tracks : [mem.track] }))
-    .filter((mem) => !tracks || mem.misTracks.some((t) => tracks.includes(t)));
-
-  return filas.map((mem) => {
-    const d = acc.get(mem.id);
-    return {
-      id: mem.id,
-      name: mem.name,
-      track: mem.track,
-      tracks: mem.misTracks,
-      role: mem.role,
-      color: mem.color,
-      es_lead: mem.es_lead,
-      total: d?.total ?? 0,
-      porEstado: ESTADOS_ACTIVOS.filter((s) => (d?.porEstado[s] ?? 0) > 0).map((s) => ({
-        token: STATUS_TOKEN[s] as PillStatus,
-        label: STATUS_LABEL[s],
-        count: d!.porEstado[s],
-      })),
-      porCliente: d
-        ? [...d.porCliente]
-            .map(([cid, n]) => {
-              const c = clientById.get(cid);
-              return { name: c?.name ?? "?", slug: c?.slug ?? "", color: c?.brand_color ?? "#775cbf", count: n };
-            })
-            .sort((x, y) => y.count - x.count)
-        : [],
-    };
-  });
+  // Se le pega el vocabulario de presentación (token de color + etiqueta del estado) al
+  // dato agrupado. El conteo se DERIVA de la lista de tareas → número y lista no driftan.
+  return carga.map((m) => ({
+    id: m.id,
+    name: m.name,
+    track: m.track,
+    tracks: m.tracks,
+    role: m.role,
+    color: m.color,
+    es_lead: m.es_lead,
+    total: m.total,
+    porEstado: m.porEstado.map((e) => ({
+      status: e.status,
+      token: STATUS_TOKEN[e.status] as PillStatus,
+      label: STATUS_LABEL[e.status],
+      count: e.tareas.length,
+      tareas: e.tareas,
+    })),
+    porCliente: m.porCliente,
+  }));
 }
 
 /** Etiqueta de un brief: "Brief DD/MM" (por fecha), o su nombre, o su código. */

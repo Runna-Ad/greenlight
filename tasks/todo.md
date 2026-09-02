@@ -17,8 +17,16 @@
       congelado en revisión (**necesita cuenta `creative`**) · correo de tarea propia (**necesita una
       SEGUNDA persona**: todo camino de aviso excluye al actor) · brief Greenlit y su vuelta al reabrir ·
       avisos · formato del diálogo en el portal · cliente revocado.
-- [ ] **2. Paso B del Workload**: pastilla de carga clicable → sus tareas por estado. ⚠️ el desglose DEBE
-      heredar el scope por track de quien mira (`tracksVisibles`/`visibleParaRol`) o es una puerta lateral.
+- [x] **2. Paso B del Workload** (2026-09-01, código puro, SIN deploy): pastilla de carga clicable → despliega
+      inline las tareas de la persona en ese estado, cada una enlaza a `/{slug}/tareas/{id}`. El scope por track
+      de quien mira se aplica a la TAREA (`idea.track ∈ tracks`, espeja `visibleParaRol`) → conteos + lista + total
+      + por-cliente heredan el filtro; `count` se DERIVA de la lista. Cerró una fuga de CONTEO pre-existente (los
+      conteos NO estaban acotados por track, sólo la lista de miembros). Lógica pura en `src/lib/workload.ts`
+      (partida de `performance/data.ts`, patrón bundle.ts) con 12 tests incl. falso-positivo multi-track. Quité el
+      acumulador muerto `porTrack`. Gates VERDES: tsc·eslint·lib 470·db 346·sync 44·isolation 58·actions 21·build.
+      ⏳ LIVE-VERIFY (Pedro, sesión autenticada): abrir Performance→Workload como lead de UN track → una pastilla
+      abre sólo tareas de SU track (nada del otro equipo aunque la persona sea multi-track); como admin/master ve
+      todo; el enlace abre la tarea correcta; teclado (Tab→Enter abre/cierra, foco visible).
 - [ ] **3. Perf** (deuda conocida, no bloquea):
       - [ ] N+1 de `sync/import.ts` (~6 consultas por fila) — arriesgado, sesión propia.
       - [ ] Cap de `bundle-data.ts`. ⚠️ **el Greenlit NO lo arregló** (me equivoqué al decirlo): un LIMIT
