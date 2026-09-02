@@ -27,12 +27,15 @@
       ⏳ LIVE-VERIFY (Pedro, sesión autenticada): abrir Performance→Workload como lead de UN track → una pastilla
       abre sólo tareas de SU track (nada del otro equipo aunque la persona sea multi-track); como admin/master ve
       todo; el enlace abre la tarea correcta; teclado (Tab→Enter abre/cierra, foco visible).
-- [ ] **3. Perf** (deuda conocida, no bloquea):
+- [~] **3. Perf** (deuda conocida, no bloquea):
       - [ ] N+1 de `sync/import.ts` (~6 consultas por fila) — arriesgado, sesión propia.
       - [ ] Cap de `bundle-data.ts`. ⚠️ **el Greenlit NO lo arregló** (me equivoqué al decirlo): un LIMIT
             puede truncar las tareas NO entregadas de un brief y hacerlo parecer terminado → hace falta un
-            agregado en SQL, no un `.limit()`.
-      - [ ] `cargarWorkload`: `idea_assignments` y `briefs` se leen completos.
+            agregado en SQL, no un `.limit()`. (= migración → sesión con deploy-gate.)
+      - [x] **`cargarWorkload`: lecturas completas ACOTADAS** (2026-09-02): `idea_assignments` y `briefs` ya no
+            se traen enteras (crecían con el histórico → truncación silenciosa al tope de PostgREST). Ahora patrón
+            de 2 fases acotado al working set activo, igual que `cargarEvaluacion`. Resultado IDÉNTICO (perf pura).
+            Gates verdes, sin migración.
 - [~] **4. Dependabot + a11y** (parcial):
       - [x] **3 PRs SEGUROS aplicados** (2026-09-02, commit 64f2e50, cerrados a favor del commit — bases rancias,
             no merge ciego): grupo npm minor/patch (11 paquetes) + actions checkout/setup-node v7. Lock regenerado

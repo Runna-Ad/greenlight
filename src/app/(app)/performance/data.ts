@@ -47,27 +47,52 @@ export async function cargarWorkload(tracks: Track[] | null): Promise<WorkloadMe
   // El acotado por track se hace en la lib (en memoria) contra el GRANT completo: filtrar
   // en SQL por `track` dejaba fuera a quien tiene el otro como home pero grant en éste (0059).
 
-  const [{ data: miembros }, { data: asigs }, { data: ideas }, { data: briefs }, { data: clients }] =
-    await Promise.all([
-      qMiembros,
-      db.from("idea_assignments").select("member_id, idea_id"),
-      // Filtro de estado en SQL: ESTADOS_ACTIVOS == complemento exacto de TERMINALES sobre
-      // el enum de 7 valores → no se traen las ideas terminales (la tabla que más crece).
-      // `track` alimenta el acotado por scope; `naming_base`/`code` etiquetan cada tarea.
-      db
-        .from("ideas")
-        .select("id, status, brief_id, track, naming_base, code")
-        .in("status", ESTADOS_ACTIVOS)
-        .is("deleted_at", null),
-      db.from("briefs").select("id, client_id"),
-      db.from("clients").select("id, name, slug, brand_color"),
-    ]);
+  // Fase 1: miembros + ideas ACTIVAS + clientes, en paralelo (sin dependencias).
+  const [{ data: miembros }, { data: ideas }, { data: clients }] = await Promise.all([
+    qMiembros,
+    // Filtro de estado en SQL: ESTADOS_ACTIVOS == complemento exacto de TERMINALES sobre
+    // el enum de 7 valores → no se traen las ideas terminales (la tabla que más crece).
+    // `track` alimenta el acotado por scope; `naming_base`/`code` etiquetan cada tarea.
+    db
+      .from("ideas")
+      .select("id, status, brief_id, track, naming_base, code")
+      .in("status", ESTADOS_ACTIVOS)
+      .is("deleted_at", null),
+    db.from("clients").select("id, name, slug, brand_color"),
+  ]);
+
+  const ideasRows = (ideas ?? []) as IdeaRow[];
+  const ideaIds = ideasRows.map((i) => i.id);
+  const briefIds = [...new Set(ideasRows.map((i) => i.brief_id).filter(Boolean))];
+
+  // Fase 2: asignaciones + briefs ACOTADOS al working set activo. Antes se traían
+  // ENTERAS y ambas crecen con el histórico → al tope de filas de PostgREST se truncarían
+  // EN SILENCIO (un doer perdería carga sin error) — la deuda de perf que anotó Pedro.
+  // Mismo patrón de dos fases que cargarEvaluacion. Sin ideas activas → nada que traer
+  // (evita `.in(..., [])`, comportamiento indefinido en PostgREST). El resultado es
+  // IDÉNTICO al de antes: agruparCarga ya ignoraba las asignaciones de ideas no-activas y
+  // sólo consultaba los briefs de esas ideas — sólo dejamos de traer lo que igual se tiraba.
+  const [asigs, briefs] = ideaIds.length
+    ? await Promise.all([
+        db
+          .from("idea_assignments")
+          .select("member_id, idea_id")
+          .in("idea_id", ideaIds)
+          .not("member_id", "is", null)
+          .then((r) => (r.data ?? []) as AsigRow[]),
+        db
+          .from("briefs")
+          .select("id, client_id")
+          .in("id", briefIds)
+          .then((r) => (r.data ?? []) as BriefRow[]),
+      ])
+    : [[] as AsigRow[], [] as BriefRow[]];
 
   const carga = agruparCarga(
     (miembros ?? []) as MiembroRow[],
-    (asigs ?? []) as AsigRow[],
-    (ideas ?? []) as IdeaRow[],
-    (briefs ?? []) as BriefRow[],
+    asigs,
+    ideasRows,
+    briefs,
     (clients ?? []) as ClientRow[],
     tracks,
   );
