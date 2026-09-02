@@ -5,7 +5,9 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 const DB_SCHEMA = process.env.NEXT_PUBLIC_DB_SCHEMA ?? "produccion";
 
 // Routes reachable without a session.
-const PUBLIC_PATHS = ["/login", "/auth", "/portal/login"];
+// /robots.txt tiene que servirse SIN sesión, o el buscador recibe un redirect a /login en
+// vez del "Disallow: /" (visto en prod al desplegar el noindex, 2026-09-02).
+const PUBLIC_PATHS = ["/login", "/auth", "/portal/login", "/robots.txt"];
 
 // Refreshes the Supabase session cookie on every request and gates auth.
 export async function updateSession(request: NextRequest) {
