@@ -28,10 +28,10 @@
       abre sólo tareas de SU track (nada del otro equipo aunque la persona sea multi-track); como admin/master ve
       todo; el enlace abre la tarea correcta; teclado (Tab→Enter abre/cierra, foco visible).
 - [~] **3. Perf** (deuda conocida, no bloquea):
-      - [x] **N+1 de `sync/import.ts`** (2026-09-02 pm, commit ee673da en main, SIN push): lotes → 12 consultas fijas por
+      - [x] **N+1 de `sync/import.ts`** (2026-09-02 pm, commit ee673da, LIVE): lotes → 12 consultas fijas por
             run (5 filas = 40 filas). Write-path en `src/lib/import-lote.ts` + test con base falsa (70 casos, en `npm test`).
-      - [x] **Cap de `bundle-data.ts`** (2026-09-02 pm, rama `perf/bundles-sql`, commit cc1a3c5): migración **0060** vista
-            `brief_estado` + `cargarBundles` en 2 fases. ⏳ SHIP = `npm run migrate` → merge → push (la vista antes que el código).
+      - [x] **Cap de `bundle-data.ts`** (2026-09-02 pm, commits cc1a3c5+842fa70, LIVE): migración **0060** vista
+            `brief_estado` + `cargarBundles` en 2 fases. Migración aplicada y mergeado a main el 2026-09-02.
       - [x] **`cargarWorkload`: lecturas completas ACOTADAS** (2026-09-02): `idea_assignments` y `briefs` ya no
             se traen enteras (crecían con el histórico → truncación silenciosa al tope de PostgREST). Ahora patrón
             de 2 fases acotado al working set activo, igual que `cargarEvaluacion`. Resultado IDÉNTICO (perf pura).
@@ -40,16 +40,16 @@
       - [x] **3 PRs SEGUROS aplicados** (2026-09-02, commit 64f2e50, cerrados a favor del commit — bases rancias,
             no merge ciego): grupo npm minor/patch (11 paquetes) + actions checkout/setup-node v7. Lock regenerado
             sobre main (guard `check-server-actions` intacto). npm audit 7→4 vulns. Gates verdes, sin migración.
-      - [x] **Majors resueltos** (2026-09-02 pm, commit 6424531 en main, SIN push): TS 7 rompe `npm run lint` (typescript-eslint
+      - [x] **Majors resueltos** (2026-09-02 pm, commit 6424531, LIVE): TS 7 rompe `npm run lint` (typescript-eslint
             rechaza 7.0) → **TypeScript 6.0.3**; **@types/node 24** (el del runtime). dependabot.yml ignora esos majors.
-            ⏳ Tras el push: cerrar PRs #4/#5 con comentario.
+            PRs #4/#5 cerrados.
       - [x] **`npm audit fix`** (2026-09-02): 4 vulns transitivas → **0** (sólo lock, no-major). Commit e717129.
       - [~] **pulido a11y** (2026-09-02, parcial):
             - [x] `CommandDialog`/`command.tsx` MUERTO eliminado + dep `cmdk` quitada (−1 dependencia).
             - [x] `autoFocus` en el primer campo del request-form del portal.
             - [x] tap targets SEGUROS a 44px: CTAs de PortalAcciones (Aprobar/Pedir cambios/confirm) + chips
                   «Ver campo»/«Quitar» del panel de cambios (estaban ~24px, borde de AA → ahora min-h-9).
-            - [x] **PortalNav a 44px (AAA)** (2026-09-02 pm, commit 97c597a en main, SIN push): controles y filas de popover
+            - [x] **PortalNav a 44px (AAA)** (2026-09-02 pm, commit 97c597a, LIVE): controles y filas de popover
                   ≥44px; offset sticky MEDIDO (`--portal-nav-h`) en vez de `top-[7.5rem]`. Verificado desktop + móvil 375.
                   Nota pre-existente: en móvil las flechas quedan fuera de pantalla (fila con scroll horizontal).
             - [ ] nota Paso B: las pastillas del Workload y su lista quedan <44px en desktop (superficie interna, AA ok).

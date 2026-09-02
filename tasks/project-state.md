@@ -1,11 +1,11 @@
 # Project state — Greenlight · by Rünna
-Última actualización: 2026-09-02 (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **LISTO, SIN PUSH (espera "ship it"): 5 commits en main + 2 en rama `perf/bundles-sql`** (incluye los arreglos del review de seguridad Opus)
+Última actualización: 2026-09-02 (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
-## ⏳ 2026-09-02 (tarde) — LISTO Y SIN DESPLEGAR: 3 commits en `main` + rama `perf/bundles-sql` (migración 0060)
-- **`main` (sin pushear, SIN migración)**: import del sheet en lotes (12 consultas fijas por run; write-path en
+## ✅ 2026-09-02 (tarde) — SHIPPEADO + LIVE: perf import/bundles · TS 6 · a11y PortalNav · review Opus (migración 0060 aplicada)
+- **`main`** (pusheado): import del sheet en lotes (12 consultas fijas por run; write-path en
   `src/lib/import-lote.ts` + `scripts/test-import.mjs` con base falsa, en `npm test`) · PortalNav a 44px con offset
   sticky MEDIDO (`--portal-nav-h`) · TypeScript **6.0.3** + @types/node **24** + `dependabot.yml` ignora majors de
-  esos dos · 0 vulns. Shippear = `git push origin main` (Vercel auto) + cerrar PRs #4/#5.
+  esos dos · 0 vulns. PRs #4/#5 cerrados.
 - **Rama `perf/bundles-sql`** (1 commit): migración **0060** vista `produccion.brief_estado` + `cargarBundles` en 2
   fases (briefs en curso → tareas sólo de ésos). Shippear = `npm run migrate` (ref `ybbrpqzbedaxsmotgtkh`) ANTES
   de mergear/pushear. Sin esto la lista de briefs sigue leyendo TODOS los board_tasks del cliente (cap silencioso).

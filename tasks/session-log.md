@@ -1,8 +1,7 @@
 # Session log — Greenlight · by Rünna
 
-## 2026-09-02 (tarde) — Deuda de perf (import N+1 · cap de bundles) + majors + a11y AAA del PortalNav (LISTO · SIN PUSH)
-**main: 5 commits SIN pushear (ee673da → fix del review, sin migración) + rama `perf/bundles-sql`: 2 commits (migración 0060 + fix del review).
-Nada desplegado: pushear main = deploy (Vercel auto), así que espera el "ship it".**
+## 2026-09-02 (tarde) — Deuda de perf (import N+1 · cap de bundles) + majors + a11y AAA del PortalNav (SHIPPEADO + LIVE)
+**SHIPPEADO 2026-09-02 ~10:43 MDT con el "ship it" de Pedro: main ee673da → 3e81636 (merge de `perf/bundles-sql`), migración 0060 aplicada al esquema `produccion` (ref ybbrpqzbedaxsmotgtkh) ANTES del merge, Vercel Ready, CI verde, PRs #4/#5 cerrados (Dependabot los cerró solo al mover main). Verificado en prod: vista `brief_estado` viva, 2 briefs en curso, 0 grants públicos, prod responde 307→login.**
 
 ### Qué se hizo (en orden)
 1. **Import del sheet en LOTES** [ee673da]: cada fila costaba ~7 viajes seriados a la base (staged → familia →
@@ -38,7 +37,7 @@ Nada desplegado: pushear main = deploy (Vercel auto), así que espera el "ship i
 ### Gates por commit
 tsc 0 · eslint 0 err · check:actions 21 · isolation 59 · lib 470 · db 364 · import 81 · sync 44 · build OK · 0 vulns.
 
-### Cómo se shippea (cuando Pedro diga)
+### Cómo se shippeó (orden que se siguió)
 - **main** (sin migración): `git push origin main` → Vercel auto-deploy. Después cerrar PRs #4/#5 de
   Dependabot con comentario (a favor del commit, como el 2026-09-02 am).
 - **rama `perf/bundles-sql`**: `npm run migrate` (aplica 0060 al ref `ybbrpqzbedaxsmotgtkh`) → `git merge` a main
@@ -49,7 +48,8 @@ tsc 0 · eslint 0 err · check:actions 21 · isolation 59 · lib 470 · db 364 �
 - El import ya no cuelga tareas de un brief en la papelera (crea uno vivo).
 
 ### Pick up next
-- El "ship it" de arriba. Luego el **paso de pruebas de Pedro** (sigue siendo la puerta al lanzamiento).
+- **Paso de pruebas de Pedro** (sigue siendo la puerta al lanzamiento). LIVE-VERIFY de esta sesión: /briefs lista lo mismo que antes; un sync del sheet importa una pestaña entera de golpe; portal en el teléfono (botones de 44px, barra pegada bajo el nav).
+- Pedro preguntó por qué "S.P.A.M": Greenlight VIVE en el proyecto Supabase compartido con S.P.A.M, en su esquema `produccion` (ledger propio `produccion._migrations`). Nombrarlo así confunde — decir "el esquema produccion de Greenlight".
 - Cosmético pre-existente: en móvil las flechas del PortalNav quedan fuera de pantalla (fila con scroll
   horizontal); si el portal se usa mucho desde el teléfono, convendría envolver la fila o mover las flechas.
 
