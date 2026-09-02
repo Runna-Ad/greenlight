@@ -1,6 +1,6 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟢 2026-09-02 (noche 3) — 3 features del reap de funcionalidad (código en main, SIN push · sin migración)
+## ✅ 2026-09-02 (noche 3) — 3 features del reap de funcionalidad — SHIPPEADO + LIVE (main f8e9767, Vercel Ready)
 Commit 689dc93. Pedro pidió construir 1, 2 y 3b; 3 (auto-link a clientes) se deja como está; 3a ya existía.
 - [x] **1. Crear cliente en la app**: `crearCliente` (Admin › Clientes, sección "Empresas cliente", alta inline);
       tarjeta "Nuevo cliente" de /clientes → `/admin?tab=clientes` (sólo admin); admin-shell honra `?tab=`.
@@ -10,7 +10,8 @@ Commit 689dc93. Pedro pidió construir 1, 2 y 3b; 3 (auto-link a clientes) se de
       automático al dar de alta, decisión de Pedro).
 - [x] **3a. Aviso al admin en solicitud de acceso**: ya lo hacía `solicitarAcceso` (in-app + email a admin/master
       activos). Verificado por lectura de código; sin cambios.
-- [ ] **SHIP** (necesita "ship it" de Pedro; sólo `git push origin main`, sin migración): despliega estas 3.
+- [x] **SHIP** (2026-09-02 noche, "ship it"): push a main → deploy Production `dpl_G6E7Ks…` Ready, alias runna-greenlight.
+      Verificado por el commit status de Vercel en GitHub (f8e9767 → success → esa deployment). CI (test) verde. Sin migración.
 - [ ] **LIVE-VERIFY de Pedro (sesión autenticada, no visible en local con login apagado)**: Admin › Clientes crea
       una empresa (aparece en la lista y en /clientes, su slug es la URL); el botón de sobre en Equipo manda el
       correo (deshabilitado sin email); el buscador como lead sólo trae sus tracks, como especialista sólo lo suyo;

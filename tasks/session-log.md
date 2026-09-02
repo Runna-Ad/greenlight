@@ -1,5 +1,19 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-02 (noche 3) — 3 features del reap (crear cliente · buscador · invitar) — SHIPPEADO + LIVE
+Pedro pidió construir 1, 2 y 3b (3 se deja como está; 3a ya existía). Commits 689dc93 (feat) + f8e9767 (docs),
+push a main con su "ship it". Deploy Production `dpl_G6E7Ks…` Ready, alias runna-greenlight. Sin migración.
+- CREAR CLIENTE (Admin › Clientes, sección Empresas cliente + alta inline; tarjeta de /clientes → /admin?tab=clientes,
+  sólo admin; admin-shell honra ?tab=). BUSCADOR global real (`buscar` acotado por identidad + SearchBox con debounce,
+  dropdown, teclado; oculto para el cliente). INVITAR manual al equipo (`enviarInvitacion` + botón de sobre en Equipo).
+  3a ya lo hacía `solicitarAcceso` (in-app + email a admin/master activos). slugify → lib/slug.
+- Gates: tsc 0 · lint 0 · lib 473 · db 377 · import 81 · sync 44 · build OK.
+- Verificación: SearchBox probado en vivo (abre/consulta/vacío, sin errores). La UI de Admin no se ve en local (login
+  apagado = sin sesión = 'creative') → LIVE-VERIFY de Pedro pendiente en todo.md (crear empresa, botón invitar, scope
+  del buscador por rol, cliente sin buscador). Confusión al verificar el deploy: un preview de Dependabot (15m) tapaba
+  el deploy de main; el commit status de Vercel en GitHub (f8e9767 → dpl_G6E7Ks, success, Production) fue el dato firme.
+- Procesos: watcher de deploy (acotado, 12) terminó; nada corriendo.
+
 ## 2026-09-02 (noche 2) — REAP PRE-LANZAMIENTO deep · repo entero — **SHIPPEADO + LIVE** (main 977d7cf · 0061 aplicada · Vercel Ready)
 **Qué se hizo:** carpeta confirmada (`/Users/work/Projects/greenlight`, memoria y sesiones ya renombradas; `S.P.A.M`
 es OTRO proyecto). Push del bloque auto-generado del session-log (d914783, Vercel Ready). Luego el reap: 6 agentes
@@ -1582,4 +1596,28 @@ se ve igual que la respuesta correcta).
 - [ ] **aplicarSugerencia** (validar-actions): tras el write del campo, sella `hue_aplicado_at=now()` en
 - [ ] **evaluacion.ts**: CorreccionInput/Atribuida += `reworkFallido` (hue_aplicado_at && atendido_at);
 - [ ] **tipos-cambio.ts**: GrupoCriterio += "proceso" + GRUPO_LABEL/TONO. (Resolución NO es una categoria
+
+
+## 2026-09-02 15:06
+**Shipped (recent commits):**
+  - docs: 3 features del reap (crear cliente, buscador, invitar) — todo + lección de verificar UI gateada
+  - feat: crear cliente en Admin, buscador global funcional, invitación manual al equipo
+  - docs: reap pre-lanzamiento → SHIPPEADO + LIVE (main 977d7cf, 0061 aplicada, robots público)
+  - fix(proxy): /robots.txt es público — en prod redirigía a /login en vez de servir el Disallow
+  - merge: reap/asignar-rpc — asignarTarea vía rpc_set_assignees (migración 0061 YA aplicada a prod)
+  - docs(wrap-up): reap pre-lanzamiento — session log, lessons, todo, project-state, skill-observations
+  - asignarTarea → rpc_set_assignees (0061): el actor no se avisa a sí mismo, assigned_by sellado
+  - migración 0061: el actor no se avisa a sí mismo, inactivos sin avisos, rpc_set_assignees, candado de rutinas
+
+**Still open:**
+- [ ] **SHIP** (necesita "ship it" de Pedro; sólo `git push origin main`, sin migración): despliega estas 3.
+- [ ] **LIVE-VERIFY de Pedro (sesión autenticada, no visible en local con login apagado)**: Admin › Clientes crea
+- [ ] **LIVE-VERIFY de Pedro (sesión autenticada)**: como lead, asignarse a sí mismo → SIN aviso "se te asignó"; dar de baja a
+- [ ] **Decisiones de Pedro** (no se tocó): crear clientes en la app (el botón dice "desde Admin" y Admin no lo tiene) · sheet por cliente
+- [ ] Deuda menor anotada: hex duplicados (#2d2b55/#d9d2f0, #00e676 fuera de var) · empty states ad-hoc en board/briefs · setup-storage no
+- [ ] **1. Paso de pruebas de Pedro** (la única puerta): Fases 2/3/4 · borrador de correcciones ·
+- [ ] **5. Decisión abierta**: hoy "borrador" = sólo `under_review`. Si el lead fija un cambio con la
+- [ ] **6. No construir** (recomendación explícita): ajustes de notificación dentro del portal del
+- [ ] UNIQUE (opcional, no corrido): crear "Card" duplicada → "Ya existe…". (skip, no crítico.)
+- [ ] FASE 1 (sync/import.ts, acotado): pool con role+es_lead; matchLead inteligente (exact/prefix/
 
