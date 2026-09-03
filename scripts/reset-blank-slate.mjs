@@ -45,6 +45,12 @@ const KEEP = new Set([
   "snippets",               // legal + selling-point library
   "pods",                   // team pod definitions
   "sheet_sources",          // Google-Sheet connection config — KEEP so sync stays wired (Pedro, 2026-08-20)
+  // H.Ü.E BRAIN + biblioteca (conocimiento acumulado, NO contenido de tareas) — KEEP (Pedro, 2026-09-03)
+  "hue_instructions",       // lecciones/Cerebro
+  "hue_kb_documents",       // biblioteca KB (docs subidos)
+  "hue_settings",           // interruptor de auto-aprendizaje (singleton)
+  "hue_adaptations",        // auditoría del auto-aprendizaje (cita hue_instructions, no ideas)
+  "notification_prefs",     // preferencias de notificación POR USUARIO — config, no contenido
 ]);
 
 // Ordered children→parents is computed automatically from the FK graph; this is
@@ -58,8 +64,24 @@ const DELETE = new Set([
   "staged_rows", "sync_runs",
   "references",             // stale sheet-imported links — DELETE for a true blank slate (Pedro, 2026-08-20)
   "pending_invites",        // runtime access-request queue — clear on reset
+  // Contenido de tareas añadido tras 0045/0046 — se ata a ideas (cascade). (Pedro, 2026-09-03)
+  "copies", "copies_temas",       // plantilla copies
+  "hue_suggestions",              // veredictos/ortografía POR TAREA
+  "hue_generations",              // borradores del writer POR TAREA
+  "hue_top_performers",           // "ganadores" = ideas estrelladas (apuntan a las tareas borradas)
   "track_members", "profiles",
 ]);
+
+// ── Ámbito CONTENT-ONLY (Pedro 2026-09-03): borra SÓLO tareas/briefs y su contenido,
+// CONSERVA a las personas (equipo + cuentas) y la cola de accesos. Sin el flag, es el
+// reset go-live completo (también borra track_members/profiles/pending_invites).
+const CONTENT_ONLY = process.argv.includes("--content-only");
+if (CONTENT_ONLY) {
+  for (const t of ["track_members", "profiles", "pending_invites"]) {
+    DELETE.delete(t);
+    KEEP.add(t);
+  }
+}
 
 // Ambiguous — Pedro decides. Treated as KEEP (never auto-deleted) until moved.
 // Resolved 2026-08-20: references→DELETE, sheet_sources→KEEP. None left.
