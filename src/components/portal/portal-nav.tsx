@@ -26,8 +26,9 @@ function iconoDe(t: PortalTarea) {
   return Eye;
 }
 
-const href = (brief: string, tarea: string) => `?brief=${brief}&tarea=${tarea}`;
-const hrefLista = (brief: string, bucket: BucketPortal) => `?brief=${brief}&vista=${bucket}`;
+const pref = (marca: string | null) => (marca ? `marca=${marca}&` : "");
+const href = (marca: string | null, brief: string, tarea: string) => `?${pref(marca)}brief=${brief}&tarea=${tarea}`;
+const hrefLista = (marca: string | null, brief: string, bucket: BucketPortal) => `?${pref(marca)}brief=${brief}&vista=${bucket}`;
 const nombreTarea = (t: PortalTarea) => t.naming ?? t.code ?? "Idea";
 
 // Agrupa los briefs por MES de su fecha para el selector (los sin fecha van al final).
@@ -71,6 +72,9 @@ export function PortalNav({
   selBriefId,
   selTareaId,
   vistaBucket,
+  marcaId,
+  backHref,
+  backLabel,
 }: {
   /** El shell lo usa para medir la altura del nav (ResizeObserver). */
   ref?: Ref<HTMLDivElement>;
@@ -80,6 +84,11 @@ export function PortalNav({
   selTareaId: string | null;
   /** Cubeta en modo LISTA (revision|aprobado), o null en modo DETALLE (tarea + flechas). */
   vistaBucket: BucketPortal | null;
+  /** Marca activa (Fase 2) — se preserva en TODOS los links del nav; null = sin filtro. */
+  marcaId: string | null;
+  /** "Atrás" al grid de briefs de la marca (o de marcas), o null si no hay a dónde volver. */
+  backHref: string | null;
+  backLabel: string;
 }) {
   const [openBrief, setOpenBrief] = useState(false);
   const [openTareas, setOpenTareas] = useState(false);
@@ -110,6 +119,16 @@ export function PortalNav({
       {/* UNA sola fila (scroll horizontal si no cabe). La barra de acción de abajo se pega
           justo debajo leyendo la altura medida de este nav (sin sticky-collision). */}
       <div className="flex items-center gap-3 overflow-x-auto px-4 py-2.5 sm:px-6 lg:px-8">
+        {/* Atrás al grid de briefs / marcas (Fase 2) */}
+        {backHref && (
+          <Link
+            href={backHref}
+            aria-label={`Volver a ${backLabel}`}
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
+          >
+            <ChevronLeft className="size-4" />
+          </Link>
+        )}
         {/* Identidad del portal */}
         <div className="flex shrink-0 items-center gap-2.5">
           {cliente.logoUrl ? (
@@ -154,7 +173,7 @@ export function PortalNav({
                   return (
                     <Link
                       key={b.id}
-                      href={href(b.id, b.tasks[0]?.id ?? "")}
+                      href={href(marcaId, b.id, b.tasks[0]?.id ?? "")}
                       scroll={false}
                       onClick={() => setOpenBrief(false)}
                       className={cn(
@@ -208,7 +227,7 @@ export function PortalNav({
                   return (
                     <Link
                       key={t.id}
-                      href={href(brief!.id, t.id)}
+                      href={href(marcaId, brief!.id, t.id)}
                       scroll={false}
                       onClick={() => setOpenTareas(false)}
                       aria-current={activo ? "true" : undefined}
@@ -272,7 +291,7 @@ export function PortalNav({
             }
             // Activas → DETALLE de su primera tarea (flujo de revisión). En revisión /
             // Aprobadas → modo LISTA (?vista=), un tablero de tarjetas.
-            const destino = v.k === "activas" ? href(brief!.id, primera.id) : hrefLista(brief!.id, v.k);
+            const destino = v.k === "activas" ? href(marcaId, brief!.id, primera.id) : hrefLista(marcaId, brief!.id, v.k);
             return (
               <Link
                 key={v.k}
@@ -293,11 +312,11 @@ export function PortalNav({
         {/* Flechas de navegación secuencial — sólo en modo DETALLE (en lista no aplican). */}
         {detalle && (
           <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
-            <FlechaTarea brief={brief?.id} tarea={prev?.id} dir="prev" />
+            <FlechaTarea marca={marcaId} brief={brief?.id} tarea={prev?.id} dir="prev" />
             <span className="min-w-[3.5rem] text-center text-[13px] font-medium tabular-nums text-muted-foreground">
               {idx >= 0 ? idx + 1 : "–"} / {visibles.length}
             </span>
-            <FlechaTarea brief={brief?.id} tarea={next?.id} dir="next" />
+            <FlechaTarea marca={marcaId} brief={brief?.id} tarea={next?.id} dir="next" />
           </div>
         )}
       </div>
@@ -306,7 +325,7 @@ export function PortalNav({
 }
 
 /** Una flecha de navegación: Link si hay tarea destino, botón inerte (deshabilitado) si no. */
-function FlechaTarea({ brief, tarea, dir }: { brief?: string; tarea?: string; dir: "prev" | "next" }) {
+function FlechaTarea({ marca, brief, tarea, dir }: { marca: string | null; brief?: string; tarea?: string; dir: "prev" | "next" }) {
   const Icon = dir === "prev" ? ChevronLeft : ChevronRight;
   const label = dir === "prev" ? "Tarea anterior" : "Tarea siguiente";
   const clase =
@@ -319,7 +338,7 @@ function FlechaTarea({ brief, tarea, dir }: { brief?: string; tarea?: string; di
     );
   }
   return (
-    <Link href={href(brief, tarea)} scroll={false} aria-label={label} className={cn(clase, "hover:border-primary/40 hover:bg-secondary")}>
+    <Link href={href(marca, brief, tarea)} scroll={false} aria-label={label} className={cn(clase, "hover:border-primary/40 hover:bg-secondary")}>
       <Icon className="size-4" />
     </Link>
   );

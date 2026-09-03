@@ -33,11 +33,15 @@ export function PortalListaTareas({
   bucket,
   tareas,
   marca,
+  marcaId,
 }: {
   briefId: string;
   bucket: BucketPortal;
   tareas: PortalTarea[];
+  /** Color de marca (para los chips). */
   marca: string;
+  /** Marca activa (Fase 2) — se preserva en el link de cada card. null = sin filtro. */
+  marcaId: string | null;
 }) {
   return (
     <div className="mx-auto max-w-4xl">
@@ -62,7 +66,7 @@ export function PortalListaTareas({
             return (
               <Link
                 key={t.id}
-                href={`?brief=${briefId}&tarea=${t.id}`}
+                href={`?${marcaId ? `marca=${marcaId}&` : ""}brief=${briefId}&tarea=${t.id}`}
                 scroll={false}
                 className="group flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-[color-mix(in_srgb,var(--primary)_45%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >

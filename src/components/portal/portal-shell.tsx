@@ -12,6 +12,10 @@ export function PortalShell({
   selBriefId,
   selTareaId,
   vistaBucket,
+  marcaId,
+  backHref,
+  backLabel,
+  mostrarNav,
   vista,
 }: {
   cliente: { name: string; logoUrl: string | null; brandColor: string };
@@ -20,7 +24,15 @@ export function PortalShell({
   selTareaId: string | null;
   /** Cubeta en modo LISTA (revision|aprobado) o null en modo DETALLE — gobierna las pestañas. */
   vistaBucket: BucketPortal | null;
-  /** El contenido: el detalle de la tarea seleccionada, o la lista de tarjetas de una cubeta. */
+  /** Marca activa (Fase 2) — se preserva en el nav. null = sin filtro. */
+  marcaId: string | null;
+  /** "Atrás" del nav (a briefs/marcas), o null. */
+  backHref: string | null;
+  backLabel: string;
+  /** El nav (brief · pestañas · flechas) sólo aparece en el NIVEL DE TAREA; en los grids de
+   *  marca/brief no (esos traen su propio header). (Fase 2) */
+  mostrarNav: boolean;
+  /** El contenido: grid de marcas/briefs, o el detalle/lista de tareas. */
   vista: ReactNode;
 }) {
   const marca = cliente.brandColor;
@@ -54,7 +66,7 @@ export function PortalShell({
     />
   );
 
-  if (!briefs.length) {
+  if (!briefs.length && !vista) {
     return (
       <div className="relative w-full px-4 py-8 sm:px-6 lg:px-8">
         {glow}
@@ -89,15 +101,27 @@ export function PortalShell({
     <div className="relative w-full" style={varNav}>
       {glow}
 
-      {/* Navegación STICKY (briefs · tareas · filtro · flechas) — ancho completo. */}
-      <PortalNav ref={navRef} cliente={cliente} briefs={briefs} selBriefId={selBriefId} selTareaId={selTareaId} vistaBucket={vistaBucket} />
+      {/* Navegación STICKY (briefs · pestañas · flechas) — SÓLO en el nivel de tarea. */}
+      {mostrarNav && (
+        <PortalNav
+          ref={navRef}
+          cliente={cliente}
+          briefs={briefs}
+          selBriefId={selBriefId}
+          selTareaId={selTareaId}
+          vistaBucket={vistaBucket}
+          marcaId={marcaId}
+          backHref={backHref}
+          backLabel={backLabel}
+        />
+      )}
 
       {/* El contenido usa el ANCHO COMPLETO (con padding) — más aire, sin el margen central
           que dejaba mucho espacio muerto a los lados (Pedro). El key por tarea la remonta al
           cambiar → entra con un fade sutil. */}
       <div className="px-4 py-6 sm:px-6 lg:px-8">
         {vista ? (
-          <div key={selTareaId ?? vistaBucket ?? "none"} className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+          <div key={selTareaId ?? vistaBucket ?? marcaId ?? "grid"} className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
             {vista}
           </div>
         ) : (

@@ -17,6 +17,9 @@ export type PortalTarea = {
   code: string | null;
   naming: string | null;
   status: AssetStatus;
+  /** Marca de la tarea (id) — el portal drilla por MARCA (Card/Préstamos). "__none__" si no
+   *  tiene marca asignada, para no perderla. */
+  marcaId: string;
   marcaName: string | null;
   marcaLogo: string | null;
   /** La tarea volvió al cliente DESPUÉS de una ronda de cambios (published + tiene
@@ -33,9 +36,22 @@ export type PortalBrief = {
   tasks: PortalTarea[];
 };
 
+/** Una marca del cliente con trabajo client-facing, para el grid de marcas del portal. */
+export type PortalMarca = {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  /** Cuántos briefs tienen ≥1 tarea de esta marca (lo que muestra la card de marca). */
+  briefs: number;
+  /** Cuántas tareas client-facing de esta marca (total). */
+  tareas: number;
+};
+
 export type PortalData = {
   cliente: { name: string; slug: string; logoUrl: string | null; brandColor: string };
   briefs: PortalBrief[];
+  /** Las marcas con trabajo (para el nivel superior de navegación). */
+  marcas: PortalMarca[];
 };
 
 /** La etiqueta de un brief: "Brief DD/MM" (por fecha), o su nombre, o su código. */
@@ -74,6 +90,7 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
     return {
       cliente: { name: cli.name, slug: cli.slug, logoUrl: cli.logo_url, brandColor: cli.brand_color ?? "#775cbf" },
       briefs: [],
+      marcas: [],
     };
   }
 
@@ -126,6 +143,7 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
       code: i.code,
       naming: i.naming_base,
       status: i.status,
+      marcaId: i.marca_id ?? "__none__",
       marcaName: m?.name ?? null,
       marcaLogo: m?.logo_url ?? null,
       reReview: i.status === "published" && conRonda.has(i.id),
@@ -138,9 +156,34 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
     .map((b) => ({ id: b.id, label: briefLabel(b), date: b.brief_date, tasks: porBrief.get(b.id)! }))
     .sort((a, b) => b.tasks.length - a.tasks.length || a.label.localeCompare(b.label));
 
+  // Resumen por MARCA: cuántos briefs y tareas client-facing tiene cada una. Un brief puede
+  // abarcar VARIAS marcas (marca es por-tarea), así que marca = FILTRO, no dueño: un brief
+  // cuenta para cada marca que toca. (Pedro 2026-09-03, Fase 2)
+  const briefsPorMarca = new Map<string, Set<string>>();
+  const tareasPorMarca = new Map<string, number>();
+  for (const b of conTareas) {
+    for (const t of b.tasks) {
+      (briefsPorMarca.get(t.marcaId) ?? briefsPorMarca.set(t.marcaId, new Set()).get(t.marcaId)!).add(b.id);
+      tareasPorMarca.set(t.marcaId, (tareasPorMarca.get(t.marcaId) ?? 0) + 1);
+    }
+  }
+  const marcasResumen: PortalMarca[] = [...tareasPorMarca.keys()]
+    .map((id) => {
+      const m = id === "__none__" ? null : marcaById.get(id);
+      return {
+        id,
+        name: m?.name ?? "Sin marca",
+        logoUrl: m?.logo_url ?? null,
+        briefs: briefsPorMarca.get(id)?.size ?? 0,
+        tareas: tareasPorMarca.get(id) ?? 0,
+      };
+    })
+    .sort((a, b) => b.tareas - a.tareas || a.name.localeCompare(b.name));
+
   return {
     cliente: { name: cli.name, slug: cli.slug, logoUrl: cli.logo_url, brandColor: cli.brand_color ?? "#775cbf" },
     briefs: conTareas,
+    marcas: marcasResumen,
   };
 }
 
