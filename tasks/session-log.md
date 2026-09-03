@@ -1,5 +1,30 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-03 (tarde/noche) — CIERRE: reap + 0061 + 4 features + restructura del PORTAL — TODO SHIPPEADO + LIVE
+Sesión larguísima; todo en producción (runna-greenlight.vercel.app), verificado por el commit status de Vercel.
+**Bloque 1 (reap pre-lanzamiento, ya cerrado antes):** 2 críticos + 11 serios + ~25 mejoras (main 4077c52) · migración
+**0061** (actor no se auto-avisa, inactivos sin correos, rpc_set_assignees, candado de rutinas) · 3 features (crear
+cliente, buscador, invitar) · descubrimiento clave: el **login YA está encendido/forzado en prod**.
+**Bloque 2 (esta tanda — portal + flujo de revisión):**
+- Portal "En proceso" (48686f5): el cliente ve sus cambios enviados mientras el equipo los trabaja.
+- Portal pestañas **Activas/Aprobadas** (f06245f) → fix: los tabs NAVEGAN de verdad (e37912b, no sólo filtro muerto).
+- **Cortinilla (legales) obligatoria** para mandar a revisión (9b2d4b9), gateada en las 3 puertas a under_review.
+- **H.Ü.E revisa CADA envío** a revisión (7dbc468) — antes sólo el 1º (el verbo `devolver` se lo saltaba).
+- Portal: tarea sacada de **Greenlit** a producción interna **desaparece** del portal (468786e).
+- Portal **Fase 1** (5ae2116): 3 pestañas + listas de tarjetas. **Fase 2** (d2a3fdc): drill-down por MARCA
+  (Card/Préstamos) → briefs → tarea, con marca-como-filtro + auto-salto + back-nav.
+- Control de Cambios: el lead **confirma DESDE el panel** (7a785f9), no sólo en el hover (el atendido sale expandido).
+- Fix: confirmar un cambio ya **no borra "Enviar a cliente"** (5a3d0a1) — la cancha del lead dura hasta enviar/reasignar.
+**Método:** cada cambio con render-check aislado (el portal/task-view son role-gated, invisibles en local con login
+apagado); gates verdes en cada tanda (tsc·lint·lib 481·db 377·import 81·sync 44·build). Deploys verificados por commit
+status, no por `vercel ls`.
+**Qué falta para el lanzamiento oficial (NADA de código):** walkthrough autenticado de Pedro (checklist en todo.md,
+incluye todo lo del portal como cliente) · decisión de blank-slate reset · onboarding de equipo + DiDi.
+**Procesos:** sin dev servers (preview vacío), watchers de deploy todos terminados, sin nada vivo. Working tree limpio,
+todo pusheado.
+**Pick up next session:** el walkthrough de Pedro + las 3 tareas operativas. Ideas sueltas: cap de gasto H.Ü.E (Pedro
+lo pospuso), botón "reenviar link" a clientes, invitación por correo al equipo — todas en todo.md como decisiones suyas.
+
 ## 2026-09-03 — CIERRE DE SESIÓN (reap pre-lanzamiento + 4 features) — TODO SHIPPEADO + LIVE
 Sesión larga que arrancó confirmando la carpeta (`/Users/work/Projects/greenlight`; memoria y sesiones ya
 renombradas; S.P.A.M es OTRO proyecto) y terminó con el reap de pre-lanzamiento y sus follow-ups en producción.
@@ -1677,4 +1702,28 @@ se ve igual que la respuesta correcta).
 - [ ] **5. Decisión abierta**: hoy "borrador" = sólo `under_review`. Si el lead fija un cambio con la
 - [ ] **6. No construir** (recomendación explícita): ajustes de notificación dentro del portal del
 - [ ] UNIQUE (opcional, no corrido): crear "Card" duplicada → "Ya existe…". (skip, no crítico.)
+
+
+## 2026-09-03 11:03
+**Shipped (recent commits):**
+  - docs: cortinilla obligatoria para revisión — todo
+  - feat(revisión): la cortinilla de cierre (legales) es obligatoria para mandar a revisión
+  - docs(lessons): verificar UI gateada por rol con render aislado, no sólo gates
+  - fix(portal): las pestañas Activas/Aprobadas ahora NAVEGAN (antes no hacían nada)
+  - docs: portal pestañas Activas/Aprobadas — todo
+  - feat(portal): pestañas Activas / Aprobadas — las tareas aprobadas salen del flujo
+  - docs(wrap-up): cierre de sesión — reap + 4 features SHIPPEADO+LIVE; login ya forzado en prod
+  - docs: portal cambios en proceso — todo
+
+**Still open:**
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en un video/estático SIN legal, "Mandar a revisión" → bloqueado con "Agrega la
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = rol cliente, no visible en local con login apagado): como cliente, aprobar una
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = rol cliente, no visible en local con login apagado): como cliente, "Pedir cambios"
+- [ ] **LIVE-VERIFY de Pedro (sesión autenticada, no visible en local con login apagado)**: Admin › Clientes crea
+- [ ] **LIVE-VERIFY de Pedro (sesión autenticada)**: como lead, asignarse a sí mismo → SIN aviso "se te asignó"; dar de baja a
+- [ ] **Decisiones de Pedro** (no se tocó): crear clientes en la app (el botón dice "desde Admin" y Admin no lo tiene) · sheet por cliente
+- [ ] Deuda menor anotada: hex duplicados (#2d2b55/#d9d2f0, #00e676 fuera de var) · empty states ad-hoc en board/briefs · setup-storage no
 

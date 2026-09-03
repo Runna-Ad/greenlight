@@ -6,7 +6,17 @@
 > carpeta de código `/Users/work/Projects/greenlight` (⏳ pendiente el `mv` local con el desktop app cerrado) ·
 > carpeta de MARCA `/Users/work/Documents/Claude/Projects/Greenlight` (no es código; el repo es público) ·
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
-Última actualización: 2026-09-03 — REAP + 4 features **SHIPPEADO + LIVE** (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
+Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + reset + onboarding. Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
+
+## ✅ 2026-09-03 (noche) — Restructura del PORTAL + flujo de revisión — SHIPPEADO + LIVE
+- **Portal del cliente**: 3 pestañas (Activas=por revisar · En revisión=in_corrections · Aprobadas=delivered);
+  En revisión/Aprobadas como listas de tarjetas; **Fase 2** drill-down por MARCA (Card/Préstamos → briefs → tarea,
+  marca=FILTRO porque los briefs abarcan ambas; auto-salto de niveles de 1 item; back-nav). Cubetas en lib/portal-bucket.
+- **Cambios "En proceso"** visibles al cliente durante in_corrections. Tarea sacada de **Greenlit** a interno sale del portal.
+- **Flujo de revisión**: cortinilla (legales) OBLIGATORIA para mandar a revisión (gateada en las 3 puertas: submit/drag/devolver);
+  H.Ü.E revisa CADA envío a revisión; el lead confirma un cambio DESDE el panel (atendido sale expandido); confirmar ya no
+  borra "Enviar a cliente" (la cancha del lead dura hasta enviar/reasignar, no hasta confirmar).
+- **Verificación**: render-check aislado por componente (portal/task-view son role-gated, no se ven en local con login off).
 
 ## ✅ 2026-09-03 — Follow-ups del reap — SHIPPEADO + LIVE
 - **3 features** (689dc93, LIVE): crear cliente en Admin, buscador global acotado por identidad, invitación manual al equipo.
