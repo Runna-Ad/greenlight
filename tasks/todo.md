@@ -1,5 +1,14 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-03 — H.Ü.E revisa ortografía en CADA envío a revisión + 3ª puerta gateada (código en main, SIN push · sin migración)
+Pedro: al devolver a revisión tras corregir, H.Ü.E no revisaba. Causa: colgaba sólo del verbo submit_review; `devolver`
+(in_corrections→under_review) se lo saltaba. Fix: ortografia + gate de cortinilla en submit_review Y devolver.
+`faltaCortinilla` centralizado en lib/cortinilla → gatea las 3 puertas (submit, drag/moveTask, devolver).
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: tarea devuelta por el lead → especialista corrige → "Devolver a revisión" → H.Ü.E
+      abre el diálogo de ortografía si hay faltas (igual que en el 1er envío); sin cortinilla, "Devolver a revisión"
+      también se bloquea.
+
 ## 🟢 2026-09-03 — Portal Fase 1: 3 pestañas + listas de tarjetas (código en main, SIN push · sin migración)
 Acordado con Pedro: por fases, marca-como-filtro. Activas = flujo de revisión; En revisión / Aprobadas = tableros
 de tarjetas (?vista=) que abren la tarea (?tarea=). Fuente única de cubetas en lib/portal-bucket. Render-check 13/13.
