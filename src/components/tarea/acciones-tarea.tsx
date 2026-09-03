@@ -117,8 +117,10 @@ export function AccionesTarea({
 
   const ejecutar = (a: Accion) =>
     startTransition(async () => {
-      // "Mandar a revisión" pasa primero por el corrector de H.Ü.E (surface+override).
-      if (a.verb === "submit_review") {
+      // Mandar a revisión Y devolver a revisión (tras corregir) pasan por el corrector de
+      // H.Ü.E: el especialista revisa CADA vez que manda a revisión — sea la 1ª o la 4ª, no
+      // sólo la primera (Pedro 2026-09-03). Antes "devolver" se saltaba el chequeo.
+      if (a.verb === "submit_review" || a.verb === "devolver") {
         // Cortinilla de cierre (legales) obligatoria: sin ella no se manda (Pedro). El
         // servidor lo gatea igual; aquí se evita el viaje y se dice claro qué falta.
         if (faltaLegal) {
