@@ -8,6 +8,19 @@ import { join } from "node:path";
 const DIR = "supabase/migrations";
 const ALLOWED_SCHEMAS = new Set(["produccion", "auth", "extensions"]);
 
+// Excepción ACOTADA (0062, live refresh): Realtime Broadcast vive en el esquema `realtime`
+// de Supabase — es del proyecto, no de S.P.A.M, y S.P.A.M no usa Realtime Authorization.
+// Se permiten SÓLO estos usos; cualquier otra mención de `realtime.` sigue siendo falla:
+//   realtime.send(…) · realtime.topic() · to_regclass('realtime.messages')
+//   · una policy cuyo nombre empiece por greenlight_ sobre realtime.messages
+const REALTIME_OK = [
+  /\brealtime\.send\s*\(/i,
+  /\brealtime\.topic\s*\(\s*\)/i,
+  /to_regclass\(\s*'realtime\.messages'\s*\)/i,
+  /\bpolicy\s+(if\s+exists\s+)?greenlight_[a-z0-9_]+\s+on\s+realtime\.messages\b/i,
+];
+const realtimePermitido = (l) => REALTIME_OK.some((r) => r.test(l));
+
 let problems = 0;
 const files = readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort();
 
@@ -22,6 +35,7 @@ for (const file of files) {
 
     // Any explicit mention of another schema is a hard fail.
     for (const m of l.matchAll(/\b(public|storage|realtime|vault|cron|net)\s*\./gi)) {
+      if (m[1].toLowerCase() === "realtime" && realtimePermitido(l)) continue;
       console.error(`🚨 ${at} toca el esquema "${m[1]}": ${l.slice(0, 90)}`);
       problems++;
     }
@@ -37,6 +51,7 @@ for (const file of files) {
       const isIndex = /index/i.test(ddl[2]);
       // triggers/policies/indexes name the OBJECT first and the table later ("on produccion.x")
       if (isTrigger || isPolicy || isIndex) {
+        if (isPolicy && realtimePermitido(l)) return;
         if (/\son\s+/i.test(l) && !/\son\s+produccion\./i.test(l)) {
           console.error(`🚨 ${at} DDL sobre tabla fuera de produccion: ${l.slice(0, 90)}`);
           problems++;

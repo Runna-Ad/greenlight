@@ -15,8 +15,15 @@ import { Button } from "@/components/ui/button";
  */
 export function NotificationsBell({ initialCount }: { initialCount: number }) {
   const [count, setCount] = useState(initialCount);
+  // Live refresh (0062): el layout re-entrega el contador tras un aviso nuevo; como
+  // `count` es estado propio (baja optimista al abrir un aviso), se adopta al cambiar.
+  const [enVuelo, startTransition] = useTransition();
+  const [countEntregado, setCountEntregado] = useState(initialCount);
+  if (initialCount !== countEntregado) {
+    setCountEntregado(initialCount);
+    if (!enVuelo) setCount(initialCount); // no pisar la baja optimista de marcarLeidas en vuelo
+  }
   const [avisos, setAvisos] = useState<Aviso[] | null>(null);
-  const [, startTransition] = useTransition();
 
   const abrir = (open: boolean) => {
     if (!open) return;

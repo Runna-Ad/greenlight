@@ -2345,5 +2345,108 @@ console.log("\n▶ brief_estado (0060) — contrato con greenlitDeBundle()");
   await db.query(`delete from produccion.briefs where id in ($1,$2)`, [eBrief, eVacio]);
 }
 
+// ── Live refresh (0062) — Realtime Broadcast, un canal privado por persona ──
+console.log("\n▶ Live refresh 0062 — quién recibe el aviso de 'algo cambió'");
+{
+  // PGlite no trae el esquema `realtime`. Hasta aquí, cada update de ideas ya pasó por el
+  // trigger con `realtime.send` INEXISTENTE — y no tumbó nada (eso ya quedó probado por
+  // todo lo de arriba). Ahora se SIMULA `realtime.send` guardando en una tabla, para probar
+  // el FAN-OUT real: quién recibe qué, y que un no-cambio no avisa.
+  await db.exec(`create schema if not exists realtime;
+    create table realtime._enviados (topic text, event text, payload jsonb);
+    create function realtime.send(payload jsonb, event text, topic text, private boolean default true)
+      returns void language sql as $$ insert into realtime._enviados values (topic, event, payload) $$;`);
+  const enviados = async () => q(`select topic, event, payload from realtime._enviados order by topic`);
+  const limpiar = async () => db.exec(`delete from realtime._enviados`);
+
+  // Fixtures: una tarea viva con cliente; una cuenta de cliente de ESE cliente y otra de
+  // un cliente ajeno (no debe enterarse); un miembro del equipo dado de baja (tampoco).
+  const lIdea = await scalar(`select i.id from produccion.ideas i join produccion.briefs b on b.id=i.brief_id
+                               where i.deleted_at is null and b.client_id is not null limit 1`);
+  const lClient = await scalar(`select b.client_id from produccion.ideas i join produccion.briefs b on b.id=i.brief_id where i.id=$1`, [lIdea]);
+  const lSlug = await scalar(`select slug from produccion.clients where id=$1`, [lClient]);
+  const cliMio = "aaaaaaaa-0062-4000-8000-000000000001";
+  const cliAjeno = "aaaaaaaa-0062-4000-8000-000000000002";
+  const bajado = "aaaaaaaa-0062-4000-8000-000000000003";
+  const otroClient = await scalar(`insert into produccion.clients (name, slug) values ('Ajeno 0062','ajeno-0062') returning id`);
+  await db.exec(`insert into produccion.profiles (id,email,full_name,role,client_id) values
+      ('${cliMio}','cli-mio-0062@x.mx','Cliente Mío','client','${lClient}'),
+      ('${cliAjeno}','cli-ajeno-0062@x.mx','Cliente Ajeno','client','${otroClient}');
+    insert into produccion.profiles (id,email,full_name,role,active) values ('${bajado}','baja-0062@x.mx','Dado de Baja','creative',false);`);
+  // Destinatarios esperados = equipo activo + TODAS las cuentas activas de ese cliente (los
+  // fixtures de arriba ya dejaron alguna): el cliente ajeno y el dado de baja quedan fuera.
+  const destinatarios = Number(await scalar(`select count(*) from produccion.profiles
+      where active and (role <> 'client' or client_id = $1)`, [lClient]));
+  const equipoActivo = destinatarios - 1; // -1 = la cuenta cliMio; se suma explícito abajo
+
+  // Cambio de estado real → 1 aviso por persona del equipo activo + la cuenta del cliente dueño.
+  await limpiar();
+  const antes = await scalar(`select status from produccion.ideas where id=$1`, [lIdea]);
+  await db.exec(`select set_config('produccion.lead_override','on',false)`);
+  await db.query(`update produccion.ideas set status = case when status='in_progress' then 'under_review' else 'in_progress' end::produccion.asset_status where id=$1`, [lIdea]);
+  await db.exec(`select set_config('produccion.lead_override','',false)`);
+  let msgs = await enviados();
+  eq("status: equipo activo + cliente dueño = destinatarios", msgs.length, equipoActivo + 1);
+  ok("status: el cliente dueño recibe", msgs.some((m) => m.topic === `greenlight:user:${cliMio}`));
+  ok("status: el cliente AJENO no recibe", !msgs.some((m) => m.topic === `greenlight:user:${cliAjeno}`));
+  ok("status: el dado de baja no recibe", !msgs.some((m) => m.topic === `greenlight:user:${bajado}`));
+  ok("status: todos los topics llevan el prefijo greenlight:user:", msgs.every((m) => m.topic.startsWith("greenlight:user:")));
+  eq("status: evento 'cambio'", msgs[0]?.event, "cambio");
+  eq("status: payload.kind = update", msgs[0]?.payload?.kind, "update");
+  ok("status: payload lleva el slug del cliente", (msgs[0]?.payload?.client_slugs ?? []).includes(lSlug));
+  ok("status: payload lleva el id de la tarea", (msgs[0]?.payload?.idea_ids ?? []).includes(lIdea));
+  ok("status: el payload NO lleva contenido (ni concepto ni guión)", !("concepto" in (msgs[0]?.payload ?? {})) && !("nombre" in (msgs[0]?.payload ?? {})));
+  await db.exec(`select set_config('produccion.lead_override','on',false)`);
+  await db.query(`update produccion.ideas set status=$2 where id=$1`, [lIdea, antes]);
+  await db.exec(`select set_config('produccion.lead_override','',false)`);
+
+  // Un update que NO cambia nada de lo vigilado → silencio (ni por sentencia).
+  await limpiar();
+  await db.query(`update produccion.ideas set notas = coalesce(notas,'') || ' ' where id=$1`, [lIdea]);
+  eq("columna no vigilada (notas) → 0 avisos", (await enviados()).length, 0);
+  await db.query(`update produccion.ideas set deleted_at = deleted_at where id=$1`, [lIdea]);
+  eq("set deleted_at = deleted_at (sin cambio real) → 0 avisos", (await enviados()).length, 0);
+
+  // Papelera y restaurar: sí avisan (la tarea aparece/desaparece de tableros).
+  await db.query(`update produccion.ideas set deleted_at = now() where id=$1`, [lIdea]);
+  eq("a la papelera → avisa", (await enviados()).length, equipoActivo + 1);
+  await limpiar();
+  await db.query(`update produccion.ideas set deleted_at = null where id=$1`, [lIdea]);
+  eq("restaurar → avisa", (await enviados()).length, equipoActivo + 1);
+
+  // Asignación: insertar / quitar en idea_assignments avisa con kind=assign, UNA vez por
+  // sentencia aunque entren varias filas.
+  await limpiar();
+  const m1 = await scalar(`select id from produccion.track_members where active order by name limit 1`);
+  const m2 = await scalar(`select id from produccion.track_members where active order by name offset 1 limit 1`);
+  await db.query(`delete from produccion.idea_assignments where idea_id=$1`, [lIdea]);
+  await limpiar();
+  await db.query(`insert into produccion.idea_assignments (idea_id, member_id, es_lead) values ($1,$2,false),($1,$3,false)`, [lIdea, m1, m2]);
+  msgs = await enviados();
+  eq("asignar 2 personas en una sentencia → 1 aviso por destinatario", msgs.length, equipoActivo + 1);
+  eq("asignación: payload.kind = assign", msgs[0]?.payload?.kind, "assign");
+  ok("asignación: payload lleva la tarea una sola vez", (msgs[0]?.payload?.idea_ids ?? []).filter((x) => x === lIdea).length === 1);
+  // UPDATE en idea_assignments: sólo un cambio REAL (quién / es_lead) avisa.
+  await limpiar();
+  await db.query(`update produccion.idea_assignments set es_lead = es_lead where idea_id=$1`, [lIdea]);
+  eq("update sin cambio real en asignaciones → 0 avisos", (await enviados()).length, 0);
+  await db.query(`update produccion.idea_assignments set es_lead = true where idea_id=$1 and member_id=$2`, [lIdea, m1]);
+  eq("cambiar es_lead → avisa", (await enviados()).length, equipoActivo + 1);
+  await limpiar();
+  await db.query(`delete from produccion.idea_assignments where idea_id=$1`, [lIdea]);
+  eq("quitar asignación → avisa", (await enviados()).length, equipoActivo + 1);
+
+  // El candado 0061 sigue cerrado para lo nuevo: sin EXECUTE a PUBLIC. (La simulación
+  // "RLS enforcement" de arriba concede EXECUTE a `authenticated` a TODAS las rutinas, así
+  // que aquí se mira PUBLIC, igual que el barrido I6.)
+  eq("las rutinas live_* no son ejecutables por PUBLIC", Number(await scalar(`
+    select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'produccion' and p.proname like 'live\\_%'
+       and (p.proacl is null or exists (select 1 from unnest(p.proacl) a where a::text like '=%'))`)), 0);
+
+  await db.query(`delete from produccion.profiles where id in ($1,$2,$3)`, [cliMio, cliAjeno, bajado]);
+  await db.query(`delete from produccion.clients where id=$1`, [otroClient]);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

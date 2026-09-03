@@ -159,8 +159,22 @@ export function Board({
   const mayAssign = canAssign(role);
 
   const [tasks, setTasks] = useState(initialTasks);
+  // Live refresh (0062): `tasks` es estado propio (para el drag optimista), así que un
+  // `router.refresh()` ajeno NO lo tocaba — el tablero se quedaba viejo aunque el servidor
+  // ya hubiera re-entregado. Patrón de React "ajustar estado cuando cambia una prop":
+  // cuando llega una entrega NUEVA del servidor (identidad distinta), se adopta entera.
+  // Un movimiento en vuelo no se pierde: el refresh llega DESPUÉS del commit del cambio
+  // que lo disparó, así que la entrega ya trae ese estado.
+  // Mientras una acción PROPIA está en vuelo (drag / asignación optimista) NO se adopta:
+  // un refresh ajeno traería el estado de ANTES del commit propio y la tarjeta brincaría.
+  // La acción, al terminar, re-entrega (revalidatePath) y entonces sí se adopta.
   const [dragging, setDragging] = useState<Task | null>(null);
-  const [, startTransition] = useTransition();
+  const [enVuelo, startTransition] = useTransition();
+  const [tasksEntregadas, setTasksEntregadas] = useState(initialTasks);
+  if (initialTasks !== tasksEntregadas) {
+    setTasksEntregadas(initialTasks);
+    if (!enVuelo) setTasks(initialTasks);
+  }
 
   // ── filters ──
   const [fPersona, setFPersona] = useState(ALL);

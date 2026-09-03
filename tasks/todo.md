@@ -1,5 +1,21 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-03 — LIVE REFRESH: la plataforma se refresca sola al cambiar estado/asignación (código en main, SIN push · migración 0062 SIN aplicar)
+Pedro: "que nadie tenga que recargar para ver un cambio de estado o una tarea nueva asignada". Diseño: Realtime
+**Broadcast desde la BD** (trigger por SENTENCIA en `ideas` + `idea_assignments` → `realtime.send` a un canal privado
+POR PERSONA `greenlight:user:<profile_id>`), NO Postgres Changes (exigiría SELECT de `authenticated` sobre ideas y
+reabriría el candado 0056). La policy de `realtime.messages` sólo compara `realtime.topic()` con `auth.uid()` — no toca
+produccion. Navegador: `LiveRefresh` (layout) escucha su canal → debounce 400ms → `router.refresh()`; fallback al volver
+a la pestaña (>15s) y al reconectar el socket. `Board` y la campana adoptan las props nuevas (antes `useState(initial)`
+se quedaba viejo). Excepción ACOTADA en check-isolation para `realtime.send/topic` + policy `greenlight_*`.
+Verificado: test-db 397/397 (fan-out real con `realtime.send` simulado: equipo activo + cuenta del cliente dueño; ajeno
+y dados de baja NO; sin cambio real → 0 avisos; 2 asignaciones en 1 sentencia → 1 aviso), isolation, lint, tsc, build.
+- [ ] **SHIP** (necesita "ship it"): `node scripts/migrate.mjs` (0062) + `git push origin main`.
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+      dos navegadores/personas; A mueve una tarea a "En revisión" o asigna a B → en B el tablero / mi-trabajo / la
+      campana cambian solos en ~1s sin recargar; un texto a medio escribir en una tarea NO se pierde. Si no refresca:
+      Supabase → Realtime → Settings → confirmar que el proyecto tiene Realtime encendido (default sí).
+
 ## 🟢 2026-09-03 — "Enviar a cliente" no desaparece al confirmar un cambio (código en main, SIN push · sin migración)
 Pedro: confirmar un cambio del cliente borraba la barra "Enviar a cliente". Causa: la cancha del lead se medía por
 cambios SIN RESOLVER; confirmar el último la vaciaba. Fix: se mide por cambios ENVIADOS esta ronda (resueltos o no),
