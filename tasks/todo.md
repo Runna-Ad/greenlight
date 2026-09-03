@@ -1,5 +1,13 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-02 (noche 4) — Portal: el cliente ve sus cambios "En proceso" (código en main, SIN push · sin migración)
+Commit del feat(portal). Tercer bucket `enProceso` (ronda!=null, resolved_at null) en portal-data → contexto cliente →
+PanelControlCambios (grupo "En proceso", gris neutro). El panel ahora sale durante in_corrections.
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = rol cliente, no visible en local con login apagado): como cliente, "Pedir cambios"
+      → el Control de Cambios muestra "En proceso" con lo que pediste (read-only, sin Quitar); al cerrar el equipo la ronda,
+      pasan a "Aplicado"; el conteo del panel los incluye.
+
 ## ✅ 2026-09-02 (noche 3) — 3 features del reap de funcionalidad — SHIPPEADO + LIVE (main f8e9767, Vercel Ready)
 Commit 689dc93. Pedro pidió construir 1, 2 y 3b; 3 (auto-link a clientes) se deja como está; 3a ya existía.
 - [x] **1. Crear cliente en la app**: `crearCliente` (Admin › Clientes, sección "Empresas cliente", alta inline);
@@ -38,8 +46,7 @@ Llave pública re-probada en prod: 401 en todas las tablas y en `brief_estado`.
       a un especialista multi-track en ambos tracks y a un admin como lead.
 - [ ] **Decisiones de Pedro** (no se tocó): crear clientes en la app (el botón dice "desde Admin" y Admin no lo tiene) · sheet por cliente
       (fallback hardcodeado a DiDi si falta SHEETS_SCRIPT_URL; prod lo tiene) · buscador global (stub en todas las páginas, portal incluido) ·
-      "reenviar mi link" para clientes / invitación por correo al equipo · Papelera sólo master (admin borra pero no deshace) · el cliente no
-      ve su lista de cambios tras "Pedir cambios" · rate limit por identidad en acciones de H.Ü.E + tope de gasto en la consola de Anthropic ·
+      "reenviar mi link" para clientes / invitación por correo al equipo · Papelera sólo master (admin borra pero no deshace) · [HECHO 2026-09-02] el cliente ya ve su lista de cambios "En proceso" tras "Pedir cambios" · rate limit por identidad en acciones de H.Ü.E + tope de gasto en la consola de Anthropic ·
       camino de UPDATE para filas del sheet que cambiaron.
 - [ ] Deuda menor anotada: hex duplicados (#2d2b55/#d9d2f0, #00e676 fuera de var) · empty states ad-hoc en board/briefs · setup-storage no
       reconcilia buckets existentes · AUTH_ENABLED assert atado a VERCEL_ENV · CSP de scripts (nonces) · copy del tablero vacío para especialista.
