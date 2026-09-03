@@ -1,5 +1,16 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-03 — Portal Fase 1: 3 pestañas + listas de tarjetas (código en main, SIN push · sin migración)
+Acordado con Pedro: por fases, marca-como-filtro. Activas = flujo de revisión; En revisión / Aprobadas = tableros
+de tarjetas (?vista=) que abren la tarea (?tarea=). Fuente única de cubetas en lib/portal-bucket. Render-check 13/13.
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): las 3 pestañas; En revisión / Aprobadas
+      muestran tarjetas; clic en una card abre la tarea completa; volver con la pestaña; Activas sigue siendo el
+      flujo de revisión con flechas; en móvil el nav no se rompe.
+- [ ] **FASE 2** (acordada, pendiente): nivel de MARCA como entrada — cards por marca (Card/Préstamos) con conteo
+      de briefs → briefs del brand (filtrados a las tareas de esa marca) → la tarea. Marca = FILTRO sobre tareas
+      (los briefs abarcan ambas marcas, no son dueños de una). Auto-saltar niveles de un solo item.
+
 ## 🟢 2026-09-03 — Cortinilla de cierre (legales) obligatoria para mandar a revisión (código en main, SIN push · sin migración)
 Pedro: no se puede mandar a revisión sin legales. `requiereCortinilla(plantilla)` (guion/estatico sí, copies no).
 Gate en servidor + las DOS puertas a under_review (botón submitForReview + drag/moveTask) + bloqueo en la UI.
