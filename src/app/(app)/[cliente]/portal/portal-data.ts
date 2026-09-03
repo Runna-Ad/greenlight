@@ -6,6 +6,7 @@ import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
 import type { RefVista } from "@/components/tarea/referencias-plano";
 import type { TemaRow } from "@/components/tarea/documento-copies";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
+import { ESTADOS_PORTAL } from "@/lib/portal-bucket";
 
 // El portal muestra SÓLO lo que ya se envió al cliente: published_at != null (el
 // mismo criterio que Entregas). Su estado ACTUAL puede ser published (en su
@@ -81,6 +82,11 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
     .select("id, code, naming_base, status, marca_id, brief_id")
     .in("brief_id", briefIds)
     .not("published_at", "is", null)
+    // El ESTADO ACTUAL manda: una tarea sacada de Greenlit de vuelta a producción interna
+    // (in_progress/under_review/completed/todo) deja de ser client-facing y sale del portal,
+    // aunque conserve su `published_at` viejo. Sin esto reaparecía como "activa" sin que los
+    // cambios se hubieran hecho ni reenviado. (Pedro 2026-09-03)
+    .in("status", ESTADOS_PORTAL)
     .is("deleted_at", null) // papelera (0057): fuera del portal al instante
     .order("code", { ascending: true });
 
@@ -230,7 +236,9 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
       deleted_at: string | null;
     }>();
   // En la papelera (0057) = inexistente para el cliente, aunque tenga el link directo.
-  if (!idea || !idea.published_at || idea.deleted_at) return null;
+  // Y el ESTADO ACTUAL manda: una tarea sacada de Greenlit a producción interna no se abre
+  // por link directo tampoco (misma regla que la lista del portal). (Pedro 2026-09-03)
+  if (!idea || !idea.published_at || idea.deleted_at || !ESTADOS_PORTAL.includes(idea.status)) return null;
 
   // La tarea debe pertenecer a ESTE cliente (por su brief).
   const { data: brief } = await db

@@ -9,6 +9,15 @@ import type { AssetStatus } from "@/lib/brand";
  * Fuente ÚNICA — la comparten el nav (pestañas) y la lista de tarjetas, para que no dividan
  * las mismas tareas de forma distinta.
  */
+/**
+ * Los ÚNICOS estados que el cliente ve en su portal: published (por revisar), in_corrections
+ * (el equipo trabaja sus cambios) y delivered (aprobado). Si un admin saca una tarea de
+ * Greenlit de vuelta a producción interna (in_progress/under_review/completed/todo), deja de
+ * ser client-facing y DESAPARECE del portal — el `published_at` viejo no basta para mostrarla,
+ * el estado ACTUAL manda (Pedro 2026-09-03). Fuente única del filtro de carga del portal.
+ */
+export const ESTADOS_PORTAL: AssetStatus[] = ["published", "in_corrections", "delivered"];
+
 export type BucketPortal = "activas" | "revision" | "aprobado";
 
 export function bucketPortal(status: AssetStatus): BucketPortal {
