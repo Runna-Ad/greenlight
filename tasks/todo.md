@@ -1,5 +1,14 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-03 — Control de Cambios: el lead confirma desde el panel (código en main, SIN push · sin migración)
+Pedro: confirmar sólo salía en el hover. Causa: `borrador`(=under_review) escondía el botón Confirmar Y compactaba
+el cambio atendido. Fix: Confirmar visible para no-cerrados (salvo borrador OPEN); lo atendido sale expandido; header
+y botón H.Ü.E usan `soloBorrador`. Render-check 6/6.
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+      Control de Cambios muestra la tarjeta expandida con el botón "Confirmar" (sin pasar el ratón); confirmar la cierra;
+      un borrador nuevo (sin enviar) sigue diciendo "sólo los ves tú" y sin Confirmar.
+
 ## 🟢 2026-09-03 — Portal Fase 2: drill-down por MARCA (código en main, SIN push · sin migración)
 Marca→briefs→tarea. Marca=filtro (un brief abarca ambas; aparece bajo las dos con sus tareas de esa marca).
 Auto-salto de niveles de 1 item. Back-nav. cargarPortal expone `marcas` + `marcaId` por tarea. Render-check 11/11.
