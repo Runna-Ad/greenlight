@@ -1,5 +1,13 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-03 — Portal: tarea sacada de Greenlit sale del portal (código en main, SIN push · sin migración)
+Pedro: aprobada→Greenlit→admin la mueve a producción interna → reaparecía como "activa". Causa: el portal filtraba por
+`published_at`, no por el estado ACTUAL. Fix: ESTADOS_PORTAL (published/in_corrections/delivered) en cargarPortal Y
+cargarTareaPortal (link directo). Vuelve a producción interna → fuera del portal; re-publicada → reaparece.
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
+      "En progreso" → en el portal del cliente DESAPARECE (no queda como activa); re-publicarla → reaparece por revisar.
+
 ## 🟢 2026-09-03 — H.Ü.E revisa ortografía en CADA envío a revisión + 3ª puerta gateada (código en main, SIN push · sin migración)
 Pedro: al devolver a revisión tras corregir, H.Ü.E no revisaba. Causa: colgaba sólo del verbo submit_review; `devolver`
 (in_corrections→under_review) se lo saltaba. Fix: ortografia + gate de cortinilla en submit_review Y devolver.
