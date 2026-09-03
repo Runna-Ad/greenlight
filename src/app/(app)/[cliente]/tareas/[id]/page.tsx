@@ -426,11 +426,13 @@ export default async function TareaPage({
     ? `Notas de guión: ${notaG}`
     : "Notas de guión (p. ej. # de outfits, tono, continuidad)…";
 
-  // Cambios del CLIENTE enviados sin resolver → la tarea es cancha del LEAD (él edita y
-  // reenvía, o reasigna); el especialista no la retoma. (Enviado = ronda asignada; sin
-  // resolver = resolved_at null — espeja el gate de rpc_lead_reenvia_cliente.)
-  const cambiosClientePend = (cambiosCliente ?? []).filter((c) => c.ronda != null && !c.resolved_at);
-  const clientChangesPending = idea.status === "in_corrections" && cambiosClientePend.length > 0;
+  // La tarea es cancha del LEAD (él edita y reenvía, o reasigna; el especialista no la
+  // retoma) mientras haya cambios del cliente ENVIADOS esta ronda (ronda != null) — sin
+  // importar si ya los confirmó. La cancha vuelve al enviar/reasignar (cambia el status),
+  // NO al confirmar cada cambio: antes, confirmar el ÚLTIMO ponía la cuenta en 0 y hacía
+  // DESAPARECER la barra "Enviar a cliente" justo cuando el lead iba a enviar. (Pedro 2026-09-03)
+  const cambiosClienteRonda = (cambiosCliente ?? []).filter((c) => c.ronda != null);
+  const clientChangesPending = idea.status === "in_corrections" && cambiosClienteRonda.length > 0;
   // El lead responsable ACTUAL (para conservarlo al reasignar).
   const leadActualId = personas.find((p) => p.es_lead)?.id ?? null;
 
@@ -496,7 +498,7 @@ export default async function TareaPage({
           {clientChangesPending && canOverrideStatus(role) && (
             <BannerCambiosCliente
               ideaId={idea.id}
-              nCambios={cambiosClientePend.length}
+              nCambios={cambiosClienteRonda.length}
               leadActualId={leadActualId}
               especialistasPool={especialistasPool}
             />
