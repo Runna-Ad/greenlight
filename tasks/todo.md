@@ -1,5 +1,13 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-03 — Portal Fase 2: drill-down por MARCA (código en main, SIN push · sin migración)
+Marca→briefs→tarea. Marca=filtro (un brief abarca ambas; aparece bajo las dos con sus tareas de esa marca).
+Auto-salto de niveles de 1 item. Back-nav. cargarPortal expone `marcas` + `marcaId` por tarea. Render-check 11/11.
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+      #briefs); click marca → briefs de esa marca con conteos por estado + desplegable de tareas; click brief → la vista
+      con las 3 pestañas filtrada a la marca; back-nav funciona; con 1 sola marca se salta directo a sus briefs; en móvil OK.
+
 ## 🟢 2026-09-03 — Portal: tarea sacada de Greenlit sale del portal (código en main, SIN push · sin migración)
 Pedro: aprobada→Greenlit→admin la mueve a producción interna → reaparecía como "activa". Causa: el portal filtraba por
 `published_at`, no por el estado ACTUAL. Fix: ESTADOS_PORTAL (published/in_corrections/delivered) en cargarPortal Y
