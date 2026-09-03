@@ -75,6 +75,11 @@ export function PanelCorrecciones() {
     (c) => c.targetTabla === "copies" || c.targetTabla === "copies_temas",
   );
   const esLegal = ctx.correcciones.some((c) => c.targetTabla === "ideas");
+  // `borrador` (=status under_review) es DEMASIADO amplio: también es true cuando el
+  // especialista DEVUELVE la tarea a revisión y hay cambios ATENDIDOS por confirmar. El
+  // mensaje de "borrador" y ocultar Confirmar/H.Ü.E sólo aplica cuando de verdad es una
+  // ronda nueva sin nada enviado (todas OPEN). (Pedro 2026-09-03)
+  const soloBorrador = ctx.borrador && ctx.correcciones.every((c) => c.estado === "open");
 
   return (
     <aside className="rounded-xl border border-border bg-card shadow-sm">
@@ -92,7 +97,7 @@ export function PanelCorrecciones() {
         </h2>
         <p className="mt-1 text-[11.5px] text-muted-foreground">
           {ctx.esRevisor
-            ? ctx.borrador
+            ? soloBorrador
               // Ronda en BORRADOR: todavía no se manda nada. Nada que confirmar ni revisar.
               ? "Anota los cambios que quieras y mándalos cuando termines: hasta entonces sólo los ves tú."
               : "Confirma cada una al revisarla; la tarea se aprueba cuando no quede ninguna en rojo."
@@ -101,7 +106,7 @@ export function PanelCorrecciones() {
         {/* H.Ü.E revisa cada cambio de la ronda y da dictamen + sugerencia — ADVISORY,
             ayuda a revisar; el lead decide. Disponible siempre que haya cambios que
             revisar (no sólo mientras quedan sin confirmar). */}
-        {ctx.esRevisor && !ctx.borrador && !esCopies && !esLegal && (
+        {ctx.esRevisor && !soloBorrador && !esCopies && !esLegal && (
           <button
             type="button"
             disabled={ctx.validando}
@@ -147,14 +152,16 @@ export function PanelCorrecciones() {
               {visible && (
                 <div className="grid gap-2 px-2.5 pb-2.5">
                   {(() => {
-                    // Resueltos (atendido/confirmado) → compactos siempre. Abiertos (rojo) →
-                    // los primeros 5 expandidos, el resto compacto. El default se invierte con
-                    // el toggle manual (alternados). Así el panel encoge al ir resolviendo.
+                    // Sólo lo CONFIRMADO (closed) se compacta por default — el panel encoge al
+                    // ir confirmando. Lo ATENDIDO (done · POR CONFIRMAR) queda EXPANDIDO: es
+                    // accionable para el lead (su botón Confirmar debe verse sin expandir a mano;
+                    // antes se compactaba y el confirm sólo salía en el hover). Abiertos (rojo):
+                    // los primeros 5 expandidos, el resto compacto. Se invierte con el toggle. (Pedro 2026-09-03)
                     let abiertasVistas = 0;
                     return items.map((c) => {
-                      const resuelta = c.estado !== "open";
                       let compactaDefault: boolean;
-                      if (resuelta) compactaDefault = true;
+                      if (c.estado === "closed") compactaDefault = true;
+                      else if (c.estado === "done") compactaDefault = false;
                       else {
                         compactaDefault = abiertasVistas >= 5;
                         abiertasVistas++;
@@ -266,9 +273,12 @@ export function PanelCorrecciones() {
                             Reabrir
                           </BtnAccion>
                         )}
-                        {/* Revisor: confirma cualquiera sin cerrar; reabre lo que ya
-                            tocó (ámbar o verde) — un confirm por error tiene vuelta. */}
-                        {ctx.esRevisor && !ctx.borrador && c.estado !== "closed" && (
+                        {/* Revisor: confirma cualquiera SIN CERRAR — salvo un borrador OPEN "Por
+                            enviar" (ése se manda, no se confirma). Un cambio ATENDIDO (ámbar) SÍ se
+                            confirma aunque la tarea esté de nuevo en under_review tras el retorno del
+                            especialista — antes el gate `!borrador` (=status under_review) lo escondía
+                            justo cuando el lead necesitaba confirmarlo; sólo salía en el hover. (Pedro 2026-09-03) */}
+                        {ctx.esRevisor && c.estado !== "closed" && !(ctx.borrador && c.estado === "open") && (
                           <BtnAccion disabled={ctx.pendiente} tone="go" onClick={() => ctx.marcar(c.id, "closed")}>
                             Confirmar
                           </BtnAccion>
