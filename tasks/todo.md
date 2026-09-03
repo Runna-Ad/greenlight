@@ -1,5 +1,13 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-03 — Cortinilla de cierre (legales) obligatoria para mandar a revisión (código en main, SIN push · sin migración)
+Pedro: no se puede mandar a revisión sin legales. `requiereCortinilla(plantilla)` (guion/estatico sí, copies no).
+Gate en servidor + las DOS puertas a under_review (botón submitForReview + drag/moveTask) + bloqueo en la UI.
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en un video/estático SIN legal, "Mandar a revisión" → bloqueado con "Agrega la
+      cortinilla de cierre (legales)…" (botón y arrastre al carril "En revisión"); con legal (snippet o texto libre)
+      → pasa normal; una tarea de COPIES se manda sin legal (no lleva cortinilla).
+
 ## 🟢 2026-09-03 — Portal: pestañas Activas / Aprobadas (código en main, SIN push · sin migración)
 Pedro: una tarea aprobada se quedaba en la lista abierta. El filtro "Aprobadas" YA existía pero escondido en un popover
 con default "Todas". Fix: dos pestañas visibles (Activas / Aprobadas) en el nav del portal, default Activas → la aprobada
