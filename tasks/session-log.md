@@ -1,5 +1,29 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-03 — CIERRE DE SESIÓN (reap pre-lanzamiento + 4 features) — TODO SHIPPEADO + LIVE
+Sesión larga que arrancó confirmando la carpeta (`/Users/work/Projects/greenlight`; memoria y sesiones ya
+renombradas; S.P.A.M es OTRO proyecto) y terminó con el reap de pre-lanzamiento y sus follow-ups en producción.
+**Shippeado y verificado en prod (runna-greenlight.vercel.app):**
+- **Reap pre-lanzamiento deep** (6 agentes solo-lectura + verificación propia): 2 críticos, 11 serios, ~25 mejoras
+  (main 4077c52). **Migración 0061** (actor no se auto-avisa, inactivos sin correos, `rpc_set_assignees`, candado de
+  rutinas — aplicada al esquema `produccion`, ref ybbrpqzbedaxsmotgtkh) + `asignarTarea`→RPC. Hotfix `/robots.txt` público.
+- **3 features** (689dc93): crear cliente en Admin, buscador global acotado por identidad, invitación manual al equipo.
+- **Portal "En proceso"** (48686f5): el cliente ve sus cambios enviados mientras el equipo los trabaja (tercer bucket
+  read-only entre "sin enviar" y "aplicado"). Sin migración.
+**Hallazgo clave de estado:** el **login YA está ENCENDIDO y forzado en prod** (AUTH_ENABLED=true; /clientes, /admin,
+/mi-trabajo → 307 /login; llave pública 401 en todo). El gran gate de go-live ("prender el login") ya está cruzado.
+La mayor parte del HANDOFF-golive (login core, acceso de cliente, brief fail-safe, settings CRUD) ya está construido y vivo.
+**Qué falta para el lanzamiento oficial (NADA de código bloquea):** (1) el walkthrough autenticado de Pedro (checklist en
+todo.md — incl. el nuevo flujo de portal como cliente, y todo lo gateado por rol que no se ve en local con login apagado);
+(2) decisión de blank-slate reset (prod tiene ~2 briefs — ¿test o real?); (3) onboardear al equipo real y a DiDi.
+Pedro descartó el cap de gasto de H.Ü.E por ahora ("está muy controlado, se agrega después").
+**Gates a lo largo de la sesión:** tsc 0 · lint 0 · lib 473 · db 377 · import 81 · sync 44 · build OK.
+**Verificación de deploy:** por el commit status de Vercel en GitHub (no por el orden de `vercel ls` — un preview de
+Dependabot lo tapaba). Todos los deploys llegaron a success.
+**Procesos:** sin dev servers (preview_list vacío), sin watchers vivos (todos los bounded terminaron), pestaña del browser
+cerrada. Working tree limpio, todo pusheado.
+**Pick up next session:** el walkthrough de Pedro y las 3 tareas operativas de arriba. No hay build pendiente.
+
 ## 2026-09-02 (noche 3) — 3 features del reap (crear cliente · buscador · invitar) — SHIPPEADO + LIVE
 Pedro pidió construir 1, 2 y 3b (3 se deja como está; 3a ya existía). Commits 689dc93 (feat) + f8e9767 (docs),
 push a main con su "ship it". Deploy Production `dpl_G6E7Ks…` Ready, alias runna-greenlight. Sin migración.
@@ -1620,4 +1644,37 @@ se ve igual que la respuesta correcta).
 - [ ] **6. No construir** (recomendación explícita): ajustes de notificación dentro del portal del
 - [ ] UNIQUE (opcional, no corrido): crear "Card" duplicada → "Ya existe…". (skip, no crítico.)
 - [ ] FASE 1 (sync/import.ts, acotado): pool con role+es_lead; matchLead inteligente (exact/prefix/
+
+
+## 2026-09-03 09:30
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro (sesión autenticada, no visible en local con login apagado)**: Admin › Clientes crea
+- [ ] **LIVE-VERIFY de Pedro (sesión autenticada)**: como lead, asignarse a sí mismo → SIN aviso "se te asignó"; dar de baja a
+- [ ] **Decisiones de Pedro** (no se tocó): crear clientes en la app (el botón dice "desde Admin" y Admin no lo tiene) · sheet por cliente
+- [ ] Deuda menor anotada: hex duplicados (#2d2b55/#d9d2f0, #00e676 fuera de var) · empty states ad-hoc en board/briefs · setup-storage no
+- [ ] **1. Paso de pruebas de Pedro** (la única puerta): Fases 2/3/4 · borrador de correcciones ·
+- [ ] **5. Decisión abierta**: hoy "borrador" = sólo `under_review`. Si el lead fija un cambio con la
+- [ ] **6. No construir** (recomendación explícita): ajustes de notificación dentro del portal del
+- [ ] UNIQUE (opcional, no corrido): crear "Card" duplicada → "Ya existe…". (skip, no crítico.)
+- [ ] FASE 1 (sync/import.ts, acotado): pool con role+es_lead; matchLead inteligente (exact/prefix/
+- [ ] FASE 2: retirar vocab.ts ASIGNACION → picker in-task del pool vivo; el lead asigna especialistas (es_lead=false).
+
+
+## 2026-09-03 10:02
+**Shipped (recent commits):**
+  - docs: portal cambios en proceso — todo
+  - feat(portal): el cliente ve sus cambios "en proceso" mientras el equipo los trabaja
+
+**Still open:**
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = rol cliente, no visible en local con login apagado): como cliente, "Pedir cambios"
+- [ ] **LIVE-VERIFY de Pedro (sesión autenticada, no visible en local con login apagado)**: Admin › Clientes crea
+- [ ] **LIVE-VERIFY de Pedro (sesión autenticada)**: como lead, asignarse a sí mismo → SIN aviso "se te asignó"; dar de baja a
+- [ ] **Decisiones de Pedro** (no se tocó): crear clientes en la app (el botón dice "desde Admin" y Admin no lo tiene) · sheet por cliente
+- [ ] Deuda menor anotada: hex duplicados (#2d2b55/#d9d2f0, #00e676 fuera de var) · empty states ad-hoc en board/briefs · setup-storage no
+- [ ] **1. Paso de pruebas de Pedro** (la única puerta): Fases 2/3/4 · borrador de correcciones ·
+- [ ] **5. Decisión abierta**: hoy "borrador" = sólo `under_review`. Si el lead fija un cambio con la
+- [ ] **6. No construir** (recomendación explícita): ajustes de notificación dentro del portal del
+- [ ] UNIQUE (opcional, no corrido): crear "Card" duplicada → "Ya existe…". (skip, no crítico.)
 

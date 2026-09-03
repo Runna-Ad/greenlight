@@ -6,7 +6,13 @@
 > carpeta de código `/Users/work/Projects/greenlight` (⏳ pendiente el `mv` local con el desktop app cerrado) ·
 > carpeta de MARCA `/Users/work/Documents/Claude/Projects/Greenlight` (no es código; el repo es público) ·
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
-Última actualización: 2026-09-02 (noche) — REAP PRE-LANZAMIENTO deep **SHIPPEADO + LIVE**: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
+Última actualización: 2026-09-03 — REAP + 4 features **SHIPPEADO + LIVE** (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
+
+## ✅ 2026-09-03 — Follow-ups del reap — SHIPPEADO + LIVE
+- **3 features** (689dc93, LIVE): crear cliente en Admin, buscador global acotado por identidad, invitación manual al equipo.
+- **Portal "En proceso"** (48686f5, LIVE, sin migración): el cliente ve sus cambios enviados-sin-resolver durante in_corrections.
+- **Estado de lanzamiento:** login YA encendido/forzado en prod (AUTH_ENABLED=true). Falta SÓLO: walkthrough autenticado de
+  Pedro, decisión de blank-slate reset, onboarding de equipo + DiDi. H.Ü.E spend cap: pospuesto por Pedro.
 
 ## ✅ 2026-09-02 (noche) — REAP PRE-LANZAMIENTO (deep) — SHIPPEADO + LIVE (main 977d7cf, 0061 aplicada)
 - **main** (LIVE): `4077c52` fixes (auth cerrada: proxy/portal/baja de equipo/provision; un solo pool
