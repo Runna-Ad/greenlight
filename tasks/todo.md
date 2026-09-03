@@ -1,5 +1,14 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-03 — Portal: pestañas Activas / Aprobadas (código en main, SIN push · sin migración)
+Pedro: una tarea aprobada se quedaba en la lista abierta. El filtro "Aprobadas" YA existía pero escondido en un popover
+con default "Todas". Fix: dos pestañas visibles (Activas / Aprobadas) en el nav del portal, default Activas → la aprobada
+sale del flujo. Toast de aprobar lo dice. Un link a una tarea ya aprobada abre en Aprobadas.
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = rol cliente, no visible en local con login apagado): como cliente, aprobar una
+      tarea → desaparece de "Activas" y aparece en "Aprobadas" (con toast); el contador de cada pestaña cuadra; un enlace
+      directo a una tarea aprobada abre en la pestaña Aprobadas; en móvil el nav sigue sin romperse (scroll horizontal ok).
+
 ## 🟢 2026-09-02 (noche 4) — Portal: el cliente ve sus cambios "En proceso" (código en main, SIN push · sin migración)
 Commit del feat(portal). Tercer bucket `enProceso` (ronda!=null, resolved_at null) en portal-data → contexto cliente →
 PanelControlCambios (grupo "En proceso", gris neutro). El panel ahora sale durante in_corrections.
