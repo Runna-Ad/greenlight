@@ -92,11 +92,6 @@ export function PortalNav({
   selBriefId: string | null;
   selTareaId: string | null;
 }) {
-  const [filtro, setFiltro] = useState<Vista>(() => {
-    const b = briefs.find((x) => x.id === selBriefId) ?? briefs[0] ?? null;
-    const st = b?.tasks.find((t) => t.id === selTareaId)?.status;
-    return st === "delivered" ? "aprobado" : "activas";
-  });
   const [openBrief, setOpenBrief] = useState(false);
   const [openTareas, setOpenTareas] = useState(false);
   const marca = cliente.brandColor;
@@ -106,8 +101,14 @@ export function PortalNav({
 
   const tareas = brief?.tasks ?? [];
   const cuenta = (k: Vista) => tareas.filter((t) => enVista(t.status, k)).length;
-  // La lista que recorren las flechas y muestra el dropdown de tareas — respeta la pestaña.
-  const visibles = tareas.filter((t) => enVista(t.status, filtro));
+  // La pestaña ACTIVA se deriva de la tarea EN PANTALLA (no de un estado local muerto): si
+  // estás viendo una aprobada, estás en "Aprobadas". Así el tab refleja dónde estás, y
+  // clic en el otro tab NAVEGA a su primera tarea (Link abajo). (fix Pedro 2026-09-03)
+  const tareaEnPantalla = tareas.find((t) => t.id === selTareaId) ?? null;
+  const vistaActual: Vista = tareaEnPantalla && esAprobada(tareaEnPantalla.status) ? "aprobado" : "activas";
+  const primeraDe = (k: Vista) => tareas.find((t) => enVista(t.status, k)) ?? null;
+  // Las flechas y el dropdown recorren SÓLO la cubeta de la tarea en pantalla.
+  const visibles = tareas.filter((t) => enVista(t.status, vistaActual));
   const idx = visibles.findIndex((t) => t.id === selTareaId);
   const prev = idx > 0 ? visibles[idx - 1] : null;
   // Si la tarea abierta no está en el filtro (idx=-1), "siguiente" salta a la primera.
@@ -250,33 +251,45 @@ export function PortalNav({
         >
           {VISTAS.map((v) => {
             const n = cuenta(v.k);
-            const activo = filtro === v.k;
-            // No deshabilitar la pestaña ACTIVA aunque quede en 0 (para poder volver a ella);
-            // Aprobadas sí se apaga si aún no hay ninguna aprobada.
-            const deshab = n === 0 && v.k === "aprobado" && filtro !== "aprobado";
-            return (
-              <button
-                key={v.k}
-                type="button"
-                role="tab"
-                aria-selected={activo}
-                disabled={deshab}
-                onClick={() => setFiltro(v.k)}
+            const activo = v.k === vistaActual;
+            const primera = primeraDe(v.k);
+            const clase = cn(
+              "inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors",
+              activo ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
+            );
+            const contador = (
+              <span
                 className={cn(
-                  "inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors disabled:cursor-default disabled:opacity-40",
-                  activo ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
+                  "rounded-full px-1.5 text-[11px] tabular-nums",
+                  activo ? "bg-white/20 text-primary-foreground" : "bg-secondary text-muted-foreground",
                 )}
               >
-                {v.label}
-                <span
-                  className={cn(
-                    "rounded-full px-1.5 text-[11px] tabular-nums",
-                    activo ? "bg-white/20 text-primary-foreground" : "bg-secondary text-muted-foreground",
-                  )}
-                >
-                  {n}
+                {n}
+              </span>
+            );
+            // Cubeta vacía → tab inerte (deshabilitado). Con tareas → Link que lleva a la
+            // PRIMERA de la cubeta, así el contenido de la página cambia de verdad.
+            if (!primera) {
+              return (
+                <span key={v.k} role="tab" aria-selected={false} aria-disabled className={cn(clase, "cursor-default opacity-40")}>
+                  {v.label}
+                  {contador}
                 </span>
-              </button>
+              );
+            }
+            return (
+              <Link
+                key={v.k}
+                href={href(brief!.id, primera.id)}
+                scroll={false}
+                role="tab"
+                aria-selected={activo}
+                aria-current={activo ? "page" : undefined}
+                className={clase}
+              >
+                {v.label}
+                {contador}
+              </Link>
             );
           })}
         </div>
