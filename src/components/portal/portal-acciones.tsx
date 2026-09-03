@@ -80,7 +80,7 @@ export function PortalAcciones({
         toast.error(res.error);
         return;
       }
-      toast.success("¡Aprobado! El equipo fue notificado.");
+      toast.success("¡Aprobado! El equipo fue notificado — la tarea pasó a la pestaña Aprobadas.");
       router.refresh();
     });
 

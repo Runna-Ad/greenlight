@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   FileText,
   ChevronDown,
-  SlidersHorizontal,
   ChevronLeft,
   ChevronRight,
   ListChecks,
@@ -30,14 +29,15 @@ const ESTADO_RE_REVIEW = { label: "Cambios listos", tone: "var(--primary)", Icon
 const estadoDeTarea = (t: PortalTarea) =>
   t.status === "published" && t.reReview ? ESTADO_RE_REVIEW : estadoCliente(t.status);
 
-// Cubetas del filtro (mismas 3 que ESTADO_CLIENTE + "todas").
-type Bucket = "todas" | "revisar" | "cambios" | "aprobado";
-const bucketDe = (s: string): Exclude<Bucket, "todas"> =>
-  s === "delivered" ? "aprobado" : s === "in_corrections" ? "cambios" : "revisar";
-const FILTROS: { k: Bucket; label: string }[] = [
-  { k: "todas", label: "Todas" },
-  { k: "revisar", label: "Por revisar" },
-  { k: "cambios", label: "En cambios" },
+// Dos pestañas: ACTIVAS (lo que aún necesita al cliente: por revisar + en cambios) y
+// APROBADAS (delivered). Antes era un filtro escondido en un popover con default "todas",
+// así que una tarea aprobada seguía en la lista abierta y ensuciaba el flujo (Pedro). El
+// badge por-tarea sigue distinguiendo "Por revisar" vs "En cambios" dentro de Activas.
+type Vista = "activas" | "aprobado";
+const esAprobada = (s: string) => s === "delivered";
+const enVista = (s: string, v: Vista) => (v === "aprobado" ? esAprobada(s) : !esAprobada(s));
+const VISTAS: { k: Vista; label: string }[] = [
+  { k: "activas", label: "Activas" },
   { k: "aprobado", label: "Aprobadas" },
 ];
 
@@ -92,20 +92,22 @@ export function PortalNav({
   selBriefId: string | null;
   selTareaId: string | null;
 }) {
-  const [filtro, setFiltro] = useState<Bucket>("todas");
+  const [filtro, setFiltro] = useState<Vista>(() => {
+    const b = briefs.find((x) => x.id === selBriefId) ?? briefs[0] ?? null;
+    const st = b?.tasks.find((t) => t.id === selTareaId)?.status;
+    return st === "delivered" ? "aprobado" : "activas";
+  });
   const [openBrief, setOpenBrief] = useState(false);
   const [openTareas, setOpenTareas] = useState(false);
-  const [openFiltro, setOpenFiltro] = useState(false);
   const marca = cliente.brandColor;
 
   const brief = briefs.find((b) => b.id === selBriefId) ?? briefs[0] ?? null;
   const grupos = useMemo(() => agruparPorMes(briefs), [briefs]);
 
   const tareas = brief?.tasks ?? [];
-  const cuenta = (k: Bucket) =>
-    k === "todas" ? tareas.length : tareas.filter((t) => bucketDe(t.status) === k).length;
-  // La lista que recorren las flechas y muestra el dropdown de tareas — respeta el filtro.
-  const visibles = tareas.filter((t) => filtro === "todas" || bucketDe(t.status) === filtro);
+  const cuenta = (k: Vista) => tareas.filter((t) => enVista(t.status, k)).length;
+  // La lista que recorren las flechas y muestra el dropdown de tareas — respeta la pestaña.
+  const visibles = tareas.filter((t) => enVista(t.status, filtro));
   const idx = visibles.findIndex((t) => t.id === selTareaId);
   const prev = idx > 0 ? visibles[idx - 1] : null;
   // Si la tarea abierta no está en el filtro (idx=-1), "siguiente" salta a la primera.
@@ -239,53 +241,45 @@ export function PortalNav({
           </PopoverContent>
         </Popover>
 
-        {/* Filtro por estado (funnel) — narra las flechas Y el dropdown de tareas */}
-        <Popover open={openFiltro} onOpenChange={setOpenFiltro}>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              aria-label="Filtrar por estado"
-              className={cn(
-                "relative inline-flex size-11 shrink-0 items-center justify-center rounded-lg border transition-colors",
-                filtro === "todas"
-                  ? "border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-secondary"
-                  : "border-primary bg-primary/10 text-primary",
-              )}
-            >
-              <SlidersHorizontal className="size-4" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-52 p-1.5">
-            <p className="px-2 pb-1 pt-0.5 text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">
-              Filtros
-            </p>
-            {FILTROS.map((f) => {
-              const n = cuenta(f.k);
-              const activo = filtro === f.k;
-              const deshab = n === 0 && f.k !== "todas";
-              return (
-                <button
-                  key={f.k}
-                  type="button"
-                  disabled={deshab}
-                  onClick={() => {
-                    setFiltro(f.k);
-                    setOpenFiltro(false);
-                  }}
+        {/* Pestañas Activas / Aprobadas — narran las flechas Y el dropdown de tareas.
+            Por defecto "Activas": las aprobadas salen del flujo de trabajo y viven aparte. */}
+        <div
+          role="tablist"
+          aria-label="Filtrar tareas"
+          className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border bg-card p-0.5"
+        >
+          {VISTAS.map((v) => {
+            const n = cuenta(v.k);
+            const activo = filtro === v.k;
+            // No deshabilitar la pestaña ACTIVA aunque quede en 0 (para poder volver a ella);
+            // Aprobadas sí se apaga si aún no hay ninguna aprobada.
+            const deshab = n === 0 && v.k === "aprobado" && filtro !== "aprobado";
+            return (
+              <button
+                key={v.k}
+                type="button"
+                role="tab"
+                aria-selected={activo}
+                disabled={deshab}
+                onClick={() => setFiltro(v.k)}
+                className={cn(
+                  "inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors disabled:cursor-default disabled:opacity-40",
+                  activo ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
+                )}
+              >
+                {v.label}
+                <span
                   className={cn(
-                    "flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors disabled:cursor-default disabled:opacity-40",
-                    activo ? "bg-secondary font-semibold text-foreground" : "text-foreground hover:bg-secondary",
+                    "rounded-full px-1.5 text-[11px] tabular-nums",
+                    activo ? "bg-white/20 text-primary-foreground" : "bg-secondary text-muted-foreground",
                   )}
                 >
-                  <span className="min-w-0 flex-1">{f.label}</span>
-                  <span className="shrink-0 rounded-full bg-secondary px-1.5 text-[11px] tabular-nums text-muted-foreground">
-                    {n}
-                  </span>
-                </button>
-              );
-            })}
-          </PopoverContent>
-        </Popover>
+                  {n}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
         {/* Flechas de navegación secuencial por las tareas (filtradas) del brief */}
         <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
