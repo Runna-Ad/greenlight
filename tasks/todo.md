@@ -1,5 +1,14 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-03 — "Enviar a cliente" no desaparece al confirmar un cambio (código en main, SIN push · sin migración)
+Pedro: confirmar un cambio del cliente borraba la barra "Enviar a cliente". Causa: la cancha del lead se medía por
+cambios SIN RESOLVER; confirmar el último la vaciaba. Fix: se mide por cambios ENVIADOS esta ronda (resueltos o no),
+en page.tsx (barra) y lib/cambios-pendientes (ocultar al especialista) — misma regla en ambas. Termina al enviar/reasignar.
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+      "Enviar a cliente / Reasignar" SIGUE ahí → enviar cierra la ronda; y el especialista no ve la tarea hasta que se
+      envíe/reasigne (no reaparece al confirmar el último).
+
 ## 🟢 2026-09-03 — Control de Cambios: el lead confirma desde el panel (código en main, SIN push · sin migración)
 Pedro: confirmar sólo salía en el hover. Causa: `borrador`(=under_review) escondía el botón Confirmar Y compactaba
 el cambio atendido. Fix: Confirmar visible para no-cerrados (salvo borrador OPEN); lo atendido sale expandido; header
