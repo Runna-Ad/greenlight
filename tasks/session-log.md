@@ -1,5 +1,22 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-03 (noche 2) — BLANK-SLATE RESET (content-only) — HECHO + VERIFICADO
+Pedro: "clean slate reset of the tasks/briefs both from agency and client portal" + (a media tarea) "no borres las
+learnings de H.Ü.E". Se usó `scripts/reset-blank-slate.mjs` (dry-run por default, --run destructivo, produccion-only,
+una transacción, re-cuenta al final). El script REHUSÓ correr al principio: 10 tablas nuevas sin clasificar (copies,
+copies_temas, hue_* , notification_prefs) — la red de seguridad funcionó. Clasificadas: contenido por-tarea (copies,
+hue_suggestions/generations/top_performers) → DELETE; cerebro/biblioteca de H.Ü.E (instructions/kb_documents/settings/
+adaptations) + notification_prefs → KEEP. Añadido flag **--content-only** (conserva track_members/profiles/pending_invites).
+**Ejecutado con el "run it" de Pedro:** 639 filas de contenido borradas en 1 transacción (ref ybbrpqzbedaxsmotgtkh,
+esquema produccion, target re-verificado ANTES). Post-count: briefs=0, ideas=0, assets=0, comments=0, staged_rows=0;
+KEEP intacto — clients 1, marcas 2, track_members 7, profiles 8, hue_instructions 7, hue_kb_documents 7, snippets 5,
+vocab 42, reglas 7, notification_prefs 43. Prod sirve (login 200) y la llave pública sigue en 401 (reset = sólo datos,
+RLS/grants intactos). El H.Ü.E BRAIN (learnings) se conservó a propósito (Pedro): sólo salieron los outputs por-tarea
+(3 generations + 6 suggestions) atados a las tareas de prueba borradas (cascade).
+Commit del script (6f18b0c, pusheado): clasificación de tablas nuevas + flag --content-only. No hay migración.
+**Estado de lanzamiento:** de las 3 tareas operativas, el RESET ya está hecho. Quedan: walkthrough autenticado de
+Pedro + onboarding del equipo/DiDi real.
+
 ## 2026-09-03 (tarde/noche) — CIERRE: reap + 0061 + 4 features + restructura del PORTAL — TODO SHIPPEADO + LIVE
 Sesión larguísima; todo en producción (runna-greenlight.vercel.app), verificado por el commit status de Vercel.
 **Bloque 1 (reap pre-lanzamiento, ya cerrado antes):** 2 críticos + 11 serios + ~25 mejoras (main 4077c52) · migración
@@ -1726,4 +1743,28 @@ se ve igual que la respuesta correcta).
 - [ ] **LIVE-VERIFY de Pedro (sesión autenticada)**: como lead, asignarse a sí mismo → SIN aviso "se te asignó"; dar de baja a
 - [ ] **Decisiones de Pedro** (no se tocó): crear clientes en la app (el botón dice "desde Admin" y Admin no lo tiene) · sheet por cliente
 - [ ] Deuda menor anotada: hex duplicados (#2d2b55/#d9d2f0, #00e676 fuera de var) · empty states ad-hoc en board/briefs · setup-storage no
+
+
+## 2026-09-03 12:03
+**Shipped (recent commits):**
+  - docs(wrap-up): cierre de sesión — reap + 0061 + 4 features + restructura del portal, todo LIVE
+  - docs: Enviar a cliente persiste al confirmar — todo
+  - fix(cambios cliente): confirmar un cambio ya no hace desaparecer "Enviar a cliente"
+  - docs: confirmar desde el panel de cambios — todo
+  - fix(correcciones): el lead confirma un cambio DESDE el panel (no sólo en el hover)
+  - docs: portal Fase 2 (drill-down por marca) — todo
+  - feat(portal): Fase 2 — drill-down por MARCA (Card/Préstamos) → briefs → tarea
+  - docs: tarea fuera de Greenlit sale del portal — todo
+
+**Still open:**
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: tarea devuelta por el lead → especialista corrige → "Devolver a revisión" → H.Ü.E
 
