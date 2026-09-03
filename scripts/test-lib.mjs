@@ -4,7 +4,7 @@ import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.t
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
 import { actionsFor, waitingLabel, transicionRequiereLead } from "../src/lib/task-actions.ts";
 import { filtroBundle, greenlitDeBundle, bundleEnCurso, esGreenlitReciente, MS_VENTANA_GREENLIT } from "../src/lib/bundle.ts";
-import { plantillaPara, readTimeS, soloHablado, PALABRAS_POR_MINUTO, parseDuracion, presupuestoDialogoS, LEGAL_SECONDS, COLCHON_MIN_S, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
+import { plantillaPara, requiereCortinilla, readTimeS, soloHablado, PALABRAS_POR_MINUTO, parseDuracion, presupuestoDialogoS, LEGAL_SECONDS, COLCHON_MIN_S, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
@@ -229,6 +229,10 @@ console.log("\n▶ Plantilla de trabajo");
 eq("los 4 tipos de video usan el guión",
    ["RP Video","Normal Video","AIGC video","GIF"].every(t => plantillaPara(t) === "guion"), true);
 eq("Images usa la plantilla de estático", plantillaPara("Images"), "estatico");
+// Cortinilla de cierre (legales) obligatoria: video y estático sí, copies no (gate de revisión).
+ok("video requiere cortinilla", requiereCortinilla("guion") === true);
+ok("estático requiere cortinilla", requiereCortinilla("estatico") === true);
+ok("copies NO requiere cortinilla", requiereCortinilla("copies") === false);
 eq("Copies tiene la suya", plantillaPara("Copies"), "copies");
 eq("un tipo desconocido cae en guión", plantillaPara("Podcast"), "guion");
 

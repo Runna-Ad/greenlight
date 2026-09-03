@@ -58,6 +58,7 @@ export function AccionesTarea({
   status,
   ctx,
   abiertas,
+  faltaLegal = false,
   variante = "compacta",
 }: {
   ideaId: string;
@@ -66,6 +67,8 @@ export function AccionesTarea({
   ctx: TaskContext;
   /** Correcciones sin atender (rojas) en la ronda actual. */
   abiertas: number;
+  /** Falta la cortinilla obligatoria (legales) → no se puede mandar a revisión. */
+  faltaLegal?: boolean;
   variante?: "compacta" | "prominente";
 }) {
   const router = useRouter();
@@ -116,6 +119,12 @@ export function AccionesTarea({
     startTransition(async () => {
       // "Mandar a revisión" pasa primero por el corrector de H.Ü.E (surface+override).
       if (a.verb === "submit_review") {
+        // Cortinilla de cierre (legales) obligatoria: sin ella no se manda (Pedro). El
+        // servidor lo gatea igual; aquí se evita el viaje y se dice claro qué falta.
+        if (faltaLegal) {
+          toast.error("Agrega la cortinilla de cierre (legales) antes de mandar a revisión.");
+          return;
+        }
         const r = await revisarOrtografia(ideaId, { planos, estatico });
         if (r.ok && (r.errores.length > 0 || r.flags.length > 0)) {
           setErrores(r.errores);

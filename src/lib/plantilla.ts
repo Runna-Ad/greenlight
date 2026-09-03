@@ -87,6 +87,14 @@ export function readTimeS(dialogo: string | null | undefined): number {
 export const LEGAL_SECONDS = 2;
 
 /**
+ * ¿Esta plantilla lleva CORTINILLA DE CIERRE (legales) obligatoria? Video (guion) y
+ * estático la llevan — su bloque "Legales" se edita en la tarea (BloqueLegal). Copies no
+ * tiene cortinilla. Sirve para GATEAR el "Mandar a revisión": no se manda sin legal.
+ * (Pedro 2026-09-03)
+ */
+export const requiereCortinilla = (plantilla: Plantilla): boolean => plantilla !== "copies";
+
+/**
  * Colchón MÍNIMO en segundos entre la duración objetivo del guión y el TOPE del rango
  * (Pedro, 2026-08-27). Para un valor único ("30") el rango es de 0, así que este mínimo
  * es lo único que separa el objetivo del tope: "30" → objetivo 26, y el 30 nunca se

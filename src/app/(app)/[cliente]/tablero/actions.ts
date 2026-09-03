@@ -16,6 +16,7 @@ import { transicionRequiereLead } from "@/lib/task-actions";
 import { getCurrentUser } from "@/lib/identity";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import type { AssetStatus } from "@/lib/brand";
+import { plantillaPara, requiereCortinilla } from "@/lib/plantilla";
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -43,6 +44,32 @@ async function revalidateFor(db: Db, ideaId: string) {
   }
   revalidatePath("/mi-trabajo");
   revalidatePath("/entregas");
+}
+
+const MSG_FALTA_LEGAL =
+  "Agrega la cortinilla de cierre (legales) antes de mandar a revisión.";
+
+/**
+ * La cortinilla de cierre (legales) es OBLIGATORIA para mandar a revisión: video y
+ * estático la llevan (copies no). "Tiene legal" = un snippet legal elegido (idea_snippets,
+ * que sólo guarda legales) O texto libre en `ideas.legales_libres`. Se comprueba en el
+ * SERVIDOR y en LAS DOS puertas a `under_review` (el botón "Mandar a revisión" y el arrastre
+ * del tablero), no sólo en la UI. (Pedro 2026-09-03)
+ */
+async function faltaCortinilla(db: Db, ideaId: string): Promise<boolean> {
+  const { data: idea } = await db
+    .from("ideas")
+    .select("tipo_asset, legales_libres")
+    .eq("id", ideaId)
+    .maybeSingle<{ tipo_asset: string | null; legales_libres: string | null }>();
+  if (!idea) return false; // la tarea ya no existe: que el flujo normal lo maneje
+  if (!requiereCortinilla(plantillaPara(idea.tipo_asset))) return false; // copies no lleva
+  if (idea.legales_libres?.trim()) return false; // legal por texto libre
+  const { count } = await db
+    .from("idea_snippets")
+    .select("*", { count: "exact", head: true })
+    .eq("idea_id", ideaId);
+  return (count ?? 0) === 0; // sin snippet legal elegido tampoco → falta
 }
 
 /** Contexto común: quién eres, con qué rol miras, y tu perfil (para atribución).
@@ -89,6 +116,11 @@ export async function moveTask(
   const from = cur?.status;
   if (from && transicionRequiereLead(from, toStatus) && !canOverrideStatus(role)) {
     return { ok: false, error: "Sólo un lead puede aprobar, enviar al cliente o entregar." };
+  }
+  // Cortinilla obligatoria: arrastrar/mover a "En revisión" es la MISMA puerta que el
+  // botón "Mandar a revisión" — se gatea igual, o el legal se saltaría por el tablero.
+  if (toStatus === "under_review" && (await faltaCortinilla(db, ideaId))) {
+    return { ok: false, error: MSG_FALTA_LEGAL };
   }
 
   const { error } = await db.rpc("rpc_move_task", {
@@ -147,6 +179,7 @@ export async function submitForReview(ideaId: string, note?: string): Promise<Ac
   if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
+  if (await faltaCortinilla(db, ideaId)) return { ok: false, error: MSG_FALTA_LEGAL };
   const { error } = await db.rpc("rpc_task_submit_review", {
     p_idea_id: ideaId,
     p_actor_member: soyId,

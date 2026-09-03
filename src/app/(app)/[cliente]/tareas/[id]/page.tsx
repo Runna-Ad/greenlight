@@ -11,7 +11,7 @@ import {
 } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
 import { type AssetStatus } from "@/lib/brand";
-import { ESTADOS_SOLO_LECTURA, plantillaPara, notaGlobal, LEGAL_SECONDS } from "@/lib/plantilla";
+import { ESTADOS_SOLO_LECTURA, plantillaPara, requiereCortinilla, notaGlobal, LEGAL_SECONDS } from "@/lib/plantilla";
 import { posicionEnBundle } from "@/lib/bundle";
 import { cargarBundle } from "@/lib/bundle-data";
 import { CorreccionesProvider } from "@/components/tarea/correcciones/contexto";
@@ -298,6 +298,9 @@ export default async function TareaPage({
   // los 2s SÓLO si la tarea lleva legal (snippet elegido o texto libre); 0 si no.
   const cortinillaTexto = legalesSeleccionados[0]?.body ?? idea.legales_libres ?? "";
   const cortinillaS = cortinillaTexto.trim() ? LEGAL_SECONDS : 0;
+  // Falta la cortinilla obligatoria (legales) → bloquea "Mandar a revisión" en la UI
+  // (el servidor lo gatea igual). Copies no lleva cortinilla. (Pedro 2026-09-03)
+  const faltaLegal = requiereCortinilla(plantilla) && !cortinillaTexto.trim();
 
   // Phase B — legal sugerido para este guión (determinista, por marca). Se computa
   // sobre el guión GUARDADO (la fuente legalmente relevante); el humano confirma.
@@ -479,6 +482,7 @@ export default async function TareaPage({
               ideaId={idea.id}
               status={idea.status}
               ctx={ctx}
+              faltaLegal={faltaLegal}
               abiertas={abiertasN}
               indice={posicion.indice}
               total={posicion.total}
