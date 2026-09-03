@@ -15,33 +15,19 @@ import {
 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import type { PortalBrief, PortalTarea } from "@/app/(app)/[cliente]/portal/portal-data";
+import { bucketPortal, estadoCliente, BUCKETS_PORTAL, type BucketPortal } from "@/lib/portal-bucket";
 import { cn } from "@/lib/utils";
 
-// Estado en palabras del cliente (no la máquina de estados interna). Igual que en portal-shell.
-const ESTADO_CLIENTE: Record<string, { label: string; tone: string; Icon: typeof Eye }> = {
-  delivered: { label: "Aprobado", tone: "var(--status-completed)", Icon: CheckCircle2 },
-  in_corrections: { label: "En cambios", tone: "var(--status-corrections)", Icon: RefreshCw },
-};
-const estadoCliente = (s: string) =>
-  ESTADO_CLIENTE[s] ?? { label: "Por revisar", tone: "var(--status-progress)", Icon: Eye };
-// La tarea volvió tras una ronda (published + reReview): morado, NO verde (el verde es "Aprobado").
-const ESTADO_RE_REVIEW = { label: "Cambios listos", tone: "var(--primary)", Icon: CheckCheck };
-const estadoDeTarea = (t: PortalTarea) =>
-  t.status === "published" && t.reReview ? ESTADO_RE_REVIEW : estadoCliente(t.status);
-
-// Dos pestañas: ACTIVAS (lo que aún necesita al cliente: por revisar + en cambios) y
-// APROBADAS (delivered). Antes era un filtro escondido en un popover con default "todas",
-// así que una tarea aprobada seguía en la lista abierta y ensuciaba el flujo (Pedro). El
-// badge por-tarea sigue distinguiendo "Por revisar" vs "En cambios" dentro de Activas.
-type Vista = "activas" | "aprobado";
-const esAprobada = (s: string) => s === "delivered";
-const enVista = (s: string, v: Vista) => (v === "aprobado" ? esAprobada(s) : !esAprobada(s));
-const VISTAS: { k: Vista; label: string }[] = [
-  { k: "activas", label: "Activas" },
-  { k: "aprobado", label: "Aprobadas" },
-];
+/** Ícono por estado — la etiqueta/color viene de estadoCliente (compartido con las cards). */
+function iconoDe(t: PortalTarea) {
+  if (t.status === "delivered") return CheckCircle2;
+  if (t.status === "in_corrections") return RefreshCw;
+  if (t.status === "published" && t.reReview) return CheckCheck;
+  return Eye;
+}
 
 const href = (brief: string, tarea: string) => `?brief=${brief}&tarea=${tarea}`;
+const hrefLista = (brief: string, bucket: BucketPortal) => `?brief=${brief}&vista=${bucket}`;
 const nombreTarea = (t: PortalTarea) => t.naming ?? t.code ?? "Idea";
 
 // Agrupa los briefs por MES de su fecha para el selector (los sin fecha van al final).
@@ -69,14 +55,14 @@ function agruparPorMes(briefs: PortalBrief[]): { titulo: string; items: PortalBr
 }
 
 /**
- * El header STICKY del portal (Pedro): consolida toda la navegación de briefs/tareas en
- * una sola barra que se queda arriba al hacer scroll — así el cliente cambia de tarea sin
- * volver arriba. Tres popovers (Brief · Ver detalle de tareas · Filtro) + flechas ← N/M →
- * que recorren SECUENCIALMENTE las tareas (filtradas) del brief seleccionado. Pega bajo el
- * Topbar de la app (top-16); la barra de acción del cliente (PortalAcciones) baja debajo,
- * a la altura que el shell MIDE de este nav (`ref` → `--portal-nav-h`), no a un número fijo.
- *
- * Todos los controles miden ≥44px (WCAG 2.5.5 AAA): el portal se usa desde el teléfono.
+ * El header STICKY del portal. Tres pestañas — Activas (por revisar) · En revisión (el
+ * equipo trabaja tus cambios) · Aprobadas (delivered):
+ *   · Activas es el FLUJO DE REVISIÓN — una tarea + flechas ← N/M → para recorrerlas.
+ *   · En revisión / Aprobadas son LISTAS DE TARJETAS (modo lista, `?vista=`): el cliente no
+ *     tiene nada urgente ahí, las ve como tablero y abre la que quiera. (Pedro 2026-09-03)
+ * En modo lista las flechas y el dropdown de tareas se ocultan (la lista ES la navegación).
+ * Pega bajo el Topbar (top-16); la barra de acción del cliente lee la altura medida
+ * (`ref` → `--portal-nav-h`). Todos los controles ≥44px (se usa desde el teléfono).
  */
 export function PortalNav({
   ref,
@@ -84,6 +70,7 @@ export function PortalNav({
   briefs,
   selBriefId,
   selTareaId,
+  vistaBucket,
 }: {
   /** El shell lo usa para medir la altura del nav (ResizeObserver). */
   ref?: Ref<HTMLDivElement>;
@@ -91,6 +78,8 @@ export function PortalNav({
   briefs: PortalBrief[];
   selBriefId: string | null;
   selTareaId: string | null;
+  /** Cubeta en modo LISTA (revision|aprobado), o null en modo DETALLE (tarea + flechas). */
+  vistaBucket: BucketPortal | null;
 }) {
   const [openBrief, setOpenBrief] = useState(false);
   const [openTareas, setOpenTareas] = useState(false);
@@ -100,18 +89,20 @@ export function PortalNav({
   const grupos = useMemo(() => agruparPorMes(briefs), [briefs]);
 
   const tareas = brief?.tasks ?? [];
-  const cuenta = (k: Vista) => tareas.filter((t) => enVista(t.status, k)).length;
-  // La pestaña ACTIVA se deriva de la tarea EN PANTALLA (no de un estado local muerto): si
-  // estás viendo una aprobada, estás en "Aprobadas". Así el tab refleja dónde estás, y
-  // clic en el otro tab NAVEGA a su primera tarea (Link abajo). (fix Pedro 2026-09-03)
+  const cuenta = (k: BucketPortal) => tareas.filter((t) => bucketPortal(t.status) === k).length;
+  const primeraDe = (k: BucketPortal) => tareas.find((t) => bucketPortal(t.status) === k) ?? null;
+
+  // La pestaña ACTIVA: en modo lista es la cubeta de la lista; en modo detalle se deriva de
+  // la tarea EN PANTALLA (si ves una aprobada, estás en "Aprobadas").
   const tareaEnPantalla = tareas.find((t) => t.id === selTareaId) ?? null;
-  const vistaActual: Vista = tareaEnPantalla && esAprobada(tareaEnPantalla.status) ? "aprobado" : "activas";
-  const primeraDe = (k: Vista) => tareas.find((t) => enVista(t.status, k)) ?? null;
-  // Las flechas y el dropdown recorren SÓLO la cubeta de la tarea en pantalla.
-  const visibles = tareas.filter((t) => enVista(t.status, vistaActual));
+  const vistaActual: BucketPortal =
+    vistaBucket ?? (tareaEnPantalla ? bucketPortal(tareaEnPantalla.status) : "activas");
+
+  // Modo DETALLE: las flechas y el dropdown recorren la cubeta de la tarea en pantalla.
+  const detalle = vistaBucket == null;
+  const visibles = tareas.filter((t) => bucketPortal(t.status) === vistaActual);
   const idx = visibles.findIndex((t) => t.id === selTareaId);
   const prev = idx > 0 ? visibles[idx - 1] : null;
-  // Si la tarea abierta no está en el filtro (idx=-1), "siguiente" salta a la primera.
   const next = idx < 0 ? visibles[0] ?? null : idx < visibles.length - 1 ? visibles[idx + 1] : null;
 
   return (
@@ -188,68 +179,71 @@ export function PortalNav({
           </PopoverContent>
         </Popover>
 
-        {/* "Ver detalle de tareas" — la lista (filtrada) del brief, navegable */}
-        <Popover open={openTareas} onOpenChange={setOpenTareas}>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
-            >
-              <ListChecks className="size-3.5 shrink-0" />
-              <span className="hidden sm:inline">Ver detalle de tareas</span>
-              <span className="sm:hidden">Tareas</span>
-              <ChevronDown className="size-3.5 shrink-0" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="max-h-[70vh] w-80 overflow-y-auto p-0">
-            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 border-b border-border bg-secondary/70 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-              <span>Estado</span>
-              <span>Tareas</span>
-            </div>
-            {visibles.length === 0 ? (
-              <p className="px-3 py-6 text-center text-[13px] text-muted-foreground">Ninguna tarea en este estado.</p>
-            ) : (
-              visibles.map((t) => {
-                const est = estadoDeTarea(t);
-                const activo = t.id === selTareaId;
-                return (
-                  <Link
-                    key={t.id}
-                    href={href(brief!.id, t.id)}
-                    scroll={false}
-                    onClick={() => setOpenTareas(false)}
-                    aria-current={activo ? "true" : undefined}
-                    style={{
-                      boxShadow: activo ? `inset 3px 0 0 ${marca}` : undefined,
-                      background: activo ? `color-mix(in srgb, ${marca} 8%, transparent)` : undefined,
-                    }}
-                    className={cn(
-                      "grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 border-b border-border px-3 py-2 text-[13px] transition-colors last:border-b-0",
-                      !activo && "hover:bg-secondary/60",
-                    )}
-                  >
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
-                      style={{ background: `color-mix(in srgb, ${est.tone} 82%, #000)` }}
+        {/* "Ver detalle de tareas" — sólo en modo DETALLE (en lista, las tarjetas son la lista) */}
+        {detalle && (
+          <Popover open={openTareas} onOpenChange={setOpenTareas}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
+              >
+                <ListChecks className="size-3.5 shrink-0" />
+                <span className="hidden sm:inline">Ver detalle de tareas</span>
+                <span className="sm:hidden">Tareas</span>
+                <ChevronDown className="size-3.5 shrink-0" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="max-h-[70vh] w-80 overflow-y-auto p-0">
+              <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 border-b border-border bg-secondary/70 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                <span>Estado</span>
+                <span>Tareas</span>
+              </div>
+              {visibles.length === 0 ? (
+                <p className="px-3 py-6 text-center text-[13px] text-muted-foreground">Ninguna tarea en este estado.</p>
+              ) : (
+                visibles.map((t) => {
+                  const est = estadoCliente(t.status, t.reReview);
+                  const Icono = iconoDe(t);
+                  const activo = t.id === selTareaId;
+                  return (
+                    <Link
+                      key={t.id}
+                      href={href(brief!.id, t.id)}
+                      scroll={false}
+                      onClick={() => setOpenTareas(false)}
+                      aria-current={activo ? "true" : undefined}
+                      style={{
+                        boxShadow: activo ? `inset 3px 0 0 ${marca}` : undefined,
+                        background: activo ? `color-mix(in srgb, ${marca} 8%, transparent)` : undefined,
+                      }}
+                      className={cn(
+                        "grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 border-b border-border px-3 py-2 text-[13px] transition-colors last:border-b-0",
+                        !activo && "hover:bg-secondary/60",
+                      )}
                     >
-                      <est.Icon className="size-2.5" /> {est.label}
-                    </span>
-                    <span className="min-w-0 truncate font-semibold text-foreground">{nombreTarea(t)}</span>
-                  </Link>
-                );
-              })
-            )}
-          </PopoverContent>
-        </Popover>
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+                        style={{ background: `color-mix(in srgb, ${est.tone} 82%, #000)` }}
+                      >
+                        <Icono className="size-2.5" /> {est.label}
+                      </span>
+                      <span className="min-w-0 truncate font-semibold text-foreground">{nombreTarea(t)}</span>
+                    </Link>
+                  );
+                })
+              )}
+            </PopoverContent>
+          </Popover>
+        )}
 
-        {/* Pestañas Activas / Aprobadas — narran las flechas Y el dropdown de tareas.
-            Por defecto "Activas": las aprobadas salen del flujo de trabajo y viven aparte. */}
+        {/* Pestañas Activas · En revisión · Aprobadas. Activas → flujo de revisión (detalle);
+            En revisión / Aprobadas → lista de tarjetas. Cubeta vacía = pestaña deshabilitada. */}
         <div
           role="tablist"
-          aria-label="Filtrar tareas"
+          aria-label="Ver tareas por estado"
           className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border bg-card p-0.5"
         >
-          {VISTAS.map((v) => {
+          {BUCKETS_PORTAL.map((v) => {
             const n = cuenta(v.k);
             const activo = v.k === vistaActual;
             const primera = primeraDe(v.k);
@@ -267,8 +261,7 @@ export function PortalNav({
                 {n}
               </span>
             );
-            // Cubeta vacía → tab inerte (deshabilitado). Con tareas → Link que lleva a la
-            // PRIMERA de la cubeta, así el contenido de la página cambia de verdad.
+            // Cubeta vacía → pestaña inerte (no lleva a ningún lado).
             if (!primera) {
               return (
                 <span key={v.k} role="tab" aria-selected={false} aria-disabled className={cn(clase, "cursor-default opacity-40")}>
@@ -277,10 +270,13 @@ export function PortalNav({
                 </span>
               );
             }
+            // Activas → DETALLE de su primera tarea (flujo de revisión). En revisión /
+            // Aprobadas → modo LISTA (?vista=), un tablero de tarjetas.
+            const destino = v.k === "activas" ? href(brief!.id, primera.id) : hrefLista(brief!.id, v.k);
             return (
               <Link
                 key={v.k}
-                href={href(brief!.id, primera.id)}
+                href={destino}
                 scroll={false}
                 role="tab"
                 aria-selected={activo}
@@ -294,14 +290,16 @@ export function PortalNav({
           })}
         </div>
 
-        {/* Flechas de navegación secuencial por las tareas (filtradas) del brief */}
-        <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
-          <FlechaTarea brief={brief?.id} tarea={prev?.id} dir="prev" />
-          <span className="min-w-[3.5rem] text-center text-[13px] font-medium tabular-nums text-muted-foreground">
-            {idx >= 0 ? idx + 1 : "–"} / {visibles.length}
-          </span>
-          <FlechaTarea brief={brief?.id} tarea={next?.id} dir="next" />
-        </div>
+        {/* Flechas de navegación secuencial — sólo en modo DETALLE (en lista no aplican). */}
+        {detalle && (
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
+            <FlechaTarea brief={brief?.id} tarea={prev?.id} dir="prev" />
+            <span className="min-w-[3.5rem] text-center text-[13px] font-medium tabular-nums text-muted-foreground">
+              {idx >= 0 ? idx + 1 : "–"} / {visibles.length}
+            </span>
+            <FlechaTarea brief={brief?.id} tarea={next?.id} dir="next" />
+          </div>
+        )}
       </div>
     </div>
   );

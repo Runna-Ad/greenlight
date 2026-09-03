@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { PackageOpen } from "lucide-react";
 import type { PortalBrief } from "@/app/(app)/[cliente]/portal/portal-data";
+import type { BucketPortal } from "@/lib/portal-bucket";
 import { PortalNav } from "./portal-nav";
 
 export function PortalShell({
@@ -10,13 +11,16 @@ export function PortalShell({
   briefs,
   selBriefId,
   selTareaId,
+  vistaBucket,
   vista,
 }: {
   cliente: { name: string; logoUrl: string | null; brandColor: string };
   briefs: PortalBrief[];
   selBriefId: string | null;
   selTareaId: string | null;
-  /** La vista de sólo lectura de la tarea seleccionada (con su barra de acción). */
+  /** Cubeta en modo LISTA (revision|aprobado) o null en modo DETALLE — gobierna las pestañas. */
+  vistaBucket: BucketPortal | null;
+  /** El contenido: el detalle de la tarea seleccionada, o la lista de tarjetas de una cubeta. */
   vista: ReactNode;
 }) {
   const marca = cliente.brandColor;
@@ -86,14 +90,14 @@ export function PortalShell({
       {glow}
 
       {/* Navegación STICKY (briefs · tareas · filtro · flechas) — ancho completo. */}
-      <PortalNav ref={navRef} cliente={cliente} briefs={briefs} selBriefId={selBriefId} selTareaId={selTareaId} />
+      <PortalNav ref={navRef} cliente={cliente} briefs={briefs} selBriefId={selBriefId} selTareaId={selTareaId} vistaBucket={vistaBucket} />
 
       {/* El contenido usa el ANCHO COMPLETO (con padding) — más aire, sin el margen central
           que dejaba mucho espacio muerto a los lados (Pedro). El key por tarea la remonta al
           cambiar → entra con un fade sutil. */}
       <div className="px-4 py-6 sm:px-6 lg:px-8">
         {vista ? (
-          <div key={selTareaId ?? "none"} className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+          <div key={selTareaId ?? vistaBucket ?? "none"} className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
             {vista}
           </div>
         ) : (

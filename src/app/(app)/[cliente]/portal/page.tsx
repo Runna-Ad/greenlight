@@ -7,6 +7,8 @@ import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { cargarPortal, cargarTareaPortal } from "./portal-data";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { PortalTarea } from "@/components/portal/portal-tarea";
+import { PortalListaTareas } from "@/components/portal/portal-lista-tareas";
+import { bucketPortal, type BucketPortal } from "@/lib/portal-bucket";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +26,7 @@ export default async function PortalPage({
   searchParams,
 }: {
   params: Promise<{ cliente: string }>;
-  searchParams: Promise<{ brief?: string; tarea?: string }>;
+  searchParams: Promise<{ brief?: string; tarea?: string; vista?: string }>;
 }) {
   const { cliente } = await params;
   const sp = await searchParams;
@@ -73,21 +75,43 @@ export default async function PortalPage({
     );
   }
 
-  // Selección: brief del query (si es válido) o el primero; tarea del query (si
-  // pertenece al brief) o la primera del brief.
+  // Selección: brief del query (si es válido) o el primero.
   const briefSel = (sp.brief && data.briefs.some((b) => b.id === sp.brief) ? sp.brief : data.briefs[0]?.id) ?? null;
   const briefObj = data.briefs.find((b) => b.id === briefSel);
+
+  // Dos modos: LISTA (?vista=revision|aprobado) → tablero de tarjetas de esa cubeta;
+  // DETALLE (default) → la tarea seleccionada con su flujo de revisión. (Pedro 2026-09-03)
+  const vistaBucket: BucketPortal | null =
+    sp.vista === "revision" || sp.vista === "aprobado" ? sp.vista : null;
+
+  const marca = data.cliente.brandColor;
+
+  if (vistaBucket) {
+    const tareasBucket = (briefObj?.tasks ?? []).filter((t) => bucketPortal(t.status) === vistaBucket);
+    return (
+      <PortalShell
+        cliente={{ name: data.cliente.name, logoUrl: data.cliente.logoUrl, brandColor: marca }}
+        briefs={data.briefs}
+        selBriefId={briefSel}
+        selTareaId={null}
+        vistaBucket={vistaBucket}
+        vista={briefSel ? <PortalListaTareas briefId={briefSel} bucket={vistaBucket} tareas={tareasBucket} marca={marca} /> : null}
+      />
+    );
+  }
+
+  // Modo detalle: tarea del query (si pertenece al brief) o la primera del brief.
   const tareaSel =
     (sp.tarea && briefObj?.tasks.some((t) => t.id === sp.tarea) ? sp.tarea : briefObj?.tasks[0]?.id) ?? null;
-
   const tareaData = tareaSel ? await cargarTareaPortal(cliente, tareaSel) : null;
 
   return (
     <PortalShell
-      cliente={{ name: data.cliente.name, logoUrl: data.cliente.logoUrl, brandColor: data.cliente.brandColor }}
+      cliente={{ name: data.cliente.name, logoUrl: data.cliente.logoUrl, brandColor: marca }}
       briefs={data.briefs}
       selBriefId={briefSel}
       selTareaId={tareaSel}
+      vistaBucket={null}
       vista={tareaData ? <PortalTarea t={tareaData} puedeActuar={puedeActuar} /> : null}
     />
   );
