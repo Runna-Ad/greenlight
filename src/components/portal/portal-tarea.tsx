@@ -37,6 +37,7 @@ export function PortalTarea({ t, puedeActuar }: { t: TareaPortal; puedeActuar: b
         clienteSlug={t.clienteSlug}
         cambios={t.cambios}
         revisiones={t.revisiones}
+        enProceso={t.enProceso}
         editable={puedeActuar && t.status === "published"}
       >
       {/* Barra de acción PEGADA ARRIBA (Aprobar ⇄ Pedir cambios). Vive dentro del
@@ -61,7 +62,7 @@ export function PortalTarea({ t, puedeActuar }: { t: TareaPortal; puedeActuar: b
 // cambios (sin enviar o aplicados), el panel "Control de Cambios" — a la DERECHA en
 // desktop (sticky, mismo formato que el interno) y COLAPSABLE arriba en móvil (Pedro).
 function CuerpoTarea({ t }: { t: TareaPortal }) {
-  const hayPanel = t.cambios.length > 0 || t.revisiones.length > 0;
+  const hayPanel = t.cambios.length > 0 || t.revisiones.length > 0 || t.enProceso.length > 0;
   const hero = (
     <HeroTarea
       ideaId={t.ideaId}

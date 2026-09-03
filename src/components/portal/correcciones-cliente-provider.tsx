@@ -24,6 +24,7 @@ export function CorreccionesClienteProvider({
   clienteSlug,
   cambios,
   revisiones,
+  enProceso,
   editable,
   children,
 }: {
@@ -33,6 +34,8 @@ export function CorreccionesClienteProvider({
   cambios: Correccion[];
   /** Los cambios de rondas pasadas que el equipo YA aplicó (read-only, "aplicado"). */
   revisiones: Correccion[];
+  /** Los cambios ya ENVIADOS que el equipo aún no resuelve (read-only, "en proceso"). */
+  enProceso: Correccion[];
   editable: boolean;
   children: ReactNode;
 }) {
@@ -69,6 +72,7 @@ export function CorreccionesClienteProvider({
       borrador: false,
       correcciones: cambios,
       revisiones,
+      enProceso,
       pendiente,
       deCampo: (tabla, filaId, campo) => {
         const k = keyCampo(tabla, filaId, campo);
@@ -91,7 +95,7 @@ export function CorreccionesClienteProvider({
       validando: false,
       validar: () => {},
     };
-  }, [ideaId, clienteSlug, editable, cambios, revisiones, pendiente, router, start]);
+  }, [ideaId, clienteSlug, editable, cambios, revisiones, enProceso, pendiente, router, start]);
 
   return <CorreccionesCtx.Provider value={value}>{children}</CorreccionesCtx.Provider>;
 }

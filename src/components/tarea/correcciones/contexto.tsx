@@ -49,6 +49,8 @@ export type Ctx = {
   /** Cambios de rondas PASADAS ya aplicados por el equipo (read-only). Sólo el portal
    *  los usa: al re-revisar, el cliente ve DÓNDE y QUÉ se cambió. Vacío en el interno. */
   revisiones?: Correccion[];
+  /** (portal) Cambios enviados que el equipo aún no resuelve — read-only "en proceso". */
+  enProceso?: Correccion[];
   pendiente: boolean;
   /** Correcciones que apuntan a un campo exacto. */
   deCampo: (tabla: string, filaId: string | null, campo: string) => Correccion[];

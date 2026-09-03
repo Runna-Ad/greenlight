@@ -174,6 +174,12 @@ export type TareaPortal = {
    *  confirmados). Se muestran read-only ("aplicado") para que el cliente vea dónde y
    *  qué se cambió al re-revisar — no lo dejan adivinando. */
   revisiones: Correccion[];
+  /** Cambios YA ENVIADOS que el equipo AÚN NO resuelve (ronda!=null, resolved_at null):
+   *  la ronda en curso mientras la tarea está en in_corrections. Read-only ("en proceso").
+   *  Sin esto el cliente, tras "Pedir cambios", no veía NADA de lo que pidió hasta que el
+   *  equipo cerrara la ronda — caían fuera de `cambios` (ya no son borrador) y de
+   *  `revisiones` (aún no resueltos). (reap 2026-09-02) */
+  enProceso: Correccion[];
 };
 
 type PinRow = {
@@ -240,7 +246,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     }>();
   if (!brief || brief.clients?.slug !== clienteSlug) return null;
 
-  const [{ data: marca }, planosRes, estaticoRes, pinsRes, revsRes] = await Promise.all([
+  const [{ data: marca }, planosRes, estaticoRes, pinsRes, revsRes, enProcRes] = await Promise.all([
     idea.marca_id
       ? db.from("marcas").select("name, logo_url").eq("id", idea.marca_id).maybeSingle<{ name: string; logo_url: string | null }>()
       : Promise.resolve({ data: null }),
@@ -288,6 +294,21 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
       // (la ronda en curso durante in_corrections) NO es "aplicado" — no se muestra
       // como tal. En published (re-revisión) el gate garantiza que todos estén resueltos.
       .not("resolved_at", "is", null)
+      .not("target_campo", "is", null)
+      .order("created_at")
+      .returns<PinRow[]>(),
+    // Los cambios ENVIADOS que el equipo aún NO resuelve (ronda!=null, resolved_at null):
+    // la ronda en curso durante in_corrections. Read-only ("en proceso") — el cliente ve
+    // lo que pidió mientras el equipo trabaja, sin poder editarlo. (reap 2026-09-02)
+    db
+      .from("comments")
+      .select(
+        "id, body, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, ronda, atendido_at, resolved_at",
+      )
+      .eq("idea_id", idea.id)
+      .eq("kind", "client_change")
+      .not("ronda", "is", null)
+      .is("resolved_at", null)
       .not("target_campo", "is", null)
       .order("created_at")
       .returns<PinRow[]>(),
@@ -359,6 +380,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
   });
   const cambios: Correccion[] = (pinsRes.data ?? []).map(aCorreccion);
   const revisiones: Correccion[] = (revsRes.data ?? []).map(aCorreccion);
+  const enProceso: Correccion[] = (enProcRes.data ?? []).map(aCorreccion);
 
   return {
     ideaId: idea.id,
@@ -386,5 +408,6 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     refsEstatico,
     cambios,
     revisiones,
+    enProceso,
   };
 }

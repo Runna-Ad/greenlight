@@ -11,6 +11,9 @@ import { cn } from "@/lib/utils";
 // panel interno (open=coral, done=amber, closed=green).
 const CORAL = "color-mix(in srgb, var(--status-corrections) 78%, #000)";
 const AMARILLO = "color-mix(in srgb, var(--status-progress) 80%, #000)";
+// EN PROCESO (enviado, el equipo trabajando): gris neutro — ni rojo (sin enviar), ni
+// amarillo (aplicado), ni verde (aprobado). Un estado de ESPERA, sin colisión semántica.
+const GRIS = "color-mix(in srgb, var(--muted-foreground) 88%, #000)";
 
 // Salta al campo del cambio y lo hace parpadear (mismo data-campo-key + gl-flash que el
 // panel interno) — así "Ver" lleva al cliente justo a donde está el cambio.
@@ -33,8 +36,8 @@ function verCampo(c: Correccion) {
 /**
  * "Control de Cambios" del portal — el MISMO formato que la columna derecha interna,
  * adaptado al cliente: sin H.Ü.E, sin confirmar/atender. Muestra TODOS los cambios del
- * cliente: los que aún NO ha enviado (con "Quitar") y los que el equipo YA aplicó
- * (read-only "Aplicado"), agrupados; "Ver" salta al campo. `mobile` lo vuelve colapsable
+ * cliente: sin enviar (con "Quitar"), en proceso (enviados, el equipo trabajando) y los que
+ * el equipo YA aplicó (read-only "Aplicado"), agrupados; "Ver" salta al campo. `mobile` lo vuelve colapsable
  * (arriba del contenido en móvil); en desktop va como panel fijo a la derecha.
  */
 export function PanelControlCambios({ mobile = false }: { mobile?: boolean }) {
@@ -43,12 +46,14 @@ export function PanelControlCambios({ mobile = false }: { mobile?: boolean }) {
   const [colapsadas, setColapsadas] = useState<Set<number>>(new Set());
 
   const drafts = ctx?.correcciones ?? []; // sin enviar
+  const enProceso = ctx?.enProceso ?? []; // enviados, el equipo trabajando
   const aplicados = ctx?.revisiones ?? []; // ya aplicados
-  const total = drafts.length + aplicados.length;
+  const total = drafts.length + enProceso.length + aplicados.length;
   if (!ctx || !total) return null;
 
   const grupos = porRonda(aplicados);
   const rondaActual = grupos[0]?.ronda;
+  const gruposProceso = porRonda(enProceso);
 
   const cuerpo = (
     <div>
@@ -68,6 +73,23 @@ export function PanelControlCambios({ mobile = false }: { mobile?: boolean }) {
           </div>
         </div>
       )}
+
+      {/* Grupo: cambios ENVIADOS que el equipo aún trabaja — read-only, "En proceso". */}
+      {gruposProceso.map(({ ronda, items }) => (
+        <div key={`proc-${ronda}`} className="border-b border-border last:border-b-0">
+          <div className="flex items-center gap-2 px-3.5 pb-1.5 pt-2.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            En proceso
+            <span className="ml-auto rounded-full px-2 py-0.5 text-[10.5px] font-semibold normal-case tracking-normal text-white" style={{ background: GRIS }}>
+              {items.length}
+            </span>
+          </div>
+          <div className="grid gap-2 px-2.5 pb-2.5">
+            {items.map((c) => (
+              <Tarjeta key={c.id} c={c} tono={GRIS} etiqueta="En proceso" />
+            ))}
+          </div>
+        </div>
+      ))}
 
       {/* Grupos: rondas ya aplicadas — read-only. */}
       {grupos.map(({ ronda, items }) => {
@@ -127,8 +149,8 @@ export function PanelControlCambios({ mobile = false }: { mobile?: boolean }) {
               Control de Cambios
             </h2>
             <p className="mt-1 text-[11.5px] text-muted-foreground">
-              Lo que pediste y su estado. Quita los que aún no envíes; los aplicados por el equipo quedan
-              para que los revises.
+              Lo que pediste y su estado: sin enviar (los puedes quitar), en proceso (el equipo trabajando)
+              y aplicados (para que los revises).
             </p>
           </>
         )}
