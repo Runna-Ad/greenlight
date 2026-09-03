@@ -1,5 +1,40 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-03 — LIVE REFRESH (0062) — SHIPPEADO (main 62bb720 · migración aplicada) + evaluación de "H.Ü.E lee referencias"
+Pedro pidió dos cosas: (1) que la plataforma se refresque sola al cambiar estado / asignación; (2) evaluar si H.Ü.E puede
+leer las referencias (links a Drive / TikTok) de una tarea al escribir un guión. Modo challenge para ambas; "go ahead"
+sólo para (1). Pregunta de Pedro contestada: SÍ, "Dile a H.Ü.E que quieres" entra al writer (hue-writer.ts:279).
+
+**(1) Live refresh — decisión y diseño.** Broadcast desde la BD, NO Postgres Changes (exigiría SELECT de `authenticated`
+sobre ideas → reabriría el candado 0056). Canal privado POR PERSONA (`greenlight:user:<id>`) porque la policy de
+`realtime.messages` corre como `authenticated`, que no tiene usage sobre produccion: con `auth.uid()` basta. Trigger por
+SENTENCIA con transition tables (un import de 300 no emite 300×N). `realtime.send` envuelto en exception (PGlite / canal
+caído nunca tumban el write). Navegador: `LiveRefresh` en el layout → debounce → `router.refresh()` + fallback al volver a
+la pestaña + al reconectar. Board y campana adoptan props nuevas (patrón React "ajustar estado al cambiar prop"), sin pisar
+acciones optimistas en vuelo (`isPending` de useTransition). check-isolation: excepción ACOTADA a `realtime.send/topic`
++ policy `greenlight_*`.
+- Verificación: test-db 399/399 (simulando `realtime.send` → fan-out real), isolation, server-actions, lint, tsc, build;
+  navegador local: tablero sin errores, fallback de pestaña dispara UN `_rsc` y respeta la ventana de 15s.
+- Reap (code-reviewer sonnet): 1 bug real (el `return` en el exception cortaba el fan-out para todos los siguientes) +
+  guard optimista + filtro "cambio real" en updates de asignación. Arreglado antes del commit.
+- Ship: `node scripts/migrate.mjs` → 0062 ok en ybbrpqzbedaxsmotgtkh (triggers ×6, policy, rutinas sin PUBLIC) ·
+  `git push origin main` 6db13b3..62bb720 → Vercel.
+- Post-ship, hallazgo REAL: `realtime.messages` tenía 0 particiones (el proyecto nunca había tenido un cliente
+  Realtime) → `realtime.send` no insertaba nada (WARNING tragado). FIX: script con la llave publicable conectó un canal
+  público → Realtime creó las particiones (09-02..09-06) → smoke `realtime.send` por CLI (escritura) insertó la fila.
+  Ver lesson. Vercel: deploy Ready (27s). Triggers ×6 + policy `greenlight_live_propio` verificados en prod.
+- **NO verificado**: la entrega por WebSocket a una sesión real (local sin sesión; prod exige Google login). LIVE-VERIFY
+  de Pedro con dos personas (ver todo.md).
+
+**(2) H.Ü.E + referencias — propuesta (pendiente de Pedro).** Tier 1: Google Docs/Slides/Sheets + YouTube (texto exacto;
+extraer al GUARDAR la referencia, cachear por URL, tope 3 refs × ~4k chars, badge "H.Ü.E la leyó / privada"). Tier 2:
+TikTok/IG sólo caption+hashtags vía oEmbed, etiquetado "no vi el video". Tier 3 (decisión aparte, costo mensual): video
+real vía API de descarga + transcripción + frames. Medir con hue_generations (diff borrador vs publicado) antes de Tier 3.
+Riesgos: contaminación (precios/legales ajenos → referencia = inspiración, KB/reglas mandan), inyección desde contenido
+web, timeout de 60s (por eso extraer al guardar, no al generar).
+
+Próximo: Pedro verifica live (1); decide Tier 1 de (2).
+
 ## 2026-09-03 (noche 2) — BLANK-SLATE RESET (content-only) — HECHO + VERIFICADO
 Pedro: "clean slate reset of the tasks/briefs both from agency and client portal" + (a media tarea) "no borres las
 learnings de H.Ü.E". Se usó `scripts/reset-blank-slate.mjs` (dry-run por default, --run destructivo, produccion-only,

@@ -1,6 +1,6 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟢 2026-09-03 — LIVE REFRESH: la plataforma se refresca sola al cambiar estado/asignación (código en main, SIN push · migración 0062 SIN aplicar)
+## ✅ 2026-09-03 — LIVE REFRESH: la plataforma se refresca sola al cambiar estado/asignación (SHIPPEADO: main 62bb720 pusheado · migración 0062 APLICADA)
 Pedro: "que nadie tenga que recargar para ver un cambio de estado o una tarea nueva asignada". Diseño: Realtime
 **Broadcast desde la BD** (trigger por SENTENCIA en `ideas` + `idea_assignments` → `realtime.send` a un canal privado
 POR PERSONA `greenlight:user:<profile_id>`), NO Postgres Changes (exigiría SELECT de `authenticated` sobre ideas y
@@ -10,7 +10,8 @@ a la pestaña (>15s) y al reconectar el socket. `Board` y la campana adoptan las
 se quedaba viejo). Excepción ACOTADA en check-isolation para `realtime.send/topic` + policy `greenlight_*`.
 Verificado: test-db 397/397 (fan-out real con `realtime.send` simulado: equipo activo + cuenta del cliente dueño; ajeno
 y dados de baja NO; sin cambio real → 0 avisos; 2 asignaciones en 1 sentencia → 1 aviso), isolation, lint, tsc, build.
-- [ ] **SHIP** (necesita "ship it"): `node scripts/migrate.mjs` (0062) + `git push origin main`.
+- [x] **SHIP** — `node scripts/migrate.mjs` (0062 ok) + `git push origin main` (6db13b3..62bb720). Pedro: "ship it" 2026-09-03.
+- [x] **Post-ship**: Realtime del proyecto arrancado por primera vez (0 particiones → 5); smoke `realtime.send` inserta. Vercel Ready.
 - [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
       dos navegadores/personas; A mueve una tarea a "En revisión" o asigna a B → en B el tablero / mi-trabajo / la
       campana cambian solos en ~1s sin recargar; un texto a medio escribir en una tarea NO se pierde. Si no refresca:

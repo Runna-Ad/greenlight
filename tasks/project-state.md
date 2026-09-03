@@ -8,6 +8,17 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+## ✅ 2026-09-03 — LIVE REFRESH (0062) — SHIPPEADO + migración aplicada
+- La plataforma se re-lee sola al cambiar estado / asignación / papelera / alta-baja de tareas (Pedro: "que nadie
+  tenga que recargar"). **Realtime Broadcast desde la BD**: trigger por SENTENCIA en `ideas` + `idea_assignments` →
+  `realtime.send` a un canal privado POR PERSONA (`greenlight:user:<profile_id>`); policy `greenlight_live_propio` en
+  `realtime.messages` sólo con `auth.uid()` — el candado 0056 sigue intacto. Equipo activo recibe todo; cuenta de
+  cliente sólo lo de su cliente. `LiveRefresh` (layout) → debounce 400ms → `router.refresh()`; fallback al volver a la
+  pestaña (>15s) y al reconectar. Board y campana adoptan props nuevas (sin pisar acciones optimistas en vuelo).
+- Excepción ACOTADA en check-isolation para `realtime.send/topic` + policy `greenlight_*`. test-db simula
+  `realtime.send` y prueba el fan-out real (399/399).
+- **Pendiente**: LIVE-VERIFY de Pedro con dos personas (el socket no se prueba en local: login apagado → sin sesión).
+
 ## ✅ 2026-09-03 (noche) — Restructura del PORTAL + flujo de revisión — SHIPPEADO + LIVE
 - **Portal del cliente**: 3 pestañas (Activas=por revisar · En revisión=in_corrections · Aprobadas=delivered);
   En revisión/Aprobadas como listas de tarjetas; **Fase 2** drill-down por MARCA (Card/Préstamos → briefs → tarea,
