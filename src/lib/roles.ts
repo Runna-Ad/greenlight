@@ -64,11 +64,15 @@ export type NavKey =
   | "entregas"
   | "admin"
   | "mi-perfil"
-  | "portal";
+  | "portal"
+  // HÜE Prisma: el estudio de prompts (imagen/video/edición). Lo ve todo el equipo
+  // interno — es una herramienta de trabajo, no de administración. El cliente no.
+  | "prisma";
 
 const NAV_ALL: NavKey[] = [
   "clientes",
   "mi-trabajo",
+  "prisma",
   "performance",
   "tablero",
   "briefs",
@@ -93,6 +97,7 @@ const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
   lead: [
     "clientes",
     "mi-trabajo",
+    "prisma",
     "performance",
     "tablero",
     "briefs",
@@ -102,7 +107,7 @@ const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
   ],
   // El especialista entra a trabajar lo suyo: su lista, el tablero y los
   // bundles (donde sólo ve las tareas que tiene asignadas) + su Mi perfil.
-  creative: ["mi-trabajo", "tablero", "briefs", "mi-perfil"],
+  creative: ["mi-trabajo", "prisma", "tablero", "briefs", "mi-perfil"],
   // El cliente no entra a la app interna en absoluto — sólo a su portal.
   client: ["portal"],
 };
@@ -143,6 +148,15 @@ export const canAdmin = (role: ViewRole): boolean => esNivelAdmin(role);
  * admin gestiona al equipo pero no puede nombrar a otro admin. (Pedro.)
  */
 export const canAssignAdmins = (role: ViewRole): boolean => role === "master";
+
+/**
+ * HÜE Prisma: quién ve y puede tocar los prompts de TODOS (historial completo, refinar
+ * o recompilar lo de otra persona). Lead/admin/master sí; el especialista sólo lo suyo.
+ * FUENTE ÚNICA para la página (qué lista) y las actions (qué deja tocar): si cada una
+ * decidiera por su cuenta, el historial enseñaría prompts que la action rechaza.
+ */
+export const canVerTodoPrisma = (role: ViewRole): boolean =>
+  esNivelAdmin(role) || role === "lead";
 
 /**
  * Quién entra al H.Ü.E HUB. Sólo el Master Builder — el HUB entrena y mide a

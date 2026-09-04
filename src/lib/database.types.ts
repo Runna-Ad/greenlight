@@ -305,6 +305,79 @@ export type HueAdaptation = {
   reverted_at: string | null;
 };
 
+// ── HÜE Prisma (0063) ────────────────────────────────────────
+export type PrismaVariante = "base" | "segura" | "audaz" | "minima";
+export type PrismaJobStatus = "queued" | "running" | "done" | "error";
+
+/** Referencia guardada con el spec: dónde vive la imagen y qué leyó H.Ü.E de ella. */
+export type PrismaRefGuardada = {
+  role: string;
+  storage_path: string;
+  caption: string | null;
+  dna: Record<string, unknown> | null;
+};
+
+export type PrismaSpecRow = {
+  id: string;
+  client_id: string | null;
+  marca_id: string | null;
+  job: string;
+  tool: string;
+  destino: string | null;
+  idea: string;
+  spec: Record<string, unknown>;
+  refs: PrismaRefGuardada[];
+  created_by: string | null;
+  created_at: string;
+};
+
+export type PrismaPromptRow = {
+  id: string;
+  spec_id: string;
+  tool: string;
+  variante: PrismaVariante;
+  prompt_version: string;
+  salida: string;
+  formato: "texto" | "json";
+  valido: boolean;
+  errores: string[];
+  explicacion: string | null;
+  model: string | null;
+  usage: Record<string, number> | null;
+  created_at: string;
+};
+
+export type PrismaCharacterRow = {
+  id: string;
+  client_id: string;
+  name: string;
+  descripcion: string;
+  storage_path: string | null;
+  active: boolean;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type PrismaRatingRow = {
+  id: string;
+  prompt_id: string;
+  user_id: string;
+  score: -1 | 1;
+  nota: string | null;
+  created_at: string;
+};
+
+export type PrismaJobRow = {
+  id: string;
+  prompt_id: string;
+  provider: string;
+  status: PrismaJobStatus;
+  result_path: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 // ── Plantilla Copies (0046) ──────────────────────────────────
 export type CopyTema = {
   id: string;

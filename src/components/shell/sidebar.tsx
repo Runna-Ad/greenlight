@@ -15,10 +15,12 @@ import {
   Eye,
   Menu,
   ChevronDown,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canSee, DEFAULT_ROLE, type NavKey, type ViewRole } from "@/lib/roles";
+import { prismaActivo } from "@/lib/prisma/flags";
 import { Wordmark } from "./wordmark";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -47,6 +49,9 @@ function navFor(
       items: [
         { key: "clientes", href: "/clientes", label: "Clientes", icon: Users },
         { key: "mi-trabajo", href: "/mi-trabajo", label: "Mi trabajo", icon: LayoutGrid },
+        // HÜE Prisma (estudio de prompts). Detrás de un flag mientras se prueba en la
+        // rama: apagado se pinta como "Pronto", sin Link (ver `soon`).
+        { key: "prisma", href: "/prisma", label: "HÜE Prisma", icon: Sparkles, soon: !prismaActivo() },
         { key: "performance", href: "/performance", label: "Performance", icon: GaugeCircle },
         { key: "entregas", href: "/entregas", label: "Entregas", icon: PackageCheck },
         // "Mi perfil" ya NO vive en la nav lateral (secciones de trabajo): las acciones
@@ -83,6 +88,7 @@ function navFor(
 const RESERVED = new Set([
   "clientes",
   "mi-trabajo",
+  "prisma",
   "performance",
   "workload",
   "entregas",

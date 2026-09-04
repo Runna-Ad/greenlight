@@ -1690,3 +1690,26 @@ Que el lead pueda aplicar la sugerencia de H.Ü.E directo al campo con un botón
 - [x] Fix: wrapper del panel desktop era <aside> anidado sobre otro <aside> → <div>.
 - [x] Verificado live (JS): Aplicado=amber rgb(148,95,6); panel sticky top-133 junto a planos; móvil oculto en desktop.
 - [x] Gates tsc·eslint·build. PENDIENTE "ship it".
+
+## 🟡 (2026-09-03) — HÜE Prisma: estudio de prompts (rama `prisma`, flag NEXT_PUBLIC_PRISMA_ENABLED) — SIN commit, SIN migración
+Plan aprobado: /Users/work/.claude/plans/ok-so-1st-having-radiant-jellyfish.md
+Origen: teardown de rocoprompt.com (14 bots Gemini). Una idea → un prompt para cada herramienta.
+Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo prompt (generación in-app = v2, flag).
+- [x] 1. NavKey `prisma` + sidebar (icono Sparkles, `soon` si el flag está apagado) + RESERVED + flags.ts; /prisma visible a creative+.
+- [x] 2. lib/prisma: spec.ts (PromptSpec) + 5 compilers + validators + routing + tools + scripts/test-prisma.mjs (78 checks, en `npm test`).
+- [ ] 3. Migración `0063_prisma` ESCRITA y probada en PGlite (test-db 400 ✓) — NO aplicada a prod: espera el "ship it" de Pedro.
+      Hasta entonces: el selector de marca cae al color de marca (cargarMarcas re-consulta sin prisma_presets) y "Generar" falla
+      con "Could not find the table produccion.prisma_specs" (toast limpio, verificado en preview).
+- [x] 4. writer.ts (Claude Sonnet 5, bloque estable cacheado, tool_use → PromptSpec, reparación 1 vez) + vision.ts (caption + ADN).
+      Verificado VIVO desde scratchpad: spec válido a la 1ª, refine cambia sólo la luz, cache_read=3811 en la 2ª llamada.
+- [x] 5. UI: 3 puertas → trabajo → 3 pasos → resultado (copiar, abrir en la herramienta, cambiar herramienta, explicar, refinar,
+      pulgar) + historial + swatches con "sugerido desde tus referencias". Subida+visión verificadas en preview (caption + ADN).
+- [x] 6. copy.ts ES/EN (ES default, toggle en localStorage vía useSyncExternalStore).
+- [~] 7. Reap: tsc · eslint · build · test-lib · test-db · test-prisma en verde. Agentes de review (seguridad Opus + salud Sonnet)
+      corriendo; pendiente aplicar hallazgos. Pantalla de RESULTADO no vista en vivo (necesita las tablas).
+## Review
+- Pendiente de Pedro: (1) `git commit` en la rama `prisma` (no se commiteó nada); (2) "ship it" para la 0063 vía `npm run migrate`
+  (NO `supabase db push`); (3) `NEXT_PUBLIC_PRISMA_ENABLED=true` en el env de Preview de Vercel para ver la rama; (4) probar
+  con un diseñador dos trabajos reales.
+- Deuda: personajes (prisma_characters) sin UI de alta (sólo lectura); variantes segura/audaz/mínima no construidas (la columna
+  `variante` ya existe); `explicacion` cachea por idioma con prefijo "[es]"; presets de marca se editan a mano en la BD (falta UI en Admin).

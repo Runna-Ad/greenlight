@@ -1803,3 +1803,52 @@ se ve igual que la respuesta correcta).
 - [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
 - [ ] **LIVE-VERIFY de Pedro**: tarea devuelta por el lead → especialista corrige → "Devolver a revisión" → H.Ü.E
 
+
+## 2026-09-03 15:33
+**Shipped (recent commits):**
+  - docs(live refresh): shippeado — 0062 aplicada, Realtime arrancado (particiones), lecciones + log
+  - feat(live): la plataforma se refresca sola al cambiar estado/asignación (Realtime Broadcast, 0062)
+  - docs(wrap-up): blank-slate reset content-only HECHO + verificado; learnings de H.Ü.E intactas
+  - chore(reset): clasificar tablas nuevas (copies, hue_*, notification_prefs) + flag --content-only
+  - docs(wrap-up): cierre de sesión — reap + 0061 + 4 features + restructura del portal, todo LIVE
+  - docs: Enviar a cliente persiste al confirmar — todo
+  - fix(cambios cliente): confirmar un cambio ya no hace desaparecer "Enviar a cliente"
+  - docs: confirmar desde el panel de cambios — todo
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-03 (tarde) — HÜE Prisma v1 construido en la rama `prisma` (sin commit, sin migración)
+**What we did:** Teardown de rocoprompt.com (14 bots Gemini; informe + fuente en docs/roco-teardown/). Con eso, plan aprobado
+y construido HÜE Prisma: estudio de prompts dentro de Greenlight. Un spec único (lib/prisma/spec.ts) → 5 compilers (Nano
+Banana, Veo 3.1, Kling, Sora 2, Higgsfield) → validators deterministas; writer con Claude Sonnet 5 (bloque estable cacheado,
+tool_use, 1 reparación) + pase de visión (caption + ADN visual); UI de 3 puertas → trabajo → 3 pasos → resultado (copiar, abrir,
+cambiar herramienta, explicar, refinar, pulgar) + historial + ES/EN; migración 0063 (5 tablas prisma_* + marcas.prisma_presets).
+Reap: 2 agentes (seguridad Opus, salud Sonnet) → 4 serios de seguridad + 1 crítico de UI arreglados (gate exige identidad, IDOR en
+calificar, destino/videoType validados, storage_path estricto, errores de BD no crudos, try/finally en toda llamada a action,
+idioma del diálogo, nombres de herramienta y duraciones en una sola fuente, esSpec() al leer jsonb, reset al cambiar de job).
+**Current state:** tsc · eslint · build · test-lib (481) · test-db (400) · test-prisma (78) en verde. En preview local: subida +
+visión + 3 pasos + sugerencia de herramienta verificados; "Generar" falla con toast limpio porque las tablas no existen aún.
+Writer verificado VIVO contra Claude desde scratchpad (spec válido a la 1ª, refine sólo cambia la luz, cache_read=3811).
+**Uncommitted work:** TODO (13 rutas en git status): src/lib/prisma/*, src/components/prisma/*, src/app/(app)/prisma/*,
+supabase/migrations/…0063_prisma.sql, scripts/test-prisma.mjs, docs/roco-teardown/*, y edits en roles.ts, sidebar.tsx,
+database.types.ts, package.json, tasks/*.
+**Decisions made:** (1) módulo dentro de Greenlight (rama + flag NEXT_PUBLIC_PRISMA_ENABLED; en dev siempre encendido), no repo
+aparte; (2) TODOS los prompts salen en inglés (el diálogo conserva su idioma) para poder recompilar un spec a cualquier herramienta;
+(3) leads ven/tocan los prompts de toda la agencia (canVerTodoPrisma) — deliberado, un solo cliente hoy; (4) Midjourney fuera de v1.
+**Pick up next session:** 1) Pedro: `git add -A && git commit` en `prisma`; 2) "ship it" → `npm run migrate` (0063) — NUNCA
+`supabase db push`; 3) Vercel Preview env: NEXT_PUBLIC_PRISMA_ENABLED=true; 4) probar la pantalla de RESULTADO en vivo (no se
+pudo sin tablas): copiar, cambiar herramienta, explicar, refinar, pulgar, historial; 5) prueba con un diseñador (foto de producto +
+animar foto); 6) deuda: UI de personajes y de presets de marca en Admin, variantes segura/audaz/mínima, throttle por usuario en
+analizarImagen, archivos huérfanos en `prisma/` si el usuario abandona.
+**Environment changes:** ninguno (la entrada temporal `greenlight` en ~/Downloads/.claude/launch.json se creó y se borró).
