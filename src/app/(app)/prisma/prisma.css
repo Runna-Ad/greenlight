@@ -5,7 +5,7 @@
    UNA idea y la abre en un prompt por herramienta. Por eso:
    - el espectro son 5 tonos y cada tono ES una herramienta (color = información,
      no decoración): amarillo Nano Banana, naranja Higgsfield, coral Kling,
-     magenta Sora, cian Veo. El violeta es el de Greenlight (la app).
+     magenta Sora, cian Veo, verde ChatGPT Images. El violeta es el de Greenlight (la app).
    - el "haz" del encabezado se abre en espectro mientras el diseñador trabaja
      y se CIERRA en el color de la herramienta cuando el prompt está listo.
    - el resto (fondo, tipografía de cuerpo, radios) es Greenlight: el módulo es
@@ -19,8 +19,9 @@
   --p-coral: #ff5a6e;
   --p-magenta: #e24cb4;
   --p-cyan: #29b6f6;
+  --p-green: #3dd68c;
   --p-violet: var(--primary);
-  --p-spectrum: linear-gradient(90deg, var(--p-yellow), var(--p-orange), var(--p-coral), var(--p-magenta), var(--p-violet), var(--p-cyan));
+  --p-spectrum: linear-gradient(90deg, var(--p-yellow), var(--p-orange), var(--p-coral), var(--p-magenta), var(--p-violet), var(--p-cyan), var(--p-green));
   /* El color "activo": la herramienta elegida lo fija en línea (style="--p-tool: …"). */
   --p-tool: var(--p-violet);
   --p-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -132,6 +133,7 @@
     color-mix(in oklch, var(--p-coral) 68%, var(--foreground)),
     color-mix(in oklch, var(--p-magenta) 70%, var(--foreground)),
     color-mix(in oklch, var(--p-cyan) 62%, var(--foreground)),
+    color-mix(in oklch, var(--p-green) 58%, var(--foreground)),
     color-mix(in oklch, var(--p-yellow) 62%, var(--foreground))
   );
   background: var(--p-ink-spectrum);

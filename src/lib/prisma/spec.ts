@@ -12,8 +12,8 @@
  * (scripts/test-prisma.mjs).
  */
 
-export type Tool = "nanobanana" | "veo" | "kling" | "sora" | "higgsfield";
-export const TOOLS: Tool[] = ["nanobanana", "veo", "kling", "sora", "higgsfield"];
+export type Tool = "nanobanana" | "chatgpt" | "veo" | "kling" | "sora" | "higgsfield";
+export const TOOLS: Tool[] = ["nanobanana", "chatgpt", "veo", "kling", "sora", "higgsfield"];
 
 /** Las tres "puertas" de la pantalla de inicio. */
 export type JobKind = "imagen" | "video" | "edicion";
@@ -213,6 +213,19 @@ export type Beat = {
   sfx: string; // onomatopeyas / ambiente: "*click* suave, viento"
 };
 
+/** Texto que DEBE aparecer dentro de la imagen o del video (un titular, un precio, un
+ *  "Hasta 20% de cashback"). Se guarda tal cual lo escribió el diseñador, en su idioma:
+ *  las herramientas lo pintan letra por letra, así que traducirlo lo arruinaría.
+ *  Lección 2026-09-04: sin este campo, H.Ü.E trataba el texto como "slogan inventado"
+ *  y lo tiraba; y el compiler de foto de producto ni siquiera leía `accion`. */
+export type TextoEnImagen = {
+  contenido: string;
+  /** Dónde va ("top third", "bottom left"). null = que la herramienta decida. */
+  posicion: string | null;
+  /** Cómo se ve ("bold sans-serif, white"). null = que la herramienta decida. */
+  estilo: string | null;
+};
+
 /** Lo que la marca del cliente aporta a TODO prompt (viene de marcas.prisma_presets). */
 export type MarcaPreset = {
   nombre: string;
@@ -254,6 +267,9 @@ export type PromptSpec = {
   video_type: SoraVideoType | null;
   /** Sólo Higgsfield: nombre del preset de cámara (ver compilers/higgsfield.ts). */
   preset: string | null;
+  /** Texto que debe verse en la pieza. null = sin texto (y los compilers lo prohíben).
+   *  Opcional en el tipo porque las filas guardadas antes del 2026-09-04 no lo traen. */
+  texto?: TextoEnImagen | null;
 };
 
 /** Un spec en blanco con valores seguros. El writer lo llena; la UI lo edita. */
@@ -281,7 +297,23 @@ export function specVacio(job: JobType, tool: Tool, idea = ""): PromptSpec {
     beats: null,
     video_type: null,
     preset: null,
+    texto: null,
   };
+}
+
+/** El texto en imagen del spec, o null (filas viejas no traen el campo). */
+export function textoDe(spec: PromptSpec): TextoEnImagen | null {
+  const t = spec.texto;
+  return t && t.contenido.trim() ? t : null;
+}
+
+/** Los negativos del spec SIN los que prohíben texto, cuando el diseñador SÍ pidió texto.
+ *  H.Ü.E agrega "no text overlays" por reflejo; si lo dejáramos, el prompt se contradice. */
+export function negativosDe(spec: PromptSpec, extra: string[] = []): string[] {
+  const todos = [...spec.negativos, ...(spec.marca?.evitar ?? []), ...extra];
+  const unicos = [...new Set(todos)];
+  if (!textoDe(spec)) return unicos;
+  return unicos.filter((n) => !/\b(text|texto|subtitles|caption|typography|letter)/i.test(n));
 }
 
 /**

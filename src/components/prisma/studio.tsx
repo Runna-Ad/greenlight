@@ -94,6 +94,7 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
   const [kind, setKind] = useState<JobKind | null>(null);
   const [job, setJob] = useState<JobType | null>(null);
   const [idea, setIdea] = useState("");
+  const [texto, setTexto] = useState("");
   const [refs, setRefs] = useState<Partial<Record<RefRole, RefLocal | null>>>({});
   const [look, setLook] = useState<Look>(lookVacio);
   const [destino, setDestino] = useState<Destino>("ig_story");
@@ -133,7 +134,7 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
 
   // Sin useMemo a propósito: el React Compiler ya memoiza, y una dependencia derivada
   // (refsLista.length) hacía que el compilador saltara el componente entero.
-  const sugerencia = job ? elegirHerramienta({ job, destino, tieneDialogo: dialogo.trim().length > 0, tieneRefs: refsLista.length > 0, movimientoMarcado: !!look.movimiento }) : null;
+  const sugerencia = job ? elegirHerramienta({ job, destino, tieneDialogo: dialogo.trim().length > 0, tieneRefs: refsLista.length > 0, movimientoMarcado: !!look.movimiento, tieneTexto: texto.trim().length > 0 }) : null;
   const tool: Tool | null = toolOverride ?? sugerencia?.tool ?? null;
   const aspect = marca?.preset.aspect_default ?? ASPECT_POR_DESTINO[destino];
   const duraciones = tool ? TOOL_INFO[tool].duraciones : [];
@@ -193,6 +194,7 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
       marcaId,
       personajeId,
       videoType: tool === "sora" ? videoType : null,
+      texto: texto.trim() || null,
     };
     // try/finally: si la llamada REVIENTA (red), el botón no se queda en "Generando…".
     let r: Awaited<ReturnType<typeof generarPrompt>>;
@@ -347,6 +349,15 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
                       {tx(UI.ideaLabel, lang)}
                     </label>
                     <Textarea id="prisma-idea" autoFocus value={idea} onChange={(e) => setIdea(e.target.value)} placeholder={tx(UI.ideaPlaceholder, lang)} rows={3} className="mt-2" />
+                  </div>
+                  {/* Texto en la pieza: campo PROPIO (no se saca de la idea). Lo que se
+                      escribe aquí va tal cual al prompt, en el idioma en que se escribió. */}
+                  <div>
+                    <label htmlFor="prisma-texto" className="block text-sm font-medium text-foreground">
+                      {tx(UI.textoLabel, lang)}
+                    </label>
+                    <input id="prisma-texto" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={tx(UI.textoPlaceholder, lang)} maxLength={200} className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                    <p className="mt-1 text-xs text-muted-foreground">{tx(UI.textoAyuda, lang)}</p>
                   </div>
                   {slots.length > 0 && (
                     <div className="grid gap-3 sm:grid-cols-2">

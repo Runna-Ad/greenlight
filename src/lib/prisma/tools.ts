@@ -47,6 +47,20 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
     duraciones: [],
     color: "#f7c948",
   },
+  chatgpt: {
+    id: "chatgpt",
+    nombre: "ChatGPT Images",
+    idioma: "en",
+    formato: "texto",
+    maxPalabras: null,
+    maxCaracteres: null,
+    url: "https://chatgpt.com/",
+    imagenes: true,
+    video: false,
+    duraciones: [],
+    // Verde: el sexto tono cierra el círculo del espectro (cian → verde → amarillo).
+    color: "#3dd68c",
+  },
   veo: {
     id: "veo",
     nombre: "Veo 3.1",
@@ -109,22 +123,24 @@ export const COLOR_KIND: Record<JobKind, string> = {
   video: "#29b6f6",
 };
 
-/** Qué herramientas pueden hacer cada trabajo (la primera es la sugerida por defecto). */
+/** Qué herramientas pueden hacer cada trabajo (la primera es la sugerida por defecto).
+ *  Imagen y edición: Nano Banana (mejor con referencias e identidad) y ChatGPT Images
+ *  (mejor pintando texto exacto). routing.ts decide cuál sugerir. */
 export const TOOLS_POR_JOB: Record<JobType, Tool[]> = {
-  foto_producto: ["nanobanana"],
-  escena_persona: ["nanobanana"],
-  imagen_libre: ["nanobanana"],
-  cambio_outfit: ["nanobanana"],
-  cambio_fondo: ["nanobanana"],
-  cambio_pose: ["nanobanana"],
-  agregar_objeto: ["nanobanana"],
-  cambio_angulo: ["nanobanana"],
-  restaurar_foto: ["nanobanana"],
-  mejora_foto: ["nanobanana"],
-  aplicar_logo: ["nanobanana"],
-  dos_personajes: ["nanobanana"],
-  cambio_epoca: ["nanobanana"],
-  figura_coleccionable: ["nanobanana"],
+  foto_producto: ["nanobanana", "chatgpt"],
+  escena_persona: ["nanobanana", "chatgpt"],
+  imagen_libre: ["nanobanana", "chatgpt"],
+  cambio_outfit: ["nanobanana", "chatgpt"],
+  cambio_fondo: ["nanobanana", "chatgpt"],
+  cambio_pose: ["nanobanana", "chatgpt"],
+  agregar_objeto: ["nanobanana", "chatgpt"],
+  cambio_angulo: ["nanobanana", "chatgpt"],
+  restaurar_foto: ["nanobanana", "chatgpt"],
+  mejora_foto: ["nanobanana", "chatgpt"],
+  aplicar_logo: ["nanobanana", "chatgpt"],
+  dos_personajes: ["nanobanana", "chatgpt"],
+  cambio_epoca: ["nanobanana", "chatgpt"],
+  figura_coleccionable: ["nanobanana", "chatgpt"],
   animar_foto: ["veo", "kling", "higgsfield"],
   texto_a_video: ["veo", "kling", "sora"],
   transicion: ["kling", "veo"],

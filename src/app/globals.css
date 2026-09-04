@@ -319,7 +319,7 @@
    Sin movimiento bajo prefers-reduced-motion (el riel queda estático). */
 .gl-nav-spectrum {
   position: relative;
-  --gl-spectrum: linear-gradient(180deg, #f7c948, #ff8a3d, #ff5a6e, #e24cb4, #29b6f6, #f7c948);
+  --gl-spectrum: linear-gradient(180deg, #f7c948, #ff8a3d, #ff5a6e, #e24cb4, #29b6f6, #3dd68c, #f7c948);
 }
 .gl-nav-spectrum::before {
   content: "";

@@ -3,7 +3,7 @@
  * muy bien una estructura de campos + beats con tiempo (lo mismo que hace fuerte al
  * prompt de Sora). El diálogo va en su idioma original; el resto en inglés.
  */
-import { comas, sinPronombre, type Beat, type PromptSpec } from "../spec.ts";
+import { comas, negativosDe, sinPronombre, textoDe, type Beat, type PromptSpec } from "../spec.ts";
 import type { Salida } from "./salida.ts";
 import { beatsDe } from "./beats.ts";
 import { duracionValida } from "../tools.ts";
@@ -17,7 +17,8 @@ type VeoJson = {
   elements: string[];
   motion: string;
   ending: string;
-  text: "none";
+  /** "none" o el texto exacto que debe verse en pantalla (con posición/estilo si los hay). */
+  text: string;
   dialogue?: { text: string; language: string; voice: string };
   keywords: string[];
   timeline: { timestamp: string; action: string }[];
@@ -49,8 +50,10 @@ function elementos(spec: PromptSpec): string[] {
 export function compilarVeo(spec: PromptSpec): Salida {
   const dur = duracionValida("veo", spec.duracion);
   const beats: Beat[] = beatsDe(spec, dur);
-  const negativos = new Set<string>(["no subtitles", "no text overlays", "no hard cuts", ...spec.negativos, ...(spec.marca?.evitar ?? [])]);
+  const t = textoDe(spec);
+  const negativos = new Set<string>(negativosDe(spec, [...(t ? [] : ["no subtitles", "no text overlays"]), "no hard cuts"]));
   if (!spec.dialogo) negativos.add("no music background");
+  if (t) negativos.add("no other text");
 
   const json: VeoJson = {
     description: descripcion(spec),
@@ -61,7 +64,7 @@ export function compilarVeo(spec: PromptSpec): Salida {
     elements: elementos(spec),
     motion: beats.map((b) => b.accion).join(" → "),
     ending: beats[beats.length - 1]?.accion ?? "",
-    text: "none",
+    text: t ? `"${t.contenido.trim()}"${t.posicion ? ` — ${t.posicion}` : ""}${t.estilo ? ` — ${t.estilo}` : ""} (exact spelling, stays legible)` : "none",
     ...(spec.dialogo?.texto.trim()
       ? { dialogue: { text: spec.dialogo.texto.trim(), language: spec.dialogo.idioma, voice: spec.dialogo.voz ?? "natural, conversational" } }
       : {}),

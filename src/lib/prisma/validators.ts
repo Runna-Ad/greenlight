@@ -4,7 +4,7 @@
  * Si falla, el writer hace UNA llamada de reparación con estos errores como feedback.
  * Módulo puro.
  */
-import { contarPalabras, type PromptSpec, type Tool } from "./spec.ts";
+import { contarPalabras, textoDe, type PromptSpec, type Tool } from "./spec.ts";
 import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO, duracionValida } from "./tools.ts";
 import { PRESETS_HIGGSFIELD } from "./compilers/higgsfield.ts";
 import { SORA_TYPE_EN } from "./compilers/sora.ts";
@@ -23,7 +23,8 @@ const CONTRADICCIONES: [RegExp, RegExp, string][] = [
 const STOP_ES = /\b(el|la|los|las|una|unos|unas|con|para|por|que|pero|también|desde|hacia|sobre|mientras|donde|cuando)\b/gi;
 
 function sinDialogo(texto: string): string {
-  // Quita lo que va entre comillas (diálogo en su idioma original) antes de medir idioma.
+  // Quita lo que va entre comillas (diálogo o texto en imagen, en su idioma original)
+  // antes de medir idioma.
   return texto.replace(/"[^"]*"/g, "").replace(/“[^”]*”/g, "");
 }
 
@@ -41,6 +42,11 @@ function comunes(texto: string, spec: PromptSpec): string[] {
   for (const [a, b, msg] of CONTRADICCIONES) {
     if (a.test(cuerpo) && b.test(cuerpo)) e.push(`Luz contradictoria: ${msg}.`);
   }
+  // El texto pedido tiene que ir TAL CUAL (entre comillas) en el prompt: si falta,
+  // la herramienta no lo pinta y el diseñador cree que HÜE lo ignoró (2026-09-04).
+  const t = textoDe(spec);
+  // El JSON de Veo escapa las comillas (\"): se quitan antes de buscar.
+  if (t && !texto.replace(/\\"/g, '"').includes(`"${t.contenido.trim()}"`)) e.push(`No incluye el texto pedido "${t.contenido.trim()}" tal cual.`);
   return e;
 }
 
@@ -70,7 +76,9 @@ function veo(texto: string, spec: PromptSpec): string[] {
   }
   const kw = Array.isArray(j.keywords) ? (j.keywords as unknown[]) : [];
   if (!kw.includes(spec.aspect)) e.push(`keywords debe incluir el formato ${spec.aspect}.`);
-  if (j.text !== "none") e.push('text debe ser "none" (sin texto en pantalla).');
+  if (textoDe(spec)) {
+    if (j.text === "none") e.push("text no puede ser \"none\": el diseñador pidió texto en pantalla.");
+  } else if (j.text !== "none") e.push('text debe ser "none" (sin texto en pantalla).');
   const tl = Array.isArray(j.timeline) ? (j.timeline as unknown[]) : [];
   if (tl.length < 3) e.push("El timeline debe tener 3 bloques.");
   const neg = Array.isArray(j.negative_prompts) ? (j.negative_prompts as unknown[]) : [];
@@ -111,6 +119,18 @@ function nanobanana(texto: string, spec: PromptSpec): string[] {
   return e;
 }
 
+function chatgpt(texto: string, spec: PromptSpec): string[] {
+  const e: string[] = [];
+  const ord = ["first", "second", "third", "fourth"];
+  spec.refs.forEach((_, i) => {
+    if (!texto.includes(`the ${ord[i] ?? `#${i + 1}`} attached image`)) e.push(`No usa la referencia adjunta ${i + 1}.`);
+  });
+  if (spec.refs.length && !/Keep unchanged:/.test(texto)) e.push('Falta la cláusula "Keep unchanged" (qué se conserva).');
+  if (/\[Imagen \d/.test(texto)) e.push("Usa etiquetas [Imagen N], que ChatGPT no entiende (van como adjuntos).");
+  if (!/(square|portrait|landscape) \(\d+×\d+\)/.test(texto)) e.push("Falta el tamaño de salida (square/portrait/landscape).");
+  return e;
+}
+
 export function validar(texto: string, spec: PromptSpec, tool: Tool = spec.tool): Veredicto {
   const errores = [...comunes(texto, spec)];
   switch (tool) {
@@ -128,6 +148,9 @@ export function validar(texto: string, spec: PromptSpec, tool: Tool = spec.tool)
       break;
     case "nanobanana":
       errores.push(...nanobanana(texto, spec));
+      break;
+    case "chatgpt":
+      errores.push(...chatgpt(texto, spec));
       break;
   }
   return errores.length ? { ok: false, errores } : { ok: true };

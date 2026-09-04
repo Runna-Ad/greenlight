@@ -101,6 +101,8 @@ export type InputGenerar = {
   marcaId: string | null;
   personajeId: string | null;
   videoType: string | null;
+  /** Texto que debe verse en la pieza (campo propio del wizard). */
+  texto: string | null;
 };
 
 export type ResultadoGenerar = {
@@ -167,6 +169,7 @@ function normalizar(raw: InputGenerar): InputGenerar | Fail {
     marcaId: sn(raw.marcaId, 64),
     personajeId: sn(raw.personajeId, 64),
     videoType,
+    texto: sn(raw.texto, 200),
   };
 }
 
@@ -204,6 +207,7 @@ async function entradaDe(inp: InputGenerar): Promise<{ entrada: EntradaWriter; c
       marca,
       personaje,
       videoType: inp.videoType,
+      texto: inp.texto,
     },
   };
 }
@@ -297,6 +301,7 @@ export async function refinarPrompt(specId: string, cambio: string): Promise<Res
     marca: spec.marca,
     personaje: null,
     videoType: spec.video_type,
+    texto: spec.texto?.contenido ?? null,
   };
   const r = await refinarSpec(entrada, spec, texto);
   if (!r.ok) return r;

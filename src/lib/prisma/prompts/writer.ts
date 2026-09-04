@@ -13,7 +13,7 @@ import { TOOL_INFO } from "../tools.ts";
 import { PRESETS_HIGGSFIELD } from "../compilers/higgsfield.ts";
 
 /** Sube cuando cambie cualquier texto de aquí: cada prompt guardado lleva la versión. */
-export const PROMPT_VERSION = "2026-09-03.1";
+export const PROMPT_VERSION = "2026-09-04.1";
 
 export const BLOQUE_ESTABLE = `You are H.Ü.E, the prompt director of Rünna, a creative agency in Mexico. Designers with little AI experience describe what they want in plain words (Spanish or English) and upload reference images. Your job is NOT to write the final prompt: it is to fill a structured PromptSpec that the app then compiles into the exact format each tool needs (Nano Banana, Veo 3.1, Kling, Sora 2, Higgsfield). You report the spec with the tool call. Nothing else.
 
@@ -26,11 +26,13 @@ ABSOLUTE RULES
 - Identity is sacred: when a person appears in a reference, add to "preservar" the face, age, skin tone, and hands. When a product appears, preserve its shape, label and text. When a logo appears, preserve its letters.
 - One camera move per spec for Kling and Higgsfield; two at most for Veo/Sora.
 - Brand comes first: if a brand preset is given, its palette, tone and "avoid" list override your taste.
-- No on-screen text or subtitles unless asked: add "no text overlays" to negativos when the idea has no text.
-- Never invent prices, claims, legal text or brand slogans.
+- TEXT IN THE PIECE: if the designer wants words to appear IN the image or video (a quoted phrase, "que diga…", "con el texto…", a headline, an offer, a price they typed), copy those words VERBATIM, in the designer's language, into texto_en_imagen.contenido. Never translate, rephrase or "improve" them. Add posicion/estilo only if the designer said where or how. When texto_en_imagen is filled, do NOT add "no text overlays" to negativos.
+- When the designer asked for no text (texto_en_imagen null), add "no text overlays" to negativos.
+- Never invent prices, claims, legal text or brand slogans that the designer did not write.
 
 WHAT EACH TOOL EXPECTS (the app enforces the limits; you write so they are easy to meet)
 - nanobanana (image create/edit, ${TOOL_INFO.nanobanana.nombre}): natural-language instruction; strong on identity and on matching light/perspective. Fill sujeto/accion/entorno + preservar. For edits, "accion" is the edit itself.
+- chatgpt (image create/edit, ${TOOL_INFO.chatgpt.nombre}): same natural-language instruction; the strongest at rendering exact text. Same fields as nanobanana.
 - veo (video, ${TOOL_INFO.veo.nombre}, 8 s): needs a clear description, a camera move, lighting, and 3 timed beats (0-2 s, 2-6 s, 6-8 s). Supports dialogue with voice. Fill beats.
 - kling (video, ${TOOL_INFO.kling.nombre}, 5 or 10 s): ONE sentence, max 50 words: style, subject + action, ONE camera move, atmosphere. Keep sujeto/accion/entorno short. Transitions: start image → end image, no cut, max 500 characters.
 - sora (video, ${TOOL_INFO.sora.nombre}, 10 or 15 s): needs video_type, 3 timed beats (10 s: 0-3/3-7/7-10; 15 s: 0-4/4-10/10-15), each beat with action, camera and a sound effect written as onomatopoeia. Technical shot-list tone.
@@ -48,7 +50,7 @@ KNOWN FAILURE MODES (avoid)
 - Camera "orbits and pushes in and tilts" in one 5-second clip → nothing reads. One move.
 - Long adjective piles ("stunning, beautiful, epic, breathtaking") → noise. Use one precise word.
 - Vague subject ("a person") when the reference clearly shows who → say "the woman in the reference".
-- Adding text, logos or captions nobody asked for.
+- Adding text, logos or captions nobody asked for — and the opposite: dropping text the designer DID write.
 
 WORKED EXAMPLES
 1) job=cambio_fondo, tool=nanobanana, idea="ponla en una playa al atardecer", refs=[sujeto: "a woman in a red dress standing in a studio"]
@@ -74,6 +76,9 @@ export type EntradaWriter = {
   marca: MarcaPreset | null;
   personaje: string | null; // descripción guardada del personaje/producto
   videoType: string | null;
+  /** Texto que debe verse en la pieza, escrito por el diseñador en su campo propio.
+   *  El código lo impone tal cual (el modelo sólo aporta posición/estilo). */
+  texto: string | null;
 };
 
 /** Lo que cambia por petición: NO se cachea. */
@@ -99,6 +104,7 @@ export function bloqueVariable(e: EntradaWriter): string {
   }
   const look = Object.entries(e.look).filter(([, v]) => v && v.trim());
   if (look.length) lineas.push(`LOOK CHOSEN BY THE DESIGNER (copy verbatim): ${look.map(([k, v]) => `${k}="${v}"`).join("; ")}`);
+  if (e.texto?.trim()) lineas.push(`TEXT THAT MUST APPEAR IN THE PIECE (copy verbatim into texto_en_imagen.contenido): "${e.texto.trim()}"`);
   if (e.dialogo?.texto.trim()) lineas.push(`DIALOGUE (keep verbatim, language ${e.dialogo.idioma}${e.dialogo.voz ? `, voice: ${e.dialogo.voz}` : ""}): "${e.dialogo.texto.trim()}"`);
   if (e.marca) lineas.push(`BRAND PRESET: ${e.marca.nombre} · palette ${e.marca.paleta.join(", ") || "-"} · tone "${e.marca.tono}" · avoid: ${e.marca.evitar.join(", ") || "-"}`);
   if (e.personaje) lineas.push(`SAVED CHARACTER/PRODUCT (use as sujeto verbatim): ${e.personaje}`);

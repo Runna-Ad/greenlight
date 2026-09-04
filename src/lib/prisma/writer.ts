@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { specVacio, type PromptSpec, type Beat, type Camara, type Dialogo, type SoraVideoType, type Tool } from "@/lib/prisma/spec";
+import { specVacio, type PromptSpec, type Beat, type Camara, type Dialogo, type SoraVideoType, type TextoEnImagen, type Tool } from "@/lib/prisma/spec";
 import { SORA_VIDEO_TYPES } from "@/lib/prisma/spec";
 import { compilar, type Salida } from "@/lib/prisma/compilers";
 import { validar } from "@/lib/prisma/validators";
@@ -74,8 +74,18 @@ const SPEC_SCHEMA = {
     video_type: { type: ["string", "null"], enum: [...SORA_VIDEO_TYPES, null] },
     preset: { type: ["string", "null"], enum: [...PRESETS_HIGGSFIELD, null] },
     dialogo_voz: { type: ["string", "null"], description: "Voice description for the dialogue, if any." },
+    texto_en_imagen: {
+      type: ["object", "null"],
+      description: "Words that must appear inside the image/video, verbatim in the designer's language. null when no text was asked for.",
+      properties: {
+        contenido: { type: "string" },
+        posicion: { type: ["string", "null"], description: "Where it sits, e.g. 'top third', 'bottom left corner'." },
+        estilo: { type: ["string", "null"], description: "How it looks, e.g. 'bold white sans-serif'." },
+      },
+      required: ["contenido", "posicion", "estilo"],
+    },
   },
-  required: ["sujeto", "accion", "entorno", "camara", "luz", "mood", "estilo", "paleta", "texturas", "negativos", "preservar", "beats", "video_type", "preset", "dialogo_voz"],
+  required: ["sujeto", "accion", "entorno", "camara", "luz", "mood", "estilo", "paleta", "texturas", "negativos", "preservar", "beats", "video_type", "preset", "dialogo_voz", "texto_en_imagen"],
 };
 
 const s0 = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
@@ -90,6 +100,16 @@ function beatsDe(v: unknown): Beat[] | null {
     out.push({ desde: Number(o.desde) || 0, hasta: Number(o.hasta) || 0, accion: s0(o.accion), camara: s0(o.camara), sfx: s0(o.sfx) });
   }
   return out.filter((b) => b.accion).length ? out : null;
+}
+
+/** El texto en imagen: lo que el diseñador escribió en su campo MANDA (tal cual); el
+ *  modelo sólo aporta posición y estilo. Si no llenó el campo, vale lo que el modelo
+ *  rescató de la idea (p. ej. una frase entre comillas). */
+function textoDesde(input: Record<string, unknown>, e: EntradaWriter): TextoEnImagen | null {
+  const m = (input.texto_en_imagen ?? null) as Record<string, unknown> | null;
+  const contenido = e.texto?.trim() || (m ? s0(m.contenido) : "");
+  if (!contenido) return null;
+  return { contenido, posicion: m ? sn(m.posicion) : null, estilo: m ? sn(m.estilo) : null };
 }
 
 /** Mezcla lo que el modelo devolvió con lo que el código ya sabía (entrada). */
@@ -122,6 +142,7 @@ function specDesde(input: Record<string, unknown>, e: EntradaWriter): PromptSpec
     beats: beatsDe(input.beats),
     video_type: (SORA_VIDEO_TYPES as string[]).includes(vt ?? "") ? (vt as SoraVideoType) : e.videoType && (SORA_VIDEO_TYPES as string[]).includes(e.videoType) ? (e.videoType as SoraVideoType) : null,
     preset: sn(input.preset),
+    texto: textoDesde(input, e),
   };
 }
 

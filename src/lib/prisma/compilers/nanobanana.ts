@@ -4,14 +4,21 @@
  * cláusula PRESERVAR siempre (identidad, manos, texto del empaque), igualar luz y
  * perspectiva desde el ADN visual, y paleta de marca en foto de producto.
  */
-import { etiquetaRef, frases, type PromptSpec, type RefRole } from "../spec.ts";
+import { etiquetaRef, frases, negativosDe, textoDe, type PromptSpec, type RefRole } from "../spec.ts";
 import type { Salida } from "./salida.ts";
 
-const ref = (spec: PromptSpec, role: RefRole): string => etiquetaRef(spec, role) ?? `[Imagen: ${role}]`;
+/** Cómo se nombra una referencia dentro del prompt. Nano Banana entiende "[Imagen N]";
+ *  ChatGPT prefiere "the first attached image". Cada compiler pasa la suya. */
+export type Etiquetador = (spec: PromptSpec, role: RefRole) => string | null;
 
-/** La instrucción principal, por trabajo. Cada una es una frase completa en inglés. */
-function instruccion(spec: PromptSpec): string {
+const etiquetaNB: Etiquetador = (spec, role) => etiquetaRef(spec, role);
+
+/** La instrucción principal, por trabajo. Cada una es una frase completa en inglés.
+ *  `sujeto`/`accion` del spec se anexan al final para que NADA que H.Ü.E escribió se
+ *  pierda (antes foto_producto leía sólo `entorno` y tiraba el resto). */
+function instruccion(spec: PromptSpec, etiqueta: Etiquetador): string {
   const s = spec;
+  const ref = (sp: PromptSpec, role: RefRole): string => etiqueta(sp, role) ?? `[Imagen: ${role}]`;
   const idea = s.accion || s.idea;
   switch (s.job) {
     case "cambio_outfit":
@@ -31,22 +38,22 @@ function instruccion(spec: PromptSpec): string {
     case "aplicar_logo":
       return `Apply the logo from ${ref(s, "logo")} onto the product or surface in ${ref(s, "producto")}. ${idea || "The logo must follow the curvature, texture and lighting of the surface like a real print"}. Keep the logo's proportions and every letter legible`;
     case "dos_personajes": {
-      const pose = etiquetaRef(s, "pose");
+      const pose = etiqueta(s, "pose");
       return `Create one photorealistic scene with the person from ${ref(s, "sujeto")} and the person from ${ref(s, "personaje2")} together${pose ? `, using the pose from ${pose}` : ""}. Scene and interaction: ${idea}. Lighting, shadows and perspective must match for both people`;
     }
     case "cambio_epoca":
       return `Transport the subject from ${ref(s, "sujeto")} to this era and style: ${idea}. Adapt clothing, hairstyle and environment to that period and apply a color treatment and grain that simulates photography of that time`;
     case "figura_coleccionable": {
-      const emp = etiquetaRef(s, "empaque");
+      const emp = etiqueta(s, "empaque");
       return `Turn the subject from ${ref(s, "sujeto")} into a collectible figure${s.estilo ? ` in ${s.estilo} style` : " in detailed vinyl style"}, standing on a round base under clean studio lighting${emp ? `. Behind the figure, its product box, with a design inspired by ${emp}` : ". Next to it, a product box with a modern graphic design showing an illustration of the character"}`;
     }
     case "foto_producto":
-      return `Turn the product photo from ${ref(s, "producto")} into a high-impact advertising photograph. Keep the product itself unchanged but optimize lighting, focus and color. ${s.entorno ? `Place it in this setting: ${s.entorno}` : "Place it in the best aspirational setting for its audience"}. Avoid distortion, harsh shadows and busy backgrounds; textures and details must look natural and high resolution`;
+      return `Turn the product photo from ${ref(s, "producto")} into a high-impact advertising photograph. Keep the product itself unchanged but optimize lighting, focus and color. ${s.entorno ? `Place it in this setting: ${s.entorno}` : "Place it in the best aspirational setting for its audience"}${s.accion ? `. Composition and action: ${s.accion}` : ""}. Avoid distortion, harsh shadows and busy backgrounds; textures and details must look natural and high resolution`;
     case "escena_persona":
       return `Take the person from ${ref(s, "sujeto")} and create a new photograph of them ${s.accion ? s.accion : "in a natural pose"}${s.entorno ? ` in ${s.entorno}` : ""}. Integrate lighting, shadows and perspective so it looks like one real shot`;
     case "imagen_libre":
     default: {
-      const estilo = etiquetaRef(s, "estilo");
+      const estilo = etiqueta(s, "estilo");
       return `Create an image of ${s.sujeto || idea}${s.accion ? ` ${s.accion}` : ""}${s.entorno ? `, in ${s.entorno}` : ""}${estilo ? `, in the visual style of ${estilo}` : ""}`;
     }
   }
@@ -98,15 +105,33 @@ function marca(spec: PromptSpec): string | null {
   return partes.length ? `Brand: ${m.nombre}, ${partes.join(", ")}` : null;
 }
 
-export function compilarNanoBanana(spec: PromptSpec): Salida {
-  const evitar = [...spec.negativos, ...(spec.marca?.evitar ?? [])];
-  const texto = frases(
-    instruccion(spec),
+/** La cláusula del texto en imagen: letra por letra, entre comillas, y nada más de texto.
+ *  Es la misma para las dos herramientas de imagen (las dos pintan texto si se les pide
+ *  claro). Si no hay texto, se prohíbe explícitamente. */
+export function clausulaTexto(spec: PromptSpec): string {
+  const t = textoDe(spec);
+  if (!t) return "No text, letters, captions or watermarks anywhere in the image";
+  return `Render this exact text, spelled letter by letter with no changes, as part of the image: "${t.contenido.trim()}"${t.posicion ? `, placed ${t.posicion}` : ""}${t.estilo ? `, ${t.estilo}` : ", in clean legible typography that suits the scene"}. No other text`;
+}
+
+/** El cuerpo compartido de un prompt de imagen (Nano Banana y ChatGPT usan el mismo
+ *  orden: instrucción → igualar referencia → técnica → marca → texto → conservar → evitar). */
+export function cuerpoImagen(spec: PromptSpec, etiqueta: Etiquetador): (string | null)[] {
+  const evitar = negativosDe(spec);
+  return [
+    instruccion(spec, etiqueta),
     igualarADN(spec),
     tecnicos(spec),
     marca(spec),
-    `Keep unchanged: ${preservar(spec).join("; ")}`,
+    clausulaTexto(spec),
+    spec.refs.length || spec.preservar.length ? `Keep unchanged: ${preservar(spec).join("; ")}` : null,
     evitar.length ? `Avoid: ${evitar.join(", ")}` : null,
+  ];
+}
+
+export function compilarNanoBanana(spec: PromptSpec): Salida {
+  const texto = frases(
+    ...cuerpoImagen(spec, etiquetaNB),
     `Output format: ${spec.aspect}, photorealistic unless a style says otherwise`,
   );
   return { texto, formato: "texto" };

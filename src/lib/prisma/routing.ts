@@ -3,7 +3,7 @@
  * cada elección devuelve un `porque` en una línea que la UI enseña tal cual.
  * Módulo puro.
  */
-import type { JobType, PromptSpec, Tool, Destino } from "./spec.ts";
+import { JOB_KIND, textoDe, type JobType, type PromptSpec, type Tool, type Destino } from "./spec.ts";
 import { TOOLS_POR_JOB } from "./tools.ts";
 import { t, type Par } from "./copy.ts";
 
@@ -16,15 +16,25 @@ export type PistasRuta = {
   tieneRefs: boolean;
   /** El diseñador pidió un movimiento de cámara concreto (órbita, crash zoom…). */
   movimientoMarcado: boolean;
+  /** El diseñador escribió texto que debe verse en la pieza. */
+  tieneTexto: boolean;
 };
 
 export function elegirHerramienta(p: PistasRuta): Eleccion {
   const opciones = TOOLS_POR_JOB[p.job];
   const primera = opciones[0];
 
-  // Imagen y edición: sólo hay una herramienta de imagen en v1.
+  // Imagen y edición: dos herramientas. Con texto pedido gana ChatGPT (pinta letras
+  // exactas con mucha más fiabilidad); si no, Nano Banana (identidad y referencias).
+  if (JOB_KIND[p.job] !== "video") {
+    if (p.tieneTexto) {
+      return { tool: "chatgpt", porque: t("Pediste texto en la imagen y ChatGPT es la que mejor escribe letras exactas.", "You asked for text in the image and ChatGPT is the best at rendering exact lettering.") };
+    }
+    return { tool: "nanobanana", porque: t("Nano Banana es la que mejor respeta caras, productos y referencias.", "Nano Banana is the best at keeping faces, products and references faithful.") };
+  }
+
   if (opciones.length === 1) {
-    return { tool: primera, porque: t("Es la herramienta de imagen de la agencia y trabaja muy bien con referencias.", "It is the agency's image tool and it works very well with references.") };
+    return { tool: primera, porque: t("Es la única herramienta para este trabajo.", "It is the only tool for this job.") };
   }
 
   if (p.job === "transicion") {
@@ -61,5 +71,6 @@ export function pistasDe(spec: PromptSpec, destino: Destino): PistasRuta {
     tieneDialogo: !!spec.dialogo?.texto.trim(),
     tieneRefs: spec.refs.length > 0,
     movimientoMarcado: !!spec.camara.movimiento?.trim(),
+    tieneTexto: !!textoDe(spec),
   };
 }

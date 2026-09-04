@@ -3,7 +3,7 @@
  * estilo, sujeto+acción, movimiento de cámara, atmósfera. Sin conectores largos.
  * Transiciones: prosa corta, ≤500 caracteres (Kling corta el prompt).
  */
-import { comas, contarPalabras, sinPronombre, type PromptSpec } from "../spec.ts";
+import { comas, contarPalabras, sinPronombre, textoDe, type PromptSpec } from "../spec.ts";
 import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO } from "../tools.ts";
 import type { Salida } from "./salida.ts";
 
@@ -25,10 +25,13 @@ export function compilarKling(spec: PromptSpec): Salida {
       : `${spec.sujeto || spec.idea} ${sinPronombre(spec.accion)}`.trim();
   const camara = spec.camara.movimiento || "camera slowly pushes in";
   const atmosfera = comas(spec.luz, spec.entorno && spec.job !== "animar_foto" ? spec.entorno : null, spec.mood);
+  const t = textoDe(spec);
+  const clausulaTexto = t ? `on-screen text "${t.contenido.trim()}"${t.posicion ? ` ${t.posicion}` : ""}` : null;
 
   // Se recorta de atrás hacia adelante: la atmósfera es lo primero que se sacrifica,
-  // el estilo y el sujeto nunca.
-  const capas = [estilo, sujeto, camara, atmosfera];
+  // el estilo y el sujeto nunca. El texto pedido va ANTES de la atmósfera: si el
+  // diseñador lo escribió, pesa más que el mood.
+  const capas = [estilo, sujeto, camara, ...(clausulaTexto ? [clausulaTexto] : []), atmosfera];
   let texto = comas(...capas);
   while (contarPalabras(texto) > MAX && capas.length > 2) {
     capas.pop();

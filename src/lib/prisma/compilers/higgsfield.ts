@@ -3,7 +3,7 @@
  * de cámara que el diseñador elige en la herramienta. El movimiento del spec se mapea
  * al preset más cercano; si no hay match, se sugiere "Dolly In".
  */
-import { comas, contarPalabras, sinPronombre, type PromptSpec } from "../spec.ts";
+import { comas, contarPalabras, sinPronombre, textoDe, type PromptSpec } from "../spec.ts";
 import { TOOL_INFO } from "../tools.ts";
 import type { Salida } from "./salida.ts";
 
@@ -71,7 +71,8 @@ export function compilarHiggsfield(spec: PromptSpec): Salida {
     spec.job === "animar_foto"
       ? `${spec.sujeto || "the subject from the reference image"} ${spec.accion ? sinPronombre(spec.accion) : "comes alive with subtle natural motion"}`
       : `${spec.sujeto || spec.idea} ${sinPronombre(spec.accion)}`.trim();
-  const capas = [sujeto, spec.entorno && spec.job !== "animar_foto" ? spec.entorno : null, spec.luz, spec.mood, spec.estilo];
+  const t = textoDe(spec);
+  const capas = [sujeto, t ? `on-screen text "${t.contenido.trim()}"` : null, spec.entorno && spec.job !== "animar_foto" ? spec.entorno : null, spec.luz, spec.mood, spec.estilo];
   let cuerpo = comas(...capas);
   while (contarPalabras(cuerpo) > MAX && capas.length > 1) {
     capas.pop();

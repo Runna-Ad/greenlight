@@ -196,7 +196,7 @@ console.log("\n▶ validators comunes");
 // ── 8. Routing ──
 console.log("\n▶ routing");
 {
-  const base = { destino: "ig_story", tieneDialogo: false, tieneRefs: true, movimientoMarcado: false };
+  const base = { destino: "ig_story", tieneDialogo: false, tieneRefs: true, movimientoMarcado: false, tieneTexto: false };
   eq("edición → nanobanana", elegirHerramienta({ ...base, job: "cambio_outfit" }).tool, "nanobanana");
   eq("animar foto vertical sin voz → kling", elegirHerramienta({ ...base, job: "animar_foto" }).tool, "kling");
   eq("con diálogo → veo", elegirHerramienta({ ...base, job: "animar_foto", tieneDialogo: true }).tool, "veo");
@@ -205,6 +205,53 @@ console.log("\n▶ routing");
   eq("escena sora → sora", elegirHerramienta({ ...base, job: "escena_sora" }).tool, "sora");
   eq("texto a video en YouTube → veo", elegirHerramienta({ ...base, job: "texto_a_video", destino: "yt" }).tool, "veo");
   ok("toda elección trae un porqué en ambos idiomas", (() => { const p = elegirHerramienta({ ...base, job: "transicion" }).porque; return p.es.length > 10 && p.en.length > 10; })());
+}
+
+// ── 10. Texto en imagen + ChatGPT Images (2026-09-04) ──
+console.log("\n▶ texto en imagen + chatgpt");
+{
+  const texto = { contenido: "Hasta 20% de cashback", posicion: "top third", estilo: null };
+  // Nano Banana: el texto va tal cual entre comillas y desaparece la prohibición de texto.
+  const nb = compilar(spec("foto_producto", "nanobanana", { texto, negativos: ["no text overlays", "blur"] }));
+  ok("nanobanana incluye el texto tal cual", nb.texto.includes('"Hasta 20% de cashback"'), nb.texto);
+  ok("nanobanana quita 'no text overlays' cuando hay texto", !/no text overlays/.test(nb.texto), nb.texto);
+  ok("nanobanana conserva la posición", nb.texto.includes("placed top third"));
+  ok("sin texto, nanobanana lo prohíbe", /No text, letters/.test(compilar(spec("foto_producto", "nanobanana")).texto));
+  ok("foto_producto ya NO tira la acción", compilar(spec("foto_producto", "nanobanana")).texto.includes("walks slowly"));
+  ok("validator exige el texto tal cual", (() => { const v = validar(nb.texto.replace("Hasta 20% de cashback", "20% cashback"), spec("foto_producto", "nanobanana", { texto })); return !v.ok && v.errores.some((e) => e.includes("tal cual")); })());
+  ok("validator pasa con el texto presente", validar(nb.texto, spec("foto_producto", "nanobanana", { texto })).ok, JSON.stringify(validar(nb.texto, spec("foto_producto", "nanobanana", { texto }))));
+
+  // ChatGPT: referencias como adjuntos, tamaño en vez de aspect, valida.
+  const gpt = compilar(spec("cambio_outfit", "chatgpt", { texto }));
+  ok("chatgpt nombra adjuntos", gpt.texto.includes("the first attached image") && gpt.texto.includes("the second attached image"), gpt.texto);
+  ok("chatgpt no usa [Imagen N]", !/\[Imagen \d/.test(gpt.texto));
+  ok("chatgpt pide tamaño portrait para 9:16", /portrait \(1024×1536\)/.test(gpt.texto));
+  ok("chatgpt incluye el texto", gpt.texto.includes('"Hasta 20% de cashback"'));
+  ok("chatgpt válido", validar(gpt.texto, spec("cambio_outfit", "chatgpt", { texto })).ok, JSON.stringify(validar(gpt.texto, spec("cambio_outfit", "chatgpt", { texto }))));
+  ok("chatgpt cuadrado para 1:1", /square \(1024×1024\)/.test(compilar(spec("imagen_libre", "chatgpt", { aspect: "1:1" })).texto));
+  ok("todas las imágenes aceptan chatgpt", JOBS_POR_KIND.imagen.concat(JOBS_POR_KIND.edicion).every((j) => TOOLS_POR_JOB[j].includes("chatgpt")));
+  ok("ningún video acepta chatgpt", JOBS_POR_KIND.video.every((j) => !TOOLS_POR_JOB[j].includes("chatgpt")));
+  ok("chatgpt válido en todos los trabajos de imagen", JOBS_POR_KIND.imagen.concat(JOBS_POR_KIND.edicion).every((j) => validar(compilar(spec(j, "chatgpt")).texto, spec(j, "chatgpt")).ok));
+
+  // Video: el texto aparece y no se contradice.
+  const veo = JSON.parse(compilar(spec("texto_a_video", "veo", { texto })).texto);
+  ok("veo text lleva el texto", veo.text.startsWith('"Hasta 20% de cashback"'), veo.text);
+  ok("veo no prohíbe texto cuando hay texto", !veo.negative_prompts.includes("no text overlays"));
+  ok("veo válido con texto", validar(compilar(spec("texto_a_video", "veo", { texto })).texto, spec("texto_a_video", "veo", { texto })).ok);
+  ok("veo sin texto sigue en none", JSON.parse(compilar(spec("texto_a_video", "veo")).texto).text === "none");
+  const sora = compilar(spec("escena_sora", "sora", { texto })).texto;
+  ok("sora agrega On-screen text", /On-screen text .*"Hasta 20% de cashback"/.test(sora), sora);
+  ok("sora no dice 'no on-screen text' cuando hay texto", !/no on-screen text/.test(sora));
+  const kl = compilar(spec("texto_a_video", "kling", { texto })).texto;
+  ok("kling incluye el texto", kl.includes('"Hasta 20% de cashback"'), kl);
+  ok("kling sigue ≤50 palabras", contarPalabras(kl) <= 50, String(contarPalabras(kl)));
+  ok("filas viejas sin campo texto no rompen", compilar({ ...spec("foto_producto", "nanobanana"), texto: undefined }).texto.length > 0);
+
+  // Routing: con texto → chatgpt; sin texto → nanobanana.
+  const base = { destino: "ig_story", tieneDialogo: false, tieneRefs: true, movimientoMarcado: false };
+  eq("imagen con texto → chatgpt", elegirHerramienta({ ...base, job: "foto_producto", tieneTexto: true }).tool, "chatgpt");
+  eq("imagen sin texto → nanobanana", elegirHerramienta({ ...base, job: "foto_producto", tieneTexto: false }).tool, "nanobanana");
+  eq("video con texto no cambia de herramienta", elegirHerramienta({ ...base, job: "animar_foto", tieneTexto: true }).tool, "kling");
 }
 
 // ── 9. helpers ──

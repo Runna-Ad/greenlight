@@ -4,7 +4,7 @@
  * Empieza SIEMPRE con el tipo de video (Sora lo respeta como guía estética).
  */
 import type { PromptSpec, SoraVideoType } from "../spec.ts";
-import { comas, sinPronombre } from "../spec.ts";
+import { comas, negativosDe, sinPronombre, textoDe } from "../spec.ts";
 import type { Salida } from "./salida.ts";
 import { beatsDe } from "./beats.ts";
 import { duracionValida } from "../tools.ts";
@@ -62,8 +62,10 @@ export function compilarSora(spec: PromptSpec): Salida {
     ? `Voice (${spec.dialogo.idioma}${spec.dialogo.voz ? `, ${spec.dialogo.voz}` : ""}): "${spec.dialogo.texto.trim()}"`
     : "No dialogue";
   lineas.push(`Sound & voice: ${voz}. ${spec.negativos.includes("no music") || !spec.dialogo ? "No background music unless stated." : ""}`.trim());
-  const evitar = [...spec.negativos, ...(spec.marca?.evitar ?? []), "no subtitles", "no on-screen text"];
-  lineas.push(`Avoid: ${[...new Set(evitar)].join(", ")}.`);
+  const t = textoDe(spec);
+  if (t) lineas.push(`On-screen text (exact spelling, legible the whole time): "${t.contenido.trim()}"${t.posicion ? `, ${t.posicion}` : ""}${t.estilo ? `, ${t.estilo}` : ""}.`);
+  const evitar = negativosDe(spec, t ? ["no other text"] : ["no subtitles", "no on-screen text"]);
+  lineas.push(`Avoid: ${evitar.join(", ")}.`);
 
   return { texto: lineas.join("\n"), formato: "texto" };
 }
