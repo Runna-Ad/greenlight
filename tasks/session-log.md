@@ -1916,3 +1916,34 @@ real · prueba con diseñador · decidir merge a main (= deploy a prod; el módu
 - [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
 - [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
 
+
+## 2026-09-04 11:00
+**Shipped (recent commits):**
+  - copy(prisma): español natural de México en toda la interfaz + razones bilingües
+  - feat(prisma): el nombre manda — "HÜE Prisma" en Poppins, "Prisma" con el espectro, ítem del menú encendido
+  - feat(prisma): identidad propia — espectro por herramienta, haz de prisma, motion CSS
+  - chore(prisma): redeploy preview con las variables de Supabase y Anthropic
+  - chore(prisma): redeploy preview con NEXT_PUBLIC_PRISMA_ENABLED
+  - docs(prisma): 0063 aplicada + ship en rama prisma — todo y session-log
+  - feat(prisma): HÜE Prisma v1 — estudio de prompts (una idea → un prompt por herramienta)
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+## 2026-09-04 (pm) — Prisma: texto en la pieza + ChatGPT Images
+**Pedro reportó:** escribió un titular en la idea y el prompt lo ignoró. Causa: sin casilla `texto` en el spec (el writer lo censuraba como slogan) + el compiler de foto_producto ni leía `accion`.
+**Hecho (commit 77a8f0e, rama prisma, preview auto):**
+- `PromptSpec.texto` {contenido, posicion, estilo} + input propio en paso 1 ("¿Lleva texto la pieza?"). El código impone lo escrito tal cual; el modelo sólo aporta posición/estilo (o rescata frases entre comillas de la idea si el campo va vacío).
+- Los 6 compilers pintan el texto y quitan "no text overlays" cuando hay texto; validator exige el texto entre comillas. foto_producto ya usa `accion`.
+- Nueva herramienta **ChatGPT Images** (verde #3dd68c) para TODOS los trabajos de imagen/edición: cuerpo compartido con Nano Banana (`cuerpoImagen` + etiquetador), refs como "the first attached image", tamaño square/portrait/landscape. Routing: con texto → ChatGPT; sin texto → Nano Banana.
+- PROMPT_VERSION 2026-09-04.1. Gates: tsc ✓ eslint ✓ next build ✓ test-prisma 120 ✓.
+**Pendiente:** Pedro prueba en el preview con un titular real (campo nuevo bajo la idea). Sin migración (tool es `text`). Main intacto.
