@@ -1691,15 +1691,14 @@ Que el lead pueda aplicar la sugerencia de H.Ü.E directo al campo con un botón
 - [x] Verificado live (JS): Aplicado=amber rgb(148,95,6); panel sticky top-133 junto a planos; móvil oculto en desktop.
 - [x] Gates tsc·eslint·build. PENDIENTE "ship it".
 
-## 🟡 (2026-09-03) — HÜE Prisma: estudio de prompts (rama `prisma`, flag NEXT_PUBLIC_PRISMA_ENABLED) — SIN commit, SIN migración
+## 🟢 (2026-09-03) — HÜE Prisma: estudio de prompts (rama `prisma`, flag NEXT_PUBLIC_PRISMA_ENABLED) — COMMIT 98ad6dc + 0063 APLICADA
 Plan aprobado: /Users/work/.claude/plans/ok-so-1st-having-radiant-jellyfish.md
 Origen: teardown de rocoprompt.com (14 bots Gemini). Una idea → un prompt para cada herramienta.
 Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo prompt (generación in-app = v2, flag).
 - [x] 1. NavKey `prisma` + sidebar (icono Sparkles, `soon` si el flag está apagado) + RESERVED + flags.ts; /prisma visible a creative+.
 - [x] 2. lib/prisma: spec.ts (PromptSpec) + 5 compilers + validators + routing + tools + scripts/test-prisma.mjs (78 checks, en `npm test`).
-- [ ] 3. Migración `0063_prisma` ESCRITA y probada en PGlite (test-db 400 ✓) — NO aplicada a prod: espera el "ship it" de Pedro.
-      Hasta entonces: el selector de marca cae al color de marca (cargarMarcas re-consulta sin prisma_presets) y "Generar" falla
-      con "Could not find the table produccion.prisma_specs" (toast limpio, verificado en preview).
+- [x] 3. Migración `0063_prisma` APLICADA al esquema producción de Greenlight (proyecto ybbrpqzbedaxsmotgtkh) el 2026-09-04
+      con `npm run migrate` tras el "ship it" de Pedro. Verificado: 5 tablas prisma_* con RLS, marcas.prisma_presets existe.
 - [x] 4. writer.ts (Claude Sonnet 5, bloque estable cacheado, tool_use → PromptSpec, reparación 1 vez) + vision.ts (caption + ADN).
       Verificado VIVO desde scratchpad: spec válido a la 1ª, refine cambia sólo la luz, cache_read=3811 en la 2ª llamada.
 - [x] 5. UI: 3 puertas → trabajo → 3 pasos → resultado (copiar, abrir en la herramienta, cambiar herramienta, explicar, refinar,
@@ -1708,8 +1707,10 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
 - [~] 7. Reap: tsc · eslint · build · test-lib · test-db · test-prisma en verde. Agentes de review (seguridad Opus + salud Sonnet)
       corriendo; pendiente aplicar hallazgos. Pantalla de RESULTADO no vista en vivo (necesita las tablas).
 ## Review
-- Pendiente de Pedro: (1) `git commit` en la rama `prisma` (no se commiteó nada); (2) "ship it" para la 0063 vía `npm run migrate`
-  (NO `supabase db push`); (3) `NEXT_PUBLIC_PRISMA_ENABLED=true` en el env de Preview de Vercel para ver la rama; (4) probar
-  con un diseñador dos trabajos reales.
+- Hecho 2026-09-04: commit 98ad6dc en `prisma` + push (preview de Vercel) + 0063 aplicada. main NO tocado (merge = deploy a prod,
+  decisión de Pedro).
+- Pendiente de Pedro: (1) `NEXT_PUBLIC_PRISMA_ENABLED=true` en el env de Preview de Vercel (sin él la nav dice "Pronto");
+  (2) probar la pantalla de RESULTADO en el preview con login real; (3) probar con un diseñador dos trabajos reales; (4) decidir
+  cuándo mergear a main.
 - Deuda: personajes (prisma_characters) sin UI de alta (sólo lectura); variantes segura/audaz/mínima no construidas (la columna
   `variante` ya existe); `explicacion` cachea por idioma con prefijo "[es]"; presets de marca se editan a mano en la BD (falta UI en Admin).

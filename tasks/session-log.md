@@ -1852,3 +1852,10 @@ pudo sin tablas): copiar, cambiar herramienta, explicar, refinar, pulgar, histor
 animar foto); 6) deuda: UI de personajes y de presets de marca en Admin, variantes segura/audaz/mínima, throttle por usuario en
 analizarImagen, archivos huérfanos en `prisma/` si el usuario abandona.
 **Environment changes:** ninguno (la entrada temporal `greenlight` en ~/Downloads/.claude/launch.json se creó y se borró).
+
+## 2026-09-04 — "ship it" de HÜE Prisma
+**What we did:** `npm run migrate` → 0063 aplicada al esquema producción de Greenlight (proyecto ybbrpqzbedaxsmotgtkh); verificadas
+5 tablas prisma_* con RLS + marcas.prisma_presets. Commit 98ad6dc en la rama `prisma` y push a GitHub (Runna-Ad/greenlight) → preview
+de Vercel. main intacto.
+**Pick up next session:** flag NEXT_PUBLIC_PRISMA_ENABLED=true en Preview de Vercel · probar resultado/refinar/historial con login
+real · prueba con diseñador · decidir merge a main (= deploy a prod; el módulo queda oculto tras el flag hasta encenderlo).
