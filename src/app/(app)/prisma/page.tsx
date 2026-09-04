@@ -37,7 +37,7 @@ function demoResultado(): PromptVivo | null {
     refs: [{ role: "sujeto", caption: "a woman in a black coat in a night market", dna: null }],
   });
   const salida = compilar(spec);
-  return { specId: "demo", promptId: "demo", tool: "kling", spec, salida, valido: true, errores: [], porque: "Para un clip vertical corto sin voz, Kling anima la foto con buen movimiento." };
+  return { specId: "demo", promptId: "demo", tool: "kling", spec, salida, valido: true, errores: [], porque: { es: "Para un clip vertical corto y sin voz, Kling le da buen movimiento a la foto.", en: "For a short vertical clip with no voice, Kling animates the photo with good motion." } };
 }
 
 export default async function PrismaPage({ searchParams }: { searchParams: Promise<{ demo?: string }> }) {
@@ -49,7 +49,7 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
       <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
         <Lock className="mx-auto size-5 text-muted-foreground" />
         <p className="mt-3 text-sm text-foreground">
-          {prismaActivo() ? `Un ${ROLE_LABEL[role]} no entra a HÜE Prisma.` : "HÜE Prisma todavía no está encendido."}
+          {prismaActivo() ? `Un ${ROLE_LABEL[role]} no tiene acceso a HÜE Prisma.` : "HÜE Prisma todavía no está activo."}
         </p>
       </div>
     );

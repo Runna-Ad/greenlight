@@ -45,7 +45,7 @@ export function RefUploader({
       }
       onChange({ role, storage_path: r.storage_path, caption: r.caption, dna: r.dna, url: r.url, aviso: r.aviso });
       setFlash(true);
-      if (r.aviso) toast.message(lang === "es" ? "La imagen subió, pero H.Ü.E no pudo leerla." : "Image uploaded, but H.Ü.E could not read it.");
+      if (r.aviso) toast.message(lang === "es" ? "La imagen se subió, pero H.Ü.E no pudo leerla." : "Image uploaded, but H.Ü.E could not read it.");
     } finally {
       setBusy(false);
     }

@@ -9,61 +9,61 @@ import { TOOL_INFO } from "./tools.ts";
 export type Lang = "es" | "en";
 export const LANGS: Lang[] = ["es", "en"];
 
-type Par = { es: string; en: string };
-const t = (es: string, en: string): Par => ({ es, en });
+export type Par = { es: string; en: string };
+export const t = (es: string, en: string): Par => ({ es, en });
 
 export const KIND_LABEL: Record<JobKind, Par> = {
   imagen: t("Crear imagen", "Create an image"),
   video: t("Crear video", "Create a video"),
-  edicion: t("Editar imagen", "Edit an image"),
+  edicion: t("Editar una foto", "Edit a photo"),
 };
 
 export const KIND_HINT: Record<JobKind, Par> = {
-  imagen: t("Una foto nueva desde una idea o una referencia.", "A new photo from an idea or a reference."),
-  video: t("Animar una foto, crear un clip o una transición.", "Animate a photo, create a clip or a transition."),
-  edicion: t("Cambiar algo de una foto que ya tienes.", "Change something in a photo you already have."),
+  imagen: t("Una imagen nueva a partir de tu idea o de una referencia.", "A new image from your idea or a reference."),
+  video: t("Darle movimiento a una foto, hacer un clip o una transición.", "Animate a photo, make a clip or a transition."),
+  edicion: t("Cambiarle algo a una foto que ya tienes.", "Change something in a photo you already have."),
 };
 
 export const JOB_LABEL: Record<JobType, Par> = {
   foto_producto: t("Foto de producto", "Product photo"),
-  escena_persona: t("Persona en otro lugar", "Person in a new place"),
+  escena_persona: t("Poner a alguien en otro lugar", "Put someone in a new place"),
   imagen_libre: t("Imagen desde cero", "Image from scratch"),
-  cambio_outfit: t("Cambiar outfit", "Change outfit"),
-  cambio_fondo: t("Cambiar fondo", "Change background"),
-  cambio_pose: t("Cambiar pose", "Change pose"),
+  cambio_outfit: t("Cambiar el outfit", "Change the outfit"),
+  cambio_fondo: t("Cambiar el fondo", "Change the background"),
+  cambio_pose: t("Cambiar la pose", "Change the pose"),
   agregar_objeto: t("Agregar un objeto", "Add an object"),
-  cambio_angulo: t("Cambiar ángulo de cámara", "Change camera angle"),
-  restaurar_foto: t("Restaurar foto antigua", "Restore old photo"),
+  cambio_angulo: t("Cambiar el ángulo de cámara", "Change the camera angle"),
+  restaurar_foto: t("Restaurar una foto vieja", "Restore an old photo"),
   mejora_foto: t("Mejorar la foto", "Enhance photo"),
-  aplicar_logo: t("Poner un logo (mockup)", "Apply a logo (mockup)"),
-  dos_personajes: t("Dos personas en una escena", "Two people in one scene"),
+  aplicar_logo: t("Ponerle un logo (mockup)", "Apply a logo (mockup)"),
+  dos_personajes: t("Juntar a dos personas en una escena", "Put two people in one scene"),
   cambio_epoca: t("Cambiar de época", "Change era"),
-  figura_coleccionable: t("Figura coleccionable", "Collectible figure"),
-  animar_foto: t("Animar esta foto", "Animate this photo"),
-  texto_a_video: t("Video desde una idea", "Video from an idea"),
+  figura_coleccionable: t("Convertir en figura coleccionable", "Turn into a collectible figure"),
+  animar_foto: t("Darle movimiento a una foto", "Animate a photo"),
+  texto_a_video: t("Video a partir de una idea", "Video from an idea"),
   transicion: t("Transición entre dos tomas", "Transition between two shots"),
-  escena_sora: t("Escena de 10-15 s (Sora)", "10-15 s scene (Sora)"),
+  escena_sora: t("Escena de 10 a 15 segundos (Sora)", "10 to 15 second scene (Sora)"),
 };
 
 export const JOB_HINT: Record<JobType, Par> = {
-  foto_producto: t("Sube el producto; HÜE lo pone en un escenario publicitario.", "Upload the product; HÜE places it in an advertising setting."),
-  escena_persona: t("Sube a la persona; describe dónde y haciendo qué.", "Upload the person; describe where and doing what."),
-  imagen_libre: t("Describe la imagen. Una referencia de estilo es opcional.", "Describe the image. A style reference is optional."),
-  cambio_outfit: t("Foto de la persona + foto del outfit.", "Photo of the person + photo of the outfit."),
-  cambio_fondo: t("Foto de la persona; describe el fondo nuevo.", "Photo of the person; describe the new background."),
-  cambio_pose: t("Foto de la persona + foto de la pose.", "Photo of the person + photo of the pose."),
-  agregar_objeto: t("Foto de la escena + foto del objeto.", "Photo of the scene + photo of the object."),
-  cambio_angulo: t("Una foto; elige el ángulo nuevo.", "One photo; pick the new angle."),
-  restaurar_foto: t("Una foto vieja o dañada.", "An old or damaged photo."),
-  mejora_foto: t("Una foto; di qué mejorar o deja que HÜE decida.", "One photo; say what to improve or let HÜE decide."),
-  aplicar_logo: t("Foto del producto o superficie + el logo.", "Photo of the product or surface + the logo."),
-  dos_personajes: t("Dos fotos; describe la escena. Pose opcional.", "Two photos; describe the scene. Pose optional."),
-  cambio_epoca: t("Una foto; di la época (años 20, 80s…).", "One photo; name the era (1920s, 80s…)."),
-  figura_coleccionable: t("Foto de la persona; empaque opcional.", "Photo of the person; packaging optional."),
-  animar_foto: t("Una foto; di qué se mueve.", "One photo; say what moves."),
-  texto_a_video: t("Sin fotos: describe el clip.", "No photos: describe the clip."),
-  transicion: t("Foto de inicio + foto de fin.", "Start photo + end photo."),
-  escena_sora: t("Una escena con tipo de video y duración.", "A scene with a video type and duration."),
+  foto_producto: t("Sube la foto del producto y HÜE lo mete en un escenario de anuncio.", "Upload the product photo and HÜE places it in an ad setting."),
+  escena_persona: t("Sube la foto de la persona y cuéntanos dónde está y qué hace.", "Upload the person and tell us where they are and what they do."),
+  imagen_libre: t("Describe lo que quieres ver. Si tienes una referencia de estilo, súbela.", "Describe what you want to see. Upload a style reference if you have one."),
+  cambio_outfit: t("Una foto de la persona y otra del outfit.", "One photo of the person and one of the outfit."),
+  cambio_fondo: t("Una foto de la persona y dinos cómo es el fondo nuevo.", "One photo of the person and a description of the new background."),
+  cambio_pose: t("Una foto de la persona y otra con la pose.", "One photo of the person and one with the pose."),
+  agregar_objeto: t("Una foto de la escena y otra del objeto.", "One photo of the scene and one of the object."),
+  cambio_angulo: t("Una foto y el ángulo desde el que la quieres ver.", "One photo and the angle you want to see it from."),
+  restaurar_foto: t("Una foto vieja o maltratada. HÜE la limpia y le pone color.", "An old or damaged photo. HÜE cleans it up and adds color."),
+  mejora_foto: t("Una foto. Dinos qué mejorar o deja que HÜE lo decida.", "One photo. Tell us what to improve or let HÜE decide."),
+  aplicar_logo: t("Una foto del producto o la superficie, y el logo.", "One photo of the product or surface, plus the logo."),
+  dos_personajes: t("Dos fotos y cuéntanos la escena. La pose es opcional.", "Two photos and a description of the scene. Pose optional."),
+  cambio_epoca: t("Una foto y la época a la que la quieres llevar (los 20, los 80…).", "One photo and the era you want to take it to (the 20s, the 80s…)."),
+  figura_coleccionable: t("Una foto de la persona. Si quieres, también una del empaque.", "One photo of the person. Optionally, one of the packaging."),
+  animar_foto: t("Una foto y qué quieres que se mueva.", "One photo and what you want to move."),
+  texto_a_video: t("Sin fotos. Solo describe el clip.", "No photos. Just describe the clip."),
+  transicion: t("La toma con la que empieza y la toma con la que termina.", "The shot it starts on and the shot it ends on."),
+  escena_sora: t("Una escena completa: tipo de video y duración.", "A full scene: video type and duration."),
 };
 
 export const REF_LABEL: Record<RefRole, Par> = {
@@ -76,16 +76,16 @@ export const REF_LABEL: Record<RefRole, Par> = {
   logo: t("El logo", "The logo"),
   estilo: t("Referencia de estilo", "Style reference"),
   empaque: t("El empaque", "The packaging"),
-  personaje2: t("La segunda persona", "The second person"),
-  inicio: t("Toma de inicio", "Start shot"),
-  fin: t("Toma de fin", "End shot"),
+  personaje2: t("La otra persona", "The other person"),
+  inicio: t("Toma inicial", "Start shot"),
+  fin: t("Toma final", "End shot"),
 };
 
 export const DESTINO_LABEL: Record<Destino, Par> = {
   ig_story: t("Instagram Story / Reel (9:16)", "Instagram Story / Reel (9:16)"),
   ig_feed: t("Instagram feed (4:5)", "Instagram feed (4:5)"),
   tiktok: t("TikTok (9:16)", "TikTok (9:16)"),
-  fb_ad: t("Anuncio Facebook (1:1)", "Facebook ad (1:1)"),
+  fb_ad: t("Anuncio de Facebook (1:1)", "Facebook ad (1:1)"),
   yt: t("YouTube (16:9)", "YouTube (16:9)"),
   web_banner: t("Banner web (16:9)", "Web banner (16:9)"),
   print: t("Impreso (4:3)", "Print (4:3)"),
@@ -105,13 +105,13 @@ export const UI = {
   queQuieres: t("¿Qué quieres hacer?", "What do you want to make?"),
   paso1: t("Tu idea y tus referencias", "Your idea and references"),
   paso2: t("El look", "The look"),
-  paso3: t("¿Dónde va?", "Where is it going?"),
-  ideaLabel: t("Cuéntalo con tus palabras", "Say it in your own words"),
-  ideaPlaceholder: t("Ej: la modelo con el abrigo negro caminando por un mercado de noche, luz cálida…", "e.g. the model in the black coat walking through a night market, warm light…"),
-  subirRef: t("Arrastra o elige una imagen", "Drag or choose an image"),
+  paso3: t("¿Dónde se va a publicar?", "Where will it be published?"),
+  ideaLabel: t("Cuéntanos tu idea con tus palabras", "Tell us your idea in your own words"),
+  ideaPlaceholder: t("Ej.: la modelo del abrigo negro caminando por un mercado de noche, con luz cálida…", "e.g. the model in the black coat walking through a night market, warm light…"),
+  subirRef: t("Arrastra una imagen o búscala en tu compu", "Drag an image here or browse your files"),
   quitar: t("Quitar", "Remove"),
   siguiente: t("Siguiente", "Next"),
-  atras: t("Atrás", "Back"),
+  atras: t("Regresar", "Back"),
   generar: t("Generar prompt", "Generate prompt"),
   generando: t("HÜE está escribiendo…", "HÜE is writing…"),
   copiar: t("Copiar", "Copy"),
@@ -119,9 +119,9 @@ export const UI = {
   abrirEn: t("Abrir en", "Open in"),
   explicar: t("Explícame este prompt", "Explain this prompt"),
   ocultarExplicacion: t("Ocultar explicación", "Hide explanation"),
-  refinar: t("¿Quieres cambiar algo?", "Want to change something?"),
-  refinarPlaceholder: t("Ej: que sea de día, más cerca del rostro…", "e.g. make it daytime, closer to the face…"),
-  aplicarCambio: t("Aplicar cambio", "Apply change"),
+  refinar: t("¿Le cambiamos algo?", "Want to change something?"),
+  refinarPlaceholder: t("Ej.: que sea de día, más cerca de la cara…", "e.g. make it daytime, closer to the face…"),
+  aplicarCambio: t("Aplicar el cambio", "Apply the change"),
   variantes: t("Variantes", "Variants"),
   varBase: t("Base", "Base"),
   varSegura: t("Segura", "Safe"),
@@ -134,25 +134,25 @@ export const UI = {
   idiomaDialogo: t("Idioma del diálogo", "Dialogue language"),
   pasoDe: t("Paso", "Step"),
   de: t("de", "of"),
-  dialogoPlaceholder: t("Lo que dice, tal cual (se conserva en su idioma)", "What they say, verbatim (kept in its language)"),
+  dialogoPlaceholder: t("Escribe lo que dice, tal cual. Se queda en el idioma en que lo escribas.", "Write what they say, word for word. It stays in the language you write it in."),
   duracion: t("Duración", "Duration"),
   tipoVideo: t("Tipo de video", "Video type"),
   marca: t("Marca", "Brand"),
   sinMarca: t("Sin marca", "No brand"),
   historial: t("Historial", "History"),
-  sinHistorial: t("Todavía no hay prompts. El primero se guarda aquí.", "No prompts yet. The first one lands here."),
+  sinHistorial: t("Aún no tienes prompts. Cuando generes el primero, aquí lo vas a encontrar.", "No prompts yet. When you generate the first one, you will find it here."),
   guardado: t("Guardado", "Saved"),
-  error: t("Algo salió mal. Intenta de nuevo.", "Something went wrong. Try again."),
+  error: t("Algo falló. Inténtalo otra vez.", "Something went wrong. Try again."),
   luz: t("Luz", "Light"),
   camara: t("Cámara", "Camera"),
   mood: t("Ambiente", "Mood"),
   estilo: t("Estilo", "Style"),
-  sugeridoDeTusRefs: t("Sugerido desde tus referencias", "Suggested from your references"),
+  sugeridoDeTusRefs: t("Lo que HÜE vio en tu referencia", "What HÜE saw in your reference"),
   gustó: t("Me sirvió", "This worked"),
   noGustó: t("No me sirvió", "Didn't work"),
-  generarEnApp: t("Generar aquí (pronto)", "Generate here (soon)"),
-  validado: t("Verificado para la herramienta", "Checked for the tool"),
-  conObservaciones: t("Con observaciones", "With notes"),
+  generarEnApp: t("Pronto: generar la imagen aquí mismo", "Coming soon: generate the image right here"),
+  validado: t("Listo para pegar en la herramienta", "Ready to paste into the tool"),
+  conObservaciones: t("Con detalles por revisar", "Has details to review"),
 } satisfies Record<string, Par>;
 
 export type UiKey = keyof typeof UI;
@@ -163,7 +163,7 @@ export const MENSAJES_GENERANDO: Par[] = [
   t("Leyendo tus referencias…", "Reading your references…"),
   t("Eligiendo la luz y la cámara…", "Choosing light and camera…"),
   t("Escribiendo el prompt…", "Writing the prompt…"),
-  t("Revisando que cumpla la herramienta…", "Checking it fits the tool…"),
+  t("Revisando que le sirva a la herramienta…", "Checking it fits the tool…"),
 ];
 
 /** Devuelve el texto en el idioma pedido. */
@@ -176,38 +176,38 @@ export type Swatch = { valor: string; label: Par };
 export const SWATCHES_LUZ: Swatch[] = [
   { valor: "soft window light, gentle shadows", label: t("Luz de ventana suave", "Soft window light") },
   { valor: "golden hour, warm low sun, long shadows", label: t("Atardecer dorado", "Golden hour") },
-  { valor: "clean studio light, white background, soft shadow", label: t("Estudio limpio", "Clean studio") },
+  { valor: "clean studio light, white background, soft shadow", label: t("Estudio, fondo limpio", "Clean studio") },
   { valor: "hard direct flash, bright, sharp shadows", label: t("Flash directo", "Direct flash") },
   { valor: "neon signs, colored reflections, night", label: t("Neón de noche", "Neon at night") },
-  { valor: "dramatic side light, deep shadows, high contrast", label: t("Dramática de lado", "Dramatic side light") },
+  { valor: "dramatic side light, deep shadows, high contrast", label: t("Luz dramática de lado", "Dramatic side light") },
   { valor: "overcast daylight, even and soft", label: t("Día nublado", "Overcast day") },
-  { valor: "candlelight, warm and dim", label: t("Velas", "Candlelight") },
+  { valor: "candlelight, warm and dim", label: t("Luz de velas", "Candlelight") },
 ];
 
 export const SWATCHES_CAMARA: Swatch[] = [
   { valor: "slow dolly in", label: t("Acercarse despacio", "Slow push in") },
   { valor: "slow dolly out", label: t("Alejarse despacio", "Slow pull out") },
-  { valor: "orbit around the subject", label: t("Girar alrededor", "Orbit around") },
+  { valor: "orbit around the subject", label: t("Dar la vuelta alrededor", "Orbit around") },
   { valor: "handheld, natural shake", label: t("Cámara en mano", "Handheld") },
   { valor: "static tripod, locked", label: t("Fija", "Static") },
-  { valor: "crane up revealing the scene", label: t("Subir y revelar", "Crane up reveal") },
+  { valor: "crane up revealing the scene", label: t("Subir y descubrir la escena", "Crane up reveal") },
   { valor: "tracking shot following from behind", label: t("Seguir por detrás", "Follow from behind") },
   { valor: "aerial drone shot", label: t("Dron", "Drone") },
 ];
 
 export const SWATCHES_LENTE: Swatch[] = [
-  { valor: "85mm portrait lens, blurred background", label: t("Retrato, fondo borroso", "Portrait, blurred background") },
+  { valor: "85mm portrait lens, blurred background", label: t("Retrato con fondo desenfocado", "Portrait, blurred background") },
   { valor: "35mm, natural perspective", label: t("Natural", "Natural") },
   { valor: "24mm wide angle, more of the scene", label: t("Gran angular", "Wide angle") },
-  { valor: "100mm macro, extreme detail", label: t("Macro, mucho detalle", "Macro, extreme detail") },
+  { valor: "100mm macro, extreme detail", label: t("Macro, muchísimo detalle", "Macro, extreme detail") },
   { valor: "anamorphic, horizontal flares", label: t("Cine anamórfico", "Anamorphic cinema") },
 ];
 
 export const SWATCHES_MOOD: Swatch[] = [
-  { valor: "premium, calm, elegant", label: t("Premium y calmado", "Premium and calm") },
+  { valor: "premium, calm, elegant", label: t("Premium y tranquilo", "Premium and calm") },
   { valor: "energetic, fun, bright", label: t("Energético y alegre", "Energetic and fun") },
   { valor: "nostalgic, warm, intimate", label: t("Nostálgico e íntimo", "Nostalgic and intimate") },
-  { valor: "dramatic, epic, cinematic", label: t("Épico y cinematográfico", "Epic and cinematic") },
+  { valor: "dramatic, epic, cinematic", label: t("Épico, de película", "Epic, cinematic") },
   { valor: "clean, minimal, modern", label: t("Minimalista y moderno", "Minimal and modern") },
   { valor: "playful, colorful, pop", label: t("Colorido y pop", "Colorful and pop") },
   { valor: "mysterious, dark, moody", label: t("Misterioso y oscuro", "Mysterious and dark") },
@@ -215,9 +215,9 @@ export const SWATCHES_MOOD: Swatch[] = [
 
 export const SWATCHES_ESTILO: Swatch[] = [
   { valor: "photorealistic photo", label: t("Foto realista", "Photorealistic") },
-  { valor: "cinematic film still", label: t("Fotograma de cine", "Cinematic film still") },
+  { valor: "cinematic film still", label: t("Frame de película", "Cinematic film still") },
   { valor: "editorial fashion photography", label: t("Editorial de moda", "Editorial fashion") },
-  { valor: "product advertising, glossy", label: t("Publicidad de producto", "Product advertising") },
+  { valor: "product advertising, glossy", label: t("Foto publicitaria de producto", "Product advertising") },
   { valor: "vintage film photo, grain", label: t("Foto vintage con grano", "Vintage film, grain") },
   { valor: "3D render, clean", label: t("Render 3D", "3D render") },
   { valor: "illustration, flat colors", label: t("Ilustración plana", "Flat illustration") },

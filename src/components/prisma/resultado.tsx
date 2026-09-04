@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { cambiarHerramienta, calificar, explicar, refinarPrompt } from "@/app/(app)/prisma/actions";
-import { TOOL_LABEL, UI, tx, type Lang } from "@/lib/prisma/copy";
+import { TOOL_LABEL, UI, tx, type Lang, type Par } from "@/lib/prisma/copy";
 import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
 import type { PromptSpec, Tool } from "@/lib/prisma/spec";
 import type { Salida } from "@/lib/prisma/compilers";
@@ -21,7 +21,7 @@ export type PromptVivo = {
   salida: Salida;
   valido: boolean;
   errores: string[];
-  porque: string | null;
+  porque: Par | null;
 };
 
 /**
@@ -119,7 +119,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
           <h2 className="font-heading mt-1 flex items-center gap-2 text-xl font-semibold text-foreground">
             <span className="p-tool-chip inline-flex items-center rounded-full px-3 py-0.5 text-base">{tx(TOOL_LABEL[vivo.tool], lang)}</span>
           </h2>
-          {vivo.porque && <p className="mt-0.5 text-xs text-muted-foreground">{vivo.porque}</p>}
+          {vivo.porque && <p className="mt-0.5 text-xs text-muted-foreground">{tx(vivo.porque, lang)}</p>}
         </div>
         <span
           className={cn(
@@ -227,7 +227,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
             {refinando ? tx(UI.generando, lang) : tx(UI.aplicarCambio, lang)}
           </Button>
           <Button size="sm" variant="ghost" onClick={onNueva}>
-            {lang === "es" ? "Nueva idea" : "New idea"}
+            {lang === "es" ? "Otra idea" : "New idea"}
           </Button>
         </div>
       </div>

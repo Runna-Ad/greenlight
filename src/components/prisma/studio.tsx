@@ -400,7 +400,7 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
                         </div>
                       )}
                       {dialogo.trim() && (
-                        <input value={voz} onChange={(e) => setVoz(e.target.value)} placeholder={lang === "es" ? "¿Cómo es la voz? (ej: cálida, acento mexicano neutro)" : "What is the voice like?"} className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" aria-label={lang === "es" ? "Voz" : "Voice"} />
+                        <input value={voz} onChange={(e) => setVoz(e.target.value)} placeholder={lang === "es" ? "¿Cómo suena la voz? (ej.: cálida, acento mexicano neutro)" : "What does the voice sound like?"} className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" aria-label={lang === "es" ? "Voz" : "Voice"} />
                       )}
                     </div>
                   )}
@@ -412,7 +412,7 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
                       <p className="mt-1.5">
                         <span className="p-tool-chip inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold">{tx(TOOL_LABEL[tool], lang)}</span>
                       </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{toolOverride ? (lang === "es" ? "La elegiste tú." : "You picked it.") : sugerencia.porque}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{toolOverride ? (lang === "es" ? "La elegiste tú." : "You picked it.") : tx(sugerencia.porque, lang)}</p>
                       {TOOLS_POR_JOB[job].length > 1 && (
                         <div className="mt-3">
                           <p className="mb-1.5 text-xs text-muted-foreground">{tx(UI.cambiarHerramienta, lang)}</p>

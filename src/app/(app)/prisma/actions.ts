@@ -25,9 +25,9 @@ const MIMES_VISION: MimeVision[] = ["image/jpeg", "image/png", "image/webp", "im
 // ── Gate ─────────────────────────────────────────────────────
 async function gate(): Promise<{ role: ViewRole; soyId: string } | Fail> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
-  if (!prismaActivo()) return { ok: false, error: "HÜE Prisma no está encendido." };
+  if (!prismaActivo()) return { ok: false, error: "HÜE Prisma todavía no está activo." };
   const role = await getViewAs();
-  if (!canSee(role, "prisma")) return { ok: false, error: "Este rol no entra a HÜE Prisma." };
+  if (!canSee(role, "prisma")) return { ok: false, error: "Tu rol no tiene acceso a HÜE Prisma." };
   // Identidad OBLIGATORIA (estándar de la casa: task-scope.ts). Sin sesión, getViewAs
   // cae a 'creative' y pasaría el gate: eso dejaría llamadas a H.Ü.E (facturables) y
   // specs huérfanos (created_by null) a cualquiera que llegue al endpoint.
@@ -40,7 +40,7 @@ async function gate(): Promise<{ role: ViewRole; soyId: string } | Fail> {
  *  tablas, constraints): se registra en el servidor y sale un mensaje llano. */
 function fallo(donde: string, detalle: string | undefined): Fail {
   console.error(`[prisma] ${donde}:`, detalle ?? "sin detalle");
-  return { ok: false, error: "No se pudo guardar. Intenta de nuevo; si sigue, avisa a Pedro." };
+  return { ok: false, error: "No se pudo guardar. Inténtalo otra vez y, si sigue fallando, avísale a Pedro." };
 }
 
 /** ¿Puede este usuario tocar este spec? Los suyos siempre; lead/admin/master, todos. */
@@ -66,7 +66,7 @@ export async function analizarImagen(form: FormData): Promise<RefAnalizada | Fai
 
   const file = form.get("file");
   if (!(file instanceof File)) return { ok: false, error: "No llegó ningún archivo." };
-  if (file.size > MAX_BYTES) return { ok: false, error: "La imagen pasa de 10 MB." };
+  if (file.size > MAX_BYTES) return { ok: false, error: "La imagen pesa más de 10 MB." };
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = sniffImageMime(bytes);
   if (!mime || !(MIMES_VISION as string[]).includes(mime)) return { ok: false, error: "Sólo JPG, PNG, WebP o GIF." };
@@ -132,7 +132,7 @@ function dnaLimpio(v: unknown): VisualDNA | null {
 /** Valida y normaliza la entrada del wizard. Fail-closed: nada se completa con un default
  *  silencioso si el valor viene mal (lección 2026-09-02, "default en write-path"). */
 function normalizar(raw: InputGenerar): InputGenerar | Fail {
-  if (!(raw.job in JOB_KIND)) return { ok: false, error: "Trabajo no válido." };
+  if (!(raw.job in JOB_KIND)) return { ok: false, error: "Ese tipo de trabajo no existe." };
   if (!TOOLS.includes(raw.tool) || !TOOLS_POR_JOB[raw.job].includes(raw.tool)) return { ok: false, error: "Esa herramienta no sirve para este trabajo." };
   if (!ASPECTS.includes(raw.aspect)) return { ok: false, error: "Formato no válido." };
   if (!DESTINOS.includes(raw.destino)) return { ok: false, error: "Destino no válido." };
@@ -140,12 +140,12 @@ function normalizar(raw: InputGenerar): InputGenerar | Fail {
   if (videoType && !(SORA_VIDEO_TYPES as string[]).includes(videoType)) return { ok: false, error: "Tipo de video no válido." };
   const refs: RefEntrada[] = [];
   for (const r of raw.refs ?? []) {
-    if (!ROLES_REF.includes(r.role)) return { ok: false, error: "Referencia con papel desconocido." };
+    if (!ROLES_REF.includes(r.role)) return { ok: false, error: "Una de las referencias no es válida." };
     // Sólo la forma exacta que produce analizarImagen: nada de "prisma/../otro".
     if (typeof r.storage_path !== "string" || !/^prisma\/[0-9a-f-]{36}\.(png|jpg|webp|gif)$/.test(r.storage_path)) return { ok: false, error: "Referencia inválida." };
     refs.push({ role: r.role, storage_path: r.storage_path, caption: sn(r.caption), dna: dnaLimpio(r.dna) });
   }
-  if (refs.length > 4) return { ok: false, error: "Máximo 4 referencias." };
+  if (refs.length > 4) return { ok: false, error: "Puedes subir hasta 4 referencias." };
   const dur = raw.duracion === null || raw.duracion === undefined ? null : Number(raw.duracion);
   if (dur !== null && (!Number.isFinite(dur) || dur < 1 || dur > 60)) return { ok: false, error: "Duración no válida." };
   return {
@@ -184,7 +184,7 @@ async function entradaDe(inp: InputGenerar): Promise<{ entrada: EntradaWriter; c
   if (inp.personajeId) {
     // Un personaje pertenece a UN cliente: sin marca (→ sin cliente) no hay forma de
     // comprobar que sea suyo, así que no se acepta (no se cargan los de todos).
-    if (!clientId) return { ok: false, error: "Elige la marca antes de usar un personaje guardado." };
+    if (!clientId) return { ok: false, error: "Primero elige la marca para usar un personaje guardado." };
     const p = (await cargarPersonajes(db, clientId)).find((x) => x.id === inp.personajeId);
     if (!p) return { ok: false, error: "Ese personaje ya no existe." };
     personaje = p.descripcion;
@@ -252,7 +252,7 @@ async function specDeFila(specId: string, g: { role: ViewRole; soyId: string }):
   const db = supabaseAdmin();
   const { data: row } = await db.from("prisma_specs").select("*").eq("id", specId).maybeSingle<PrismaSpecRow>();
   if (!row) return { ok: false, error: "Ese prompt ya no existe." };
-  if (!puedeTocar(row, g)) return { ok: false, error: "Este prompt es de otra persona." };
+  if (!puedeTocar(row, g)) return { ok: false, error: "Ese prompt lo hizo otra persona; no lo puedes editar." };
   // El jsonb se valida en runtime: una fila con una forma vieja no debe llegar a compilar().
   if (!esSpec(row.spec)) return fallo("prisma_specs.spec", `forma incompatible en ${specId}`);
   return { row, spec: row.spec };
@@ -345,7 +345,7 @@ export async function abrirSpec(specId: string): Promise<ResultadoAbrir | Fail> 
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle<PrismaPromptRow>();
-  if (!p) return { ok: false, error: "Ese prompt no tiene salida guardada." };
+  if (!p) return { ok: false, error: "Ese prompt no tiene texto guardado." };
   return { ok: true, promptId: p.id, tool: p.tool as Tool, spec: s.spec, salida: { texto: p.salida, formato: p.formato }, valido: p.valido, errores: p.errores ?? [] };
 }
 

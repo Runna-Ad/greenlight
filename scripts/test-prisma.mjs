@@ -204,7 +204,7 @@ console.log("\n▶ routing");
   eq("transición → kling", elegirHerramienta({ ...base, job: "transicion" }).tool, "kling");
   eq("escena sora → sora", elegirHerramienta({ ...base, job: "escena_sora" }).tool, "sora");
   eq("texto a video en YouTube → veo", elegirHerramienta({ ...base, job: "texto_a_video", destino: "yt" }).tool, "veo");
-  ok("toda elección trae un porqué", elegirHerramienta({ ...base, job: "transicion" }).porque.length > 10);
+  ok("toda elección trae un porqué en ambos idiomas", (() => { const p = elegirHerramienta({ ...base, job: "transicion" }).porque; return p.es.length > 10 && p.en.length > 10; })());
 }
 
 // ── 9. helpers ──

@@ -156,7 +156,7 @@ async function llamarSpec(e: EntradaWriter, extra: string | null): Promise<{ inp
       ],
     });
     const bloque = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-    if (!bloque) return { error: "H.Ü.E no devolvió el spec. Intenta de nuevo." };
+    if (!bloque) return { error: "H.Ü.E no respondió bien. Inténtalo otra vez." };
     return { input: bloque.input as Record<string, unknown>, usage: usoDe(res) };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Error al llamar a H.Ü.E." };
@@ -227,7 +227,7 @@ export async function explicarPrompt(salida: string, tool: Tool, lang: "es" | "e
       .map((b) => b.text)
       .join("\n")
       .trim();
-    if (!texto) return { ok: false, error: "H.Ü.E no devolvió la explicación." };
+    if (!texto) return { ok: false, error: "H.Ü.E no pudo explicarlo. Inténtalo otra vez." };
     return { ok: true, texto, usage: usoDe(res) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Error al llamar a H.Ü.E." };
