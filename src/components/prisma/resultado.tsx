@@ -116,7 +116,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{tx(UI.herramienta, lang)}</p>
-          <h2 className="font-wordmark mt-1 flex items-center gap-2 text-xl font-semibold text-foreground">
+          <h2 className="font-heading mt-1 flex items-center gap-2 text-xl font-semibold text-foreground">
             <span className="p-tool-chip inline-flex items-center rounded-full px-3 py-0.5 text-base">{tx(TOOL_LABEL[vivo.tool], lang)}</span>
           </h2>
           {vivo.porque && <p className="mt-0.5 text-xs text-muted-foreground">{vivo.porque}</p>}

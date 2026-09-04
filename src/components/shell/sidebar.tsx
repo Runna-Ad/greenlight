@@ -34,6 +34,10 @@ type NavItem = {
   label: string;
   icon: LucideIcon;
   soon?: boolean;
+  /** "spectrum": el ítem se enciende con el espectro de HÜE Prisma al pasar y al estar
+   *  seleccionado (riel izquierdo + icono). Una bandera, no un caso especial en el JSX,
+   *  para que el resto del menú no cambie. Estilos en globals.css (.gl-nav-spectrum). */
+  accent?: "spectrum";
 };
 
 // Cross-client items live at the root; client-scoped items take the active slug.
@@ -51,7 +55,7 @@ function navFor(
         { key: "mi-trabajo", href: "/mi-trabajo", label: "Mi trabajo", icon: LayoutGrid },
         // HÜE Prisma (estudio de prompts). Detrás de un flag mientras se prueba en la
         // rama: apagado se pinta como "Pronto", sin Link (ver `soon`).
-        { key: "prisma", href: "/prisma", label: "HÜE Prisma", icon: Sparkles, soon: !prismaActivo() },
+        { key: "prisma", href: "/prisma", label: "HÜE Prisma", icon: Sparkles, soon: !prismaActivo(), accent: "spectrum" },
         { key: "performance", href: "/performance", label: "Performance", icon: GaugeCircle },
         { key: "entregas", href: "/entregas", label: "Entregas", icon: PackageCheck },
         // "Mi perfil" ya NO vive en la nav lateral (secciones de trabajo): las acciones
@@ -212,9 +216,11 @@ function SidebarNav({
                     <Link
                       href={item.href}
                       onClick={onNavigate}
+                      data-active={active ? "true" : undefined}
                       className={cn(
                         row,
                         "transition-colors",
+                        item.accent === "spectrum" && "gl-nav-spectrum",
                         active
                           ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
                           : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",

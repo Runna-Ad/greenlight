@@ -310,3 +310,57 @@
   .gl-enter { animation: gl-enter 0.2s ease-out; }        /* entrada de un item nuevo */
   @keyframes gl-enter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 }
+
+/* ── HÜE Prisma en el menú lateral (.gl-nav-spectrum) ──
+   El ítem de Prisma se enciende con su espectro SÓLO al pasar el cursor y cuando está
+   seleccionado: un riel de 3px a la izquierda con el espectro fluyendo y el icono
+   recorriendo los tonos. La pastilla morada de "activo" se conserva (una sola regla
+   de activo para todo el menú); el espectro es la seña de "esta sección es distinta".
+   Sin movimiento bajo prefers-reduced-motion (el riel queda estático). */
+.gl-nav-spectrum {
+  position: relative;
+  --gl-spectrum: linear-gradient(180deg, #f7c948, #ff8a3d, #ff5a6e, #e24cb4, #29b6f6, #f7c948);
+}
+.gl-nav-spectrum::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--gl-spectrum);
+  background-size: 100% 300%;
+  opacity: 0;
+  transform: scaleY(0.4);
+  transition: opacity 160ms ease-out, transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.gl-nav-spectrum:hover::before,
+.gl-nav-spectrum[data-active="true"]::before {
+  opacity: 1;
+  transform: scaleY(1);
+  animation: gl-spectrum-flow 3s linear infinite;
+}
+.gl-nav-spectrum:hover > svg,
+.gl-nav-spectrum[data-active="true"] > svg {
+  animation: gl-spectrum-hue 4s linear infinite;
+}
+@keyframes gl-spectrum-flow {
+  from { background-position: 0 0; }
+  to { background-position: 0 -300%; }
+}
+/* El icono recorre los mismos tonos del espectro (color = currentColor del SVG). */
+@keyframes gl-spectrum-hue {
+  0% { color: #f7c948; }
+  20% { color: #ff8a3d; }
+  40% { color: #ff5a6e; }
+  60% { color: #e24cb4; }
+  80% { color: #29b6f6; }
+  100% { color: #f7c948; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gl-nav-spectrum:hover::before,
+  .gl-nav-spectrum[data-active="true"]::before,
+  .gl-nav-spectrum:hover > svg,
+  .gl-nav-spectrum[data-active="true"] > svg { animation: none; }
+}

@@ -246,9 +246,13 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
           haz: la firma del módulo. Su estado sigue al flujo (idle → escribiendo → listo). */}
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">{tx(UI.titulo, lang)}</p>
-          <h1 className="font-wordmark mt-1 text-[26px] font-semibold leading-tight tracking-tight text-foreground md:text-[32px]">{tx(UI.tagline, lang)}</h1>
-          <Beam estado={estadoHaz} color={colorActivo} className="mt-2" />
+          {/* El NOMBRE es el titular (Poppins, la fuente de títulos de la app); la palabra
+              "Prisma" lleva el espectro como tinta. La tagline baja a subtítulo. (Pedro) */}
+          <h1 className="font-heading text-[34px] font-bold leading-none tracking-tight text-foreground md:text-[44px]">
+            HÜE <span className="p-spectrum-text">Prisma</span>
+          </h1>
+          <p className="mt-2 text-base text-muted-foreground md:text-lg">{tx(UI.tagline, lang)}</p>
+          <Beam estado={estadoHaz} color={colorActivo} className="mt-3" />
         </div>
         <div className="flex items-center gap-2">
           <button

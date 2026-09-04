@@ -121,6 +121,31 @@
   animation: none;
 }
 
+/* ── La palabra "Prisma": el espectro como tinta. Versión para texto: cada tono se
+   mezcla ~35% con la tinta de la app para que el amarillo y el cian no se laven sobre
+   fondo claro (contraste), y fluye despacio como el haz. Sólo esa palabra. ── */
+.p-spectrum-text {
+  --p-ink-spectrum: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--p-yellow) 62%, var(--foreground)),
+    color-mix(in oklch, var(--p-orange) 66%, var(--foreground)),
+    color-mix(in oklch, var(--p-coral) 68%, var(--foreground)),
+    color-mix(in oklch, var(--p-magenta) 70%, var(--foreground)),
+    color-mix(in oklch, var(--p-cyan) 62%, var(--foreground)),
+    color-mix(in oklch, var(--p-yellow) 62%, var(--foreground))
+  );
+  background: var(--p-ink-spectrum);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: p-flow-text 9s linear infinite;
+}
+@keyframes p-flow-text {
+  from { background-position: 0% 0; }
+  to { background-position: -300% 0; }
+}
+
 /* ── Entrada de cada pantalla/paso: fundido + 8px + desenfoque leve (240ms).
    Se remonta con key={paso}, así cada cambio de paso entra "fresco". ── */
 .p-enter {
@@ -232,6 +257,7 @@
    Se conservan los fundidos cortos (ayudan a entender el cambio). ── */
 @media (prefers-reduced-motion: reduce) {
   .prisma-root::before { animation: none; }
+  .p-spectrum-text { animation: none; }
   .p-beam-out,
   .p-beam[data-estado="escribiendo"] .p-beam-out { animation: none; }
   .p-enter,
