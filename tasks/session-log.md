@@ -1859,3 +1859,60 @@ analizarImagen, archivos huérfanos en `prisma/` si el usuario abandona.
 de Vercel. main intacto.
 **Pick up next session:** flag NEXT_PUBLIC_PRISMA_ENABLED=true en Preview de Vercel · probar resultado/refinar/historial con login
 real · prueba con diseñador · decidir merge a main (= deploy a prod; el módulo queda oculto tras el flag hasta encenderlo).
+
+## 2026-09-04 08:45
+**Shipped (recent commits):**
+  - docs(prisma): 0063 aplicada + ship en rama prisma — todo y session-log
+  - feat(prisma): HÜE Prisma v1 — estudio de prompts (una idea → un prompt por herramienta)
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-04 09:08
+**Shipped (recent commits):**
+  - chore(prisma): redeploy preview con NEXT_PUBLIC_PRISMA_ENABLED
+  - docs(prisma): 0063 aplicada + ship en rama prisma — todo y session-log
+  - feat(prisma): HÜE Prisma v1 — estudio de prompts (una idea → un prompt por herramienta)
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-04 10:25
+**Shipped (recent commits):**
+  - chore(prisma): redeploy preview con las variables de Supabase y Anthropic
+  - chore(prisma): redeploy preview con NEXT_PUBLIC_PRISMA_ENABLED
+  - docs(prisma): 0063 aplicada + ship en rama prisma — todo y session-log
+  - feat(prisma): HÜE Prisma v1 — estudio de prompts (una idea → un prompt por herramienta)
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Check, Copy, ExternalLink, Lightbulb, RefreshCw, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -111,12 +111,14 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
   };
 
   return (
-    <div className="space-y-4">
-      {/* Cabecera: herramienta + por qué + estado de validación */}
+    <div className="space-y-4" style={{ "--p-tool": info.color } as CSSProperties}>
+      {/* Cabecera: herramienta (en su tono del espectro) + por qué + estado de validación */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">{tx(UI.herramienta, lang)}</p>
-          <h2 className="text-xl font-semibold text-foreground">{tx(TOOL_LABEL[vivo.tool], lang)}</h2>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{tx(UI.herramienta, lang)}</p>
+          <h2 className="font-wordmark mt-1 flex items-center gap-2 text-xl font-semibold text-foreground">
+            <span className="p-tool-chip inline-flex items-center rounded-full px-3 py-0.5 text-base">{tx(TOOL_LABEL[vivo.tool], lang)}</span>
+          </h2>
           {vivo.porque && <p className="mt-0.5 text-xs text-muted-foreground">{vivo.porque}</p>}
         </div>
         <span
@@ -141,12 +143,14 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
 
       {/* El prompt. Los botones van en su propia fila (no flotando sobre el texto): en
           móvil un botón absoluto tapaba la primera línea del prompt. */}
-      <div>
+      <div key={vivo.promptId} className="p-reveal">
         <div className="mb-2 flex flex-wrap justify-end gap-1.5">
-          <Button size="sm" onClick={copiar} aria-live="polite">
-            {copiado ? <Check className="size-4" /> : <Copy className="size-4" />}
-            {copiado ? tx(UI.copiado, lang) : tx(UI.copiar, lang)}
-          </Button>
+          <span className="p-burst rounded-md" data-on={copiado ? "true" : "false"}>
+            <Button size="sm" onClick={copiar} aria-live="polite">
+              {copiado ? <Check className="size-4" /> : <Copy className="size-4" />}
+              {copiado ? tx(UI.copiado, lang) : tx(UI.copiar, lang)}
+            </Button>
+          </span>
           <Button size="sm" variant="outline" asChild>
             <a href={info.url} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="size-4" />
@@ -198,7 +202,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
       </div>
 
       {verExplicacion && explicacion && (
-        <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm leading-relaxed text-foreground whitespace-pre-wrap">{explicacion}</div>
+        <div className="p-enter rounded-xl border border-border bg-card px-4 py-3 text-sm leading-relaxed text-foreground whitespace-pre-wrap" style={{ boxShadow: "inset 4px 0 0 var(--p-tool)" }}>{explicacion}</div>
       )}
 
       {/* Refinar */}

@@ -1706,6 +1706,10 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
 - [x] 6. copy.ts ES/EN (ES default, toggle en localStorage vía useSyncExternalStore).
 - [~] 7. Reap: tsc · eslint · build · test-lib · test-db · test-prisma en verde. Agentes de review (seguridad Opus + salud Sonnet)
       corriendo; pendiente aplicar hallazgos. Pantalla de RESULTADO no vista en vivo (necesita las tablas).
+- [x] 8. Design pass (design-god-mode, 2026-09-04): identidad propia — espectro (un tono por herramienta), haz de prisma como
+      firma (idle → escribiendo → listo en el color de la herramienta), Unbounded en títulos, puertas con tono, muestras del ADN,
+      entradas escalonadas, "copiado" con anillo, mensajes rotativos al generar. Todo CSS (prisma.css), reduced-motion respetado.
+      Demo dev-only `?demo=resultado` para ver el resultado sin sesión.
 ## Review
 - Hecho 2026-09-04: commit 98ad6dc en `prisma` + push (preview de Vercel) + 0063 aplicada. main NO tocado (merge = deploy a prod,
   decisión de Pedro).

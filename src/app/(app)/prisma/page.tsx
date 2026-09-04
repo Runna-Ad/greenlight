@@ -1,3 +1,4 @@
+import "./prisma.css";
 import { Lock } from "lucide-react";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
@@ -7,7 +8,9 @@ import { prismaActivo } from "@/lib/prisma/flags";
 import { cargarHistorial, cargarMarcas, cargarPersonajes } from "@/lib/prisma/data";
 import { PrismaStudio, type MarcaUI, type PersonajeUI } from "@/components/prisma/studio";
 import type { ItemHistorialUI } from "@/components/prisma/historial";
-import type { JobType, Tool } from "@/lib/prisma/spec";
+import { specVacio, type JobType, type Tool } from "@/lib/prisma/spec";
+import { compilar } from "@/lib/prisma/compilers";
+import type { PromptVivo } from "@/components/prisma/resultado";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +19,30 @@ export const dynamic = "force-dynamic";
  * Server component: gate por rol + flag, carga marcas/personajes/historial y monta
  * el estudio (client). El historial llega como props y se re-lee con router.refresh().
  */
-export default async function PrismaPage() {
-  const [role, soy] = await Promise.all([getViewAs(), getSoy()]);
+/** Un resultado de muestra, SÓLO en desarrollo (`?demo=resultado`): prompt real del
+ *  compiler de Kling sobre un spec fijo. Nunca se construye en producción. */
+function demoResultado(): PromptVivo | null {
+  if (process.env.NODE_ENV !== "development") return null;
+  const spec = specVacio("animar_foto", "kling", "que la modelo respire y sonría");
+  Object.assign(spec, {
+    sujeto: "the woman in the black coat from the reference",
+    accion: "breathes softly, then turns to the camera and smiles",
+    entorno: "as in the reference",
+    camara: { angulo: "eye level", movimiento: "slow dolly in", lente: "85mm, shallow depth of field" },
+    luz: "warm lantern light from the right, soft shadows",
+    mood: "nostalgic, warm, intimate",
+    estilo: "cinematic video",
+    aspect: "9:16",
+    duracion: 5,
+    refs: [{ role: "sujeto", caption: "a woman in a black coat in a night market", dna: null }],
+  });
+  const salida = compilar(spec);
+  return { specId: "demo", promptId: "demo", tool: "kling", spec, salida, valido: true, errores: [], porque: "Para un clip vertical corto sin voz, Kling anima la foto con buen movimiento." };
+}
+
+export default async function PrismaPage({ searchParams }: { searchParams: Promise<{ demo?: string }> }) {
+  const [role, soy, sp] = await Promise.all([getViewAs(), getSoy(), searchParams]);
+  const demo = sp.demo === "resultado" ? demoResultado() : null;
 
   if (!prismaActivo() || !canSee(role, "prisma")) {
     return (
@@ -52,5 +77,5 @@ export default async function PrismaPage() {
     }));
   }
 
-  return <PrismaStudio marcas={marcas} personajes={personajes} historial={historial} />;
+  return <PrismaStudio marcas={marcas} personajes={personajes} historial={historial} demo={demo} />;
 }

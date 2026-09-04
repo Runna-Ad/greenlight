@@ -4,6 +4,8 @@ import { Clock, ImageIcon, Loader2 } from "lucide-react";
 import { JOB_LABEL, TOOL_LABEL, UI, tx, type Lang } from "@/lib/prisma/copy";
 import type { JobType, Tool } from "@/lib/prisma/spec";
 import { JOB_KIND } from "@/lib/prisma/spec";
+import { TOOL_INFO } from "@/lib/prisma/tools";
+import type { CSSProperties } from "react";
 
 /** Lo que el servidor manda al rail (ya firmado y recortado). */
 export type ItemHistorialUI = {
@@ -25,16 +27,18 @@ export function Historial({ items, lang, onAbrir, abriendo }: { items: ItemHisto
       {items.length === 0 ? (
         <p className="mt-3 px-1 text-xs text-muted-foreground">{tx(UI.sinHistorial, lang)}</p>
       ) : (
-        <ul className="mt-2 space-y-1">
-          {items.map((it) => (
-            <li key={it.specId}>
+        <ul className="p-stagger mt-2 space-y-1">
+          {items.map((it, i) => (
+            <li key={it.specId} style={{ "--i": i, "--p-tool": TOOL_INFO[it.tool].color } as CSSProperties}>
               <button
                 type="button"
                 onClick={() => onAbrir(it.specId)}
                 disabled={abriendo !== null}
                 aria-busy={abriendo === it.specId}
-                className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-secondary disabled:cursor-wait disabled:opacity-70"
+                className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-secondary disabled:cursor-wait disabled:opacity-70"
               >
+                {/* Barra del tono de la herramienta: color = información (qué herramienta fue). */}
+                <span className="h-9 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: "var(--p-tool)" }} aria-hidden="true" />
                 {abriendo === it.specId ? (
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground">
                     <Loader2 className="size-4 animate-spin" />

@@ -31,6 +31,7 @@ export function RefUploader({
 }) {
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState(false);
+  const [flash, setFlash] = useState(false); // destello al recibir la imagen (se apaga solo)
 
   const subir = async (file: File) => {
     setBusy(true);
@@ -43,6 +44,7 @@ export function RefUploader({
         return;
       }
       onChange({ role, storage_path: r.storage_path, caption: r.caption, dna: r.dna, url: r.url, aviso: r.aviso });
+      setFlash(true);
       if (r.aviso) toast.message(lang === "es" ? "La imagen subió, pero H.Ü.E no pudo leerla." : "Image uploaded, but H.Ü.E could not read it.");
     } finally {
       setBusy(false);
@@ -51,9 +53,12 @@ export function RefUploader({
 
   const label = tx(REF_LABEL[role], lang);
 
+  // Sólo hex reales se pintan como muestra: el ADN también puede traer nombres ("warm beige").
+  const swatches = (value?.dna?.paleta ?? []).filter((c) => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 5);
+
   if (value) {
     return (
-      <div className="rounded-xl border border-border bg-card p-3">
+      <div className={cn("p-enter rounded-xl border border-border bg-card p-3", flash && "p-drop-flash")} onAnimationEnd={() => setFlash(false)}>
         <div className="flex items-start gap-3">
           {/* Thumbnail firmado (bucket privado). <img> a propósito: URL firmada, tamaño libre. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -84,6 +89,13 @@ export function RefUploader({
                 {value.dna.lente ? ` · ${value.dna.lente}` : ""}
                 {value.dna.mood ? ` · ${value.dna.mood}` : ""}
               </p>
+            )}
+            {swatches.length > 0 && (
+              <ul className="mt-2 flex items-center gap-1.5" aria-label={lang === "es" ? "Paleta de la referencia" : "Reference palette"}>
+                {swatches.map((c) => (
+                  <li key={c} className="p-swatch" style={{ backgroundColor: c }} title={c} />
+                ))}
+              </ul>
             )}
           </div>
         </div>

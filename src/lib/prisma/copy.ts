@@ -42,7 +42,7 @@ export const JOB_LABEL: Record<JobType, Par> = {
   animar_foto: t("Animar esta foto", "Animate this photo"),
   texto_a_video: t("Video desde una idea", "Video from an idea"),
   transicion: t("Transición entre dos tomas", "Transition between two shots"),
-  escena_sora: t("Escena de 10–15 s (Sora)", "10–15 s scene (Sora)"),
+  escena_sora: t("Escena de 10-15 s (Sora)", "10-15 s scene (Sora)"),
 };
 
 export const JOB_HINT: Record<JobType, Par> = {
@@ -156,6 +156,15 @@ export const UI = {
 } satisfies Record<string, Par>;
 
 export type UiKey = keyof typeof UI;
+
+/** Lo que dice el botón mientras H.Ü.E trabaja (rota cada ~1.8 s): progreso legible,
+ *  no un spinner mudo. Son etapas reales del writer, en orden aproximado. */
+export const MENSAJES_GENERANDO: Par[] = [
+  t("Leyendo tus referencias…", "Reading your references…"),
+  t("Eligiendo la luz y la cámara…", "Choosing light and camera…"),
+  t("Escribiendo el prompt…", "Writing the prompt…"),
+  t("Revisando que cumpla la herramienta…", "Checking it fits the tool…"),
+];
 
 /** Devuelve el texto en el idioma pedido. */
 export const tx = (par: Par, lang: Lang): string => par[lang];

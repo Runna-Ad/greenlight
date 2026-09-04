@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Clapperboard, ImageIcon, Languages, Loader2, Sparkles, Wand2 } from "lucide-react";
@@ -15,6 +15,7 @@ import {
   JOB_LABEL,
   KIND_HINT,
   KIND_LABEL,
+  MENSAJES_GENERANDO,
   SWATCHES_CAMARA,
   SWATCHES_ESTILO,
   SWATCHES_LENTE,
@@ -39,12 +40,13 @@ import {
   type RefRole,
   type Tool,
 } from "@/lib/prisma/spec";
-import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
+import { COLOR_KIND, TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
 import { elegirHerramienta } from "@/lib/prisma/routing";
 import { useLang } from "./use-lang";
 import { RefUploader, type RefLocal } from "./ref-uploader";
 import { Resultado, type PromptVivo } from "./resultado";
 import { Historial, type ItemHistorialUI } from "./historial";
+import { Beam } from "./beam";
 
 export type MarcaUI = { id: string; name: string; client_id: string; client_name: string; preset: MarcaPreset };
 export type PersonajeUI = { id: string; name: string; client_id: string };
@@ -83,11 +85,12 @@ function Chips({ titulo, opciones, valor, onChange, lang, permiteOtro = true }: 
  * HÜE Prisma — el estudio. Tres puertas → un trabajo → 3 pasos → resultado.
  * Etiquetas en palabras llanas; la jerga sólo aparece en el prompt final.
  */
-export function PrismaStudio({ marcas, personajes, historial }: { marcas: MarcaUI[]; personajes: PersonajeUI[]; historial: ItemHistorialUI[] }) {
+export function PrismaStudio({ marcas, personajes, historial, demo = null }: { marcas: MarcaUI[]; personajes: PersonajeUI[]; historial: ItemHistorialUI[]; demo?: PromptVivo | null }) {
   const router = useRouter();
   const [lang, setLang] = useLang();
 
-  const [paso, setPaso] = useState<Paso>("inicio");
+  // `demo` (sólo dev) arranca directo en el resultado para poder verlo sin sesión.
+  const [paso, setPaso] = useState<Paso>(demo ? "resultado" : "inicio");
   const [kind, setKind] = useState<JobKind | null>(null);
   const [job, setJob] = useState<JobType | null>(null);
   const [idea, setIdea] = useState("");
@@ -103,8 +106,16 @@ export function PrismaStudio({ marcas, personajes, historial }: { marcas: MarcaU
   const [videoType, setVideoType] = useState<string | null>(null);
   const [toolOverride, setToolOverride] = useState<Tool | null>(null);
   const [generando, setGenerando] = useState(false);
-  const [vivo, setVivo] = useState<PromptVivo | null>(null);
+  const [vivo, setVivo] = useState<PromptVivo | null>(demo);
   const [abriendo, setAbriendo] = useState<string | null>(null);
+  // Mientras H.Ü.E escribe, el botón rota por las etapas (1.8 s cada una). El
+  // intervalo se limpia al terminar (y en StrictMode el cleanup evita duplicados).
+  const [etapa, setEtapa] = useState(0);
+  useEffect(() => {
+    if (!generando) return;
+    const id = window.setInterval(() => setEtapa((e) => (e + 1) % MENSAJES_GENERANDO.length), 1800);
+    return () => window.clearInterval(id);
+  }, [generando]);
 
   // Foco al encabezado al cambiar de paso: el lector de pantalla (y el teclado) aterrizan
   // en el paso nuevo en vez de quedarse en el botón "Siguiente" que ya no existe.
@@ -225,13 +236,19 @@ export function PrismaStudio({ marcas, personajes, historial }: { marcas: MarcaU
     return opts;
   };
 
+  // El color activo del módulo: la herramienta elegida tiñe tarjeta, haz y resultado.
+  const colorActivo = vivo ? TOOL_INFO[vivo.tool].color : tool ? TOOL_INFO[tool].color : null;
+  const estadoHaz: "idle" | "escribiendo" | "listo" = generando ? "escribiendo" : paso === "resultado" && vivo ? "listo" : "idle";
+
   return (
-    <div className="mx-auto max-w-6xl">
-      {/* Cabecera */}
+    <div className="prisma-root mx-auto max-w-6xl" style={colorActivo ? ({ "--p-tool": colorActivo } as CSSProperties) : undefined}>
+      {/* Cabecera: el nombre en la tipografía del wordmark (Unbounded) y, debajo, el
+          haz: la firma del módulo. Su estado sigue al flujo (idle → escribiendo → listo). */}
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">{tx(UI.titulo, lang)}</p>
-          <h1 className="mt-1 text-2xl font-semibold text-foreground">{tx(UI.tagline, lang)}</h1>
+          <h1 className="font-wordmark mt-1 text-[26px] font-semibold leading-tight tracking-tight text-foreground md:text-[32px]">{tx(UI.tagline, lang)}</h1>
+          <Beam estado={estadoHaz} color={colorActivo} className="mt-2" />
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -254,10 +271,10 @@ export function PrismaStudio({ marcas, personajes, historial }: { marcas: MarcaU
         <div className="min-w-0">
           {/* INICIO: tres puertas */}
           {paso === "inicio" && (
-            <section aria-label={tx(UI.queQuieres, lang)}>
+            <section key="inicio" className="p-enter" aria-label={tx(UI.queQuieres, lang)}>
               <h2 className="mb-3 text-lg font-semibold text-foreground">{tx(UI.queQuieres, lang)}</h2>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {KINDS.map(({ kind: k, icon: Icon }) => (
+              <div className="p-stagger grid gap-3 sm:grid-cols-3">
+                {KINDS.map(({ kind: k, icon: Icon }, i) => (
                   <button
                     key={k}
                     type="button"
@@ -265,9 +282,10 @@ export function PrismaStudio({ marcas, personajes, historial }: { marcas: MarcaU
                       setKind(k);
                       setPaso("job");
                     }}
-                    className="group rounded-2xl border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-md"
+                    style={{ "--hue": COLOR_KIND[k], "--i": i } as CSSProperties}
+                    className="p-door cursor-pointer rounded-2xl border border-border bg-card p-5 text-left shadow-sm"
                   >
-                    <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                    <span className="p-door-icon flex size-11 items-center justify-center rounded-xl">
                       <Icon className="size-5" />
                     </span>
                     <span className="mt-4 block text-base font-semibold text-foreground">{tx(KIND_LABEL[k], lang)}</span>
@@ -280,16 +298,16 @@ export function PrismaStudio({ marcas, personajes, historial }: { marcas: MarcaU
 
           {/* JOB: los trabajos en lenguaje humano */}
           {paso === "job" && kind && (
-            <section>
+            <section key="job" className="p-enter">
               <button type="button" onClick={() => setPaso("inicio")} className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="size-4" /> {tx(UI.atras, lang)}
               </button>
               <h2 ref={tituloRef} tabIndex={-1} className="mb-3 text-lg font-semibold text-foreground outline-none">
                 {tx(KIND_LABEL[kind], lang)}
               </h2>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {JOBS_POR_KIND[kind].map((j) => (
-                  <button key={j} type="button" onClick={() => elegirJob(j)} className="rounded-xl border border-border bg-card px-4 py-3 text-left transition-colors hover:border-primary">
+              <div className="p-stagger grid gap-2 sm:grid-cols-2">
+                {JOBS_POR_KIND[kind].map((j, i) => (
+                  <button key={j} type="button" onClick={() => elegirJob(j)} style={{ "--hue": COLOR_KIND[kind], "--i": i } as CSSProperties} className="p-door cursor-pointer rounded-xl border border-border bg-card px-4 py-3 text-left">
                     <span className="block text-sm font-medium text-foreground">{tx(JOB_LABEL[j], lang)}</span>
                     <span className="block text-xs text-muted-foreground">{tx(JOB_HINT[j], lang)}</span>
                   </button>
@@ -300,7 +318,7 @@ export function PrismaStudio({ marcas, personajes, historial }: { marcas: MarcaU
 
           {/* PASOS 1-3 */}
           {typeof paso === "number" && job && (
-            <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <section key={`paso-${paso}`} className="p-enter rounded-2xl border border-border bg-card p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">{tx(JOB_LABEL[job], lang)}</p>
@@ -313,7 +331,7 @@ export function PrismaStudio({ marcas, personajes, historial }: { marcas: MarcaU
                 </p>
                 <ol className="flex items-center gap-1.5" aria-hidden="true">
                   {[1, 2, 3].map((n) => (
-                    <li key={n} className={cn("size-2 rounded-full", n === paso ? "bg-primary" : n < paso ? "bg-primary/40" : "bg-border")} aria-current={n === paso ? "step" : undefined} />
+                    <li key={n} className={cn("h-2 rounded-full transition-all duration-300", n === paso ? "w-6 bg-primary" : n < paso ? "w-2 bg-primary/40" : "w-2 bg-border")} aria-current={n === paso ? "step" : undefined} />
                   ))}
                 </ol>
               </div>
@@ -385,9 +403,11 @@ export function PrismaStudio({ marcas, personajes, historial }: { marcas: MarcaU
 
                   {/* Herramienta sugerida + override */}
                   {sugerencia && tool && (
-                    <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">{tx(UI.herramienta, lang)}</p>
-                      <p className="mt-1 text-base font-semibold text-foreground">{tx(TOOL_LABEL[tool], lang)}</p>
+                    <div className="p-tool-card rounded-xl border border-border bg-card p-4 pl-5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{tx(UI.herramienta, lang)}</p>
+                      <p className="mt-1.5">
+                        <span className="p-tool-chip inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold">{tx(TOOL_LABEL[tool], lang)}</span>
+                      </p>
                       <p className="mt-0.5 text-xs text-muted-foreground">{toolOverride ? (lang === "es" ? "La elegiste tú." : "You picked it.") : sugerencia.porque}</p>
                       {TOOLS_POR_JOB[job].length > 1 && (
                         <div className="mt-3">
@@ -426,9 +446,9 @@ export function PrismaStudio({ marcas, personajes, historial }: { marcas: MarcaU
                     {tx(UI.siguiente, lang)} <ArrowRight className="size-4" />
                   </Button>
                 ) : (
-                  <Button onClick={generar} disabled={generando || !tool}>
+                  <Button onClick={generar} disabled={generando || !tool} aria-live="polite" className="min-w-[200px]">
                     {generando ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                    {generando ? tx(UI.generando, lang) : tx(UI.generar, lang)}
+                    {generando ? tx(MENSAJES_GENERANDO[etapa], lang) : tx(UI.generar, lang)}
                   </Button>
                 )}
               </div>
@@ -436,7 +456,7 @@ export function PrismaStudio({ marcas, personajes, historial }: { marcas: MarcaU
           )}
 
           {paso === "resultado" && vivo && (
-            <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <section key="resultado" className="p-enter rounded-2xl border border-border bg-card p-5 shadow-sm">
               <Resultado vivo={vivo} lang={lang} onCambio={setVivo} onNueva={reset} />
             </section>
           )}

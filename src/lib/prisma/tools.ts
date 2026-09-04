@@ -3,7 +3,7 @@
  * qué límites tiene, dónde se abre. Es la "verdad" que usan compilers, validators y
  * la pantalla de resultado. Módulo puro.
  */
-import type { Tool, JobType } from "./spec.ts";
+import type { Tool, JobType, JobKind } from "./spec.ts";
 
 export type Idioma = "es" | "en";
 
@@ -27,6 +27,10 @@ export type ToolInfo = {
   video: boolean;
   /** Duraciones que ofrece (segundos). [] = imagen. */
   duraciones: number[];
+  /** El tono de la herramienta en el espectro de Prisma (color = información: la UI
+   *  tiñe la tarjeta, la cabecera del resultado y el haz con él). Hex literal a
+   *  propósito: se usa en estilos en línea (`--p-tool`), donde var() sí resuelve. */
+  color: string;
 };
 
 export const TOOL_INFO: Record<Tool, ToolInfo> = {
@@ -41,6 +45,7 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
     imagenes: true,
     video: false,
     duraciones: [],
+    color: "#f7c948",
   },
   veo: {
     id: "veo",
@@ -53,6 +58,7 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
     imagenes: true,
     video: true,
     duraciones: [8],
+    color: "#29b6f6",
   },
   kling: {
     id: "kling",
@@ -65,6 +71,7 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
     imagenes: true,
     video: true,
     duraciones: [5, 10],
+    color: "#ff5a6e",
   },
   sora: {
     id: "sora",
@@ -77,6 +84,7 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
     imagenes: true,
     video: true,
     duraciones: [10, 15],
+    color: "#e24cb4",
   },
   higgsfield: {
     id: "higgsfield",
@@ -89,7 +97,16 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
     imagenes: true,
     video: true,
     duraciones: [5],
+    color: "#ff8a3d",
   },
+};
+
+/** Tono de cada "puerta" de inicio (imagen / edición / video): el espectro también
+ *  ordena la entrada. */
+export const COLOR_KIND: Record<JobKind, string> = {
+  imagen: "#f7c948",
+  edicion: "#e24cb4",
+  video: "#29b6f6",
 };
 
 /** Qué herramientas pueden hacer cada trabajo (la primera es la sugerida por defecto). */
