@@ -8,6 +8,17 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+## ✅ 2026-09-08 — H.Ü.E LEE REFERENCIAS · Tier 2 (TikTok caption) — SHIPPEADO (main 8597fa4, SIN migración)
+- TikTok se suma al lector de referencias (0064): `leerTiktok()` → oEmbed público (sin llave) → caption + autor,
+  estado `parcial` (leímos lo que el autor ESCRIBIÓ, no lo que PASA en el video). Reusa caché/estados/prompt/badge;
+  cero vendor, cero infra, cero migración. SSRF-safe (fetch a host literal `www.tiktok.com/oembed`). Instagram sigue
+  `no_soportada` (su oEmbed murió / bloquea IPs de datacenter). Review Opus cerró un gap de prompt-injection (fence en
+  la rama `parcial` + saneo/cap del título).
+- Medición (Step 2 / gate de Tier 3): captura automática en `hue_generations.referencias`; `scripts/refs-impact.sql`
+  (adopción) + Hub `resumenEdiciones` (calidad). Reminder one-time 2026-09-22 (routine `trig_01LCE7ihfhQbatgPeouXttrn`).
+- **Pendiente**: LIVE-VERIFY de Pedro (pegar TikTok en una tarea → badge "leyó el caption"). Tier 3 (video real) NO se
+  construye hasta que la medición muestre que la referencia mueve la aguja.
+
 ## ✅ 2026-09-03 — H.Ü.E LEE REFERENCIAS · Tier 1 — SHIPPEADO (main d911a3d, 0064 aplicada)
 - Google Docs/Slides/Sheets/Drive(pdf,docx,txt) → texto exacto; YouTube → título+autor (sin transcripción, honesto);
   TikTok/IG → no soportada (Tier 2). Caché `referencia_lecturas` por URL canónica; lectura en after() al guardar el

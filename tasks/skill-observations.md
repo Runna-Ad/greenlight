@@ -2,6 +2,16 @@
 
 Qué falló (o funcionó) en el PROCESO, no en el código. Alimenta el ajuste de las skills.
 
+[2026-09-08] OBSERVATION: replicable-win — el patrón "main loop construye (Sonnet bajo opusplan), subagente Opus revisa
+seguridad" atrapó un bug real. CONTEXT: Tier 2 mete el caption de TikTok (dato de TERCEROS) a un prompt de LLM. Escribí
+el código en el main loop (Sonnet) y ruteé el review al subagente `security-reviewer` (Opus, per MODEL GUARD). El Opus
+cazó un gap SERIO de prompt-injection que el código en Sonnet NO vio: la rama `parcial` de `bloqueReferencias` no
+envolvía el texto en la cerca anti-inyección (sólo `leida` lo hacía) y el título iba crudo. RECOMMENDATION: mantener
+—y que beast-mode lo haga explícito— "todo código que mete input externo/no confiable a un prompt LLM o toca user-data
+bajo opusplan pasa por un review Opus (subagente)"; green gates ≠ seguro. Obs menor: al sumar una rama a un if-encadenado
+(`leerReferencia`), ubicarla ANTES de la condición más laxa — un TikTok-con-id caía en `c.id && c.tipo !== "otro"` →
+`leerGoogle`.
+
 [2026-09-02] OBSERVATION: replicable-win
 CONTEXTO: al hacer "merge the safe Dependabot PRs", NO confié en el `mergeStateStatus: CLEAN` de GitHub. Un
 chequeo de antigüedad (`git log <pr-branch>..origin/main -- <archivos>`) reveló que las bases eran rancias: un

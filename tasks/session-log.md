@@ -1,5 +1,24 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-08 — H.Ü.E LEE REFERENCIAS · Tier 2 (TikTok caption) — SHIPPEADO a main + reminder de medición
+**Qué hicimos:** Pedro llegó con la idea de "analizar referencias en video" (spec de Whisper audio-only). Challenge
+protocol: volteé el plan a "lo más barato con más señal primero" — caption por oEmbed (gratis, in-house) → MEDIR →
+sólo entonces Tier 3 (video real, que sí cuesta). Pedro aceptó. Descubrí que Tier 1 (0064) ya estaba en main y que el
+propio código marcaba TikTok/IG como `no_soportada` (Tier 2). Construí Tier 2: `tiktokRef()` + `leerTiktok()` (oEmbed →
+caption+autor, estado `parcial`), reusando caché/estados/prompt/badge de 0064. CERO migración. Review de seguridad
+(subagente Opus) cerró un gap SERIO de prompt-injection (la rama `parcial` no fenceaba + título crudo). Step 2
+(medición): captura automática vía `hue_generations.referencias` + `scripts/refs-impact.sql`.
+**Estado actual:** SHIPPEADO + LIVE. main `8597fa4` (ff desde 36fd514) pusheado; Vercel prod desplegando (code-only,
+sin migración); prod sirve 200. Rama `hue-referencias-tier2` == main.
+**Trabajo sin commitear:** ninguno (working tree limpio). El `session-log.md` modificado que venía de la sesión `prisma`
+quedó en `git stash@{0}` ("prisma session-log WIP") — restaurar en esa rama.
+**Decisiones:** (1) caption-first + gate de medición ANTES de gastar en Tier 3 (challenge aceptado por Pedro).
+(2) Instagram fuera por ahora (su oEmbed murió / bloquea IPs de datacenter) — decisión aparte. (3) el cap de bytes del
+oEmbed se deja IGUAL que YouTube (no crear divergencia; endurecer ambos juntos si acaso). (4) rama sale de main, no de prisma.
+**Retomar la próxima:** (a) LIVE-VERIFY de Pedro (pegar TikTok en una tarea → badge "leyó el caption"); (b) el 2026-09-22
+corre el reminder (routine `trig_01LCE7ihfhQbatgPeouXttrn`) → medir con refs-impact.sql + Hub → decidir Tier 3.
+**Cambios de entorno:** ninguno (sin env vars, sin deps, sin migración). Reminder cloud one-time creado (22-sep 15:00 UTC).
+
 ## 2026-09-03 — H.Ü.E LEE REFERENCIAS · Tier 1 — CONSTRUIDO en rama `hue-referencias` (worktree ../greenlight-refs), SIN merge
 Pedro: "go with tier 1". La sesión estaba en la rama `prisma` (otra sesión trabajando ahí; su 0063 ya aplicada en prod)
 → se construyó en un worktree aparte sobre main para no pisarla. Ver todo.md para el diseño y el checklist de ship.
