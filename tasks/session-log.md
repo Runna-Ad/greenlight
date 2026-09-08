@@ -1,5 +1,20 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-03 — H.Ü.E LEE REFERENCIAS · Tier 1 — CONSTRUIDO en rama `hue-referencias` (worktree ../greenlight-refs), SIN merge
+Pedro: "go with tier 1". La sesión estaba en la rama `prisma` (otra sesión trabajando ahí; su 0063 ya aplicada en prod)
+→ se construyó en un worktree aparte sobre main para no pisarla. Ver todo.md para el diseño y el checklist de ship.
+- Código: `lib/referencia-lectura-url.ts` (puro) + `lib/referencia-lectura.ts` (server, caché) + 0064 + writer (bloque
+  REFERENCIAS en el prompt variable) + guardarIntake (after) + badge en `BotonReferencia` (equipo). 40 tests nuevos.
+- Smoke REAL con loader node (ver lesson): Doc compartido → leida; Doc privado → privada; YouTube → parcial (transcripción
+  imposible server-side: lesson); Drive video → no_soportada; TikTok → no_soportada.
+- Reap (code-reviewer sonnet): 4 serios arreglados antes del commit — (1) el badge se gateaba por `soloLectura`, que para
+  un CLIENTE en tarea abierta es false → veía copy interno de H.Ü.E; ahora `lecturas` sólo llega al equipo (undefined =
+  sin badge); (2) cercas `<<<`/`>>>` falsificables desde un doc hostil → cerca ALEATORIA por generación + se borran del
+  texto; (3) YouTube = 3 fetches secuenciales × 8s → tope TOTAL de 9s por referencia (Promise.race); (4)
+  `lecturasCacheadas` sin try/catch podía tumbar la página → envuelto. Menores: cuerpo en streaming con tope de bytes,
+  allowlist de host para la pista de subtítulos, role="list", keys estables. SSRF/RLS/canónicas: limpios.
+- Pendiente: "ship it" → merge a main + 0064 + push. Live-verify de Pedro con un Doc real.
+
 ## 2026-09-03 — LIVE REFRESH (0062) — SHIPPEADO (main 62bb720 · migración aplicada) + evaluación de "H.Ü.E lee referencias"
 Pedro pidió dos cosas: (1) que la plataforma se refresque sola al cambiar estado / asignación; (2) evaluar si H.Ü.E puede
 leer las referencias (links a Drive / TikTok) de una tarea al escribir un guión. Modo challenge para ambas; "go ahead"

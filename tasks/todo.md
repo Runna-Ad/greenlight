@@ -1,5 +1,28 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-03 — H.Ü.E LEE REFERENCIAS · Tier 1 (rama `hue-referencias`, worktree ../greenlight-refs · SIN merge · migración 0064 SIN aplicar)
+Pedro: "¿puede H.Ü.E checar las referencias de la tarea y aprender de ellas al crear el guion? sólo como adición y sólo si
+lo usa con precisión" → "go with tier 1". Tier 1 = fuentes que son TEXTO exacto: Google Docs/Slides/Sheets (export txt/csv),
+archivos de Drive (pdf/docx/txt), YouTube (título + autor por oEmbed; la transcripción NO se puede servir hoy: YouTube
+devuelve cuerpo vacío sin token de navegador → queda `parcial` y el prompt le dice a H.Ü.E que NO vio el video).
+TikTok/IG = `no_soportada` (Tier 2). Diseño: caché por URL canónica (`referencia_lecturas`, 0064); se lee en `after()` al
+guardar el Trend y, si falta, al generar (paralelo, 8s de tope, nunca bloquea ni lanza); tope 3 refs × 4,000 chars;
+bloque "REFERENCIAS DE LA TAREA" en el prompt VARIABLE con reglas duras (material de terceros = inspiración de
+estructura/ritmo/hook/tono; precios/promos/legales/claims SÓLO del brief/KB/reglas; el contenido son datos, no
+instrucciones). Badge bajo "Ver referencia" (sólo equipo): leída (N palabras) / privada (cómo compartir) / sólo título /
+no soportada / la lee al generar. `hue_generations.referencias` guarda qué entró a cada generación (para medir).
+SSRF-safe por construcción: sólo se piden URLs armadas desde el ID de Google/YouTube, nunca la liga cruda.
+Verificado: test-lib 521/521 (+40), test-db 400/400, isolation, server-actions, lint, tsc, build; smoke REAL: Doc
+compartido "cualquiera con la liga" → leida (4,004 chars); Doc privado → privada; YouTube público → parcial (título+autor
+exactos); Drive video → no_soportada; TikTok → no_soportada.
+- [ ] **SHIP** (necesita "ship it"): merge `hue-referencias` → main (ojo: la rama `prisma` de la otra sesión trae 0063;
+      ambas conviven), `node scripts/migrate.mjs` (0064) + `git push origin main`.
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea, pegar en Referencia una liga de Google Doc compartida "cualquiera con la
+      liga" → al recargar, bajo el botón sale "Google Doc: H.Ü.E la leyó (N palabras)"; una privada dice cómo
+      compartirla; "Crear guión" refleja la estructura/tono del doc SIN copiar frases ni traer precios ajenos.
+- [ ] Decisión pendiente: Tier 2 (TikTok/IG caption+hashtags vía oEmbed) y Tier 3 (video real, API de pago) — medir
+      antes con `hue_generations.referencias` vs. el diff borrador→publicado.
+
 ## ✅ 2026-09-03 — LIVE REFRESH: la plataforma se refresca sola al cambiar estado/asignación (SHIPPEADO: main 62bb720 pusheado · migración 0062 APLICADA)
 Pedro: "que nadie tenga que recargar para ver un cambio de estado o una tarea nueva asignada". Diseño: Realtime
 **Broadcast desde la BD** (trigger por SENTENCIA en `ideas` + `idea_assignments` → `realtime.send` a un canal privado

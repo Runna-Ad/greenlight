@@ -9,6 +9,7 @@ import { getSoyId } from "@/lib/soy";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { reunirContextoTarea, escribirGuion, escribirCopy } from "@/lib/hue-writer";
 import type { PlanoParsed, EstaticoParsed } from "@/lib/guion";
+import type { Lectura } from "@/lib/referencia-lectura-url";
 
 // El modelo del writer (hue-writer.ts) — se guarda como metadata de la generación.
 const MODELO = "claude-sonnet-5";
@@ -19,7 +20,12 @@ const MODELO = "claude-sonnet-5";
  * `after()` (no bloquea la respuesta) y es NO CRÍTICO: si falla, se registra y ya
  * — nunca rompe la generación (el humano ya tiene su borrador en pantalla).
  */
-async function capturarGeneracion(ideaId: string, kind: "guion" | "copy", draft: unknown): Promise<void> {
+async function capturarGeneracion(
+  ideaId: string,
+  kind: "guion" | "copy",
+  draft: unknown,
+  referencias: Lectura[] = [],
+): Promise<void> {
   try {
     if (!hasSupabase()) return;
     await supabaseAdmin().from("hue_generations").insert({
@@ -28,6 +34,8 @@ async function capturarGeneracion(ideaId: string, kind: "guion" | "copy", draft:
       draft: draft as never,
       model: MODELO,
       generated_by: await getSoyId(),
+      // Qué referencias entraron al prompt (0064) — para medir después si sirven.
+      referencias: referencias.map((r) => ({ url: r.url, tipo: r.tipo, estado: r.estado, chars: r.chars })) as never,
     });
   } catch (e) {
     console.error("[hue] no se pudo capturar la generación", e);
@@ -61,7 +69,7 @@ export async function crearGuion(
     const ctx = await reunirContextoTarea(ideaId);
     if (!ctx) return { ok: false, error: "La tarea ya no existe." };
     const res = await escribirGuion(ctx);
-    if (res.ok) after(() => capturarGeneracion(ideaId, "guion", res.planos));
+    if (res.ok) after(() => capturarGeneracion(ideaId, "guion", res.planos, ctx.referencias));
     return res;
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "No se pudo reunir el contexto de la tarea." };
@@ -77,7 +85,7 @@ export async function crearCopy(
     const ctx = await reunirContextoTarea(ideaId);
     if (!ctx) return { ok: false, error: "La tarea ya no existe." };
     const res = await escribirCopy(ctx);
-    if (res.ok) after(() => capturarGeneracion(ideaId, "copy", res.estatico));
+    if (res.ok) after(() => capturarGeneracion(ideaId, "copy", res.estatico, ctx.referencias));
     return res;
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "No se pudo reunir el contexto de la tarea." };

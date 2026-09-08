@@ -6,6 +6,7 @@ import { Lightbulb, Puzzle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Plantilla } from "@/lib/plantilla";
 import { DetallesTab } from "./detalles-tab";
+import type { Lectura } from "@/lib/referencia-lectura-url";
 import { RunnaToolsTab, type Persona } from "./runna-tools-tab";
 
 type DetallesProps = {
@@ -15,6 +16,8 @@ type DetallesProps = {
   duracion: string[];
   concepto: string | null;
   trend: string | null;
+  /** Qué pudo leer H.Ü.E de cada liga del Trend (0064) — para el badge. */
+  lecturas?: Lectura[];
 };
 
 type PoolPersona = { id: string; name: string; color: string };
@@ -95,6 +98,7 @@ export function TabsTarea({
             duracion={detalles.duracion}
             concepto={detalles.concepto}
             trend={detalles.trend}
+            lecturas={detalles.lecturas}
             plantilla={plantilla}
             soloLectura={soloLectura}
           />

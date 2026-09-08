@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { PlayCircle, Pencil, Check } from "lucide-react";
+import { PlayCircle, Pencil, Check, BookOpenCheck, EyeOff, Info } from "lucide-react";
 
 import { parseReferencias, type TrendSegmento } from "@/lib/referencia";
+import { clasificarReferencia, etiquetaLectura, type Lectura } from "@/lib/referencia-lectura-url";
 import { CampoIntake } from "./campo-intake";
 
 type RefLink = Extract<TrendSegmento, { tipo: "ref" }>;
@@ -17,10 +18,15 @@ type RefLink = Extract<TrendSegmento, { tipo: "ref" }>;
 export function BotonReferencia({
   ideaId,
   valorInicial,
+  lecturas,
   soloLectura,
 }: {
   ideaId: string;
   valorInicial: string | null;
+  /** Lo que H.Ü.E pudo leer de cada liga (caché, 0064). La página SÓLO la pasa al equipo:
+   *  `undefined` = no eres equipo → el badge no se construye (el cliente no ve la cocina;
+   *  `soloLectura` NO sirve de gate: una tarea abierta no es de sólo lectura para el cliente). */
+  lecturas?: Lectura[];
   soloLectura?: boolean;
 }) {
   const [valor, setValor] = useState(valorInicial ?? "");
@@ -65,7 +71,7 @@ export function BotonReferencia({
     <div className="flex flex-wrap items-center gap-2">
       {refs.map((r, i) => (
         <a
-          key={i}
+          key={`${i}-${r.url}`}
           href={r.url}
           target="_blank"
           rel="noreferrer"
@@ -93,6 +99,31 @@ export function BotonReferencia({
         >
           <Pencil className="size-3.5" />
         </button>
+      )}
+      {/* Qué pudo leer H.Ü.E (0064): sólo para el equipo — `lecturas` sólo llega si lo eres. */}
+      {refs.length > 0 && lecturas !== undefined && (
+        <ul role="list" className="basis-full space-y-0.5" aria-label="Lectura de referencias por H.Ü.E">
+          {refs.map((r, i) => {
+            const c = clasificarReferencia(r.url);
+            const l = lecturas.find((x) => x.url === c.canonica) ?? null;
+            const e = etiquetaLectura(l, c.tipo);
+            const Icono = e.tono === "ok" ? BookOpenCheck : e.tono === "aviso" ? EyeOff : Info;
+            return (
+              <li
+                key={`${i}-${r.url}`}
+                className={`flex items-start gap-1.5 text-[11px] leading-snug ${
+                  e.tono === "ok" ? "text-emerald-700 dark:text-emerald-400" : e.tono === "aviso" ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"
+                }`}
+              >
+                <Icono className="mt-0.5 size-3 shrink-0" aria-hidden />
+                <span>
+                  {refs.length > 1 && <span className="font-semibold">{r.label} · </span>}
+                  {e.texto}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

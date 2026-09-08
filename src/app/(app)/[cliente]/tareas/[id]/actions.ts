@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/identity";
 import { assertCanActOnTask, assertCanActOnRow } from "@/lib/auth/task-scope";
 import { ESTADOS_SOLO_LECTURA, motivoSoloLectura } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
+import { programarLecturas } from "@/lib/referencia-lectura";
 import { combinarConsideraciones } from "@/lib/consideraciones";
 import type { AssetStatus } from "@/lib/brand";
 import { sinInventar, limpiarPegado, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
@@ -122,6 +123,10 @@ export async function guardarIntake(
     const v = (actual as Record<string, string | null> | null)?.[campo] ?? null;
     if (v !== limpio) return { ok: false, conflicto: true, valorActual: v };
   }
+
+  // Referencias (0064): al guardar el Trend, H.Ü.E lee sus ligas en background para que
+  // al generar ya estén en caché (y el badge de la tarea diga si pudo leerlas).
+  if (campo === "trend") after(() => programarLecturas(limpio));
 
   // Invalida el caché de la ruta: sin esto el write SÍ persiste en la BD, pero al
   // recargar/navegar Next sirve la copia cacheada (valor viejo) y parece "no guardó".

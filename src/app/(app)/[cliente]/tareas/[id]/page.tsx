@@ -5,6 +5,9 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { cargarRefsPorPlano, cargarRefsEstatico } from "@/lib/referencias-data";
+import { parseReferencias } from "@/lib/referencia";
+import { lecturasCacheadas } from "@/lib/referencia-lectura";
+import type { Lectura } from "@/lib/referencia-lectura-url";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import {
   ROLE_LABEL, canSee, canOverrideStatus, canAssign, puedeSerLead, puedeSerEspecialista,
@@ -401,6 +404,18 @@ export default async function TareaPage({
   const soloLectura = cerrada && !canOverrideStatus(role);
   const esEstatico = plantilla === "estatico";
   const esEquipo = role !== "client";
+  // Referencias (0064): qué pudo leer H.Ü.E de cada liga del Trend — SÓLO la caché (la
+  // página nunca sale a internet; la lectura corre al guardar y al generar). Sólo equipo.
+  // Para el cliente queda `undefined` → el badge ni se construye. Nunca tumba la página.
+  let lecturasRef: Lectura[] | undefined;
+  if (esEquipo) {
+    try {
+      lecturasRef = await lecturasCacheadas(parseReferencias(idea.trend).filter((s) => s.tipo === "ref").map((s) => s.url));
+    } catch (e) {
+      console.error("[referencias] no se pudo leer la caché", e);
+      lecturasRef = [];
+    }
+  }
   const puedeEditar = canOverrideStatus(role);
 
   // ── Ronda en BORRADOR ────────────────────────────────────────────────────────
@@ -536,6 +551,7 @@ export default async function TareaPage({
               duracion: idea.duracion ?? [],
               concepto: idea.concepto,
               trend: idea.trend,
+              lecturas: lecturasRef,
             }}
             // Rünna tools SÓLO para el equipo — no se construye para el cliente
             // (no se filtra en el payload RSC, no sólo se oculta con CSS). Los Selling

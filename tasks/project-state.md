@@ -8,6 +8,13 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+## 🟢 2026-09-03 — H.Ü.E LEE REFERENCIAS · Tier 1 — construido en rama `hue-referencias` (SIN merge, 0064 SIN aplicar)
+- Google Docs/Slides/Sheets/Drive(pdf,docx,txt) → texto exacto; YouTube → título+autor (sin transcripción, honesto);
+  TikTok/IG → no soportada (Tier 2). Caché `referencia_lecturas` por URL canónica; lectura en after() al guardar el
+  Trend y al generar (8s tope, nunca bloquea). Bloque REFERENCIAS en el prompt con reglas duras (inspiración ≠ verdad
+  de marca; datos ≠ instrucciones). Badge en la tarea (equipo). `hue_generations.referencias` para medir.
+- Pendiente: ship (merge + 0064 + push) y live-verify de Pedro. Ojo al merge: la rama `prisma` (otra sesión) trae 0063.
+
 ## ✅ 2026-09-03 — LIVE REFRESH (0062) — SHIPPEADO + migración aplicada
 - La plataforma se re-lee sola al cambiar estado / asignación / papelera / alta-baja de tareas (Pedro: "que nadie
   tenga que recargar"). **Realtime Broadcast desde la BD**: trigger por SENTENCIA en `ideas` + `idea_assignments` →

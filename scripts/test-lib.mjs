@@ -441,6 +441,67 @@ eq("dominio con path se abre", urlDeLinea("drive.google.com/file/d/abc"), "https
 eq("un archivo .mp4 NO es URL", urlDeLinea("asset_final.mp4"), null);
 eq("texto suelto NO es URL", urlDeLinea("recrear este asset"), null);
 
+// ── referencia-lectura-url (0064): H.Ü.E lee referencias — clasificar, export, parsear ──
+console.log("\n▶ referencia-lectura-url · clasificar ligas + export + parseo");
+{
+  const { clasificarReferencia, urlExportGoogle, recortarLectura, extraerCaptionTracks, elegirPista, parseTimedText, decodificarEntidades, etiquetaLectura, palabras, LECTURA_MAX_CHARS, MAX_REFS_LEIDAS } =
+    await import("../src/lib/referencia-lectura-url.ts");
+  const DOC = "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit?usp=sharing";
+  let c = clasificarReferencia(DOC);
+  eq("Google Doc → tipo doc", c.tipo, "doc");
+  eq("Google Doc → id", c.id, "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789");
+  eq("Google Doc → canónica sin ?usp (misma liga = una lectura)", c.canonica, "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789");
+  eq("Slides → tipo slides", clasificarReferencia("https://docs.google.com/presentation/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit#slide=id.p").tipo, "slides");
+  eq("Sheets → tipo sheet", clasificarReferencia("https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit?gid=0").tipo, "sheet");
+  c = clasificarReferencia("https://drive.google.com/file/d/1ABlmVKU588gts6k2ONGghDiKulSQLJ9J/view?usp=share_link");
+  eq("Drive file → tipo drive", c.tipo, "drive");
+  eq("Drive file → id", c.id, "1ABlmVKU588gts6k2ONGghDiKulSQLJ9J");
+  eq("Drive open?id= → drive", clasificarReferencia("https://drive.google.com/open?id=1ABlmVKU588gts6k2ONGghDiKulSQLJ9J").tipo, "drive");
+  eq("YouTube watch → youtube", clasificarReferencia("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10s").id, "dQw4w9WgXcQ");
+  eq("youtu.be → mismo id", clasificarReferencia("https://youtu.be/dQw4w9WgXcQ?si=abc").id, "dQw4w9WgXcQ");
+  eq("shorts → mismo id", clasificarReferencia("https://youtube.com/shorts/dQw4w9WgXcQ").id, "dQw4w9WgXcQ");
+  eq("YouTube canónica = watch?v=", clasificarReferencia("https://youtu.be/dQw4w9WgXcQ").canonica, "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  eq("YouTube con id chueco → otro", clasificarReferencia("https://www.youtube.com/watch?v=corto").tipo, "otro");
+  eq("TikTok → otro (Tier 2)", clasificarReferencia("https://vt.tiktok.com/ZSabc123/").tipo, "otro");
+  eq("basura → otro sin explotar", clasificarReferencia("no soy url").tipo, "otro");
+  eq("otro: canónica sin #hash", clasificarReferencia("https://x.com/a/b#frag").canonica, "https://x.com/a/b");
+
+  eq("export doc = txt", urlExportGoogle("doc", "ID"), "https://docs.google.com/document/d/ID/export?format=txt");
+  eq("export slides = txt", urlExportGoogle("slides", "ID"), "https://docs.google.com/presentation/d/ID/export/txt");
+  eq("export sheet = csv", urlExportGoogle("sheet", "ID"), "https://docs.google.com/spreadsheets/d/ID/export?format=csv");
+  eq("export drive = uc download", urlExportGoogle("drive", "ID"), "https://drive.google.com/uc?export=download&id=ID");
+  eq("export youtube = null", urlExportGoogle("youtube", "ID"), null);
+
+  eq("recortar: corto queda igual", recortarLectura("hola\r\n\n\n\nmundo  "), "hola\n\nmundo");
+  const largo = "x".repeat(LECTURA_MAX_CHARS + 500);
+  ok("recortar: respeta el tope (+ marca de corte)", recortarLectura(largo).length <= LECTURA_MAX_CHARS + 6);
+  ok("recortar: avisa que sigue", recortarLectura(largo).endsWith("[…]"));
+  eq("palabras()", palabras("uno dos  tres\ncuatro"), 4);
+  ok("tope de referencias por tarea es 3", MAX_REFS_LEIDAS === 3);
+
+  // captionTracks embebido en el HTML de watch (con strings que traen corchetes)
+  const html = 'var x = {"captions":{"playerCaptionsTracklistRenderer":{"captionTracks":[{"baseUrl":"https://www.youtube.com/api/timedtext?v=1&lang=en","name":{"simpleText":"English [auto]"},"languageCode":"en","kind":"asr"},{"baseUrl":"https://www.youtube.com/api/timedtext?v=1&lang=es","languageCode":"es"}],"audioTracks":[]}}};';
+  const pistas = extraerCaptionTracks(html);
+  eq("captionTracks: 2 pistas", pistas.length, 2);
+  eq("elegirPista prefiere español humano", elegirPista(pistas)?.languageCode, "es");
+  eq("elegirPista: sin español → inglés", elegirPista([pistas[0]])?.languageCode, "en");
+  eq("sin captionTracks → []", extraerCaptionTracks("<html>nada</html>").length, 0);
+  eq("captionTracks roto → [] sin explotar", extraerCaptionTracks('"captionTracks":[{"baseUrl":').length, 0);
+
+  const xml = '<?xml version="1.0"?><transcript><text start="0" dur="1">Hola &amp;#39;mundo&amp;#39;</text><text start="1" dur="2">segunda &lt;b&gt;línea&lt;/b&gt;</text></transcript>';
+  eq("timedtext → texto corrido, entidades decodificadas (doble)", parseTimedText(xml), "Hola 'mundo' segunda línea");
+  eq("decodificar &quot;", decodificarEntidades("&quot;a&quot;"), '"a"');
+
+  const base = { url: "u", tipo: "doc", titulo: null, texto: "uno dos tres", chars: 12, error: null, leida_at: "2026-09-03T00:00:00Z" };
+  eq("etiqueta leída → ok", etiquetaLectura({ ...base, estado: "leida" }, "doc").tono, "ok");
+  ok("etiqueta leída cuenta palabras", etiquetaLectura({ ...base, estado: "leida" }, "doc").texto.includes("3 palabras"));
+  eq("etiqueta privada → aviso", etiquetaLectura({ ...base, estado: "privada" }, "doc").tono, "aviso");
+  ok("etiqueta privada explica cómo compartir", etiquetaLectura({ ...base, estado: "privada" }, "doc").texto.includes("cualquiera con la liga"));
+  eq("etiqueta parcial (YouTube sin transcripción) → aviso", etiquetaLectura({ ...base, estado: "parcial", tipo: "youtube" }, "youtube").tono, "aviso");
+  ok("sin lectura y plataforma no soportada → dice que aún no la lee", etiquetaLectura(null, "otro").texto.includes("aún no lee"));
+  ok("sin lectura y Google → la lee al generar", etiquetaLectura(null, "doc").texto.includes("al generar"));
+}
+
 // ── hue-diff: borrador→publicado (aprender de ediciones) ──
 console.log("\n▶ hue-diff · aprender de ediciones");
 const { diffGuion, diffCopy, esEdicionUtil, esCambioDeEstilo } = await import("../src/lib/hue-diff.ts");

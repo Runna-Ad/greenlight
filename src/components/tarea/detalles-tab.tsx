@@ -6,6 +6,7 @@ import { Pill } from "@/components/ui/pill";
 import { CampoIntake } from "./campo-intake";
 import { CampoDuraciones } from "./campo-duraciones";
 import { BotonReferencia } from "./boton-referencia";
+import type { Lectura } from "@/lib/referencia-lectura-url";
 import { useWorkspaceView } from "./workspace-provider";
 
 /**
@@ -23,6 +24,7 @@ export function DetallesTab({
   duracion,
   concepto,
   trend,
+  lecturas,
   plantilla,
   soloLectura,
 }: {
@@ -33,6 +35,8 @@ export function DetallesTab({
   duracion: string[];
   concepto: string | null;
   trend: string | null;
+  /** Sólo llega para el EQUIPO (undefined para el cliente → sin badge). */
+  lecturas?: Lectura[];
   plantilla: Plantilla;
   soloLectura: boolean;
 }) {
@@ -112,7 +116,7 @@ export function DetallesTab({
         </Grupo>
 
         <div className="mt-3 flex justify-end">
-          <BotonReferencia ideaId={ideaId} valorInicial={trend} soloLectura={lectura} />
+          <BotonReferencia ideaId={ideaId} valorInicial={trend} lecturas={lecturas} soloLectura={lectura} />
         </div>
       </div>
     </div>
