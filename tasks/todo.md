@@ -1,6 +1,6 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟢 2026-09-03 — H.Ü.E LEE REFERENCIAS · Tier 1 (rama `hue-referencias`, worktree ../greenlight-refs · SIN merge · migración 0064 SIN aplicar)
+## ✅ 2026-09-03 — H.Ü.E LEE REFERENCIAS · Tier 1 (SHIPPEADO: main d911a3d pusheado · migración 0064 APLICADA)
 Pedro: "¿puede H.Ü.E checar las referencias de la tarea y aprender de ellas al crear el guion? sólo como adición y sólo si
 lo usa con precisión" → "go with tier 1". Tier 1 = fuentes que son TEXTO exacto: Google Docs/Slides/Sheets (export txt/csv),
 archivos de Drive (pdf/docx/txt), YouTube (título + autor por oEmbed; la transcripción NO se puede servir hoy: YouTube
@@ -15,8 +15,8 @@ SSRF-safe por construcción: sólo se piden URLs armadas desde el ID de Google/Y
 Verificado: test-lib 521/521 (+40), test-db 400/400, isolation, server-actions, lint, tsc, build; smoke REAL: Doc
 compartido "cualquiera con la liga" → leida (4,004 chars); Doc privado → privada; YouTube público → parcial (título+autor
 exactos); Drive video → no_soportada; TikTok → no_soportada.
-- [ ] **SHIP** (necesita "ship it"): merge `hue-referencias` → main (ojo: la rama `prisma` de la otra sesión trae 0063;
-      ambas conviven), `node scripts/migrate.mjs` (0064) + `git push origin main`.
+- [x] **SHIP** — ff-merge `hue-referencias` → main (6fc0f81..d911a3d), push, `node scripts/migrate.mjs` 0064 ok. Pedro: "ship it".
+      OJO para la sesión de `prisma`: main avanzó (0062 + 0064); al mergear prisma conviven 0063 y 0064.
 - [ ] **LIVE-VERIFY de Pedro**: en una tarea, pegar en Referencia una liga de Google Doc compartida "cualquiera con la
       liga" → al recargar, bajo el botón sale "Google Doc: H.Ü.E la leyó (N palabras)"; una privada dice cómo
       compartirla; "Crear guión" refleja la estructura/tono del doc SIN copiar frases ni traer precios ajenos.

@@ -13,7 +13,8 @@ Pedro: "go with tier 1". La sesión estaba en la rama `prisma` (otra sesión tra
   texto; (3) YouTube = 3 fetches secuenciales × 8s → tope TOTAL de 9s por referencia (Promise.race); (4)
   `lecturasCacheadas` sin try/catch podía tumbar la página → envuelto. Menores: cuerpo en streaming con tope de bytes,
   allowlist de host para la pista de subtítulos, role="list", keys estables. SSRF/RLS/canónicas: limpios.
-- Pendiente: "ship it" → merge a main + 0064 + push. Live-verify de Pedro con un Doc real.
+- Ship (Pedro "ship it"): ff-merge a main desde el worktree (6fc0f81..d911a3d), push, 0064 aplicada en ybbrpqzbedaxsmotgtkh
+  (tabla + RLS + columna verificadas). Live-verify de Pedro con un Doc real pendiente.
 
 ## 2026-09-03 — LIVE REFRESH (0062) — SHIPPEADO (main 62bb720 · migración aplicada) + evaluación de "H.Ü.E lee referencias"
 Pedro pidió dos cosas: (1) que la plataforma se refresque sola al cambiar estado / asignación; (2) evaluar si H.Ü.E puede
