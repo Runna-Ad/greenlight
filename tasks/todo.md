@@ -1,5 +1,35 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-08 — H.Ü.E LEE REFERENCIAS · Tier 2: TikTok (caption) + medición (rama `hue-referencias-tier2`, SIN push · SIN migración)
+Pedro: "análisis de referencias en video". Evaluación (challenge): el plan original era Whisper (audio-only) → se voltéo a
+"lo más barato con más señal primero" y Pedro aceptó: **Step 1 TikTok caption (gratis, in-house, sin infra) → Step 2 medir →
+sólo entonces decidir Tier 3 (video real, que SÍ cuesta)**. Step 1 y 2 construidos y verificados hoy.
+- [x] **Step 1 — TikTok caption por oEmbed público** (sin llave, sin bajar el video). Extiende 0064 (mismo `referencia_lecturas`,
+      mismos estados, mismo bloque de prompt, mismo badge — CERO migración). `tiktokRef()` clasifica liga completa
+      (`@usuario/video/<id>`, `/photo/`) y ligas cortas (vm./vt./`/t/`, sin id → las resuelve el oEmbed). Rama `tiktok` en
+      `clasificarReferencia` + `leerReferencia` (ANTES de la de Google, si no un TikTok-con-id se ruteaba a `leerGoogle`).
+      `leerTiktok` → `parcial` (caption+autor: leímos lo que el autor ESCRIBIÓ, no lo que PASA en el video). SSRF-safe: la
+      única petición es a `www.tiktok.com/oembed` con una liga canónica de tiktok.com. Prompt/badge tipo-aware ("caption",
+      no "título y autor"). Instagram sigue `no_soportada` (oEmbed murió / bloquea IPs de datacenter → decisión aparte).
+- [x] **Step 2 — medición** (captura AUTOMÁTICA, cero código: `hue_generations.referencias` ya loguea toda ref que entra,
+      incluida TikTok, sin filtro por tipo). Query de ADOPCIÓN lista: `scripts/refs-impact.sql` (correr con
+      `supabase db query --linked --file`). El corte de CALIDAD (editRate borrador→publicado) se lee del Hub de H.Ü.E
+      (resumenEdiciones/diffGuion, en vivo) — no es SQL. Necesita que se acumule data (decenas de tareas).
+- [x] Verificado: test-lib 529/529 (+8 casos TikTok), test-db/import/sync + isolation + server-actions ✓, lint ✓, tsc (src
+      limpio; los 2 errores restantes son `.next` viejo de la rama prisma) ✓, `next build` limpio (sin ruta /prisma → rama
+      bien salida de main) ✓. Smoke REAL del oEmbed: TikTok público → 200 + caption con hashtags; id falso → 400 → `error`.
+- [x] Security review (Opus): SSRF/ReDoS/XSS limpios (fetch a host LITERAL `www.tiktok.com/oembed`). Cazó un gap SERIO
+      de defensa-en-profundidad (la rama `parcial` no envolvía el texto en la cerca anti-inyección + `titulo` crudo) →
+      ARREGLADO: fence también en parcial + saneo/cap de título para TODAS las plataformas (una ruta) + cap en origen.
+      Re-verificado: tsc src limpio · test-lib 529 · build ✓. Deuda menor anotada: el body del oEmbed no se cap-ea por
+      bytes antes de `.json()` (MISMO patrón que el oEmbed de YouTube → endurecer ambos juntos, no crear divergencia).
+- [ ] **Decisión de Pedro tras medir**: ¿Tier 3 (video real)? Multimodal (Claude frames + transcripción) vs Whisper-only;
+      requiere infra de descarga (Vercel Sandbox / worker) + costo real. NO empezar hasta que Step 2 diga que la ref mueve la aguja.
+- [ ] **SHIP** (necesita "ship it"; sólo `git push` de la rama / PR a main — SIN migración). Rama parte de `main`, no de `prisma`.
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea, pega en Referencia una liga de TikTok pública → al recargar, bajo "Ver
+      referencia" sale "TikTok: H.Ü.E leyó el caption (no vio el video)"; "Crear guión" refleja el ángulo/hook del caption
+      sin copiarlo literal y sin traer precios/legales ajenos.
+
 ## ✅ 2026-09-03 — H.Ü.E LEE REFERENCIAS · Tier 1 (SHIPPEADO: main d911a3d pusheado · migración 0064 APLICADA)
 Pedro: "¿puede H.Ü.E checar las referencias de la tarea y aprender de ellas al crear el guion? sólo como adición y sólo si
 lo usa con precisión" → "go with tier 1". Tier 1 = fuentes que son TEXTO exacto: Google Docs/Slides/Sheets (export txt/csv),

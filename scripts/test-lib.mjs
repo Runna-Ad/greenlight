@@ -462,7 +462,17 @@ console.log("\n▶ referencia-lectura-url · clasificar ligas + export + parseo"
   eq("shorts → mismo id", clasificarReferencia("https://youtube.com/shorts/dQw4w9WgXcQ").id, "dQw4w9WgXcQ");
   eq("YouTube canónica = watch?v=", clasificarReferencia("https://youtu.be/dQw4w9WgXcQ").canonica, "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
   eq("YouTube con id chueco → otro", clasificarReferencia("https://www.youtube.com/watch?v=corto").tipo, "otro");
-  eq("TikTok → otro (Tier 2)", clasificarReferencia("https://vt.tiktok.com/ZSabc123/").tipo, "otro");
+  // TikTok (Tier 2): liga completa → id + canónica @usuario/video; liga corta → tiktok sin id.
+  c = clasificarReferencia("https://www.tiktok.com/@scout2015/video/6718335390845095173?is_copy_url=1&lang=es");
+  eq("TikTok completo → tiktok", c.tipo, "tiktok");
+  eq("TikTok completo → id numérico", c.id, "6718335390845095173");
+  eq("TikTok canónica @usuario/video (sin query)", c.canonica, "https://www.tiktok.com/@scout2015/video/6718335390845095173");
+  eq("TikTok /photo → tiktok", clasificarReferencia("https://www.tiktok.com/@u/photo/7300000000000000000").tipo, "tiktok");
+  c = clasificarReferencia("https://vt.tiktok.com/ZSabc123/");
+  eq("TikTok liga corta → tiktok", c.tipo, "tiktok");
+  eq("TikTok liga corta → sin id (lo resuelve oEmbed)", c.id, null);
+  eq("TikTok liga corta → canónica normalizada", c.canonica, "https://vt.tiktok.com/ZSabc123");
+  eq("TikTok perfil (sin video) → otro", clasificarReferencia("https://www.tiktok.com/@usuario").tipo, "otro");
   eq("basura → otro sin explotar", clasificarReferencia("no soy url").tipo, "otro");
   eq("otro: canónica sin #hash", clasificarReferencia("https://x.com/a/b#frag").canonica, "https://x.com/a/b");
 
@@ -498,6 +508,7 @@ console.log("\n▶ referencia-lectura-url · clasificar ligas + export + parseo"
   eq("etiqueta privada → aviso", etiquetaLectura({ ...base, estado: "privada" }, "doc").tono, "aviso");
   ok("etiqueta privada explica cómo compartir", etiquetaLectura({ ...base, estado: "privada" }, "doc").texto.includes("cualquiera con la liga"));
   eq("etiqueta parcial (YouTube sin transcripción) → aviso", etiquetaLectura({ ...base, estado: "parcial", tipo: "youtube" }, "youtube").tono, "aviso");
+  ok("etiqueta parcial TikTok dice 'caption'", etiquetaLectura({ ...base, estado: "parcial", tipo: "tiktok" }, "tiktok").texto.includes("caption"));
   ok("sin lectura y plataforma no soportada → dice que aún no la lee", etiquetaLectura(null, "otro").texto.includes("aún no lee"));
   ok("sin lectura y Google → la lee al generar", etiquetaLectura(null, "doc").texto.includes("al generar"));
 }

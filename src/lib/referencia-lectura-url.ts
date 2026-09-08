@@ -3,13 +3,15 @@
 // poder probarse con el harness node (scripts/test-lib.mjs). Lo que hace red vive en
 // `referencia-lectura.ts`.
 
-export type TipoLectura = "doc" | "slides" | "sheet" | "drive" | "youtube" | "otro";
+export type TipoLectura = "doc" | "slides" | "sheet" | "drive" | "youtube" | "tiktok" | "otro";
 
 /**
  * leida        → texto completo (documento exportado / transcripción del video)
- * parcial      → sólo metadatos exactos (título/autor de YouTube), sin transcripción
+ * parcial      → sólo lo EXACTO que da la plataforma SIN ver el video: título+autor de
+ *                YouTube, o el caption que el autor escribió en TikTok (nunca lo que PASA
+ *                en el video)
  * privada      → Google pidió login: el doc no está compartido "con la liga"
- * no_soportada → la liga es de una plataforma que aún no se lee (TikTok/IG) o un
+ * no_soportada → la liga es de una plataforma que aún no se lee (Instagram) o un
  *                archivo sin texto (video/imagen)
  * error        → falló la lectura (red, timeout…) — se reintenta después
  */
@@ -62,6 +64,9 @@ export function clasificarReferencia(url: string): Clasificacion {
   const yt = youtubeId(u);
   if (yt) return { tipo: "youtube", id: yt, canonica: `https://www.youtube.com/watch?v=${yt}` };
 
+  const tt = tiktokRef(u);
+  if (tt) return { tipo: "tiktok", id: tt.id, canonica: tt.canonica };
+
   u.hash = "";
   return { tipo: "otro", id: null, canonica: u.toString().replace(/\/$/, "") };
 }
@@ -79,6 +84,31 @@ export function youtubeId(u: URL): string | null {
     }
   }
   return id && ID_YT.test(id) ? id : null;
+}
+
+/**
+ * TikTok: el id numérico del post y su forma canónica. Soporta la liga completa
+ * (`/@usuario/video/<id>`, también `/photo/<id>`) y las ligas cortas (vm./vt./`/t/<code>`),
+ * que NO traen id — se dejan tal cual y las resuelve el propio oEmbed de TikTok.
+ * Sólo se acepta un host de tiktok.com, así la lectura (oEmbed) nunca sale de TikTok (SSRF).
+ */
+export function tiktokRef(u: URL): { id: string | null; canonica: string } | null {
+  const host = u.hostname.replace(/^www\./, "").replace(/^m\./, "");
+  if (host !== "tiktok.com" && !host.endsWith(".tiktok.com")) return null;
+
+  // Liga completa: /@usuario/video/<id> (o /photo/<id>), id numérico largo.
+  const full = u.pathname.match(/^\/@([\w.-]+)\/(?:video|photo)\/(\d{6,25})/);
+  if (full) return { id: full[2], canonica: `https://www.tiktok.com/@${full[1]}/video/${full[2]}` };
+
+  // Sin usuario pero con id (/video/<id>): raro, pero clasificable.
+  const soloId = u.pathname.match(/^\/(?:video|photo)\/(\d{6,25})/);
+  if (soloId) return { id: soloId[1], canonica: `https://www.tiktok.com/video/${soloId[1]}` };
+
+  // Liga corta (vm./vt./tiktok.com/t/<code>): sin id; la canónica es la liga normalizada.
+  if (host.startsWith("vm.") || host.startsWith("vt.") || /^\/t\/[\w-]+/.test(u.pathname)) {
+    return { id: null, canonica: `https://${u.hostname}${u.pathname}`.replace(/\/+$/, "") };
+  }
+  return null;
 }
 
 /** La URL que devuelve el TEXTO de un recurso de Google (funciona con "cualquiera con la liga"). */
@@ -185,6 +215,7 @@ export const TIPO_LABEL: Record<TipoLectura, string> = {
   sheet: "Google Sheet",
   drive: "Archivo de Drive",
   youtube: "YouTube",
+  tiktok: "TikTok",
   otro: "Liga",
 };
 
@@ -193,14 +224,20 @@ export function etiquetaLectura(l: Lectura | null, tipo: TipoLectura): { texto: 
   const nombre = TIPO_LABEL[tipo];
   if (!l) {
     return tipo === "otro"
-      ? { texto: `${nombre}: H.Ü.E aún no lee esta plataforma (sólo Google y YouTube)`, tono: "neutro" }
+      ? { texto: `${nombre}: H.Ü.E aún no lee esta plataforma (sólo Google, YouTube y TikTok)`, tono: "neutro" }
       : { texto: `${nombre}: H.Ü.E la lee al generar el guión`, tono: "neutro" };
   }
   switch (l.estado) {
     case "leida":
       return { texto: `${nombre}: H.Ü.E la leyó (${palabras(l.texto).toLocaleString("es-MX")} palabras)`, tono: "ok" };
     case "parcial":
-      return { texto: `${nombre}: H.Ü.E sólo vio título y autor — sin transcripción`, tono: "aviso" };
+      return {
+        texto:
+          tipo === "tiktok"
+            ? `${nombre}: H.Ü.E leyó el caption (no vio el video)`
+            : `${nombre}: H.Ü.E sólo vio título y autor — sin transcripción`,
+        tono: "aviso",
+      };
     case "privada":
       return { texto: `${nombre}: es privada — compártela con "cualquiera con la liga" para que H.Ü.E la lea`, tono: "aviso" };
     case "no_soportada":

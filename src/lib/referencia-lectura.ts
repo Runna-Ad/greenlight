@@ -16,12 +16,14 @@ import {
 } from "@/lib/referencia-lectura-url";
 
 /**
- * H.Ü.E lee las REFERENCIAS de la tarea (0064, Tier 1): Google Docs / Slides / Sheets /
- * archivos de Drive (pdf, docx, txt) + YouTube (título, autor y transcripción si la hay).
+ * H.Ü.E lee las REFERENCIAS de la tarea: Google Docs / Slides / Sheets / archivos de Drive
+ * (pdf, docx, txt) + YouTube (título, autor y transcripción si la hay) [0064, Tier 1] +
+ * TikTok (el caption que escribió el autor, por oEmbed) [Tier 2]. Instagram sigue `no_soportada`.
  *
  * Principios (Pedro: "sólo si lo puede usar con precisión"):
- * - Sólo TEXTO exacto. Un video sin transcripción queda `parcial` y el prompt se lo dice a
- *   H.Ü.E para que NO invente lo que pasa en él. TikTok / Instagram = `no_soportada` (Tier 2).
+ * - Sólo TEXTO exacto. Un video del que no vimos el contenido (sin transcripción, o del que
+ *   sólo tenemos el caption) queda `parcial` y el prompt se lo dice a H.Ü.E para que NO
+ *   invente lo que pasa en él.
  * - Nada bloquea al equipo: la lectura corre en `after()` al guardar la liga, y al generar
  *   con tope de tiempo. Si falla, el guión se escribe igual (sin esa referencia).
  * - Lo leído es material de TERCEROS: se trata como datos (nunca como instrucciones), se
@@ -182,6 +184,30 @@ async function leerYoutube(id: string, canonica: string): Promise<Borrador> {
   return { estado: "parcial", titulo, texto: cabecera || null, error: "sin transcripción disponible" };
 }
 
+async function leerTiktok(canonica: string): Promise<Borrador> {
+  // oEmbed PÚBLICO de TikTok: `title` = el caption que escribió el autor, `author_name` = el
+  // handle. Sin llave y sin bajar el video. La petición SIEMPRE va a www.tiktok.com/oembed
+  // (host fijo) con la liga canónica de TikTok como parámetro → la lectura nunca sale de
+  // TikTok (SSRF-safe, igual que el oEmbed de YouTube).
+  const oe = await traer(`https://www.tiktok.com/oembed?url=${encodeURIComponent(canonica)}`);
+  if (!oe) return fallo("error", "TikTok no respondió a tiempo");
+  if (oe.status === 401 || oe.status === 403) return fallo("privada", "el video es privado");
+  if (oe.status === 404) return fallo("error", "TikTok dice que el video no existe");
+  if (!oe.ok) return fallo("error", `TikTok respondió ${oe.status}`);
+  let caption: string | null = null, autor: string | null = null;
+  try {
+    const j = (await oe.json()) as { title?: string; author_name?: string };
+    caption = j.title?.trim() || null;
+    autor = j.author_name?.trim() || null;
+  } catch { /* cuerpo no-JSON: sin datos utilizables */ }
+  if (!caption && !autor) return fallo("error", "TikTok no devolvió datos del video");
+  const texto = [autor && `Autor: ${autor}`, caption && `Caption: ${caption}`].filter(Boolean).join("\n");
+  // `titulo` es SÓLO una etiqueta corta (una línea, acotada): el caption completo va en `texto`
+  // (recortado). `parcial` a propósito: leímos lo que el autor ESCRIBIÓ, no lo que PASA en el video.
+  const titulo = caption ? caption.replace(/\s+/g, " ").trim().slice(0, 120) : null;
+  return { estado: "parcial", titulo, texto: recortarLectura(texto), error: null };
+}
+
 /** Lee UNA liga (sin caché). Nunca lanza: todo fallo es un estado. */
 export async function leerReferencia(url: string): Promise<Lectura> {
   const c = clasificarReferencia(url);
@@ -189,8 +215,9 @@ export async function leerReferencia(url: string): Promise<Lectura> {
   try {
     const lectura =
       c.tipo === "youtube" && c.id ? leerYoutube(c.id, c.canonica)
+      : c.tipo === "tiktok" ? leerTiktok(c.canonica)
       : c.id && c.tipo !== "otro" ? leerGoogle(c.tipo, c.id)
-      : Promise.resolve(fallo("no_soportada", "plataforma que H.Ü.E aún no lee (sólo Google y YouTube)"));
+      : Promise.resolve(fallo("no_soportada", "plataforma que H.Ü.E aún no lee (sólo Google, YouTube y TikTok)"));
     // Tope TOTAL: una referencia nunca retrasa "Crear guión" más de TOTAL_MS (reap 2026-09-03).
     let timer: ReturnType<typeof setTimeout> | undefined;
     const tope = new Promise<Borrador>((res) => { timer = setTimeout(() => res(fallo("error", "se agotó el tiempo de lectura")), TOTAL_MS); });
