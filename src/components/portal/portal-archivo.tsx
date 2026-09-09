@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { ChevronLeft, ArrowRight, CheckCircle2, Archive } from "lucide-react";
-import type { PortalBrief } from "@/app/(app)/[cliente]/portal/portal-data";
-import { estadoBriefPanel } from "@/lib/portal-bucket";
+import type { ArchivoBrief } from "@/app/(app)/[cliente]/portal/portal-data";
 
 /**
  * Pestaña ARCHIVO del portal — los briefs COMPLETADOS (todas sus piezas aprobadas) hace más de
@@ -13,20 +12,15 @@ import { estadoBriefPanel } from "@/lib/portal-bucket";
  */
 export function PortalArchivo({
   cliente,
-  briefs,
-  ahora,
+  archivadas,
 }: {
   cliente: { name: string; logoUrl: string | null; brandColor: string };
-  briefs: PortalBrief[];
-  /** "Ahora" fijado en el servidor (hora de la request) — corte panel(≤15d)/archivo(>15d). */
-  ahora: number;
+  /** Los briefs archivados (metadata, SIN tareas) — ya filtrados y ordenados (reciente primero)
+   *  en cargarPortal. La carga del panel no trae el histórico; esta lista sale del índice. */
+  archivadas: ArchivoBrief[];
 }) {
-  const archivadas = briefs
-    .filter((b) => estadoBriefPanel(b.greenlitAt, ahora) === "archivado")
-    .sort((a, b) => (b.greenlitAt ?? "").localeCompare(a.greenlitAt ?? "")); // más reciente primero
-
   // Agrupar por mes de completado (greenlit_at) — preserva el orden ya ordenado.
-  const grupos: { mes: string; items: PortalBrief[] }[] = [];
+  const grupos: { mes: string; items: ArchivoBrief[] }[] = [];
   for (const b of archivadas) {
     const mes = mesLabel(b.greenlitAt);
     const g = grupos.at(-1);
@@ -91,13 +85,12 @@ function fechaCorta(iso: string | null): string {
   return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
 }
 
-function ArchivoRow({ brief }: { brief: PortalBrief }) {
-  const entryMarca = brief.tasks[0]?.marcaId ?? "__none__";
-  const n = brief.tasks.length;
+function ArchivoRow({ brief }: { brief: ArchivoBrief }) {
+  const n = brief.nTareas;
   return (
     <li>
       <Link
-        href={`?marca=${entryMarca}&brief=${brief.id}`}
+        href={`?brief=${brief.id}`}
         className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm transition-colors hover:border-primary/40 hover:bg-secondary/40"
       >
         <CheckCircle2 className="size-4 shrink-0" style={{ color: "var(--status-completed)" }} />

@@ -6,7 +6,7 @@ import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
 import type { RefVista } from "@/components/tarea/referencias-plano";
 import type { TemaRow } from "@/components/tarea/documento-copies";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
-import { ESTADOS_PORTAL } from "@/lib/portal-bucket";
+import { ESTADOS_PORTAL, estadoBriefPanel } from "@/lib/portal-bucket";
 
 // El portal muestra SÓLO lo que ya se envió al cliente: published_at != null (el
 // mismo criterio que Entregas). Su estado ACTUAL puede ser published (en su
@@ -51,9 +51,17 @@ export type PortalMarca = {
   tareas: number;
 };
 
+/** Un brief ARCHIVADO en la lista del Archivo — SÓLO metadata (sin tareas). El detalle se
+ *  carga al abrir el brief. */
+export type ArchivoBrief = { id: string; label: string; greenlitAt: string | null; nTareas: number };
+
 export type PortalData = {
   cliente: { name: string; slug: string; logoUrl: string | null; brandColor: string };
+  /** Briefs con detalle de tareas: los NO archivados (activos + completados ≤15d), más el brief
+   *  que se esté viendo (`briefPedido`) aunque esté archivado. NUNCA el histórico completo. */
   briefs: PortalBrief[];
+  /** Los briefs ARCHIVADOS (completados hace >15d) — SÓLO metadata para la lista del Archivo. */
+  archivadas: ArchivoBrief[];
   /** Las marcas con trabajo (para el nivel superior de navegación). */
   marcas: PortalMarca[];
   /** "En producción" (pre-envío) — SÓLO el par {brief, marca} de cada pieza que el equipo
@@ -75,10 +83,13 @@ function briefLabel(b: { brief_name: string | null; code: string | null; brief_d
   return b.brief_name || b.code || "Brief";
 }
 
-/** Los briefs de un cliente con sus tareas YA enviadas (para revisar). */
-export async function cargarPortal(clienteSlug: string): Promise<PortalData | null> {
+/** Los briefs de un cliente con sus tareas YA enviadas (para revisar). Carga ACOTADA: sólo los
+ *  briefs NO archivados (+ `briefPedido`, el que se esté viendo) traen detalle de tareas; los
+ *  archivados salen como metadata (`archivadas`) para la lista del Archivo. */
+export async function cargarPortal(clienteSlug: string, briefPedido?: string): Promise<PortalData | null> {
   if (!hasSupabase()) return null;
   const db = supabaseAdmin();
+  const ahora = Date.now();
 
   const { data: cli } = await db
     .from("clients")
@@ -95,10 +106,11 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
     // greenlit_at por brief (vista brief_estado 0060): completo ⇔ greenlit_at != null; su fecha
     // gobierna panel(≤15d)/archivo(>15d). Se cuenta en SQL (la vista), no en JS — evita traer y
     // agregar todo el histórico de tareas para saber "¿ya se entregó?" (misma razón que la 0060).
-    db.from("brief_estado").select("brief_id, greenlit_at").eq("client_slug", clienteSlug)
-      .returns<{ brief_id: string; greenlit_at: string | null }[]>(),
+    db.from("brief_estado").select("brief_id, greenlit_at, n_tareas").eq("client_slug", clienteSlug)
+      .returns<{ brief_id: string; greenlit_at: string | null; n_tareas: number }[]>(),
   ]);
   const greenlitByBrief = new Map((estados ?? []).map((e) => [e.brief_id, e.greenlit_at]));
+  const nTareasByBrief = new Map((estados ?? []).map((e) => [e.brief_id, e.n_tareas]));
   const briefRows = (briefs ?? []) as { id: string; brief_name: string | null; code: string | null; brief_date: string | null }[];
   const marcaById = new Map(
     ((marcas ?? []) as { id: string; name: string; logo_url: string | null }[]).map((m) => [m.id, m]),
@@ -108,33 +120,44 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
     return {
       cliente: { name: cli.name, slug: cli.slug, logoUrl: cli.logo_url, brandColor: cli.brand_color ?? "#775cbf" },
       briefs: [],
+      archivadas: [],
       marcas: [],
       produccion: [],
-      ahora: Date.now(),
+      ahora,
     };
   }
 
-  const { data: ideas } = await db
-    .from("ideas")
-    .select("id, code, naming_base, status, marca_id, brief_id")
-    .in("brief_id", briefIds)
-    .not("published_at", "is", null)
-    // El ESTADO ACTUAL manda: una tarea sacada de Greenlit de vuelta a producción interna
-    // (in_progress/under_review/completed/todo) deja de ser client-facing y sale del portal,
-    // aunque conserve su `published_at` viejo. Sin esto reaparecía como "activa" sin que los
-    // cambios se hubieran hecho ni reenviado. (Pedro 2026-09-03)
-    .in("status", ESTADOS_PORTAL)
-    .is("deleted_at", null) // papelera (0057): fuera del portal al instante
-    .order("code", { ascending: true });
+  // Fase 1 (índice, ya en SQL vía brief_estado): quién está archivado. Fase 2 (aquí): traemos
+  // detalle de tareas SÓLO de los NO archivados (+ el brief que se está viendo, `briefPedido`,
+  // aunque esté archivado). Así el panel/nav nunca cargan el histórico COMPLETO — evita el corte
+  // SILENCIOSO a ~1000 filas de PostgREST cuando un cliente acumula cientos de briefs entregados
+  // (misma familia que la 0060). El Archivo se arma desde el índice (metadata), sin tareas.
+  const archivado = (id: string) => estadoBriefPanel(greenlitByBrief.get(id) ?? null, ahora) === "archivado";
+  const cargarIds = briefIds.filter((id) => !archivado(id) || id === briefPedido);
 
-  const ideaRows = (ideas ?? []) as {
+  let ideaRows: {
     id: string;
     code: string | null;
     naming_base: string | null;
     status: AssetStatus;
     marca_id: string | null;
     brief_id: string;
-  }[];
+  }[] = [];
+  if (cargarIds.length) {
+    const { data: ideas } = await db
+      .from("ideas")
+      .select("id, code, naming_base, status, marca_id, brief_id")
+      .in("brief_id", cargarIds)
+      .not("published_at", "is", null)
+      // El ESTADO ACTUAL manda: una tarea sacada de Greenlit de vuelta a producción interna
+      // (in_progress/under_review/completed/todo) deja de ser client-facing y sale del portal,
+      // aunque conserve su `published_at` viejo. Sin esto reaparecía como "activa" sin que los
+      // cambios se hubieran hecho ni reenviado. (Pedro 2026-09-03)
+      .in("status", ESTADOS_PORTAL)
+      .is("deleted_at", null) // papelera (0057): fuera del portal al instante
+      .order("code", { ascending: true });
+    ideaRows = (ideas ?? []) as typeof ideaRows;
+  }
 
   // ¿Qué tareas tienen un cambio del cliente YA APLICADO que el portal puede mostrar?
   // El badge "Cambios listos" debe encender SÓLO cuando la vista de la tarea tendrá algo
@@ -221,12 +244,26 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
     produccion = (prod ?? []).map((p) => ({ briefId: p.brief_id, marcaId: p.marca_id ?? "__none__" }));
   }
 
+  // Los ARCHIVADOS: metadata desde el índice (label + fecha de completado + nº de piezas), SIN
+  // tareas. La lista del Archivo los enlaza por `?brief=<id>` (la marca se resuelve del brief al
+  // abrirlo — briefPedido). Más recientes primero.
+  const archivadas: ArchivoBrief[] = briefRows
+    .filter((b) => archivado(b.id))
+    .map((b) => ({
+      id: b.id,
+      label: briefLabel(b),
+      greenlitAt: greenlitByBrief.get(b.id) ?? null,
+      nTareas: nTareasByBrief.get(b.id) ?? 0,
+    }))
+    .sort((a, b) => (b.greenlitAt ?? "").localeCompare(a.greenlitAt ?? ""));
+
   return {
     cliente: { name: cli.name, slug: cli.slug, logoUrl: cli.logo_url, brandColor: cli.brand_color ?? "#775cbf" },
     briefs: conTareas,
+    archivadas,
     marcas: marcasResumen,
     produccion,
-    ahora: Date.now(),
+    ahora,
   };
 }
 

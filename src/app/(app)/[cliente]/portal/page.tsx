@@ -68,7 +68,9 @@ export default async function PortalPage({
     puedeActuar = true;
   }
 
-  const data = await cargarPortal(cliente);
+  // Se pasa el brief que se está viendo (`sp.brief`) para que, si está archivado, cargue SU
+  // detalle además de los no-archivados (carga acotada — ver cargarPortal).
+  const data = await cargarPortal(cliente, sp.brief);
   if (!data) {
     return (
       <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
@@ -99,7 +101,7 @@ export default async function PortalPage({
     return (
       <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null}
         vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false}
-        vista={<PortalHome cliente={clienteInfo} marcas={marcas} briefs={data.briefs} produccion={data.produccion} ahora={ahora} />} />
+        vista={<PortalHome cliente={clienteInfo} marcas={marcas} briefs={data.briefs} produccion={data.produccion} ahora={ahora} nArchivadas={data.archivadas.length} />} />
     );
   }
 
@@ -109,7 +111,7 @@ export default async function PortalPage({
     return (
       <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null}
         vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false}
-        vista={<PortalArchivo cliente={clienteInfo} briefs={data.briefs} ahora={ahora} />} />
+        vista={<PortalArchivo cliente={clienteInfo} archivadas={data.archivadas} />} />
     );
   }
 
@@ -118,7 +120,11 @@ export default async function PortalPage({
   // multi-marca → de vuelta al panel. Ya NO hay grid de MARCAS ni de BRIEFS: el panel es el hub
   // (filtra por marca con chips) y el salto entre briefs vive en el nav de la tarea. (Pedro 2026-09-09)
   const marcaValida = sp.marca && marcas.some((m) => m.id === sp.marca) ? sp.marca : null;
-  const marcaSel = marcaValida ?? (marcas.length === 1 ? marcas[0].id : null);
+  let marcaSel = marcaValida ?? (marcas.length === 1 ? marcas[0].id : null);
+  // El Archivo enlaza sin marca (?brief=Y); si falta, se deriva del brief YA cargado (briefPedido).
+  if (!marcaSel && sp.brief) {
+    marcaSel = data.briefs.find((b) => b.id === sp.brief)?.tasks[0]?.marcaId ?? null;
+  }
   if (!marcaSel) redirect(`/${cliente}/portal`);
 
   // Briefs FILTRADOS a la marca (sólo sus tareas; un brief que abarca dos marcas aparece bajo ambas).

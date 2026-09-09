@@ -48,13 +48,18 @@ export function PortalHome({
   briefs,
   produccion,
   ahora,
+  nArchivadas,
 }: {
   cliente: { name: string; logoUrl: string | null; brandColor: string };
   marcas: PortalMarca[];
+  /** Sólo briefs NO archivados (activos + completados ≤15d) — la carga es acotada. */
   briefs: PortalBrief[];
   produccion: { briefId: string; marcaId: string }[];
   /** "Ahora" fijado en el servidor (hora de la request) — para el corte panel/archivo por edad. */
   ahora: number;
+  /** Cuántos briefs archivados hay (>15d) — llega aparte porque no vienen en `briefs`; gobierna
+   *  el link "Ver archivo". */
+  nArchivadas: number;
 }) {
   // Filtro de marca (client-side, efímero): "Todas" o una marca. Sólo si hay >1 marca.
   const [filtro, setFiltro] = useState<string | null>(null);
@@ -97,12 +102,11 @@ export function PortalHome({
     .filter((x) => x.total > 0)
     .sort((a, b) => b.total - a.total);
 
-  // Ciclo de vida del brief: activo → "Tus briefs"; completado ≤15d → "Completados" (colapsado);
-  // completado >15d → NO aparece aquí, vive en el Archivo (mismo split que la pestaña, vía
-  // estadoBriefPanel — fuente única). El link al Archivo se muestra si hay alguno en la vista.
+  // Ciclo de vida del brief: activo → "Tus briefs"; completado ≤15d → "Completados" (colapsado).
+  // `briefs` YA viene acotado a NO archivados, así que aquí sólo se separan activo/reciente; los
+  // archivados (>15d) no están en `briefs` — su conteo (`nArchivadas`) gobierna el link al Archivo.
   const activas = tarjetas.filter((x) => x.arch === "activo");
   const recientes = tarjetas.filter((x) => x.arch === "reciente");
-  const nArchivadas = tarjetas.filter((x) => x.arch === "archivado").length;
 
   return (
     <div className="mx-auto max-w-4xl px-1">

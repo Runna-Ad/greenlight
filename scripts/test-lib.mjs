@@ -4,7 +4,7 @@ import { buildFilename, isValidOverride, normToken } from "../src/lib/filename.t
 import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/lib/required.ts";
 import { actionsFor, waitingLabel, transicionRequiereLead } from "../src/lib/task-actions.ts";
 import { filtroBundle, greenlitDeBundle, bundleEnCurso, esGreenlitReciente, MS_VENTANA_GREENLIT } from "../src/lib/bundle.ts";
-import { bucketPortal, ESTADOS_PORTAL } from "../src/lib/portal-bucket.ts";
+import { bucketPortal, ESTADOS_PORTAL, estadoBriefPanel, DIAS_COMPLETADO_EN_PANEL } from "../src/lib/portal-bucket.ts";
 import { plantillaPara, requiereCortinilla, readTimeS, soloHablado, PALABRAS_POR_MINUTO, parseDuracion, presupuestoDialogoS, LEGAL_SECONDS, COLCHON_MIN_S, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
@@ -243,6 +243,18 @@ ok("portal NO muestra estados internos (in_progress/under_review/completed/todo)
 eq("published → cubeta activas (por revisar)", bucketPortal("published"), "activas");
 eq("in_corrections → cubeta revision", bucketPortal("in_corrections"), "revision");
 eq("delivered → cubeta aprobado", bucketPortal("delivered"), "aprobado");
+
+// estadoBriefPanel: gobierna el split panel/archivo Y qué briefs carga cargarPortal. El borde de
+// 15 días es INCLUSIVO en "reciente" (día 15 sigue en el panel; día 16 pasa al archivo).
+{
+  const AHORA = Date.parse("2026-09-20T12:00:00Z");
+  const haceDias = (d) => new Date(AHORA - d * 86400000).toISOString();
+  eq("brief sin greenlit → activo", estadoBriefPanel(null, AHORA), "activo");
+  eq("brief completado hoy → reciente (panel)", estadoBriefPanel(haceDias(0), AHORA), "reciente");
+  eq("brief completado hace 15d (borde) → reciente (panel)", estadoBriefPanel(haceDias(15), AHORA), "reciente");
+  eq("brief completado hace 16d → archivado", estadoBriefPanel(haceDias(16), AHORA), "archivado");
+  eq("la ventana del panel son 15 días", DIAS_COMPLETADO_EN_PANEL, 15);
+}
 eq("Copies tiene la suya", plantillaPara("Copies"), "copies");
 eq("un tipo desconocido cae en guión", plantillaPara("Podcast"), "guion");
 
