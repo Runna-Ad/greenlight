@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Flame, ArrowRight, Eye, RefreshCw, CheckCircle2, CheckCheck } from "lucide-react";
+import { Flame, ArrowRight, Eye, RefreshCw, CheckCircle2, CheckCheck, ChevronDown, Archive } from "lucide-react";
 import type { PortalBrief, PortalTarea, PortalMarca } from "@/app/(app)/[cliente]/portal/portal-data";
 import type { AssetStatus } from "@/lib/brand";
-import { estadoCliente } from "@/lib/portal-bucket";
+import { estadoCliente, estadoBriefPanel } from "@/lib/portal-bucket";
 
 /**
  * NIVEL 0 del portal — la VISTA GENERAL (home) del cliente. Un pantallazo de dónde va TODO su
@@ -47,14 +47,19 @@ export function PortalHome({
   marcas,
   briefs,
   produccion,
+  ahora,
 }: {
   cliente: { name: string; logoUrl: string | null; brandColor: string };
   marcas: PortalMarca[];
   briefs: PortalBrief[];
   produccion: { briefId: string; marcaId: string }[];
+  /** "Ahora" fijado en el servidor (hora de la request) — para el corte panel/archivo por edad. */
+  ahora: number;
 }) {
   // Filtro de marca (client-side, efímero): "Todas" o una marca. Sólo si hay >1 marca.
   const [filtro, setFiltro] = useState<string | null>(null);
+  // "Completados" (≤15 días) arranca COLAPSADO — el panel es sobre lo que sigue vivo.
+  const [verCompletados, setVerCompletados] = useState(false);
   const multiMarca = marcas.length > 1;
 
   const flat: QItem[] = briefs.flatMap((b) => b.tasks.map((t) => ({ ...t, briefId: b.id, briefLabel: b.label })));
@@ -87,10 +92,17 @@ export function PortalHome({
       };
       const total = seg.revisar + seg.cambios + seg.aprobado + seg.prod;
       const entryMarca = filtro ?? b.tasks[0]?.marcaId ?? "__none__";
-      return { brief: b, seg, total, entryMarca };
+      return { brief: b, seg, total, entryMarca, arch: estadoBriefPanel(b.greenlitAt, ahora) };
     })
     .filter((x) => x.total > 0)
     .sort((a, b) => b.total - a.total);
+
+  // Ciclo de vida del brief: activo → "Tus briefs"; completado ≤15d → "Completados" (colapsado);
+  // completado >15d → NO aparece aquí, vive en el Archivo (mismo split que la pestaña, vía
+  // estadoBriefPanel — fuente única). El link al Archivo se muestra si hay alguno en la vista.
+  const activas = tarjetas.filter((x) => x.arch === "activo");
+  const recientes = tarjetas.filter((x) => x.arch === "reciente");
+  const nArchivadas = tarjetas.filter((x) => x.arch === "archivado").length;
 
   return (
     <div className="mx-auto max-w-4xl px-1">
@@ -154,16 +166,51 @@ export function PortalHome({
         <Tile k="aprobado" n={cuenta.aprobado} foot="Listas y cerradas" />
       </section>
 
-      {/* Zona C — Tus briefs */}
-      {tarjetas.length > 0 && (
+      {/* Zona C — Tus briefs (ACTIVOS: con trabajo en curso) */}
+      {activas.length > 0 && (
         <>
           <SecHead titulo="Tus briefs" hint="— avance de cada entrega" />
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="Avance por brief">
-            {tarjetas.map(({ brief, seg, total, entryMarca }) => (
+            {activas.map(({ brief, seg, total, entryMarca }) => (
               <BriefCard key={brief.id} brief={brief} seg={seg} total={total} entryMarca={entryMarca} />
             ))}
           </section>
         </>
+      )}
+
+      {/* Completados (≤15 días) — colapsado; los de >15 días viven en el Archivo. */}
+      {(recientes.length > 0 || nArchivadas > 0) && (
+        <div className="mt-8 rounded-xl border border-border bg-secondary/30 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {recientes.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setVerCompletados((v) => !v)}
+                aria-expanded={verCompletados}
+                className="inline-flex items-center gap-2 text-[13px] font-semibold text-foreground"
+              >
+                <ChevronDown className={`size-4 text-muted-foreground transition-transform ${verCompletados ? "" : "-rotate-90"}`} />
+                Completados
+                <span className="rounded-full bg-card px-1.5 text-[11px] tabular-nums text-muted-foreground">{recientes.length}</span>
+                <span className="font-normal text-muted-foreground">· últimos 15 días</span>
+              </button>
+            ) : (
+              <span className="text-[13px] text-muted-foreground">Los briefs completados hace más de 15 días están en el archivo.</span>
+            )}
+            {nArchivadas > 0 && (
+              <Link href="?vista=archivo" className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline">
+                <Archive className="size-3.5" /> Ver archivo
+              </Link>
+            )}
+          </div>
+          {recientes.length > 0 && verCompletados && (
+            <section className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="Briefs completados (últimos 15 días)">
+              {recientes.map(({ brief, seg, total, entryMarca }) => (
+                <BriefCard key={brief.id} brief={brief} seg={seg} total={total} entryMarca={entryMarca} />
+              ))}
+            </section>
+          )}
+        </div>
       )}
     </div>
   );

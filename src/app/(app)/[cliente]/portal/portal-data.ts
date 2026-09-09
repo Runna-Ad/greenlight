@@ -34,6 +34,10 @@ export type PortalBrief = {
   /** Fecha del brief (ISO) — para agrupar por mes en el selector del portal. null si no tiene. */
   date: string | null;
   tasks: PortalTarea[];
+  /** Fecha en que el brief quedó COMPLETO (todas sus piezas aprobadas) = `brief_estado.greenlit_at`
+   *  (MAX delivered_at cuando no queda pendiente). null = sigue activo. Gobierna el split
+   *  panel/Completados/Archivo (ver `estadoBriefPanel`). */
+  greenlitAt: string | null;
 };
 
 /** Una marca del cliente con trabajo client-facing, para el grid de marcas del portal. */
@@ -57,6 +61,9 @@ export type PortalData = {
    *  como CONTEO (panel de inicio): nunca el nombre ni el detalle (no se filtra WIP). Acotado a
    *  los briefs YA client-facing para que el número reconcilie con las tarjetas de brief. */
   produccion: { briefId: string; marcaId: string }[];
+  /** Hora del SERVIDOR al cargar (ms). El split panel(≤15d)/archivo(>15d) se corta contra esta
+   *  marca — determinista en el render (no Date.now() en el componente). */
+  ahora: number;
 };
 
 /** La etiqueta de un brief: "Brief DD/MM" (por fecha), o su nombre, o su código. */
@@ -80,12 +87,18 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
     .maybeSingle<{ id: string; name: string; slug: string; logo_url: string | null; brand_color: string | null }>();
   if (!cli) return null;
 
-  const [{ data: briefs }, { data: marcas }] = await Promise.all([
+  const [{ data: briefs }, { data: marcas }, { data: estados }] = await Promise.all([
     // `.is("deleted_at", null)`: lo mandado a la papelera (0057) desaparece del portal
     // del cliente de inmediato — no espera a la purga de 30 días.
     db.from("briefs").select("id, brief_name, code, brief_date").eq("client_id", cli.id).is("deleted_at", null),
     db.from("marcas").select("id, name, logo_url").eq("client_id", cli.id),
+    // greenlit_at por brief (vista brief_estado 0060): completo ⇔ greenlit_at != null; su fecha
+    // gobierna panel(≤15d)/archivo(>15d). Se cuenta en SQL (la vista), no en JS — evita traer y
+    // agregar todo el histórico de tareas para saber "¿ya se entregó?" (misma razón que la 0060).
+    db.from("brief_estado").select("brief_id, greenlit_at").eq("client_slug", clienteSlug)
+      .returns<{ brief_id: string; greenlit_at: string | null }[]>(),
   ]);
+  const greenlitByBrief = new Map((estados ?? []).map((e) => [e.brief_id, e.greenlit_at]));
   const briefRows = (briefs ?? []) as { id: string; brief_name: string | null; code: string | null; brief_date: string | null }[];
   const marcaById = new Map(
     ((marcas ?? []) as { id: string; name: string; logo_url: string | null }[]).map((m) => [m.id, m]),
@@ -97,6 +110,7 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
       briefs: [],
       marcas: [],
       produccion: [],
+      ahora: Date.now(),
     };
   }
 
@@ -159,7 +173,10 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
   // Sólo briefs CON tareas enviadas; los de más tareas primero.
   const conTareas: PortalBrief[] = briefRows
     .filter((b) => porBrief.has(b.id))
-    .map((b) => ({ id: b.id, label: briefLabel(b), date: b.brief_date, tasks: porBrief.get(b.id)! }))
+    .map((b) => ({
+      id: b.id, label: briefLabel(b), date: b.brief_date, tasks: porBrief.get(b.id)!,
+      greenlitAt: greenlitByBrief.get(b.id) ?? null,
+    }))
     .sort((a, b) => b.tasks.length - a.tasks.length || a.label.localeCompare(b.label));
 
   // Resumen por MARCA: cuántos briefs y tareas client-facing tiene cada una. Un brief puede
@@ -209,6 +226,7 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
     briefs: conTareas,
     marcas: marcasResumen,
     produccion,
+    ahora: Date.now(),
   };
 }
 

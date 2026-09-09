@@ -8,10 +8,9 @@ import { cargarPortal, cargarTareaPortal } from "./portal-data";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { PortalTarea } from "@/components/portal/portal-tarea";
 import { PortalListaTareas } from "@/components/portal/portal-lista-tareas";
-import { PortalBrandGrid } from "@/components/portal/portal-brand-grid";
-import { PortalBriefGrid } from "@/components/portal/portal-brief-grid";
 import { PortalHome } from "@/components/portal/portal-home";
-import { bucketPortal, type BucketPortal } from "@/lib/portal-bucket";
+import { PortalArchivo } from "@/components/portal/portal-archivo";
+import { bucketPortal, estadoBriefPanel, type BucketPortal } from "@/lib/portal-bucket";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +82,9 @@ export default async function PortalPage({
   const marca = data.cliente.brandColor;
   const clienteInfo = { name: data.cliente.name, logoUrl: data.cliente.logoUrl, brandColor: marca };
   const marcas = data.marcas;
+  // "Ahora" se fija en el SERVIDOR (hora de la request, en `cargarPortal`): el split panel/archivo
+  // por edad del greenlit es determinista en el render y no desajusta la hidratación.
+  const ahora = data.ahora;
 
   // Sin trabajo client-facing → estado vacío (el shell lo pinta con !briefs && !vista).
   if (!marcas.length) {
@@ -97,47 +99,43 @@ export default async function PortalPage({
     return (
       <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null}
         vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false}
-        vista={<PortalHome cliente={clienteInfo} marcas={marcas} briefs={data.briefs} produccion={data.produccion} />} />
+        vista={<PortalHome cliente={clienteInfo} marcas={marcas} briefs={data.briefs} produccion={data.produccion} ahora={ahora} />} />
     );
   }
 
-  // Marca seleccionada (auto-salto si hay UNA sola marca → directo a sus briefs).
+  // Pestaña ARCHIVO — briefs completados hace >15 días (fuera del panel). Nivel propio, sin marca;
+  // el split ≤15d/>15d lo hace `estadoBriefPanel` sobre `greenlitAt` (misma fuente que el panel).
+  if (sp.vista === "archivo") {
+    return (
+      <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null}
+        vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false}
+        vista={<PortalArchivo cliente={clienteInfo} briefs={data.briefs} ahora={ahora} />} />
+    );
+  }
+
+  // Marca seleccionada (auto-salto si hay UNA sola marca). Los enlaces del panel/archivo SIEMPRE
+  // traen ?marca, así que un `!marcaSel` sólo pasa con una URL a mano/rota en un cliente
+  // multi-marca → de vuelta al panel. Ya NO hay grid de MARCAS ni de BRIEFS: el panel es el hub
+  // (filtra por marca con chips) y el salto entre briefs vive en el nav de la tarea. (Pedro 2026-09-09)
   const marcaValida = sp.marca && marcas.some((m) => m.id === sp.marca) ? sp.marca : null;
   const marcaSel = marcaValida ?? (marcas.length === 1 ? marcas[0].id : null);
-
-  // NIVEL 1 — grid de MARCAS: entrada cuando hay >1 marca y ninguna elegida.
-  if (!marcaSel) {
-    return (
-      <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null} vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false}
-        vista={<PortalBrandGrid cliente={clienteInfo} marcas={marcas} />} />
-    );
-  }
+  if (!marcaSel) redirect(`/${cliente}/portal`);
 
   // Briefs FILTRADOS a la marca (sólo sus tareas; un brief que abarca dos marcas aparece bajo ambas).
   const briefsMarca = data.briefs
     .map((b) => ({ ...b, tasks: b.tasks.filter((t) => t.marcaId === marcaSel) }))
     .filter((b) => b.tasks.length > 0);
-  const marcaObj = marcas.find((m) => m.id === marcaSel)!;
-  // Atrás llega al INICIO (NIVEL 0, vista general) — el panel reemplazó al grid de marcas como
-  // landing, así que "?" (sin params) vuelve al home para cualquier cliente (1 o varias marcas).
-  const backAHome = "?";
 
-  // NIVEL 2 — grid de BRIEFS de la marca: sin brief/tarea/vista elegidos y con >1 brief.
-  const enTarea = !!(sp.brief || sp.vista || sp.tarea);
-  if (!enTarea && briefsMarca.length > 1) {
-    return (
-      <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null} vistaBucket={null} marcaId={marcaSel} backHref={null} backLabel="" mostrarNav={false}
-        vista={<PortalBriefGrid cliente={clienteInfo} marcaNombre={marcaObj.name} marcaId={marcaSel} briefs={briefsMarca} backHref={backAHome} />} />
-    );
-  }
-
-  // NIVEL 3 — vista de TAREA (filtrada a la marca). El auto-salto de brief único cae aquí.
+  // NIVEL de TAREA (filtrada a la marca). El auto-salto de brief único cae aquí.
   const briefSel = (sp.brief && briefsMarca.some((b) => b.id === sp.brief) ? sp.brief : briefsMarca[0]?.id) ?? null;
   const briefObj = briefsMarca.find((b) => b.id === briefSel);
   const vistaBucket: BucketPortal | null = sp.vista === "revision" || sp.vista === "aprobado" ? sp.vista : null;
-  // Atrás: a los briefs de la marca si hay >1; si no, al inicio (vista general).
-  const backHref = briefsMarca.length > 1 ? `?marca=${marcaSel}` : backAHome;
-  const backLabel = briefsMarca.length > 1 ? "los briefs" : "el inicio";
+  // Atrás: al ARCHIVO si el brief que ves está archivado (completado hace >15d), si no al INICIO
+  // (el panel). Se DERIVA del estado del brief, no de un marcador en la URL → correcto aunque
+  // saltes entre briefs por el nav. Nunca vuelve a un grid (ya no existen).
+  const backAlArchivo = !!briefObj && estadoBriefPanel(briefObj.greenlitAt, ahora) === "archivado";
+  const backHref = backAlArchivo ? "?vista=archivo" : "?";
+  const backLabel = backAlArchivo ? "el archivo" : "el inicio";
 
   if (vistaBucket) {
     const tareasBucket = (briefObj?.tasks ?? []).filter((t) => bucketPortal(t.status) === vistaBucket);

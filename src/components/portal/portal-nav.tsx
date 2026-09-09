@@ -86,7 +86,7 @@ export function PortalNav({
   vistaBucket: BucketPortal | null;
   /** Marca activa (Fase 2) — se preserva en TODOS los links del nav; null = sin filtro. */
   marcaId: string | null;
-  /** "Atrás" al grid de briefs de la marca (o de marcas), o null si no hay a dónde volver. */
+  /** "Atrás" al INICIO (panel) o al ARCHIVO — lo decide la página según el brief. null = sin volver. */
   backHref: string | null;
   backLabel: string;
 }) {
@@ -119,7 +119,7 @@ export function PortalNav({
       {/* UNA sola fila (scroll horizontal si no cabe). La barra de acción de abajo se pega
           justo debajo leyendo la altura medida de este nav (sin sticky-collision). */}
       <div className="flex items-center gap-3 overflow-x-auto px-4 py-2.5 sm:px-6 lg:px-8">
-        {/* Atrás al grid de briefs / marcas (Fase 2) */}
+        {/* Atrás al inicio (panel) o al archivo — lo decide la página */}
         {backHref && (
           <Link
             href={backHref}

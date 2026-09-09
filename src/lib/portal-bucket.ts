@@ -41,3 +41,20 @@ export function estadoCliente(status: AssetStatus, reReview: boolean): { label: 
   if (status === "published" && reReview) return { label: "Cambios listos", tone: "var(--primary)" };
   return { label: "Por revisar", tone: "var(--status-progress)" };
 }
+
+/**
+ * Ciclo de vida de un BRIEF en el panel del cliente (Pedro 2026-09-09):
+ *   · "activo"     — sigue con trabajo (alguna pieza sin aprobar) → tarjeta en "Tus briefs".
+ *   · "reciente"   — completado (TODO aprobado) hace ≤15 días → sección "Completados" del panel.
+ *   · "archivado"  — completado hace >15 días → sale del panel, vive en la pestaña "Archivo".
+ * "Completado" y su FECHA los da la vista `brief_estado.greenlit_at` (MAX delivered_at cuando
+ * n_pendientes=0) — la MISMA definición que /briefs y greenlitDeBundle (no se re-deriva). El
+ * corte es por tiempo → la transición panel→archivo es automática, sin cron. Fuente ÚNICA del
+ * split para que el panel y el archivo nunca se solapen ni pierdan un brief. */
+export const DIAS_COMPLETADO_EN_PANEL = 15;
+export type EstadoBriefPanel = "activo" | "reciente" | "archivado";
+export function estadoBriefPanel(greenlitAt: string | null, ahora: number = Date.now()): EstadoBriefPanel {
+  if (!greenlitAt) return "activo";
+  const dias = (ahora - new Date(greenlitAt).getTime()) / 86_400_000;
+  return dias <= DIAS_COMPLETADO_EN_PANEL ? "reciente" : "archivado";
+}
