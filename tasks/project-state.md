@@ -8,6 +8,23 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+## ✅ 2026-09-09 (cont.) — ARCHIVO DE BRIEFS + PANEL-HUB + CARGA ACOTADA — SHIPPEADO (main c2bf45d, Vercel Ready, SIN migración)
+- **Archivo**: un brief completado (todo aprobado) → "Completados · últimos 15 días" (colapsado, en el panel) → pestaña
+  **Archivo** (`?vista=archivo`, agrupado por mes) a los 15 días. Corte por `brief_estado.greenlit_at` (reusa 0060) →
+  automático, sin cron. Fuente única del split (panel/archivo/atrás/carga): la fn pura `estadoBriefPanel`.
+- **Nav = Panel ⇄ Archivo ⇄ Tarea**: BORRADOS el grid de MARCAS y el de BRIEFS (redundantes con el panel: chips de marca
+  + "Tus briefs" + el selector de brief del nav ya cubren todo). Atrás desde una tarea → panel, o archivo si el brief está
+  archivado (DERIVADO del estado, no de un flag en la URL → correcto aunque saltes de brief por el nav). URL sin marca en
+  cliente multi-marca → redirect al panel.
+- **Carga acotada** (2 fases vía `brief_estado`): el panel/nav sólo cargan el working set (activos + completados ≤15d + el
+  brief que se está viendo); el Archivo se arma del índice (metadata, sin tareas); abrir un archivado carga su detalle
+  on-demand. Cierra el corte SILENCIOSO a ~1000 filas de PostgREST cuando un cliente acumula cientos de briefs entregados.
+- Ships: **f810f20** (archivo + nav-hub), **c2bf45d** (carga acotada). Gates: tsc·eslint·lib 534·db 400·isolation 62·
+  actions 22·build. Prod: didi 0 archivados hoy → **refactor de output idéntico** (no-op visible; la cota se activa al cruzar 15d).
+- **Pendiente — LIVE-VERIFY de Pedro** (portal auth-gated): panel→tarea→atrás vuelve al PANEL; abrir un archivado→atrás
+  vuelve al ARCHIVO; "Completados" colapsa/expande; los grids ya no existen. El brief `f03ccc2b` (greenlit hoy) pasa a
+  Archivo el **2026-09-24** — prueba viva del corte por edad.
+
 ## ✅ 2026-09-09 — PANEL DE INICIO DEL CLIENTE + ENVÍO DIRECTO DEL LEAD-SOLO — SHIPPEADO (main d43e4cc, Vercel Ready, SIN migración)
 - **Portal NIVEL 0 "Vista general"** (nuevo landing del cliente, `portal-home.tsx`): cola de aprobación (piezas
   `published`) + 4 contadores (En producción · Por revisar · En cambios · Aprobadas) + avance por brief (barra de

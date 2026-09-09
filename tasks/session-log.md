@@ -1897,3 +1897,63 @@ Rama prisma NO tocada.
 reconciliado.)
 
 **Proceso:** 1 tarea de background (deploy-check) — bounded one-shot, completó sola (sin zombie). Sin otras tareas vivas.
+
+## 2026-09-09 10:06
+**Shipped (recent commits):**
+  - docs(portal): wrap-up — session-log, lecciones (WIN + 3 lessons), project-state
+  - feat(portal): panel de inicio del cliente + envío directo del lead-solo
+
+**Still open:**
+- [ ] **Decisión de Pedro tras medir**: ¿Tier 3 (video real)? Multimodal (Claude frames + transcripción) vs Whisper-only;
+- [ ] **SHIP** (necesita "ship it"; sólo `git push` de la rama / PR a main — SIN migración). Rama parte de `main`, no de `prisma`.
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea, pega en Referencia una liga de TikTok pública → al recargar, bajo "Ver
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea, pegar en Referencia una liga de Google Doc compartida "cualquiera con la
+- [ ] Decisión pendiente: Tier 2 (TikTok/IG caption+hashtags vía oEmbed) y Tier 3 (video real, API de pago) — medir
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+
+
+## 2026-09-09 11:29
+**Shipped (recent commits):**
+  - perf(portal): carga acotada del panel — 2 fases vía brief_estado (sin histórico)
+  - feat(portal): archivo de briefs + panel como hub único de navegación
+  - docs(portal): wrap-up — session-log, lecciones (WIN + 3 lessons), project-state
+  - feat(portal): panel de inicio del cliente + envío directo del lead-solo
+
+**Still open:**
+- [ ] **Decisión de Pedro tras medir**: ¿Tier 3 (video real)? Multimodal (Claude frames + transcripción) vs Whisper-only;
+- [ ] **SHIP** (necesita "ship it"; sólo `git push` de la rama / PR a main — SIN migración). Rama parte de `main`, no de `prisma`.
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea, pega en Referencia una liga de TikTok pública → al recargar, bajo "Ver
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea, pegar en Referencia una liga de Google Doc compartida "cualquiera con la
+- [ ] Decisión pendiente: Tier 2 (TikTok/IG caption+hashtags vía oEmbed) y Tier 3 (video real, API de pago) — medir
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+
+
+
+## 2026-09-09 (cont.) — Archivo de briefs + panel-hub + carga acotada (SHIPPEADO: f810f20, c2bf45d)
+**Hecho (sobre el panel ya live):**
+- Archivo: brief completado → "Completados · últimos 15 días" (colapsado, panel) → pestaña Archivo a los 15d. Corte por
+  brief_estado.greenlit_at (reusa 0060), automático, sin cron/migración. Fuente única del split: estadoBriefPanel.
+- Nav colapsada a Panel <-> Archivo <-> Tarea: fuera el grid de briefs Y el de marcas (redundantes con el panel); atrás
+  vuelve al panel, o al archivo si el brief está archivado (DERIVADO del estado, no de un flag en la URL). Grids borrados (2 archivos).
+- Carga acotada (perf debt cerrada): índice brief_estado → detalle SÓLO del working set (activos + recientes + el brief
+  que se ve). Archivo desde el índice (sin tareas); archivado se abre on-demand. Cierra el corte a ~1000 filas de PostgREST.
+  Refactor de output IDÉNTICO (0 archivados hoy → no-op visible). +5 tests de estadoBriefPanel (bordes 15/16d).
+
+**Decisiones de Pedro:** archivo A(15d)→pestaña · atrás al panel · borrar el tab de briefs (y el de marcas) · cerrar la
+deuda de carga acotada · 3× "ship it".
+
+**Ships:** f810f20 (archivo+nav), c2bf45d (carga acotada). Ambos main → Vercel Ready, prod /login 200. SIN migración.
+
+**Proceso:** 3 deploy-checks de background en la sesión, TODOS bounded one-shot (sleep+check), completaron solos — sin
+polling loops, sin zombies (harness notificó cada completado).
+
+**Pendiente:** LIVE-VERIFY de Pedro (portal auth-gated) — panel/archivo/atrás/completados. El brief f03ccc2b (greenlit
+hoy) pasa a Archivo el 2026-09-24 = prueba viva del corte por edad.
