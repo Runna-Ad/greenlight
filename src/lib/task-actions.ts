@@ -38,6 +38,12 @@ export type TaskContext = {
   role: ViewRole;
   /** Sin responsable no se puede empezar: primero hay que asignarla. */
   hasAssignee: boolean;
+  /** ¿La tarea tiene ESPECIALISTA (algún asignado que NO es lead)? Cuando un lead trabaja
+   *  su propia tarea SIN especialista, él es a la vez el doer y el revisor: no hay a quién
+   *  mandarle una revisión, así que envía DIRECTO al cliente (mismo espíritu que
+   *  `reenviarACliente`). Sólo lo consume el workspace (AccionesTarea); opcional para el
+   *  resto de superficies (tablero/mi-trabajo) que no ofrecen ese envío directo. */
+  hasSpecialist?: boolean;
   /** La tarea está en `in_corrections` con cambios del CLIENTE enviados y SIN resolver.
    *  Esos son cancha del LEAD (él edita y reenvía, o reasigna); el especialista NO los
    *  retoma — la tarea sale de su lista por visibilidad hasta que se le reasigne. Las

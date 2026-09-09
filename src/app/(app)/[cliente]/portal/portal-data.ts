@@ -52,6 +52,11 @@ export type PortalData = {
   briefs: PortalBrief[];
   /** Las marcas con trabajo (para el nivel superior de navegación). */
   marcas: PortalMarca[];
+  /** "En producción" (pre-envío) — SÓLO el par {brief, marca} de cada pieza que el equipo
+   *  está armando y aún NO manda. Es la ÚNICA data pre-publicación que ve el cliente, y sólo
+   *  como CONTEO (panel de inicio): nunca el nombre ni el detalle (no se filtra WIP). Acotado a
+   *  los briefs YA client-facing para que el número reconcilie con las tarjetas de brief. */
+  produccion: { briefId: string; marcaId: string }[];
 };
 
 /** La etiqueta de un brief: "Brief DD/MM" (por fecha), o su nombre, o su código. */
@@ -91,6 +96,7 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
       cliente: { name: cli.name, slug: cli.slug, logoUrl: cli.logo_url, brandColor: cli.brand_color ?? "#775cbf" },
       briefs: [],
       marcas: [],
+      produccion: [],
     };
   }
 
@@ -180,10 +186,29 @@ export async function cargarPortal(clienteSlug: string): Promise<PortalData | nu
     })
     .sort((a, b) => b.tareas - a.tareas || a.name.localeCompare(b.name));
 
+  // "En producción" (pre-envío): SÓLO {brief, marca} de cada pieza en un estado de producción
+  // interno (todo/in_progress/under_review/completed), para el CONTEO del panel de inicio —
+  // nunca el nombre ni el cuerpo (no se filtra WIP al cliente). Acotado a los briefs YA
+  // client-facing (conTareas) para que el número del panel RECONCILIE con las tarjetas de brief
+  // (un brief sin NADA enviado sigue invisible, como hoy). Sin briefs client-facing → [].
+  const conTareasIds = conTareas.map((b) => b.id);
+  let produccion: { briefId: string; marcaId: string }[] = [];
+  if (conTareasIds.length) {
+    const { data: prod } = await db
+      .from("ideas")
+      .select("marca_id, brief_id")
+      .in("brief_id", conTareasIds)
+      .in("status", ["todo", "in_progress", "under_review", "completed"])
+      .is("deleted_at", null)
+      .returns<{ marca_id: string | null; brief_id: string }[]>();
+    produccion = (prod ?? []).map((p) => ({ briefId: p.brief_id, marcaId: p.marca_id ?? "__none__" }));
+  }
+
   return {
     cliente: { name: cli.name, slug: cli.slug, logoUrl: cli.logo_url, brandColor: cli.brand_color ?? "#775cbf" },
     briefs: conTareas,
     marcas: marcasResumen,
+    produccion,
   };
 }
 

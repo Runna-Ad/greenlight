@@ -456,6 +456,9 @@ export default async function TareaPage({
     isAssignee: soy ? memberIds.includes(soy.id) : false,
     hasAssignee: memberIds.length > 0,
     clientChangesPending,
+    // ¿Hay ESPECIALISTA (asignado no-lead)? Si un lead trabaja su tarea SOLO, envía directo
+    // al cliente desde el workspace (él es el revisor) — ver AccionesTarea/enviarClienteSolo.
+    hasSpecialist: personas.some((p) => !p.es_lead),
   };
 
   return (

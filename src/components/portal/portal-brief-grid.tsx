@@ -40,7 +40,7 @@ export function PortalBriefGrid({
         {backHref && (
           <Link
             href={backHref}
-            aria-label="Volver a marcas"
+            aria-label="Volver al inicio"
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
           >
             <ChevronLeft className="size-4" />

@@ -10,6 +10,7 @@ import { PortalTarea } from "@/components/portal/portal-tarea";
 import { PortalListaTareas } from "@/components/portal/portal-lista-tareas";
 import { PortalBrandGrid } from "@/components/portal/portal-brand-grid";
 import { PortalBriefGrid } from "@/components/portal/portal-brief-grid";
+import { PortalHome } from "@/components/portal/portal-home";
 import { bucketPortal, type BucketPortal } from "@/lib/portal-bucket";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +89,18 @@ export default async function PortalPage({
     return <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null} vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false} vista={null} />;
   }
 
+  // NIVEL 0 — VISTA GENERAL (home): sin ningún parámetro de navegación, el cliente aterriza en el
+  // panel (cola de aprobación + contadores por estado + avance por brief). Los enlaces del panel
+  // llevan ?marca=&brief=&tarea= → salen del home y toma el relevo la navegación por niveles.
+  const enHome = !sp.marca && !sp.brief && !sp.tarea && !sp.vista;
+  if (enHome) {
+    return (
+      <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null}
+        vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false}
+        vista={<PortalHome cliente={clienteInfo} marcas={marcas} briefs={data.briefs} produccion={data.produccion} />} />
+    );
+  }
+
   // Marca seleccionada (auto-salto si hay UNA sola marca → directo a sus briefs).
   const marcaValida = sp.marca && marcas.some((m) => m.id === sp.marca) ? sp.marca : null;
   const marcaSel = marcaValida ?? (marcas.length === 1 ? marcas[0].id : null);
@@ -105,14 +118,16 @@ export default async function PortalPage({
     .map((b) => ({ ...b, tasks: b.tasks.filter((t) => t.marcaId === marcaSel) }))
     .filter((b) => b.tasks.length > 0);
   const marcaObj = marcas.find((m) => m.id === marcaSel)!;
-  const backAMarcas = marcas.length > 1 ? "?" : null;
+  // Atrás llega al INICIO (NIVEL 0, vista general) — el panel reemplazó al grid de marcas como
+  // landing, así que "?" (sin params) vuelve al home para cualquier cliente (1 o varias marcas).
+  const backAHome = "?";
 
   // NIVEL 2 — grid de BRIEFS de la marca: sin brief/tarea/vista elegidos y con >1 brief.
   const enTarea = !!(sp.brief || sp.vista || sp.tarea);
   if (!enTarea && briefsMarca.length > 1) {
     return (
       <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null} vistaBucket={null} marcaId={marcaSel} backHref={null} backLabel="" mostrarNav={false}
-        vista={<PortalBriefGrid cliente={clienteInfo} marcaNombre={marcaObj.name} marcaId={marcaSel} briefs={briefsMarca} backHref={backAMarcas} />} />
+        vista={<PortalBriefGrid cliente={clienteInfo} marcaNombre={marcaObj.name} marcaId={marcaSel} briefs={briefsMarca} backHref={backAHome} />} />
     );
   }
 
@@ -120,9 +135,9 @@ export default async function PortalPage({
   const briefSel = (sp.brief && briefsMarca.some((b) => b.id === sp.brief) ? sp.brief : briefsMarca[0]?.id) ?? null;
   const briefObj = briefsMarca.find((b) => b.id === briefSel);
   const vistaBucket: BucketPortal | null = sp.vista === "revision" || sp.vista === "aprobado" ? sp.vista : null;
-  // Atrás: a los briefs si hay >1; si no, a las marcas si hay >1; si no, nada.
-  const backHref = briefsMarca.length > 1 ? `?marca=${marcaSel}` : backAMarcas;
-  const backLabel = briefsMarca.length > 1 ? "los briefs" : "las marcas";
+  // Atrás: a los briefs de la marca si hay >1; si no, al inicio (vista general).
+  const backHref = briefsMarca.length > 1 ? `?marca=${marcaSel}` : backAHome;
+  const backLabel = briefsMarca.length > 1 ? "los briefs" : "el inicio";
 
   if (vistaBucket) {
     const tareasBucket = (briefObj?.tasks ?? []).filter((t) => bucketPortal(t.status) === vistaBucket);

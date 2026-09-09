@@ -91,9 +91,14 @@ export async function moveTask(
   if (from && transicionRequiereLead(from, toStatus) && !canOverrideStatus(role)) {
     return { ok: false, error: "Sólo un lead puede aprobar, enviar al cliente o entregar." };
   }
-  // Cortinilla obligatoria: arrastrar/mover a "En revisión" es la MISMA puerta que el
-  // botón "Mandar a revisión" — se gatea igual, o el legal se saltaría por el tablero.
-  if (toStatus === "under_review" && (await faltaCortinilla(db, ideaId))) {
+  // Cortinilla obligatoria: la MISMA puerta que "Mandar a revisión" — se gatea por el
+  // ESTADO destino, no por el nombre del verbo (guard-all-paths, 2026-09-03). Dos destinos
+  // la exigen: `under_review` (la revisión normal) y `published` (envío al cliente) — este
+  // último cierra el hueco de arrastrar/mover in_progress→published DIRECTO por el tablero,
+  // que se saltaba el legal (la revisión nunca corrió). En `completed→published` la cortinilla
+  // ya está (se exigió al entrar a revisión) → el chequeo pasa sin estorbar; una tarea que no
+  // la requiere (Copies) → faltaCortinilla=false, tampoco estorba.
+  if ((toStatus === "under_review" || toStatus === "published") && (await faltaCortinilla(db, ideaId))) {
     return { ok: false, error: MSG_FALTA_LEGAL };
   }
 
@@ -317,6 +322,65 @@ export async function asignarTarea(
     p_especialista_ids: especialistaIds,
     p_actor_member: u?.member?.id ?? null,
     p_actor_profile: u?.userId ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  await revalidateFor(db, ideaId);
+  after(() => dispatchPendingEmails());
+  return { ok: true };
+}
+
+/**
+ * El LEAD trabajó su PROPIA tarea SIN especialista y la envía DIRECTO al cliente. Él es
+ * a la vez el doer y el revisor: no hay a quién mandarle una revisión, así que se salta la
+ * ronda (mismo espíritu que `reenviarACliente`, pero desde `in_progress`, no correcciones).
+ *
+ * in_progress→published NO está en el flujo normal (a propósito: que un especialista no
+ * brinque la revisión), así que va como OVERRIDE de lead CON motivo — queda en status_events,
+ * no un salto ciego. El gate NO se confía a la UI: aquí se re-verifica rol, scope, ESTADO,
+ * que sea un lead SOLO (sin especialista) y la cortinilla obligatoria (misma puerta legal que
+ * "Mandar a revisión" — o el legal se saltaría por este camino directo). El chequeo de
+ * ortografía de H.Ü.E es advisory y corre en el cliente (AccionesTarea), igual que en submit.
+ */
+export async function enviarClienteSolo(ideaId: string): Promise<ActionResult> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const { role, soyId, profileId } = await context();
+  if (!canOverrideStatus(role)) return { ok: false, error: "Sólo un lead envía al cliente." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+
+  const db = supabaseAdmin();
+
+  // Sólo desde EN PROGRESO: el envío directo es el atajo del lead-solo mientras trabaja, no
+  // una puerta general a published desde cualquier estado.
+  const { data: idea } = await db
+    .from("ideas").select("status").eq("id", ideaId).maybeSingle<{ status: AssetStatus }>();
+  if (idea?.status !== "in_progress") {
+    return { ok: false, error: "El envío directo sólo aplica a una tarea En progreso." };
+  }
+
+  // Debe ser un lead SOLO: si hay ESPECIALISTA asignado, la tarea va por revisión, no por
+  // envío directo (guard-both-the-button-and-the-function — la UI ya lo esconde, el server lo niega).
+  const { data: asigs } = await db
+    .from("idea_assignments").select("es_lead").eq("idea_id", ideaId).returns<{ es_lead: boolean }[]>();
+  if ((asigs ?? []).some((a) => !a.es_lead)) {
+    return { ok: false, error: "La tarea tiene especialista: va por revisión, no por envío directo." };
+  }
+
+  // Cortinilla obligatoria: la MISMA puerta legal que "Mandar a revisión". Sin under_review de
+  // por medio, este es el único punto donde se puede exigir antes de que el cliente la vea.
+  if (await faltaCortinilla(db, ideaId)) return { ok: false, error: MSG_FALTA_LEGAL };
+
+  // Override de lead CON motivo (no flujo normal) — mismo patrón que rpc_lead_reenvia_cliente.
+  // El cambio a published dispara los avisos: task_published (asignados) y ready_for_review
+  // (cliente, 0051), igual que cualquier otra publicación.
+  const { error } = await db.rpc("rpc_move_task", {
+    p_idea_id: ideaId,
+    p_to: "published",
+    p_as_lead: true,
+    p_actor: profileId,
+    p_reason: "El lead trabajó la tarea sin especialista y la envió directo al cliente",
+    p_actor_member: soyId,
   });
   if (error) return { ok: false, error: error.message };
 

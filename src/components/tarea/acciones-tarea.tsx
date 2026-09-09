@@ -13,6 +13,7 @@ import {
   mandarCorrecciones,
   devolverARevision,
 } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
+import { enviarClienteSolo } from "@/app/(app)/[cliente]/tablero/actions";
 import {
   revisarOrtografia,
   marcarOrtografiaIgnorada,
@@ -24,8 +25,9 @@ import { useWorkspace } from "./workspace-provider";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
-/** Los verbos del workspace: los de flujo + los dos de correcciones localizadas. */
-type WorkspaceVerb = TaskVerb | "mandar_correcciones" | "devolver";
+/** Los verbos del workspace: los de flujo + los dos de correcciones localizadas + el envío
+ *  directo del lead-solo (sin especialista → él es el revisor, publica sin ronda). */
+type WorkspaceVerb = TaskVerb | "mandar_correcciones" | "devolver" | "send_client_solo";
 type Tono = "primary" | "danger";
 type Accion = { verb: WorkspaceVerb; label: string; tone: Tono };
 
@@ -35,6 +37,7 @@ const ICONO: Record<WorkspaceVerb, typeof Send> = {
   request_changes: RotateCcw,
   approve: Check,
   send_client: Send,
+  send_client_solo: Send,
   mandar_correcciones: RotateCcw,
   devolver: CornerUpLeft,
 };
@@ -42,6 +45,7 @@ const ICONO: Record<WorkspaceVerb, typeof Send> = {
 const TOAST_EXTRA: Partial<Record<WorkspaceVerb, string>> = {
   mandar_correcciones: "Mandada a correcciones — el especialista ya tiene el aviso.",
   devolver: "Devuelta a revisión — el Dept Head ya tiene el aviso.",
+  send_client_solo: "Enviada al cliente — ya está en su portal para revisión.",
 };
 
 /**
@@ -97,7 +101,9 @@ export function AccionesTarea({
         ? await mandarCorrecciones(clienteSlug, ideaId)
         : a.verb === "devolver"
           ? await devolverARevision(clienteSlug, ideaId)
-          : await EJECUTA_VERBO[a.verb](ideaId);
+          : a.verb === "send_client_solo"
+            ? await enviarClienteSolo(ideaId)
+            : await EJECUTA_VERBO[a.verb](ideaId);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo completar la acción.");
       return;
@@ -108,7 +114,9 @@ export function AccionesTarea({
     // para el especialista (ESTADOS_SOLO_LECTURA). Quedarse en una página que ya no
     // se puede editar sólo invita a pelearse con ella; se vuelve al tablero, que es
     // donde está el resto de su trabajo. (Pedro 2026-09-01)
-    if (a.verb === "submit_review") {
+    // El envío directo del lead-solo también SUELTA la tarea (pasa a published, cancha del
+    // cliente) → mismo regreso al tablero.
+    if (a.verb === "submit_review" || a.verb === "send_client_solo") {
       router.push(`/${clienteSlug}/tablero`);
       return;
     }
@@ -117,14 +125,17 @@ export function AccionesTarea({
 
   const ejecutar = (a: Accion) =>
     startTransition(async () => {
-      // Mandar a revisión Y devolver a revisión (tras corregir) pasan por el corrector de
-      // H.Ü.E: el especialista revisa CADA vez que manda a revisión — sea la 1ª o la 4ª, no
-      // sólo la primera (Pedro 2026-09-03). Antes "devolver" se saltaba el chequeo.
-      if (a.verb === "submit_review" || a.verb === "devolver") {
-        // Cortinilla de cierre (legales) obligatoria: sin ella no se manda (Pedro). El
-        // servidor lo gatea igual; aquí se evita el viaje y se dice claro qué falta.
+      // Mandar a revisión, devolver a revisión (tras corregir) Y el envío directo del lead-solo
+      // pasan por el corrector de H.Ü.E: se revisa CADA vez que la tarea deja las manos de quien
+      // la trabaja — sea la 1ª o la 4ª (Pedro 2026-09-03). El lead-solo es el ÚNICO checkpoint
+      // antes del cliente (nunca pasó por la revisión de un especialista), así que aquí importa
+      // doble: mismo gate de ortografía + cortinilla (faltaLegal) que "Mandar a revisión".
+      if (a.verb === "submit_review" || a.verb === "devolver" || a.verb === "send_client_solo") {
+        // Cortinilla de cierre (legales) obligatoria: sin ella no se manda ni se envía al
+        // cliente (Pedro). El servidor lo gatea igual; aquí se evita el viaje y se dice qué falta.
         if (faltaLegal) {
-          toast.error("Agrega la cortinilla de cierre (legales) antes de mandar a revisión.");
+          const destino = a.verb === "send_client_solo" ? "enviar al cliente" : "mandar a revisión";
+          toast.error(`Agrega la cortinilla de cierre (legales) antes de ${destino}.`);
           return;
         }
         const r = await revisarOrtografia(ideaId, { planos, estatico });
@@ -277,6 +288,19 @@ function accionesDe(
   if (status === "in_corrections" && esEspecialista) {
     return [{ verb: "devolver", label: "Devolver a revisión", tone: "primary" }];
   }
+
+  // Lead trabajando su tarea SOLO (asignado, sin especialista): es doer y revisor a la vez —
+  // no hay a quién mandarle una revisión. Empieza y luego envía DIRECTO al cliente desde aquí
+  // (mismo espíritu que reenviarACliente). El tablero NO ofrece esto: el envío directo va
+  // gateado por H.Ü.E + cortinilla, que sólo viven en este workspace — ver ejecutar().
+  const leadSolo = esRevisor && ctx.isAssignee && !ctx.hasSpecialist;
+  if (leadSolo && status === "todo") {
+    return [{ verb: "start", label: "Empezar", tone: "primary" }];
+  }
+  if (leadSolo && status === "in_progress") {
+    return [{ verb: "send_client_solo", label: "Enviar a cliente", tone: "primary" }];
+  }
+
   // Resto de fases: la misma decisión que el tablero.
   return actionsFor(status, ctx).map((a) => ({ verb: a.verb, label: a.label, tone: a.tone }));
 }
