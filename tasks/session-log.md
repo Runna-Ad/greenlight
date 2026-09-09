@@ -1838,3 +1838,62 @@ se ve igual que la respuesta correcta).
 - [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
 - [ ] **LIVE-VERIFY de Pedro**: tarea devuelta por el lead → especialista corrige → "Devolver a revisión" → H.Ü.E
 
+
+## 2026-09-08 16:28
+**Shipped (recent commits):**
+  - docs(hue): wrap-up Tier 2 — session-log, lecciones (WIN + fix de prompt-injection), project-state, skill-obs
+  - feat(hue): Tier 2 — H.Ü.E lee el caption de TikTok por oEmbed (sin llave, sin migración)
+  - docs(hue referencias): shippeado — 0064 aplicada, main d911a3d
+  - feat(hue): H.Ü.E lee las referencias de la tarea — Tier 1 (Google Docs/Slides/Sheets/Drive + YouTube título/autor)
+
+**Still open:**
+- [ ] **Decisión de Pedro tras medir**: ¿Tier 3 (video real)? Multimodal (Claude frames + transcripción) vs Whisper-only;
+- [ ] **SHIP** (necesita "ship it"; sólo `git push` de la rama / PR a main — SIN migración). Rama parte de `main`, no de `prisma`.
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea, pega en Referencia una liga de TikTok pública → al recargar, bajo "Ver
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea, pegar en Referencia una liga de Google Doc compartida "cualquiera con la
+- [ ] Decisión pendiente: Tier 2 (TikTok/IG caption+hashtags vía oEmbed) y Tier 3 (video real, API de pago) — medir
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+
+
+## 2026-09-09 09:23
+
+**Still open:**
+- [ ] **Decisión de Pedro tras medir**: ¿Tier 3 (video real)? Multimodal (Claude frames + transcripción) vs Whisper-only;
+- [ ] **SHIP** (necesita "ship it"; sólo `git push` de la rama / PR a main — SIN migración). Rama parte de `main`, no de `prisma`.
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea, pega en Referencia una liga de TikTok pública → al recargar, bajo "Ver
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea, pegar en Referencia una liga de Google Doc compartida "cualquiera con la
+- [ ] Decisión pendiente: Tier 2 (TikTok/IG caption+hashtags vía oEmbed) y Tier 3 (video real, API de pago) — medir
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+
+
+
+## 2026-09-09 — Panel de inicio del cliente + envío directo del lead-solo (SHIPPEADO · main d43e4cc · Vercel Ready)
+**Hecho:**
+- Bug (Pedro): un lead que trabaja SOLO (sin especialista) no veía el botón para enviar al cliente. Fix: "Empezar" (todo)
+  + "Enviar a cliente" (in_progress) en el workspace para el lead-solo, gateado por H.Ü.E + cortinilla; in_progress→
+  published como override de lead CON motivo (reusa rpc_move_task; SIN migración). Computado en `accionesDe` (workspace-
+  only) para no ofrecerlo ungated en el tablero.
+- Cerrado el hueco del tablero: `moveTask` exige cortinilla en CUALQUIER paso a published (guard por estado destino).
+- Panel de inicio del cliente (NIVEL 0 del portal, `portal-home.tsx`): cola de aprobación + 4 contadores (incl. "En
+  producción" conteo-only) + avance por brief, filtrable por marca. Data: `cargarPortal` devuelve `produccion` (conteo
+  pre-envío, acotado + sin WIP). Nuevo landing; back-nav vuelve al panel.
+- Flujo: mock primero (Artifact) → Pedro aprobó → construido con los tokens/clases reales del portal.
+
+**Decisiones de Pedro:** gated (H.Ü.E+legal) para el envío directo · cerrar el hueco del tablero · incluir el contador
+"En producción" · mock antes de construir · ship.
+
+**Ship:** main d43e4cc pusheado (777227f..d43e4cc) → Vercel Production ● Ready (31s), prod /login 200. SIN migración.
+Rama prisma NO tocada.
+
+**Pendiente:** LIVE-VERIFY de Pedro (portal auth-gated) — ver project-state. (Data ya verificada en prod: didi 3/19,
+reconciliado.)
+
+**Proceso:** 1 tarea de background (deploy-check) — bounded one-shot, completó sola (sin zombie). Sin otras tareas vivas.

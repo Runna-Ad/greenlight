@@ -8,6 +8,25 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+## ✅ 2026-09-09 — PANEL DE INICIO DEL CLIENTE + ENVÍO DIRECTO DEL LEAD-SOLO — SHIPPEADO (main d43e4cc, Vercel Ready, SIN migración)
+- **Portal NIVEL 0 "Vista general"** (nuevo landing del cliente, `portal-home.tsx`): cola de aprobación (piezas
+  `published`) + 4 contadores (En producción · Por revisar · En cambios · Aprobadas) + avance por brief (barra de
+  estados), filtrable por marca. Back-nav vuelve al inicio; el grid de marcas queda como fallback. Reusa los tokens/
+  clases reales del portal + `estadoCliente`/`bucketPortal`. (Mock aprobado antes de construir.)
+- **"En producción" = conteo puro** (pre-envío): `cargarPortal` → `produccion: {briefId,marcaId}[]` — sólo brief+marca,
+  nunca nombres/cuerpo (no filtra WIP), acotado a briefs YA client-facing → el tile reconcilia con las tarjetas.
+- **Envío directo del lead-solo** (sin especialista): "Empezar" (todo) + "Enviar a cliente" (in_progress) en el workspace,
+  gateado por H.Ü.E + cortinilla; in_progress→published como override de lead con motivo (reusa `rpc_move_task`).
+  Computado en `accionesDe` (workspace-only) para NO ofrecerlo ungated en el tablero.
+- **Guard legal por estado destino**: `moveTask` exige cortinilla en CUALQUIER paso a `published` (cierra el hueco de
+  arrastrar in_progress→published por el tablero sin legal).
+- Gates: tsc · eslint · lib 529 · db 400 · import 81 · actions 22 · isolation 62 · build. Data verificada en prod
+  (didi: 3 por revisar, 19 en producción, reconciliado). SIN migración → ship = git push (777227f..d43e4cc, Vercel Ready).
+- **Pendiente — LIVE-VERIFY de Pedro** (portal auth-gated, no visible en local): (1) como cliente DiDi → `…/didi/portal`
+  aterriza en el panel; los items de la cola abren la pieza; chips de marca filtran; back vuelve al panel. (2) como lead
+  sin especialista: Empezar → Enviar a cliente (con chequeo H.Ü.E/legal) → la pieza cae en el portal. (3) arrastrar
+  in_progress→published sin cortinilla → bloqueado con el mensaje legal.
+
 ## ✅ 2026-09-08 — H.Ü.E LEE REFERENCIAS · Tier 2 (TikTok caption) — SHIPPEADO (main 8597fa4, SIN migración)
 - TikTok se suma al lector de referencias (0064): `leerTiktok()` → oEmbed público (sin llave) → caption + autor,
   estado `parcial` (leímos lo que el autor ESCRIBIÓ, no lo que PASA en el video). Reusa caché/estados/prompt/badge;
