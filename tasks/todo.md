@@ -1,5 +1,58 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-09-11 (5) — HÜE Prisma v1 · FASE 2: diagnóstico + ortografía (rama `prisma`, SIN migración)
+Pedro: "yes and also add a grammar check specially when user writes text to make sure accents, and grammar are correct both in
+english and spanish". Plan §3 + la ortografía como UN aviso más.
+- [x] **`lib/prisma/diagnostico.ts`** (puro): `Aviso` {codigo, nivel, que, porque, arreglo, accion, fuente}; `REGLAS_BASE` (7:
+      duracion_fuera, veo_8s_con_refs, aspect_no_soportado, refs_de_mas, dialogo_sin_voz, texto_en_video, dos_movimientos);
+      reglas de la BD compiladas con `regexSegura` al LEER (una mala se descarta con warn); `evaluar` por campo (patrón y/o
+      umbral, filtros tool/kind); `diagnosticarEntrada` (cliente, instantáneo) y `diagnosticar` (resultado: + reglas de
+      `salida` + errores del validador + negativos sin mapear); `aplicarArreglo` (puro, idempotente); `bloqueado`.
+- [x] **`lib/prisma/ortografia.ts`** (puro): diccionario de ≥ 200 acentos frecuentes en copy (sin palabras ambiguas), signos
+      de apertura ¿ ¡, `idiomaDe`. + **H.Ü.E como corrector** (`revisarTexto`, tool_use `emitir_correccion`, mismo idioma,
+      sin tocar marcas/números/mayúsculas) → acción `revisarOrtografia(campo, texto)` (gate + freno + tope; si el modelo
+      falla, vale la capa determinista). Se revisa al SALIR del campo (texto en la pieza y diálogo); es sugerencia: «Usar»
+      / «Dejar como está»; también entra como aviso en el paso 3 y se anota `aviso_aplicado` si se usa.
+- [x] **Juicio de H.Ü.E** (`juzgarSpec`, tool_use `emitir_avisos`, ≤ 3, saneado): siempre en video al generar/refinar/
+      variar; a petición en imagen con "Revísalo bien" (`revisarBien`). Smoke real: 3 avisos bien formados (abrazo+espejo,
+      cámara rápida vs acción suave, reflejo) — con 900 tokens se cortaba: ahora 1,600 + frases ≤ 18 palabras + warn.
+- [x] **Servidor**: `diagnosticoDe` en generar/refinar/variar (con juicio) y cambiarHerramienta/abrirSpec (determinista);
+      se guarda en `prisma_prompts.avisos` y viaja en cada resultado; `InputGenerar.avisosAplicados` → eventos
+      `aviso_aplicado`; `registrarEvento(…, "aviso_aplicado", codigo)` desde el resultado; `page.tsx` baja las reglas del
+      Hub como `ReglaCliente[]`.
+- [x] **UI**: `components/prisma/avisos.tsx` (`PanelAvisos` por nivel con ícono+texto, fuente oficial/comunidad con fecha,
+      "Arreglarlo"; `SugerenciaTexto`); paso 3 con el panel (un `bloquea` apaga Generar), arreglos de un click (herramienta,
+      duración, formato → `aspectOverride`, texto, diálogo, soltar ref, fusión → prompt de Nano Banana para copiar);
+      resultado: el panel sustituye la lista cruda de errores, "Arreglarlo" = cambiar herramienta o refinar con la
+      instrucción del arreglo, "Revísalo bien" en imagen. El spinner de "revisando" vive en la etiqueta (no mueve el layout).
+- [x] Tests: test-prisma 395 (+59): acentos, mayúsculas, ¿¡, idioma, reglas base, reglas de BD (patrón/umbral/filtros/acción),
+      regex mala descartada, bloquea primero, aplicarArreglo, diagnosticar sobre el resultado. Gates: tsc · lint · build ·
+      test-db 439 · isolation · actions. Smoke real corrector: "Envio gratis a todo mexico, pidelo hoy y ahorrate" → todo
+      acentuado por el diccionario; "Get you order deliver free todays" → "Get your order delivered free today" por H.Ü.E.
+      Navegador: paso 3 muestra "Antes de generar → Texto en pantalla en un video → Arreglarlo" y al aplicarlo desaparece.
+- [x] Reap (Opus seguridad + Sonnet salud) → arreglado: regex de las reglas acotada (≤ 2 repeticiones sin tope por RUTA +
+      sondas de 22/120 letras + entrada acotada a 600/2,000) y el seed entero pasa por el filtro en el test; un aviso
+      "bloquea" se impone también en el servidor ANTES de la llamada facturable; `registrarEvento(aviso_aplicado)` con freno,
+      código válido y que exista en los avisos del prompt; el aprendizaje sólo lee copiado/abierto/variante/refinado;
+      `avisosDe` valida el jsonb guardado (fuente sólo http(s)); freno propio para la revisión ortográfica; `revisarBien`
+      con tope 20 y disponible cuando aún no hay juicio (video tras cambiar de herramienta); cercas en refinar/explicar/
+      texto; ¿¡ en frases seguidas; diccionario sin ambiguos (leon/san) ni entradas nulas; `idiomaDe` con pesos (un "café"
+      no vuelve español una frase inglesa); códigos reservados al guardar reglas; `useMemo` de las reglas; reset del último
+      texto revisado; soltar la ref del personaje suelta el personaje; UUID en `explicar`.
+- [x] **0068** `20260911120004_greenlight_0068_prisma_reglas_patron.sql`: el patrón de `texto_no_latino` con escapes \uXXXX
+      (el crudo traía U+0600, un carácter de formato, y el filtro de lectura lo descartaba). test-db 441 · test-prisma 438.
+- [ ] **SHIP** (necesita "ship it"): `npm run migrate` (0068). Sin ella todo funciona; sólo esa regla no cuenta.
+- [ ] Commit + `git push origin prisma` (código seguro antes de la 0068).
+### Verificación F2 (Pedro, preview con login)
+- Escribe "Envio gratis a todo mexico" en "¿Lleva texto la pieza?" y sal del campo → aparece «Envío gratis a todo México»
+  con «Usar la sugerencia». En inglés: "Get you order deliver free" → corrección gramatical.
+- Video con texto → aviso "Texto en pantalla en un video" → Arreglarlo quita el texto. Higgsfield con diálogo → "no genera
+  voz" → Arreglarlo cambia a Veo.
+- Generar un video → en el resultado aparecen los avisos del juicio de H.Ü.E (si hay algo que ver). Imagen → botón
+  "Revísalo bien".
+- Hub › Prisma: editar/crear una regla (p. ej. `hex_en_idea`) → recargar Prisma → el aviso cambia sin deploy.
+
+
 ## 🟢 2026-09-11 (4) — HÜE Prisma v1 · FASE 1: compilers al día + "Úsalo en…" (rama `prisma`, SIN migración)
 Pedro: "start phase 1". Plan §6. Todo puro + probado; el writer y los compilers cambian, la BD no.
 - [x] **De negativo a positivo** — `lib/prisma/positivo.ts` (`positivar` con mapa de 30 familias + `sinMapear`; `sustantivar`):

@@ -48,17 +48,52 @@ export type ReglaInput = {
 
 export const LIMITES = { codigo: 60, patron: 200, nota: 700, texto: 300, url: 300 } as const;
 
+/** Códigos que ya usa el diagnóstico (reglas base, validador, juicio, ortografía): una regla
+ *  del Hub con el mismo código quedaría tapada en silencio, así que se rechazan al guardar. */
+export const CODIGOS_RESERVADOS = ["duracion_fuera", "veo_8s_con_refs", "aspect_no_soportado", "refs_de_mas", "dialogo_sin_voz", "texto_en_video", "dos_movimientos", "negativos_sin_mapear"] as const;
+export const PREFIJOS_RESERVADOS = ["validador_", "hue_", "ortografia_"] as const;
+export const codigoReservado = (codigo: string): boolean => (CODIGOS_RESERVADOS as readonly string[]).includes(codigo) || PREFIJOS_RESERVADOS.some((p) => codigo.startsWith(p));
+
 /** Una nota que intenta hablarle al modelo como si fuera el sistema no es conocimiento: es
  *  una instrucción. Se rechaza al guardar (la nota entra al bloque cacheado de TODAS las
  *  generaciones de TODAS las marcas; el tope de daño se pone aquí). */
 const PARECE_INSTRUCCION = /(OUTPUT CONTRACT|ABSOLUTE RULES|TOOL NOTES|emitir_spec|ignore (all |the |any )?(previous|above|prior)|disregard (all |the |any )?(previous|above|prior))/i;
 
-/** Entradas de prueba para el ensayo de tiempo. CORTAS a propósito (22 letras): un patrón
- *  exponencial tarda 2^22 pasos (decenas de ms, medible) y no 2^200 (colgaría el servidor
- *  que lo está validando — el ensayo corre en el mismo proceso). Terminan en "!" porque el
- *  backtracking explota cuando NO hay match. */
-const ENSAYO = ["a".repeat(22) + "!", "ab".repeat(11) + "!", "x y ".repeat(6) + "!", "a".repeat(22)];
+/** Entradas de prueba para el ensayo de tiempo, de menor a mayor: primero 22 letras (un patrón
+ *  exponencial tarda 2^22 pasos: decenas de ms, medible, y se rechaza ANTES de tocar las
+ *  largas), luego 120 (un polinómico de grado 4 tarda ~10^8: también se rechaza). Nunca más
+ *  largas: el ensayo corre en el mismo proceso. Terminan en "!" porque el backtracking
+ *  explota cuando NO hay match. */
+const ENSAYO = ["a".repeat(22) + "!", "ab".repeat(11) + "!", "x y ".repeat(6) + "!", "a".repeat(22), "a".repeat(120) + "!", "ab".repeat(60) + "!"];
 const ENSAYO_MAX_MS = 5;
+/** Con ≤ 2 cuantificadores sin tope por rama, el peor caso es cuadrático, y con la entrada
+ *  acotada en el diagnóstico (600 / 2,000 letras) eso son microsegundos, no un cuelgue. */
+const CUANTIFICADORES_MAX_POR_RAMA = 2;
+
+/** El máximo de cuantificadores SIN tope (* + {n,}) que puede recorrer UNA sola ruta del
+ *  patrón: en cada grupo cuenta la alternativa peor, no la suma de todas (una lista de
+ *  palabras `(cura\w*|garantiz\w*|milagro\w*)` es lineal aunque tenga cinco `\w*`). */
+export function cuantificadoresMaxPorRuta(patron: string): number {
+  const pila: { actual: number; max: number }[] = [{ actual: 0, max: 0 }];
+  let enClase = false;
+  const cima = () => pila[pila.length - 1];
+  for (let i = 0; i < patron.length; i++) {
+    const c = patron[i];
+    if (c === "\\") { i++; continue; }
+    if (enClase) { if (c === "]") enClase = false; continue; }
+    if (c === "[") { enClase = true; continue; }
+    if (c === "(") { pila.push({ actual: 0, max: 0 }); continue; }
+    if (c === ")") {
+      const g = pila.length > 1 ? pila.pop()! : null;
+      if (g) cima().actual += Math.max(g.max, g.actual);
+      continue;
+    }
+    if (c === "|") { const t = cima(); t.max = Math.max(t.max, t.actual); t.actual = 0; continue; }
+    if (c === "*" || c === "+" || (c === "{" && /^\{\d+,\}/.test(patron.slice(i)))) cima().actual++;
+  }
+  while (pila.length > 1) { const g = pila.pop()!; cima().actual += Math.max(g.max, g.actual); }
+  return Math.max(pila[0].max, pila[0].actual);
+}
 
 /** ¿Es una regex que podemos correr sin riesgo? Corta las formas que explotan (lookbehind,
  *  cuantificadores anidados sobre grupos, repeticiones enormes) y, como la lista de formas
@@ -73,15 +108,19 @@ export function regexSegura(patron: string): { ok: true; re: RegExp } | { ok: fa
   if (reps.some((m) => Number(m[1]) > 50 || Number(m[2] || 0) > 50)) return { ok: false, error: "Repeticiones {n,m} de más de 50 no se permiten." };
   if (reps.length > 2) return { ok: false, error: "Más de dos repeticiones {n,m} en un patrón no se permiten." };
   if (/\([^)]*[+*][^)]*\)[+*]/.test(p)) return { ok: false, error: "Cuantificador sobre un grupo que ya repite (catastrophic backtracking)." };
+  if (cuantificadoresMaxPorRuta(p) > CUANTIFICADORES_MAX_POR_RAMA) return { ok: false, error: `Más de ${CUANTIFICADORES_MAX_POR_RAMA} repeticiones sin tope (* +) en una misma ruta del patrón: simplifícalo (el peor caso deja de ser cuadrático).` };
   let re: RegExp;
   try {
     re = new RegExp(p, "iu");
   } catch (e) {
     return { ok: false, error: `Patrón inválido: ${e instanceof Error ? e.message : "regex"}` };
   }
+  // De la sonda corta a la larga, midiendo tras cada una: la que explote se rechaza sin correr las demás.
   const t0 = performance.now();
-  for (const s of ENSAYO) re.test(s);
-  if (performance.now() - t0 > ENSAYO_MAX_MS) return { ok: false, error: "El patrón tarda demasiado contra entradas largas: simplifícalo." };
+  for (const s of ENSAYO) {
+    re.test(s);
+    if (performance.now() - t0 > ENSAYO_MAX_MS) return { ok: false, error: "El patrón tarda demasiado contra entradas largas: simplifícalo." };
+  }
   return { ok: true, re };
 }
 
@@ -110,6 +149,7 @@ function validar(raw: unknown): { ok: true; row: ReglaInput } | { ok: false; err
   if (!o) return { ok: false, error: "Regla inválida." };
   const codigo = typeof o.codigo === "string" ? o.codigo.trim().toLowerCase() : "";
   if (!new RegExp(`^[a-z0-9_]{3,${LIMITES.codigo}}$`).test(codigo)) return { ok: false, error: `El código: 3 a ${LIMITES.codigo} caracteres, minúsculas, números y guion bajo.` };
+  if (codigoReservado(codigo)) return { ok: false, error: `El código "${codigo}" lo usa el diagnóstico de Prisma: elige otro.` };
   const clase = o.clase;
   if (!(CLASES as readonly unknown[]).includes(clase)) return { ok: false, error: "La clase debe ser regla o nota." };
   const tool = o.tool === null || o.tool === undefined || o.tool === "" ? null : o.tool;

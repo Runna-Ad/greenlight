@@ -16,7 +16,8 @@ import { bloqueEstableCon, repartirNotas, BLOQUE_ESTABLE, NOTAS_MAX, NOTAS_MAX_C
 import { VIDEO_TYPES } from "../src/lib/prisma/spec.ts";
 import { herramientaVigente } from "../src/lib/prisma/tools.ts";
 import { VIDEO_TYPE_EN, LOOK_POR_TIPO } from "../src/lib/prisma/compilers/video-tipos.ts";
-import { regexSegura, validarRegla, notasDe } from "../src/lib/prisma/reglas.ts";
+import { regexSegura, validarRegla, notasDe, cuantificadoresMaxPorRuta, codigoReservado } from "../src/lib/prisma/reglas.ts";
+import { readFileSync } from "node:fs";
 import { positivar, sustantivar, POSITIVO_REGLAS } from "../src/lib/prisma/positivo.ts";
 import { deletrear, DELETREO_MAX } from "../src/lib/prisma/texto-imagen.ts";
 import { movimientos } from "../src/lib/prisma/camara.ts";
@@ -26,6 +27,8 @@ import { negativosSinMapear } from "../src/lib/prisma/compilers/nanobanana.ts";
 import { compilarFusion } from "../src/lib/prisma/compilers/fusion.ts";
 import { cortes } from "../src/lib/prisma/compilers/beats.ts";
 import { ASPECTS } from "../src/lib/prisma/spec.ts";
+import { ACENTOS, idiomaDe, revisarAcentos } from "../src/lib/prisma/ortografia.ts";
+import { REGLAS_BASE, accionDe, avisosDe, compilarRegla, compilarReglas, diagnosticarEntrada, diagnosticar, entradaDeSpec, aplicarArreglo, avisoOrtografia, bloqueado } from "../src/lib/prisma/diagnostico.ts";
 
 let pass = 0,
   fail = 0;
@@ -427,6 +430,23 @@ console.log("\n▶ TOOL NOTES + reglas");
   ok("regex rota se rechaza", !regexSegura("(abc").ok);
   ok("más de 200 chars se rechaza", !regexSegura("a".repeat(201)).ok);
   ok("alternancia ambigua que explota en el ensayo se rechaza", !regexSegura("^(a|a)*$").ok);
+  ok("polinómico (4 repeticiones sin tope en una rama) se rechaza", !regexSegura("[a-z]*[a-z]*[a-z]*[a-z]*!").ok);
+  ok("3 repeticiones sin tope en una rama se rechazan", !regexSegura("a*b*c*!").ok);
+  ok("muchas ramas con UNA repetición cada una pasan (claim_prohibido)", regexSegura("\\b(cura\\w*|garantiz\\w*|100 ?%|milagro\\w*|adelgaza\\w*|guaranteed|risk[- ]free|miracle)\\b").ok);
+  ok("manos_primer_plano (dos [^.]* por rama) pasa", regexSegura("\\b(manos?|dedos?)\\b[^.]*\\b(primer plano|close[- ]?up)\\b|\\b(primer plano|close[- ]?up)\\b[^.]*\\b(manos?|dedos?)\\b").ok);
+  eq("cuantificadoresMaxPorRuta: la peor ruta, no la suma", cuantificadoresMaxPorRuta("a*b|[+*]c+|(x|y)*z{2,}"), 2);
+  eq("cuantificadoresMaxPorRuta: alternativas dentro de un grupo no se suman", cuantificadoresMaxPorRuta("\\b(cura\\w*|garantiz\\w*|milagro\\w*|adelgaza\\w*)\\b"), 1);
+  eq("cuantificadoresMaxPorRuta: tres seguidos", cuantificadoresMaxPorRuta("[a-z]*[a-z]*[a-z]*!"), 3);
+  // Todos los patrones SEMBRADOS en la 0067 tienen que pasar el filtro de lectura: si no, el Hub los descartaría en silencio.
+  const sql = readFileSync(new URL("../supabase/migrations/20260911120003_greenlight_0067_prisma_reglas.sql", import.meta.url), "utf8");
+  const sql68 = readFileSync(new URL("../supabase/migrations/20260911120004_greenlight_0068_prisma_reglas_patron.sql", import.meta.url), "utf8");
+  // El patrón vigente = el de la 0067 salvo que una migración posterior lo actualice (0068).
+  const parches = new Map([...sql68.matchAll(/set patron = '((?:[^']|'')*)'[\s\S]*?where codigo = '([a-z0-9_]+)'/g)].map((m) => [m[2], m[1].replace(/''/g, "'")]));
+  const sembrados = [...sql.matchAll(/\('([a-z0-9_]+)', 'regla', [^,]+, [^,]+, '[a-z]+', '[a-z.]+', '((?:[^']|'')*)'/g)].map((m) => [m[1], parches.get(m[1]) ?? m[2].replace(/''/g, "'")]);
+  ok("la 0068 parcha texto_no_latino con escapes", parches.has("texto_no_latino") && /\\u0600/.test(parches.get("texto_no_latino")));
+  ok("el patrón parchado detecta japonés y árabe", new RegExp(parches.get("texto_no_latino"), "iu").test("日本") && new RegExp(parches.get("texto_no_latino"), "iu").test("مرحبا") && !new RegExp(parches.get("texto_no_latino"), "iu").test("Envío gratis"));
+  ok(`la 0067 siembra ≥ 15 patrones (${sembrados.length})`, sembrados.length >= 15);
+  for (const [codigo, patron] of sembrados) ok(`patrón sembrado ${codigo} pasa regexSegura`, regexSegura(patron).ok, regexSegura(patron).ok ? "" : regexSegura(patron).error);
   ok("patrón con salto de línea se rechaza", !regexSegura("a\nb").ok);
   ok("el patrón con doble espacio se conserva tal cual (no se reescribe)", (() => { const r = validarRegla({ codigo: "regla_t", clase: "regla", campo: "idea", patron: "a  b", que_es: "a", que_en: "b" }); return r.ok && r.row.patron === "a  b"; })());
   // validarRegla (estricto)
@@ -617,6 +637,133 @@ console.log("\n▶ F1 — Úsalo en… (recomendarModelo)");
   ok("sin modelo no hay línea", !bloqueVariable(entrada).includes("TARGET MODEL"));
   const f = compilarFusion({ role: "sujeto", caption: "a woman", dna: null }, { role: "producto", caption: null, dna: null }, "16:9");
   ok("fusión: combina [Imagen 1] y [Imagen 2] en una y pide el formato", f.includes("[Imagen 1]") && f.includes("[Imagen 2]") && f.includes("16:9") && /Combine/.test(f), f);
+}
+
+// ── 15. F2: ortografía + diagnóstico ──
+console.log("\n▶ F2 — ortografía (acentos + signos de apertura)");
+{
+  eq("Envio gratis → Envío gratis", revisarAcentos("Envio gratis").sugerido, "Envío gratis");
+  eq("MAS RAPIDO conserva mayúsculas", revisarAcentos("MAS RAPIDO").sugerido, "MÁS RÁPIDO");
+  eq("Hasta 20% de cashback no cambia", revisarAcentos("Hasta 20% de cashback").cambios.length, 0);
+  eq("una palabra ya acentuada no se toca", revisarAcentos("Envío rápido").cambios.length, 0);
+  eq("signo de apertura", revisarAcentos("que esperas?").sugerido, "¿que esperas?");
+  eq("dos frases: sólo la que lo necesita", revisarAcentos("Envio gratis. Pidelo hoy!").sugerido, "Envío gratis. ¡Pídelo hoy!");
+  eq("ya tiene apertura: no duplica", revisarAcentos("¿Listo?").cambios.length, 0);
+  eq("dos frases seguidas sin punto: las dos", revisarAcentos("Que esperas? Compralo ya!").sugerido, "¿Que esperas? ¡Cómpralo ya!");
+  eq("MAYÚSCULAS + apertura", revisarAcentos("ENVIO GRATIS HOY!").sugerido, "¡ENVÍO GRATIS HOY!");
+  eq("'leon' y 'san' ya no están en el diccionario (ambiguos)", ["leon", "san"].filter((w) => w in ACENTOS).length, 0);
+  ok("el diccionario no trae entradas que no cambian nada", Object.entries(ACENTOS).every(([k, v]) => k !== v.toLowerCase()));
+  eq("idiomaDe: un 'café' no vuelve español una frase inglesa", idiomaDe("Grab a café to go, it's on us!"), "en");
+  eq("idiomaDe: ¿ decide", idiomaDe("¿Listo para el cambio?"), "es");
+  eq("inglés con café: no se le ponen signos", revisarAcentos("Grab a café to go, it's on us!").cambios.length, 0);
+  eq("inglés: no se toca aunque tenga palabras del diccionario", revisarAcentos("Get the menu now", "en").cambios.length, 0);
+  eq("idiomaDe: inglés", idiomaDe("Get up to 20% off your order today"), "en");
+  eq("idiomaDe: español", idiomaDe("Hasta 20% de cashback en tu primera compra"), "es");
+  eq("idiomaDe: acento decide", idiomaDe("Envío gratis"), "es");
+  ok("el diccionario no trae palabras ambiguas (tu/el/si/esta/que/como/solo)", ["tu", "el", "si", "esta", "que", "como", "solo", "mi", "de", "se"].every((w) => !(w in ACENTOS)));
+  ok("el diccionario tiene ≥ 200 entradas", Object.keys(ACENTOS).length >= 200, String(Object.keys(ACENTOS).length));
+  const rev = revisarAcentos("Envio gratis");
+  ok("los cambios traen de → a con motivo bilingüe", rev.cambios[0].de === "Envio" && rev.cambios[0].a === "Envío" && rev.cambios[0].motivo.es && rev.cambios[0].motivo.en);
+  const av = avisoOrtografia("texto", "Envio gratis", rev);
+  ok("la ortografía se vuelve un aviso con arreglo de un click", av && av.codigo === "ortografia_texto" && av.accion.tipo === "texto" && av.accion.texto === "Envío gratis");
+  eq("sin cambios no hay aviso", avisoOrtografia("texto", "Hola", revisarAcentos("Hola")), null);
+}
+
+console.log("\n▶ F2 — diagnóstico: reglas base");
+{
+  const e = { job: "animar_foto", tool: "kling", destino: "ig_story", aspect: "9:16", duracion: 7, refs: [{ role: "sujeto" }], texto: null, dialogo: null, movimiento: null, idea: "que se mueva" };
+  const d = diagnosticarEntrada(e, []);
+  ok("duración fuera de las de Kling → aviso con arreglo", d.some((a) => a.codigo === "duracion_fuera" && a.accion.tipo === "duracion" && a.accion.segundos === 5), JSON.stringify(d.map((a) => a.codigo)));
+  eq("Kling 5 s: sin aviso de duración", diagnosticarEntrada({ ...e, duracion: 5 }, []).filter((a) => a.codigo === "duracion_fuera").length, 0);
+  const veo = diagnosticarEntrada({ ...e, tool: "veo", duracion: 4 }, []);
+  ok("Veo con refs y 4 s → 8 s", veo.some((a) => a.codigo === "veo_8s_con_refs" && a.accion.segundos === 8 && a.fuente?.tipo === "oficial"));
+  const cuadrado = diagnosticarEntrada({ ...e, tool: "veo", duracion: 8, aspect: "1:1" }, []);
+  ok("Veo en 1:1 → formato no soportado, arreglo 16:9", cuadrado.some((a) => a.codigo === "aspect_no_soportado" && a.accion.aspect === "16:9"));
+  ok("Veo en 4:5 → sugiere 9:16 (misma orientación)", diagnosticarEntrada({ ...e, tool: "veo", duracion: 8, aspect: "4:5" }, []).some((a) => a.codigo === "aspect_no_soportado" && a.accion.aspect === "9:16"));
+  const voz = diagnosticarEntrada({ ...e, tool: "higgsfield", duracion: 5, dialogo: { texto: "hola", idioma: "es-MX" } }, []);
+  ok("diálogo en Higgsfield → usar Veo", voz.some((a) => a.codigo === "dialogo_sin_voz" && a.accion.tipo === "tool" && a.accion.tool === "veo"));
+  eq("diálogo en Veo: sin aviso", diagnosticarEntrada({ ...e, tool: "veo", duracion: 8, dialogo: { texto: "hola", idioma: "es-MX" } }, []).filter((a) => a.codigo === "dialogo_sin_voz").length, 0);
+  ok("texto en video → sugiere ponerlo en edición", diagnosticarEntrada({ ...e, duracion: 5, texto: "Hasta 20%" }, []).some((a) => a.codigo === "texto_en_video" && a.accion.tipo === "quitar_texto"));
+  ok("dos movimientos en Kling → aviso", diagnosticarEntrada({ ...e, duracion: 5, movimiento: "orbit around her, then push in" }, []).some((a) => a.codigo === "dos_movimientos"));
+  eq("dos movimientos en Veo: no aplica", diagnosticarEntrada({ ...e, tool: "veo", duracion: 8, movimiento: "orbit, then push in" }, []).filter((a) => a.codigo === "dos_movimientos").length, 0);
+  const muchas = diagnosticarEntrada({ ...e, tool: "veo", duracion: 8, refs: [{ role: "sujeto" }, { role: "estilo" }, { role: "pose" }, { role: "escena" }] }, []);
+  ok("4 refs en Veo → fusión", muchas.some((a) => a.codigo === "refs_de_mas" && a.accion.tipo === "prompt_fusion"));
+  ok("imagen limpia: cero avisos", diagnosticarEntrada({ job: "foto_producto", tool: "nanobanana", destino: "ig_feed", aspect: "1:1", duracion: null, refs: [{ role: "producto" }], texto: null, dialogo: null, movimiento: null, idea: "la tarjeta sobre mármol" }, []).length === 0);
+  eq("REGLAS_BASE tiene 7 reglas", REGLAS_BASE.length, 7);
+}
+
+console.log("\n▶ F2 — diagnóstico: reglas de la BD (patrón, umbral, filtros, arreglo)");
+{
+  const fila = (x) => ({ codigo: "r", tool: null, kind: null, nivel: "advierte", campo: "idea", patron: null, umbral: null, que_es: "q", que_en: "q", porque_es: null, porque_en: null, arreglo_es: null, arreglo_en: null, accion: null, fuente_url: "https://a.b", fuente_fecha: "2026-09-11", fuente_tipo: "comunidad", ...x });
+  const e = { job: "foto_producto", tool: "nanobanana", destino: "ig_feed", aspect: "1:1", duracion: null, refs: [{ role: "producto" }], texto: "Hasta 20% de cashback en tu primera compra hoy mismo", dialogo: null, movimiento: null, idea: "fondo #ff6600 con la tarjeta" };
+  const hex = compilarRegla(fila({ codigo: "hex_en_idea", patron: "#[0-9a-f]{3}(?:[0-9a-f]{3})?\\b", nivel: "sugiere" }));
+  ok("regla con patrón se compila", !!hex && hex.re instanceof RegExp);
+  const d = diagnosticarEntrada(e, [hex]);
+  ok("hex en la idea dispara y trae la fuente", d.some((a) => a.codigo === "hex_en_idea" && a.nivel === "sugiere" && a.fuente.tipo === "comunidad" && a.fuente.url === "https://a.b"));
+  const largo = compilarRegla(fila({ codigo: "texto_largo", campo: "texto", umbral: 8, kind: "imagen", accion: { tipo: "recortar_texto", palabras: 8 } }));
+  ok("umbral de palabras dispara con 9 palabras y trae la acción", diagnosticarEntrada(e, [largo]).some((a) => a.codigo === "texto_largo" && a.accion.tipo === "recortar_texto" && a.accion.palabras === 8));
+  eq("umbral no dispara con 3 palabras", diagnosticarEntrada({ ...e, texto: "Envío gratis hoy" }, [largo]).length, 0);
+  eq("filtro por kind: video no aplica", diagnosticarEntrada({ ...e, job: "animar_foto", tool: "veo", duracion: 8, refs: [{ role: "sujeto" }] }, [largo]).filter((a) => a.codigo === "texto_largo").length, 0);
+  const soloVeo = compilarRegla(fila({ codigo: "dialogo_no_ingles", tool: "veo", campo: "dialogo.idioma", patron: "^(?!en)" }));
+  ok("regla por herramienta: Veo con diálogo en español dispara", diagnosticarEntrada({ ...e, job: "animar_foto", tool: "veo", duracion: 8, refs: [{ role: "sujeto" }], dialogo: { texto: "hola", idioma: "es-MX" } }, [soloVeo]).some((a) => a.codigo === "dialogo_no_ingles"));
+  eq("…y no en Kling", diagnosticarEntrada({ ...e, job: "animar_foto", tool: "kling", duracion: 5, refs: [{ role: "sujeto" }], dialogo: { texto: "hola", idioma: "es-MX" } }, [soloVeo]).filter((a) => a.codigo === "dialogo_no_ingles").length, 0);
+  eq("regex peligrosa se descarta sin lanzar", compilarRegla(fila({ patron: "(a+)+b" })), null);
+  eq("campo desconocido se descarta", compilarRegla(fila({ campo: "color", patron: "x" })), null);
+  eq("sin patrón ni umbral se descarta", compilarRegla(fila({})), null);
+  eq("compilarReglas filtra las malas", compilarReglas([fila({ patron: "x" }), fila({ patron: "(a+)+" })]).length, 1);
+  const ambos = compilarRegla(fila({ codigo: "texto_largo_con_hex", campo: "texto", patron: "#[0-9a-f]{6}", umbral: 3 }));
+  ok("patrón + umbral: los dos deben cumplirse", diagnosticarEntrada({ ...e, texto: "fondo #ff6600 brillante hoy" }, [ambos]).length === 1 && diagnosticarEntrada({ ...e, texto: "fondo #ff6600" }, [ambos]).length === 0 && diagnosticarEntrada({ ...e, texto: "fondo naranja brillante hoy" }, [ambos]).length === 0);
+  ok("un código reservado se rechaza al guardar", !validarRegla({ codigo: "refs_de_mas", clase: "regla", campo: "idea", patron: "x", que_es: "a", que_en: "b" }).ok && !validarRegla({ codigo: "validador_1", clase: "regla", campo: "idea", patron: "x", que_es: "a", que_en: "b" }).ok && !validarRegla({ codigo: "hue_manos", clase: "regla", campo: "idea", patron: "x", que_es: "a", que_en: "b" }).ok);
+  ok("los códigos de REGLAS_BASE están todos reservados", REGLAS_BASE.map((f) => f({ job: "animar_foto", tool: "higgsfield", destino: "ig_story", aspect: "1:1", duracion: 7, refs: [{ role: "sujeto" }, { role: "estilo" }], texto: "x", dialogo: { texto: "h", idioma: "es-MX" }, movimiento: "orbit, then push in", idea: "x" })).filter(Boolean).every((a) => codigoReservado(a.codigo)));
+  // avisosDe: el jsonb guardado se valida, nunca se confía
+  const buenos = avisosDe([
+    { codigo: "hex_en_idea", nivel: "sugiere", que: { es: "q", en: "q" }, porque: null, arreglo: null, accion: { tipo: "tool", tool: "veo" }, fuente: { url: "https://a.b", fecha: "2026-09-11", tipo: "comunidad" } },
+    { codigo: "MALO", nivel: "sugiere", que: { es: "q", en: "q" } },
+    { codigo: "sin_nivel", nivel: "grita", que: { es: "q", en: "q" } },
+    { codigo: "js_url", nivel: "advierte", que: { es: "q", en: "q" }, fuente: { url: "javascript:alert(1)", fecha: null, tipo: "oficial" } },
+    { codigo: "ortografia_texto", nivel: "advierte", que: { es: "q", en: "q" }, accion: { tipo: "texto", texto: "Envío\ngratis" } },
+    "basura",
+  ]);
+  eq("avisosDe descarta código/nivel inválidos y basura", buenos.map((a) => a.codigo).join(","), "hex_en_idea,js_url,ortografia_texto");
+  eq("una fuente javascript: se quita", buenos[1].fuente, null);
+  ok("la acción de texto se acota a una línea", buenos[2].accion.tipo === "texto" && buenos[2].accion.texto === "Envío gratis");
+  ok("la fuente buena se conserva", buenos[0].fuente.url === "https://a.b" && buenos[0].fuente.tipo === "comunidad");
+  eq("avisosDe(null) → []", avisosDe(null).length, 0);
+  eq("accionDe: tool válida", JSON.stringify(accionDe({ tipo: "tool", tool: "veo" })), JSON.stringify({ tipo: "tool", tool: "veo" }));
+  eq("accionDe: tool retirada → null", accionDe({ tipo: "tool", tool: "sora" }), null);
+  eq("accionDe: tipo inventado → null", accionDe({ tipo: "borrar_todo" }), null);
+  eq("accionDe: recortar_texto sin palabras → null", accionDe({ tipo: "recortar_texto" }), null);
+  const bloq = compilarRegla(fila({ codigo: "prohibido", nivel: "bloquea", patron: "cura el cancer" }));
+  const conBloqueo = diagnosticarEntrada({ ...e, idea: "crema que cura el cancer" }, [hex, bloq]);
+  eq("bloquea va primero", conBloqueo[0].codigo, "prohibido");
+  ok("bloqueado() lo encuentra", bloqueado(conBloqueo)?.codigo === "prohibido" && bloqueado([]) === null);
+}
+
+console.log("\n▶ F2 — aplicarArreglo + diagnosticar sobre el resultado");
+{
+  const e = { job: "animar_foto", tool: "higgsfield", destino: "ig_story", aspect: "9:16", duracion: 5, refs: [{ role: "sujeto" }, { role: "estilo" }], texto: "Hasta 20% de cashback en tu primera compra hoy", dialogo: { texto: "hola", idioma: "es-MX" }, movimiento: null, idea: "x" };
+  eq("tool (legal para el job)", JSON.stringify(aplicarArreglo(e, { tipo: "tool", tool: "veo" })), JSON.stringify({ tool: "veo" }));
+  eq("tool ilegal para el job → nada", JSON.stringify(aplicarArreglo(e, { tipo: "tool", tool: "nanobanana" })), "{}");
+  eq("recortar_texto", aplicarArreglo(e, { tipo: "recortar_texto", palabras: 3 }).texto, "Hasta 20% de");
+  const una = aplicarArreglo(e, { tipo: "recortar_texto", palabras: 3 });
+  eq("idempotente", aplicarArreglo({ ...e, ...una }, { tipo: "recortar_texto", palabras: 3 }).texto, una.texto);
+  eq("soltar_ref", aplicarArreglo(e, { tipo: "soltar_ref", role: "estilo" }).refs.length, 1);
+  eq("quitar_texto", aplicarArreglo(e, { tipo: "quitar_texto" }).texto, null);
+  eq("texto (ortografía)", aplicarArreglo(e, { tipo: "texto", texto: "Envío" }).texto, "Envío");
+  eq("dialogo (ortografía)", aplicarArreglo(e, { tipo: "dialogo", texto: "¡Hola!" }).dialogo.texto, "¡Hola!");
+  eq("nota no cambia nada", JSON.stringify(aplicarArreglo(e, { tipo: "nota" })), "{}");
+  // Sobre el resultado: entrada desde el spec + errores del validador como avisos
+  const s = spec("animar_foto", "kling", { destino: "ig_story" });
+  const ent = entradaDeSpec(s);
+  ok("entradaDeSpec lee destino, refs y movimiento", ent.destino === "ig_story" && ent.refs.length === 1 && ent.movimiento === "slow dolly in" && ent.tool === "kling");
+  const conDialogo = entradaDeSpec(spec("animar_foto", "veo", { dialogo: { texto: "hola", idioma: "es-MX", voz: null } }));
+  ok("entradaDeSpec lleva el diálogo y su idioma", conDialogo.dialogo?.texto === "hola" && conDialogo.dialogo?.idioma === "es-MX");
+  const d = diagnosticar(s, "kling", compilar(s).texto, ["61 palabras; Kling rinde con ≤60."], []);
+  ok("los errores del validador entran como avisos 'advierte'", d.some((a) => a.codigo === "validador_1" && a.nivel === "advierte" && /61 palabras/.test(a.que.es)));
+  const nb = spec("foto_producto", "nanobanana", { negativos: ["blur", "purple hats"], marca: null });
+  ok("negativos sin mapear se cuentan como sugerencia", diagnosticar(nb, "nanobanana", compilar(nb).texto, [], []).some((a) => a.codigo === "negativos_sin_mapear" && /1 cosa/.test(a.que.es)), JSON.stringify(diagnosticar(nb, "nanobanana", compilar(nb).texto, [], []).map((a) => a.que.es)));
+  const reglaSalida = compilarRegla({ codigo: "prompt_largo", tool: null, kind: "imagen", nivel: "sugiere", campo: "salida", patron: null, umbral: 5, que_es: "largo", que_en: "long", porque_es: null, porque_en: null, arreglo_es: null, arreglo_en: null, accion: null, fuente_url: null, fuente_fecha: null });
+  ok("las reglas de campo 'salida' sólo corren sobre el resultado", diagnosticar(nb, "nanobanana", compilar(nb).texto, [], [reglaSalida]).some((a) => a.codigo === "prompt_largo") && !diagnosticarEntrada(entradaDeSpec(nb), [reglaSalida]).some((a) => a.codigo === "prompt_largo"));
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} prisma: ${pass} passed, ${fail} failed\n`);

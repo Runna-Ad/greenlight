@@ -3,6 +3,7 @@
  * el resto de Greenlight es español a secas; aquí los diseñadores pueden alternar.
  * Las claves son estables; sólo cambia el texto. Módulo puro.
  */
+import type { ReglaNivel } from "./reglas.ts";
 import type { PrismaVariante } from "../database.types.ts";
 import type { JobType, JobKind, RefRole, Destino, Tool } from "./spec.ts";
 import { TOOL_INFO } from "./tools.ts";
@@ -151,6 +152,22 @@ export const UI = {
   duracionConRefs: t("Con imágenes de referencia, Veo sólo genera 8 s.", "With reference images, Veo only generates 8 s."),
   tipoVideo: t("Tipo de video", "Video type"),
   usaloEn: t("Úsalo en", "Use it in"),
+  avisosTitulo: t("Antes de generar", "Before generating"),
+  avisosResultado: t("Lo que conviene revisar", "Worth checking"),
+  arreglarlo: t("Arreglarlo", "Fix it"),
+  fuenteOficial: t("fuente oficial", "official source"),
+  fuenteComunidad: t("fuente de la comunidad", "community source"),
+  bloqueadoPor: t("No se puede generar hasta arreglar esto.", "Cannot generate until this is fixed."),
+  revisando: t("H.Ü.E revisa la ortografía…", "H.Ü.E is checking the spelling…"),
+  sugiere: t("H.Ü.E sugiere:", "H.Ü.E suggests:"),
+  usarSugerencia: t("Usar la sugerencia", "Use the suggestion"),
+  dejarAsi: t("Dejar como está", "Leave as is"),
+  revisaloBien: t("Revísalo bien", "Check it thoroughly"),
+  revisaloBienAyuda: t("Una mirada extra de H.Ü.E a lo que una regla no ve (manos, reflejos, claims…).", "An extra look from H.Ü.E at what a rule cannot see (hands, reflections, claims…)."),
+  sinAvisosJuicio: t("H.Ü.E no ve nada más que revisar.", "H.Ü.E sees nothing else to check."),
+  aplicado: t("Aplicado.", "Applied."),
+  fusionTitulo: t("Prompt para fundir dos referencias en una (Nano Banana)", "Prompt to merge two references into one (Nano Banana)"),
+  fusionAyuda: t("Genera esta imagen, súbela como referencia única y quita las dos originales.", "Generate this image, upload it as the single reference and remove the two originals."),
   marca: t("Marca", "Brand"),
   sinMarca: t("Sin marca", "No brand"),
   historial: t("Historial", "History"),
@@ -264,3 +281,6 @@ export const SWATCHES_ESTILO: Swatch[] = [
   { valor: "3D render, clean", label: t("Render 3D", "3D render") },
   { valor: "illustration, flat colors", label: t("Ilustración plana", "Flat illustration") },
 ];
+
+/** Nivel de un aviso del diagnóstico (F2), para el lector de pantalla y las etiquetas. */
+export const NIVEL_LABEL: Record<ReglaNivel, Par> = { bloquea: t("Bloquea", "Blocks"), advierte: t("Aviso", "Warning"), sugiere: t("Sugerencia", "Suggestion") };

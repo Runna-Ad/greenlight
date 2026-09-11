@@ -5,7 +5,8 @@ import { getSoy } from "@/lib/soy";
 import { ROLE_LABEL, canSee, canVerTodoPrisma } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { prismaActivo } from "@/lib/prisma/flags";
-import { cargarHistorial, cargarMarcas } from "@/lib/prisma/data";
+import { cargarHistorial, cargarMarcas, cargarReglas } from "@/lib/prisma/data";
+import type { ReglaCliente } from "@/lib/prisma/diagnostico";
 import { PrismaStudio, type MarcaUI } from "@/components/prisma/studio";
 import type { ItemHistorialUI } from "@/components/prisma/historial";
 import { specVacio, type JobType, type Tool } from "@/lib/prisma/spec";
@@ -58,6 +59,7 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
 
   let marcas: MarcaUI[] = [];
   let historial: ItemHistorialUI[] = [];
+  let reglas: ReglaCliente[] = [];
   if (hasSupabase()) {
     const db = supabaseAdmin();
     // lead/admin/master ven el historial de todos; el especialista, el suyo. Misma
@@ -65,7 +67,9 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
     const todos = canVerTodoPrisma(role);
     // Los personajes NO se cargan aquí: se piden al elegir la marca (listarPersonajes), para no
     // mandarle a todo el mundo las fotos firmadas de todos los clientes en cada carga.
-    const [m, h] = await Promise.all([cargarMarcas(db), cargarHistorial(db, soy?.id ?? null, todos)]);
+    const [m, h, r] = await Promise.all([cargarMarcas(db), cargarHistorial(db, soy?.id ?? null, todos), cargarReglas(db)]);
+    // Sólo lo que el diagnóstico necesita (sin ids, fechas ni notas): el cliente las compila.
+    reglas = r.filas.filter((f) => f.clase === "regla").map((f) => ({ codigo: f.codigo, tool: f.tool, kind: f.kind, nivel: f.nivel, campo: f.campo, patron: f.patron, umbral: f.umbral, que_es: f.que_es, que_en: f.que_en, porque_es: f.porque_es, porque_en: f.porque_en, arreglo_es: f.arreglo_es, arreglo_en: f.arreglo_en, accion: f.accion, fuente_url: f.fuente_url, fuente_fecha: f.fuente_fecha, fuente_tipo: f.fuente_tipo }));
     marcas = m.map((x) => ({ id: x.id, name: x.name, client_id: x.client_id, client_name: x.client_name, preset: x.preset }));
     historial = h.map((it) => ({
       specId: it.spec.id,
@@ -79,5 +83,5 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
     }));
   }
 
-  return <PrismaStudio marcas={marcas} historial={historial} demo={demo} verTodo={canVerTodoPrisma(role)} />;
+  return <PrismaStudio marcas={marcas} historial={historial} demo={demo} verTodo={canVerTodoPrisma(role)} reglas={reglas} />;
 }

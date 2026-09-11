@@ -2521,6 +2521,9 @@ console.log("\n▶ 0067 — prisma_reglas + columnas + eventos");
   const fuenteMala = await db.query(`insert into produccion.prisma_reglas (codigo, clase, nota_en, fuente_url, fuente_fecha) values ('fuente_mala', 'nota', 'x', 'javascript:alert(1)', '2026-01-01')`).then(() => false).catch(() => true);
   ok("una fuente que no es http(s) la rechaza la BD", fuenteMala);
   eq("las fuentes de comunidad quedaron marcadas", Number(await scalar(`select count(*) from produccion.prisma_reglas where fuente_tipo = 'comunidad'`)), 5);
+  // 0068: el patrón de texto_no_latino ya va con escapes (sin caracteres de formato crudos)
+  const patronNoLatino = await scalar(`select patron from produccion.prisma_reglas where codigo = 'texto_no_latino'`);
+  ok("0068: texto_no_latino con escapes \\uXXXX y sin caracteres de formato", /\\u0600/.test(patronNoLatino) && !/[\p{Cc}\p{Cf}]/u.test(patronNoLatino), patronNoLatino);
   const promptEv = await scalar(`insert into produccion.prisma_prompts (spec_id, tool, prompt_version, salida, formato) values ($1, 'nanobanana', 'test', 'p', 'texto') returning id`, [specEv]);
   const miembro = await scalar(`select id from produccion.track_members limit 1`);
   if (miembro) {

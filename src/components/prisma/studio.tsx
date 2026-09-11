@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Clapperboard, Cpu, ImageIcon, Languages, Loader2, Plus, Sparkles, Trash2, UserRound, Wand2, X } from "lucide-react";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChipSelect } from "@/components/intake/chip-select";
 import { cn } from "@/lib/utils";
-import { abrirSpec, generarPrompt, listarPersonajes, retirarPersonaje, type InputGenerar } from "@/app/(app)/prisma/actions";
+import { abrirSpec, generarPrompt, listarPersonajes, retirarPersonaje, type InputGenerar, revisarOrtografia } from "@/app/(app)/prisma/actions";
 import {
   DESTINO_LABEL,
   JOB_HINT,
@@ -33,6 +33,7 @@ import {
   REFS_POR_JOB,
   VIDEO_TYPES,
   esVideo,
+  type Aspect,
   type Destino,
   type JobKind,
   type JobType,
@@ -43,6 +44,10 @@ import {
 import { COLOR_KIND, TOOL_INFO, TOOLS_POR_JOB, VEO_SEGUNDOS_CON_REFS } from "@/lib/prisma/tools";
 import { elegirHerramienta } from "@/lib/prisma/routing";
 import { recomendarModelo } from "@/lib/prisma/modelo";
+import { aplicarArreglo, avisoOrtografia, bloqueado, compilarReglas, diagnosticarEntrada, ordenarAvisos, type Aviso, type EntradaDiagnostico, type ReglaCliente } from "@/lib/prisma/diagnostico";
+import { compilarFusion } from "@/lib/prisma/compilers/fusion";
+import type { Cambio } from "@/lib/prisma/ortografia";
+import { PanelAvisos, SugerenciaTexto } from "./avisos";
 import { useLang } from "./use-lang";
 import { RefUploader, type RefLocal } from "./ref-uploader";
 import { Resultado, type PromptVivo } from "./resultado";
@@ -87,7 +92,7 @@ function Chips({ titulo, opciones, valor, onChange, lang, permiteOtro = true }: 
  * HÜE Prisma — el estudio. Tres puertas → un trabajo → 3 pasos → resultado.
  * Etiquetas en palabras llanas; la jerga sólo aparece en el prompt final.
  */
-export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }: { marcas: MarcaUI[]; historial: ItemHistorialUI[]; demo?: PromptVivo | null; verTodo?: boolean }) {
+export function PrismaStudio({ marcas, historial, demo = null, verTodo = false, reglas = [] }: { marcas: MarcaUI[]; historial: ItemHistorialUI[]; demo?: PromptVivo | null; verTodo?: boolean; reglas?: ReglaCliente[] }) {
   const router = useRouter();
   const [lang, setLang] = useLang();
 
@@ -120,6 +125,19 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
   const [duracion, setDuracion] = useState<number | null>(null);
   const [videoType, setVideoType] = useState<string | null>(null);
   const [toolOverride, setToolOverride] = useState<Tool | null>(null);
+  /** F2: formato elegido por un arreglo ("genera en 9:16 y recorta"); null = el del destino/marca. */
+  const [aspectOverride, setAspectOverride] = useState<Aspect | null>(null);
+  /** F2: la sugerencia ortográfica viva (texto en la pieza o diálogo) y qué se está revisando. */
+  const [revision, setRevision] = useState<{ campo: "texto" | "dialogo"; original: string; sugerido: string; cambios: Cambio[] } | null>(null);
+  const [revisando, setRevisando] = useState<"texto" | "dialogo" | null>(null);
+  /** "Dejar como está": el texto exacto que el diseñador decidió no corregir (no se insiste). */
+  const [ignorada, setIgnorada] = useState<{ texto: string | null; dialogo: string | null }>({ texto: null, dialogo: null });
+  /** Códigos de avisos cuyo arreglo se aplicó antes de generar (viajan como evento aviso_aplicado). */
+  const [avisosAplicados, setAvisosAplicados] = useState<string[]>([]);
+  /** El prompt de fusión (dos refs → una) cuando el arreglo lo pide. */
+  const [fusion, setFusion] = useState<string | null>(null);
+  // Último valor revisado por campo: no se vuelve a llamar a H.Ü.E por el mismo texto.
+  const ultimoRevisado = useRef<{ texto: string; dialogo: string }>({ texto: "", dialogo: "" });
   const [generando, setGenerando] = useState(false);
   const [vivo, setVivo] = useState<PromptVivo | null>(demo);
   const [abriendo, setAbriendo] = useState<string | null>(null);
@@ -151,13 +169,97 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
   // (refsLista.length) hacía que el compilador saltara el componente entero.
   const sugerencia = job ? elegirHerramienta({ job, destino, tieneDialogo: dialogo.trim().length > 0, tieneRefs: refsLista.length > 0, movimientoMarcado: !!look.movimiento, tieneTexto: texto.trim().length > 0 }) : null;
   const tool: Tool | null = toolOverride ?? sugerencia?.tool ?? null;
-  const aspect = marca?.preset.aspect_default ?? ASPECT_POR_DESTINO[destino];
+  const aspect: Aspect = aspectOverride ?? marca?.preset.aspect_default ?? ASPECT_POR_DESTINO[destino];
   // Veo con imágenes de referencia sólo genera 8 s: el chip lo dice y no ofrece otra cosa.
   const veoForzado = tool === "veo" && refsLista.length > 0;
   const duraciones = veoForzado ? [VEO_SEGUNDOS_CON_REFS] : tool ? TOOL_INFO[tool].duraciones : [];
   const duracionEfectiva = video ? (duracion && duraciones.includes(duracion) ? duracion : duraciones[0] ?? null) : null;
   // "Úsalo en…" anticipado: el mismo cálculo puro que verá en el resultado.
   const modelo = job && tool ? recomendarModelo({ job, tool, destino, refs: refsLista.length, texto: texto.trim().length > 0, dialogo: dialogo.trim().length > 0, duracion: duracionEfectiva }) : null;
+
+  // F2: el diagnóstico del paso 3, en el cliente y al instante (reglas base + reglas del Hub +
+  // la ortografía si hay una sugerencia viva). Un "bloquea" apaga el botón de generar.
+  // useMemo a propósito: compilar corre regexSegura (con su ensayo de tiempo) por regla, y
+  // `reglas` es una prop estable — no debe repetirse en cada tecla.
+  const reglasComp = useMemo(() => compilarReglas(reglas), [reglas]);
+  const idiomaDialogoActual = dialogoLang ?? (lang === "en" ? "en" : "es-MX");
+  const entradaDiag: EntradaDiagnostico | null = job && tool ? { job, tool, destino, aspect, duracion: duracionEfectiva, refs: refsLista.map((r) => ({ role: r.role })), texto: texto.trim() || null, dialogo: dialogo.trim() ? { texto: dialogo, idioma: idiomaDialogoActual } : null, movimiento: look.movimiento, idea } : null;
+  const sugerenciaViva = (campo: "texto" | "dialogo") => (revision && revision.campo === campo && revision.original === (campo === "texto" ? texto : dialogo) && ignorada[campo] !== revision.original ? revision : null);
+  const avisosOrtografia: Aviso[] = (["texto", "dialogo"] as const).flatMap((campo) => {
+    const r = sugerenciaViva(campo);
+    const a = r ? avisoOrtografia(campo, r.original, { idioma: "es", sugerido: r.sugerido, cambios: r.cambios }) : null;
+    return a ? [a] : [];
+  });
+  const avisosPaso3: Aviso[] = entradaDiag ? ordenarAvisos([...diagnosticarEntrada(entradaDiag, reglasComp), ...avisosOrtografia]) : [];
+  const bloqueo = bloqueado(avisosPaso3);
+
+  // Revisar ortografía y gramática de un campo (al salir de él). Dos capas en el servidor:
+  // diccionario de acentos + H.Ü.E. Es una sugerencia: nunca se reemplaza solo.
+  const revisar = async (campo: "texto" | "dialogo") => {
+    const valor = campo === "texto" ? texto : dialogo;
+    if (!valor.trim() || valor === ultimoRevisado.current[campo] || ignorada[campo] === valor) return;
+    ultimoRevisado.current[campo] = valor;
+    setRevisando(campo);
+    try {
+      const r = await revisarOrtografia(campo, valor, campo === "dialogo" ? idiomaDialogoActual : undefined);
+      if (!r.ok || !r.cambios.length || r.sugerido === valor) {
+        setRevision((prev) => (prev?.campo === campo ? null : prev));
+        return;
+      }
+      setRevision({ campo, original: valor, sugerido: r.sugerido, cambios: r.cambios });
+    } catch {
+      // La revisión es opcional: si falla, el diseñador sigue con su texto.
+    } finally {
+      setRevisando((v) => (v === campo ? null : v));
+    }
+  };
+  const usarSugerencia = (campo: "texto" | "dialogo") => {
+    const r = sugerenciaViva(campo);
+    if (!r) return;
+    if (campo === "texto") setTexto(r.sugerido);
+    else setDialogo(r.sugerido);
+    ultimoRevisado.current[campo] = r.sugerido;
+    setAvisosAplicados((prev) => (prev.includes(`ortografia_${campo}`) ? prev : [...prev, `ortografia_${campo}`]));
+    setRevision(null);
+  };
+  const dejarAsi = (campo: "texto" | "dialogo") => {
+    const r = sugerenciaViva(campo);
+    if (!r) return;
+    setIgnorada((prev) => ({ ...prev, [campo]: r.original }));
+    setRevision(null);
+  };
+
+  // "Arreglarlo": el arreglo de un click del aviso se vuelca en el estado del wizard.
+  const arreglar = (a: Aviso) => {
+    if (!entradaDiag || !a.accion) return;
+    if (a.accion.tipo === "prompt_fusion") {
+      const [r1, r2] = refsLista;
+      if (r1 && r2) setFusion(compilarFusion({ role: r1.role, caption: r1.caption, dna: r1.dna }, { role: r2.role, caption: r2.caption, dna: r2.dna }, aspect));
+    } else {
+      const patch = aplicarArreglo(entradaDiag, a.accion);
+      if (patch.tool !== undefined) setToolOverride(patch.tool);
+      if (patch.duracion !== undefined) setDuracion(patch.duracion);
+      if (patch.aspect !== undefined) setAspectOverride(patch.aspect);
+      if ("texto" in patch) {
+        setTexto(patch.texto ?? "");
+        ultimoRevisado.current.texto = patch.texto ?? "";
+        if (a.codigo.startsWith("ortografia")) setRevision(null);
+      }
+      if (patch.dialogo !== undefined) {
+        setDialogo(patch.dialogo?.texto ?? "");
+        ultimoRevisado.current.dialogo = patch.dialogo?.texto ?? "";
+        if (a.codigo.startsWith("ortografia")) setRevision(null);
+      }
+      if (patch.refs !== undefined) {
+        const quedan = new Set(patch.refs.map((r) => r.role));
+        // Si la referencia que se suelta era la foto prestada por el personaje, se suelta el
+        // personaje entero (foto + id): si no, viajaría su descripción sin su imagen.
+        if (refDePersonaje && !quedan.has(refDePersonaje)) elegirPersonaje(null);
+        setRefs((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, quedan.has(k as RefRole) ? v : null])));
+      }
+    }
+    setAvisosAplicados((prev) => (prev.includes(a.codigo) ? prev : [...prev, a.codigo]));
+  };
 
   const faltanRefs = slots.filter((s) => !s.opcional && !refs[s.role]).length > 0;
   const paso1Listo = !faltanRefs && (idea.trim().length > 0 || refsLista.length > 0);
@@ -237,6 +339,13 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
     setDuracion(null);
     setVideoType(null);
     setToolOverride(null);
+    setAspectOverride(null);
+    setRevision(null);
+    setIgnorada({ texto: null, dialogo: null });
+    setAvisosAplicados([]);
+    setFusion(null);
+    setTexto("");
+    ultimoRevisado.current = { texto: "", dialogo: "" };
     setVivo(null);
   };
 
@@ -257,11 +366,17 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
     setMostrarPersonajeForm(false);
     setConfirmarRetiro(false);
     setToolOverride(null);
+    setAspectOverride(null);
+    setRevision(null);
+    setIgnorada({ texto: null, dialogo: null });
+    setAvisosAplicados([]);
+    setFusion(null);
+    ultimoRevisado.current = { texto: "", dialogo: "" };
     setPaso(1);
   };
 
   const generar = async () => {
-    if (!job || !tool) return;
+    if (!job || !tool || bloqueo) return;
     setGenerando(true);
     const idiomaDialogo = dialogoLang ?? (lang === "en" ? "en" : "es-MX");
     const input: InputGenerar = {
@@ -278,6 +393,7 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
       personajeId,
       videoType: video ? videoType : null,
       texto: texto.trim() || null,
+      avisosAplicados,
     };
     // try/finally: si la llamada REVIENTA (red), el botón no se queda en "Generando…".
     let r: Awaited<ReturnType<typeof generarPrompt>>;
@@ -290,7 +406,7 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
       setGenerando(false);
     }
     if (!r.ok) return toast.error(r.error);
-    setVivo({ specId: r.specId, promptId: r.promptId, tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: sugerencia?.tool === tool ? sugerencia.porque : null, variante: "base", aprendio: r.aprendio });
+    setVivo({ specId: r.specId, promptId: r.promptId, tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: sugerencia?.tool === tool ? sugerencia.porque : null, variante: "base", aprendio: r.aprendio, avisos: r.avisos });
     setPaso("resultado");
     router.refresh(); // el historial (props del servidor) se re-lee
   };
@@ -308,7 +424,7 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
       setAbriendo(null);
     }
     if (!r.ok) return toast.error(r.error);
-    setVivo({ specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: r.nota, variante: r.variante, aprendio: null });
+    setVivo({ specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: r.nota, variante: r.variante, aprendio: null, avisos: r.avisos });
     setJob(r.spec.job);
     setKind(null);
     setPaso("resultado");
@@ -431,16 +547,24 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
                     <label htmlFor="prisma-idea" className="block text-sm font-medium text-foreground">
                       {tx(UI.ideaLabel, lang)}
                     </label>
-                    <Textarea id="prisma-idea" autoFocus value={idea} onChange={(e) => setIdea(e.target.value)} placeholder={tx(UI.ideaPlaceholder, lang)} rows={3} className="mt-2" />
+                    <Textarea id="prisma-idea" autoFocus value={idea} onChange={(e) => setIdea(e.target.value)} placeholder={tx(UI.ideaPlaceholder, lang)} rows={3} maxLength={2000} className="mt-2" />
                   </div>
                   {/* Texto en la pieza: campo PROPIO (no se saca de la idea). Lo que se
                       escribe aquí va tal cual al prompt, en el idioma en que se escribió. */}
                   <div>
-                    <label htmlFor="prisma-texto" className="block text-sm font-medium text-foreground">
+                    <label htmlFor="prisma-texto" className="flex items-center gap-2 text-sm font-medium text-foreground">
                       {tx(UI.textoLabel, lang)}
+                      {/* El spinner vive en la etiqueta: revisar no mueve nada debajo del campo. */}
+                      {revisando === "texto" && (
+                        <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground" aria-live="polite">
+                          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> {tx(UI.revisando, lang)}
+                        </span>
+                      )}
                     </label>
-                    <input id="prisma-texto" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={tx(UI.textoPlaceholder, lang)} maxLength={200} className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                    <input id="prisma-texto" value={texto} onChange={(e) => setTexto(e.target.value)} onBlur={() => void revisar("texto")} placeholder={tx(UI.textoPlaceholder, lang)} maxLength={200} className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
                     <p className="mt-1 text-xs text-muted-foreground">{tx(UI.textoAyuda, lang)}</p>
+                    {/* Ortografía: acentos y gramática del texto que se va a pintar. Sugerencia, nunca reemplazo. */}
+                    <SugerenciaTexto sugerido={sugerenciaViva("texto")?.sugerido ?? null} cambios={sugerenciaViva("texto")?.cambios ?? []} lang={lang} onUsar={() => usarSugerencia("texto")} onDejar={() => dejarAsi("texto")} />
                   </div>
                   {slots.length > 0 && (
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -464,7 +588,7 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
 
               {paso === 3 && (
                 <div className="space-y-5">
-                  <Chips lang={lang} titulo={tx(UI.paso3, lang)} opciones={DESTINOS.map((d) => ({ value: d, label: tx(DESTINO_LABEL[d], lang) }))} valor={destino} onChange={(v) => v && setDestino(v as Destino)} permiteOtro={false} />
+                  <Chips lang={lang} titulo={tx(UI.paso3, lang)} opciones={DESTINOS.map((d) => ({ value: d, label: tx(DESTINO_LABEL[d], lang) }))} valor={destino} onChange={(v) => { if (v) { setDestino(v as Destino); setAspectOverride(null); } }} permiteOtro={false} />
                   <div>
                     <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{tx(UI.marca, lang)}</p>
                     <ChipSelect
@@ -541,10 +665,16 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
                   )}
                   {video && (
                     <div>
-                      <label htmlFor="prisma-dialogo" className="block text-sm font-medium text-foreground">
+                      <label htmlFor="prisma-dialogo" className="flex items-center gap-2 text-sm font-medium text-foreground">
                         {tx(UI.dialogo, lang)}
+                        {revisando === "dialogo" && (
+                          <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground" aria-live="polite">
+                            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> {tx(UI.revisando, lang)}
+                          </span>
+                        )}
                       </label>
-                      <Textarea id="prisma-dialogo" value={dialogo} onChange={(e) => setDialogo(e.target.value)} placeholder={tx(UI.dialogoPlaceholder, lang)} rows={2} className="mt-2" />
+                      <Textarea id="prisma-dialogo" value={dialogo} onChange={(e) => setDialogo(e.target.value)} onBlur={() => void revisar("dialogo")} placeholder={tx(UI.dialogoPlaceholder, lang)} rows={2} className="mt-2" />
+                      <SugerenciaTexto sugerido={sugerenciaViva("dialogo")?.sugerido ?? null} cambios={sugerenciaViva("dialogo")?.cambios ?? []} lang={lang} onUsar={() => usarSugerencia("dialogo")} onDejar={() => dejarAsi("dialogo")} />
                       {dialogo.trim() && (
                         <div className="mt-2">
                           <Chips lang={lang} titulo={tx(UI.idiomaDialogo, lang)} opciones={[{ value: "es-MX", label: "Español" }, { value: "en", label: "English" }]} valor={dialogoLang ?? (lang === "en" ? "en" : "es-MX")} onChange={(v) => setDialogoLang(v === "en" ? "en" : "es-MX")} permiteOtro={false} />
@@ -597,6 +727,24 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
                       </p>
                     </div>
                   )}
+                  {/* F2: avisos antes de generar, con arreglo de un click. Un "bloquea" apaga Generar. */}
+                  {avisosPaso3.length > 0 && <PanelAvisos avisos={avisosPaso3} lang={lang} titulo={tx(UI.avisosTitulo, lang)} onArreglar={arreglar} />}
+                  {fusion && (
+                    <div className="rounded-xl border border-border bg-card p-3">
+                      <p className="text-xs font-semibold text-foreground">{tx(UI.fusionTitulo, lang)}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{tx(UI.fusionAyuda, lang)}</p>
+                      <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-secondary p-2 font-mono text-xs text-foreground">{fusion}</pre>
+                      <div className="mt-2 flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => void navigator.clipboard.writeText(fusion).then(() => toast.success(tx(UI.copiado, lang))).catch(() => toast.error(tx(UI.error, lang)))}>
+                          {tx(UI.copiar, lang)}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setFusion(null)}>
+                          {tx(UI.cancelar, lang)}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {bloqueo && <p className="text-xs font-medium text-destructive" role="alert">{tx(UI.bloqueadoPor, lang)}</p>}
                 </div>
               )}
 
@@ -610,7 +758,7 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
                     {tx(UI.siguiente, lang)} <ArrowRight className="size-4" />
                   </Button>
                 ) : (
-                  <Button onClick={generar} disabled={generando || !tool} aria-live="polite" className="min-w-[200px]">
+                  <Button onClick={generar} disabled={generando || !tool || !!bloqueo} aria-live="polite" className="min-w-[200px]">
                     {generando ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
                     {generando ? tx(MENSAJES_GENERANDO[etapa], lang) : tx(UI.generar, lang)}
                   </Button>

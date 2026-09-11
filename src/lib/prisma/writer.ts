@@ -2,11 +2,13 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { specVacio, type PromptSpec, type Beat, type Camara, type Dialogo, type VideoType, type TextoEnImagen, type Tool } from "@/lib/prisma/spec";
 import { VIDEO_TYPES } from "@/lib/prisma/spec";
-import { plano } from "@/lib/prisma/texto";
+import { cercado, plano } from "@/lib/prisma/texto";
 import { compilar, type Salida } from "@/lib/prisma/compilers";
 import { validar } from "@/lib/prisma/validators";
 import { PRESETS_HIGGSFIELD } from "@/lib/prisma/compilers/higgsfield";
-import { BLOQUE_ESTABLE, bloqueEstableCon, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueVariante, bloqueExplicar, bloqueDescribirPersonaje, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje, type NotaTool } from "@/lib/prisma/prompts/writer";
+import { BLOQUE_ESTABLE, bloqueEstableCon, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueVariante, bloqueExplicar, bloqueDescribirPersonaje, bloqueJuicio, bloqueCorreccion, AVISOS_SCHEMA, CORRECCION_SCHEMA, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje, type NotaTool } from "@/lib/prisma/prompts/writer";
+import type { Aviso } from "@/lib/prisma/diagnostico";
+import type { Cambio, Idioma } from "@/lib/prisma/ortografia";
 import type { PrismaVariante } from "@/lib/database.types";
 
 /**
@@ -263,6 +265,88 @@ export async function variarSpec(e: EntradaWriter, specActual: PromptSpec, varia
 }
 
 /** Recompila el mismo spec a otra herramienta (sin modelo). */
+/**
+ * El juicio de H.Ü.E sobre un spec ya compilado: hasta 3 avisos que una regla mecánica no ve.
+ * Saneo a la vuelta: cada texto en una línea y con tope, nivel del enum, código como slug con
+ * prefijo "hue_"; un aviso mal formado se descarta (no la lista). Nunca lanza.
+ */
+export async function juzgarSpec(e: EntradaWriter, spec: PromptSpec, salida: string): Promise<{ avisos: Aviso[]; usage: Uso | null }> {
+  try {
+    const client = new Anthropic();
+    const res = await client.messages.create({
+      model: MODEL,
+      // 3 avisos × 8 campos cortos caben de sobra; con 900 el modelo se quedaba a medias y no
+      // llegaba a cerrar el tool_use (smoke 2026-09-11) → lista vacía sin error visible.
+      max_tokens: 1600,
+      thinking: { type: "disabled" },
+      tools: [{ name: "emitir_avisos", description: "Report the judgment-only warnings.", input_schema: AVISOS_SCHEMA as unknown as Anthropic.Tool["input_schema"] }],
+      tool_choice: { type: "tool", name: "emitir_avisos" },
+      messages: [{ role: "user", content: bloqueJuicio(e, JSON.stringify(spec), salida) }],
+    });
+    const bloque = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    if (!bloque || res.stop_reason === "max_tokens") console.warn(`[prisma] juzgarSpec: ${bloque ? "cortado por max_tokens" : "sin tool_use"} (stop_reason=${res.stop_reason})`);
+    const lista = Array.isArray((bloque?.input as { avisos?: unknown } | undefined)?.avisos) ? ((bloque!.input as { avisos: unknown[] }).avisos) : [];
+    const corto = (v: unknown, max = 240): string => (typeof v === "string" ? plano(v).slice(0, max) : "");
+    const avisos: Aviso[] = [];
+    for (const raw of lista.slice(0, 3)) {
+      if (!raw || typeof raw !== "object") continue;
+      const o = raw as Record<string, unknown>;
+      const codigo = "hue_" + corto(o.codigo, 40).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+      const nivel = o.nivel === "advierte" || o.nivel === "sugiere" ? o.nivel : null;
+      const que_es = corto(o.que_es);
+      const que_en = corto(o.que_en);
+      if (!nivel || codigo === "hue_" || !que_es || !que_en || avisos.some((a) => a.codigo === codigo)) continue;
+      const porque_es = corto(o.porque_es);
+      const porque_en = corto(o.porque_en);
+      const arreglo_es = corto(o.arreglo_es);
+      const arreglo_en = corto(o.arreglo_en);
+      avisos.push({ codigo, nivel, que: { es: que_es, en: que_en }, porque: porque_es || porque_en ? { es: porque_es || porque_en, en: porque_en || porque_es } : null, arreglo: arreglo_es || arreglo_en ? { es: arreglo_es || arreglo_en, en: arreglo_en || arreglo_es } : null, accion: null, fuente: null });
+    }
+    return { avisos, usage: usoDe(res) };
+  } catch (err) {
+    console.error("[prisma] juzgarSpec:", err instanceof Error ? err.message : err);
+    return { avisos: [], usage: null };
+  }
+}
+
+/** Corrección de ortografía y gramática de un texto corto, en su idioma. Devuelve el texto
+ *  corregido (saneado: una línea, con tope) y los cambios; sin cambios = igual al original. */
+export async function revisarTexto(texto: string, idioma: Idioma, campo: "texto" | "dialogo", max = 200): Promise<{ ok: true; corregido: string; cambios: Cambio[]; usage: Uso } | { ok: false; error: string }> {
+  try {
+    const client = new Anthropic();
+    const res = await client.messages.create({
+      model: MODEL,
+      max_tokens: 500,
+      thinking: { type: "disabled" },
+      tools: [{ name: "emitir_correccion", description: "Report the corrected text.", input_schema: CORRECCION_SCHEMA as unknown as Anthropic.Tool["input_schema"] }],
+      tool_choice: { type: "tool", name: "emitir_correccion" },
+      messages: [{ role: "user", content: bloqueCorreccion(texto, idioma, campo) }],
+    });
+    const bloque = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    const o = (bloque?.input ?? {}) as Record<string, unknown>;
+    const corregido = typeof o.corregido === "string" ? plano(o.corregido).slice(0, max) : "";
+    if (!corregido) return { ok: false, error: "H.Ü.E no pudo revisarlo. Inténtalo otra vez." };
+    const cambios: Cambio[] = [];
+    for (const c of Array.isArray(o.cambios) ? o.cambios.slice(0, 6) : []) {
+      if (!c || typeof c !== "object") continue;
+      const x = c as Record<string, unknown>;
+      const de = typeof x.de === "string" ? plano(x.de).slice(0, 80) : "";
+      const a = typeof x.a === "string" ? plano(x.a).slice(0, 80) : "";
+      if (!de || !a || de === a) continue;
+      const es = typeof x.motivo_es === "string" ? plano(x.motivo_es).slice(0, 60) : "";
+      const en = typeof x.motivo_en === "string" ? plano(x.motivo_en).slice(0, 60) : "";
+      cambios.push({ de, a, motivo: { es: es || en || "corrección", en: en || es || "correction" } });
+    }
+    // El modelo vio el texto cercado (sin < >): se compara contra esa misma base, si no un
+    // "OFERTA <3" saldría siempre "corregido".
+    const igual = corregido === cercado(texto);
+    return { ok: true, corregido: igual ? texto : corregido, cambios: igual ? [] : cambios, usage: usoDe(res) };
+  } catch (err) {
+    console.error("[prisma] revisarTexto:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "H.Ü.E no respondió. Inténtalo otra vez." };
+  }
+}
+
 export function recompilar(spec: PromptSpec, tool: Tool): { salida: Salida; valido: boolean; errores: string[] } {
   const s = { ...spec, tool };
   const salida = compilar(s);

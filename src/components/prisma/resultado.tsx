@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
-import { Check, Copy, Cpu, ExternalLink, Flame, Lightbulb, Minus, RefreshCw, Shield, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2 } from "lucide-react";
+import { Check, Copy, Cpu, ExternalLink, Eye, Flame, Lightbulb, Minus, RefreshCw, Shield, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { cambiarHerramienta, calificar, explicar, refinarPrompt, registrarEvento, variar } from "@/app/(app)/prisma/actions";
+import { cambiarHerramienta, calificar, explicar, refinarPrompt, registrarEvento, revisarBien, variar } from "@/app/(app)/prisma/actions";
+import { PanelAvisos } from "./avisos";
+import { compilarFusion } from "@/lib/prisma/compilers/fusion";
+import type { Aviso } from "@/lib/prisma/diagnostico";
 import { PEDIR_VERSION_LABEL, TOOL_LABEL, UI, VARIANTE_LABEL, tx, type Lang, type Par } from "@/lib/prisma/copy";
 import type { PrismaVariante } from "@/lib/database.types";
 import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
@@ -28,6 +31,8 @@ export type PromptVivo = {
   variante?: PrismaVariante | null;
   /** Cuánto aprendizaje de la marca entró a esta generación (sólo al generar). */
   aprendio?: { ganadores: number; preferencias: number } | null;
+  /** F2: el diagnóstico del resultado (lo calcula el servidor y se guarda con el prompt). */
+  avisos?: Aviso[];
 };
 
 /** Las versiones que se pueden pedir, con su ícono. Fuera del componente: no cambian. */
@@ -58,6 +63,10 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
   const [cambiando, setCambiando] = useState<Tool | null>(null);
   const [voto, setVoto] = useState<1 | -1 | null>(null);
   const [variando, setVariando] = useState<PrismaVariante | null>(null);
+  const [aplicando, setAplicando] = useState<string | null>(null);
+  const [juzgando, setJuzgando] = useState(false);
+  const [juzgado, setJuzgado] = useState(false);
+  const [fusion, setFusion] = useState<string | null>(null);
 
   const info = TOOL_INFO[vivo.tool];
   // "Úsalo en…": puro y en el cliente; el servidor guarda el mismo cálculo (sobre el spec
@@ -66,7 +75,12 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
   const otras = TOOLS_POR_JOB[vivo.spec.job].filter((t) => t !== vivo.tool);
   // Mientras CUALQUIER acción va al servidor, las demás esperan: dos respuestas cruzadas
   // (cambiar herramienta + otra versión) pisarían el resultado con un `vivo` viejo.
-  const ocupado = cambiando !== null || refinando || variando !== null || cargandoExp;
+  const ocupado = cambiando !== null || refinando || variando !== null || cargandoExp || aplicando !== null || juzgando;
+  // Los avisos vienen del servidor; una fila de antes de F2 (o el demo) trae sólo `errores`.
+  const avisos: Aviso[] = vivo.avisos ?? vivo.errores.map((e, i) => ({ codigo: `validador_${i + 1}`, nivel: "advierte", que: { es: e, en: e }, porque: null, arreglo: null, accion: null, fuente: null }));
+  // El juicio de H.Ü.E ya corrió si hay avisos "hue_"; si no (imagen, o video tras cambiar de
+  // herramienta, que recompila sin modelo), se ofrece "Revísalo bien".
+  const yaJuzgado = juzgado || avisos.some((a) => a.codigo.startsWith("hue_"));
   // El demo (sólo dev) no tiene filas en la BD: nada que llame al servidor.
   const esDemo = vivo.specId === "demo";
   const IconoVersion = vivo.variante && vivo.variante !== "base" ? VERSIONES.find((x) => x.v === vivo.variante)?.Icon : undefined;
@@ -115,20 +129,84 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
     setExplicacion(null);
     setVerExplicacion(false);
     setVoto(null);
-    onCambio({ ...vivo, tool, promptId: r.promptId, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante });
+    setJuzgado(false);
+    onCambio({ ...vivo, tool, promptId: r.promptId, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, avisos: r.avisos });
+  };
+
+  const refinarCon = async (texto: string, apagar: () => void): Promise<boolean> => {
+    const r = await correr(() => refinarPrompt(vivo.specId, texto), apagar);
+    if (!r) return false;
+    if (!r.ok) {
+      toast.error(r.error);
+      return false;
+    }
+    setCambio("");
+    setExplicacion(null);
+    setVerExplicacion(false);
+    setVoto(null);
+    setJuzgado(false);
+    onCambio({ ...vivo, promptId: r.promptId, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, avisos: r.avisos });
+    return true;
   };
 
   const refinar = async () => {
     if (!cambio.trim()) return;
     setRefinando(true);
-    const r = await correr(() => refinarPrompt(vivo.specId, cambio), () => setRefinando(false));
+    await refinarCon(cambio, () => setRefinando(false));
+  };
+
+  /** "Arreglarlo" sobre el resultado: cambiar de herramienta o refinar con la instrucción del
+   *  arreglo; se anota como evento aviso_aplicado (qué avisos ayudan de verdad). */
+  const arreglar = async (a: Aviso) => {
+    if (!a.accion || esDemo) return;
+    const ac = a.accion;
+    if (ac.tipo === "prompt_fusion") {
+      const [r1, r2] = vivo.spec.refs;
+      if (r1 && r2) setFusion(compilarFusion(r1, r2, vivo.spec.aspect));
+      return;
+    }
+    const instruccion =
+      ac.tipo === "tool" ? null
+      : ac.tipo === "texto" ? `Usa exactamente este texto en la pieza: «${ac.texto}»`
+      : ac.tipo === "dialogo" ? `El diálogo dice exactamente: «${ac.texto}»`
+      : ac.tipo === "duracion" ? `Duración: ${ac.segundos} s`
+      : ac.tipo === "aspect" ? `Formato ${ac.aspect}`
+      : ac.tipo === "quitar_texto" ? "Quita todo el texto de la pieza"
+      : ac.tipo === "recortar_texto" ? `Recorta el texto de la pieza a ${ac.palabras} palabras como máximo`
+      : null;
+    if (ac.tipo !== "tool" && !instruccion) return;
+    setAplicando(a.codigo);
+    const promptAntes = vivo.promptId;
+    let hecho = false;
+    if (ac.tipo === "tool") {
+      const r = await correr(() => cambiarHerramienta(vivo.specId, ac.tool), () => undefined);
+      if (r?.ok) {
+        setExplicacion(null);
+        setVerExplicacion(false);
+        setVoto(null);
+        setJuzgado(false);
+        onCambio({ ...vivo, tool: ac.tool, promptId: r.promptId, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, avisos: r.avisos });
+        hecho = true;
+      } else if (r && !r.ok) toast.error(r.error);
+    } else if (instruccion) {
+      hecho = await refinarCon(instruccion, () => undefined);
+    }
+    setAplicando(null);
+    if (hecho) {
+      toast.success(tx(UI.aplicado, lang));
+      void registrarEvento(promptAntes, "aviso_aplicado", a.codigo).catch(() => undefined);
+    }
+  };
+
+  /** "Revísalo bien": el juicio de H.Ü.E a petición (en video ya corrió solo al generar). */
+  const revisar = async () => {
+    setJuzgando(true);
+    const r = await correr(() => revisarBien(vivo.promptId), () => setJuzgando(false));
     if (!r) return;
     if (!r.ok) return toast.error(r.error);
-    setCambio("");
-    setExplicacion(null);
-    setVerExplicacion(false);
-    setVoto(null);
-    onCambio({ ...vivo, promptId: r.promptId, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores });
+    setJuzgado(true);
+    if (r.avisos.length === avisos.length) toast.message(tx(UI.sinAvisosJuicio, lang));
+    onCambio({ ...vivo, avisos: r.avisos });
   };
 
   const otraVersion = async (v: Exclude<PrismaVariante, "base">) => {
@@ -141,7 +219,8 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
     setVerExplicacion(false);
     setVoto(null);
     // La versión es un spec hermano: desde aquí, refinar / cambiar herramienta / explicar actúan sobre ella.
-    onCambio({ ...vivo, specId: r.specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null });
+    setJuzgado(false);
+    onCambio({ ...vivo, specId: r.specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null, avisos: r.avisos });
   };
 
   const votar = async (score: 1 | -1) => {
@@ -193,12 +272,17 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
         </span>
       </div>
 
-      {!vivo.valido && vivo.errores.length > 0 && (
-        <ul className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs text-foreground">
-          {vivo.errores.map((e) => (
-            <li key={e}>· {e}</li>
-          ))}
-        </ul>
+      {/* F2: un solo lenguaje de problemas (reglas, validador, ortografía, juicio de H.Ü.E). */}
+      <PanelAvisos avisos={avisos} lang={lang} titulo={tx(UI.avisosResultado, lang)} onArreglar={esDemo ? undefined : arreglar} aplicando={aplicando} />
+      {fusion && (
+        <div className="rounded-xl border border-border bg-card p-3">
+          <p className="text-xs font-semibold text-foreground">{tx(UI.fusionTitulo, lang)}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{tx(UI.fusionAyuda, lang)}</p>
+          <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-secondary p-2 font-mono text-xs text-foreground">{fusion}</pre>
+          <Button size="sm" variant="ghost" className="mt-2" onClick={() => setFusion(null)}>
+            {tx(UI.cancelar, lang)}
+          </Button>
+        </div>
       )}
 
       {/* El prompt. Los botones van en su propia fila (no flotando sobre el texto): en
@@ -229,6 +313,12 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
 
       {/* Acciones secundarias */}
       <div className="flex flex-wrap items-center gap-2">
+        {!yaJuzgado && (
+          <Button variant="outline" size="sm" onClick={revisar} disabled={ocupado || esDemo} aria-busy={juzgando} title={tx(UI.revisaloBienAyuda, lang)}>
+            {juzgando ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
+            {tx(UI.revisaloBien, lang)}
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={toggleExplicar} disabled={ocupado || esDemo} aria-busy={cargandoExp}>
           {cargandoExp ? <Loader2 className="size-4 animate-spin" /> : <Lightbulb className="size-4" />}
           {verExplicacion ? tx(UI.ocultarExplicacion, lang) : tx(UI.explicar, lang)}

@@ -120,6 +120,8 @@ export async function cargarAprendizaje(db: Db, clientId: string, job: JobType):
       .from("prisma_eventos")
       .select("spec_id, prompt_id, job, tool, variante, tipo, detalle, created_at")
       .eq("client_id", clientId)
+      // Sólo los tipos que enseñan: un aluvión de otro tipo (aviso_aplicado…) no desplaza la ventana.
+      .in("tipo", ["copiado", "abierto", "variante", "refinado"])
       .gte("created_at", desde)
       .order("created_at", { ascending: false })
       .limit(200)
