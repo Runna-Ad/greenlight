@@ -8,7 +8,14 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
-## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-11 — TODO LIVE en preview (4bd71fa · 0065, 0066 y 0067 APLICADAS)
+## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-11 — TODO LIVE en preview (797d637 · 0065–0068 APLICADAS)
+- **F1 hecha (66f7fb5):** compilers al día (negativo → positivo, Nano Banana 2/Pro con slot de estilo, gpt-image-2.5 con
+  tamaños reales y deletreo, Veo 8/6/4 con 8 forzado con refs, Kling 60 palabras + un movimiento) y "Úsalo en…"
+  (`lib/prisma/modelo.ts`, guardado en `prisma_prompts.modelo_sug`). Smoke real `scripts/smoke-prisma.mjs`.
+- **F2 hecha (797d637, 0068 aplicada):** diagnóstico (`lib/prisma/diagnostico.ts`: 7 reglas base + reglas del Hub, avisos
+  con arreglo de un click, guardados en `prisma_prompts.avisos`, un "bloquea" también en el servidor), ortografía
+  (`lib/prisma/ortografia.ts` diccionario + H.Ü.E corrector, sugerencia al salir del campo) y juicio de H.Ü.E
+  (`juzgarSpec`: siempre en video, "Revísalo bien" a petición). Siguiente: **F3** entrevista (≤ 3 preguntas; sin migración).
 - **v1 "el prompter perfecto" — FASE 0 hecha (4bd71fa, 0067 aplicada):** plan aprobado en
   `/Users/work/.claude/plans/ok-no-i-need-lexical-ocean.md` (v1 = perfeccionar prompts; v2 = generar assets in-app, APARCADA).
   Sora 2 retirada (OpenAI apaga su API el 24-sep-2026): filas viejas se leen como Veo 3.1 (`TOOLS_HISTORICAS`/`TOOL_SUCESORA`/

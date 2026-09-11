@@ -1,6 +1,6 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-09-11 (5) — HÜE Prisma v1 · FASE 2: diagnóstico + ortografía (rama `prisma`, SIN migración)
+## 🟢 2026-09-11 (5) — HÜE Prisma v1 · FASE 2: diagnóstico + ortografía (rama `prisma`, SIN migración)
 Pedro: "yes and also add a grammar check specially when user writes text to make sure accents, and grammar are correct both in
 english and spanish". Plan §3 + la ortografía como UN aviso más.
 - [x] **`lib/prisma/diagnostico.ts`** (puro): `Aviso` {codigo, nivel, que, porque, arreglo, accion, fuente}; `REGLAS_BASE` (7:
@@ -41,8 +41,8 @@ english and spanish". Plan §3 + la ortografía como UN aviso más.
       texto revisado; soltar la ref del personaje suelta el personaje; UUID en `explicar`.
 - [x] **0068** `20260911120004_greenlight_0068_prisma_reglas_patron.sql`: el patrón de `texto_no_latino` con escapes \uXXXX
       (el crudo traía U+0600, un carácter de formato, y el filtro de lectura lo descartaba). test-db 441 · test-prisma 438.
-- [ ] **SHIP** (necesita "ship it"): `npm run migrate` (0068). Sin ella todo funciona; sólo esa regla no cuenta.
-- [ ] Commit + `git push origin prisma` (código seguro antes de la 0068).
+- [x] **SHIP** — Pedro: "ship it" → `npm run migrate` 0068 aplicada y verificada en prod (patrón con escapes, en el ledger).
+- [x] Commit 797d637 + push a `prisma`.
 ### Verificación F2 (Pedro, preview con login)
 - Escribe "Envio gratis a todo mexico" en "¿Lleva texto la pieza?" y sal del campo → aparece «Envío gratis a todo México»
   con «Usar la sugerencia». En inglés: "Get you order deliver free" → corrección gramatical.
