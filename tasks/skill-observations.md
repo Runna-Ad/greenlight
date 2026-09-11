@@ -88,3 +88,15 @@ el que verificó (el code-reviewer dio por verificado algo que un grep desminti�
 CONTEXT: El PostToolUse hook de Edit pide "abre el preview y verifica" tras CADA edición, incluso a mitad de un
 lote de 40 archivos; verificar por edición sería absurdo. Se verificó al final del lote (correcto).
 RECOMMENDATION: que el hook lo pida una vez por turno/lote, o sólo cuando no haya más ediciones pendientes.
+
+[2026-09-11] OBSERVATION: replicable-win
+CONTEXT: HÜE Prisma, dos tandas de build en un día. Lanzar security-reviewer (Opus) + code-reviewer (Sonnet) en background al terminar de escribir código, y hacer la verificación en navegador/smoke mientras corrían, cazó 1 crítico + 9 serios que los gates (tsc, lint, build, 600 tests) no ven.
+RECOMMENDATION: en beast-mode-dev, Phase 4 debería decir explícitamente "spawn los reviewers ANTES de la verificación manual, no después" — hoy se lee como secuencial (build → reap → verify).
+
+[2026-09-11] OBSERVATION: missing-rule
+CONTEXT: tres comandos rechazados por "control characters" al escribir una regex de caracteres de control con escapes unicode; el rechazo tira el comando entero (y los otros archivos del mismo heredoc). También: el pane del navegador recargó la pestaña en "/" a media verificación de un wizard de 3 pasos y se perdió el estado.
+RECOMMENDATION: nota de tooling en beast-mode-dev (o en research.md): (1) nunca escribir rangos de control literales/escapados en un comando — usar `\p{Cc}`/`\p{Cf}` o `String.fromCharCode`; un archivo por heredoc; (2) para pantallas profundas de un wizard, un `?demo=` dev-only que monte ese paso directo; el chequeo móvil al final.
+
+[2026-09-11] OBSERVATION: skill-gap
+CONTEXT: "verificar de verdad" una acción de servidor que necesita sesión (login apagado en local) sigue sin camino directo: hoy se cubrió con (a) smoke real del modelo con el loader nuevo `scripts/register-hooks.mjs`, (b) `?demo=resultado`, (c) LIVE-VERIFY de Pedro. Funciona, pero cada sesión lo re-arma.
+RECOMMENDATION: un `?demo=paso3` (y en general un demo por pantalla gateada) + documentar el loader en el CLAUDE.md del proyecto como "así se prueba un prompt nuevo antes de cablearlo".

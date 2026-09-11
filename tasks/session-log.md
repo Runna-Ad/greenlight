@@ -34,6 +34,13 @@ lo humano que entra al prompt siempre cercado y sin ángulos; freno en memoria p
 **Pick up next session:** live-verify de Pedro (a)–(e) en todo.md → mirar `prisma_eventos` tras una semana de uso real y, si hay
 decenas de eventos por marca, revisar que los ganadores que elige tengan sentido. Nada pendiente de código.
 **Environment changes:** ninguna dependencia nueva.
+**CIERRE (wrap-up 2026-09-11):** 4 commits en `prisma` (fb1107c · 5b5f9b6 · bff75ed · 192864c), 31 archivos, +1,945/−173,
+todo pusheado, working tree limpio. Migraciones 0065 y 0066 APLICADAS y verificadas en prod. main intacto (9 adelante; prisma
+13 adelante; merge en seco sólo choca en tasks/*.md). Stashes que quedan: `stash@{0}` en main = la lección "qué es HÜE Prisma"
+(ya copiada a lessons.md de esta rama; al volver a main, `git stash pop` o `drop`); `stash@{1}` en prisma = bloque auto-generado
+del session-log del 2026-09-08 (ruido; se puede soltar). Lecciones logueadas hoy: 12 (2 WIN, 3 TIME_SINK/LESSON de tooling, 1
+sobre la ventana del "ship it", 1 de tests de privilegios, el resto de diseño). Procesos: dev server local DETENIDO; 4 agentes de
+review terminaron; sin watchers ni crons. Lo único vivo es el preview de Vercel.
 
 ## 2026-09-11 — HÜE Prisma: presets en Admin · personajes guardados · explicación por idioma (rama `prisma`, SIN commit · SIN push · 0065 PENDIENTE de "ship it")
 Pedro: "1 yes · 2 needs more thought (¿cuánto más caro? ¿puede H.Ü.E aprender de lo que elige el diseñador?) · 3 yes · 4 yes ·
@@ -2049,6 +2056,26 @@ real · prueba con diseñador · decidir merge a main (= deploy a prod; el módu
 - [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
 - [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
 - [ ] **Decisión de Pedro — variantes (segura/audaz/mínima)**: ver el análisis de costo y el diseño de "aprender de las
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+
+
+## 2026-09-11 11:08
+**Shipped (recent commits):**
+  - docs(prisma): 0066 aplicada — todo, session-log, project-state
+  - docs(prisma): session-log — commit de la 2ª tanda
+  - feat(prisma): otra versión bajo demanda + H.Ü.E aprende solo (eventos 0066, pendiente de aplicar)
+  - feat(prisma): presets de marca en Admin + personajes guardados + explicación por idioma (0065)
+
+**Still open:**
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
 - [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
 - [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
 - [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
