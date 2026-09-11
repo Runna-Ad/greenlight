@@ -28,11 +28,11 @@ preview de Vercel). main NO tocado.
   herramienta; acciones cruzadas pisaban el resultado; la versión no salía en el historial; aplanar los ganadores borraba
   la estructura (ahora `cercadoMultilinea`). Detalle en todo.md § Review. Gates finales: test-prisma 183 · test-db 418.
 **Current state:** 1ª tanda LIVE en el preview. 2ª tanda: reapeada, commit **5b5f9b6**, pusheada al preview;
-**0066 NO aplicada** (migración nueva → necesita su propio "ship it"). El código tolera la tabla y la columna ausentes.
+**0066 APLICADA** con el segundo "ship it" de Pedro (verificada en prod: RLS, policy, índice único, columna origen_spec_id, ledger 20260911120002). Eventos y aprendizaje ENCENDIDOS en el preview.
 **Decisions made:** versiones bajo demanda (no 3 de golpe); versión = spec hermano; memoria por marca; captura fire-and-forget;
 lo humano que entra al prompt siempre cercado y sin ángulos; freno en memoria por identidad (best-effort, como el login).
-**Pick up next session:** "ship it" de la 0066 → `npm run migrate` → live-verify (d)/(e) en todo.md → mirar `prisma_eventos`
-tras una semana de uso real y, si hay decenas de eventos por marca, revisar que los ganadores que elige tengan sentido.
+**Pick up next session:** live-verify de Pedro (a)–(e) en todo.md → mirar `prisma_eventos` tras una semana de uso real y, si hay
+decenas de eventos por marca, revisar que los ganadores que elige tengan sentido. Nada pendiente de código.
 **Environment changes:** ninguna dependencia nueva.
 
 ## 2026-09-11 — HÜE Prisma: presets en Admin · personajes guardados · explicación por idioma (rama `prisma`, SIN commit · SIN push · 0065 PENDIENTE de "ship it")

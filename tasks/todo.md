@@ -103,9 +103,9 @@ diseñador HACE (copiar, abrir en la herramienta, pedir otra versión, pedir un 
       `prisma_specs.origen_spec_id` (0066) para saber de qué spec viene cada versión (tolerante si aún no existe); el demo
       apaga TODO lo que llama al servidor; `aria-busy` en todos los botones de acción; el chip de versión lleva su ícono.
       Gates finales: tsc 0 · lint 0 · test-prisma 183 · test-db 418 · lib 481 · import 81 · sync 44 · isolation · actions · build.
-- [ ] **SHIP de la 0066** (necesita "ship it" — es una migración nueva, posterior al "ship it" de hoy): `node scripts/migrate.mjs`.
-      El código ya está en el preview y TOLERA que la tabla no exista (otra versión funciona; eventos y aprendizaje se
-      encienden solos al aplicar la 0066; mientras, avisa en el log).
+- [x] **SHIP de la 0066** — Pedro: "ship it" (2026-09-11). `npm run migrate` aplicó la 0066 al esquema `produccion` de
+      Greenlight (ref ybbrpqzbedaxsmotgtkh): tabla con RLS + policy master + índice único + `prisma_specs.origen_spec_id`.
+      Código ya en el preview (bff75ed): eventos y aprendizaje quedan ENCENDIDOS desde ahora.
 - [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
       igual a la que veías, historial con la etiqueta; refinar sobre ella sigue siendo audaz. (e) tras la 0066: copiar 2
       prompts de DiDi Card → generar otro de la misma marca → línea "HÜE se apoyó en N prompts…"; pedir 3 versiones → la
