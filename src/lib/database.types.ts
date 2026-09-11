@@ -307,6 +307,23 @@ export type HueAdaptation = {
 
 // ── HÜE Prisma (0063) ────────────────────────────────────────
 export type PrismaVariante = "base" | "segura" | "audaz" | "minima";
+export const PRISMA_VARIANTES_PEDIBLES = ["segura", "audaz", "minima"] as const;
+
+/** Lo que el diseñador HIZO con un prompt (0066): la señal con la que H.Ü.E aprende. */
+export type PrismaEventoTipo = "copiado" | "abierto" | "variante" | "refinado";
+export type PrismaEventoRow = {
+  id: string;
+  spec_id: string;
+  prompt_id: string | null;
+  client_id: string | null;
+  job: string;
+  tool: string;
+  variante: PrismaVariante;
+  user_id: string | null;
+  tipo: PrismaEventoTipo;
+  detalle: string | null;
+  created_at: string;
+};
 export type PrismaJobStatus = "queued" | "running" | "done" | "error";
 
 /** Referencia guardada con el spec: dónde vive la imagen y qué leyó H.Ü.E de ella. */
@@ -329,6 +346,8 @@ export type PrismaSpecRow = {
   refs: PrismaRefGuardada[];
   created_by: string | null;
   created_at: string;
+  /** 0066: si es una versión pedida (segura/audaz/mínima), el spec del que viene. */
+  origen_spec_id?: string | null;
 };
 
 export type PrismaPromptRow = {

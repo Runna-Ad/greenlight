@@ -3,6 +3,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { PrismaCharacterRow, PrismaPromptRow, PrismaSpecRow } from "@/lib/database.types";
 import type { MarcaPreset } from "@/lib/prisma/spec";
 import { presetDeMarca } from "@/lib/prisma/preset";
+import type { JobType } from "@/lib/prisma/spec";
+import { resumirAprendizaje, type Aprendizaje, type EventoRow, type PromptCandidato, type Voto } from "@/lib/prisma/aprendizaje";
 
 /**
  * HÜE Prisma — lecturas de servidor (marcas con preset, personajes, historial, URLs
@@ -92,6 +94,57 @@ export async function cargarHistorial(db: Db, autorId: string | null, todos: boo
   const paths = [...new Set(specs.map((s) => s.refs?.[0]?.storage_path).filter((p): p is string => !!p))];
   const urls = await firmar(db, paths);
   return specs.map((s) => ({ spec: s, prompt: ultimo.get(s.id) ?? null, thumb: s.refs?.[0]?.storage_path ? urls.get(s.refs[0].storage_path) ?? null : null }));
+}
+
+/** Días hacia atrás que H.Ü.E mira para aprender de una marca. */
+const DIAS_APRENDIZAJE = 90;
+
+/**
+ * Lo aprendido de UN cliente para un trabajo: sus eventos recientes + sus prompts recientes
+ * (con votos) → resumirAprendizaje (puro). Nunca lanza: si la tabla de eventos aún no existe
+ * (antes de la 0066) o algo falla, se genera SIN aprendizaje y queda constancia en el log.
+ *
+ * DECISIÓN (Pedro, 2026-09-11): la memoria es POR MARCA, no por autor — "que H.Ü.E aprenda"
+ * significa que lo que le sirvió a un diseñador de DiDi le sirve al siguiente. El historial
+ * sí es por autor (lo que cada quien ve); aquí sólo viajan recortes al MODELO (cercados, como
+ * referencia de estructura) y al diseñador se le enseña únicamente el CONTEO.
+ */
+export async function cargarAprendizaje(db: Db, clientId: string, job: JobType): Promise<Aprendizaje | null> {
+  const desde = new Date(Date.now() - DIAS_APRENDIZAJE * 86400e3).toISOString();
+  type Fila = { id: string; spec_id: string; tool: string; variante: string; salida: string; valido: boolean; prisma_specs: { client_id: string | null; job: string }; prisma_ratings: { prompt_id: string; score: number }[] | null };
+  // Las dos consultas no dependen entre sí: en paralelo (está en el camino caliente de generar).
+  const [ev, pr] = await Promise.all([
+    db
+      .from("prisma_eventos")
+      .select("spec_id, prompt_id, job, tool, variante, tipo, detalle, created_at")
+      .eq("client_id", clientId)
+      .gte("created_at", desde)
+      .order("created_at", { ascending: false })
+      .limit(200)
+      .returns<EventoRow[]>(),
+    db
+      .from("prisma_prompts")
+      .select("id, spec_id, tool, variante, salida, valido, prisma_specs!inner(client_id, job), prisma_ratings(prompt_id, score)")
+      .eq("prisma_specs.client_id", clientId)
+      .gte("created_at", desde)
+      .order("created_at", { ascending: false })
+      .limit(60)
+      .returns<Fila[]>(),
+  ]);
+  if (ev.error) {
+    console.warn(`[prisma] aprendizaje sin eventos (¿falta la 0066?): ${ev.error.message}`);
+    return null;
+  }
+  if (pr.error) {
+    console.warn(`[prisma] aprendizaje sin prompts: ${pr.error.message}`);
+    return null;
+  }
+  // El filtro por cliente se REPITE en JS: si el filtro embebido no aplicara, nunca entraría
+  // un prompt de otro cliente como "ganador" de esta marca.
+  const filas = (pr.data ?? []).filter((f) => f.prisma_specs?.client_id === clientId);
+  const prompts: PromptCandidato[] = filas.map((f) => ({ id: f.id, spec_id: f.spec_id, job: f.prisma_specs.job, tool: f.tool, variante: f.variante, salida: f.salida, valido: f.valido }));
+  const votos: Voto[] = filas.flatMap((f) => f.prisma_ratings ?? []);
+  return resumirAprendizaje(job, ev.data ?? [], prompts, votos);
 }
 
 /** URLs firmadas en lote (bucket privado), 1 h. */

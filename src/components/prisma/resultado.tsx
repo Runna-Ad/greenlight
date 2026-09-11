@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
-import { Check, Copy, ExternalLink, Lightbulb, RefreshCw, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2 } from "lucide-react";
+import { Check, Copy, ExternalLink, Flame, Lightbulb, Minus, RefreshCw, Shield, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { cambiarHerramienta, calificar, explicar, refinarPrompt } from "@/app/(app)/prisma/actions";
-import { TOOL_LABEL, UI, tx, type Lang, type Par } from "@/lib/prisma/copy";
+import { cambiarHerramienta, calificar, explicar, refinarPrompt, registrarEvento, variar } from "@/app/(app)/prisma/actions";
+import { PEDIR_VERSION_LABEL, TOOL_LABEL, UI, VARIANTE_LABEL, tx, type Lang, type Par } from "@/lib/prisma/copy";
+import type { PrismaVariante } from "@/lib/database.types";
 import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
 import type { PromptSpec, Tool } from "@/lib/prisma/spec";
 import type { Salida } from "@/lib/prisma/compilers";
@@ -22,6 +23,23 @@ export type PromptVivo = {
   valido: boolean;
   errores: string[];
   porque: Par | null;
+  /** base | segura | audaz | minima (chip). */
+  variante?: PrismaVariante | null;
+  /** Cuánto aprendizaje de la marca entró a esta generación (sólo al generar). */
+  aprendio?: { ganadores: number; preferencias: number } | null;
+};
+
+/** Las versiones que se pueden pedir, con su ícono. Fuera del componente: no cambian. */
+const VERSIONES: { v: Exclude<PrismaVariante, "base">; Icon: typeof Shield }[] = [
+  { v: "segura", Icon: Shield },
+  { v: "audaz", Icon: Flame },
+  { v: "minima", Icon: Minus },
+];
+
+/** Copiar/abrir SIEMPRE es instantáneo: el evento se registra por detrás y, si falla, no molesta. */
+const anotar = (promptId: string, tipo: "copiado" | "abierto") => {
+  if (promptId === "demo") return;
+  void registrarEvento(promptId, tipo).catch(() => undefined);
 };
 
 /**
@@ -38,14 +56,22 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
   const [refinando, setRefinando] = useState(false);
   const [cambiando, setCambiando] = useState<Tool | null>(null);
   const [voto, setVoto] = useState<1 | -1 | null>(null);
+  const [variando, setVariando] = useState<PrismaVariante | null>(null);
 
   const info = TOOL_INFO[vivo.tool];
   const otras = TOOLS_POR_JOB[vivo.spec.job].filter((t) => t !== vivo.tool);
+  // Mientras CUALQUIER acción va al servidor, las demás esperan: dos respuestas cruzadas
+  // (cambiar herramienta + otra versión) pisarían el resultado con un `vivo` viejo.
+  const ocupado = cambiando !== null || refinando || variando !== null || cargandoExp;
+  // El demo (sólo dev) no tiene filas en la BD: nada que llame al servidor.
+  const esDemo = vivo.specId === "demo";
+  const IconoVersion = vivo.variante && vivo.variante !== "base" ? VERSIONES.find((x) => x.v === vivo.variante)?.Icon : undefined;
 
   const copiar = async () => {
     try {
       await navigator.clipboard.writeText(vivo.salida.texto);
       setCopiado(true);
+      anotar(vivo.promptId, "copiado");
       setTimeout(() => setCopiado(false), 1600);
     } catch {
       toast.error(tx(UI.error, lang));
@@ -85,7 +111,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
     setExplicacion(null);
     setVerExplicacion(false);
     setVoto(null);
-    onCambio({ ...vivo, tool, promptId: r.promptId, salida: r.salida, valido: r.valido, errores: r.errores, porque: null });
+    onCambio({ ...vivo, tool, promptId: r.promptId, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante });
   };
 
   const refinar = async () => {
@@ -99,6 +125,19 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
     setVerExplicacion(false);
     setVoto(null);
     onCambio({ ...vivo, promptId: r.promptId, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores });
+  };
+
+  const otraVersion = async (v: Exclude<PrismaVariante, "base">) => {
+    setVariando(v);
+    const r = await correr(() => variar(vivo.specId, v), () => setVariando(null));
+    if (!r) return;
+    if (!r.ok) return toast.error(r.error);
+    setCambio("");
+    setExplicacion(null);
+    setVerExplicacion(false);
+    setVoto(null);
+    // La versión es un spec hermano: desde aquí, refinar / cambiar herramienta / explicar actúan sobre ella.
+    onCambio({ ...vivo, specId: r.specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null });
   };
 
   const votar = async (score: 1 | -1) => {
@@ -118,8 +157,17 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{tx(UI.herramienta, lang)}</p>
           <h2 className="font-heading mt-1 flex items-center gap-2 text-xl font-semibold text-foreground">
             <span className="p-tool-chip inline-flex items-center rounded-full px-3 py-0.5 text-base">{tx(TOOL_LABEL[vivo.tool], lang)}</span>
+            {vivo.variante && vivo.variante !== "base" && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                {IconoVersion && <IconoVersion className="size-3.5" aria-hidden="true" />}
+                {tx(UI.version, lang)}: {tx(VARIANTE_LABEL[vivo.variante], lang)}
+              </span>
+            )}
           </h2>
           {vivo.porque && <p className="mt-0.5 text-xs text-muted-foreground">{tx(vivo.porque, lang)}</p>}
+          {/* Aprendizaje visible: el diseñador sabe que H.Ü.E ya "conoce" a esta marca. */}
+          {vivo.aprendio && vivo.aprendio.ganadores > 0 && <p className="mt-0.5 text-xs text-muted-foreground">{tx(UI.aprendioDe, lang).replace("{n}", String(vivo.aprendio.ganadores))}</p>}
+          {vivo.aprendio && vivo.aprendio.ganadores === 0 && vivo.aprendio.preferencias > 0 && <p className="mt-0.5 text-xs text-muted-foreground">{tx(UI.aprendioPref, lang)}</p>}
         </div>
         <span
           className={cn(
@@ -152,7 +200,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
             </Button>
           </span>
           <Button size="sm" variant="outline" asChild>
-            <a href={info.url} target="_blank" rel="noopener noreferrer">
+            <a href={info.url} target="_blank" rel="noopener noreferrer" onClick={() => anotar(vivo.promptId, "abierto")}>
               <ExternalLink className="size-4" />
               {tx(UI.abrirEn, lang)} {info.nombre}
             </a>
@@ -169,12 +217,12 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
 
       {/* Acciones secundarias */}
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" onClick={toggleExplicar} disabled={cargandoExp}>
+        <Button variant="outline" size="sm" onClick={toggleExplicar} disabled={ocupado || esDemo} aria-busy={cargandoExp}>
           {cargandoExp ? <Loader2 className="size-4 animate-spin" /> : <Lightbulb className="size-4" />}
           {verExplicacion ? tx(UI.ocultarExplicacion, lang) : tx(UI.explicar, lang)}
         </Button>
         {otras.map((t) => (
-          <Button key={t} variant="ghost" size="sm" onClick={() => cambiar(t)} disabled={cambiando !== null}>
+          <Button key={t} variant="ghost" size="sm" onClick={() => cambiar(t)} disabled={ocupado || esDemo} aria-busy={cambiando === t}>
             {cambiando === t ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
             {tx(TOOL_LABEL[t], lang)}
           </Button>
@@ -183,6 +231,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
           <button
             type="button"
             onClick={() => votar(1)}
+            disabled={esDemo}
             aria-pressed={voto === 1}
             aria-label={tx(UI.gustó, lang)}
             className={cn("rounded-full p-2 transition-colors hover:bg-secondary", voto === 1 ? "text-status-completed" : "text-muted-foreground")}
@@ -192,6 +241,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
           <button
             type="button"
             onClick={() => votar(-1)}
+            disabled={esDemo}
             aria-pressed={voto === -1}
             aria-label={tx(UI.noGustó, lang)}
             className={cn("rounded-full p-2 transition-colors hover:bg-secondary", voto === -1 ? "text-destructive" : "text-muted-foreground")}
@@ -204,6 +254,20 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
       {verExplicacion && explicacion && (
         <div className="p-enter rounded-xl border border-border bg-card px-4 py-3 text-sm leading-relaxed text-foreground whitespace-pre-wrap" style={{ boxShadow: "inset 4px 0 0 var(--p-tool)" }}>{explicacion}</div>
       )}
+
+      {/* Otra versión, bajo demanda: una llamada más SÓLO si se pide (y el click le enseña a H.Ü.E). */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <p className="text-sm font-medium text-foreground">{tx(UI.otraVersion, lang)}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{tx(UI.otraVersionAyuda, lang)}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {VERSIONES.map(({ v, Icon }) => (
+            <Button key={v} size="sm" variant="outline" onClick={() => otraVersion(v)} disabled={ocupado || esDemo} aria-busy={variando === v}>
+              {variando === v ? <Loader2 className="size-4 animate-spin" /> : <Icon className="size-4" />}
+              {tx(PEDIR_VERSION_LABEL[v], lang)}
+            </Button>
+          ))}
+        </div>
+      </div>
 
       {/* Refinar */}
       <div className="rounded-xl border border-border bg-card p-4">
@@ -222,7 +286,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
           }}
         />
         <div className="mt-2 flex items-center justify-between gap-2">
-          <Button size="sm" onClick={refinar} disabled={refinando || !cambio.trim()}>
+          <Button size="sm" onClick={refinar} disabled={ocupado || esDemo || !cambio.trim()} aria-busy={refinando}>
             {refinando ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />}
             {refinando ? tx(UI.generando, lang) : tx(UI.aplicarCambio, lang)}
           </Button>

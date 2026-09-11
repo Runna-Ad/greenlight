@@ -5,7 +5,8 @@ import { SORA_VIDEO_TYPES } from "@/lib/prisma/spec";
 import { compilar, type Salida } from "@/lib/prisma/compilers";
 import { validar } from "@/lib/prisma/validators";
 import { PRESETS_HIGGSFIELD } from "@/lib/prisma/compilers/higgsfield";
-import { BLOQUE_ESTABLE, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueExplicar, bloqueDescribirPersonaje, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje } from "@/lib/prisma/prompts/writer";
+import { BLOQUE_ESTABLE, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueVariante, bloqueExplicar, bloqueDescribirPersonaje, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje } from "@/lib/prisma/prompts/writer";
+import type { PrismaVariante } from "@/lib/database.types";
 
 /**
  * HÜE Prisma — el WRITER. H.Ü.E llena un PromptSpec (tool_use, esquema estricto), el
@@ -219,6 +220,16 @@ export async function escribirSpec(e: EntradaWriter): Promise<ResultadoWriter> {
 /** Aplica un cambio pedido por el diseñador sobre un spec existente (cambia SÓLO eso). */
 export async function refinarSpec(e: EntradaWriter, specActual: PromptSpec, cambio: string): Promise<ResultadoWriter> {
   const r = await llamarSpec(e, bloqueRefinar(JSON.stringify(specActual), cambio));
+  if ("error" in r) return { ok: false, error: r.error };
+  const spec = specDesde(r.input, e);
+  const salida = compilar(spec);
+  const v = validar(salida.texto, spec);
+  return { ok: true, spec, salida, valido: v.ok, errores: v.ok ? [] : v.errores, usage: r.usage, reparado: false };
+}
+
+/** Otra versión del spec, bajo demanda (segura / audaz / mínima). Una llamada, sólo si se pide. */
+export async function variarSpec(e: EntradaWriter, specActual: PromptSpec, variante: Exclude<PrismaVariante, "base">): Promise<ResultadoWriter> {
+  const r = await llamarSpec(e, bloqueVariante(JSON.stringify(specActual), variante));
   if ("error" in r) return { ok: false, error: r.error };
   const spec = specDesde(r.input, e);
   const salida = compilar(spec);

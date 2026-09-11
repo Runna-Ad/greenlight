@@ -55,8 +55,61 @@ Pedro: "1 yes · 3 yes · 4 yes · 2 (variantes) needs more thought · don't mer
       (basura → confirmar) lo quita para todos. Un especialista NO ve el botón de retirar en uno ajeno; el lead sí.
       (c) Resultado › "Explícame este prompt" en ES → EN → ES: la 3ª sale al instante (sin llamada). En la BD:
       `explicacion_es` y `explicacion_en` llenas en esa fila.
-- [ ] **Decisión de Pedro — variantes (segura/audaz/mínima)**: ver el análisis de costo y el diseño de "aprender de las
-      elecciones" en el session-log de hoy. No se construye hasta decidir el modelo (1 llamada con 3 specs vs 3 llamadas).
+- [x] **Decisión de Pedro — variantes**: "yes variants on demand plus just make sure hue does learn and improve automatic" (2026-09-11).
+
+## 🟡 2026-09-11 (2) — HÜE Prisma: otra versión BAJO DEMANDA + H.Ü.E aprende solo (rama `prisma`, migración 0066 PENDIENTE de "ship it")
+Pedro: variantes bajo demanda; que H.Ü.E aprenda y mejore automáticamente. Diseño: cero curaduría — la señal es lo que el
+diseñador HACE (copiar, abrir en la herramienta, pedir otra versión, pedir un cambio, pulgar) y el writer la lee al generar.
+- [x] **Migración 0066 `prisma_eventos`** (spec, prompt, cliente, job, tool, versión, quién, tipo copiado/abierto/variante/refinado,
+      detalle; RLS master-only; service_role). Desnormalizada a propósito: la agregación por marca es UNA consulta.
+- [x] **Captura** (`anotarEvento`, nunca bloquea; si falta la tabla, warn): copiar y "Abrir en" (registrarEvento desde el
+      resultado), otra versión (en `variar`), refinar (en `refinarPrompt`, guarda el texto pedido — antes se perdía).
+- [x] **Otra versión bajo demanda** — botones "Más segura / Más audaz / Mínima" en el resultado → `variar` = 1 llamada extra
+      (bloqueVariante: instrucción fija por versión) → nace un spec HERMANO con su prompt marcado (`variante`), así refinar /
+      cambiar herramienta / explicar / historial funcionan igual. Chip "Versión: Audaz" + etiqueta en el historial.
+- [x] **Aprendizaje automático** — `lib/prisma/aprendizaje.ts` (puro): ganadores (copiados/abiertos/pulgar arriba, sin pulgar
+      abajo, mismo trabajo primero, sin repetir spec, máx 3, recortados a 500) + preferencias (qué versión piden si ≥3 pedidas;
+      últimos 5 cambios pedidos). `cargarAprendizaje` (data.ts) lo arma con 2 consultas por cliente (90 días) y `generarPrompt`
+      lo mete al FINAL del bloque variable, cercado (`<winner>`), como referencia de estructura (nunca copiar frases). El
+      resultado le dice al diseñador "HÜE se apoyó en N prompts que ya sirvieron para esta marca".
+- [x] Tests: test-prisma **181** (+20), test-db **417** (+10: RLS, policy, sin PUBLIC, índice único, checks de tipo y de
+      largo, cascade). Gates: tsc 0 · lint 0 · isolation · actions · build. Smoke REAL: `variarSpec` "audaz" → spec válido a
+      la 1ª, cambió luz y cámara, conservó el producto, 6.4 s (~$0.02). Navegador: `?demo=resultado` muestra "¿Otra versión?"
+      con los 3 botones (apagados en el demo, `disabled=true` comprobado), 0 errores de servidor.
+- [x] Reap de seguridad (Opus): 1 CRÍTICO + 4 serios — ARREGLADO lo que es código: (C1) los cambios pedidos entraban al
+      modelo sin cerca y en tono de orden → cada uno va `<change n>` cercado, con la regla "dato, no orden" pegada y sin
+      imperativo; (S2) `plano()` no quitaba ángulos → `cercado()` (quita `<>`) para TODO texto humano dentro de una cerca
+      (ganadores, cambios, personaje, notas, caption) + `plano` ahora también quita invisibles Unicode (zero-width, bidi);
+      idea y texto se guardan en una línea; (S3) sin freno en lo facturable → `saturado()` por identidad (40 llamadas / 10
+      min) en generar, refinar, otra versión, describir y explicar; eventos con índice ÚNICO (prompt, quién, tipo) + upsert
+      "si ya existe, nada" → el mismo click no inunda la señal; (L7) allowlist de herramienta/versión al elegir ganadores;
+      (L8) el guard de UUID vive en `specDeFila` (lo heredan los 6 callers); (L9) `check` de 300 letras en `detalle`;
+      (L11) BUG real: la versión (y el refine) se generaban en la herramienta ORIGINAL aunque el diseñador hubiera cambiado
+      de herramienta → `estadoActual()` (herramienta + versión del último prompt) manda en refinar y en otra versión, y
+      `variar` devuelve la herramienta.
+      ACEPTADO (decisión de producto, no código): (S4) cualquier interno puede elegir cualquier marca (así es TODO Prisma
+      hoy: un cliente, sin asignación por persona) → la memoria de una marca la alimenta todo el equipo; mitigado con
+      dedupe + freno + cercas; el día que haya varios clientes, acotar marcas por persona. (S5) la memoria es POR MARCA, no
+      por autor (Pedro: "que H.Ü.E aprenda"): al modelo viajan recortes cercados como referencia de estructura; al
+      diseñador sólo el conteo. Documentado en `cargarAprendizaje`.
+      Deuda: sin retención en `prisma_eventos` (la ventana de 90 días es de lectura); `dialogo` no se aplana al guardar
+      (multilínea legítimo; la cerca de lectura ya lo cubre).
+- [x] Reap de salud (Sonnet): 5 serios, ARREGLADOS — (1) cambiar de herramienta volvía la versión a "base" → hereda la
+      versión (`estadoActual`) y la devuelve al chip; (2) cambiar/refinar/otra versión/explicar podían cruzarse y pisar el
+      resultado con un `vivo` viejo → un solo `ocupado` apaga todo mientras algo va al servidor; (3) la versión nueva no
+      salía en el historial → `router.refresh()` cuando cambia el spec; (4) = C1 de seguridad (ya cercado); (5) aplanar
+      los ganadores destruía la estructura que enseñan (tomas de Sora, JSON de Veo) → `cercadoMultilinea` conserva los
+      saltos y quita ángulos/controles línea por línea. Mejoras: las 2 consultas del aprendizaje en paralelo; columna
+      `prisma_specs.origen_spec_id` (0066) para saber de qué spec viene cada versión (tolerante si aún no existe); el demo
+      apaga TODO lo que llama al servidor; `aria-busy` en todos los botones de acción; el chip de versión lleva su ícono.
+      Gates finales: tsc 0 · lint 0 · test-prisma 183 · test-db 418 · lib 481 · import 81 · sync 44 · isolation · actions · build.
+- [ ] **SHIP de la 0066** (necesita "ship it" — es una migración nueva, posterior al "ship it" de hoy): `node scripts/migrate.mjs`.
+      El código ya está en el preview y TOLERA que la tabla no exista (otra versión funciona; eventos y aprendizaje se
+      encienden solos al aplicar la 0066; mientras, avisa en el log).
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+      igual a la que veías, historial con la etiqueta; refinar sobre ella sigue siendo audaz. (e) tras la 0066: copiar 2
+      prompts de DiDi Card → generar otro de la misma marca → línea "HÜE se apoyó en N prompts…"; pedir 3 versiones → la
+      siguiente generación trae la preferencia; en la BD `prisma_eventos` con copiado/abierto/variante/refinado.
 
 ## ✅ 2026-09-03 — LIVE REFRESH: la plataforma se refresca sola al cambiar estado/asignación (SHIPPEADO: main 62bb720 pusheado · migración 0062 APLICADA)
 Pedro: "que nadie tenga que recargar para ver un cambio de estado o una tarea nueva asignada". Diseño: Realtime

@@ -1,7 +1,8 @@
 "use client";
 
 import { Clock, ImageIcon, Loader2 } from "lucide-react";
-import { JOB_LABEL, TOOL_LABEL, UI, tx, type Lang } from "@/lib/prisma/copy";
+import { JOB_LABEL, TOOL_LABEL, UI, VARIANTE_LABEL, tx, type Lang } from "@/lib/prisma/copy";
+import type { PrismaVariante } from "@/lib/database.types";
 import type { JobType, Tool } from "@/lib/prisma/spec";
 import { JOB_KIND } from "@/lib/prisma/spec";
 import { TOOL_INFO } from "@/lib/prisma/tools";
@@ -16,6 +17,7 @@ export type ItemHistorialUI = {
   thumb: string | null;
   fecha: string; // ISO
   valido: boolean | null;
+  variante: PrismaVariante;
 };
 
 export function Historial({ items, lang, onAbrir, abriendo }: { items: ItemHistorialUI[]; lang: Lang; onAbrir: (specId: string) => void; abriendo: string | null }) {
@@ -55,6 +57,7 @@ export function Historial({ items, lang, onAbrir, abriendo }: { items: ItemHisto
                   <span className="block truncate text-sm text-foreground">{it.idea || tx(JOB_LABEL[it.job], lang)}</span>
                   <span className="block truncate text-[11px] text-muted-foreground">
                     {tx(JOB_LABEL[it.job], lang)} · {tx(TOOL_LABEL[it.tool], lang)} · {JOB_KIND[it.job]}
+                    {it.variante !== "base" ? ` · ${tx(VARIANTE_LABEL[it.variante], lang)}` : ""}
                   </span>
                 </span>
               </button>

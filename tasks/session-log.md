@@ -1,5 +1,40 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-11 (2) — SHIP de la 1ª tanda (0065 + push) · otra versión BAJO DEMANDA · H.Ü.E aprende solo (rama `prisma`; 0066 PENDIENTE)
+Pedro: "ship it and yes variants on demand plus just make sure hue does learn and improve automatic".
+**Shippeado (1ª tanda):** pre-check en prod (6 prompts, 1 explicación con prefijo `[es]`, 0 sin prefijo) → `npm run migrate`
+aplicó **0065** al esquema `produccion` de Greenlight (ref ybbrpqzbedaxsmotgtkh) → verificado: `explicacion_es`/`_en` existen,
+la explicación quedó en `_es`, ledger = 20260911120001 → commit **fb1107c** → `git push origin prisma` (5a5008d..fb1107c,
+preview de Vercel). main NO tocado.
+**Construido (2ª tanda, working tree):**
+- **Otra versión bajo demanda** — en el resultado: "Más segura / Más audaz / Mínima" → `variar` = UNA llamada extra sólo al
+  pedirla (`bloqueVariante`, instrucción fija por versión). La versión nace como spec HERMANO (misma idea/refs/marca) con su
+  prompt etiquetado `variante`; refinar / cambiar herramienta / explicar / historial / pulgar funcionan igual. Chip "Versión:
+  Audaz"; etiqueta en el historial. Se pide sobre la herramienta que el diseñador está VIENDO (`estadoActual`: herramienta y
+  versión del último prompt) — de paso arregló un bug viejo: refinar después de cambiar de herramienta volvía a la original.
+- **Aprendizaje automático** — migración **0066 `prisma_eventos`** (copiado / abierto en la herramienta / versión pedida /
+  cambio pedido; desnormalizada por marca; RLS master; índice único prompt+quién+tipo; check de 300 letras). Captura sin
+  bloquear (`anotarEvento`). `lib/prisma/aprendizaje.ts` (puro) destila por marca: GANADORES (copiados/abiertos/pulgar
+  arriba, sin pulgar abajo, mismo trabajo primero, sin repetir spec, máx 3 × 500 letras) + VERSIONES preferidas (≥3 pedidas) +
+  últimos 5 CAMBIOS pedidos. `generarPrompt` lo mete al final del bloque variable, cercado (`<winner>`, `<change>`) como
+  dato, no orden; el diseñador ve "HÜE se apoyó en N prompts que ya sirvieron para esta marca". Cero curaduría: mejora sola
+  con el uso. Con 6 prompts en prod hoy no hay nada que aprender aún; empieza a contar desde que se aplique la 0066.
+- Gates: tsc 0 · lint 0 · test-prisma **181** · test-db **417** · isolation · actions · build. Smoke real de `variarSpec`
+  (audaz): válido a la 1ª, cambió luz y cámara, conservó el producto, 6.4 s. Navegador: demo con los 3 botones apagados.
+- Reap seguridad (Opus): 1 crítico + 4 serios; lo de código ARREGLADO (cercas + `cercado()` sin ángulos, invisibles Unicode
+  fuera, freno por identidad 40/10 min en todo lo facturable, eventos deduplicados, UUID central, bug de herramienta). Dos
+  ACEPTADOS como decisión de producto y documentados: la memoria es por MARCA (no por autor) y cualquier interno alimenta
+  la marca (un cliente hoy). Reap de salud (Sonnet): 5 serios, todos arreglados — la versión se perdía al cambiar de
+  herramienta; acciones cruzadas pisaban el resultado; la versión no salía en el historial; aplanar los ganadores borraba
+  la estructura (ahora `cercadoMultilinea`). Detalle en todo.md § Review. Gates finales: test-prisma 183 · test-db 418.
+**Current state:** 1ª tanda LIVE en el preview. 2ª tanda: reapeada, commiteada y pusheada al preview (ver commit abajo);
+**0066 NO aplicada** (migración nueva → necesita su propio "ship it"). El código tolera la tabla y la columna ausentes.
+**Decisions made:** versiones bajo demanda (no 3 de golpe); versión = spec hermano; memoria por marca; captura fire-and-forget;
+lo humano que entra al prompt siempre cercado y sin ángulos; freno en memoria por identidad (best-effort, como el login).
+**Pick up next session:** "ship it" de la 0066 → `npm run migrate` → live-verify (d)/(e) en todo.md → mirar `prisma_eventos`
+tras una semana de uso real y, si hay decenas de eventos por marca, revisar que los ganadores que elige tengan sentido.
+**Environment changes:** ninguna dependencia nueva.
+
 ## 2026-09-11 — HÜE Prisma: presets en Admin · personajes guardados · explicación por idioma (rama `prisma`, SIN commit · SIN push · 0065 PENDIENTE de "ship it")
 Pedro: "1 yes · 2 needs more thought (¿cuánto más caro? ¿puede H.Ü.E aprender de lo que elige el diseñador?) · 3 yes · 4 yes ·
 don't merge main yet, leave it where it is". Sesión arrancó en `main` con una lección sin commitear (qué ES HÜE Prisma): quedó en

@@ -285,7 +285,7 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
       setGenerando(false);
     }
     if (!r.ok) return toast.error(r.error);
-    setVivo({ specId: r.specId, promptId: r.promptId, tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: sugerencia?.tool === tool ? sugerencia.porque : null });
+    setVivo({ specId: r.specId, promptId: r.promptId, tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: sugerencia?.tool === tool ? sugerencia.porque : null, variante: "base", aprendio: r.aprendio });
     setPaso("resultado");
     router.refresh(); // el historial (props del servidor) se re-lee
   };
@@ -303,7 +303,7 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
       setAbriendo(null);
     }
     if (!r.ok) return toast.error(r.error);
-    setVivo({ specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null });
+    setVivo({ specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null });
     setJob(r.spec.job);
     setKind(null);
     setPaso("resultado");
@@ -607,7 +607,16 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
 
           {paso === "resultado" && vivo && (
             <section key="resultado" className="p-enter rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <Resultado vivo={vivo} lang={lang} onCambio={setVivo} onNueva={reset} />
+              <Resultado
+                vivo={vivo}
+                lang={lang}
+                onCambio={(v) => {
+                  const specNuevo = v.specId !== vivo.specId; // "otra versión" crea un spec hermano
+                  setVivo(v);
+                  if (specNuevo) router.refresh(); // el historial (props del servidor) se re-lee
+                }}
+                onNueva={reset}
+              />
             </section>
           )}
         </div>

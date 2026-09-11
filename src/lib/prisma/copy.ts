@@ -3,6 +3,7 @@
  * el resto de Greenlight es español a secas; aquí los diseñadores pueden alternar.
  * Las claves son estables; sólo cambia el texto. Módulo puro.
  */
+import type { PrismaVariante } from "../database.types.ts";
 import type { JobType, JobKind, RefRole, Destino, Tool } from "./spec.ts";
 import { TOOL_INFO } from "./tools.ts";
 
@@ -130,6 +131,14 @@ export const UI = {
   varSegura: t("Segura", "Safe"),
   varAudaz: t("Audaz", "Bold"),
   varMinima: t("Mínima", "Minimal"),
+  pedirSegura: t("Más segura", "Safer"),
+  pedirAudaz: t("Más audaz", "Bolder"),
+  pedirMinima: t("Mínima", "Minimal"),
+  otraVersion: t("¿Otra versión?", "Another version?"),
+  otraVersionAyuda: t("Una llamada más a HÜE, sólo si la pides. Lo que elijas le enseña qué prefiere esta marca.", "One more call to HÜE, only when you ask. What you pick teaches it what this brand prefers."),
+  version: t("Versión", "Version"),
+  aprendioDe: t("HÜE se apoyó en {n} prompts que ya sirvieron para esta marca.", "HÜE drew on {n} prompts that already worked for this brand."),
+  aprendioPref: t("HÜE tomó en cuenta lo que los diseñadores de esta marca suelen pedir.", "HÜE took into account what this brand's designers usually ask for."),
   herramienta: t("Herramienta", "Tool"),
   porque: t("¿Por qué esta?", "Why this one?"),
   cambiarHerramienta: t("Usar otra herramienta", "Use another tool"),
@@ -182,6 +191,11 @@ export const UI = {
 } satisfies Record<string, Par>;
 
 export type UiKey = keyof typeof UI;
+
+/** Etiqueta de cada versión (chip del resultado, historial). */
+export const VARIANTE_LABEL: Record<PrismaVariante, Par> = { base: UI.varBase, segura: UI.varSegura, audaz: UI.varAudaz, minima: UI.varMinima };
+/** Lo que dice el botón para PEDIR esa versión. */
+export const PEDIR_VERSION_LABEL: Record<Exclude<PrismaVariante, "base">, Par> = { segura: UI.pedirSegura, audaz: UI.pedirAudaz, minima: UI.pedirMinima };
 
 /** Lo que dice el botón mientras H.Ü.E trabaja (rota cada ~1.8 s): progreso legible,
  *  no un spinner mudo. Son etapas reales del writer, en orden aproximado. */

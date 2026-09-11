@@ -11,6 +11,7 @@ import type { ItemHistorialUI } from "@/components/prisma/historial";
 import { specVacio, type JobType, type Tool } from "@/lib/prisma/spec";
 import { compilar } from "@/lib/prisma/compilers";
 import type { PromptVivo } from "@/components/prisma/resultado";
+import type { PrismaVariante } from "@/lib/database.types";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,7 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
       thumb: it.thumb,
       fecha: it.spec.created_at,
       valido: it.prompt?.valido ?? null,
+      variante: (it.prompt?.variante ?? "base") as PrismaVariante,
     }));
   }
 

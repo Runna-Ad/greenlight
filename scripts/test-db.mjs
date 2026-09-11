@@ -2461,5 +2461,27 @@ console.log("\n▶ 0065 — prisma_prompts: una explicación por idioma");
   eq("backfill: sin prefijo (era español) → explicacion_es entera", await scalar(`select 'hola' where 'hola' is not null and 'hola' not like E'[es]\\n%' and 'hola' not like E'[en]\\n%'`), "hola");
 }
 
+// ── 0066: HÜE Prisma — eventos de uso (con lo que aprende H.Ü.E) ──
+console.log("\n▶ 0066 — prisma_eventos");
+{
+  eq("la tabla existe con RLS encendido", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_eventos' and c.relrowsecurity`)), 1);
+  eq("policy master-only presente", Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = 'prisma_eventos'`)), 1);
+  ok("service_role puede insertar", (await q(`select has_table_privilege('service_role', 'produccion.prisma_eventos', 'insert') as ok`))[0].ok);
+  // Como el barrido I6 de rutinas: un ACL con entrada "=…" sería un grant a PUBLIC.
+  eq("PUBLIC no tiene ningún privilegio", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_eventos' and c.relacl is not null and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+  eq("prisma_specs.origen_spec_id existe (la versión sabe de qué spec viene)", Number(await scalar(`select count(*) from information_schema.columns where table_schema = 'produccion' and table_name = 'prisma_specs' and column_name = 'origen_spec_id'`)), 1);
+  eq("índice único (prompt, quién, tipo): el mismo click no suma", Number(await scalar(`select count(*) from pg_indexes where schemaname = 'produccion' and tablename = 'prisma_eventos' and indexname = 'prisma_eventos_unico_idx' and indexdef like 'CREATE UNIQUE INDEX%'`)), 1);
+  // Con un spec real, los checks se prueban de verdad (no por el FK).
+  const specEv = await scalar(`insert into produccion.prisma_specs (job, tool, spec) values ('foto_producto', 'nanobanana', '{}'::jsonb) returning id`);
+  const tipoMalo = await db.query(`insert into produccion.prisma_eventos (spec_id, job, tool, tipo) values ($1, 'x', 'y', 'inventado')`, [specEv]).then(() => false).catch(() => true);
+  ok("un tipo de evento inventado se rechaza (check)", tipoMalo);
+  const detalleLargo = await db.query(`insert into produccion.prisma_eventos (spec_id, job, tool, tipo, detalle) values ($1, 'x', 'y', 'refinado', $2)`, [specEv, "z".repeat(301)]).then(() => false).catch(() => true);
+  ok("un detalle de más de 300 letras se rechaza (check)", detalleLargo);
+  await db.query(`insert into produccion.prisma_eventos (spec_id, job, tool, tipo, detalle) values ($1, 'x', 'y', 'refinado', 'más luz')`, [specEv]);
+  eq("un evento bien formado entra", Number(await scalar(`select count(*) from produccion.prisma_eventos where spec_id = $1`, [specEv])), 1);
+  await db.query(`delete from produccion.prisma_specs where id = $1`, [specEv]);
+  eq("borrar el spec se lleva sus eventos (cascade)", Number(await scalar(`select count(*) from produccion.prisma_eventos where spec_id = $1`, [specEv])), 0);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);
