@@ -5,7 +5,6 @@ import { compilarNanoBanana } from "./nanobanana.ts";
 import { compilarChatGPT } from "./chatgpt.ts";
 import { compilarVeo } from "./veo.ts";
 import { compilarKling } from "./kling.ts";
-import { compilarSora } from "./sora.ts";
 import { compilarHiggsfield } from "./higgsfield.ts";
 
 export type { Salida } from "./salida.ts";
@@ -15,7 +14,6 @@ const COMPILERS: Record<Tool, (spec: PromptSpec) => Salida> = {
   chatgpt: compilarChatGPT,
   veo: compilarVeo,
   kling: compilarKling,
-  sora: compilarSora,
   higgsfield: compilarHiggsfield,
 };
 

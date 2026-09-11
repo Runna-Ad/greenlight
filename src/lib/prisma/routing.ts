@@ -41,8 +41,13 @@ export function elegirHerramienta(p: PistasRuta): Eleccion {
     return { tool: "kling", porque: t("Kling toma la toma inicial y la final y hace la transición sin cortes.", "Kling takes the start and end shots and makes the transition with no cuts.") };
   }
 
+  // Escena por bloques de tiempo (nació con Sora 2, retirada): Veo sigue los beats y pone
+  // voz/sonido; para un vertical corto sin voz, Kling es más rápido y barato.
   if (p.job === "escena_sora") {
-    return { tool: "sora", porque: t("Sora 2 es la que mejor sigue una escena por bloques de tiempo y con sonido.", "Sora 2 is the best at following a scene in timed blocks, with sound.") };
+    if (!p.tieneDialogo && (p.destino === "ig_story" || p.destino === "tiktok")) {
+      return { tool: "kling", porque: t("Escena vertical corta y sin voz: Kling la hace rápido y barato.", "A short vertical scene with no voice: Kling does it fast and cheap.") };
+    }
+    return { tool: "veo", porque: t("Veo 3.1 sigue los bloques de tiempo y genera la voz y el sonido en el mismo video.", "Veo 3.1 follows the timed beats and generates voice and sound in the same video.") };
   }
 
   // Video con diálogo: Veo genera voz y sonido nativos.

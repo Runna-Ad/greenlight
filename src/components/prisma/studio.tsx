@@ -31,7 +31,7 @@ import {
   ASPECT_POR_DESTINO,
   JOBS_POR_KIND,
   REFS_POR_JOB,
-  SORA_VIDEO_TYPES,
+  VIDEO_TYPES,
   esVideo,
   type Destino,
   type JobKind,
@@ -271,7 +271,7 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
       dialogo: dialogo.trim() ? { texto: dialogo, idioma: idiomaDialogo, voz: voz.trim() || null } : null,
       marcaId,
       personajeId,
-      videoType: tool === "sora" ? videoType : null,
+      videoType: video ? videoType : null,
       texto: texto.trim() || null,
     };
     // try/finally: si la llamada REVIENTA (red), el botón no se queda en "Generando…".
@@ -303,7 +303,7 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
       setAbriendo(null);
     }
     if (!r.ok) return toast.error(r.error);
-    setVivo({ specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null });
+    setVivo({ specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: r.nota, variante: r.variante, aprendio: null });
     setJob(r.spec.job);
     setKind(null);
     setPaso("resultado");
@@ -571,10 +571,10 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
                           <ChipSelect options={duraciones.map((d) => ({ value: String(d), label: `${d} s` }))} selected={[String(duracionEfectiva)]} onChange={(up) => setDuracion(Number(up([String(duracionEfectiva)])[0]) || null)} ariaLabel={tx(UI.duracion, lang)} allowCustom={false} />
                         </div>
                       )}
-                      {tool === "sora" && (
+                      {video && (
                         <div className="mt-3">
                           <p className="mb-1.5 text-xs text-muted-foreground">{tx(UI.tipoVideo, lang)}</p>
-                          <ChipSelect options={SORA_VIDEO_TYPES.map((v) => ({ value: v }))} selected={videoType ? [videoType] : []} onChange={(up) => setVideoType(up(videoType ? [videoType] : [])[0] ?? null)} ariaLabel={tx(UI.tipoVideo, lang)} allowCustom={false} />
+                          <ChipSelect options={VIDEO_TYPES.map((v) => ({ value: v }))} selected={videoType ? [videoType] : []} onChange={(up) => setVideoType(up(videoType ? [videoType] : [])[0] ?? null)} ariaLabel={tx(UI.tipoVideo, lang)} allowCustom={false} />
                         </div>
                       )}
                       <p className="mt-3 text-xs text-muted-foreground">

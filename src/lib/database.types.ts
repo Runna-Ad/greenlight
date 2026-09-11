@@ -310,7 +310,10 @@ export type PrismaVariante = "base" | "segura" | "audaz" | "minima";
 export const PRISMA_VARIANTES_PEDIBLES = ["segura", "audaz", "minima"] as const;
 
 /** Lo que el diseñador HIZO con un prompt (0066): la señal con la que H.Ü.E aprende. */
-export type PrismaEventoTipo = "copiado" | "abierto" | "variante" | "refinado";
+export type PrismaEventoTipo =
+  | "copiado" | "abierto" | "variante" | "refinado"
+  | "respondido" | "aviso_aplicado" | "resultado_subido" | "resultado_aceptado" | "correccion_generada"
+  | "generado" | "adjuntado" | "regenerado"; // los 3 últimos: reservados para v2 (0067)
 export type PrismaEventoRow = {
   id: string;
   spec_id: string;
@@ -348,6 +351,8 @@ export type PrismaSpecRow = {
   created_at: string;
   /** 0066: si es una versión pedida (segura/audaz/mínima), el spec del que viene. */
   origen_spec_id?: string | null;
+  /** 0067: respuestas de la entrevista (F3). */
+  respuestas?: unknown[];
 };
 
 export type PrismaPromptRow = {
@@ -362,8 +367,41 @@ export type PrismaPromptRow = {
   errores: string[];
   explicacion_es: string | null; // 0065: una columna por idioma
   explicacion_en: string | null;
+  /** 0067: avisos que se le enseñaron al diseñador (F2) y el modelo/tier sugerido (F1).
+   *  Opcionales en el tipo: el preview puede correr antes de la migración. */
+  avisos?: unknown[];
+  modelo_sug?: string | null;
   model: string | null;
   usage: Record<string, number> | null;
+  created_at: string;
+};
+
+/** Una fila de prisma_reglas (0067): el conocimiento vivo por herramienta. */
+export type PrismaReglaRow = {
+  id: string;
+  codigo: string;
+  clase: "regla" | "nota";
+  tool: string | null;
+  kind: "imagen" | "video" | "edicion" | null;
+  nivel: "bloquea" | "advierte" | "sugiere";
+  campo: string | null;
+  patron: string | null;
+  umbral: number | null;
+  que_es: string | null;
+  que_en: string | null;
+  porque_es: string | null;
+  porque_en: string | null;
+  arreglo_es: string | null;
+  arreglo_en: string | null;
+  accion: Record<string, unknown> | null;
+  nota_en: string | null;
+  fuente_url: string | null;
+  fuente_fecha: string | null;
+  fuente_tipo: "oficial" | "comunidad";
+  activa: boolean;
+  orden: number;
+  updated_by: string | null;
+  updated_at: string;
   created_at: string;
 };
 

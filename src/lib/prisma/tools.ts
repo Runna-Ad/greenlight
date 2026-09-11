@@ -3,7 +3,7 @@
  * qué límites tiene, dónde se abre. Es la "verdad" que usan compilers, validators y
  * la pantalla de resultado. Módulo puro.
  */
-import type { Tool, JobType, JobKind } from "./spec.ts";
+import { TOOLS, TOOL_SUCESORA, type Tool, type JobType, type JobKind, type Aspect } from "./spec.ts";
 
 export type Idioma = "es" | "en";
 
@@ -87,19 +87,6 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
     duraciones: [5, 10],
     color: "#ff5a6e",
   },
-  sora: {
-    id: "sora",
-    nombre: "Sora 2",
-    idioma: "en",
-    formato: "texto",
-    maxPalabras: null,
-    maxCaracteres: null,
-    url: "https://sora.chatgpt.com/",
-    imagenes: true,
-    video: true,
-    duraciones: [10, 15],
-    color: "#e24cb4",
-  },
   higgsfield: {
     id: "higgsfield",
     nombre: "Higgsfield",
@@ -142,10 +129,36 @@ export const TOOLS_POR_JOB: Record<JobType, Tool[]> = {
   cambio_epoca: ["nanobanana", "chatgpt"],
   figura_coleccionable: ["nanobanana", "chatgpt"],
   animar_foto: ["veo", "kling", "higgsfield"],
-  texto_a_video: ["veo", "kling", "sora"],
+  texto_a_video: ["veo", "kling"],
   transicion: ["kling", "veo"],
-  escena_sora: ["sora"],
+  // Nació con Sora 2 (retirada el 24-sep-2026): la escena por bloques de tiempo la hacen Veo y Kling.
+  escena_sora: ["veo", "kling"],
 };
+
+/** La herramienta VIGENTE para un job a partir de una guardada (que puede estar retirada):
+ *  la misma si sigue existiendo y sirve para el job; si no, su sucesora si sirve; si no,
+ *  null (el que llama decide el fallback). Un solo sitio para "sora → veo": specDeFila y
+ *  estadoActual lo comparten, así no se separan cuando retiremos otra. */
+export function herramientaVigente(tool: string, job: JobType): Tool | null {
+  const candidatas = [tool, TOOL_SUCESORA[tool]].filter((t): t is Tool => !!t && (TOOLS as string[]).includes(t));
+  return candidatas.find((t) => TOOLS_POR_JOB[job].includes(t)) ?? null;
+}
+
+/** Formatos que cada herramienta acepta de verdad (verificado 2026-09-11). El diagnóstico
+ *  avisa cuando el aspect elegido no está aquí. */
+export const ASPECTS_POR_TOOL: Record<Tool, Aspect[]> = {
+  nanobanana: ["1:1", "16:9", "9:16", "4:5", "4:3", "3:4"],
+  chatgpt: ["1:1", "16:9", "9:16", "4:5", "4:3", "3:4"],
+  veo: ["16:9", "9:16"],
+  kling: ["16:9", "9:16", "1:1"],
+  higgsfield: ["16:9", "9:16", "1:1", "4:5"],
+};
+
+/** Cuántas imágenes de referencia acepta cada herramienta (Veo y Kling: 3). */
+export const REFS_MAX: Record<Tool, number> = { nanobanana: 14, chatgpt: 16, veo: 3, kling: 3, higgsfield: 1 };
+
+/** Quién genera voz/sonido nativo (para "pediste diálogo en una herramienta sin voz"). */
+export const TOOL_AUDIO: Record<Tool, boolean> = { nanobanana: false, chatgpt: false, veo: true, kling: true, higgsfield: false };
 
 /** La duración que la herramienta acepta más cercana a la pedida (o su primera opción).
  *  Compiler y validator la usan igual: una sola regla, sin "=== 15 ? 15 : 10" repetido. */

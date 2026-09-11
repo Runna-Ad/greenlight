@@ -1,19 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { BarChart3, GraduationCap, type LucideIcon } from "lucide-react";
+import { BarChart3, GraduationCap, Sparkles, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HueIntelligence } from "./hue-intelligence";
 import { HueTraining } from "./hue-training";
+import { PrismaReglas } from "./prisma-reglas";
 
 /**
- * El H.Ü.E HUB (master-only). Dos áreas: Inteligencia (analítica de "qué está
+ * El H.Ü.E HUB (master-only). Tres áreas: Inteligencia (analítica de "qué está
  * funcionando") + Entrenamiento (el Cerebro, la Biblioteca de Ganadores, el KB y el
- * loop de auto-aprendizaje). Se auto-carga vía server actions gateadas por canHue —
+ * loop de auto-aprendizaje) + Prisma (el conocimiento vivo por herramienta: notas y reglas). Se auto-carga vía server actions gateadas por canHue —
  * el admin-shell sólo monta esta pestaña si el usuario es master.
  */
 export function HueHubTab() {
-  const [sub, setSub] = useState<"intel" | "entrenar">("intel");
+  const [sub, setSub] = useState<"intel" | "entrenar" | "prisma">("intel");
   return (
     <div className="space-y-4">
       <div>
@@ -26,9 +27,10 @@ export function HueHubTab() {
       <div className="flex gap-1 border-b border-border">
         <SubTab active={sub === "intel"} onClick={() => setSub("intel")} icon={BarChart3} label="Inteligencia" />
         <SubTab active={sub === "entrenar"} onClick={() => setSub("entrenar")} icon={GraduationCap} label="Entrenamiento" />
+        <SubTab active={sub === "prisma"} onClick={() => setSub("prisma")} icon={Sparkles} label="Prisma" />
       </div>
 
-      {sub === "intel" ? <HueIntelligence /> : <HueTraining />}
+      {sub === "intel" ? <HueIntelligence /> : sub === "entrenar" ? <HueTraining /> : <PrismaReglas />}
     </div>
   );
 }

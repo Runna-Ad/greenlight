@@ -5,6 +5,8 @@ import type { MarcaPreset } from "@/lib/prisma/spec";
 import { presetDeMarca } from "@/lib/prisma/preset";
 import type { JobType } from "@/lib/prisma/spec";
 import { resumirAprendizaje, type Aprendizaje, type EventoRow, type PromptCandidato, type Voto } from "@/lib/prisma/aprendizaje";
+import { notasDe, type NotaTool } from "@/lib/prisma/reglas";
+import type { PrismaReglaRow } from "@/lib/database.types";
 
 /**
  * HÜE Prisma — lecturas de servidor (marcas con preset, personajes, historial, URLs
@@ -145,6 +147,45 @@ export async function cargarAprendizaje(db: Db, clientId: string, job: JobType):
   const prompts: PromptCandidato[] = filas.map((f) => ({ id: f.id, spec_id: f.spec_id, job: f.prisma_specs.job, tool: f.tool, variante: f.variante, salida: f.salida, valido: f.valido }));
   const votos: Voto[] = filas.flatMap((f) => f.prisma_ratings ?? []);
   return resumirAprendizaje(job, ev.data ?? [], prompts, votos);
+}
+
+export type ReglasCargadas = { filas: PrismaReglaRow[]; notas: NotaTool[]; clave: string };
+
+/** FNV-1a de 32 bits en base 36: suficiente para distinguir versiones del conocimiento. */
+function huella(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
+}
+const REGLAS_TTL_MS = 60_000;
+let reglasCache: { en: number; valor: ReglasCargadas } | null = null;
+
+/**
+ * El conocimiento vivo por herramienta (prisma_reglas, 0067): las filas activas, las notas ya
+ * listas para TOOL NOTES y una `clave` (= max(updated_at)) que identifica esta versión del
+ * conocimiento. Caché de 60 s por instancia: una generación no debe pagar la consulta.
+ * NUNCA lanza: si la tabla aún no existe (preview antes de la 0067) o algo falla, se sigue
+ * sin notas y queda constancia en el log — mismo patrón que cargarMarcas con prisma_presets.
+ */
+export async function cargarReglas(db: Db): Promise<ReglasCargadas> {
+  const ahora = Date.now();
+  if (reglasCache && ahora - reglasCache.en < REGLAS_TTL_MS) return reglasCache.valor;
+  const { data, error } = await db.from("prisma_reglas").select("*").eq("activa", true).order("clase").order("orden").limit(120).returns<PrismaReglaRow[]>();
+  if (error) {
+    console.warn(`[prisma] reglas no disponibles (¿falta la 0067?): ${error.message}`);
+    return { filas: [], notas: [], clave: "0" };
+  }
+  const filas = data ?? [];
+  const notas = notasDe(filas);
+  // Huella del CONTENIDO que entra al prompt (no max(updated_at): apagar una nota vieja no
+  // movería ese máximo y el caché del writer seguiría sirviendo la nota apagada).
+  const clave = notas.length ? `${notas.length}.${huella(notas.map((n) => `${n.tool ?? ""}|${n.fecha ?? ""}|${n.texto}`).join("\n"))}` : "0";
+  const valor = { filas, notas, clave };
+  reglasCache = { en: ahora, valor };
+  return valor;
 }
 
 /** URLs firmadas en lote (bucket privado), 1 h. */

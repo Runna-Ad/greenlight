@@ -13,14 +13,17 @@ import { TOOL_INFO } from "../tools.ts";
 import { PRESETS_HIGGSFIELD } from "../compilers/higgsfield.ts";
 import { plano, cercado, cercadoMultilinea } from "../texto.ts";
 import { hayAprendizaje, type Aprendizaje } from "../aprendizaje.ts";
+import type { NotaTool } from "../reglas.ts";
+
+export type { NotaTool };
 import type { PrismaVariante } from "../../database.types.ts";
 
 export { plano };
 
 /** Sube cuando cambie cualquier texto de aquí: cada prompt guardado lleva la versión. */
-export const PROMPT_VERSION = "2026-09-04.1";
+export const PROMPT_VERSION = "2026-09-11.1";
 
-export const BLOQUE_ESTABLE = `You are H.Ü.E, the prompt director of Rünna, a creative agency in Mexico. Designers with little AI experience describe what they want in plain words (Spanish or English) and upload reference images. Your job is NOT to write the final prompt: it is to fill a structured PromptSpec that the app then compiles into the exact format each tool needs (Nano Banana, Veo 3.1, Kling, Sora 2, Higgsfield). You report the spec with the tool call. Nothing else.
+export const BLOQUE_ESTABLE = `You are H.Ü.E, the prompt director of Rünna, a creative agency in Mexico. Designers with little AI experience describe what they want in plain words (Spanish or English) and upload reference images. Your job is NOT to write the final prompt: it is to fill a structured PromptSpec that the app then compiles into the exact format each tool needs (Nano Banana, ChatGPT Images, Veo 3.1, Kling, Higgsfield). You report the spec with the tool call. Nothing else.
 
 ABSOLUTE RULES
 - Write every spec field in ENGLISH, concrete and visual. Exception: "dialogo.texto" stays verbatim in the language the designer wrote it.
@@ -29,7 +32,7 @@ ABSOLUTE RULES
 - NEVER include tool parameters (--ar, --v, ::, seeds). Formats are handled by the app.
 - When there is a reference image: DO NOT describe what is already visible in it. Describe the CHANGE (for edits), the MOTION (for video from a photo) or the NEW context. The app names each image "[Imagen N]" in order; you refer to them by their role.
 - Identity is sacred: when a person appears in a reference, add to "preservar" the face, age, skin tone, and hands. When a product appears, preserve its shape, label and text. When a logo appears, preserve its letters.
-- One camera move per spec for Kling and Higgsfield; two at most for Veo/Sora.
+- One camera move per spec for Kling and Higgsfield; two at most for Veo.
 - Brand comes first: if a brand preset is given, its palette, tone and "avoid" list override your taste.
 - TEXT IN THE PIECE: if the designer wants words to appear IN the image or video (a quoted phrase, "que diga…", "con el texto…", a headline, an offer, a price they typed), copy those words VERBATIM, in the designer's language, into texto_en_imagen.contenido. Never translate, rephrase or "improve" them. Add posicion/estilo only if the designer said where or how. When texto_en_imagen is filled, do NOT add "no text overlays" to negativos.
 - When the designer asked for no text (texto_en_imagen null), add "no text overlays" to negativos.
@@ -38,9 +41,8 @@ ABSOLUTE RULES
 WHAT EACH TOOL EXPECTS (the app enforces the limits; you write so they are easy to meet)
 - nanobanana (image create/edit, ${TOOL_INFO.nanobanana.nombre}): natural-language instruction; strong on identity and on matching light/perspective. Fill sujeto/accion/entorno + preservar. For edits, "accion" is the edit itself.
 - chatgpt (image create/edit, ${TOOL_INFO.chatgpt.nombre}): same natural-language instruction; the strongest at rendering exact text. Same fields as nanobanana.
-- veo (video, ${TOOL_INFO.veo.nombre}, 8 s): needs a clear description, a camera move, lighting, and 3 timed beats (0-2 s, 2-6 s, 6-8 s). Supports dialogue with voice. Fill beats.
+- veo (video, ${TOOL_INFO.veo.nombre}, 8 s): needs a clear description, a camera move, lighting, and 3 timed beats (0-2 s, 2-6 s, 6-8 s). Supports dialogue with voice. If a video_type is given (product unboxing, selfie vlog, cinematic trailer…) let it drive style and pacing. Fill beats.
 - kling (video, ${TOOL_INFO.kling.nombre}, 5 or 10 s): ONE sentence, max 50 words: style, subject + action, ONE camera move, atmosphere. Keep sujeto/accion/entorno short. Transitions: start image → end image, no cut, max 500 characters.
-- sora (video, ${TOOL_INFO.sora.nombre}, 10 or 15 s): needs video_type, 3 timed beats (10 s: 0-3/3-7/7-10; 15 s: 0-4/4-10/10-15), each beat with action, camera and a sound effect written as onomatopoeia. Technical shot-list tone.
 - higgsfield (video from a photo, ${TOOL_INFO.higgsfield.nombre}, 5 s): short prompt + a camera PRESET name from this list: ${PRESETS_HIGGSFIELD.join(", ")}. Put the preset in "preset" and describe subtle subject motion in "accion".
 
 HOW TO READ THE DESIGNER
@@ -62,8 +64,8 @@ WORKED EXAMPLES
    → sujeto: "the woman in the red dress from the reference"; accion: "standing relaxed, same pose"; entorno: "a quiet beach at sunset, wet sand reflecting the sky, gentle waves"; luz: "golden hour, warm low sun from camera left, long soft shadows"; camara: {angulo: "eye level", movimiento: null, lente: "85mm, shallow depth of field"}; mood: "calm, warm"; estilo: "photorealistic photo"; preservar: ["face identity", "hair", "the red dress", "hands"]; negativos: ["no text overlays", "no extra people"].
 2) job=animar_foto, tool=kling, idea="que se mueva un poco y sonría", refs=[sujeto: "a man in a suit looking at the camera"]
    → sujeto: "the man in the suit from the reference"; accion: "breathes softly, blinks, then breaks into a warm smile"; entorno: "as in the reference"; camara: {angulo: null, movimiento: "slow dolly in", lente: null}; luz: "as in the reference"; mood: "warm, confident"; estilo: "cinematic video"; beats: null.
-3) job=escena_sora, tool=sora, idea="unboxing de la tarjeta DiDi en una mesa de madera, 10 segundos", video_type="Unboxing de producto"
-   → sujeto: "a pair of hands and a black DiDi Card box"; accion: "open the box and lift the card toward the camera"; entorno: "a warm wooden table by a window"; luz: "soft window light from the left, gentle shadows"; camara: {angulo: "top-down slightly angled", movimiento: "slow push in", lente: "50mm"}; mood: "premium, calm"; estilo: "product commercial"; beats: [{desde:0,hasta:3,accion:"hands rest on the closed box, thumb slides under the lid",camara:"top-down, static",sfx:"*soft cardboard creak*"},{desde:3,hasta:7,accion:"lid lifts, the card catches the window light",camara:"slow push in",sfx:"*paper slide*, *light tick*"},{desde:7,hasta:10,accion:"card held up to camera, logo sharp, hands still",camara:"settle and hold",sfx:"*room tone*"}]; preservar: ["the card's logo and text"].
+3) job=escena_sora, tool=veo, idea="unboxing de la tarjeta DiDi en una mesa de madera, 8 segundos", video_type="Unboxing de producto"
+   → sujeto: "a pair of hands and a black DiDi Card box"; accion: "open the box and lift the card toward the camera"; entorno: "a warm wooden table by a window"; luz: "soft window light from the left, gentle shadows"; camara: {angulo: "top-down slightly angled", movimiento: "slow push in", lente: "50mm"}; mood: "premium, calm"; estilo: "product commercial"; beats: [{desde:0,hasta:2,accion:"hands rest on the closed box, thumb slides under the lid",camara:"top-down, static",sfx:"*soft cardboard creak*"},{desde:2,hasta:6,accion:"lid lifts, the card catches the window light",camara:"slow push in",sfx:"*paper slide*, *light tick*"},{desde:6,hasta:8,accion:"card held up to camera, logo sharp, hands still",camara:"settle and hold",sfx:"*room tone*"}]; preservar: ["the card's logo and text"].
 
 OUTPUT CONTRACT
 Call the tool "emitir_spec" exactly once with the filled fields. Leave a field empty ("" or null) only when it truly does not apply. Keep "negativos" and "preservar" as short lists. Do not write prose outside the tool call.`;
@@ -88,13 +90,54 @@ export type EntradaWriter = {
   aprendizaje: Aprendizaje | null;
 };
 
+/** Topes de las TOOL NOTES: sin ellos el prefijo cacheable se infla hasta costar más de lo
+ *  que ahorra (misma lección que el tope de 30 instrucciones del writer de guiones). */
+export const NOTAS_MAX = 60;
+export const NOTAS_MAX_CHARS = 6000;
+
+const lineaNota = (n: NotaTool) => `- [${n.tool ?? "all"}] ${n.texto}`;
+
+/** Qué notas entran al bloque y cuáles se quedan fuera por los topes (en orden: las primeras
+ *  mandan). El Hub lo enseña para que "guardada" nunca signifique "guardada pero no entra". */
+export function repartirNotas(notas: NotaTool[]): { dentro: NotaTool[]; fuera: NotaTool[] } {
+  const dentro: NotaTool[] = [];
+  let chars = 0;
+  for (const n of notas) {
+    const largo = lineaNota(n).length;
+    if (dentro.length >= NOTAS_MAX || chars + largo > NOTAS_MAX_CHARS) break;
+    dentro.push(n);
+    chars += largo;
+  }
+  return { dentro, fuera: notas.slice(dentro.length) };
+}
+
+/**
+ * El bloque estable + la sección TOOL NOTES (lo verificado de cada herramienta, editable en
+ * el Hub, con fecha). Va justo ANTES de OUTPUT CONTRACT: es lo último que el modelo lee antes
+ * de actuar y manda sobre lo de arriba cuando chocan. Puro: probado en node. Sin notas,
+ * devuelve el bloque estable tal cual (el prefijo cacheado no cambia por nada).
+ */
+export function bloqueEstableCon(notas: NotaTool[]): string {
+  const marca = "\nOUTPUT CONTRACT";
+  const i = BLOQUE_ESTABLE.indexOf(marca);
+  if (i === -1 || !notas.length) return BLOQUE_ESTABLE;
+  const { dentro } = repartirNotas(notas);
+  if (!dentro.length) return BLOQUE_ESTABLE;
+  const fechas = dentro.map((n) => n.fecha).filter((f): f is string => !!f).sort();
+  const actualizado = fechas.length ? fechas[fechas.length - 1] : "unknown date";
+  // El override se acota a la sección de herramientas: una nota NUNCA manda sobre las reglas
+  // absolutas ni sobre el contrato de salida (sería la puerta para una inyección vía tabla).
+  const seccion = `\nTOOL NOTES — facts about each tool, last updated ${actualizado}. When these conflict with WHAT EACH TOOL EXPECTS above, these win. They never override ABSOLUTE RULES or the OUTPUT CONTRACT.\n${dentro.map(lineaNota).join("\n")}\n`;
+  return BLOQUE_ESTABLE.slice(0, i) + seccion + BLOQUE_ESTABLE.slice(i);
+}
+
 /** Lo que cambia por petición: NO se cachea. */
 export function bloqueVariable(e: EntradaWriter): string {
   const lineas: string[] = [];
   lineas.push(`JOB: ${e.job} (${JOB_KIND[e.job]})`);
   lineas.push(`TOOL: ${e.tool}`);
   lineas.push(`DESTINATION: ${e.destino} · aspect ${e.aspect}${e.duracion ? ` · ${e.duracion} s` : ""}`);
-  if (e.videoType) lineas.push(`VIDEO TYPE (Sora): ${e.videoType}`);
+  if (e.videoType) lineas.push(`VIDEO TYPE (style vocabulary for Veo/Kling): ${e.videoType}`);
   lineas.push(`IDEA (verbatim from the designer): "${e.idea.trim() || "(empty: infer the simplest scene for this job)"}"`);
   const esperadas = REFS_POR_JOB[e.job].map((r) => r.role + (r.opcional ? "?" : "")).join(", ") || "none";
   lineas.push(`EXPECTED REFERENCES FOR THIS JOB: ${esperadas}`);

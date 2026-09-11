@@ -6,6 +6,7 @@
 import { comas, contarPalabras, sinPronombre, textoDe, type PromptSpec } from "../spec.ts";
 import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO } from "../tools.ts";
 import type { Salida } from "./salida.ts";
+import { tipoEn } from "./video-tipos.ts";
 
 const MAX = TOOL_INFO.kling.maxPalabras ?? 50;
 
@@ -18,7 +19,8 @@ function transicion(spec: PromptSpec): string {
 export function compilarKling(spec: PromptSpec): Salida {
   if (spec.job === "transicion") return { texto: transicion(spec), formato: "texto" };
 
-  const estilo = spec.estilo || "cinematic video";
+  // El tipo de video (si lo hay) abre la capa de estilo: corto, porque Kling cuenta palabras.
+  const estilo = comas(tipoEn(spec.video_type), spec.estilo || "cinematic video");
   const sujeto =
     spec.job === "animar_foto"
       ? `${spec.sujeto || "the subject from the reference image"} ${spec.accion ? sinPronombre(spec.accion) : "with subtle natural movement"}`

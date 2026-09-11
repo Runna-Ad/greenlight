@@ -1,11 +1,11 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { specVacio, type PromptSpec, type Beat, type Camara, type Dialogo, type SoraVideoType, type TextoEnImagen, type Tool } from "@/lib/prisma/spec";
-import { SORA_VIDEO_TYPES } from "@/lib/prisma/spec";
+import { specVacio, type PromptSpec, type Beat, type Camara, type Dialogo, type VideoType, type TextoEnImagen, type Tool } from "@/lib/prisma/spec";
+import { VIDEO_TYPES } from "@/lib/prisma/spec";
 import { compilar, type Salida } from "@/lib/prisma/compilers";
 import { validar } from "@/lib/prisma/validators";
 import { PRESETS_HIGGSFIELD } from "@/lib/prisma/compilers/higgsfield";
-import { BLOQUE_ESTABLE, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueVariante, bloqueExplicar, bloqueDescribirPersonaje, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje } from "@/lib/prisma/prompts/writer";
+import { BLOQUE_ESTABLE, bloqueEstableCon, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueVariante, bloqueExplicar, bloqueDescribirPersonaje, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje, type NotaTool } from "@/lib/prisma/prompts/writer";
 import type { PrismaVariante } from "@/lib/database.types";
 
 /**
@@ -72,7 +72,7 @@ const SPEC_SCHEMA = {
     negativos: { type: "array", items: { type: "string" } },
     preservar: { type: "array", items: { type: "string" } },
     beats: { type: ["array", "null"], items: BEAT_SCHEMA },
-    video_type: { type: ["string", "null"], enum: [...SORA_VIDEO_TYPES, null] },
+    video_type: { type: ["string", "null"], enum: [...VIDEO_TYPES, null] },
     preset: { type: ["string", "null"], enum: [...PRESETS_HIGGSFIELD, null] },
     dialogo_voz: { type: ["string", "null"], description: "Voice description for the dialogue, if any." },
     texto_en_imagen: {
@@ -141,7 +141,7 @@ function specDesde(input: Record<string, unknown>, e: EntradaWriter): PromptSpec
     dialogo,
     marca: e.marca,
     beats: beatsDe(input.beats),
-    video_type: (SORA_VIDEO_TYPES as string[]).includes(vt ?? "") ? (vt as SoraVideoType) : e.videoType && (SORA_VIDEO_TYPES as string[]).includes(e.videoType) ? (e.videoType as SoraVideoType) : null,
+    video_type: (VIDEO_TYPES as string[]).includes(vt ?? "") ? (vt as VideoType) : e.videoType && (VIDEO_TYPES as string[]).includes(e.videoType) ? (e.videoType as VideoType) : null,
     preset: sn(input.preset),
     texto: textoDesde(input, e),
   };
@@ -160,14 +160,31 @@ function usoDe(res: Anthropic.Message): Uso {
 const sumar = (a: Uso, b: Uso): Uso => ({ input: a.input + b.input, output: a.output + b.output, cache_read: a.cache_read + b.cache_read, cache_write: a.cache_write + b.cache_write });
 
 /** Una llamada a emitir_spec. `extra` va DESPUÉS del bloque variable (reparación/refine). */
-async function llamarSpec(e: EntradaWriter, extra: string | null): Promise<{ input: Record<string, unknown>; usage: Uso } | { error: string }> {
+/**
+ * El bloque estable con las TOOL NOTES del Hub, cacheado en memoria de la instancia por
+ * `clave` (= max(updated_at) de prisma_reglas): se reconstruye SÓLO cuando cambia una nota,
+ * así el prefijo cacheable del modelo es idéntico entre llamadas y sigue pegando en caché.
+ */
+/** La versión que se guarda con cada prompt: la del writer + la huella del conocimiento
+ *  (TOOL NOTES) que tenía ese día. Un solo sitio: generar, refinar y variar la comparten. */
+export const versionCon = (clave: string): string => `${PROMPT_VERSION}+${clave}`;
+
+let estableCache: { clave: string; texto: string } | null = null;
+export function estableCon(notas: NotaTool[], clave: string): string {
+  if (estableCache?.clave === clave) return estableCache.texto;
+  const texto = bloqueEstableCon(notas);
+  estableCache = { clave, texto };
+  return texto;
+}
+
+async function llamarSpec(e: EntradaWriter, extra: string | null, estable: string = BLOQUE_ESTABLE): Promise<{ input: Record<string, unknown>; usage: Uso } | { error: string }> {
   try {
     const client = new Anthropic();
     const res = await client.messages.create({
       model: MODEL,
       max_tokens: 4000,
       thinking: { type: "disabled" },
-      system: [{ type: "text", text: BLOQUE_ESTABLE, cache_control: { type: "ephemeral" } }],
+      system: [{ type: "text", text: estable, cache_control: { type: "ephemeral" } }],
       tools: [{ name: "emitir_spec", description: "Report the filled PromptSpec.", input_schema: SPEC_SCHEMA as Anthropic.Tool["input_schema"] }],
       tool_choice: { type: "tool", name: "emitir_spec" },
       messages: [
@@ -187,8 +204,8 @@ async function llamarSpec(e: EntradaWriter, extra: string | null): Promise<{ inp
 }
 
 /** Escribe el spec, compila, valida y repara UNA vez si hace falta. */
-export async function escribirSpec(e: EntradaWriter): Promise<ResultadoWriter> {
-  const r1 = await llamarSpec(e, null);
+export async function escribirSpec(e: EntradaWriter, estable: string = BLOQUE_ESTABLE): Promise<ResultadoWriter> {
+  const r1 = await llamarSpec(e, null, estable);
   if ("error" in r1) return { ok: false, error: r1.error };
   let spec = specDesde(r1.input, e);
   let salida = compilar(spec);
@@ -197,7 +214,7 @@ export async function escribirSpec(e: EntradaWriter): Promise<ResultadoWriter> {
   let reparado = false;
 
   if (!v.ok) {
-    const r2 = await llamarSpec(e, bloqueReparacion(v.errores, JSON.stringify(r1.input)));
+    const r2 = await llamarSpec(e, bloqueReparacion(v.errores, JSON.stringify(r1.input)), estable);
     if (!("error" in r2)) {
       const spec2 = specDesde(r2.input, e);
       const salida2 = compilar(spec2);
@@ -218,8 +235,8 @@ export async function escribirSpec(e: EntradaWriter): Promise<ResultadoWriter> {
 }
 
 /** Aplica un cambio pedido por el diseñador sobre un spec existente (cambia SÓLO eso). */
-export async function refinarSpec(e: EntradaWriter, specActual: PromptSpec, cambio: string): Promise<ResultadoWriter> {
-  const r = await llamarSpec(e, bloqueRefinar(JSON.stringify(specActual), cambio));
+export async function refinarSpec(e: EntradaWriter, specActual: PromptSpec, cambio: string, estable: string = BLOQUE_ESTABLE): Promise<ResultadoWriter> {
+  const r = await llamarSpec(e, bloqueRefinar(JSON.stringify(specActual), cambio), estable);
   if ("error" in r) return { ok: false, error: r.error };
   const spec = specDesde(r.input, e);
   const salida = compilar(spec);
@@ -228,8 +245,8 @@ export async function refinarSpec(e: EntradaWriter, specActual: PromptSpec, camb
 }
 
 /** Otra versión del spec, bajo demanda (segura / audaz / mínima). Una llamada, sólo si se pide. */
-export async function variarSpec(e: EntradaWriter, specActual: PromptSpec, variante: Exclude<PrismaVariante, "base">): Promise<ResultadoWriter> {
-  const r = await llamarSpec(e, bloqueVariante(JSON.stringify(specActual), variante));
+export async function variarSpec(e: EntradaWriter, specActual: PromptSpec, variante: Exclude<PrismaVariante, "base">, estable: string = BLOQUE_ESTABLE): Promise<ResultadoWriter> {
+  const r = await llamarSpec(e, bloqueVariante(JSON.stringify(specActual), variante), estable);
   if ("error" in r) return { ok: false, error: r.error };
   const spec = specDesde(r.input, e);
   const salida = compilar(spec);

@@ -1,7 +1,7 @@
 /**
  * HÜE Prisma — el "PromptSpec": UNA descripción intermedia de lo que el diseñador
- * quiere, independiente de la herramienta. Cada compiler (nanobanana/veo/kling/
- * sora/higgsfield) la convierte al formato exacto de su herramienta.
+ * quiere, independiente de la herramienta. Cada compiler (nanobanana/chatgpt/veo/
+ * kling/higgsfield) la convierte al formato exacto de su herramienta.
  *
  * Por qué así (lección del teardown de Roco Prompts): allá cada bot tenía su propio
  * prompt y su propio formulario; cambiar de herramienta era volver a empezar. Con un
@@ -12,8 +12,16 @@
  * (scripts/test-prisma.mjs).
  */
 
-export type Tool = "nanobanana" | "chatgpt" | "veo" | "kling" | "sora" | "higgsfield";
-export const TOOLS: Tool[] = ["nanobanana", "chatgpt", "veo", "kling", "sora", "higgsfield"];
+export type Tool = "nanobanana" | "chatgpt" | "veo" | "kling" | "higgsfield";
+export const TOOLS: Tool[] = ["nanobanana", "chatgpt", "veo", "kling", "higgsfield"];
+
+/** Herramientas que alguna vez existieron: una fila guardada no se vuelve ilegible porque
+ *  retiremos una herramienta. Sora 2: OpenAI apaga su API el 24-sep-2026 (retirada en 0067). */
+export const TOOLS_HISTORICAS: string[] = [...TOOLS, "sora"];
+/** Quién hereda los trabajos de una herramienta retirada (al leer una fila vieja). */
+export const TOOL_SUCESORA: Record<string, Tool> = { sora: "veo" };
+/** Nombre con el que se conoció una herramienta retirada (para el aviso "antes era…"). */
+export const NOMBRE_HISTORICO: Record<string, string> = { sora: "Sora 2" };
 
 /** Las tres "puertas" de la pantalla de inicio. */
 export type JobKind = "imagen" | "video" | "edicion";
@@ -40,6 +48,8 @@ export type JobType =
   | "animar_foto"
   | "texto_a_video"
   | "transicion"
+  // El id nació con Sora 2 y está persistido en filas reales: NO se renombra. Hoy es "escena
+  // por bloques de tiempo" (Veo 3.1 / Kling 3); la etiqueta vive en copy.ts.
   | "escena_sora";
 
 export const JOB_KIND: Record<JobType, JobKind> = {
@@ -176,8 +186,9 @@ export type Dialogo = {
   voz: string | null; // "voz neutra con acento mexicano, cálida"
 };
 
-/** Estilo de video para Sora 2 (taxonomía que Sora respeta muy bien). */
-export type SoraVideoType =
+/** Estilo/tipo de video. Nació como la taxonomía de Sora 2; sobrevive como VOCABULARIO que
+ *  Veo 3.1 y Kling 3 entienden igual (compilers/video-tipos.ts). */
+export type VideoType =
   | "Trailer cinematográfico"
   | "Comercial de producto"
   | "Video de celular sin cortes"
@@ -190,7 +201,7 @@ export type SoraVideoType =
   | "Story Vertical"
   | "Video Old VHS";
 
-export const SORA_VIDEO_TYPES: SoraVideoType[] = [
+export const VIDEO_TYPES: VideoType[] = [
   "Trailer cinematográfico",
   "Comercial de producto",
   "Video de celular sin cortes",
@@ -261,10 +272,10 @@ export type PromptSpec = {
   dialogo: Dialogo | null;
   marca: MarcaPreset | null;
 
-  /** Sólo video: beats por bloque de tiempo (Sora/Veo los usan; Kling los resume). */
+  /** Sólo video: beats por bloque de tiempo (Veo los usa; Kling los resume). */
   beats: Beat[] | null;
-  /** Sólo Sora. */
-  video_type: SoraVideoType | null;
+  /** Sólo video: el tipo/estilo (Veo lo lleva en `style`, Kling en su primera capa). */
+  video_type: VideoType | null;
   /** Sólo Higgsfield: nombre del preset de cámara (ver compilers/higgsfield.ts). */
   preset: string | null;
   /** Texto que debe verse en la pieza. null = sin texto (y los compilers lo prohíben).
@@ -320,6 +331,7 @@ export function negativosDe(spec: PromptSpec, extra: string[] = []): string[] {
  * ¿Este objeto (p. ej. el jsonb guardado en prisma_specs.spec) tiene la forma de un
  * PromptSpec? Comprobación de RUNTIME: un cast ciego dejaría pasar filas viejas con
  * otra forma y reventarían dentro de compilar(). Verifica lo que los compilers tocan.
+ * Acepta herramientas HISTÓRICAS (sora): quien lee la fila la mapea a su sucesora.
  */
 export function esSpec(v: unknown): v is PromptSpec {
   if (!v || typeof v !== "object") return false;
@@ -329,7 +341,7 @@ export function esSpec(v: unknown): v is PromptSpec {
   const cam = o.camara as Record<string, unknown> | undefined;
   return (
     str("job") && (o.job as string) in JOB_KIND &&
-    str("tool") && TOOLS.includes(o.tool as Tool) &&
+    str("tool") && TOOLS_HISTORICAS.includes(o.tool as string) &&
     str("idea") && str("sujeto") && str("accion") && str("entorno") && str("luz") && str("mood") && str("estilo") &&
     !!cam && typeof cam === "object" &&
     arr("paleta") && arr("texturas") && arr("negativos") && arr("preservar") && arr("refs") &&

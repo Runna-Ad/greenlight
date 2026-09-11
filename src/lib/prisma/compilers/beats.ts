@@ -6,7 +6,7 @@
  */
 import { sinPronombre, type Beat, type PromptSpec } from "../spec.ts";
 
-/** Cortes estándar por duración (segundos). Sora exige exactamente estos. */
+/** Cortes estándar por duración (segundos). Nacieron con Sora 2; Veo los sigue igual de bien. */
 export function cortes(duracion: number): [number, number][] {
   if (duracion <= 5) return [[0, 2], [2, 4], [4, 5]];
   if (duracion <= 8) return [[0, 2], [2, 6], [6, 8]];

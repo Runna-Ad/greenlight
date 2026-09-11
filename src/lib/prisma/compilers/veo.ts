@@ -1,12 +1,13 @@
 /**
  * Compiler → Veo 3.1 (Google Flow). JSON en inglés con timeline por bloques: Veo sigue
- * muy bien una estructura de campos + beats con tiempo (lo mismo que hace fuerte al
- * prompt de Sora). El diálogo va en su idioma original; el resto en inglés.
+ * muy bien una estructura de campos + beats con tiempo. El tipo de video (vocabulario
+ * heredado de Sora 2) entra en `style`. El diálogo va en su idioma original; el resto en inglés.
  */
 import { comas, negativosDe, sinPronombre, textoDe, type Beat, type PromptSpec } from "../spec.ts";
 import type { Salida } from "./salida.ts";
 import { beatsDe } from "./beats.ts";
 import { duracionValida } from "../tools.ts";
+import { lookDeTipo, tipoEn } from "./video-tipos.ts";
 
 type VeoJson = {
   description: string;
@@ -57,7 +58,8 @@ export function compilarVeo(spec: PromptSpec): Salida {
 
   const json: VeoJson = {
     description: descripcion(spec),
-    style: comas(spec.estilo || "cinematic, photorealistic", spec.mood),
+    // El tipo de video va primero: es la etiqueta que Veo mejor respeta como guía estética.
+    style: comas(tipoEn(spec.video_type), spec.estilo || "cinematic, photorealistic", spec.mood, lookDeTipo(spec.video_type)),
     camera: comas(spec.camara.lente, spec.camara.angulo, spec.camara.movimiento || "slow continuous camera move, no cuts"),
     lighting: spec.luz || "soft natural light",
     environment: spec.entorno || (spec.job === "animar_foto" ? "as in the reference image" : ""),

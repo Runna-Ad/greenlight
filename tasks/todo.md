@@ -1,5 +1,39 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-09-11 (3) — HÜE Prisma v1 "el prompter perfecto" · FASE 0: Sora fuera, conocimiento dentro (rama `prisma`, migración 0067 PENDIENTE de "ship it")
+Plan aprobado: /Users/work/.claude/plans/ok-no-i-need-lexical-ocean.md (v1 = perfeccionar prompts; v2 generación in-app APARCADA).
+Pedro: v1 sólo prompts · Sora se retira (OpenAI apaga la Videos API el 24-sep-2026) · entrevista ≤3 preguntas · Nano Banana 2
+para iterar / Pro para la final · "sube lo que salió" en v1 · "perfecto" = ronda real con diseñadores.
+- [x] **0067 `prisma_reglas`** (reglas + notas por herramienta, con fuente y fecha; seed ~40 filas) + `prisma_specs.respuestas` +
+      `prisma_prompts.avisos` + `prisma_prompts.modelo_sug` + CHECK de `prisma_eventos.tipo` ampliado (una sola vez) + índice
+      único parcial (copiado/abierto) + índice (client_id, tipo, created_at). RLS master + service_role.
+- [x] **Sora fuera** sin migración de datos: `TOOLS` sin sora, `TOOLS_HISTORICAS` + `TOOL_SUCESORA` (filas viejas se leen
+      como Veo), `VIDEO_TYPES` (los 11 tipos como vocabulario), `compilers/video-tipos.ts` (`estiloDeTipo`) usado por Veo y
+      Kling, `sora.ts` borrado, validators/routing/copy/prompts/tests actualizados, chip "Tipo de video" para todo video.
+- [x] **TOOL NOTES**: `cargarReglas` (data.ts, tolerante sin tabla) → `bloqueEstableCon(notas)` al final del bloque cacheado
+      (topes 60 / 4,000 chars) → caché por `clave` en writer.ts → `prompt_version = PROMPT_VERSION+clave`.
+- [x] **Hub › Prisma**: `prisma-reglas.tsx` (tabla, alta/edición, toggle, fuente obligatoria en notas, badge >90 días) +
+      `hubPrismaReglas` / `guardarReglaPrisma` (regex validada, rechaza) / `activarReglaPrisma` en hue-actions.
+- [x] Tests: test-db bloque 0067 · test-prisma (spec viejo con sora → veo; `estiloDeTipo` en Veo y Kling; `bloqueEstableCon`
+      topes y posición). Gates: tsc · lint · test:prisma · test:db · isolation · actions · build. Reap + navegador.
+### Verificación F0
+- Reabrir desde el historial un spec guardado con `tool:'sora'` → se abre como Veo 3.1 con el aviso "Antes era Sora 2".
+- Generar un video con tipo "Unboxing de producto" → el `style` de Veo y la capa de estilo de Kling lo llevan.
+- Segunda generación seguida → `cache_read_input_tokens > 0` (TOOL NOTES no rompió el caché) — smoke con register-hooks.
+- Pedro (sesión master): Hub › H.Ü.E › Prisma → editar una nota → la siguiente generación la refleja sin deploy.
+- [x] Reap (Opus seguridad + Sonnet salud): 21 hallazgos → arreglados: upsert de eventos roto por el índice parcial (insert + 23505 +
+      prueba en test-db), `clave` = huella del contenido (no max(updated_at)), override de TOOL NOTES acotado + `cercado` + rechazo de
+      notas-instrucción, notas de herramienta retirada se descartan, CHECKs de clase en la BD, `fuente_tipo` oficial/comunidad,
+      crear ≠ editar en el Hub (un código repetido no pisa), `abrirSpec` idempotente, `herramientaVigente` compartida, `versionCon`,
+      errores planos + UUID en el Hub, confirmación inline al borrar, tope 6,000 chars con aviso "N notas no entran".
+- [x] Verificado: tsc · lint · build · test:prisma 235 · test:db 439 · isolation · actions · navegador (sin Sora, chip "Tipo de video"
+      en Veo y Kling, routing escena → Kling vertical / Veo YouTube) · smoke real: 2ª llamada `cache_read` 4,455 tokens.
+- [ ] **SHIP** (necesita "ship it"): `npm run migrate` (0067). El código ya está en `prisma` (preview seguro sin la 0067: sin notas,
+      el Hub avisa "falta la 0067", los eventos siguen con el índice de la 0066).
+- Pendientes que salieron del reap (van en su fase): F2 → re-validar `patron` al LEER (regexSegura + tope de 2,000 chars de entrada
+  o worker con timeout) y tope por persona/prompt para los eventos no únicos; F5 → panel "vista previa de TOOL NOTES" en el Hub antes
+  de guardar; alguna vez → `client_id/marca_id` en prisma_reglas si una nota debe ser por marca.
+
 ## 🟡 2026-09-11 — HÜE Prisma: presets de marca en Admin · personajes guardados · explicación por idioma (rama `prisma`, SIN push · migración 0065 PENDIENTE de "ship it")
 Pedro: "1 yes · 3 yes · 4 yes · 2 (variantes) needs more thought · don't merge main yet". Tres builds acotados, cero cambios en main.
 - [x] **A. Presets de marca (Admin › Marcas)** — `src/lib/prisma/preset.ts` = UNA sola normalización (la usan el lector `presetDe` en

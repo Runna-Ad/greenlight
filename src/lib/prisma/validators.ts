@@ -5,9 +5,9 @@
  * Módulo puro.
  */
 import { contarPalabras, textoDe, type PromptSpec, type Tool } from "./spec.ts";
-import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO, duracionValida } from "./tools.ts";
+import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO } from "./tools.ts";
 import { PRESETS_HIGGSFIELD } from "./compilers/higgsfield.ts";
-import { SORA_TYPE_EN } from "./compilers/sora.ts";
+import { tipoEn } from "./compilers/video-tipos.ts";
 
 export type Veredicto = { ok: true } | { ok: false; errores: string[] };
 
@@ -83,19 +83,9 @@ function veo(texto: string, spec: PromptSpec): string[] {
   if (tl.length < 3) e.push("El timeline debe tener 3 bloques.");
   const neg = Array.isArray(j.negative_prompts) ? (j.negative_prompts as unknown[]) : [];
   if (!neg.length) e.push("negative_prompts no puede ir vacío.");
-  return e;
-}
-
-function sora(texto: string, spec: PromptSpec): string[] {
-  const e: string[] = [];
-  const tipos = Object.values(SORA_TYPE_EN);
-  if (!tipos.some((t) => texto.startsWith(`${t}:`))) e.push("Debe empezar con el tipo de video seguido de dos puntos.");
-  const bloques = texto.match(/^\d+–\d+s:/gm)?.length ?? 0;
-  if (bloques !== 3) e.push(`El timeline debe tener exactamente 3 bloques (tiene ${bloques}).`);
-  const dur = duracionValida("sora", spec.duracion);
-  if (!texto.includes(`Timeline (${dur}s)`)) e.push(`La duración del timeline debe ser ${dur}s.`);
-  if (!/^Sound & voice:/m.test(texto)) e.push('Falta la sección "Sound & voice".');
-  for (const s of ["Look:", "Camera:", "Light:", "Pace:"]) if (!texto.includes(`\n${s}`)) e.push(`Falta la sección "${s}".`);
+  // El tipo de video elegido tiene que verse en `style` (es lo que Veo usa como guía estética).
+  const tipo = tipoEn(spec.video_type);
+  if (tipo && !(typeof j.style === "string" && j.style.includes(tipo))) e.push(`style debe llevar el tipo de video "${tipo}".`);
   return e;
 }
 
@@ -139,9 +129,6 @@ export function validar(texto: string, spec: PromptSpec, tool: Tool = spec.tool)
       break;
     case "veo":
       errores.push(...veo(texto, spec));
-      break;
-    case "sora":
-      errores.push(...sora(texto, spec));
       break;
     case "higgsfield":
       errores.push(...higgsfield(texto));

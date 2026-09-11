@@ -2483,5 +2483,58 @@ console.log("\n▶ 0066 — prisma_eventos");
   eq("borrar el spec se lleva sus eventos (cascade)", Number(await scalar(`select count(*) from produccion.prisma_eventos where spec_id = $1`, [specEv])), 0);
 }
 
+// ── 0067: HÜE Prisma v1 — conocimiento vivo (prisma_reglas), entrevista, avisos, eventos ──
+console.log("\n▶ 0067 — prisma_reglas + columnas + eventos");
+{
+  eq("prisma_reglas existe con RLS", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_reglas' and c.relrowsecurity`)), 1);
+  eq("policy master-only", Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = 'prisma_reglas'`)), 1);
+  ok("service_role puede escribir", (await q(`select has_table_privilege('service_role', 'produccion.prisma_reglas', 'insert') as ok`))[0].ok);
+  eq("PUBLIC sin privilegios", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_reglas' and c.relacl is not null and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+  const seed = Number(await scalar(`select count(*) from produccion.prisma_reglas`));
+  ok("el seed metió las notas y reglas (≥ 25)", seed >= 25, String(seed));
+  eq("7 notas sembradas, todas con fuente y fecha", Number(await scalar(`select count(*) from produccion.prisma_reglas where clase = 'nota' and fuente_url is not null and fuente_fecha is not null`)), 7);
+  eq("ninguna regla sin patrón ni umbral", Number(await scalar(`select count(*) from produccion.prisma_reglas where clase = 'regla' and patron is null and umbral is null`)), 0);
+  const dup = await db.query(`insert into produccion.prisma_reglas (codigo, clase, nota_en) values ('nota_veo', 'nota', 'x')`).then(() => false).catch(() => true);
+  ok("el código es único", dup);
+  const codigoMalo = await db.query(`insert into produccion.prisma_reglas (codigo, clase, nota_en) values ('Con Mayúsculas', 'nota', 'x')`).then(() => false).catch(() => true);
+  ok("un código con mayúsculas/espacios se rechaza (check)", codigoMalo);
+  const cols = (await q(`select table_name, column_name from information_schema.columns where table_schema = 'produccion' and (table_name, column_name) in (('prisma_specs','respuestas'),('prisma_prompts','avisos'),('prisma_prompts','modelo_sug'))`)).length;
+  eq("respuestas / avisos / modelo_sug existen", cols, 3);
+  // Eventos: el CHECK nuevo y el índice único parcial
+  const specEv = await scalar(`insert into produccion.prisma_specs (job, tool, spec) values ('foto_producto', 'nanobanana', '{}'::jsonb) returning id`);
+  const nuevoTipo = await db.query(`insert into produccion.prisma_eventos (spec_id, job, tool, tipo, detalle) values ($1, 'x', 'y', 'respondido', 'angulo=frente')`, [specEv]).then(() => true).catch(() => false);
+  ok("el CHECK acepta 'respondido'", nuevoTipo);
+  const inventado = await db.query(`insert into produccion.prisma_eventos (spec_id, job, tool, tipo) values ($1, 'x', 'y', 'inventado')`, [specEv]).then(() => false).catch(() => true);
+  ok("el CHECK sigue rechazando un tipo inventado", inventado);
+  // Por qué anotarEvento hace INSERT llano y tolera 23505 (y NO upsert): Postgres no usa un
+  // índice único PARCIAL como árbitro de ON CONFLICT si la sentencia no repite su WHERE, y
+  // PostgREST no puede mandarlo. Esta prueba fija ese hecho para que nadie vuelva al upsert.
+  const onConflictSinWhere = await db.query(`insert into produccion.prisma_eventos (spec_id, job, tool, tipo) values ($1, 'x', 'y', 'variante') on conflict (prompt_id, user_id, tipo) do nothing`, [specEv]).then(() => false).catch((e) => /no unique or exclusion constraint/i.test(String(e.message)));
+  ok("ON CONFLICT sin el WHERE del índice parcial FALLA (por eso el insert llano + 23505)", onConflictSinWhere);
+  // Invariantes de clase también en la BD
+  const notaSinFuente = await db.query(`insert into produccion.prisma_reglas (codigo, clase, nota_en) values ('nota_sin_fuente', 'nota', 'x')`).then(() => false).catch(() => true);
+  ok("una nota sin fuente/fecha la rechaza la BD", notaSinFuente);
+  const reglaSinPatron = await db.query(`insert into produccion.prisma_reglas (codigo, clase, campo, que_es, que_en) values ('regla_vacia', 'regla', 'idea', 'a', 'b')`).then(() => false).catch(() => true);
+  ok("una regla sin patrón ni umbral la rechaza la BD", reglaSinPatron);
+  const campoMalo = await db.query(`insert into produccion.prisma_reglas (codigo, clase, campo, patron, que_es, que_en) values ('campo_malo', 'regla', 'color', 'x', 'a', 'b')`).then(() => false).catch(() => true);
+  ok("un campo fuera de la lista lo rechaza la BD", campoMalo);
+  const fuenteMala = await db.query(`insert into produccion.prisma_reglas (codigo, clase, nota_en, fuente_url, fuente_fecha) values ('fuente_mala', 'nota', 'x', 'javascript:alert(1)', '2026-01-01')`).then(() => false).catch(() => true);
+  ok("una fuente que no es http(s) la rechaza la BD", fuenteMala);
+  eq("las fuentes de comunidad quedaron marcadas", Number(await scalar(`select count(*) from produccion.prisma_reglas where fuente_tipo = 'comunidad'`)), 5);
+  const promptEv = await scalar(`insert into produccion.prisma_prompts (spec_id, tool, prompt_version, salida, formato) values ($1, 'nanobanana', 'test', 'p', 'texto') returning id`, [specEv]);
+  const miembro = await scalar(`select id from produccion.track_members limit 1`);
+  if (miembro) {
+    await db.query(`insert into produccion.prisma_eventos (spec_id, prompt_id, user_id, job, tool, tipo, detalle) values ($1, $2, $3, 'x', 'y', 'aviso_aplicado', 'texto_largo')`, [specEv, promptEv, miembro]);
+    const segundo = await db.query(`insert into produccion.prisma_eventos (spec_id, prompt_id, user_id, job, tool, tipo, detalle) values ($1, $2, $3, 'x', 'y', 'aviso_aplicado', 'hex_en_idea')`, [specEv, promptEv, miembro]).then(() => true).catch(() => false);
+    ok("dos 'aviso_aplicado' del mismo prompt y persona SÍ entran (índice parcial)", segundo);
+    await db.query(`insert into produccion.prisma_eventos (spec_id, prompt_id, user_id, job, tool, tipo) values ($1, $2, $3, 'x', 'y', 'copiado')`, [specEv, promptEv, miembro]);
+    const copiado2 = await db.query(`insert into produccion.prisma_eventos (spec_id, prompt_id, user_id, job, tool, tipo) values ($1, $2, $3, 'x', 'y', 'copiado')`, [specEv, promptEv, miembro]).then(() => false).catch(() => true);
+    ok("un segundo 'copiado' del mismo prompt y persona NO entra", copiado2);
+  } else {
+    ok("(sin track_members en la fixture: se omite la prueba del índice parcial)", true);
+  }
+  await db.query(`delete from produccion.prisma_specs where id = $1`, [specEv]);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

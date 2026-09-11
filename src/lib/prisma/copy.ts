@@ -43,7 +43,7 @@ export const JOB_LABEL: Record<JobType, Par> = {
   animar_foto: t("Darle movimiento a una foto", "Animate a photo"),
   texto_a_video: t("Video a partir de una idea", "Video from an idea"),
   transicion: t("Transición entre dos tomas", "Transition between two shots"),
-  escena_sora: t("Escena de 10 a 15 segundos (Sora)", "10 to 15 second scene (Sora)"),
+  escena_sora: t("Escena por bloques de tiempo", "Timed-beat scene"),
 };
 
 export const JOB_HINT: Record<JobType, Par> = {
@@ -64,7 +64,7 @@ export const JOB_HINT: Record<JobType, Par> = {
   animar_foto: t("Una foto y qué quieres que se mueva.", "One photo and what you want to move."),
   texto_a_video: t("Sin fotos. Solo describe el clip.", "No photos. Just describe the clip."),
   transicion: t("La toma con la que empieza y la toma con la que termina.", "The shot it starts on and the shot it ends on."),
-  escena_sora: t("Una escena completa: tipo de video y duración.", "A full scene: video type and duration."),
+  escena_sora: t("Una escena completa: tipo de video, duración y sonido.", "A full scene: video type, duration and sound."),
 };
 
 export const REF_LABEL: Record<RefRole, Par> = {
