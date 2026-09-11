@@ -5,9 +5,17 @@
  * Módulo puro.
  */
 import { contarPalabras, textoDe, type PromptSpec, type Tool } from "./spec.ts";
-import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO } from "./tools.ts";
+import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO, duracionVeo } from "./tools.ts";
 import { PRESETS_HIGGSFIELD } from "./compilers/higgsfield.ts";
+import { ORDINAL } from "./compilers/chatgpt.ts";
 import { tipoEn } from "./compilers/video-tipos.ts";
+import { movimientos } from "./camara.ts";
+
+/** Kling y Higgsfield siguen UN movimiento de cámara por clip; dos deforman la imagen. */
+function unSoloMovimiento(texto: string): string | null {
+  const m = movimientos(texto);
+  return m.length >= 2 ? `Dos movimientos de cámara (${m.join(" y ")}): esta herramienta sólo sigue uno. Elige uno.` : null;
+}
 
 export type Veredicto = { ok: true } | { ok: false; errores: string[] };
 
@@ -56,10 +64,12 @@ function kling(texto: string, spec: PromptSpec): string[] {
     if (texto.length > KLING_MAX_CHARS_TRANSICION) e.push(`Transición de ${texto.length} caracteres; Kling corta en ${KLING_MAX_CHARS_TRANSICION}.`);
     return e;
   }
-  const max = TOOL_INFO.kling.maxPalabras ?? 50;
+  const max = TOOL_INFO.kling.maxPalabras ?? 60;
   const n = contarPalabras(texto);
   if (n > max) e.push(`${n} palabras; Kling rinde con ≤${max}.`);
   if ((texto.match(/\./g)?.length ?? 0) > 2) e.push("Debe ser una sola oración (separa con comas, no con puntos).");
+  const mov = unSoloMovimiento(texto);
+  if (mov) e.push(mov);
   return e;
 }
 
@@ -71,9 +81,12 @@ function veo(texto: string, spec: PromptSpec): string[] {
   } catch {
     return ["El JSON de Veo no es válido."];
   }
-  for (const k of ["description", "style", "camera", "lighting", "environment", "elements", "motion", "ending", "text", "keywords", "timeline", "negative_prompts"]) {
+  for (const k of ["description", "style", "camera", "lighting", "environment", "elements", "motion", "ending", "text", "keywords", "timeline", "negative_prompts", "negative_prompt", "duration_seconds"]) {
     if (!(k in j)) e.push(`Falta el campo "${k}" en el JSON de Veo.`);
   }
+  // 8 s obligatorio con referencias; sin ellas, una de las duraciones de Veo.
+  const esperada = duracionVeo(spec.duracion, spec.refs.length);
+  if (j.duration_seconds !== esperada) e.push(`duration_seconds debe ser ${esperada}${spec.refs.length ? " (con referencias Veo sólo genera 8 s)" : ""}.`);
   const kw = Array.isArray(j.keywords) ? (j.keywords as unknown[]) : [];
   if (!kw.includes(spec.aspect)) e.push(`keywords debe incluir el formato ${spec.aspect}.`);
   if (textoDe(spec)) {
@@ -83,6 +96,8 @@ function veo(texto: string, spec: PromptSpec): string[] {
   if (tl.length < 3) e.push("El timeline debe tener 3 bloques.");
   const neg = Array.isArray(j.negative_prompts) ? (j.negative_prompts as unknown[]) : [];
   if (!neg.length) e.push("negative_prompts no puede ir vacío.");
+  if (neg.some((n) => typeof n === "string" && /^(no|without|avoid)\b/i.test(n))) e.push("negative_prompts van como sustantivos (\"subtitles\"), nunca \"no X\".");
+  if (typeof j.negative_prompt !== "string" || j.negative_prompt !== neg.join(", ")) e.push("negative_prompt debe ser la misma lista en una línea.");
   // El tipo de video elegido tiene que verse en `style` (es lo que Veo usa como guía estética).
   const tipo = tipoEn(spec.video_type);
   if (tipo && !(typeof j.style === "string" && j.style.includes(tipo))) e.push(`style debe llevar el tipo de video "${tipo}".`);
@@ -96,6 +111,9 @@ function higgsfield(texto: string): string[] {
   const n = contarPalabras(cuerpo ?? "");
   if (n > max) e.push(`${n} palabras; Higgsfield rinde con ≤${max}.`);
   if (!presetLinea || !(PRESETS_HIGGSFIELD as readonly string[]).includes(presetLinea.trim())) e.push("Falta un preset de cámara válido de Higgsfield.");
+  // El cuerpo no debe pedir un movimiento distinto del preset (un preset por clip).
+  const mov = unSoloMovimiento(texto);
+  if (mov) e.push(mov);
   return e;
 }
 
@@ -111,13 +129,12 @@ function nanobanana(texto: string, spec: PromptSpec): string[] {
 
 function chatgpt(texto: string, spec: PromptSpec): string[] {
   const e: string[] = [];
-  const ord = ["first", "second", "third", "fourth"];
   spec.refs.forEach((_, i) => {
-    if (!texto.includes(`the ${ord[i] ?? `#${i + 1}`} attached image`)) e.push(`No usa la referencia adjunta ${i + 1}.`);
+    if (!texto.includes(`the ${ORDINAL[i] ?? `#${i + 1}`} attached image`)) e.push(`No usa la referencia adjunta ${i + 1}.`);
   });
   if (spec.refs.length && !/Keep unchanged:/.test(texto)) e.push('Falta la cláusula "Keep unchanged" (qué se conserva).');
   if (/\[Imagen \d/.test(texto)) e.push("Usa etiquetas [Imagen N], que ChatGPT no entiende (van como adjuntos).");
-  if (!/(square|portrait|landscape) \(\d+×\d+\)/.test(texto)) e.push("Falta el tamaño de salida (square/portrait/landscape).");
+  if (!/(square|portrait|landscape) \(\d+×\d+, \d+:\d+\)/.test(texto)) e.push("Falta el tamaño de salida (square/portrait/landscape con píxeles y aspect).");
   return e;
 }
 

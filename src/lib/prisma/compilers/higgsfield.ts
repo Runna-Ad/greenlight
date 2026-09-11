@@ -78,6 +78,8 @@ export function compilarHiggsfield(spec: PromptSpec): Salida {
     capas.pop();
     cuerpo = comas(...capas);
   }
+  // Si el sujeto solo (p. ej. un personaje guardado) ya se pasa, se corta duro como en Kling.
+  if (contarPalabras(cuerpo) > MAX) cuerpo = cuerpo.split(/\s+/).slice(0, MAX).join(" ").replace(/[,;\s]+$/, "");
   cuerpo = cuerpo.charAt(0).toUpperCase() + cuerpo.slice(1);
   const texto = `${cuerpo}.\nCamera preset: ${preset}`;
   return { texto, formato: "texto" };

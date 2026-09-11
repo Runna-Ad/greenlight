@@ -109,19 +109,21 @@ export type RefRole =
 
 /** Qué imágenes pide cada trabajo, en orden. `opcional` = puede faltar. */
 export const REFS_POR_JOB: Record<JobType, { role: RefRole; opcional?: boolean }[]> = {
-  foto_producto: [{ role: "producto" }],
-  escena_persona: [{ role: "sujeto" }],
+  // Imagen y edición: el slot "estilo" (opcional, siempre al final) deja pasar UNA imagen cuyo
+  // look se toma prestado sin copiar su sujeto (Nano Banana 2 acepta 14 refs; Pro 6 + 3 de estilo).
+  foto_producto: [{ role: "producto" }, { role: "estilo", opcional: true }],
+  escena_persona: [{ role: "sujeto" }, { role: "estilo", opcional: true }],
   imagen_libre: [{ role: "estilo", opcional: true }],
-  cambio_outfit: [{ role: "sujeto" }, { role: "outfit" }],
-  cambio_fondo: [{ role: "sujeto" }],
-  cambio_pose: [{ role: "sujeto" }, { role: "pose" }],
-  agregar_objeto: [{ role: "escena" }, { role: "objeto" }],
-  cambio_angulo: [{ role: "escena" }],
+  cambio_outfit: [{ role: "sujeto" }, { role: "outfit" }, { role: "estilo", opcional: true }],
+  cambio_fondo: [{ role: "sujeto" }, { role: "estilo", opcional: true }],
+  cambio_pose: [{ role: "sujeto" }, { role: "pose" }, { role: "estilo", opcional: true }],
+  agregar_objeto: [{ role: "escena" }, { role: "objeto" }, { role: "estilo", opcional: true }],
+  cambio_angulo: [{ role: "escena" }, { role: "estilo", opcional: true }],
   restaurar_foto: [{ role: "sujeto" }],
-  mejora_foto: [{ role: "sujeto" }],
+  mejora_foto: [{ role: "sujeto" }, { role: "estilo", opcional: true }],
   aplicar_logo: [{ role: "producto" }, { role: "logo" }],
-  dos_personajes: [{ role: "sujeto" }, { role: "personaje2" }, { role: "pose", opcional: true }],
-  cambio_epoca: [{ role: "sujeto" }],
+  dos_personajes: [{ role: "sujeto" }, { role: "personaje2" }, { role: "pose", opcional: true }, { role: "estilo", opcional: true }],
+  cambio_epoca: [{ role: "sujeto" }, { role: "estilo", opcional: true }],
   figura_coleccionable: [{ role: "sujeto" }, { role: "empaque", opcional: true }],
   animar_foto: [{ role: "sujeto" }],
   texto_a_video: [],
@@ -162,6 +164,8 @@ export type Destino =
   | "libre";
 
 export const DESTINOS: Destino[] = ["ig_story", "ig_feed", "tiktok", "fb_ad", "yt", "web_banner", "print", "libre"];
+/** Guardia de runtime: el destino llega de una fila (text sin CHECK) o de un jsonb viejo. */
+export const esDestino = (v: unknown): v is Destino => typeof v === "string" && (DESTINOS as string[]).includes(v);
 
 export const ASPECT_POR_DESTINO: Record<Destino, Aspect> = {
   ig_story: "9:16",
@@ -281,6 +285,9 @@ export type PromptSpec = {
   /** Texto que debe verse en la pieza. null = sin texto (y los compilers lo prohíben).
    *  Opcional en el tipo porque las filas guardadas antes del 2026-09-04 no lo traen. */
   texto?: TextoEnImagen | null;
+  /** Dónde se publica (F1: los compilers piden 2K para impresión, "Úsalo en…" lo usa).
+   *  Opcional: las filas de antes del 2026-09-11 lo traen sólo en prisma_specs.destino. */
+  destino?: Destino | null;
 };
 
 /** Un spec en blanco con valores seguros. El writer lo llena; la UI lo edita. */
@@ -309,6 +316,7 @@ export function specVacio(job: JobType, tool: Tool, idea = ""): PromptSpec {
     video_type: null,
     preset: null,
     texto: null,
+    destino: null,
   };
 }
 
@@ -345,7 +353,8 @@ export function esSpec(v: unknown): v is PromptSpec {
     str("idea") && str("sujeto") && str("accion") && str("entorno") && str("luz") && str("mood") && str("estilo") &&
     !!cam && typeof cam === "object" &&
     arr("paleta") && arr("texturas") && arr("negativos") && arr("preservar") && arr("refs") &&
-    str("aspect") && ASPECTS.includes(o.aspect as Aspect)
+    str("aspect") && ASPECTS.includes(o.aspect as Aspect) &&
+    (o.destino === undefined || o.destino === null || esDestino(o.destino))
   );
 }
 

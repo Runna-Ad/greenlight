@@ -6,7 +6,8 @@
 import { comas, negativosDe, sinPronombre, textoDe, type Beat, type PromptSpec } from "../spec.ts";
 import type { Salida } from "./salida.ts";
 import { beatsDe } from "./beats.ts";
-import { duracionValida } from "../tools.ts";
+import { duracionVeo } from "../tools.ts";
+import { sustantivar } from "../positivo.ts";
 import { lookDeTipo, tipoEn } from "./video-tipos.ts";
 
 type VeoJson = {
@@ -20,10 +21,14 @@ type VeoJson = {
   ending: string;
   /** "none" o el texto exacto que debe verse en pantalla (con posición/estilo si los hay). */
   text: string;
-  dialogue?: { text: string; language: string; voice: string };
+  dialogue?: { text: string; language: string; voice: string; note?: string };
   keywords: string[];
   timeline: { timestamp: string; action: string }[];
+  /** Sustantivos (la doc de Veo: "subtitles", nunca "no subtitles"). */
   negative_prompts: string[];
+  /** Lo mismo en una línea, para el campo "Negative prompt" de Flow. */
+  negative_prompt: string;
+  duration_seconds: number;
 };
 
 const mmss = (s: number): string => `00:${String(Math.max(0, Math.round(s))).padStart(2, "0")}`;
@@ -49,12 +54,26 @@ function elementos(spec: PromptSpec): string[] {
 }
 
 export function compilarVeo(spec: PromptSpec): Salida {
-  const dur = duracionValida("veo", spec.duracion);
+  // 8 s obligatorio con referencias (Veo ignora otra duración cuando hay imágenes).
+  const dur = duracionVeo(spec.duracion, spec.refs.length);
   const beats: Beat[] = beatsDe(spec, dur);
   const t = textoDe(spec);
-  const negativos = new Set<string>(negativosDe(spec, [...(t ? [] : ["no subtitles", "no text overlays"]), "no hard cuts"]));
-  if (!spec.dialogo) negativos.add("no music background");
-  if (t) negativos.add("no other text");
+  // Veo lee sustantivos: "subtitles", "hard cuts". Un "no X" lo confunde (doc oficial).
+  const crudos = negativosDe(spec, [...(t ? [] : ["subtitles", "text overlays"]), "hard cuts"]);
+  if (!spec.dialogo) crudos.push("background music");
+  if (t) crudos.push("other text");
+  const negativos = new Set<string>(crudos.map(sustantivar).filter(Boolean));
+  const dialogo = spec.dialogo?.texto.trim()
+    ? {
+        dialogue: {
+          text: spec.dialogo.texto.trim(),
+          language: spec.dialogo.idioma,
+          voice: spec.dialogo.voz ?? "natural, conversational",
+          // Sólo el inglés está "totalmente soportado"; en otro idioma se le pide no traducir.
+          ...(/^en\b/i.test(spec.dialogo.idioma) ? {} : { note: "keep the dialogue in its original language exactly as written; do not translate or paraphrase it" }),
+        },
+      }
+    : {};
 
   const json: VeoJson = {
     description: descripcion(spec),
@@ -67,12 +86,12 @@ export function compilarVeo(spec: PromptSpec): Salida {
     motion: beats.map((b) => b.accion).join(" → "),
     ending: beats[beats.length - 1]?.accion ?? "",
     text: t ? `"${t.contenido.trim()}"${t.posicion ? ` — ${t.posicion}` : ""}${t.estilo ? ` — ${t.estilo}` : ""} (exact spelling, stays legible)` : "none",
-    ...(spec.dialogo?.texto.trim()
-      ? { dialogue: { text: spec.dialogo.texto.trim(), language: spec.dialogo.idioma, voice: spec.dialogo.voz ?? "natural, conversational" } }
-      : {}),
+    ...dialogo,
     keywords: [spec.aspect, ...spec.paleta.slice(0, 2), spec.estilo, spec.mood].filter((k): k is string => !!k).slice(0, 7),
     timeline: beats.map((b) => ({ timestamp: `${mmss(b.desde)}-${mmss(b.hasta)}`, action: comas(b.accion, b.camara, b.sfx && `sound: ${b.sfx}`) })),
     negative_prompts: [...negativos],
+    negative_prompt: [...negativos].join(", "),
+    duration_seconds: dur,
   };
   return { texto: JSON.stringify(json, null, 2), formato: "json" };
 }

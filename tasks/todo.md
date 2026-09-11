@@ -1,5 +1,46 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-11 (4) — HÜE Prisma v1 · FASE 1: compilers al día + "Úsalo en…" (rama `prisma`, SIN migración)
+Pedro: "start phase 1". Plan §6. Todo puro + probado; el writer y los compilers cambian, la BD no.
+- [x] **De negativo a positivo** — `lib/prisma/positivo.ts` (`positivar` con mapa de 30 familias + `sinMapear`; `sustantivar`):
+      Nano Banana / ChatGPT dicen "Keep the frame: …" y un "Avoid:" corto sólo con lo sin mapear; Kling mete hasta 2 positivos
+      en la atmósfera; Veo recibe sustantivos + `negative_prompt` en una línea; el writer escribe negativos como sustantivos.
+      La instrucción de foto de producto ya no dice "Avoid distortion…".
+- [x] **Nano Banana 2/Pro** — slot `estilo` opcional (al final) en todos los jobs de imagen/edición ("Borrow only the visual
+      style of [Imagen N]"); tipografía real cuando no hay estilo de texto; "2K resolution" sólo para impresión y banner.
+- [x] **gpt-image-2.5** — `TAMANO_GPT` por aspect (múltiplos de 16, ratio ≤ 3:1, lado ≤ 1536); `texto-imagen.ts` `deletrear`
+      (≤ 24 letras, conserva mayúsculas); ediciones "Change ONLY this: … Everything else … stays exactly as it is";
+      `Quality: high|medium`; ordinales hasta "sixth".
+- [x] **Veo 3.1** — duraciones [8, 6, 4] (8 default), `duracionVeo` fuerza 8 con referencias (chip + nota en el paso 3);
+      `cortes` para 4 y 6 s; `duration_seconds` en el JSON; diálogo no inglés lleva `dialogue.note` de no traducir.
+- [x] **Kling 3** — 60 palabras; `camara.ts` `movimientos()` → validador "Dos movimientos de cámara: elige uno" (Kling y
+      Higgsfield, donde el cuerpo no puede contradecir el preset).
+- [x] **"Úsalo en…"** — `lib/prisma/modelo.ts` `recomendarModelo` (NB2 vs Pro · flare vs sunburst · Veo vs Fast · Kling vs
+      Turbo · Higgsfield) con etiqueta, porqué y cómo llegar; anticipo en el paso 3 y chip en el resultado (puro, cliente);
+      el servidor lo guarda en `prisma_prompts.modelo_sug` y lo manda al writer como `TARGET MODEL`. `PromptSpec.destino`
+      (filas viejas: fallback a `prisma_specs.destino` en `specDeFila`). `compilers/fusion.ts` listo para el arreglo de F2.
+- [x] Tests: test-prisma 326 (+91) · test-db 439 · tsc · lint · build · isolation · actions. **Smoke real**
+      `scripts/smoke-prisma.mjs` (3 specs, ≈ US$0.05): caché leído en la 2ª y 3ª llamada, 3 prompts válidos, negativos como
+      sustantivos. Navegador: paso 3 muestra "Úsalo en · ChatGPT Images · sunburst" con texto y "Nano Banana Pro" al cambiar
+      de herramienta; el resultado demo muestra "Kling 3.0 Turbo" + cómo llegar.
+- [x] Reap (Opus seguridad + Sonnet salud) → arreglado: todo texto del cliente sale de `s0/sn` ya en UNA línea (`plano`) y
+      DIALOGUE / LOOK / captions van cercados; idioma del diálogo en lista; roles de referencia validados contra el job; freno
+      en `cambiarHerramienta`; `texto_en_imagen` del modelo con `plano` + tope; `esDestino` al leer + en `esSpec`; preset del
+      Admin con `plano`; `modelo_sug` se calcula sobre el spec RESULTANTE (= lo que ve el diseñador); validador de Veo exige
+      `duration_seconds` (8 con refs), `negative_prompt` y sustantivos; regex sin palabras sueltas (`dark`, `zoom`, `follows`,
+      `hands`, `cuts`) + tests de falso positivo; Pro desde 3 refs; Higgsfield con tope duro; Kling sin coma colgante.
+- [x] Gates finales: tsc · lint · build · test-prisma 336 · test-db 439 · isolation · actions. Commit + push a `prisma`.
+- Pendientes menores (no bloquean): `modelo_sug` sin fallback si faltara la 0067 (hoy está aplicada; el ledger ordena);
+  referencias subidas no ligadas a quien las subió (UUIDv4, riesgo bajo; namespacing por usuario cuando toque); nota de
+  8 s sin `aria-describedby`; `duracion` manual se conserva al quitar la referencia (comportamiento defendible); el smoke
+  no se tipa contra `EntradaWriter`.
+### Verificación F1 (Pedro, preview con login)
+- Generar una imagen con texto → el resultado dice "Úsalo en · ChatGPT Images · sunburst" (o "Nano Banana Pro" si eliges Nano)
+  y el prompt de ChatGPT trae el texto deletreado y "Quality: high".
+- Subir una referencia en "Darle movimiento a una foto" con Veo → el chip de duración sólo ofrece 8 s con la nota.
+- Un prompt de Nano Banana ya no dice "Avoid: …" salvo lo que la marca pide evitar; dice "Keep the frame: …".
+
+
 ## 🟢 2026-09-11 (3) — HÜE Prisma v1 "el prompter perfecto" · FASE 0: Sora fuera, conocimiento dentro (rama `prisma`, commit 4bd71fa · 0067 APLICADA)
 Plan aprobado: /Users/work/.claude/plans/ok-no-i-need-lexical-ocean.md (v1 = perfeccionar prompts; v2 generación in-app APARCADA).
 Pedro: v1 sólo prompts · Sora se retira (OpenAI apaga la Videos API el 24-sep-2026) · entrevista ≤3 preguntas · Nano Banana 2

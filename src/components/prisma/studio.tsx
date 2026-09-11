@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Clapperboard, ImageIcon, Languages, Loader2, Plus, Sparkles, Trash2, UserRound, Wand2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clapperboard, Cpu, ImageIcon, Languages, Loader2, Plus, Sparkles, Trash2, UserRound, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChipSelect } from "@/components/intake/chip-select";
@@ -40,8 +40,9 @@ import {
   type RefRole,
   type Tool,
 } from "@/lib/prisma/spec";
-import { COLOR_KIND, TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
+import { COLOR_KIND, TOOL_INFO, TOOLS_POR_JOB, VEO_SEGUNDOS_CON_REFS } from "@/lib/prisma/tools";
 import { elegirHerramienta } from "@/lib/prisma/routing";
+import { recomendarModelo } from "@/lib/prisma/modelo";
 import { useLang } from "./use-lang";
 import { RefUploader, type RefLocal } from "./ref-uploader";
 import { Resultado, type PromptVivo } from "./resultado";
@@ -151,8 +152,12 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
   const sugerencia = job ? elegirHerramienta({ job, destino, tieneDialogo: dialogo.trim().length > 0, tieneRefs: refsLista.length > 0, movimientoMarcado: !!look.movimiento, tieneTexto: texto.trim().length > 0 }) : null;
   const tool: Tool | null = toolOverride ?? sugerencia?.tool ?? null;
   const aspect = marca?.preset.aspect_default ?? ASPECT_POR_DESTINO[destino];
-  const duraciones = tool ? TOOL_INFO[tool].duraciones : [];
+  // Veo con imágenes de referencia sólo genera 8 s: el chip lo dice y no ofrece otra cosa.
+  const veoForzado = tool === "veo" && refsLista.length > 0;
+  const duraciones = veoForzado ? [VEO_SEGUNDOS_CON_REFS] : tool ? TOOL_INFO[tool].duraciones : [];
   const duracionEfectiva = video ? (duracion && duraciones.includes(duracion) ? duracion : duraciones[0] ?? null) : null;
+  // "Úsalo en…" anticipado: el mismo cálculo puro que verá en el resultado.
+  const modelo = job && tool ? recomendarModelo({ job, tool, destino, refs: refsLista.length, texto: texto.trim().length > 0, dialogo: dialogo.trim().length > 0, duracion: duracionEfectiva }) : null;
 
   const faltanRefs = slots.filter((s) => !s.opcional && !refs[s.role]).length > 0;
   const paso1Listo = !faltanRefs && (idea.trim().length > 0 || refsLista.length > 0);
@@ -559,16 +564,25 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }
                         <span className="p-tool-chip inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold">{tx(TOOL_LABEL[tool], lang)}</span>
                       </p>
                       <p className="mt-0.5 text-xs text-muted-foreground">{toolOverride ? (lang === "es" ? "La elegiste tú." : "You picked it.") : tx(sugerencia.porque, lang)}</p>
+                      {modelo && (
+                        <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-foreground">
+                          <Cpu className="size-3.5 text-primary" aria-hidden="true" />
+                          <span className="font-medium">{tx(UI.usaloEn, lang)}</span>
+                          <span className="rounded-full border border-border bg-secondary px-2 py-0.5 font-medium">{tx(modelo.etiqueta, lang)}</span>
+                          <span className="text-muted-foreground">{tx(modelo.porque, lang)}</span>
+                        </p>
+                      )}
                       {TOOLS_POR_JOB[job].length > 1 && (
                         <div className="mt-3">
                           <p className="mb-1.5 text-xs text-muted-foreground">{tx(UI.cambiarHerramienta, lang)}</p>
                           <ChipSelect options={TOOLS_POR_JOB[job].map((t) => ({ value: t, label: tx(TOOL_LABEL[t], lang) }))} selected={[tool]} onChange={(up) => setToolOverride((up([tool])[0] as Tool | undefined) ?? null)} ariaLabel={tx(UI.herramienta, lang)} allowCustom={false} />
                         </div>
                       )}
-                      {video && duraciones.length > 1 && (
+                      {video && (duraciones.length > 1 || veoForzado) && (
                         <div className="mt-3">
                           <p className="mb-1.5 text-xs text-muted-foreground">{tx(UI.duracion, lang)}</p>
                           <ChipSelect options={duraciones.map((d) => ({ value: String(d), label: `${d} s` }))} selected={[String(duracionEfectiva)]} onChange={(up) => setDuracion(Number(up([String(duracionEfectiva)])[0]) || null)} ariaLabel={tx(UI.duracion, lang)} allowCustom={false} />
+                          {veoForzado && <p className="mt-1 text-[11px] text-muted-foreground">{tx(UI.duracionConRefs, lang)}</p>}
                         </div>
                       )}
                       {video && (

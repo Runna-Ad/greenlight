@@ -5,6 +5,7 @@
  * perspectiva desde el ADN visual, y paleta de marca en foto de producto.
  */
 import { etiquetaRef, frases, negativosDe, textoDe, type PromptSpec, type RefRole } from "../spec.ts";
+import { positivar } from "../positivo.ts";
 import type { Salida } from "./salida.ts";
 
 /** Cómo se nombra una referencia dentro del prompt. Nano Banana entiende "[Imagen N]";
@@ -48,7 +49,7 @@ function instruccion(spec: PromptSpec, etiqueta: Etiquetador): string {
       return `Turn the subject from ${ref(s, "sujeto")} into a collectible figure${s.estilo ? ` in ${s.estilo} style` : " in detailed vinyl style"}, standing on a round base under clean studio lighting${emp ? `. Behind the figure, its product box, with a design inspired by ${emp}` : ". Next to it, a product box with a modern graphic design showing an illustration of the character"}`;
     }
     case "foto_producto":
-      return `Turn the product photo from ${ref(s, "producto")} into a high-impact advertising photograph. Keep the product itself unchanged but optimize lighting, focus and color. ${s.entorno ? `Place it in this setting: ${s.entorno}` : "Place it in the best aspirational setting for its audience"}${s.accion ? `. Composition and action: ${s.accion}` : ""}. Avoid distortion, harsh shadows and busy backgrounds; textures and details must look natural and high resolution`;
+      return `Turn the product photo from ${ref(s, "producto")} into a high-impact advertising photograph. Keep the product itself unchanged but optimize lighting, focus and color. ${s.entorno ? `Place it in this setting: ${s.entorno}` : "Place it in the best aspirational setting for its audience"}${s.accion ? `. Composition and action: ${s.accion}` : ""}. Accurate proportions, soft shadows and a clean background; textures and details must look natural and high resolution`;
     case "escena_persona":
       return `Take the person from ${ref(s, "sujeto")} and create a new photograph of them ${s.accion ? s.accion : "in a natural pose"}${s.entorno ? ` in ${s.entorno}` : ""}. Integrate lighting, shadows and perspective so it looks like one real shot`;
     case "imagen_libre":
@@ -111,28 +112,52 @@ function marca(spec: PromptSpec): string | null {
 export function clausulaTexto(spec: PromptSpec): string {
   const t = textoDe(spec);
   if (!t) return "No text, letters, captions or watermarks anywhere in the image";
-  return `Render this exact text, spelled letter by letter with no changes, as part of the image: "${t.contenido.trim()}"${t.posicion ? `, placed ${t.posicion}` : ""}${t.estilo ? `, ${t.estilo}` : ", in clean legible typography that suits the scene"}. No other text`;
+  // Sin estilo pedido se pide una TIPOGRAFÍA real: "clean typography" a secas produce letras
+  // genéricas y espaciado raro; una familia concreta y contraste alto rinden mucho mejor.
+  return `Render this exact text, spelled letter by letter with no changes, as part of the image: "${t.contenido.trim()}"${t.posicion ? `, placed ${t.posicion}` : ""}${t.estilo ? `, ${t.estilo}` : ", set in a real typeface: bold geometric sans-serif, evenly kerned, high contrast against its background"}. No other text`;
+}
+
+/** La referencia de estilo (slot opcional): se toma prestado el LOOK, no el sujeto. En
+ *  imagen_libre la instrucción ya la nombra; en los demás jobs va como frase propia. */
+function estiloPrestado(spec: PromptSpec, etiqueta: Etiquetador): string | null {
+  if (spec.job === "imagen_libre") return null;
+  const e = etiqueta(spec, "estilo");
+  return e ? `Borrow only the visual style of ${e} (color grading, light quality, composition); its subject is not part of this image` : null;
+}
+
+/** Salida de Nano Banana: formato + resolución cuando el destino la pide (impresión y
+ *  banners salen a 2K; lo demás a la resolución por default, más barato). */
+function salidaNB(spec: PromptSpec): string {
+  const alta = spec.destino === "print" || spec.destino === "web_banner";
+  return `Output format: ${spec.aspect}${alta ? ", 2K resolution" : ""}, photorealistic unless a style says otherwise`;
 }
 
 /** El cuerpo compartido de un prompt de imagen (Nano Banana y ChatGPT usan el mismo
- *  orden: instrucción → igualar referencia → técnica → marca → texto → conservar → evitar). */
+ *  orden: instrucción → estilo prestado → igualar referencia → técnica → marca → texto →
+ *  conservar → lo que se quiere EN LUGAR de lo que se evita → un "Avoid" corto).
+ *  Las dos herramientas carecen de campo negativo: "no busy background" produce justo eso. */
 export function cuerpoImagen(spec: PromptSpec, etiqueta: Etiquetador): (string | null)[] {
-  const evitar = negativosDe(spec);
+  const { positivos, sinMapear } = positivar(negativosDe(spec));
   return [
     instruccion(spec, etiqueta),
+    estiloPrestado(spec, etiqueta),
     igualarADN(spec),
     tecnicos(spec),
     marca(spec),
     clausulaTexto(spec),
     spec.refs.length || spec.preservar.length ? `Keep unchanged: ${preservar(spec).join("; ")}` : null,
-    evitar.length ? `Avoid: ${evitar.join(", ")}` : null,
+    positivos.length ? `Keep the frame: ${positivos.join("; ")}` : null,
+    sinMapear.length ? `Avoid: ${sinMapear.slice(0, 4).join(", ")}` : null,
   ];
 }
 
+/** Cuántos "qué evitar" quedaron sin convertir a positivo (el diagnóstico lo enseña; así el
+ *  mapa de positivo.ts crece con datos). */
+export function negativosSinMapear(spec: PromptSpec): number {
+  return positivar(negativosDe(spec)).sinMapear.length;
+}
+
 export function compilarNanoBanana(spec: PromptSpec): Salida {
-  const texto = frases(
-    ...cuerpoImagen(spec, etiquetaNB),
-    `Output format: ${spec.aspect}, photorealistic unless a style says otherwise`,
-  );
+  const texto = frases(...cuerpoImagen(spec, etiquetaNB), salidaNB(spec));
   return { texto, formato: "texto" };
 }

@@ -71,7 +71,7 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
     url: "https://labs.google/flow/",
     imagenes: true,
     video: true,
-    duraciones: [8],
+    duraciones: [8, 6, 4], // 8 primero = default (y obligatorio con referencias); ver duracionVeo
     color: "#29b6f6",
   },
   kling: {
@@ -79,7 +79,7 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
     nombre: "Kling",
     idioma: "en",
     formato: "texto",
-    maxPalabras: 50,
+    maxPalabras: 60,
     maxCaracteres: null,
     url: "https://app.klingai.com/",
     imagenes: true,
@@ -142,6 +142,13 @@ export const TOOLS_POR_JOB: Record<JobType, Tool[]> = {
 export function herramientaVigente(tool: string, job: JobType): Tool | null {
   const candidatas = [tool, TOOL_SUCESORA[tool]].filter((t): t is Tool => !!t && (TOOLS as string[]).includes(t));
   return candidatas.find((t) => TOOLS_POR_JOB[job].includes(t)) ?? null;
+}
+
+/** Veo 3.1 exige 8 s cuando hay imágenes de referencia (también con primer/último cuadro y
+ *  1080p): con refs la duración pedida se ignora y se fuerza a 8. Sin refs, la más cercana. */
+export const VEO_SEGUNDOS_CON_REFS = 8;
+export function duracionVeo(pedida: number | null, refs: number): number {
+  return refs > 0 ? VEO_SEGUNDOS_CON_REFS : duracionValida("veo", pedida);
 }
 
 /** Formatos que cada herramienta acepta de verdad (verificado 2026-09-11). El diagnóstico

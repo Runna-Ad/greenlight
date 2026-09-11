@@ -1,4 +1,5 @@
 import { ASPECTS, type Aspect, type MarcaPreset } from "./spec.ts";
+import { plano } from "./texto.ts";
 
 /**
  * HÜE Prisma — el PRESET de marca (marcas.prisma_presets): lo que la marca del cliente
@@ -39,7 +40,8 @@ function lista(v: unknown, max: number, norm: (s: string) => string = (s) => s):
   const out: string[] = [];
   for (const x of v) {
     if (typeof x !== "string") continue;
-    const s = norm(x.trim().slice(0, PRESET_LIMITES.item)).trim();
+    // plano: el texto del Admin entra a los prompts (writer y compilados): una línea, sin control chars.
+    const s = norm(plano(x).slice(0, PRESET_LIMITES.item)).trim();
     if (!s || out.includes(s)) continue;
     out.push(s);
     if (out.length >= max) break;
@@ -53,7 +55,7 @@ export function normalizarPreset(raw: unknown): PresetGuardado {
   const aspect = typeof o.aspect_default === "string" && (ASPECTS as string[]).includes(o.aspect_default) ? (o.aspect_default as Aspect) : null;
   return {
     paleta: lista(o.paleta, PRESET_LIMITES.paleta, normalizarColor).filter(esHex),
-    tono: typeof o.tono === "string" ? o.tono.trim().slice(0, PRESET_LIMITES.tono) : "",
+    tono: typeof o.tono === "string" ? plano(o.tono).slice(0, PRESET_LIMITES.tono) : "",
     evitar: lista(o.evitar, PRESET_LIMITES.evitar),
     aspect_default: aspect,
   };

@@ -21,7 +21,7 @@ import type { PrismaVariante } from "../../database.types.ts";
 export { plano };
 
 /** Sube cuando cambie cualquier texto de aquí: cada prompt guardado lleva la versión. */
-export const PROMPT_VERSION = "2026-09-11.1";
+export const PROMPT_VERSION = "2026-09-11.2";
 
 export const BLOQUE_ESTABLE = `You are H.Ü.E, the prompt director of Rünna, a creative agency in Mexico. Designers with little AI experience describe what they want in plain words (Spanish or English) and upload reference images. Your job is NOT to write the final prompt: it is to fill a structured PromptSpec that the app then compiles into the exact format each tool needs (Nano Banana, ChatGPT Images, Veo 3.1, Kling, Higgsfield). You report the spec with the tool call. Nothing else.
 
@@ -35,14 +35,15 @@ ABSOLUTE RULES
 - One camera move per spec for Kling and Higgsfield; two at most for Veo.
 - Brand comes first: if a brand preset is given, its palette, tone and "avoid" list override your taste.
 - TEXT IN THE PIECE: if the designer wants words to appear IN the image or video (a quoted phrase, "que diga…", "con el texto…", a headline, an offer, a price they typed), copy those words VERBATIM, in the designer's language, into texto_en_imagen.contenido. Never translate, rephrase or "improve" them. Add posicion/estilo only if the designer said where or how. When texto_en_imagen is filled, do NOT add "no text overlays" to negativos.
-- When the designer asked for no text (texto_en_imagen null), add "no text overlays" to negativos.
+- When the designer asked for no text (texto_en_imagen null), add "text overlays" to negativos.
+- negativos are SHORT NOUN PHRASES of what to avoid ("text overlays", "extra people", "harsh shadows", "busy background") — never "no X" or "avoid X". The app turns the common ones into positive phrasing for tools without a negative field (Nano Banana, ChatGPT, Kling) and keeps nouns for Veo.
 - Never invent prices, claims, legal text or brand slogans that the designer did not write.
 
 WHAT EACH TOOL EXPECTS (the app enforces the limits; you write so they are easy to meet)
 - nanobanana (image create/edit, ${TOOL_INFO.nanobanana.nombre}): natural-language instruction; strong on identity and on matching light/perspective. Fill sujeto/accion/entorno + preservar. For edits, "accion" is the edit itself.
 - chatgpt (image create/edit, ${TOOL_INFO.chatgpt.nombre}): same natural-language instruction; the strongest at rendering exact text. Same fields as nanobanana.
-- veo (video, ${TOOL_INFO.veo.nombre}, 8 s): needs a clear description, a camera move, lighting, and 3 timed beats (0-2 s, 2-6 s, 6-8 s). Supports dialogue with voice. If a video_type is given (product unboxing, selfie vlog, cinematic trailer…) let it drive style and pacing. Fill beats.
-- kling (video, ${TOOL_INFO.kling.nombre}, 5 or 10 s): ONE sentence, max 50 words: style, subject + action, ONE camera move, atmosphere. Keep sujeto/accion/entorno short. Transitions: start image → end image, no cut, max 500 characters.
+- veo (video, ${TOOL_INFO.veo.nombre}, 4, 6 or 8 s; always 8 s when reference images are attached): needs a clear description, ONE camera move, lighting, and 3 timed beats (for 8 s: 0-2 s, 2-6 s, 6-8 s). Supports dialogue with voice (English fully; other languages best-effort). If a video_type is given (product unboxing, selfie vlog, cinematic trailer…) let it drive style and pacing. Fill beats.
+- kling (video, ${TOOL_INFO.kling.nombre} 3, 5 or 10 s): ONE sentence, max 60 words: style, subject + action, ONE camera move, atmosphere. No negative field: negativos become positive phrasing. Keep sujeto/accion/entorno short. Transitions: start image → end image, no cut, max 500 characters.
 - higgsfield (video from a photo, ${TOOL_INFO.higgsfield.nombre}, 5 s): short prompt + a camera PRESET name from this list: ${PRESETS_HIGGSFIELD.join(", ")}. Put the preset in "preset" and describe subtle subject motion in "accion".
 
 HOW TO READ THE DESIGNER
@@ -61,7 +62,7 @@ KNOWN FAILURE MODES (avoid)
 
 WORKED EXAMPLES
 1) job=cambio_fondo, tool=nanobanana, idea="ponla en una playa al atardecer", refs=[sujeto: "a woman in a red dress standing in a studio"]
-   → sujeto: "the woman in the red dress from the reference"; accion: "standing relaxed, same pose"; entorno: "a quiet beach at sunset, wet sand reflecting the sky, gentle waves"; luz: "golden hour, warm low sun from camera left, long soft shadows"; camara: {angulo: "eye level", movimiento: null, lente: "85mm, shallow depth of field"}; mood: "calm, warm"; estilo: "photorealistic photo"; preservar: ["face identity", "hair", "the red dress", "hands"]; negativos: ["no text overlays", "no extra people"].
+   → sujeto: "the woman in the red dress from the reference"; accion: "standing relaxed, same pose"; entorno: "a quiet beach at sunset, wet sand reflecting the sky, gentle waves"; luz: "golden hour, warm low sun from camera left, long soft shadows"; camara: {angulo: "eye level", movimiento: null, lente: "85mm, shallow depth of field"}; mood: "calm, warm"; estilo: "photorealistic photo"; preservar: ["face identity", "hair", "the red dress", "hands"]; negativos: ["text overlays", "extra people"].
 2) job=animar_foto, tool=kling, idea="que se mueva un poco y sonría", refs=[sujeto: "a man in a suit looking at the camera"]
    → sujeto: "the man in the suit from the reference"; accion: "breathes softly, blinks, then breaks into a warm smile"; entorno: "as in the reference"; camara: {angulo: null, movimiento: "slow dolly in", lente: null}; luz: "as in the reference"; mood: "warm, confident"; estilo: "cinematic video"; beats: null.
 3) job=escena_sora, tool=veo, idea="unboxing de la tarjeta DiDi en una mesa de madera, 8 segundos", video_type="Unboxing de producto"
@@ -88,6 +89,8 @@ export type EntradaWriter = {
   texto: string | null;
   /** Lo aprendido de esta marca (ganadores + preferencias); null si no hay marca o datos. */
   aprendizaje: Aprendizaje | null;
+  /** F1: el modelo/nivel recomendado ("Úsalo en…"), para que el writer dimensione el spec. */
+  modelo?: string | null;
 };
 
 /** Topes de las TOOL NOTES: sin ellos el prefijo cacheable se infla hasta costar más de lo
@@ -138,24 +141,28 @@ export function bloqueVariable(e: EntradaWriter): string {
   lineas.push(`TOOL: ${e.tool}`);
   lineas.push(`DESTINATION: ${e.destino} · aspect ${e.aspect}${e.duracion ? ` · ${e.duracion} s` : ""}`);
   if (e.videoType) lineas.push(`VIDEO TYPE (style vocabulary for Veo/Kling): ${e.videoType}`);
+  // El modelo/nivel donde se va a pegar: Pro y sunburst premian el detalle preciso; Flash,
+  // flare, Fast y Turbo premian la brevedad.
+  if (e.modelo) lineas.push(`TARGET MODEL: ${e.modelo} (Pro / sunburst reward precise detail; Flash / flare / Fast / Turbo reward brevity — size the spec accordingly)`);
   lineas.push(`IDEA (verbatim from the designer): "${e.idea.trim() || "(empty: infer the simplest scene for this job)"}"`);
   const esperadas = REFS_POR_JOB[e.job].map((r) => r.role + (r.opcional ? "?" : "")).join(", ") || "none";
   lineas.push(`EXPECTED REFERENCES FOR THIS JOB: ${esperadas}`);
   if (e.refs.length) {
     lineas.push("REFERENCES PROVIDED (in order; the app will call them [Imagen 1], [Imagen 2]…):");
     e.refs.forEach((r, i) => {
+      // Caption y ADN los escribió la visión sobre una imagen que subió una persona: datos, cercados.
       const dna = r.dna
-        ? ` · DNA → light: ${r.dna.luz}; lens: ${r.dna.lente}; palette: ${r.dna.paleta.join(", ")}; mood: ${r.dna.mood}; composition: ${r.dna.composicion}; texture: ${r.dna.textura}`
+        ? cercado(` · DNA → light: ${r.dna.luz}; lens: ${r.dna.lente}; palette: ${r.dna.paleta.join(", ")}; mood: ${r.dna.mood}; composition: ${r.dna.composicion}; texture: ${r.dna.textura}`)
         : "";
-      lineas.push(`  [Imagen ${i + 1}] role=${r.role} · ${r.caption ?? "(no caption)"}${dna}`);
+      lineas.push(`  [Imagen ${i + 1}] role=${r.role} · ${r.caption ? cercado(r.caption) : "(no caption)"}${dna ? ` ${dna}` : ""}`);
     });
   } else {
     lineas.push("REFERENCES PROVIDED: none");
   }
   const look = Object.entries(e.look).filter(([, v]) => v && v.trim());
-  if (look.length) lineas.push(`LOOK CHOSEN BY THE DESIGNER (copy verbatim): ${look.map(([k, v]) => `${k}="${v}"`).join("; ")}`);
+  if (look.length) lineas.push(`LOOK CHOSEN BY THE DESIGNER (copy verbatim): ${look.map(([k, v]) => `${k}="${cercado(v ?? "")}"`).join("; ")}`);
   if (e.texto?.trim()) lineas.push(`TEXT THAT MUST APPEAR IN THE PIECE (copy verbatim into texto_en_imagen.contenido): "${e.texto.trim()}"`);
-  if (e.dialogo?.texto.trim()) lineas.push(`DIALOGUE (keep verbatim, language ${e.dialogo.idioma}${e.dialogo.voz ? `, voice: ${e.dialogo.voz}` : ""}): "${e.dialogo.texto.trim()}"`);
+  if (e.dialogo?.texto.trim()) lineas.push(`DIALOGUE (keep verbatim, language ${cercado(e.dialogo.idioma)}${e.dialogo.voz ? `, voice: ${cercado(e.dialogo.voz)}` : ""}): "${cercado(e.dialogo.texto)}"`);
   if (e.marca) lineas.push(`BRAND PRESET: ${e.marca.nombre} · palette ${e.marca.paleta.join(", ") || "-"} · tone "${e.marca.tono}" · avoid: ${e.marca.evitar.join(", ") || "-"}`);
   // Cercado y en una sola línea: la descripción la escribió una persona (y la reusan otras);
   // es un dato, no una instrucción, y no puede fingir una sección nueva del prompt.

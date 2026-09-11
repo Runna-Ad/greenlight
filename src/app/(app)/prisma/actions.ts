@@ -11,11 +11,12 @@ import { escribirSpec, refinarSpec, variarSpec, recompilar, explicarPrompt, desc
 import type { EntradaWriter } from "@/lib/prisma/prompts/writer";
 import { plano } from "@/lib/prisma/texto";
 import { BUCKET, cargarAprendizaje, cargarMarcas, cargarPersonajes, cargarReglas, firmar } from "@/lib/prisma/data";
-import { ASPECTS, DESTINOS, JOB_KIND, NOMBRE_HISTORICO, VIDEO_TYPES, TOOLS, esSpec, type Aspect, type Destino, type JobType, type PromptSpec, type RefRole, type Tool, type VisualDNA } from "@/lib/prisma/spec";
+import { ASPECTS, DESTINOS, JOB_KIND, NOMBRE_HISTORICO, REFS_POR_JOB, VIDEO_TYPES, TOOLS, esDestino, esSpec, type Aspect, type Destino, type JobType, type PromptSpec, type RefRole, type Tool, type VisualDNA } from "@/lib/prisma/spec";
 import { t, type Par } from "@/lib/prisma/copy";
 import { TOOL_INFO, TOOLS_POR_JOB, herramientaVigente } from "@/lib/prisma/tools";
 import { PRISMA_VARIANTES_PEDIBLES, type PrismaCharacterRow, type PrismaEventoTipo, type PrismaPromptRow, type PrismaSpecRow, type PrismaRefGuardada, type PrismaVariante } from "@/lib/database.types";
 import { personajeUI, type PersonajeUI } from "@/lib/prisma/personajes";
+import { pistasModelo, recomendarModelo } from "@/lib/prisma/modelo";
 import type { Salida } from "@/lib/prisma/compilers";
 
 type Fail = { ok: false; error: string };
@@ -146,8 +147,14 @@ function saturado(soyId: string, nowMs = Date.now()): boolean {
 }
 const FRENO: Fail = { ok: false, error: "Muchas llamadas a H.Ü.E en poco tiempo. Espera unos minutos." };
 
-const s0 = (v: unknown, max = 2000): string => (typeof v === "string" ? v.trim().slice(0, max) : "");
-const sn = (v: unknown, max = 400): string | null => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
+// Todo texto que viene del cliente sale de aquí en UNA línea y sin caracteres de control
+// (plano): la regla de la casa se cumple en el saneo, no en cada sitio que lo usa.
+const s0 = (v: unknown, max = 2000): string => (typeof v === "string" ? plano(v).slice(0, max) : "");
+const sn = (v: unknown, max = 400): string | null => {
+  const p = typeof v === "string" ? plano(v).slice(0, max) : "";
+  return p || null;
+};
+const IDIOMAS_DIALOGO = ["es-MX", "en"] as const;
 
 /** Sanea el ADN que viene del cliente (no se confía en él aunque lo haya escrito H.Ü.E). */
 function dnaLimpio(v: unknown): VisualDNA | null {
@@ -169,8 +176,9 @@ function normalizar(raw: InputGenerar): InputGenerar | Fail {
   const videoType = sn(raw.videoType, 60);
   if (videoType && !(VIDEO_TYPES as string[]).includes(videoType)) return { ok: false, error: "Tipo de video no válido." };
   const refs: RefEntrada[] = [];
+  const rolesDelJob = REFS_POR_JOB[raw.job].map((s) => s.role);
   for (const r of raw.refs ?? []) {
-    if (!ROLES_REF.includes(r.role)) return { ok: false, error: "Una de las referencias no es válida." };
+    if (!ROLES_REF.includes(r.role) || !rolesDelJob.includes(r.role)) return { ok: false, error: "Una de las referencias no es válida para este trabajo." };
     if (typeof r.storage_path !== "string" || !RUTA_REF.test(r.storage_path)) return { ok: false, error: "Referencia inválida." };
     refs.push({ role: r.role, storage_path: r.storage_path, caption: sn(r.caption), dna: dnaLimpio(r.dna) });
   }
@@ -180,7 +188,7 @@ function normalizar(raw: InputGenerar): InputGenerar | Fail {
   return {
     job: raw.job,
     tool: raw.tool,
-    idea: plano(s0(raw.idea)),
+    idea: s0(raw.idea),
     destino: raw.destino,
     aspect: raw.aspect,
     duracion: dur,
@@ -192,14 +200,11 @@ function normalizar(raw: InputGenerar): InputGenerar | Fail {
       mood: sn(raw.look?.mood),
       estilo: sn(raw.look?.estilo),
     },
-    dialogo: raw.dialogo && s0(raw.dialogo.texto, 600) ? { texto: s0(raw.dialogo.texto, 600), idioma: s0(raw.dialogo.idioma, 12) || "es-MX", voz: sn(raw.dialogo.voz, 120) } : null,
+    dialogo: raw.dialogo && s0(raw.dialogo.texto, 600) ? { texto: s0(raw.dialogo.texto, 600), idioma: (IDIOMAS_DIALOGO as readonly string[]).includes(raw.dialogo.idioma) ? raw.dialogo.idioma : "es-MX", voz: sn(raw.dialogo.voz, 120) } : null,
     marcaId: sn(raw.marcaId, 64),
     personajeId: sn(raw.personajeId, 64),
     videoType,
-    texto: (() => {
-      const t = sn(raw.texto, 200);
-      return t ? plano(t) || null : null;
-    })(),
+    texto: sn(raw.texto, 200),
   };
 }
 
@@ -243,11 +248,11 @@ async function entradaDe(inp: InputGenerar): Promise<{ entrada: EntradaWriter; c
   };
 }
 
-async function guardarPrompt(specId: string, tool: Tool, salida: Salida, valido: boolean, errores: string[], usage: Uso | null, variante: PrismaVariante = "base", version: string = PROMPT_VERSION): Promise<string | Fail> {
+async function guardarPrompt(specId: string, tool: Tool, salida: Salida, valido: boolean, errores: string[], usage: Uso | null, variante: PrismaVariante = "base", version: string = PROMPT_VERSION, modeloSug: string | null = null): Promise<string | Fail> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("prisma_prompts")
-    .insert({ spec_id: specId, tool, variante, prompt_version: version, salida: salida.texto, formato: salida.formato, valido, errores, model: usage ? MODEL : null, usage })
+    .insert({ spec_id: specId, tool, variante, prompt_version: version, salida: salida.texto, formato: salida.formato, valido, errores, model: usage ? MODEL : null, usage, modelo_sug: modeloSug })
     .select("id")
     .single<{ id: string }>();
   if (error || !data) return fallo("prisma_prompts.insert", error?.message);
@@ -289,7 +294,9 @@ export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar
   // entra al writer en cada generación, sin que nadie lo cure.
   // El conocimiento vivo (TOOL NOTES) va en el bloque cacheado; en paralelo con el aprendizaje.
   const [aprendizaje, reglas] = await Promise.all([ent.clientId ? cargarAprendizaje(db, ent.clientId, inp.job) : Promise.resolve(null), cargarReglas(db)]);
-  const r = await escribirSpec({ ...ent.entrada, aprendizaje }, estableCon(reglas.notas, reglas.clave));
+  // "Úsalo en…": el modelo/nivel donde se va a pegar; el writer dimensiona el spec para él.
+  const modelo = recomendarModelo({ job: inp.job, tool: inp.tool, destino: inp.destino, refs: inp.refs.length, texto: !!inp.texto?.trim(), dialogo: !!inp.dialogo?.texto.trim(), duracion: inp.duracion }).modelo;
+  const r = await escribirSpec({ ...ent.entrada, aprendizaje, modelo }, estableCon(reglas.notas, reglas.clave));
   if (!r.ok) return r;
 
   const refsGuardadas: PrismaRefGuardada[] = inp.refs.map((x) => ({ role: x.role, storage_path: x.storage_path, caption: x.caption, dna: x.dna as Record<string, unknown> | null }));
@@ -300,7 +307,9 @@ export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar
     .single<{ id: string }>();
   if (error || !specRow) return fallo("prisma_specs.insert", error?.message);
 
-  const promptId = await guardarPrompt(specRow.id, inp.tool, r.salida, r.valido, r.errores, r.usage, "base", versionCon(reglas.clave));
+  // Se guarda el modelo calculado sobre el spec RESULTANTE (el modelo puede inferir texto en la
+  // pieza desde la idea): es exactamente lo que el resultado le enseña al diseñador.
+  const promptId = await guardarPrompt(specRow.id, inp.tool, r.salida, r.valido, r.errores, r.usage, "base", versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, inp.tool)).modelo);
   if (typeof promptId !== "string") return promptId;
 
   return { ok: true, specId: specRow.id, promptId, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, usage: r.usage, reparado: r.reparado, aprendio: { ganadores: aprendizaje?.ganadores.length ?? 0, preferencias: (aprendizaje?.versiones ? 1 : 0) + (aprendizaje?.cambios.length ? 1 : 0) } };
@@ -320,7 +329,9 @@ async function specDeFila(specId: string, g: { role: ViewRole; soyId: string }):
   // Herramienta retirada (Sora 2): la fila se lee con su sucesora. Nada se reescribe en la
   // BD; el siguiente prompt que se guarde ya va con la herramienta nueva.
   const historica = (TOOLS as string[]).includes(row.spec.tool) ? null : (row.spec.tool as string);
-  const spec = historica ? { ...row.spec, tool: herramientaVigente(historica, row.spec.job) ?? TOOLS_POR_JOB[row.spec.job][0] } : row.spec;
+  // Los specs de antes de F1 no traen destino dentro del jsonb: se toma de la fila.
+  const conDestino: PromptSpec = { ...row.spec, destino: esDestino(row.spec.destino) ? row.spec.destino : esDestino(row.destino) ? row.destino : null };
+  const spec = historica ? { ...conDestino, tool: herramientaVigente(historica, row.spec.job) ?? TOOLS_POR_JOB[row.spec.job][0] } : conDestino;
   return { row, spec, historica };
 }
 
@@ -328,6 +339,8 @@ export async function cambiarHerramienta(specId: string, tool: Tool): Promise<Re
   const g = await gate();
   if ("ok" in g) return g;
   if (!TOOLS.includes(tool)) return { ok: false, error: "Herramienta no válida." };
+  // No llama al modelo, pero guarda una fila por click: el mismo freno evita el goteo infinito.
+  if (saturado(g.soyId)) return FRENO;
   const s = await specDeFila(specId, g);
   if ("ok" in s) return s;
   if (!TOOLS_POR_JOB[s.spec.job].includes(tool)) return { ok: false, error: "Esa herramienta no sirve para este trabajo." };
@@ -335,7 +348,7 @@ export async function cambiarHerramienta(specId: string, tool: Tool): Promise<Re
   const r = recompilar(s.spec, tool);
   // La versión (audaz, mínima…) se hereda: cambiar de herramienta no la vuelve "base".
   const { variante } = await estadoActual(supabaseAdmin(), s);
-  const promptId = await guardarPrompt(specId, tool, r.salida, r.valido, r.errores, null, variante);
+  const promptId = await guardarPrompt(specId, tool, r.salida, r.valido, r.errores, null, variante, PROMPT_VERSION, recomendarModelo(pistasModelo(s.spec, tool)).modelo);
   if (typeof promptId !== "string") return promptId;
   return { ok: true, promptId, salida: r.salida, valido: r.valido, errores: r.errores, variante };
 }
@@ -355,12 +368,13 @@ export async function refinarPrompt(specId: string, cambio: string): Promise<Res
   const db = supabaseAdmin();
   const [{ tool, variante }, reglas] = await Promise.all([estadoActual(db, s), cargarReglas(db)]);
   const spec = { ...s.spec, tool };
-  const r = await refinarSpec({ ...entradaDesdeSpec(s), tool }, spec, texto, estableCon(reglas.notas, reglas.clave));
+  const modelo = recomendarModelo(pistasModelo(spec)).modelo;
+  const r = await refinarSpec({ ...entradaDesdeSpec(s), tool, modelo }, spec, texto, estableCon(reglas.notas, reglas.clave));
   if (!r.ok) return r;
 
   const { error } = await db.from("prisma_specs").update({ spec: r.spec }).eq("id", specId);
   if (error) return fallo("prisma_specs.update", error.message);
-  const promptId = await guardarPrompt(specId, tool, r.salida, r.valido, r.errores, r.usage, variante, versionCon(reglas.clave));
+  const promptId = await guardarPrompt(specId, tool, r.salida, r.valido, r.errores, r.usage, variante, versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, tool)).modelo);
   if (typeof promptId !== "string") return promptId;
   // Señal de aprendizaje: qué tuvo que pedir el diseñador (el texto, recortado).
   await anotarEvento(db, { spec_id: specId, prompt_id: promptId, client_id: s.row.client_id, job: spec.job, tool, variante, user_id: g.soyId, tipo: "refinado", detalle: texto.slice(0, 300) });
@@ -374,7 +388,7 @@ function entradaDesdeSpec(s: { row: PrismaSpecRow; spec: PromptSpec }): EntradaW
     job: spec.job,
     tool: spec.tool,
     idea: spec.idea,
-    destino: (s.row.destino as Destino | null) ?? "libre",
+    destino: spec.destino ?? (esDestino(s.row.destino) ? s.row.destino : "libre"),
     aspect: spec.aspect,
     duracion: spec.duracion,
     refs: spec.refs,
@@ -446,7 +460,7 @@ export async function abrirSpec(specId: string): Promise<ResultadoAbrir | Fail> 
     return { ok: true, promptId: previo.id, tool: s.spec.tool, spec: s.spec, salida: { texto: previo.salida, formato: previo.formato }, valido: previo.valido, errores: previo.errores ?? [], variante: previo.variante, nota };
   }
   const r = recompilar(s.spec, s.spec.tool);
-  const nuevoId = await guardarPrompt(specId, s.spec.tool, r.salida, r.valido, r.errores, null, p.variante);
+  const nuevoId = await guardarPrompt(specId, s.spec.tool, r.salida, r.valido, r.errores, null, p.variante, PROMPT_VERSION, recomendarModelo(pistasModelo(s.spec)).modelo);
   if (typeof nuevoId !== "string") return nuevoId;
   return { ok: true, promptId: nuevoId, tool: s.spec.tool, spec: s.spec, salida: r.salida, valido: r.valido, errores: r.errores, variante: p.variante, nota };
 }
@@ -569,7 +583,8 @@ export async function variar(specId: string, variante: string): Promise<Resultad
   const db = supabaseAdmin();
   // La versión se pide sobre la herramienta que el diseñador está VIENDO (la del último prompt).
   const [{ tool }, reglas] = await Promise.all([estadoActual(db, s), cargarReglas(db)]);
-  const r = await variarSpec({ ...entradaDesdeSpec(s), tool }, { ...s.spec, tool }, v, estableCon(reglas.notas, reglas.clave));
+  const modelo = recomendarModelo(pistasModelo(s.spec, tool)).modelo;
+  const r = await variarSpec({ ...entradaDesdeSpec(s), tool, modelo }, { ...s.spec, tool }, v, estableCon(reglas.notas, reglas.clave));
   if (!r.ok) return r;
 
   const fila = { client_id: s.row.client_id, marca_id: s.row.marca_id, job: s.row.job, tool, destino: s.row.destino, idea: s.row.idea, spec: r.spec, refs: s.row.refs, created_by: g.soyId };
@@ -581,7 +596,7 @@ export async function variar(specId: string, variante: string): Promise<Resultad
   }
   const { data: nuevo, error } = ins;
   if (error || !nuevo) return fallo("prisma_specs.insert", error?.message);
-  const promptId = await guardarPrompt(nuevo.id, tool, r.salida, r.valido, r.errores, r.usage, v, versionCon(reglas.clave));
+  const promptId = await guardarPrompt(nuevo.id, tool, r.salida, r.valido, r.errores, r.usage, v, versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, tool)).modelo);
   if (typeof promptId !== "string") return promptId;
   await anotarEvento(db, { spec_id: specId, prompt_id: promptId, client_id: s.row.client_id, job: s.row.job, tool, variante: v, user_id: g.soyId, tipo: "variante", detalle: v });
   return { ok: true, specId: nuevo.id, promptId, tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, variante: v };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
-import { Check, Copy, ExternalLink, Flame, Lightbulb, Minus, RefreshCw, Shield, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2 } from "lucide-react";
+import { Check, Copy, Cpu, ExternalLink, Flame, Lightbulb, Minus, RefreshCw, Shield, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,7 @@ import { cambiarHerramienta, calificar, explicar, refinarPrompt, registrarEvento
 import { PEDIR_VERSION_LABEL, TOOL_LABEL, UI, VARIANTE_LABEL, tx, type Lang, type Par } from "@/lib/prisma/copy";
 import type { PrismaVariante } from "@/lib/database.types";
 import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
+import { pistasModelo, recomendarModelo } from "@/lib/prisma/modelo";
 import type { PromptSpec, Tool } from "@/lib/prisma/spec";
 import type { Salida } from "@/lib/prisma/compilers";
 import { prismaGeneracionActiva } from "@/lib/prisma/flags";
@@ -59,6 +60,9 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
   const [variando, setVariando] = useState<PrismaVariante | null>(null);
 
   const info = TOOL_INFO[vivo.tool];
+  // "Úsalo en…": puro y en el cliente; el servidor guarda el mismo cálculo (sobre el spec
+  // resultante) en prisma_prompts.modelo_sug para medir si se sigue.
+  const modelo = recomendarModelo(pistasModelo(vivo.spec, vivo.tool));
   const otras = TOOLS_POR_JOB[vivo.spec.job].filter((t) => t !== vivo.tool);
   // Mientras CUALQUIER acción va al servidor, las demás esperan: dos respuestas cruzadas
   // (cambiar herramienta + otra versión) pisarían el resultado con un `vivo` viejo.
@@ -165,6 +169,14 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
             )}
           </h2>
           {vivo.porque && <p className="mt-0.5 text-xs text-muted-foreground">{tx(vivo.porque, lang)}</p>}
+          {/* "Úsalo en…": en qué modelo/nivel de la herramienta pegar, por qué y cómo llegar. */}
+          <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-foreground">
+            <Cpu className="size-3.5 text-primary" aria-hidden="true" />
+            <span className="font-medium">{tx(UI.usaloEn, lang)}</span>
+            <span className="rounded-full border border-border bg-secondary px-2 py-0.5 font-medium">{tx(modelo.etiqueta, lang)}</span>
+            <span className="text-muted-foreground">{tx(modelo.porque, lang)}</span>
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{tx(modelo.comoLlegar, lang)}</p>
           {/* Aprendizaje visible: el diseñador sabe que H.Ü.E ya "conoce" a esta marca. */}
           {vivo.aprendio && vivo.aprendio.ganadores > 0 && <p className="mt-0.5 text-xs text-muted-foreground">{tx(UI.aprendioDe, lang).replace("{n}", String(vivo.aprendio.ganadores))}</p>}
           {vivo.aprendio && vivo.aprendio.ganadores === 0 && vivo.aprendio.preferencias > 0 && <p className="mt-0.5 text-xs text-muted-foreground">{tx(UI.aprendioPref, lang)}</p>}

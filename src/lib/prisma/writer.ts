@@ -2,6 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { specVacio, type PromptSpec, type Beat, type Camara, type Dialogo, type VideoType, type TextoEnImagen, type Tool } from "@/lib/prisma/spec";
 import { VIDEO_TYPES } from "@/lib/prisma/spec";
+import { plano } from "@/lib/prisma/texto";
 import { compilar, type Salida } from "@/lib/prisma/compilers";
 import { validar } from "@/lib/prisma/validators";
 import { PRESETS_HIGGSFIELD } from "@/lib/prisma/compilers/higgsfield";
@@ -108,9 +109,15 @@ function beatsDe(v: unknown): Beat[] | null {
  *  rescató de la idea (p. ej. una frase entre comillas). */
 function textoDesde(input: Record<string, unknown>, e: EntradaWriter): TextoEnImagen | null {
   const m = (input.texto_en_imagen ?? null) as Record<string, unknown> | null;
-  const contenido = e.texto?.trim() || (m ? s0(m.contenido) : "");
+  // Lo que escribió el diseñador manda; lo que propone el modelo se sanea igual que si fuera
+  // humano (vuelve al writer en cada refine): una línea y con tope.
+  const contenido = e.texto?.trim() || (m ? plano(s0(m.contenido)).slice(0, 200) : "");
   if (!contenido) return null;
-  return { contenido, posicion: m ? sn(m.posicion) : null, estilo: m ? sn(m.estilo) : null };
+  const corto = (v: unknown): string | null => {
+    const p = m ? plano(sn(v) ?? "").slice(0, 120) : "";
+    return p || null;
+  };
+  return { contenido, posicion: corto(m?.posicion), estilo: corto(m?.estilo) };
 }
 
 /** Mezcla lo que el modelo devolvió con lo que el código ya sabía (entrada). */
@@ -144,6 +151,7 @@ function specDesde(input: Record<string, unknown>, e: EntradaWriter): PromptSpec
     video_type: (VIDEO_TYPES as string[]).includes(vt ?? "") ? (vt as VideoType) : e.videoType && (VIDEO_TYPES as string[]).includes(e.videoType) ? (e.videoType as VideoType) : null,
     preset: sn(input.preset),
     texto: textoDesde(input, e),
+    destino: e.destino,
   };
 }
 

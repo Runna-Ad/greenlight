@@ -1,11 +1,11 @@
 // HÜE Prisma — golden set: specs → compilers → validators. Sin DB ni modelo.
 // Run: node scripts/test-prisma.mjs   (Node 24 quita los tipos al importar .ts)
-import { specVacio, contarPalabras, frases, comas, indiceRef, esSpec, JOBS_POR_KIND, TOOLS, TOOLS_HISTORICAS, TOOL_SUCESORA } from "../src/lib/prisma/spec.ts";
+import { specVacio, contarPalabras, frases, comas, indiceRef, esSpec, JOBS_POR_KIND, REFS_POR_JOB, TOOLS, TOOLS_HISTORICAS, TOOL_SUCESORA } from "../src/lib/prisma/spec.ts";
 import { compilar } from "../src/lib/prisma/compilers/index.ts";
 import { validar } from "../src/lib/prisma/validators.ts";
 import { elegirHerramienta } from "../src/lib/prisma/routing.ts";
 import { presetDe, PRESETS_HIGGSFIELD } from "../src/lib/prisma/compilers/higgsfield.ts";
-import { TOOLS_POR_JOB } from "../src/lib/prisma/tools.ts";
+import { TOOLS_POR_JOB, TOOL_INFO, duracionVeo } from "../src/lib/prisma/tools.ts";
 import { normalizarPreset, normalizarColor, presetDeMarca, presetVacio, validarPreset, PRESET_LIMITES } from "../src/lib/prisma/preset.ts";
 import { bloqueVariante, bloqueVariable } from "../src/lib/prisma/prompts/writer.ts";
 import { plano, cercado, cercadoMultilinea } from "../src/lib/prisma/texto.ts";
@@ -17,6 +17,15 @@ import { VIDEO_TYPES } from "../src/lib/prisma/spec.ts";
 import { herramientaVigente } from "../src/lib/prisma/tools.ts";
 import { VIDEO_TYPE_EN, LOOK_POR_TIPO } from "../src/lib/prisma/compilers/video-tipos.ts";
 import { regexSegura, validarRegla, notasDe } from "../src/lib/prisma/reglas.ts";
+import { positivar, sustantivar, POSITIVO_REGLAS } from "../src/lib/prisma/positivo.ts";
+import { deletrear, DELETREO_MAX } from "../src/lib/prisma/texto-imagen.ts";
+import { movimientos } from "../src/lib/prisma/camara.ts";
+import { recomendarModelo, pistasModelo } from "../src/lib/prisma/modelo.ts";
+import { TAMANO_GPT } from "../src/lib/prisma/compilers/chatgpt.ts";
+import { negativosSinMapear } from "../src/lib/prisma/compilers/nanobanana.ts";
+import { compilarFusion } from "../src/lib/prisma/compilers/fusion.ts";
+import { cortes } from "../src/lib/prisma/compilers/beats.ts";
+import { ASPECTS } from "../src/lib/prisma/spec.ts";
 
 let pass = 0,
   fail = 0;
@@ -108,7 +117,7 @@ console.log("\n▶ Kling");
   s.entorno = "a night market with paper lanterns, steam from food stalls, neon signs, wet cobblestones, vendors shouting, children running, fireworks in the distance, a cat on a roof";
   s.mood = "nostalgic, calm, melancholic, hopeful, quiet, warm, cinematic, epic";
   const out = compilar(s).texto;
-  ok("≤50 palabras aunque el spec sea largo", contarPalabras(out) <= 50, `${contarPalabras(out)}: ${out}`);
+  ok(`≤${TOOL_INFO.kling.maxPalabras} palabras aunque el spec sea largo`, contarPalabras(out) <= TOOL_INFO.kling.maxPalabras, `${contarPalabras(out)}: ${out}`);
   ok("empieza con el estilo", out.startsWith("Cinematic photo"), out);
   const pron = compilar(spec("animar_foto", "kling", { accion: "she breathes softly and smiles" })).texto;
   ok("quita el pronombre: 'coat breathes', no 'coat she breathes'", /black coat breathes softly/.test(pron), pron);
@@ -132,7 +141,8 @@ console.log("\n▶ Veo 3.1");
   ok("descripción de animar habla de la referencia", /reference image/i.test(j.description));
   ok("veo animar: sin 'she' pegado al sujeto", !/coat she /.test(JSON.parse(compilar(spec("animar_foto", "veo", { accion: "she smiles" })).texto).description));
   const sin = JSON.parse(compilar(spec("texto_a_video", "veo")).texto);
-  ok("sin diálogo sí pide sin música", sin.negative_prompts.includes("no music background"));
+  ok("sin diálogo sí pide sin música (como sustantivo, no 'no X')", sin.negative_prompts.includes("background music") && !sin.negative_prompts.some((n) => /^no /.test(n)));
+  ok("negative_prompt en una línea para el campo de Flow", typeof sin.negative_prompt === "string" && sin.negative_prompt.includes("background music"));
   ok("evitar de la marca entra a negative_prompts", sin.negative_prompts.includes("purple backgrounds"));
 }
 
@@ -145,7 +155,7 @@ console.log("\n▶ tipos de video + sucesión de Sora");
   ok("veo con tipo pasa el validador", validar(compilar(spec("escena_sora", "veo", { video_type: "Unboxing de producto" })).texto, spec("escena_sora", "veo", { video_type: "Unboxing de producto" })).ok);
   const kl = compilar(spec("escena_sora", "kling", { video_type: "Vlog Selfie" })).texto;
   ok("kling: el tipo abre la oración", kl.startsWith("Selfie vlog, "), kl);
-  ok("kling con tipo sigue ≤50 palabras", contarPalabras(kl) <= 50, String(contarPalabras(kl)));
+  ok("kling con tipo sigue dentro del tope", contarPalabras(kl) <= TOOL_INFO.kling.maxPalabras, String(contarPalabras(kl)));
   eq("tipoEn(null) → null", tipoEn(null), null);
   // Beats del modelo se realinean a los cortes oficiales de 8 s en Veo
   const conBeats = spec("escena_sora", "veo", { duracion: 8, beats: [
@@ -250,10 +260,10 @@ console.log("\n▶ texto en imagen + chatgpt");
   const gpt = compilar(spec("cambio_outfit", "chatgpt", { texto }));
   ok("chatgpt nombra adjuntos", gpt.texto.includes("the first attached image") && gpt.texto.includes("the second attached image"), gpt.texto);
   ok("chatgpt no usa [Imagen N]", !/\[Imagen \d/.test(gpt.texto));
-  ok("chatgpt pide tamaño portrait para 9:16", /portrait \(1024×1536\)/.test(gpt.texto));
+  ok("chatgpt pide tamaño portrait real para 9:16", /portrait \(864×1536, 9:16\)/.test(gpt.texto), gpt.texto);
   ok("chatgpt incluye el texto", gpt.texto.includes('"Hasta 20% de cashback"'));
   ok("chatgpt válido", validar(gpt.texto, spec("cambio_outfit", "chatgpt", { texto })).ok, JSON.stringify(validar(gpt.texto, spec("cambio_outfit", "chatgpt", { texto }))));
-  ok("chatgpt cuadrado para 1:1", /square \(1024×1024\)/.test(compilar(spec("imagen_libre", "chatgpt", { aspect: "1:1" })).texto));
+  ok("chatgpt cuadrado para 1:1 (1024×1024)", /square \(1024×1024, 1:1\)/.test(compilar(spec("imagen_libre", "chatgpt", { aspect: "1:1" })).texto));
   ok("todas las imágenes aceptan chatgpt", JOBS_POR_KIND.imagen.concat(JOBS_POR_KIND.edicion).every((j) => TOOLS_POR_JOB[j].includes("chatgpt")));
   ok("ningún video acepta chatgpt", JOBS_POR_KIND.video.every((j) => !TOOLS_POR_JOB[j].includes("chatgpt")));
   ok("chatgpt válido en todos los trabajos de imagen", JOBS_POR_KIND.imagen.concat(JOBS_POR_KIND.edicion).every((j) => validar(compilar(spec(j, "chatgpt")).texto, spec(j, "chatgpt")).ok));
@@ -266,7 +276,7 @@ console.log("\n▶ texto en imagen + chatgpt");
   ok("veo sin texto sigue en none", JSON.parse(compilar(spec("texto_a_video", "veo")).texto).text === "none");
   const kl = compilar(spec("texto_a_video", "kling", { texto })).texto;
   ok("kling incluye el texto", kl.includes('"Hasta 20% de cashback"'), kl);
-  ok("kling sigue ≤50 palabras", contarPalabras(kl) <= 50, String(contarPalabras(kl)));
+  ok("kling sigue dentro del tope", contarPalabras(kl) <= TOOL_INFO.kling.maxPalabras, String(contarPalabras(kl)));
   ok("filas viejas sin campo texto no rompen", compilar({ ...spec("foto_producto", "nanobanana"), texto: undefined }).texto.length > 0);
 
   // Routing: con texto → chatgpt; sin texto → nanobanana.
@@ -451,6 +461,162 @@ console.log("\n▶ TOOL NOTES + reglas");
     { clase: "nota", tool: "veo", nota_en: "off", fuente_fecha: null, activa: false, orden: 0 },
   ]);
   eq("notasDe: activas, ordenadas, en una línea; la de una herramienta retirada se DESCARTA", JSON.stringify(notas.map((n) => [n.tool, n.texto])), JSON.stringify([[null, "a b"], ["kling", "b"]]));
+}
+
+// ── 14. F1: compilers al día + "Úsalo en…" ──
+console.log("\n▶ F1 — de negativo a positivo");
+{
+  ok(`el mapa trae ≥ 28 reglas (${POSITIVO_REGLAS})`, POSITIVO_REGLAS >= 28);
+  const casos = [
+    ["no text overlays", "clean, text-free image"],
+    ["extra people", "only the subject in frame, nobody else"],
+    ["no busy background", "a clean, simple, uncluttered background"],
+    ["harsh shadows", "soft, even, flattering shadows"],
+    ["blurry", "tack-sharp focus on the subject"],
+    ["distortion", "accurate proportions and straight, stable lines"],
+    ["extra fingers", "natural hands with five fingers"],
+    ["no logos", "plain, unbranded surfaces"],
+    ["hard cuts", "one continuous take"],
+    ["no music", "natural ambient sound only"],
+    ["cartoon", "photorealistic rendering"],
+    ["oversaturated", "natural, balanced color saturation"],
+    ["low resolution", "high resolution, crisp fine detail"],
+    ["camera shake", "a smooth, steady camera"],
+    ["lens flare", "a clean lens with controlled highlights"],
+  ];
+  for (const [neg, pos] of casos) eq(`positivar("${neg}")`, positivar([neg]).positivos[0], pos);
+  const r = positivar(["no busy background", "purple backgrounds", "busy background", "  "]);
+  eq("duplicados de la misma familia se funden", r.positivos.length, 1);
+  eq("lo que no está en el mapa queda aparte", JSON.stringify(r.sinMapear), JSON.stringify(["purple backgrounds"]));
+  eq("'dark blue coat' NO se vuelve 'imagen clara' (queda sin mapear)", JSON.stringify(positivar(["dark blue coat"]).positivos), "[]");
+  eq("'holding hands' no es un defecto de manos", JSON.stringify(positivar(["holding hands"]).positivos), "[]");
+  eq("'price cuts' no es un corte de edición", JSON.stringify(positivar(["price cuts"]).positivos), "[]");
+  eq("'too dark' sí", positivar(["too dark"]).positivos[0], "a well-exposed, bright image");
+  eq("sustantivar quita la negación", sustantivar("no subtitles"), "subtitles");
+  eq("sustantivar: without", sustantivar("without any music"), "music");
+  eq("sustantivar deja un sustantivo tal cual", sustantivar("purple backgrounds"), "purple backgrounds");
+  const nb = compilar(spec("foto_producto", "nanobanana", { negativos: ["no busy background", "blur"] })).texto;
+  ok("nanobanana dice qué quiere EN LUGAR de lo que evita", nb.includes("Keep the frame: a clean, simple, uncluttered background; tack-sharp focus on the subject"), nb);
+  ok("nanobanana no dice 'no busy background'", !/no busy background/.test(nb));
+  ok("lo sin mapear va en un Avoid corto (evitar de la marca)", /Avoid: purple backgrounds/.test(nb), nb);
+  eq("negativosSinMapear cuenta lo que quedó", negativosSinMapear(spec("foto_producto", "nanobanana", { negativos: ["blur"] })), 1);
+  const kl = compilar(spec("animar_foto", "kling", { negativos: ["harsh shadows"], entorno: "", mood: "" })).texto;
+  ok("kling mete el positivo en la atmósfera (sin campo negativo)", kl.includes("soft, even, flattering shadows"), kl);
+  ok("kling nunca escribe 'no X'", !/\bno [a-z]/.test(kl), kl);
+}
+
+console.log("\n▶ F1 — Nano Banana 2/Pro: estilo prestado, tipografía real, 2K");
+{
+  const conEstilo = spec("foto_producto", "nanobanana");
+  conEstilo.refs = [...conEstilo.refs, { role: "estilo", caption: "a moody editorial photo", dna: null }];
+  const out = compilar(conEstilo).texto;
+  ok("la referencia de estilo se toma prestada sin copiar su sujeto", /Borrow only the visual style of \[Imagen 2/.test(out), out);
+  ok("la instrucción de foto de producto ya no dice 'Avoid …' (positivo)", !/Avoid distortion/.test(out), out);
+  ok("con la ref de estilo el validador sigue en verde", validar(out, conEstilo).ok, validar(out, conEstilo).errores?.join(" | "));
+  const sinEstiloTexto = compilar(spec("foto_producto", "nanobanana", { texto: { contenido: "Hasta 20%", posicion: null, estilo: null } })).texto;
+  ok("sin estilo de texto pide una tipografía real", /set in a real typeface: bold geometric sans-serif/.test(sinEstiloTexto), sinEstiloTexto);
+  const print = compilar(spec("foto_producto", "nanobanana", { destino: "print" })).texto;
+  ok("impresión pide 2K", /Output format: 9:16, 2K resolution/.test(print), print);
+  ok("redes NO piden 2K (más barato)", !/2K/.test(compilar(spec("foto_producto", "nanobanana", { destino: "ig_feed" })).texto));
+  ok("todos los jobs de imagen/edición aceptan el slot estilo (opcional, al final)", JOBS_POR_KIND.imagen.concat(JOBS_POR_KIND.edicion).filter((j) => !["restaurar_foto", "aplicar_logo", "figura_coleccionable"].includes(j)).every((j) => { const r = REFS_POR_JOB[j]; return r[r.length - 1].role === "estilo" && r[r.length - 1].opcional; }));
+}
+
+console.log("\n▶ F1 — gpt-image-2.5: tamaños reales, deletreo, un cambio, calidad");
+{
+  for (const a of ASPECTS) {
+    const [w, h] = TAMANO_GPT[a];
+    const [aw, ah] = a.split(":").map(Number);
+    ok(`${a}: múltiplos de 16, ratio ≤ 3:1 y fiel al aspect (${w}×${h})`, w % 16 === 0 && h % 16 === 0 && Math.max(w, h) / Math.min(w, h) <= 3 && Math.abs(w / h - aw / ah) < 0.03 && Math.max(w, h) <= 1536);
+  }
+  eq("deletrear conserva mayúsculas y separa letras", deletrear("Hasta 20%"), "H-a-s-t-a 2-0-%");
+  eq("deletrear de más de 24 letras → null", deletrear("x".repeat(DELETREO_MAX + 1)), null);
+  eq("deletrear vacío → null", deletrear("   "), null);
+  const conTexto = compilar(spec("foto_producto", "chatgpt", { texto: { contenido: "Hasta 20%", posicion: null, estilo: null } })).texto;
+  ok("chatgpt deletrea el texto corto", conTexto.includes("spelled out letter by letter so every glyph is right: H-a-s-t-a 2-0-%"), conTexto);
+  ok("con texto la calidad es high", /Quality: high/.test(conTexto));
+  const largo = compilar(spec("foto_producto", "chatgpt", { texto: { contenido: "Este es un texto demasiado largo para deletrear", posicion: null, estilo: null } })).texto;
+  ok("texto largo NO se deletrea (saturaría el prompt)", !/spelled out letter by letter/.test(largo));
+  const ed = compilar(spec("cambio_fondo", "chatgpt")).texto;
+  ok("una edición abre con 'Change ONLY this:'", ed.startsWith("Change ONLY this: "), ed.slice(0, 60));
+  ok("…y cierra con lo que no se toca", ed.includes("Everything else in the attached image stays exactly as it is"), ed);
+  const nueva = compilar(spec("foto_producto", "chatgpt", { destino: "ig_feed" })).texto;
+  ok("una imagen nueva NO dice 'Change ONLY'", !nueva.includes("Change ONLY"));
+  ok("iteración en redes: calidad medium", /Quality: medium/.test(nueva), nueva);
+  ok("impresión: calidad high", /Quality: high/.test(compilar(spec("foto_producto", "chatgpt", { destino: "print" })).texto));
+  ok("chatgpt válido con 4 referencias (ordinales hasta sexto)", (() => { const s = spec("dos_personajes", "chatgpt"); s.refs = [...s.refs, { role: "estilo", caption: null, dna: null }]; return validar(compilar(s).texto, s).ok; })());
+}
+
+console.log("\n▶ F1 — Veo 3.1: 4/6/8, 8 con refs, negativos sustantivos, diálogo no inglés");
+{
+  eq("duracionVeo sin refs respeta la pedida", duracionVeo(4, 0), 4);
+  eq("duracionVeo(6)", duracionVeo(6, 0), 6);
+  eq("duracionVeo con refs fuerza 8", duracionVeo(4, 2), 8);
+  eq("duracionVeo(null) → 8 por default", duracionVeo(null, 0), 8);
+  eq("cortes de 4 s", JSON.stringify(cortes(4)), JSON.stringify([[0, 1], [1, 3], [3, 4]]));
+  eq("cortes de 6 s", JSON.stringify(cortes(6)), JSON.stringify([[0, 2], [2, 4], [4, 6]]));
+  const conRefs = JSON.parse(compilar(spec("animar_foto", "veo", { duracion: 4 })).texto);
+  eq("animar_foto (con ref) pide 4 → sale 8", conRefs.duration_seconds, 8);
+  eq("…y el timeline termina en 00:08", conRefs.timeline[2].timestamp, "00:06-00:08");
+  const corto = JSON.parse(compilar(spec("texto_a_video", "veo", { duracion: 4 })).texto);
+  eq("texto_a_video (sin refs) sí sale a 4 s", corto.duration_seconds, 4);
+  eq("…con cortes de 4 s", corto.timeline[2].timestamp, "00:03-00:04");
+  ok("ningún negativo empieza con 'no '", corto.negative_prompts.every((n) => !/^no\b/i.test(n)), corto.negative_prompts.join(" | "));
+  const es = JSON.parse(compilar(spec("texto_a_video", "veo", { dialogo: { texto: "hola, ¿qué tal?", idioma: "es-MX", voz: null } })).texto);
+  ok("diálogo en español lleva la nota de no traducir", /do not translate/.test(es.dialogue.note ?? ""), JSON.stringify(es.dialogue));
+  const en = JSON.parse(compilar(spec("texto_a_video", "veo", { dialogo: { texto: "hi there", idioma: "en", voz: null } })).texto);
+  ok("diálogo en inglés no lleva nota", en.dialogue.note === undefined);
+  ok("veo válido a 4 s", validar(compilar(spec("texto_a_video", "veo", { duracion: 4 })).texto, spec("texto_a_video", "veo", { duracion: 4 })).ok);
+  const sRef = spec("animar_foto", "veo", { duracion: 4 });
+  const roto = JSON.stringify({ ...JSON.parse(compilar(sRef).texto), duration_seconds: 4 });
+  ok("el validador exige 8 s con referencias", !validar(roto, sRef).ok && validar(roto, sRef).errores.some((e) => /duration_seconds debe ser 8/.test(e)));
+  const conNo = JSON.stringify({ ...JSON.parse(compilar(sRef).texto), negative_prompts: ["no subtitles"], negative_prompt: "no subtitles" });
+  ok("el validador rechaza 'no X' en negative_prompts", !validar(conNo, sRef).ok && validar(conNo, sRef).errores.some((e) => /sustantivos/.test(e)));
+}
+
+console.log("\n▶ F1 — un solo movimiento de cámara (Kling, Higgsfield)");
+{
+  eq("movimientos: push in + whip pan", JSON.stringify(movimientos("slow push in on her face, then a whip pan to the door")), JSON.stringify(["push in", "pan"]));
+  eq("movimientos: uno solo", JSON.stringify(movimientos("camera slowly pushes in")), JSON.stringify(["push in"]));
+  eq("movimientos: ninguno", movimientos("she smiles").length, 0);
+  eq("movimientos: 'she follows the recipe' no es tracking", movimientos("she follows the recipe while stirring").length, 0);
+  eq("movimientos: 'zoom lens' no es un zoom", movimientos("shot on a 70-200 zoom lens").length, 0);
+  eq("movimientos: 'camera follows her' sí", JSON.stringify(movimientos("the camera follows her down the hall")), JSON.stringify(["tracking"]));
+  const dos = spec("animar_foto", "kling", { camara: { angulo: null, movimiento: "orbit around her, then push in", lente: null } });
+  const vd = validar(compilar(dos).texto, dos);
+  ok("kling con dos movimientos: el validador lo marca", !vd.ok && vd.errores.some((e) => /Dos movimientos de cámara/.test(e)), vd.ok ? "ok?" : vd.errores.join(" | "));
+  const uno = spec("animar_foto", "kling", { camara: { angulo: null, movimiento: "camera orbits around her", lente: null } });
+  ok("kling con un movimiento: en verde", validar(compilar(uno).texto, uno).ok, validar(compilar(uno).texto, uno).errores?.join(" | "));
+  const hf = spec("animar_foto", "higgsfield", { accion: "she turns as the camera orbits around her", preset: "Dolly In" });
+  const vh = validar(compilar(hf).texto, hf);
+  ok("higgsfield: el cuerpo no puede pedir otro movimiento que el preset", !vh.ok && vh.errores.some((e) => /Dos movimientos/.test(e)), vh.ok ? "ok?" : vh.errores.join(" | "));
+  const hfOk = spec("animar_foto", "higgsfield", { accion: "she turns and smiles", camara: { angulo: null, movimiento: "orbit", lente: null } });
+  ok("higgsfield coherente (preset Orbit, cuerpo sin otro movimiento): en verde", validar(compilar(hfOk).texto, hfOk).ok, validar(compilar(hfOk).texto, hfOk).errores?.join(" | "));
+}
+
+console.log("\n▶ F1 — Úsalo en… (recomendarModelo)");
+{
+  const base = { job: "foto_producto", tool: "nanobanana", destino: "ig_feed", refs: 1, texto: false, dialogo: false, duracion: null };
+  eq("nano sin texto en redes → Nano Banana 2", recomendarModelo(base).modelo, "gemini-3.1-flash-image");
+  eq("nano con texto → Pro", recomendarModelo({ ...base, texto: true }).modelo, "gemini-3-pro-image");
+  eq("nano para impresión → Pro", recomendarModelo({ ...base, destino: "print" }).modelo, "gemini-3-pro-image");
+  eq("nano con 3 referencias → Pro", recomendarModelo({ ...base, refs: 3 }).modelo, "gemini-3-pro-image");
+  eq("nano con 2 referencias → 2", recomendarModelo({ ...base, refs: 2 }).modelo, "gemini-3.1-flash-image");
+  eq("nano aplicar_logo → Pro", recomendarModelo({ ...base, job: "aplicar_logo" }).modelo, "gemini-3-pro-image");
+  eq("chatgpt edición → sunburst", recomendarModelo({ ...base, tool: "chatgpt", job: "cambio_fondo" }).modelo, "gpt-image-2.5-sunburst");
+  eq("chatgpt imagen nueva sin texto → flare", recomendarModelo({ ...base, tool: "chatgpt" }).modelo, "gpt-image-2.5-flare");
+  eq("veo story sin voz → Fast", recomendarModelo({ ...base, tool: "veo", job: "animar_foto", destino: "ig_story" }).modelo, "veo-3.1-fast-generate-preview");
+  eq("veo YouTube → completo", recomendarModelo({ ...base, tool: "veo", job: "animar_foto", destino: "yt" }).modelo, "veo-3.1-generate-preview");
+  eq("veo con voz → completo aunque sea story", recomendarModelo({ ...base, tool: "veo", job: "animar_foto", destino: "ig_story", dialogo: true }).modelo, "veo-3.1-generate-preview");
+  eq("kling 5 s sin voz → Turbo", recomendarModelo({ ...base, tool: "kling", job: "animar_foto", duracion: 5 }).modelo, "kling-3.0-turbo");
+  eq("kling 10 s → 3.0", recomendarModelo({ ...base, tool: "kling", job: "animar_foto", duracion: 10 }).modelo, "kling-3.0");
+  const p = pistasModelo(spec("foto_producto", "nanobanana", { destino: "print" }));
+  ok("pistasModelo lee el destino del spec", p.destino === "print" && p.refs === 1 && p.texto === false);
+  eq("pistasModelo sin destino → libre", pistasModelo(spec("foto_producto", "nanobanana")).destino, "libre");
+  const entrada = { job: "foto_producto", tool: "nanobanana", idea: "x", destino: "ig_feed", aspect: "1:1", duracion: null, refs: [], look: { luz: null, movimiento: null, lente: null, mood: null, estilo: null }, dialogo: null, marca: null, personaje: null, videoType: null, texto: null, aprendizaje: null };
+  ok("TARGET MODEL viaja al writer", bloqueVariable({ ...entrada, modelo: "gemini-3-pro-image" }).includes("TARGET MODEL: gemini-3-pro-image"));
+  ok("sin modelo no hay línea", !bloqueVariable(entrada).includes("TARGET MODEL"));
+  const f = compilarFusion({ role: "sujeto", caption: "a woman", dna: null }, { role: "producto", caption: null, dna: null }, "16:9");
+  ok("fusión: combina [Imagen 1] y [Imagen 2] en una y pide el formato", f.includes("[Imagen 1]") && f.includes("[Imagen 2]") && f.includes("16:9") && /Combine/.test(f), f);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} prisma: ${pass} passed, ${fail} failed\n`);
