@@ -9,6 +9,8 @@ import { EVENTOS_VALIDOS, SCOPES_VALIDOS, type MisPrefs } from "@/lib/notif-even
 import { canAdmin, canAssignAdmins } from "@/lib/roles";
 import { ESTADOS_ACTIVOS } from "@/lib/workload";
 import { slugify } from "@/lib/slug";
+import { normalizarPreset, presetVacio, validarPreset, type PresetGuardado } from "@/lib/prisma/preset";
+import { prismaActivo } from "@/lib/prisma/flags";
 import { sendEmail, hasEmail } from "@/lib/email";
 import { htmlFor, textFor } from "@/lib/email-template";
 import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
@@ -595,11 +597,11 @@ export async function listarMarcasPorCliente(): Promise<ClienteConMarcas[]> {
   const db = supabaseAdmin();
   const [cliRes, marcaRes] = await Promise.all([
     db.from("clients").select("id, name, slug, logo_url").order("name", { ascending: true }),
-    db.from("marcas").select("id, client_id, name, slug, logo_url").order("name", { ascending: true }),
+    db.from("marcas").select("id, client_id, name, slug, logo_url, prisma_presets").order("name", { ascending: true }),
   ]);
   const clientes = (cliRes.data ?? []) as { id: string; name: string; slug: string; logo_url: string | null }[];
   const marcas = (marcaRes.data ?? []) as {
-    id: string; client_id: string; name: string; slug: string; logo_url: string | null;
+    id: string; client_id: string; name: string; slug: string; logo_url: string | null; prisma_presets: unknown;
   }[];
   return clientes.map((c) => ({
     id: c.id,
@@ -608,7 +610,8 @@ export async function listarMarcasPorCliente(): Promise<ClienteConMarcas[]> {
     logo_url: c.logo_url,
     marcas: marcas
       .filter((m) => m.client_id === c.id)
-      .map((m) => ({ id: m.id, name: m.name, slug: m.slug, logo_url: m.logo_url })),
+      // El preset se normaliza con la MISMA función que usa el writer al leerlo.
+      .map((m) => ({ id: m.id, name: m.name, slug: m.slug, logo_url: m.logo_url, prisma_preset: normalizarPreset(m.prisma_presets) })),
   }));
 }
 
@@ -710,7 +713,7 @@ export async function crearMarca(clientId: string, name: string): Promise<MarcaG
     return { ok: false, error: error.message };
   }
   revalidatePath("/admin");
-  return { ok: true, marca: data as MarcaLogo };
+  return { ok: true, marca: { ...(data as Omit<MarcaLogo, "prisma_preset">), prisma_preset: normalizarPreset(null) } };
 }
 
 /** Borra una marca. Sólo admin+. Los FK de la marca son SET NULL (ideas) / CASCADE
@@ -808,4 +811,34 @@ export async function enviarInvitacion(memberId: string): Promise<Guardado> {
   });
   if (!res.ok) return { ok: false, error: res.error ?? "No se pudo enviar el correo." };
   return { ok: true };
+}
+
+// ── HÜE Prisma: preset de marca ─────────────────────────────
+/** Guarda lo que la marca aporta a TODO prompt de HÜE Prisma (marcas.prisma_presets).
+ *  Sólo admin+. Se normaliza con la MISMA función que usa el writer al leer
+ *  (lib/prisma/preset.ts): lo que se guarda es exactamente lo que H.Ü.E va a ver. */
+export async function guardarPrismaPreset(marcaId: string, raw: PresetGuardado): Promise<{ ok: true; preset: PresetGuardado } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!prismaActivo()) return { ok: false, error: "HÜE Prisma todavía no está activo." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin edita el preset de Prisma." };
+  // ESTRICTO al guardar: lo que no cabe se rechaza con motivo, no se recorta en silencio.
+  const v = validarPreset(raw);
+  if (!v.ok) return v;
+  const preset = v.preset;
+  // Vacío se guarda como NULL (= "sin preset": el writer cae al color de marca), no como {}.
+  // El UPDATE debe PROBAR que tocó la fila (.select): 0 filas = la marca ya no existe.
+  const { data, error } = await supabaseAdmin()
+    .from("marcas")
+    .update({ prisma_presets: presetVacio(preset) ? null : preset })
+    .eq("id", marcaId)
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    console.error("[admin] guardarPrismaPreset:", error.message);
+    return { ok: false, error: "No se pudo guardar el preset. Inténtalo otra vez." };
+  }
+  if (!data) return { ok: false, error: "La marca ya no existe." };
+  revalidatePath("/admin");
+  revalidatePath("/prisma");
+  return { ok: true, preset };
 }

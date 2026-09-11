@@ -1,8 +1,8 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { PrismaCharacterRow, PrismaPromptRow, PrismaSpecRow } from "@/lib/database.types";
-import type { MarcaPreset, Aspect } from "@/lib/prisma/spec";
-import { ASPECTS } from "@/lib/prisma/spec";
+import type { MarcaPreset } from "@/lib/prisma/spec";
+import { presetDeMarca } from "@/lib/prisma/preset";
 
 /**
  * HÜE Prisma — lecturas de servidor (marcas con preset, personajes, historial, URLs
@@ -23,22 +23,6 @@ export type MarcaConPreset = {
   client_slug: string;
   preset: MarcaPreset;
 };
-
-/** Convierte marcas.prisma_presets (jsonb libre) a un MarcaPreset seguro. Sin preset,
- *  se siembra con el color de marca del cliente: mejor un mínimo real que nada. */
-function presetDe(name: string, raw: unknown, brandColor: string | null): MarcaPreset {
-  const o = (raw ?? {}) as Record<string, unknown>;
-  const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
-  const paleta = arr(o.paleta);
-  const aspect = typeof o.aspect_default === "string" && (ASPECTS as string[]).includes(o.aspect_default) ? (o.aspect_default as Aspect) : null;
-  return {
-    nombre: name,
-    paleta: paleta.length ? paleta : brandColor ? [brandColor] : [],
-    tono: typeof o.tono === "string" ? o.tono : "",
-    evitar: arr(o.evitar),
-    aspect_default: aspect,
-  };
-}
 
 /** Todas las marcas activas con su preset (para el selector "Marca"). */
 export async function cargarMarcas(db: Db): Promise<MarcaConPreset[]> {
@@ -66,7 +50,8 @@ export async function cargarMarcas(db: Db): Promise<MarcaConPreset[]> {
       client_id: m.client_id,
       client_name: m.clients.name,
       client_slug: m.clients.slug,
-      preset: presetDe(`${m.clients.name} ${m.name}`.trim(), m.prisma_presets, m.clients.brand_color),
+      // La MISMA normalización que usa el Admin al guardar (lib/prisma/preset.ts).
+      preset: presetDeMarca(`${m.clients.name} ${m.name}`.trim(), m.prisma_presets, m.clients.brand_color),
     }));
 }
 

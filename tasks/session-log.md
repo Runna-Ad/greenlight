@@ -1,5 +1,65 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-09-11 — HÜE Prisma: presets en Admin · personajes guardados · explicación por idioma (rama `prisma`, SIN commit · SIN push · 0065 PENDIENTE de "ship it")
+Pedro: "1 yes · 2 needs more thought (¿cuánto más caro? ¿puede H.Ü.E aprender de lo que elige el diseñador?) · 3 yes · 4 yes ·
+don't merge main yet, leave it where it is". Sesión arrancó en `main` con una lección sin commitear (qué ES HÜE Prisma): quedó en
+`git stash@{0}` de main y copiada a lessons.md de esta rama.
+**Hecho (working tree de `prisma`, 16 archivos tocados + 5 nuevos + 2 scripts):**
+- **A. Presets de marca en Admin › Marcas** — botón "Prisma" por marca abre un editor (paleta hex con color picker, tono, evitar,
+  formato por default) → `guardarPrismaPreset` (admin+, flag). `src/lib/prisma/preset.ts` es la ÚNICA forma del preset: la lee el
+  writer (`presetDeMarca`) y la valida el Admin (`validarPreset`, ESTRICTO: rechaza, no recorta). Sin migración (columna de 0063).
+- **B. Personajes / productos guardados** — en el paso 3, bajo la marca: chips de los guardados + "Guardar uno nuevo" (nombre,
+  foto opcional con el mismo uploader, notas en español) → "Que HÜE lo describa" PROPONE la descripción en inglés (40–80 palabras,
+  con lo que vio en la foto) → el diseñador la corrige → Guardar (`crearPersonaje`; el cliente se deriva de la marca en el
+  servidor). Retirar = active=false (el autor o lead/admin/master, misma regla `puedeTocar` que los specs). Al elegir uno con foto,
+  su foto entra como referencia si el slot de persona/producto está vacío y sale al soltarlo (pure fn, 13 tests). Los personajes se
+  PIDEN al elegir la marca (`listarPersonajes`), no viajan con la página. Sin migración.
+- **C. Explicación por idioma** — migración **0065**: `explicacion` → `explicacion_es` + `explicacion_en` (backfill: prefijo
+  "[es]"/"[en]" → su columna; sin prefijo → español, que era el default de 0063; luego drop). `explicar()` lee/escribe la columna del
+  idioma y, si el preview corre antes que la 0065, entrega igual sin cachear (warn en log).
+- Gates: tsc 0 · eslint 0 · test-prisma **161** (+41) · test-db **407** (+7) · isolation · actions · build. Smoke REAL del modelo
+  con el loader nuevo (`node --env-file=.env.local --import ./scripts/register-hooks.mjs`): 80 palabras, inglés, 3.9 s, ~$0.002.
+- Reap: seguridad (Opus) 0 críticos / 4 serios / 8 menores; salud (Sonnet) 1 serio / 6 menores — TODO lo serio arreglado (detalle en
+  todo.md § Review): personajes por marca bajo demanda, cliente derivado de la marca, `plano()` + cercas para todo texto humano que
+  entra al prompt, tope a los ítems del ADN, UUID en ids, errores crudos fuera, paleta sólo hex, backfill sin pérdida, guardar/
+  retirar tardíos no pisan la UI tras cambiar de marca.
+- Navegador (local, sin sesión): estudio → paso 3 → bloque de personajes → formulario → "Que HÜE lo describa" → toast "Inicia
+  sesión para usar HÜE Prisma." (gate, sin 500). `?demo=resultado` sigue. 0 errores de consola/servidor. Lo que exige sesión
+  (guardar de verdad, Admin) queda como LIVE-VERIFY de Pedro en el preview (todo.md).
+**Current state:** código listo y verificado; NADA commiteado ni pusheado (Pedro decide). Migración 0065 NO aplicada a prod.
+**Uncommitted work:** todo lo de arriba + `tasks/*` + `scripts/register-hooks.mjs` + `scripts/node-hooks.mjs`.
+**Decisions made:** (1) el cliente de un personaje lo deriva el servidor de la marca (nunca del navegador); (2) los personajes se
+piden por marca, bajo demanda (no en la página); (3) paleta SÓLO hex, en servidor y editor (una regla); (4) guardar = estricto,
+leer = tolerante; (5) toda frase humana que se inyecta al prompt va en una línea y cercada; (6) `explicar` tolera la columna
+ausente para que preview y migración no tengan que ir juntos.
+
+**Variantes (segura / audaz / mínima) — análisis para la decisión de Pedro.** Precio real de Sonnet 5 (tabla oficial cargada
+hoy): $2 / 1M tokens de entrada, $10 / 1M de salida; caché: escribir $2.50, leer $0.20. Uso real en prod (5 prompts guardados):
+874 entrada + 3,811 escritura de caché + 761 salida por prompt ≈ **$0.019** (≈ 2 centavos). Dato incómodo: `cache_read` = 0 en
+los 5 — la caché de 5 min nunca pegó (las generaciones van espaciadas), así que el bloque "cacheado" cuesta 1.25× en vez de 0.1×.
+- 1 llamada que devuelve 3 specs (entrada igual, salida ×3): ≈ **$0.034** → **1.8×**.
+- 3 llamadas (la 2ª y 3ª sí pegan caché): ≈ **$0.039** → **2.1×**.
+- Por 100 prompts/mes: hoy ≈ $1.90 → con variantes ≈ $3.40–3.90. El costo en dólares NO es el problema; el costo real es
+  latencia (salida ×3: ~10 s → ~25 s) y la atención del diseñador (leer 3 prompts).
+- **Recomendación:** variantes BAJO DEMANDA — en el resultado, "Dame otra versión: más segura / más audaz / mínima" = un refine con
+  instrucción fija (1 llamada extra SÓLO cuando se pide, ~$0.01). Cuesta cero si nadie lo usa y el click ES la señal de
+  aprendizaje. Si Pedro prefiere las 3 de golpe: 1 llamada / 3 specs (1.8×), nunca 3 llamadas.
+**¿Puede H.Ü.E aprender de lo que elige el diseñador? Sí — con el mismo molde que ya usa para guiones (Cerebro + Ganadores):**
+1. CAPTURAR (sin modelo, barato): hoy sólo hay pulgar (prisma_ratings). Faltan las señales fuertes: qué prompt se COPIÓ o se
+   ABRIÓ en la herramienta, qué variante se eligió, qué cambios pidió (el texto del refine no se guarda hoy) y si editó el
+   prompt antes de copiarlo. Una tabla `prisma_eventos` (prompt_id, tipo, nota) o columnas en prisma_prompts.
+2. AGREGAR (SQL/código): por marca + trabajo: "en fotos de producto de DiDi Card copian la audaz 70%; el refine más común es
+   'más luz cálida'".
+3. DEVOLVER al writer: (a) 2–3 "prompts ganadores" de la misma marca+trabajo como ejemplares en el bloque variable (few-shot,
+   igual que GUIONES GANADORES); (b) una línea de "preferencias aprendidas de esta marca"; (c) opcional, un "Cerebro Prisma"
+   destilado (H.Ü.E resume las últimas N elecciones en 3–5 reglas por marca, revisables en el H.Ü.E Hub, patrón hue_sintesis).
+Condición: VOLUMEN. Prod tiene 5 prompts en total; aprender necesita decenas de elecciones por marca. Orden sugerido: capturar ya
+(barato), devolver cuando haya datos. Nada de esto se construyó hoy — es la respuesta a la pregunta 2.
+**Pick up next session:** "ship it" → contar explicaciones sin prefijo → `node scripts/migrate.mjs` (0065) → commit + `git push
+origin prisma` → LIVE-VERIFY de Pedro (a/b/c en todo.md) → decisión de variantes / captura de elecciones.
+**Environment changes:** ninguna dependencia nueva. Scripts nuevos: `scripts/register-hooks.mjs` + `scripts/node-hooks.mjs`
+(smokes de libs server-only en node suelto). Dev server local (preview) quedó corriendo en :3000 al cierre de este turno.
+
 ## 2026-09-03 — LIVE REFRESH (0062) — SHIPPEADO (main 62bb720 · migración aplicada) + evaluación de "H.Ü.E lee referencias"
 Pedro pidió dos cosas: (1) que la plataforma se refresque sola al cambiar estado / asignación; (2) evaluar si H.Ü.E puede
 leer las referencias (links a Drive / TikTok) de una tarea al escribir un guión. Modo challenge para ambas; "go ahead"
@@ -1947,3 +2007,18 @@ real · prueba con diseñador · decidir merge a main (= deploy a prod; el módu
 - Nueva herramienta **ChatGPT Images** (verde #3dd68c) para TODOS los trabajos de imagen/edición: cuerpo compartido con Nano Banana (`cuerpoImagen` + etiquetador), refs como "the first attached image", tamaño square/portrait/landscape. Routing: con texto → ChatGPT; sin texto → Nano Banana.
 - PROMPT_VERSION 2026-09-04.1. Gates: tsc ✓ eslint ✓ next build ✓ test-prisma 120 ✓.
 **Pendiente:** Pedro prueba en el preview con un titular real (campo nuevo bajo la idea). Sin migración (tool es `text`). Main intacto.
+
+## 2026-09-11 10:23
+
+**Still open:**
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **Decisión de Pedro — variantes (segura/audaz/mínima)**: ver el análisis de costo y el diseño de "aprender de las
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+

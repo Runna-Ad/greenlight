@@ -6,6 +6,9 @@ import { validar } from "../src/lib/prisma/validators.ts";
 import { elegirHerramienta } from "../src/lib/prisma/routing.ts";
 import { presetDe, PRESETS_HIGGSFIELD } from "../src/lib/prisma/compilers/higgsfield.ts";
 import { TOOLS_POR_JOB } from "../src/lib/prisma/tools.ts";
+import { normalizarPreset, normalizarColor, presetDeMarca, presetVacio, validarPreset, PRESET_LIMITES } from "../src/lib/prisma/preset.ts";
+import { plano } from "../src/lib/prisma/prompts/writer.ts";
+import { aplicarFotoDePersonaje, slotParaFoto } from "../src/lib/prisma/personajes.ts";
 
 let pass = 0,
   fail = 0;
@@ -260,6 +263,74 @@ eq("frases une y cierra", frases("a", " b. ", null, "", "c"), "a. b. c.");
 eq("comas limpia colas", comas("x, ", "y.", undefined), "x, y");
 eq("indiceRef 1-based", indiceRef(spec("cambio_outfit", "nanobanana"), "outfit"), 2);
 eq("indiceRef null", indiceRef(spec("cambio_outfit", "nanobanana"), "logo"), null);
+
+// ── 10. preset de marca (lib/prisma/preset.ts): UNA normalización para leer y guardar ──
+console.log("\n▶ preset de marca");
+{
+  const n = normalizarPreset({ paleta: ["#FF6B1A", "#fff", " #ff6b1a ", "warm beige", 7, ""], tono: "  premium, directo  ", evitar: ["texto en pantalla", "texto en pantalla", ""], aspect_default: "9:16" });
+  eq("hex a minúsculas y #rgb expandido, sin repetidos, sin basura y SÓLO hex", JSON.stringify(n.paleta), JSON.stringify(["#ff6b1a", "#ffffff"]));
+  eq("tono recortado", n.tono, "premium, directo");
+  eq("evitar sin repetidos ni vacíos", JSON.stringify(n.evitar), JSON.stringify(["texto en pantalla"]));
+  eq("aspect válido pasa", n.aspect_default, "9:16");
+  eq("aspect inválido → null", normalizarPreset({ aspect_default: "2:1" }).aspect_default, null);
+  eq("basura → preset vacío", presetVacio(normalizarPreset("nada")), true);
+  eq("null → preset vacío", presetVacio(normalizarPreset(null)), true);
+  eq("una lista no es un preset", presetVacio(normalizarPreset(["#ffffff"])), true);
+  eq("tope de paleta", normalizarPreset({ paleta: Array.from({ length: 20 }, (_, i) => `#${String(i).padStart(6, "0")}`) }).paleta.length, PRESET_LIMITES.paleta);
+  eq("tono con tope", normalizarPreset({ tono: "x".repeat(500) }).tono.length, PRESET_LIMITES.tono);
+  eq("normalizarColor #F0A → #ff00aa", normalizarColor("#F0A"), "#ff00aa");
+  eq("normalizarColor deja los nombres", normalizarColor(" verde bosque "), "verde bosque");
+  const p = presetDeMarca("DiDi Card", null, "#FF6B1A");
+  eq("sin preset: cae al color de marca (normalizado)", JSON.stringify(p.paleta), JSON.stringify(["#ff6b1a"]));
+  eq("sin preset: tono vacío", p.tono, "");
+  eq("sin preset ni color de marca: paleta vacía", presetDeMarca("X", null, null).paleta.length, 0);
+  const p2 = presetDeMarca("DiDi Card", { paleta: ["#111111"], tono: "premium" }, "#ff6b1a");
+  eq("con paleta propia NO mete el color de marca", JSON.stringify(p2.paleta), JSON.stringify(["#111111"]));
+  eq("nombre pasa tal cual", p2.nombre, "DiDi Card");
+  // validarPreset (write-path): rechaza en vez de recortar
+  ok("válido pasa", validarPreset({ paleta: ["#FF6B1A"], tono: "premium", evitar: ["texto"], aspect_default: "9:16" }).ok);
+  eq("válido normaliza", validarPreset({ paleta: ["#FF6B1A"], tono: " premium ", evitar: [], aspect_default: null }).preset?.paleta[0], "#ff6b1a");
+  ok("9 colores → error", !validarPreset({ paleta: Array.from({ length: 9 }, () => "#000000") }).ok);
+  ok("color que no es hex → error", !validarPreset({ paleta: ["verde bosque"] }).ok);
+  ok("tono muy largo → error", !validarPreset({ tono: "x".repeat(201) }).ok);
+  ok("aspect inválido → error", !validarPreset({ aspect_default: "2:1" }).ok);
+  ok("evitar vacío dentro → error", !validarPreset({ evitar: [" "] }).ok);
+  ok("una lista no es un preset → error", !validarPreset(["#ffffff"]).ok);
+  ok("campos ausentes → vacío válido", validarPreset({}).ok && presetVacio(validarPreset({}).preset));
+  // plano(): lo que escribe una persona no puede fingir secciones nuevas del prompt
+  eq("plano quita saltos y controles", plano("a\n\nb\tc\u0000d"), "a b c d");
+  eq("plano recorta y colapsa espacios", plano("  x   y  "), "x y");
+}
+
+// ── 11. personajes: la foto entra y sale del slot sin tocar lo del diseñador ──
+console.log("\n▶ personajes (foto ↔ slot)");
+{
+  const pj = { id: "p1", name: "Card", client_id: "c1", descripcion: "an orange card", foto: { storage_path: "prisma/a.png", url: "u" }, mio: true };
+  const sinFoto = { ...pj, id: "p2", foto: null };
+  eq("slotParaFoto: la persona antes que el producto", slotParaFoto(["producto", "sujeto"]), "sujeto");
+  eq("slotParaFoto: el producto si no hay persona", slotParaFoto(["producto", "escena"]), "producto");
+  eq("slotParaFoto: null si no aplica", slotParaFoto(["escena"]), null);
+  const r1 = aplicarFotoDePersonaje({}, null, pj, "sujeto", null);
+  eq("presta la foto a un slot vacío", r1.refs.sujeto?.storage_path, "prisma/a.png");
+  eq("marca el slot prestado", r1.marcado, "sujeto");
+  const mia = { role: "sujeto", storage_path: "prisma/mia.png", caption: null, dna: null, url: "m", aviso: null };
+  const r2 = aplicarFotoDePersonaje({ sujeto: mia }, null, pj, "sujeto", null);
+  eq("NO pisa una foto que subió el diseñador", r2.refs.sujeto?.storage_path, "prisma/mia.png");
+  eq("…y entonces no marca nada", r2.marcado, null);
+  const r3 = aplicarFotoDePersonaje(r1.refs, pj, null, "sujeto", r1.marcado);
+  eq("al soltar el personaje, su foto sale del slot", r3.refs.sujeto ?? null, null);
+  const r4 = aplicarFotoDePersonaje({ sujeto: mia }, pj, null, "sujeto", "sujeto");
+  eq("al soltar, si el slot ya trae otra foto, no la toca", r4.refs.sujeto?.storage_path, "prisma/mia.png");
+  const r5 = aplicarFotoDePersonaje({}, null, sinFoto, "sujeto", null);
+  eq("un personaje sin foto no presta nada", r5.refs.sujeto ?? null, null);
+  const local = { ...mia, storage_path: "prisma/a.png", caption: "an orange card on marble" };
+  const r6 = aplicarFotoDePersonaje({}, null, pj, "sujeto", null, local);
+  eq("si la foto se subió en esta sesión, trae lo que H.Ü.E vio", r6.refs.sujeto?.caption, "an orange card on marble");
+  const r7 = aplicarFotoDePersonaje({ sujeto: mia }, null, pj, null, null);
+  eq("sin slot aplicable no cambia nada", r7.refs.sujeto, mia);
+  const r8 = aplicarFotoDePersonaje(r1.refs, pj, sinFoto, "sujeto", r1.marcado);
+  eq("cambiar a uno sin foto libera el slot prestado", r8.refs.sujeto ?? null, null);
+}
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} prisma: ${pass} passed, ${fail} failed\n`);
 if (fail) process.exit(1);

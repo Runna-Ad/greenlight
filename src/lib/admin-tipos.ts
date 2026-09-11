@@ -1,3 +1,5 @@
+import type { PresetGuardado } from "@/lib/prisma/preset";
+
 // Tipos compartidos del panel de administración (puro — lo usan las server
 // actions y los componentes cliente).
 
@@ -39,8 +41,8 @@ export const SNIPPET_KIND_LABEL: Record<string, string> = {
 
 export type MarcaOpt = { id: string; name: string };
 
-/** Una marca (sub-marca) con su logo, para el panel de Marcas. */
-export type MarcaLogo = { id: string; name: string; slug: string; logo_url: string | null };
+/** Una marca (sub-marca) con su logo y su preset de HÜE Prisma, para el panel de Marcas. */
+export type MarcaLogo = { id: string; name: string; slug: string; logo_url: string | null; prisma_preset: PresetGuardado };
 
 /** Un cliente con sus marcas (sub-marcas) — DiDi → Card / Préstamos. */
 export type ClienteConMarcas = {

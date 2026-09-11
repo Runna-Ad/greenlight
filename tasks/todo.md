@@ -1,5 +1,63 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-09-11 — HÜE Prisma: presets de marca en Admin · personajes guardados · explicación por idioma (rama `prisma`, SIN push · migración 0065 PENDIENTE de "ship it")
+Pedro: "1 yes · 3 yes · 4 yes · 2 (variantes) needs more thought · don't merge main yet". Tres builds acotados, cero cambios en main.
+- [x] **A. Presets de marca (Admin › Marcas)** — `src/lib/prisma/preset.ts` = UNA sola normalización (la usan el lector `presetDe` en
+      lib/prisma/data.ts y la acción de guardado: el que escribe y el que lee comparten la forma). Acción `guardarPrismaPreset`
+      (canAdmin) en admin/actions.ts; editor inline por marca en marcas-tab.tsx (paleta hex, tono, evitar, formato por default).
+      Sin migración: `marcas.prisma_presets` ya existe (0063).
+- [x] **B. Personajes / productos guardados** — paso 3 del estudio: "Guardar uno nuevo" → nombre + foto (RefUploader) + notas en
+      cualquier idioma → H.Ü.E propone la descripción EN INGLÉS (preview editable, 1 llamada barata, sin herramienta) → Guardar
+      (`crearPersonaje`: valida cliente y forma exacta de la ruta de la foto, `created_by`). `retirarPersonaje` = active=false
+      (el autor, o lead/admin/master — misma regla que `puedeTocar`). Al elegir un personaje con foto y slot `sujeto`/`producto`
+      vacío, su foto entra como referencia. Sin migración (la descripción ya lleva lo que H.Ü.E vio en la foto).
+- [x] **C. Explicación cacheada por idioma** — migración 0065: `prisma_prompts.explicacion` → `explicacion_es` + `explicacion_en`
+      (backfill del prefijo "[es]\n" / "[en]\n"). `explicar()` lee/escribe la columna del idioma. Tolerante si la columna aún no
+      existe en el preview (no cachea y avisa en el log del servidor; mismo patrón que `cargarMarcas` con prisma_presets).
+- [x] Tests: test-prisma 161 (+41: normalizarPreset/validarPreset/presetDeMarca, foto↔slot, plano), test-db 407 (+7: 0065
+      columnas + backfill). Gates: tsc 0 · lint 0 · isolation ✓ · actions ✓ · build ✓. Smoke REAL del modelo (loader nuevo
+      `scripts/register-hooks.mjs`): describirPersonajeIA → 80 palabras en inglés, con el hex de la paleta, 3.9 s, ~$0.002.
+- [x] Reap. Pass 0 (grep): UNA normalización del preset (lector y Admin), UNA regla de ruta de foto (RUTA_REF), UN gate de
+      "¿puedo tocar?" (puedeTocar para specs y personajes), cero referencias a la columna vieja. Seguridad (Opus): 0 críticos,
+      4 serios ARREGLADOS — (S1) ítems de la paleta del ADN sin tope → tope 40; (S2) la página mandaba a TODOS los internos los
+      personajes + fotos firmadas de TODOS los clientes → ahora se piden al elegir la marca (`listarPersonajes`, gateada);
+      (S3) inyección persistente vía descripción/notas/caption → `plano()` (una línea, sin controles) + cercas
+      `<saved_subject>`/`<notes>`/`<photo_caption>` con la regla pegada; (S4) `crearPersonaje` confiaba en el client_id del
+      navegador → ahora recibe marcaId y deriva el cliente en el servidor (patrón entradaDe). Menores arreglados: UUID en ids,
+      errores crudos del proveedor/BD ya no llegan al diseñador (llamarSpec, explicarPrompt, guardarPrismaPreset), paleta
+      SÓLO hex en servidor (= editor), `validarPreset` estricto en el write-path (rechaza, no recorta), flag prismaActivo en la
+      acción y el botón de Admin, backfill de 0065 sin pérdida (sin prefijo → español). Salud (Sonnet): 1 serio ARREGLADO —
+      guardar/retirar que termina DESPUÉS de cambiar de marca ya no toca la UI (generación `marcaGen` + cliente del
+      personaje); aviso "cambiaste las notas después de la propuesta"; sangría del fragmento en marcas-tab.
+      Navegador (local, sin sesión): estudio → paso 3 → bloque de personajes (vacío + "Guardar uno nuevo") → formulario →
+      "Que HÜE lo describa" → toast "Inicia sesión para usar HÜE Prisma." (gate correcto, sin 500); `?demo=resultado` sigue;
+      móvil sin desbordes; 0 errores de consola/servidor.
+      Deuda anotada (no bloquea): sin throttle por identidad en las llamadas facturables (ya estaba pendiente); la ruta de
+      la foto se valida por forma, no por dueño (acotado por UUID de 122 bits); 3 nombres para el preset
+      (prisma_presets / prisma_preset / preset).
+### Verificación
+- Admin › Marcas: editar el preset de una marca → guardar → recargar y sigue → en Prisma, generar con esa marca mete la
+  paleta/tono/evitar al bloque BRAND PRESET del writer.
+- Prisma paso 3: crear personaje con foto → H.Ü.E propone la descripción en inglés → guardar → aparece en los chips ya
+  seleccionado y su foto queda como referencia → generar → `sujeto` del spec = la descripción tal cual.
+- Explicar en ES, luego EN, luego ES otra vez: 2 llamadas al modelo, no 3 (la 3ª sale de la columna).
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+      español): `select count(*) from produccion.prisma_prompts where explicacion is not null` (hoy: 1 de 5); (2)
+      `node scripts/migrate.mjs` (0065 al esquema produccion de Greenlight, ref ybbrpqzbedaxsmotgtkh); (3) `git add -A && git
+      commit` + `git push origin prisma` (preview de Vercel). NO main. Si el código llega al preview ANTES que la 0065,
+      "Explícame" sigue sirviendo (no cachea y avisa en el log).
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+      (a) Admin › Marcas › botón Prisma en DiDi Card → paleta (#ff6b1a), tono, evitar, formato → Guardar → recargar y sigue →
+      en Prisma, generar con esa marca → el prompt refleja paleta/tono/evitar. Sin preset, la fila dice "usa el color de marca".
+      (b) Prisma › paso 3 › marca DiDi Card → "Guardar uno nuevo" → nombre + foto de la tarjeta + notas en español → "Que HÜE
+      lo describa" → propuesta en inglés → corregir → Guardar → aparece en los chips YA seleccionado y, en un trabajo con
+      slot de persona/producto vacío, su foto entra como referencia (texto morado). Cambiar de marca lo suelta. Retirar
+      (basura → confirmar) lo quita para todos. Un especialista NO ve el botón de retirar en uno ajeno; el lead sí.
+      (c) Resultado › "Explícame este prompt" en ES → EN → ES: la 3ª sale al instante (sin llamada). En la BD:
+      `explicacion_es` y `explicacion_en` llenas en esa fila.
+- [ ] **Decisión de Pedro — variantes (segura/audaz/mínima)**: ver el análisis de costo y el diseño de "aprender de las
+      elecciones" en el session-log de hoy. No se construye hasta decidir el modelo (1 llamada con 3 specs vs 3 llamadas).
+
 ## ✅ 2026-09-03 — LIVE REFRESH: la plataforma se refresca sola al cambiar estado/asignación (SHIPPEADO: main 62bb720 pusheado · migración 0062 APLICADA)
 Pedro: "que nadie tenga que recargar para ver un cambio de estado o una tarea nueva asignada". Diseño: Realtime
 **Broadcast desde la BD** (trigger por SENTENCIA en `ideas` + `idea_assignments` → `realtime.send` a un canal privado

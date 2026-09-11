@@ -5,7 +5,7 @@ import { SORA_VIDEO_TYPES } from "@/lib/prisma/spec";
 import { compilar, type Salida } from "@/lib/prisma/compilers";
 import { validar } from "@/lib/prisma/validators";
 import { PRESETS_HIGGSFIELD } from "@/lib/prisma/compilers/higgsfield";
-import { BLOQUE_ESTABLE, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueExplicar, PROMPT_VERSION, type EntradaWriter } from "@/lib/prisma/prompts/writer";
+import { BLOQUE_ESTABLE, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueExplicar, bloqueDescribirPersonaje, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje } from "@/lib/prisma/prompts/writer";
 
 /**
  * HÜE Prisma — el WRITER. H.Ü.E llena un PromptSpec (tool_use, esquema estricto), el
@@ -180,7 +180,8 @@ async function llamarSpec(e: EntradaWriter, extra: string | null): Promise<{ inp
     if (!bloque) return { error: "H.Ü.E no respondió bien. Inténtalo otra vez." };
     return { input: bloque.input as Record<string, unknown>, usage: usoDe(res) };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Error al llamar a H.Ü.E." };
+    console.error("[prisma] llamarSpec:", err instanceof Error ? err.message : err);
+    return { error: "H.Ü.E no respondió. Inténtalo otra vez." };
   }
 }
 
@@ -251,8 +252,34 @@ export async function explicarPrompt(salida: string, tool: Tool, lang: "es" | "e
     if (!texto) return { ok: false, error: "H.Ü.E no pudo explicarlo. Inténtalo otra vez." };
     return { ok: true, texto, usage: usoDe(res) };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Error al llamar a H.Ü.E." };
+    console.error("[prisma] explicarPrompt:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "H.Ü.E no respondió. Inténtalo otra vez." };
   }
 }
 
 export { PROMPT_VERSION };
+
+/** Describe un personaje/producto guardado en inglés (una vez, al guardarlo). Llamada
+ *  barata, sin herramienta; el diseñador la revisa antes de guardar (actions). */
+export async function describirPersonajeIA(e: EntradaPersonaje): Promise<{ ok: true; texto: string; usage: Uso } | { ok: false; error: string }> {
+  try {
+    const client = new Anthropic();
+    const res = await client.messages.create({
+      model: MODEL,
+      max_tokens: 300,
+      thinking: { type: "disabled" },
+      messages: [{ role: "user", content: bloqueDescribirPersonaje(e) }],
+    });
+    const texto = res.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim()
+      .replace(/^["“]|["”]$/g, "");
+    if (!texto) return { ok: false, error: "H.Ü.E no pudo describirlo. Inténtalo otra vez." };
+    return { ok: true, texto, usage: usoDe(res) };
+  } catch (err) {
+    console.error("[prisma] describirPersonajeIA:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "H.Ü.E no respondió. Inténtalo otra vez." };
+  }
+}

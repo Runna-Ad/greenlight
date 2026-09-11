@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Clapperboard, ImageIcon, Languages, Loader2, Sparkles, Wand2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clapperboard, ImageIcon, Languages, Loader2, Plus, Sparkles, Trash2, UserRound, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChipSelect } from "@/components/intake/chip-select";
 import { cn } from "@/lib/utils";
-import { abrirSpec, generarPrompt, type InputGenerar } from "@/app/(app)/prisma/actions";
+import { abrirSpec, generarPrompt, listarPersonajes, retirarPersonaje, type InputGenerar } from "@/app/(app)/prisma/actions";
 import {
   DESTINO_LABEL,
   JOB_HINT,
@@ -47,9 +47,10 @@ import { RefUploader, type RefLocal } from "./ref-uploader";
 import { Resultado, type PromptVivo } from "./resultado";
 import { Historial, type ItemHistorialUI } from "./historial";
 import { Beam } from "./beam";
+import { PersonajeForm } from "./personaje-form";
+import { aplicarFotoDePersonaje, slotParaFoto, type PersonajeUI } from "@/lib/prisma/personajes";
 
 export type MarcaUI = { id: string; name: string; client_id: string; client_name: string; preset: MarcaPreset };
-export type PersonajeUI = { id: string; name: string; client_id: string };
 
 type Look = { luz: string | null; movimiento: string | null; lente: string | null; mood: string | null; estilo: string | null };
 type Paso = "inicio" | "job" | 1 | 2 | 3 | "resultado";
@@ -85,7 +86,7 @@ function Chips({ titulo, opciones, valor, onChange, lang, permiteOtro = true }: 
  * HÜE Prisma — el estudio. Tres puertas → un trabajo → 3 pasos → resultado.
  * Etiquetas en palabras llanas; la jerga sólo aparece en el prompt final.
  */
-export function PrismaStudio({ marcas, personajes, historial, demo = null }: { marcas: MarcaUI[]; personajes: PersonajeUI[]; historial: ItemHistorialUI[]; demo?: PromptVivo | null }) {
+export function PrismaStudio({ marcas, historial, demo = null, verTodo = false }: { marcas: MarcaUI[]; historial: ItemHistorialUI[]; demo?: PromptVivo | null; verTodo?: boolean }) {
   const router = useRouter();
   const [lang, setLang] = useLang();
 
@@ -100,6 +101,18 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
   const [destino, setDestino] = useState<Destino>("ig_story");
   const [marcaId, setMarcaId] = useState<string | null>(null);
   const [personajeId, setPersonajeId] = useState<string | null>(null);
+  // Personajes guardados de la marca elegida: se PIDEN al elegirla (listarPersonajes), no
+  // llegan con la página — así nadie recibe las fotos de todos los clientes de entrada.
+  const [personajes, setPersonajes] = useState<PersonajeUI[]>([]);
+  const [cargandoPersonajes, setCargandoPersonajes] = useState(false);
+  const [mostrarPersonajeForm, setMostrarPersonajeForm] = useState(false);
+  const [confirmarRetiro, setConfirmarRetiro] = useState(false);
+  const [retirando, setRetirando] = useState(false);
+  /** Slot al que el personaje elegido le PRESTÓ su foto (para devolverlo al soltarlo). */
+  const [refDePersonaje, setRefDePersonaje] = useState<RefRole | null>(null);
+  // Cambiar de marca invalida todo lo que estaba en vuelo (guardar/retirar un personaje): al
+  // volver del servidor, si la marca ya es otra, el resultado no toca la UI (la BD sí cambió).
+  const marcaGen = useRef(0);
   const [dialogo, setDialogo] = useState("");
   const [dialogoLang, setDialogoLang] = useState<"es-MX" | "en" | null>(null);
   const [voz, setVoz] = useState("");
@@ -127,6 +140,7 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
 
   const marca = marcas.find((m) => m.id === marcaId) ?? null;
   const personajesDeMarca = marca ? personajes.filter((p) => p.client_id === marca.client_id) : [];
+  const personaje = personajesDeMarca.find((p) => p.id === personajeId) ?? null;
   const video = job ? esVideo(job) : false;
   const slots = job ? REFS_POR_JOB[job] : [];
   const refsLista = slots.map((s) => refs[s.role] ?? null).filter((r): r is RefLocal => !!r);
@@ -143,6 +157,64 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
   const faltanRefs = slots.filter((s) => !s.opcional && !refs[s.role]).length > 0;
   const paso1Listo = !faltanRefs && (idea.trim().length > 0 || refsLista.length > 0);
 
+  // Elegir (o soltar) un personaje: su foto entra al slot de persona/producto si está vacío
+  // y sale al soltarlo — sin tocar nunca una foto que subió el diseñador (personajes.ts).
+  const elegirPersonaje = (nuevo: PersonajeUI | null, fotoLocal: RefLocal | null = null) => {
+    const n = aplicarFotoDePersonaje(refs, personaje, nuevo, slotParaFoto(slots.map((s) => s.role)), refDePersonaje, fotoLocal);
+    setRefs(n.refs);
+    setRefDePersonaje(n.marcado);
+    setPersonajeId(nuevo?.id ?? null);
+    setConfirmarRetiro(false);
+  };
+
+  // Al cambiar de marca se piden sus personajes. Si la llamada falla (red, sesión) la lista
+  // queda vacía y se avisa: el resto del paso 3 sigue funcionando sin personaje.
+  const cargarPersonajesDe = async (id: string | null) => {
+    setPersonajes([]);
+    if (!id) return;
+    const gen = marcaGen.current;
+    setCargandoPersonajes(true);
+    try {
+      const r = await listarPersonajes(id);
+      if (gen !== marcaGen.current) return; // respuesta de una marca que ya no es la elegida
+      if (!r.ok) return toast.error(r.error);
+      setPersonajes(r.personajes);
+    } catch {
+      if (gen === marcaGen.current) toast.error(tx(UI.error, lang));
+    } finally {
+      if (gen === marcaGen.current) setCargandoPersonajes(false);
+    }
+  };
+
+  const alGuardarPersonaje = (p: PersonajeUI, fotoLocal: RefLocal | null) => {
+    // Ya quedó guardado en la BD; si mientras tanto se cambió de marca, no se selecciona aquí
+    // (aparecerá al volver a su marca). Doble candado: generación + cliente del personaje.
+    if (p.client_id !== marca?.client_id) return;
+    setPersonajes((l) => (l.some((x) => x.id === p.id) ? l : [...l, p]));
+    setMostrarPersonajeForm(false);
+    elegirPersonaje(p, fotoLocal);
+  };
+
+  const retirar = async () => {
+    if (!personaje) return;
+    const gen = marcaGen.current;
+    setRetirando(true);
+    let r: Awaited<ReturnType<typeof retirarPersonaje>>;
+    try {
+      r = await retirarPersonaje(personaje.id);
+    } catch {
+      toast.error(tx(UI.error, lang));
+      return;
+    } finally {
+      setRetirando(false);
+    }
+    if (!r.ok) return toast.error(r.error);
+    toast.success(tx(UI.personajeRetirado, lang));
+    if (gen !== marcaGen.current) return; // la marca cambió mientras tanto: la lista ya es otra
+    setPersonajes((l) => l.filter((x) => x.id !== personaje.id));
+    elegirPersonaje(null);
+  };
+
   const reset = () => {
     setPaso("inicio");
     setKind(null);
@@ -154,6 +226,9 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
     setVoz("");
     setDialogoLang(null);
     setPersonajeId(null);
+    setRefDePersonaje(null);
+    setMostrarPersonajeForm(false);
+    setConfirmarRetiro(false);
     setDuracion(null);
     setVideoType(null);
     setToolOverride(null);
@@ -173,6 +248,9 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
     setDuracion(null);
     setVideoType(null);
     setPersonajeId(null);
+    setRefDePersonaje(null);
+    setMostrarPersonajeForm(false);
+    setConfirmarRetiro(false);
     setToolOverride(null);
     setPaso(1);
   };
@@ -389,15 +467,72 @@ export function PrismaStudio({ marcas, personajes, historial, demo = null }: { m
                       selected={[marcaId ?? ""]}
                       onChange={(up) => {
                         const v = up([marcaId ?? ""])[0] ?? "";
+                        marcaGen.current += 1;
                         setMarcaId(v || null);
-                        setPersonajeId(null);
+                        elegirPersonaje(null);
+                        setMostrarPersonajeForm(false);
+                        void cargarPersonajesDe(v || null);
                       }}
                       ariaLabel={tx(UI.marca, lang)}
                       allowCustom={false}
                     />
                   </div>
-                  {personajesDeMarca.length > 0 && (
-                    <Chips lang={lang} titulo={lang === "es" ? "Personaje o producto guardado" : "Saved character or product"} opciones={[{ value: "", label: lang === "es" ? "Ninguno" : "None" }, ...personajesDeMarca.map((p) => ({ value: p.id, label: p.name }))]} valor={personajeId ?? ""} onChange={(v) => setPersonajeId(v || null)} permiteOtro={false} />
+                  {/* Personaje o producto guardado: sólo con marca (pertenece a UN cliente). Se
+                      puede elegir, guardar uno nuevo y retirar el elegido (el autor o un lead). */}
+                  {marca && (
+                    <div className="space-y-2">
+                      {personajesDeMarca.length > 0 ? (
+                        <Chips lang={lang} titulo={tx(UI.personajeTitulo, lang)} opciones={[{ value: "", label: tx(UI.personajeNinguno, lang) }, ...personajesDeMarca.map((p) => ({ value: p.id, label: p.name }))]} valor={personajeId ?? ""} onChange={(v) => elegirPersonaje(personajesDeMarca.find((p) => p.id === v) ?? null)} permiteOtro={false} />
+                      ) : (
+                        <div aria-busy={cargandoPersonajes}>
+                          <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{tx(UI.personajeTitulo, lang)}</p>
+                          <p className="flex items-center gap-1.5 text-sm text-muted-foreground" aria-live="polite">
+                            {cargandoPersonajes && <Loader2 className="size-3.5 animate-spin" />}
+                            {cargandoPersonajes ? tx(UI.personajeCargando, lang) : tx(UI.personajeVacio, lang)}
+                          </p>
+                        </div>
+                      )}
+                      {personaje && (
+                        <div className="p-enter flex items-start gap-3 rounded-xl border border-border bg-card/60 p-3">
+                          {personaje.foto ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={personaje.foto.url} alt={personaje.name} className="size-14 shrink-0 rounded-lg object-cover" />
+                          ) : (
+                            <span className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+                              <UserRound className="size-5" />
+                            </span>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground">{personaje.name}</p>
+                            <p className="mt-0.5 line-clamp-3 text-xs text-muted-foreground">{personaje.descripcion}</p>
+                            {refDePersonaje && <p className="mt-1 text-xs text-primary">{tx(UI.personajeFotoComoRef, lang)}</p>}
+                          </div>
+                          {(personaje.mio || verTodo) &&
+                            (confirmarRetiro ? (
+                              <div className="flex items-center gap-1">
+                                <Button size="sm" variant="destructive" onClick={retirar} disabled={retirando}>
+                                  {retirando ? <Loader2 className="size-4 animate-spin" /> : null}
+                                  {tx(UI.personajeRetirar, lang)}
+                                </Button>
+                                <button type="button" onClick={() => setConfirmarRetiro(false)} disabled={retirando} aria-label={tx(UI.cancelar, lang)} className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary">
+                                  <X className="size-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button type="button" onClick={() => setConfirmarRetiro(true)} aria-label={`${tx(UI.personajeRetirar, lang)} ${personaje.name}`} title={tx(UI.personajeRetirar, lang)} className="rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-destructive">
+                                <Trash2 className="size-4" />
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                      {mostrarPersonajeForm ? (
+                        <PersonajeForm marcaId={marca.id} lang={lang} onGuardado={alGuardarPersonaje} onCancelar={() => setMostrarPersonajeForm(false)} />
+                      ) : (
+                        <button type="button" onClick={() => setMostrarPersonajeForm(true)} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-dashed border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary">
+                          <Plus className="size-3.5" /> {tx(UI.personajeNuevo, lang)}
+                        </button>
+                      )}
+                    </div>
                   )}
                   {video && (
                     <div>

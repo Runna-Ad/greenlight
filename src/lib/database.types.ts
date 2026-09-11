@@ -341,7 +341,8 @@ export type PrismaPromptRow = {
   formato: "texto" | "json";
   valido: boolean;
   errores: string[];
-  explicacion: string | null;
+  explicacion_es: string | null; // 0065: una columna por idioma
+  explicacion_en: string | null;
   model: string | null;
   usage: Record<string, number> | null;
   created_at: string;

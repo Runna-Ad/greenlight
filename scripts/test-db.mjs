@@ -2448,5 +2448,18 @@ console.log("\n▶ Live refresh 0062 — quién recibe el aviso de 'algo cambió
   await db.query(`delete from produccion.clients where id=$1`, [otroClient]);
 }
 
+// ── 0065: HÜE Prisma — la explicación se cachea POR IDIOMA (una columna por idioma) ──
+console.log("\n▶ 0065 — prisma_prompts: una explicación por idioma");
+{
+  const cols = (await q(`select column_name from information_schema.columns where table_schema = 'produccion' and table_name = 'prisma_prompts'`)).map((r) => r.column_name);
+  ok("explicacion_es existe", cols.includes("explicacion_es"));
+  ok("explicacion_en existe", cols.includes("explicacion_en"));
+  ok("la columna vieja `explicacion` ya no existe", !cols.includes("explicacion"));
+  // El backfill de la 0065 usa exactamente esta expresión: el prefijo "[es]⏎" mide 5.
+  eq("backfill: '[es]⏎…' → texto sin prefijo", await scalar(`select substr(E'[es]\\nhola', 6) where E'[es]\\nhola' like E'[es]\\n%'`), "hola");
+  eq("backfill: '[en]⏎…' no cae en la casilla de español", Number(await scalar(`select (E'[en]\\nhi' like E'[es]\\n%')::int`)), 0);
+  eq("backfill: sin prefijo (era español) → explicacion_es entera", await scalar(`select 'hola' where 'hola' is not null and 'hola' not like E'[es]\\n%' and 'hola' not like E'[en]\\n%'`), "hola");
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

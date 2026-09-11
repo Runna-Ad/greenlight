@@ -5,7 +5,7 @@ import { ImagePlus, Loader2, X, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { analizarImagen, type RefEntrada } from "@/app/(app)/prisma/actions";
-import { REF_LABEL, UI, tx, type Lang } from "@/lib/prisma/copy";
+import { REF_LABEL, UI, tx, type Lang, type Par } from "@/lib/prisma/copy";
 import type { RefRole } from "@/lib/prisma/spec";
 
 /** Una referencia ya subida y leída, con su URL firmada para el thumbnail. */
@@ -22,12 +22,15 @@ export function RefUploader({
   value,
   onChange,
   lang,
+  etiqueta,
 }: {
   role: RefRole;
   opcional?: boolean;
   value: RefLocal | null;
   onChange: (v: RefLocal | null) => void;
   lang: Lang;
+  /** Etiqueta propia (p. ej. "Su foto" al guardar un personaje); si no, la del rol. */
+  etiqueta?: Par;
 }) {
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState(false);
@@ -51,7 +54,7 @@ export function RefUploader({
     }
   };
 
-  const label = tx(REF_LABEL[role], lang);
+  const label = tx(etiqueta ?? REF_LABEL[role], lang);
 
   // Sólo hex reales se pintan como muestra: el ADN también puede traer nombres ("warm beige").
   const swatches = (value?.dna?.paleta ?? []).filter((c) => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 5);
