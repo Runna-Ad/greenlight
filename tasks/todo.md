@@ -1,6 +1,6 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-09-11 (3) — HÜE Prisma v1 "el prompter perfecto" · FASE 0: Sora fuera, conocimiento dentro (rama `prisma`, migración 0067 PENDIENTE de "ship it")
+## 🟢 2026-09-11 (3) — HÜE Prisma v1 "el prompter perfecto" · FASE 0: Sora fuera, conocimiento dentro (rama `prisma`, commit 4bd71fa · 0067 APLICADA)
 Plan aprobado: /Users/work/.claude/plans/ok-no-i-need-lexical-ocean.md (v1 = perfeccionar prompts; v2 generación in-app APARCADA).
 Pedro: v1 sólo prompts · Sora se retira (OpenAI apaga la Videos API el 24-sep-2026) · entrevista ≤3 preguntas · Nano Banana 2
 para iterar / Pro para la final · "sube lo que salió" en v1 · "perfecto" = ronda real con diseñadores.
@@ -28,8 +28,11 @@ para iterar / Pro para la final · "sube lo que salió" en v1 · "perfecto" = ro
       errores planos + UUID en el Hub, confirmación inline al borrar, tope 6,000 chars con aviso "N notas no entran".
 - [x] Verificado: tsc · lint · build · test:prisma 235 · test:db 439 · isolation · actions · navegador (sin Sora, chip "Tipo de video"
       en Veo y Kling, routing escena → Kling vertical / Veo YouTube) · smoke real: 2ª llamada `cache_read` 4,455 tokens.
-- [ ] **SHIP** (necesita "ship it"): `npm run migrate` (0067). El código ya está en `prisma` (preview seguro sin la 0067: sin notas,
-      el Hub avisa "falta la 0067", los eventos siguen con el índice de la 0066).
+- [x] **SHIP** — Pedro: "ship it" → `npm run migrate` 0067 aplicada y verificada en prod (26 filas: 7 notas + 19 reglas, 5 de
+      comunidad; RLS + policy; 3 columnas nuevas; CHECK de eventos ampliado; índice único parcial; en el ledger).
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+      prompt → la nota nueva ya viaja (sin deploy). Reabrir desde el historial un spec viejo de Sora → se abre como Veo 3.1 con
+      el aviso "Antes era Sora 2".
 - Pendientes que salieron del reap (van en su fase): F2 → re-validar `patron` al LEER (regexSegura + tope de 2,000 chars de entrada
   o worker con timeout) y tope por persona/prompt para los eventos no únicos; F5 → panel "vista previa de TOOL NOTES" en el Hub antes
   de guardar; alguna vez → `client_id/marca_id` en prisma_reglas si una nota debe ser por marca.
