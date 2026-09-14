@@ -50,6 +50,8 @@ import type { Cambio } from "@/lib/prisma/ortografia";
 import { PanelAvisos, SugerenciaTexto } from "./avisos";
 import { Entrevista } from "./entrevista";
 import { aplicarRespuestas, type Pregunta, type Respuesta } from "@/lib/prisma/entrevista";
+import { necesitaEntrevista } from "@/lib/prisma/entrevista";
+import { revisarAcentos } from "@/lib/prisma/ortografia";
 import { useLang } from "./use-lang";
 import { RefUploader, type RefLocal } from "./ref-uploader";
 import { Resultado, type PromptVivo } from "./resultado";
@@ -218,6 +220,27 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
   });
   const avisosPaso3: Aviso[] = entradaDiag ? ordenarAvisos([...diagnosticarEntrada(entradaDiag, reglasComp), ...avisosOrtografia]) : [];
   const bloqueo = bloqueado(avisosPaso3);
+
+  // Capa instantánea (sin servidor): el diccionario de acentos corre mientras escribe, con un
+  // respiro de 500 ms; la sugerencia aparece bajo el campo sin esperar a H.Ü.E.
+  useEffect(() => {
+    const valor = texto;
+    if (!valor.trim() || ignorada.texto === valor) return;
+    const id = window.setTimeout(() => {
+      const r = revisarAcentos(valor);
+      if (r.cambios.length && r.sugerido !== valor) setRevision((prev) => (prev?.campo === "texto" && prev.original === valor ? prev : { campo: "texto", original: valor, sugerido: r.sugerido, cambios: r.cambios }));
+    }, 500);
+    return () => window.clearTimeout(id);
+  }, [texto, ignorada.texto]);
+  useEffect(() => {
+    const valor = dialogo;
+    if (!valor.trim() || ignorada.dialogo === valor) return;
+    const id = window.setTimeout(() => {
+      const r = revisarAcentos(valor, dialogoLang === "en" ? "en" : dialogoLang === "es-MX" ? "es" : undefined);
+      if (r.cambios.length && r.sugerido !== valor) setRevision((prev) => (prev?.campo === "dialogo" && prev.original === valor ? prev : { campo: "dialogo", original: valor, sugerido: r.sugerido, cambios: r.cambios }));
+    }, 500);
+    return () => window.clearTimeout(id);
+  }, [dialogo, dialogoLang, ignorada.dialogo]);
 
   // Revisar ortografía y gramática de un campo (al salir de él). Dos capas en el servidor:
   // diccionario de acentos + H.Ü.E. Es una sugerencia: nunca se reemplaza solo.
@@ -430,14 +453,19 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
     if (!job || !tool) return;
     if (sinPreguntas) return setPaso(2);
     setPreguntando(true);
+    // ¿La heurística iba a preguntar? Si sí y no llegó nada, se le dice al diseñador (nunca "nada pasó").
+    const refsFaltan = slots.some((s) => !s.opcional && !refs[s.role]);
+    const iba = necesitaEntrevista({ idea, refsFaltan, chipsLook: Object.values(look).filter((v) => v && v.trim()).length, refsConDna: refsLista.filter((r) => r.dna).length, sinPreguntas });
     try {
       const r = await entrevistar(armarInput(job, tool));
       if (!r.ok) {
-        // La entrevista es opcional: si falla (freno, red), se sigue sin preguntas.
+        // La entrevista es opcional: si falla (freno, red), se sigue sin preguntas — diciéndolo.
+        toast.message(tx(UI.entrevistaFallo, lang), { description: r.error });
         setPaso(2);
         return;
       }
       if (!r.preguntas.length) {
+        if (iba) toast.message(tx(UI.sinPreguntasEstaVez, lang));
         setPaso(2);
         return;
       }
@@ -445,6 +473,7 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
       setRespuestas({});
       setPaso("entrevista");
     } catch {
+      toast.message(tx(UI.entrevistaFallo, lang));
       setPaso(2);
     } finally {
       setPreguntando(false);
@@ -669,6 +698,12 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
                 </div>
               )}
 
+              {(paso === "entrevista" || paso === 2) && sugerenciaViva("texto") && (
+                <div className="mb-4">
+                  <p className="text-xs font-medium text-muted-foreground">{tx(UI.textoLabel, lang)}: «{texto}»</p>
+                  <SugerenciaTexto sugerido={sugerenciaViva("texto")?.sugerido ?? null} cambios={sugerenciaViva("texto")?.cambios ?? []} lang={lang} onUsar={() => usarSugerencia("texto")} onDejar={() => dejarAsi("texto")} />
+                </div>
+              )}
               {paso === "entrevista" && (
                 <Entrevista
                   preguntas={preguntas}

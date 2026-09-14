@@ -32,6 +32,11 @@ Pedro: "ok lets start then" (tras acordar la Fase 6 "Vigía" y los plegados de l
       wizard); "la marca lo sabe" exige 2 personas (o 6 veces de una); 1,600 tokens para preguntas; un solo `armarInput`;
       "Regresar" en la entrevista; título sin número fijo; error crudo de visión sólo al log.
 - [x] Gates finales: tsc · lint · build · test-prisma 473 · test-db 441 · isolation · actions. Commit + push a `prisma`.
+- [x] **Pedro probó y "no pasó nada"** → causa: el modelo devolvió las preguntas como STRING JSON dentro del tool_use y el
+      saneo (Array.isArray) las tiraba en silencio. Arreglo: `lib/prisma/json.ts` (`listaDe`/`objetoDe`) en preguntas,
+      juicio, corrector y listas del spec + warn si hay tokens y 0 elementos; fallos/vacíos de la entrevista ahora se dicen
+      con un toast; la sugerencia ortográfica sale AL ESCRIBIR (diccionario, 500 ms) y se ve también en la entrevista y en
+      el paso 2. Reproducido 2×: 3 preguntas. test-prisma 483.
 ### Verificación F3 (Pedro, preview con login)
 - Idea corta ("la tarjeta en una mesa") + Siguiente → aparecen 2–3 preguntas con chips; contesta y sigue → el look trae las
   respuestas; el prompt las respeta. Idea larga con referencias y 3 chips de look → no pregunta nada.

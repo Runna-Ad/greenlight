@@ -9,6 +9,7 @@
 import { ASPECTS, contarPalabras, type Aspect } from "./spec.ts";
 import { plano, recortar } from "./texto.ts";
 import type { Par } from "./copy.ts";
+import { listaDe, objetoDe } from "./json.ts";
 
 export const PREGUNTA_IDS = ["angulo", "personas", "fondo", "texto", "ritmo", "voz", "producto", "luz", "otro"] as const;
 export type PreguntaId = (typeof PREGUNTA_IDS)[number];
@@ -56,19 +57,19 @@ const par = (es: unknown, en: unknown, max: number): Par | null => {
 /** Lo que devuelve el modelo → preguntas limpias. Una pregunta mal formada se descarta (no
  *  la entrevista); las de ids que la marca "ya sabe" se omiten; tope de 3. */
 export function sanearPreguntas(raw: unknown, yaSabidas: string[] = []): Pregunta[] {
-  if (!Array.isArray(raw)) return [];
   const out: Pregunta[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
-    const o = item as Record<string, unknown>;
+  // Tolerante con la forma: array, string JSON o {preguntas: …} (el modelo a veces lo manda así).
+  for (const item of listaDe(raw, "preguntas")) {
+    const o = objetoDe(item);
+    if (!o) continue;
     const id = typeof o.id === "string" && (PREGUNTA_IDS as readonly string[]).includes(o.id) ? (o.id as PreguntaId) : null;
     if (!id || yaSabidas.includes(id) || out.some((q) => q.id === id)) continue;
     const pregunta = par(o.pregunta_es, o.pregunta_en, 140);
     if (!pregunta) continue;
     const opciones: Opcion[] = [];
-    for (const op of Array.isArray(o.opciones) ? o.opciones : []) {
-      if (!op || typeof op !== "object") continue;
-      const x = op as Record<string, unknown>;
+    for (const op of listaDe(o.opciones, "opciones")) {
+      const x = objetoDe(op);
+      if (!x) continue;
       const valor = texto(x.valor, MAX_CHARS_RESPUESTA);
       const label = par(x.label_es, x.label_en, 60);
       if (!valor || !label || opciones.some((v) => v.valor === valor)) continue;
@@ -85,11 +86,10 @@ export function sanearPreguntas(raw: unknown, yaSabidas: string[] = []): Pregunt
 
 /** Lo que manda el cliente → respuestas limpias (tope 3, una línea, 120 letras, campo del enum). */
 export function sanearRespuestas(raw: unknown): Respuesta[] {
-  if (!Array.isArray(raw)) return [];
   const out: Respuesta[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
-    const o = item as Record<string, unknown>;
+  for (const item of listaDe(raw, "respuestas")) {
+    const o = objetoDe(item);
+    if (!o) continue;
     const id = typeof o.id === "string" && (PREGUNTA_IDS as readonly string[]).includes(o.id) ? (o.id as PreguntaId) : null;
     const valor = texto(o.valor, MAX_CHARS_RESPUESTA);
     if (!id || !valor || out.some((r) => r.id === id)) continue;

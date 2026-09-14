@@ -20,6 +20,7 @@ import { regexSegura, validarRegla, notasDe, cuantificadoresMaxPorRuta, codigoRe
 import { readFileSync } from "node:fs";
 import { necesitaEntrevista, sanearPreguntas, sanearRespuestas, aplicarRespuestas, detalleRespuestas, pares, MAX_PREGUNTAS } from "../src/lib/prisma/entrevista.ts";
 import { patronRespuestas, hayAprendizaje } from "../src/lib/prisma/aprendizaje.ts";
+import { listaDe, objetoDe } from "../src/lib/prisma/json.ts";
 import { positivar, sustantivar, POSITIVO_REGLAS } from "../src/lib/prisma/positivo.ts";
 import { deletrear, DELETREO_MAX } from "../src/lib/prisma/texto-imagen.ts";
 import { movimientos } from "../src/lib/prisma/camara.ts";
@@ -797,6 +798,18 @@ console.log("\n▶ F3 — entrevista: saneo de preguntas y respuestas");
   eq("un campo fuera del enum → null", q[2].campo, null);
   eq("las ids que la marca ya sabe no se preguntan", sanearPreguntas(cruda, ["fondo", "personas"]).map((x) => x.id).join(","), "ritmo,voz");
   eq("sanearPreguntas(null) → []", sanearPreguntas(null).length, 0);
+  // 2026-09-14 en el preview: el modelo mandó la lista como STRING JSON y el saneo tiraba las 3 preguntas.
+  const comoString = JSON.stringify({ preguntas: cruda.slice(0, 2) });
+  eq("sanearPreguntas acepta la lista como string JSON", sanearPreguntas(comoString, []).length, 2);
+  eq("sanearPreguntas acepta un objeto envoltorio {preguntas: […]}", sanearPreguntas({ preguntas: cruda.slice(0, 1) }, []).length, 1);
+  eq("sanearPreguntas acepta opciones como string JSON", sanearPreguntas([{ ...cruda[0], opciones: JSON.stringify(cruda[0].opciones) }], []).length, 1);
+  eq("listaDe: array", listaDe([1, 2]).length, 2);
+  eq("listaDe: string JSON de array", listaDe("[1,2,3]").length, 3);
+  eq("listaDe: string JSON con clave", listaDe('{"avisos":[1]}', "avisos").length, 1);
+  eq("listaDe: objeto con una sola clave se desenvuelve", listaDe({ x: "[1,2]" }).length, 2);
+  eq("listaDe: basura → []", listaDe("hola").length + listaDe(42).length + listaDe(null).length, 0);
+  eq("listaDe: string que no es JSON → []", listaDe("[no json").length, 0);
+  ok("objetoDe: string JSON → objeto; array → null", objetoDe('{"a":1}')?.a === 1 && objetoDe([1]) === null && objetoDe("x") === null);
   eq("MAX_PREGUNTAS = 3", MAX_PREGUNTAS, 3);
   const r = sanearRespuestas([{ id: "fondo", valor: "  clean\nstudio  ", campo: "luz" }, { id: "fondo", valor: "dup" }, { id: "nada", valor: "x" }, { id: "luz", valor: "x".repeat(500), campo: "raro" }, { id: "voz", valor: "" }]);
   eq("respuestas: una línea, sin repetidos, id del enum, campo del enum o null, tope de letras", JSON.stringify(r), JSON.stringify([{ id: "fondo", valor: "clean studio", campo: "luz" }, { id: "luz", valor: "x".repeat(120), campo: null }]));

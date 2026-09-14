@@ -8,6 +8,7 @@ import { validar } from "@/lib/prisma/validators";
 import { PRESETS_HIGGSFIELD } from "@/lib/prisma/compilers/higgsfield";
 import { BLOQUE_ESTABLE, bloqueEstableCon, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueVariante, bloqueExplicar, bloqueDescribirPersonaje, bloqueJuicio, bloqueCorreccion, bloqueEntrevista, AVISOS_SCHEMA, CORRECCION_SCHEMA, PREGUNTAS_SCHEMA, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje, type NotaTool } from "@/lib/prisma/prompts/writer";
 import { sanearPreguntas, type Pregunta } from "@/lib/prisma/entrevista";
+import { listaDe, objetoDe } from "@/lib/prisma/json";
 import type { Aviso } from "@/lib/prisma/diagnostico";
 import type { Cambio, Idioma } from "@/lib/prisma/ortografia";
 import type { PrismaVariante } from "@/lib/database.types";
@@ -94,14 +95,16 @@ const SPEC_SCHEMA = {
 };
 
 const s0 = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
-const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean) : []);
+// Tolerante: el modelo a veces manda una lista como string JSON ("[\"a\",\"b\"]").
+const arr = (v: unknown): string[] => listaDe(v).filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean);
 const sn = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
 function beatsDe(v: unknown): Beat[] | null {
-  if (!Array.isArray(v) || !v.length) return null;
+  const lista = listaDe(v, "beats");
+  if (!lista.length) return null;
   const out: Beat[] = [];
-  for (const b of v) {
-    const o = (b ?? {}) as Record<string, unknown>;
+  for (const b of lista) {
+    const o = objetoDe(b) ?? {};
     out.push({ desde: Number(o.desde) || 0, hasta: Number(o.hasta) || 0, accion: s0(o.accion), camara: s0(o.camara), sfx: s0(o.sfx) });
   }
   return out.filter((b) => b.accion).length ? out : null;
@@ -286,12 +289,13 @@ export async function juzgarSpec(e: EntradaWriter, spec: PromptSpec, salida: str
     });
     const bloque = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
     if (!bloque || res.stop_reason === "max_tokens") console.warn(`[prisma] juzgarSpec: ${bloque ? "cortado por max_tokens" : "sin tool_use"} (stop_reason=${res.stop_reason})`);
-    const lista = Array.isArray((bloque?.input as { avisos?: unknown } | undefined)?.avisos) ? ((bloque!.input as { avisos: unknown[] }).avisos) : [];
+    // Tolerante con la forma (array, string JSON o {avisos: …}): el modelo a veces la envuelve.
+    const lista = listaDe((bloque?.input as { avisos?: unknown } | undefined)?.avisos ?? bloque?.input, "avisos");
     const corto = (v: unknown, max = 240): string => (typeof v === "string" ? plano(v).slice(0, max) : "");
     const avisos: Aviso[] = [];
     for (const raw of lista.slice(0, 3)) {
-      if (!raw || typeof raw !== "object") continue;
-      const o = raw as Record<string, unknown>;
+      const o = objetoDe(raw);
+      if (!o) continue;
       const codigo = "hue_" + corto(o.codigo, 40).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
       const nivel = o.nivel === "advierte" || o.nivel === "sugiere" ? o.nivel : null;
       const que_es = corto(o.que_es);
@@ -324,13 +328,13 @@ export async function revisarTexto(texto: string, idioma: Idioma, campo: "texto"
       messages: [{ role: "user", content: bloqueCorreccion(texto, idioma, campo) }],
     });
     const bloque = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-    const o = (bloque?.input ?? {}) as Record<string, unknown>;
+    const o = objetoDe(bloque?.input) ?? {};
     const corregido = typeof o.corregido === "string" ? plano(o.corregido).slice(0, max) : "";
     if (!corregido) return { ok: false, error: "H.Ü.E no pudo revisarlo. Inténtalo otra vez." };
     const cambios: Cambio[] = [];
-    for (const c of Array.isArray(o.cambios) ? o.cambios.slice(0, 6) : []) {
-      if (!c || typeof c !== "object") continue;
-      const x = c as Record<string, unknown>;
+    for (const c of listaDe(o.cambios, "cambios").slice(0, 6)) {
+      const x = objetoDe(c);
+      if (!x) continue;
       const de = typeof x.de === "string" ? plano(x.de).slice(0, 80) : "";
       const a = typeof x.a === "string" ? plano(x.a).slice(0, 80) : "";
       if (!de || !a || de === a) continue;
@@ -363,8 +367,12 @@ export async function preguntarFaltante(e: EntradaWriter, yaSabidas: string[]): 
     });
     const bloque = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
     if (!bloque || res.stop_reason === "max_tokens") console.warn(`[prisma] preguntarFaltante: ${bloque ? "cortado por max_tokens" : "sin tool_use"} (stop_reason=${res.stop_reason})`);
-    const lista = (bloque?.input as { preguntas?: unknown } | undefined)?.preguntas;
-    return { ok: true, preguntas: sanearPreguntas(lista, yaSabidas), usage: usoDe(res) };
+    // sanearPreguntas ya tolera string JSON / envoltorio; se le pasa el input entero por si la
+    // clave viene un nivel arriba.
+    const lista = (bloque?.input as { preguntas?: unknown } | undefined)?.preguntas ?? bloque?.input;
+    const preguntas = sanearPreguntas(lista, yaSabidas);
+    if (!preguntas.length && res.usage.output_tokens > 150) console.warn(`[prisma] preguntarFaltante: ${res.usage.output_tokens} tokens de salida y 0 preguntas saneadas (forma inesperada)`);
+    return { ok: true, preguntas, usage: usoDe(res) };
   } catch (err) {
     console.error("[prisma] preguntarFaltante:", err instanceof Error ? err.message : err);
     return { ok: false, error: "H.Ü.E no respondió. Inténtalo otra vez." };

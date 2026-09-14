@@ -159,6 +159,8 @@ export const UI = {
   seguirConRespuestas: t("Seguir con {n} respuesta(s)", "Continue with {n} answer(s)"),
   sinPreguntas: t("Sin preguntas, sorpréndeme (en este navegador)", "No questions, surprise me (on this browser)"),
   conPreguntas: t("Volver a activar las preguntas de H.Ü.E", "Turn H.Ü.E's questions back on"),
+  sinPreguntasEstaVez: t("H.Ü.E no necesitó preguntar nada: la idea ya lo dice.", "H.Ü.E did not need to ask anything: the idea already says it."),
+  entrevistaFallo: t("H.Ü.E no pudo preguntar esta vez; seguimos sin preguntas.", "H.Ü.E could not ask this time; moving on without questions."),
   avisosTitulo: t("Antes de generar", "Before generating"),
   avisosResultado: t("Lo que conviene revisar", "Worth checking"),
   arreglarlo: t("Arreglarlo", "Fix it"),
