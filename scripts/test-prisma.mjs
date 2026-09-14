@@ -206,13 +206,13 @@ console.log("\n▶ Nano Banana");
   const out = compilar(s).texto;
   ok("nombra [Imagen 1: caption]", out.includes("[Imagen 1: a woman in a black coat]"), out);
   ok("nombra [Imagen 2]", out.includes("[Imagen 2]"));
-  ok("conserva identidad y manos", /facial identity/.test(out) && /five fingers/.test(out));
+  ok("conserva identidad y manos", /the exact face, age and skin tone/.test(out) && /five fingers/.test(out));
   ok("iguala luz del ADN", out.includes("soft window light from the left"));
   ok("paleta de marca", out.includes("#ff6b1a"));
   ok("evita lo de la marca", out.includes("purple backgrounds"));
   ok("formato 9:16", out.includes("9:16"));
   const p = compilar(spec("foto_producto", "nanobanana")).texto;
-  ok("producto: conserva etiqueta y texto", /label and any text/.test(p));
+  ok("producto: conserva etiqueta y texto", /label and text, legible/.test(p));
   // Validator caza un prompt sin referencia
   const roto = validar("Make it pretty. Keep unchanged: nothing. 9:16", s);
   ok("validator caza referencias sin usar", !roto.ok && roto.errores.some((e) => e.includes("[Imagen 1]")), JSON.stringify(roto));
@@ -492,8 +492,8 @@ console.log("\n▶ F1 — de negativo a positivo");
   ok(`el mapa trae ≥ 28 reglas (${POSITIVO_REGLAS})`, POSITIVO_REGLAS >= 28);
   const casos = [
     ["no text overlays", "clean, text-free image"],
-    ["extra people", "only the subject in frame, nobody else"],
-    ["no busy background", "a clean, simple, uncluttered background"],
+    ["extra people", "nobody else in frame"],
+    ["no busy background", "a clean, uncluttered scene with only the subject"],
     ["harsh shadows", "soft, even, flattering shadows"],
     ["blurry", "tack-sharp focus on the subject"],
     ["distortion", "accurate proportions and straight, stable lines"],
@@ -513,19 +513,42 @@ console.log("\n▶ F1 — de negativo a positivo");
   eq("lo que no está en el mapa queda aparte", JSON.stringify(r.sinMapear), JSON.stringify(["purple backgrounds"]));
   eq("'dark blue coat' NO se vuelve 'imagen clara' (queda sin mapear)", JSON.stringify(positivar(["dark blue coat"]).positivos), "[]");
   eq("'holding hands' no es un defecto de manos", JSON.stringify(positivar(["holding hands"]).positivos), "[]");
+  eq("'hands' a secas = que no salgan → positivo", positivar(["hands"]).positivos[0], "hands kept out of frame");
+  eq("'extra props' y 'clutter' son UNA sola frase", positivar(["extra props", "clutter", "busy background"]).positivos.length, 1);
   eq("'price cuts' no es un corte de edición", JSON.stringify(positivar(["price cuts"]).positivos), "[]");
   eq("'too dark' sí", positivar(["too dark"]).positivos[0], "a well-exposed, bright image");
   eq("sustantivar quita la negación", sustantivar("no subtitles"), "subtitles");
   eq("sustantivar: without", sustantivar("without any music"), "music");
   eq("sustantivar deja un sustantivo tal cual", sustantivar("purple backgrounds"), "purple backgrounds");
   const nb = compilar(spec("foto_producto", "nanobanana", { negativos: ["no busy background", "blur"] })).texto;
-  ok("nanobanana dice qué quiere EN LUGAR de lo que evita", nb.includes("Keep the frame: a clean, simple, uncluttered background; tack-sharp focus on the subject"), nb);
+  ok("nanobanana dice qué quiere EN LUGAR de lo que evita", nb.includes("Keep the frame: a clean, uncluttered scene with only the subject; tack-sharp focus on the subject"), nb);
   ok("nanobanana no dice 'no busy background'", !/no busy background/.test(nb));
   ok("lo sin mapear va en un Avoid corto (evitar de la marca)", /Avoid: purple backgrounds/.test(nb), nb);
   eq("negativosSinMapear cuenta lo que quedó", negativosSinMapear(spec("foto_producto", "nanobanana", { negativos: ["blur"] })), 1);
   const kl = compilar(spec("animar_foto", "kling", { negativos: ["harsh shadows"], entorno: "", mood: "" })).texto;
   ok("kling mete el positivo en la atmósfera (sin campo negativo)", kl.includes("soft, even, flattering shadows"), kl);
   ok("kling nunca escribe 'no X'", !/\bno [a-z]/.test(kl), kl);
+}
+
+console.log("\n▶ F1 — longitud de los prompts de imagen (regresión): andamio corto, techo con spec cargado");
+{
+  // Un spec "normal" (frases de una cláusula, como pide el bloque estable): el andamio fijo del
+  // compiler no debe empujarlo por encima del tope de la regla prompt_largo (160).
+  const corto = (job, tool) => {
+    const s = spec(job, tool, { texto: { contenido: "Hasta 20% de cashback", posicion: null, estilo: null } });
+    Object.assign(s, { sujeto: "an orange credit card", accion: "lies flat at a slight angle", entorno: "a white marble counter", camara: { angulo: "eye level", movimiento: null, lente: "85mm, shallow depth of field" }, luz: "soft window light from the left", mood: "premium, calm", estilo: "product photo", paleta: [], texturas: ["marble"], negativos: ["clutter", "harsh shadows"], preservar: [] });
+    s.refs = s.refs.map((r, i) => ({ ...r, caption: i === 0 ? "an orange credit card" : null, dna: null }));
+    return s;
+  };
+  for (const job of [...JOBS_POR_KIND.imagen, ...JOBS_POR_KIND.edicion]) {
+    for (const tool of TOOLS_POR_JOB[job]) {
+      const n = contarPalabras(compilar(corto(job, tool)).texto);
+      // El tope es el de la regla prompt_largo (160): un spec normal nunca debe disparar el aviso por culpa del andamio.
+      ok(`${job} → ${tool}: spec normal con texto y marca ≤ 160 palabras (${n})`, n <= 160);
+      const m = contarPalabras(compilar(spec(job, tool, { texto: { contenido: "Hasta 20% de cashback", posicion: null, estilo: null } })).texto);
+      ok(`${job} → ${tool}: spec cargado (fixture de estrés) ≤ 210 palabras (${m})`, m <= 210);
+    }
+  }
 }
 
 console.log("\n▶ F1 — Nano Banana 2/Pro: estilo prestado, tipografía real, 2K");
@@ -537,7 +560,7 @@ console.log("\n▶ F1 — Nano Banana 2/Pro: estilo prestado, tipografía real, 
   ok("la instrucción de foto de producto ya no dice 'Avoid …' (positivo)", !/Avoid distortion/.test(out), out);
   ok("con la ref de estilo el validador sigue en verde", validar(out, conEstilo).ok, validar(out, conEstilo).errores?.join(" | "));
   const sinEstiloTexto = compilar(spec("foto_producto", "nanobanana", { texto: { contenido: "Hasta 20%", posicion: null, estilo: null } })).texto;
-  ok("sin estilo de texto pide una tipografía real", /set in a real typeface: bold geometric sans-serif/.test(sinEstiloTexto), sinEstiloTexto);
+  ok("sin estilo de texto pide una tipografía real", /bold geometric sans-serif, high contrast/.test(sinEstiloTexto), sinEstiloTexto);
   const print = compilar(spec("foto_producto", "nanobanana", { destino: "print" })).texto;
   ok("impresión pide 2K", /Output format: 9:16, 2K resolution/.test(print), print);
   ok("redes NO piden 2K (más barato)", !/2K/.test(compilar(spec("foto_producto", "nanobanana", { destino: "ig_feed" })).texto));
@@ -555,13 +578,13 @@ console.log("\n▶ F1 — gpt-image-2.5: tamaños reales, deletreo, un cambio, c
   eq("deletrear de más de 24 letras → null", deletrear("x".repeat(DELETREO_MAX + 1)), null);
   eq("deletrear vacío → null", deletrear("   "), null);
   const conTexto = compilar(spec("foto_producto", "chatgpt", { texto: { contenido: "Hasta 20%", posicion: null, estilo: null } })).texto;
-  ok("chatgpt deletrea el texto corto", conTexto.includes("spelled out letter by letter so every glyph is right: H-a-s-t-a 2-0-%"), conTexto);
+  ok("chatgpt deletrea el texto corto", conTexto.includes("Spelled out: H-a-s-t-a 2-0-%"), conTexto);
   ok("con texto la calidad es high", /Quality: high/.test(conTexto));
   const largo = compilar(spec("foto_producto", "chatgpt", { texto: { contenido: "Este es un texto demasiado largo para deletrear", posicion: null, estilo: null } })).texto;
-  ok("texto largo NO se deletrea (saturaría el prompt)", !/spelled out letter by letter/.test(largo));
+  ok("texto largo NO se deletrea (saturaría el prompt)", !/Spelled out:/.test(largo));
   const ed = compilar(spec("cambio_fondo", "chatgpt")).texto;
   ok("una edición abre con 'Change ONLY this:'", ed.startsWith("Change ONLY this: "), ed.slice(0, 60));
-  ok("…y cierra con lo que no se toca", ed.includes("Everything else in the attached image stays exactly as it is"), ed);
+  ok("…y cierra con lo que no se toca", ed.includes("Everything else stays exactly as it is"), ed);
   const nueva = compilar(spec("foto_producto", "chatgpt", { destino: "ig_feed" })).texto;
   ok("una imagen nueva NO dice 'Change ONLY'", !nueva.includes("Change ONLY"));
   ok("iteración en redes: calidad medium", /Quality: medium/.test(nueva), nueva);

@@ -15,13 +15,13 @@ import { cuerpoImagen, type Etiquetador } from "./nanobanana.ts";
 
 export const ORDINAL = ["first", "second", "third", "fourth", "fifth", "sixth"];
 
-/** "the first attached image (a woman in a red dress)". */
-const etiquetaGPT: Etiquetador = (spec, role) => {
+/** "the first attached image (a woman in a red dress)"; en una segunda mención, sin el caption. */
+const etiquetaGPT: Etiquetador = (spec, role, corto = false) => {
   const n = indiceRef(spec, role);
   if (n === null) return null;
   const r = spec.refs[n - 1];
   const ord = ORDINAL[n - 1] ?? `#${n}`;
-  return r.caption ? `the ${ord} attached image (${r.caption})` : `the ${ord} attached image`;
+  return r.caption && !corto ? `the ${ord} attached image (${r.caption})` : `the ${ord} attached image`;
 };
 
 /** Tamaño real por aspect para gpt-image-2.5: lados múltiplos de 16, ratio ≤ 3:1, y el
@@ -46,7 +46,7 @@ export function tamanoGPT(aspect: Aspect): string {
 function deletreo(spec: PromptSpec): string | null {
   const t = textoDe(spec);
   const d = t && deletrear(t.contenido);
-  return d ? `The text, spelled out letter by letter so every glyph is right: ${d}` : null;
+  return d ? `Spelled out: ${d}` : null;
 }
 
 export function compilarChatGPT(spec: PromptSpec): Salida {
@@ -59,9 +59,9 @@ export function compilarChatGPT(spec: PromptSpec): Salida {
   const texto = frases(
     ...cuerpo,
     deletreo(spec),
-    edicion ? "Everything else in the attached image stays exactly as it is" : null,
-    `Output: one ${tamanoGPT(spec.aspect)} image, photorealistic unless a style says otherwise`,
-    `Quality: ${final ? "high (final asset)" : "medium (quick iteration)"}`,
+    edicion ? "Everything else stays exactly as it is" : null,
+    `Output: one ${tamanoGPT(spec.aspect)} image${spec.estilo ? "" : ", photorealistic"}`,
+    `Quality: ${final ? "high" : "medium"}`,
   );
   return { texto, formato: "texto" };
 }

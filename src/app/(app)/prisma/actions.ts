@@ -346,7 +346,7 @@ export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar
   if (bloqueo) return { ok: false, error: bloqueo.que.es };
   // "Úsalo en…": el modelo/nivel donde se va a pegar; el writer dimensiona el spec para él.
   const modelo = recomendarModelo({ job: inp.job, tool: inp.tool, destino: inp.destino, refs: inp.refs.length, texto: !!inp.texto?.trim(), dialogo: !!inp.dialogo?.texto.trim(), duracion: inp.duracion }).modelo;
-  const r = await escribirSpec({ ...ent.entrada, aprendizaje, modelo }, estableCon(reglas.notas, reglas.clave));
+  const r = await escribirSpec({ ...ent.entrada, aprendizaje, modelo }, estableCon(reglas.notas, reglas.clave), reglasDe(reglas));
   if (!r.ok) return r;
 
   const refsGuardadas: PrismaRefGuardada[] = inp.refs.map((x) => ({ role: x.role, storage_path: x.storage_path, caption: x.caption, dna: x.dna as Record<string, unknown> | null }));
@@ -431,7 +431,7 @@ export async function refinarPrompt(specId: string, cambio: string): Promise<Res
   const [{ tool, variante }, reglas] = await Promise.all([estadoActual(db, s), cargarReglas(db)]);
   const spec = { ...s.spec, tool };
   const modelo = recomendarModelo(pistasModelo(spec)).modelo;
-  const r = await refinarSpec({ ...entradaDesdeSpec(s), tool, modelo }, spec, texto, estableCon(reglas.notas, reglas.clave));
+  const r = await refinarSpec({ ...entradaDesdeSpec(s), tool, modelo }, spec, texto, estableCon(reglas.notas, reglas.clave), reglasDe(reglas));
   if (!r.ok) return r;
 
   const { error } = await db.from("prisma_specs").update({ spec: r.spec }).eq("id", specId);
@@ -653,7 +653,7 @@ export async function variar(specId: string, variante: string): Promise<Resultad
   // La versión se pide sobre la herramienta que el diseñador está VIENDO (la del último prompt).
   const [{ tool }, reglas] = await Promise.all([estadoActual(db, s), cargarReglas(db)]);
   const modelo = recomendarModelo(pistasModelo(s.spec, tool)).modelo;
-  const r = await variarSpec({ ...entradaDesdeSpec(s), tool, modelo }, { ...s.spec, tool }, v, estableCon(reglas.notas, reglas.clave));
+  const r = await variarSpec({ ...entradaDesdeSpec(s), tool, modelo }, { ...s.spec, tool }, v, estableCon(reglas.notas, reglas.clave), reglasDe(reglas));
   if (!r.ok) return r;
 
   const fila = { client_id: s.row.client_id, marca_id: s.row.marca_id, job: s.row.job, tool, destino: s.row.destino, idea: s.row.idea, spec: r.spec, refs: s.row.refs, created_by: g.soyId };

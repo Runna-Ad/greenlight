@@ -36,7 +36,8 @@ ABSOLUTE RULES
 - Brand comes first: if a brand preset is given, its palette, tone and "avoid" list override your taste.
 - TEXT IN THE PIECE: if the designer wants words to appear IN the image or video (a quoted phrase, "que diga…", "con el texto…", a headline, an offer, a price they typed), copy those words VERBATIM, in the designer's language, into texto_en_imagen.contenido. Never translate, rephrase or "improve" them. Add posicion/estilo only if the designer said where or how. When texto_en_imagen is filled, do NOT add "no text overlays" to negativos.
 - When the designer asked for no text (texto_en_imagen null), add "text overlays" to negativos.
-- negativos are SHORT NOUN PHRASES of what to avoid ("text overlays", "extra people", "harsh shadows", "busy background") — never "no X" or "avoid X". The app turns the common ones into positive phrasing for tools without a negative field (Nano Banana, ChatGPT, Kling) and keeps nouns for Veo.
+- negativos are SHORT NOUN PHRASES of what to avoid — never "no X" or "avoid X". Prefer these canonical ones (the app turns them into positive phrasing for tools without a negative field): "text overlays", "extra people", "clutter", "harsh shadows", "blur", "distortion", "hands in frame", "logos", "reflections", "lens flare", "oversaturation", "low resolution". Keep the list to 2–4 items; anything else that matters goes as a POSITIVE into entorno or preservar instead.
+- LENGTH: the compiled image prompt should stay under ~110 words, so keep sujeto, entorno and luz to one clause each (no adjective stacks), texturas to 1–2 items, preservar to 2–3 items. Say the important thing once.
 - Never invent prices, claims, legal text or brand slogans that the designer did not write.
 
 WHAT EACH TOOL EXPECTS (the app enforces the limits; you write so they are easy to meet)
@@ -207,7 +208,7 @@ export function bloqueVariante(specJson: string, variante: Exclude<PrismaVariant
 
 /** Reparación: el validador objetó; se manda el spec y los errores, se pide corregir SOLO eso. */
 export function bloqueReparacion(errores: string[], specJson: string): string {
-  return `MANDATORY CORRECTION. The compiled prompt failed these checks:\n- ${errores.join("\n- ")}\n\nHere is the spec you produced:\n${specJson}\n\nFix ONLY what those checks need (shorten, remove the contradiction, add the missing piece) and call emitir_spec again with the full corrected spec.`;
+  return `MANDATORY CORRECTION. The compiled prompt failed these checks:\n- ${errores.join("\n- ")}\n\nHere is the spec you produced:\n${specJson}\n\nFix ONLY what those checks need (shorten by cutting adjectives and secondary details — never the text in the piece, the references or the brand; keep ONE camera move; turn a leftover \"avoid\" into what you want instead, inside entorno or preservar) and call emitir_spec again with the full corrected spec.`;
 }
 
 /** Refinar: el diseñador pide un cambio sobre un spec que ya existe. */
@@ -380,7 +381,7 @@ export function bloqueEntrevista(e: EntradaWriter, yaSabidas: string[]): string 
     e.dialogo?.texto ? `Dialogue: yes (${cercado(e.dialogo.idioma)})` : "Dialogue: none",
     yaSabidas.length ? `Do NOT ask about the ids inside <known> (this brand always answers the same; it is already assumed): <known>${cercado(yaSabidas.join(", "))}</known>` : "",
     "Ask ONLY what (a) changes the result materially, (b) cannot be inferred from the above, and (c) the wizard did not already capture. Typical: the camera angle (angulo), whether people appear and how many (personas), the background (fondo), the pacing of a video (ritmo), whether there is voice (voz), which product variant (producto), the light (luz). Never ask about the tool, the format, the brand or the duration when they are given.",
-    "Each question: an id from the list, one short sentence in Spanish (pregunta_es) and English (pregunta_en), 2 to 4 chip options (valor = the value the prompt will use, in English, at most 8 words; label_es / label_en = what the designer sees, 1 to 4 words). Set campo when the answer maps directly to a wizard field (luz, movimiento, lente, mood, estilo, duracion, aspect, dialogo.idioma); otherwise null.",
+    "Each question: an id from the list, one short sentence in Spanish (pregunta_es) and English (pregunta_en), 2 to 4 chip options (valor = the value the prompt will use, in English, at most 8 words; label_es / label_en = what the designer sees, 1 to 4 words). Labels are for people who are NOT photographers: everyday words, never jargon — say \"Desde arriba\" not \"Cenital\", \"De cerca\" not \"Primer plano\", \"Al nivel de los ojos\" not \"Eye-level\", \"Contraluz\" only with a gloss like \"A contraluz (luz por detrás)\". Set campo when the answer maps directly to a wizard field (luz, movimiento, lente, mood, estilo, duracion, aspect, dialogo.idioma); otherwise null.",
     "At most 3 questions, most valuable first. If the idea is already complete, return an empty list. Call emitir_preguntas exactly once.",
   ].filter(Boolean).join("\n");
 }

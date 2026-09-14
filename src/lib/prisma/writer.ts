@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { specVacio, type PromptSpec, type Beat, type Camara, type Dialogo, type VideoType, type TextoEnImagen, type Tool } from "@/lib/prisma/spec";
+import { specVacio, contarPalabras, type PromptSpec, type Beat, type Camara, type Dialogo, type VideoType, type TextoEnImagen, type Tool } from "@/lib/prisma/spec";
 import { VIDEO_TYPES } from "@/lib/prisma/spec";
 import { cercado, plano } from "@/lib/prisma/texto";
 import { compilar, type Salida } from "@/lib/prisma/compilers";
@@ -9,7 +9,7 @@ import { PRESETS_HIGGSFIELD } from "@/lib/prisma/compilers/higgsfield";
 import { BLOQUE_ESTABLE, bloqueEstableCon, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueVariante, bloqueExplicar, bloqueDescribirPersonaje, bloqueJuicio, bloqueCorreccion, bloqueEntrevista, AVISOS_SCHEMA, CORRECCION_SCHEMA, PREGUNTAS_SCHEMA, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje, type NotaTool } from "@/lib/prisma/prompts/writer";
 import { sanearPreguntas, type Pregunta } from "@/lib/prisma/entrevista";
 import { listaDe, objetoDe } from "@/lib/prisma/json";
-import type { Aviso } from "@/lib/prisma/diagnostico";
+import { diagnosticar, esReparable, type Aviso, type ReglaCompilada } from "@/lib/prisma/diagnostico";
 import type { Cambio, Idioma } from "@/lib/prisma/ortografia";
 import type { PrismaVariante } from "@/lib/database.types";
 
@@ -218,54 +218,64 @@ async function llamarSpec(e: EntradaWriter, extra: string | null, estable: strin
 }
 
 /** Escribe el spec, compila, valida y repara UNA vez si hace falta. */
-export async function escribirSpec(e: EntradaWriter, estable: string = BLOQUE_ESTABLE): Promise<ResultadoWriter> {
-  const r1 = await llamarSpec(e, null, estable);
-  if ("error" in r1) return { ok: false, error: r1.error };
-  let spec = specDesde(r1.input, e);
-  let salida = compilar(spec);
-  let v = validar(salida.texto, spec);
-  let usage = r1.usage;
-  let reparado = false;
+/** Lo que hay que corregir en un spec ya compilado: errores del validador + los avisos del
+ *  diagnóstico que el writer puede arreglar SOLO (prompt largo, dos movimientos, "avoid"
+ *  sin positivo). Es lo que se le devuelve al modelo en la reparación. */
+function problemasDe(spec: PromptSpec, salida: Salida, reglas: ReglaCompilada[]): { errores: string[]; problemas: string[] } {
+  const v = validar(salida.texto, spec);
+  const errores = v.ok ? [] : v.errores;
+  const reparables = diagnosticar(spec, spec.tool, salida.texto, [], reglas).filter(esReparable);
+  const n = contarPalabras(salida.texto);
+  const problemas = [...errores, ...reparables.map((a) => `${a.que.en}${a.campo === "salida" ? ` (it has ${n} words now)` : ""}${a.arreglo ? ` ${a.arreglo.en}` : ""}`)];
+  return { errores, problemas };
+}
 
-  if (!v.ok) {
-    const r2 = await llamarSpec(e, bloqueReparacion(v.errores, JSON.stringify(r1.input)), estable);
+/** Compila, revisa y, si hace falta, pide UNA reparación al modelo: H.Ü.E no entrega un prompt
+ *  que sus propias reglas marcarían (Pedro, 2026-09-14: "si ya lo sabe, ¿por qué lo hace mal?").
+ *  Se queda con la versión con MENOS problemas (la reparación nunca empeora). */
+async function cerrarSpec(e: EntradaWriter, input: Record<string, unknown>, usage: Uso, estable: string, reglas: ReglaCompilada[]): Promise<ResultadoWriter> {
+  let spec = specDesde(input, e);
+  let salida = compilar(spec);
+  let { errores, problemas } = problemasDe(spec, salida, reglas);
+  let reparado = false;
+  if (problemas.length) {
+    const r2 = await llamarSpec(e, bloqueReparacion(problemas, JSON.stringify(input)), estable);
     if (!("error" in r2)) {
       const spec2 = specDesde(r2.input, e);
       const salida2 = compilar(spec2);
-      const v2 = validar(salida2.texto, spec2);
+      const p2 = problemasDe(spec2, salida2, reglas);
       usage = sumar(usage, r2.usage);
-      // Nos quedamos con la versión con MENOS errores (la reparación no debe empeorar).
-      const e1 = v.ok ? 0 : v.errores.length;
-      const e2 = v2.ok ? 0 : v2.errores.length;
-      if (e2 <= e1) {
+      // Menos problemas gana; en empate, el prompt más corto (la reparación nunca alarga).
+      if (p2.problemas.length < problemas.length || (p2.problemas.length === problemas.length && contarPalabras(salida2.texto) < contarPalabras(salida.texto))) {
         spec = spec2;
         salida = salida2;
-        v = v2;
+        errores = p2.errores;
+        problemas = p2.problemas;
         reparado = true;
       }
     }
   }
-  return { ok: true, spec, salida, valido: v.ok, errores: v.ok ? [] : v.errores, usage, reparado };
+  return { ok: true, spec, salida, valido: errores.length === 0, errores, usage, reparado };
+}
+
+export async function escribirSpec(e: EntradaWriter, estable: string = BLOQUE_ESTABLE, reglas: ReglaCompilada[] = []): Promise<ResultadoWriter> {
+  const r1 = await llamarSpec(e, null, estable);
+  if ("error" in r1) return { ok: false, error: r1.error };
+  return cerrarSpec(e, r1.input, r1.usage, estable, reglas);
 }
 
 /** Aplica un cambio pedido por el diseñador sobre un spec existente (cambia SÓLO eso). */
-export async function refinarSpec(e: EntradaWriter, specActual: PromptSpec, cambio: string, estable: string = BLOQUE_ESTABLE): Promise<ResultadoWriter> {
+export async function refinarSpec(e: EntradaWriter, specActual: PromptSpec, cambio: string, estable: string = BLOQUE_ESTABLE, reglas: ReglaCompilada[] = []): Promise<ResultadoWriter> {
   const r = await llamarSpec(e, bloqueRefinar(JSON.stringify(specActual), cambio), estable);
   if ("error" in r) return { ok: false, error: r.error };
-  const spec = specDesde(r.input, e);
-  const salida = compilar(spec);
-  const v = validar(salida.texto, spec);
-  return { ok: true, spec, salida, valido: v.ok, errores: v.ok ? [] : v.errores, usage: r.usage, reparado: false };
+  return cerrarSpec(e, r.input, r.usage, estable, reglas);
 }
 
 /** Otra versión del spec, bajo demanda (segura / audaz / mínima). Una llamada, sólo si se pide. */
-export async function variarSpec(e: EntradaWriter, specActual: PromptSpec, variante: Exclude<PrismaVariante, "base">, estable: string = BLOQUE_ESTABLE): Promise<ResultadoWriter> {
+export async function variarSpec(e: EntradaWriter, specActual: PromptSpec, variante: Exclude<PrismaVariante, "base">, estable: string = BLOQUE_ESTABLE, reglas: ReglaCompilada[] = []): Promise<ResultadoWriter> {
   const r = await llamarSpec(e, bloqueVariante(JSON.stringify(specActual), variante), estable);
   if ("error" in r) return { ok: false, error: r.error };
-  const spec = specDesde(r.input, e);
-  const salida = compilar(spec);
-  const v = validar(salida.texto, spec);
-  return { ok: true, spec, salida, valido: v.ok, errores: v.ok ? [] : v.errores, usage: r.usage, reparado: false };
+  return cerrarSpec(e, r.input, r.usage, estable, reglas);
 }
 
 /** Recompila el mismo spec a otra herramienta (sin modelo). */

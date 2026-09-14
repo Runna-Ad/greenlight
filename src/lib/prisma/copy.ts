@@ -264,11 +264,11 @@ export const SWATCHES_CAMARA: Swatch[] = [
 ];
 
 export const SWATCHES_LENTE: Swatch[] = [
-  { valor: "85mm portrait lens, blurred background", label: t("Retrato con fondo desenfocado", "Portrait, blurred background") },
-  { valor: "35mm, natural perspective", label: t("Natural", "Natural") },
-  { valor: "24mm wide angle, more of the scene", label: t("Gran angular", "Wide angle") },
-  { valor: "100mm macro, extreme detail", label: t("Macro, muchísimo detalle", "Macro, extreme detail") },
-  { valor: "anamorphic, horizontal flares", label: t("Cine anamórfico", "Anamorphic cinema") },
+  { valor: "85mm portrait lens, blurred background", label: t("De cerca, fondo desenfocado", "Close, blurred background") },
+  { valor: "35mm, natural perspective", label: t("Como lo ve el ojo", "As the eye sees it") },
+  { valor: "24mm wide angle, more of the scene", label: t("Abierto, se ve más escena", "Wide, more of the scene") },
+  { valor: "100mm macro, extreme detail", label: t("Muy de cerca, cada detalle", "Very close, every detail") },
+  { valor: "anamorphic, horizontal flares", label: t("De película, con destellos", "Movie look, with flares") },
 ];
 
 export const SWATCHES_MOOD: Swatch[] = [

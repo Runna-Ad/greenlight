@@ -1,5 +1,24 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-09-14 (7) — HÜE Prisma: H.Ü.E se corrige solo + palabras llanas (rama `prisma`, 0069 PENDIENTE de "ship it")
+Pedro: "if hue generated the prompt by itself shouldn't it adhere to this suggestions… why would it purposely do it wrong?" y
+"Cenital / cine anamórfico… overly complicated".
+- [x] **cerrarSpec** (writer.ts): compila → diagnostica → si hay avisos REPARABLES por el writer (prompt largo, dos
+      movimientos, "avoid" sin positivo) UNA reparación con esos avisos + el conteo de palabras → gana la versión con menos
+      problemas y, en empate, la más corta. Aplica a generar, refinar y otra versión. Las reglas del Hub viajan al writer.
+- [x] **Andamio más corto** en Nano Banana / ChatGPT (técnica compacta, texto exacto en 8 palabras, marca corta, conservar
+      corto, ≤ 3 positivos sin repetir idea, "photorealistic" sólo sin estilo, "Quality: high", segunda mención de una ref
+      sin caption, deletreo "Spelled out:") → el caso de Pedro pasa de 162 a ~152 palabras sin reparación; el bloque
+      estable pide una cláusula por campo y negativos canónicos (lista); "hands" → "hands kept out of frame".
+- [x] **0069** `20260914120001_greenlight_0069_prisma_prompt_largo.sql`: tope de `prompt_largo` 120 → 160 (el andamio fijo
+      pesa ~50; con 120 cualquier pieza con texto y marca "pasaba de largo").
+- [x] `negativos_sin_mapear` es interno (señal para el Hub; el diseñador no lo ve). Etiquetas llanas en los chips de lente
+      y regla de palabras llanas para las opciones de la entrevista.
+- [x] Tests: test-prisma 541 (longitud con fixture normal ≤ 160 y estrés ≤ 210 para todos los jobs de imagen × 2
+      herramientas). test-db 443. Smoke real 2×: 151–154 palabras, sin reparación, sin avisos visibles.
+- [ ] **SHIP** (necesita "ship it"): `npm run migrate` (0069). Sin ella el aviso de 120 sigue saliendo en prompts normales.
+
+
 ## 🟢 2026-09-14 (6) — HÜE Prisma v1 · FASE 3: la entrevista (rama `prisma`, SIN migración)
 Pedro: "ok lets start then" (tras acordar la Fase 6 "Vigía" y los plegados de la Fase 5 en el plan). Plan §2.
 - [x] **`lib/prisma/entrevista.ts`** (puro): `necesitaEntrevista` (sin modelo: < 8 palabras siempre pregunta; ≥ 25 + refs +

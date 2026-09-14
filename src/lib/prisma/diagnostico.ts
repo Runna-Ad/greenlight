@@ -33,7 +33,25 @@ export type Arreglo =
   | { tipo: "nota" };
 
 export type Fuente = { url: string; fecha: string | null; tipo: "oficial" | "comunidad" };
-export type Aviso = { codigo: string; nivel: Nivel; que: Par; porque: Par | null; arreglo: Par | null; accion: Arreglo | null; fuente: Fuente | null };
+export type Aviso = {
+  codigo: string;
+  nivel: Nivel;
+  que: Par;
+  porque: Par | null;
+  arreglo: Par | null;
+  accion: Arreglo | null;
+  fuente: Fuente | null;
+  /** Qué campo miró la regla (null en los avisos del validador/juicio). Sirve para saber si el writer lo puede arreglar solo. */
+  campo?: ReglaCampo | null;
+  /** Señal para el Hub / el aprendizaje, no para el diseñador (no se pinta). */
+  interno?: boolean;
+};
+
+/** Lo que H.Ü.E puede arreglar SOLO al escribir (y por eso se le pide antes de enseñar el
+ *  prompt): lo que mira el prompt compilado (longitud…), la cámara (dos movimientos) y los
+ *  "qué evitar" sin versión positiva. Lo demás (formato, duración, refs, texto del diseñador,
+ *  contenido de la idea) lo decide una persona. */
+export const esReparable = (a: Aviso): boolean => a.campo === "salida" || a.campo === "camara" || a.codigo === "negativos_sin_mapear";
 
 /** Lo que el diagnóstico necesita saber: lo mismo que el wizard tiene en el paso 3 o lo que
  *  un spec ya compilado sabe de sí. `salida` sólo existe en el resultado. */
@@ -189,7 +207,7 @@ function evaluar(regla: ReglaCompilada, e: EntradaDiagnostico): Aviso | null {
   const valor = crudo.slice(0, regla.campo === "salida" ? TOPE_SALIDA : TOPE_VALOR);
   const empata = (regla.re ? regla.re.test(valor) : true) && (regla.umbral === null ? true : medidaDe(e, regla.campo, crudo) > regla.umbral);
   if (!empata) return null;
-  return { codigo: regla.codigo, nivel: regla.nivel, que: regla.que, porque: regla.porque, arreglo: regla.arreglo, accion: regla.accion, fuente: regla.fuente };
+  return { codigo: regla.codigo, nivel: regla.nivel, que: regla.que, porque: regla.porque, arreglo: regla.arreglo, accion: regla.accion, fuente: regla.fuente, campo: regla.campo };
 }
 
 // ── Reglas base (constantes del código; no dependen de la BD) ─────────────────────────────
@@ -286,7 +304,7 @@ export const REGLAS_BASE: ((e: EntradaDiagnostico) => Aviso | null)[] = [
       codigo: "dos_movimientos", nivel: "advierte",
       que: t(`Dos movimientos de cámara (${m.join(" y ")}).`, `Two camera moves (${m.join(" and ")}).`),
       porque: t(`${TOOL_INFO[e.tool].nombre} sólo sigue uno por clip; dos deforman la imagen.`, `${TOOL_INFO[e.tool].nombre} follows one per clip; two warp the image.`),
-      arreglo: t("Elige uno y deja el otro para otro clip.", "Pick one and leave the other for another clip."), accion: { tipo: "nota" }, fuente: { url: "https://higgsfield.ai/camera-controls", fecha: "2026-09-11", tipo: "oficial" },
+      arreglo: t("Elige uno y deja el otro para otro clip.", "Pick one and leave the other for another clip."), accion: { tipo: "nota" }, fuente: { url: "https://higgsfield.ai/camera-controls", fecha: "2026-09-11", tipo: "oficial" }, campo: "camara",
     };
   },
 ];
@@ -325,7 +343,7 @@ export function diagnosticar(spec: PromptSpec, tool: Tool, salida: string, error
   const validador: Aviso[] = errores.map((err, i) => ({ codigo: `validador_${i + 1}`, nivel: "advierte", que: { es: err, en: err }, porque: null, arreglo: null, accion: null, fuente: null }));
   const sinMapear = tool === "nanobanana" || tool === "chatgpt" ? negativosSinMapear({ ...spec, tool }) : 0;
   const positivos: Aviso[] = sinMapear
-    ? [{ codigo: "negativos_sin_mapear", nivel: "sugiere", que: t(`${sinMapear} cosa(s) a evitar quedaron como "Avoid".`, `${sinMapear} thing(s) to avoid stayed as "Avoid".`), porque: t("Esta herramienta no tiene campo negativo; lo que se pide en positivo sale mejor.", "This tool has no negative field; positive phrasing works better."), arreglo: t("Si se repite, se añade al mapa de positivos.", "If it repeats, it gets added to the positives map."), accion: null, fuente: null }]
+    ? [{ codigo: "negativos_sin_mapear", nivel: "sugiere", que: t(`${sinMapear} cosa(s) a evitar quedaron como "Avoid".`, `${sinMapear} thing(s) to avoid stayed as "Avoid".`), porque: t("Esta herramienta no tiene campo negativo; lo que se pide en positivo sale mejor.", "This tool has no negative field; positive phrasing works better."), arreglo: t("Dilo en positivo: qué quieres ver en su lugar (en entorno o preservar).", "Say it in the positive: what you want to see instead (in entorno or preservar)."), accion: null, fuente: null, interno: true }]
     : [];
   return ordenarAvisos([...base, ...db, ...validador, ...positivos]);
 }

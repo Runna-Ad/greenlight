@@ -4,22 +4,27 @@
  * cláusula PRESERVAR siempre (identidad, manos, texto del empaque), igualar luz y
  * perspectiva desde el ADN visual, y paleta de marca en foto de producto.
  */
-import { etiquetaRef, frases, negativosDe, textoDe, type PromptSpec, type RefRole } from "../spec.ts";
+import { etiquetaRef, frases, indiceRef, negativosDe, textoDe, type PromptSpec, type RefRole } from "../spec.ts";
 import { positivar } from "../positivo.ts";
 import type { Salida } from "./salida.ts";
 
 /** Cómo se nombra una referencia dentro del prompt. Nano Banana entiende "[Imagen N]";
  *  ChatGPT prefiere "the first attached image". Cada compiler pasa la suya. */
-export type Etiquetador = (spec: PromptSpec, role: RefRole) => string | null;
+export type Etiquetador = (spec: PromptSpec, role: RefRole, corto?: boolean) => string | null;
 
-const etiquetaNB: Etiquetador = (spec, role) => etiquetaRef(spec, role);
+/** "[Imagen 1: caption]" la primera vez; "[Imagen 1]" en una segunda mención (cada palabra cuenta). */
+const etiquetaNB: Etiquetador = (spec, role, corto = false) => {
+  if (!corto) return etiquetaRef(spec, role);
+  const n = indiceRef(spec, role);
+  return n === null ? null : `[Imagen ${n}]`;
+};
 
 /** La instrucción principal, por trabajo. Cada una es una frase completa en inglés.
  *  `sujeto`/`accion` del spec se anexan al final para que NADA que H.Ü.E escribió se
  *  pierda (antes foto_producto leía sólo `entorno` y tiraba el resto). */
 function instruccion(spec: PromptSpec, etiqueta: Etiquetador): string {
   const s = spec;
-  const ref = (sp: PromptSpec, role: RefRole): string => etiqueta(sp, role) ?? `[Imagen: ${role}]`;
+  const ref = (sp: PromptSpec, role: RefRole, corto = false): string => etiqueta(sp, role, corto) ?? `[Imagen: ${role}]`;
   const idea = s.accion || s.idea;
   switch (s.job) {
     case "cambio_outfit":
@@ -27,7 +32,7 @@ function instruccion(spec: PromptSpec, etiqueta: Etiquetador): string {
     case "cambio_fondo":
       return `Take the subject from ${ref(s, "sujeto")} and place them in this new setting: ${s.entorno || idea}. Match the subject's lighting, shadows and perspective to the new background so the result looks like one real photograph`;
     case "cambio_pose":
-      return `Take the subject from ${ref(s, "sujeto")} and put them in the exact pose shown in ${ref(s, "pose")}, adapting body and clothing realistically to the new posture. Keep the original background from ${ref(s, "sujeto")}`;
+      return `Take the subject from ${ref(s, "sujeto")} and put them in the exact pose shown in ${ref(s, "pose")}, adapting body and clothing realistically to the new posture. Keep the original background from ${ref(s, "sujeto", true)}`;
     case "agregar_objeto":
       return `Integrate the object from ${ref(s, "objeto")} into the scene from ${ref(s, "escena")}: ${idea || "in the most natural and logical way"}. Match scale, perspective, lighting direction and shadows; if the object is transparent or reflective, show realistic refraction and reflections of the scene`;
     case "cambio_angulo":
@@ -40,7 +45,7 @@ function instruccion(spec: PromptSpec, etiqueta: Etiquetador): string {
       return `Apply the logo from ${ref(s, "logo")} onto the product or surface in ${ref(s, "producto")}. ${idea || "The logo must follow the curvature, texture and lighting of the surface like a real print"}. Keep the logo's proportions and every letter legible`;
     case "dos_personajes": {
       const pose = etiqueta(s, "pose");
-      return `Create one photorealistic scene with the person from ${ref(s, "sujeto")} and the person from ${ref(s, "personaje2")} together${pose ? `, using the pose from ${pose}` : ""}. Scene and interaction: ${idea}. Lighting, shadows and perspective must match for both people`;
+      return `Create one scene with the person from ${ref(s, "sujeto")} and the person from ${ref(s, "personaje2")} together${pose ? `, using the pose from ${pose}` : ""}. Scene and interaction: ${idea}. Matching light and perspective for both`;
     }
     case "cambio_epoca":
       return `Transport the subject from ${ref(s, "sujeto")} to this era and style: ${idea}. Adapt clothing, hairstyle and environment to that period and apply a color treatment and grain that simulates photography of that time`;
@@ -49,7 +54,7 @@ function instruccion(spec: PromptSpec, etiqueta: Etiquetador): string {
       return `Turn the subject from ${ref(s, "sujeto")} into a collectible figure${s.estilo ? ` in ${s.estilo} style` : " in detailed vinyl style"}, standing on a round base under clean studio lighting${emp ? `. Behind the figure, its product box, with a design inspired by ${emp}` : ". Next to it, a product box with a modern graphic design showing an illustration of the character"}`;
     }
     case "foto_producto":
-      return `Turn the product photo from ${ref(s, "producto")} into a high-impact advertising photograph. Keep the product itself unchanged but optimize lighting, focus and color. ${s.entorno ? `Place it in this setting: ${s.entorno}` : "Place it in the best aspirational setting for its audience"}${s.accion ? `. Composition and action: ${s.accion}` : ""}. Accurate proportions, soft shadows and a clean background; textures and details must look natural and high resolution`;
+      return `Turn the product photo from ${ref(s, "producto")} into a high-impact advertising photograph: product unchanged, better light, focus and color. ${s.entorno ? `Setting: ${s.entorno}` : "Setting: the best aspirational scene for its audience"}${s.accion ? `. Composition: ${s.accion}` : ""}. Accurate proportions, soft shadows, natural high-resolution detail`;
     case "escena_persona":
       return `Take the person from ${ref(s, "sujeto")} and create a new photograph of them ${s.accion ? s.accion : "in a natural pose"}${s.entorno ? ` in ${s.entorno}` : ""}. Integrate lighting, shadows and perspective so it looks like one real shot`;
     case "imagen_libre":
@@ -65,10 +70,10 @@ function preservar(spec: PromptSpec): string[] {
   const out = new Set<string>(spec.preservar);
   const roles = new Set(spec.refs.map((r) => r.role));
   if (roles.has("sujeto") || roles.has("personaje2")) {
-    out.add("the exact facial identity, age and skin tone of each person");
+    out.add("the exact face, age and skin tone of each person");
     out.add("natural hands with five fingers");
   }
-  if (roles.has("producto")) out.add("the product's shape, label and any text on it, fully legible");
+  if (roles.has("producto")) out.add("the product's shape, label and text, legible");
   if (roles.has("logo")) out.add("the logo's exact letters and proportions");
   if (spec.job === "cambio_pose" || spec.job === "cambio_outfit") out.add("the original background");
   return [...out];
@@ -83,27 +88,28 @@ function igualarADN(spec: PromptSpec): string | null {
   return partes.length ? `Match the reference's ${partes.join("; ")}` : null;
 }
 
+/** Compacto a propósito: cada palabra de etiqueta cuenta contra el tope del prompt. */
 function tecnicos(spec: PromptSpec): string | null {
   const c = spec.camara;
   const partes = [
-    c.lente && `lens: ${c.lente}`,
-    c.angulo && `camera angle: ${c.angulo}`,
-    spec.luz && `lighting: ${spec.luz}`,
-    spec.mood && `mood: ${spec.mood}`,
-    spec.estilo && spec.job !== "figura_coleccionable" && `style: ${spec.estilo}`,
-    spec.texturas.length && `textures: ${spec.texturas.join(", ")}`,
+    c.lente && `Lens ${c.lente}`,
+    c.angulo && `angle ${c.angulo}`,
+    spec.luz && `light ${spec.luz}`,
+    spec.mood && `mood ${spec.mood}`,
+    spec.estilo && spec.job !== "figura_coleccionable" && `style ${spec.estilo}`,
+    spec.texturas.length && `textures ${spec.texturas.slice(0, 2).join(", ")}`,
   ].filter(Boolean);
-  return partes.length ? `Technical details: ${partes.join(", ")}` : null;
+  return partes.length ? partes.join("; ") : null;
 }
 
 function marca(spec: PromptSpec): string | null {
   const m = spec.marca;
   if (!m) return null;
   const partes = [
-    m.paleta.length && `brand palette ${m.paleta.join(", ")}`,
+    m.paleta.length && `palette ${m.paleta.join(", ")}`,
     m.tono && `tone ${m.tono}`,
   ].filter(Boolean);
-  return partes.length ? `Brand: ${m.nombre}, ${partes.join(", ")}` : null;
+  return partes.length ? `Brand ${m.nombre}: ${partes.join("; ")}` : null;
 }
 
 /** La cláusula del texto en imagen: letra por letra, entre comillas, y nada más de texto.
@@ -114,7 +120,7 @@ export function clausulaTexto(spec: PromptSpec): string {
   if (!t) return "No text, letters, captions or watermarks anywhere in the image";
   // Sin estilo pedido se pide una TIPOGRAFÍA real: "clean typography" a secas produce letras
   // genéricas y espaciado raro; una familia concreta y contraste alto rinden mucho mejor.
-  return `Render this exact text, spelled letter by letter with no changes, as part of the image: "${t.contenido.trim()}"${t.posicion ? `, placed ${t.posicion}` : ""}${t.estilo ? `, ${t.estilo}` : ", set in a real typeface: bold geometric sans-serif, evenly kerned, high contrast against its background"}. No other text`;
+  return `Render this exact text, letter by letter, no changes: "${t.contenido.trim()}"${t.posicion ? `, placed ${t.posicion}` : ""}${t.estilo ? `, ${t.estilo}` : ", bold geometric sans-serif, high contrast"}. No other text`;
 }
 
 /** La referencia de estilo (slot opcional): se toma prestado el LOOK, no el sujeto. En
@@ -129,7 +135,8 @@ function estiloPrestado(spec: PromptSpec, etiqueta: Etiquetador): string | null 
  *  banners salen a 2K; lo demás a la resolución por default, más barato). */
 function salidaNB(spec: PromptSpec): string {
   const alta = spec.destino === "print" || spec.destino === "web_banner";
-  return `Output format: ${spec.aspect}${alta ? ", 2K resolution" : ""}, photorealistic unless a style says otherwise`;
+  // "photorealistic" sólo si no hay estilo: con estilo, repetirlo contradice o sobra.
+  return `Output format: ${spec.aspect}${alta ? ", 2K resolution" : ""}${spec.estilo ? "" : ", photorealistic"}`;
 }
 
 /** El cuerpo compartido de un prompt de imagen (Nano Banana y ChatGPT usan el mismo
@@ -146,8 +153,9 @@ export function cuerpoImagen(spec: PromptSpec, etiqueta: Etiquetador): (string |
     marca(spec),
     clausulaTexto(spec),
     spec.refs.length || spec.preservar.length ? `Keep unchanged: ${preservar(spec).join("; ")}` : null,
-    positivos.length ? `Keep the frame: ${positivos.join("; ")}` : null,
-    sinMapear.length ? `Avoid: ${sinMapear.slice(0, 4).join(", ")}` : null,
+    // Hasta 3 positivos: más repiten la misma idea con otras palabras y engordan el prompt.
+    positivos.length ? `Keep the frame: ${positivos.slice(0, 3).join("; ")}` : null,
+    sinMapear.length ? `Avoid: ${sinMapear.slice(0, 3).join(", ")}` : null,
   ];
 }
 

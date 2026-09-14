@@ -2524,6 +2524,7 @@ console.log("\n▶ 0067 — prisma_reglas + columnas + eventos");
   // 0068: el patrón de texto_no_latino ya va con escapes (sin caracteres de formato crudos)
   const patronNoLatino = await scalar(`select patron from produccion.prisma_reglas where codigo = 'texto_no_latino'`);
   ok("0068: texto_no_latino con escapes \\uXXXX y sin caracteres de formato", /\\u0600/.test(patronNoLatino) && !/[\p{Cc}\p{Cf}]/u.test(patronNoLatino), patronNoLatino);
+  eq("0069: prompt_largo con tope 160", Number(await scalar(`select umbral from produccion.prisma_reglas where codigo = 'prompt_largo'`)), 160);
   const promptEv = await scalar(`insert into produccion.prisma_prompts (spec_id, tool, prompt_version, salida, formato) values ($1, 'nanobanana', 'test', 'p', 'texto') returning id`, [specEv]);
   const miembro = await scalar(`select id from produccion.track_members limit 1`);
   if (miembro) {

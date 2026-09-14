@@ -21,7 +21,9 @@ const fecha = (iso: string | null, lang: Lang) => (iso ? new Date(iso + "T00:00:
  * click · la fuente (así "H.Ü.E dice" se vuelve "está documentado"). Color + ícono + texto:
  * el nivel nunca se comunica sólo con color.
  */
-export function PanelAvisos({ avisos, lang, onArreglar, aplicando = null, titulo }: { avisos: Aviso[]; lang: Lang; onArreglar?: (a: Aviso) => void; aplicando?: string | null; titulo?: string }) {
+export function PanelAvisos({ avisos: todos, lang, onArreglar, aplicando = null, titulo }: { avisos: Aviso[]; lang: Lang; onArreglar?: (a: Aviso) => void; aplicando?: string | null; titulo?: string }) {
+  // Los avisos internos (señales para el Hub) no se le enseñan al diseñador.
+  const avisos = todos.filter((a) => !a.interno);
   if (!avisos.length) return null;
   return (
     <section aria-label={titulo ?? tx(UI.avisosTitulo, lang)} aria-live="polite" className="space-y-2">

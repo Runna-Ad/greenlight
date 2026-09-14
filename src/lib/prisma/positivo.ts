@@ -14,12 +14,14 @@ type Regla = [RegExp, string];
 /** Orden importa: la primera que empata gana. Cada positivo es UNA frase corta. */
 const MAPA: Regla[] = [
   [/\b(text overlay|text overlays|texts?|lettering|letters|captions?|typography|subtitles?|watermarks?|words on)\b/i, "clean, text-free image"],
-  [/\b(extra|other|additional|more) (people|persons|person|faces|figures)\b|\bcrowds?\b|\bbystanders\b|\bpasser/i, "only the subject in frame, nobody else"],
-  [/\b(busy|cluttered|messy|noisy|distracting) (background|backdrop|scene)\b|\bclutter\b/i, "a clean, simple, uncluttered background"],
+  [/\b(extra|other|additional|more) (people|persons|person|faces|figures)\b|\bcrowds?\b|\bbystanders\b|\bpasser/i, "nobody else in frame"],
+  [/\b(busy|cluttered|messy|noisy|distracting) (background|backdrop|scene)\b|\bclutter(ed)?\b|\b(extra|random|unnecessary) (props?|objects?|items?|elements?)\b/i, "a clean, uncluttered scene with only the subject"],
   [/\bharsh (shadows?|light|lighting)\b|\bhard shadows?\b/i, "soft, even, flattering shadows"],
   [/\bblur(ry|red)?\b|\bout of focus\b|\bsoft focus\b/i, "tack-sharp focus on the subject"],
   [/\bdistort(ion|ed)?\b|\bdeform(ed|ities)?\b|\bwarp(ed|ing)?\b|\bmelting\b/i, "accurate proportions and straight, stable lines"],
   [/\b(extra|missing|six|deformed|bad|mangled|fused) fingers?\b|\b(bad|deformed|distorted|melted|broken) hands?\b/i, "natural hands with five fingers"],
+  // "hands" como cosa a evitar (que no salgan) — distinto de las manos deformes de arriba.
+  [/^hands?$|\bhands? (in|on|inside) (the )?(frame|shot|photo|image|picture)\b|\bvisible hands?\b|\bhands? visible\b/i, "hands kept out of frame"],
   [/\blogos?\b|\bbrand marks?\b|\btrademarks?\b/i, "plain, unbranded surfaces"],
   [/\bhard cuts?\b|\bjump cuts?\b|\bfast cuts?\b|\bcuts between\b|\bediting\b/i, "one continuous take"],
   [/\bmusic\b|\bsoundtrack\b|\bscore\b/i, "natural ambient sound only"],
@@ -38,7 +40,6 @@ const MAPA: Regla[] = [
   [/\bneon\b/i, "a natural light palette"],
   [/\bsmil(e|es|ing)\b|\bteeth\b/i, "a calm, closed-mouth expression"],
   [/\beye contact\b|\blooking at (the )?camera\b/i, "the gaze directed away from the camera"],
-  [/\bprops?\b|\bextra objects?\b|\bclutter objects?\b/i, "an empty scene with just the subject"],
   [/\btoo dark\b|\bdark (image|photo|frame|exposure)\b|\bunderexpos(ed|ure)\b|\bmurky\b/i, "a well-exposed, bright image"],
   [/\boverexpos(ed|ure)\b|\bblown(-| )out\b|\bblown highlights\b/i, "balanced exposure with highlights retained"],
   [/\bnud(e|ity)\b|\bnsfw\b|\bexplicit\b/i, "fully clothed, tasteful"],
