@@ -1,6 +1,6 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-09-14 (8) — HÜE Prisma v1 · FASE 4: "sube lo que salió" (rama `prisma`, migración 0070 PENDIENTE de "ship it")
+## 🟢 2026-09-14 (8) — HÜE Prisma v1 · FASE 4: "sube lo que salió" (rama `prisma`, 390b013 · 0070 APLICADA)
 Pedro: "lets go with phase 4". Plan §7: el diseñador sube lo que salió de la herramienta, H.Ü.E lo compara con lo pedido,
 dice qué falló, ofrece un prompt de corrección (edita ESE resultado) o refinar el original, y se marca el resultado final
 aceptado = la señal de aprendizaje más fuerte.
@@ -39,7 +39,9 @@ aceptado = la señal de aprendizaje más fuerte.
       crítico (tipo del demo, ya cazado por el build), 2 serios (uno = el del evento; el otro: la corrección repetida
       devolvía `avisos: []` → ahora los guardados), mejoras (modelo validado por herramienta, sin "change only" triple,
       tests del round-trip del veredicto y de `faltaMigracion`). test-prisma 605 · test-db 460 · tsc 0 · lint 0 · build ✓.
-- [x] Commit + push a `prisma` (preview). **Migración 0070 → espera "ship it".**
+- [x] Commit + push a `prisma` (preview, 390b013).
+- [x] **SHIP** — Pedro: "ship it" → `npm run migrate` 0070 aplicada y verificada en prod (tabla con RLS, policy master,
+      service_role escribe, `prisma_specs.correccion_de`, 4 índices, en el ledger). Siguiente: **F5** ronda de prueba.
 
 ### Review F4 — lo que queda (diferido, no bloquea)
 - **Memoria de marca abierta a cualquier rol interno** (security LOW): `cargarMarcas` da todas las marcas a todo rol y

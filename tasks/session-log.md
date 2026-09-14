@@ -2185,3 +2185,25 @@ real · prueba con diseñador · decidir merge a main (= deploy a prod; el módu
 - [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
 - [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
 
+
+## 2026-09-14 16:05
+**Shipped (recent commits):**
+  - feat(prisma): F4 — "sube lo que salió": veredicto de H.Ü.E, corrección sobre la imagen, resultado final aceptado (0070 PENDIENTE de "ship it")
+  - docs(prisma): 0069 aplicada — todo, project-state
+  - feat(prisma): H.Ü.E se corrige solo con sus propias reglas + prompts más cortos + palabras llanas
+  - fix(prisma): la entrevista se veía vacía — la salida del tool_use puede venir como string JSON
+  - docs(prisma): F3 cerrada — project-state; sigue F4
+  - feat(prisma): F3 — la entrevista (≤ 3 preguntas rápidas, cero cuando la idea ya lo dice todo)
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+

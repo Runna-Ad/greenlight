@@ -8,7 +8,7 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
-## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-14 — TODO LIVE en preview (0065–0069 APLICADAS · **0070 PENDIENTE de "ship it"**)
+## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-14 — TODO LIVE en preview (390b013 · 0065–0070 APLICADAS)
 - **F4 hecha (2026-09-14) — "sube lo que salió":** bloque "¿Cómo salió?" en el resultado (`components/prisma/como-salio.tsx`):
   el diseñador sube la imagen que le dio la herramienta (o un cuadro si es video) y el modelo que usó; H.Ü.E la compara con
   lo pedido en UNA llamada con visión (`compararResultado`, tool_use `emitir_veredicto`): 7 puntos ✓/✗ con nota es/en
@@ -19,8 +19,7 @@
   con 👍 > copiado/abierto > 👍; `patronFallos` (un punto falla ≥ 3 de los últimos 6 en una herramienta) → frase al writer
   y "Úsalo en…" sube a Pro/sunburst cuando falla el texto o el parecido. Acciones en `prisma/resultado-actions.ts`;
   helpers compartidos con actions.ts en `prisma/comun.ts`. **Migración 0070** (`prisma_resultados` +
-  `prisma_specs.correccion_de`) escrita y probada en PGlite; hasta que Pedro diga "ship it", en el preview subir un
-  resultado dice "Esta parte se activa cuando se aplique la migración 0070". `?demo=veredicto` (dev) enseña el bloque.
+  `prisma_specs.correccion_de`) APLICADA en prod (2026-09-14, "ship it"). `?demo=veredicto` (dev) enseña el bloque.
   Smoke real `scripts/smoke-veredicto.mjs` (logo vs spec de producto: 7 puntos, texto y sujeto ✗, 2/2).
 - **Tras la prueba de Pedro (2026-09-14):** la salida de un tool_use puede venir como string JSON (lib/prisma/json.ts,
   `listaDe`); la ortografía se sugiere al escribir; **H.Ü.E se corrige solo** con sus propias reglas antes de enseñar el
