@@ -1,6 +1,6 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-09-14 (7) — HÜE Prisma: H.Ü.E se corrige solo + palabras llanas (rama `prisma`, 0069 PENDIENTE de "ship it")
+## 🟢 2026-09-14 (7) — HÜE Prisma: H.Ü.E se corrige solo + palabras llanas (rama `prisma`, 7080c45 · 0069 APLICADA)
 Pedro: "if hue generated the prompt by itself shouldn't it adhere to this suggestions… why would it purposely do it wrong?" y
 "Cenital / cine anamórfico… overly complicated".
 - [x] **cerrarSpec** (writer.ts): compila → diagnostica → si hay avisos REPARABLES por el writer (prompt largo, dos
@@ -16,7 +16,7 @@ Pedro: "if hue generated the prompt by itself shouldn't it adhere to this sugges
       y regla de palabras llanas para las opciones de la entrevista.
 - [x] Tests: test-prisma 541 (longitud con fixture normal ≤ 160 y estrés ≤ 210 para todos los jobs de imagen × 2
       herramientas). test-db 443. Smoke real 2×: 151–154 palabras, sin reparación, sin avisos visibles.
-- [ ] **SHIP** (necesita "ship it"): `npm run migrate` (0069). Sin ella el aviso de 120 sigue saliendo en prompts normales.
+- [x] **SHIP** — Pedro: "ship it" → `npm run migrate` 0069 aplicada y verificada en prod (umbral 160, en el ledger).
 
 
 ## 🟢 2026-09-14 (6) — HÜE Prisma v1 · FASE 3: la entrevista (rama `prisma`, SIN migración)
