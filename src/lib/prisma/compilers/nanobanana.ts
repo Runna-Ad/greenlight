@@ -53,6 +53,11 @@ function instruccion(spec: PromptSpec, etiqueta: Etiquetador): string {
       const emp = etiqueta(s, "empaque");
       return `Turn the subject from ${ref(s, "sujeto")} into a collectible figure${s.estilo ? ` in ${s.estilo} style` : " in detailed vinyl style"}, standing on a round base under clean studio lighting${emp ? `. Behind the figure, its product box, with a design inspired by ${emp}` : ". Next to it, a product box with a modern graphic design showing an illustration of the character"}`;
     }
+    case "correccion":
+      // F4: la imagen que SALIÓ es la única referencia; `accion` es la edición que H.Ü.E dedujo al
+      // comparar. Un cambio, dicho primero; lo demás lo protege "Keep unchanged" (Nano Banana) o
+      // "Change ONLY this … Everything else stays" (ChatGPT): aquí no se repite.
+      return `Edit ${ref(s, "resultado")}: ${s.accion || idea}`;
     case "foto_producto":
       return `Turn the product photo from ${ref(s, "producto")} into a high-impact advertising photograph: product unchanged, better light, focus and color. ${s.entorno ? `Setting: ${s.entorno}` : "Setting: the best aspirational scene for its audience"}${s.accion ? `. Composition: ${s.accion}` : ""}. Accurate proportions, soft shadows, natural high-resolution detail`;
     case "escena_persona":
@@ -76,6 +81,7 @@ function preservar(spec: PromptSpec): string[] {
   if (roles.has("producto")) out.add("the product's shape, label and text, legible");
   if (roles.has("logo")) out.add("the logo's exact letters and proportions");
   if (spec.job === "cambio_pose" || spec.job === "cambio_outfit") out.add("the original background");
+  if (spec.job === "correccion") out.add("everything else in the image: subject, composition, colors and light");
   return [...out];
 }
 
@@ -115,9 +121,11 @@ function marca(spec: PromptSpec): string | null {
 /** La cláusula del texto en imagen: letra por letra, entre comillas, y nada más de texto.
  *  Es la misma para las dos herramientas de imagen (las dos pintan texto si se les pide
  *  claro). Si no hay texto, se prohíbe explícitamente. */
-export function clausulaTexto(spec: PromptSpec): string {
+export function clausulaTexto(spec: PromptSpec): string | null {
   const t = textoDe(spec);
-  if (!t) return "No text, letters, captions or watermarks anywhere in the image";
+  // Una corrección sin texto que arreglar no dice nada del texto: la imagen puede traerlo y
+  // "Keep unchanged" ya lo protege; prohibirlo lo borraría.
+  if (!t) return spec.job === "correccion" ? null : "No text, letters, captions or watermarks anywhere in the image";
   // Sin estilo pedido se pide una TIPOGRAFÍA real: "clean typography" a secas produce letras
   // genéricas y espaciado raro; una familia concreta y contraste alto rinden mucho mejor.
   return `Render this exact text, letter by letter, no changes: "${t.contenido.trim()}"${t.posicion ? `, placed ${t.posicion}` : ""}${t.estilo ? `, ${t.estilo}` : ", bold geometric sans-serif, high contrast"}. No other text`;
@@ -136,7 +144,8 @@ function estiloPrestado(spec: PromptSpec, etiqueta: Etiquetador): string | null 
 function salidaNB(spec: PromptSpec): string {
   const alta = spec.destino === "print" || spec.destino === "web_banner";
   // "photorealistic" sólo si no hay estilo: con estilo, repetirlo contradice o sobra.
-  return `Output format: ${spec.aspect}${alta ? ", 2K resolution" : ""}${spec.estilo ? "" : ", photorealistic"}`;
+  // …ni en una corrección: el look es el de la imagen que salió (una ilustración sigue siéndolo).
+  return `Output format: ${spec.aspect}${alta ? ", 2K resolution" : ""}${spec.estilo || spec.job === "correccion" ? "" : ", photorealistic"}`;
 }
 
 /** El cuerpo compartido de un prompt de imagen (Nano Banana y ChatGPT usan el mismo

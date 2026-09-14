@@ -1,5 +1,62 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-09-14 (8) — HÜE Prisma v1 · FASE 4: "sube lo que salió" (rama `prisma`, migración 0070 PENDIENTE de "ship it")
+Pedro: "lets go with phase 4". Plan §7: el diseñador sube lo que salió de la herramienta, H.Ü.E lo compara con lo pedido,
+dice qué falló, ofrece un prompt de corrección (edita ESE resultado) o refinar el original, y se marca el resultado final
+aceptado = la señal de aprendizaje más fuerte.
+- [x] **0070** `20260914120002_greenlight_0070_prisma_resultados.sql`: tabla `prisma_resultados` (spec, prompt, client_id,
+      tool, modelo, storage_path `prisma/out/…`, mime, caption, veredicto jsonb, score 0–100, aceptado, created_by), RLS
+      master + grant service_role; `prisma_specs.correccion_de` (el spec que corrige un resultado). Sin storage.* en SQL.
+- [x] **`lib/prisma/resultado.ts`** (puro): campos del veredicto (sujeto, texto, encuadre, luz, estilo, identidad, marca),
+      `sanearVeredicto` (tolera array / string JSON / envoltorio), `scoreDe`, `detalleFallos`/`fallosDe` (sólo campos del
+      enum), `specCorreccion` (spec hermano de edición sobre la imagen subida: job `correccion`, ref `resultado`).
+- [x] **Job oculto `correccion`** (edición; no aparece en el wizard) + rol de ref `resultado`; compilers Nano Banana / ChatGPT:
+      "Edit [Imagen 1]: {cambio}. Change only that…", sin cláusula de "no text" ni "photorealistic" impuestos.
+- [x] **`compararResultado`** (writer.ts, tool_use `emitir_veredicto`, UNA llamada con la imagen): caption + lista
+      cumple/no cumple con nota es/en + `refine` (qué pedirle al original) + `correccion_en` (la edición sobre ESTA imagen).
+- [x] **Acciones** `prisma/resultado-actions.ts`: `subirResultado(form)` (gate, freno "vision", sniff, ≤ 5 MB, sube,
+      compara, guarda fila + evento `resultado_subido` con los campos fallidos), `corregirResultado(id)` (spec hermano +
+      prompt + evento `correccion_generada`, idempotente), `aceptarResultado(id, si)` (evento `resultado_aceptado` sólo al
+      pasar de no a sí). Helpers compartidos con actions.ts en `prisma/comun.ts` (un solo gate / freno / specDeFila).
+- [x] **UI** `components/prisma/como-salio.tsx` dentro del resultado: modelo usado (prellenado con "Úsalo en…"), subir la
+      imagen, lista ✓/✗ con notas, "Corregir este resultado" (imagen/edición) · "Refinar el original" · "Marcar como
+      resultado final"; chip "Corrección" en el prompt hermano y en el historial; al reabrir desde el historial se ve el
+      último resultado y si quedó aceptado.
+- [x] **Aprende**: ganadores = aceptado > subido con 👍 > copiado/abierto > 👍; `patronFallos` (un campo falla ≥ 3 de los
+      últimos 6 resultados de esa herramienta) → frase al writer + "Úsalo en…" sube a Pro / sunburst cuando el texto o la
+      identidad fallan.
+- [x] Tests: test-db 460 (bloque 0070: RLS, grants, checks de ruta/mime/score/modelo, set null / cascade); test-prisma 593
+      (veredicto tolerante, score, fallos, spec de corrección válido en las 2 herramientas, orden de ganadores, patrón de
+      fallos, `<results>` al writer, Úsalo en… con fallos). tsc 0 · lint 0 · build ✓ · npm test ✓. Smoke real
+      `scripts/smoke-veredicto.mjs` 2/2 (logo vs producto: 7 puntos, texto y sujeto ✗, refine, sin corrección).
+      Browser: `?demo=veredicto` y `?demo=resultado` en desktop y 375 px (sin scroll horizontal, sin errores de consola).
+- [x] Reap: security (Opus): 0 críticos, 0 serios, 2 medios + 5 bajos → arreglados: el spec que vuelve al writer (refinar /
+      otra versión / reparación) va en `<spec>` cercado y declarado dato; el texto pintado DENTRO de la imagen subida se
+      declara contenido, nunca instrucción; lo que vuelve de la visión sale `cercado`; el evento `resultado_aceptado`
+      lleva el id del RESULTADO (desmarcar uno no borra la señal de otro); tope de visión 3.5 MB (base64 × 1.33 < 5 MB);
+      archivo retirado del bucket si falla el insert; `faltaMigracion` sólo para "no existe la tabla/columna" (probado
+      contra prod: PGRST205 / 42703); sólo se acepta un resultado para el prompt VIGENTE del spec. Salud (Sonnet): 1
+      crítico (tipo del demo, ya cazado por el build), 2 serios (uno = el del evento; el otro: la corrección repetida
+      devolvía `avisos: []` → ahora los guardados), mejoras (modelo validado por herramienta, sin "change only" triple,
+      tests del round-trip del veredicto y de `faltaMigracion`). test-prisma 605 · test-db 460 · tsc 0 · lint 0 · build ✓.
+- [x] Commit + push a `prisma` (preview). **Migración 0070 → espera "ship it".**
+
+### Review F4 — lo que queda (diferido, no bloquea)
+- **Memoria de marca abierta a cualquier rol interno** (security LOW): `cargarMarcas` da todas las marcas a todo rol y
+  `resultado_aceptado` es ahora la señal más fuerte → un creative podría "enseñarle" a una marca ajena. La inyección está
+  cercada; lo que queda es integridad de la memoria. Si las marcas deben ir por track/persona, es un cambio aparte.
+- **Referencias > 3.5 MB** (salud #8): `analizarImagen` sigue aceptando 10 MB y, si la visión no lee, la referencia "sirve
+  igual" sin ADN. Alinear al tope de visión (o reducir en el servidor con `sharp`, que Next ya trae) = decisión de Pedro.
+- La corrección repetida no devuelve su propio resultado subido (reabrir desde el historial sí lo trae).
+- **Rol de sesión:** Pedro pidió `/model opus` para migraciones/datos; la revisión de seguridad corrió en Opus (subagente).
+
+### Verificación F4 (Pedro, preview con login)
+1. Genera un prompt de imagen, pégalo en Gemini/ChatGPT, baja la imagen y súbela en "¿Cómo salió?".
+2. Debe aparecer la lista ✓/✗ (texto, encuadre, luz…) con una nota corta por punto y el modelo que usaste.
+3. Si algo falló: "Corregir este resultado" → prompt hermano con chip "Corrección" que edita esa imagen; o "Refinar el original".
+4. "Marcar como resultado final" → queda marcado; al reabrir desde el historial se ve.
+5. Un video: sube un cuadro (captura) → veredicto; sólo ofrece "Refinar el original".
+
 ## 🟢 2026-09-14 (7) — HÜE Prisma: H.Ü.E se corrige solo + palabras llanas (rama `prisma`, 7080c45 · 0069 APLICADA)
 Pedro: "if hue generated the prompt by itself shouldn't it adhere to this suggestions… why would it purposely do it wrong?" y
 "Cenital / cine anamórfico… overly complicated".

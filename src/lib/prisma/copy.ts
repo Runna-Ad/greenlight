@@ -6,6 +6,7 @@
 import type { ReglaNivel } from "./reglas.ts";
 import type { PrismaVariante } from "../database.types.ts";
 import type { JobType, JobKind, RefRole, Destino, Tool } from "./spec.ts";
+import type { CampoVeredicto } from "./resultado.ts";
 import { TOOL_INFO } from "./tools.ts";
 
 export type Lang = "es" | "en";
@@ -41,6 +42,7 @@ export const JOB_LABEL: Record<JobType, Par> = {
   dos_personajes: t("Juntar a dos personas en una escena", "Put two people in one scene"),
   cambio_epoca: t("Cambiar de época", "Change era"),
   figura_coleccionable: t("Convertir en figura coleccionable", "Turn into a collectible figure"),
+  correccion: t("Corrección de un resultado", "Correction of a result"),
   animar_foto: t("Darle movimiento a una foto", "Animate a photo"),
   texto_a_video: t("Video a partir de una idea", "Video from an idea"),
   transicion: t("Transición entre dos tomas", "Transition between two shots"),
@@ -62,6 +64,7 @@ export const JOB_HINT: Record<JobType, Par> = {
   dos_personajes: t("Dos fotos y cuéntanos la escena. La pose es opcional.", "Two photos and a description of the scene. Pose optional."),
   cambio_epoca: t("Una foto y la época a la que la quieres llevar (los 20, los 80…).", "One photo and the era you want to take it to (the 20s, the 80s…)."),
   figura_coleccionable: t("Una foto de la persona. Si quieres, también una del empaque.", "One photo of the person. Optionally, one of the packaging."),
+  correccion: t("Edita lo que salió de la herramienta: arregla lo que falló y deja todo lo demás igual.", "Edits what came out of the tool: fixes what failed and leaves everything else the same."),
   animar_foto: t("Una foto y qué quieres que se mueva.", "One photo and what you want to move."),
   texto_a_video: t("Sin fotos. Solo describe el clip.", "No photos. Just describe the clip."),
   transicion: t("La toma con la que empieza y la toma con la que termina.", "The shot it starts on and the shot it ends on."),
@@ -81,6 +84,7 @@ export const REF_LABEL: Record<RefRole, Par> = {
   personaje2: t("La otra persona", "The other person"),
   inicio: t("Toma inicial", "Start shot"),
   fin: t("Toma final", "End shot"),
+  resultado: t("Lo que salió", "The result"),
 };
 
 export const DESTINO_LABEL: Record<Destino, Par> = {
@@ -191,6 +195,32 @@ export const UI = {
   gustó: t("Me sirvió", "This worked"),
   noGustó: t("No me sirvió", "Didn't work"),
   generarEnApp: t("Pronto: generar la imagen aquí mismo", "Coming soon: generate the image right here"),
+  // F4: "sube lo que salió"
+  comoSalio: t("¿Cómo salió?", "How did it turn out?"),
+  comoSalioAyuda: t("Sube la imagen que te dio la herramienta. H.Ü.E la compara con lo que pediste y te dice qué falló.", "Upload the image the tool gave you. H.Ü.E compares it with what you asked for and tells you what missed."),
+  comoSalioVideo: t("Para un video, sube una captura (un cuadro): H.Ü.E revisa ese cuadro.", "For a video, upload a screenshot (one frame): H.Ü.E checks that frame."),
+  modeloUsado: t("¿En qué modelo lo generaste?", "Which model did you generate it with?"),
+  modeloOtro: t("Otro", "Other"),
+  subirResultado: t("Arrastra la imagen que salió o búscala en tu compu", "Drag the image that came out or browse your files"),
+  comparando: t("H.Ü.E está comparando…", "H.Ü.E is comparing…"),
+  veredictoTitulo: t("Lo que H.Ü.E vio", "What H.Ü.E saw"),
+  veredictoTodoBien: t("Cumple todo lo que pediste.", "It meets everything you asked for."),
+  veredictoPuntos: t("{ok} de {n} puntos bien", "{ok} of {n} points right"),
+  cumple: t("Bien", "Right"),
+  noCumple: t("Falló", "Missed"),
+  corregirResultado: t("Corregir este resultado", "Fix this result"),
+  corregirAyuda: t("Un prompt nuevo que edita esta misma imagen: arregla lo que falló y deja lo demás igual.", "A new prompt that edits this same image: fixes what missed and leaves the rest as is."),
+  corrigiendo: t("H.Ü.E arma la corrección…", "H.Ü.E is preparing the fix…"),
+  refinarOriginal: t("Refinar el original", "Refine the original"),
+  refinarOriginalAyuda: t("Vuelve a generar desde el prompt original con este cambio.", "Generate again from the original prompt with this change."),
+  aceptarFinal: t("Marcar como resultado final", "Mark as final result"),
+  aceptado: t("Resultado final aceptado", "Final result accepted"),
+  quitarAceptado: t("Quitar la marca", "Unmark"),
+  subirOtro: t("Subir otro", "Upload another"),
+  correccion: t("Corrección", "Correction"),
+  correccionDe: t("Corrige el resultado que subiste; pégalo con esa imagen adjunta.", "It corrects the result you uploaded; paste it with that image attached."),
+  resultadoGuardado: t("Resultado guardado.", "Result saved."),
+  resultadoPesado: t("Para compararla, la imagen debe pesar menos de 3.5 MB.", "To compare it, the image must be under 3.5 MB."),
   personajeTitulo: t("Personaje o producto guardado", "Saved character or product"),
   personajeNinguno: t("Ninguno", "None"),
   personajeVacio: t("Todavía no hay ninguno guardado para este cliente.", "Nothing saved for this client yet."),
@@ -292,4 +322,15 @@ export const SWATCHES_ESTILO: Swatch[] = [
 ];
 
 /** Nivel de un aviso del diagnóstico (F2), para el lector de pantalla y las etiquetas. */
+/** F4: los puntos que H.Ü.E revisa en lo que salió, en palabras de todos los días. */
+export const CAMPO_VEREDICTO_LABEL: Record<CampoVeredicto, Par> = {
+  sujeto: t("Lo que se ve", "What is shown"),
+  texto: t("El texto", "The text"),
+  encuadre: t("Encuadre y formato", "Framing and format"),
+  luz: t("La luz", "The light"),
+  estilo: t("Estilo y colores", "Style and colors"),
+  identidad: t("Parecido con la referencia", "Likeness to the reference"),
+  marca: t("La marca", "The brand"),
+};
+
 export const NIVEL_LABEL: Record<ReglaNivel, Par> = { bloquea: t("Bloquea", "Blocks"), advierte: t("Aviso", "Warning"), sugiere: t("Sugerencia", "Suggestion") };

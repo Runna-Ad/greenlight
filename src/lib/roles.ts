@@ -4,11 +4,12 @@
  * Una sola fuente para el menú Y para los permisos: si vivieran en dos sitios,
  * acabarían discrepando y la vista previa dejaría de probar nada.
  *
- * OJO — hoy el login está apagado y las server actions usan la service-role key,
- * que se salta RLS. Así que esto gobierna las PANTALLAS de verdad, pero los
- * permisos sólo hasta donde el código los respeta; RLS todavía no participa.
- * El día que se encienda AUTH_ENABLED hay que volver a verificar cada vista,
- * porque RLS puede esconder más de lo que la vista previa enseñaba.
+ * OJO — el login está ENCENDIDO (identity.ts + middleware exigen sesión y perfil
+ * vigente; AUTH_ENABLED=true es obligatorio en producción), pero las server actions
+ * siguen usando la service-role key, que se salta RLS. Así que esto gobierna las
+ * PANTALLAS de verdad y los permisos hasta donde el código los respeta (gate +
+ * puedeTocar / assertCanActOnRow en cada acción); RLS es el candado de la BD para
+ * clientes directos, no el árbitro dentro de la app.
  */
 // `master` = Master Builder: el dueño de la plataforma (Pedro), el tier superior
 // por encima de admin. Espeja el valor de enum produccion.app_role 'master'

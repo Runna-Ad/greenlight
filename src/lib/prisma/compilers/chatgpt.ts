@@ -60,7 +60,7 @@ export function compilarChatGPT(spec: PromptSpec): Salida {
     ...cuerpo,
     deletreo(spec),
     edicion ? "Everything else stays exactly as it is" : null,
-    `Output: one ${tamanoGPT(spec.aspect)} image${spec.estilo ? "" : ", photorealistic"}`,
+    `Output: one ${tamanoGPT(spec.aspect)} image${spec.estilo || spec.job === "correccion" ? "" : ", photorealistic"}`,
     `Quality: ${final ? "high" : "medium"}`,
   );
   return { texto, formato: "texto" };

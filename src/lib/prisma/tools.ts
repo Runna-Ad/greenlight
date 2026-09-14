@@ -128,6 +128,7 @@ export const TOOLS_POR_JOB: Record<JobType, Tool[]> = {
   dos_personajes: ["nanobanana", "chatgpt"],
   cambio_epoca: ["nanobanana", "chatgpt"],
   figura_coleccionable: ["nanobanana", "chatgpt"],
+  correccion: ["nanobanana", "chatgpt"], // F4: se corrige en la misma herramienta de imagen
   animar_foto: ["veo", "kling", "higgsfield"],
   texto_a_video: ["veo", "kling"],
   transicion: ["kling", "veo"],

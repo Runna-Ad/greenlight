@@ -353,6 +353,26 @@ export type PrismaSpecRow = {
   origen_spec_id?: string | null;
   /** 0067: respuestas de la entrevista (F3). */
   respuestas?: unknown[];
+  /** 0070: si es un prompt de corrección (F4), el resultado subido que corrige. */
+  correccion_de?: string | null;
+};
+
+/** Una fila de prisma_resultados (0070): lo que salió de la herramienta y el veredicto de H.Ü.E. */
+export type PrismaResultadoRow = {
+  id: string;
+  spec_id: string;
+  prompt_id: string | null;
+  client_id: string | null;
+  tool: string;
+  modelo: string | null;
+  storage_path: string;
+  mime: string;
+  caption: string | null;
+  veredicto: Record<string, unknown>;
+  score: number | null;
+  aceptado: boolean;
+  created_by: string | null;
+  created_at: string;
 };
 
 export type PrismaPromptRow = {

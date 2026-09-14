@@ -1,13 +1,16 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
-import { Check, Copy, Cpu, ExternalLink, Eye, Flame, Lightbulb, Minus, RefreshCw, Shield, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2 } from "lucide-react";
+import { Check, Copy, Cpu, ExternalLink, Eye, Flame, Lightbulb, Minus, RefreshCw, Shield, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { cambiarHerramienta, calificar, explicar, refinarPrompt, registrarEvento, revisarBien, variar } from "@/app/(app)/prisma/actions";
 import { PanelAvisos } from "./avisos";
+import { ComoSalio } from "./como-salio";
+import type { ResultadoVivo } from "@/lib/prisma/resultado";
+import type { ResultadoCorregir } from "@/app/(app)/prisma/resultado-actions";
 import { compilarFusion } from "@/lib/prisma/compilers/fusion";
 import type { Aviso } from "@/lib/prisma/diagnostico";
 import { PEDIR_VERSION_LABEL, TOOL_LABEL, UI, VARIANTE_LABEL, tx, type Lang, type Par } from "@/lib/prisma/copy";
@@ -33,6 +36,10 @@ export type PromptVivo = {
   aprendio?: { ganadores: number; preferencias: number } | null;
   /** F2: el diagnóstico del resultado (lo calcula el servidor y se guarda con el prompt). */
   avisos?: Aviso[];
+  /** F4: es un prompt de corrección (edita un resultado subido). */
+  correccion?: boolean;
+  /** F4: el último resultado subido para este prompt (al reabrir desde el historial). */
+  resultado?: ResultadoVivo | null;
 };
 
 /** Las versiones que se pueden pedir, con su ícono. Fuera del componente: no cambian. */
@@ -130,7 +137,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
     setVerExplicacion(false);
     setVoto(null);
     setJuzgado(false);
-    onCambio({ ...vivo, tool, promptId: r.promptId, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, avisos: r.avisos });
+    onCambio({ ...vivo, tool, promptId: r.promptId, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, avisos: r.avisos, resultado: null });
   };
 
   const refinarCon = async (texto: string, apagar: () => void): Promise<boolean> => {
@@ -145,8 +152,19 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
     setVerExplicacion(false);
     setVoto(null);
     setJuzgado(false);
-    onCambio({ ...vivo, promptId: r.promptId, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, avisos: r.avisos });
+    onCambio({ ...vivo, promptId: r.promptId, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, avisos: r.avisos, resultado: null });
     return true;
+  };
+
+  /** F4: "Corregir este resultado" creó un spec hermano de edición: desde aquí todo actúa sobre él. */
+  const alCorregir = (r: ResultadoCorregir) => {
+    setCambio("");
+    setExplicacion(null);
+    setVerExplicacion(false);
+    setVoto(null);
+    setJuzgado(false);
+    onCambio({ ...vivo, specId: r.specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: "base", aprendio: null, avisos: r.avisos, correccion: true, resultado: null });
+    toast.success(tx(UI.correccion, lang));
   };
 
   const refinar = async () => {
@@ -185,7 +203,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
         setVerExplicacion(false);
         setVoto(null);
         setJuzgado(false);
-        onCambio({ ...vivo, tool: ac.tool, promptId: r.promptId, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, avisos: r.avisos });
+        onCambio({ ...vivo, tool: ac.tool, promptId: r.promptId, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, avisos: r.avisos, resultado: null });
         hecho = true;
       } else if (r && !r.ok) toast.error(r.error);
     } else if (instruccion) {
@@ -220,7 +238,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
     setVoto(null);
     // La versión es un spec hermano: desde aquí, refinar / cambiar herramienta / explicar actúan sobre ella.
     setJuzgado(false);
-    onCambio({ ...vivo, specId: r.specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null, avisos: r.avisos });
+    onCambio({ ...vivo, specId: r.specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null, avisos: r.avisos, correccion: false, resultado: null });
   };
 
   const votar = async (score: 1 | -1) => {
@@ -246,8 +264,15 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
                 {tx(UI.version, lang)}: {tx(VARIANTE_LABEL[vivo.variante], lang)}
               </span>
             )}
+            {vivo.correccion && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                <Wrench className="size-3.5" aria-hidden="true" />
+                {tx(UI.correccion, lang)}
+              </span>
+            )}
           </h2>
           {vivo.porque && <p className="mt-0.5 text-xs text-muted-foreground">{tx(vivo.porque, lang)}</p>}
+          {vivo.correccion && <p className="mt-0.5 text-xs text-muted-foreground">{tx(UI.correccionDe, lang)}</p>}
           {/* "Úsalo en…": en qué modelo/nivel de la herramienta pegar, por qué y cómo llegar. */}
           <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-foreground">
             <Cpu className="size-3.5 text-primary" aria-hidden="true" />
@@ -356,6 +381,22 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
       {verExplicacion && explicacion && (
         <div className="p-enter rounded-xl border border-border bg-card px-4 py-3 text-sm leading-relaxed text-foreground whitespace-pre-wrap" style={{ boxShadow: "inset 4px 0 0 var(--p-tool)" }}>{explicacion}</div>
       )}
+
+      {/* F4: "sube lo que salió" — con key: un prompt nuevo empieza sin resultado. Con prefijo:
+          el bloque del prompt (arriba) ya usa promptId como key y son hermanos. */}
+      <ComoSalio
+        key={`salio-${vivo.promptId}`}
+        specId={vivo.specId}
+        promptId={vivo.promptId}
+        tool={vivo.tool}
+        job={vivo.spec.job}
+        lang={lang}
+        inicial={vivo.resultado ?? null}
+        modeloSugerido={modelo.modelo}
+        ocupado={ocupado}
+        onCorreccion={alCorregir}
+        onRefinar={(texto) => refinarCon(texto, () => undefined)}
+      />
 
       {/* Otra versión, bajo demanda: una llamada más SÓLO si se pide (y el click le enseña a H.Ü.E). */}
       <div className="rounded-xl border border-border bg-card p-4">

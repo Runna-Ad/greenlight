@@ -1,61 +1,24 @@
 "use server";
 
-import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { canSee, canVerTodoPrisma, type ViewRole } from "@/lib/roles";
-import { getViewAs } from "@/lib/view-as";
-import { getSoyId } from "@/lib/soy";
-import { prismaActivo } from "@/lib/prisma/flags";
-import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { analizarReferencia } from "@/lib/prisma/vision";
-import { escribirSpec, refinarSpec, variarSpec, recompilar, explicarPrompt, describirPersonajeIA, estableCon, versionCon, juzgarSpec, revisarTexto, preguntarFaltante, MODEL, PROMPT_VERSION, type Uso } from "@/lib/prisma/writer";
-import { avisosDe, bloqueado, compilarReglas, diagnosticar, diagnosticarEntrada, type Aviso, type ReglaCompilada } from "@/lib/prisma/diagnostico";
+import { escribirSpec, refinarSpec, variarSpec, recompilar, explicarPrompt, describirPersonajeIA, estableCon, versionCon, juzgarSpec, revisarTexto, preguntarFaltante, PROMPT_VERSION, type Uso } from "@/lib/prisma/writer";
+import { avisosDe, bloqueado, diagnosticar, diagnosticarEntrada, type Aviso } from "@/lib/prisma/diagnostico";
 import { idiomaDe, revisarAcentos, type Cambio, type Idioma } from "@/lib/prisma/ortografia";
 import { aplicarRespuestas, detalleRespuestas, necesitaEntrevista, sanearRespuestas, type Pregunta, type Respuesta } from "@/lib/prisma/entrevista";
 import type { EntradaWriter } from "@/lib/prisma/prompts/writer";
-import { plano, recortar } from "@/lib/prisma/texto";
-import { BUCKET, cargarAprendizaje, cargarMarcas, cargarPersonajes, cargarReglas, firmar } from "@/lib/prisma/data";
-import { ASPECTS, DESTINOS, JOB_KIND, NOMBRE_HISTORICO, REFS_POR_JOB, VIDEO_TYPES, TOOLS, esDestino, esSpec, type Aspect, type Destino, type JobType, type PromptSpec, type RefRole, type Tool, type VisualDNA } from "@/lib/prisma/spec";
+import { plano } from "@/lib/prisma/texto";
+import { cargarAprendizaje, cargarMarcas, cargarPersonajes, cargarReglas, firmar } from "@/lib/prisma/data";
+import { ASPECTS, DESTINOS, JOB_KIND, JOBS_POR_KIND, NOMBRE_HISTORICO, REFS_POR_JOB, VIDEO_TYPES, TOOLS, type Aspect, type Destino, type JobType, type PromptSpec, type RefRole, type Tool, type VisualDNA } from "@/lib/prisma/spec";
 import { t, type Par } from "@/lib/prisma/copy";
-import { TOOL_INFO, TOOLS_POR_JOB, herramientaVigente } from "@/lib/prisma/tools";
-import { PRISMA_VARIANTES_PEDIBLES, type PrismaCharacterRow, type PrismaEventoTipo, type PrismaPromptRow, type PrismaSpecRow, type PrismaRefGuardada, type PrismaVariante } from "@/lib/database.types";
+import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
+import { PRISMA_VARIANTES_PEDIBLES, type PrismaCharacterRow, type PrismaEventoTipo, type PrismaPromptRow, type PrismaRefGuardada, type PrismaVariante } from "@/lib/database.types";
 import { personajeUI, type PersonajeUI } from "@/lib/prisma/personajes";
 import { pistasModelo, recomendarModelo } from "@/lib/prisma/modelo";
 import type { Salida } from "@/lib/prisma/compilers";
-
-type Fail = { ok: false; error: string };
-
-/** Formatos que H.Ü.E puede MIRAR (Claude vision). AVIF se acepta en referencias de
- *  tareas pero aquí no: sin visión no hay ADN, y el ADN es la gracia. */
-type MimeVision = "image/jpeg" | "image/png" | "image/webp" | "image/gif";
-const MIMES_VISION: MimeVision[] = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-
-// ── Gate ─────────────────────────────────────────────────────
-async function gate(): Promise<{ role: ViewRole; soyId: string } | Fail> {
-  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
-  if (!prismaActivo()) return { ok: false, error: "HÜE Prisma todavía no está activo." };
-  const role = await getViewAs();
-  if (!canSee(role, "prisma")) return { ok: false, error: "Tu rol no tiene acceso a HÜE Prisma." };
-  // Identidad OBLIGATORIA (estándar de la casa: task-scope.ts). Sin sesión, getViewAs
-  // cae a 'creative' y pasaría el gate: eso dejaría llamadas a H.Ü.E (facturables) y
-  // specs huérfanos (created_by null) a cualquiera que llegue al endpoint.
-  const soyId = await getSoyId();
-  if (!soyId) return { ok: false, error: "Inicia sesión para usar HÜE Prisma." };
-  return { role, soyId };
-}
-
-/** Un error de base o de proveedor NO se le enseña crudo al diseñador (nombres de
- *  tablas, constraints): se registra en el servidor y sale un mensaje llano. */
-function fallo(donde: string, detalle: string | undefined): Fail {
-  console.error(`[prisma] ${donde}:`, detalle ?? "sin detalle");
-  return { ok: false, error: "No se pudo guardar. Inténtalo otra vez y, si sigue fallando, avísale a Pedro." };
-}
-
-/** ¿Puede este usuario tocar esta fila (spec o personaje)? Lo suyo siempre; lead/admin/master, todo.
- *  UNA regla para las dos familias: si cada una decidiera por su cuenta, terminarían distintas. */
-function puedeTocar(row: { created_by: string | null }, g: { role: ViewRole; soyId: string }): boolean {
-  if (canVerTodoPrisma(g.role)) return true;
-  return row.created_by === g.soyId;
-}
+// Lo compartido con resultado-actions.ts (gate, freno, saneos, subir imagen, guardar prompt…):
+// UNA implementación para las dos familias de acciones.
+import { CODIGO_AVISO, FRENO, RUTA_REF, UUID, anotarEvento, diagnosticoDe, entradaDesdeSpec, estadoActual, fallo, gate, guardarPrompt, leerImagen, puedeTocar, reglasDe, s0, saturado, sn, specDeFila, subirAlBucket, ultimoResultadoDe, type Fail, type ResultadoVivo } from "./comun";
 
 // ── 1) Subir + leer una referencia ──────────────────────────
 export type RefAnalizada = {
@@ -74,21 +37,17 @@ export async function analizarImagen(form: FormData): Promise<RefAnalizada | Fai
 
   // Subida a storage + visión (facturable): mismo freno que el resto, con su cubo.
   if (saturado(g.soyId, Date.now(), "vision", 30)) return FRENO;
-  const file = form.get("file");
-  if (!(file instanceof File)) return { ok: false, error: "No llegó ningún archivo." };
-  if (file.size > MAX_BYTES) return { ok: false, error: "La imagen pesa más de 10 MB." };
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const mime = sniffImageMime(bytes);
-  if (!mime || !(MIMES_VISION as string[]).includes(mime)) return { ok: false, error: "Sólo JPG, PNG, WebP o GIF." };
+  const img = await leerImagen(form);
+  if ("ok" in img) return img;
+  const { bytes, mime } = img;
 
   const db = supabaseAdmin();
-  const path = `prisma/${crypto.randomUUID()}.${EXT_POR_MIME[mime]}`;
-  const up = await db.storage.from(BUCKET).upload(path, bytes, { contentType: mime, upsert: false });
-  if (up.error) return fallo("upload", up.error.message);
+  const path = await subirAlBucket(db, "prisma", bytes, mime);
+  if (typeof path !== "string") return path;
 
   const [urls, vision] = await Promise.all([
     firmar(db, [path]),
-    analizarReferencia(Buffer.from(bytes).toString("base64"), mime as MimeVision),
+    analizarReferencia(Buffer.from(bytes).toString("base64"), mime),
   ]);
   const url = urls.get(path) ?? "";
   if (!vision.ok) {
@@ -142,41 +101,7 @@ export type ResultadoGenerar = {
 };
 
 const ROLES_REF: RefRole[] = ["sujeto", "producto", "outfit", "pose", "escena", "objeto", "logo", "estilo", "empaque", "personaje2", "inicio", "fin"];
-/** Sólo la forma exacta que produce analizarImagen: nada de "prisma/../otro". La misma
- *  regla para las referencias de un prompt y para la foto de un personaje guardado. */
-const RUTA_REF = /^prisma\/[0-9a-f-]{36}\.(png|jpg|webp|gif)$/;
-/** Un id de fila es un UUID o no es nada: se rechaza ANTES de preguntarle a la base. */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-// ── Freno por identidad para lo que se COBRA (llamadas al modelo) ──
-// Mismo patrón que `ipThrottled` en portal/login: ventana en memoria de la instancia. Una
-// persona no genera 40 prompts en 10 minutos; un loop contra el endpoint sí. Best-effort
-// (Fluid Compute reusa instancias, no las comparte todas), suficiente para cortar ráfagas.
-const LLAMADAS_WINDOW_MS = 10 * 60_000;
-const LLAMADAS_MAX = 40;
-const cubos = new Map<string, Map<string, number[]>>();
-/** Freno por identidad y por "cubo": lo facturable comparte uno (40 / 10 min); la revisión
- *  ortográfica (se dispara al salir de un campo) tiene el suyo, para que tabular por el
- *  formulario nunca gaste el cupo de generar. */
-function saturado(soyId: string, nowMs = Date.now(), cubo = "modelo", tope = LLAMADAS_MAX): boolean {
-  const llamadas = cubos.get(cubo) ?? new Map<string, number[]>();
-  cubos.set(cubo, llamadas);
-  const recientes = (llamadas.get(soyId) ?? []).filter((t) => nowMs - t < LLAMADAS_WINDOW_MS);
-  recientes.push(nowMs);
-  llamadas.set(soyId, recientes);
-  if (llamadas.size > 2000) for (const [k, v] of llamadas) if (v.every((t) => nowMs - t >= LLAMADAS_WINDOW_MS)) llamadas.delete(k);
-  return recientes.length > tope;
-}
-const CODIGO_AVISO = /^[a-z0-9_]{3,60}$/;
-const FRENO: Fail = { ok: false, error: "Muchas llamadas a H.Ü.E en poco tiempo. Espera unos minutos." };
-
-// Todo texto que viene del cliente sale de aquí en UNA línea y sin caracteres de control
-// (plano): la regla de la casa se cumple en el saneo, no en cada sitio que lo usa.
-const s0 = (v: unknown, max = 2000): string => (typeof v === "string" ? recortar(plano(v), max) : "");
-const sn = (v: unknown, max = 400): string | null => {
-  const p = typeof v === "string" ? recortar(plano(v), max) : "";
-  return p || null;
-};
+const JOBS_OFRECIDOS = new Set<JobType>(Object.values(JOBS_POR_KIND).flat());
 const IDIOMAS_DIALOGO = ["es-MX", "en"] as const;
 
 /** Sanea el ADN que viene del cliente (no se confía en él aunque lo haya escrito H.Ü.E). */
@@ -192,7 +117,8 @@ function dnaLimpio(v: unknown): VisualDNA | null {
 /** Valida y normaliza la entrada del wizard. Fail-closed: nada se completa con un default
  *  silencioso si el valor viene mal (lección 2026-09-02, "default en write-path"). */
 function normalizar(raw: InputGenerar): InputGenerar | Fail {
-  if (!(raw.job in JOB_KIND)) return { ok: false, error: "Ese tipo de trabajo no existe." };
+  // Sólo los trabajos que el wizard OFRECE: `correccion` (F4) nace en el servidor, nunca del navegador.
+  if (!(raw.job in JOB_KIND) || !JOBS_OFRECIDOS.has(raw.job)) return { ok: false, error: "Ese tipo de trabajo no existe." };
   if (!TOOLS.includes(raw.tool) || !TOOLS_POR_JOB[raw.job].includes(raw.tool)) return { ok: false, error: "Esa herramienta no sirve para este trabajo." };
   if (!ASPECTS.includes(raw.aspect)) return { ok: false, error: "Formato no válido." };
   if (!DESTINOS.includes(raw.destino)) return { ok: false, error: "Destino no válido." };
@@ -281,51 +207,6 @@ async function entradaDe(inp: InputGenerar): Promise<{ entrada: EntradaWriter; c
   };
 }
 
-async function guardarPrompt(specId: string, tool: Tool, salida: Salida, valido: boolean, errores: string[], usage: Uso | null, variante: PrismaVariante = "base", version: string = PROMPT_VERSION, modeloSug: string | null = null, avisos: Aviso[] = []): Promise<string | Fail> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("prisma_prompts")
-    .insert({ spec_id: specId, tool, variante, prompt_version: version, salida: salida.texto, formato: salida.formato, valido, errores, model: usage ? MODEL : null, usage, modelo_sug: modeloSug, avisos })
-    .select("id")
-    .single<{ id: string }>();
-  if (error || !data) return fallo("prisma_prompts.insert", error?.message);
-  return data.id;
-}
-
-/** Las reglas de la BD (clase "regla"), compiladas; las malas se descartan con aviso en el log. */
-const reglasDe = (r: Awaited<ReturnType<typeof cargarReglas>>): ReglaCompilada[] => compilarReglas(r.filas.filter((f) => f.clase === "regla"));
-
-/** El diagnóstico del resultado: reglas + validador + (en video, siempre) el juicio de H.Ü.E.
- *  `entrada` sólo hace falta para el juicio; null = sin juicio (cambiar de herramienta, abrir). */
-async function diagnosticoDe(spec: PromptSpec, tool: Tool, salida: Salida, errores: string[], reglas: ReglaCompilada[], entrada: EntradaWriter | null): Promise<Aviso[]> {
-  const base = diagnosticar(spec, tool, salida.texto, errores, reglas);
-  if (!entrada || JOB_KIND[spec.job] !== "video") return base;
-  const { avisos } = await juzgarSpec(entrada, spec, salida.texto);
-  const codigos = new Set(base.map((a) => a.codigo));
-  return [...base, ...avisos.filter((a) => !codigos.has(a.codigo))];
-}
-
-/** Registra lo que el diseñador HIZO (0066) — la señal con la que H.Ü.E aprende. Nunca
- *  bloquea: si la tabla aún no existe o falla el insert, queda en el log y la acción sigue. */
-async function anotarEvento(db: ReturnType<typeof supabaseAdmin>, e: { spec_id: string; prompt_id: string | null; client_id: string | null; job: string; tool: string; variante: PrismaVariante; user_id: string; tipo: PrismaEventoTipo; detalle: string | null }): Promise<void> {
-  // Índice único (prompt, quién, tipo) — desde la 0067 es PARCIAL (sólo copiado/abierto), y
-  // Postgres no infiere un índice parcial en ON CONFLICT sin su WHERE, cosa que PostgREST no
-  // puede mandar: un upsert fallaría para TODOS los tipos. Insert llano y el duplicado
-  // (23505) cuenta como "ya estaba": el mismo click repetido no suma señal.
-  const { error } = await db.from("prisma_eventos").insert(e);
-  if (error && error.code !== "23505") console.warn(`[prisma] evento ${e.tipo} no registrado (¿falta la 0066?): ${error.message}`);
-}
-
-/** Herramienta y versión del ÚLTIMO prompt de un spec. `cambiarHerramienta` no toca el spec
- *  (recompila y guarda otro prompt), así que "la herramienta actual" vive en el último prompt:
- *  refinar o pedir otra versión después de cambiar de herramienta debe seguir en ESA
- *  herramienta, y un spec nacido como "versión audaz" sigue siendo audaz al refinarlo. */
-async function estadoActual(db: ReturnType<typeof supabaseAdmin>, s: { row: PrismaSpecRow; spec: PromptSpec }): Promise<{ tool: Tool; variante: PrismaVariante }> {
-  const { data } = await db.from("prisma_prompts").select("tool, variante").eq("spec_id", s.row.id).order("created_at", { ascending: false }).limit(1).maybeSingle<{ tool: string; variante: PrismaVariante }>();
-  const tool = (data && herramientaVigente(data.tool, s.spec.job)) ?? s.spec.tool;
-  return { tool, variante: data?.variante ?? "base" };
-}
-
 export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar | Fail> {
   const g = await gate();
   if ("ok" in g) return g;
@@ -378,23 +259,6 @@ export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar
 // ── 3) Misma idea, otra herramienta (sin modelo) ─────────────
 export type ResultadoRecompilar = { ok: true; promptId: string; salida: Salida; valido: boolean; errores: string[]; variante: PrismaVariante; avisos: Aviso[] };
 
-async function specDeFila(specId: string, g: { role: ViewRole; soyId: string }): Promise<{ row: PrismaSpecRow; spec: PromptSpec; historica: string | null } | Fail> {
-  if (!UUID.test(specId)) return { ok: false, error: "Ese prompt ya no existe." };
-  const db = supabaseAdmin();
-  const { data: row } = await db.from("prisma_specs").select("*").eq("id", specId).maybeSingle<PrismaSpecRow>();
-  if (!row) return { ok: false, error: "Ese prompt ya no existe." };
-  if (!puedeTocar(row, g)) return { ok: false, error: "Ese prompt lo hizo otra persona; no lo puedes editar." };
-  // El jsonb se valida en runtime: una fila con una forma vieja no debe llegar a compilar().
-  if (!esSpec(row.spec)) return fallo("prisma_specs.spec", `forma incompatible en ${specId}`);
-  // Herramienta retirada (Sora 2): la fila se lee con su sucesora. Nada se reescribe en la
-  // BD; el siguiente prompt que se guarde ya va con la herramienta nueva.
-  const historica = (TOOLS as string[]).includes(row.spec.tool) ? null : (row.spec.tool as string);
-  // Los specs de antes de F1 no traen destino dentro del jsonb: se toma de la fila.
-  const conDestino: PromptSpec = { ...row.spec, destino: esDestino(row.spec.destino) ? row.spec.destino : esDestino(row.destino) ? row.destino : null };
-  const spec = historica ? { ...conDestino, tool: herramientaVigente(historica, row.spec.job) ?? TOOLS_POR_JOB[row.spec.job][0] } : conDestino;
-  return { row, spec, historica };
-}
-
 export async function cambiarHerramienta(specId: string, tool: Tool): Promise<ResultadoRecompilar | Fail> {
   const g = await gate();
   if ("ok" in g) return g;
@@ -444,27 +308,6 @@ export async function refinarPrompt(specId: string, cambio: string): Promise<Res
   return { ok: true, promptId, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, usage: r.usage, avisos };
 }
 
-/** La entrada del writer reconstruida desde un spec guardado (refinar / otra versión). */
-function entradaDesdeSpec(s: { row: PrismaSpecRow; spec: PromptSpec }): EntradaWriter {
-  const spec = s.spec;
-  return {
-    job: spec.job,
-    tool: spec.tool,
-    idea: spec.idea,
-    destino: spec.destino ?? (esDestino(s.row.destino) ? s.row.destino : "libre"),
-    aspect: spec.aspect,
-    duracion: spec.duracion,
-    refs: spec.refs,
-    look: { luz: spec.luz || null, movimiento: spec.camara.movimiento, lente: spec.camara.lente, mood: spec.mood || null, estilo: spec.estilo || null },
-    dialogo: spec.dialogo,
-    marca: spec.marca,
-    personaje: null,
-    videoType: spec.video_type,
-    texto: spec.texto?.contenido ?? null,
-    aprendizaje: null, // refinar / otra versión: cambian SÓLO lo pedido; los ejemplares distraerían
-  };
-}
-
 // ── 5) Explicar (se genera una vez por idioma y se guarda) ───
 export async function explicar(promptId: string, lang: "es" | "en"): Promise<{ ok: true; texto: string } | Fail> {
   const g = await gate();
@@ -495,7 +338,7 @@ export async function explicar(promptId: string, lang: "es" | "en"): Promise<{ o
 }
 
 // ── 5b) Reabrir desde el historial ───────────────────────────
-export type ResultadoAbrir = { ok: true; promptId: string; tool: Tool; spec: PromptSpec; salida: Salida; valido: boolean; errores: string[]; variante: PrismaVariante; /** "Antes era Sora 2…" cuando la fila venía de una herramienta retirada. */ nota: Par | null; avisos: Aviso[] };
+export type ResultadoAbrir = { ok: true; promptId: string; tool: Tool; spec: PromptSpec; salida: Salida; valido: boolean; errores: string[]; variante: PrismaVariante; /** "Antes era Sora 2…" cuando la fila venía de una herramienta retirada. */ nota: Par | null; avisos: Aviso[]; /** F4: es un prompt de corrección (edita un resultado subido). */ correccion: boolean; /** F4: el último resultado subido para este prompt (con su veredicto y si quedó aceptado). */ resultado: ResultadoVivo | null };
 
 export async function abrirSpec(specId: string): Promise<ResultadoAbrir | Fail> {
   const g = await gate();
@@ -515,7 +358,7 @@ export async function abrirSpec(specId: string): Promise<ResultadoAbrir | Fail> 
     // Los avisos guardados con el prompt (si la fila es de antes de F2, se recalculan los deterministas).
     const guardados = avisosDe(p.avisos);
     const avisosFila = guardados.length ? guardados : diagnosticar(s.spec, p.tool as Tool, p.salida, p.errores ?? [], reglasDe(await cargarReglas(db)));
-    return { ok: true, promptId: p.id, tool: p.tool as Tool, spec: s.spec, salida: { texto: p.salida, formato: p.formato }, valido: p.valido, errores: p.errores ?? [], variante: p.variante, nota: null, avisos: avisosFila };
+    return { ok: true, promptId: p.id, tool: p.tool as Tool, spec: s.spec, salida: { texto: p.salida, formato: p.formato }, valido: p.valido, errores: p.errores ?? [], variante: p.variante, nota: null, avisos: avisosFila, correccion: !!s.row.correccion_de, resultado: await ultimoResultadoDe(db, p.id, s.spec.job) };
   }
   // El prompt guardado es de una herramienta retirada (Sora 2): su texto ya no sirve. Se
   // recompila el spec para la sucesora y se guarda como prompt nuevo (copiar/eventos apuntan
@@ -525,13 +368,13 @@ export async function abrirSpec(specId: string): Promise<ResultadoAbrir | Fail> 
   const nota = t(`Antes era ${antes}, que ya no está en Prisma; ahora se escribe para ${ahora}.`, `It used to be ${antes}, which is no longer in Prisma; it is now written for ${ahora}.`);
   const { data: previo } = await db.from("prisma_prompts").select("*").eq("spec_id", specId).eq("tool", s.spec.tool).order("created_at", { ascending: false }).limit(1).maybeSingle<PrismaPromptRow>();
   if (previo) {
-    return { ok: true, promptId: previo.id, tool: s.spec.tool, spec: s.spec, salida: { texto: previo.salida, formato: previo.formato }, valido: previo.valido, errores: previo.errores ?? [], variante: previo.variante, nota, avisos: avisosDe(previo.avisos) };
+    return { ok: true, promptId: previo.id, tool: s.spec.tool, spec: s.spec, salida: { texto: previo.salida, formato: previo.formato }, valido: previo.valido, errores: previo.errores ?? [], variante: previo.variante, nota, avisos: avisosDe(previo.avisos), correccion: !!s.row.correccion_de, resultado: await ultimoResultadoDe(db, previo.id, s.spec.job) };
   }
   const r = recompilar(s.spec, s.spec.tool);
   const avisos = diagnosticar(s.spec, s.spec.tool, r.salida.texto, r.errores, reglasDe(await cargarReglas(db)));
   const nuevoId = await guardarPrompt(specId, s.spec.tool, r.salida, r.valido, r.errores, null, p.variante, PROMPT_VERSION, recomendarModelo(pistasModelo(s.spec)).modelo, avisos);
   if (typeof nuevoId !== "string") return nuevoId;
-  return { ok: true, promptId: nuevoId, tool: s.spec.tool, spec: s.spec, salida: r.salida, valido: r.valido, errores: r.errores, variante: p.variante, nota, avisos };
+  return { ok: true, promptId: nuevoId, tool: s.spec.tool, spec: s.spec, salida: r.salida, valido: r.valido, errores: r.errores, variante: p.variante, nota, avisos, correccion: !!s.row.correccion_de, resultado: null };
 }
 
 // ── 6) Calificar (pulgar arriba/abajo) ───────────────────────

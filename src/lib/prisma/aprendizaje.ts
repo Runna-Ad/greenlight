@@ -1,15 +1,20 @@
 import { JOB_KIND, TOOLS, type JobType, type Tool } from "./spec.ts";
 import { plano, cercadoMultilinea } from "./texto.ts";
 import { pares, PREGUNTA_IDS } from "./entrevista.ts";
+import { patronFallos, type FalloPatron } from "./resultado.ts";
 import type { PrismaVariante } from "../database.types.ts";
 
 /**
  * HÜE Prisma — APRENDIZAJE automático. De lo que los diseñadores HACEN con los prompts de
  * una marca (copiar, abrir en la herramienta, pedir otra versión, pedir un cambio, pulgar)
  * se destila, sin modelo y sin curaduría, lo que el writer debe saber la próxima vez:
- *   1) GANADORES: prompts que sirvieron (se copiaron / se abrieron / pulgar arriba, y sin
- *      pulgar abajo), del mismo trabajo primero; entran como ejemplares de estructura.
+ *   1) GANADORES: prompts que sirvieron, por fuerza de la señal (F4): un resultado subido y
+ *      marcado como FINAL ACEPTADO > un resultado subido con pulgar arriba > se copió / se abrió
+ *      > pulgar arriba suelto (y nunca con pulgar abajo); del mismo trabajo primero; entran
+ *      como ejemplares de estructura.
  *   2) PREFERENCIAS: qué versión suelen pedir y qué cambios piden últimamente.
+ *   3) FALLOS (F4): qué punto (texto, parecido…) le viene fallando a la marca en cada
+ *      herramienta según los resultados que subió → el writer lo cuida y "Úsalo en…" sube de nivel.
  * Módulo puro (se prueba en node); las consultas viven en data.ts.
  */
 
@@ -28,6 +33,8 @@ export type Aprendizaje = {
   respuestas: string | null;
   /** F3: ids de pregunta que ya no hace falta hacer (la marca siempre responde igual). */
   yaSabidas: string[];
+  /** F4: qué le viene fallando a la marca por herramienta (de los resultados subidos). */
+  fallos: FalloPatron[];
 };
 
 export const MAX_GANADORES = 3;
@@ -48,19 +55,24 @@ const VARIANTES = new Set(["base", "segura", "audaz", "minima"]);
 /** Sólo herramientas y versiones que la app conoce: la columna `tool` no tiene check en la BD. */
 const esCandidatoSano = (p: PromptCandidato): boolean => (TOOLS as string[]).includes(p.tool) && VARIANTES.has(p.variante);
 
-export const hayAprendizaje = (a: Aprendizaje | null): a is Aprendizaje => !!a && (a.ganadores.length > 0 || !!a.versiones || a.cambios.length > 0 || !!a.respuestas);
+export const hayAprendizaje = (a: Aprendizaje | null): a is Aprendizaje => !!a && (a.ganadores.length > 0 || !!a.versiones || a.cambios.length > 0 || !!a.respuestas || (a.fallos?.length ?? 0) > 0);
 
 /** Eventos (más recientes primero) + prompts recientes del cliente + votos → Aprendizaje. */
 export function resumirAprendizaje(job: JobType, eventos: EventoRow[], prompts: PromptCandidato[], votos: Voto[]): Aprendizaje {
   const malos = new Set(votos.filter((v) => v.score < 0).map((v) => v.prompt_id));
   const buenos = votos.filter((v) => v.score > 0).map((v) => v.prompt_id);
 
-  // 1) Ganadores. Orden de llegada = recencia (los eventos vienen del más nuevo al más viejo).
+  // 1) Ganadores, por fuerza de la señal; dentro de cada fuerza, por recencia (los eventos
+  // vienen del más nuevo al más viejo). Un prompt entra UNA vez, con su mejor señal.
   const usados: string[] = [];
-  for (const e of eventos) {
-    if ((e.tipo === "copiado" || e.tipo === "abierto") && e.prompt_id && !usados.includes(e.prompt_id)) usados.push(e.prompt_id);
-  }
-  for (const id of buenos) if (!usados.includes(id)) usados.push(id);
+  const meter = (id: string | null) => {
+    if (id && !usados.includes(id)) usados.push(id);
+  };
+  const buenosSet = new Set(buenos);
+  for (const e of eventos) if (e.tipo === "resultado_aceptado") meter(e.prompt_id);
+  for (const e of eventos) if (e.tipo === "resultado_subido" && e.prompt_id && buenosSet.has(e.prompt_id)) meter(e.prompt_id);
+  for (const e of eventos) if (e.tipo === "copiado" || e.tipo === "abierto") meter(e.prompt_id);
+  for (const id of buenos) meter(id);
   const porId = new Map(prompts.map((p) => [p.id, p]));
   const candidatos = usados
     .map((id) => porId.get(id))
@@ -100,7 +112,11 @@ export function resumirAprendizaje(job: JobType, eventos: EventoRow[], prompts: 
   // veces, la marca "ya la sabe": el writer la asume y la entrevista deja de hacerla.
   const { respuestas, yaSabidas } = patronRespuestas(eventos);
 
-  return { ganadores, versiones, cambios, respuestas, yaSabidas };
+  // 4) Lo que salió mal en lo que subieron: un punto que falla 3 de las últimas 6 veces en una
+  // herramienta es un patrón de ESA herramienta con ESTA marca, no un mal día.
+  const fallos = patronFallos(eventos, TOOLS);
+
+  return { ganadores, versiones, cambios, respuestas, yaSabidas, fallos };
 }
 
 /** De los eventos `respondido` (más recientes primero) → lo que la marca siempre contesta. */

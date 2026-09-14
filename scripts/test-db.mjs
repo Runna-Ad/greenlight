@@ -2540,5 +2540,43 @@ console.log("\n▶ 0067 — prisma_reglas + columnas + eventos");
   await db.query(`delete from produccion.prisma_specs where id = $1`, [specEv]);
 }
 
+
+// ── 0070: HÜE Prisma v1 · F4 — prisma_resultados + specs de corrección ──
+console.log("\n▶ 0070 — prisma_resultados + prisma_specs.correccion_de");
+{
+  eq("prisma_resultados existe con RLS", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_resultados' and c.relrowsecurity`)), 1);
+  eq("policy master-only", Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = 'prisma_resultados'`)), 1);
+  ok("service_role puede escribir", (await q(`select has_table_privilege('service_role', 'produccion.prisma_resultados', 'insert') as ok`))[0].ok);
+  eq("PUBLIC sin privilegios", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_resultados' and c.relacl is not null and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+  eq("prisma_specs.correccion_de existe", Number(await scalar(`select count(*) from information_schema.columns where table_schema = 'produccion' and table_name = 'prisma_specs' and column_name = 'correccion_de'`)), 1);
+  const specR = await scalar(`insert into produccion.prisma_specs (job, tool, spec) values ('foto_producto', 'nanobanana', '{}'::jsonb) returning id`);
+  const promptR = await scalar(`insert into produccion.prisma_prompts (spec_id, tool, prompt_version, salida, formato) values ($1, 'nanobanana', 'test', 'p', 'texto') returning id`, [specR]);
+  const ruta = () => `prisma/out/${crypto.randomUUID()}.png`;
+  const resId = await scalar(`insert into produccion.prisma_resultados (spec_id, prompt_id, tool, modelo, storage_path, mime, veredicto, score) values ($1, $2, 'nanobanana', 'gemini-3-pro-image', $3, 'image/png', '{"cumple":[]}'::jsonb, 50) returning id`, [specR, promptR, ruta()]);
+  ok("un resultado bien formado entra", !!resId);
+  eq("aceptado nace en false", await scalar(`select aceptado from produccion.prisma_resultados where id = $1`, [resId]), false);
+  const rutaMala = await db.query(`insert into produccion.prisma_resultados (spec_id, tool, storage_path, mime) values ($1, 'nanobanana', 'prisma/x.png', 'image/png')`, [specR]).then(() => false).catch(() => true);
+  ok("una ruta fuera de prisma/out/<uuid>.<ext> la rechaza la BD", rutaMala);
+  const mimeMalo = await db.query(`insert into produccion.prisma_resultados (spec_id, tool, storage_path, mime) values ($1, 'nanobanana', $2, 'image/avif')`, [specR, ruta()]).then(() => false).catch(() => true);
+  ok("un mime que la visión no lee lo rechaza la BD", mimeMalo);
+  const scoreMalo = await db.query(`insert into produccion.prisma_resultados (spec_id, tool, storage_path, mime, score) values ($1, 'nanobanana', $2, 'image/png', 101)`, [specR, ruta()]).then(() => false).catch(() => true);
+  ok("un score fuera de 0–100 lo rechaza la BD", scoreMalo);
+  const modeloLargo = await db.query(`insert into produccion.prisma_resultados (spec_id, tool, storage_path, mime, modelo) values ($1, 'nanobanana', $2, 'image/png', $3)`, [specR, ruta(), "m".repeat(61)]).then(() => false).catch(() => true);
+  ok("un modelo de más de 60 letras lo rechaza la BD", modeloLargo);
+  // El spec de corrección enlaza al resultado; borrar el resultado deja el enlace en null (el prompt sigue).
+  const specC = await scalar(`insert into produccion.prisma_specs (job, tool, spec, origen_spec_id, correccion_de) values ('correccion', 'nanobanana', '{}'::jsonb, $1, $2) returning id`, [specR, resId]);
+  eq("el spec de corrección apunta al resultado", await scalar(`select correccion_de from produccion.prisma_specs where id = $1`, [specC]), resId);
+  // Borrar el PROMPT deja el resultado sin prompt (set null), no lo borra.
+  await db.query(`delete from produccion.prisma_prompts where id = $1`, [promptR]);
+  eq("borrar el prompt deja el resultado (prompt_id a null)", await scalar(`select prompt_id from produccion.prisma_resultados where id = $1`, [resId]), null);
+  await db.query(`delete from produccion.prisma_resultados where id = $1`, [resId]);
+  eq("borrar el resultado deja el spec de corrección sin enlace (set null)", await scalar(`select correccion_de from produccion.prisma_specs where id = $1`, [specC]), null);
+  const resId2 = await scalar(`insert into produccion.prisma_resultados (spec_id, tool, storage_path, mime) values ($1, 'nanobanana', $2, 'image/png') returning id`, [specR, ruta()]);
+  await db.query(`delete from produccion.prisma_specs where id = $1`, [specR]);
+  eq("borrar el spec se lleva sus resultados (cascade)", Number(await scalar(`select count(*) from produccion.prisma_resultados where id = $1`, [resId2])), 0);
+  eq("…y el spec de corrección sobrevive sin origen (set null)", await scalar(`select origen_spec_id from produccion.prisma_specs where id = $1`, [specC]), null);
+  await db.query(`delete from produccion.prisma_specs where id = $1`, [specC]);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

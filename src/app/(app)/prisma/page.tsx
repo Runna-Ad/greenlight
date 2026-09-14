@@ -13,6 +13,7 @@ import type { ItemHistorialUI } from "@/components/prisma/historial";
 import { specVacio, type JobType, type Tool } from "@/lib/prisma/spec";
 import { compilar } from "@/lib/prisma/compilers";
 import type { PromptVivo } from "@/components/prisma/resultado";
+import type { ResultadoVivo } from "@/lib/prisma/resultado";
 import type { PrismaVariante } from "@/lib/database.types";
 
 export const dynamic = "force-dynamic";
@@ -23,8 +24,9 @@ export const dynamic = "force-dynamic";
  * el estudio (client). El historial llega como props y se re-lee con router.refresh().
  */
 /** Un resultado de muestra, SÓLO en desarrollo (`?demo=resultado`): prompt real del
- *  compiler de Kling sobre un spec fijo. Nunca se construye en producción. */
-function demoResultado(): PromptVivo | null {
+ *  compiler de Kling sobre un spec fijo. Nunca se construye en producción. Con
+ *  `?demo=veredicto` trae además un resultado subido de mentira (F4) para ver el veredicto. */
+function demoResultado(conVeredicto = false): PromptVivo | null {
   if (process.env.NODE_ENV !== "development") return null;
   const spec = specVacio("animar_foto", "kling", "que la modelo respire y sonría");
   Object.assign(spec, {
@@ -40,7 +42,28 @@ function demoResultado(): PromptVivo | null {
     refs: [{ role: "sujeto", caption: "a woman in a black coat in a night market", dna: null }],
   });
   const salida = compilar(spec);
-  return { specId: "demo", promptId: "demo", tool: "kling", spec, salida, valido: true, errores: [], porque: { es: "Para un clip vertical corto y sin voz, Kling le da buen movimiento a la foto.", en: "For a short vertical clip with no voice, Kling animates the photo with good motion." } };
+  const resultado: ResultadoVivo | null = conVeredicto
+    ? {
+        id: "demo",
+        promptId: "demo",
+        url: "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="#1b211e"/><circle cx="48" cy="48" r="26" fill="#f2c57c"/></svg>'),
+        modelo: "kling-3.0-turbo",
+        veredicto: {
+          caption: "a woman in a black coat, still, in a night market",
+          cumple: [
+            { campo: "sujeto", ok: true, nota: { es: "La modelo del abrigo negro en el mercado, como se pidió.", en: "The model in the black coat at the market, as asked." } },
+            { campo: "luz", ok: false, nota: { es: "La luz es fría y azul; se pidió luz cálida de farol.", en: "The light is cold and blue; warm lantern light was asked for." } },
+            { campo: "encuadre", ok: true, nota: { es: "Vertical 9:16, a la altura de los ojos.", en: "Vertical 9:16, eye level." } },
+          ],
+          refine: { es: "Que la luz sea cálida, de farol, no azul", en: "Make the light warm, from lanterns, not blue" },
+          correccion: null,
+        },
+        score: 67,
+        aceptado: false,
+        corregible: false,
+      }
+    : null;
+  return { specId: "demo", promptId: "demo", tool: "kling", spec, salida, valido: true, errores: [], porque: { es: "Para un clip vertical corto y sin voz, Kling le da buen movimiento a la foto.", en: "For a short vertical clip with no voice, Kling animates the photo with good motion." }, resultado };
 }
 
 /** La entrevista de muestra, SÓLO en desarrollo (`?demo=entrevista`): tres preguntas fijas
@@ -56,7 +79,7 @@ function demoEntrevista(): Pregunta[] | null {
 
 export default async function PrismaPage({ searchParams }: { searchParams: Promise<{ demo?: string }> }) {
   const [role, soy, sp] = await Promise.all([getViewAs(), getSoy(), searchParams]);
-  const demo = sp.demo === "resultado" ? demoResultado() : null;
+  const demo = sp.demo === "resultado" || sp.demo === "veredicto" ? demoResultado(sp.demo === "veredicto") : null;
   const demoPreguntas = sp.demo === "entrevista" ? demoEntrevista() : null;
 
   if (!prismaActivo() || !canSee(role, "prisma")) {
@@ -93,6 +116,7 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
       fecha: it.spec.created_at,
       valido: it.prompt?.valido ?? null,
       variante: (it.prompt?.variante ?? "base") as PrismaVariante,
+      correccion: !!it.spec.correccion_de,
     }));
   }
 

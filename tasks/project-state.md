@@ -8,7 +8,20 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
-## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-14 — TODO LIVE en preview (7080c45 · 0065–0069 APLICADAS)
+## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-14 — TODO LIVE en preview (0065–0069 APLICADAS · **0070 PENDIENTE de "ship it"**)
+- **F4 hecha (2026-09-14) — "sube lo que salió":** bloque "¿Cómo salió?" en el resultado (`components/prisma/como-salio.tsx`):
+  el diseñador sube la imagen que le dio la herramienta (o un cuadro si es video) y el modelo que usó; H.Ü.E la compara con
+  lo pedido en UNA llamada con visión (`compararResultado`, tool_use `emitir_veredicto`): 7 puntos ✓/✗ con nota es/en
+  (lo que se ve, texto, encuadre, luz, estilo, parecido, marca), puntaje, `refine` (qué pedirle al original) y una
+  edición concreta. Tres salidas: **Corregir este resultado** (spec hermano oculto `correccion` sobre esa imagen, rol de
+  ref `resultado`, compilado sin modelo, chip "Corrección"), **Refinar el original** (dispara el refine con el texto de
+  H.Ü.E) y **Marcar como resultado final** (toggle; evento `resultado_aceptado`). Aprende: ganadores = aceptado > subido
+  con 👍 > copiado/abierto > 👍; `patronFallos` (un punto falla ≥ 3 de los últimos 6 en una herramienta) → frase al writer
+  y "Úsalo en…" sube a Pro/sunburst cuando falla el texto o el parecido. Acciones en `prisma/resultado-actions.ts`;
+  helpers compartidos con actions.ts en `prisma/comun.ts`. **Migración 0070** (`prisma_resultados` +
+  `prisma_specs.correccion_de`) escrita y probada en PGlite; hasta que Pedro diga "ship it", en el preview subir un
+  resultado dice "Esta parte se activa cuando se aplique la migración 0070". `?demo=veredicto` (dev) enseña el bloque.
+  Smoke real `scripts/smoke-veredicto.mjs` (logo vs spec de producto: 7 puntos, texto y sujeto ✗, 2/2).
 - **Tras la prueba de Pedro (2026-09-14):** la salida de un tool_use puede venir como string JSON (lib/prisma/json.ts,
   `listaDe`); la ortografía se sugiere al escribir; **H.Ü.E se corrige solo** con sus propias reglas antes de enseñar el
   prompt (`cerrarSpec`: prompt largo, dos movimientos, "avoid" sin positivo); andamio de los compilers de imagen ~50
@@ -17,7 +30,7 @@
   chips antes de escribir, cero cuando la idea ya lo dice todo (heurística sin modelo), respuestas al writer como datos
   cercados, la marca aprende sus respuestas fijas (≥ 4 de 10 y ≥ 2 personas) y deja de preguntar. Plan actualizado con la
   **Fase 6 "Vigía"** (fuentes + job semanal + propuestas + límites/fortalezas como datos) y los plegados de la Fase 5
-  (adaptar a formatos, zonas seguras, prompt primero). Siguiente: **F4** "sube lo que salió" (migración 0069).
+  (adaptar a formatos, zonas seguras, prompt primero). Siguiente tras F4: **F5** ronda de prueba + plegados, luego **F6** Vigía.
 - **F1 hecha (66f7fb5):** compilers al día (negativo → positivo, Nano Banana 2/Pro con slot de estilo, gpt-image-2.5 con
   tamaños reales y deletreo, Veo 8/6/4 con 8 forzado con refs, Kling 60 palabras + un movimiento) y "Úsalo en…"
   (`lib/prisma/modelo.ts`, guardado en `prisma_prompts.modelo_sug`). Smoke real `scripts/smoke-prisma.mjs`.

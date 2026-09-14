@@ -526,7 +526,7 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
       setGenerando(false);
     }
     if (!r.ok) return toast.error(r.error);
-    setVivo({ specId: r.specId, promptId: r.promptId, tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: sugerencia?.tool === tool ? sugerencia.porque : null, variante: "base", aprendio: r.aprendio, avisos: r.avisos });
+    setVivo({ specId: r.specId, promptId: r.promptId, tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: sugerencia?.tool === tool ? sugerencia.porque : null, variante: "base", aprendio: r.aprendio, avisos: r.avisos, correccion: false, resultado: null });
     setPaso("resultado");
     router.refresh(); // el historial (props del servidor) se re-lee
   };
@@ -544,7 +544,7 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
       setAbriendo(null);
     }
     if (!r.ok) return toast.error(r.error);
-    setVivo({ specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: r.nota, variante: r.variante, aprendio: null, avisos: r.avisos });
+    setVivo({ specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: r.nota, variante: r.variante, aprendio: null, avisos: r.avisos, correccion: r.correccion, resultado: r.resultado });
     setJob(r.spec.job);
     setKind(null);
     setPaso("resultado");

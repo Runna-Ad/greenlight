@@ -121,7 +121,7 @@ export async function cargarAprendizaje(db: Db, clientId: string, job: JobType):
       .select("spec_id, prompt_id, job, tool, variante, tipo, detalle, created_at")
       .eq("client_id", clientId)
       // Sólo los tipos que enseñan: un aluvión de otro tipo (aviso_aplicado…) no desplaza la ventana.
-      .in("tipo", ["copiado", "abierto", "variante", "refinado"])
+      .in("tipo", ["copiado", "abierto", "variante", "refinado", "resultado_subido", "resultado_aceptado"])
       .gte("created_at", desde)
       .order("created_at", { ascending: false })
       .limit(200)

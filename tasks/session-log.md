@@ -2084,3 +2084,104 @@ real · prueba con diseñador · decidir merge a main (= deploy a prod; el módu
 - [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
 - [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
 
+
+## 2026-09-11 14:49
+**Shipped (recent commits):**
+  - docs(prisma): wrap-up — lecciones, observaciones de skills y cierre del session-log
+  - docs(prisma): 0066 aplicada — todo, session-log, project-state
+  - docs(prisma): session-log — commit de la 2ª tanda
+  - feat(prisma): otra versión bajo demanda + H.Ü.E aprende solo (eventos 0066, pendiente de aplicar)
+  - feat(prisma): presets de marca en Admin + personajes guardados + explicación por idioma (0065)
+
+**Still open:**
+- [ ] **SHIP** (necesita "ship it"): `npm run migrate` (0067) → commit → `git push origin prisma`.
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-11 15:07
+**Shipped (recent commits):**
+  - feat(prisma): F0 — Sora fuera, conocimiento vivo por herramienta (0067 pendiente de aplicar)
+  - docs(prisma): wrap-up — lecciones, observaciones de skills y cierre del session-log
+  - docs(prisma): 0066 aplicada — todo, session-log, project-state
+  - docs(prisma): session-log — commit de la 2ª tanda
+  - feat(prisma): otra versión bajo demanda + H.Ü.E aprende solo (eventos 0066, pendiente de aplicar)
+  - feat(prisma): presets de marca en Admin + personajes guardados + explicación por idioma (0065)
+
+**Still open:**
+- [ ] **SHIP** (necesita "ship it"): `npm run migrate` (0067). El código ya está en `prisma` (preview seguro sin la 0067: sin notas,
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-11 16:01
+**Shipped (recent commits):**
+  - feat(prisma): F1 — compilers al día + "Úsalo en…" (Nano Banana 2/Pro, gpt-image-2.5, Veo 3.1, Kling 3)
+  - docs(prisma): 0067 aplicada — todo y project-state (F0 cerrada, sigue F1)
+  - feat(prisma): F0 — Sora fuera, conocimiento vivo por herramienta (0067 pendiente de aplicar)
+  - docs(prisma): wrap-up — lecciones, observaciones de skills y cierre del session-log
+  - docs(prisma): 0066 aplicada — todo, session-log, project-state
+  - docs(prisma): session-log — commit de la 2ª tanda
+  - feat(prisma): otra versión bajo demanda + H.Ü.E aprende solo (eventos 0066, pendiente de aplicar)
+  - feat(prisma): presets de marca en Admin + personajes guardados + explicación por idioma (0065)
+
+**Still open:**
+- [ ] Reap (Opus seguridad + Sonnet salud) → arreglos → commit → `git push origin prisma`.
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+
+
+## 2026-09-14 14:09
+
+**Still open:**
+- [ ] Reap (Opus seguridad + Sonnet salud) → arreglos → commit → `git push origin prisma`.
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+
+
+## 2026-09-14 15:09
+**Shipped (recent commits):**
+  - fix(prisma): la entrevista se veía vacía — la salida del tool_use puede venir como string JSON
+  - docs(prisma): F3 cerrada — project-state; sigue F4
+  - feat(prisma): F3 — la entrevista (≤ 3 preguntas rápidas, cero cuando la idea ya lo dice todo)
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+

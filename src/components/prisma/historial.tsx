@@ -18,6 +18,8 @@ export type ItemHistorialUI = {
   fecha: string; // ISO
   valido: boolean | null;
   variante: PrismaVariante;
+  /** F4: es un prompt de corrección (edita un resultado subido). */
+  correccion?: boolean;
 };
 
 export function Historial({ items, lang, onAbrir, abriendo }: { items: ItemHistorialUI[]; lang: Lang; onAbrir: (specId: string) => void; abriendo: string | null }) {
@@ -58,6 +60,7 @@ export function Historial({ items, lang, onAbrir, abriendo }: { items: ItemHisto
                   <span className="block truncate text-[11px] text-muted-foreground">
                     {tx(JOB_LABEL[it.job], lang)} · {tx(TOOL_LABEL[it.tool], lang)} · {JOB_KIND[it.job]}
                     {it.variante !== "base" ? ` · ${tx(VARIANTE_LABEL[it.variante], lang)}` : ""}
+                    {it.correccion ? ` · ${tx(UI.correccion, lang)}` : ""}
                   </span>
                 </span>
               </button>

@@ -44,6 +44,9 @@ export type JobType =
   | "dos_personajes"
   | "cambio_epoca"
   | "figura_coleccionable"
+  // F4: la CORRECCIÓN de un resultado subido (edita ESA imagen: "arregla X, todo lo demás igual").
+  // Job OCULTO: no está en JOBS_POR_KIND (el wizard no lo ofrece); nace en corregirResultado.
+  | "correccion"
   // Crear video
   | "animar_foto"
   | "texto_a_video"
@@ -67,12 +70,15 @@ export const JOB_KIND: Record<JobType, JobKind> = {
   dos_personajes: "edicion",
   cambio_epoca: "edicion",
   figura_coleccionable: "edicion",
+  correccion: "edicion",
   animar_foto: "video",
   texto_a_video: "video",
   transicion: "video",
   escena_sora: "video",
 };
 
+/** Los trabajos que el wizard OFRECE por puerta. `correccion` (F4) no está a propósito: sólo
+ *  nace desde "Corregir este resultado". */
 export const JOBS_POR_KIND: Record<JobKind, JobType[]> = {
   imagen: ["foto_producto", "escena_persona", "imagen_libre"],
   edicion: [
@@ -105,7 +111,9 @@ export type RefRole =
   | "empaque"
   | "personaje2"
   | "inicio"
-  | "fin";
+  | "fin"
+  /** F4: la imagen que SALIÓ de la herramienta (la única referencia de un spec de corrección). */
+  | "resultado";
 
 /** Qué imágenes pide cada trabajo, en orden. `opcional` = puede faltar. */
 export const REFS_POR_JOB: Record<JobType, { role: RefRole; opcional?: boolean }[]> = {
@@ -125,6 +133,7 @@ export const REFS_POR_JOB: Record<JobType, { role: RefRole; opcional?: boolean }
   dos_personajes: [{ role: "sujeto" }, { role: "personaje2" }, { role: "pose", opcional: true }, { role: "estilo", opcional: true }],
   cambio_epoca: [{ role: "sujeto" }, { role: "estilo", opcional: true }],
   figura_coleccionable: [{ role: "sujeto" }, { role: "empaque", opcional: true }],
+  correccion: [{ role: "resultado" }],
   animar_foto: [{ role: "sujeto" }],
   texto_a_video: [],
   transicion: [{ role: "inicio" }, { role: "fin" }],

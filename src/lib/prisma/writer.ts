@@ -6,7 +6,8 @@ import { cercado, plano } from "@/lib/prisma/texto";
 import { compilar, type Salida } from "@/lib/prisma/compilers";
 import { validar } from "@/lib/prisma/validators";
 import { PRESETS_HIGGSFIELD } from "@/lib/prisma/compilers/higgsfield";
-import { BLOQUE_ESTABLE, bloqueEstableCon, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueVariante, bloqueExplicar, bloqueDescribirPersonaje, bloqueJuicio, bloqueCorreccion, bloqueEntrevista, AVISOS_SCHEMA, CORRECCION_SCHEMA, PREGUNTAS_SCHEMA, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje, type NotaTool } from "@/lib/prisma/prompts/writer";
+import { BLOQUE_ESTABLE, bloqueEstableCon, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueVariante, bloqueExplicar, bloqueDescribirPersonaje, bloqueJuicio, bloqueCorreccion, bloqueEntrevista, bloqueVeredicto, AVISOS_SCHEMA, CORRECCION_SCHEMA, PREGUNTAS_SCHEMA, VEREDICTO_SCHEMA, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje, type NotaTool } from "@/lib/prisma/prompts/writer";
+import { sanearVeredicto, type Veredicto } from "@/lib/prisma/resultado";
 import { sanearPreguntas, type Pregunta } from "@/lib/prisma/entrevista";
 import { listaDe, objetoDe } from "@/lib/prisma/json";
 import { diagnosticar, esReparable, type Aviso, type ReglaCompilada } from "@/lib/prisma/diagnostico";
@@ -385,6 +386,48 @@ export async function preguntarFaltante(e: EntradaWriter, yaSabidas: string[]): 
     return { ok: true, preguntas, usage: usoDe(res) };
   } catch (err) {
     console.error("[prisma] preguntarFaltante:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "H.Ü.E no respondió. Inténtalo otra vez." };
+  }
+}
+
+/** Formatos que H.Ü.E puede MIRAR. */
+export type MimeVision = "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+
+/**
+ * F4: comparar lo que SALIÓ (la imagen, en base64) con lo que se pidió (spec + prompt). UNA
+ * llamada con visión; saneo a la vuelta (sanearVeredicto tolera string JSON / envoltorio); si
+ * el modelo no devuelve puntos, es un fallo visible (no un "todo bien" en silencio). Nunca lanza.
+ */
+export async function compararResultado(spec: PromptSpec, salida: string, base64: string, mime: MimeVision): Promise<{ ok: true; veredicto: Veredicto; usage: Uso } | { ok: false; error: string }> {
+  try {
+    const client = new Anthropic();
+    const res = await client.messages.create({
+      model: MODEL,
+      // 7 puntos × 2 notas + refine × 2 + corrección: el mismo margen que el juicio.
+      max_tokens: 1600,
+      thinking: { type: "disabled" },
+      tools: [{ name: "emitir_veredicto", description: "Report how the generated image compares with what was asked.", input_schema: VEREDICTO_SCHEMA as unknown as Anthropic.Tool["input_schema"] }],
+      tool_choice: { type: "tool", name: "emitir_veredicto" },
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: mime, data: base64 } },
+            { type: "text", text: bloqueVeredicto(spec, salida) },
+          ],
+        },
+      ],
+    });
+    const bloque = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    if (!bloque || res.stop_reason === "max_tokens") console.warn(`[prisma] compararResultado: ${bloque ? "cortado por max_tokens" : "sin tool_use"} (stop_reason=${res.stop_reason})`);
+    const veredicto = sanearVeredicto(bloque?.input);
+    if (!veredicto.cumple.length) {
+      if (res.usage.output_tokens > 150) console.warn(`[prisma] compararResultado: ${res.usage.output_tokens} tokens de salida y 0 puntos saneados (forma inesperada)`);
+      return { ok: false, error: "H.Ü.E no pudo comparar la imagen. Inténtalo otra vez." };
+    }
+    return { ok: true, veredicto, usage: usoDe(res) };
+  } catch (err) {
+    console.error("[prisma] compararResultado:", err instanceof Error ? err.message : err);
     return { ok: false, error: "H.Ü.E no respondió. Inténtalo otra vez." };
   }
 }
