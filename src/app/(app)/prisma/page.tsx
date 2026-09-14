@@ -7,6 +7,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { prismaActivo } from "@/lib/prisma/flags";
 import { cargarHistorial, cargarMarcas, cargarReglas } from "@/lib/prisma/data";
 import type { ReglaCliente } from "@/lib/prisma/diagnostico";
+import type { Pregunta } from "@/lib/prisma/entrevista";
 import { PrismaStudio, type MarcaUI } from "@/components/prisma/studio";
 import type { ItemHistorialUI } from "@/components/prisma/historial";
 import { specVacio, type JobType, type Tool } from "@/lib/prisma/spec";
@@ -42,9 +43,21 @@ function demoResultado(): PromptVivo | null {
   return { specId: "demo", promptId: "demo", tool: "kling", spec, salida, valido: true, errores: [], porque: { es: "Para un clip vertical corto y sin voz, Kling le da buen movimiento a la foto.", en: "For a short vertical clip with no voice, Kling animates the photo with good motion." } };
 }
 
+/** La entrevista de muestra, SÓLO en desarrollo (`?demo=entrevista`): tres preguntas fijas
+ *  para ver la pantalla sin sesión (la real necesita login y una llamada a H.Ü.E). */
+function demoEntrevista(): Pregunta[] | null {
+  if (process.env.NODE_ENV !== "development") return null;
+  return [
+    { id: "angulo", pregunta: { es: "¿Desde qué ángulo ves la tarjeta?", en: "From which angle do you see the card?" }, opciones: [{ valor: "top-down flat lay", label: { es: "Cenital", en: "Top-down" } }, { valor: "45-degree angle", label: { es: "En ángulo", en: "Angled" } }, { valor: "eye-level close-up", label: { es: "A nivel de ojos", en: "Eye level" } }], campo: "lente" },
+    { id: "fondo", pregunta: { es: "¿Qué superficie de fondo?", en: "Which background surface?" }, opciones: [{ valor: "white marble counter", label: { es: "Mármol blanco", en: "White marble" } }, { valor: "light wood table", label: { es: "Madera clara", en: "Light wood" } }], campo: null },
+    { id: "luz", pregunta: { es: "¿Qué luz quieres?", en: "Which light?" }, opciones: [{ valor: "soft morning window light", label: { es: "Ventana suave", en: "Soft window" } }, { valor: "bright studio light", label: { es: "Estudio", en: "Studio" } }], campo: "luz" },
+  ];
+}
+
 export default async function PrismaPage({ searchParams }: { searchParams: Promise<{ demo?: string }> }) {
   const [role, soy, sp] = await Promise.all([getViewAs(), getSoy(), searchParams]);
   const demo = sp.demo === "resultado" ? demoResultado() : null;
+  const demoPreguntas = sp.demo === "entrevista" ? demoEntrevista() : null;
 
   if (!prismaActivo() || !canSee(role, "prisma")) {
     return (
@@ -83,5 +96,5 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
     }));
   }
 
-  return <PrismaStudio marcas={marcas} historial={historial} demo={demo} verTodo={canVerTodoPrisma(role)} reglas={reglas} />;
+  return <PrismaStudio marcas={marcas} historial={historial} demo={demo} demoPreguntas={demoPreguntas} verTodo={canVerTodoPrisma(role)} reglas={reglas} />;
 }

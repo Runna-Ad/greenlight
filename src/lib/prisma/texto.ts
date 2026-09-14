@@ -7,6 +7,14 @@ export const plano = (s: string): string => s.replace(/[\p{Cc}\p{Cf}]+/gu, " ").
  *  además quita los ángulos, así el texto no puede cerrar la cerca y fingir instrucciones. */
 export const cercado = (s: string): string => plano(s.replace(/[<>]/g, " "));
 
+/** Recorta a `n` unidades sin partir un emoji por la mitad: un surrogate huérfano al final
+ *  revienta el jsonb de Postgres ("unsupported Unicode escape sequence") DESPUÉS de haber
+ *  pagado la llamada al modelo. Se usa en todo tope de texto humano. */
+export const recortar = (s: string, n: number): string => {
+  const t = s.slice(0, n);
+  return /[\uD800-\uDBFF]$/.test(t) ? t.slice(0, -1) : t;
+};
+
 /** Para un prompt YA compilado que entra como ejemplar (<winner>): conserva los saltos de línea
  *  — en Sora es una lista de tomas y en Veo un JSON; la ESTRUCTURA es justo la lección — pero
  *  quita ángulos, controles e invisibles línea por línea. */

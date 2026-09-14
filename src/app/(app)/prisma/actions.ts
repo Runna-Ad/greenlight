@@ -7,11 +7,12 @@ import { getSoyId } from "@/lib/soy";
 import { prismaActivo } from "@/lib/prisma/flags";
 import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
 import { analizarReferencia } from "@/lib/prisma/vision";
-import { escribirSpec, refinarSpec, variarSpec, recompilar, explicarPrompt, describirPersonajeIA, estableCon, versionCon, juzgarSpec, revisarTexto, MODEL, PROMPT_VERSION, type Uso } from "@/lib/prisma/writer";
+import { escribirSpec, refinarSpec, variarSpec, recompilar, explicarPrompt, describirPersonajeIA, estableCon, versionCon, juzgarSpec, revisarTexto, preguntarFaltante, MODEL, PROMPT_VERSION, type Uso } from "@/lib/prisma/writer";
 import { avisosDe, bloqueado, compilarReglas, diagnosticar, diagnosticarEntrada, type Aviso, type ReglaCompilada } from "@/lib/prisma/diagnostico";
 import { idiomaDe, revisarAcentos, type Cambio, type Idioma } from "@/lib/prisma/ortografia";
+import { aplicarRespuestas, detalleRespuestas, necesitaEntrevista, sanearRespuestas, type Pregunta, type Respuesta } from "@/lib/prisma/entrevista";
 import type { EntradaWriter } from "@/lib/prisma/prompts/writer";
-import { plano } from "@/lib/prisma/texto";
+import { plano, recortar } from "@/lib/prisma/texto";
 import { BUCKET, cargarAprendizaje, cargarMarcas, cargarPersonajes, cargarReglas, firmar } from "@/lib/prisma/data";
 import { ASPECTS, DESTINOS, JOB_KIND, NOMBRE_HISTORICO, REFS_POR_JOB, VIDEO_TYPES, TOOLS, esDestino, esSpec, type Aspect, type Destino, type JobType, type PromptSpec, type RefRole, type Tool, type VisualDNA } from "@/lib/prisma/spec";
 import { t, type Par } from "@/lib/prisma/copy";
@@ -71,6 +72,8 @@ export async function analizarImagen(form: FormData): Promise<RefAnalizada | Fai
   const g = await gate();
   if ("ok" in g) return g;
 
+  // Subida a storage + visión (facturable): mismo freno que el resto, con su cubo.
+  if (saturado(g.soyId, Date.now(), "vision", 30)) return FRENO;
   const file = form.get("file");
   if (!(file instanceof File)) return { ok: false, error: "No llegó ningún archivo." };
   if (file.size > MAX_BYTES) return { ok: false, error: "La imagen pesa más de 10 MB." };
@@ -88,7 +91,11 @@ export async function analizarImagen(form: FormData): Promise<RefAnalizada | Fai
     analizarReferencia(Buffer.from(bytes).toString("base64"), mime as MimeVision),
   ]);
   const url = urls.get(path) ?? "";
-  if (!vision.ok) return { ok: true, storage_path: path, url, caption: null, dna: null, aviso: vision.error };
+  if (!vision.ok) {
+    // El error crudo del proveedor va al log; al navegador, una frase (regla de la casa).
+    console.warn(`[prisma] visión no leyó la referencia: ${vision.error}`);
+    return { ok: true, storage_path: path, url, caption: null, dna: null, aviso: "H.Ü.E no pudo leer la imagen; la referencia sirve igual." };
+  }
   return { ok: true, storage_path: path, url, caption: vision.vision.caption, dna: vision.vision.dna, aviso: null };
 }
 
@@ -112,6 +119,10 @@ export type InputGenerar = {
   texto: string | null;
   /** F2: códigos de los avisos cuyo arreglo el diseñador aplicó ANTES de generar (evento aviso_aplicado). */
   avisosAplicados?: string[];
+  /** F3: respuestas de la entrevista (chips o texto libre). */
+  respuestas?: Respuesta[];
+  /** F3: el diseñador pidió "sin preguntas" (preferencia local). */
+  sinPreguntas?: boolean;
 };
 
 export type ResultadoGenerar = {
@@ -161,9 +172,9 @@ const FRENO: Fail = { ok: false, error: "Muchas llamadas a H.Ü.E en poco tiempo
 
 // Todo texto que viene del cliente sale de aquí en UNA línea y sin caracteres de control
 // (plano): la regla de la casa se cumple en el saneo, no en cada sitio que lo usa.
-const s0 = (v: unknown, max = 2000): string => (typeof v === "string" ? plano(v).slice(0, max) : "");
+const s0 = (v: unknown, max = 2000): string => (typeof v === "string" ? recortar(plano(v), max) : "");
 const sn = (v: unknown, max = 400): string | null => {
-  const p = typeof v === "string" ? plano(v).slice(0, max) : "";
+  const p = typeof v === "string" ? recortar(plano(v), max) : "";
   return p || null;
 };
 const IDIOMAS_DIALOGO = ["es-MX", "en"] as const;
@@ -218,6 +229,8 @@ function normalizar(raw: InputGenerar): InputGenerar | Fail {
     videoType,
     texto: sn(raw.texto, 200),
     avisosAplicados: Array.isArray(raw.avisosAplicados) ? [...new Set(raw.avisosAplicados.filter((c): c is string => typeof c === "string" && CODIGO_AVISO.test(c)))].slice(0, 10) : [],
+    respuestas: sanearRespuestas(raw.respuestas),
+    sinPreguntas: raw.sinPreguntas === true,
   };
 }
 
@@ -240,6 +253,12 @@ async function entradaDe(inp: InputGenerar): Promise<{ entrada: EntradaWriter; c
     if (!p) return { ok: false, error: "Ese personaje ya no existe." };
     personaje = p.descripcion;
   }
+  // Las respuestas de la entrevista con `campo` llenan el wizard desde el CÓDIGO: la luz, la
+  // duración, el formato o el idioma no dependen de que el modelo "las lea".
+  const respuestas = inp.respuestas ?? [];
+  // Sólo el look: formato, duración e idioma los decide el wizard (ya llegan aplicados desde el
+  // cliente, y un destino elegido DESPUÉS de la entrevista manda sobre la respuesta).
+  const con = aplicarRespuestas({ look: inp.look, duracion: inp.duracion, aspect: inp.aspect, dialogoIdioma: inp.dialogo?.idioma ?? null }, respuestas, "look");
   return {
     clientId,
     entrada: {
@@ -247,16 +266,17 @@ async function entradaDe(inp: InputGenerar): Promise<{ entrada: EntradaWriter; c
       tool: inp.tool,
       idea: inp.idea,
       destino: inp.destino,
-      aspect: inp.aspect,
-      duracion: inp.duracion,
+      aspect: con.aspect,
+      duracion: con.duracion,
       refs: inp.refs.map((r) => ({ role: r.role, caption: r.caption, dna: r.dna })),
-      look: inp.look,
-      dialogo: inp.dialogo,
+      look: con.look,
+      dialogo: inp.dialogo ? { ...inp.dialogo, idioma: con.dialogoIdioma ?? inp.dialogo.idioma } : null,
       marca,
       personaje,
       videoType: inp.videoType,
       texto: inp.texto,
       aprendizaje: null, // se llena en generarPrompt (necesita el cliente)
+      respuestas: respuestas.map((r) => ({ id: r.id, valor: r.valor })),
     },
   };
 }
@@ -321,7 +341,8 @@ export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar
   // El conocimiento vivo (TOOL NOTES) va en el bloque cacheado; en paralelo con el aprendizaje.
   const [aprendizaje, reglas] = await Promise.all([ent.clientId ? cargarAprendizaje(db, ent.clientId, inp.job) : Promise.resolve(null), cargarReglas(db)]);
   // Un aviso que BLOQUEA se impone aquí, no sólo en el navegador, y antes de pagar la llamada.
-  const bloqueo = bloqueado(diagnosticarEntrada({ job: inp.job, tool: inp.tool, destino: inp.destino, aspect: inp.aspect, duracion: inp.duracion, refs: inp.refs.map((r) => ({ role: r.role })), texto: inp.texto, dialogo: inp.dialogo ? { texto: inp.dialogo.texto, idioma: inp.dialogo.idioma } : null, movimiento: inp.look.movimiento, idea: inp.idea }, reglasDe(reglas)));
+  // Con los valores YA aplicados (las respuestas de la entrevista pueden cambiar formato, duración o movimiento).
+  const bloqueo = bloqueado(diagnosticarEntrada({ job: inp.job, tool: inp.tool, destino: inp.destino, aspect: ent.entrada.aspect, duracion: ent.entrada.duracion, refs: inp.refs.map((r) => ({ role: r.role })), texto: inp.texto, dialogo: ent.entrada.dialogo ? { texto: ent.entrada.dialogo.texto, idioma: ent.entrada.dialogo.idioma } : null, movimiento: ent.entrada.look.movimiento, idea: inp.idea }, reglasDe(reglas)));
   if (bloqueo) return { ok: false, error: bloqueo.que.es };
   // "Úsalo en…": el modelo/nivel donde se va a pegar; el writer dimensiona el spec para él.
   const modelo = recomendarModelo({ job: inp.job, tool: inp.tool, destino: inp.destino, refs: inp.refs.length, texto: !!inp.texto?.trim(), dialogo: !!inp.dialogo?.texto.trim(), duracion: inp.duracion }).modelo;
@@ -331,7 +352,7 @@ export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar
   const refsGuardadas: PrismaRefGuardada[] = inp.refs.map((x) => ({ role: x.role, storage_path: x.storage_path, caption: x.caption, dna: x.dna as Record<string, unknown> | null }));
   const { data: specRow, error } = await db
     .from("prisma_specs")
-    .insert({ client_id: ent.clientId, marca_id: inp.marcaId, job: inp.job, tool: inp.tool, destino: inp.destino, idea: inp.idea, spec: r.spec, refs: refsGuardadas, created_by: g.soyId })
+    .insert({ client_id: ent.clientId, marca_id: inp.marcaId, job: inp.job, tool: inp.tool, destino: inp.destino, idea: inp.idea, spec: r.spec, refs: refsGuardadas, created_by: g.soyId, respuestas: inp.respuestas ?? [] })
     .select("id")
     .single<{ id: string }>();
   if (error || !specRow) return fallo("prisma_specs.insert", error?.message);
@@ -341,6 +362,10 @@ export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar
   const avisos = await diagnosticoDe(r.spec, inp.tool, r.salida, r.errores, reglasDe(reglas), { ...ent.entrada, aprendizaje, modelo });
   const promptId = await guardarPrompt(specRow.id, inp.tool, r.salida, r.valido, r.errores, r.usage, "base", versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, inp.tool)).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
+  // Lo que contestó en la entrevista: con esto la marca "aprende" sus respuestas fijas.
+  if (inp.respuestas?.length) {
+    await anotarEvento(db, { spec_id: specRow.id, prompt_id: promptId, client_id: ent.clientId, job: inp.job, tool: inp.tool, variante: "base", user_id: g.soyId, tipo: "respondido", detalle: detalleRespuestas(inp.respuestas) });
+  }
   // Los arreglos que el diseñador aplicó ANTES de generar: señal de qué avisos ayudan (un solo insert).
   if (inp.avisosAplicados?.length) {
     const { error: evError } = await db.from("prisma_eventos").insert(inp.avisosAplicados.map((codigo) => ({ spec_id: specRow.id, prompt_id: promptId, client_id: ent.clientId, job: inp.job, tool: inp.tool, variante: "base" as PrismaVariante, user_id: g.soyId, tipo: "aviso_aplicado" as PrismaEventoTipo, detalle: codigo })));
@@ -719,4 +744,34 @@ export async function revisarBien(promptId: string): Promise<{ ok: true; avisos:
   const { error } = await db.from("prisma_prompts").update({ avisos }).eq("id", pid);
   if (error) console.warn(`[prisma] revisarBien: no se guardaron los avisos: ${error.message}`);
   return { ok: true, avisos };
+}
+
+// ── F3) La entrevista: qué falta preguntar antes de escribir ──────────────────────────────
+export type ResultadoEntrevista = { ok: true; preguntas: Pregunta[] };
+
+/**
+ * ≤ 3 preguntas rápidas, o ninguna. La heurística (sin modelo) decide si vale la pena
+ * preguntar; sólo entonces se paga la llamada. Las preguntas que esta marca "ya sabe"
+ * (misma respuesta ≥ 4 de las últimas 10 veces) no se hacen.
+ */
+export async function entrevistar(raw: InputGenerar): Promise<ResultadoEntrevista | Fail> {
+  const g = await gate();
+  if ("ok" in g) return g;
+  const inp = normalizar(raw);
+  if ("ok" in inp) return inp;
+  // La heurística va ANTES de tocar la BD: cuando la idea ya lo dice todo, la llamada es gratis.
+  const roles = new Set(inp.refs.map((r) => r.role));
+  const refsFaltan = REFS_POR_JOB[inp.job].some((s) => !s.opcional && !roles.has(s.role));
+  const chipsLook = Object.values(inp.look).filter((v) => v && v.trim()).length;
+  const refsConDna = inp.refs.filter((r) => !!r.dna).length;
+  if (!necesitaEntrevista({ idea: inp.idea, refsFaltan, chipsLook, refsConDna, sinPreguntas: !!inp.sinPreguntas })) return { ok: true, preguntas: [] };
+  // Cubo propio: ir y volver entre el paso 1 y el 2 nunca gasta el cupo de generar.
+  if (saturado(g.soyId, Date.now(), "entrevista", 20)) return FRENO;
+  const ent = await entradaDe(inp);
+  if ("ok" in ent) return ent;
+  const db = supabaseAdmin();
+  const aprendizaje = ent.clientId ? await cargarAprendizaje(db, ent.clientId, inp.job) : null;
+  const r = await preguntarFaltante(ent.entrada, aprendizaje?.yaSabidas ?? []);
+  if (!r.ok) return r;
+  return { ok: true, preguntas: r.preguntas };
 }

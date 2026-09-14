@@ -1,5 +1,44 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-14 (6) — HÜE Prisma v1 · FASE 3: la entrevista (rama `prisma`, SIN migración)
+Pedro: "ok lets start then" (tras acordar la Fase 6 "Vigía" y los plegados de la Fase 5 en el plan). Plan §2.
+- [x] **`lib/prisma/entrevista.ts`** (puro): `necesitaEntrevista` (sin modelo: < 8 palabras siempre pregunta; ≥ 25 + refs +
+      ≥ 3 chips de look no pregunta; "sin preguntas" manda), `sanearPreguntas` (ids del enum, 2–4 opciones, tope 3, omite
+      las que la marca ya sabe), `sanearRespuestas` (una línea, 120 letras, campo del enum), `aplicarRespuestas` (llena
+      luz/movimiento/lente/mood/estilo/duración/formato/idioma desde el CÓDIGO, sólo lo vacío), `detalleRespuestas`/`pares`.
+- [x] **H.Ü.E pregunta** (`preguntarFaltante`, tool_use `emitir_preguntas`, `bloqueEntrevista` corto sin caché) → acción
+      `entrevistar(input)`: gate → normalizar → heurística → (sólo si hace falta) freno + modelo; las ids "sabidas" de la
+      marca no se preguntan. Smoke real: idea "la tarjeta en una mesa" → ángulo / fondo / luz con chips; con `yaSabidas`
+      → ninguna. ≈ US$0.005 por entrevista.
+- [x] **Al writer**: `DESIGNER ANSWERS` con cada `<answer about="id">` cercada, antes de la orden final; las respuestas con
+      campo ya llegan aplicadas al look/duración/formato/idioma. Guardadas en `prisma_specs.respuestas` + evento
+      `respondido` (`id=valor; …`). **Aprende**: `patronRespuestas` (misma respuesta ≥ 4 de las últimas 10 → "esta marca
+      siempre contesta…" al writer y la pregunta deja de hacerse).
+- [x] **UI**: paso "entrevista" entre 1 y 2 (`components/prisma/entrevista.tsx`: chips + "Otra…", "Saltar", "Sin preguntas,
+      sorpréndeme (en este navegador)" en localStorage vía useSyncExternalStore, "Seguir con N respuesta(s)"); el botón
+      Siguiente del paso 1 muestra "H.Ü.E está viendo qué le falta…"; cero preguntas salta invisible al paso 2; al seguir,
+      las respuestas con campo aparecen como chips elegidos en el paso 2 (los valores que no están en la lista se ven como
+      chip); punto extra pulsante en la barra; `?demo=entrevista` (sólo dev) para ver la pantalla sin sesión.
+- [x] Tests: test-prisma 460 (+22): matriz de `necesitaEntrevista`, saneo (5 opciones → 4, id inventado fuera, campo raro
+      → null, sabidas fuera), respuestas, aplicarRespuestas, detalle/pares, DESIGNER ANSWERS cercado y antes de la orden,
+      patrón 4 de 5 sí / 3 de 5 no. Gates: tsc · lint · build · test-db 441 · isolation · actions. Navegador: paso 1 →
+      spinner → paso 2 (sin sesión); `?demo=entrevista` → contestar 2 → "Seguir con 2 respuesta(s)" → los chips del look
+      traen las respuestas.
+- [x] Reap (Opus seguridad + Sonnet salud) → arreglado: separadores fuera del `detalle` + `pares()` sólo ids conocidas +
+      tope y cerca `<known>`/`<learned>`; el gate de "bloquea" usa los valores ya aplicados; cubo propio para la entrevista
+      (20/10 min) y para visión (30); la heurística corre ANTES de tocar la BD; recorte seguro de emojis (`recortar`);
+      los `respondido` con su propia ventana; la heurística usa lo que existe en el paso 1 (idea + refs + ADN; los chips
+      del look sólo si ya se eligieron); el servidor sólo aplica respuestas al look (formato/duración/idioma los decide el
+      wizard); "la marca lo sabe" exige 2 personas (o 6 veces de una); 1,600 tokens para preguntas; un solo `armarInput`;
+      "Regresar" en la entrevista; título sin número fijo; error crudo de visión sólo al log.
+- [x] Gates finales: tsc · lint · build · test-prisma 473 · test-db 441 · isolation · actions. Commit + push a `prisma`.
+### Verificación F3 (Pedro, preview con login)
+- Idea corta ("la tarjeta en una mesa") + Siguiente → aparecen 2–3 preguntas con chips; contesta y sigue → el look trae las
+  respuestas; el prompt las respeta. Idea larga con referencias y 3 chips de look → no pregunta nada.
+- "Sin preguntas, sorpréndeme" → no vuelve a preguntar en ese navegador; en el paso 2 hay un enlace para reactivarlas.
+- Tras 4 generaciones de la misma marca contestando igual una pregunta, deja de hacerla.
+
+
 ## 🟢 2026-09-11 (5) — HÜE Prisma v1 · FASE 2: diagnóstico + ortografía (rama `prisma`, SIN migración)
 Pedro: "yes and also add a grammar check specially when user writes text to make sure accents, and grammar are correct both in
 english and spanish". Plan §3 + la ortografía como UN aviso más.

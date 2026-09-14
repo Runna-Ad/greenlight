@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Clapperboard, Cpu, ImageIcon, Languages, Loader2, Plus, Sparkles, Trash2, UserRound, Wand2, X } from "lucide-react";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChipSelect } from "@/components/intake/chip-select";
 import { cn } from "@/lib/utils";
-import { abrirSpec, generarPrompt, listarPersonajes, retirarPersonaje, type InputGenerar, revisarOrtografia } from "@/app/(app)/prisma/actions";
+import { abrirSpec, generarPrompt, listarPersonajes, retirarPersonaje, type InputGenerar, revisarOrtografia, entrevistar } from "@/app/(app)/prisma/actions";
 import {
   DESTINO_LABEL,
   JOB_HINT,
@@ -48,6 +48,8 @@ import { aplicarArreglo, avisoOrtografia, bloqueado, compilarReglas, diagnostica
 import { compilarFusion } from "@/lib/prisma/compilers/fusion";
 import type { Cambio } from "@/lib/prisma/ortografia";
 import { PanelAvisos, SugerenciaTexto } from "./avisos";
+import { Entrevista } from "./entrevista";
+import { aplicarRespuestas, type Pregunta, type Respuesta } from "@/lib/prisma/entrevista";
 import { useLang } from "./use-lang";
 import { RefUploader, type RefLocal } from "./ref-uploader";
 import { Resultado, type PromptVivo } from "./resultado";
@@ -59,7 +61,23 @@ import { aplicarFotoDePersonaje, slotParaFoto, type PersonajeUI } from "@/lib/pr
 export type MarcaUI = { id: string; name: string; client_id: string; client_name: string; preset: MarcaPreset };
 
 type Look = { luz: string | null; movimiento: string | null; lente: string | null; mood: string | null; estilo: string | null };
-type Paso = "inicio" | "job" | 1 | 2 | 3 | "resultado";
+type Paso = "inicio" | "job" | 1 | "entrevista" | 2 | 3 | "resultado";
+/** Preferencia local: el diseñador apagó la entrevista en este navegador. */
+const SIN_PREGUNTAS_KEY = "prisma:sin-preguntas";
+const leerSinPreguntas = (): boolean => {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(SIN_PREGUNTAS_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+// localStorage como "store externo": el servidor siempre ve false (sin desajuste de hidratación)
+// y el cliente lee el valor real sin un setState dentro de un efecto.
+const suscribirStorage = (cb: () => void) => {
+  window.addEventListener("storage", cb);
+  return () => window.removeEventListener("storage", cb);
+};
+const sinPreguntasServidor = () => false;
 
 const DESTINOS: Destino[] = ["ig_story", "ig_feed", "tiktok", "fb_ad", "yt", "web_banner", "print", "libre"];
 const KINDS: { kind: JobKind; icon: typeof ImageIcon }[] = [
@@ -92,14 +110,14 @@ function Chips({ titulo, opciones, valor, onChange, lang, permiteOtro = true }: 
  * HÜE Prisma — el estudio. Tres puertas → un trabajo → 3 pasos → resultado.
  * Etiquetas en palabras llanas; la jerga sólo aparece en el prompt final.
  */
-export function PrismaStudio({ marcas, historial, demo = null, verTodo = false, reglas = [] }: { marcas: MarcaUI[]; historial: ItemHistorialUI[]; demo?: PromptVivo | null; verTodo?: boolean; reglas?: ReglaCliente[] }) {
+export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = null, verTodo = false, reglas = [] }: { marcas: MarcaUI[]; historial: ItemHistorialUI[]; demo?: PromptVivo | null; /** Sólo dev (`?demo=entrevista`): arranca en la entrevista con estas preguntas. */ demoPreguntas?: Pregunta[] | null; verTodo?: boolean; reglas?: ReglaCliente[] }) {
   const router = useRouter();
   const [lang, setLang] = useLang();
 
   // `demo` (sólo dev) arranca directo en el resultado para poder verlo sin sesión.
-  const [paso, setPaso] = useState<Paso>(demo ? "resultado" : "inicio");
+  const [paso, setPaso] = useState<Paso>(demo ? "resultado" : demoPreguntas ? "entrevista" : "inicio");
   const [kind, setKind] = useState<JobKind | null>(null);
-  const [job, setJob] = useState<JobType | null>(null);
+  const [job, setJob] = useState<JobType | null>(demoPreguntas ? "foto_producto" : null);
   const [idea, setIdea] = useState("");
   const [texto, setTexto] = useState("");
   const [refs, setRefs] = useState<Partial<Record<RefRole, RefLocal | null>>>({});
@@ -136,6 +154,14 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false, 
   const [avisosAplicados, setAvisosAplicados] = useState<string[]>([]);
   /** El prompt de fusión (dos refs → una) cuando el arreglo lo pide. */
   const [fusion, setFusion] = useState<string | null>(null);
+  /** F3: la entrevista — preguntas de H.Ü.E, respuestas (id → valor), y si se apagó en este navegador. */
+  const [preguntas, setPreguntas] = useState<Pregunta[]>(demoPreguntas ?? []);
+  const [respuestas, setRespuestas] = useState<Record<string, string>>({});
+  const [preguntando, setPreguntando] = useState(false);
+  const sinPreguntasGuardado = useSyncExternalStore(suscribirStorage, leerSinPreguntas, sinPreguntasServidor);
+  // Lo que se cambia en ESTA pestaña manda sobre lo guardado (el evento storage no se dispara en la misma pestaña).
+  const [sinPreguntasLocal, setSinPreguntasLocal] = useState<boolean | null>(null);
+  const sinPreguntas = sinPreguntasLocal ?? sinPreguntasGuardado;
   // Último valor revisado por campo: no se vuelve a llamar a H.Ü.E por el mismo texto.
   const ultimoRevisado = useRef<{ texto: string; dialogo: string }>({ texto: "", dialogo: "" });
   const [generando, setGenerando] = useState(false);
@@ -346,6 +372,8 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false, 
     setFusion(null);
     setTexto("");
     ultimoRevisado.current = { texto: "", dialogo: "" };
+    setPreguntas([]);
+    setRespuestas({});
     setVivo(null);
   };
 
@@ -372,29 +400,92 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false, 
     setAvisosAplicados([]);
     setFusion(null);
     ultimoRevisado.current = { texto: "", dialogo: "" };
+    setPreguntas([]);
+    setRespuestas({});
     setPaso(1);
+  };
+
+  /** El input del servidor se arma en UN sitio: entrevistar y generar mandan lo mismo. */
+  const armarInput = (j: JobType, t: Tool): InputGenerar => ({
+    job: j,
+    tool: t,
+    idea,
+    destino,
+    aspect,
+    duracion: duracionEfectiva,
+    refs: refsLista.map((r) => ({ role: r.role, storage_path: r.storage_path, caption: r.caption, dna: r.dna })),
+    look,
+    dialogo: dialogo.trim() ? { texto: dialogo, idioma: idiomaDialogoActual, voz: voz.trim() || null } : null,
+    marcaId,
+    personajeId,
+    videoType: video ? videoType : null,
+    texto: texto.trim() || null,
+    avisosAplicados,
+    respuestas: respuestasLista(),
+    sinPreguntas,
+  });
+
+  /** Del paso 1 al 2 pasando (o no) por la entrevista: H.Ü.E decide sin modelo cuando la idea ya lo dice todo. */
+  const irAlLook = async () => {
+    if (!job || !tool) return;
+    if (sinPreguntas) return setPaso(2);
+    setPreguntando(true);
+    try {
+      const r = await entrevistar(armarInput(job, tool));
+      if (!r.ok) {
+        // La entrevista es opcional: si falla (freno, red), se sigue sin preguntas.
+        setPaso(2);
+        return;
+      }
+      if (!r.preguntas.length) {
+        setPaso(2);
+        return;
+      }
+      setPreguntas(r.preguntas);
+      setRespuestas({});
+      setPaso("entrevista");
+    } catch {
+      setPaso(2);
+    } finally {
+      setPreguntando(false);
+    }
+  };
+  /** Las respuestas ya en forma de viaje (sólo las contestadas). */
+  const respuestasLista = (): Respuesta[] => preguntas.filter((p) => respuestas[p.id]).map((p) => ({ id: p.id, valor: respuestas[p.id], campo: p.campo }));
+  /** "Seguir": las respuestas con campo llenan los chips del look aquí mismo (y el servidor las
+   *  vuelve a aplicar, idempotente): el diseñador ve en el paso 2 lo que acaba de contestar. */
+  const seguirEntrevista = () => {
+    const con = aplicarRespuestas({ look, duracion, aspect, dialogoIdioma: dialogoLang }, respuestasLista());
+    setLook(con.look);
+    if (con.duracion !== duracion) setDuracion(con.duracion);
+    if (con.aspect !== aspect) setAspectOverride(con.aspect);
+    if (con.dialogoIdioma && !dialogoLang) setDialogoLang(con.dialogoIdioma as "es-MX" | "en");
+    setPaso(2);
+  };
+  const apagarPreguntas = () => {
+    try {
+      window.localStorage.setItem(SIN_PREGUNTAS_KEY, "1");
+    } catch {
+      // sin localStorage (modo privado): sólo esta sesión
+    }
+    setSinPreguntasLocal(true);
+    setPreguntas([]);
+    setRespuestas({});
+    setPaso(2);
+  };
+  const encenderPreguntas = () => {
+    try {
+      window.localStorage.removeItem(SIN_PREGUNTAS_KEY);
+    } catch {
+      // idem
+    }
+    setSinPreguntasLocal(false);
   };
 
   const generar = async () => {
     if (!job || !tool || bloqueo) return;
     setGenerando(true);
-    const idiomaDialogo = dialogoLang ?? (lang === "en" ? "en" : "es-MX");
-    const input: InputGenerar = {
-      job,
-      tool,
-      idea,
-      destino,
-      aspect,
-      duracion: duracionEfectiva,
-      refs: refsLista.map((r) => ({ role: r.role, storage_path: r.storage_path, caption: r.caption, dna: r.dna })),
-      look,
-      dialogo: dialogo.trim() ? { texto: dialogo, idioma: idiomaDialogo, voz: voz.trim() || null } : null,
-      marcaId,
-      personajeId,
-      videoType: video ? videoType : null,
-      texto: texto.trim() || null,
-      avisosAplicados,
-    };
+    const input = armarInput(job, tool);
     // try/finally: si la llamada REVIENTA (red), el botón no se queda en "Generando…".
     let r: Awaited<ReturnType<typeof generarPrompt>>;
     try {
@@ -431,9 +522,11 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false, 
   };
 
   // Opción "sugerido desde tus referencias" para un swatch, si hay ADN.
-  const conSugerido = (base: Swatch[], sugerido: string | null): { value: string; label: string }[] => {
+  const conSugerido = (base: Swatch[], sugerido: string | null, actual: string | null = null): { value: string; label: string }[] => {
     const opts = base.map((s) => ({ value: s.valor, label: tx(s.label, lang) }));
     if (sugerido && !opts.some((o) => o.value === sugerido)) opts.unshift({ value: sugerido, label: `${tx(UI.sugeridoDeTusRefs, lang)}: ${sugerido}` });
+    // Lo que ya está elegido y no es un chip de la lista (respuesta de la entrevista, "otro…") se ve como chip.
+    if (actual && !opts.some((o) => o.value === actual)) opts.unshift({ value: actual, label: actual });
     return opts;
   };
 
@@ -522,21 +615,21 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false, 
           )}
 
           {/* PASOS 1-3 */}
-          {typeof paso === "number" && job && (
+          {(typeof paso === "number" || paso === "entrevista") && job && (
             <section key={`paso-${paso}`} className="p-enter rounded-2xl border border-border bg-card p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">{tx(JOB_LABEL[job], lang)}</p>
                   <h2 ref={tituloRef} tabIndex={-1} className="text-lg font-semibold text-foreground outline-none">
-                    {paso === 1 ? tx(UI.paso1, lang) : paso === 2 ? tx(UI.paso2, lang) : tx(UI.paso3, lang)}
+                    {paso === 1 ? tx(UI.paso1, lang) : paso === "entrevista" ? tx(UI.entrevistaTitulo, lang) : paso === 2 ? tx(UI.paso2, lang) : tx(UI.paso3, lang)}
                   </h2>
                 </div>
                 <p className="sr-only" aria-live="polite">
-                  {tx(UI.pasoDe, lang)} {paso} {tx(UI.de, lang)} 3
+                  {tx(UI.pasoDe, lang)} {paso === "entrevista" ? "1½" : paso} {tx(UI.de, lang)} 3
                 </p>
                 <ol className="flex items-center gap-1.5" aria-hidden="true">
-                  {[1, 2, 3].map((n) => (
-                    <li key={n} className={cn("h-2 rounded-full transition-all duration-300", n === paso ? "w-6 bg-primary" : n < paso ? "w-2 bg-primary/40" : "w-2 bg-border")} aria-current={n === paso ? "step" : undefined} />
+                  {[1, ...(paso === "entrevista" ? ["e" as const] : []), 2, 3].map((n) => (
+                    <li key={n} className={cn("h-2 rounded-full transition-all duration-300", n === "e" ? "w-4 animate-pulse bg-primary" : n === paso ? "w-6 bg-primary" : (paso === "entrevista" ? n < 2 : n < (paso as number)) ? "w-2 bg-primary/40" : "w-2 bg-border")} aria-current={n === paso || (n === "e" && paso === "entrevista") ? "step" : undefined} />
                   ))}
                 </ol>
               </div>
@@ -576,13 +669,31 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false, 
                 </div>
               )}
 
+              {paso === "entrevista" && (
+                <Entrevista
+                  preguntas={preguntas}
+                  respuestas={respuestas}
+                  lang={lang}
+                  onCambio={(id, valor) => setRespuestas((prev) => { const n = { ...prev }; if (valor) n[id] = valor; else delete n[id]; return n; })}
+                  onSeguir={seguirEntrevista}
+                  onSaltar={() => { setRespuestas({}); setPaso(2); }}
+                  onSinPreguntas={apagarPreguntas}
+                  onAtras={() => setPaso(1)}
+                />
+              )}
+
               {paso === 2 && (
                 <div className="space-y-5">
-                  <Chips lang={lang} titulo={tx(UI.luz, lang)} opciones={conSugerido(SWATCHES_LUZ, dnaPrincipal?.luz ?? null)} valor={look.luz} onChange={(v) => setLook((l) => ({ ...l, luz: v }))} />
-                  {video && <Chips lang={lang} titulo={tx(UI.camara, lang)} opciones={conSugerido(SWATCHES_CAMARA, null)} valor={look.movimiento} onChange={(v) => setLook((l) => ({ ...l, movimiento: v }))} />}
-                  <Chips lang={lang} titulo={lang === "es" ? "Lente" : "Lens"} opciones={conSugerido(SWATCHES_LENTE, dnaPrincipal?.lente ?? null)} valor={look.lente} onChange={(v) => setLook((l) => ({ ...l, lente: v }))} />
-                  <Chips lang={lang} titulo={tx(UI.mood, lang)} opciones={conSugerido(SWATCHES_MOOD, dnaPrincipal?.mood ?? null)} valor={look.mood} onChange={(v) => setLook((l) => ({ ...l, mood: v }))} />
-                  <Chips lang={lang} titulo={tx(UI.estilo, lang)} opciones={conSugerido(SWATCHES_ESTILO, null)} valor={look.estilo} onChange={(v) => setLook((l) => ({ ...l, estilo: v }))} />
+                  {sinPreguntas && (
+                    <button type="button" onClick={encenderPreguntas} className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+                      {tx(UI.conPreguntas, lang)}
+                    </button>
+                  )}
+                  <Chips lang={lang} titulo={tx(UI.luz, lang)} opciones={conSugerido(SWATCHES_LUZ, dnaPrincipal?.luz ?? null, look.luz)} valor={look.luz} onChange={(v) => setLook((l) => ({ ...l, luz: v }))} />
+                  {video && <Chips lang={lang} titulo={tx(UI.camara, lang)} opciones={conSugerido(SWATCHES_CAMARA, null, look.movimiento)} valor={look.movimiento} onChange={(v) => setLook((l) => ({ ...l, movimiento: v }))} />}
+                  <Chips lang={lang} titulo={lang === "es" ? "Lente" : "Lens"} opciones={conSugerido(SWATCHES_LENTE, dnaPrincipal?.lente ?? null, look.lente)} valor={look.lente} onChange={(v) => setLook((l) => ({ ...l, lente: v }))} />
+                  <Chips lang={lang} titulo={tx(UI.mood, lang)} opciones={conSugerido(SWATCHES_MOOD, dnaPrincipal?.mood ?? null, look.mood)} valor={look.mood} onChange={(v) => setLook((l) => ({ ...l, mood: v }))} />
+                  <Chips lang={lang} titulo={tx(UI.estilo, lang)} opciones={conSugerido(SWATCHES_ESTILO, null, look.estilo)} valor={look.estilo} onChange={(v) => setLook((l) => ({ ...l, estilo: v }))} />
                 </div>
               )}
 
@@ -748,13 +859,19 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false, 
                 </div>
               )}
 
-              {/* Navegación del paso */}
+              {/* Navegación del paso (la entrevista trae sus propios botones) */}
+              {paso !== "entrevista" && (
               <div className="mt-6 flex items-center justify-between gap-2">
-                <Button variant="ghost" onClick={() => (paso === 1 ? setPaso("job") : setPaso((paso - 1) as Paso))}>
+                <Button variant="ghost" onClick={() => (paso === 1 ? setPaso("job") : setPaso((paso - 1) as Paso))} disabled={preguntando}>
                   <ArrowLeft className="size-4" /> {tx(UI.atras, lang)}
                 </Button>
-                {paso < 3 ? (
-                  <Button onClick={() => setPaso((paso + 1) as Paso)} disabled={paso === 1 && !paso1Listo}>
+                {paso === 1 ? (
+                  <Button onClick={() => void irAlLook()} disabled={!paso1Listo || preguntando} aria-busy={preguntando} className="min-w-[160px]">
+                    {preguntando ? <Loader2 className="size-4 animate-spin" /> : null}
+                    {preguntando ? tx(UI.entrevistando, lang) : tx(UI.siguiente, lang)} {!preguntando && <ArrowRight className="size-4" />}
+                  </Button>
+                ) : paso < 3 ? (
+                  <Button onClick={() => setPaso((paso + 1) as Paso)}>
                     {tx(UI.siguiente, lang)} <ArrowRight className="size-4" />
                   </Button>
                 ) : (
@@ -764,6 +881,7 @@ export function PrismaStudio({ marcas, historial, demo = null, verTodo = false, 
                   </Button>
                 )}
               </div>
+              )}
             </section>
           )}
 

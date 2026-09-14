@@ -6,7 +6,8 @@ import { cercado, plano } from "@/lib/prisma/texto";
 import { compilar, type Salida } from "@/lib/prisma/compilers";
 import { validar } from "@/lib/prisma/validators";
 import { PRESETS_HIGGSFIELD } from "@/lib/prisma/compilers/higgsfield";
-import { BLOQUE_ESTABLE, bloqueEstableCon, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueVariante, bloqueExplicar, bloqueDescribirPersonaje, bloqueJuicio, bloqueCorreccion, AVISOS_SCHEMA, CORRECCION_SCHEMA, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje, type NotaTool } from "@/lib/prisma/prompts/writer";
+import { BLOQUE_ESTABLE, bloqueEstableCon, bloqueVariable, bloqueReparacion, bloqueRefinar, bloqueVariante, bloqueExplicar, bloqueDescribirPersonaje, bloqueJuicio, bloqueCorreccion, bloqueEntrevista, AVISOS_SCHEMA, CORRECCION_SCHEMA, PREGUNTAS_SCHEMA, PROMPT_VERSION, type EntradaWriter, type EntradaPersonaje, type NotaTool } from "@/lib/prisma/prompts/writer";
+import { sanearPreguntas, type Pregunta } from "@/lib/prisma/entrevista";
 import type { Aviso } from "@/lib/prisma/diagnostico";
 import type { Cambio, Idioma } from "@/lib/prisma/ortografia";
 import type { PrismaVariante } from "@/lib/database.types";
@@ -343,6 +344,29 @@ export async function revisarTexto(texto: string, idioma: Idioma, campo: "texto"
     return { ok: true, corregido: igual ? texto : corregido, cambios: igual ? [] : cambios, usage: usoDe(res) };
   } catch (err) {
     console.error("[prisma] revisarTexto:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "H.Ü.E no respondió. Inténtalo otra vez." };
+  }
+}
+
+/** F3: qué preguntar antes de escribir (≤ 3). Saneado a la vuelta; nunca lanza. */
+export async function preguntarFaltante(e: EntradaWriter, yaSabidas: string[]): Promise<{ ok: true; preguntas: Pregunta[]; usage: Uso } | { ok: false; error: string }> {
+  try {
+    const client = new Anthropic();
+    const res = await client.messages.create({
+      model: MODEL,
+      // 3 preguntas × 4 opciones × 3 textos: el mismo tope que el juicio (con 900 se cortaba).
+      max_tokens: 1600,
+      thinking: { type: "disabled" },
+      tools: [{ name: "emitir_preguntas", description: "Report the questions still worth asking (or none).", input_schema: PREGUNTAS_SCHEMA as unknown as Anthropic.Tool["input_schema"] }],
+      tool_choice: { type: "tool", name: "emitir_preguntas" },
+      messages: [{ role: "user", content: bloqueEntrevista(e, yaSabidas) }],
+    });
+    const bloque = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    if (!bloque || res.stop_reason === "max_tokens") console.warn(`[prisma] preguntarFaltante: ${bloque ? "cortado por max_tokens" : "sin tool_use"} (stop_reason=${res.stop_reason})`);
+    const lista = (bloque?.input as { preguntas?: unknown } | undefined)?.preguntas;
+    return { ok: true, preguntas: sanearPreguntas(lista, yaSabidas), usage: usoDe(res) };
+  } catch (err) {
+    console.error("[prisma] preguntarFaltante:", err instanceof Error ? err.message : err);
     return { ok: false, error: "H.Ü.E no respondió. Inténtalo otra vez." };
   }
 }

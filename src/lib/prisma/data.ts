@@ -115,7 +115,7 @@ export async function cargarAprendizaje(db: Db, clientId: string, job: JobType):
   const desde = new Date(Date.now() - DIAS_APRENDIZAJE * 86400e3).toISOString();
   type Fila = { id: string; spec_id: string; tool: string; variante: string; salida: string; valido: boolean; prisma_specs: { client_id: string | null; job: string }; prisma_ratings: { prompt_id: string; score: number }[] | null };
   // Las dos consultas no dependen entre sí: en paralelo (está en el camino caliente de generar).
-  const [ev, pr] = await Promise.all([
+  const [ev, pr, resp] = await Promise.all([
     db
       .from("prisma_eventos")
       .select("spec_id, prompt_id, job, tool, variante, tipo, detalle, created_at")
@@ -134,6 +134,16 @@ export async function cargarAprendizaje(db: Db, clientId: string, job: JobType):
       .order("created_at", { ascending: false })
       .limit(60)
       .returns<Fila[]>(),
+    // Las respuestas de la entrevista van aparte: con su propia ventana no desplazan a los ganadores.
+    db
+      .from("prisma_eventos")
+      .select("spec_id, prompt_id, job, tool, variante, tipo, detalle, created_at, user_id")
+      .eq("client_id", clientId)
+      .eq("tipo", "respondido")
+      .gte("created_at", desde)
+      .order("created_at", { ascending: false })
+      .limit(60)
+      .returns<EventoRow[]>(),
   ]);
   if (ev.error) {
     console.warn(`[prisma] aprendizaje sin eventos (¿falta la 0066?): ${ev.error.message}`);
@@ -148,7 +158,7 @@ export async function cargarAprendizaje(db: Db, clientId: string, job: JobType):
   const filas = (pr.data ?? []).filter((f) => f.prisma_specs?.client_id === clientId);
   const prompts: PromptCandidato[] = filas.map((f) => ({ id: f.id, spec_id: f.spec_id, job: f.prisma_specs.job, tool: f.tool, variante: f.variante, salida: f.salida, valido: f.valido }));
   const votos: Voto[] = filas.flatMap((f) => f.prisma_ratings ?? []);
-  return resumirAprendizaje(job, ev.data ?? [], prompts, votos);
+  return resumirAprendizaje(job, [...(ev.data ?? []), ...(resp.error ? [] : (resp.data ?? []))], prompts, votos);
 }
 
 export type ReglasCargadas = { filas: PrismaReglaRow[]; notas: NotaTool[]; clave: string };
