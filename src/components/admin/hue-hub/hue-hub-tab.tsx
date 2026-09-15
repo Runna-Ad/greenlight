@@ -5,7 +5,7 @@ import { BarChart3, GraduationCap, Sparkles, type LucideIcon } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { HueIntelligence } from "./hue-intelligence";
 import { HueTraining } from "./hue-training";
-import { PrismaReglas } from "./prisma-reglas";
+import { PrismaHub } from "./prisma-hub";
 
 /**
  * El H.Ü.E HUB (master-only). Tres áreas: Inteligencia (analítica de "qué está
@@ -30,7 +30,7 @@ export function HueHubTab() {
         <SubTab active={sub === "prisma"} onClick={() => setSub("prisma")} icon={Sparkles} label="Prisma" />
       </div>
 
-      {sub === "intel" ? <HueIntelligence /> : sub === "entrenar" ? <HueTraining /> : <PrismaReglas />}
+      {sub === "intel" ? <HueIntelligence /> : sub === "entrenar" ? <HueTraining /> : <PrismaHub />}
     </div>
   );
 }

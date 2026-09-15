@@ -14,7 +14,7 @@ import { listaDe, objetoDe } from "./json.ts";
 export const PREGUNTA_IDS = ["angulo", "personas", "fondo", "texto", "ritmo", "voz", "producto", "luz", "otro"] as const;
 export type PreguntaId = (typeof PREGUNTA_IDS)[number];
 /** Campos que el CÓDIGO llena con la respuesta (los demás viajan sólo como texto al writer). */
-export const CAMPOS_RESPUESTA = ["luz", "movimiento", "lente", "mood", "estilo", "duracion", "aspect", "dialogo.idioma"] as const;
+export const CAMPOS_RESPUESTA = ["luz", "movimiento", "lente", "angulo", "mood", "estilo", "duracion", "aspect", "dialogo.idioma"] as const;
 export type CampoRespuesta = (typeof CAMPOS_RESPUESTA)[number];
 
 export type Opcion = { valor: string; label: Par };
@@ -100,7 +100,7 @@ export function sanearRespuestas(raw: unknown): Respuesta[] {
   return out;
 }
 
-export type LookEntrada = { luz: string | null; movimiento: string | null; lente: string | null; mood: string | null; estilo: string | null };
+export type LookEntrada = { luz: string | null; movimiento: string | null; lente: string | null; angulo?: string | null; mood: string | null; estilo: string | null };
 
 /** Las respuestas con `campo` llenan el wizard desde el CÓDIGO (no se depende del modelo).
  *  Sólo pisa lo que estaba vacío: lo que el diseñador ya eligió a mano manda.
@@ -112,7 +112,7 @@ export function aplicarRespuestas(base: { look: LookEntrada; duracion: number | 
   let { duracion, aspect, dialogoIdioma } = base;
   for (const r of respuestas) {
     switch (r.campo) {
-      case "luz": case "movimiento": case "lente": case "mood": case "estilo":
+      case "luz": case "movimiento": case "lente": case "angulo": case "mood": case "estilo":
         if (!look[r.campo]) look[r.campo] = r.valor;
         break;
       case "duracion": {

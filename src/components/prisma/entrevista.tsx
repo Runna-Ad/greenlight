@@ -20,8 +20,8 @@ export function Entrevista({ preguntas, respuestas, lang, onCambio, onSeguir, on
         <span>{tx(UI.entrevistaIntro, lang).replace("{n}", String(preguntas.length))}</span>
       </p>
       {preguntas.map((p, i) => (
-        <div key={p.id}>
-          <p className="mb-1.5 text-sm font-medium text-foreground">
+        <div key={p.id} role="group" aria-labelledby={`prisma-pregunta-${p.id}`}>
+          <p id={`prisma-pregunta-${p.id}`} className="mb-1.5 text-sm font-medium text-foreground">
             <span className="mr-1.5 text-xs text-muted-foreground">{i + 1}.</span>
             {tx(p.pregunta, lang)}
           </p>
@@ -35,6 +35,7 @@ export function Entrevista({ preguntas, respuestas, lang, onCambio, onSeguir, on
           />
         </div>
       ))}
+      <p className="sr-only" aria-live="polite">{contestadas} / {preguntas.length}</p>
       <button type="button" onClick={onSinPreguntas} className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
         {tx(UI.sinPreguntas, lang)}
       </button>

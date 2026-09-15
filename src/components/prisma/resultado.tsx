@@ -6,18 +6,18 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { cambiarHerramienta, calificar, explicar, refinarPrompt, registrarEvento, revisarBien, variar } from "@/app/(app)/prisma/actions";
+import { adaptarFormato, cambiarHerramienta, calificar, explicar, refinarPrompt, registrarEvento, revisarBien, variar } from "@/app/(app)/prisma/actions";
 import { PanelAvisos } from "./avisos";
 import { ComoSalio } from "./como-salio";
 import type { ResultadoVivo } from "@/lib/prisma/resultado";
 import type { ResultadoCorregir } from "@/app/(app)/prisma/resultado-actions";
 import { compilarFusion } from "@/lib/prisma/compilers/fusion";
 import type { Aviso } from "@/lib/prisma/diagnostico";
-import { PEDIR_VERSION_LABEL, TOOL_LABEL, UI, VARIANTE_LABEL, tx, type Lang, type Par } from "@/lib/prisma/copy";
+import { DESTINO_LABEL, PEDIR_VERSION_LABEL, TOOL_LABEL, UI, VARIANTE_LABEL, tx, type Lang, type Par } from "@/lib/prisma/copy";
 import type { PrismaVariante } from "@/lib/database.types";
 import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
 import { pistasModelo, recomendarModelo } from "@/lib/prisma/modelo";
-import type { PromptSpec, Tool } from "@/lib/prisma/spec";
+import { DESTINOS, JOB_KIND, type Destino, type PromptSpec, type Tool } from "@/lib/prisma/spec";
 import type { Salida } from "@/lib/prisma/compilers";
 import { prismaGeneracionActiva } from "@/lib/prisma/flags";
 
@@ -60,7 +60,7 @@ const anotar = (promptId: string, tipo: "copiado" | "abierto") => {
  * Abrir en la herramienta, cambiar de herramienta (recompila sin modelo), explicar,
  * refinar y calificar. Sin dead-ends: siempre hay "Nueva idea".
  */
-export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo; lang: Lang; onCambio: (v: PromptVivo) => void; onNueva: () => void }) {
+export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false, onJuzgar }: { vivo: PromptVivo; lang: Lang; onCambio: (v: PromptVivo) => void; onNueva: () => void; /** F5a: el juicio de H.Ü.E corre en segundo plano para ESTE prompt. */ juicioEnCurso?: boolean; /** F5a: pedir el juicio en segundo plano para un prompt nuevo (video). */ onJuzgar?: (promptId: string) => void }) {
   const [copiado, setCopiado] = useState(false);
   const [explicacion, setExplicacion] = useState<string | null>(null);
   const [verExplicacion, setVerExplicacion] = useState(false);
@@ -74,20 +74,23 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
   const [juzgando, setJuzgando] = useState(false);
   const [juzgado, setJuzgado] = useState(false);
   const [fusion, setFusion] = useState<string | null>(null);
+  const [adaptando, setAdaptando] = useState<Destino | null>(null);
 
   const info = TOOL_INFO[vivo.tool];
+  const esVideoJob = JOB_KIND[vivo.spec.job] === "video";
+  const destinoActual: Destino = vivo.spec.destino ?? "libre";
   // "Úsalo en…": puro y en el cliente; el servidor guarda el mismo cálculo (sobre el spec
   // resultante) en prisma_prompts.modelo_sug para medir si se sigue.
   const modelo = recomendarModelo(pistasModelo(vivo.spec, vivo.tool));
   const otras = TOOLS_POR_JOB[vivo.spec.job].filter((t) => t !== vivo.tool);
   // Mientras CUALQUIER acción va al servidor, las demás esperan: dos respuestas cruzadas
   // (cambiar herramienta + otra versión) pisarían el resultado con un `vivo` viejo.
-  const ocupado = cambiando !== null || refinando || variando !== null || cargandoExp || aplicando !== null || juzgando;
+  const ocupado = cambiando !== null || refinando || variando !== null || cargandoExp || aplicando !== null || juzgando || juicioEnCurso || adaptando !== null;
   // Los avisos vienen del servidor; una fila de antes de F2 (o el demo) trae sólo `errores`.
   const avisos: Aviso[] = vivo.avisos ?? vivo.errores.map((e, i) => ({ codigo: `validador_${i + 1}`, nivel: "advierte", que: { es: e, en: e }, porque: null, arreglo: null, accion: null, fuente: null }));
   // El juicio de H.Ü.E ya corrió si hay avisos "hue_"; si no (imagen, o video tras cambiar de
   // herramienta, que recompila sin modelo), se ofrece "Revísalo bien".
-  const yaJuzgado = juzgado || avisos.some((a) => a.codigo.startsWith("hue_"));
+  const yaJuzgado = juzgado || juicioEnCurso || avisos.some((a) => a.codigo.startsWith("hue_"));
   // El demo (sólo dev) no tiene filas en la BD: nada que llame al servidor.
   const esDemo = vivo.specId === "demo";
   const IconoVersion = vivo.variante && vivo.variante !== "base" ? VERSIONES.find((x) => x.v === vivo.variante)?.Icon : undefined;
@@ -153,7 +156,23 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
     setVoto(null);
     setJuzgado(false);
     onCambio({ ...vivo, promptId: r.promptId, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, avisos: r.avisos, resultado: null });
+    if (esVideoJob) onJuzgar?.(r.promptId);
     return true;
+  };
+
+  /** F5a: el mismo prompt para OTRO destino, sin modelo: formato nuevo (y zona segura). */
+  const adaptar = async (d: Destino) => {
+    setAdaptando(d);
+    const r = await correr(() => adaptarFormato(vivo.specId, d), () => setAdaptando(null));
+    if (!r) return;
+    if (!r.ok) return toast.error(r.error);
+    setCambio("");
+    setExplicacion(null);
+    setVerExplicacion(false);
+    setVoto(null);
+    setJuzgado(false);
+    onCambio({ ...vivo, specId: r.specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null, avisos: r.avisos, correccion: false, resultado: null });
+    toast.success(tx(UI.adaptado, lang).replace("{d}", tx(DESTINO_LABEL[d], lang)));
   };
 
   /** F4: "Corregir este resultado" creó un spec hermano de edición: desde aquí todo actúa sobre él. */
@@ -239,6 +258,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
     // La versión es un spec hermano: desde aquí, refinar / cambiar herramienta / explicar actúan sobre ella.
     setJuzgado(false);
     onCambio({ ...vivo, specId: r.specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null, avisos: r.avisos, correccion: false, resultado: null });
+    if (esVideoJob) onJuzgar?.(r.promptId);
   };
 
   const votar = async (score: 1 | -1) => {
@@ -281,6 +301,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
             <span className="text-muted-foreground">{tx(modelo.porque, lang)}</span>
           </p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">{tx(modelo.comoLlegar, lang)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{tx(UI.formato, lang)}: {vivo.spec.aspect} · {tx(DESTINO_LABEL[destinoActual], lang)}</p>
           {/* Aprendizaje visible: el diseñador sabe que H.Ü.E ya "conoce" a esta marca. */}
           {vivo.aprendio && vivo.aprendio.ganadores > 0 && <p className="mt-0.5 text-xs text-muted-foreground">{tx(UI.aprendioDe, lang).replace("{n}", String(vivo.aprendio.ganadores))}</p>}
           {vivo.aprendio && vivo.aprendio.ganadores === 0 && vivo.aprendio.preferencias > 0 && <p className="mt-0.5 text-xs text-muted-foreground">{tx(UI.aprendioPref, lang)}</p>}
@@ -298,6 +319,11 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
       </div>
 
       {/* F2: un solo lenguaje de problemas (reglas, validador, ortografía, juicio de H.Ü.E). */}
+      {juicioEnCurso && (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground" aria-live="polite">
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> {tx(UI.revisandoJuicio, lang)}
+        </p>
+      )}
       <PanelAvisos avisos={avisos} lang={lang} titulo={tx(UI.avisosResultado, lang)} onArreglar={esDemo ? undefined : arreglar} aplicando={aplicando} />
       {fusion && (
         <div className="rounded-xl border border-border bg-card p-3">
@@ -397,6 +423,20 @@ export function Resultado({ vivo, lang, onCambio, onNueva }: { vivo: PromptVivo;
         onCorreccion={alCorregir}
         onRefinar={(texto) => refinarCon(texto, () => undefined)}
       />
+
+      {/* F5a: el mismo prompt para los demás destinos, sin modelo (formato + zona segura). */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <p className="text-sm font-medium text-foreground">{tx(UI.adaptarTitulo, lang)}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{tx(UI.adaptarAyuda, lang)}</p>
+        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={tx(UI.adaptarTitulo, lang)}>
+          {DESTINOS.filter((d) => d !== destinoActual).map((d) => (
+            <Button key={d} size="sm" variant="outline" onClick={() => adaptar(d)} disabled={ocupado || esDemo} aria-busy={adaptando === d}>
+              {adaptando === d ? <Loader2 className="size-4 animate-spin" /> : null}
+              {tx(DESTINO_LABEL[d], lang)}
+            </Button>
+          ))}
+        </div>
+      </div>
 
       {/* Otra versión, bajo demanda: una llamada más SÓLO si se pide (y el click le enseña a H.Ü.E). */}
       <div className="rounded-xl border border-border bg-card p-4">

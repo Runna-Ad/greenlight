@@ -246,6 +246,24 @@ export const UI = {
   cancelar: t("Cancelar", "Cancel"),
   validado: t("Listo para pegar en la herramienta", "Ready to paste into the tool"),
   conObservaciones: t("Con detalles por revisar", "Has details to review"),
+  // F5a: el Look rehecho
+  lookTitulo: t("Elige un look", "Pick a look"),
+  lookAyuda: t("Una receta completa: luz, lente, ángulo, ambiente y estilo. Abajo puedes ajustar una sola cosa.", "A complete recipe: light, lens, angle, mood and style. Below you can adjust a single thing."),
+  lookSugiere: t("H.Ü.E sugiere", "H.Ü.E suggests"),
+  lookPor: t("por «{p}»", "because of “{p}”"),
+  lookHabitual: t("Esta marca lo usa", "This brand uses it"),
+  lookElegido: t("Elegido", "Chosen"),
+  ajustar: t("Ajustar", "Adjust"),
+  ajustarAyuda: t("Cambia una sola cosa sin perder el resto.", "Change one thing without losing the rest."),
+  lookPersonalizado: t("Personalizado", "Custom"),
+  angulo: t("Ángulo", "Angle"),
+  lente: t("Lente", "Lens"),
+  adaptarTitulo: t("Adaptar a otros formatos", "Adapt to other formats"),
+  adaptarAyuda: t("El mismo prompt, recompilado para otro destino (formato y zona segura), sin volver a llamar a H.Ü.E.", "The same prompt, recompiled for another destination (format and safe zone), without calling H.Ü.E again."),
+  adaptando: t("Adaptando…", "Adapting…"),
+  adaptado: t("Listo para {d}.", "Ready for {d}."),
+  formato: t("Formato", "Format"),
+  revisandoJuicio: t("H.Ü.E está revisando el prompt…", "H.Ü.E is reviewing the prompt…"),
 } satisfies Record<string, Par>;
 
 export type UiKey = keyof typeof UI;
@@ -300,6 +318,97 @@ export const SWATCHES_LENTE: Swatch[] = [
   { valor: "100mm macro, extreme detail", label: t("Muy de cerca, cada detalle", "Very close, every detail") },
   { valor: "anamorphic, horizontal flares", label: t("De película, con destellos", "Movie look, with flares") },
 ];
+
+/** El ángulo de cámara, en palabras llanas (Pedro, 2026-09-14: "Desde arriba", no "Cenital"). */
+export const SWATCHES_ANGULO: Swatch[] = [
+  { valor: "eye level", label: t("Al nivel de los ojos", "Eye level") },
+  { valor: "top-down flat lay", label: t("Desde arriba", "From above") },
+  { valor: "45-degree angle from above", label: t("En ángulo, desde arriba", "Angled, from above") },
+  { valor: "low angle, looking up", label: t("Desde abajo", "From below") },
+  { valor: "straight-on, frontal", label: t("De frente", "Straight on") },
+];
+
+/** Valores que fijan los looks y que no están en las listas de arriba: su etiqueta llana, para
+ *  que una fila de "Ajustar" nunca enseñe la frase técnica en inglés. */
+export const ETIQUETA_VALOR: Record<string, Par> = {
+  "soft directional light from one side, rich shadows": t("Luz de lado suave, sombras ricas", "Soft side light, rich shadows"),
+  "hard direct sunlight, sharp long shadows": t("Sol duro, sombras largas", "Hard sun, long shadows"),
+  "bright even light, solid colored background": t("Luz pareja, fondo de color", "Even light, colored background"),
+  "studio HDRI light, soft reflections": t("Estudio 3D, reflejos suaves", "3D studio, soft reflections"),
+  "clean studio light, soft key from the front": t("Estudio, luz de frente", "Studio, front light"),
+  "bright airy daylight, soft": t("Día luminoso", "Bright daylight"),
+  "soft natural daylight": t("Luz natural de día", "Natural daylight"),
+  "flat, even, no shadows": t("Plana, sin sombras", "Flat, no shadows"),
+  "flat, even, graphic": t("Plana y gráfica", "Flat and graphic"),
+  "soft, diffuse": t("Suave y difusa", "Soft and diffuse"),
+  "clean studio light, soft shadow": t("Estudio, sombra suave", "Studio, soft shadow"),
+  "as in the reference": t("Como en la foto", "As in the photo"),
+  "natural daylight": t("Luz de día", "Daylight"),
+  "soft directional light, gentle shadows": t("Luz suave de un lado", "Soft light from one side"),
+  "warm tungsten light, slightly overexposed": t("Cálida de foco, un poco quemada", "Warm bulb light, a bit blown out"),
+  "85mm, everything sharp": t("De cerca, todo enfocado", "Close, all sharp"),
+  "50mm, natural perspective": t("Normal, como lo ve el ojo", "Normal, as the eye sees it"),
+  "50mm, everything sharp": t("Normal, todo enfocado", "Normal, all sharp"),
+  "50mm, film look": t("Normal, look analógico", "Normal, film look"),
+  "phone camera, wide": t("Cámara de celular", "Phone camera"),
+  "front phone camera, wide": t("Cámara frontal del celular", "Front phone camera"),
+  "old camcorder, soft": t("Cámara de video vieja", "Old camcorder"),
+  "slightly low angle": t("Un poco desde abajo", "Slightly from below"),
+  "high angle from above": t("Desde muy arriba", "From high above"),
+  "slightly above eye level": t("Un poco por encima de los ojos", "Slightly above the eyes"),
+  "warm, everyday, real": t("Cálido y cotidiano", "Warm and everyday"),
+  "clean, curated, calm": t("Limpio y ordenado", "Clean and curated"),
+  "bold, confident, graphic": t("Con presencia, gráfico", "Bold and graphic"),
+  "premium, tactile": t("Premium, se siente el material", "Premium, tactile"),
+  "clean, futuristic": t("Limpio y futurista", "Clean and futuristic"),
+  "natural, candid, real": t("Natural y real", "Natural and real"),
+  "confident, clean": t("Seguro y limpio", "Confident and clean"),
+  "bold, fashion, editorial": t("Con actitud, de revista", "Bold, editorial"),
+  "urban, energetic, moody": t("Urbano y con energía", "Urban and energetic"),
+  "nostalgic, warm": t("Nostálgico y cálido", "Nostalgic and warm"),
+  "natural, believable": t("Natural y creíble", "Natural and believable"),
+  "friendly, simple": t("Amable y simple", "Friendly and simple"),
+  "bold, punchy, modern": t("Fuerte y moderno", "Bold and modern"),
+  "gentle, artistic": t("Suave y artístico", "Gentle and artistic"),
+  "calm, natural": t("Tranquilo y natural", "Calm and natural"),
+  "premium, calm": t("Premium y tranquilo", "Premium and calm"),
+  "authentic, casual": t("Auténtico y casual", "Authentic and casual"),
+  "epic, expansive": t("Épico y abierto", "Epic and wide"),
+  "calm, tactile": t("Tranquilo, se siente la textura", "Calm and tactile"),
+  "friendly, direct": t("Cercano y directo", "Friendly and direct"),
+  "warm, natural": t("Cálido y natural", "Warm and natural"),
+  "dramatic, cinematic": t("Dramático, de película", "Dramatic, cinematic"),
+  "photorealistic lifestyle photo": t("Foto real, de estilo de vida", "Real lifestyle photo"),
+  "luxury still-life photography": t("Bodegón de lujo", "Luxury still life"),
+  "editorial flat lay photography": t("Flat lay editorial", "Editorial flat lay"),
+  "high-contrast advertising photo": t("Foto publicitaria de alto contraste", "High-contrast ad photo"),
+  "macro product photography": t("Foto macro de producto", "Macro product photo"),
+  "colorful pop advertising photo": t("Foto publicitaria pop", "Pop ad photo"),
+  "documentary photography": t("Foto documental", "Documentary photo"),
+  "studio portrait photography": t("Retrato de estudio", "Studio portrait"),
+  "cinematic street photography": t("Foto de calle, de cine", "Cinematic street photo"),
+  "bright lifestyle photography": t("Foto luminosa de estilo de vida", "Bright lifestyle photo"),
+  "bold graphic poster design": t("Cartel gráfico", "Graphic poster"),
+  "watercolor illustration on paper": t("Acuarela sobre papel", "Watercolor on paper"),
+  "minimalist photography": t("Foto minimalista", "Minimalist photo"),
+  "editorial photography": t("Foto editorial", "Editorial photo"),
+  "cinematic video": t("Video de cine", "Cinematic video"),
+  "product commercial": t("Comercial de producto", "Product commercial"),
+  "smartphone UGC video": t("Video de celular, real", "Phone-shot UGC video"),
+  "aerial cinematic video": t("Video aéreo de cine", "Aerial cinematic video"),
+  "ASMR macro video": t("Video ASMR macro", "ASMR macro video"),
+  "selfie vlog": t("Vlog selfie", "Selfie vlog"),
+  "old VHS home video": t("Video casero VHS", "VHS home video"),
+  "handheld selfie, natural shake": t("Selfie en mano", "Handheld selfie"),
+};
+
+/** La etiqueta llana de un valor técnico (swatch, valor de look o respuesta de la entrevista); si no
+ *  hay ninguna, el valor tal cual. */
+export function etiquetaValor(valor: string, lang: Lang, extra: Record<string, Par> = {}): string {
+  const swatch = [...SWATCHES_LUZ, ...SWATCHES_CAMARA, ...SWATCHES_LENTE, ...SWATCHES_ANGULO, ...SWATCHES_MOOD, ...SWATCHES_ESTILO].find((s) => s.valor === valor);
+  const par = swatch?.label ?? ETIQUETA_VALOR[valor] ?? extra[valor];
+  return par ? par[lang] : valor;
+}
 
 export const SWATCHES_MOOD: Swatch[] = [
   { valor: "premium, calm, elegant", label: t("Premium y tranquilo", "Premium and calm") },

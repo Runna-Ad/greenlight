@@ -71,7 +71,7 @@ function demoResultado(conVeredicto = false): PromptVivo | null {
 function demoEntrevista(): Pregunta[] | null {
   if (process.env.NODE_ENV !== "development") return null;
   return [
-    { id: "angulo", pregunta: { es: "¿Desde qué ángulo ves la tarjeta?", en: "From which angle do you see the card?" }, opciones: [{ valor: "top-down flat lay", label: { es: "Cenital", en: "Top-down" } }, { valor: "45-degree angle", label: { es: "En ángulo", en: "Angled" } }, { valor: "eye-level close-up", label: { es: "A nivel de ojos", en: "Eye level" } }], campo: "lente" },
+    { id: "angulo", pregunta: { es: "¿Desde qué ángulo ves la tarjeta?", en: "From which angle do you see the card?" }, opciones: [{ valor: "top-down flat lay", label: { es: "Cenital", en: "Top-down" } }, { valor: "45-degree angle", label: { es: "En ángulo", en: "Angled" } }, { valor: "eye-level close-up", label: { es: "A nivel de ojos", en: "Eye level" } }], campo: "angulo" },
     { id: "fondo", pregunta: { es: "¿Qué superficie de fondo?", en: "Which background surface?" }, opciones: [{ valor: "white marble counter", label: { es: "Mármol blanco", en: "White marble" } }, { valor: "light wood table", label: { es: "Madera clara", en: "Light wood" } }], campo: null },
     { id: "luz", pregunta: { es: "¿Qué luz quieres?", en: "Which light?" }, opciones: [{ valor: "soft morning window light", label: { es: "Ventana suave", en: "Soft window" } }, { valor: "bright studio light", label: { es: "Estudio", en: "Studio" } }], campo: "luz" },
   ];

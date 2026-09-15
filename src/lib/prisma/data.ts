@@ -6,6 +6,7 @@ import { presetDeMarca } from "@/lib/prisma/preset";
 import type { JobType } from "@/lib/prisma/spec";
 import { resumirAprendizaje, type Aprendizaje, type EventoRow, type PromptCandidato, type Voto } from "@/lib/prisma/aprendizaje";
 import { notasDe, type NotaTool } from "@/lib/prisma/reglas";
+import type { FilaHabito } from "@/lib/prisma/looks";
 import type { PrismaReglaRow } from "@/lib/database.types";
 
 /**
@@ -159,6 +160,22 @@ export async function cargarAprendizaje(db: Db, clientId: string, job: JobType):
   const prompts: PromptCandidato[] = filas.map((f) => ({ id: f.id, spec_id: f.spec_id, job: f.prisma_specs.job, tool: f.tool, variante: f.variante, salida: f.salida, valido: f.valido }));
   const votos: Voto[] = filas.flatMap((f) => f.prisma_ratings ?? []);
   return resumirAprendizaje(job, [...(ev.data ?? []), ...(resp.error ? [] : (resp.data ?? []))], prompts, votos);
+}
+
+/** F5a: las filas de look (luz, lente, ángulo, ambiente, estilo, movimiento) de los últimos specs
+ *  de un cliente → lo que la marca "suele usar" (looks.ts los cuenta). Nunca lanza. */
+export async function cargarHabitos(db: Db, clientId: string, limite = 60): Promise<FilaHabito[]> {
+  const { data, error } = await db.from("prisma_specs").select("spec").eq("client_id", clientId).order("created_at", { ascending: false }).limit(limite).returns<{ spec: Record<string, unknown> | null }[]>();
+  if (error) {
+    console.warn(`[prisma] hábitos no disponibles: ${error.message}`);
+    return [];
+  }
+  const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+  return (data ?? []).map((r) => {
+    const s = r.spec ?? {};
+    const cam = (s.camara && typeof s.camara === "object" ? s.camara : {}) as Record<string, unknown>;
+    return { luz: str(s.luz), lente: str(cam.lente), angulo: str(cam.angulo), mood: str(s.mood), estilo: str(s.estilo), movimiento: str(cam.movimiento) };
+  });
 }
 
 export type ReglasCargadas = { filas: PrismaReglaRow[]; notas: NotaTool[]; clave: string };

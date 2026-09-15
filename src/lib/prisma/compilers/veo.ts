@@ -9,6 +9,7 @@ import { beatsDe } from "./beats.ts";
 import { duracionVeo } from "../tools.ts";
 import { sustantivar } from "../positivo.ts";
 import { lookDeTipo, tipoEn } from "./video-tipos.ts";
+import { zonaSeguraCorta } from "./zonas.ts";
 
 type VeoJson = {
   description: string;
@@ -75,8 +76,10 @@ export function compilarVeo(spec: PromptSpec): Salida {
       }
     : {};
 
+  const zona = zonaSeguraCorta(spec);
   const json: VeoJson = {
-    description: descripcion(spec),
+    // F5a: en story / TikTok la descripción cierra con la zona segura (la app tapa arriba y abajo).
+    description: zona ? `${descripcion(spec)} Keep the ${zona}.` : descripcion(spec),
     // El tipo de video va primero: es la etiqueta que Veo mejor respeta como guía estética.
     style: comas(tipoEn(spec.video_type), spec.estilo || "cinematic, photorealistic", spec.mood, lookDeTipo(spec.video_type)),
     camera: comas(spec.camara.lente, spec.camara.angulo, spec.camara.movimiento || "slow continuous camera move, no cuts"),

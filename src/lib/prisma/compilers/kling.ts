@@ -10,6 +10,7 @@ import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO } from "../tools.ts";
 import { positivar } from "../positivo.ts";
 import type { Salida } from "./salida.ts";
 import { tipoEn } from "./video-tipos.ts";
+import { zonaSeguraCorta } from "./zonas.ts";
 
 const MAX = TOOL_INFO.kling.maxPalabras ?? 60;
 
@@ -38,7 +39,9 @@ export function compilarKling(spec: PromptSpec): Salida {
   // Se recorta de atrás hacia adelante: los positivos convertidos son lo primero que se
   // sacrifica, la atmósfera después; el estilo y el sujeto nunca. El texto pedido va ANTES
   // de la atmósfera: si el diseñador lo escribió, pesa más que el mood.
-  const capas = [estilo, sujeto, camara, ...(clausulaTexto ? [clausulaTexto] : []), atmosfera, positivos];
+  // F5a: la zona segura (story / TikTok) va al final: es lo primero que se sacrifica si no cabe.
+  const zona = zonaSeguraCorta(spec);
+  const capas = [estilo, sujeto, camara, ...(clausulaTexto ? [clausulaTexto] : []), atmosfera, positivos, ...(zona ? [zona] : [])];
   let texto = comas(...capas);
   while (contarPalabras(texto) > MAX && capas.length > 2) {
     capas.pop();

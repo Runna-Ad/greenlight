@@ -8,7 +8,17 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
-## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-14 — TODO LIVE en preview (390b013 · 0065–0070 APLICADAS)
+## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-15 — TODO LIVE en preview (0065–0070 APLICADAS · F5a sin migración)
+- **F5a hecha (2026-09-15) — pulido sin briefs + el Look rehecho:** paso 2 = 33 "looks" (recetas completas con foto,
+  `lib/prisma/looks.ts`, grid `components/prisma/looks-grid.tsx`) por familia (producto / persona / libre / video /
+  edición); H.Ü.E deja uno pre-elegido sin modelo (palabras de la idea + ADN + destino), los que la marca ya usó suben
+  al frente (`habitosDe` sobre sus specs), "Ajustar" plegable con las filas de siempre + Ángulo y etiquetas llanas para
+  todo valor (`etiquetaValor`); la marca se elige en el paso 1 (la entrevista y los hábitos la necesitan antes).
+  "Adaptar a otros formatos" (`adaptarFormato`: spec hermano recompilado sin modelo) + zonas seguras story/TikTok en
+  los compilers (`compilers/zonas.ts`); "prompt primero, juicio después" (el juicio de video corre en segundo plano
+  desde el cliente, `juzgarLuego` → `revisarBien`); Hub › H.Ü.E › Prisma › **Informe** (`lib/prisma/informe.ts`,
+  `hubPrismaInforme`): lo que la ronda de prueba mide. Miniaturas de los looks pendientes de Pedro
+  (`scripts/looks-thumbs.mjs` + `FOTOS_LISTAS`); mientras, degradado + ícono.
 - **F4 hecha (2026-09-14) — "sube lo que salió":** bloque "¿Cómo salió?" en el resultado (`components/prisma/como-salio.tsx`):
   el diseñador sube la imagen que le dio la herramienta (o un cuadro si es video) y el modelo que usó; H.Ü.E la compara con
   lo pedido en UNA llamada con visión (`compararResultado`, tool_use `emitir_veredicto`): 7 puntos ✓/✗ con nota es/en

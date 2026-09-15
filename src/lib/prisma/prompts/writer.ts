@@ -81,7 +81,7 @@ export type EntradaWriter = {
   aspect: Aspect;
   duracion: number | null;
   refs: { role: RefRole; caption: string | null; dna: VisualDNA | null }[];
-  look: { luz: string | null; movimiento: string | null; lente: string | null; mood: string | null; estilo: string | null };
+  look: { luz: string | null; movimiento: string | null; lente: string | null; angulo?: string | null; mood: string | null; estilo: string | null };
   dialogo: { texto: string; idioma: string; voz: string | null } | null;
   marca: MarcaPreset | null;
   personaje: string | null; // descripción guardada del personaje/producto
@@ -416,7 +416,7 @@ export const PREGUNTAS_SCHEMA = {
             maxItems: 4,
             items: { type: "object", properties: { valor: { type: "string" }, label_es: { type: "string" }, label_en: { type: "string" } }, required: ["valor", "label_es", "label_en"] },
           },
-          campo: { type: ["string", "null"], enum: ["luz", "movimiento", "lente", "mood", "estilo", "duracion", "aspect", "dialogo.idioma", null] },
+          campo: { type: ["string", "null"], enum: ["luz", "movimiento", "lente", "angulo", "mood", "estilo", "duracion", "aspect", "dialogo.idioma", null] },
         },
         required: ["id", "pregunta_es", "pregunta_en", "opciones", "campo"],
       },
@@ -444,7 +444,7 @@ export function bloqueEntrevista(e: EntradaWriter, yaSabidas: string[]): string 
     e.dialogo?.texto ? `Dialogue: yes (${cercado(e.dialogo.idioma)})` : "Dialogue: none",
     yaSabidas.length ? `Do NOT ask about the ids inside <known> (this brand always answers the same; it is already assumed): <known>${cercado(yaSabidas.join(", "))}</known>` : "",
     "Ask ONLY what (a) changes the result materially, (b) cannot be inferred from the above, and (c) the wizard did not already capture. Typical: the camera angle (angulo), whether people appear and how many (personas), the background (fondo), the pacing of a video (ritmo), whether there is voice (voz), which product variant (producto), the light (luz). Never ask about the tool, the format, the brand or the duration when they are given.",
-    "Each question: an id from the list, one short sentence in Spanish (pregunta_es) and English (pregunta_en), 2 to 4 chip options (valor = the value the prompt will use, in English, at most 8 words; label_es / label_en = what the designer sees, 1 to 4 words). Labels are for people who are NOT photographers: everyday words, never jargon — say \"Desde arriba\" not \"Cenital\", \"De cerca\" not \"Primer plano\", \"Al nivel de los ojos\" not \"Eye-level\", \"Contraluz\" only with a gloss like \"A contraluz (luz por detrás)\". Set campo when the answer maps directly to a wizard field (luz, movimiento, lente, mood, estilo, duracion, aspect, dialogo.idioma); otherwise null.",
+    "Each question: an id from the list, one short sentence in Spanish (pregunta_es) and English (pregunta_en), 2 to 4 chip options (valor = the value the prompt will use, in English, at most 8 words; label_es / label_en = what the designer sees, 1 to 4 words). Labels are for people who are NOT photographers: everyday words, never jargon — say \"Desde arriba\" not \"Cenital\", \"De cerca\" not \"Primer plano\", \"Al nivel de los ojos\" not \"Eye-level\", \"Contraluz\" only with a gloss like \"A contraluz (luz por detrás)\". Set campo when the answer maps directly to a wizard field (luz, movimiento, lente, angulo, mood, estilo, duracion, aspect, dialogo.idioma); otherwise null.",
     "At most 3 questions, most valuable first. If the idea is already complete, return an empty list. Call emitir_preguntas exactly once.",
   ].filter(Boolean).join("\n");
 }

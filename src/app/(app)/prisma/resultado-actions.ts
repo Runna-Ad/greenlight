@@ -133,7 +133,7 @@ export async function corregirResultado(resultadoId: string): Promise<ResultadoC
     .single<{ id: string }>();
   if (error || !nuevo) return faltaMigracion(error, "0070") ?? fallo("prisma_specs.insert", error?.message);
   const reglas = await cargarReglas(db);
-  const avisos = await diagnosticoDe(spec, tool, rc.salida, rc.errores, reglasDe(reglas), null);
+  const avisos = diagnosticoDe(spec, tool, rc.salida, rc.errores, reglasDe(reglas));
   const promptId = await guardarPrompt(nuevo.id, tool, rc.salida, rc.valido, rc.errores, null, "base", PROMPT_VERSION, recomendarModelo(pistasModelo(spec, tool)).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
   // El evento queda en el spec ORIGINAL: "a este prompt hubo que corregirle X".

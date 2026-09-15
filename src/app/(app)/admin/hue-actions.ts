@@ -11,6 +11,7 @@ import { correrSintesis, correrSintesisEdiciones, sintetizarEdicionesSiAuto, typ
 import { extraerTextoKb, esKbValido } from "@/lib/hue-kb-extract";
 import type { HueInstruction, HueKbDocument, HueScope, PrismaReglaRow } from "@/lib/database.types";
 import { notasDe, validarRegla } from "@/lib/prisma/reglas";
+import { resumirInforme, type FilaEventoInforme, type FilaPromptInforme, type FilaResultadoInforme, type FilaSpecInforme, type Informe } from "@/lib/prisma/informe";
 import { repartirNotas } from "@/lib/prisma/prompts/writer";
 
 const KB_BUCKET = "greenlight-kb";
@@ -372,6 +373,25 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function falloReglas(donde: string, msg: string | undefined): Fail {
   console.error(`[hub/prisma] ${donde}: ${msg ?? "?"}`);
   return { ok: false, error: "No se pudo completar. Inténtalo de nuevo." };
+}
+
+/** F5a: el informe de uso (plan §5): lo que la ronda de prueba mide, desde lo que Prisma ya
+ *  registra. Cuatro lecturas acotadas por fecha; una tabla que aún no exista sale vacía, no rompe. */
+export async function hubPrismaInforme(dias: number): Promise<Ok<{ informe: Informe }> | Fail> {
+  const no = await noMaster();
+  if (no) return no;
+  const d = [7, 30, 90].includes(dias) ? dias : 30;
+  const desde = new Date(Date.now() - d * 86400e3).toISOString();
+  const db = supabaseAdmin();
+  const [pr, ev, re, sp] = await Promise.all([
+    db.from("prisma_prompts").select("id, spec_id, tool, modelo_sug, avisos, valido").gte("created_at", desde).order("created_at", { ascending: false }).limit(2000).returns<FilaPromptInforme[]>(),
+    db.from("prisma_eventos").select("spec_id, prompt_id, tool, tipo, detalle, user_id").gte("created_at", desde).order("created_at", { ascending: false }).limit(4000).returns<FilaEventoInforme[]>(),
+    db.from("prisma_resultados").select("id, spec_id, prompt_id, tool, modelo, score, aceptado").gte("created_at", desde).order("created_at", { ascending: false }).limit(2000).returns<FilaResultadoInforme[]>(),
+    db.from("prisma_specs").select("id, job, respuestas, correccion_de").gte("created_at", desde).order("created_at", { ascending: false }).limit(2000).returns<FilaSpecInforme[]>(),
+  ]);
+  for (const [nombre, q] of [["prompts", pr], ["eventos", ev], ["resultados", re], ["specs", sp]] as const) if (q.error) console.warn(`[hub/prisma] informe sin ${nombre}: ${q.error.message}`);
+  if (pr.error) return falloReglas("informe.prompts", pr.error.message);
+  return { ok: true, informe: resumirInforme(d, { prompts: pr.data ?? [], eventos: ev.data ?? [], resultados: re.data ?? [], specs: sp.data ?? [] }) };
 }
 
 /** Las filas + cuántas notas activas se quedan FUERA del prompt por los topes (60 / 6,000

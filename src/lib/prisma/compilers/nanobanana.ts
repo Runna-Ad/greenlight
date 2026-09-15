@@ -6,6 +6,7 @@
  */
 import { etiquetaRef, frases, indiceRef, negativosDe, textoDe, type PromptSpec, type RefRole } from "../spec.ts";
 import { positivar } from "../positivo.ts";
+import { zonaSeguraImagen } from "./zonas.ts";
 import type { Salida } from "./salida.ts";
 
 /** Cómo se nombra una referencia dentro del prompt. Nano Banana entiende "[Imagen N]";
@@ -161,6 +162,8 @@ export function cuerpoImagen(spec: PromptSpec, etiqueta: Etiquetador): (string |
     tecnicos(spec),
     marca(spec),
     clausulaTexto(spec),
+    // F5a: story / TikTok → lo importante en el centro (la app tapa arriba y abajo).
+    zonaSeguraImagen(spec),
     spec.refs.length || spec.preservar.length ? `Keep unchanged: ${preservar(spec).join("; ")}` : null,
     // Hasta 3 positivos: más repiten la misma idea con otras palabras y engordan el prompt.
     positivos.length ? `Keep the frame: ${positivos.slice(0, 3).join("; ")}` : null,

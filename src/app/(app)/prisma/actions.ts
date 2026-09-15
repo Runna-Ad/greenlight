@@ -8,8 +8,9 @@ import { idiomaDe, revisarAcentos, type Cambio, type Idioma } from "@/lib/prisma
 import { aplicarRespuestas, detalleRespuestas, necesitaEntrevista, sanearRespuestas, type Pregunta, type Respuesta } from "@/lib/prisma/entrevista";
 import type { EntradaWriter } from "@/lib/prisma/prompts/writer";
 import { plano } from "@/lib/prisma/texto";
-import { cargarAprendizaje, cargarMarcas, cargarPersonajes, cargarReglas, firmar } from "@/lib/prisma/data";
-import { ASPECTS, DESTINOS, JOB_KIND, JOBS_POR_KIND, NOMBRE_HISTORICO, REFS_POR_JOB, VIDEO_TYPES, TOOLS, type Aspect, type Destino, type JobType, type PromptSpec, type RefRole, type Tool, type VisualDNA } from "@/lib/prisma/spec";
+import { cargarAprendizaje, cargarHabitos, cargarMarcas, cargarPersonajes, cargarReglas, firmar } from "@/lib/prisma/data";
+import { habitosDe, type Habitos } from "@/lib/prisma/looks";
+import { ASPECT_POR_DESTINO, ASPECTS, DESTINOS, JOB_KIND, JOBS_POR_KIND, NOMBRE_HISTORICO, REFS_POR_JOB, VIDEO_TYPES, TOOLS, esDestino, type Aspect, type Destino, type JobType, type PromptSpec, type RefRole, type Tool, type VisualDNA } from "@/lib/prisma/spec";
 import { t, type Par } from "@/lib/prisma/copy";
 import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
 import { PRISMA_VARIANTES_PEDIBLES, type PrismaCharacterRow, type PrismaEventoTipo, type PrismaPromptRow, type PrismaRefGuardada, type PrismaVariante } from "@/lib/database.types";
@@ -69,7 +70,7 @@ export type InputGenerar = {
   aspect: Aspect;
   duracion: number | null;
   refs: RefEntrada[];
-  look: { luz: string | null; movimiento: string | null; lente: string | null; mood: string | null; estilo: string | null };
+  look: { luz: string | null; movimiento: string | null; lente: string | null; angulo?: string | null; mood: string | null; estilo: string | null };
   dialogo: { texto: string; idioma: string; voz: string | null } | null;
   marcaId: string | null;
   personajeId: string | null;
@@ -146,6 +147,7 @@ function normalizar(raw: InputGenerar): InputGenerar | Fail {
       luz: sn(raw.look?.luz),
       movimiento: sn(raw.look?.movimiento),
       lente: sn(raw.look?.lente),
+      angulo: sn(raw.look?.angulo),
       mood: sn(raw.look?.mood),
       estilo: sn(raw.look?.estilo),
     },
@@ -240,7 +242,7 @@ export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar
 
   // Se guarda el modelo calculado sobre el spec RESULTANTE (el modelo puede inferir texto en la
   // pieza desde la idea): es exactamente lo que el resultado le enseña al diseñador.
-  const avisos = await diagnosticoDe(r.spec, inp.tool, r.salida, r.errores, reglasDe(reglas), { ...ent.entrada, aprendizaje, modelo });
+  const avisos = diagnosticoDe(r.spec, inp.tool, r.salida, r.errores, reglasDe(reglas));
   const promptId = await guardarPrompt(specRow.id, inp.tool, r.salida, r.valido, r.errores, r.usage, "base", versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, inp.tool)).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
   // Lo que contestó en la entrevista: con esto la marca "aprende" sus respuestas fijas.
@@ -273,7 +275,7 @@ export async function cambiarHerramienta(specId: string, tool: Tool): Promise<Re
   // La versión (audaz, mínima…) se hereda: cambiar de herramienta no la vuelve "base".
   const db = supabaseAdmin();
   const [{ variante }, reglas] = await Promise.all([estadoActual(db, s), cargarReglas(db)]);
-  const avisos = await diagnosticoDe(s.spec, tool, r.salida, r.errores, reglasDe(reglas), null);
+  const avisos = diagnosticoDe(s.spec, tool, r.salida, r.errores, reglasDe(reglas));
   const promptId = await guardarPrompt(specId, tool, r.salida, r.valido, r.errores, null, variante, PROMPT_VERSION, recomendarModelo(pistasModelo(s.spec, tool)).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
   return { ok: true, promptId, salida: r.salida, valido: r.valido, errores: r.errores, variante, avisos };
@@ -300,7 +302,7 @@ export async function refinarPrompt(specId: string, cambio: string): Promise<Res
 
   const { error } = await db.from("prisma_specs").update({ spec: r.spec }).eq("id", specId);
   if (error) return fallo("prisma_specs.update", error.message);
-  const avisos = await diagnosticoDe(r.spec, tool, r.salida, r.errores, reglasDe(reglas), { ...entradaDesdeSpec(s), tool, modelo });
+  const avisos = diagnosticoDe(r.spec, tool, r.salida, r.errores, reglasDe(reglas));
   const promptId = await guardarPrompt(specId, tool, r.salida, r.valido, r.errores, r.usage, variante, versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, tool)).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
   // Señal de aprendizaje: qué tuvo que pedir el diseñador (el texto, recortado).
@@ -464,7 +466,7 @@ export async function retirarPersonaje(id: string): Promise<{ ok: true } | Fail>
 /** Los personajes de la marca elegida (paso 3), con sus fotos firmadas. Se piden AL ELEGIR
  *  la marca, no al cargar la página: así la página no manda a todo el mundo los nombres,
  *  descripciones y fotos (URLs firmadas del bucket privado) de TODOS los clientes. */
-export async function listarPersonajes(marcaId: string): Promise<{ ok: true; personajes: PersonajeUI[] } | Fail> {
+export async function listarPersonajes(marcaId: string): Promise<{ ok: true; personajes: PersonajeUI[]; /** F5a: los looks y valores que esta marca ya usó (para subirlos al frente). */ habitos: Habitos | null } | Fail> {
   const g = await gate();
   if ("ok" in g) return g;
   const mid = sn(marcaId, 64);
@@ -472,9 +474,10 @@ export async function listarPersonajes(marcaId: string): Promise<{ ok: true; per
   const db = supabaseAdmin();
   const m = (await cargarMarcas(db)).find((x) => x.id === mid);
   if (!m) return { ok: false, error: "Esa marca ya no existe." };
-  const filas = await cargarPersonajes(db, m.client_id);
+  // Personajes y hábitos de look en paralelo: los dos dependen sólo del cliente de la marca.
+  const [filas, habitosFilas] = await Promise.all([cargarPersonajes(db, m.client_id), cargarHabitos(db, m.client_id)]);
   const fotos = await firmar(db, filas.map((x) => x.storage_path).filter((s): s is string => !!s));
-  return { ok: true, personajes: filas.map((x) => personajeUI(x, x.storage_path ? fotos.get(x.storage_path) ?? null : null, g.soyId)) };
+  return { ok: true, personajes: filas.map((x) => personajeUI(x, x.storage_path ? fotos.get(x.storage_path) ?? null : null, g.soyId)), habitos: habitosFilas.length ? habitosDe(habitosFilas) : null };
 }
 
 // ── 8) Otra versión, bajo demanda (segura / audaz / mínima) ───
@@ -508,11 +511,43 @@ export async function variar(specId: string, variante: string): Promise<Resultad
   }
   const { data: nuevo, error } = ins;
   if (error || !nuevo) return fallo("prisma_specs.insert", error?.message);
-  const avisos = await diagnosticoDe(r.spec, tool, r.salida, r.errores, reglasDe(reglas), { ...entradaDesdeSpec(s), tool, modelo });
+  const avisos = diagnosticoDe(r.spec, tool, r.salida, r.errores, reglasDe(reglas));
   const promptId = await guardarPrompt(nuevo.id, tool, r.salida, r.valido, r.errores, r.usage, v, versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, tool)).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
   await anotarEvento(db, { spec_id: specId, prompt_id: promptId, client_id: s.row.client_id, job: s.row.job, tool, variante: v, user_id: g.soyId, tipo: "variante", detalle: v });
   return { ok: true, specId: nuevo.id, promptId, tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, variante: v, avisos };
+}
+
+// ── F5a) Adaptar a otros formatos (sin modelo) ────────────────
+// De un prompt que ya sirve, el mismo spec para OTRO destino: formato nuevo (y zona segura si es
+// story / TikTok), recompilado al instante. Nace como spec hermano (origen_spec_id) para que
+// refinar, cambiar de herramienta e historial funcionen igual que con cualquier prompt.
+export type ResultadoAdaptar = { ok: true; specId: string; promptId: string; tool: Tool; spec: PromptSpec; salida: Salida; valido: boolean; errores: string[]; variante: PrismaVariante; avisos: Aviso[]; destino: Destino };
+
+export async function adaptarFormato(specId: string, destino: string): Promise<ResultadoAdaptar | Fail> {
+  const g = await gate();
+  if ("ok" in g) return g;
+  if (!esDestino(destino)) return { ok: false, error: "Destino no válido." };
+  // No llama al modelo, pero guarda dos filas por click: el mismo freno que cambiar de herramienta.
+  if (saturado(g.soyId)) return FRENO;
+  const s = await specDeFila(specId, g);
+  if ("ok" in s) return s;
+  if ((s.spec.destino ?? "libre") === destino) return { ok: false, error: "Ya está en ese formato." };
+  const db = supabaseAdmin();
+  const [{ tool, variante }, reglas] = await Promise.all([estadoActual(db, s), cargarReglas(db)]);
+  // El formato es el del destino (la gracia de adaptar): el default de la marca ya se aplicó al original.
+  const spec: PromptSpec = { ...s.spec, tool, destino, aspect: ASPECT_POR_DESTINO[destino] };
+  const rc = recompilar(spec, tool);
+  const { data: nuevo, error } = await db
+    .from("prisma_specs")
+    .insert({ client_id: s.row.client_id, marca_id: s.row.marca_id, job: s.row.job, tool, destino, idea: s.row.idea, spec, refs: s.row.refs, created_by: g.soyId, origen_spec_id: specId, respuestas: s.row.respuestas ?? [] })
+    .select("id")
+    .single<{ id: string }>();
+  if (error || !nuevo) return fallo("prisma_specs.insert", error?.message);
+  const avisos = diagnosticoDe(spec, tool, rc.salida, rc.errores, reglasDe(reglas));
+  const promptId = await guardarPrompt(nuevo.id, tool, rc.salida, rc.valido, rc.errores, null, variante, PROMPT_VERSION, recomendarModelo(pistasModelo(spec, tool)).modelo, avisos);
+  if (typeof promptId !== "string") return promptId;
+  return { ok: true, specId: nuevo.id, promptId, tool, spec, salida: rc.salida, valido: rc.valido, errores: rc.errores, variante, avisos, destino };
 }
 
 // ── 9) Lo que el diseñador HACE con el prompt (copiar / abrir en la herramienta) ──

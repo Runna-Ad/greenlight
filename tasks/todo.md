@@ -1,5 +1,42 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-09-15 (9) — HÜE Prisma v1 · FASE 5a: pulido sin briefs + el Look rebuild (rama `prisma`, SIN migración)
+Pedro: "lets do your recommendation" + "include the look rebuild in phase 5a". Sin migración. Plan §5 plegados.
+- [x] **El Look, rehecho** — `lib/prisma/looks.ts` (puro): ~30 "looks" por familia (producto / persona / libre / video /
+      edición), cada uno fija luz + lente + ángulo + ambiente + estilo (+ movimiento en video); `looksPara(job)`,
+      `lookSugerido` (idea + ADN + destino → uno pre-elegido "H.Ü.E sugiere"), `lookActivo`, `habitosDe` (lo que la marca
+      más usa flota arriba). UI `components/prisma/looks-grid.tsx`: tarjetas con miniatura (generadas una vez con Nano
+      Banana → `public/prisma/looks/*.jpg`) + "Ajustar" plegable con las filas de siempre (+ Ángulo). La marca pasa al
+      paso 1 (así la entrevista y los hábitos SÍ la conocen). Las respuestas de la entrevista se ven con su etiqueta, no
+      con el valor crudo en inglés.
+- [x] **Adaptar a otros formatos** — `adaptarFormato(specId, destino)`: spec hermano con el destino/aspect nuevo,
+      recompilado SIN modelo; bloque en el resultado. **Zonas seguras** story / TikTok en los 5 compilers (`compilers/zonas.ts`).
+- [x] **Prompt primero, juicio después** — generar / refinar / otra versión devuelven el prompt al instante con los avisos
+      deterministas; en video el juicio de H.Ü.E corre en segundo plano y los avisos llegan unos segundos después
+      ("H.Ü.E está revisando…").
+- [x] **Informe en el Hub** — `lib/prisma/informe.ts` (puro) + `hubPrismaInforme(dias)` + Hub › Prisma › Informe: prompts por
+      herramienta y modelo, copiados sin refinar, refines por prompt, avisos mostrados vs aplicados, preguntas hechas vs
+      contestadas, resultados subidos / aceptados a la 1ª / tras corrección, modelo recomendado vs usado, fallos por punto.
+- [x] **A11y** del panel de avisos, la entrevista y el grid de looks (aria-pressed, nombres accesibles de "Arreglarlo" y
+      de la fuente, grupos con etiqueta en la entrevista y conteo para lectores; `avisosDe` conserva `interno`: un aviso
+      interno guardado ya no se le enseña al diseñador al reabrir).
+- [x] Tests: test-prisma 658 (todos los looks × job × herramienta válidos = 200+ combinaciones; sugerencia con acentos y
+      límites de palabra; hábitos; etiquetas llanas para cada valor; zonas seguras en NB/GPT/Veo/Kling y el tope de Kling;
+      informe con fixture) · npm test ✓ · tsc 0 · lint 0 · build ✓. Browser: `?demo=entrevista` → paso 2 con el grid
+      ("H.Ü.E sugiere" pre-elegido, "Ajustar" con Ángulo y etiquetas llanas), 375 px a dos columnas; `?demo=resultado` con
+      "Adaptar a otros formatos" y la línea de formato; sin errores de consola.
+- [ ] Reap (security Opus + salud Sonnet) · commit + push a `prisma`.
+- [ ] **Miniaturas de los looks** (pendiente de Pedro): el conector `nano-banana` apunta a un modelo retirado
+      (gemini-2.5-flash-image-preview → 404); `scripts/looks-thumbs.mjs` las genera con gemini-3.1-flash-image por REST
+      cuando haya `GEMINI_API_KEY` en la shell (Pedro la exporta; no va en el repo), y luego `FOTOS_LISTAS = true` en
+      looks.ts. Mientras, cada tarjeta enseña su degradado e ícono.
+
+### Verificación F5a (Pedro, preview con login)
+1. Paso 1: la marca se elige arriba. Paso 2: tarjetas de looks con foto; uno viene marcado "H.Ü.E sugiere"; "Ajustar" abre las filas.
+2. Resultado: "Adaptar a otros formatos" → Story / Feed / Banner… un click cada uno, sin esperar a H.Ü.E.
+3. Un video: el prompt aparece al instante y en unos segundos llegan los avisos del juicio.
+4. Hub › H.Ü.E › Prisma › Informe: los números de los últimos 30 días.
+
 ## 🟢 2026-09-14 (8) — HÜE Prisma v1 · FASE 4: "sube lo que salió" (rama `prisma`, 390b013 · 0070 APLICADA)
 Pedro: "lets go with phase 4". Plan §7: el diseñador sube lo que salió de la herramienta, H.Ü.E lo compara con lo pedido,
 dice qué falló, ofrece un prompt de corrección (edita ESE resultado) o refinar el original, y se marca el resultado final

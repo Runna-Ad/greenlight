@@ -2207,3 +2207,18 @@ real · prueba con diseñador · decidir merge a main (= deploy a prod; el módu
 - [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
 - [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
 
+
+## 2026-09-15 10:17
+
+**Still open:**
+- [ ] Reap (security Opus + salud Sonnet) · commit + push a `prisma`.
+- [ ] **Miniaturas de los looks** (pendiente de Pedro): el conector `nano-banana` apunta a un modelo retirado
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+

@@ -5,7 +5,7 @@ import { getViewAs } from "@/lib/view-as";
 import { getSoyId } from "@/lib/soy";
 import { prismaActivo } from "@/lib/prisma/flags";
 import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
-import { juzgarSpec, MODEL, PROMPT_VERSION, type MimeVision, type Uso } from "@/lib/prisma/writer";
+import { MODEL, PROMPT_VERSION, type MimeVision, type Uso } from "@/lib/prisma/writer";
 import { compilarReglas, diagnosticar, type Aviso, type ReglaCompilada } from "@/lib/prisma/diagnostico";
 import type { EntradaWriter } from "@/lib/prisma/prompts/writer";
 import { plano, recortar } from "@/lib/prisma/texto";
@@ -140,14 +140,11 @@ export async function guardarPrompt(specId: string, tool: Tool, salida: Salida, 
 /** Las reglas de la BD (clase "regla"), compiladas; las malas se descartan con aviso en el log. */
 export const reglasDe = (r: Awaited<ReturnType<typeof cargarReglas>>): ReglaCompilada[] => compilarReglas(r.filas.filter((f) => f.clase === "regla"));
 
-/** El diagnóstico del resultado: reglas + validador + (en video, siempre) el juicio de H.Ü.E.
- *  `entrada` sólo hace falta para el juicio; null = sin juicio (cambiar de herramienta, abrir). */
-export async function diagnosticoDe(spec: PromptSpec, tool: Tool, salida: Salida, errores: string[], reglas: ReglaCompilada[], entrada: EntradaWriter | null): Promise<Aviso[]> {
-  const base = diagnosticar(spec, tool, salida.texto, errores, reglas);
-  if (!entrada || JOB_KIND[spec.job] !== "video") return base;
-  const { avisos } = await juzgarSpec(entrada, spec, salida.texto);
-  const codigos = new Set(base.map((a) => a.codigo));
-  return [...base, ...avisos.filter((a) => !codigos.has(a.codigo))];
+/** El diagnóstico del resultado: reglas + validador. Determinista y al instante. El JUICIO de
+ *  H.Ü.E (modelo) ya no va aquí: F5a "prompt primero, juicio después" — el prompt se enseña ya y,
+ *  en video, el cliente pide el juicio en segundo plano (revisarBien) y los avisos llegan después. */
+export function diagnosticoDe(spec: PromptSpec, tool: Tool, salida: Salida, errores: string[], reglas: ReglaCompilada[]): Aviso[] {
+  return diagnosticar(spec, tool, salida.texto, errores, reglas);
 }
 
 /** Registra lo que el diseñador HIZO (0066) — la señal con la que H.Ü.E aprende. Nunca
@@ -201,7 +198,7 @@ export function entradaDesdeSpec(s: { row: PrismaSpecRow; spec: PromptSpec }): E
     aspect: spec.aspect,
     duracion: spec.duracion,
     refs: spec.refs,
-    look: { luz: spec.luz || null, movimiento: spec.camara.movimiento, lente: spec.camara.lente, mood: spec.mood || null, estilo: spec.estilo || null },
+    look: { luz: spec.luz || null, movimiento: spec.camara.movimiento, lente: spec.camara.lente, angulo: spec.camara.angulo, mood: spec.mood || null, estilo: spec.estilo || null },
     dialogo: spec.dialogo,
     marca: spec.marca,
     personaje: null,

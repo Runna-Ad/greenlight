@@ -45,13 +45,13 @@ export function PanelAvisos({ avisos: todos, lang, onArreglar, aplicando = null,
                   {a.arreglo && <p className="mt-1 text-xs text-foreground">{tx(a.arreglo, lang)}</p>}
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     {conAccion && (
-                      <Button size="sm" variant={a.nivel === "bloquea" ? "destructive" : "secondary"} disabled={aplicando !== null} onClick={() => onArreglar?.(a)} className="h-7 gap-1.5 px-2.5 text-xs">
+                      <Button size="sm" variant={a.nivel === "bloquea" ? "destructive" : "secondary"} disabled={aplicando !== null} onClick={() => onArreglar?.(a)} className="h-7 gap-1.5 px-2.5 text-xs" aria-label={`${tx(UI.arreglarlo, lang)}: ${tx(a.que, lang)}`}>
                         {aplicando === a.codigo ? <Loader2 className="size-3.5 animate-spin" /> : <Wand2 className="size-3.5" />}
                         {tx(UI.arreglarlo, lang)}
                       </Button>
                     )}
                     {a.fuente && /^https?:\/\//i.test(a.fuente.url) && (
-                      <a href={a.fuente.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
+                      <a href={a.fuente.url} target="_blank" rel="noopener noreferrer" aria-label={`${a.fuente.tipo === "comunidad" ? tx(UI.fuenteComunidad, lang) : tx(UI.fuenteOficial, lang)}: ${tx(a.que, lang)}`} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
                         <ExternalLink className="size-3" aria-hidden="true" />
                         {a.fuente.tipo === "comunidad" ? tx(UI.fuenteComunidad, lang) : tx(UI.fuenteOficial, lang)}
                         {fecha(a.fuente.fecha, lang) ? ` · ${fecha(a.fuente.fecha, lang)}` : ""}

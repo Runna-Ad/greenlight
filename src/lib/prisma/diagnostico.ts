@@ -384,7 +384,9 @@ export function avisosDe(raw: unknown): Aviso[] {
     if (!codigo || !nivel || !que) continue;
     const f = o.fuente && typeof o.fuente === "object" ? (o.fuente as Record<string, unknown>) : null;
     const fuente: Fuente | null = f && typeof f.url === "string" && HTTP.test(f.url) ? { url: f.url.slice(0, 300), fecha: typeof f.fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f.fecha) ? f.fecha : null, tipo: f.tipo === "comunidad" ? "comunidad" : "oficial" } : null;
-    out.push({ codigo, nivel, que, porque: parDe(o.porque), arreglo: parDe(o.arreglo), accion: accionDe(o.accion) ?? accionTexto(o.accion), fuente });
+    // `interno` viaja también: al reabrir desde el historial, un aviso interno (señal para el
+    // Hub) no debe aparecerle al diseñador ni contar en el informe como "mostrado".
+    out.push({ codigo, nivel, que, porque: parDe(o.porque), arreglo: parDe(o.arreglo), accion: accionDe(o.accion) ?? accionTexto(o.accion), fuente, ...(o.interno === true ? { interno: true } : {}) });
   }
   return out;
 }
