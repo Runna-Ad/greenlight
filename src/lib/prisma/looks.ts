@@ -72,7 +72,7 @@ export const LOOK_ORIGINAL_ID = "original";
 /** ¿Ya existen las miniaturas en public/prisma/looks? Mientras no (se generan con
  *  scripts/looks-thumbs.mjs), la tarjeta enseña sólo su degradado e ícono — sin pedir 33 imágenes
  *  que no existen (33 errores 404 por visita). Se pone en true al subirlas. */
-export const FOTOS_LISTAS = false;
+export const FOTOS_LISTAS = true;
 
 export const LOOKS: Look[] = [
   // ── Producto ──

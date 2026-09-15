@@ -2249,3 +2249,45 @@ F6 Vigía (0071/0072, cada una con "ship it") o F5b si ya hay briefs. Diferido: 
 interno (security LOW F4); referencias > 3.5 MB sin ADN; la corrección repetida no trae su propio resultado.
 **Environment changes:** ninguno (sin deps nuevas; 0070 en prod; `scripts/looks-thumbs.mjs` y `scripts/smoke-veredicto.mjs`
 nuevos, manuales).
+
+## 2026-09-15 11:23
+**Shipped (recent commits):**
+  - refactor(prisma): filaHermana — una función decide qué columnas viajan al spec hermano (variar / adaptar / corregir)
+  - fix(prisma): F5a reap de salud — linaje de corrección en variar/adaptar, juicio sin bloquear, sugerencia al día, informe (spinner, personas), zona segura sólo al crear
+  - fix(prisma): F5a reap de seguridad — hábitos sólo con vocabulario conocido, look cercado al writer, cubo propio del juicio, bloquea en adaptar
+  - docs(prisma): cierre de sesión — session-log, lessons, todo (F5a 7a0f8c6, reap pendiente)
+  - feat(prisma): F5a — el Look rehecho (looks con foto, H.Ü.E sugiere, hábitos de marca), adaptar a otros formatos, zonas seguras, juicio en segundo plano, informe en el Hub, a11y
+
+**Still open:**
+- [ ] Siguiente (mismo tipo de bug, fuera de esta tanda): `cargarHabitos` y el denominador `entrevista.specs` del informe
+- [ ] **Miniaturas de los looks** (pendiente de Pedro): el conector `nano-banana` apunta a un modelo retirado
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-15 13:27
+**Shipped (recent commits):**
+  - refactor(prisma): filaHermana — una función decide qué columnas viajan al spec hermano (variar / adaptar / corregir)
+  - fix(prisma): F5a reap de salud — linaje de corrección en variar/adaptar, juicio sin bloquear, sugerencia al día, informe (spinner, personas), zona segura sólo al crear
+  - fix(prisma): F5a reap de seguridad — hábitos sólo con vocabulario conocido, look cercado al writer, cubo propio del juicio, bloquea en adaptar
+  - docs(prisma): cierre de sesión — session-log, lessons, todo (F5a 7a0f8c6, reap pendiente)
+  - feat(prisma): F5a — el Look rehecho (looks con foto, H.Ü.E sugiere, hábitos de marca), adaptar a otros formatos, zonas seguras, juicio en segundo plano, informe en el Hub, a11y
+
+**Still open:**
+- [ ] Siguiente (mismo tipo de bug, fuera de esta tanda): `cargarHabitos` y el denominador `entrevista.specs` del informe
+- [ ] **Miniaturas de los looks** (pendiente de Pedro): el conector `nano-banana` apunta a un modelo retirado
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+

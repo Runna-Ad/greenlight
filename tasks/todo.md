@@ -55,9 +55,14 @@ Pedro: "lets do your recommendation" + "include the look rebuild in phase 5a". S
       cambió y nadie ajustó el look; personas del informe = también quien sólo generó; semántica de "copiado sin refinar"
       documentada (a nivel de idea); `corregirResultado` no crea una segunda corrección si la anterior no se pudo abrir;
       la zona segura más corta (un prompt de story con texto y marca cabe en 160) + test de longitud.
-- [ ] **Miniaturas de los looks** (pendiente de Pedro): el conector `nano-banana` apunta a un modelo retirado
+- [x] **Miniaturas de los looks** — HECHO 2026-09-15: las 33 generadas (1 MB, 480 px, lazy) y `FOTOS_LISTAS = true`;
+      browser: 200 en cada miniatura, sin errores de consola, 375 px a dos columnas. Única floja: `poster_grafico` trae
+      letras falsas ("FES IER") pese al "no text" → regenerar sólo ésa si Pedro quiere (borrar el jpg y re-correr).
+      Historia: el conector `nano-banana` apunta a un modelo retirado
       (gemini-2.5-flash-image-preview → 404); `scripts/looks-thumbs.mjs` las genera con gemini-3.1-flash-image por REST
-      cuando haya `GEMINI_API_KEY` en la shell (Pedro la exporta; no va en el repo), y luego `FOTOS_LISTAS = true` en
+      cuando haya `GEMINI_API_KEY` en la shell (Pedro la exporta; no va en el repo), y luego
+      **2026-09-15: corrido → 33 × 429 `limit: 0` (free tier). Falta activar billing en el proyecto de AI Studio de
+      esa llave (~$2.21 por las 33 a $0.067 c/u en 1K; prepago mínimo $5); luego re-correr el mismo comando.** Y luego `FOTOS_LISTAS = true` en
       looks.ts. Mientras, cada tarjeta enseña su degradado e ícono.
 
 ### Verificación F5a (Pedro, preview con login)
