@@ -32,7 +32,13 @@ Pedro: "lets do your recommendation" + "include the look rebuild in phase 5a". S
       "juicio" y sin repetir un juicio que ya corrió; `adaptarFormato` respeta el mismo "bloquea" que generar; tope de 120
       letras en los hábitos y `Object.hasOwn` en `etiquetaValor`. INFO aceptado: `listarPersonajes` (marcas + hábitos) para
       cualquier rol interno = modelo de agencia, ya documentado como diferido.
-- [ ] Reap salud (Sonnet): corría al cerrar → aplicar sus hallazgos en la siguiente sesión.
+- [x] Reap salud (Sonnet): 0 críticos; 2 serios → arreglados (una versión o una adaptación de una CORRECCIÓN perdía el
+      linaje `correccion_de` y el chip "Corrección" —y el informe la contaba como "a la primera"—: ahora viaja con el
+      hermano y vuelve en la respuesta; el informe colgaba el spinner al repetir el periodo activo). Mejoras: el juicio en
+      segundo plano ya no bloquea refinar/adaptar (era la gracia de F5a); la sugerencia de look se actualiza si la idea
+      cambió y nadie ajustó el look; personas del informe = también quien sólo generó; semántica de "copiado sin refinar"
+      documentada (a nivel de idea); `corregirResultado` no crea una segunda corrección si la anterior no se pudo abrir;
+      la zona segura más corta (un prompt de story con texto y marca cabe en 160) + test de longitud.
 - [ ] **Miniaturas de los looks** (pendiente de Pedro): el conector `nano-banana` apunta a un modelo retirado
       (gemini-2.5-flash-image-preview → 404); `scripts/looks-thumbs.mjs` las genera con gemini-3.1-flash-image por REST
       cuando haya `GEMINI_API_KEY` en la shell (Pedro la exporta; no va en el repo), y luego `FOTOS_LISTAS = true` en

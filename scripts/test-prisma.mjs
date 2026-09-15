@@ -563,6 +563,9 @@ console.log("\n▶ F1 — longitud de los prompts de imagen (regresión): andami
       ok(`${job} → ${tool}: spec normal con texto y marca ≤ 160 palabras (${n})`, n <= 160);
       const m = contarPalabras(compilar(spec(job, tool, { texto: { contenido: "Hasta 20% de cashback", posicion: null, estilo: null } })).texto);
       ok(`${job} → ${tool}: spec cargado (fixture de estrés) ≤ 210 palabras (${m})`, m <= 210);
+      // F5a: en story / TikTok se suma la zona segura; con texto y marca tiene que seguir cabiendo en 160.
+      const st = contarPalabras(compilar({ ...corto(job, tool), destino: "ig_story", aspect: "9:16" }).texto);
+      ok(`${job} → ${tool}: spec normal en story (zona segura + texto + marca) ≤ 160 palabras (${st})`, st <= 160);
     }
   }
 }
@@ -1082,10 +1085,11 @@ console.log("\n▶ F5a — zonas seguras (story / TikTok) + informe");
   const feed = spec("foto_producto", "nanobanana", { destino: "ig_feed", aspect: "4:5" });
   const storyHorizontal = spec("foto_producto", "nanobanana", { destino: "ig_story", aspect: "16:9" });
   ok("story 9:16 tiene zona; feed y story en 16:9 no", tieneZonaSegura(story) && !tieneZonaSegura(feed) && !tieneZonaSegura(storyHorizontal));
+  ok("una EDICIÓN en story no lleva zona (la composición la trae la foto original)", !tieneZonaSegura(spec("cambio_fondo", "nanobanana", { destino: "ig_story", aspect: "9:16" })));
   ok("la frase de imagen dice arriba 15 % y abajo 20 %", /top 15% and bottom 20%/.test(zonaSeguraImagen(story)) && zonaSeguraImagen(feed) === null);
   for (const tool of ["nanobanana", "chatgpt"]) {
     const out = compilar({ ...story, tool });
-    ok(`${tool}: el prompt de story lleva la zona segura y sigue válido`, out.texto.includes("central safe zone") && validar(out.texto, { ...story, tool }).ok);
+    ok(`${tool}: el prompt de story lleva la zona segura y sigue válido`, out.texto.includes("Safe zone:") && validar(out.texto, { ...story, tool }).ok);
     ok(`${tool}: el de feed no la lleva`, !compilar({ ...feed, tool }).texto.includes("safe zone"));
   }
   const veoStory = spec("texto_a_video", "veo", { destino: "tiktok", aspect: "9:16" });

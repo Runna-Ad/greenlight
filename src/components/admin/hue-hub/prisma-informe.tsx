@@ -55,7 +55,7 @@ export function PrismaInforme() {
         </div>
         <div className="flex items-center gap-1.5" role="group" aria-label="Periodo">
           {DIAS.map((d) => (
-            <button key={d} type="button" onClick={() => { setDias(d); setCargandoDe(d); }} aria-pressed={dias === d} className={cn("rounded-full border px-2.5 py-1 text-xs transition-colors", dias === d ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:text-foreground")}>
+            <button key={d} type="button" onClick={() => { if (d === dias) return; setDias(d); setCargandoDe(d); }} aria-pressed={dias === d} className={cn("rounded-full border px-2.5 py-1 text-xs transition-colors", dias === d ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:text-foreground")}>
               {d} días
             </button>
           ))}

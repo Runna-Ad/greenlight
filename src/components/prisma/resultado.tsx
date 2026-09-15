@@ -85,7 +85,9 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
   const otras = TOOLS_POR_JOB[vivo.spec.job].filter((t) => t !== vivo.tool);
   // Mientras CUALQUIER acción va al servidor, las demás esperan: dos respuestas cruzadas
   // (cambiar herramienta + otra versión) pisarían el resultado con un `vivo` viejo.
-  const ocupado = cambiando !== null || refinando || variando !== null || cargandoExp || aplicando !== null || juzgando || juicioEnCurso || adaptando !== null;
+  // `juicioEnCurso` NO bloquea: la gracia de "prompt primero, juicio después" es seguir trabajando;
+  // si el prompt cambia mientras tanto, studio descarta el juicio del prompt viejo.
+  const ocupado = cambiando !== null || refinando || variando !== null || cargandoExp || aplicando !== null || juzgando || adaptando !== null;
   // Los avisos vienen del servidor; una fila de antes de F2 (o el demo) trae sólo `errores`.
   const avisos: Aviso[] = vivo.avisos ?? vivo.errores.map((e, i) => ({ codigo: `validador_${i + 1}`, nivel: "advierte", que: { es: e, en: e }, porque: null, arreglo: null, accion: null, fuente: null }));
   // El juicio de H.Ü.E ya corrió si hay avisos "hue_"; si no (imagen, o video tras cambiar de
@@ -171,7 +173,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
     setVerExplicacion(false);
     setVoto(null);
     setJuzgado(false);
-    onCambio({ ...vivo, specId: r.specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null, avisos: r.avisos, correccion: false, resultado: null });
+    onCambio({ ...vivo, specId: r.specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null, avisos: r.avisos, correccion: r.correccion, resultado: null });
     toast.success(tx(UI.adaptado, lang).replace("{d}", tx(DESTINO_LABEL[d], lang)));
   };
 
@@ -257,7 +259,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
     setVoto(null);
     // La versión es un spec hermano: desde aquí, refinar / cambiar herramienta / explicar actúan sobre ella.
     setJuzgado(false);
-    onCambio({ ...vivo, specId: r.specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null, avisos: r.avisos, correccion: false, resultado: null });
+    onCambio({ ...vivo, specId: r.specId, promptId: r.promptId, tool: r.tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, aprendio: null, avisos: r.avisos, correccion: r.correccion, resultado: null });
     if (esVideoJob) onJuzgar?.(r.promptId);
   };
 

@@ -141,6 +141,8 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
   const [habitos, setHabitos] = useState<Habitos | null>(null);
   /** F5a: "Ajustar" (las filas de siempre) abierto o plegado. */
   const [ajustar, setAjustar] = useState(false);
+  /** F5a: el id del look que H.Ü.E aplicó solo (si sigue tal cual y la idea cambió, se vuelve a sugerir). */
+  const [sugeridoAplicado, setSugeridoAplicado] = useState<string | null>(null);
   const [mostrarPersonajeForm, setMostrarPersonajeForm] = useState(false);
   const [confirmarRetiro, setConfirmarRetiro] = useState(false);
   const [retirando, setRetirando] = useState(false);
@@ -223,9 +225,13 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
   // Etiquetas llanas de las respuestas de la entrevista (un valor elegido ahí se ve con su
   // etiqueta, no con la frase técnica en inglés — el chip crudo de la prueba de Pedro).
   const etiquetasEntrevista: Record<string, Par> = Object.fromEntries(preguntas.flatMap((p) => p.opciones.map((o) => [o.valor, o.label])));
-  /** Entrar al paso 2: si el look está vacío, H.Ü.E deja pre-elegido el que sugiere. */
+  /** Entrar al paso 2: si el look está vacío —o sigue siendo la sugerencia anterior, sin ajustar— H.Ü.E
+   *  deja pre-elegido el que sugiere ahora (la idea pudo cambiar en el paso 1). Un look elegido a mano se respeta. */
   const entrarAlLook = () => {
-    if (job && sugerido && todoVacio(look)) setLook(aplicarLook(sugerido.look, esVideo(job)));
+    if (job && sugerido && (todoVacio(look) || (sugeridoAplicado !== null && lookActivoId === sugeridoAplicado))) {
+      setLook(aplicarLook(sugerido.look, esVideo(job)));
+      setSugeridoAplicado(sugerido.look.id);
+    }
     setPaso(2);
   };
 
@@ -436,6 +442,7 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
     setPreguntas([]);
     setRespuestas({});
     setAjustar(false);
+    setSugeridoAplicado(null);
     setVivo(null);
   };
 
@@ -465,6 +472,7 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
     setPreguntas([]);
     setRespuestas({});
     setAjustar(false);
+    setSugeridoAplicado(null);
     setPaso(1);
   };
 
@@ -527,7 +535,9 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
     const lista = respuestasLista();
     // Base: el look sugerido si el diseñador no tocó nada; y lo que CONTESTÓ manda sobre el look
     // (se vacía esa fila antes de aplicar, porque aplicarRespuestas sólo llena lo vacío).
-    const base: Look = todoVacio(look) && sugerido && job ? aplicarLook(sugerido.look, esVideo(job)) : { ...look };
+    const desdeSugerencia = !!sugerido && !!job && (todoVacio(look) || (sugeridoAplicado !== null && lookActivoId === sugeridoAplicado));
+    const base: Look = desdeSugerencia && sugerido && job ? aplicarLook(sugerido.look, esVideo(job)) : { ...look };
+    if (desdeSugerencia && sugerido) setSugeridoAplicado(sugerido.look.id);
     for (const r of lista) if (r.campo && r.campo in base) base[r.campo as keyof Look] = null;
     const con = aplicarRespuestas({ look: base, duracion, aspect, dialogoIdioma: dialogoLang }, lista);
     setLook({ ...base, ...con.look });

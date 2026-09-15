@@ -9,7 +9,7 @@ import { CAMPOS_VEREDICTO, fallosDeDetalle, type CampoVeredicto } from "./result
 export type FilaPromptInforme = { id: string; spec_id: string; tool: string; modelo_sug: string | null; avisos: unknown; valido: boolean };
 export type FilaEventoInforme = { spec_id: string; prompt_id: string | null; tool: string; tipo: string; detalle: string | null; user_id: string | null };
 export type FilaResultadoInforme = { id: string; spec_id: string; prompt_id: string | null; tool: string; modelo: string | null; score: number | null; aceptado: boolean };
-export type FilaSpecInforme = { id: string; job: string; respuestas: unknown; correccion_de: string | null };
+export type FilaSpecInforme = { id: string; job: string; respuestas: unknown; correccion_de: string | null; created_by?: string | null };
 
 export type Informe = {
   dias: number;
@@ -44,7 +44,8 @@ export function resumirInforme(dias: number, d: { prompts: FilaPromptInforme[]; 
   const aplicados = new Map<string, number>();
   const fallos = new Map<CampoVeredicto, number>();
   let correcciones = 0;
-  const personas = new Set<string>();
+  // Personas = quien hizo algo con un prompt O quien sólo generó (los specs traen su autor).
+  const personas = new Set<string>(d.specs.map((s) => s.created_by).filter((u): u is string => !!u));
   for (const e of d.eventos) {
     if (e.user_id) personas.add(e.user_id);
     if ((e.tipo === "copiado" || e.tipo === "abierto") && e.prompt_id) tool(promptPorId.get(e.prompt_id)?.tool ?? e.tool).copiados.add(e.prompt_id);
@@ -56,6 +57,8 @@ export function resumirInforme(dias: number, d: { prompts: FilaPromptInforme[]; 
     if (e.tipo === "resultado_subido") for (const c of fallosDeDetalle(e.detalle)) fallos.set(c, (fallos.get(c) ?? 0) + 1);
     if (e.tipo === "correccion_generada") correcciones++;
   }
+  // "Copiado sin refinar" es a nivel de IDEA (spec): si esa idea se refinó alguna vez —antes o después
+  // del copiado— no cuenta como "salió bien a la primera". Es la lectura estricta del criterio de F5.
   const porHerramienta = [...porTool.entries()]
     .map(([t, x]) => {
       const copiadosSinRefinar = [...x.copiados].filter((id) => !specsRefinados.has(promptPorId.get(id)?.spec_id ?? "")).length;

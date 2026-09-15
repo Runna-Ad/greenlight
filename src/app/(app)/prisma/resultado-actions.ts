@@ -119,6 +119,8 @@ export async function corregirResultado(resultadoId: string): Promise<ResultadoC
       // Los avisos que se calcularon la primera vez viven en la fila (mismo patrón que abrirSpec).
       return { ok: true, specId: previo.id, promptId: p.id, tool: p.tool as Tool, spec: sp.spec, salida: { texto: p.salida, formato: p.formato }, valido: p.valido, errores: p.errores ?? [], avisos: avisosDe(p.avisos) };
     }
+    // Existe pero no se puede abrir (permiso, fila rara): NO se crea una segunda corrección en silencio.
+    return { ok: false, error: "Este resultado ya tiene una corrección, pero no se pudo abrir. Búscala en el historial." };
   }
 
   // La corrección se hace en la MISMA herramienta de imagen; si el resultado vino de otra, Nano Banana.

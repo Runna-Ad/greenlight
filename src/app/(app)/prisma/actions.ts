@@ -485,7 +485,7 @@ export async function listarPersonajes(marcaId: string): Promise<{ ok: true; per
 // como un spec HERMANO (misma idea, refs y marca; otro spec) para que refinar, cambiar de
 // herramienta, explicar e historial funcionen igual que con cualquier prompt. El evento
 // "variante" queda en el spec ORIGINAL: es la señal de qué versiones pide esta marca.
-export type ResultadoVariar = { ok: true; specId: string; promptId: string; tool: Tool; spec: PromptSpec; salida: Salida; valido: boolean; errores: string[]; variante: PrismaVariante; avisos: Aviso[] };
+export type ResultadoVariar = { ok: true; specId: string; promptId: string; tool: Tool; spec: PromptSpec; salida: Salida; valido: boolean; errores: string[]; variante: PrismaVariante; avisos: Aviso[]; /** F5a: una versión de una corrección sigue siendo una corrección. */ correccion: boolean };
 
 export async function variar(specId: string, variante: string): Promise<ResultadoVariar | Fail> {
   const g = await gate();
@@ -502,7 +502,8 @@ export async function variar(specId: string, variante: string): Promise<Resultad
   const r = await variarSpec({ ...entradaDesdeSpec(s), tool, modelo }, { ...s.spec, tool }, v, estableCon(reglas.notas, reglas.clave), reglasDe(reglas));
   if (!r.ok) return r;
 
-  const fila = { client_id: s.row.client_id, marca_id: s.row.marca_id, job: s.row.job, tool, destino: s.row.destino, idea: s.row.idea, spec: r.spec, refs: s.row.refs, created_by: g.soyId };
+  // El linaje de corrección (0070) viaja con el hermano: una versión de una corrección sigue siendo una corrección.
+  const fila = { client_id: s.row.client_id, marca_id: s.row.marca_id, job: s.row.job, tool, destino: s.row.destino, idea: s.row.idea, spec: r.spec, refs: s.row.refs, created_by: g.soyId, correccion_de: s.row.correccion_de ?? null };
   let ins = await db.from("prisma_specs").insert({ ...fila, origen_spec_id: specId }).select("id").single<{ id: string }>();
   // Antes de la 0066 la columna origen_spec_id no existe: se guarda sin el enlace (mismo patrón que prisma_presets).
   if (ins.error && /origen_spec_id/.test(ins.error.message)) {
@@ -515,14 +516,14 @@ export async function variar(specId: string, variante: string): Promise<Resultad
   const promptId = await guardarPrompt(nuevo.id, tool, r.salida, r.valido, r.errores, r.usage, v, versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, tool)).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
   await anotarEvento(db, { spec_id: specId, prompt_id: promptId, client_id: s.row.client_id, job: s.row.job, tool, variante: v, user_id: g.soyId, tipo: "variante", detalle: v });
-  return { ok: true, specId: nuevo.id, promptId, tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, variante: v, avisos };
+  return { ok: true, specId: nuevo.id, promptId, tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, variante: v, avisos, correccion: !!s.row.correccion_de };
 }
 
 // ── F5a) Adaptar a otros formatos (sin modelo) ────────────────
 // De un prompt que ya sirve, el mismo spec para OTRO destino: formato nuevo (y zona segura si es
 // story / TikTok), recompilado al instante. Nace como spec hermano (origen_spec_id) para que
 // refinar, cambiar de herramienta e historial funcionen igual que con cualquier prompt.
-export type ResultadoAdaptar = { ok: true; specId: string; promptId: string; tool: Tool; spec: PromptSpec; salida: Salida; valido: boolean; errores: string[]; variante: PrismaVariante; avisos: Aviso[]; destino: Destino };
+export type ResultadoAdaptar = { ok: true; specId: string; promptId: string; tool: Tool; spec: PromptSpec; salida: Salida; valido: boolean; errores: string[]; variante: PrismaVariante; avisos: Aviso[]; destino: Destino; correccion: boolean };
 
 export async function adaptarFormato(specId: string, destino: string): Promise<ResultadoAdaptar | Fail> {
   const g = await gate();
@@ -543,14 +544,14 @@ export async function adaptarFormato(specId: string, destino: string): Promise<R
   const rc = recompilar(spec, tool);
   const { data: nuevo, error } = await db
     .from("prisma_specs")
-    .insert({ client_id: s.row.client_id, marca_id: s.row.marca_id, job: s.row.job, tool, destino, idea: s.row.idea, spec, refs: s.row.refs, created_by: g.soyId, origen_spec_id: specId, respuestas: s.row.respuestas ?? [] })
+    .insert({ client_id: s.row.client_id, marca_id: s.row.marca_id, job: s.row.job, tool, destino, idea: s.row.idea, spec, refs: s.row.refs, created_by: g.soyId, origen_spec_id: specId, respuestas: s.row.respuestas ?? [], correccion_de: s.row.correccion_de ?? null })
     .select("id")
     .single<{ id: string }>();
   if (error || !nuevo) return fallo("prisma_specs.insert", error?.message);
   const avisos = diagnosticoDe(spec, tool, rc.salida, rc.errores, reglasDe(reglas));
   const promptId = await guardarPrompt(nuevo.id, tool, rc.salida, rc.valido, rc.errores, null, variante, PROMPT_VERSION, recomendarModelo(pistasModelo(spec, tool)).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
-  return { ok: true, specId: nuevo.id, promptId, tool, spec, salida: rc.salida, valido: rc.valido, errores: rc.errores, variante, avisos, destino };
+  return { ok: true, specId: nuevo.id, promptId, tool, spec, salida: rc.salida, valido: rc.valido, errores: rc.errores, variante, avisos, destino, correccion: !!s.row.correccion_de };
 }
 
 // ── 9) Lo que el diseñador HACE con el prompt (copiar / abrir en la herramienta) ──

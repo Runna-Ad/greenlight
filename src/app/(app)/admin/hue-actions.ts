@@ -387,7 +387,7 @@ export async function hubPrismaInforme(dias: number): Promise<Ok<{ informe: Info
     db.from("prisma_prompts").select("id, spec_id, tool, modelo_sug, avisos, valido").gte("created_at", desde).order("created_at", { ascending: false }).limit(2000).returns<FilaPromptInforme[]>(),
     db.from("prisma_eventos").select("spec_id, prompt_id, tool, tipo, detalle, user_id").gte("created_at", desde).order("created_at", { ascending: false }).limit(4000).returns<FilaEventoInforme[]>(),
     db.from("prisma_resultados").select("id, spec_id, prompt_id, tool, modelo, score, aceptado").gte("created_at", desde).order("created_at", { ascending: false }).limit(2000).returns<FilaResultadoInforme[]>(),
-    db.from("prisma_specs").select("id, job, respuestas, correccion_de").gte("created_at", desde).order("created_at", { ascending: false }).limit(2000).returns<FilaSpecInforme[]>(),
+    db.from("prisma_specs").select("id, job, respuestas, correccion_de, created_by").gte("created_at", desde).order("created_at", { ascending: false }).limit(2000).returns<FilaSpecInforme[]>(),
   ]);
   for (const [nombre, q] of [["prompts", pr], ["eventos", ev], ["resultados", re], ["specs", sp]] as const) if (q.error) console.warn(`[hub/prisma] informe sin ${nombre}: ${q.error.message}`);
   if (pr.error) return falloReglas("informe.prompts", pr.error.message);
