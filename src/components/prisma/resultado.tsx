@@ -17,6 +17,7 @@ import { DESTINO_LABEL, PEDIR_VERSION_LABEL, TOOL_LABEL, UI, VARIANTE_LABEL, tx,
 import type { PrismaVariante } from "@/lib/database.types";
 import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
 import { pistasModelo, recomendarModelo } from "@/lib/prisma/modelo";
+import { useCatalogo } from "./catalogo-contexto";
 import { DESTINOS, JOB_KIND, type Destino, type PromptSpec, type Tool } from "@/lib/prisma/spec";
 import type { Salida } from "@/lib/prisma/compilers";
 import { prismaGeneracionActiva } from "@/lib/prisma/flags";
@@ -81,7 +82,8 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
   const destinoActual: Destino = vivo.spec.destino ?? "libre";
   // "Úsalo en…": puro y en el cliente; el servidor guarda el mismo cálculo (sobre el spec
   // resultante) en prisma_prompts.modelo_sug para medir si se sigue.
-  const modelo = recomendarModelo(pistasModelo(vivo.spec, vivo.tool));
+  const catalogo = useCatalogo();
+  const modelo = recomendarModelo(pistasModelo(vivo.spec, vivo.tool), catalogo);
   const otras = TOOLS_POR_JOB[vivo.spec.job].filter((t) => t !== vivo.tool);
   // Mientras CUALQUIER acción va al servidor, las demás esperan: dos respuestas cruzadas
   // (cambiar herramienta + otra versión) pisarían el resultado con un `vivo` viejo.

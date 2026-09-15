@@ -11,6 +11,7 @@ import { readTimeS } from "../src/lib/plantilla.ts";
 import { reglasQueAplican } from "../src/lib/reglas.ts";
 import { actionsFor } from "../src/lib/task-actions.ts";
 import { greenlitDeBundle } from "../src/lib/bundle.ts";
+import { CATALOGO_BASE, catalogoDesdeFilas } from "../src/lib/prisma/catalogo.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migDir = join(__dirname, "..", "supabase", "migrations");
@@ -2576,6 +2577,29 @@ console.log("\n▶ 0070 — prisma_resultados + prisma_specs.correccion_de");
   eq("borrar el spec se lleva sus resultados (cascade)", Number(await scalar(`select count(*) from produccion.prisma_resultados where id = $1`, [resId2])), 0);
   eq("…y el spec de corrección sobrevive sin origen (set null)", await scalar(`select origen_spec_id from produccion.prisma_specs where id = $1`, [specC]), null);
   await db.query(`delete from produccion.prisma_specs where id = $1`, [specC]);
+}
+
+// ── 0071: HÜE Prisma v1 · F6a — prisma_herramientas (los datos de cada herramienta) ──
+console.log("\n▶ 0071 — prisma_herramientas");
+{
+  eq("prisma_herramientas existe con RLS", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_herramientas' and c.relrowsecurity`)), 1);
+  eq("policy master-only", Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = 'prisma_herramientas'`)), 1);
+  ok("service_role puede escribir", (await q(`select has_table_privilege('service_role', 'produccion.prisma_herramientas', 'update') as ok`))[0].ok);
+  eq("PUBLIC sin privilegios", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_herramientas' and c.relacl is not null and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+  const filas = await q(`select tool, limites, fortalezas, modelos, fuente_url, fuente_fecha from produccion.prisma_herramientas order by tool`);
+  eq("una fila por herramienta (5)", filas.length, 5);
+  // Sin esto el test de abajo sería vacío: si el jsonb llegara como texto, todo caería a la base.
+  eq("el jsonb llega como datos (Veo: 8, 6, 4 en ese orden)", JSON.stringify(filas.find((f) => f.tool === "veo")?.limites?.duraciones), "[8,6,4]");
+  eq("el seed ES el catálogo de las constantes (leído con catalogoDesdeFilas)", JSON.stringify(catalogoDesdeFilas(filas)), JSON.stringify(CATALOGO_BASE));
+  const malas = [
+    ["un tool con mayúsculas/espacios", `insert into produccion.prisma_herramientas (tool) values ('Mala Tool')`],
+    ["limites que no es objeto", `insert into produccion.prisma_herramientas (tool, limites) values ('x_tool', '[]'::jsonb)`],
+    ["modelos que no es lista", `insert into produccion.prisma_herramientas (tool, modelos) values ('x_tool', '{}'::jsonb)`],
+    ["más de 4 modelos", `insert into produccion.prisma_herramientas (tool, modelos) values ('x_tool', '[1,2,3,4,5]'::jsonb)`],
+    ["una fuente que no es http(s)", `insert into produccion.prisma_herramientas (tool, fuente_url) values ('x_tool', 'javascript:alert(1)')`],
+    ["una herramienta repetida", `insert into produccion.prisma_herramientas (tool) values ('veo')`],
+  ];
+  for (const [que, sql] of malas) ok(`la BD rechaza ${que}`, await db.query(sql).then(() => false).catch(() => true));
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

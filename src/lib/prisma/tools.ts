@@ -148,8 +148,8 @@ export function herramientaVigente(tool: string, job: JobType): Tool | null {
 /** Veo 3.1 exige 8 s cuando hay imágenes de referencia (también con primer/último cuadro y
  *  1080p): con refs la duración pedida se ignora y se fuerza a 8. Sin refs, la más cercana. */
 export const VEO_SEGUNDOS_CON_REFS = 8;
-export function duracionVeo(pedida: number | null, refs: number): number {
-  return refs > 0 ? VEO_SEGUNDOS_CON_REFS : duracionValida("veo", pedida);
+export function duracionVeo(pedida: number | null, refs: number, opciones: number[] = TOOL_INFO.veo.duraciones): number {
+  return refs > 0 ? VEO_SEGUNDOS_CON_REFS : duracionValida("veo", pedida, opciones);
 }
 
 /** Formatos que cada herramienta acepta de verdad (verificado 2026-09-11). El diagnóstico
@@ -169,9 +169,9 @@ export const REFS_MAX: Record<Tool, number> = { nanobanana: 14, chatgpt: 16, veo
 export const TOOL_AUDIO: Record<Tool, boolean> = { nanobanana: false, chatgpt: false, veo: true, kling: true, higgsfield: false };
 
 /** La duración que la herramienta acepta más cercana a la pedida (o su primera opción).
- *  Compiler y validator la usan igual: una sola regla, sin "=== 15 ? 15 : 10" repetido. */
-export function duracionValida(tool: Tool, pedida: number | null): number {
-  const opciones = TOOL_INFO[tool].duraciones;
+ *  Compiler y validator la usan igual: una sola regla, sin "=== 15 ? 15 : 10" repetido.
+ *  F6a: `opciones` = las del catálogo (Hub › Herramientas); por defecto, las constantes. */
+export function duracionValida(tool: Tool, pedida: number | null, opciones: number[] = TOOL_INFO[tool].duraciones): number {
   if (!opciones.length) return 0;
   if (pedida === null) return opciones[0];
   return opciones.reduce((mejor, d) => (Math.abs(d - pedida) < Math.abs(mejor - pedida) ? d : mejor), opciones[0]);

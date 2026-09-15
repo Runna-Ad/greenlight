@@ -15,6 +15,7 @@ import { plano, cercado, cercadoMultilinea } from "../texto.ts";
 import { hayAprendizaje, type Aprendizaje } from "../aprendizaje.ts";
 import { fraseFallos } from "../resultado.ts";
 import type { NotaTool } from "../reglas.ts";
+import type { RolModelo } from "../catalogo.ts";
 
 export type { NotaTool };
 import type { PrismaVariante } from "../../database.types.ts";
@@ -22,7 +23,7 @@ import type { PrismaVariante } from "../../database.types.ts";
 export { plano };
 
 /** Sube cuando cambie cualquier texto de aquí: cada prompt guardado lleva la versión. */
-export const PROMPT_VERSION = "2026-09-14.1";
+export const PROMPT_VERSION = "2026-09-15.1";
 
 export const BLOQUE_ESTABLE = `You are H.Ü.E, the prompt director of Rünna, a creative agency in Mexico. Designers with little AI experience describe what they want in plain words (Spanish or English) and upload reference images. Your job is NOT to write the final prompt: it is to fill a structured PromptSpec that the app then compiles into the exact format each tool needs (Nano Banana, ChatGPT Images, Veo 3.1, Kling, Higgsfield). You report the spec with the tool call. Nothing else.
 
@@ -93,6 +94,8 @@ export type EntradaWriter = {
   aprendizaje: Aprendizaje | null;
   /** F1: el modelo/nivel recomendado ("Úsalo en…"), para que el writer dimensione el spec. */
   modelo?: string | null;
+  /** F6a: el tier de ese modelo (del catálogo): la pista de tamaño sale de aquí, no del nombre. */
+  modeloRol?: RolModelo | null;
   /** F3: lo que el diseñador contestó en la entrevista (chips o texto libre; datos). */
   respuestas?: { id: string; valor: string }[];
 };
@@ -145,9 +148,11 @@ export function bloqueVariable(e: EntradaWriter): string {
   lineas.push(`TOOL: ${e.tool}`);
   lineas.push(`DESTINATION: ${e.destino} · aspect ${e.aspect}${e.duracion ? ` · ${e.duracion} s` : ""}`);
   if (e.videoType) lineas.push(`VIDEO TYPE (style vocabulary for Veo/Kling): ${e.videoType}`);
-  // El modelo/nivel donde se va a pegar: Pro y sunburst premian el detalle preciso; Flash,
-  // flare, Fast y Turbo premian la brevedad.
-  if (e.modelo) lineas.push(`TARGET MODEL: ${e.modelo} (Pro / sunburst reward precise detail; Flash / flare / Fast / Turbo reward brevity — size the spec accordingly)`);
+  // El modelo/nivel donde se va a pegar. F6a: el id viene del catálogo (editable en el Hub), así que
+  // va cercado como todo dato de fuera; y la pista de tamaño sale del ROL (el fino premia el detalle,
+  // el rápido la brevedad), no de nombres de modelo que el catálogo puede cambiar.
+  const tier = e.modeloRol === "fino" ? "the precise tier: it rewards precise detail" : e.modeloRol === "rapido" ? "the fast tier: it rewards brevity" : "Pro / sunburst reward precise detail; Flash / flare / Fast / Turbo reward brevity";
+  if (e.modelo) lineas.push(`TARGET MODEL: ${cercado(e.modelo)} (${tier} — size the spec accordingly)`);
   lineas.push(`IDEA (verbatim from the designer): "${e.idea.trim() || "(empty: infer the simplest scene for this job)"}"`);
   const esperadas = REFS_POR_JOB[e.job].map((r) => r.role + (r.opcional ? "?" : "")).join(", ") || "none";
   lineas.push(`EXPECTED REFERENCES FOR THIS JOB: ${esperadas}`);

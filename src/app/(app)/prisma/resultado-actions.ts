@@ -3,7 +3,8 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { compararResultado, recompilar, PROMPT_VERSION } from "@/lib/prisma/writer";
 import { BUCKET, cargarReglas } from "@/lib/prisma/data";
-import { MODELOS_POR_TOOL, pistasModelo, recomendarModelo } from "@/lib/prisma/modelo";
+import { pistasModelo, recomendarModelo } from "@/lib/prisma/modelo";
+import type { Catalogo } from "@/lib/prisma/catalogo";
 import { detalleFallos, fallosDe, scoreDe, specCorreccion, veredictoAFila, veredictoDe, type ResultadoVivo } from "@/lib/prisma/resultado";
 import { JOB_KIND, TOOLS, type PromptSpec, type Tool } from "@/lib/prisma/spec";
 import { TOOLS_POR_JOB } from "@/lib/prisma/tools";
@@ -26,10 +27,11 @@ import { FRENO, MAX_BYTES_VISION, MAX_MB_VISION_TEXTO, UUID, anotarEvento, diagn
 
 /** El modelo que dice haber usado: uno de los de ESA herramienta, "otro", o nada. Fail-closed:
  *  no se guarda texto libre (y un modelo de Kling no cuenta para un resultado de Nano Banana). */
-function modeloDe(raw: unknown, tool: Tool): string | null | Fail {
+function modeloDe(raw: unknown, tool: Tool, cat: Catalogo): string | null | Fail {
   const m = sn(raw, 60);
   if (!m) return null;
-  return MODELOS_POR_TOOL[tool].some((x) => x.id === m) || m === "otro" ? m : { ok: false, error: "Modelo no válido." };
+  // F6a: los modelos de hoy (Hub › Herramientas), los mismos que el cliente ofrece en "¿en cuál lo generaste?".
+  return cat[tool].modelos.some((x) => x.id === m) || m === "otro" ? m : { ok: false, error: "Modelo no válido." };
 }
 
 /** El resultado + el spec al que pertenece (con el cerco de siempre: sólo lo que puedes tocar). */
@@ -70,7 +72,7 @@ export async function subirResultado(form: FormData): Promise<ResultadoSubido | 
   const img = await leerImagen(form, MAX_BYTES_VISION, `Para compararla, la imagen debe pesar menos de ${MAX_MB_VISION_TEXTO}.`);
   if ("ok" in img) return img;
   const tool: Tool = (TOOLS as string[]).includes(p.tool) ? (p.tool as Tool) : s.spec.tool;
-  const modelo = modeloDe(form.get("modelo"), tool);
+  const modelo = modeloDe(form.get("modelo"), tool, (await cargarReglas(db)).catalogo);
   if (modelo && typeof modelo === "object") return modelo;
 
   // Primero comparar, luego guardar: si H.Ü.E no responde, no queda un archivo huérfano en el bucket.
@@ -127,14 +129,14 @@ export async function corregirResultado(resultadoId: string): Promise<ResultadoC
   // La corrección se hace en la MISMA herramienta de imagen; si el resultado vino de otra, Nano Banana.
   const tool: Tool = (TOOLS as string[]).includes(r.tool) && TOOLS_POR_JOB.correccion.includes(r.tool as Tool) ? (r.tool as Tool) : "nanobanana";
   const spec = specCorreccion(s.spec, tool, v.correccion, v.caption, fallosDe(v));
-  const rc = recompilar(spec, tool);
+  const reglas = await cargarReglas(db);
+  const rc = recompilar(spec, tool, reglas.catalogo);
   const refs: PrismaRefGuardada[] = [{ role: "resultado", storage_path: r.storage_path, caption: v.caption, dna: null }];
   // `s` es el spec de ESTE resultado (resultadoDeFila → specDeFila(r.spec_id)): el hermano enlaza con él.
   const { data: nuevo, error } = await db.from("prisma_specs").insert(filaHermana(s.row, { job: "correccion", spec, tool, refs, correccion_de: r.id, created_by: g.soyId })).select("id").single<{ id: string }>();
   if (error || !nuevo) return faltaMigracion(error, "0070") ?? fallo("prisma_specs.insert", error?.message);
-  const reglas = await cargarReglas(db);
-  const avisos = diagnosticoDe(spec, tool, rc.salida, rc.errores, reglasDe(reglas));
-  const promptId = await guardarPrompt(nuevo.id, tool, rc.salida, rc.valido, rc.errores, null, "base", PROMPT_VERSION, recomendarModelo(pistasModelo(spec, tool)).modelo, avisos);
+  const avisos = diagnosticoDe(spec, tool, rc.salida, rc.errores, reglasDe(reglas), reglas.catalogo);
+  const promptId = await guardarPrompt(nuevo.id, tool, rc.salida, rc.valido, rc.errores, null, "base", PROMPT_VERSION, recomendarModelo(pistasModelo(spec, tool), reglas.catalogo).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
   // El evento queda en el spec ORIGINAL: "a este prompt hubo que corregirle X".
   await anotarEvento(db, { spec_id: r.spec_id, prompt_id: r.prompt_id, client_id: s.row.client_id, job: s.row.job, tool, variante: "base", user_id: g.soyId, tipo: "correccion_generada", detalle: fallosDe(v).join(",") || null });

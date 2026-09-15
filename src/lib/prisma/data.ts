@@ -8,6 +8,7 @@ import { resumirAprendizaje, type Aprendizaje, type EventoRow, type PromptCandid
 import { notasDe, type NotaTool } from "@/lib/prisma/reglas";
 import type { FilaHabito } from "@/lib/prisma/looks";
 import type { PrismaReglaRow } from "@/lib/database.types";
+import { CATALOGO_BASE, catalogoDesdeFilas, type Catalogo, type FilaHerramienta } from "@/lib/prisma/catalogo";
 
 /**
  * HÜE Prisma — lecturas de servidor (marcas con preset, personajes, historial, URLs
@@ -182,7 +183,8 @@ export async function cargarHabitos(db: Db, clientId: string, limite = 60): Prom
   });
 }
 
-export type ReglasCargadas = { filas: PrismaReglaRow[]; notas: NotaTool[]; clave: string };
+/** El conocimiento vivo: notas y reglas (0067) + los datos de cada herramienta (0071, F6a). */
+export type ReglasCargadas = { filas: PrismaReglaRow[]; notas: NotaTool[]; clave: string; catalogo: Catalogo };
 
 /** FNV-1a de 32 bits en base 36: suficiente para distinguir versiones del conocimiento. */
 function huella(s: string): string {
@@ -206,19 +208,32 @@ let reglasCache: { en: number; valor: ReglasCargadas } | null = null;
 export async function cargarReglas(db: Db): Promise<ReglasCargadas> {
   const ahora = Date.now();
   if (reglasCache && ahora - reglasCache.en < REGLAS_TTL_MS) return reglasCache.valor;
-  const { data, error } = await db.from("prisma_reglas").select("*").eq("activa", true).order("clase").order("orden").limit(120).returns<PrismaReglaRow[]>();
-  if (error) {
-    console.warn(`[prisma] reglas no disponibles (¿falta la 0067?): ${error.message}`);
-    return { filas: [], notas: [], clave: "0" };
+  // F6a: los datos de cada herramienta viajan con las reglas (misma caché, una sola ida a la BD).
+  const [rg, hr] = await Promise.all([
+    db.from("prisma_reglas").select("*").eq("activa", true).order("clase").order("orden").limit(120).returns<PrismaReglaRow[]>(),
+    db.from("prisma_herramientas").select("tool, limites, fortalezas, modelos, fuente_url, fuente_fecha").limit(20).returns<FilaHerramienta[]>(),
+  ]);
+  // Sin la 0071 (o si falla) se sigue con las constantes: nunca rompe una generación.
+  if (hr.error) console.warn(`[prisma] herramientas no disponibles (¿falta la 0071?): ${hr.error.message}`);
+  const catalogo = hr.error ? CATALOGO_BASE : catalogoDesdeFilas(hr.data ?? []);
+  if (rg.error) {
+    console.warn(`[prisma] reglas no disponibles (¿falta la 0067?): ${rg.error.message}`);
+    return { filas: [], notas: [], clave: "0", catalogo };
   }
-  const filas = data ?? [];
+  const filas = rg.data ?? [];
   const notas = notasDe(filas);
   // Huella del CONTENIDO que entra al prompt (no max(updated_at): apagar una nota vieja no
   // movería ese máximo y el caché del writer seguiría sirviendo la nota apagada).
   const clave = notas.length ? `${notas.length}.${huella(notas.map((n) => `${n.tool ?? ""}|${n.fecha ?? ""}|${n.texto}`).join("\n"))}` : "0";
-  const valor = { filas, notas, clave };
+  const valor = { filas, notas, clave, catalogo };
   reglasCache = { en: ahora, valor };
   return valor;
+}
+
+/** Tras guardar en el Hub (reglas o herramientas): la siguiente lectura va a la BD, no a la caché
+ *  de esta instancia. Otras instancias la renuevan solas en ≤ 60 s. */
+export function olvidarConocimiento(): void {
+  reglasCache = null;
 }
 
 /** URLs firmadas en lote (bucket privado), 1 h. */

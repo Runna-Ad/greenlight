@@ -16,6 +16,7 @@ import type { PrismaEventoTipo, PrismaResultadoRow, PrismaSpecRow, PrismaVariant
 import type { Salida } from "@/lib/prisma/compilers";
 import { veredictoDe, type ResultadoVivo } from "@/lib/prisma/resultado";
 import { faltaMigracion } from "@/lib/prisma/migracion";
+import type { Catalogo } from "@/lib/prisma/catalogo";
 
 export type { ResultadoVivo };
 export { faltaMigracion };
@@ -143,8 +144,8 @@ export const reglasDe = (r: Awaited<ReturnType<typeof cargarReglas>>): ReglaComp
 /** El diagnóstico del resultado: reglas + validador. Determinista y al instante. El JUICIO de
  *  H.Ü.E (modelo) ya no va aquí: F5a "prompt primero, juicio después" — el prompt se enseña ya y,
  *  en video, el cliente pide el juicio en segundo plano (revisarBien) y los avisos llegan después. */
-export function diagnosticoDe(spec: PromptSpec, tool: Tool, salida: Salida, errores: string[], reglas: ReglaCompilada[]): Aviso[] {
-  return diagnosticar(spec, tool, salida.texto, errores, reglas);
+export function diagnosticoDe(spec: PromptSpec, tool: Tool, salida: Salida, errores: string[], reglas: ReglaCompilada[], cat?: Catalogo): Aviso[] {
+  return diagnosticar(spec, tool, salida.texto, errores, reglas, cat);
 }
 
 /** Registra lo que el diseñador HIZO (0066) — la señal con la que H.Ü.E aprende. Nunca

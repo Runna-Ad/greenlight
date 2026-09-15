@@ -7,6 +7,8 @@
 import { contarPalabras, textoDe, type PromptSpec, type Tool } from "./spec.ts";
 import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO, duracionVeo } from "./tools.ts";
 import { PRESETS_HIGGSFIELD } from "./compilers/higgsfield.ts";
+import { topePalabras } from "./compilers/kling.ts";
+import type { Catalogo, Limites } from "./catalogo.ts";
 import { ORDINAL } from "./compilers/chatgpt.ts";
 import { tipoEn } from "./compilers/video-tipos.ts";
 import { movimientos } from "./camara.ts";
@@ -58,13 +60,13 @@ function comunes(texto: string, spec: PromptSpec): string[] {
   return e;
 }
 
-function kling(texto: string, spec: PromptSpec): string[] {
+function kling(texto: string, spec: PromptSpec, lim?: Limites): string[] {
   const e: string[] = [];
   if (spec.job === "transicion") {
     if (texto.length > KLING_MAX_CHARS_TRANSICION) e.push(`Transición de ${texto.length} caracteres; Kling corta en ${KLING_MAX_CHARS_TRANSICION}.`);
     return e;
   }
-  const max = TOOL_INFO.kling.maxPalabras ?? 60;
+  const max = topePalabras(lim, TOOL_INFO.kling.maxPalabras ?? 60);
   const n = contarPalabras(texto);
   if (n > max) e.push(`${n} palabras; Kling rinde con ≤${max}.`);
   if ((texto.match(/\./g)?.length ?? 0) > 2) e.push("Debe ser una sola oración (separa con comas, no con puntos).");
@@ -73,7 +75,7 @@ function kling(texto: string, spec: PromptSpec): string[] {
   return e;
 }
 
-function veo(texto: string, spec: PromptSpec): string[] {
+function veo(texto: string, spec: PromptSpec, lim?: Limites): string[] {
   const e: string[] = [];
   let j: Record<string, unknown>;
   try {
@@ -85,7 +87,7 @@ function veo(texto: string, spec: PromptSpec): string[] {
     if (!(k in j)) e.push(`Falta el campo "${k}" en el JSON de Veo.`);
   }
   // 8 s obligatorio con referencias; sin ellas, una de las duraciones de Veo.
-  const esperada = duracionVeo(spec.duracion, spec.refs.length);
+  const esperada = duracionVeo(spec.duracion, spec.refs.length, lim?.duraciones);
   if (j.duration_seconds !== esperada) e.push(`duration_seconds debe ser ${esperada}${spec.refs.length ? " (con referencias Veo sólo genera 8 s)" : ""}.`);
   const kw = Array.isArray(j.keywords) ? (j.keywords as unknown[]) : [];
   if (!kw.includes(spec.aspect)) e.push(`keywords debe incluir el formato ${spec.aspect}.`);
@@ -104,10 +106,10 @@ function veo(texto: string, spec: PromptSpec): string[] {
   return e;
 }
 
-function higgsfield(texto: string): string[] {
+function higgsfield(texto: string, lim?: Limites): string[] {
   const e: string[] = [];
   const [cuerpo, presetLinea] = texto.split("\nCamera preset: ");
-  const max = TOOL_INFO.higgsfield.maxPalabras ?? 60;
+  const max = topePalabras(lim, TOOL_INFO.higgsfield.maxPalabras ?? 60);
   const n = contarPalabras(cuerpo ?? "");
   if (n > max) e.push(`${n} palabras; Higgsfield rinde con ≤${max}.`);
   if (!presetLinea || !(PRESETS_HIGGSFIELD as readonly string[]).includes(presetLinea.trim())) e.push("Falta un preset de cámara válido de Higgsfield.");
@@ -138,17 +140,19 @@ function chatgpt(texto: string, spec: PromptSpec): string[] {
   return e;
 }
 
-export function validar(texto: string, spec: PromptSpec, tool: Tool = spec.tool): Veredicto {
+/** F6a: `cat` = el MISMO catálogo con el que se compiló (topes de palabras, duraciones). */
+export function validar(texto: string, spec: PromptSpec, tool: Tool = spec.tool, cat?: Catalogo): Veredicto {
   const errores = [...comunes(texto, spec)];
+  const lim = cat?.[tool].limites;
   switch (tool) {
     case "kling":
-      errores.push(...kling(texto, spec));
+      errores.push(...kling(texto, spec, lim));
       break;
     case "veo":
-      errores.push(...veo(texto, spec));
+      errores.push(...veo(texto, spec, lim));
       break;
     case "higgsfield":
-      errores.push(...higgsfield(texto));
+      errores.push(...higgsfield(texto, lim));
       break;
     case "nanobanana":
       errores.push(...nanobanana(texto, spec));

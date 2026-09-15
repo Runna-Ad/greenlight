@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { aceptarResultado, corregirResultado, subirResultado, type ResultadoCorregir } from "@/app/(app)/prisma/resultado-actions";
 import { CAMPO_VEREDICTO_LABEL, UI, tx, type Lang } from "@/lib/prisma/copy";
-import { MODELOS_POR_TOOL } from "@/lib/prisma/modelo";
+import { useCatalogo } from "./catalogo-contexto";
 import type { ResultadoVivo } from "@/lib/prisma/resultado";
 import { JOB_KIND, type JobType, type Tool } from "@/lib/prisma/spec";
 
@@ -54,7 +54,8 @@ export function ComoSalio({
   const [aceptando, setAceptando] = useState(false);
   const video = JOB_KIND[job] === "video";
   const esDemo = specId === "demo";
-  const modelos = MODELOS_POR_TOOL[tool];
+  // F6a: los modelos de hoy (Hub › Herramientas); el servidor valida contra los mismos.
+  const modelos = useCatalogo()[tool].modelos;
   const bloqueado = ocupado || subiendo || corrigiendo || refinando || aceptando;
 
   const subir = async (file: File) => {

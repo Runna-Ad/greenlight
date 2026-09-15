@@ -9,6 +9,8 @@ import { cargarHistorial, cargarMarcas, cargarReglas } from "@/lib/prisma/data";
 import type { ReglaCliente } from "@/lib/prisma/diagnostico";
 import type { Pregunta } from "@/lib/prisma/entrevista";
 import { PrismaStudio, type MarcaUI } from "@/components/prisma/studio";
+import { CatalogoProvider } from "@/components/prisma/catalogo-contexto";
+import { CATALOGO_BASE, type Catalogo } from "@/lib/prisma/catalogo";
 import type { ItemHistorialUI } from "@/components/prisma/historial";
 import { specVacio, type JobType, type Tool } from "@/lib/prisma/spec";
 import { compilar } from "@/lib/prisma/compilers";
@@ -93,9 +95,22 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
     );
   }
 
+  // Sólo dev (`?demo=herramientas`): la pestaña Hub › Prisma › Herramientas con los valores del
+  // código, sin sesión master y sin guardar — para ver la pantalla en local.
+  if (sp.demo === "herramientas" && process.env.NODE_ENV === "development") {
+    // Import dinámico: el editor del Hub no viaja en el bundle de /prisma de nadie.
+    const { PrismaHerramientas } = await import("@/components/admin/hue-hub/prisma-herramientas");
+    return (
+      <div className="mx-auto max-w-4xl">
+        <PrismaHerramientas demo={CATALOGO_BASE} />
+      </div>
+    );
+  }
+
   let marcas: MarcaUI[] = [];
   let historial: ItemHistorialUI[] = [];
   let reglas: ReglaCliente[] = [];
+  let catalogo: Catalogo = CATALOGO_BASE;
   if (hasSupabase()) {
     const db = supabaseAdmin();
     // lead/admin/master ven el historial de todos; el especialista, el suyo. Misma
@@ -106,6 +121,9 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
     const [m, h, r] = await Promise.all([cargarMarcas(db), cargarHistorial(db, soy?.id ?? null, todos), cargarReglas(db)]);
     // Sólo lo que el diagnóstico necesita (sin ids, fechas ni notas): el cliente las compila.
     reglas = r.filas.filter((f) => f.clase === "regla").map((f) => ({ codigo: f.codigo, tool: f.tool, kind: f.kind, nivel: f.nivel, campo: f.campo, patron: f.patron, umbral: f.umbral, que_es: f.que_es, que_en: f.que_en, porque_es: f.porque_es, porque_en: f.porque_en, arreglo_es: f.arreglo_es, arreglo_en: f.arreglo_en, accion: f.accion, fuente_url: f.fuente_url, fuente_fecha: f.fuente_fecha, fuente_tipo: f.fuente_tipo }));
+    // F6a: límites, fortalezas y modelos vigentes (Hub › Herramientas) — el wizard, el routing y
+    // "Úsalo en…" del cliente usan los mismos que el servidor.
+    catalogo = r.catalogo;
     marcas = m.map((x) => ({ id: x.id, name: x.name, client_id: x.client_id, client_name: x.client_name, preset: x.preset }));
     historial = h.map((it) => ({
       specId: it.spec.id,
@@ -120,5 +138,9 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
     }));
   }
 
-  return <PrismaStudio marcas={marcas} historial={historial} demo={demo} demoPreguntas={demoPreguntas} verTodo={canVerTodoPrisma(role)} reglas={reglas} />;
+  return (
+    <CatalogoProvider value={catalogo}>
+      <PrismaStudio marcas={marcas} historial={historial} demo={demo} demoPreguntas={demoPreguntas} verTodo={canVerTodoPrisma(role)} reglas={reglas} />
+    </CatalogoProvider>
+  );
 }

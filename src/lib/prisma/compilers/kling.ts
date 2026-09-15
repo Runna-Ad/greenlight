@@ -9,10 +9,13 @@ import { comas, contarPalabras, negativosDe, sinPronombre, textoDe, type PromptS
 import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO } from "../tools.ts";
 import { positivar } from "../positivo.ts";
 import type { Salida } from "./salida.ts";
+import type { Limites } from "../catalogo.ts";
 import { tipoEn } from "./video-tipos.ts";
 import { zonaSeguraCorta } from "./zonas.ts";
 
 const MAX = TOOL_INFO.kling.maxPalabras ?? 60;
+/** El tope vigente: el del catálogo si viene (null = sin tope), si no la constante. */
+export const topePalabras = (lim: Limites | undefined, base: number): number => (lim ? (lim.maxPalabras ?? Infinity) : base);
 
 function transicion(spec: PromptSpec): string {
   let t = `Seamless single continuous shot transitioning from the start image to the end image. ${spec.accion || "Connect elements, colors and themes between both scenes: the camera moves or the world morphs organically, no cut"}.${spec.camara.movimiento ? ` ${spec.camara.movimiento}.` : ""}${spec.mood ? ` ${spec.mood}.` : ""}`;
@@ -20,8 +23,9 @@ function transicion(spec: PromptSpec): string {
   return t;
 }
 
-export function compilarKling(spec: PromptSpec): Salida {
+export function compilarKling(spec: PromptSpec, lim?: Limites): Salida {
   if (spec.job === "transicion") return { texto: transicion(spec), formato: "texto" };
+  const max = topePalabras(lim, MAX);
 
   // El tipo de video (si lo hay) abre la capa de estilo: corto, porque Kling cuenta palabras.
   const estilo = comas(tipoEn(spec.video_type), spec.estilo || "cinematic video");
@@ -43,11 +47,11 @@ export function compilarKling(spec: PromptSpec): Salida {
   const zona = zonaSeguraCorta(spec);
   const capas = [estilo, sujeto, camara, ...(clausulaTexto ? [clausulaTexto] : []), atmosfera, positivos, ...(zona ? [zona] : [])];
   let texto = comas(...capas);
-  while (contarPalabras(texto) > MAX && capas.length > 2) {
+  while (contarPalabras(texto) > max && capas.length > 2) {
     capas.pop();
     texto = comas(...capas);
   }
-  if (contarPalabras(texto) > MAX) texto = texto.split(/\s+/).slice(0, MAX).join(" ").replace(/[,;\s]+$/, "");
+  if (contarPalabras(texto) > max) texto = texto.split(/\s+/).slice(0, max).join(" ").replace(/[,;\s]+$/, "");
   texto = texto.charAt(0).toUpperCase() + texto.slice(1) + ".";
   return { texto, formato: "texto" };
 }

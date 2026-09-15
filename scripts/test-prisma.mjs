@@ -41,6 +41,9 @@ import { JOB_KIND as JOB_KIND_F5 } from "../src/lib/prisma/spec.ts";
 import { tieneZonaSegura, zonaSeguraImagen, zonaSeguraCorta } from "../src/lib/prisma/compilers/zonas.ts";
 import { resumirInforme } from "../src/lib/prisma/informe.ts";
 import { filaHermana } from "../src/lib/prisma/hermano.ts";
+import { CATALOGO_BASE, catalogoDesdeFilas, fichaAFila, validarFicha, mejorEn, modeloPorRol, fortalezasDe, refsMinimas } from "../src/lib/prisma/catalogo.ts";
+import { JOB_KIND as JOB_KIND_F6, DESTINOS as DESTINOS_F6 } from "../src/lib/prisma/spec.ts";
+import { duracionValida as duracionValidaF6 } from "../src/lib/prisma/tools.ts";
 import { bloqueVeredicto } from "../src/lib/prisma/prompts/writer.ts";
 
 let pass = 0,
@@ -681,6 +684,8 @@ console.log("\n▶ F1 — Úsalo en… (recomendarModelo)");
   const entrada = { job: "foto_producto", tool: "nanobanana", idea: "x", destino: "ig_feed", aspect: "1:1", duracion: null, refs: [], look: { luz: null, movimiento: null, lente: null, mood: null, estilo: null }, dialogo: null, marca: null, personaje: null, videoType: null, texto: null, aprendizaje: null };
   ok("TARGET MODEL viaja al writer", bloqueVariable({ ...entrada, modelo: "gemini-3-pro-image" }).includes("TARGET MODEL: gemini-3-pro-image"));
   ok("sin modelo no hay línea", !bloqueVariable(entrada).includes("TARGET MODEL"));
+  ok("F6a: con el rol del catálogo, la pista es el tier (sin nombres de modelo)", bloqueVariable({ ...entrada, modelo: "gpt-image-3", modeloRol: "rapido" }).includes("TARGET MODEL: gpt-image-3 (the fast tier"));
+  ok("F6a: el id del catálogo va cercado (sin < >)", !/[<>]/.test(bloqueVariable({ ...entrada, modelo: "x<b>y", modeloRol: "fino" }).split("\n").find((l) => l.startsWith("TARGET MODEL")) ?? "<"));
   const f = compilarFusion({ role: "sujeto", caption: "a woman", dna: null }, { role: "producto", caption: null, dna: null }, "16:9");
   ok("fusión: combina [Imagen 1] y [Imagen 2] en una y pide el formato", f.includes("[Imagen 1]") && f.includes("[Imagen 2]") && f.includes("16:9") && /Combine/.test(f), f);
 }
@@ -1170,6 +1175,131 @@ console.log("\n▶ spec hermano — UNA función decide qué columnas viajan (va
   const corr = filaHermana(original, { job: "correccion", spec: {}, tool: "nanobanana", refs: refsRes, correccion_de: "r9", created_by: "ana" });
   eq("corregir: job correccion, refs del resultado, apunta al resultado y al spec del que viene", JSON.stringify([corr.job, corr.refs[0].role, corr.correccion_de, corr.origen_spec_id, corr.destino]), JSON.stringify(["correccion", "resultado", "r9", "s-orig", "ig_feed"]));
   eq("sin correccion_de en el original (fila de antes de la 0070) → null, no undefined", filaHermana({ ...original, correccion_de: undefined }, { spec: {}, tool: "nanobanana", created_by: "ana" }).correccion_de, null);
+}
+
+console.log("\n▶ F6a — catálogo de herramientas (límites, fortalezas, modelos como datos)");
+{
+  const clon = () => structuredClone(CATALOGO_BASE);
+  const TOOLS_F6 = Object.keys(CATALOGO_BASE);
+  // El routing de ANTES de F6a (copiado tal cual, sólo la herramienta): el seed debe reproducirlo en TODO.
+  const rutaV1 = (p) => {
+    const opciones = TOOLS_POR_JOB[p.job];
+    if (JOB_KIND_F6[p.job] !== "video") return p.tieneTexto ? "chatgpt" : "nanobanana";
+    if (opciones.length === 1) return opciones[0];
+    if (p.job === "transicion") return "kling";
+    const vertical = p.destino === "ig_story" || p.destino === "tiktok";
+    if (p.job === "escena_sora") return !p.tieneDialogo && vertical ? "kling" : "veo";
+    if (p.tieneDialogo) return "veo";
+    if (p.job === "animar_foto" && p.movimientoMarcado) return "higgsfield";
+    if (p.job === "animar_foto" && vertical) return "kling";
+    return opciones[0];
+  };
+  const desdeSeed = catalogoDesdeFilas(TOOLS_F6.map((tool) => ({ tool, ...fichaAFila(tool, CATALOGO_BASE[tool]) })));
+  let casos = 0, distintos = 0, distintosSeed = 0;
+  for (const job of Object.keys(TOOLS_POR_JOB)) for (const destino of DESTINOS_F6) for (let b = 0; b < 16; b++) {
+    const p = { job, destino, tieneDialogo: !!(b & 1), tieneRefs: !!(b & 2), movimientoMarcado: !!(b & 4), tieneTexto: !!(b & 8) };
+    casos++;
+    if (elegirHerramienta(p).tool !== rutaV1(p)) distintos++;
+    if (elegirHerramienta(p, desdeSeed).tool !== rutaV1(p)) distintosSeed++;
+  }
+  eq(`golden: las ${casos} combinaciones (job × destino × pistas) eligen igual que antes de F6a`, distintos, 0);
+  eq("golden: leído desde las filas del seed, también igual", distintosSeed, 0);
+  eq("el seed ida y vuelta (fichaAFila → catalogoDesdeFilas) es exactamente la base", JSON.stringify(desdeSeed), JSON.stringify(CATALOGO_BASE));
+  ok("la base pasa la validación ESTRICTA del Hub en las 5 herramientas", TOOLS_F6.every((tool) => validarFicha(tool, fichaAFila(tool, CATALOGO_BASE[tool])).ok));
+  eq("sólo las fortalezas que el routing usa: imagen 2, video 3", JSON.stringify([fortalezasDe("chatgpt"), fortalezasDe("kling")]), JSON.stringify([["texto_exacto", "identidad"], ["voz", "movimiento", "rapidez"]]));
+
+  // "ChatGPT 6 reconoce mejor las caras" = subir un número → la sugerencia cambia sin deploy.
+  const caras = clon();
+  caras.chatgpt.fortalezas.identidad = 5;
+  caras.nanobanana.fortalezas.identidad = 3;
+  const fotoSinTexto = { job: "foto_producto", destino: "ig_feed", tieneDialogo: false, tieneRefs: true, movimientoMarcado: false, tieneTexto: false };
+  const e1 = elegirHerramienta(fotoSinTexto, caras);
+  ok("subir la fortaleza de caras de ChatGPT cambia la sugerencia (y el porqué la nombra)", e1.tool === "chatgpt" && e1.porque.es.includes("ChatGPT Images"), JSON.stringify(e1));
+  eq("empate → la primera de la lista del trabajo", mejorEn({ ...clon(), chatgpt: { ...clon().chatgpt, fortalezas: { ...clon().chatgpt.fortalezas, identidad: 5 } } }, "identidad", ["nanobanana", "chatgpt"]), "nanobanana");
+
+  // Modelos: el código elige el ROL, el catálogo dice qué modelo es hoy.
+  const nuevo = clon();
+  nuevo.chatgpt.modelos = [nuevo.chatgpt.modelos[0], { id: "gpt-image-3", etiqueta: "ChatGPT Images 3", rol: "fino", comoLlegar: { es: "En ChatGPT elige Images 3.", en: "In ChatGPT pick Images 3." } }];
+  const pm = { job: "foto_producto", tool: "chatgpt", destino: "ig_feed", refs: 0, texto: true, dialogo: false, duracion: null };
+  const rec = recomendarModelo(pm, nuevo);
+  ok("un modelo nuevo en el catálogo sale en 'Úsalo en…' con su nombre y cómo llegar", rec.modelo === "gpt-image-3" && rec.porque.es.includes("ChatGPT Images 3") && rec.comoLlegar.es === "En ChatGPT elige Images 3.", JSON.stringify(rec));
+  eq("sin catálogo, el mismo id de siempre", recomendarModelo(pm).modelo, "gpt-image-2.5-sunburst");
+  eq("un rol que falta en el catálogo → el de la base", modeloPorRol({ ...clon(), nanobanana: { ...clon().nanobanana, modelos: [] } }, "nanobanana", "fino").id, "gemini-3-pro-image");
+
+  // Carga TOLERANTE: lo raro se queda con la base, campo a campo; nunca rompe.
+  const raro = catalogoDesdeFilas([
+    { tool: "nanobanana", limites: { duraciones: [5], aspects: ["1:1", "99:1"], refs_max: 99, audio: "si" }, fortalezas: { texto_exacto: 9, identidad: 4 }, modelos: [{ id: "Mal ID", etiqueta: "x", rol: "fino", como_llegar_es: "a", como_llegar_en: "b" }], fuente_url: "javascript:x", fuente_fecha: "ayer" },
+    { tool: "sora", limites: {}, fortalezas: {}, modelos: [], fuente_url: null, fuente_fecha: null },
+  ]);
+  const nb = raro.nanobanana;
+  ok("fila rara: duraciones/formatos/refs/audio/modelos/fuente malos → base; la fortaleza buena sí entra", JSON.stringify(nb.limites) === JSON.stringify(CATALOGO_BASE.nanobanana.limites) && nb.fortalezas.texto_exacto === 3 && nb.fortalezas.identidad === 4 && nb.modelos === CATALOGO_BASE.nanobanana.modelos && nb.fuente === null, JSON.stringify(nb));
+  ok("una herramienta desconocida (sora) no entra al catálogo", !("sora" in raro));
+  const mudo = catalogoDesdeFilas([{ tool: "kling", limites: { audio: false }, fortalezas: { voz: 4, movimiento: 4, rapidez: 5 }, modelos: null, fuente_url: null, fuente_fecha: null }]);
+  eq("sin audio, la voz es 0 aunque la fila diga otra cosa (nunca mandar diálogo a una muda)", mudo.kling.fortalezas.voz, 0);
+  eq("max_palabras null = sin tope; fuera de rango → base", JSON.stringify([catalogoDesdeFilas([{ tool: "kling", limites: { max_palabras: null } }]).kling.limites.maxPalabras, catalogoDesdeFilas([{ tool: "kling", limites: { max_palabras: 5 } }]).kling.limites.maxPalabras]), "[null,60]");
+
+  // Validación ESTRICTA del Hub: cualquier campo mal = no se guarda, con el porqué.
+  const snake = (ms) => ms.map((m) => ({ id: m.id, etiqueta: m.etiqueta, rol: m.rol, como_llegar_es: m.comoLlegar.es, como_llegar_en: m.comoLlegar.en }));
+  const klingOk = { limites: { duraciones: [5, 10, 15], max_palabras: 80, max_caracteres: null, aspects: ["16:9", "9:16", "1:1"], refs_max: 3, audio: true }, fortalezas: { voz: 3, movimiento: 4, rapidez: 5 }, modelos: snake(CATALOGO_BASE.kling.modelos), fuente_url: "https://app.klingai.com/", fuente_fecha: "2026-09-15" };
+  const v = validarFicha("kling", klingOk);
+  ok("una ficha buena se guarda, normalizada (sólo sus 3 fortalezas)", v.ok && v.fila.limites.max_palabras === 80 && Object.keys(v.fila.fortalezas).length === 3 && v.fila.fuente_fecha === "2026-09-15", JSON.stringify(v));
+  const malas = [
+    ["imagen con duraciones", "nanobanana", { ...fichaAFila("nanobanana", CATALOGO_BASE.nanobanana), limites: { ...fichaAFila("nanobanana", CATALOGO_BASE.nanobanana).limites, duraciones: [5] } }, /imagen no lleva duraciones/],
+    ["voz sin audio", "kling", { ...klingOk, limites: { ...klingOk.limites, audio: false } }, /voz/],
+    ["fortaleza fuera de 0–5", "kling", { ...klingOk, fortalezas: { ...klingOk.fortalezas, rapidez: 6 } }, /0 a 5/],
+    ["id de modelo con espacios", "kling", { ...klingOk, modelos: [{ ...klingOk.modelos[0], id: "Kling Tres" }, klingOk.modelos[1]] }, /id/],
+    ["falta el rol fino", "kling", { ...klingOk, modelos: [klingOk.modelos[0]] }, /rol "fino"/],
+    ["fuente que no es http(s)", "kling", { ...klingOk, fuente_url: "javascript:alert(1)" }, /Fuente/],
+    ["formato inventado", "kling", { ...klingOk, limites: { ...klingOk.limites, aspects: ["21:9"] } }, /Formatos/],
+    ["herramienta desconocida", "sora", klingOk, /desconocida/],
+  ];
+  for (const [que, tool, input, re] of malas) {
+    const r = validarFicha(tool, input);
+    ok(`el Hub rechaza: ${que}`, !r.ok && re.test(r.error), JSON.stringify(r));
+  }
+
+  // Límites que viajan: compiler y validador con el MISMO catálogo.
+  const largo = spec("texto_a_video", "kling", { sujeto: "a courier on a bicycle", accion: "rides through the market at dusk", luz: "warm golden light", mood: "busy, joyful", entorno: "a crowded night market with paper lanterns, steam rising from food stalls, neon signs, wet pavement reflecting the lights, people carrying umbrellas, bicycles leaning on walls and vendors calling out to the passing crowd everywhere" });
+  const cat90 = clon();
+  cat90.kling.limites.maxPalabras = 90;
+  const t60 = compilar(largo, "kling").texto;
+  const t90 = compilar(largo, "kling", cat90).texto;
+  ok("Kling con tope 90 del catálogo deja pasar más de 60 palabras (y no más de 90)", contarPalabras(t60) <= 60 && contarPalabras(t90) > 60 && contarPalabras(t90) <= 90, `${contarPalabras(t60)} / ${contarPalabras(t90)}`);
+  ok("…y valida con el mismo catálogo (con las constantes, no)", validar(t90, largo, "kling", cat90).ok && !validar(t90, largo, "kling").ok);
+  const catVeo = clon();
+  catVeo.veo.limites.duraciones = [8, 6, 4, 10];
+  const sv = spec("texto_a_video", "veo", { duracion: 10 });
+  const jv10 = JSON.parse(compilar(sv, "veo", catVeo).texto);
+  ok("Veo con 10 s en el catálogo compila 10 s y valida", jv10.duration_seconds === 10 && validar(compilar(sv, "veo", catVeo).texto, sv, "veo", catVeo).ok, String(jv10.duration_seconds));
+  eq("duracionValida con las opciones del catálogo", duracionValidaF6("kling", 14, [5, 10, 15]), 15);
+  const catK = clon();
+  catK.kling.limites.duraciones = [5, 10, 15];
+  const ent = { job: "animar_foto", tool: "kling", destino: "tiktok", aspect: "9:16", duracion: 15, refs: [], texto: null, dialogo: null, movimiento: null, idea: "x" };
+  ok("el diagnóstico lee las duraciones del catálogo (15 s en Kling: aviso con la base, nada con el catálogo)", diagnosticarEntrada(ent, []).some((a) => a.codigo === "duracion_fuera") && !diagnosticarEntrada(ent, [], catK).some((a) => a.codigo === "duracion_fuera"));
+  const catRefs = clon();
+  catRefs.veo.limites.refsMax = 4;
+  const ent4 = { ...ent, tool: "veo", duracion: 8, refs: [{ role: "sujeto" }, { role: "estilo" }, { role: "producto" }, { role: "entorno" }] };
+  ok("refs de más: 4 en Veo avisa con la base y no con refsMax 4", diagnosticarEntrada(ent4, []).some((a) => a.codigo === "refs_de_mas") && !diagnosticarEntrada(ent4, [], catRefs).some((a) => a.codigo === "refs_de_mas"));
+}
+
+console.log("\n▶ F6a — reap: combinaciones que degradan todo, nombres reservados, caracteres rotos");
+{
+  const veoF = fichaAFila("veo", CATALOGO_BASE.veo);
+  const klF = fichaAFila("kling", CATALOGO_BASE.kling);
+  const r1 = validarFicha("veo", { ...veoF, limites: { ...veoF.limites, duraciones: [6, 4] } });
+  ok("Veo sin 8 s en la lista: el Hub lo rechaza", !r1.ok && /8 s/.test(r1.error), JSON.stringify(r1));
+  eq("…y la carga tolerante se queda con la base", JSON.stringify(catalogoDesdeFilas([{ tool: "veo", limites: { duraciones: [6, 4] } }]).veo.limites.duraciones), "[8,6,4]");
+  eq("refs mínimas por herramienta (la transición pide 2; Higgsfield sólo anima una foto)", JSON.stringify(["nanobanana", "chatgpt", "veo", "kling", "higgsfield"].map(refsMinimas)), "[2,2,2,2,1]");
+  const r2 = validarFicha("kling", { ...klF, limites: { ...klF.limites, refs_max: 1 } });
+  ok("refs máximas por debajo de lo que pide un trabajo: rechazado", !r2.ok && /Referencias/.test(r2.error), JSON.stringify(r2));
+  eq("…y la carga tolerante no lo acepta", catalogoDesdeFilas([{ tool: "kling", limites: { refs_max: 1 } }]).kling.limites.refsMax, 3);
+  const r3 = validarFicha("kling", { ...klF, limites: { ...klF.limites, max_palabras: 20 } });
+  ok("tope de palabras bajo 30: rechazado", !r3.ok && /Tope de palabras/.test(r3.error), JSON.stringify(r3));
+  const r4 = validarFicha("kling", { ...klF, modelos: [{ ...klF.modelos[0], id: "otro" }, klF.modelos[1]] });
+  ok('"otro" no puede ser el id de un modelo (es la opción de "¿Cómo salió?")', !r4.ok && /reservado/.test(r4.error), JSON.stringify(r4));
+  const r5 = validarFicha("kling", { ...klF, modelos: [{ ...klF.modelos[0], etiqueta: "Kling \uD800" }, klF.modelos[1]] });
+  ok("un surrogate suelto en el nombre se rechaza antes de la BD", !r5.ok, JSON.stringify(r5));
+  ok("recomendarModelo trae el tier del catálogo", recomendarModelo({ job: "foto_producto", tool: "nanobanana", destino: "print", refs: 0, texto: false, dialogo: false, duracion: null }).rol === "fino");
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} prisma: ${pass} passed, ${fail} failed\n`);

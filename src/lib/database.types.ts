@@ -425,6 +425,20 @@ export type PrismaReglaRow = {
   created_at: string;
 };
 
+/** Una fila de prisma_herramientas (0071, F6a): límites, fortalezas y modelos de UNA herramienta,
+ *  editables en Hub › Herramientas. El jsonb se lee con catalogoDesdeFilas (campo raro → constante). */
+export type PrismaHerramientaRow = {
+  tool: string;
+  limites: Record<string, unknown>;
+  fortalezas: Record<string, unknown>;
+  modelos: unknown[];
+  fuente_url: string | null;
+  fuente_fecha: string | null;
+  updated_by: string | null;
+  updated_at: string;
+  created_at: string;
+};
+
 export type PrismaCharacterRow = {
   id: string;
   client_id: string;

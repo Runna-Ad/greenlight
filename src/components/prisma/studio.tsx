@@ -49,6 +49,7 @@ import {
 import { COLOR_KIND, TOOL_INFO, TOOLS_POR_JOB, VEO_SEGUNDOS_CON_REFS } from "@/lib/prisma/tools";
 import { elegirHerramienta } from "@/lib/prisma/routing";
 import { recomendarModelo } from "@/lib/prisma/modelo";
+import { useCatalogo } from "./catalogo-contexto";
 import { aplicarArreglo, avisoOrtografia, bloqueado, compilarReglas, diagnosticarEntrada, ordenarAvisos, type Aviso, type EntradaDiagnostico, type ReglaCliente } from "@/lib/prisma/diagnostico";
 import { compilarFusion } from "@/lib/prisma/compilers/fusion";
 import type { Cambio } from "@/lib/prisma/ortografia";
@@ -121,6 +122,7 @@ function Chips({ titulo, opciones, valor, onChange, lang, permiteOtro = true }: 
 export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = null, verTodo = false, reglas = [] }: { marcas: MarcaUI[]; historial: ItemHistorialUI[]; demo?: PromptVivo | null; /** Sólo dev (`?demo=entrevista`): arranca en la entrevista con estas preguntas. */ demoPreguntas?: Pregunta[] | null; verTodo?: boolean; reglas?: ReglaCliente[] }) {
   const router = useRouter();
   const [lang, setLang] = useLang();
+  const catalogo = useCatalogo();
 
   // `demo` (sólo dev) arranca directo en el resultado para poder verlo sin sesión.
   const [paso, setPaso] = useState<Paso>(demo ? "resultado" : demoPreguntas ? "entrevista" : "inicio");
@@ -237,15 +239,15 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
 
   // Sin useMemo a propósito: el React Compiler ya memoiza, y una dependencia derivada
   // (refsLista.length) hacía que el compilador saltara el componente entero.
-  const sugerencia = job ? elegirHerramienta({ job, destino, tieneDialogo: dialogo.trim().length > 0, tieneRefs: refsLista.length > 0, movimientoMarcado: !!look.movimiento, tieneTexto: texto.trim().length > 0 }) : null;
+  const sugerencia = job ? elegirHerramienta({ job, destino, tieneDialogo: dialogo.trim().length > 0, tieneRefs: refsLista.length > 0, movimientoMarcado: !!look.movimiento, tieneTexto: texto.trim().length > 0 }, catalogo) : null;
   const tool: Tool | null = toolOverride ?? sugerencia?.tool ?? null;
   const aspect: Aspect = aspectOverride ?? marca?.preset.aspect_default ?? ASPECT_POR_DESTINO[destino];
   // Veo con imágenes de referencia sólo genera 8 s: el chip lo dice y no ofrece otra cosa.
   const veoForzado = tool === "veo" && refsLista.length > 0;
-  const duraciones = veoForzado ? [VEO_SEGUNDOS_CON_REFS] : tool ? TOOL_INFO[tool].duraciones : [];
+  const duraciones = veoForzado ? [VEO_SEGUNDOS_CON_REFS] : tool ? catalogo[tool].limites.duraciones : [];
   const duracionEfectiva = video ? (duracion && duraciones.includes(duracion) ? duracion : duraciones[0] ?? null) : null;
   // "Úsalo en…" anticipado: el mismo cálculo puro que verá en el resultado.
-  const modelo = job && tool ? recomendarModelo({ job, tool, destino, refs: refsLista.length, texto: texto.trim().length > 0, dialogo: dialogo.trim().length > 0, duracion: duracionEfectiva }) : null;
+  const modelo = job && tool ? recomendarModelo({ job, tool, destino, refs: refsLista.length, texto: texto.trim().length > 0, dialogo: dialogo.trim().length > 0, duracion: duracionEfectiva }, catalogo) : null;
 
   // F2: el diagnóstico del paso 3, en el cliente y al instante (reglas base + reglas del Hub +
   // la ortografía si hay una sugerencia viva). Un "bloquea" apaga el botón de generar.
@@ -260,7 +262,7 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
     const a = r ? avisoOrtografia(campo, r.original, { idioma: "es", sugerido: r.sugerido, cambios: r.cambios }) : null;
     return a ? [a] : [];
   });
-  const avisosPaso3: Aviso[] = entradaDiag ? ordenarAvisos([...diagnosticarEntrada(entradaDiag, reglasComp), ...avisosOrtografia]) : [];
+  const avisosPaso3: Aviso[] = entradaDiag ? ordenarAvisos([...diagnosticarEntrada(entradaDiag, reglasComp, catalogo), ...avisosOrtografia]) : [];
   const bloqueo = bloqueado(avisosPaso3);
 
   // Capa instantánea (sin servidor): el diccionario de acentos corre mientras escribe, con un

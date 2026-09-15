@@ -5,6 +5,7 @@
  */
 import { comas, negativosDe, sinPronombre, textoDe, type Beat, type PromptSpec } from "../spec.ts";
 import type { Salida } from "./salida.ts";
+import type { Limites } from "../catalogo.ts";
 import { beatsDe } from "./beats.ts";
 import { duracionVeo } from "../tools.ts";
 import { sustantivar } from "../positivo.ts";
@@ -54,9 +55,9 @@ function elementos(spec: PromptSpec): string[] {
   return out.slice(0, 6);
 }
 
-export function compilarVeo(spec: PromptSpec): Salida {
+export function compilarVeo(spec: PromptSpec, lim?: Limites): Salida {
   // 8 s obligatorio con referencias (Veo ignora otra duración cuando hay imágenes).
-  const dur = duracionVeo(spec.duracion, spec.refs.length);
+  const dur = duracionVeo(spec.duracion, spec.refs.length, lim?.duraciones);
   const beats: Beat[] = beatsDe(spec, dur);
   const t = textoDe(spec);
   // Veo lee sustantivos: "subtitles", "hard cuts". Un "no X" lo confunde (doc oficial).

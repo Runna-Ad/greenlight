@@ -4,7 +4,8 @@
  * Módulo puro.
  */
 import { JOB_KIND, textoDe, type JobType, type PromptSpec, type Tool, type Destino } from "./spec.ts";
-import { TOOLS_POR_JOB } from "./tools.ts";
+import { TOOL_INFO, TOOLS_POR_JOB } from "./tools.ts";
+import { CATALOGO_BASE, mejorEn, type Catalogo } from "./catalogo.ts";
 import { t, type Par } from "./copy.ts";
 
 export type Eleccion = { tool: Tool; porque: Par };
@@ -20,52 +21,66 @@ export type PistasRuta = {
   tieneTexto: boolean;
 };
 
-export function elegirHerramienta(p: PistasRuta): Eleccion {
+/** F6a: las reglas dicen QUÉ importa (texto, diálogo, movimiento, vertical corto); el catálogo dice
+ *  QUIÉN es mejor en eso (fortalezas 0–5, Hub › Herramientas). Con el catálogo base, la elección es
+ *  exactamente la de antes (test golden). Empate → la primera de TOOLS_POR_JOB. */
+export function elegirHerramienta(p: PistasRuta, cat: Catalogo = CATALOGO_BASE): Eleccion {
   const opciones = TOOLS_POR_JOB[p.job];
   const primera = opciones[0];
+  const n = (x: Tool) => TOOL_INFO[x].nombre;
 
-  // Imagen y edición: dos herramientas. Con texto pedido gana ChatGPT (pinta letras
-  // exactas con mucha más fiabilidad); si no, Nano Banana (identidad y referencias).
+  // Imagen y edición: con texto pedido, la mejor en letras exactas; si no, la mejor en caras,
+  // productos y referencias.
   if (JOB_KIND[p.job] !== "video") {
     if (p.tieneTexto) {
-      return { tool: "chatgpt", porque: t("Pediste texto en la imagen y ChatGPT es la que mejor escribe letras exactas.", "You asked for text in the image and ChatGPT is the best at rendering exact lettering.") };
+      const x = mejorEn(cat, "texto_exacto", opciones);
+      return { tool: x, porque: t(`Pediste texto en la imagen y ${n(x)} es la que mejor escribe letras exactas.`, `You asked for text in the image and ${n(x)} is the best at rendering exact lettering.`) };
     }
-    return { tool: "nanobanana", porque: t("Nano Banana es la que mejor respeta caras, productos y referencias.", "Nano Banana is the best at keeping faces, products and references faithful.") };
+    const x = mejorEn(cat, "identidad", opciones);
+    return { tool: x, porque: t(`${n(x)} es la que mejor respeta caras, productos y referencias.`, `${n(x)} is the best at keeping faces, products and references faithful.`) };
   }
 
   if (opciones.length === 1) {
     return { tool: primera, porque: t("Es la única herramienta para este trabajo.", "It is the only tool for this job.") };
   }
 
+  // Capacidad, no fortaleza: Kling toma el cuadro inicial y el final.
   if (p.job === "transicion") {
     return { tool: "kling", porque: t("Kling toma la toma inicial y la final y hace la transición sin cortes.", "Kling takes the start and end shots and makes the transition with no cuts.") };
   }
 
-  // Escena por bloques de tiempo (nació con Sora 2, retirada): Veo sigue los beats y pone
-  // voz/sonido; para un vertical corto sin voz, Kling es más rápido y barato.
+  const vertical = p.destino === "ig_story" || p.destino === "tiktok";
+  const conVoz = (): Eleccion => {
+    const x = mejorEn(cat, "voz", opciones);
+    return { tool: x, porque: t(`Como hay diálogo, ${n(x)} genera la voz y el sonido en el mismo video.`, `Since there is dialogue, ${n(x)} generates the voice and sound in the same video.`) };
+  };
+
+  // Escena por bloques de tiempo (nació con Sora 2, retirada): con voz, la mejor en voz; vertical
+  // corta sin voz, la más rápida; si no, la primera (sigue los beats).
   if (p.job === "escena_sora") {
-    if (!p.tieneDialogo && (p.destino === "ig_story" || p.destino === "tiktok")) {
-      return { tool: "kling", porque: t("Escena vertical corta y sin voz: Kling la hace rápido y barato.", "A short vertical scene with no voice: Kling does it fast and cheap.") };
+    if (p.tieneDialogo) return conVoz();
+    if (vertical) {
+      const x = mejorEn(cat, "rapidez", opciones);
+      return { tool: x, porque: t(`Escena vertical corta y sin voz: ${n(x)} la hace rápido y barato.`, `A short vertical scene with no voice: ${n(x)} does it fast and cheap.`) };
     }
-    return { tool: "veo", porque: t("Veo 3.1 sigue los bloques de tiempo y genera la voz y el sonido en el mismo video.", "Veo 3.1 follows the timed beats and generates voice and sound in the same video.") };
+    return { tool: primera, porque: t(`${n(primera)} sigue los bloques de tiempo y genera la voz y el sonido en el mismo video.`, `${n(primera)} follows the timed beats and generates voice and sound in the same video.`) };
   }
 
-  // Video con diálogo: Veo genera voz y sonido nativos.
-  if (p.tieneDialogo) {
-    return { tool: "veo", porque: t("Como hay diálogo, Veo 3.1 genera la voz y el sonido en el mismo video.", "Since there is dialogue, Veo 3.1 generates the voice and sound in the same video.") };
-  }
+  if (p.tieneDialogo) return conVoz();
 
-  // Movimiento de cámara marcado sobre una foto: Higgsfield tiene presets de cámara.
+  // Movimiento de cámara marcado sobre una foto: la mejor en movimientos de cámara.
   if (p.job === "animar_foto" && p.movimientoMarcado) {
-    return { tool: "higgsfield", porque: t("Pediste un movimiento de cámara específico y Higgsfield lo trae como preset.", "You asked for a specific camera move and Higgsfield has it as a preset.") };
+    const x = mejorEn(cat, "movimiento", opciones);
+    return { tool: x, porque: t(`Pediste un movimiento de cámara específico y ${n(x)} es la que mejor lo controla.`, `You asked for a specific camera move and ${n(x)} controls it best.`) };
   }
 
-  // Redes verticales cortas sin diálogo: Kling es rápido y barato.
-  if (p.job === "animar_foto" && (p.destino === "ig_story" || p.destino === "tiktok")) {
-    return { tool: "kling", porque: t("Para un clip vertical corto y sin voz, Kling le da buen movimiento a la foto.", "For a short vertical clip with no voice, Kling animates the photo with good motion.") };
+  // Redes verticales cortas sin diálogo: la más rápida y barata.
+  if (p.job === "animar_foto" && vertical) {
+    const x = mejorEn(cat, "rapidez", opciones);
+    return { tool: x, porque: t(`Para un clip vertical corto y sin voz, ${n(x)} le da buen movimiento a la foto, rápido y barato.`, `For a short vertical clip with no voice, ${n(x)} animates the photo with good motion, fast and cheap.`) };
   }
 
-  return { tool: primera, porque: t("Veo 3.1 es el mejor balance entre calidad y control para este video.", "Veo 3.1 is the best balance of quality and control for this video.") };
+  return { tool: primera, porque: t(`${n(primera)} es el mejor balance entre calidad y control para este video.`, `${n(primera)} is the best balance of quality and control for this video.`) };
 }
 
 /** Pistas desde un spec ya llenado (para re-elegir al cambiar algo). */

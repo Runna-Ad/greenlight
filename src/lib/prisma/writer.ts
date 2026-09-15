@@ -11,6 +11,7 @@ import { sanearVeredicto, type Veredicto } from "@/lib/prisma/resultado";
 import { sanearPreguntas, type Pregunta } from "@/lib/prisma/entrevista";
 import { listaDe, objetoDe } from "@/lib/prisma/json";
 import { diagnosticar, esReparable, type Aviso, type ReglaCompilada } from "@/lib/prisma/diagnostico";
+import type { Catalogo } from "@/lib/prisma/catalogo";
 import type { Cambio, Idioma } from "@/lib/prisma/ortografia";
 import type { PrismaVariante } from "@/lib/database.types";
 
@@ -222,10 +223,10 @@ async function llamarSpec(e: EntradaWriter, extra: string | null, estable: strin
 /** Lo que hay que corregir en un spec ya compilado: errores del validador + los avisos del
  *  diagnóstico que el writer puede arreglar SOLO (prompt largo, dos movimientos, "avoid"
  *  sin positivo). Es lo que se le devuelve al modelo en la reparación. */
-function problemasDe(spec: PromptSpec, salida: Salida, reglas: ReglaCompilada[]): { errores: string[]; problemas: string[] } {
-  const v = validar(salida.texto, spec);
+function problemasDe(spec: PromptSpec, salida: Salida, reglas: ReglaCompilada[], cat?: Catalogo): { errores: string[]; problemas: string[] } {
+  const v = validar(salida.texto, spec, spec.tool, cat);
   const errores = v.ok ? [] : v.errores;
-  const reparables = diagnosticar(spec, spec.tool, salida.texto, [], reglas).filter(esReparable);
+  const reparables = diagnosticar(spec, spec.tool, salida.texto, [], reglas, cat).filter(esReparable);
   const n = contarPalabras(salida.texto);
   const problemas = [...errores, ...reparables.map((a) => `${a.que.en}${a.campo === "salida" ? ` (it has ${n} words now)` : ""}${a.arreglo ? ` ${a.arreglo.en}` : ""}`)];
   return { errores, problemas };
@@ -234,17 +235,17 @@ function problemasDe(spec: PromptSpec, salida: Salida, reglas: ReglaCompilada[])
 /** Compila, revisa y, si hace falta, pide UNA reparación al modelo: H.Ü.E no entrega un prompt
  *  que sus propias reglas marcarían (Pedro, 2026-09-14: "si ya lo sabe, ¿por qué lo hace mal?").
  *  Se queda con la versión con MENOS problemas (la reparación nunca empeora). */
-async function cerrarSpec(e: EntradaWriter, input: Record<string, unknown>, usage: Uso, estable: string, reglas: ReglaCompilada[]): Promise<ResultadoWriter> {
+async function cerrarSpec(e: EntradaWriter, input: Record<string, unknown>, usage: Uso, estable: string, reglas: ReglaCompilada[], cat?: Catalogo): Promise<ResultadoWriter> {
   let spec = specDesde(input, e);
-  let salida = compilar(spec);
-  let { errores, problemas } = problemasDe(spec, salida, reglas);
+  let salida = compilar(spec, spec.tool, cat);
+  let { errores, problemas } = problemasDe(spec, salida, reglas, cat);
   let reparado = false;
   if (problemas.length) {
     const r2 = await llamarSpec(e, bloqueReparacion(problemas, JSON.stringify(input)), estable);
     if (!("error" in r2)) {
       const spec2 = specDesde(r2.input, e);
-      const salida2 = compilar(spec2);
-      const p2 = problemasDe(spec2, salida2, reglas);
+      const salida2 = compilar(spec2, spec2.tool, cat);
+      const p2 = problemasDe(spec2, salida2, reglas, cat);
       usage = sumar(usage, r2.usage);
       // Menos problemas gana; en empate, el prompt más corto (la reparación nunca alarga).
       if (p2.problemas.length < problemas.length || (p2.problemas.length === problemas.length && contarPalabras(salida2.texto) < contarPalabras(salida.texto))) {
@@ -259,24 +260,24 @@ async function cerrarSpec(e: EntradaWriter, input: Record<string, unknown>, usag
   return { ok: true, spec, salida, valido: errores.length === 0, errores, usage, reparado };
 }
 
-export async function escribirSpec(e: EntradaWriter, estable: string = BLOQUE_ESTABLE, reglas: ReglaCompilada[] = []): Promise<ResultadoWriter> {
+export async function escribirSpec(e: EntradaWriter, estable: string = BLOQUE_ESTABLE, reglas: ReglaCompilada[] = [], cat?: Catalogo): Promise<ResultadoWriter> {
   const r1 = await llamarSpec(e, null, estable);
   if ("error" in r1) return { ok: false, error: r1.error };
-  return cerrarSpec(e, r1.input, r1.usage, estable, reglas);
+  return cerrarSpec(e, r1.input, r1.usage, estable, reglas, cat);
 }
 
 /** Aplica un cambio pedido por el diseñador sobre un spec existente (cambia SÓLO eso). */
-export async function refinarSpec(e: EntradaWriter, specActual: PromptSpec, cambio: string, estable: string = BLOQUE_ESTABLE, reglas: ReglaCompilada[] = []): Promise<ResultadoWriter> {
+export async function refinarSpec(e: EntradaWriter, specActual: PromptSpec, cambio: string, estable: string = BLOQUE_ESTABLE, reglas: ReglaCompilada[] = [], cat?: Catalogo): Promise<ResultadoWriter> {
   const r = await llamarSpec(e, bloqueRefinar(JSON.stringify(specActual), cambio), estable);
   if ("error" in r) return { ok: false, error: r.error };
-  return cerrarSpec(e, r.input, r.usage, estable, reglas);
+  return cerrarSpec(e, r.input, r.usage, estable, reglas, cat);
 }
 
 /** Otra versión del spec, bajo demanda (segura / audaz / mínima). Una llamada, sólo si se pide. */
-export async function variarSpec(e: EntradaWriter, specActual: PromptSpec, variante: Exclude<PrismaVariante, "base">, estable: string = BLOQUE_ESTABLE, reglas: ReglaCompilada[] = []): Promise<ResultadoWriter> {
+export async function variarSpec(e: EntradaWriter, specActual: PromptSpec, variante: Exclude<PrismaVariante, "base">, estable: string = BLOQUE_ESTABLE, reglas: ReglaCompilada[] = [], cat?: Catalogo): Promise<ResultadoWriter> {
   const r = await llamarSpec(e, bloqueVariante(JSON.stringify(specActual), variante), estable);
   if ("error" in r) return { ok: false, error: r.error };
-  return cerrarSpec(e, r.input, r.usage, estable, reglas);
+  return cerrarSpec(e, r.input, r.usage, estable, reglas, cat);
 }
 
 /** Recompila el mismo spec a otra herramienta (sin modelo). */
@@ -432,10 +433,10 @@ export async function compararResultado(spec: PromptSpec, salida: string, base64
   }
 }
 
-export function recompilar(spec: PromptSpec, tool: Tool): { salida: Salida; valido: boolean; errores: string[] } {
+export function recompilar(spec: PromptSpec, tool: Tool, cat?: Catalogo): { salida: Salida; valido: boolean; errores: string[] } {
   const s = { ...spec, tool };
-  const salida = compilar(s);
-  const v = validar(salida.texto, s);
+  const salida = compilar(s, tool, cat);
+  const v = validar(salida.texto, s, tool, cat);
   return { salida, valido: v.ok, errores: v.ok ? [] : v.errores };
 }
 

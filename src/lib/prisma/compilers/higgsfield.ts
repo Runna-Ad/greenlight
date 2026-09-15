@@ -6,6 +6,8 @@
 import { comas, contarPalabras, sinPronombre, textoDe, type PromptSpec } from "../spec.ts";
 import { TOOL_INFO } from "../tools.ts";
 import type { Salida } from "./salida.ts";
+import type { Limites } from "../catalogo.ts";
+import { topePalabras } from "./kling.ts";
 
 /** Presets de cámara de Higgsfield (los nombres tal como aparecen en la herramienta).
  *  Lista editable: si Higgsfield agrega uno, se añade aquí y en el test. */
@@ -63,7 +65,8 @@ export function presetDe(movimiento: string | null): PresetHiggsfield {
 
 const MAX = TOOL_INFO.higgsfield.maxPalabras ?? 60;
 
-export function compilarHiggsfield(spec: PromptSpec): Salida {
+export function compilarHiggsfield(spec: PromptSpec, lim?: Limites): Salida {
+  const max = topePalabras(lim, MAX);
   const preset = (PRESETS_HIGGSFIELD as readonly string[]).includes(spec.preset ?? "")
     ? (spec.preset as PresetHiggsfield)
     : presetDe(spec.camara.movimiento);
@@ -74,12 +77,12 @@ export function compilarHiggsfield(spec: PromptSpec): Salida {
   const t = textoDe(spec);
   const capas = [sujeto, t ? `on-screen text "${t.contenido.trim()}"` : null, spec.entorno && spec.job !== "animar_foto" ? spec.entorno : null, spec.luz, spec.mood, spec.estilo];
   let cuerpo = comas(...capas);
-  while (contarPalabras(cuerpo) > MAX && capas.length > 1) {
+  while (contarPalabras(cuerpo) > max && capas.length > 1) {
     capas.pop();
     cuerpo = comas(...capas);
   }
   // Si el sujeto solo (p. ej. un personaje guardado) ya se pasa, se corta duro como en Kling.
-  if (contarPalabras(cuerpo) > MAX) cuerpo = cuerpo.split(/\s+/).slice(0, MAX).join(" ").replace(/[,;\s]+$/, "");
+  if (contarPalabras(cuerpo) > max) cuerpo = cuerpo.split(/\s+/).slice(0, max).join(" ").replace(/[,;\s]+$/, "");
   cuerpo = cuerpo.charAt(0).toUpperCase() + cuerpo.slice(1);
   const texto = `${cuerpo}.\nCamera preset: ${preset}`;
   return { texto, formato: "texto" };

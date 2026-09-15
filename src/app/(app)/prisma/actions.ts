@@ -226,11 +226,11 @@ export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar
   const [aprendizaje, reglas] = await Promise.all([ent.clientId ? cargarAprendizaje(db, ent.clientId, inp.job) : Promise.resolve(null), cargarReglas(db)]);
   // Un aviso que BLOQUEA se impone aquí, no sólo en el navegador, y antes de pagar la llamada.
   // Con los valores YA aplicados (las respuestas de la entrevista pueden cambiar formato, duración o movimiento).
-  const bloqueo = bloqueado(diagnosticarEntrada({ job: inp.job, tool: inp.tool, destino: inp.destino, aspect: ent.entrada.aspect, duracion: ent.entrada.duracion, refs: inp.refs.map((r) => ({ role: r.role })), texto: inp.texto, dialogo: ent.entrada.dialogo ? { texto: ent.entrada.dialogo.texto, idioma: ent.entrada.dialogo.idioma } : null, movimiento: ent.entrada.look.movimiento, idea: inp.idea }, reglasDe(reglas)));
+  const bloqueo = bloqueado(diagnosticarEntrada({ job: inp.job, tool: inp.tool, destino: inp.destino, aspect: ent.entrada.aspect, duracion: ent.entrada.duracion, refs: inp.refs.map((r) => ({ role: r.role })), texto: inp.texto, dialogo: ent.entrada.dialogo ? { texto: ent.entrada.dialogo.texto, idioma: ent.entrada.dialogo.idioma } : null, movimiento: ent.entrada.look.movimiento, idea: inp.idea }, reglasDe(reglas), reglas.catalogo));
   if (bloqueo) return { ok: false, error: bloqueo.que.es };
   // "Úsalo en…": el modelo/nivel donde se va a pegar; el writer dimensiona el spec para él.
-  const modelo = recomendarModelo({ job: inp.job, tool: inp.tool, destino: inp.destino, refs: inp.refs.length, texto: !!inp.texto?.trim(), dialogo: !!inp.dialogo?.texto.trim(), duracion: inp.duracion }).modelo;
-  const r = await escribirSpec({ ...ent.entrada, aprendizaje, modelo }, estableCon(reglas.notas, reglas.clave), reglasDe(reglas));
+  const { modelo, rol: modeloRol } = recomendarModelo({ job: inp.job, tool: inp.tool, destino: inp.destino, refs: inp.refs.length, texto: !!inp.texto?.trim(), dialogo: !!inp.dialogo?.texto.trim(), duracion: inp.duracion }, reglas.catalogo);
+  const r = await escribirSpec({ ...ent.entrada, aprendizaje, modelo, modeloRol }, estableCon(reglas.notas, reglas.clave), reglasDe(reglas), reglas.catalogo);
   if (!r.ok) return r;
 
   const refsGuardadas: PrismaRefGuardada[] = inp.refs.map((x) => ({ role: x.role, storage_path: x.storage_path, caption: x.caption, dna: x.dna as Record<string, unknown> | null }));
@@ -243,8 +243,8 @@ export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar
 
   // Se guarda el modelo calculado sobre el spec RESULTANTE (el modelo puede inferir texto en la
   // pieza desde la idea): es exactamente lo que el resultado le enseña al diseñador.
-  const avisos = diagnosticoDe(r.spec, inp.tool, r.salida, r.errores, reglasDe(reglas));
-  const promptId = await guardarPrompt(specRow.id, inp.tool, r.salida, r.valido, r.errores, r.usage, "base", versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, inp.tool)).modelo, avisos);
+  const avisos = diagnosticoDe(r.spec, inp.tool, r.salida, r.errores, reglasDe(reglas), reglas.catalogo);
+  const promptId = await guardarPrompt(specRow.id, inp.tool, r.salida, r.valido, r.errores, r.usage, "base", versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, inp.tool), reglas.catalogo).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
   // Lo que contestó en la entrevista: con esto la marca "aprende" sus respuestas fijas.
   if (inp.respuestas?.length) {
@@ -272,12 +272,12 @@ export async function cambiarHerramienta(specId: string, tool: Tool): Promise<Re
   if ("ok" in s) return s;
   if (!TOOLS_POR_JOB[s.spec.job].includes(tool)) return { ok: false, error: "Esa herramienta no sirve para este trabajo." };
 
-  const r = recompilar(s.spec, tool);
   // La versión (audaz, mínima…) se hereda: cambiar de herramienta no la vuelve "base".
   const db = supabaseAdmin();
   const [{ variante }, reglas] = await Promise.all([estadoActual(db, s), cargarReglas(db)]);
-  const avisos = diagnosticoDe(s.spec, tool, r.salida, r.errores, reglasDe(reglas));
-  const promptId = await guardarPrompt(specId, tool, r.salida, r.valido, r.errores, null, variante, PROMPT_VERSION, recomendarModelo(pistasModelo(s.spec, tool)).modelo, avisos);
+  const r = recompilar(s.spec, tool, reglas.catalogo);
+  const avisos = diagnosticoDe(s.spec, tool, r.salida, r.errores, reglasDe(reglas), reglas.catalogo);
+  const promptId = await guardarPrompt(specId, tool, r.salida, r.valido, r.errores, null, variante, PROMPT_VERSION, recomendarModelo(pistasModelo(s.spec, tool), reglas.catalogo).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
   return { ok: true, promptId, salida: r.salida, valido: r.valido, errores: r.errores, variante, avisos };
 }
@@ -297,14 +297,14 @@ export async function refinarPrompt(specId: string, cambio: string): Promise<Res
   const db = supabaseAdmin();
   const [{ tool, variante }, reglas] = await Promise.all([estadoActual(db, s), cargarReglas(db)]);
   const spec = { ...s.spec, tool };
-  const modelo = recomendarModelo(pistasModelo(spec)).modelo;
-  const r = await refinarSpec({ ...entradaDesdeSpec(s), tool, modelo }, spec, texto, estableCon(reglas.notas, reglas.clave), reglasDe(reglas));
+  const { modelo, rol: modeloRol } = recomendarModelo(pistasModelo(spec), reglas.catalogo);
+  const r = await refinarSpec({ ...entradaDesdeSpec(s), tool, modelo, modeloRol }, spec, texto, estableCon(reglas.notas, reglas.clave), reglasDe(reglas), reglas.catalogo);
   if (!r.ok) return r;
 
   const { error } = await db.from("prisma_specs").update({ spec: r.spec }).eq("id", specId);
   if (error) return fallo("prisma_specs.update", error.message);
-  const avisos = diagnosticoDe(r.spec, tool, r.salida, r.errores, reglasDe(reglas));
-  const promptId = await guardarPrompt(specId, tool, r.salida, r.valido, r.errores, r.usage, variante, versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, tool)).modelo, avisos);
+  const avisos = diagnosticoDe(r.spec, tool, r.salida, r.errores, reglasDe(reglas), reglas.catalogo);
+  const promptId = await guardarPrompt(specId, tool, r.salida, r.valido, r.errores, r.usage, variante, versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, tool), reglas.catalogo).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
   // Señal de aprendizaje: qué tuvo que pedir el diseñador (el texto, recortado).
   await anotarEvento(db, { spec_id: specId, prompt_id: promptId, client_id: s.row.client_id, job: spec.job, tool, variante, user_id: g.soyId, tipo: "refinado", detalle: texto.slice(0, 300) });
@@ -360,7 +360,8 @@ export async function abrirSpec(specId: string): Promise<ResultadoAbrir | Fail> 
   if ((TOOLS as string[]).includes(p.tool)) {
     // Los avisos guardados con el prompt (si la fila es de antes de F2, se recalculan los deterministas).
     const guardados = avisosDe(p.avisos);
-    const avisosFila = guardados.length ? guardados : diagnosticar(s.spec, p.tool as Tool, p.salida, p.errores ?? [], reglasDe(await cargarReglas(db)));
+    const conocimiento = guardados.length ? null : await cargarReglas(db);
+    const avisosFila = conocimiento ? diagnosticar(s.spec, p.tool as Tool, p.salida, p.errores ?? [], reglasDe(conocimiento), conocimiento.catalogo) : guardados;
     return { ok: true, promptId: p.id, tool: p.tool as Tool, spec: s.spec, salida: { texto: p.salida, formato: p.formato }, valido: p.valido, errores: p.errores ?? [], variante: p.variante, nota: null, avisos: avisosFila, correccion: !!s.row.correccion_de, resultado: await ultimoResultadoDe(db, p.id, s.spec.job) };
   }
   // El prompt guardado es de una herramienta retirada (Sora 2): su texto ya no sirve. Se
@@ -373,9 +374,10 @@ export async function abrirSpec(specId: string): Promise<ResultadoAbrir | Fail> 
   if (previo) {
     return { ok: true, promptId: previo.id, tool: s.spec.tool, spec: s.spec, salida: { texto: previo.salida, formato: previo.formato }, valido: previo.valido, errores: previo.errores ?? [], variante: previo.variante, nota, avisos: avisosDe(previo.avisos), correccion: !!s.row.correccion_de, resultado: await ultimoResultadoDe(db, previo.id, s.spec.job) };
   }
-  const r = recompilar(s.spec, s.spec.tool);
-  const avisos = diagnosticar(s.spec, s.spec.tool, r.salida.texto, r.errores, reglasDe(await cargarReglas(db)));
-  const nuevoId = await guardarPrompt(specId, s.spec.tool, r.salida, r.valido, r.errores, null, p.variante, PROMPT_VERSION, recomendarModelo(pistasModelo(s.spec)).modelo, avisos);
+  const reglas = await cargarReglas(db);
+  const r = recompilar(s.spec, s.spec.tool, reglas.catalogo);
+  const avisos = diagnosticar(s.spec, s.spec.tool, r.salida.texto, r.errores, reglasDe(reglas), reglas.catalogo);
+  const nuevoId = await guardarPrompt(specId, s.spec.tool, r.salida, r.valido, r.errores, null, p.variante, PROMPT_VERSION, recomendarModelo(pistasModelo(s.spec), reglas.catalogo).modelo, avisos);
   if (typeof nuevoId !== "string") return nuevoId;
   return { ok: true, promptId: nuevoId, tool: s.spec.tool, spec: s.spec, salida: r.salida, valido: r.valido, errores: r.errores, variante: p.variante, nota, avisos, correccion: !!s.row.correccion_de, resultado: null };
 }
@@ -499,14 +501,14 @@ export async function variar(specId: string, variante: string): Promise<Resultad
   const db = supabaseAdmin();
   // La versión se pide sobre la herramienta que el diseñador está VIENDO (la del último prompt).
   const [{ tool }, reglas] = await Promise.all([estadoActual(db, s), cargarReglas(db)]);
-  const modelo = recomendarModelo(pistasModelo(s.spec, tool)).modelo;
-  const r = await variarSpec({ ...entradaDesdeSpec(s), tool, modelo }, { ...s.spec, tool }, v, estableCon(reglas.notas, reglas.clave), reglasDe(reglas));
+  const { modelo, rol: modeloRol } = recomendarModelo(pistasModelo(s.spec, tool), reglas.catalogo);
+  const r = await variarSpec({ ...entradaDesdeSpec(s), tool, modelo, modeloRol }, { ...s.spec, tool }, v, estableCon(reglas.notas, reglas.clave), reglasDe(reglas), reglas.catalogo);
   if (!r.ok) return r;
 
   const { data: nuevo, error } = await db.from("prisma_specs").insert(filaHermana(s.row, { spec: r.spec, tool, created_by: g.soyId })).select("id").single<{ id: string }>();
   if (error || !nuevo) return fallo("prisma_specs.insert", error?.message);
-  const avisos = diagnosticoDe(r.spec, tool, r.salida, r.errores, reglasDe(reglas));
-  const promptId = await guardarPrompt(nuevo.id, tool, r.salida, r.valido, r.errores, r.usage, v, versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, tool)).modelo, avisos);
+  const avisos = diagnosticoDe(r.spec, tool, r.salida, r.errores, reglasDe(reglas), reglas.catalogo);
+  const promptId = await guardarPrompt(nuevo.id, tool, r.salida, r.valido, r.errores, r.usage, v, versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, tool), reglas.catalogo).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
   await anotarEvento(db, { spec_id: specId, prompt_id: promptId, client_id: s.row.client_id, job: s.row.job, tool, variante: v, user_id: g.soyId, tipo: "variante", detalle: v });
   return { ok: true, specId: nuevo.id, promptId, tool, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, variante: v, avisos, correccion: !!s.row.correccion_de };
@@ -532,13 +534,13 @@ export async function adaptarFormato(specId: string, destino: string): Promise<R
   // El formato es el del destino (la gracia de adaptar): el default de la marca ya se aplicó al original.
   const spec: PromptSpec = { ...s.spec, tool, destino, aspect: ASPECT_POR_DESTINO[destino] };
   // El mismo "bloquea" que generar (formato o duración que una regla prohíbe): nada se escribe.
-  const bloqueo = bloqueado(diagnosticarEntrada(entradaDeSpec(spec, tool), reglasDe(reglas)));
+  const bloqueo = bloqueado(diagnosticarEntrada(entradaDeSpec(spec, tool), reglasDe(reglas), reglas.catalogo));
   if (bloqueo) return { ok: false, error: bloqueo.que.es };
-  const rc = recompilar(spec, tool);
+  const rc = recompilar(spec, tool, reglas.catalogo);
   const { data: nuevo, error } = await db.from("prisma_specs").insert(filaHermana(s.row, { spec, tool, destino, created_by: g.soyId })).select("id").single<{ id: string }>();
   if (error || !nuevo) return fallo("prisma_specs.insert", error?.message);
-  const avisos = diagnosticoDe(spec, tool, rc.salida, rc.errores, reglasDe(reglas));
-  const promptId = await guardarPrompt(nuevo.id, tool, rc.salida, rc.valido, rc.errores, null, variante, PROMPT_VERSION, recomendarModelo(pistasModelo(spec, tool)).modelo, avisos);
+  const avisos = diagnosticoDe(spec, tool, rc.salida, rc.errores, reglasDe(reglas), reglas.catalogo);
+  const promptId = await guardarPrompt(nuevo.id, tool, rc.salida, rc.valido, rc.errores, null, variante, PROMPT_VERSION, recomendarModelo(pistasModelo(spec, tool), reglas.catalogo).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
   return { ok: true, specId: nuevo.id, promptId, tool, spec, salida: rc.salida, valido: rc.valido, errores: rc.errores, variante, avisos, destino, correccion: !!s.row.correccion_de };
 }

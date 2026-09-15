@@ -1,5 +1,68 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔵 2026-09-15 (11) — HÜE Prisma v1 · FASE 6 Vigía (rama `prisma`) — F6a HECHA (0071 APLICADA) · sigue F6b
+Pedro: "let's start F6 vigia" → eligió **datos de herramienta primero** (F6a → F6b → F6c) y **botón "Revisar ahora" +
+cron semanal cableado** que sólo corre al llegar a producción (Vercel cron llama a la URL de PRODUCCIÓN — docs
+2026-08-11; Prisma vive en preview). Migraciones **0071** (F6a) y **0072** (F6b) — el plan viejo decía 0069/0070, ya usadas;
+main termina en 0064. Cada una con su "ship it".
+
+### F6a — los datos de cada herramienta, editables en el Hub (0071 `prisma_herramientas`)
+- [x] **0071** (`20260915120001_…_0071_prisma_herramientas.sql`): `prisma_herramientas` (una fila por tool): `limites`,
+      `fortalezas` (sólo las que el routing usa: imagen {texto_exacto, identidad}; video {voz, movimiento, rapidez}),
+      `modelos` [{id, etiqueta, rol, como_llegar_es/en}], fuente, updated_by/at. RLS master, service_role escribe, CHECKs
+      de forma y tamaño. **Seed GENERADO desde CATALOGO_BASE con fichaAFila** (no transcrito a mano).
+- [x] `lib/prisma/catalogo.ts` (puro): `CATALOGO_BASE`, `catalogoDesdeFilas` (tolerante campo a campo; sin audio → voz 0),
+      `validarFicha` (estricta, para el Hub), `fichaAFila`, `mejorEn` (empate → la primera), `modeloPorRol`. El catálogo
+      viaja DENTRO de `cargarReglas` (misma caché de 60 s, una ida a la BD; sin la 0071 → constantes + warn en el log);
+      `olvidarConocimiento()` al guardar en el Hub (también las reglas: antes esperaban hasta 60 s).
+- [x] Consumidores con `cat` opcional (default = base): routing por fortaleza con el porqué nombrando a la ganadora;
+      recomendarModelo elige ROL y el catálogo da el modelo (los porqués nombran las etiquetas del catálogo);
+      duracionValida/duracionVeo (`opciones`), compilers Kling/Higgsfield (`topePalabras`: null = sin tope) y Veo,
+      validar, diagnóstico (duración, formato, refs, audio) y writer (compila, valida y repara con el MISMO catálogo).
+- [x] Cableado: page `/prisma` → `CatalogoProvider` (contexto) → Studio (sugerencia, chips de duración, "Úsalo en…",
+      diagnóstico), Resultado, "¿Cómo salió?"; todas las actions; `subirResultado` valida el modelo contra el catálogo.
+      `MODELOS_POR_TOOL` eliminado (vive en el catálogo).
+- [x] Hub › Prisma › **Herramientas**: una herramienta a la vez; "Así elige Prisma" en vivo (con "(antes X)" al mover un
+      número), fortalezas 0–5, límites, modelos (máx. 4; el primero de cada rol es el recomendado), fuente; "Valores del
+      código"; guardar = vivo. Sin la 0071: valores del código y "Guardar" apagado.
+- [x] Tests: test-prisma 730 (golden **2,432 combinaciones job × destino × pistas = routing de antes**, también leído desde
+      el seed; ida y vuelta del seed; la base pasa la validación estricta; "ChatGPT sube caras" cambia la sugerencia; modelo
+      nuevo en "Úsalo en…"; fila rara → base campo a campo; 8 rechazos del Hub; Kling tope 90 compila y valida >60; Veo 10 s;
+      diagnóstico con duraciones/refs del catálogo) · test-db 474 (0071: RLS, policy, service_role, PUBLIC sin ACL, 5 filas,
+      jsonb como datos, **seed == CATALOGO_BASE**, 6 CHECKs) · npm test ✓ · tsc 0 · lint 0. Browser (`?demo=herramientas`,
+      sólo dev): bajar "caras" de Nano Banana a 2 → "Foto sin texto → ChatGPT Images (antes Nano Banana)", Guardar apagado
+      en demo; 375 px ok; el estudio carga y el log dice "herramientas no disponibles (¿falta la 0071?)" → constantes.
+- [x] Reap en paralelo — **security (Opus): 0 críticos / 0 serios / 0 medios**, 3 bajos; **salud (Sonnet): 0 críticos /
+      0 serios** (paridad compilar/validar/diagnosticar/recomendar con el MISMO catálogo en las 20+ llamadas, cliente = servidor).
+      Las dos coincidieron en lo mismo → arreglado: validación CRUZADA en el lector compartido (tolerante y estricto igual):
+      Veo debe conservar 8 s (`VEO_SEGUNDOS_CON_REFS`), refs máx. ≥ `refsMinimas(tool)` (lo obligatorio del trabajo que más
+      pide: 2/2/2/2/1), tope de palabras ≥ 30 (`MIN_PALABRAS`); "otro" no puede ser id de modelo (es la opción de "¿Cómo
+      salió?"); surrogate suelto rechazado; `TARGET MODEL` cercado y la pista de tamaño sale del ROL del catálogo ("fast /
+      precise tier"), no de nombres de modelo (`Recomendacion.rol`, `EntradaWriter.modeloRol`, PROMPT_VERSION 2026-09-15.1);
+      CHECK de `modelos` a 16 000 bytes (un guardado válido con acentos no revienta en la BD); el editor del Hub con import
+      dinámico en la demo (no viaja en el bundle de /prisma); pistas en el Hub (8 s de Veo, mín. de refs y de palabras).
+      +11 tests (741). Aceptado sin cambio: `?demo=resultado` compila con la base (sólo dev).
+- [x] **SHIP 0071** — Pedro: "ship it" → `node scripts/migrate.mjs` → aplicada. Verificada en prod (ybbrpqzbedaxsmotgtkh):
+      5 filas, RLS on, 1 policy, anon/authenticated sin SELECT, service_role escribe, Veo [8,6,4], y **prod leído con
+      catalogoDesdeFilas == CATALOGO_BASE** (nada cambió para los diseñadores). npm test ✓ · tsc 0 · lint 0 · build ✓.
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+      a 2 → "Así elige Prisma" dice "Foto sin texto → ChatGPT Images (antes Nano Banana)" → "Valores del código" → Guardar
+      no se prende (sin cambios). (Si quiere probar un guardado real: subir y volver a bajar, o "Valores del código" + Guardar.)
+
+### F6b — el vigía (0072 `prisma_fuentes` + `prisma_propuestas`)
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+      higgsfield.ai); lectura segura (https, sólo el host de la fila, sin redirecciones a otro host, 15 s, 2 MB);
+      texto → hash; sin cambio = cero llamadas al modelo; con cambio → H.Ü.E lee SÓLO lo que cambió (cercado como dato)
+      + lo que Prisma ya sabe de esa herramienta → propone con cita literal + url.
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+      prisma_herramientas con el MISMO validador del Hub; descartar guarda el porqué y no vuelve; `codigo` = ticket.
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+
+### F6c — lo que queda del plan §8
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+      herramienta × job (editables).
+
 ## 🟢 2026-09-15 (10) — HÜE Prisma: `filaHermana` — UNA función para el spec hermano (rama `prisma`, SIN migración)
 Pedro: "yes do A". La deuda que dejó el reap de salud de F5a (el linaje `correccion_de` se perdía porque 3 sitios copiaban
 las columnas a mano).

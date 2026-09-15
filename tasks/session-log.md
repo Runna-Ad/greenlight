@@ -2291,3 +2291,26 @@ nuevos, manuales).
 - [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
 - [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
 
+
+## 2026-09-15 14:27
+**Shipped (recent commits):**
+  - fix(prisma): las copias ya no cuentan como ideas — hábitos de marca e informe sólo con specs originales
+  - feat(prisma): miniaturas de los 33 looks (Nano Banana 2, 480 px, 1 MB) + FOTOS_LISTAS = true
+  - refactor(prisma): filaHermana — una función decide qué columnas viajan al spec hermano (variar / adaptar / corregir)
+  - fix(prisma): F5a reap de salud — linaje de corrección en variar/adaptar, juicio sin bloquear, sugerencia al día, informe (spinner, personas), zona segura sólo al crear
+  - fix(prisma): F5a reap de seguridad — hábitos sólo con vocabulario conocido, look cercado al writer, cubo propio del juicio, bloquea en adaptar
+  - docs(prisma): cierre de sesión — session-log, lessons, todo (F5a 7a0f8c6, reap pendiente)
+  - feat(prisma): F5a — el Look rehecho (looks con foto, H.Ü.E sugiere, hábitos de marca), adaptar a otros formatos, zonas seguras, juicio en segundo plano, informe en el Hub, a11y
+
+**Still open:**
+- [ ] Reap (security Opus + salud Sonnet) · docs · commit/push · **"ship it" para 0071**.
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+

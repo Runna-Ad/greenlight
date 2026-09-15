@@ -10,7 +10,8 @@
  * lenguaje de problemas para el diseñador. Módulo puro (cliente y servidor).
  */
 import { ASPECTS, JOB_KIND, contarPalabras, textoDe, type Aspect, type Destino, type JobType, type PromptSpec, type RefRole, type Tool } from "./spec.ts";
-import { ASPECTS_POR_TOOL, REFS_MAX, TOOL_AUDIO, TOOL_INFO, TOOLS_POR_JOB, duracionValida } from "./tools.ts";
+import { TOOL_INFO, TOOLS_POR_JOB, duracionValida } from "./tools.ts";
+import { CATALOGO_BASE, type Catalogo } from "./catalogo.ts";
 import { movimientos } from "./camara.ts";
 import { regexSegura, CAMPOS, NIVELES, type ReglaCampo, type ReglaNivel } from "./reglas.ts";
 import { negativosSinMapear } from "./compilers/nanobanana.ts";
@@ -214,8 +215,8 @@ function evaluar(regla: ReglaCompilada, e: EntradaDiagnostico): Aviso | null {
 const SIN_FUENTE = null;
 
 /** El formato soportado más parecido al pedido (misma orientación si se puede). */
-function aspectCercano(tool: Tool, aspect: Aspect): Aspect {
-  const soportados = ASPECTS_POR_TOOL[tool];
+function aspectCercano(tool: Tool, aspect: Aspect, cat: Catalogo): Aspect {
+  const soportados = cat[tool].limites.aspects;
   if (soportados.includes(aspect)) return aspect;
   const [w, h] = aspect.split(":").map(Number);
   const orientacion = w === h ? "cuadrado" : w > h ? "horizontal" : "vertical";
@@ -226,12 +227,14 @@ function aspectCercano(tool: Tool, aspect: Aspect): Aspect {
   return misma ?? soportados[0];
 }
 
-export const REGLAS_BASE: ((e: EntradaDiagnostico) => Aviso | null)[] = [
+/** F6a: las que miran límites (duración, formato, refs, audio) los leen del catálogo vigente;
+ *  sin catálogo, las constantes (así las llaman los tests). */
+export const REGLAS_BASE: ((e: EntradaDiagnostico, cat?: Catalogo) => Aviso | null)[] = [
   // Duración que la herramienta no ofrece.
-  (e) => {
-    const opciones = TOOL_INFO[e.tool].duraciones;
+  (e, cat = CATALOGO_BASE) => {
+    const opciones = cat[e.tool].limites.duraciones;
     if (!opciones.length || e.duracion === null || opciones.includes(e.duracion)) return null;
-    const mejor = duracionValida(e.tool, e.duracion);
+    const mejor = duracionValida(e.tool, e.duracion, opciones);
     return {
       codigo: "duracion_fuera", nivel: "advierte",
       que: t(`${TOOL_INFO[e.tool].nombre} no genera ${e.duracion} s.`, `${TOOL_INFO[e.tool].nombre} does not generate ${e.duracion} s.`),
@@ -250,19 +253,20 @@ export const REGLAS_BASE: ((e: EntradaDiagnostico) => Aviso | null)[] = [
     };
   },
   // Formato que la herramienta no acepta.
-  (e) => {
-    if (ASPECTS_POR_TOOL[e.tool].includes(e.aspect)) return null;
-    const mejor = aspectCercano(e.tool, e.aspect);
+  (e, cat = CATALOGO_BASE) => {
+    const aspects = cat[e.tool].limites.aspects;
+    if (aspects.includes(e.aspect)) return null;
+    const mejor = aspectCercano(e.tool, e.aspect, cat);
     return {
       codigo: "aspect_no_soportado", nivel: "advierte",
       que: t(`${TOOL_INFO[e.tool].nombre} no genera en ${e.aspect}.`, `${TOOL_INFO[e.tool].nombre} does not generate ${e.aspect}.`),
-      porque: t(`Acepta ${ASPECTS_POR_TOOL[e.tool].join(", ")}.`, `It accepts ${ASPECTS_POR_TOOL[e.tool].join(", ")}.`),
+      porque: t(`Acepta ${aspects.join(", ")}.`, `It accepts ${aspects.join(", ")}.`),
       arreglo: t(`Genera en ${mejor} y recorta en edición.`, `Generate in ${mejor} and crop in editing.`), accion: { tipo: "aspect", aspect: mejor }, fuente: SIN_FUENTE,
     };
   },
   // Más referencias de las que acepta.
-  (e) => {
-    const max = REFS_MAX[e.tool];
+  (e, cat = CATALOGO_BASE) => {
+    const max = cat[e.tool].limites.refsMax;
     if (e.refs.length <= max) return null;
     const video = JOB_KIND[e.job] === "video";
     return {
@@ -274,9 +278,9 @@ export const REGLAS_BASE: ((e: EntradaDiagnostico) => Aviso | null)[] = [
     };
   },
   // Diálogo en una herramienta sin voz.
-  (e) => {
-    if (!e.dialogo?.texto.trim() || TOOL_AUDIO[e.tool]) return null;
-    const conVoz = TOOLS_POR_JOB[e.job].find((tl) => TOOL_AUDIO[tl]) ?? null;
+  (e, cat = CATALOGO_BASE) => {
+    if (!e.dialogo?.texto.trim() || cat[e.tool].limites.audio) return null;
+    const conVoz = TOOLS_POR_JOB[e.job].find((tl) => cat[tl].limites.audio) ?? null;
     return {
       codigo: "dialogo_sin_voz", nivel: "advierte",
       que: t(`${TOOL_INFO[e.tool].nombre} no genera voz.`, `${TOOL_INFO[e.tool].nombre} does not generate voice.`),
@@ -318,8 +322,8 @@ export function ordenarAvisos(avisos: Aviso[]): Aviso[] {
 }
 
 /** Antes de generar (cliente, instantáneo): reglas base + reglas de la BD sobre la entrada. */
-export function diagnosticarEntrada(e: EntradaDiagnostico, reglas: ReglaCompilada[]): Aviso[] {
-  const base = REGLAS_BASE.map((f) => f(e)).filter((a): a is Aviso => !!a);
+export function diagnosticarEntrada(e: EntradaDiagnostico, reglas: ReglaCompilada[], cat: Catalogo = CATALOGO_BASE): Aviso[] {
+  const base = REGLAS_BASE.map((f) => f(e, cat)).filter((a): a is Aviso => !!a);
   const db = reglas.filter((r) => r.campo !== "salida").map((r) => evaluar(r, e)).filter((a): a is Aviso => !!a);
   return ordenarAvisos([...base, ...db]);
 }
@@ -336,9 +340,9 @@ export function entradaDeSpec(spec: PromptSpec, tool: Tool = spec.tool, salida: 
 
 /** Sobre el resultado: entrada + reglas (incluidas las de `salida`) + errores del validador +
  *  cuántos "qué evitar" quedaron sin volverse positivos. */
-export function diagnosticar(spec: PromptSpec, tool: Tool, salida: string, errores: string[], reglas: ReglaCompilada[]): Aviso[] {
+export function diagnosticar(spec: PromptSpec, tool: Tool, salida: string, errores: string[], reglas: ReglaCompilada[], cat: Catalogo = CATALOGO_BASE): Aviso[] {
   const e = entradaDeSpec(spec, tool, salida);
-  const base = REGLAS_BASE.map((f) => f(e)).filter((a): a is Aviso => !!a);
+  const base = REGLAS_BASE.map((f) => f(e, cat)).filter((a): a is Aviso => !!a);
   const db = reglas.map((r) => evaluar(r, e)).filter((a): a is Aviso => !!a);
   const validador: Aviso[] = errores.map((err, i) => ({ codigo: `validador_${i + 1}`, nivel: "advierte", que: { es: err, en: err }, porque: null, arreglo: null, accion: null, fuente: null }));
   const sinMapear = tool === "nanobanana" || tool === "chatgpt" ? negativosSinMapear({ ...spec, tool }) : 0;

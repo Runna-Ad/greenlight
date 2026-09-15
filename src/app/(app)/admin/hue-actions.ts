@@ -13,6 +13,9 @@ import type { HueInstruction, HueKbDocument, HueScope, PrismaReglaRow } from "@/
 import { notasDe, validarRegla } from "@/lib/prisma/reglas";
 import { resumirInforme, type FilaEventoInforme, type FilaPromptInforme, type FilaResultadoInforme, type FilaSpecInforme, type Informe } from "@/lib/prisma/informe";
 import { repartirNotas } from "@/lib/prisma/prompts/writer";
+import { CATALOGO_BASE, catalogoDesdeFilas, validarFicha, type Catalogo, type FilaHerramienta } from "@/lib/prisma/catalogo";
+import { olvidarConocimiento } from "@/lib/prisma/data";
+import { TOOLS, type Tool } from "@/lib/prisma/spec";
 
 const KB_BUCKET = "greenlight-kb";
 const MAX_KB_BYTES = 20 * 1024 * 1024;
@@ -427,6 +430,7 @@ export async function guardarReglaPrisma(raw: unknown, id?: string): Promise<Ok<
     if (error) return error.code === "23505" ? { ok: false, error: `Ya existe una regla con el código "${v.row.codigo}": edítala o elige otro código.` } : falloReglas("insert", error.message);
   }
   const { data: guardada } = await db.from("prisma_reglas").select("id").eq("codigo", v.row.codigo).maybeSingle<{ id: string }>();
+  olvidarConocimiento();
   revalidatePath("/admin");
   revalidatePath("/prisma");
   return { ok: true, id: guardada?.id ?? id ?? "" };
@@ -441,6 +445,7 @@ export async function activarReglaPrisma(id: string, activa: boolean): Promise<O
   const { data, error } = await supabaseAdmin().from("prisma_reglas").update({ activa, updated_at: new Date().toISOString(), updated_by: soyId }).eq("id", id).select("id").maybeSingle();
   if (error) return falloReglas("update", error.message);
   if (!data) return { ok: false, error: "Esa regla ya no existe." };
+  olvidarConocimiento();
   revalidatePath("/admin");
   revalidatePath("/prisma");
   return { ok: true };
@@ -452,6 +457,43 @@ export async function borrarReglaPrisma(id: string): Promise<Ok | Fail> {
   if (!UUID_RE.test(id)) return { ok: false, error: "Esa regla ya no existe." };
   const { error } = await supabaseAdmin().from("prisma_reglas").delete().eq("id", id);
   if (error) return falloReglas("delete", error.message);
+  olvidarConocimiento();
+  revalidatePath("/admin");
+  revalidatePath("/prisma");
+  return { ok: true };
+}
+
+// ── F6a: los datos de cada herramienta (prisma_herramientas, 0071) ──────────
+
+/** Los datos de cada herramienta ya resueltos (lo que falte o venga raro = la constante del código)
+ *  + cuándo se editó cada fila. Sin la 0071 se enseñan los valores del código, sin poder guardar. */
+export async function hubPrismaHerramientas(): Promise<Ok<{ catalogo: Catalogo; sinTabla: boolean; editado: Partial<Record<Tool, string>> }> | Fail> {
+  const no = await noMaster();
+  if (no) return no;
+  const { data, error } = await supabaseAdmin().from("prisma_herramientas").select("tool, limites, fortalezas, modelos, fuente_url, fuente_fecha, updated_at").returns<(FilaHerramienta & { updated_at: string })[]>();
+  if (error) {
+    if (/prisma_herramientas/.test(error.message)) return { ok: true, catalogo: CATALOGO_BASE, sinTabla: true, editado: {} };
+    return falloReglas("herramientas.select", error.message);
+  }
+  const filas = data ?? [];
+  const editado = Object.fromEntries(filas.filter((f) => (TOOLS as string[]).includes(f.tool)).map((f) => [f.tool, f.updated_at])) as Partial<Record<Tool, string>>;
+  return { ok: true, catalogo: catalogoDesdeFilas(filas), sinTabla: false, editado };
+}
+
+/** Guarda la ficha de UNA herramienta. Upsert por `tool` a propósito (a diferencia de las reglas):
+ *  hay exactamente una fila por herramienta y siempre la misma, no hay "nueva con código repetido".
+ *  Validación estricta (validarFicha); vivo en la siguiente generación. */
+export async function guardarHerramientaPrisma(tool: string, raw: unknown): Promise<Ok | Fail> {
+  const no = await noMaster();
+  if (no) return no;
+  const v = validarFicha(tool, raw);
+  if (!v.ok) return v;
+  // Quién lo editó es parte del conocimiento (fuente + fecha + persona): sin roster, no se guarda.
+  const soyId = await getSoyId();
+  if (!soyId) return { ok: false, error: "Inicia sesión para editar el conocimiento." };
+  const { error } = await supabaseAdmin().from("prisma_herramientas").upsert({ ...v.fila, updated_by: soyId, updated_at: new Date().toISOString() }, { onConflict: "tool" });
+  if (error) return /prisma_herramientas/.test(error.message) ? { ok: false, error: "Falta aplicar la migración 0071 (prisma_herramientas)." } : falloReglas("herramientas.upsert", error.message);
+  olvidarConocimiento();
   revalidatePath("/admin");
   revalidatePath("/prisma");
   return { ok: true };
