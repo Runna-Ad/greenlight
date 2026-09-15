@@ -3,14 +3,14 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { analizarReferencia } from "@/lib/prisma/vision";
 import { escribirSpec, refinarSpec, variarSpec, recompilar, explicarPrompt, describirPersonajeIA, estableCon, versionCon, juzgarSpec, revisarTexto, preguntarFaltante, PROMPT_VERSION, type Uso } from "@/lib/prisma/writer";
-import { avisosDe, bloqueado, diagnosticar, diagnosticarEntrada, entradaDeSpec, type Aviso } from "@/lib/prisma/diagnostico";
+import { ACCIONES_PASO3, ACCIONES_RESULTADO, avisosDe, bloqueado, diagnosticar, diagnosticarEntrada, entradaDeSpec, instruccionDe, resolucionDe, type Aviso } from "@/lib/prisma/diagnostico";
 import { idiomaDe, revisarAcentos, type Cambio, type Idioma } from "@/lib/prisma/ortografia";
-import { aplicarRespuestas, detalleRespuestas, necesitaEntrevista, sanearRespuestas, type Pregunta, type Respuesta } from "@/lib/prisma/entrevista";
+import { MAX_PREGUNTAS, MAX_RONDAS, PREGUNTA_IDS, aplicarRespuestas, detalleRespuestas, necesitaEntrevista, sanearRespuestas, type Pregunta, type Respuesta } from "@/lib/prisma/entrevista";
 import type { EntradaWriter } from "@/lib/prisma/prompts/writer";
 import { plano } from "@/lib/prisma/texto";
 import { cargarAprendizaje, cargarHabitos, cargarMarcas, cargarPersonajes, cargarReglas, firmar } from "@/lib/prisma/data";
 import { habitosDe, type Habitos } from "@/lib/prisma/looks";
-import { ASPECT_POR_DESTINO, ASPECTS, DESTINOS, JOB_KIND, JOBS_POR_KIND, NOMBRE_HISTORICO, REFS_POR_JOB, VIDEO_TYPES, TOOLS, esDestino, type Aspect, type Destino, type JobType, type PromptSpec, type RefRole, type Tool, type VisualDNA } from "@/lib/prisma/spec";
+import { MAX_REFS, ROLES_MULTI, ASPECT_POR_DESTINO, ASPECTS, DESTINOS, JOB_KIND, JOBS_POR_KIND, NOMBRE_HISTORICO, REFS_POR_JOB, VIDEO_TYPES, TOOLS, esDestino, type Aspect, type Destino, type JobType, type PromptSpec, type RefRole, type Tool, type VisualDNA } from "@/lib/prisma/spec";
 import { t, type Par } from "@/lib/prisma/copy";
 import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
 import { PRISMA_VARIANTES_PEDIBLES, type PrismaCharacterRow, type PrismaEventoTipo, type PrismaPromptRow, type PrismaRefGuardada, type PrismaVariante } from "@/lib/database.types";
@@ -20,7 +20,7 @@ import { pistasModelo, recomendarModelo } from "@/lib/prisma/modelo";
 import type { Salida } from "@/lib/prisma/compilers";
 // Lo compartido con resultado-actions.ts (gate, freno, saneos, subir imagen, guardar prompt…):
 // UNA implementación para las dos familias de acciones.
-import { CODIGO_AVISO, FRENO, RUTA_REF, UUID, anotarEvento, diagnosticoDe, entradaDesdeSpec, estadoActual, fallo, gate, guardarPrompt, leerImagen, puedeTocar, reglasDe, s0, saturado, sn, specDeFila, subirAlBucket, ultimoResultadoDe, type Fail, type ResultadoVivo } from "./comun";
+import { CODIGO_AVISO, FRENO, RUTA_REF, UUID, anotarEvento, diagnosticoDe, entradaDesdeSpec, estadoActual, fallo, gate, guardarPrompt, leerImagen, puedeTocar, reglasDe, s0, saturado, sn, specDeFila, subirAlBucket, ultimoResultadoDe, type Fail, type ResultadoVivo, type Sesion, type SpecCargado } from "./comun";
 
 // ── 1) Subir + leer una referencia ──────────────────────────
 export type RefAnalizada = {
@@ -80,6 +80,8 @@ export type InputGenerar = {
   texto: string | null;
   /** F2: códigos de los avisos cuyo arreglo el diseñador aplicó ANTES de generar (evento aviso_aplicado). */
   avisosAplicados?: string[];
+  /** F5c: códigos de avisos del paso 3 que el diseñador pidió que H.Ü.E arregle al generar. */
+  avisosPedidos?: string[];
   /** F3: respuestas de la entrevista (chips o texto libre). */
   respuestas?: Respuesta[];
   /** F3: el diseñador pidió "sin preguntas" (preferencia local). */
@@ -126,14 +128,18 @@ function normalizar(raw: InputGenerar): InputGenerar | Fail {
   if (!DESTINOS.includes(raw.destino)) return { ok: false, error: "Destino no válido." };
   const videoType = sn(raw.videoType, 60);
   if (videoType && !(VIDEO_TYPES as string[]).includes(videoType)) return { ok: false, error: "Tipo de video no válido." };
+  // El tope ANTES de procesar nada (reap F5c): una lista gigante no se recorre.
+  if (Array.isArray(raw.refs) && raw.refs.length > MAX_REFS) return { ok: false, error: `Puedes subir hasta ${MAX_REFS} referencias.` };
   const refs: RefEntrada[] = [];
   const rolesDelJob = REFS_POR_JOB[raw.job].map((s) => s.role);
   for (const r of raw.refs ?? []) {
     if (!ROLES_REF.includes(r.role) || !rolesDelJob.includes(r.role)) return { ok: false, error: "Una de las referencias no es válida para este trabajo." };
     if (typeof r.storage_path !== "string" || !RUTA_REF.test(r.storage_path)) return { ok: false, error: "Referencia inválida." };
+    // F5c: varias imágenes sólo en las casillas que las aceptan (un logo, una pose, la toma inicial: una).
+    if (!ROLES_MULTI.has(r.role) && refs.some((x) => x.role === r.role)) return { ok: false, error: "Esa casilla lleva una sola imagen." };
     refs.push({ role: r.role, storage_path: r.storage_path, caption: sn(r.caption), dna: dnaLimpio(r.dna) });
   }
-  if (refs.length > 4) return { ok: false, error: "Puedes subir hasta 4 referencias." };
+  if (refs.length > MAX_REFS) return { ok: false, error: `Puedes subir hasta ${MAX_REFS} referencias.` };
   const dur = raw.duracion === null || raw.duracion === undefined ? null : Number(raw.duracion);
   if (dur !== null && (!Number.isFinite(dur) || dur < 1 || dur > 60)) return { ok: false, error: "Duración no válida." };
   return {
@@ -158,6 +164,7 @@ function normalizar(raw: InputGenerar): InputGenerar | Fail {
     videoType,
     texto: sn(raw.texto, 200),
     avisosAplicados: Array.isArray(raw.avisosAplicados) ? [...new Set(raw.avisosAplicados.filter((c): c is string => typeof c === "string" && CODIGO_AVISO.test(c)))].slice(0, 10) : [],
+    avisosPedidos: Array.isArray(raw.avisosPedidos) ? [...new Set(raw.avisosPedidos.filter((c): c is string => typeof c === "string" && CODIGO_AVISO.test(c)))].slice(0, 10) : [],
     respuestas: sanearRespuestas(raw.respuestas),
     sinPreguntas: raw.sinPreguntas === true,
   };
@@ -226,11 +233,17 @@ export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar
   const [aprendizaje, reglas] = await Promise.all([ent.clientId ? cargarAprendizaje(db, ent.clientId, inp.job) : Promise.resolve(null), cargarReglas(db)]);
   // Un aviso que BLOQUEA se impone aquí, no sólo en el navegador, y antes de pagar la llamada.
   // Con los valores YA aplicados (las respuestas de la entrevista pueden cambiar formato, duración o movimiento).
-  const bloqueo = bloqueado(diagnosticarEntrada({ job: inp.job, tool: inp.tool, destino: inp.destino, aspect: ent.entrada.aspect, duracion: ent.entrada.duracion, refs: inp.refs.map((r) => ({ role: r.role })), texto: inp.texto, dialogo: ent.entrada.dialogo ? { texto: ent.entrada.dialogo.texto, idioma: ent.entrada.dialogo.idioma } : null, movimiento: ent.entrada.look.movimiento, idea: inp.idea }, reglasDe(reglas), reglas.catalogo));
+  const diag = diagnosticarEntrada({ job: inp.job, tool: inp.tool, destino: inp.destino, aspect: ent.entrada.aspect, duracion: ent.entrada.duracion, refs: inp.refs.map((r) => ({ role: r.role })), texto: inp.texto, dialogo: ent.entrada.dialogo ? { texto: ent.entrada.dialogo.texto, idioma: ent.entrada.dialogo.idioma } : null, movimiento: ent.entrada.look.movimiento, idea: inp.idea }, reglasDe(reglas), reglas.catalogo);
+  const bloqueo = bloqueado(diag);
   if (bloqueo) return { ok: false, error: bloqueo.que.es };
+  // F5c: "Que H.Ü.E lo arregle": el texto de cada arreglo sale de las reglas de Prisma recalculadas
+  // AQUÍ (por código); el navegador sólo dice cuáles — nunca manda texto que llegue al writer.
+  // Sólo los que H.Ü.E arregla de verdad al escribir (misma regla que el botón; un "bloquea" nunca).
+  const pedidos = diag.filter((a) => (inp.avisosPedidos ?? []).includes(a.codigo) && resolucionDe(a, ACCIONES_PASO3, "al_generar") === "hue");
+  const arreglos = pedidos.map((a) => (a.arreglo ?? a.que).en);
   // "Úsalo en…": el modelo/nivel donde se va a pegar; el writer dimensiona el spec para él.
   const { modelo, rol: modeloRol } = recomendarModelo({ job: inp.job, tool: inp.tool, destino: inp.destino, refs: inp.refs.length, texto: !!inp.texto?.trim(), dialogo: !!inp.dialogo?.texto.trim(), duracion: inp.duracion }, reglas.catalogo);
-  const r = await escribirSpec({ ...ent.entrada, aprendizaje, modelo, modeloRol }, estableCon(reglas.notas, reglas.clave), reglasDe(reglas), reglas.catalogo);
+  const r = await escribirSpec({ ...ent.entrada, aprendizaje, modelo, modeloRol, arreglos }, estableCon(reglas.notas, reglas.clave), reglasDe(reglas), reglas.catalogo);
   if (!r.ok) return r;
 
   const refsGuardadas: PrismaRefGuardada[] = inp.refs.map((x) => ({ role: x.role, storage_path: x.storage_path, caption: x.caption, dna: x.dna as Record<string, unknown> | null }));
@@ -251,8 +264,9 @@ export async function generarPrompt(raw: InputGenerar): Promise<ResultadoGenerar
     await anotarEvento(db, { spec_id: specRow.id, prompt_id: promptId, client_id: ent.clientId, job: inp.job, tool: inp.tool, variante: "base", user_id: g.soyId, tipo: "respondido", detalle: detalleRespuestas(inp.respuestas) });
   }
   // Los arreglos que el diseñador aplicó ANTES de generar: señal de qué avisos ayudan (un solo insert).
-  if (inp.avisosAplicados?.length) {
-    const { error: evError } = await db.from("prisma_eventos").insert(inp.avisosAplicados.map((codigo) => ({ spec_id: specRow.id, prompt_id: promptId, client_id: ent.clientId, job: inp.job, tool: inp.tool, variante: "base" as PrismaVariante, user_id: g.soyId, tipo: "aviso_aplicado" as PrismaEventoTipo, detalle: codigo })));
+  const aplicados = [...new Set([...(inp.avisosAplicados ?? []), ...pedidos.map((a) => a.codigo)])];
+  if (aplicados.length) {
+    const { error: evError } = await db.from("prisma_eventos").insert(aplicados.map((codigo) => ({ spec_id: specRow.id, prompt_id: promptId, client_id: ent.clientId, job: inp.job, tool: inp.tool, variante: "base" as PrismaVariante, user_id: g.soyId, tipo: "aviso_aplicado" as PrismaEventoTipo, detalle: codigo })));
     if (evError) console.warn(`[prisma] avisos aplicados no registrados: ${evError.message}`);
   }
 
@@ -293,7 +307,34 @@ export async function refinarPrompt(specId: string, cambio: string): Promise<Res
   if (!texto) return { ok: false, error: "Escribe qué quieres cambiar." };
   const s = await specDeFila(specId, g);
   if ("ok" in s) return s;
+  // Señal de aprendizaje: qué tuvo que pedir el diseñador (el texto, recortado).
+  return refinarNucleo(s, g, texto, { tipo: "refinado", detalle: texto.slice(0, 300) });
+}
 
+/** F5c (reap): "Arreglarlo con H.Ü.E" sobre el resultado. El navegador sólo manda el CÓDIGO: el servidor
+ *  busca el aviso entre los guardados de ESE prompt (reglas, validador, juicio), confirma que es de los
+ *  que H.Ü.E arregla reescribiendo, arma la instrucción y lo anota como aviso_aplicado — NO como
+ *  "refinado": un arreglo pedido por la máquina no es un gusto de la marca (aprendizaje) ni cuenta
+ *  contra "copiado sin refinar" (informe). */
+export async function arreglarAviso(specId: string, promptId: string, codigo: string): Promise<ResultadoRefinar | Fail> {
+  const g = await gate();
+  if ("ok" in g) return g;
+  if (saturado(g.soyId)) return FRENO;
+  const pid = sn(promptId, 64);
+  const cod = sn(codigo, 60);
+  if (!pid || !UUID.test(pid) || !cod || !CODIGO_AVISO.test(cod)) return { ok: false, error: "Aviso no válido." };
+  const s = await specDeFila(specId, g);
+  if ("ok" in s) return s;
+  const { data: p } = await supabaseAdmin().from("prisma_prompts").select("avisos").eq("id", pid).eq("spec_id", s.row.id).maybeSingle<{ avisos: unknown }>();
+  if (!p) return { ok: false, error: "Ese prompt ya no existe." };
+  const aviso = avisosDe(p.avisos).find((a) => a.codigo === cod);
+  if (!aviso || resolucionDe(aviso, ACCIONES_RESULTADO, "ahora") !== "hue") return { ok: false, error: "Ese aviso no se arregla así." };
+  return refinarNucleo(s, g, instruccionDe(aviso), { tipo: "aviso_aplicado", detalle: cod });
+}
+
+/** Lo que comparten refinar y "Arreglarlo con H.Ü.E": reescribir SÓLO lo pedido, guardar y anotar. */
+async function refinarNucleo(s: SpecCargado, g: Sesion, texto: string, evento: { tipo: "refinado" | "aviso_aplicado"; detalle: string }): Promise<ResultadoRefinar | Fail> {
+  const specId = s.row.id;
   const db = supabaseAdmin();
   const [{ tool, variante }, reglas] = await Promise.all([estadoActual(db, s), cargarReglas(db)]);
   const spec = { ...s.spec, tool };
@@ -306,8 +347,7 @@ export async function refinarPrompt(specId: string, cambio: string): Promise<Res
   const avisos = diagnosticoDe(r.spec, tool, r.salida, r.errores, reglasDe(reglas), reglas.catalogo);
   const promptId = await guardarPrompt(specId, tool, r.salida, r.valido, r.errores, r.usage, variante, versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, tool), reglas.catalogo).modelo, avisos);
   if (typeof promptId !== "string") return promptId;
-  // Señal de aprendizaje: qué tuvo que pedir el diseñador (el texto, recortado).
-  await anotarEvento(db, { spec_id: specId, prompt_id: promptId, client_id: s.row.client_id, job: spec.job, tool, variante, user_id: g.soyId, tipo: "refinado", detalle: texto.slice(0, 300) });
+  await anotarEvento(db, { spec_id: specId, prompt_id: promptId, client_id: s.row.client_id, job: spec.job, tool, variante, user_id: g.soyId, tipo: evento.tipo, detalle: evento.detalle });
   return { ok: true, promptId, spec: r.spec, salida: r.salida, valido: r.valido, errores: r.errores, usage: r.usage, avisos };
 }
 
@@ -630,24 +670,30 @@ export type ResultadoEntrevista = { ok: true; preguntas: Pregunta[] };
  * preguntar; sólo entonces se paga la llamada. Las preguntas que esta marca "ya sabe"
  * (misma respuesta ≥ 4 de las últimas 10 veces) no se hacen.
  */
-export async function entrevistar(raw: InputGenerar): Promise<ResultadoEntrevista | Fail> {
+/** F5c: `profundo` = "Profundizar" (ronda 2 o 3): lo ya preguntado no se repite y lo contestado viaja
+ *  a H.Ü.E como dato. La heurística "¿hace falta preguntar?" sólo decide la PRIMERA ronda: la
+ *  segunda la pidió el diseñador. */
+export async function entrevistar(raw: InputGenerar, profundo?: { ronda: number; preguntadas: string[] }): Promise<ResultadoEntrevista | Fail> {
   const g = await gate();
   if ("ok" in g) return g;
   const inp = normalizar(raw);
   if ("ok" in inp) return inp;
+  const ronda = profundo ? profundo.ronda : 1;
+  if (!Number.isInteger(ronda) || ronda < 1 || ronda > MAX_RONDAS || (profundo && ronda < 2)) return { ok: false, error: "Ronda no válida." };
+  const preguntadas = profundo && Array.isArray(profundo.preguntadas) ? [...new Set(profundo.preguntadas.filter((id): id is string => typeof id === "string" && (PREGUNTA_IDS as readonly string[]).includes(id)))].slice(0, MAX_PREGUNTAS * MAX_RONDAS) : [];
   // La heurística va ANTES de tocar la BD: cuando la idea ya lo dice todo, la llamada es gratis.
   const roles = new Set(inp.refs.map((r) => r.role));
   const refsFaltan = REFS_POR_JOB[inp.job].some((s) => !s.opcional && !roles.has(s.role));
   const chipsLook = Object.values(inp.look).filter((v) => v && v.trim()).length;
   const refsConDna = inp.refs.filter((r) => !!r.dna).length;
-  if (!necesitaEntrevista({ idea: inp.idea, refsFaltan, chipsLook, refsConDna, sinPreguntas: !!inp.sinPreguntas })) return { ok: true, preguntas: [] };
+  if (ronda === 1 && !necesitaEntrevista({ idea: inp.idea, refsFaltan, chipsLook, refsConDna, sinPreguntas: !!inp.sinPreguntas })) return { ok: true, preguntas: [] };
   // Cubo propio: ir y volver entre el paso 1 y el 2 nunca gasta el cupo de generar.
   if (saturado(g.soyId, Date.now(), "entrevista", 20)) return FRENO;
   const ent = await entradaDe(inp);
   if ("ok" in ent) return ent;
   const db = supabaseAdmin();
   const aprendizaje = ent.clientId ? await cargarAprendizaje(db, ent.clientId, inp.job) : null;
-  const r = await preguntarFaltante(ent.entrada, aprendizaje?.yaSabidas ?? []);
+  const r = await preguntarFaltante(ent.entrada, [...(aprendizaje?.yaSabidas ?? []), ...preguntadas], ronda > 1 ? { ronda, respuestas: inp.respuestas ?? [] } : undefined);
   if (!r.ok) return r;
   return { ok: true, preguntas: r.preguntas };
 }

@@ -4,7 +4,7 @@
  * cláusula PRESERVAR siempre (identidad, manos, texto del empaque), igualar luz y
  * perspectiva desde el ADN visual, y paleta de marca en foto de producto.
  */
-import { etiquetaRef, frases, indiceRef, negativosDe, textoDe, type PromptSpec, type RefRole } from "../spec.ts";
+import { etiquetaRef, frases, indicesRef, negativosDe, textoDe, unirY, type PromptSpec, type RefRole } from "../spec.ts";
 import { positivar } from "../positivo.ts";
 import { zonaSeguraImagen } from "./zonas.ts";
 import type { Salida } from "./salida.ts";
@@ -16,8 +16,8 @@ export type Etiquetador = (spec: PromptSpec, role: RefRole, corto?: boolean) => 
 /** "[Imagen 1: caption]" la primera vez; "[Imagen 1]" en una segunda mención (cada palabra cuenta). */
 const etiquetaNB: Etiquetador = (spec, role, corto = false) => {
   if (!corto) return etiquetaRef(spec, role);
-  const n = indiceRef(spec, role);
-  return n === null ? null : `[Imagen ${n}]`;
+  const ns = indicesRef(spec, role);
+  return ns.length ? unirY(ns.map((n) => `[Imagen ${n}]`)) : null;
 };
 
 /** La instrucción principal, por trabajo. Cada una es una frase completa en inglés.

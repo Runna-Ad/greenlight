@@ -1,5 +1,63 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔵 2026-09-15 (12) — HÜE Prisma · F5c: lo que pidieron los diseñadores (rama `prisma`, antes de F6b)
+Pedro: "go in your order" + deep dive de Higgsfield (sitio + API, la quiere conectar a Prisma). Probablemente SIN migración.
+1. [x] **Todo aviso se puede resolver** — `resolucionDe(aviso, acciones, "ahora" | "al_generar")` (diagnostico.ts): "arreglar"
+       si ESTA pantalla aplica esa acción (ACCIONES_PASO3 / ACCIONES_RESULTADO = exactamente lo que cada `arreglar` aplica);
+       "hue" si no tiene arreglo mecánico y es del prompt (juicio `hue_*`, validador, regla nota sobre idea/texto/acción/
+       cámara/salida); si no, "entendido" ("ninguna" sólo para un bloquea). Resultado: "Arreglarlo con H.Ü.E" = refine con
+       `instruccionDe` + evento aviso_aplicado. Paso 3: "Que H.Ü.E lo arregle" (toggle) → `avisosPedidos` (CÓDIGOS) → el
+       servidor recalcula los avisos y pasa SU texto de arreglo al writer ("PRISMA CHECKS TO RESOLVE", cercado; PROMPT_VERSION
+       2026-09-15.2). "Entendido" oculta (nunca un bloquea; el bloqueo no cambia) + "Mostrar N ocultos". Browser: ChatGPT +
+       Impreso → el aviso de modelo trae "Entendido" (antes un "Arreglarlo" muerto); ocultar/mostrar ok, sin errores.
+2. [x] **Entrevista a fondo** — "Profundizar (3 más)" hasta MAX_RONDAS = 3; 7 ids nuevos (mood, composicion, detalle, hora,
+       vestuario, accion, color) — cada id se pregunta UNA vez; la ronda 2+ recibe lo contestado CERCADO (`<answer id>`) y lo
+       preguntado en `<known>`; "una lista vacía es buena respuesta" → si no falta nada, "H.Ü.E ya tiene lo que necesita" y el
+       botón se va. "Saltar" en ronda 2+ salta sólo ESA ronda. Respuestas guardan `ronda` (2/3) → Hub › Informe "Por rondas"
+       (ideas por ronda máxima y cuántas llegaron a un resultado aceptado, contando sus copias). Browser (`?demo=entrevista`,
+       rondas de muestra sólo dev): ronda 2 con "Ya contestaste…", ronda 3 sin "Profundizar".
+3. [x] **Varias imágenes por casilla** — "+ Otra imagen (N de 6)" en producto/sujeto/estilo/escena/objeto/outfit/empaque
+       (`ROLES_MULTI`; logo, pose, toma inicial/final: una). `MAX_REFS = 6` (servidor: tope y casillas de una sola imagen).
+       Nano Banana: "[Imagen 1: …] and [Imagen 2: …]"; ChatGPT: "the first attached image … and the second attached image"
+       (el validador exige cada una). `soltar_ref` quita sólo la ÚLTIMA de esa casilla; quitar la principal promueve la
+       siguiente. Tope por herramienta (Veo/Kling 3) = el aviso "refs de más" de siempre. Subir imágenes en local exige
+       sesión → cubierto por tests (compilan y validan con 2–3 del mismo papel).
+- Tests F5c: test-prisma 770 · npm test ✓ · tsc 0 · lint 0.
+- [x] Reap security (Opus): 0 críticos / 0 serios; 1 medio + 2 bajos → arreglados: "Arreglarlo con H.Ü.E" ya no va por
+      refinarPrompt (anotaba texto de la máquina como `refinado` → aprendizaje y "copiado sin refinar" contaminados): acción
+      propia `arreglarAviso(specId, promptId, codigo)` — el servidor busca el aviso guardado en ESE prompt, confirma que es
+      "hue", arma la instrucción y anota `aviso_aplicado` (núcleo compartido `refinarNucleo`); `avisosPedidos` también se
+      filtra con `resolucionDe` en el servidor; el tope de 6 refs se revisa antes de recorrer la lista; la IDEA del writer
+      va cercada (`<idea>`) como todo texto humano. Pie de la entrevista en dos filas limpias.
+- [x] Reap salud (Sonnet): paridad confirmada (ACCIONES_* = lo que cada `arreglar` aplica; etiquetas multi-imagen = lo que
+      piden los validadores; rondas se resetean bien). 1 SERIO → arreglado y RE-VERIFICADO por el mismo revisor: el personaje
+      y las "+ otra" — soltar el personaje vaciaba la principal y las extra quedaban en pantalla sin viajar al prompt; quitar
+      con la X la foto del personaje lo dejaba elegido (previo a F5c). Ahora `elegirPersonaje` promueve la siguiente, la X
+      sobre la foto del personaje lo suelta entero, y el arreglo soltar_ref usa `soltarPersonaje` (sin setRefs que se pisen).
+      npm test ✓ (770) · tsc 0 · lint 0 · build ✓.
+4. [ ] **F5d — Higgsfield como plataforma** (espera a Pedro: qué modelos usan DENTRO de Higgsfield y si es default para todos
+       o por marca). Plan: "¿Dónde generas?" (Higgsfield por default) → el prompt se sigue escribiendo para el MODELO; el
+       catálogo (F6a) gana, por modelo, "cómo llegar en Higgsfield" y los límites de Higgsfield cuando difieren (Kling 3.0
+       ahí: hasta 15 s, audio nativo, hasta 6 cortes; Veo 3.1: 1–3 refs, 4/6/8 s, 16:9/9:16 = los nuestros); presets de
+       cámara al día con la lista de Camera Controls (50+, hoy tenemos 19); ajustar el compiler de Nano Banana a la guía
+       que publica Higgsfield (sujeto → composición → acción → lugar → estilo, restricciones explícitas, texto entre
+       comillas + fuente). Modelos nuevos (Seedream 5.0, FLUX.2 con JSON y HEX, Soul 2.0/Soul ID, Seedance 2.5, MiniMax H3,
+       Wan 2.7) = un compiler cada uno → sólo los que el equipo use. Probablemente sin migración (jsonb del catálogo).
+- [x] **Investigación Higgsfield** → `tasks/higgsfield-research-2026-09-15.md` (fuentes citadas; research.md).
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+      Higgsfield" en el resultado → server action manda el prompt compilado + las referencias (upload firmado desde
+      nuestro bucket) a la ruta del modelo → `request_id` → tabla nueva `prisma_generaciones` (spec, prompt, modelo,
+      request_id, estado, costo, salidas; migración con "ship it") → estado por webhook (payload/firma sin verificar) o
+      polling acotado → al completar, bajar las salidas a nuestro bucket (Higgsfield las guarda ≥7 días) y correr la
+      comparación de F4 SOLA (el ciclo "sube lo que salió" se cierra sin que nadie suba nada). Costos: estimar antes
+      (el CLI tiene `generate cost`; en la API, verificar), tope por persona/día, resolución y duración conservadoras
+      por default; failed/NSFW no cobran. Antes de construir: leer el OpenAPI (`docs/openapi.json`), confirmar rutas y
+      parámetros por modelo, rate limits, estado GA y precios reales con una llave de prueba.
+
+### Verificación F5c
+Tests puros por pieza (qué aviso lleva qué botón; rondas y tope; refs por rol y tope por modelo) · browser con `?demo=` en
+cada pantalla · reap en paralelo (security Opus + salud Sonnet) · npm test · tsc · lint · build · commit/push a `prisma`.
+
 ## 🔵 2026-09-15 (11) — HÜE Prisma v1 · FASE 6 Vigía (rama `prisma`) — F6a HECHA (0071 APLICADA) · sigue F6b
 Pedro: "let's start F6 vigia" → eligió **datos de herramienta primero** (F6a → F6b → F6c) y **botón "Revisar ahora" +
 cron semanal cableado** que sólo corre al llegar a producción (Vercel cron llama a la URL de PRODUCCIÓN — docs

@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ChipSelect } from "@/components/intake/chip-select";
 import { cn } from "@/lib/utils";
 import { abrirSpec, generarPrompt, listarPersonajes, retirarPersonaje, revisarBien, type InputGenerar, revisarOrtografia, entrevistar } from "@/app/(app)/prisma/actions";
-import {
+import { REF_LABEL,
   DESTINO_LABEL,
   JOB_HINT,
   JOB_LABEL,
@@ -33,6 +33,8 @@ import {
 import { aplicarLook, lookActivo, lookSugerido, looksPara, ordenarPorHabitos, type Habitos, type LookElegido } from "@/lib/prisma/looks";
 import { LooksGrid } from "./looks-grid";
 import {
+  MAX_REFS,
+  ROLES_MULTI,
   ASPECT_POR_DESTINO,
   JOBS_POR_KIND,
   REFS_POR_JOB,
@@ -50,13 +52,13 @@ import { COLOR_KIND, TOOL_INFO, TOOLS_POR_JOB, VEO_SEGUNDOS_CON_REFS } from "@/l
 import { elegirHerramienta } from "@/lib/prisma/routing";
 import { recomendarModelo } from "@/lib/prisma/modelo";
 import { useCatalogo } from "./catalogo-contexto";
-import { aplicarArreglo, avisoOrtografia, bloqueado, compilarReglas, diagnosticarEntrada, ordenarAvisos, type Aviso, type EntradaDiagnostico, type ReglaCliente } from "@/lib/prisma/diagnostico";
+import { ACCIONES_PASO3, aplicarArreglo, avisoOrtografia, bloqueado, compilarReglas, diagnosticarEntrada, ordenarAvisos, resolucionDe, type Aviso, type EntradaDiagnostico, type ReglaCliente } from "@/lib/prisma/diagnostico";
 import { compilarFusion } from "@/lib/prisma/compilers/fusion";
 import type { Cambio } from "@/lib/prisma/ortografia";
 import { PanelAvisos, SugerenciaTexto } from "./avisos";
 import { Entrevista } from "./entrevista";
 import { aplicarRespuestas, type Pregunta, type Respuesta } from "@/lib/prisma/entrevista";
-import { necesitaEntrevista } from "@/lib/prisma/entrevista";
+import { MAX_RONDAS, necesitaEntrevista } from "@/lib/prisma/entrevista";
 import { revisarAcentos } from "@/lib/prisma/ortografia";
 import { useLang } from "./use-lang";
 import { RefUploader, type RefLocal } from "./ref-uploader";
@@ -119,7 +121,7 @@ function Chips({ titulo, opciones, valor, onChange, lang, permiteOtro = true }: 
  * HÜE Prisma — el estudio. Tres puertas → un trabajo → 3 pasos → resultado.
  * Etiquetas en palabras llanas; la jerga sólo aparece en el prompt final.
  */
-export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = null, verTodo = false, reglas = [] }: { marcas: MarcaUI[]; historial: ItemHistorialUI[]; demo?: PromptVivo | null; /** Sólo dev (`?demo=entrevista`): arranca en la entrevista con estas preguntas. */ demoPreguntas?: Pregunta[] | null; verTodo?: boolean; reglas?: ReglaCliente[] }) {
+export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = null, demoProfundas = null, verTodo = false, reglas = [] }: { marcas: MarcaUI[]; historial: ItemHistorialUI[]; demo?: PromptVivo | null; /** Sólo dev (`?demo=entrevista`): arranca en la entrevista con estas preguntas. */ demoPreguntas?: Pregunta[] | null; /** Sólo dev: las preguntas de "Profundizar" (rondas 2 y 3). */ demoProfundas?: Pregunta[] | null; verTodo?: boolean; reglas?: ReglaCliente[] }) {
   const router = useRouter();
   const [lang, setLang] = useLang();
   const catalogo = useCatalogo();
@@ -131,6 +133,9 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
   const [idea, setIdea] = useState("");
   const [texto, setTexto] = useState("");
   const [refs, setRefs] = useState<Partial<Record<RefRole, RefLocal | null>>>({});
+  /** F5c: las imágenes de "+ otra" de cada casilla (la principal sigue en `refs`: el personaje presta
+   *  su foto a la principal y nada de eso cambia). Tope total MAX_REFS. */
+  const [extras, setExtras] = useState<Partial<Record<RefRole, RefLocal[]>>>({});
   const [look, setLook] = useState<Look>(lookVacio);
   const [destino, setDestino] = useState<Destino>("ig_story");
   const [marcaId, setMarcaId] = useState<string | null>(null);
@@ -168,11 +173,20 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
   const [ignorada, setIgnorada] = useState<{ texto: string | null; dialogo: string | null }>({ texto: null, dialogo: null });
   /** Códigos de avisos cuyo arreglo se aplicó antes de generar (viajan como evento aviso_aplicado). */
   const [avisosAplicados, setAvisosAplicados] = useState<string[]>([]);
+  /** F5c: avisos del paso 3 que H.Ü.E arreglará al generar (códigos) y los ocultos con "Entendido". */
+  const [avisosPedidos, setAvisosPedidos] = useState<string[]>([]);
+  const [ocultosPaso3, setOcultosPaso3] = useState<string[]>([]);
   /** El prompt de fusión (dos refs → una) cuando el arreglo lo pide. */
   const [fusion, setFusion] = useState<string | null>(null);
   /** F3: la entrevista — preguntas de H.Ü.E, respuestas (id → valor), y si se apagó en este navegador. */
   const [preguntas, setPreguntas] = useState<Pregunta[]>(demoPreguntas ?? []);
   const [respuestas, setRespuestas] = useState<Record<string, string>>({});
+  /** F5c: la entrevista por rondas — TODAS las preguntas hechas (con su ronda), la ronda actual y si
+   *  H.Ü.E ya dijo que no le falta nada (entonces "Profundizar" desaparece). */
+  const [hechas, setHechas] = useState<(Pregunta & { ronda: number })[]>(() => (demoPreguntas ?? []).map((p) => ({ ...p, ronda: 1 })));
+  const [ronda, setRonda] = useState(1);
+  const [sinMas, setSinMas] = useState(false);
+  const [profundizando, setProfundizando] = useState(false);
   const [preguntando, setPreguntando] = useState(false);
   const sinPreguntasGuardado = useSyncExternalStore(suscribirStorage, leerSinPreguntas, sinPreguntasServidor);
   // Lo que se cambia en ESTA pestaña manda sobre lo guardado (el evento storage no se dispara en la misma pestaña).
@@ -217,7 +231,8 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
   const personaje = personajesDeMarca.find((p) => p.id === personajeId) ?? null;
   const video = job ? esVideo(job) : false;
   const slots = job ? REFS_POR_JOB[job] : [];
-  const refsLista = slots.map((s) => refs[s.role] ?? null).filter((r): r is RefLocal => !!r);
+  // Orden estable: por casilla, la principal y luego sus "+ otra" (así se numeran [Imagen N]).
+  const refsLista = slots.flatMap((s) => (refs[s.role] ? [refs[s.role] as RefLocal, ...(extras[s.role] ?? [])] : []));
   const dnaPrincipal = refsLista.find((r) => r.dna)?.dna ?? null;
   // F5a: los looks del trabajo (los que la marca ya usó, primero), cuál está elegido tal cual y
   // cuál sugiere H.Ü.E (sin modelo: idea + ADN + destino). Todo puro y barato: se calcula al render.
@@ -226,7 +241,7 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
   const sugerido = job ? lookSugerido({ job, idea, dna: dnaPrincipal, destino }) : null;
   // Etiquetas llanas de las respuestas de la entrevista (un valor elegido ahí se ve con su
   // etiqueta, no con la frase técnica en inglés — el chip crudo de la prueba de Pedro).
-  const etiquetasEntrevista: Record<string, Par> = Object.fromEntries(preguntas.flatMap((p) => p.opciones.map((o) => [o.valor, o.label])));
+  const etiquetasEntrevista: Record<string, Par> = Object.fromEntries(hechas.flatMap((p) => p.opciones.map((o) => [o.valor, o.label])));
   /** Entrar al paso 2: si el look está vacío —o sigue siendo la sugerencia anterior, sin ajustar— H.Ü.E
    *  deja pre-elegido el que sugiere ahora (la idea pudo cambiar en el paso 1). Un look elegido a mano se respeta. */
   const entrarAlLook = () => {
@@ -344,11 +359,22 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
         if (a.codigo.startsWith("ortografia")) setRevision(null);
       }
       if (patch.refs !== undefined) {
-        const quedan = new Set(patch.refs.map((r) => r.role));
+        // F5c: cuántas quedan de cada casilla; se recorta desde el final (primero las de "+ otra").
+        const cuenta = new Map<string, number>();
+        for (const r of patch.refs) cuenta.set(r.role, (cuenta.get(r.role) ?? 0) + 1);
+        const nuevasRefs: Partial<Record<RefRole, RefLocal | null>> = { ...refs };
+        const nuevosExtras: Partial<Record<RefRole, RefLocal[]>> = { ...extras };
+        for (const s of slots) {
+          const lista = [refs[s.role], ...(extras[s.role] ?? [])].filter((x): x is RefLocal => !!x).slice(0, cuenta.get(s.role) ?? 0);
+          nuevasRefs[s.role] = lista[0] ?? null;
+          nuevosExtras[s.role] = lista.slice(1);
+        }
         // Si la referencia que se suelta era la foto prestada por el personaje, se suelta el
         // personaje entero (foto + id): si no, viajaría su descripción sin su imagen.
-        if (refDePersonaje && !quedan.has(refDePersonaje)) elegirPersonaje(null);
-        setRefs((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, quedan.has(k as RefRole) ? v : null])));
+        // Directo (sin elegirPersonaje, cuyo setRefs se pisaría): aquí las casillas ya se recalcularon.
+        if (refDePersonaje && !nuevasRefs[refDePersonaje]) soltarPersonaje();
+        setRefs(nuevasRefs);
+        setExtras(nuevosExtras);
       }
     }
     setAvisosAplicados((prev) => (prev.includes(a.codigo) ? prev : [...prev, a.codigo]));
@@ -361,9 +387,24 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
   // y sale al soltarlo — sin tocar nunca una foto que subió el diseñador (personajes.ts).
   const elegirPersonaje = (nuevo: PersonajeUI | null, fotoLocal: RefLocal | null = null) => {
     const n = aplicarFotoDePersonaje(refs, personaje, nuevo, slotParaFoto(slots.map((s) => s.role)), refDePersonaje, fotoLocal);
-    setRefs(n.refs);
+    // F5c (reap): si el personaje se lleva la foto principal y quedan "+ otra", la siguiente toma su
+    // lugar — si no, se verían en pantalla pero no viajarían al prompt (refsLista parte de la principal).
+    let nuevas = n.refs;
+    const masDelSlot = refDePersonaje ? extras[refDePersonaje] ?? [] : [];
+    if (refDePersonaje && !nuevas[refDePersonaje] && masDelSlot.length) {
+      const slot = refDePersonaje;
+      nuevas = { ...nuevas, [slot]: masDelSlot[0] };
+      setExtras((prev) => ({ ...prev, [slot]: masDelSlot.slice(1) }));
+    }
+    setRefs(nuevas);
     setRefDePersonaje(n.marcado);
     setPersonajeId(nuevo?.id ?? null);
+    setConfirmarRetiro(false);
+  };
+  /** Suelta el personaje (id y marca de su foto) SIN tocar las casillas: para cuando ya se recalcularon. */
+  const soltarPersonaje = () => {
+    setPersonajeId(null);
+    setRefDePersonaje(null);
     setConfirmarRetiro(false);
   };
 
@@ -423,6 +464,7 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
     setJob(null);
     setIdea("");
     setRefs({});
+    setExtras({});
     setLook(lookVacio);
     setDialogo("");
     setVoz("");
@@ -438,10 +480,15 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
     setRevision(null);
     setIgnorada({ texto: null, dialogo: null });
     setAvisosAplicados([]);
+    setAvisosPedidos([]);
+    setOcultosPaso3([]);
     setFusion(null);
     setTexto("");
     ultimoRevisado.current = { texto: "", dialogo: "" };
     setPreguntas([]);
+    setHechas([]);
+    setRonda(1);
+    setSinMas(false);
     setRespuestas({});
     setAjustar(false);
     setSugeridoAplicado(null);
@@ -454,6 +501,7 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
   const elegirJob = (j: JobType) => {
     setJob(j);
     setRefs({});
+    setExtras({});
     setLook(lookVacio);
     setDialogo("");
     setVoz("");
@@ -469,9 +517,14 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
     setRevision(null);
     setIgnorada({ texto: null, dialogo: null });
     setAvisosAplicados([]);
+    setAvisosPedidos([]);
+    setOcultosPaso3([]);
     setFusion(null);
     ultimoRevisado.current = { texto: "", dialogo: "" };
     setPreguntas([]);
+    setHechas([]);
+    setRonda(1);
+    setSinMas(false);
     setRespuestas({});
     setAjustar(false);
     setSugeridoAplicado(null);
@@ -494,6 +547,8 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
     videoType: video ? videoType : null,
     texto: texto.trim() || null,
     avisosAplicados,
+    // Sólo los que siguen vivos: si la entrada cambió, un pedido viejo ya no aplica.
+    avisosPedidos: avisosPedidos.filter((c) => avisosPaso3.some((a) => a.codigo === c)),
     respuestas: respuestasLista(),
     sinPreguntas,
   });
@@ -520,6 +575,9 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
         return;
       }
       setPreguntas(r.preguntas);
+      setHechas(r.preguntas.map((p) => ({ ...p, ronda: 1 })));
+      setRonda(1);
+      setSinMas(false);
       setRespuestas({});
       setPaso("entrevista");
     } catch {
@@ -530,11 +588,12 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
     }
   };
   /** Las respuestas ya en forma de viaje (sólo las contestadas). */
-  const respuestasLista = (): Respuesta[] => preguntas.filter((p) => respuestas[p.id]).map((p) => ({ id: p.id, valor: respuestas[p.id], campo: p.campo }));
+  // F5c: de TODAS las rondas; la ronda viaja cuando es 2 o 3 (el informe mide si profundizar ayuda).
+  const respuestasLista = (): Respuesta[] => hechas.filter((p) => respuestas[p.id]).map((p) => ({ id: p.id, valor: respuestas[p.id], campo: p.campo, ...(p.ronda > 1 ? { ronda: p.ronda } : {}) }));
   /** "Seguir": las respuestas con campo llenan los chips del look aquí mismo (y el servidor las
    *  vuelve a aplicar, idempotente): el diseñador ve en el paso 2 lo que acaba de contestar. */
-  const seguirEntrevista = () => {
-    const lista = respuestasLista();
+  const seguirEntrevista = () => aplicarYSeguir(respuestasLista());
+  const aplicarYSeguir = (lista: Respuesta[]) => {
     // Base: el look sugerido si el diseñador no tocó nada; y lo que CONTESTÓ manda sobre el look
     // (se vacía esa fila antes de aplicar, porque aplicarRespuestas sólo llena lo vacío).
     const desdeSugerencia = !!sugerido && !!job && (todoVacio(look) || (sugeridoAplicado !== null && lookActivoId === sugeridoAplicado));
@@ -556,8 +615,39 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
     }
     setSinPreguntasLocal(true);
     setPreguntas([]);
+    setHechas([]);
+    setRonda(1);
+    setSinMas(false);
     setRespuestas({});
     entrarAlLook();
+  };
+  /** F5c: "Profundizar (3 más)": otra ronda (máx. MAX_RONDAS). La nueva no repite lo preguntado y
+   *  recibe lo contestado; si a H.Ü.E no le falta nada, lo dice y el botón se va. */
+  const profundizar = async () => {
+    if (!job || !tool || ronda >= MAX_RONDAS) return;
+    const siguiente = ronda + 1;
+    setProfundizando(true);
+    try {
+      const r = demoProfundas
+        ? { ok: true as const, preguntas: demoProfundas.filter((p) => !hechas.some((h) => h.id === p.id)).slice(0, 3) }
+        : await entrevistar(armarInput(job, tool), { ronda: siguiente, preguntadas: hechas.map((p) => p.id) });
+      if (!r.ok) {
+        toast.message(tx(UI.profundizarFallo, lang), { description: r.error });
+        return;
+      }
+      if (!r.preguntas.length) {
+        setSinMas(true);
+        toast.message(tx(UI.yaTieneTodo, lang));
+        return;
+      }
+      setPreguntas(r.preguntas);
+      setHechas((prev) => [...prev, ...r.preguntas.map((p) => ({ ...p, ronda: siguiente }))]);
+      setRonda(siguiente);
+    } catch {
+      toast.message(tx(UI.profundizarFallo, lang));
+    } finally {
+      setProfundizando(false);
+    }
   };
   const encenderPreguntas = () => {
     try {
@@ -774,9 +864,42 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
                   </div>
                   {slots.length > 0 && (
                     <div className="grid gap-3 sm:grid-cols-2">
-                      {slots.map((s) => (
-                        <RefUploader key={s.role} role={s.role} opcional={s.opcional} value={refs[s.role] ?? null} onChange={(v) => setRefs((prev) => ({ ...prev, [s.role]: v }))} lang={lang} />
-                      ))}
+                      {slots.map((s) => {
+                        const mas = extras[s.role] ?? [];
+                        return (
+                          <div key={s.role} className="space-y-2">
+                            <RefUploader
+                              role={s.role}
+                              opcional={s.opcional}
+                              value={refs[s.role] ?? null}
+                              onChange={(v) => {
+                                // Quitar la foto que prestó el personaje = soltar el personaje entero (si no, su
+                                // descripción viajaría con otra foto); elegirPersonaje ya promueve la siguiente.
+                                if (!v && refDePersonaje === s.role && personaje?.foto && refs[s.role]?.storage_path === personaje.foto.storage_path) return elegirPersonaje(null);
+                                if (v || !mas.length) return setRefs((prev) => ({ ...prev, [s.role]: v }));
+                                // Se quitó la principal y hay más: la siguiente toma su lugar (sin huecos).
+                                setRefs((prev) => ({ ...prev, [s.role]: mas[0] }));
+                                setExtras((prev) => ({ ...prev, [s.role]: mas.slice(1) }));
+                              }}
+                              lang={lang}
+                            />
+                            {mas.map((m, i) => (
+                              <RefUploader key={m.storage_path} role={s.role} value={m} onChange={(v) => { if (!v) setExtras((prev) => ({ ...prev, [s.role]: (prev[s.role] ?? []).filter((_, j) => j !== i) })); }} lang={lang} etiqueta={{ es: `${REF_LABEL[s.role].es} · ${i + 2}`, en: `${REF_LABEL[s.role].en} · ${i + 2}` }} />
+                            ))}
+                            {ROLES_MULTI.has(s.role) && refs[s.role] && refsLista.length < MAX_REFS && (
+                              <RefUploader
+                                key={`${s.role}-mas-${mas.length}`}
+                                role={s.role}
+                                opcional
+                                value={null}
+                                onChange={(v) => { if (v) setExtras((prev) => ({ ...prev, [s.role]: [...(prev[s.role] ?? []), v] })); }}
+                                lang={lang}
+                                etiqueta={{ es: `+ Otra imagen (${refsLista.length} de ${MAX_REFS})`, en: `+ Another image (${refsLista.length} of ${MAX_REFS})` }}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -795,7 +918,23 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
                   lang={lang}
                   onCambio={(id, valor) => setRespuestas((prev) => { const n = { ...prev }; if (valor) n[id] = valor; else delete n[id]; return n; })}
                   onSeguir={seguirEntrevista}
-                  onSaltar={() => { setRespuestas({}); entrarAlLook(); }}
+                  onSaltar={() => {
+                    if (ronda === 1) {
+                      setRespuestas({});
+                      entrarAlLook();
+                      return;
+                    }
+                    // Ronda 2+: se salta sólo ESTA ronda; lo contestado antes se queda y se aplica.
+                    const deEstaRonda = new Set<string>(preguntas.map((p) => p.id));
+                    setRespuestas((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !deEstaRonda.has(id))));
+                    aplicarYSeguir(respuestasLista().filter((r) => !deEstaRonda.has(r.id)));
+                  }}
+                  ronda={ronda}
+                  maxRondas={MAX_RONDAS}
+                  anteriores={hechas.filter((p) => p.ronda < ronda && respuestas[p.id]).map((p) => ({ pregunta: tx(p.pregunta, lang), respuesta: tx(p.opciones.find((o) => o.valor === respuestas[p.id])?.label ?? { es: respuestas[p.id], en: respuestas[p.id] }, lang) }))}
+                  puedeProfundizar={ronda < MAX_RONDAS && !sinMas}
+                  profundizando={profundizando}
+                  onProfundizar={profundizar}
                   onSinPreguntas={apagarPreguntas}
                   onAtras={() => setPaso(1)}
                 />
@@ -957,7 +1096,21 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
                     </div>
                   )}
                   {/* F2: avisos antes de generar, con arreglo de un click. Un "bloquea" apaga Generar. */}
-                  {avisosPaso3.length > 0 && <PanelAvisos avisos={avisosPaso3} lang={lang} titulo={tx(UI.avisosTitulo, lang)} onArreglar={arreglar} />}
+                  {avisosPaso3.length > 0 && (
+                    <PanelAvisos
+                      // Un "bloquea" nunca se oculta; ocultar no toca el bloqueo (sale de avisosPaso3 completo).
+                      avisos={avisosPaso3.filter((a) => a.nivel === "bloquea" || !ocultosPaso3.includes(a.codigo))}
+                      lang={lang}
+                      titulo={tx(UI.avisosTitulo, lang)}
+                      onArreglar={arreglar}
+                      resolver={(a) => resolucionDe(a, ACCIONES_PASO3, "al_generar")}
+                      onHue={(a) => setAvisosPedidos((prev) => (prev.includes(a.codigo) ? prev.filter((c) => c !== a.codigo) : [...prev, a.codigo]))}
+                      pedidos={new Set(avisosPedidos)}
+                      onEntendido={(a) => setOcultosPaso3((prev) => [...prev, a.codigo])}
+                      ocultos={avisosPaso3.filter((a) => a.nivel !== "bloquea" && ocultosPaso3.includes(a.codigo)).length}
+                      onMostrarOcultos={() => setOcultosPaso3([])}
+                    />
+                  )}
                   {fusion && (
                     <div className="rounded-xl border border-border bg-card p-3">
                       <p className="text-xs font-semibold text-foreground">{tx(UI.fusionTitulo, lang)}</p>

@@ -8,20 +8,24 @@
  * 4) una edición pide UN cambio ("Change ONLY this") y repite qué no se toca;
  * 5) una línea de calidad: high para lo final, medium para iterar.
  */
-import { frases, indiceRef, textoDe, JOB_KIND, type Aspect, type PromptSpec } from "../spec.ts";
+import { frases, indicesRef, textoDe, unirY, JOB_KIND, type Aspect, type PromptSpec } from "../spec.ts";
 import { deletrear } from "../texto-imagen.ts";
 import type { Salida } from "./salida.ts";
 import { cuerpoImagen, type Etiquetador } from "./nanobanana.ts";
 
 export const ORDINAL = ["first", "second", "third", "fourth", "fifth", "sixth"];
 
-/** "the first attached image (a woman in a red dress)"; en una segunda mención, sin el caption. */
+/** "the first attached image (a woman in a red dress)"; en una segunda mención, sin el caption. F5c:
+ *  varias del mismo papel → "the first attached image (…) and the second attached image (…)" — cada
+ *  adjunto nombrado entero, que es lo que el validador busca. */
 const etiquetaGPT: Etiquetador = (spec, role, corto = false) => {
-  const n = indiceRef(spec, role);
-  if (n === null) return null;
-  const r = spec.refs[n - 1];
-  const ord = ORDINAL[n - 1] ?? `#${n}`;
-  return r.caption && !corto ? `the ${ord} attached image (${r.caption})` : `the ${ord} attached image`;
+  const ns = indicesRef(spec, role);
+  if (!ns.length) return null;
+  return unirY(ns.map((n) => {
+    const r = spec.refs[n - 1];
+    const ord = ORDINAL[n - 1] ?? `#${n}`;
+    return r.caption && !corto ? `the ${ord} attached image (${r.caption})` : `the ${ord} attached image`;
+  }));
 };
 
 /** Tamaño real por aspect para gpt-image-2.5: lados múltiplos de 16, ratio ≤ 3:1, y el

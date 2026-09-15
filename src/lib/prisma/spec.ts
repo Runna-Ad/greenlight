@@ -367,19 +367,37 @@ export function esSpec(v: unknown): v is PromptSpec {
   );
 }
 
-/** Índice 1-based de la referencia con ese papel, o null. Es lo que los prompts
+/** F5c: hasta 6 imágenes en total (Pedro, 2026-09-15); el tope de CADA herramienta lo cuida el aviso
+ *  "refs de más" con su arreglo (Veo y Kling usan 3). */
+export const MAX_REFS = 6;
+/** Las casillas que aceptan varias imágenes ("+ otra": el producto desde varios ángulos, dos de estilo…).
+ *  Las demás llevan UNA (un logo, la pose, la toma inicial y la final, lo que salió). */
+export const ROLES_MULTI: ReadonlySet<RefRole> = new Set<RefRole>(["producto", "sujeto", "estilo", "escena", "objeto", "outfit", "empaque"]);
+
+/** Índice 1-based de la PRIMERA referencia con ese papel, o null. Es lo que los prompts
  *  escriben como "[Imagen N]". */
 export function indiceRef(spec: PromptSpec, role: RefRole): number | null {
   const i = spec.refs.findIndex((r) => r.role === role);
   return i === -1 ? null : i + 1;
 }
 
-/** Etiqueta "[Imagen N]" o, si hay caption, "[Imagen N: caption]". */
+/** F5c: índices 1-based de TODAS las referencias con ese papel (varias imágenes por casilla). */
+export function indicesRef(spec: PromptSpec, role: RefRole): number[] {
+  return spec.refs.flatMap((r, i) => (r.role === role ? [i + 1] : []));
+}
+
+/** "a", "a and b", "a, b and c" — para nombrar varias imágenes de una casilla en una frase. */
+export const unirY = (xs: string[]): string => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+
+/** Etiqueta "[Imagen N]" o, si hay caption, "[Imagen N: caption]"; con varias del mismo papel las
+ *  nombra TODAS ("[Imagen 1: …] and [Imagen 2: …]"): el validador exige que cada imagen se use. */
 export function etiquetaRef(spec: PromptSpec, role: RefRole): string | null {
-  const n = indiceRef(spec, role);
-  if (n === null) return null;
-  const r = spec.refs[n - 1];
-  return r.caption ? `[Imagen ${n}: ${r.caption}]` : `[Imagen ${n}]`;
+  const ns = indicesRef(spec, role);
+  if (!ns.length) return null;
+  return unirY(ns.map((n) => {
+    const r = spec.refs[n - 1];
+    return r.caption ? `[Imagen ${n}: ${r.caption}]` : `[Imagen ${n}]`;
+  }));
 }
 
 /** ¿El trabajo es de video? */

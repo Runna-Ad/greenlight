@@ -413,7 +413,11 @@ export function aplicarArreglo(e: EntradaDiagnostico, a: Arreglo): Partial<Entra
     case "aspect": return { aspect: a.aspect };
     case "quitar_texto": return { texto: null };
     case "recortar_texto": return e.texto ? { texto: e.texto.split(/\s+/).slice(0, a.palabras).join(" ") } : {};
-    case "soltar_ref": return { refs: e.refs.filter((r) => r.role !== a.role) };
+    case "soltar_ref": {
+      // F5c: con varias imágenes por casilla se suelta sólo la ÚLTIMA de ese papel, no todas.
+      const i = e.refs.map((r) => r.role).lastIndexOf(a.role);
+      return i === -1 ? {} : { refs: e.refs.filter((_, j) => j !== i) };
+    }
     case "texto": return { texto: a.texto };
     case "dialogo": return e.dialogo ? { dialogo: { ...e.dialogo, texto: a.texto } } : {};
     case "prompt_fusion":
@@ -426,3 +430,33 @@ export function aplicarArreglo(e: EntradaDiagnostico, a: Arreglo): Partial<Entra
 
 /** ¿Hay algo que impida generar? */
 export const bloqueado = (avisos: Aviso[]): Aviso | null => avisos.find((a) => a.nivel === "bloquea") ?? null;
+
+// ── F5c: todo aviso se puede resolver ─────────────────────────────────────────────────────
+/** Cada tarjeta termina en UNO de: "arreglar" (el arreglo de un click que ESTA pantalla sabe
+ *  aplicar), "hue" (H.Ü.E lo arregla: en el resultado refinando, en el paso 3 al generar) o
+ *  "entendido" (informativo: se oculta). Un "bloquea" nunca se oculta ("ninguna": el aviso ya dice
+ *  que no se puede generar así). Pedro, 2026-09-15: "muchas veces no te deja arreglarlo". */
+export type Resolucion = "arreglar" | "hue" | "entendido" | "ninguna";
+
+/** Los arreglos de un click que cada pantalla sabe aplicar; los demás no enseñan un botón muerto. */
+export const ACCIONES_PASO3: ReadonlySet<Arreglo["tipo"]> = new Set(["tool", "duracion", "aspect", "quitar_texto", "recortar_texto", "soltar_ref", "texto", "dialogo", "prompt_fusion"]);
+export const ACCIONES_RESULTADO: ReadonlySet<Arreglo["tipo"]> = new Set(["tool", "duracion", "aspect", "quitar_texto", "recortar_texto", "texto", "dialogo", "prompt_fusion"]);
+
+/** Lo que el prompt (y por eso H.Ü.E) controla: un aviso sobre esto se arregla reescribiendo. */
+const CAMPOS_HUE: ReadonlySet<string> = new Set(["idea", "texto", "accion", "camara", "salida", "dialogo.idioma"]);
+
+export function resolucionDe(a: Aviso, acciones: ReadonlySet<Arreglo["tipo"]>, hue: "ahora" | "al_generar"): Resolucion {
+  if (a.accion && acciones.has(a.accion.tipo)) return "arreglar";
+  // H.Ü.E sólo toma lo que NO tiene arreglo mecánico: si la regla trae uno (cambiar de modelo, soltar
+  // una referencia) y esta pantalla no lo aplica, reescribir el prompt tampoco lo haría.
+  const sinMecanico = !a.accion || a.accion.tipo === "nota";
+  const delPrompt = a.codigo.startsWith("hue_") || a.codigo.startsWith("validador_") || (!!a.campo && CAMPOS_HUE.has(a.campo) && (hue === "ahora" || a.campo !== "salida"));
+  // Antes de generar, un "bloquea" no se delega: el servidor no genera hasta que la entrada cambie.
+  if (sinMecanico && delPrompt && !(hue === "al_generar" && a.nivel === "bloquea")) return "hue";
+  return a.nivel === "bloquea" ? "ninguna" : "entendido";
+}
+
+/** La instrucción de "Arreglarlo con H.Ü.E" (va a refinar como texto del diseñador, cercado allá). */
+export function instruccionDe(a: Aviso): string {
+  return `Arregla este aviso sin cambiar nada más: ${a.que.es}${a.arreglo ? ` ${a.arreglo.es}` : ""}`.replace(/\s+/g, " ").trim().slice(0, 600);
+}

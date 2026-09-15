@@ -79,10 +79,23 @@ function demoEntrevista(): Pregunta[] | null {
   ];
 }
 
+/** Sólo dev (`?demo=entrevista`): las preguntas de "Profundizar" (rondas 2 y 3), fijas. */
+function demoProfundas(): Pregunta[] | null {
+  if (process.env.NODE_ENV !== "development") return null;
+  return [
+    { id: "mood", pregunta: { es: "¿Qué debe sentir quien la vea?", en: "What should the viewer feel?" }, opciones: [{ valor: "calm and premium", label: { es: "Calma, lujo", en: "Calm, premium" } }, { valor: "bold and energetic", label: { es: "Energía", en: "Energy" } }], campo: "mood" },
+    { id: "detalle", pregunta: { es: "¿Qué detalle de la tarjeta hay que lucir?", en: "Which card detail should shine?" }, opciones: [{ valor: "the embossed logo", label: { es: "El logo en relieve", en: "Embossed logo" } }, { valor: "the metallic edge", label: { es: "El canto metálico", en: "Metallic edge" } }], campo: null },
+    { id: "hora", pregunta: { es: "¿A qué hora del día?", en: "What time of day?" }, opciones: [{ valor: "golden hour", label: { es: "Atardecer", en: "Golden hour" } }, { valor: "bright midday", label: { es: "Mediodía", en: "Midday" } }], campo: null },
+    { id: "composicion", pregunta: { es: "¿Dónde va la tarjeta en la foto?", en: "Where is the card in the frame?" }, opciones: [{ valor: "centered", label: { es: "Al centro", en: "Centered" } }, { valor: "off to one side, rule of thirds", label: { es: "A un lado", en: "Off to one side" } }], campo: null },
+    { id: "color", pregunta: { es: "¿Algún color que deba dominar?", en: "Any dominant color?" }, opciones: [{ valor: "the brand color", label: { es: "El de la marca", en: "Brand color" } }, { valor: "neutral whites", label: { es: "Blancos neutros", en: "Neutral whites" } }], campo: null },
+  ];
+}
+
 export default async function PrismaPage({ searchParams }: { searchParams: Promise<{ demo?: string }> }) {
   const [role, soy, sp] = await Promise.all([getViewAs(), getSoy(), searchParams]);
   const demo = sp.demo === "resultado" || sp.demo === "veredicto" ? demoResultado(sp.demo === "veredicto") : null;
   const demoPreguntas = sp.demo === "entrevista" ? demoEntrevista() : null;
+  const profundasDemo = sp.demo === "entrevista" ? demoProfundas() : null;
 
   if (!prismaActivo() || !canSee(role, "prisma")) {
     return (
@@ -140,7 +153,7 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
 
   return (
     <CatalogoProvider value={catalogo}>
-      <PrismaStudio marcas={marcas} historial={historial} demo={demo} demoPreguntas={demoPreguntas} verTodo={canVerTodoPrisma(role)} reglas={reglas} />
+      <PrismaStudio marcas={marcas} historial={historial} demo={demo} demoPreguntas={demoPreguntas} demoProfundas={profundasDemo} verTodo={canVerTodoPrisma(role)} reglas={reglas} />
     </CatalogoProvider>
   );
 }

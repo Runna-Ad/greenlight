@@ -31,7 +31,7 @@ import { compilarFusion } from "../src/lib/prisma/compilers/fusion.ts";
 import { cortes } from "../src/lib/prisma/compilers/beats.ts";
 import { ASPECTS } from "../src/lib/prisma/spec.ts";
 import { ACENTOS, idiomaDe, revisarAcentos } from "../src/lib/prisma/ortografia.ts";
-import { REGLAS_BASE, accionDe, avisosDe, compilarRegla, compilarReglas, diagnosticarEntrada, diagnosticar, entradaDeSpec, aplicarArreglo, avisoOrtografia, bloqueado } from "../src/lib/prisma/diagnostico.ts";
+import { REGLAS_BASE, accionDe, avisosDe, compilarRegla, compilarReglas, diagnosticarEntrada, diagnosticar, entradaDeSpec, aplicarArreglo, avisoOrtografia, bloqueado, resolucionDe, instruccionDe, ACCIONES_PASO3, ACCIONES_RESULTADO } from "../src/lib/prisma/diagnostico.ts";
 import { JOB_KIND } from "../src/lib/prisma/spec.ts";
 import { sanearVeredicto, scoreDe, detalleFallos, fallosDeDetalle, specCorreccion, patronFallos, fraseFallos, CAMPOS_VEREDICTO, veredictoAFila, veredictoDe } from "../src/lib/prisma/resultado.ts";
 import { faltaMigracion } from "../src/lib/prisma/migracion.ts";
@@ -41,6 +41,9 @@ import { JOB_KIND as JOB_KIND_F5 } from "../src/lib/prisma/spec.ts";
 import { tieneZonaSegura, zonaSeguraImagen, zonaSeguraCorta } from "../src/lib/prisma/compilers/zonas.ts";
 import { resumirInforme } from "../src/lib/prisma/informe.ts";
 import { filaHermana } from "../src/lib/prisma/hermano.ts";
+import { indicesRef as indicesRefF5, etiquetaRef as etiquetaRefF5, MAX_REFS as MAX_REFS_F5, ROLES_MULTI as ROLES_MULTI_F5 } from "../src/lib/prisma/spec.ts";
+import { PREGUNTAS_SCHEMA as PREGUNTAS_SCHEMA_F5 } from "../src/lib/prisma/prompts/writer.ts";
+import { MAX_RONDAS as MAX_RONDAS_F5, PREGUNTA_IDS as PREGUNTA_IDS_F5 } from "../src/lib/prisma/entrevista.ts";
 import { CATALOGO_BASE, catalogoDesdeFilas, fichaAFila, validarFicha, mejorEn, modeloPorRol, fortalezasDe, refsMinimas } from "../src/lib/prisma/catalogo.ts";
 import { JOB_KIND as JOB_KIND_F6, DESTINOS as DESTINOS_F6 } from "../src/lib/prisma/spec.ts";
 import { duracionValida as duracionValidaF6 } from "../src/lib/prisma/tools.ts";
@@ -686,6 +689,8 @@ console.log("\n▶ F1 — Úsalo en… (recomendarModelo)");
   ok("sin modelo no hay línea", !bloqueVariable(entrada).includes("TARGET MODEL"));
   ok("F6a: con el rol del catálogo, la pista es el tier (sin nombres de modelo)", bloqueVariable({ ...entrada, modelo: "gpt-image-3", modeloRol: "rapido" }).includes("TARGET MODEL: gpt-image-3 (the fast tier"));
   ok("F6a: el id del catálogo va cercado (sin < >)", !/[<>]/.test(bloqueVariable({ ...entrada, modelo: "x<b>y", modeloRol: "fino" }).split("\n").find((l) => l.startsWith("TARGET MODEL")) ?? "<"));
+  ok("F5c: los arreglos pedidos van cercados y ANTES de la orden final", (() => { const b = bloqueVariable({ ...entrada, arreglos: ["Pick one camera move <b>now</b>"] }); return b.includes("PRISMA CHECKS TO RESOLVE") && !b.includes("<b>") && b.includes("<fix>") && b.indexOf("PRISMA CHECKS") < b.indexOf("Now fill the PromptSpec"); })());
+  ok("F5c: sin arreglos pedidos no hay bloque", !bloqueVariable(entrada).includes("PRISMA CHECKS"));
   const f = compilarFusion({ role: "sujeto", caption: "a woman", dna: null }, { role: "producto", caption: null, dna: null }, "16:9");
   ok("fusión: combina [Imagen 1] y [Imagen 2] en una y pide el formato", f.includes("[Imagen 1]") && f.includes("[Imagen 2]") && f.includes("16:9") && /Combine/.test(f), f);
 }
@@ -1300,6 +1305,60 @@ console.log("\n▶ F6a — reap: combinaciones que degradan todo, nombres reserv
   const r5 = validarFicha("kling", { ...klF, modelos: [{ ...klF.modelos[0], etiqueta: "Kling \uD800" }, klF.modelos[1]] });
   ok("un surrogate suelto en el nombre se rechaza antes de la BD", !r5.ok, JSON.stringify(r5));
   ok("recomendarModelo trae el tier del catálogo", recomendarModelo({ job: "foto_producto", tool: "nanobanana", destino: "print", refs: 0, texto: false, dialogo: false, duracion: null }).rol === "fino");
+}
+
+console.log("\n▶ F5c — todo aviso se puede resolver");
+{
+  const av = (x) => ({ codigo: "x", nivel: "advierte", que: { es: "Qué pasa.", en: "What." }, porque: null, arreglo: { es: "Haz esto.", en: "Do this." }, accion: null, fuente: null, ...x });
+  const R = (a, donde) => (donde === "paso3" ? resolucionDe(a, ACCIONES_PASO3, "al_generar") : resolucionDe(a, ACCIONES_RESULTADO, "ahora"));
+  eq("un arreglo de un click que la pantalla aplica → Arreglarlo", R(av({ accion: { tipo: "tool", tool: "veo" } }), "res"), "arreglar");
+  eq("el juicio de H.Ü.E (sin acción) en el resultado → con H.Ü.E", R(av({ codigo: "hue_manos" }), "res"), "hue");
+  eq("un error del validador (sin texto de arreglo) → con H.Ü.E", R(av({ codigo: "validador_1", arreglo: null }), "res"), "hue");
+  eq("regla 'nota' sobre la cámara (dos movimientos) → con H.Ü.E en el resultado…", R(av({ codigo: "dos_movimientos", accion: { tipo: "nota" }, campo: "camara" }), "res"), "hue");
+  eq("…y 'al generar' en el paso 3", R(av({ codigo: "dos_movimientos", accion: { tipo: "nota" }, campo: "camara" }), "paso3"), "hue");
+  eq("una regla sobre la SALIDA no se pide antes de generar (aún no hay salida)", R(av({ codigo: "prompt_largo", campo: "salida" }), "paso3"), "entendido");
+  eq("sin voz y sin herramienta con voz ('nota', sin campo) → Entendido", R(av({ codigo: "dialogo_sin_voz", accion: { tipo: "nota" } }), "res"), "entendido");
+  eq("'cambiar de modelo' no lo arregla reescribir → Entendido (nunca un botón muerto)", R(av({ codigo: "usa_pro", accion: { tipo: "modelo", modelo: "gemini-3-pro-image" }, campo: "texto" }), "res"), "entendido");
+  eq("soltar una referencia: en el paso 3 sí; en el resultado, Entendido", JSON.stringify([R(av({ accion: { tipo: "soltar_ref", role: "estilo" } }), "paso3"), R(av({ accion: { tipo: "soltar_ref", role: "estilo" } }), "res")]), '["arreglar","entendido"]');
+  eq("un 'bloquea' sin arreglo antes de generar → sin botón (ni se oculta ni se delega)", R(av({ codigo: "idea_prohibida", nivel: "bloquea", accion: { tipo: "nota" }, campo: "idea" }), "paso3"), "ninguna");
+  ok("la instrucción lleva el aviso y su arreglo, en una línea y con tope", (() => { const i = instruccionDe(av({ que: { es: "Dos\nmovimientos.", en: "x" }, arreglo: { es: "Elige uno. ".repeat(100), en: "x" } })); return i.startsWith("Arregla este aviso sin cambiar nada más: Dos movimientos.") && !i.includes("\n") && i.length <= 600; })());
+  const e0 = { job: "animar_foto", tool: "higgsfield", destino: "ig_story", aspect: "1:1", duracion: 7, refs: [{ role: "sujeto" }, { role: "estilo" }], texto: "x", dialogo: { texto: "h", idioma: "es-MX" }, movimiento: "orbit, then push in", idea: "x" };
+  const base = diagnosticarEntrada(e0, []);
+  ok(`las ${base.length} reglas base disparadas tienen una salida en el paso 3 y en el resultado`, base.length >= 5 && base.every((a) => R(a, "paso3") !== "ninguna" && R(a, "res") !== "ninguna"), JSON.stringify(base.map((a) => [a.codigo, R(a, "paso3"), R(a, "res")])));
+}
+
+console.log("\n▶ F5c — entrevista a fondo (hasta 3 rondas)");
+{
+  eq("MAX_RONDAS = 3 y los ids de las rondas profundas existen", JSON.stringify([MAX_RONDAS_F5, ["mood", "composicion", "detalle", "hora", "vestuario", "accion", "color"].every((i) => PREGUNTA_IDS_F5.includes(i))]), "[3,true]");
+  const ids10 = ["angulo", "personas", "fondo", "texto", "ritmo", "voz", "producto", "luz", "mood", "detalle"];
+  const r9 = sanearRespuestas(ids10.map((id, i) => ({ id, valor: "x" + i, ronda: 1 + Math.floor(i / 3) })));
+  eq("respuestas: hasta 9 (3 × 3) y la ronda viaja sólo si es 2 o 3", JSON.stringify([r9.length, r9[0].ronda, r9[3].ronda, r9[8].ronda]), "[9,null,2,3]");
+  const e = { job: "foto_producto", tool: "nanobanana", idea: "una botella", destino: "ig_feed", aspect: "4:5", duracion: null, refs: [], look: { luz: null, movimiento: null, lente: null, angulo: null, mood: null, estilo: null }, dialogo: null, marca: null, personaje: null, videoType: null, texto: null, aprendizaje: null };
+  const b1 = bloqueEntrevista(e, []);
+  const b2 = bloqueEntrevista(e, ["fondo", "luz"], { ronda: 2, respuestas: [{ id: "fondo", valor: "white <marble>", campo: null }] });
+  ok("ronda 1: sin bloque de ronda profunda", !b1.includes("DEEPER round"));
+  ok("ronda 2: dice la ronda, lo contestado va CERCADO y lo preguntado entra a <known>", b2.includes("DEEPER round (2 of 3)") && /<answer id="fondo">white\s+marble\s*<\/answer>/.test(b2) && !b2.includes("<marble>") && /<known>fondo, luz<\/known>/.test(b2), b2);
+  ok("ronda 2: una lista vacía es una buena respuesta (no inventar preguntas)", b2.includes("an empty list is a good answer"));
+  const qs = sanearPreguntas([{ id: "fondo", pregunta_es: "¿Fondo?", pregunta_en: "Bg?", opciones: [{ valor: "a", label_es: "A", label_en: "A" }, { valor: "b", label_es: "B", label_en: "B" }] }, { id: "mood", pregunta_es: "¿Ánimo?", pregunta_en: "Mood?", opciones: [{ valor: "calm", label_es: "Calma", label_en: "Calm" }, { valor: "bold", label_es: "Audaz", label_en: "Bold" }], campo: "mood" }], ["fondo", "luz"]);
+  eq("la ronda nueva nunca repite lo ya preguntado", JSON.stringify(qs.map((q) => q.id)), '["mood"]');
+  ok("el schema de preguntas acepta los ids nuevos", PREGUNTAS_SCHEMA_F5.properties.preguntas.items.properties.id.enum.includes("detalle"));
+  const inf2 = resumirInforme(30, { prompts: [], eventos: [], resultados: [{ id: "r1", spec_id: "v1", prompt_id: null, tool: "nanobanana", modelo: null, score: 90, aceptado: true }], specs: [{ id: "i1", job: "foto_producto", respuestas: [{ id: "fondo", valor: "x" }, { id: "mood", valor: "y", ronda: 2 }], correccion_de: null }, { id: "v1", job: "foto_producto", respuestas: [], correccion_de: null, origen_spec_id: "i1" }, { id: "i2", job: "foto_producto", respuestas: [{ id: "luz", valor: "z" }], correccion_de: null }] });
+  eq("informe por rondas: i1 llegó a 2 rondas y a un resultado aceptado (en su versión v1)", JSON.stringify(inf2.entrevista.porRonda), JSON.stringify([{ ronda: 1, ideas: 1, aceptadas: 0 }, { ronda: 2, ideas: 1, aceptadas: 1 }, { ronda: 3, ideas: 0, aceptadas: 0 }]));
+}
+
+console.log("\n▶ F5c — varias imágenes por casilla (hasta 6)");
+{
+  const multi = spec("foto_producto", "nanobanana", { refs: [{ role: "producto", caption: "bottle front", dna: null }, { role: "producto", caption: "bottle side", dna: null }, { role: "estilo", caption: "moody studio", dna: null }] });
+  const nb = compilar(multi, "nanobanana").texto;
+  ok("Nano Banana nombra las dos del producto y la de estilo", nb.includes("[Imagen 1: bottle front] and [Imagen 2: bottle side]") && nb.includes("[Imagen 3"), nb);
+  ok("…y valida (cada imagen se usa)", validar(nb, multi, "nanobanana").ok, JSON.stringify(validar(nb, multi, "nanobanana")));
+  const gpt = compilar(multi, "chatgpt").texto;
+  ok("ChatGPT nombra cada adjunto (first, second, third) y valida", ["first", "second", "third"].every((o) => gpt.includes(`the ${o} attached image`)) && validar(gpt, { ...multi, tool: "chatgpt" }, "chatgpt").ok, gpt);
+  eq("indicesRef: todas las del papel", JSON.stringify(indicesRefF5(multi, "producto")), "[1,2]");
+  eq("soltar_ref quita sólo la ÚLTIMA de esa casilla", JSON.stringify(aplicarArreglo({ job: "foto_producto", tool: "nanobanana", destino: "ig_feed", aspect: "4:5", duracion: null, refs: [{ role: "producto" }, { role: "producto" }, { role: "estilo" }], texto: null, dialogo: null, movimiento: null, idea: "x" }, { tipo: "soltar_ref", role: "producto" }).refs), JSON.stringify([{ role: "producto" }, { role: "estilo" }]));
+  eq("tope y casillas que aceptan varias", JSON.stringify([MAX_REFS_F5, ROLES_MULTI_F5.has("producto"), ROLES_MULTI_F5.has("logo"), ROLES_MULTI_F5.has("inicio")]), "[6,true,false,false]");
+  const una = etiquetaRefF5(spec("cambio_outfit", "nanobanana"), "outfit");
+  ok("una sola del papel: la etiqueta de siempre", !!una && una.startsWith("[Imagen 2") && !una.includes(" and "), una);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} prisma: ${pass} passed, ${fail} failed\n`);

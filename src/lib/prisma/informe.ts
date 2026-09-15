@@ -26,7 +26,8 @@ export type Informe = {
   personas: number;
   porHerramienta: { tool: string; prompts: number; copiados: number; copiadosSinRefinar: number; refinados: number; refinesPorPrompt: number }[];
   avisos: { codigo: string; mostrados: number; aplicados: number }[];
-  entrevista: { specs: number; conRespuestas: number; respuestas: number };
+  /** F5c: `porRonda` = ideas por la ronda más alta contestada, y cuántas llegaron a un resultado aceptado. */
+  entrevista: { specs: number; conRespuestas: number; respuestas: number; porRonda: { ronda: number; ideas: number; aceptadas: number }[] };
   resultados: {
     subidos: number;
     aceptados: number;
@@ -86,6 +87,24 @@ export function resumirInforme(dias: number, d: { prompts: FilaPromptInforme[]; 
   const ideas = d.specs.filter((s) => !s.origen_spec_id);
   const conRespuestas = ideas.filter((s) => Array.isArray(s.respuestas) && s.respuestas.length > 0);
   const respuestas = conRespuestas.reduce((n, s) => n + (s.respuestas as unknown[]).length, 0);
+  // F5c: ¿profundizar ayuda? La ronda más alta contestada por idea y si esa idea llegó a un resultado
+  // ACEPTADO — en ella o en una copia suya (versión, adaptación, corrección: se sube por origen_spec_id).
+  const padre = new Map(d.specs.map((s) => [s.id, s.origen_spec_id ?? null]));
+  const raiz = (id: string): string => {
+    let x = id;
+    for (let i = 0; i < 4; i++) {
+      const p = padre.get(x);
+      if (!p) break;
+      x = p;
+    }
+    return x;
+  };
+  const conAceptado = new Set(d.resultados.filter((r) => r.aceptado).map((r) => raiz(r.spec_id)));
+  const rondaMax = (s: FilaSpecInforme): number => (Array.isArray(s.respuestas) && s.respuestas.length ? Math.max(1, ...s.respuestas.map((r) => (r && typeof r === "object" && Number.isInteger((r as { ronda?: unknown }).ronda) ? (r as { ronda: number }).ronda : 1))) : 0);
+  const porRonda = [1, 2, 3].map((ronda) => {
+    const deRonda = ideas.filter((s) => rondaMax(s) === ronda);
+    return { ronda, ideas: deRonda.length, aceptadas: deRonda.filter((s) => conAceptado.has(s.id)).length };
+  });
 
   const specPorId = new Map(d.specs.map((s) => [s.id, s]));
   const aceptados = d.resultados.filter((r) => r.aceptado);
@@ -101,7 +120,7 @@ export function resumirInforme(dias: number, d: { prompts: FilaPromptInforme[]; 
     personas: personas.size,
     porHerramienta,
     avisos,
-    entrevista: { specs: ideas.length, conRespuestas: conRespuestas.length, respuestas },
+    entrevista: { specs: ideas.length, conRespuestas: conRespuestas.length, respuestas, porRonda },
     resultados: {
       subidos: d.resultados.length,
       aceptados: aceptados.length,

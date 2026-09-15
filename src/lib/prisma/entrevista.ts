@@ -11,7 +11,9 @@ import { plano, recortar } from "./texto.ts";
 import type { Par } from "./copy.ts";
 import { listaDe, objetoDe } from "./json.ts";
 
-export const PREGUNTA_IDS = ["angulo", "personas", "fondo", "texto", "ritmo", "voz", "producto", "luz", "otro"] as const;
+// F5c: los 7 últimos dan espacio a las rondas profundas (ánimo, composición, EL detalle a lucir, hora/clima,
+// vestuario, qué hace el sujeto, color): cada id se pregunta UNA vez en toda la entrevista.
+export const PREGUNTA_IDS = ["angulo", "personas", "fondo", "texto", "ritmo", "voz", "producto", "luz", "otro", "mood", "composicion", "detalle", "hora", "vestuario", "accion", "color"] as const;
 export type PreguntaId = (typeof PREGUNTA_IDS)[number];
 /** Campos que el CÓDIGO llena con la respuesta (los demás viajan sólo como texto al writer). */
 export const CAMPOS_RESPUESTA = ["luz", "movimiento", "lente", "angulo", "mood", "estilo", "duracion", "aspect", "dialogo.idioma"] as const;
@@ -19,9 +21,11 @@ export type CampoRespuesta = (typeof CAMPOS_RESPUESTA)[number];
 
 export type Opcion = { valor: string; label: Par };
 export type Pregunta = { id: PreguntaId; pregunta: Par; opciones: Opcion[]; campo: CampoRespuesta | null };
-export type Respuesta = { id: PreguntaId; valor: string; campo: CampoRespuesta | null };
+export type Respuesta = { id: PreguntaId; valor: string; campo: CampoRespuesta | null; /** F5c: la ronda en que se contestó (sólo si es 2 o 3). */ ronda?: number };
 
 export const MAX_PREGUNTAS = 3;
+/** F5c: "Profundizar" — hasta 3 rondas de 3 preguntas (Pedro, 2026-09-15). */
+export const MAX_RONDAS = 3;
 export const MAX_OPCIONES = 4;
 export const MIN_OPCIONES = 2;
 export const MAX_CHARS_RESPUESTA = 120;
@@ -94,8 +98,10 @@ export function sanearRespuestas(raw: unknown): Respuesta[] {
     const valor = texto(o.valor, MAX_CHARS_RESPUESTA);
     if (!id || !valor || out.some((r) => r.id === id)) continue;
     const campo = typeof o.campo === "string" && (CAMPOS_RESPUESTA as readonly string[]).includes(o.campo) ? (o.campo as CampoRespuesta) : null;
-    out.push({ id, valor, campo });
-    if (out.length >= MAX_PREGUNTAS) break;
+    const ronda = typeof o.ronda === "number" && Number.isInteger(o.ronda) && o.ronda >= 2 && o.ronda <= MAX_RONDAS ? o.ronda : null;
+    out.push(ronda ? { id, valor, campo, ronda } : { id, valor, campo });
+    // F5c: hasta 3 rondas × 3 preguntas.
+    if (out.length >= MAX_PREGUNTAS * MAX_RONDAS) break;
   }
   return out;
 }

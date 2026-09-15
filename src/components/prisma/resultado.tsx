@@ -6,13 +6,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { adaptarFormato, cambiarHerramienta, calificar, explicar, refinarPrompt, registrarEvento, revisarBien, variar } from "@/app/(app)/prisma/actions";
+import { adaptarFormato, arreglarAviso, cambiarHerramienta, calificar, explicar, refinarPrompt, registrarEvento, revisarBien, variar } from "@/app/(app)/prisma/actions";
 import { PanelAvisos } from "./avisos";
 import { ComoSalio } from "./como-salio";
 import type { ResultadoVivo } from "@/lib/prisma/resultado";
 import type { ResultadoCorregir } from "@/app/(app)/prisma/resultado-actions";
 import { compilarFusion } from "@/lib/prisma/compilers/fusion";
-import type { Aviso } from "@/lib/prisma/diagnostico";
+import { ACCIONES_RESULTADO, resolucionDe, type Aviso } from "@/lib/prisma/diagnostico";
 import { DESTINO_LABEL, PEDIR_VERSION_LABEL, TOOL_LABEL, UI, VARIANTE_LABEL, tx, type Lang, type Par } from "@/lib/prisma/copy";
 import type { PrismaVariante } from "@/lib/database.types";
 import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
@@ -76,6 +76,8 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
   const [juzgado, setJuzgado] = useState(false);
   const [fusion, setFusion] = useState<string | null>(null);
   const [adaptando, setAdaptando] = useState<Destino | null>(null);
+  /** F5c: avisos ocultos con "Entendido", por prompt (`promptId:codigo`): un prompt nuevo trae los suyos. */
+  const [ocultos, setOcultos] = useState<string[]>([]);
 
   const info = TOOL_INFO[vivo.tool];
   const esVideoJob = JOB_KIND[vivo.spec.job] === "video";
@@ -147,8 +149,10 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
     onCambio({ ...vivo, tool, promptId: r.promptId, salida: r.salida, valido: r.valido, errores: r.errores, porque: null, variante: r.variante, avisos: r.avisos, resultado: null });
   };
 
-  const refinarCon = async (texto: string, apagar: () => void): Promise<boolean> => {
-    const r = await correr(() => refinarPrompt(vivo.specId, texto), apagar);
+  const refinarCon = async (texto: string, apagar: () => void, codigoAviso?: string): Promise<boolean> => {
+    // F5c: un aviso lo arregla el SERVIDOR (arma la instrucción desde el aviso guardado y lo anota
+    // como aviso_aplicado, no como un refine del diseñador).
+    const r = await correr(() => (codigoAviso ? arreglarAviso(vivo.specId, vivo.promptId, codigoAviso) : refinarPrompt(vivo.specId, texto)), apagar);
     if (!r) return false;
     if (!r.ok) {
       toast.error(r.error);
@@ -237,6 +241,16 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
       toast.success(tx(UI.aplicado, lang));
       void registrarEvento(promptAntes, "aviso_aplicado", a.codigo).catch(() => undefined);
     }
+  };
+
+  /** F5c: "Arreglarlo con H.Ü.E" — un aviso SIN arreglo mecánico (juicio de H.Ü.E, validador, regla sin
+   *  acción). Viaja sólo el código: el servidor busca el aviso en los guardados de ESE prompt, arma la
+   *  instrucción y anota aviso_aplicado (el Hub lo mide; no cuenta como refine ni como gusto de la marca). */
+  const arreglarConHue = async (a: Aviso) => {
+    if (esDemo) return;
+    setAplicando(a.codigo);
+    const hecho = await refinarCon("", () => setAplicando(null), a.codigo);
+    if (hecho) toast.success(tx(UI.aplicado, lang));
   };
 
   /** "Revísalo bien": el juicio de H.Ü.E a petición (en video ya corrió solo al generar). */
@@ -328,7 +342,18 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
           <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> {tx(UI.revisandoJuicio, lang)}
         </p>
       )}
-      <PanelAvisos avisos={avisos} lang={lang} titulo={tx(UI.avisosResultado, lang)} onArreglar={esDemo ? undefined : arreglar} aplicando={aplicando} />
+      <PanelAvisos
+        avisos={avisos.filter((a) => a.nivel === "bloquea" || !ocultos.includes(`${vivo.promptId}:${a.codigo}`))}
+        lang={lang}
+        titulo={tx(UI.avisosResultado, lang)}
+        onArreglar={esDemo ? undefined : arreglar}
+        aplicando={aplicando}
+        resolver={(a) => resolucionDe(a, ACCIONES_RESULTADO, "ahora")}
+        onHue={esDemo ? undefined : arreglarConHue}
+        onEntendido={(a) => setOcultos((prev) => [...prev, `${vivo.promptId}:${a.codigo}`])}
+        ocultos={avisos.filter((a) => a.nivel !== "bloquea" && ocultos.includes(`${vivo.promptId}:${a.codigo}`)).length}
+        onMostrarOcultos={() => setOcultos((prev) => prev.filter((k) => !k.startsWith(`${vivo.promptId}:`)))}
+      />
       {fusion && (
         <div className="rounded-xl border border-border bg-card p-3">
           <p className="text-xs font-semibold text-foreground">{tx(UI.fusionTitulo, lang)}</p>

@@ -128,6 +128,13 @@ export function PrismaInforme() {
               <ul className="mt-2 space-y-1 text-sm text-foreground">
                 <li>Ideas con respuestas: {informe.entrevista.conRespuestas} de {informe.entrevista.specs} ({pct(informe.entrevista.conRespuestas, informe.entrevista.specs)})</li>
                 <li>Respuestas dadas: {informe.entrevista.respuestas}</li>
+                <li>
+                  Por rondas:{" "}
+                  {informe.entrevista.porRonda
+                    .filter((r) => r.ideas > 0)
+                    .map((r) => `${r.ronda} ${r.ronda === 1 ? "ronda" : "rondas"}: ${r.ideas} idea(s), ${r.aceptadas} con resultado aceptado`)
+                    .join(" · ") || "—"}
+                </li>
               </ul>
             </div>
           </div>
