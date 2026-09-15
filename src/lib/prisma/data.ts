@@ -163,9 +163,12 @@ export async function cargarAprendizaje(db: Db, clientId: string, job: JobType):
 }
 
 /** F5a: las filas de look (luz, lente, ángulo, ambiente, estilo, movimiento) de los últimos specs
- *  de un cliente → lo que la marca "suele usar" (looks.ts los cuenta). Nunca lanza. */
+ *  de un cliente → lo que la marca "suele usar" (looks.ts los cuenta). Nunca lanza.
+ *  Sólo specs ORIGINALES (`origen_spec_id is null`): una copia (otra versión, adaptar, corrección) no es
+ *  otra elección del diseñador — adaptar a 5 formatos contaba ese look 6 veces. El filtro va en la BD,
+ *  no después: con el tope de 60, las copias se comían la ventana. */
 export async function cargarHabitos(db: Db, clientId: string, limite = 60): Promise<FilaHabito[]> {
-  const { data, error } = await db.from("prisma_specs").select("spec").eq("client_id", clientId).order("created_at", { ascending: false }).limit(limite).returns<{ spec: Record<string, unknown> | null }[]>();
+  const { data, error } = await db.from("prisma_specs").select("spec").eq("client_id", clientId).is("origen_spec_id", null).order("created_at", { ascending: false }).limit(limite).returns<{ spec: Record<string, unknown> | null }[]>();
   if (error) {
     console.warn(`[prisma] hábitos no disponibles: ${error.message}`);
     return [];

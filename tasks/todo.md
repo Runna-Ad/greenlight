@@ -12,9 +12,16 @@ las columnas a mano).
       respuestas ya van aplicadas en el spec).
 - [x] Fuera el respaldo "antes de la 0066" en `variar` (la 0066 está en prod desde 2026-09-11: código muerto).
 - [x] Tests: 9 checks nuevos en test-prisma (700 ✓) · npm test ✓ · tsc 0 · lint 0 · build ✓.
-- [ ] Siguiente (mismo tipo de bug, fuera de esta tanda): `cargarHabitos` y el denominador `entrevista.specs` del informe
-      cuentan también los hermanos (adaptar a 5 formatos = ese look cuenta 6 veces en "lo que esta marca suele usar").
-      Arreglo: filtrar `origen_spec_id is null` en las dos consultas.
+- [x] Las copias ya no cuentan como ideas (Pedro: "do the habits fix next"): `cargarHabitos` filtra
+      `origen_spec_id is null` EN LA BD (con el tope de 60, filtrar después dejaba que las copias se comieran la ventana);
+      el informe trae `origen_spec_id` y cuenta "Ideas (specs)" y la entrevista sólo con originales, pero `specPorId`
+      sigue con TODOS (una corrección es copia y hace falta para "aceptado tras corrección"). Arregla también el
+      histórico: adaptaciones de antes de filaHermana que traían la entrevista copiada. Test: fixture con una corrección
+      y una adaptación vieja → ideas 3, entrevista 1/3/1 (701 ✓) · npm test ✓ · tsc 0 · lint 0 · build ✓. Sin browser:
+      el informe exige sesión master y los hábitos una marca con specs — no se ven en local.
+      Barrido: las demás lecturas de prisma_specs son por id, la idempotencia de corregir o el historial (ahí las copias
+      SÍ van). Nota menor, sin arreglar: el aprendizaje puede elegir como "ganadores" dos prompts casi iguales (un
+      original y su adaptación, si el diseñador copió ambos).
 
 ## 🟡 2026-09-15 (9) — HÜE Prisma v1 · FASE 5a: pulido sin briefs + el Look rebuild (rama `prisma`, 7a0f8c6, SIN migración · reap pendiente)
 Pedro: "lets do your recommendation" + "include the look rebuild in phase 5a". Sin migración. Plan §5 plegados.

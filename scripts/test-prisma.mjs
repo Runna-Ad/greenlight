@@ -1127,7 +1127,9 @@ console.log("\n▶ F5a — zonas seguras (story / TikTok) + informe");
     { id: "s1", job: "foto_producto", respuestas: [{ id: "luz", valor: "x" }], correccion_de: null },
     { id: "s2", job: "foto_producto", respuestas: [], correccion_de: null },
     { id: "s3", job: "texto_a_video", respuestas: [], correccion_de: null },
-    { id: "s4", job: "correccion", respuestas: [], correccion_de: "r1" },
+    { id: "s4", job: "correccion", respuestas: [], correccion_de: "r1", origen_spec_id: "s1" },
+    // Una adaptación de antes de filaHermana: copia de s1 con la entrevista copiada — no es idea ni entrevista nueva.
+    { id: "s5", job: "foto_producto", respuestas: [{ id: "luz", valor: "x" }], correccion_de: null, origen_spec_id: "s1" },
   ];
   const inf = resumirInforme(30, { prompts, eventos, resultados, specs });
   eq("prompts y personas", `${inf.prompts}/${inf.personas}`, "3/2");
@@ -1135,7 +1137,8 @@ console.log("\n▶ F5a — zonas seguras (story / TikTok) + informe");
   eq("nanobanana: 2 prompts, 2 copiados, 1 sin refinar, 1 refine", JSON.stringify([nb.prompts, nb.copiados, nb.copiadosSinRefinar, nb.refinados]), "[2,2,1,1]");
   eq("refines por prompt", nb.refinesPorPrompt, 0.5);
   eq("avisos: mostrados vs aplicados (los internos no cuentan)", JSON.stringify(inf.avisos), JSON.stringify([{ codigo: "texto_largo", mostrados: 1, aplicados: 1 }]));
-  eq("entrevista: 1 de 4 con respuestas", `${inf.entrevista.conRespuestas}/${inf.entrevista.specs}/${inf.entrevista.respuestas}`, "1/4/1");
+  eq("ideas = sólo originales (la corrección s4 y la adaptación s5 son copias)", inf.specs, 3);
+  eq("entrevista: 1 de 3 ideas con respuestas — la copia s5 no la cuenta otra vez", `${inf.entrevista.conRespuestas}/${inf.entrevista.specs}/${inf.entrevista.respuestas}`, "1/3/1");
   const r = inf.resultados;
   eq("resultados: subidos, aceptados, a la 1ª, tras corrección, correcciones", JSON.stringify([r.subidos, r.aceptados, r.aceptadosPrimera, r.aceptadosTrasCorreccion, r.correcciones]), "[2,1,0,1,1]");
   eq("score medio", r.scoreMedio, 75);

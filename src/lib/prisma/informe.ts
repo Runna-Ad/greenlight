@@ -9,7 +9,15 @@ import { CAMPOS_VEREDICTO, fallosDeDetalle, type CampoVeredicto } from "./result
 export type FilaPromptInforme = { id: string; spec_id: string; tool: string; modelo_sug: string | null; avisos: unknown; valido: boolean };
 export type FilaEventoInforme = { spec_id: string; prompt_id: string | null; tool: string; tipo: string; detalle: string | null; user_id: string | null };
 export type FilaResultadoInforme = { id: string; spec_id: string; prompt_id: string | null; tool: string; modelo: string | null; score: number | null; aceptado: boolean };
-export type FilaSpecInforme = { id: string; job: string; respuestas: unknown; correccion_de: string | null; created_by?: string | null };
+export type FilaSpecInforme = {
+  id: string;
+  job: string;
+  respuestas: unknown;
+  correccion_de: string | null;
+  created_by?: string | null;
+  /** 0066: una COPIA (otra versión / adaptar / corrección) apunta a su original — no es una idea nueva. */
+  origen_spec_id?: string | null;
+};
 
 export type Informe = {
   dias: number;
@@ -72,7 +80,11 @@ export function resumirInforme(dias: number, d: { prompts: FilaPromptInforme[]; 
   const codigos = new Set([...mostrados.keys(), ...aplicados.keys()]);
   const avisos = [...codigos].map((codigo) => ({ codigo, mostrados: mostrados.get(codigo) ?? 0, aplicados: aplicados.get(codigo) ?? 0 })).sort((a, b) => b.mostrados - a.mostrados);
 
-  const conRespuestas = d.specs.filter((s) => Array.isArray(s.respuestas) && s.respuestas.length > 0);
+  // Ideas = sólo los specs ORIGINALES: una copia no es una idea nueva ni una entrevista nueva (antes de
+  // filaHermana, adaptar copiaba las respuestas y la misma entrevista contaba una vez por formato).
+  // `specPorId` (abajo) sí usa TODOS: una corrección es una copia y hace falta para "tras corrección".
+  const ideas = d.specs.filter((s) => !s.origen_spec_id);
+  const conRespuestas = ideas.filter((s) => Array.isArray(s.respuestas) && s.respuestas.length > 0);
   const respuestas = conRespuestas.reduce((n, s) => n + (s.respuestas as unknown[]).length, 0);
 
   const specPorId = new Map(d.specs.map((s) => [s.id, s]));
@@ -84,12 +96,12 @@ export function resumirInforme(dias: number, d: { prompts: FilaPromptInforme[]; 
 
   return {
     dias,
-    specs: d.specs.length,
+    specs: ideas.length,
     prompts: d.prompts.length,
     personas: personas.size,
     porHerramienta,
     avisos,
-    entrevista: { specs: d.specs.length, conRespuestas: conRespuestas.length, respuestas },
+    entrevista: { specs: ideas.length, conRespuestas: conRespuestas.length, respuestas },
     resultados: {
       subidos: d.resultados.length,
       aceptados: aceptados.length,
