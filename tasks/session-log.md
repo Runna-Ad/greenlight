@@ -2338,3 +2338,33 @@ nuevos, manuales).
 - [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
 - [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
 
+
+## 2026-09-15 Session (2) — HÜE Prisma: filaHermana · miniaturas · copias ≠ ideas · F6a (0071 aplicada) · F5c · investigación Higgsfield
+**What we did:** 5 commits en `prisma`, todos pusheados (preview): 18bd833 `filaHermana` (una función para el spec hermano;
+`adaptar` dejaba de copiar la entrevista); 5d11c6f miniaturas de los 33 looks (Pedro activó billing de Gemini; la 1ª corrida
+dio 429 `limit: 0` del free tier) + `FOTOS_LISTAS = true`; 58a0e1c las copias no cuentan como ideas (hábitos filtran en la
+BD, informe en código); 015bd88 **F6a** — `prisma_herramientas` + `catalogo.ts` + Hub › Herramientas (0071 aplicada con el
+"ship it" de Pedro, verificada en prod); 0be23d2 **F5c** — avisos siempre resolubles, entrevista a fondo (3 rondas), hasta 6
+imágenes. Investigación de Higgsfield (sitio + API) con agente → `tasks/higgsfield-research-2026-09-15.md`. Cada fase con
+reap en paralelo (security Opus + salud Sonnet): F6a 3 bajos + 1 invariante cruzada; F5c 1 medio + 2 bajos + 1 serio,
+todo arreglado (el serio, re-verificado por el mismo revisor).
+**Current state:** todo en preview (rama `prisma`, 0be23d2 + este commit de docs), sin merge a main (Pedro). 0063/0065–0071
+aplicadas en prod. Tests: prisma 770 · npm test ✓ · tsc 0 · lint 0 · build ✓. Nada corriendo (servidor y agentes cerrados).
+**Uncommitted work:** ninguno tras este commit de docs.
+**Decisions made:** (1) F6 en orden datos → vigía → resto; el vigía corre con botón "Revisar ahora" + cron que sólo dispara en
+producción (Vercel cron llama a la URL de producción). (2) Fortalezas = sólo las que el routing usa; seed GENERADO desde las
+constantes; modelos por rol (el código elige el rol, el catálogo el modelo). (3) 0071 se aplicó DESPUÉS de las revisiones
+aunque el "ship it" llegó antes: el arreglo del CHECK entró en la misma 0071. (4) F5c antes de F6b (feedback diario de los
+diseñadores). (5) Avisos: H.Ü.E sólo toma lo que no tiene arreglo mecánico; en el paso 3 viaja el código y el servidor
+recalcula el texto; un bloquea nunca se oculta ni se delega. (6) Entrevista: la ronda 2+ salta la heurística; cada id una
+vez por entrevista. (7) Referencias: principal + extras (la lógica del personaje no se tocó), ROLES_MULTI, tope 6. (8)
+Higgsfield = plataforma que ALOJA modelos → el prompt se escribe para el modelo; la plataforma cambia "cómo llegar" y límites.
+**Pick up next session:** (1) Pedro responde: qué modelos usan DENTRO de Higgsfield (imagen / video); Higgsfield por default
+para todos o por marca; cuenta + tope mensual para la API (él crea la llave en Vercel). (2) F5d Higgsfield como plataforma
+(plan en todo.md). (3) F7 API de Higgsfield: leer el OpenAPI, llave de prueba, rutas/params por modelo, precios reales,
+migración de trabajos ("ship it"). (4) F6b Vigía (0072) si Higgsfield espera. (5) LIVE-VERIFY de Pedro en preview con login:
+Hub › Herramientas; avisos (Entendido / con H.Ü.E); Profundizar; "+ Otra imagen". (6) Opcional: regenerar `poster_grafico`.
+Diferido: `?demo=paso3` (2ª sesión que hace falta), ganadores casi iguales en el aprendizaje (original + adaptación),
+`?demo=resultado` compila con el catálogo base.
+**Environment changes:** billing de Gemini activado en el proyecto de AI Studio de Pedro (miniaturas); migración 0071 en prod;
+sin dependencias ni variables de entorno nuevas.

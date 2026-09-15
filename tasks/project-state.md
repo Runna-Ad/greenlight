@@ -8,7 +8,28 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
-## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-15 — TODO LIVE en preview (0065–0070 APLICADAS · F5a sin migración)
+## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-15 (tarde) — TODO LIVE en preview (0065–0071 APLICADAS · F6a + F5c)
+- **F5c hecha (0be23d2, sin migración) — lo que pidieron los diseñadores:** (1) todo aviso termina en una salida —
+  "Arreglarlo" (lo que ESA pantalla aplica: ACCIONES_PASO3 / ACCIONES_RESULTADO), "Arreglarlo con H.Ü.E" (`arreglarAviso`:
+  el servidor arma la instrucción desde el aviso guardado y anota `aviso_aplicado`) / "Que H.Ü.E lo arregle" en el paso 3
+  (viajan CÓDIGOS; el servidor recalcula el texto → bloque "PRISMA CHECKS TO RESOLVE"), o "Entendido"; (2) entrevista a
+  fondo: "Profundizar (3 más)" hasta 3 rondas, 7 ids nuevos, lo contestado cercado, Hub › Informe "Por rondas"; (3) hasta
+  6 imágenes: "+ Otra imagen" en ROLES_MULTI, Nano Banana/ChatGPT nombran cada una, soltar_ref quita la última, personaje
+  y extras sin huecos. IDEA cercada en el writer (PROMPT_VERSION 2026-09-15.2).
+- **Higgsfield investigado** (`tasks/higgsfield-research-2026-09-15.md`, fuentes citadas): plataforma que aloja modelos +
+  API real (`api.higgsfield.ai`, llave ID:SECRET, asíncrona, upload firmado, salidas ≥7 días). Planes en todo.md: **F5d**
+  (Higgsfield como plataforma: el prompt sigue siendo del MODELO; "cómo llegar" y límites de Higgsfield en el catálogo) y
+  **F7** (generar directo por la API + comparación automática; tabla de trabajos con migración). Esperan a Pedro.
+- **F6a hecha (015bd88, 0071 APLICADA 2026-09-15):** `prisma_herramientas` = límites, fortalezas 0–5 (sólo las que el
+  routing usa) y modelos (por rol rápido/fino) de cada herramienta, editables en Hub › H.Ü.E › Prisma › **Herramientas**
+  ("Así elige Prisma" en vivo). `lib/prisma/catalogo.ts`: carga tolerante campo a campo + validación estricta con
+  invariantes cruzadas (Veo conserva 8 s, refs ≥ lo que pide un trabajo, tope ≥ 30 palabras, "otro" reservado). El
+  catálogo viaja en `cargarReglas` (misma caché; `olvidarConocimiento()` al guardar); routing, "Úsalo en…", compilers,
+  validadores, diagnóstico y writer usan el MISMO. Golden: 2,432 combinaciones eligen igual que antes; seed generado desde
+  las constantes y verificado en prod (leído == CATALOGO_BASE). Siguiente del plan: **F6b Vigía** (0072) y F6c.
+- **También 2026-09-15:** `filaHermana` (18bd833: una función decide las columnas del spec hermano; `adaptar` ya no copia la
+  entrevista), miniaturas de los 33 looks (5d11c6f; `poster_grafico` trae letras falsas — regenerar si se quiere), las copias
+  ya no cuentan como ideas en hábitos ni en el informe (58a0e1c).
 - **F5a hecha (2026-09-15) — pulido sin briefs + el Look rehecho:** paso 2 = 33 "looks" (recetas completas con foto,
   `lib/prisma/looks.ts`, grid `components/prisma/looks-grid.tsx`) por familia (producto / persona / libre / video /
   edición); H.Ü.E deja uno pre-elegido sin modelo (palabras de la idea + ADN + destino), los que la marca ya usó suben

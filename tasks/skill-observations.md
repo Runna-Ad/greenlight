@@ -100,3 +100,15 @@ RECOMMENDATION: nota de tooling en beast-mode-dev (o en research.md): (1) nunca 
 [2026-09-11] OBSERVATION: skill-gap
 CONTEXT: "verificar de verdad" una acción de servidor que necesita sesión (login apagado en local) sigue sin camino directo: hoy se cubrió con (a) smoke real del modelo con el loader nuevo `scripts/register-hooks.mjs`, (b) `?demo=resultado`, (c) LIVE-VERIFY de Pedro. Funciona, pero cada sesión lo re-arma.
 RECOMMENDATION: un `?demo=paso3` (y en general un demo por pantalla gateada) + documentar el loader en el CLAUDE.md del proyecto como "así se prueba un prompt nuevo antes de cablearlo".
+
+[2026-09-15] OBSERVATION: replicable-win
+CONTEXT: tras arreglar el SERIO de una revisión, devolverle el arreglo al MISMO revisor (SendMessage) lo confirmó en 65 s y cubrió un camino extra.
+RECOMMENDATION: beast-mode-dev, Phase 6: "un hallazgo SERIO/CRÍTICO se re-verifica con el mismo revisor antes del commit".
+
+[2026-09-15] OBSERVATION: skill-gap (recurrente — 2ª vez)
+CONTEXT: verificar los avisos del paso 3 de Prisma exigió un rodeo porque el paso 1 pide subir una foto (necesita sesión en local). Mismo hueco que 2026-09-11.
+RECOMMENDATION: construir `?demo=paso3` en Prisma la próxima sesión; regla general en beast-mode-dev: "si una pantalla profunda se verificó con rodeos dos veces, se le hace su demo dev-only".
+
+[2026-09-15] OBSERVATION: conflict
+CONTEXT: el hook MODEL GUARD repitió "Session model is opusplan → this will EXECUTE on Sonnet" en varias vueltas, pero esta sesión corría en Opus 5; decírselo a Pedro habría sido falso (regla 2: no fabricar), así que no se dijo.
+RECOMMENDATION: que el hook lea el modelo real de la sesión (o lo diga condicional: "si estás en opusplan…") en ~/.claude/hooks.
