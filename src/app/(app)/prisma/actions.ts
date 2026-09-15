@@ -15,6 +15,7 @@ import { t, type Par } from "@/lib/prisma/copy";
 import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
 import { PRISMA_VARIANTES_PEDIBLES, type PrismaCharacterRow, type PrismaEventoTipo, type PrismaPromptRow, type PrismaRefGuardada, type PrismaVariante } from "@/lib/database.types";
 import { personajeUI, type PersonajeUI } from "@/lib/prisma/personajes";
+import { filaHermana } from "@/lib/prisma/hermano";
 import { pistasModelo, recomendarModelo } from "@/lib/prisma/modelo";
 import type { Salida } from "@/lib/prisma/compilers";
 // Lo compartido con resultado-actions.ts (gate, freno, saneos, subir imagen, guardar prompt…):
@@ -502,15 +503,7 @@ export async function variar(specId: string, variante: string): Promise<Resultad
   const r = await variarSpec({ ...entradaDesdeSpec(s), tool, modelo }, { ...s.spec, tool }, v, estableCon(reglas.notas, reglas.clave), reglasDe(reglas));
   if (!r.ok) return r;
 
-  // El linaje de corrección (0070) viaja con el hermano: una versión de una corrección sigue siendo una corrección.
-  const fila = { client_id: s.row.client_id, marca_id: s.row.marca_id, job: s.row.job, tool, destino: s.row.destino, idea: s.row.idea, spec: r.spec, refs: s.row.refs, created_by: g.soyId, correccion_de: s.row.correccion_de ?? null };
-  let ins = await db.from("prisma_specs").insert({ ...fila, origen_spec_id: specId }).select("id").single<{ id: string }>();
-  // Antes de la 0066 la columna origen_spec_id no existe: se guarda sin el enlace (mismo patrón que prisma_presets).
-  if (ins.error && /origen_spec_id/.test(ins.error.message)) {
-    console.warn("[prisma] prisma_specs.origen_spec_id no existe todavía (falta la 0066); versión sin enlace.");
-    ins = await db.from("prisma_specs").insert(fila).select("id").single<{ id: string }>();
-  }
-  const { data: nuevo, error } = ins;
+  const { data: nuevo, error } = await db.from("prisma_specs").insert(filaHermana(s.row, { spec: r.spec, tool, created_by: g.soyId })).select("id").single<{ id: string }>();
   if (error || !nuevo) return fallo("prisma_specs.insert", error?.message);
   const avisos = diagnosticoDe(r.spec, tool, r.salida, r.errores, reglasDe(reglas));
   const promptId = await guardarPrompt(nuevo.id, tool, r.salida, r.valido, r.errores, r.usage, v, versionCon(reglas.clave), recomendarModelo(pistasModelo(r.spec, tool)).modelo, avisos);
@@ -542,11 +535,7 @@ export async function adaptarFormato(specId: string, destino: string): Promise<R
   const bloqueo = bloqueado(diagnosticarEntrada(entradaDeSpec(spec, tool), reglasDe(reglas)));
   if (bloqueo) return { ok: false, error: bloqueo.que.es };
   const rc = recompilar(spec, tool);
-  const { data: nuevo, error } = await db
-    .from("prisma_specs")
-    .insert({ client_id: s.row.client_id, marca_id: s.row.marca_id, job: s.row.job, tool, destino, idea: s.row.idea, spec, refs: s.row.refs, created_by: g.soyId, origen_spec_id: specId, respuestas: s.row.respuestas ?? [], correccion_de: s.row.correccion_de ?? null })
-    .select("id")
-    .single<{ id: string }>();
+  const { data: nuevo, error } = await db.from("prisma_specs").insert(filaHermana(s.row, { spec, tool, destino, created_by: g.soyId })).select("id").single<{ id: string }>();
   if (error || !nuevo) return fallo("prisma_specs.insert", error?.message);
   const avisos = diagnosticoDe(spec, tool, rc.salida, rc.errores, reglasDe(reglas));
   const promptId = await guardarPrompt(nuevo.id, tool, rc.salida, rc.valido, rc.errores, null, variante, PROMPT_VERSION, recomendarModelo(pistasModelo(spec, tool)).modelo, avisos);

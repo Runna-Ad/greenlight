@@ -7,6 +7,7 @@ import { MODELOS_POR_TOOL, pistasModelo, recomendarModelo } from "@/lib/prisma/m
 import { detalleFallos, fallosDe, scoreDe, specCorreccion, veredictoAFila, veredictoDe, type ResultadoVivo } from "@/lib/prisma/resultado";
 import { JOB_KIND, TOOLS, type PromptSpec, type Tool } from "@/lib/prisma/spec";
 import { TOOLS_POR_JOB } from "@/lib/prisma/tools";
+import { filaHermana } from "@/lib/prisma/hermano";
 import { avisosDe, type Aviso } from "@/lib/prisma/diagnostico";
 import type { Salida } from "@/lib/prisma/compilers";
 import type { PrismaPromptRow, PrismaRefGuardada, PrismaResultadoRow } from "@/lib/database.types";
@@ -128,11 +129,8 @@ export async function corregirResultado(resultadoId: string): Promise<ResultadoC
   const spec = specCorreccion(s.spec, tool, v.correccion, v.caption, fallosDe(v));
   const rc = recompilar(spec, tool);
   const refs: PrismaRefGuardada[] = [{ role: "resultado", storage_path: r.storage_path, caption: v.caption, dna: null }];
-  const { data: nuevo, error } = await db
-    .from("prisma_specs")
-    .insert({ client_id: s.row.client_id, marca_id: s.row.marca_id, job: "correccion", tool, destino: s.row.destino, idea: s.row.idea, spec, refs, created_by: g.soyId, origen_spec_id: r.spec_id, correccion_de: r.id })
-    .select("id")
-    .single<{ id: string }>();
+  // `s` es el spec de ESTE resultado (resultadoDeFila → specDeFila(r.spec_id)): el hermano enlaza con él.
+  const { data: nuevo, error } = await db.from("prisma_specs").insert(filaHermana(s.row, { job: "correccion", spec, tool, refs, correccion_de: r.id, created_by: g.soyId })).select("id").single<{ id: string }>();
   if (error || !nuevo) return faltaMigracion(error, "0070") ?? fallo("prisma_specs.insert", error?.message);
   const reglas = await cargarReglas(db);
   const avisos = diagnosticoDe(spec, tool, rc.salida, rc.errores, reglasDe(reglas));

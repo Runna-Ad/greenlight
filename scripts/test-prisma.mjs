@@ -40,6 +40,7 @@ import { etiquetaValor, SWATCHES_ANGULO, ETIQUETA_VALOR } from "../src/lib/prism
 import { JOB_KIND as JOB_KIND_F5 } from "../src/lib/prisma/spec.ts";
 import { tieneZonaSegura, zonaSeguraImagen, zonaSeguraCorta } from "../src/lib/prisma/compilers/zonas.ts";
 import { resumirInforme } from "../src/lib/prisma/informe.ts";
+import { filaHermana } from "../src/lib/prisma/hermano.ts";
 import { bloqueVeredicto } from "../src/lib/prisma/prompts/writer.ts";
 
 let pass = 0,
@@ -1142,6 +1143,30 @@ console.log("\n▶ F5a — zonas seguras (story / TikTok) + informe");
   eq("recomendación seguida: r1 sí (Pro), r2 sin prompt en la ventana no cuenta", JSON.stringify(r.recomendacionSeguida), JSON.stringify({ seguida: 1, total: 1 }));
   eq("todo vacío → ceros, sin reventar", resumirInforme(7, { prompts: [], eventos: [], resultados: [], specs: [] }).resultados.scoreMedio, null);
   ok("avisosDe conserva `interno` (un aviso interno guardado no se le enseña al diseñador al reabrir)", avisosDe(prompts[1].avisos)[0]?.interno === true && avisosDe(prompts[0].avisos)[0]?.interno === undefined);
+}
+
+console.log("\n▶ spec hermano — UNA función decide qué columnas viajan (variar / adaptar / corregir)");
+{
+  const refs = [{ role: "producto", storage_path: "prisma/a.png", caption: "botella", dna: null }];
+  const original = { id: "s-orig", client_id: "c1", marca_id: "m1", job: "foto_producto", tool: "nanobanana", destino: "ig_feed", idea: "una botella", spec: { v: 1 }, refs, created_by: "ana", created_at: "2026-09-15", origen_spec_id: null, respuestas: [{ id: "luz", valor: "x" }], correccion_de: null };
+  const COLUMNAS = ["client_id", "marca_id", "idea", "job", "destino", "refs", "correccion_de", "spec", "tool", "created_by", "origen_spec_id", "respuestas"].sort().join(",");
+
+  const version = filaHermana(original, { spec: { v: 2 }, tool: "chatgpt", created_by: "beto" });
+  eq("otra versión: escribe TODAS las columnas (ni id ni created_at)", Object.keys(version).sort().join(","), COLUMNAS);
+  eq("otra versión: hereda cliente/marca/idea/job/destino/refs, enlaza con el original", JSON.stringify([version.client_id, version.marca_id, version.idea, version.job, version.destino, version.refs === refs, version.origen_spec_id]), JSON.stringify(["c1", "m1", "una botella", "foto_producto", "ig_feed", true, "s-orig"]));
+  eq("otra versión: spec, herramienta y autor son los nuevos", JSON.stringify([version.spec, version.tool, version.created_by]), JSON.stringify([{ v: 2 }, "chatgpt", "beto"]));
+  eq("la entrevista NO se copia (el informe la cuenta una vez por idea)", JSON.stringify(version.respuestas), "[]");
+
+  eq("adaptar: el destino nuevo gana", filaHermana(original, { spec: {}, tool: "nanobanana", destino: "ig_story", created_by: "ana" }).destino, "ig_story");
+
+  const correccion = { ...original, id: "s-corr", job: "correccion", correccion_de: "r1" };
+  eq("una versión de una CORRECCIÓN sigue siendo corrección (el bug de F5a)", filaHermana(correccion, { spec: {}, tool: "nanobanana", created_by: "ana" }).correccion_de, "r1");
+  eq("una adaptación de una corrección también", filaHermana(correccion, { spec: {}, tool: "nanobanana", destino: "tiktok", created_by: "ana" }).correccion_de, "r1");
+
+  const refsRes = [{ role: "resultado", storage_path: "prisma/out/b.png", caption: "lo que salió", dna: null }];
+  const corr = filaHermana(original, { job: "correccion", spec: {}, tool: "nanobanana", refs: refsRes, correccion_de: "r9", created_by: "ana" });
+  eq("corregir: job correccion, refs del resultado, apunta al resultado y al spec del que viene", JSON.stringify([corr.job, corr.refs[0].role, corr.correccion_de, corr.origen_spec_id, corr.destino]), JSON.stringify(["correccion", "resultado", "r9", "s-orig", "ig_feed"]));
+  eq("sin correccion_de en el original (fila de antes de la 0070) → null, no undefined", filaHermana({ ...original, correccion_de: undefined }, { spec: {}, tool: "nanobanana", created_by: "ana" }).correccion_de, null);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} prisma: ${pass} passed, ${fail} failed\n`);

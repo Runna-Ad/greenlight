@@ -1,5 +1,21 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟢 2026-09-15 (10) — HÜE Prisma: `filaHermana` — UNA función para el spec hermano (rama `prisma`, SIN migración)
+Pedro: "yes do A". La deuda que dejó el reap de salud de F5a (el linaje `correccion_de` se perdía porque 3 sitios copiaban
+las columnas a mano).
+- [x] `lib/prisma/hermano.ts` (puro): `filaHermana(origen, cambios)` construye la fila hermana; su tipo exige TODAS las
+      columnas de `PrismaSpecRow` (`-?`), así que una columna nueva de una migración rompe tsc AHÍ hasta decidir si viaja
+      (probado: columna de prueba → TS2741 en hermano.ts:22, revertido).
+- [x] `variar`, `adaptarFormato` y `corregirResultado` la usan. `origen_spec_id` = siempre el id del original.
+- [x] Divergencia arreglada: `adaptarFormato` copiaba `respuestas` (la entrevista) y `variar` no → el informe contaba la
+      MISMA entrevista una vez por cada adaptación. Ahora ningún hermano la copia (nadie más lee esa columna: las
+      respuestas ya van aplicadas en el spec).
+- [x] Fuera el respaldo "antes de la 0066" en `variar` (la 0066 está en prod desde 2026-09-11: código muerto).
+- [x] Tests: 9 checks nuevos en test-prisma (700 ✓) · npm test ✓ · tsc 0 · lint 0 · build ✓.
+- [ ] Siguiente (mismo tipo de bug, fuera de esta tanda): `cargarHabitos` y el denominador `entrevista.specs` del informe
+      cuentan también los hermanos (adaptar a 5 formatos = ese look cuenta 6 veces en "lo que esta marca suele usar").
+      Arreglo: filtrar `origen_spec_id is null` en las dos consultas.
+
 ## 🟡 2026-09-15 (9) — HÜE Prisma v1 · FASE 5a: pulido sin briefs + el Look rebuild (rama `prisma`, 7a0f8c6, SIN migración · reap pendiente)
 Pedro: "lets do your recommendation" + "include the look rebuild in phase 5a". Sin migración. Plan §5 plegados.
 - [x] **El Look, rehecho** — `lib/prisma/looks.ts` (puro): ~30 "looks" por familia (producto / persona / libre / video /
