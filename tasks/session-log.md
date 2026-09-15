@@ -2222,3 +2222,28 @@ real · prueba con diseñador · decidir merge a main (= deploy a prod; el módu
 - [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
 - [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
 
+
+## 2026-09-14 → 2026-09-15 Session — HÜE Prisma v1: F4 "sube lo que salió" (0070 aplicada) + F5a pulido y el Look rehecho
+**What we did:** F4 completa y SHIPPEADA (390b013 + docs c847026; migración 0070 aplicada y verificada en prod): el diseñador
+sube lo que salió, H.Ü.E lo compara en una llamada con visión (7 puntos ✓/✗, refine, corrección), "Corregir este resultado"
+(spec hermano oculto `correccion`), "Refinar el original", "Marcar como resultado final"; aprende (ganadores por fuerza de
+señal, patrón de fallos → "Úsalo en…" sube a Pro/sunburst). Reap F4: 0 críticos; 2 medios + 5 bajos arreglados (cercas del
+spec que vuelve al writer, texto pintado en la imagen = contenido, evento aceptado por RESULTADO, tope 3.5 MB, limpieza
+del bucket, sólo prompt vigente). F5a (7a0f8c6, sin migración): paso 2 rehecho como 33 "looks" con H.Ü.E sugiere + hábitos
+de marca + "Ajustar" con Ángulo y etiquetas llanas; marca al paso 1; adaptar a otros formatos; zonas seguras story/TikTok;
+prompt primero, juicio después; Hub › Prisma › Informe; a11y. Tests: prisma 658, db 460, npm test, tsc, lint, build.
+**Current state:** todo en preview (rama `prisma`), sin merge a main (Pedro). 0063–0070 aplicadas en prod.
+**Uncommitted work:** ninguno (árbol limpio tras 7a0f8c6 + este commit de docs).
+**Decisions made:** (1) Comparar el resultado = UNA llamada con visión (caption + veredicto + refine + corrección), no
+caption/ADN + comparación. (2) `correccion` es job OCULTO (rol de ref `resultado`); la corrección la arma el CÓDIGO desde
+`correccion_en`; en video sólo cabe refinar. (3) Looks en código (golden test) y a tabla en F6 (Vigía). (4) La marca se
+elige en el paso 1 porque la entrevista y los hábitos la necesitan antes. (5) Tope de visión 3.5 MB (base64 × 1.33 < 5 MB).
+(6) F5b (ronda con diseñadores) espera a que Pedro tenga 5–10 briefs reales; el Informe del Hub ya la mide.
+**Pick up next session:** (1) Los DOS reaps de F5a (security Opus + salud Sonnet) corrían al cerrar: leer sus hallazgos y
+aplicarlos (o relanzarlos sobre 7a0f8c6). (2) Pedro: miniaturas de los looks — exportar GEMINI_API_KEY en la shell,
+`node scripts/looks-thumbs.mjs`, poner `FOTOS_LISTAS = true` en looks.ts, commit; el conector `nano-banana` apunta a un
+modelo retirado (usar `nano-banana-2` o actualizarlo). (3) Pedro live-verify en preview (todo.md § F4 y § F5a). (4) Luego
+F6 Vigía (0071/0072, cada una con "ship it") o F5b si ya hay briefs. Diferido: memoria de marca abierta a cualquier rol
+interno (security LOW F4); referencias > 3.5 MB sin ADN; la corrección repetida no trae su propio resultado.
+**Environment changes:** ninguno (sin deps nuevas; 0070 en prod; `scripts/looks-thumbs.mjs` y `scripts/smoke-veredicto.mjs`
+nuevos, manuales).

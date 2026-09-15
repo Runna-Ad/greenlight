@@ -1,6 +1,6 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-09-15 (9) — HÜE Prisma v1 · FASE 5a: pulido sin briefs + el Look rebuild (rama `prisma`, SIN migración)
+## 🟡 2026-09-15 (9) — HÜE Prisma v1 · FASE 5a: pulido sin briefs + el Look rebuild (rama `prisma`, 7a0f8c6, SIN migración · reap pendiente)
 Pedro: "lets do your recommendation" + "include the look rebuild in phase 5a". Sin migración. Plan §5 plegados.
 - [x] **El Look, rehecho** — `lib/prisma/looks.ts` (puro): ~30 "looks" por familia (producto / persona / libre / video /
       edición), cada uno fija luz + lente + ángulo + ambiente + estilo (+ movimiento en video); `looksPara(job)`,
@@ -25,7 +25,8 @@ Pedro: "lets do your recommendation" + "include the look rebuild in phase 5a". S
       informe con fixture) · npm test ✓ · tsc 0 · lint 0 · build ✓. Browser: `?demo=entrevista` → paso 2 con el grid
       ("H.Ü.E sugiere" pre-elegido, "Ajustar" con Ángulo y etiquetas llanas), 375 px a dos columnas; `?demo=resultado` con
       "Adaptar a otros formatos" y la línea de formato; sin errores de consola.
-- [ ] Reap (security Opus + salud Sonnet) · commit + push a `prisma`.
+- [x] Commit + push a `prisma` (7a0f8c6, preview).
+- [ ] Reap (security Opus + salud Sonnet): corrían al cerrar la sesión → aplicar sus hallazgos en la siguiente.
 - [ ] **Miniaturas de los looks** (pendiente de Pedro): el conector `nano-banana` apunta a un modelo retirado
       (gemini-2.5-flash-image-preview → 404); `scripts/looks-thumbs.mjs` las genera con gemini-3.1-flash-image por REST
       cuando haya `GEMINI_API_KEY` en la shell (Pedro la exporta; no va en el repo), y luego `FOTOS_LISTAS = true` en
