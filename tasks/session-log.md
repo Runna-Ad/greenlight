@@ -2239,8 +2239,9 @@ caption/ADN + comparación. (2) `correccion` es job OCULTO (rol de ref `resultad
 `correccion_en`; en video sólo cabe refinar. (3) Looks en código (golden test) y a tabla en F6 (Vigía). (4) La marca se
 elige en el paso 1 porque la entrevista y los hábitos la necesitan antes. (5) Tope de visión 3.5 MB (base64 × 1.33 < 5 MB).
 (6) F5b (ronda con diseñadores) espera a que Pedro tenga 5–10 briefs reales; el Informe del Hub ya la mide.
-**Pick up next session:** (1) Los DOS reaps de F5a (security Opus + salud Sonnet) corrían al cerrar: leer sus hallazgos y
-aplicarlos (o relanzarlos sobre 7a0f8c6). (2) Pedro: miniaturas de los looks — exportar GEMINI_API_KEY en la shell,
+**Pick up next session:** (1) El reap de SECURITY de F5a llegó tras el wrap-up y se aplicó (commit siguiente a 0e86f0b:
+hábitos sólo con vocabulario conocido, look cercado, cubo "juicio", bloquea en adaptar); el de SALUD (Sonnet) seguía
+corriendo: leer sus hallazgos y aplicarlos (o relanzarlo). (2) Pedro: miniaturas de los looks — exportar GEMINI_API_KEY en la shell,
 `node scripts/looks-thumbs.mjs`, poner `FOTOS_LISTAS = true` en looks.ts, commit; el conector `nano-banana` apunta a un
 modelo retirado (usar `nano-banana-2` o actualizarlo). (3) Pedro live-verify en preview (todo.md § F4 y § F5a). (4) Luego
 F6 Vigía (0071/0072, cada una con "ship it") o F5b si ya hay briefs. Diferido: memoria de marca abierta a cualquier rol

@@ -3,7 +3,7 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { analizarReferencia } from "@/lib/prisma/vision";
 import { escribirSpec, refinarSpec, variarSpec, recompilar, explicarPrompt, describirPersonajeIA, estableCon, versionCon, juzgarSpec, revisarTexto, preguntarFaltante, PROMPT_VERSION, type Uso } from "@/lib/prisma/writer";
-import { avisosDe, bloqueado, diagnosticar, diagnosticarEntrada, type Aviso } from "@/lib/prisma/diagnostico";
+import { avisosDe, bloqueado, diagnosticar, diagnosticarEntrada, entradaDeSpec, type Aviso } from "@/lib/prisma/diagnostico";
 import { idiomaDe, revisarAcentos, type Cambio, type Idioma } from "@/lib/prisma/ortografia";
 import { aplicarRespuestas, detalleRespuestas, necesitaEntrevista, sanearRespuestas, type Pregunta, type Respuesta } from "@/lib/prisma/entrevista";
 import type { EntradaWriter } from "@/lib/prisma/prompts/writer";
@@ -537,6 +537,9 @@ export async function adaptarFormato(specId: string, destino: string): Promise<R
   const [{ tool, variante }, reglas] = await Promise.all([estadoActual(db, s), cargarReglas(db)]);
   // El formato es el del destino (la gracia de adaptar): el default de la marca ya se aplicó al original.
   const spec: PromptSpec = { ...s.spec, tool, destino, aspect: ASPECT_POR_DESTINO[destino] };
+  // El mismo "bloquea" que generar (formato o duración que una regla prohíbe): nada se escribe.
+  const bloqueo = bloqueado(diagnosticarEntrada(entradaDeSpec(spec, tool), reglasDe(reglas)));
+  if (bloqueo) return { ok: false, error: bloqueo.que.es };
   const rc = recompilar(spec, tool);
   const { data: nuevo, error } = await db
     .from("prisma_specs")
@@ -608,15 +611,18 @@ export async function revisarBien(promptId: string): Promise<{ ok: true; avisos:
   if ("ok" in g) return g;
   const pid = sn(promptId, 64);
   if (!pid || !UUID.test(pid)) return { ok: false, error: "Prompt no válido." };
-  if (saturado(g.soyId)) return FRENO;
+  // Cubo propio: desde F5a el cliente lo dispara solo en video; nunca debe gastar el cupo de generar.
+  if (saturado(g.soyId, Date.now(), "juicio", 20)) return FRENO;
   const db = supabaseAdmin();
   const { data: p } = await db.from("prisma_prompts").select("*").eq("id", pid).maybeSingle<PrismaPromptRow>();
   if (!p) return { ok: false, error: "Ese prompt ya no existe." };
   const s = await specDeFila(p.spec_id, g);
   if ("ok" in s) return s;
+  const previos = avisosDe(p.avisos);
+  // Un juicio que ya corrió no se repite (ni se cobra): los avisos "hue_" guardados son la prueba.
+  if (previos.some((a) => a.codigo.startsWith("hue_"))) return { ok: true, avisos: previos };
   const tool = (TOOLS as string[]).includes(p.tool) ? (p.tool as Tool) : s.spec.tool;
   const { avisos: juicio } = await juzgarSpec({ ...entradaDesdeSpec(s), tool }, { ...s.spec, tool }, p.salida);
-  const previos = avisosDe(p.avisos);
   const codigos = new Set(previos.map((a) => a.codigo));
   const avisos = [...previos, ...juicio.filter((a) => !codigos.has(a.codigo))].slice(0, 20);
   const { error } = await db.from("prisma_prompts").update({ avisos }).eq("id", pid);

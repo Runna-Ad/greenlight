@@ -406,7 +406,8 @@ export const ETIQUETA_VALOR: Record<string, Par> = {
  *  hay ninguna, el valor tal cual. */
 export function etiquetaValor(valor: string, lang: Lang, extra: Record<string, Par> = {}): string {
   const swatch = [...SWATCHES_LUZ, ...SWATCHES_CAMARA, ...SWATCHES_LENTE, ...SWATCHES_ANGULO, ...SWATCHES_MOOD, ...SWATCHES_ESTILO].find((s) => s.valor === valor);
-  const par = swatch?.label ?? ETIQUETA_VALOR[valor] ?? extra[valor];
+  // hasOwn: un valor como "constructor" no debe traer una función del prototipo.
+  const par = swatch?.label ?? (Object.hasOwn(ETIQUETA_VALOR, valor) ? ETIQUETA_VALOR[valor] : undefined) ?? (Object.hasOwn(extra, valor) ? extra[valor] : undefined);
   return par ? par[lang] : valor;
 }
 

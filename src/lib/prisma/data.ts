@@ -170,7 +170,8 @@ export async function cargarHabitos(db: Db, clientId: string, limite = 60): Prom
     console.warn(`[prisma] hábitos no disponibles: ${error.message}`);
     return [];
   }
-  const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+  // Con tope: una frase larga escrita por el modelo no debe volverse una etiqueta de chip kilométrica.
+  const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim().slice(0, 120) : null);
   return (data ?? []).map((r) => {
     const s = r.spec ?? {};
     const cam = (s.camara && typeof s.camara === "object" ? s.camara : {}) as Record<string, unknown>;

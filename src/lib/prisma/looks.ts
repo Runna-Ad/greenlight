@@ -11,7 +11,7 @@
  * herramienta); en la Fase 6 (Vigía) ganan tabla y edición en el Hub sobre esta misma forma.
  */
 import type { Destino, JobType, VisualDNA } from "./spec.ts";
-import type { Par } from "./copy.ts";
+import { SWATCHES_ANGULO, SWATCHES_CAMARA, SWATCHES_ESTILO, SWATCHES_LENTE, SWATCHES_LUZ, SWATCHES_MOOD, type Par } from "./copy.ts";
 
 export type Familia = "producto" | "persona" | "libre" | "video" | "edicion";
 
@@ -207,6 +207,14 @@ export type Habitos = {
 
 export const HABITO_MIN = 2;
 
+/** El vocabulario que la app CONOCE (chips + campos de los looks). Un hábito sólo cuenta si es una
+ *  de estas frases: el texto libre que una persona escribió en "Otro…" se queda en su spec y nunca
+ *  se vuelve chip sugerido de OTRA persona (revisión de seguridad F5a: era un salto entre usuarios). */
+export const VOCABULARIO_LOOK: ReadonlySet<string> = new Set([
+  ...[...SWATCHES_LUZ, ...SWATCHES_CAMARA, ...SWATCHES_LENTE, ...SWATCHES_ANGULO, ...SWATCHES_MOOD, ...SWATCHES_ESTILO].map((s) => s.valor),
+  ...LOOKS.flatMap((l) => Object.values(l.campos).filter((v): v is string => !!v)),
+]);
+
 /** Lo que una marca ya usó: cuenta looks exactos y valores por fila en sus specs recientes. */
 export function habitosDe(filas: FilaHabito[], looks: Look[] = LOOKS): Habitos {
   const porLook = new Map<string, number>();
@@ -214,7 +222,7 @@ export function habitosDe(filas: FilaHabito[], looks: Look[] = LOOKS): Habitos {
   for (const f of filas) {
     for (const k of Object.keys(porValor) as (keyof FilaHabito)[]) {
       const v = f[k]?.trim();
-      if (v) porValor[k].set(v, (porValor[k].get(v) ?? 0) + 1);
+      if (v && VOCABULARIO_LOOK.has(v)) porValor[k].set(v, (porValor[k].get(v) ?? 0) + 1);
     }
     const id = lookActivo({ luz: f.luz, lente: f.lente, angulo: f.angulo, mood: f.mood, estilo: f.estilo, movimiento: f.movimiento }, looks.filter((l) => l.id !== LOOK_ORIGINAL_ID), !!f.movimiento);
     if (id) porLook.set(id, (porLook.get(id) ?? 0) + 1);

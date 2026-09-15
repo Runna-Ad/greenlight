@@ -26,7 +26,13 @@ Pedro: "lets do your recommendation" + "include the look rebuild in phase 5a". S
       ("H.Ü.E sugiere" pre-elegido, "Ajustar" con Ángulo y etiquetas llanas), 375 px a dos columnas; `?demo=resultado` con
       "Adaptar a otros formatos" y la línea de formato; sin errores de consola.
 - [x] Commit + push a `prisma` (7a0f8c6, preview).
-- [ ] Reap (security Opus + salud Sonnet): corrían al cerrar la sesión → aplicar sus hallazgos en la siguiente.
+- [x] Reap security (Opus): 0 críticos / 0 serios; 1 medio + 4 bajos → arreglados (0e86f0b+): los hábitos de marca sólo
+      cuentan vocabulario conocido (el texto libre de "Otro…" nunca se vuelve chip sugerido de otra persona); la fila del
+      look va al writer cercada como dato (`<look campo>`), no entre comillas de atributo; `revisarBien` con cubo propio
+      "juicio" y sin repetir un juicio que ya corrió; `adaptarFormato` respeta el mismo "bloquea" que generar; tope de 120
+      letras en los hábitos y `Object.hasOwn` en `etiquetaValor`. INFO aceptado: `listarPersonajes` (marcas + hábitos) para
+      cualquier rol interno = modelo de agencia, ya documentado como diferido.
+- [ ] Reap salud (Sonnet): corría al cerrar → aplicar sus hallazgos en la siguiente sesión.
 - [ ] **Miniaturas de los looks** (pendiente de Pedro): el conector `nano-banana` apunta a un modelo retirado
       (gemini-2.5-flash-image-preview → 404); `scripts/looks-thumbs.mjs` las genera con gemini-3.1-flash-image por REST
       cuando haya `GEMINI_API_KEY` en la shell (Pedro la exporta; no va en el repo), y luego `FOTOS_LISTAS = true` en
