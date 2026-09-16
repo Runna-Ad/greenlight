@@ -33,14 +33,17 @@ export function textoCosto(c: CostoModelo | null | undefined, video: boolean, to
   if (c.ilimitado) return t("Ilimitado en nuestro plan: 0 créditos por intento.", "Unlimited on our plan: 0 credits per try.");
   const exacto = video ? precioEn(c, duracion) : null;
   if (exacto) {
-    // Precio exacto del botón Generate a esa duración: 1080p (la final) y las otras resoluciones al lado.
+    // Precio exacto del botón Generate a esa duración: 1080p (la final) — o 720p si el modelo no llega a 1080p — y
+    // las otras resoluciones al lado.
     const [a, b] = INTENTOS_TIPICOS;
-    const p = exacto.p1080;
-    const otras = [exacto.p480 != null ? `480p: ${num(exacto.p480)}` : null, exacto.p720 !== p ? `720p: ${num(exacto.p720)}` : null, exacto.p4k !== null ? `4K: ${num(exacto.p4k)}` : null].filter(Boolean).join(" · ");
-    const igual = exacto.p720 === p ? { es: " (720p cuesta lo mismo)", en: " (720p costs the same)" } : { es: "", en: "" };
+    const hd = exacto.p1080 !== null;
+    const p = exacto.p1080 ?? exacto.p720;
+    const res = hd ? "1080p" : "720p";
+    const otras = [exacto.p480 != null ? `480p: ${num(exacto.p480)}` : null, hd && exacto.p720 !== p ? `720p: ${num(exacto.p720)}` : null, exacto.p4k !== null ? `4K: ${num(exacto.p4k)}` : null].filter(Boolean).join(" · ");
+    const igual = hd && exacto.p720 === p ? { es: " (720p cuesta lo mismo)", en: " (720p costs the same)" } : !hd ? { es: " (su máximo)", en: " (its max)" } : { es: "", en: "" };
     return t(
-      `${num(p)} créditos por intento a ${exacto.s} s en 1080p${igual.es}${otras ? ` · ${otras}` : ""} · ${usd(p)}. Una pieza lista suele tomar ${a}–${b} intentos: ≈ ${num(p * a)}–${num(p * b)} créditos. Más corto cuesta menos.`,
-      `${num(p)} credits per try at ${exacto.s} s in 1080p${igual.en}${otras ? ` · ${otras}` : ""} · ${usd(p)}. A finished piece usually takes ${a}–${b} tries: ≈ ${num(p * a)}–${num(p * b)} credits. Shorter costs less.`,
+      `${num(p)} créditos por intento a ${exacto.s} s en ${res}${igual.es}${otras ? ` · ${otras}` : ""} · ${usd(p)}. Una pieza lista suele tomar ${a}–${b} intentos: ≈ ${num(p * a)}–${num(p * b)} créditos. Más corto cuesta menos.`,
+      `${num(p)} credits per try at ${exacto.s} s in ${res}${igual.en}${otras ? ` · ${otras}` : ""} · ${usd(p)}. A finished piece usually takes ${a}–${b} tries: ≈ ${num(p * a)}–${num(p * b)} credits. Shorter costs less.`,
     );
   }
   if (c.tipico === null) return t("Consume créditos (sin dato del costo exacto; Higgsfield lo muestra en el botón Generate).", "Uses credits (no exact cost on file; Higgsfield shows it on the Generate button).");

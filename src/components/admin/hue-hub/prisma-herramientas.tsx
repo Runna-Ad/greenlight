@@ -33,7 +33,7 @@ const aBorrador = (f: FichaHerramienta): Borrador => ({
     tipico: m.costo?.tipico != null && !m.costo.ilimitado ? String(m.costo.tipico) : "",
     min: m.costo?.min != null && !m.costo.ilimitado ? String(m.costo.min) : "",
     max: m.costo?.max != null && !m.costo.ilimitado ? String(m.costo.max) : "",
-    tabla: m.costo?.porDuracion?.length && !m.costo.ilimitado ? m.costo.porDuracion.map((f) => `${f.s}=${m.costo?.porDuracion?.some((x) => x.p480 != null) ? `${f.p480 ?? "-"}/` : ""}${f.p720}/${f.p1080}/${f.p4k ?? "-"}`).join(", ") : "",
+    tabla: m.costo?.porDuracion?.length && !m.costo.ilimitado ? m.costo.porDuracion.map((f) => `${f.s}=${m.costo?.porDuracion?.some((x) => x.p480 != null) ? `${f.p480 ?? "-"}/` : ""}${f.p720}/${f.p1080 ?? "-"}/${f.p4k ?? "-"}`).join(", ") : "",
   })),
   fuenteUrl: f.fuente?.url ?? "",
   fuenteFecha: f.fuente?.fecha ?? "",
@@ -49,10 +49,10 @@ function aTabla(txt: string) {
   const filas = txt.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
   if (!filas.length) return null;
   return filas.map((f) => {
-    const m = /^(\d+)\s*s?\s*=\s*(?:([\d.]+|-)\s*\/\s*)?([\d.]+)\s*\/\s*([\d.]+)\s*\/\s*([\d.]+|-)$/.exec(f);
+    const m = /^(\d+)\s*s?\s*=\s*(?:([\d.]+|-)\s*\/\s*)?([\d.]+)\s*\/\s*([\d.]+|-)\s*\/\s*([\d.]+|-)$/.exec(f);
     if (!m) return { segundos: Number.NaN, p720: 0, p1080: 0, p4k: null };
     const n = (x: string | undefined) => (x === undefined || x === "-" ? null : Number(x));
-    return { segundos: Number(m[1]), p480: n(m[2]), p720: Number(m[3]), p1080: Number(m[4]), p4k: n(m[5]) };
+    return { segundos: Number(m[1]), p480: n(m[2]), p720: Number(m[3]), p1080: n(m[4]), p4k: n(m[5]) };
   });
 }
 

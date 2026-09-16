@@ -40,7 +40,8 @@ export const MAX_DURACIONES = 15;
 
 export type Limites = { duraciones: number[]; maxPalabras: number | null; maxCaracteres: number | null; aspects: Aspect[]; refsMax: number; audio: boolean };
 /** Lo que cuesta un intento a esa duración (segundos), por resolución. 4K null = no la ofrece o sin dato. */
-export type PrecioDuracion = { s: number; p720: number; p1080: number; p4k: number | null; p480?: number | null };
+/** p1080 null = el modelo no llega a 1080p (Seedance Mini); 720p siempre está. */
+export type PrecioDuracion = { s: number; p720: number; p1080: number | null; p4k: number | null; p480?: number | null };
 /** Lo que cuesta UN intento en nuestro plan (Ultimate). `ilimitado`: 0 créditos en higgsfield.ai. Si no,
  *  créditos por generación con los ajustes de siempre (típico = mediana del histórico; null = sin dato).
  *  `porDuracion`: la tabla exacta cuando la tenemos (Pedro, del botón Generate); el estimado la usa antes que el típico. */
@@ -85,6 +86,9 @@ const VEO_31_FAST = tabla([[4, 11, 11, 24], [6, 17, 17, 36], [8, 22, 22, 48]]);
 const SEEDANCE_25 = Array.from({ length: 27 }, (_, i): PrecioDuracion => ({ s: i + 4, p480: 3 * (i + 4), p720: 6.5 * (i + 4), p1080: 9 * (i + 4), p4k: null }));
 /** Seedance 2.0 (Pedro): los mismos precios por segundo que 2.5, sólo hasta 15 s, y con 4K a 22 por segundo (4 s = 88; 15 s = 330). */
 const SEEDANCE_20 = SEEDANCE_25.filter((f) => f.s <= 15).map((f) => ({ ...f, p4k: 22 * f.s }));
+/** Seedance 2.0 Mini (Pedro): 4–15 s, sólo 480p y 720p; 720p = 2.5 por segundo (4 s = 10; 15 s = 37.5, que Higgsfield
+ *  muestra como 38). 480p sin dato todavía. */
+const SEEDANCE_MINI = Array.from({ length: 12 }, (_, i): PrecioDuracion => ({ s: i + 4, p720: 2.5 * (i + 4), p1080: null, p4k: null }));
 const OMNI_FLASH = tabla([3, 4, 5, 6, 7, 8, 9, 10].map((sg) => [sg, 9 + 3 * (sg - 3), sg === 10 ? 45 : 14 + 4 * (sg - 3), 27 + 9 * (sg - 3)] as [number, number, number, number]));
 const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
   nanobanana: [
@@ -113,7 +117,7 @@ const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
     hf("seedream-5.0-lite", "Seedream 5.0 Lite", "fino", "En Higgsfield: Image → Seedream 5.0 lite → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Seedream 5.0 lite → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=seedream_v5_lite`, LIBRE),
   ],
   seedance: [
-    hf("seedance-2.0-mini", "Seedance 2.0 Mini", "rapido", "En Higgsfield: Video → Seedance 2.0 Mini (hasta 720p) → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.0 Mini (up to 720p) → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_0_mini`, pago(12.5, 10, 17.5)),
+    hf("seedance-2.0-mini", "Seedance 2.0 Mini", "rapido", "En Higgsfield: Video → Seedance 2.0 Mini (hasta 720p) → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.0 Mini (up to 720p) → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_0_mini`, pago(12.5, 10, 37.5, SEEDANCE_MINI)),
     hf("seedance-2.0", "Seedance 2.0", "fino", "En Higgsfield: Video → Seedance 2.0 → sube las referencias y pega el prompt; 1080p salvo que la pieza pida 4K.", "In Higgsfield: Video → Seedance 2.0 → upload the references and paste the prompt; 1080p unless the piece needs 4K.", `${HF_VIDEO}?model=seedance_2_0`, pago(54, 12, 330, SEEDANCE_20)),
     hf("seedance-2.5", "Seedance 2.5", "fino", "En Higgsfield: Video → Seedance 2.5 → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.5 → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_5`, pago(72, 12, 270, SEEDANCE_25)),
   ],
@@ -247,9 +251,9 @@ function leerTabla(v: unknown): Leido<PrecioDuracion[] | null> {
     const sg = f.segundos;
     if (typeof sg !== "number" || !Number.isInteger(sg) || sg < 1 || sg > 60 || out.some((o) => o.s === sg)) return mal("Costo por duración: segundos enteros de 1 a 60, sin repetir.");
     const opcional = (x: unknown) => x === null || x === undefined || creditos(x);
-    if (!creditos(f.p720) || !creditos(f.p1080) || !opcional(f.p4k) || !opcional(f.p480)) return mal(`Costo por duración (${sg} s): créditos entre 0 y 1000.`);
+    if (!creditos(f.p720) || !opcional(f.p1080) || !opcional(f.p4k) || !opcional(f.p480)) return mal(`Costo por duración (${sg} s): créditos entre 0 y 1000.`);
     const p480 = typeof f.p480 === "number" ? redondo(f.p480) : null;
-    out.push({ s: sg, ...(p480 !== null ? { p480 } : {}), p720: redondo(f.p720), p1080: redondo(f.p1080), p4k: f.p4k === null || f.p4k === undefined ? null : redondo(f.p4k as number) });
+    out.push({ s: sg, ...(p480 !== null ? { p480 } : {}), p720: redondo(f.p720), p1080: typeof f.p1080 === "number" ? redondo(f.p1080) : null, p4k: f.p4k === null || f.p4k === undefined ? null : redondo(f.p4k as number) });
   }
   return bien(out.length ? out.sort((a, b) => a.s - b.s) : null);
 }
