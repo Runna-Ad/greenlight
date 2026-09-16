@@ -50,7 +50,7 @@ o elige entre modelos que ya cumplen. "típico" = créditos por intento con los 
 | Modelo (id) | Costo base | De dónde sale |
 |---|---|---|
 | Nano Banana Pro (gemini-3-pro-image) | ilimitado | plan "365 Ilimitado" (calidad 2K) |
-| Nano Banana 2 (gemini-3.1-flash-image) | cobra, sin dato | no está en la lista de ilimitados |
+| Nano Banana 2 (gemini-3.1-flash-image) | 2 (1.5–3) | **Pedro, 2026-09-16**: 1K = 1.5 · 2K = 2 · 4K = 3 (típico = 2K). |
 | Image Auto | ilimitado | historial ("Ilimitado") |
 | GPT Image 2.5 Flare / Sunburst | 3 (1.5–26.5) | **Pedro, 2026-09-16: 3 créditos cada uno** (NO ilimitados); rango del blog por calidad/resolución. GPT Image 2 = 6.5 (no está en el catálogo). El "GPT Image" ilimitado del plan no es ninguno de estos. |
 | Veo 3.1 | 58 (29–88) + tabla | **Pedro, 2026-09-16**: 8 s = 58 (720p y 1080p) / 88 (4K) · 6 s = 44 / 66 · 4 s = 29 / 44. 720p = 1080p; 4K ≈ ×1.5 (la nota de costo de Veo lo dice, en vez de la general "1080p ≈ ×2"). |
@@ -61,7 +61,7 @@ o elige entre modelos que ya cumplen. "típico" = créditos por intento con los 
 | Higgsfield DoP | sin dato | — |
 | Seedream 4.5 / 5.0 Lite | ilimitado | plan |
 | Seedance 2.0 Mini | 12.5 (10–17.5) | historial (6 filas) |
-| Seedance 2.0 | 54 (36–110) | historial (16 filas) |
+| Seedance 2.0 | 54 (12–330) + tabla | típico = mediana del historial (16 filas). **Pedro, 2026-09-16**: mismos precios por segundo que 2.5 (480p 3 · 720p 6.5 · 1080p 9), 4–15 s, y 4K a 22 por segundo (4 s = 88; 15 s = 330). |
 | Seedance 2.5 | 72 (12–270) + tabla | **Pedro, 2026-09-16**: 4–30 s, parejo por segundo: 480p 3 · 720p 6.5 · 1080p 9 (4 s = 12/26/36; 30 s = 90/195/270). Sin 4K. Ojo: la herramienta Seedance en Prisma ofrece hasta 15 s (2.0 no pasa de ahí); de 16 a 30 s falta decidir. |
 | Gemini Omni Flash 1.1 | 34 (9–90) + tabla | **Pedro, 2026-09-16**: 3–10 s (cualquier segundo). 720p 9→30 (+3/s) · 1080p 14→45 (+4/s; ojo: +4 daría 42 a 10 s, Pedro dijo 45 — se guardó 45, confirmar) · 4K 27→90 (+9/s). Típico = 8 s 1080p. |
 Por intento → por pieza: × 3–5 (blog ai-video-credits-explained). USD: × 0.04 (resumen de uso de Pedro).
@@ -70,4 +70,4 @@ Por intento → por pieza: × 3–5 (blog ai-video-credits-explained). USD: × 0
 Cuando hay tabla (`porDuracion`: segundos → 720p/1080p/4K), el estimado del Studio y del resultado dice el precio EXACTO
 a la duración elegida en 1080p (y las otras resoluciones al lado); sin fila para esa duración, usa el típico.
 Editable en Hub › Herramientas: `4=29/29/44, 6=44/44/66` (segundos=720p/1080p/4K; "-" = sin 4K), o con 480p al frente: `4=12/26/36/-`.
-Faltan tablas de: Seedance 2.0 / Mini, Kling 3.0 / Turbo / Motion Control.
+Faltan tablas de: Seedance 2.0 Mini, Kling 3.0 / Turbo / Motion Control.

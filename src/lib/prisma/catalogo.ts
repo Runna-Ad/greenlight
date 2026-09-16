@@ -83,10 +83,12 @@ const VEO_31 = tabla([[4, 29, 29, 44], [6, 44, 44, 66], [8, 58, 58, 88]]);
 const VEO_31_FAST = tabla([[4, 11, 11, 24], [6, 17, 17, 36], [8, 22, 22, 48]]);
 /** Seedance 2.5 (Pedro): 4–30 s, parejo por segundo — 480p 3, 720p 6.5, 1080p 9 (4 s = 12/26/36; 30 s = 90/195/270). Sin 4K. */
 const SEEDANCE_25 = Array.from({ length: 27 }, (_, i): PrecioDuracion => ({ s: i + 4, p480: 3 * (i + 4), p720: 6.5 * (i + 4), p1080: 9 * (i + 4), p4k: null }));
+/** Seedance 2.0 (Pedro): los mismos precios por segundo que 2.5, sólo hasta 15 s, y con 4K a 22 por segundo (4 s = 88; 15 s = 330). */
+const SEEDANCE_20 = SEEDANCE_25.filter((f) => f.s <= 15).map((f) => ({ ...f, p4k: 22 * f.s }));
 const OMNI_FLASH = tabla([3, 4, 5, 6, 7, 8, 9, 10].map((sg) => [sg, 9 + 3 * (sg - 3), sg === 10 ? 45 : 14 + 4 * (sg - 3), 27 + 9 * (sg - 3)] as [number, number, number, number]));
 const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
   nanobanana: [
-    hf("gemini-3.1-flash-image", "Nano Banana 2", "rapido", "En Higgsfield: Image → Nano Banana 2 → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Nano Banana 2 → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=nano-banana-2`, pago(null)),
+    hf("gemini-3.1-flash-image", "Nano Banana 2", "rapido", "En Higgsfield: Image → Nano Banana 2 → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Nano Banana 2 → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=nano-banana-2`, pago(2, 1.5, 3)),
     hf("gemini-3-pro-image", "Nano Banana Pro", "fino", "En Higgsfield: Image → Nano Banana Pro → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Nano Banana Pro → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=nano-banana-pro`, LIBRE),
     // Sólo para "¿en cuál lo generaste?": Higgsfield elige el modelo solo (el prompt de Nano Banana es el más neutro).
     hf("image-auto", "Image Auto", "rapido", "En Higgsfield: Image → Auto → pega el prompt (Higgsfield elige el modelo).", "In Higgsfield: Image → Auto → paste the prompt (Higgsfield picks the model).", null, LIBRE),
@@ -112,7 +114,7 @@ const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
   ],
   seedance: [
     hf("seedance-2.0-mini", "Seedance 2.0 Mini", "rapido", "En Higgsfield: Video → Seedance 2.0 Mini (hasta 720p) → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.0 Mini (up to 720p) → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_0_mini`, pago(12.5, 10, 17.5)),
-    hf("seedance-2.0", "Seedance 2.0", "fino", "En Higgsfield: Video → Seedance 2.0 → sube las referencias y pega el prompt; 1080p salvo que la pieza pida 4K.", "In Higgsfield: Video → Seedance 2.0 → upload the references and paste the prompt; 1080p unless the piece needs 4K.", `${HF_VIDEO}?model=seedance_2_0`, pago(54, 36, 110)),
+    hf("seedance-2.0", "Seedance 2.0", "fino", "En Higgsfield: Video → Seedance 2.0 → sube las referencias y pega el prompt; 1080p salvo que la pieza pida 4K.", "In Higgsfield: Video → Seedance 2.0 → upload the references and paste the prompt; 1080p unless the piece needs 4K.", `${HF_VIDEO}?model=seedance_2_0`, pago(54, 12, 330, SEEDANCE_20)),
     hf("seedance-2.5", "Seedance 2.5", "fino", "En Higgsfield: Video → Seedance 2.5 → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.5 → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_5`, pago(72, 12, 270, SEEDANCE_25)),
   ],
   gemini_omni: [

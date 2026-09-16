@@ -21,6 +21,9 @@ const usd = (n: number): string => `US$${(n * USD_POR_CREDITO).toFixed(2)}`;
 /** Lo que cambia el precio según la resolución, cuando la herramienta no sigue la regla general (720p → 1080p ≈ ×2).
  *  Veo 3.1 (Pedro, 2026-09-16): 720p y 1080p cuestan lo mismo — 8 s = 58, 6 s = 44, 4 s = 29 — y 4K ≈ ×1.5 (88 / 66 / 44). */
 const RESOLUCION: Partial<Record<string, { es: string; en: string }>> = {
+  // Imagen: Nano Banana 2 cobra por tamaño (Pedro, 2026-09-16). La nota sólo sale si el modelo cobra (Pro es ilimitado).
+  seedance: { es: " 1080p cuesta 1.4× lo de 720p (9 vs 6.5 créditos por segundo); 4K, sólo en 2.0, 22 por segundo.", en: " 1080p costs 1.4× 720p (9 vs 6.5 credits per second); 4K, only on 2.0, 22 per second." },
+  nanobanana: { es: " 1K: 1.5 · 2K: 2 · 4K: 3.", en: " 1K: 1.5 · 2K: 2 · 4K: 3." },
   veo: { es: " 720p y 1080p cuestan lo mismo; 4K cuesta 1.5× (8 s: 58 → 88). Más corto cuesta menos (4 s: 29).", en: " 720p and 1080p cost the same; 4K costs 1.5× (8 s: 58 → 88). Shorter costs less (4 s: 29)." },
 };
 
@@ -45,7 +48,7 @@ export function textoCosto(c: CostoModelo | null | undefined, video: boolean, to
   const rangoEn = rango.replace("hasta", "up to");
   const [a, b] = INTENTOS_TIPICOS;
   const pieza = { es: ` Una pieza lista suele tomar ${a}–${b} intentos: ≈ ${num(c.tipico * a)}–${num(c.tipico * b)} créditos.`, en: ` A finished piece usually takes ${a}–${b} tries: ≈ ${num(c.tipico * a)}–${num(c.tipico * b)} credits.` };
-  const res = !video ? { es: "", en: "" } : RESOLUCION[tool ?? ""] ?? { es: " A 1080p cuesta cerca del doble que a 720p.", en: " 1080p costs about twice as much as 720p." };
+  const res = RESOLUCION[tool ?? ""] ?? (video ? { es: " A 1080p cuesta cerca del doble que a 720p.", en: " 1080p costs about twice as much as 720p." } : { es: "", en: "" });
   return t(
     `≈ ${num(c.tipico)} créditos por intento${rango} · ${usd(c.tipico)}.${pieza.es}${res.es}`,
     `≈ ${num(c.tipico)} credits per try${rangoEn} · ${usd(c.tipico)}.${pieza.en}${res.en}`,
