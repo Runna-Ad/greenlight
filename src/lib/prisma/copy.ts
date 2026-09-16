@@ -127,6 +127,7 @@ export const UI = {
   copiado: t("Copiado", "Copied"),
   abrirEn: t("Abrir en", "Open in"),
   abrirEnHiggsfield: t("Abrir {modelo} en Higgsfield", "Open {modelo} in Higgsfield"),
+  pasoAPaso: t("Paso a paso en Higgsfield", "Step by step in Higgsfield"),
   explicar: t("Explícame este prompt", "Explain this prompt"),
   ocultarExplicacion: t("Ocultar explicación", "Hide explanation"),
   refinar: t("¿Le cambiamos algo?", "Want to change something?"),

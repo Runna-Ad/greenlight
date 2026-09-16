@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
-import { Check, Copy, Cpu, ExternalLink, Eye, Flame, Lightbulb, Minus, RefreshCw, Shield, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2, Wrench } from "lucide-react";
+import { Check, Copy, Cpu, ExternalLink, ListOrdered, Eye, Flame, Lightbulb, Minus, RefreshCw, Shield, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,7 @@ import { DESTINO_LABEL, PEDIR_VERSION_LABEL, TOOL_LABEL, UI, VARIANTE_LABEL, tx,
 import type { PrismaVariante } from "@/lib/database.types";
 import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
 import { pistasModelo, recomendarModelo } from "@/lib/prisma/modelo";
+import { pasosHiggsfield } from "@/lib/prisma/pasos";
 import { useCatalogo } from "./catalogo-contexto";
 import { DESTINOS, JOB_KIND, type Destino, type PromptSpec, type Tool } from "@/lib/prisma/spec";
 import type { Salida } from "@/lib/prisma/compilers";
@@ -390,6 +391,19 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
         >
           {vivo.salida.texto}
         </pre>
+        {/* Lo que el diseñador hace DENTRO de Higgsfield con este prompt (casillas, orden, ajustes, cómo iterar). */}
+        <details open className="mt-2 rounded-xl border border-border bg-card px-4 py-3 text-sm">
+          <summary className="flex cursor-pointer items-center gap-2 font-medium text-foreground">
+            <ListOrdered className="size-4 text-primary" aria-hidden="true" />
+            {tx(UI.pasoAPaso, lang)}
+          </summary>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-foreground marker:text-muted-foreground">
+            {pasosHiggsfield(vivo.spec, vivo.tool, tx(modelo.etiqueta, lang), catalogo).map((p, i) => (
+              // Lista fija y sin reordenar: el índice es una key estable.
+              <li key={i}>{tx(p, lang)}</li>
+            ))}
+          </ol>
+        </details>
       </div>
 
       {/* Acciones secundarias */}

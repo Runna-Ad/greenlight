@@ -96,10 +96,13 @@ const SPEC_SCHEMA = {
   required: ["sujeto", "accion", "entorno", "camara", "luz", "mood", "estilo", "paleta", "texturas", "negativos", "preservar", "beats", "video_type", "preset", "dialogo_voz", "texto_en_imagen"],
 };
 
-const s0 = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+// Una sola línea y con tope: un salto de línea en un campo del modelo fingiría una sección nueva en los
+// prompts por bloques (Seedance: "\nPOSITIVE LOCKS: …").
+const linea = (v: string): string => plano(v).slice(0, 600);
+const s0 = (v: unknown): string => (typeof v === "string" ? linea(v) : "");
 // Tolerante: el modelo a veces manda una lista como string JSON ("[\"a\",\"b\"]").
-const arr = (v: unknown): string[] => listaDe(v).filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean);
-const sn = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+const arr = (v: unknown): string[] => listaDe(v).filter((x): x is string => typeof x === "string").map(linea).filter(Boolean);
+const sn = (v: unknown): string | null => (typeof v === "string" && linea(v) ? linea(v) : null);
 
 function beatsDe(v: unknown): Beat[] | null {
   const lista = listaDe(v, "beats");
@@ -157,7 +160,8 @@ function specDesde(input: Record<string, unknown>, e: EntradaWriter): PromptSpec
     marca: e.marca,
     beats: beatsDe(input.beats),
     video_type: (VIDEO_TYPES as string[]).includes(vt ?? "") ? (vt as VideoType) : e.videoType && (VIDEO_TYPES as string[]).includes(e.videoType) ? (e.videoType as VideoType) : null,
-    preset: sn(input.preset),
+    // El enum del schema no se hace cumplir del todo: sólo un preset real de la lista.
+    preset: (PRESETS_HIGGSFIELD as readonly string[]).includes(sn(input.preset) ?? "") ? sn(input.preset) : null,
     texto: textoDesde(input, e),
     destino: e.destino,
   };

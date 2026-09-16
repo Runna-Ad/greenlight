@@ -23,7 +23,7 @@ Pedro: "go" al plan prompt-first (§ DECISIONES DE PEDRO abajo); Wan 2.7 fuera (
       y se calibran en el Hub. "Higgsfield" (la familia vieja) se muestra como **Higgsfield DoP**.
 - [x] **Image Auto** y **Kling 3.0 Motion Control** en el catálogo sólo para "¿en cuál lo generaste?" (no se recomiendan).
       Motion Control como TRABAJO (pide un VIDEO de referencia) = fase propia después.
-- [x] **0072 (sólo datos, PENDIENTE de "ship it")** `…_0072_prisma_modelos_higgsfield.sql`: pone al día `modelos` de las 5
+- [x] **0072 (sólo datos) APLICADA 2026-09-16** con el "ship it" de Pedro (`npm run migrate`, ref ybbrpqzbedaxsmotgtkh; verificada: las 5 filas con sus páginas de Higgsfield, ninguna estaba editada) `…_0072_prisma_modelos_higgsfield.sql`: pone al día `modelos` de las 5
       filas de 0071 SÓLO si nadie las editó (`updated_by is null`); test-db lo prueba (fila editada intacta). Sin 0072 la
       app funciona (botón → página de la familia; "cómo llegar" viejo). **F6b Vigía pasa a 0073.**
 - Verificado: test-prisma 863 · test-db 478 · npm test ✓ · tsc 0 · lint 0 · build ✓ · navegador (?demo=resultado: botón
@@ -40,6 +40,23 @@ Pedro: "go" al plan prompt-first (§ DECISIONES DE PEDRO abajo); Wan 2.7 fuera (
 - test-db encontró solo que las filas vivas de 0071 ya no igualan al catálogo → 0072 (sólo datos, no pisa lo editado).
 - Final: test-prisma 866 · test-db 478 · npm test ✓ · tsc 0 · lint 0 · build ✓ · navegador (pegar en textarea = nada;
   pegar en la página = sube).
+
+### Deep dive Higgsfield (Pedro: "read all and learn… so hue can way more accurately create prompts and guide designers")
+- [x] Leído: Help Center (43 páginas) · blog de guías (~40, incl. case4k y full-ad-campaign) · skill de Seedance de Pedro
+      → `tasks/higgsfield-guia-prompts-2026-09-16.md` (síntesis) + las dos notas crudas con URLs.
+- [x] Seedance en BLOQUES (GLOBAL STYLE … POSITIVE LOCKS), `@imageN`, FOV en grados (`opticaDe`), cortes "0.0s to 3.0s" +
+      HARD CUT; Omni con `@imageN` y orden sujeto → lugar/candados → cámara; validadores al día.
+- [x] Writer: sección CRAFT (lo visible, inicio→fin, manos, cantidades, una luz, cámara exacta, un beat = una acción,
+      sin nombres propios de terceros) · PROMPT_VERSION 2026-09-16.2.
+- [x] "Paso a paso en Higgsfield" en cada resultado (`lib/prisma/pasos.ts`): modelo, casilla y orden de las refs,
+      ajustes (720p/1K para probar, final con el mismo prompt), sonido, un consejo del modelo, subir lo que salió.
+- [x] Reap doble. Seguridad (Opus): 0 críticos/serios; 1 medio + 3 bajos → ARREGLADOS (campos del writer en UNA línea con
+      tope; captions sin @imageN ni "HARD CUT"; @imageN fuera de rango = error; HARD CUT sólo cuenta dentro de SHOTS; lente
+      con tope antes de las regex; preset sólo de la lista). Salud (Sonnet): 3 serios → ARREGLADOS (sfx por plano y estilo
+      del texto en Seedance/Omni; la regla "[Imagen N]" del writer ahora dice que cada herramienta usa su sintaxis) + Veo
+      transición en orden en el paso a paso + key estable + Omni con varias fotos del mismo sujeto. Pendiente (viejo, no de
+      esto): `marca.tono` no lo usa ningún compiler (sólo el writer). test-prisma 882 · npm test ✓ · lint 0 · build ✓.
+- [ ] Idea para Pedro (Hub, sin deploy): Kling acepta 3–15 s en Higgsfield; la lista dice 5 y 10.
 
 **Paso 2** — H.Ü.E elige lo más barato sin perder calidad + estimado en créditos (tasks/higgsfield-costos-2026-09-16.md).
 **Paso 3** — Performance › Evaluación: por diseñador y mes — piezas, vueltas y tiempo hasta el aceptado, créditos estimados.

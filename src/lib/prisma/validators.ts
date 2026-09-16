@@ -141,14 +141,17 @@ function chatgpt(texto: string, spec: PromptSpec): string[] {
   return e;
 }
 
-/** Seedream, Seedance y Gemini Omni nombran las referencias "Image N": cada una tiene que aparecer, y
- *  la etiqueta [Imagen N] de Nano Banana no la entienden. */
-function imagenesNumeradas(texto: string, spec: PromptSpec): string[] {
+/** Seedream nombra las referencias "Image N"; Seedance y Gemini Omni, con la etiqueta de Higgsfield
+ *  "@imageN". Cada una tiene que aparecer, y la etiqueta [Imagen N] de Nano Banana no la entienden. */
+function imagenesNumeradas(texto: string, spec: PromptSpec, arroba = false): string[] {
   const e: string[] = [];
   spec.refs.forEach((_, i) => {
-    if (!new RegExp(`\\bImage ${i + 1}\\b`).test(texto)) e.push(`No usa la referencia Image ${i + 1}.`);
+    const re = arroba ? new RegExp(`@image${i + 1}\\b`) : new RegExp(`\\bImage ${i + 1}\\b`);
+    if (!re.test(texto)) e.push(arroba ? `No usa la referencia @image${i + 1}.` : `No usa la referencia Image ${i + 1}.`);
   });
-  if (/\[Imagen \d/.test(texto)) e.push("Usa etiquetas [Imagen N]; aquí las referencias se nombran Image 1, Image 2…");
+  if (/\[Imagen \d/.test(texto)) e.push(`Usa etiquetas [Imagen N]; aquí las referencias se nombran ${arroba ? "@image1, @image2…" : "Image 1, Image 2…"}`);
+  // Una etiqueta que no corresponde a ninguna imagen subida (la herramienta la ignoraría o inventaría).
+  if (arroba) for (const m of texto.matchAll(/@image(\d+)/g)) if (Number(m[1]) < 1 || Number(m[1]) > spec.refs.length) e.push(`Menciona @image${m[1]} pero sólo hay ${spec.refs.length} referencia(s).`);
   return e;
 }
 
@@ -167,15 +170,18 @@ function dialogoTalCual(texto: string, spec: PromptSpec): string[] {
 }
 
 function seedance(texto: string, spec: PromptSpec, lim?: Limites): string[] {
-  const e = [...imagenesNumeradas(texto, spec), ...dialogoTalCual(texto, spec)];
+  const e = [...imagenesNumeradas(texto, spec, true), ...dialogoTalCual(texto, spec)];
   const dur = duracionValida("seedance", spec.duracion, lim?.duraciones);
-  if (!texto.includes(`Format: ${spec.aspect}, ${dur} seconds`)) e.push(`Falta "Format: ${spec.aspect}, ${dur} seconds".`);
-  if (spec.job === "escena_sora" && !/Shot 1 \(/.test(texto)) e.push("La escena por bloques necesita los planos con tiempo (Shot 1, Shot 2…).");
+  if (!texto.includes(`OUTPUT: ${spec.aspect}, ${dur} seconds`)) e.push(`Falta "OUTPUT: ${spec.aspect}, ${dur} seconds".`);
+  if (!/^GLOBAL STYLE: /.test(texto)) e.push("Debe abrir con GLOBAL STYLE (una regla visual arriba).");
+  // Sólo dentro de SHOTS (una caption no puede fingir los cortes).
+  const shots = /\nSHOTS\n([\s\S]*?)\n[A-Z][A-Z ]+: /.exec(texto)?.[1] ?? "";
+  if (spec.job === "escena_sora" && !/^\d+\.\ds HARD CUT$/m.test(shots)) e.push("La escena por bloques necesita los planos con tiempo y sus HARD CUT.");
   return e;
 }
 
 function omni(texto: string, spec: PromptSpec, lim?: Limites): string[] {
-  const e = [...imagenesNumeradas(texto, spec), ...dialogoTalCual(texto, spec)];
+  const e = [...imagenesNumeradas(texto, spec, true), ...dialogoTalCual(texto, spec)];
   const dur = duracionValida("gemini_omni", spec.duracion, lim?.duraciones);
   if (!texto.includes(`${dur}-second ${spec.aspect} video`)) e.push(`Debe pedir un video de ${dur} s en ${spec.aspect}.`);
   return e;
