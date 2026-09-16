@@ -2,9 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { canHue } from "@/lib/roles";
-import { getViewAs } from "@/lib/view-as";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSoyId } from "@/lib/soy";
 import { cargarHubIntelligence, cargarWinners, cargarEdiciones, type HubIntel, type Winner, type AdaptacionRow, type EdicionesResumen } from "@/lib/hue-data";
 import { correrSintesis, correrSintesisEdiciones, sintetizarEdicionesSiAuto, type SintesisResultado } from "@/lib/hue-sintesis";
@@ -15,6 +13,7 @@ import { resumirInforme, type FilaEventoInforme, type FilaPromptInforme, type Fi
 import { repartirNotas } from "@/lib/prisma/prompts/writer";
 import { CATALOGO_BASE, catalogoDesdeFilas, validarFicha, type Catalogo, type FilaHerramienta } from "@/lib/prisma/catalogo";
 import { olvidarConocimiento } from "@/lib/prisma/data";
+import { noMaster } from "./gate";
 import { TOOLS, type Tool } from "@/lib/prisma/spec";
 
 const KB_BUCKET = "greenlight-kb";
@@ -63,11 +62,6 @@ async function resolverScope(scope: string, scopeId: string | null): Promise<Sco
 }
 
 /** Gate del HUB: sólo master. Devuelve null si pasa, o un Fail si no. */
-async function noMaster(): Promise<Fail | null> {
-  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
-  if (!canHue(await getViewAs())) return { ok: false, error: "El H.Ü.E HUB es sólo del Master Builder." };
-  return null;
-}
 
 // ── Loaders (lectura, master-gated) ──────────────────────────
 

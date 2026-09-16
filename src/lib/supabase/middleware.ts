@@ -8,6 +8,9 @@ const DB_SCHEMA = process.env.NEXT_PUBLIC_DB_SCHEMA ?? "produccion";
 // /robots.txt tiene que servirse SIN sesión, o el buscador recibe un redirect a /login en
 // vez del "Disallow: /" (visto en prod al desplegar el noindex, 2026-09-02).
 const PUBLIC_PATHS = ["/login", "/auth", "/portal/login", "/robots.txt"];
+// Públicas SÓLO con la ruta exacta (sin subrutas): el cron del vigía llega sin sesión y la ruta exige su
+// propio secreto (CRON_SECRET).
+const PUBLIC_EXACT = ["/api/prisma/vigia"];
 
 // Refreshes the Supabase session cookie on every request and gates auth.
 export async function updateSession(request: NextRequest) {
@@ -70,7 +73,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC_PATHS.some(
+  const isPublic = PUBLIC_EXACT.includes(path) || PUBLIC_PATHS.some(
     (p) => path === p || path.startsWith(`${p}/`),
   );
 

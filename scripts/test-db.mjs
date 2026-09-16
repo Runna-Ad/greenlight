@@ -2618,5 +2618,49 @@ console.log("\n▶ 0072 — modelos en Higgsfield");
   ok("lo que nadie editó sí se pone al día", (await q(`select modelos from produccion.prisma_herramientas where tool = 'veo'`))[0].modelos.length === 2);
 }
 
+// ── 0074: el vigía (fuentes + propuestas) ──
+console.log("\n▶ 0074 — vigía");
+{
+  for (const t of ["prisma_fuentes", "prisma_propuestas"]) {
+    eq(`${t} con RLS y una policy master`, Number(await scalar(`select count(*) from pg_policies p join pg_class c on c.relname = p.tablename join pg_namespace n on n.oid = c.relnamespace and n.nspname = p.schemaname where p.schemaname = 'produccion' and p.tablename = '${t}' and c.relrowsecurity`)), 1);
+    ok(`${t}: service_role escribe`, (await q(`select has_table_privilege('service_role', 'produccion.${t}', 'insert') as ok`))[0].ok);
+  }
+  ok("la función de sumar fuente: sólo service_role la ejecuta", (await q(`select has_function_privilege('service_role', 'produccion.prisma_propuesta_sumar(text, uuid)', 'execute') as s, has_function_privilege('anon', 'produccion.prisma_propuesta_sumar(text, uuid)', 'execute') as a`)).map((r) => r.s && !r.a)[0]);
+  const { FUENTES_BASE } = await import("../src/lib/prisma/vigia.ts");
+  eq("seed: las fuentes de FUENTES_BASE, activas y sin leer", Number(await scalar(`select count(*) from produccion.prisma_fuentes where activa and ultimo_hash is null`)), FUENTES_BASE.length);
+  const f = await scalar(`select id from produccion.prisma_fuentes order by url limit 1`);
+  const g = await scalar(`select id from produccion.prisma_fuentes order by url offset 1 limit 1`);
+  const h = "a".repeat(64);
+  await db.query(`insert into produccion.prisma_propuestas (huella, tipo, tool, origen, fuentes, resumen_es, contenido, cita, cita_url) values ($1, 'nota', 'kling', 'comunidad', array[$2]::uuid[], 'x', '{"nota_en":"x"}', 'cita', 'https://x.y/z')`, [h, f]);
+  await db.query(`select produccion.prisma_propuesta_sumar($1, $2)`, [h, g]);
+  await db.query(`select produccion.prisma_propuesta_sumar($1, $2)`, [h, g]);
+  eq("sumar fuente: agrega la nueva una sola vez", Number(await scalar(`select cardinality(fuentes) from produccion.prisma_propuestas where huella = '${h}'`)), 2);
+  const malas = [
+    ["la misma huella dos veces", `insert into produccion.prisma_propuestas (huella, tipo, origen, resumen_es, contenido, cita, cita_url) values ('${h}', 'nota', 'oficial', 'x', '{}', 'c', 'https://x.y')`],
+    ["una huella que no es sha256", `insert into produccion.prisma_propuestas (huella, tipo, origen, resumen_es, contenido, cita, cita_url) values ('abc', 'nota', 'oficial', 'x', '{}', 'c', 'https://x.y')`],
+    ["un tipo desconocido", `insert into produccion.prisma_propuestas (huella, tipo, origen, resumen_es, contenido, cita, cita_url) values ('${"b".repeat(64)}', 'hackear', 'oficial', 'x', '{}', 'c', 'https://x.y')`],
+    ["una cita sin https", `insert into produccion.prisma_propuestas (huella, tipo, origen, resumen_es, contenido, cita, cita_url) values ('${"c".repeat(64)}', 'nota', 'oficial', 'x', '{}', 'c', 'http://x.y')`],
+    ["aprobada sin fecha de decisión", `update produccion.prisma_propuestas set estado = 'aprobada' where huella = '${h}'`],
+    ["contenido que no es objeto", `insert into produccion.prisma_propuestas (huella, tipo, origen, resumen_es, contenido, cita, cita_url) values ('${"d".repeat(64)}', 'nota', 'oficial', 'x', '[]', 'c', 'https://x.y')`],
+    ["una fuente http", `insert into produccion.prisma_fuentes (url, nombre) values ('http://x.y/z', 'x')`],
+    ["una fuente repetida", `insert into produccion.prisma_fuentes (url, nombre) values ('${FUENTES_BASE[0].url}', 'x')`],
+    ["una fuente sin nombre", `insert into produccion.prisma_fuentes (url, nombre) values ('https://x.y/otra', '')`],
+    ["un texto guardado de más de 300 000", `update produccion.prisma_fuentes set ultimo_texto = repeat('x', 300001) where id = '${f}'`],
+  ];
+  for (const [que, sql] of malas) ok(`la BD rechaza ${que}`, await db.query(sql).then(() => false).catch(() => true));
+  eq("candado: la primera toma, la segunda no (corriendo)", JSON.stringify([await scalar(`select produccion.prisma_vigia_tomar(0)`), await scalar(`select produccion.prisma_vigia_tomar(0)`)]), "[true,false]");
+  await db.query(`select produccion.prisma_vigia_soltar()`);
+  eq("candado: soltado pero con pausa de 120 s → no; sin pausa → sí", JSON.stringify([await scalar(`select produccion.prisma_vigia_tomar(120)`), await scalar(`select produccion.prisma_vigia_tomar(0)`)]), "[false,true]");
+  await db.query(`update produccion.prisma_vigia_estado set corriendo_desde = now() - interval '20 minutes'`);
+  eq("candado: una corrida muerta (>15 min) se puede retomar", await scalar(`select produccion.prisma_vigia_tomar(0)`), true);
+  ok("candado: una sola fila (id = 1)", await db.query(`insert into produccion.prisma_vigia_estado (id) values (2)`).then(() => false).catch(() => true));
+  const privs = (await q(`select has_function_privilege('service_role', 'produccion.prisma_vigia_tomar(integer)', 'execute') as s, has_function_privilege('anon', 'produccion.prisma_vigia_tomar(integer)', 'execute') as a, has_function_privilege('authenticated', 'produccion.prisma_vigia_soltar()', 'execute') as u, has_function_privilege('anon', 'produccion.prisma_propuesta_sumar(text, uuid)', 'execute') as a2, has_function_privilege('authenticated', 'produccion.prisma_propuesta_sumar(text, uuid)', 'execute') as u2`))[0];
+  // `authenticated` no se mira aquí: este archivo le concede TODAS las rutinas a propósito más arriba (simulación
+  // pre-0056). En la BD real no las tiene (0056 + el revoke de PUBLIC), y además las funciones son SECURITY INVOKER:
+  // sin rol master, la RLS de las tablas las deja sin efecto.
+  eq("candado y sumar: service_role ejecuta, anon no", JSON.stringify({ s: privs.s, a: privs.a, a2: privs.a2 }), JSON.stringify({ s: true, a: false, a2: false }));
+  ok("aprobada con fecha sí pasa", await db.query(`update produccion.prisma_propuestas set estado = 'aprobada', decidido_at = now() where huella = '${h}'`).then(() => true).catch(() => false));
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

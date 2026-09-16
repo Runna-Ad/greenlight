@@ -439,6 +439,43 @@ export type PrismaHerramientaRow = {
   created_at: string;
 };
 
+/** F6b (0074): una fuente que lee el vigía. `ultimo_texto` no viaja al navegador. */
+export type PrismaFuenteRow = {
+  id: string;
+  url: string;
+  nombre: string;
+  tool: string | null;
+  origen: "oficial" | "comunidad";
+  activa: boolean;
+  ultimo_hash: string | null;
+  ultimo_texto: string | null;
+  ultima_lectura: string | null;
+  ultimo_error: string | null;
+  updated_by: string | null;
+  updated_at: string;
+  created_at: string;
+};
+
+/** F6b (0074): un cambio al conocimiento que propone el vigía, con su cita. */
+export type PrismaPropuestaRow = {
+  id: string;
+  huella: string;
+  tipo: "nota" | "regla" | "modelo" | "limite" | "fortaleza" | "deprecacion" | "codigo";
+  tool: string | null;
+  origen: "oficial" | "comunidad";
+  fuentes: string[];
+  resumen_es: string;
+  contenido: Record<string, unknown>;
+  cita: string;
+  cita_url: string;
+  cita_fecha: string;
+  estado: "pendiente" | "aprobada" | "descartada";
+  motivo: string | null;
+  decidido_por: string | null;
+  decidido_at: string | null;
+  created_at: string;
+};
+
 export type PrismaCharacterRow = {
   id: string;
   client_id: string;

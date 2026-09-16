@@ -120,6 +120,33 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
     );
   }
 
+  // Sólo dev (`?demo=vigia`): la pestaña Hub › Prisma › Vigía con datos de muestra, sin servidor.
+  if (sp.demo === "vigia" && process.env.NODE_ENV === "development") {
+    const { PrismaVigia } = await import("@/components/admin/hue-hub/prisma-vigia");
+    const ahora = new Date().toISOString();
+    return (
+      <div className="mx-auto max-w-4xl">
+        <PrismaVigia
+          demo={{
+            enEspera: 1,
+            fuentes: [
+              { id: "f1", url: "https://higgsfield.ai/creator-hub/help-center/ai-models/how-do-i-use-kling", nombre: "Higgsfield — Kling", tool: "kling", origen: "oficial", activa: true, ultima_lectura: ahora, ultimo_error: null, updated_at: ahora, created_at: ahora, leida: true },
+              { id: "f2", url: "https://ai.google.dev/gemini-api/docs/veo", nombre: "Google — Veo (Gemini API)", tool: "veo", origen: "oficial", activa: true, ultima_lectura: ahora, ultimo_error: "respondió 503", updated_at: ahora, created_at: ahora, leida: true },
+              { id: "f3", url: "https://higgsfield.ai/blog/seedance-2-5-prompting-guide", nombre: "Higgsfield — guía de prompts de Seedance 2.5", tool: "seedance", origen: "oficial", activa: false, ultima_lectura: null, ultimo_error: null, updated_at: ahora, created_at: ahora, leida: false },
+            ],
+            pendientes: [
+              { id: "p1", tipo: "limite", tool: "kling", origen: "oficial", fuentes: ["f1"], resumen_es: "Kling 3.0 ahora genera hasta 20 s en Higgsfield.", contenido: { campo: "duraciones", valor: [5, 10, 15, 20] }, cita: "Kling 3.0 now supports clips of up to 20 seconds", cita_url: "https://higgsfield.ai/creator-hub/help-center/ai-models/how-do-i-use-kling", cita_fecha: ahora.slice(0, 10), estado: "pendiente", motivo: null, decidido_at: null, created_at: ahora },
+              { id: "p2", tipo: "nota", tool: "veo", origen: "oficial", fuentes: ["f2"], resumen_es: "Veo 3.1 lee mejor el diálogo cuando va entre comillas.", contenido: { nota_en: "Veo 3.1 follows dialogue more reliably when the line is quoted." }, cita: "Put spoken lines in quotation marks for more reliable dialogue", cita_url: "https://ai.google.dev/gemini-api/docs/veo", cita_fecha: ahora.slice(0, 10), estado: "pendiente", motivo: null, decidido_at: null, created_at: ahora },
+            ],
+            decididas: [
+              { id: "p3", tipo: "codigo", tool: null, origen: "oficial", fuentes: ["f1"], resumen_es: "Higgsfield agregó un modelo de audio nuevo.", contenido: { detalle_es: "Nueva familia de audio." }, cita: "…", cita_url: "https://higgsfield.ai/", cita_fecha: ahora.slice(0, 10), estado: "descartada", motivo: "No usamos audio suelto.", decidido_at: ahora, created_at: ahora },
+            ],
+          }}
+        />
+      </div>
+    );
+  }
+
   let marcas: MarcaUI[] = [];
   let historial: ItemHistorialUI[] = [];
   let reglas: ReglaCliente[] = [];

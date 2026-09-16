@@ -1,5 +1,44 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔵 2026-09-16 (14) — HÜE Prisma · F6b VIGÍA (rama `prisma`, migración **0074** — necesita "ship it")
+Pedro: "cant we do vigia? that one seems important and doesnt affect the rest no?" → sí: tablas, pestaña y job propios;
+sólo toca el resto al APROBAR (con los mismos validadores del Hub).
+- [x] **0074** `prisma_fuentes` (url https única, nombre, tool, origen oficial|comunidad, activa, último hash/texto/lectura/
+      error) + `prisma_propuestas` (huella única = no se repite; tipo nota|regla|modelo|limite|fortaleza|deprecacion|codigo;
+      origen; fuentes[]; resumen; contenido jsonb; cita literal + url + fecha; estado pendiente|aprobada|descartada;
+      motivo; decidido por/cuándo) + función atómica para sumar una fuente. RLS master, service_role. Seed: 14 fuentes
+      (docs oficiales + Help Center/blog de Higgsfield) generadas desde `FUENTES_BASE`.
+- [x] `lib/prisma/vigia.ts` (puro): extraer texto legible (main/article), párrafos nuevos vs la última lectura, validar
+      fuente, sanear propuestas (cita LITERAL del texto nuevo o se tira; contenido por tipo), huella, aplicar a la ficha /
+      a una nota, visible = oficial o ≥2 fuentes (comunidad).
+- [x] Lectura segura (server): https, sin IPs/hosts internos (y el DNS resuelto tampoco), redirecciones sólo al mismo
+      host (máx. 3), 15 s, 2 MB, sólo html/texto. Sin cambio → cero llamadas a H.Ü.E; primera lectura = línea base.
+- [x] H.Ü.E propone (tool_use): SÓLO lo nuevo (cercado como dato) + lo que Prisma ya sabe de esa herramienta; máx. 5
+      por fuente; tope de llamadas por corrida.
+- [x] Hub › Prisma › **Vigía**: fuentes (agregar/editar/pausar), "Revisar ahora", propuestas pendientes con cita y liga
+      → Aprobar (escribe con validarRegla / validarFicha) / Descartar (motivo, no vuelve); historial.
+- [x] `/api/prisma/vigia` (GET, `Authorization: Bearer CRON_SECRET`, sin secreto = 503) + ruta pública en el proxy +
+      `vercel.json` cron semanal — sólo corre en PRODUCCIÓN (Pedro pone CRON_SECRET al pasar a producción).
+- [x] Reap doble. Seguridad (Opus, 2 vueltas): 0 críticos. Arreglados: extracción LINEAL (antes regex cuadráticas: 2 MB
+      hostiles ≈ 30 min → 1 ms), reglas del vigía nunca bloquean (también al aprobar) y la tarjeta enseña TODO lo que hacen,
+      aprobar RECLAMA primero y devuelve a pendiente si falla (try/finally), tocar una herramienta sólo si nadie la editó
+      (updated_at) y nunca sobre una ficha rara, filtro de notas/textos que le hablan a alguien, IPv6 sólo 2000::/3 sin
+      túneles, redirección sin cambiar de puerto, ruta pública EXACTA, candado de corrida en la BD (0074:
+      prisma_vigia_estado + tomar/soltar; botón con pausa de 120 s, cron sin pausa), 60 s por llamada, presupuesto 150 s,
+      2 lotes por fuente y las menos recientes primero, minúsculas sólo A–Z. Salud (Sonnet): 1 crítico arreglado —
+      cambios grandes se PERDÍAN (tope + marcar todo como leído) → lotes de 6 000 y se marca leído sólo lo leído (por
+      posición); prompt con los `campo` válidos y las fortalezas de la herramienta; errores de guardado al log/resumen;
+      try/catch en la UI. Aceptado: si el cron coincide con una revisión manual, esa semana la cubre la manual.
+- [x] Smokes: lector contra Higgsfield real (ok) + IPs internas/rebinding/http (bloqueados); H.Ü.E con un cambio sintético
+      ×2 (≈2.5k tokens c/u): ignoró el banner y la inyección, propuso sólo los 2 hechos reales con cita literal.
+      test-prisma 947 · test-db 503 · npm test ✓ · lint 0 · build ✓ · navegador (?demo=vigia, 375 px sin desborde).
+- [ ] **SHIP 0074** (espera "ship it") → primera corrida "Revisar ahora" = línea base (no propone, no gasta).
+### Verificación F6b
+Tests puros (extracción, cambios, saneo con citas falsas, cada tipo, aplicar, huella, visible, validar fuente/hosts) ·
+test-db 0074 (RLS, CHECKs, huella única, función) · npm test · tsc · lint · build · navegador (?demo=vigia) · reap doble
+(seguridad Opus: SSRF, ruta pública, inyección) · smoke real de "Revisar ahora" con la BD de producción SÓLO tras
+"ship it" · commit/push.
+
 ## 🔵 2026-09-16 (13) — HÜE Prisma · Higgsfield como plataforma (rama `prisma`)
 Pedro: "go" al plan prompt-first (§ DECISIONES DE PEDRO abajo); Wan 2.7 fuera (sin uso desde junio). Sin migración esperada:
 `tool` es text libre en todas las tablas (0063/0066/0070) y `prisma_herramientas.tool` sólo exige `^[a-z0-9_]{2,30}$`.
