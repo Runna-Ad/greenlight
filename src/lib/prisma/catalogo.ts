@@ -78,18 +78,21 @@ const LIBRE: CostoModelo = { ilimitado: true, tipico: 0, min: 0, max: 0 };
 const pago = (tipico: number | null, min: number | null = tipico, max: number | null = tipico, porDuracion: PrecioDuracion[] | null = null): CostoModelo => ({ ilimitado: false, tipico, min, max, ...(porDuracion ? { porDuracion } : {}) });
 /** [segundos, 720p, 1080p, 4K] → tabla. */
 const tabla = (filas: [number, number, number, number | null][]): PrecioDuracion[] => filas.map(([s, p720, p1080, p4k]) => ({ s, p720, p1080, p4k }));
-/** Precios del botón Generate que pasó Pedro (2026-09-16). Veo: 720p = 1080p. Omni Flash 1.1: 3–10 s, +3 / +4 / +9 por
- *  segundo (720p / 1080p / 4K); Pedro dijo que 1080p "llega a 45" a 10 s aunque +4 daría 42 → se guarda 45 tal cual. */
+/** Precios del botón Generate (Pedro y lectura directa, 2026-09-16). Veo: 720p = 1080p. Omni Flash 1.1: 3–10 s,
+ *  3 / 4.5 / 9 por segundo (720p / 1080p / 4K) — el botón redondea (1080p a 3 s muestra 14); también ofrece 360p a 1. */
 const VEO_31 = tabla([[4, 29, 29, 44], [6, 44, 44, 66], [8, 58, 58, 88]]);
 const VEO_31_FAST = tabla([[4, 11, 11, 24], [6, 17, 17, 36], [8, 22, 22, 48]]);
 /** Seedance 2.5 (Pedro): 4–30 s, parejo por segundo — 480p 3, 720p 6.5, 1080p 9 (4 s = 12/26/36; 30 s = 90/195/270). Sin 4K. */
 const SEEDANCE_25 = Array.from({ length: 27 }, (_, i): PrecioDuracion => ({ s: i + 4, p480: 3 * (i + 4), p720: 6.5 * (i + 4), p1080: 9 * (i + 4), p4k: null }));
-/** Seedance 2.0 (Pedro): los mismos precios por segundo que 2.5, sólo hasta 15 s, y con 4K a 22 por segundo (4 s = 88; 15 s = 330). */
-const SEEDANCE_20 = SEEDANCE_25.filter((f) => f.s <= 15).map((f) => ({ ...f, p4k: 22 * f.s }));
+/** Seedance 2.0: 4–15 s. 480p 3 y 1080p 9 por segundo como 2.5, pero 720p 4.5 (no 6.5) y 4K 22 (4 s = 88; 15 s = 330).
+ *  Leído del botón Generate el 2026-09-16 (Higgsfield muestra un precio tachado más alto: hay descuento vigente). */
+const SEEDANCE_20 = SEEDANCE_25.filter((f) => f.s <= 15).map((f) => ({ ...f, p720: 4.5 * f.s, p4k: 22 * f.s }));
 /** Seedance 2.0 Mini (Pedro): 4–15 s, sólo 480p y 720p; 720p = 2.5 por segundo (4 s = 10; 15 s = 37.5, que Higgsfield
- *  muestra como 38). 480p sin dato todavía. */
-const SEEDANCE_MINI = Array.from({ length: 12 }, (_, i): PrecioDuracion => ({ s: i + 4, p720: 2.5 * (i + 4), p1080: null, p4k: null }));
-const OMNI_FLASH = tabla([3, 4, 5, 6, 7, 8, 9, 10].map((sg) => [sg, 9 + 3 * (sg - 3), sg === 10 ? 45 : 14 + 4 * (sg - 3), 27 + 9 * (sg - 3)] as [number, number, number, number]));
+ *  muestra como 38 — el botón redondea hacia arriba; el historial cobra 12.5). 480p = 1 por segundo (botón, 2026-09-16). */
+const SEEDANCE_MINI = Array.from({ length: 12 }, (_, i): PrecioDuracion => ({ s: i + 4, p480: i + 4, p720: 2.5 * (i + 4), p1080: null, p4k: null }));
+const OMNI_FLASH = tabla([3, 4, 5, 6, 7, 8, 9, 10].map((sg) => [sg, 3 * sg, 4.5 * sg, 9 * sg] as [number, number, number, number]));
+/** Kling 3.0 (botón Generate, 2026-09-16): 3–15 s; 720p 2 · 1080p 2.5 · 4K 6 por segundo. El sonido no cambia el precio. */
+const KLING_30 = tabla(Array.from({ length: 13 }, (_, i) => [i + 3, 2 * (i + 3), 2.5 * (i + 3), 6 * (i + 3)] as [number, number, number, number]));
 const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
   nanobanana: [
     hf("gemini-3.1-flash-image", "Nano Banana 2", "rapido", "En Higgsfield: Image → Nano Banana 2 → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Nano Banana 2 → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=nano-banana-2`, pago(2, 1.5, 3)),
@@ -107,9 +110,9 @@ const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
   ],
   kling: [
     hf("kling-3.0-turbo", "Kling 3.0 Turbo", "rapido", "En Higgsfield: Video → Kling 3.0 en su modo rápido (Turbo) → pega el prompt.", "In Higgsfield: Video → Kling 3.0 in its fast (Turbo) mode → paste the prompt.", `${HF_VIDEO}?model=kling3_0`, pago(6, 6, 8)),
-    hf("kling-3.0", "Kling 3.0", "fino", "En Higgsfield: Video → Kling 3.0 → pega el prompt (la foto va en Start frame).", "In Higgsfield: Video → Kling 3.0 → paste the prompt (the photo goes in Start frame).", `${HF_VIDEO}?model=kling3_0`, pago(6, 3.75, 12)),
+    hf("kling-3.0", "Kling 3.0", "fino", "En Higgsfield: Video → Kling 3.0 → pega el prompt (la foto va en Start frame).", "In Higgsfield: Video → Kling 3.0 → paste the prompt (the photo goes in Start frame).", `${HF_VIDEO}?model=kling3_0`, pago(12.5, 6, 90, KLING_30)),
     // Sólo para "¿en cuál lo generaste?": el movimiento sale de un VIDEO de referencia; el texto sólo pinta el escenario.
-    hf("kling-3.0-motion-control", "Kling 3.0 Motion Control", "fino", "En Higgsfield: Video → Motion Control → sube la foto del personaje y el video del movimiento; el prompt describe sólo el escenario y la luz.", "In Higgsfield: Video → Motion Control → upload the character photo and the motion video; the prompt only describes the setting and light.", "https://higgsfield.ai/ai/video/motion?model=kling-3-motion-control", pago(8, 8, 14)),
+    hf("kling-3.0-motion-control", "Kling 3.0 Motion Control", "fino", "En Higgsfield: Video → Motion Control → sube la foto del personaje y el video del movimiento; el prompt describe sólo el escenario y la luz.", "In Higgsfield: Video → Motion Control → upload the character photo and the motion video; the prompt only describes the setting and light.", "https://higgsfield.ai/ai/video/motion?model=kling-3-motion-control", pago(8, 4.5, 75)), // cobra por segundo del video de movimiento (3–30 s): 720p 1.5 · 1080p 2.5
   ],
   higgsfield: [hf("higgsfield", "Higgsfield DoP", "fino", "En Higgsfield: Video → sube la foto → elige ese preset de cámara → pega el texto.", "In Higgsfield: Video → upload the photo → pick that camera preset → paste the text.", HF_VIDEO, null)],
   seedream: [
@@ -122,7 +125,7 @@ const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
     hf("seedance-2.5", "Seedance 2.5", "fino", "En Higgsfield: Video → Seedance 2.5 → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.5 → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_5`, pago(72, 12, 270, SEEDANCE_25)),
   ],
   gemini_omni: [
-    hf("gemini-omni-flash", "Gemini Omni Flash 1.1", "fino", "En Higgsfield: Video → Gemini Omni Flash 1.1 → sube las referencias, elige la duración (3–10 s) y pega el prompt.", "In Higgsfield: Video → Gemini Omni Flash 1.1 → upload the references, pick the length (3–10 s) and paste the prompt.", `${HF_VIDEO}?model=gemini-omni-flash-1-1`, pago(34, 9, 90, OMNI_FLASH)),
+    hf("gemini-omni-flash", "Gemini Omni Flash 1.1", "fino", "En Higgsfield: Video → Gemini Omni Flash 1.1 → sube las referencias, elige la duración (3–10 s) y pega el prompt.", "In Higgsfield: Video → Gemini Omni Flash 1.1 → upload the references, pick the length (3–10 s) and paste the prompt.", `${HF_VIDEO}?model=gemini-omni-flash-1-1`, pago(36, 9, 90, OMNI_FLASH)),
   ],
 };
 

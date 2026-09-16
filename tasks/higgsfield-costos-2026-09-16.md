@@ -71,3 +71,19 @@ Cuando hay tabla (`porDuracion`: segundos → 720p/1080p/4K), el estimado del St
 a la duración elegida en 1080p (y las otras resoluciones al lado); sin fila para esa duración, usa el típico.
 Editable en Hub › Herramientas: `4=29/29/44, 6=44/44/66` (segundos=720p/1080p/4K; "-" = sin 4K), o con 480p al frente: `4=12/26/36/-`.
 Faltan tablas de: Kling 3.0 / Turbo / Motion Control.
+
+## Lectura directa del botón Generate (2026-09-16, sin sesión — Veo 8 s = 58 coincide con la cuenta de Pedro)
+Se leyó en el navegador de la app cambiando duración/resolución (NUNCA se pulsó Generate). Por segundo:
+| Modelo | 360p | 480p | 720p | 1080p | 4K | Duraciones |
+|---|---|---|---|---|---|---|
+| Kling 3.0 | — | — | 2 | 2.5 | 6 | 3–15 s (el sonido no cambia el precio) |
+| Kling 3.0 Motion Control | — | — | 1.5 | 2.5 | — | según el video de movimiento, 3–30 s |
+| Seedance 2.0 | — | 3 | **4.5** (no 6.5) | 9 | 22 | 4–15 s — precio tachado más alto: descuento vigente (lista: 6 / 6 / 12 / 26) |
+| Seedance 2.0 Mini | — | 1 | 2.5 | — | — | 4–15 s |
+| Seedance 2.0 Fast (no está en Prisma) | — | 1.5 | 3.5 | — | — | 4–15 s |
+| Seedance 2.5 | — | 3 | 6.5 | 9 | — | 4–30 s — descuento vigente en 720p (lista 7) y 1080p (lista 16) |
+| Gemini Omni Flash 1.1 | 1 | — | 3 | **4.5** | 9 | 3–10 s (1080p a 10 s = 45 ✓; el botón redondea: 3 s muestra 14 por 13.5) |
+- El botón redondea medios créditos hacia ARRIBA (Mini 5 s = 13); el historial cobra el exacto (12.5).
+- **Kling 3.0 Turbo** y **Higgsfield DoP** ya NO aparecen en el selector de modelos (sólo Kling 3.0, Motion Control y ediciones; Higgsfield = Genjutsu y Reframe).
+- "Seedance 2.0 Fast / Mini is not available in US" (aviso por región del navegador; el equipo está en México).
+- Sin sesión no se ve qué es ilimitado del plan (Nano Banana Pro 4K) — necesita la cuenta de Pedro.
