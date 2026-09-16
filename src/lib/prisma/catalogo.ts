@@ -36,6 +36,7 @@ export type RolModelo = (typeof ROLES_MODELO)[number];
 /** Los roles entre los que elige recomendarModelo en cada herramienta. */
 export const ROLES_POR_TOOL: Record<Tool, RolModelo[]> = { nanobanana: ["rapido", "fino"], chatgpt: ["rapido", "fino"], veo: ["rapido", "fino"], kling: ["rapido", "fino"], higgsfield: ["fino"], seedream: ["fino"], seedance: ["rapido", "fino"], gemini_omni: ["fino"] };
 export const MAX_MODELOS = 4;
+export const MAX_DURACIONES = 15;
 
 export type Limites = { duraciones: number[]; maxPalabras: number | null; maxCaracteres: number | null; aspects: Aspect[]; refsMax: number; audio: boolean };
 /** `url`: la página de ESE modelo en Higgsfield (null = la de la familia, TOOL_INFO.url). */
@@ -130,7 +131,8 @@ export const refsMinimas = (tool: Tool): number =>
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
 function leerDuraciones(v: unknown, tool: Tool): Leido<number[]> {
-  if (!Array.isArray(v) || v.length > 6 || !v.every((d) => entero(d, 1, 60))) return mal("Duraciones: hasta 6 números enteros de 1 a 60 segundos.");
+  // Hasta 15: Kling 3.0 y Seedance aceptan cualquier segundo de 3/4 a 15 en Higgsfield.
+  if (!Array.isArray(v) || v.length > MAX_DURACIONES || !v.every((d) => entero(d, 1, 60))) return mal(`Duraciones: hasta ${MAX_DURACIONES} números enteros de 1 a 60 segundos.`);
   if (new Set(v).size !== v.length) return mal("Duraciones: sin repetir.");
   if (TOOL_INFO[tool].video && !v.length) return mal("Un video necesita al menos una duración.");
   if (!TOOL_INFO[tool].video && v.length) return mal("Una herramienta de imagen no lleva duraciones.");

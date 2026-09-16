@@ -1079,7 +1079,7 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
                       {video && (duraciones.length > 1 || veoForzado) && (
                         <div className="mt-3">
                           <p className="mb-1.5 text-xs text-muted-foreground">{tx(UI.duracion, lang)}</p>
-                          <ChipSelect options={duraciones.map((d) => ({ value: String(d), label: `${d} s` }))} selected={[String(duracionEfectiva)]} onChange={(up) => setDuracion(Number(up([String(duracionEfectiva)])[0]) || null)} ariaLabel={tx(UI.duracion, lang)} allowCustom={false} />
+                          <ChipSelect options={[...duraciones].sort((a, b) => a - b).map((d) => ({ value: String(d), label: `${d} s` }))} selected={[String(duracionEfectiva)]} onChange={(up) => setDuracion(Number(up([String(duracionEfectiva)])[0]) || null)} ariaLabel={tx(UI.duracion, lang)} allowCustom={false} />
                           {veoForzado && <p className="mt-1 text-[11px] text-muted-foreground">{tx(UI.duracionConRefs, lang)}</p>}
                         </div>
                       )}

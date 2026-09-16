@@ -56,7 +56,9 @@ Pedro: "go" al plan prompt-first (§ DECISIONES DE PEDRO abajo); Wan 2.7 fuera (
       del texto en Seedance/Omni; la regla "[Imagen N]" del writer ahora dice que cada herramienta usa su sintaxis) + Veo
       transición en orden en el paso a paso + key estable + Omni con varias fotos del mismo sujeto. Pendiente (viejo, no de
       esto): `marca.tono` no lo usa ningún compiler (sólo el writer). test-prisma 882 · npm test ✓ · lint 0 · build ✓.
-- [ ] Idea para Pedro (Hub, sin deploy): Kling acepta 3–15 s en Higgsfield; la lista dice 5 y 10.
+- [x] Kling 3–15 s (Pedro: "change kling durations to 3-15 in the hub"): constantes [5,3,4…15] (5 = default), tope del Hub
+      6 → 15 duraciones (`MAX_DURACIONES`), chips de duración en orden ascendente, writer 2026-09-16.4, **0073 (sólo datos)
+      APLICADA y verificada** (fila viva de Kling = [5,3,4,6,…,15]; no estaba editada). F6b Vigía pasa a **0074**.
 
 **Paso 2** — H.Ü.E elige lo más barato sin perder calidad + estimado en créditos (tasks/higgsfield-costos-2026-09-16.md).
 **Paso 3** — Performance › Evaluación: por diseñador y mes — piezas, vueltas y tiempo hasta el aceptado, créditos estimados.

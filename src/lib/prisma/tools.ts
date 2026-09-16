@@ -90,7 +90,8 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
     url: `${HF_VIDEO}?model=kling3_0`,
     imagenes: true,
     video: true,
-    duraciones: [5, 10],
+    // Kling 3.0 en Higgsfield: cualquier segundo de 3 a 15 (Pedro, 2026-09-16). 5 primero = el default.
+    duraciones: [5, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     color: "#ff5a6e",
   },
   higgsfield: {

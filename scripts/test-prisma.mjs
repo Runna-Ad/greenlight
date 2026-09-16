@@ -727,9 +727,10 @@ console.log("\n▶ F2 — ortografía (acentos + signos de apertura)");
 
 console.log("\n▶ F2 — diagnóstico: reglas base");
 {
-  const e = { job: "animar_foto", tool: "kling", destino: "ig_story", aspect: "9:16", duracion: 7, refs: [{ role: "sujeto" }], texto: null, dialogo: null, movimiento: null, idea: "que se mueva" };
+  // Kling acepta 3–15 s (2026-09-16): 20 s queda fuera y el arreglo es la más cercana (15).
+  const e = { job: "animar_foto", tool: "kling", destino: "ig_story", aspect: "9:16", duracion: 20, refs: [{ role: "sujeto" }], texto: null, dialogo: null, movimiento: null, idea: "que se mueva" };
   const d = diagnosticarEntrada(e, []);
-  ok("duración fuera de las de Kling → aviso con arreglo", d.some((a) => a.codigo === "duracion_fuera" && a.accion.tipo === "duracion" && a.accion.segundos === 5), JSON.stringify(d.map((a) => a.codigo)));
+  ok("duración fuera de las de Kling → aviso con arreglo", d.some((a) => a.codigo === "duracion_fuera" && a.accion.tipo === "duracion" && a.accion.segundos === 15), JSON.stringify(d.map((a) => a.codigo)));
   eq("Kling 5 s: sin aviso de duración", diagnosticarEntrada({ ...e, duracion: 5 }, []).filter((a) => a.codigo === "duracion_fuera").length, 0);
   const veo = diagnosticarEntrada({ ...e, tool: "veo", duracion: 4 }, []);
   ok("Veo con refs y 4 s → 8 s", veo.some((a) => a.codigo === "veo_8s_con_refs" && a.accion.segundos === 8 && a.fuente?.tipo === "oficial"));
@@ -1278,9 +1279,9 @@ console.log("\n▶ F6a — catálogo de herramientas (límites, fortalezas, mode
   ok("Veo con 10 s en el catálogo compila 10 s y valida", jv10.duration_seconds === 10 && validar(compilar(sv, "veo", catVeo).texto, sv, "veo", catVeo).ok, String(jv10.duration_seconds));
   eq("duracionValida con las opciones del catálogo", duracionValidaF6("kling", 14, [5, 10, 15]), 15);
   const catK = clon();
-  catK.kling.limites.duraciones = [5, 10, 15];
-  const ent = { job: "animar_foto", tool: "kling", destino: "tiktok", aspect: "9:16", duracion: 15, refs: [], texto: null, dialogo: null, movimiento: null, idea: "x" };
-  ok("el diagnóstico lee las duraciones del catálogo (15 s en Kling: aviso con la base, nada con el catálogo)", diagnosticarEntrada(ent, []).some((a) => a.codigo === "duracion_fuera") && !diagnosticarEntrada(ent, [], catK).some((a) => a.codigo === "duracion_fuera"));
+  catK.kling.limites.duraciones = [5, 10, 20];
+  const ent = { job: "animar_foto", tool: "kling", destino: "tiktok", aspect: "9:16", duracion: 20, refs: [], texto: null, dialogo: null, movimiento: null, idea: "x" };
+  ok("el diagnóstico lee las duraciones del catálogo (20 s en Kling: aviso con la base, nada con el catálogo)", diagnosticarEntrada(ent, []).some((a) => a.codigo === "duracion_fuera") && !diagnosticarEntrada(ent, [], catK).some((a) => a.codigo === "duracion_fuera"));
   const catRefs = clon();
   catRefs.veo.limites.refsMax = 4;
   const ent4 = { ...ent, tool: "veo", duracion: 8, refs: [{ role: "sujeto" }, { role: "estilo" }, { role: "producto" }, { role: "entorno" }] };
@@ -1450,6 +1451,10 @@ console.log("\n▶ F5c — varias imágenes por casilla (hasta 6)");
   const conSfx = compilar(spec("escena_sora", "seedance", { beats: [{ desde: 0, hasta: 2, accion: "a", camara: "static", sfx: "click" }, { desde: 2, hasta: 6, accion: "b", camara: "push", sfx: "whoosh" }, { desde: 6, hasta: 8, accion: "c", camara: "hold", sfx: "room tone" }], texto: { contenido: "Hola", posicion: "top", estilo: "bold white sans-serif" } })).texto;
   ok("Seedance lleva el sonido de cada plano y el estilo del texto", conSfx.includes("sound: whoosh") && conSfx.includes('on-screen text "Hola", top, bold white sans-serif'), conSfx);
   eq("Veo transición: primer y último cuadro en orden", pasosHiggsfield(spec("transicion", "veo"), "veo", "Veo 3.1")[1].es.startsWith("Elige primer y último cuadro"), true);
+  eq("Kling: 3 a 15 s, 5 primero (default)", JSON.stringify(TOOL_INFO.kling.duraciones), "[5,3,4,6,7,8,9,10,11,12,13,14,15]");
+  const { validarFicha: vf15, fichaAFila: fa15, CATALOGO_BASE: cb15, MAX_DURACIONES } = await import("../src/lib/prisma/catalogo.ts");
+  const k16 = fa15("kling", cb15.kling);
+  ok("el Hub acepta las 13 de Kling y rechaza más de 15", vf15("kling", fa15("kling", cb15.kling)).ok && MAX_DURACIONES === 15 && !vf15("kling", { ...k16, limites: { ...k16.limites, duraciones: Array.from({ length: 16 }, (_, i) => i + 1) } }).ok);
   // Reap 2026-09-16.
   eq("la página del modelo sólo puede ser de higgsfield.ai", JSON.stringify(["https://evil.example/x", "https://higgsfield.ai.evil.com/", "https://cdn.higgsfield.ai/a"].map(leerUrlModelo)), JSON.stringify([false, false, "https://cdn.higgsfield.ai/a"]));
   const conComillas = spec("texto_a_video", "seedance", { dialogo: { texto: 'Dijo "ya llegó" y se fue', idioma: "es", voz: null } });
