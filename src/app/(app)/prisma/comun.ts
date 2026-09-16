@@ -35,11 +35,9 @@ export type Sesion = { role: ViewRole; soyId: string };
 /** Formatos que H.Ü.E puede MIRAR (Claude vision). AVIF se acepta en referencias de
  *  tareas pero aquí no: sin visión no hay ADN, y el ADN es la gracia. */
 export const MIMES_VISION: MimeVision[] = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-/** Lo que la API de visión acepta por imagen es 5 MB y el archivo viaja en base64 (×1.33): con 3.5 MB
- *  de archivo se queda debajo en cualquiera de las dos lecturas del límite. Por encima no hay
- *  comparación posible, y se dice ANTES de subir o pagar nada. */
-export const MAX_BYTES_VISION = 3.5 * 1024 * 1024;
-export const MAX_MB_VISION_TEXTO = "3.5 MB";
+/** Tope de visión (5 MB en base64 → 3.5 MB de archivo). Vive en lib/prisma/subida: el navegador achica
+ *  hasta esa misma cifra antes de subir; aquí se rechaza por encima, ANTES de pagar nada. */
+export { MAX_BYTES_VISION, MAX_MB_VISION_TEXTO } from "@/lib/prisma/subida";
 
 // ── Gate ─────────────────────────────────────────────────────
 export async function gate(): Promise<Sesion | Fail> {

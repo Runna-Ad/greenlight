@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { Check, CheckCircle2, ImagePlus, Loader2, RefreshCw, Upload, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,9 @@ import { CAMPO_VEREDICTO_LABEL, UI, tx, type Lang } from "@/lib/prisma/copy";
 import { useCatalogo } from "./catalogo-contexto";
 import type { ResultadoVivo } from "@/lib/prisma/resultado";
 import { JOB_KIND, type JobType, type Tool } from "@/lib/prisma/spec";
+import { ACCEPT_IMAGEN, ACCEPT_VIDEO, prepararParaComparar, type ErrorSubida } from "@/lib/prisma/subida";
+
+const ERROR_SUBIDA: Record<ErrorSubida, keyof typeof UI> = { video_ilegible: "videoIlegible", imagen_ilegible: "imagenIlegible", tipo: "tipoNoSoportado" };
 
 /**
  * "¿Cómo salió?" — el diseñador sube la imagen que le dio la herramienta (o un cuadro, si es
@@ -48,6 +51,8 @@ export function ComoSalio({
   const [resultado, setResultado] = useState<ResultadoVivo | null>(inicial);
   const [modelo, setModelo] = useState(modeloSugerido);
   const [subiendo, setSubiendo] = useState(false);
+  /** Achicando la imagen o sacando el cuadro del video, antes de que H.Ü.E compare. */
+  const [preparando, setPreparando] = useState(false);
   const [over, setOver] = useState(false);
   const [corrigiendo, setCorrigiendo] = useState(false);
   const [refinando, setRefinando] = useState(false);
@@ -58,12 +63,18 @@ export function ComoSalio({
   const modelos = useCatalogo()[tool].modelos;
   const bloqueado = ocupado || subiendo || corrigiendo || refinando || aceptando;
 
-  const subir = async (file: File) => {
-    if (esDemo) return;
+  const subir = async (original: File) => {
     setSubiendo(true);
+    setPreparando(true);
     try {
+      // Lo pesado se achica y el video se vuelve su cuadro del medio AQUÍ: al servidor sólo llega lo que acepta.
+      const listo = await prepararParaComparar(original);
+      setPreparando(false);
+      if (!listo.ok) return void toast.error(tx(UI[ERROR_SUBIDA[listo.error]], lang));
+      // Demo (sólo dev): se prueba la preparación y se dice qué saldría, sin llamar al servidor.
+      if (esDemo) return void toast.message(`Demo · ${listo.file.name} · ${listo.file.type} · ${Math.round(listo.file.size / 1024)} KB`);
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", listo.file);
       form.append("specId", specId);
       form.append("promptId", promptId);
       form.append("modelo", modelo);
@@ -74,9 +85,24 @@ export function ComoSalio({
     } catch {
       toast.error(tx(UI.error, lang));
     } finally {
+      setPreparando(false);
       setSubiendo(false);
     }
   };
+
+  // Pegar (⌘V / Ctrl+V) mientras se espera el resultado: "copiar imagen" en Higgsfield → pegar aquí.
+  // Sólo se queda con el pegado si trae una imagen; un pegado de texto sigue su camino.
+  const alPegar = useEffectEvent((e: ClipboardEvent) => {
+    const f = Array.from(e.clipboardData?.files ?? []).find((x) => x.type.startsWith("image/"));
+    if (!f || resultado || bloqueado) return;
+    e.preventDefault();
+    void subir(f);
+  });
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => alPegar(e);
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
 
   const corregir = async () => {
     if (!resultado) return;
@@ -173,22 +199,25 @@ export function ComoSalio({
             className={cn(
               "flex w-full cursor-pointer items-center gap-3 rounded-xl border border-dashed px-4 py-4 text-left transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
               over ? "border-primary bg-primary/8" : "border-border bg-card/50 hover:border-primary",
-              (subiendo || esDemo) && "cursor-wait opacity-70",
+              subiendo && "cursor-wait opacity-70",
             )}
           >
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
               {subiendo ? <Loader2 className="size-5 animate-spin" /> : <ImagePlus className="size-5" />}
             </span>
             <span className="min-w-0">
-              <span className="block text-sm font-medium text-foreground">{subiendo ? tx(UI.comparando, lang) : tx(UI.subirResultado, lang)}</span>
-              <span className="block text-xs text-muted-foreground">JPG · PNG · WebP · GIF · &lt; 3.5 MB</span>
+              <span className="block text-sm font-medium text-foreground" aria-live="polite">
+                {preparando ? tx(UI.preparando, lang) : subiendo ? tx(UI.comparando, lang) : tx(video ? UI.subirResultadoVideo : UI.subirResultado, lang)}
+              </span>
+              <span className="block text-xs text-muted-foreground">{tx(UI.pegarResultado, lang)}</span>
+              <span className="block text-[11px] text-muted-foreground">{video ? "JPG · PNG · WebP · MP4 · MOV · WebM" : "JPG · PNG · WebP · GIF"}</span>
             </span>
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
+              accept={video ? ACCEPT_VIDEO : ACCEPT_IMAGEN}
               className="sr-only"
-              aria-label={tx(UI.subirResultado, lang)}
-              disabled={bloqueado || esDemo}
+              aria-label={tx(video ? UI.subirResultadoVideo : UI.subirResultado, lang)}
+              disabled={bloqueado}
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = "";

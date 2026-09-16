@@ -1361,5 +1361,18 @@ console.log("\n▶ F5c — varias imágenes por casilla (hasta 6)");
   ok("una sola del papel: la etiqueta de siempre", !!una && una.startsWith("[Imagen 2") && !una.includes(" and "), una);
 }
 
+// ── Higgsfield · paso 4: "¿Cómo salió?" achica en el navegador (medidaDestino es lo puro) ──
+{
+  const { medidaDestino, LADO_MAX, MAX_BYTES_VISION, ACCEPT_VIDEO, ACCEPT_IMAGEN } = await import("../src/lib/prisma/subida.ts");
+  eq("una 4K horizontal baja a 2048 por el lado largo, sin deformar", JSON.stringify(medidaDestino(3840, 2160)), JSON.stringify({ w: 2048, h: 1152 }));
+  eq("una vertical 9:16 también (el lado largo es el alto)", JSON.stringify(medidaDestino(1440, 2560)), JSON.stringify({ w: 1152, h: 2048 }));
+  eq("lo que ya cabe no se agranda", JSON.stringify(medidaDestino(1024, 768)), JSON.stringify({ w: 1024, h: 768 }));
+  eq("medidas raras → 0 (el que llama no dibuja)", JSON.stringify([medidaDestino(0, 100), medidaDestino(NaN, 100), medidaDestino(100, 100, 0)]), JSON.stringify([{ w: 0, h: 0 }, { w: 0, h: 0 }, { w: 0, h: 0 }]));
+  eq("una tira extrema nunca queda en 0 px", JSON.stringify(medidaDestino(10000, 2, 2048)), JSON.stringify({ w: 2048, h: 1 }));
+  eq("lado máx. y tope de visión (el mismo que exige el servidor)", JSON.stringify([LADO_MAX, MAX_BYTES_VISION]), JSON.stringify([2048, 3.5 * 1024 * 1024]));
+  ok("el selector de video acepta el video y las imágenes; el de imagen, sólo imágenes", ACCEPT_VIDEO.includes("video/mp4") && ACCEPT_VIDEO.includes("image/png") && !ACCEPT_IMAGEN.includes("video/"));
+  ok("el servidor lee el tope de subida.ts (una sola cifra)", readFileSync("src/app/(app)/prisma/comun.ts", "utf8").includes('export { MAX_BYTES_VISION, MAX_MB_VISION_TEXTO } from "@/lib/prisma/subida"'));
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} prisma: ${pass} passed, ${fail} failed\n`);
 if (fail) process.exit(1);

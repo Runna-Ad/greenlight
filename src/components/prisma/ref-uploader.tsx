@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { analizarImagen, type RefEntrada } from "@/app/(app)/prisma/actions";
 import { REF_LABEL, UI, tx, type Lang, type Par } from "@/lib/prisma/copy";
 import type { RefRole } from "@/lib/prisma/spec";
+import { prepararParaComparar } from "@/lib/prisma/subida";
 
 /** Una referencia ya subida y leída, con su URL firmada para el thumbnail. */
 export type RefLocal = RefEntrada & { url: string; aviso: string | null };
@@ -36,11 +37,16 @@ export function RefUploader({
   const [over, setOver] = useState(false);
   const [flash, setFlash] = useState(false); // destello al recibir la imagen (se apaga solo)
 
-  const subir = async (file: File) => {
+  const subir = async (original: File) => {
+    // Una referencia es una imagen: un video soltado aquí se rechaza (el cuadro va en "¿Cómo salió?").
+    if (!original.type.startsWith("image/")) return void toast.error(tx(UI.imagenIlegible, lang));
     setBusy(true);
     try {
+      // Arriba de 3.5 MB H.Ü.E no podía leerla (sin ADN, en silencio): se achica antes de subir.
+      const listo = await prepararParaComparar(original);
+      if (!listo.ok) return void toast.error(tx(UI.imagenIlegible, lang));
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", listo.file);
       const r = await analizarImagen(form);
       if (!r.ok) {
         toast.error(r.error);
@@ -49,6 +55,8 @@ export function RefUploader({
       onChange({ role, storage_path: r.storage_path, caption: r.caption, dna: r.dna, url: r.url, aviso: r.aviso });
       setFlash(true);
       if (r.aviso) toast.message(lang === "es" ? "La imagen se subió, pero H.Ü.E no pudo leerla." : "Image uploaded, but H.Ü.E could not read it.");
+    } catch {
+      toast.error(tx(UI.error, lang));
     } finally {
       setBusy(false);
     }
