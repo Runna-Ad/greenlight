@@ -4,7 +4,8 @@ import type { supabaseAdmin } from "@/lib/supabase-admin";
 import { cargarReglas } from "@/lib/prisma/data";
 import { leerPagina } from "@/lib/prisma/vigia-leer";
 import { proponerCambios } from "@/lib/prisma/vigia-ia";
-import { cambios, enLotes, extraerTexto, huellaTexto, sabidoDe, sinParrafos, type Origen } from "@/lib/prisma/vigia";
+import { avisarPropuestas } from "@/lib/prisma/vigia-aviso";
+import { cambios, enLotes, extraerTexto, huellaTexto, sabidoDe, sinParrafos, type AvisoVigia, type Origen } from "@/lib/prisma/vigia";
 import { TOOLS, type Tool } from "@/lib/prisma/spec";
 
 /**
@@ -27,6 +28,8 @@ export type ResumenVigia = {
   errores: { nombre: string; error: string }[];
   llamadas: number;
   tokens: number;
+  /** Correos "hay cambios para revisar" mandados a los masters. */
+  correos: number;
 };
 
 type FilaFuenteBD = { id: string; url: string; nombre: string; tool: string | null; origen: Origen; ultimo_hash: string | null; ultimo_texto: string | null };
@@ -56,7 +59,17 @@ export async function correrVigia(db: Db, esperaSeg: number, opts: Parameters<ty
   }
   if (tomado !== true) return { ok: false, error: "Ya hay una revisión en curso o se acaba de revisar: espera un par de minutos." };
   try {
-    return { ok: true, resumen: await revisarFuentes(db, opts) };
+    const avisos: AvisoVigia[] = [];
+    const resumen = await revisarFuentes(db, { ...opts, avisos });
+    // Aviso por correo SÓLO cuando hay algo que decidir (Pedro, 2026-09-16). Un fallo no tumba la corrida.
+    if (avisos.length) {
+      try {
+        resumen.correos = (await avisarPropuestas(db, avisos)).enviados;
+      } catch (e) {
+        console.error(`[prisma/vigia] aviso: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+    return { ok: true, resumen };
   } finally {
     const { error: e } = await db.rpc("prisma_vigia_soltar");
     if (e) console.error(`[prisma/vigia] soltar candado: ${e.message}`);
@@ -65,11 +78,11 @@ export async function correrVigia(db: Db, esperaSeg: number, opts: Parameters<ty
 
 /** `presupuestoMs`: después de ese tiempo ya no se pregunta a H.Ü.E (lo que falte entra en la próxima corrida);
  *  así una corrida larga no choca con el límite de la función (300 s). */
-export async function revisarFuentes(db: Db, opts: { soloId?: string; maxLlamadas?: number; presupuestoMs?: number } = {}): Promise<ResumenVigia> {
+export async function revisarFuentes(db: Db, opts: { soloId?: string; maxLlamadas?: number; presupuestoMs?: number; avisos?: AvisoVigia[] } = {}): Promise<ResumenVigia> {
   const inicio = Date.now();
   // 150 s: una llamada puede tardar hasta 120 s (60 s + un reintento) y la función muere a los 300 s.
   const presupuesto = opts.presupuestoMs ?? 150_000;
-  const r: ResumenVigia = { leidas: 0, sinCambio: 0, lineaBase: 0, conCambios: 0, propuestas: 0, repetidas: 0, pendientesDeLlamada: 0, errores: [], llamadas: 0, tokens: 0 };
+  const r: ResumenVigia = { leidas: 0, sinCambio: 0, lineaBase: 0, conCambios: 0, propuestas: 0, repetidas: 0, pendientesDeLlamada: 0, errores: [], llamadas: 0, tokens: 0, correos: 0 };
   const maxLlamadas = opts.maxLlamadas ?? 8;
   // Las que llevan más tiempo sin leerse primero (una fuente que cambia mucho no deja a las demás sin turno).
   let q = db.from("prisma_fuentes").select("id, url, nombre, tool, origen, ultimo_hash, ultimo_texto").eq("activa", true).order("ultima_lectura", { ascending: true, nullsFirst: true }).limit(40);
@@ -142,12 +155,19 @@ export async function revisarFuentes(db: Db, opts: { soloId?: string; maxLlamada
       for (const p of ia.propuestas) {
         const huella = sha256(huellaTexto(p));
         const { error: insErr } = await db.from("prisma_propuestas").insert({ huella, tipo: p.tipo, tool: p.tool, origen: f.origen, fuentes: [f.id], resumen_es: p.resumen_es, contenido: p.contenido, cita: p.cita, cita_url: f.url, cita_fecha: hoy });
-        if (!insErr) r.propuestas++;
-        else if (insErr.code === "23505") {
+        const aviso: AvisoVigia = { tipo: p.tipo, tool: p.tool, resumen_es: p.resumen_es, fuente: f.nombre };
+        if (!insErr) {
+          r.propuestas++;
+          // La de comunidad espera a su segunda fuente para avisar (antes no se puede aprobar).
+          if (f.origen === "oficial") opts.avisos?.push(aviso);
+        } else if (insErr.code === "23505") {
           // Ya existía (pendiente, aprobada o descartada): no vuelve; sólo se suma esta fuente.
           r.repetidas++;
+          const { data: antes } = await db.from("prisma_propuestas").select("origen, fuentes, estado").eq("huella", huella).maybeSingle<{ origen: Origen; fuentes: string[]; estado: string }>();
           const { error: rpcErr } = await db.rpc("prisma_propuesta_sumar", { p_huella: huella, p_fuente: f.id });
           if (rpcErr) console.warn(`[prisma/vigia] sumar fuente: ${rpcErr.message}`);
+          // Una de comunidad que con ESTA fuente llega a 2 se vuelve aprobable: ahora sí se avisa (una sola vez).
+          else if (antes && antes.origen === "comunidad" && antes.estado === "pendiente" && !antes.fuentes.includes(f.id) && new Set(antes.fuentes).size === 1) opts.avisos?.push(aviso);
         } else console.error(`[prisma/vigia] insert propuesta: ${insErr.message}`);
       }
       leidos++;

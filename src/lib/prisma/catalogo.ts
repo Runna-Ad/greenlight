@@ -85,7 +85,7 @@ const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
   ],
   veo: [
     hf("veo-3.1-fast-generate-preview", "Veo 3.1 Fast", "rapido", "En Higgsfield: Video → Google Veo → Veo 3.1 Fast → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 Fast → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`, pago(null)),
-    hf("veo-3.1-generate-preview", "Veo 3.1", "fino", "En Higgsfield: Video → Google Veo → Veo 3.1 → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`, pago(58, 40, 70)),
+    hf("veo-3.1-generate-preview", "Veo 3.1", "fino", "En Higgsfield: Video → Google Veo → Veo 3.1 → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`, pago(58, 29, 88)),
   ],
   kling: [
     hf("kling-3.0-turbo", "Kling 3.0 Turbo", "rapido", "En Higgsfield: Video → Kling 3.0 en su modo rápido (Turbo) → pega el prompt.", "In Higgsfield: Video → Kling 3.0 in its fast (Turbo) mode → paste the prompt.", `${HF_VIDEO}?model=kling3_0`, pago(6, 6, 8)),

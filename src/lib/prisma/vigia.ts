@@ -11,6 +11,7 @@ import { ID_MODELO, ROLES_MODELO, fichaAFila, fortalezasDe, type FichaHerramient
 import { validarRegla } from "./reglas.ts";
 import { plano } from "./texto.ts";
 import { listaDe, objetoDe } from "./json.ts";
+import { TOOL_INFO } from "./tools.ts";
 
 export const TIPOS_PROPUESTA = ["nota", "regla", "modelo", "limite", "fortaleza", "deprecacion", "codigo"] as const;
 export type TipoPropuesta = (typeof TIPOS_PROPUESTA)[number];
@@ -407,4 +408,29 @@ export function describirContenido(tipo: TipoPropuesta, c: Record<string, unknow
     case "codigo":
       return s(c.detalle_es);
   }
+}
+
+/** Lo que el correo cuenta de una propuesta nueva. */
+export type AvisoVigia = { tipo: TipoPropuesta; tool: Tool | null; resumen_es: string; fuente: string };
+
+/** El correo "hay cambios para Prisma" (Pedro, 2026-09-16: avisar cada vez que haya que cambiar algo en la
+ *  plataforma). Sólo lo que ya se puede aprobar (oficial, o comunidad con 2 fuentes). Texto plano: la plantilla
+ *  lo escapa. Tope de 20 líneas; el resto se cuenta. */
+export function correoVigia(nuevas: AvisoVigia[]): { asunto: string; titulo: string; cuerpo: string } | null {
+  if (!nuevas.length) return null;
+  const n = nuevas.length;
+  const codigo = nuevas.filter((a) => a.tipo === "codigo").length;
+  const tope = 20;
+  const lineas = nuevas.slice(0, tope).map((a) => `• ${TIPO_LABEL[a.tipo]}${a.tool ? ` · ${TOOL_INFO[a.tool].nombre}` : ""}: ${plano(a.resumen_es).slice(0, 300)} (fuente: ${plano(a.fuente).slice(0, 80)})`);
+  if (n > tope) lineas.push(`…y ${n - tope} más.`);
+  const plural = n === 1 ? "un cambio" : `${n} cambios`;
+  return {
+    asunto: `Prisma: el vigía encontró ${plural} para revisar`,
+    titulo: `El vigía encontró ${plural} en Higgsfield`,
+    cuerpo: [
+      `Nada se aplica solo: revísalos y apruébalos o descártalos en Hub › Prisma › Vigía.${codigo ? ` ${codigo === 1 ? "Uno necesita" : `${codigo} necesitan`} un cambio en el código (pásaselo a Claude).` : ""}`,
+      "",
+      ...lineas,
+    ].join("\n"),
+  };
 }

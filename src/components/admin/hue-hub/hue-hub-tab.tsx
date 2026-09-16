@@ -14,7 +14,8 @@ import { PrismaHub } from "./prisma-hub";
  * el admin-shell sólo monta esta pestaña si el usuario es master.
  */
 export function HueHubTab() {
-  const [sub, setSub] = useState<"intel" | "entrenar" | "prisma">("intel");
+  // ?hub=prisma abre directo en Prisma (el botón del correo del vigía). Esta pestaña sólo corre en el cliente.
+  const [sub, setSub] = useState<"intel" | "entrenar" | "prisma">(() => (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("hub") === "prisma" ? "prisma" : "intel"));
   return (
     <div className="space-y-4">
       <div>

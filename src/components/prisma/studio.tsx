@@ -1071,7 +1071,7 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
                           <span className="text-muted-foreground">{tx(modelo.porque, lang)}</span>
                         </p>
                       )}
-                      {modelo && <p className="mt-1 text-xs text-muted-foreground">{tx(textoCosto(modelo.costo, !!video), lang)}</p>}
+                      {modelo && <p className="mt-1 text-xs text-muted-foreground">{tx(textoCosto(modelo.costo, !!video, tool ?? undefined), lang)}</p>}
                       {TOOLS_POR_JOB[job].length > 1 && (
                         <div className="mt-3">
                           <p className="mb-1.5 text-xs text-muted-foreground">{tx(UI.cambiarHerramienta, lang)}</p>

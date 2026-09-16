@@ -13,7 +13,11 @@ type Vista = keyof typeof VISTAS;
 /** Hub › Prisma: el conocimiento vivo (notas y reglas), los datos de cada herramienta (F6a) y el
  *  informe de uso (F5a). */
 export function PrismaHub() {
-  const [vista, setVista] = useState<Vista>("conocimiento");
+  // ?vista=vigia (el correo del vigía) abre esa vista; cualquier otro valor cae en Conocimiento.
+  const [vista, setVista] = useState<Vista>(() => {
+    const v = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("vista") : null;
+    return v && Object.hasOwn(VISTAS, v) ? (v as Vista) : "conocimiento";
+  });
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Prisma">

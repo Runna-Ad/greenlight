@@ -53,7 +53,7 @@ o elige entre modelos que ya cumplen. "típico" = créditos por intento con los 
 | Nano Banana 2 (gemini-3.1-flash-image) | cobra, sin dato | no está en la lista de ilimitados |
 | Image Auto | ilimitado | historial ("Ilimitado") |
 | GPT Image 2.5 Flare / Sunburst | 3 (1.5–26.5) | **Pedro, 2026-09-16: 3 créditos cada uno** (NO ilimitados); rango del blog por calidad/resolución. GPT Image 2 = 6.5 (no está en el catálogo). El "GPT Image" ilimitado del plan no es ninguno de estos. |
-| Veo 3.1 | 58 (40–70) | blog (Lipsync Veo 58 cr/1080p) + estimados de terceros |
+| Veo 3.1 | 58 (29–88) | **Pedro, 2026-09-16**: 8 s = 58 (720p y 1080p) / 88 (4K) · 6 s = 44 / 66 · 4 s = 29 / 44. 720p = 1080p; 4K ≈ ×1.5 (la nota de costo de Veo lo dice, en vez de la general "1080p ≈ ×2"). |
 | Veo 3.1 Fast | cobra, sin dato | — |
 | Kling 3.0 Turbo | 6 (6–8) | historial (14 filas) |
 | Kling 3.0 | 6 (3.75–12) | historial (12 filas) |

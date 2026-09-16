@@ -324,7 +324,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
           {/* Paso 2: lo que cuesta, antes de generar en Higgsfield. */}
           <p className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
             <Coins className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
-            <span>{tx(textoCosto(modelo.costo, esVideoJob), lang)}</span>
+            <span>{tx(textoCosto(modelo.costo, esVideoJob, vivo.tool), lang)}</span>
           </p>
           <p className="mt-1 text-xs text-muted-foreground">{tx(UI.formato, lang)}: {vivo.spec.aspect} · {tx(DESTINO_LABEL[destinoActual], lang)}</p>
           {/* Aprendizaje visible: el diseñador sabe que H.Ü.E ya "conoce" a esta marca. */}

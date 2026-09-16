@@ -146,6 +146,7 @@ export function PrismaVigia({ demo = null }: { demo?: DatosVigia | null }) {
         <p className="rounded-lg bg-secondary/60 px-3 py-2 text-xs text-foreground" aria-live="polite">
           Leídas {resumen.leidas} · sin cambios {resumen.sinCambio} · primera lectura {resumen.lineaBase} · con cambios {resumen.conCambios} · propuestas nuevas {resumen.propuestas}
           {resumen.repetidas ? ` · ya conocidas ${resumen.repetidas}` : ""}
+          {resumen.correos ? ` · aviso por correo enviado` : ""}
           {resumen.pendientesDeLlamada ? ` · ${resumen.pendientesDeLlamada} quedan para la próxima` : ""}
           {resumen.errores.length ? ` · con error: ${resumen.errores.map((e) => e.nombre).join(", ")}` : ""}
         </p>
