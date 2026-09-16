@@ -5,12 +5,13 @@
  * Módulo puro.
  */
 import { contarPalabras, textoDe, type PromptSpec, type Tool } from "./spec.ts";
-import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO, duracionVeo } from "./tools.ts";
+import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO, duracionValida, duracionVeo } from "./tools.ts";
 import { PRESETS_HIGGSFIELD } from "./compilers/higgsfield.ts";
 import { topePalabras } from "./compilers/kling.ts";
 import type { Catalogo, Limites } from "./catalogo.ts";
 import { ORDINAL } from "./compilers/chatgpt.ts";
 import { tipoEn } from "./compilers/video-tipos.ts";
+import { dialogoCitado } from "./compilers/seedance.ts";
 import { movimientos } from "./camara.ts";
 
 /** Kling y Higgsfield siguen UN movimiento de cámara por clip; dos deforman la imagen. */
@@ -140,6 +141,46 @@ function chatgpt(texto: string, spec: PromptSpec): string[] {
   return e;
 }
 
+/** Seedream, Seedance y Gemini Omni nombran las referencias "Image N": cada una tiene que aparecer, y
+ *  la etiqueta [Imagen N] de Nano Banana no la entienden. */
+function imagenesNumeradas(texto: string, spec: PromptSpec): string[] {
+  const e: string[] = [];
+  spec.refs.forEach((_, i) => {
+    if (!new RegExp(`\\bImage ${i + 1}\\b`).test(texto)) e.push(`No usa la referencia Image ${i + 1}.`);
+  });
+  if (/\[Imagen \d/.test(texto)) e.push("Usa etiquetas [Imagen N]; aquí las referencias se nombran Image 1, Image 2…");
+  return e;
+}
+
+function seedream(texto: string, spec: PromptSpec): string[] {
+  const e = imagenesNumeradas(texto, spec);
+  if (spec.refs.length && !/Keep unchanged:/.test(texto)) e.push('Falta la cláusula "Keep unchanged" (qué se conserva).');
+  if (!texto.includes(`Output: ${spec.aspect}`)) e.push(`Falta el formato ${spec.aspect}.`);
+  return e;
+}
+
+/** Video con diálogo: el texto va tal cual (entre comillas); sin diálogo, se pide sonido sin voz. */
+function dialogoTalCual(texto: string, spec: PromptSpec): string[] {
+  const d = spec.dialogo?.texto.trim();
+  if (d) return texto.includes(dialogoCitado(d)) ? [] : ["No incluye el diálogo tal cual (entre comillas)."];
+  return /no dialogue/i.test(texto) ? [] : ['Sin diálogo: falta pedir sonido sin voz ("no dialogue").'];
+}
+
+function seedance(texto: string, spec: PromptSpec, lim?: Limites): string[] {
+  const e = [...imagenesNumeradas(texto, spec), ...dialogoTalCual(texto, spec)];
+  const dur = duracionValida("seedance", spec.duracion, lim?.duraciones);
+  if (!texto.includes(`Format: ${spec.aspect}, ${dur} seconds`)) e.push(`Falta "Format: ${spec.aspect}, ${dur} seconds".`);
+  if (spec.job === "escena_sora" && !/Shot 1 \(/.test(texto)) e.push("La escena por bloques necesita los planos con tiempo (Shot 1, Shot 2…).");
+  return e;
+}
+
+function omni(texto: string, spec: PromptSpec, lim?: Limites): string[] {
+  const e = [...imagenesNumeradas(texto, spec), ...dialogoTalCual(texto, spec)];
+  const dur = duracionValida("gemini_omni", spec.duracion, lim?.duraciones);
+  if (!texto.includes(`${dur}-second ${spec.aspect} video`)) e.push(`Debe pedir un video de ${dur} s en ${spec.aspect}.`);
+  return e;
+}
+
 /** F6a: `cat` = el MISMO catálogo con el que se compiló (topes de palabras, duraciones). */
 export function validar(texto: string, spec: PromptSpec, tool: Tool = spec.tool, cat?: Catalogo): Veredicto {
   const errores = [...comunes(texto, spec)];
@@ -159,6 +200,15 @@ export function validar(texto: string, spec: PromptSpec, tool: Tool = spec.tool,
       break;
     case "chatgpt":
       errores.push(...chatgpt(texto, spec));
+      break;
+    case "seedream":
+      errores.push(...seedream(texto, spec));
+      break;
+    case "seedance":
+      errores.push(...seedance(texto, spec, lim));
+      break;
+    case "gemini_omni":
+      errores.push(...omni(texto, spec, lim));
       break;
   }
   return errores.length ? { ok: false, errores } : { ok: true };

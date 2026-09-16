@@ -30,6 +30,8 @@ export type Recomendacion = {
   comoLlegar: Par;
   /** F6a: el tier del modelo; el writer dimensiona el spec con esto, no con el nombre (que el catálogo cambia). */
   rol: RolModelo;
+  /** La página de ese modelo en Higgsfield (null = la de la familia, TOOL_INFO.url). */
+  url: string | null;
 };
 
 const SOCIAL: Destino[] = ["ig_story", "ig_feed", "tiktok", "fb_ad"];
@@ -40,7 +42,7 @@ const SOCIAL: Destino[] = ["ig_story", "ig_feed", "tiktok", "fb_ad"];
 export function recomendarModelo(p: PistasModelo, cat: Catalogo = CATALOGO_BASE): Recomendacion {
   const rapido = modeloPorRol(cat, p.tool, "rapido");
   const fino = modeloPorRol(cat, p.tool, "fino");
-  const rec = (m: ModeloHerramienta, porque: Par): Recomendacion => ({ modelo: m.id, etiqueta: t(m.etiqueta, m.etiqueta), porque, comoLlegar: m.comoLlegar, rol: m.rol });
+  const rec = (m: ModeloHerramienta, porque: Par): Recomendacion => ({ modelo: m.id, etiqueta: t(m.etiqueta, m.etiqueta), porque, comoLlegar: m.comoLlegar, rol: m.rol, url: m.url });
   switch (p.tool) {
     case "nanobanana": {
       // Lo que a esta marca le falló en los resultados que subió (texto, parecido) pide el fino.
@@ -75,6 +77,16 @@ export function recomendarModelo(p: PistasModelo, cat: Catalogo = CATALOGO_BASE)
       if ((p.duracion ?? 5) <= 5 && !p.dialogo) return rec(rapido, t(`Clip corto sin voz: ${rapido.etiqueta} tarda y cuesta la mitad con casi la misma calidad.`, `A short clip with no voice: ${rapido.etiqueta} takes and costs half with almost the same quality.`));
       return rec(fino, t("Clip largo o con voz: el modelo completo mantiene mejor la coherencia.", "A long clip or one with voice: the full model keeps coherence better."));
     }
+    case "seedance": {
+      // Mini llega hasta 720p y cuesta una fracción: de sobra para redes sin voz. Con voz o para pantalla
+      // grande, el completo (Seedance es lo más caro del equipo: sólo cuando la pieza lo pide).
+      if (!p.dialogo && SOCIAL.includes(p.destino)) return rec(rapido, t(`Clip para redes sin voz: ${rapido.etiqueta} (hasta 720p) cuesta una fracción y se ve igual en el celular.`, `A social clip with no voice: ${rapido.etiqueta} (up to 720p) costs a fraction and looks the same on a phone.`));
+      return rec(fino, t(p.dialogo ? `Hay voz: ${fino.etiqueta} cuida el diálogo y el lip-sync.` : `Pieza para pantalla grande: ${fino.etiqueta} rinde 1080p (o 4K si la pieza lo pide).`, p.dialogo ? `There is voice: ${fino.etiqueta} takes care of dialogue and lip-sync.` : `A piece for a big screen: ${fino.etiqueta} renders 1080p (or 4K if the piece needs it).`));
+    }
+    case "seedream":
+      return rec(fino, t(`${fino.etiqueta} sigue bien las referencias numeradas (Image 1, Image 2…).`, `${fino.etiqueta} follows numbered references well (Image 1, Image 2…).`));
+    case "gemini_omni":
+      return rec(fino, t(`${fino.etiqueta} sigue instrucciones en lenguaje natural y genera el sonido con el video (720p).`, `${fino.etiqueta} follows natural-language instructions and generates sound with the video (720p).`));
     case "higgsfield":
     default:
       return rec(fino, t("El preset de cámara que va al final del prompt es el que manda.", "The camera preset at the end of the prompt is what matters."));

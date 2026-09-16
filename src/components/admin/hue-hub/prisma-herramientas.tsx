@@ -14,7 +14,7 @@ import { elegirHerramienta } from "@/lib/prisma/routing";
 import { ASPECTS, TOOLS, type Aspect, type Tool } from "@/lib/prisma/spec";
 import { TOOL_INFO } from "@/lib/prisma/tools";
 
-type ModeloB = { id: string; etiqueta: string; rol: RolModelo; es: string; en: string };
+type ModeloB = { id: string; etiqueta: string; rol: RolModelo; es: string; en: string; url: string };
 /** El formulario en texto (los números se escriben): se convierte a la forma de la tabla al validar. */
 type Borrador = { duraciones: string; maxPalabras: string; maxCaracteres: string; aspects: Aspect[]; refsMax: string; audio: boolean; fortalezas: Record<Fortaleza, number>; modelos: ModeloB[]; fuenteUrl: string; fuenteFecha: string };
 
@@ -26,7 +26,7 @@ const aBorrador = (f: FichaHerramienta): Borrador => ({
   refsMax: String(f.limites.refsMax),
   audio: f.limites.audio,
   fortalezas: { ...f.fortalezas },
-  modelos: f.modelos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, rol: m.rol, es: m.comoLlegar.es, en: m.comoLlegar.en })),
+  modelos: f.modelos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, rol: m.rol, es: m.comoLlegar.es, en: m.comoLlegar.en, url: m.url ?? "" })),
   fuenteUrl: f.fuente?.url ?? "",
   fuenteFecha: f.fuente?.fecha ?? "",
 });
@@ -46,7 +46,7 @@ function aEntrada(tool: Tool, b: Borrador) {
       audio: b.audio,
     },
     fortalezas: Object.fromEntries(fortalezasDe(tool).map((k) => [k, b.fortalezas[k]])),
-    modelos: b.modelos.map((m) => ({ id: m.id.trim(), etiqueta: m.etiqueta, rol: m.rol, como_llegar_es: m.es, como_llegar_en: m.en })),
+    modelos: b.modelos.map((m) => ({ id: m.id.trim(), etiqueta: m.etiqueta, rol: m.rol, como_llegar_es: m.es, como_llegar_en: m.en, url: m.url.trim() || null })),
     fuente_url: b.fuenteUrl.trim() || null,
     fuente_fecha: b.fuenteFecha || null,
   };
@@ -294,9 +294,13 @@ export function PrismaHerramientas({ demo = null }: { demo?: Catalogo | null }) 
                     <Textarea value={m.en} onChange={(e) => setModelo(i, { en: e.target.value })} rows={2} maxLength={300} className="mt-1 text-sm" />
                   </label>
                 </div>
+                <label className="block text-xs text-muted-foreground">
+                  Página del modelo en Higgsfield (el botón &quot;Abrir&quot; la usa; vacío = la de la herramienta)
+                  <Input value={m.url} onChange={(e) => setModelo(i, { url: e.target.value })} className="mt-1 h-8 font-mono text-sm" type="url" maxLength={300} placeholder="https://higgsfield.ai/ai/image?model=…" />
+                </label>
               </div>
             ))}
-            <Button size="sm" variant="outline" className="gap-1.5" disabled={borrador.modelos.length >= MAX_MODELOS} onClick={() => set("modelos", [...borrador.modelos, { id: "", etiqueta: "", rol: "fino", es: "", en: "" }])}>
+            <Button size="sm" variant="outline" className="gap-1.5" disabled={borrador.modelos.length >= MAX_MODELOS} onClick={() => set("modelos", [...borrador.modelos, { id: "", etiqueta: "", rol: "fino", es: "", en: "", url: "" }])}>
               <Plus className="size-3.5" /> Agregar modelo
             </Button>
           </fieldset>

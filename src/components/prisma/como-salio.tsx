@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Check, CheckCircle2, ImagePlus, Loader2, RefreshCw, Upload, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -63,7 +63,11 @@ export function ComoSalio({
   const modelos = useCatalogo()[tool].modelos;
   const bloqueado = ocupado || subiendo || corrigiendo || refinando || aceptando;
 
+  // Candado síncrono: dos pegados en el mismo instante no arrancan dos comparaciones (cada una se paga).
+  const enCurso = useRef(false);
   const subir = async (original: File) => {
+    if (enCurso.current) return;
+    enCurso.current = true;
     setSubiendo(true);
     setPreparando(true);
     try {
@@ -85,16 +89,21 @@ export function ComoSalio({
     } catch {
       toast.error(tx(UI.error, lang));
     } finally {
+      enCurso.current = false;
       setPreparando(false);
       setSubiendo(false);
     }
   };
 
   // Pegar (⌘V / Ctrl+V) mientras se espera el resultado: "copiar imagen" en Higgsfield → pegar aquí.
-  // Sólo se queda con el pegado si trae una imagen; un pegado de texto sigue su camino.
+  // Sólo se queda con el pegado si trae una imagen y NO va a otro lugar: un campo de texto o un diálogo
+  // abierto (p. ej. "Guardar personaje") se quedan con su pegado.
   const alPegar = useEffectEvent((e: ClipboardEvent) => {
     const f = Array.from(e.clipboardData?.files ?? []).find((x) => x.type.startsWith("image/"));
     if (!f || resultado || bloqueado) return;
+    const destino = e.target instanceof Element ? e.target : null;
+    if (destino?.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='alertdialog']")) return;
+    if (document.querySelector("[role='dialog'], [role='alertdialog']")) return;
     e.preventDefault();
     void subir(f);
   });

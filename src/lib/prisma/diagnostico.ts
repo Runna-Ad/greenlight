@@ -345,7 +345,8 @@ export function diagnosticar(spec: PromptSpec, tool: Tool, salida: string, error
   const base = REGLAS_BASE.map((f) => f(e, cat)).filter((a): a is Aviso => !!a);
   const db = reglas.map((r) => evaluar(r, e)).filter((a): a is Aviso => !!a);
   const validador: Aviso[] = errores.map((err, i) => ({ codigo: `validador_${i + 1}`, nivel: "advierte", que: { es: err, en: err }, porque: null, arreglo: null, accion: null, fuente: null }));
-  const sinMapear = tool === "nanobanana" || tool === "chatgpt" ? negativosSinMapear({ ...spec, tool }) : 0;
+  // Las tres de imagen usan cuerpoImagen (mismo "Avoid" para lo que no se volvió positivo).
+  const sinMapear = tool === "nanobanana" || tool === "chatgpt" || tool === "seedream" ? negativosSinMapear({ ...spec, tool }) : 0;
   const positivos: Aviso[] = sinMapear
     ? [{ codigo: "negativos_sin_mapear", nivel: "sugiere", que: t(`${sinMapear} cosa(s) a evitar quedaron como "Avoid".`, `${sinMapear} thing(s) to avoid stayed as "Avoid".`), porque: t("Esta herramienta no tiene campo negativo; lo que se pide en positivo sale mejor.", "This tool has no negative field; positive phrasing works better."), arreglo: t("Dilo en positivo: qué quieres ver en su lugar (en entorno o preservar).", "Say it in the positive: what you want to see instead (in entorno or preservar)."), accion: null, fuente: null, interno: true }]
     : [];

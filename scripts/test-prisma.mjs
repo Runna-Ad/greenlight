@@ -129,7 +129,7 @@ for (const kind of Object.keys(JOBS_POR_KIND)) {
     }
   }
 }
-ok("cubre las 5 herramientas", TOOLS.every((t) => Object.values(TOOLS_POR_JOB).some((l) => l.includes(t))));
+ok("cubre todas las herramientas", TOOLS.every((t) => Object.values(TOOLS_POR_JOB).some((l) => l.includes(t))));
 ok("al menos 20 combinaciones", combos >= 20, `combos=${combos}`);
 
 // ── 2. Kling: tope de palabras y una sola oración ──
@@ -960,7 +960,7 @@ console.log("\n▶ F4 — sube lo que salió: veredicto, puntaje, fallos, spec d
   eq("hereda formato y marca", `${sinTexto.aspect}/${sinTexto.marca?.nombre}`, "9:16/DiDi Card");
   eq("la única referencia es la imagen que salió", JSON.stringify(sinTexto.refs.map((r) => r.role)), '["resultado"]');
   ok("correccion es de edición y NO se ofrece en el wizard", JOB_KIND.correccion === "edicion" && !Object.values(JOBS_POR_KIND).flat().includes("correccion"));
-  ok("correccion sólo en las herramientas de imagen", JSON.stringify(TOOLS_POR_JOB.correccion) === '["nanobanana","chatgpt"]');
+  ok("correccion sólo en las herramientas de imagen (todas), Nano Banana primero", TOOLS_POR_JOB.correccion[0] === "nanobanana" && TOOLS_POR_JOB.correccion.every((t) => !TOOL_INFO[t].video) && TOOLS.filter((t) => !TOOL_INFO[t].video).every((t) => TOOLS_POR_JOB.correccion.includes(t)), JSON.stringify(TOOLS_POR_JOB.correccion));
 
   // Patrón de fallos por herramienta: 3 de los últimos 6.
   const S = (tool, detalle) => ({ tool, tipo: "resultado_subido", detalle });
@@ -1372,6 +1372,62 @@ console.log("\n▶ F5c — varias imágenes por casilla (hasta 6)");
   eq("lado máx. y tope de visión (el mismo que exige el servidor)", JSON.stringify([LADO_MAX, MAX_BYTES_VISION]), JSON.stringify([2048, 3.5 * 1024 * 1024]));
   ok("el selector de video acepta el video y las imágenes; el de imagen, sólo imágenes", ACCEPT_VIDEO.includes("video/mp4") && ACCEPT_VIDEO.includes("image/png") && !ACCEPT_IMAGEN.includes("video/"));
   ok("el servidor lee el tope de subida.ts (una sola cifra)", readFileSync("src/app/(app)/prisma/comun.ts", "utf8").includes('export { MAX_BYTES_VISION, MAX_MB_VISION_TEXTO } from "@/lib/prisma/subida"'));
+}
+
+// ── Higgsfield · paso 1: las familias que el equipo usa ahí + la página de cada modelo ──
+{
+  const { CATALOGO_BASE: CAT, catalogoDesdeFilas: desdeFilas, validarFicha: validarF, fichaAFila: aFila, leerUrlModelo } = await import("../src/lib/prisma/catalogo.ts");
+  const { HF_IMAGEN, HF_VIDEO } = await import("../src/lib/prisma/tools.ts");
+  const nuevas = ["seedream", "seedance", "gemini_omni"];
+  ok("las 3 familias nuevas existen y tienen trabajos", nuevas.every((t) => TOOLS.includes(t) && Object.values(TOOLS_POR_JOB).some((l) => l.includes(t))));
+  ok("…y van AL FINAL de cada lista (el routing de antes no cambia)", Object.values(TOOLS_POR_JOB).every((l) => { const i = l.findIndex((t) => nuevas.includes(t)); return i === -1 || l.slice(i).every((t) => nuevas.includes(t)); }));
+  ok("Higgsfield es la plataforma: toda familia abre en higgsfield.ai", TOOLS.every((t) => TOOL_INFO[t].url.startsWith("https://higgsfield.ai/")));
+  ok("cada modelo base con página abre en higgsfield.ai por https", TOOLS.every((t) => CAT[t].modelos.every((m) => m.url === null || m.url.startsWith("https://higgsfield.ai/"))));
+  eq("slugs verificados en el sitio (2026-09-16)", JSON.stringify([CAT.nanobanana.modelos[1].url, CAT.seedream.modelos[0].url, CAT.seedance.modelos[0].url, CAT.kling.modelos[2].url]), JSON.stringify([`${HF_IMAGEN}?model=nano-banana-pro`, `${HF_IMAGEN}?model=seedream_v4_5`, `${HF_VIDEO}?model=seedance_2_0_mini`, "https://higgsfield.ai/ai/video/motion?model=kling-3-motion-control"]));
+  ok("Image Auto y Motion Control existen pero NO se recomiendan (no son el primero de su rol)", modeloPorRol(CAT, "nanobanana", "rapido").id !== "image-auto" && modeloPorRol(CAT, "kling", "fino").id === "kling-3.0");
+  eq("leerUrlModelo: vacío = null; https sí; http, javascript: y espacios no", JSON.stringify(["", null, undefined, "https://higgsfield.ai/ai/image?model=x", "http://higgsfield.ai", "javascript:alert(1)", "https://a b.com", "x".repeat(301)].map(leerUrlModelo)), JSON.stringify([null, null, null, "https://higgsfield.ai/ai/image?model=x", false, false, false, false]));
+  // Una fila vieja del Hub (0071) no trae url: los modelos quedan sin página y el botón usa la de la familia.
+  const vieja = aFila("kling", CAT.kling);
+  vieja.modelos = vieja.modelos.map((m) => Object.fromEntries(Object.entries(m).filter(([k]) => k !== "url")));
+  ok("fila vieja sin url → modelos con url null (sin romper)", desdeFilas([{ tool: "kling", ...vieja }]).kling.modelos.every((m) => m.url === null));
+  const conUrl = validarF("seedance", aFila("seedance", CAT.seedance));
+  ok("validarFicha conserva la página de cada modelo (ida y vuelta)", conUrl.ok && conUrl.fila.modelos.map((m) => m.url).join() === CAT.seedance.modelos.map((m) => m.url).join(), JSON.stringify(conUrl));
+  const mala = aFila("seedream", CAT.seedream);
+  mala.modelos[0].url = "http://evil.example";
+  ok("validarFicha rechaza una página que no es https", !validarF("seedream", mala).ok);
+  // Recomendaciones: Seedance es lo más caro → Mini para redes sin voz; el completo con voz o pantalla grande.
+  const ps = (x) => ({ job: "animar_foto", tool: "seedance", destino: "tiktok", refs: 1, texto: false, dialogo: false, duracion: 5, ...x });
+  eq("Seedance: redes sin voz → Mini", recomendarModelo(ps({})).modelo, "seedance-2.0-mini");
+  eq("Seedance: con voz → 2.0", recomendarModelo(ps({ dialogo: true })).modelo, "seedance-2.0");
+  eq("Seedance: pantalla grande → 2.0", recomendarModelo(ps({ destino: "yt" })).modelo, "seedance-2.0");
+  ok("la recomendación trae la página del modelo", recomendarModelo(ps({})).url === `${HF_VIDEO}?model=seedance_2_0_mini`);
+  eq("Seedream y Omni recomiendan su modelo", [recomendarModelo({ ...ps({}), job: "foto_producto", tool: "seedream" }).modelo, recomendarModelo({ ...ps({}), tool: "gemini_omni" }).modelo].join(), "seedream-4.5,gemini-omni-flash");
+
+  // Compilers nuevos.
+  const sd = spec("foto_producto", "seedream", { refs: [{ role: "producto", caption: "amber bottle", dna: null }, { role: "producto", caption: "bottle back", dna: null }] });
+  const sdOut = compilar(sd).texto;
+  ok("Seedream nombra Image 1 y Image 2 (no [Imagen N]) y valida", sdOut.includes("Image 1 (amber bottle) and Image 2 (bottle back)") && !sdOut.includes("[Imagen") && validar(sdOut, sd).ok, sdOut);
+  ok("Seedream: el validador exige cada Image N", !validar(sdOut.replace("Image 2 (bottle back)", "the back"), sd).ok);
+  const escena = spec("escena_sora", "seedance", { duracion: 10, dialogo: { texto: "¡Por fin llegó!", idioma: "es-MX", voz: "warm" } });
+  const esOut = compilar(escena).texto;
+  ok("Seedance: la escena va por planos con tiempo y el diálogo tal cual", /Shot 1 \(0-3s\)/.test(esOut) && esOut.includes('"¡Por fin llegó!"') && esOut.includes("Format: ") && validar(esOut, escena).ok, esOut);
+  ok("Seedance: sin diálogo pide sonido sin voz", /no dialogue/.test(compilar(spec("texto_a_video", "seedance")).texto));
+  const tr = spec("transicion", "seedance", { refs: [{ role: "inicio", caption: "street at noon", dna: null }, { role: "fin", caption: "same street at night", dna: null }] });
+  const trOut = compilar(tr).texto;
+  ok("Seedance: transición día → noche sin 'luz contradictoria' (las captions no van)", trOut.includes("Image 1 is the first frame and Image 2 the last frame") && validar(trOut, tr).ok, JSON.stringify(validar(trOut, tr)));
+  eq("Seedance: la duración es la más cercana que ofrece (8 → 10)", /Format: \S+, (\d+) seconds/.exec(compilar(spec("texto_a_video", "seedance", { duracion: 8 })).texto)?.[1], "10");
+  const om = spec("animar_foto", "gemini_omni", { duracion: 6, aspect: "9:16" });
+  const omOut = compilar(om).texto;
+  ok("Omni: instrucción conversacional con duración y formato, y valida", omOut.startsWith("Animate Image 1 into a 6-second 9:16 video") && validar(omOut, om).ok, omOut);
+  ok("Omni: el validador exige la duración pedida", !validar(omOut.replace("6-second", "5-second"), om).ok);
+  // Reap 2026-09-16.
+  eq("la página del modelo sólo puede ser de higgsfield.ai", JSON.stringify(["https://evil.example/x", "https://higgsfield.ai.evil.com/", "https://cdn.higgsfield.ai/a"].map(leerUrlModelo)), JSON.stringify([false, false, "https://cdn.higgsfield.ai/a"]));
+  const conComillas = spec("texto_a_video", "seedance", { dialogo: { texto: 'Dijo "ya llegó" y se fue', idioma: "es", voz: null } });
+  const ccOut = compilar(conComillas).texto;
+  ok("Seedance: una comilla dentro del diálogo no rompe la cita (y valida)", ccOut.includes('"Dijo “ya llegó” y se fue"') && validar(ccOut, conComillas).ok, ccOut);
+  const { diagnosticar: diag } = await import("../src/lib/prisma/diagnostico.ts");
+  const conAvoid = spec("imagen_libre", "seedream", { negativos: ["zzz raro sin mapa"] });
+  ok("Seedream también avisa lo que quedó como \"Avoid\"", diag(conAvoid, "seedream", compilar(conAvoid).texto, [], []).some((a) => a.codigo === "negativos_sin_mapear"));
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} prisma: ${pass} passed, ${fail} failed\n`);

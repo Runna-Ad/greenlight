@@ -376,9 +376,10 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
             </Button>
           </span>
           <Button size="sm" variant="outline" asChild>
-            <a href={info.url} target="_blank" rel="noopener noreferrer" onClick={() => anotar(vivo.promptId, "abierto")}>
+            {/* Higgsfield es la plataforma del equipo: se abre la página del modelo recomendado (o la de la familia). */}
+            <a href={modelo.url ?? info.url} target="_blank" rel="noopener noreferrer" onClick={() => anotar(vivo.promptId, "abierto")}>
               <ExternalLink className="size-4" />
-              {tx(UI.abrirEn, lang)} {info.nombre}
+              {tx(UI.abrirEnHiggsfield, lang).replace("{modelo}", tx(modelo.etiqueta, lang))}
             </a>
           </Button>
         </div>

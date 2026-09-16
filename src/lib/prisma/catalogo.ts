@@ -8,7 +8,7 @@
  * Módulo puro (cliente y servidor; se prueba en node).
  */
 import { ASPECTS, REFS_POR_JOB, TOOLS, type Aspect, type JobType, type Tool } from "./spec.ts";
-import { ASPECTS_POR_TOOL, REFS_MAX, TOOL_AUDIO, TOOL_INFO, TOOLS_POR_JOB, VEO_SEGUNDOS_CON_REFS } from "./tools.ts";
+import { ASPECTS_POR_TOOL, HF_IMAGEN, HF_VIDEO, REFS_MAX, TOOL_AUDIO, TOOL_INFO, TOOLS_POR_JOB, VEO_SEGUNDOS_CON_REFS } from "./tools.ts";
 import { t, type Par } from "./copy.ts";
 
 // ── Fortalezas ────────────────────────────────────────────────────────────────
@@ -34,11 +34,12 @@ export const ETIQUETA_FORTALEZA: Record<Fortaleza, Par> = {
 export const ROLES_MODELO = ["rapido", "fino"] as const;
 export type RolModelo = (typeof ROLES_MODELO)[number];
 /** Los roles entre los que elige recomendarModelo en cada herramienta. */
-export const ROLES_POR_TOOL: Record<Tool, RolModelo[]> = { nanobanana: ["rapido", "fino"], chatgpt: ["rapido", "fino"], veo: ["rapido", "fino"], kling: ["rapido", "fino"], higgsfield: ["fino"] };
+export const ROLES_POR_TOOL: Record<Tool, RolModelo[]> = { nanobanana: ["rapido", "fino"], chatgpt: ["rapido", "fino"], veo: ["rapido", "fino"], kling: ["rapido", "fino"], higgsfield: ["fino"], seedream: ["fino"], seedance: ["rapido", "fino"], gemini_omni: ["fino"] };
 export const MAX_MODELOS = 4;
 
 export type Limites = { duraciones: number[]; maxPalabras: number | null; maxCaracteres: number | null; aspects: Aspect[]; refsMax: number; audio: boolean };
-export type ModeloHerramienta = { id: string; etiqueta: string; rol: RolModelo; comoLlegar: Par };
+/** `url`: la página de ESE modelo en Higgsfield (null = la de la familia, TOOL_INFO.url). */
+export type ModeloHerramienta = { id: string; etiqueta: string; rol: RolModelo; comoLlegar: Par; url: string | null };
 export type FichaHerramienta = { limites: Limites; fortalezas: Record<Fortaleza, number>; modelos: ModeloHerramienta[]; fuente: { url: string; fecha: string } | null };
 export type Catalogo = Record<Tool, FichaHerramienta>;
 
@@ -51,28 +52,52 @@ const BASE_FORTALEZAS: Record<Tool, Partial<Record<Fortaleza, number>>> = {
   veo: { voz: 5, movimiento: 3, rapidez: 2 },
   kling: { voz: 3, movimiento: 4, rapidez: 5 },
   higgsfield: { voz: 0, movimiento: 5, rapidez: 3 },
+  // Familias nuevas (2026-09-16): puntajes DEBAJO del líder en cada fortaleza a propósito — el routing de
+  // antes no cambia (test golden) y el diseñador las elige a mano. Se calibran en Hub › Herramientas con
+  // lo que digan los resultados subidos. Seedance: la mejor calidad pero la más cara (rapidez 1).
+  seedream: { texto_exacto: 3, identidad: 4 },
+  seedance: { voz: 4, movimiento: 4, rapidez: 1 },
+  gemini_omni: { voz: 3, movimiento: 3, rapidez: 3 },
 };
 
-/** Los modelos verificados el 2026-09-11 (antes vivían en modelo.ts). El PRIMERO de cada rol es
- *  el que se recomienda; los demás sólo aparecen en "¿en cuál lo generaste?". */
+/** Los modelos que el equipo usa EN HIGGSFIELD (verificados en su sitio el 2026-09-16; slugs de `?model=`).
+ *  El PRIMERO de cada rol es el que se recomienda; los demás sólo aparecen en "¿en cuál lo generaste?".
+ *  Los ids son estables (se guardan en modelo_sug y en los resultados): no se renombran. */
+const hf = (id: string, etiqueta: string, rol: RolModelo, es: string, en: string, url: string | null): ModeloHerramienta => ({ id, etiqueta, rol, comoLlegar: t(es, en), url });
 const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
   nanobanana: [
-    { id: "gemini-3.1-flash-image", etiqueta: "Nano Banana 2", rol: "rapido", comoLlegar: t("En Gemini es el modelo de imagen por default; en AI Studio, gemini-3.1-flash-image.", "In Gemini it is the default image model; in AI Studio, gemini-3.1-flash-image.") },
-    { id: "gemini-3-pro-image", etiqueta: "Nano Banana Pro", rol: "fino", comoLlegar: t("En Gemini elige el modo Thinking (Nano Banana Pro) antes de pegar; en AI Studio, el modelo gemini-3-pro-image.", "In Gemini pick Thinking mode (Nano Banana Pro) before pasting; in AI Studio, the gemini-3-pro-image model.") },
+    hf("gemini-3.1-flash-image", "Nano Banana 2", "rapido", "En Higgsfield: Image → Nano Banana 2 → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Nano Banana 2 → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=nano-banana-2`),
+    hf("gemini-3-pro-image", "Nano Banana Pro", "fino", "En Higgsfield: Image → Nano Banana Pro → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Nano Banana Pro → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=nano-banana-pro`),
+    // Sólo para "¿en cuál lo generaste?": Higgsfield elige el modelo solo (el prompt de Nano Banana es el más neutro).
+    hf("image-auto", "Image Auto", "rapido", "En Higgsfield: Image → Auto → pega el prompt (Higgsfield elige el modelo).", "In Higgsfield: Image → Auto → paste the prompt (Higgsfield picks the model).", null),
   ],
   chatgpt: [
-    { id: "gpt-image-2.5-flare", etiqueta: "ChatGPT Images · flare", rol: "rapido", comoLlegar: t("En ChatGPT pega el prompt tal cual; por API, gpt-image-2.5-flare.", "In ChatGPT paste the prompt as is; via API, gpt-image-2.5-flare.") },
-    { id: "gpt-image-2.5-sunburst", etiqueta: "ChatGPT Images · sunburst", rol: "fino", comoLlegar: t("En ChatGPT pega el prompt con la imagen adjunta; por API usa el modelo gpt-image-2.5-sunburst.", "In ChatGPT paste the prompt with the image attached; via API use the gpt-image-2.5-sunburst model.") },
+    hf("gpt-image-2.5-flare", "GPT Image 2.5 Flare", "rapido", "En Higgsfield: Image → GPT Image 2.5 Flare → adjunta las imágenes en orden y pega el prompt.", "In Higgsfield: Image → GPT Image 2.5 Flare → attach the images in order and paste the prompt.", `${HF_IMAGEN}?model=gpt-image-2-5-flare`),
+    hf("gpt-image-2.5-sunburst", "GPT Image 2.5 Sunburst", "fino", "En Higgsfield: Image → GPT Image 2.5 Sunburst → adjunta las imágenes en orden y pega el prompt.", "In Higgsfield: Image → GPT Image 2.5 Sunburst → attach the images in order and paste the prompt.", `${HF_IMAGEN}?model=gpt-image-2-5-sunburst`),
   ],
   veo: [
-    { id: "veo-3.1-fast-generate-preview", etiqueta: "Veo 3.1 Fast", rol: "rapido", comoLlegar: t("En Flow elige la calidad Fast antes de generar.", "In Flow choose Fast quality before generating.") },
-    { id: "veo-3.1-generate-preview", etiqueta: "Veo 3.1", rol: "fino", comoLlegar: t("En Flow deja la calidad estándar (Quality).", "In Flow keep the standard quality (Quality).") },
+    hf("veo-3.1-fast-generate-preview", "Veo 3.1 Fast", "rapido", "En Higgsfield: Video → Google Veo → Veo 3.1 Fast → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 Fast → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`),
+    hf("veo-3.1-generate-preview", "Veo 3.1", "fino", "En Higgsfield: Video → Google Veo → Veo 3.1 → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`),
   ],
   kling: [
-    { id: "kling-3.0-turbo", etiqueta: "Kling 3.0 Turbo", rol: "rapido", comoLlegar: t("En Kling elige el modelo 3.0 y el modo Turbo (o Standard).", "In Kling pick model 3.0 and Turbo mode (or Standard).") },
-    { id: "kling-3.0", etiqueta: "Kling 3.0", rol: "fino", comoLlegar: t("En Kling elige el modelo 3.0 en modo Professional.", "In Kling pick model 3.0 in Professional mode.") },
+    hf("kling-3.0-turbo", "Kling 3.0 Turbo", "rapido", "En Higgsfield: Video → Kling 3.0 en su modo rápido (Turbo) → pega el prompt.", "In Higgsfield: Video → Kling 3.0 in its fast (Turbo) mode → paste the prompt.", `${HF_VIDEO}?model=kling3_0`),
+    hf("kling-3.0", "Kling 3.0", "fino", "En Higgsfield: Video → Kling 3.0 → pega el prompt (la foto va en Start frame).", "In Higgsfield: Video → Kling 3.0 → paste the prompt (the photo goes in Start frame).", `${HF_VIDEO}?model=kling3_0`),
+    // Sólo para "¿en cuál lo generaste?": el movimiento sale de un VIDEO de referencia; el texto sólo pinta el escenario.
+    hf("kling-3.0-motion-control", "Kling 3.0 Motion Control", "fino", "En Higgsfield: Video → Motion Control → sube la foto del personaje y el video del movimiento; el prompt describe sólo el escenario y la luz.", "In Higgsfield: Video → Motion Control → upload the character photo and the motion video; the prompt only describes the setting and light.", "https://higgsfield.ai/ai/video/motion?model=kling-3-motion-control"),
   ],
-  higgsfield: [{ id: "higgsfield", etiqueta: "Higgsfield", rol: "fino", comoLlegar: t("En Higgsfield: Create → elige ese preset de cámara → pega el texto.", "In Higgsfield: Create → pick that camera preset → paste the text.") }],
+  higgsfield: [hf("higgsfield", "Higgsfield DoP", "fino", "En Higgsfield: Video → sube la foto → elige ese preset de cámara → pega el texto.", "In Higgsfield: Video → upload the photo → pick that camera preset → paste the text.", HF_VIDEO)],
+  seedream: [
+    hf("seedream-4.5", "Seedream 4.5", "fino", "En Higgsfield: Image → Seedream 4.5 → sube las referencias en el orden del prompt (Image 1, Image 2…) y pega el prompt.", "In Higgsfield: Image → Seedream 4.5 → upload the references in the prompt's order (Image 1, Image 2…) and paste the prompt.", `${HF_IMAGEN}?model=seedream_v4_5`),
+    hf("seedream-5.0-lite", "Seedream 5.0 Lite", "fino", "En Higgsfield: Image → Seedream 5.0 lite → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Seedream 5.0 lite → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=seedream_v5_lite`),
+  ],
+  seedance: [
+    hf("seedance-2.0-mini", "Seedance 2.0 Mini", "rapido", "En Higgsfield: Video → Seedance 2.0 Mini (hasta 720p) → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.0 Mini (up to 720p) → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_0_mini`),
+    hf("seedance-2.0", "Seedance 2.0", "fino", "En Higgsfield: Video → Seedance 2.0 → sube las referencias y pega el prompt; 1080p salvo que la pieza pida 4K.", "In Higgsfield: Video → Seedance 2.0 → upload the references and paste the prompt; 1080p unless the piece needs 4K.", `${HF_VIDEO}?model=seedance_2_0`),
+    hf("seedance-2.5", "Seedance 2.5", "fino", "En Higgsfield: Video → Seedance 2.5 → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.5 → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_5`),
+  ],
+  gemini_omni: [
+    hf("gemini-omni-flash", "Gemini Omni Flash", "fino", "En Higgsfield: Video → Gemini Omni Flash (720p) → sube las referencias y pega el prompt.", "In Higgsfield: Video → Gemini Omni Flash (720p) → upload the references and paste the prompt.", `${HF_VIDEO}?model=gemini-omni-flash-1-1`),
+  ],
 };
 
 /** El catálogo de las constantes: lo que usa todo el que no pase otro (tests, demo, sin BD). */
@@ -148,12 +173,26 @@ function leerModelos(v: unknown, tool: Tool): Leido<ModeloHerramienta[]> {
     if (!textoPlano(o.etiqueta, 60)) return mal(`${n}: falta el nombre (máx. 60).`);
     if (!(ROLES_MODELO as readonly unknown[]).includes(o.rol)) return mal(`${n}: el rol es "rapido" o "fino".`);
     if (!textoPlano(o.como_llegar_es, 300) || !textoPlano(o.como_llegar_en, 300)) return mal(`${n}: falta "cómo llegar" en español y en inglés (máx. 300).`);
-    out.push({ id: o.id, etiqueta: (o.etiqueta as string).trim(), rol: o.rol as RolModelo, comoLlegar: t((o.como_llegar_es as string).trim(), (o.como_llegar_en as string).trim()) });
+    const url = leerUrlModelo(o.url);
+    if (url === false) return mal(`${n}: la página va como https://higgsfield.ai/… (máx. 300), o vacía.`);
+    out.push({ id: o.id, etiqueta: (o.etiqueta as string).trim(), rol: o.rol as RolModelo, comoLlegar: t((o.como_llegar_es as string).trim(), (o.como_llegar_en as string).trim()), url });
   }
   if (new Set(out.map((m) => m.id)).size !== out.length) return mal("Modelos: dos con el mismo id.");
   const falta = ROLES_POR_TOOL[tool].find((r) => !out.some((m) => m.rol === r));
   if (falta) return mal(`Modelos: falta uno con rol "${falta}".`);
   return bien(out);
+}
+/** La página del modelo: vacía (null) o https EN higgsfield.ai (la plataforma del equipo; así una cuenta
+ *  master robada no puede mandar el botón "Abrir" de todos a un sitio falso). false = mala. */
+export function leerUrlModelo(v: unknown): string | null | false {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v !== "string" || v.length > 300 || /\s/.test(v)) return false;
+  try {
+    const u = new URL(v);
+    return u.protocol === "https:" && (u.hostname === "higgsfield.ai" || u.hostname.endsWith(".higgsfield.ai")) ? v : false;
+  } catch {
+    return false;
+  }
 }
 function leerFuente(url: unknown, fecha: unknown): Leido<{ url: string; fecha: string } | null> {
   if ((url === null || url === undefined || url === "") && (fecha === null || fecha === undefined || fecha === "")) return bien(null);
@@ -229,7 +268,7 @@ export function fichaAFila(tool: Tool, f: FichaHerramienta): Omit<FilaHerramient
   return {
     limites: { duraciones: f.limites.duraciones, max_palabras: f.limites.maxPalabras, max_caracteres: f.limites.maxCaracteres, aspects: f.limites.aspects, refs_max: f.limites.refsMax, audio: f.limites.audio },
     fortalezas: Object.fromEntries(fortalezasDe(tool).map((k) => [k, f.fortalezas[k]])),
-    modelos: f.modelos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, rol: m.rol, como_llegar_es: m.comoLlegar.es, como_llegar_en: m.comoLlegar.en })),
+    modelos: f.modelos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, rol: m.rol, como_llegar_es: m.comoLlegar.es, como_llegar_en: m.comoLlegar.en, url: m.url })),
     fuente_url: f.fuente?.url ?? null,
     fuente_fecha: f.fuente?.fecha ?? null,
   };

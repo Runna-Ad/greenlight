@@ -12,8 +12,11 @@
  * (scripts/test-prisma.mjs).
  */
 
-export type Tool = "nanobanana" | "chatgpt" | "veo" | "kling" | "higgsfield";
-export const TOOLS: Tool[] = ["nanobanana", "chatgpt", "veo", "kling", "higgsfield"];
+/** 2026-09-16: el equipo genera TODO en Higgsfield (default para todas las marcas). Cada Tool es una
+ *  FAMILIA de modelos con su forma de prompt; "higgsfield" es el modelo DoP (presets de cámara).
+ *  seedream / seedance / gemini_omni: los modelos que el equipo usa ahí y no tenían compiler. */
+export type Tool = "nanobanana" | "chatgpt" | "veo" | "kling" | "higgsfield" | "seedream" | "seedance" | "gemini_omni";
+export const TOOLS: Tool[] = ["nanobanana", "chatgpt", "veo", "kling", "higgsfield", "seedream", "seedance", "gemini_omni"];
 
 /** Herramientas que alguna vez existieron: una fila guardada no se vuelve ilegible porque
  *  retiremos una herramienta. Sora 2: OpenAI apaga su API el 24-sep-2026 (retirada en 0067). */

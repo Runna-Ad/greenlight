@@ -7,6 +7,9 @@ import { compilarChatGPT } from "./chatgpt.ts";
 import { compilarVeo } from "./veo.ts";
 import { compilarKling } from "./kling.ts";
 import { compilarHiggsfield } from "./higgsfield.ts";
+import { compilarSeedream } from "./seedream.ts";
+import { compilarSeedance } from "./seedance.ts";
+import { compilarOmni } from "./omni.ts";
 
 export type { Salida } from "./salida.ts";
 
@@ -16,6 +19,9 @@ const COMPILERS: Record<Tool, (spec: PromptSpec, lim?: Limites) => Salida> = {
   veo: compilarVeo,
   kling: compilarKling,
   higgsfield: compilarHiggsfield,
+  seedream: compilarSeedream,
+  seedance: compilarSeedance,
+  gemini_omni: compilarOmni,
 };
 
 /** F6a: `cat` = el catálogo vigente (Hub › Herramientas). Sin él, los límites de las constantes.

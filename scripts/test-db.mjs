@@ -2602,5 +2602,21 @@ console.log("\n▶ 0071 — prisma_herramientas");
   for (const [que, sql] of malas) ok(`la BD rechaza ${que}`, await db.query(sql).then(() => false).catch(() => true));
 }
 
+// ── 0072: los modelos EN HIGGSFIELD (sólo datos; no pisa lo editado en el Hub) ──
+console.log("\n▶ 0072 — modelos en Higgsfield");
+{
+  const kling = (await q(`select modelos from produccion.prisma_herramientas where tool = 'kling'`))[0].modelos;
+  ok("Kling trae Motion Control y cada modelo su página en higgsfield.ai", kling.some((m) => m.id === "kling-3.0-motion-control") && kling.every((m) => typeof m.url === "string" && m.url.startsWith("https://higgsfield.ai/")), JSON.stringify(kling));
+  // Una fila editada a mano (updated_by) no se toca si la 0072 se vuelve a correr.
+  const sql0072 = readFileSync(join(migDir, readdirSync(migDir).find((f) => f.includes("_0072_"))), "utf8");
+  const editado = JSON.stringify([{ id: "a-mano", etiqueta: "A mano", rol: "fino", como_llegar_es: "x", como_llegar_en: "x" }]);
+  await db.query(`update produccion.prisma_herramientas set modelos = $1::jsonb, updated_by = $2 where tool = 'higgsfield'`, [editado, galie]);
+  await db.query(`update produccion.prisma_herramientas set modelos = '[]'::jsonb where tool = 'veo'`);
+  await db.exec(sql0072);
+  const quedo = (await q(`select modelos, updated_by from produccion.prisma_herramientas where tool = 'higgsfield'`))[0];
+  ok("lo editado en el Hub (updated_by) se queda como está", !!galie && quedo.updated_by === galie && quedo.modelos.length === 1 && quedo.modelos[0].id === "a-mano", JSON.stringify(quedo));
+  ok("lo que nadie editó sí se pone al día", (await q(`select modelos from produccion.prisma_herramientas where tool = 'veo'`))[0].modelos.length === 2);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

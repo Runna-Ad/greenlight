@@ -1,5 +1,53 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔵 2026-09-16 (13) — HÜE Prisma · Higgsfield como plataforma (rama `prisma`)
+Pedro: "go" al plan prompt-first (§ DECISIONES DE PEDRO abajo); Wan 2.7 fuera (sin uso desde junio). Sin migración esperada:
+`tool` es text libre en todas las tablas (0063/0066/0070) y `prisma_herramientas.tool` sólo exige `^[a-z0-9_]{2,30}$`.
+**Paso 4 — "¿Cómo salió?" más rápido** (el arrastre ya existía)
+- [x] `src/lib/prisma/subida.ts` (navegador): lo que pase de 3.5 MB se achica ANTES de subir (lado largo ≤ 2048,
+      JPEG) → adiós al error "pesa demasiado"; en trabajos de video se puede subir el VIDEO y se toma el cuadro del medio
+      (video + canvas). Parte pura `medidaDestino(w, h, max)` con tests. El tope de visión vive AQUÍ (comun.ts lo re-exporta).
+- [x] `como-salio.tsx`: pegar con ⌘V / Ctrl+V (copiar imagen en Higgsfield → pegar); nunca roba un pegado de texto;
+      el input acepta video en trabajos de video; copy nueva. `?demo=resultado` ahora prueba la preparación (toast, sin servidor).
+- [x] Paridad: `ref-uploader.tsx` (referencias del paso 3) achica igual — arriba de 3.5 MB la visión fallaba EN SILENCIO
+      (subía sin ADN). Navegador: PNG de 52.5 MB pegado → JPEG 2.9 MB; webm → cuadro JPEG; mp4 roto → aviso, sin romper.
+      Tests 778 · npm test ✓ · tsc 0 · lint 0 · commit 0a31361 (sin push aún).
+**Paso 1 — prompts para los modelos del equipo, abiertos en Higgsfield**
+- [x] Cada modelo del catálogo gana `url` (opcional, https, validada, editable en Hub): "Abrir {modelo} en Higgsfield"
+      lleva a la página del modelo recomendado; sin url (filas viejas) → la de la familia. "Cómo llegar" reescrito para
+      Higgsfield. Slugs VERIFICADOS en higgsfield.ai (navegador, 2026-09-16) → research.md.
+- [x] Familias nuevas (ficha + compiler + validador + golden + recomendación): **seedream** (4.5 / 5.0 Lite; "Image N"),
+      **seedance** (2.0 Mini para redes sin voz, 2.0 con voz o pantalla grande, 2.5 en la lista; planos con tiempo en la
+      escena por bloques; sonido explícito), **gemini_omni** (instrucción conversacional, 16:9/9:16, 4–10 s). Van al
+      FINAL de TOOLS_POR_JOB y con fortalezas debajo del líder → el routing de antes NO cambia (golden); se eligen a mano
+      y se calibran en el Hub. "Higgsfield" (la familia vieja) se muestra como **Higgsfield DoP**.
+- [x] **Image Auto** y **Kling 3.0 Motion Control** en el catálogo sólo para "¿en cuál lo generaste?" (no se recomiendan).
+      Motion Control como TRABAJO (pide un VIDEO de referencia) = fase propia después.
+- [x] **0072 (sólo datos, PENDIENTE de "ship it")** `…_0072_prisma_modelos_higgsfield.sql`: pone al día `modelos` de las 5
+      filas de 0071 SÓLO si nadie las editó (`updated_by is null`); test-db lo prueba (fila editada intacta). Sin 0072 la
+      app funciona (botón → página de la familia; "cómo llegar" viejo). **F6b Vigía pasa a 0073.**
+- Verificado: test-prisma 863 · test-db 478 · npm test ✓ · tsc 0 · lint 0 · build ✓ · navegador (?demo=resultado: botón
+  "Abrir Kling 3.0 Turbo en Higgsfield" → kling3_0; ?demo=herramientas: 8 pestañas, url por modelo, routing igual).
+### Review (pasos 4 + 1)
+- Reap seguridad (Opus): 0 críticos / 0 serios / 0 medios; 4 bajos → 3 ARREGLADOS: el pegado ignora campos de texto y
+  diálogos abiertos; la página del modelo sólo acepta https://*.higgsfield.ai (una cuenta master robada no puede mandar el
+  "Abrir" de todos a un sitio falso); una comilla recta dentro del diálogo se vuelve tipográfica (`dialogoCitado`, lo usan
+  compiler y validador). 1 PENDIENTE (deuda chica): la "fuente" del Hub acepta http:// (no ejecuta nada; código de F6a).
+- Reap salud (Sonnet): 2 serios → ARREGLADOS: Seedream no avisaba lo que quedó como "Avoid" (diagnostico.ts ~348: ahora las
+  3 de imagen); el pegado global robaba pegados de otros campos/diálogos (arriba) + candado síncrono `enCurso` (dos pegados
+  = una sola comparación facturable). 1 ABIERTO para Pedro/fuente: ¿"un solo movimiento de cámara" aplica a Seedance/Omni?
+  (hoy sólo Kling/DoP; sin fuente para extenderlo).
+- test-db encontró solo que las filas vivas de 0071 ya no igualan al catálogo → 0072 (sólo datos, no pisa lo editado).
+- Final: test-prisma 866 · test-db 478 · npm test ✓ · tsc 0 · lint 0 · build ✓ · navegador (pegar en textarea = nada;
+  pegar en la página = sube).
+
+**Paso 2** — H.Ü.E elige lo más barato sin perder calidad + estimado en créditos (tasks/higgsfield-costos-2026-09-16.md).
+**Paso 3** — Performance › Evaluación: por diseñador y mes — piezas, vueltas y tiempo hasta el aceptado, créditos estimados.
+### Verificación
+Tests puros (medidaDestino; golden de los compilers nuevos; catálogo con url; routing/modelo) · npm test · tsc · lint ·
+build · navegador con `?demo=` (pegar, video, abrir en Higgsfield) · reap doble (seguridad Opus + salud Sonnet) ·
+commit/push a `prisma` (preview).
+
 ## 🔵 2026-09-15 (12) — HÜE Prisma · F5c: lo que pidieron los diseñadores (rama `prisma`, antes de F6b)
 Pedro: "go in your order" + deep dive de Higgsfield (sitio + API, la quiere conectar a Prisma). Probablemente SIN migración.
 1. [x] **Todo aviso se puede resolver** — `resolucionDe(aviso, acciones, "ahora" | "al_generar")` (diagnostico.ts): "arreglar"
@@ -35,8 +83,55 @@ Pedro: "go in your order" + deep dive de Higgsfield (sitio + API, la quiere cone
       con la X la foto del personaje lo dejaba elegido (previo a F5c). Ahora `elegirPersonaje` promueve la siguiente, la X
       sobre la foto del personaje lo suelta entero, y el arreglo soltar_ref usa `soltarPersonaje` (sin setRefs que se pisen).
       npm test ✓ (770) · tsc 0 · lint 0 · build ✓.
-4. [ ] **F5d — Higgsfield como plataforma** (espera a Pedro: qué modelos usan DENTRO de Higgsfield y si es default para todos
-       o por marca). Plan: "¿Dónde generas?" (Higgsfield por default) → el prompt se sigue escribiendo para el MODELO; el
+### 🟣 DECISIONES DE PEDRO (2026-09-15, respuestas del head de diseño) — mandan sobre F5d y F7
+- **Plan de Higgsfield: Ultimate.** Pedro ya tiene la llave de la API (la pone ÉL en Vercel Preview/rama `prisma` +
+  `.env.local` como `HIGGSFIELD_API_KEY_ID` / `HIGGSFIELD_API_KEY_SECRET`; yo no toco secretos).
+- **Modelos que usa el equipo DENTRO de Higgsfield:**
+  - Imagen: los ILIMITADOS del plan — sobre todo **Seedream 4.5**, **Nano Banana Pro**, **"auto"** y **Kling** (imagen).
+  - Video: depende de la quema de créditos. Hoy **Kling 3.0** y **Kling Motion Control** (lo más barato con mejor resultado);
+    **Seedance** = el mejor pero caro → poco, sobre todo cuando se necesita un cuadro en 4K; también **Google Veo 3.1 /
+    Gemini Omni**. Modelos para **UGC realista**: aún sin descubrir (pendiente).
+- **Higgsfield = default para TODAS las marcas.**
+- **Sin tope de gasto.** En lugar del tope: **contador** de cuánto se gastó y cuánto QUEDA (saldo de créditos).
+- **Nuevos pedidos:**
+  1. **HÜE recomienda qué usar** según lo que el diseñador pide y busca: la mejor opción al MENOR costo sin sacrificar calidad
+     (el routing de hoy elige por fortaleza — sumarle costo; los ilimitados del plan cuentan como costo ~0).
+  2. **Estimado de costo ANTES de generar** ("¿cuántos créditos puede costar esto?") para que el diseñador sepa lo que gasta.
+  3. **Admin › Evaluaciones, por diseñador y por mes:** cuántos prompts/assets generó, cuántas iteraciones o cuánto tiempo le
+     tomó llegar a uno bueno, y cuánto gastó cada uno.
+- ⚠️ **Hallazgo 2026-09-15 (OpenAPI público v2.0.0, `docs.higgsfield.ai/docs/openapi.json`):** la API con llave sólo trae
+  modelos VIEJOS (Kling 2.1/2.5-turbo, Seedance v1, `/nano-banana`, Veo 3.1, Sora 2, Hailuo, Wan 2.5, Reve, Flux Kontext,
+  Soul) y NO tiene costo, créditos, saldo ni webhook. Kling 3.0 / Seedream 4.5 / Nano Banana Pro / Seedance 2.5 / Gemini Omni
+  aparecen en el CLI (`@higgsfield/cli`, login de usuario, `generate cost`; binario cerrado, backend sin documentar).
+  **VERIFICADO (páginas de Higgsfield, 2026-09-15):** (1) "Unlimited access applies only on higgsfield.ai: outside it,
+  generations always deduct credits" — API/CLI/MCP SIEMPRE cobran, aunque el modelo sea ilimitado en la web
+  ([unlimited](https://higgsfield.ai/creator-hub/help-center/credits/what-are-unlimited-models-and-which-plans-include-them),
+  [credits](https://higgsfield.ai/creator-hub/help-center/credits/how-credits-work)); misma bolsa de créditos que la web.
+  (2) `POST /estimate/{ruta-del-modelo}` (misma llave) → `{"credits","usd"}` antes de generar
+  ([billing](https://docs.higgsfield.ai/docs/concepts/billing-and-retention.md)); sólo para modelos de la API.
+  (3) Saldo restante: SIN endpoint — sólo en la barra de higgsfield.ai. (4) El costo real por request no viene en el status.
+  IDs del CLI (MODELS.md): kling3_0, seedream_v4_5, nano_banana_2 (= Nano Banana Pro), image_auto, seedance_2_5, veo3_1,
+  gemini_omni, marketing_studio_video (modo `ugc`). "Kling Motion Control": NO encontrado → preguntar al head de diseño.
+  → Generar DENTRO de Prisma volvería de pago lo que en la web es gratis. Recomendación a Pedro: prompt-first (F5d +
+  HÜE barato-sin-perder-calidad + estimado + stats) y la llave sólo para `/estimate`; F7 en pausa. Pedro decide.
+- **Pedro preguntó por un iframe** (generar en higgsfield.ai y que HÜE vea): **IMPOSIBLE, verificado** — higgsfield.ai manda
+  `X-Frame-Options: SAMEORIGIN` + CSP `frame-ancestors 'self' *.higgsfield.ai` (curl -I, 2026-09-15); y aunque cargara, el
+  navegador no deja leer un iframe de otro dominio. Extensión de navegador propia: técnicamente posible, NO recomendada
+  (términos no legibles —página sólo JS—; /trust dice que combaten "coordinated bot usage"; frágil; toca la cuenta pagada).
+- **Contador = GASTO ESTIMADO** (Pedro). Pedro pasa su **histórico de gasto** (higgsfield.ai → avatar → Manage Account →
+  Usage) → costo real por modelo/ajuste = la tabla de costos del catálogo; + `/estimate` con la llave para los modelos de
+  la API. **DIRECCIÓN ELEGIDA (Pedro, 2026-09-15): el ciclo — se sigue generando en higgsfield.ai.** SIN botón de "intentos":
+  Pedro — "¿Cómo salió?" (F4) YA lo registra: el diseñador sube lo que salió y pide la revisión → Prisma CUENTA cuántas
+  veces volvió. Datos que ya existen: `prisma_resultados` (cada subida + veredicto; `aceptado`), specs con `correccion_de`
+  (corrección de H.Ü.E), evento `refinado`, evento `resultado_aceptado`. Por pieza (spec raíz): vueltas = subidas +
+  correcciones + refinados hasta la aceptada; tiempo = spec raíz → aceptado. Gasto estimado = vueltas × costo del modelo
+  (del histórico de Pedro + `/estimate`). Hacer la subida más rápida (pegar/arrastrar) sigue en pie.
+- **Histórico recibido (2026-09-16)** → `tasks/higgsfield-costos-2026-09-16.md`: 1 crédito ≈ USD 0.04; Seedance 2.0 = 59 %
+  del gasto (mediana 54 créditos vs Kling v3.0 6); lista de ilimitados del plan; 1,200 créditos/mes que no se acumulan;
+  link de Kling 3.0 Motion Control. Plan por pasos (1 prompts por modelo · 2 HÜE barato-sin-perder-calidad + estimado ·
+  3 stats en Evaluaciones · 4 subida más rápida) → espera el "go" de Pedro.
+
+4. [ ] **F5d — Higgsfield como plataforma** (decisiones de Pedro ARRIBA: default para todas; modelos del equipo). Plan: "¿Dónde generas?" (Higgsfield por default) → el prompt se sigue escribiendo para el MODELO; el
        catálogo (F6a) gana, por modelo, "cómo llegar en Higgsfield" y los límites de Higgsfield cuando difieren (Kling 3.0
        ahí: hasta 15 s, audio nativo, hasta 6 cortes; Veo 3.1: 1–3 refs, 4/6/8 s, 16:9/9:16 = los nuestros); presets de
        cámara al día con la lista de Camera Controls (50+, hoy tenemos 19); ajustar el compiler de Nano Banana a la guía
