@@ -15,7 +15,7 @@ import { ASPECTS, TOOLS, type Aspect, type Tool } from "@/lib/prisma/spec";
 import { TOOL_INFO } from "@/lib/prisma/tools";
 
 /** Costo en texto (se escribe): vacío = sin dato. `conCosto` false = no sabemos si cobra. */
-type ModeloB = { id: string; etiqueta: string; rol: RolModelo; es: string; en: string; url: string; conCosto: boolean; ilimitado: boolean; tipico: string; min: string; max: string };
+type ModeloB = { id: string; etiqueta: string; rol: RolModelo; es: string; en: string; url: string; conCosto: boolean; ilimitado: boolean; tipico: string; min: string; max: string; tabla: string };
 /** El formulario en texto (los números se escriben): se convierte a la forma de la tabla al validar. */
 type Borrador = { duraciones: string; maxPalabras: string; maxCaracteres: string; aspects: Aspect[]; refsMax: string; audio: boolean; fortalezas: Record<Fortaleza, number>; modelos: ModeloB[]; fuenteUrl: string; fuenteFecha: string };
 
@@ -33,6 +33,7 @@ const aBorrador = (f: FichaHerramienta): Borrador => ({
     tipico: m.costo?.tipico != null && !m.costo.ilimitado ? String(m.costo.tipico) : "",
     min: m.costo?.min != null && !m.costo.ilimitado ? String(m.costo.min) : "",
     max: m.costo?.max != null && !m.costo.ilimitado ? String(m.costo.max) : "",
+    tabla: m.costo?.porDuracion?.length && !m.costo.ilimitado ? m.costo.porDuracion.map((f) => `${f.s}=${f.p720}/${f.p1080}/${f.p4k ?? "-"}`).join(", ") : "",
   })),
   fuenteUrl: f.fuente?.url ?? "",
   fuenteFecha: f.fuente?.fecha ?? "",
@@ -40,6 +41,18 @@ const aBorrador = (f: FichaHerramienta): Borrador => ({
 
 /** Vacío = sin tope (null); lo demás, número (un NaN lo rechaza la validación con su porqué). */
 const numero = (s: string): number | null => (s.trim() === "" ? null : Number(s));
+
+/** "4=29/29/44, 6=44/44/66" (segundos = 720p/1080p/4K; "-" = sin 4K) → la lista que valida el servidor. Una fila
+ *  mal escrita viaja como segundos inválidos para que la validación diga el porqué (no se tira en silencio). */
+function aTabla(txt: string) {
+  const filas = txt.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
+  if (!filas.length) return null;
+  return filas.map((f) => {
+    const m = /^(\d+)\s*s?\s*=\s*([\d.]+)\s*\/\s*([\d.]+)\s*\/\s*([\d.]+|-)$/.exec(f);
+    if (!m) return { segundos: Number.NaN, p720: 0, p1080: 0, p4k: null };
+    return { segundos: Number(m[1]), p720: Number(m[2]), p1080: Number(m[3]), p4k: m[4] === "-" ? null : Number(m[4]) };
+  });
+}
 
 /** La forma que valida el servidor (validarFicha) — la misma que se guarda en la tabla. */
 function aEntrada(tool: Tool, b: Borrador) {
@@ -55,7 +68,7 @@ function aEntrada(tool: Tool, b: Borrador) {
     fortalezas: Object.fromEntries(fortalezasDe(tool).map((k) => [k, b.fortalezas[k]])),
     modelos: b.modelos.map((m) => ({
       id: m.id.trim(), etiqueta: m.etiqueta, rol: m.rol, como_llegar_es: m.es, como_llegar_en: m.en, url: m.url.trim() || null,
-      costo: m.conCosto ? { ilimitado: m.ilimitado, creditos_tipicos: numero(m.tipico), creditos_min: numero(m.min), creditos_max: numero(m.max) } : null,
+      costo: m.conCosto ? { ilimitado: m.ilimitado, creditos_tipicos: numero(m.tipico), creditos_min: numero(m.min), creditos_max: numero(m.max), creditos_por_duracion: m.ilimitado ? null : aTabla(m.tabla) } : null,
     })),
     fuente_url: b.fuenteUrl.trim() || null,
     fuente_fecha: b.fuenteFecha || null,
@@ -325,9 +338,13 @@ export function PrismaHerramientas({ demo = null }: { demo?: Catalogo | null }) 
                     </label>
                   ))}
                 </div>
+                <label className="block text-xs text-muted-foreground">
+                  Créditos por duración (del botón Generate) — <span className="font-mono">segundos=720p/1080p/4K</span>, separados por coma; &quot;-&quot; si no hay 4K. Vacío = se usa el típico.
+                  <Input value={m.tabla} onChange={(e) => setModelo(i, { tabla: e.target.value })} disabled={!m.conCosto || m.ilimitado} className="mt-1 h-8 font-mono text-sm" maxLength={400} placeholder="4=29/29/44, 6=44/44/66, 8=58/58/88" />
+                </label>
               </div>
             ))}
-            <Button size="sm" variant="outline" className="gap-1.5" disabled={borrador.modelos.length >= MAX_MODELOS} onClick={() => set("modelos", [...borrador.modelos, { id: "", etiqueta: "", rol: "fino", es: "", en: "", url: "", conCosto: false, ilimitado: false, tipico: "", min: "", max: "" }])}>
+            <Button size="sm" variant="outline" className="gap-1.5" disabled={borrador.modelos.length >= MAX_MODELOS} onClick={() => set("modelos", [...borrador.modelos, { id: "", etiqueta: "", rol: "fino", es: "", en: "", url: "", conCosto: false, ilimitado: false, tipico: "", min: "", max: "", tabla: "" }])}>
               <Plus className="size-3.5" /> Agregar modelo
             </Button>
           </fieldset>

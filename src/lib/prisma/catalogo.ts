@@ -39,9 +39,12 @@ export const MAX_MODELOS = 4;
 export const MAX_DURACIONES = 15;
 
 export type Limites = { duraciones: number[]; maxPalabras: number | null; maxCaracteres: number | null; aspects: Aspect[]; refsMax: number; audio: boolean };
+/** Lo que cuesta un intento a esa duración (segundos), por resolución. 4K null = no la ofrece o sin dato. */
+export type PrecioDuracion = { s: number; p720: number; p1080: number; p4k: number | null };
 /** Lo que cuesta UN intento en nuestro plan (Ultimate). `ilimitado`: 0 créditos en higgsfield.ai. Si no,
- *  créditos por generación con los ajustes de siempre (típico = mediana del histórico; null = sin dato). */
-export type CostoModelo = { ilimitado: boolean; tipico: number | null; min: number | null; max: number | null };
+ *  créditos por generación con los ajustes de siempre (típico = mediana del histórico; null = sin dato).
+ *  `porDuracion`: la tabla exacta cuando la tenemos (Pedro, del botón Generate); el estimado la usa antes que el típico. */
+export type CostoModelo = { ilimitado: boolean; tipico: number | null; min: number | null; max: number | null; porDuracion?: PrecioDuracion[] | null };
 /** `url`: la página de ESE modelo en Higgsfield (null = la de la familia, TOOL_INFO.url). `costo`: null = sin dato. */
 export type ModeloHerramienta = { id: string; etiqueta: string; rol: RolModelo; comoLlegar: Par; url: string | null; costo: CostoModelo | null };
 export type FichaHerramienta = { limites: Limites; fortalezas: Record<Fortaleza, number>; modelos: ModeloHerramienta[]; fuente: { url: string; fecha: string } | null };
@@ -71,7 +74,14 @@ const hf = (id: string, etiqueta: string, rol: RolModelo, es: string, en: string
 /** Costos base (tasks/higgsfield-costos-2026-09-16.md): ILIMITADO = lista "365 Ilimitado" del plan de Pedro; los
  *  créditos = medianas/rangos del historial de uso de Pedro, y donde no hay filas, precios del blog de Higgsfield. */
 const LIBRE: CostoModelo = { ilimitado: true, tipico: 0, min: 0, max: 0 };
-const pago = (tipico: number | null, min: number | null = tipico, max: number | null = tipico): CostoModelo => ({ ilimitado: false, tipico, min, max });
+const pago = (tipico: number | null, min: number | null = tipico, max: number | null = tipico, porDuracion: PrecioDuracion[] | null = null): CostoModelo => ({ ilimitado: false, tipico, min, max, ...(porDuracion ? { porDuracion } : {}) });
+/** [segundos, 720p, 1080p, 4K] → tabla. */
+const tabla = (filas: [number, number, number, number | null][]): PrecioDuracion[] => filas.map(([s, p720, p1080, p4k]) => ({ s, p720, p1080, p4k }));
+/** Precios del botón Generate que pasó Pedro (2026-09-16). Veo: 720p = 1080p. Omni Flash 1.1: 3–10 s, +3 / +4 / +9 por
+ *  segundo (720p / 1080p / 4K); Pedro dijo que 1080p "llega a 45" a 10 s aunque +4 daría 42 → se guarda 45 tal cual. */
+const VEO_31 = tabla([[4, 29, 29, 44], [6, 44, 44, 66], [8, 58, 58, 88]]);
+const VEO_31_FAST = tabla([[4, 11, 11, 24], [6, 17, 17, 36], [8, 22, 22, 48]]);
+const OMNI_FLASH = tabla([3, 4, 5, 6, 7, 8, 9, 10].map((sg) => [sg, 9 + 3 * (sg - 3), sg === 10 ? 45 : 14 + 4 * (sg - 3), 27 + 9 * (sg - 3)] as [number, number, number, number]));
 const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
   nanobanana: [
     hf("gemini-3.1-flash-image", "Nano Banana 2", "rapido", "En Higgsfield: Image → Nano Banana 2 → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Nano Banana 2 → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=nano-banana-2`, pago(null)),
@@ -84,8 +94,8 @@ const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
     hf("gpt-image-2.5-sunburst", "GPT Image 2.5 Sunburst", "fino", "En Higgsfield: Image → GPT Image 2.5 Sunburst → adjunta las imágenes en orden y pega el prompt.", "In Higgsfield: Image → GPT Image 2.5 Sunburst → attach the images in order and paste the prompt.", `${HF_IMAGEN}?model=gpt-image-2-5-sunburst`, pago(3, 1.5, 26.5)),
   ],
   veo: [
-    hf("veo-3.1-fast-generate-preview", "Veo 3.1 Fast", "rapido", "En Higgsfield: Video → Google Veo → Veo 3.1 Fast → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 Fast → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`, pago(null)),
-    hf("veo-3.1-generate-preview", "Veo 3.1", "fino", "En Higgsfield: Video → Google Veo → Veo 3.1 → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`, pago(58, 29, 88)),
+    hf("veo-3.1-fast-generate-preview", "Veo 3.1 Fast", "rapido", "En Higgsfield: Video → Google Veo → Veo 3.1 Fast → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 Fast → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`, pago(22, 11, 48, VEO_31_FAST)),
+    hf("veo-3.1-generate-preview", "Veo 3.1", "fino", "En Higgsfield: Video → Google Veo → Veo 3.1 → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`, pago(58, 29, 88, VEO_31)),
   ],
   kling: [
     hf("kling-3.0-turbo", "Kling 3.0 Turbo", "rapido", "En Higgsfield: Video → Kling 3.0 en su modo rápido (Turbo) → pega el prompt.", "In Higgsfield: Video → Kling 3.0 in its fast (Turbo) mode → paste the prompt.", `${HF_VIDEO}?model=kling3_0`, pago(6, 6, 8)),
@@ -104,7 +114,7 @@ const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
     hf("seedance-2.5", "Seedance 2.5", "fino", "En Higgsfield: Video → Seedance 2.5 → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.5 → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_5`, pago(72, null, 195)),
   ],
   gemini_omni: [
-    hf("gemini-omni-flash", "Gemini Omni Flash", "fino", "En Higgsfield: Video → Gemini Omni Flash (720p) → sube las referencias y pega el prompt.", "In Higgsfield: Video → Gemini Omni Flash (720p) → upload the references and paste the prompt.", `${HF_VIDEO}?model=gemini-omni-flash-1-1`, pago(24, 12, 30)),
+    hf("gemini-omni-flash", "Gemini Omni Flash 1.1", "fino", "En Higgsfield: Video → Gemini Omni Flash 1.1 → sube las referencias, elige la duración (3–10 s) y pega el prompt.", "In Higgsfield: Video → Gemini Omni Flash 1.1 → upload the references, pick the length (3–10 s) and paste the prompt.", `${HF_VIDEO}?model=gemini-omni-flash-1-1`, pago(34, 9, 90, OMNI_FLASH)),
   ],
 };
 
@@ -219,9 +229,30 @@ export function leerCosto(v: unknown): Leido<CostoModelo | null> {
   const [tipico, min, max] = [num(o.creditos_tipicos), num(o.creditos_min), num(o.creditos_max)];
   if (tipico === false || min === false || max === false) return mal("Costo: créditos entre 0 y 1000 (o vacío si no hay dato).");
   if ((min !== null && tipico !== null && min > tipico) || (max !== null && tipico !== null && max < tipico) || (min !== null && max !== null && min > max)) return mal("Costo: mínimo ≤ típico ≤ máximo.");
-  return bien({ ilimitado: false, tipico: tipico === null ? null : redondo(tipico), min: min === null ? null : redondo(min), max: max === null ? null : redondo(max) });
+  const tablaLeida = leerTabla(o.creditos_por_duracion);
+  if (!tablaLeida.ok) return tablaLeida;
+  return bien({ ilimitado: false, tipico: tipico === null ? null : redondo(tipico), min: min === null ? null : redondo(min), max: max === null ? null : redondo(max), ...(tablaLeida.valor ? { porDuracion: tablaLeida.valor } : {}) });
 }
-const costoAFila = (c: CostoModelo | null) => (c ? { ilimitado: c.ilimitado, creditos_tipicos: c.tipico, creditos_min: c.min, creditos_max: c.max } : null);
+/** [{segundos, p720, p1080, p4k}] — segundos enteros 1–60 sin repetir, máx. 16 filas; se guarda en orden. */
+function leerTabla(v: unknown): Leido<PrecioDuracion[] | null> {
+  if (v === null || v === undefined) return bien(null);
+  if (!Array.isArray(v) || v.length > 16) return mal("Costo por duración: una lista de hasta 16 filas.");
+  const out: PrecioDuracion[] = [];
+  for (const x of v) {
+    const f = obj(x);
+    const sg = f.segundos;
+    if (typeof sg !== "number" || !Number.isInteger(sg) || sg < 1 || sg > 60 || out.some((o) => o.s === sg)) return mal("Costo por duración: segundos enteros de 1 a 60, sin repetir.");
+    if (!creditos(f.p720) || !creditos(f.p1080) || !(f.p4k === null || f.p4k === undefined || creditos(f.p4k))) return mal(`Costo por duración (${sg} s): créditos entre 0 y 1000.`);
+    out.push({ s: sg, p720: redondo(f.p720), p1080: redondo(f.p1080), p4k: f.p4k === null || f.p4k === undefined ? null : redondo(f.p4k as number) });
+  }
+  return bien(out.length ? out.sort((a, b) => a.s - b.s) : null);
+}
+const costoAFila = (c: CostoModelo | null) =>
+  c ? { ilimitado: c.ilimitado, creditos_tipicos: c.tipico, creditos_min: c.min, creditos_max: c.max, ...(c.porDuracion?.length && !c.ilimitado ? { creditos_por_duracion: c.porDuracion.map((f) => ({ segundos: f.s, p720: f.p720, p1080: f.p1080, p4k: f.p4k })) } : {}) } : null;
+
+/** El precio exacto a esa duración, si hay tabla (la fila con esos segundos; si no, ninguna — no se inventa). */
+export const precioEn = (c: CostoModelo | null | undefined, segundos: number | null | undefined): PrecioDuracion | null =>
+  (segundos && c?.porDuracion?.find((f) => f.s === segundos)) || null;
 
 function leerFuente(url: unknown, fecha: unknown): Leido<{ url: string; fecha: string } | null> {
   if ((url === null || url === undefined || url === "") && (fecha === null || fecha === undefined || fecha === "")) return bien(null);

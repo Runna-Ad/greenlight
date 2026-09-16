@@ -145,7 +145,7 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
     url: `${HF_VIDEO}?model=gemini-omni-flash-1-1`,
     imagenes: true,
     video: true,
-    duraciones: [8, 4, 6, 10],
+    duraciones: [8, 3, 4, 5, 6, 7, 9, 10],
     color: "#4f8cff",
   },
 };

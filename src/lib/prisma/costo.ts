@@ -5,7 +5,7 @@
  * resumen de uso de Pedro, 2026-09-16). Módulo puro.
  */
 import { t, type Par } from "./copy.ts";
-import type { CostoModelo } from "./catalogo.ts";
+import { precioEn, type CostoModelo } from "./catalogo.ts";
 import type { Tool } from "./spec.ts";
 
 export const USD_POR_CREDITO = 0.04;
@@ -25,9 +25,21 @@ const RESOLUCION: Partial<Record<string, { es: string; en: string }>> = {
 };
 
 /** Una línea para el diseñador: "Ilimitado en nuestro plan", "≈ 6 créditos por intento (3.75–12) · US$0.24" o "sin dato". */
-export function textoCosto(c: CostoModelo | null | undefined, video: boolean, tool?: Tool): Par {
+export function textoCosto(c: CostoModelo | null | undefined, video: boolean, tool?: Tool, duracion?: number | null): Par {
   if (!c) return t("Costo: sin dato; Higgsfield lo muestra en el botón Generate.", "Cost: no data; Higgsfield shows it on the Generate button.");
   if (c.ilimitado) return t("Ilimitado en nuestro plan: 0 créditos por intento.", "Unlimited on our plan: 0 credits per try.");
+  const exacto = video ? precioEn(c, duracion) : null;
+  if (exacto) {
+    // Precio exacto del botón Generate a esa duración: 1080p (la final) y las otras resoluciones al lado.
+    const [a, b] = INTENTOS_TIPICOS;
+    const p = exacto.p1080;
+    const otras = [exacto.p720 !== p ? `720p: ${num(exacto.p720)}` : null, exacto.p4k !== null ? `4K: ${num(exacto.p4k)}` : null].filter(Boolean).join(" · ");
+    const igual = exacto.p720 === p ? { es: " (720p cuesta lo mismo)", en: " (720p costs the same)" } : { es: "", en: "" };
+    return t(
+      `${num(p)} créditos por intento a ${exacto.s} s en 1080p${igual.es}${otras ? ` · ${otras}` : ""} · ${usd(p)}. Una pieza lista suele tomar ${a}–${b} intentos: ≈ ${num(p * a)}–${num(p * b)} créditos. Más corto cuesta menos.`,
+      `${num(p)} credits per try at ${exacto.s} s in 1080p${igual.en}${otras ? ` · ${otras}` : ""} · ${usd(p)}. A finished piece usually takes ${a}–${b} tries: ≈ ${num(p * a)}–${num(p * b)} credits. Shorter costs less.`,
+    );
+  }
   if (c.tipico === null) return t("Consume créditos (sin dato del costo exacto; Higgsfield lo muestra en el botón Generate).", "Uses credits (no exact cost on file; Higgsfield shows it on the Generate button).");
   const rango = c.min !== null && c.max !== null && (c.min !== c.tipico || c.max !== c.tipico) ? ` (${num(c.min)}–${num(c.max)})` : c.max !== null && c.max !== c.tipico ? ` (hasta ${num(c.max)})` : "";
   const rangoEn = rango.replace("hasta", "up to");

@@ -15,7 +15,7 @@ import { compilarFusion } from "@/lib/prisma/compilers/fusion";
 import { ACCIONES_RESULTADO, resolucionDe, type Aviso } from "@/lib/prisma/diagnostico";
 import { DESTINO_LABEL, PEDIR_VERSION_LABEL, TOOL_LABEL, UI, VARIANTE_LABEL, tx, type Lang, type Par } from "@/lib/prisma/copy";
 import type { PrismaVariante } from "@/lib/database.types";
-import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
+import { duracionVeo, TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
 import { pistasModelo, recomendarModelo } from "@/lib/prisma/modelo";
 import { pasosHiggsfield } from "@/lib/prisma/pasos";
 import { costoCorto, textoCosto } from "@/lib/prisma/costo";
@@ -324,7 +324,7 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
           {/* Paso 2: lo que cuesta, antes de generar en Higgsfield. */}
           <p className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
             <Coins className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
-            <span>{tx(textoCosto(modelo.costo, esVideoJob, vivo.tool), lang)}</span>
+            <span>{tx(textoCosto(modelo.costo, esVideoJob, vivo.tool, vivo.tool === "veo" ? duracionVeo(vivo.spec.duracion, vivo.spec.refs.length) : vivo.spec.duracion), lang)}</span>
           </p>
           <p className="mt-1 text-xs text-muted-foreground">{tx(UI.formato, lang)}: {vivo.spec.aspect} · {tx(DESTINO_LABEL[destinoActual], lang)}</p>
           {/* Aprendizaje visible: el diseñador sabe que H.Ü.E ya "conoce" a esta marca. */}
