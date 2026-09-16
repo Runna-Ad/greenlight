@@ -32,7 +32,10 @@ sólo toca el resto al APROBAR (con los mismos validadores del Hub).
 - [x] Smokes: lector contra Higgsfield real (ok) + IPs internas/rebinding/http (bloqueados); H.Ü.E con un cambio sintético
       ×2 (≈2.5k tokens c/u): ignoró el banner y la inyección, propuso sólo los 2 hechos reales con cita literal.
       test-prisma 947 · test-db 503 · npm test ✓ · lint 0 · build ✓ · navegador (?demo=vigia, 375 px sin desborde).
-- [ ] **SHIP 0074** (espera "ship it") → primera corrida "Revisar ahora" = línea base (no propone, no gasta).
+- [x] **SHIP 0074** — Pedro: "ship it" → `npm run migrate` (ref ybbrpqzbedaxsmotgtkh) → verificada: 14 fuentes, RLS en las 3
+      tablas, 3 policies, anon/authenticated sin acceso a tablas ni funciones, service_role ejecuta, ledger 20260916120003.
+      Línea base con `correrVigia(db, 0, { maxLlamadas: 0 })`: 14 leídas en 6 s, 0 errores, 0 llamadas, 0 propuestas,
+      candado suelto. Desde la próxima revisión, sólo lo nuevo. Pendiente de Pedro al pasar a producción: CRON_SECRET.
 ### Verificación F6b
 Tests puros (extracción, cambios, saneo con citas falsas, cada tipo, aplicar, huella, visible, validar fuente/hosts) ·
 test-db 0074 (RLS, CHECKs, huella única, función) · npm test · tsc · lint · build · navegador (?demo=vigia) · reap doble
