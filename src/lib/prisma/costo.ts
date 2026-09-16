@@ -33,7 +33,7 @@ export function textoCosto(c: CostoModelo | null | undefined, video: boolean, to
     // Precio exacto del botón Generate a esa duración: 1080p (la final) y las otras resoluciones al lado.
     const [a, b] = INTENTOS_TIPICOS;
     const p = exacto.p1080;
-    const otras = [exacto.p720 !== p ? `720p: ${num(exacto.p720)}` : null, exacto.p4k !== null ? `4K: ${num(exacto.p4k)}` : null].filter(Boolean).join(" · ");
+    const otras = [exacto.p480 != null ? `480p: ${num(exacto.p480)}` : null, exacto.p720 !== p ? `720p: ${num(exacto.p720)}` : null, exacto.p4k !== null ? `4K: ${num(exacto.p4k)}` : null].filter(Boolean).join(" · ");
     const igual = exacto.p720 === p ? { es: " (720p cuesta lo mismo)", en: " (720p costs the same)" } : { es: "", en: "" };
     return t(
       `${num(p)} créditos por intento a ${exacto.s} s en 1080p${igual.es}${otras ? ` · ${otras}` : ""} · ${usd(p)}. Una pieza lista suele tomar ${a}–${b} intentos: ≈ ${num(p * a)}–${num(p * b)} créditos. Más corto cuesta menos.`,

@@ -62,12 +62,12 @@ o elige entre modelos que ya cumplen. "típico" = créditos por intento con los 
 | Seedream 4.5 / 5.0 Lite | ilimitado | plan |
 | Seedance 2.0 Mini | 12.5 (10–17.5) | historial (6 filas) |
 | Seedance 2.0 | 54 (36–110) | historial (16 filas) |
-| Seedance 2.5 | 72 (hasta 195) | blog (8 s 1080p = 72; 30 s 720p = 195) |
+| Seedance 2.5 | 72 (12–270) + tabla | **Pedro, 2026-09-16**: 4–30 s, parejo por segundo: 480p 3 · 720p 6.5 · 1080p 9 (4 s = 12/26/36; 30 s = 90/195/270). Sin 4K. Ojo: la herramienta Seedance en Prisma ofrece hasta 15 s (2.0 no pasa de ahí); de 16 a 30 s falta decidir. |
 | Gemini Omni Flash 1.1 | 34 (9–90) + tabla | **Pedro, 2026-09-16**: 3–10 s (cualquier segundo). 720p 9→30 (+3/s) · 1080p 14→45 (+4/s; ojo: +4 daría 42 a 10 s, Pedro dijo 45 — se guardó 45, confirmar) · 4K 27→90 (+9/s). Típico = 8 s 1080p. |
 Por intento → por pieza: × 3–5 (blog ai-video-credits-explained). USD: × 0.04 (resumen de uso de Pedro).
 
 ## Tabla por duración (2026-09-16)
 Cuando hay tabla (`porDuracion`: segundos → 720p/1080p/4K), el estimado del Studio y del resultado dice el precio EXACTO
 a la duración elegida en 1080p (y las otras resoluciones al lado); sin fila para esa duración, usa el típico.
-Editable en Hub › Herramientas: `4=29/29/44, 6=44/44/66` (segundos=720p/1080p/4K; "-" = sin 4K).
-Faltan tablas de: Seedance 2.0 / Mini / 2.5, Kling 3.0 / Turbo / Motion Control.
+Editable en Hub › Herramientas: `4=29/29/44, 6=44/44/66` (segundos=720p/1080p/4K; "-" = sin 4K), o con 480p al frente: `4=12/26/36/-`.
+Faltan tablas de: Seedance 2.0 / Mini, Kling 3.0 / Turbo / Motion Control.

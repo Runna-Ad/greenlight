@@ -33,7 +33,7 @@ const aBorrador = (f: FichaHerramienta): Borrador => ({
     tipico: m.costo?.tipico != null && !m.costo.ilimitado ? String(m.costo.tipico) : "",
     min: m.costo?.min != null && !m.costo.ilimitado ? String(m.costo.min) : "",
     max: m.costo?.max != null && !m.costo.ilimitado ? String(m.costo.max) : "",
-    tabla: m.costo?.porDuracion?.length && !m.costo.ilimitado ? m.costo.porDuracion.map((f) => `${f.s}=${f.p720}/${f.p1080}/${f.p4k ?? "-"}`).join(", ") : "",
+    tabla: m.costo?.porDuracion?.length && !m.costo.ilimitado ? m.costo.porDuracion.map((f) => `${f.s}=${m.costo?.porDuracion?.some((x) => x.p480 != null) ? `${f.p480 ?? "-"}/` : ""}${f.p720}/${f.p1080}/${f.p4k ?? "-"}`).join(", ") : "",
   })),
   fuenteUrl: f.fuente?.url ?? "",
   fuenteFecha: f.fuente?.fecha ?? "",
@@ -42,15 +42,17 @@ const aBorrador = (f: FichaHerramienta): Borrador => ({
 /** Vacío = sin tope (null); lo demás, número (un NaN lo rechaza la validación con su porqué). */
 const numero = (s: string): number | null => (s.trim() === "" ? null : Number(s));
 
-/** "4=29/29/44, 6=44/44/66" (segundos = 720p/1080p/4K; "-" = sin 4K) → la lista que valida el servidor. Una fila
+/** "4=29/29/44, 6=44/44/66" (segundos = 720p/1080p/4K; "-" = sin 4K) o con 480p al frente "4=12/26/36/-"
+ *  → la lista que valida el servidor. Una fila
  *  mal escrita viaja como segundos inválidos para que la validación diga el porqué (no se tira en silencio). */
 function aTabla(txt: string) {
   const filas = txt.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
   if (!filas.length) return null;
   return filas.map((f) => {
-    const m = /^(\d+)\s*s?\s*=\s*([\d.]+)\s*\/\s*([\d.]+)\s*\/\s*([\d.]+|-)$/.exec(f);
+    const m = /^(\d+)\s*s?\s*=\s*(?:([\d.]+|-)\s*\/\s*)?([\d.]+)\s*\/\s*([\d.]+)\s*\/\s*([\d.]+|-)$/.exec(f);
     if (!m) return { segundos: Number.NaN, p720: 0, p1080: 0, p4k: null };
-    return { segundos: Number(m[1]), p720: Number(m[2]), p1080: Number(m[3]), p4k: m[4] === "-" ? null : Number(m[4]) };
+    const n = (x: string | undefined) => (x === undefined || x === "-" ? null : Number(x));
+    return { segundos: Number(m[1]), p480: n(m[2]), p720: Number(m[3]), p1080: Number(m[4]), p4k: n(m[5]) };
   });
 }
 
@@ -339,8 +341,8 @@ export function PrismaHerramientas({ demo = null }: { demo?: Catalogo | null }) 
                   ))}
                 </div>
                 <label className="block text-xs text-muted-foreground">
-                  Créditos por duración (del botón Generate) — <span className="font-mono">segundos=720p/1080p/4K</span>, separados por coma; &quot;-&quot; si no hay 4K. Vacío = se usa el típico.
-                  <Input value={m.tabla} onChange={(e) => setModelo(i, { tabla: e.target.value })} disabled={!m.conCosto || m.ilimitado} className="mt-1 h-8 font-mono text-sm" maxLength={400} placeholder="4=29/29/44, 6=44/44/66, 8=58/58/88" />
+                  Créditos por duración (del botón Generate) — <span className="font-mono">segundos=720p/1080p/4K</span> (o <span className="font-mono">480p/720p/1080p/4K</span>), separados por coma; &quot;-&quot; si no existe esa resolución. Vacío = se usa el típico.
+                  <Input value={m.tabla} onChange={(e) => setModelo(i, { tabla: e.target.value })} disabled={!m.conCosto || m.ilimitado} className="mt-1 h-8 font-mono text-sm" maxLength={1500} placeholder="4=29/29/44, 6=44/44/66, 8=58/58/88" />
                 </label>
               </div>
             ))}

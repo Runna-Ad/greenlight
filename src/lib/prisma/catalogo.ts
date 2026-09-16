@@ -40,7 +40,7 @@ export const MAX_DURACIONES = 15;
 
 export type Limites = { duraciones: number[]; maxPalabras: number | null; maxCaracteres: number | null; aspects: Aspect[]; refsMax: number; audio: boolean };
 /** Lo que cuesta un intento a esa duración (segundos), por resolución. 4K null = no la ofrece o sin dato. */
-export type PrecioDuracion = { s: number; p720: number; p1080: number; p4k: number | null };
+export type PrecioDuracion = { s: number; p720: number; p1080: number; p4k: number | null; p480?: number | null };
 /** Lo que cuesta UN intento en nuestro plan (Ultimate). `ilimitado`: 0 créditos en higgsfield.ai. Si no,
  *  créditos por generación con los ajustes de siempre (típico = mediana del histórico; null = sin dato).
  *  `porDuracion`: la tabla exacta cuando la tenemos (Pedro, del botón Generate); el estimado la usa antes que el típico. */
@@ -81,6 +81,8 @@ const tabla = (filas: [number, number, number, number | null][]): PrecioDuracion
  *  segundo (720p / 1080p / 4K); Pedro dijo que 1080p "llega a 45" a 10 s aunque +4 daría 42 → se guarda 45 tal cual. */
 const VEO_31 = tabla([[4, 29, 29, 44], [6, 44, 44, 66], [8, 58, 58, 88]]);
 const VEO_31_FAST = tabla([[4, 11, 11, 24], [6, 17, 17, 36], [8, 22, 22, 48]]);
+/** Seedance 2.5 (Pedro): 4–30 s, parejo por segundo — 480p 3, 720p 6.5, 1080p 9 (4 s = 12/26/36; 30 s = 90/195/270). Sin 4K. */
+const SEEDANCE_25 = Array.from({ length: 27 }, (_, i): PrecioDuracion => ({ s: i + 4, p480: 3 * (i + 4), p720: 6.5 * (i + 4), p1080: 9 * (i + 4), p4k: null }));
 const OMNI_FLASH = tabla([3, 4, 5, 6, 7, 8, 9, 10].map((sg) => [sg, 9 + 3 * (sg - 3), sg === 10 ? 45 : 14 + 4 * (sg - 3), 27 + 9 * (sg - 3)] as [number, number, number, number]));
 const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
   nanobanana: [
@@ -111,7 +113,7 @@ const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
   seedance: [
     hf("seedance-2.0-mini", "Seedance 2.0 Mini", "rapido", "En Higgsfield: Video → Seedance 2.0 Mini (hasta 720p) → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.0 Mini (up to 720p) → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_0_mini`, pago(12.5, 10, 17.5)),
     hf("seedance-2.0", "Seedance 2.0", "fino", "En Higgsfield: Video → Seedance 2.0 → sube las referencias y pega el prompt; 1080p salvo que la pieza pida 4K.", "In Higgsfield: Video → Seedance 2.0 → upload the references and paste the prompt; 1080p unless the piece needs 4K.", `${HF_VIDEO}?model=seedance_2_0`, pago(54, 36, 110)),
-    hf("seedance-2.5", "Seedance 2.5", "fino", "En Higgsfield: Video → Seedance 2.5 → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.5 → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_5`, pago(72, null, 195)),
+    hf("seedance-2.5", "Seedance 2.5", "fino", "En Higgsfield: Video → Seedance 2.5 → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.5 → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_5`, pago(72, 12, 270, SEEDANCE_25)),
   ],
   gemini_omni: [
     hf("gemini-omni-flash", "Gemini Omni Flash 1.1", "fino", "En Higgsfield: Video → Gemini Omni Flash 1.1 → sube las referencias, elige la duración (3–10 s) y pega el prompt.", "In Higgsfield: Video → Gemini Omni Flash 1.1 → upload the references, pick the length (3–10 s) and paste the prompt.", `${HF_VIDEO}?model=gemini-omni-flash-1-1`, pago(34, 9, 90, OMNI_FLASH)),
@@ -233,22 +235,24 @@ export function leerCosto(v: unknown): Leido<CostoModelo | null> {
   if (!tablaLeida.ok) return tablaLeida;
   return bien({ ilimitado: false, tipico: tipico === null ? null : redondo(tipico), min: min === null ? null : redondo(min), max: max === null ? null : redondo(max), ...(tablaLeida.valor ? { porDuracion: tablaLeida.valor } : {}) });
 }
-/** [{segundos, p720, p1080, p4k}] — segundos enteros 1–60 sin repetir, máx. 16 filas; se guarda en orden. */
+/** [{segundos, p480?, p720, p1080, p4k}] — segundos enteros 1–60 sin repetir, máx. 32 filas; se guarda en orden. */
 function leerTabla(v: unknown): Leido<PrecioDuracion[] | null> {
   if (v === null || v === undefined) return bien(null);
-  if (!Array.isArray(v) || v.length > 16) return mal("Costo por duración: una lista de hasta 16 filas.");
+  if (!Array.isArray(v) || v.length > 32) return mal("Costo por duración: una lista de hasta 32 filas.");
   const out: PrecioDuracion[] = [];
   for (const x of v) {
     const f = obj(x);
     const sg = f.segundos;
     if (typeof sg !== "number" || !Number.isInteger(sg) || sg < 1 || sg > 60 || out.some((o) => o.s === sg)) return mal("Costo por duración: segundos enteros de 1 a 60, sin repetir.");
-    if (!creditos(f.p720) || !creditos(f.p1080) || !(f.p4k === null || f.p4k === undefined || creditos(f.p4k))) return mal(`Costo por duración (${sg} s): créditos entre 0 y 1000.`);
-    out.push({ s: sg, p720: redondo(f.p720), p1080: redondo(f.p1080), p4k: f.p4k === null || f.p4k === undefined ? null : redondo(f.p4k as number) });
+    const opcional = (x: unknown) => x === null || x === undefined || creditos(x);
+    if (!creditos(f.p720) || !creditos(f.p1080) || !opcional(f.p4k) || !opcional(f.p480)) return mal(`Costo por duración (${sg} s): créditos entre 0 y 1000.`);
+    const p480 = typeof f.p480 === "number" ? redondo(f.p480) : null;
+    out.push({ s: sg, ...(p480 !== null ? { p480 } : {}), p720: redondo(f.p720), p1080: redondo(f.p1080), p4k: f.p4k === null || f.p4k === undefined ? null : redondo(f.p4k as number) });
   }
   return bien(out.length ? out.sort((a, b) => a.s - b.s) : null);
 }
 const costoAFila = (c: CostoModelo | null) =>
-  c ? { ilimitado: c.ilimitado, creditos_tipicos: c.tipico, creditos_min: c.min, creditos_max: c.max, ...(c.porDuracion?.length && !c.ilimitado ? { creditos_por_duracion: c.porDuracion.map((f) => ({ segundos: f.s, p720: f.p720, p1080: f.p1080, p4k: f.p4k })) } : {}) } : null;
+  c ? { ilimitado: c.ilimitado, creditos_tipicos: c.tipico, creditos_min: c.min, creditos_max: c.max, ...(c.porDuracion?.length && !c.ilimitado ? { creditos_por_duracion: c.porDuracion.map((f) => ({ segundos: f.s, ...(f.p480 != null ? { p480: f.p480 } : {}), p720: f.p720, p1080: f.p1080, p4k: f.p4k })) } : {}) } : null;
 
 /** El precio exacto a esa duración, si hay tabla (la fila con esos segundos; si no, ninguna — no se inventa). */
 export const precioEn = (c: CostoModelo | null | undefined, segundos: number | null | undefined): PrecioDuracion | null =>
