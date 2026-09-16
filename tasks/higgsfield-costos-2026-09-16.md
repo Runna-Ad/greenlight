@@ -43,3 +43,25 @@ Recordatorio (verificado 2026-09-15): lo ilimitado aplica SÓLO en higgsfield.ai
 - Costo por AJUSTE (duración × resolución) — el historial no lo muestra. Opciones: el tooltip del monto (subrayado
   punteado) o anotar lo que marca el botón Generar para 2–3 ajustes comunes de Seedance 2.0 y Kling 3.0.
 - Wan 2.7 (10 % del gasto), Cinematic Studio 3.5, Seedance 1.5 Pro y Sora 2 se usan pero el head de diseño no los nombró.
+
+## Costos base en el catálogo (paso 2, `catalogo.ts` BASE_MODELOS — editables en Hub › Herramientas)
+Regla de Pedro (2026-09-16): ahorrar sin sacrificar calidad — la calidad/capacidad decide; el costo sólo desempata
+o elige entre modelos que ya cumplen. "típico" = créditos por intento con los ajustes de siempre.
+| Modelo (id) | Costo base | De dónde sale |
+|---|---|---|
+| Nano Banana Pro (gemini-3-pro-image) | ilimitado | plan "365 Ilimitado" (calidad 2K) |
+| Nano Banana 2 (gemini-3.1-flash-image) | cobra, sin dato | no está en la lista de ilimitados |
+| Image Auto | ilimitado | historial ("Ilimitado") |
+| GPT Image 2.5 Flare / Sunburst | 3 (1.5–26.5) | **Pedro, 2026-09-16: 3 créditos cada uno** (NO ilimitados); rango del blog por calidad/resolución. GPT Image 2 = 6.5 (no está en el catálogo). El "GPT Image" ilimitado del plan no es ninguno de estos. |
+| Veo 3.1 | 58 (40–70) | blog (Lipsync Veo 58 cr/1080p) + estimados de terceros |
+| Veo 3.1 Fast | cobra, sin dato | — |
+| Kling 3.0 Turbo | 6 (6–8) | historial (14 filas) |
+| Kling 3.0 | 6 (3.75–12) | historial (12 filas) |
+| Kling 3.0 Motion Control | 8 (8–14) | historial |
+| Higgsfield DoP | sin dato | — |
+| Seedream 4.5 / 5.0 Lite | ilimitado | plan |
+| Seedance 2.0 Mini | 12.5 (10–17.5) | historial (6 filas) |
+| Seedance 2.0 | 54 (36–110) | historial (16 filas) |
+| Seedance 2.5 | 72 (hasta 195) | blog (8 s 1080p = 72; 30 s 720p = 195) |
+| Gemini Omni Flash | 24 (12–30) | blog (~US$0.15/s) ÷ US$0.05/crédito del blog, 4–10 s — estimado |
+Por intento → por pieza: × 3–5 (blog ai-video-credits-explained). USD: × 0.04 (resumen de uso de Pedro).

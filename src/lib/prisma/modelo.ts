@@ -7,7 +7,8 @@
  */
 import { JOB_KIND, textoDe, type Destino, type JobType, type PromptSpec, type Tool } from "./spec.ts";
 import { t, type Par } from "./copy.ts";
-import { CATALOGO_BASE, modeloPorRol, type Catalogo, type ModeloHerramienta, type RolModelo } from "./catalogo.ts";
+import { CATALOGO_BASE, modeloPorRol, type Catalogo, type CostoModelo, type ModeloHerramienta, type RolModelo } from "./catalogo.ts";
+import { creditosDe } from "./costo.ts";
 import type { CampoVeredicto } from "./resultado.ts";
 
 export type PistasModelo = {
@@ -32,6 +33,8 @@ export type Recomendacion = {
   rol: RolModelo;
   /** La página de ese modelo en Higgsfield (null = la de la familia, TOOL_INFO.url). */
   url: string | null;
+  /** Paso 2: lo que cuesta un intento (null = sin dato). */
+  costo: CostoModelo | null;
 };
 
 const SOCIAL: Destino[] = ["ig_story", "ig_feed", "tiktok", "fb_ad"];
@@ -40,9 +43,31 @@ const SOCIAL: Destino[] = ["ig_story", "ig_feed", "tiktok", "fb_ad"];
  *  catálogo dice qué modelo es cada rol hoy (id, nombre, cómo llegar) — "llegó ChatGPT 6" = cambiar
  *  una fila en Hub › Herramientas, sin deploy. Los porqués nombran los modelos del catálogo. */
 export function recomendarModelo(p: PistasModelo, cat: Catalogo = CATALOGO_BASE): Recomendacion {
+  const r = porRol(p, cat);
+  if (r.rol !== "rapido" || !(ROLES_POR_TOOL_CON_FINO(cat, p.tool))) return r;
+  // Paso 2 (Pedro: "ahorrar sin sacrificar calidad"): la calidad decidió que basta el rápido. Si el FINO de la
+  // misma herramienta es ILIMITADO o ESTRICTAMENTE más barato (p. ej. Nano Banana Pro es ilimitado y el 2 no),
+  // el fino: mejor calidad sin gastar más. Al mismo precio pagado se queda el rápido (es el que itera más
+  // rápido: Kling Turbo). Al revés nunca: si la pieza pidió el fino, se queda el fino aunque cueste.
+  const fino = modeloPorRol(cat, p.tool, "fino");
+  const cr = creditosDe(r.costo);
+  const cf = creditosDe(fino.costo);
+  if (cf === null || (cr !== null && cf > cr) || (cr === null && cf > 0)) return r;
+  if (cr !== null && cf === cr && cf > 0) return r;
+  const porque = cf === 0
+    ? t(`${fino.etiqueta} es ilimitado en nuestro plan: la calidad alta sin gastar créditos.`, `${fino.etiqueta} is unlimited on our plan: top quality without spending credits.`)
+    : t(`${fino.etiqueta} cuesta lo mismo o menos que ${r.etiqueta.es} y rinde más calidad.`, `${fino.etiqueta} costs the same or less than ${r.etiqueta.en} and delivers higher quality.`);
+  return { modelo: fino.id, etiqueta: t(fino.etiqueta, fino.etiqueta), porque, comoLlegar: fino.comoLlegar, rol: fino.rol, url: fino.url, costo: fino.costo };
+}
+
+/** ¿La herramienta tiene un modelo fino distinto del rápido? (Higgsfield DoP, Seedream y Omni sólo tienen fino.) */
+const ROLES_POR_TOOL_CON_FINO = (cat: Catalogo, tool: PistasModelo["tool"]): boolean => modeloPorRol(cat, tool, "fino").id !== modeloPorRol(cat, tool, "rapido").id;
+
+/** F6a: el CÓDIGO decide el rol por lo que la pieza PIDE (calidad), con las condiciones de siempre. */
+function porRol(p: PistasModelo, cat: Catalogo): Recomendacion {
   const rapido = modeloPorRol(cat, p.tool, "rapido");
   const fino = modeloPorRol(cat, p.tool, "fino");
-  const rec = (m: ModeloHerramienta, porque: Par): Recomendacion => ({ modelo: m.id, etiqueta: t(m.etiqueta, m.etiqueta), porque, comoLlegar: m.comoLlegar, rol: m.rol, url: m.url });
+  const rec = (m: ModeloHerramienta, porque: Par): Recomendacion => ({ modelo: m.id, etiqueta: t(m.etiqueta, m.etiqueta), porque, comoLlegar: m.comoLlegar, rol: m.rol, url: m.url, costo: m.costo });
   switch (p.tool) {
     case "nanobanana": {
       // Lo que a esta marca le falló en los resultados que subió (texto, parecido) pide el fino.

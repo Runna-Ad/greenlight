@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
-import { Check, Copy, Cpu, ExternalLink, ListOrdered, Eye, Flame, Lightbulb, Minus, RefreshCw, Shield, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2, Wrench } from "lucide-react";
+import { Check, Coins, Copy, Cpu, ExternalLink, ListOrdered, Eye, Flame, Lightbulb, Minus, RefreshCw, Shield, ThumbsDown, ThumbsUp, Wand2, AlertTriangle, ShieldCheck, Loader2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +18,7 @@ import type { PrismaVariante } from "@/lib/database.types";
 import { TOOL_INFO, TOOLS_POR_JOB } from "@/lib/prisma/tools";
 import { pistasModelo, recomendarModelo } from "@/lib/prisma/modelo";
 import { pasosHiggsfield } from "@/lib/prisma/pasos";
+import { costoCorto, textoCosto } from "@/lib/prisma/costo";
 import { useCatalogo } from "./catalogo-contexto";
 import { DESTINOS, JOB_KIND, type Destino, type PromptSpec, type Tool } from "@/lib/prisma/spec";
 import type { Salida } from "@/lib/prisma/compilers";
@@ -320,6 +321,11 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
             <span className="text-muted-foreground">{tx(modelo.porque, lang)}</span>
           </p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">{tx(modelo.comoLlegar, lang)}</p>
+          {/* Paso 2: lo que cuesta, antes de generar en Higgsfield. */}
+          <p className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
+            <Coins className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
+            <span>{tx(textoCosto(modelo.costo, esVideoJob), lang)}</span>
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">{tx(UI.formato, lang)}: {vivo.spec.aspect} · {tx(DESTINO_LABEL[destinoActual], lang)}</p>
           {/* Aprendizaje visible: el diseñador sabe que H.Ü.E ya "conoce" a esta marca. */}
           {vivo.aprendio && vivo.aprendio.ganadores > 0 && <p className="mt-0.5 text-xs text-muted-foreground">{tx(UI.aprendioDe, lang).replace("{n}", String(vivo.aprendio.ganadores))}</p>}
@@ -418,12 +424,16 @@ export function Resultado({ vivo, lang, onCambio, onNueva, juicioEnCurso = false
           {cargandoExp ? <Loader2 className="size-4 animate-spin" /> : <Lightbulb className="size-4" />}
           {verExplicacion ? tx(UI.ocultarExplicacion, lang) : tx(UI.explicar, lang)}
         </Button>
-        {otras.map((t) => (
-          <Button key={t} variant="ghost" size="sm" onClick={() => cambiar(t)} disabled={ocupado || esDemo} aria-busy={cambiando === t}>
-            {cambiando === t ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-            {tx(TOOL_LABEL[t], lang)}
-          </Button>
-        ))}
+        {otras.map((t) => {
+          const c = tx(costoCorto(recomendarModelo(pistasModelo(vivo.spec, t), catalogo).costo), lang);
+          return (
+            <Button key={t} variant="ghost" size="sm" onClick={() => cambiar(t)} disabled={ocupado || esDemo} aria-busy={cambiando === t}>
+              {cambiando === t ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+              {tx(TOOL_LABEL[t], lang)}
+              {c && <span className="text-[11px] font-normal text-muted-foreground">· {c}</span>}
+            </Button>
+          );
+        })}
         <span className="ml-auto flex items-center gap-1">
           <button
             type="button"

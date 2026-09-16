@@ -19,13 +19,43 @@ export type PistasRuta = {
   movimientoMarcado: boolean;
   /** El diseñador escribió texto que debe verse en la pieza. */
   tieneTexto: boolean;
+  /** Paso 2 — capacidad: cuántas referencias subió y cuántos segundos pidió (opcionales: sin dato no se filtra). */
+  refs?: number;
+  duracion?: number | null;
 };
+
+/** ¿La herramienta acepta lo que la pieza trae? Referencias y duración son límites duros (el catálogo los dice).
+ *  La duración se descarta sólo si la herramienta NO LLEGA (más larga que su máximo): dentro del rango, la
+ *  duración se ajusta a la más cercana que ofrece (Kling y Seedance aceptan cualquier segundo; Omni 4/6/8/10). */
+function cabe(cat: Catalogo, tool: Tool, p: PistasRuta): "refs" | "duracion" | null {
+  const l = cat[tool].limites;
+  if ((p.refs ?? 0) > l.refsMax) return "refs";
+  if (TOOL_INFO[tool].video && p.duracion && l.duraciones.length && p.duracion > Math.max(...l.duraciones)) return "duracion";
+  return null;
+}
 
 /** F6a: las reglas dicen QUÉ importa (texto, diálogo, movimiento, vertical corto); el catálogo dice
  *  QUIÉN es mejor en eso (fortalezas 0–5, Hub › Herramientas). Con el catálogo base, la elección es
  *  exactamente la de antes (test golden). Empate → la primera de TOOLS_POR_JOB. */
 export function elegirHerramienta(p: PistasRuta, cat: Catalogo = CATALOGO_BASE): Eleccion {
-  const opciones = TOOLS_POR_JOB[p.job];
+  const todas = TOOLS_POR_JOB[p.job];
+  const caben = todas.filter((x) => !cabe(cat, x, p));
+  // Si ninguna cabe, se elige entre todas (el diagnóstico avisa); si todas caben, nada cambia.
+  if (!caben.length || caben.length === todas.length) return elegirEntre(p, cat, todas);
+  const elegida = elegirEntre(p, cat, caben);
+  const sinFiltro = elegirEntre(p, cat, todas).tool;
+  const motivo = cabe(cat, sinFiltro, p);
+  if (!motivo || sinFiltro === elegida.tool) return elegida;
+  const n = (x: Tool) => TOOL_INFO[x].nombre;
+  const l = cat[sinFiltro].limites;
+  const razon =
+    motivo === "refs"
+      ? t(`Subiste ${p.refs} referencias y ${n(sinFiltro)} acepta hasta ${l.refsMax}: va ${n(elegida.tool)}.`, `You uploaded ${p.refs} references and ${n(sinFiltro)} takes up to ${l.refsMax}: ${n(elegida.tool)} it is.`)
+      : t(`Pides ${p.duracion} s y ${n(sinFiltro)} llega a ${Math.max(...l.duraciones)} s: va ${n(elegida.tool)}.`, `You want ${p.duracion} s and ${n(sinFiltro)} goes up to ${Math.max(...l.duraciones)} s: ${n(elegida.tool)} it is.`);
+  return { tool: elegida.tool, porque: t(`${razon.es} ${elegida.porque.es}`, `${razon.en} ${elegida.porque.en}`) };
+}
+
+function elegirEntre(p: PistasRuta, cat: Catalogo, opciones: Tool[]): Eleccion {
   const primera = opciones[0];
   const n = (x: Tool) => TOOL_INFO[x].nombre;
 
@@ -45,7 +75,7 @@ export function elegirHerramienta(p: PistasRuta, cat: Catalogo = CATALOGO_BASE):
   }
 
   // Capacidad, no fortaleza: Kling toma el cuadro inicial y el final.
-  if (p.job === "transicion") {
+  if (p.job === "transicion" && opciones.includes("kling")) {
     return { tool: "kling", porque: t("Kling toma la toma inicial y la final y hace la transición sin cortes.", "Kling takes the start and end shots and makes the transition with no cuts.") };
   }
 
@@ -92,5 +122,7 @@ export function pistasDe(spec: PromptSpec, destino: Destino): PistasRuta {
     tieneRefs: spec.refs.length > 0,
     movimientoMarcado: !!spec.camara.movimiento?.trim(),
     tieneTexto: !!textoDe(spec),
+    refs: spec.refs.length,
+    duracion: spec.duracion,
   };
 }

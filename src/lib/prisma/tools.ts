@@ -131,7 +131,8 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
     url: `${HF_VIDEO}?model=seedance_2_0`,
     imagenes: true,
     video: true,
-    duraciones: [5, 10, 15],
+    // Seedance 2.0 / Mini en Higgsfield: cualquier segundo de 4 a 15 (Help Center "How do I use Seedance?").
+    duraciones: [5, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     color: "#e24cb4",
   },
   gemini_omni: {

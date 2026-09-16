@@ -39,8 +39,11 @@ export const MAX_MODELOS = 4;
 export const MAX_DURACIONES = 15;
 
 export type Limites = { duraciones: number[]; maxPalabras: number | null; maxCaracteres: number | null; aspects: Aspect[]; refsMax: number; audio: boolean };
-/** `url`: la página de ESE modelo en Higgsfield (null = la de la familia, TOOL_INFO.url). */
-export type ModeloHerramienta = { id: string; etiqueta: string; rol: RolModelo; comoLlegar: Par; url: string | null };
+/** Lo que cuesta UN intento en nuestro plan (Ultimate). `ilimitado`: 0 créditos en higgsfield.ai. Si no,
+ *  créditos por generación con los ajustes de siempre (típico = mediana del histórico; null = sin dato). */
+export type CostoModelo = { ilimitado: boolean; tipico: number | null; min: number | null; max: number | null };
+/** `url`: la página de ESE modelo en Higgsfield (null = la de la familia, TOOL_INFO.url). `costo`: null = sin dato. */
+export type ModeloHerramienta = { id: string; etiqueta: string; rol: RolModelo; comoLlegar: Par; url: string | null; costo: CostoModelo | null };
 export type FichaHerramienta = { limites: Limites; fortalezas: Record<Fortaleza, number>; modelos: ModeloHerramienta[]; fuente: { url: string; fecha: string } | null };
 export type Catalogo = Record<Tool, FichaHerramienta>;
 
@@ -64,40 +67,44 @@ const BASE_FORTALEZAS: Record<Tool, Partial<Record<Fortaleza, number>>> = {
 /** Los modelos que el equipo usa EN HIGGSFIELD (verificados en su sitio el 2026-09-16; slugs de `?model=`).
  *  El PRIMERO de cada rol es el que se recomienda; los demás sólo aparecen en "¿en cuál lo generaste?".
  *  Los ids son estables (se guardan en modelo_sug y en los resultados): no se renombran. */
-const hf = (id: string, etiqueta: string, rol: RolModelo, es: string, en: string, url: string | null): ModeloHerramienta => ({ id, etiqueta, rol, comoLlegar: t(es, en), url });
+const hf = (id: string, etiqueta: string, rol: RolModelo, es: string, en: string, url: string | null, costo: CostoModelo | null = null): ModeloHerramienta => ({ id, etiqueta, rol, comoLlegar: t(es, en), url, costo });
+/** Costos base (tasks/higgsfield-costos-2026-09-16.md): ILIMITADO = lista "365 Ilimitado" del plan de Pedro; los
+ *  créditos = medianas/rangos del historial de uso de Pedro, y donde no hay filas, precios del blog de Higgsfield. */
+const LIBRE: CostoModelo = { ilimitado: true, tipico: 0, min: 0, max: 0 };
+const pago = (tipico: number | null, min: number | null = tipico, max: number | null = tipico): CostoModelo => ({ ilimitado: false, tipico, min, max });
 const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
   nanobanana: [
-    hf("gemini-3.1-flash-image", "Nano Banana 2", "rapido", "En Higgsfield: Image → Nano Banana 2 → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Nano Banana 2 → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=nano-banana-2`),
-    hf("gemini-3-pro-image", "Nano Banana Pro", "fino", "En Higgsfield: Image → Nano Banana Pro → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Nano Banana Pro → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=nano-banana-pro`),
+    hf("gemini-3.1-flash-image", "Nano Banana 2", "rapido", "En Higgsfield: Image → Nano Banana 2 → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Nano Banana 2 → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=nano-banana-2`, pago(null)),
+    hf("gemini-3-pro-image", "Nano Banana Pro", "fino", "En Higgsfield: Image → Nano Banana Pro → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Nano Banana Pro → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=nano-banana-pro`, LIBRE),
     // Sólo para "¿en cuál lo generaste?": Higgsfield elige el modelo solo (el prompt de Nano Banana es el más neutro).
-    hf("image-auto", "Image Auto", "rapido", "En Higgsfield: Image → Auto → pega el prompt (Higgsfield elige el modelo).", "In Higgsfield: Image → Auto → paste the prompt (Higgsfield picks the model).", null),
+    hf("image-auto", "Image Auto", "rapido", "En Higgsfield: Image → Auto → pega el prompt (Higgsfield elige el modelo).", "In Higgsfield: Image → Auto → paste the prompt (Higgsfield picks the model).", null, LIBRE),
   ],
   chatgpt: [
-    hf("gpt-image-2.5-flare", "GPT Image 2.5 Flare", "rapido", "En Higgsfield: Image → GPT Image 2.5 Flare → adjunta las imágenes en orden y pega el prompt.", "In Higgsfield: Image → GPT Image 2.5 Flare → attach the images in order and paste the prompt.", `${HF_IMAGEN}?model=gpt-image-2-5-flare`),
-    hf("gpt-image-2.5-sunburst", "GPT Image 2.5 Sunburst", "fino", "En Higgsfield: Image → GPT Image 2.5 Sunburst → adjunta las imágenes en orden y pega el prompt.", "In Higgsfield: Image → GPT Image 2.5 Sunburst → attach the images in order and paste the prompt.", `${HF_IMAGEN}?model=gpt-image-2-5-sunburst`),
+    hf("gpt-image-2.5-flare", "GPT Image 2.5 Flare", "rapido", "En Higgsfield: Image → GPT Image 2.5 Flare → adjunta las imágenes en orden y pega el prompt.", "In Higgsfield: Image → GPT Image 2.5 Flare → attach the images in order and paste the prompt.", `${HF_IMAGEN}?model=gpt-image-2-5-flare`, pago(3, 1.5, 26.5)),
+    hf("gpt-image-2.5-sunburst", "GPT Image 2.5 Sunburst", "fino", "En Higgsfield: Image → GPT Image 2.5 Sunburst → adjunta las imágenes en orden y pega el prompt.", "In Higgsfield: Image → GPT Image 2.5 Sunburst → attach the images in order and paste the prompt.", `${HF_IMAGEN}?model=gpt-image-2-5-sunburst`, pago(3, 1.5, 26.5)),
   ],
   veo: [
-    hf("veo-3.1-fast-generate-preview", "Veo 3.1 Fast", "rapido", "En Higgsfield: Video → Google Veo → Veo 3.1 Fast → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 Fast → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`),
-    hf("veo-3.1-generate-preview", "Veo 3.1", "fino", "En Higgsfield: Video → Google Veo → Veo 3.1 → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`),
+    hf("veo-3.1-fast-generate-preview", "Veo 3.1 Fast", "rapido", "En Higgsfield: Video → Google Veo → Veo 3.1 Fast → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 Fast → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`, pago(null)),
+    hf("veo-3.1-generate-preview", "Veo 3.1", "fino", "En Higgsfield: Video → Google Veo → Veo 3.1 → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`, pago(58, 40, 70)),
   ],
   kling: [
-    hf("kling-3.0-turbo", "Kling 3.0 Turbo", "rapido", "En Higgsfield: Video → Kling 3.0 en su modo rápido (Turbo) → pega el prompt.", "In Higgsfield: Video → Kling 3.0 in its fast (Turbo) mode → paste the prompt.", `${HF_VIDEO}?model=kling3_0`),
-    hf("kling-3.0", "Kling 3.0", "fino", "En Higgsfield: Video → Kling 3.0 → pega el prompt (la foto va en Start frame).", "In Higgsfield: Video → Kling 3.0 → paste the prompt (the photo goes in Start frame).", `${HF_VIDEO}?model=kling3_0`),
+    hf("kling-3.0-turbo", "Kling 3.0 Turbo", "rapido", "En Higgsfield: Video → Kling 3.0 en su modo rápido (Turbo) → pega el prompt.", "In Higgsfield: Video → Kling 3.0 in its fast (Turbo) mode → paste the prompt.", `${HF_VIDEO}?model=kling3_0`, pago(6, 6, 8)),
+    hf("kling-3.0", "Kling 3.0", "fino", "En Higgsfield: Video → Kling 3.0 → pega el prompt (la foto va en Start frame).", "In Higgsfield: Video → Kling 3.0 → paste the prompt (the photo goes in Start frame).", `${HF_VIDEO}?model=kling3_0`, pago(6, 3.75, 12)),
     // Sólo para "¿en cuál lo generaste?": el movimiento sale de un VIDEO de referencia; el texto sólo pinta el escenario.
-    hf("kling-3.0-motion-control", "Kling 3.0 Motion Control", "fino", "En Higgsfield: Video → Motion Control → sube la foto del personaje y el video del movimiento; el prompt describe sólo el escenario y la luz.", "In Higgsfield: Video → Motion Control → upload the character photo and the motion video; the prompt only describes the setting and light.", "https://higgsfield.ai/ai/video/motion?model=kling-3-motion-control"),
+    hf("kling-3.0-motion-control", "Kling 3.0 Motion Control", "fino", "En Higgsfield: Video → Motion Control → sube la foto del personaje y el video del movimiento; el prompt describe sólo el escenario y la luz.", "In Higgsfield: Video → Motion Control → upload the character photo and the motion video; the prompt only describes the setting and light.", "https://higgsfield.ai/ai/video/motion?model=kling-3-motion-control", pago(8, 8, 14)),
   ],
-  higgsfield: [hf("higgsfield", "Higgsfield DoP", "fino", "En Higgsfield: Video → sube la foto → elige ese preset de cámara → pega el texto.", "In Higgsfield: Video → upload the photo → pick that camera preset → paste the text.", HF_VIDEO)],
+  higgsfield: [hf("higgsfield", "Higgsfield DoP", "fino", "En Higgsfield: Video → sube la foto → elige ese preset de cámara → pega el texto.", "In Higgsfield: Video → upload the photo → pick that camera preset → paste the text.", HF_VIDEO, null)],
   seedream: [
-    hf("seedream-4.5", "Seedream 4.5", "fino", "En Higgsfield: Image → Seedream 4.5 → sube las referencias en el orden del prompt (Image 1, Image 2…) y pega el prompt.", "In Higgsfield: Image → Seedream 4.5 → upload the references in the prompt's order (Image 1, Image 2…) and paste the prompt.", `${HF_IMAGEN}?model=seedream_v4_5`),
-    hf("seedream-5.0-lite", "Seedream 5.0 Lite", "fino", "En Higgsfield: Image → Seedream 5.0 lite → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Seedream 5.0 lite → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=seedream_v5_lite`),
+    hf("seedream-4.5", "Seedream 4.5", "fino", "En Higgsfield: Image → Seedream 4.5 → sube las referencias en el orden del prompt (Image 1, Image 2…) y pega el prompt.", "In Higgsfield: Image → Seedream 4.5 → upload the references in the prompt's order (Image 1, Image 2…) and paste the prompt.", `${HF_IMAGEN}?model=seedream_v4_5`, LIBRE),
+    hf("seedream-5.0-lite", "Seedream 5.0 Lite", "fino", "En Higgsfield: Image → Seedream 5.0 lite → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Seedream 5.0 lite → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=seedream_v5_lite`, LIBRE),
   ],
   seedance: [
-    hf("seedance-2.0-mini", "Seedance 2.0 Mini", "rapido", "En Higgsfield: Video → Seedance 2.0 Mini (hasta 720p) → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.0 Mini (up to 720p) → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_0_mini`),
-    hf("seedance-2.0", "Seedance 2.0", "fino", "En Higgsfield: Video → Seedance 2.0 → sube las referencias y pega el prompt; 1080p salvo que la pieza pida 4K.", "In Higgsfield: Video → Seedance 2.0 → upload the references and paste the prompt; 1080p unless the piece needs 4K.", `${HF_VIDEO}?model=seedance_2_0`),
-    hf("seedance-2.5", "Seedance 2.5", "fino", "En Higgsfield: Video → Seedance 2.5 → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.5 → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_5`),
+    hf("seedance-2.0-mini", "Seedance 2.0 Mini", "rapido", "En Higgsfield: Video → Seedance 2.0 Mini (hasta 720p) → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.0 Mini (up to 720p) → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_0_mini`, pago(12.5, 10, 17.5)),
+    hf("seedance-2.0", "Seedance 2.0", "fino", "En Higgsfield: Video → Seedance 2.0 → sube las referencias y pega el prompt; 1080p salvo que la pieza pida 4K.", "In Higgsfield: Video → Seedance 2.0 → upload the references and paste the prompt; 1080p unless the piece needs 4K.", `${HF_VIDEO}?model=seedance_2_0`, pago(54, 36, 110)),
+    hf("seedance-2.5", "Seedance 2.5", "fino", "En Higgsfield: Video → Seedance 2.5 → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.5 → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_5`, pago(72, null, 195)),
   ],
   gemini_omni: [
-    hf("gemini-omni-flash", "Gemini Omni Flash", "fino", "En Higgsfield: Video → Gemini Omni Flash (720p) → sube las referencias y pega el prompt.", "In Higgsfield: Video → Gemini Omni Flash (720p) → upload the references and paste the prompt.", `${HF_VIDEO}?model=gemini-omni-flash-1-1`),
+    hf("gemini-omni-flash", "Gemini Omni Flash", "fino", "En Higgsfield: Video → Gemini Omni Flash (720p) → sube las referencias y pega el prompt.", "In Higgsfield: Video → Gemini Omni Flash (720p) → upload the references and paste the prompt.", `${HF_VIDEO}?model=gemini-omni-flash-1-1`, pago(24, 12, 30)),
   ],
 };
 
@@ -177,7 +184,10 @@ function leerModelos(v: unknown, tool: Tool): Leido<ModeloHerramienta[]> {
     if (!textoPlano(o.como_llegar_es, 300) || !textoPlano(o.como_llegar_en, 300)) return mal(`${n}: falta "cómo llegar" en español y en inglés (máx. 300).`);
     const url = leerUrlModelo(o.url);
     if (url === false) return mal(`${n}: la página va como https://higgsfield.ai/… (máx. 300), o vacía.`);
-    out.push({ id: o.id, etiqueta: (o.etiqueta as string).trim(), rol: o.rol as RolModelo, comoLlegar: t((o.como_llegar_es as string).trim(), (o.como_llegar_en as string).trim()), url });
+    // Una fila guardada antes del costo (0071/0072) no lo trae: se toma el de la constante con el mismo id.
+    const costo = o.costo === undefined ? { ok: true as const, valor: BASE_MODELOS[tool].find((b) => b.id === o.id)?.costo ?? null } : leerCosto(o.costo);
+    if (!costo.ok) return mal(`${n}: ${costo.error}`);
+    out.push({ id: o.id, etiqueta: (o.etiqueta as string).trim(), rol: o.rol as RolModelo, comoLlegar: t((o.como_llegar_es as string).trim(), (o.como_llegar_en as string).trim()), url, costo: costo.valor });
   }
   if (new Set(out.map((m) => m.id)).size !== out.length) return mal("Modelos: dos con el mismo id.");
   const falta = ROLES_POR_TOOL[tool].find((r) => !out.some((m) => m.rol === r));
@@ -196,6 +206,23 @@ export function leerUrlModelo(v: unknown): string | null | false {
     return false;
   }
 }
+// 0 o al menos 0.01: un 5e-324 pasaría "≥ 0" y se guardaría como 300+ dígitos en el jsonb.
+const creditos = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && (v === 0 || v >= 0.01) && v <= 1000;
+const redondo = (v: number): number => Math.round(v * 100) / 100;
+/** El costo de un modelo tal como viaja: {ilimitado, creditos_tipicos, creditos_min, creditos_max} o null. */
+export function leerCosto(v: unknown): Leido<CostoModelo | null> {
+  if (v === null) return bien(null);
+  const o = obj(v);
+  if (typeof o.ilimitado !== "boolean") return mal("Costo: di si es ilimitado.");
+  if (o.ilimitado) return bien({ ...LIBRE });
+  const num = (x: unknown): number | null | false => (x === null || x === undefined || x === "" ? null : creditos(x) ? x : false);
+  const [tipico, min, max] = [num(o.creditos_tipicos), num(o.creditos_min), num(o.creditos_max)];
+  if (tipico === false || min === false || max === false) return mal("Costo: créditos entre 0 y 1000 (o vacío si no hay dato).");
+  if ((min !== null && tipico !== null && min > tipico) || (max !== null && tipico !== null && max < tipico) || (min !== null && max !== null && min > max)) return mal("Costo: mínimo ≤ típico ≤ máximo.");
+  return bien({ ilimitado: false, tipico: tipico === null ? null : redondo(tipico), min: min === null ? null : redondo(min), max: max === null ? null : redondo(max) });
+}
+const costoAFila = (c: CostoModelo | null) => (c ? { ilimitado: c.ilimitado, creditos_tipicos: c.tipico, creditos_min: c.min, creditos_max: c.max } : null);
+
 function leerFuente(url: unknown, fecha: unknown): Leido<{ url: string; fecha: string } | null> {
   if ((url === null || url === undefined || url === "") && (fecha === null || fecha === undefined || fecha === "")) return bien(null);
   if (typeof url !== "string" || !/^https?:\/\//.test(url) || url.length > 300) return mal("Fuente: una URL http(s) de hasta 300 caracteres.");
@@ -234,7 +261,12 @@ export function catalogoDesdeFilas(filas: FilaHerramienta[]): Catalogo {
     cat[tool] = {
       limites,
       fortalezas,
-      modelos: pick(leerModelos(f.modelos, tool), base.modelos),
+      modelos: (() => {
+        const m = leerModelos(f.modelos, tool);
+        // Tolerante pero no mudo: una fila rara vuelve a la base y queda en el log.
+        if (!m.ok) console.warn(`[prisma] modelos de ${tool} ilegibles (${m.error}); se usan los del código.`);
+        return m.ok ? m.valor : base.modelos;
+      })(),
       fuente: pick(leerFuente(f.fuente_url, f.fuente_fecha), null),
     };
   }
@@ -270,16 +302,32 @@ export function fichaAFila(tool: Tool, f: FichaHerramienta): Omit<FilaHerramient
   return {
     limites: { duraciones: f.limites.duraciones, max_palabras: f.limites.maxPalabras, max_caracteres: f.limites.maxCaracteres, aspects: f.limites.aspects, refs_max: f.limites.refsMax, audio: f.limites.audio },
     fortalezas: Object.fromEntries(fortalezasDe(tool).map((k) => [k, f.fortalezas[k]])),
-    modelos: f.modelos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, rol: m.rol, como_llegar_es: m.comoLlegar.es, como_llegar_en: m.comoLlegar.en, url: m.url })),
+    modelos: f.modelos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, rol: m.rol, como_llegar_es: m.comoLlegar.es, como_llegar_en: m.comoLlegar.en, url: m.url, costo: costoAFila(m.costo) })),
     fuente_url: f.fuente?.url ?? null,
     fuente_fecha: f.fuente?.fecha ?? null,
   };
 }
 
 // ── Consultas que usan routing / modelo / diagnóstico ─────────────────────────
-/** La herramienta con más puntaje en esa fortaleza; empate → la primera de la lista (TOOLS_POR_JOB). */
+/** Lo mínimo que cuesta un intento en esa herramienta con un modelo que Prisma recomendaría (el primero de cada
+ *  rol): ilimitado = 0; sin dato en ninguno = null. */
+export function costoMinimo(cat: Catalogo, tool: Tool): number | null {
+  const recomendables = ROLES_MODELO.map((r) => cat[tool].modelos.find((m) => m.rol === r)).filter((m): m is ModeloHerramienta => !!m);
+  const cs = recomendables.map((m) => (m.costo ? (m.costo.ilimitado ? 0 : m.costo.tipico) : null)).filter((c): c is number => c !== null);
+  return cs.length ? Math.min(...cs) : null;
+}
+
+/** La herramienta con más puntaje en esa fortaleza. Empate → la más barata si las dos tienen costo conocido
+ *  (paso 2: ahorrar sin bajar calidad); si no, la primera de la lista (TOOLS_POR_JOB). */
 export function mejorEn(cat: Catalogo, f: Fortaleza, entre: Tool[]): Tool {
-  return entre.reduce((mejor, x) => (cat[x].fortalezas[f] > cat[mejor].fortalezas[f] ? x : mejor), entre[0]);
+  return entre.reduce((mejor, x) => {
+    const a = cat[x].fortalezas[f];
+    const b = cat[mejor].fortalezas[f];
+    if (a !== b) return a > b ? x : mejor;
+    const cx = costoMinimo(cat, x);
+    const cm = costoMinimo(cat, mejor);
+    return cx !== null && cm !== null && cx < cm ? x : mejor;
+  }, entre[0]);
 }
 
 /** El modelo recomendado de un rol: el PRIMERO con ese rol; si el catálogo no trae ninguno, la base. */

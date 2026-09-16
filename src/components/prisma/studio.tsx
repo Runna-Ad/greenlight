@@ -51,6 +51,7 @@ import {
 import { COLOR_KIND, TOOL_INFO, TOOLS_POR_JOB, VEO_SEGUNDOS_CON_REFS } from "@/lib/prisma/tools";
 import { elegirHerramienta } from "@/lib/prisma/routing";
 import { recomendarModelo } from "@/lib/prisma/modelo";
+import { costoCorto, textoCosto } from "@/lib/prisma/costo";
 import { useCatalogo } from "./catalogo-contexto";
 import { ACCIONES_PASO3, aplicarArreglo, avisoOrtografia, bloqueado, compilarReglas, diagnosticarEntrada, ordenarAvisos, resolucionDe, type Aviso, type EntradaDiagnostico, type ReglaCliente } from "@/lib/prisma/diagnostico";
 import { compilarFusion } from "@/lib/prisma/compilers/fusion";
@@ -254,7 +255,7 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
 
   // Sin useMemo a propósito: el React Compiler ya memoiza, y una dependencia derivada
   // (refsLista.length) hacía que el compilador saltara el componente entero.
-  const sugerencia = job ? elegirHerramienta({ job, destino, tieneDialogo: dialogo.trim().length > 0, tieneRefs: refsLista.length > 0, movimientoMarcado: !!look.movimiento, tieneTexto: texto.trim().length > 0 }, catalogo) : null;
+  const sugerencia = job ? elegirHerramienta({ job, destino, tieneDialogo: dialogo.trim().length > 0, tieneRefs: refsLista.length > 0, movimientoMarcado: !!look.movimiento, tieneTexto: texto.trim().length > 0, refs: refsLista.length, duracion }, catalogo) : null;
   const tool: Tool | null = toolOverride ?? sugerencia?.tool ?? null;
   const aspect: Aspect = aspectOverride ?? marca?.preset.aspect_default ?? ASPECT_POR_DESTINO[destino];
   // Veo con imágenes de referencia sólo genera 8 s: el chip lo dice y no ofrece otra cosa.
@@ -1070,10 +1071,15 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
                           <span className="text-muted-foreground">{tx(modelo.porque, lang)}</span>
                         </p>
                       )}
+                      {modelo && <p className="mt-1 text-xs text-muted-foreground">{tx(textoCosto(modelo.costo, !!video), lang)}</p>}
                       {TOOLS_POR_JOB[job].length > 1 && (
                         <div className="mt-3">
                           <p className="mb-1.5 text-xs text-muted-foreground">{tx(UI.cambiarHerramienta, lang)}</p>
-                          <ChipSelect options={TOOLS_POR_JOB[job].map((t) => ({ value: t, label: tx(TOOL_LABEL[t], lang) }))} selected={[tool]} onChange={(up) => setToolOverride((up([tool])[0] as Tool | undefined) ?? null)} ariaLabel={tx(UI.herramienta, lang)} allowCustom={false} />
+                          <ChipSelect options={TOOLS_POR_JOB[job].map((t) => {
+                            // Paso 2: cada opción con lo que cuesta su modelo recomendado para ESTA pieza.
+                            const c = tx(costoCorto(recomendarModelo({ job, tool: t, destino, refs: refsLista.length, texto: texto.trim().length > 0, dialogo: dialogo.trim().length > 0, duracion }, catalogo).costo), lang);
+                            return { value: t, label: c ? `${tx(TOOL_LABEL[t], lang)} · ${c}` : tx(TOOL_LABEL[t], lang) };
+                          })} selected={[tool]} onChange={(up) => setToolOverride((up([tool])[0] as Tool | undefined) ?? null)} ariaLabel={tx(UI.herramienta, lang)} allowCustom={false} />
                         </div>
                       )}
                       {video && (duraciones.length > 1 || veoForzado) && (

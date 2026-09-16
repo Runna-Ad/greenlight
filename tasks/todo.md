@@ -61,6 +61,28 @@ Pedro: "go" al plan prompt-first (§ DECISIONES DE PEDRO abajo); Wan 2.7 fuera (
       APLICADA y verificada** (fila viva de Kling = [5,3,4,6,…,15]; no estaba editada). F6b Vigía pasa a **0074**.
 
 **Paso 2** — H.Ü.E elige lo más barato sin perder calidad + estimado en créditos (tasks/higgsfield-costos-2026-09-16.md).
+Pedro (2026-09-16): "this is meant to help save costs but no sacrificing quality — don't avoid paid ones, just don't use
+them if it's not needed". → REGLA: la CALIDAD/capacidad decide; el costo sólo desempata o elige entre modelos que ya
+cumplen lo pedido. Sin migración (el costo por modelo se completa desde las constantes si la fila no lo trae).
+- [x] Catálogo: `costo` por modelo {ilimitado, créditos típico/mín/máx} (base = histórico de Pedro + blog), editable en
+      el Hub; filas viejas sin `costo` → el de la constante con el mismo id (el test "seed = constantes" sigue verde).
+- [x] `lib/prisma/costo.ts`: estimado por intento + por pieza (3–5 intentos, blog) + USD (0.04/crédito, resumen de Pedro).
+- [x] Modelo: si el rol pedido lo cumple también un modelo ILIMITADO de la misma herramienta (o el fino es más barato),
+      ése; si no, el de siempre. Nunca baja de fino a rápido. Nano Banana → Pro (ilimitado).
+- [x] Routing: (a) capacidad — descarta herramientas que no aceptan tantas referencias, esa duración o ese formato
+      (hoy sólo avisaba después); (b) empate de fortaleza → la más barata. Los casos de siempre no cambian (golden).
+- [x] UI: costo en "Úsalo en…" (paso 3 y resultado), en los botones de cambiar herramienta, y campos en el Hub.
+- Datos de Pedro (2026-09-16): GPT Image 2.5 Flare y Sunburst = 3 créditos cada uno (NO ilimitados); GPT Image 2 = 6.5.
+- Reap paso 2 — seguridad (Opus): 0 críticos/serios/medios; bajos arreglados (créditos redondeados a 2 decimales y sin
+  microvalores; aviso en el log si una fila de modelos es ilegible). Salud (Sonnet): 1 serio arreglado — la capacidad
+  sólo descarta por duración si la herramienta NO LLEGA, y Seedance ahora ofrece 4–15 s (Help Center) en vez de 5/10/15,
+  así un 6 s ya no se corta a 5; comentario del desempate corregido (a igual precio pagado se queda el rápido); doble
+  cálculo del costo en los botones quitado. test-prisma 904 · npm test ✓ · lint 0 · build ✓ · navegador ✓.
+- Pendiente para Pedro: confirmar qué "GPT Image" es el ilimitado del plan (no es 2 ni 2.5).
+
+### Verificación paso 2
+Golden de routing intacto · tests de capacidad/empate/ilimitado/estimado · npm test · tsc · lint · build · navegador
+(?demo=resultado, ?demo=herramientas) · reap doble · commit/push.
 **Paso 3** — Performance › Evaluación: por diseñador y mes — piezas, vueltas y tiempo hasta el aceptado, créditos estimados.
 ### Verificación
 Tests puros (medidaDestino; golden de los compilers nuevos; catálogo con url; routing/modelo) · npm test · tsc · lint ·

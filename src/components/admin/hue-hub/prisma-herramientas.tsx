@@ -14,7 +14,8 @@ import { elegirHerramienta } from "@/lib/prisma/routing";
 import { ASPECTS, TOOLS, type Aspect, type Tool } from "@/lib/prisma/spec";
 import { TOOL_INFO } from "@/lib/prisma/tools";
 
-type ModeloB = { id: string; etiqueta: string; rol: RolModelo; es: string; en: string; url: string };
+/** Costo en texto (se escribe): vacío = sin dato. `conCosto` false = no sabemos si cobra. */
+type ModeloB = { id: string; etiqueta: string; rol: RolModelo; es: string; en: string; url: string; conCosto: boolean; ilimitado: boolean; tipico: string; min: string; max: string };
 /** El formulario en texto (los números se escriben): se convierte a la forma de la tabla al validar. */
 type Borrador = { duraciones: string; maxPalabras: string; maxCaracteres: string; aspects: Aspect[]; refsMax: string; audio: boolean; fortalezas: Record<Fortaleza, number>; modelos: ModeloB[]; fuenteUrl: string; fuenteFecha: string };
 
@@ -26,7 +27,13 @@ const aBorrador = (f: FichaHerramienta): Borrador => ({
   refsMax: String(f.limites.refsMax),
   audio: f.limites.audio,
   fortalezas: { ...f.fortalezas },
-  modelos: f.modelos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, rol: m.rol, es: m.comoLlegar.es, en: m.comoLlegar.en, url: m.url ?? "" })),
+  modelos: f.modelos.map((m) => ({
+    id: m.id, etiqueta: m.etiqueta, rol: m.rol, es: m.comoLlegar.es, en: m.comoLlegar.en, url: m.url ?? "",
+    conCosto: !!m.costo, ilimitado: !!m.costo?.ilimitado,
+    tipico: m.costo?.tipico != null && !m.costo.ilimitado ? String(m.costo.tipico) : "",
+    min: m.costo?.min != null && !m.costo.ilimitado ? String(m.costo.min) : "",
+    max: m.costo?.max != null && !m.costo.ilimitado ? String(m.costo.max) : "",
+  })),
   fuenteUrl: f.fuente?.url ?? "",
   fuenteFecha: f.fuente?.fecha ?? "",
 });
@@ -46,7 +53,10 @@ function aEntrada(tool: Tool, b: Borrador) {
       audio: b.audio,
     },
     fortalezas: Object.fromEntries(fortalezasDe(tool).map((k) => [k, b.fortalezas[k]])),
-    modelos: b.modelos.map((m) => ({ id: m.id.trim(), etiqueta: m.etiqueta, rol: m.rol, como_llegar_es: m.es, como_llegar_en: m.en, url: m.url.trim() || null })),
+    modelos: b.modelos.map((m) => ({
+      id: m.id.trim(), etiqueta: m.etiqueta, rol: m.rol, como_llegar_es: m.es, como_llegar_en: m.en, url: m.url.trim() || null,
+      costo: m.conCosto ? { ilimitado: m.ilimitado, creditos_tipicos: numero(m.tipico), creditos_min: numero(m.min), creditos_max: numero(m.max) } : null,
+    })),
     fuente_url: b.fuenteUrl.trim() || null,
     fuente_fecha: b.fuenteFecha || null,
   };
@@ -298,9 +308,26 @@ export function PrismaHerramientas({ demo = null }: { demo?: Catalogo | null }) 
                   Página del modelo en Higgsfield (el botón &quot;Abrir&quot; la usa; vacío = la de la herramienta)
                   <Input value={m.url} onChange={(e) => setModelo(i, { url: e.target.value })} className="mt-1 h-8 font-mono text-sm" type="url" maxLength={300} placeholder="https://higgsfield.ai/ai/image?model=…" />
                 </label>
+                {/* Paso 2: lo que cuesta un intento en NUESTRO plan (Prisma lo usa para desempatar y para el estimado). */}
+                <div className="grid items-end gap-2 sm:grid-cols-[auto_auto_1fr_1fr_1fr]">
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Switch checked={m.conCosto} onCheckedChange={(on) => setModelo(i, { conCosto: on })} aria-label={`Sabemos el costo de ${m.etiqueta || "este modelo"}`} />
+                    Costo conocido
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Switch checked={m.ilimitado} disabled={!m.conCosto} onCheckedChange={(on) => setModelo(i, { ilimitado: on })} aria-label={`${m.etiqueta || "Este modelo"} es ilimitado en nuestro plan`} />
+                    Ilimitado en el plan
+                  </label>
+                  {(["tipico", "min", "max"] as const).map((k) => (
+                    <label key={k} className="block text-xs text-muted-foreground">
+                      {k === "tipico" ? "Créditos típicos" : k === "min" ? "Mínimo" : "Máximo"}
+                      <Input value={m[k]} onChange={(e) => setModelo(i, { [k]: e.target.value })} disabled={!m.conCosto || m.ilimitado} className="mt-1 h-8 text-sm" inputMode="decimal" placeholder="sin dato" />
+                    </label>
+                  ))}
+                </div>
               </div>
             ))}
-            <Button size="sm" variant="outline" className="gap-1.5" disabled={borrador.modelos.length >= MAX_MODELOS} onClick={() => set("modelos", [...borrador.modelos, { id: "", etiqueta: "", rol: "fino", es: "", en: "", url: "" }])}>
+            <Button size="sm" variant="outline" className="gap-1.5" disabled={borrador.modelos.length >= MAX_MODELOS} onClick={() => set("modelos", [...borrador.modelos, { id: "", etiqueta: "", rol: "fino", es: "", en: "", url: "", conCosto: false, ilimitado: false, tipico: "", min: "", max: "" }])}>
               <Plus className="size-3.5" /> Agregar modelo
             </Button>
           </fieldset>
