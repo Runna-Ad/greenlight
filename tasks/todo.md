@@ -2459,3 +2459,10 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
   cuándo mergear a main.
 - Deuda: personajes (prisma_characters) sin UI de alta (sólo lectura); variantes segura/audaz/mínima no construidas (la columna
   `variante` ya existe); `explicacion` cachea por idioma con prefijo "[es]"; presets de marca se editan a mano en la BD (falta UI en Admin).
+
+## 2026-09-17 — Precios reales de Higgsfield + 0075
+- [x] Precios leídos del botón Generate (sin sesión y con la cuenta de Rünna): Kling 3.0/Turbo, Seedance 2.0/Fast/Mini/2.5, Omni, Veo, DoP, Motion Control, Nano Banana Pro (ilimitado sólo con el interruptor, 1K/2K) → tasks/higgsfield-costos-2026-09-16.md
+- [x] Seedance 2.0 Fast agregado; a igual precio gana el fino (PEDRO_OVERRIDE)
+- [x] SHIP 0075 (DoP = Standard/Turbo/Lite; Kling Turbo con su página) — aplicada y verificada 2026-09-17: catálogo vivo = código 8/8
+- [ ] Pedro: ¿qué modelo convertir en "365 Ilimitado"? (el plan permite uno más; Seedance 2.0 = 59 % del gasto)
+- [ ] Pedro: quedan 15/1,200 créditos del mes
