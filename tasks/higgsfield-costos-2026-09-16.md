@@ -105,3 +105,13 @@ Se leyó en el navegador de la app cambiando duración/resolución (NUNCA se pul
   Cobran: GPT Image 2.5 Sunburst/Flare, GPT Image 2 (6.5, lista 8.5), Seedream 5.0 Pro (nuevo), Nano Banana 2,
   Nano Banana 2 Lite (nuevo), Recraft, Grok, FLUX.2 Flex/Max, etc.
 - Aviso en la cuenta: "¡Se están agotando los créditos! Ya usaste más del 90%".
+
+## Plan (página Suscripción, 2026-09-17)
+- **Ultimate**, anual (US$352.80/año; próxima factura US$294 el 20 ene 2027). **1,200 créditos al mes — quedan 15.**
+  Recarga automática apagada. 977 generaciones gratis en total (US$125.84 ahorrados).
+- **13 modelos "365 Ilimitado"** (renovación automática): FLUX.2 Pro (2K), Nano Banana Pro (exclusivo, 2K), Higgsfield Soul,
+  GPT Image, Z Image, Seedream 4.5, Kling O1 Image, Flux Kontext, Higgsfield Popcorn, Nano Banana (+3 en la página 2).
+- **"Convierte un modelo más en 365 Ilimitado"**: el plan permite volver ilimitado UN modelo más (sin elegir todavía).
+- Seedance 2.0 Fast "Generar gratis · 4": NO está en el plan → promoción; en los últimos 7 días no hay usos de Fast.
+- Uso: la última generación fue el 10 sept (Motion Control); 82 créditos en 7 días.
+- Páginas: DoP = ?model=standard | turbo | lite · Kling 3.0 Turbo = ?model=kling3_0_turbo · Seedance 2.0 Fast = ?model=seedance_2_0_fast.

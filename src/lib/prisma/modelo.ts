@@ -46,14 +46,13 @@ export function recomendarModelo(p: PistasModelo, cat: Catalogo = CATALOGO_BASE)
   const r = porRol(p, cat);
   if (r.rol !== "rapido" || !(ROLES_POR_TOOL_CON_FINO(cat, p.tool))) return r;
   // Paso 2 (Pedro: "ahorrar sin sacrificar calidad"): la calidad decidió que basta el rápido. Si el FINO de la
-  // misma herramienta es ILIMITADO o ESTRICTAMENTE más barato (p. ej. Nano Banana Pro es ilimitado y el 2 no),
-  // el fino: mejor calidad sin gastar más. Al mismo precio pagado se queda el rápido (es el que itera más
-  // rápido: Kling Turbo). Al revés nunca: si la pieza pidió el fino, se queda el fino aunque cueste.
+  // misma herramienta es ILIMITADO o cuesta LO MISMO O MENOS (p. ej. Nano Banana Pro es ilimitado y el 2 no; Kling 3.0
+  // y Turbo cuestan igual en 1080p), el fino: mejor calidad sin gastar más (Pedro, 2026-09-17: "si cuestan lo mismo,
+  // el mejor"). Al revés nunca: si la pieza pidió el fino, se queda el fino aunque cueste.
   const fino = modeloPorRol(cat, p.tool, "fino");
   const cr = creditosDe(r.costo);
   const cf = creditosDe(fino.costo);
   if (cf === null || (cr !== null && cf > cr) || (cr === null && cf > 0)) return r;
-  if (cr !== null && cf === cr && cf > 0) return r;
   const porque = cf === 0
     ? t(`${fino.etiqueta} es ilimitado en nuestro plan: la calidad alta sin gastar créditos.`, `${fino.etiqueta} is unlimited on our plan: top quality without spending credits.`)
     : t(`${fino.etiqueta} cuesta lo mismo o menos que ${r.etiqueta.es} y rinde más calidad.`, `${fino.etiqueta} costs the same or less than ${r.etiqueta.en} and delivers higher quality.`);

@@ -90,6 +90,7 @@ const SEEDANCE_20 = SEEDANCE_25.filter((f) => f.s <= 15).map((f) => ({ ...f, p72
 /** Seedance 2.0 Mini (Pedro): 4–15 s, sólo 480p y 720p; 720p = 2.5 por segundo (4 s = 10; 15 s = 37.5, que Higgsfield
  *  muestra como 38 — el botón redondea hacia arriba; el historial cobra 12.5). 480p = 1 por segundo (botón, 2026-09-16). */
 const SEEDANCE_MINI = Array.from({ length: 12 }, (_, i): PrecioDuracion => ({ s: i + 4, p480: i + 4, p720: 2.5 * (i + 4), p1080: null, p4k: null }));
+const SEEDANCE_FAST = Array.from({ length: 12 }, (_, i): PrecioDuracion => ({ s: i + 4, p480: 1.5 * (i + 4), p720: 3.5 * (i + 4), p1080: null, p4k: null }));
 const OMNI_FLASH = tabla([3, 4, 5, 6, 7, 8, 9, 10].map((sg) => [sg, 3 * sg, 4.5 * sg, 9 * sg] as [number, number, number, number]));
 /** Kling 3.0 en la cuenta de Rünna (2026-09-17; sin sesión se ve más caro: 2 / 2.5): 3–15 s; 720p 1.75 · 1080p 2 · 4K 6 por
  *  segundo. Turbo: 720p 1.5 · 1080p 2, sin 4K. El sonido no cambia el precio. El «Modo ilimitado» de Kling es un pase
@@ -112,18 +113,27 @@ const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
     hf("veo-3.1-generate-preview", "Veo 3.1", "fino", "En Higgsfield: Video → Google Veo → Veo 3.1 → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`, pago(58, 29, 88, VEO_31)),
   ],
   kling: [
-    hf("kling-3.0-turbo", "Kling 3.0 Turbo", "rapido", "En Higgsfield: Video → Kling 3.0 en su modo rápido (Turbo) → pega el prompt.", "In Higgsfield: Video → Kling 3.0 in its fast (Turbo) mode → paste the prompt.", `${HF_VIDEO}?model=kling3_0`, pago(10, 4.5, 30, KLING_TURBO)),
+    hf("kling-3.0-turbo", "Kling 3.0 Turbo", "rapido", "En Higgsfield: Video → Kling 3.0 en su modo rápido (Turbo) → pega el prompt.", "In Higgsfield: Video → Kling 3.0 in its fast (Turbo) mode → paste the prompt.", `${HF_VIDEO}?model=kling3_0_turbo`, pago(10, 4.5, 30, KLING_TURBO)),
     hf("kling-3.0", "Kling 3.0", "fino", "En Higgsfield: Video → Kling 3.0 → pega el prompt (la foto va en Start frame).", "In Higgsfield: Video → Kling 3.0 → paste the prompt (the photo goes in Start frame).", `${HF_VIDEO}?model=kling3_0`, pago(10, 5.25, 90, KLING_30)),
     // Sólo para "¿en cuál lo generaste?": el movimiento sale de un VIDEO de referencia; el texto sólo pinta el escenario.
     hf("kling-3.0-motion-control", "Kling 3.0 Motion Control", "fino", "En Higgsfield: Video → Motion Control → sube la foto del personaje y el video del movimiento; el prompt describe sólo el escenario y la luz.", "In Higgsfield: Video → Motion Control → upload the character photo and the motion video; the prompt only describes the setting and light.", "https://higgsfield.ai/ai/video/motion?model=kling-3-motion-control", pago(8, 4.5, 75)), // cobra por segundo del video de movimiento (3–30 s): 720p 1.5 · 1080p 2.5
   ],
-  higgsfield: [hf("higgsfield", "Higgsfield DoP", "fino", "En Higgsfield: Video → sube la foto → elige ese preset de cámara → pega el texto.", "In Higgsfield: Video → upload the photo → pick that camera preset → paste the text.", HF_VIDEO, pago(7, 5, 10))], // DoP hoy: Lite 5 · Turbo 7 · Standard 10 (720p, 3–5 s; cuenta de Rünna, 2026-09-17)
+  // DoP hoy son 3 modelos en Higgsfield (720p, 3–5 s; cuenta de Rünna, 2026-09-17): Standard 10 · Turbo 7 · Lite 5 créditos.
+  // Se recomienda Standard (la mejor calidad); el id "higgsfield" se queda (resultados viejos lo guardan).
+  higgsfield: [
+    hf("higgsfield", "Higgsfield DoP Standard", "fino", "En Higgsfield: Video → Higgsfield Standard → sube la foto → elige ese preset de cámara → pega el texto.", "In Higgsfield: Video → Higgsfield Standard → upload the photo → pick that camera preset → paste the text.", `${HF_VIDEO}?model=standard`, pago(10)),
+    hf("higgsfield-turbo", "Higgsfield DoP Turbo", "fino", "En Higgsfield: Video → Higgsfield Turbo → sube la foto → elige ese preset de cámara → pega el texto.", "In Higgsfield: Video → Higgsfield Turbo → upload the photo → pick that camera preset → paste the text.", `${HF_VIDEO}?model=turbo`, pago(7)),
+    hf("higgsfield-lite", "Higgsfield DoP Lite", "fino", "En Higgsfield: Video → Higgsfield Lite → sube la foto → elige ese preset de cámara → pega el texto.", "In Higgsfield: Video → Higgsfield Lite → upload the photo → pick that camera preset → paste the text.", `${HF_VIDEO}?model=lite`, pago(5)),
+  ],
   seedream: [
     hf("seedream-4.5", "Seedream 4.5", "fino", "En Higgsfield: Image → Seedream 4.5 → sube las referencias en el orden del prompt (Image 1, Image 2…) y pega el prompt.", "In Higgsfield: Image → Seedream 4.5 → upload the references in the prompt's order (Image 1, Image 2…) and paste the prompt.", `${HF_IMAGEN}?model=seedream_v4_5`, LIBRE),
     hf("seedream-5.0-lite", "Seedream 5.0 Lite", "fino", "En Higgsfield: Image → Seedream 5.0 lite → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Seedream 5.0 lite → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=seedream_v5_lite`, LIBRE),
   ],
   seedance: [
     hf("seedance-2.0-mini", "Seedance 2.0 Mini", "rapido", "En Higgsfield: Video → Seedance 2.0 Mini (hasta 720p) → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.0 Mini (up to 720p) → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_0_mini`, pago(12.5, 10, 37.5, SEEDANCE_MINI)),
+    // Entre Mini y 2.0 (cuenta de Rünna, 2026-09-17): 4–15 s, 480p 1.5 · 720p 3.5 por segundo. Higgsfield a veces regala
+    // generaciones de éste ("Generar gratis"): es promoción, no parte del plan.
+    hf("seedance-2.0-fast", "Seedance 2.0 Fast", "rapido", "En Higgsfield: Video → Seedance 2.0 Fast (hasta 720p) → sube las referencias y pega el prompt; si aparece «Generar gratis», úsalo.", "In Higgsfield: Video → Seedance 2.0 Fast (up to 720p) → upload the references and paste the prompt; if «Generate free» shows up, use it.", `${HF_VIDEO}?model=seedance_2_0_fast`, pago(17.5, 6, 52.5, SEEDANCE_FAST)),
     hf("seedance-2.0", "Seedance 2.0", "fino", "En Higgsfield: Video → Seedance 2.0 → sube las referencias y pega el prompt; 1080p salvo que la pieza pida 4K.", "In Higgsfield: Video → Seedance 2.0 → upload the references and paste the prompt; 1080p unless the piece needs 4K.", `${HF_VIDEO}?model=seedance_2_0`, pago(54, 12, 330, SEEDANCE_20)),
     hf("seedance-2.5", "Seedance 2.5", "fino", "En Higgsfield: Video → Seedance 2.5 → sube las referencias y pega el prompt.", "In Higgsfield: Video → Seedance 2.5 → upload the references and paste the prompt.", `${HF_VIDEO}?model=seedance_2_5`, pago(72, 12, 270, SEEDANCE_25)),
   ],

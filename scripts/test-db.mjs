@@ -2618,6 +2618,27 @@ console.log("\n▶ 0072 — modelos en Higgsfield");
   ok("lo que nadie editó sí se pone al día", (await q(`select modelos from produccion.prisma_herramientas where tool = 'veo'`))[0].modelos.length === 2);
 }
 
+// ── 0075: DoP son 3 modelos y Kling Turbo tiene su página (sólo datos) ──
+console.log("\n▶ 0075 — DoP y Kling Turbo");
+{
+  const sql = (n) => readFileSync(join(migDir, readdirSync(migDir).find((f) => f.includes(`_${n}_`))), "utf8");
+  // Partimos de lo que dejó 0072 (el bloque de arriba la volvió a correr) con DoP sin editar.
+  await db.query(`update produccion.prisma_herramientas set updated_by = null where tool = 'higgsfield'`);
+  await db.exec(sql("0072"));
+  await db.exec(sql("0075"));
+  const { CATALOGO_BASE: cb75, catalogoDesdeFilas: cdf75 } = await import("../src/lib/prisma/catalogo.ts");
+  const filas75 = await q(`select tool, limites, fortalezas, modelos, fuente_url, fuente_fecha from produccion.prisma_herramientas where tool in ('higgsfield', 'kling')`);
+  const leido = cdf75(filas75);
+  eq("tras 0075, DoP y Kling leídos de la tabla = las constantes", JSON.stringify([leido.higgsfield.modelos, leido.kling.modelos]), JSON.stringify([cb75.higgsfield.modelos, cb75.kling.modelos]));
+  ok("los modelos se guardan sin costo (el costo sale del código)", filas75.every((f) => f.modelos.every((m) => !("costo" in m))));
+  await db.exec(sql("0075"));
+  eq("correrla dos veces da lo mismo", JSON.stringify(cdf75(await q(`select tool, limites, fortalezas, modelos, fuente_url, fuente_fecha from produccion.prisma_herramientas where tool in ('higgsfield', 'kling')`)).kling.modelos), JSON.stringify(cb75.kling.modelos));
+  const aMano = JSON.stringify([{ id: "a-mano", etiqueta: "A mano", rol: "fino", como_llegar_es: "x", como_llegar_en: "x" }]);
+  await db.query(`update produccion.prisma_herramientas set modelos = $1::jsonb, updated_by = $2 where tool = 'higgsfield'`, [aMano, galie]);
+  await db.exec(sql("0075"));
+  eq("lo editado en el Hub no se pisa", (await q(`select modelos from produccion.prisma_herramientas where tool = 'higgsfield'`))[0].modelos[0].id, "a-mano");
+}
+
 // ── 0074: el vigía (fuentes + propuestas) ──
 console.log("\n▶ 0074 — vigía");
 {
