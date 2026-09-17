@@ -60,10 +60,16 @@ function pasoReferencias(spec: PromptSpec, tool: Tool, cat: Catalogo): Par | nul
 
 /** Resolución para iterar y para la final: la resolución es el mayor multiplicador del costo (blog
  *  "AI video credits explained"): se prueba barato y se paga alto sólo en la toma buena. */
-function pasoAjustes(spec: PromptSpec, tool: Tool, cat: Catalogo): Par {
+function pasoAjustes(spec: PromptSpec, tool: Tool, cat: Catalogo, modelo: string): Par {
   const aspect = spec.aspect;
   if (JOB_KIND[spec.job] !== "video") {
     const alta = spec.destino === "print" || spec.destino === "web_banner";
+    // Nano Banana Pro es ilimitado SÓLO con el interruptor «Ilimitado» encendido y en 1K/2K; apagado cobra 2 y 4K
+    // cobra 4 siempre (leído en la cuenta de Rünna, 2026-09-17).
+    const libre = cat[tool].modelos.find((m) => m.etiqueta === modelo)?.costo?.ilimitado;
+    if (tool === "nanobanana" && libre) return alta
+      ? t(`Ajustes: formato ${aspect} · enciende «Ilimitado» para probar en 1K (apagado cobra 2 créditos); 4K para la final (cobra 4 créditos: el impreso lo necesita).`, `Settings: ${aspect} format · turn on «Unlimited» to test in 1K (off, it costs 2 credits); 4K for the final (costs 4 credits: print needs it).`)
+      : t(`Ajustes: formato ${aspect} · enciende «Ilimitado» (apagado cobra 2 créditos) · 1K para probar; 2K para la final (4K cobra 4).`, `Settings: ${aspect} format · turn on «Unlimited» (off, it costs 2 credits) · 1K to test; 2K for the final (4K costs 4).`);
     if (tool === "chatgpt") return t(`Ajustes: formato ${aspect} · calidad Medium y 1K para probar; High y ${alta ? "4K" : "2K"} para la final.`, `Settings: ${aspect} format · Medium quality and 1K to test; High and ${alta ? "4K" : "2K"} for the final.`);
     if (tool === "seedream") return t(`Ajustes: formato ${aspect} · calidad basic para probar; high para la final.`, `Settings: ${aspect} format · basic quality to test; high for the final.`);
     return t(`Ajustes: formato ${aspect} · 1K para probar; ${alta ? "4K" : "2K"} para la final.`, `Settings: ${aspect} format · 1K to test; ${alta ? "4K" : "2K"} for the final.`);
@@ -71,8 +77,8 @@ function pasoAjustes(spec: PromptSpec, tool: Tool, cat: Catalogo): Par {
   const opciones = cat[tool].limites.duraciones;
   const dur = tool === "veo" ? duracionVeo(spec.duracion, spec.refs.length, opciones) : duracionValida(tool, spec.duracion, opciones);
   const base = { es: `Ajustes: ${dur} s · ${aspect}`, en: `Settings: ${dur} s · ${aspect}` };
-  if (tool === "gemini_omni") return t(`${base.es} · 720p (es la única en Omni).`, `${base.en} · 720p (Omni's only option).`);
-  if (tool === "higgsfield") return t(`${base.es} (DoP genera 3 o 5 s).`, `${base.en} (DoP generates 3 or 5 s).`);
+  if (tool === "gemini_omni") return t(`${base.es} · 720p para probar (360p si sólo checas el movimiento); 1080p para la final.`, `${base.en} · 720p to test (360p if you only check the motion); 1080p for the final.`);
+  if (tool === "higgsfield") return t(`${base.es} (DoP genera 3 o 5 s en 720p: Lite 5 créditos, Turbo 7, Standard 10).`, `${base.en} (DoP makes 3 or 5 s in 720p: Lite 5 credits, Turbo 7, Standard 10).`);
   const final = tool === "veo" ? "1080p" : "1080p (4K sólo si la pieza lo pide)";
   const finalEn = tool === "veo" ? "1080p" : "1080p (4K only if the piece needs it)";
   return t(`${base.es} · 720p para probar; ${final} para la final, con el MISMO prompt.`, `${base.en} · 720p to test; ${finalEn} for the final, with the SAME prompt.`);
@@ -109,7 +115,7 @@ export function pasosHiggsfield(spec: PromptSpec, tool: Tool, modelo: string, ca
   const pasos: (Par | null)[] = [
     t(`Abre ${modelo} en Higgsfield (botón «Abrir»).`, `Open ${modelo} in Higgsfield («Open» button).`),
     pasoReferencias(spec, tool, cat),
-    pasoAjustes(spec, tool, cat),
+    pasoAjustes(spec, tool, cat, modelo),
     pasoSonido(spec, tool, cat),
     t(`Copia el prompt completo y pégalo${TOOL_INFO[tool].formato === "json" ? " tal cual (es JSON)" : ""}; genera.`, `Copy the full prompt and paste it${TOOL_INFO[tool].formato === "json" ? " as is (it is JSON)" : ""}; generate.`),
     consejo(spec, tool),

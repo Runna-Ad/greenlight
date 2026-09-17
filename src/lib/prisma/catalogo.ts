@@ -39,8 +39,8 @@ export const MAX_MODELOS = 4;
 export const MAX_DURACIONES = 15;
 
 export type Limites = { duraciones: number[]; maxPalabras: number | null; maxCaracteres: number | null; aspects: Aspect[]; refsMax: number; audio: boolean };
-/** Lo que cuesta un intento a esa duración (segundos), por resolución. 4K null = no la ofrece o sin dato. */
-/** p1080 null = el modelo no llega a 1080p (Seedance Mini); 720p siempre está. */
+/** Lo que cuesta un intento a esa duración (segundos), por resolución. 4K null = no la ofrece o sin dato; p1080 null = el
+ *  modelo no llega a 1080p (Seedance Mini); 720p siempre está. */
 export type PrecioDuracion = { s: number; p720: number; p1080: number | null; p4k: number | null; p480?: number | null };
 /** Lo que cuesta UN intento en nuestro plan (Ultimate). `ilimitado`: 0 créditos en higgsfield.ai. Si no,
  *  créditos por generación con los ajustes de siempre (típico = mediana del histórico; null = sin dato).
@@ -91,8 +91,11 @@ const SEEDANCE_20 = SEEDANCE_25.filter((f) => f.s <= 15).map((f) => ({ ...f, p72
  *  muestra como 38 — el botón redondea hacia arriba; el historial cobra 12.5). 480p = 1 por segundo (botón, 2026-09-16). */
 const SEEDANCE_MINI = Array.from({ length: 12 }, (_, i): PrecioDuracion => ({ s: i + 4, p480: i + 4, p720: 2.5 * (i + 4), p1080: null, p4k: null }));
 const OMNI_FLASH = tabla([3, 4, 5, 6, 7, 8, 9, 10].map((sg) => [sg, 3 * sg, 4.5 * sg, 9 * sg] as [number, number, number, number]));
-/** Kling 3.0 (botón Generate, 2026-09-16): 3–15 s; 720p 2 · 1080p 2.5 · 4K 6 por segundo. El sonido no cambia el precio. */
-const KLING_30 = tabla(Array.from({ length: 13 }, (_, i) => [i + 3, 2 * (i + 3), 2.5 * (i + 3), 6 * (i + 3)] as [number, number, number, number]));
+/** Kling 3.0 en la cuenta de Rünna (2026-09-17; sin sesión se ve más caro: 2 / 2.5): 3–15 s; 720p 1.75 · 1080p 2 · 4K 6 por
+ *  segundo. Turbo: 720p 1.5 · 1080p 2, sin 4K. El sonido no cambia el precio. El «Modo ilimitado» de Kling es un pase
+ *  aparte que se compra (US$35/día), no parte del plan. */
+const KLING_30 = tabla(Array.from({ length: 13 }, (_, i) => [i + 3, 1.75 * (i + 3), 2 * (i + 3), 6 * (i + 3)] as [number, number, number, number]));
+const KLING_TURBO = tabla(Array.from({ length: 13 }, (_, i) => [i + 3, 1.5 * (i + 3), 2 * (i + 3), null] as [number, number, number, null]));
 const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
   nanobanana: [
     hf("gemini-3.1-flash-image", "Nano Banana 2", "rapido", "En Higgsfield: Image → Nano Banana 2 → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Nano Banana 2 → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=nano-banana-2`, pago(2, 1.5, 3)),
@@ -109,12 +112,12 @@ const BASE_MODELOS: Record<Tool, ModeloHerramienta[]> = {
     hf("veo-3.1-generate-preview", "Veo 3.1", "fino", "En Higgsfield: Video → Google Veo → Veo 3.1 → pega el JSON completo.", "In Higgsfield: Video → Google Veo → Veo 3.1 → paste the full JSON.", `${HF_VIDEO}?model=veo-3-1-preview`, pago(58, 29, 88, VEO_31)),
   ],
   kling: [
-    hf("kling-3.0-turbo", "Kling 3.0 Turbo", "rapido", "En Higgsfield: Video → Kling 3.0 en su modo rápido (Turbo) → pega el prompt.", "In Higgsfield: Video → Kling 3.0 in its fast (Turbo) mode → paste the prompt.", `${HF_VIDEO}?model=kling3_0`, pago(6, 6, 8)),
-    hf("kling-3.0", "Kling 3.0", "fino", "En Higgsfield: Video → Kling 3.0 → pega el prompt (la foto va en Start frame).", "In Higgsfield: Video → Kling 3.0 → paste the prompt (the photo goes in Start frame).", `${HF_VIDEO}?model=kling3_0`, pago(12.5, 6, 90, KLING_30)),
+    hf("kling-3.0-turbo", "Kling 3.0 Turbo", "rapido", "En Higgsfield: Video → Kling 3.0 en su modo rápido (Turbo) → pega el prompt.", "In Higgsfield: Video → Kling 3.0 in its fast (Turbo) mode → paste the prompt.", `${HF_VIDEO}?model=kling3_0`, pago(10, 4.5, 30, KLING_TURBO)),
+    hf("kling-3.0", "Kling 3.0", "fino", "En Higgsfield: Video → Kling 3.0 → pega el prompt (la foto va en Start frame).", "In Higgsfield: Video → Kling 3.0 → paste the prompt (the photo goes in Start frame).", `${HF_VIDEO}?model=kling3_0`, pago(10, 5.25, 90, KLING_30)),
     // Sólo para "¿en cuál lo generaste?": el movimiento sale de un VIDEO de referencia; el texto sólo pinta el escenario.
     hf("kling-3.0-motion-control", "Kling 3.0 Motion Control", "fino", "En Higgsfield: Video → Motion Control → sube la foto del personaje y el video del movimiento; el prompt describe sólo el escenario y la luz.", "In Higgsfield: Video → Motion Control → upload the character photo and the motion video; the prompt only describes the setting and light.", "https://higgsfield.ai/ai/video/motion?model=kling-3-motion-control", pago(8, 4.5, 75)), // cobra por segundo del video de movimiento (3–30 s): 720p 1.5 · 1080p 2.5
   ],
-  higgsfield: [hf("higgsfield", "Higgsfield DoP", "fino", "En Higgsfield: Video → sube la foto → elige ese preset de cámara → pega el texto.", "In Higgsfield: Video → upload the photo → pick that camera preset → paste the text.", HF_VIDEO, null)],
+  higgsfield: [hf("higgsfield", "Higgsfield DoP", "fino", "En Higgsfield: Video → sube la foto → elige ese preset de cámara → pega el texto.", "In Higgsfield: Video → upload the photo → pick that camera preset → paste the text.", HF_VIDEO, pago(7, 5, 10))], // DoP hoy: Lite 5 · Turbo 7 · Standard 10 (720p, 3–5 s; cuenta de Rünna, 2026-09-17)
   seedream: [
     hf("seedream-4.5", "Seedream 4.5", "fino", "En Higgsfield: Image → Seedream 4.5 → sube las referencias en el orden del prompt (Image 1, Image 2…) y pega el prompt.", "In Higgsfield: Image → Seedream 4.5 → upload the references in the prompt's order (Image 1, Image 2…) and paste the prompt.", `${HF_IMAGEN}?model=seedream_v4_5`, LIBRE),
     hf("seedream-5.0-lite", "Seedream 5.0 Lite", "fino", "En Higgsfield: Image → Seedream 5.0 lite → sube las referencias en orden y pega el prompt.", "In Higgsfield: Image → Seedream 5.0 lite → upload the references in order and paste the prompt.", `${HF_IMAGEN}?model=seedream_v5_lite`, LIBRE),

@@ -87,3 +87,21 @@ Se leyó en el navegador de la app cambiando duración/resolución (NUNCA se pul
 - **Kling 3.0 Turbo** y **Higgsfield DoP** ya NO aparecen en el selector de modelos (sólo Kling 3.0, Motion Control y ediciones; Higgsfield = Genjutsu y Reframe).
 - "Seedance 2.0 Fast / Mini is not available in US" (aviso por región del navegador; el equipo está en México).
 - Sin sesión no se ve qué es ilimitado del plan (Nano Banana Pro 4K) — necesita la cuenta de Pedro.
+
+## Con la sesión de Pedro (2026-09-17, navegador de la app, sólo lectura — nunca se pulsó Generar ni se compró nada)
+- **Kling 3.0 cuesta menos en la cuenta** que sin sesión: 720p 1.75 · 1080p 2 · 4K 6 por segundo (5 s = 8.75 / 10 / 30).
+  Explica el historial (10.5 = 6 s 720p; 12 = 6 s 1080p). **Kling 3.0 Turbo**: 720p 1.5 · 1080p 2, 3–15 s, sin 4K
+  (existe: está en "Todos los modelos"). El resto (Seedance, Omni, Veo, Motion Control) = igual que sin sesión.
+- **"Modo ilimitado" de Kling 3.0 NO es del plan**: es un pase que se compra (1 día US$35 · 3 días US$82 · 7 días US$158).
+- **Nano Banana Pro**: ilimitado SÓLO con el interruptor «Ilimitado» encendido y en 1K/2K. Apagado: 1K/2K = 2 créditos; 4K = 4 siempre.
+- **Seedance 2.0 Fast**: 480p 1.5/s, 720p 3.5/s; tiene "Generar gratis · 4" (4 generaciones gratis a 8 s 720p) y su
+  propio «Modo ilimitado» (no se probó). "No disponible en EE. UU." es aviso por región.
+- **Higgsfield DoP** ahora son 3 modelos (720p, 3–5 s): Lite 5 · Turbo 7 · Standard 10 créditos. En Prisma sigue como
+  "Higgsfield DoP" (el nombre vive en la BD: se cambia en Hub › Herramientas).
+- **Veo**: 3.1 (58 / 88 a 8 s) y 3.1 Fast (22 / 48) confirmados. Nuevo: **Veo 3.1 Lite** (8 s: 720p 12 · 1080p 16).
+  Veo 3 y Veo 3 Fast "se van a retirar".
+- **Imágenes ILIMITADAS hoy**: Seedream 5.0 lite · Seedream 4.5 · Seedream 4.0 · Nano Banana Pro · Nano Banana · Auto ·
+  Higgsfield Soul · Face Swap · Z-Image · Kling O1 · FLUX.2 Pro · **GPT Image (el viejo, no 2 ni 2.5)** · Multi Reference.
+  Cobran: GPT Image 2.5 Sunburst/Flare, GPT Image 2 (6.5, lista 8.5), Seedream 5.0 Pro (nuevo), Nano Banana 2,
+  Nano Banana 2 Lite (nuevo), Recraft, Grok, FLUX.2 Flex/Max, etc.
+- Aviso en la cuenta: "¡Se están agotando los créditos! Ya usaste más del 90%".
