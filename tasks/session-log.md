@@ -2368,3 +2368,81 @@ Diferido: `?demo=paso3` (2ª sesión que hace falta), ganadores casi iguales en 
 `?demo=resultado` compila con el catálogo base.
 **Environment changes:** billing de Gemini activado en el proyecto de AI Studio de Pedro (miniaturas); migración 0071 en prod;
 sin dependencias ni variables de entorno nuevas.
+
+## 2026-09-16 13:23
+
+**Still open:**
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+
+
+## 2026-09-16 14:00
+**Shipped (recent commits):**
+  - feat(prisma): Higgsfield como plataforma — Seedream, Seedance y Gemini Omni + "Abrir en Higgsfield" por modelo
+  - feat(prisma): "¿Cómo salió?" más rápido — pegar con ⌘V, achicar en el navegador y subir el video
+
+**Still open:**
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+
+
+## 2026-09-17 09:13
+
+**Still open:**
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+
+
+## 2026-09-16/17 Session — Higgsfield prompt-first: costos, Vigía con correo, precios reales leídos del sitio (rama `prisma`)
+**What we did:**
+- Paso 4 ("¿Cómo salió?" rápido), paso 1 (Higgsfield como plataforma, Seedream/Seedance/Omni), deep dive de Higgsfield
+  (bloques Seedance, "Paso a paso en Higgsfield"), Kling 3–15 s (0073), paso 2 (estimado de créditos: ahorrar SIN
+  sacrificar calidad), F6b Vigía (0074, línea base 14 fuentes, 0 llamadas).
+- Vigía manda correo a los Master Builder cuando hay propuestas aprobables (oficiales, o de comunidad al llegar a 2
+  fuentes), con liga directa a Hub › Prisma › Vigía (`?tab=hue&hub=prisma&vista=vigia`).
+- Costo por DURACIÓN (`porDuracion`: 480p/720p/1080p/4K, editable en Hub › Herramientas: `4=12/26/36/-`); el estimado dice
+  el precio exacto a la duración elegida.
+- Precios leídos del botón Generate en el navegador de la app (nunca se pulsó Generar ni se compró nada): sin sesión y con
+  la cuenta de Rünna. Corrigió 2 datos dictados (Seedance 2.0 720p = 4.5/s; Omni 1080p = 4.5/s) y Kling es más barato en
+  la cuenta (720p 1.75 · 1080p 2 · 4K 6). Nano Banana Pro es ilimitado SÓLO con el interruptor «Ilimitado» y en 1K/2K.
+- Seedance 2.0 Fast agregado; DoP = Standard/Turbo/Lite; Kling Turbo con su página; a igual precio gana el fino.
+- **0075 APLICADA** (Pedro "ship it") y verificada: catálogo vivo = código 8/8, ninguna fila editada a mano.
+**Current state:** todo pusheado al preview (último cea9722); 0072–0075 en prod; main NO tocado. Gates: test-prisma 975 ·
+test-db 508 · lint · tsc · build verdes.
+**Uncommitted work:** ninguno mío (este log). 
+**Decisions made:** prompt-first (el ilimitado sólo aplica en higgsfield.ai); rondas se cuentan con las subidas de
+"¿Cómo salió?" (sin botón de intentos); 1 crédito ≈ US$0.04; a igual precio gana la calidad (PEDRO_OVERRIDE); la promo
+"Generar gratis" de Seedance Fast NO entra a la lógica (no es del plan); el "Modo ilimitado" de Kling es un pase de pago
+(US$35/día), no del plan; se guardan los precios CON descuento vigente (Seedance muestra precio de lista tachado).
+**Pick up next session:**
+1. Paso 3 — estadísticas por diseñador al mes en Performance › Evaluación (piezas, rondas hasta aceptar, créditos estimados).
+2. Pedro: elegir el modelo extra "365 Ilimitado" que permite el plan (Seedance 2.0 = 59 % del gasto); quedan 15/1,200 créditos.
+3. Pedro: ¿Seedance hasta 30 s (lo de 16–30 s va a 2.5)? · GMAIL_* en Preview de Vercel si quiere correos del vigía en preview ·
+   CRON_SECRET al pasar Prisma a producción · LIVE-VERIFY del Hub (Vigía, campo de precios) con sesión master.
+4. Si Higgsfield quita el descuento de Seedance, actualizar las tablas (lista: 2.0 = 6/6/12/26; 2.5 720p 7, 1080p 16).
+**Environment changes:** ninguna dependencia nueva; Pedro inició sesión en Higgsfield en el navegador de la app y activó
+"Allow JavaScript from Apple Events" en Chrome (puede apagarlo).

@@ -112,3 +112,11 @@ RECOMMENDATION: construir `?demo=paso3` en Prisma la próxima sesión; regla gen
 [2026-09-15] OBSERVATION: conflict
 CONTEXT: el hook MODEL GUARD repitió "Session model is opusplan → this will EXECUTE on Sonnet" en varias vueltas, pero esta sesión corría en Opus 5; decírselo a Pedro habría sido falso (regla 2: no fabricar), así que no se dijo.
 RECOMMENDATION: que el hook lea el modelo real de la sesión (o lo diga condicional: "si estás en opusplan…") en ~/.claude/hooks.
+
+[2026-09-17] OBSERVATION: skill-gap
+CONTEXT: pedí a Pedro, modelo por modelo, precios que el navegador de la app podía leer solo (Pedro: "cant you access the browser and review those things yourself?"). Leerlos con un script (sliders Radix con teclas, listbox con pointer events, escaneo en segundo plano) tardó minutos y cazó 2 datos dictados erróneos.
+RECOMMENDATION: beast-mode-dev Phase 1: "si el dato vive en una página web, léelo con el navegador antes de pedírselo a Pedro (sólo lectura; nunca botones que gastan)".
+
+[2026-09-17] OBSERVATION: conflict
+CONTEXT: el hook MODEL GUARD disparó "auth / login → opusplan ejecuta en Sonnet" cuando Pedro dijo "ill sign in" (iniciar sesión en un sitio, no código de auth) y el hook CHALLENGE MODE disparó con órdenes directas ("yes add seedance 2.0 fast… you fix the dop name").
+RECOMMENDATION: afinar los disparadores en ~/.claude/hooks (auth = archivos/código de auth; challenge = preguntas de evaluación sin verbo de orden).

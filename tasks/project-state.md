@@ -8,6 +8,16 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-17 — TODO LIVE en preview (0065–0075 APLICADAS)
+- **Higgsfield prompt-first:** el equipo genera en higgsfield.ai (ilimitados sólo ahí); Prisma escribe el prompt del
+  MODELO, dice en qué modelo y cómo llegar ("Abrir en Higgsfield" por modelo + "Paso a paso"), y estima créditos con
+  precios reales por duración × resolución (tasks/higgsfield-costos-2026-09-16.md). Familias: nanobanana, chatgpt, veo,
+  kling, higgsfield (DoP Standard/Turbo/Lite), seedream, seedance (Mini/Fast/2.0/2.5), gemini_omni.
+- **Regla de costo:** la calidad decide; el costo sólo desempata o sube al fino si es ilimitado o cuesta ≤.
+- **F6b Vigía (0074):** 14 fuentes, propuestas citadas que el master aprueba en Hub › Prisma › Vigía; correo a los
+  masters cuando hay algo que decidir (necesita GMAIL_* — hoy sólo en Production); cron semanal con CRON_SECRET (pendiente).
+- **Siguiente:** paso 3 (estadísticas por diseñador en Evaluación).
+
 ## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-15 (tarde) — TODO LIVE en preview (0065–0071 APLICADAS · F6a + F5c)
 - **F5c hecha (0be23d2, sin migración) — lo que pidieron los diseñadores:** (1) todo aviso termina en una salida —
   "Arreglarlo" (lo que ESA pantalla aplica: ACCIONES_PASO3 / ACCIONES_RESULTADO), "Arreglarlo con H.Ü.E" (`arreglarAviso`:
