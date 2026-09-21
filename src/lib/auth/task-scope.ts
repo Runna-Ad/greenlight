@@ -103,6 +103,13 @@ export async function assertCanActOnRow(tabla: TablaFila, filaId: string): Promi
  * Se compone DESPUÉS de assertCanActOnTask/Row. (reap 0076 M2)
  */
 export async function assertPuedeEditar(ideaId: string): Promise<ScopeResult> {
+  // 0076 — el Lead Diseño maneja SÓLO el lado de diseño (Pedro 2026-09-21): revisa, pide
+  // cambios y reparte diseñadores; el CONTENIDO (guión, copies, legales) es de quien trabaja
+  // la tarea y del Lead Creativo. Nunca edita, en ningún estado.
+  const quien = await getCurrentUser();
+  if (quien?.role === "lead" && quien.member?.disciplina === "diseno") {
+    return { ok: false, error: "El Lead Diseño revisa y pide cambios; el contenido lo editan quien trabaja la tarea y el Lead Creativo." };
+  }
   const { data } = await supabaseAdmin().from("ideas").select("status").eq("id", ideaId).maybeSingle();
   const status = (data as { status: AssetStatus } | null)?.status;
   if (!status) return { ok: false, error: "La tarea ya no existe." };

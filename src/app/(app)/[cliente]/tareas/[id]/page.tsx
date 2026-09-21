@@ -422,9 +422,9 @@ export default async function TareaPage({
     idea.status === "under_review" && !!tareaDiseno?.requiere_diseno && !tareaDiseno.diseno_aprobado_at;
   const soyLD = esLeadDiseno(role, soy?.disciplina);
   const revisaAhora = !soyLD || disenoPendienteAhora;
-  // Sin diseñador (y sin ser suya) la tarea no es del carril del Lead Diseño: sólo lectura.
-  const ldAjena = soyLD && !tareaDiseno?.requiere_diseno && !(soy && memberIds.includes(soy.id));
-  const soloLectura = ldAjena || (cerrada && !(canOverrideStatus(role) && revisaAhora));
+  // El Lead Diseño NUNCA edita contenido (Pedro: sólo el lado de diseño) — revisa con
+  // correcciones. Espejo de `assertPuedeEditar`.
+  const soloLectura = soyLD || (cerrada && !(canOverrideStatus(role) && revisaAhora));
   const esEstatico = plantilla === "estatico";
   const esEquipo = role !== "client";
   // Referencias (0064): qué pudo leer H.Ü.E de cada liga del Trend — SÓLO la caché (la

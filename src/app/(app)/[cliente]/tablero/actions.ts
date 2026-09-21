@@ -532,6 +532,12 @@ export async function reasignarCambios(
   if (!especialistaIds.length) {
     return { ok: false, error: "Elige al menos un especialista para reasignar." };
   }
+  // Reasignar MUEVE la tarea (in_corrections → in_progress): exige alcance de ACTUAR, no el
+  // "ver_o_asignar" con el que asignarTarea deja pasar al Lead Diseño. (reap 0076)
+  const { role } = await context();
+  if (!canOverrideStatus(role)) return { ok: false, error: "Sólo un lead reasigna." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
   const cc = await gateCambiosCliente(supabaseAdmin(), ideaId);
   if (!cc.ok) return cc;
   // asignarTarea re-valida rol+track+activo y canAssign en el SERVIDOR.

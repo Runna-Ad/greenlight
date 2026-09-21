@@ -7,7 +7,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canOverrideStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getSoyId } from "@/lib/soy";
-import { assertCanActOnTask } from "@/lib/auth/task-scope";
+import { assertCanActOnTask, assertPuedeEditar } from "@/lib/auth/task-scope";
 import { sinNegrita } from "@/lib/negrita";
 import { registrarVeredictos, marcarVeredictoAplicado, ignorarVeredicto } from "@/lib/hue-log";
 
@@ -345,6 +345,8 @@ export async function aplicarSugerencia(
   // tarea fuera suya). (reap 2026-08-26)
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const editable = await assertPuedeEditar(ideaId); // 0076: aplicar = editar contenido
+  if (!editable.ok) return { ok: false, error: editable.error };
   if (!textoNuevo.trim()) return { ok: false, error: "No hay texto que aplicar." };
 
   const db = supabaseAdmin();

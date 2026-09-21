@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { canAdmin, canMoveStatus, canOverrideStatus } from "@/lib/roles";
-import { getViewAs } from "@/lib/view-as";
+import { canAdmin, canCreateBrief, canMoveStatus, canOverrideStatus } from "@/lib/roles";
+import { getDisciplina, getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { getCurrentUser } from "@/lib/identity";
 import {
@@ -105,6 +105,8 @@ export async function guardarIntake(
   if (ESTADOS_SOLO_LECTURA.includes(status) && !(canOverrideStatus(role) && (await assertPuedePedirCambios(ideaId)).ok)) {
     return { ok: false, error: motivoSoloLectura(status) };
   }
+  const editable = await assertPuedeEditar(ideaId); // 0076: el Lead Diseño no edita contenido
+  if (!editable.ok) return { ok: false, error: editable.error };
 
   // Se guarda SIN recortar (como guardarCampo): el valor que el cliente recuerda
   // debe coincidir con el guardado, o el siguiente compare-and-set marca un
@@ -164,6 +166,8 @@ export async function guardarDuraciones(
   if (ESTADOS_SOLO_LECTURA.includes(status) && !(canOverrideStatus(role) && (await assertPuedePedirCambios(ideaId)).ok)) {
     return { ok: false, error: motivoSoloLectura(status) };
   }
+  const editable = await assertPuedeEditar(ideaId); // 0076: el Lead Diseño no edita contenido
+  if (!editable.ok) return { ok: false, error: editable.error };
 
   const { error } = await db.rpc("rpc_set_duraciones", {
     p_idea_id: ideaId,
@@ -219,6 +223,8 @@ export async function guardarConsideraciones(
   if (ESTADOS_SOLO_LECTURA.includes(status) && !(canOverrideStatus(role) && (await assertPuedePedirCambios(ideaId)).ok)) {
     return { ok: false, error: motivoSoloLectura(status) };
   }
+  const editable = await assertPuedeEditar(ideaId); // 0076: el Lead Diseño no edita contenido
+  if (!editable.ok) return { ok: false, error: editable.error };
 
   const fila = idea as { comentarios_creativo: string | null; peloteo_raw: string | null };
   const combinadoActual = combinarConsideraciones(fila.comentarios_creativo, fila.peloteo_raw);
@@ -301,6 +307,8 @@ export async function guardarSellingPoints(
   if (ESTADOS_SOLO_LECTURA.includes(status) && !(canOverrideStatus(role) && (await assertPuedePedirCambios(ideaId)).ok)) {
     return { ok: false, error: motivoSoloLectura(status) };
   }
+  const editable = await assertPuedeEditar(ideaId); // 0076: el Lead Diseño no edita contenido
+  if (!editable.ok) return { ok: false, error: editable.error };
 
   // La columna puede ser NULL (creada a mano sin selling points), [] (import sin
   // valor) o ["texto"]. El texto que vio la persona es el arreglo unido.
@@ -343,6 +351,10 @@ export async function guardarBrief(
   const role = await getViewAs();
   if (!canOverrideStatus(role)) {
     return { ok: false, error: "Sólo un lead edita el resumen del brief." };
+  }
+  // 0076: el brief es del lado creativo — el Lead Diseño no lo edita (tampoco los crea).
+  if (!canCreateBrief(role, await getDisciplina())) {
+    return { ok: false, error: "El Lead Diseño no edita briefs." };
   }
 
   const db = supabaseAdmin();
@@ -472,6 +484,8 @@ export async function guardarCampo(
   if (status && ESTADOS_SOLO_LECTURA.includes(status) && !(canOverrideStatus(role) && (await assertPuedePedirCambios(ideaId)).ok)) {
     return { ok: false, error: motivoSoloLectura(status) };
   }
+  const editable = await assertPuedeEditar(ideaId); // 0076: el Lead Diseño no edita contenido
+  if (!editable.ok) return { ok: false, error: editable.error };
 
   const limpio = valorNuevo?.trim() ? valorNuevo : null;
 
