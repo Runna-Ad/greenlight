@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { RefreshCw, Lock, LayoutGrid } from "lucide-react";
-import { ROLE_LABEL, canSee, canAssign, type ViewRole } from "@/lib/roles";
+import { ROLE_LABEL, canSee, canAssign, esLeadDiseno, type ViewRole } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
 import { ideasConCambiosDelCliente } from "@/lib/cambios-pendientes";
@@ -29,7 +29,13 @@ type BoardData = { tasks: Task[]; members: Member[]; briefs: BriefOption[] };
 function visibleParaRol(tasks: Task[], role: ViewRole, soy: Soy | null): Task[] {
   if (role === "master" || role === "admin") return tasks;
   // Lead: su alcance EFECTIVO de tracks (grant multi-track puede ser uno o ambos).
-  if (role === "lead") return soy?.tracks?.length ? tasks.filter((t) => soy.tracks.includes(t.track)) : [];
+  if (role === "lead") {
+    if (!soy?.tracks?.length) return [];
+    // 0076 — el Lead Diseño ve TODO su alcance (global = ambos equipos) para poder poner
+    // diseñadores en cualquier tarea (Pedro 2026-09-21); lo que puede HACER en cada tarjeta
+    // lo acotan puedeCerrar / AssignPicker y el servidor.
+    return tasks.filter((t) => soy.tracks.includes(t.track));
+  }
   // Creative: sólo lo asignado, y NO las tareas con cambios del cliente sin resolver
   // (esas son cancha del lead hasta que se reasignen).
   if (role === "creative")
@@ -78,7 +84,7 @@ async function loadBoard(
           .from("track_members")
           // `role` viaja para que el picker del tablero separe Lead (rol `lead`) de
           // Especialistas (rol `creative`) — la misma regla rol+track del task section.
-          .select("id, name, color, track, tracks, role")
+          .select("id, name, color, track, tracks, role, disciplina")
           .eq("active", true)
           .order("track")
           .order("sort_order")
@@ -180,7 +186,7 @@ export default async function TableroPage({
           titulo="Todavía no hay tareas"
           descripcion="Trae un proyecto del Google Sheet para empezar a producir."
         >
-          {canSee(role, "sync") && (
+          {canSee(role, "sync", soy?.disciplina) && (
             <Button asChild variant="outline">
               <Link href={`/${cliente}/sync`}>
                 <RefreshCw className="size-4" /> Sincronizar
@@ -196,6 +202,7 @@ export default async function TableroPage({
           briefs={data?.briefs ?? []}
           role={role}
           soyId={soy?.id ?? null}
+          soyLeadDiseno={esLeadDiseno(role, soy?.disciplina)}
         />
       )}
     </div>

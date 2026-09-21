@@ -22,6 +22,8 @@ export type Soy = {
   /** El rol REAL de la identidad. Para saber si su trabajo cuenta como autoría
    *  (sólo el equipo creativo la deja). null = default 'creative'. */
   role: string | null;
+  /** 0076: creativo | diseno (Lead Diseño / Diseñador). */
+  disciplina: "creativo" | "diseno";
   notify_email: boolean;
   notify_slack: boolean;
 };

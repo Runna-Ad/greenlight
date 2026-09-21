@@ -70,7 +70,7 @@ function TarjetaMiembro({ m }: { m: EvalMiembro }) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate font-semibold text-foreground">{m.name}</span>
             <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-              Equipo {TEAM_LABEL[m.track]}
+              {m.track ? `Equipo ${TEAM_LABEL[m.track]}` : "Diseño · global"}
             </span>
           </div>
           <p className="mt-0.5 text-[11.5px] text-muted-foreground">

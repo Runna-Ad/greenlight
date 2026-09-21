@@ -57,6 +57,8 @@ export type Member = {
    *  gate del servidor: `lead` sólo en su track, `creative` sólo en su track, y
    *  admin/master como Lead en cualquiera (Pedro 2026-09-01). */
   role: string;
+  /** 0076: creativo | diseno. Diseño sin track = global (tracksDe). */
+  disciplina: string | null;
 };
 
 export type Task = {
@@ -88,6 +90,9 @@ export type Task = {
   /** in_corrections con cambios del cliente sin resolver — cancha del lead; se oculta al
    *  especialista y en la tarjeta se marca "Sin especialista"/aviso al lead. */
   clientChangesPending?: boolean;
+  /** 0076 (board_tasks): ¿lleva diseñador? ids de sus leads. */
+  requiere_diseno?: boolean;
+  lead_ids?: string[];
 };
 
 export type BriefOption = { id: string; title: string | null; tab: string | null };
@@ -145,6 +150,7 @@ export function Board({
   briefs,
   role = DEFAULT_ROLE,
   soyId = null,
+  soyLeadDiseno = false,
 }: {
   cliente: string;
   tasks: Task[];
@@ -153,9 +159,17 @@ export function Board({
   role?: ViewRole;
   /** Quién dice ser quien mira, para saber cuáles son "sus" tareas. */
   soyId?: string | null;
+  /** 0076: quien mira es Lead Diseño — no cierra (aprobar/enviar/mover de lead) lo que no lleva. */
+  soyLeadDiseno?: boolean;
 }) {
   const mayMove = canMoveStatus(role);
-  const mayOverride = canOverrideStatus(role);
+  const mayOverrideRol = canOverrideStatus(role);
+  // Espejo de `assertRevisorCompleto`: el Lead Diseño sólo tiene la escotilla de lead
+  // ("Mover", soltar en columnas de lead) en las tareas de las que ES el lead. (0076)
+  const puedeCerrar = useCallback(
+    (t: Task) => mayOverrideRol && (!soyLeadDiseno || (t.lead_ids ?? []).includes(soyId ?? "")),
+    [mayOverrideRol, soyLeadDiseno, soyId],
+  );
   const mayAssign = canAssign(role);
 
   const [tasks, setTasks] = useState(initialTasks);
@@ -370,7 +384,8 @@ export function Board({
               tasks={tasksByStatus.get(status) ?? EMPTY_TASKS}
               members={mayAssign ? members : undefined}
               dragging={dragging}
-              mayOverride={mayOverride}
+              puedeCerrar={puedeCerrar}
+              soyLeadDiseno={soyLeadDiseno}
               role={role}
               soyId={soyId}
               onAssign={applyAssignees}
@@ -396,7 +411,8 @@ const Column = memo(function Column({
   tasks,
   members,
   dragging,
-  mayOverride,
+  puedeCerrar,
+  soyLeadDiseno,
   role,
   soyId,
   onAssign,
@@ -407,7 +423,8 @@ const Column = memo(function Column({
   tasks: Task[];
   members?: Member[];
   dragging: Task | null;
-  mayOverride: boolean;
+  puedeCerrar: (t: Task) => boolean;
+  soyLeadDiseno: boolean;
   role: ViewRole;
   soyId: string | null;
   onAssign: (t: Task, leadId: string | null, especialistaIds: string[]) => void;
@@ -425,6 +442,7 @@ const Column = memo(function Column({
   // A lead reaches everywhere — the move is logged as an override. A non-lead only
   // reaches DOER targets: approve/send-to-client/deliver are lead-only, so those
   // columns aren't drop targets for a creative (the server also blocks it). (reap C1)
+  const mayOverride = !!dragging && puedeCerrar(dragging);
   const reachable =
     !dragging ||
     mayOverride ||
@@ -508,7 +526,8 @@ const Column = memo(function Column({
               cliente={cliente}
               task={t}
               members={members}
-              mayOverride={mayOverride}
+              mayOverride={puedeCerrar(t)}
+              soyLeadDiseno={soyLeadDiseno}
               role={role}
               soyId={soyId}
               onAssign={onAssign}
@@ -529,6 +548,7 @@ const TaskCard = memo(function TaskCard({
   task,
   members,
   mayOverride,
+  soyLeadDiseno,
   role,
   soyId,
   onAssign,
@@ -538,6 +558,7 @@ const TaskCard = memo(function TaskCard({
   task: Task;
   members?: Member[];
   mayOverride: boolean;
+  soyLeadDiseno: boolean;
   role: ViewRole;
   soyId: string | null;
   onAssign: (t: Task, leadId: string | null, especialistaIds: string[]) => void;
@@ -568,6 +589,7 @@ const TaskCard = memo(function TaskCard({
         task={task}
         members={members}
         mayOverride={mayOverride}
+        soyLeadDiseno={soyLeadDiseno}
         role={role}
         soyId={soyId}
         onAssign={onAssign}
@@ -583,6 +605,7 @@ const CardBody = memo(function CardBody({
   task,
   members,
   mayOverride,
+  soyLeadDiseno = false,
   onAssign,
   onMove,
   handleProps,
@@ -592,6 +615,7 @@ const CardBody = memo(function CardBody({
   task: Task;
   members?: Member[];
   mayOverride?: boolean;
+  soyLeadDiseno?: boolean;
   /** role/soyId ya no se usan aquí (se quitaron los botones del tablero: el
       trabajo se empuja arrastrando o desde el workspace), pero se dejan en el
       tipo por si vuelven — los padres los siguen pasando sin costo. */
@@ -722,7 +746,7 @@ const CardBody = memo(function CardBody({
           relative z-10: por encima del link estirado, para seguir clicables. */}
       <div className="relative z-10 mt-2 flex items-center gap-1 border-t border-border/60 pt-2">
         {members && onAssign ? (
-          <AssignPicker task={task} members={members} onAssign={onAssign} />
+          <AssignPicker task={task} members={members} onAssign={onAssign} soyLeadDiseno={soyLeadDiseno} />
         ) : (
           <PeopleChips members={task.members} />
         )}
@@ -843,17 +867,23 @@ function AssignPicker({
   task,
   members,
   onAssign,
+  soyLeadDiseno = false,
 }: {
   task: Task;
   members: Member[];
   onAssign: (t: Task, leadId: string | null, especialistaIds: string[]) => void;
+  soyLeadDiseno?: boolean;
 }) {
-  // Mismas funciones que el gate del servidor y que el picker de la tarea — un
-  // admin/master puede ser lead de cualquier track (es global). (Pedro 2026-09-01)
-  const leadsPool = members.filter((m) => puedeSerLead(m, task.track));
-  const espPool = members.filter((m) => puedeSerEspecialista(m, task.track));
   const leadId = task.leads[0]?.id ?? null;
   const teamIds = new Set(task.team.map((m) => m.id));
+  // Mismas funciones que el gate del servidor y que el picker de la tarea — un
+  // admin/master puede ser lead de cualquier track (es global). (Pedro 2026-09-01)
+  // 0076 — el Lead Diseño reparte DISEÑADORES: no cambia al lead ni a los creativos
+  // (espejo del gate de `asignarTarea`), así que sólo se le ofrece eso.
+  const leadsPool = members.filter((m) => puedeSerLead(m, task.track) && (!soyLeadDiseno || m.id === leadId));
+  const espPool = members.filter(
+    (m) => puedeSerEspecialista(m, task.track) && (!soyLeadDiseno || m.disciplina === "diseno"),
+  );
 
   const pickLead = (id: string | null) => onAssign(task, id, [...teamIds]);
   const toggleEsp = (id: string) => {

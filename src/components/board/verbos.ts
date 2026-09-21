@@ -6,6 +6,7 @@
 // es error de compilación.
 
 import {
+  approveDesign,
   approveTask,
   requestChanges,
   sendToClient,
@@ -24,6 +25,7 @@ export const EJECUTA_VERBO: Record<
   request_changes: (id, body) => requestChanges(id, body ?? ""),
   approve: (id) => approveTask(id),
   send_client: (id, body) => sendToClient(id, body),
+  approve_design: (id) => approveDesign(id),
 };
 
 /** Qué confirmar en pantalla cuando el verbo sale bien. */
@@ -31,6 +33,7 @@ export const TOAST_VERBO: Partial<Record<TaskVerb, string>> = {
   submit_review: "Mandada a revisión — el lead ya tiene el aviso.",
   request_changes: "Cambios pedidos — quien la trabaja ya tiene el aviso.",
   approve: "Aprobada.",
+  approve_design: "Diseño aprobado — el Lead Creativo ya tiene el aviso.",
   // El portal del cliente YA existe y funciona; lo que falta es el AVISO automático
   // al cliente (llega con el login/binding cliente↔sesión). Así que "enviada" = ya
   // visible en su portal, pero por ahora el lead le comparte el link a mano.

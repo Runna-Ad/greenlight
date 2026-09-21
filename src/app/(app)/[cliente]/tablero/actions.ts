@@ -5,18 +5,21 @@ import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { dispatchPendingEmails } from "@/lib/notif-email";
 import {
-  canAssign, canMoveStatus, canOverrideStatus, puedeSerLead, puedeSerEspecialista,
+  canAssign, canMoveStatus, canOverrideStatus, esLeadDiseno, puedeSerLead, puedeSerEspecialista,
   type ViewRole,
 } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
 
 /** La forma mínima que necesitan `puedeSerLead`/`puedeSerEspecialista`. */
-type MiembroAsignable = { role: string | null; track: Track | null; tracks: Track[] | null; active?: boolean };
+type MiembroAsignable = { role: string | null; track: Track | null; tracks: Track[] | null; disciplina: string | null; active?: boolean };
 import { transicionRequiereLead } from "@/lib/task-actions";
 import { getCurrentUser } from "@/lib/identity";
-import { assertCanActOnTask } from "@/lib/auth/task-scope";
+import {
+  assertCanActOnTask, assertPuedePedirCambios, assertRevisorCompleto, assertRevisorDiseno,
+} from "@/lib/auth/task-scope";
 import type { AssetStatus } from "@/lib/brand";
 import { faltaCortinilla, MSG_FALTA_LEGAL } from "@/lib/cortinilla";
+import { ideasConCambiosDelCliente } from "@/lib/cambios-pendientes";
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -54,6 +57,18 @@ async function context(): Promise<{ role: ViewRole; soyId: string | null; profil
 }
 
 /**
+ * 0076 — Una tarea en correcciones con cambios del CLIENTE es cancha del Lead Creativo (él
+ * los hace o los reasigna). El Lead Diseño no la retoma ni la reasigna aunque lleve diseño.
+ * Se aplica a TODO camino que la saque de in_corrections: Retomar, arrastre y reasignar.
+ */
+async function gateCambiosCliente(db: Db, ideaId: string): Promise<ActionResult> {
+  const { data } = await db.from("ideas").select("status").eq("id", ideaId).maybeSingle<{ status: AssetStatus }>();
+  if (data?.status !== "in_corrections") return { ok: true };
+  if (!(await ideasConCambiosDelCliente(db, [ideaId])).has(ideaId)) return { ok: true };
+  return assertRevisorCompleto(ideaId);
+}
+
+/**
  * Mover una TAREA a otro estado (arrastre y menú "Mover" del lead).
  *
  * Pasa por rpc_move_task, la única puerta: valida la transición, decide si el
@@ -88,8 +103,20 @@ export async function moveTask(
   const { data: cur } = await db
     .from("ideas").select("status").eq("id", ideaId).maybeSingle<{ status: AssetStatus }>();
   const from = cur?.status;
+  if (from === "in_corrections") {
+    const cc = await gateCambiosCliente(db, ideaId);
+    if (!cc.ok) return cc;
+  }
   if (from && transicionRequiereLead(from, toStatus) && !canOverrideStatus(role)) {
     return { ok: false, error: "Sólo un lead puede aprobar, enviar al cliente o entregar." };
+  }
+  // 0076: el Lead Diseño no arrastra a aprobado/publicado/entregado una tarea que no lleva
+  // él — la MISMA regla que los botones. Pedir cambios: la misma que `requestChanges`.
+  if (from && transicionRequiereLead(from, toStatus)) {
+    const rev = toStatus === "in_corrections"
+      ? await assertPuedePedirCambios(ideaId)
+      : await assertRevisorCompleto(ideaId);
+    if (!rev.ok) return { ok: false, error: rev.error };
   }
   // Cortinilla obligatoria: la MISMA puerta que "Mandar a revisión" — se gatea por el
   // ESTADO destino, no por el nombre del verbo (guard-all-paths, 2026-09-03). Dos destinos
@@ -135,6 +162,8 @@ export async function startTask(ideaId: string): Promise<ActionResult> {
   if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
+  const cc = await gateCambiosCliente(db, ideaId);
+  if (!cc.ok) return cc;
   const { error } = await db.rpc("rpc_task_start", {
     p_idea_id: ideaId,
     p_actor_member: soyId,
@@ -186,6 +215,8 @@ export async function requestChanges(ideaId: string, body: string): Promise<Acti
   if (!body.trim()) return { ok: false, error: "Escribe qué hay que corregir." };
 
   const db = supabaseAdmin();
+  const rev = await assertPuedePedirCambios(ideaId);
+  if (!rev.ok) return { ok: false, error: rev.error };
   const { error } = await db.rpc("rpc_task_request_changes", {
     p_idea_id: ideaId,
     p_body: body.trim(),
@@ -211,6 +242,8 @@ export async function approveTask(ideaId: string, note?: string): Promise<Action
   }
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const rev = await assertRevisorCompleto(ideaId); // 0076: el Lead Diseño no cierra la pieza
+  if (!rev.ok) return { ok: false, error: rev.error };
 
   const db = supabaseAdmin();
   const { error } = await db.rpc("rpc_task_approve", {
@@ -229,6 +262,33 @@ export async function approveTask(ideaId: string, note?: string): Promise<Action
   return { ok: true };
 }
 
+/**
+ * 0076 — El Lead Diseño aprueba el DISEÑO. La tarea sigue En revisión y pasa al Lead
+ * Creativo (la RPC le avisa). Gate: Lead Diseño/admin/master + scope de la tarea; la RPC
+ * valida que esté en revisión y lleve diseñador.
+ */
+export async function approveDesign(ideaId: string, note?: string): Promise<ActionResult> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const { soyId, profileId } = await context();
+  const rev = await assertRevisorDiseno();
+  if (!rev.ok) return { ok: false, error: rev.error };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+
+  const db = supabaseAdmin();
+  const { error } = await db.rpc("rpc_task_approve_design", {
+    p_idea_id: ideaId,
+    p_actor_member: soyId,
+    p_actor: profileId,
+    p_note: note?.trim() || null,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  await revalidateFor(db, ideaId);
+  after(() => dispatchPendingEmails());
+  return { ok: true };
+}
+
 /** El lead publica al cliente → Publicado. Paso APARTE de aprobar (Pedro). */
 export async function sendToClient(ideaId: string, note?: string): Promise<ActionResult> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
@@ -238,6 +298,8 @@ export async function sendToClient(ideaId: string, note?: string): Promise<Actio
   }
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const rev = await assertRevisorCompleto(ideaId); // 0076: el Lead Diseño no cierra la pieza
+  if (!rev.ok) return { ok: false, error: rev.error };
 
   const db = supabaseAdmin();
   const { error } = await db.rpc("rpc_task_send_client", {
@@ -275,25 +337,35 @@ export async function asignarTarea(
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const { role } = await context();
   if (!canAssign(role)) return { ok: false, error: "Este rol no puede asignar." };
-  const scope = await assertCanActOnTask(ideaId);
+  // El Lead Diseño pone diseñadores en CUALQUIER tarea (el gate de abajo le limita a eso).
+  const scope = await assertCanActOnTask(ideaId, "ver_o_asignar");
   if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
 
-  const { data: idea } = await db
-    .from("ideas").select("track").eq("id", ideaId).maybeSingle<{ track: string }>();
+  const [{ data: idea }, { data: actuales }, u] = await Promise.all([
+    db.from("ideas").select("track, status, diseno_aprobado_at").eq("id", ideaId)
+      .maybeSingle<{ track: string; status: AssetStatus; diseno_aprobado_at: string | null }>(),
+    db.from("idea_assignments").select("member_id, es_lead, track_members(disciplina)").eq("idea_id", ideaId)
+      .returns<{ member_id: string | null; es_lead: boolean; track_members: { disciplina: string } | null }[]>(),
+    getCurrentUser(),
+  ]);
   const track = idea?.track ?? null;
+  const leadActual = (actuales ?? []).find((a) => a.es_lead)?.member_id ?? null;
+  const esDisenoActual = (a: { track_members: { disciplina: string } | null }) => a.track_members?.disciplina === "diseno";
 
   // Validación de rol+track (la frontera REAL, no sólo el filtro de la UI).
   const ids = [...(leadId ? [leadId] : []), ...especialistaIds];
   const dedupIds = [...new Set(ids)];
+  let disciplinaDe = new Map<string, string | null>();
   if (dedupIds.length) {
     const { data: rows } = await db
       .from("track_members")
-      .select("id, role, track, tracks, active")
+      .select("id, role, track, tracks, active, disciplina")
       .in("id", dedupIds)
-      .returns<{ id: string; role: string; track: string; tracks: string[] | null; active: boolean }[]>();
+      .returns<{ id: string; role: string; track: string; tracks: string[] | null; active: boolean; disciplina: string | null }[]>();
     const byId = new Map((rows ?? []).map((m) => [m.id, m]));
+    disciplinaDe = new Map((rows ?? []).map((m) => [m.id, m.disciplina]));
     // `puedeSerLead`/`puedeSerEspecialista` (lib/roles) son la fuente ÚNICA que
     // comparten este gate y los dos pickers — así la UI nunca ofrece a alguien que
     // el servidor rechaza. Un admin/master SÍ puede ser lead (Pedro 2026-09-01).
@@ -311,11 +383,24 @@ export async function asignarTarea(
     }
   }
 
+  // 0076 — el Lead Diseño reparte DISEÑADORES; no pone ni quita al lead de la tarea ni a
+  // los especialistas creativos. Si pudiera ponerse de lead, `assertRevisorCompleto` lo
+  // dejaría aprobar y enviar al cliente — el carril del Lead Creativo. (reap S1)
+  if (esLeadDiseno(u?.role, u?.member?.disciplina)) {
+    if ((leadId ?? null) !== leadActual) {
+      return { ok: false, error: "El Lead Diseño asigna diseñadores; el lead de la tarea lo pone el Lead Creativo o un admin." };
+    }
+    const creativosAntes = (actuales ?? []).filter((a) => !a.es_lead && !esDisenoActual(a)).map((a) => a.member_id).sort();
+    const creativosDespues = especialistaIds
+      .filter((eid) => disciplinaDe.get(eid) !== "diseno").sort();
+    if (creativosAntes.join() !== creativosDespues.join()) {
+      return { ok: false, error: "El Lead Diseño sólo agrega o quita diseñadores." };
+    }
+  }
   // La escritura va por rpc_set_assignees (0061): hace el DIFF (preserva assigned_at de
   // quien sigue), sella es_lead y assigned_by, y — lo que un insert directo por PostgREST
   // no podía — fija `produccion.acting_member`, así el trigger notify_on_assignment NO
   // avisa "se te asignó" a quien se asigna a sí mismo. (reap 2026-09-02, sweep S1)
-  const u = await getCurrentUser();
   const { error } = await db.rpc("rpc_set_assignees", {
     p_idea_id: ideaId,
     p_lead_id: leadId,
@@ -324,6 +409,19 @@ export async function asignarTarea(
     p_actor_profile: u?.userId ?? null,
   });
   if (error) return { ok: false, error: error.message };
+
+  // 0076 — quitar al diseñador en plena revisión con el diseño sin aprobar también es
+  // SALTARSE el diseño: queda el mismo rastro que "Aprobar sin diseño". (reap M2)
+  const habiaDiseno = (actuales ?? []).some((a) => !a.es_lead && esDisenoActual(a));
+  if (idea?.status === "under_review" && !idea.diseno_aprobado_at && habiaDiseno) {
+    const { data: sigue } = await db.rpc("idea_requiere_diseno", { p_idea_id: ideaId });
+    if (sigue === false) {
+      await db.from("activity_log").insert({
+        entity_type: "idea", entity_id: ideaId, actor_id: u?.userId ?? null,
+        verb: "diseno_saltado", payload: { member: u?.member?.id ?? null, via: "quitar_disenador" },
+      });
+    }
+  }
 
   await revalidateFor(db, ideaId);
   after(() => dispatchPendingEmails());
@@ -348,6 +446,8 @@ export async function enviarClienteSolo(ideaId: string): Promise<ActionResult> {
   if (!canOverrideStatus(role)) return { ok: false, error: "Sólo un lead envía al cliente." };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const rev = await assertRevisorCompleto(ideaId); // 0076: el Lead Diseño no cierra la pieza
+  if (!rev.ok) return { ok: false, error: rev.error };
 
   const db = supabaseAdmin();
 
@@ -405,6 +505,8 @@ export async function reenviarACliente(ideaId: string): Promise<ActionResult> {
   if (!canOverrideStatus(role)) return { ok: false, error: "Sólo un lead reenvía al cliente." };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const rev = await assertRevisorCompleto(ideaId); // 0076: el Lead Diseño no cierra la pieza
+  if (!rev.ok) return { ok: false, error: rev.error };
 
   const db = supabaseAdmin();
   const { error } = await db.rpc("rpc_lead_reenvia_cliente", {
@@ -430,6 +532,8 @@ export async function reasignarCambios(
   if (!especialistaIds.length) {
     return { ok: false, error: "Elige al menos un especialista para reasignar." };
   }
+  const cc = await gateCambiosCliente(supabaseAdmin(), ideaId);
+  if (!cc.ok) return cc;
   // asignarTarea re-valida rol+track+activo y canAssign en el SERVIDOR.
   const asign = await asignarTarea(ideaId, leadId, especialistaIds);
   if (!asign.ok) return asign;

@@ -4,7 +4,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getSoy } from "@/lib/soy";
 import { getViewAs } from "@/lib/view-as";
 import { ideasConCambiosDelCliente } from "@/lib/cambios-pendientes";
-import { ROLE_LABEL, canSee } from "@/lib/roles";
+import { ROLE_LABEL, canSee, esLeadDiseno } from "@/lib/roles";
 import { STATUS_LABEL, STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
 import { MyTasks, type MyTask } from "@/components/board/my-tasks";
 
@@ -43,6 +43,10 @@ export default async function MiTrabajoPage() {
   }
 
   let tasks: MyTask[] = [];
+  // 0076 — la cola del Lead Diseño: tareas EN REVISIÓN con diseñador y el diseño sin aprobar,
+  // dentro de su alcance (global = ambos equipos). No están asignadas a él, por eso van aparte.
+  const soyLeadDiseno = esLeadDiseno(role, soy.disciplina);
+  let colaDiseno: MyTask[] = [];
   if (hasSupabase()) {
     const db = supabaseAdmin();
     const { data } = await db
@@ -52,6 +56,19 @@ export default async function MiTrabajoPage() {
       .limit(300)
       .returns<MyTask[]>();
     tasks = data ?? [];
+
+    if (soyLeadDiseno && soy.tracks.length) {
+      const { data: cola } = await db
+        .from("board_tasks")
+        .select("*")
+        .eq("status", "under_review")
+        .eq("requiere_diseno", true)
+        .is("diseno_aprobado_at", null)
+        .in("track", soy.tracks)
+        .limit(300)
+        .returns<MyTask[]>();
+      colaDiseno = cola ?? [];
+    }
 
     // Cambios del CLIENTE son cancha del LEAD: para un especialista (creative), una
     // tarea en in_corrections con cambios del cliente sin resolver NO es suya hasta que
@@ -91,6 +108,17 @@ export default async function MiTrabajoPage() {
         </p>
       </div>
 
+      {colaDiseno.length > 0 && (
+        <section className="mb-6">
+          <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
+            <span className="size-2 rounded-full bg-primary" />
+            Diseño por revisar
+            <span className="text-muted-foreground">({colaDiseno.length})</span>
+          </h3>
+          <MyTasks tasks={colaDiseno} soyId={soy.id} role={role} soyLeadDiseno />
+        </section>
+      )}
+
       {tasks.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-10 text-center">
           <p className="text-sm text-muted-foreground">
@@ -115,14 +143,14 @@ export default async function MiTrabajoPage() {
                 {status === "in_corrections" ? "Cambios pedidos" : STATUS_LABEL[status]}
                 <span className="text-muted-foreground">({items.length})</span>
               </h3>
-              <MyTasks tasks={items} soyId={soy.id} role={role} />
+              <MyTasks tasks={items} soyId={soy.id} role={role} soyLeadDiseno={soyLeadDiseno} />
             </section>
           ))}
         </div>
       )}
 
       {/* Un especialista no ve /clientes: el enlace lo mandaba a una tarjeta de "no entra". */}
-      {canSee(role, "clientes") && (
+      {canSee(role, "clientes", soy.disciplina) && (
         <p className="mt-8 text-xs text-muted-foreground">
           ¿Buscas el panorama completo?{" "}
           <Link href="/clientes" className="underline underline-offset-2">

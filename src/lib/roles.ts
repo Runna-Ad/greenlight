@@ -30,7 +30,7 @@ export const VIEW_ROLES: ViewRole[] = ["master", "admin", "lead", "creative", "c
 export const ROLE_LABEL: Record<ViewRole, string> = {
   master: "Master Builder",
   admin: "Admin",
-  lead: "Dept Head / Lead",
+  lead: "Lead Creativo",
   creative: "Especialista",
   client: "Partner",
 };
@@ -42,6 +42,53 @@ export const ROLE_HINT: Record<ViewRole, string> = {
   creative: "Sólo sus tareas asignadas",
   client: "Sólo lo publicado para su marca (Partner)",
 };
+
+// ── Disciplina (0076) ───────────────────────────────────────
+// El NIVEL (lead / creative) dice qué puede hacer; la DISCIPLINA dice de qué es. Diseño
+// es su propio carril: el Lead Diseño aprueba el diseño y se lo pasa al Lead Creativo de
+// la tarea — no aprueba la pieza completa ni la envía al cliente. Diseño es GLOBAL por
+// defecto (track null = ambos equipos), con la opción de acotarlo a uno. (Pedro 2026-09-18)
+export const DISCIPLINAS = ["creativo", "diseno"] as const;
+export type Disciplina = (typeof DISCIPLINAS)[number];
+
+export const DISCIPLINA_LABEL: Record<Disciplina, string> = {
+  creativo: "Creativo",
+  diseno: "Diseño",
+};
+
+/** Lo que se lee de la BD → una disciplina válida (lo desconocido cae a creativo). */
+export const aDisciplina = (d: unknown): Disciplina => (d === "diseno" ? "diseno" : "creativo");
+
+/** La etiqueta que ve la gente: nivel + disciplina. Admin/master/cliente no tienen disciplina. */
+export function etiquetaRol(role: string, disciplina: string | null | undefined): string {
+  if (disciplina === "diseno") {
+    if (role === "lead") return "Lead Diseño";
+    if (role === "creative") return "Diseñador";
+  }
+  return ROLE_LABEL[role as ViewRole] ?? role;
+}
+
+/** ¿Lead de la disciplina diseño? */
+export const esLeadDiseno = (role: string | null | undefined, disciplina: string | null | undefined): boolean =>
+  role === "lead" && disciplina === "diseno";
+
+const TODOS_LOS_TRACKS: Track[] = ["real", "normal"];
+
+/**
+ * El alcance EFECTIVO de tracks de un miembro — FUENTE ÚNICA (identity, pickers, gates).
+ * Grant multi-track (0059) si lo tiene; si no, el track HOME. Diseño sin track = global
+ * (ambos). Admin/master (track null, creativo) = [] — son globales por ROL, ver
+ * `tracksVisibles`.
+ */
+export function tracksDe(m: {
+  track: Track | null;
+  tracks: Track[] | null;
+  disciplina?: string | null;
+}): Track[] {
+  if (m.tracks && m.tracks.length) return [...new Set(m.tracks)];
+  if (m.track) return [m.track];
+  return m.disciplina === "diseno" ? [...TODOS_LOS_TRACKS] : [];
+}
 
 /**
  * Fallback role for client-component PROPS only (the server always passes the real
@@ -107,8 +154,19 @@ const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
   client: ["portal"],
 };
 
-export const canSee = (role: ViewRole, key: NavKey): boolean =>
-  NAV_BY_ROLE[role].includes(key);
+// 0076 — el Lead Diseño maneja SÓLO el lado de diseño (Pedro 2026-09-21): su trabajo,
+// Performance (sólo diseñadores), el tablero (para poner diseñadores en cualquier tarea) y los
+// briefs en lectura. "Clientes" sólo como NAVEGACIÓN — es la única puerta al tablero de cada
+// cliente (crear/editar clientes sigue siendo de admin, canAdmin). Ni Sync, ni Entregas, ni
+// crear briefs. En la rama `prisma` se agrega "prisma" a esta lista.
+const NAV_LEAD_DISENO: NavKey[] = ["clientes", "mi-trabajo", "performance", "tablero", "briefs", "mi-perfil"];
+
+/** `disciplina` distingue al Lead Diseño (mismo nivel `lead`, otro carril). Opcional para
+ *  los roles que no la tienen; quien gatea algo que el Lead Diseño NO debe ver la pasa. */
+export const canSee = (role: ViewRole, key: NavKey, disciplina?: string | null): boolean =>
+  role === "lead" && disciplina === "diseno"
+    ? NAV_LEAD_DISENO.includes(key)
+    : NAV_BY_ROLE[role].includes(key);
 
 // ── Permisos ────────────────────────────────────────────────
 
@@ -132,8 +190,8 @@ export const canMoveStatus = (role: ViewRole): boolean => role !== "client";
  * Quién puede CREAR un brief. Aparte de canSee("briefs"): el especialista ahora
  * ve los bundles, pero capturar un brief sigue siendo del lead.
  */
-export const canCreateBrief = (role: ViewRole): boolean =>
-  esNivelAdmin(role) || role === "lead";
+export const canCreateBrief = (role: ViewRole, disciplina?: string | null): boolean =>
+  esNivelAdmin(role) || (role === "lead" && disciplina !== "diseno"); // Lead Diseño: no (0076)
 
 /** Quién entra al panel de administración. Sólo master/admin. */
 export const canAdmin = (role: ViewRole): boolean => esNivelAdmin(role);
@@ -177,6 +235,9 @@ export type MiembroAsignable = {
   role: string | null;
   track: Track | null;
   tracks: Track[] | null;
+  /** 0076: diseño sin track = global. OBLIGATORIO por la misma razón que `tracks`: si un
+   *  pool no la trae, un diseñador global desaparece de los pickers sin un solo error. */
+  disciplina: string | null;
   active?: boolean;
 };
 
@@ -198,9 +259,12 @@ export function puedeSerLead(
   if (m.active === false) return false;
   if (m.role === "admin" || m.role === "master") return true; // globales, sin track
   if (m.role !== "lead") return false;
+  // 0076: el Lead Diseño NUNCA es el lead de una tarea — ese es el Lead Creativo, el que
+  // aprueba la pieza y la envía al cliente. Si pudiera serlo (asignación, brief, sync o
+  // import de la hoja), `assertRevisorCompleto` le abriría aprobar/enviar. (reap H1)
+  if (m.disciplina === "diseno") return false;
   // Mismo grant multi-track que los especialistas (0059): pertenencia, no igualdad.
-  const suyos = m.tracks && m.tracks.length ? m.tracks : m.track ? [m.track] : [];
-  return trackTarea !== null && suyos.includes(trackTarea);
+  return trackTarea !== null && tracksDe(m).includes(trackTarea);
 }
 
 /** ¿Puede ser ESPECIALISTA (doer) de una tarea de `trackTarea`? Sólo `creative` de su
@@ -212,9 +276,8 @@ export function puedeSerEspecialista(
   if (m.active === false) return false;
   if (m.role !== "creative") return false;
   // PERTENENCIA, no igualdad: un creativo puede tener grant de varios tracks (0059).
-  // Sin grant se cae a su track HOME — mismo comportamiento que antes.
-  const suyos = m.tracks && m.tracks.length ? m.tracks : m.track ? [m.track] : [];
-  return trackTarea !== null && suyos.includes(trackTarea);
+  // Sin grant se cae a su track HOME; un diseñador sin track es global (0076).
+  return trackTarea !== null && tracksDe(m).includes(trackTarea);
 }
 
 /**

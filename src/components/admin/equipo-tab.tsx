@@ -15,11 +15,12 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Pill } from "@/components/ui/pill";
-import { ROLE_LABEL, type ViewRole } from "@/lib/roles";
+import { DISCIPLINAS, DISCIPLINA_LABEL, etiquetaRol, type Disciplina } from "@/lib/roles";
 import { ROLES_ASIGNABLES, type MiembroRow, type RolAsignable } from "@/lib/equipo";
 import { crearMiembro, guardarMiembro, eliminarMiembro, enviarInvitacion } from "@/app/(app)/admin/actions";
 
-const rolLabel = (r: string) => ROLE_LABEL[r as ViewRole] ?? r;
+// La etiqueta depende de la disciplina: lead+diseño = "Lead Diseño", creative+diseño = "Diseñador".
+const rolLabel = (r: string, d?: string | null) => etiquetaRol(r, d);
 
 export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
   const [miembros, setMiembros] = useState<MiembroRow[]>(inicial);
@@ -45,8 +46,14 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
     const local: Partial<MiembroRow> = { ...patch };
     if ("role" in patch) {
       const esGlobal = patch.role === "admin" || patch.role === "master";
-      if (esGlobal) local.track = null;
-      else if (prev && prev.track == null) local.track = "normal";
+      if (esGlobal) {
+        local.track = null;
+        local.disciplina = "creativo";
+      } else if (prev && prev.track == null && prev.disciplina !== "diseno") local.track = "normal";
+    }
+    // Diseño puede quedar global (sin track); al volver a Creativo necesita uno.
+    if (patch.disciplina === "creativo" && prev && prev.track == null && prev.role !== "admin" && prev.role !== "master") {
+      local.track = "normal";
     }
     setMiembros((ms) => ms.map((m) => (m.id === id ? { ...m, ...local } : m)));
     const r = await guardarMiembro(id, patch);
@@ -64,6 +71,7 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
 
   // Admin/master son GLOBALES (track null): van a su propio grupo, no a Real/Normal
   // — si no, se caían de ambas columnas y desaparecían de la lista. (Pedro 2026-08-21.)
+  // Diseño sin track también es global (0076).
   const global = miembros.filter((m) => m.track == null);
   const real = miembros.filter((m) => m.track === "real");
   const normal = miembros.filter((m) => m.track === "normal");
@@ -79,7 +87,7 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
         </Button>
       </div>
 
-      <Grupo titulo="Vista global · Admins y Master" miembros={global} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
+      <Grupo titulo="Vista global · Admins, Master y Diseño" miembros={global} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
       <Grupo titulo="Equipo Real" miembros={real} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
       <Grupo titulo="Equipo Normal" miembros={normal} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
 
@@ -227,6 +235,8 @@ function MiembroCard({
   // track home mientras no se otorgue nada, así nadie se queda sin alcance.
   const tracksOtorgados =
     m.tracks && m.tracks.length ? m.tracks : m.track ? [m.track] : [];
+  // Diseño (0076): sin ningún track = GLOBAL (ambos equipos). Su default.
+  const esDiseno = !esGlobal && m.disciplina === "diseno";
 
   return (
     <div
@@ -252,9 +262,9 @@ function MiembroCard({
           className="min-w-0 flex-1 font-medium"
           ariaLabel="Nombre"
         />
-        {m.es_lead && (
+        {(m.es_lead || esDiseno) && (
           <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-            Lead
+            {rolLabel(m.role, m.disciplina)}
           </span>
         )}
         <Pill color={m.color} title="Tareas activas asignadas" className="shrink-0">
@@ -285,11 +295,24 @@ function MiembroCard({
             className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {roles.map((r) => (
-              <option key={r} value={r}>{rolLabel(r)}</option>
+              <option key={r} value={r}>{rolLabel(r, m.disciplina)}</option>
             ))}
           </select>
         </Campo>
-        <Campo label="Tracks" hint={esGlobal ? undefined : "uno o ambos"}>
+        {!esGlobal && (
+          <Campo label="Disciplina">
+            <select
+              value={m.disciplina}
+              onChange={(e) => guardar(m.id, { disciplina: e.target.value as Disciplina })}
+              className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {DISCIPLINAS.map((d) => (
+                <option key={d} value={d}>{DISCIPLINA_LABEL[d]}</option>
+              ))}
+            </select>
+          </Campo>
+        )}
+        <Campo label="Tracks" hint={esGlobal ? undefined : esDiseno ? "ninguno = global" : "uno o ambos"}>
           {esGlobal ? (
             <span
               className="flex h-8 items-center rounded-md border border-dashed border-border px-2 text-sm text-muted-foreground"
@@ -299,7 +322,11 @@ function MiembroCard({
             </span>
           ) : (
             // Lead o especialista: uno o ambos tracks, mismo control.
-            <TrackMultiSelect value={tracksOtorgados} onChange={(ts) => guardar(m.id, { tracks: ts })} />
+            <TrackMultiSelect
+              value={tracksOtorgados}
+              permiteVacio={esDiseno}
+              onChange={(ts) => guardar(m.id, ts.length ? { tracks: ts } : { tracks: [], track: null })}
+            />
           )}
         </Campo>
         <Campo label="Email">
@@ -331,19 +358,21 @@ function MiembroCard({
   );
 }
 
-// Grant de tracks de un LEAD: Real / Normal / ambos. Requiere ≥1 (no se puede dejar
-// a un lead sin ningún track — no podría ver ni asignar nada).
+// Grant de tracks: Real / Normal / ambos. Requiere ≥1 (un lead/especialista sin track no
+// podría ver ni asignar nada) — salvo Diseño, donde NINGUNO = global (0076).
 function TrackMultiSelect({
   value,
   onChange,
+  permiteVacio = false,
 }: {
   value: ("real" | "normal")[];
   onChange: (tracks: ("real" | "normal")[]) => void;
+  permiteVacio?: boolean;
 }) {
   const has = (t: "real" | "normal") => value.includes(t);
   const toggle = (t: "real" | "normal") => {
     const next = has(t) ? value.filter((x) => x !== t) : [...value, t];
-    if (!next.length) return; // un lead necesita al menos un track
+    if (!next.length && !permiteVacio) return; // un lead necesita al menos un track
     onChange(next);
   };
   const chip = (t: "real" | "normal", label: string) => (
@@ -363,7 +392,7 @@ function TrackMultiSelect({
     </button>
   );
   return (
-    <div className="flex gap-1.5" role="group" aria-label="Tracks del lead">
+    <div className="flex gap-1.5" role="group" aria-label="Tracks">
       {chip("real", "Real")}
       {chip("normal", "Normal")}
     </div>
@@ -444,8 +473,10 @@ function AgregarPersona({
   onCreado: (m: MiembroRow) => void;
 }) {
   const [name, setName] = useState("");
-  const [track, setTrack] = useState<"real" | "normal">("real");
+  // "" = global (sólo Diseño, 0076).
+  const [track, setTrack] = useState<"real" | "normal" | "">("real");
   const [role, setRole] = useState<RolAsignable>("creative");
+  const [disciplina, setDisciplina] = useState<Disciplina>("creativo");
   const [color, setColor] = useState("#775cbf");
   const [email, setEmail] = useState("");
   const [slack, setSlack] = useState("");
@@ -454,14 +485,16 @@ function AgregarPersona({
   const esGlobalNuevo = role === "admin" || role === "master";
 
   const reset = () => {
-    setName(""); setTrack("real"); setRole("creative");
+    setName(""); setTrack("real"); setRole("creative"); setDisciplina("creativo");
     setColor("#775cbf"); setEmail(""); setSlack("");
   };
 
   const crear = async () => {
     setGuardando(true);
     const r = await crearMiembro({
-      name, track, role, color,
+      name, role, color,
+      disciplina: esGlobalNuevo ? "creativo" : disciplina,
+      track: track || null,
       email: email || undefined,
       slack_user_id: slack || undefined,
     });
@@ -513,8 +546,9 @@ function AgregarPersona({
                   Global · sin track
                 </span>
               ) : (
-                <select value={track} onChange={(e) => setTrack(e.target.value as "real" | "normal")}
+                <select value={track} onChange={(e) => setTrack(e.target.value as "real" | "normal" | "")}
                   className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  {disciplina === "diseno" && <option value="">Global · ambos equipos</option>}
                   <option value="real">Real</option>
                   <option value="normal">Normal</option>
                 </select>
@@ -525,11 +559,31 @@ function AgregarPersona({
               <select id="f-track-esglobalnuevo-global-sin-track-settrack-classname-h-9-w-full-rounded-md-border-border-input-bg-background-px-2-text-sm-outline-none-focus-visible-ring-2-focus-visible-ring-ring-real-normal-rol" value={role} onChange={(e) => setRole(e.target.value as RolAsignable)}
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {ROLES_ASIGNABLES.map((r) => (
-                  <option key={r} value={r}>{rolLabel(r)}</option>
+                  <option key={r} value={r}>{rolLabel(r, disciplina)}</option>
                 ))}
               </select>
             </div>
           </div>
+          {!esGlobalNuevo && (
+            <div>
+              <Label htmlFor="f-disciplina" className="mb-1 block">Disciplina</Label>
+              <select
+                id="f-disciplina"
+                value={disciplina}
+                onChange={(e) => {
+                  const d = e.target.value as Disciplina;
+                  setDisciplina(d);
+                  // Diseño nace GLOBAL por defecto (Pedro); al volver a Creativo necesita track.
+                  setTrack(d === "diseno" ? "" : track || "real");
+                }}
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {DISCIPLINAS.map((d) => (
+                  <option key={d} value={d}>{DISCIPLINA_LABEL[d]}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <Label htmlFor="f-email" className="mb-1 block">Email <span className="text-muted-foreground">(opcional)</span></Label>
             <input id="f-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@…"

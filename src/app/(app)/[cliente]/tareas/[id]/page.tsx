@@ -10,8 +10,9 @@ import { lecturasCacheadas } from "@/lib/referencia-lectura";
 import type { Lectura } from "@/lib/referencia-lectura-url";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import {
-  ROLE_LABEL, canSee, canOverrideStatus, canAssign, puedeSerLead, puedeSerEspecialista,
+  ROLE_LABEL, canSee, canOverrideStatus, canAssign, puedeSerLead, puedeSerEspecialista, esLeadDiseno,
 } from "@/lib/roles";
+import { esRevisorCompleto } from "@/lib/task-actions";
 import type { Track } from "@/lib/vocab";
 import { type AssetStatus } from "@/lib/brand";
 import { ESTADOS_SOLO_LECTURA, plantillaPara, requiereCortinilla, notaGlobal, LEGAL_SECONDS } from "@/lib/plantilla";
@@ -83,7 +84,9 @@ export default async function TareaPage({
   // URLs de 1h al bucket PRIVADO de referencias. Espeja el gate del lado de
   // escritura (assertCanActOnTask). notFound() en vez de "denegado" para no
   // revelar que la tarea existe. (reap 2026-08-26)
-  const scope = await assertCanActOnTask(id);
+  // "ver_o_asignar": el Lead Diseño abre cualquier tarea de su alcance (para ponerle un
+  // diseñador); sin diseño, la ve en sólo lectura (abajo) y el servidor le niega el resto.
+  const scope = await assertCanActOnTask(id, "ver_o_asignar");
   if (!scope.ok) notFound();
 
   // La tarea tiene que ser DEL cliente de la URL: la ruta cargaba por `id` y usaba el
@@ -99,7 +102,10 @@ export default async function TareaPage({
 
   const plantilla = plantillaPara(idea.tipo_asset);
 
-  const [{ data: marca }, { data: archivos }, { data: asignaciones }, { data: brief }, { data: clienteRow }] =
+  const [
+    { data: marca }, { data: archivos }, { data: asignaciones }, { data: brief }, { data: clienteRow },
+    { data: tareaDiseno },
+  ] =
     await Promise.all([
       idea.marca_id
         ? db.from("marcas").select("name, slug, logo_url").eq("id", idea.marca_id).maybeSingle()
@@ -126,6 +132,9 @@ export default async function TareaPage({
       db.from("briefs").select("brief_name, code, brief_date").eq("id", idea.brief_id).maybeSingle(),
       // Color de marca del cliente — pinta el badge "Cliente" de sus cambios (Pedro).
       db.from("clients").select("brand_color").eq("slug", cliente).maybeSingle<{ brand_color: string | null }>(),
+      // 0076 — ¿lleva diseñador y ya aprobó el Lead Diseño? (la vista lo deriva de las asignaciones)
+      db.from("board_tasks").select("requiere_diseno, diseno_aprobado_at").eq("id", idea.id)
+        .maybeSingle<{ requiere_diseno: boolean; diseno_aprobado_at: string | null }>(),
     ]);
   const marcaColor = clienteRow?.brand_color ?? null;
   const memberIds = (asignaciones ?? []).map((a) => a.member_id).filter(Boolean) as string[];
@@ -337,20 +346,26 @@ export default async function TareaPage({
   const { data: poolRows } = hasSupabase()
     ? await db
         .from("track_members")
-        .select("id, name, color, role, track, tracks")
+        .select("id, name, color, role, track, tracks, disciplina")
         .eq("active", true)
         .in("role", ["lead", "creative", "admin", "master"])
         .order("name")
     : { data: [] };
   const pool = (poolRows ?? []) as {
     id: string; name: string; color: string; role: string;
-    track: Track | null; tracks: Track[] | null;
+    track: Track | null; tracks: Track[] | null; disciplina: string | null;
   }[];
+  // 0076 — el Lead Diseño reparte DISEÑADORES: no cambia al lead ni a los creativos (espejo
+  // del gate de `asignarTarea` y del picker del tablero).
+  const soyLeadDisenoPool = esLeadDiseno(role, soy?.disciplina);
+  const leadActualPool = (asignaciones ?? []).find((a) => a.es_lead)?.member_id ?? null;
   const leadsPool = pool
     .filter((m) => puedeSerLead(m, idea.track as Track | null))
+    .filter((m) => !soyLeadDisenoPool || m.id === leadActualPool)
     .map(({ id, name, color }) => ({ id, name, color }));
   const especialistasPool = pool
     .filter((m) => puedeSerEspecialista(m, idea.track as Track | null))
+    .filter((m) => !soyLeadDisenoPool || m.disciplina === "diseno")
     .map(({ id, name, color }) => ({ id, name, color }));
 
   const autorIds = [...new Set((corrRows ?? []).map((r) => r.author_member_id).filter(Boolean) as string[])];
@@ -401,7 +416,15 @@ export default async function TareaPage({
   // Congelada para el especialista: terminales + `under_review` (mientras el lead
   // revisa, no se sigue editando). El lead conserva la pluma. (Pedro 2026-09-01)
   const cerrada = ESTADOS_SOLO_LECTURA.includes(idea.status);
-  const soloLectura = cerrada && !canOverrideStatus(role);
+  // 0076: el Lead Diseño edita una tarea en revisión/cerrada sólo mientras el diseño está
+  // pendiente — espejo de `assertPuedeEditar` en el servidor.
+  const disenoPendienteAhora =
+    idea.status === "under_review" && !!tareaDiseno?.requiere_diseno && !tareaDiseno.diseno_aprobado_at;
+  const soyLD = esLeadDiseno(role, soy?.disciplina);
+  const revisaAhora = !soyLD || disenoPendienteAhora;
+  // Sin diseñador (y sin ser suya) la tarea no es del carril del Lead Diseño: sólo lectura.
+  const ldAjena = soyLD && !tareaDiseno?.requiere_diseno && !(soy && memberIds.includes(soy.id));
+  const soloLectura = ldAjena || (cerrada && !(canOverrideStatus(role) && revisaAhora));
   const esEstatico = plantilla === "estatico";
   const esEquipo = role !== "client";
   // Referencias (0064): qué pudo leer H.Ü.E de cada liga del Trend — SÓLO la caché (la
@@ -459,6 +482,12 @@ export default async function TareaPage({
     // ¿Hay ESPECIALISTA (asignado no-lead)? Si un lead trabaja su tarea SOLO, envía directo
     // al cliente desde el workspace (él es el revisor) — ver AccionesTarea/enviarClienteSolo.
     hasSpecialist: personas.some((p) => !p.es_lead),
+    // 0076 — revisión de diseño: ¿lleva diseñador? ¿ya lo aprobó el Lead Diseño?
+    diseno: tareaDiseno?.requiere_diseno
+      ? (tareaDiseno.diseno_aprobado_at ? ("aprobado" as const) : ("pendiente" as const))
+      : null,
+    soyLeadDiseno: esLeadDiseno(role, soy?.disciplina),
+    soyLeadDeTarea: soy ? leadActualId === soy.id : false,
   };
 
   return (
@@ -513,7 +542,7 @@ export default async function TareaPage({
 
           {/* Cambios del cliente: cancha del LEAD. Él edita y reenvía, o reasigna. El
               especialista no ve esta tarea (visibilidad). Sólo para lead/admin/master. */}
-          {clientChangesPending && canOverrideStatus(role) && (
+          {clientChangesPending && canOverrideStatus(role) && esRevisorCompleto(ctx) && (
             <BannerCambiosCliente
               ideaId={idea.id}
               nCambios={cambiosClienteRonda.length}

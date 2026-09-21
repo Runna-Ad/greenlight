@@ -2,10 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Check, RotateCcw, PlayCircle, CornerUpLeft } from "lucide-react";
+import { Send, Check, CheckCheck, RotateCcw, PlayCircle, CornerUpLeft } from "lucide-react";
 import { toast } from "sonner";
 
-import { actionsFor, waitingLabel, type TaskContext, type TaskVerb } from "@/lib/task-actions";
+import {
+  actionsFor, esRevisorCompleto, esRevisorDiseno, waitingLabel, type TaskContext, type TaskVerb,
+} from "@/lib/task-actions";
 import type { AssetStatus } from "@/lib/brand";
 import { canOverrideStatus } from "@/lib/roles";
 import { EJECUTA_VERBO, TOAST_VERBO } from "@/components/board/verbos";
@@ -36,6 +38,7 @@ const ICONO: Record<WorkspaceVerb, typeof Send> = {
   submit_review: Send,
   request_changes: RotateCcw,
   approve: Check,
+  approve_design: CheckCheck,
   send_client: Send,
   send_client_solo: Send,
   mandar_correcciones: RotateCcw,
@@ -44,7 +47,7 @@ const ICONO: Record<WorkspaceVerb, typeof Send> = {
 
 const TOAST_EXTRA: Partial<Record<WorkspaceVerb, string>> = {
   mandar_correcciones: "Mandada a correcciones — el especialista ya tiene el aviso.",
-  devolver: "Devuelta a revisión — el Dept Head ya tiene el aviso.",
+  devolver: "Devuelta a revisión — el lead ya tiene el aviso.",
   send_client_solo: "Enviada al cliente — ya está en su portal para revisión.",
 };
 
@@ -281,9 +284,17 @@ function accionesDe(
   if (status === "in_corrections" && ctx.clientChangesPending) return [];
 
   if (status === "under_review" && esRevisor) {
-    return abiertas > 0
-      ? [{ verb: "mandar_correcciones", label: "Pedir cambios", tone: "danger" }]
-      : [{ verb: "approve", label: "Aprobar", tone: "primary" }];
+    // 0076: con diseño pendiente pide cambios el Lead Diseño (o el revisor completo, que
+    // además puede aprobar sin esperar); ya aprobado, sólo el revisor completo. Las
+    // aprobaciones salen de actionsFor (la misma decisión que el tablero); "Mandar cambios"
+    // de allí se sustituye aquí por las correcciones localizadas.
+    const puedePedir = (ctx.diseno === "pendiente" && esRevisorDiseno(ctx)) || esRevisorCompleto(ctx);
+    if (abiertas > 0) {
+      return puedePedir ? [{ verb: "mandar_correcciones", label: "Pedir cambios", tone: "danger" }] : [];
+    }
+    return actionsFor(status, ctx)
+      .filter((a) => a.verb !== "request_changes")
+      .map((a) => ({ verb: a.verb, label: a.label, tone: a.tone }));
   }
   if (status === "in_corrections" && esEspecialista) {
     return [{ verb: "devolver", label: "Devolver a revisión", tone: "primary" }];

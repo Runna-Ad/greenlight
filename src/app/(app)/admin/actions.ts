@@ -6,7 +6,7 @@ import { getViewAs } from "@/lib/view-as";
 import { getSoyId } from "@/lib/soy";
 import { getCurrentUser } from "@/lib/identity";
 import { EVENTOS_VALIDOS, SCOPES_VALIDOS, type MisPrefs } from "@/lib/notif-eventos";
-import { canAdmin, canAssignAdmins } from "@/lib/roles";
+import { aDisciplina, canAdmin, canAssignAdmins } from "@/lib/roles";
 import { ESTADOS_ACTIVOS } from "@/lib/workload";
 import { slugify } from "@/lib/slug";
 import { sendEmail, hasEmail } from "@/lib/email";
@@ -42,7 +42,7 @@ export async function listarEquipo(): Promise<MiembroRow[]> {
 
   const { data: miembros } = await db
     .from("track_members")
-    .select("id, name, track, tracks, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
+    .select("id, name, track, tracks, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order, disciplina")
     .order("track", { ascending: true })
     .order("sort_order", { ascending: true });
 
@@ -79,6 +79,7 @@ const CAMPOS_EDITABLES = new Set([
   "track",
   "tracks",
   "role",
+  "disciplina",
   "email",
   "slack_user_id",
   "active",
@@ -114,9 +115,9 @@ export async function guardarMiembro(
   // ni desactivarlo) — el guard de arriba sólo miraba el rol NUEVO, no el actual.
   const { data: actual } = await db
     .from("track_members")
-    .select("role, profile_id, track")
+    .select("role, profile_id, track, disciplina")
     .eq("id", id)
-    .maybeSingle<{ role: string; profile_id: string | null; track: string | null }>();
+    .maybeSingle<{ role: string; profile_id: string | null; track: string | null; disciplina: string | null }>();
   if (!actual) return { ok: false, error: "Esa persona ya no existe." };
   if (ROLES_SOLO_MASTER.has(String(actual.role)) && !canAssignAdmins(rol)) {
     return { ok: false, error: "Sólo el Master Builder puede editar a un admin." };
@@ -134,6 +135,8 @@ export async function guardarMiembro(
         ? [...new Set(v.filter((x): x is "real" | "normal" => TRACKS_VALIDOS.has(x as string)))]
         : [];
       limpio.tracks = ts.length ? ts : null;
+    } else if (k === "disciplina") {
+      limpio.disciplina = aDisciplina(v);
     } else {
       limpio[k] = v;
     }
@@ -148,9 +151,36 @@ export async function guardarMiembro(
   //  - si pasa de global a doer y quedaría sin track → default 'normal'.
   const rolEfectivo = ("role" in limpio ? limpio.role : actual.role) as string;
   const esGlobal = rolEfectivo === "admin" || rolEfectivo === "master";
+  // 0076: Diseño (Lead Diseño / Diseñador) PUEDE quedar sin track = global, ambos equipos
+  // (su default, Pedro 2026-09-18). Admin/master no tienen disciplina (siempre creativo).
+  if (esGlobal) limpio.disciplina = "creativo";
+  const disciplinaEfectiva = ("disciplina" in limpio ? limpio.disciplina : aDisciplina(actual.disciplina)) as string;
+  const trackEfectivo = "track" in limpio ? limpio.track : actual.track;
+  // Un Lead Diseño nunca es el lead de una tarea (puedeSerLead). Si un Lead Creativo pasa a
+  // Diseño, sus filas es_lead viejas le seguirían abriendo aprobar/enviar al cliente
+  // (assertRevisorCompleto) → se niega mientras lleve tareas vivas: reasignarlas primero.
+  const seVuelveLeadDiseno =
+    rolEfectivo === "lead" && disciplinaEfectiva === "diseno" &&
+    !(actual.role === "lead" && aDisciplina(actual.disciplina) === "diseno");
+  if (seVuelveLeadDiseno) {
+    const { data: suyas } = await db
+      .from("idea_assignments").select("idea_id").eq("member_id", id).eq("es_lead", true);
+    const ids = (suyas ?? []).map((r) => (r as { idea_id: string }).idea_id);
+    if (ids.length) {
+      const { count } = await db
+        .from("ideas").select("id", { count: "exact", head: true })
+        .in("id", ids).in("status", ESTADOS_ACTIVOS).is("deleted_at", null);
+      if (count) {
+        return {
+          ok: false,
+          error: `Es lead de ${count} tarea${count === 1 ? "" : "s"} activa${count === 1 ? "" : "s"}. Reasígnalas a un Lead Creativo antes de pasarlo a Diseño.`,
+        };
+      }
+    }
+  }
   if (esGlobal) {
     limpio.track = null;
-  } else if (limpio.track == null && actual.track == null) {
+  } else if (trackEfectivo == null && disciplinaEfectiva !== "diseno") {
     limpio.track = "normal";
   }
 
@@ -160,7 +190,10 @@ export async function guardarMiembro(
   //  - global (admin/master) → sin grant: no viven en un track, lo miran todo.
   //  - doer con grant → su `track` HOME = el primero del grant, para que siempre tenga un
   //    track home DENTRO de su alcance (agrupa y ordena Equipo, y evita un home huérfano).
-  if (esGlobal) {
+  if (esGlobal || ("track" in limpio && limpio.track === null)) {
+    // Sin track = global (admin/master o Diseño): sin grant tampoco. Si quedara un grant
+    // colgando, la app (tracksDe mira el grant primero) y la BD (track null = global)
+    // discreparían sobre su alcance. (reap 0076 L4)
     limpio.tracks = null;
   } else if (Array.isArray(limpio.tracks) && limpio.tracks.length) {
     limpio.track = (limpio.tracks as string[])[0];
@@ -291,7 +324,9 @@ export async function guardarWatchAll(on: boolean): Promise<Guardado> {
 /** Da de alta una persona nueva en el equipo. Devuelve la fila creada (carga 0). */
 export async function crearMiembro(data: {
   name: string;
-  track: "real" | "normal";
+  /** null = global — sólo para Diseño (0076); a creativo sin track se le pone Normal. */
+  track: "real" | "normal" | null;
+  disciplina?: "creativo" | "diseno";
   color?: string;
   role?: RolAsignable;
   email?: string;
@@ -310,7 +345,10 @@ export async function crearMiembro(data: {
   // conservan el suyo. (Pedro 2026-08-21.)
   const rolNuevo = data.role ?? "creative";
   const esGlobal = rolNuevo === "admin" || rolNuevo === "master";
-  const track: "real" | "normal" | null = esGlobal ? null : data.track;
+  const disciplina = esGlobal ? "creativo" : aDisciplina(data.disciplina);
+  const track: "real" | "normal" | null = esGlobal
+    ? null
+    : data.track ?? (disciplina === "diseno" ? null : "normal");
 
   // sort_order = siguiente en su track (para que aparezca al final). Con track
   // null (globales), `.is` — `.eq(null)` no matchea NULLs en Postgres.
@@ -332,17 +370,18 @@ export async function crearMiembro(data: {
       track,
       color: data.color ?? "#775cbf",
       role: rolNuevo,
+      disciplina,
       email: data.email?.trim() || null,
       slack_user_id: data.slack_user_id?.trim() || null,
       es_lead: esLeadDeRol(rolNuevo),
       sort_order,
     })
-    .select("id, name, track, tracks, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
+    .select("id, name, track, tracks, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order, disciplina")
     .single();
   if (error) {
     // unique (track, name) — nombre repetido dentro del mismo track.
     const msg = /duplicate|unique/i.test(error.message)
-      ? `Ya hay un "${data.name.trim()}" en el track ${data.track === "real" ? "Real" : "Normal"}.`
+      ? `Ya hay un "${data.name.trim()}" ${data.track ? `en el track ${data.track === "real" ? "Real" : "Normal"}` : "entre los globales"}.`
       : error.message;
     return { ok: false, error: msg };
   }

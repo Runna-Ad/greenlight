@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Plus, FileText, Layers, AlertTriangle, Lock } from "lucide-react";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { getViewAs } from "@/lib/view-as";
+import { getViewAs, getDisciplina } from "@/lib/view-as";
 import { getCurrentUser } from "@/lib/identity";
 import { canSee, canAdmin, tracksVisibles, ROLE_LABEL } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
@@ -112,7 +112,7 @@ export default async function ClientesPage() {
   // clientes por teclear la URL. El middleware ya amarra al cliente a su portal;
   // esto lo respalda (creative/client → Denegado). (reap pre-launch)
   const role = await getViewAs();
-  if (!canSee(role, "clientes")) {
+  if (!canSee(role, "clientes", await getDisciplina())) {
     return (
       <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
         <Lock className="mx-auto size-5 text-muted-foreground" />

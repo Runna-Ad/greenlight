@@ -64,7 +64,7 @@ export async function crearBrief(
   // Server-side gate: una server action es un POST público — el gate de la página
   // no basta. Sólo lead/admin/master crean briefs (crearBrief además manda emails).
   const u = await getCurrentUser();
-  if (!u || !canCreateBrief(u.role)) {
+  if (!u || !canCreateBrief(u.role, u.member?.disciplina)) {
     res.errors.push("Sólo un lead o un admin puede crear un brief.");
     return res;
   }
@@ -106,9 +106,9 @@ export async function crearBrief(
   // por `track = track` a secas: sin grant multi-track, sin rol (un lead de OTRO track
   // entraba como especialista) y sin admin/master como lead. (reap 2026-09-02, sweep C1)
   const { data: memberRows } = await db
-    .from("track_members").select("id, name, track, tracks, role, active").eq("active", true);
+    .from("track_members").select("id, name, track, tracks, role, active, disciplina").eq("active", true);
   const memberIdPorNombre = new Map<string, string>(
-    ((memberRows ?? []) as { id: string; name: string; track: Track | null; tracks: Track[] | null; role: string; active: boolean }[])
+    ((memberRows ?? []) as { id: string; name: string; track: Track | null; tracks: Track[] | null; role: string; active: boolean; disciplina: string | null }[])
       .filter((m) => puedeSerAsignado(m, track))
       .map((m) => [fold(m.name), m.id]),
   );

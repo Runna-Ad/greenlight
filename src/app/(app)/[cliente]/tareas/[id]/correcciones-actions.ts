@@ -10,7 +10,7 @@ import { esCategoria } from "@/lib/tipos-cambio";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { getCurrentUser } from "@/lib/identity";
-import { assertCanActOnTask } from "@/lib/auth/task-scope";
+import { assertCanActOnTask, assertPuedePedirCambios } from "@/lib/auth/task-scope";
 import { faltaCortinilla, MSG_FALTA_LEGAL } from "@/lib/cortinilla";
 
 export type CorreccionResultado = { ok: true; id?: string } | { ok: false; error: string };
@@ -59,6 +59,9 @@ export async function agregarCorreccion(
   if (!canOverrideStatus(role)) {
     return { ok: false, error: "Sólo un lead puede pedir cambios." };
   }
+  // 0076: la pide quien revisa AHORA (Lead Diseño con diseño pendiente; si no, el Lead Creativo).
+  const rev = await assertPuedePedirCambios(ideaId);
+  if (!rev.ok) return { ok: false, error: rev.error };
   if (!TABLAS_VALIDAS.has(target.tabla)) return { ok: false, error: "Destino inválido." };
   if (!body.trim()) return { ok: false, error: "Escribe qué hay que corregir." };
   // El tipo de cambio es obligatorio para un cambio interno: es lo que puntúa la
@@ -116,6 +119,11 @@ export async function setEstadoCorreccion(
   }
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  if (estado === "closed" || (estado === "open" && canOverrideStatus(role))) {
+    // 0076: confirma/reabre (como revisor) quien revisa AHORA (Lead Diseño con diseño pendiente, si no el Lead Creativo).
+    const rev = await assertPuedePedirCambios(ideaId);
+    if (!rev.ok) return { ok: false, error: rev.error };
+  }
 
   const db = supabaseAdmin();
   const patch: Record<string, string | null> =
@@ -153,6 +161,8 @@ export async function descartarCorreccion(
   }
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const rev = await assertPuedePedirCambios(ideaId); // 0076: sólo quien revisa ahora
+  if (!rev.ok) return { ok: false, error: rev.error };
 
   const db = supabaseAdmin();
   // Incluye client_change: los cambios del cliente son correcciones de primera clase
@@ -179,6 +189,8 @@ export async function confirmarCampo(
   if (!canOverrideStatus(role)) return { ok: false, error: "Sólo un lead confirma correcciones." };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const rev = await assertPuedePedirCambios(ideaId); // 0076: sólo quien revisa ahora
+  if (!rev.ok) return { ok: false, error: rev.error };
 
   const db = supabaseAdmin();
   const soy = await getSoy();
@@ -210,6 +222,8 @@ export async function mandarCorrecciones(
     return { ok: false, error: "Sólo un lead manda correcciones." };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const rev = await assertPuedePedirCambios(ideaId); // 0076: misma regla que requestChanges
+  if (!rev.ok) return { ok: false, error: rev.error };
 
   const db = supabaseAdmin();
   const { error } = await db.rpc("rpc_task_send_corrections", {

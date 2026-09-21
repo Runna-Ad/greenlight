@@ -7,7 +7,9 @@ import { canAdmin, canMoveStatus, canOverrideStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { getCurrentUser } from "@/lib/identity";
-import { assertCanActOnTask, assertCanActOnRow } from "@/lib/auth/task-scope";
+import {
+  assertCanActOnTask, assertCanActOnRow, assertPuedePedirCambios, assertPuedeEditar, assertPuedeEditarFila,
+} from "@/lib/auth/task-scope";
 import { ESTADOS_SOLO_LECTURA, motivoSoloLectura } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
 import { programarLecturas } from "@/lib/referencia-lectura";
@@ -100,7 +102,7 @@ export async function guardarIntake(
   if (!idea) return { ok: false, error: "La tarea ya no existe." };
 
   const status = idea.status as AssetStatus;
-  if (ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role)) {
+  if (ESTADOS_SOLO_LECTURA.includes(status) && !(canOverrideStatus(role) && (await assertPuedePedirCambios(ideaId)).ok)) {
     return { ok: false, error: motivoSoloLectura(status) };
   }
 
@@ -159,7 +161,7 @@ export async function guardarDuraciones(
     .from("ideas").select("status").eq("id", ideaId).maybeSingle();
   if (!idea) return { ok: false, error: "La tarea ya no existe." };
   const status = (idea as { status: AssetStatus }).status;
-  if (ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role)) {
+  if (ESTADOS_SOLO_LECTURA.includes(status) && !(canOverrideStatus(role) && (await assertPuedePedirCambios(ideaId)).ok)) {
     return { ok: false, error: motivoSoloLectura(status) };
   }
 
@@ -214,7 +216,7 @@ export async function guardarConsideraciones(
   if (!idea) return { ok: false, error: "La tarea ya no existe." };
 
   const status = idea.status as AssetStatus;
-  if (ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role)) {
+  if (ESTADOS_SOLO_LECTURA.includes(status) && !(canOverrideStatus(role) && (await assertPuedePedirCambios(ideaId)).ok)) {
     return { ok: false, error: motivoSoloLectura(status) };
   }
 
@@ -296,7 +298,7 @@ export async function guardarSellingPoints(
   if (!idea) return { ok: false, error: "La tarea ya no existe." };
 
   const status = idea.status as AssetStatus;
-  if (ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role)) {
+  if (ESTADOS_SOLO_LECTURA.includes(status) && !(canOverrideStatus(role) && (await assertPuedePedirCambios(ideaId)).ok)) {
     return { ok: false, error: motivoSoloLectura(status) };
   }
 
@@ -467,7 +469,7 @@ export async function guardarCampo(
   const { data: idea } = await db
     .from("ideas").select("status").eq("id", ideaId).maybeSingle();
   const status = idea?.status as AssetStatus | undefined;
-  if (status && ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role)) {
+  if (status && ESTADOS_SOLO_LECTURA.includes(status) && !(canOverrideStatus(role) && (await assertPuedePedirCambios(ideaId)).ok)) {
     return { ok: false, error: motivoSoloLectura(status) };
   }
 
@@ -537,6 +539,8 @@ export async function agregarPlano(
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const editable = await assertPuedeEditar(ideaId); // sólo lectura en revisión/cerrada (0076 M2)
+  if (!editable.ok) return { ok: false, error: editable.error };
 
   const db = supabaseAdmin();
   const { data: ultimo } = await db
@@ -567,6 +571,8 @@ export async function agregarTema(
   if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const editable = await assertPuedeEditar(ideaId); // sólo lectura en revisión/cerrada (0076 M2)
+  if (!editable.ok) return { ok: false, error: editable.error };
   const db = supabaseAdmin();
   const { data: ultimo } = await db
     .from("copies_temas").select("orden").eq("idea_id", ideaId)
@@ -589,6 +595,8 @@ export async function guardarCuota(
   if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
   const scope = await assertCanActOnRow("copies_temas", temaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const editable = await assertPuedeEditarFila("copies_temas", temaId); // sólo lectura en revisión/cerrada (0076 M2)
+  if (!editable.ok) return { ok: false, error: editable.error };
   const n = Math.max(0, Math.min(999, Math.round(Number.isFinite(cuota) ? cuota : 1)));
   const { error } = await supabaseAdmin().from("copies_temas").update({ cuota: n }).eq("id", temaId);
   if (error) return { ok: false, error: error.message };
@@ -602,6 +610,8 @@ export async function borrarTema(temaId: string): Promise<{ ok: true } | { ok: f
   if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
   const scope = await assertCanActOnRow("copies_temas", temaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const editable = await assertPuedeEditarFila("copies_temas", temaId); // sólo lectura en revisión/cerrada (0076 M2)
+  if (!editable.ok) return { ok: false, error: editable.error };
   const { error } = await supabaseAdmin().from("copies_temas").delete().eq("id", temaId);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/[cliente]/tareas/[id]", "page");
@@ -616,6 +626,8 @@ export async function agregarCopy(
   if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
   const scope = await assertCanActOnRow("copies_temas", temaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const editable = await assertPuedeEditarFila("copies_temas", temaId); // sólo lectura en revisión/cerrada (0076 M2)
+  if (!editable.ok) return { ok: false, error: editable.error };
   const db = supabaseAdmin();
   const { data: ultimo } = await db
     .from("copies").select("orden").eq("tema_id", temaId)
@@ -635,6 +647,8 @@ export async function borrarCopy(copyId: string): Promise<{ ok: true } | { ok: f
   if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
   const scope = await assertCanActOnRow("copies", copyId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const editable = await assertPuedeEditarFila("copies", copyId); // sólo lectura en revisión/cerrada (0076 M2)
+  if (!editable.ok) return { ok: false, error: editable.error };
   const { error } = await supabaseAdmin().from("copies").delete().eq("id", copyId);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/[cliente]/tareas/[id]", "page");
@@ -647,6 +661,8 @@ export async function borrarPlano(planoId: string): Promise<GuardarResultado> {
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
   const scope = await assertCanActOnRow("planos", planoId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const editable = await assertPuedeEditarFila("planos", planoId); // sólo lectura en revisión/cerrada (0076 M2)
+  if (!editable.ok) return { ok: false, error: editable.error };
 
   const { error } = await supabaseAdmin().from("planos").delete().eq("id", planoId);
   if (error) return { ok: false, error: error.message };
@@ -666,6 +682,8 @@ export async function vaciarGuion(ideaId: string): Promise<GuardarResultado> {
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const editable = await assertPuedeEditar(ideaId); // sólo lectura en revisión/cerrada (0076 M2)
+  if (!editable.ok) return { ok: false, error: editable.error };
 
   const { error } = await supabaseAdmin().from("planos").delete().eq("idea_id", ideaId);
   if (error) return { ok: false, error: error.message };
@@ -737,6 +755,8 @@ export async function importarGuion(
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const editable = await assertPuedeEditar(ideaId); // sólo lectura en revisión/cerrada (0076 M2)
+  if (!editable.ok) return { ok: false, error: editable.error };
   if (!planos.length) return { ok: false, error: "No hay planos que importar." };
 
   const db = supabaseAdmin();
@@ -787,6 +807,8 @@ export async function importarEstatico(
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const editable = await assertPuedeEditar(ideaId); // sólo lectura en revisión/cerrada (0076 M2)
+  if (!editable.ok) return { ok: false, error: editable.error };
 
   const CAMPOS_ESTATICO = ["copy_titulo", "copy_subtitulo", "copy_cta", "legales_extra"] as const;
   const patch: Record<string, string> = {};
@@ -965,6 +987,8 @@ export async function alternarSnippet(
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
+  const editable = await assertPuedeEditar(ideaId); // sólo lectura en revisión/cerrada (0076 M2)
+  if (!editable.ok) return { ok: false, error: editable.error };
 
   const db = supabaseAdmin();
   let error;

@@ -31,7 +31,7 @@ export function Topbar({
 }) {
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground shadow-sm md:px-6">
-      <MobileNav role={role} />
+      <MobileNav role={role} disciplina={soy?.disciplina ?? null} />
       {/* La marca vive UNA sola vez, en el sidebar. Aquí el topbar lleva el
           contexto: el título de la página, o el saludo personalizado
           "Hola, {nombre}" (de su sesión) — nunca el logo repetido. */}

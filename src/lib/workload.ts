@@ -3,6 +3,7 @@
 // `server-only` — el mismo patrón que bundle.ts vs bundle-data.ts.
 
 import type { Track } from "@/lib/vocab";
+import { tracksDe } from "./roles.ts";
 import type { AssetStatus } from "@/lib/brand";
 
 // "Activa" = asignada y NO publicada/entregada. ESTADOS_ACTIVOS es EXACTAMENTE el
@@ -31,9 +32,11 @@ export type CargaTarea = {
 export type CargaMiembro = {
   id: string;
   name: string;
-  track: Track; // HOME track (agrupa/ordena)
+  track: Track | null; // HOME track (agrupa/ordena). null = Diseño global (0076)
   tracks: Track[]; // alcance efectivo (grant multi-track)
   role: string;
+  /** 0076: disciplina (creativo | diseno) — para la etiqueta Lead Diseño / Diseñador. */
+  disciplina: string | null;
   color: string;
   es_lead: boolean;
   total: number;
@@ -47,9 +50,11 @@ export type CargaMiembro = {
 export type MiembroRow = {
   id: string;
   name: string;
-  track: Track;
+  track: Track | null;
   tracks: Track[] | null;
   role: string;
+  /** 0076: diseño sin track = global. */
+  disciplina?: string | null;
   color: string;
   es_lead: boolean;
 };
@@ -125,7 +130,7 @@ export function agruparCarga(
     miembros
       // Grant efectivo (0059): sin grant se cae al home. Un lead/creativo con grant en
       // ESTE track entra aunque su home sea el otro.
-      .map((mem) => ({ ...mem, misTracks: mem.tracks?.length ? mem.tracks : [mem.track] }))
+      .map((mem) => ({ ...mem, misTracks: tracksDe(mem) }))
       // Miembro visible = tiene grant en algún track que quien mira ve. El acotado por
       // TAREA de arriba ya vacía a quien no tenga tareas visibles (total 0 → la UI lo
       // esconde); este filtro mantiene la paridad con cargarEvaluacion.
@@ -138,6 +143,7 @@ export function agruparCarga(
           track: mem.track,
           tracks: mem.misTracks,
           role: mem.role,
+          disciplina: mem.disciplina ?? null,
           color: mem.color,
           es_lead: mem.es_lead,
           total: d?.total ?? 0,

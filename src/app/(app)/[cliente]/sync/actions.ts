@@ -44,7 +44,7 @@ function resolveConfig(): SyncConfig {
 export async function getSyncMode(): Promise<SyncMode> {
   // Sólo revela {kind}, pero es un export "use server": mismo gate que sus hermanas.
   const u = await getCurrentUser();
-  if (!u || !canCreateBrief(u.role)) return { kind: "csv" };
+  if (!u || !canCreateBrief(u.role, u.member?.disciplina)) return { kind: "csv" };
   return { kind: resolveConfig().kind };
 }
 
@@ -76,7 +76,7 @@ function tabsVisibles(tabs: TabInfo[], tv: Track[] | null): TabInfo[] {
 /** Step 1 — list what's in the spreadsheet, classified. No row data yet. */
 export async function listProjects(): Promise<{ tabs: TabInfo[]; error?: string }> {
   const u = await getCurrentUser();
-  if (!u || !canCreateBrief(u.role)) return { tabs: [], error: "No autorizado." };
+  if (!u || !canCreateBrief(u.role, u.member?.disciplina)) return { tabs: [], error: "No autorizado." };
   const tv = tracksVisibles(u.role, u.member?.tracks ?? null);
   const config = resolveConfig();
   if (config.kind === "csv") {
@@ -101,7 +101,7 @@ export async function previewProjects(
   known: Record<string, string> = {},
 ): Promise<ProjectPreview[]> {
   const u = await getCurrentUser();
-  if (!u || !canCreateBrief(u.role)) return [];
+  if (!u || !canCreateBrief(u.role, u.member?.disciplina)) return [];
   // Mismo scope por track que listProjects/import: un lead sólo pre-visualiza sus tracks
   // (previewProjects recibe `tabs` del cliente → hay que re-filtrar, no confiar en la UI).
   const tv = tracksVisibles(u.role, u.member?.tracks ?? null);

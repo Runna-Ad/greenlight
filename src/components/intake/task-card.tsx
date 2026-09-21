@@ -32,7 +32,7 @@ type TextKey =
 /** Una persona del roster tal como la ven los pickers. `tracks` (grant multi-track, 0059)
  *  es OBLIGATORIO para que `puedeSerAsignado` decida bien — sin él, un especialista
  *  multi-track sólo aparecía en un equipo. */
-export type PoolMember = { name: string; color: string; track: Track | null; tracks: Track[] | null; role: string };
+export type PoolMember = { name: string; color: string; track: Track | null; tracks: Track[] | null; role: string; disciplina: string | null };
 
 export function TaskCard({
   task,

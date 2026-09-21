@@ -1,6 +1,6 @@
 import { Lock } from "lucide-react";
 
-import { getViewAs } from "@/lib/view-as";
+import { getViewAs, getDisciplina } from "@/lib/view-as";
 import { ROLE_LABEL, canCreateBrief } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { BriefBuilder } from "@/components/intake/brief-builder";
@@ -16,7 +16,7 @@ export default async function NuevoBriefPage({
   const { cliente } = await params;
   const role = await getViewAs();
 
-  if (!canCreateBrief(role)) {
+  if (!canCreateBrief(role, await getDisciplina())) {
     return (
       <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
         <Lock className="mx-auto size-5 text-muted-foreground" />
@@ -34,7 +34,7 @@ export default async function NuevoBriefPage({
   const { data: poolRows } = hasSupabase()
     ? await supabaseAdmin()
         .from("track_members")
-        .select("name, color, track, tracks, role")
+        .select("name, color, track, tracks, role, disciplina")
         .eq("active", true)
         .order("name")
     : { data: [] };

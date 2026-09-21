@@ -3,6 +3,7 @@ import { STATUS_LABEL, STATUS_TOKEN } from "@/lib/brand";
 import type { WorkloadMember } from "@/components/workload/workload-board";
 import type { PillStatus } from "@/components/ui/pill";
 import type { Track } from "@/lib/vocab";
+import { tracksDe } from "@/lib/roles";
 import {
   agruparCarga,
   ESTADOS_ACTIVOS,
@@ -31,13 +32,17 @@ import {
 // pequeñas y se le pasa el scope de quien mira. `null` = todos (admin/master); un lead
 // pasa su(s) track(s). El acotado se aplica a la TAREA, así que conteos + lista + total
 // heredan el scope — un lead ya no ve la carga del OTRO equipo. (reap C4 + Paso B)
-export async function cargarWorkload(tracks: Track[] | null): Promise<WorkloadMember[]> {
+export async function cargarWorkload(
+  tracks: Track[] | null,
+  /** 0076: el Lead Diseño ve la carga SÓLO de los diseñadores. */
+  soloDiseno = false,
+): Promise<WorkloadMember[]> {
   if (!hasSupabase()) return [];
   const db = supabaseAdmin();
 
   const qMiembros = db
     .from("track_members")
-    .select("id, name, track, tracks, role, color, es_lead")
+    .select("id, name, track, tracks, role, color, es_lead, disciplina")
     .eq("active", true)
     // Sólo doers (lead/creative): admin/master son globales, sin track ni carga
     // asignable — no entran al Workload. (Pedro 2026-08-21.)
@@ -89,7 +94,7 @@ export async function cargarWorkload(tracks: Track[] | null): Promise<WorkloadMe
     : [[] as AsigRow[], [] as BriefRow[]];
 
   const carga = agruparCarga(
-    (miembros ?? []) as MiembroRow[],
+    ((miembros ?? []) as MiembroRow[]).filter((m) => !soloDiseno || m.disciplina === "diseno"),
     asigs,
     ideasRows,
     briefs,
@@ -105,6 +110,7 @@ export async function cargarWorkload(tracks: Track[] | null): Promise<WorkloadMe
     track: m.track,
     tracks: m.tracks,
     role: m.role,
+    disciplina: m.disciplina,
     color: m.color,
     es_lead: m.es_lead,
     total: m.total,
@@ -139,6 +145,8 @@ function briefLabelDe(b: { brief_name: string | null; code: string | null; brief
 export async function cargarEvaluacion(
   tracks: Track[] | null,
   periodo: Periodo,
+  /** 0076: el Lead Diseño evalúa SÓLO a los diseñadores (en ambos equipos). */
+  soloDiseno = false,
 ): Promise<EvalMiembro[]> {
   if (!hasSupabase()) return [];
   // tracks=[] = un lead SIN identidad (soy) — no puede acotar a "su equipo", así
@@ -149,7 +157,7 @@ export async function cargarEvaluacion(
 
   const qMiembros = db
     .from("track_members")
-    .select("id, name, color, track, tracks")
+    .select("id, name, color, track, tracks, disciplina")
     .eq("active", true)
     .eq("role", "creative")
     .order("name", { ascending: true });
@@ -223,14 +231,16 @@ export async function cargarEvaluacion(
     id: string;
     name: string;
     color: string;
-    track: Track;
+    track: Track | null;
     tracks: Track[] | null;
+    disciplina: string | null;
   }[])
-    // Scope por GRANT (0059), no por track home — mismo criterio que Workload.
+    // Scope por GRANT (0059), no por track home — mismo criterio que Workload (tracksDe:
+    // un diseñador sin track es global, 0076).
     .filter((m) => {
+      if (soloDiseno && m.disciplina !== "diseno") return false; // Lead Diseño: sólo diseñadores
       if (!tracks) return true; // admin/master: todos
-      const suyos = m.tracks?.length ? m.tracks : [m.track];
-      return suyos.some((t) => tracks.includes(t));
+      return tracksDe(m).some((t) => tracks.includes(t));
     })
     .map((m) => ({ id: m.id, name: m.name, color: m.color, track: m.track }));
 

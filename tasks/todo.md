@@ -1,5 +1,43 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔵 2026-09-18 — Lead Diseño + Diseñador + revisión de diseño (rama `roles-diseno` desde main · 0076 SIN aplicar)
+Pedro: dos leads — **Lead Creativo** (el lead de hoy) y **Lead Diseño** — y el rol **Diseñador**. Diseño es GLOBAL por
+defecto (ambos equipos) con opción de acotarlo. Flujo: diseñador → **Lead Diseño aprueba el diseño** → pasa al **Lead
+Creativo de esa tarea** (en vez de al cliente) → aprobar/enviar como siempre. El Lead Creativo PUEDE saltarse el diseño
+(override registrado). Lead Diseño ve a todos los diseñadores + su Evaluación; los diseñadores no ven números. La tarea
+"de diseño suelta" (sin brief) = trabajo de Prisma sin tarea ligada → va en la rama `prisma` (Lead Diseño aprueba y fin).
+Modelo (challenge aceptado): NO roles nuevos del enum — NIVEL (lead/creative) + DISCIPLINA (creativo/diseno).
+- [x] 0076: `track_members.disciplina` (check creativo|diseno) · `ideas.diseno_aprobado_at/_por` · `idea_requiere_diseno()` ·
+      reset al entrar a revisión · fan_out: revisión con diseño avisa a Lead(s) Diseño, no al Lead Creativo ·
+      `rpc_task_approve_design` (avisa a los revisores creativos con `destinatarios_revision`, la MISMA selección) ·
+      `rpc_task_approve` registra `diseno_saltado` · `board_tasks` + requiere_diseno/diseno_aprobado_at · sin PUBLIC.
+- [x] `tracksDe` (roles.ts) = fuente única del alcance (identity, pickers, workload, evaluación): diseño sin track = global.
+- [x] `actionsFor`: Aprobar diseño / Aprobar sin diseño / Aprobar todo; el Lead Diseño no aprueba ni envía lo que no lleva.
+- [x] Gates servidor: `assertRevisorCompleto` (approve/send/reenviar/solo/mover), `assertRevisorDiseno` (approveDesign),
+      `assertPuedePedirCambios` (botón, arrastre y correcciones localizadas — una regla).
+- [x] Mi trabajo: cola "Diseño por revisar" del Lead Diseño. Workspace de la tarea: botones con la misma decisión.
+- [x] Admin › Equipo: Disciplina, "ninguno = global" para diseño, etiquetas Lead Creativo / Lead Diseño / Diseñador.
+- [x] Performance: el Lead Diseño ve SÓLO diseñadores (carga + evaluación); "Diseño · global" en la tarjeta.
+- [x] Tests: test-db 421+ (20 del flujo + contrato actionsFor con diseño) · test-lib 561 · tsc 0 · lint 0.
+- [x] Reap × 3 vueltas (seguridad Opus ×3 + paridad Sonnet). Arreglado: el Lead Diseño NUNCA es lead de una tarea
+      (puedeSerLead; cerraba asignarse / brief / hoja → aprobar y enviar); pedir cambios sólo EN REVISIÓN; su alcance =
+      tareas con diseñador o suyas (assertCanActOnTask, tablero); "Mover"/arrastre/banner/pickers por tarea; cambios del
+      cliente = cancha del Lead Creativo (Retomar/arrastre/reasignar); `assertPuedeEditar` en TODAS las ediciones
+      estructurales (bug PREVIO: un asignado podía vaciar el guión de una pieza publicada); correcciones sólo de quien
+      revisa ahora; diseñador inactivo / Lead Diseño colado / sin Lead Diseño activo (avisa al Lead Creativo);
+      `disciplina` OBLIGATORIA en MiembroAsignable (el compilador cazó 6 pools); Admin niega pasar a Diseño a un lead
+      con tareas vivas; Workload con etiquetas Lead Diseño / Diseñador.
+- [x] Build ✓. Navegador: NO posible antes del "ship it" (las pantallas leen `disciplina`, que no existe en prod
+      hasta aplicar 0076) — verificar en vivo justo después de aplicar.
+- Deuda (baja, anotada por el reap): (1) brief nuevo: nombrar a un Lead Diseño en "Asignación" lo marca como persona
+      faltante y ofrece crear un duplicado → rechazarlo con mensaje; (2) PREVIO: un especialista puede reabrir ('open')
+      una corrección ya confirmada; (3) quitar/poner un diseñador EN PLENA revisión no avisa a nadie (sólo avisa el
+      cambio de estado); (4) decisión de Pedro pendiente: ¿el Lead Diseño crea briefs / importa de la hoja / ve
+      Clientes y Entregas de ambos equipos? Hoy: sí (lead global). Su Evaluación/Workload ya es SÓLO de diseñadores.
+- [ ] "ship it" de Pedro → aplicar 0076 (`node scripts/migrate.mjs`), merge a main, push.
+- [ ] Después: merge main → `prisma`; Prisma: el Lead Diseño aprueba resultados (sueltos = fin; ligados a tarea →
+      Lead Creativo) y **Paso 3** (Evaluación por diseñador y mes: tiempo hasta la aprobación REAL del Lead Diseño).
+
 ## 🟢 2026-09-08 — H.Ü.E LEE REFERENCIAS · Tier 2: TikTok (caption) + medición (rama `hue-referencias-tier2`, SIN push · SIN migración)
 Pedro: "análisis de referencias en video". Evaluación (challenge): el plan original era Whisper (audio-only) → se voltéo a
 "lo más barato con más señal primero" y Pedro aceptó: **Step 1 TikTok caption (gratis, in-house, sin infra) → Step 2 medir →

@@ -1,6 +1,6 @@
 import { Lock } from "lucide-react";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { getViewAs } from "@/lib/view-as";
+import { getViewAs, getDisciplina } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { ROLE_LABEL, canSee, canAdmin, tracksVisibles } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
@@ -122,7 +122,7 @@ async function cargarArchivo(tracks: Track[] | null): Promise<BriefArchivo[]> {
 export default async function EntregasPage() {
   // Entregas es sólo para leads y arriba — un especialista no entra (ni por URL).
   const role = await getViewAs();
-  if (!canSee(role, "entregas")) {
+  if (!canSee(role, "entregas", await getDisciplina())) {
     return (
       <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
         <Lock className="mx-auto size-5 text-muted-foreground" />

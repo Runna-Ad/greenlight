@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import type { ViewRole } from "@/lib/roles";
+import { aDisciplina, tracksDe, type Disciplina, type ViewRole } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -31,26 +31,14 @@ export type CurrentMember = {
    *  creative → [track]; admin/master → [] (globales, ver `tracksVisibles`). */
   tracks: Track[];
   role: string | null; // the profile's REAL role (authorship counts for creatives)
+  /** 0076: creativo | diseno. lead+diseno = Lead Diseño; creative+diseno = Diseñador. */
+  disciplina: Disciplina;
   notify_email: boolean;
   notify_slack: boolean;
 };
 
-/**
- * El alcance efectivo de tracks de un miembro. Una sola fuente para que identity y soy
- * coincidan. El grant (`tracks`, 0059) vale para CUALQUIER doer — lead o creative: un
- * especialista que trabaja Real y Normal ya no queda atado a uno solo (Pedro
- * 2026-09-01). Sin grant se cae al track HOME. Admin/master (track null) = [] (globales,
- * ver `tracksVisibles`). Antes esto exigía `role === "lead"`, que era lo único que dejaba
- * fuera a los creativos.
- */
-function tracksEfectivos(
-  role: string | null,
-  track: "real" | "normal" | null,
-  grant: ("real" | "normal")[] | null,
-): Track[] {
-  if (grant && grant.length) return [...new Set(grant)];
-  return track ? [track] : [];
-}
+// El alcance efectivo de tracks vive en `tracksDe` (lib/roles): la MISMA regla que usan
+// los pickers y los gates. Un diseñador sin track es global (0076).
 
 export type CurrentUser = {
   userId: string; // auth.users.id === profiles.id
@@ -117,7 +105,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   if (appRoleToViewRole(p.role) !== "client") {
     const { data: m } = await admin
       .from("track_members")
-      .select("id, name, color, track, tracks, notify_email, notify_slack")
+      .select("id, name, color, track, tracks, disciplina, notify_email, notify_slack")
       .eq("profile_id", user.id)
       .eq("active", true)
       .maybeSingle();
@@ -128,6 +116,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
         color: string;
         track: "real" | "normal" | null;
         tracks: ("real" | "normal")[] | null;
+        disciplina: string | null;
         notify_email: boolean;
         notify_slack: boolean;
       };
@@ -136,8 +125,9 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
         name: mm.name,
         color: mm.color,
         track: mm.track,
-        tracks: tracksEfectivos(p.role, mm.track, mm.tracks),
+        tracks: tracksDe(mm),
         role: p.role, // authorship role = the profile's real role
+        disciplina: aDisciplina(mm.disciplina),
         notify_email: mm.notify_email,
         notify_slack: mm.notify_slack,
       };

@@ -31,7 +31,8 @@ export type TaskVerb =
   | "submit_review"
   | "request_changes"
   | "approve"
-  | "send_client";
+  | "send_client"
+  | "approve_design";
 
 export type TaskContext = {
   isAssignee: boolean;
@@ -49,6 +50,15 @@ export type TaskContext = {
    *  retoma — la tarea sale de su lista por visibilidad hasta que se le reasigne. Las
    *  acciones del lead viven en la propia tarea (AccionesTarea), no en el tablero. */
   clientChangesPending?: boolean;
+  /** 0076 — revisión de DISEÑO. `null`/ausente = la tarea no lleva diseñador (flujo de
+   *  siempre); "pendiente" = en revisión esperando al Lead Diseño; "aprobado" = el Lead
+   *  Diseño ya la aprobó y la tarea está con el Lead Creativo. */
+  diseno?: "pendiente" | "aprobado" | null;
+  /** Quien mira es Lead Diseño (lead + disciplina diseño). */
+  soyLeadDiseno?: boolean;
+  /** Quien mira es el LEAD asignado de ESTA tarea (su es_lead). Un Lead Diseño que es el
+   *  lead de la tarea actúa como su revisor completo. */
+  soyLeadDeTarea?: boolean;
 };
 
 // master = Master Builder, el tier sobre admin: se comporta como lead para el
@@ -67,6 +77,19 @@ const isLead = (role: ViewRole) => role === "master" || role === "admin" || role
  * una tarea que hizo él mismo, usa el menú "Mover" (la escotilla del lead).
  */
 const esEspecialista = (ctx: TaskContext) => ctx.isAssignee && !isLead(ctx.role);
+
+/**
+ * ¿Revisa la pieza COMPLETA (aprobar → completado, enviar al cliente)? Lead/admin/master,
+ * salvo el Lead Diseño: él aprueba el DISEÑO y se lo pasa al Lead Creativo — no aprueba
+ * ni envía al cliente, a menos que sea el lead asignado de esa tarea. (Pedro 2026-09-18)
+ * Espejo EXACTO de `puedeRevisarCompleto` (lib/auth/task-scope), el gate del servidor.
+ */
+export const esRevisorCompleto = (ctx: Pick<TaskContext, "role" | "soyLeadDiseno" | "soyLeadDeTarea">) =>
+  isLead(ctx.role) && (!ctx.soyLeadDiseno || !!ctx.soyLeadDeTarea);
+
+/** ¿Puede aprobar el diseño? Lead Diseño, admin o master. */
+export const esRevisorDiseno = (ctx: Pick<TaskContext, "role" | "soyLeadDiseno">) =>
+  ctx.role === "master" || ctx.role === "admin" || (ctx.role === "lead" && !!ctx.soyLeadDiseno);
 
 /**
  * Las transiciones que un DOER (especialista) produce por el flujo normal:
@@ -116,20 +139,34 @@ export function actionsFor(status: AssetStatus, ctx: TaskContext): TaskAction[] 
           ]
         : [];
 
-    case "under_review":
-      // Sólo el lead/admin/master resuelve una revisión. El especialista espera.
-      return isLead(ctx.role)
-        ? [
-            { to: "completed", label: "Aprobar", tone: "primary", verb: "approve" },
-            {
-              to: "in_corrections",
-              label: "Mandar cambios",
-              tone: "danger",
-              needsBody: true, // pedir cambios sin decir cuáles no sirve de nada
-              verb: "request_changes",
-            },
-          ]
-        : [];
+    case "under_review": {
+      // Sólo revisores resuelven una revisión. El especialista espera.
+      const pedirCambios: TaskAction = {
+        to: "in_corrections",
+        label: "Mandar cambios",
+        tone: "danger",
+        needsBody: true, // pedir cambios sin decir cuáles no sirve de nada
+        verb: "request_changes",
+      };
+      const aprobar: TaskAction = { to: "completed", label: "Aprobar", tone: "primary", verb: "approve" };
+      if (ctx.diseno === "pendiente") {
+        // Diseño primero: el Lead Diseño (o admin/master) lo aprueba y pasa al Lead
+        // Creativo. El Lead Creativo PUEDE saltárselo (Pedro: override, queda registrado).
+        if (esRevisorDiseno(ctx)) {
+          const acciones: TaskAction[] = [
+            { to: "under_review", label: "Aprobar diseño", tone: "primary", verb: "approve_design" },
+            pedirCambios,
+          ];
+          // Admin/master (o el Lead Diseño que ES el lead de la tarea) también pueden
+          // aprobar la pieza completa de una vez.
+          return esRevisorCompleto(ctx) ? [...acciones, { ...aprobar, label: "Aprobar todo" }] : acciones;
+        }
+        return esRevisorCompleto(ctx)
+          ? [{ ...aprobar, label: "Aprobar sin diseño" }, pedirCambios]
+          : [];
+      }
+      return esRevisorCompleto(ctx) ? [aprobar, pedirCambios] : [];
+    }
 
     case "in_corrections":
       // Cambios del CLIENTE → cancha del LEAD: se resuelven DENTRO de la tarea
@@ -144,7 +181,7 @@ export function actionsFor(status: AssetStatus, ctx: TaskContext): TaskAction[] 
     case "completed":
       // Enviar al cliente es un paso APARTE de aprobar (decisión de Pedro):
       // dos puertas del lead, nada llega al cliente sin pasar por él.
-      return isLead(ctx.role)
+      return esRevisorCompleto(ctx)
         ? [
             {
               to: "published",
@@ -164,7 +201,11 @@ export function actionsFor(status: AssetStatus, ctx: TaskContext): TaskAction[] 
 /** Texto para quien no tiene nada que pulsar pero necesita saber por qué. */
 export function waitingLabel(status: AssetStatus, ctx: TaskContext): string | null {
   if (status === "under_review" && ctx.isAssignee && !isLead(ctx.role)) {
-    return "Esperando revisión";
+    return ctx.diseno === "pendiente" ? "Esperando revisión de diseño" : "Esperando revisión";
+  }
+  // El Lead Diseño ya aprobó: la tarea está con el Lead Creativo.
+  if (status === "under_review" && ctx.diseno === "aprobado" && esRevisorDiseno(ctx) && !esRevisorCompleto(ctx)) {
+    return "Diseño aprobado — con el Lead Creativo";
   }
   // Cambios del cliente esperando al lead: en el tablero se marca (el lead los
   // resuelve abriendo la tarea). El especialista no llega aquí (no la ve).

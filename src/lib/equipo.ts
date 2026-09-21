@@ -18,6 +18,8 @@ export type MiembroRow = {
   tracks: ("real" | "normal")[] | null;
   color: string;
   role: string;
+  /** 0076: creativo | diseno (Lead Diseño / Diseñador). */
+  disciplina: "creativo" | "diseno";
   email: string | null;
   slack_user_id: string | null;
   es_lead: boolean;

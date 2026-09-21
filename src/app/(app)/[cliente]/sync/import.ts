@@ -33,7 +33,7 @@ export async function importRows(
 
   // Server-side gate: importar crea briefs/tareas → sólo lead/admin/master.
   const u = await getCurrentUser();
-  if (!u || !canCreateBrief(u.role)) {
+  if (!u || !canCreateBrief(u.role, u.member?.disciplina)) {
     res.errors.push("Sólo un lead o un admin puede importar del sheet.");
     return res;
   }
@@ -80,7 +80,7 @@ export async function knownRows(clienteSlug: string): Promise<Record<string, str
   // cliente incluido) enumeraba las claves de fila de cualquier cliente por slug.
   // (reap pre-lanzamiento 2026-09-02)
   const u = await getCurrentUser();
-  if (!u || !canCreateBrief(u.role)) return {};
+  if (!u || !canCreateBrief(u.role, u.member?.disciplina)) return {};
   const db = supabaseAdmin();
   const { data: client } = await db
     .from("clients").select("id").eq("slug", clienteSlug).maybeSingle();

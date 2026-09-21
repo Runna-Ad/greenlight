@@ -9,7 +9,7 @@ import { plantillaPara, requiereCortinilla, readTimeS, soloHablado, PALABRAS_POR
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
-import { puedeSerLead, puedeSerEspecialista } from "../src/lib/roles.ts";
+import { puedeSerLead, puedeSerEspecialista, tracksDe, etiquetaRol, esLeadDiseno, canSee as canSeeR, canCreateBrief as canCreateBriefR } from "../src/lib/roles.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
 
 let pass = 0,
@@ -1249,6 +1249,70 @@ console.log("\n▶ evaluarEquipo() — Resolución + Eficiencia");
      !puedeSerEspecialista({ role: "creative", track: "real", tracks: [], active: true }, "normal"));
   ok("un grant no salva a un miembro INACTIVO",
      !puedeSerEspecialista({ ...creaAmbos, active: false }, "normal"));
+}
+
+// ── 0076: Lead Diseño / Diseñador — alcance global + botones de la revisión de diseño ──
+console.log("\n▶ Disciplina 0076 — diseño global + revisión de diseño");
+{
+  const disGlobal = { role: "creative", track: null, tracks: null, disciplina: "diseno", active: true };
+  const disReal = { role: "creative", track: "real", tracks: null, disciplina: "diseno", active: true };
+  const leadDis = { role: "lead", track: null, tracks: null, disciplina: "diseno", active: true };
+  const creaSinTrack = { role: "creative", track: null, tracks: null, disciplina: "creativo", active: true };
+
+  eq("diseñador sin track = global (ambos equipos)", tracksDe(disGlobal).join(","), "real,normal");
+  eq("diseñador acotado a Real = sólo Real", tracksDe(disReal).join(","), "real");
+  eq("un creativo sin track sigue sin alcance (no se vuelve global)", tracksDe(creaSinTrack).length, 0);
+  eq("admin (track null, sin disciplina) sigue en [] — global por ROL, no por track",
+     tracksDe({ track: null, tracks: null }).length, 0);
+  ok("diseñador global es Especialista en Real", puedeSerEspecialista(disGlobal, "real"));
+  ok("…y en Normal", puedeSerEspecialista(disGlobal, "normal"));
+  ok("diseñador acotado a Real NO es Especialista en Normal", !puedeSerEspecialista(disReal, "normal"));
+  ok("el Lead Diseño NUNCA es el lead de una tarea (ese es el Lead Creativo)", !puedeSerLead(leadDis, "normal") && !puedeSerLead({ ...leadDis, track: "real" }, "real"));
+  ok("…ni se cuela como especialista", !puedeSerEspecialista(leadDis, "real"));
+  ok("un diseñador inactivo no es asignable", !puedeSerEspecialista({ ...disGlobal, active: false }, "real"));
+
+  eq("etiqueta: lead + diseño", etiquetaRol("lead", "diseno"), "Lead Diseño");
+  eq("etiqueta: lead + creativo", etiquetaRol("lead", "creativo"), "Lead Creativo");
+  eq("etiqueta: creative + diseño", etiquetaRol("creative", "diseno"), "Diseñador");
+  eq("etiqueta: creative + creativo", etiquetaRol("creative", "creativo"), "Especialista");
+  ok("esLeadDiseno sólo con lead + diseno", esLeadDiseno("lead", "diseno") && !esLeadDiseno("creative", "diseno") && !esLeadDiseno("lead", "creativo"));
+
+  const base = { hasAssignee: true };
+  const LC = { ...base, role: "lead", isAssignee: true, soyLeadDeTarea: true };             // Lead Creativo de la tarea
+  const LD = { ...base, role: "lead", isAssignee: false, soyLeadDiseno: true };             // Lead Diseño (no es el lead)
+  const LDlead = { ...LD, isAssignee: true, soyLeadDeTarea: true };                          // Lead Diseño que ES el lead
+  const ADM = { ...base, role: "admin", isAssignee: false };
+  const DIS = { ...base, role: "creative", isAssignee: true };
+  const lbl = (s, c) => actionsFor(s, c).map((a) => a.label).join(" · ");
+
+  eq("diseño pendiente: el Lead Diseño aprueba diseño o pide cambios",
+     lbl("under_review", { ...LD, diseno: "pendiente" }), "Aprobar diseño · Mandar cambios");
+  eq("diseño pendiente: el Lead Creativo puede saltárselo (override)",
+     lbl("under_review", { ...LC, diseno: "pendiente" }), "Aprobar sin diseño · Mandar cambios");
+  eq("diseño pendiente: admin aprueba diseño, pide cambios o aprueba todo",
+     lbl("under_review", { ...ADM, diseno: "pendiente" }), "Aprobar diseño · Mandar cambios · Aprobar todo");
+  eq("diseño pendiente: el Lead Diseño que es el lead también puede aprobar todo",
+     lbl("under_review", { ...LDlead, diseno: "pendiente" }), "Aprobar diseño · Mandar cambios · Aprobar todo");
+  eq("diseño aprobado: el Lead Creativo aprueba como siempre",
+     lbl("under_review", { ...LC, diseno: "aprobado" }), "Aprobar · Mandar cambios");
+  eq("diseño aprobado: el Lead Diseño ya no tiene nada que pulsar",
+     lbl("under_review", { ...LD, diseno: "aprobado" }), "");
+  eq("…y se le dice por qué", waitingLabel("under_review", { ...LD, diseno: "aprobado" }), "Diseño aprobado — con el Lead Creativo");
+  eq("el Lead Diseño NO envía al cliente una tarea que no lleva",
+     lbl("completed", LD), "");
+  eq("el Lead Diseño que es el lead sí envía al cliente", lbl("completed", LDlead), "Enviar a cliente");
+  eq("sin diseñador: el Lead Diseño no revisa tareas ajenas", lbl("under_review", { ...LD, diseno: null }), "");
+  eq("sin diseñador: el Lead Creativo, como siempre", lbl("under_review", { ...LC, diseno: null }), "Aprobar · Mandar cambios");
+  eq("el diseñador espera la revisión de diseño",
+     waitingLabel("under_review", { ...DIS, diseno: "pendiente" }), "Esperando revisión de diseño");
+  // Menú del Lead Diseño: sólo el lado de diseño (Pedro 2026-09-21).
+  ok("Lead Diseño: tablero, mi trabajo, performance, briefs (lectura) y clientes (navegación)",
+     ["tablero", "mi-trabajo", "performance", "briefs", "clientes"].every((k) => canSeeR("lead", k, "diseno")));
+  ok("Lead Diseño: NO Sync, NO Entregas, NO Admin", !canSeeR("lead", "sync", "diseno") && !canSeeR("lead", "entregas", "diseno") && !canSeeR("lead", "admin", "diseno"));
+  ok("Lead Diseño NO crea briefs; Lead Creativo sí", !canCreateBriefR("lead", "diseno") && canCreateBriefR("lead", "creativo") && canCreateBriefR("lead"));
+  ok("el Lead Creativo conserva su menú", canSeeR("lead", "sync", "creativo") && canSeeR("lead", "entregas"));
+  eq("'Aprobar diseño' no cambia de estado",
+     actionsFor("under_review", { ...LD, diseno: "pendiente" })[0].to, "under_review");
 }
 
 // ── Workload: el desglose HEREDA el scope por track de quien mira (Paso B) ──

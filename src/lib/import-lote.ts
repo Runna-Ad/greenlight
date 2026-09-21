@@ -190,9 +190,9 @@ export async function ejecutarImport(
   // used to drop both — Asignación was read for the dedup key and then thrown
   // away. Resolve them here so a re-sync can't lose them again.
   const { data: memberRows } = await db
-    .from("track_members").select("id, name, track, tracks, role, es_lead").eq("active", true);
+    .from("track_members").select("id, name, track, tracks, role, es_lead, disciplina").eq("active", true);
   const MEMBERS = (memberRows ?? []) as {
-    id: string; name: string; track: Track | null; tracks: Track[] | null; role: string; es_lead: boolean;
+    id: string; name: string; track: Track | null; tracks: Track[] | null; role: string; es_lead: boolean; disciplina: string | null;
   }[];
   // Quién puede ser LEAD de una fila lo decide `puedeSerLead` (lib/roles) — la misma
   // regla que el tablero y `asignarTarea`: lead de su(s) track(s) (grant multi-track) o

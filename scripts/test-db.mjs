@@ -1404,18 +1404,24 @@ console.log("\n▶ Referencias por plano");
 // ofrece un movimiento que la BD rechaza — o peor, deja de ofrecer uno legal.
 console.log("\n▶ Botones — contrato actionsFor() vs transition_allowed()");
 {
+  let ok_ad = true;
   const ROLES = ["admin", "lead", "creative", "client"];
-  const CTXS = [
+  const BASE = [
     { isAssignee: true, hasAssignee: true },
     { isAssignee: false, hasAssignee: true },
     { isAssignee: false, hasAssignee: false },
   ];
+  // 0076: cada contexto también con revisión de diseño pendiente/aprobada y como Lead Diseño.
+  const CTXS = BASE.flatMap((c) => [null, "pendiente", "aprobado"].flatMap((diseno) =>
+    [false, true].map((soyLeadDiseno) => ({ ...c, diseno, soyLeadDiseno }))));
   const ESTADOS = ["todo","in_progress","under_review","in_corrections","completed","published","delivered"];
   let ofrecidas = 0, ilegales = 0;
   for (const status of ESTADOS)
     for (const role of ROLES)
       for (const c of CTXS)
         for (const a of actionsFor(status, { ...c, role })) {
+          // "Aprobar diseño" no mueve la tarea (sigue en revisión): no es una transición.
+          if (a.verb === "approve_design") { ok_ad = ok_ad && a.to === status; continue; }
           ofrecidas++;
           const legal = await scalar(
             `select produccion.transition_allowed($1::produccion.asset_status,$2::produccion.asset_status)`,
@@ -1426,6 +1432,7 @@ console.log("\n▶ Botones — contrato actionsFor() vs transition_allowed()");
           }
         }
   ok(`las ${ofrecidas} acciones ofrecidas por actionsFor() son legales en SQL`, ilegales === 0);
+  ok("'Aprobar diseño' nunca cambia el estado", ok_ad);
 }
 
 // ── CONTRACT: TS canMove() === DB transition_allowed() over ALL pairs ──
@@ -2446,6 +2453,126 @@ console.log("\n▶ Live refresh 0062 — quién recibe el aviso de 'algo cambió
 
   await db.query(`delete from produccion.profiles where id in ($1,$2,$3)`, [cliMio, cliAjeno, bajado]);
   await db.query(`delete from produccion.clients where id=$1`, [otroClient]);
+}
+
+// ── 0076: disciplina (Lead Diseño / Diseñador) + paso de revisión de diseño ─────
+console.log("\n▶ 0076 — disciplina + revisión de diseño (Lead Diseño → Lead Creativo)");
+{
+  await db.exec(`select set_config('produccion.acting_member','',false);`);
+  await db.exec(`select set_config('produccion.notify_to_lead','false',false);`);
+  const ldP = "00000000-0000-0000-0000-0000000007d1", dzP = "00000000-0000-0000-0000-0000000007d2";
+  await db.exec(`
+    insert into produccion.profiles (id,email,full_name,role,notify_scope) values
+      ('${ldP}','leaddis@runna.mx','LeadDis','lead','all'),
+      ('${dzP}','disenador@runna.mx','Dise','creative','my_track') on conflict (id) do nothing;
+    insert into produccion.track_members (track,name,color,role,profile_id,disciplina) values
+      (null,'LeadDiseno0076','#775cbf','lead','${ldP}','diseno'),
+      (null,'Disenador0076','#775cbf','creative','${dzP}','diseno') on conflict do nothing;
+  `);
+  const LD = await scalar(`select id from produccion.track_members where name='LeadDiseno0076'`);
+  const DZ = await scalar(`select id from produccion.track_members where name='Disenador0076'`);
+  const LC = await scalar(`select id from produccion.track_members where name='LeadRealN'`);
+  const ideas = (await q(`select id from produccion.ideas where track='real' and deleted_at is null order by id limit 2`)).map((r) => r.id);
+  const [dIdea, sinDis] = ideas;
+  const mover = async (id, to) => {
+    await db.exec(`select set_config('produccion.lead_override','on',false);`);
+    await db.query(`update produccion.ideas set status=$2 where id=$1`, [id, to]);
+    await db.exec(`select set_config('produccion.lead_override','',false);`);
+  };
+  const avisos = async (id, where, params = []) => Number(await scalar(
+    `select count(*) from produccion.notifications where entity_id=$1 and ${where}`, [id, ...params]));
+
+  let rechazo = null;
+  try { await db.query(`update produccion.track_members set disciplina='copy' where id=$1`, [LD]); }
+  catch (e) { rechazo = e.message; }
+  ok("disciplina sólo acepta creativo | diseno", rechazo !== null);
+
+  for (const id of ideas) await db.query(`delete from produccion.idea_assignments where idea_id=$1`, [id]);
+  await db.query(`select produccion.rpc_set_assignees($1,$2,$3::uuid[],null,null)`, [dIdea, LC, `{${DZ}}`]);
+  await db.query(`select produccion.rpc_set_assignees($1,$2,'{}'::uuid[],null,null)`, [sinDis, LC]);
+  eq("con un diseñador asignado, la tarea requiere diseño",
+     await scalar(`select produccion.idea_requiere_diseno($1)`, [dIdea]), true);
+  eq("board_tasks expone requiere_diseno",
+     await scalar(`select requiere_diseno from produccion.board_tasks where id=$1`, [dIdea]), true);
+  eq("sin diseñador, no requiere diseño",
+     await scalar(`select requiere_diseno from produccion.board_tasks where id=$1`, [sinDis]), false);
+
+  // Revisión CON diseño → avisa al Lead Diseño, NO al Lead Creativo (todavía).
+  await mover(dIdea, "in_progress");
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [dIdea]);
+  await mover(dIdea, "under_review");
+  eq("revisión con diseño → avisa al Lead Diseño",
+     await avisos(dIdea, `recipient_member_id=$2 and type='task_submitted' and title like '%revisar diseño'`, [LD]), 1);
+  eq("revisión con diseño → el Lead Creativo NO se avisa todavía",
+     await avisos(dIdea, `(recipient_member_id=$2 or recipient_id=$3) and type='task_submitted'`, [LC, lrP]), 0);
+
+  // Aprobar diseño → pasa al Lead Creativo (aviso) y deja rastro.
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [dIdea]);
+  await db.query(`select produccion.rpc_task_approve_design($1,$2,$3,null)`, [dIdea, LD, ldP]);
+  ok("aprobar diseño sella diseno_aprobado_at",
+     (await scalar(`select diseno_aprobado_at from produccion.ideas where id=$1`, [dIdea])) !== null);
+  eq("…y quién lo aprobó",
+     await scalar(`select diseno_aprobado_por from produccion.ideas where id=$1`, [dIdea]), LD);
+  eq("diseño aprobado → avisa al Lead Creativo de la tarea",
+     await avisos(dIdea, `recipient_member_id=$2 and title like '%diseño aprobado%'`, [LC]), 1);
+  eq("…y no al Lead Diseño que la aprobó",
+     await avisos(dIdea, `(recipient_member_id=$2 or recipient_id=$3)`, [LD, ldP]), 0);
+  eq("activity_log registra diseno_aprobado", Number(await scalar(
+    `select count(*) from produccion.activity_log where entity_id=$1 and verb='diseno_aprobado'`, [dIdea])), 1);
+  eq("la tarea sigue en revisión (el Lead Creativo decide)",
+     await scalar(`select status from produccion.ideas where id=$1`, [dIdea]), "under_review");
+  await db.query(`select produccion.rpc_task_approve_design($1,$2,$3,null)`, [dIdea, LD, ldP]);
+  eq("aprobar diseño dos veces es idempotente", Number(await scalar(
+    `select count(*) from produccion.activity_log where entity_id=$1 and verb='diseno_aprobado'`, [dIdea])), 1);
+
+  // Correcciones → al volver a revisión, el diseño se vuelve a revisar.
+  await mover(dIdea, "in_corrections");
+  await mover(dIdea, "under_review");
+  eq("volver a revisión reinicia la aprobación de diseño",
+     await scalar(`select diseno_aprobado_at from produccion.ideas where id=$1`, [dIdea]), null);
+
+  // Override del Lead Creativo: aprobar sin diseño queda registrado.
+  await db.query(`select produccion.rpc_task_approve($1,$2,$3,null)`, [dIdea, LC, lrP]);
+  eq("aprobar sin diseño → completed", await scalar(`select status from produccion.ideas where id=$1`, [dIdea]), "completed");
+  eq("…con rastro diseno_saltado", Number(await scalar(
+    `select count(*) from produccion.activity_log where entity_id=$1 and verb='diseno_saltado'`, [dIdea])), 1);
+
+  // Sin diseñador: flujo de siempre; el Lead Diseño (scope 'all') no recibe revisiones ajenas.
+  let err = null;
+  await mover(sinDis, "in_progress");
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [sinDis]);
+  await mover(sinDis, "under_review");
+  eq("revisión sin diseño → avisa al Lead Creativo",
+     await avisos(sinDis, `recipient_member_id=$2 and type='task_submitted'`, [LC]), 1);
+  eq("revisión sin diseño → el Lead Diseño (scope all) NO se avisa",
+     await avisos(sinDis, `(recipient_member_id=$2 or recipient_id=$3)`, [LD, ldP]), 0);
+  try { await db.query(`select produccion.rpc_task_approve_design($1,$2,$3,null)`, [sinDis, LD, ldP]); }
+  catch (e) { err = e.message; }
+  ok("aprobar diseño en una tarea sin diseñador se rechaza", /no lleva revisión de diseño/.test(err ?? ""), err ?? "");
+
+  // Sin Lead Diseño ACTIVO que cubra el track, nadie se queda sin aviso: va al Lead Creativo.
+  await db.query(`update produccion.track_members set active=false where id=$1`, [LD]);
+  await mover(dIdea, "in_progress");
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [dIdea]);
+  await mover(dIdea, "under_review");
+  eq("sin Lead Diseño activo, la revisión con diseño avisa al Lead Creativo",
+     await avisos(dIdea, `recipient_member_id=$2 and type='task_submitted'`, [LC]), 1);
+  await db.query(`update produccion.track_members set active=true where id=$1`, [LD]);
+  // Un diseñador dado de baja no hace que la tarea "lleve diseño".
+  await db.query(`update produccion.track_members set active=false where id=$1`, [DZ]);
+  eq("diseñador inactivo → la tarea no requiere diseño",
+     await scalar(`select produccion.idea_requiere_diseno($1)`, [dIdea]), false);
+  await db.query(`update produccion.track_members set active=true where id=$1`, [DZ]);
+
+  // Un Lead Diseño colado como NO-lead (p. ej. por un brief) no hace que la tarea "lleve diseño".
+  await db.query(`select produccion.rpc_set_assignees($1,$2,$3::uuid[],null,null)`, [sinDis, LC, `{${LD}}`]);
+  eq("un Lead Diseño como asignado no-lead no cuenta como diseñador",
+     await scalar(`select produccion.idea_requiere_diseno($1)`, [sinDis]), false);
+
+  eq("rutinas de diseño no ejecutables por PUBLIC", Number(await scalar(`
+    select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+     where n.nspname='produccion' and p.proname in ('rpc_task_approve_design','idea_requiere_diseno','destinatarios_revision','reset_diseno_aprobado')
+       and (p.proacl is null or exists (select 1 from unnest(p.proacl) a where a::text like '=%'))`)), 0);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

@@ -29,6 +29,10 @@ export type MyTask = {
   /** in_corrections con cambios del cliente sin resolver — cancha del lead. El
    *  especialista no llega aquí (se filtra); al lead se le marca "Cambios del cliente". */
   clientChangesPending?: boolean;
+  /** 0076 (board_tasks): ¿lleva diseñador? ¿ya aprobó el Lead Diseño? ¿quién es su lead? */
+  requiere_diseno?: boolean;
+  diseno_aprobado_at?: string | null;
+  lead_ids?: string[];
 };
 
 /**
@@ -40,10 +44,13 @@ export function MyTasks({
   tasks,
   soyId,
   role,
+  soyLeadDiseno = false,
 }: {
   tasks: MyTask[];
   soyId: string;
   role: ViewRole;
+  /** Quien mira es Lead Diseño (0076). */
+  soyLeadDiseno?: boolean;
 }) {
   const [rows, setRows] = useState(tasks);
   const [, startTransition] = useTransition();
@@ -73,6 +80,9 @@ export function MyTasks({
           role,
           hasAssignee: t.member_ids.length > 0,
           clientChangesPending: t.clientChangesPending,
+          diseno: t.requiere_diseno ? (t.diseno_aprobado_at ? ("aprobado" as const) : ("pendiente" as const)) : null,
+          soyLeadDiseno,
+          soyLeadDeTarea: (t.lead_ids ?? []).includes(soyId),
         };
         const acciones = actionsFor(t.status, ctx);
         const espera = waitingLabel(t.status, ctx);

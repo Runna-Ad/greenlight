@@ -1,7 +1,7 @@
 import { Lock } from "lucide-react";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
-import { ROLE_LABEL, canSee, tracksVisibles } from "@/lib/roles";
+import { ROLE_LABEL, canSee, esLeadDiseno, tracksVisibles } from "@/lib/roles";
 import { cargarWorkload, cargarEvaluacion, resolverMes } from "./data";
 import { PerformanceTabs } from "@/components/performance/performance-tabs";
 
@@ -26,9 +26,11 @@ export default async function PerformancePage({
   const { periodo, etiqueta, mesActual, mesPrev, mesNext } = resolverMes(sp.mes ?? null);
   const hoyId = resolverMes(null).mesActual;
   const tracks = tracksVisibles(role, soy?.tracks ?? null);
+  // 0076: el Lead Diseño ve a SUS diseñadores (global = ambos equipos), no a todo el track.
+  const soloDiseno = esLeadDiseno(role, soy?.disciplina);
   const [carga, evaluacion] = await Promise.all([
-    cargarWorkload(tracks),
-    cargarEvaluacion(tracks, periodo),
+    cargarWorkload(tracks, soloDiseno),
+    cargarEvaluacion(tracks, periodo, soloDiseno),
   ]);
 
   return (

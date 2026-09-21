@@ -8,6 +8,7 @@ import { chipTextColor } from "@/lib/vocab";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { AssetStatus } from "@/lib/brand";
 import type { CargaTarea } from "@/lib/workload";
+import { etiquetaRol } from "@/lib/roles";
 
 // Una persona con su carga de trabajo VIVA (tareas asignadas no publicadas/entregadas),
 // desglosada por estado y por cliente. La calcula la página (server); esto sólo pinta.
@@ -17,11 +18,13 @@ export type WorkloadMember = {
   id: string;
   name: string;
   /** Track HOME (agrupa y ordena). Para lo que la persona ABARCA, usa `tracks`. */
-  track: "real" | "normal";
+  track: "real" | "normal" | null; // null = Diseño global (0076)
   /** Tracks a los que pertenece (0059). Una persona puede ser de uno o de ambos. */
   tracks: ("real" | "normal")[];
   /** Rol real (lead / creative) — se muestra como pastilla junto a los tracks. */
   role: string;
+  /** 0076: creativo | diseno. */
+  disciplina: string | null;
   color: string;
   es_lead: boolean;
   total: number;
@@ -72,7 +75,7 @@ export function WorkloadBoard({ miembros }: { miembros: WorkloadMember[] }) {
 }
 
 const TRACK_LABEL: Record<string, string> = { real: "Real", normal: "Normal" };
-const ROL_LABEL: Record<string, string> = { lead: "Lead", creative: "Especialista" };
+
 
 function MemberRow({ m, maxTotal }: { m: WorkloadMember; maxTotal: number }) {
   // Un estado abierto a la vez por fila; clic en la misma pastilla la cierra.
@@ -98,7 +101,7 @@ function MemberRow({ m, maxTotal }: { m: WorkloadMember; maxTotal: number }) {
             {/* Rol + tracks como pastillas: la persona se lee entera en su fila, sin
                 depender de bajo qué encabezado esté. */}
             <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-              {ROL_LABEL[m.role] ?? m.role}
+              {etiquetaRol(m.role, m.disciplina)}
             </span>
             {m.tracks.map((t) => (
               <span

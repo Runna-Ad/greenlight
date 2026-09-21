@@ -23,7 +23,7 @@ import { CRITERIOS_PUNTUABLES, GRUPO_LABEL, type GrupoCriterio } from "./tipos-c
 
 export type Track = "real" | "normal";
 
-export type MiembroInput = { id: string; name: string; color: string; track: Track };
+export type MiembroInput = { id: string; name: string; color: string; track: Track | null };
 /** Quién AUTORÓ (editó ≥1 campo de) una idea. */
 export type AutoriaInput = { ideaId: string; memberId: string };
 /** Una edición de un campo: quién y cuándo (de field_edits). */
@@ -111,7 +111,7 @@ export type EvalMiembro = Puntaje & {
   memberId: string;
   name: string;
   color: string;
-  track: Track;
+  track: Track | null; // null = Diseño global (0076)
   /** El mismo mes, agrupado por el brief de cada tarea (la nota mensual es el promedio
    *  ponderado por nº de tareas de estos → reconcilian). Ordenado por nota desc. */
   briefs: BriefEval[];

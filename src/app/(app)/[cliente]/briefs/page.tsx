@@ -2,7 +2,7 @@ import Link from "next/link";
 import { FileText, Lock, Plus, UserRound } from "lucide-react";
 
 import { hasSupabase } from "@/lib/supabase-admin";
-import { getViewAs } from "@/lib/view-as";
+import { getViewAs, getDisciplina } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
 import { ROLE_LABEL, canAdmin, canCreateBrief, canSee } from "@/lib/roles";
 import { cargarBundles } from "@/lib/bundle-data";
@@ -54,7 +54,7 @@ export default async function BriefsPage({
             </p>
           )}
         </div>
-        {canCreateBrief(role) && (
+        {canCreateBrief(role, await getDisciplina()) && (
           <Button asChild>
             <Link href={`/${cliente}/briefs/nuevo`}>
               <Plus className="size-4" /> Nuevo brief
@@ -78,7 +78,7 @@ export default async function BriefsPage({
               ? "Ningún brief tiene tareas tuyas todavía."
               : "Aún no hay briefs con tareas. Crea el primero para capturar ideas."}
           </p>
-          {canCreateBrief(role) && (
+          {canCreateBrief(role, await getDisciplina()) && (
             <Button asChild variant="outline" className="mt-4">
               <Link href={`/${cliente}/briefs/nuevo`}>Capturar idea</Link>
             </Button>

@@ -17,6 +17,12 @@ export async function getViewAs(): Promise<ViewRole> {
   return u?.role ?? "creative";
 }
 
+/** 0076: la disciplina del miembro (creativo | diseno) — distingue al Lead Diseño. */
+export async function getDisciplina(): Promise<string | null> {
+  const u = await getCurrentUser();
+  return u?.member?.disciplina ?? null;
+}
+
 /** Impersonation is gone — there is no "previewing as someone else" anymore. */
 export async function isPreviewing(): Promise<boolean> {
   return false;

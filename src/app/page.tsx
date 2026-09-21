@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getViewAs } from "@/lib/view-as";
+import { getViewAs, getDisciplina } from "@/lib/view-as";
 import { canSee } from "@/lib/roles";
 
 // Aterrizaje por rol: un especialista no ve /clientes (canSee lo niega), así que
@@ -8,5 +8,5 @@ import { canSee } from "@/lib/roles";
 // (reap pre-lanzamiento 2026-09-02)
 export default async function Home() {
   const role = await getViewAs();
-  redirect(canSee(role, "clientes") ? "/clientes" : "/mi-trabajo");
+  redirect(canSee(role, "clientes", await getDisciplina()) ? "/clientes" : "/mi-trabajo");
 }
