@@ -34,7 +34,15 @@ Modelo (challenge aceptado): NO roles nuevos del enum — NIVEL (lead/creative) 
       una corrección ya confirmada; (3) quitar/poner un diseñador EN PLENA revisión no avisa a nadie (sólo avisa el
       cambio de estado); (4) decisión de Pedro pendiente: ¿el Lead Diseño crea briefs / importa de la hoja / ve
       Clientes y Entregas de ambos equipos? Hoy: sí (lead global). Su Evaluación/Workload ya es SÓLO de diseñadores.
-- [ ] "ship it" de Pedro → aplicar 0076 (`node scripts/migrate.mjs`), merge a main, push.
+- [x] 2026-09-21 Pedro: (1) el Lead Diseño pone diseñadores en CUALQUIER tarea; (2) SÓLO el lado de diseño → menú propio
+      (Clientes sólo como navegación, Mi trabajo, Performance, Tablero, Briefs en lectura), no crea/edita briefs, no Sync ni
+      Entregas, NUNCA edita contenido (revisa con correcciones). Reap del delta (Opus) arreglado.
+- [x] "ship it" (Pedro 2026-09-21, SIN merge): **0076 APLICADA** a prod (ledger 20260918120001; verificado: columnas,
+      funciones sin PUBLIC, approve conserva resolver correcciones, fan-out conserva aviso al cliente, 0 diseño asignado =
+      comportamiento idéntico). main (login de clientes, 4 commits) mergeado a la rama; push → preview
+      https://greenlight-git-roles-diseno-pedros-projects-c43384db.vercel.app
+- [ ] **Pedro prueba en el preview** (Vercel + login) → confirma → merge a main (Vercel despliega prod).
+- [ ] Al mergear main → `prisma`: agregar "prisma" a NAV_LEAD_DISENO (roles.ts).
 - [ ] Después: merge main → `prisma`; Prisma: el Lead Diseño aprueba resultados (sueltos = fin; ligados a tarea →
       Lead Creativo) y **Paso 3** (Evaluación por diseñador y mes: tiempo hasta la aprobación REAL del Lead Diseño).
 
