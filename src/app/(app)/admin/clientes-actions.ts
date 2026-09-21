@@ -5,10 +5,8 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getCurrentUser } from "@/lib/identity";
 import { canAdmin } from "@/lib/roles";
 import { slugify } from "@/lib/slug";
-import { sendEmail, hasEmail } from "@/lib/email";
-import { htmlFor, textFor } from "@/lib/email-template";
-
-const APP_URL = process.env.APP_URL ?? "https://runna-greenlight.vercel.app";
+import { hasEmail } from "@/lib/email";
+import { generarEnlaceCliente, mandarCorreoEnlace } from "@/lib/auth/enlace-cliente";
 
 export type InvitacionRow = {
   id: string;
@@ -127,16 +125,11 @@ export async function aprobarInvitacion(input: {
   await db.auth.admin.createUser({ email, email_confirm: true }).catch(() => undefined);
 
   // 2) Genera el magic-link (devuelve también el user, exista o recién creado).
-  const { data: link, error: linkErr } = await db.auth.admin.generateLink({
-    type: "magiclink",
-    email,
-    options: { redirectTo: `${APP_URL}/auth/confirm` },
-  });
-  const props = link?.properties as { hashed_token?: string } | undefined;
-  const userId = link?.user?.id;
-  if (linkErr || !userId || !props?.hashed_token) {
+  const link = await generarEnlaceCliente(email, portalPath);
+  if (!link) {
     return { ok: false, error: "No se pudo generar el enlace de acceso. Intenta de nuevo." };
   }
+  const userId = link.userId;
 
   // 3) Crea/actualiza el perfil del cliente, scopeado a su client_id. El id ES el
   //    de auth.users — nunca inventado.
@@ -170,17 +163,7 @@ export async function aprobarInvitacion(input: {
 
   // 5) Manda el enlace (branded, transaccional). El link entra por /auth/confirm.
   if (loSelle && hasEmail()) {
-    const confirmUrl =
-      `${APP_URL}/auth/confirm?token_hash=${props.hashed_token}` +
-      `&type=magiclink&next=${encodeURIComponent(portalPath)}`;
-    const title = "Tu acceso a Greenlight está listo";
-    const body = "Entra a tu portal para revisar y aprobar el contenido de tu marca.";
-    await sendEmail({
-      to: email,
-      subject: "Greenlight · Tu acceso está listo",
-      text: textFor(title, body, confirmUrl),
-      html: htmlFor({ type: "client_invite", title, body, ctaUrl: confirmUrl }),
-    });
+    await mandarCorreoEnlace(email, link.url, true);
   }
 
   revalidatePath("/admin");

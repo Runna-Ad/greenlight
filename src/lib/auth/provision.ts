@@ -10,7 +10,7 @@ import type { Track } from "@/lib/vocab";
  * Se escapan para que el correo sea literal (sigue insensible a mayúsculas).
  * (reap pre-lanzamiento 2026-09-02)
  */
-function sinComodines(email: string): string {
+export function sinComodines(email: string): string {
   return email.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 

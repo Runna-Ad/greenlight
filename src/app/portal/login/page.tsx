@@ -1,13 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Wordmark } from "@/components/shell/wordmark";
-import { RequestForm } from "./request-form";
+import { PortalAcceso } from "./portal-acceso";
 
 function mensajeDeError(code: string): string {
   switch (code) {
     case "link-invalid":
     case "link-expired":
-      return "Ese enlace ya no es válido o expiró. Pide acceso de nuevo y te mandaremos uno nuevo.";
+      return "Ese enlace ya no es válido o expiró. Escribe tu correo abajo y te mandamos uno nuevo.";
     case "access-revoked":
       return "Tu acceso fue dado de baja. Si crees que es un error, escríbele a tu contacto en Rünna.";
     default:
@@ -18,9 +18,9 @@ function mensajeDeError(code: string): string {
 export default async function PortalLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string; solicitar?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, next, solicitar } = await searchParams;
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-sidebar p-6">
@@ -41,20 +41,12 @@ export default async function PortalLoginPage({
 
           <div className="px-8 py-7">
             <h1 className="text-center text-lg font-semibold text-foreground">Portal de clientes</h1>
-            <p className="mt-1 text-center text-sm leading-relaxed text-muted-foreground">
-              Pide acceso a tu portal. H.Ü.E lo aprueba y te manda un enlace de entrada por correo.
-            </p>
 
-            {error && (
-              <p
-                role="alert"
-                className="mt-5 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive"
-              >
-                {mensajeDeError(error)}
-              </p>
-            )}
-
-            <RequestForm />
+            <PortalAcceso
+              next={next}
+              modoInicial={solicitar === "1" ? "solicitar" : "entrar"}
+              aviso={error ? mensajeDeError(error) : null}
+            />
 
             <p className="mt-4 border-t border-border pt-4 text-center text-xs text-muted-foreground">
               ¿Eres del equipo Rünna?{" "}
