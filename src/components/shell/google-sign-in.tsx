@@ -7,7 +7,18 @@ import { createClient } from "@/lib/supabase/client";
 
 /** "Continuar con Google" — kicks off the OAuth flow. The server /auth/callback is
  *  what actually enforces who's allowed in; this just starts it. */
-export function GoogleSignIn({ next }: { next?: string }) {
+export function GoogleSignIn({
+  next,
+  volverA = "/login",
+  variant = "default",
+  className = "mt-6",
+}: {
+  next?: string;
+  /** Página a la que vuelve si Google falla al arrancar (el portal de clientes usa /portal/login). */
+  volverA?: "/login" | "/portal/login";
+  variant?: "default" | "outline";
+  className?: string;
+}) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -15,20 +26,30 @@ export function GoogleSignIn({ next }: { next?: string }) {
     setLoading(true);
     const supabase = createClient();
     const redirectTo = new URL("/auth/callback", window.location.origin);
-    if (next) redirectTo.searchParams.set("next", next);
+    // Puerta de clientes: se marca en una cookie corta (no en la URL de regreso) para
+    // que /auth/callback devuelva sus rechazos a /portal/login y respete `next`. Así la
+    // URL que ve Supabase es EXACTAMENTE la de siempre y su lista de URLs permitidas no
+    // puede romper el login con Google. La puerta del equipo borra la marca.
+    const esCliente = volverA === "/portal/login";
+    const seguro = window.location.protocol === "https:" ? "; Secure" : "";
+    const cookie = (nombre: string, valor: string, maxAge: number) =>
+      (document.cookie = `${nombre}=${encodeURIComponent(valor)}; Path=/auth; Max-Age=${maxAge}; SameSite=Lax${seguro}`);
+    cookie("gl_puerta", esCliente ? "cliente" : "", esCliente ? 600 : 0);
+    cookie("gl_next", esCliente && next ? next : "", esCliente && next ? 600 : 0);
+    if (next && !esCliente) redirectTo.searchParams.set("next", next);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: redirectTo.toString() },
     });
     if (error) {
       setLoading(false);
-      router.replace(`/login?error=${encodeURIComponent(error.message)}`);
+      router.replace(`${volverA}?error=${encodeURIComponent(error.message)}`);
     }
     // on success the browser is redirected to Google; nothing else to do.
   }
 
   return (
-    <Button className="mt-6 w-full gap-2" size="lg" onClick={signIn} disabled={loading}>
+    <Button className={`${className} w-full gap-2`} variant={variant} size="lg" onClick={signIn} disabled={loading}>
       <GoogleMark />
       {loading ? "Conectando…" : "Continuar con Google"}
     </Button>

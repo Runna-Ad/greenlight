@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { leerPerfil, esClienteAprobado, destinoDentroDelPortal } from "@/lib/auth/acceso-cliente";
 import { isAgencyEmail } from "@/lib/auth/allowlist";
 import { provisionAgencyLogin } from "@/lib/auth/provision";
 
@@ -30,10 +30,23 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const oauthError = url.searchParams.get("error_description") || url.searchParams.get("error");
-  const next = url.searchParams.get("next");
+  // Desde /portal/login (puerta de clientes) los rechazos vuelven AHÍ con su mensaje,
+  // no al login de Google del equipo (donde un cliente no tiene salida). La marca y el
+  // `next` del cliente llegan en cookies cortas (ver GoogleSignIn), no en la URL.
+  const puertaCliente = request.cookies.get("gl_puerta")?.value === "cliente";
+  const next = puertaCliente
+    ? (request.cookies.get("gl_next")?.value ?? null)
+    : url.searchParams.get("next");
+
+  /** Toda respuesta borra las cookies de la puerta: sirven para UN solo regreso. */
+  const redirigir = (destino: URL) => {
+    const res = NextResponse.redirect(destino);
+    for (const nombre of ["gl_puerta", "gl_next"]) res.cookies.set(nombre, "", { path: "/auth", maxAge: 0 });
+    return res;
+  };
 
   const deny = (reason: string) =>
-    NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(reason)}`, url.origin));
+    redirigir(new URL(`${puertaCliente ? "/portal/login" : "/login"}?error=${encodeURIComponent(reason)}`, url.origin));
 
   if (oauthError) return deny(oauthError);
   if (!code) return deny("missing-code");
@@ -63,37 +76,32 @@ export async function GET(request: NextRequest) {
       await supabase.auth.signOut();
       return deny("not-allowed");
     }
-    return NextResponse.redirect(safeRedirect(next, url.origin));
+    return redirigir(safeRedirect(next, url.origin));
   }
 
   // ── Client door: must already be an APPROVED client (provisioned at approval) ──
-  const admin = supabaseAdmin();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role, client_id, active")
-    .eq("id", user.id)
-    .maybeSingle();
-  const p = profile as { role: string; client_id: string | null; active: boolean } | null;
+  // Los rechazos cierran SÓLO esta sesión (scope "local"): el default ("global") sacaba
+  // también al cliente de su otra sesión abierta (p. ej. con contraseña en el teléfono).
+  const rechazarCliente = async (reason: string) => {
+    await supabase.auth.signOut({ scope: "local" });
+    return redirigir(new URL(`/portal/login?error=${encodeURIComponent(reason)}`, url.origin));
+  };
+  const perfil = await leerPerfil({ id: user.id });
+
+  // Una caída de la BD NO es "acceso revocado": se le pide volver a entrar.
+  if (perfil === "error") return rechazarCliente("sesion");
 
   // Acceso revocado (Clientes → "Revocar", profiles.active=false) → no entra, aunque su
   // login de Google siga siendo válido. Se corta EN LA PUERTA para que reciba un mensaje
   // claro en vez de una pantalla de "denegado" más adentro. (reap I4)
-  if (p && !p.active) {
-    await supabase.auth.signOut();
-    return deny("access-revoked");
-  }
+  if (perfil && !perfil.active) return rechazarCliente("access-revoked");
 
-  if (p?.role === "client" && p.client_id) {
-    const { data: client } = await admin
-      .from("clients")
-      .select("slug")
-      .eq("id", p.client_id)
-      .maybeSingle();
-    const slug = (client as { slug: string } | null)?.slug;
-    return NextResponse.redirect(new URL(slug ? `/${slug}/portal` : "/", url.origin));
+  if (esClienteAprobado(perfil)) {
+    return redirigir(new URL(destinoDentroDelPortal(next, `/${perfil.slug}/portal`), url.origin));
   }
 
   // Not agency, not an approved client → no access. Don't leave a dangling session.
-  await supabase.auth.signOut();
+  if (puertaCliente) return rechazarCliente("google-sin-acceso");
+  await supabase.auth.signOut({ scope: "local" });
   return deny("not-allowed");
 }
