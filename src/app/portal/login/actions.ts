@@ -1,9 +1,11 @@
 "use server";
 
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { sendEmail, hasEmail } from "@/lib/email";
 import { htmlFor, textFor } from "@/lib/email-template";
+import { buscarClienteAprobado, reenviarEnlaceCliente, type ClienteAprobado } from "@/lib/auth/enlace-cliente";
 
 const APP_URL = process.env.APP_URL ?? "https://runna-greenlight.vercel.app";
 const esEmail = (v: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim());
@@ -24,18 +26,32 @@ const IP_WINDOW_MS = 10 * 60_000; // 10 min
 const IP_MAX = 5; // solicitudes por IP por ventana
 const ipHits = new Map<string, number[]>();
 
-function ipThrottled(ip: string, nowMs: number): boolean {
-  const recientes = (ipHits.get(ip) ?? []).filter((t) => nowMs - t < IP_WINDOW_MS);
+/** Ventana deslizante en memoria (best-effort, por instancia). true = ya se pasó del límite. */
+function pasaDelLimite(hits: Map<string, number[]>, clave: string, max: number, nowMs: number): boolean {
+  const recientes = (hits.get(clave) ?? []).filter((t) => nowMs - t < IP_WINDOW_MS);
   recientes.push(nowMs);
-  ipHits.set(ip, recientes);
+  hits.set(clave, recientes);
   // Limpieza barata para que el mapa no crezca sin límite en una instancia larga.
-  if (ipHits.size > 5000) {
-    for (const [k, v] of ipHits) {
-      if (v.every((t) => nowMs - t >= IP_WINDOW_MS)) ipHits.delete(k);
+  if (hits.size > 5000) {
+    for (const [k, v] of hits) {
+      if (v.every((t) => nowMs - t >= IP_WINDOW_MS)) hits.delete(k);
     }
   }
-  return recientes.length > IP_MAX;
+  return recientes.length > max;
 }
+
+function ipThrottled(ip: string, nowMs: number): boolean {
+  return pasaDelLimite(ipHits, ip, IP_MAX, nowMs);
+}
+
+// "Mándame mi enlace" (enviarEnlaceDeEntrada): sólo le manda correo a clientes YA
+// aprobados — no sirve para spamear direcciones arbitrarias — pero sin freno un script
+// podía bombardear el buzón de un cliente real. Por-IP propio (no comparte cupo con
+// las solicitudes) + por-CORREO. Pasado el límite se responde igual que siempre.
+const ENTRADA_IP_MAX = 10;
+const ENLACE_POR_CORREO_MAX = 3;
+const entradaIpHits = new Map<string, number[]>();
+const enlacesPorCorreo = new Map<string, number[]>();
 
 const GLOBAL_WINDOW_MS = 10 * 60_000; // 10 min
 const GLOBAL_MAX = 30; // solicitudes nuevas en la ventana antes de frenar en seco
@@ -88,6 +104,17 @@ export async function solicitarAcceso(input: {
     };
   }
 
+  // Un cliente YA aprobado que vuelve a "pedir acceso" (porque se le caducó la sesión)
+  // no necesita otra aprobación: se le manda su enlace de entrada y NO se crea una
+  // solicitud nueva que le caiga a los admins. Respuesta idéntica hacia fuera; el envío
+  // corre después de responder.
+  const yaEsCliente = await buscarClienteAprobado(email);
+  if (yaEsCliente && yaEsCliente !== "error") {
+    const cliente = yaEsCliente;
+    if (hasEmail()) after(() => enviarSiHayCupo(cliente, null));
+    return { ok: true };
+  }
+
   // El índice único parcial (lower(email) where status='pending') evita duplicados:
   // si ya hay una pendiente, la refrescamos en vez de acumular filas.
   let esNueva = true;
@@ -113,6 +140,56 @@ export async function solicitarAcceso(input: {
   // igual (su solicitud está registrada), sin filtrar si ya existía.
   if (esNueva) await notificarAdmins({ email, name, brand });
   return { ok: true };
+}
+
+/**
+ * "Ya tengo acceso — mándame mi enlace". Un cliente APROBADO cuya sesión caducó (o
+ * que cambió de dispositivo) pide un enlace de entrada nuevo. Público y sin sesión:
+ * la respuesta es la MISMA exista o no el correo (no revela quién es cliente), y sólo
+ * se manda correo a clientes aprobados y activos. `next` = la página del portal que
+ * intentaba abrir; sólo se respeta si cae dentro de SU portal.
+ */
+export async function enviarEnlaceDeEntrada(input: {
+  email: string;
+  next?: string | null;
+}): Promise<SolicitudResult> {
+  // Server action pública: el payload puede venir de cualquier lado, no sólo del formulario.
+  if (typeof input?.email !== "string" || (input.next != null && typeof input.next !== "string")) {
+    return { ok: false, error: "Escribe un correo válido." };
+  }
+  if (!hasSupabase() || !hasEmail()) return { ok: false, error: "El sistema no está disponible ahora mismo." };
+
+  const email = input.email.trim().toLowerCase().slice(0, 254);
+  if (!esEmail(email)) return { ok: false, error: "Escribe un correo válido." };
+
+  if (pasaDelLimite(entradaIpHits, await ipDeLaSolicitud(), ENTRADA_IP_MAX, Date.now())) {
+    return { ok: false, error: "Demasiados intentos. Espera unos minutos y vuelve a intentarlo." };
+  }
+
+  // TODO lo que distingue a un cliente de un desconocido (buscarlo, generar el link, el
+  // SMTP) corre DESPUÉS de responder: misma respuesta y mismo tiempo para cualquier
+  // correo — la página no sirve para averiguar quién es cliente de Rünna.
+  const next = input.next?.slice(0, 512) ?? null;
+  after(async () => {
+    try {
+      const cliente = await buscarClienteAprobado(email);
+      if (cliente && cliente !== "error") await enviarSiHayCupo(cliente, next);
+    } catch (e) {
+      console.error("[portal] enlace de entrada: error inesperado —", e);
+    }
+  });
+  return { ok: true };
+}
+
+/** Envía el enlace si ese correo no se pasó de su cupo. Fallos → log (nunca al público). */
+async function enviarSiHayCupo(cliente: ClienteAprobado, next: string | null): Promise<void> {
+  if (pasaDelLimite(enlacesPorCorreo, cliente.email, ENLACE_POR_CORREO_MAX, Date.now())) return;
+  try {
+    const r = await reenviarEnlaceCliente(cliente, next);
+    if (!r.ok) console.error("[portal] no se pudo mandar el enlace de entrada", { profileId: cliente.profileId });
+  } catch (e) {
+    console.error("[portal] enlace de entrada: error inesperado —", e);
+  }
 }
 
 /** Aviso a Pedro + admins: in-app (una notificación por perfil) + email branded. */

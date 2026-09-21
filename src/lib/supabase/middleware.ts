@@ -74,10 +74,21 @@ export async function updateSession(request: NextRequest) {
     (p) => path === p || path.startsWith(`${p}/`),
   );
 
+  // El portal de un cliente vive en `/{slug}/portal` — NO empieza con "/portal".
+  const esRutaPortal = /^\/[^/]+\/portal(\/|$)/.test(path);
+
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
-    // Client portal has its own login; internal app uses /login.
-    url.pathname = path.startsWith("/portal") ? "/portal/login" : "/login";
+    // El portal del cliente tiene su propia puerta; la app interna usa /login. Antes
+    // sólo se miraba `startsWith("/portal")`, así que un cliente con la sesión caducada
+    // en /didi/portal caía en el login de Google del EQUIPO, sin forma de volver a
+    // entrar. `next` lo regresa a la página que intentaba abrir (validado al enviar).
+    if (esRutaPortal || path.startsWith("/portal")) {
+      url.pathname = "/portal/login";
+      url.search = esRutaPortal ? `?next=${encodeURIComponent(path + request.nextUrl.search)}` : "";
+    } else {
+      url.pathname = "/login";
+    }
     return NextResponse.redirect(url);
   }
 
@@ -87,7 +98,6 @@ export async function updateSession(request: NextRequest) {
   // una página interna futura olvide su guard `canSee` (defensa por encima de las
   // páginas). El portal en sí valida la MARCA (no puede ver la de otro). No consulta
   // el rol en rutas públicas ni de portal, para no pegarle a la mayoría de requests.
-  const esRutaPortal = /^\/[^/]+\/portal(\/|$)/.test(path);
   if (user && !isPublic && !esRutaPortal) {
     // La IDENTIDAD se valida con el cliente de SESIÓN (getUser, arriba); los DATOS se
     // leen con SERVICE-ROLE — igual que /auth/callback e identity.ts. Antes estas dos

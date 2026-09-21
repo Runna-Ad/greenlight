@@ -7,7 +7,7 @@ import { GoogleSignIn } from "@/components/shell/google-sign-in";
 function mensajeDeError(code: string): string {
   switch (code) {
     case "not-allowed":
-      return "Esa cuenta no tiene acceso. Entra con tu correo @runna.com.mx — o si eres cliente, pide acceso abajo.";
+      return "Esa cuenta no tiene acceso. Entra con tu correo @runna.com.mx — o si eres cliente, entra por tu portal abajo.";
     case "access-revoked":
       return "Tu acceso fue dado de baja. Si crees que es un error, escríbele a tu contacto en Rünna.";
     case "missing-code":
@@ -70,7 +70,7 @@ export default async function LoginPage({
             <p className="mt-4 border-t border-border pt-4 text-center text-xs text-muted-foreground">
               ¿Eres cliente?{" "}
               <Link href="/portal/login" className="font-medium text-foreground underline-offset-2 hover:underline">
-                Solicita acceso a tu portal
+                Entra a tu portal
               </Link>
             </p>
           </div>
