@@ -4,10 +4,13 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const DB_SCHEMA = process.env.NEXT_PUBLIC_DB_SCHEMA ?? "produccion";
 
-// Routes reachable without a session.
+// Routes reachable without a session — EXACT paths only. Antes era por prefijo, y
+// `/login/tablero`, `/auth/tareas/<id>` o `/robots.txt/briefs` contaban como públicas:
+// caían en `[cliente]/*` con cliente="login" y se saltaban el muro de login Y el amarre
+// del cliente (sólo quedaba el guard de cada página). (security review 2026-09-21)
 // /robots.txt tiene que servirse SIN sesión, o el buscador recibe un redirect a /login en
 // vez del "Disallow: /" (visto en prod al desplegar el noindex, 2026-09-02).
-const PUBLIC_PATHS = ["/login", "/auth", "/portal/login", "/robots.txt"];
+const PUBLIC_PATHS = ["/login", "/portal/login", "/auth/callback", "/auth/confirm", "/robots.txt"];
 
 // Refreshes the Supabase session cookie on every request and gates auth.
 export async function updateSession(request: NextRequest) {
@@ -70,9 +73,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC_PATHS.some(
-    (p) => path === p || path.startsWith(`${p}/`),
-  );
+  const isPublic = PUBLIC_PATHS.includes(path);
 
   // El portal de un cliente vive en `/{slug}/portal` — NO empieza con "/portal".
   const esRutaPortal = /^\/[^/]+\/portal(\/|$)/.test(path);
@@ -97,8 +98,11 @@ export async function updateSession(request: NextRequest) {
   // otra ruta interna lo regresa a su portal — así queda amarrado a su marca aunque
   // una página interna futura olvide su guard `canSee` (defensa por encima de las
   // páginas). El portal en sí valida la MARCA (no puede ver la de otro). No consulta
-  // el rol en rutas públicas ni de portal, para no pegarle a la mayoría de requests.
-  if (user && !isPublic && !esRutaPortal) {
+  // el rol en rutas públicas. SÍ corre en las rutas de portal (antes no): una sesión sin
+  // perfil o dada de baja podía mandar server actions a `/{x}/portal` y getViewAs() la
+  // dejaba en 'creative'. Ahí sólo aplica "sin perfil / baja = fuera"; el cliente ya
+  // está en un portal, así que no se le redirige. (security review 2026-09-21)
+  if (user && !isPublic) {
     // La IDENTIDAD se valida con el cliente de SESIÓN (getUser, arriba); los DATOS se
     // leen con SERVICE-ROLE — igual que /auth/callback e identity.ts. Antes estas dos
     // lecturas iban por el cliente de sesión (rol `authenticated`), lo que obligaba a
@@ -134,11 +138,13 @@ export async function updateSession(request: NextRequest) {
     // (reap pre-lanzamiento 2026-09-02)
     if (leido && (!p || p.active === false)) {
       const url = request.nextUrl.clone();
-      url.pathname = p?.role === "client" || path.startsWith("/portal") ? "/portal/login" : "/login";
-      url.search = "?error=access-revoked";
+      url.pathname =
+        p?.role === "client" || esRutaPortal || path.startsWith("/portal") ? "/portal/login" : "/login";
+      // Sólo "dado de baja" cuando el perfil lo DICE; sin perfil se pide volver a entrar.
+      url.search = p ? "?error=access-revoked" : "?error=sesion";
       return NextResponse.redirect(url);
     }
-    if (p?.role === "client") {
+    if (p?.role === "client" && !esRutaPortal) {
       let dest = "/portal/login";
       if (p.client_id) {
         try {
