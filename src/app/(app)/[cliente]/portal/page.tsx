@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { getViewAs } from "@/lib/view-as";
 import { getCurrentUser } from "@/lib/identity";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
+import { createClient } from "@/lib/supabase/server";
+import { leerPerfil, esClienteAprobado } from "@/lib/auth/acceso-cliente";
 import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { cargarPortal, cargarTareaPortal } from "./portal-data";
 import { PortalShell } from "@/components/portal/portal-shell";
@@ -13,6 +15,19 @@ import { PortalArchivo } from "@/components/portal/portal-archivo";
 import { bucketPortal, estadoBriefPanel, type BucketPortal } from "@/lib/portal-bucket";
 
 export const dynamic = "force-dynamic";
+
+/** ¿Por qué hay sesión pero no identidad? Sólo "access-revoked" si el perfil dice active=false. */
+async function motivoSinIdentidad(): Promise<"access-revoked" | "sesion"> {
+  try {
+    const {
+      data: { user },
+    } = await (await createClient()).auth.getUser();
+    const perfil = user ? await leerPerfil({ id: user.id }) : null;
+    return perfil && perfil !== "error" && !perfil.active ? "access-revoked" : "sesion";
+  } catch {
+    return "sesion";
+  }
+}
 
 function PortalDenegado({ mensaje }: { mensaje: string }) {
   return (
@@ -38,7 +53,9 @@ export default async function PortalPage({
   // a 'creative' y el cliente veía "Un Especialista no entra al portal" + nav interna.
   // El proxy no cubre las rutas del portal (no consulta el rol ahí), así que se cierra
   // aquí. Sólo con el muro de login encendido: con él apagado no hay sesión que revocar.
-  if (process.env.AUTH_ENABLED === "true" && !user) redirect("/portal/login?error=access-revoked");
+  // "Sin identidad" también sale de una lectura FALLIDA de la BD: ahí se pide volver a
+  // entrar, no se le dice a un cliente activo que su acceso fue dado de baja.
+  if (process.env.AUTH_ENABLED === "true" && !user) redirect(`/portal/login?error=${await motivoSinIdentidad()}`);
 
   if (!canSee(role, "portal")) {
     return <PortalDenegado mensaje={`Un ${ROLE_LABEL[role]} no entra al portal.`} />;
@@ -63,6 +80,9 @@ export default async function PortalPage({
       esSuyo = (reqClient as { id: string } | null)?.id === user.clientId;
     }
     if (!esSuyo) {
+      // URL vieja o de otra marca → a SU portal (no un callejón sin salida).
+      const propio = user?.clientId ? await leerPerfil({ id: user.userId }) : null;
+      if (esClienteAprobado(propio)) redirect(`/${propio.slug}/portal`);
       return <PortalDenegado mensaje="Este portal no es de tu marca." />;
     }
     puedeActuar = true;

@@ -1,15 +1,25 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Wordmark } from "@/components/shell/wordmark";
-import { RequestForm } from "./request-form";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/identity";
+import { hasSupabase } from "@/lib/supabase-admin";
+import { leerPerfil, esClienteAprobado, destinoDentroDelPortal } from "@/lib/auth/acceso-cliente";
+import { PortalAcceso } from "./portal-acceso";
 
 function mensajeDeError(code: string): string {
   switch (code) {
     case "link-invalid":
     case "link-expired":
-      return "Ese enlace ya no es válido o expiró. Pide acceso de nuevo y te mandaremos uno nuevo.";
+      return "Ese enlace ya no es válido o expiró. Entra con tu contraseña o con Google; si no tienes contraseña, toca \"¿Olvidaste tu contraseña?\".";
     case "access-revoked":
       return "Tu acceso fue dado de baja. Si crees que es un error, escríbele a tu contacto en Rünna.";
+    case "google-sin-acceso":
+      return "Esa cuenta de Google aún no tiene acceso al portal. Si ya pediste acceso, espera la aprobación; si no, solicítalo abajo.";
+    case "sesion":
+      return "No pudimos confirmar tu sesión. Vuelve a entrar.";
+    case "access_denied":
+      return "Se canceló el inicio de sesión con Google. Vuelve a intentarlo o entra con tu correo.";
     default:
       return "Algo salió mal. Intenta de nuevo.";
   }
@@ -18,9 +28,23 @@ function mensajeDeError(code: string): string {
 export default async function PortalLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string; solicitar?: string; modo?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, next, solicitar, modo } = await searchParams;
+
+  // Un cliente que YA tiene sesión y abre esta página (marcador, correo viejo) va
+  // directo a su portal en vez de ver un formulario. Sólo sin `error`: si el portal lo
+  // mandó aquí con un error, se muestra el error — así nunca hay un bucle.
+  // Usa getCurrentUser (el mismo guardia que las páginas) para no discrepar nunca con él.
+  if (!error && process.env.AUTH_ENABLED === "true" && hasSupabase()) {
+    const u = await getCurrentUser();
+    if (u?.role === "client") {
+      const perfil = await leerPerfil({ id: u.userId });
+      if (esClienteAprobado(perfil)) redirect(destinoDentroDelPortal(next, `/${perfil.slug}/portal`));
+    }
+  }
+
+  const modoInicial = modo === "recuperar" ? "recuperar" : modo === "solicitar" || solicitar === "1" ? "solicitar" : "entrar";
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-sidebar p-6">
@@ -41,20 +65,12 @@ export default async function PortalLoginPage({
 
           <div className="px-8 py-7">
             <h1 className="text-center text-lg font-semibold text-foreground">Portal de clientes</h1>
-            <p className="mt-1 text-center text-sm leading-relaxed text-muted-foreground">
-              Pide acceso a tu portal. H.Ü.E lo aprueba y te manda un enlace de entrada por correo.
-            </p>
 
-            {error && (
-              <p
-                role="alert"
-                className="mt-5 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive"
-              >
-                {mensajeDeError(error)}
-              </p>
-            )}
-
-            <RequestForm />
+            <PortalAcceso
+              next={next}
+              modoInicial={modoInicial}
+              aviso={error ? mensajeDeError(error) : null}
+            />
 
             <p className="mt-4 border-t border-border pt-4 text-center text-xs text-muted-foreground">
               ¿Eres del equipo Rünna?{" "}

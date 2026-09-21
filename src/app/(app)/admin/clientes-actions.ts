@@ -5,10 +5,8 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getCurrentUser } from "@/lib/identity";
 import { canAdmin } from "@/lib/roles";
 import { slugify } from "@/lib/slug";
-import { sendEmail, hasEmail } from "@/lib/email";
-import { htmlFor, textFor } from "@/lib/email-template";
-
-const APP_URL = process.env.APP_URL ?? "https://runna-greenlight.vercel.app";
+import { hasEmail } from "@/lib/email";
+import { asegurarCuentaCliente, mandarCorreoAccesoListo } from "@/lib/auth/acceso-cliente";
 
 export type InvitacionRow = {
   id: string;
@@ -91,7 +89,7 @@ export async function listarClientesUsuarios(): Promise<ClienteUsuarioRow[]> {
 
 /**
  * APROBAR: crea (idempotente) la cuenta del cliente + su perfil scopeado al
- * cliente elegido, y AHÍ recién le manda el magic-link de acceso. Nunca antes.
+ * cliente elegido, y AHÍ recién le avisa que ya puede entrar (contraseña o Google).
  */
 export async function aprobarInvitacion(input: {
   inviteId: string;
@@ -120,23 +118,14 @@ export async function aprobarInvitacion(input: {
     .maybeSingle<{ slug: string }>();
   if (!cli) return { ok: false, error: "El cliente elegido no existe." };
   const email = inv.email.trim().toLowerCase();
-  const portalPath = `/${cli.slug}/portal`;
 
-  // 1) Asegura la cuenta de auth (idempotente). Confirmada, sin contraseña — entra
-  //    sólo por magic-link.
-  await db.auth.admin.createUser({ email, email_confirm: true }).catch(() => undefined);
-
-  // 2) Genera el magic-link (devuelve también el user, exista o recién creado).
-  const { data: link, error: linkErr } = await db.auth.admin.generateLink({
-    type: "magiclink",
-    email,
-    options: { redirectTo: `${APP_URL}/auth/confirm` },
-  });
-  const props = link?.properties as { hashed_token?: string } | undefined;
-  const userId = link?.user?.id;
-  if (linkErr || !userId || !props?.hashed_token) {
-    return { ok: false, error: "No se pudo generar el enlace de acceso. Intenta de nuevo." };
+  // 1–2) Asegura la cuenta de auth (idempotente) y su id. Una contraseña que no pasó
+  //      por el código de verificación se neutraliza (ver asegurarCuentaCliente).
+  const cuenta = await asegurarCuentaCliente(email);
+  if (!cuenta) {
+    return { ok: false, error: "No se pudo preparar la cuenta del cliente. Intenta de nuevo." };
   }
+  const userId = cuenta.userId;
 
   // 3) Crea/actualiza el perfil del cliente, scopeado a su client_id. El id ES el
   //    de auth.users — nunca inventado.
@@ -149,7 +138,7 @@ export async function aprobarInvitacion(input: {
   if (profErr) return { ok: false, error: profErr.message };
 
   // 4) Sella la solicitud como aprobada — compare-and-set sobre status='pending' para
-  //    que dos admins aprobando a la vez no manden el enlace dos veces. Si esto falla,
+  //    que dos admins aprobando a la vez no manden el aviso dos veces. Si esto falla,
   //    NO se manda el correo: la solicitud sigue pendiente y al reintentar se completa.
   const { data: sellada, error: sealErr } = await db
     .from("pending_invites")
@@ -166,21 +155,12 @@ export async function aprobarInvitacion(input: {
   if (sealErr) {
     return { ok: false, error: "Se preparó el acceso pero no se pudo cerrar la solicitud. Reintenta." };
   }
-  const loSelle = !!(sellada && sellada.length); // sólo quien la selló manda el enlace
+  const loSelle = !!(sellada && sellada.length); // sólo quien la selló manda el aviso
 
-  // 5) Manda el enlace (branded, transaccional). El link entra por /auth/confirm.
+  // 5) Avisa al cliente (branded, transaccional): ya puede entrar con su contraseña o
+  //    con Google. Sin enlaces de un solo uso — los escáneres de correo los gastan.
   if (loSelle && hasEmail()) {
-    const confirmUrl =
-      `${APP_URL}/auth/confirm?token_hash=${props.hashed_token}` +
-      `&type=magiclink&next=${encodeURIComponent(portalPath)}`;
-    const title = "Tu acceso a Greenlight está listo";
-    const body = "Entra a tu portal para revisar y aprobar el contenido de tu marca.";
-    await sendEmail({
-      to: email,
-      subject: "Greenlight · Tu acceso está listo",
-      text: textFor(title, body, confirmUrl),
-      html: htmlFor({ type: "client_invite", title, body, ctaUrl: confirmUrl }),
-    });
+    await mandarCorreoAccesoListo(email);
   }
 
   revalidatePath("/admin");

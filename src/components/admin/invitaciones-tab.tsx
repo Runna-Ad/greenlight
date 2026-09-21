@@ -29,8 +29,9 @@ export function InvitacionesTab({
     <div>
       <h2 className="text-lg font-semibold text-foreground">Invitaciones pendientes</h2>
       <p className="mb-4 mt-0.5 text-sm text-muted-foreground">
-        Clientes que pidieron acceso a su portal. Al aprobar, eliges a qué cliente y marca
-        pertenecen — hasta entonces se les manda su enlace de entrada por correo.
+        Clientes que pidieron acceso a su portal (ya confirmaron su correo con un código). Al
+        aprobar, eliges a qué cliente y marca pertenecen, y les avisamos por correo que ya
+        pueden entrar con su contraseña o con Google.
       </p>
 
       {pendientes.length === 0 ? (
@@ -72,7 +73,7 @@ function InvitacionRowCard({
         toast.error(res.error);
         return;
       }
-      toast.success(`Acceso aprobado — enlace enviado a ${inv.email}.`);
+      toast.success(`Acceso aprobado — le avisamos a ${inv.email}.`);
       onDecidir();
     });
 

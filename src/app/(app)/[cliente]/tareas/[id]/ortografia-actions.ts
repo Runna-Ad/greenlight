@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canMoveStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
+import { getCurrentUser } from "@/lib/identity";
 import { getSoyId } from "@/lib/soy";
 import { assertCanActOnTask, assertCanActOnRow } from "@/lib/auth/task-scope";
 import { fixSeguro } from "@/lib/ortografia";
@@ -374,6 +375,11 @@ export async function marcarOrtografiaIgnorada(
   filas: { filaId: string; campo: string; sugerencia: string }[],
 ): Promise<{ ok: boolean }> {
   if (!hasSupabase()) return { ok: false };
+  // Sin sesión getViewAs() cae a 'creative' (que SÍ pasa canMoveStatus): con el muro
+  // encendido se exige identidad real. Y se acota el lote — era un bucle sin tope sobre
+  // hue_suggestions con un body de hasta 10 MB. (security review 2026-09-21)
+  if (process.env.AUTH_ENABLED === "true" && !(await getCurrentUser())) return { ok: false };
+  if (!Array.isArray(filas) || filas.length > 200) return { ok: false };
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false };
   await ignorarOrtografia(filas);

@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
+import { sesionConContrasena, contrasenaPermitida } from "@/lib/auth/acceso-cliente";
 import { aDisciplina, tracksDe, type Disciplina, type ViewRole } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
 
@@ -100,6 +101,17 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   // app, negar aquí cierra TODA superficie de golpe (páginas y server actions caen a "sin
   // identidad" = denegado), en vez de parchear cada pantalla. (reap I4 — alcance real)
   if (!p.active) return null;
+
+  // Sesiones abiertas con CONTRASEÑA: sólo valen para clientes que la crearon con el
+  // código del correo. Cierra dos huecos que no pasan por nuestra pantalla de entrada
+  // (se puede entrar directo contra Supabase con la llave pública): una contraseña que
+  // alguien pre-registró en la cuenta de un cliente ANTES del login con contraseña, y una
+  // contraseña en una cuenta del equipo (que debe entrar con Google). getUser() ya validó
+  // esta sesión, así que leer su token es seguro. (security review 2026-09-21)
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (sesionConContrasena(session?.access_token) && !contrasenaPermitida(p.role, user.app_metadata)) return null;
 
   let member: CurrentMember | null = null;
   if (appRoleToViewRole(p.role) !== "client") {
