@@ -2446,3 +2446,82 @@ test-db 508 · lint · tsc · build verdes.
 4. Si Higgsfield quita el descuento de Seedance, actualizar las tablas (lista: 2.0 = 6/6/12/26; 2.5 720p 7, 1080p 16).
 **Environment changes:** ninguna dependencia nueva; Pedro inició sesión en Higgsfield en el navegador de la app y activó
 "Allow JavaScript from Apple Events" en Chrome (puede apagarlo).
+
+## 2026-09-18 10:25
+
+**Still open:**
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+
+
+## 2026-09-21 14:12
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro** (preview con login): como cliente real, pedir el enlace en /portal/login → llega el correo →
+- [ ] Deuda (seguridad, M2): los límites del envío de enlaces viven en memoria (por instancia). Opciones: tabla de
+- [ ] **DIFERIDO por Pedro** ("@runna is fine for now, we're using them for testing — we'll add the lock later"): aprobar
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+
+
+## 2026-09-21 — LOGIN DE CLIENTES: bug de re-entrada → contraseña + Google + blindaje — 2 SHIPS (main f929fc3 · 24ece16), sin migración
+**What we did:**
+1. **Bug (foto de Pedro):** un cliente ya aprobado no podía volver a entrar — caía en el login de Google del EQUIPO. Causas:
+   el magic link se mandaba UNA vez (al aprobar); el proxy sólo mandaba a /portal/login si la ruta empezaba con "/portal"
+   (el portal real es `/{slug}/portal`); "Cerrar sesión" mandaba a todos a /login. **Ship 1 (f929fc3):** "Mándame mi
+   enlace", redirect con `next`, logout del cliente → /portal/login, helper único del enlace. Security review (Opus):
+   `*` en ilike (PostgREST lo vuelve `%`) → enumeración; envío en `after()`.
+2. **Pedro:** "contraseña al pedir acceso y Google" + "que ninguna URL salte el login ni deje fuera a un cliente".
+   Audit Opus del borde cliente → 3 hallazgos reales. **Ship 2 (24ece16):** /portal/login = Google o correo+contraseña
+   (contraseña validada en el NAVEGADOR); pedir acceso / olvidé = código de 6 dígitos al correo; aprobar = aviso sin
+   enlace; contraseña sólo vale si pasó por el código (amr + app_metadata.clave_verificada) — ni pre-registros ni cuentas
+   del equipo; rutas públicas EXACTAS (`/login/tablero` etc. daban 200 sin sesión EN PROD); /auth/confirm ya no abre
+   sesiones; caída de BD ≠ "dado de baja"; perfil revisado también en rutas de portal; signOut scope "local";
+   `marcarOrtografiaIgnorada` exige identidad. 2ª review Opus: 0 takeover; residuales documentados.
+3. Pedro revocó a los 2 testers (Claudia Aguilar, Hermann — DiDi) → NO se borran: harán "Solicita acceso" (opción B).
+**Current state:** deployed & working. Verificado en PROD: rutas-trampa → /login, `/didi/portal` → /portal/login?next,
+enlaces viejos → mensaje, rechazo de Google desde clientes → /portal/login, contraseña mala desde el navegador real.
+**Uncommitted work:** `tasks/*.md` en `prisma` (docs de esta sesión + cambios previos que ya estaban) y `brag-brief.md`
+(de Pedro). Nada sin push en main ni en prisma.
+**Decisions made:** clientes = contraseña + Google (PEDRO_OVERRIDE sobre el magic link); verificación por CÓDIGO, nunca
+enlaces de un solo uso (Safe Links los gasta); login en el navegador por los límites POR IP de Supabase; sin tabla de
+contadores (el endpoint público de verify de Supabase la vuelve insuficiente → la defensa real es config del proyecto);
+@runna sigue sin candado (Pedro lo usa para pruebas); testers no se borran (auth compartido con S.P.A.M, historial).
+**Pick up next session:**
+1. LIVE-VERIFY con Claudia + Hermann (opción B) — si falla, pedir el mensaje exacto + hora → logs de Vercel.
+2. DECIDE PEDRO: Supabase → Auth → Email: OTP length 8 + expiry ~900 s (proyecto compartido con S.P.A.M).
+3. Opcional: límites durables de códigos (tabla+RPC) y/o CAPTCHA (Turnstile).
+4. Diferido: candado @runna (aprobar un correo del equipo lo vuelve cliente; la puerta del equipo acepta logins por
+   correo, no sólo Google).
+5. Al fusionar `prisma` → main: conflicto trivial en `src/lib/supabase/middleware.ts` (su PUBLIC_EXACT de
+   /api/prisma/vigia vs las rutas exactas nuevas — agregar "/api/prisma/vigia" a PUBLIC_PATHS) + los `tasks/*.md`.
+**Environment changes:** ninguna dependencia, env var ni migración. Ramas locales `fix/portal-login` y
+`fix/client-password-login` (ya fusionadas). Worktrees borrados. `.claude/launch.json` restaurado.
+
+## 2026-09-21 15:12
+
+**Still open:**
+- [ ] DECIDE PEDRO (proyecto de auth COMPARTIDO con S.P.A.M): subir "Email OTP Length" a 8 y bajar "Email OTP
+- [ ] Opcional: límites DURABLES de códigos (tabla + RPC) y/o CAPTCHA (Turnstile) en pedir/confirmar código.
+- [ ] Diferido con el candado @runna: la puerta del equipo acepta cualquier login por correo (no sólo Google).
+- [ ] LIVE-VERIFY con testers reales (Pedro 2026-09-21: opción B): Claudia Aguilar y Hermann (DiDi, revocados) hacen
+- [ ] **LIVE-VERIFY de Pedro** (preview con login): como cliente real, pedir el enlace en /portal/login → llega el correo →
+- [ ] Deuda (seguridad, M2): los límites del envío de enlaces viven en memoria (por instancia). Opciones: tabla de
+- [ ] **DIFERIDO por Pedro** ("@runna is fine for now, we're using them for testing — we'll add the lock later"): aprobar
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+

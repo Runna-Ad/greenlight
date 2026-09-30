@@ -120,3 +120,15 @@ RECOMMENDATION: beast-mode-dev Phase 1: "si el dato vive en una página web, lé
 [2026-09-17] OBSERVATION: conflict
 CONTEXT: el hook MODEL GUARD disparó "auth / login → opusplan ejecuta en Sonnet" cuando Pedro dijo "ill sign in" (iniciar sesión en un sitio, no código de auth) y el hook CHALLENGE MODE disparó con órdenes directas ("yes add seedance 2.0 fast… you fix the dop name").
 RECOMMENDATION: afinar los disparadores en ~/.claude/hooks (auth = archivos/código de auth; challenge = preguntas de evaluación sin verbo de orden).
+
+[2026-09-21] OBSERVATION: replicable-win
+CONTEXT: fix de PROD mientras `prisma` sigue en preview: worktree desde origin/main + config temporal en `.claude/launch.json` (otro puerto, `AUTH_ENABLED=true` sólo en el proceso, .env sin tocar) → se reprodujo el bug real con el muro encendido y se verificó sin mezclar ramas; luego se restauró el launch.json y se borró el worktree.
+RECOMMENDATION: beast-mode-dev: "fix que debe ir a main con otra rama abierta → worktree + preview temporal en puerto propio; restaurar launch.json y borrar el worktree al cerrar".
+
+[2026-09-21] OBSERVATION: missing-rule
+CONTEXT: en auth, la 2ª pasada del security-reviewer (sobre lo YA arreglado) encontró clases nuevas que la 1ª no podía ver (endpoint público de verify de Supabase, contraseñas en cuentas del equipo, contraseñas pre-registradas vivas en clientes viejos).
+RECOMMENDATION: beast-mode-dev Phase 6: para auth/permisos, re-correr el security-reviewer sobre el diff FINAL antes de shippear, no sólo sobre el primer build.
+
+[2026-09-21] OBSERVATION: conflict
+CONTEXT: el hook MODEL GUARD volvió a decir "opusplan → ejecuta en Sonnet" mientras la sesión corría en Opus 5 (el modelo real lo dice el sistema). Falsa alarma recurrente (ver 2026-09-17).
+RECOMMENDATION: que el hook lea el modelo REAL de la sesión antes de avisar, o que sólo avise cuando settings.json diga opusplan Y no haya override de /model.

@@ -529,6 +529,14 @@ Fuentes: Poppins (títulos) · Inter (datos) · Geist Mono (nombres de archivo) 
 Unbounded (wordmark)
 
 ## Desplegado
+- **2026-09-21 (2) — main 24ece16** (merge de `fix/client-password-login`, sin migración): clientes entran con **Google o
+  correo + contraseña**; pedir acceso / olvidé contraseña = **código de 6 dígitos** al correo; aprobar = aviso sin enlace;
+  contraseña sólo vale si pasó por el código (amr + app_metadata.clave_verificada); rutas públicas EXACTAS; /auth/confirm
+  ya no abre sesiones. Pendiente de Pedro: OTP length 8 + expiry ~15 min en Supabase (compartido con S.P.A.M).
+- **2026-09-21 — main f929fc3 LIVE** (merge de `fix/portal-login`, sin migración): el cliente aprobado vuelve a entrar —
+  `/{slug}/portal` sin sesión → `/portal/login?next=…` (antes caía en el login de Google del equipo), /portal/login abre
+  en "Mándame mi enlace", logout del cliente → /portal/login. Verificado en prod con curl (redirect, página, copy, /tablero
+  → /login). Falta la prueba de Pedro con un correo de cliente real (que llegue el enlace y entre a su portal).
 - **https://runna-greenlight.vercel.app** — dominio de prod ACTUAL (alias → deploy más reciente).
   Login ON (`AUTH_ENABLED=true`) → `/` da 307 a `/login`. ⚠️ El viejo `runna-command-center.vercel.app`
   ya NO sirve (404) — corregido 2026-08-21 al verificar el ship del HUB.

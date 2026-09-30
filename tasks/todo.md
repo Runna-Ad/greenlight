@@ -1,5 +1,61 @@
 # Greenlight · by Rünna — Build Todo
 
+## ✅ 2026-09-21 (2) — Login de CLIENTES con contraseña + Google + blindaje — SHIPPEADO (main f929fc3 → 24ece16, commit f6d99a4, sin migración)
+Pedro: "wouldn't it be easier for the client to add a password on their sign up… after approved" + "use google or normal email password, have both options" + "make sure there's no workaround or URL that can bypass or lock them out".
+- [x] /portal/login: **Google** + **correo y contraseña** (la contraseña la valida el NAVEGADOR con Supabase → límite
+      por IP del cliente, no la IP compartida de Vercel) → `destinoTrasEntrar` decide: cliente aprobado → su portal;
+      pendiente / revocado / equipo / sin acceso → cierra esa sesión y explica.
+- [x] "Solicita acceso": nombre, correo, marca, **contraseña** → **código de 6 dígitos** al correo (prueba de que el
+      correo es suyo; sin esto cualquiera pedía acceso "como ana@didi.com" con SU contraseña) → solicitud + aviso a admins.
+- [x] "¿Olvidaste tu contraseña?" = mismo código → contraseña nueva. Sirve a los clientes de antes (sin contraseña).
+- [x] Sin enlaces de un solo uso (Safe Links de Microsoft los gasta — confirmado en docs de Supabase). Aprobar = correo
+      "tu acceso está listo" sin enlace. Una contraseña no verificada se neutraliza al aprobar (app_metadata marker).
+- [x] Audit (Opus) arreglado: rutas públicas EXACTAS (`/login/tablero`, `/auth/…`, `/robots.txt/…` daban 200 en prod
+      sin sesión), `marcarOrtografiaIgnorada` exige identidad + tope 200, una caída de BD ya no dice "acceso dado de
+      baja", portal de otra marca → a SU portal, rechazos de Google de clientes → /portal/login (cookie corta, no
+      query — la allowlist de Supabase no puede romper OAuth), signOut con scope "local" (no saca otras sesiones).
+- [x] Verificado local (login ENCENDIDO, puerto 3002): rutas-trampa → /login; contraseña mala; código malo; foco;
+      cookie de Google de un solo uso; móvil. tsc + eslint limpios.
+- [x] Security review (Opus) de la reconstrucción: 0 takeover. Arreglado: contraseña sólo vale si pasó por el código
+      (getCurrentUser + destinoTrasEntrar leen el `amr` de la sesión: contraseña en cuenta del EQUIPO o de cliente sin
+      marca = sin identidad) · reset de contraseñas no verificadas al aprobar salta correos @runna (S.P.A.M compartido)
+      · `/auth/confirm` ya no abre sesiones (enlaces viejos → mensaje) · el proxy también revisa perfil en rutas de
+      portal (sesión sin perfil / baja = fuera) · 429 de Supabase ≠ "código incorrecto" · botones nunca se quedan
+      en "Entrando…" · nota de reenvío honesta. Unit test del `amr` (11/11) + rutas + flujos en navegador OK.
+- [x] `next build` limpio. **"ship it" de Pedro** → commit f6d99a4 → merge --no-ff a main (24ece16) → `git push origin main` → Vercel.
+- [ ] DECIDE PEDRO (proyecto de auth COMPARTIDO con S.P.A.M): subir "Email OTP Length" a 8 y bajar "Email OTP
+      Expiration" a ~900 s en Supabase → Auth → Email. El endpoint público de verificación de Supabase permite adivinar
+      códigos directo (igual que con los enlaces de antes); 8 dígitos + 15 min lo vuelve impráctico.
+- [ ] Opcional: límites DURABLES de códigos (tabla + RPC) y/o CAPTCHA (Turnstile) en pedir/confirmar código.
+- [ ] Diferido con el candado @runna: la puerta del equipo acepta cualquier login por correo (no sólo Google).
+- [ ] LIVE-VERIFY con testers reales (Pedro 2026-09-21: opción B): Claudia Aguilar y Hermann (DiDi, revocados) hacen
+      "Solicita acceso" → código → Pedro aprueba en Invitaciones pendientes → la fila vuelve a "Activo" → entran con
+      contraseña o Google. Si algo falla: pedir el mensaje EXACTO que vieron + la hora (para buscar en los logs de Vercel).
+- Nota merge: `prisma` choca en `middleware.ts` (su PUBLIC_EXACT de /api/prisma/vigia vs rutas exactas) — trivial.
+
+## ✅ 2026-09-21 — FIX PROD: el cliente aprobado no puede volver a entrar — SHIPPEADO (main b996640 → f929fc3, merge de `fix/portal-login` 361152f, sin migración)
+Bug (foto de Pedro): cliente ya aprobado, sesión caducada → cae en el login de Google del EQUIPO, sólo con "solicita acceso".
+- [x] Proxy: `/{slug}/portal` sin sesión → `/portal/login?next=…` (antes `startsWith("/portal")` nunca casaba → /login).
+- [x] /portal/login abre en **"Mándame mi enlace"** (correo → enlace nuevo, sólo a clientes aprobados y activos; respuesta
+      idéntica y en `after()` para no revelar quién es cliente); "¿Primera vez? Solicita acceso" como segundo camino.
+- [x] "Solicitar acceso" de un cliente YA aprobado → le llega su enlace, no una solicitud nueva a los admins.
+- [x] Cerrar sesión de un cliente → /portal/login. Copy de /login: "¿Eres cliente? Entra a tu portal".
+- [x] Un solo helper `lib/auth/enlace-cliente.ts` (aprobación + re-entrada) — el formato del link vive en un solo sitio.
+- [x] tsc + eslint + `next build` limpios; local con login ENCENDIDO: redirect, formulario, toggle, móvil, error de link.
+      Security review (Opus): sin takeover ni open redirect; arreglados `*` en ilike, enumeración por respuesta/tiempo,
+      enviar al correo guardado, validación de tipos.
+- [ ] **LIVE-VERIFY de Pedro** (preview con login): como cliente real, pedir el enlace en /portal/login → llega el correo →
+      entra a SU portal; abrir `/{slug}/portal?...` sin sesión → vuelve a esa página tras entrar; "Cerrar sesión" → /portal/login.
+- [x] **Commit + ship** — "commit and ship" de Pedro (2026-09-21): commit 361152f → merge --no-ff a main (f929fc3) →
+      `git push origin main` → Vercel. Al fusionar `prisma` con main más adelante, el CÓDIGO entra limpio (middleware.ts
+      incluido); sólo chocan los `tasks/*.md` (como ya pasaba).
+- [ ] Deuda (seguridad, M2): los límites del envío de enlaces viven en memoria (por instancia). Opciones: tabla de
+      envíos (migración) o regla de rate-limit en Vercel Firewall para POST /portal/login. Decide Pedro.
+- [ ] **DIFERIDO por Pedro** ("@runna is fine for now, we're using them for testing — we'll add the lock later"): aprobar
+      una solicitud hecha con un correo del equipo (@runna.com.mx) convierte ese perfil en `client`. Candado pendiente en
+      `aprobarInvitacion` (negar si `isAgencyEmail` o si el perfil ya existe con otro rol) + `sinComodines` no escapa `*`
+      (PostgREST lo vuelve `%`) en los lookups de provision.ts. NO arreglar hasta que Pedro lo pida.
+
 ## 🔵 2026-09-16 (14) — HÜE Prisma · F6b VIGÍA (rama `prisma`, migración **0074** — necesita "ship it")
 Pedro: "cant we do vigia? that one seems important and doesnt affect the rest no?" → sí: tablas, pestaña y job propios;
 sólo toca el resto al APROBAR (con los mismos validadores del Hub).
