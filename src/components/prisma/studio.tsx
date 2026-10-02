@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, ChevronDown, Clapperboard, Cpu, ImageIcon, Languages, Loader2, Plus, Sparkles, Trash2, UserRound, Wand2, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, ArrowRight, ChevronDown, Clapperboard, Cpu, ImageIcon, Languages, Loader2, Maximize2, Plus, Sparkles, Trash2, UserRound, Wand2, X } from "lucide-react";
+import { prismaFormatosActivo } from "@/lib/prisma/flags";
+import { FX } from "@/lib/prisma/formatos/copy";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChipSelect } from "@/components/intake/chip-select";
@@ -776,6 +779,23 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
                   </button>
                 ))}
               </div>
+              {/* Formatos: no hace un prompt, adapta un anuncio YA terminado a N tamaños (otra pantalla). */}
+              {prismaFormatosActivo() && (
+                <Link
+                  href="/prisma/formatos"
+                  style={{ "--hue": "var(--p-cyan)" } as CSSProperties}
+                  className="p-door mt-3 flex cursor-pointer items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left shadow-sm"
+                >
+                  <span className="p-door-icon flex size-11 shrink-0 items-center justify-center rounded-xl">
+                    <Maximize2 className="size-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-base font-semibold text-foreground">{tx(FX.puertaTitulo, lang)}</span>
+                    <span className="mt-0.5 block text-sm text-muted-foreground">{tx(FX.puertaAyuda, lang)}</span>
+                  </span>
+                  <ArrowRight className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                </Link>
+              )}
             </section>
           )}
 

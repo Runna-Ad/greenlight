@@ -28,6 +28,9 @@
   --p-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   position: relative;
   isolation: isolate;
+  /* El campo de luz (::before) sale 8 % por la derecha: sin esto la página se podía mover de lado (y en móvil
+     estiraba también las barras fijas). `clip`, no `hidden`: no crea un contenedor de scroll y no rompe sticky. */
+  overflow-x: clip;
 }
 
 /* ── Campo de luz: un lavado de espectro muy tenue arriba a la derecha. Fijo en
@@ -187,6 +190,8 @@
   }
 }
 .p-door:active { transform: scale(0.98); }
+/* Foco de teclado visible en las puertas (antes no tenían ninguno). */
+.p-door:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* ── Tarjeta de la herramienta y cabecera del resultado: franja del tono activo. ── */
 .p-tool-card {

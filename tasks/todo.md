@@ -1,5 +1,71 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔨 2026-10-02 — Prisma › Formatos (un anuncio terminado → N tamaños, original intocable) · rama `prisma`
+Pedro: subo UN anuncio plano, marco 10-15 tamaños por plataforma, recibo cuadrícula + ZIP. El original sólo se escala
+parejo (sin recorte, estirado ni redibujo); lo nuevo alrededor = IA, desenfoque o color.
+
+**Decisiones de Pedro (2026-10-02):** una RUTA por tamaño (`POST /api/prisma/formatos/tamano`, 4 a la vez; las Server
+Actions van de una en una por cliente, docs de Next 16 `server-actions.md`) · DOS tablas · PNG maestro + JPG q90 en el
+ZIP · el botón nuevo se llama "Adaptar formatos" y la sección vieja pasa a "Adaptar el prompt a otro formato" · IA =
+Gemini Nano Banana 2 (`gemini-3.1-flash-image`, llave que ya existe) CABLEADA PERO APAGADA hasta probarla.
+**Proveedor:** Higgsfield NO tiene outpaint en su API (openapi de docs.higgsfield.ai: 8 rutas, ninguna) · fal descartado
+(Pedro no quiere otro gasto) · prueba de Gemini 2026-10-02 → 402 "prepayment credits are depleted" (la llave sirve, la
+cuenta prepago está en $0). Desenfoque probado: pixel-lock OK en 4 tamaños (script en el scratchpad de la sesión).
+**Bug cazado en la prueba:** `composite({ blend: "source" })` de sharp vacía TODO lo que queda fuera del pegado → el
+pegado duro es una copia de bytes sobre el RGBA crudo, no un modo de mezcla.
+
+- [x] 0. Dependencias: `sharp` directo (ya venía con next) + `fflate` (ZIP en el navegador).
+- [x] 1. `src/lib/prisma/formatos/geometria.ts` (puro): presets por plataforma, contain-fit, offset centrado, expansión
+      por lado, cobertura → modo por omisión (≥50 % ia · 30-50 % blur · <30 % "Requiere rediseño", apagado), aviso si
+      el original se agranda, lienzo de Gemini (proporción más cercana + tamaño 0.5K/1K/2K) y costo estimado.
+- [x] 2. `src/lib/prisma/formatos/componer.ts` (server, sharp): escalar → relleno (ia | blur | color) → pegado DURO al
+      final (copia de bytes) → verificación sobre el PNG releído → `pixel_lock_ok` + deriva de la IA. PNG + JPG q90.
+- [x] 3. `src/lib/prisma/formatos/proveedor.ts`: interfaz + Gemini (REST generateContent, como looks-thumbs). Apagado
+      con `PRISMA_FORMATOS_IA` ≠ "gemini".
+- [x] 4. Migración **0077** (0076 = roles-diseno): `prisma_formatos_lotes` + `prisma_formatos_salidas`, RLS master-only
+      + grant service_role (patrón 0063/0070). `database.types.ts`. PGlite.
+- [x] 5. Bucket privado `greenlight-formatos` en `setup-storage.mjs`.
+- [x] 6. Servidor: `formatos-actions.ts` (crear lote → URL firmada de SUBIDA; confirmar; lote desde un resultado) +
+      `POST /api/prisma/formatos/tamano`. Mismo gate/puedeTocar/saturado/fallo; Origin revisado en la ruta.
+- [x] 7. UI `/prisma/formatos` + puerta en el estudio + botón "Adaptar formatos" en "¿Cómo salió?". Copy en español.
+- [x] 8. Flag `NEXT_PUBLIC_PRISMA_FORMATOS_ENABLED` (encendido en dev).
+- [x] 9. Tests: `scripts/test-formatos.mjs` (geometría de todos los presets + pixel-lock con proveedor de basura) en `npm test`.
+- [x] 10. Reap → arreglos → `?demo=formatos` local.
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0077 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+      flag + `PRISMA_FORMATOS_IA=gemini` en Vercel › Preview, y saldo en la cuenta de Gemini.
+
+**Verificación:** `npm test` verde · check:actions · lint · tsc · build · PGlite 0077 · local `?demo=formatos`.
+
+### Review (2026-10-02)
+- **Hecho y probado local:** `npm test` → aislamiento 74 migraciones OK · 26 "use server" OK · lib 481/0 · prisma 975/0
+  · formatos 43/0 · db 543/0 · import 81/0 · sync 44/0. tsc y eslint limpios. `npm run build` exit 0, sin warnings.
+  `?demo=formatos` revisado a 1440/1024/375: sin scroll horizontal, error de medida con role="alert".
+- **Reap, dos rondas** (5 pases en paralelo + re-revisión de seguridad y de pantalla). Lo serio que se arregló:
+  doble cobro por reclamo reiniciado (ahora UPDATE condicional en la base, no leer-y-escribir) · la ruta procesa la
+  fila RECLAMADA (no la leída antes) · costo de la IA que se perdía si algo fallaba después, o si Gemini no devolvía
+  imagen · memoria (la fuente se guarda codificada) · GIF sin tope de píxeles · lote duplicado desde un resultado
+  (índice único parcial + 23505) · borrar el anuncio por un error de red · tarjetas que se quedaban "Armando…" para
+  siempre (sondeo cada 5 s + "procesando" muerto a los 4 min se muestra como error) · resumen falso al fallar
+  prepararSalidas · tope de 20 tamaños saltable · salir de la página sin aviso · enlaces vencidos (se refirman solos).
+- **NO probado todavía (necesita "ship it" + Pedro):** la prueba real en la preview (anuncio real → 15 tamaños → ZIP →
+  pixel-lock en cada tarjeta IA → costo en la tabla). La calidad de Gemini: **no checada** (402, cuenta en $0).
+
+### Diferido (no bloquea la preview)
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+      poner `PRISMA_FORMATOS_IA=gemini` en producción.
+- [ ] Limpieza: lotes que se quedan en 'subiendo' y archivos huérfanos del bucket (cron).
+- [ ] Un PNG con transparencia conserva sus huecos en v1 (el pixel-lock lo exige); opción futura: aplanar sobre el relleno.
+- [ ] ZIP en streaming (hoy todo en memoria; ~20 tamaños × 2 archivos aguanta) y miniaturas WebP chicas en la cuadrícula.
+- [ ] Revisar (sólo lectura) que ninguna policy de `storage.objects` del proyecto compartido exponga `greenlight-formatos`.
+- [ ] Avisos previos de npm audit: next 16.3.2 (crítico) y nodemailer (alto) — tarea aparte ya sugerida.
+
+### Para la prueba real — necesita "ship it" de Pedro (en este orden)
+1. `~/.claude/hooks/claim.sh` del esquema → `node scripts/migrate.mjs` (aplica 0077) → soltar el claim.
+2. `node scripts/setup-storage.mjs` (crea `greenlight-formatos`, privado, 25 MB, png/jpeg/webp).
+3. Pedro en Vercel › Preview: `NEXT_PUBLIC_PRISMA_FORMATOS_ENABLED=true` (requiere redeploy). Para IA además:
+   `PRISMA_FORMATOS_IA=gemini` + `GEMINI_API_KEY`, y saldo en la cuenta de Gemini.
+4. Prueba: anuncio real → 15 tamaños → ZIP → pixel-lock en cada tarjeta → `costo_real_usd` en la tabla.
+
 ## ✅ 2026-09-21 (2) — Login de CLIENTES con contraseña + Google + blindaje — SHIPPEADO (main f929fc3 → 24ece16, commit f6d99a4, sin migración)
 Pedro: "wouldn't it be easier for the client to add a password on their sign up… after approved" + "use google or normal email password, have both options" + "make sure there's no workaround or URL that can bypass or lock them out".
 - [x] /portal/login: **Google** + **correo y contraseña** (la contraseña la valida el NAVEGADOR con Supabase → límite

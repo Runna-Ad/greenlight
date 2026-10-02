@@ -2683,5 +2683,70 @@ console.log("\n▶ 0074 — vigía");
   ok("aprobada con fecha sí pasa", await db.query(`update produccion.prisma_propuestas set estado = 'aprobada', decidido_at = now() where huella = '${h}'`).then(() => true).catch(() => false));
 }
 
+// ── 0077: HÜE Prisma › Formatos — lotes + salidas ──
+console.log("\n▶ 0077 — prisma_formatos_lotes + prisma_formatos_salidas");
+{
+  for (const t of ["prisma_formatos_lotes", "prisma_formatos_salidas"]) {
+    eq(`${t} existe con RLS`, Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = '${t}' and c.relrowsecurity`)), 1);
+    eq(`${t}: policy master-only`, Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = '${t}' and qual like '%master%'`)), 1);
+    ok(`${t}: service_role puede escribir`, (await q(`select has_table_privilege('service_role', 'produccion.${t}', 'update') as ok`))[0].ok);
+    eq(`${t}: PUBLIC sin privilegios`, Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = '${t}' and c.relacl is not null and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+  }
+  const u = () => crypto.randomUUID();
+  const fuente = `fuente/${u()}.png`;
+  const lote = await scalar(`insert into produccion.prisma_formatos_lotes (fuente_path, nombre) values ($1, 'promo') returning id`, [fuente]);
+  eq("el lote nace 'subiendo'", await scalar(`select estado from produccion.prisma_formatos_lotes where id = $1`, [lote]), "subiendo");
+  const rechaza = async (sql, params = []) => db.query(sql, params).then(() => false).catch(() => true);
+  ok("la BD rechaza 'listo' sin mime ni medidas", await rechaza(`update produccion.prisma_formatos_lotes set estado = 'listo' where id = $1`, [lote]));
+  ok("con mime y medidas, 'listo' pasa", !(await rechaza(`update produccion.prisma_formatos_lotes set estado = 'listo', fuente_mime = 'image/png', fuente_w = 1200, fuente_h = 1500 where id = $1`, [lote])));
+  ok("la BD rechaza una ruta de fuente fuera de fuente/<uuid>", await rechaza(`insert into produccion.prisma_formatos_lotes (fuente_path) values ('prisma/../x.png')`));
+  ok("la BD rechaza la misma fuente en dos lotes", await rechaza(`insert into produccion.prisma_formatos_lotes (fuente_path) values ($1)`, [fuente]));
+  ok("la BD rechaza un mime que no es png/jpg/webp", await rechaza(`insert into produccion.prisma_formatos_lotes (fuente_path, fuente_mime) values ($1, 'image/gif')`, [`fuente/${u()}.png`]));
+  const sal = await scalar(`insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo, costo_estimado_usd) values ($1, 'meta-1080x1920', 1080, 1920, 'ia', 0.102) returning id`, [lote]);
+  eq("la salida nace 'pendiente' con 0 intentos", JSON.stringify(await q(`select estado, intentos from produccion.prisma_formatos_salidas where id = $1`, [sal])), JSON.stringify([{ estado: "pendiente", intentos: 0 }]));
+  const malas = [
+    ["el mismo tamaño dos veces en un lote", `insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo) values ('${lote}', 'meta-1080x1920', 1080, 1920, 'blur')`],
+    ["un modo desconocido", `insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo) values ('${lote}', 'x-1600x900', 1600, 900, 'magia')`],
+    ["modo color sin color", `insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo) values ('${lote}', 'x-1600x900', 1600, 900, 'color')`],
+    ["un color que no es #rrggbb", `insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo, color) values ('${lote}', 'x-1600x900', 1600, 900, 'color', 'red')`],
+    ["una medida de 5000 px", `insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo) values ('${lote}', 'otro-5000x900', 5000, 900, 'blur')`],
+    ["un preset con forma rara", `insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo) values ('${lote}', '../x', 100, 100, 'blur')`],
+    ["'listo' sin archivos ni pixel-lock", `update produccion.prisma_formatos_salidas set estado = 'listo' where id = '${sal}'`],
+    ["'listo' con pixel-lock FALSO", `update produccion.prisma_formatos_salidas set estado = 'listo', png_path = 'salida/${lote}/${u()}.png', jpg_path = 'salida/${lote}/${u()}.jpg', pixel_lock_ok = false where id = '${sal}'`],
+    ["una ruta de salida fuera de salida/<lote>/<uuid>", `update produccion.prisma_formatos_salidas set png_path = 'fuente/x.png' where id = '${sal}'`],
+    ["un costo negativo", `update produccion.prisma_formatos_salidas set costo_real_usd = -1 where id = '${sal}'`],
+  ];
+  for (const [que, sql] of malas) ok(`la BD rechaza ${que}`, await rechaza(sql));
+  const png = `salida/${lote}/${u()}.png`;
+  ok("'listo' con PNG, JPG y pixel-lock pasa", !(await rechaza(`update produccion.prisma_formatos_salidas set estado = 'listo', png_path = $2, jpg_path = $3, pixel_lock_ok = true, costo_real_usd = 0.0712, deriva = 4.2 where id = $1`, [sal, png, png.replace(/\.png$/, ".jpg")])));
+  // Reclamo atómico: sólo un "procesando" gana aunque dos llamadas lleguen juntas.
+  const sal2 = await scalar(`insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo) values ($1, 'google-300x250', 300, 250, 'blur') returning id`, [lote]);
+  const reclamo = `update produccion.prisma_formatos_salidas set estado = 'procesando', intentos = intentos + 1 where id = $1 and estado in ('pendiente', 'error') returning id`;
+  const r1 = await q(reclamo, [sal2]);
+  const r2 = await q(reclamo, [sal2]);
+  eq("reclamo atómico: el primero toma la salida, el segundo no", `${r1.length}/${r2.length}`, "1/0");
+  // Reinicio CONDICIONAL de prepararSalidas: un "procesando" vivo no vuelve a "pendiente"; uno muerto (>4 min) sí.
+  const reinicio = `update produccion.prisma_formatos_salidas set estado = 'pendiente' where id = $1 and (estado <> 'procesando' or updated_at < now() - interval '4 minutes') returning id`;
+  eq("reinicio condicional: un 'procesando' vivo NO se reinicia (no hay segundo reclamo = no hay doble cobro)", (await q(reinicio, [sal2])).length, 0);
+  await db.query(`update produccion.prisma_formatos_salidas set updated_at = now() - interval '5 minutes' where id = $1`, [sal2]);
+  eq("reinicio condicional: un 'procesando' muerto sí se reinicia", (await q(reinicio, [sal2])).length, 1);
+  // Un resultado de "¿Cómo salió?" → UN lote por persona (dos pestañas a la vez no duplican la copia).
+  const specX = await scalar(`insert into produccion.prisma_specs (job, tool, spec) values ('foto_producto', 'nanobanana', '{}'::jsonb) returning id`);
+  const resX = await scalar(`insert into produccion.prisma_resultados (spec_id, tool, storage_path, mime) values ($1, 'nanobanana', $2, 'image/png') returning id`, [specX, `prisma/out/${u()}.png`]);
+  const quien = (await q(`select id from produccion.track_members limit 1`))[0]?.id;
+  ok("hay un resultado y una persona para probar el índice único", !!resX && !!quien);
+  if (resX && quien) {
+    const conRes = `insert into produccion.prisma_formatos_lotes (fuente_path, resultado_id, created_by) values ($1, $2, $3)`;
+    ok("el primer lote de un resultado pasa", !(await rechaza(conRes, [`fuente/${u()}.png`, resX, quien])));
+    ok("la BD rechaza un segundo lote del MISMO resultado y la misma persona", await rechaza(conRes, [`fuente/${u()}.png`, resX, quien]));
+    ok("lotes subidos a mano (sin resultado) no chocan entre sí", !(await rechaza(`insert into produccion.prisma_formatos_lotes (fuente_path, created_by) values ($1, $2)`, [`fuente/${u()}.png`, quien])) && !(await rechaza(`insert into produccion.prisma_formatos_lotes (fuente_path, created_by) values ($1, $2)`, [`fuente/${u()}.png`, quien])));
+    await db.query(`delete from produccion.prisma_formatos_lotes where created_by = $1`, [quien]);
+  }
+  await db.query(`delete from produccion.prisma_specs where id = $1`, [specX]);
+  const borra = await scalar(`select count(*) from produccion.prisma_formatos_salidas where lote_id = $1`, [lote]);
+  await db.query(`delete from produccion.prisma_formatos_lotes where id = $1`, [lote]);
+  eq("borrar el lote se lleva sus salidas (cascade)", `${borra}→${await scalar(`select count(*) from produccion.prisma_formatos_salidas where lote_id = $1`, [lote])}`, "2→0");
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -12,3 +12,9 @@ export const prismaActivo = (): boolean =>
 /** v2: generar la imagen/video dentro de la app. Hoy sólo muestra el botón apagado. */
 export const prismaGeneracionActiva = (): boolean =>
   process.env.NEXT_PUBLIC_PRISMA_GENERATION_ENABLED === "true";
+
+/** Prisma › Formatos (adaptar un anuncio terminado a N tamaños). Va DENTRO de Prisma: sin Prisma no hay
+ *  Formatos. En desarrollo siempre encendido, como Prisma. El relleno con IA tiene su propio interruptor,
+ *  de servidor (lib/prisma/formatos/proveedor.ts), porque cuesta. */
+export const prismaFormatosActivo = (): boolean =>
+  prismaActivo() && (process.env.NEXT_PUBLIC_PRISMA_FORMATOS_ENABLED === "true" || process.env.NODE_ENV === "development");

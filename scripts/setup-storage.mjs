@@ -30,6 +30,9 @@ const BUCKETS = [
   { name: "greenlight-logos", public: true, fileSizeLimit: "10MB", allowedMimeTypes: IMAGENES },
   // KB de H.Ü.E: PRIVADO (docs de entrenamiento, se leen server-side por signed URL).
   { name: "greenlight-kb", public: false, fileSizeLimit: "20MB", allowedMimeTypes: KB_DOCS },
+  // Prisma › Formatos: PRIVADO. El anuncio subido (fuente/…) y sus tamaños (salida/<lote>/…). Sube el
+  // navegador directo con una URL firmada (Vercel corta los cuerpos de más de 4.5 MB); se lee firmado.
+  { name: "greenlight-formatos", public: false, fileSizeLimit: "25MB", allowedMimeTypes: ["image/png", "image/jpeg", "image/webp"] },
 ];
 
 // Cargar .env.local sin dependencias (los scripts de este repo no usan dotenv).
@@ -62,9 +65,29 @@ if (listErr) {
   process.exit(1);
 }
 
+// "25MB" puede quedar guardado como 25·1000² o 25·1024² según la versión de Storage: ambas cuentan como iguales
+// (si no, la revisión "corregiría" todos los buckets en cada corrida y escondería un cambio real).
+const MB = (v) => Number(String(v).replace(/MB$/i, ""));
+const mismoTope = (bytes, v) => [1000 * 1000, 1024 * 1024].some((u) => Number(bytes) === MB(v) * u);
 for (const b of BUCKETS) {
-  if (buckets.some((x) => x.name === b.name)) {
-    console.log(`✓ El bucket "${b.name}" ya existe — nada que hacer.`);
+  const existe = buckets.find((x) => x.name === b.name);
+  if (existe) {
+    // Que exista no basta: en un proyecto compartido alguien pudo crearlo a mano (público, sin tope). Si su
+    // configuración no es la de aquí, se corrige.
+    const igual =
+      existe.public === b.public &&
+      mismoTope(existe.file_size_limit, b.fileSizeLimit) &&
+      JSON.stringify([...(existe.allowed_mime_types ?? [])].sort()) === JSON.stringify([...b.allowedMimeTypes].sort());
+    if (igual) {
+      console.log(`✓ El bucket "${b.name}" ya existe con la configuración correcta.`);
+      continue;
+    }
+    const { error: updErr } = await db.storage.updateBucket(b.name, { public: b.public, fileSizeLimit: b.fileSizeLimit, allowedMimeTypes: b.allowedMimeTypes });
+    if (updErr) {
+      console.error(`El bucket "${b.name}" existe con OTRA configuración y no se pudo corregir:`, updErr.message);
+      process.exit(1);
+    }
+    console.log(`✅ Bucket "${b.name}": configuración corregida (${b.public ? "público" : "privado"}, ${b.fileSizeLimit}).`);
     continue;
   }
   const { error: createErr } = await db.storage.createBucket(b.name, {

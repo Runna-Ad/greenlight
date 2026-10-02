@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { Check, CheckCircle2, ImagePlus, Loader2, RefreshCw, Upload, Wand2, X } from "lucide-react";
+import Link from "next/link";
+import { Check, CheckCircle2, ImagePlus, Loader2, Maximize2, RefreshCw, Upload, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ import { useCatalogo } from "./catalogo-contexto";
 import type { ResultadoVivo } from "@/lib/prisma/resultado";
 import { JOB_KIND, type JobType, type Tool } from "@/lib/prisma/spec";
 import { ACCEPT_IMAGEN, ACCEPT_VIDEO, prepararParaComparar, type ErrorSubida } from "@/lib/prisma/subida";
+import { prismaFormatosActivo } from "@/lib/prisma/flags";
 
 const ERROR_SUBIDA: Record<ErrorSubida, keyof typeof UI> = { video_ilegible: "videoIlegible", imagen_ilegible: "imagenIlegible", tipo: "tipoNoSoportado" };
 
@@ -285,11 +287,20 @@ export function ComoSalio({
               <CheckCircle2 className="size-4" />
               {resultado.aceptado ? tx(UI.quitarAceptado, lang) : tx(UI.aceptarFinal, lang)}
             </Button>
+            {/* Un resultado APROBADO pasa directo a Formatos (el original se escala, nunca se redibuja). */}
+            {resultado.aceptado && prismaFormatosActivo() && !esDemo && (
+              <Button size="sm" variant="outline" asChild>
+                <Link href={`/prisma/formatos?resultado=${resultado.id}`}>
+                  <Maximize2 className="size-4" /> {tx(UI.adaptarFormatos, lang)}
+                </Link>
+              </Button>
+            )}
             <Button size="sm" variant="ghost" onClick={() => setResultado(null)} disabled={bloqueado} className="ml-auto">
               {tx(UI.subirOtro, lang)}
             </Button>
           </div>
           {resultado.veredicto.refine && <p className="text-xs text-muted-foreground">{tx(UI.refinarOriginal, lang)}: «{tx(resultado.veredicto.refine, lang)}»</p>}
+          {!resultado.aceptado && prismaFormatosActivo() && !esDemo && <p className="text-xs text-muted-foreground">{tx(UI.adaptarFormatosPista, lang)}</p>}
         </div>
       )}
     </section>

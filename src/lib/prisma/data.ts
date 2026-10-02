@@ -237,10 +237,11 @@ export function olvidarConocimiento(): void {
 }
 
 /** URLs firmadas en lote (bucket privado), 1 h. */
-export async function firmar(db: Db, paths: string[]): Promise<Map<string, string>> {
+export async function firmar(db: Db, paths: string[], bucket: string = BUCKET): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (!paths.length) return out;
-  const { data } = await db.storage.from(BUCKET).createSignedUrls(paths, 60 * 60);
+  const { data, error } = await db.storage.from(bucket).createSignedUrls(paths, 60 * 60);
+  if (error) console.error(`[prisma] createSignedUrls (${bucket}):`, error.message);
   for (const s of data ?? []) if (s.path && s.signedUrl) out.set(s.path, s.signedUrl);
   return out;
 }

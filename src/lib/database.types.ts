@@ -375,6 +375,47 @@ export type PrismaResultadoRow = {
   created_at: string;
 };
 
+/** Una fila de prisma_formatos_lotes (0077): un anuncio subido para llevarlo a N tamaños. */
+export type PrismaFormatosLoteRow = {
+  id: string;
+  client_id: string | null;
+  marca_id: string | null;
+  resultado_id: string | null;
+  nombre: string;
+  estado: "subiendo" | "listo";
+  fuente_path: string;
+  fuente_mime: "image/png" | "image/jpeg" | "image/webp" | null;
+  fuente_w: number | null;
+  fuente_h: number | null;
+  /** numeric: PostgREST lo manda como número. */
+  costo_estimado_usd: number;
+  created_by: string | null;
+  created_at: string;
+};
+
+/** Una fila de prisma_formatos_salidas (0077): un tamaño de un lote. */
+export type PrismaFormatosSalidaRow = {
+  id: string;
+  lote_id: string;
+  preset: string;
+  ancho: number;
+  alto: number;
+  modo: "ia" | "blur" | "color";
+  color: string | null;
+  estado: "pendiente" | "procesando" | "listo" | "error";
+  png_path: string | null;
+  jpg_path: string | null;
+  proveedor: string | null;
+  costo_estimado_usd: number;
+  costo_real_usd: number | null;
+  pixel_lock_ok: boolean | null;
+  deriva: number | null;
+  error: string | null;
+  intentos: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type PrismaPromptRow = {
   id: string;
   spec_id: string;
