@@ -375,7 +375,7 @@ export type PrismaResultadoRow = {
   created_at: string;
 };
 
-/** Una fila de prisma_formatos_lotes (0077): un anuncio subido para llevarlo a N tamaños. */
+/** Una fila de prisma_formatos_lotes (0078): un anuncio subido para llevarlo a N tamaños. */
 export type PrismaFormatosLoteRow = {
   id: string;
   client_id: string | null;
@@ -393,7 +393,7 @@ export type PrismaFormatosLoteRow = {
   created_at: string;
 };
 
-/** Una fila de prisma_formatos_salidas (0077): un tamaño de un lote. */
+/** Una fila de prisma_formatos_salidas (0078): un tamaño de un lote. */
 export type PrismaFormatosSalidaRow = {
   id: string;
   lote_id: string;

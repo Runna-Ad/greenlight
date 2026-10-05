@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
--- 0077 — HÜE Prisma › Formatos: un anuncio terminado → N tamaños, con el original intocable
+-- 0078 — HÜE Prisma › Formatos: un anuncio terminado → N tamaños, con el original intocable
 -- ═══════════════════════════════════════════════════════════════
 -- Un LOTE = un anuncio subido; una SALIDA = un tamaño de ese lote. Dos tablas a propósito: cada tamaño
 -- se procesa en su propia llamada (4 a la vez) y actualiza SU fila; una lista jsonb dentro del lote

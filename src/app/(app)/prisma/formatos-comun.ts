@@ -15,7 +15,7 @@ import { fallo, puedeTocar, UUID, faltaMigracion, type Fail, type Sesion } from 
  */
 
 export { BUCKET_FORMATOS, MIME_A_EXT, type MimeFuente };
-export const MIGRACION_FORMATOS = "0077";
+export const MIGRACION_FORMATOS = "0078";
 /** Un tamaño "procesando" sin noticias en este tiempo se da por muerto (la función se cayó) y se puede retomar.
  *  Va un poco arriba del maxDuration de la ruta (210 s): una corrida viva nunca se pisa. */
 export const PROCESANDO_MUERTO_MS = 4 * 60_000;

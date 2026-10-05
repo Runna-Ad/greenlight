@@ -22,7 +22,7 @@ pegado duro es una copia de bytes sobre el RGBA crudo, no un modo de mezcla.
       final (copia de bytes) → verificación sobre el PNG releído → `pixel_lock_ok` + deriva de la IA. PNG + JPG q90.
 - [x] 3. `src/lib/prisma/formatos/proveedor.ts`: interfaz + Gemini (REST generateContent, como looks-thumbs). Apagado
       con `PRISMA_FORMATOS_IA` ≠ "gemini".
-- [x] 4. Migración **0077** (0076 = roles-diseno): `prisma_formatos_lotes` + `prisma_formatos_salidas`, RLS master-only
+- [x] 4. Migración **0078** (0076 = roles-diseno, 0077 = cambios-cliente en main): `prisma_formatos_lotes` + `prisma_formatos_salidas`, RLS master-only
       + grant service_role (patrón 0063/0070). `database.types.ts`. PGlite.
 - [x] 5. Bucket privado `greenlight-formatos` en `setup-storage.mjs`.
 - [x] 6. Servidor: `formatos-actions.ts` (crear lote → URL firmada de SUBIDA; confirmar; lote desde un resultado) +
@@ -31,10 +31,10 @@ pegado duro es una copia de bytes sobre el RGBA crudo, no un modo de mezcla.
 - [x] 8. Flag `NEXT_PUBLIC_PRISMA_FORMATOS_ENABLED` (encendido en dev).
 - [x] 9. Tests: `scripts/test-formatos.mjs` (geometría de todos los presets + pixel-lock con proveedor de basura) en `npm test`.
 - [x] 10. Reap → arreglos → `?demo=formatos` local.
-- [ ] 11. Preview: push. Prueba real necesita "ship it" (0077 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
       flag + `PRISMA_FORMATOS_IA=gemini` en Vercel › Preview, y saldo en la cuenta de Gemini.
 
-**Verificación:** `npm test` verde · check:actions · lint · tsc · build · PGlite 0077 · local `?demo=formatos`.
+**Verificación:** `npm test` verde · check:actions · lint · tsc · build · PGlite 0078 · local `?demo=formatos`.
 
 ### Review (2026-10-02)
 - **Hecho y probado local:** `npm test` → aislamiento 74 migraciones OK · 26 "use server" OK · lib 481/0 · prisma 975/0
@@ -60,7 +60,7 @@ pegado duro es una copia de bytes sobre el RGBA crudo, no un modo de mezcla.
 - [ ] Avisos previos de npm audit: next 16.3.2 (crítico) y nodemailer (alto) — tarea aparte ya sugerida.
 
 ### Para la prueba real — necesita "ship it" de Pedro (en este orden)
-1. `~/.claude/hooks/claim.sh` del esquema → `node scripts/migrate.mjs` (aplica 0077) → soltar el claim.
+1. `~/.claude/hooks/claim.sh` del esquema → `node scripts/migrate.mjs` (aplica 0078) → soltar el claim.
 2. `node scripts/setup-storage.mjs` (crea `greenlight-formatos`, privado, 25 MB, png/jpeg/webp).
 3. Pedro en Vercel › Preview: `NEXT_PUBLIC_PRISMA_FORMATOS_ENABLED=true` (requiere redeploy). Para IA además:
    `PRISMA_FORMATOS_IA=gemini` + `GEMINI_API_KEY`, y saldo en la cuenta de Gemini.

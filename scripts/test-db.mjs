@@ -2683,8 +2683,8 @@ console.log("\n▶ 0074 — vigía");
   ok("aprobada con fecha sí pasa", await db.query(`update produccion.prisma_propuestas set estado = 'aprobada', decidido_at = now() where huella = '${h}'`).then(() => true).catch(() => false));
 }
 
-// ── 0077: HÜE Prisma › Formatos — lotes + salidas ──
-console.log("\n▶ 0077 — prisma_formatos_lotes + prisma_formatos_salidas");
+// ── 0078: HÜE Prisma › Formatos — lotes + salidas ──
+console.log("\n▶ 0078 — prisma_formatos_lotes + prisma_formatos_salidas");
 {
   for (const t of ["prisma_formatos_lotes", "prisma_formatos_salidas"]) {
     eq(`${t} existe con RLS`, Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = '${t}' and c.relrowsecurity`)), 1);
