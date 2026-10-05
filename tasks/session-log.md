@@ -1957,3 +1957,29 @@ polling loops, sin zombies (harness notificó cada completado).
 
 **Pendiente:** LIVE-VERIFY de Pedro (portal auth-gated) — panel/archivo/atrás/completados. El brief f03ccc2b (greenlit
 hoy) pasa a Archivo el 2026-09-24 = prueba viva del corte por edad.
+
+## 2026-10-05 — CAMBIOS DEL CLIENTE "DESAPARECÍAN" → bandera de cancha del lead — SHIPPED (main b524f19, migración 0077 aplicada)
+**What we did:**
+1. Bug de los testers: el cliente pide cambios → no aparecían en Correcciones con pastilla, y la especialista no los veía
+   ni después de reasignársela. Causa: "cancha del lead" se DERIVABA de "existe un client_change enviado" (cualquier
+   ronda, para siempre) → asignar desde el picker no la soltaba; además `clientChangesPending` nunca se pintaba.
+   Evidencia en prod: asignaciones de Claudia 17:08 sin status_events nuevos.
+2. Fix (0077 `20261005120001`): bandera `ideas.cambios_cliente_en_lead` (ON al enviar el cliente; OFF al enrutar o salir
+   de in_corrections), `rpc_enrutar_cambios_cliente`, rpc_set_assignees enruta al entrar especialista nuevo, live refresh
+   vigila la bandera, submit sólo desde published, reenviar cierra internas + exige cortinilla, backfill acotado.
+   App: pastilla "Cambios pedidos por el cliente" (color de marca) + "Hazlos tú o asígnalos…", banner "Asignar a
+   especialista" (preselecciona, ya no mueve a En progreso), cuenta sólo la ronda actual, nada de "Por enviar" en cambios
+   del cliente, tablero/Mi Trabajo/bundle leen la bandera.
+3. Auditoría Opus del flujo completo (8 hallazgos) + reap Opus del fix (2 serios corregidos: backfill y live refresh).
+**Proof:** tsc/eslint/build ok; test:db 420 · lib 534 · sync 44. Prod: backfill = 3 de Claudia liberadas, 2 en cancha del
+lead. Preview y luego LIVE como master: 5 pastillas correctas, banner "2 cambios", Christian preseleccionado, portal
+"En cambios 5". Lógica de botones A/B: Claudia en CREDITLIMIT antes [] → ahora "Devolver a revisión".
+**Not checked:** la pantalla de un especialista (sólo tengo la sesión master). Pedir a Claudia que confirme.
+**Decisions:** Pedro: sólo lead/admin ven la tarea antes de enrutar; lead recibe aviso accionable. Merge directo a main
+porque los testers prueban en main.
+**Pick up next:** (1) confirmación de Claudia en vivo; (2) el aviso del 10-02 a Claudia (cambio del cliente) no se
+reprodujo hoy — si reaparece, revisar asignaciones de ese momento; (3) un especialista NUEVO recibe 2 avisos
+("se te asignó" + "Cambios del cliente"); (4) Mi Trabajo: pastilla sin color de marca; (5) ⚠️ la rama `prisma` (origin,
+9cc367f) trae OTRA migración etiquetada "0077" (`20261002120001_…prisma_formatos`) — no choca en el ledger (versión
+distinta) pero conviene renombrarla a 0078 antes de aplicarla; (6) al fusionar main→prisma, entra la 0077 de cambios.
+**Environment:** worktree `../greenlight-cambios-cliente` (en main) borrable; rama `fix/cambios-cliente` ya fusionada.
