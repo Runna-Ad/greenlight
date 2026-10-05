@@ -1983,3 +1983,12 @@ reprodujo hoy — si reaparece, revisar asignaciones de ese momento; (3) un espe
 9cc367f) trae OTRA migración etiquetada "0077" (`20261002120001_…prisma_formatos`) — no choca en el ledger (versión
 distinta) pero conviene renombrarla a 0078 antes de aplicarla; (6) al fusionar main→prisma, entra la 0077 de cambios.
 **Environment:** worktree `../greenlight-cambios-cliente` (en main) borrable; rama `fix/cambios-cliente` ya fusionada.
+
+## 2026-10-05 (cierre, adendo)
+- ✅ Renombrada la migración de Prisma Formatos a **0078** (`20261005120002_…`, rama prisma 7290181). No estaba aplicada
+  (ledger sin ella, tabla inexistente). Cierra el pendiente (5) de arriba. Ojo: la rama prisma necesita `npm install`
+  (dependencia nueva `fflate`) y la carpeta local está 2 commits atrás.
+- ✅ CI de main 6d7dc5b falló por GitHub ("job was not acquired by Runner", Internal server error) — no por código.
+  Re-run → verde. El merge b524f19 ya había pasado.
+- 🧹 Worktrees `greenlight-cambios-cliente` y temporal de prisma borrados; rama local fix/cambios-cliente borrada (sigue
+  en GitHub).
