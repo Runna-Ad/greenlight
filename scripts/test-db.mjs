@@ -2448,5 +2448,95 @@ console.log("\n▶ Live refresh 0062 — quién recibe el aviso de 'algo cambió
   await db.query(`delete from produccion.clients where id=$1`, [otroClient]);
 }
 
+// ── 0077 — la cancha del lead es una BANDERA con ciclo de vida (no "hubo cambios alguna vez") ──
+console.log("\n▶ 0077 — cambios del cliente: cancha del lead, enrutado y pastilla");
+{
+  await db.exec(`select set_config('produccion.notify_to_lead','',false);
+                 select set_config('produccion.acting_member','',false);
+                 select set_config('request.jwt.claims','{"role":"service_role"}',false)`);
+  const I = flIdea;
+  const m = async (name) => scalar(`select id from produccion.track_members where name=$1`, [name]);
+  const galie = await m("Galie"), mony = await m("Mony");
+  const leadM = await scalar(
+    `select id from produccion.track_members where role='lead' and active and (track='real' or 'real'=any(tracks)) limit 1`);
+  const flag = async () => scalar(`select cambios_cliente_en_lead from produccion.ideas where id=$1`, [I]);
+  const avisos = async () => (await q(
+    `select n.title, n.body, tm.name from produccion.notifications n
+       left join produccion.track_members tm on tm.id = n.recipient_member_id
+      where n.entity_id=$1`, [I]));
+  const mover = (to) => db.query(`select produccion.rpc_move_task($1,$2,true,null,'test 0077',null)`, [I, to]);
+  const enviarCliente = async (body) => {
+    await db.query(`insert into produccion.comments (idea_id, body, kind) values ($1,$2,'client_change')`, [I, body]);
+    return scalar(`select produccion.rpc_client_submit_changes($1)::text`, [I]);
+  };
+
+  // Punto de partida: lead + Galie asignados, todo lo previo resuelto, publicada.
+  await db.query(`select produccion.rpc_set_assignees($1,$2,$3::uuid[],null,null)`, [I, leadM, `{${galie}}`]);
+  await db.query(`update produccion.comments set resolved_at=now() where idea_id=$1 and resolved_at is null`, [I]);
+  await mover("published");
+  await db.query(`update produccion.ideas set published_at=coalesce(published_at,now()), deleted_at=null where id=$1`, [I]);
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [I]);
+
+  eq("cliente envía → in_corrections", await enviarCliente("Cambia el hook"), "in_corrections");
+  eq("…y prende la cancha del lead", await flag(), true);
+  let av = await avisos();
+  ok("el aviso NO va a la especialista asignada", !av.some((a) => a.name === "Galie"));
+  ok("el aviso dice qué hacer (hacerlos o asignarlos)",
+     av.length > 0 && av.every((a) => /asígnalos a un especialista/.test(a.body ?? "")));
+
+  // Cambiar SÓLO el lead (la especialista ya estaba) no enruta.
+  await db.query(`select produccion.rpc_set_assignees($1,$2,$3::uuid[],null,null)`, [I, leadM, `{${galie}}`]);
+  eq("re-guardar la misma asignación NO enruta", await flag(), true);
+
+  // EL BUG: el lead asigna una especialista NUEVA desde el picker normal → enruta.
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [I]);
+  await db.query(`select produccion.rpc_set_assignees($1,$2,$3::uuid[],$2,null)`, [I, leadM, `{${galie},${mony}}`]);
+  eq("asignar especialista nueva apaga la cancha del lead", await flag(), false);
+  eq("…y la tarea sigue En correcciones (no desaparece del portal)",
+     await scalar(`select status::text from produccion.ideas where id=$1`, [I]), "in_corrections");
+  av = await avisos();
+  ok("los especialistas reciben 'Cambios del cliente'",
+     ["Galie", "Mony"].every((n) => av.some((a) => a.name === n && /Cambios del cliente/.test(a.title))));
+  ok("el lead (actor) no se avisa a sí mismo", !av.some((a) => a.name !== "Galie" && a.name !== "Mony" && /Cambios del cliente/.test(a.title)));
+
+  // "Asignar" del banner a la MISMA persona: enruta explícito y avisa (antes: sin aviso).
+  await db.query(`update produccion.ideas set cambios_cliente_en_lead=true where id=$1`, [I]);
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [I]);
+  eq("enrutar explícito avisa a los 2 especialistas",
+     Number(await scalar(`select produccion.rpc_enrutar_cambios_cliente($1,$2)`, [I, leadM])), 2);
+  eq("…y apaga la bandera", await flag(), false);
+  eq("enrutar sin bandera es no-op", Number(await scalar(`select produccion.rpc_enrutar_cambios_cliente($1,$2)`, [I, leadM])), 0);
+
+  // Salir de in_corrections por cualquier camino apaga la bandera.
+  await db.query(`update produccion.ideas set cambios_cliente_en_lead=true where id=$1`, [I]);
+  await mover("under_review");
+  eq("salir de in_corrections apaga la bandera", await flag(), false);
+
+  // Ronda INTERNA posterior: la tarea con historial de cliente ya NO se esconde.
+  await db.query(`insert into produccion.comments (idea_id, body, kind, ronda) values ($1,'interno','correction_request',
+                    produccion.correction_next_round($1))`, [I]);
+  await scalar(`select produccion.rpc_task_send_corrections($1,null,null)`, [I]);
+  eq("ronda interna después de una del cliente: NO es cancha del lead", await flag(), false);
+
+  // Reenviar al cliente cierra TODO lo abierto (cliente + internas).
+  await db.query(`update produccion.ideas set cambios_cliente_en_lead=true where id=$1`, [I]);
+  eq("reenviar → published", await scalar(`select produccion.rpc_lead_reenvia_cliente($1,null,null)::text`, [I]), "published");
+  eq("reenviar resolvió también la corrección interna abierta",
+     Number(await scalar(`select count(*) from produccion.comments where idea_id=$1 and resolved_at is null
+       and (kind='correction_request' or ronda is not null)`, [I])), 0);
+  eq("y la bandera queda apagada", await flag(), false);
+
+  // El cliente ya no puede "enviar" fuera de published (pestaña vieja).
+  await mover("delivered");
+  await db.query(`insert into produccion.comments (idea_id, body, kind) values ($1,'tarde','client_change')`, [I]);
+  let rechazado = false;
+  try { await scalar(`select produccion.rpc_client_submit_changes($1)`, [I]); } catch { rechazado = true; }
+  ok("enviar cambios con la pieza fuera de published se rechaza", rechazado);
+  ok("…y no estampa ronda al borrador",
+     Number(await scalar(`select count(*) from produccion.comments where idea_id=$1 and body='tarde' and ronda is null`, [I])) === 1);
+  await db.query(`delete from produccion.comments where idea_id=$1 and body='tarde'`, [I]);
+  await db.exec(`select set_config('request.jwt.claims','',false)`);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

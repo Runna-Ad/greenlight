@@ -79,7 +79,7 @@ export function PanelCorrecciones() {
   // especialista DEVUELVE la tarea a revisión y hay cambios ATENDIDOS por confirmar. El
   // mensaje de "borrador" y ocultar Confirmar/H.Ü.E sólo aplica cuando de verdad es una
   // ronda nueva sin nada enviado (todas OPEN). (Pedro 2026-09-03)
-  const soloBorrador = ctx.borrador && ctx.correcciones.every((c) => c.estado === "open");
+  const soloBorrador = ctx.borrador && ctx.correcciones.every((c) => c.estado === "open" && !c.cliente);
 
   return (
     <aside className="rounded-xl border border-border bg-card shadow-sm">
@@ -209,7 +209,7 @@ export function PanelCorrecciones() {
                           className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
                           style={{ background: PILL[c.estado] }}
                         >
-                          {ctx.borrador && c.estado === "open" ? "Por enviar" : ETIQUETA[c.estado]}
+                          {ctx.borrador && c.estado === "open" && !c.cliente ? "Por enviar" : ETIQUETA[c.estado]}
                         </span>
                         {/* Cualquier tarjeta expandida se puede volver a compactar. */}
                         <button
@@ -278,7 +278,7 @@ export function PanelCorrecciones() {
                             confirma aunque la tarea esté de nuevo en under_review tras el retorno del
                             especialista — antes el gate `!borrador` (=status under_review) lo escondía
                             justo cuando el lead necesitaba confirmarlo; sólo salía en el hover. (Pedro 2026-09-03) */}
-                        {ctx.esRevisor && c.estado !== "closed" && !(ctx.borrador && c.estado === "open") && (
+                        {ctx.esRevisor && c.estado !== "closed" && !(ctx.borrador && c.estado === "open" && !c.cliente) && (
                           <BtnAccion disabled={ctx.pendiente} tone="go" onClick={() => ctx.marcar(c.id, "closed")}>
                             Confirmar
                           </BtnAccion>
@@ -368,7 +368,7 @@ function TarjetaCompacta({
         className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
         style={{ background: PILL[c.estado] }}
       >
-        {borrador && c.estado === "open" ? "Por enviar" : ETIQUETA[c.estado]}
+        {borrador && c.estado === "open" && !c.cliente ? "Por enviar" : ETIQUETA[c.estado]}
       </span>
       <ChevronDown className="size-3.5 -rotate-90 text-muted-foreground" />
     </button>

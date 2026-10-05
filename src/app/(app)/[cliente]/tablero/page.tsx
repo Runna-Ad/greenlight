@@ -3,7 +3,7 @@ import { RefreshCw, Lock, LayoutGrid } from "lucide-react";
 import { ROLE_LABEL, canSee, canAssign, type ViewRole } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
-import { ideasConCambiosDelCliente } from "@/lib/cambios-pendientes";
+import { ideasConCambiosDelCliente, ideasEnRondaDelCliente } from "@/lib/cambios-pendientes";
 import { getSoy, type Soy } from "@/lib/soy";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  * A CARD is one sheet row — one unit of work, one set of people, one status.
  * Its Tamaño × Plataforma files are counted inside it, never split into cards.
  */
-type BoardData = { tasks: Task[]; members: Member[]; briefs: BriefOption[] };
+type BoardData = { tasks: Task[]; members: Member[]; briefs: BriefOption[]; marcaColor: string | null };
 
 /**
  * Qué tareas ve cada rol en el tablero. Espeja el gate de ESCRITURA
@@ -53,11 +53,11 @@ async function loadBoard(
 
   const { data: client } = await db
     .from("clients")
-    .select("id")
+    .select("id, brand_color")
     .eq("slug", clienteSlug)
-    .maybeSingle();
+    .maybeSingle<{ id: string; brand_color: string | null }>();
 
-  const empty: BoardData = { tasks: [], members: [], briefs: [] };
+  const empty: BoardData = { tasks: [], members: [], briefs: [], marcaColor: null };
   if (!client) return empty;
 
   // board_tasks already carries the people and the file count (migration 0008),
@@ -96,12 +96,19 @@ async function loadBoard(
   // Anota qué tareas en in_corrections tienen cambios del CLIENTE sin resolver (cancha
   // del lead): el especialista no debe verlas. Se calcula ANTES de filtrar por rol para
   // que visibleParaRol pueda excluirlas del payload RSC del creative.
+  // También qué tareas trabajan, en esta ronda, cambios pedidos por el CLIENTE (pastilla).
   let base = (tasks ?? []) as Task[];
-  const conCambios = await ideasConCambiosDelCliente(
-    db,
-    base.filter((t) => t.status === "in_corrections").map((t) => t.id),
-  );
-  if (conCambios.size) base = base.map((t) => (conCambios.has(t.id) ? { ...t, clientChangesPending: true } : t));
+  const enCorr = base.filter((t) => t.status === "in_corrections").map((t) => t.id);
+  const [conCambios, rondaCliente] = await Promise.all([
+    ideasConCambiosDelCliente(db, enCorr),
+    ideasEnRondaDelCliente(db, enCorr),
+  ]);
+  if (conCambios.size || rondaCliente.size)
+    base = base.map((t) =>
+      conCambios.has(t.id) || rondaCliente.has(t.id)
+        ? { ...t, clientChangesPending: conCambios.has(t.id), cambiosDelCliente: rondaCliente.has(t.id) }
+        : t,
+    );
 
   // La vista board_tasks no expone delivered_at; lo traemos SÓLO para las tareas
   // delivered (para que la columna Greenlit muestre las de ≤7 días). Consulta chica
@@ -128,6 +135,7 @@ async function loadBoard(
     tasks: conFecha,
     members: members ?? [],
     briefs: (briefs ?? []).map((b) => ({ id: b.id, title: b.title, tab: b.source_tab })),
+    marcaColor: client.brand_color,
   };
 }
 
@@ -196,6 +204,7 @@ export default async function TableroPage({
           briefs={data?.briefs ?? []}
           role={role}
           soyId={soy?.id ?? null}
+          marcaColor={data?.marcaColor ?? null}
         />
       )}
     </div>

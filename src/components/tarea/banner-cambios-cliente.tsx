@@ -17,23 +17,30 @@ type Pool = { id: string; name: string; color: string };
  * ve esta tarea (visibilidad). El lead decide, sin salir de la tarea:
  *   · "Enviar a cliente" → él ya hizo los cambios (editables en in_corrections) y
  *     reenvía DIRECTO (reenviarACliente → rpc_lead_reenvia_cliente). Sin ronda de revisión.
- *   · "Reasignar" → elige especialista(s) y la manda a EN PROGRESO (reasignarCambios) →
- *     el especialista la trabaja y vuelve por el flujo normal.
+ *   · "Asignar" → elige especialista(s) (vienen marcados los que ya están) y se los
+ *     PASA (reasignarCambios): la tarea sigue En correcciones, el especialista la ve con
+ *     los cambios del cliente en el panel, recibe el aviso, y la devuelve a revisión.
  */
 export function BannerCambiosCliente({
   ideaId,
   nCambios,
   leadActualId,
   especialistasPool,
+  especialistasActuales,
 }: {
   ideaId: string;
   nCambios: number;
   leadActualId: string | null;
   especialistasPool: Pool[];
+  /** Los especialistas YA asignados: vienen marcados (el caso común es pasárselo a quien
+   *  ya la trabajaba). Antes el picker abría vacío. */
+  especialistasActuales: string[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [esp, setEsp] = useState<Set<string>>(new Set());
+  const [esp, setEsp] = useState<Set<string>>(
+    () => new Set(especialistasActuales.filter((id) => especialistasPool.some((e) => e.id === id))),
+  );
 
   const toggleEsp = (id: string) =>
     setEsp((prev) => {
@@ -61,7 +68,7 @@ export function BannerCambiosCliente({
         toast.error(res.error ?? "No se pudo reasignar.");
         return;
       }
-      toast.success("Reasignada — el especialista ya tiene el aviso.");
+      toast.success("Asignada — el especialista ya tiene el aviso.");
       router.refresh();
     });
 
@@ -75,7 +82,7 @@ export function BannerCambiosCliente({
               El cliente pidió {nCambios} cambio{nCambios === 1 ? "" : "s"}
             </p>
             <p className="text-xs text-muted-foreground">
-              Hazlos tú y reenvía, o reasígnalos a un especialista para que los trabaje.
+              Hazlos tú y reenvía, o asígnalos a un especialista para que los trabaje.
             </p>
           </div>
         </div>
@@ -83,7 +90,7 @@ export function BannerCambiosCliente({
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" disabled={pending}>
-                <UserPlus className="size-4" /> Reasignar
+                <UserPlus className="size-4" /> Asignar a especialista
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-64 p-2">
@@ -121,7 +128,7 @@ export function BannerCambiosCliente({
                 disabled={pending || esp.size === 0}
                 onClick={reasignar}
               >
-                Reasignar y mandar a trabajar
+                Asignar y avisar
               </Button>
             </PopoverContent>
           </Popover>

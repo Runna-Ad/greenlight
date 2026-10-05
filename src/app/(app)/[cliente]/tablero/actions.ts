@@ -395,7 +395,7 @@ export async function enviarClienteSolo(ideaId: string): Promise<ActionResult> {
 // Cuando el cliente pide cambios, la tarea es del LEAD (el especialista no la ve hasta
 // que se reasigne — eso lo gobierna task-actions + la visibilidad). El lead decide:
 //   · HACERLOS ÉL → edita en in_corrections (ya editable) y reenvía directo → reenviarACliente.
-//   · REASIGNAR → fija especialista y la manda a EN PROGRESO → reasignarCambios.
+//   · ASIGNAR → fija especialista(s) y se los pasa → reasignarCambios.
 
 /** El lead APLICÓ los cambios del cliente él mismo y reenvía la pieza directo (sin
  *  ronda de revisión, él es el revisor). Sólo lead+; desde in_corrections. */
@@ -407,6 +407,17 @@ export async function reenviarACliente(ideaId: string): Promise<ActionResult> {
   if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
+  // Sólo mientras los cambios del cliente esperan al lead: si ya los enrutó a un
+  // especialista, la pieza vuelve por revisión, no se reenvía saltándose su ronda.
+  const { data: idea } = await db
+    .from("ideas").select("cambios_cliente_en_lead").eq("id", ideaId)
+    .maybeSingle<{ cambios_cliente_en_lead: boolean }>();
+  if (!idea?.cambios_cliente_en_lead) {
+    return { ok: false, error: "Estos cambios ya están con un especialista: la pieza vuelve por revisión." };
+  }
+  // Misma puerta legal que "Mandar a revisión" y que el envío directo del lead-solo: sin
+  // revisión de por medio, aquí es el único punto antes de que el cliente la vuelva a ver.
+  if (await faltaCortinilla(db, ideaId)) return { ok: false, error: MSG_FALTA_LEGAL };
   const { error } = await db.rpc("rpc_lead_reenvia_cliente", {
     p_idea_id: ideaId,
     p_actor_member: soyId,
@@ -419,9 +430,12 @@ export async function reenviarACliente(ideaId: string): Promise<ActionResult> {
   return { ok: true };
 }
 
-/** El lead REASIGNA los cambios del cliente a un especialista: fija la asignación
- *  (lead + especialistas, RE-validada en asignarTarea) y mueve la tarea a EN PROGRESO
- *  para que el especialista la trabaje. Exige al menos un especialista. */
+/** El lead le PASA los cambios del cliente a un especialista: fija la asignación (lead +
+ *  especialistas, RE-validada en asignarTarea) y ENRUTA (0077: apaga la cancha del lead y
+ *  avisa a los especialistas — también si es la misma persona que ya estaba, que antes no
+ *  recibía nada). La tarea se queda En correcciones: el especialista ve los cambios del
+ *  cliente en su panel, los atiende y la devuelve a revisión, como cualquier corrección.
+ *  Antes la movía a En progreso → la pieza desaparecía del portal del cliente. */
 export async function reasignarCambios(
   ideaId: string,
   leadId: string | null,
@@ -436,8 +450,11 @@ export async function reasignarCambios(
 
   const { soyId } = await context();
   const db = supabaseAdmin();
-  // in_corrections → in_progress (misma RPC que "Retomar"): ahora es del especialista.
-  const { error } = await db.rpc("rpc_task_start", { p_idea_id: ideaId, p_actor_member: soyId });
+  // Idempotente: si asignarTarea ya enrutó (entró alguien nuevo), esto no hace nada más.
+  const { error } = await db.rpc("rpc_enrutar_cambios_cliente", {
+    p_idea_id: ideaId,
+    p_actor_member: soyId,
+  });
   if (error) return { ok: false, error: error.message };
 
   await revalidateFor(db, ideaId);

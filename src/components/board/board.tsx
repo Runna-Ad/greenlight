@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useMemo, useState, useTransition } from "react";
+import { memo, useCallback, useMemo, useState, useTransition, type CSSProperties } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -26,7 +26,7 @@ import {
   canMove,
   type AssetStatus,
 } from "@/lib/brand";
-import { moveTask, asignarTarea } from "@/app/(app)/[cliente]/tablero/actions";
+import { moveTask, asignarTarea, reasignarCambios } from "@/app/(app)/[cliente]/tablero/actions";
 import { transicionRequiereLead } from "@/lib/task-actions";
 import { esGreenlitReciente as esGreenlitRecienteFecha } from "@/lib/bundle";
 import {
@@ -88,6 +88,9 @@ export type Task = {
   /** in_corrections con cambios del cliente sin resolver — cancha del lead; se oculta al
    *  especialista y en la tarjeta se marca "Sin especialista"/aviso al lead. */
   clientChangesPending?: boolean;
+  /** La ronda ACTUAL de correcciones trae cambios pedidos por el CLIENTE → pastilla
+   *  "Cambios pedidos por el cliente" (lead antes de enrutar, especialista después). */
+  cambiosDelCliente?: boolean;
 };
 
 export type BriefOption = { id: string; title: string | null; tab: string | null };
@@ -145,6 +148,7 @@ export function Board({
   briefs,
   role = DEFAULT_ROLE,
   soyId = null,
+  marcaColor = null,
 }: {
   cliente: string;
   tasks: Task[];
@@ -153,6 +157,9 @@ export function Board({
   role?: ViewRole;
   /** Quién dice ser quien mira, para saber cuáles son "sus" tareas. */
   soyId?: string | null;
+  /** Color de marca del cliente (clients.brand_color): pinta la pastilla de cambios del
+   *  cliente, igual que el badge "Cliente" de la tarea. Viaja como variable CSS. */
+  marcaColor?: string | null;
 }) {
   const mayMove = canMoveStatus(role);
   const mayOverride = canOverrideStatus(role);
@@ -300,7 +307,13 @@ export function Board({
       );
 
       startTransition(async () => {
-        const res = await asignarTarea(task.id, leadId, especialistaIds);
+        // Cambios del cliente esperando al lead: asignar especialista(s) desde el tablero
+        // ES pasárselos (aunque sea quien ya estaba) — misma acción que "Asignar" del banner.
+        // Con asignarTarea a secas, re-guardar a la misma persona no la enrutaba.
+        const res =
+          task.clientChangesPending && especialistaIds.length
+            ? await reasignarCambios(task.id, leadId, especialistaIds)
+            : await asignarTarea(task.id, leadId, especialistaIds);
         if (!res.ok) {
           setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...before } : t)));
           toast.error(res.error ?? "No se pudo guardar la asignación.");
@@ -317,7 +330,7 @@ export function Board({
     : 0;
 
   return (
-    <div>
+    <div style={{ "--marca-cliente": marcaColor || "var(--primary)" } as CSSProperties}>
       {sinLeadN > 0 && (
         <div className="mb-3 flex items-center gap-2 rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-[13px] text-status-warning">
           <AlertTriangle className="size-4 shrink-0" />
@@ -380,7 +393,7 @@ export function Board({
         </div>
 
         <DragOverlay dropAnimation={null}>
-          {dragging ? <CardBody cliente={cliente} task={dragging} dragging /> : null}
+          {dragging ? <CardBody cliente={cliente} task={dragging} mayOverride={mayOverride} dragging /> : null}
         </DragOverlay>
       </DndContext>
     </div>
@@ -633,11 +646,28 @@ const CardBody = memo(function CardBody({
         aria-label={`Abrir ${task.naming_base ?? "tarea"}`}
         className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
-      {enCorrecciones && (
+      {enCorrecciones && task.cambiosDelCliente ? (
+        // Cambios del CLIENTE: pastilla en el color de marca (como el badge "Cliente" de la
+        // tarea). Mientras esperan al lead, dice qué toca: hacerlos o asignarlos.
+        <p
+          className="mb-1.5 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          style={{
+            background: "color-mix(in srgb, var(--marca-cliente) 16%, transparent)",
+            color: "color-mix(in srgb, var(--marca-cliente) 82%, #000)",
+          }}
+        >
+          Cambios pedidos por el cliente
+          {task.clientChangesPending && mayOverride && (
+            <span className="block font-medium normal-case tracking-normal">
+              Hazlos tú o asígnalos a un especialista
+            </span>
+          )}
+        </p>
+      ) : enCorrecciones ? (
         <p className="mb-1.5 rounded bg-[color-mix(in_srgb,var(--status-corrections)_12%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-status-corrections">
           Cambios pedidos
         </p>
-      )}
+      ) : null}
       <div className="flex items-center gap-1.5">
         {/* Only the handle starts a drag, so the chips below stay clickable. */}
         <button
