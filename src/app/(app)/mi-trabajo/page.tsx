@@ -3,7 +3,7 @@ import { UserRound, Lock } from "lucide-react";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getSoy } from "@/lib/soy";
 import { getViewAs } from "@/lib/view-as";
-import { ideasConCambiosDelCliente } from "@/lib/cambios-pendientes";
+import { ideasConCambiosDelCliente, ideasEnRondaDelCliente } from "@/lib/cambios-pendientes";
 import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { STATUS_LABEL, STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
 import { MyTasks, type MyTask } from "@/components/board/my-tasks";
@@ -56,13 +56,18 @@ export default async function MiTrabajoPage() {
     // Cambios del CLIENTE son cancha del LEAD: para un especialista (creative), una
     // tarea en in_corrections con cambios del cliente sin resolver NO es suya hasta que
     // se la reasignen — fuera de su lista. El lead SÍ la ve (se marca "Cambios del cliente").
-    const conCambios = await ideasConCambiosDelCliente(
-      db,
-      tasks.filter((t) => t.status === "in_corrections").map((t) => t.id),
-    );
-    if (conCambios.size) {
+    const enCorr = tasks.filter((t) => t.status === "in_corrections").map((t) => t.id);
+    const [conCambios, rondaCliente] = await Promise.all([
+      ideasConCambiosDelCliente(db, enCorr),
+      ideasEnRondaDelCliente(db, enCorr),
+    ]);
+    if (conCambios.size || rondaCliente.size) {
       tasks = tasks
-        .map((t) => ({ ...t, clientChangesPending: conCambios.has(t.id) }))
+        .map((t) => ({
+          ...t,
+          clientChangesPending: conCambios.has(t.id),
+          cambiosDelCliente: rondaCliente.has(t.id),
+        }))
         .filter((t) => !(role === "creative" && t.clientChangesPending));
     }
   }

@@ -29,6 +29,8 @@ export type MyTask = {
   /** in_corrections con cambios del cliente sin resolver — cancha del lead. El
    *  especialista no llega aquí (se filtra); al lead se le marca "Cambios del cliente". */
   clientChangesPending?: boolean;
+  /** La ronda actual trae cambios pedidos por el CLIENTE (pastilla, igual que el tablero). */
+  cambiosDelCliente?: boolean;
 };
 
 /**
@@ -118,6 +120,11 @@ export function MyTasks({
                 {t.marca && (
                   <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
                     {t.marca}
+                  </span>
+                )}
+                {enCorrecciones && t.cambiosDelCliente && (
+                  <span className="rounded bg-[color-mix(in_srgb,var(--status-corrections)_14%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-status-corrections">
+                    Cambios pedidos por el cliente
                   </span>
                 )}
                 {t.tipo_asset && (

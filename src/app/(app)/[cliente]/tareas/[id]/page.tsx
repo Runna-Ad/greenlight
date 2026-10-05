@@ -47,6 +47,7 @@ type Idea = {
   entrega_num: string | null; entrega_final: string | null; entrega_url: string | null;
   trend: string | null; notas: string | null; legales_libres: string | null; nota_guion: string | null;
   comentarios_creativo: string | null; peloteo_raw: string | null; selling_points: string[] | null;
+  cambios_cliente_en_lead: boolean;
 };
 
 export default async function TareaPage({
@@ -68,7 +69,7 @@ export default async function TareaPage({
   const { data: idea } = await db
     .from("ideas")
     .select(
-      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo, peloteo_raw, selling_points",
+      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo, peloteo_raw, selling_points, cambios_cliente_en_lead",
     )
     .eq("id", id)
     .is("deleted_at", null) // en la papelera (0057) = 404; se restaura desde /admin
@@ -442,12 +443,17 @@ export default async function TareaPage({
     : "Notas de guión (p. ej. # de outfits, tono, continuidad)…";
 
   // La tarea es cancha del LEAD (él edita y reenvía, o reasigna; el especialista no la
-  // retoma) mientras haya cambios del cliente ENVIADOS esta ronda (ronda != null) — sin
-  // importar si ya los confirmó. La cancha vuelve al enviar/reasignar (cambia el status),
-  // NO al confirmar cada cambio: antes, confirmar el ÚLTIMO ponía la cuenta en 0 y hacía
-  // DESAPARECER la barra "Enviar a cliente" justo cuando el lead iba a enviar. (Pedro 2026-09-03)
-  const cambiosClienteRonda = (cambiosCliente ?? []).filter((c) => c.ronda != null);
-  const clientChangesPending = idea.status === "in_corrections" && cambiosClienteRonda.length > 0;
+  // retoma) mientras la bandera de 0077 esté prendida: la prende el envío del cliente y la
+  // apagan el enrutado (asignar especialista / Reasignar) o salir de in_corrections. NO la
+  // apaga confirmar cada cambio: antes, confirmar el ÚLTIMO hacía DESAPARECER la barra
+  // "Enviar a cliente" justo cuando el lead iba a enviar. (Pedro 2026-09-03)
+  // Antes se derivaba de "hay client_change enviados" de CUALQUIER ronda → la tarea se
+  // quedaba escondida al especialista aunque el lead ya se la hubiera asignado. (2026-10-05)
+  const clientChangesPending = idea.status === "in_corrections" && idea.cambios_cliente_en_lead;
+  // El banner cuenta SÓLO el lote actual (la ronda más alta del cliente), no el historial:
+  // "El cliente pidió 5 cambios" sumaba la ronda 1 ya resuelta con la 2.
+  const rondaClienteActual = Math.max(0, ...(cambiosCliente ?? []).map((c) => c.ronda ?? 0));
+  const cambiosClienteRonda = (cambiosCliente ?? []).filter((c) => c.ronda === rondaClienteActual);
   // El lead responsable ACTUAL (para conservarlo al reasignar).
   const leadActualId = personas.find((p) => p.es_lead)?.id ?? null;
 
@@ -519,6 +525,7 @@ export default async function TareaPage({
               nCambios={cambiosClienteRonda.length}
               leadActualId={leadActualId}
               especialistasPool={especialistasPool}
+              especialistasActuales={personas.filter((p) => !p.es_lead).map((p) => p.id)}
             />
           )}
 

@@ -142,6 +142,8 @@ export type Idea = {
   concepto: string | null;
   comunicacion: string | null;
   selling_points: string[];
+  /** El cliente envió cambios y el lead aún no los enruta (0077). */
+  cambios_cliente_en_lead: boolean;
   comentarios_creativo: string | null;
   comentarios_produccion: string | null;
   comentarios_diseno: string | null;
