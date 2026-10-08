@@ -1,5 +1,20 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-10-08 — MASTER VE TODO (rama `claude/sharp-swirles-54ddbf`, de main · SIN migración · preview pushed)
+PEDRO_OVERRIDE: el Master Builder ve TODAS las acciones de la tarea (doer + revisor), asignado o no. Lead/admin igual que antes.
+- [x] `veTodo`/`haceDeDoer` en src/lib/task-actions.ts → actionsFor (tablero/Mi Trabajo) + AccionesTarea + panel de correcciones ("Marcar atendido").
+- [x] Auditoría server: startTask/submitForReview/moveTask/devolverARevision/setEstadoCorreccion/revisarOrtografia aceptan master
+      no asignado; RPC de verbo y triggers no miran asignación → NO hace falta migración (security-reviewer Opus: limpio).
+- [x] Tests: +16 casos master/admin en test-lib (fallan contra el código viejo, pasan con el nuevo). npm test exit 0 (1094 ✓, 0 ✗), tsc, eslint, next build ✓.
+- [ ] Decisiones de Pedro (ver abajo) + LIVE-VERIFY como master en el preview.
+- [ ] SHIP (merge a main) sólo con "ship it".
+Decisiones abiertas: (1) Retomar/Devolver cuando hay cambios del CLIENTE pendientes (hoy: sólo banner del lead; un Retomar apagaría la
+bandera sin enrutar); (2) ¿confirmación antes de que el master mande a revisión una tarea ajena?; (3) master asignado solo en progreso ve
+"Enviar a cliente" + "Mandar a revisión" (este último secundario); (4) "Marcar atendido" oculto para master en under_review (borrador).
+Deuda (pre-existente, NO de este cambio): devolverARevision/startTask no chequean `cambios_cliente_en_lead` en el servidor;
+setEstadoCorreccion no filtra por `kind`; las RPC start/submit no pasan p_actor (auditoría sin actor si el master no tiene fila en track_members);
+Mi Trabajo no pasa hasSpecialist y su "Mandar a revisión" inline no corre H.Ü.E (también para especialistas).
+
 ## 🟢 2026-09-08 — H.Ü.E LEE REFERENCIAS · Tier 2: TikTok (caption) + medición (rama `hue-referencias-tier2`, SIN push · SIN migración)
 Pedro: "análisis de referencias en video". Evaluación (challenge): el plan original era Whisper (audio-only) → se voltéo a
 "lo más barato con más señal primero" y Pedro aceptó: **Step 1 TikTok caption (gratis, in-house, sin infra) → Step 2 medir →
