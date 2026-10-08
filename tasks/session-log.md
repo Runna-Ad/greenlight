@@ -1992,3 +1992,24 @@ distinta) pero conviene renombrarla a 0078 antes de aplicarla; (6) al fusionar m
   Re-run → verde. El merge b524f19 ya había pasado.
 - 🧹 Worktrees `greenlight-cambios-cliente` y temporal de prisma borrados; rama local fix/cambios-cliente borrada (sigue
   en GitHub).
+
+## 2026-10-08 — MASTER VE TODO + cancha del lead en servidor + H.Ü.E en arrastre/Mi Trabajo — SHIPPED (main 29c6e81, SIN migración)
+**What we did:**
+1. PEDRO_OVERRIDE: el Master Builder ve TODAS las acciones (Empezar / Mandar a revisión / Retomar / Devolver / Marcar atendido) además
+   de las de revisor, asignado o no. Fuente única `veTodo`/`haceDeDoer` (src/lib/task-actions.ts). Lead/admin sin cambio.
+2. Auditoría server: server actions + RPC de verbo ya aceptaban al master no asignado → no hizo falta migración.
+3. Mi Trabajo: "Mandar a revisión" ya no es inline → abre la tarea (corre H.Ü.E). Tablero: arrastrar/Mover a En revisión
+   (desde En progreso/Correcciones) abre la tarea para especialista/master; lead/admin siguen moviendo directo.
+4. Cancha del lead (cambios del cliente) gateada en el SERVIDOR en las 4 puertas: startTask, submitForReview, devolverARevision, moveTask.
+5. setEstadoCorreccion filtra por kind (sólo correcciones) y avisa si no tocó nada.
+**Proof:** npm test exit 0 (1094 ✓ / 0 ✗; +16 casos master/admin que fallan contra el código viejo), tsc, eslint, next build ✓.
+2 security reviews (Opus) — la 2ª cazó la 4ª puerta (submitForReview). Preview como master: botones por estado ✓, arrastre abrió la
+tarea sin moverla ✓, diálogo H.Ü.E con 4 sugerencias ✓ (Cancelar). Producción: Vercel success + CI success; LIVE como master:
+Empezar en APPOZOLESEPT ✓, Mandar a revisión en SPAPVOYSCRIPT5ONEMANINTRO ✓, consola sin errores.
+**Decisions (Pedro):** sin Retomar con cambios del cliente (banner del lead), sin confirmación al mover tareas ajenas, "Marcar atendido"
+oculto en borradores. Lead/admin: arrastre directo (su tarea no tiene "Mandar a revisión").
+**Not checked:** pantalla de un especialista en vivo (sólo sesión master); el gate de servidor de la cancha del lead (requiere pestaña vieja de especialista).
+**Pick up next:** deuda en todo.md — regla de la cancha también en rpc_move_task (migración), p_actor en RPC start/submit,
+H.Ü.E es chequeo del navegador (advisory). SPAPVOYSCRIPT5ONEMANINTRO tiene 4 typos reales (efectibo, acorde, conplicaciones, solisita).
+Copy "Acciones de Master Builder" en la variante prominente de AccionesTarea = código muerto.
+**Environment:** worktree con `npm ci` propio (node_modules real, ver lesson worktree+Turbopack). Rama claude/sharp-swirles-54ddbf ya fusionada.
