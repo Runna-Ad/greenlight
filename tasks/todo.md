@@ -6,7 +6,11 @@ PEDRO_OVERRIDE: el Master Builder ve TODAS las acciones de la tarea (doer + revi
 - [x] Auditoría server: startTask/submitForReview/moveTask/devolverARevision/setEstadoCorreccion/revisarOrtografia aceptan master
       no asignado; RPC de verbo y triggers no miran asignación → NO hace falta migración (security-reviewer Opus: limpio).
 - [x] Tests: +16 casos master/admin en test-lib (fallan contra el código viejo, pasan con el nuevo). npm test exit 0 (1094 ✓, 0 ✗), tsc, eslint, next build ✓.
-- [ ] Decisiones de Pedro (ver abajo) + LIVE-VERIFY como master en el preview.
+- [x] Decisiones de Pedro (2026-10-08): sin Retomar con cambios del cliente, sin confirmación, "Marcar atendido" oculto en borradores.
+- [x] LIVE-VERIFY como master (preview 144478a, DiDi): Empezar en tarea ajena ✓, Mandar a revisión ✓, Aprobar ✓, Devolver + Marcar atendido ✓,
+      cambios del cliente → banner del lead ✓. Arrastre de SPAPVOYSCRIPT5ONEMANINTRO a En revisión → abrió la tarea, siguió En progreso ✓.
+      "Mandar a revisión" → diálogo H.Ü.E con 4 sugerencias ✓ → Cancelar (nada movido; las 4 quedaron como "ignoradas" en la estadística de H.Ü.E).
+      Nota: el copy "Acciones de Master Builder" vive en la variante "prominente" de AccionesTarea, que ninguna pantalla usa (código muerto, inofensivo).
 - [ ] SHIP (merge a main) sólo con "ship it".
 Decisiones abiertas: (1) Retomar/Devolver cuando hay cambios del CLIENTE pendientes (hoy: sólo banner del lead; un Retomar apagaría la
 bandera sin enrutar); (2) ¿confirmación antes de que el master mande a revisión una tarea ajena?; (3) master asignado solo en progreso ve
