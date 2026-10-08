@@ -81,8 +81,13 @@ export function MyTasks({
         const enCorrecciones = t.status === "in_corrections";
         // Las fases de CORRECCIONES (especialista) y REVISIÓN (lead) se trabajan dentro
         // de la tarea — la fila la abre, sin botón inline que difiera del task page. (reap S5/I3)
+        // "Mandar a revisión" TAMBIÉN se hace dentro: ahí corre el corrector de H.Ü.E (y el
+        // aviso de cortinilla) antes de soltar la tarea. El botón inline se lo saltaba —
+        // mandaba sin revisar ortografía, para todos (Pedro 2026-10-08).
+        const mandaARevision = acciones.some((a) => a.verb === "submit_review");
         const necesitaContexto =
-          (t.status === "in_corrections" || t.status === "under_review") && acciones.length > 0;
+          ((t.status === "in_corrections" || t.status === "under_review") && acciones.length > 0) ||
+          mandaARevision;
 
         return (
           <li
@@ -152,7 +157,11 @@ export function MyTasks({
                 // divergía del task page (Retomar vs Devolver; Aprobar-con-correcciones-
                 // abiertas). Cue con pointer-events-none → el clic cae al link de la fila. (reap S5/I3)
                 <span className="pointer-events-none text-[11px] font-medium text-primary">
-                  {t.status === "under_review" ? "Revisar →" : "Abrir para corregir →"}
+                  {t.status === "under_review"
+                    ? "Revisar →"
+                    : mandaARevision
+                      ? "Abrir para mandar a revisión →"
+                      : "Abrir para corregir →"}
                 </span>
               ) : (
                 <>

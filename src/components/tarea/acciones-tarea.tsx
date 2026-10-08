@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Send, Check, RotateCcw, PlayCircle, CornerUpLeft } from "lucide-react";
 import { toast } from "sonner";
 
-import { actionsFor, waitingLabel, type TaskContext, type TaskVerb } from "@/lib/task-actions";
+import { actionsFor, haceDeDoer, veTodo, waitingLabel, type TaskContext, type TaskVerb } from "@/lib/task-actions";
 import type { AssetStatus } from "@/lib/brand";
 import { canOverrideStatus } from "@/lib/roles";
 import { EJECUTA_VERBO, TOAST_VERBO } from "@/components/board/verbos";
@@ -28,7 +28,7 @@ import { Button } from "@/components/ui/button";
 /** Los verbos del workspace: los de flujo + los dos de correcciones localizadas + el envío
  *  directo del lead-solo (sin especialista → él es el revisor, publica sin ronda). */
 type WorkspaceVerb = TaskVerb | "mandar_correcciones" | "devolver" | "send_client_solo";
-type Tono = "primary" | "danger";
+type Tono = "primary" | "danger" | "secondary";
 type Accion = { verb: WorkspaceVerb; label: string; tone: Tono };
 
 const ICONO: Record<WorkspaceVerb, typeof Send> = {
@@ -199,6 +199,8 @@ export function AccionesTarea({
   if (!acciones.length && !espera) return null;
 
   const prominente = variante === "prominente";
+  // El master viendo una tarea que no tiene asignada: el copy no debe sonar a "tu tarea".
+  const ajena = veTodo(ctx.role) && !ctx.isAssignee;
 
   const botones = acciones.map((a) => {
     const Icono = ICONO[a.verb];
@@ -207,7 +209,7 @@ export function AccionesTarea({
         key={a.verb}
         size={prominente ? "lg" : "default"}
         disabled={pending}
-        variant={a.tone === "danger" ? "destructive" : "default"}
+        variant={a.tone === "danger" ? "destructive" : a.tone === "secondary" ? "outline" : "default"}
         onClick={() => ejecutar(a)}
         className={cn(
           "gap-2 font-semibold shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md",
@@ -228,11 +230,13 @@ export function AccionesTarea({
         <div className="flex flex-col items-center gap-2 rounded-xl border border-primary/20 bg-gradient-to-r from-primary/[0.07] to-secondary/40 px-4 py-5 shadow-sm sm:flex-row sm:justify-between">
           <div className="text-center sm:text-left">
             <p className="text-sm font-semibold text-foreground">
-              {espera ? espera : "¿Lista esta tarea?"}
+              {espera ? espera : ajena ? "Acciones de Master Builder" : "¿Lista esta tarea?"}
             </p>
             {!espera && (
               <p className="text-xs text-muted-foreground">
-                Cuando termines, mándala al siguiente paso desde aquí.
+                {ajena
+                  ? "No es tuya: puedes moverla al siguiente paso por quien la trabaja."
+                  : "Cuando termines, mándala al siguiente paso desde aquí."}
               </p>
             )}
           </div>
@@ -270,10 +274,9 @@ function accionesDe(
   esRevisor: boolean,
   abiertas: number,
 ): Accion[] {
-  // El especialista ejecuta; el revisor (lead/admin/master) revisa. `esRevisor`
-  // (canOverrideStatus) es exactamente lead/admin/master, así que un asignado que
-  // NO es revisor es el especialista. Devolver una corrección la trabajó él.
-  const esEspecialista = ctx.isAssignee && !esRevisor;
+  // El especialista ejecuta; el revisor (lead/admin/master) revisa. Quién ve los verbos de
+  // doer lo decide `haceDeDoer` (task-actions): el especialista asignado y, además, el
+  // master asignado o no (PEDRO_OVERRIDE 2026-10-08). Importada para que no deriven.
 
   // Cambios del CLIENTE en in_corrections: no hay acciones de flujo aquí — el lead los
   // resuelve con el banner "Cambios del cliente" (Enviar a cliente / Reasignar), y el
@@ -285,7 +288,7 @@ function accionesDe(
       ? [{ verb: "mandar_correcciones", label: "Pedir cambios", tone: "danger" }]
       : [{ verb: "approve", label: "Aprobar", tone: "primary" }];
   }
-  if (status === "in_corrections" && esEspecialista) {
+  if (status === "in_corrections" && haceDeDoer(ctx)) {
     return [{ verb: "devolver", label: "Devolver a revisión", tone: "primary" }];
   }
 
@@ -298,7 +301,12 @@ function accionesDe(
     return [{ verb: "start", label: "Empezar", tone: "primary" }];
   }
   if (leadSolo && status === "in_progress") {
-    return [{ verb: "send_client_solo", label: "Enviar a cliente", tone: "primary" }];
+    const solo: Accion = { verb: "send_client_solo", label: "Enviar a cliente", tone: "primary" };
+    // El master ve también "Mandar a revisión" (nada escondido); el envío directo va primero
+    // y el otro queda secundario (outline) para que no se confunda cuál salta la revisión.
+    return veTodo(ctx.role)
+      ? [solo, { verb: "submit_review", label: "Mandar a revisión", tone: "secondary" }]
+      : [solo];
   }
 
   // Resto de fases: la misma decisión que el tablero.

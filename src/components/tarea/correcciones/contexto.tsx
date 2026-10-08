@@ -33,6 +33,8 @@ export type Ctx = {
   esCliente: boolean;
   /** Equipo interno (puede marcar atendido como especialista). */
   esEquipo: boolean;
+  /** Master: además de revisor, ve los botones del especialista ("Marcar atendido"). */
+  veTodo?: boolean;
   /**
    * BORRADOR: el lead sigue ARMANDO la ronda y aún no la ha mandado (la tarea está en
    * `under_review`). Es la etapa que le faltaba al ciclo de vida de una corrección
@@ -82,6 +84,7 @@ export function CorreccionesProvider({
   marcaColor,
   esRevisor,
   esEquipo,
+  veTodo = false,
   borrador,
   correcciones,
   children,
@@ -91,6 +94,7 @@ export function CorreccionesProvider({
   marcaColor: string | null;
   esRevisor: boolean;
   esEquipo: boolean;
+  veTodo?: boolean;
   /** El lead sigue armando la ronda (tarea en `under_review`): aún no se mandó. */
   borrador: boolean;
   /** Correcciones internas + cambios del cliente ENVIADOS (con `cliente:true`) —
@@ -164,6 +168,7 @@ export function CorreccionesProvider({
       borrador,
       esCliente: false,
       esEquipo,
+      veTodo,
       correcciones,
       pendiente,
       deCampo: (tabla, filaId, campo) => {
@@ -233,7 +238,7 @@ export function CorreccionesProvider({
           toast.success("Sugerencia aplicada");
         }),
     }),
-    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, borrador, correcciones, pendiente, veredictos, validando, validar, run, setWsPlanos, setWsEstatico, bumpReseed],
+    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, veTodo, borrador, correcciones, pendiente, veredictos, validando, validar, run, setWsPlanos, setWsEstatico, bumpReseed],
   );
 
   return <CorreccionesCtx.Provider value={value}>{children}</CorreccionesCtx.Provider>;

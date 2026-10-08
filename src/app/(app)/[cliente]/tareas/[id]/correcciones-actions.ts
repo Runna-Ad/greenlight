@@ -12,6 +12,7 @@ import { getSoy } from "@/lib/soy";
 import { getCurrentUser } from "@/lib/identity";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { faltaCortinilla, MSG_FALTA_LEGAL } from "@/lib/cortinilla";
+import { enCanchaDelLead, MSG_CANCHA_DEL_LEAD } from "@/lib/cambios-pendientes";
 
 export type CorreccionResultado = { ok: true; id?: string } | { ok: false; error: string };
 
@@ -125,9 +126,19 @@ export async function setEstadoCorreccion(
         ? { atendido_at: null, atendido_by: null, resolved_at: null, resolved_by: null, resolved_member_id: null }
         : { resolved_at: new Date().toISOString(), resolved_member_id: soy?.id ?? null, resolved_by: await actorId() };
 
-  const { error } = await db
-    .from("comments").update(patch).eq("id", commentId).eq("idea_id", ideaId);
+  // Sólo correcciones (internas o del cliente): sin el filtro por `kind`, el mismo POST
+  // podía sellar atendido/confirmado en CUALQUIER comentario de la tarea (una aprobación,
+  // una nota). Mismo filtro que descartarCorreccion. Si no matchea nada, se DICE (antes
+  // devolvía ok con 0 filas tocadas).
+  const { data, error } = await db
+    .from("comments")
+    .update(patch)
+    .eq("id", commentId)
+    .eq("idea_id", ideaId)
+    .in("kind", ["correction_request", "client_change"])
+    .select("id");
   if (error) return { ok: false, error: error.message };
+  if (!data?.length) return { ok: false, error: "Esa corrección ya no existe." };
   return { ok: true };
 }
 
@@ -237,6 +248,9 @@ export async function devolverARevision(
   if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
+  if (!canOverrideStatus(role) && (await enCanchaDelLead(db, ideaId))) {
+    return { ok: false, error: MSG_CANCHA_DEL_LEAD };
+  }
   // Devolver a revisión es OTRA puerta a under_review: se gatea la cortinilla igual que
   // "Mandar a revisión" y el arrastre del tablero (guard-all-paths). (Pedro 2026-09-03)
   if (await faltaCortinilla(db, ideaId)) return { ok: false, error: MSG_FALTA_LEGAL };

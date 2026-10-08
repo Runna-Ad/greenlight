@@ -127,7 +127,7 @@ eq("el asignado empieza una tarea por hacer", labels("todo", asignado), "Empezar
 eq("sin responsable no hay botón de empezar", labels("todo", { ...asignado, hasAssignee: false }), "");
 eq("y se explica por qué", waitingLabel("todo", { ...asignado, hasAssignee: false }), "Falta responsable");
 eq("un creativo ajeno no empieza tu tarea", labels("todo", ajeno), "");
-// El lead/admin/master es REVISOR, no doer (Pedro 2026-08-21): no ve "Empezar"
+// El lead/admin es REVISOR, no doer (Pedro 2026-08-21; el master ve todo, ver abajo): no ve "Empezar"
 // ni "Mandar a revisión", ni aunque esté asignado a la tarea. Usa "Mover".
 eq("el lead NO empieza (es revisor, no doer)", labels("todo", lead), "");
 eq("un lead asignado tampoco empieza", labels("todo", leadAsignado), "");
@@ -140,6 +140,28 @@ eq("en revisión el lead aprueba o pide cambios", labels("under_review", lead), 
 eq("mandar cambios exige texto", actionsFor("under_review", lead).find(a => a.tone === "danger").needsBody, true);
 eq("correcciones → retomar (especialista)", labels("in_corrections", asignado), "Retomar");
 eq("correcciones: el lead no retoma", labels("in_corrections", lead), "");
+
+// Master (Master Builder) VE TODO (PEDRO_OVERRIDE 2026-10-08): sus verbos de revisor + los
+// de doer, asignado o no, para verificar la plataforma y meter mano. Lead/admin no cambian.
+const master = { isAssignee: false, role: "master", hasAssignee: true };
+const masterAsignado = { ...master, isAssignee: true };
+const admin = { isAssignee: false, role: "admin", hasAssignee: true };
+eq("master: empieza una tarea por hacer (aunque no sea suya)", labels("todo", master), "Empezar");
+eq("master asignado: también empieza", labels("todo", masterAsignado), "Empezar");
+eq("master: sin responsable sigue sin Empezar (primero se asigna)", labels("todo", { ...master, hasAssignee: false }), "");
+eq("master: en progreso ve Mandar a revisión", labels("in_progress", master), "Mandar a revisión");
+eq("master: Mandar a revisión usa submit_review (corre H.Ü.E en el workspace)", actionsFor("in_progress", master)[0]?.verb, "submit_review");
+eq("master: en revisión aprueba o pide cambios (aprobar primero)", labels("under_review", master), "Aprobar · Mandar cambios");
+eq("master: correcciones del lead → Retomar", labels("in_corrections", master), "Retomar");
+eq("master: completado → Enviar a cliente", labels("completed", master), "Enviar a cliente");
+eq("master: cambios del cliente → sin botón inline (banner del lead en la tarea)", labels("in_corrections", { ...master, clientChangesPending: true }), "");
+eq("master: ve la marca de cambios del cliente", waitingLabel("in_corrections", { ...master, clientChangesPending: true }), "Cambios del cliente");
+eq("master: no se le dice 'Esperando revisión' (él la resuelve)", waitingLabel("under_review", masterAsignado), null);
+// La decisión 2026-08-21 sigue para lead y admin: revisores puros.
+eq("admin: NO empieza", labels("todo", admin), "");
+eq("admin: NO manda a revisión", labels("in_progress", admin), "");
+eq("admin: NO retoma", labels("in_corrections", admin), "");
+eq("lead asignado: sigue sin Mandar a revisión", labels("in_progress", leadAsignado), "");
 
 // ── transicionRequiereLead (reap C1): el arrastre del tablero no salta el gate del lead ──
 console.log("\n▶ transicionRequiereLead — gate por transición");

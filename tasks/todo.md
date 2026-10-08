@@ -1,5 +1,30 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-10-08 — MASTER VE TODO (rama `claude/sharp-swirles-54ddbf`, de main · SIN migración · preview pushed)
+PEDRO_OVERRIDE: el Master Builder ve TODAS las acciones de la tarea (doer + revisor), asignado o no. Lead/admin igual que antes.
+- [x] `veTodo`/`haceDeDoer` en src/lib/task-actions.ts → actionsFor (tablero/Mi Trabajo) + AccionesTarea + panel de correcciones ("Marcar atendido").
+- [x] Auditoría server: startTask/submitForReview/moveTask/devolverARevision/setEstadoCorreccion/revisarOrtografia aceptan master
+      no asignado; RPC de verbo y triggers no miran asignación → NO hace falta migración (security-reviewer Opus: limpio).
+- [x] Tests: +16 casos master/admin en test-lib (fallan contra el código viejo, pasan con el nuevo). npm test exit 0 (1094 ✓, 0 ✗), tsc, eslint, next build ✓.
+- [x] Decisiones de Pedro (2026-10-08): sin Retomar con cambios del cliente, sin confirmación, "Marcar atendido" oculto en borradores.
+- [x] LIVE-VERIFY como master (preview 144478a, DiDi): Empezar en tarea ajena ✓, Mandar a revisión ✓, Aprobar ✓, Devolver + Marcar atendido ✓,
+      cambios del cliente → banner del lead ✓. Arrastre de SPAPVOYSCRIPT5ONEMANINTRO a En revisión → abrió la tarea, siguió En progreso ✓.
+      "Mandar a revisión" → diálogo H.Ü.E con 4 sugerencias ✓ → Cancelar (nada movido; las 4 quedaron como "ignoradas" en la estadística de H.Ü.E).
+      Nota: el copy "Acciones de Master Builder" vive en la variante "prominente" de AccionesTarea, que ninguna pantalla usa (código muerto, inofensivo).
+- [ ] SHIP (merge a main) sólo con "ship it".
+Decisiones abiertas: (1) Retomar/Devolver cuando hay cambios del CLIENTE pendientes (hoy: sólo banner del lead; un Retomar apagaría la
+bandera sin enrutar); (2) ¿confirmación antes de que el master mande a revisión una tarea ajena?; (3) master asignado solo en progreso ve
+"Enviar a cliente" + "Mandar a revisión" (este último secundario); (4) "Marcar atendido" oculto para master en under_review (borrador).
+Deuda (pre-existente, NO de este cambio): devolverARevision/startTask no chequean `cambios_cliente_en_lead` en el servidor;
+las RPC start/submit no pasan p_actor (auditoría sin actor si el master no tiene fila en track_members);
+- [x] Arrastre/menú "Mover" a En revisión (desde En progreso/Correcciones) ABRE la tarea para doer (especialista/master) → corre H.Ü.E.
+      Lead/admin siguen moviendo directo (la tarea no les ofrece "Mandar a revisión"). Con cambios del cliente pendientes, directo (sin callejón).
+- [x] Cancha del lead gateada en el SERVIDOR: startTask, submitForReview, devolverARevision, moveTask (helper enCanchaDelLead).
+Deuda opcional: la misma regla en rpc_move_task (migración; habría que pasar p_as_lead por rpc_task_start/return_review). H.Ü.E sigue siendo
+chequeo del navegador (un POST directo lo salta; es advisory por diseño: "mandar de todos modos").
+- [x] (72d668e) Mi Trabajo: "Mandar a revisión" ya no es inline → "Abrir para mandar a revisión →" (corre H.Ü.E en la tarea).
+- [x] (72d668e) setEstadoCorreccion filtra kind correction_request/client_change y avisa si no tocó nada.
+
 ## 🟢 2026-09-08 — H.Ü.E LEE REFERENCIAS · Tier 2: TikTok (caption) + medición (rama `hue-referencias-tier2`, SIN push · SIN migración)
 Pedro: "análisis de referencias en video". Evaluación (challenge): el plan original era Whisper (audio-only) → se voltéo a
 "lo más barato con más señal primero" y Pedro aceptó: **Step 1 TikTok caption (gratis, in-house, sin infra) → Step 2 medir →
