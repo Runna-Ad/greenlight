@@ -13,7 +13,11 @@ bandera sin enrutar); (2) ¿confirmación antes de que el master mande a revisi�
 "Enviar a cliente" + "Mandar a revisión" (este último secundario); (4) "Marcar atendido" oculto para master en under_review (borrador).
 Deuda (pre-existente, NO de este cambio): devolverARevision/startTask no chequean `cambios_cliente_en_lead` en el servidor;
 las RPC start/submit no pasan p_actor (auditoría sin actor si el master no tiene fila en track_members);
-arrastre/menú "Mover" del tablero a under_review NO corre H.Ü.E (sí gatea cortinilla en servidor).
+- [x] Arrastre/menú "Mover" a En revisión (desde En progreso/Correcciones) ABRE la tarea para doer (especialista/master) → corre H.Ü.E.
+      Lead/admin siguen moviendo directo (la tarea no les ofrece "Mandar a revisión"). Con cambios del cliente pendientes, directo (sin callejón).
+- [x] Cancha del lead gateada en el SERVIDOR: startTask, submitForReview, devolverARevision, moveTask (helper enCanchaDelLead).
+Deuda opcional: la misma regla en rpc_move_task (migración; habría que pasar p_as_lead por rpc_task_start/return_review). H.Ü.E sigue siendo
+chequeo del navegador (un POST directo lo salta; es advisory por diseño: "mandar de todos modos").
 - [x] (72d668e) Mi Trabajo: "Mandar a revisión" ya no es inline → "Abrir para mandar a revisión →" (corre H.Ü.E en la tarea).
 - [x] (72d668e) setEstadoCorreccion filtra kind correction_request/client_change y avisa si no tocó nada.
 

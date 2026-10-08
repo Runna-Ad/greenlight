@@ -17,6 +17,7 @@ import { getCurrentUser } from "@/lib/identity";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import type { AssetStatus } from "@/lib/brand";
 import { faltaCortinilla, MSG_FALTA_LEGAL } from "@/lib/cortinilla";
+import { enCanchaDelLead, MSG_CANCHA_DEL_LEAD } from "@/lib/cambios-pendientes";
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -91,6 +92,10 @@ export async function moveTask(
   if (from && transicionRequiereLead(from, toStatus) && !canOverrideStatus(role)) {
     return { ok: false, error: "Sólo un lead puede aprobar, enviar al cliente o entregar." };
   }
+  // Cambios del cliente esperando al lead: el especialista no saca la tarea de ahí.
+  if (from === "in_corrections" && !canOverrideStatus(role) && (await enCanchaDelLead(db, ideaId))) {
+    return { ok: false, error: MSG_CANCHA_DEL_LEAD };
+  }
   // Cortinilla obligatoria: la MISMA puerta que "Mandar a revisión" — se gatea por el
   // ESTADO destino, no por el nombre del verbo (guard-all-paths, 2026-09-03). Dos destinos
   // la exigen: `under_review` (la revisión normal) y `published` (envío al cliente) — este
@@ -135,6 +140,11 @@ export async function startTask(ideaId: string): Promise<ActionResult> {
   if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
+  // Retomar con cambios del cliente esperando al lead: sólo un revisor. (La bandera sólo
+  // existe en in_corrections, así que Empezar desde todo nunca choca con esto.)
+  if (!canOverrideStatus(role) && (await enCanchaDelLead(db, ideaId))) {
+    return { ok: false, error: MSG_CANCHA_DEL_LEAD };
+  }
   const { error } = await db.rpc("rpc_task_start", {
     p_idea_id: ideaId,
     p_actor_member: soyId,
@@ -158,6 +168,10 @@ export async function submitForReview(ideaId: string, note?: string): Promise<Ac
   if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
+  // rpc_task_submit_review también acepta in_corrections→under_review: misma cancha del lead.
+  if (!canOverrideStatus(role) && (await enCanchaDelLead(db, ideaId))) {
+    return { ok: false, error: MSG_CANCHA_DEL_LEAD };
+  }
   if (await faltaCortinilla(db, ideaId)) return { ok: false, error: MSG_FALTA_LEGAL };
   const { error } = await db.rpc("rpc_task_submit_review", {
     p_idea_id: ideaId,

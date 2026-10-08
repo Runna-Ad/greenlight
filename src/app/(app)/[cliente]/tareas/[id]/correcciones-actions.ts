@@ -12,6 +12,7 @@ import { getSoy } from "@/lib/soy";
 import { getCurrentUser } from "@/lib/identity";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { faltaCortinilla, MSG_FALTA_LEGAL } from "@/lib/cortinilla";
+import { enCanchaDelLead, MSG_CANCHA_DEL_LEAD } from "@/lib/cambios-pendientes";
 
 export type CorreccionResultado = { ok: true; id?: string } | { ok: false; error: string };
 
@@ -247,6 +248,9 @@ export async function devolverARevision(
   if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
+  if (!canOverrideStatus(role) && (await enCanchaDelLead(db, ideaId))) {
+    return { ok: false, error: MSG_CANCHA_DEL_LEAD };
+  }
   // Devolver a revisión es OTRA puerta a under_review: se gatea la cortinilla igual que
   // "Mandar a revisión" y el arrastre del tablero (guard-all-paths). (Pedro 2026-09-03)
   if (await faltaCortinilla(db, ideaId)) return { ok: false, error: MSG_FALTA_LEGAL };

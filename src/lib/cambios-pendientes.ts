@@ -31,6 +31,24 @@ export async function ideasConCambiosDelCliente(
   return new Set((data ?? []).map((r) => r.id));
 }
 
+export const MSG_CANCHA_DEL_LEAD =
+  "El cliente pidió cambios y esperan al lead: él los hace o te los asigna. Recarga la página.";
+
+/**
+ * Gate del SERVIDOR para la cancha del lead: mientras la bandera esté prendida, sólo un
+ * revisor (lead/admin/master) mueve la tarea. La UI ya esconde Retomar/Devolver al
+ * especialista, pero una pestaña vieja o un POST directo los ejecutaban igual — y al salir
+ * de in_corrections el trigger apaga la bandera, así que los cambios del cliente se
+ * saltaban el enrutado del lead. Lo comparten startTask, submitForReview,
+ * devolverARevision y moveTask (todas las puertas de salida del especialista). (Pedro 2026-10-08)
+ */
+export async function enCanchaDelLead(
+  db: ReturnType<typeof supabaseAdmin>,
+  ideaId: string,
+): Promise<boolean> {
+  return (await ideasConCambiosDelCliente(db, [ideaId])).has(ideaId);
+}
+
 /**
  * Qué tareas en correcciones están trabajando, AHORA, cambios que pidió el CLIENTE: la
  * ronda actual (la más alta entre correcciones internas y cambios del cliente enviados)

@@ -15,6 +15,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Files, Plus, X, GripVertical, Users, Crown, Check, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,7 +28,7 @@ import {
   type AssetStatus,
 } from "@/lib/brand";
 import { moveTask, asignarTarea, reasignarCambios } from "@/app/(app)/[cliente]/tablero/actions";
-import { transicionRequiereLead } from "@/lib/task-actions";
+import { haceDeDoer, transicionRequiereLead } from "@/lib/task-actions";
 import { esGreenlitReciente as esGreenlitRecienteFecha } from "@/lib/bundle";
 import {
   DEFAULT_ROLE,
@@ -161,6 +162,7 @@ export function Board({
    *  cliente, igual que el badge "Cliente" de la tarea. Viaja como variable CSS. */
   marcaColor?: string | null;
 }) {
+  const router = useRouter();
   const mayMove = canMoveStatus(role);
   const mayOverride = canOverrideStatus(role);
   const mayAssign = canAssign(role);
@@ -248,6 +250,28 @@ export function Board({
     (task: Task, to: AssetStatus) => {
       if (task.status === to || !mayMove) return;
       const from = task.status;
+      // Mandar a revisión (desde En progreso o Correcciones) se hace DENTRO de la tarea:
+      // ahí corre el corrector de H.Ü.E antes de soltarla. Arrastrar o usar "Mover" se lo
+      // saltaba (Pedro 2026-10-08). Sólo para quien tiene el botón en la tarea (el
+      // especialista asignado y el master — haceDeDoer); para el lead/admin la tarea no
+      // ofrece "Mandar a revisión", así que su arrastre sigue siendo la escotilla de siempre.
+      const ctxDoer = {
+        isAssignee: !!soyId && task.members.some((m) => m.id === soyId),
+        role,
+        hasAssignee: task.members.length > 0,
+      };
+      // Con cambios del CLIENTE esperando al lead la tarea no ofrece "Devolver" (sólo el
+      // banner del lead) → abrirla sería un callejón; ese arrastre sigue directo.
+      if (
+        to === "under_review" &&
+        (from === "in_progress" || from === "in_corrections") &&
+        !task.clientChangesPending &&
+        haceDeDoer(ctxDoer)
+      ) {
+        toast.info("Mándala a revisión desde la tarea: H.Ü.E revisa la ortografía antes de soltarla.");
+        router.push(`/${cliente}/tareas/${task.id}`);
+        return;
+      }
       const esOverride = !canMove(from, to);
       setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: to } : t)));
 
@@ -266,7 +290,7 @@ export function Board({
         }
       });
     },
-    [cliente, mayMove],
+    [cliente, mayMove, role, soyId, router],
   );
 
   const onDragStart = useCallback(
