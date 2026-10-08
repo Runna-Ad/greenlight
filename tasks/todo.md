@@ -12,8 +12,10 @@ Decisiones abiertas: (1) Retomar/Devolver cuando hay cambios del CLIENTE pendien
 bandera sin enrutar); (2) ¿confirmación antes de que el master mande a revisión una tarea ajena?; (3) master asignado solo en progreso ve
 "Enviar a cliente" + "Mandar a revisión" (este último secundario); (4) "Marcar atendido" oculto para master en under_review (borrador).
 Deuda (pre-existente, NO de este cambio): devolverARevision/startTask no chequean `cambios_cliente_en_lead` en el servidor;
-setEstadoCorreccion no filtra por `kind`; las RPC start/submit no pasan p_actor (auditoría sin actor si el master no tiene fila en track_members);
-Mi Trabajo no pasa hasSpecialist y su "Mandar a revisión" inline no corre H.Ü.E (también para especialistas).
+las RPC start/submit no pasan p_actor (auditoría sin actor si el master no tiene fila en track_members);
+arrastre/menú "Mover" del tablero a under_review NO corre H.Ü.E (sí gatea cortinilla en servidor).
+- [x] (72d668e) Mi Trabajo: "Mandar a revisión" ya no es inline → "Abrir para mandar a revisión →" (corre H.Ü.E en la tarea).
+- [x] (72d668e) setEstadoCorreccion filtra kind correction_request/client_change y avisa si no tocó nada.
 
 ## 🟢 2026-09-08 — H.Ü.E LEE REFERENCIAS · Tier 2: TikTok (caption) + medición (rama `hue-referencias-tier2`, SIN push · SIN migración)
 Pedro: "análisis de referencias en video". Evaluación (challenge): el plan original era Whisper (audio-only) → se voltéo a
