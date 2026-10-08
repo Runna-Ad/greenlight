@@ -60,13 +60,24 @@ const isLead = (role: ViewRole) => role === "master" || role === "admin" || role
  * El ESPECIALISTA que ejecuta: asignado a la tarea y NO lead/admin/master.
  *
  * Los verbos de "doer" (empezar, mandar a revisión, retomar correcciones) son
- * SUYOS — nadie más los ve. El lead/admin/master es REVISOR: aprueba, pide
+ * SUYOS — sólo él y el master (ver `veTodo`) los ven. El lead/admin es REVISOR: aprueba, pide
  * cambios y envía al cliente; NO produce, así que no tiene a quién mandarle una
  * revisión (se la mandaría a sí mismo). Decisión de Pedro (2026-08-21): un lead
  * viendo una tarea en progreso ya no ve "Mandar a revisión". Si necesita empujar
  * una tarea que hizo él mismo, usa el menú "Mover" (la escotilla del lead).
  */
 const esEspecialista = (ctx: TaskContext) => ctx.isAssignee && !isLead(ctx.role);
+
+/**
+ * El MASTER (Master Builder) ve TODO: además de sus verbos de revisor, ve los de doer
+ * (Empezar / Mandar a revisión / Retomar), esté asignado o no — para verificar que toda
+ * la plataforma funciona y meter mano si hace falta (PEDRO_OVERRIDE 2026-10-08). Lead y
+ * admin siguen como revisores puros (decisión 2026-08-21). El servidor ya lo permite:
+ * canMoveStatus + assertCanActOnTask (master = toda la agencia) y las RPC de verbo no
+ * miran la asignación.
+ */
+export const veTodo = (role: ViewRole) => role === "master";
+const haceDeDoer = (ctx: TaskContext) => esEspecialista(ctx) || veTodo(ctx.role);
 
 /**
  * Las transiciones que un DOER (especialista) produce por el flujo normal:
@@ -100,12 +111,12 @@ export function actionsFor(status: AssetStatus, ctx: TaskContext): TaskAction[] 
     case "todo":
       // Sin responsable no hay quién la empiece — la tarjeta ofrece asignar.
       if (!ctx.hasAssignee) return [];
-      return esEspecialista(ctx)
+      return haceDeDoer(ctx)
         ? [{ to: "in_progress", label: "Empezar", tone: "primary", verb: "start" }]
         : [];
 
     case "in_progress":
-      return esEspecialista(ctx)
+      return haceDeDoer(ctx)
         ? [
             {
               to: "under_review",
@@ -137,7 +148,7 @@ export function actionsFor(status: AssetStatus, ctx: TaskContext): TaskAction[] 
       // inline, y el especialista ni la ve (visibilidad). Cambios pedidos por el LEAD
       // (sin bandera) → el especialista los RETOMA como siempre.
       if (ctx.clientChangesPending) return [];
-      return esEspecialista(ctx)
+      return haceDeDoer(ctx)
         ? [{ to: "in_progress", label: "Retomar", tone: "primary", verb: "start" }]
         : [];
 

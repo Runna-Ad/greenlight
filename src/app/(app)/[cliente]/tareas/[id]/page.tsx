@@ -16,6 +16,7 @@ import type { Track } from "@/lib/vocab";
 import { type AssetStatus } from "@/lib/brand";
 import { ESTADOS_SOLO_LECTURA, plantillaPara, requiereCortinilla, notaGlobal, LEGAL_SECONDS } from "@/lib/plantilla";
 import { posicionEnBundle } from "@/lib/bundle";
+import { veTodo } from "@/lib/task-actions";
 import { cargarBundle } from "@/lib/bundle-data";
 import { CorreccionesProvider } from "@/components/tarea/correcciones/contexto";
 import { WorkspaceProvider } from "@/components/tarea/workspace-provider";
@@ -492,6 +493,7 @@ export default async function TareaPage({
         marcaColor={marcaColor}
         esRevisor={canOverrideStatus(role)}
         esEquipo={esEquipo}
+        veTodo={veTodo(role)}
         borrador={borrador}
         correcciones={correccionesVisibles}
       >

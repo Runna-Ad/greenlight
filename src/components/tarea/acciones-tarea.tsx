@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Send, Check, RotateCcw, PlayCircle, CornerUpLeft } from "lucide-react";
 import { toast } from "sonner";
 
-import { actionsFor, waitingLabel, type TaskContext, type TaskVerb } from "@/lib/task-actions";
+import { actionsFor, veTodo, waitingLabel, type TaskContext, type TaskVerb } from "@/lib/task-actions";
 import type { AssetStatus } from "@/lib/brand";
 import { canOverrideStatus } from "@/lib/roles";
 import { EJECUTA_VERBO, TOAST_VERBO } from "@/components/board/verbos";
@@ -273,7 +273,9 @@ function accionesDe(
   // El especialista ejecuta; el revisor (lead/admin/master) revisa. `esRevisor`
   // (canOverrideStatus) es exactamente lead/admin/master, así que un asignado que
   // NO es revisor es el especialista. Devolver una corrección la trabajó él.
+  // El master además ve los verbos de doer, asignado o no (PEDRO_OVERRIDE 2026-10-08).
   const esEspecialista = ctx.isAssignee && !esRevisor;
+  const haceDeDoer = esEspecialista || veTodo(ctx.role);
 
   // Cambios del CLIENTE en in_corrections: no hay acciones de flujo aquí — el lead los
   // resuelve con el banner "Cambios del cliente" (Enviar a cliente / Reasignar), y el
@@ -285,7 +287,7 @@ function accionesDe(
       ? [{ verb: "mandar_correcciones", label: "Pedir cambios", tone: "danger" }]
       : [{ verb: "approve", label: "Aprobar", tone: "primary" }];
   }
-  if (status === "in_corrections" && esEspecialista) {
+  if (status === "in_corrections" && haceDeDoer) {
     return [{ verb: "devolver", label: "Devolver a revisión", tone: "primary" }];
   }
 
@@ -298,7 +300,11 @@ function accionesDe(
     return [{ verb: "start", label: "Empezar", tone: "primary" }];
   }
   if (leadSolo && status === "in_progress") {
-    return [{ verb: "send_client_solo", label: "Enviar a cliente", tone: "primary" }];
+    const solo: Accion = { verb: "send_client_solo", label: "Enviar a cliente", tone: "primary" };
+    // El master ve también "Mandar a revisión" (nada escondido); el envío directo va primero.
+    return veTodo(ctx.role)
+      ? [solo, { verb: "submit_review", label: "Mandar a revisión", tone: "primary" }]
+      : [solo];
   }
 
   // Resto de fases: la misma decisión que el tablero.
