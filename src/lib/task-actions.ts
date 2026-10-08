@@ -77,7 +77,7 @@ const esEspecialista = (ctx: TaskContext) => ctx.isAssignee && !isLead(ctx.role)
  * miran la asignación.
  */
 export const veTodo = (role: ViewRole) => role === "master";
-const haceDeDoer = (ctx: TaskContext) => esEspecialista(ctx) || veTodo(ctx.role);
+export const haceDeDoer = (ctx: TaskContext) => esEspecialista(ctx) || veTodo(ctx.role);
 
 /**
  * Las transiciones que un DOER (especialista) produce por el flujo normal:

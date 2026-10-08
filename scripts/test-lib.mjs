@@ -127,7 +127,7 @@ eq("el asignado empieza una tarea por hacer", labels("todo", asignado), "Empezar
 eq("sin responsable no hay botón de empezar", labels("todo", { ...asignado, hasAssignee: false }), "");
 eq("y se explica por qué", waitingLabel("todo", { ...asignado, hasAssignee: false }), "Falta responsable");
 eq("un creativo ajeno no empieza tu tarea", labels("todo", ajeno), "");
-// El lead/admin/master es REVISOR, no doer (Pedro 2026-08-21): no ve "Empezar"
+// El lead/admin es REVISOR, no doer (Pedro 2026-08-21; el master ve todo, ver abajo): no ve "Empezar"
 // ni "Mandar a revisión", ni aunque esté asignado a la tarea. Usa "Mover".
 eq("el lead NO empieza (es revisor, no doer)", labels("todo", lead), "");
 eq("un lead asignado tampoco empieza", labels("todo", leadAsignado), "");

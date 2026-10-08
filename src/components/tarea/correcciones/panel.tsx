@@ -264,9 +264,11 @@ export function PanelCorrecciones() {
                       <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
                         {/* Especialista: marca atendido (rojo→ámbar) o reabre (ámbar→rojo). El
                             master también marca atendido (ve todo, PEDRO_OVERRIDE 2026-10-08) — salvo
-                            un borrador "Por enviar", que aún no le llegó a nadie. Su "Reabrir" ya lo
-                            cubre el botón de revisor de abajo. */}
-                        {ctx.esEquipo && (!ctx.esRevisor || (ctx.veTodo && !ctx.borrador)) && c.estado === "open" && (
+                            un borrador "Por enviar" (mismo gate por ítem que "Confirmar"). Su
+                            "Reabrir" ya lo cubre el botón de revisor de abajo. */}
+                        {ctx.esEquipo &&
+                          (!ctx.esRevisor || (ctx.veTodo && !(ctx.borrador && !c.cliente))) &&
+                          c.estado === "open" && (
                           <BtnAccion disabled={ctx.pendiente} tone="primary" onClick={() => ctx.marcar(c.id, "done")}>
                             Marcar atendido
                           </BtnAccion>
