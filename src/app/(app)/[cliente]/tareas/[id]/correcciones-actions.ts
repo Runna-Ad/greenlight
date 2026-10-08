@@ -125,9 +125,19 @@ export async function setEstadoCorreccion(
         ? { atendido_at: null, atendido_by: null, resolved_at: null, resolved_by: null, resolved_member_id: null }
         : { resolved_at: new Date().toISOString(), resolved_member_id: soy?.id ?? null, resolved_by: await actorId() };
 
-  const { error } = await db
-    .from("comments").update(patch).eq("id", commentId).eq("idea_id", ideaId);
+  // Sólo correcciones (internas o del cliente): sin el filtro por `kind`, el mismo POST
+  // podía sellar atendido/confirmado en CUALQUIER comentario de la tarea (una aprobación,
+  // una nota). Mismo filtro que descartarCorreccion. Si no matchea nada, se DICE (antes
+  // devolvía ok con 0 filas tocadas).
+  const { data, error } = await db
+    .from("comments")
+    .update(patch)
+    .eq("id", commentId)
+    .eq("idea_id", ideaId)
+    .in("kind", ["correction_request", "client_change"])
+    .select("id");
   if (error) return { ok: false, error: error.message };
+  if (!data?.length) return { ok: false, error: "Esa corrección ya no existe." };
   return { ok: true };
 }
 
