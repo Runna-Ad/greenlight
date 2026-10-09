@@ -36,7 +36,7 @@ create table produccion.prisma_formatos_salidas (
   preset             text not null check (preset ~ '^[a-z]+-[0-9]{2,4}x[0-9]{2,4}$'), -- lib/prisma/formatos/geometria.ts
   ancho              integer not null check (ancho between 32 and 4096),
   alto               integer not null check (alto between 32 and 4096),
-  modo               text not null check (modo in ('ia', 'blur', 'color')),
+  modo               text not null check (modo in ('extender', 'ia', 'blur', 'color')), -- extender = bordes lisos (v2, 2026-10-09)
   color              text check (color is null or color ~ '^#[0-9a-f]{6}$'),
   estado             text not null default 'pendiente' check (estado in ('pendiente', 'procesando', 'listo', 'error')),
   png_path           text check (png_path is null or png_path ~ '^salida/[0-9a-f-]{36}/[0-9a-f-]{36}\.png$'),

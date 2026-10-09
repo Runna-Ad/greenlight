@@ -4,7 +4,7 @@ import sharp from "sharp";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sniffImageMime } from "@/lib/referencia";
 import { prismaFormatosActivo } from "@/lib/prisma/flags";
-import { FUENTE_MAX_BYTES, FUENTE_MAX_PX, HEX, lienzoIA, presetDe, type Modo } from "@/lib/prisma/formatos/geometria";
+import { FUENTE_MAX_BYTES, FUENTE_MAX_PX, HEX, esModo, lienzoIA, presetDe, type Modo } from "@/lib/prisma/formatos/geometria";
 import { leerFuente } from "@/lib/prisma/formatos/componer";
 import { iaActiva } from "@/lib/prisma/formatos/proveedor";
 import type { LoteVista, SalidaVista } from "@/lib/prisma/formatos/vista";
@@ -188,7 +188,7 @@ export async function prepararSalidas(loteId: string, tamanos: TamanoPedido[]): 
     if (!p) return { ok: false, error: "Hay un tamaño que no existe." };
     if (pedidos.has(p.id)) continue;
     pedidos.add(p.id);
-    const modo: Modo | null = t.modo === "ia" || t.modo === "blur" || t.modo === "color" ? t.modo : null;
+    const modo: Modo | null = esModo(t.modo) ? t.modo : null;
     if (!modo) return { ok: false, error: "Hay un tamaño sin relleno elegido." };
     if (modo === "ia" && !ia) return { ok: false, error: "El relleno con IA está apagado. Usa desenfoque o color." };
     const color = modo === "color" ? (typeof t.color === "string" && HEX.test(t.color) ? t.color.toLowerCase() : null) : null;

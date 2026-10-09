@@ -1,7 +1,7 @@
 /**
  * HÜE Prisma › Formatos — lo que el servidor le manda a la pantalla (módulo puro: tipos + una regla).
  */
-import { DERIVA_REVISAR, type Modo } from "./geometria.ts";
+import { DERIVA_REVISAR, type Bordes, type Modo } from "./geometria.ts";
 
 /** El bucket privado de Formatos y los tipos que acepta (UNA definición para navegador y servidor). */
 export const BUCKET_FORMATOS = "greenlight-formatos";
@@ -17,6 +17,9 @@ export type LoteVista = {
   url: string;
   /** Color promedio del borde del anuncio: el relleno "color" por omisión. */
   colorBorde: string;
+  /** Fondo liso por lado: cuánto se puede recortar y qué lados se pueden extender (lo calcula el servidor con
+   *  la MISMA función con la que arma cada tamaño, así la vista previa y el resultado coinciden). */
+  bordes: Bordes;
   resultadoId: string | null;
   /** Cliente del anuncio (para preseleccionar la marca y ofrecer sus colores). */
   clientId: string | null;

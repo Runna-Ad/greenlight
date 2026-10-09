@@ -17,9 +17,19 @@ de herramientas de IA (planos) · IA = Nano Banana 2.1.
       ya lo llama "legacy"; la doc nueva es la Interactions API) → confirmar en la prueba real.
 - [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
       archivos + `GEMINI_API_KEY` con saldo como secreto del entorno de la sesión (no pegarla en el chat).
-- [ ] 3. Pegar la lista de medidas (texto libre → tamaños) + juegos guardados por cliente · métodos GRATIS: recorte de
-      fondo vacío (respetando cajas protegidas) y extender bordes lisos/degradados POR LADO (no el promedio) · análisis
-      del anuncio UNA vez (Gemini visión → cajas de titular/logo/CTA/producto/caras + tipo de fondo, ~$0.002).
+- [~] 3. Métodos gratis + pegar la lista.
+  - [x] 3a. Pegar la lista del cliente (`leerMedidas`: "9:16 (1080*1920) 320*250 …" → elige EXACTAMENTE esas; reusa
+        presets, el resto medida libre; rediseño queda apagado; fuera de límites se avisa).
+  - [x] 3b. Recorte de fondo LISO (`bordesDe` sobre copia de 256 px → `recortable` por lado, 70 % de la franja,
+        conservador; `encajar(..., recortable)` crece hasta que el contenido quepa, sin pasar de cover ni de 1×).
+  - [x] 3c. Modo "extender" (gratis): cada lado repite su última línea + desenfoque suave; se sugiere cuando todos los
+        lados a rellenar son lisos. Sin nada que rellenar → no se rellena ni se llama a la IA. 0078 (sin aplicar)
+        acepta 'extender'. Prueba visual con anuncio sintético de degradado: 10/12 medidas de la lista limpias y
+        gratis (320×50 y 640×100 siguen "rediseño" → paso 4).
+  - [ ] 3d. Análisis del anuncio UNA vez (Gemini visión → cajas de titular/logo/CTA/producto/caras) para recortar
+        también fondo de FOTO sin tocar el contenido. Necesita la llave + anuncios reales (paso 2).
+  - [ ] 3e. Juegos de medidas guardados por cliente (necesita tabla/columna → va en una migración nueva o en 0078
+        mientras siga sin aplicar).
 - [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
 - [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
       dibujar → caer a la puerta de imagen plana con aviso.

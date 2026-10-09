@@ -15,12 +15,14 @@ export const PLATAFORMA_LABEL: Record<Plataforma, Par> = {
 };
 
 export const MODO_LABEL: Record<Modo, Par> = {
+  extender: t("Extender", "Extend"),
   ia: t("IA", "AI"),
   blur: t("Desenfoque", "Blur"),
   color: t("Color", "Color"),
 };
 
 export const MODO_AYUDA: Record<Modo, Par> = {
+  extender: t("Continúa los bordes lisos o degradados del anuncio. Gratis.", "Continues the ad's plain or gradient edges. Free."),
   ia: t("H.Ü.E continúa el fondo del anuncio hacia afuera.", "H.Ü.E extends the ad's background outward."),
   blur: t("El mismo anuncio, desenfocado y oscurecido, detrás. Gratis.", "The same ad, blurred and darkened, behind it. Free."),
   color: t("Un color sólido alrededor. Gratis.", "A solid color around it. Free."),
@@ -28,7 +30,7 @@ export const MODO_AYUDA: Record<Modo, Par> = {
 
 export const FX = {
   titulo: t("Formatos", "Formats"),
-  tagline: t("Un anuncio terminado, en todos los tamaños. El original nunca se toca: sólo se escala.", "One finished ad, in every size. The original is never touched: only scaled."),
+  tagline: t("Un anuncio terminado, en todos los tamaños. El contenido nunca se toca: sólo se escala (y se recorta fondo liso si hace falta).", "One finished ad, in every size. The content is never touched: only scaled (and plain background trimmed when needed)."),
   volver: t("Volver a HÜE Prisma", "Back to HÜE Prisma"),
   puertaTitulo: t("Formatos", "Formats"),
   puertaAyuda: t("Lleva un anuncio terminado a todos los tamaños de Meta, Google y más.", "Take a finished ad to every Meta, Google and other size."),
@@ -109,4 +111,14 @@ export const FX = {
   resultadoError: t("No pudimos traer la imagen del resultado ({e}). Súbela a mano.", "We couldn't bring in the result image ({e}). Upload it by hand."),
   colorBordeLabel: t("Color del borde del anuncio", "The ad's edge color"),
   colorMarca: t("Color de la marca {c}", "Brand color {c}"),
+  // ── v2 (2026-10-09): pegar la lista del cliente + recorte de fondo liso ──
+  pegarLista: t("Pegar la lista del cliente", "Paste the client's list"),
+  pegarAyuda: t("Tal cual te la mandaron, p. ej. «9:16 (1080×1920) 320×250 1200*627». Se eligen exactamente esas medidas.", "As they sent it, e.g. “9:16 (1080×1920) 320×250 1200*627”. Exactly those sizes get selected."),
+  pegarUsar: t("Usar estas medidas", "Use these sizes"),
+  pegarNada: t("No encontré medidas. Escríbelas como 320×250.", "No sizes found. Write them like 320×250."),
+  pegarListo: t("{n} medidas de la lista · {on} elegidas", "{n} sizes from the list · {on} selected"),
+  pegarRediseno: t(" · {r} requieren rediseño (quedan apagadas)", " · {r} need a redesign (left off)"),
+  pegarFuera: t(" · fuera de límites, ignoradas: {m}", " · out of bounds, ignored: {m}"),
+  pegarTope: t(" · sólo caben {n} por anuncio", " · only {n} fit per ad"),
+  recorta: t("Recorta {p} % de fondo liso", "Trims {p}% of plain background"),
 };

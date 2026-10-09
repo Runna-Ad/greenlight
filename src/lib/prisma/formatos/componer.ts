@@ -1,8 +1,10 @@
 /**
  * HÜE Prisma › Formatos — armar UN tamaño (servidor, sharp).
  *
- *   1. escalar el original parejo (contain) → NUESTRA copia escalada (RGBA crudo, sólo de ese tamaño)
- *   2. fondo: IA (outpaint) | desenfoque (el mismo anuncio, cubriendo y oscurecido) | color sólido
+ *   1. escalar el original parejo → NUESTRA copia escalada de la parte VISIBLE (RGBA crudo). Si el anuncio
+ *      tiene franjas de fondo liso, se recorta de ahí (nunca del contenido) para que el anuncio quede más grande.
+ *   2. fondo (sólo si sobra espacio): extender los bordes lisos | IA (outpaint) | desenfoque (el mismo
+ *      anuncio, cubriendo y oscurecido) | color sólido
  *   3. ÚLTIMO paso: pegar duro nuestra copia en el offset exacto (copia de bytes; lo que haya hecho el
  *      relleno ahí queda sobrescrito)
  *   4. codificar PNG, RELEERLO y comparar la zona contra nuestra copia → `pixelLockOk`
@@ -15,7 +17,10 @@
  * llega al navegador: depende de sharp, que no se puede empaquetar para el cliente.
  */
 import sharp from "sharp";
-import { FUENTE_MAX_PX, colorDeBorde, encajar, lienzoIA, pegarDuro, zonaIdentica, deriva as derivaDe, type Encaje, type Modo, type TamanoIA } from "./geometria.ts";
+import {
+  FUENTE_MAX_PX, bordesDe, colorDeBorde, encajar, hayExpansion, lienzoIA, pegarDuro, zonaIdentica, deriva as derivaDe,
+  type Bordes, type Encaje, type Lados, type Modo, type TamanoIA,
+} from "./geometria.ts";
 
 /** El anuncio: sus bytes tal cual (PNG/JPG/WebP) y su medida ya orientada (EXIF). */
 export type Fuente = { bytes: Buffer; w: number; h: number };
@@ -50,9 +55,37 @@ export async function colorBorde(f: Fuente): Promise<string> {
   return colorDeBorde(data, info.width, info.height);
 }
 
+/** Bordes lisos del anuncio (recortable + qué lados se pueden extender), medidos sobre una copia chica.
+ *  Determinista: el servidor lo calcula igual al mostrar el lote y al armar cada tamaño. */
+export async function analizarBordes(f: Fuente): Promise<Bordes> {
+  const { data, info } = await abrir(f).resize(256, 256, { fit: "inside" }).ensureAlpha().raw({ depth: "uchar" }).toBuffer({ resolveWithObject: true });
+  return bordesDe(data, info.width, info.height, f.w, f.h);
+}
+
 /** NUESTRA copia escalada del original (sw×sh, RGBA crudo). Determinista: misma entrada, mismos bytes. */
 export async function escalar(f: Fuente, sw: number, sh: number): Promise<Buffer> {
   return abrir(f).ensureAlpha().resize(sw, sh, { fit: "fill", kernel: "lanczos3" }).raw({ depth: "uchar" }).toBuffer();
+}
+
+/** La parte VISIBLE del original escalado (sw×sh, RGBA crudo): escalar completo y, si hubo recorte, cortar. */
+export async function escalarVisible(f: Fuente, e: Pick<Encaje, "sw" | "sh" | "completo" | "corte">): Promise<Buffer> {
+  const todo = e.sw === e.completo.w && e.sh === e.completo.h;
+  if (todo) return escalar(f, e.sw, e.sh);
+  return abrir(f)
+    .ensureAlpha()
+    .resize(e.completo.w, e.completo.h, { fit: "fill", kernel: "lanczos3" })
+    .extract({ left: e.corte.x, top: e.corte.y, width: e.sw, height: e.sh })
+    .raw({ depth: "uchar" })
+    .toBuffer();
+}
+
+/** Extender: cada lado repite su última línea hacia afuera (en un fondo liso o degradado eso ES el fondo) y
+ *  se suaviza un poco para que el ruido de compresión no deje rayas. RGBA crudo W×H, opaco. */
+export async function fondoExtender(visible: Buffer, e: Pick<Encaje, "sw" | "sh" | "expansion">, W: number, H: number): Promise<Buffer> {
+  const sigma = Math.max(1, Math.round(Math.min(W, H) / 200));
+  // Dos pasos: sharp aplica sus operaciones en un orden fijo, y el desenfoque tiene que ir DESPUÉS de extender.
+  const extendido = await crudo(visible, e.sw, e.sh).extend({ ...e.expansion, extendWith: "copy" }).raw({ depth: "uchar" }).toBuffer();
+  return crudo(extendido, W, H).flatten({ background: "#000000" }).blur(sigma).ensureAlpha(1).raw({ depth: "uchar" }).toBuffer();
 }
 
 /** Desenfoque: el mismo anuncio cubriendo todo, muy desenfocado y oscurecido (RGBA crudo W×H, opaco). Se
@@ -85,10 +118,21 @@ export function fondoColor(W: number, H: number, hex: string): Buffer {
  * centro, para darle contexto); de lo que vuelva se recorta la zona de la medida final y se lleva a W×H. Las
  * medidas de vuelta NO se confían: siempre se reescala.
  */
-export async function fondoIA(f: Fuente, W: number, H: number, expandir: Expandir): Promise<{ rgba: Buffer; costoUsd: number | null; modelo: string }> {
-  const L = lienzoIA(f.w, f.h, W, H);
+export async function fondoIA(
+  f: Fuente,
+  W: number,
+  H: number,
+  expandir: Expandir,
+  recortable?: Lados,
+  visible?: { rgba: Buffer; w: number; h: number },
+): Promise<{ rgba: Buffer; costoUsd: number | null; modelo: string }> {
+  const L = lienzoIA(f.w, f.h, W, H, recortable);
   const lienzo = await fondoBlur(f, L.gw, L.gh);
-  pegarDuro(lienzo, L.gw, await escalar(f, L.original.w, L.original.h), { sw: L.original.w, sh: L.original.h, ox: L.original.x, oy: L.original.y });
+  // Contexto para la IA: la parte visible (con recorte, no el anuncio entero), a la escala del lienzo.
+  const contexto = visible
+    ? await crudo(visible.rgba, visible.w, visible.h).resize(L.original.w, L.original.h, { fit: "fill", kernel: "lanczos3" }).raw({ depth: "uchar" }).toBuffer()
+    : await escalar(f, L.original.w, L.original.h);
+  pegarDuro(lienzo, L.gw, contexto, { sw: L.original.w, sh: L.original.h, ox: L.original.x, oy: L.original.y });
   // Sólo viaja por la red: compresión mínima.
   const png = await crudo(lienzo, L.gw, L.gh).png({ compressionLevel: 1 }).toBuffer();
   const r = await expandir({ png, aspect: L.aspect, tamano: L.tamano });
@@ -131,22 +175,28 @@ export class ErrorConCosto extends Error {
   }
 }
 
-export async function componer(f: Fuente, W: number, H: number, modo: Modo, opts: { color?: string; expandir?: Expandir } = {}): Promise<Compuesto> {
-  const e = encajar(f.w, f.h, W, H);
-  const original = await escalar(f, e.sw, e.sh);
+export async function componer(f: Fuente, W: number, H: number, modo: Modo, opts: { color?: string; expandir?: Expandir; bordes?: Bordes } = {}): Promise<Compuesto> {
+  const bordes = opts.bordes ?? (await analizarBordes(f));
+  const e = encajar(f.w, f.h, W, H, bordes.recortable);
+  const original = await escalarVisible(f, e);
   let base: Buffer;
   let deriva: number | null = null;
   let costoUsd: number | null = null;
   let modelo: string | null = null;
-  if (modo === "ia") {
-    if (!opts.expandir) throw new Error("componer: modo ia sin proveedor");
-    const ia = await fondoIA(f, W, H, opts.expandir);
+  if (modo === "ia" && !opts.expandir) throw new Error("componer: modo ia sin proveedor");
+  if (modo === "color" && !opts.color) throw new Error("componer: modo color sin color");
+  if (!hayExpansion(e)) {
+    // El anuncio (recortado) llena la medida: no hay nada que rellenar, ni que cobrar.
+    base = Buffer.from(original);
+  } else if (modo === "extender") {
+    base = await fondoExtender(original, e, W, H);
+  } else if (modo === "ia" && opts.expandir) {
+    const ia = await fondoIA(f, W, H, opts.expandir, bordes.recortable, { rgba: original, w: e.sw, h: e.sh });
     base = ia.rgba;
     costoUsd = ia.costoUsd;
     modelo = ia.modelo;
     deriva = derivaDe(base, W, original, e);
-  } else if (modo === "color") {
-    if (!opts.color) throw new Error("componer: modo color sin color");
+  } else if (modo === "color" && opts.color) {
     base = fondoColor(W, H, opts.color);
   } else {
     base = await fondoBlur(f, W, H);

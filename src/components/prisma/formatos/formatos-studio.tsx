@@ -12,8 +12,8 @@ import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
 import { confirmarLote, crearLote, loteDesdeResultado, prepararSalidas, verSalidas } from "@/app/(app)/prisma/formatos-actions";
 import {
-  HEX, LADO_MAX, LADO_MIN, PLATAFORMAS, PRESETS, FUENTE_MAX_BYTES, agrandaPct, encajar, idCustom, lienzoIA, limpiarNombre, medidaValida, nombreArchivo, sugerir,
-  type Modo, type Preset,
+  HEX, LADO_MAX, LADO_MIN, MODOS, PLATAFORMAS, PRESETS, FUENTE_MAX_BYTES, agrandaPct, encajar, idCustom, leerMedidas, lienzoIA, limpiarNombre, medidaValida, nombreArchivo, sugerir,
+  type Encaje, type Modo, type Preset,
 } from "@/lib/prisma/formatos/geometria";
 import { FX, MODO_AYUDA, MODO_LABEL, PLATAFORMA_LABEL } from "@/lib/prisma/formatos/copy";
 import { BUCKET_FORMATOS, MIME_A_EXT, type LoteVista, type SalidaVista } from "@/lib/prisma/formatos/vista";
@@ -25,7 +25,6 @@ type Fin = "listo" | "error" | "enCurso" | "parar";
 
 const CONCURRENCIA = 4;
 const MAX_TAMANOS = 20;
-const MODOS: Modo[] = ["ia", "blur", "color"];
 /** Cada cuánto se pregunta por los tamaños que se están armando fuera de esta tanda (otra pestaña, respuesta cortada). */
 const SONDEO_MS = 5_000;
 const FOCO = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
@@ -50,14 +49,24 @@ async function bytesDe(url: string): Promise<Uint8Array> {
   return new Uint8Array(await res.arrayBuffer());
 }
 
+/** Dónde cae el anuncio en un tamaño (con el recorte de fondo liso que calculó el servidor). La MISMA cuenta
+ *  que hace componer() al armarlo: la vista previa y el resultado coinciden. */
+const encajeDe = (lote: LoteVista, p: Pick<Preset, "w" | "h">): Encaje => encajar(lote.w, lote.h, p.w, p.h, lote.bordes.recortable);
+const sugerencia = (lote: LoteVista, p: Pick<Preset, "w" | "h">) => sugerir(encajeDe(lote, p), lote.bordes.liso);
+/** % del original escalado que se recortó (fondo liso), o null si no se recortó nada. */
+const recortePct = (e: Encaje): number | null => {
+  const p = Math.round((1 - (e.sw * e.sh) / (e.completo.w * e.completo.h)) * 100);
+  return p >= 1 ? p : null;
+};
+
 function eleccionInicial(lote: LoteVista, p: Preset, iaOn: boolean): Eleccion {
-  const s = sugerir(encajar(lote.w, lote.h, p.w, p.h).cobertura);
+  const s = sugerencia(lote, p);
   return { on: s.encendido, modo: s.modo === "ia" && !iaOn ? "blur" : s.modo, color: lote.colorBorde };
 }
 
 /** Miniatura de proporciones: el recuadro es el tamaño final y el bloque de adentro, dónde cae el anuncio. */
 function Proporcion({ lote, p, apagado }: { lote: LoteVista; p: Preset; apagado: boolean }) {
-  const e = encajar(lote.w, lote.h, p.w, p.h);
+  const e = encajeDe(lote, p);
   const k = 44 / Math.max(p.w, p.h);
   return (
     <span className={cn("relative flex size-12 shrink-0 items-center justify-center", apagado && "opacity-50")} aria-hidden="true">
@@ -93,6 +102,10 @@ export function FormatosStudio({
   const [cw, setCw] = useState("");
   const [ch, setCh] = useState("");
   const [errorMedida, setErrorMedida] = useState<string | null>(null);
+  const [lista, setLista] = useState("");
+  const [errorLista, setErrorLista] = useState<string | null>(null);
+  /** Lo que hizo la última lista pegada (visible bajo el cuadro; el lector de pantalla lo oye por `aviso`). */
+  const [resumenLista, setResumenLista] = useState<string | null>(null);
   const [eleccion, setEleccion] = useState<Record<string, Eleccion>>(() => (demo ? Object.fromEntries(PRESETS.map((p) => [p.id, eleccionInicial(demo.lote, p, iaOn)])) : {}));
   const [salidas, setSalidas] = useState<Record<string, SalidaVista>>(() => Object.fromEntries((demo?.salidas ?? []).map((s) => [s.preset, s])));
   /** Los tamaños de la tanda en curso (el progreso cuenta sólo éstos). */
@@ -242,6 +255,40 @@ export function FormatosStudio({
     setAviso(f(tx(FX.medidaAgregada, lang), { w, h }));
     setCw("");
     setCh("");
+  };
+  /** Pegar la lista del cliente: se eligen EXACTAMENTE esas medidas (las que ya existían como preset se
+   *  reusan con su plataforma; las demás entran como medida libre). Las que requieren rediseño quedan en la
+   *  lista pero apagadas, igual que al elegir a mano. */
+  const usarLista = (ev: FormEvent) => {
+    ev.preventDefault();
+    if (!lote) return;
+    const { medidas, fuera } = leerMedidas(lista);
+    if (!medidas.length) return void setErrorLista(fuera.length ? tx(FX.pegarNada, lang) + f(tx(FX.pegarFuera, lang), { m: fuera.join(", ") }) : tx(FX.pegarNada, lang));
+    const caben = medidas.slice(0, MAX_TAMANOS);
+    const nuevos: Preset[] = caben.filter((m) => !todos.some((p) => p.w === m.w && p.h === m.h)).map((m) => ({ id: idCustom(m.w, m.h), plataforma: "otro", w: m.w, h: m.h }));
+    const enLista = new Set(caben.map((m) => `${m.w}x${m.h}`));
+    let on = 0;
+    let rediseno = 0;
+    const siguiente = Object.fromEntries(
+      [...todos, ...nuevos].map((p) => {
+        const sug = eleccionInicial(lote, p, iaOn);
+        const pedida = enLista.has(`${p.w}x${p.h}`);
+        if (pedida && sug.on) on++;
+        if (pedida && !sug.on) rediseno++;
+        return [p.id, { ...(eleccion[p.id] ?? sug), on: pedida && sug.on }];
+      }),
+    );
+    setCustoms((prev) => [...prev, ...nuevos]);
+    setEleccion(siguiente);
+    setErrorLista(null);
+    setLista("");
+    const resumen =
+      f(tx(FX.pegarListo, lang), { n: caben.length, on }) +
+      (rediseno ? f(tx(FX.pegarRediseno, lang), { r: rediseno }) : "") +
+      (fuera.length ? f(tx(FX.pegarFuera, lang), { m: fuera.join(", ") }) : "") +
+      (medidas.length > MAX_TAMANOS ? f(tx(FX.pegarTope, lang), { n: MAX_TAMANOS }) : "");
+    setResumenLista(resumen);
+    setAviso(resumen);
   };
   const quitarCustom = (id: string) => {
     setCustoms((prev) => prev.filter((p) => p.id !== id));
@@ -660,7 +707,7 @@ export function FormatosStudio({
                         let n = 0;
                         return Object.fromEntries(
                           todos.filter((p) => prev[p.id]).map((p) => {
-                            const rediseno = sugerir(encajar(lote.w, lote.h, p.w, p.h).cobertura).rediseno;
+                            const rediseno = sugerencia(lote, p).rediseno;
                             const on = !rediseno && n < MAX_TAMANOS;
                             if (on) n++;
                             return [p.id, { ...prev[p.id], on }];
@@ -676,6 +723,41 @@ export function FormatosStudio({
                   </Button>
                 </div>
               </div>
+
+              {/* La lista del cliente, pegada tal cual (v2): lo más rápido cuando las medidas no son estándar. */}
+              <form onSubmit={usarLista} noValidate className="mb-3 rounded-xl border border-border bg-card p-3" aria-labelledby="formatos-pegar">
+                <label id="formatos-pegar" htmlFor="formatos-pegar-texto" className="text-sm font-medium text-foreground">
+                  {tx(FX.pegarLista, lang)}
+                </label>
+                <p id="formatos-pegar-ayuda" className="mt-0.5 text-xs text-muted-foreground">
+                  {tx(FX.pegarAyuda, lang)}
+                </p>
+                <div className="mt-2 flex flex-wrap items-start gap-2">
+                  <textarea
+                    id="formatos-pegar-texto"
+                    value={lista}
+                    rows={2}
+                    onChange={(e) => {
+                      setLista(e.target.value);
+                      setErrorLista(null);
+                      setResumenLista(null);
+                    }}
+                    aria-invalid={!!errorLista}
+                    aria-describedby={errorLista ? "formatos-pegar-error" : "formatos-pegar-ayuda"}
+                    className="min-h-10 min-w-0 flex-1 basis-60 resize-y rounded-md border border-input bg-background px-2 py-1.5 font-mono text-xs text-foreground [field-sizing:fixed]"
+                  />
+                  <Button type="submit" size="sm" variant="outline" className="h-10" disabled={!lista.trim() || corriendo}>
+                    {tx(FX.pegarUsar, lang)}
+                  </Button>
+                </div>
+                {errorLista ? (
+                  <p id="formatos-pegar-error" role="alert" className="mt-1.5 flex items-start gap-1.5 text-xs text-foreground">
+                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-600" aria-hidden="true" /> {errorLista}
+                  </p>
+                ) : (
+                  resumenLista && <p className="mt-1.5 text-xs text-muted-foreground">{resumenLista}</p>
+                )}
+              </form>
 
               {/* Leyenda visible: qué hace cada relleno y cuánto cuesta (antes vivía sólo en tooltips). */}
               <div className="mb-3 rounded-xl border border-border bg-card/60 p-3 text-xs text-muted-foreground">
@@ -708,9 +790,10 @@ export function FormatosStudio({
                       <ul aria-labelledby={idGrupo} className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
                         {grupo.map((p) => {
                           const el = eleccion[p.id];
-                          const e = encajar(lote.w, lote.h, p.w, p.h);
-                          const s = sugerir(e.cobertura);
+                          const e = encajeDe(lote, p);
+                          const s = sugerir(e, lote.bordes.liso);
                           const agranda = agrandaPct(e);
+                          const recorta = recortePct(e);
                           const idCheck = `formatos-on-${p.id}`;
                           const nombre = `${tx(PLATAFORMA_LABEL[p.plataforma], lang)} ${p.w}×${p.h}`;
                           return (
@@ -737,6 +820,7 @@ export function FormatosStudio({
                                     </span>
                                   </span>
                                 )}
+                                {recorta && <span className="mt-0.5 block text-xs text-muted-foreground">{f(tx(FX.recorta, lang), { p: recorta })}</span>}
                                 {agranda && (
                                   <span className="mt-0.5 block text-xs text-muted-foreground">
                                     {f(tx(FX.seAmplia, lang), { x: e.escala.toLocaleString(lang === "es" ? "es-MX" : "en-US", { maximumFractionDigits: 1 }) })}

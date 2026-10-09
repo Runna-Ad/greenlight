@@ -7,7 +7,7 @@ import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { prismaFormatosActivo } from "@/lib/prisma/flags";
 import { cargarMarcas } from "@/lib/prisma/data";
-import { HEX } from "@/lib/prisma/formatos/geometria";
+import { BORDES_NINGUNO, HEX } from "@/lib/prisma/formatos/geometria";
 import { iaActiva } from "@/lib/prisma/formatos/proveedor";
 import type { LoteVista, SalidaVista } from "@/lib/prisma/formatos/vista";
 import { FormatosStudio, type MarcaColores } from "@/components/prisma/formatos/formatos-studio";
@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
  */
 function demoFormatos(): { lote: LoteVista; salidas: SalidaVista[] } | null {
   if (process.env.NODE_ENV !== "development") return null;
-  const lote: LoteVista = { id: "demo", nombre: "promo-demo", w: 480, h: 358, url: "/prisma/looks/atardecer_calido.jpg", colorBorde: "#3a2f4b", resultadoId: null, clientId: null };
+  const lote: LoteVista = { id: "demo", nombre: "promo-demo", w: 480, h: 358, url: "/prisma/looks/atardecer_calido.jpg", colorBorde: "#3a2f4b", bordes: BORDES_NINGUNO, resultadoId: null, clientId: null };
   const base = { color: null, jpgUrl: lote.url, costoEstimadoUsd: 0, costoRealUsd: null, deriva: null, revisarUnion: false, pixelLockOk: null, error: null };
   const s = (preset: string, ancho: number, alto: number, x: Partial<SalidaVista>): SalidaVista => ({ ...base, id: preset, preset, ancho, alto, modo: "blur", estado: "listo", pngUrl: lote.url, ...x });
   return {

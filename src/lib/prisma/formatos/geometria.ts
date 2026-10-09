@@ -1,13 +1,18 @@
 /**
  * HÜE Prisma › Formatos — la geometría (módulo PURO: lo usan el servidor, el navegador y los tests).
  *
- * La regla que manda: el anuncio original SÓLO se escala parejo para caber en la medida final ("contain"),
- * se centra, y lo que sobra alrededor se rellena. Todo en enteros: el original escalado mide exactamente
- * `sw × sh`, la expansión por lado suma exactamente la medida final, y nada se pasa ni se queda corto 1 px.
+ * La regla que manda: el anuncio original SÓLO se escala parejo (nunca se estira ni se redibuja), se centra,
+ * y lo que sobra alrededor se rellena. v2 (Pedro, 2026-10-09): se puede RECORTAR fondo vacío — las franjas
+ * lisas del borde del anuncio (ver `bordesDe`) — para que el contenido quede más grande; el contenido nunca se
+ * corta. Todo en enteros: la parte visible del original mide exactamente `sw × sh`, la expansión por lado
+ * suma exactamente la medida final, y nada se pasa ni se queda corto 1 px.
  */
 
 export type Plataforma = "meta" | "google" | "linkedin" | "x" | "pinterest" | "youtube" | "otro";
-export type Modo = "ia" | "blur" | "color";
+/** extender = continuar los bordes lisos/degradados del anuncio (gratis); ia; blur; color. */
+export type Modo = "extender" | "ia" | "blur" | "color";
+export const MODOS: Modo[] = ["extender", "ia", "blur", "color"];
+export const esModo = (m: unknown): m is Modo => typeof m === "string" && (MODOS as string[]).includes(m);
 
 export type Preset = { id: string; plataforma: Plataforma; w: number; h: number };
 
@@ -56,25 +61,45 @@ export function presetDe(id: string): Preset | null {
 export const medidaValida = (w: number, h: number): boolean =>
   Number.isInteger(w) && Number.isInteger(h) && w >= LADO_MIN && h >= LADO_MIN && w <= LADO_MAX && h <= LADO_MAX;
 
+/** Por lado, en px del ORIGINAL. */
+export type Lados = { top: number; right: number; bottom: number; left: number };
+export const SIN_RECORTE: Lados = { top: 0, right: 0, bottom: 0, left: 0 };
+
 export type Encaje = {
-  /** Factor de escala real (sw / w0). >1 = el original se agranda. */
+  /** Factor de escala real (completo.w / w0). >1 = el original se agranda. */
   escala: number;
+  /** La parte VISIBLE del original escalado, y dónde cae en la medida final (siempre adentro). */
   sw: number;
   sh: number;
   ox: number;
   oy: number;
+  /** El original escalado completo y dónde empieza la parte visible dentro de él. Sin recorte: completo =
+   *  {sw, sh} y corte = {0, 0}. */
+  completo: { w: number; h: number };
+  corte: { x: number; y: number };
   /** Píxeles nuevos por lado. left + sw + right === W; top + sh + bottom === H. */
-  expansion: { top: number; right: number; bottom: number; left: number };
+  expansion: Lados;
   /** Fracción de la medida final que ocupa el original (0-1). */
   cobertura: number;
 };
 
+const sinRecorte = (r: Lados) => !(r.top > 0 || r.right > 0 || r.bottom > 0 || r.left > 0);
+
 /**
  * Contain-fit: el lado que manda queda EXACTO (no por redondeo de un flotante), el otro se redondea y se
  * acota a [1, límite]. Centrado con floor: si sobra un píxel impar, va abajo/derecha.
+ *
+ * Con `recortable` (fondo liso por lado, px del original): la escala crece hasta que el CONTENIDO (el
+ * original menos lo recortable) quepa, sin pasar de "cover" (pasado eso sólo se cortaría de más). Lo que se
+ * sale de la medida final se corta sólo del fondo liso; si aun así sobra espacio, se rellena como siempre.
  */
-export function encajar(w0: number, h0: number, W: number, H: number): Encaje {
+export function encajar(w0: number, h0: number, W: number, H: number, recortable: Lados = SIN_RECORTE): Encaje {
   if (!(w0 > 0 && h0 > 0 && W > 0 && H > 0)) throw new Error("encajar: medidas inválidas");
+  if (!sinRecorte(recortable)) {
+    const r = acotarRecorte(w0, h0, recortable);
+    const e = encajarRecortando(w0, h0, W, H, r);
+    if (e) return e;
+  }
   let sw: number;
   let sh: number;
   // Comparar en enteros (w0*H vs W*h0) evita que un flotante elija el lado equivocado en empates.
@@ -93,10 +118,84 @@ export function encajar(w0: number, h0: number, W: number, H: number): Encaje {
     sh,
     ox,
     oy,
+    completo: { w: sw, h: sh },
+    corte: { x: 0, y: 0 },
     expansion: { top: oy, right: W - sw - ox, bottom: H - sh - oy, left: ox },
     cobertura: (sw * sh) / (W * H),
   };
 }
+
+/** Enteros ≥ 0 y nunca más de 45 % por lado: siempre queda contenido en medio (aunque el anuncio sea liso). */
+function acotarRecorte(w0: number, h0: number, r: Lados): Lados {
+  const c = (v: number, lado: number) => Math.max(0, Math.min(Math.floor(v), Math.floor(lado * 0.45)));
+  return { top: c(r.top, h0), right: c(r.right, w0), bottom: c(r.bottom, h0), left: c(r.left, w0) };
+}
+
+/** Un eje: dónde va el original escalado (`full` px) en la medida final (`T` px) cortando, a lo sumo, `ma` px
+ *  del principio y `mb` del final (ya escalados). Devuelve el offset (puede ser negativo) y la parte visible. */
+function eje(full: number, T: number, ma: number, mb: number) {
+  const centrado = Math.floor((T - full) / 2);
+  const lo = -ma; // no cortar más que `ma` al principio
+  const hi = T - full + mb; // ni más que `mb` al final
+  // Si el redondeo deja 1-2 px de contradicción, se reparte (el 30 % de aire que nunca se recorta lo absorbe).
+  const o = lo <= hi ? Math.min(hi, Math.max(lo, centrado)) : Math.round((lo + hi) / 2);
+  const v0 = Math.max(0, o);
+  const v1 = Math.min(T, o + full);
+  return { o, v0, tam: v1 - v0, corte: v0 - o };
+}
+
+function encajarRecortando(w0: number, h0: number, W: number, H: number, r: Lados): Encaje | null {
+  const pw = w0 - r.left - r.right;
+  const ph = h0 - r.top - r.bottom;
+  // ¿Gana algo? Si el contenido no deja crecer la escala más allá de contain, el contain exacto de siempre.
+  const contain = Math.min(W / w0, H / h0);
+  const cover = Math.max(W / w0, H / h0);
+  const cabe = Math.min(W / pw, H / ph);
+  // Recortar nunca AGRANDA el original más allá de su tamaño real (se vería borroso): techo = 1×, o contain si
+  // el anuncio ya era más chico que la medida.
+  const techo = Math.max(contain, 1);
+  const s = Math.min(cabe, cover, techo);
+  if (s <= contain * 1.001) return null;
+  let fw: number;
+  let fh: number;
+  if (s === techo && techo < cabe && techo < cover) {
+    fw = Math.round(w0 * s);
+    fh = Math.round(h0 * s);
+  } else if (cabe >= cover) {
+    // Cover: un lado EXACTO a la medida final, el otro se pasa y se corta del fondo liso.
+    if (W * h0 >= H * w0) {
+      fw = W;
+      fh = Math.max(H, Math.round((h0 * W) / w0));
+    } else {
+      fh = H;
+      fw = Math.max(W, Math.round((w0 * H) / h0));
+    }
+  } else if (W * ph <= H * pw) {
+    // Manda el ancho del contenido: el contenido escalado mide exactamente W.
+    fw = Math.round((w0 * W) / pw);
+    fh = Math.round((h0 * W) / pw);
+  } else {
+    fh = Math.round((h0 * H) / ph);
+    fw = Math.round((w0 * H) / ph);
+  }
+  const k = fw / w0;
+  const x = eje(fw, W, Math.floor(r.left * k), Math.floor(r.right * k));
+  const y = eje(fh, H, Math.floor(r.top * k), Math.floor(r.bottom * k));
+  if (x.tam < 1 || y.tam < 1) return null;
+  return {
+    escala: k,
+    sw: x.tam,
+    sh: y.tam,
+    ox: x.v0,
+    oy: y.v0,
+    completo: { w: fw, h: fh },
+    corte: { x: x.corte, y: y.corte },
+    expansion: { top: y.v0, right: W - x.v0 - x.tam, bottom: H - y.v0 - y.tam, left: x.v0 },
+    cobertura: (x.tam * y.tam) / (W * H),
+  };
+}
+
+export const hayExpansion = (e: Pick<Encaje, "expansion">): boolean => !sinRecorte(e.expansion);
 
 /** Umbrales del modo por omisión. Ajustables: son criterio, no física. */
 export const COBERTURA_IA = 0.5;
@@ -105,13 +204,16 @@ export const COBERTURA_BLUR = 0.3;
 export type Sugerencia = { modo: Modo; rediseno: boolean; encendido: boolean };
 
 /**
- * Cambio moderado → IA; grande → desenfoque; extremo (el original queda diminuto) → "Requiere rediseño",
- * apagado por omisión (se puede forzar; entonces va en desenfoque).
+ * Sin nada que rellenar, o con bordes lisos donde hay que rellenar → extender (gratis, se ve continuo).
+ * Si no: cambio moderado → IA; grande → desenfoque; extremo (el original queda diminuto) → "Requiere
+ * rediseño", apagado por omisión (se puede forzar).
  */
-export function sugerir(cobertura: number): Sugerencia {
-  if (cobertura >= COBERTURA_IA) return { modo: "ia", rediseno: false, encendido: true };
-  if (cobertura >= COBERTURA_BLUR) return { modo: "blur", rediseno: false, encendido: true };
-  return { modo: "blur", rediseno: true, encendido: false };
+export function sugerir(e: Pick<Encaje, "cobertura" | "expansion">, liso: Record<keyof Lados, boolean> | null = null): Sugerencia {
+  const extendible = !hayExpansion(e) || (!!liso && (Object.keys(e.expansion) as (keyof Lados)[]).every((k) => e.expansion[k] === 0 || liso[k]));
+  if (e.cobertura < COBERTURA_BLUR) return { modo: extendible ? "extender" : "blur", rediseno: true, encendido: false };
+  if (extendible) return { modo: "extender", rediseno: false, encendido: true };
+  if (e.cobertura >= COBERTURA_IA) return { modo: "ia", rediseno: false, encendido: true };
+  return { modo: "blur", rediseno: false, encendido: true };
 }
 
 /** Si el original se AGRANDA más de un 5 %, se avisa (se verá suave). Devuelve el % o null. */
@@ -159,8 +261,8 @@ export type LienzoIA = {
 };
 
 /** La proporción de la IA más cercana a W:H (distancia en log, simétrica), el tamaño más barato que no
- *  agrande la zona final más de un 10 %, y dónde va todo dentro. */
-export function lienzoIA(w0: number, h0: number, W: number, H: number): LienzoIA {
+ *  agrande la zona final más de un 10 %, y dónde va todo dentro (la parte VISIBLE del original). */
+export function lienzoIA(w0: number, h0: number, W: number, H: number, recortable: Lados = SIN_RECORTE): LienzoIA {
   const objetivo = Math.log(W / H);
   let aspect = "1:1";
   let mejor = Infinity;
@@ -183,16 +285,19 @@ export function lienzoIA(w0: number, h0: number, W: number, H: number): LienzoIA
     z = zonaEn("2K");
   }
   const k = z.e.sw / W;
-  const final = encajar(w0, h0, W, H);
+  const final = encajar(w0, h0, W, H, recortable);
   const ow = Math.max(1, Math.min(z.e.sw, Math.round(final.sw * k)));
   const oh = Math.max(1, Math.min(z.e.sh, Math.round(final.sh * k)));
+  // Mismo lugar relativo que en la medida final (con recorte ya no está necesariamente centrado).
+  const ox = Math.min(z.e.sw - ow, Math.round(final.ox * k));
+  const oy = Math.min(z.e.sh - oh, Math.round(final.oy * k));
   return {
     aspect,
     tamano,
     gw: z.gw,
     gh: z.gh,
     zona: { x: z.e.ox, y: z.e.oy, w: z.e.sw, h: z.e.sh },
-    original: { x: z.e.ox + Math.floor((z.e.sw - ow) / 2), y: z.e.oy + Math.floor((z.e.sh - oh) / 2), w: ow, h: oh },
+    original: { x: z.e.ox + ox, y: z.e.oy + oy, w: ow, h: oh },
     costoUsd: COSTO_IA_USD[tamano],
   };
 }
@@ -270,6 +375,83 @@ export function colorDeBorde(rgba: Uint8Array, w: number, h: number, grosor = 2)
   }
   const hex = (v: number) => Math.round(v / n).toString(16).padStart(2, "0");
   return n ? `#${hex(r)}${hex(g)}${hex(b)}` : "#000000";
+}
+
+// ── Bordes lisos (para recortar fondo vacío y para "extender") ─────────────
+/** Lo que se sabe de los bordes del anuncio. `recortable` en px del ORIGINAL; `liso` = ese lado se puede
+ *  continuar hacia afuera sin que se note (color plano o degradado suave). */
+export type Bordes = { recortable: Lados; liso: Record<keyof Lados, boolean> };
+export const BORDES_NINGUNO: Bordes = { recortable: SIN_RECORTE, liso: { top: false, right: false, bottom: false, left: false } };
+
+/** Diferencia (suma RGBA) entre dos píxeles vecinos que ya cuenta como "borde de algo" (letra, logo, foto).
+ *  En la copia chica (≤ 256 px) el ruido de JPEG y los degradados quedan muy por debajo. */
+const SALTO = 30;
+/** Saltos que todavía se toleran en una línea lisa: 1 por cada 200 px (mínimo 1). Cualquier cosa que toque la
+ *  línea — una barra, un logo — deja DOS saltos (entra y sale), así que no pasa. Mejor no recortar de más:
+ *  si un fondo no se reconoce como liso, sólo se pierde el ahorro (cae a IA/desenfoque), nunca contenido. */
+const saltosTolerados = (largo: number) => Math.max(1, Math.floor(largo / 200));
+/** De la franja lisa sólo se recorta esta fracción: el resto queda como aire alrededor del contenido. */
+export const RECORTE_DE_LA_FRANJA = 0.7;
+/** Mínimo de líneas lisas (en la copia chica) para continuar ese lado hacia afuera. */
+const LINEAS_PARA_EXTENDER = 2;
+
+/**
+ * Mide, por lado, cuántas líneas seguidas desde el borde son FONDO LISO: casi sin saltos a lo largo de la
+ * línea ni contra la línea anterior (así un degradado cuenta como liso, una letra o una foto no). Trabaja
+ * sobre una copia chica (RGBA crudo `w × h`) y devuelve el recortable en px del original (`w0 × h0`).
+ */
+export function bordesDe(rgba: Uint8Array, w: number, h: number, w0: number, h0: number): Bordes {
+  const salto = (i: number, j: number) =>
+    Math.abs(rgba[i] - rgba[j]) + Math.abs(rgba[i + 1] - rgba[j + 1]) + Math.abs(rgba[i + 2] - rgba[j + 2]) + Math.abs(rgba[i + 3] - rgba[j + 3]);
+  const px = (x: number, y: number) => (y * w + x) * 4;
+  /** Profundidad lisa desde un lado: `largo` = píxeles por línea, `pos(k, t)` = el píxel t de la línea k
+   *  (k = 0 es la del borde). */
+  const profundidad = (lineas: number, largo: number, pos: (k: number, t: number) => number): number => {
+    const tope = Math.floor(lineas * 0.45);
+    for (let k = 0; k < tope; k++) {
+      let saltos = 0;
+      for (let t = 0; t < largo; t++) {
+        const i = pos(k, t);
+        if ((t + 1 < largo && salto(i, pos(k, t + 1)) > SALTO) || (k > 0 && salto(i, pos(k - 1, t)) > SALTO)) saltos++;
+      }
+      if (saltos > saltosTolerados(largo)) return k;
+    }
+    return tope;
+  };
+  const d = {
+    top: profundidad(h, w, (k, t) => px(t, k)),
+    bottom: profundidad(h, w, (k, t) => px(t, h - 1 - k)),
+    left: profundidad(w, h, (k, t) => px(k, t)),
+    right: profundidad(w, h, (k, t) => px(w - 1 - k, t)),
+  };
+  // A px del original, conservador: se descuenta una línea (la que ya tocaba el contenido) y se deja aire.
+  const aOriginal = (lineas: number, chico: number, grande: number) => Math.floor(Math.max(0, lineas - 1) * (grande / chico) * RECORTE_DE_LA_FRANJA);
+  return {
+    recortable: { top: aOriginal(d.top, h, h0), right: aOriginal(d.right, w, w0), bottom: aOriginal(d.bottom, h, h0), left: aOriginal(d.left, w, w0) },
+    liso: { top: d.top >= LINEAS_PARA_EXTENDER, right: d.right >= LINEAS_PARA_EXTENDER, bottom: d.bottom >= LINEAS_PARA_EXTENDER, left: d.left >= LINEAS_PARA_EXTENDER },
+  };
+}
+
+// ── Pegar una lista de medidas ───────────────────────────────────────────
+/**
+ * Saca las medidas de un texto pegado tal cual viene del cliente: "9:16 (1080*1920)  1200*627 320x250 …".
+ * Acepta x, ×, X o * como separador; las proporciones sueltas ("9:16") se ignoran (no dicen medida).
+ * Devuelve las válidas sin repetir (en el orden en que vienen) y las que se salen de los límites.
+ */
+export function leerMedidas(texto: string): { medidas: { w: number; h: number }[]; fuera: string[] } {
+  const medidas: { w: number; h: number }[] = [];
+  const fuera: string[] = [];
+  const vistas = new Set<string>();
+  for (const m of texto.matchAll(/(\d{1,5})\s*[x×X*]\s*(\d{1,5})/g)) {
+    const w = Number(m[1]);
+    const h = Number(m[2]);
+    const k = `${w}x${h}`;
+    if (vistas.has(k)) continue;
+    vistas.add(k);
+    if (medidaValida(w, h)) medidas.push({ w, h });
+    else fuera.push(`${w}×${h}`);
+  }
+  return { medidas, fuera };
 }
 
 export const HEX = /^#[0-9a-f]{6}$/i;

@@ -400,7 +400,7 @@ export type PrismaFormatosSalidaRow = {
   preset: string;
   ancho: number;
   alto: number;
-  modo: "ia" | "blur" | "color";
+  modo: "extender" | "ia" | "blur" | "color";
   color: string | null;
   estado: "pendiente" | "procesando" | "listo" | "error";
   png_path: string | null;

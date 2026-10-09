@@ -4,7 +4,7 @@ import { firmar } from "@/lib/prisma/data";
 import { sniffImageMime } from "@/lib/referencia";
 import type { PrismaFormatosLoteRow, PrismaFormatosSalidaRow } from "@/lib/database.types";
 import { FUENTE_MAX_BYTES, type Modo } from "@/lib/prisma/formatos/geometria";
-import { colorBorde, leerFuente, type Fuente } from "@/lib/prisma/formatos/componer";
+import { analizarBordes, colorBorde, leerFuente, type Fuente } from "@/lib/prisma/formatos/componer";
 import { BUCKET_FORMATOS, MIME_A_EXT, revisarUnion, type LoteVista, type MimeFuente, type SalidaVista } from "@/lib/prisma/formatos/vista";
 import { fallo, puedeTocar, UUID, faltaMigracion, type Fail, type Sesion } from "./comun";
 
@@ -57,7 +57,8 @@ export const firmarFormatos = (db: Db, paths: (string | null)[]): Promise<Map<st
   firmar(db, paths.filter((p): p is string => !!p), BUCKET_FORMATOS);
 
 export async function loteVista(l: PrismaFormatosLoteRow, url: string, fuente: Fuente): Promise<LoteVista> {
-  return { id: l.id, nombre: l.nombre, w: fuente.w, h: fuente.h, url, colorBorde: await colorBorde(fuente), resultadoId: l.resultado_id, clientId: l.client_id };
+  const [color, bordes] = await Promise.all([colorBorde(fuente), analizarBordes(fuente)]);
+  return { id: l.id, nombre: l.nombre, w: fuente.w, h: fuente.h, url, colorBorde: color, bordes, resultadoId: l.resultado_id, clientId: l.client_id };
 }
 
 export function salidaVista(s: PrismaFormatosSalidaRow, urls: Map<string, string>): SalidaVista {
