@@ -1,5 +1,34 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔨 2026-10-09 — Prisma › Formatos v2 (rama `prisma`, SIN fusionar main todavía — Pedro: "don't merge yet")
+Pedro trae una lista real de un cliente: 9:16 (1080×1920), 1200×627, 320×250, 320×50, 1280×720, 600×500, 876×324,
+768×1024, 720×1600, 720×1280, 640×100, 4:5 (1200×1500) — varias NO estándar. Quiere rápido, exacto y lo más barato.
+**Diagnóstico de v1:** "escalar parejo + rellenar" no sirve en banners extremos: en 320×50 / 640×100 el anuncio queda de
+50×50 / 100×100 (16 % de cobertura) y 876×324 queda en 37 %; además 1 llamada de IA POR TAMAÑO (~$0.60-0.80 por anuncio
+con Nano Banana 2) y Gemini redibuja todo el lienzo (sin máscara) → la unión puede notarse.
+**Decisiones de Pedro (2026-10-09):** recortar fondo VACÍO está OK (lo intocable = texto, logo, producto, caras, sin
+deformar) · REACOMODAR las piezas del anuncio está OK (banners) · los anuncios vienen sobre todo de **Photoshop (PSD)** y
+de herramientas de IA (planos) · IA = Nano Banana 2.1.
+**Plan (en orden):**
+- [x] 1. Nano Banana 2.1 (`gemini-nano-banana-2.1`, salió 2026-10-06): la `gemini-3.1-flash-image` se apaga el
+      **2026-10-29**. Imagen de salida a la mitad (US$30/M tokens: ~$0.034 1K · ~$0.050 2K), entrada ×3 (US$1.50/M,
+      irrelevante: 1 imagen). Precios de fuentes secundarias (ai.google.dev bloqueado desde la sesión): la 1ª llamada
+      real los confirma con usageMetadata. Sigue sin máscara → el pegado duro se queda. `generateContent` sigue (Google
+      ya lo llama "legacy"; la doc nueva es la Interactions API) → confirmar en la prueba real.
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+      archivos + `GEMINI_API_KEY` con saldo como secreto del entorno de la sesión (no pegarla en el chat).
+- [ ] 3. Pegar la lista de medidas (texto libre → tamaños) + juegos guardados por cliente · métodos GRATIS: recorte de
+      fondo vacío (respetando cajas protegidas) y extender bordes lisos/degradados POR LADO (no el promedio) · análisis
+      del anuncio UNA vez (Gemini visión → cajas de titular/logo/CTA/producto/caras + tipo de fondo, ~$0.002).
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+      dibujar → caer a la puerta de imagen plana con aviso.
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+      ajuste de color de la unión SÓLO del lado del relleno. Meta: ~$0.05-0.10 por anuncio con fondo de foto, $0 con liso.
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- Aparte: `src/lib/prisma/catalogo.ts` (lo que Prisma recomienda en Higgsfield) sigue con Nano Banana 2 → que lo
+  proponga el Vigía o agregarlo cuando Higgsfield tenga la 2.1.
+
 ## 🔨 2026-10-02 — Prisma › Formatos (un anuncio terminado → N tamaños, original intocable) · rama `prisma`
 Pedro: subo UN anuncio plano, marco 10-15 tamaños por plataforma, recibo cuadrícula + ZIP. El original sólo se escala
 parejo (sin recorte, estirado ni redibujo); lo nuevo alrededor = IA, desenfoque o color.

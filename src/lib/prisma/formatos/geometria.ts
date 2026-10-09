@@ -119,9 +119,10 @@ export function agrandaPct(e: Encaje): number | null {
   return e.escala > 1.05 ? Math.round((e.escala - 1) * 100) : null;
 }
 
-// ── Lienzo de la IA (Gemini 3.1 Flash Image) ──────────────────────────────
-// Proporciones y medidas EXACTAS de la tabla de ai.google.dev/gemini-api/docs/image-generation
-// (leída 2026-10-02). Sólo 1K y 2K: el valor de la API para 512 px no está claro en la doc.
+// ── Lienzo de la IA (Nano Banana 2.1) ─────────────────────────────────────
+// Proporciones y medidas EXACTAS de la tabla de ai.google.dev/gemini-api/docs/image-generation para Nano
+// Banana 2 (leída 2026-10-02); la 2.1 es una actualización del mismo modelo y se asume igual hasta la prueba
+// real (de todos modos lo que vuelve se reescala, nunca se confía su medida). Sólo 1K y 2K.
 export type TamanoIA = "1K" | "2K";
 export const RATIOS_IA: Record<string, Record<TamanoIA, [number, number]>> = {
   "1:1": { "1K": [1024, 1024], "2K": [2048, 2048] },
@@ -139,8 +140,9 @@ export const RATIOS_IA: Record<string, Record<TamanoIA, [number, number]>> = {
   "16:9": { "1K": [1376, 768], "2K": [2752, 1536] },
   "21:9": { "1K": [1584, 672], "2K": [3168, 1344] },
 };
-/** US$ por imagen de salida (pricing de Gemini 3.1 Flash Image, 2026-10-02) + ~1 000 tokens de entrada a US$0.50/M. */
-export const COSTO_IA_USD: Record<TamanoIA, number> = { "1K": 0.067 + 0.001, "2K": 0.101 + 0.001 };
+/** US$ por imagen de salida de Nano Banana 2.1 (1 120 / 1 680 tokens a US$30/M) + ~1 000 tokens de entrada a
+ *  US$1.50/M. Antes (Nano Banana 2): 0.068 / 0.102. */
+export const COSTO_IA_USD: Record<TamanoIA, number> = { "1K": 0.0336 + 0.0015, "2K": 0.0504 + 0.0015 };
 /** Cuánto se tolera AGRANDAR lo que devuelve la IA antes de pedir el tamaño siguiente. */
 const TOLERANCIA_AGRANDAR = 1.1;
 

@@ -5,18 +5,22 @@ import { ErrorConCosto, type Expandir, type PeticionIA, type RespuestaIA } from 
  * HÜE Prisma › Formatos — el relleno con IA. UNA interfaz (`Expandir`, en componer.ts) y un proveedor
  * detrás; cambiar de proveedor = otra función con la misma forma, sin tocar el resto.
  *
- * Hoy: Gemini Nano Banana 2 (`gemini-3.1-flash-image`) por la API REST de Gemini, la misma que usa
- * scripts/looks-thumbs.mjs. Gemini no recibe máscara: redibuja TODO el lienzo, centro incluido. No importa:
+ * Hoy: Gemini Nano Banana 2.1 (`gemini-nano-banana-2.1`, 2026-10-06) por la API REST de Gemini
+ * (generateContent), la misma que usa scripts/looks-thumbs.mjs. Reemplaza a Nano Banana 2
+ * (`gemini-3.1-flash-image`), que Google apaga el 2026-10-29; la imagen de salida cuesta la mitad. Gemini no recibe máscara: redibuja TODO el lienzo, centro incluido. No importa:
  * el último paso de componer() pega encima NUESTRA copia del original, y la deriva mide cuánto se movió.
  *
  * APAGADO salvo `PRISMA_FORMATOS_IA=gemini` + `GEMINI_API_KEY` (cuesta dinero; Pedro lo enciende tras probarlo).
  */
 
-export const MODELO_GEMINI = "gemini-3.1-flash-image";
-/** Precios publicados de Gemini 3.1 Flash Image (ai.google.dev/gemini-api/docs/pricing, 2026-10-02), US$ por token. */
-const USD_ENTRADA = 0.5 / 1e6;
-const USD_SALIDA_TEXTO = 3 / 1e6;
-const USD_SALIDA_IMAGEN = 60 / 1e6;
+export const MODELO_GEMINI = "gemini-nano-banana-2.1";
+/** Precios de Nano Banana 2.1, US$ por token (reportados al lanzamiento, 2026-10-09; la página de precios de
+ *  Google no se pudo abrir desde la sesión → la primera llamada real los confirma con usageMetadata).
+ *  Entrada ×3 vs Nano Banana 2 (0.50 → 1.50), imagen de salida a la mitad (60 → 30): aquí la entrada es una
+ *  sola imagen, así que sale ~mitad de precio. */
+const USD_ENTRADA = 1.5 / 1e6;
+const USD_SALIDA_TEXTO = 7.5 / 1e6;
+const USD_SALIDA_IMAGEN = 30 / 1e6;
 const TIEMPO_MAX_MS = 150_000;
 
 const PROMPT =

@@ -28,8 +28,8 @@ function demoFormatos(): { lote: LoteVista; salidas: SalidaVista[] } | null {
   return {
     lote,
     salidas: [
-      s("meta-1080x1080", 1080, 1080, { modo: "ia", pixelLockOk: true, deriva: 6.2, costoEstimadoUsd: 0.068, costoRealUsd: 0.0702 }),
-      s("meta-1080x1920", 1080, 1920, { modo: "ia", pixelLockOk: true, deriva: 24.5, revisarUnion: true, costoEstimadoUsd: 0.102, costoRealUsd: 0.1031 }),
+      s("meta-1080x1080", 1080, 1080, { modo: "ia", pixelLockOk: true, deriva: 6.2, costoEstimadoUsd: 0.0351, costoRealUsd: 0.0362 }),
+      s("meta-1080x1920", 1080, 1920, { modo: "ia", pixelLockOk: true, deriva: 24.5, revisarUnion: true, costoEstimadoUsd: 0.0519, costoRealUsd: 0.0527 }),
       s("google-300x250", 300, 250, { estado: "procesando", pngUrl: null, jpgUrl: null }),
       s("linkedin-1200x627", 1200, 627, { pixelLockOk: true, costoRealUsd: 0 }),
       s("x-1600x900", 1600, 900, { modo: "ia", estado: "error", pngUrl: null, jpgUrl: null, error: "La IA está saturada. Reintenta en un minuto." }),

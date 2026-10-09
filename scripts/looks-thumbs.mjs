@@ -1,5 +1,5 @@
-// Miniaturas de los looks del paso 2 (F5a): una imagen por look, generada UNA vez con Nano Banana 2
-// (gemini-3.1-flash-image) por la API REST de Gemini, reducida a 480 px y guardada como JPEG en
+// Miniaturas de los looks del paso 2 (F5a): una imagen por look, generada UNA vez con Nano Banana 2.1
+// (gemini-nano-banana-2.1; la 3.1-flash-image se apaga el 2026-10-29) por la API REST de Gemini, reducida a 480 px y guardada como JPEG en
 // public/prisma/looks/<id>.jpg. No corre en tests ni en build: se corre a mano cuando cambien los
 // looks. Necesita GEMINI_API_KEY en el entorno (no se lee de ningún archivo del repo).
 //   GEMINI_API_KEY=… node scripts/looks-thumbs.mjs            → genera las que falten
@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { LOOKS } from "../src/lib/prisma/looks.ts";
 
 const DIR = "public/prisma/looks";
-const MODELO = "gemini-3.1-flash-image";
+const MODELO = "gemini-nano-banana-2.1";
 const dry = process.argv.includes("--dry-run");
 const todas = process.argv.includes("--todas");
 const key = process.env.GEMINI_API_KEY;
