@@ -49,14 +49,15 @@ Y alto de su parte sólida; el fondo cubre y conserva el piso bajo el HERO; el p
 LEGAL). Revisión automática: nada fuera del lienzo, nada encimado, LEGAL < 7 px de alto de letra → "revisar".
 Resultado: 8 sin avisos; 4 marcadas por LEGAL chico (600×500 ≈6.2 px, 640×100 ≈3.5, 320×250 ≈3.3, 320×50 ≈1.7).
 El alto de letra del legal es una APROXIMACIÓN del laboratorio (9 px en el maestro): en la app sale del texto real.
-Pendiente de Pedro: HERO a la izquierda (lo que vio antes) o a la derecha (lo que pide el script del equipo).
+RESUELTO (Pedro, 2026-10-13): HERO a la DERECHA como el script del equipo, con volteo de un clic. Las cifras de
+letra de arriba eran la aproximación del laboratorio; las reales (del texto del PSD) están en B3.
 
 ### Plan B — puerta PSD (2026-10-13)
-**Next Step:** B3 — armar las medidas desde las piezas DENTRO de la app (hoy sólo existe en el laboratorio,
-`psd-piezas.mjs`): elegir la mesa más parecida, acomodo de 2 columnas para horizontales, LEGAL con su propia escala
-y marca "revisar" si queda chico (regla de Pedro), comprobaciones de la sección 4 de la guía. Antes de fijar los
-acomodos: leer el script del equipo (`DiDi_Adaptations_V3.jsx`) si Pedro lo pasa, y más PSD. Preguntas abiertas a
-Pedro: safe zones por medida · si en el nombre de entrega cambia la plataforma (`_FB_` vs `_EC_`) · ¿commit en `prisma`?
+**Next Step:** B5 — la pantalla: subir un PSD en Prisma › Formatos, leerlo en el navegador (Web Worker con reloj),
+pintar cada medida en un canvas con `acomodar` + las piezas de `despiezar`, botón "voltear" (`heroLado`) y la lista
+de avisos por medida. Corre entero en este Mac / la preview: sin migración, sin IA, sin tocar lo vivo.
+Esperando de Pedro (ya tiene el mensaje para el equipo): zonas seguras por medida · qué medidas llevan FB / EC / GG
+en el nombre · letra mínima aceptable del legal (hoy `LETRA_MIN_PX = 10`, provisional) · 3-5 PSD más.
 - [x] B0. Laboratorio FUERA del repo, guardado en `~/Projects/greenlight-psd-lab/` (`psd-leer.mjs` lector ·
       `psd-mesas.mjs` informe por mesa + resizer de hoy · `psd-piezas.mjs` piezas + acomodo horizontal ·
       `psd-correr.mjs` y `hacer-psd-falso.mjs` ensayo con PSD inventados). Trae su propio `ag-psd`; usa `sharp` y el
@@ -141,9 +142,49 @@ Pedro: safe zones por medida · si en el nombre de entrega cambia la plataforma 
       mala intención aún puede colgar a la librería dentro de `leerPsd`); revisar `File.size` antes de leerlo;
       pintar avisos, motivos y nombres como TEXTO, nunca HTML; lo que acabe en nombre de archivo pasa por
       `limpiarNombre` (geometria.ts).
-- [ ] B3. Componer "fondo aparte" por medida: el fondo llena la medida (cover), las piezas van en un bloque escalado
-      parejo; candado de píxeles sobre las piezas. Umbral de caída a la vía plana: fidelidad > 0.5 % o sin capa de fondo.
-- [ ] B4. Motor de acomodo para banners delgados (320×50, 640×100): piezas sueltas en fila. Es el paso 4 de abajo.
+- [~] B3. Acomodo en la app. **La lógica está HECHA (2026-10-13); falta pintarla en la pantalla (B5).**
+      `src/lib/prisma/formatos/acomodo.ts` (puro: sólo cajas y números): `elegirMaestro` (la mesa de forma más
+      parecida) · `familiaDe` (igual / display / horizontal / ancho / banner) · `acomodar(maestro, W, H, { heroLado,
+      zona })` · `sePuedeVoltear` · `nombreSalida` (cambia `_4x5_` por `_1200x627_`).
+      - **Decisión de Pedro (2026-10-13): opción B = HERO a la DERECHA por omisión (como el script del equipo) + un
+        volteo de un clic a la izquierda.** `heroLado: "izquierda"` da el espejo exacto (probado).
+      - Cada pieza se ajusta por ancho Y alto de su parte sólida (el script del equipo sólo miraba el ancho).
+      - Regla del legal (Pedro): con la forma del maestro, el pie recupera lo que la reducción le quitó (crece sobre
+        su borde de abajo hasta el ancho útil o la pieza de arriba) y NUNCA queda más grande de como lo dejó el
+        diseñador; a la medida del maestro no se mueve nada. En los acomodos nuevos el pie lleva su propia escala
+        (tope 1.15× y una franja del alto). Si la letra queda < `LETRA_MIN_PX`, aviso "letra".
+      - La letra real sale del PSD: `psd.ts` ahora da `letraPx` por capa de texto y `letraMinPx` por pieza (tamaño ×
+        escala de la transformación). El legal de este archivo mide 16.0 px en las dos mesas.
+      - Avisos por medida (lo medible de la sección 4 de la guía): pieza sin lugar ("falta") · fuera de la medida ·
+        dentro de la zona segura · dos piezas encimadas · letra chica.
+      - PSD real, 12 medidas: 9 sin avisos; 320×250, 640×100 y 320×50 marcadas SÓLO por letra chica (legal 5.9 /
+        6.2 / 3.1 px). Letra más chica en las demás: 10.8 px (600×500) a 18.4 px (1200×627, 1280×720).
+      - **Reap (code-reviewer, sólo leyendo): 4 SERIOS, los 4 reproducidos con números ANTES de arreglar y ahora
+        con test.** (1) el pie crecía ENCIMA de una pieza que tuviera al lado (sólo miraba a la de arriba): ahora cada
+        tamaño se prueba contra todas las piezas · (2) una zona segura más grande que la medida daba tamaños
+        NEGATIVOS: ahora se avisa y se acomoda sin ella (tope 75 % de un lado; NaN/negativos cuentan como 0) · (3) un
+        legal aplanado (sin letra medible) nunca se marcaba: ahora se avisa en cuanto se reduce · (4) una medida
+        vertical lejos de la forma del maestro salía con el acomodo del maestro, chico y sin aviso: ahora aviso "forma".
+        De paso: caja vacía o con NaN → aviso (antes se perdía callada) · carpeta repetida → aviso propio ·
+        `nombreSalida` recibe la mesa y cambia la ficha con SU forma (un nombre con promo "2x1" ya no se rompe; ve la
+        medida al principio y al final) · `elegirMaestro([])` → −1 · `acomodar` rechaza Infinity.
+        No tocado (dicho por el revisor, inofensivo): no se registra cuánto se corre el ancla del fondo al amarrarlo.
+      - Tests: `scripts/test-formatos.mjs` **128/0** (antes 104): las 12 medidas contra el reparto del script, el
+        maestro intacto, el volteo, zona segura, nombre de entrega, y 2,418 casos de maestros raros × medidas × lado
+        × zona (números finitos, fondo que cubre, nada fuera, nada encimado, el pie no crece sobre nadie, toda pieza
+        colocada o avisada). 30 mutaciones probadas (romper el código a propósito): 29 hicieron fallar un test; la
+        otra era una condición redundante y se quitó. `npm test` completo: lib 481/0 · prisma 975/0 · formatos
+        128/0 · db 543/0 · import 81/0 · sync 44/0. tsc y eslint limpios.
+        Los arreglos de la revisión NO pasaron por un segundo revisor; el archivo se vuelve a revisar en B5.
+      - El laboratorio (`~/Projects/greenlight-psd-lab/psd-armar.mjs`) ya sólo PINTA: lee y acomoda con el código de
+        la app. Salida para Pedro: `~/Desktop/formatos-salida/12-medidas/index.html` (12 medidas + sección "El
+        volteo" con las 5 que se pueden voltear). Miradas una por una antes de enseñarlas.
+      - Limitaciones a la vista: 720×1600 conserva el acomodo del 9:16 centrado (queda aire arriba y abajo; el
+        script del equipo tiene una familia "tall" aparte) · una medida vertical lejos de la forma del maestro cae
+        en "igual" sin acomodo propio · un solo PSD real probado · la zona segura es opcional y nadie la manda aún.
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+      y no se enciman, pero la letra queda chica y se marca. Falta decidir CON EL EQUIPO qué piezas se quedan fuera
+      en esas medidas (¿legal en una línea aparte?, ¿sin beneficios?) y partir el FOOTER en LEGAL / APP STORES.
 - [ ] B5. Puerta PSD en la pantalla: leer en el NAVEGADOR (Web Worker) y subir sólo PNG de fondo + piezas, nunca el
       PSD (Vercel corta los cuerpos a 4.5 MB; el bucket a 25 MB). Alternativa descartada: leerlo en el servidor.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.

@@ -107,6 +107,8 @@ export type CapaPsd = {
   /** La carpeta de primer nivel dentro de la mesa (o la capa misma si está suelta). */
   pieza: string;
   mascara: MascaraPsd | null;
+  /** Capas de texto: el tamaño de su letra más chica, en px del lienzo (ya con la escala de la capa). */
+  letraPx: number | null;
   pixeles: () => Pixeles | undefined;
 };
 export type DocPsd = {
@@ -122,6 +124,15 @@ export type DocPsd = {
 };
 
 const tipoDe = (l: Layer): TipoCapa => (l.text ? "texto" : l.placedLayer ? "objeto inteligente" : l.adjustment ? "ajuste" : l.vectorFill || l.vectorMask ? "forma" : "píxeles");
+
+function letraDe(l: Layer): number | null {
+  const t = l.text;
+  if (!t) return null;
+  const tr = t.transform ?? [1, 0, 0, 1, 0, 0];
+  const escala = Math.hypot(tr[2] ?? 0, tr[3] ?? 1) || 1;
+  const tams = [t.style?.fontSize, ...(t.styleRuns ?? []).map((r) => r.style?.fontSize)].filter((v): v is number => typeof v === "number" && v > 0);
+  return tams.length ? Math.min(...tams) * escala : null;
+}
 
 const hayEfectos = (l: Layer): boolean =>
   !!l.effects && !l.effects.disabled &&
@@ -226,6 +237,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
         nombre, tipo: tipoDe(l), left: l.left ?? 0, top: l.top ?? 0, w, h, opacidad, relleno: l.fillOpacity ?? 1,
         mezcla: l.blendMode ?? "normal", halos: halosDe(l), conEfectos: hayEfectos(l), recorte: !!l.clipping, mesa: ctx.mesa, pieza: ctx.pieza ?? nombre,
         mascara: k && mw > 0 && mh > 0 ? { left: k.left ?? 0, top: k.top ?? 0, right: k.right ?? 0, bottom: k.bottom ?? 0, defecto: k.defaultColor ?? 255, pixeles: () => getLayerMaskImageData(l) } : null,
+        letraPx: letraDe(l),
         pixeles: () => (w > 0 && h > 0 ? getLayerImageData(l) : undefined),
       });
     }
@@ -262,6 +274,8 @@ export type PiezaPsd = {
   oscurece: Uint8ClampedArray | null;
   /** % de sus píxeles que otra pieza de más arriba tapa u oscurece (ahí su color no es confiable). */
   tapadaPct: number;
+  /** El tamaño de su letra más chica en px de la mesa; null si no trae capas de texto. */
+  letraMinPx: number | null;
 };
 export type MaestroPsd = {
   nombre: string;
@@ -626,6 +640,7 @@ function despiezarMesa(doc: DocPsd, mesa: number): MaestroPsd {
     armadas.push({
       nombre: t.nombre, rol: rolDe(t.nombre), caja, solido: sx1 < 0 ? caja : { x: sx0, y: sy0, w: sx1 - sx0 + 1, h: sy1 - sy0 + 1 },
       rgba, oscurece, tapadaPct: 0,
+      letraMinPx: capas.reduce<number | null>((min, c) => (c.pieza === t.nombre && c.letraPx !== null && (min === null || c.letraPx < min) ? c.letraPx : min), null),
     });
   }
   const piezas: PiezaPsd[] = [];
