@@ -81,6 +81,11 @@ legibles ("they need to be crisp and high quality in order to have them legible"
 elija · (2) la guía de zona segura debe decir de QUÉ app: un selector de canal ("if you want to check safe zones
 select a Channel and then it shows you") en vez de un genérico "la app tapa aquí" · (3) qué hacer con un PSD muy
 grande. Después: B4 y una familia propia para verticales altos (720×1600) y para 1:1.
+**Propuesto a Pedro 2026-10-13 (espera su elección; nada construido):** nitidez → A filtro más fino al reducir · B dar más lugar al texto en
+las 3 medidas chicas (quitar piezas por prioridad hasta que la letra llegue al mínimo) · C redibujar el texto vivo con la tipografía DiDi
+(pide los archivos de la fuente). Recomendado: B + A; C después. Medición en `tasks/research.md` (2026-10-13). Zona segura → selector de canal,
+sin canal por defecto, con cifras marcadas "aprox." hasta confirmarlas. PSD muy grande → dejar el rechazo de hoy con un mensaje que diga qué
+hacer; elegir mesas sólo si aparece un caso real. Preview de Vercel del commit 9a9f901: `success` (estado de GitHub, 2026-10-13).
 Que Pedro pruebe la pantalla en la preview (HÜE Prisma › carta "Adaptar a formatos") con su PSD y con 3-5 más.
 Esperando de Pedro: letra mínima aceptable del legal (hoy `LETRA_MIN_PX = 10`, provisional) · más PSD. El nombre
 largo: estacionado por él.
