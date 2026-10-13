@@ -2525,3 +2525,63 @@ contadores (el endpoint público de verify de Supabase la vuelve insuficiente �
 - [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
 - [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
 
+
+## 2026-10-05 13:07
+
+**Still open:**
+- [ ] DECIDE PEDRO (proyecto de auth COMPARTIDO con S.P.A.M): subir "Email OTP Length" a 8 y bajar "Email OTP
+- [ ] Opcional: límites DURABLES de códigos (tabla + RPC) y/o CAPTCHA (Turnstile) en pedir/confirmar código.
+- [ ] Diferido con el candado @runna: la puerta del equipo acepta cualquier login por correo (no sólo Google).
+- [ ] LIVE-VERIFY con testers reales (Pedro 2026-09-21: opción B): Claudia Aguilar y Hermann (DiDi, revocados) hacen
+- [ ] **LIVE-VERIFY de Pedro** (preview con login): como cliente real, pedir el enlace en /portal/login → llega el correo →
+- [ ] Deuda (seguridad, M2): los límites del envío de enlaces viven en memoria (por instancia). Opciones: tabla de
+- [ ] **DIFERIDO por Pedro** ("@runna is fine for now, we're using them for testing — we'll add the lock later"): aprobar
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+
+
+## 2026-10-08 13:09
+
+**Still open:**
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+- [ ] Limpieza: lotes que se quedan en 'subiendo' y archivos huérfanos del bucket (cron).
+- [ ] Un PNG con transparencia conserva sus huecos en v1 (el pixel-lock lo exige); opción futura: aplanar sobre el relleno.
+- [ ] ZIP en streaming (hoy todo en memoria; ~20 tamaños × 2 archivos aguanta) y miniaturas WebP chicas en la cuadrícula.
+- [ ] Revisar (sólo lectura) que ninguna policy de `storage.objects` del proyecto compartido exponga `greenlight-formatos`.
+- [ ] Avisos previos de npm audit: next 16.3.2 (crítico) y nodemailer (alto) — tarea aparte ya sugerida.
+- [ ] DECIDE PEDRO (proyecto de auth COMPARTIDO con S.P.A.M): subir "Email OTP Length" a 8 y bajar "Email OTP
+- [ ] Opcional: límites DURABLES de códigos (tabla + RPC) y/o CAPTCHA (Turnstile) en pedir/confirmar código.
+- [ ] Diferido con el candado @runna: la puerta del equipo acepta cualquier login por correo (no sólo Google).
+
+
+## 2026-10-08 13:49
+
+**Still open:**
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+- [ ] Limpieza: lotes que se quedan en 'subiendo' y archivos huérfanos del bucket (cron).
+- [ ] Un PNG con transparencia conserva sus huecos en v1 (el pixel-lock lo exige); opción futura: aplanar sobre el relleno.
+- [ ] ZIP en streaming (hoy todo en memoria; ~20 tamaños × 2 archivos aguanta) y miniaturas WebP chicas en la cuadrícula.
+- [ ] Revisar (sólo lectura) que ninguna policy de `storage.objects` del proyecto compartido exponga `greenlight-formatos`.
+- [ ] Avisos previos de npm audit: next 16.3.2 (crítico) y nodemailer (alto) — tarea aparte ya sugerida.
+- [ ] DECIDE PEDRO (proyecto de auth COMPARTIDO con S.P.A.M): subir "Email OTP Length" a 8 y bajar "Email OTP
+- [ ] Opcional: límites DURABLES de códigos (tabla + RPC) y/o CAPTCHA (Turnstile) en pedir/confirmar código.
+- [ ] Diferido con el candado @runna: la puerta del equipo acepta cualquier login por correo (no sólo Google).
+
+
+## 2026-10-13 10:17
+
+**Still open:**
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+- [ ] Limpieza: lotes que se quedan en 'subiendo' y archivos huérfanos del bucket (cron).
+- [ ] Un PNG con transparencia conserva sus huecos en v1 (el pixel-lock lo exige); opción futura: aplanar sobre el relleno.
+- [ ] ZIP en streaming (hoy todo en memoria; ~20 tamaños × 2 archivos aguanta) y miniaturas WebP chicas en la cuadrícula.
+- [ ] Revisar (sólo lectura) que ninguna policy de `storage.objects` del proyecto compartido exponga `greenlight-formatos`.
+- [ ] Avisos previos de npm audit: next 16.3.2 (crítico) y nodemailer (alto) — tarea aparte ya sugerida.
+- [ ] DECIDE PEDRO (proyecto de auth COMPARTIDO con S.P.A.M): subir "Email OTP Length" a 8 y bajar "Email OTP
+- [ ] Opcional: límites DURABLES de códigos (tabla + RPC) y/o CAPTCHA (Turnstile) en pedir/confirmar código.
+- [ ] Diferido con el candado @runna: la puerta del equipo acepta cualquier login por correo (no sólo Google).
+

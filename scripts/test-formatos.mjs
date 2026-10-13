@@ -7,6 +7,8 @@ import {
   bordesDe, leerMedidas, hayExpansion, SIN_RECORTE, MODOS, esModo,
 } from "../src/lib/prisma/formatos/geometria.ts";
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
+import { writePsdBuffer } from "ag-psd";
+import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT } from "../src/lib/prisma/formatos/psd.ts";
 
 let pass = 0,
   fail = 0;
@@ -329,6 +331,222 @@ console.log("\n▶ v2 · componer: recorte + extender sobre un anuncio de fondo 
   const conIA = await componer(f, 768, 1024, "ia", { bordes: b, expandir: async () => { throw new Error("no debía llamarse"); } }).catch((err) => err);
   ok("768×1024 con costados lisos: el recorte llena la medida → la IA ni se llama", !(conIA instanceof Error) && !hayExpansion(conIA.encaje) && conIA.costoUsd === null && conIA.pixelLockOk);
   eq("recortar nunca agranda más allá del tamaño real (1080² → 1080×1920 se queda a 1×)", encajar(1080, 1080, 1080, 1920, b.recortable).escala, 1);
+}
+
+// ── v2 · puerta PSD ──────────────────────────────────────────
+console.log("\n▶ v2 · PSD: roles de la guía de diseño");
+eq("rolDe: nombre completo, sin mayúsculas ni acentos", ["BRAND", "Subtitulo", " título ", "background", "Hero", "cta", "FOOTER"].map(rolDe), ["BRAND", "SUBTITULO", "TITULO", "BACKGROUND", "HERO", "CTA", "FOOTER"]);
+eq("rolDe: nunca por 'contiene' (SUBTITULO no es TITULO) ni carpetas ajenas", ["SUBTITULO 2", "TITULOS", "Logo", "", "HERO copia"].map(rolDe), [null, null, null, null, null]);
+
+console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
+{
+  const W = 400, H = 500;
+  const dentro = (x, y, [l, t, w, h]) => x >= l && x < l + w && y >= t && y < t + h;
+  const img = (w, h, fn) => {
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const [r, g, b, a = 255] = fn(x, y); data.set([r, g, b, a], (y * w + x) * 4); }
+    return { data, width: w, height: h };
+  };
+  const capa = (name, [l, t, w, h], fn, extra = {}) => ({ name, left: l, top: t, right: l + w, bottom: t + h, blendMode: "normal", opacity: 1, imageData: img(w, h, (x, y) => fn(x + l, y + t)), ...extra });
+  const carpeta = (name, children, extra = {}) => ({ name, opened: true, children, ...extra });
+
+  // La verdad, píxel a píxel (lo que "Photoshop" guardaría como copia aplanada).
+  const base = (x, y) => [200 + 30 * Math.sin(x / 40), 180 + 20 * Math.cos(y / 50), 160];
+  const tinte = (x, y) => { const v = 255 - (55 * y) / H; return [v, v, v]; };
+  const fondoVerdad = (x, y) => base(x, y).map((v, k) => (v * tinte(x, y)[k]) / 255);
+  const R = { sombra: [60, 300, 200, 60], producto: [80, 150, 140, 180], titulo: [40, 30, 320, 50], sub: [250, 170, 130, 60], cta: [250, 250, 130, 40], brand: [150, 95, 100, 30], footer: [40, 450, 320, 30] };
+  const OSC = 1 + (128 / 255 - 1) * (200 / 255); // sombra gris 128 al 78 % de alfa, en multiplicar
+  const verdad = (fondo) => (x, y) => {
+    let c = fondo(x, y);
+    if (dentro(x, y, R.sombra)) c = c.map((v) => v * OSC);
+    if (dentro(x, y, R.producto)) c = [250, 120, 20]; // la capa es AZUL: el naranja sólo existe en el aplanado
+    if (dentro(x, y, R.titulo)) c = c.map((v) => v * 0.5 + 255 * 0.5);
+    if (dentro(x, y, R.sub)) c = [255, 212, 0];
+    if (dentro(x, y, [R.cta[0], R.cta[1], R.cta[2] / 2, R.cta[3]])) c = [17, 17, 17]; // la máscara esconde la mitad derecha
+    if (dentro(x, y, R.brand)) c = [240, 60, 30];
+    if (dentro(x, y, R.footer)) c = [90, 90, 90];
+    return c;
+  };
+  const arbol = () => [
+    carpeta("Background", [capa("base", [0, 0, W, H], base), capa("tinte", [0, 0, W, H], tinte, { blendMode: "multiply" })]),
+    carpeta("FOOTER", [capa("legal", R.footer, () => [90, 90, 90])]),
+    carpeta("HERO", [capa("sombra", R.sombra, () => [128, 128, 128, 200], { blendMode: "multiply" }), capa("producto", R.producto, () => [10, 10, 200])]),
+    carpeta("CTA", [capa("boton", R.cta, () => [17, 17, 17], { mask: { left: R.cta[0], top: R.cta[1], right: R.cta[0] + R.cta[2], bottom: R.cta[1] + R.cta[3], defaultColor: 255, imageData: img(R.cta[2], R.cta[3], (x) => (x < R.cta[2] / 2 ? [255, 255, 255] : [0, 0, 0])) } })]),
+    carpeta("Subtitulo", [capa("beneficio", R.sub, () => [255, 212, 0])]),
+    carpeta("TITULO", [capa("titular", R.titulo, () => [255, 255, 255, 128])]),
+    carpeta("BRAND", [capa("logo", R.brand, () => [240, 60, 30])]),
+    capa("borrador oculto", [0, 0, W, H], () => [255, 0, 0], { hidden: true }),
+  ];
+  const psdDe = (children, aplanado, real = true) =>
+    writePsdBuffer({ width: W, height: H, children, imageData: img(W, H, (x, y) => aplanado(x, y)), imageResources: { versionInfo: { hasRealMergedData: real, writerName: "t", readerName: "t", fileVersion: 1 } } });
+  const maxDif = (a, fn, caja = [0, 0, W, H]) => {
+    let mx = 0;
+    for (let y = caja[1]; y < caja[1] + caja[3]; y++) for (let x = caja[0]; x < caja[0] + caja[2]; x++) { const v = fn(x, y); for (let k = 0; k < 3; k++) mx = Math.max(mx, Math.abs(a[(y * W + x) * 3 + k] - v[k])); }
+    return Math.round(mx);
+  };
+
+  const motivo = (fn) => { try { fn(); return "sin error"; } catch (err) { return err instanceof ErrorPsd ? err.motivo : `otro: ${err}`; } };
+  const doc = leerPsd(psdDe(arbol(), verdad(fondoVerdad)));
+  eq("leerPsd: sin mesas de trabajo, el lienzo es la mesa; la capa oculta no entra", [doc.mesas.length, doc.mesas[0].w, doc.mesas[0].h, doc.capas.length, doc.capas.some((c) => c.nombre.includes("oculto"))], [1, W, H, 9, false]);
+  const ma = despiezar(doc, 0);
+  eq("despiezar: 6 piezas con su rol, de abajo hacia arriba", ma.piezas.map((p) => p.rol), ["FOOTER", "HERO", "CTA", "SUBTITULO", "TITULO", "BRAND"]);
+  ok(`el fondo sale como el de Photoshop (${ma.fondoDistintoPct.toFixed(2)} % distinto) y rearmado da el anuncio (${ma.rearmadoDistintoPct.toFixed(2)} %)`, ma.fondoDistintoPct < 0.5 && ma.rearmadoDistintoPct < 0.5 && despieceUsable(ma).ok, JSON.stringify(despieceUsable(ma)));
+  ok(`fondo LIMPIO: bajo el producto y la sombra no queda rastro de ellos (dif. máx ${maxDif(ma.fondo, fondoVerdad)})`, maxDif(ma.fondo, fondoVerdad) <= 4);
+  const pz = (rol) => ma.piezas.find((p) => p.rol === rol);
+  const px = (p, x, y) => [...p.rgba.subarray(((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4, ((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4 + 4)];
+  eq("el COLOR de la pieza sale del aplanado, no de la capa (azul en la capa, naranja en Photoshop)", px(pz("HERO"), 150, 200), [250, 120, 20, 255]);
+  const t = px(pz("TITULO"), 200, 55);
+  ok(`un titular al 50 % se des-mezcla del fondo: blanco con alfa 128 (${t})`, t[3] === 128 && t.slice(0, 3).every((v) => v >= 250));
+  eq("la máscara recorta la silueta: del botón sólo viaja la mitad visible", [pz("CTA").solido.w, pz("CTA").solido.h], [R.cta[2] / 2, R.cta[3]]);
+  const h = pz("HERO");
+  const o = h.oscurece ? h.oscurece[((330 - h.caja.y) * h.caja.w + (70 - h.caja.x)) * 3] : -1;
+  ok(`la sombra viaja con el HERO como "cuánto oscurece" (${o} ≈ ${Math.round(OSC * 255)}) y su caja la incluye`, Math.abs(o - OSC * 255) <= 3 && h.caja.x === R.sombra[0] && h.solido.x === R.producto[0]);
+  ok("rearmar() devuelve el anuncio de Photoshop", maxDif(rearmar(ma), verdad(fondoVerdad)) <= 6, `dif. máx ${maxDif(rearmar(ma), verdad(fondoVerdad))}`);
+
+  // Un ajuste de color sobre el fondo que NO pintamos (tinte parejo): se corrige solo, también bajo las piezas.
+  const ajustado = (x, y) => fondoVerdad(x, y).map((v) => v * 0.85 + 12);
+  const ma2 = despiezar(leerPsd(psdDe(arbol(), verdad(ajustado))), 0);
+  ok(`ajuste de color que no pintamos: el fondo limpio lo trae igual (dif. máx ${maxDif(ma2.fondo, ajustado)}) y sigue usable`, maxDif(ma2.fondo, ajustado) <= 6 && despieceUsable(ma2).ok, JSON.stringify(despieceUsable(ma2)));
+
+  // Textura que no coincide (el aplanado trae un fondo que las capas no explican): NO es usable.
+  let s = 5;
+  const ruido = new Uint8Array(W * H).map(() => ((s = (s * 1103515245 + 12345) & 0x7fffffff) % 200));
+  const ma3 = despiezar(leerPsd(psdDe(arbol(), verdad((x, y) => { const v = 40 + ruido[y * W + x]; return [v, v, v]; }))), 0);
+  ok(`fondo que las capas no explican (${ma3.fondoDistintoPct.toFixed(0)} % distinto) → no usable`, ma3.fondoDistintoPct > 50 && !despieceUsable(ma3).ok);
+
+  // Dos piezas que se tapan: se avisa y no es usable.
+  const tapado = arbol();
+  tapado[6] = carpeta("BRAND", [capa("logo", [40, 30, 200, 50], () => [240, 60, 30])]);
+  const ma4 = despiezar(leerPsd(psdDe(tapado, (x, y) => (dentro(x, y, [40, 30, 200, 50]) ? [240, 60, 30] : verdad(fondoVerdad)(x, y)))), 0);
+  ok(`BRAND encima del TITULO: tapada ${ma4.piezas.find((p) => p.rol === "TITULO").tapadaPct.toFixed(0)} % → no usable, con motivo`, ma4.piezas.find((p) => p.rol === "TITULO").tapadaPct > 50 && despieceUsable(ma4).motivos.some((x) => x.includes("TITULO")));
+
+  // Lo que manda el anuncio a la vía plana.
+  eq("sin copia aplanada real → sin-aplanado", motivo(() => despiezar(leerPsd(psdDe(arbol(), verdad(fondoVerdad), false)), 0)), "sin-aplanado");
+  eq("sin carpeta BACKGROUND → sin-fondo", motivo(() => despiezar(leerPsd(psdDe(arbol().slice(1), verdad(fondoVerdad))), 0)), "sin-fondo");
+  eq("bytes que no son un PSD → no-soportado", motivo(() => leerPsd(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))), "no-soportado");
+  eq("mesa que no existe → no-soportado", motivo(() => despiezar(doc, 3)), "no-soportado");
+
+  // ── Lo que encontró el reap (2026-10-13): cada caso se vio FALLAR antes del arreglo ──
+  const soloBase = () => carpeta("BACKGROUND", [capa("base", [0, 0, W, H], base)]);
+  const px3 = (a, x, y) => [...a.subarray((y * W + x) * 3, (y * W + x) * 3 + 3)];
+
+  // Sombra paralela (efecto de capa): vive FUERA de los píxeles de su capa. Antes se quedaba pintada en el fondo.
+  {
+    const T = [100, 100, 200, 40], S = [112, 112, 200, 40];
+    const v = (x, y) => { let c = base(x, y); if (dentro(x, y, S)) c = c.map((n) => n * 0.6); if (dentro(x, y, T)) c = [255, 255, 255]; return c; };
+    const sombra = { effects: { dropShadow: [{ enabled: true, size: { value: 0, units: "Pixels" }, distance: { value: 17, units: "Pixels" }, angle: 135, color: { r: 0, g: 0, b: 0 }, blendMode: "multiply", opacity: 0.4 }] } };
+    const d = leerPsd(psdDe([soloBase(), carpeta("TITULO", [capa("t", T, () => [255, 255, 255], sombra)])], v));
+    eq("leerPsd: la sombra paralela queda como halo de su capa (distancia + tamaño + 1; fuerza = su opacidad)", d.capas.find((c) => c.nombre === "t").halos, [{ tipo: "sombra", radio: 18, fuerza: 0.4 }]);
+    const x = despiezar(d, 0);
+    ok(`sombra paralela del titular: el fondo limpio no guarda su fantasma (dif. máx ${maxDif(x.fondo, base)}) y viaja con la pieza`, maxDif(x.fondo, base) <= 4 && !!x.piezas[0].oscurece && x.piezas[0].caja.w > T[2] && maxDif(rearmar(x), v) <= 6);
+  }
+  // Contorno por fuera: es parte de la silueta.
+  {
+    const B0 = [150, 200, 100, 40], B1 = [144, 194, 112, 52];
+    const v = (x, y) => (dentro(x, y, B0) ? [17, 17, 17] : dentro(x, y, B1) ? [255, 0, 0] : base(x, y));
+    const contorno = { effects: { stroke: [{ enabled: true, position: "outside", fillType: "color", size: { value: 6, units: "Pixels" }, color: { r: 255, g: 0, b: 0 }, blendMode: "normal", opacity: 1 }] } };
+    const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("CTA", [capa("b", B0, () => [17, 17, 17], contorno)])], v)), 0);
+    const s = x.piezas[0].solido;
+    ok(`contorno de 6 px: la silueta del botón lo incluye (${s.w}×${s.h} ≥ 112×52) y el fondo queda limpio (dif. máx ${maxDif(x.fondo, base)})`, s.w >= 112 && s.h >= 52 && maxDif(x.fondo, base) <= 4 && maxDif(rearmar(x), v) <= 6);
+  }
+  // Una pieza de ARRIBA que oscurece a una de ABAJO: antes se oscurecía dos veces al rearmar.
+  {
+    const HE = [80, 150, 200, 200], SC = [60, 300, 260, 60];
+    const v = (x, y) => { let c = base(x, y); if (dentro(x, y, HE)) c = [250, 120, 20]; if (dentro(x, y, SC)) c = c.map((n) => n * 0.6); return c; };
+    const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("HERO", [capa("p", HE, () => [250, 120, 20])]), carpeta("FOOTER", [capa("velo", SC, () => [153, 153, 153], { blendMode: "multiply" })])], v)), 0);
+    ok(`velo del FOOTER sobre el HERO: rearmado exacto (dif. máx ${maxDif(rearmar(x), v)}) y el HERO queda marcado, no usable`, maxDif(rearmar(x), v) <= 6 && despieceUsable(x).motivos.some((s) => s.includes("HERO")));
+  }
+  // Una capa de sombra es un rectángulo OPACO, blanco salvo donde oscurece: lo blanco no cuenta como sombra.
+  // (En el PSD real, la sombra del HERO "tapaba" 90 % del FOOTER sin tocarlo.)
+  {
+    const HE = [80, 150, 140, 180], FO = [40, 450, 320, 30], SO = [0, 100, W, 400];
+    const gris = (x, y) => (dentro(x, y, [60, 320, 200, 30]) ? [128, 128, 128] : [255, 255, 255]);
+    const v = (x, y) => { let c = base(x, y); if (dentro(x, y, FO)) c = [90, 90, 90]; if (dentro(x, y, [60, 320, 200, 30])) c = c.map((n) => (n * 128) / 255); if (dentro(x, y, HE)) c = [250, 120, 20]; return c; };
+    const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("FOOTER", [capa("legal", FO, () => [90, 90, 90])]), carpeta("HERO", [capa("sombra", SO, gris, { blendMode: "multiply" }), capa("p", HE, () => [250, 120, 20])])], v)), 0);
+    const f = x.piezas.find((p) => p.rol === "FOOTER"), h = x.piezas.find((p) => p.rol === "HERO");
+    ok(`sombra en rectángulo blanco: no tapa al FOOTER (${f.tapadaPct.toFixed(1)} %), la caja del HERO sólo crece por lo gris (${h.caja.w}×${h.caja.h}) y es usable`, f.tapadaPct === 0 && h.caja.w === 200 && h.caja.h === 200 && despieceUsable(x).ok && maxDif(rearmar(x), v) <= 6, JSON.stringify(despieceUsable(x)));
+  }
+  // Un tinte que no pintamos + una pieza que tapa el 70 % de lado a lado: antes el fondo "se olvidaba" del tinte lejos del borde.
+  {
+    const HE = [0, 0, 280, H];
+    const tintado = (x, y) => base(x, y).map((n) => n * 0.85 + 12);
+    const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("HERO", [capa("p", HE, () => [250, 120, 20])])], (a, b) => (dentro(a, b, HE) ? [250, 120, 20] : tintado(a, b)))), 0);
+    ok(`pieza que tapa el 70 %: bajo ella el fondo sigue trayendo el tinte (dif. máx ${maxDif(x.fondo, tintado, HE)}; en x=5 ${px3(x.fondo, 5, 250)})`, maxDif(x.fondo, tintado, HE) <= 10);
+  }
+  // Fondo negro: "cuánto oscurece" no se puede medir ahí → la sombra no agranda la pieza ni ennegrece otro fondo.
+  {
+    const HE = [100, 100, 100, 100], SO = [90, 190, 140, 40];
+    const x = despiezar(leerPsd(psdDe([carpeta("BACKGROUND", [capa("base", [0, 0, W, H], () => [0, 0, 0])]), carpeta("HERO", [capa("s", SO, () => [0, 0, 0, 150], { blendMode: "multiply" }), capa("p", HE, () => [250, 120, 20])])], (a, b) => (dentro(a, b, HE) ? [250, 120, 20] : [0, 0, 0]))), 0);
+    eq("fondo negro con sombra: la caja del HERO es sólo lo sólido y no oscurece nada", [x.piezas[0].caja.w, x.piezas[0].caja.h, Math.min(...x.piezas[0].oscurece)], [100, 100, 255]);
+  }
+  // ── Segunda pasada del reap ──
+  // Botón "fantasma": Relleno al 0 % con contorno INTERIOR. La capa no pinta nada, su efecto sí: la pieza existe.
+  {
+    const B0 = [150, 200, 100, 40];
+    const v = (x, y) => (dentro(x, y, B0) && !dentro(x, y, [153, 203, 94, 34]) ? [255, 0, 0] : base(x, y));
+    const fantasma = { fillOpacity: 0, effects: { stroke: [{ enabled: true, position: "inside", fillType: "color", size: { value: 3, units: "Pixels" }, color: { r: 255, g: 0, b: 0 }, blendMode: "normal", opacity: 1 }] } };
+    const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("CTA", [capa("b", B0, () => [17, 17, 17], fantasma)])], v)), 0);
+    ok("botón al 0 % de Relleno con contorno interior: sigue siendo una pieza (antes desaparecía y su marco se quedaba en el fondo), con aviso", x.piezas.length === 1 && x.piezas[0].solido.w === 100 && x.piezas[0].solido.h === 40 && x.avisos.some((a) => a.includes("Relleno")) && maxDif(x.fondo, base, [150, 200, 100, 3]) <= 4, JSON.stringify([x.piezas.map((p) => p.solido), x.avisos]));
+  }
+  // La sombra paralela de una pieza de arriba que cae sobre una de abajo (sin que las piezas se toquen): sólo
+  // marca a la de abajo si se nota.
+  {
+    const HE = [200, 100, 150, 300], T = [40, 150, 150, 40], S = [100, 210, 150, 40]; // sombra corrida 60 px en diagonal
+    const caso = (opacidad) => {
+      const v = (x, y) => { let c = base(x, y); if (dentro(x, y, HE)) c = [250, 120, 20]; if (dentro(x, y, S)) c = c.map((n) => n * (1 - opacidad)); if (dentro(x, y, T)) c = [255, 255, 255]; return c; };
+      const fx = { effects: { dropShadow: [{ enabled: true, size: { value: 0, units: "Pixels" }, distance: { value: 85, units: "Pixels" }, angle: 135, color: { r: 0, g: 0, b: 0 }, blendMode: "multiply", opacity: opacidad }] } };
+      return despiezar(leerPsd(psdDe([soloBase(), carpeta("HERO", [capa("p", HE, () => [250, 120, 20])]), carpeta("TITULO", [capa("t", T, () => [255, 255, 255], fx)])], v)), 0);
+    };
+    const tenue = caso(0.03), fuerte = caso(0.5);
+    const heroDe = (x) => x.piezas.find((p) => p.rol === "HERO").tapadaPct;
+    ok(`sombra del titular que cae sobre el HERO: al 3 % no lo marca (${heroDe(tenue).toFixed(1)} %), al 50 % sí (${heroDe(fuerte).toFixed(1)} %)`, heroDe(tenue) === 0 && despieceUsable(tenue).ok && heroDe(fuerte) > TAPADA_MAX_PCT && !despieceUsable(fuerte).ok, JSON.stringify([despieceUsable(tenue), despieceUsable(fuerte)]));
+  }
+  // Máscara "ocultar todo" sin pintar: esa capa no existe para Photoshop.
+  {
+    const oculta = capa("fantasma", [20, 20, 360, 60], () => [0, 255, 0], { mask: { left: 0, top: 0, right: 0, bottom: 0, defaultColor: 0 } });
+    const d = leerPsd(psdDe([soloBase(), carpeta("BRAND", [oculta, capa("logo", R.brand, () => [240, 60, 30])])], (x, y) => (dentro(x, y, R.brand) ? [240, 60, 30] : base(x, y))));
+    const x = despiezar(d, 0);
+    eq("capa con máscara 'ocultar todo' sin pintar: no entra a la silueta", [d.capas.some((c) => c.nombre === "fantasma"), x.piezas[0].solido.w, x.piezas[0].solido.h], [false, R.brand[2], R.brand[3]]);
+  }
+  // Una capa en multiplicar casi blanca que cubre todo: no oscurece nada visible y no debe "tapar todo el fondo".
+  {
+    const HE = [100, 100, 100, 100];
+    const v = (x, y) => (dentro(x, y, HE) ? [250, 120, 20] : base(x, y).map((n) => (n * 252) / 255));
+    eq("multiplicar casi blanco sobre toda la mesa: el fondo sigue viéndose (antes: sin-fondo)", motivo(() => despiezar(leerPsd(psdDe([soloBase(), carpeta("HERO", [capa("velo", [0, 0, W, H], () => [252, 252, 252], { blendMode: "multiply" }), capa("p", HE, () => [250, 120, 20])])], v)), 0)), "sin error");
+  }
+  // La copia aplanada con un cuarto canal que NO es transparencia (una selección guardada): se ignora.
+  {
+    const v = verdad(fondoVerdad);
+    const x = despiezar(leerPsd(psdDe(arbol(), (a, b) => [...v(a, b), a < 200 ? 0 : 255])), 0);
+    ok(`cuarto canal del aplanado ignorado: sigue saliendo el anuncio (rearmado ${x.rearmadoDistintoPct.toFixed(2)} %, dif. máx del fondo ${maxDif(x.fondo, fondoVerdad)})`, x.rearmadoDistintoPct < 0.5 && maxDif(x.fondo, fondoVerdad) <= 4);
+  }
+  // Límites para archivos ajenos.
+  {
+    const sueltas = Array.from({ length: PIEZAS_MAX + 1 }, (_, i) => capa(`suelta ${i}`, [i, i, 4, 4], () => [0, 0, 0]));
+    eq(`${PIEZAS_MAX + 1} capas sueltas de primer nivel (cada una sería una pieza del tamaño de la mesa) → demasiado-grande`, motivo(() => despiezar(leerPsd(psdDe([soloBase(), ...sueltas], base)), 0)), "demasiado-grande");
+    const bueno = psdDe(arbol(), verdad(fondoVerdad));
+    const psb = Uint8Array.from(bueno); psb[5] = 2;
+    eq("un PSB (versión 2) → no-soportado, antes de leerlo", motivo(() => leerPsd(psb)), "no-soportado");
+    const pozo = new Uint8Array(bueno.length + 64); pozo.set(bueno, 32);
+    eq("una vista en medio de un búfer más grande se lee igual (se copia)", leerPsd(pozo.subarray(32, 32 + bueno.length)).capas.length, 9);
+    const raro = arbol(); raro[2] = carpeta("HE‮RO\u0007", raro[2].children); raro[1] = carpeta("x".repeat(500), raro[1].children);
+    const dr = leerPsd(psdDe(raro, verdad(fondoVerdad)));
+    eq("nombres del archivo: sin caracteres de control ni de dirección, y con tope de largo", [[...new Set(dr.capas.map((c) => c.pieza))].map((n) => (n.length > 20 ? n.length : n))], [["Background", 120, "HERO", "CTA", "Subtitulo", "TITULO", "BRAND"]]);
+  }
+
+  // Mesas de trabajo: dos anuncios en un archivo, cada capa en la suya; lo que queda fuera se ignora con aviso.
+  const mesa = (name, dx, hijos) => carpeta(name, hijos.map((g) => (g.children ? { ...g, children: g.children.map((l) => ({ ...l, left: l.left + dx, right: l.right + dx, ...(l.mask ? { mask: { ...l.mask, left: l.mask.left + dx, right: l.mask.right + dx } } : {}) })) } : g)), { artboard: { rect: { top: 0, left: dx, bottom: H, right: dx + W } } });
+  const dosMesas = writePsdBuffer({
+    width: W * 2 + 40, height: H,
+    children: [mesa("ANUNCIO_4x5", 0, arbol().slice(0, 7)), mesa("ANUNCIO_9x16", W + 40, arbol().slice(0, 7)), capa("nota suelta", [W + 5, 10, 20, 20], () => [0, 0, 0])],
+    imageData: img(W * 2 + 40, H, (x, y) => (x < W ? verdad(fondoVerdad)(x, y) : x >= W + 40 ? verdad(fondoVerdad)(x - W - 40, y) : [0, 0, 0, 0])),
+    imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } },
+  });
+  const d2 = leerPsd(dosMesas);
+  eq("dos mesas de trabajo: medidas, nombres y capas repartidas", [d2.mesas.map((m) => `${m.nombre}@${m.x}:${m.w}x${m.h}`), d2.capas.filter((c) => c.mesa === 0).length, d2.capas.filter((c) => c.mesa === 1).length], [["ANUNCIO_4x5@0:400x500", "ANUNCIO_9x16@440:400x500"], 9, 9]);
+  ok("la capa fuera de las mesas se ignora, con aviso", d2.avisos.some((a) => a.includes("fuera de las mesas")));
+  const m2 = despiezar(d2, 1);
+  ok(`la segunda mesa se despieza en SUS coordenadas (rearmado ${m2.rearmadoDistintoPct.toFixed(2)} %, HERO en x=${m2.piezas.find((p) => p.rol === "HERO").solido.x})`, m2.rearmadoDistintoPct < 0.5 && m2.piezas.find((p) => p.rol === "HERO").solido.x === R.producto[0] && despieceUsable(m2).ok);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

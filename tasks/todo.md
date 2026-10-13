@@ -9,6 +9,147 @@ con Nano Banana 2) y Gemini redibuja todo el lienzo (sin máscara) → la unión
 **Decisiones de Pedro (2026-10-09):** recortar fondo VACÍO está OK (lo intocable = texto, logo, producto, caras, sin
 deformar) · REACOMODAR las piezas del anuncio está OK (banners) · los anuncios vienen sobre todo de **Photoshop (PSD)** y
 de herramientas de IA (planos) · IA = Nano Banana 2.1.
+**Pedro (2026-10-13):** "the assets are always psd files" → los anuncios llegan SIEMPRE en PSD. **Eligió la opción B
+("go with B"):** la puerta PSD va PRIMERO (antes del análisis con visión, 3d), con caída a la vía plana cuando el
+archivo usa algo que no sabemos redibujar. Regla del día: nada que toque lo vivo (ni fusión a main, ni la base
+compartida, ni deploy) hasta que Pedro diga; todo se prueba en este Mac.
+
+**Pedro (2026-10-13, tras ver `con-capas/`):** "the subfolder con capas options look really good" → seguir con B.
+**Regla del LEGAL (Pedro, textual):** "legal text should get resized to the most readable size without disturbing the
+asset and if it still too small flag it for review" → el LEGAL lleva su PROPIA escala (lo más grande que quepa sin
+mover lo demás) y, si aun así queda chico, la medida se marca "revisar". Falta el número de "chico" (propuesta: alto de
+mayúscula < 7 px) → confirmar con diseño.
+**La guía del equipo** (Pedro la compartió; resumen en la memoria `didi-art-iterations-guide`): carpetas EXACTAS BRAND /
+TITULO / SUBTITULO / CTA / HERO / FOOTER / BACKGROUND (en el archivo real cambian mayúsculas → comparar sin mayúsculas ni
+acentos, nombre COMPLETO, no "contiene"). El equipo YA adapta con un script de Photoshop (`DiDi_Adaptations_V3.jsx`) y
+su bitácora del caso Giant Card (el MISMO PSD de la prueba) reporta: horizontales rehechas casi por completo a mano,
+logo / tiendas / legal desproporcionados en chicos (320x50), artes descentrados o fuera del lienzo. Su checklist de
+revisión (sección 4) = nuestras comprobaciones automáticas. No trae números de safe zones ni de texto mínimo. En este
+Mac NO hay Photoshop. Pendiente de Pedro: el archivo del script (sólo para leerlo), safe zones por medida, y si en el
+nombre de entrega cambia también la plataforma (`_FB_` en las mesas vs `_EC_` en el ejemplo de 320x50).
+
+**El script del equipo, leído (2026-10-13, `DiDi_Adaptations_V3.jsx`, 381 líneas, sólo lectura; es un PILOTO atado
+a este anuncio):**
+- Sus 12 medidas SON nuestras 12. Por medida dice de qué mesa sale (9x16 → 1080×1920, 720×1280, 720×1600; 4x5 → el
+  resto) y su "familia": clone · portrait · tall · landscape · landscapeCompact · wide · display · banner. Coincide con
+  nuestra regla "la mesa de forma más parecida".
+- Acomodo por familia = centro (cx, cy) y ANCHO de cada carpeta como fracción del lienzo; el fondo, a cubrir.
+  Intención del equipo: horizontales = texto a la IZQUIERDA y HERO a la DERECHA, pie abajo a todo lo ancho; "wide" =
+  tres zonas (texto · beneficios · hero); "banner" = una sola fila; todas las adaptadas llevan `review: true`.
+- Por qué dio los problemas de su bitácora (mi lectura del código): (1) mide sólo el ANCHO, nunca el alto → en
+  640×100 el HERO sale de ~131 px de alto en un lienzo de 100 y el pie de ~47; (2) usa los límites de la CARPETA
+  (con sombras y con capas más grandes que la mesa) → centra mal ("no detectó el centro del arte"); (3) coordenadas
+  fijas afinadas a ojo para ESTE anuncio; (4) no revisa choques ni tamaño de letra.
+- Nombre de salida: cambia `_4x5_` / `_9x16_` por `_ANCHOxALTO_` en el nombre de la mesa; la plataforma (`_FB_`) NO
+  cambia. El `_EC_` del ejemplo de la guía sigue sin explicación → pregunta a Pedro.
+**Las 12 medidas desde las piezas (laboratorio `psd-armar.mjs`, usa `psd.ts` de la app):** salida en
+`~/Desktop/formatos-salida/12-medidas/` con el nombre del equipo. Familias propias por proporción: igual (misma
+forma que una mesa: mismo acomodo a escala) · display · horizontal · ancho · banner; cada pieza se ajusta por ancho
+Y alto de su parte sólida; el fondo cubre y conserva el piso bajo el HERO; el pie crece hasta donde quepa (regla del
+LEGAL). Revisión automática: nada fuera del lienzo, nada encimado, LEGAL < 7 px de alto de letra → "revisar".
+Resultado: 8 sin avisos; 4 marcadas por LEGAL chico (600×500 ≈6.2 px, 640×100 ≈3.5, 320×250 ≈3.3, 320×50 ≈1.7).
+El alto de letra del legal es una APROXIMACIÓN del laboratorio (9 px en el maestro): en la app sale del texto real.
+Pendiente de Pedro: HERO a la izquierda (lo que vio antes) o a la derecha (lo que pide el script del equipo).
+
+### Plan B — puerta PSD (2026-10-13)
+**Next Step:** B3 — armar las medidas desde las piezas DENTRO de la app (hoy sólo existe en el laboratorio,
+`psd-piezas.mjs`): elegir la mesa más parecida, acomodo de 2 columnas para horizontales, LEGAL con su propia escala
+y marca "revisar" si queda chico (regla de Pedro), comprobaciones de la sección 4 de la guía. Antes de fijar los
+acomodos: leer el script del equipo (`DiDi_Adaptations_V3.jsx`) si Pedro lo pasa, y más PSD. Preguntas abiertas a
+Pedro: safe zones por medida · si en el nombre de entrega cambia la plataforma (`_FB_` vs `_EC_`) · ¿commit en `prisma`?
+- [x] B0. Laboratorio FUERA del repo, guardado en `~/Projects/greenlight-psd-lab/` (`psd-leer.mjs` lector ·
+      `psd-mesas.mjs` informe por mesa + resizer de hoy · `psd-piezas.mjs` piezas + acomodo horizontal ·
+      `psd-correr.mjs` y `hacer-psd-falso.mjs` ensayo con PSD inventados). Trae su propio `ag-psd`; usa `sharp` y el
+      motor de Formatos de este repo por ruta absoluta.
+      Probado con 2 PSD inventados: lee capas y grupos, ignora las ocultas, mide la FIDELIDAD (nuestro pintado simple
+      vs la copia aplanada que guarda Photoshop: 0.00 % distinto en el limpio, 1.48 % en el que trae una sombra que no
+      redibujamos → cae a la vía plana), separa fondo / piezas y arma "fondo aparte" en las 12 medidas.
+- [~] B1. Leer los PSD REALES con el laboratorio. **1 de N leído (2026-10-13): `APGIANTCARDUGC 2.psd`** (DiDi Card,
+      72 MB, RGB 8 bits, CON copia aplanada). Salida en `~/Desktop/formatos-salida/` (`psd-mesas.mjs`). Hallazgos:
+      - **Dos mesas de trabajo en un archivo**: 9:16 (1080×1920) y 4:5 (1200×1500), hechas a mano por el diseñador
+        (en 9:16 el CTA baja y el logo se recorre: ya "reacomodan"). → partir por mesa y, para cada medida, salir de
+        la mesa de forma más parecida.
+      - **7 grupos con nombre por mesa** (31 capas c/u): Background · HERO · TITULO (EYEBROW, HEADLINE) · Subtitulo
+        (BENEFIT_01/02) · CTA · BRAND · FOOTER (APP STORES, LEGAL). Los grupos YA dicen qué es cada pieza.
+        PREGUNTA A PEDRO: ¿todo el equipo arma así los archivos (misma plantilla)?
+      - **El pintado simple NO alcanza**: 31-32 % de píxeles distintos a Photoshop. Por pieza (9:16 / 4:5): BRAND
+        0.0/0.0 · CTA 3.4/3.8 · Background 4.7/11.6 · TITULO 6.0/5.1 · Subtitulo 23.3/23.0 · FOOTER 46.5/45.3 ·
+        HERO 79.2/83.8. Causas: capas de ajuste con recorte (levels, hue/saturation, black & white), modos de
+        fusión (multiply, darken, linear burn, lighter color, vivid light), efecto solidFill (color overlay) y
+        objetos inteligentes. FORMAS y POSICIONES sí coinciden; lo que falla es el COLOR.
+      - **Resizer de hoy sobre el anuncio real** (vista previa, juicio mío): bien en 7 medidas (1080×1920,
+        1200×1500, 768×1024, 720×1280, 720×1600, 600×500, 320×250); MAL en las 5 horizontales (1200×627, 1280×720,
+        876×324: anuncio chico con franjas estiradas a los lados; 320×50 y 640×100: diminuto).
+      - **Ajuste al diseño de B:** las capas dan DÓNDE está cada pieza y su SILUETA (alfa); el COLOR sale de la copia
+        aplanada de Photoshop (fiel por construcción; en los bordes se "des-mezcla" contra el fondo limpio). Lo único
+        que hay que pintar nosotros es el FONDO LIMPIO (grupo Background: 3 modos de fusión + hue/saturation) y se
+        comprueba contra la copia aplanada donde ninguna pieza lo tapa. Sombras (linear burn / darken) = capa
+        multiplicativa que se vuelve a aplicar. Falta PROBARLO en este archivo antes de escribir B2.
+      Faltan más PSD (otros diseñadores / otros clientes) antes de fijar reglas: un archivo no es una plantilla.
+      - **PROBADO el mismo día (`psd-piezas.mjs`, laboratorio):** con multiply / darken / linear burn / lighter color /
+        vivid light pintados, nuestro fondo difiere de Photoshop en 1.8 % (4:5) y 0.8 % (9:16) de lo visible ANTES
+        de corregir; el resto se corrige con un relleno suave ("push-pull") de la diferencia. Autoprueba (rearmar
+        las piezas en su lugar): **0.69 % (4:5) y 0.04 % (9:16)** de píxeles distintos, contra 31-32 % del pintado
+        simple. Ninguna pieza tapa a otra en este archivo (0.0 %). Con un acomodo de 2 columnas (HERO a la
+        izquierda; BRAND, TITULO, Subtitulo, CTA, FOOTER en columna) salieron 1200×627, 876×324 y 1280×720 limpios
+        (en `~/Desktop/formatos-salida/con-capas/`). Sin IA, $0.
+      - Pendientes que la prueba dejó a la vista: (1) en 876×324 el LEGAL queda ilegible (~5 px): hace falta regla
+        de tamaño mínimo de texto / qué hacer con el legal en medidas chicas → decide Pedro; (2) los roles se
+        sacaron del NOMBRE del grupo y `/titul/` agarró "Subtitulo" antes que "TITULO" (anclar los patrones; mejor
+        un mapa de nombres confirmado por Pedro); (3) máscaras de capa ignoradas (aquí no afectó); (4) piezas que se
+        tapan entre sí: sin resolver (aquí no hubo); (5) banners 320×50 / 640×100: otro acomodo (una fila, sin HERO
+        o con HERO recortado) → decidir qué piezas entran.
+- [x] B2. `src/lib/prisma/formatos/psd.ts` (puro: sin sharp ni DOM; Node, navegador y Web Worker). HECHO 2026-10-13,
+      SIN commit: `leerPsd` (estructura primero con `useRawData`, límites, píxeles por capa a pedido, mesas de
+      trabajo, máscaras de capa, halos de efectos) · `rolDe` (nombre COMPLETO de la guía, sin mayúsculas ni acentos)
+      · `despiezar` (fondo limpio + piezas resueltas de ABAJO hacia ARRIBA contra lo ya armado, color del aplanado,
+      sombras como mapa multiplicativo) · `rearmar` · `despieceUsable` (rearmado ≤ 2 %, fondo ≤ 10 % de textura que
+      no coincide, pieza tapada u oscurecida ≤ 2 %) · `ErrorPsd` con motivo → vía plana.
+      **Dependencia nueva: `ag-psd` ^31.0.3** (package.json + lock). 16 modos de fusión por canal + lighter/darker color.
+      **Reap (2026-10-13):** code-reviewer (sonnet) + security-reviewer (opus), los dos sólo leyendo.
+      - Reproducidos con PSD sintéticos ANTES de arreglar y ahora con test: sombra paralela que dejaba fantasma en el
+        fondo (dif. 92 → 0) · velo de una pieza de arriba que se aplicaba dos veces sobre una de abajo (51 → 0) ·
+        tinte que se perdía bajo una pieza grande (23 → 6) · fondo negro que volvía la sombra negro sólido.
+      - Arreglados sin reproducir (por lectura, baratos): 4º canal del aplanado ignorado · errores de decodificación
+        → `ErrorPsd` · mesa con coordenadas no enteras · Relleno de capa.
+      - Seguridad (archivo ajeno; se lee en el navegador de quien lo sube): tope de bytes (250 MB), de ÁREA de
+        lienzo (60 MP) y de capa/máscara (48 MP), de piezas (40) y de memoria del despiece (1.5 GB) ANTES de
+        reservar · canales en ZIP rechazados (el PSD real sólo trae crudo y RLE) · PSB rechazado por cabecera ·
+        `totalMemoryLimit` 64 MB al leer · nombres del archivo sin caracteres de control/dirección y ≤ 120 ·
+        copia de la entrada si es una vista parcial de su búfer.
+      - Hallado al correr el PSD real tras la reescritura: la sombra del HERO es un rectángulo OPACO blanco →
+        "tapaba" 90 % del FOOTER; ahora la fuerza de sombra = alfa × lejanía del blanco, y sólo cuenta si se nota.
+      - **Segunda pasada de los MISMOS dos revisores (sobre el código arreglado):** botón al 0 % de Relleno con
+        contorno interior desaparecía (ahora la silueta es la forma completa cuando hay efectos, con aviso) · los
+        halos se sellaban con fuerza 1 y una sombra tenue del titular "tapaba" al HERO (ahora fuerza = opacidad del
+        efecto; el resplandor sólo aparta su zona; cada píxel cuenta una vez) · máscara "ocultar todo" sin pintar ·
+        umbral de lo visible igual al de lo medido (multiplicar casi blanco ya no da sin-fondo) · capa estacionada
+        fuera de la mesa cuya sombra entra · halos: a lo más uno por tipo y la capa se decodifica una vez ·
+        presupuesto de memoria cuenta 15 bytes por pieza (tope 2 GB) · tamaño revisado ANTES de copiar la entrada.
+        Los 4 tests nuevos de esta pasada se vieron FALLAR quitando cada arreglo (mutación) y pasar al restaurarlo.
+      Tests: `scripts/test-formatos.mjs` **104/0** (antes 67). `npm test` completo: lib 481/0 · prisma 975/0 ·
+      formatos 104/0 · db 543/0 · import 81/0 · sync 44/0. tsc y eslint limpios. PSD real: fondo 0.00 % y rearmado
+      0.03 % en las DOS mesas (antes 0.70 % en 4:5), las dos usables, ~0.4 s por mesa.
+      **B2 queda cerrado en código; SIN commit.** Los arreglos de la segunda pasada NO pasaron por un tercer
+      revisor (tope de 3 vueltas; el archivo se vuelve a revisar cuando se conecte a la pantalla, B5).
+      **Deuda anotada (no bloquea):** búferes de alfa/sombra por pieza recortados a su caja (hoy miden la mesa
+      entera; lo acota el tope de memoria) · validar las tablas RLE antes de decodificar · resplandor exterior no
+      viaja (se avisa) · contorno grueso en formas redondas: la silueta se engorda en CUADRADO (se pasa ~0.4×radio
+      en las diagonales; con contornos de 1-4 px no se nota) · `npm audit --omit=dev`: 6 avisos previos (next, nodemailer, source-map-js, sprintf-js vía
+      mammoth), ninguno de ag-psd visto en la salida.
+      **Requisitos que B5 hereda:** leer el PSD SIEMPRE en un Web Worker con reloj que lo mate (un archivo hecho con
+      mala intención aún puede colgar a la librería dentro de `leerPsd`); revisar `File.size` antes de leerlo;
+      pintar avisos, motivos y nombres como TEXTO, nunca HTML; lo que acabe en nombre de archivo pasa por
+      `limpiarNombre` (geometria.ts).
+- [ ] B3. Componer "fondo aparte" por medida: el fondo llena la medida (cover), las piezas van en un bloque escalado
+      parejo; candado de píxeles sobre las piezas. Umbral de caída a la vía plana: fidelidad > 0.5 % o sin capa de fondo.
+- [ ] B4. Motor de acomodo para banners delgados (320×50, 640×100): piezas sueltas en fila. Es el paso 4 de abajo.
+- [ ] B5. Puerta PSD en la pantalla: leer en el NAVEGADOR (Web Worker) y subir sólo PNG de fondo + piezas, nunca el
+      PSD (Vercel corta los cuerpos a 4.5 MB; el bucket a 25 MB). Alternativa descartada: leerlo en el servidor.
+- 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
+**Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
+eslint y build limpios. Sin migración nueva ni deploy.
+
 **Plan (en orden):**
 - [x] 1. Nano Banana 2.1 (`gemini-nano-banana-2.1`, salió 2026-10-06): la `gemini-3.1-flash-image` se apaga el
       **2026-10-29**. Imagen de salida a la mitad (US$30/M tokens: ~$0.034 1K · ~$0.050 2K), entrada ×3 (US$1.50/M,
