@@ -456,9 +456,9 @@ export function leerMedidas(texto: string): { medidas: { w: number; h: number }[
 
 export const HEX = /^#[0-9a-f]{6}$/i;
 
-/** Nombre de archivo en el ZIP: sin acentos raros ni espacios. */
-export const limpiarNombre = (base: string): string =>
-  base.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "anuncio";
+/** Nombre de archivo en el ZIP: sin acentos raros ni espacios. `max`: el nombre de entrega del equipo pasa de 50. */
+export const limpiarNombre = (base: string, max = 50): string =>
+  base.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, max) || "anuncio";
 
 export function nombreArchivo(base: string, p: Pick<Preset, "plataforma" | "w" | "h">, ext: "png" | "jpg"): string {
   return `${limpiarNombre(base)}_${p.plataforma}_${p.w}x${p.h}.${ext}`;

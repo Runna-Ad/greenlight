@@ -22,6 +22,7 @@
  * por capa cuando se piden (un PSD puede declarar medidas enormes sin traer datos).
  */
 import { readPsd, getLayerImageData, getLayerMaskImageData, getCompositeImageData, initializeCanvas, type Layer } from "ag-psd";
+import { PSD_BYTES_MAX } from "./listo.ts";
 
 /** Sólo se LEEN por índice. (La librería tipa también 16 y 32 bits; aquí siempre son 8: `leerPsd` rechaza lo demás.) */
 type Pixeles = { data: ArrayLike<number>; width: number; height: number };
@@ -38,7 +39,7 @@ if (typeof document === "undefined") {
 }
 
 /** Los reales rondan 70 MB. */
-export const PSD_BYTES_MAX = 250_000_000;
+export { PSD_BYTES_MAX };
 /** El tope del formato PSD. Un archivo con una docena de mesas en fila pasa fácil de 12 000 px de ancho. */
 export const PSD_LADO_MAX = 30_000;
 /** La copia aplanada se decodifica entera (4 bytes por píxel): 60 MP = 240 MB. */

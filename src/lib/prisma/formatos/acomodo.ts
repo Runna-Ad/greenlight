@@ -12,6 +12,7 @@
  * El pie (FOOTER) lleva su PROPIA escala: lo más grande que quepa sin mover lo demás (regla de Pedro para el
  * legal). Si aun así la letra queda chica, la medida se marca para revisión; nunca se entrega sin avisar.
  */
+import { ZONA_HISTORIA_PCT } from "../compilers/zonas.ts";
 import type { Caja, Rol } from "./psd.ts";
 
 /** Lo que el acomodo necesita de una pieza (PiezaPsd lo cumple). */
@@ -34,11 +35,13 @@ export type Acomodo = {
   avisos: AvisoAcomodo[];
 };
 export type Lado = "derecha" | "izquierda";
+/** px de la medida final que la plataforma tapa por cada borde. */
+export type Zona = { top: number; right: number; bottom: number; left: number };
 export type OpcionesAcomodo = {
   /** De qué lado va el HERO donde hay columnas (`sePuedeVoltear`); en lo demás no cambia nada. El equipo lo pone a la derecha. */
   heroLado?: Lado;
-  /** Zona segura: px de la medida final que la plataforma tapa por cada borde. */
-  zona?: { top: number; right: number; bottom: number; left: number };
+  /** Zona segura. Las piezas que acomoda la herramienta la evitan; las que dejó el diseñador, si caen en ella, se avisan. */
+  zona?: Zona;
 };
 
 // Criterio, no física: se afinan viendo anuncios reales.
@@ -83,6 +86,31 @@ export function nombreSalida(ma: { nombre: string; w: number; h: number }, W: nu
   const f = fichas.reduce((a, b) => (lejos(b) < lejos(a) ? b : a));
   const desde = (f.index ?? 0) + f[1].length;
   return `${ma.nombre.slice(0, desde)}${W}x${H}${ma.nombre.slice((f.index ?? 0) + f[0].length)}`;
+}
+
+/** Las 12 medidas que el equipo entrega hoy (las de su script de Photoshop): con ellas arranca la pantalla. */
+export const MEDIDAS_EQUIPO = "1080×1920 720×1280 720×1600 1200×1500 768×1024 1280×720 1200×627 876×324 600×500 320×250 640×100 320×50";
+
+/**
+ * Zona segura como GUÍA (decisión de Pedro, 2026-10-13). El equipo no tiene números propios: sólo las reglas
+ * públicas, y sólo le importan en 4:5, 1:1, 9:16 y 16:9. De esas, hoy sólo el 9:16 tiene algo que la plataforma
+ * tapa de verdad: las franjas de una historia (la misma regla que usan los prompts). En feed (4:5, 1:1) la imagen
+ * no se tapa y para 16:9 no hay un número público fiable: ahí no hay guía.
+ */
+export function zonaGuia(W: number, H: number): Zona | null {
+  if (!(W > 0 && H > 0) || Math.abs(W / H / (9 / 16) - 1) > 0.01) return null;
+  return { top: (H * ZONA_HISTORIA_PCT.arriba) / 100, right: 0, bottom: (H * ZONA_HISTORIA_PCT.abajo) / 100, left: 0 };
+}
+
+/**
+ * Una medida completa: de qué mesa sale, su acomodo y su guía de zona segura (si tiene). La guía NO entra al
+ * acomodo: un 9:16 siempre conserva el acomodo del diseñador (no hay familia vertical propia), y lo que él colocó
+ * no se marca. El día que la herramienta acomode verticales por su cuenta, ahí es donde la zona debe mandar.
+ */
+export function acomodarMedida(maestros: MaestroCaja[], W: number, H: number, op: { heroLado?: Lado } = {}): { maestro: number; acomodo: Acomodo; guia: Zona | null } {
+  const maestro = elegirMaestro(maestros, W, H);
+  if (maestro < 0) throw new Error("acomodarMedida: sin maestros");
+  return { maestro, acomodo: acomodar(maestros[maestro], W, H, op), guia: zonaGuia(W, H) };
 }
 
 type Suelta = { i: number; p: PiezaCaja };

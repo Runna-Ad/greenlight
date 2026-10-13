@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, ChevronDown, Clapperboard, Cpu, ImageIcon, Languages, Loader2, Maximize2, Plus, Sparkles, Trash2, UserRound, Wand2, X } from "lucide-react";
-import { prismaFormatosActivo } from "@/lib/prisma/flags";
-import { FX } from "@/lib/prisma/formatos/copy";
+import { FP } from "@/lib/prisma/formatos/copy";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChipSelect } from "@/components/intake/chip-select";
@@ -755,11 +754,12 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
 
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
         <div className="min-w-0">
-          {/* INICIO: tres puertas */}
+          {/* INICIO: las puertas (tres hacen un prompt; la cuarta adapta un anuncio terminado) */}
           {paso === "inicio" && (
-            <section key="inicio" className="p-enter" aria-label={tx(UI.queQuieres, lang)}>
+            <section key="inicio" className="p-enter @container" aria-label={tx(UI.queQuieres, lang)}>
               <h2 className="mb-3 text-lg font-semibold text-foreground">{tx(UI.queQuieres, lang)}</h2>
-              <div className="p-stagger grid gap-3 sm:grid-cols-3">
+              {/* Cuatro en fila cuando la COLUMNA da para ello (el historial de al lado la angosta); si no, 2 × 2. */}
+              <div className="p-stagger grid gap-3 sm:grid-cols-2 @3xl:grid-cols-4">
                 {KINDS.map(({ kind: k, icon: Icon }, i) => (
                   <button
                     key={k}
@@ -778,24 +778,20 @@ export function PrismaStudio({ marcas, historial, demo = null, demoPreguntas = n
                     <span className="mt-1 block text-sm text-muted-foreground">{tx(KIND_HINT[k], lang)}</span>
                   </button>
                 ))}
-              </div>
-              {/* Formatos: no hace un prompt, adapta un anuncio YA terminado a N tamaños (otra pantalla). */}
-              {prismaFormatosActivo() && (
+                {/* Formatos: no hace un prompt, adapta un anuncio YA terminado (su PSD) a N medidas, en otra pantalla.
+                    Va con Prisma, sin interruptor propio: se lee en el navegador y no toca la base. */}
                 <Link
-                  href="/prisma/formatos"
-                  style={{ "--hue": "var(--p-cyan)" } as CSSProperties}
-                  className="p-door mt-3 flex cursor-pointer items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left shadow-sm"
+                  href="/prisma/formatos/psd"
+                  style={{ "--hue": "var(--p-green)", "--i": KINDS.length } as CSSProperties}
+                  className="p-door block cursor-pointer rounded-2xl border border-border bg-card p-5 text-left shadow-sm"
                 >
-                  <span className="p-door-icon flex size-11 shrink-0 items-center justify-center rounded-xl">
-                    <Maximize2 className="size-5" />
+                  <span className="p-door-icon flex size-11 items-center justify-center rounded-xl">
+                    <Maximize2 className="size-5" aria-hidden="true" />
                   </span>
-                  <span className="min-w-0">
-                    <span className="block text-base font-semibold text-foreground">{tx(FX.puertaTitulo, lang)}</span>
-                    <span className="mt-0.5 block text-sm text-muted-foreground">{tx(FX.puertaAyuda, lang)}</span>
-                  </span>
-                  <ArrowRight className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span className="mt-4 block text-base font-semibold text-foreground">{tx(FP.cartaTitulo, lang)}</span>
+                  <span className="mt-1 block text-sm text-muted-foreground">{tx(FP.cartaAyuda, lang)}</span>
                 </Link>
-              )}
+              </div>
             </section>
           )}
 

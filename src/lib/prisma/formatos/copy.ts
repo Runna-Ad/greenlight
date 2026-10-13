@@ -32,8 +32,6 @@ export const FX = {
   titulo: t("Formatos", "Formats"),
   tagline: t("Un anuncio terminado, en todos los tamaños. El contenido nunca se toca: sólo se escala (y se recorta fondo liso si hace falta).", "One finished ad, in every size. The content is never touched: only scaled (and plain background trimmed when needed)."),
   volver: t("Volver a HÜE Prisma", "Back to HÜE Prisma"),
-  puertaTitulo: t("Formatos", "Formats"),
-  puertaAyuda: t("Lleva un anuncio terminado a todos los tamaños de Meta, Google y más.", "Take a finished ad to every Meta, Google and other size."),
   subir: t("Sube el anuncio terminado", "Upload the finished ad"),
   subirAyuda: t("Arrástralo aquí o elige el archivo. Una imagen plana (sin capas).", "Drag it here or pick the file. A flat image (no layers)."),
   subirTipos: t("PNG · JPG · WebP · hasta 25 MB", "PNG · JPG · WebP · up to 25 MB"),
@@ -121,4 +119,89 @@ export const FX = {
   pegarFuera: t(" · fuera de límites, ignoradas: {m}", " · out of bounds, ignored: {m}"),
   pegarTope: t(" · sólo caben {n} por anuncio", " · only {n} fit per ad"),
   recorta: t("Recorta {p} % de fondo liso", "Trims {p}% of plain background"),
+};
+
+/** Rellena `{clave}` en un texto de copy. */
+export const rellenar = (s: string, vars: Record<string, string | number>): string => s.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ""));
+
+// ── Puerta PSD (2026-10-13): el anuncio llega en Photoshop y se arma desde sus capas, en el navegador ──
+export const FP = {
+  cartaTitulo: t("Adaptar a formatos", "Adapt to formats"),
+  cartaAyuda: t("Tu anuncio terminado (PSD), en todas las medidas que pide el cliente.", "Your finished ad (PSD), in every size the client asks for."),
+  tagline: t(
+    "Elige el PSD del anuncio y sale en todas las medidas. Se lee aquí, en tu navegador: el archivo no se sube a ningún lado.",
+    "Pick the ad's PSD and get every size. It is read here, in your browser: the file is never uploaded.",
+  ),
+  subir: t("Elige o arrastra el PSD del anuncio", "Pick or drop the ad's PSD"),
+  subirAyuda: t(
+    "Debe traer las carpetas de la guía (BRAND, TITULO, SUBTITULO, CTA, HERO, FOOTER y BACKGROUND) y estar guardado con «Maximizar compatibilidad».",
+    "It must have the guide's folders (BRAND, TITULO, SUBTITULO, CTA, HERO, FOOTER and BACKGROUND) and be saved with “Maximize Compatibility”.",
+  ),
+  subirTipos: t("PSD · hasta {mb} MB", "PSD · up to {mb} MB"),
+  leyendo: t("Leyendo el PSD…", "Reading the PSD…"),
+  leyendoMesa: t("Separando la mesa {m} de {n}…", "Splitting artboard {m} of {n}…"),
+  leyendoAyuda: t("Un archivo de 70 MB tarda unos segundos. No cierres esta pestaña.", "A 70 MB file takes a few seconds. Keep this tab open."),
+  cancelar: t("Cancelar", "Cancel"),
+  cambiar: t("Cambiar PSD", "Change PSD"),
+  archivo: t("Archivo", "File"),
+  mesasUna: t("1 mesa de trabajo", "1 artboard"),
+  mesas: t("{n} mesas de trabajo", "{n} artboards"),
+  mesaNoUsada: t("No se usó «{n}»: {m}", "“{n}” wasn't used: {m}"),
+  sinNombre: t("sin nombre", "untitled"),
+  listaTope: t("{n} medidas no cupieron (máximo {max} por anuncio y sin pasar de cierto tamaño en total).", "{n} sizes didn't fit (up to {max} per ad, within a total size limit)."),
+  listaFuera: t("Ignoradas por salirse de {min} a {max} px por lado: {m}.", "Ignored for falling outside {min} to {max} px per side: {m}."),
+  listaLista: t("{n} medidas de la lista.", "{n} sizes from the list."),
+  resumenOk: t("{n} medidas, todas sin avisos", "{n} sizes, none with warnings"),
+  resumenRevisar: t("{n} medidas · {r} para revisar", "{n} sizes · {r} to review"),
+  voltear: t("Voltear", "Flip"),
+  voltearAria: t("Voltear {m}", "Flip {m}"),
+  voltearTodas: t("Voltear todas", "Flip all"),
+  voltearTodasHecho: t("{n} medidas volteadas.", "{n} sizes flipped."),
+  heroDerecha: t("HERO a la derecha", "HERO on the right"),
+  heroIzquierda: t("HERO a la izquierda", "HERO on the left"),
+  deMesa: t("de la mesa {m}", "from the {m} artboard"),
+  letra: t("letra más chica {px} px", "smallest text {px} px"),
+  sinAvisos: t("Sin avisos", "No warnings"),
+  revisar: t("Revisar antes de entregar", "Review before delivery"),
+  revisarCorto: t("Revisar", "Review"),
+  noPinto: t("No se pudo pintar esta medida (al navegador no le alcanzó la memoria). No va en el ZIP.", "This size couldn't be drawn (the browser ran out of memory). It is not in the ZIP."),
+  zipIncompleto: t("El ZIP no se armó: faltaron {n} medidas. Reintenta.", "The ZIP wasn't built: {n} sizes were missing. Try again."),
+  notasUna: t("1 nota del archivo", "1 file note"),
+  notasN: t("{n} notas del archivo", "{n} file notes"),
+  bajarPng: t("PNG", "PNG"),
+  bajarPngAria: t("Descargar {m} en PNG", "Download {m} as PNG"),
+  bajarFallo: t("No se pudo armar la descarga. Reintenta.", "The download couldn't be built. Try again."),
+  zona: t("Zona segura en 9:16", "Safe zone on 9:16"),
+  zonaAyuda: t(
+    "Guía: en una historia la app tapa el {a} % de arriba y el {b} % de abajo. Sólo se ve aquí; no va en la descarga.",
+    "Guide: in a story the app covers the top {a}% and the bottom {b}%. It only shows here; it is not in the download.",
+  ),
+  zonaFranja: t("La app tapa aquí", "The app covers this"),
+  lienzoAria: t("Vista de {m}", "Preview of {m}"),
+  lienzoGuia: t(", con la guía de zona segura encima", ", with the safe-zone guide on top"),
+  planaLink: t("¿Sólo tienes una imagen plana (PNG o JPG)? Usa Formatos con imagen plana", "Only have a flat image (PNG or JPG)? Use Formats with a flat image"),
+  avisosDelArchivo: t("Notas del archivo", "File notes"),
+};
+
+export const FP_FAMILIA: Record<"igual" | "display" | "horizontal" | "ancho" | "banner", Par> = {
+  igual: t("acomodo del diseñador", "designer's layout"),
+  display: t("dos columnas", "two columns"),
+  horizontal: t("dos columnas", "two columns"),
+  ancho: t("tres zonas", "three zones"),
+  banner: t("una fila", "one row"),
+};
+
+export const FP_ERROR = {
+  noEsPsd: t("Ese archivo no es un PSD de Photoshop.", "That file isn't a Photoshop PSD."),
+  pesado: t("El PSD pesa más de {mb} MB.", "The PSD is over {mb} MB."),
+  noSoportado: t("Este PSD no se puede leer aquí. Guárdalo de nuevo desde Photoshop como PSD (RGB, 8 bits) y vuelve a intentarlo.", "This PSD can't be read here. Save it again from Photoshop as a PSD (RGB, 8 bits) and try again."),
+  grande: t("Este PSD es demasiado grande para leerlo en el navegador. Abajo dice qué se pasó de tamaño.", "This PSD is too large to read in the browser. The line below says what is over the limit."),
+  sinAplanado: t(
+    "El PSD no trae su copia aplanada. Ábrelo en Photoshop y guárdalo con «Maximizar compatibilidad» activado.",
+    "The PSD has no flattened copy. Open it in Photoshop and save it with “Maximize Compatibility” turned on.",
+  ),
+  sinFondo: t("Falta la carpeta BACKGROUND. La guía pide una carpeta con ese nombre exacto en cada mesa.", "The BACKGROUND folder is missing. The guide asks for a folder with that exact name in every artboard."),
+  tardo: t("El PSD tardó demasiado en leerse y se canceló. Prueba con un archivo más ligero.", "Reading the PSD took too long and was cancelled. Try a lighter file."),
+  desconocido: t("No se pudo leer el PSD. Reintenta.", "The PSD couldn't be read. Try again."),
+  ningunaMesa: t("No se pudo separar ninguna mesa de trabajo de este PSD en fondo y piezas. Abajo está el porqué de cada una.", "None of this PSD's artboards could be split into background and pieces. The reason for each is below."),
 };

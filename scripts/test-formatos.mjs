@@ -4,12 +4,15 @@ import sharp from "sharp";
 import {
   PRESETS, presetDe, idCustom, medidaValida, encajar, sugerir, agrandaPct, lienzoIA, RATIOS_IA, costoEstimado, COSTO_IA_USD,
   pegarDuro, zonaIdentica, deriva, colorDeBorde, nombreArchivo, LADO_MIN, LADO_MAX,
-  bordesDe, leerMedidas, hayExpansion, SIN_RECORTE, MODOS, esModo,
+  bordesDe, leerMedidas, limpiarNombre, hayExpansion, SIN_RECORTE, MODOS, esModo,
 } from "../src/lib/prisma/formatos/geometria.ts";
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
 import { writePsdBuffer } from "ag-psd";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT } from "../src/lib/prisma/formatos/psd.ts";
-import { acomodar, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, LETRA_MIN_PX } from "../src/lib/prisma/formatos/acomodo.ts";
+import { acomodar, acomodarMedida, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaGuia, LETRA_MIN_PX, MEDIDAS_EQUIPO } from "../src/lib/prisma/formatos/acomodo.ts";
+import { prepararMaestro, medidasQueCaben, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX } from "../src/lib/prisma/formatos/listo.ts";
+import { ZONA_HISTORIA_PCT, zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
+import { specVacio } from "../src/lib/prisma/spec.ts";
 
 let pass = 0,
   fail = 0;
@@ -650,6 +653,45 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
   const doble = acomodar({ ...M45, piezas: [...M45.piezas, pz("HERO", 100, 100, 300, 300)] }, 1200, 627);
   ok("dos carpetas HERO: se coloca una y la otra se avisa por lo que es", doble.puestas.length === 6 && doble.avisos.some((v) => v.tipo === "falta" && v.texto.includes("más de una carpeta «HERO»")), JSON.stringify(doble.avisos));
   eq("lista de mesas vacía → −1; una medida que no es un número positivo → error claro", [elegirMaestro([], 100, 100), [Infinity, NaN, 0, -5].map((W) => { try { acomodar(M45, W, 100); return "sigue"; } catch { return "error"; } })], [-1, ["error", "error", "error", "error"]]);
+}
+
+// ── v2 · la pantalla de la puerta PSD: lo que NO depende del navegador ─────────
+console.log("\n▶ v2 · pantalla PSD: una medida completa, la guía de zona segura y lo que cruza del worker");
+{
+  const pz = (nombre, x, y, w, h, letraMinPx = null) => ({ nombre, rol: rolDe(nombre), solido: { x, y, w, h }, letraMinPx });
+  const M916 = { nombre: "AD_9x16_FB", w: 1080, h: 1920, piezas: [pz("FOOTER", 131, 1485, 818, 70, 16), pz("HERO", 105, 558, 692, 695), pz("CTA", 365, 1290, 348, 110, 51.2), pz("Subtitulo", 632, 625, 338, 194, 31.9), pz("TITULO", 193, 336, 681, 176, 34.8), pz("BRAND", 312, 202, 457, 80)] };
+  const M45 = { nombre: "AD_4x5_FB", w: 1200, h: 1500, piezas: [pz("FOOTER", 204, 1361, 790, 62, 16), pz("HERO", 113, 508, 788, 791), pz("CTA", 788, 856, 306, 97, 45), pz("Subtitulo", 684, 617, 383, 194, 32), pz("TITULO", 188, 238, 824, 212, 42), pz("BRAND", 364, 86, 472, 83)] };
+  const lista = leerMedidas(MEDIDAS_EQUIPO);
+  eq("la lista con la que arranca la pantalla son las 12 medidas del equipo, todas válidas y dentro del tope", [lista.medidas.length, lista.fuera, lista.medidas.length <= MEDIDAS_MAX, lista.medidas[0], lista.medidas[11]], [12, [], true, { w: 1080, h: 1920 }, { w: 320, h: 50 }]);
+  // Guía de zona segura (decisión B de Pedro): sólo 9:16 y sus escalas directas; nunca entra al acomodo.
+  eq("guía de zona: sólo en 9:16 y sus escalas directas", lista.medidas.filter((m) => zonaGuia(m.w, m.h)).map((m) => `${m.w}x${m.h}`), ["1080x1920", "720x1280"]);
+  eq("la guía mide lo mismo que la regla de los prompts de historia (una sola fuente)", [zonaGuia(1080, 1920), zonaGuia(720, 1280).top / 1280 * 100, zonaGuia(720, 1280).bottom / 1280 * 100], [{ top: 288, right: 0, bottom: 384, left: 0 }, ZONA_HISTORIA_PCT.arriba, ZONA_HISTORIA_PCT.abajo]);
+  eq("la frase de zona segura del prompt no cambió al sacar sus números a una constante", zonaSeguraImagen({ ...specVacio("imagen_cero", "nanobanana", "x"), destino: "ig_story", aspect: "9:16" }), "Safe zone: subject and text centered, top 15% and bottom 20% clear");
+  eq("zonaGuia con medidas que no son medidas → sin guía", [zonaGuia(0, 0), zonaGuia(NaN, 5), zonaGuia(1080, 1080), zonaGuia(1920, 1080), zonaGuia(1200, 1500)], [null, null, null, null, null]);
+  const m916 = acomodarMedida([M916, M45], 1080, 1920);
+  ok("una medida completa: 9:16 sale de la mesa 9:16, trae guía, y la guía NO marca lo que colocó el diseñador (BRAND está dentro de ella)", m916.maestro === 0 && m916.guia !== null && M916.piezas[5].solido.y < m916.guia.top && m916.acomodo.avisos.length === 0, JSON.stringify(m916.acomodo.avisos));
+  const m627 = acomodarMedida([M916, M45], 1200, 627, { heroLado: "izquierda" });
+  ok("una medida completa: 1200×627 sale de la mesa 4:5, sin guía, y respeta el lado pedido", m627.maestro === 1 && m627.guia === null && JSON.stringify(m627.acomodo) === JSON.stringify(acomodar(M45, 1200, 627, { heroLado: "izquierda" })));
+  eq("sin mesas no hay medida: error claro, no un índice inventado", (() => { try { acomodarMedida([], 100, 100); return "sigue"; } catch (e) { return e.message; } })(), "acomodarMedida: sin maestros");
+  eq("nombre de archivo: el de entrega del equipo cabe entero (antes se cortaba a 50) y un nombre con rutas o símbolos sale limpio", [limpiarNombre("APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", 120), limpiarNombre("../../etc/pa ss<wd>", 120), limpiarNombre("x".repeat(300), 120).length, limpiarNombre("x".repeat(300)).length], ["APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "etc-pa-ss-wd", 120, 50]);
+
+  // Lo que el worker le manda a la pantalla.
+  const W2 = 4, H2 = 3;
+  const fondoRgb = Uint8ClampedArray.from({ length: W2 * H2 * 3 }, (_, i) => (i * 7) % 256);
+  const rgba = new Uint8ClampedArray(2 * 2 * 4).fill(9), osc = Uint8ClampedArray.from({ length: 2 * 2 * 3 }, (_, i) => 100 + i);
+  const crudo = { nombre: "mesa", w: W2, h: H2, fondo: fondoRgb, piezas: [{ nombre: "HERO", rol: "HERO", caja: { x: 0, y: 0, w: 2, h: 2 }, solido: { x: 0, y: 0, w: 2, h: 2 }, rgba, oscurece: osc, tapadaPct: 0, letraMinPx: null }, { nombre: "CTA", rol: "CTA", caja: { x: 1, y: 1, w: 2, h: 2 }, solido: { x: 1, y: 1, w: 2, h: 2 }, rgba, oscurece: null, tapadaPct: 0, letraMinPx: 12 }], fondoDistintoPct: 0, rearmadoDistintoPct: 0, avisos: ["nota"] };
+  const { maestro: listo, transferibles, bytes: pesoListo } = prepararMaestro(crudo);
+  eq("lo que pesa un maestro al cruzar a la página = fondo + color y sombra de cada pieza, ya en RGBA", pesoListo, W2 * H2 * 4 + (16 + 16) + 16);
+  ok("el fondo y el mapa de sombras llegan en RGBA opaco, con los mismos colores", listo.fondo.length === W2 * H2 * 4 && [...listo.fondo].every((v, i) => (i % 4 === 3 ? v === 255 : v === fondoRgb[Math.floor(i / 4) * 3 + (i % 4)])) && listo.piezas[0].oscurece.length === 16 && [...listo.piezas[0].oscurece].every((v, i) => (i % 4 === 3 ? v === 255 : v === osc[Math.floor(i / 4) * 3 + (i % 4)])) && listo.piezas[1].oscurece === null);
+  ok("las piezas conservan su orden, rol, cajas y letra; los píxeles van sin copiar", listo.piezas.map((p) => p.rol).join() === "HERO,CTA" && listo.piezas[1].letraMinPx === 12 && listo.piezas[0].rgba === rgba && listo.avisos[0] === "nota" && listo.piezas[1].caja.x === 1);
+  ok("cada búfer se transfiere UNA vez aunque dos piezas lo compartan (repetido tumbaría el postMessage)", transferibles.length === new Set(transferibles).size && transferibles.length === 3 && transferibles.includes(rgba.buffer), String(transferibles.length));
+  // Tope de lienzos: una lista pegada no puede pedir 2 GB de memoria.
+  const g = { w: 4096, h: 4096 }, c = { w: 320, h: 50 };
+  eq("las 12 del equipo caben todas", medidasQueCaben(lista.medidas), { caben: lista.medidas, fuera: 0 });
+  eq("30 medidas de 4096×4096 (2 GB de lienzos): sólo entran las que caben en el tope de píxeles, y se dice cuántas no", (({ caben, fuera }) => [caben.length, fuera, caben.reduce((s, m) => s + m.w * m.h, 0) <= MEDIDAS_PX_MAX])(medidasQueCaben(Array.from({ length: 30 }, () => g))), [4, 26, true]);
+  eq("una enorme en medio no le quita su lugar a las chicas que vienen después, y se respeta el orden", medidasQueCaben([g, g, g, g, g, c, { w: 300, h: 250 }]).caben.map((m) => m.w), [4096, 4096, 4096, 4096, 320, 300]);
+  eq(`más de ${MEDIDAS_MAX} medidas chicas: entran ${MEDIDAS_MAX}`, (({ caben, fuera }) => [caben.length, fuera])(medidasQueCaben(Array.from({ length: 45 }, () => c))), [MEDIDAS_MAX, 15]);
+  ok("el tope de peso es uno solo: el que revisa la pantalla es el que aplica el lector", (() => { try { leerPsd(new Uint8Array(0).subarray(0)); } catch { /* vacío: otro error */ } try { leerPsd({ byteLength: PSD_BYTES_MAX + 1 }); return false; } catch (e) { return e instanceof ErrorPsd && e.motivo === "demasiado-grande"; } })());
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

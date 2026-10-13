@@ -52,12 +52,38 @@ El alto de letra del legal es una APROXIMACIÓN del laboratorio (9 px en el maes
 RESUELTO (Pedro, 2026-10-13): HERO a la DERECHA como el script del equipo, con volteo de un clic. Las cifras de
 letra de arriba eran la aproximación del laboratorio; las reales (del texto del PSD) están en B3.
 
+**Pedro (2026-10-13, respuestas a las preguntas abiertas):**
+- NOMBRE de entrega (FB / EC / GG por medida): **ESTACIONADO por Pedro** ("dont worry about the long name will fix
+  that later is not really important right now"). No volver a preguntarlo ni invertir en ello hasta que él lo traiga.
+  `nombreSalida` se queda como está (cambia sólo la medida).
+- ZONAS SEGURAS, respuesta del equipo (textual): "solo en las 4:5, 1:1, 9:16 y 16:9.. a menos q sean escalas directas
+  d ellas, no hay nada especifico mas q reglas d buen uso que hay online para tamanos de FB, IG, etc".
+  Lo que significa: sólo importan en esas 4 formas (y sus escalas directas); el equipo NO tiene números propios.
+  - **Medido (scratchpad `zonas-medir.mjs`):** de las 12 medidas caen en la regla 4: 1080×1920 y 720×1280 (9:16),
+    1200×1500 (4:5), 1280×720 (16:9). Ninguna es 1:1. Las 3 primeras conservan el acomodo del diseñador (no se
+    mueve nada); sólo 1280×720 la acomoda la herramienta.
+  - **Medido:** el maestro 9:16 del propio equipo NO cumple ni la regla más suave: BRAND empieza al 10.5 % del alto
+    (regla: 14-15 % libre arriba) y el FOOTER termina al 19.0 % del borde de abajo (regla: 20 % libre). Con la de
+    Reels (14 / 35 / 6 %) quedan dentro FOOTER, HERO, CTA y BRAND. Un chequeo estricto marcaría SU original siempre.
+  - **Las reglas "que hay online" no coinciden entre sí y no hallé una página oficial** (ver research.md 2026-10-13).
+    Lo más citado, 9:16 de Meta: 14 % arriba; abajo 20 % (Stories) o 35 % (Reels); 6 % a los lados. La app ya usa
+    15 % / 20 % para historias (`compilers/zonas.ts`). Feed 4:5 y 1:1: la plataforma no tapa la imagen; sólo
+    márgenes de buen uso. 16:9: sin número oficial hallado.
+  - **DECIDIDO por Pedro (2026-10-13): opción B**, "go with B and build the screen". La zona segura es una GUÍA que
+    se prende en la vista de los 9:16 (15 % arriba, 20 % abajo: la misma regla de los prompts, una sola constante en
+    `compilers/zonas.ts`). No va en la descarga y nunca marca lo que colocó el diseñador. Hoy la herramienta no
+    acomoda verticales por su cuenta, así que la guía no mueve nada; el día que exista una familia vertical, ahí manda.
+- Siguen abiertas: letra mínima aceptable del legal (hoy 10 px provisional) · 3-5 PSD más.
+
 ### Plan B — puerta PSD (2026-10-13)
-**Next Step:** B5 — la pantalla: subir un PSD en Prisma › Formatos, leerlo en el navegador (Web Worker con reloj),
-pintar cada medida en un canvas con `acomodar` + las piezas de `despiezar`, botón "voltear" (`heroLado`) y la lista
-de avisos por medida. Corre entero en este Mac / la preview: sin migración, sin IA, sin tocar lo vivo.
-Esperando de Pedro (ya tiene el mensaje para el equipo): zonas seguras por medida · qué medidas llevan FB / EC / GG
-en el nombre · letra mínima aceptable del legal (hoy `LETRA_MIN_PX = 10`, provisional) · 3-5 PSD más.
+**Next Step (Pedro, 2026-10-13, al ver la pantalla):** (1) que las medidas CHICAS no pierdan calidad: nítidas y
+legibles ("they need to be crisp and high quality in order to have them legible"): proponerle 2-3 caminos y que
+elija · (2) la guía de zona segura debe decir de QUÉ app: un selector de canal ("if you want to check safe zones
+select a Channel and then it shows you") en vez de un genérico "la app tapa aquí" · (3) qué hacer con un PSD muy
+grande. Después: B4 y una familia propia para verticales altos (720×1600) y para 1:1.
+Que Pedro pruebe la pantalla en la preview (HÜE Prisma › carta "Adaptar a formatos") con su PSD y con 3-5 más.
+Esperando de Pedro: letra mínima aceptable del legal (hoy `LETRA_MIN_PX = 10`, provisional) · más PSD. El nombre
+largo: estacionado por él.
 - [x] B0. Laboratorio FUERA del repo, guardado en `~/Projects/greenlight-psd-lab/` (`psd-leer.mjs` lector ·
       `psd-mesas.mjs` informe por mesa + resizer de hoy · `psd-piezas.mjs` piezas + acomodo horizontal ·
       `psd-correr.mjs` y `hacer-psd-falso.mjs` ensayo con PSD inventados). Trae su propio `ag-psd`; usa `sharp` y el
@@ -142,7 +168,7 @@ en el nombre · letra mínima aceptable del legal (hoy `LETRA_MIN_PX = 10`, prov
       mala intención aún puede colgar a la librería dentro de `leerPsd`); revisar `File.size` antes de leerlo;
       pintar avisos, motivos y nombres como TEXTO, nunca HTML; lo que acabe en nombre de archivo pasa por
       `limpiarNombre` (geometria.ts).
-- [~] B3. Acomodo en la app. **La lógica está HECHA (2026-10-13); falta pintarla en la pantalla (B5).**
+- [x] B3. Acomodo en la app. HECHO 2026-10-13 (la lógica aquí; pintado en la pantalla en B5).
       `src/lib/prisma/formatos/acomodo.ts` (puro: sólo cajas y números): `elegirMaestro` (la mesa de forma más
       parecida) · `familiaDe` (igual / display / horizontal / ancho / banner) · `acomodar(maestro, W, H, { heroLado,
       zona })` · `sePuedeVoltear` · `nombreSalida` (cambia `_4x5_` por `_1200x627_`).
@@ -185,8 +211,61 @@ en el nombre · letra mínima aceptable del legal (hoy `LETRA_MIN_PX = 10`, prov
 - [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
       y no se enciman, pero la letra queda chica y se marca. Falta decidir CON EL EQUIPO qué piezas se quedan fuera
       en esas medidas (¿legal en una línea aparte?, ¿sin beneficios?) y partir el FOOTER en LEGAL / APP STORES.
-- [ ] B5. Puerta PSD en la pantalla: leer en el NAVEGADOR (Web Worker) y subir sólo PNG de fondo + piezas, nunca el
-      PSD (Vercel corta los cuerpos a 4.5 MB; el bucket a 25 MB). Alternativa descartada: leerlo en el servidor.
+- [x] B5. La pantalla de la puerta PSD. HECHA 2026-10-13 (Pedro: "go with B and build the screen, also remember to
+      add the resizing card here as well"). Alternativas descartadas: meterla en la pantalla de imagen plana (esa
+      necesita la 0078, estacionada) · leer el PSD en el servidor (Vercel corta los cuerpos a 4.5 MB; el PSD pesa 72).
+      - Ruta nueva `/prisma/formatos/psd` (`app/(app)/prisma/formatos/psd/page.tsx`): sólo el gate de HÜE Prisma (flag
+        de Prisma + rol). NO usa el interruptor de Formatos: no toca la base ni cuesta, todo pasa en el navegador.
+      - `components/prisma/formatos/psd.worker.ts`: Web Worker que lee y despieza; la página lo mata a los 120 s.
+        Una mesa que falla no tumba a las demás; si todas fallan por lo mismo, ese es el mensaje (p. ej. "guárdalo
+        con Maximizar compatibilidad").
+      - `lib/prisma/formatos/listo.ts` (puro, sin `ag-psd`): lo que cruza del worker a la página + topes. La página
+        sólo importa TIPOS de `psd.ts`, así la librería vive en el worker.
+      - `components/prisma/formatos/pintar.ts`: pinta cada medida en un <canvas> (fondo que llena, piezas de abajo
+        hacia arriba, sombras en "multiplicar", reducción por mitades).
+      - `components/prisma/formatos/formatos-psd.tsx`: soltar el PSD · una tarjeta por medida con su vista, "Voltear"
+        donde hay columnas, "Voltear todas", guía de zona segura en 9:16, avisos, PNG por medida y ZIP · pegar la
+        lista del cliente (arranca con las 12 del equipo, tope 30).
+      - `acomodo.ts`: `MEDIDAS_EQUIPO`, `zonaGuia`, `acomodarMedida` · `geometria.ts`: `limpiarNombre(base, max)` (el
+        nombre de entrega del equipo pasa de 50) · `compilers/zonas.ts`: `ZONA_HISTORIA_PCT`.
+      - **La carta en el inicio de Prisma:** cuarta carta "Adaptar a formatos" junto a las tres (4 en fila cuando la
+        columna da, 2 × 2 si no). Sustituye a la fila ancha que dependía del interruptor de Formatos.
+      - **Probado en el navegador (localhost, PSD real de 72 MB):** 12 medidas en ~0.9 s · mismas 3 marcadas que el
+        laboratorio · píxeles contra los PNG del laboratorio: idénticos a la medida de la mesa (dif. media 0.01),
+        0.5-3.2 niveles en las demás por el remuestreo (≤ 2.75 % de píxeles a más de 24 niveles) · "Voltear" con un
+        clic real pasa el HERO de lado · PNG y ZIP (12 entradas) con el nombre del equipo, interceptados sin guardar
+        archivo · archivo que no es PSD y PSD sin BACKGROUND dan su mensaje · un nombre de archivo con `<script>` sale
+        como texto · 375 px sin scroll horizontal · consola sin errores.
+      - **Reap (3 revisores en paralelo, sólo leyendo: salud + rendimiento, seguridad [opus], accesibilidad + UI).**
+        Ningún CRÍTICO. SERIOS arreglados, cada uno comprobado después en el navegador:
+        · dos archivos casi a la vez arrancaban dos lectores y el viejo podía pisar al nuevo → cada lectura toma un
+          turno, el cuadro se cierra antes del primer `await`, y sólo el worker vigente puede cerrar la lectura
+        · si el worker no arrancaba, el reloj giraba para siempre → try/catch + `onmessageerror`
+        · el ZIP podía salir con menos archivos y decir "listo" → todas las fotos se toman en el mismo instante y, si
+          falta una, no se entrega · nombres repetidos en el ZIP ya no se pisan
+        · una vista que no se podía pintar quedaba en blanco con palomita → se avisa en su tarjeta y no va al ZIP
+        · (seguridad) un PSD hecho a propósito podía pasarle >1 GB de píxeles a la página → tope de mesas (24) y de
+          bytes que cruzan (600 MB) en el worker, tope de píxeles de la lista de medidas (80 MP), y el worker se
+          suelta ANTES de armar los lienzos. Confirmado seguro: nada sale del navegador, los nombres y textos del
+          archivo se pintan como texto, el gate es el de HÜE Prisma.
+        · (accesibilidad) `lang` en la pantalla y en los textos del motor · el foco vuelve al cuadro al cambiar de
+          PSD, cancelar o fallar · "Voltear" es una acción (sin `aria-pressed`), dice de qué lado quedó y se anuncia
+          · la lista pegada se anuncia · las notas del archivo cuentan en el resumen y tienen título
+        También: soltar el PSD en cualquier parte de la página (antes, fuera del cuadro, el navegador se lo llevaba) ·
+        botón "Cancelar" mientras lee · "Voltear todas" voltea cada una · insignia "Revisar" junto a la medida ·
+        avisos en ámbar y con letra normal · el panel ya no se mete bajo la barra de arriba (también en la pantalla de
+        imagen plana) · textos más claros · la carta usa un color propio (verde; el cian es de "Crear video").
+        NO hecho (anotado, no bloquea): exportar JPG además de PNG (decisión de producto: los banners de Google
+        tienen tope de peso) · repetir el botón del ZIP al final en el teléfono · mandar una mesa por mensaje para
+        bajar el pico de memoria · hook `useLectorPsd` · contraste del borde del textarea (token global `--input`)
+        · anillos de foco que recorta `.prisma-root{overflow-x:clip}` (sin confirmar). Los arreglos del reap NO
+        pasaron por una segunda ronda de revisores: se comprobaron uno por uno en el navegador.
+      - Tests `scripts/test-formatos.mjs` **146/0** (antes 128). 15 mutaciones nuevas, las 15 atrapadas. `npm test`
+        completo: lib 481/0 · prisma 975/0 · formatos 146/0 · db 543/0 · import 81/0 · sync 44/0. tsc, eslint y
+        `npm run build` limpios (la ruta `/prisma/formatos/psd` sale en el build).
+      - Limitaciones a la vista: los avisos del motor salen sólo en español aunque la pantalla esté en inglés · 1:1
+        desde un 4:5 conserva el acomodo del diseñador con aire a los lados · 720×1600 igual, con aire arriba y abajo
+        · no hay "ver grande" (la descarga es el tamaño real) · un solo PSD real probado.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

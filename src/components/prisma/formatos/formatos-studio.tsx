@@ -15,7 +15,7 @@ import {
   HEX, LADO_MAX, LADO_MIN, MODOS, PLATAFORMAS, PRESETS, FUENTE_MAX_BYTES, agrandaPct, encajar, idCustom, leerMedidas, lienzoIA, limpiarNombre, medidaValida, nombreArchivo, sugerir,
   type Encaje, type Modo, type Preset,
 } from "@/lib/prisma/formatos/geometria";
-import { FX, MODO_AYUDA, MODO_LABEL, PLATAFORMA_LABEL } from "@/lib/prisma/formatos/copy";
+import { FX, MODO_AYUDA, MODO_LABEL, PLATAFORMA_LABEL, rellenar as f } from "@/lib/prisma/formatos/copy";
 import { BUCKET_FORMATOS, MIME_A_EXT, type LoteVista, type SalidaVista } from "@/lib/prisma/formatos/vista";
 
 export type MarcaColores = { id: string; clientId: string; nombre: string; colores: string[] };
@@ -30,7 +30,6 @@ const SONDEO_MS = 5_000;
 const FOCO = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
 
 const usd = (n: number, lang: Lang) => (n <= 0 ? tx(FX.gratis, lang) : `${new Intl.NumberFormat(lang === "es" ? "es-MX" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)} USD`);
-const f = (s: string, vars: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ""));
 
 /** Corre `fn` sobre cada item con a lo sumo `n` a la vez; `seguir()` en falso deja de tomar nuevos. */
 async function enCola<T>(items: T[], n: number, fn: (t: T) => Promise<void>, seguir: () => boolean): Promise<void> {
@@ -654,7 +653,7 @@ export function FormatosStudio({
       ) : (
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
           {/* Columna izquierda: el original y el costo; se queda a la vista al bajar por la lista (en escritorio). */}
-          <aside className="space-y-3 lg:sticky lg:top-4 lg:self-start">
+          <aside className="space-y-3 lg:sticky lg:top-20 lg:self-start">
             <div className="rounded-xl border border-border bg-card p-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{tx(FX.original, lang)}</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}

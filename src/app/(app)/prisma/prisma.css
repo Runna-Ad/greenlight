@@ -281,3 +281,25 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* Formatos › guía de zona segura: la franja que la app tapa en una historia. Va ENCIMA de la vista, nunca en la descarga. */
+.p-zona {
+  pointer-events: none;
+  overflow: hidden;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--foreground) 58%, transparent) 0 6px,
+    color-mix(in oklch, var(--foreground) 40%, transparent) 6px 12px
+  );
+}
+.p-zona-texto {
+  margin: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
