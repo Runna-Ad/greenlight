@@ -76,8 +76,8 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 - Siguen abiertas: letra mínima aceptable del legal (hoy 10 px provisional) · 3-5 PSD más.
 
 ### Plan B — puerta PSD (2026-10-13)
-**Next Step (2026-10-14, noche):** B13 construido (opción 1 + zona del canal) y en la preview: que Pedro lo vea con
-s33. Pendiente su respuesta: en Stories/Reels la franja de abajo tapa el colchón y la tarjeta vuelve a flotar.
+**Next Step (2026-10-14, noche):** B13 + zoom del fondo en la preview: que Pedro lo vea con s33 (sin canal, Stories,
+TikTok). Reels sigue con la tarjeta flotando (pediría ×1.95 de zoom): decidir si se queda así.
 **Antes:** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
 subir. La prueba de punta a punta de tipografías espera el "ship it" de 0079 + bucket. 320×50 se queda igual
 (Pedro). Después: que pruebe la preview con su PSD y las DiDi; B4.
@@ -477,6 +477,12 @@ largo: estacionado por él.
         flota sobre el cielo. APGIANT: sin cambios donde manda su mesa 9:16. Navegador (localhost): elegir canal
         cambia la 9:16 y la ayuda nueva se ve. test-formatos 286/0 · npm test 81/0 y 44/0 · tsc y eslint limpios.
       · También: el botón de IA estima US$0.041 (lo medido), `COSTO_COPIA_IA_USD`.
+      · Zoom del fondo (Pedro: "yes build the background zoom"): con canal, si la tarjeta no cabe sobre su punto, el
+        fondo se agranda lo MENOS posible, hasta ×1.5 sobre lo que cubre (`FONDO_ZOOM_MAX`). s33 a 1080×1920:
+        TikTok ×1.30 y Stories ×1.46 → tarjeta sobre el colchón, botón enfrente, legal abajo fuera de la franja
+        (a tamaño real se lee; el fondo, más suave). Reels pediría ×1.95 (tarjeta chiquita, nubes borradas): no
+        se agranda y la tarjeta flota. APGIANT con Stories pediría ×2.1: tampoco. Navegador (localhost): con
+        Stories la 9:16 sale con el zoom. test-formatos 290/0 · npm test 81/0 y 44/0 · tsc y eslint limpios.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

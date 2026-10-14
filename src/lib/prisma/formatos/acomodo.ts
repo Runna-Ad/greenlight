@@ -59,6 +59,13 @@ export const PIE_ESCALA_MAX = 1.15;
 const ZONA_MAX = 0.75;
 /** Para salir de la zona del canal, las piezas se achican hasta esto de su tamaño; si ni así, se dejan y se avisa. */
 const ZONA_ACHICA_MAX = 0.6;
+/**
+ * Con canal, el fondo se agranda hasta esto más de lo que necesita para cubrir, para que el HERO quede sobre su
+ * punto fuera de la franja que tapa la app (Pedro, 2026-10-14: "yes build the background zoom"). Medido con s33 en
+ * 1080×1920: TikTok pide ×1.30, Stories ×1.46, Reels ×1.95. A ×1.95 la tarjeta se ve chiquita sobre un colchón
+ * enorme y las nubes se borran (el título de nubes se pierde): Reels se queda sin zoom y su HERO no queda en su punto.
+ */
+export const FONDO_ZOOM_MAX = 1.5;
 /** Donde hay columnas, ninguna pieza de texto se agranda más que esto respecto al HERO (para que no se coma el anuncio). */
 const TEXTO_SOBRE_HERO_MAX = 1.8;
 /**
@@ -185,12 +192,14 @@ function parada(s: Suelta | undefined, r: Rect): Puesta[] {
  * Por eso cada pieza va con su pie (el centro de abajo) sobre el MISMO punto del fondo que en el maestro.
  * Si así no caben en `r` (la medida, o lo que deja libre la zona del canal), en este orden:
  *   1. se juntan hacia `ref` (el pie del HERO), que se queda sobre su punto, hasta como las dejó el diseñador;
- *   2. si el HERO no cabe en su punto, el grupo se corre (y se junta lo necesario);
- *   3. si ni juntas caben, se achican todas por igual hasta ZONA_ACHICA_MAX;
- *   4. si ni así, el acomodo del diseñador centrado, y lo que caiga en la zona se avisa.
+ *   2. con `zoom` (hay canal): el fondo se agranda lo MENOS posible (hasta FONDO_ZOOM_MAX) para que el HERO quepa
+ *      sobre su punto, con las piezas del tamaño más grande que quepa fuera de la zona (achicadas si hace falta);
+ *   3. si el HERO no cabe en su punto, el grupo se corre (y se junta lo necesario);
+ *   4. si ni juntas caben, se achican todas por igual hasta ZONA_ACHICA_MAX;
+ *   5. si ni así, el acomodo del diseñador centrado, y lo que caiga en la zona se avisa.
  * El fondo se corre con `ref` lo que le sobra (siempre cubre la medida).
  */
-function anclarAlFondo(ps: Suelta[], k0: number, kb: number, r: Rect, ref: { x: number; y: number }, ma: { w: number; h: number }, W: number, H: number): { puestas: Puesta[]; fondo: Acomodo["fondo"] } {
+function anclarAlFondo(ps: Suelta[], k0: number, kb: number, r: Rect, ref: { x: number; y: number }, ma: { w: number; h: number }, W: number, H: number, zoom: boolean): { puestas: Puesta[]; fondo: Acomodo["fondo"] } {
   const d = ps.map(({ p }) => ({ dx: p.solido.x + p.solido.w / 2 - ref.x, dy: p.solido.y + p.solido.h - ref.y, w: p.solido.w, h: p.solido.h }));
   const cruce = (a: Rect | null, b: Rect): Rect | null => {
     if (!a) return null;
@@ -207,9 +216,9 @@ function anclarAlFondo(ps: Suelta[], k0: number, kb: number, r: Rect, ref: { x: 
     }), { x0: -Infinity, x1: Infinity, y0: -Infinity, y1: Infinity }),
     { x0: -Infinity, x1: Infinity, y0: -Infinity, y1: Infinity },
   );
-  // Donde `ref` sigue sobre su punto: el fondo se corre lo que le sobra y sigue cubriendo la medida.
-  const enSuPunto: Rect = { x0: W - ma.w * kb + kb * ref.x, x1: kb * ref.x, y0: H - ma.h * kb + kb * ref.y, y1: kb * ref.y };
-  const fijo = (t: number) => cruce(rango(t, k0), enSuPunto);
+  // Donde `ref` sigue sobre su punto con el fondo a escala z: el fondo se corre lo que le sobra y sigue cubriendo.
+  const enSuPunto = (z: number): Rect => ({ x0: W - ma.w * z + z * ref.x, x1: z * ref.x, y0: H - ma.h * z + z * ref.y, y1: z * ref.y });
+  const fijo = (t: number, kk = k0, z = kb) => cruce(rango(t, kk), enSuPunto(z));
   // El valor más grande entre lo y hi que todavía cumple (lo cumple, hi no).
   const mayor = (cumple: (t: number) => boolean, lo: number, hi: number) => {
     for (let n = 0; n < 30; n++) {
@@ -219,21 +228,37 @@ function anclarAlFondo(ps: Suelta[], k0: number, kb: number, r: Rect, ref: { x: 
     }
     return lo;
   };
+  // El valor más chico entre lo y hi que todavía cumple (hi cumple, lo no).
+  const menor = (cumple: (t: number) => boolean, lo: number, hi: number) => {
+    for (let n = 0; n < 30; n++) {
+      const t = (lo + hi) / 2;
+      if (cumple(t)) hi = t;
+      else lo = t;
+    }
+    return hi;
+  };
   const kMin = k0 * ZONA_ACHICA_MAX;
-  let s = kb, k = k0, g = fijo(kb);
+  // Lo más grande que caben las piezas juntas (como las dejó el diseñador) fuera de la zona; null si ni a kMin.
+  const kCabe = rango(k0, k0) ? k0 : rango(kMin, kMin) ? mayor((t) => !!rango(t, t), kMin, k0) : null;
+  const zMax = kb * FONDO_ZOOM_MAX;
+  let s = kb, k = k0, z = kb, g = fijo(kb);
   if (!g && fijo(k0)) g = fijo((s = mayor((t) => !!fijo(t), k0, kb)));
-  else if (!g && rango(k0, k0)) g = rango((s = mayor((t) => !!rango(t, k0), k0, kb)), k0);
-  else if (!g && rango(kMin, kMin)) g = rango((s = k = mayor((t) => !!rango(t, t), kMin, k0)), k);
+  else if (!g && zoom && kCabe !== null && fijo(kCabe, kCabe, zMax)) {
+    k = kCabe;
+    z = menor((t) => !!fijo(k, k, t), kb, zMax);
+    g = fijo((s = mayor((t) => !!fijo(t, k, z), k, z)), k, z);
+  } else if (!g && rango(k0, k0)) g = rango((s = mayor((t) => !!rango(t, k0), k0, kb)), k0);
+  else if (!g && kCabe !== null) g = rango((s = k = kCabe), k);
   else if (!g) s = k0;
   // `ref` sobre el fondo centrado (o, sin lugar posible, donde lo deja el acomodo del diseñador centrado), lo más cerca que se pueda.
-  const ax = g ? (W - ma.w * kb) / 2 + kb * ref.x : (W - ma.w * k0) / 2 + k0 * ref.x;
-  const ay = g ? (H - ma.h * kb) / 2 + kb * ref.y : (H - ma.h * k0) / 2 + k0 * ref.y;
+  const ax = g ? (W - ma.w * z) / 2 + z * ref.x : (W - ma.w * k0) / 2 + k0 * ref.x;
+  const ay = g ? (H - ma.h * z) / 2 + z * ref.y : (H - ma.h * k0) / 2 + k0 * ref.y;
   const X = g ? Math.max(g.x0, Math.min(g.x1, ax)) : ax, Y = g ? Math.max(g.y0, Math.min(g.y1, ay)) : ay;
   const puestas = ps.map(({ i, p }, n) => {
     const w = p.solido.w * k, h = p.solido.h * k;
     return { pieza: i, k, x: X + s * d[n].dx - w / 2, y: Y + s * d[n].dy - h, w, h };
   });
-  return { puestas, fondo: { k: kb, x: Math.min(0, Math.max(W - ma.w * kb, X - kb * ref.x)), y: Math.min(0, Math.max(H - ma.h * kb, Y - kb * ref.y)) } };
+  return { puestas, fondo: { k: z, x: Math.min(0, Math.max(W - ma.w * z, X - z * ref.x)), y: Math.min(0, Math.max(H - ma.h * z, Y - z * ref.y)) } };
 }
 
 /** Espejo horizontal de un rectángulo dentro de [a0, a1]. */
@@ -311,7 +336,8 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
     const otraForma = razon(W, H, ma) >= PARECIDO_MAX;
     const lado = (z: number) => (otraForma && z > 0 ? z + m : 0);
     const libre: Rect = { x0: lado(zona.left), x1: W - lado(zona.right), y0: lado(zona.top), y1: H - lado(zona.bottom) };
-    ({ puestas, fondo: fondoAntes } = anclarAlFondo(sueltas, k, kb, libre, ref, ma, W, H));
+    const conZona = otraForma && (zona.top > 0 || zona.right > 0 || zona.bottom > 0 || zona.left > 0);
+    ({ puestas, fondo: fondoAntes } = anclarAlFondo(sueltas, k, kb, libre, ref, ma, W, H, conZona));
     // El pie recupera lo que la reducción le quitó: crece sobre su mismo borde de abajo y su mismo centro, hasta el
     // ancho útil, y nunca más grande de como lo dejó el diseñador (a la medida del maestro no se mueve nada: el
     // original es intocable). Tampoco se arrima a otra pieza: se prueba cada tamaño contra TODAS, no sólo la de arriba.

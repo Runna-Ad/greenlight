@@ -18,7 +18,7 @@ import { carpetaGoogle, archivosDeMetadata, archivosQueSirven, buscarEnGoogle, A
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { acomodar, acomodarMedida, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO } from "../src/lib/prisma/formatos/acomodo.ts";
+import { acomodar, acomodarMedida, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida } from "../src/lib/prisma/formatos/revisar.ts";
@@ -746,6 +746,19 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
   ok("con la zona de historias: ninguna pieza queda debajo de lo que tapa la app (sin aviso de zona)", conCanal.puestas.every((q) => q.y >= historia.top && q.y + q.h <= 1920 - historia.bottom) && !conCanal.avisos.some((v) => v.tipo === "zona"), JSON.stringify(conCanal.puestas.map((q) => [M45.piezas[q.pieza].rol, Math.round(q.y), Math.round(q.y + q.h)])));
   // Con historias el contenido no cabe ni junto (1337 px del maestro a ×0.9 contra 1169 libres): se achica.
   ok("con la zona de historias el contenido no cabe ni junto: se achica todo por igual, sin bajar de 60 %", heroCanal.k < 0.9 && heroCanal.k >= 0.9 * 0.6 && conCanal.puestas.every((q) => q.k === heroCanal.k || M45.piezas[q.pieza].rol === "FOOTER"), String(heroCanal.k));
+  // s33 (DiDi Buen Fin, 2026-10-14): la tarjeta parada en un colchón a 3/4 del alto. Cajas reales de `despiezar`.
+  const M33 = { nombre: "BFDIRECT20CASH_4x5_STOCK_STATIC_IDEAE_EC_V1_NOV26_RN", w: 1200, h: 1500, piezas: [pz("CTA", 424, 1179, 352, 97, 44.9), pz("FOOTER", 205, 1361, 788, 62, 16), pz("TITULO", 287, 239, 611, 459, 59), pz("HERO", 468, 726, 279, 408), pz("BRAND", 146, 73, 907, 113)] };
+  const s33Historia = acomodar(M33, 1080, 1920, { zona: historia });
+  const heroS33 = s33Historia.puestas.find((q) => M33.piezas[q.pieza].rol === "HERO");
+  ok(
+    `s33 con historias: el fondo se agranda lo necesario (≤ ×${FONDO_ZOOM_MAX}) para que la tarjeta quede sobre su punto, y nada en la zona`,
+    s33Historia.fondo.k > 1.28 && s33Historia.fondo.k <= 1.28 * FONDO_ZOOM_MAX + 1e-9 && alFondo(M33, s33Historia, heroS33).every((d) => Math.abs(d) < 1) && !s33Historia.avisos.some((v) => v.tipo === "zona"),
+    JSON.stringify([s33Historia.fondo.k, alFondo(M33, s33Historia, heroS33)]),
+  );
+  ok("s33 sin canal: todas sobre su punto y el fondo cubre justo (×1.28)", ((a) => a.fondo.k === 1.28 && a.puestas.every((q) => alFondo(M33, a, q).every((d) => Math.abs(d) < 1)))(acomodar(M33, 1080, 1920)));
+  const reels = acomodar(M45, 1080, 1920, { zona: { top: 1920 * 0.14, right: 1080 * 0.06, bottom: 1920 * 0.35, left: 1080 * 0.06 } });
+  ok("si el HERO pide más zoom que el tope (APGIANT con reels, franja de 35 % abajo: pediría ×2), el fondo no se agranda y nada queda en la zona", reels.fondo.k === 1.28 && !reels.avisos.some((v) => v.tipo === "zona"), JSON.stringify([reels.fondo.k, reels.avisos]));
+  ok("sin canal el fondo nunca se agranda de más (cubre justo)", [[1080, 1920], [720, 1600], [768, 1024]].every(([W, H]) => acomodar(M45, W, H).fondo.k === Math.max(W / 1200, H / 1500)));
   const arriba = acomodar(M45, 1080, 1920, { zona: { top: 250, right: 0, bottom: 0, left: 0 } });
   const heroArriba = arriba.puestas.find((q) => M45.piezas[q.pieza].rol === "HERO");
   ok("con una zona sólo arriba (el HERO sí cabe en su lugar): el HERO se queda sobre su punto y lo de arriba se junta hacia él, fuera de la zona", alFondo(M45, arriba, heroArriba).every((d) => Math.abs(d) < 1) && arriba.puestas.every((q) => q.y >= 250) && heroArriba.k === 0.9, JSON.stringify([alFondo(M45, arriba, heroArriba), arriba.puestas.map((q) => Math.round(q.y))]));
