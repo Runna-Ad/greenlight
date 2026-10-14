@@ -24,6 +24,7 @@
 import { readPsd, getLayerImageData, getLayerMaskImageData, getCompositeImageData, initializeCanvas, type Layer } from "ag-psd";
 import { PSD_BYTES_MAX } from "./listo.ts";
 import { textoDe, type TextoCapa, type TextoPsdCrudo } from "./textos.ts";
+import { ROLES, rolDe, type Rol } from "./roles.ts";
 
 /** Sólo se LEEN por índice. (La librería tipa también 16 y 32 bits; aquí siempre son 8: `leerPsd` rechaza lo demás.) */
 type Pixeles = { data: ArrayLike<number>; width: number; height: number };
@@ -72,15 +73,8 @@ export const FONDO_FIEL_MAX_PCT = 10;
 export const REARMADO_MAX_PCT = 2;
 export const TAPADA_MAX_PCT = 2;
 
-export const ROLES = ["BACKGROUND", "HERO", "TITULO", "SUBTITULO", "CTA", "BRAND", "FOOTER"] as const;
-export type Rol = (typeof ROLES)[number];
-
-/** Nombre COMPLETO de la carpeta, sin mayúsculas ni acentos ("Subtitulo" → SUBTITULO). Nunca "contiene":
- *  "SUBTITULO" contiene "TITULO". */
-export function rolDe(nombre: string): Rol | null {
-  const n = nombre.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toUpperCase();
-  return (ROLES as readonly string[]).includes(n) ? (n as Rol) : null;
-}
+// Los papeles de las carpetas viven en roles.ts (chico: también lo usa la pantalla, sin cargar ag-psd).
+export { ROLES, rolDe, type Rol };
 
 export type MotivoPsd = "no-soportado" | "demasiado-grande" | "sin-aplanado" | "sin-fondo";
 export class ErrorPsd extends Error {
@@ -814,7 +808,6 @@ function despiezarMesa(doc: DocPsd, mesa: number): MaestroPsd {
     if (!p) return;
     p.tapadaPct = propios[k] ? Math.min(100, (ajenos[k] / propios[k]) * 100) : 0;
     if (p.tapadaPct > TAPADA_MAX_PCT) avisos.push(`«${p.nombre}» queda ${p.tapadaPct.toFixed(1)} % tapada u oscurecida por otra pieza: ahí su color no es confiable.`);
-    if (!p.rol) avisos.push(`La carpeta «${p.nombre}» no es una de las de la guía (${ROLES.join(" / ")}).`);
     piezas.push(p);
   });
 

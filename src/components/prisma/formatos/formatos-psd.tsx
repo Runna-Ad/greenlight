@@ -10,11 +10,12 @@ import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
 import { CANALES, MEDIDAS_EQUIPO, acomodarMedida, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Lado } from "@/lib/prisma/formatos/acomodo";
-import { FP, FP_ERROR, FP_FAMILIA, FX, rellenar } from "@/lib/prisma/formatos/copy";
+import { FP, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
 import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
 import { LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
+import { nombreDeGuia, type Rol } from "@/lib/prisma/formatos/roles";
 import { colaVacia, enCola, pintar } from "./pintar";
 import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, fuentesRecordadas, olvidarFuentes, recordarFuentes, revisarTextos, textoEscrito, type ArchivoFuente, type Escritura, type Tipografias } from "./escritura";
 import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
@@ -125,6 +126,13 @@ function textoNotaFuentes(n: NotaFuentes, lang: Lang): string {
   const cargadas = n.nuevas === 1 ? tx(FP.textoCargadaUna, lang) : n.nuevas ? rellenar(tx(FP.textoCargadas, lang), { n: n.nuevas }) : n.malas.length ? "" : tx(FP.textoYaEstaban, lang);
   return [n.de ? rellenar(tx(FP.textoDeGreenlight, lang), { c: n.de }) : "", cargadas, n.malas.length ? rellenar(tx(FP.textoMalas, lang), { f: unos(n.malas) }) : ""].filter(Boolean).join(" ");
 }
+
+/** Sin PSD: la misma lista vacía siempre (una nueva en cada pintado rehacía los acomodos). */
+const SIN_MAESTROS: MaestroListo[] = [];
+
+/** Lo que se puede elegir para una carpeta fuera de la guía. BACKGROUND no: el fondo se arma al leer el PSD (una
+ *  carpeta "Fondo" o "BG" ya se reconoce sola). "" = sin papel. */
+const PAPELES = ["HERO", "TITULO", "SUBTITULO", "CTA", "BRAND", "FOOTER", ""] as const;
 
 /** "DiDiSans-Pro-Bold es / … son sólo para anuncios de DiDi: elige DiDi arriba". */
 const textoAjenas = (a: { cliente: string; nombres: string[] }, lang: Lang) => rellenar(tx(a.nombres.length === 1 ? FP.textoAjena : FP.textoAjenas, lang), { f: unos(a.nombres), c: a.cliente });
@@ -303,6 +311,9 @@ export function FormatosPsd({ planaActiva, clientes }: { planaActiva: boolean; c
   /** Las tipografías que llegaron por ser exclusivas de un cliente (nombre → cliente): se sueltan al cambiar de cliente. */
   const deExclusiva = useRef(new Map<string, string>());
   /** Lo que le falta al PSD pero es exclusivo de OTRO cliente (de qué PSD y con qué cliente elegido se preguntó). */
+  /** El papel que se eligió para cada carpeta fuera de la guía ("CARD" → HERO), de qué PSD. Sin elegir, el que adivinó
+   *  el lector (roles.ts). null = sin papel. */
+  const [papeles, setPapeles] = useState<{ leido: Leido; mapa: Map<string, Rol | null> } | null>(null);
   const [ajenas, setAjenas] = useState<{ leido: Leido; cliente: string; lista: { cliente: string; nombres: string[] }[] } | null>(null);
   const [leido, setLeido] = useState<Leido | null>(null);
   const [avance, setAvance] = useState<{ mesa: number; de: number } | null>(null);
@@ -375,7 +386,19 @@ export function FormatosPsd({ planaActiva, clientes }: { planaActiva: boolean; c
 
   const leyendo = avance !== null;
   const eligiendo = eleccion !== null;
-  const usables = leido?.maestros ?? [];
+  const usables = leido?.maestros ?? SIN_MAESTROS;
+  const elegidos = papeles?.leido === leido ? papeles.mapa : null;
+  /** Los maestros con el papel elegido en cada carpeta (lo que acomoda cada medida). Sólo cambia `rol`. */
+  const maestrosVista = useMemo(
+    () => (elegidos ? usables.map((m) => ({ ...m, piezas: m.piezas.map((p) => (elegidos.has(p.nombre) ? { ...p, rol: elegidos.get(p.nombre) ?? null } : p)) })) : usables),
+    [usables, elegidos],
+  );
+  /** Las carpetas cuyo nombre no es de la guía, con el papel que tienen ahora (una vez cada nombre, en orden). */
+  const fueraDeGuia = [...new Map(maestrosVista.flatMap((m) => m.piezas).filter((p) => !nombreDeGuia(p.nombre)).map((p) => [p.nombre, p.rol] as const))];
+  const elegirPapel = (nombre: string, rol: Rol | null) => {
+    if (!leido) return;
+    setPapeles((antes) => ({ leido, mapa: new Map([...(antes?.leido === leido ? antes.mapa : []), [nombre, rol]]) }));
+  };
   // Al terminar de leer, el foco va al resultado; al volver al cuadro de subida, al cuadro.
   useEffect(() => {
     if (leido?.maestros.length) tituloResultado.current?.focus();
@@ -775,14 +798,14 @@ export function FormatosPsd({ planaActiva, clientes }: { planaActiva: boolean; c
 
   // El mismo acomodo que calcula cada tarjeta (función pura): aquí sirve para el resumen, el legal y los nombres del ZIP.
   const filas = useMemo(
-    () => (leido?.maestros.length ? medidas.map((m) => ({ m, ...acomodarMedida(leido.maestros, m.w, m.h, { heroLado: lados[clave(m)] }) })) : []),
-    [leido, medidas, lados],
+    () => (maestrosVista.length ? medidas.map((m) => ({ m, ...acomodarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)] }) })) : []),
+    [maestrosVista, medidas, lados],
   );
   const porRevisar = filas.filter((f) => f.acomodo.avisos.length).length;
   const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia));
   const n916 = medidas.filter((m) => es916(m.w, m.h)).length;
   // El legal puede ser obligatorio (CAT de una tarjeta): las medidas donde se quitó se dicen junto al ZIP, no sólo en su tarjeta.
-  const sinLegal = filas.filter((f) => f.acomodo.quitadas.some((i) => usables[f.maestro]?.piezas[i]?.rol === "FOOTER")).map((f) => etiqueta(f.m));
+  const sinLegal = filas.filter((f) => f.acomodo.quitadas.some((i) => maestrosVista[f.maestro]?.piezas[i]?.rol === "FOOTER")).map((f) => etiqueta(f.m));
   const voltearTodas = () => {
     setLados((p) => ({ ...p, ...Object.fromEntries(volteables.map((f) => [clave(f.m), p[clave(f.m)] === "izquierda" ? "derecha" : "izquierda"])) }));
     anunciar(rellenar(tx(FP.voltearTodasHecho, lang), { n: volteables.length }));
@@ -1037,6 +1060,35 @@ export function FormatosPsd({ planaActiva, clientes }: { planaActiva: boolean; c
                   </ul>
                 </div>
               )}
+              {fueraDeGuia.length > 0 && (
+                <fieldset className="mt-2 border-t border-border pt-2" aria-describedby="psd-carpetas-ayuda">
+                  <legend className="text-xs font-semibold text-foreground">{tx(FP.carpetasTitulo, lang)}</legend>
+                  <p id="psd-carpetas-ayuda" className="mt-0.5 text-xs text-muted-foreground">
+                    {tx(FP.carpetasAyuda, lang)}
+                  </p>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {fueraDeGuia.map(([nombre, rol], i) => (
+                      <li key={nombre} className="flex items-center gap-2">
+                        <label htmlFor={`psd-carpeta-${i}`} className="min-w-0 flex-1 truncate text-sm text-foreground" title={nombre}>
+                          <span lang={delMotor}>«{nombre}»</span>
+                        </label>
+                        <select
+                          id={`psd-carpeta-${i}`}
+                          value={rol ?? ""}
+                          onChange={(e) => elegirPapel(nombre, (e.target.value || null) as Rol | null)}
+                          className="min-h-11 w-40 shrink-0 cursor-pointer rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+                        >
+                          {PAPELES.map((p) => (
+                            <option key={p} value={p}>
+                              {tx(FP_PAPEL[p || "NINGUNO"], lang)}
+                            </option>
+                          ))}
+                        </select>
+                      </li>
+                    ))}
+                  </ul>
+                </fieldset>
+              )}
               <Button variant="outline" size="lg" className={cn("mt-3 w-full", BOTON)} onClick={cambiarPsd}>
                 <FileUp className="size-4" aria-hidden="true" /> {tx(FP.cambiar, lang)}
               </Button>
@@ -1221,7 +1273,7 @@ export function FormatosPsd({ planaActiva, clientes }: { planaActiva: boolean; c
                 las horizontales y los banners ocupan la fila entera. El orden es el de la lista del cliente. */}
             <ul className="grid items-start gap-4 @xl:grid-cols-2">
               {medidas.map((m) => (
-                <TarjetaMedida key={clave(m)} maestros={usables} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} />
+                <TarjetaMedida key={clave(m)} maestros={maestrosVista} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} />
               ))}
             </ul>
           </section>

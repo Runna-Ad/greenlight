@@ -1023,3 +1023,8 @@ TAGS: #pedro-override #formatos #tipografias #selector #no-adivinar #consistenci
 ROOT CAUSE: generalicé el formato de nombres a partir de un solo archivo real.
 RULE: un lector de formatos de archivo (tipografías, PSD, metadatos) se prueba contra al menos 3 archivos reales de fabricantes distintos antes de darlo por bueno, y cada caso raro que aparezca se vuelve un test con su archivo falso.
 TAGS: #formatos #tipografias #variable-fonts #probar-con-reales #google-fonts
+
+[2026-10-14] LESSON (Formatos: los nombres de la guía no son los nombres de los archivos): el motor reconocía las carpetas sólo por los 7 nombres exactos de la guía de diseño. El segundo PSD real de DiDi (s33) usa Logo / Copy / CARD / Legales y 7 de 12 medidas salieron con sólo el botón. Ningún test lo veía: todos los PSD de prueba se armaron con los nombres de la guía.
+ROOT CAUSE: tomé la guía escrita como si fuera lo que traen los archivos; el primer PSD real la seguía y eso lo confirmó por casualidad.
+RULE: cuando una regla depende de cómo nombra la gente sus cosas (carpetas, capas, columnas), se aceptan los nombres comunes y la pantalla deja corregirlo con un clic; y se prueba con un archivo que NO siga la convención antes de darlo por bueno (Pedro mandó uno a propósito).
+TAGS: #formatos #psd #convenciones #probar-con-reales #nombres

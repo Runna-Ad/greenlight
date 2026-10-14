@@ -399,6 +399,17 @@ largo: estacionado por él.
             NO hecho (anotado): no buscar en Google las exclusivas de otro cliente (las gratuitas son de todos; lo
             que no está se recuerda 1 h) · filtrar en SQL con índice GIN (catálogo chico, con topes) · mandar menos
             nombres a Admin · avisar "no se pudo consultar Google" aparte · recordar en el navegador las de Google.
+- [x] B10. Carpetas con otro nombre (Pedro, 2026-10-14: "go with option 3"). El PSD s33-BFDIRECT20CASH trae Logo /
+      Copy / CARD / Legales en vez de la guía: 7 de 12 medidas (todas las horizontales y banners) se quedaban sólo con
+      el CTA. Ahora `roles.ts` reconoce los otros nombres comunes (Logo → BRAND, Copy → TITULO, CARD → HERO,
+      Legales → FOOTER, Fondo/BG → BACKGROUND…) y la pantalla enseña «Carpetas con otro nombre» con un selector por
+      carpeta ya puesto en lo que parece; cambiarlo rehace las medidas al instante (sin volver a leer el PSD).
+      Probado con s33: "no entra" 28 → 0, para revisar 10 → 6; CARD → "Sin papel" lo regresa a 7 avisos; de vuelta
+      a Hero, 6. test-formatos 256/0, `npm test` verde, tsc/eslint limpios.
+      Visto con s33 (para Pedro, no es de las carpetas): (1) dos tarjetas en las horizontales: la imagen de IA del
+      Background ya trae una tarjeta pintada justo debajo de la de CARD; al mover CARD, la pintada se queda. Es del
+      PSD. (2) 876×324: la parte de arriba del titular ("Hasta" y el 20 %) queda debajo de la fila de logos y NO se
+      avisa. Pendiente de proponer arreglo.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

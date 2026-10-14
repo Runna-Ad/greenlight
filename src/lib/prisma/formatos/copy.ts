@@ -215,6 +215,11 @@ export const FP = {
     "To use its exclusive fonts (DiDi Sans Pro only goes on DiDi ads). With no client, only the fonts shared by everyone are used.",
   ),
   sinCliente: t("Sin cliente", "No client"),
+  carpetasTitulo: t("Carpetas con otro nombre", "Folders with other names"),
+  carpetasAyuda: t(
+    "No tienen un nombre de la guía. Cada una ya dice lo que parece; si no es, cámbialo y las medidas se rehacen. «Sin papel» sólo sale en las medidas que copian el diseño.",
+    "Their names aren't from the guide. Each one already shows what it looks like; if it's wrong, change it and the sizes are redone. “No role” only shows up in sizes that copy the layout.",
+  ),
   clienteSoltadas: t("Se dejaron de usar las tipografías exclusivas del otro cliente: {f}.", "The other client's exclusive fonts are no longer used: {f}."),
   textoGreenlightNo: t(
     "No se pudieron traer las tipografías guardadas en Greenlight; puedes arrastrarlas aquí.",
@@ -263,6 +268,17 @@ export const FP = {
   lienzoGuia: t(", con la zona segura de {c} encima", ", with the {c} safe zone on top"),
   planaLink: t("¿Sólo tienes una imagen plana (PNG o JPG)? Usa Formatos con imagen plana", "Only have a flat image (PNG or JPG)? Use Formats with a flat image"),
   avisosDelArchivo: t("Notas del archivo", "File notes"),
+};
+
+/** El papel de una carpeta fuera de la guía, para elegirlo en la pantalla. */
+export const FP_PAPEL: Record<"HERO" | "TITULO" | "SUBTITULO" | "CTA" | "BRAND" | "FOOTER" | "NINGUNO", Par> = {
+  HERO: t("Hero (imagen principal)", "Hero (main image)"),
+  TITULO: t("Título", "Title"),
+  SUBTITULO: t("Subtítulo", "Subtitle"),
+  CTA: t("Botón (CTA)", "Button (CTA)"),
+  BRAND: t("Marca (logo)", "Brand (logo)"),
+  FOOTER: t("Legal", "Legal"),
+  NINGUNO: t("Sin papel", "No role"),
 };
 
 export const FP_FAMILIA: Record<"igual" | "display" | "horizontal" | "ancho" | "banner", Par> = {

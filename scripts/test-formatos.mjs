@@ -8,6 +8,7 @@ import {
 } from "../src/lib/prisma/formatos/geometria.ts";
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
 import { writePsdBuffer } from "ag-psd";
+import { nombreDeGuia } from "../src/lib/prisma/formatos/roles.ts";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
@@ -348,7 +349,9 @@ console.log("\n▶ v2 · componer: recorte + extender sobre un anuncio de fondo 
 // ── v2 · puerta PSD ──────────────────────────────────────────
 console.log("\n▶ v2 · PSD: roles de la guía de diseño");
 eq("rolDe: nombre completo, sin mayúsculas ni acentos", ["BRAND", "Subtitulo", " título ", "background", "Hero", "cta", "FOOTER"].map(rolDe), ["BRAND", "SUBTITULO", "TITULO", "BACKGROUND", "HERO", "CTA", "FOOTER"]);
-eq("rolDe: nunca por 'contiene' (SUBTITULO no es TITULO) ni carpetas ajenas", ["SUBTITULO 2", "TITULOS", "Logo", "", "HERO copia"].map(rolDe), [null, null, null, null, null]);
+eq("rolDe: nunca por 'contiene' (SUBTITULO no es TITULO) ni carpetas ajenas", ["SUBTITULO 2", "TITULOS", "Logo 2", "", "HERO copia", "Capa 1"].map(rolDe), [null, null, null, null, null, null]);
+eq("rolDe: los otros nombres del equipo (PSD s33 de DiDi: Logo, Copy, CARD, Legales), sin mayúsculas ni acentos", ["Logo", "Copy", "CARD", "Legales", "Botón", "fondo", "BG", "Headline", "Beneficios"].map(rolDe), ["BRAND", "TITULO", "HERO", "FOOTER", "CTA", "BACKGROUND", "BACKGROUND", "TITULO", "SUBTITULO"]);
+eq("nombreDeGuia: sólo los 7 nombres exactos de la guía", ["Subtítulo", "BACKGROUND", "Logo", "Copy", "TITULOS"].map(nombreDeGuia), [true, true, false, false, false]);
 
 console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
 {
