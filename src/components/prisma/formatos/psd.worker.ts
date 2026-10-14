@@ -8,7 +8,7 @@
  * 2. Con hasta MESAS_AUTO mesas, las despieza todas. Con más, le pregunta a la página cuáles ("elegir") y espera
  *    "mesas" con los índices.
  */
-import { ErrorPsd, despiezar, despieceUsable, leerPsd, type DocPsd, type MotivoPsd } from "@/lib/prisma/formatos/psd";
+import { ES_PSB, ErrorPsd, despiezar, despieceUsable, esVersionPsd, leerPsd, pesaDemasiado, type DocPsd, type MotivoPsd } from "@/lib/prisma/formatos/psd";
 import { MESAS_AUTO, MESAS_MAX, PSD_BYTES_MAX, TRANSFERIR_MAX_BYTES, prepararMaestro, sugerirMesas, type MaestroListo, type MensajeWorker, type MesaDescartada, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PsdPesado, adelgazarPsd } from "@/lib/prisma/formatos/adelgazar";
 
@@ -27,7 +27,7 @@ function entregar(d: DocPsd, indices: number[]): void {
   indices.forEach((i, n) => {
     const mesa = d.mesas[i];
     // Topes del TOTAL (los de psd.ts son por mesa): ni más mesas ni más píxeles de los que la página aguanta.
-    if (n >= MESAS_MAX) return void descartadas.push({ nombre: mesa.nombre, motivos: [`Se eligieron más de ${MESAS_MAX} mesas: ésta no se leyó`] });
+    if (n >= MESAS_MAX) return void descartadas.push({ nombre: mesa.nombre, motivos: [`Se eligieron más de ${MESAS_MAX} mesas: ésta no se leyó.`] });
     hilo.postMessage({ tipo: "avance", mesa: n + 1, de: Math.min(indices.length, MESAS_MAX) });
     // Una mesa que no se deja separar no tumba a las demás: se anota con su porqué.
     try {
@@ -35,7 +35,7 @@ function entregar(d: DocPsd, indices: number[]): void {
       const uso = despieceUsable(ma);
       if (!uso.ok) return void descartadas.push({ nombre: ma.nombre || mesa.nombre, motivos: uso.motivos });
       const listo = prepararMaestro(ma);
-      if (bytes + listo.bytes > TRANSFERIR_MAX_BYTES) return void descartadas.push({ nombre: ma.nombre || mesa.nombre, motivos: ["Sus piezas pesan demasiado para armarlas en el navegador. Qué hacer: elige menos mesas"] });
+      if (bytes + listo.bytes > TRANSFERIR_MAX_BYTES) return void descartadas.push({ nombre: ma.nombre || mesa.nombre, motivos: ["Sus piezas pesan demasiado para armarlas en el navegador. Qué hacer: elige menos mesas."] });
       bytes += listo.bytes;
       maestros.push(listo.maestro);
       transferir.push(...(listo.transferibles as ArrayBuffer[]));
@@ -54,12 +54,14 @@ function entregar(d: DocPsd, indices: number[]): void {
 }
 
 async function leer(archivo: Blob): Promise<void> {
+  // Un PSB tiene otra estructura (largos de 8 bytes): se rechaza ANTES de recorrerlo como PSD.
+  if (!esVersionPsd(new Uint8Array(await archivo.slice(0, 6).arrayBuffer()))) throw new ErrorPsd("no-soportado", ES_PSB);
   let datos: ArrayBuffer;
   try {
     datos = (await adelgazarPsd(archivo, PSD_BYTES_MAX)).datos;
   } catch (err) {
-    if (err instanceof PsdPesado) throw new ErrorPsd("demasiado-grande", `Sus capas pesan ${err.mb} MB (máximo ${Math.round(PSD_BYTES_MAX / 1e6)}), ya sin los originales de sus objetos inteligentes. Qué hacer: guarda una copia sólo con las mesas que necesitas y sin capas ocultas.`);
-    throw new ErrorPsd("no-soportado", `No se pudo leer el archivo: ${err instanceof Error ? err.message : String(err)}`);
+    if (err instanceof PsdPesado) throw new ErrorPsd("demasiado-grande", pesaDemasiado(err.mb, err.quitados ? ", ya sin los originales de sus objetos inteligentes" : ""));
+    throw new ErrorPsd("no-soportado", `No se pudo leer el archivo: ${err instanceof Error ? err.message : String(err)}.`);
   }
   const d = leerPsd(datos);
   if (d.mesas.length <= MESAS_AUTO) return entregar(d, d.mesas.map((_, i) => i));

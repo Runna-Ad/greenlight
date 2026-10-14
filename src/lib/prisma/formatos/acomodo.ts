@@ -111,13 +111,16 @@ export const MEDIDAS_EQUIPO = "1080×1920 720×1280 720×1600 1200×1500 768×10
  *     extremo más seguro de cada rango.
  * `pct` = % del alto (arriba, abajo) o del ancho (derecha, izquierda) que la app tapa.
  */
+const HISTORIA_META: Zona = { top: 14, right: 0, bottom: 20, left: 0 };
+const REEL_META: Zona = { top: 14, right: 6, bottom: 35, left: 6 };
+/** `px`: la cifra la dio el equipo en px de 1080×1920 (se enseña así); si no, viene de guías en % (aprox.). */
 export const CANALES = {
-  "ig-stories": { nombre: "Instagram Stories", pct: { top: 14, right: 0, bottom: 20, left: 0 } },
-  "ig-reels": { nombre: "Instagram Reels", pct: { top: 14, right: 6, bottom: 35, left: 6 } },
-  "fb-stories": { nombre: "Facebook Stories", pct: { top: 14, right: 0, bottom: 20, left: 0 } },
-  "fb-reels": { nombre: "Facebook Reels", pct: { top: 14, right: 6, bottom: 35, left: 6 } },
-  tiktok: { nombre: "TikTok", pct: { top: (200 / 1920) * 100, right: (120 / 1080) * 100, bottom: (300 / 1920) * 100, left: 0 } },
-} as const satisfies Record<string, { nombre: string; pct: Zona }>;
+  "ig-stories": { nombre: "Instagram Stories", pct: HISTORIA_META, px: false },
+  "ig-reels": { nombre: "Instagram Reels", pct: REEL_META, px: false },
+  "fb-stories": { nombre: "Facebook Stories", pct: HISTORIA_META, px: false },
+  "fb-reels": { nombre: "Facebook Reels", pct: REEL_META, px: false },
+  tiktok: { nombre: "TikTok", pct: { top: (200 / 1920) * 100, right: (120 / 1080) * 100, bottom: (300 / 1920) * 100, left: 0 }, px: true },
+} as const satisfies Record<string, { nombre: string; pct: Zona; px: boolean }>;
 export type Canal = keyof typeof CANALES;
 export const esCanal = (v: unknown): v is Canal => typeof v === "string" && Object.hasOwn(CANALES, v);
 /** 9:16 o una escala directa (1 % de holgura por el redondeo de las medidas). */

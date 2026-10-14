@@ -76,7 +76,9 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 - Siguen abiertas: letra mínima aceptable del legal (hoy 10 px provisional) · 3-5 PSD más.
 
 ### Plan B — puerta PSD (2026-10-13)
-**Next Step (Pedro, 2026-10-13, al ver la pantalla):** (1) que las medidas CHICAS no pierdan calidad: nítidas y
+**Next Step (2026-10-14):** B6 hecho (ver abajo). Falta: que Pedro pruebe la preview con su PSD y las DiDi, y
+decida si el legal se queda como imagen o se afloja la prueba para letra chica. Después B4 y familias propias.
+**Antes (Pedro, 2026-10-13, al ver la pantalla):** (1) que las medidas CHICAS no pierdan calidad: nítidas y
 legibles ("they need to be crisp and high quality in order to have them legible"): proponerle 2-3 caminos y que
 elija · (2) la guía de zona segura debe decir de QUÉ app: un selector de canal ("if you want to check safe zones
 select a Channel and then it shows you") en vez de un genérico "la app tapa aquí" · (3) qué hacer con un PSD muy
@@ -271,6 +273,43 @@ largo: estacionado por él.
       - Limitaciones a la vista: los avisos del motor salen sólo en español aunque la pantalla esté en inglés · 1:1
         desde un 4:5 conserva el acomodo del diseñador con aire a los lados · 720×1600 igual, con aire arriba y abajo
         · no hay "ver grande" (la descarga es el tamaño real) · un solo PSD real probado.
+- [x] B6. Lo que Pedro pidió al ver B5 (2026-10-14): "do A, B and C" (nitidez) · zona segura por canal con sus cifras
+      de TikTok · "A and B now" (PSD grandes). Commits f594f52 · 1fcd249 · f8b9655 · e99b44b (rama `prisma`).
+      - **Zona segura por canal** (`acomodo.ts` `CANALES`, `zonaCanal`): selector, sin canal por defecto; IG/FB
+        Stories y Reels "aprox."; TikTok con las cifras de Pedro (arriba 200, derecha 120, abajo 300 de 1080×1920).
+      - **PSD grandes A+B**: mensajes "Qué hacer" · `adelgazar.ts` quita lo que no se usa antes de leer (PSD real
+        71.8 → 21.8 MB, mismo despiece) · elegir mesas cuando hay más de 4 · una mesa enorme se lee reducida.
+      - **Nitidez A** (`nitido.ts`): filtro propio Lanczos-3, igual en todo navegador; identidad exacta; 12 medidas
+        en ~0.9 s. **B** (`acomodo.ts`): en medidas chicas se quita el legal y luego el subtítulo y el texto gana
+        lugar; 320×50 sigue con el título a 6.9 px (marcado).
+      - **Nitidez C** (`textos.ts`, `escritura.ts`, `textosDe` en `psd.ts`): con las tipografías soltadas, cada texto
+        se prueba contra Photoshop y sólo si coincide se vuelve a escribir. PSD real: 10 de 12. El legal (16 px) da
+        0.218 contra el tope 0.20 en su lugar exacto (el navegador dibuja la letra 10-14 % más gruesa que Photoshop)
+        y se queda como imagen; NO se aflojó la prueba para que pase. Medido: en las medidas chicas C sale casi
+        igual de nítido que A (de +6 % a -15 % en salto de borde): A ya hacía el trabajo. Donde C ganaría es al
+        AGRANDAR texto, y en este PSD sólo el legal se agranda (×1.15 en 1280×720 y 1200×627).
+      - Tests formatos 213/0; 20 mutaciones de C, las 20 atrapadas (4 se escapaban al principio: se cerraron).
+        `npm test` completo verde, tsc, eslint y build limpios. Navegador: carga limpia 0 errores, voltear y ZIP (12).
+      - Limitaciones: cursivas de la variable no se cargan · texto con efectos, fusión, máscara o capa encima va
+        como imagen · tipografías recordadas sólo en ese navegador · 320×50 título 6.9 px.
+      - **Reap (5 revisores en paralelo, sólo leyendo; 2026-10-14).** Ningún CRÍTICO. Arreglados y comprobados en el
+        navegador (carga limpia, 0 errores): soltar un .zip/.woff2 con resultados ya no los borra (aviso) · el foco
+        va a "Cancelar" tras "Leer las marcadas" y a "Agregar" tras "Olvidar" · aviso "Sin legal en N medidas" junto
+        al ZIP · el ZIP espera a que se pinten todas las vistas (antes: "faltaron 12" si se pulsaba pronto) · la
+        prueba de textos salió del pintado (si falla no tumba la pantalla) y cuenta bien: un texto que pasó en una
+        pieza que va como imagen ya no cuenta como escrito · margen alrededor de la tinta (una palabra que salta de
+        línea ya no pasa) · tipografías: topes ANTES de leer (20 MB c/u, 200, 200 MB total), registro por pestaña
+        (volver a la pantalla no carga otra copia; "Olvidar" las saca de verdad), IndexedDB con conexión cerrada,
+        transacción esperada y topes (60 archivos / 100 MB), sólo se recuerdan las que cargaron · `fuentesDe`
+        blindado contra archivos hechos a propósito (tabla de 65 535 nombres: 1 ms) · texto con >64 cambios de
+        estilo o tinta >4 MP va como imagen · PSB rechazado antes de recorrerlo y "ya sin los originales" sólo si es
+        verdad · cifras del canal a la vista (TikTok en px de Pedro) y anuncio al elegirlo · "proporción" en vez
+        de "forma" · "mesa 0 de N" · plurales de tipografías · títulos de tarjeta como encabezados · `lang` bien
+        puesto · etiqueta de zona que puede bajar de línea. Tests 221/0; 8 mutaciones nuevas, todas atrapadas.
+        NO hecho (anotado): reducir más las mesas enormes para pintar rápido (si luego se pega una medida mayor,
+        saldría agrandada: pide decidir) · filtro en un worker · `base` sólo cuando hay tipografías · leer el final
+        del PSD en menos pasos · arrastrar con resaltado en la tarjeta (se cambió el texto a "Arrastra a esta
+        página") · confirmar "Olvidar" (las tipografías se vuelven a soltar; el archivo original no se toca).
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

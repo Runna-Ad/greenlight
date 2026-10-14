@@ -301,5 +301,7 @@
   font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
-  white-space: nowrap;
+  /* "Instagram Stories covers this (approx.)" casi llena una vista 9:16 de 248 px: si no cabe, baja a otra línea. */
+  max-width: calc(100% - 8px);
+  text-align: center;
 }

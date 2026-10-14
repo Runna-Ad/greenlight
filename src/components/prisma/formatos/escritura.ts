@@ -11,42 +11,84 @@
 import type { MaestroListo } from "@/lib/prisma/formatos/listo";
 import type { Lugar, TextoEscrito } from "@/lib/prisma/formatos/nitido";
 import type { TextoPieza } from "@/lib/prisma/formatos/psd";
-import { TEXTO_CORRER_MAX, TEXTO_DIF_MAX, compararAlfa, fuentesDe, maquetar, type LineaTexto, type Medidor, type TramoTexto } from "@/lib/prisma/formatos/textos";
+import { TEXTO_ANCHO_TOL, TEXTO_CORRER_MAX, TEXTO_DIF_MAX, compararAlfa, fuentesDe, maquetar, type LineaTexto, type Medidor, type TramoTexto } from "@/lib/prisma/formatos/textos";
 
 /** Una tipografía cargada: con qué familia se pide en el canvas y, si es variable, su peso (eje wght). */
 type Cargada = { familia: string; peso: number | null };
 export type Tipografias = ReadonlyMap<string, Cargada>;
+export type ArchivoFuente = { nombre: string; datos: ArrayBuffer };
 
 export const EXTENSIONES_FUENTE = /\.(otf|ttf)$/i;
 const FUENTE_BYTES_MAX = 20_000_000;
 const FUENTES_MAX = 200;
+/** Lo que se lee de una sola vez (una carpeta de fuentes del sistema pesa cientos de MB). */
+const FUENTES_BYTES_TOTAL = 200_000_000;
+/** Lo que se guarda en este navegador, en total: con más, lo nuevo ya no se recuerda (se usa sólo en esta pestaña). */
+const RECORDAR_MAX = 60;
+const RECORDAR_BYTES_MAX = 100_000_000;
+
+// Lo cargado en esta pestaña vive mientras la pestaña: volver a la pantalla no mete otra copia de cada tipografía.
+const registro = new Map<string, Cargada>();
+const caras: FontFace[] = [];
 let familias = 0;
 
-/** Carga archivos de tipografía; devuelve el mapa nuevo (lo que ya había + lo nuevo) y los archivos que no sirvieron. */
-export async function cargarFuentes(archivos: { nombre: string; datos: ArrayBuffer }[], antes: Tipografias): Promise<{ mapa: Map<string, Cargada>; nuevas: string[]; malas: string[] }> {
+/** Qué archivos se leen: sólo .otf/.ttf, hasta 20 MB cada uno, 200 y 200 MB en total. Los demás, por nombre. */
+export function elegirFuentes<T extends { name: string; size: number }>(archivos: T[]): { usar: T[]; omitidas: string[] } {
+  const usar: T[] = [], omitidas: string[] = [];
+  let total = 0;
+  for (const f of archivos) {
+    if (!EXTENSIONES_FUENTE.test(f.name)) continue;
+    if (f.size > FUENTE_BYTES_MAX || usar.length >= FUENTES_MAX || total + f.size > FUENTES_BYTES_TOTAL) {
+      omitidas.push(f.name);
+      continue;
+    }
+    usar.push(f);
+    total += f.size;
+  }
+  return { usar, omitidas };
+}
+
+/**
+ * Carga tipografías; devuelve el mapa nuevo (lo que ya había + lo nuevo), los nombres nuevos, los archivos que no
+ * sirvieron y los que sí (sólo ésos se recuerdan).
+ */
+export async function cargarFuentes(archivos: ArchivoFuente[], antes: Tipografias): Promise<{ mapa: Map<string, Cargada>; nuevas: string[]; malas: string[]; buenas: ArchivoFuente[] }> {
   const mapa = new Map(antes);
-  const nuevas: string[] = [], malas: string[] = [];
+  const nuevas: string[] = [], malas: string[] = [], buenas: ArchivoFuente[] = [];
   for (const a of archivos.slice(0, FUENTES_MAX)) {
     try {
       if (a.datos.byteLength > FUENTE_BYTES_MAX) throw new Error("pesa demasiado");
-      const nombres = fuentesDe(a.datos).filter((f) => !mapa.has(f.ps));
-      if (!nombres.length) continue;
-      const variable = nombres.some((f) => f.peso !== null);
-      const familia = `psd-fuente-${++familias}`;
-      // Una variable se carga una vez con todo el rango: el peso de cada estilo se pide con font-weight (va al eje wght).
-      const cara = new FontFace(familia, a.datos, variable ? { weight: "1 1000" } : {});
-      await cara.load();
-      document.fonts.add(cara);
+      const nombres = fuentesDe(a.datos);
+      const sinCargar = nombres.filter((f) => !registro.has(f.ps));
+      if (sinCargar.length) {
+        const familia = `psd-fuente-${++familias}`;
+        // Una variable se carga una vez con todo el rango: el peso de cada estilo se pide con font-weight (va al eje wght).
+        const cara = new FontFace(familia, a.datos, sinCargar.some((f) => f.peso !== null) ? { weight: "1 1000" } : {});
+        await cara.load();
+        document.fonts.add(cara);
+        caras.push(cara);
+        for (const f of sinCargar) registro.set(f.ps, { familia, peso: f.peso });
+      }
       for (const f of nombres) {
-        mapa.set(f.ps, { familia, peso: f.peso });
+        const c = registro.get(f.ps);
+        if (!c || mapa.has(f.ps)) continue;
+        mapa.set(f.ps, c);
         nuevas.push(f.ps);
       }
+      buenas.push(a);
     } catch (err) {
       console.error("[formatos-psd] tipografía", a.nombre, err);
       malas.push(a.nombre);
     }
   }
-  return { mapa, nuevas, malas };
+  return { mapa, nuevas, malas, buenas };
+}
+
+/** Saca de la pestaña todo lo cargado (al olvidar las tipografías). */
+export function soltarFuentes(): void {
+  for (const c of caras) document.fonts.delete(c);
+  caras.length = 0;
+  registro.clear();
 }
 
 const cssDe = (t: Tipografias, tramo: TramoTexto): string | null => {
@@ -55,9 +97,15 @@ const cssDe = (t: Tipografias, tramo: TramoTexto): string | null => {
   const peso = f.peso === null ? 400 : Math.min(1000, Math.max(1, Math.round(f.peso)));
   return `${peso} ${tramo.tam}px "${f.familia}"`;
 };
+/** El espacio entre letras: lo mismo al medir que al escribir (si no, la maqueta y la letra no coinciden). */
+const espaciado = (tramo: TramoTexto) => (tramo.track ? `${(tramo.track / 1000) * tramo.tam}px` : "0px");
 
 // ── Recordar las tipografías en este navegador ───────────────────────────
 const BASE = "hue-prisma-formatos", ALMACEN = "tipografias";
+/** Dos archivos con el mismo nombre en carpetas distintas (Regular.otf de dos familias) no se pisan. */
+const claveDe = (a: ArchivoFuente) => `${a.nombre}:${a.datos.byteLength}`;
+const esArchivo = (x: unknown): x is ArchivoFuente => !!x && typeof (x as ArchivoFuente).nombre === "string" && (x as ArchivoFuente).datos instanceof ArrayBuffer;
+
 function abrirBase(): Promise<IDBDatabase> {
   return new Promise((ok, mal) => {
     const r = indexedDB.open(BASE, 1);
@@ -66,34 +114,68 @@ function abrirBase(): Promise<IDBDatabase> {
     r.onerror = () => mal(r.error);
   });
 }
-/** Lo que se recordó antes (vacío si el navegador no deja guardar: ventana privada, almacenamiento bloqueado). */
-export async function fuentesRecordadas(): Promise<{ nombre: string; datos: ArrayBuffer }[]> {
+/** Una transacción en el almacén: espera a que se GUARDE de verdad (o falle) y cierra la conexión siempre. */
+async function enAlmacen(modo: IDBTransactionMode, fn: (s: IDBObjectStore) => void): Promise<void> {
+  const db = await abrirBase();
   try {
-    const db = await abrirBase();
-    return await new Promise((ok) => {
-      const r = db.transaction(ALMACEN).objectStore(ALMACEN).getAll();
-      r.onsuccess = () => ok((r.result as { nombre: string; datos: ArrayBuffer }[]).filter((x) => x && typeof x.nombre === "string" && x.datos instanceof ArrayBuffer));
-      r.onerror = () => ok([]);
+    await new Promise<void>((ok, mal) => {
+      const tx = db.transaction(ALMACEN, modo);
+      tx.oncomplete = () => ok();
+      tx.onerror = () => mal(tx.error);
+      tx.onabort = () => mal(tx.error);
+      fn(tx.objectStore(ALMACEN));
     });
-  } catch {
-    return [];
+  } finally {
+    db.close();
   }
 }
-export async function recordarFuentes(archivos: { nombre: string; datos: ArrayBuffer }[]): Promise<void> {
+/** Lo que se recordó antes (vacío si el navegador no deja guardar: ventana privada, almacenamiento bloqueado). */
+export async function fuentesRecordadas(): Promise<ArchivoFuente[]> {
+  let out: ArchivoFuente[] = [];
   try {
-    const db = await abrirBase();
-    const tx = db.transaction(ALMACEN, "readwrite");
-    for (const a of archivos) tx.objectStore(ALMACEN).put(a, a.nombre);
-  } catch {
-    /* sin almacenamiento: se usan sólo en esta pestaña */
+    await enAlmacen("readonly", (s) => {
+      const r = s.getAll();
+      r.onsuccess = () => (out = (r.result as unknown[]).filter(esArchivo).filter((x) => x.datos.byteLength <= FUENTE_BYTES_MAX).slice(0, RECORDAR_MAX));
+    });
+  } catch (err) {
+    console.error("[formatos-psd] tipografías recordadas", err);
+  }
+  return out;
+}
+/** Guarda las que cargaron bien, sin pasar los topes del almacén. false = no se pudo guardar. */
+export async function recordarFuentes(archivos: ArchivoFuente[]): Promise<boolean> {
+  if (!archivos.length) return true;
+  try {
+    await enAlmacen("readwrite", (s) => {
+      const r = s.getAll();
+      r.onsuccess = () => {
+        const hay = (r.result as unknown[]).filter(esArchivo);
+        const ya = new Set(hay.map(claveDe));
+        let n = hay.length, bytes = hay.reduce((t, x) => t + x.datos.byteLength, 0);
+        for (const a of archivos) {
+          if (ya.has(claveDe(a))) continue;
+          if (n + 1 > RECORDAR_MAX || bytes + a.datos.byteLength > RECORDAR_BYTES_MAX) break;
+          s.put(a, claveDe(a));
+          n++;
+          bytes += a.datos.byteLength;
+        }
+      };
+    });
+    return true;
+  } catch (err) {
+    console.error("[formatos-psd] recordar tipografías", err);
+    return false;
   }
 }
-export async function olvidarFuentes(): Promise<void> {
+/** Borra las recordadas y las saca de la pestaña. false = no se pudieron borrar del navegador. */
+export async function olvidarFuentes(): Promise<boolean> {
+  soltarFuentes();
   try {
-    const db = await abrirBase();
-    db.transaction(ALMACEN, "readwrite").objectStore(ALMACEN).clear();
-  } catch {
-    /* nada que olvidar */
+    await enAlmacen("readwrite", (s) => void s.clear());
+    return true;
+  } catch (err) {
+    console.error("[formatos-psd] olvidar tipografías", err);
+    return false;
   }
 }
 
@@ -106,7 +188,7 @@ const medidorDe = (t: Tipografias): Medidor => (texto, tramo) => {
   const css = cssDe(t, tramo);
   if (!x || !css) return { ancho: 0, sube: 0 };
   x.font = css;
-  x.letterSpacing = tramo.track ? `${(tramo.track / 1000) * tramo.tam}px` : "0px";
+  x.letterSpacing = espaciado(tramo);
   const m = x.measureText(texto);
   return { ancho: m.width, sube: m.actualBoundingBoxAscent };
 };
@@ -118,7 +200,7 @@ function escribir(x: CanvasRenderingContext2D, t: Tipografias, lineas: LineaText
   for (const l of lineas)
     for (const p of l.pedazos) {
       x.font = cssDe(t, p.tramo) ?? "";
-      x.letterSpacing = p.tramo.track ? `${(p.tramo.track / 1000) * p.tramo.tam}px` : "0px";
+      x.letterSpacing = espaciado(p.tramo);
       x.fillStyle = color ? `rgb(${p.tramo.color.map((v) => Math.round(v)).join(",")})` : "#000";
       x.fillText(p.texto, p.x, l.base - p.tramo.subir);
     }
@@ -134,10 +216,36 @@ type Listo = { tp: TextoPieza; lineas: LineaTexto[]; dx: number; dy: number };
 export type Revision = { maestro: number; pieza: number; capa: string; ok: boolean; motivo: string | null; faltan: string[] };
 /** Por maestro y pieza: sus textos listos para escribir (sólo piezas donde TODOS pasaron). */
 export type Escritura = { piezas: Map<string, Listo[]>; revisiones: Revision[] };
+const clavePieza = (maestro: number, pieza: number) => `${maestro}:${pieza}`;
+const OTRO_COMO_IMAGEN = "otro texto de la misma pieza va como imagen, así que ésta también";
+
+/**
+ * Se escribe el texto con un margen alrededor de la tinta de Photoshop: lo nuestro que caiga FUERA (una palabra
+ * que saltó a otra línea) también cuenta como diferencia. Medio alto de la tinta, entre 8 y 256 px.
+ */
+const margenDe = (h: number) => Math.min(256, Math.max(8, Math.round(h / 2)));
+
+function probar(x: CanvasRenderingContext2D, lienzo: HTMLCanvasElement, tp: TextoPieza, t: Tipografias, medir: Medidor): Listo | string {
+  const lineas = maquetar(tp.texto, medir);
+  const { w, h } = tp.caja, M = margenDe(h);
+  const W = w + 2 * M, H = h + 2 * M;
+  lienzo.width = W; // cambiar el tamaño también lo borra
+  lienzo.height = H;
+  escribir(x, t, lineas, matriz(tp.texto.transform, 1, M - tp.caja.x, M - tp.caja.y), false);
+  const px = x.getImageData(0, 0, W, H).data;
+  const nuestro = new Uint8ClampedArray(W * H), ps = new Uint8ClampedArray(W * H);
+  for (let i = 0; i < W * H; i++) nuestro[i] = px[i * 4 + 3];
+  for (let y = 0; y < h; y++) ps.set(tp.alfa.subarray(y * w, y * w + w), (y + M) * W + M);
+  const c = compararAlfa(nuestro, ps, W, H);
+  if (c.dif > TEXTO_DIF_MAX || Math.abs(c.anchoRazon - 1) > TEXTO_ANCHO_TOL || Math.abs(c.dx) > TEXTO_CORRER_MAX || Math.abs(c.dy) > TEXTO_CORRER_MAX)
+    return `no coincide con Photoshop (${Math.round(c.dif * 100)} % distinto)`;
+  return { tp, lineas, dx: c.dx, dy: c.dy };
+}
 
 /**
  * Prueba cada texto de cada maestro con las tipografías cargadas. Sin tipografías no se prueba nada (y no se
- * escribe nada: todo va como imagen, como antes).
+ * escribe nada: todo va como imagen, como antes). Un texto que no se deja probar va como imagen; nunca tumba la
+ * pantalla.
  */
 export function revisarTextos(maestros: MaestroListo[], t: Tipografias): Escritura {
   const piezas = new Map<string, Listo[]>();
@@ -145,65 +253,79 @@ export function revisarTextos(maestros: MaestroListo[], t: Tipografias): Escritu
   const medir = medidorDe(t);
   const lienzo = document.createElement("canvas");
   const x = lienzo.getContext("2d", { willReadFrequently: true });
-  maestros.forEach((ma, mi) =>
-    ma.piezas.forEach((p, pi) => {
-      if (!p.textos.length) return;
-      const listos: Listo[] = [];
-      for (const tp of p.textos) {
-        const faltan = [...new Set(tp.texto.tramos.map((r) => r.fuente).filter((f) => !t.has(f)))];
-        let motivo = tp.motivo ?? (faltan.length ? `falta la tipografía ${faltan.join(", ")}` : null);
-        if (!motivo && !x) motivo = "el navegador no dejó crear el lienzo";
-        if (!motivo && x) {
-          const lineas = maquetar(tp.texto, medir);
-          const { w, h } = tp.caja;
-          lienzo.width = w;
-          lienzo.height = h;
-          x.clearRect(0, 0, w, h);
-          escribir(x, t, lineas, matriz(tp.texto.transform, 1, -tp.caja.x, -tp.caja.y), false);
-          const px = x.getImageData(0, 0, w, h).data;
-          const nuestro = new Uint8ClampedArray(w * h);
-          for (let i = 0; i < w * h; i++) nuestro[i] = px[i * 4 + 3];
-          const c = compararAlfa(nuestro, tp.alfa, w, h);
-          if (c.dif > TEXTO_DIF_MAX || Math.abs(c.anchoRazon - 1) > 0.03 || Math.abs(c.dx) > TEXTO_CORRER_MAX || Math.abs(c.dy) > TEXTO_CORRER_MAX)
-            motivo = `no coincide con Photoshop (${Math.round(c.dif * 100)} % distinto)`;
-          else listos.push({ tp, lineas, dx: c.dx, dy: c.dy });
+  try {
+    maestros.forEach((ma, mi) =>
+      ma.piezas.forEach((p, pi) => {
+        if (!p.textos.length) return;
+        const listos: Listo[] = [];
+        const propias: Revision[] = [];
+        for (const tp of p.textos) {
+          const faltan = [...new Set(tp.texto.tramos.map((r) => r.fuente).filter((f) => !t.has(f)))];
+          let motivo = tp.motivo ?? (faltan.length ? `falta la tipografía ${faltan.join(", ")}` : null);
+          // Sin base, otro texto de la pieza no se puede redibujar: la pieza va entera como imagen (ni se prueba).
+          if (!motivo && !p.base) motivo = OTRO_COMO_IMAGEN;
+          if (!motivo && !x) motivo = "el navegador no dejó crear el lienzo";
+          if (!motivo && x) {
+            try {
+              const r = probar(x, lienzo, tp, t, medir);
+              if (typeof r === "string") motivo = r;
+              else listos.push(r);
+            } catch (err) {
+              console.error("[formatos-psd] probar texto", tp.capa, err);
+              motivo = "no se pudo probar en este navegador";
+            }
+          }
+          propias.push({ maestro: mi, pieza: pi, capa: tp.capa, ok: !motivo, motivo, faltan });
         }
-        revisiones.push({ maestro: mi, pieza: pi, capa: tp.capa, ok: !motivo, motivo, faltan });
-      }
-      if (p.base && listos.length === p.textos.length) piezas.set(`${mi}:${pi}`, listos);
-    }),
-  );
+        if (listos.length === p.textos.length) piezas.set(clavePieza(mi, pi), listos);
+        // Si uno no pasa, la pieza entera va como imagen: los que sí pasaron tampoco se escriben, y así se dice.
+        else for (const r of propias) if (r.ok) Object.assign(r, { ok: false, motivo: OTRO_COMO_IMAGEN });
+        revisiones.push(...propias);
+      }),
+    );
+  } finally {
+    lienzo.width = lienzo.height = 0;
+  }
   return { piezas, revisiones };
 }
 
-/** Lo que `armarMedida` llama para una pieza: sus letras escritas a la escala de la medida, o null (va como imagen). */
+/**
+ * Lo que `armarMedida` llama para una pieza: sus letras escritas a la escala de la medida, o null (va como imagen:
+ * también si el lienzo falla, así la medida sale con el texto de Photoshop en vez de perderse).
+ */
 export function textoEscrito(e: Escritura | null, maestro: number, ma: MaestroListo, t: Tipografias): TextoEscrito | undefined {
   if (!e?.piezas.size) return undefined;
   return (pieza: number, l: Lugar) => {
-    const listos = e.piezas.get(`${maestro}:${pieza}`);
+    const listos = e.piezas.get(clavePieza(maestro, pieza));
     if (!listos) return null;
     const w = l.x1 - l.x0, h = l.y1 - l.y0;
     const lienzo = document.createElement("canvas");
-    lienzo.width = w;
-    lienzo.height = h;
-    const x = lienzo.getContext("2d", { willReadFrequently: true });
-    if (!x) return null;
-    const caja = ma.piezas[pieza].caja;
-    for (const s of listos) {
-      x.globalAlpha = s.tp.opacidad;
-      // De la mesa a este rectángulo: la esquina de la caja de la pieza cae en (ox, oy); más el corrimiento de la prueba.
-      escribir(x, t, s.lineas, matriz(s.tp.texto.transform, l.k, l.ox - l.x0 + (s.dx - caja.x) * l.k, l.oy - l.y0 + (s.dy - caja.y) * l.k), true);
+    try {
+      lienzo.width = w;
+      lienzo.height = h;
+      const x = lienzo.getContext("2d", { willReadFrequently: true });
+      if (!x) return null;
+      const caja = ma.piezas[pieza].caja;
+      for (const s of listos) {
+        x.globalAlpha = s.tp.opacidad;
+        // De la mesa a este rectángulo: la esquina de la caja de la pieza cae en (ox, oy); más el corrimiento de la prueba.
+        escribir(x, t, s.lineas, matriz(s.tp.texto.transform, l.k, l.ox - l.x0 + (s.dx - caja.x) * l.k, l.oy - l.y0 + (s.dy - caja.y) * l.k), true);
+      }
+      const px = x.getImageData(0, 0, w, h).data;
+      const out = new Float32Array(w * h * 4);
+      for (let i = 0; i < w * h; i++) {
+        const a = px[i * 4 + 3];
+        out[i * 4] = (px[i * 4] * a) / 255;
+        out[i * 4 + 1] = (px[i * 4 + 1] * a) / 255;
+        out[i * 4 + 2] = (px[i * 4 + 2] * a) / 255;
+        out[i * 4 + 3] = a;
+      }
+      return out;
+    } catch (err) {
+      console.error("[formatos-psd] escribir texto", err);
+      return null;
+    } finally {
+      lienzo.width = lienzo.height = 0;
     }
-    const px = x.getImageData(0, 0, w, h).data;
-    const out = new Float32Array(w * h * 4);
-    for (let i = 0; i < w * h; i++) {
-      const a = px[i * 4 + 3];
-      out[i * 4] = (px[i * 4] * a) / 255;
-      out[i * 4 + 1] = (px[i * 4 + 1] * a) / 255;
-      out[i * 4 + 2] = (px[i * 4 + 2] * a) / 255;
-      out[i * 4 + 3] = a;
-    }
-    lienzo.width = lienzo.height = 0;
-    return out;
   };
 }

@@ -41,6 +41,13 @@ if (typeof document === "undefined") {
 
 /** Los reales rondan 70 MB. */
 export { PSD_BYTES_MAX };
+
+/** Versión 1 en la cabecera ("8BPS" + 00 01); la 2 es un PSB (documento grande), que no se lee. */
+export const esVersionPsd = (cab: Uint8Array): boolean => cab.length >= 6 && cab[4] === 0 && cab[5] === 1;
+export const ES_PSB = "Es un PSB (documento grande), no un PSD. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas, como PSD.";
+/** El mismo mensaje lo dan el worker (antes de juntar los bytes) y `leerPsd`: un solo texto. */
+export const pesaDemasiado = (mb: number, nota: string): string =>
+  `Sus capas pesan ${mb} MB (máximo ${Math.round(PSD_BYTES_MAX / 1e6)})${nota}. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas y sin capas ocultas.`;
 /** El tope del formato PSD. Un archivo con una docena de mesas en fila pasa fácil de 12 000 px de ancho. */
 export const PSD_LADO_MAX = 30_000;
 /** La copia aplanada se decodifica entera (4 bytes por píxel): 60 MP = 240 MB. */
@@ -180,11 +187,11 @@ const limpio = (s: string | undefined): string => (s ?? "").replace(/[\p{Cc}\p{C
 export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
   // Una vista que no abarca todo su ArrayBuffer (un Buffer chico de Node sale de un pozo compartido) se copia:
   // la librería acota sus lecturas por el búfer de abajo, no por la vista.
-  if (entrada.byteLength > PSD_BYTES_MAX) throw new ErrorPsd("demasiado-grande", `Sus capas pesan ${Math.round(entrada.byteLength / 1e6)} MB (máximo ${Math.round(PSD_BYTES_MAX / 1e6)}). Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas y sin capas ocultas.`);
+  if (entrada.byteLength > PSD_BYTES_MAX) throw new ErrorPsd("demasiado-grande", pesaDemasiado(Math.round(entrada.byteLength / 1e6), ""));
   const buf = ArrayBuffer.isView(entrada) && (entrada.byteOffset !== 0 || entrada.byteLength !== entrada.buffer.byteLength) ? new Uint8Array(entrada) : entrada;
   const cab = ArrayBuffer.isView(buf) ? buf : new Uint8Array(buf, 0, Math.min(6, buf.byteLength));
   if (cab.length < 6 || cab[0] !== 0x38 || cab[1] !== 0x42 || cab[2] !== 0x50 || cab[3] !== 0x53) throw new ErrorPsd("no-soportado", "El archivo no es un PSD");
-  if (cab[4] !== 0 || cab[5] !== 1) throw new ErrorPsd("no-soportado", "Es un PSB (documento grande), no un PSD. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas, como PSD.");
+  if (!esVersionPsd(cab)) throw new ErrorPsd("no-soportado", ES_PSB);
   let psd;
   try {
     // totalMemoryLimit: con useRawData lo único que se decodifica al leer son los patrones del documento.
@@ -293,7 +300,8 @@ export type TextoPieza = {
   texto: TextoCapa;
   /** Opacidad × relleno de la capa (0-1). */
   opacidad: number;
-  /** Dónde está su tinta en Photoshop, en px de la mesa, y su alfa ahí (sin la opacidad), w × h. */
+  /** Dónde está su tinta en Photoshop, en px de la mesa, y su alfa ahí (sin la opacidad), w × h; vacío si tiene
+   *  motivo (no se va a probar). */
   caja: Caja;
   alfa: Uint8ClampedArray;
   /** Por qué NO se redibuja (null = se intenta, y decide la prueba en la página). */
@@ -833,6 +841,8 @@ function motivoCapa(c: CapaPsd, encima: CapaPsd[]): string | null {
 
 /** Alrededor de cada letra se rellena también este margen: su borde suavizado trae color de la letra. */
 const LETRA_MARGEN = 1;
+/** Tinta de un texto más grande que esto (px de la mesa) no se prueba: va como imagen. Un titular grande ocupa ~0.5 MP. */
+export const TEXTO_CAJA_MAX_PX = 4_000_000;
 /** Alfa menor a esto tras rellenar es ruido del borde: se borra (si no, queda un fantasma del texto). */
 const FANTASMA = 0.04;
 
@@ -850,7 +860,6 @@ function textosDe(capas: CapaPsd[], m: MesaPsd, p: PiezaPsd): Pick<PiezaPsd, "te
   for (let k = capas.length - 1; k >= 0; k--) {
     const c = capas[k];
     if (!c.texto) continue;
-    const motivo = c.texto.motivo ?? motivoCapa(c, capas.slice(k + 1));
     // Su tinta en Photoshop: caja y alfa (sin la opacidad de la capa), dentro de la mesa.
     let x0 = m.w, y0 = m.h, x1 = -1, y1 = -1;
     porPixel(c, m, false, (i, a) => {
@@ -860,12 +869,15 @@ function textosDe(capas: CapaPsd[], m: MesaPsd, p: PiezaPsd): Pick<PiezaPsd, "te
     });
     if (x1 < 0) continue; // capa de texto sin nada pintado en esta mesa
     const caja = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
-    const alfa = new Uint8ClampedArray(caja.w * caja.h);
+    // Una tinta enorme no es un texto que valga probar en el navegador (y congelaría la página al compararla).
+    const motivo = c.texto.motivo ?? motivoCapa(c, capas.slice(k + 1)) ?? (caja.w * caja.h > TEXTO_CAJA_MAX_PX ? "texto demasiado grande para probarlo" : null);
+    const alfa = new Uint8ClampedArray(motivo ? 0 : caja.w * caja.h);
     const peso = c.opacidad || 1;
-    porPixel(c, m, false, (i, a) => {
-      const x = (i % m.w) - x0, y = ((i / m.w) | 0) - y0;
-      if (x >= 0 && x < caja.w && y >= 0 && y < caja.h) alfa[y * caja.w + x] = Math.round((a / peso) * 255);
-    });
+    if (!motivo)
+      porPixel(c, m, false, (i, a) => {
+        const x = (i % m.w) - x0, y = ((i / m.w) | 0) - y0;
+        if (x >= 0 && x < caja.w && y >= 0 && y < caja.h) alfa[y * caja.w + x] = Math.round((a / peso) * 255);
+      });
     const tr = c.texto.transform;
     textos.push({ capa: c.nombre, texto: { ...c.texto, transform: [tr[0], tr[1], tr[2], tr[3], tr[4] - m.x, tr[5] - m.y] }, opacidad: c.opacidad * c.relleno, caja, alfa, motivo });
     if (motivo) { todas = false; continue; }

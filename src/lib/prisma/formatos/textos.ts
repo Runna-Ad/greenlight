@@ -72,13 +72,21 @@ export type TextoPsdCrudo = {
 };
 
 const TEXTO_MAX = 2000;
+/** Un texto real cambia de estilo unas pocas veces; con más, maquetarlo costaría demasiado y va como imagen. */
+export const TRAMOS_MAX = 64;
+const FUENTE_NOMBRE_MAX = 128;
 const casi = (a: number | undefined, b: number) => a === undefined || Math.abs(a - b) < 1e-3;
+/** El nombre de una tipografía tal como viene del archivo: sin caracteres de control ni de dirección, y corto. */
+const nombreFuente = (n: string | undefined): string => (n ?? "").replace(/[\p{Cc}\p{Cf}]/gu, "").slice(0, FUENTE_NOMBRE_MAX);
 
 export function textoDe(t: TextoPsdCrudo): TextoCapa {
   const texto = (t.text ?? "").slice(0, TEXTO_MAX).replace(/[\r\u0003]/g, "\n");
   const base = t.style ?? {};
-  const corridas = t.styleRuns?.length ? t.styleRuns : [{ length: texto.length, style: {} }];
+  // Las corridas de largo 0 no pintan nada (la librería las conserva): fuera.
+  const todas = t.styleRuns?.length ? t.styleRuns.filter((r) => (r.length | 0) > 0) : [{ length: texto.length, style: {} }];
   const motivos: string[] = [];
+  if (todas.length > TRAMOS_MAX) motivos.push("demasiados cambios de estilo");
+  const corridas = todas.length > TRAMOS_MAX ? [] : todas;
   const tramos: TramoTexto[] = [];
   for (const r of corridas) {
     const s: EstiloPsd = { ...base, ...(r.style ?? {}) };
@@ -92,7 +100,7 @@ export function textoDe(t: TextoPsdCrudo): TextoCapa {
     const c = s.fillColor ?? {};
     tramos.push({
       n: Math.max(0, r.length | 0),
-      fuente: s.font?.name ?? "",
+      fuente: nombreFuente(s.font?.name),
       tam,
       color: [c.r ?? 0, c.g ?? 0, c.b ?? 0],
       track: s.tracking ?? 0,
@@ -102,7 +110,7 @@ export function textoDe(t: TextoPsdCrudo): TextoCapa {
     });
   }
   // Los tramos tienen que cubrir el texto exacto (si no, algo no se leyó bien).
-  if (tramos.reduce((t2, r) => t2 + r.n, 0) !== texto.length) motivos.push("tramos que no cubren el texto");
+  if (corridas.length && tramos.reduce((t2, r) => t2 + r.n, 0) !== texto.length) motivos.push("tramos que no cubren el texto");
   const justs = new Set([t.paragraphStyle?.justification ?? "left", ...(t.paragraphStyleRuns ?? []).map((r) => r.style?.justification ?? t.paragraphStyle?.justification ?? "left")]);
   const just = [...justs][0];
   if (justs.size > 1) motivos.push("párrafos con distinta alineación");
@@ -217,58 +225,73 @@ export type FuenteArchivo = { ps: string; peso: number | null };
  * guarda "DiDiSansVariable-Bold": prefijo de la familia + nombre del estilo). Sólo estilos no cursivos. Lanza si
  * no es una tipografía.
  */
+/** Topes de lo que se cree de un archivo de tipografía (uno hecho a propósito podría pedir millones de nombres). */
+const TABLAS_MAX = 64, EJES_MAX = 64, ESTILOS_MAX = 256, NOMBRE_BYTES_MAX = 256;
+const utf16 = new TextDecoder("utf-16be"), latin1 = new TextDecoder("latin1");
+
 export function fuentesDe(buf: ArrayBuffer): FuenteArchivo[] {
   const v = new DataView(buf);
+  const L = buf.byteLength;
+  if (L < 12) throw new Error("no es una tipografía OpenType/TrueType");
   const firma = v.getUint32(0);
   if (firma !== 0x00010000 && firma !== 0x4f54544f /* OTTO */ && firma !== 0x74727565 /* true */) throw new Error("no es una tipografía OpenType/TrueType");
-  const n = v.getUint16(4);
+  const n = Math.min(v.getUint16(4), TABLAS_MAX);
   const tablas: Record<string, { off: number; len: number }> = {};
-  for (let i = 0; i < n && 12 + i * 16 + 16 <= buf.byteLength; i++) {
+  for (let i = 0; i < n && 12 + i * 16 + 16 <= L; i++) {
     const o = 12 + i * 16;
-    tablas[String.fromCharCode(v.getUint8(o), v.getUint8(o + 1), v.getUint8(o + 2), v.getUint8(o + 3))] = { off: v.getUint32(o + 8), len: v.getUint32(o + 12) };
+    const t = { off: v.getUint32(o + 8), len: v.getUint32(o + 12) };
+    // Una tabla que se sale del archivo no se usa.
+    if (t.off + t.len <= L) tablas[String.fromCharCode(v.getUint8(o), v.getUint8(o + 1), v.getUint8(o + 2), v.getUint8(o + 3))] = t;
   }
   const nm = tablas.name;
-  if (!nm) throw new Error("tipografía sin tabla de nombres");
+  if (!nm || nm.len < 6) throw new Error("tipografía sin tabla de nombres");
+  const finNm = nm.off + nm.len;
+  // fvar primero: dice qué nombres (de sus estilos) hacen falta. Sólo se decodifican ésos.
+  const fv = tablas.fvar;
+  const ejes: string[] = [], estilos: { o: number; tam: number }[] = [];
+  const quiero = new Set([6, 25]);
+  if (fv && fv.len >= 16) {
+    const ejesOff = fv.off + v.getUint16(fv.off + 4);
+    const nEjes = v.getUint16(fv.off + 8), nInst = v.getUint16(fv.off + 12), tam = v.getUint16(fv.off + 14);
+    if (nEjes <= EJES_MAX && nInst <= ESTILOS_MAX && tam >= nEjes * 4 + 4 && ejesOff + nEjes * 20 + nInst * tam <= fv.off + fv.len) {
+      for (let i = 0; i < nEjes; i++) {
+        const o = ejesOff + i * 20;
+        ejes.push(String.fromCharCode(v.getUint8(o), v.getUint8(o + 1), v.getUint8(o + 2), v.getUint8(o + 3)));
+      }
+      for (let i = 0; i < nInst; i++) {
+        const o = ejesOff + nEjes * 20 + i * tam;
+        estilos.push({ o, tam });
+        quiero.add(v.getUint16(o));
+        if (tam >= nEjes * 4 + 6) quiero.add(v.getUint16(o + 4 + nEjes * 4));
+      }
+    }
+  }
   const nombres: Record<number, string> = {};
   const cuenta = v.getUint16(nm.off + 2), cadenas = nm.off + v.getUint16(nm.off + 4);
-  for (let i = 0; i < cuenta; i++) {
+  for (let i = 0; i < cuenta && nm.off + 6 + i * 12 + 12 <= finNm; i++) {
     const r = nm.off + 6 + i * 12;
     const plat = v.getUint16(r), id = v.getUint16(r + 6), len = v.getUint16(r + 8), off = v.getUint16(r + 10);
-    if (cadenas + off + len > buf.byteLength) continue;
-    if (plat === 3 || plat === 0) {
-      let s = "";
-      for (let k = 0; k + 1 < len; k += 2) s += String.fromCharCode(v.getUint16(cadenas + off + k));
-      nombres[id] = s;
-    } else if (plat === 1 && nombres[id] === undefined) {
-      let s = "";
-      for (let k = 0; k < len; k++) s += String.fromCharCode(v.getUint8(cadenas + off + k));
-      nombres[id] = s;
-    }
+    if (!quiero.has(id) || len > NOMBRE_BYTES_MAX || cadenas + off + len > L) continue;
+    if (plat === 3 || plat === 0) nombres[id] = utf16.decode(new Uint8Array(buf, cadenas + off, len & ~1));
+    else if (plat === 1 && nombres[id] === undefined) nombres[id] = latin1.decode(new Uint8Array(buf, cadenas + off, len));
   }
   const ps = nombres[6];
   if (!ps) throw new Error("tipografía sin nombre PostScript");
-  const fv = tablas.fvar;
-  if (!fv) return [{ ps, peso: null }];
-  const ejesOff = fv.off + v.getUint16(fv.off + 4), nEjes = v.getUint16(fv.off + 8), nInst = v.getUint16(fv.off + 12), tamInst = v.getUint16(fv.off + 14);
-  const ejes: string[] = [];
-  for (let i = 0; i < nEjes; i++) {
-    const o = ejesOff + i * 20;
-    ejes.push(String.fromCharCode(v.getUint8(o), v.getUint8(o + 1), v.getUint8(o + 2), v.getUint8(o + 3)));
-  }
+  if (!estilos.length) return [{ ps, peso: null }];
+  const nEjes = ejes.length;
   const iW = ejes.indexOf("wght"), iI = ejes.indexOf("ital");
   const prefijo = nombres[25] ?? ps.replace(/-[^-]*$/, "");
-  const out: FuenteArchivo[] = [];
-  for (let i = 0; i < nInst; i++) {
-    const o = ejesOff + nEjes * 20 + i * tamInst;
+  const out = new Map<string, FuenteArchivo>();
+  for (const { o, tam } of estilos) {
     const coord = (k: number) => v.getInt32(o + 4 + k * 4) / 65536;
     if (iI >= 0 && coord(iI) !== 0) continue;
-    const psId = tamInst >= nEjes * 4 + 6 ? v.getUint16(o + 4 + nEjes * 4) : 0xffff;
+    const psId = tam >= nEjes * 4 + 6 ? v.getUint16(o + 4 + nEjes * 4) : 0xffff;
     const sufijo = (psId !== 0xffff && nombres[psId]) || nombres[v.getUint16(o)] || "";
     if (!sufijo) continue;
     const nombre = sufijo.startsWith(prefijo) ? sufijo : `${prefijo}-${sufijo.replace(/\s+/g, "")}`;
-    out.push({ ps: nombre, peso: iW >= 0 ? coord(iW) : null });
+    if (!out.has(nombre)) out.set(nombre, { ps: nombre, peso: iW >= 0 ? coord(iW) : null });
   }
-  return out.length ? out : [{ ps, peso: null }];
+  return out.size ? [...out.values()] : [{ ps, peso: null }];
 }
 
 // ── La prueba: ¿lo que escribimos es lo que dibujó Photoshop? ────────────
@@ -279,6 +302,10 @@ export function fuentesDe(buf: ArrayBuffer): FuenteArchivo[] {
 export const TEXTO_DIF_MAX = 0.2;
 /** Lo más que se acepta corregir de lugar (px del maestro) al alinear: más que esto es que la maqueta está mal. */
 export const TEXTO_CORRER_MAX = 6;
+/** Cuánto puede diferir el ancho de la tinta (fracción): con otra tipografía o un salto de línea distinto, se pasa. */
+export const TEXTO_ANCHO_TOL = 0.03;
+/** Desde esta alfa (0-255) un píxel cuenta como letra al medir el ancho de la tinta (el borde suave no). */
+const TINTA_UMBRAL = 64;
 
 /**
  * Compara dos alfas del mismo tamaño (w × h, 0-255): cuánto hay que correr el nuestro para empatar con el de
@@ -293,15 +320,16 @@ export function compararAlfa(nuestro: Uint8ClampedArray | Uint8Array, ps: Uint8C
         const v = a[y * w + x];
         if (!v) continue;
         s += v; sx += v * x; sy += v * y;
-        if (v > 64) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
+        if (v > TINTA_UMBRAL) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
       }
     return { s, cx: s ? sx / s : 0, cy: s ? sy / s : 0, ancho: x1 - x0 + 1 };
   };
   const a = centro(nuestro), b = centro(ps);
   if (!a.s || !b.s) return { dx: 0, dy: 0, dif: 1, anchoRazon: 0 };
-  const malCon = (dx: number, dy: number) => {
+  // `tope`: en cuanto un corrimiento ya es peor que el mejor, se deja de sumar.
+  const malCon = (dx: number, dy: number, tope: number) => {
     let mal = 0;
-    for (let y = 0; y < h; y++)
+    for (let y = 0; y < h && mal < tope; y++)
       for (let x = 0; x < w; x++) {
         const xs = x - dx, ys = y - dy;
         const v = xs >= 0 && xs < w && ys >= 0 && ys < h ? nuestro[ys * w + xs] : 0;
@@ -315,7 +343,7 @@ export function compararAlfa(nuestro: Uint8ClampedArray | Uint8Array, ps: Uint8C
   let mejor = { dx: cx, dy: cy, mal: Infinity };
   for (let dy = cy - 1; dy <= cy + 1; dy++)
     for (let dx = cx - 1; dx <= cx + 1; dx++) {
-      const mal = malCon(dx, dy);
+      const mal = malCon(dx, dy, mejor.mal);
       if (mal < mejor.mal) mejor = { dx, dy, mal };
     }
   return { dx: mejor.dx, dy: mejor.dy, dif: mejor.mal / b.s, anchoRazon: a.ancho / b.ancho };

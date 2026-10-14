@@ -15,8 +15,8 @@ import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/for
 import { LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
-import { enCola, pintar } from "./pintar";
-import { EXTENSIONES_FUENTE, cargarFuentes, fuentesRecordadas, olvidarFuentes, recordarFuentes, revisarTextos, textoEscrito, type Escritura, type Tipografias } from "./escritura";
+import { colaVacia, enCola, pintar } from "./pintar";
+import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, fuentesRecordadas, olvidarFuentes, recordarFuentes, revisarTextos, textoEscrito, type ArchivoFuente, type Escritura, type Tipografias } from "./escritura";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD. El anuncio llega en Photoshop: un Web Worker lo lee y lo separa en fondo
@@ -27,6 +27,7 @@ import { EXTENSIONES_FUENTE, cargarFuentes, fuentesRecordadas, olvidarFuentes, r
 type Falla = { clave: keyof typeof FP_ERROR; detalle?: string };
 type Leido = { archivo: string; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] };
 type Medida = { w: number; h: number };
+const SIN_TIPOS: Tipografias = new Map();
 
 const CLAVE_ERROR: Record<MotivoPsd | "desconocido", keyof typeof FP_ERROR> = { "no-soportado": "noSoportado", "demasiado-grande": "grande", "sin-aplanado": "sinAplanado", "sin-fondo": "sinFondo", desconocido: "desconocido" };
 /** Alto máximo con el que se ENSEÑA una medida (la descarga va siempre a tamaño real). */
@@ -58,22 +59,75 @@ function descargar(blob: Blob, nombre: string) {
 
 const pct = (v: number, de: number) => `${(v / de) * 100}%`;
 
-/** Los archivos de lo que se soltó, entrando a las carpetas (hasta 4 niveles y 500 archivos: la de tipografías trae ~20). */
+const SOLTAR_NIVELES = 4;
+/** Archivos que sirven (la carpeta de tipografías trae ~20) y entradas recorridas en total, para no andar sin fin. */
+const SOLTAR_ARCHIVOS_MAX = 500;
+const SOLTAR_ENTRADAS_MAX = 5000;
+const SIRVE = /\.(psd|otf|ttf)$/i;
+
+/**
+ * Los archivos de lo que se soltó, entrando a las carpetas. Lo soltado suelto entra siempre (un PNG dice "no es un
+ * PSD"); de adentro de una carpeta, sólo .psd/.otf/.ttf. Un archivo ilegible se salta, no tumba la carpeta.
+ */
 async function archivosDe(entradas: FileSystemEntry[]): Promise<File[]> {
   const out: File[] = [];
+  let vistas = 0;
+  const lleno = () => out.length >= SOLTAR_ARCHIVOS_MAX || vistas >= SOLTAR_ENTRADAS_MAX;
   const andar = async (e: FileSystemEntry, nivel: number): Promise<void> => {
-    if (out.length >= 500) return;
-    if (e.isFile) return void out.push(await new Promise<File>((ok, mal) => (e as FileSystemFileEntry).file(ok, mal)));
-    if (!e.isDirectory || nivel >= 4) return;
+    if (lleno()) return;
+    vistas++;
+    if (e.isFile) {
+      if (nivel > 0 && !SIRVE.test(e.name)) return;
+      try {
+        out.push(await new Promise<File>((ok, mal) => (e as FileSystemFileEntry).file(ok, mal)));
+      } catch (err) {
+        console.error("[formatos-psd] soltar", e.name, err);
+      }
+      return;
+    }
+    if (!e.isDirectory || nivel >= SOLTAR_NIVELES) return;
     const lector = (e as FileSystemDirectoryEntry).createReader();
-    for (let lote: FileSystemEntry[] = []; ; ) {
-      lote = await new Promise<FileSystemEntry[]>((ok, mal) => lector.readEntries(ok, mal));
-      if (!lote.length) break;
+    while (!lleno()) {
+      let lote: FileSystemEntry[];
+      try {
+        lote = await new Promise<FileSystemEntry[]>((ok, mal) => lector.readEntries(ok, mal));
+      } catch (err) {
+        return console.error("[formatos-psd] soltar", e.name, err);
+      }
+      if (!lote.length) return;
       for (const x of lote) await andar(x, nivel + 1);
     }
   };
-  for (const e of entradas) await andar(e, 0).catch((err) => console.error("[formatos-psd] soltar", err));
+  for (const e of entradas) await andar(e, 0);
   return out;
+}
+
+/** Lo que pasó al cargar tipografías. */
+type NotaFuentes = { nuevas: number; malas: string[]; vacio?: boolean; fallo?: boolean };
+const notaMala = (n: NotaFuentes) => !!n.fallo || !!n.vacio || (!n.nuevas && n.malas.length > 0);
+const NOMBRES_MAX = 6;
+/** El nombre de una capa de texto es su texto (el legal mide 60+ letras): se acorta, y entero va en el `title`. */
+const CAPA_MAX = 48;
+const corto = (s: string) => (s.length > CAPA_MAX ? `${s.slice(0, CAPA_MAX - 1)}…` : s);
+/** Una lista de nombres que puede ser larga: los primeros y "+N". */
+const unos = (xs: string[]) => `${xs.slice(0, NOMBRES_MAX).join(", ")}${xs.length > NOMBRES_MAX ? ` +${xs.length - NOMBRES_MAX}` : ""}`;
+function textoNotaFuentes(n: NotaFuentes, lang: Lang): string {
+  if (n.fallo) return tx(FP.textoFallo, lang);
+  if (n.vacio) return tx(FP.textoNinguna, lang);
+  const cargadas = n.nuevas === 1 ? tx(FP.textoCargadaUna, lang) : n.nuevas ? rellenar(tx(FP.textoCargadas, lang), { n: n.nuevas }) : n.malas.length ? "" : tx(FP.textoYaEstaban, lang);
+  return [cargadas, n.malas.length ? rellenar(tx(FP.textoMalas, lang), { f: unos(n.malas) }) : ""].filter(Boolean).join(" ");
+}
+
+/** Lo que tapa el canal, en palabras: % donde la cifra es de guías (aprox.), px donde la dio el equipo (TikTok). */
+function cifrasCanal(c: Canal, lang: Lang): string {
+  const { pct: p, px } = CANALES[c];
+  const v = (x: number, lado: number) => (px ? `${Math.round((x / 100) * lado)} px` : `≈${Math.round(x)} %`);
+  const partes = [
+    p.top ? `${tx(FP.zonaArriba, lang)} ${v(p.top, 1920)}` : "",
+    p.bottom ? `${tx(FP.zonaAbajo, lang)} ${v(p.bottom, 1920)}` : "",
+    p.left && p.left === p.right ? `${tx(FP.zonaLados, lang)} ${v(p.left, 1080)}` : p.right ? `${tx(FP.zonaDerecha, lang)} ${v(p.right, 1080)}` : "",
+  ].filter(Boolean);
+  return rellenar(tx(FP.zonaCifras, lang), { z: `${partes.join(", ")}${px ? ` ${tx(FP.zonaDe1080, lang)}` : ""}` });
 }
 
 const TarjetaMedida = memo(function TarjetaMedida({
@@ -240,8 +294,13 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   const [canal, setCanal] = useState<Canal | null>(null);
   /** Tipografías cargadas (nombre PostScript → cómo pedirla). Vacío = el texto va como imagen. */
   const [tipos, setTipos] = useState<Tipografias>(() => new Map());
-  const [notaFuentes, setNotaFuentes] = useState<{ mal: boolean; texto: string } | null>(null);
+  /** Qué pasó al cargar tipografías (se escribe al pintar: así sigue el idioma de la pantalla). */
+  const [notaFuentes, setNotaFuentes] = useState<NotaFuentes | null>(null);
+  const [cargandoFuentes, setCargandoFuentes] = useState(false);
+  /** La última prueba de los textos: de qué PSD y con qué tipografías se hizo (ver el efecto que la corre). */
+  const [prueba, setPrueba] = useState<{ leido: Leido; tipos: Tipografias; e: Escritura | null } | null>(null);
   const entradaFuentes = useRef<HTMLInputElement>(null);
+  const botonAgregar = useRef<HTMLButtonElement>(null);
   const [zipeando, setZipeando] = useState(false);
   /** Lo último que pasó, para lectores de pantalla. `n` cambia cuando el mismo texto se repite (si no, no se anuncia). */
   const [aviso, setAviso] = useState<{ texto: string; n: number } | null>(null);
@@ -258,6 +317,9 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   const entrada = useRef<HTMLInputElement>(null);
   /** El cuadro de subida vuelve a existir (cambiar PSD, cancelar, error): el foco regresa a él, no al tope de la página. */
   const volverASubir = useRef(false);
+  /** Tras "Leer las marcadas" el elegidor se va: el foco pasa a "Cancelar" de la lectura. */
+  const irACancelar = useRef(false);
+  const botonCancelar = useRef<HTMLButtonElement>(null);
 
   const soltar = useCallback(() => {
     if (!trabajo.current) return;
@@ -289,6 +351,12 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     volverASubir.current = false;
     entrada.current?.focus();
   });
+  useEffect(() => {
+    if (!irACancelar.current || !leyendo || eligiendo) return;
+    irACancelar.current = false;
+    botonCancelar.current?.focus();
+  });
+  const totalTextos = usables.reduce((t, m) => t + m.piezas.reduce((u, p) => u + p.textos.length, 0), 0);
 
   const cambiarPsd = () => {
     volverASubir.current = true;
@@ -385,11 +453,19 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     }
   };
 
-  const marcar = (i: number) =>
-    setEleccion((e) => e && { ...e, marcadas: e.marcadas.includes(i) ? e.marcadas.filter((x) => x !== i) : e.marcadas.length < MESAS_MAX ? [...e.marcadas, i] : e.marcadas });
+  const marcar = (i: number) => {
+    if (!eleccion) return;
+    const ya = eleccion.marcadas.includes(i);
+    const marcadas = ya ? eleccion.marcadas.filter((x) => x !== i) : [...eleccion.marcadas, i];
+    if (marcadas.length > MESAS_MAX) return;
+    setEleccion({ ...eleccion, marcadas });
+    // Al llegar al tope las demás casillas se apagan: se dice por qué.
+    if (!ya && marcadas.length === MESAS_MAX) anunciar(rellenar(tx(FP.elegirTope, lang), { max: MESAS_MAX }));
+  };
   const leerElegidas = () => {
     const t = trabajo.current;
-    if (!t || !eleccion?.marcadas.length) return;
+    if (!eleccion?.marcadas.length) return void anunciar(tx(FP.elegirNinguna, lang));
+    if (!t) return;
     try {
       t.worker.postMessage({ tipo: "mesas", indices: eleccion.marcadas } satisfies PedidoWorker);
     } catch (err) {
@@ -400,6 +476,7 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
       return setFalla({ clave: "desconocido" });
     }
     t.armar();
+    irACancelar.current = true;
     setAvance({ mesa: 0, de: eleccion.marcadas.length });
     setEleccion(null);
   };
@@ -413,26 +490,41 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
       if (vivo.current) setTipos((antes) => new Map([...r.mapa, ...antes]));
     })();
   }, []);
+  const avisarFuentes = (n: NotaFuentes) => {
+    setNotaFuentes(n);
+    const texto = textoNotaFuentes(n, lang);
+    anunciar(texto);
+    // Sin la tarjeta "Texto nítido" en pantalla (aún no hay PSD, o no trae textos) la nota sale como aviso flotante.
+    if (!totalTextos) (notaMala(n) ? toast.error : toast.success)(texto);
+  };
   const agregarFuentes = async (archivos: File[]) => {
+    // Los topes van ANTES de leer: una carpeta de fuentes del sistema o un archivo enorme no llegan a memoria.
+    const { usar, omitidas } = elegirFuentes(archivos);
+    if (!usar.length) return avisarFuentes(omitidas.length ? { nuevas: 0, malas: omitidas } : { nuevas: 0, malas: [], vacio: true });
+    setCargandoFuentes(true);
     try {
-      const datos = await Promise.all(archivos.filter((f) => EXTENSIONES_FUENTE.test(f.name)).map(async (f) => ({ nombre: f.name, datos: await f.arrayBuffer() })));
+      const datos: ArchivoFuente[] = [];
+      for (const f of usar) datos.push({ nombre: f.name, datos: await f.arrayBuffer() });
       const r = await cargarFuentes(datos, tipos);
       if (!vivo.current) return;
-      setTipos(r.mapa);
-      void recordarFuentes(datos.filter((d) => !r.malas.includes(d.nombre)));
-      const texto = [rellenar(tx(FP.textoCargadas, lang), { n: r.nuevas.length }), r.malas.length ? rellenar(tx(FP.textoMalas, lang), { f: r.malas.join(", ") }) : ""].filter(Boolean).join(" ");
-      setNotaFuentes({ mal: !r.nuevas.length && r.malas.length > 0, texto });
-      anunciar(texto);
+      // Funcional: dos tandas casi juntas (o la de las recordadas) se suman, no se pisan. Nada nuevo, nada que repintar.
+      if (r.nuevas.length) setTipos((antes) => new Map([...antes, ...r.mapa]));
+      void recordarFuentes(r.buenas);
+      avisarFuentes({ nuevas: r.nuevas.length, malas: [...r.malas, ...omitidas] });
     } catch (err) {
       console.error("[formatos-psd] tipografías", err);
-      setNotaFuentes({ mal: true, texto: tx(FP.textoFallo, lang) });
+      if (vivo.current) avisarFuentes({ nuevas: 0, malas: [], fallo: true });
+    } finally {
+      if (vivo.current) setCargandoFuentes(false);
     }
   };
   const olvidar = () => {
-    void olvidarFuentes();
     setTipos(new Map());
     setNotaFuentes(null);
     anunciar(tx(FP.textoOlvidadas, lang));
+    void olvidarFuentes().then((bien) => bien || toast.error(tx(FP.textoNoOlvido, lang)));
+    // Este botón desaparece: el foco pasa a "Agregar tipografías" (si no, cae al tope de la página).
+    botonAgregar.current?.focus();
   };
 
   // Un PSD soltado FUERA del cuadro haría que el navegador lo abra o lo descargue y se pierda la pantalla: la
@@ -448,9 +540,13 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
       const archivos = entradas.length ? await archivosDe(entradas) : sueltos;
       const fuentes = archivos.filter((f) => EXTENSIONES_FUENTE.test(f.name));
       if (fuentes.length) void agregarFuentes(fuentes);
-      // Un PSD (o, si no vino ninguna tipografía, el primer archivo: así un PNG dice "no es un PSD").
-      const psd = archivos.find((f) => /\.psd$/i.test(f.name)) ?? (fuentes.length ? undefined : archivos[0]);
-      if (psd && !leyendo) void abrir(psd);
+      const psd = archivos.find((f) => /\.psd$/i.test(f.name));
+      if (psd) return void (leyendo || abrir(psd));
+      if (fuentes.length || !archivos.length) return;
+      // Ni PSD ni tipografías (un .zip de fuentes, un .woff2): con resultados en pantalla no se pierden por eso; en el
+      // cuadro de subida, el archivo dice por qué no sirve ("no es un PSD").
+      if (usables.length || leyendo) return void toast.error(tx(FP.soltarNoSirve, lang));
+      void abrir(archivos[0]);
     })();
   });
 
@@ -490,13 +586,33 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     [anunciar, lang],
   );
 
-  // El mismo cálculo que hace cada tarjeta (función pura, barata): aquí sirve para el resumen y los nombres del ZIP.
   // Cada texto se prueba contra Photoshop con las tipografías cargadas; sólo los que coinciden se vuelven a escribir.
-  const escritura = useMemo(() => (leido?.maestros.length && tipos.size ? revisarTextos(leido.maestros, tipos) : null), [leido, tipos]);
-  const totalTextos = usables.reduce((t, m) => t + m.piezas.reduce((u, p) => u + p.textos.length, 0), 0);
+  // La prueba va FUERA del pintado de la pantalla (dibuja en un canvas; si algo falla no la tumba). Mientras
+  // corre, las tarjetas siguen con la prueba anterior del MISMO PSD y sus tipografías: nada se repinta dos veces.
+  useEffect(() => {
+    const l = leido;
+    if (!l?.maestros.length) return;
+    const reloj = window.setTimeout(() => {
+      let e: Escritura | null = null;
+      try {
+        if (tipos.size) e = revisarTextos(l.maestros, tipos);
+      } catch (err) {
+        console.error("[formatos-psd] probar textos", err);
+      }
+      if (vivo.current) setPrueba({ leido: l, tipos, e });
+    }, 0);
+    return () => window.clearTimeout(reloj);
+  }, [leido, tipos]);
+  const vigente = prueba && prueba.leido === leido ? prueba : null;
+  const escritura = vigente?.e ?? null;
+  const tiposEscritos = vigente?.tipos ?? SIN_TIPOS;
+  const probando = tipos.size > 0 && vigente?.tipos !== tipos;
   const revisiones = escritura?.revisiones ?? [];
   const escritos = revisiones.filter((r) => r.ok).length;
-  const faltanFuentes = [...new Set(usables.flatMap((m) => m.piezas.flatMap((p) => p.textos.flatMap((t) => t.texto.tramos.map((r) => r.fuente)))))].filter((f) => f && !tipos.has(f));
+  const faltanFuentes = useMemo(
+    () => [...new Set((leido?.maestros ?? []).flatMap((m) => m.piezas.flatMap((p) => p.textos.flatMap((t) => t.texto.tramos.map((r) => r.fuente)))))].filter((f) => f && !tipos.has(f)),
+    [leido, tipos],
+  );
   // El mismo texto suele venir en varias mesas: una línea por texto y motivo, con las medidas de sus mesas.
   const comoImagen = [
     ...revisiones
@@ -513,13 +629,16 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
       .values(),
   ];
 
+  // El mismo acomodo que calcula cada tarjeta (función pura): aquí sirve para el resumen, el legal y los nombres del ZIP.
   const filas = useMemo(
     () => (leido?.maestros.length ? medidas.map((m) => ({ m, ...acomodarMedida(leido.maestros, m.w, m.h, { heroLado: lados[clave(m)] }) })) : []),
     [leido, medidas, lados],
   );
   const porRevisar = filas.filter((f) => f.acomodo.avisos.length).length;
   const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia));
-  const hay916 = medidas.some((m) => es916(m.w, m.h));
+  const n916 = medidas.filter((m) => es916(m.w, m.h)).length;
+  // El legal puede ser obligatorio (CAT de una tarjeta): las medidas donde se quitó se dicen junto al ZIP, no sólo en su tarjeta.
+  const sinLegal = filas.filter((f) => f.acomodo.quitadas.some((i) => usables[f.maestro]?.piezas[i]?.rol === "FOOTER")).map((f) => etiqueta(f.m));
   const voltearTodas = () => {
     setLados((p) => ({ ...p, ...Object.fromEntries(volteables.map((f) => [clave(f.m), p[clave(f.m)] === "izquierda" ? "derecha" : "izquierda"])) }));
     anunciar(rellenar(tx(FP.voltearTodasHecho, lang), { n: volteables.length }));
@@ -530,6 +649,9 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     if (!leido || zipeando || !filas.length) return;
     setZipeando(true);
     try {
+      // Las vistas se pintan una por vuelta (al abrir, al voltear, al sumar tipografías): se espera a la última.
+      await colaVacia();
+      if (!vivo.current) return;
       const con = filas.map((f) => ({ nombre: archivoDe(leido.maestros[f.maestro], f.m), lienzo: lienzos.current.get(clave(f.m)) }));
       const faltan = con.filter((c) => !c.lienzo).length;
       // Un ZIP incompleto que diga "listo" es peor que no entregarlo.
@@ -559,15 +681,16 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   const resumen = filas.length
     ? [porRevisar ? rellenar(tx(FP.resumenRevisar, lang), { n: filas.length, r: porRevisar }) : rellenar(tx(FP.resumenOk, lang), { n: filas.length }), notasTxt].filter(Boolean).join(" · ")
     : "";
-  const textoAvance = avance && avance.de > 0 ? rellenar(tx(FP.leyendoMesa, lang), { m: avance.mesa, n: avance.de }) : tx(FP.leyendo, lang);
+  const textoAvance = avance && avance.de > 0 && avance.mesa > 0 ? rellenar(tx(FP.leyendoMesa, lang), { m: avance.mesa, n: avance.de }) : tx(FP.leyendo, lang);
   /** El motor y el archivo hablan español: con la pantalla en inglés esos textos se marcan como español. */
   const delMotor = lang === "en" ? "es" : undefined;
 
   return (
     <div lang={lang} className="prisma-root mx-auto max-w-6xl">
-      {/* Un solo anuncio para lectores de pantalla: el avance de la lectura, lo último que se hizo, o el resumen. */}
+      {/* Un solo anuncio para lectores de pantalla: el avance de la lectura, lo último que se hizo, o el resumen. Al
+          abrirse el elegidor el foco ya lee su título: aquí no se repite. */}
       <p role="status" className="sr-only">
-        {leyendo ? textoAvance : eleccion ? rellenar(tx(FP.elegirTitulo, lang), { n: eleccion.mesas.length }) : aviso ? `${aviso.texto}${aviso.n % 2 ? "​" : ""}` : resumen}
+        {leyendo ? textoAvance : aviso ? `${aviso.texto}${aviso.n % 2 ? "​" : ""}` : eligiendo ? "" : resumen}
       </p>
 
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -597,8 +720,10 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
             <h2 id="psd-elegir-titulo" ref={tituloElegir} tabIndex={-1} className="text-base font-medium text-foreground outline-none">
               {rellenar(tx(FP.elegirTitulo, lang), { n: eleccion.mesas.length })}
             </h2>
-            <p className="text-sm text-muted-foreground">{rellenar(tx(FP.elegirAyuda, lang), { max: MESAS_MAX })}</p>
-            <fieldset className="mt-3">
+            <p id="psd-elegir-ayuda" className="text-sm text-muted-foreground">
+              {rellenar(tx(FP.elegirAyuda, lang), { max: MESAS_MAX })}
+            </p>
+            <fieldset className="mt-3" aria-describedby="psd-elegir-ayuda">
               <legend className="sr-only">{tx(FP.elegirLeyenda, lang)}</legend>
               <ul className="max-h-96 space-y-0.5 overflow-y-auto">
                 {eleccion.mesas.map((m, i) => {
@@ -609,6 +734,7 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                         {/* Nombre explícito: el texto de la etiqueta pega el nombre y la medida ("…_A540×960"). */}
                         <input
                           type="checkbox"
+                          lang={m.nombre ? delMotor : undefined}
                           aria-label={`${m.nombre || tx(FP.sinNombre, lang)}, ${etiqueta(m)}`}
                           className={cn("size-4 shrink-0 accent-primary", FOCO)}
                           checked={on}
@@ -625,9 +751,20 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                 })}
               </ul>
             </fieldset>
+            {!eleccion.marcadas.length && (
+              <p id="psd-elegir-ninguna" className="mt-3 flex items-center gap-1.5 text-sm text-foreground">
+                <AlertTriangle className="size-4 shrink-0 text-status-warning" aria-hidden="true" /> {tx(FP.elegirNinguna, lang)}
+              </p>
+            )}
             <div className="mt-4 flex flex-wrap gap-2">
               {/* aria-disabled, no disabled: el botón conserva el foco y dice por qué no hace nada. */}
-              <Button size="lg" className={cn(BOTON, "aria-disabled:opacity-60")} onClick={leerElegidas} aria-disabled={!eleccion.marcadas.length || undefined}>
+              <Button
+                size="lg"
+                className={cn(BOTON, "aria-disabled:cursor-not-allowed aria-disabled:opacity-60")}
+                onClick={leerElegidas}
+                aria-disabled={!eleccion.marcadas.length || undefined}
+                aria-describedby={eleccion.marcadas.length ? undefined : "psd-elegir-ninguna"}
+              >
                 <FileUp className="size-4" aria-hidden="true" /> {rellenar(tx(FP.elegirLeer, lang), { n: eleccion.marcadas.length })}
               </Button>
               <Button variant="outline" size="lg" className={BOTON} onClick={cancelar}>
@@ -678,7 +815,7 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
             />
           </label>
           {leyendo && (
-            <Button variant="outline" size="lg" className={BOTON} onClick={cancelar}>
+            <Button ref={botonCancelar} variant="outline" size="lg" className={BOTON} onClick={cancelar}>
               <X className="size-4" aria-hidden="true" /> {tx(FP.cancelar, lang)}
             </Button>
           )}
@@ -687,8 +824,9 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
               <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
               <div className="min-w-0">
                 <p>{tx(FP_ERROR[falla.clave], lang)}</p>
+                {/* El detalle suele traer el "Qué hacer": se lee con el mismo peso que el error, no como nota al pie. */}
                 {falla.detalle && (
-                  <p lang={delMotor} className="mt-0.5 break-words text-xs text-muted-foreground">
+                  <p lang={delMotor} className="mt-1 break-words text-sm text-foreground">
                     {falla.detalle}
                   </p>
                 )}
@@ -772,13 +910,19 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
             </form>
 
             {totalTextos > 0 && (
-              <div className="rounded-xl border border-border bg-card p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{tx(FP.textoTitulo, lang)}</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{rellenar(tx(FP.textoEstado, lang), { n: escritos, m: totalTextos })}</p>
+              <section aria-labelledby="psd-texto-titulo" className="rounded-xl border border-border bg-card p-3">
+                <h2 id="psd-texto-titulo" className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  {tx(FP.textoTitulo, lang)}
+                </h2>
+                {/* Vivo: al sumar tipografías el resultado cambia aquí, y se anuncia. */}
+                <p aria-live="polite" className="mt-1 flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  {probando && <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />}
+                  {probando ? tx(FP.textoProbando, lang) : tipos.size ? rellenar(tx(FP.textoEstado, lang), { n: escritos, m: totalTextos }) : tx(FP.textoSinFuentes, lang)}
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">{tx(FP.textoAyuda, lang)}</p>
                 {faltanFuentes.length > 0 && (
-                  <p lang={delMotor} className="mt-1 break-words text-xs text-foreground">
-                    {rellenar(tx(FP.textoFaltan, lang), { f: faltanFuentes.join(", ") })}
+                  <p className="mt-1 break-words text-xs text-foreground">
+                    {tx(FP.textoFaltan, lang)} {unos(faltanFuentes)}.
                   </p>
                 )}
                 {comoImagen.length > 0 && (
@@ -786,18 +930,21 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                     <p id="psd-texto-imagen" className="mt-2 text-xs font-medium text-foreground">
                       {tx(FP.textoComoImagen, lang)}
                     </p>
-                    <ul aria-labelledby="psd-texto-imagen" lang={delMotor} className="mt-0.5 list-disc space-y-0.5 pl-5 text-xs text-foreground">
+                    <ul aria-labelledby="psd-texto-imagen" className="mt-0.5 list-disc space-y-0.5 pl-5 text-xs text-foreground">
                       {comoImagen.map((r, i) => (
                         <li key={i} className="break-words">
-                          «{r.capa}» ({r.mesas.join(", ")}): {r.motivo}
+                          <span lang={delMotor} title={r.capa.length > CAPA_MAX ? r.capa : undefined}>
+                            «{corto(r.capa)}»
+                          </span>{" "}
+                          ({rellenar(tx(r.mesas.length > 1 ? FP.textoMesas : FP.textoMesa, lang), { m: r.mesas.join(", ") })}): <span lang={delMotor}>{r.motivo}</span>
                         </li>
                       ))}
                     </ul>
                   </>
                 )}
                 {notaFuentes && (
-                  <p role={notaFuentes.mal ? "alert" : undefined} className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
-                    {notaFuentes.mal && <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden="true" />} {notaFuentes.texto}
+                  <p role={notaMala(notaFuentes) ? "alert" : undefined} className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
+                    {notaMala(notaFuentes) && <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden="true" />} {textoNotaFuentes(notaFuentes, lang)}
                   </p>
                 )}
                 <input
@@ -814,19 +961,30 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                     if (archivos.length) void agregarFuentes(archivos);
                   }}
                 />
-                <Button variant="outline" size="lg" className={cn("mt-2 w-full", BOTON)} onClick={() => entradaFuentes.current?.click()}>
-                  <Type className="size-4" aria-hidden="true" /> {tx(FP.textoAgregar, lang)}
+                <Button
+                  ref={botonAgregar}
+                  variant="outline"
+                  size="lg"
+                  className={cn("mt-2 w-full aria-disabled:cursor-wait", BOTON)}
+                  onClick={() => cargandoFuentes || entradaFuentes.current?.click()}
+                  aria-disabled={cargandoFuentes || undefined}
+                  aria-busy={cargandoFuentes}
+                >
+                  {cargandoFuentes ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Type className="size-4" aria-hidden="true" />}
+                  {tx(cargandoFuentes ? FP.textoCargando : FP.textoAgregar, lang)}
                 </Button>
                 {tipos.size > 0 && (
-                  <button type="button" onClick={olvidar} className={cn("mt-1 min-h-11 w-full cursor-pointer rounded text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline sm:min-h-8", FOCO)}>
+                  <button type="button" onClick={olvidar} className={cn("mt-2 min-h-11 w-full cursor-pointer rounded text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground sm:min-h-9", FOCO)}>
                     {tx(FP.textoOlvidar, lang)}
                   </button>
                 )}
-              </div>
+              </section>
             )}
 
-            <div className="rounded-xl border border-border bg-card p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{tx(FP.zona, lang)}</p>
+            <section aria-labelledby="psd-zona-titulo" className="rounded-xl border border-border bg-card p-3">
+              <h2 id="psd-zona-titulo" className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                {tx(FP.zona, lang)}
+              </h2>
               <label htmlFor="psd-canal" className="mt-1 block text-sm font-medium text-foreground">
                 {tx(FP.zonaCanal, lang)}
               </label>
@@ -834,11 +992,12 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                 id="psd-canal"
                 value={canal ?? ""}
                 onChange={(e) => {
-                  const v = e.target.value;
-                  setCanal(esCanal(v) ? v : null);
+                  const v = esCanal(e.target.value) ? e.target.value : null;
+                  setCanal(v);
+                  if (v) anunciar(n916 ? rellenar(tx(FP.zonaMarcadas, lang), { c: CANALES[v].nombre, n: n916 }) : tx(FP.zonaSin916, lang));
                 }}
                 aria-describedby="psd-canal-ayuda"
-                className="mt-1 h-10 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-1 min-h-11 w-full cursor-pointer rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
               >
                 <option value="">{tx(FP.zonaNinguno, lang)}</option>
                 {(Object.keys(CANALES) as Canal[]).map((c) => (
@@ -847,11 +1006,11 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                   </option>
                 ))}
               </select>
+              {canal && <p className="mt-1 text-xs font-medium text-foreground">{n916 ? cifrasCanal(canal, lang) : tx(FP.zonaSin916, lang)}</p>}
               <p id="psd-canal-ayuda" className="mt-1 text-xs text-muted-foreground">
                 {tx(FP.zonaAyuda, lang)}
-                {canal && !hay916 && <> {tx(FP.zonaSin916, lang)}</>}
               </p>
-            </div>
+            </section>
           </aside>
 
           <section aria-labelledby="psd-resultado" className="@container min-w-0">
@@ -861,6 +1020,12 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                   {tx(FX.resultados, lang)}
                 </h2>
                 <p className="text-sm text-muted-foreground">{resumen}</p>
+                {sinLegal.length > 0 && (
+                  <p className="mt-1 flex items-start gap-1.5 text-sm text-foreground">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-warning" aria-hidden="true" />
+                    {sinLegal.length === 1 ? rellenar(tx(FP.sinLegalUna, lang), { m: sinLegal[0] }) : rellenar(tx(FP.sinLegal, lang), { n: sinLegal.length, m: sinLegal.join(", ") })}
+                  </p>
+                )}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {volteables.length > 0 && (
@@ -879,7 +1044,7 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                 las horizontales y los banners ocupan la fila entera. El orden es el de la lista del cliente. */}
             <ul className="grid items-start gap-4 @xl:grid-cols-2">
               {medidas.map((m) => (
-                <TarjetaMedida key={clave(m)} maestros={usables} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tipos} lang={lang} alVoltear={voltear} registrar={registrar} />
+                <TarjetaMedida key={clave(m)} maestros={usables} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} />
               ))}
             </ul>
           </section>

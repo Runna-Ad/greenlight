@@ -8,7 +8,7 @@ import {
 } from "../src/lib/prisma/formatos/geometria.ts";
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
 import { writePsdBuffer } from "ag-psd";
-import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa } from "../src/lib/prisma/formatos/psd.ts";
+import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, ENFOQUE_DESDE } from "../src/lib/prisma/formatos/nitido.ts";
 import { textoDe, maquetar, fuentesDe, compararAlfa } from "../src/lib/prisma/formatos/textos.ts";
@@ -581,6 +581,7 @@ console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
     ok("un PSD sin nada que quitar sale byte por byte igual", igual.quitados === 0 && igualBytes(new Uint8Array(igual.datos), sinNada));
     const pesado = await adelgazarPsd(new Blob([conObjeto]), 100_000).then(() => null, (e) => e);
     ok("si aun sin lo que sobra pasa del tope: PsdPesado con lo que pesaría, ANTES de reservar memoria", pesado instanceof PsdPesado && pesado.mb === Math.round(flaco.datos.byteLength / 1e6) && pesado.mb < 1, String(pesado));
+    ok(`PsdPesado dice si se le quitó algo (${pesado?.quitados} bloques): el mensaje "ya sin los originales" sólo si es verdad`, pesado?.quitados > 0);
     // Lo que no se entiende no se quita: un archivo cortado a la mitad o con basura al final se entrega entero.
     const cortado = conObjeto.subarray(0, Math.floor(conObjeto.length / 2));
     const c = await adelgazarPsd(new Blob([cortado]), PSD_BYTES_MAX);
@@ -872,6 +873,10 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
     [{ style: { fontSize: 20 } }, "tramo sin tipografía o tamaño"],
     [{ style: st, shapeType: "box", boxBounds: [0, 0, NaN, 9] }, "caja de párrafo ilegible"],
   ];
+  eq("textoDe: corridas de largo 0 no cuentan (la librería las conserva)", textoDe({ text: "abcd", style: st, styleRuns: [{ length: 0, style: { font: { name: "Otra" } } }, { length: 4, style: {} }] }).tramos.map((r) => [r.n, r.fuente]), [[4, "F-Bold"]]);
+  const muchas = textoDe({ text: "a".repeat(65), style: st, styleRuns: Array.from({ length: 65 }, () => ({ length: 1, style: {} })) });
+  eq("textoDe: más de 64 cambios de estilo: va como imagen sin maquetarlo (y sin un motivo de más)", [muchas.motivo, muchas.tramos.length], ["demasiados cambios de estilo", 0]);
+  eq("textoDe: el nombre de la tipografía llega sin caracteres de control ni de dirección", textoDe({ text: "a", style: { ...st, font: { name: "F-\u202eBold\u0007" } } }).tramos[0].fuente, "F-Bold");
   eq("textoDe: lo que no se puede escribir igual lleva su motivo (y va como imagen)", casos.map(([t, m]) => { const mo = textoDe({ text: "abcd", ...t }).motivo; return mo?.includes(m) ? m : mo; }), casos.map(([, m]) => m));
 
   // maquetar con un medidor falso: cada letra mide medio tamaño; "sube" sólo es razonable para la "d".
@@ -887,7 +892,7 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
   eq("maquetar, caja: una línea que cabe justa no se parte; alineada a la derecha", lin(maquetar(caja("right", 50), medir)), [[19, [["aa bb", 10]]], [43, [["cc", 40]]]]);
 
   // fuentesDe con tipografías mínimas hechas aquí (tabla de nombres + fvar).
-  const sfnt = ({ nombres, ejes = null, instancias = [], firma = 0x00010000 }) => {
+  const sfnt = ({ nombres, ejes = null, instancias = [], firma = 0x00010000, tamInst = null }) => {
     const recs = Object.entries(nombres).map(([id, s]) => ({ id: +id, b: [...s].flatMap((ch) => [ch.charCodeAt(0) >> 8, ch.charCodeAt(0) & 255]) }));
     const ini = 6 + recs.length * 12;
     const name = new Uint8Array(ini + recs.reduce((s, r) => s + r.b.length, 0));
@@ -897,8 +902,9 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
     recs.forEach((r, i) => { const o = 6 + i * 12; nv.setUint16(o, 3); nv.setUint16(o + 2, 1); nv.setUint16(o + 4, 0x409); nv.setUint16(o + 6, r.id); nv.setUint16(o + 8, r.b.length); nv.setUint16(o + 10, off); name.set(r.b, ini + off); off += r.b.length; });
     const tablas = [["name", name]];
     if (ejes) {
-      const tam = 4 + ejes.length * 4 + 2;
-      const fv = new Uint8Array(16 + ejes.length * 20 + instancias.length * tam);
+      const tam = tamInst ?? 4 + ejes.length * 4 + 2;
+      // + un estilo de más al final: con tamInst 0 todos se escriben en el mismo lugar y no deben salirse.
+      const fv = new Uint8Array(16 + ejes.length * 20 + instancias.length * tam + 4 + ejes.length * 4 + 2);
       const fd = new DataView(fv.buffer);
       fd.setUint16(0, 1); fd.setUint16(4, 16); fd.setUint16(6, 2); fd.setUint16(8, ejes.length); fd.setUint16(10, 20); fd.setUint16(12, instancias.length); fd.setUint16(14, tam);
       ejes.forEach((t, i) => [...t].forEach((ch, k) => fd.setUint8(16 + i * 20 + k, ch.charCodeAt(0))));
@@ -924,6 +930,28 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
   let lanzo = false;
   try { fuentesDe(new ArrayBuffer(64)); } catch { lanzo = true; }
   ok("fuentesDe: un archivo que no es tipografía lanza", lanzo);
+  // Archivos hechos a propósito: no congelan ni inventan estilos.
+  const bomba = (() => {
+    const cuenta = 65535, largo = 65534, ini = 6 + cuenta * 12;
+    const name = new Uint8Array(ini + largo);
+    const nv = new DataView(name.buffer);
+    nv.setUint16(2, cuenta);
+    for (let i = 0; i < cuenta; i++) { const o = 6 + i * 12; nv.setUint16(o, 3); nv.setUint16(o + 6, i); nv.setUint16(o + 8, largo); }
+    const out = new Uint8Array(12 + 16 + name.length);
+    const v = new DataView(out.buffer);
+    v.setUint32(0, 0x00010000); v.setUint16(4, 1);
+    [..."name"].forEach((ch, k) => v.setUint8(12 + k, ch.charCodeAt(0)));
+    v.setUint32(12 + 8, 28); v.setUint32(12 + 12, name.length);
+    out.set(name, 28);
+    return out.buffer;
+  })();
+  const t0b = performance.now();
+  let tiroBomba = false;
+  try { fuentesDe(bomba); } catch { tiroBomba = true; }
+  const msBomba = performance.now() - t0b;
+  ok(`fuentesDe: tabla de nombres con 65 535 nombres de 64 KB: no la decodifica entera (${msBomba.toFixed(0)} ms) y lanza (sin nombre PostScript usable)`, tiroBomba && msBomba < 500);
+  eq("fuentesDe: estilos de tamaño 0 (todos leen el mismo) no se creen: queda el nombre del archivo", fijas(fuentesDe(sfnt({ nombres: { 6: "Fam-Regular", 25: "Fam", 256: "Bold" }, ejes: ["wght"], instancias: [{ sub: 256, coords: [700] }, { sub: 256, coords: [700] }], tamInst: 0 }))), [["Fam-Regular", null]]);
+  eq("fuentesDe: dos estilos con el mismo nombre cuentan una vez", fijas(fuentesDe(sfnt({ nombres: { 6: "Fam-Regular", 25: "Fam", 256: "Bold" }, ejes: ["wght"], instancias: [{ sub: 256, coords: [700] }, { sub: 256, coords: [700] }] }))), [["Fam-Bold", 700]]);
   const didi = join(homedir(), "Desktop/formatos-prueba/DiDi Sans Pro");
   const vf = join(didi, "DiDiSansVariableVF/DiDiSansVariableVF.ttf"), med = join(didi, "DiDi Sans Pro/otf/DiDiSans-Pro-Medium.otf");
   if (existsSync(vf) && existsSync(med)) {
@@ -962,6 +990,7 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
   const cta = (buf) => despiezar(leerPsd(buf), 0).piezas.find((p) => p.rol === "CTA");
   const p1 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto()]));
   const t0 = p1.textos[0];
+  eq("esVersionPsd: un PSD (versión 1) sí; un PSB (versión 2) o una cabecera corta, no", [esVersionPsd(Uint8Array.of(0x38, 0x42, 0x50, 0x53, 0, 1)), esVersionPsd(Uint8Array.of(0x38, 0x42, 0x50, 0x53, 0, 2)), esVersionPsd(Uint8Array.of(0x38, 0x42))], [true, false, false]);
   eq("textosDe: el texto de la pieza, su lugar en px de la mesa, su caja de tinta en Photoshop y su alfa ahí", [p1.textos.length, t0?.capa, t0?.texto.texto, t0?.texto.transform[4], t0?.caja, [0, 3, 4, 5].map((i) => t0?.alfa[i]), t0?.motivo, t0?.opacidad], [1, "Pídela", "Pídela\nya", 60, { x: 60, y: 40, w: 59, h: 20 }, [255, 100, 40, 0], null, 1]);
   const bpx = (p, x, y) => [...p.base.subarray(((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4, ((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4 + 4)];
   let fueraIgual = true, letrasNaranja = true;

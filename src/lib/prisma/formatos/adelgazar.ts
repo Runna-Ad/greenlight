@@ -7,7 +7,7 @@
  * se ven, así que esos bloques no hacen falta para despiezar. Se leen a pedazos con `slice` y sólo se junta en
  * memoria lo que se va a usar: un PSD de 1 GB hecho casi todo de objetos inteligentes cabe.
  *
- * Formato (PSD versión 1; el PSB se rechaza antes): cabecera de 26 bytes · datos de color (largo de 4 bytes) ·
+ * Formato (PSD versión 1; el PSB lo rechaza el worker ANTES de llamar aquí): cabecera de 26 bytes · datos de color (largo de 4 bytes) ·
  * recursos (largo de 4) · capas y máscaras (largo de 4: dentro van la información de capas, la máscara global y
  * al final bloques etiquetados "8BIM"+clave+largo) · la copia aplanada hasta el final del archivo.
  */
@@ -25,9 +25,12 @@ type Archivo = Pick<Blob, "size" | "slice">;
 /** Aun sin lo que sobra, el PSD pasa del tope: `mb` = lo que pesaría lo que sí se lee. */
 export class PsdPesado extends Error {
   mb: number;
-  constructor(bytes: number) {
-    super(`pesa ${Math.round(bytes / 1e6)} MB sin los originales de sus objetos inteligentes`);
+  /** Cuántos bloques se le quitaron (0 = no había qué quitar, o no se pudo recorrer). */
+  quitados: number;
+  constructor(bytes: number, quitados: number) {
+    super(`pesa ${Math.round(bytes / 1e6)} MB${quitados ? " sin los originales de sus objetos inteligentes" : ""}`);
     this.mb = Math.round(bytes / 1e6);
+    this.quitados = quitados;
   }
 }
 export type Adelgazado = { datos: ArrayBuffer; quitados: number };
@@ -99,7 +102,7 @@ async function tramos(a: Archivo): Promise<{ tramos: [number, number][]; posLarg
 export async function adelgazarPsd(a: Archivo, topeBytes: number): Promise<Adelgazado> {
   const t = (await tramos(a)) ?? { tramos: [[0, a.size]] as [number, number][], posLargo: -1, quitados: 0 };
   const total = t.tramos.reduce((s, [x, y]) => s + (y - x), 0);
-  if (total > topeBytes) throw new PsdPesado(total);
+  if (total > topeBytes) throw new PsdPesado(total, t.quitados);
   const datos = new Uint8Array(total);
   let o = 0;
   for (const [x, y] of t.tramos)

@@ -22,10 +22,12 @@ export function pintar(destino: HTMLCanvasElement, ma: MaestroListo, a: Acomodo,
 // clics y teclas.
 const cola: { fn: () => void; vivo: boolean }[] = [];
 let corriendo = false;
+const alVaciarse: (() => void)[] = [];
 function siguiente(): void {
   const t = cola.shift();
   if (!t) {
     corriendo = false;
+    for (const ok of alVaciarse.splice(0)) ok();
     return;
   }
   try {
@@ -46,3 +48,5 @@ export function enCola(fn: () => void): () => void {
     t.vivo = false;
   };
 }
+/** Se cumple cuando ya no queda ninguna medida esperando turno (el ZIP espera esto antes de tomar las fotos). */
+export const colaVacia = (): Promise<void> => (corriendo ? new Promise((ok) => alVaciarse.push(ok)) : Promise.resolve());
