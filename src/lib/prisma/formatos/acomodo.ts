@@ -21,7 +21,7 @@ export type MaestroCaja = { nombre: string; w: number; h: number; piezas: PiezaC
 export type Familia = "igual" | "display" | "horizontal" | "ancho" | "banner";
 /** Una pieza colocada: índice en `maestro.piezas`, su escala y la caja de su parte sólida en la medida final. */
 export type Puesta = { pieza: number; k: number; x: number; y: number; w: number; h: number };
-export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma"; texto: string };
+export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada"; texto: string };
 export type Acomodo = {
   familia: Familia;
   /** De abajo hacia arriba, en el orden del maestro. */
@@ -32,6 +32,8 @@ export type Acomodo = {
   letras: { pieza: number; px: number }[];
   /** Lo que alguien tiene que mirar antes de entregar. Vacío = pasó todas las comprobaciones. */
   avisos: AvisoAcomodo[];
+  /** Piezas que se quitaron A PROPÓSITO para que el texto que queda se lea (índices en `maestro.piezas`). */
+  quitadas: number[];
 };
 export type Lado = "derecha" | "izquierda";
 /** px de la medida final que la plataforma tapa por cada borde. */
@@ -54,6 +56,16 @@ export const PIE_ESCALA_MAX = 1.15;
 const ZONA_MAX = 0.75;
 /** Donde hay columnas, ninguna pieza de texto se agranda más que esto respecto al HERO (para que no se coma el anuncio). */
 const TEXTO_SOBRE_HERO_MAX = 1.8;
+/**
+ * Medidas chicas (regla de arranque de Pedro, 2026-10-14): si alguna letra no llega a LETRA_MIN_PX, se quita primero
+ * el legal y luego el subtítulo, y lo que queda se agranda. Cada quitada se CONSERVA sólo si de verdad agrandó el
+ * texto que se queda (en el acomodo del diseñador quitar no libera nada: ahí no se quita). Lo que siga chico se marca.
+ */
+export const QUITAR_EN_ORDEN: readonly Rol[] = ["FOOTER", "SUBTITULO"];
+/** En columnas, lo más que el lado del texto le quita al HERO para que la letra llegue al mínimo (el HERO queda en ~28 %). */
+const CORTE_MAX = 0.7;
+/** Cuántos tamaños de "más lugar al texto" se prueban entre el acomodo del equipo (0) y el máximo (1). */
+const PASOS_TEXTO = 10;
 
 const razon = (W: number, H: number, ma: { w: number; h: number }) => Math.abs(Math.log(W / H / (ma.w / ma.h)));
 
@@ -161,7 +173,42 @@ function parada(s: Suelta | undefined, r: Rect): Puesta[] {
 /** Espejo horizontal de un rectángulo dentro de [a0, a1]. */
 const espejo = (r: Rect, a0: number, a1: number): Rect => ({ ...r, x0: a0 + a1 - r.x1, x1: a0 + a1 - r.x0 });
 
+/** La letra más chica de las piezas `de` que siguen puestas (Infinity si ninguna trae texto medible). */
+const letraDe = (a: Acomodo, de: (i: number) => boolean) => Math.min(Infinity, ...a.letras.filter((l) => de(l.pieza)).map((l) => l.px));
+
 export function acomodar(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo = {}): Acomodo {
+  const todas = () => true;
+  // Con estas piezas fuera: el acomodo del equipo y, si la letra no llega, el lado del texto se ensancha (a costa
+  // del HERO) sólo lo necesario. Si ni al máximo llega, el que deja la letra más grande.
+  const ensanchar = (quitar: Set<number>): Acomodo => {
+    let mejor = acomodarSin(ma, W, H, op, quitar, 0);
+    if (mejor.familia === "igual") return mejor;
+    for (let n = 1; n <= PASOS_TEXTO && letraDe(mejor, todas) < LETRA_MIN_PX; n++) {
+      const a = acomodarSin(ma, W, H, op, quitar, n / PASOS_TEXTO);
+      if (letraDe(a, todas) > letraDe(mejor, todas) + 0.05) mejor = a;
+    }
+    return mejor;
+  };
+  let a = ensanchar(new Set());
+  for (const rol of QUITAR_EN_ORDEN) {
+    if (!(letraDe(a, todas) < LETRA_MIN_PX)) break;
+    const i = a.puestas.find((q) => ma.piezas[q.pieza].rol === rol)?.pieza;
+    if (i === undefined) continue;
+    if (a.familia === "igual") break; // el acomodo del diseñador no se toca: lo chico se marca, no se quita
+    const quitar = new Set([...a.quitadas, i]);
+    const prueba = ensanchar(quitar);
+    // Se quita si ELLA no se lee, o si quitarla agranda lo que se queda. Nunca si lo que se queda acaba bajo el
+    // mínimo por quitarla (que baje un poco sin pasar del mínimo está bien: se ensancha sólo lo necesario).
+    const queda = (k: number) => !quitar.has(k);
+    const suya = a.letras.find((l) => l.pieza === i)?.px ?? Infinity;
+    const antes = letraDe(a, queda), despues = letraDe(prueba, queda);
+    if (despues >= Math.min(antes, LETRA_MIN_PX) - 0.05 && (suya < LETRA_MIN_PX || despues > antes + 0.05)) a = prueba;
+  }
+  return a;
+}
+
+/** `texto` (0-1): cuánto lugar de más se le da al texto. 0 = el acomodo del equipo, tal cual. */
+function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo, quitar: Set<number>, texto: number): Acomodo {
   if (![ma.w, ma.h, W, H].every((v) => Number.isFinite(v) && v > 0)) throw new Error("acomodar: medidas inválidas");
   const familia = familiaDe(W, H, ma);
   const avisos: AvisoAcomodo[] = [];
@@ -173,7 +220,7 @@ export function acomodar(ma: MaestroCaja, W: number, H: number, op: OpcionesAcom
   }
   const valida = (p: PiezaCaja) => [p.solido.x, p.solido.y, p.solido.w, p.solido.h].every(Number.isFinite) && p.solido.w > 0 && p.solido.h > 0;
   const de = (rol: Rol): Suelta | undefined => {
-    const i = ma.piezas.findIndex((p) => p.rol === rol && valida(p));
+    const i = ma.piezas.findIndex((p, k) => p.rol === rol && valida(p) && !quitar.has(k));
     return i < 0 ? undefined : { i, p: ma.piezas[i] };
   };
   const m = Math.round(Math.min(H * 0.07, W * 0.045));
@@ -186,7 +233,7 @@ export function acomodar(ma: MaestroCaja, W: number, H: number, op: OpcionesAcom
   if (familia === "igual") {
     // El acomodo del diseñador, a escala pareja y centrado.
     const k = Math.min(W / ma.w, H / ma.h), ox = (W - ma.w * k) / 2, oy = (H - ma.h * k) / 2;
-    puestas = ma.piezas.flatMap((p, i) => (valida(p) ? [{ pieza: i, k, x: ox + p.solido.x * k, y: oy + p.solido.y * k, w: p.solido.w * k, h: p.solido.h * k }] : []));
+    puestas = ma.piezas.flatMap((p, i) => (valida(p) && !quitar.has(i) ? [{ pieza: i, k, x: ox + p.solido.x * k, y: oy + p.solido.y * k, w: p.solido.w * k, h: p.solido.h * k }] : []));
     // El pie recupera lo que la reducción le quitó: crece sobre su mismo borde de abajo y su mismo centro, hasta el
     // ancho útil, y nunca más grande de como lo dejó el diseñador (a la medida del maestro no se mueve nada: el
     // original es intocable). Tampoco se arrima a otra pieza: se prueba cada tamaño contra TODAS, no sólo la de arriba.
@@ -230,13 +277,24 @@ export function acomodar(ma: MaestroCaja, W: number, H: number, op: OpcionesAcom
       return voltear ? espejo(r, cuerpo.x0, cuerpo.x1) : r;
     };
     if (familia === "banner") {
-      // Una sola fila: marca · título · beneficios · hero · botón.
-      const celdas: [Rol, number][] = [["BRAND", 0.13], ["TITULO", 0.27], ["SUBTITULO", 0.19], ["HERO", 0.21], ["CTA", 0.14]];
-      const total = celdas.reduce((t, c) => t + c[1], 0);
+      // Una sola fila: marca · título · beneficios · hero · botón. Las celdas se reparten entre las piezas que SÍ
+      // están: una que falta (o que se quitó) no deja un hueco, le da su lugar a las demás.
+      // Con `texto`, las celdas de texto (título, beneficios, botón) crecen con lo que les cede el HERO (hasta
+      // quedarse con un tercio de su celda). La marca conserva exactamente la suya.
+      const crudas = ([["BRAND", 0.13], ["TITULO", 0.27], ["SUBTITULO", 0.19], ["HERO", 0.21], ["CTA", 0.14]] as [Rol, number][]).flatMap(([rol, frac]) => {
+        const s = de(rol);
+        return s ? [{ s, rol, frac }] : [];
+      });
+      const deTexto = (r: Rol) => r === "TITULO" || r === "SUBTITULO" || r === "CTA";
+      const textoF = crudas.reduce((t, c) => t + (deTexto(c.rol) ? c.frac : 0), 0);
+      const heroF = crudas.find((c) => c.rol === "HERO")?.frac ?? 0;
+      const cede = Math.min(textoF * texto, (heroF * 2) / 3);
+      const celdas = crudas.map((c) => ({ s: c.s, frac: deTexto(c.rol) ? c.frac * (1 + cede / textoF) : c.rol === "HERO" ? c.frac - cede : c.frac }));
+      const total = celdas.reduce((t, c) => t + c.frac, 0);
       let x = cuerpo.x0;
-      for (const [rol, frac] of celdas) {
-        const cw = (ancho * frac) / total, s = de(rol);
-        if (s && cuerpo.y1 > cuerpo.y0) {
+      for (const { s, frac } of celdas) {
+        const cw = (ancho * frac) / total;
+        if (cuerpo.y1 > cuerpo.y0) {
           const k = Math.min((cw * 0.9) / s.p.solido.w, (cuerpo.y1 - cuerpo.y0) / s.p.solido.h);
           const w = s.p.solido.w * k, h = s.p.solido.h * k;
           puestas.push({ pieza: s.i, k, x: x + (cw - w) / 2, y: cuerpo.y0 + (cuerpo.y1 - cuerpo.y0 - h) / 2, w, h });
@@ -245,14 +303,17 @@ export function acomodar(ma: MaestroCaja, W: number, H: number, op: OpcionesAcom
       }
     } else if (familia === "ancho") {
       // Tres zonas: texto · beneficios · hero.
-      const hero = parada(de("HERO"), zonaX(0.66, 1));
-      const kTope = (hero[0]?.k ?? 1) * TEXTO_SOBRE_HERO_MAX;
-      puestas = [...hero, ...columna([de("BRAND"), de("TITULO"), de("CTA")], zonaX(0, 0.4), hueco, kTope), ...columna([de("SUBTITULO")], zonaX(0.43, 0.63), hueco, kTope)];
+      // Con `texto`, el HERO arranca más a la derecha y las dos zonas de texto se estiran en la misma proporción.
+      const h0 = 0.66 + texto * (0.8 - 0.66), e = h0 / 0.66;
+      const hero = parada(de("HERO"), zonaX(h0, 1));
+      // El tope "texto ≤ 1.8 × HERO" cuida la proporción del equipo; cuando la letra no llega, manda la letra.
+      const kTope = texto > 0 ? Infinity : (hero[0]?.k ?? 1) * TEXTO_SOBRE_HERO_MAX;
+      puestas = [...hero, ...columna([de("BRAND"), de("TITULO"), de("CTA")], zonaX(0, 0.4 * e), hueco, kTope), ...columna([de("SUBTITULO")], zonaX(0.43 * e, 0.63 * e), hueco, kTope)];
     } else {
       // horizontal / display: dos columnas, texto de un lado y hero del otro.
-      const corte = familia === "display" ? 0.53 : 0.51;
+      const base = familia === "display" ? 0.53 : 0.51, corte = base + texto * (CORTE_MAX - base);
       const hero = parada(de("HERO"), zonaX(corte + 0.02, 1));
-      puestas = [...hero, ...columna([de("BRAND"), de("TITULO"), de("SUBTITULO"), de("CTA")], zonaX(0, corte - 0.02), hueco, (hero[0]?.k ?? 1) * TEXTO_SOBRE_HERO_MAX)];
+      puestas = [...hero, ...columna([de("BRAND"), de("TITULO"), de("SUBTITULO"), de("CTA")], zonaX(0, corte - 0.02), hueco, texto > 0 ? Infinity : (hero[0]?.k ?? 1) * TEXTO_SOBRE_HERO_MAX)];
     }
     puestas.push(...pie);
     puestas.sort((a, b) => a.pieza - b.pieza);
@@ -274,6 +335,11 @@ export function acomodar(ma: MaestroCaja, W: number, H: number, op: OpcionesAcom
   ma.piezas.forEach((p, i) => {
     if (puestas.some((q) => q.pieza === i)) return;
     const n = p.rol ?? p.nombre;
+    if (quitar.has(i))
+      return void avisos.push({
+        tipo: "quitada",
+        texto: p.rol === "FOOTER" ? `Se quitó el legal (FOOTER) para que el resto se lea: revisar con el cliente si esta medida puede ir sin legal.` : `Se quitó «${n}» para que el resto se lea.`,
+      });
     const gemela = p.rol !== null && puestas.some((q) => ma.piezas[q.pieza].rol === p.rol);
     avisos.push({ tipo: "falta", texto: !valida(p) ? `«${n}» trae una caja vacía o inválida: no se colocó.` : gemela ? `Hay más de una carpeta «${n}»: sólo se colocó una. Revisar.` : `«${n}» no entra en este acomodo: revisar.` });
   });
@@ -300,5 +366,5 @@ export function acomodar(ma: MaestroCaja, W: number, H: number, op: OpcionesAcom
     letras.push({ pieza: q.pieza, px });
     if (px < LETRA_MIN_PX) avisos.push({ tipo: "letra", texto: `${nom(q)}: la letra queda de ${px.toFixed(1)} px (mínimo ${LETRA_MIN_PX}).` });
   }
-  return { familia, puestas, fondo, letras, avisos };
+  return { familia, puestas, fondo, letras, avisos, quitadas: [...quitar].sort((x, y) => x - y) };
 }
