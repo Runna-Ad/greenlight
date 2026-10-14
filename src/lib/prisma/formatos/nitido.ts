@@ -17,8 +17,13 @@ export type MaestroDatos = {
   h: number;
   /** RGBA opaco, w × h. */
   fondo: Uint8ClampedArray;
-  piezas: { rol: Rol | null; caja: Caja; solido: Caja; rgba: Uint8ClampedArray; oscurece: Uint8ClampedArray | null }[];
+  piezas: { rol: Rol | null; caja: Caja; solido: Caja; rgba: Uint8ClampedArray; oscurece: Uint8ClampedArray | null; base?: Uint8ClampedArray | null }[];
 };
+/** Lugar de una pieza en la medida: su escala, dónde cae la esquina de su caja y el rectángulo [x0, x1) × [y0, y1). */
+export type Lugar = { k: number; ox: number; oy: number; x0: number; y0: number; x1: number; y1: number };
+/** El texto de una pieza ya escrito a la medida final: RGBA premultiplicado (0-255) del rectángulo de `Lugar`, o
+ *  null si esa pieza va con su texto como imagen. */
+export type TextoEscrito = (pieza: number, lugar: Lugar) => Float32Array | null;
 
 /** Bajo esta escala, a las piezas de texto se les aplica el enfoque (a su tamaño o casi, no hace falta). */
 export const ENFOQUE_DESDE = 0.75;
@@ -137,7 +142,7 @@ function enfocar(v: Float32Array, w: number, h: number, cuanto: number): void {
  * La medida W × H armada: el fondo que la cubre y cada pieza donde la dejó el acomodo (sin redondear su lugar al
  * píxel), sus sombras en "multiplicar". RGBA opaco, listo para `ImageData`. `enfoque: false` = sin enfoque extra.
  */
-export function armarMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, op: { enfoque?: boolean } = {}): Uint8ClampedArray {
+export function armarMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, op: { enfoque?: boolean; texto?: TextoEscrito } = {}): Uint8ClampedArray {
   const dest = remuestrear(ma.fondo, ma.w, ma.h, a.fondo.k, a.fondo.x, a.fondo.y, 0, 0, W, H, "extender", false);
   for (const q of a.puestas) {
     const p = ma.piezas[q.pieza];
@@ -156,13 +161,17 @@ export function armarMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, 
           for (let c = 0; c < 3; c++) dest[d + c] *= (s[i + c] + 255 * (1 - cub)) / 255;
         }
     }
-    const col = remuestrear(p.rgba, p.caja.w, p.caja.h, q.k, ox, oy, x0, y0, x1, y1, "fuera", true);
-    if (op.enfoque !== false && q.k < ENFOQUE_DESDE && DE_TEXTO.has(p.rol)) enfocar(col, rw, y1 - y0, ENFOQUE);
-    for (let y = y0; y < y1; y++)
-      for (let x = x0; x < x1; x++) {
-        const i = ((y - y0) * rw + (x - x0)) * 4, d = (y * W + x) * 4, al = col[i + 3] / 255;
-        for (let c = 0; c < 3; c++) dest[d + c] = col[i + c] + dest[d + c] * (1 - al);
-      }
+    // Texto vuelto a escribir: la pieza va SIN sus letras (su base) y las letras nuevas encima, en su mismo turno
+    // (lo que esté más arriba las sigue tapando como en Photoshop). Sin enfoque: las letras ya salen nítidas.
+    const escrito = p.base ? (op.texto?.(q.pieza, { k: q.k, ox, oy, x0, y0, x1, y1 }) ?? null) : null;
+    const col = remuestrear(escrito && p.base ? p.base : p.rgba, p.caja.w, p.caja.h, q.k, ox, oy, x0, y0, x1, y1, "fuera", true);
+    if (!escrito && op.enfoque !== false && q.k < ENFOQUE_DESDE && DE_TEXTO.has(p.rol)) enfocar(col, rw, y1 - y0, ENFOQUE);
+    for (const capa of escrito ? [col, escrito] : [col])
+      for (let y = y0; y < y1; y++)
+        for (let x = x0; x < x1; x++) {
+          const i = ((y - y0) * rw + (x - x0)) * 4, d = (y * W + x) * 4, al = capa[i + 3] / 255;
+          for (let c = 0; c < 3; c++) dest[d + c] = capa[i + c] + dest[d + c] * (1 - al);
+        }
   }
   const out = new Uint8ClampedArray(W * H * 4);
   for (let i = 0; i < W * H; i++) {

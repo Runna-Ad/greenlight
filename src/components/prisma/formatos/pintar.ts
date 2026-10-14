@@ -5,12 +5,12 @@
  */
 import type { Acomodo } from "@/lib/prisma/formatos/acomodo";
 import type { MaestroListo } from "@/lib/prisma/formatos/listo";
-import { armarMedida } from "@/lib/prisma/formatos/nitido";
+import { armarMedida, type TextoEscrito } from "@/lib/prisma/formatos/nitido";
 
 /** Lanza si el navegador no da lienzo (se quedó sin memoria): quien llama lo enseña; nunca queda una vista en blanco
  *  que parezca buena. */
-export function pintar(destino: HTMLCanvasElement, ma: MaestroListo, a: Acomodo, W: number, H: number): void {
-  const px = armarMedida(ma, a, W, H);
+export function pintar(destino: HTMLCanvasElement, ma: MaestroListo, a: Acomodo, W: number, H: number, op: { texto?: TextoEscrito } = {}): void {
+  const px = armarMedida(ma, a, W, H, op);
   destino.width = W;
   destino.height = H;
   const x = destino.getContext("2d");

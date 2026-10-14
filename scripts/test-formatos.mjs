@@ -11,6 +11,10 @@ import { writePsdBuffer } from "ag-psd";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, ENFOQUE_DESDE } from "../src/lib/prisma/formatos/nitido.ts";
+import { textoDe, maquetar, fuentesDe, compararAlfa } from "../src/lib/prisma/formatos/textos.ts";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { acomodar, acomodarMedida, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO } from "../src/lib/prisma/formatos/listo.ts";
 import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
@@ -771,12 +775,15 @@ console.log("\n▶ v2 · pantalla PSD: una medida completa, la guía de zona seg
   const W2 = 4, H2 = 3;
   const fondoRgb = Uint8ClampedArray.from({ length: W2 * H2 * 3 }, (_, i) => (i * 7) % 256);
   const rgba = new Uint8ClampedArray(2 * 2 * 4).fill(9), osc = Uint8ClampedArray.from({ length: 2 * 2 * 3 }, (_, i) => 100 + i);
-  const crudo = { nombre: "mesa", w: W2, h: H2, fondo: fondoRgb, piezas: [{ nombre: "HERO", rol: "HERO", caja: { x: 0, y: 0, w: 2, h: 2 }, solido: { x: 0, y: 0, w: 2, h: 2 }, rgba, oscurece: osc, tapadaPct: 0, letraMinPx: null }, { nombre: "CTA", rol: "CTA", caja: { x: 1, y: 1, w: 2, h: 2 }, solido: { x: 1, y: 1, w: 2, h: 2 }, rgba, oscurece: null, tapadaPct: 0, letraMinPx: 12 }], fondoDistintoPct: 0, rearmadoDistintoPct: 0, avisos: ["nota"] };
+  const base = new Uint8ClampedArray(16).fill(3), alfaTexto = new Uint8ClampedArray(6).fill(200);
+  const texto = { capa: "Pídela ya", texto: { texto: "x", tramos: [], alineacion: "left", transform: [1, 0, 0, 1, 0, 0], caja: null, motivo: null }, opacidad: 1, caja: { x: 1, y: 1, w: 3, h: 2 }, alfa: alfaTexto, motivo: null };
+  const crudo = { nombre: "mesa", w: W2, h: H2, fondo: fondoRgb, piezas: [{ nombre: "HERO", rol: "HERO", caja: { x: 0, y: 0, w: 2, h: 2 }, solido: { x: 0, y: 0, w: 2, h: 2 }, rgba, oscurece: osc, tapadaPct: 0, letraMinPx: null, textos: [], base: null }, { nombre: "CTA", rol: "CTA", caja: { x: 1, y: 1, w: 2, h: 2 }, solido: { x: 1, y: 1, w: 2, h: 2 }, rgba, oscurece: null, tapadaPct: 0, letraMinPx: 12, textos: [texto], base }], fondoDistintoPct: 0, rearmadoDistintoPct: 0, avisos: ["nota"] };
   const { maestro: listo, transferibles, bytes: pesoListo } = prepararMaestro(crudo);
-  eq("lo que pesa un maestro al cruzar a la página = fondo + color y sombra de cada pieza, ya en RGBA", pesoListo, W2 * H2 * 4 + (16 + 16) + 16);
+  eq("lo que pesa un maestro al cruzar a la página = fondo + color, sombra, pieza sin texto y tinta de cada texto", pesoListo, W2 * H2 * 4 + (16 + 16) + 16 + 16 + 6);
+  ok("la pieza sin texto y la tinta de cada texto también cruzan sin copiarse", listo.piezas[1].base === base && listo.piezas[1].textos[0].alfa === alfaTexto && transferibles.includes(base.buffer) && transferibles.includes(alfaTexto.buffer));
   ok("el fondo y el mapa de sombras llegan en RGBA opaco, con los mismos colores", listo.fondo.length === W2 * H2 * 4 && [...listo.fondo].every((v, i) => (i % 4 === 3 ? v === 255 : v === fondoRgb[Math.floor(i / 4) * 3 + (i % 4)])) && listo.piezas[0].oscurece.length === 16 && [...listo.piezas[0].oscurece].every((v, i) => (i % 4 === 3 ? v === 255 : v === osc[Math.floor(i / 4) * 3 + (i % 4)])) && listo.piezas[1].oscurece === null);
   ok("las piezas conservan su orden, rol, cajas y letra; los píxeles van sin copiar", listo.piezas.map((p) => p.rol).join() === "HERO,CTA" && listo.piezas[1].letraMinPx === 12 && listo.piezas[0].rgba === rgba && listo.avisos[0] === "nota" && listo.piezas[1].caja.x === 1);
-  ok("cada búfer se transfiere UNA vez aunque dos piezas lo compartan (repetido tumbaría el postMessage)", transferibles.length === new Set(transferibles).size && transferibles.length === 3 && transferibles.includes(rgba.buffer), String(transferibles.length));
+  ok("cada búfer se transfiere UNA vez aunque dos piezas lo compartan (repetido tumbaría el postMessage)", transferibles.length === new Set(transferibles).size && transferibles.length === 5 && transferibles.includes(rgba.buffer), String(transferibles.length));
   // Tope de lienzos: una lista pegada no puede pedir 2 GB de memoria.
   const g = { w: 4096, h: 4096 }, c = { w: 320, h: 50 };
   eq("las 12 del equipo caben todas", medidasQueCaben(lista.medidas), { caben: lista.medidas, fuera: 0 });
@@ -825,6 +832,153 @@ console.log("\n▶ v2 · nitidez: filtro propio (Lanczos-3, alfa premultiplicada
   const conSombra = { ...ma, piezas: [{ ...ma.piezas[0], rgba: new Uint8ClampedArray(120 * 120 * 4), oscurece: osc }] };
   const ps = armarMedida(conSombra, conK(1, 50, 50), 200, 200);
   eq("sombra a su tamaño: dentro de su caja el blanco queda a la mitad; justo afuera de la caja y lejos, intacto", [ps[(100 * 200 + 100) * 4], ps[(100 * 200 + 39) * 4], ps[(5 * 200 + 5) * 4]], [128, 255, 255]);
+  // Texto vuelto a escribir: la pieza va SIN sus letras (base) y encima lo que devuelva `texto`.
+  const conLetras = new Uint8ClampedArray(pieza);
+  for (let y = 50; y < 60; y++) for (let x = 30; x < 90; x++) conLetras.set([255, 255, 255, 255], (y * 120 + x) * 4);
+  const conBase = { ...ma, piezas: [{ ...ma.piezas[0], rol: "CTA", rgba: conLetras, base: pieza }] };
+  const verde = (_p, l) => { const o = new Float32Array((l.x1 - l.x0) * (l.y1 - l.y0) * 4); o.set([0, 255, 0, 255], ((100 - l.y0) * (l.x1 - l.x0) + (100 - l.x0)) * 4); return o; };
+  const k1 = conK(1, 50, 50);
+  const esc = armarMedida(conBase, k1, 200, 200, { texto: verde });
+  let blancas = 0;
+  for (let y = 90; y < 100; y++) for (let x = 70; x < 130; x++) if (esc[(y * 200 + x) * 4 + 1] === 255 && esc[(y * 200 + x) * 4] === 255) blancas++;
+  eq("con texto escrito: va la base (sin las letras viejas) y encima las nuevas", [blancas, [...esc.subarray((100 * 200 + 100) * 4, (100 * 200 + 100) * 4 + 3)]], [0, [0, 255, 0]]);
+  const igualA = (a, b) => a.every((v, i) => v === b[i]);
+  let llamadas = 0;
+  ok("texto que devuelve null (no pasó la prueba): sale la pieza entera, como sin texto", igualA(armarMedida(conBase, k1, 200, 200, { texto: () => null }), armarMedida(conBase, k1, 200, 200)));
+  armarMedida({ ...conBase, piezas: [{ ...conBase.piezas[0], base: null }] }, k1, 200, 200, { texto: () => (llamadas++, null) });
+  eq("pieza sin base (algún texto no se puede redibujar): ni se pregunta por su texto", llamadas, 0);
+}
+
+// ── v2 · nitidez C: el texto se vuelve a escribir con su tipografía ─────────
+console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías y la prueba contra Photoshop");
+{
+  const st = { font: { name: "F-Bold" }, fontSize: 20, fillColor: { r: 255, g: 10, b: 0 } };
+  const t1 = textoDe({ text: "Hola\rmundo", transform: [2, 0, 0, 2, 10, 20], style: st, styleRuns: [{ length: 5, style: {} }, { length: 5, style: { font: { name: "F-Regular" }, fontCaps: 2 } }], paragraphStyle: { justification: "center" } });
+  eq("textoDe: \\r pasa a \\n, cada corrida hereda el estilo base, centrado, texto de punto", [t1.texto, t1.tramos.map((r) => [r.n, r.fuente, r.tam, r.color, r.mayusculas]), t1.alineacion, t1.caja, t1.motivo], ["Hola\nmundo", [[5, "F-Bold", 20, [255, 10, 0], false], [5, "F-Regular", 20, [255, 10, 0], true]], "center", null, null]);
+  const t2 = textoDe({ text: "a\u0003b", shapeType: "box", boxBounds: [0, 0, 100, 40], style: { ...st, autoLeading: false, leading: 30 } });
+  eq("textoDe: caja de párrafo, salto forzado (\\u0003) e interlineado fijo", [t2.texto, t2.caja, t2.tramos[0].interlineado], ["a\nb", [0, 0, 100, 40], 30]);
+  eq("textoDe: interlineado automático queda null (120 % al maquetar)", textoDe({ text: "a", style: { ...st, autoLeading: true, leading: 30 } }).tramos[0].interlineado, null);
+  const casos = [
+    [{ style: { ...st, fauxBold: true } }, "negrita o cursiva falsa"],
+    [{ style: { ...st, horizontalScale: 0.9 } }, "letra estirada"],
+    [{ style: { ...st, fontCaps: 1 } }, "versalitas"],
+    [{ style: { ...st, underline: true } }, "subrayado o tachado"],
+    [{ style: { ...st, strokeFlag: true } }, "contorno de letra"],
+    [{ style: st, warp: { style: "arc" } }, "texto deformado"],
+    [{ style: st, orientation: "vertical" }, "texto vertical"],
+    [{ style: st, styleRuns: [{ length: 2, style: {} }] }, "tramos que no cubren el texto"],
+    [{ style: st, paragraphStyle: { justification: "left" }, paragraphStyleRuns: [{ length: 4, style: { justification: "center" } }] }, "párrafos con distinta alineación"],
+    [{ style: st, paragraphStyle: { justification: "justifyAll" } }, "alineación «justifyAll»"],
+    [{ style: { fontSize: 20 } }, "tramo sin tipografía o tamaño"],
+    [{ style: st, shapeType: "box", boxBounds: [0, 0, NaN, 9] }, "caja de párrafo ilegible"],
+  ];
+  eq("textoDe: lo que no se puede escribir igual lleva su motivo (y va como imagen)", casos.map(([t, m]) => { const mo = textoDe({ text: "abcd", ...t }).motivo; return mo?.includes(m) ? m : mo; }), casos.map(([, m]) => m));
+
+  // maquetar con un medidor falso: cada letra mide medio tamaño; "sube" sólo es razonable para la "d".
+  const medir = (texto, tramo) => ({ ancho: texto.length * tramo.tam * 0.5, sube: texto === "d" ? tramo.tam * 0.7 : 999 });
+  const lin = (ls) => ls.map((l) => [+l.base.toFixed(3), l.pedazos.map((p) => [p.texto, +p.x.toFixed(3)])]);
+  eq("maquetar, texto de punto: base de la primera en 0, centrado en x = 0, mayúsculas aplicadas, 120 % de interlineado", lin(maquetar(t1, medir)), [[0, [["Hola", -20]]], [24, [["MUNDO", -25]]]]);
+  const mezcla = textoDe({ text: "ab\ncd", style: st, styleRuns: [{ length: 3, style: {} }, { length: 1, style: { fontSize: 40 } }, { length: 1, style: {} }] });
+  eq("maquetar: el interlineado automático sale de la letra MÁS GRANDE de esa línea", lin(maquetar(mezcla, medir)).map((l) => l[0]), [0, 48]);
+  const dos = textoDe({ text: "abcd", style: st, styleRuns: [{ length: 2, style: {} }, { length: 2, style: { fontSize: 40 } }] });
+  eq("maquetar: dos tramos en una línea van uno tras otro", lin(maquetar(dos, medir)), [[0, [["ab", 0], ["cd", 20]]]]);
+  const caja = (just, ancho) => textoDe({ text: "aa bb cc", shapeType: "box", boxBounds: [10, 5, 10 + ancho, 60], style: st, paragraphStyle: { justification: just } });
+  eq("maquetar, caja: parte en palabras al ancho, y la primera base baja lo que sube la «d» (regla Ascent de Adobe)", lin(maquetar(caja("left", 60), medir)), [[19, [["aa bb", 10]]], [43, [["cc", 10]]]]);
+  eq("maquetar, caja: una línea que cabe justa no se parte; alineada a la derecha", lin(maquetar(caja("right", 50), medir)), [[19, [["aa bb", 10]]], [43, [["cc", 40]]]]);
+
+  // fuentesDe con tipografías mínimas hechas aquí (tabla de nombres + fvar).
+  const sfnt = ({ nombres, ejes = null, instancias = [], firma = 0x00010000 }) => {
+    const recs = Object.entries(nombres).map(([id, s]) => ({ id: +id, b: [...s].flatMap((ch) => [ch.charCodeAt(0) >> 8, ch.charCodeAt(0) & 255]) }));
+    const ini = 6 + recs.length * 12;
+    const name = new Uint8Array(ini + recs.reduce((s, r) => s + r.b.length, 0));
+    const nv = new DataView(name.buffer);
+    nv.setUint16(2, recs.length); nv.setUint16(4, ini);
+    let off = 0;
+    recs.forEach((r, i) => { const o = 6 + i * 12; nv.setUint16(o, 3); nv.setUint16(o + 2, 1); nv.setUint16(o + 4, 0x409); nv.setUint16(o + 6, r.id); nv.setUint16(o + 8, r.b.length); nv.setUint16(o + 10, off); name.set(r.b, ini + off); off += r.b.length; });
+    const tablas = [["name", name]];
+    if (ejes) {
+      const tam = 4 + ejes.length * 4 + 2;
+      const fv = new Uint8Array(16 + ejes.length * 20 + instancias.length * tam);
+      const fd = new DataView(fv.buffer);
+      fd.setUint16(0, 1); fd.setUint16(4, 16); fd.setUint16(6, 2); fd.setUint16(8, ejes.length); fd.setUint16(10, 20); fd.setUint16(12, instancias.length); fd.setUint16(14, tam);
+      ejes.forEach((t, i) => [...t].forEach((ch, k) => fd.setUint8(16 + i * 20 + k, ch.charCodeAt(0))));
+      instancias.forEach((ins, i) => { const o = 16 + ejes.length * 20 + i * tam; fd.setUint16(o, ins.sub); ins.coords.forEach((c, k) => fd.setInt32(o + 4 + k * 4, Math.round(c * 65536))); fd.setUint16(o + 4 + ejes.length * 4, ins.ps ?? 0xffff); });
+      tablas.push(["fvar", fv]);
+    }
+    let pos = 12 + tablas.length * 16;
+    const out = new Uint8Array(pos + tablas.reduce((s, [, b]) => s + b.length, 0));
+    const v = new DataView(out.buffer);
+    v.setUint32(0, firma); v.setUint16(4, tablas.length);
+    tablas.forEach(([tag, b], i) => { const o = 12 + i * 16; [...tag].forEach((ch, k) => v.setUint8(o + k, ch.charCodeAt(0))); v.setUint32(o + 8, pos); v.setUint32(o + 12, b.length); out.set(b, pos); pos += b.length; });
+    return out.buffer;
+  };
+  const fijas = (f) => f.map((x) => [x.ps, x.peso]);
+  eq("fuentesDe: una fija (.ttf y .otf) da su nombre PostScript, sin peso", [fijas(fuentesDe(sfnt({ nombres: { 1: "Fam", 6: "Fam-Medium" } }))), fijas(fuentesDe(sfnt({ nombres: { 6: "Fam-Bold" }, firma: 0x4f54544f })))], [[["Fam-Medium", null]], [["Fam-Bold", null]]]);
+  const variable = sfnt({
+    nombres: { 6: "FamVariable-Regular", 25: "FamVariable", 256: "Thin", 257: "Bold", 258: "Bold Italic", 259: "FamVariable-Black", 260: "Semi Bold" },
+    ejes: ["wght", "ital"],
+    instancias: [{ sub: 256, ps: 256, coords: [0, 0] }, { sub: 257, ps: 257, coords: [100, 0] }, { sub: 258, ps: 258, coords: [100, 100] }, { sub: 259, ps: 259, coords: [90, 0] }, { sub: 260, coords: [33, 0] }],
+  });
+  eq("fuentesDe: una variable da cada estilo NO cursivo como «prefijo-Estilo», con su peso (como lo guarda Photoshop)", fijas(fuentesDe(variable)), [["FamVariable-Thin", 0], ["FamVariable-Bold", 100], ["FamVariable-Black", 90], ["FamVariable-SemiBold", 33]]);
+  eq("fuentesDe: sin prefijo de familia, el prefijo sale del nombre PostScript", fijas(fuentesDe(sfnt({ nombres: { 6: "X-Regular", 256: "Bold" }, ejes: ["wght"], instancias: [{ sub: 256, ps: 256, coords: [700] }] }))), [["X-Bold", 700]]);
+  let lanzo = false;
+  try { fuentesDe(new ArrayBuffer(64)); } catch { lanzo = true; }
+  ok("fuentesDe: un archivo que no es tipografía lanza", lanzo);
+  const didi = join(homedir(), "Desktop/formatos-prueba/DiDi Sans Pro");
+  const vf = join(didi, "DiDiSansVariableVF/DiDiSansVariableVF.ttf"), med = join(didi, "DiDi Sans Pro/otf/DiDiSans-Pro-Medium.otf");
+  if (existsSync(vf) && existsSync(med)) {
+    const ab = (f) => { const b = readFileSync(f); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
+    eq("fuentesDe con las DiDi reales: la variable da sus 4 estilos con su peso; la Medium, su nombre", [fijas(fuentesDe(ab(vf))), fijas(fuentesDe(ab(med)))], [[["DiDiSansVariable-Thin", 0], ["DiDiSansVariable-Regular", 33], ["DiDiSansVariable-Medium", 66], ["DiDiSansVariable-Bold", 100]], [["DiDiSans-Pro-Medium", null]]]);
+  } else console.log("  · (las DiDi no están en el Escritorio: no se probó con las reales)");
+
+  // compararAlfa: cuánto correr el nuestro y qué tanto no coincide.
+  const w = 40, h = 10;
+  const bloque = (x0, y0, extra = []) => { const a = new Uint8Array(w * h); for (let y = y0; y < y0 + 3; y++) for (let x = x0; x < x0 + 3; x++) a[y * w + x] = 255; for (const [x, y, v] of extra) a[y * w + x] = v; return a; };
+  const psA = bloque(10, 3);
+  eq("compararAlfa: idéntico = sin corrimiento y 0 % distinto", compararAlfa(psA, psA, w, h), { dx: 0, dy: 0, dif: 0, anchoRazon: 1 });
+  const c2 = compararAlfa(bloque(7, 5), psA, w, h);
+  eq("compararAlfa: el nuestro 3 px a la izquierda y 2 abajo se corre (3, -2) y coincide", [c2.dx, c2.dy, c2.dif], [3, -2, 0]);
+  const c3 = compararAlfa(bloque(10, 3, [[34, 4, 40], [35, 4, 40]]), psA, w, h);
+  ok(`compararAlfa: tinta tenue lejos corre el centro casi 1 px; se prueba alrededor y queda el corrimiento exacto (dx ${c3.dx}, ${(c3.dif * 100).toFixed(1)} %)`, c3.dx === 0 && c3.dy === 0 && c3.dif < 0.05);
+  const c4 = compararAlfa(bloque(10, 3, [[10, 9, 219], [12, 9, 219]]), psA, w, h);
+  ok(`compararAlfa: lo mismo hacia abajo (dy ${c4.dy}, ${(c4.dif * 100).toFixed(1)} %)`, c4.dx === 0 && c4.dy === 0 && c4.dif < 0.2);
+  eq("compararAlfa: si no hay tinta nuestra, 100 % distinto", compararAlfa(new Uint8Array(w * h), psA, w, h).dif, 1);
+
+  // textosDe (dentro de despiezar), con un PSD que trae una capa de texto de verdad (ag-psd la escribe), dentro de
+  // una mesa de trabajo corrida OX px (todo lo de la pieza va en px de la MESA). Letras con orilla suave de 2 px.
+  const W = 200, H = 100, OX = 300;
+  const img = (iw, ih, fn) => { const data = new Uint8ClampedArray(iw * ih * 4); for (let y = 0; y < ih; y++) for (let x = 0; x < iw; x++) { const [r, g, b, a = 255] = fn(x, y); data.set([r, g, b, a], (y * iw + x) * 4); } return { data, width: iw, height: ih }; };
+  const capa = (name, [l, t, cw, ch], fn, extra = {}) => ({ name, left: l + OX, top: t, right: l + OX + cw, bottom: t + ch, blendMode: "normal", opacity: 1, imageData: img(cw, ch, (x, y) => fn(x + l, y + t)), ...extra });
+  const tinta = (x, y) => (x >= 60 && x < 120 && y >= 40 && y < 60 && y % 8 < 6 ? [255, 255, 255, 100, 40, 0][x % 6] : 0);
+  const NARANJA = [250, 120, 20];
+  const enBoton = (x, y) => x >= 40 && x < 160 && y >= 30 && y < 70;
+  const texto = (extra = {}) => capa("Pídela", [60, 40, 60, 20], (x, y) => [255, 255, 255, tinta(x, y)], { text: { text: "Pídela\rya", transform: [1, 0, 0, 1, 60 + OX, 55], style: { font: { name: "DiDiSans-Pro-Bold" }, fontSize: 16, fillColor: { r: 255, g: 255, b: 255 } }, paragraphStyle: { justification: "center" } }, ...extra });
+  const psdTexto = (cta, op = 1) => writePsdBuffer({
+    width: OX + W, height: H,
+    children: [{ name: "Mesa", opened: true, artboard: { rect: { top: 0, left: OX, bottom: H, right: OX + W } }, children: [{ name: "Background", opened: true, children: [capa("base", [0, 0, W, H], () => [20, 40, 60])] }, { name: "CTA", opened: true, children: cta }] }],
+    imageData: img(OX + W, H, (X, y) => { const x = X - OX; if (x < 0) return [0, 0, 0]; let c = [20, 40, 60]; if (enBoton(x, y)) c = NARANJA; const a = (tinta(x, y) / 255) * op; return c.map((v) => v * (1 - a) + 255 * a); }),
+    imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } },
+  });
+  const cta = (buf) => despiezar(leerPsd(buf), 0).piezas.find((p) => p.rol === "CTA");
+  const p1 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto()]));
+  const t0 = p1.textos[0];
+  eq("textosDe: el texto de la pieza, su lugar en px de la mesa, su caja de tinta en Photoshop y su alfa ahí", [p1.textos.length, t0?.capa, t0?.texto.texto, t0?.texto.transform[4], t0?.caja, [0, 3, 4, 5].map((i) => t0?.alfa[i]), t0?.motivo, t0?.opacidad], [1, "Pídela", "Pídela\nya", 60, { x: 60, y: 40, w: 59, h: 20 }, [255, 100, 40, 0], null, 1]);
+  const bpx = (p, x, y) => [...p.base.subarray(((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4, ((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4 + 4)];
+  let fueraIgual = true, letrasNaranja = true;
+  for (let y = p1.caja.y; y < p1.caja.y + p1.caja.h; y++)
+    for (let x = p1.caja.x; x < p1.caja.x + p1.caja.w; x++) {
+      const b = bpx(p1, x, y), j = ((y - p1.caja.y) * p1.caja.w + (x - p1.caja.x)) * 4;
+      if (tinta(x, y) && !b.slice(0, 3).every((v, k) => Math.abs(v - NARANJA[k]) <= 2)) letrasNaranja = false;
+      if (x >= 58 && x < 122 && y >= 38 && y < 62) continue; // las letras y su margen
+      if (!b.every((v, k) => v === p1.rgba[j + k])) fueraIgual = false;
+    }
+  ok("textosDe: la base es la pieza sin letras: donde iban (también su orilla suave), el naranja del botón; lejos, idéntica a la pieza", !!p1.base && letrasNaranja && fueraIgual && bpx(p1, 61, 41)[3] === 255);
+  const p2 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto({ opacity: 0.5 })], 0.5));
+  eq("textosDe: con la capa al 50 %, el alfa de la prueba sale SIN la opacidad y la opacidad viaja aparte", [p2.textos[0].alfa[0], +p2.textos[0].opacidad.toFixed(2)], [255, 0.5]);
+  const p3 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto({ blendMode: "screen" })]));
+  eq("textosDe: texto en «trama»: lleva motivo y la pieza va entera como imagen (sin base)", [p3.textos[0].motivo, p3.base], ["fusión screen", null]);
+  const p4 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto(), capa("brillo", [100, 35, 20, 10], () => [255, 255, 255, 30])]));
+  eq("textosDe: una capa que no es texto encima de las letras: motivo y sin base (no se sabría qué hay debajo)", [p4.textos[0].motivo, p4.base], ["«brillo» está encima", null]);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

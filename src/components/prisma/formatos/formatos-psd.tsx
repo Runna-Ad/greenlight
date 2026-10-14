@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CircleCheck, Download, FileUp, FlipHorizontal2, Languages, Loader2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CircleCheck, Download, FileUp, FlipHorizontal2, Languages, Loader2, Type, X } from "lucide-react";
 import { toast } from "sonner";
 import { zipSync } from "fflate";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
 import { enCola, pintar } from "./pintar";
+import { EXTENSIONES_FUENTE, cargarFuentes, fuentesRecordadas, olvidarFuentes, recordarFuentes, revisarTextos, textoEscrito, type Escritura, type Tipografias } from "./escritura";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD. El anuncio llega en Photoshop: un Web Worker lo lee y lo separa en fondo
@@ -57,11 +58,31 @@ function descargar(blob: Blob, nombre: string) {
 
 const pct = (v: number, de: number) => `${(v / de) * 100}%`;
 
+/** Los archivos de lo que se soltó, entrando a las carpetas (hasta 4 niveles y 500 archivos: la de tipografías trae ~20). */
+async function archivosDe(entradas: FileSystemEntry[]): Promise<File[]> {
+  const out: File[] = [];
+  const andar = async (e: FileSystemEntry, nivel: number): Promise<void> => {
+    if (out.length >= 500) return;
+    if (e.isFile) return void out.push(await new Promise<File>((ok, mal) => (e as FileSystemFileEntry).file(ok, mal)));
+    if (!e.isDirectory || nivel >= 4) return;
+    const lector = (e as FileSystemDirectoryEntry).createReader();
+    for (let lote: FileSystemEntry[] = []; ; ) {
+      lote = await new Promise<FileSystemEntry[]>((ok, mal) => lector.readEntries(ok, mal));
+      if (!lote.length) break;
+      for (const x of lote) await andar(x, nivel + 1);
+    }
+  };
+  for (const e of entradas) await andar(e, 0).catch((err) => console.error("[formatos-psd] soltar", err));
+  return out;
+}
+
 const TarjetaMedida = memo(function TarjetaMedida({
   maestros,
   medida,
   lado,
   canal,
+  escritura,
+  tipos,
   lang,
   alVoltear,
   registrar,
@@ -70,6 +91,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
   medida: Medida;
   lado: Lado;
   canal: Canal | null;
+  escritura: Escritura | null;
+  tipos: Tipografias;
   lang: Lang;
   alVoltear: (m: Medida, a: Lado) => void;
   registrar: (k: string, lienzo: HTMLCanvasElement | null) => void;
@@ -91,7 +114,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
     const cancelar = enCola(() => {
       let bien = true;
       try {
-        pintar(l, ma, acomodo, w, h);
+        pintar(l, ma, acomodo, w, h, { texto: textoEscrito(escritura, maestro, ma, tipos) });
       } catch (err) {
         console.error("[formatos-psd] pintar", err);
         bien = false;
@@ -103,7 +126,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
       cancelar();
       registrar(k, null);
     };
-  }, [ma, acomodo, w, h, k, registrar]);
+  }, [ma, maestro, acomodo, w, h, k, registrar, escritura, tipos]);
 
   const letra = acomodo.letras.length ? Math.min(...acomodo.letras.map((l) => l.px)) : null;
   const volteable = sePuedeVoltear(acomodo.familia);
@@ -215,6 +238,10 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   const [lados, setLados] = useState<Record<string, Lado>>({});
   /** Canal contra el que se revisa la zona segura. Sin canal no se marca nada (nadie ve una franja sin nombre). */
   const [canal, setCanal] = useState<Canal | null>(null);
+  /** Tipografías cargadas (nombre PostScript → cómo pedirla). Vacío = el texto va como imagen. */
+  const [tipos, setTipos] = useState<Tipografias>(() => new Map());
+  const [notaFuentes, setNotaFuentes] = useState<{ mal: boolean; texto: string } | null>(null);
+  const entradaFuentes = useRef<HTMLInputElement>(null);
   const [zipeando, setZipeando] = useState(false);
   /** Lo último que pasó, para lectores de pantalla. `n` cambia cuando el mismo texto se repite (si no, no se anuncia). */
   const [aviso, setAviso] = useState<{ texto: string; n: number } | null>(null);
@@ -377,15 +404,56 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     setEleccion(null);
   };
 
+  // Tipografías: las que se recordaron en este navegador se cargan solas; las nuevas se suman y se recuerdan.
+  useEffect(() => {
+    void (async () => {
+      const recordadas = await fuentesRecordadas();
+      if (!recordadas.length) return;
+      const r = await cargarFuentes(recordadas, new Map());
+      if (vivo.current) setTipos((antes) => new Map([...r.mapa, ...antes]));
+    })();
+  }, []);
+  const agregarFuentes = async (archivos: File[]) => {
+    try {
+      const datos = await Promise.all(archivos.filter((f) => EXTENSIONES_FUENTE.test(f.name)).map(async (f) => ({ nombre: f.name, datos: await f.arrayBuffer() })));
+      const r = await cargarFuentes(datos, tipos);
+      if (!vivo.current) return;
+      setTipos(r.mapa);
+      void recordarFuentes(datos.filter((d) => !r.malas.includes(d.nombre)));
+      const texto = [rellenar(tx(FP.textoCargadas, lang), { n: r.nuevas.length }), r.malas.length ? rellenar(tx(FP.textoMalas, lang), { f: r.malas.join(", ") }) : ""].filter(Boolean).join(" ");
+      setNotaFuentes({ mal: !r.nuevas.length && r.malas.length > 0, texto });
+      anunciar(texto);
+    } catch (err) {
+      console.error("[formatos-psd] tipografías", err);
+      setNotaFuentes({ mal: true, texto: tx(FP.textoFallo, lang) });
+    }
+  };
+  const olvidar = () => {
+    void olvidarFuentes();
+    setTipos(new Map());
+    setNotaFuentes(null);
+    anunciar(tx(FP.textoOlvidadas, lang));
+  };
+
   // Un PSD soltado FUERA del cuadro haría que el navegador lo abra o lo descargue y se pierda la pantalla: la
   // página entera recibe el archivo.
   const alSoltar = useEffectEvent((e: DragEvent) => {
     if (!e.dataTransfer?.types.includes("Files")) return;
     e.preventDefault();
     setOver(false);
-    const archivo = e.dataTransfer.files[0];
-    if (archivo && !leyendo) void abrir(archivo);
+    // Las carpetas se recorren (la de tipografías llega así). Las entradas se toman YA: después del evento ya no existen.
+    const entradas = [...e.dataTransfer.items].map((i) => i.webkitGetAsEntry?.() ?? null).filter((x): x is FileSystemEntry => !!x);
+    const sueltos = [...e.dataTransfer.files];
+    void (async () => {
+      const archivos = entradas.length ? await archivosDe(entradas) : sueltos;
+      const fuentes = archivos.filter((f) => EXTENSIONES_FUENTE.test(f.name));
+      if (fuentes.length) void agregarFuentes(fuentes);
+      // Un PSD (o, si no vino ninguna tipografía, el primer archivo: así un PNG dice "no es un PSD").
+      const psd = archivos.find((f) => /\.psd$/i.test(f.name)) ?? (fuentes.length ? undefined : archivos[0]);
+      if (psd && !leyendo) void abrir(psd);
+    })();
   });
+
   useEffect(() => {
     const sobre = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
@@ -423,6 +491,28 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   );
 
   // El mismo cálculo que hace cada tarjeta (función pura, barata): aquí sirve para el resumen y los nombres del ZIP.
+  // Cada texto se prueba contra Photoshop con las tipografías cargadas; sólo los que coinciden se vuelven a escribir.
+  const escritura = useMemo(() => (leido?.maestros.length && tipos.size ? revisarTextos(leido.maestros, tipos) : null), [leido, tipos]);
+  const totalTextos = usables.reduce((t, m) => t + m.piezas.reduce((u, p) => u + p.textos.length, 0), 0);
+  const revisiones = escritura?.revisiones ?? [];
+  const escritos = revisiones.filter((r) => r.ok).length;
+  const faltanFuentes = [...new Set(usables.flatMap((m) => m.piezas.flatMap((p) => p.textos.flatMap((t) => t.texto.tramos.map((r) => r.fuente)))))].filter((f) => f && !tipos.has(f));
+  // El mismo texto suele venir en varias mesas: una línea por texto y motivo, con las medidas de sus mesas.
+  const comoImagen = [
+    ...revisiones
+      .filter((r) => !r.ok && !r.faltan.length)
+      .reduce((g, r) => {
+        const ma = leido?.maestros[r.maestro];
+        const mesa = ma ? `${ma.w}×${ma.h}` : "";
+        const k = `${r.capa}\n${r.motivo}`;
+        const v = g.get(k);
+        if (!v) g.set(k, { capa: r.capa, motivo: r.motivo, mesas: [mesa] });
+        else if (!v.mesas.includes(mesa)) v.mesas.push(mesa);
+        return g;
+      }, new Map<string, { capa: string; motivo: string | null; mesas: string[] }>())
+      .values(),
+  ];
+
   const filas = useMemo(
     () => (leido?.maestros.length ? medidas.map((m) => ({ m, ...acomodarMedida(leido.maestros, m.w, m.h, { heroLado: lados[clave(m)] }) })) : []),
     [leido, medidas, lados],
@@ -681,6 +771,60 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
               </Button>
             </form>
 
+            {totalTextos > 0 && (
+              <div className="rounded-xl border border-border bg-card p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{tx(FP.textoTitulo, lang)}</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{rellenar(tx(FP.textoEstado, lang), { n: escritos, m: totalTextos })}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{tx(FP.textoAyuda, lang)}</p>
+                {faltanFuentes.length > 0 && (
+                  <p lang={delMotor} className="mt-1 break-words text-xs text-foreground">
+                    {rellenar(tx(FP.textoFaltan, lang), { f: faltanFuentes.join(", ") })}
+                  </p>
+                )}
+                {comoImagen.length > 0 && (
+                  <>
+                    <p id="psd-texto-imagen" className="mt-2 text-xs font-medium text-foreground">
+                      {tx(FP.textoComoImagen, lang)}
+                    </p>
+                    <ul aria-labelledby="psd-texto-imagen" lang={delMotor} className="mt-0.5 list-disc space-y-0.5 pl-5 text-xs text-foreground">
+                      {comoImagen.map((r, i) => (
+                        <li key={i} className="break-words">
+                          «{r.capa}» ({r.mesas.join(", ")}): {r.motivo}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {notaFuentes && (
+                  <p role={notaFuentes.mal ? "alert" : undefined} className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
+                    {notaFuentes.mal && <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden="true" />} {notaFuentes.texto}
+                  </p>
+                )}
+                <input
+                  ref={entradaFuentes}
+                  type="file"
+                  multiple
+                  accept=".otf,.ttf,font/otf,font/ttf"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={(e) => {
+                    const archivos = [...(e.target.files ?? [])];
+                    e.target.value = "";
+                    if (archivos.length) void agregarFuentes(archivos);
+                  }}
+                />
+                <Button variant="outline" size="lg" className={cn("mt-2 w-full", BOTON)} onClick={() => entradaFuentes.current?.click()}>
+                  <Type className="size-4" aria-hidden="true" /> {tx(FP.textoAgregar, lang)}
+                </Button>
+                {tipos.size > 0 && (
+                  <button type="button" onClick={olvidar} className={cn("mt-1 min-h-11 w-full cursor-pointer rounded text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline sm:min-h-8", FOCO)}>
+                    {tx(FP.textoOlvidar, lang)}
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="rounded-xl border border-border bg-card p-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{tx(FP.zona, lang)}</p>
               <label htmlFor="psd-canal" className="mt-1 block text-sm font-medium text-foreground">
@@ -735,7 +879,7 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                 las horizontales y los banners ocupan la fila entera. El orden es el de la lista del cliente. */}
             <ul className="grid items-start gap-4 @xl:grid-cols-2">
               {medidas.map((m) => (
-                <TarjetaMedida key={clave(m)} maestros={usables} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} lang={lang} alVoltear={voltear} registrar={registrar} />
+                <TarjetaMedida key={clave(m)} maestros={usables} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tipos} lang={lang} alVoltear={voltear} registrar={registrar} />
               ))}
             </ul>
           </section>

@@ -2,7 +2,7 @@
  * HÜE Prisma › Formatos — lo que cruza del Web Worker (que lee el PSD) a la pantalla (que lo pinta). Módulo puro y
  * SIN la librería de PSD: la pantalla sólo importa de aquí, así `ag-psd` vive en el worker y no en la página.
  */
-import type { Caja, MaestroPsd, MotivoPsd, Rol } from "./psd.ts";
+import type { Caja, MaestroPsd, MotivoPsd, Rol, TextoPieza } from "./psd.ts";
 
 /** Tope de lo que se LEE de un PSD: sus capas y su copia aplanada, ya sin los originales de los objetos inteligentes
  *  ni los filtros inteligentes (`adelgazar.ts`). El PSD real del equipo pesa 72 MB en disco y 22 MB así. */
@@ -33,6 +33,9 @@ export type PiezaLista = {
   rgba: Uint8ClampedArray;
   /** RGBA opaco, caja.w × caja.h: cuánto oscurece lo de abajo (blanco = nada). Se pinta en "multiplicar". */
   oscurece: Uint8ClampedArray | null;
+  /** La pieza sin sus textos (RGBA, caja.w × caja.h), para cuando el texto se vuelve a escribir. */
+  base: Uint8ClampedArray | null;
+  textos: TextoPieza[];
 };
 export type MaestroListo = {
   nombre: string;
@@ -77,12 +80,12 @@ export function prepararMaestro(ma: MaestroPsd): { maestro: MaestroListo; transf
     w: ma.w,
     h: ma.h,
     fondo: opaco(ma.fondo),
-    piezas: ma.piezas.map((p) => ({ nombre: p.nombre, rol: p.rol, caja: p.caja, solido: p.solido, letraMinPx: p.letraMinPx, rgba: p.rgba, oscurece: p.oscurece ? opaco(p.oscurece) : null })),
+    piezas: ma.piezas.map((p) => ({ nombre: p.nombre, rol: p.rol, caja: p.caja, solido: p.solido, letraMinPx: p.letraMinPx, rgba: p.rgba, oscurece: p.oscurece ? opaco(p.oscurece) : null, base: p.base, textos: p.textos })),
     avisos: ma.avisos,
   };
   // Un búfer repetido en la lista de transferencia tumba el postMessage: se manda cada uno una vez.
-  const transferibles = [...new Set([maestro.fondo.buffer, ...maestro.piezas.flatMap((p) => (p.oscurece ? [p.rgba.buffer, p.oscurece.buffer] : [p.rgba.buffer]))])];
-  const bytes = maestro.fondo.length + maestro.piezas.reduce((s, p) => s + p.rgba.length + (p.oscurece?.length ?? 0), 0);
+  const transferibles = [...new Set([maestro.fondo.buffer, ...maestro.piezas.flatMap((p) => [p.rgba.buffer, ...(p.oscurece ? [p.oscurece.buffer] : []), ...(p.base ? [p.base.buffer] : []), ...p.textos.map((t) => t.alfa.buffer)])])];
+  const bytes = maestro.fondo.length + maestro.piezas.reduce((s, p) => s + p.rgba.length + (p.oscurece?.length ?? 0) + (p.base?.length ?? 0) + p.textos.reduce((t, x) => t + x.alfa.length, 0), 0);
   return { maestro, transferibles, bytes };
 }
 

@@ -23,6 +23,7 @@
  */
 import { readPsd, getLayerImageData, getLayerMaskImageData, getCompositeImageData, initializeCanvas, type Layer } from "ag-psd";
 import { PSD_BYTES_MAX } from "./listo.ts";
+import { textoDe, type TextoCapa, type TextoPsdCrudo } from "./textos.ts";
 
 /** Sólo se LEEN por índice. (La librería tipa también 16 y 32 bits; aquí siempre son 8: `leerPsd` rechaza lo demás.) */
 type Pixeles = { data: ArrayLike<number>; width: number; height: number };
@@ -110,6 +111,8 @@ export type CapaPsd = {
   mascara: MascaraPsd | null;
   /** Capas de texto: el tamaño de su letra más chica, en px del lienzo (ya con la escala de la capa). */
   letraPx: number | null;
+  /** Capas de texto: lo necesario para volver a escribirlas (transform en px del LIENZO). */
+  texto: TextoCapa | null;
   pixeles: () => Pixeles | undefined;
 };
 export type DocPsd = {
@@ -239,6 +242,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
         mezcla: l.blendMode ?? "normal", halos: halosDe(l), conEfectos: hayEfectos(l), recorte: !!l.clipping, mesa: ctx.mesa, pieza: ctx.pieza ?? nombre,
         mascara: k && mw > 0 && mh > 0 ? { left: k.left ?? 0, top: k.top ?? 0, right: k.right ?? 0, bottom: k.bottom ?? 0, defecto: k.defaultColor ?? 255, pixeles: () => getLayerMaskImageData(l) } : null,
         letraPx: letraDe(l),
+        texto: l.text ? textoDe(l.text as TextoPsdCrudo) : null,
         pixeles: () => (w > 0 && h > 0 ? getLayerImageData(l) : undefined),
       });
     }
@@ -277,6 +281,23 @@ export type PiezaPsd = {
   tapadaPct: number;
   /** El tamaño de su letra más chica en px de la mesa; null si no trae capas de texto. */
   letraMinPx: number | null;
+  /** Sus capas de texto (de abajo hacia arriba), para volver a escribirlas a la medida final. */
+  textos: TextoPieza[];
+  /** La pieza SIN sus textos (RGBA, caja.w × caja.h): lo que queda debajo de las letras. Sólo si TODOS sus textos
+   *  se pueden intentar redibujar; si no, null y la pieza va entera como imagen. */
+  base: Uint8ClampedArray | null;
+};
+/** Una capa de texto de una pieza: su texto (transform en px de la MESA), y su tinta en Photoshop para la prueba. */
+export type TextoPieza = {
+  capa: string;
+  texto: TextoCapa;
+  /** Opacidad × relleno de la capa (0-1). */
+  opacidad: number;
+  /** Dónde está su tinta en Photoshop, en px de la mesa, y su alfa ahí (sin la opacidad), w × h. */
+  caja: Caja;
+  alfa: Uint8ClampedArray;
+  /** Por qué NO se redibuja (null = se intenta, y decide la prueba en la página). */
+  motivo: string | null;
 };
 export type MaestroPsd = {
   nombre: string;
@@ -539,6 +560,8 @@ export function reducirMesa(doc: DocPsd, mesa: number, maxPx: number = MESA_MAX_
         mesa: 0, left: k.x0, top: k.y0, w: k.w, h: k.h,
         halos: c.halos.map((hl) => ({ ...hl, radio: Math.min(HALO_MAX_PX, Math.ceil(hl.radio / Math.min(invX, invY)) + 1) })),
         letraPx: c.letraPx === null ? null : c.letraPx / invY,
+        // El texto, a la misma escala: del lienzo a la mesa reducida (que queda en 0, 0).
+        texto: c.texto && { ...c.texto, transform: [c.texto.transform[0] / invX, c.texto.transform[1] / invY, c.texto.transform[2] / invX, c.texto.transform[3] / invY, (c.texto.transform[4] - m.x) / invX, (c.texto.transform[5] - m.y) / invY] },
         pixeles: una(() => {
           const img = c.pixeles();
           return img && k.w > 0 && k.h > 0 ? promediarArea(img, m.x + k.x0 * invX - c.left, m.y + k.y0 * invY - c.top, invX, invY, k.w, k.h, [0, 0, 0, 0], true) : undefined;
@@ -766,11 +789,14 @@ function despiezarMesa(doc: DocPsd, mesa: number): MaestroPsd {
         rgba[j * 4 + 3] = a8(a);
         if (a > 0.05) ultima[i] = k;
       }
-    armadas.push({
+    const pieza: PiezaPsd = {
       nombre: t.nombre, rol: rolDe(t.nombre), caja, solido: sx1 < 0 ? caja : { x: sx0, y: sy0, w: sx1 - sx0 + 1, h: sy1 - sy0 + 1 },
       rgba, oscurece, tapadaPct: 0,
       letraMinPx: capas.reduce<number | null>((min, c) => (c.pieza === t.nombre && c.letraPx !== null && (min === null || c.letraPx < min) ? c.letraPx : min), null),
-    });
+      textos: [], base: null,
+    };
+    Object.assign(pieza, textosDe(capas.filter((c) => c.pieza === t.nombre), m, pieza));
+    armadas.push(pieza);
   }
   const piezas: PiezaPsd[] = [];
   armadas.forEach((p, k) => {
@@ -790,6 +816,90 @@ function despiezarMesa(doc: DocPsd, mesa: number): MaestroPsd {
   }
   maestro.rearmadoDistintoPct = (mal / N) * 100;
   return maestro;
+}
+
+/** Por qué una capa de texto no se puede redibujar aunque su texto sí se entienda (null = se puede intentar). */
+function motivoCapa(c: CapaPsd, encima: CapaPsd[]): string | null {
+  if (c.mezcla !== "normal") return `fusión ${c.mezcla}`;
+  if (c.conEfectos) return "efectos de capa";
+  if (c.mascara) return "máscara";
+  if (c.recorte) return "recortada a otra capa";
+  if (encima[0]?.recorte) return "otra capa recortada a ella";
+  // Una capa que NO es texto encima de sus letras: al quitar las letras no se sabría qué hay debajo de esa.
+  const toca = (o: CapaPsd) => o.left < c.left + c.w && o.left + o.w > c.left && o.top < c.top + c.h && o.top + o.h > c.top;
+  const tapa = encima.find((o) => !o.texto && o.tipo !== "ajuste" && toca(o));
+  return tapa ? `«${tapa.nombre}» está encima` : null;
+}
+
+/** Alrededor de cada letra se rellena también este margen: su borde suavizado trae color de la letra. */
+const LETRA_MARGEN = 1;
+/** Alfa menor a esto tras rellenar es ruido del borde: se borra (si no, queda un fantasma del texto). */
+const FANTASMA = 0.04;
+
+/**
+ * Los textos de una pieza y la pieza SIN ellos. Todo lo que tocan las letras (más un margen) se rellena con lo
+ * que hay alrededor: en el PSD real las letras van sobre transparente o sobre un color liso (botón, píldora), y
+ * "des-mezclar" el borde suavizado dejaba un fantasma claro de cada letra. `capas` = las de esa pieza, de abajo
+ * hacia arriba.
+ */
+function textosDe(capas: CapaPsd[], m: MesaPsd, p: PiezaPsd): Pick<PiezaPsd, "textos" | "base"> {
+  const { x: cx, y: cy, w: cw, h: ch } = p.caja;
+  const textos: TextoPieza[] = [];
+  const hueco = new Uint8Array(cw * ch);
+  let todas = true;
+  for (let k = capas.length - 1; k >= 0; k--) {
+    const c = capas[k];
+    if (!c.texto) continue;
+    const motivo = c.texto.motivo ?? motivoCapa(c, capas.slice(k + 1));
+    // Su tinta en Photoshop: caja y alfa (sin la opacidad de la capa), dentro de la mesa.
+    let x0 = m.w, y0 = m.h, x1 = -1, y1 = -1;
+    porPixel(c, m, false, (i, a) => {
+      if (a <= 0.02) return;
+      const x = i % m.w, y = (i / m.w) | 0;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    });
+    if (x1 < 0) continue; // capa de texto sin nada pintado en esta mesa
+    const caja = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+    const alfa = new Uint8ClampedArray(caja.w * caja.h);
+    const peso = c.opacidad || 1;
+    porPixel(c, m, false, (i, a) => {
+      const x = (i % m.w) - x0, y = ((i / m.w) | 0) - y0;
+      if (x >= 0 && x < caja.w && y >= 0 && y < caja.h) alfa[y * caja.w + x] = Math.round((a / peso) * 255);
+    });
+    const tr = c.texto.transform;
+    textos.push({ capa: c.nombre, texto: { ...c.texto, transform: [tr[0], tr[1], tr[2], tr[3], tr[4] - m.x, tr[5] - m.y] }, opacidad: c.opacidad * c.relleno, caja, alfa, motivo });
+    if (motivo) { todas = false; continue; }
+    porPixel(c, m, true, (i, a) => {
+      const x = (i % m.w) - cx, y = ((i / m.w) | 0) - cy;
+      if (a > 0.02 && x >= 0 && x < cw && y >= 0 && y < ch) hueco[y * cw + x] = 1;
+    });
+  }
+  textos.reverse();
+  if (!textos.length || !todas) return { textos, base: null };
+  // Margen alrededor de las letras (su borde suavizado) y relleno con lo de al lado, premultiplicado.
+  const sabe = new Uint8Array(cw * ch).fill(1);
+  for (let y = 0; y < ch; y++)
+    for (let x = 0; x < cw; x++) {
+      if (!hueco[y * cw + x]) continue;
+      for (let yy = Math.max(0, y - LETRA_MARGEN); yy <= Math.min(ch - 1, y + LETRA_MARGEN); yy++)
+        for (let xx = Math.max(0, x - LETRA_MARGEN); xx <= Math.min(cw - 1, x + LETRA_MARGEN); xx++) sabe[yy * cw + xx] = 0;
+    }
+  const color = new Float32Array(cw * ch * 3), alfaB = new Float32Array(cw * ch * 3);
+  for (let j = 0; j < cw * ch; j++) {
+    const a = p.rgba[j * 4 + 3] / 255;
+    for (let q = 0; q < 3; q++) color[j * 3 + q] = (p.rgba[j * 4 + q] / 255) * a;
+    alfaB[j * 3] = a;
+  }
+  rellenar(color, sabe, cw, ch);
+  rellenar(alfaB, sabe, cw, ch);
+  const base = new Uint8ClampedArray(cw * ch * 4);
+  for (let j = 0; j < cw * ch; j++) {
+    const a = Math.min(1, Math.max(0, alfaB[j * 3]));
+    if (a < FANTASMA) continue;
+    for (let q = 0; q < 3; q++) base[j * 4 + q] = Math.round(Math.min(1, Math.max(0, color[j * 3 + q] / a)) * 255);
+    base[j * 4 + 3] = Math.round(a * 255);
+  }
+  return { textos, base };
 }
 
 /** Arma el anuncio con cada pieza en su lugar (RGB, w × h). Es la prueba del despiece: tiene que salir el de
