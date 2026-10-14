@@ -1035,3 +1035,8 @@ RULE: antes de nombrarle a Pedro un problema visual de acomodo, medir las cajas 
 SEGUNDA VEZ EL MISMO DÍA: le dije que la tarjeta repetida afectaba "2 de 12 medidas" viendo sólo 3 horizontales. Al correr el chequeo en las 12, salió en 11 (en las verticales la copia queda más grande detrás de la tarjeta). Patrón: cuento el alcance de un problema desde una muestra.
 RULE 2: un número de alcance ("X de 12 medidas", "N archivos") sale de correr el chequeo sobre TODO, nunca de las 2-3 imágenes que miré.
 TAGS: #formatos #diagnostico #medir-antes-de-decir #contraste #alcance
+
+[2026-10-14] LESSON (un candado por tiempo no frena un doble clic si el primer clic tiene ocupada la página): para que un doble clic en «Quitar del fondo» no lo deshiciera al instante (el botón cambia a «Deshacer» en el mismo lugar), ignoré clics a menos de 400 ms del anterior usando event.timeStamp. En el navegador falló: el segundo clic llegó con 571 ms de diferencia porque el primero tuvo la página ocupada (borrar + rehacer 12 medidas) y el navegador le puso la hora al despacharlo. Lo atrapó la prueba con un doble clic real, no los tests.
+ROOT CAUSE: supuse que la hora del evento es la del dedo; es la de cuando la página pudo atenderlo.
+RULE: para un botón que cambia de acción en su lugar, ignorar `event.detail > 1` (el segundo clic de un doble clic lo marca el navegador) y dejar el candado de tiempo sólo para Enter sostenido. Probar siempre con un doble clic real en el navegador.
+TAGS: #ui #doble-clic #eventos #formatos #probar-en-navegador

@@ -429,6 +429,14 @@ largo: estacionado por él.
         avisos nuevos en las 12. test-formatos 268/0. Probado en el navegador (localhost): quitar, deshacer, 12
         lienzos pintados, foco se queda en el botón, aviso role=status.
       · NO hecho: Gemini como respaldo del relleno (espera llave con saldo para probarlo con una llamada real).
+      · Revisión (3 revisores, abaa346): arreglado: retoque viejo tras cambiar el papel de una carpeta · HERO grande
+        pasaba sin comparar lados (y no se ofrece si tapa > 50 % del maestro) · el PSD anterior quedaba en memoria ·
+        el nombre del botón para lector de pantalla no empezaba con su texto · doble clic deshacía (ahora `detail`) ·
+        caché con clave distinta en tarjeta y resumen · quitar la copia de una mesa repintaba las de otra · avisos
+        nombran la carpeta («Copy» (TITULO)) · try/catch en las ayudas · reflejo por lado y apagado hacia la orilla.
+        NO arreglado (a propósito): los avisos del motor siguen sólo en español (diseño de siempre) · «se ve la copia»
+        compara lugar y escala, no cobertura (avisa de más, nunca de menos) · el borrado corre en la página, no en el
+        worker (13-24 ms en el PSD real; con el tope de 50 % el peor caso estimado es ~0.5 s).
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.
