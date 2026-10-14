@@ -12,10 +12,10 @@ import { useLang } from "@/components/prisma/use-lang";
 import { CANALES, MEDIDAS_EQUIPO, acomodarMedida, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Lado } from "@/lib/prisma/formatos/acomodo";
 import { FP, FP_ERROR, FP_FAMILIA, FX, rellenar } from "@/lib/prisma/formatos/copy";
 import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
-import { LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoWorker } from "@/lib/prisma/formatos/listo";
+import { LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
-import { aPintable, pintar, soltarLienzos, type MaestroPintable } from "./pintar";
+import { enCola, pintar } from "./pintar";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD. El anuncio llega en Photoshop: un Web Worker lo lee y lo separa en fondo
@@ -24,7 +24,7 @@ import { aPintable, pintar, soltarLienzos, type MaestroPintable } from "./pintar
  */
 
 type Falla = { clave: keyof typeof FP_ERROR; detalle?: string };
-type Leido = { archivo: string; maestros: MaestroPintable[]; descartadas: MesaDescartada[]; avisos: string[] };
+type Leido = { archivo: string; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] };
 type Medida = { w: number; h: number };
 
 const CLAVE_ERROR: Record<MotivoPsd | "desconocido", keyof typeof FP_ERROR> = { "no-soportado": "noSoportado", "demasiado-grande": "grande", "sin-aplanado": "sinAplanado", "sin-fondo": "sinFondo", desconocido: "desconocido" };
@@ -41,7 +41,7 @@ const BOTON = "min-h-11 sm:min-h-9";
 const clave = (m: Medida) => `${m.w}x${m.h}`;
 const etiqueta = (m: Medida) => `${m.w}×${m.h}`;
 /** El nombre de entrega del equipo (el de la mesa con la medida nueva), limpio para ser nombre de archivo. */
-const archivoDe = (ma: MaestroPintable, m: Medida) => `${nombreSalida({ nombre: limpiarNombre(ma.nombre, NOMBRE_MESA_MAX), w: ma.w, h: ma.h }, m.w, m.h)}.png`;
+const archivoDe = (ma: MaestroListo, m: Medida) => `${nombreSalida({ nombre: limpiarNombre(ma.nombre, NOMBRE_MESA_MAX), w: ma.w, h: ma.h }, m.w, m.h)}.png`;
 const sinExtension = (archivo: string) => archivo.replace(/\.psd$/i, "");
 
 const aPng = (lienzo: HTMLCanvasElement): Promise<Blob> =>
@@ -66,7 +66,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
   alVoltear,
   registrar,
 }: {
-  maestros: MaestroPintable[];
+  maestros: MaestroListo[];
   medida: Medida;
   lado: Lado;
   canal: Canal | null;
@@ -82,22 +82,25 @@ const TarjetaMedida = memo(function TarjetaMedida({
   const ma = maestros[maestro];
   const lienzo = useRef<HTMLCanvasElement>(null);
   const [noPinto, setNoPinto] = useState(false);
-  // Pinta y, SÓLO si salió bien, se anota para la descarga: una vista que no se pudo pintar nunca va al ZIP ni
-  // se queda en blanco con una palomita al lado.
+  // Pinta (en su turno de la fila) y, SÓLO si salió bien, se anota para la descarga: una vista que espera turno o
+  // que no se pudo pintar nunca va al ZIP ni se queda en blanco con una palomita al lado.
   useEffect(() => {
     const l = lienzo.current;
     if (!l) return;
-    let bien = true;
-    try {
-      pintar(l, ma, acomodo, w, h);
-    } catch (err) {
-      console.error("[formatos-psd] pintar", err);
-      bien = false;
-    }
-    registrar(k, bien ? l : null);
-    const cuadro = requestAnimationFrame(() => setNoPinto(!bien));
+    registrar(k, null);
+    const cancelar = enCola(() => {
+      let bien = true;
+      try {
+        pintar(l, ma, acomodo, w, h);
+      } catch (err) {
+        console.error("[formatos-psd] pintar", err);
+        bien = false;
+      }
+      registrar(k, bien ? l : null);
+      setNoPinto(!bien);
+    });
     return () => {
-      cancelAnimationFrame(cuadro);
+      cancelar();
       registrar(k, null);
     };
   }, [ma, acomodo, w, h, k, registrar]);
@@ -261,7 +264,6 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   });
 
   const cambiarPsd = () => {
-    leido?.maestros.forEach(soltarLienzos);
     volverASubir.current = true;
     setLeido(null);
     setAviso(null);
@@ -278,7 +280,6 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     const mio = ++turno.current;
     const vigente = () => vivo.current && mio === turno.current;
     soltar();
-    leido?.maestros.forEach(soltarLienzos);
     setFalla(null);
     setLeido(null);
     setLados({});
@@ -341,18 +342,13 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
         console.error("[formatos-psd]", m.detalle);
         return void cerrar({ clave: CLAVE_ERROR[m.motivo], detalle: m.motivo === "desconocido" ? undefined : m.detalle });
       }
-      // El worker ya entregó: se suelta ANTES de pasar los píxeles a lienzos (su memoria y la de la página no se suman).
+      // El worker ya entregó (sus píxeles cruzaron sin copiarse): se suelta.
       cerrar(null);
-      try {
-        // Un PSD sin mesas de trabajo no trae nombre de mesa: el del archivo hace de nombre de entrega.
-        const maestros = m.maestros.map((x) => aPintable(x.nombre ? x : { ...x, nombre: sinExtension(file.name) }));
-        setLeido({ archivo: file.name, maestros, descartadas: m.descartadas, avisos: m.avisos });
-        if (maestros.length) setAvance(null);
-        else fallar({ clave: "ningunaMesa" });
-      } catch (err) {
-        console.error("[formatos-psd] lienzos", err);
-        fallar({ clave: "desconocido" });
-      }
+      // Un PSD sin mesas de trabajo no trae nombre de mesa: el del archivo hace de nombre de entrega.
+      const maestros = m.maestros.map((x) => (x.nombre ? x : { ...x, nombre: sinExtension(file.name) }));
+      setLeido({ archivo: file.name, maestros, descartadas: m.descartadas, avisos: m.avisos });
+      if (maestros.length) setAvance(null);
+      else fallar({ clave: "ningunaMesa" });
     };
     try {
       worker.postMessage({ tipo: "leer", archivo: file } satisfies PedidoWorker);

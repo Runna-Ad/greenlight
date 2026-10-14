@@ -10,6 +10,7 @@ import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib
 import { writePsdBuffer } from "ag-psd";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
+import { armarMedida, ENFOQUE_DESDE } from "../src/lib/prisma/formatos/nitido.ts";
 import { acomodar, acomodarMedida, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO } from "../src/lib/prisma/formatos/listo.ts";
 import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
@@ -553,6 +554,14 @@ console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
   const m2 = despiezar(d2, 1);
   ok(`la segunda mesa se despieza en SUS coordenadas (rearmado ${m2.rearmadoDistintoPct.toFixed(2)} %, HERO en x=${m2.piezas.find((p) => p.rol === "HERO").solido.x})`, m2.rearmadoDistintoPct < 0.5 && m2.piezas.find((p) => p.rol === "HERO").solido.x === R.producto[0] && despieceUsable(m2).ok);
 
+  // ── Filtro propio (nitidez A, 2026-10-14): a la medida del maestro sale EXACTAMENTE el anuncio rearmado ──
+  {
+    const lista = prepararMaestro(ma).maestro, px = armarMedida(lista, acomodar(ma, W, H), W, H), ref = rearmar(ma);
+    let mx = 0;
+    for (let i = 0; i < W * H; i++) for (let c = 0; c < 3; c++) mx = Math.max(mx, Math.abs(px[i * 4 + c] - ref[i * 3 + c]));
+    ok(`armarMedida a la medida del maestro = el anuncio rearmado (dif. máx ${mx}, sólo redondeo)`, mx <= 1 && px.length === W * H * 4 && px.every((v, i) => i % 4 !== 3 || v === 255));
+  }
+
   // ── PSD muy grandes (Pedro, 2026-10-14: "A and B now") ──
   const igualBytes = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
   const mismoDespiece = (a, b) => igualBytes(a.fondo, b.fondo) && a.piezas.length === b.piezas.length && a.piezas.every((p, i) => igualBytes(p.rgba, b.piezas[i].rgba) && JSON.stringify(p.caja) === JSON.stringify(b.piezas[i].caja) && p.letraMinPx === b.piezas[i].letraMinPx);
@@ -775,6 +784,47 @@ console.log("\n▶ v2 · pantalla PSD: una medida completa, la guía de zona seg
   eq("una enorme en medio no le quita su lugar a las chicas que vienen después, y se respeta el orden", medidasQueCaben([g, g, g, g, g, c, { w: 300, h: 250 }]).caben.map((m) => m.w), [4096, 4096, 4096, 4096, 320, 300]);
   eq(`más de ${MEDIDAS_MAX} medidas chicas: entran ${MEDIDAS_MAX}`, (({ caben, fuera }) => [caben.length, fuera])(medidasQueCaben(Array.from({ length: 45 }, () => c))), [MEDIDAS_MAX, 15]);
   ok("el tope de peso es uno solo: el que revisa la pantalla es el que aplica el lector", (() => { try { leerPsd(new Uint8Array(0).subarray(0)); } catch { /* vacío: otro error */ } try { leerPsd({ byteLength: PSD_BYTES_MAX + 1 }); return false; } catch (e) { return e instanceof ErrorPsd && e.motivo === "demasiado-grande"; } })());
+}
+
+// ── v2 · nitidez A: el filtro propio con piezas hechas a mano ─────────
+console.log("\n▶ v2 · nitidez: filtro propio (Lanczos-3, alfa premultiplicada, enfoque sólo en texto)");
+{
+  const lleno = (w, h, c) => { const d = new Uint8ClampedArray(w * h * 4); for (let i = 0; i < w * h; i++) d.set(c, i * 4); return d; };
+  // Fondo blanco 200×200; una pieza roja de 100×100 con un borde transparente de 10 px alrededor (caja 120×120).
+  const pieza = new Uint8ClampedArray(120 * 120 * 4);
+  for (let y = 10; y < 110; y++) for (let x = 10; x < 110; x++) pieza.set([255, 0, 0, 255], (y * 120 + x) * 4);
+  const ma = { w: 200, h: 200, fondo: lleno(200, 200, [255, 255, 255, 255]), piezas: [{ rol: "HERO", caja: { x: 40, y: 40, w: 120, h: 120 }, solido: { x: 50, y: 50, w: 100, h: 100 }, rgba: pieza, oscurece: null }] };
+  const conK = (k, x, y) => ({ familia: "display", puestas: [{ pieza: 0, k, x, y, w: 100 * k, h: 100 * k }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] });
+  const px = armarMedida(ma, conK(0.37, 33.3, 41.7), 200, 200);
+  let rojoMin = 255;
+  for (let i = 0; i < 200 * 200; i++) rojoMin = Math.min(rojoMin, px[i * 4]);
+  ok(`alfa premultiplicada: rojo sobre blanco reducido al 37 % en posición fraccionaria, sin orilla oscura (rojo mínimo ${rojoMin}, debe ser 255)`, rojoMin >= 254);
+  // El fondo siempre cubre: ampliado un poco y corrido medio píxel, las orillas no se oscurecen (se extiende la orilla).
+  const fondoDeg = new Uint8ClampedArray(100 * 100 * 4);
+  for (let y = 0; y < 100; y++) for (let x = 0; x < 100; x++) fondoDeg.set([x * 2, 100, 200 - y, 255], (y * 100 + x) * 4);
+  const f = armarMedida({ w: 100, h: 100, fondo: fondoDeg, piezas: [] }, { familia: "igual", puestas: [], fondo: { k: 1.07, x: -0.5, y: -3.2 }, letras: [], avisos: [], quitadas: [] }, 104, 100);
+  const esquinas = [0, 103, 99 * 104, 99 * 104 + 103].map((i) => [f[i * 4], f[i * 4 + 1], f[i * 4 + 2]]);
+  ok(`fondo ampliado y corrido: las esquinas conservan su color, sin negro de "afuera" (${JSON.stringify(esquinas)})`, esquinas.every((c) => c[1] >= 98 && c[2] >= 90));
+  const mitad = armarMedida({ w: 100, h: 100, fondo: fondoDeg, piezas: [] }, { familia: "igual", puestas: [], fondo: { k: 0.5, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] }, 50, 50);
+  ok(`fondo reducido a la mitad: la orilla conserva su color (verde ${mitad[1]} y ${mitad[(49 * 50 + 49) * 4 + 1]}, debe ser ~100)`, Math.abs(mitad[1] - 100) <= 2 && Math.abs(mitad[(49 * 50 + 49) * 4 + 1] - 100) <= 2);
+  // Al reducir, el filtro se ensancha: un ajedrez de 1 px reducido a un tercio sale gris parejo, sin rayas (moiré).
+  const ajedrez = new Uint8ClampedArray(99 * 99 * 4);
+  for (let y = 0; y < 99; y++) for (let x = 0; x < 99; x++) { const v = (x + y) % 2 ? 255 : 0; ajedrez.set([v, v, v, 255], (y * 99 + x) * 4); }
+  const gris = armarMedida({ w: 99, h: 99, fondo: ajedrez, piezas: [] }, { familia: "igual", puestas: [], fondo: { k: 1 / 3, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] }, 33, 33);
+  let gmin = 255, gmax = 0;
+  for (let y = 3; y < 30; y++) for (let x = 3; x < 30; x++) { const v = gris[(y * 33 + x) * 4]; gmin = Math.min(gmin, v); gmax = Math.max(gmax, v); }
+  ok(`ajedrez de 1 px a un tercio: gris parejo (de ${gmin} a ${gmax}), sin moiré`, gmin >= 117 && gmax <= 138);
+  // Enfoque: sólo a piezas de texto y sólo al reducirlas por debajo de ENFOQUE_DESDE.
+  const conRol = (rol) => ({ ...ma, piezas: [{ ...ma.piezas[0], rol }] });
+  const igual = (a, b) => a.every((v, i) => v === b[i]);
+  const chico = conK(0.4, 20, 20), casi = conK(ENFOQUE_DESDE + 0.01, 20, 20);
+  ok("el enfoque cambia una pieza de TEXTO reducida", !igual(armarMedida(conRol("TITULO"), chico, 200, 200), armarMedida(conRol("TITULO"), chico, 200, 200, { enfoque: false })));
+  ok("el enfoque NO toca al HERO ni a la marca, ni a un texto casi a su tamaño", ["HERO", "BRAND"].every((r) => igual(armarMedida(conRol(r), chico, 200, 200), armarMedida(conRol(r), chico, 200, 200, { enfoque: false }))) && igual(armarMedida(conRol("TITULO"), casi, 200, 200), armarMedida(conRol("TITULO"), casi, 200, 200, { enfoque: false })));
+  // Sombra (multiplicar): oscurece lo de abajo sólo dentro de su caja.
+  const osc = lleno(120, 120, [128, 128, 128, 255]);
+  const conSombra = { ...ma, piezas: [{ ...ma.piezas[0], rgba: new Uint8ClampedArray(120 * 120 * 4), oscurece: osc }] };
+  const ps = armarMedida(conSombra, conK(1, 50, 50), 200, 200);
+  eq("sombra a su tamaño: dentro de su caja el blanco queda a la mitad; justo afuera de la caja y lejos, intacto", [ps[(100 * 200 + 100) * 4], ps[(100 * 200 + 39) * 4], ps[(5 * 200 + 5) * 4]], [128, 255, 255]);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);
