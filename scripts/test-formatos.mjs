@@ -12,7 +12,8 @@ import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MA
 import { adelgazarPsd, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
 import { textoDe, maquetar, fuentesDe, compararAlfa } from "../src/lib/prisma/formatos/textos.ts";
-import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, TIPOGRAFIA_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
+import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, elegirParaCliente, exclusivasDeOtros, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIA_GOOGLE_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
+import { carpetaGoogle, archivosDeMetadata, archivosQueSirven, buscarEnGoogle, ARCHIVOS_POR_FAMILIA_MAX, GOOGLE_BYTES_POR_PEDIDO } from "../src/lib/prisma/formatos/google-fonts.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -956,6 +957,71 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
   eq("elegirTipografias: sólo las que cubren lo pedido, cada nombre una vez (la repetida no va), primero la que cubre más; y lo que falta", [el1.elegidas.map((x) => x.id), el1.faltan, el2.elegidas.map((x) => x.id), el2.faltan], [["suelta", "var"], ["Falta-X"], ["var", "suelta"], []]);
   eq(`elegirTipografias: a lo más ${ARCHIVOS_ENTREGADOS_MAX} archivos por PSD`, elegirTipografias(Array.from({ length: 40 }, (_, i) => ({ nombres: [`F-${i}`] })), Array.from({ length: 40 }, (_, i) => `F-${i}`)).elegidas.length, ARCHIVOS_ENTREGADOS_MAX);
   eq("rutaTipografia: <cliente>/<huella>.<tipo> (la que exige la base)", rutaTipografia("c1", "ab", "otf"), "c1/ab.otf");
+  // Variables de Google: el estilo con nombre propio completo va tal cual (no "MontserratItalic-Montserrat-…"), y
+  // cada estilo responde también al nombre de su versión estática (lo que guarda el PSD si el diseñador usó ésa).
+  eq("fuentesDe: un estilo con nombre propio completo no lleva otro prefijo", fijas(fuentesDe(sfnt({ nombres: { 1: "Montserrat", 6: "Montserrat-ThinItalic", 25: "MontserratItalic", 256: "Bold Italic", 257: "Montserrat-BoldItalic" }, ejes: ["wght"], instancias: [{ sub: 256, ps: 257, coords: [700] }] }))), [["Montserrat-BoldItalic", 700]]);
+  eq("fuentesDe: un nombre de ESTILO con guion (sin nombre PostScript propio) sí lleva el prefijo", fijas(fuentesDe(sfnt({ nombres: { 6: "Fam-Regular", 25: "Fam", 256: "Semi-Bold" }, ejes: ["wght"], instancias: [{ sub: 256, coords: [600] }] }))), [["Fam-Semi-Bold", 600]]);
+  eq("fuentesDe: cada estilo de una variable responde también al nombre de su estática", fijas(fuentesDe(sfnt({ nombres: { 6: "OpenSansRoman-Regular", 16: "Open Sans", 25: "OpenSansRoman", 256: "Bold" }, ejes: ["wght"], instancias: [{ sub: 256, coords: [700] }] }))), [["OpenSansRoman-Bold", 700], ["OpenSans-Bold", 700]]);
+  // Exclusivas: sólo se entregan con su cliente elegido; las del cliente elegido ganan un empate.
+  const bib = [
+    { id: "didi-pro", client_id: "didi", exclusiva: true, cliente: "DiDi", nombres: ["DiDiSans-Pro-Bold"] },
+    { id: "otro-x", client_id: "otro", exclusiva: false, cliente: "Otro", nombres: ["Comun-Bold"] },
+    { id: "google-m", client_id: null, exclusiva: false, cliente: "Google Fonts", nombres: ["Montserrat-Bold"] },
+    { id: "didi-x", client_id: "didi", exclusiva: false, cliente: "DiDi", nombres: ["Comun-Bold"] },
+  ];
+  const ids = (xs) => xs.map((x) => x.id);
+  const todo = ["DiDiSans-Pro-Bold", "Comun-Bold", "Montserrat-Bold"];
+  const ep = (c) => { const r = elegirParaCliente(bib, todo, c); return [ids(r.elegidas), r.faltan]; };
+  eq("elegirParaCliente: sin cliente, ninguna exclusiva; con DiDi, la suya; con otro, sin la de DiDi", [ep(null), ep("didi"), ep("otro")], [[["otro-x", "google-m"], ["DiDiSans-Pro-Bold"]], [["didi-pro", "didi-x", "google-m"], []], [["otro-x", "google-m"], ["DiDiSans-Pro-Bold"]]]);
+  const grande = [{ id: "google-var", client_id: null, exclusiva: false, cliente: "Google Fonts", nombres: ["Comun-Bold", "Comun-Thin", "Comun-Black"] }, ...bib];
+  eq("elegirParaCliente: la del cliente elegido gana aunque otro archivo cubra más nombres", ids(elegirParaCliente(grande, ["Comun-Bold", "Comun-Thin"], "didi").elegidas), ["didi-x", "google-var"]);
+  eq(`elegirParaCliente: entre las dos vueltas, a lo más ${ARCHIVOS_ENTREGADOS_MAX} archivos`, elegirParaCliente(Array.from({ length: 40 }, (_, i) => ({ client_id: i < 20 ? "c" : null, exclusiva: false, nombres: [`F-${i}`] })), Array.from({ length: 40 }, (_, i) => `F-${i}`), "c").elegidas.length, ARCHIVOS_ENTREGADOS_MAX);
+  eq("exclusivasDeOtros: lo que falta y es exclusivo de otro cliente, por cliente; con su cliente elegido, nada", [exclusivasDeOtros(bib, ["DiDiSans-Pro-Bold", "Nadie-Bold"], null), exclusivasDeOtros(bib, ["DiDiSans-Pro-Bold"], "didi")], [[{ cliente: "DiDi", nombres: ["DiDiSans-Pro-Bold"] }], []]);
+  eq("rutaTipografia: las de Google van en google/<huella>.<tipo>", rutaTipografia("google", "ab", "ttf"), "google/ab.ttf");
+  ok("leerTipografia: hasta 10 MB sólo si se pide (las de Google)", leerTipografia(new ArrayBuffer(TIPOGRAFIA_MAX_BYTES + 1), TIPOGRAFIA_GOOGLE_MAX_BYTES) === null && TIPOGRAFIA_GOOGLE_MAX_BYTES === 10_000_000);
+  // Google Fonts: la carpeta sale del nombre; el METADATA dice qué archivos hay; sólo se bajan los que sirven.
+  eq("carpetaGoogle: lo de antes del guion, minúsculas y sin símbolos; muy corto, null", ["OpenSans-Bold", "Montserrat", "DiDiSans-Pro-Medium", "X-Bold", "-Bold", "Noto_Sans-Bold"].map(carpetaGoogle), ["opensans", "montserrat", "didisans", null, null, "notosans"]);
+  const md = `name: "Fake"\nfonts {\n  name: "Fake"\n  filename: "Fake-Regular.ttf"\n  post_script_name: "Fake-Regular"\n  copyright: "Copyright {2020} } raro"\n}\nfonts {\n  filename: "Fake-Bold.ttf"\n  post_script_name: "Fake-Bold"\n}\nfonts {\n  filename: "../malo.ttf"\n  post_script_name: "Malo"\n}\nfonts {\n  filename: "Fake-Bold.ttf"\n  post_script_name: "Fake-Bold"\n}\n`;
+  eq("archivosDeMetadata: cada archivo con su nombre, sin rutas raras ni repetidos (aunque el copyright traiga llaves)", archivosDeMetadata(md), [{ archivo: "Fake-Regular.ttf", ps: "Fake-Regular" }, { archivo: "Fake-Bold.ttf", ps: "Fake-Bold" }]);
+  eq("archivosQueSirven: las variables si las hay; si no, sólo las estáticas pedidas; con tope", [
+    archivosQueSirven([{ archivo: "V[wght].ttf", ps: "V-Thin" }, { archivo: "V-Italic[wght].ttf", ps: "V-ThinItalic" }], ["V-Bold"]),
+    archivosQueSirven(archivosDeMetadata(md), ["Fake-Bold"]),
+    archivosQueSirven(Array.from({ length: 20 }, (_, i) => ({ archivo: `S-${i}.ttf`, ps: `S-${i}` })), Array.from({ length: 20 }, (_, i) => `S-${i}`)).length,
+  ], [["V[wght].ttf", "V-Italic[wght].ttf"], ["Fake-Bold.ttf"], ARCHIVOS_POR_FAMILIA_MAX]);
+  {
+    const fakeBold = sfnt({ nombres: { 6: "Fake-Bold" } });
+    const pedidos = [];
+    // Un GitHub falso: "fake" está en apache (no en ofl); "nadiea" no está; "caido" responde 500.
+    const pedir = async (url) => {
+      pedidos.push(url.replace("https://raw.githubusercontent.com/google/fonts/main/", ""));
+      if (url.endsWith("/apache/fake/METADATA.pb")) return new Response(md);
+      if (url.endsWith("/apache/fake/Fake-Bold.ttf")) return new Response(fakeBold);
+      if (url.includes("/caido/")) return new Response("", { status: 500 });
+      return new Response("", { status: 404 });
+    };
+    const sinPlazo = new AbortController().signal;
+    const r = await buscarEnGoogle(["Fake-Bold", "Nadiea-Bold", "Caido-Bold"], sinPlazo, pedir);
+    eq("buscarEnGoogle: encuentra la familia en otra licencia y baja sólo el archivo pedido, leído de sus bytes", r.map((x) => [x.archivo, x.leida.nombres]), [["Fake-Bold.ttf", ["Fake-Bold"]]]);
+    pedidos.length = 0;
+    await buscarEnGoogle(["Nadiea-Regular", "Caido-Regular"], sinPlazo, pedir);
+    eq("buscarEnGoogle: lo que Google no tiene no se vuelve a buscar; lo que falló por la red, sí", pedidos, ["ofl/caido/METADATA.pb"]);
+    const mentira = async (url) => (url.endsWith("METADATA.pb") ? new Response(md.replace(/fake/gi, "Mentira").replace("apache", "ofl")) : new Response(sfnt({ nombres: { 6: "Otra-Cosa" } })));
+    eq("buscarEnGoogle: un archivo que no trae el nombre pedido no vuelve (manda lo que dicen sus bytes, no el METADATA)", (await buscarEnGoogle(["Mentira-Bold"], sinPlazo, mentira)).length, 0);
+    pedidos.length = 0;
+    await buscarEnGoogle(["Fake-Zzz"], sinPlazo, pedir);
+    await buscarEnGoogle(["Fake-Zzz"], sinPlazo, pedir);
+    eq("buscarEnGoogle: la familia está pero el estilo no: se baja una vez y luego se recuerda", pedidos, ["ofl/fake/METADATA.pb", "apache/fake/METADATA.pb"]);
+    // Un GitHub que manda archivos enormes sin decir su tamaño: se corta al pasar el tope, no se lee entero.
+    let servidos = 0;
+    const enorme = async (url) => {
+      if (url.endsWith("METADATA.pb")) return new Response(`fonts {\n filename: "Gorda[wght].ttf"\n post_script_name: "Gorda-Thin"\n}\n`);
+      return new Response(new ReadableStream({ pull(c) { servidos += 1_000_000; c.enqueue(new Uint8Array(1_000_000)); if (servidos > 3 * GOOGLE_BYTES_POR_PEDIDO) c.close(); } }));
+    };
+    eq("buscarEnGoogle: un archivo sin tamaño declarado se corta al pasar 10 MB (no se baja entero)", [(await buscarEnGoogle(["Gorda-Bold"], sinPlazo, enorme)).length, servidos <= 12_000_000], [0, true]);
+    const vencido = AbortSignal.abort();
+    pedidos.length = 0;
+    eq("buscarEnGoogle: con el plazo vencido no se pide nada", [(await buscarEnGoogle(["Otrafam-Bold"], vencido, pedir)).length, pedidos.length], [0, 0]);
+  }
   // Archivos hechos a propósito: no congelan ni inventan estilos.
   const bomba = (() => {
     const cuenta = 65535, largo = 65534, ini = 6 + cuenta * 12;

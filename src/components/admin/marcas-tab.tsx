@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
-import { Upload, Trash2, Building2, Plus, Sparkles, X, Type, Loader2 } from "lucide-react";
+import { Upload, Trash2, Building2, Plus, Sparkles, X, Type, Loader2, Lock, Users } from "lucide-react";
 import { toast } from "sonner";
 
-import { subirLogoMarca, quitarLogoMarca, crearMarca, eliminarMarca, subirTipografiaCliente, borrarTipografiaCliente } from "@/app/(app)/admin/actions";
+import { subirLogoMarca, quitarLogoMarca, crearMarca, eliminarMarca, subirTipografiaCliente, borrarTipografia, cambiarExclusiva } from "@/app/(app)/admin/actions";
 import { Button } from "@/components/ui/button";
-import type { ClienteConMarcas, MarcaLogo, TipografiaCliente } from "@/lib/admin-tipos";
+import type { ClienteConMarcas, MarcaLogo, TipografiaGuardada, TipografiasEstado } from "@/lib/admin-tipos";
 import { TIPOGRAFIA_MAX_BYTES } from "@/lib/prisma/formatos/tipografias";
 import type { PresetGuardado } from "@/lib/prisma/preset";
 import { PresetPrismaEditor, resumenPreset } from "./prisma-preset";
@@ -18,8 +18,9 @@ import { prismaActivo } from "@/lib/prisma/flags";
  * (DiDi → Card / Préstamos) y cada una lleva su propio logo, que aparece en la
  * cabecera de la tarea. Sube/reemplaza/quita, guardado inmediato.
  */
-export function MarcasTab({ clientes: inicial }: { clientes: ClienteConMarcas[] }) {
+export function MarcasTab({ clientes: inicial, tipografiasGoogle }: { clientes: ClienteConMarcas[]; tipografiasGoogle: TipografiasEstado }) {
   const [clientes, setClientes] = useState(inicial);
+  const [google, setGoogle] = useState(tipografiasGoogle);
 
   const setLogo = (marcaId: string, logo_url: string | null) =>
     setClientes((prev) =>
@@ -37,7 +38,7 @@ export function MarcasTab({ clientes: inicial }: { clientes: ClienteConMarcas[] 
       })),
     );
 
-  const setTipos = (clientId: string, cambio: (antes: TipografiaCliente[]) => TipografiaCliente[]) =>
+  const setTipos = (clientId: string, cambio: (antes: TipografiaGuardada[]) => TipografiaGuardada[]) =>
     setClientes((prev) => prev.map((c) => (c.id === clientId && Array.isArray(c.tipografias) ? { ...c, tipografias: cambio(c.tipografias) } : c)));
 
   const addMarca = (clientId: string, marca: MarcaLogo) =>
@@ -87,10 +88,15 @@ export function MarcasTab({ clientes: inicial }: { clientes: ClienteConMarcas[] 
                 </ul>
               )}
               <AgregarMarca clientId={c.id} onCreated={(m) => addMarca(c.id, m)} />
-              {prismaActivo() && <TipografiasDelCliente cliente={c} onCambio={(f) => setTipos(c.id, f)} />}
+              {prismaActivo() && <TipografiasSeccion cliente={c} tipos={c.tipografias} onCambio={(f) => setTipos(c.id, f)} />}
             </section>
           ))}
         </div>
+      )}
+      {prismaActivo() && (
+        <section className="mt-5 rounded-xl border border-border bg-card shadow-sm">
+          <TipografiasSeccion cliente={null} tipos={google} onCambio={(f) => setGoogle((g) => (Array.isArray(g) ? f(g) : g))} />
+        </section>
       )}
     </div>
   );
@@ -266,15 +272,18 @@ function MarcaRow({
 }
 
 /**
- * Las tipografías del CLIENTE para HÜE Prisma › Formatos: se suben una vez y Formatos las trae solas cuando un PSD
- * las usa (por su nombre). Valen para todas sus marcas. Se guardan privadas: sólo el equipo con sesión las baja.
+ * Una sección de la biblioteca de tipografías de HÜE Prisma › Formatos. Con `cliente`: las que el equipo sube en su
+ * tarjeta, cada una "sólo de este cliente" (exclusiva) o "para todos". Sin `cliente`: las gratuitas que Formatos trajo
+ * solo de Google Fonts (sólo se ven y se borran). Formatos las trae por su nombre cuando un PSD las usa.
  */
-function TipografiasDelCliente({
+function TipografiasSeccion({
   cliente,
+  tipos,
   onCambio,
 }: {
-  cliente: ClienteConMarcas;
-  onCambio: (cambio: (antes: TipografiaCliente[]) => TipografiaCliente[]) => void;
+  cliente: { id: string; name: string } | null;
+  tipos: TipografiasEstado;
+  onCambio: (cambio: (antes: TipografiaGuardada[]) => TipografiaGuardada[]) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const botonSubir = useRef<HTMLButtonElement>(null);
@@ -282,10 +291,14 @@ function TipografiasDelCliente({
   const [pending, start] = useTransition();
   const [progreso, setProgreso] = useState<{ va: number; de: number } | null>(null);
   const [porBorrar, setPorBorrar] = useState<string | null>(null);
+  /** Lo que se sube ahora: sólo de este cliente (lo normal en la tarjeta de un cliente: su letra de marca) o para todos. */
+  const [soloSuyas, setSoloSuyas] = useState(true);
+  /** Filas cuyo "Sólo / Para todos" espera al servidor. */
+  const [volteando, setVolteando] = useState<Set<string>>(() => new Set());
   /** A dónde va el foco cuando termina lo que estaba en curso (el botón estaba ocupado o su fila desapareció). */
   const focoAlTerminar = useRef<"subir" | null>(null);
-  const tipos = cliente.tipografias;
-  const tituloId = `tipos-${cliente.id}`;
+  const tituloId = `tipos-${cliente?.id ?? "google"}`;
+  const soloId = `tipos-solo-${cliente?.id ?? "google"}`;
 
   // Al pedir confirmación, el foco pasa a "Cancelar" (el botón de basura que lo tenía desaparece).
   useEffect(() => {
@@ -297,10 +310,10 @@ function TipografiasDelCliente({
     botonSubir.current?.focus();
   }, [pending]);
 
-  const agregar = (t: TipografiaCliente) =>
+  const agregar = (t: TipografiaGuardada) =>
     onCambio((antes) => (antes.some((x) => x.id === t.id) ? antes : [...antes, t].sort((a, b) => a.archivo.localeCompare(b.archivo))));
 
-  const subir = (archivos: File[]) =>
+  const subir = (c: { id: string; name: string }, archivos: File[]) =>
     start(async () => {
       const nuevas: string[] = [];
       const repetidas: string[] = [];
@@ -325,7 +338,7 @@ function TipografiasDelCliente({
           form.append("file", f);
           let res: Awaited<ReturnType<typeof subirTipografiaCliente>>;
           try {
-            res = await subirTipografiaCliente(cliente.id, form);
+            res = await subirTipografiaCliente(c.id, form, soloSuyas);
           } catch (err) {
             console.error("[marcas] subir tipografía", err);
             malas.push(`«${f.name}» no se pudo subir (conexión)`);
@@ -346,17 +359,46 @@ function TipografiasDelCliente({
       } finally {
         setProgreso(null);
         focoAlTerminar.current = "subir";
-        if (nuevas.length) toast.success(nuevas.length === 1 ? `Tipografía de ${cliente.name} guardada.` : `${nuevas.length} tipografías de ${cliente.name} guardadas.`);
+        if (nuevas.length) toast.success(nuevas.length === 1 ? `Tipografía de ${c.name} guardada.` : `${nuevas.length} tipografías de ${c.name} guardadas.`);
         if (repetidas.length) toast.info(repetidas.length === 1 ? `«${repetidas[0]}» ya estaba guardada.` : `${repetidas.length} ya estaban guardadas.`);
         if (malas.length) toast.error(malas.length === 1 ? `${malas[0]}.` : `${malas.length} no se guardaron: ${malas.slice(0, 3).join(" · ")}${malas.length > 3 ? ` +${malas.length - 3}` : ""}.`);
         if (paraTodas) toast.error(paraTodas);
       }
     });
 
-  const borrar = (t: TipografiaCliente) =>
+  // Al instante en pantalla; si el servidor no lo guarda, vuelve como estaba y se dice.
+  // Al instante en pantalla; si el servidor no lo guarda, vuelve como estaba y se dice. Su botón no se vuelve a
+  // pulsar hasta que el servidor conteste (dos clics no se cruzan).
+  const voltearExclusiva = (c: { id: string; name: string }, t: TipografiaGuardada) => {
+    if (volteando.has(t.id)) return;
+    const exclusiva = !t.exclusiva;
+    const poner = (v: boolean) => onCambio((antes) => antes.map((x) => (x.id === t.id ? { ...x, exclusiva: v } : x)));
+    poner(exclusiva);
+    setVolteando((s) => new Set(s).add(t.id));
+    void cambiarExclusiva(t.id, exclusiva)
+      .then((res) => {
+        if (res.ok) return void toast.success(exclusiva ? `«${t.archivo}»: sólo para ${c.name}.` : `«${t.archivo}»: para todos los clientes.`);
+        poner(!exclusiva);
+        toast.error(res.error);
+      })
+      .catch((err) => {
+        console.error("[marcas] exclusiva de tipografía", err);
+        poner(!exclusiva);
+        toast.error(`«${t.archivo}» no se pudo cambiar (conexión). Inténtalo otra vez.`);
+      })
+      .finally(() =>
+        setVolteando((s) => {
+          const n = new Set(s);
+          n.delete(t.id);
+          return n;
+        }),
+      );
+  };
+
+  const borrar = (t: TipografiaGuardada) =>
     start(async () => {
       try {
-        const res = await borrarTipografiaCliente(t.id);
+        const res = await borrarTipografia(t.id);
         if (!res.ok) return void toast.error(res.error);
         onCambio((antes) => antes.filter((x) => x.id !== t.id));
         toast.success(`«${t.archivo}» borrada.`);
@@ -371,15 +413,19 @@ function TipografiasDelCliente({
     });
 
   return (
-    <div className="border-t border-border/60 px-4 py-3">
+    <div className={cliente ? "border-t border-border/60 px-4 py-3" : "px-4 py-3"}>
       <div className="flex flex-wrap items-center gap-2">
         <Type className="size-4 text-muted-foreground" aria-hidden="true" />
         <h3 id={tituloId} className="text-sm font-medium text-foreground">
-          Tipografías de {cliente.name} para Formatos
+          {cliente ? `Tipografías de ${cliente.name} para Formatos` : "Tipografías gratuitas (Google Fonts)"}
         </h3>
         {Array.isArray(tipos) && <span className="text-[11px] text-muted-foreground">{tipos.length === 1 ? "1 archivo" : `${tipos.length} archivos`}</span>}
-        {Array.isArray(tipos) && (
-          <>
+        {cliente && Array.isArray(tipos) && (
+          <div className="ml-auto flex flex-wrap items-center gap-3">
+            <label htmlFor={soloId} className="flex cursor-pointer items-center gap-1.5 text-[13px] text-foreground">
+              <input id={soloId} type="checkbox" checked={soloSuyas} onChange={(e) => setSoloSuyas(e.target.checked)} className="size-4 cursor-pointer accent-primary" />
+              Sólo para {cliente.name}
+            </label>
             <input
               ref={inputRef}
               type="file"
@@ -389,7 +435,7 @@ function TipografiasDelCliente({
               onChange={(e) => {
                 const archivos = [...(e.target.files ?? [])];
                 e.target.value = "";
-                if (archivos.length) subir(archivos);
+                if (archivos.length) subir(cliente, archivos);
               }}
             />
             {/* aria-disabled (no disabled) mientras trabaja: así no pierde el foco y se puede volver a él al terminar. */}
@@ -400,12 +446,12 @@ function TipografiasDelCliente({
               aria-disabled={pending || undefined}
               aria-busy={pending}
               onClick={() => pending || inputRef.current?.click()}
-              className="ml-auto gap-1.5 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+              className="gap-1.5 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
             >
               {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Upload className="size-3.5" aria-hidden="true" />}
               {progreso ? `Subiendo ${progreso.va} de ${progreso.de}…` : "Subir tipografías"}
             </Button>
-          </>
+          </div>
         )}
       </div>
       {tipos === "sin-tabla" ? (
@@ -417,9 +463,9 @@ function TipografiasDelCliente({
       ) : (
         <>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Los .otf o .ttf que usan los PSD de {cliente.name}, propios o comerciales. Formatos las busca por nombre entre
-            todas las que hay en Greenlight, así que una tipografía subida una vez sirve también para cualquier otro
-            cliente. Sólo el equipo con sesión las descarga.
+            {cliente
+              ? `Los .otf o .ttf que usan los PSD de ${cliente.name}, propios o comerciales. Formatos las busca por su nombre. Las marcadas «Sólo ${cliente.name}» se usan únicamente cuando en Formatos se elige ${cliente.name}; las demás sirven para cualquier cliente.`
+              : "Formatos las trae solo la primera vez que un PSD usa una tipografía gratuita que nadie subió, y desde entonces sirven para todos. Si borras una, se vuelve a traer cuando otro PSD la use."}
           </p>
           {tipos.length > 0 && (
             <ul aria-labelledby={tituloId} className="mt-2 divide-y divide-border/60 rounded-lg border border-border/60">
@@ -434,6 +480,21 @@ function TipografiasDelCliente({
                       {t.nombres.length > 4 ? ` +${t.nombres.length - 4}` : ""} · {Math.max(1, Math.round(t.bytes / 1024))} KB
                     </p>
                   </div>
+                  {cliente && porBorrar !== t.id && (
+                    // El estado se lee en la etiqueta (no sólo en el color) y aria-pressed lo dice al lector de pantalla.
+                    <button
+                      type="button"
+                      onClick={() => voltearExclusiva(cliente, t)}
+                      disabled={pending || volteando.has(t.id)}
+                      aria-pressed={t.exclusiva}
+                      aria-label={`Sólo para ${cliente.name}: ${t.archivo}`}
+                      title={t.exclusiva ? `Sólo se usa en anuncios de ${cliente.name}. Clic: para todos.` : `Sirve para cualquier cliente. Clic: sólo ${cliente.name}.`}
+                      className={`inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${t.exclusiva ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {t.exclusiva ? <Lock className="size-3" aria-hidden="true" /> : <Users className="size-3" aria-hidden="true" />}
+                      {t.exclusiva ? `Sólo ${cliente.name}` : "Para todos"}
+                    </button>
+                  )}
                   {porBorrar === t.id ? (
                     <div className="flex items-center gap-1">
                       <button

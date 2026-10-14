@@ -24,7 +24,8 @@ import type {
   MarcaOpt,
   SnippetKind,
   SnippetRow,
-  TipografiaCliente,
+  TipografiaGuardada,
+  TipografiasEstado,
 } from "@/lib/admin-tipos";
 
 const APP_URL = process.env.APP_URL ?? "https://runna-greenlight.vercel.app";
@@ -601,16 +602,16 @@ export async function listarMarcasPorCliente(): Promise<ClienteConMarcas[]> {
     db.from("clients").select("id, name, slug, logo_url").order("name", { ascending: true }),
     db.from("marcas").select("id, client_id, name, slug, logo_url, prisma_presets").order("name", { ascending: true }),
     // Sin HÜE Prisma la sección no se enseña: ni se pregunta.
-    prismaActivo() ? db.from("tipografias_cliente").select("id, client_id, archivo, nombres, bytes").order("archivo", { ascending: true }) : null,
+    prismaActivo() ? db.from("tipografias").select(`client_id, ${COLS_TIPO}`).not("client_id", "is", null).order("archivo", { ascending: true }) : null,
   ]);
   const clientes = (cliRes.data ?? []) as { id: string; name: string; slug: string; logo_url: string | null }[];
   const marcas = (marcaRes.data ?? []) as {
     id: string; client_id: string; name: string; slug: string; logo_url: string | null; prisma_presets: unknown;
   }[];
   // Antes de aplicar la 0079 la tabla no existe: el panel dice que falta, en vez de romperse. Otro error se dice como error.
-  if (tipoRes?.error && !faltaTablaTipografias(tipoRes.error)) console.error("[admin] leer tipografias_cliente:", tipoRes.error.message);
+  if (tipoRes?.error && !faltaTablaTipografias(tipoRes.error)) console.error("[admin] leer tipografias:", tipoRes.error.message);
   const estadoTipos: "sin-tabla" | "error" | null = !tipoRes?.error ? null : faltaTablaTipografias(tipoRes.error) ? "sin-tabla" : "error";
-  const tipos = (tipoRes?.data ?? []) as (TipografiaCliente & { client_id: string })[];
+  const tipos = (tipoRes?.data ?? []) as (TipografiaGuardada & { client_id: string })[];
   return clientes.map((c) => ({
     id: c.id,
     name: c.name,
@@ -620,21 +621,36 @@ export async function listarMarcasPorCliente(): Promise<ClienteConMarcas[]> {
       .filter((m) => m.client_id === c.id)
       // El preset se normaliza con la MISMA función que usa el writer al leerlo.
       .map((m) => ({ id: m.id, name: m.name, slug: m.slug, logo_url: m.logo_url, prisma_preset: normalizarPreset(m.prisma_presets) })),
-    tipografias: estadoTipos ?? tipos.filter((t) => t.client_id === c.id).map(({ id, archivo, nombres, bytes }) => ({ id, archivo, nombres, bytes })),
+    tipografias: estadoTipos ?? tipos.filter((t) => t.client_id === c.id).map(({ id, archivo, nombres, bytes, exclusiva }) => ({ id, archivo, nombres, bytes, exclusiva })),
   }));
 }
 
-// ── Clientes: tipografías para HÜE Prisma › Formatos ─────────────
-// Letra con licencia del cliente: bucket PRIVADO, sólo la sube un admin y sólo la baja el equipo con sesión (por
-// URL firmada, en prisma/tipografias-actions.ts). Se valida por sus bytes, nunca por el nombre del archivo.
+/** Las gratuitas que Formatos trajo solo de Google Fonts (de nadie, para todos), para verlas y borrarlas en Marcas. */
+export async function listarTipografiasGoogle(): Promise<TipografiasEstado> {
+  if (!canAdmin(await getViewAs()) || !hasSupabase() || !prismaActivo()) return [];
+  const { data, error } = await supabaseAdmin().from("tipografias").select(COLS_TIPO).is("client_id", null).order("archivo", { ascending: true });
+  if (!error) return (data ?? []) as TipografiaGuardada[];
+  if (faltaTablaTipografias(error)) return "sin-tabla";
+  console.error("[admin] leer tipografias de Google:", error.message);
+  return "error";
+}
+
+// ── Tipografías para HÜE Prisma › Formatos ─────────────
+// Una biblioteca para todos los clientes: bucket PRIVADO, sólo la sube un admin y sólo la baja el equipo con sesión
+// (por URL firmada, en prisma/tipografias-actions.ts). Se valida por sus bytes, nunca por el nombre del archivo.
+// `exclusiva` = sólo para su cliente (Formatos la entrega únicamente cuando se eligió ese cliente).
 const SIN_TABLA_TIPOS = "La base todavía no guarda tipografías: falta aplicar el cambio 0079.";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const COLS_TIPO = "id, archivo, nombres, bytes, exclusiva";
 
 /** `todas`: el error no es de ESE archivo (permiso, tope del cliente, falta la tabla): no vale la pena intentar los demás. */
-type TipoGuardada = { ok: true; tipografia: TipografiaCliente; repetida: boolean } | { ok: false; error: string; todas?: boolean };
+type TipoGuardada = { ok: true; tipografia: TipografiaGuardada; repetida: boolean } | { ok: false; error: string; todas?: boolean };
 
-/** Sube UNA tipografía al cliente. Sólo admin. El mismo archivo dos veces en un cliente queda una vez. */
-export async function subirTipografiaCliente(clientId: string, form: FormData): Promise<TipoGuardada> {
+/**
+ * Sube UNA tipografía al cliente. Sólo admin. El mismo archivo dos veces en un cliente queda una vez (y se queda
+ * como estaba: lo exclusiva se cambia en su fila, no subiéndola otra vez).
+ */
+export async function subirTipografiaCliente(clientId: string, form: FormData, exclusiva: boolean): Promise<TipoGuardada> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada.", todas: true };
   if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin sube tipografías.", todas: true };
   if (!UUID_RE.test(clientId)) return { ok: false, error: "Cliente inválido.", todas: true };
@@ -649,16 +665,16 @@ export async function subirTipografiaCliente(clientId: string, form: FormData): 
   const { data: cli } = await db.from("clients").select("id").eq("id", clientId).maybeSingle();
   if (!cli) return { ok: false, error: "Ese cliente ya no existe.", todas: true };
   const sha256 = [...new Uint8Array(await crypto.subtle.digest("SHA-256", buf))].map((b) => b.toString(16).padStart(2, "0")).join("");
-  const cols = "id, archivo, nombres, bytes";
-  const ya = await db.from("tipografias_cliente").select(cols).eq("client_id", clientId).eq("sha256", sha256).maybeSingle();
+  const cols = COLS_TIPO;
+  const ya = await db.from("tipografias").select(cols).eq("client_id", clientId).eq("sha256", sha256).maybeSingle();
   if (ya.error) {
     if (faltaTablaTipografias(ya.error)) return { ok: false, error: SIN_TABLA_TIPOS, todas: true };
-    console.error("[admin] leer tipografias_cliente:", ya.error.message);
+    console.error("[admin] leer tipografias:", ya.error.message);
     return { ok: false, error: "No se pudo guardar. Inténtalo otra vez.", todas: true };
   }
-  if (ya.data) return { ok: true, tipografia: ya.data as TipografiaCliente, repetida: true };
+  if (ya.data) return { ok: true, tipografia: ya.data as TipografiaGuardada, repetida: true };
   // El tope se revisa sin "count ?? 0": si la cuenta falla, no se sube (nada de pasar el tope por un error).
-  const { count, error: errCuenta } = await db.from("tipografias_cliente").select("id", { count: "exact", head: true }).eq("client_id", clientId);
+  const { count, error: errCuenta } = await db.from("tipografias").select("id", { count: "exact", head: true }).eq("client_id", clientId);
   if (errCuenta || count === null) {
     console.error("[admin] contar tipografías:", errCuenta?.message ?? "sin cuenta");
     return { ok: false, error: "No se pudo guardar. Inténtalo otra vez.", todas: true };
@@ -673,28 +689,42 @@ export async function subirTipografiaCliente(clientId: string, form: FormData): 
     return { ok: false, error: "No se pudo guardar el archivo. Inténtalo otra vez." };
   }
   const ins = await db
-    .from("tipografias_cliente")
-    .insert({ client_id: clientId, archivo: archivoVisible(file.name), ruta, sha256, bytes: buf.byteLength, nombres: leida.nombres, created_by: await getSoyId() })
+    .from("tipografias")
+    .insert({ client_id: clientId, origen: "subida", exclusiva: exclusiva === true, archivo: archivoVisible(file.name), ruta, sha256, bytes: buf.byteLength, nombres: leida.nombres, created_by: await getSoyId() })
     .select(cols)
     .single();
   if (ins.error) {
     // Dos subidas del mismo archivo a la vez: la otra ganó y su fila apunta al mismo archivo, que se queda.
-    const otra = await db.from("tipografias_cliente").select(cols).eq("client_id", clientId).eq("sha256", sha256).maybeSingle();
-    if (otra.data) return { ok: true, tipografia: otra.data as TipografiaCliente, repetida: true };
+    const otra = await db.from("tipografias").select(cols).eq("client_id", clientId).eq("sha256", sha256).maybeSingle();
+    if (otra.data) return { ok: true, tipografia: otra.data as TipografiaGuardada, repetida: true };
     console.error("[admin] guardar tipografía:", ins.error.message);
     await db.storage.from(TIPOGRAFIAS_BUCKET).remove([ruta]);
     return { ok: false, error: "No se pudo guardar. Inténtalo otra vez." };
   }
-  return { ok: true, tipografia: ins.data as TipografiaCliente, repetida: false };
+  return { ok: true, tipografia: ins.data as TipografiaGuardada, repetida: false };
 }
 
-/** Borra una tipografía del cliente (su fila y su archivo). Sólo admin. */
-export async function borrarTipografiaCliente(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+/** Marca una tipografía de un cliente como sólo suya (o la abre a todos). Sólo admin; las de Google no tienen dueño. */
+export async function cambiarExclusiva(id: string, exclusiva: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin cambia tipografías." };
+  if (!UUID_RE.test(id) || typeof exclusiva !== "boolean") return { ok: false, error: "Tipografía inválida." };
+  const { data, error } = await supabaseAdmin().from("tipografias").update({ exclusiva }).eq("id", id).not("client_id", "is", null).select("id");
+  if (error) {
+    console.error("[admin] cambiar exclusiva de tipografía:", error.message);
+    return { ok: false, error: "No se pudo cambiar. Inténtalo otra vez." };
+  }
+  if (!data?.length) return { ok: false, error: "Esa tipografía ya no existe." };
+  return { ok: true };
+}
+
+/** Borra una tipografía de la biblioteca (su fila y su archivo): de un cliente o de Google. Sólo admin. */
+export async function borrarTipografia(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin borra tipografías." };
   if (!UUID_RE.test(id)) return { ok: false, error: "Tipografía inválida." };
   const db = supabaseAdmin();
-  const { data, error } = await db.from("tipografias_cliente").select("ruta").eq("id", id).maybeSingle();
+  const { data, error } = await db.from("tipografias").select("ruta").eq("id", id).maybeSingle();
   if (error) {
     console.error("[admin] leer tipografía:", error.message);
     return { ok: false, error: "No se pudo borrar. Inténtalo otra vez." };
@@ -707,7 +737,7 @@ export async function borrarTipografiaCliente(id: string): Promise<{ ok: true } 
     console.error("[admin] borrar archivo de tipografía:", rm.error.message);
     return { ok: false, error: "No se pudo borrar el archivo. Inténtalo otra vez." };
   }
-  const del = await db.from("tipografias_cliente").delete().eq("id", id);
+  const del = await db.from("tipografias").delete().eq("id", id);
   if (del.error) {
     console.error("[admin] borrar fila de tipografía (su archivo ya no está):", del.error.message);
     return { ok: false, error: "Se borró el archivo pero no su registro. Inténtalo otra vez." };

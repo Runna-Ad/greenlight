@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CircleCheck, Download, FileUp, FlipHorizontal2, Languages, Loader2, Type, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CircleCheck, Download, FileUp, FlipHorizontal2, Languages, Loader2, Lock, Type, X } from "lucide-react";
 import { toast } from "sonner";
 import { zipSync } from "fflate";
 import { Button } from "@/components/ui/button";
@@ -103,8 +103,11 @@ async function archivosDe(entradas: FileSystemEntry[]): Promise<File[]> {
   return out;
 }
 
-/** Lo más que se espera a Greenlight (el pedido y cada archivo): después se dice y se pueden soltar. */
+/** Lo más que se espera a Greenlight por cada archivo: después se dice y se pueden soltar. */
 const GREENLIGHT_MS = 20_000;
+/** Y al pedido: el servidor puede buscar en Google (12 s), y los pedidos al servidor van en fila (uno nuevo, p. ej. al
+ *  cambiar de cliente, espera a que termine el anterior). */
+const PEDIDO_MS = 45_000;
 
 /** Lo que pasó al cargar tipografías. `de` = vinieron de Greenlight (de qué clientes); `greenlightNo` = no se pudieron traer. */
 type NotaFuentes = { nuevas: number; malas: string[]; vacio?: boolean; fallo?: boolean; de?: string; greenlightNo?: boolean };
@@ -122,6 +125,9 @@ function textoNotaFuentes(n: NotaFuentes, lang: Lang): string {
   const cargadas = n.nuevas === 1 ? tx(FP.textoCargadaUna, lang) : n.nuevas ? rellenar(tx(FP.textoCargadas, lang), { n: n.nuevas }) : n.malas.length ? "" : tx(FP.textoYaEstaban, lang);
   return [n.de ? rellenar(tx(FP.textoDeGreenlight, lang), { c: n.de }) : "", cargadas, n.malas.length ? rellenar(tx(FP.textoMalas, lang), { f: unos(n.malas) }) : ""].filter(Boolean).join(" ");
 }
+
+/** "DiDiSans-Pro-Bold es / … son sólo para anuncios de DiDi: elige DiDi arriba". */
+const textoAjenas = (a: { cliente: string; nombres: string[] }, lang: Lang) => rellenar(tx(a.nombres.length === 1 ? FP.textoAjena : FP.textoAjenas, lang), { f: unos(a.nombres), c: a.cliente });
 
 /** Lo que tapa el canal, en palabras: % donde la cifra es de guías (aprox.), px donde la dio el equipo (TikTok). */
 function cifrasCanal(c: Canal, lang: Lang): string {
@@ -285,8 +291,19 @@ const TarjetaMedida = memo(function TarjetaMedida({
   );
 });
 
-export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
+/** Un cliente para elegir arriba: decide qué tipografías exclusivas puede usar el anuncio. */
+export type ClientePsd = { id: string; nombre: string };
+
+export function FormatosPsd({ planaActiva, clientes }: { planaActiva: boolean; clientes: ClientePsd[] }) {
   const [lang, setLang] = useLang();
+  /** "" = Sin cliente: sólo las tipografías que sirven para todos. */
+  const [cliente, setCliente] = useState("");
+  /** El cliente elegido AHORA, para lo que termina tarde (una respuesta de otro cliente no carga nada). */
+  const clienteVigente = useRef("");
+  /** Las tipografías que llegaron por ser exclusivas de un cliente (nombre → cliente): se sueltan al cambiar de cliente. */
+  const deExclusiva = useRef(new Map<string, string>());
+  /** Lo que le falta al PSD pero es exclusivo de OTRO cliente (de qué PSD y con qué cliente elegido se preguntó). */
+  const [ajenas, setAjenas] = useState<{ leido: Leido; cliente: string; lista: { cliente: string; nombres: string[] }[] } | null>(null);
   const [leido, setLeido] = useState<Leido | null>(null);
   const [avance, setAvance] = useState<{ mesa: number; de: number } | null>(null);
   const [falla, setFalla] = useState<Falla | null>(null);
@@ -309,8 +326,11 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   const [trayendo, setTrayendo] = useState(0);
   /** El PSD al que ya se le resolvió el pedido (o no le faltaba nada): hasta entonces no se dice "Faltan". */
   const [resueltoPara, setResueltoPara] = useState<Leido | null>(null);
-  /** A qué PSD ya se le pidieron (una vez por PSD: si Greenlight no las tiene, no se vuelve a preguntar). */
-  const pedidasPara = useRef<Leido | null>(null);
+  /** A qué PSD (y con qué cliente) ya se le pidieron: una vez por PSD y cliente; si Greenlight no las tiene, no se
+   *  vuelve a preguntar hasta cambiar de PSD o de cliente. */
+  const pedidasPara = useRef<{ l: Leido; c: string } | null>(null);
+  /** Sube al "Olvidar": el mismo PSD con el mismo cliente vuelve a pedir lo que le falta. */
+  const [otraVez, setOtraVez] = useState(0);
   /** Lo vigente para lo que termina tarde (tras esperar a la red): el PSD en pantalla y las tipografías cargadas. */
   const leidoVigente = useRef<Leido | null>(null);
   const tiposVigentes = useRef<Tipografias>(new Map());
@@ -512,32 +532,37 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
       }
     })();
   }, []);
-  const avisarFuentes = (n: NotaFuentes) => {
+  /** `extra` = lo que también hay que decirle al lector de pantalla (p. ej. "es sólo para anuncios de DiDi"). */
+  const avisarFuentes = (n: NotaFuentes, extra = "") => {
     setNotaFuentes(n);
     const texto = textoNotaFuentes(n, lang);
-    anunciar(texto);
+    anunciar([texto, extra].filter(Boolean).join(" "));
     // Sin la tarjeta "Texto nítido" en pantalla (aún no hay PSD, o no trae textos) la nota sale como aviso flotante.
     if (!totalTextos) (notaMala(n) ? toast.error : toast.success)(texto);
   };
-  /** `de` = vinieron de Greenlight (los clientes, para la nota). */
-  const agregarFuentes = async (archivos: File[], de?: string, noBajaron: string[] = []) => {
+  /** `greenlight` = vinieron de Greenlight: `de` (los clientes, para la nota), los que no bajaron y si siguen
+   *  valiendo al terminar de cargar (otro PSD u otro cliente elegido mientras tanto: no se suman). */
+  const agregarFuentes = async (archivos: File[], greenlight?: { de: string; noBajaron: string[]; vigente: () => boolean; extra: string }) => {
+    const de = greenlight?.de;
+    const extra = greenlight?.extra ?? "";
     // Los topes van ANTES de leer: una carpeta de fuentes del sistema o un archivo enorme no llegan a memoria.
     const { usar, omitidas: fuera } = elegirFuentes(archivos);
-    const omitidas = [...fuera, ...noBajaron];
-    if (!usar.length) return avisarFuentes(omitidas.length ? { nuevas: 0, malas: omitidas, de } : { nuevas: 0, malas: [], vacio: true });
+    const omitidas = [...fuera, ...(greenlight?.noBajaron ?? [])];
+    if (!usar.length) return avisarFuentes(omitidas.length ? { nuevas: 0, malas: omitidas, de } : { nuevas: 0, malas: [], vacio: true }, extra);
     setCargandoFuentes((n) => n + 1);
     try {
       const datos: ArchivoFuente[] = [];
       for (const f of usar) datos.push({ nombre: f.name, datos: await f.arrayBuffer() });
       // Las vigentes (no las de cuando empezó: pudieron soltarse u olvidarse otras mientras se leía).
       const r = await cargarFuentes(datos, tiposVigentes.current);
-      if (!vivo.current) return;
-      // Funcional: dos tandas casi juntas (o la de las recordadas) se suman, no se pisan. Nada nuevo, nada que repintar.
-      if (r.nuevas.length) setTipos((antes) => new Map([...antes, ...r.mapa]));
+      if (!vivo.current || (greenlight && !greenlight.vigente())) return;
+      // Funcional: dos tandas casi juntas (o la de las recordadas) se suman, no se pisan. Sólo lo NUEVO: `r.mapa` es
+      // una copia de cuando empezó y traería de vuelta lo que mientras tanto se soltó (otro cliente, "Olvidar").
+      if (r.nuevas.length) setTipos((antes) => new Map([...antes, ...r.nuevas.flatMap((n) => { const c = r.mapa.get(n); return c ? [[n, c] as const] : []; })]));
       // Las que vienen de Greenlight NO se guardan en el navegador: son letra con licencia del cliente y se vuelven
       // a pedir (con sesión) en cada pestaña. Las que la persona soltó, sí: son sus archivos.
       if (de === undefined) void recordarFuentes(r.buenas);
-      avisarFuentes({ nuevas: r.nuevas.length, malas: [...r.malas, ...omitidas], de });
+      avisarFuentes({ nuevas: r.nuevas.length, malas: [...r.malas, ...omitidas], de }, extra);
     } catch (err) {
       console.error("[formatos-psd] tipografías", err);
       if (vivo.current) avisarFuentes({ nuevas: 0, malas: [], fallo: true });
@@ -547,7 +572,12 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   };
   const olvidar = () => {
     setTipos(new Map());
+    deExclusiva.current.clear();
     setNotaFuentes(null);
+    // También se van las que trajo Greenlight: se vuelven a pedir para el PSD en pantalla.
+    pedidasPara.current = null;
+    setResueltoPara(null);
+    setOtraVez((n) => n + 1);
     anunciar(tx(FP.textoOlvidadas, lang));
     void olvidarFuentes().then((bien) => bien || toast.error(tx(FP.textoNoOlvido, lang)));
     // Este botón desaparece: el foco pasa a "Agregar tipografías" (si no, cae al tope de la página).
@@ -640,24 +670,28 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     () => [...new Set((leido?.maestros ?? []).flatMap((m) => m.piezas.flatMap((p) => p.textos.flatMap((t) => t.texto.tramos.map((r) => r.fuente)))))].filter((f) => f && !tipos.has(f)),
     [leido, tipos],
   );
-  // Lo que le falta al PSD se pide a Greenlight UNA vez por PSD: las tipografías del cliente que un admin guardó en
-  // Admin › Marcas. Espera a las recordadas en este navegador (con ellas casi nunca falta nada y no se pregunta).
-  // Llegan por el mismo camino que soltarlas: mismos topes, misma prueba contra Photoshop, y se recuerdan aquí.
-  const pedirTipografias = useEffectEvent(async (l: Leido) => {
-    if (pedidasPara.current === l) return;
-    pedidasPara.current = l;
+  // Lo que le falta al PSD se pide a Greenlight UNA vez por PSD y cliente: las que un admin guardó en Admin › Marcas
+  // (las exclusivas, sólo si se eligió su cliente) y, si no están, las gratuitas de Google Fonts. Espera a las
+  // recordadas en este navegador (con ellas casi nunca falta nada y no se pregunta). Llegan por el mismo camino que
+  // soltarlas: mismos topes y misma prueba contra Photoshop (pero éstas no se recuerdan en el navegador).
+  const pedirTipografias = useEffectEvent(async (l: Leido, c: string) => {
+    if (pedidasPara.current?.l === l && pedidasPara.current.c === c) return;
+    pedidasPara.current = { l, c };
     if (!faltanFuentes.length) return setResueltoPara(l);
-    // Lo que termina tarde sólo cuenta si ese PSD sigue en pantalla (otro leído encima hace su propio pedido).
-    const sigue = () => vivo.current && leidoVigente.current === l;
+    // Lo que termina tarde sólo cuenta si ese PSD sigue en pantalla con el mismo cliente (otro PSD u otro cliente
+    // hacen su propio pedido).
+    const sigue = () => vivo.current && leidoVigente.current === l && clienteVigente.current === c;
     setTrayendo((n) => n + 1);
     try {
       const r = await Promise.race([
-        tipografiasDelPsd(faltanFuentes),
-        new Promise<never>((_, no) => window.setTimeout(() => no(new Error("Greenlight no respondió")), GREENLIGHT_MS)),
+        tipografiasDelPsd(faltanFuentes, c || null),
+        new Promise<never>((_, no) => window.setTimeout(() => no(new Error("Greenlight no respondió")), PEDIDO_MS)),
       ]);
       if (!sigue()) return;
       if (!r.ok) return avisarFuentes({ nuevas: 0, malas: [], greenlightNo: true });
-      if (!r.tipografias.length) return;
+      setAjenas(r.ajenas.length ? { leido: l, cliente: c, lista: r.ajenas } : null);
+      const extra = r.ajenas.map((a) => textoAjenas(a, lang)).join(" ");
+      if (!r.tipografias.length) return void (extra && anunciar(extra));
       // Cada archivo por su lado: uno que falle (enlace vencido, red) no tumba a los demás; se nombra.
       const bajadas = await Promise.allSettled(
         r.tipografias.map(async (t) => {
@@ -673,17 +707,45 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
       if (fallaron.length) console.error("[formatos-psd] tipografías de Greenlight que no bajaron", fallaron, bajadas.filter((b) => b.status === "rejected"));
       const de = [...new Set(r.tipografias.map((t) => t.cliente).filter(Boolean))].join(", ");
       if (!archivos.length) return avisarFuentes({ nuevas: 0, malas: [], greenlightNo: true });
-      await agregarFuentes(archivos, de, fallaron);
+      // Las exclusivas se anotan ANTES de cargarlas (sólo los nombres que no había): si se cambia de cliente mientras
+      // cargan, el cambio ya las encuentra y las suelta.
+      for (const [i, t] of r.tipografias.entries()) {
+        if (!t.exclusivaDe || bajadas[i].status !== "fulfilled") continue;
+        for (const n of t.nombres) if (!tiposVigentes.current.has(n)) deExclusiva.current.set(n, t.exclusivaDe);
+      }
+      await agregarFuentes(archivos, { de, noBajaron: fallaron, vigente: sigue, extra });
     } catch (err) {
       console.error("[formatos-psd] tipografías de Greenlight", err);
       if (sigue()) avisarFuentes({ nuevas: 0, malas: [], greenlightNo: true });
     } finally {
       if (vivo.current) {
         setTrayendo((n) => n - 1);
-        setResueltoPara((p) => (leidoVigente.current === l ? l : p));
+        setResueltoPara((p) => (leidoVigente.current === l && clienteVigente.current === c ? l : p));
       }
     }
   });
+  /**
+   * Cambiar de cliente: se sueltan las tipografías que llegaron por ser exclusivas de OTRO cliente (DiDi Sans Pro deja
+   * de usarse si ya no es DiDi) y se vuelve a pedir lo que le falte al PSD en pantalla, ahora con el cliente nuevo.
+   */
+  const elegirCliente = (c: string) => {
+    clienteVigente.current = c;
+    setCliente(c);
+    const fuera = [...deExclusiva.current].filter(([, de]) => de !== c).map(([n]) => n);
+    if (fuera.length) {
+      for (const n of fuera) deExclusiva.current.delete(n);
+      setTipos((antes) => new Map([...antes].filter(([n]) => !fuera.includes(n))));
+      setNotaFuentes(null);
+      anunciar(rellenar(tx(FP.clienteSoltadas, lang), { f: unos(fuera) }));
+    }
+    setResueltoPara(null);
+    setAjenas(null);
+  };
+  // Lo que falta y es exclusivo de OTRO cliente se dice aparte ("elige DiDi arriba"); pedírselo a un admin no sirve.
+  const deOtroCliente = (ajenas?.leido === leido && ajenas.cliente === cliente ? ajenas.lista : [])
+    .map((a) => ({ cliente: a.cliente, nombres: a.nombres.filter((n) => faltanFuentes.includes(n)) }))
+    .filter((a) => a.nombres.length);
+  const faltanOtras = faltanFuentes.filter((n) => !deOtroCliente.some((a) => a.nombres.includes(n)));
   useEffect(() => {
     leidoVigente.current = leido;
     tiposVigentes.current = tipos;
@@ -692,9 +754,9 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     const l = leido;
     if (!l?.maestros.length || !recordadasListas) return;
     // Fuera del efecto (como la prueba de textos): el aviso de "trayendo" no se pinta en el mismo paso.
-    const reloj = window.setTimeout(() => void pedirTipografias(l), 0);
+    const reloj = window.setTimeout(() => void pedirTipografias(l, cliente), 0);
     return () => window.clearTimeout(reloj);
-  }, [leido, recordadasListas]);
+  }, [leido, recordadasListas, cliente, otraVez]);
   // El mismo texto suele venir en varias mesas: una línea por texto y motivo, con las medidas de sus mesas.
   const comoImagen = [
     ...revisiones
@@ -795,6 +857,31 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
           <Languages className="size-3.5" aria-hidden="true" /> {lang === "es" ? "EN" : "ES"}
         </button>
       </div>
+
+      {clientes.length > 0 && (
+        <div className="mb-4">
+          <label htmlFor="psd-cliente" className="block text-sm font-medium text-foreground">
+            {tx(FP.cliente, lang)}
+          </label>
+          <select
+            id="psd-cliente"
+            value={cliente}
+            onChange={(e) => elegirCliente(e.target.value)}
+            aria-describedby="psd-cliente-ayuda"
+            className="mt-1 block min-h-11 w-full max-w-xs cursor-pointer rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+          >
+            <option value="">{tx(FP.sinCliente, lang)}</option>
+            {clientes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </select>
+          <p id="psd-cliente-ayuda" className="mt-1 max-w-2xl text-xs text-muted-foreground">
+            {tx(FP.clienteAyuda, lang)}
+          </p>
+        </div>
+      )}
 
       {eleccion ? (
         <section className="p-enter max-w-2xl" aria-labelledby="psd-elegir-titulo">
@@ -1002,11 +1089,19 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                   {trayendo > 0 ? tx(FP.textoTrayendo, lang) : probando ? tx(FP.textoProbando, lang) : tipos.size ? rellenar(tx(FP.textoEstado, lang), { n: escritos, m: totalTextos }) : tx(FP.textoSinFuentes, lang)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">{tx(FP.textoAyuda, lang)}</p>
-                {faltanFuentes.length > 0 && !trayendo && resueltoPara === leido && (
+                {faltanOtras.length > 0 && !trayendo && resueltoPara === leido && (
                   <p className="mt-1 break-words text-xs text-foreground">
-                    {tx(FP.textoFaltan, lang)} {unos(faltanFuentes)}. <span className="text-muted-foreground">{tx(FP.textoFaltanAdmin, lang)}</span>
+                    {tx(FP.textoFaltan, lang)} {unos(faltanOtras)}. <span className="text-muted-foreground">{tx(FP.textoFaltanAdmin, lang)}</span>
                   </p>
                 )}
+                {!trayendo &&
+                  resueltoPara === leido &&
+                  deOtroCliente.map((a) => (
+                    <p key={a.cliente} className="mt-1 flex items-start gap-1.5 break-words text-xs text-foreground">
+                      <Lock className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      {textoAjenas(a, lang)}
+                    </p>
+                  ))}
                 {comoImagen.length > 0 && (
                   <>
                     <p id="psd-texto-imagen" className="mt-2 text-xs font-medium text-foreground">

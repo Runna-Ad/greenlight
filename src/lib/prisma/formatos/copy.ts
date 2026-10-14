@@ -191,16 +191,31 @@ export const FP = {
   textoEstado: t("{n} de {m} textos se escriben con su tipografía (cada mesa cuenta aparte)", "{n} of {m} texts are typeset with their font (each artboard counts)"),
   textoSinFuentes: t("Sin tipografías: el texto va como imagen, como siempre.", "No fonts: text goes as an image, as usual."),
   textoAyuda: t(
-    "Con las tipografías del anuncio el texto se vuelve a escribir en cada medida en vez de reducirse como imagen. Las del cliente que un admin guardó en Admin › Marcas llegan solas; las demás, arrástralas a esta página (.otf o .ttf, o la carpeta entera) o usa el botón: ésas se quedan en este navegador y no se suben. Cada texto se compara antes con el de Photoshop.",
-    "With the ad's fonts, the text is typeset again at every size instead of being shrunk as an image. The client's fonts that an admin saved in Admin › Marcas load on their own; drag any others onto this page (.otf or .ttf, or the whole folder) or use the button: those stay in this browser and are never uploaded. Each text is first checked against Photoshop's.",
+    "Con las tipografías del anuncio el texto se vuelve a escribir en cada medida en vez de reducirse como imagen. Las que un admin guardó en Admin › Marcas y las gratuitas de Google Fonts llegan solas; las demás, arrástralas a esta página (.otf o .ttf, o la carpeta entera) o usa el botón: ésas se quedan en este navegador y no se suben. Cada texto se compara antes con el de Photoshop.",
+    "With the ad's fonts, the text is typeset again at every size instead of being shrunk as an image. The ones an admin saved in Admin › Marcas and the free ones from Google Fonts load on their own; drag any others onto this page (.otf or .ttf, or the whole folder) or use the button: those stay in this browser and are never uploaded. Each text is first checked against Photoshop's.",
   ),
   textoFaltan: t("Faltan:", "Missing:"),
   textoFaltanAdmin: t(
     "Si son del cliente, pide a un admin que las suba en Admin › Marcas, en la tarjeta del cliente; la próxima vez que leas el PSD llegarán solas.",
     "If they're the client's, ask an admin to upload them in Admin › Marcas, on the client's card; the next time you read the PSD they'll load on their own.",
   ),
+  textoAjena: t(
+    "{f} es sólo para anuncios de {c}. Si este anuncio es de {c}, elige {c} arriba en «Cliente».",
+    "{f} is only for {c} ads. If this ad is for {c}, pick {c} above under “Client”.",
+  ),
+  textoAjenas: t(
+    "{f} son sólo para anuncios de {c}. Si este anuncio es de {c}, elige {c} arriba en «Cliente».",
+    "{f} are only for {c} ads. If this ad is for {c}, pick {c} above under “Client”.",
+  ),
   textoDeGreenlight: t("De Greenlight ({c}):", "From Greenlight ({c}):"),
-  textoTrayendo: t("Trayendo las tipografías del cliente…", "Fetching the client's fonts…"),
+  textoTrayendo: t("Trayendo las tipografías…", "Fetching the fonts…"),
+  cliente: t("Cliente", "Client"),
+  clienteAyuda: t(
+    "Para usar sus tipografías exclusivas (DiDi Sans Pro sólo sale en anuncios de DiDi). Sin cliente se usan las que sirven para todos.",
+    "To use its exclusive fonts (DiDi Sans Pro only goes on DiDi ads). With no client, only the fonts shared by everyone are used.",
+  ),
+  sinCliente: t("Sin cliente", "No client"),
+  clienteSoltadas: t("Se dejaron de usar las tipografías exclusivas del otro cliente: {f}.", "The other client's exclusive fonts are no longer used: {f}."),
   textoGreenlightNo: t(
     "No se pudieron traer las tipografías guardadas en Greenlight; puedes arrastrarlas aquí.",
     "The fonts saved in Greenlight couldn't be brought in; you can drag them here.",

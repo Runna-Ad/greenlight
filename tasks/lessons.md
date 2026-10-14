@@ -1012,3 +1012,14 @@ PEDRO'S APPROACH: "dont worry so much about font security, its fine... if we nee
 WHY IT WAS BETTER: las tipografías son herramienta de trabajo del equipo; una biblioteca compartida es justo lo que quiere (se sube una vez y sirve para todos). El riesgo es bajo y la licencia la maneja el equipo; las advertencias le costaban decisiones sin cambiar nada.
 RULE: en tipografías de Greenlight se queda lo básico (sólo el equipo con sesión las baja) y NO se vuelve a plantear licencias ni límites por cliente. La búsqueda por nombre en TODOS los clientes es el diseño buscado; la tarjeta del cliente es sólo dónde se sube.
 TAGS: #pedro-override #formatos #tipografias #no-sobre-advertir #biblioteca-compartida
+
+[2026-10-14] PEDRO_OVERRIDE (Formatos: el cliente se ELIGE a mano, no se adivina ni sólo se etiqueta): para las tipografías exclusivas (DiDi Sans Pro sólo para DiDi) planeé que Formatos las usara igual y sólo pusiera la etiqueta "exclusiva de DiDi", porque el nombre del PSD no dice de qué cliente es (APGIANTCARD… no está en la base).
+PEDRO'S APPROACH: "for the client it can be a manual selector like the other sections of prisma work... is this for a client? dropdown or select skip and go with no client".
+WHY IT WAS BETTER: con el cliente elegido la regla se CUMPLE (la exclusiva sólo llega con su cliente) en vez de avisar y esperar que alguien lea el aviso; y es el mismo control que ya usan las otras pantallas de Prisma, así que nadie aprende nada nuevo. "Sin cliente" es el salto.
+RULE: cuando la app no puede saber un dato de contexto con certeza (cliente, marca, canal), se pregunta con el control que el resto del producto ya usa para eso, con una opción de "ninguno"; no se adivina por el nombre del archivo ni se baja la regla a una etiqueta.
+TAGS: #pedro-override #formatos #tipografias #selector #no-adivinar #consistencia
+
+[2026-10-14] LESSON (fuentesDe: una regla sacada de UNA tipografía falló con las de Google): el lector de nombres de las variables ponía el prefijo de la familia delante del nombre de cada estilo. Con DiDi funcionaba porque sus estilos se llaman sólo "Bold". Al probar contra el catálogo real de Google salieron dos fallas: Montserrat Italic ya trae el nombre completo y quedaba "MontserratItalic-Montserrat-ThinItalic", y Open Sans variable dice "OpenSansRoman-Bold" mientras el PSD guarda "OpenSans-Bold" (el de la estática). Ningún test lo veía: los archivos de prueba estaban hechos a la medida de DiDi.
+ROOT CAUSE: generalicé el formato de nombres a partir de un solo archivo real.
+RULE: un lector de formatos de archivo (tipografías, PSD, metadatos) se prueba contra al menos 3 archivos reales de fabricantes distintos antes de darlo por bueno, y cada caso raro que aparezca se vuelve un test con su archivo falso.
+TAGS: #formatos #tipografias #variable-fonts #probar-con-reales #google-fonts

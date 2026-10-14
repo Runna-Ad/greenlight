@@ -44,8 +44,10 @@ export type MarcaOpt = { id: string; name: string };
 /** Una marca (sub-marca) con su logo y su preset de HÜE Prisma, para el panel de Marcas. */
 export type MarcaLogo = { id: string; name: string; slug: string; logo_url: string | null; prisma_preset: PresetGuardado };
 
-/** Una tipografía del cliente (para Formatos): el archivo subido y los nombres que trae. */
-export type TipografiaCliente = { id: string; archivo: string; nombres: string[]; bytes: number };
+/** Una tipografía de la biblioteca de Formatos: el archivo, los nombres que trae y si es sólo de su cliente. */
+export type TipografiaGuardada = { id: string; archivo: string; nombres: string[]; bytes: number; exclusiva: boolean };
+/** "sin-tabla" = la base todavía no guarda tipografías (falta la migración 0079); "error" = no se pudieron leer. */
+export type TipografiasEstado = TipografiaGuardada[] | "sin-tabla" | "error";
 
 /** Un cliente con sus marcas (sub-marcas) — DiDi → Card / Préstamos. */
 export type ClienteConMarcas = {
@@ -54,8 +56,7 @@ export type ClienteConMarcas = {
   slug: string;
   logo_url: string | null;
   marcas: MarcaLogo[];
-  /** "sin-tabla" = la base todavía no guarda tipografías (falta la migración 0079); "error" = no se pudieron leer. */
-  tipografias: TipografiaCliente[] | "sin-tabla" | "error";
+  tipografias: TipografiasEstado;
 };
 
 export type IntegracionesEstado = {

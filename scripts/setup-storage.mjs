@@ -6,6 +6,7 @@
 //
 // Idempotente: se puede correr las veces que sea. NO está en `npm test`.
 //   node scripts/setup-storage.mjs
+//   node scripts/setup-storage.mjs --only <bucket>   → sólo ése (Pedro aprueba cada uno por nombre)
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
@@ -33,9 +34,10 @@ const BUCKETS = [
   // Prisma › Formatos: PRIVADO. El anuncio subido (fuente/…) y sus tamaños (salida/<lote>/…). Sube el
   // navegador directo con una URL firmada (Vercel corta los cuerpos de más de 4.5 MB); se lee firmado.
   { name: "greenlight-formatos", public: false, fileSizeLimit: "25MB", allowedMimeTypes: ["image/png", "image/jpeg", "image/webp"] },
-  // Tipografías de cada cliente (0079): PRIVADO. Letra con licencia del cliente: sólo la baja el equipo con sesión,
-  // por URL firmada (Formatos la pide al leer un PSD). Sube el servidor, con el tipo que sale de leer sus bytes.
-  { name: "greenlight-tipografias", public: false, fileSizeLimit: "4MB", allowedMimeTypes: ["font/otf", "font/ttf"] },
+  // Biblioteca de tipografías de Formatos (0079): PRIVADO. Sólo la baja el equipo con sesión, por URL firmada (Formatos
+  // la pide al leer un PSD). Sube el servidor, con el tipo que sale de leer sus bytes: las de Admin (hasta 4 MB, el
+  // tope de Vercel) y las que trae de Google Fonts (variables de hasta 10 MB).
+  { name: "greenlight-tipografias", public: false, fileSizeLimit: "10MB", allowedMimeTypes: ["font/otf", "font/ttf"] },
 ];
 
 // Cargar .env.local sin dependencias (los scripts de este repo no usan dotenv).
@@ -60,6 +62,13 @@ if (!url || !key) {
   process.exit(1);
 }
 
+const i = process.argv.indexOf("--only");
+const only = i >= 0 ? process.argv[i + 1] : null;
+if (i >= 0 && !BUCKETS.some((b) => b.name === only)) {
+  console.error(`--only: "${only ?? ""}" no es un bucket de la lista (${BUCKETS.map((b) => b.name).join(", ")}).`);
+  process.exit(1);
+}
+
 const db = createClient(url, key);
 
 const { data: buckets, error: listErr } = await db.storage.listBuckets();
@@ -72,7 +81,7 @@ if (listErr) {
 // (si no, la revisión "corregiría" todos los buckets en cada corrida y escondería un cambio real).
 const MB = (v) => Number(String(v).replace(/MB$/i, ""));
 const mismoTope = (bytes, v) => [1000 * 1000, 1024 * 1024].some((u) => Number(bytes) === MB(v) * u);
-for (const b of BUCKETS) {
+for (const b of BUCKETS.filter((x) => !only || x.name === only)) {
   const existe = buckets.find((x) => x.name === b.name);
   if (existe) {
     // Que exista no basta: en un proyecto compartido alguien pudo crearlo a mano (público, sin tope). Si su

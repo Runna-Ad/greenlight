@@ -25,6 +25,7 @@ import type { MiembroRow } from "@/lib/equipo";
 import type {
   ActividadRow,
   ClienteConMarcas,
+  TipografiasEstado,
   IntegracionesEstado,
   MarcaOpt,
   SnippetRow,
@@ -78,6 +79,7 @@ export function AdminShell({
   equipoInicial,
   soy,
   marcas,
+  tipografiasGoogle,
   actividad,
   integraciones,
   biblioteca,
@@ -89,6 +91,8 @@ export function AdminShell({
   equipoInicial: MiembroRow[];
   soy: Soy;
   marcas: ClienteConMarcas[];
+  /** Las gratuitas que Formatos trajo de Google Fonts (sección propia en Marcas). */
+  tipografiasGoogle: TipografiasEstado;
   actividad: ActividadRow[];
   integraciones: IntegracionesEstado;
   biblioteca: { snippets: SnippetRow[]; marcas: MarcaOpt[] };
@@ -158,7 +162,7 @@ export function AdminShell({
               empresas={marcas.map((c) => ({ id: c.id, name: c.name, slug: c.slug }))}
             />
           )}
-          {tab === "marcas" && <MarcasTab clientes={marcas} />}
+          {tab === "marcas" && <MarcasTab clientes={marcas} tipografiasGoogle={tipografiasGoogle} />}
           {tab === "actividad" && <ActividadTab rows={actividad} />}
           {tab === "integraciones" && <IntegracionesTab estado={integraciones} />}
           {tab === "biblioteca" && <BibliotecaTab snippets={biblioteca.snippets} marcas={biblioteca.marcas} />}

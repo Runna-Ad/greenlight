@@ -222,8 +222,9 @@ export type FuenteArchivo = { ps: string; peso: number | null };
 
 /**
  * Los nombres PostScript que trae un .otf/.ttf: el suyo y, si es variable, el de cada estilo con nombre (Photoshop
- * guarda "DiDiSansVariable-Bold": prefijo de la familia + nombre del estilo). Sólo estilos no cursivos. Lanza si
- * no es una tipografía.
+ * guarda "DiDiSansVariable-Bold": el nombre propio del estilo, o prefijo de la familia + nombre del estilo), más el
+ * que tendría su versión estática ("OpenSans-Bold" para "OpenSansRoman-Bold"). Sin estilos del eje de cursiva. Lanza
+ * si no es una tipografía.
  */
 /** Topes de lo que se cree de un archivo de tipografía (uno hecho a propósito podría pedir millones de nombres). */
 const TABLAS_MAX = 64, EJES_MAX = 64, ESTILOS_MAX = 256, NOMBRE_BYTES_MAX = 256;
@@ -249,7 +250,7 @@ export function fuentesDe(buf: ArrayBuffer): FuenteArchivo[] {
   // fvar primero: dice qué nombres (de sus estilos) hacen falta. Sólo se decodifican ésos.
   const fv = tablas.fvar;
   const ejes: string[] = [], estilos: { o: number; tam: number }[] = [];
-  const quiero = new Set([6, 25]);
+  const quiero = new Set([1, 6, 16, 25]);
   if (fv && fv.len >= 16) {
     const ejesOff = fv.off + v.getUint16(fv.off + 4);
     const nEjes = v.getUint16(fv.off + 8), nInst = v.getUint16(fv.off + 12), tam = v.getUint16(fv.off + 14);
@@ -281,15 +282,26 @@ export function fuentesDe(buf: ArrayBuffer): FuenteArchivo[] {
   const nEjes = ejes.length;
   const iW = ejes.indexOf("wght"), iI = ejes.indexOf("ital");
   const prefijo = nombres[25] ?? ps.replace(/-[^-]*$/, "");
+  // Familia sin espacios: así nombra Google (y casi todos) a la versión ESTÁTICA de cada estilo ("OpenSans-Bold"),
+  // que es la que suele tener instalada el diseñador y la que guarda el PSD. La variable dice "OpenSansRoman-Bold".
+  const familia = (nombres[16] ?? nombres[1] ?? "").replace(/\s+/g, "");
   const out = new Map<string, FuenteArchivo>();
   for (const { o, tam } of estilos) {
     const coord = (k: number) => v.getInt32(o + 4 + k * 4) / 65536;
     if (iI >= 0 && coord(iI) !== 0) continue;
     const psId = tam >= nEjes * 4 + 6 ? v.getUint16(o + 4 + nEjes * 4) : 0xffff;
-    const sufijo = (psId !== 0xffff && nombres[psId]) || nombres[v.getUint16(o)] || "";
-    if (!sufijo) continue;
-    const nombre = sufijo.startsWith(prefijo) ? sufijo : `${prefijo}-${sufijo.replace(/\s+/g, "")}`;
-    if (!out.has(nombre)) out.set(nombre, { ps: nombre, peso: iW >= 0 ? coord(iW) : null });
+    // El nombre PostScript propio del estilo: si ya viene completo ("Montserrat-SemiBoldItalic", con guion o con el
+    // prefijo) va tal cual; si es sólo el estilo ("Bold", como en DiDi), o no hay y se usa el nombre del estilo
+    // ("Semi-Bold" también), lleva el prefijo de la familia delante.
+    const ps0 = (psId !== 0xffff && nombres[psId]) || "";
+    const estilo = (nombres[v.getUint16(o)] ?? "").replace(/\s+/g, "");
+    const peso = iW >= 0 ? coord(iW) : null;
+    const completo = !!ps0 && !/\s/.test(ps0) && (ps0.includes("-") || ps0.startsWith(prefijo));
+    const base = (ps0 || estilo).replace(/\s+/g, "");
+    const principal = completo ? ps0 : base && `${prefijo}-${base}`;
+    for (const nombre of [principal, familia && estilo && `${familia}-${estilo}`]) {
+      if (nombre && !out.has(nombre)) out.set(nombre, { ps: nombre, peso });
+    }
   }
   return out.size ? [...out.values()] : [{ ps, peso: null }];
 }

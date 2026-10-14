@@ -76,9 +76,9 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 - Siguen abiertas: letra mínima aceptable del legal (hoy 10 px provisional) · 3-5 PSD más.
 
 ### Plan B — puerta PSD (2026-10-13)
-**Next Step (2026-10-14):** B7 hecho (el legal se escribe; texto con la gamma de Photoshop). Falta que Pedro elija
-camino para "tipografías por marca" y diga si se quita el renglón chico ("Línea de crédito de hasta:") en 320×50.
-Después: que pruebe la preview con su PSD y las DiDi; B4.
+**Next Step (2026-10-14):** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
+subir. La prueba de punta a punta de tipografías espera el "ship it" de 0079 + bucket. 320×50 se queda igual
+(Pedro). Después: que pruebe la preview con su PSD y las DiDi; B4.
 **Antes (Pedro, 2026-10-13, al ver la pantalla):** (1) que las medidas CHICAS no pierdan calidad: nítidas y
 legibles ("they need to be crisp and high quality in order to have them legible"): proponerle 2-3 caminos y que
 elija · (2) la guía de zona segura debe decir de QUÉ app: un selector de canal ("if you want to check safe zones
@@ -331,7 +331,7 @@ largo: estacionado por él.
 - [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
       Se suben UNA vez en Admin › Marcas, en la tarjeta del CLIENTE (DiDi cubre Card y Préstamos); Formatos pide
       por nombre las que le faltan al PSD y las carga solo. Nadie elige nada.
-      - [x] Migración 0079 `produccion.tipografias_cliente` (cliente, archivo, ruta, sha256, bytes, nombres[]),
+      - [x] Migración 0079 `produccion.tipografias_cliente` (en B9 pasó a `produccion.tipografias`) (cliente, archivo, ruta, sha256, bytes, nombres[]),
             RLS master-only, escribe service_role · bucket PRIVADO `greenlight-tipografias` en setup-storage.mjs
             (letra con licencia: sólo el equipo con sesión la baja, por URL firmada de 10 min). SIN APLICAR.
       - [x] `lib/prisma/formatos/tipografias.ts` (puro): ¿es otf/ttf? (por sus bytes, con `fuentesDe`), nombres del
@@ -360,6 +360,45 @@ largo: estacionado por él.
             (igual que el resto de Marcas) · filtrar en SQL con overlaps + índice (el catálogo es chico; se cruza en
             el servidor a propósito) · borrar la caché del navegador al cerrar sesión (sólo guarda lo que la persona
             soltó). Pedro decidió (2026-10-14): se busca en TODOS los clientes ("if more than one client use the same font thats fine"); comerciales se suben igual; sin advertencias de licencia.
+- [~] B9. Biblioteca de tipografías: gratuitas de Google + exclusivas por cliente (Pedro, 2026-10-14: "1, go ahead but
+      also there are specific client fonts like didi pro sans can only be used by didi" y, a media obra, "for the
+      client it can be a manual selector like the other sections of prisma work... select skip and go with no client").
+      - [x] 0079 reescrita (SIN APLICAR): tabla `produccion.tipografias` (antes `tipografias_cliente`): `client_id` null
+            = de Google; `origen` subida|google; `exclusiva` (sólo de cliente); subidas ≤ 4 MB, Google ≤ 10 MB; ruta
+            `<cliente|google>/<sha256>.<ext>` atada a su dueño; la misma de Google una vez (índice parcial). Bucket a 10 MB.
+      - [x] `google-fonts.ts`: carpeta por el nombre PostScript ("OpenSans-Bold" → opensans), METADATA.pb en
+            ofl/apache/ufl, baja las variables o las estáticas pedidas (6 familias × 8 archivos), se queda sólo con lo
+            que de verdad trae el nombre (leído de sus bytes), "no está" se recuerda 1 h. Probado contra GitHub real:
+            Montserrat, Montserrat Italic, Lato, Open Sans sí; DiDi no (y no se vuelve a preguntar).
+      - [x] `fuentesDe` (arreglo encontrado así): un estilo variable con nombre propio completo ya no se duplica
+            ("MontserratItalic-Montserrat-ThinItalic") y cada estilo responde también al nombre de su estática
+            ("OpenSans-Bold" para "OpenSansRoman-Bold"). La variable de DiDi sigue dando sus 4 nombres iguales.
+      - [x] Formatos PSD: selector «Cliente» arriba ("Sin cliente" = sólo las que sirven para todos). Las exclusivas
+            sólo llegan con su cliente elegido; al cambiar de cliente se sueltan y se vuelve a pedir. Lo que falta y es
+            exclusivo de otro cliente se dice aparte ("es sólo para anuncios de DiDi: elige DiDi arriba").
+      - [x] Admin › Marcas: casilla "Sólo para {cliente}" al subir (marcada), botón por fila "Sólo DiDi / Para todos"
+            (al instante, vuelve si falla), sección "Tipografías gratuitas (Google Fonts)" con borrar.
+      - [x] Pruebas: test-db 574/0 · test-formatos 254/0 · `npm test` verde · tsc/eslint limpios.
+      - [x] "Ship it" (Pedro, 2026-10-14): 0079 APLICADA sola (`migrate.mjs --only 20261014120001 --project-ref
+            ybbrpqzbedaxsmotgtkh`; 0078 sigue sin aplicar) y bucket `greenlight-tipografias` creado solo
+            (`setup-storage.mjs --only`). Verificado en vivo: tabla, RLS, 1 política, ledger, bucket privado 10 MB.
+      - [x] Prueba de punta a punta en vivo: subidas las 9 DiDi Sans Pro como "Sólo DiDi" (9 filas, 9 archivos).
+            APGIANTCARD con "Sin cliente": no llegan y dice "son sólo para anuncios de DiDi, elige DiDi arriba";
+            con DiDi: 12 de 12 textos escritos, todo desde Greenlight; de vuelta a "Sin cliente": se sueltan.
+            PSD de prueba con Montserrat-Bold: la trajo de Google sola, quedó en la biblioteca (Montserrat[wght].ttf,
+            745 KB, 9 estilos) y llegó al navegador.
+      - [x] Revisión (código sonnet + seguridad opus, 2026-10-14). Arreglado: freno por persona para Google, un
+            archivo a la vez con 40 MB por pedido, 2 búsquedas a la vez, plazo de 12 s, lectura con tope (sin fiarse
+            del content-length), sin redirecciones, "el estilo no está" también se recuerda, tope de 300 de Google,
+            archivo huérfano se borra, nombre de archivo ≤ 120 · lo de su cliente gana aunque otro archivo cubra más ·
+            tope de 30 archivos entre las dos vueltas · guardados a la vez · cambiar de cliente a media carga ya no
+            revive exclusivas (sólo se suma lo nuevo) · pedido con 45 s (van en fila) · "Olvidar" vuelve a pedir ·
+            nota y aviso al soltar exclusivas · las exclusivas de otro cliente se dicen al lector de pantalla ·
+            clientes activos (no sólo los que tienen marcas) · nombre de estilo con guion lleva prefijo · Admin: el
+            botón Sólo/Para todos espera al servidor, aviso al confirmar, aria-label fijo · selector de 44 px.
+            NO hecho (anotado): no buscar en Google las exclusivas de otro cliente (las gratuitas son de todos; lo
+            que no está se recuerda 1 h) · filtrar en SQL con índice GIN (catálogo chico, con topes) · mandar menos
+            nombres a Admin · avisar "no se pudo consultar Google" aparte · recordar en el navegador las de Google.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

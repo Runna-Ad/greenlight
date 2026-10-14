@@ -2748,10 +2748,10 @@ console.log("\n▶ 0078 — prisma_formatos_lotes + prisma_formatos_salidas");
   eq("borrar el lote se lleva sus salidas (cascade)", `${borra}→${await scalar(`select count(*) from produccion.prisma_formatos_salidas where lote_id = $1`, [lote])}`, "2→0");
 }
 
-// ── 0079: tipografías de cada cliente (Formatos las pide por nombre) ──
-console.log("\n▶ 0079 — tipografias_cliente");
+// ── 0079: biblioteca de tipografías (Formatos las pide por nombre) ──
+console.log("\n▶ 0079 — tipografias");
 {
-  const t = "tipografias_cliente";
+  const t = "tipografias";
   eq(`${t} existe con RLS`, Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = '${t}' and c.relrowsecurity`)), 1);
   eq(`${t}: policy master-only`, Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = '${t}' and qual like '%master%'`)), 1);
   ok(`${t}: service_role puede escribir`, (await q(`select has_table_privilege('service_role', 'produccion.${t}', 'insert') as ok`))[0].ok);
@@ -2760,11 +2760,15 @@ console.log("\n▶ 0079 — tipografias_cliente");
   const cli = await scalar(`insert into produccion.clients (name, slug) values ('Tipos SA', 'tipos-sa') returning id`);
   const otro = await scalar(`insert into produccion.clients (name, slug) values ('Otro SA', 'otro-sa') returning id`);
   const sha = "a".repeat(64);
+  // c = el cliente (null = de Google); `origen` sale de c si no se dice.
   const fila = (c, s, ruta, extra = {}) => db.query(
-    `insert into produccion.${t} (client_id, archivo, ruta, sha256, bytes, nombres) values ($1, $2, $3, $4, $5, $6) returning id`,
-    [c, extra.archivo ?? "DiDiSans-Pro-Medium.otf", ruta, s, extra.bytes ?? 46768, extra.nombres ?? ["DiDiSans-Pro-Medium"]],
+    `insert into produccion.${t} (client_id, origen, exclusiva, archivo, ruta, sha256, bytes, nombres) values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
+    [c, extra.origen ?? (c ? "subida" : "google"), extra.exclusiva ?? false, extra.archivo ?? "DiDiSans-Pro-Medium.otf", ruta, s, extra.bytes ?? 46768, extra.nombres ?? ["DiDiSans-Pro-Medium"]],
   );
-  ok("una tipografía bien formada entra", !!(await fila(cli, sha, `${cli}/${sha}.otf`)).rows[0]?.id);
+  ok("una tipografía de cliente bien formada entra", !!(await fila(cli, sha, `${cli}/${sha}.otf`)).rows[0]?.id);
+  ok("una EXCLUSIVA de cliente entra", !!(await fila(cli, "9".repeat(64), `${cli}/${"9".repeat(64)}.otf`, { exclusiva: true })).rows[0]?.id);
+  const g = "8".repeat(64);
+  ok("una de Google (sin cliente) entra, hasta 10 MB", !!(await fila(null, g, `google/${g}.ttf`, { bytes: 9_000_000, archivo: "Montserrat[wght].ttf" })).rows[0]?.id);
   const malas = [
     ["el mismo archivo dos veces en el cliente", () => fila(cli, sha, `${cli}/${sha}.ttf`)],
     ["una ruta que apunta a OTRO cliente", () => fila(cli, "b".repeat(64), `${otro}/${"b".repeat(64)}.otf`)],
@@ -2772,18 +2776,27 @@ console.log("\n▶ 0079 — tipografias_cliente");
     ["una ruta que no es .otf/.ttf", () => fila(cli, "e".repeat(64), `${cli}/${"e".repeat(64)}.woff2`)],
     ["una ruta con ../", () => fila(cli, "f".repeat(64), `../${"f".repeat(64)}.otf`)],
     ["una huella que no es sha256", () => fila(cli, "xyz", `${cli}/xyz.otf`)],
-    ["un archivo de más de 4 MB", () => fila(cli, "1".repeat(64), `${cli}/${"1".repeat(64)}.otf`, { bytes: 4_000_001 })],
+    ["una subida de más de 4 MB", () => fila(cli, "1".repeat(64), `${cli}/${"1".repeat(64)}.otf`, { bytes: 4_000_001 })],
     ["un archivo sin nombres", () => fila(cli, "2".repeat(64), `${cli}/${"2".repeat(64)}.otf`, { nombres: [] })],
     ["un nombre vacío en la lista", () => fila(cli, "3".repeat(64), `${cli}/${"3".repeat(64)}.otf`, { nombres: ["A", null] })],
     ["un nombre de archivo de más de 120", () => fila(cli, "4".repeat(64), `${cli}/${"4".repeat(64)}.otf`, { archivo: "x".repeat(121) })],
+    ["la misma de Google dos veces", () => fila(null, g, `google/${g}.otf`)],
+    ["una de Google de más de 10 MB", () => fila(null, "5".repeat(64), `google/${"5".repeat(64)}.ttf`, { bytes: 10_000_001 })],
+    ["una de Google con cliente", () => fila(cli, "6".repeat(64), `${cli}/${"6".repeat(64)}.ttf`, { origen: "google" })],
+    ["una subida sin cliente", () => fila(null, "7".repeat(64), `google/${"7".repeat(64)}.ttf`, { origen: "subida" })],
+    ["una de Google exclusiva (no es de nadie)", () => fila(null, "0".repeat(64), `google/${"0".repeat(64)}.ttf`, { exclusiva: true })],
+    ["una de Google guardada en la carpeta de un cliente", () => fila(null, "ab".repeat(32), `${cli}/${"ab".repeat(32)}.ttf`)],
+    ["una de cliente guardada en la carpeta de Google", () => fila(cli, "cd".repeat(32), `google/${"cd".repeat(32)}.ttf`)],
+    ["un origen inventado", () => fila(cli, "ef".repeat(32), `${cli}/${"ef".repeat(32)}.ttf`, { origen: "otro" })],
   ];
   for (const [que, hacer] of malas) ok(`la BD rechaza ${que}`, await hacer().then(() => false).catch(() => true));
   ok("el mismo archivo en OTRO cliente sí entra (cada cliente tiene su copia)", !(await rechaza(`insert into produccion.${t} (client_id, archivo, ruta, sha256, bytes, nombres) values ($1, 'x.otf', $2, $3, 46768, '{X}')`, [otro, `${otro}/${sha}.otf`, sha])));
+  ok("una subida nueva es para todos (no exclusiva) y de origen 'subida' si no se dice", (await q(`select exclusiva = false and origen = 'subida' as ok from produccion.${t} where client_id = $1 and archivo = 'x.otf'`, [otro]))[0]?.ok === true);
   await asRole(CREA);
   eq("un creativo con sesión NO ve las tipografías (sólo por el servidor)", Number(await scalar(`select count(*) from produccion.${t}`)), 0);
   await resetRole();
   ok("la BD NO deja borrar un cliente que aún tiene tipografías (sus archivos quedarían sin fila)", await rechaza(`delete from produccion.clients where id = $1`, [cli]));
-  await db.query(`delete from produccion.${t} where client_id in ($1, $2)`, [cli, otro]);
+  await db.query(`delete from produccion.${t} where client_id in ($1, $2) or client_id is null`, [cli, otro]);
   ok("sin tipografías, el cliente sí se borra", !(await rechaza(`delete from produccion.clients where id = $1`, [cli])) && !(await rechaza(`delete from produccion.clients where id = $1`, [otro])));
 }
 
