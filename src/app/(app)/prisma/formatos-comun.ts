@@ -85,6 +85,9 @@ export function salidaVista(s: PrismaFormatosSalidaRow, urls: Map<string, string
 
 /** Las rutas no traen el chequeo de origen de las server actions: sólo se acepta la propia página. */
 export function mismoOrigen(req: Request): boolean {
+  // El navegador dice de dónde viene el pedido y una página no lo puede falsear: si lo dice, tiene que ser esta.
+  const sitio = req.headers.get("sec-fetch-site");
+  if (sitio && sitio !== "same-origin") return false;
   const origen = req.headers.get("origin");
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
   if (!origen || !host) return false;

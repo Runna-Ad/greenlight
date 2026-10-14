@@ -11,7 +11,7 @@ import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
 import { CANALES, MEDIDAS_EQUIPO, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Lado } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type CopiaEnFondo } from "@/lib/prisma/formatos/revisar";
-import { DERIVA_IA_REVISAR, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
+import { DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
 import { COSTO_IA_USD, LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
 import { LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoWorker } from "@/lib/prisma/formatos/listo";
@@ -24,8 +24,10 @@ import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD. El anuncio llega en Photoshop: un Web Worker lo lee y lo separa en fondo
- * limpio + piezas, y cada medida se pinta aquí mismo en un <canvas>. Nada se sube ni se guarda: no hay base, ni
- * IA, ni costo. Lo que decide DÓNDE va cada pieza es `acomodo.ts` (probado aparte); esta pantalla sólo lo enseña.
+ * limpio + piezas, y cada medida se pinta aquí mismo en un <canvas>. Nada se sube ni se guarda y no hay costo, salvo
+ * un caso que la persona pide con un botón: «Rellenar con IA» manda a Gemini un recorte del fondo y la pieza (la ruta
+ * /api/prisma/formatos/copia). Lo que decide DÓNDE va cada pieza es `acomodo.ts` (probado aparte); esta pantalla sólo
+ * lo enseña.
  */
 
 type Falla = { clave: keyof typeof FP_ERROR; detalle?: string };
@@ -34,12 +36,13 @@ type Medida = { w: number; h: number };
 /** Un maestro como se acomoda y se pinta: con el papel elegido en cada carpeta y, si se aprobó, sin la copia del fondo. */
 type MaestroVista = MaestroListo & { copia?: CopiaEnFondo | null };
 /** Cómo se quitó: gratis (espejo) o con la IA (lo que costó y cuánto cambió lo de alrededor). */
-type Quitada = { pieza: number; fondo: Uint8ClampedArray } & ({ metodo: "espejo" } | { metodo: "ia"; costoUsd: number | null; deriva: number });
-/** Lado mayor de la imagen de la pieza que se le manda a la IA (sólo es para que sepa qué borrar). */
-const PIEZA_IA_MAX = 768;
+type Quitada = { pieza: number; fondo: Uint8ClampedArray } & ({ metodo: "espejo" } | { metodo: "ia"; costoUsd: number | null; deriva: number | null });
+
 /** El último `MaestroVista` armado para cada maestro y con qué: si no cambió nada de ESE maestro, se devuelve el mismo
  *  objeto y sus tarjetas no se vuelven a pintar (quitar la copia de una mesa no repinta las de otra). */
 const vistas = new WeakMap<MaestroListo, { q: Quitada | null; g: Gemela | null; v: MaestroVista }>();
+/** Lo más que la pantalla espera a la IA (la ruta le da 150 s, más subir y bajar). */
+const IA_ESPERA_MS = 170_000;
 /** Cuánto se ignora otra activación de «Quitar del fondo» / «Deshacer» (Enter sostenido). El doble clic se ignora
  *  aparte, por `detail`: su segundo clic puede llegar más tarde que esto si el primero tuvo ocupada la página. */
 const COPIA_PAUSA_MS = 400;
@@ -65,22 +68,33 @@ const sinExtension = (archivo: string) => archivo.replace(/\.psd$/i, "");
 const aPng = (lienzo: HTMLCanvasElement): Promise<Blob> =>
   new Promise((ok, mal) => lienzo.toBlob((b) => (b ? ok(b) : mal(new Error("toBlob"))), "image/png"));
 
+/** Un RGBA como PNG de a lo más `bytes`: se achica (lado mayor desde `max`, ×0.75 cada vez) hasta que quepa. Si ni a
+ *  256 px cabe, va así y la ruta dice que es demasiado grande. */
+async function pngQueQuepa(rgba: Uint8ClampedArray<ArrayBuffer>, w: number, h: number, max: number, bytes: number): Promise<Blob> {
+  for (let lado = max; ; lado = Math.round(lado * 0.75)) {
+    const b = await aPng(lienzoDe(rgba, w, h, lado));
+    if (b.size <= bytes || lado <= 256) return b;
+  }
+}
 /** Un RGBA en un lienzo; si su lado mayor pasa de `max`, reducido (con el suavizado del navegador). */
 function lienzoDe(rgba: Uint8ClampedArray<ArrayBuffer>, w: number, h: number, max = Infinity): HTMLCanvasElement {
+  // Sin contexto (el navegador se quedó sin memoria de lienzos) se corta aquí: nunca se manda una imagen en blanco.
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
-  c.getContext("2d")?.putImageData(new ImageData(rgba, w, h), 0, 0);
+  const origen = c.getContext("2d");
+  if (!origen) throw new Error("sin 2d");
+  origen.putImageData(new ImageData(rgba, w, h), 0, 0);
   const k = Math.min(1, max / Math.max(w, h));
   if (k === 1) return c;
   const r = document.createElement("canvas");
   r.width = Math.max(1, Math.round(w * k));
   r.height = Math.max(1, Math.round(h * k));
   const ctx = r.getContext("2d");
-  if (ctx) {
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(c, 0, 0, r.width, r.height);
-  }
+  if (!ctx) throw new Error("sin 2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(c, 0, 0, r.width, r.height);
+  c.width = c.height = 0; // suelta la memoria del lienzo grande ya
   return r;
 }
 /** El rectángulo `c` de un RGBA de ancho W. */
@@ -376,8 +390,12 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const [sinCopia, setSinCopia] = useState<{ leido: Leido; mapa: Map<number, Quitada> } | null>(null);
   /** Cuándo se quitó o devolvió la última copia (ver COPIA_PAUSA_MS). */
   const ultimaCopia = useRef(0);
-  /** El maestro (índice) cuya copia está borrando la IA ahora: una a la vez, y su botón espera. */
-  const [conIA, setConIA] = useState<number | null>(null);
+  /** La copia que está borrando la IA ahora (de qué PSD y qué maestro): una a la vez, y su botón espera. */
+  const [conIA, setConIA] = useState<{ leido: Leido; i: number } | null>(null);
+  /** El pedido a la IA en curso: se cancela al cambiar de PSD o al salir de la pantalla. */
+  const pedidoIA = useRef<AbortController | null>(null);
+  /** Tras quitar con IA, el foco va al botón de esa copia (el de la IA desaparece). */
+  const enfocarCopia = useRef<number | null>(null);
   /** Lo que le falta al PSD pero es exclusivo de OTRO cliente (de qué PSD y con qué cliente elegido se preguntó). */
   const [ajenas, setAjenas] = useState<{ leido: Leido; cliente: string; lista: { cliente: string; nombres: string[] }[] } | null>(null);
   const [leido, setLeido] = useState<Leido | null>(null);
@@ -445,6 +463,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     return () => {
       vivo.current = false;
       soltar();
+      pedidoIA.current?.abort();
     };
   }, [soltar]);
   const anunciar = useCallback((t: string) => setAviso((p) => ({ texto: t, n: p?.texto === t ? p.n + 1 : 0 })), []);
@@ -475,7 +494,16 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
       }),
     [conPapel],
   );
+  /** Lo de ahora para lo que termina tarde (la respuesta de la IA): las copias y el idioma de la pantalla. */
+  const copiasVigentes = useRef(copias);
+  const langVigente = useRef(lang);
+  useEffect(() => {
+    copiasVigentes.current = copias;
+    langVigente.current = lang;
+  }, [copias, lang]);
   const quitadas = sinCopia?.leido === leido ? sinCopia.mapa : null;
+  /** El maestro cuya copia está borrando la IA en ESTE PSD (null si ninguno). */
+  const iaEnCurso = conIA && conIA.leido === leido ? conIA.i : null;
   /** Lo quitado de un maestro sigue valiendo sólo si su copia es la misma pieza (si la persona cambió el papel de las
    *  carpetas, el HERO puede ser otro: entonces se vuelve a ofrecer en vez de dejar un retoque viejo). */
   const quitadaDe = (i: number): Quitada | null => {
@@ -523,36 +551,54 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   // fondo original y la pieza; de lo que vuelve se pega únicamente el hueco (gemela.ts › pegarRellenoIA).
   const rellenarConIA = async (i: number) => {
     const m = conPapel[i], g = copias[i], l = leido;
-    if (!l || !m || !g || conIA !== null) return;
+    if (!l || !m || !g || (conIA && conIA.leido === l)) return;
     const recorte = recorteParaIA(m, g);
     const p = m.piezas[g.pieza];
     if (!recorte || !p) return void toast.error(tx(FP.copiaIaNoCabe, lang));
-    setConIA(i);
+    const ctrl = new AbortController();
+    pedidoIA.current?.abort();
+    pedidoIA.current = ctrl;
+    setConIA({ leido: l, i });
+    anunciar(tx(FP.copiaIaTrabajando, lang));
     try {
       const c = recorte.caja;
       const form = new FormData();
-      form.set("fondo", await aPng(lienzoDe(recortarRgba(m.fondo, m.w, c), c.w, c.h, RECORTE_IA_MAX)), "fondo.png");
-      form.set("pieza", await aPng(lienzoDe(new Uint8ClampedArray(p.rgba), p.caja.w, p.caja.h, PIEZA_IA_MAX)), "pieza.png");
+      form.set("fondo", await pngQueQuepa(recortarRgba(m.fondo, m.w, c), c.w, c.h, RECORTE_IA_MAX, FONDO_IA_MAX_BYTES), "fondo.png");
+      const rgbaPieza = p.rgba.buffer instanceof ArrayBuffer ? (p.rgba as Uint8ClampedArray<ArrayBuffer>) : new Uint8ClampedArray(p.rgba);
+      form.set("pieza", await pngQueQuepa(rgbaPieza, p.caja.w, p.caja.h, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES), "pieza.png");
       form.set("aspect", recorte.aspect);
-      const res = await fetch("/api/prisma/formatos/copia", { method: "POST", body: form });
+      const res = await fetch("/api/prisma/formatos/copia", { method: "POST", body: form, signal: AbortSignal.any([ctrl.signal, AbortSignal.timeout(IA_ESPERA_MS)]) });
       if (!res.ok) {
         const e = (await res.json().catch(() => null)) as { error?: unknown } | null;
         throw typeof e?.error === "string" ? new ErrorDeRuta(e.error) : new Error(`HTTP ${res.status}`);
       }
       const costo = res.headers.get("x-costo-usd"), costoUsd = costo && Number.isFinite(Number(costo)) ? Number(costo) : null;
       const ia = await aRgba(await res.blob(), c.w, c.h);
-      // Mientras la IA trabajaba pudo cambiar el PSD: lo que vuelve ya no es de éste.
-      if (!vivo.current || leidoVigente.current !== l) return;
-      const { fondo, deriva } = pegarRellenoIA(m, g, c, ia);
-      setSinCopia((antes) => ({ leido: l, mapa: new Map([...(antes?.leido === l ? antes.mapa : []), [i, { pieza: g.pieza, fondo, metodo: "ia", costoUsd, deriva }]]) }));
-      anunciar(rellenar(tx(FP.copiaIaAviso, lang), { p: p.nombre, m: deMesa(m) }));
+      // Mientras la IA trabajaba pudo cambiar el PSD o el papel de las carpetas: lo que vuelve ya no es de éste.
+      if (!vivo.current) return;
+      if (leidoVigente.current !== l || copiasVigentes.current[i]?.pieza !== g.pieza) return void toast.info(tx(FP.copiaIaDescartada, langVigente.current));
+      const pegado = pegarRellenoIA(m, g, c, ia);
+      if (!pegado) throw new Error("pegado");
+      setSinCopia((antes) => ({ leido: l, mapa: new Map([...(antes?.leido === l ? antes.mapa : []), [i, { pieza: g.pieza, fondo: pegado.fondo, metodo: "ia", costoUsd, deriva: pegado.deriva }]]) }));
+      enfocarCopia.current = i;
+      const t = langVigente.current;
+      anunciar(rellenar(tx(FP.copiaIaAviso, t), { p: p.nombre, m: deMesa(m) }) + (pegado.deriva !== null && pegado.deriva > DERIVA_IA_REVISAR ? ` ${tx(FP.copiaIaDeriva, t)}` : ""));
     } catch (err) {
+      // Cancelado porque cambió el PSD o se salió de la pantalla: nada que decir.
+      if (ctrl.signal.aborted || !vivo.current) return;
       console.error("[formatos-psd] copia con IA", err);
-      toast.error(err instanceof ErrorDeRuta ? err.message : tx(FP.copiaIaFallo, lang));
+      toast.error(err instanceof ErrorDeRuta ? err.message : tx(FP.copiaIaFallo, langVigente.current), { duration: 10_000 });
     } finally {
-      if (vivo.current) setConIA(null);
+      if (pedidoIA.current === ctrl) pedidoIA.current = null;
+      if (vivo.current) setConIA((ahora) => (ahora?.leido === l && ahora.i === i ? null : ahora));
     }
   };
+  // Tras quitar con IA, el botón de la IA desaparece: el foco pasa al de «Deshacer» de esa misma copia.
+  useEffect(() => {
+    if (enfocarCopia.current === null) return;
+    document.getElementById(`psd-copia-btn-${enfocarCopia.current}`)?.focus();
+    enfocarCopia.current = null;
+  });
   const devolverCopia = (i: number, nombre: string, cuando: number) => {
     const m = conPapel[i];
     if (!leido || !m || cuando - ultimaCopia.current < COPIA_PAUSA_MS) return;
@@ -594,6 +640,8 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     setPapeles(null);
     setSinCopia(null);
     setAjenas(null);
+    pedidoIA.current?.abort();
+    setConIA(null);
   };
   const cambiarPsd = () => {
     volverASubir.current = true;
@@ -1280,24 +1328,30 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                       // En cuántas medidas se ve (antes de quitarla: dos veces; después: el relleno). Los mismos avisos de cada tarjeta.
                       const n = filas.filter((f) => f.maestro === c.i && f.acomodo.avisos.some((a) => a.tipo === "copia" || a.tipo === "retoque")).length;
                       const q = c.quitada;
+                      const estimado = `≈ ${usd(COSTO_IA_USD["1K"], 3)}`;
                       const v = {
                         p: c.nombre,
                         m: deMesa(c.m),
                         pct: String(Math.round(c.parecido * 100)),
                         n: String(n),
                         t: String(filas.length),
-                        c: q?.metodo === "ia" && q.costoUsd !== null ? usd(q.costoUsd, 3) : `≈ ${usd(COSTO_IA_USD["1K"], 2)}`,
+                        c: q?.metodo === "ia" && q.costoUsd !== null ? usd(q.costoUsd, 3) : estimado,
+                        e: estimado,
                       };
-                      const trabajando = conIA === c.i;
+                      const trabajando = iaEnCurso === c.i;
+                      const g = copias[c.i];
+                      // La IA se ofrece después de quitar la copia (gratis o con IA) y sólo si cabe un recorte para mandarle.
+                      const conBotonIA = iaCopia && !!q && !!g && recorteParaIA(c.m, g) !== null;
                       return (
                         <li key={c.i}>
                           <p className="break-words text-sm text-foreground">{rellenar(tx(!q ? FP.copiaTexto : q.metodo === "ia" ? FP.copiaQuitadaIA : FP.copiaQuitada, lang), v)}</p>
-                          {q?.metodo === "ia" && q.deriva > DERIVA_IA_REVISAR && (
+                          {q?.metodo === "ia" && q.deriva !== null && q.deriva > DERIVA_IA_REVISAR && (
                             <p className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
                               <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> {tx(FP.copiaIaDeriva, lang)}
                             </p>
                           )}
                           <Button
+                            id={`psd-copia-btn-${c.i}`}
                             variant={q ? "outline" : "default"}
                             size="lg"
                             className={cn("mt-1.5 w-full", BOTON, FOCO)}
@@ -1313,24 +1367,27 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                             {/* El nombre que oye el lector empieza con lo que dice el botón (así también lo encuentra el control por voz). */}
                             <span className="sr-only">{rellenar(tx(q ? FP.copiaDevolverSr : FP.copiaQuitarSr, lang), v)}</span>
                           </Button>
-                          {iaCopia && q?.metodo === "espejo" && (
+                          {conBotonIA && (
                             <>
                               <p id={`psd-copia-ia-${c.i}`} className="mt-2 text-xs text-muted-foreground">
                                 {rellenar(tx(FP.copiaIaAyuda, lang), v)}
+                                {trabajando ? ` ${tx(FP.copiaIaEspera, lang)}` : iaEnCurso !== null ? ` ${tx(FP.copiaIaOtra, lang)}` : ""}
                               </p>
                               <Button
-                                variant="outline"
+                                variant="secondary"
                                 size="lg"
                                 className={cn("mt-1 w-full", BOTON, FOCO)}
-                                disabled={conIA !== null}
+                                aria-disabled={iaEnCurso !== null}
+                                aria-busy={trabajando}
                                 aria-describedby={`psd-copia-ia-${c.i}`}
                                 onClick={(e) => {
-                                  if (e.detail > 1) return;
+                                  if (e.detail > 1 || iaEnCurso !== null) return;
                                   void rellenarConIA(c.i);
                                 }}
                               >
-                                {trabajando ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}{" "}
-                                {tx(trabajando ? FP.copiaIaTrabajando : FP.copiaIa, lang)}
+                                {trabajando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}{" "}
+                                {trabajando ? tx(FP.copiaIaTrabajando, lang) : rellenar(tx(q?.metodo === "ia" ? FP.copiaIaOtraVez : FP.copiaIa, lang), v)}
+                                <span className="sr-only">{rellenar(tx(FP.copiaQuitarSr, lang), v)}</span>
                               </Button>
                             </>
                           )}
@@ -1451,7 +1508,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                   aria-disabled={cargandoFuentes > 0 || undefined}
                   aria-busy={cargandoFuentes > 0}
                 >
-                  {cargandoFuentes > 0 ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Type className="size-4" aria-hidden="true" />}
+                  {cargandoFuentes > 0 ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Type className="size-4" aria-hidden="true" />}
                   {tx(cargandoFuentes > 0 ? FP.textoCargando : FP.textoAgregar, lang)}
                 </Button>
                 {tipos.size > 0 && (
@@ -1516,7 +1573,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                 )}
                 {/* aria-disabled, no disabled: un botón con foco que se deshabilita suelta el foco al tope de la página. */}
                 <Button size="lg" className={cn(BOTON, "aria-disabled:opacity-60")} onClick={() => void bajarZip()} aria-disabled={zipeando || undefined} aria-busy={zipeando}>
-                  {zipeando ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
+                  {zipeando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
                   {zipeando ? tx(FX.armandoZip, lang) : rellenar(tx(FX.bajarZipN, lang), { n: filas.length })}
                 </Button>
               </div>

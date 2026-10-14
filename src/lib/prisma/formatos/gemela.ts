@@ -5,8 +5,9 @@
  * Pasa con fondos hechos con IA: la imagen ya trae el producto justo donde el diseñador puso su carpeta (s33 de DiDi:
  * la tarjeta naranja está pintada en el colchón debajo de la de CARD). En el maestro no se nota porque la pieza la
  * tapa; en las medidas donde la pieza se mueve, se ven dos. Aquí se DETECTA y, sólo si la persona lo aprueba, se borra
- * rellenando el hueco con lo que tiene a los lados, sin IA (Pedro, 2026-10-14: "detects, warns and suggest fix. if
- * they approve then option 1 kicks in").
+ * rellenando el hueco con lo que tiene a los lados, gratis y sin IA (Pedro, 2026-10-14: "detects, warns and suggest
+ * fix. if they approve then option 1 kicks in"). Si ese relleno no queda bien, al final está el respaldo con IA: el
+ * recorte que se le manda y cómo se pega lo que devuelve.
  */
 import { RATIOS_IA } from "./geometria.ts";
 import type { Caja, Rol } from "./psd.ts";
@@ -115,15 +116,6 @@ function ensanchar(m: Uint8Array, w: number, h: number, r: number): Uint8Array {
   return out;
 }
 
-/**
- * El fondo sin la copia (RGBA nuevo; el de entrada no se toca), en tres pasos:
- * 1. Cada renglón del hueco se rellena con lo que tiene a su izquierda y a su derecha, reflejado como en un espejo y
- *    mezclado según la distancia: las nubes y el colchón siguen en vez de emborronarse.
- * 2. Una mezcla vertical corta dentro del hueco, para que los renglones no se vean como rayas.
- * 3. El reflejo: alrededor, el fondo trae el color de la copia (el naranja de la tarjeta sobre el colchón) y el espejo
- *    lo mete al hueco. Se le quita sólo ese tinte, comparando con el color de más lejos; el brillo se queda igual, así
- *    que la textura no cambia.
- */
 /** El hueco a borrar, dentro de `g.caja` (bw × bh, 0/1): la silueta de la pieza ensanchada. */
 function huecoDe(p: PiezaPixeles, g: Gemela): Uint8Array {
   const { x: bx, y: by, w: bw, h: bh } = g.caja;
@@ -136,6 +128,15 @@ function huecoDe(p: PiezaPixeles, g: Gemela): Uint8Array {
   return ensanchar(silueta, bw, bh, radioDe(p));
 }
 
+/**
+ * El fondo sin la copia (RGBA nuevo; el de entrada no se toca), en tres pasos:
+ * 1. Cada renglón del hueco se rellena con lo que tiene a su izquierda y a su derecha, reflejado como en un espejo y
+ *    mezclado según la distancia: las nubes y el colchón siguen en vez de emborronarse.
+ * 2. Una mezcla vertical corta dentro del hueco, para que los renglones no se vean como rayas.
+ * 3. El reflejo: alrededor, el fondo trae el color de la copia (el naranja de la tarjeta sobre el colchón) y el espejo
+ *    lo mete al hueco. Se le quita sólo ese tinte, comparando con el color de más lejos; el brillo se queda igual, así
+ *    que la textura no cambia.
+ */
 export function quitarGemela(ma: ConFondo, g: Gemela): Uint8ClampedArray {
   const p = ma.piezas[g.pieza];
   if (!p || !completa(ma, p)) return ma.fondo;
@@ -261,6 +262,13 @@ function quitarReflejo(ma: ConFondo, p: PiezaPixeles, caja: Caja, out: Uint8Clam
 const AIRE_IA = 0.25;
 /** Lado mayor del recorte que se le manda (px). La IA devuelve ~1 000 px: mandar más sólo pesa. */
 export const RECORTE_IA_MAX = 1536;
+/** Lado mayor de la imagen de la pieza (sólo es para que la IA sepa qué borrar). */
+export const PIEZA_IA_MAX = 768;
+/** Lo más que pesa cada PNG que se manda. Vercel corta los cuerpos de más de 4.5 MB: los dos juntos caben abajo de
+ *  eso; si un recorte pesa más, la pantalla lo achica hasta que quepa. La ruta revisa lo mismo. */
+export const FONDO_IA_MAX_BYTES = 3_300_000;
+export const PIEZA_IA_MAX_BYTES = 1_000_000;
+export const CUERPO_IA_MAX_BYTES = 4_400_000;
 /** Error medio (0-255) en el aire del recorte, donde la IA no debía cambiar nada. Arriba = movió el fondo: revisar. */
 export const DERIVA_IA_REVISAR = 18;
 
@@ -287,29 +295,32 @@ export function recorteParaIA(ma: { w: number; h: number }, g: Gemela): { caja: 
   return mejor && { caja: mejor.caja, aspect: mejor.aspect };
 }
 
-/** Distancia (px, aproximada 3-4) de cada punto de la caja al hueco: dos pasadas sobre la caja. */
+/** Lo que cuesta un paso derecho y uno en diagonal al medir distancias (≈ √2). */
+const PASO_RECTO = 1;
+const PASO_DIAGONAL = 1.4;
+/** Distancia (px, aproximada con pasos de 1 y 1.4) de cada punto de la caja al hueco: dos pasadas sobre la caja. */
 function distancias(m: Uint8Array, w: number, h: number): Float32Array {
-  const d = new Float32Array(w * h).fill(1e9);
+  const d = new Float32Array(w * h).fill(Infinity);
   for (let i = 0; i < m.length; i++) if (m[i]) d[i] = 0;
   const paso = (i: number, j: number, c: number) => { if (d[j] + c < d[i]) d[i] = d[j] + c; };
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
-      if (x > 0) paso(i, i - 1, 1);
+      if (x > 0) paso(i, i - 1, PASO_RECTO);
       if (y > 0) {
-        paso(i, i - w, 1);
-        if (x > 0) paso(i, i - w - 1, 1.4);
-        if (x < w - 1) paso(i, i - w + 1, 1.4);
+        paso(i, i - w, PASO_RECTO);
+        if (x > 0) paso(i, i - w - 1, PASO_DIAGONAL);
+        if (x < w - 1) paso(i, i - w + 1, PASO_DIAGONAL);
       }
     }
   for (let y = h - 1; y >= 0; y--)
     for (let x = w - 1; x >= 0; x--) {
       const i = y * w + x;
-      if (x < w - 1) paso(i, i + 1, 1);
+      if (x < w - 1) paso(i, i + 1, PASO_RECTO);
       if (y < h - 1) {
-        paso(i, i + w, 1);
-        if (x < w - 1) paso(i, i + w + 1, 1.4);
-        if (x > 0) paso(i, i + w - 1, 1.4);
+        paso(i, i + w, PASO_RECTO);
+        if (x < w - 1) paso(i, i + w + 1, PASO_DIAGONAL);
+        if (x > 0) paso(i, i + w - 1, PASO_DIAGONAL);
       }
     }
   return d;
@@ -317,12 +328,13 @@ function distancias(m: Uint8Array, w: number, h: number): Float32Array {
 
 /**
  * El fondo con lo que devolvió la IA (`ia`: RGBA del tamaño de `recorte`, ya reescalado): entero dentro del hueco y
- * desvaneciéndose en el anillo del reflejo; fuera de eso, el fondo ORIGINAL sin tocar. `deriva`: el error medio en el
- * aire del recorte (fuera de la caja de la copia), donde la IA no debía cambiar nada; alto = la unión puede notarse.
+ * desvaneciéndose en el anillo del reflejo; fuera de eso, el fondo ORIGINAL sin tocar (también la orilla de la caja:
+ * ahí el peso es 0 siempre). `deriva`: el error medio en el aire del recorte (fuera de la caja de la copia), donde la
+ * IA no debía cambiar nada; alto = la unión puede notarse; null = no hubo aire que medir. null si los datos no cuadran.
  */
-export function pegarRellenoIA(ma: ConFondo, g: Gemela, recorte: Caja, ia: Uint8ClampedArray): { fondo: Uint8ClampedArray; deriva: number } {
+export function pegarRellenoIA(ma: ConFondo, g: Gemela, recorte: Caja, ia: Uint8ClampedArray): { fondo: Uint8ClampedArray; deriva: number | null } | null {
   const p = ma.piezas[g.pieza];
-  if (!p || !completa(ma, p) || ia.length < recorte.w * recorte.h * 4) return { fondo: ma.fondo, deriva: Infinity };
+  if (!p || !completa(ma, p) || ia.length < recorte.w * recorte.h * 4) return null;
   const { x: bx, y: by, w: bw, h: bh } = g.caja;
   const d = distancias(huecoDe(p, g), bw, bh), anillo = reflejoDe(p);
   const W = ma.w, out = new Uint8ClampedArray(ma.fondo);
@@ -336,8 +348,10 @@ export function pegarRellenoIA(ma: ConFondo, g: Gemela, recorte: Caja, ia: Uint8
         n += 3;
         continue;
       }
-      const peso = Math.max(0, Math.min(1, 1 - d[(Y - by) * bw + (X - bx)] / anillo));
+      // El peso baja con la distancia al hueco y, por si acaso, también con la distancia a la orilla de la caja.
+      const orilla = Math.min(X - bx, Y - by, bx + bw - 1 - X, by + bh - 1 - Y);
+      const peso = Math.max(0, Math.min(1, 1 - d[(Y - by) * bw + (X - bx)] / anillo, orilla / anillo));
       if (peso > 0) for (let c = 0; c < 3; c++) out[j + c] = ia[k + c] * peso + ma.fondo[j + c] * (1 - peso);
     }
-  return { fondo: out, deriva: n ? Math.round((suma / n) * 10) / 10 : 0 };
+  return { fondo: out, deriva: n ? Math.round((suma / n) * 10) / 10 : null };
 }

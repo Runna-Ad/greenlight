@@ -1229,6 +1229,19 @@ console.log("\n▶ v2 · copia del HERO pintada en el fondo (gemela.ts) y avisos
       if (!enCaja && px(pr.fondo, x, y).some((v, c) => v !== fondo[(y * L + x) * 4 + c])) fueraIgual = false;
     }
   ok("IA: en el centro del hueco va lo de la IA; fuera de la caja de la copia el fondo queda idéntico (píxel por píxel)", JSON.stringify(px(pr.fondo, caja.x + 25, caja.y + 35)) === "[0,200,0]" && fueraIgual);
+  let orillaIgual = true;
+  for (let y = g.caja.y; y < g.caja.y + g.caja.h; y++)
+    for (let x = g.caja.x; x < g.caja.x + g.caja.w; x++) {
+      const enOrilla = x === g.caja.x || y === g.caja.y || x === g.caja.x + g.caja.w - 1 || y === g.caja.y + g.caja.h - 1;
+      if (enOrilla && px(pr.fondo, x, y).some((v, c) => v !== fondo[(y * L + x) * 4 + c])) orillaIgual = false;
+    }
+  ok("IA: la orilla de la caja de la copia queda idéntica al original aunque la IA mande todo verde (la unión no se nota)", orillaIgual);
+  eq("IA: si lo que vuelve es más chico que el recorte, no se pega nada (null)", pegarRellenoIA(ma, g, rc.caja, new Uint8ClampedArray(4)), null);
+  eq(
+    "IA: con un recorte sin aire alrededor de la copia no hay con qué medir la deriva (null, no 0)",
+    pegarRellenoIA(ma, g, g.caja, new Uint8ClampedArray(g.caja.w * g.caja.h * 4))?.deriva,
+    null,
+  );
   ok("IA: la deriva mide el aire del recorte: con una IA que lo cambió todo, alta; con una que no tocó el aire, 0", pr.deriva > 18 && pegarRellenoIA(ma, g, rc.caja, (() => { const o = new Uint8ClampedArray(rc.caja.w * rc.caja.h * 4); for (let y = 0; y < rc.caja.h; y++) o.set(fondo.subarray(((rc.caja.y + y) * L + rc.caja.x) * 4, ((rc.caja.y + y) * L + rc.caja.x + rc.caja.w) * 4), y * rc.caja.w * 4); return o; })()).deriva === 0, String(pr.deriva));
 
   // Contraste: fondo azul a la izquierda, blanco a la derecha; un titular blanco que en el original va sobre el azul.

@@ -76,9 +76,8 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 - Siguen abiertas: letra mínima aceptable del legal (hoy 10 px provisional) · 3-5 PSD más.
 
 ### Plan B — puerta PSD (2026-10-13)
-**Next Step (2026-10-14, tarde):** B11 (copia en el fondo + contraste) construido y probado en localhost; cerrar la
-revisión, subir a la preview y que Pedro lo pruebe con s33. Gemini como respaldo del relleno: espera que Pedro ponga
-saldo a la llave (pasos en el chat del 2026-10-14) para construirlo con una llamada real.
+**Next Step (2026-10-14, noche):** B12 («Rellenar con IA») construido, revisado y en la preview. Falta UNA llamada
+real con s33 en la preview (Pedro carga el PSD, Claude aprieta el botón): leer el costo real y ver la unión.
 **Antes:** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
 subir. La prueba de punta a punta de tipografías espera el "ship it" de 0079 + bucket. 320×50 se queda igual
 (Pedro). Después: que pruebe la preview con su PSD y las DiDi; B4.
@@ -437,6 +436,24 @@ largo: estacionado por él.
         NO arreglado (a propósito): los avisos del motor siguen sólo en español (diseño de siempre) · «se ve la copia»
         compara lugar y escala, no cobertura (avisa de más, nunca de menos) · el borrado corre en la página, no en el
         worker (13-24 ms en el PSD real; con el tope de 50 % el peor caso estimado es ~0.5 s).
+- [x] B12. «Rellenar con IA», segundo botón tras «Quitar del fondo» (Pedro, 2026-10-14: "yes build it as a second
+      button"). Se ofrece sólo después del relleno gratis y sólo si `PRISMA_FORMATOS_IA=gemini` + `GEMINI_API_KEY`.
+      · Pantalla: recorta el fondo ORIGINAL alrededor de la copia en una proporción que Gemini acepta (≤ 1536 px) +
+        la pieza (≤ 768 px), los achica hasta que quepan en el límite de 4.5 MB de Vercel, y pega lo que vuelve sólo
+        en el hueco y un anillo que se desvanece (`pegarRellenoIA`; la orilla de la caja queda idéntica). Mide la
+        «deriva» (cuánto cambió la IA el aire alrededor) y avisa si pasa de 18.
+      · Ruta `/api/prisma/formatos/copia`: mismo origen (sec-fetch-site + Origin), gate de Prisma, freno propio
+        10 / 10 min + el freno de todo lo que se cobra, largo del cuerpo ANTES de leerlo, PNG decodificado y vuelto a
+        codificar (sin metadatos), proporción ±3 %, salida re-codificada. Costo en `x-costo-usd`.
+      · Revisión (código + seguridad + accesibilidad): arreglado: pedido cancelable (cambiar de PSD o salir lo corta;
+        tope 170 s) · resultado tardío de otro PSD o con otro papel de carpetas se descarta y se avisa · lienzo sin
+        contexto ya no manda una imagen en blanco · el foco pasa a «Deshacer» al terminar · `aria-busy` y
+        `aria-disabled` en vez de quitar el botón del teclado · aviso al empezar · costo estimado en el botón ·
+        «Probar otra vez con IA» después de una · ayuda dice qué se manda a Google (un recorte, no el PSD).
+        test-formatos 280/0 · npm test 44/0 · tsc y eslint limpios.
+      · NO arreglado (a propósito): errores de la ruta sólo en español · el freno vive en memoria por instancia: ANTES
+        de producción, registro por llamada en la base con tope diario · `npm audit` no corrido · nitidez en maestros
+        grandes (recorte de 1536 px estirado) no medida: se ve en la prueba real.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.
