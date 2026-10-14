@@ -990,3 +990,9 @@ TAGS: #formatos #nitidez #criterio #no-p-hacking #sesgo #medir-antes
 ROOT CAUSE: traté la regla como algo de "pantallas nuevas" y no la corrí sobre una tarjeta nueva dentro de una pantalla ya revisada.
 RULE: las cuatro pasadas van sobre CADA control nuevo que haga algo asíncrono o reciba archivos, aunque viva en una pantalla ya revisada; y una quinta para lo que guarda algo (IndexedDB, localStorage): salir y volver a entrar, y ver que no se duplica ni crece sin tope.
 TAGS: #formatos #reap #repetida #break-it #async #limites #persistencia
+
+[2026-10-14] PEDRO_OVERRIDE (Formatos, informe: un pendiente sin "qué significa" ni "qué hago yo" no sirve): cerré el informe de nitidez con una lista "Still open" que incluía "320×50 still has its title at 6.9 px". Pedro: "i dont know what you expect me to say to this".
+PEDRO'S APPROACH: cada cosa que le enseño tiene que decir qué significa para él y si tiene que hacer algo; si no hay nada que hacer, no se lo pongo como pendiente suyo.
+WHY IT WAS BETTER: una cifra suelta ("6.9 px") lo obliga a adivinar si es un problema, si es grave y si le toca decidir. Además la cifra engañaba: el que mide 6.9 px es el renglón chico de arriba del precio («Línea de crédito de hasta:»), no el precio.
+RULE: en un informe a Pedro, cada pendiente lleva (1) qué se ve en el anuncio, en palabras de diseño (qué texto, en qué medida), (2) si es grave, (3) qué propongo yo, y (4) "nada que hacer de tu lado" o UNA pregunta de sí/no. Sin esas cuatro, no va en la lista. Lectura mía: lo que es sólo una limitación conocida va al todo.md, no al informe.
+TAGS: #pedro-override #informe #comunicacion #formatos #sin-cifras-sueltas
