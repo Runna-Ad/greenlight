@@ -32,3 +32,8 @@ export function rolDe(nombre: string): Rol | null {
   const n = normal(nombre);
   return (ROLES as readonly string[]).includes(n) ? (n as Rol) : (OTROS_NOMBRES[n] ?? null);
 }
+
+/** Cómo se nombra una pieza en los avisos: el nombre de su carpeta (el que ve el diseñador en Photoshop) y, si no es
+ *  un nombre de la guía, también su papel: «TITULO», «Copy» (TITULO), «Capa suelta». */
+export const etiquetaPieza = (p: { nombre: string; rol: Rol | null }): string =>
+  p.rol && !nombreDeGuia(p.nombre) ? `«${p.nombre}» (${p.rol})` : `«${p.nombre}»`;

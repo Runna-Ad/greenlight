@@ -221,6 +221,27 @@ export const FP = {
     "Their names aren't from the guide. Each one already shows what it looks like; if it's wrong, change it and the sizes are redone. “No role” only shows up in sizes that copy the layout.",
   ),
   clienteSoltadas: t("Se dejaron de usar las tipografías exclusivas del otro cliente: {f}.", "The other client's exclusive fonts are no longer used: {f}."),
+  copiaTitulo: t("Pieza repetida en el fondo", "Piece repeated in the background"),
+  copiaDeMesa: t(" de la mesa {m}", " of artboard {m}"),
+  copiaTexto: t(
+    "El fondo{m} ya trae «{p}» pintado debajo de la carpeta (coincide en un {pct} %), y se ve dos veces en {n} de {t} medidas. Si lo quitas, el hueco se rellena con lo que tiene a los lados. Se puede deshacer.",
+    "The background{m} already has “{p}” painted under the folder ({pct}% match), so it shows twice in {n} of {t} sizes. If you remove it, the gap is filled with what's on each side. You can undo it.",
+  ),
+  copiaQuitar: t("Quitar del fondo", "Remove from background"),
+  copiaQuitarSr: t(": «{p}»{m}", ": “{p}”{m}"),
+  copiaQuitada: t(
+    "Se quitó «{p}» del fondo{m} y el hueco se rellenó con lo que tiene a los lados. Revisa las {n} medidas marcadas «Fondo retocado».",
+    "“{p}” was removed from the background{m} and the gap was filled with what's on each side. Check the {n} sizes marked “Fondo retocado” (background retouched).",
+  ),
+  copiaDevolver: t("Deshacer", "Undo"),
+  copiaDevolverSr: t(": volver a poner «{p}» en el fondo{m}", ": put “{p}” back in the background{m}"),
+  copiaAyuda: t(
+    "Gratis y sin IA, sólo si lo pides. Tu PSD no cambia. Si el relleno se ve mal, deshazlo y pide al diseñador el fondo sin el producto.",
+    "Free, no AI, only when you ask. Your PSD doesn't change. If the fill looks wrong, undo it and ask the designer for the background without the product.",
+  ),
+  copiaQuitadaAviso: t("«{p}» se quitó del fondo{m} y las medidas se rehicieron.", "“{p}” was removed from the background{m} and the sizes were redone."),
+  copiaDevueltaAviso: t("«{p}» volvió al fondo{m}.", "“{p}” is back in the background{m}."),
+  copiaFallo: t("No se pudo quitar del fondo. Reintenta.", "Couldn't remove it from the background. Try again."),
   textoGreenlightNo: t(
     "No se pudieron traer las tipografías guardadas en Greenlight; puedes arrastrarlas aquí.",
     "The fonts saved in Greenlight couldn't be brought in; you can drag them here.",

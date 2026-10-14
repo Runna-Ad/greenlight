@@ -1028,3 +1028,10 @@ TAGS: #formatos #tipografias #variable-fonts #probar-con-reales #google-fonts
 ROOT CAUSE: tomé la guía escrita como si fuera lo que traen los archivos; el primer PSD real la seguía y eso lo confirmó por casualidad.
 RULE: cuando una regla depende de cómo nombra la gente sus cosas (carpetas, capas, columnas), se aceptan los nombres comunes y la pantalla deja corregirlo con un clic; y se prueba con un archivo que NO siga la convención antes de darlo por bueno (Pedro mandó uno a propósito).
 TAGS: #formatos #psd #convenciones #probar-con-reales #nombres
+
+[2026-10-14] LESSON (Formatos: diagnostiqué un "se encima" mirando la miniatura): le dije a Pedro que en 876×324 el titular "se mete debajo de la fila de logos" y él aprobó construir un chequeo de encimados por eso. Al medir las cajas sólidas a tamaño real hay 11 px libres entre Logo y Copy; lo que se ve mal es contraste (letras de nube blancas sobre nubes blancas). Un chequeo de encimados no lo habría atrapado.
+ROOT CAUSE: juzgué un problema de posición desde una imagen reducida a la mitad, sin medir las cajas.
+RULE: antes de nombrarle a Pedro un problema visual de acomodo, medir las cajas (encimas-real.mjs o el acomodo) y ver el render a tamaño real. Si un diagnóstico mío ya le llevó a aprobar algo, corregirlo antes de construir.
+SEGUNDA VEZ EL MISMO DÍA: le dije que la tarjeta repetida afectaba "2 de 12 medidas" viendo sólo 3 horizontales. Al correr el chequeo en las 12, salió en 11 (en las verticales la copia queda más grande detrás de la tarjeta). Patrón: cuento el alcance de un problema desde una muestra.
+RULE 2: un número de alcance ("X de 12 medidas", "N archivos") sale de correr el chequeo sobre TODO, nunca de las 2-3 imágenes que miré.
+TAGS: #formatos #diagnostico #medir-antes-de-decir #contraste #alcance

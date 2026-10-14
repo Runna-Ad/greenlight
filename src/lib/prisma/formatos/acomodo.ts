@@ -13,6 +13,7 @@
  * legal). Si aun así la letra queda chica, la medida se marca para revisión; nunca se entrega sin avisar.
  */
 import type { Caja, Rol } from "./psd.ts";
+import { etiquetaPieza } from "./roles.ts";
 
 /** Lo que el acomodo necesita de una pieza (PiezaPsd lo cumple). */
 export type PiezaCaja = { nombre: string; rol: Rol | null; solido: Caja; letraMinPx?: number | null };
@@ -21,7 +22,8 @@ export type MaestroCaja = { nombre: string; w: number; h: number; piezas: PiezaC
 export type Familia = "igual" | "display" | "horizontal" | "ancho" | "banner";
 /** Una pieza colocada: índice en `maestro.piezas`, su escala y la caja de su parte sólida en la medida final. */
 export type Puesta = { pieza: number; k: number; x: number; y: number; w: number; h: number };
-export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada"; texto: string };
+/** `contraste`, `copia` y `retoque` los pone `revisar.ts` (miran píxeles); los demás, el acomodo. */
+export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque"; texto: string };
 export type Acomodo = {
   familia: Familia;
   /** De abajo hacia arriba, en el orden del maestro. */
@@ -333,18 +335,18 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
   const fondo = { k: kb, x: Math.min(0, Math.max(W - ma.w * kb, fx)), y: Math.min(0, Math.max(H - ma.h * kb, fy)) };
 
   // ── Lo que revisa la guía de diseño (sección 4), lo que se puede medir ──
-  const nom = (q: Puesta) => ma.piezas[q.pieza].rol ?? ma.piezas[q.pieza].nombre;
+  const nom = (q: Puesta) => etiquetaPieza(ma.piezas[q.pieza]);
   if (familia === "igual" && razon(W, H, ma) >= PARECIDO_MAX) avisos.push({ tipo: "forma", texto: "Esta proporción todavía no tiene acomodo propio: se usó el del maestro, más chico. Revisar." });
   ma.piezas.forEach((p, i) => {
     if (puestas.some((q) => q.pieza === i)) return;
-    const n = p.rol ?? p.nombre;
+    const n = etiquetaPieza(p);
     if (quitar.has(i))
       return void avisos.push({
         tipo: "quitada",
-        texto: p.rol === "FOOTER" ? `Se quitó el legal (FOOTER) para que el resto se lea: revisar con el cliente si esta medida puede ir sin legal.` : `Se quitó «${n}» para que el resto se lea.`,
+        texto: p.rol === "FOOTER" ? `Se quitó el legal ${n} para que el resto se lea: revisar con el cliente si esta medida puede ir sin legal.` : `Se quitó ${n} para que el resto se lea.`,
       });
-    const gemela = p.rol !== null && puestas.some((q) => ma.piezas[q.pieza].rol === p.rol);
-    avisos.push({ tipo: "falta", texto: !valida(p) ? `«${n}» trae una caja vacía o inválida: no se colocó.` : gemela ? `Hay más de una carpeta «${n}»: sólo se colocó una. Revisar.` : `«${n}» no entra en este acomodo: revisar.` });
+    const duplicada = p.rol !== null && puestas.some((q) => ma.piezas[q.pieza].rol === p.rol);
+    avisos.push({ tipo: "falta", texto: !valida(p) ? `${n} trae una caja vacía o inválida: no se colocó.` : duplicada ? `Hay más de una carpeta ${n}: sólo se colocó una. Revisar.` : `${n} no entra en este acomodo: revisar.` });
   });
   for (const q of puestas) {
     if (!(q.x >= -0.5 && q.y >= -0.5 && q.x + q.w <= W + 0.5 && q.y + q.h <= H + 0.5)) avisos.push({ tipo: "fuera", texto: `${nom(q)} se sale de la medida.` });

@@ -2,14 +2,16 @@
 
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CircleCheck, Download, FileUp, FlipHorizontal2, Languages, Loader2, Lock, Type, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CircleCheck, Download, Eraser, FileUp, FlipHorizontal2, Languages, Loader2, Lock, Type, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { zipSync } from "fflate";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
-import { CANALES, MEDIDAS_EQUIPO, acomodarMedida, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Lado } from "@/lib/prisma/formatos/acomodo";
+import { CANALES, MEDIDAS_EQUIPO, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Lado } from "@/lib/prisma/formatos/acomodo";
+import { revisarMedida, type CopiaEnFondo } from "@/lib/prisma/formatos/revisar";
+import { buscarGemela, quitarGemela, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
 import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
 import { LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoWorker } from "@/lib/prisma/formatos/listo";
@@ -29,6 +31,15 @@ import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
 type Falla = { clave: keyof typeof FP_ERROR; detalle?: string };
 type Leido = { archivo: string; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] };
 type Medida = { w: number; h: number };
+/** Un maestro como se acomoda y se pinta: con el papel elegido en cada carpeta y, si se aprobó, sin la copia del fondo. */
+type MaestroVista = MaestroListo & { copia?: CopiaEnFondo | null };
+type Quitada = { pieza: number; fondo: Uint8ClampedArray };
+/** El último `MaestroVista` armado para cada maestro y con qué: si no cambió nada de ESE maestro, se devuelve el mismo
+ *  objeto y sus tarjetas no se vuelven a pintar (quitar la copia de una mesa no repinta las de otra). */
+const vistas = new WeakMap<MaestroListo, { q: Quitada | null; g: Gemela | null; v: MaestroVista }>();
+/** Cuánto se ignora otra activación de «Quitar del fondo» / «Deshacer» (Enter sostenido). El doble clic se ignora
+ *  aparte, por `detail`: su segundo clic puede llegar más tarde que esto si el primero tuvo ocupada la página. */
+const COPIA_PAUSA_MS = 400;
 const SIN_TIPOS: Tipografias = new Map();
 
 const CLAVE_ERROR: Record<MotivoPsd | "desconocido", keyof typeof FP_ERROR> = { "no-soportado": "noSoportado", "demasiado-grande": "grande", "sin-aplanado": "sinAplanado", "sin-fondo": "sinFondo", desconocido: "desconocido" };
@@ -160,7 +171,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
   alVoltear,
   registrar,
 }: {
-  maestros: MaestroListo[];
+  maestros: MaestroVista[];
   medida: Medida;
   lado: Lado;
   canal: Canal | null;
@@ -172,7 +183,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
 }) {
   const { w, h } = medida;
   const k = clave(medida);
-  const { maestro, acomodo } = useMemo(() => acomodarMedida(maestros, w, h, { heroLado: lado }), [maestros, w, h, lado]);
+  const { maestro, acomodo } = useMemo(() => revisarMedida(maestros, w, h, { heroLado: lado }), [maestros, w, h, lado]);
   const guia = zonaCanal(canal, w, h);
   const nombreCanal = canal ? CANALES[canal].nombre : "";
   const ma = maestros[maestro];
@@ -310,10 +321,14 @@ export function FormatosPsd({ planaActiva, clientes }: { planaActiva: boolean; c
   const clienteVigente = useRef("");
   /** Las tipografías que llegaron por ser exclusivas de un cliente (nombre → cliente): se sueltan al cambiar de cliente. */
   const deExclusiva = useRef(new Map<string, string>());
-  /** Lo que le falta al PSD pero es exclusivo de OTRO cliente (de qué PSD y con qué cliente elegido se preguntó). */
   /** El papel que se eligió para cada carpeta fuera de la guía ("CARD" → HERO), de qué PSD. Sin elegir, el que adivinó
    *  el lector (roles.ts). null = sin papel. */
   const [papeles, setPapeles] = useState<{ leido: Leido; mapa: Map<string, Rol | null> } | null>(null);
+  /** Las copias del HERO que la persona aprobó quitar del fondo, por maestro (índice), de qué PSD: el fondo ya rellenado. */
+  const [sinCopia, setSinCopia] = useState<{ leido: Leido; mapa: Map<number, Quitada> } | null>(null);
+  /** Cuándo se quitó o devolvió la última copia (ver COPIA_PAUSA_MS). */
+  const ultimaCopia = useRef(0);
+  /** Lo que le falta al PSD pero es exclusivo de OTRO cliente (de qué PSD y con qué cliente elegido se preguntó). */
   const [ajenas, setAjenas] = useState<{ leido: Leido; cliente: string; lista: { cliente: string; nombres: string[] }[] } | null>(null);
   const [leido, setLeido] = useState<Leido | null>(null);
   const [avance, setAvance] = useState<{ mesa: number; de: number } | null>(null);
@@ -388,11 +403,83 @@ export function FormatosPsd({ planaActiva, clientes }: { planaActiva: boolean; c
   const eligiendo = eleccion !== null;
   const usables = leido?.maestros ?? SIN_MAESTROS;
   const elegidos = papeles?.leido === leido ? papeles.mapa : null;
-  /** Los maestros con el papel elegido en cada carpeta (lo que acomoda cada medida). Sólo cambia `rol`. */
-  const maestrosVista = useMemo(
-    () => (elegidos ? usables.map((m) => ({ ...m, piezas: m.piezas.map((p) => (elegidos.has(p.nombre) ? { ...p, rol: elegidos.get(p.nombre) ?? null } : p)) })) : usables),
+  /** Los maestros con el papel elegido en cada carpeta. Sólo cambia `rol`, y sólo en los maestros que traen esa carpeta. */
+  const conPapel = useMemo(
+    () =>
+      elegidos
+        ? usables.map((m) => (m.piezas.some((p) => elegidos.has(p.nombre)) ? { ...m, piezas: m.piezas.map((p) => (elegidos.has(p.nombre) ? { ...p, rol: elegidos.get(p.nombre) ?? null } : p)) } : m))
+        : usables,
     [usables, elegidos],
   );
+  /** Si el fondo de cada maestro trae pintada una copia de su HERO (se mide con el fondo original, siempre). Es una
+   *  ayuda: si algo raro del PSD la rompe, la pantalla sigue sin ella. */
+  const copias = useMemo(
+    () =>
+      conPapel.map((m) => {
+        try {
+          return buscarGemela(m);
+        } catch (err) {
+          console.error("[formatos-psd] buscar copia", err);
+          return null;
+        }
+      }),
+    [conPapel],
+  );
+  const quitadas = sinCopia?.leido === leido ? sinCopia.mapa : null;
+  /** Lo quitado de un maestro sigue valiendo sólo si su copia es la misma pieza (si la persona cambió el papel de las
+   *  carpetas, el HERO puede ser otro: entonces se vuelve a ofrecer en vez de dejar un retoque viejo). */
+  const quitadaDe = (i: number): Quitada | null => {
+    const q = quitadas?.get(i), g = copias[i];
+    return q && g && q.pieza === g.pieza ? q : null;
+  };
+  /** Lo que acomoda y pinta cada medida: con su papel y, donde se aprobó, con el fondo sin la copia. */
+  const maestrosVista = useMemo<MaestroVista[]>(
+    () =>
+      conPapel.map((m, i) => {
+        const q = quitadas?.get(i), g = copias[i] ?? null;
+        const vale = q && g && q.pieza === g.pieza ? q : null;
+        const antes = vistas.get(m);
+        if (antes && antes.q === vale && antes.g === g) return antes.v;
+        const v: MaestroVista = vale ? { ...m, fondo: vale.fondo, copia: { pieza: vale.pieza, quitada: true } } : g ? { ...m, copia: { pieza: g.pieza, quitada: false } } : m;
+        vistas.set(m, { q: vale, g, v });
+        return v;
+      }),
+    [conPapel, copias, quitadas],
+  );
+  /** Lo que enseña «Pieza repetida en el fondo»: cada maestro con copia, quitada o no. */
+  const copiasVista = conPapel.flatMap((m, i) => {
+    const g = copias[i];
+    return g ? [{ i, m, nombre: m.piezas[g.pieza]?.nombre ?? "", parecido: g.parecido, quitada: !!quitadaDe(i) }] : [];
+  });
+  const deMesa = (m: MaestroListo) => (usables.length > 1 ? rellenar(tx(FP.copiaDeMesa, lang), { m: `${m.w}×${m.h}` }) : "");
+  // Quitar la copia sólo cuando la persona lo pide (Pedro: avisar y sugerir; si lo aprueba, se rellena), y poder deshacerlo.
+  // `cuando` = la hora del clic (event.timeStamp): un segundo clic muy seguido no deshace lo que el primero hizo.
+  const quitarCopia = (i: number, cuando: number) => {
+    const m = conPapel[i], g = copias[i];
+    if (!leido || !m || !g || cuando - ultimaCopia.current < COPIA_PAUSA_MS) return;
+    let fondo: Uint8ClampedArray;
+    try {
+      fondo = quitarGemela(m, g);
+    } catch (err) {
+      console.error("[formatos-psd] quitar copia", err);
+      toast.error(tx(FP.copiaFallo, lang));
+      return;
+    }
+    ultimaCopia.current = cuando;
+    setSinCopia((antes) => ({ leido, mapa: new Map([...(antes?.leido === leido ? antes.mapa : []), [i, { pieza: g.pieza, fondo }]]) }));
+    anunciar(rellenar(tx(FP.copiaQuitadaAviso, lang), { p: m.piezas[g.pieza]?.nombre ?? "", m: deMesa(m) }));
+  };
+  const devolverCopia = (i: number, nombre: string, cuando: number) => {
+    const m = conPapel[i];
+    if (!leido || !m || cuando - ultimaCopia.current < COPIA_PAUSA_MS) return;
+    ultimaCopia.current = cuando;
+    setSinCopia((antes) => {
+      const mapa = new Map(antes?.leido === leido ? antes.mapa : []);
+      mapa.delete(i);
+      return { leido, mapa };
+    });
+    anunciar(rellenar(tx(FP.copiaDevueltaAviso, lang), { p: nombre, m: deMesa(m) }));
+  };
   /** Las carpetas cuyo nombre no es de la guía, con el papel que tienen ahora (una vez cada nombre, en orden). */
   const fueraDeGuia = [...new Map(maestrosVista.flatMap((m) => m.piezas).filter((p) => !nombreDeGuia(p.nombre)).map((p) => [p.nombre, p.rol] as const))];
   const elegirPapel = (nombre: string, rol: Rol | null) => {
@@ -418,9 +505,16 @@ export function FormatosPsd({ planaActiva, clientes }: { planaActiva: boolean; c
   });
   const totalTextos = usables.reduce((t, m) => t + m.piezas.reduce((u, p) => u + p.textos.length, 0), 0);
 
+  /** Lo elegido para el PSD anterior se suelta junto con él (no sólo se esconde): cada fondo retocado pesa como la mesa. */
+  const soltarElegido = () => {
+    setPapeles(null);
+    setSinCopia(null);
+    setAjenas(null);
+  };
   const cambiarPsd = () => {
     volverASubir.current = true;
     setLeido(null);
+    soltarElegido();
     setAviso(null);
   };
   const cancelar = () => {
@@ -437,6 +531,7 @@ export function FormatosPsd({ planaActiva, clientes }: { planaActiva: boolean; c
     soltar();
     setFalla(null);
     setLeido(null);
+    soltarElegido();
     setLados({});
     setAviso(null);
     setNotaFuentes(null);
@@ -796,9 +891,10 @@ export function FormatosPsd({ planaActiva, clientes }: { planaActiva: boolean; c
       .values(),
   ];
 
-  // El mismo acomodo que calcula cada tarjeta (función pura): aquí sirve para el resumen, el legal y los nombres del ZIP.
+  // El mismo acomodo y los mismos avisos que cada tarjeta (`revisarMedida` guarda lo ya hecho): aquí sirven para el
+  // resumen, el legal y los nombres del ZIP.
   const filas = useMemo(
-    () => (maestrosVista.length ? medidas.map((m) => ({ m, ...acomodarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)] }) })) : []),
+    () => (maestrosVista.length ? medidas.map((m) => ({ m, ...revisarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)] }) })) : []),
     [maestrosVista, medidas, lados],
   );
   const porRevisar = filas.filter((f) => f.acomodo.avisos.length).length;
@@ -1088,6 +1184,42 @@ export function FormatosPsd({ planaActiva, clientes }: { planaActiva: boolean; c
                     ))}
                   </ul>
                 </fieldset>
+              )}
+              {copiasVista.length > 0 && (
+                <div className="mt-2 border-t border-border pt-2">
+                  <h2 id="psd-copia" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    {copiasVista.every((c) => c.quitada) ? <CircleCheck className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" /> : <AlertTriangle className="size-3.5 shrink-0 text-status-warning" aria-hidden="true" />}{" "}
+                    {tx(FP.copiaTitulo, lang)}
+                  </h2>
+                  <ul aria-labelledby="psd-copia" className="mt-1 space-y-2">
+                    {copiasVista.map((c) => {
+                      // En cuántas medidas se ve (antes de quitarla: dos veces; después: el relleno). Los mismos avisos de cada tarjeta.
+                      const n = filas.filter((f) => f.maestro === c.i && f.acomodo.avisos.some((a) => a.tipo === "copia" || a.tipo === "retoque")).length;
+                      const v = { p: c.nombre, m: deMesa(c.m), pct: String(Math.round(c.parecido * 100)), n: String(n), t: String(filas.length) };
+                      return (
+                        <li key={c.i}>
+                          <p className="break-words text-sm text-foreground">{rellenar(tx(c.quitada ? FP.copiaQuitada : FP.copiaTexto, lang), v)}</p>
+                          <Button
+                            variant={c.quitada ? "outline" : "default"}
+                            size="lg"
+                            className={cn("mt-1.5 w-full", BOTON, FOCO)}
+                            onClick={(e) => {
+                              // El segundo clic de un doble clic (detail 2) llega cuando el botón ya cambió: desharía lo que el primero hizo.
+                              if (e.detail > 1) return;
+                              if (c.quitada) devolverCopia(c.i, c.nombre, e.timeStamp);
+                              else quitarCopia(c.i, e.timeStamp);
+                            }}
+                          >
+                            {c.quitada ? <Undo2 className="size-4" aria-hidden="true" /> : <Eraser className="size-4" aria-hidden="true" />} {tx(c.quitada ? FP.copiaDevolver : FP.copiaQuitar, lang)}
+                            {/* El nombre que oye el lector empieza con lo que dice el botón (así también lo encuentra el control por voz). */}
+                            <span className="sr-only">{rellenar(tx(c.quitada ? FP.copiaDevolverSr : FP.copiaQuitarSr, lang), v)}</span>
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="mt-1.5 text-xs text-muted-foreground">{tx(FP.copiaAyuda, lang)}</p>
+                </div>
               )}
               <Button variant="outline" size="lg" className={cn("mt-3 w-full", BOTON)} onClick={cambiarPsd}>
                 <FileUp className="size-4" aria-hidden="true" /> {tx(FP.cambiar, lang)}

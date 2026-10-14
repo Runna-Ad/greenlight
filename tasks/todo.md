@@ -76,7 +76,10 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 - Siguen abiertas: letra mínima aceptable del legal (hoy 10 px provisional) · 3-5 PSD más.
 
 ### Plan B — puerta PSD (2026-10-13)
-**Next Step (2026-10-14):** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
+**Next Step (2026-10-14, tarde):** B11 (copia en el fondo + contraste) construido y probado en localhost; cerrar la
+revisión, subir a la preview y que Pedro lo pruebe con s33. Gemini como respaldo del relleno: espera que Pedro ponga
+saldo a la llave (pasos en el chat del 2026-10-14) para construirlo con una llamada real.
+**Antes:** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
 subir. La prueba de punta a punta de tipografías espera el "ship it" de 0079 + bucket. 320×50 se queda igual
 (Pedro). Después: que pruebe la preview con su PSD y las DiDi; B4.
 **Antes (Pedro, 2026-10-13, al ver la pantalla):** (1) que las medidas CHICAS no pierdan calidad: nítidas y
@@ -409,7 +412,23 @@ largo: estacionado por él.
       Visto con s33 (para Pedro, no es de las carpetas): (1) dos tarjetas en las horizontales: la imagen de IA del
       Background ya trae una tarjeta pintada justo debajo de la de CARD; al mover CARD, la pintada se queda. Es del
       PSD. (2) 876×324: la parte de arriba del titular ("Hasta" y el 20 %) queda debajo de la fila de logos y NO se
-      avisa. Pendiente de proponer arreglo.
+      avisa. Pendiente de proponer arreglo. **CORREGIDO 2026-10-14:** no se enciman (11 px libres medidos a tamaño
+      real); el problema es contraste: letras de nube blancas sobre nubes blancas → B11.
+- [x] B11. Copia en el fondo + contraste (Pedro, 2026-10-14: "build the contrast check and option 1 with option 3
+      first meaning it detects warns and suggest fix. if they approve then option 1 kicks in"; Gemini como respaldo).
+      · `gemela.ts`: `buscarGemela` (bajo el HERO, ≥ 75 % parecido Y 30 puntos más que a los lados; s33 91 %, 2 ms;
+        APGIANT nada) · `quitarGemela` (sólo al aprobar: espejo por renglón + mezcla vertical + quita el reflejo de
+        color alrededor sin tocar el brillo; 13-24 ms; fondo nuevo, el original queda para «Deshacer»).
+      · `revisar.ts`: `revisarMedida` = acomodo + avisos de píxeles, una sola entrada para la tarjeta y el resumen
+        (caché por lista de maestros). Avisos: «copia» (se ve dos veces), «retoque» (se ve el relleno), «contraste»
+        (≥ 30 % de la pieza casi del mismo tono que lo de atrás Y ≥ 15 puntos peor que en el original).
+      · Pantalla: «Copia en el fondo» en el panel con «Quitar del fondo» / «Deshacer» y aviso al lector de pantalla.
+      · Medido con los 2 PSD reales: s33 tal cual → 11 medidas con «copia» (no 2: en las verticales la copia sale más
+        grande DETRÁS de la tarjeta), contraste en 1280×720, 1200×627, 876×324, 640×100 y 320×50 (TITULO) + BRAND en
+        los 2 banners; con la copia quitada → 11 «retoque» y además FOOTER en 720×1600 (33 % vs 17 %). APGIANT: 0
+        avisos nuevos en las 12. test-formatos 268/0. Probado en el navegador (localhost): quitar, deshacer, 12
+        lienzos pintados, foco se queda en el botón, aviso role=status.
+      · NO hecho: Gemini como respaldo del relleno (espera llave con saldo para probarlo con una llamada real).
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

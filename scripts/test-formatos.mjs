@@ -8,7 +8,7 @@ import {
 } from "../src/lib/prisma/formatos/geometria.ts";
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
 import { writePsdBuffer } from "ag-psd";
-import { nombreDeGuia } from "../src/lib/prisma/formatos/roles.ts";
+import { nombreDeGuia, etiquetaPieza } from "../src/lib/prisma/formatos/roles.ts";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
@@ -20,6 +20,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { acomodar, acomodarMedida, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO } from "../src/lib/prisma/formatos/listo.ts";
+import { buscarGemela, quitarGemela } from "../src/lib/prisma/formatos/gemela.ts";
+import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida } from "../src/lib/prisma/formatos/revisar.ts";
 import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
 import { specVacio } from "../src/lib/prisma/spec.ts";
 
@@ -706,7 +708,7 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
         const cubre = a.fondo.x <= 0.01 && a.fondo.y <= 0.01 && a.fondo.x + ma.w * a.fondo.k >= W - 0.01 && a.fondo.y + ma.h * a.fondo.k >= H - 0.01;
         const dentro = a.puestas.every((q) => q.k > 0 && q.x >= -0.5 && q.y >= -0.5 && q.x + q.w <= W + 0.5 && q.y + q.h <= H + 0.5);
         const sinChoque = !a.avisos.some((v) => v.tipo === "fuera" || v.tipo === "encima");
-        const nadaCallado = ma.piezas.every((p, i) => a.puestas.some((q) => q.pieza === i) || a.avisos.some((v) => (v.tipo === "falta" || v.tipo === "quitada") && v.texto.includes(p.rol ?? p.nombre)));
+        const nadaCallado = ma.piezas.every((p, i) => a.puestas.some((q) => q.pieza === i) || a.avisos.some((v) => (v.tipo === "falta" || v.tipo === "quitada") && v.texto.includes(etiquetaPieza(p))));
         // Con la forma del maestro: el pie puede crecer, pero no MÁS encima de nadie que a escala pareja.
         let pieQuieto = true;
         const fi = ma.piezas.findIndex((p) => p.rol === "FOOTER"), f = a.puestas.find((q) => q.pieza === fi);
@@ -1109,6 +1111,114 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
   const conBoton = (extra) => [capa("boton", [40, 30, 120, 40], () => NARANJA), texto(extra)];
   eq("gamma del texto: copia aplanada mezclada normal → 1; en gamma 1.45 → 1.45; con la capa al 50 %, igual", [gammaDe(psdTexto(conBoton())), gammaDe(psdTexto(conBoton(), 1, 1.45)), gammaDe(psdTexto(conBoton({ opacity: 0.5 }), 0.5, 1.45)), gammaDe(psdTexto(conBoton({ opacity: 0.5 }), 0.5))], [1, 1.45, 1.45, 1]);
   eq("gamma del texto: sin texto que medir, la del PSD real del equipo (1.45)", gammaDe(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA)])), 1.45);
+}
+
+console.log("\n▶ v2 · copia del HERO pintada en el fondo (gemela.ts) y avisos de píxeles (revisar.ts)");
+{
+  // Fondo con textura (cada lugar distinto) y el HERO pintado tal cual en su lugar, como la imagen de IA del s33.
+  const L = 200, caja = { x: 60, y: 60, w: 50, h: 70 };
+  const heroPx = (x, y) => [((x * 13 + y * 3) % 200) + 30, ((x * 5 + y * 11) % 200) + 20, 90];
+  const rgba = new Uint8ClampedArray(caja.w * caja.h * 4);
+  for (let y = 0; y < caja.h; y++) for (let x = 0; x < caja.w; x++) rgba.set([...heroPx(x, y), 255], (y * caja.w + x) * 4);
+  const fondo = new Uint8ClampedArray(L * L * 4);
+  for (let y = 0; y < L; y++) for (let x = 0; x < L; x++) fondo.set([(x * 7) % 256, (y * 5) % 256, ((x + y) * 3) % 256, 255], (y * L + x) * 4);
+  for (let y = 0; y < caja.h; y++) for (let x = 0; x < caja.w; x++) fondo.set([...heroPx(x, y), 255], ((caja.y + y) * L + caja.x + x) * 4);
+  const hero = { nombre: "CARD", rol: "HERO", caja, solido: caja, letraMinPx: null, rgba };
+  const ma = { nombre: "M", w: L, h: L, fondo, piezas: [hero] };
+  const g = buscarGemela(ma);
+  ok("gemela: el fondo trae el HERO pintado debajo → se encuentra (pieza 0, parecido 100 %) y lo que se borra cubre la pieza", !!g && g.pieza === 0 && g.parecido === 1 && g.caja.x <= caja.x && g.caja.y <= caja.y && g.caja.x + g.caja.w >= caja.x + caja.w && g.caja.y + g.caja.h >= caja.y + caja.h, JSON.stringify(g));
+  const antes = fondo.slice();
+  const limpio = quitarGemela(ma, g);
+  let fuera = true;
+  for (let y = 0; y < L; y++)
+    for (let x = 0; x < L; x++) {
+      const dentro = x >= g.caja.x && x < g.caja.x + g.caja.w && y >= g.caja.y && y < g.caja.y + g.caja.h;
+      if (!dentro && [0, 1, 2, 3].some((c) => limpio[(y * L + x) * 4 + c] !== fondo[(y * L + x) * 4 + c])) fuera = false;
+    }
+  ok("gemela: quitarla da un fondo NUEVO (el de entrada no cambia) y fuera de su caja no toca ni un píxel", limpio !== fondo && fondo.every((v, i) => v === antes[i]) && fuera);
+  eq("gemela: en el fondo ya rellenado no queda copia que encontrar", buscarGemela({ ...ma, fondo: limpio }), null);
+  const blanco = new Uint8ClampedArray(L * L * 4).fill(250), heroBlanco = new Uint8ClampedArray(caja.w * caja.h * 4).fill(250);
+  eq("gemela: un HERO blanco sobre un fondo blanco se parece en todas partes: NO es copia", buscarGemela({ ...ma, fondo: blanco, piezas: [{ ...hero, rgba: heroBlanco }] }), null);
+  eq("gemela: sólo se busca bajo el HERO (la misma pieza con otro papel no cuenta)", buscarGemela({ ...ma, piezas: [{ ...hero, rol: "TITULO" }] }), null);
+
+  // ¿Se ve la copia? Con el acomodo del maestro, la pieza la tapa; corrida, no.
+  const conCopia = (quitada) => ({ ...ma, fondo: quitada ? limpio : fondo, copia: { pieza: 0, caja: g.caja, quitada } });
+  const enSuLugar = acomodar(conCopia(false), L, L);
+  const corrida = { ...enSuLugar, puestas: enSuLugar.puestas.map((q) => ({ ...q, x: q.x + 60 })) };
+  eq("copia: a la medida del maestro la pieza la tapa (no se ve); corrida 60 px, sí", [seVeLaCopia(conCopia(false), enSuLugar, L, L), seVeLaCopia(conCopia(false), corrida, L, L)], [false, true]);
+  eq("copia: el aviso dice lo que pasa antes y después de quitarla", [avisosDePixeles(conCopia(false), corrida, L, L).map((a) => a.tipo), avisosDePixeles(conCopia(true), corrida, L, L).map((a) => a.tipo), avisosDePixeles(conCopia(false), enSuLugar, L, L).length], [["copia"], ["retoque"], 0]);
+  const uno = conCopia(false);
+  ok(
+    "revisarMedida: la tarjeta (lado «derecha») y el resumen (sin lado) reciben el MISMO resultado; otra lista con el mismo maestro también; otro maestro, no",
+    revisarMedida([uno], 1200, 627) === revisarMedida([uno], 1200, 627, { heroLado: "derecha" }) && revisarMedida([uno], 1200, 627) !== revisarMedida([conCopia(false)], 1200, 627),
+  );
+  eq("avisos: la pieza se nombra por su carpeta, y con su papel si la carpeta no es de la guía", [etiquetaPieza({ nombre: "TITULO", rol: "TITULO" }), etiquetaPieza({ nombre: "Copy", rol: "TITULO" }), etiquetaPieza({ nombre: "Capa suelta", rol: null })], ["«TITULO»", "«Copy» (TITULO)", "«Capa suelta»"]);
+
+  // Piezas grandes: corrida entera cae fuera, se mide corrida a la mitad; sin ningún lado medible, no se marca.
+  const grande = (fondoDe, color) => {
+    const cg = { x: 30, y: 30, w: 140, h: 140 }, rg = new Uint8ClampedArray(cg.w * cg.h * 4), fg = new Uint8ClampedArray(L * L * 4);
+    for (let y = 0; y < cg.h; y++) for (let x = 0; x < cg.w; x++) rg.set([...color(x, y), 255], (y * cg.w + x) * 4);
+    for (let y = 0; y < L; y++) for (let x = 0; x < L; x++) fg.set([...fondoDe(x, y), 255], (y * L + x) * 4);
+    for (let y = 0; y < cg.h; y++) for (let x = 0; x < cg.w; x++) fg.set([...color(x, y), 255], ((cg.y + y) * L + cg.x + x) * 4);
+    return { ...ma, fondo: fg, piezas: [{ ...hero, caja: cg, solido: cg, rgba: rg }] };
+  };
+  const textura = (x, y) => [(x * 7) % 256, (y * 5) % 256, ((x + y) * 3) % 256];
+  eq("gemela: HERO grande (49 % del maestro): blanco sobre blanco NO es copia aunque corrida entera caiga fuera; con textura, sí", [buscarGemela(grande(() => [250, 250, 250], () => [250, 250, 250])), buscarGemela(grande(textura, heroPx))?.pieza], [null, 0]);
+  const enorme = { ...grande(textura, heroPx) };
+  enorme.piezas = [{ ...enorme.piezas[0], caja: { x: 0, y: 0, w: L, h: 150 }, solido: { x: 0, y: 0, w: L, h: 150 }, rgba: enorme.fondo.slice(0, L * 150 * 4) }];
+  eq("gemela: una pieza que tapa más de la mitad del maestro no se ofrece (no queda alrededor de dónde rellenar)", buscarGemela(enorme), null);
+
+  // Copia pegada al borde: el espejo usa el lado que sí existe y nada sale negro.
+  const borde = { ...hero, caja: { x: 0, y: 60, w: 50, h: 70 }, solido: { x: 0, y: 60, w: 50, h: 70 } };
+  const fb = fondo.slice();
+  for (let y = 0; y < 70; y++) for (let x = 0; x < 50; x++) fb.set([...heroPx(x, y), 255], ((60 + y) * L + x) * 4);
+  const mb = { ...ma, fondo: fb, piezas: [borde] }, gb = buscarGemela(mb);
+  const lb = gb && quitarGemela(mb, gb);
+  let negros = 0;
+  if (lb) for (let y = 60; y < 130; y++) for (let x = 0; x < 50; x++) if (lb[(y * L + x) * 4] + lb[(y * L + x) * 4 + 1] + lb[(y * L + x) * 4 + 2] < 10) negros++;
+  ok("gemela: pegada al borde del maestro se encuentra y se rellena sin dejar píxeles negros", !!gb && gb.caja.x === 0 && !!lb && negros === 0, `${JSON.stringify(gb)} negros=${negros}`);
+
+  // El reflejo: alrededor de una copia naranja el fondo blanco-azulado trae un halo naranja; al quitar la copia se le
+  // quita ese tinte (rojo − azul baja) y el brillo se queda.
+  const NARANJA_T = (x, y) => [220 + ((x + y) % 20), 90 + ((x * 3) % 30), 30 + ((y * 7) % 20)];
+  const fr = new Uint8ClampedArray(L * L * 4), cr = { x: 75, y: 70, w: 50, h: 60 };
+  for (let y = 0; y < L; y++)
+    for (let x = 0; x < L; x++) {
+      const dx = Math.max(cr.x - x, 0, x - (cr.x + cr.w - 1)), dy = Math.max(cr.y - y, 0, y - (cr.y + cr.h - 1)), dist = Math.hypot(dx, dy);
+      const halo = dist > 0 && dist < 14 ? 1 - dist / 14 : 0;
+      fr.set([230 + 20 * halo, 235 - 60 * halo, 250 - 110 * halo, 255].map(Math.round), (y * L + x) * 4);
+    }
+  const rr = new Uint8ClampedArray(cr.w * cr.h * 4);
+  for (let y = 0; y < cr.h; y++) for (let x = 0; x < cr.w; x++) { rr.set([...NARANJA_T(x, y), 255], (y * cr.w + x) * 4); fr.set([...NARANJA_T(x, y), 255], ((cr.y + y) * L + cr.x + x) * 4); }
+  const mr = { ...ma, fondo: fr, piezas: [{ ...hero, caja: cr, solido: cr, rgba: rr }] }, gr = buscarGemela(mr), lr = gr && quitarGemela(mr, gr);
+  const anillo = (buf) => {
+    let rb = 0, lum = 0, n = 0;
+    for (let y = cr.y - 12; y < cr.y + cr.h + 12; y++)
+      for (let x = cr.x - 12; x < cr.x + cr.w + 12; x++) {
+        if (x >= cr.x - 6 && x < cr.x + cr.w + 6 && y >= cr.y - 6 && y < cr.y + cr.h + 6) continue; // sólo el halo, lejos del hueco
+        const j = (y * L + x) * 4;
+        rb += buf[j] - buf[j + 2]; lum += buf[j] + buf[j + 1] + buf[j + 2]; n++;
+      }
+    return [rb / n, lum / n];
+  };
+  const [rbAntes, lumAntes] = anillo(fr), [rbDespues, lumDespues] = lr ? anillo(lr) : [NaN, NaN];
+  ok("gemela: el halo naranja alrededor de la copia pierde su tinte (rojo − azul baja a menos de la mitad) y el brillo se queda (±3)", !!gr && rbDespues < rbAntes / 2 && Math.abs(lumDespues - lumAntes) <= 3, `rb ${rbAntes.toFixed(1)} → ${rbDespues.toFixed(1)}, brillo ${lumAntes.toFixed(1)} → ${lumDespues.toFixed(1)}`);
+
+  // Contraste: fondo azul a la izquierda, blanco a la derecha; un titular blanco que en el original va sobre el azul.
+  const C = 400, fc = new Uint8ClampedArray(C * C * 4);
+  for (let y = 0; y < C; y++) for (let x = 0; x < C; x++) fc.set(x < 200 ? [30, 60, 200, 255] : [245, 245, 245, 255], (y * C + x) * 4);
+  const bloque = (w, h, color) => { const b = new Uint8ClampedArray(w * h * 4); for (let i = 0; i < w * h; i++) b.set(color, i * 4); return b; };
+  const titulo = (x) => ({ nombre: "Copy", rol: "TITULO", caja: { x, y: 100, w: 100, h: 40 }, solido: { x, y: 100, w: 100, h: 40 }, letraMinPx: null, rgba: bloque(100, 40, [255, 255, 255, 255]) });
+  const sobreAzul = { nombre: "C", w: C, h: C, fondo: fc, piezas: [titulo(50)] };
+  const aDerecha = (m) => { const a = acomodar(m, C, C); return { ...a, familia: "horizontal", puestas: a.puestas.map((q) => (m.piezas[q.pieza].rol === "TITULO" ? { ...q, x: 250 } : q)) }; };
+  const pOrig = perdidas(sobreAzul, acomodar(sobreAzul, C, C), C, C).get(0), pMovido = perdidas(sobreAzul, aDerecha(sobreAzul), C, C).get(0);
+  ok("contraste: blanco sobre azul no se pierde; el mismo blanco sobre blanco, casi todo", pOrig < 0.05 && pMovido > 0.95, `${pOrig} ${pMovido}`);
+  eq("contraste: se avisa cuando la medida lo pone sobre su mismo tono y en el original se leía", avisosDePixeles(sobreAzul, aDerecha(sobreAzul), C, C).map((a) => a.tipo), ["contraste"]);
+  eq("contraste: si en el original ya iba así (el diseñador lo dejó), no se avisa", avisosDePixeles({ ...sobreAzul, piezas: [titulo(250)] }, aDerecha({ ...sobreAzul, piezas: [titulo(250)] }), C, C).length, 0);
+  // Lo de atrás incluye las piezas de abajo: el titular blanco sobre un HERO oscuro se lee aunque el fondo sea blanco.
+  const heroOscuro = { nombre: "CARD", rol: "HERO", caja: { x: 220, y: 80, w: 160, h: 100 }, solido: { x: 220, y: 80, w: 160, h: 100 }, letraMinPx: null, rgba: bloque(160, 100, [20, 20, 20, 255]) };
+  const conHero = { ...sobreAzul, piezas: [heroOscuro, titulo(50)] };
+  ok("contraste: lo de atrás también son las piezas de abajo (blanco sobre un HERO oscuro, encima del fondo blanco, se lee)", (perdidas(conHero, aDerecha(conHero), C, C).get(1) ?? 1) < 0.05);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);
