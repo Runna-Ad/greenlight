@@ -1045,3 +1045,9 @@ TAGS: #ui #doble-clic #eventos #formatos #probar-en-navegador
 ROOT CAUSE: medí el acomodo contra el lienzo (dentro, sin encimarse, letra legible) y nunca contra el fondo; en un anuncio con escenario (colchón, piso, mesa) lo que importa es dónde cae cada pieza SOBRE el fondo.
 RULE: en un acomodo que conserva el del diseñador, medir el desfase de cada pieza sobre el fondo (pie de la pieza → punto del fondo, en px del maestro) en todas las medidas, y probar que sea 0 donde se puede. Y al resolver con restricciones (zona del canal), fijar primero la prioridad (la pieza que "se para" en el escenario no se mueve) y probarla con un caso donde sí cabe: el primer intento maximizaba la separación y movía la tarjeta.
 TAGS: #formatos #acomodo #escenario #verticales #zona-segura #medir-antes-de-decir
+
+[2026-10-14] LESSON (le di a Pedro un número calculado a mano y era otro): para proponerle el zoom del fondo le dije que con Stories el fondo pasaría de ×1.28 a "about 1.55×". Al construirlo, el motor pidió ×1.87 (46 % más, no 21 %), y el primer tope que elegí (×1.25) no hacía nada. Mi cuenta suponía que la tarjeta podía quedar en 1352 px; no contaba que el botón y el legal van DEBAJO de ella y también tienen que quedar fuera de la franja.
+ROOT CAUSE: estimé con una cuenta de servilleta en vez de correr el motor (que ya existía en el prototipo).
+RULE: un número que le doy a Pedro para decidir (zoom, costo, alcance) sale de correr el código o el prototipo, no de una cuenta a mano; si no lo corrí, digo "estimado sin medir". Es el mismo patrón de "medir antes de decir", tercera vez hoy.
+TAGS: #formatos #medir-antes-de-decir #estimaciones #zoom
+
