@@ -17,6 +17,7 @@ import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
 import { colaVacia, enCola, pintar } from "./pintar";
 import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, fuentesRecordadas, olvidarFuentes, recordarFuentes, revisarTextos, textoEscrito, type ArchivoFuente, type Escritura, type Tipografias } from "./escritura";
+import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD. El anuncio llega en Photoshop: un Web Worker lo lee y lo separa en fondo
@@ -102,9 +103,12 @@ async function archivosDe(entradas: FileSystemEntry[]): Promise<File[]> {
   return out;
 }
 
-/** Lo que pasó al cargar tipografías. */
-type NotaFuentes = { nuevas: number; malas: string[]; vacio?: boolean; fallo?: boolean };
-const notaMala = (n: NotaFuentes) => !!n.fallo || !!n.vacio || (!n.nuevas && n.malas.length > 0);
+/** Lo más que se espera a Greenlight (el pedido y cada archivo): después se dice y se pueden soltar. */
+const GREENLIGHT_MS = 20_000;
+
+/** Lo que pasó al cargar tipografías. `de` = vinieron de Greenlight (de qué clientes); `greenlightNo` = no se pudieron traer. */
+type NotaFuentes = { nuevas: number; malas: string[]; vacio?: boolean; fallo?: boolean; de?: string; greenlightNo?: boolean };
+const notaMala = (n: NotaFuentes) => !!n.fallo || !!n.vacio || !!n.greenlightNo || (!n.nuevas && n.malas.length > 0);
 const NOMBRES_MAX = 6;
 /** El nombre de una capa de texto es su texto (el legal mide 60+ letras): se acorta, y entero va en el `title`. */
 const CAPA_MAX = 48;
@@ -112,10 +116,11 @@ const corto = (s: string) => (s.length > CAPA_MAX ? `${s.slice(0, CAPA_MAX - 1)}
 /** Una lista de nombres que puede ser larga: los primeros y "+N". */
 const unos = (xs: string[]) => `${xs.slice(0, NOMBRES_MAX).join(", ")}${xs.length > NOMBRES_MAX ? ` +${xs.length - NOMBRES_MAX}` : ""}`;
 function textoNotaFuentes(n: NotaFuentes, lang: Lang): string {
+  if (n.greenlightNo) return tx(FP.textoGreenlightNo, lang);
   if (n.fallo) return tx(FP.textoFallo, lang);
   if (n.vacio) return tx(FP.textoNinguna, lang);
   const cargadas = n.nuevas === 1 ? tx(FP.textoCargadaUna, lang) : n.nuevas ? rellenar(tx(FP.textoCargadas, lang), { n: n.nuevas }) : n.malas.length ? "" : tx(FP.textoYaEstaban, lang);
-  return [cargadas, n.malas.length ? rellenar(tx(FP.textoMalas, lang), { f: unos(n.malas) }) : ""].filter(Boolean).join(" ");
+  return [n.de ? rellenar(tx(FP.textoDeGreenlight, lang), { c: n.de }) : "", cargadas, n.malas.length ? rellenar(tx(FP.textoMalas, lang), { f: unos(n.malas) }) : ""].filter(Boolean).join(" ");
 }
 
 /** Lo que tapa el canal, en palabras: % donde la cifra es de guías (aprox.), px donde la dio el equipo (TikTok). */
@@ -296,7 +301,19 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   const [tipos, setTipos] = useState<Tipografias>(() => new Map());
   /** Qué pasó al cargar tipografías (se escribe al pintar: así sigue el idioma de la pantalla). */
   const [notaFuentes, setNotaFuentes] = useState<NotaFuentes | null>(null);
-  const [cargandoFuentes, setCargandoFuentes] = useState(false);
+  /** Cuántas cargas de tipografías van en curso (soltadas, del botón y de Greenlight pueden cruzarse). */
+  const [cargandoFuentes, setCargandoFuentes] = useState(0);
+  /** Ya se cargaron las recordadas en este navegador: sólo entonces se sabe qué le falta de verdad a un PSD. */
+  const [recordadasListas, setRecordadasListas] = useState(false);
+  /** Pedidos a Greenlight en curso (un PSD leído encima de otro puede cruzarlos). */
+  const [trayendo, setTrayendo] = useState(0);
+  /** El PSD al que ya se le resolvió el pedido (o no le faltaba nada): hasta entonces no se dice "Faltan". */
+  const [resueltoPara, setResueltoPara] = useState<Leido | null>(null);
+  /** A qué PSD ya se le pidieron (una vez por PSD: si Greenlight no las tiene, no se vuelve a preguntar). */
+  const pedidasPara = useRef<Leido | null>(null);
+  /** Lo vigente para lo que termina tarde (tras esperar a la red): el PSD en pantalla y las tipografías cargadas. */
+  const leidoVigente = useRef<Leido | null>(null);
+  const tiposVigentes = useRef<Tipografias>(new Map());
   /** La última prueba de los textos: de qué PSD y con qué tipografías se hizo (ver el efecto que la corre). */
   const [prueba, setPrueba] = useState<{ leido: Leido; tipos: Tipografias; e: Escritura | null } | null>(null);
   const entradaFuentes = useRef<HTMLInputElement>(null);
@@ -379,6 +396,7 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     setLeido(null);
     setLados({});
     setAviso(null);
+    setNotaFuentes(null);
     setEleccion(null);
     const fallar = (f: Falla) => {
       volverASubir.current = true;
@@ -484,10 +502,14 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   // Tipografías: las que se recordaron en este navegador se cargan solas; las nuevas se suman y se recuerdan.
   useEffect(() => {
     void (async () => {
-      const recordadas = await fuentesRecordadas();
-      if (!recordadas.length) return;
-      const r = await cargarFuentes(recordadas, new Map());
-      if (vivo.current) setTipos((antes) => new Map([...r.mapa, ...antes]));
+      try {
+        const recordadas = await fuentesRecordadas();
+        if (!recordadas.length) return;
+        const r = await cargarFuentes(recordadas, new Map());
+        if (vivo.current) setTipos((antes) => new Map([...r.mapa, ...antes]));
+      } finally {
+        if (vivo.current) setRecordadasListas(true);
+      }
     })();
   }, []);
   const avisarFuentes = (n: NotaFuentes) => {
@@ -497,25 +519,30 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     // Sin la tarjeta "Texto nítido" en pantalla (aún no hay PSD, o no trae textos) la nota sale como aviso flotante.
     if (!totalTextos) (notaMala(n) ? toast.error : toast.success)(texto);
   };
-  const agregarFuentes = async (archivos: File[]) => {
+  /** `de` = vinieron de Greenlight (los clientes, para la nota). */
+  const agregarFuentes = async (archivos: File[], de?: string, noBajaron: string[] = []) => {
     // Los topes van ANTES de leer: una carpeta de fuentes del sistema o un archivo enorme no llegan a memoria.
-    const { usar, omitidas } = elegirFuentes(archivos);
-    if (!usar.length) return avisarFuentes(omitidas.length ? { nuevas: 0, malas: omitidas } : { nuevas: 0, malas: [], vacio: true });
-    setCargandoFuentes(true);
+    const { usar, omitidas: fuera } = elegirFuentes(archivos);
+    const omitidas = [...fuera, ...noBajaron];
+    if (!usar.length) return avisarFuentes(omitidas.length ? { nuevas: 0, malas: omitidas, de } : { nuevas: 0, malas: [], vacio: true });
+    setCargandoFuentes((n) => n + 1);
     try {
       const datos: ArchivoFuente[] = [];
       for (const f of usar) datos.push({ nombre: f.name, datos: await f.arrayBuffer() });
-      const r = await cargarFuentes(datos, tipos);
+      // Las vigentes (no las de cuando empezó: pudieron soltarse u olvidarse otras mientras se leía).
+      const r = await cargarFuentes(datos, tiposVigentes.current);
       if (!vivo.current) return;
       // Funcional: dos tandas casi juntas (o la de las recordadas) se suman, no se pisan. Nada nuevo, nada que repintar.
       if (r.nuevas.length) setTipos((antes) => new Map([...antes, ...r.mapa]));
-      void recordarFuentes(r.buenas);
-      avisarFuentes({ nuevas: r.nuevas.length, malas: [...r.malas, ...omitidas] });
+      // Las que vienen de Greenlight NO se guardan en el navegador: son letra con licencia del cliente y se vuelven
+      // a pedir (con sesión) en cada pestaña. Las que la persona soltó, sí: son sus archivos.
+      if (de === undefined) void recordarFuentes(r.buenas);
+      avisarFuentes({ nuevas: r.nuevas.length, malas: [...r.malas, ...omitidas], de });
     } catch (err) {
       console.error("[formatos-psd] tipografías", err);
       if (vivo.current) avisarFuentes({ nuevas: 0, malas: [], fallo: true });
     } finally {
-      if (vivo.current) setCargandoFuentes(false);
+      if (vivo.current) setCargandoFuentes((n) => n - 1);
     }
   };
   const olvidar = () => {
@@ -613,6 +640,61 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     () => [...new Set((leido?.maestros ?? []).flatMap((m) => m.piezas.flatMap((p) => p.textos.flatMap((t) => t.texto.tramos.map((r) => r.fuente)))))].filter((f) => f && !tipos.has(f)),
     [leido, tipos],
   );
+  // Lo que le falta al PSD se pide a Greenlight UNA vez por PSD: las tipografías del cliente que un admin guardó en
+  // Admin › Marcas. Espera a las recordadas en este navegador (con ellas casi nunca falta nada y no se pregunta).
+  // Llegan por el mismo camino que soltarlas: mismos topes, misma prueba contra Photoshop, y se recuerdan aquí.
+  const pedirTipografias = useEffectEvent(async (l: Leido) => {
+    if (pedidasPara.current === l) return;
+    pedidasPara.current = l;
+    if (!faltanFuentes.length) return setResueltoPara(l);
+    // Lo que termina tarde sólo cuenta si ese PSD sigue en pantalla (otro leído encima hace su propio pedido).
+    const sigue = () => vivo.current && leidoVigente.current === l;
+    setTrayendo((n) => n + 1);
+    try {
+      const r = await Promise.race([
+        tipografiasDelPsd(faltanFuentes),
+        new Promise<never>((_, no) => window.setTimeout(() => no(new Error("Greenlight no respondió")), GREENLIGHT_MS)),
+      ]);
+      if (!sigue()) return;
+      if (!r.ok) return avisarFuentes({ nuevas: 0, malas: [], greenlightNo: true });
+      if (!r.tipografias.length) return;
+      // Cada archivo por su lado: uno que falle (enlace vencido, red) no tumba a los demás; se nombra.
+      const bajadas = await Promise.allSettled(
+        r.tipografias.map(async (t) => {
+          const res = await fetch(t.url, { signal: AbortSignal.timeout(GREENLIGHT_MS) });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          // El nombre lleva la extensión de sus bytes (la que revisa elegirFuentes), aunque al subirlo no la trajera.
+          return new File([await res.blob()], t.archivo.toLowerCase().endsWith(`.${t.ext}`) ? t.archivo : `${t.archivo}.${t.ext}`);
+        }),
+      );
+      if (!sigue()) return;
+      const archivos = bajadas.flatMap((b) => (b.status === "fulfilled" ? [b.value] : []));
+      const fallaron = r.tipografias.filter((_, i) => bajadas[i].status === "rejected").map((t) => t.archivo);
+      if (fallaron.length) console.error("[formatos-psd] tipografías de Greenlight que no bajaron", fallaron, bajadas.filter((b) => b.status === "rejected"));
+      const de = [...new Set(r.tipografias.map((t) => t.cliente).filter(Boolean))].join(", ");
+      if (!archivos.length) return avisarFuentes({ nuevas: 0, malas: [], greenlightNo: true });
+      await agregarFuentes(archivos, de, fallaron);
+    } catch (err) {
+      console.error("[formatos-psd] tipografías de Greenlight", err);
+      if (sigue()) avisarFuentes({ nuevas: 0, malas: [], greenlightNo: true });
+    } finally {
+      if (vivo.current) {
+        setTrayendo((n) => n - 1);
+        setResueltoPara((p) => (leidoVigente.current === l ? l : p));
+      }
+    }
+  });
+  useEffect(() => {
+    leidoVigente.current = leido;
+    tiposVigentes.current = tipos;
+  }, [leido, tipos]);
+  useEffect(() => {
+    const l = leido;
+    if (!l?.maestros.length || !recordadasListas) return;
+    // Fuera del efecto (como la prueba de textos): el aviso de "trayendo" no se pinta en el mismo paso.
+    const reloj = window.setTimeout(() => void pedirTipografias(l), 0);
+    return () => window.clearTimeout(reloj);
+  }, [leido, recordadasListas]);
   // El mismo texto suele venir en varias mesas: una línea por texto y motivo, con las medidas de sus mesas.
   const comoImagen = [
     ...revisiones
@@ -916,13 +998,13 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                 </h2>
                 {/* Vivo: al sumar tipografías el resultado cambia aquí, y se anuncia. */}
                 <p aria-live="polite" className="mt-1 flex items-center gap-1.5 text-sm font-medium text-foreground">
-                  {probando && <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />}
-                  {probando ? tx(FP.textoProbando, lang) : tipos.size ? rellenar(tx(FP.textoEstado, lang), { n: escritos, m: totalTextos }) : tx(FP.textoSinFuentes, lang)}
+                  {(probando || trayendo > 0) && <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />}
+                  {trayendo > 0 ? tx(FP.textoTrayendo, lang) : probando ? tx(FP.textoProbando, lang) : tipos.size ? rellenar(tx(FP.textoEstado, lang), { n: escritos, m: totalTextos }) : tx(FP.textoSinFuentes, lang)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">{tx(FP.textoAyuda, lang)}</p>
-                {faltanFuentes.length > 0 && (
+                {faltanFuentes.length > 0 && !trayendo && resueltoPara === leido && (
                   <p className="mt-1 break-words text-xs text-foreground">
-                    {tx(FP.textoFaltan, lang)} {unos(faltanFuentes)}.
+                    {tx(FP.textoFaltan, lang)} {unos(faltanFuentes)}. <span className="text-muted-foreground">{tx(FP.textoFaltanAdmin, lang)}</span>
                   </p>
                 )}
                 {comoImagen.length > 0 && (
@@ -966,12 +1048,12 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                   variant="outline"
                   size="lg"
                   className={cn("mt-2 w-full aria-disabled:cursor-wait", BOTON)}
-                  onClick={() => cargandoFuentes || entradaFuentes.current?.click()}
-                  aria-disabled={cargandoFuentes || undefined}
-                  aria-busy={cargandoFuentes}
+                  onClick={() => cargandoFuentes > 0 || entradaFuentes.current?.click()}
+                  aria-disabled={cargandoFuentes > 0 || undefined}
+                  aria-busy={cargandoFuentes > 0}
                 >
-                  {cargandoFuentes ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Type className="size-4" aria-hidden="true" />}
-                  {tx(cargandoFuentes ? FP.textoCargando : FP.textoAgregar, lang)}
+                  {cargandoFuentes > 0 ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Type className="size-4" aria-hidden="true" />}
+                  {tx(cargandoFuentes > 0 ? FP.textoCargando : FP.textoAgregar, lang)}
                 </Button>
                 {tipos.size > 0 && (
                   <button type="button" onClick={olvidar} className={cn("mt-2 min-h-11 w-full cursor-pointer rounded text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground sm:min-h-9", FOCO)}>

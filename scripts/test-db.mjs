@@ -2748,5 +2748,44 @@ console.log("\n▶ 0078 — prisma_formatos_lotes + prisma_formatos_salidas");
   eq("borrar el lote se lleva sus salidas (cascade)", `${borra}→${await scalar(`select count(*) from produccion.prisma_formatos_salidas where lote_id = $1`, [lote])}`, "2→0");
 }
 
+// ── 0079: tipografías de cada cliente (Formatos las pide por nombre) ──
+console.log("\n▶ 0079 — tipografias_cliente");
+{
+  const t = "tipografias_cliente";
+  eq(`${t} existe con RLS`, Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = '${t}' and c.relrowsecurity`)), 1);
+  eq(`${t}: policy master-only`, Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = '${t}' and qual like '%master%'`)), 1);
+  ok(`${t}: service_role puede escribir`, (await q(`select has_table_privilege('service_role', 'produccion.${t}', 'insert') as ok`))[0].ok);
+  eq(`${t}: PUBLIC sin privilegios`, Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = '${t}' and c.relacl is not null and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+  const rechaza = async (sql, params = []) => db.query(sql, params).then(() => false).catch(() => true);
+  const cli = await scalar(`insert into produccion.clients (name, slug) values ('Tipos SA', 'tipos-sa') returning id`);
+  const otro = await scalar(`insert into produccion.clients (name, slug) values ('Otro SA', 'otro-sa') returning id`);
+  const sha = "a".repeat(64);
+  const fila = (c, s, ruta, extra = {}) => db.query(
+    `insert into produccion.${t} (client_id, archivo, ruta, sha256, bytes, nombres) values ($1, $2, $3, $4, $5, $6) returning id`,
+    [c, extra.archivo ?? "DiDiSans-Pro-Medium.otf", ruta, s, extra.bytes ?? 46768, extra.nombres ?? ["DiDiSans-Pro-Medium"]],
+  );
+  ok("una tipografía bien formada entra", !!(await fila(cli, sha, `${cli}/${sha}.otf`)).rows[0]?.id);
+  const malas = [
+    ["el mismo archivo dos veces en el cliente", () => fila(cli, sha, `${cli}/${sha}.ttf`)],
+    ["una ruta que apunta a OTRO cliente", () => fila(cli, "b".repeat(64), `${otro}/${"b".repeat(64)}.otf`)],
+    ["una ruta con otra huella", () => fila(cli, "c".repeat(64), `${cli}/${"d".repeat(64)}.otf`)],
+    ["una ruta que no es .otf/.ttf", () => fila(cli, "e".repeat(64), `${cli}/${"e".repeat(64)}.woff2`)],
+    ["una ruta con ../", () => fila(cli, "f".repeat(64), `../${"f".repeat(64)}.otf`)],
+    ["una huella que no es sha256", () => fila(cli, "xyz", `${cli}/xyz.otf`)],
+    ["un archivo de más de 4 MB", () => fila(cli, "1".repeat(64), `${cli}/${"1".repeat(64)}.otf`, { bytes: 4_000_001 })],
+    ["un archivo sin nombres", () => fila(cli, "2".repeat(64), `${cli}/${"2".repeat(64)}.otf`, { nombres: [] })],
+    ["un nombre vacío en la lista", () => fila(cli, "3".repeat(64), `${cli}/${"3".repeat(64)}.otf`, { nombres: ["A", null] })],
+    ["un nombre de archivo de más de 120", () => fila(cli, "4".repeat(64), `${cli}/${"4".repeat(64)}.otf`, { archivo: "x".repeat(121) })],
+  ];
+  for (const [que, hacer] of malas) ok(`la BD rechaza ${que}`, await hacer().then(() => false).catch(() => true));
+  ok("el mismo archivo en OTRO cliente sí entra (cada cliente tiene su copia)", !(await rechaza(`insert into produccion.${t} (client_id, archivo, ruta, sha256, bytes, nombres) values ($1, 'x.otf', $2, $3, 46768, '{X}')`, [otro, `${otro}/${sha}.otf`, sha])));
+  await asRole(CREA);
+  eq("un creativo con sesión NO ve las tipografías (sólo por el servidor)", Number(await scalar(`select count(*) from produccion.${t}`)), 0);
+  await resetRole();
+  ok("la BD NO deja borrar un cliente que aún tiene tipografías (sus archivos quedarían sin fila)", await rechaza(`delete from produccion.clients where id = $1`, [cli]));
+  await db.query(`delete from produccion.${t} where client_id in ($1, $2)`, [cli, otro]);
+  ok("sin tipografías, el cliente sí se borra", !(await rechaza(`delete from produccion.clients where id = $1`, [cli])) && !(await rechaza(`delete from produccion.clients where id = $1`, [otro])));
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

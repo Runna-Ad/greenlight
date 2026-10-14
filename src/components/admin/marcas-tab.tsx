@@ -1,13 +1,14 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
-import { Upload, Trash2, Building2, Plus, Sparkles, X } from "lucide-react";
+import { Upload, Trash2, Building2, Plus, Sparkles, X, Type, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { subirLogoMarca, quitarLogoMarca, crearMarca, eliminarMarca } from "@/app/(app)/admin/actions";
+import { subirLogoMarca, quitarLogoMarca, crearMarca, eliminarMarca, subirTipografiaCliente, borrarTipografiaCliente } from "@/app/(app)/admin/actions";
 import { Button } from "@/components/ui/button";
-import type { ClienteConMarcas, MarcaLogo } from "@/lib/admin-tipos";
+import type { ClienteConMarcas, MarcaLogo, TipografiaCliente } from "@/lib/admin-tipos";
+import { TIPOGRAFIA_MAX_BYTES } from "@/lib/prisma/formatos/tipografias";
 import type { PresetGuardado } from "@/lib/prisma/preset";
 import { PresetPrismaEditor, resumenPreset } from "./prisma-preset";
 import { prismaActivo } from "@/lib/prisma/flags";
@@ -35,6 +36,9 @@ export function MarcasTab({ clientes: inicial }: { clientes: ClienteConMarcas[] 
         marcas: c.marcas.map((m) => (m.id === marcaId ? { ...m, prisma_preset } : m)),
       })),
     );
+
+  const setTipos = (clientId: string, cambio: (antes: TipografiaCliente[]) => TipografiaCliente[]) =>
+    setClientes((prev) => prev.map((c) => (c.id === clientId && Array.isArray(c.tipografias) ? { ...c, tipografias: cambio(c.tipografias) } : c)));
 
   const addMarca = (clientId: string, marca: MarcaLogo) =>
     setClientes((prev) => prev.map((c) => (c.id === clientId ? { ...c, marcas: [...c.marcas, marca] } : c)));
@@ -83,6 +87,7 @@ export function MarcasTab({ clientes: inicial }: { clientes: ClienteConMarcas[] 
                 </ul>
               )}
               <AgregarMarca clientId={c.id} onCreated={(m) => addMarca(c.id, m)} />
+              {prismaActivo() && <TipografiasDelCliente cliente={c} onCambio={(f) => setTipos(c.id, f)} />}
             </section>
           ))}
         </div>
@@ -257,6 +262,213 @@ function MarcaRow({
         />
       )}
     </>
+  );
+}
+
+/**
+ * Las tipografías del CLIENTE para HÜE Prisma › Formatos: se suben una vez y Formatos las trae solas cuando un PSD
+ * las usa (por su nombre). Valen para todas sus marcas. Se guardan privadas: sólo el equipo con sesión las baja.
+ */
+function TipografiasDelCliente({
+  cliente,
+  onCambio,
+}: {
+  cliente: ClienteConMarcas;
+  onCambio: (cambio: (antes: TipografiaCliente[]) => TipografiaCliente[]) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const botonSubir = useRef<HTMLButtonElement>(null);
+  const botonCancelar = useRef<HTMLButtonElement>(null);
+  const [pending, start] = useTransition();
+  const [progreso, setProgreso] = useState<{ va: number; de: number } | null>(null);
+  const [porBorrar, setPorBorrar] = useState<string | null>(null);
+  /** A dónde va el foco cuando termina lo que estaba en curso (el botón estaba ocupado o su fila desapareció). */
+  const focoAlTerminar = useRef<"subir" | null>(null);
+  const tipos = cliente.tipografias;
+  const tituloId = `tipos-${cliente.id}`;
+
+  // Al pedir confirmación, el foco pasa a "Cancelar" (el botón de basura que lo tenía desaparece).
+  useEffect(() => {
+    if (porBorrar) botonCancelar.current?.focus();
+  }, [porBorrar]);
+  useEffect(() => {
+    if (pending || !focoAlTerminar.current) return;
+    focoAlTerminar.current = null;
+    botonSubir.current?.focus();
+  }, [pending]);
+
+  const agregar = (t: TipografiaCliente) =>
+    onCambio((antes) => (antes.some((x) => x.id === t.id) ? antes : [...antes, t].sort((a, b) => a.archivo.localeCompare(b.archivo))));
+
+  const subir = (archivos: File[]) =>
+    start(async () => {
+      const nuevas: string[] = [];
+      const repetidas: string[] = [];
+      const malas: string[] = [];
+      let paraTodas: string | null = null;
+      try {
+        // Una por una: cada archivo es una llamada chica, y un error de un archivo no detiene a los demás.
+        for (const [i, f] of archivos.entries()) {
+          setProgreso({ va: i + 1, de: archivos.length });
+          if (f.size > TIPOGRAFIA_MAX_BYTES) {
+            malas.push(`«${f.name}» pasa de 4 MB`);
+            continue;
+          }
+          try {
+            // La misma prueba que hará Formatos al usarla: si este navegador no la puede cargar, no se guarda.
+            await new FontFace("prueba-tipografia", await f.arrayBuffer()).load();
+          } catch {
+            malas.push(`«${f.name}» no es una tipografía que el navegador pueda usar`);
+            continue;
+          }
+          const form = new FormData();
+          form.append("file", f);
+          let res: Awaited<ReturnType<typeof subirTipografiaCliente>>;
+          try {
+            res = await subirTipografiaCliente(cliente.id, form);
+          } catch (err) {
+            console.error("[marcas] subir tipografía", err);
+            malas.push(`«${f.name}» no se pudo subir (conexión)`);
+            continue;
+          }
+          if (!res.ok) {
+            // Un error que no es de ESE archivo (permiso, tope, falta la tabla) vale para todos: se dice una vez y se para.
+            if (res.todas) {
+              paraTodas = res.error;
+              break;
+            }
+            malas.push(res.error);
+            continue;
+          }
+          (res.repetida ? repetidas : nuevas).push(res.tipografia.archivo);
+          agregar(res.tipografia);
+        }
+      } finally {
+        setProgreso(null);
+        focoAlTerminar.current = "subir";
+        if (nuevas.length) toast.success(nuevas.length === 1 ? `Tipografía de ${cliente.name} guardada.` : `${nuevas.length} tipografías de ${cliente.name} guardadas.`);
+        if (repetidas.length) toast.info(repetidas.length === 1 ? `«${repetidas[0]}» ya estaba guardada.` : `${repetidas.length} ya estaban guardadas.`);
+        if (malas.length) toast.error(malas.length === 1 ? `${malas[0]}.` : `${malas.length} no se guardaron: ${malas.slice(0, 3).join(" · ")}${malas.length > 3 ? ` +${malas.length - 3}` : ""}.`);
+        if (paraTodas) toast.error(paraTodas);
+      }
+    });
+
+  const borrar = (t: TipografiaCliente) =>
+    start(async () => {
+      try {
+        const res = await borrarTipografiaCliente(t.id);
+        if (!res.ok) return void toast.error(res.error);
+        onCambio((antes) => antes.filter((x) => x.id !== t.id));
+        toast.success(`«${t.archivo}» borrada.`);
+      } catch (err) {
+        console.error("[marcas] borrar tipografía", err);
+        toast.error(`«${t.archivo}» no se pudo borrar (conexión). Inténtalo otra vez.`);
+      } finally {
+        setPorBorrar(null);
+        // Su fila (o su confirmación) desaparece: el foco pasa a "Subir tipografías" cuando deje de estar ocupado.
+        focoAlTerminar.current = "subir";
+      }
+    });
+
+  return (
+    <div className="border-t border-border/60 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Type className="size-4 text-muted-foreground" aria-hidden="true" />
+        <h3 id={tituloId} className="text-sm font-medium text-foreground">
+          Tipografías de {cliente.name} para Formatos
+        </h3>
+        {Array.isArray(tipos) && <span className="text-[11px] text-muted-foreground">{tipos.length === 1 ? "1 archivo" : `${tipos.length} archivos`}</span>}
+        {Array.isArray(tipos) && (
+          <>
+            <input
+              ref={inputRef}
+              type="file"
+              multiple
+              accept=".otf,.ttf,font/otf,font/ttf"
+              className="hidden"
+              onChange={(e) => {
+                const archivos = [...(e.target.files ?? [])];
+                e.target.value = "";
+                if (archivos.length) subir(archivos);
+              }}
+            />
+            {/* aria-disabled (no disabled) mientras trabaja: así no pierde el foco y se puede volver a él al terminar. */}
+            <Button
+              ref={botonSubir}
+              size="sm"
+              variant="outline"
+              aria-disabled={pending || undefined}
+              aria-busy={pending}
+              onClick={() => pending || inputRef.current?.click()}
+              className="ml-auto gap-1.5 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+            >
+              {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Upload className="size-3.5" aria-hidden="true" />}
+              {progreso ? `Subiendo ${progreso.va} de ${progreso.de}…` : "Subir tipografías"}
+            </Button>
+          </>
+        )}
+      </div>
+      {tipos === "sin-tabla" ? (
+        <p className="mt-1 text-[13px] text-muted-foreground">Todavía no se pueden guardar: falta aplicar en la base el cambio 0079.</p>
+      ) : tipos === "error" ? (
+        <p role="alert" className="mt-1 text-[13px] text-foreground">
+          No se pudieron leer las tipografías guardadas. Recarga la página.
+        </p>
+      ) : (
+        <>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Sube aquí sólo las tipografías propias de {cliente.name} (las de su marca): sirven para todas sus marcas. Cuando
+            un PSD las usa, Formatos las trae solo y vuelve a escribir el texto con ellas. Se guardan privadas: sólo el
+            equipo con sesión las descarga.
+          </p>
+          {tipos.length > 0 && (
+            <ul aria-labelledby={tituloId} className="mt-2 divide-y divide-border/60 rounded-lg border border-border/60">
+              {tipos.map((t) => (
+                <li key={t.id} className="flex items-center gap-3 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-foreground" title={t.archivo}>
+                      {t.archivo}
+                    </p>
+                    <p className="truncate text-[11px] text-muted-foreground" title={t.nombres.join(", ")}>
+                      {t.nombres.slice(0, 4).join(", ")}
+                      {t.nombres.length > 4 ? ` +${t.nombres.length - 4}` : ""} · {Math.max(1, Math.round(t.bytes / 1024))} KB
+                    </p>
+                  </div>
+                  {porBorrar === t.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        ref={botonCancelar}
+                        type="button"
+                        onClick={() => setPorBorrar(null)}
+                        disabled={pending}
+                        aria-label={`Cancelar: no borrar ${t.archivo}`}
+                        className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary"
+                      >
+                        <X className="size-4" />
+                      </button>
+                      <Button size="sm" variant="destructive" disabled={pending} onClick={() => borrar(t)} aria-label={`Borrar ${t.archivo}`}>
+                        Borrar tipografía
+                      </Button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setPorBorrar(t.id)}
+                      disabled={pending}
+                      aria-label={`Borrar tipografía ${t.archivo}`}
+                      title="Borrar tipografía"
+                      className="rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-destructive disabled:opacity-50"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

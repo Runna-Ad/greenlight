@@ -328,6 +328,38 @@ largo: estacionado por él.
         con otro grosor de la familia, 0.392 o más (6 textos × 5 grosores × 2 mesas). PSD real: 12 de 12 se escriben.
       - Tests 228/0; 9 mutaciones, 8 atrapadas; la que se escapa (contar también píxeles llenos al medir la gamma) no
         cambia nada en este tamaño: sólo pesaría con más de 20 000 píxeles llenos antes que las orillas.
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+      Se suben UNA vez en Admin › Marcas, en la tarjeta del CLIENTE (DiDi cubre Card y Préstamos); Formatos pide
+      por nombre las que le faltan al PSD y las carga solo. Nadie elige nada.
+      - [x] Migración 0079 `produccion.tipografias_cliente` (cliente, archivo, ruta, sha256, bytes, nombres[]),
+            RLS master-only, escribe service_role · bucket PRIVADO `greenlight-tipografias` en setup-storage.mjs
+            (letra con licencia: sólo el equipo con sesión la baja, por URL firmada de 10 min). SIN APLICAR.
+      - [x] `lib/prisma/formatos/tipografias.ts` (puro): ¿es otf/ttf? (por sus bytes, con `fuentesDe`), nombres del
+            archivo, saneo de lo que pide el navegador, cuáles archivos cubren qué nombres (tope 30 por PSD).
+      - [x] Admin: subir (sólo admin, 4 MB c/u, mismo archivo dos veces = uno), lista con sus nombres, borrar con
+            confirmación. Sin la migración: "falta aplicar en la base el cambio 0079", nada se rompe.
+      - [x] Formatos: al leer un PSD, si faltan tipografías, las pide a Greenlight y las carga por el mismo camino
+            que soltarlas; se recuerdan en el navegador. Candado = el de la página de Formatos + sesión (no `gate()`:
+            ése exige ficha de equipo porque guarda filas; aquí sólo se lee). Si falla, lo dice y se pueden soltar.
+      - [~] Pruebas: test-db 563/0 (19 nuevas: rutas, huella, otro cliente, tope, RLS, borrar cliente con
+            tipografías bloqueado) · test-formatos 236/0 · `npm test` completo verde · navegador SIN sesión: con las
+            recordadas no se pide nada (12/12); sin ellas se pide, al fallar lo dice y enseña "Faltan" (0 errores).
+            Falta: Admin y Formatos CON sesión de admin (Pedro inicia sesión) y, tras "ship it" (0079 + bucket),
+            subir las DiDi y ver que Formatos las trae solo.
+      - [x] Revisión (seguridad opus + código/a11y sonnet, 2026-10-14). Comprobado en el proyecto: storage.objects
+            NO tiene ninguna política (0 filas) → el bucket privado sólo lo lee el servidor. Arreglado: candado =
+            `gate()` (exige ficha de equipo) · enlaces de 1 min · las de Greenlight NO se guardan en el navegador ·
+            borrar = archivo primero, si falla se dice · cliente con tipografías no se puede borrar (restrict) ·
+            "falta la tabla" sólo con 42P01/PGRST205, otro error se dice · la cuenta del tope falla cerrada ·
+            Admin: subida a prueba de errores de red (no tumba la página), "Subiendo 3 de 20…", prueba con
+            FontFace antes de subir, un error de "todas" se dice una vez y para, foco que sí llega, etiquetas con
+            el nombre del archivo y del cliente, input oculto · Formatos: pedidos cruzados (otro PSD encima)
+            ignorados, contadores de carga, `allSettled` (un archivo que falla se nombra), 20 s de tope, la nota
+            del PSD anterior se borra, "Faltan" sólo cuando se resolvió el pedido.
+            NO hecho (anotado): botón "Reintentar" (volver a leer el PSD lo repite) · botones de 44 px en Admin
+            (igual que el resto de Marcas) · filtrar en SQL con overlaps + índice (el catálogo es chico; se cruza en
+            el servidor a propósito) · borrar la caché del navegador al cerrar sesión (sólo guarda lo que la persona
+            soltó). DECISIÓN DE PEDRO pendiente: buscar por nombre en TODOS los clientes (hoy) o sólo en uno.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

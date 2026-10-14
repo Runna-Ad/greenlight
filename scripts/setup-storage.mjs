@@ -33,6 +33,9 @@ const BUCKETS = [
   // Prisma › Formatos: PRIVADO. El anuncio subido (fuente/…) y sus tamaños (salida/<lote>/…). Sube el
   // navegador directo con una URL firmada (Vercel corta los cuerpos de más de 4.5 MB); se lee firmado.
   { name: "greenlight-formatos", public: false, fileSizeLimit: "25MB", allowedMimeTypes: ["image/png", "image/jpeg", "image/webp"] },
+  // Tipografías de cada cliente (0079): PRIVADO. Letra con licencia del cliente: sólo la baja el equipo con sesión,
+  // por URL firmada (Formatos la pide al leer un PSD). Sube el servidor, con el tipo que sale de leer sus bytes.
+  { name: "greenlight-tipografias", public: false, fileSizeLimit: "4MB", allowedMimeTypes: ["font/otf", "font/ttf"] },
 ];
 
 // Cargar .env.local sin dependencias (los scripts de este repo no usan dotenv).

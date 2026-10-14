@@ -12,6 +12,7 @@ import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MA
 import { adelgazarPsd, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
 import { textoDe, maquetar, fuentesDe, compararAlfa } from "../src/lib/prisma/formatos/textos.ts";
+import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, TIPOGRAFIA_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -943,6 +944,18 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
   let lanzo = false;
   try { fuentesDe(new ArrayBuffer(64)); } catch { lanzo = true; }
   ok("fuentesDe: un archivo que no es tipografía lanza", lanzo);
+  // Tipografías del cliente (Admin › Marcas → Formatos): se validan por sus bytes y se eligen por nombre.
+  eq("leerTipografia: un .otf (OTTO) y un .ttf dicen su tipo por los bytes y traen sus nombres", [leerTipografia(sfnt({ nombres: { 6: "Fam-Bold" }, firma: 0x4f54544f })), leerTipografia(sfnt({ nombres: { 6: "Fam-Medium" } }))], [{ ext: "otf", nombres: ["Fam-Bold"] }, { ext: "ttf", nombres: ["Fam-Medium"] }]);
+  eq("leerTipografia: una variable trae un nombre por estilo", leerTipografia(variable)?.nombres, ["FamVariable-Thin", "FamVariable-Bold", "FamVariable-Black", "FamVariable-SemiBold"]);
+  eq("leerTipografia: lo que no es tipografía, una sin nombre usable (con espacio) o una de más de 4 MB: null", [leerTipografia(new ArrayBuffer(64)), leerTipografia(sfnt({ nombres: { 6: "Con espacio" } })), leerTipografia(new ArrayBuffer(TIPOGRAFIA_MAX_BYTES + 1))], [null, null, null]);
+  eq("nombresPedidos: sólo nombres válidos, sin repetir, con tope; lo que no es lista, nada", [nombresPedidos(["A-Bold", "A-Bold", "", "con espacio", 7, "x".repeat(128)]), nombresPedidos("A-Bold"), nombresPedidos(Array.from({ length: 100 }, (_, i) => `F-${i}`)).length], [["A-Bold"], [], NOMBRES_PEDIDOS_MAX]);
+  eq("archivoVisible: sin carpetas ni caracteres de control, con tope y nunca vacío", [archivoVisible("C:\\fuentes\\DiDi.otf"), archivoVisible("../../x\u0000y.ttf"), archivoVisible("a".repeat(200)).length, archivoVisible("/")], ["DiDi.otf", "xy.ttf", ARCHIVO_NOMBRE_MAX, "tipografía"]);
+  const guardadas = [{ id: "suelta", nombres: ["D-Medium"] }, { id: "var", nombres: ["DV-Thin", "DV-Bold"] }, { id: "otra", nombres: ["Otra-Bold"] }, { id: "repetida", nombres: ["D-Medium"] }];
+  const el1 = elegirTipografias(guardadas, ["D-Medium", "DV-Bold", "Falta-X"]);
+  const el2 = elegirTipografias(guardadas, ["D-Medium", "DV-Thin", "DV-Bold"]);
+  eq("elegirTipografias: sólo las que cubren lo pedido, cada nombre una vez (la repetida no va), primero la que cubre más; y lo que falta", [el1.elegidas.map((x) => x.id), el1.faltan, el2.elegidas.map((x) => x.id), el2.faltan], [["suelta", "var"], ["Falta-X"], ["var", "suelta"], []]);
+  eq(`elegirTipografias: a lo más ${ARCHIVOS_ENTREGADOS_MAX} archivos por PSD`, elegirTipografias(Array.from({ length: 40 }, (_, i) => ({ nombres: [`F-${i}`] })), Array.from({ length: 40 }, (_, i) => `F-${i}`)).elegidas.length, ARCHIVOS_ENTREGADOS_MAX);
+  eq("rutaTipografia: <cliente>/<huella>.<tipo> (la que exige la base)", rutaTipografia("c1", "ab", "otf"), "c1/ab.otf");
   // Archivos hechos a propósito: no congelan ni inventan estilos.
   const bomba = (() => {
     const cuenta = 65535, largo = 65534, ini = 6 + cuenta * 12;

@@ -1,0 +1,88 @@
+/**
+ * HÜE Prisma › Formatos — las tipografías de cada CLIENTE, guardadas en Greenlight (puro: corre igual en el
+ * servidor, en Node y en el navegador).
+ *
+ * Un admin las sube una vez en Admin › Marcas, en la tarjeta del cliente (DiDi cubre Card y Préstamos). Formatos,
+ * al leer un PSD, pide por NOMBRE las que le faltan: el PSD dice el nombre PostScript exacto de cada tipografía
+ * ("DiDiSans-Pro-Medium") y cada archivo guardado sabe cuáles trae. Nadie elige nada.
+ */
+import { fuentesDe } from "./textos.ts";
+
+/** El bucket PRIVADO donde viven (se crea en scripts/setup-storage.mjs). */
+export const TIPOGRAFIAS_BUCKET = "greenlight-tipografias";
+
+/** ¿El error dice que la tabla todavía no existe (falta la migración 0079)? Otro error es un error de verdad. */
+export const faltaTablaTipografias = (e: { code?: string; message?: string }) =>
+  e.code === "42P01" || e.code === "PGRST205" || (/tipografias_cliente/.test(e.message ?? "") && /does not exist|schema cache/i.test(e.message ?? ""));
+
+/** Por archivo. Las del equipo pesan 47-109 KB; una con miles de letras (chino, japonés) puede pasar de 4 MB y no
+ *  entra: cruzaría el tope de lo que Vercel deja subir de una vez (4.5 MB). */
+export const TIPOGRAFIA_MAX_BYTES = 4_000_000;
+/** Archivos por cliente: una familia completa con cursivas ronda 20. */
+export const TIPOGRAFIAS_POR_CLIENTE_MAX = 60;
+/** Nombres que un PSD puede pedir de una vez, y archivos que se le mandan. */
+export const NOMBRES_PEDIDOS_MAX = 64;
+export const ARCHIVOS_ENTREGADOS_MAX = 30;
+/** Nombres por archivo (una variable trae uno por estilo). */
+const NOMBRES_POR_ARCHIVO_MAX = 256;
+/** Lo que se enseña del nombre del archivo subido. */
+export const ARCHIVO_NOMBRE_MAX = 120;
+
+/** Un nombre PostScript: ASCII visible, sin espacios. Lo demás no se guarda ni se pide. */
+const NOMBRE_PS = /^[\x21-\x7e]{1,127}$/;
+export const esNombrePs = (s: unknown): s is string => typeof s === "string" && NOMBRE_PS.test(s);
+
+export type TipografiaLeida = { ext: "otf" | "ttf"; nombres: string[] };
+
+/**
+ * ¿Es un .otf/.ttf que sirve, y qué nombres trae? Lee los bytes (nunca el nombre del archivo). null = no es una
+ * tipografía, o no trae ningún nombre que un PSD pueda pedir.
+ */
+export function leerTipografia(buf: ArrayBuffer): TipografiaLeida | null {
+  if (buf.byteLength < 12 || buf.byteLength > TIPOGRAFIA_MAX_BYTES) return null;
+  let nombres: string[];
+  try {
+    nombres = [...new Set(fuentesDe(buf).map((f) => f.ps))].filter(esNombrePs).slice(0, NOMBRES_POR_ARCHIVO_MAX);
+  } catch {
+    return null;
+  }
+  if (!nombres.length) return null;
+  return { ext: new DataView(buf).getUint32(0) === 0x4f54544f /* OTTO */ ? "otf" : "ttf", nombres };
+}
+
+/** Lo que pide el navegador, limpio: sólo nombres válidos, sin repetir, con tope. */
+export function nombresPedidos(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter(esNombrePs))].slice(0, NOMBRES_PEDIDOS_MAX);
+}
+
+/** El nombre del archivo para enseñar: sin caracteres de control ni rutas, con tope. */
+export function archivoVisible(nombre: string): string {
+  const limpio = nombre.replace(/[\p{Cc}\p{Cf}]/gu, "").split(/[\\/]/).pop()?.trim() ?? "";
+  return (limpio || "tipografía").slice(0, ARCHIVO_NOMBRE_MAX);
+}
+
+/** Dónde vive en el bucket privado: por cliente y por su huella (el mismo archivo dos veces es uno). */
+export const rutaTipografia = (clienteId: string, sha256: string, ext: "otf" | "ttf") => `${clienteId}/${sha256}.${ext}`;
+
+/**
+ * De las guardadas, cuáles mandar para lo que pide un PSD: las que traen algún nombre pedido, primero las que
+ * cubren más, sin mandar un archivo cuyo nombre ya cubre otro (la misma letra subida suelta y dentro de otra carpeta).
+ * `faltan` = lo pedido que ninguna trae.
+ */
+export function elegirTipografias<T extends { nombres: string[] }>(guardadas: T[], pedidos: string[]): { elegidas: T[]; faltan: string[] } {
+  const quedan = new Set(pedidos);
+  const elegidas: T[] = [];
+  const candidatas = guardadas
+    .map((g) => ({ g, cubre: g.nombres.filter((n) => quedan.has(n)).length }))
+    .filter((x) => x.cubre > 0)
+    .sort((a, b) => b.cubre - a.cubre);
+  for (const { g } of candidatas) {
+    if (elegidas.length >= ARCHIVOS_ENTREGADOS_MAX) break;
+    const nuevos = g.nombres.filter((n) => quedan.has(n));
+    if (!nuevos.length) continue;
+    elegidas.push(g);
+    for (const n of nuevos) quedan.delete(n);
+  }
+  return { elegidas, faltan: [...quedan] };
+}

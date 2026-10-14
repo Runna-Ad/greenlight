@@ -191,10 +191,20 @@ export const FP = {
   textoEstado: t("{n} de {m} textos se escriben con su tipografía (cada mesa cuenta aparte)", "{n} of {m} texts are typeset with their font (each artboard counts)"),
   textoSinFuentes: t("Sin tipografías: el texto va como imagen, como siempre.", "No fonts: text goes as an image, as usual."),
   textoAyuda: t(
-    "Arrastra a esta página las tipografías del anuncio (.otf o .ttf, o la carpeta entera) o usa el botón, y el texto se vuelve a escribir en cada medida en vez de reducirse como imagen. Cada texto se compara antes con el de Photoshop. Las tipografías se quedan en este navegador; no se suben.",
-    "Drag the ad's fonts onto this page (.otf or .ttf, or the whole folder) or use the button, and the text is typeset again at every size instead of being shrunk as an image. Each text is first checked against Photoshop's. The fonts stay in this browser; they are never uploaded.",
+    "Con las tipografías del anuncio el texto se vuelve a escribir en cada medida en vez de reducirse como imagen. Las del cliente que un admin guardó en Admin › Marcas llegan solas; las demás, arrástralas a esta página (.otf o .ttf, o la carpeta entera) o usa el botón: ésas se quedan en este navegador y no se suben. Cada texto se compara antes con el de Photoshop.",
+    "With the ad's fonts, the text is typeset again at every size instead of being shrunk as an image. The client's fonts that an admin saved in Admin › Marcas load on their own; drag any others onto this page (.otf or .ttf, or the whole folder) or use the button: those stay in this browser and are never uploaded. Each text is first checked against Photoshop's.",
   ),
   textoFaltan: t("Faltan:", "Missing:"),
+  textoFaltanAdmin: t(
+    "Si son del cliente, pide a un admin que las suba en Admin › Marcas, en la tarjeta del cliente; la próxima vez que leas el PSD llegarán solas.",
+    "If they're the client's, ask an admin to upload them in Admin › Marcas, on the client's card; the next time you read the PSD they'll load on their own.",
+  ),
+  textoDeGreenlight: t("De Greenlight ({c}):", "From Greenlight ({c}):"),
+  textoTrayendo: t("Trayendo las tipografías del cliente…", "Fetching the client's fonts…"),
+  textoGreenlightNo: t(
+    "No se pudieron traer las tipografías guardadas en Greenlight; puedes arrastrarlas aquí.",
+    "The fonts saved in Greenlight couldn't be brought in; you can drag them here.",
+  ),
   textoComoImagen: t(
     "Van como imagen (los píxeles de Photoshop, reducidos con el filtro nítido):",
     "Kept as images (Photoshop's pixels, shrunk with the sharp filter):",
