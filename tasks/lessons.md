@@ -1006,3 +1006,9 @@ TAGS: #formatos #nitidez #photoshop #gamma #medir-contra-la-verdad #no-culpar-al
 ROOT CAUSE: leí la etiqueta del rol como si fuera una cuenta real, sin revisar si había sesión.
 RULE: antes de diagnosticar un candado en el navegador local, confirmar que hay sesión (la respuesta de una acción que pide `getCurrentUser`, o /login). Sin sesión, pedirle a Pedro que inicie sesión ahí (regla 10) en vez de deducir el rol. El cambio que hice por el síntoma (aflojar el candado) además estaba mal: la revisión de seguridad mostró que una cuenta dada de baja antes de entrar se queda sin ficha y habría bajado letra con licencia. Se volvió al `gate()` de Prisma (exige ficha).
 TAGS: #verificacion #sesion #roles #navegador-local #diagnostico
+
+[2026-10-14] PEDRO_OVERRIDE (tipografías: no frenar por licencias ni por compartir entre clientes): al construir las tipografías por cliente levanté dos veces el tema de licencias (que una tipografía de un cliente le llegara a otro) y propuse una regla en Admin de "sólo las propias del cliente".
+PEDRO'S APPROACH: "dont worry so much about font security, its fine... if we need commercial fonts for clients we can just add them... if more than one client use the same font thats fine."
+WHY IT WAS BETTER: las tipografías son herramienta de trabajo del equipo; una biblioteca compartida es justo lo que quiere (se sube una vez y sirve para todos). El riesgo es bajo y la licencia la maneja el equipo; las advertencias le costaban decisiones sin cambiar nada.
+RULE: en tipografías de Greenlight se queda lo básico (sólo el equipo con sesión las baja) y NO se vuelve a plantear licencias ni límites por cliente. La búsqueda por nombre en TODOS los clientes es el diseño buscado; la tarjeta del cliente es sólo dónde se sube.
+TAGS: #pedro-override #formatos #tipografias #no-sobre-advertir #biblioteca-compartida

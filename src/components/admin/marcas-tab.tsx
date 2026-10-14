@@ -417,9 +417,9 @@ function TipografiasDelCliente({
       ) : (
         <>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Sube aquí sólo las tipografías propias de {cliente.name} (las de su marca): sirven para todas sus marcas. Cuando
-            un PSD las usa, Formatos las trae solo y vuelve a escribir el texto con ellas. Se guardan privadas: sólo el
-            equipo con sesión las descarga.
+            Los .otf o .ttf que usan los PSD de {cliente.name}, propios o comerciales. Formatos las busca por nombre entre
+            todas las que hay en Greenlight, así que una tipografía subida una vez sirve también para cualquier otro
+            cliente. Sólo el equipo con sesión las descarga.
           </p>
           {tipos.length > 0 && (
             <ul aria-labelledby={tituloId} className="mt-2 divide-y divide-border/60 rounded-lg border border-border/60">

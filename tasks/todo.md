@@ -359,7 +359,7 @@ largo: estacionado por él.
             NO hecho (anotado): botón "Reintentar" (volver a leer el PSD lo repite) · botones de 44 px en Admin
             (igual que el resto de Marcas) · filtrar en SQL con overlaps + índice (el catálogo es chico; se cruza en
             el servidor a propósito) · borrar la caché del navegador al cerrar sesión (sólo guarda lo que la persona
-            soltó). DECISIÓN DE PEDRO pendiente: buscar por nombre en TODOS los clientes (hoy) o sólo en uno.
+            soltó). Pedro decidió (2026-10-14): se busca en TODOS los clientes ("if more than one client use the same font thats fine"); comerciales se suben igual; sin advertencias de licencia.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.
