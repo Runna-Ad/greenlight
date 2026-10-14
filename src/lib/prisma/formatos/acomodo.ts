@@ -12,7 +12,6 @@
  * El pie (FOOTER) lleva su PROPIA escala: lo más grande que quepa sin mover lo demás (regla de Pedro para el
  * legal). Si aun así la letra queda chica, la medida se marca para revisión; nunca se entrega sin avisar.
  */
-import { ZONA_HISTORIA_PCT } from "../compilers/zonas.ts";
 import type { Caja, Rol } from "./psd.ts";
 
 /** Lo que el acomodo necesita de una pieza (PiezaPsd lo cumple). */
@@ -92,25 +91,42 @@ export function nombreSalida(ma: { nombre: string; w: number; h: number }, W: nu
 export const MEDIDAS_EQUIPO = "1080×1920 720×1280 720×1600 1200×1500 768×1024 1280×720 1200×627 876×324 600×500 320×250 640×100 320×50";
 
 /**
- * Zona segura como GUÍA (decisión de Pedro, 2026-10-13). El equipo no tiene números propios: sólo las reglas
- * públicas, y sólo le importan en 4:5, 1:1, 9:16 y 16:9. De esas, hoy sólo el 9:16 tiene algo que la plataforma
- * tapa de verdad: las franjas de una historia (la misma regla que usan los prompts). En feed (4:5, 1:1) la imagen
- * no se tapa y para 16:9 no hay un número público fiable: ahí no hay guía.
+ * Zona segura POR CANAL, como guía (Pedro, 2026-10-14: "select a Channel and then it shows you"). Cada app tapa
+ * franjas distintas, así que la guía siempre dice de cuál es y nadie la ve si no elige un canal. Sólo en 9:16: en
+ * feed (4:5, 1:1) la imagen no se tapa y para 16:9 no hay un número fiable. Todas son APROXIMADAS:
+ *   · Meta: lo que repiten las guías públicas (no se encontró una página oficial de Meta con estas cifras).
+ *   · TikTok: las que dio Pedro en px sobre 1080×1920 ("top 150–200, right ~120, bottom 250–300"), tomando el
+ *     extremo más seguro de cada rango.
+ * `pct` = % del alto (arriba, abajo) o del ancho (derecha, izquierda) que la app tapa.
  */
-export function zonaGuia(W: number, H: number): Zona | null {
-  if (!(W > 0 && H > 0) || Math.abs(W / H / (9 / 16) - 1) > 0.01) return null;
-  return { top: (H * ZONA_HISTORIA_PCT.arriba) / 100, right: 0, bottom: (H * ZONA_HISTORIA_PCT.abajo) / 100, left: 0 };
+export const CANALES = {
+  "ig-stories": { nombre: "Instagram Stories", pct: { top: 14, right: 0, bottom: 20, left: 0 } },
+  "ig-reels": { nombre: "Instagram Reels", pct: { top: 14, right: 6, bottom: 35, left: 6 } },
+  "fb-stories": { nombre: "Facebook Stories", pct: { top: 14, right: 0, bottom: 20, left: 0 } },
+  "fb-reels": { nombre: "Facebook Reels", pct: { top: 14, right: 6, bottom: 35, left: 6 } },
+  tiktok: { nombre: "TikTok", pct: { top: (200 / 1920) * 100, right: (120 / 1080) * 100, bottom: (300 / 1920) * 100, left: 0 } },
+} as const satisfies Record<string, { nombre: string; pct: Zona }>;
+export type Canal = keyof typeof CANALES;
+export const esCanal = (v: unknown): v is Canal => typeof v === "string" && Object.hasOwn(CANALES, v);
+/** 9:16 o una escala directa (1 % de holgura por el redondeo de las medidas). */
+export const es916 = (W: number, H: number): boolean => W > 0 && H > 0 && Math.abs(W / H / (9 / 16) - 1) <= 0.01;
+
+/** Lo que el canal tapa en esta medida, en px de la medida; null sin canal o si la medida no es 9:16. */
+export function zonaCanal(canal: Canal | null, W: number, H: number): Zona | null {
+  if (!esCanal(canal) || !es916(W, H)) return null;
+  const p = CANALES[canal].pct;
+  return { top: (H * p.top) / 100, right: (W * p.right) / 100, bottom: (H * p.bottom) / 100, left: (W * p.left) / 100 };
 }
 
 /**
- * Una medida completa: de qué mesa sale, su acomodo y su guía de zona segura (si tiene). La guía NO entra al
- * acomodo: un 9:16 siempre conserva el acomodo del diseñador (no hay familia vertical propia), y lo que él colocó
- * no se marca. El día que la herramienta acomode verticales por su cuenta, ahí es donde la zona debe mandar.
+ * Una medida completa: de qué mesa sale y su acomodo. La zona del canal NO entra al acomodo: un 9:16 siempre
+ * conserva el acomodo del diseñador (no hay familia vertical propia), y lo que él colocó no se marca. El día que
+ * la herramienta acomode verticales por su cuenta, ahí es donde la zona debe mandar.
  */
-export function acomodarMedida(maestros: MaestroCaja[], W: number, H: number, op: { heroLado?: Lado } = {}): { maestro: number; acomodo: Acomodo; guia: Zona | null } {
+export function acomodarMedida(maestros: MaestroCaja[], W: number, H: number, op: { heroLado?: Lado } = {}): { maestro: number; acomodo: Acomodo } {
   const maestro = elegirMaestro(maestros, W, H);
   if (maestro < 0) throw new Error("acomodarMedida: sin maestros");
-  return { maestro, acomodo: acomodar(maestros[maestro], W, H, op), guia: zonaGuia(W, H) };
+  return { maestro, acomodo: acomodar(maestros[maestro], W, H, op) };
 }
 
 type Suelta = { i: number; p: PiezaCaja };

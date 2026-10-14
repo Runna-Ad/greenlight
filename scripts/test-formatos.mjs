@@ -8,10 +8,11 @@ import {
 } from "../src/lib/prisma/formatos/geometria.ts";
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
 import { writePsdBuffer } from "ag-psd";
-import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT } from "../src/lib/prisma/formatos/psd.ts";
-import { acomodar, acomodarMedida, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaGuia, LETRA_MIN_PX, MEDIDAS_EQUIPO } from "../src/lib/prisma/formatos/acomodo.ts";
-import { prepararMaestro, medidasQueCaben, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX } from "../src/lib/prisma/formatos/listo.ts";
-import { ZONA_HISTORIA_PCT, zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
+import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa } from "../src/lib/prisma/formatos/psd.ts";
+import { adelgazarPsd, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
+import { acomodar, acomodarMedida, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO } from "../src/lib/prisma/formatos/acomodo.ts";
+import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO } from "../src/lib/prisma/formatos/listo.ts";
+import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
 import { specVacio } from "../src/lib/prisma/spec.ts";
 
 let pass = 0,
@@ -551,6 +552,74 @@ console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
   ok("la capa fuera de las mesas se ignora, con aviso", d2.avisos.some((a) => a.includes("fuera de las mesas")));
   const m2 = despiezar(d2, 1);
   ok(`la segunda mesa se despieza en SUS coordenadas (rearmado ${m2.rearmadoDistintoPct.toFixed(2)} %, HERO en x=${m2.piezas.find((p) => p.rol === "HERO").solido.x})`, m2.rearmadoDistintoPct < 0.5 && m2.piezas.find((p) => p.rol === "HERO").solido.x === R.producto[0] && despieceUsable(m2).ok);
+
+  // ── PSD muy grandes (Pedro, 2026-10-14: "A and B now") ──
+  const igualBytes = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+  const mismoDespiece = (a, b) => igualBytes(a.fondo, b.fondo) && a.piezas.length === b.piezas.length && a.piezas.every((p, i) => igualBytes(p.rgba, b.piezas[i].rgba) && JSON.stringify(p.caja) === JSON.stringify(b.piezas[i].caja) && p.letraMinPx === b.piezas[i].letraMinPx);
+  {
+    // Un PSD con 3 MB de "original de objeto inteligente" (bloque lnk2), como los reales.
+    const relleno = Uint8Array.from({ length: 3_000_000 }, (_, i) => (i * 31) & 255);
+    const conObjeto = writePsdBuffer({ width: W, height: H, children: arbol(), linkedFiles: [{ id: "20953ddb-9391-11ec-b4f1-c15674f50bc4", name: "foto.psb", type: "8BPB", creator: "8BIM", data: relleno }], imageData: img(W, H, (x, y) => verdad(fondoVerdad)(x, y)), imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } } });
+    const flaco = await adelgazarPsd(new Blob([conObjeto]), PSD_BYTES_MAX);
+    ok(`adelgazar quita el original del objeto inteligente (${(conObjeto.length / 1e6).toFixed(1)} → ${(flaco.datos.byteLength / 1e6).toFixed(1)} MB; quitó ${flaco.quitados} bytes por 3 000 000 de datos) y nada más`, flaco.quitados >= 3_000_000 && flaco.quitados < 3_001_000 && conObjeto.length - flaco.datos.byteLength === flaco.quitados);
+    ok("el PSD adelgazado da EXACTAMENTE el mismo despiece (fondo, piezas, cajas, letra)", mismoDespiece(despiezar(leerPsd(flaco.datos), 0), despiezar(leerPsd(conObjeto), 0)));
+    const sinNada = psdDe(arbol(), verdad(fondoVerdad));
+    const igual = await adelgazarPsd(new Blob([sinNada]), PSD_BYTES_MAX);
+    ok("un PSD sin nada que quitar sale byte por byte igual", igual.quitados === 0 && igualBytes(new Uint8Array(igual.datos), sinNada));
+    const pesado = await adelgazarPsd(new Blob([conObjeto]), 100_000).then(() => null, (e) => e);
+    ok("si aun sin lo que sobra pasa del tope: PsdPesado con lo que pesaría, ANTES de reservar memoria", pesado instanceof PsdPesado && pesado.mb === Math.round(flaco.datos.byteLength / 1e6) && pesado.mb < 1, String(pesado));
+    // Lo que no se entiende no se quita: un archivo cortado a la mitad o con basura al final se entrega entero.
+    const cortado = conObjeto.subarray(0, Math.floor(conObjeto.length / 2));
+    const c = await adelgazarPsd(new Blob([cortado]), PSD_BYTES_MAX);
+    ok("PSD cortado: no se quita nada (se entrega tal cual y que leerPsd decida)", c.quitados === 0 && c.datos.byteLength === cortado.length);
+    const basura = await adelgazarPsd(new Blob([new Uint8Array(40).fill(7)]), PSD_BYTES_MAX);
+    ok("bytes que no son un PSD: se entregan tal cual (leerPsd los rechaza con su mensaje)", basura.quitados === 0 && basura.datos.byteLength === 40 && motivo(() => leerPsd(basura.datos)) === "no-soportado");
+    eq("el tope de archivo es el del formato PSD (2 GB)", PSD_ARCHIVO_MAX, 2 ** 31);
+    // Photoshop rellena los bloques a 4 bytes (la especificación dice "a par"): el PSD real de hoy tenía eso y la
+    // primera versión no quitaba NADA. Aquí: un bloque de 2 bytes + 2 de relleno antes del objeto inteligente.
+    const con4 = (() => {
+      const b = Uint8Array.from(conObjeto), v = new DataView(b.buffer);
+      const posLargo = 26 + 4 + v.getUint32(26) + 4 + v.getUint32(26 + 4 + v.getUint32(26));
+      const sig = [...new TextEncoder().encode("8BIMlnk2")];
+      const at = b.findIndex((_, i) => sig.every((c, k) => b[i + k] === c));
+      const extra = Uint8Array.from([...new TextEncoder().encode("8BIMxtra"), 0, 0, 0, 2, 1, 2, 0, 0]);
+      const out = new Uint8Array(b.length + extra.length);
+      out.set(b.subarray(0, at)); out.set(extra, at); out.set(b.subarray(at), at + extra.length);
+      new DataView(out.buffer).setUint32(posLargo, v.getUint32(posLargo) + extra.length);
+      return out;
+    })();
+    const f4 = await adelgazarPsd(new Blob([con4]), PSD_BYTES_MAX);
+    ok(`relleno a 4 bytes (como Photoshop): igual quita el objeto inteligente (${f4.quitados} bytes) y da el mismo despiece`, f4.quitados === flaco.quitados && mismoDespiece(despiezar(leerPsd(f4.datos), 0), despiezar(leerPsd(con4), 0)));
+  }
+  {
+    // Reducir por área: identidad a escala 1, promedio exacto, alfa premultiplicada y lo de afuera.
+    const src = { data: Uint8ClampedArray.from([10, 20, 30, 255, 50, 60, 70, 255, 90, 100, 110, 255, 130, 140, 150, 255]), width: 2, height: 2 };
+    eq("promediarArea a escala 1 = copia exacta", [...promediarArea(src, 0, 0, 1, 1, 2, 2, [0, 0, 0, 0], true).data], [...src.data]);
+    eq("2×2 → 1×1 = el promedio de los cuatro", [...promediarArea(src, 0, 0, 2, 2, 1, 1, [0, 0, 0, 0], true).data], [70, 80, 90, 255]);
+    const medio = { data: Uint8ClampedArray.from([255, 0, 0, 255, 0, 0, 255, 0]), width: 2, height: 1 }; // rojo opaco + azul transparente
+    eq("alfa premultiplicada: un vecino transparente no tiñe el color, sólo baja el alfa", [...promediarArea(medio, 0, 0, 2, 1, 1, 1, [0, 0, 0, 0], true).data], [255, 0, 0, 128]);
+    eq("lo que cae fuera del original vale 'fuera' (una máscara blanca por defecto)", [...promediarArea({ data: Uint8ClampedArray.from([0, 0, 0, 255]), width: 1, height: 1 }, 0, 0, 2, 1, 1, 1, [255, 255, 255, 255], false).data], [128, 128, 128, 255]);
+    ok("promediarArea sólo reduce (ampliar sería inventar píxeles)", motivo(() => promediarArea(src, 0, 0, 0.5, 0.5, 4, 4, [0, 0, 0, 0], true)).startsWith("otro"));
+    // Una mesa enorme ya no se rechaza: se lee reducida, con aviso, y sigue usable.
+    const N = W * H;
+    const r1 = reducirMesa(doc, 0, N);
+    ok("reducir una mesa a SU MISMO tamaño = el despiece de siempre (identidad)", r1.w === W && r1.h === H && mismoDespiece(despiezar(r1.doc, 0), despiezar(doc, 0)));
+    const chica = despiezar(doc, 0, { mesaMaxPx: Math.floor(N / 4) });
+    const normal = despiezar(doc, 0);
+    ok(`mesa de más píxeles que el tope: se lee REDUCIDA a ${chica.w}×${chica.h}, usable (rearmado ${chica.rearmadoDistintoPct.toFixed(2)} %), con aviso`, chica.w === W / 2 && chica.h === H / 2 && despieceUsable(chica).ok && chica.avisos[0].includes("reducida a 200×250"), JSON.stringify([chica.w, chica.h, despieceUsable(chica), chica.avisos[0]]));
+    const mismasCajas = chica.piezas.every((p, i) => Math.abs(p.solido.x * 2 - normal.piezas[i].solido.x) <= 2 && Math.abs(p.solido.w * 2 - normal.piezas[i].solido.w) <= 2 && Math.abs(p.solido.h * 2 - normal.piezas[i].solido.h) <= 2);
+    ok("las piezas reducidas caen donde las originales, a la mitad (±1 px)", chica.piezas.map((p) => p.rol).join() === normal.piezas.map((p) => p.rol).join() && mismasCajas, JSON.stringify(chica.piezas.map((p) => p.solido)));
+    const d2c = despiezar(d2, 1, { mesaMaxPx: Math.floor(N / 4) });
+    ok("la SEGUNDA mesa de un archivo también se reduce en sus coordenadas (no toma píxeles de la primera)", despieceUsable(d2c).ok && d2c.w === W / 2 && d2c.rearmadoDistintoPct < 1, JSON.stringify(despieceUsable(d2c)));
+  }
+  {
+    // Muchas mesas: la persona elige; se propone la más grande de cada forma.
+    const m = (w, h) => ({ w, h });
+    eq("sugerir: la más grande de cada forma, en el orden del archivo", sugerirMesas([m(1080, 1920), m(720, 1280), m(1200, 1500), m(600, 750), m(1080, 1080), m(1280, 720)]), [0, 2, 4, 5]);
+    eq(`sugerir: a lo más ${MESAS_AUTO}, las formas más repetidas primero`, sugerirMesas([m(100, 100), m(200, 100), m(300, 100), m(400, 100), m(500, 100), m(1080, 1920), m(540, 960), m(1200, 1500), m(600, 750)]).length, MESAS_AUTO);
+    eq("sugerir: medidas inválidas no se proponen", sugerirMesas([m(0, 0), m(NaN, 5), m(100, 100)]), [2]);
+    eq("sugerir: la más GRANDE aunque venga después de una chica de la misma forma", sugerirMesas([m(720, 1280), m(600, 750), m(1080, 1920), m(1200, 1500)]), [2, 3]);
+  }
 }
 
 // ── v2 · acomodo: dónde va cada pieza en cada medida ─────────
@@ -663,15 +732,21 @@ console.log("\n▶ v2 · pantalla PSD: una medida completa, la guía de zona seg
   const M45 = { nombre: "AD_4x5_FB", w: 1200, h: 1500, piezas: [pz("FOOTER", 204, 1361, 790, 62, 16), pz("HERO", 113, 508, 788, 791), pz("CTA", 788, 856, 306, 97, 45), pz("Subtitulo", 684, 617, 383, 194, 32), pz("TITULO", 188, 238, 824, 212, 42), pz("BRAND", 364, 86, 472, 83)] };
   const lista = leerMedidas(MEDIDAS_EQUIPO);
   eq("la lista con la que arranca la pantalla son las 12 medidas del equipo, todas válidas y dentro del tope", [lista.medidas.length, lista.fuera, lista.medidas.length <= MEDIDAS_MAX, lista.medidas[0], lista.medidas[11]], [12, [], true, { w: 1080, h: 1920 }, { w: 320, h: 50 }]);
-  // Guía de zona segura (decisión B de Pedro): sólo 9:16 y sus escalas directas; nunca entra al acomodo.
-  eq("guía de zona: sólo en 9:16 y sus escalas directas", lista.medidas.filter((m) => zonaGuia(m.w, m.h)).map((m) => `${m.w}x${m.h}`), ["1080x1920", "720x1280"]);
-  eq("la guía mide lo mismo que la regla de los prompts de historia (una sola fuente)", [zonaGuia(1080, 1920), zonaGuia(720, 1280).top / 1280 * 100, zonaGuia(720, 1280).bottom / 1280 * 100], [{ top: 288, right: 0, bottom: 384, left: 0 }, ZONA_HISTORIA_PCT.arriba, ZONA_HISTORIA_PCT.abajo]);
-  eq("la frase de zona segura del prompt no cambió al sacar sus números a una constante", zonaSeguraImagen({ ...specVacio("imagen_cero", "nanobanana", "x"), destino: "ig_story", aspect: "9:16" }), "Safe zone: subject and text centered, top 15% and bottom 20% clear");
-  eq("zonaGuia con medidas que no son medidas → sin guía", [zonaGuia(0, 0), zonaGuia(NaN, 5), zonaGuia(1080, 1080), zonaGuia(1920, 1080), zonaGuia(1200, 1500)], [null, null, null, null, null]);
+  // Zona segura POR CANAL (Pedro, 2026-10-14): sin canal no hay guía; con canal, sólo en 9:16 y sus escalas.
+  const r1 = (z) => z && Object.fromEntries(Object.entries(z).map(([k, v]) => [k, Math.round(v * 10) / 10]));
+  eq("sin canal elegido no se marca nada, ni en 9:16", [zonaCanal(null, 1080, 1920), zonaCanal(undefined, 1080, 1920), zonaCanal("instagram", 1080, 1920), zonaCanal("__proto__", 1080, 1920)], [null, null, null, null]);
+  eq("con canal: sólo en 9:16 y sus escalas directas", lista.medidas.filter((m) => zonaCanal("tiktok", m.w, m.h)).map((m) => `${m.w}x${m.h}`), ["1080x1920", "720x1280"]);
+  eq("es916 = la misma regla que decide dónde hay guía", lista.medidas.filter((m) => es916(m.w, m.h)).map((m) => `${m.w}x${m.h}`), ["1080x1920", "720x1280"]);
+  eq("Stories (Instagram y Facebook): 14 % arriba y 20 % abajo, sin costados", [r1(zonaCanal("ig-stories", 1080, 1920)), r1(zonaCanal("fb-stories", 1080, 1920))], [{ top: 268.8, right: 0, bottom: 384, left: 0 }, { top: 268.8, right: 0, bottom: 384, left: 0 }]);
+  eq("Reels (Instagram y Facebook): 14 % arriba, 35 % abajo y 6 % a cada lado", [r1(zonaCanal("ig-reels", 1080, 1920)), r1(zonaCanal("fb-reels", 1080, 1920))], [{ top: 268.8, right: 64.8, bottom: 672, left: 64.8 }, { top: 268.8, right: 64.8, bottom: 672, left: 64.8 }]);
+  eq("TikTok: los px que dio Pedro sobre 1080×1920 (el extremo seguro de cada rango) y su escala en 720×1280", [r1(zonaCanal("tiktok", 1080, 1920)), r1(zonaCanal("tiktok", 720, 1280))], [{ top: 200, right: 120, bottom: 300, left: 0 }, { top: 133.3, right: 80, bottom: 200, left: 0 }]);
+  ok("cada canal tiene nombre visible y su zona deja lugar al anuncio (menos del 75 % de cada lado)", Object.values(CANALES).every((c) => c.nombre.length > 0 && c.pct.top + c.pct.bottom < 75 && c.pct.left + c.pct.right < 75) && Object.keys(CANALES).every(esCanal) && !esCanal("toString"));
+  eq("la frase de zona segura del prompt no cambió (los prompts siguen con su propia regla de historia)", zonaSeguraImagen({ ...specVacio("imagen_cero", "nanobanana", "x"), destino: "ig_story", aspect: "9:16" }), "Safe zone: subject and text centered, top 15% and bottom 20% clear");
+  eq("zonaCanal con medidas que no son medidas o que no son 9:16 → sin guía", [zonaCanal("tiktok", 0, 0), zonaCanal("tiktok", NaN, 5), zonaCanal("tiktok", 1080, 1080), zonaCanal("tiktok", 1920, 1080), zonaCanal("tiktok", 1200, 1500), zonaCanal("tiktok", -9, -16)], [null, null, null, null, null, null]);
   const m916 = acomodarMedida([M916, M45], 1080, 1920);
-  ok("una medida completa: 9:16 sale de la mesa 9:16, trae guía, y la guía NO marca lo que colocó el diseñador (BRAND está dentro de ella)", m916.maestro === 0 && m916.guia !== null && M916.piezas[5].solido.y < m916.guia.top && m916.acomodo.avisos.length === 0, JSON.stringify(m916.acomodo.avisos));
+  ok("una medida completa: 9:16 sale de la mesa 9:16, y la zona del canal NO marca lo que colocó el diseñador (BRAND está dentro de ella)", m916.maestro === 0 && M916.piezas[5].solido.y < zonaCanal("ig-reels", 1080, 1920).top && m916.acomodo.avisos.length === 0, JSON.stringify(m916.acomodo.avisos));
   const m627 = acomodarMedida([M916, M45], 1200, 627, { heroLado: "izquierda" });
-  ok("una medida completa: 1200×627 sale de la mesa 4:5, sin guía, y respeta el lado pedido", m627.maestro === 1 && m627.guia === null && JSON.stringify(m627.acomodo) === JSON.stringify(acomodar(M45, 1200, 627, { heroLado: "izquierda" })));
+  ok("una medida completa: 1200×627 sale de la mesa 4:5 y respeta el lado pedido", m627.maestro === 1 && JSON.stringify(m627.acomodo) === JSON.stringify(acomodar(M45, 1200, 627, { heroLado: "izquierda" })));
   eq("sin mesas no hay medida: error claro, no un índice inventado", (() => { try { acomodarMedida([], 100, 100); return "sigue"; } catch (e) { return e.message; } })(), "acomodarMedida: sin maestros");
   eq("nombre de archivo: el de entrega del equipo cabe entero (antes se cortaba a 50) y un nombre con rutas o símbolos sale limpio", [limpiarNombre("APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", 120), limpiarNombre("../../etc/pa ss<wd>", 120), limpiarNombre("x".repeat(300), 120).length, limpiarNombre("x".repeat(300)).length], ["APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "etc-pa-ss-wd", 120, 50]);
 

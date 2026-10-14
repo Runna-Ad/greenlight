@@ -4,13 +4,16 @@
  */
 import type { Caja, MaestroPsd, MotivoPsd, Rol } from "./psd.ts";
 
-/** Tope de peso del PSD (los reales rondan 70 MB). Vive aquí porque la pantalla lo revisa ANTES de leer el archivo. */
+/** Tope de lo que se LEE de un PSD: sus capas y su copia aplanada, ya sin los originales de los objetos inteligentes
+ *  ni los filtros inteligentes (`adelgazar.ts`). El PSD real del equipo pesa 72 MB en disco y 22 MB así. */
 export const PSD_BYTES_MAX = 250_000_000;
 /** Si el worker no termina en este tiempo, se mata: un archivo hecho con mala intención puede colgar a la librería. */
 export const LEER_MAX_MS = 120_000;
 /** Mesas de trabajo que se leen de un PSD. Los topes de `psd.ts` son POR mesa: sin éste, un archivo con 200 mesas
  *  chicas en el disco y enormes en memoria tumbaría la pestaña. Los reales traen 2 o 3. */
 export const MESAS_MAX = 24;
+/** Hasta cuántas mesas se leen sin preguntar. Con más, la persona elige cuáles (leer menos es más rápido). */
+export const MESAS_AUTO = 4;
 /** Bytes de píxeles que el worker le puede pasar a la página en total (la página los vuelve a tener como lienzos).
  *  El PSD real del equipo (2 mesas) pasa ~70 MB. */
 export const TRANSFERIR_MAX_BYTES = 600_000_000;
@@ -44,8 +47,13 @@ export type MaestroListo = {
 /** Una mesa que no se pudo usar, con el porqué (texto para enseñar tal cual). */
 export type MesaDescartada = { nombre: string; motivos: string[] };
 
+/** Lo que la pantalla le pide al worker: leer un archivo (se manda el File, no sus bytes) o, si preguntó, las mesas elegidas. */
+export type PedidoWorker = { tipo: "leer"; archivo: Blob } | { tipo: "mesas"; indices: number[] };
+export type MesaElegible = { nombre: string; w: number; h: number };
+
 export type MensajeWorker =
   | { tipo: "avance"; mesa: number; de: number }
+  | { tipo: "elegir"; mesas: MesaElegible[]; sugeridas: number[] }
   | { tipo: "listo"; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] }
   | { tipo: "error"; motivo: MotivoPsd | "desconocido"; detalle: string };
 
@@ -89,4 +97,23 @@ export function medidasQueCaben<M extends { w: number; h: number }>(medidas: M[]
     px += m.w * m.h;
   }
   return { caben, fuera: medidas.length - caben.length };
+}
+
+/** Las que se proponen marcadas cuando hay que elegir: la más grande de cada forma (una forma = misma proporción
+ *  con 2 % de holgura), las de forma más común primero, hasta MESAS_AUTO. En el orden del archivo. */
+export function sugerirMesas(mesas: { w: number; h: number }[]): number[] {
+  const formas: { r: number; mejor: number; n: number }[] = [];
+  mesas.forEach((m, i) => {
+    if (!(m.w > 0 && m.h > 0)) return;
+    const r = Math.log(m.w / m.h);
+    const f = formas.find((x) => Math.abs(x.r - r) < 0.02);
+    if (!f) return void formas.push({ r, mejor: i, n: 1 });
+    f.n++;
+    if (m.w * m.h > mesas[f.mejor].w * mesas[f.mejor].h) f.mejor = i;
+  });
+  return formas
+    .sort((a, b) => b.n - a.n || a.mejor - b.mejor)
+    .slice(0, MESAS_AUTO)
+    .map((f) => f.mejor)
+    .sort((a, b) => a - b);
 }

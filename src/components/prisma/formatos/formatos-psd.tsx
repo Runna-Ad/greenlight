@@ -2,18 +2,18 @@
 
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CircleCheck, Download, Eye, EyeOff, FileUp, FlipHorizontal2, Languages, Loader2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CircleCheck, Download, FileUp, FlipHorizontal2, Languages, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { zipSync } from "fflate";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
-import { ZONA_HISTORIA_PCT } from "@/lib/prisma/compilers/zonas";
-import { MEDIDAS_EQUIPO, acomodarMedida, nombreSalida, sePuedeVoltear, type Lado } from "@/lib/prisma/formatos/acomodo";
+import { CANALES, MEDIDAS_EQUIPO, acomodarMedida, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Lado } from "@/lib/prisma/formatos/acomodo";
 import { FP, FP_ERROR, FP_FAMILIA, FX, rellenar } from "@/lib/prisma/formatos/copy";
 import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
-import { LEER_MAX_MS, MEDIDAS_MAX, PSD_BYTES_MAX, medidasQueCaben, type MensajeWorker, type MesaDescartada } from "@/lib/prisma/formatos/listo";
+import { LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoWorker } from "@/lib/prisma/formatos/listo";
+import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
 import { aPintable, pintar, soltarLienzos, type MaestroPintable } from "./pintar";
 
@@ -36,7 +36,6 @@ const FORMA_FILA = 1.5;
 const NOMBRE_MESA_MAX = 100;
 const NOMBRE_ZIP_MAX = 80;
 const SOLTAR_URL_MS = 10_000;
-const MB_MAX = Math.round(PSD_BYTES_MAX / 1e6);
 const FOCO = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
 const BOTON = "min-h-11 sm:min-h-9";
 const clave = (m: Medida) => `${m.w}x${m.h}`;
@@ -56,11 +55,13 @@ function descargar(blob: Blob, nombre: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), SOLTAR_URL_MS);
 }
 
+const pct = (v: number, de: number) => `${(v / de) * 100}%`;
+
 const TarjetaMedida = memo(function TarjetaMedida({
   maestros,
   medida,
   lado,
-  guiaOn,
+  canal,
   lang,
   alVoltear,
   registrar,
@@ -68,14 +69,16 @@ const TarjetaMedida = memo(function TarjetaMedida({
   maestros: MaestroPintable[];
   medida: Medida;
   lado: Lado;
-  guiaOn: boolean;
+  canal: Canal | null;
   lang: Lang;
   alVoltear: (m: Medida, a: Lado) => void;
   registrar: (k: string, lienzo: HTMLCanvasElement | null) => void;
 }) {
   const { w, h } = medida;
   const k = clave(medida);
-  const { maestro, acomodo, guia } = useMemo(() => acomodarMedida(maestros, w, h, { heroLado: lado }), [maestros, w, h, lado]);
+  const { maestro, acomodo } = useMemo(() => acomodarMedida(maestros, w, h, { heroLado: lado }), [maestros, w, h, lado]);
+  const guia = zonaCanal(canal, w, h);
+  const nombreCanal = canal ? CANALES[canal].nombre : "";
   const ma = maestros[maestro];
   const lienzo = useRef<HTMLCanvasElement>(null);
   const [noPinto, setNoPinto] = useState(false);
@@ -101,7 +104,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
 
   const letra = acomodo.letras.length ? Math.min(...acomodo.letras.map((l) => l.px)) : null;
   const volteable = sePuedeVoltear(acomodo.familia);
-  const conGuia = guiaOn && !!guia;
+  const franja = rellenar(tx(FP.zonaFranja, lang), { c: nombreCanal });
   const revisar = noPinto || acomodo.avisos.length > 0;
   const bajar = async () => {
     try {
@@ -119,17 +122,24 @@ const TarjetaMedida = memo(function TarjetaMedida({
           <canvas
             ref={lienzo}
             role="img"
-            aria-label={`${rellenar(tx(FP.lienzoAria, lang), { m: etiqueta(medida) })}${conGuia ? tx(FP.lienzoGuia, lang) : ""}`}
+            aria-label={`${rellenar(tx(FP.lienzoAria, lang), { m: etiqueta(medida) })}${guia ? rellenar(tx(FP.lienzoGuia, lang), { c: nombreCanal }) : ""}`}
             className="block size-full rounded-sm"
           />
-          {conGuia && (
+          {guia && (
             <>
-              <span aria-hidden="true" className="p-zona absolute inset-x-0 top-0 flex items-end justify-center" style={{ height: `${(guia.top / h) * 100}%` }}>
-                <span className="p-zona-texto">{tx(FP.zonaFranja, lang)}</span>
-              </span>
-              <span aria-hidden="true" className="p-zona absolute inset-x-0 bottom-0 flex items-start justify-center" style={{ height: `${(guia.bottom / h) * 100}%` }}>
-                <span className="p-zona-texto">{tx(FP.zonaFranja, lang)}</span>
-              </span>
+              {guia.top > 0 && (
+                <span aria-hidden="true" className="p-zona absolute inset-x-0 top-0 flex items-end justify-center" style={{ height: pct(guia.top, h) }}>
+                  <span className="p-zona-texto">{franja}</span>
+                </span>
+              )}
+              {guia.bottom > 0 && (
+                <span aria-hidden="true" className="p-zona absolute inset-x-0 bottom-0 flex items-start justify-center" style={{ height: pct(guia.bottom, h) }}>
+                  <span className="p-zona-texto">{franja}</span>
+                </span>
+              )}
+              {/* Los costados van ENTRE las franjas de arriba y abajo: las esquinas no se rayan dos veces. */}
+              {guia.left > 0 && <span aria-hidden="true" className="p-zona absolute left-0" style={{ top: pct(guia.top, h), bottom: pct(guia.bottom, h), width: pct(guia.left, w) }} />}
+              {guia.right > 0 && <span aria-hidden="true" className="p-zona absolute right-0" style={{ top: pct(guia.top, h), bottom: pct(guia.bottom, h), width: pct(guia.right, w) }} />}
             </>
           )}
         </div>
@@ -200,16 +210,21 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   const [medidas, setMedidas] = useState<Medida[]>(() => leerMedidas(MEDIDAS_EQUIPO).medidas);
   const [notaLista, setNotaLista] = useState<{ mal: boolean; texto: string } | null>(null);
   const [lados, setLados] = useState<Record<string, Lado>>({});
-  const [guiaOn, setGuiaOn] = useState(true);
+  /** Canal contra el que se revisa la zona segura. Sin canal no se marca nada (nadie ve una franja sin nombre). */
+  const [canal, setCanal] = useState<Canal | null>(null);
   const [zipeando, setZipeando] = useState(false);
   /** Lo último que pasó, para lectores de pantalla. `n` cambia cuando el mismo texto se repite (si no, no se anuncia). */
   const [aviso, setAviso] = useState<{ texto: string; n: number } | null>(null);
-  const trabajo = useRef<{ worker: Worker; reloj: number } | null>(null);
+  /** El PSD trae muchas mesas: la persona elige cuáles leer (el worker espera, con el reloj en pausa). */
+  const [eleccion, setEleccion] = useState<{ mesas: MesaElegible[]; marcadas: number[] } | null>(null);
+  /** `armar` vuelve a poner el reloj que mata al worker (se pausa mientras alguien elige mesas). */
+  const trabajo = useRef<{ worker: Worker; reloj: number; armar: () => void } | null>(null);
   /** Cada lectura toma un turno: lo que llegue de un turno viejo (otro archivo, cancelar) se ignora. */
   const turno = useRef(0);
   const vivo = useRef(true);
   const lienzos = useRef(new Map<string, HTMLCanvasElement>());
   const tituloResultado = useRef<HTMLHeadingElement>(null);
+  const tituloElegir = useRef<HTMLHeadingElement>(null);
   const entrada = useRef<HTMLInputElement>(null);
   /** El cuadro de subida vuelve a existir (cambiar PSD, cancelar, error): el foco regresa a él, no al tope de la página. */
   const volverASubir = useRef(false);
@@ -230,13 +245,17 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   const anunciar = useCallback((t: string) => setAviso((p) => ({ texto: t, n: p?.texto === t ? p.n + 1 : 0 })), []);
 
   const leyendo = avance !== null;
+  const eligiendo = eleccion !== null;
   const usables = leido?.maestros ?? [];
   // Al terminar de leer, el foco va al resultado; al volver al cuadro de subida, al cuadro.
   useEffect(() => {
     if (leido?.maestros.length) tituloResultado.current?.focus();
   }, [leido]);
   useEffect(() => {
-    if (!volverASubir.current || leyendo || usables.length) return;
+    if (eligiendo) tituloElegir.current?.focus();
+  }, [eligiendo]);
+  useEffect(() => {
+    if (!volverASubir.current || leyendo || eligiendo || usables.length) return;
     volverASubir.current = false;
     entrada.current?.focus();
   });
@@ -252,6 +271,7 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     soltar();
     volverASubir.current = true;
     setAvance(null);
+    setEleccion(null);
   };
 
   const abrir = async (file: File) => {
@@ -263,20 +283,21 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     setLeido(null);
     setLados({});
     setAviso(null);
+    setEleccion(null);
     const fallar = (f: Falla) => {
       volverASubir.current = true;
       setAvance(null);
+      setEleccion(null);
       setFalla(f);
     };
-    // El peso y la firma se revisan ANTES de cargar el archivo en memoria.
-    if (file.size > PSD_BYTES_MAX) return fallar({ clave: "pesado" });
+    // El peso y la firma se revisan ANTES de abrir el archivo. El archivo NO se carga aquí: el worker lo lee a
+    // pedazos y se salta lo que no usa (un PSD de 1 GB hecho de objetos inteligentes cabe).
+    if (file.size > PSD_ARCHIVO_MAX) return fallar({ clave: "pesado" });
     setAvance({ mesa: 0, de: 0 }); // antes del primer await: el cuadro se cierra a otro archivo desde ya
-    let datos: ArrayBuffer;
     try {
       const cabeza = new Uint8Array(await file.slice(0, 4).arrayBuffer());
       if (!vigente()) return;
       if (!(cabeza[0] === 0x38 && cabeza[1] === 0x42 && cabeza[2] === 0x50 && cabeza[3] === 0x53)) return fallar({ clave: "noEsPsd" });
-      datos = await file.arrayBuffer();
     } catch (err) {
       console.error("[formatos-psd] leer archivo", err);
       if (vigente()) fallar({ clave: "desconocido" });
@@ -297,7 +318,9 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
       if (f) fallar(f);
       return true;
     };
-    trabajo.current = { worker, reloj: window.setTimeout(() => cerrar({ clave: "tardo" }), LEER_MAX_MS) };
+    const t = { worker, reloj: 0, armar: () => (t.reloj = window.setTimeout(() => cerrar({ clave: "tardo" }), LEER_MAX_MS)) };
+    trabajo.current = t;
+    t.armar();
     worker.onerror = (e) => {
       console.error("[formatos-psd] worker", e.message);
       cerrar({ clave: "desconocido" });
@@ -307,6 +330,13 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
       const m = e.data;
       if (trabajo.current?.worker !== worker) return;
       if (m.tipo === "avance") return setAvance({ mesa: m.mesa, de: m.de });
+      if (m.tipo === "elegir") {
+        // Mientras la persona elige, el reloj no corre: no es la librería la que tarda.
+        window.clearTimeout(t.reloj);
+        setAvance(null);
+        setEleccion({ mesas: m.mesas, marcadas: m.sugeridas });
+        return;
+      }
       if (m.tipo === "error") {
         console.error("[formatos-psd]", m.detalle);
         return void cerrar({ clave: CLAVE_ERROR[m.motivo], detalle: m.motivo === "desconocido" ? undefined : m.detalle });
@@ -325,11 +355,30 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
       }
     };
     try {
-      worker.postMessage(datos, [datos]);
+      worker.postMessage({ tipo: "leer", archivo: file } satisfies PedidoWorker);
     } catch (err) {
       console.error("[formatos-psd] worker", err);
       cerrar({ clave: "desconocido" });
     }
+  };
+
+  const marcar = (i: number) =>
+    setEleccion((e) => e && { ...e, marcadas: e.marcadas.includes(i) ? e.marcadas.filter((x) => x !== i) : e.marcadas.length < MESAS_MAX ? [...e.marcadas, i] : e.marcadas });
+  const leerElegidas = () => {
+    const t = trabajo.current;
+    if (!t || !eleccion?.marcadas.length) return;
+    try {
+      t.worker.postMessage({ tipo: "mesas", indices: eleccion.marcadas } satisfies PedidoWorker);
+    } catch (err) {
+      console.error("[formatos-psd] worker", err);
+      soltar();
+      volverASubir.current = true;
+      setEleccion(null);
+      return setFalla({ clave: "desconocido" });
+    }
+    t.armar();
+    setAvance({ mesa: 0, de: eleccion.marcadas.length });
+    setEleccion(null);
   };
 
   // Un PSD soltado FUERA del cuadro haría que el navegador lo abra o lo descargue y se pierda la pantalla: la
@@ -384,7 +433,7 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
   );
   const porRevisar = filas.filter((f) => f.acomodo.avisos.length).length;
   const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia));
-  const hayGuia = filas.some((f) => f.guia);
+  const hay916 = medidas.some((m) => es916(m.w, m.h));
   const voltearTodas = () => {
     setLados((p) => ({ ...p, ...Object.fromEntries(volteables.map((f) => [clave(f.m), p[clave(f.m)] === "izquierda" ? "derecha" : "izquierda"])) }));
     anunciar(rellenar(tx(FP.voltearTodasHecho, lang), { n: volteables.length }));
@@ -432,7 +481,7 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
     <div lang={lang} className="prisma-root mx-auto max-w-6xl">
       {/* Un solo anuncio para lectores de pantalla: el avance de la lectura, lo último que se hizo, o el resumen. */}
       <p role="status" className="sr-only">
-        {leyendo ? textoAvance : aviso ? `${aviso.texto}${aviso.n % 2 ? "​" : ""}` : resumen}
+        {leyendo ? textoAvance : eleccion ? rellenar(tx(FP.elegirTitulo, lang), { n: eleccion.mesas.length }) : aviso ? `${aviso.texto}${aviso.n % 2 ? "​" : ""}` : resumen}
       </p>
 
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -456,7 +505,52 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
         </button>
       </div>
 
-      {!usables.length ? (
+      {eleccion ? (
+        <section className="p-enter max-w-2xl" aria-labelledby="psd-elegir-titulo">
+          <div className="rounded-2xl border border-border bg-card/50 px-5 py-5">
+            <h2 id="psd-elegir-titulo" ref={tituloElegir} tabIndex={-1} className="text-base font-medium text-foreground outline-none">
+              {rellenar(tx(FP.elegirTitulo, lang), { n: eleccion.mesas.length })}
+            </h2>
+            <p className="text-sm text-muted-foreground">{rellenar(tx(FP.elegirAyuda, lang), { max: MESAS_MAX })}</p>
+            <fieldset className="mt-3">
+              <legend className="sr-only">{tx(FP.elegirLeyenda, lang)}</legend>
+              <ul className="max-h-96 space-y-0.5 overflow-y-auto">
+                {eleccion.mesas.map((m, i) => {
+                  const on = eleccion.marcadas.includes(i);
+                  return (
+                    <li key={i}>
+                      <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 hover:bg-secondary/60 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 sm:min-h-9">
+                        {/* Nombre explícito: el texto de la etiqueta pega el nombre y la medida ("…_A540×960"). */}
+                        <input
+                          type="checkbox"
+                          aria-label={`${m.nombre || tx(FP.sinNombre, lang)}, ${etiqueta(m)}`}
+                          className={cn("size-4 shrink-0 accent-primary", FOCO)}
+                          checked={on}
+                          disabled={!on && eleccion.marcadas.length >= MESAS_MAX}
+                          onChange={() => marcar(i)}
+                        />
+                        <span lang={delMotor} className="min-w-0 break-words text-sm text-foreground">
+                          {m.nombre || tx(FP.sinNombre, lang)}
+                        </span>
+                        <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">{etiqueta(m)}</span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </fieldset>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {/* aria-disabled, no disabled: el botón conserva el foco y dice por qué no hace nada. */}
+              <Button size="lg" className={cn(BOTON, "aria-disabled:opacity-60")} onClick={leerElegidas} aria-disabled={!eleccion.marcadas.length || undefined}>
+                <FileUp className="size-4" aria-hidden="true" /> {rellenar(tx(FP.elegirLeer, lang), { n: eleccion.marcadas.length })}
+              </Button>
+              <Button variant="outline" size="lg" className={BOTON} onClick={cancelar}>
+                <X className="size-4" aria-hidden="true" /> {tx(FP.cancelar, lang)}
+              </Button>
+            </div>
+          </div>
+        </section>
+      ) : !usables.length ? (
         <section className="p-enter max-w-2xl space-y-3" aria-label={tx(FP.subir, lang)}>
           {/* <label>, no <button>: mismo patrón que la puerta de imagen plana (el input de archivo vive adentro).
               El archivo soltado lo recibe la página entera (arriba); aquí sólo se pinta el "suéltalo". */}
@@ -479,7 +573,7 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                 {leyendo ? textoAvance : tx(FP.subir, lang)}
               </span>
               <span id="psd-subir-ayuda" className="block text-sm text-muted-foreground">
-                {leyendo ? tx(FP.leyendoAyuda, lang) : `${tx(FP.subirAyuda, lang)} ${rellenar(tx(FP.subirTipos, lang), { mb: MB_MAX })}`}
+                {leyendo ? tx(FP.leyendoAyuda, lang) : `${tx(FP.subirAyuda, lang)} ${tx(FP.subirTipos, lang)}`}
               </span>
             </span>
             <input
@@ -506,7 +600,7 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
             <div id="psd-subir-error" role="alert" className="flex items-start gap-1.5 text-sm text-foreground">
               <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
               <div className="min-w-0">
-                <p>{rellenar(tx(FP_ERROR[falla.clave], lang), { mb: MB_MAX })}</p>
+                <p>{tx(FP_ERROR[falla.clave], lang)}</p>
                 {falla.detalle && (
                   <p lang={delMotor} className="mt-0.5 break-words text-xs text-muted-foreground">
                     {falla.detalle}
@@ -590,6 +684,34 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                 {tx(FX.pegarUsar, lang)}
               </Button>
             </form>
+
+            <div className="rounded-xl border border-border bg-card p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{tx(FP.zona, lang)}</p>
+              <label htmlFor="psd-canal" className="mt-1 block text-sm font-medium text-foreground">
+                {tx(FP.zonaCanal, lang)}
+              </label>
+              <select
+                id="psd-canal"
+                value={canal ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCanal(esCanal(v) ? v : null);
+                }}
+                aria-describedby="psd-canal-ayuda"
+                className="mt-1 h-10 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">{tx(FP.zonaNinguno, lang)}</option>
+                {(Object.keys(CANALES) as Canal[]).map((c) => (
+                  <option key={c} value={c}>
+                    {CANALES[c].nombre}
+                  </option>
+                ))}
+              </select>
+              <p id="psd-canal-ayuda" className="mt-1 text-xs text-muted-foreground">
+                {tx(FP.zonaAyuda, lang)}
+                {canal && !hay916 && <> {tx(FP.zonaSin916, lang)}</>}
+              </p>
+            </div>
           </aside>
 
           <section aria-labelledby="psd-resultado" className="@container min-w-0">
@@ -601,11 +723,6 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                 <p className="text-sm text-muted-foreground">{resumen}</p>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {hayGuia && (
-                  <Button variant="outline" size="lg" className={BOTON} onClick={() => setGuiaOn((v) => !v)} aria-pressed={guiaOn} aria-describedby="psd-zona-ayuda">
-                    {guiaOn ? <Eye className="size-4" aria-hidden="true" /> : <EyeOff className="size-4" aria-hidden="true" />} {tx(FP.zona, lang)}
-                  </Button>
-                )}
                 {volteables.length > 0 && (
                   <Button variant="outline" size="lg" className={BOTON} onClick={voltearTodas}>
                     <FlipHorizontal2 className="size-4" aria-hidden="true" /> {tx(FP.voltearTodas, lang)}
@@ -618,16 +735,11 @@ export function FormatosPsd({ planaActiva }: { planaActiva: boolean }) {
                 </Button>
               </div>
             </div>
-            {hayGuia && (
-              <p id="psd-zona-ayuda" className="mb-3 text-xs text-muted-foreground">
-                {rellenar(tx(FP.zonaAyuda, lang), { a: ZONA_HISTORIA_PCT.arriba, b: ZONA_HISTORIA_PCT.abajo })}
-              </p>
-            )}
             {/* Dos columnas cuando la COLUMNA de resultados da para ello (la barra y el panel de al lado la angostan);
                 las horizontales y los banners ocupan la fila entera. El orden es el de la lista del cliente. */}
             <ul className="grid items-start gap-4 @xl:grid-cols-2">
               {medidas.map((m) => (
-                <TarjetaMedida key={clave(m)} maestros={usables} medida={m} lado={lados[clave(m)] ?? "derecha"} guiaOn={guiaOn} lang={lang} alVoltear={voltear} registrar={registrar} />
+                <TarjetaMedida key={clave(m)} maestros={usables} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} lang={lang} alVoltear={voltear} registrar={registrar} />
               ))}
             </ul>
           </section>

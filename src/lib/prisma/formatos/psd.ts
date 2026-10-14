@@ -177,11 +177,11 @@ const limpio = (s: string | undefined): string => (s ?? "").replace(/[\p{Cc}\p{C
 export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
   // Una vista que no abarca todo su ArrayBuffer (un Buffer chico de Node sale de un pozo compartido) se copia:
   // la librería acota sus lecturas por el búfer de abajo, no por la vista.
-  if (entrada.byteLength > PSD_BYTES_MAX) throw new ErrorPsd("demasiado-grande", `El archivo pesa ${Math.round(entrada.byteLength / 1e6)} MB`);
+  if (entrada.byteLength > PSD_BYTES_MAX) throw new ErrorPsd("demasiado-grande", `Sus capas pesan ${Math.round(entrada.byteLength / 1e6)} MB (máximo ${Math.round(PSD_BYTES_MAX / 1e6)}). Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas y sin capas ocultas.`);
   const buf = ArrayBuffer.isView(entrada) && (entrada.byteOffset !== 0 || entrada.byteLength !== entrada.buffer.byteLength) ? new Uint8Array(entrada) : entrada;
   const cab = ArrayBuffer.isView(buf) ? buf : new Uint8Array(buf, 0, Math.min(6, buf.byteLength));
   if (cab.length < 6 || cab[0] !== 0x38 || cab[1] !== 0x42 || cab[2] !== 0x50 || cab[3] !== 0x53) throw new ErrorPsd("no-soportado", "El archivo no es un PSD");
-  if (cab[4] !== 0 || cab[5] !== 1) throw new ErrorPsd("no-soportado", "Es un PSB (documento grande), no un PSD");
+  if (cab[4] !== 0 || cab[5] !== 1) throw new ErrorPsd("no-soportado", "Es un PSB (documento grande), no un PSD. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas, como PSD.");
   let psd;
   try {
     // totalMemoryLimit: con useRawData lo único que se decodifica al leer son los patrones del documento.
@@ -190,7 +190,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
     throw new ErrorPsd("no-soportado", `No se pudo leer el PSD: ${err instanceof Error ? err.message : String(err)}`);
   }
   if (!(psd.width > 0 && psd.height > 0)) throw new ErrorPsd("no-soportado", "El PSD no declara medidas");
-  if (psd.width > PSD_LADO_MAX || psd.height > PSD_LADO_MAX || psd.width * psd.height > PSD_LIENZO_MAX_PX) throw new ErrorPsd("demasiado-grande", `Lienzo de ${psd.width}×${psd.height}`);
+  if (psd.width > PSD_LADO_MAX || psd.height > PSD_LADO_MAX || psd.width * psd.height > PSD_LIENZO_MAX_PX) throw new ErrorPsd("demasiado-grande", `El lienzo mide ${psd.width}×${psd.height}: más de ${PSD_LIENZO_MAX_PX / 1e6} millones de píxeles en total. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas, o acércalas entre sí.`);
   if ((psd.bitsPerChannel ?? 8) !== 8) throw new ErrorPsd("no-soportado", `${psd.bitsPerChannel} bits por canal (sólo 8)`);
 
   const avisos: string[] = [];
@@ -201,7 +201,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
   const andar = (nodos: Layer[] | undefined, opPadre: number, ctx: Ctx) => {
     for (const l of nodos ?? []) {
       if (l.hidden) continue;
-      if (++vistas > PSD_CAPAS_MAX) throw new ErrorPsd("demasiado-grande", `Más de ${PSD_CAPAS_MAX} capas`);
+      if (++vistas > PSD_CAPAS_MAX) throw new ErrorPsd("demasiado-grande", `Más de ${PSD_CAPAS_MAX} capas visibles. Qué hacer: borra las que no se usan o acopla las carpetas que no son de la guía.`);
       const nombre = limpio(l.name);
       const opacidad = opPadre * (l.opacity ?? 1);
       if (l.children) {
@@ -225,10 +225,10 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
       }
       const w = (l.right ?? 0) - (l.left ?? 0);
       const h = (l.bottom ?? 0) - (l.top ?? 0);
-      if (!(w >= 0 && h >= 0) || w > PSD_LADO_MAX || h > PSD_LADO_MAX || w * h > PSD_CAPA_MAX_PX) throw new ErrorPsd("demasiado-grande", `La capa «${nombre}» mide ${w}×${h}`);
+      if (!(w >= 0 && h >= 0) || w > PSD_LADO_MAX || h > PSD_LADO_MAX || w * h > PSD_CAPA_MAX_PX) throw new ErrorPsd("demasiado-grande", `La capa «${nombre}» mide ${w}×${h} (máximo ${PSD_CAPA_MAX_PX / 1e6} millones de píxeles). Qué hacer: recórtala al tamaño de su mesa.`);
       const k = l.mask && !l.mask.disabled ? l.mask : null;
       const mw = (k?.right ?? 0) - (k?.left ?? 0), mh = (k?.bottom ?? 0) - (k?.top ?? 0);
-      if (!(mw >= 0 && mh >= 0) || mw > PSD_LADO_MAX || mh > PSD_LADO_MAX || mw * mh > PSD_CAPA_MAX_PX) throw new ErrorPsd("demasiado-grande", `La máscara de «${nombre}» mide ${mw}×${mh}`);
+      if (!(mw >= 0 && mh >= 0) || mw > PSD_LADO_MAX || mh > PSD_LADO_MAX || mw * mh > PSD_CAPA_MAX_PX) throw new ErrorPsd("demasiado-grande", `La máscara de «${nombre}» mide ${mw}×${mh} (máximo ${PSD_CAPA_MAX_PX / 1e6} millones de píxeles). Qué hacer: recórtala al tamaño de su mesa.`);
       // Máscara "ocultar todo" sin pintar: Photoshop no dibuja nada de esa capa.
       if (k && !(mw > 0 && mh > 0) && (k.defaultColor ?? 255) === 0) continue;
       // Canales en ZIP: se inflan enteros antes de mirar la medida (bomba de descompresión). Photoshop guarda
@@ -350,14 +350,6 @@ function porPixel(c: CapaPsd, m: MesaPsd, conRelleno: boolean, fn: (i: number, a
 
 /** La misma capa, decodificando sus píxeles (y su máscara) una sola vez. */
 function conCache(c: CapaPsd): CapaPsd {
-  const una = <T,>(fn: () => T): (() => T) => {
-    let hecho = false;
-    let valor: T | undefined;
-    return () => {
-      if (!hecho) { valor = fn(); hecho = true; }
-      return valor as T;
-    };
-  };
   return { ...c, pixeles: una(c.pixeles), mascara: c.mascara && { ...c.mascara, pixeles: una(c.mascara.pixeles) } };
 }
 
@@ -440,13 +432,151 @@ const a8 = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255);
 /** Debajo de esto, "cuánto oscurece" no se puede medir (dividir entre casi cero): se deja sin oscurecer. */
 const NEGRO = 8 / 255;
 
+// ── Mesas enormes: se leen reducidas ─────────────────────────────────────
+
+/** Lo que una función de píxeles promete: decodificar (o reducir) UNA vez, la primera vez que se pide. */
+function una<T>(fn: () => T): () => T {
+  let hecho = false;
+  let valor: T | undefined;
+  return () => {
+    if (!hecho) { valor = fn(); hecho = true; }
+    return valor as T;
+  };
+}
+
+/**
+ * Reducir por ÁREA: cada píxel nuevo es el promedio exacto de lo que cubre del original (sin dientes ni moiré).
+ * `x0, y0` = dónde cae, en px del original, la esquina del píxel nuevo (0, 0); `invX, invY` = px del original por
+ * px nuevo (≥ 1: sólo reduce). Lo que cae fuera del original vale `fuera`. Con `premult`, el color se promedia
+ * pesado por su alfa (un borde transparente no oscurece la orilla). Va fila por fila del original: en memoria sólo
+ * hay dos filas nuevas a la vez, nunca una copia en flotantes del tamaño de la capa.
+ */
+export function promediarArea(src: Pixeles, x0: number, y0: number, invX: number, invY: number, dw: number, dh: number, fuera: readonly [number, number, number, number], premult: boolean): Pixeles {
+  if (!(invX >= 1 && invY >= 1 && dw > 0 && dh > 0)) throw new Error("promediarArea: sólo reduce");
+  const { width: W, height: H, data } = src;
+  const out = new Uint8ClampedArray(dw * dh * 4);
+  const fa = fuera[3] / 255;
+  const fueraP = premult ? [fuera[0] * fa, fuera[1] * fa, fuera[2] * fa, fuera[3]] : [...fuera];
+  // Por cada columna nueva: qué columnas del original toca y con cuánto de su ancho.
+  const ini = new Int32Array(dw + 1);
+  const cols: number[] = [], pesos: number[] = [];
+  for (let X = 0; X < dw; X++) {
+    ini[X] = cols.length;
+    const a = x0 + X * invX, b = a + invX;
+    for (let i = Math.floor(a); i < b; i++) {
+      const w = Math.min(b, i + 1) - Math.max(a, i);
+      if (w > 1e-12) { cols.push(i); pesos.push(w); }
+    }
+  }
+  ini[dw] = cols.length;
+  const n = dw * 4;
+  const fila = new Float64Array(n);
+  const acc = new Float64Array(n * 2); // la fila nueva en curso y la siguiente (una fila del original toca 2 como mucho)
+  const area = invX * invY;
+  const escribir = (Y: number) => {
+    for (let X = 0; X < dw; X++) {
+      const k = X * 4, o = (Y * dw + X) * 4, al = acc[k + 3];
+      out[o + 3] = Math.round(al / area);
+      if (premult) {
+        if (al > 0) for (let c = 0; c < 3; c++) out[o + c] = Math.round(acc[k + c] / (al / 255));
+      } else for (let c = 0; c < 3; c++) out[o + c] = Math.round(acc[k + c] / area);
+    }
+    acc.copyWithin(0, n);
+    acc.fill(0, n);
+  };
+  let Y = 0;
+  const jFin = Math.ceil(y0 + dh * invY - 1e-9);
+  for (let j = Math.floor(y0); j < jFin && Y < dh; j++) {
+    fila.fill(0);
+    const dentroY = j >= 0 && j < H;
+    for (let X = 0; X < dw; X++) {
+      const k = X * 4;
+      for (let t = ini[X]; t < ini[X + 1]; t++) {
+        const i = cols[t], w = pesos[t];
+        if (!dentroY || i < 0 || i >= W) { fila[k] += fueraP[0] * w; fila[k + 1] += fueraP[1] * w; fila[k + 2] += fueraP[2] * w; fila[k + 3] += fueraP[3] * w; continue; }
+        const s = (j * W + i) * 4, a = premult ? data[s + 3] / 255 : 1;
+        fila[k] += data[s] * a * w; fila[k + 1] += data[s + 1] * a * w; fila[k + 2] += data[s + 2] * a * w; fila[k + 3] += data[s + 3] * w;
+      }
+    }
+    for (let T = Y; T <= Y + 1 && T < dh; T++) {
+      const c = y0 + T * invY;
+      const w = Math.min(c + invY, j + 1) - Math.max(c, j);
+      if (w <= 1e-12) continue;
+      const base = (T - Y) * n;
+      for (let k = 0; k < n; k++) acc[base + k] += fila[k] * w;
+    }
+    // Una fila nueva está completa cuando ya pasó todo lo que la cubre.
+    while (Y < dh && y0 + (Y + 1) * invY <= j + 1 + 1e-9) escribir(Y++);
+  }
+  while (Y < dh) escribir(Y++);
+  return { data: out, width: dw, height: dh };
+}
+
+/**
+ * Una mesa más grande que `maxPx` se lee REDUCIDA en vez de rechazarse (las medidas de entrega son de 2 MP como
+ * mucho): un documento nuevo con sólo esa mesa en (0, 0), sus capas y su copia aplanada ya a escala. Cada capa se
+ * reduce al pedirla, una sola vez. La mesa tiene que caber en el lienzo (quien llama ya lo revisó).
+ */
+export function reducirMesa(doc: DocPsd, mesa: number, maxPx: number = MESA_MAX_PX): { doc: DocPsd; w: number; h: number } {
+  const m = doc.mesas[mesa];
+  const s = Math.sqrt(maxPx / (m.w * m.h));
+  const w = Math.max(1, Math.floor(m.w * s)), h = Math.max(1, Math.floor(m.h * s));
+  const invX = m.w / w, invY = m.h / h;
+  // Una capa de afuera todavía le puede echar sombra a la mesa: se conserva un margen del alcance de un halo.
+  const caja = (l: number, t: number, r: number, b: number) => {
+    const x0 = Math.max(-HALO_MAX_PX, Math.floor((l - m.x) / invX)), y0 = Math.max(-HALO_MAX_PX, Math.floor((t - m.y) / invY));
+    const x1 = Math.min(w + HALO_MAX_PX, Math.ceil((r - m.x) / invX)), y1 = Math.min(h + HALO_MAX_PX, Math.ceil((b - m.y) / invY));
+    return { x0, y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
+  };
+  const capas = doc.capas
+    .filter((c) => c.mesa === mesa)
+    .map((c): CapaPsd => {
+      const k = caja(c.left, c.top, c.left + c.w, c.top + c.h);
+      const mk = c.mascara;
+      const km = mk && caja(mk.left, mk.top, mk.right, mk.bottom);
+      return {
+        ...c,
+        mesa: 0, left: k.x0, top: k.y0, w: k.w, h: k.h,
+        halos: c.halos.map((hl) => ({ ...hl, radio: Math.min(HALO_MAX_PX, Math.ceil(hl.radio / Math.min(invX, invY)) + 1) })),
+        letraPx: c.letraPx === null ? null : c.letraPx / invY,
+        pixeles: una(() => {
+          const img = c.pixeles();
+          return img && k.w > 0 && k.h > 0 ? promediarArea(img, m.x + k.x0 * invX - c.left, m.y + k.y0 * invY - c.top, invX, invY, k.w, k.h, [0, 0, 0, 0], true) : undefined;
+        }),
+        mascara: mk && km && km.w > 0 && km.h > 0
+          ? {
+              left: km.x0, top: km.y0, right: km.x0 + km.w, bottom: km.y0 + km.h, defecto: mk.defecto,
+              pixeles: una(() => {
+                const img = mk.pixeles();
+                return img ? promediarArea(img, m.x + km.x0 * invX - mk.left, m.y + km.y0 * invY - mk.top, invX, invY, km.w, km.h, [mk.defecto, mk.defecto, mk.defecto, 255], false) : undefined;
+              }),
+            }
+          : null,
+      };
+    });
+  const aplanado = una(() => {
+    const ap = doc.aplanado();
+    return ap ? promediarArea(ap, m.x, m.y, invX, invY, w, h, [255, 255, 255, 255], false) : undefined;
+  });
+  return { doc: { w, h, mesas: [{ nombre: m.nombre, x: 0, y: 0, w, h }], capas, avisos: [], aplanadoReal: doc.aplanadoReal, aplanado }, w, h };
+}
+
 /**
  * Una mesa → fondo limpio + piezas. Lanza SIEMPRE ErrorPsd (nunca otro error) cuando el anuncio tiene que ir por
  * la vía plana: sin copia aplanada, sin carpeta BACKGROUND, demasiado grande o datos que no se pueden leer.
+ * Una mesa de más de `mesaMaxPx` se lee reducida a ese tamaño, con aviso.
  */
-export function despiezar(doc: DocPsd, mesa: number): MaestroPsd {
+export function despiezar(doc: DocPsd, mesa: number, op: { mesaMaxPx?: number } = {}): MaestroPsd {
   try {
-    return despiezarMesa(doc, mesa);
+    const m = doc.mesas[mesa];
+    if (!m) throw new ErrorPsd("no-soportado", `No existe la mesa ${mesa}`);
+    if (![m.x, m.y, m.w, m.h].every(Number.isInteger) || !(m.w > 0 && m.h > 0) || m.x < 0 || m.y < 0 || m.x + m.w > doc.w || m.y + m.h > doc.h) throw new ErrorPsd("no-soportado", `La mesa «${m.nombre}» se sale del lienzo`);
+    const max = op.mesaMaxPx ?? MESA_MAX_PX;
+    if (m.w * m.h <= max) return despiezarMesa(doc, mesa);
+    const r = reducirMesa(doc, mesa, max);
+    const ma = despiezarMesa(r.doc, 0);
+    ma.avisos.unshift(`La mesa mide ${m.w}×${m.h}: se leyó reducida a ${r.w}×${r.h} (las medidas de entrega son más chicas).`);
+    return ma;
   } catch (err) {
     if (err instanceof ErrorPsd) throw err;
     throw new ErrorPsd("no-soportado", `No se pudieron leer las capas del PSD: ${err instanceof Error ? err.message : String(err)}`);
@@ -455,8 +585,6 @@ export function despiezar(doc: DocPsd, mesa: number): MaestroPsd {
 
 function despiezarMesa(doc: DocPsd, mesa: number): MaestroPsd {
   const m = doc.mesas[mesa];
-  if (!m) throw new ErrorPsd("no-soportado", `No existe la mesa ${mesa}`);
-  if (![m.x, m.y, m.w, m.h].every(Number.isInteger) || !(m.w > 0 && m.h > 0) || m.x < 0 || m.y < 0 || m.x + m.w > doc.w || m.y + m.h > doc.h) throw new ErrorPsd("no-soportado", `La mesa «${m.nombre}» se sale del lienzo`);
   const N = m.w * m.h;
   if (N > MESA_MAX_PX) throw new ErrorPsd("demasiado-grande", `La mesa «${m.nombre}» mide ${m.w}×${m.h}`);
   const capas = doc.capas.filter((c) => c.mesa === mesa);
@@ -464,7 +592,7 @@ function despiezarMesa(doc: DocPsd, mesa: number): MaestroPsd {
   if (!delFondo.length) throw new ErrorPsd("sin-fondo", `La mesa «${m.nombre}» no tiene carpeta BACKGROUND`);
   // Cada carpeta de primer nivel cuesta un búfer del tamaño de la mesa: se cuenta ANTES de reservar nada.
   const nPiezas = new Set(capas.filter((c) => rolDe(c.pieza) !== "BACKGROUND").map((c) => c.pieza)).size;
-  if (nPiezas > PIEZAS_MAX || N * (60 + 15 * nPiezas) > DESPIECE_MAX_BYTES) throw new ErrorPsd("demasiado-grande", `La mesa «${m.nombre}» tiene ${nPiezas} carpetas o capas sueltas de primer nivel`);
+  if (nPiezas > PIEZAS_MAX || N * (60 + 15 * nPiezas) > DESPIECE_MAX_BYTES) throw new ErrorPsd("demasiado-grande", `La mesa «${m.nombre}» tiene ${nPiezas} carpetas o capas sueltas de primer nivel (máximo ${PIEZAS_MAX}). Qué hacer: mete las capas sueltas en las carpetas de la guía.`);
   const ap = doc.aplanadoReal === false ? undefined : doc.aplanado();
   if (!ap || ap.width !== doc.w || ap.height !== doc.h) throw new ErrorPsd("sin-aplanado", "El PSD no trae copia aplanada: guardarlo con «Maximizar compatibilidad».");
   const avisos: string[] = [];
