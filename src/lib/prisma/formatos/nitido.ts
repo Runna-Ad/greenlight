@@ -18,6 +18,8 @@ export type MaestroDatos = {
   /** RGBA opaco, w × h. */
   fondo: Uint8ClampedArray;
   piezas: { rol: Rol | null; caja: Caja; solido: Caja; rgba: Uint8ClampedArray; oscurece: Uint8ClampedArray | null; base?: Uint8ClampedArray | null }[];
+  /** Gamma con que se mezcla el texto vuelto a escribir, la misma que usó Photoshop (sin dato: la mezcla normal). */
+  textoGamma?: number;
 };
 /** Lugar de una pieza en la medida: su escala, dónde cae la esquina de su caja y el rectángulo [x0, x1) × [y0, y1). */
 export type Lugar = { k: number; ox: number; oy: number; x0: number; y0: number; x1: number; y1: number };
@@ -27,6 +29,9 @@ export type TextoEscrito = (pieza: number, lugar: Lugar) => Float32Array | null;
 
 /** Bajo esta escala, a las piezas de texto se les aplica el enfoque (a su tamaño o casi, no hace falta). */
 export const ENFOQUE_DESDE = 0.75;
+/** Una pieza a su tamaño (escala a menos de esto de 1) lleva las letras de Photoshop tal cual: nada las mejora, y
+ *  el navegador dibuja la letra un poco más gruesa. */
+export const ESCRIBIR_LEJOS_DE_1 = 0.02;
 /** Cuánto enfoque (máscara de enfoque sobre un desenfoque de 1 px). Suave: más deja halos claros alrededor de la letra. */
 export const ENFOQUE = 0.35;
 const DE_TEXTO = new Set<Rol | null>(["TITULO", "SUBTITULO", "CTA", "FOOTER"]);
@@ -139,6 +144,26 @@ function enfocar(v: Float32Array, w: number, h: number, cuanto: number): void {
 }
 
 /**
+ * `capa` (RGBA premultiplicado del rectángulo [x0, x1) × [y0, y1)) encima de `dest` (RGB en flotantes, ancho W).
+ * Con gamma ≠ 1 se mezcla como Photoshop mezcla el texto: en valores elevados a la gamma.
+ */
+function encima(dest: Float32Array, W: number, capa: Float32Array, x0: number, y0: number, x1: number, y1: number, gamma: number): void {
+  const rw = x1 - x0;
+  for (let y = y0; y < y1; y++)
+    for (let x = x0; x < x1; x++) {
+      const i = ((y - y0) * rw + (x - x0)) * 4, d = (y * W + x) * 4, al = capa[i + 3] / 255;
+      if (gamma === 1) {
+        for (let c = 0; c < 3; c++) dest[d + c] = capa[i + c] + dest[d + c] * (1 - al);
+      } else if (al > 0) {
+        for (let c = 0; c < 3; c++) {
+          const color = Math.min(1, capa[i + c] / al / 255), abajo = Math.min(1, Math.max(0, dest[d + c] / 255));
+          dest[d + c] = 255 * Math.pow(al * Math.pow(color, gamma) + (1 - al) * Math.pow(abajo, gamma), 1 / gamma);
+        }
+      }
+    }
+}
+
+/**
  * La medida W × H armada: el fondo que la cubre y cada pieza donde la dejó el acomodo (sin redondear su lugar al
  * píxel), sus sombras en "multiplicar". RGBA opaco, listo para `ImageData`. `enfoque: false` = sin enfoque extra.
  */
@@ -163,15 +188,12 @@ export function armarMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, 
     }
     // Texto vuelto a escribir: la pieza va SIN sus letras (su base) y las letras nuevas encima, en su mismo turno
     // (lo que esté más arriba las sigue tapando como en Photoshop). Sin enfoque: las letras ya salen nítidas.
-    const escrito = p.base ? (op.texto?.(q.pieza, { k: q.k, ox, oy, x0, y0, x1, y1 }) ?? null) : null;
+    const escribir = p.base && Math.abs(q.k - 1) >= ESCRIBIR_LEJOS_DE_1;
+    const escrito = escribir ? (op.texto?.(q.pieza, { k: q.k, ox, oy, x0, y0, x1, y1 }) ?? null) : null;
     const col = remuestrear(escrito && p.base ? p.base : p.rgba, p.caja.w, p.caja.h, q.k, ox, oy, x0, y0, x1, y1, "fuera", true);
     if (!escrito && op.enfoque !== false && q.k < ENFOQUE_DESDE && DE_TEXTO.has(p.rol)) enfocar(col, rw, y1 - y0, ENFOQUE);
-    for (const capa of escrito ? [col, escrito] : [col])
-      for (let y = y0; y < y1; y++)
-        for (let x = x0; x < x1; x++) {
-          const i = ((y - y0) * rw + (x - x0)) * 4, d = (y * W + x) * 4, al = capa[i + 3] / 255;
-          for (let c = 0; c < 3; c++) dest[d + c] = capa[i + c] + dest[d + c] * (1 - al);
-        }
+    encima(dest, W, col, x0, y0, x1, y1, 1);
+    if (escrito) encima(dest, W, escrito, x0, y0, x1, y1, ma.textoGamma ?? 1);
   }
   const out = new Uint8ClampedArray(W * H * 4);
   for (let i = 0; i < W * H; i++) {

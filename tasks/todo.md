@@ -76,8 +76,9 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 - Siguen abiertas: letra mínima aceptable del legal (hoy 10 px provisional) · 3-5 PSD más.
 
 ### Plan B — puerta PSD (2026-10-13)
-**Next Step (2026-10-14):** B6 hecho (ver abajo). Falta: que Pedro pruebe la preview con su PSD y las DiDi, y
-decida si el legal se queda como imagen o se afloja la prueba para letra chica. Después B4 y familias propias.
+**Next Step (2026-10-14):** B7 hecho (el legal se escribe; texto con la gamma de Photoshop). Falta que Pedro elija
+camino para "tipografías por marca" y diga si se quita el renglón chico ("Línea de crédito de hasta:") en 320×50.
+Después: que pruebe la preview con su PSD y las DiDi; B4.
 **Antes (Pedro, 2026-10-13, al ver la pantalla):** (1) que las medidas CHICAS no pierdan calidad: nítidas y
 legibles ("they need to be crisp and high quality in order to have them legible"): proponerle 2-3 caminos y que
 elija · (2) la guía de zona segura debe decir de QUÉ app: un selector de canal ("if you want to check safe zones
@@ -310,6 +311,23 @@ largo: estacionado por él.
         saldría agrandada: pide decidir) · filtro en un worker · `base` sólo cuando hay tipografías · leer el final
         del PSD en menos pasos · arrastrar con resaltado en la tarjeta (se cambió el texto a "Arrastra a esta
         página") · confirmar "Olvidar" (las tipografías se vuelven a soltar; el archivo original no se toca).
+- [x] B7. El legal (Pedro, 2026-10-14: "keep the legal as an image unless loosening the check would make it crispier
+      and more readable, whatever makes it better"). Medido en el PSD real antes de decidir:
+      - **Bug de fondo encontrado:** el legal escrito salía MUCHO más oscuro que el de Photoshop. No era el navegador:
+        Photoshop mezcla el texto con lo de abajo en gamma 1.45 («Blend Text Colors Using Gamma», Ajustes de color).
+        Con 1.45 se reproducen sus 6 textos a 0.2-1.5 niveles; con la mezcla normal (la nuestra) a 1.4-11. El legal
+        (capa al 60 %) salía 131 donde Photoshop da 146. Arreglo: `gammaDeTexto` (psd.ts) averigua en cada PSD cuál
+        de las dos usó (orillas de sus letras contra la copia aplanada; PSD real: 1.45 en las dos mesas) y `encima`
+        (nitido.ts) mezcla el texto escrito igual. Afecta a TODO texto escrito: la letra oscura ya no sale más gruesa
+        de lo que se veía en Photoshop.
+      - **A su tamaño, píxeles de Photoshop:** pieza a menos de 2 % de su escala → no se escribe (`ESCRIBIR_LEJOS_DE_1`).
+        Comprobado en el navegador con las DiDi cargadas: 1080×1920 y 1200×1500 salen idénticas, 0 píxeles distintos.
+      - **El legal se escribe:** con la gamma, el legal escrito tiene el tono de Photoshop y orilla de 88 (la de
+        Photoshop a su tamaño) donde la imagen da 74 al ampliarlo ×1.15 y 78-80 al reducirlo; a ×0.69 empatan (92 con
+        enfoque). Para que pase, `TEXTO_DIF_MAX` 0.2 → 0.3, medido antes: con su tipografía los textos dan 0.035-0.218;
+        con otro grosor de la familia, 0.392 o más (6 textos × 5 grosores × 2 mesas). PSD real: 12 de 12 se escriben.
+      - Tests 228/0; 9 mutaciones, 8 atrapadas; la que se escapa (contar también píxeles llenos al medir la gamma) no
+        cambia nada en este tamaño: sólo pesaría con más de 20 000 píxeles llenos antes que las orillas.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

@@ -45,6 +45,8 @@ export type MaestroListo = {
   fondo: Uint8ClampedArray;
   /** De abajo hacia arriba. */
   piezas: PiezaLista[];
+  /** Con qué gamma mezcló Photoshop el texto (`MaestroPsd.textoGamma`). */
+  textoGamma: number;
   avisos: string[];
 };
 /** Una mesa que no se pudo usar, con el porqué (texto para enseñar tal cual). */
@@ -81,6 +83,7 @@ export function prepararMaestro(ma: MaestroPsd): { maestro: MaestroListo; transf
     h: ma.h,
     fondo: opaco(ma.fondo),
     piezas: ma.piezas.map((p) => ({ nombre: p.nombre, rol: p.rol, caja: p.caja, solido: p.solido, letraMinPx: p.letraMinPx, rgba: p.rgba, oscurece: p.oscurece ? opaco(p.oscurece) : null, base: p.base, textos: p.textos })),
+    textoGamma: ma.textoGamma,
     avisos: ma.avisos,
   };
   // Un búfer repetido en la lista de transferencia tumba el postMessage: se manda cada uno una vez.

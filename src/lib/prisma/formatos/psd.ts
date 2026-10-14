@@ -320,6 +320,9 @@ export type MaestroPsd = {
   fondoDistintoPct: number;
   /** Rearmar todo en su lugar vs la copia aplanada (0-100). */
   rearmadoDistintoPct: number;
+  /** Con qué gamma mezcló Photoshop el TEXTO con lo de abajo (ver `TEXTO_GAMMAS`): el texto vuelto a escribir se
+   *  mezcla igual. */
+  textoGamma: number;
   avisos: string[];
 };
 
@@ -815,7 +818,7 @@ function despiezarMesa(doc: DocPsd, mesa: number): MaestroPsd {
     piezas.push(p);
   });
 
-  const maestro: MaestroPsd = { nombre: m.nombre, w: m.w, h: m.h, fondo, piezas, fondoDistintoPct: (guiaMal / nVisible) * 100, rearmadoDistintoPct: 0, avisos };
+  const maestro: MaestroPsd = { nombre: m.nombre, w: m.w, h: m.h, fondo, piezas, fondoDistintoPct: (guiaMal / nVisible) * 100, rearmadoDistintoPct: 0, textoGamma: gammaDeTexto(capas, m, C), avisos };
   const otra = rearmar(maestro);
   let mal = 0;
   for (let i = 0; i < N; i++) {
@@ -845,6 +848,63 @@ const LETRA_MARGEN = 1;
 export const TEXTO_CAJA_MAX_PX = 4_000_000;
 /** Alfa menor a esto tras rellenar es ruido del borde: se borra (si no, queda un fantasma del texto). */
 const FANTASMA = 0.04;
+
+/**
+ * Las dos formas en que Photoshop mezcla el TEXTO con lo de abajo: la normal (1) o en gamma 1.45, si está activo
+ * «Blend Text Colors Using Gamma» en sus Ajustes de color. Con 1.45 la orilla de una letra oscura sale más clara y
+ * un texto con opacidad también: en el PSD real del equipo el legal (al 60 %) sale 146 donde la mezcla normal da
+ * 131, y 1.45 reproduce los píxeles de sus seis textos a 0.2-1.5 niveles (la normal, a 1.4-11).
+ */
+export const TEXTO_GAMMAS = [1, 1.45] as const;
+/** Si no hay orillas que medir: la del PSD real del equipo. */
+const TEXTO_GAMMA_OMISION = 1.45;
+/** Orillas mínimas para decidir, y cuántas bastan. */
+const GAMMA_MUESTRAS_MIN = 50;
+const GAMMA_MUESTRAS_MAX = 20_000;
+
+/**
+ * Cuál de las dos mezclas usó Photoshop en esta mesa: la que mejor reproduce su copia aplanada (`C`, RGB 0-1) en
+ * las orillas de los textos (alfa entre 0.15 y 0.85). Lo de abajo de cada orilla = el píxel más cercano de la
+ * misma fila, a 3 px o menos, donde esa capa no tiene tinta.
+ */
+function gammaDeTexto(capas: CapaPsd[], m: MesaPsd, C: Float32Array): number {
+  const err = TEXTO_GAMMAS.map(() => 0);
+  let n = 0;
+  for (const c of capas) {
+    if (n >= GAMMA_MUESTRAS_MAX) break;
+    if (!c.texto || c.mezcla !== "normal" || c.conEfectos || c.recorte || c.w * c.h > TEXTO_CAJA_MAX_PX) continue;
+    // Alfa efectiva de la capa en SU caja (0 = sin tinta o fuera de la mesa) y su color.
+    const alfa = new Float32Array(c.w * c.h);
+    const color: { px: Pixeles["data"] | null } = { px: null };
+    porPixel(c, m, true, (_i, a, data, s) => { alfa[s / 4] = a; color.px = data; });
+    const px = color.px;
+    if (!px) continue;
+    for (let j = 0; j < alfa.length && n < GAMMA_MUESTRAS_MAX; j++) {
+      const a = alfa[j];
+      if (a < 0.15 || a > 0.85) continue;
+      const x = j % c.w, y = (j / c.w) | 0;
+      const X = x + c.left - m.x, Y = y + c.top - m.y;
+      let abajo = -1;
+      for (let d = 1; d <= 3 && abajo < 0; d++)
+        for (const xx of [x - d, x + d]) {
+          const XX = xx + c.left - m.x;
+          if (abajo >= 0 || XX < 0 || XX >= m.w) continue;
+          if (xx < 0 || xx >= c.w || alfa[y * c.w + xx] === 0) abajo = Y * m.w + XX;
+        }
+      if (abajo < 0) continue;
+      const i = Y * m.w + X;
+      TEXTO_GAMMAS.forEach((g, k) => {
+        for (let q = 0; q < 3; q++) {
+          const mezcla = Math.pow(a * Math.pow(px[j * 4 + q] / 255, g) + (1 - a) * Math.pow(C[abajo * 3 + q], g), 1 / g);
+          err[k] += Math.abs(mezcla - C[i * 3 + q]);
+        }
+      });
+      n++;
+    }
+  }
+  if (n < GAMMA_MUESTRAS_MIN) return TEXTO_GAMMA_OMISION;
+  return TEXTO_GAMMAS[err.indexOf(Math.min(...err))];
+}
 
 /**
  * Los textos de una pieza y la pieza SIN ellos. Todo lo que tocan las letras (más un margen) se rellena con lo

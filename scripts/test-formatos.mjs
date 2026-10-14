@@ -10,7 +10,7 @@ import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib
 import { writePsdBuffer } from "ag-psd";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
-import { armarMedida, ENFOQUE_DESDE } from "../src/lib/prisma/formatos/nitido.ts";
+import { armarMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
 import { textoDe, maquetar, fuentesDe, compararAlfa } from "../src/lib/prisma/formatos/textos.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -778,8 +778,9 @@ console.log("\n▶ v2 · pantalla PSD: una medida completa, la guía de zona seg
   const rgba = new Uint8ClampedArray(2 * 2 * 4).fill(9), osc = Uint8ClampedArray.from({ length: 2 * 2 * 3 }, (_, i) => 100 + i);
   const base = new Uint8ClampedArray(16).fill(3), alfaTexto = new Uint8ClampedArray(6).fill(200);
   const texto = { capa: "Pídela ya", texto: { texto: "x", tramos: [], alineacion: "left", transform: [1, 0, 0, 1, 0, 0], caja: null, motivo: null }, opacidad: 1, caja: { x: 1, y: 1, w: 3, h: 2 }, alfa: alfaTexto, motivo: null };
-  const crudo = { nombre: "mesa", w: W2, h: H2, fondo: fondoRgb, piezas: [{ nombre: "HERO", rol: "HERO", caja: { x: 0, y: 0, w: 2, h: 2 }, solido: { x: 0, y: 0, w: 2, h: 2 }, rgba, oscurece: osc, tapadaPct: 0, letraMinPx: null, textos: [], base: null }, { nombre: "CTA", rol: "CTA", caja: { x: 1, y: 1, w: 2, h: 2 }, solido: { x: 1, y: 1, w: 2, h: 2 }, rgba, oscurece: null, tapadaPct: 0, letraMinPx: 12, textos: [texto], base }], fondoDistintoPct: 0, rearmadoDistintoPct: 0, avisos: ["nota"] };
+  const crudo = { nombre: "mesa", w: W2, h: H2, fondo: fondoRgb, piezas: [{ nombre: "HERO", rol: "HERO", caja: { x: 0, y: 0, w: 2, h: 2 }, solido: { x: 0, y: 0, w: 2, h: 2 }, rgba, oscurece: osc, tapadaPct: 0, letraMinPx: null, textos: [], base: null }, { nombre: "CTA", rol: "CTA", caja: { x: 1, y: 1, w: 2, h: 2 }, solido: { x: 1, y: 1, w: 2, h: 2 }, rgba, oscurece: null, tapadaPct: 0, letraMinPx: 12, textos: [texto], base }], fondoDistintoPct: 0, rearmadoDistintoPct: 0, textoGamma: 1.45, avisos: ["nota"] };
   const { maestro: listo, transferibles, bytes: pesoListo } = prepararMaestro(crudo);
+  eq("la gamma del texto de Photoshop viaja con el maestro", listo.textoGamma, 1.45);
   eq("lo que pesa un maestro al cruzar a la página = fondo + color, sombra, pieza sin texto y tinta de cada texto", pesoListo, W2 * H2 * 4 + (16 + 16) + 16 + 16 + 6);
   ok("la pieza sin texto y la tinta de cada texto también cruzan sin copiarse", listo.piezas[1].base === base && listo.piezas[1].textos[0].alfa === alfaTexto && transferibles.includes(base.buffer) && transferibles.includes(alfaTexto.buffer));
   ok("el fondo y el mapa de sombras llegan en RGBA opaco, con los mismos colores", listo.fondo.length === W2 * H2 * 4 && [...listo.fondo].every((v, i) => (i % 4 === 3 ? v === 255 : v === fondoRgb[Math.floor(i / 4) * 3 + (i % 4)])) && listo.piezas[0].oscurece.length === 16 && [...listo.piezas[0].oscurece].every((v, i) => (i % 4 === 3 ? v === 255 : v === osc[Math.floor(i / 4) * 3 + (i % 4)])) && listo.piezas[1].oscurece === null);
@@ -837,17 +838,29 @@ console.log("\n▶ v2 · nitidez: filtro propio (Lanczos-3, alfa premultiplicada
   const conLetras = new Uint8ClampedArray(pieza);
   for (let y = 50; y < 60; y++) for (let x = 30; x < 90; x++) conLetras.set([255, 255, 255, 255], (y * 120 + x) * 4);
   const conBase = { ...ma, piezas: [{ ...ma.piezas[0], rol: "CTA", rgba: conLetras, base: pieza }] };
-  const verde = (_p, l) => { const o = new Float32Array((l.x1 - l.x0) * (l.y1 - l.y0) * 4); o.set([0, 255, 0, 255], ((100 - l.y0) * (l.x1 - l.x0) + (100 - l.x0)) * 4); return o; };
-  const k1 = conK(1, 50, 50);
-  const esc = armarMedida(conBase, k1, 200, 200, { texto: verde });
+  const punto = (color) => (_p, l) => { const o = new Float32Array((l.x1 - l.x0) * (l.y1 - l.y0) * 4); o.set(color, ((100 - l.y0) * (l.x1 - l.x0) + (100 - l.x0)) * 4); return o; };
+  const verde = punto([0, 255, 0, 255]);
+  // Al 120 % la pieza cubre de 38 a 182 y sus letras viejas caerían en y 98-110, x 74-146.
+  const k12 = conK(1.2, 50, 50), k1 = conK(1, 50, 50);
+  const esc = armarMedida(conBase, k12, 200, 200, { texto: verde });
   let blancas = 0;
-  for (let y = 90; y < 100; y++) for (let x = 70; x < 130; x++) if (esc[(y * 200 + x) * 4 + 1] === 255 && esc[(y * 200 + x) * 4] === 255) blancas++;
+  for (let y = 99; y < 110; y++) for (let x = 76; x < 145; x++) if (esc[(y * 200 + x) * 4 + 1] === 255 && esc[(y * 200 + x) * 4] === 255) blancas++;
   eq("con texto escrito: va la base (sin las letras viejas) y encima las nuevas", [blancas, [...esc.subarray((100 * 200 + 100) * 4, (100 * 200 + 100) * 4 + 3)]], [0, [0, 255, 0]]);
   const igualA = (a, b) => a.every((v, i) => v === b[i]);
   let llamadas = 0;
-  ok("texto que devuelve null (no pasó la prueba): sale la pieza entera, como sin texto", igualA(armarMedida(conBase, k1, 200, 200, { texto: () => null }), armarMedida(conBase, k1, 200, 200)));
-  armarMedida({ ...conBase, piezas: [{ ...conBase.piezas[0], base: null }] }, k1, 200, 200, { texto: () => (llamadas++, null) });
+  ok("texto que devuelve null (no pasó la prueba): sale la pieza entera, como sin texto", igualA(armarMedida(conBase, k12, 200, 200, { texto: () => null }), armarMedida(conBase, k12, 200, 200)));
+  armarMedida({ ...conBase, piezas: [{ ...conBase.piezas[0], base: null }] }, k12, 200, 200, { texto: () => (llamadas++, null) });
   eq("pieza sin base (algún texto no se puede redibujar): ni se pregunta por su texto", llamadas, 0);
+  const conto = (k) => { let n = 0; const px = armarMedida(conBase, conK(k, 50, 50), 200, 200, { texto: (p, l) => (n++, verde(p, l)) }); return [n, igualA(px, armarMedida(conBase, conK(k, 50, 50), 200, 200))]; };
+  eq(`a su tamaño (escala a menos de ${ESCRIBIR_LEJOS_DE_1 * 100} % de 1) van las letras de Photoshop tal cual: ni se pregunta`, [conto(1), conto(1.019), conto(0.981)], [[0, true], [0, true], [0, true]]);
+  eq("apenas fuera de ese margen ya se escribe", [conto(1.02)[0], conto(0.98)[0]], [1, 1]);
+  // Mezcla del texto escrito: el legal del PSD real, color (58, 41, 50) al 60 % sobre (240, 222, 211).
+  const legal = { w: 200, h: 200, fondo: lleno(200, 200, [240, 222, 211, 255]), piezas: [{ ...conBase.piezas[0], rol: "FOOTER", rgba: new Uint8ClampedArray(120 * 120 * 4), base: new Uint8ClampedArray(120 * 120 * 4) }] };
+  const tinta60 = punto([58 * 0.6, 41 * 0.6, 50 * 0.6, 153]);
+  const enLegal = (g) => [...armarMedida({ ...legal, textoGamma: g }, k12, 200, 200, { texto: tinta60 }).subarray((100 * 200 + 100) * 4, (100 * 200 + 100) * 4 + 3)];
+  const g145 = [58, 41, 50].map((t, c) => Math.round(255 * Math.pow(0.6 * Math.pow(t / 255, 1.45) + 0.4 * Math.pow([240, 222, 211][c] / 255, 1.45), 1 / 1.45)));
+  eq("texto escrito con la mezcla normal (gamma 1 o sin dato): 60 % de su color + 40 % de lo de abajo", [enLegal(1), enLegal(undefined)], [[131, 113, 114], [131, 113, 114]]);
+  eq(`con gamma 1.45, como Photoshop: más claro (${g145}), cerca de lo que trae la copia aplanada del PSD real (146, 131, 128)`, enLegal(1.45), g145);
 }
 
 // ── v2 · nitidez C: el texto se vuelve a escribir con su tipografía ─────────
@@ -981,10 +994,11 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
   const NARANJA = [250, 120, 20];
   const enBoton = (x, y) => x >= 40 && x < 160 && y >= 30 && y < 70;
   const texto = (extra = {}) => capa("Pídela", [60, 40, 60, 20], (x, y) => [255, 255, 255, tinta(x, y)], { text: { text: "Pídela\rya", transform: [1, 0, 0, 1, 60 + OX, 55], style: { font: { name: "DiDiSans-Pro-Bold" }, fontSize: 16, fillColor: { r: 255, g: 255, b: 255 } }, paragraphStyle: { justification: "center" } }, ...extra });
-  const psdTexto = (cta, op = 1) => writePsdBuffer({
+  // `g`: la gamma con que "Photoshop" mezcló el texto blanco al guardar la copia aplanada (1 = la normal).
+  const psdTexto = (cta, op = 1, g = 1) => writePsdBuffer({
     width: OX + W, height: H,
     children: [{ name: "Mesa", opened: true, artboard: { rect: { top: 0, left: OX, bottom: H, right: OX + W } }, children: [{ name: "Background", opened: true, children: [capa("base", [0, 0, W, H], () => [20, 40, 60])] }, { name: "CTA", opened: true, children: cta }] }],
-    imageData: img(OX + W, H, (X, y) => { const x = X - OX; if (x < 0) return [0, 0, 0]; let c = [20, 40, 60]; if (enBoton(x, y)) c = NARANJA; const a = (tinta(x, y) / 255) * op; return c.map((v) => v * (1 - a) + 255 * a); }),
+    imageData: img(OX + W, H, (X, y) => { const x = X - OX; if (x < 0) return [0, 0, 0]; let c = [20, 40, 60]; if (enBoton(x, y)) c = NARANJA; const a = (tinta(x, y) / 255) * op; return c.map((v) => 255 * Math.pow((1 - a) * Math.pow(v / 255, g) + a, 1 / g)); }),
     imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } },
   });
   const cta = (buf) => despiezar(leerPsd(buf), 0).piezas.find((p) => p.rol === "CTA");
@@ -1008,6 +1022,11 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
   eq("textosDe: texto en «trama»: lleva motivo y la pieza va entera como imagen (sin base)", [p3.textos[0].motivo, p3.base], ["fusión screen", null]);
   const p4 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto(), capa("brillo", [100, 35, 20, 10], () => [255, 255, 255, 30])]));
   eq("textosDe: una capa que no es texto encima de las letras: motivo y sin base (no se sabría qué hay debajo)", [p4.textos[0].motivo, p4.base], ["«brillo» está encima", null]);
+  // La gamma del texto se averigua con las orillas de las letras contra la copia aplanada.
+  const gammaDe = (buf) => despiezar(leerPsd(buf), 0).textoGamma;
+  const conBoton = (extra) => [capa("boton", [40, 30, 120, 40], () => NARANJA), texto(extra)];
+  eq("gamma del texto: copia aplanada mezclada normal → 1; en gamma 1.45 → 1.45; con la capa al 50 %, igual", [gammaDe(psdTexto(conBoton())), gammaDe(psdTexto(conBoton(), 1, 1.45)), gammaDe(psdTexto(conBoton({ opacity: 0.5 }), 0.5, 1.45)), gammaDe(psdTexto(conBoton({ opacity: 0.5 }), 0.5))], [1, 1.45, 1.45, 1]);
+  eq("gamma del texto: sin texto que medir, la del PSD real del equipo (1.45)", gammaDe(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA)])), 1.45);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

@@ -296,10 +296,12 @@ export function fuentesDe(buf: ArrayBuffer): FuenteArchivo[] {
 
 // ── La prueba: ¿lo que escribimos es lo que dibujó Photoshop? ────────────
 
-/** Diferencia aceptada entre nuestro texto y el de Photoshop (fracción de su tinta). Criterio, afinado con el PSD real:
- *  sus textos dan 0.035-0.159; el legal (16 px, casi todo orilla) da 0.218 en su lugar exacto, porque el navegador
- *  dibuja la letra 10-14 % más gruesa que Photoshop, y se queda como imagen. */
-export const TEXTO_DIF_MAX = 0.2;
+/** Diferencia aceptada entre nuestro texto y el de Photoshop (fracción de su tinta). Medido en el PSD real, las dos
+ *  mesas: con su tipografía, 0.035-0.218 (el legal de 16 px es el más alto: casi todo es orilla, y el navegador
+ *  dibuja la letra 10-14 % más gruesa); con OTRO grosor de la misma familia, 0.392 o más. 0.3 queda en medio.
+ *  (Antes 0.2 dejaba el legal como imagen; Pedro pidió escribirlo si sale mejor, y sale: más nítido al ampliarlo y
+ *  al reducirlo, con el mismo tono de Photoshop desde que el texto se mezcla con su gamma.) */
+export const TEXTO_DIF_MAX = 0.3;
 /** Lo más que se acepta corregir de lugar (px del maestro) al alinear: más que esto es que la maqueta está mal. */
 export const TEXTO_CORRER_MAX = 6;
 /** Cuánto puede diferir el ancho de la tinta (fracción): con otra tipografía o un salto de línea distinto, se pasa. */
