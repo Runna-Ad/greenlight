@@ -709,12 +709,14 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
         const dentro = a.puestas.every((q) => q.k > 0 && q.x >= -0.5 && q.y >= -0.5 && q.x + q.w <= W + 0.5 && q.y + q.h <= H + 0.5);
         const sinChoque = !a.avisos.some((v) => v.tipo === "fuera" || v.tipo === "encima");
         const nadaCallado = ma.piezas.every((p, i) => a.puestas.some((q) => q.pieza === i) || a.avisos.some((v) => (v.tipo === "falta" || v.tipo === "quitada") && v.texto.includes(etiquetaPieza(p))));
-        // Con la forma del maestro: el pie puede crecer, pero no MÁS encima de nadie que a escala pareja.
+        // Con la forma del maestro: el pie puede crecer, pero no MÁS encima de nadie que a la escala de las demás
+        // piezas, sobre su mismo pie (el centro de abajo: ahí lo ancla `anclarAlFondo` y desde ahí crece).
         let pieQuieto = true;
         const fi = ma.piezas.findIndex((p) => p.rol === "FOOTER"), f = a.puestas.find((q) => q.pieza === fi);
-        if (a.familia === "igual" && f) {
-          const k0 = Math.min(W / ma.w, H / ma.h), s = ma.piezas[fi].solido;
-          const f0 = { x: (W - ma.w * k0) / 2 + s.x * k0, y: (H - ma.h * k0) / 2 + s.y * k0, w: s.w * k0, h: s.h * k0 };
+        const otra = a.puestas.find((q) => q !== f);
+        if (a.familia === "igual" && f && otra) {
+          const k0 = otra.k, s = ma.piezas[fi].solido;
+          const f0 = { x: f.x + f.w / 2 - (s.w * k0) / 2, y: f.y + f.h - s.h * k0, w: s.w * k0, h: s.h * k0 };
           pieQuieto = a.puestas.every((q) => q === f || solapa(f, q) <= solapa(f0, q) + 0.01);
         }
         const zonaAvisada = nz !== "zona imposible" || a.avisos.some((v) => v.tipo === "zona");
@@ -728,6 +730,39 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
   const z = acomodar(M45, 1280, 720, { zona: { top: 0, right: 0, bottom: 0, left: 200 } });
   ok("zona segura a la izquierda: ninguna pieza entra en ella", z.puestas.every((q) => q.x >= 200) && !z.avisos.some((v) => v.tipo === "zona"));
   ok("con la forma del maestro la zona no mueve nada: se avisa qué pieza cae en ella", acomodar(M916, 1080, 1920, { zona: { top: 300, right: 0, bottom: 0, left: 0 } }).avisos.some((v) => v.tipo === "zona" && v.texto.includes("BRAND")));
+
+  // Otra forma con el acomodo del diseñador (Pedro, 2026-10-14, s33: la tarjeta flotaba sobre el colchón y el legal
+  // le caía encima): cada pieza con su pie sobre el mismo punto del fondo que en el maestro.
+  const alFondo = (ma, a, q) => {
+    const s = ma.piezas[q.pieza].solido;
+    return [(q.x + q.w / 2 - a.fondo.x) / a.fondo.k - (s.x + s.w / 2), (q.y + q.h - a.fondo.y) / a.fondo.k - (s.y + s.h)];
+  };
+  const v916 = acomodar(M45, 1080, 1920);
+  ok("4:5 → 1080×1920 sin canal: cada pieza (menos el legal, que crece) cae sobre su mismo punto del fondo (< 1 px del maestro)", v916.familia === "igual" && v916.puestas.filter((q) => M45.piezas[q.pieza].rol !== "FOOTER").every((q) => alFondo(M45, v916, q).every((d) => Math.abs(d) < 1)), JSON.stringify(v916.puestas.map((q) => alFondo(M45, v916, q).map(Math.round))));
+  ok("y el legal también: su pie sobre su punto (crece hacia arriba desde ahí)", (([dx, dy]) => Math.abs(dy) < 1 && Math.abs(dx) < 1)(alFondo(M45, v916, v916.puestas.find((q) => M45.piezas[q.pieza].rol === "FOOTER"))));
+  const historia = { top: 1920 * 0.14, right: 0, bottom: 1920 * 0.2, left: 0 };
+  const conCanal = acomodar(M45, 1080, 1920, { zona: historia });
+  const heroCanal = conCanal.puestas.find((q) => M45.piezas[q.pieza].rol === "HERO");
+  ok("con la zona de historias: ninguna pieza queda debajo de lo que tapa la app (sin aviso de zona)", conCanal.puestas.every((q) => q.y >= historia.top && q.y + q.h <= 1920 - historia.bottom) && !conCanal.avisos.some((v) => v.tipo === "zona"), JSON.stringify(conCanal.puestas.map((q) => [M45.piezas[q.pieza].rol, Math.round(q.y), Math.round(q.y + q.h)])));
+  // Con historias el contenido no cabe ni junto (1337 px del maestro a ×0.9 contra 1169 libres): se achica.
+  ok("con la zona de historias el contenido no cabe ni junto: se achica todo por igual, sin bajar de 60 %", heroCanal.k < 0.9 && heroCanal.k >= 0.9 * 0.6 && conCanal.puestas.every((q) => q.k === heroCanal.k || M45.piezas[q.pieza].rol === "FOOTER"), String(heroCanal.k));
+  const arriba = acomodar(M45, 1080, 1920, { zona: { top: 250, right: 0, bottom: 0, left: 0 } });
+  const heroArriba = arriba.puestas.find((q) => M45.piezas[q.pieza].rol === "HERO");
+  ok("con una zona sólo arriba (el HERO sí cabe en su lugar): el HERO se queda sobre su punto y lo de arriba se junta hacia él, fuera de la zona", alFondo(M45, arriba, heroArriba).every((d) => Math.abs(d) < 1) && arriba.puestas.every((q) => q.y >= 250) && heroArriba.k === 0.9, JSON.stringify([alFondo(M45, arriba, heroArriba), arriba.puestas.map((q) => Math.round(q.y))]));
+  // Lo que el diseñador dejó separado sigue separado, en todos los maestros raros, medidas «igual» y zonas.
+  const separadas = [];
+  for (const [nombre, ma] of Object.entries(RAROS))
+    for (const [W, H] of MEDIDAS)
+      for (const [nz, zona] of Object.entries(ZONAS)) {
+        const a = acomodar(ma, W, H, { zona: zona(W, H) });
+        if (a.familia !== "igual") continue;
+        for (const q of a.puestas)
+          for (const r of a.puestas) {
+            const sq = ma.piezas[q.pieza].solido, sr = ma.piezas[r.pieza].solido;
+            if (q.pieza < r.pieza && solapa(sq, sr) === 0 && solapa(q, r) > 1) separadas.push(`${nombre} → ${W}x${H} ${nz}: ${etiquetaPieza(ma.piezas[q.pieza])} / ${etiquetaPieza(ma.piezas[r.pieza])}`);
+          }
+      }
+  ok("anclar al fondo nunca encima dos piezas que el diseñador dejó separadas (todos los raros × medidas × zonas)", separadas.length === 0, separadas.slice(0, 4).join(" | "));
   eq("nombre de entrega: la medida de la mesa se cambia por la nueva; si no trae medida, se agrega", [nombreSalida(M45, 1200, 627), nombreSalida(M916, 320, 50), nombreSalida({ ...M45, nombre: "ANUNCIO" }, 600, 500)], ["APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "APGIANTCARDUGC_320x50_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "ANUNCIO_600x500"]);
   eq("nombre con una promo '2x1', o con la medida al principio / al final: se cambia la ficha que tiene la forma de la mesa", [nombreSalida({ nombre: "BUENFIN_2x1_9x16_FB", w: 1080, h: 1920 }, 1200, 627), nombreSalida({ nombre: "4x5_AD", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_4X5", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_", w: 1200, h: 1500 }, 600, 500)], ["BUENFIN_2x1_1200x627_FB", "600x500_AD", "AD_600x500", "AD_600x500"]);
 

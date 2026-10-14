@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 /** La IA tiene 150 s de tope (proveedor.ts). */
 export const maxDuration = 180;
 
-/** Llamadas por persona cada 10 min: cada una cuesta (≈ US$0.035). */
+/** Llamadas por persona cada 10 min: cada una cuesta (≈ US$0.041, `COSTO_COPIA_IA_USD`). */
 const LLAMADAS_MAX = 10;
 /** Lo que se tolera entre la proporción del recorte y la que se pide (el recorte se redondea a px enteros). */
 const PROPORCION_TOLERANCIA = 0.03;

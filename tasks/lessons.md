@@ -1040,3 +1040,8 @@ TAGS: #formatos #diagnostico #medir-antes-de-decir #contraste #alcance
 ROOT CAUSE: supuse que la hora del evento es la del dedo; es la de cuando la página pudo atenderlo.
 RULE: para un botón que cambia de acción en su lugar, ignorar `event.detail > 1` (el segundo clic de un doble clic lo marca el navegador) y dejar el candado de tiempo sólo para Enter sostenido. Probar siempre con un doble clic real en el navegador.
 TAGS: #ui #doble-clic #eventos #formatos #probar-en-navegador
+
+[2026-10-14] LESSON (Formatos: una medida de otra forma tiene que respetar el ESCENARIO, no sólo el lienzo): en las verticales (9:16 desde un 4:5) las piezas se achicaban para caber a lo ancho (×0.90) y el fondo se agrandaba para llenar el alto (×1.28), y se centraban por separado. Cada una "cabía", ningún test lo veía, pero la tarjeta flotaba sobre el colchón y el legal le caía encima: la relación pieza-escenario del diseñador se perdía. Lo vio Pedro en la preview.
+ROOT CAUSE: medí el acomodo contra el lienzo (dentro, sin encimarse, letra legible) y nunca contra el fondo; en un anuncio con escenario (colchón, piso, mesa) lo que importa es dónde cae cada pieza SOBRE el fondo.
+RULE: en un acomodo que conserva el del diseñador, medir el desfase de cada pieza sobre el fondo (pie de la pieza → punto del fondo, en px del maestro) en todas las medidas, y probar que sea 0 donde se puede. Y al resolver con restricciones (zona del canal), fijar primero la prioridad (la pieza que "se para" en el escenario no se mueve) y probarla con un caso donde sí cabe: el primer intento maximizaba la separación y movía la tarjeta.
+TAGS: #formatos #acomodo #escenario #verticales #zona-segura #medir-antes-de-decir

@@ -43,7 +43,8 @@ export type Zona = { top: number; right: number; bottom: number; left: number };
 export type OpcionesAcomodo = {
   /** De qué lado va el HERO donde hay columnas (`sePuedeVoltear`); en lo demás no cambia nada. El equipo lo pone a la derecha. */
   heroLado?: Lado;
-  /** Zona segura. Las piezas que acomoda la herramienta la evitan; las que dejó el diseñador, si caen en ella, se avisan. */
+  /** Zona segura. Las piezas que acomoda la herramienta la evitan (también en otra forma con el acomodo del diseñador:
+   *  `anclarAlFondo`); en la forma del maestro el diseñador manda y lo que caiga en ella se avisa. */
   zona?: Zona;
 };
 
@@ -56,6 +57,8 @@ export const PARECIDO_MAX = 0.25;
 export const PIE_ESCALA_MAX = 1.15;
 /** Una zona segura que se come más de esto de un lado de la medida no es una zona: es un dato mal puesto. */
 const ZONA_MAX = 0.75;
+/** Para salir de la zona del canal, las piezas se achican hasta esto de su tamaño; si ni así, se dejan y se avisa. */
+const ZONA_ACHICA_MAX = 0.6;
 /** Donde hay columnas, ninguna pieza de texto se agranda más que esto respecto al HERO (para que no se coma el anuncio). */
 const TEXTO_SOBRE_HERO_MAX = 1.8;
 /**
@@ -81,7 +84,8 @@ export function elegirMaestro(maestros: { w: number; h: number }[], W: number, H
 export function familiaDe(W: number, H: number, ma: { w: number; h: number }): Familia {
   if (razon(W, H, ma) < PARECIDO_MAX) return "igual";
   const a = W / H;
-  // Más alta que ancha y lejos de su maestro: no hay acomodo propio todavía, se conserva el del maestro.
+  // Más alta que ancha y lejos de su maestro: no hay acomodo propio todavía, se conserva el del maestro (cada pieza
+  // sobre su mismo lugar del fondo: `anclarAlFondo`).
   return a >= 4 ? "banner" : a >= 2.2 ? "ancho" : a >= 1.5 ? "horizontal" : a >= 1 ? "display" : "igual";
 }
 
@@ -136,11 +140,10 @@ export function zonaCanal(canal: Canal | null, W: number, H: number): Zona | nul
 }
 
 /**
- * Una medida completa: de qué mesa sale y su acomodo. La zona del canal NO entra al acomodo: un 9:16 siempre
- * conserva el acomodo del diseñador (no hay familia vertical propia), y lo que él colocó no se marca. El día que
- * la herramienta acomode verticales por su cuenta, ahí es donde la zona debe mandar.
+ * Una medida completa: de qué mesa sale y su acomodo. Con zona (la del canal), en otra forma las piezas la evitan;
+ * en la forma del maestro no se mueve nada y lo que caiga en ella se avisa.
  */
-export function acomodarMedida(maestros: MaestroCaja[], W: number, H: number, op: { heroLado?: Lado } = {}): { maestro: number; acomodo: Acomodo } {
+export function acomodarMedida(maestros: MaestroCaja[], W: number, H: number, op: OpcionesAcomodo = {}): { maestro: number; acomodo: Acomodo } {
   const maestro = elegirMaestro(maestros, W, H);
   if (maestro < 0) throw new Error("acomodarMedida: sin maestros");
   return { maestro, acomodo: acomodar(maestros[maestro], W, H, op) };
@@ -173,6 +176,64 @@ function parada(s: Suelta | undefined, r: Rect): Puesta[] {
   const k = Math.min((r.x1 - r.x0) / s.p.solido.w, (r.y1 - r.y0) / s.p.solido.h);
   const w = s.p.solido.w * k, h = s.p.solido.h * k;
   return [{ pieza: s.i, k, x: r.x0 + (r.x1 - r.x0 - w) / 2, y: r.y1 - h, w, h }];
+}
+
+/**
+ * El acomodo del diseñador en otra forma (un 9:16 desde un 4:5). Las piezas se achican para caber enteras y el fondo
+ * se agranda para llenar la medida: si se movieran juntas, el escenario se correría debajo de ellas (Pedro,
+ * 2026-10-14: la tarjeta flotando, el botón y el legal encima del colchón; "they should look like the 1200x1500").
+ * Por eso cada pieza va con su pie (el centro de abajo) sobre el MISMO punto del fondo que en el maestro.
+ * Si así no caben en `r` (la medida, o lo que deja libre la zona del canal), en este orden:
+ *   1. se juntan hacia `ref` (el pie del HERO), que se queda sobre su punto, hasta como las dejó el diseñador;
+ *   2. si el HERO no cabe en su punto, el grupo se corre (y se junta lo necesario);
+ *   3. si ni juntas caben, se achican todas por igual hasta ZONA_ACHICA_MAX;
+ *   4. si ni así, el acomodo del diseñador centrado, y lo que caiga en la zona se avisa.
+ * El fondo se corre con `ref` lo que le sobra (siempre cubre la medida).
+ */
+function anclarAlFondo(ps: Suelta[], k0: number, kb: number, r: Rect, ref: { x: number; y: number }, ma: { w: number; h: number }, W: number, H: number): { puestas: Puesta[]; fondo: Acomodo["fondo"] } {
+  const d = ps.map(({ p }) => ({ dx: p.solido.x + p.solido.w / 2 - ref.x, dy: p.solido.y + p.solido.h - ref.y, w: p.solido.w, h: p.solido.h }));
+  const cruce = (a: Rect | null, b: Rect): Rect | null => {
+    if (!a) return null;
+    const c = { x0: Math.max(a.x0, b.x0), x1: Math.min(a.x1, b.x1), y0: Math.max(a.y0, b.y0), y1: Math.min(a.y1, b.y1) };
+    return c.x0 <= c.x1 + 1e-6 && c.y0 <= c.y1 + 1e-6 ? c : null;
+  };
+  // Dónde puede caer `ref` en la medida para que todas quepan en `r` con esta separación (s) y escala (k); null si en ningún lado.
+  const rango = (s: number, k: number) => cruce(
+    d.reduce<Rect>((a, v) => ({
+      x0: Math.max(a.x0, r.x0 - s * v.dx + (k * v.w) / 2),
+      x1: Math.min(a.x1, r.x1 - s * v.dx - (k * v.w) / 2),
+      y0: Math.max(a.y0, r.y0 - s * v.dy + k * v.h),
+      y1: Math.min(a.y1, r.y1 - s * v.dy),
+    }), { x0: -Infinity, x1: Infinity, y0: -Infinity, y1: Infinity }),
+    { x0: -Infinity, x1: Infinity, y0: -Infinity, y1: Infinity },
+  );
+  // Donde `ref` sigue sobre su punto: el fondo se corre lo que le sobra y sigue cubriendo la medida.
+  const enSuPunto: Rect = { x0: W - ma.w * kb + kb * ref.x, x1: kb * ref.x, y0: H - ma.h * kb + kb * ref.y, y1: kb * ref.y };
+  const fijo = (t: number) => cruce(rango(t, k0), enSuPunto);
+  // El valor más grande entre lo y hi que todavía cumple (lo cumple, hi no).
+  const mayor = (cumple: (t: number) => boolean, lo: number, hi: number) => {
+    for (let n = 0; n < 30; n++) {
+      const t = (lo + hi) / 2;
+      if (cumple(t)) lo = t;
+      else hi = t;
+    }
+    return lo;
+  };
+  const kMin = k0 * ZONA_ACHICA_MAX;
+  let s = kb, k = k0, g = fijo(kb);
+  if (!g && fijo(k0)) g = fijo((s = mayor((t) => !!fijo(t), k0, kb)));
+  else if (!g && rango(k0, k0)) g = rango((s = mayor((t) => !!rango(t, k0), k0, kb)), k0);
+  else if (!g && rango(kMin, kMin)) g = rango((s = k = mayor((t) => !!rango(t, t), kMin, k0)), k);
+  else if (!g) s = k0;
+  // `ref` sobre el fondo centrado (o, sin lugar posible, donde lo deja el acomodo del diseñador centrado), lo más cerca que se pueda.
+  const ax = g ? (W - ma.w * kb) / 2 + kb * ref.x : (W - ma.w * k0) / 2 + k0 * ref.x;
+  const ay = g ? (H - ma.h * kb) / 2 + kb * ref.y : (H - ma.h * k0) / 2 + k0 * ref.y;
+  const X = g ? Math.max(g.x0, Math.min(g.x1, ax)) : ax, Y = g ? Math.max(g.y0, Math.min(g.y1, ay)) : ay;
+  const puestas = ps.map(({ i, p }, n) => {
+    const w = p.solido.w * k, h = p.solido.h * k;
+    return { pieza: i, k, x: X + s * d[n].dx - w / 2, y: Y + s * d[n].dy - h, w, h };
+  });
+  return { puestas, fondo: { k: kb, x: Math.min(0, Math.max(W - ma.w * kb, X - kb * ref.x)), y: Math.min(0, Math.max(H - ma.h * kb, Y - kb * ref.y)) } };
 }
 
 /** Espejo horizontal de un rectángulo dentro de [a0, a1]. */
@@ -234,11 +295,23 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
   const area: Rect = { x0: zona.left + m, x1: W - zona.right - m, y0: zona.top + m, y1: H - zona.bottom - Math.round(m * 0.6) };
   const pieF = de("FOOTER");
   let puestas: Puesta[] = [];
+  const kb = Math.max(W / ma.w, H / ma.h);
+  /** En «igual» el fondo se decide antes que las piezas (ellas se anclan a él); en lo demás, después (sigue al HERO). */
+  let fondoAntes: Acomodo["fondo"] | null = null;
 
   if (familia === "igual") {
-    // El acomodo del diseñador, a escala pareja y centrado.
-    const k = Math.min(W / ma.w, H / ma.h), ox = (W - ma.w * k) / 2, oy = (H - ma.h * k) / 2;
-    puestas = ma.piezas.flatMap((p, i) => (valida(p) && !quitar.has(i) ? [{ pieza: i, k, x: ox + p.solido.x * k, y: oy + p.solido.y * k, w: p.solido.w * k, h: p.solido.h * k }] : []));
+    // El acomodo del diseñador a escala pareja, cada pieza sobre su lugar del fondo (`anclarAlFondo`).
+    const k = Math.min(W / ma.w, H / ma.h);
+    const sueltas = ma.piezas.flatMap((p, i) => (valida(p) && !quitar.has(i) ? [{ i, p }] : []));
+    const heroS = de("HERO");
+    const ref = heroS
+      ? { x: heroS.p.solido.x + heroS.p.solido.w / 2, y: heroS.p.solido.y + heroS.p.solido.h }
+      : { x: ma.w / 2, y: ma.h / 2 };
+    // La zona del canal mueve piezas sólo en otra forma; en la del maestro el diseñador manda (se avisa abajo).
+    const otraForma = razon(W, H, ma) >= PARECIDO_MAX;
+    const lado = (z: number) => (otraForma && z > 0 ? z + m : 0);
+    const libre: Rect = { x0: lado(zona.left), x1: W - lado(zona.right), y0: lado(zona.top), y1: H - lado(zona.bottom) };
+    ({ puestas, fondo: fondoAntes } = anclarAlFondo(sueltas, k, kb, libre, ref, ma, W, H));
     // El pie recupera lo que la reducción le quitó: crece sobre su mismo borde de abajo y su mismo centro, hasta el
     // ancho útil, y nunca más grande de como lo dejó el diseñador (a la medida del maestro no se mueve nada: el
     // original es intocable). Tampoco se arrima a otra pieza: se prueba cada tamaño contra TODAS, no sólo la de arriba.
@@ -325,18 +398,17 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
   }
 
   // Fondo: llena la medida; el punto del piso bajo el HERO se queda bajo el HERO.
-  const kb = Math.max(W / ma.w, H / ma.h);
   const heroS = de("HERO"), heroP = heroS && puestas.find((q) => q.pieza === heroS.i);
   let fx = (W - ma.w * kb) / 2, fy = (H - ma.h * kb) / 2;
   if (heroS && heroP) {
     fx = heroP.x + heroP.w / 2 - (heroS.p.solido.x + heroS.p.solido.w / 2) * kb;
     fy = heroP.y + heroP.h - (heroS.p.solido.y + heroS.p.solido.h) * kb;
   }
-  const fondo = { k: kb, x: Math.min(0, Math.max(W - ma.w * kb, fx)), y: Math.min(0, Math.max(H - ma.h * kb, fy)) };
+  const fondo = fondoAntes ?? { k: kb, x: Math.min(0, Math.max(W - ma.w * kb, fx)), y: Math.min(0, Math.max(H - ma.h * kb, fy)) };
 
   // ── Lo que revisa la guía de diseño (sección 4), lo que se puede medir ──
   const nom = (q: Puesta) => etiquetaPieza(ma.piezas[q.pieza]);
-  if (familia === "igual" && razon(W, H, ma) >= PARECIDO_MAX) avisos.push({ tipo: "forma", texto: "Esta proporción todavía no tiene acomodo propio: se usó el del maestro, más chico. Revisar." });
+  if (familia === "igual" && razon(W, H, ma) >= PARECIDO_MAX) avisos.push({ tipo: "forma", texto: "Esta proporción todavía no tiene acomodo propio: se usó el del maestro, más chico, con cada pieza sobre su mismo lugar del fondo. Revisar." });
   ma.piezas.forEach((p, i) => {
     if (puestas.some((q) => q.pieza === i)) return;
     const n = etiquetaPieza(p);

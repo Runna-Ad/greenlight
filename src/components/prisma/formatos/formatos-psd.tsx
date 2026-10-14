@@ -11,9 +11,9 @@ import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
 import { CANALES, MEDIDAS_EQUIPO, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Lado } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type CopiaEnFondo } from "@/lib/prisma/formatos/revisar";
-import { DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
+import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
-import { COSTO_IA_USD, LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
+import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
 import { LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
@@ -244,7 +244,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
 }) {
   const { w, h } = medida;
   const k = clave(medida);
-  const { maestro, acomodo } = useMemo(() => revisarMedida(maestros, w, h, { heroLado: lado }), [maestros, w, h, lado]);
+  // La zona del canal también acomoda (en 9:16 de otra forma las piezas la evitan): la misma que usa el resumen.
+  const { maestro, acomodo } = useMemo(() => revisarMedida(maestros, w, h, { heroLado: lado, zona: zonaCanal(canal, w, h) }), [maestros, w, h, lado, canal]);
   const guia = zonaCanal(canal, w, h);
   const nombreCanal = canal ? CANALES[canal].nombre : "";
   const ma = maestros[maestro];
@@ -1026,8 +1027,8 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   // El mismo acomodo y los mismos avisos que cada tarjeta (`revisarMedida` guarda lo ya hecho): aquí sirven para el
   // resumen, el legal y los nombres del ZIP.
   const filas = useMemo(
-    () => (maestrosVista.length ? medidas.map((m) => ({ m, ...revisarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)] }) })) : []),
-    [maestrosVista, medidas, lados],
+    () => (maestrosVista.length ? medidas.map((m) => ({ m, ...revisarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h) }) })) : []),
+    [maestrosVista, medidas, lados, canal],
   );
   const porRevisar = filas.filter((f) => f.acomodo.avisos.length).length;
   const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia));
@@ -1328,7 +1329,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                       // En cuántas medidas se ve (antes de quitarla: dos veces; después: el relleno). Los mismos avisos de cada tarjeta.
                       const n = filas.filter((f) => f.maestro === c.i && f.acomodo.avisos.some((a) => a.tipo === "copia" || a.tipo === "retoque")).length;
                       const q = c.quitada;
-                      const estimado = `≈ ${usd(COSTO_IA_USD["1K"], 3)}`;
+                      const estimado = `≈ ${usd(COSTO_COPIA_IA_USD, 3)}`;
                       const v = {
                         p: c.nombre,
                         m: deMesa(c.m),

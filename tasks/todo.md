@@ -76,8 +76,8 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 - Siguen abiertas: letra mínima aceptable del legal (hoy 10 px provisional) · 3-5 PSD más.
 
 ### Plan B — puerta PSD (2026-10-13)
-**Next Step (2026-10-14, noche):** B12 («Rellenar con IA») construido, revisado y en la preview. Falta UNA llamada
-real con s33 en la preview (Pedro carga el PSD, Claude aprieta el botón): leer el costo real y ver la unión.
+**Next Step (2026-10-14, noche):** B13 construido (opción 1 + zona del canal) y en la preview: que Pedro lo vea con
+s33. Pendiente su respuesta: en Stories/Reels la franja de abajo tapa el colchón y la tarjeta vuelve a flotar.
 **Antes:** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
 subir. La prueba de punta a punta de tipografías espera el "ship it" de 0079 + bucket. 320×50 se queda igual
 (Pedro). Después: que pruebe la preview con su PSD y las DiDi; B4.
@@ -454,6 +454,29 @@ largo: estacionado por él.
       · NO arreglado (a propósito): errores de la ruta sólo en español · el freno vive en memoria por instancia: ANTES
         de producción, registro por llamada en la base con tope diario · `npm audit` no corrido · nitidez en maestros
         grandes (recorte de 1536 px estirado) no medida: se ve en la prueba real.
+      · Prueba real en la preview (1b9bbbc, s33, 2026-10-14): US$0.041 (el botón estima ≈ 0.035: subir la estimación);
+        en 1080×1920 a tamaño real no se ve la tarjeta repetida ni la unión; sin aviso de deriva.
+- [x] B13. Verticales: la tarjeta flota, el botón cae sobre el colchón y el legal encima del colchón (Pedro, 2026-10-14,
+      con capturas de 1080×1920 y 720×1600: "they should look like the 1200x1500"). CAUSA medida: en «igual» las piezas
+      van a ×0.90 (caben a lo ancho) y el fondo a ×1.28 (llena el alto), y como el fondo llena el alto exacto no se
+      puede mover hacia arriba ni abajo. Desfase sobre el fondo (px del maestro, pie de cada pieza): 1080×1920 y
+      720×1280 botón −156, legal −200, tarjeta −114, logos +167; 720×1600 −230 / −294 / −168 / +247; 768×1024
+      −33 / −42 / −24 / +35. En las 5 horizontales el legal también queda 165-201 px arriba de su lugar (medido, sin
+      ver los renders). Prototipos (scratchpad/anclar.mjs): A = cada pieza con su pie sobre su mismo punto del fondo
+      (se ve como el maestro; los logos suben a ~7 % del borde de arriba y el legal a ~5 % del de abajo, donde
+      Stories/TikTok tapan); E gratis (espejo abajo) = sale un colchón de cabeza: descartado; E con IA no probado.
+      · Construido (Pedro: "yes build option 1 with the safe zone"): `anclarAlFondo` en acomodo.ts para «igual».
+        Cada pieza con su pie sobre su punto del fondo; el fondo se corre con el grupo donde le sobra. Con canal
+        (sólo en otra forma; en la del maestro el diseñador manda y se avisa): 1) se juntan hacia el pie del HERO,
+        que no se mueve; 2) si el HERO no cabe en su punto, el grupo se corre; 3) se achican todas por igual hasta
+        60 %; 4) si ni así, el acomodo de antes y aviso de zona. La zona entra en `revisarMedida` (tarjeta y
+        resumen) y en su caché.
+      · Medido con s33: sin canal, 1080×1920 / 720×1280 / 720×1600 / 768×1024 con tarjeta sobre el colchón, botón
+        enfrente y legal en las nubes. TikTok: igual, el grupo un poco a la izquierda. Stories (abajo 20 %) y Reels
+        (abajo 35 %): el colchón queda bajo la franja de la app; las piezas se achican (×0.87 / ×0.65) y la tarjeta
+        flota sobre el cielo. APGIANT: sin cambios donde manda su mesa 9:16. Navegador (localhost): elegir canal
+        cambia la 9:16 y la ayuda nueva se ve. test-formatos 286/0 · npm test 81/0 y 44/0 · tsc y eslint limpios.
+      · También: el botón de IA estima US$0.041 (lo medido), `COSTO_COPIA_IA_USD`.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

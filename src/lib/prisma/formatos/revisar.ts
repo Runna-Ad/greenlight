@@ -12,7 +12,7 @@
  * Una sola entrada, `revisarMedida`, para la tarjeta de cada medida y para el resumen de la pantalla: los dos cuentan
  * los mismos avisos.
  */
-import { acomodar, elegirMaestro, type Acomodo, type AvisoAcomodo, type Lado, type MaestroCaja } from "./acomodo.ts";
+import { acomodar, elegirMaestro, type Acomodo, type AvisoAcomodo, type Lado, type MaestroCaja, type Zona } from "./acomodo.ts";
 import type { Caja, Rol } from "./psd.ts";
 import { etiquetaPieza } from "./roles.ts";
 
@@ -155,7 +155,7 @@ export function avisosDePixeles(ma: MaestroRevisable, a: Acomodo, W: number, H: 
 const hechas = new WeakMap<MaestroRevisable, Map<string, { maestro: number; acomodo: Acomodo }>>();
 
 /** Una medida completa: de qué maestro sale, su acomodo y TODOS sus avisos (los del acomodo y los de píxeles). */
-export function revisarMedida(maestros: readonly MaestroRevisable[], W: number, H: number, op: { heroLado?: Lado } = {}): { maestro: number; acomodo: Acomodo } {
+export function revisarMedida(maestros: readonly MaestroRevisable[], W: number, H: number, op: { heroLado?: Lado; zona?: Zona | null } = {}): { maestro: number; acomodo: Acomodo } {
   const maestro = elegirMaestro([...maestros], W, H);
   if (maestro < 0) throw new Error("revisarMedida: sin maestros");
   const ma = maestros[maestro];
@@ -163,10 +163,12 @@ export function revisarMedida(maestros: readonly MaestroRevisable[], W: number, 
   const lado: Lado = op.heroLado === "izquierda" ? "izquierda" : "derecha";
   let porMedida = hechas.get(ma);
   if (!porMedida) hechas.set(ma, (porMedida = new Map()));
-  const clave = `${maestro}:${W}x${H}:${lado}`;
+  // La zona del canal mueve piezas (acomodo.ts): entra en la clave, o al cambiar de canal se queda el acomodo viejo.
+  const z = op.zona ?? undefined;
+  const clave = `${maestro}:${W}x${H}:${lado}:${z ? `${z.top},${z.right},${z.bottom},${z.left}` : "-"}`;
   const ya = porMedida.get(clave);
   if (ya) return ya;
-  const acomodo = acomodar(ma, W, H, { heroLado: lado });
+  const acomodo = acomodar(ma, W, H, { heroLado: lado, zona: z });
   // Los avisos de píxeles son una ayuda: si algo raro del PSD los rompe, la medida sale igual, sin ellos.
   let extra: AvisoAcomodo[] = [];
   try {

@@ -271,6 +271,9 @@ export const PIEZA_IA_MAX_BYTES = 1_000_000;
 export const CUERPO_IA_MAX_BYTES = 4_400_000;
 /** Error medio (0-255) en el aire del recorte, donde la IA no debía cambiar nada. Arriba = movió el fondo: revisar. */
 export const DERIVA_IA_REVISAR = 18;
+/** Lo que costó una llamada real (preview, s33, 2026-10-14: imagen 1K de salida + recorte y pieza de entrada). Se
+ *  enseña como estimado en el botón; lo cobrado de verdad llega en `x-costo-usd`. */
+export const COSTO_COPIA_IA_USD = 0.041;
 
 /** El recorte del maestro que se le manda a la IA: la caja de la copia con aire, en una proporción que la IA acepta
  *  (la más parecida), sin salir del maestro. null si no cabe ninguna (la caja casi del tamaño del maestro). */

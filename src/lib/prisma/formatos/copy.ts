@@ -292,8 +292,8 @@ export const FP = {
   zonaCanal: t("Revisar con el canal", "Check against channel"),
   zonaNinguno: t("Ninguno", "None"),
   zonaAyuda: t(
-    "Elige dónde va a salir y se marca lo que esa app tapa en las medidas 9:16. Las cifras son aproximadas. Sólo se ve aquí; no va en la descarga.",
-    "Pick where it will run and the 9:16 sizes show what that app covers. The figures are approximate. It only shows here; it is not in the download.",
+    "Elige dónde va a salir: en las medidas 9:16 se marca lo que esa app tapa y, si la medida no tiene la forma de tu mesa, las piezas se mueven para que no queden debajo. Las cifras son aproximadas. La franja marcada no va en la descarga.",
+    "Pick where it will run: the 9:16 sizes show what that app covers and, if a size doesn't have your artboard's shape, the pieces move so they aren't under it. The figures are approximate. The marked strip is not in the download.",
   ),
   zonaSin916: t("Ninguna medida de la lista es 9:16: no hay nada que marcar.", "No size in the list is 9:16: nothing to mark."),
   zonaMarcadas: t("{c}: marcado en {n} medidas 9:16.", "{c}: marked on {n} 9:16 sizes."),
