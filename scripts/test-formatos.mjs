@@ -20,7 +20,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { acomodar, acomodarMedida, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO } from "../src/lib/prisma/formatos/listo.ts";
-import { buscarGemela, quitarGemela } from "../src/lib/prisma/formatos/gemela.ts";
+import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida } from "../src/lib/prisma/formatos/revisar.ts";
 import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
 import { specVacio } from "../src/lib/prisma/spec.ts";
@@ -1203,6 +1203,33 @@ console.log("\n▶ v2 · copia del HERO pintada en el fondo (gemela.ts) y avisos
   };
   const [rbAntes, lumAntes] = anillo(fr), [rbDespues, lumDespues] = lr ? anillo(lr) : [NaN, NaN];
   ok("gemela: el halo naranja alrededor de la copia pierde su tinte (rojo − azul baja a menos de la mitad) y el brillo se queda (±3)", !!gr && rbDespues < rbAntes / 2 && Math.abs(lumDespues - lumAntes) <= 3, `rb ${rbAntes.toFixed(1)} → ${rbDespues.toFixed(1)}, brillo ${lumAntes.toFixed(1)} → ${lumDespues.toFixed(1)}`);
+
+  // Respaldo con IA: el recorte que se manda y lo que se pega de vuelta.
+  const rc = recorteParaIA(ma, g);
+  const [rw, rh] = (rc?.aspect ?? "0:1").split(":").map(Number);
+  ok(
+    "IA: el recorte contiene la caja de la copia, no sale del maestro y tiene una proporción que la IA acepta (±3 %)",
+    !!rc && rc.caja.x <= g.caja.x && rc.caja.y <= g.caja.y && rc.caja.x + rc.caja.w >= g.caja.x + g.caja.w && rc.caja.y + rc.caja.h >= g.caja.y + g.caja.h && rc.caja.x >= 0 && rc.caja.y >= 0 && rc.caja.x + rc.caja.w <= L && rc.caja.y + rc.caja.h <= L && Math.abs(rc.caja.w / rc.caja.h / (rw / rh) - 1) <= 0.03,
+    JSON.stringify(rc),
+  );
+  eq(
+    "IA: si ninguna proporción de la IA cabe en el maestro con la copia entera, no se manda nada (100×30 en un maestro de 100×31)",
+    recorteParaIA({ w: 100, h: 31 }, { pieza: 0, parecido: 1, caja: { x: 0, y: 0, w: 100, h: 30 } }),
+    null,
+  );
+  // Lo que "devuelve la IA": todo verde. Dentro del hueco va verde; lejos de la copia, el fondo original intacto.
+  const verde = new Uint8ClampedArray(rc.caja.w * rc.caja.h * 4);
+  for (let i = 0; i < rc.caja.w * rc.caja.h; i++) verde.set([0, 200, 0, 255], i * 4);
+  const pr = pegarRellenoIA(ma, g, rc.caja, verde);
+  const px = (buf, x, y) => [...buf.slice((y * L + x) * 4, (y * L + x) * 4 + 3)];
+  let fueraIgual = true;
+  for (let y = 0; y < L; y++)
+    for (let x = 0; x < L; x++) {
+      const enCaja = x >= g.caja.x && x < g.caja.x + g.caja.w && y >= g.caja.y && y < g.caja.y + g.caja.h;
+      if (!enCaja && px(pr.fondo, x, y).some((v, c) => v !== fondo[(y * L + x) * 4 + c])) fueraIgual = false;
+    }
+  ok("IA: en el centro del hueco va lo de la IA; fuera de la caja de la copia el fondo queda idéntico (píxel por píxel)", JSON.stringify(px(pr.fondo, caja.x + 25, caja.y + 35)) === "[0,200,0]" && fueraIgual);
+  ok("IA: la deriva mide el aire del recorte: con una IA que lo cambió todo, alta; con una que no tocó el aire, 0", pr.deriva > 18 && pegarRellenoIA(ma, g, rc.caja, (() => { const o = new Uint8ClampedArray(rc.caja.w * rc.caja.h * 4); for (let y = 0; y < rc.caja.h; y++) o.set(fondo.subarray(((rc.caja.y + y) * L + rc.caja.x) * 4, ((rc.caja.y + y) * L + rc.caja.x + rc.caja.w) * 4), y * rc.caja.w * 4); return o; })()).deriva === 0, String(pr.deriva));
 
   // Contraste: fondo azul a la izquierda, blanco a la derecha; un titular blanco que en el original va sobre el azul.
   const C = 400, fc = new Uint8ClampedArray(C * C * 4);

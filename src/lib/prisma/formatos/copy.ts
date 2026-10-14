@@ -242,6 +242,26 @@ export const FP = {
   copiaQuitadaAviso: t("«{p}» se quitó del fondo{m} y las medidas se rehicieron.", "“{p}” was removed from the background{m} and the sizes were redone."),
   copiaDevueltaAviso: t("«{p}» volvió al fondo{m}.", "“{p}” is back in the background{m}."),
   copiaFallo: t("No se pudo quitar del fondo. Reintenta.", "Couldn't remove it from the background. Try again."),
+  copiaIa: t("Rellenar con IA", "Fill with AI"),
+  copiaIaAyuda: t(
+    "¿El relleno gratis no quedó bien? La IA vuelve a borrar «{p}» y sólo cambia ese hueco. Cuesta {c} cada vez.",
+    "Free fill didn't look right? AI erases “{p}” again and only changes that gap. It costs {c} each time.",
+  ),
+  copiaIaTrabajando: t("Rellenando con IA…", "Filling with AI…"),
+  copiaQuitadaIA: t(
+    "La IA borró «{p}» del fondo{m} (costó {c}). Revisa las {n} medidas marcadas «Fondo retocado».",
+    "AI erased “{p}” from the background{m} (it cost {c}). Check the {n} sizes marked “Fondo retocado” (background retouched).",
+  ),
+  copiaIaDeriva: t(
+    "La IA cambió un poco lo de alrededor del hueco: revisa que no se note la unión.",
+    "AI changed the area around the gap a little: check that the seam doesn't show.",
+  ),
+  copiaIaAviso: t("La IA borró «{p}» del fondo{m} y las medidas se rehicieron.", "AI erased “{p}” from the background{m} and the sizes were redone."),
+  copiaIaFallo: t("La IA no pudo borrar la copia. Reintenta o quédate con el relleno gratis.", "AI couldn't erase the copy. Try again or keep the free fill."),
+  copiaIaNoCabe: t(
+    "La copia ocupa casi toda la mesa: la IA no tiene alrededor de dónde rellenar.",
+    "The copy fills almost the whole artboard: AI has nothing around it to fill from.",
+  ),
   textoGreenlightNo: t(
     "No se pudieron traer las tipografías guardadas en Greenlight; puedes arrastrarlas aquí.",
     "The fonts saved in Greenlight couldn't be brought in; you can drag them here.",

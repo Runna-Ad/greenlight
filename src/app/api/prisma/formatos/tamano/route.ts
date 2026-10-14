@@ -4,7 +4,7 @@ import { ErrorConCosto, componer } from "@/lib/prisma/formatos/componer";
 import { ErrorIA, expandidor } from "@/lib/prisma/formatos/proveedor";
 import type { PrismaFormatosSalidaRow } from "@/lib/database.types";
 import { gate, saturado, FRENO, UUID } from "@/app/(app)/prisma/comun";
-import { BUCKET_FORMATOS, PROCESANDO_MUERTO_MS, bajarFuente, firmarFormatos, loteConPermiso, salidaVista } from "@/app/(app)/prisma/formatos-comun";
+import { BUCKET_FORMATOS, PROCESANDO_MUERTO_MS, bajarFuente, firmarFormatos, loteConPermiso, mismoOrigen, salidaVista } from "@/app/(app)/prisma/formatos-comun";
 
 /**
  * HÜE Prisma › Formatos — procesa UN tamaño: escalar, rellenar, pegar duro el original, verificar, subir PNG
@@ -22,18 +22,6 @@ export const maxDuration = 210;
 const TAMANOS_MAX = 150;
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
-
-/** Las rutas no traen el chequeo de origen de las server actions: sólo se acepta la propia página. */
-function mismoOrigen(req: Request): boolean {
-  const origen = req.headers.get("origin");
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
-  if (!origen || !host) return false;
-  try {
-    return new URL(origen).host === host;
-  } catch {
-    return false;
-  }
-}
 
 export async function POST(req: Request) {
   if (!mismoOrigen(req)) return json({ ok: false, error: "Origen no permitido." }, 403);

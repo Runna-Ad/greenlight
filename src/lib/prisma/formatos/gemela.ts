@@ -8,6 +8,7 @@
  * rellenando el hueco con lo que tiene a los lados, sin IA (Pedro, 2026-10-14: "detects, warns and suggest fix. if
  * they approve then option 1 kicks in").
  */
+import { RATIOS_IA } from "./geometria.ts";
 import type { Caja, Rol } from "./psd.ts";
 
 type PiezaPixeles = { rol: Rol | null; caja: Caja; rgba: Uint8ClampedArray };
@@ -123,9 +124,8 @@ function ensanchar(m: Uint8Array, w: number, h: number, r: number): Uint8Array {
  *    lo mete al hueco. Se le quita sólo ese tinte, comparando con el color de más lejos; el brillo se queda igual, así
  *    que la textura no cambia.
  */
-export function quitarGemela(ma: ConFondo, g: Gemela): Uint8ClampedArray {
-  const p = ma.piezas[g.pieza];
-  if (!p || !completa(ma, p)) return ma.fondo;
+/** El hueco a borrar, dentro de `g.caja` (bw × bh, 0/1): la silueta de la pieza ensanchada. */
+function huecoDe(p: PiezaPixeles, g: Gemela): Uint8Array {
   const { x: bx, y: by, w: bw, h: bh } = g.caja;
   const silueta = new Uint8Array(bw * bh);
   for (let y = 0; y < p.caja.h; y++)
@@ -133,7 +133,14 @@ export function quitarGemela(ma: ConFondo, g: Gemela): Uint8ClampedArray {
       const X = p.caja.x + x - bx, Y = p.caja.y + y - by;
       if (X >= 0 && Y >= 0 && X < bw && Y < bh && p.rgba[(y * p.caja.w + x) * 4 + 3] >= ALFA_BORRAR) silueta[Y * bw + X] = 1;
     }
-  const m = ensanchar(silueta, bw, bh, radioDe(p));
+  return ensanchar(silueta, bw, bh, radioDe(p));
+}
+
+export function quitarGemela(ma: ConFondo, g: Gemela): Uint8ClampedArray {
+  const p = ma.piezas[g.pieza];
+  if (!p || !completa(ma, p)) return ma.fondo;
+  const { x: bx, y: by, w: bw, h: bh } = g.caja;
+  const m = huecoDe(p, g);
   const W = ma.w, src = ma.fondo, out = new Uint8ClampedArray(src);
   const hueco = (X: number, Y: number) => X >= bx && X < bx + bw && m[(Y - by) * bw + (X - bx)] === 1;
   // 1) Espejo por renglón.
@@ -243,4 +250,94 @@ function quitarReflejo(ma: ConFondo, p: PiezaPixeles, caja: Caja, out: Uint8Clam
       out[d + 2] = nB;
     }
   }
+}
+
+// ── Respaldo con IA (Pedro, 2026-10-14: "build it as a second button") ─────────────────────────────────────
+// Si el relleno gratis no quedó bien, se le manda a la IA SÓLO un recorte del fondo original alrededor de la copia
+// (más una imagen de la pieza, para que sepa qué borrar). De lo que devuelve se pega únicamente el hueco y, cada
+// vez menos, el anillo del reflejo: el resto del fondo queda idéntico al original, píxel por píxel.
+
+/** Aire alrededor de la caja de la copia en el recorte (parte de su lado): la IA necesita ver de qué rellenar. */
+const AIRE_IA = 0.25;
+/** Lado mayor del recorte que se le manda (px). La IA devuelve ~1 000 px: mandar más sólo pesa. */
+export const RECORTE_IA_MAX = 1536;
+/** Error medio (0-255) en el aire del recorte, donde la IA no debía cambiar nada. Arriba = movió el fondo: revisar. */
+export const DERIVA_IA_REVISAR = 18;
+
+/** El recorte del maestro que se le manda a la IA: la caja de la copia con aire, en una proporción que la IA acepta
+ *  (la más parecida), sin salir del maestro. null si no cabe ninguna (la caja casi del tamaño del maestro). */
+export function recorteParaIA(ma: { w: number; h: number }, g: Gemela): { caja: Caja; aspect: string } | null {
+  const c = g.caja;
+  const w0 = c.w * (1 + 2 * AIRE_IA), h0 = c.h * (1 + 2 * AIRE_IA);
+  const cx = c.x + c.w / 2, cy = c.y + c.h / 2;
+  let mejor: { caja: Caja; aspect: string; error: number } | null = null;
+  for (const aspect of Object.keys(RATIOS_IA)) {
+    const [rw, rh] = aspect.split(":").map(Number), r = rw / rh;
+    let w = Math.max(w0, h0 * r), h = w / r;
+    if (w > ma.w) { w = ma.w; h = w / r; }
+    if (h > ma.h) { h = ma.h; w = h * r; }
+    w = Math.round(w);
+    h = Math.round(h);
+    if (w < c.w || h < c.h) continue; // no cabe la copia entera
+    const x = Math.round(Math.min(Math.max(0, cx - w / 2), ma.w - w)), y = Math.round(Math.min(Math.max(0, cy - h / 2), ma.h - h));
+    // Se prefiere la proporción que menos agrega fuera del aire pedido.
+    const error = (w * h) / (w0 * h0);
+    if (!mejor || error < mejor.error) mejor = { caja: { x, y, w, h }, aspect, error };
+  }
+  return mejor && { caja: mejor.caja, aspect: mejor.aspect };
+}
+
+/** Distancia (px, aproximada 3-4) de cada punto de la caja al hueco: dos pasadas sobre la caja. */
+function distancias(m: Uint8Array, w: number, h: number): Float32Array {
+  const d = new Float32Array(w * h).fill(1e9);
+  for (let i = 0; i < m.length; i++) if (m[i]) d[i] = 0;
+  const paso = (i: number, j: number, c: number) => { if (d[j] + c < d[i]) d[i] = d[j] + c; };
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (x > 0) paso(i, i - 1, 1);
+      if (y > 0) {
+        paso(i, i - w, 1);
+        if (x > 0) paso(i, i - w - 1, 1.4);
+        if (x < w - 1) paso(i, i - w + 1, 1.4);
+      }
+    }
+  for (let y = h - 1; y >= 0; y--)
+    for (let x = w - 1; x >= 0; x--) {
+      const i = y * w + x;
+      if (x < w - 1) paso(i, i + 1, 1);
+      if (y < h - 1) {
+        paso(i, i + w, 1);
+        if (x < w - 1) paso(i, i + w + 1, 1.4);
+        if (x > 0) paso(i, i + w - 1, 1.4);
+      }
+    }
+  return d;
+}
+
+/**
+ * El fondo con lo que devolvió la IA (`ia`: RGBA del tamaño de `recorte`, ya reescalado): entero dentro del hueco y
+ * desvaneciéndose en el anillo del reflejo; fuera de eso, el fondo ORIGINAL sin tocar. `deriva`: el error medio en el
+ * aire del recorte (fuera de la caja de la copia), donde la IA no debía cambiar nada; alto = la unión puede notarse.
+ */
+export function pegarRellenoIA(ma: ConFondo, g: Gemela, recorte: Caja, ia: Uint8ClampedArray): { fondo: Uint8ClampedArray; deriva: number } {
+  const p = ma.piezas[g.pieza];
+  if (!p || !completa(ma, p) || ia.length < recorte.w * recorte.h * 4) return { fondo: ma.fondo, deriva: Infinity };
+  const { x: bx, y: by, w: bw, h: bh } = g.caja;
+  const d = distancias(huecoDe(p, g), bw, bh), anillo = reflejoDe(p);
+  const W = ma.w, out = new Uint8ClampedArray(ma.fondo);
+  let suma = 0, n = 0;
+  for (let y = 0; y < recorte.h; y++)
+    for (let x = 0; x < recorte.w; x++) {
+      const X = recorte.x + x, Y = recorte.y + y, j = (Y * W + X) * 4, k = (y * recorte.w + x) * 4;
+      const dentro = X >= bx && X < bx + bw && Y >= by && Y < by + bh;
+      if (!dentro) {
+        for (let c = 0; c < 3; c++) suma += Math.abs(ia[k + c] - ma.fondo[j + c]);
+        n += 3;
+        continue;
+      }
+      const peso = Math.max(0, Math.min(1, 1 - d[(Y - by) * bw + (X - bx)] / anillo));
+      if (peso > 0) for (let c = 0; c < 3; c++) out[j + c] = ia[k + c] * peso + ma.fondo[j + c] * (1 - peso);
+    }
+  return { fondo: out, deriva: n ? Math.round((suma / n) * 10) / 10 : 0 };
 }

@@ -61,7 +61,11 @@ export function costoGemini(uso: UsoGemini | undefined): number | null {
   return Math.round(total * 10_000) / 10_000;
 }
 
-async function expandirGemini(p: PeticionIA): Promise<RespuestaIA> {
+type Parte = { text: string } | { inlineData: { mimeType: "image/png"; data: string } };
+
+/** Una llamada a Gemini que devuelve UNA imagen: la usan expandir y borrar (mismos errores, mismo costo). */
+/** `mensajes`: lo que lee el diseñador si falla o si la IA no devuelve imagen (cada uso dice qué hacer). */
+async function llamarGemini(partes: Parte[], aspect: string, tamano: PeticionIA["tamano"], mensajes: { fallo: string; sinImagen: string }): Promise<RespuestaIA> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new ErrorIA("La IA de Formatos no está configurada.", "sin GEMINI_API_KEY");
   let res: Response;
@@ -70,8 +74,8 @@ async function expandirGemini(p: PeticionIA): Promise<RespuestaIA> {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: PROMPT }, { inlineData: { mimeType: "image/png", data: p.png.toString("base64") } }] }],
-        generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: p.aspect, imageSize: p.tamano } },
+        contents: [{ parts: partes }],
+        generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: aspect, imageSize: tamano } },
       }),
       signal: AbortSignal.timeout(TIEMPO_MAX_MS),
     });
@@ -82,7 +86,7 @@ async function expandirGemini(p: PeticionIA): Promise<RespuestaIA> {
     const cuerpo = (await res.text()).slice(0, 300);
     if (res.status === 402) throw new ErrorIA("La cuenta de la IA se quedó sin saldo. Avísale a Pedro.", `402 ${cuerpo}`);
     if (res.status === 429 || res.status === 503) throw new ErrorIA("La IA está saturada. Reintenta en un minuto.", `${res.status} ${cuerpo}`);
-    throw new ErrorIA("La IA no pudo rellenar este tamaño. Reintenta o usa desenfoque.", `${res.status} ${cuerpo}`);
+    throw new ErrorIA(mensajes.fallo, `${res.status} ${cuerpo}`);
   }
   type Respuesta = { candidates?: { finishReason?: string; content?: { parts?: { inlineData?: { data?: string } }[] } }[]; usageMetadata?: UsoGemini };
   const json = (await res.json()) as Respuesta;
@@ -91,7 +95,31 @@ async function expandirGemini(p: PeticionIA): Promise<RespuestaIA> {
   if (!data) {
     // Sin imagen (filtro de seguridad, etc.) Google igual cobra la entrada: el costo viaja con el error.
     const motivo = json.candidates?.[0]?.finishReason ?? "sin candidatos";
-    throw new ErrorConCosto(new ErrorIA("La IA no quiso rellenar esta imagen. Usa desenfoque o color.", `sin imagen (${motivo})`), costoUsd);
+    throw new ErrorConCosto(new ErrorIA(mensajes.sinImagen, `sin imagen (${motivo})`), costoUsd);
   }
   return { png: Buffer.from(data, "base64"), costoUsd, modelo: MODELO_GEMINI };
+}
+
+const imagen = (png: Buffer): Parte => ({ inlineData: { mimeType: "image/png", data: png.toString("base64") } });
+
+async function expandirGemini(p: PeticionIA): Promise<RespuestaIA> {
+  return llamarGemini([{ text: PROMPT }, imagen(p.png)], p.aspect, p.tamano, {
+    fallo: "La IA no pudo rellenar este tamaño. Reintenta o usa desenfoque.",
+    sinImagen: "La IA no quiso rellenar esta imagen. Usa desenfoque o color.",
+  });
+}
+
+// ── Borrar del fondo la copia de una pieza (respaldo del relleno gratis de gemela.ts) ──
+const PROMPT_BORRAR =
+  "The first image is a crop of an advertisement background. It contains a painted copy of the object shown in the second image. " +
+  "Remove that object completely from the first image, including its shadow, its reflection and any colored glow it casts on nearby surfaces, " +
+  "and fill the area with the surrounding background so it looks like the object was never there: continue the textures, perspective and lighting. " +
+  "Do not add any new objects, text, letters, numbers or logos. Keep everything else in the first image exactly the same, with the same framing.";
+
+export type PeticionBorrar = { fondo: Buffer; pieza: Buffer; aspect: string; tamano: PeticionIA["tamano"] };
+
+/** El borrador activo, o null si la IA está apagada (mismo interruptor que el relleno de Formatos). */
+export function borrador(): { borrar: (p: PeticionBorrar) => Promise<RespuestaIA>; modelo: string } | null {
+  const mensajes = { fallo: "La IA no pudo borrar la copia. Reintenta o quédate con el relleno gratis.", sinImagen: "La IA no quiso borrar la copia. Quédate con el relleno gratis o pide el fondo sin el producto." };
+  return iaActiva() ? { borrar: (p) => llamarGemini([{ text: PROMPT_BORRAR }, imagen(p.fondo), imagen(p.pieza)], p.aspect, p.tamano, mensajes), modelo: MODELO_GEMINI } : null;
 }

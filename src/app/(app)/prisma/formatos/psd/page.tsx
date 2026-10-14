@@ -5,6 +5,7 @@ import { getSoyId } from "@/lib/soy";
 import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { prismaActivo, prismaFormatosActivo } from "@/lib/prisma/flags";
+import { iaActiva } from "@/lib/prisma/formatos/proveedor";
 import { FormatosPsd, type ClientePsd } from "@/components/prisma/formatos/formatos-psd";
 
 export const dynamic = "force-dynamic";
@@ -34,5 +35,6 @@ export default async function FormatosPsdPage() {
     if (error) console.error("[prisma] clientes para Formatos:", error.message);
     clientes = ((data ?? []) as { id: string; name: string }[]).map((c) => ({ id: c.id, nombre: c.name }));
   }
-  return <FormatosPsd planaActiva={prismaFormatosActivo()} clientes={clientes} />;
+  // El respaldo con IA sólo se ofrece con sesión: la ruta que llama a la IA la pide (y cobra).
+  return <FormatosPsd planaActiva={prismaFormatosActivo()} clientes={clientes} iaCopia={!!soyId && iaActiva()} />;
 }

@@ -82,3 +82,15 @@ export function salidaVista(s: PrismaFormatosSalidaRow, urls: Map<string, string
     error: s.error,
   };
 }
+
+/** Las rutas no traen el chequeo de origen de las server actions: sólo se acepta la propia página. */
+export function mismoOrigen(req: Request): boolean {
+  const origen = req.headers.get("origin");
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  if (!origen || !host) return false;
+  try {
+    return new URL(origen).host === host;
+  } catch {
+    return false;
+  }
+}
