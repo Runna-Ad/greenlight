@@ -31,10 +31,11 @@
   --color-status-published: var(--status-published);
   --color-status-delivered: var(--status-delivered);
   --color-status-warning: var(--status-warning);
-  /* Platform pleca colors (TikTok black, Facebook blue, Google green) */
+  /* Platform pleca colors (TikTok black, Facebook blue, Google green, Instagram magenta) */
   --color-plat-tt: var(--plat-tt);
   --color-plat-fb: var(--plat-fb);
   --color-plat-gg: var(--plat-gg);
+  --color-plat-ig: var(--plat-ig);
   --color-deck-blue: var(--deck-blue);
   --color-deck-orange: var(--deck-orange);
   /* Asset-type card colors (static light purple, normal dark purple, real person DiDi orange) */
@@ -145,6 +146,7 @@
   --plat-tt: #111114;               /* TikTok black */
   --plat-fb: #1877f2;               /* Facebook blue */
   --plat-gg: #34a853;               /* Google green */
+  --plat-ig: #c13584;               /* Instagram magenta (punto de canal en HÜE Formatos) */
 
   /* Deck-mimic (encabezados tipo Google Slides). Oscurecidos vs el deck original
      (#4a86e8/#ff6d01) para que el texto blanco de 9–10px pase AA (~4.7:1). */
@@ -212,6 +214,7 @@
   --plat-tt: #e6e6ea;
   --plat-fb: #4a95f5;
   --plat-gg: #5bbd77;
+  --plat-ig: #e9609f;
 
   --type-static: #b9a7e6;
   --type-normal: #b9a7e6;

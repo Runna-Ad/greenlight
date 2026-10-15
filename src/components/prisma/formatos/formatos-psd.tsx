@@ -1,15 +1,15 @@
 "use client";
 
-import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CircleCheck, Download, Eraser, FileUp, FlipHorizontal2, Languages, Layers, Loader2, Lock, Move, Sparkles, Type, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ChevronDown, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Languages, Layers, Loader2, Lock, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { zipSync } from "fflate";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
-import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Edicion, type Lado } from "@/lib/prisma/formatos/acomodo";
+import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Edicion, type Lado } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionContraste, type InfoContraste } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
@@ -22,6 +22,7 @@ import { colaVacia, enCola, pintar } from "./pintar";
 import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, fuentesRecordadas, olvidarFuentes, recordarFuentes, revisarTextos, textoEscrito, type ArchivoFuente, type Escritura, type Tipografias } from "./escritura";
 import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
 import { EditorMedida, edicionGuardada, guardarEdicion } from "./editor-medida";
+import { COLUMNAS, ChipEstado, FOCO, FORMAS, NOMBRE_FORMA, PastillasCanal, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD. El anuncio llega en Photoshop: un Web Worker lo lee y lo separa en fondo
@@ -33,7 +34,6 @@ import { EditorMedida, edicionGuardada, guardarEdicion } from "./editor-medida";
 
 type Falla = { clave: keyof typeof FP_ERROR; detalle?: string };
 type Leido = { archivo: string; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] };
-type Medida = { w: number; h: number };
 /** Un maestro como se acomoda y se pinta: con el papel elegido en cada carpeta y, si se aprobó, sin la copia del fondo. */
 type MaestroVista = MaestroListo & { copia?: CopiaEnFondo | null };
 /** Cómo se quitó: gratis (espejo) o con la IA (lo que costó y cuánto cambió lo de alrededor). */
@@ -50,17 +50,23 @@ const COPIA_PAUSA_MS = 400;
 const SIN_TIPOS: Tipografias = new Map();
 
 const CLAVE_ERROR: Record<MotivoPsd | "desconocido", keyof typeof FP_ERROR> = { "no-soportado": "noSoportado", "demasiado-grande": "grande", "sin-aplanado": "sinAplanado", "sin-fondo": "sinFondo", desconocido: "desconocido" };
-/** Alto máximo con el que se ENSEÑA una medida (la descarga va siempre a tamaño real). */
-const VISTA_ALTO_MAX = 440;
-/** Desde esta forma (ancho ÷ alto) la tarjeta ocupa la fila entera: una horizontal en media columna no se puede juzgar. */
-const FORMA_FILA = 1.5;
+/** Alto máximo con el que se ENSEÑA una medida (la descarga va siempre a tamaño real). Con 360 caben cinco
+ *  verticales en una fila a 1440 px; para verla grande está «Editar». */
+const VISTA_ALTO_MAX = 360;
+/** La lista de DiDi, como pastillas (Pedro, 2026-10-15: "we have them pre loaded those are tied to didi"). */
+const LISTA_DIDI: MedidaLista[] = leerMedidas(MEDIDAS_EQUIPO).medidas.map((m) => ({ ...m, propia: false }));
+/** Avisos que se arreglan una sola vez arriba, en «En varias medidas»: en la tarjeta van en una línea corta. */
+const AVISO_CORTO = { copia: FP.avisoCopiaCorto, retoque: FP.avisoRetoqueCorto } as const;
 /** El nombre de la mesa se acorta ANTES de ponerle la medida: así la medida nunca se corta y dos medidas no chocan. */
 const NOMBRE_MESA_MAX = 100;
 const NOMBRE_ZIP_MAX = 80;
 const SOLTAR_URL_MS = 10_000;
-const FOCO = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
-const BOTON = "min-h-11 sm:min-h-9";
-const clave = (m: Medida) => `${m.w}x${m.h}`;
+/** Escritorio e iPad: 36 px con mouse, 44 px con dedo. */
+const BOTON = "min-h-9 pointer-coarse:min-h-11";
+/** Al llegar con Tab, lo de las tarjetas no queda debajo de la barra pegajosa de resultados (y la de la app). */
+const BAJO_BARRA = "scroll-mt-40";
+/** Los botones de cada tarjeta, más bajos (van cuatro en una tarjeta angosta). */
+const BOTON_TARJETA = cn("h-8 px-2 text-xs pointer-coarse:h-11", BAJO_BARRA);
 /**
  * De qué acomodo automático es una edición: el lado del HERO, la zona del canal y si el contraste movió el fondo lo
  * cambian (editor-medida.tsx). La sombra no mueve nada: no entra (y sin fondo movido la clave queda como antes).
@@ -72,7 +78,6 @@ const contextoEdicion = (m: Medida, lado: Lado | undefined, canal: Canal | null,
 /** El contexto de la edición de una medida con lo elegido ahora (el arreglo que de verdad se usa, sin la edición). */
 const contextoDe = (maestros: MaestroVista[], m: Medida, lados: Record<string, Lado>, canal: Canal | null, contrastes: Record<string, EleccionContraste>) =>
   contextoEdicion(m, lados[clave(m)], canal, revisarMedida(maestros, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h), contraste: contrastes[clave(m)] }).contraste?.usado);
-const etiqueta = (m: Medida) => `${m.w}×${m.h}`;
 /** El nombre de entrega del equipo (el de la mesa con la medida nueva), limpio para ser nombre de archivo. */
 const archivoDe = (ma: MaestroListo, m: Medida) => `${nombreSalida({ nombre: limpiarNombre(ma.nombre, NOMBRE_MESA_MAX), w: ma.w, h: ma.h }, m.w, m.h)}.png`;
 const sinExtension = (archivo: string) => archivo.replace(/\.psd$/i, "");
@@ -253,33 +258,47 @@ function ContrasteMedida({ info, ma, medida, editada, lang, alElegir }: { info: 
         : info.auto === "original"
           ? rellenar(tx(FP.contrasteNinguno, lang), { p, antes })
           : rellenar(tx(FP.contrasteSinArreglo, lang), { p, antes });
+  // En la tarjeta va en UNA línea (rediseño B19); la frase completa y los tres caminos se abren con un clic.
+  const linea =
+    info.usado === "original"
+      ? rellenar(tx(FP.contrasteLineaSin, lang), { a: antes })
+      : rellenar(tx(FP.contrasteLinea, lang), { o: tx(NOMBRE_ARREGLO[info.usado], lang).toLowerCase(), a: antes, b: porciento(ahora ?? 0) });
   return (
-    <div className="mt-2 rounded-lg border border-border p-2">
-      <p className="text-sm text-foreground">{nota}</p>
-      <p className="mt-1.5 text-xs text-muted-foreground">{tx(FP.contrasteOpciones, lang)}</p>
-      <div role="group" aria-label={rellenar(tx(FP.contrasteGrupo, lang), { m: etiqueta(medida) })} className="mt-1 flex flex-wrap gap-1.5">
-        {ARREGLOS.map((a) => {
-          const L = info.perdida[a], elegido = info.usado === a;
-          return (
-            <Button
-              key={a}
-              variant={elegido ? "secondary" : "outline"}
-              size="sm"
-              aria-pressed={elegido}
-              disabled={L === null || editada}
-              onClick={() => alElegir(medida, a === info.auto ? "auto" : a)}
-              className={cn("min-h-9", elegido && "font-semibold")}
-            >
-              {elegido && <CircleCheck className="size-3.5" aria-hidden="true" />}
-              {tx(NOMBRE_ARREGLO[a], lang)}
-              {L !== null && <span className="font-normal text-muted-foreground">{porciento(L)}</span>}
-              {a === info.auto && <span className="font-normal text-muted-foreground">· {tx(FP.contrasteAuto, lang)}</span>}
-            </Button>
-          );
-        })}
+    <details className="group mt-2 rounded-md border border-border">
+      <summary className={cn("flex min-h-8 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground hover:bg-secondary/60 pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden", FOCO, BAJO_BARRA)}>
+        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+        <span className="min-w-0">
+          {linea}
+          <span className="sr-only"> ({etiqueta(medida)})</span>
+        </span>
+      </summary>
+      <div className="border-t border-border p-2">
+        <p className="text-sm text-foreground">{nota}</p>
+        <p className="mt-1.5 text-xs text-muted-foreground">{tx(FP.contrasteOpciones, lang)}</p>
+        <div role="group" aria-label={rellenar(tx(FP.contrasteGrupo, lang), { m: etiqueta(medida) })} className="mt-1 flex flex-wrap gap-1.5">
+          {ARREGLOS.map((a) => {
+            const L = info.perdida[a], elegido = info.usado === a;
+            return (
+              <Button
+                key={a}
+                variant={elegido ? "secondary" : "outline"}
+                size="sm"
+                aria-pressed={elegido}
+                disabled={L === null || editada}
+                onClick={() => alElegir(medida, a === info.auto ? "auto" : a)}
+                className={cn("min-h-9 pointer-coarse:min-h-11", BAJO_BARRA, elegido && "font-semibold")}
+              >
+                {elegido && <CircleCheck className="size-3.5" aria-hidden="true" />}
+                {tx(NOMBRE_ARREGLO[a], lang)}
+                {L !== null && <span className="font-normal text-muted-foreground">{porciento(L)}</span>}
+                {a === info.auto && <span className="font-normal text-muted-foreground">· {tx(FP.contrasteAuto, lang)}</span>}
+              </Button>
+            );
+          })}
+        </div>
+        {editada && <p className="mt-1 text-xs text-muted-foreground">{tx(FP.contrasteEditada, lang)}</p>}
       </div>
-      {editada && <p className="mt-1 text-xs text-muted-foreground">{tx(FP.contrasteEditada, lang)}</p>}
-    </div>
+    </details>
   );
 }
 
@@ -351,11 +370,15 @@ const TarjetaMedida = memo(function TarjetaMedida({
   }, [ma, maestro, acomodo, w, h, k, registrar, escritura, tipos]);
 
   const letra = acomodo.letras.length ? Math.min(...acomodo.letras.map((l) => l.px)) : null;
+  // «Pieza repetida» y «fondo retocado» se arreglan UNA vez arriba (en «En varias medidas»): aquí, una línea corta
+  // y una sola vez aunque el motor los diga por cada pieza. Los demás avisos son de esta medida y van completos.
+  const cortos = [...new Set(acomodo.avisos.flatMap((v) => (v.tipo === "copia" || v.tipo === "retoque" ? [v.tipo] : [])))];
+  const propios = acomodo.avisos.filter((v) => v.tipo !== "copia" && v.tipo !== "retoque");
+  const nAvisos = acomodo.avisos.length + (noPinto ? 1 : 0);
   // Editada a mano, voltear movería sólo lo que no se tocó: se vuelve al automático desde el editor. La misma regla
   // que «Voltear todas» (`acomodo.editada`).
   const volteable = sePuedeVoltear(acomodo.familia) && !acomodo.editada;
   const franja = rellenar(tx(FP.zonaFranja, lang), { c: nombreCanal });
-  const revisar = noPinto || acomodo.avisos.length > 0;
   const bajar = async () => {
     try {
       if (lienzo.current && !noPinto) descargar(await aPng(lienzo.current), archivoDe(ma, medida));
@@ -383,7 +406,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
     }
   };
   return (
-    <li className={cn("rounded-xl border border-border bg-card p-3", w / h >= FORMA_FILA && "@xl:col-span-2")}>
+    // `@container`: los botones van en dos columnas si la tarjeta es angosta (vertical) y en fila si es ancha (banner).
+    <li className="@container flex flex-col rounded-xl border border-border bg-card p-2.5">
       <div className="flex justify-center rounded-lg bg-secondary/60 p-2">
         {/* El contenedor fija el tamaño a la vista; las franjas de la guía van encima, nunca dentro del lienzo. */}
         <div className="relative" style={{ width: `min(100%, ${Math.round(Math.min(w, (VISTA_ALTO_MAX * w) / h))}px)`, aspectRatio: `${w} / ${h}` }}>
@@ -412,81 +436,79 @@ const TarjetaMedida = memo(function TarjetaMedida({
           )}
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
-            {etiqueta(medida)}
-            {revisar && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs font-medium text-foreground">
-                <AlertTriangle className="size-3 text-status-warning" aria-hidden="true" /> {tx(FP.revisarCorto, lang)}
-              </span>
-            )}
-            {acomodo.editada && (
-              <span title={tx(FP.editadaTitulo, lang)} className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs font-medium text-foreground">
-                <Move className="size-3" aria-hidden="true" /> {tx(FP.editada, lang)}
-                <span className="sr-only">: {tx(FP.editadaTitulo, lang)}</span>
-              </span>
-            )}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            {tx(FP_FAMILIA[acomodo.familia], lang)} · {rellenar(tx(FP.deMesa, lang), { m: `${ma.w}×${ma.h}` })}
-            {volteable && <> · {tx(lado === "izquierda" ? FP.heroIzquierda : FP.heroDerecha, lang)}</>}
-            {letra !== null && <> · {rellenar(tx(FP.letra, lang), { px: letra.toFixed(1) })}</>}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-1.5">
-          <Button variant="outline" size="lg" className={BOTON} data-editar={k} onClick={() => alEditar(medida)} disabled={noPinto} aria-label={rellenar(tx(FP.editarAria, lang), { m: etiqueta(medida) })}>
-            <Move className="size-4" aria-hidden="true" /> {tx(FP.editar, lang)}
-          </Button>
-          {volteable && (
-            <Button variant="outline" size="lg" className={BOTON} onClick={() => alVoltear(medida, lado === "izquierda" ? "derecha" : "izquierda")} aria-label={rellenar(tx(FP.voltearAria, lang), { m: etiqueta(medida) })}>
-              <FlipHorizontal2 className="size-4" aria-hidden="true" /> {tx(FP.voltear, lang)}
-            </Button>
-          )}
-          <Button variant="outline" size="lg" className={BOTON} onClick={() => void bajar()} disabled={noPinto} aria-label={rellenar(tx(FP.bajarPngAria, lang), { m: etiqueta(medida) })}>
-            <Download className="size-4" aria-hidden="true" /> {tx(FP.bajarPng, lang)}
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            className={BOTON}
-            onClick={() => void bajarPsd()}
-            disabled={noPinto || armandoPsd}
-            aria-busy={armandoPsd}
-            aria-label={rellenar(tx(FP.bajarPsdAria, lang), { m: etiqueta(medida) })}
-            title={tx(FP.bajarPsdTitulo, lang)}
-          >
-            {armandoPsd ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Layers className="size-4" aria-hidden="true" />}
-            {armandoPsd ? tx(FP.bajarPsdHaciendo, lang) : tx(FP.bajarPsd, lang)}
-          </Button>
-        </div>
+      {/* El encabezado lleva sólo la medida (así se oye en la lista de encabezados); el estado va al lado, en palabras
+          (no sólo color): «Listo» o cuántos avisos tiene. */}
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        <h4 className="text-sm font-semibold text-foreground tabular-nums">{etiqueta(medida)}</h4>
+        {nAvisos > 0 ? (
+          <span className="inline-flex items-center gap-1 rounded-md border border-status-warning/50 bg-status-warning/10 px-1.5 py-0.5 text-xs font-medium">
+            <AlertTriangle className="size-3 text-status-warning" aria-hidden="true" /> {nAvisos === 1 ? tx(FP.avisoUno, lang) : rellenar(tx(FP.avisosN, lang), { n: nAvisos })}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-md border border-status-completed/40 bg-status-completed/8 px-1.5 py-0.5 text-xs font-medium">
+            <CircleCheck className="size-3 text-status-completed" aria-hidden="true" /> {tx(FP.listo, lang)}
+          </span>
+        )}
+        {acomodo.editada && (
+          <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs font-medium">
+            <Move className="size-3" aria-hidden="true" /> {tx(FP.editada, lang)}
+            <span className="sr-only">: {tx(FP.editadaTitulo, lang)}</span>
+          </span>
+        )}
       </div>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        {tx(FP_FAMILIA[acomodo.familia], lang)}
+        {maestros.length > 1 && <> · {rellenar(tx(FP.deMesa, lang), { m: `${ma.w}×${ma.h}` })}</>}
+        {volteable && <> · {tx(lado === "izquierda" ? FP.heroIzquierda : FP.heroDerecha, lang)}</>}
+        {letra !== null && <> · {rellenar(tx(FP.letra, lang), { px: letra.toFixed(1) })}</>}
+      </p>
       {noPinto && (
         <p role="alert" className="mt-2 flex items-start gap-1.5 text-sm text-foreground">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" /> {tx(FP.noPinto, lang)}
         </p>
       )}
       {contraste && <ContrasteMedida info={contraste} ma={ma} medida={medida} editada={!!acomodo.editada} lang={lang} alElegir={alContraste} />}
-      {acomodo.avisos.length > 0 ? (
-        <div className="mt-2 rounded-lg border border-border bg-secondary/50 p-2">
-          <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-            <AlertTriangle className="size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> {tx(FP.revisar, lang)}
-          </p>
-          {/* Los avisos los escribe el motor (acomodo.ts), en español: siempre como texto, y marcados como español
-              cuando la pantalla está en inglés (un lector de pantalla los pronuncia bien). */}
-          <ul lang={lang === "en" ? "es" : undefined} className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-foreground">
-            {acomodo.avisos.map((v, i) => (
-              <li key={i}>{v.texto}</li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        !noPinto && (
-          <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <CircleCheck className="size-3.5 shrink-0" aria-hidden="true" /> {tx(FP.sinAvisos, lang)}
-          </p>
-        )
+      {(propios.length > 0 || cortos.length > 0) && (
+        // Los avisos los escribe el motor (acomodo.ts), en español: marcados así cuando la pantalla está en inglés.
+        <ul lang={lang === "en" ? "es" : undefined} className="mt-2 space-y-1 text-xs leading-snug text-foreground">
+          {propios.map((v, i) => (
+            <li key={i} className="flex items-start gap-1.5">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> <span className="min-w-0">{v.texto}</span>
+            </li>
+          ))}
+          {cortos.map((t) => (
+            <li key={t} lang={lang} className="flex items-start gap-1.5 text-muted-foreground">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> <span className="min-w-0">{tx(AVISO_CORTO[t], lang)}</span>
+            </li>
+          ))}
+        </ul>
       )}
+      {/* Los botones al pie de la tarjeta (mt-auto): en una fila de tarjetas quedan a la misma altura. */}
+      <div className="mt-auto grid grid-cols-2 gap-1.5 pt-2.5 @[22rem]:flex @[22rem]:flex-wrap">
+        <Button variant="outline" className={BOTON_TARJETA} data-editar={k} onClick={() => alEditar(medida)} disabled={noPinto} aria-label={rellenar(tx(FP.editarAria, lang), { m: etiqueta(medida) })}>
+          <Move className="size-3.5" aria-hidden="true" /> {tx(FP.editar, lang)}
+        </Button>
+        {volteable && (
+          <Button variant="outline" className={BOTON_TARJETA} onClick={() => alVoltear(medida, lado === "izquierda" ? "derecha" : "izquierda")} aria-label={rellenar(tx(FP.voltearAria, lang), { m: etiqueta(medida) })}>
+            <FlipHorizontal2 className="size-3.5" aria-hidden="true" /> {tx(FP.voltear, lang)}
+          </Button>
+        )}
+        <Button variant="outline" className={BOTON_TARJETA} onClick={() => void bajar()} disabled={noPinto} aria-label={rellenar(tx(FP.bajarPngAria, lang), { m: etiqueta(medida) })}>
+          <Download className="size-3.5" aria-hidden="true" /> {tx(FP.bajarPng, lang)}
+        </Button>
+        <Button
+          variant="outline"
+          className={BOTON_TARJETA}
+          onClick={() => void bajarPsd()}
+          disabled={noPinto || armandoPsd}
+          aria-busy={armandoPsd}
+          aria-label={rellenar(tx(FP.bajarPsdAria, lang), { m: etiqueta(medida) })}
+          title={tx(FP.bajarPsdTitulo, lang)}
+        >
+          {armandoPsd ? <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Layers className="size-3.5" aria-hidden="true" />}
+          {armandoPsd ? tx(FP.bajarPsdHaciendo, lang) : tx(FP.bajarPsd, lang)}
+        </Button>
+      </div>
     </li>
   );
 });
@@ -526,9 +548,13 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const [avance, setAvance] = useState<{ mesa: number; de: number } | null>(null);
   const [falla, setFalla] = useState<Falla | null>(null);
   const [over, setOver] = useState(false);
-  const [texto, setTexto] = useState(MEDIDAS_EQUIPO);
-  const [medidas, setMedidas] = useState<Medida[]>(() => leerMedidas(MEDIDAS_EQUIPO).medidas);
-  const [notaLista, setNotaLista] = useState<{ mal: boolean; texto: string } | null>(null);
+  /** Las medidas del panel, en orden: la lista de DiDi y las agregadas a mano. */
+  const [lista, setLista] = useState<MedidaLista[]>(LISTA_DIDI);
+  /** Las que se apagaron con un clic («WxH»): siguen en el panel, no salen en los resultados. */
+  const [apagadas, setApagadas] = useState<ReadonlySet<string>>(() => new Set());
+  /** Las que salen: prendidas y dentro del tope por anuncio. El objeto de cada medida es el mismo de `lista`, así una
+   *  tarjeta no se vuelve a pintar porque se prendió o apagó otra. */
+  const { caben: medidas, fuera: sinLugar } = useMemo(() => medidasQueCaben(lista.filter((m) => !apagadas.has(clave(m)))), [lista, apagadas]);
   const [lados, setLados] = useState<Record<string, Lado>>({});
   /** El arreglo de contraste que la persona eligió por medida; sin entrada, el que elige la plataforma. */
   const [contrastes, setContrastes] = useState<Record<string, EleccionContraste>>({});
@@ -914,8 +940,9 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     setNotaFuentes(n);
     const texto = textoNotaFuentes(n, lang);
     anunciar([texto, extra].filter(Boolean).join(" "));
-    // Sin la tarjeta "Texto nítido" en pantalla (aún no hay PSD, o no trae textos) la nota sale como aviso flotante.
-    if (!totalTextos) (notaMala(n) ? toast.error : toast.success)(texto);
+    // Sin el detalle de tipografías a la vista (aún no hay PSD, o no trae textos) la nota sale como aviso flotante. Un
+    // problema, siempre: con PSD el detalle vive en un chip cerrado y nadie lo vería.
+    if (!totalTextos || notaMala(n)) (notaMala(n) ? toast.error : toast.success)(texto);
   };
   /** `greenlight` = vinieron de Greenlight: `de` (los clientes, para la nota), los que no bajaron y si siguen
    *  valiendo al terminar de cargar (otro PSD u otro cliente elegido mientras tanto: no se suman). */
@@ -997,15 +1024,57 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     };
   }, []);
 
-  const usarLista = () => {
+  // Las medidas en pastillas (rediseño B19): prender o apagar con un clic, agregar a mano (una o la lista del cliente
+  // pegada tal cual), borrar las agregadas y volver a la lista de DiDi.
+  // Cada cambio se anuncia (el lector de pantalla oye qué pasó y cuántas quedan prendidas).
+  const alternarMedida = (k: string) => {
+    const apagar = !apagadas.has(k);
+    const luego = new Set(apagadas);
+    if (apagar) luego.add(k);
+    else luego.delete(k);
+    // Funcional: dos clics antes de que la página se repinte se suman (el anuncio usa la cuenta de este clic).
+    setApagadas((a) => {
+      const n = new Set(a);
+      if (!n.delete(k)) n.add(k);
+      return n;
+    });
+    const r = rellenar(tx(FP.medidasPrendidas, lang), { n: lista.filter((m) => !luego.has(clave(m))).length, t: lista.length });
+    anunciar(rellenar(tx(apagar ? FP.medidaApagada : FP.medidaPrendida, lang), { m: k.replace("x", "×"), r }));
+  };
+  const quitarMedida = (k: string) => {
+    setLista((l) => l.filter((m) => clave(m) !== k));
+    setApagadas((a) => new Set([...a].filter((x) => x !== k)));
+    anunciar(rellenar(tx(FP.medidaQuitada, lang), { m: k.replace("x", "×") }));
+  };
+  const restablecerMedidas = () => {
+    setLista(LISTA_DIDI);
+    setApagadas(new Set());
+    anunciar(tx(FP.medidasRestablecidas, lang));
+  };
+  /** `soloEstas`: las pegadas quedan prendidas y todas las demás se apagan (lo que antes hacía «Usar estas medidas»).
+   *  Devuelve lo que hay que enseñar junto al campo (null = todo bien). */
+  const agregarMedidas = (texto: string, soloEstas: boolean): { mal: boolean; texto: string } | null => {
     const r = leerMedidas(texto);
     const limites = r.fuera.length ? rellenar(tx(FP.listaFuera, lang), { min: LADO_MIN, max: LADO_MAX, m: r.fuera.join(", ") }) : "";
-    if (!r.medidas.length) return setNotaLista({ mal: true, texto: limites || tx(FX.pegarNada, lang) });
-    const { caben, fuera } = medidasQueCaben(r.medidas);
-    setMedidas(caben);
+    if (!r.medidas.length) return { mal: true, texto: limites || tx(FX.pegarNada, lang) };
+    const ya = new Set(lista.map(clave));
+    const nuevas = r.medidas.filter((m) => !ya.has(clave(m))).map((m) => ({ ...m, propia: true }));
+    const pedidas = new Set(r.medidas.map(clave));
+    const todas = [...lista, ...nuevas];
+    const apagadasLuego = soloEstas ? new Set(todas.map(clave).filter((k) => !pedidas.has(k))) : new Set([...apagadas].filter((k) => !pedidas.has(k)));
+    setLista(todas);
+    setApagadas(apagadasLuego);
+    const { fuera } = medidasQueCaben(todas.filter((m) => !apagadasLuego.has(clave(m))));
+    const hecho = soloEstas
+      ? rellenar(tx(FP.soloEstasHecho, lang), { n: pedidas.size })
+      : nuevas.length === 1
+        ? tx(FP.agregadaUna, lang)
+        : nuevas.length
+          ? rellenar(tx(FP.agregadas, lang), { n: nuevas.length })
+          : tx(FP.agregadasYa, lang);
     const notas = [fuera ? rellenar(tx(FP.listaTope, lang), { n: fuera, max: MEDIDAS_MAX }) : "", limites].filter(Boolean).join(" ");
-    setNotaLista(notas ? { mal: false, texto: notas } : null);
-    anunciar([rellenar(tx(FP.listaLista, lang), { n: caben.length }), notas].filter(Boolean).join(" "));
+    anunciar([hecho, notas].filter(Boolean).join(" "));
+    return notas ? { mal: false, texto: notas } : null;
   };
 
   const registrar = useCallback((k: string, l: HTMLCanvasElement | null) => {
@@ -1205,6 +1274,10 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const porRevisar = filas.filter((f) => f.acomodo.avisos.length).length;
   const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia) && !f.acomodo.editada);
   const n916 = medidas.filter((m) => es916(m.w, m.h)).length;
+  const elegirCanal = (v: Canal | null) => {
+    setCanal(v);
+    if (v) anunciar(n916 ? rellenar(tx(FP.zonaMarcadas, lang), { c: CANALES[v].nombre, n: n916 }) : tx(FP.zonaSin916, lang));
+  };
   // El legal es obligatorio (CAT de una tarjeta) y nunca se quita: las medidas donde queda chico se dicen junto al ZIP,
   // no sólo en su tarjeta.
   const legalChico = filas
@@ -1256,8 +1329,65 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   /** El motor y el archivo hablan español: con la pantalla en inglés esos textos se marcan como español. */
   const delMotor = lang === "en" ? "es" : undefined;
 
+  /** El cliente decide qué tipografías exclusivas se pueden usar. `conAyuda`: la explicación a la vista (sin PSD) o
+   *  sólo para lector de pantalla y al pasar el mouse (en el panel, donde ya se entiende). */
+  const selectorCliente = (conAyuda: boolean) =>
+    clientes.length > 0 && (
+      <div className={conAyuda ? "mb-4" : "flex items-center gap-2"}>
+        <label htmlFor="psd-cliente" className={cn("text-sm font-medium text-foreground", conAyuda && "block")}>
+          {tx(FP.cliente, lang)}
+        </label>
+        <select
+          id="psd-cliente"
+          value={cliente}
+          onChange={(e) => elegirCliente(e.target.value)}
+          aria-describedby="psd-cliente-ayuda"
+          title={conAyuda ? undefined : tx(FP.clienteAyuda, lang)}
+          className={cn(
+            "h-9 cursor-pointer rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:h-11 pointer-coarse:text-base",
+            conAyuda ? "mt-1 block w-full max-w-xs" : "min-w-36",
+          )}
+        >
+          <option value="">{tx(FP.sinCliente, lang)}</option>
+          {clientes.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nombre}
+            </option>
+          ))}
+        </select>
+        <p id="psd-cliente-ayuda" className={conAyuda ? "mt-1 max-w-2xl text-xs text-muted-foreground" : "sr-only"}>
+          {tx(FP.clienteAyuda, lang)}
+        </p>
+      </div>
+    );
+
+  // Tipografías en un chip (Pedro: "if we already selected didi it should just said didis typofrafies loaded"). Mientras
+  // se traen o se prueban, lo dice; si falta alguna, en ámbar; si no, "cargadas" y cuántos textos salen nítidos.
+  const nombreCliente = clientes.find((c) => c.id === cliente)?.nombre ?? "";
+  const tiposOcupado = trayendo > 0 || cargandoFuentes > 0 || probando || (faltanFuentes.length > 0 && resueltoPara !== leido);
+  const nitidos = rellenar(tx(FP.tiposNitidos, lang), { n: escritos, m: totalTextos });
+  const chipTipos: { tono: "ok" | "aviso" | "neutro"; icono: ReactNode; texto: string } = tiposOcupado
+    ? { tono: "neutro", icono: <Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />, texto: tx(trayendo > 0 ? FP.textoTrayendo : cargandoFuentes > 0 ? FP.textoCargando : FP.textoProbando, lang) }
+    : faltanFuentes.length > 0
+      ? {
+          tono: "aviso",
+          icono: <AlertTriangle className="size-3.5 shrink-0 text-status-warning" aria-hidden="true" />,
+          texto: [faltanFuentes.length === 1 ? tx(FP.tiposFaltaUna, lang) : rellenar(tx(FP.tiposFaltan, lang), { n: faltanFuentes.length }), tipos.size ? nitidos : ""].filter(Boolean).join(" · "),
+        }
+      : !tipos.size
+        ? { tono: "neutro", icono: <Type className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />, texto: tx(FP.tiposSin, lang) }
+        : { tono: "ok", icono: <CircleCheck className="size-3.5 shrink-0 text-status-completed" aria-hidden="true" />, texto: `${nombreCliente ? rellenar(tx(FP.tiposDe, lang), { c: nombreCliente }) : tx(FP.tiposCargadas, lang)} · ${nitidos}` };
+  /** Las piezas repetidas que se ven en alguna medida prendida, con en cuántas (antes de quitarla: dos veces; después:
+   *  el relleno). Una ya quitada se queda aunque no se vea, para poder deshacerla. */
+  const copiasEnVista = copiasVista.flatMap((c) => {
+    const n = filas.filter((f) => f.maestro === c.i && f.acomodo.avisos.some((a) => a.tipo === "copia" || a.tipo === "retoque")).length;
+    return n || c.quitada ? [{ ...c, n }] : [];
+  });
+  /** ¿Queda algo por hacer en «En varias medidas»? (Si todo se arregló, el panel se queda, sin el ámbar.) */
+  const variasPendiente = copiasEnVista.some((c) => !c.quitada) || legalChico.length > 0;
+
   return (
-    <div lang={lang} className="prisma-root mx-auto max-w-6xl">
+    <div lang={lang} className="prisma-root mx-auto max-w-7xl">
       {/* Un solo anuncio para lectores de pantalla: el avance de la lectura, lo último que se hizo, o el resumen. Al
           abrirse el elegidor el foco ya lee su título: aquí no se repite. */}
       {paraEditor && (
@@ -1282,7 +1412,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
 
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <Link href="/prisma" className={cn("mb-2 inline-flex min-h-11 items-center gap-1 rounded text-sm text-muted-foreground hover:text-foreground sm:min-h-0", FOCO)}>
+          <Link href="/prisma" className={cn("mb-2 inline-flex min-h-9 items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground pointer-coarse:min-h-11", FOCO)}>
             <ArrowLeft className="size-4" aria-hidden="true" /> {tx(FX.volver, lang)}
           </Link>
           <h1 className="font-heading text-[34px] font-bold leading-none tracking-tight text-foreground md:text-[44px]">
@@ -1294,37 +1424,15 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
           type="button"
           onClick={() => setLang(lang === "es" ? "en" : "es")}
           lang={lang === "es" ? "en" : "es"}
-          className={cn("inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary sm:min-h-9", FOCO)}
+          className={cn("inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary pointer-coarse:min-h-11", FOCO)}
           aria-label={lang === "es" ? "Switch to English" : "Cambiar a español"}
         >
           <Languages className="size-3.5" aria-hidden="true" /> {lang === "es" ? "EN" : "ES"}
         </button>
       </div>
 
-      {clientes.length > 0 && (
-        <div className="mb-4">
-          <label htmlFor="psd-cliente" className="block text-sm font-medium text-foreground">
-            {tx(FP.cliente, lang)}
-          </label>
-          <select
-            id="psd-cliente"
-            value={cliente}
-            onChange={(e) => elegirCliente(e.target.value)}
-            aria-describedby="psd-cliente-ayuda"
-            className="mt-1 block min-h-11 w-full max-w-xs cursor-pointer rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
-          >
-            <option value="">{tx(FP.sinCliente, lang)}</option>
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
-              </option>
-            ))}
-          </select>
-          <p id="psd-cliente-ayuda" className="mt-1 max-w-2xl text-xs text-muted-foreground">
-            {tx(FP.clienteAyuda, lang)}
-          </p>
-        </div>
-      )}
+      {/* Sin PSD el cliente va arriba del cuadro (con su ayuda a la vista); con PSD, en el panel de ajustes. */}
+      {(eleccion || !usables.length) && selectorCliente(true)}
 
       {eleccion ? (
         <section className="p-enter max-w-2xl" aria-labelledby="psd-elegir-titulo">
@@ -1342,7 +1450,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                   const on = eleccion.marcadas.includes(i);
                   return (
                     <li key={i}>
-                      <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 hover:bg-secondary/60 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 sm:min-h-9">
+                      <label className="flex min-h-9 cursor-pointer items-center gap-3 rounded-md px-2 hover:bg-secondary/60 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 pointer-coarse:min-h-11">
                         {/* Nombre explícito: el texto de la etiqueta pega el nombre y la medida ("…_A540×960"). */}
                         <input
                           type="checkbox"
@@ -1451,314 +1559,305 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
             </div>
           )}
           {planaActiva && (
-            <Link href="/prisma/formatos" className={cn("inline-flex min-h-11 items-center rounded text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline sm:min-h-0", FOCO)}>
+            <Link href="/prisma/formatos" className={cn("inline-flex min-h-9 items-center rounded-md text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline pointer-coarse:min-h-11", FOCO)}>
               {tx(FP.planaLink, lang)}
             </Link>
           )}
         </section>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-          {/* top-20: la barra de arriba de la app (h-16) también es pegajosa; con menos, el panel se le mete debajo. */}
-          <aside className="space-y-3 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto">
-            <div className="rounded-xl border border-border bg-card p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{tx(FP.archivo, lang)}</p>
-              <p className="mt-1 break-words text-sm font-medium text-foreground">{leido?.archivo}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {usables.length === 1 ? tx(FP.mesasUna, lang) : rellenar(tx(FP.mesas, lang), { n: usables.length })}: {usables.map((m) => `${m.w}×${m.h}`).join(" · ")}
-              </p>
-              {notasArchivo.length > 0 && (
-                <div className="mt-2 border-t border-border pt-2">
-                  <h2 id="psd-notas" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                    <AlertTriangle className="size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> {tx(FP.avisosDelArchivo, lang)}
-                  </h2>
-                  <ul aria-labelledby="psd-notas" lang={delMotor} className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-foreground">
-                    {notasArchivo.map((n, i) => (
-                      <li key={i} className="break-words">
-                        {n}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {fueraDeGuia.length > 0 && (
-                <fieldset className="mt-2 border-t border-border pt-2" aria-describedby="psd-carpetas-ayuda">
-                  <legend className="text-xs font-semibold text-foreground">{tx(FP.carpetasTitulo, lang)}</legend>
-                  <p id="psd-carpetas-ayuda" className="mt-0.5 text-xs text-muted-foreground">
-                    {tx(FP.carpetasAyuda, lang)}
-                  </p>
-                  <ul className="mt-1.5 space-y-1.5">
-                    {fueraDeGuia.map(([nombre, rol], i) => (
-                      <li key={nombre} className="flex items-center gap-2">
-                        <label htmlFor={`psd-carpeta-${i}`} className="min-w-0 flex-1 truncate text-sm text-foreground" title={nombre}>
-                          <span lang={delMotor}>«{nombre}»</span>
-                        </label>
-                        <select
-                          id={`psd-carpeta-${i}`}
-                          value={rol ?? ""}
-                          onChange={(e) => elegirPapel(nombre, (e.target.value || null) as Rol | null)}
-                          className="min-h-11 w-40 shrink-0 cursor-pointer rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
-                        >
-                          {PAPELES.map((p) => (
-                            <option key={p} value={p}>
-                              {tx(FP_PAPEL[p || "NINGUNO"], lang)}
-                            </option>
-                          ))}
-                        </select>
-                      </li>
-                    ))}
-                  </ul>
-                </fieldset>
-              )}
-              {copiasVista.length > 0 && (
-                <div className="mt-2 border-t border-border pt-2">
-                  <h2 id="psd-copia" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                    {copiasVista.every((c) => !!c.quitada) ? <CircleCheck className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" /> : <AlertTriangle className="size-3.5 shrink-0 text-status-warning" aria-hidden="true" />}{" "}
-                    {tx(FP.copiaTitulo, lang)}
-                  </h2>
-                  <ul aria-labelledby="psd-copia" className="mt-1 space-y-2">
-                    {copiasVista.map((c) => {
-                      // En cuántas medidas se ve (antes de quitarla: dos veces; después: el relleno). Los mismos avisos de cada tarjeta.
-                      const n = filas.filter((f) => f.maestro === c.i && f.acomodo.avisos.some((a) => a.tipo === "copia" || a.tipo === "retoque")).length;
-                      const q = c.quitada;
-                      const estimado = `≈ ${usd(COSTO_COPIA_IA_USD, 3)}`;
-                      const v = {
-                        p: c.nombre,
-                        m: deMesa(c.m),
-                        pct: String(Math.round(c.parecido * 100)),
-                        n: String(n),
-                        t: String(filas.length),
-                        c: q?.metodo === "ia" && q.costoUsd !== null ? usd(q.costoUsd, 3) : estimado,
-                        e: estimado,
-                      };
-                      const trabajando = iaEnCurso === c.i;
-                      const g = copias[c.i];
-                      // La IA se ofrece desde el principio, junto al gratis (Pedro, 2026-10-15: "i didnt see the ai button
-                      // anywhere": sólo salía después de quitar la copia), si cabe un recorte para mandarle.
-                      const conBotonIA = iaCopia && !!g && recorteParaIA(c.m, g) !== null;
-                      return (
-                        <li key={c.i}>
-                          <p className="break-words text-sm text-foreground">{rellenar(tx(!q ? FP.copiaTexto : q.metodo === "ia" ? FP.copiaQuitadaIA : FP.copiaQuitada, lang), v)}</p>
-                          {q?.metodo === "ia" && q.deriva !== null && q.deriva > DERIVA_IA_REVISAR && (
-                            <p className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
-                              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> {tx(FP.copiaIaDeriva, lang)}
+        <div className="space-y-4">
+          {/* Ajustes (rediseño B19): todo lo que cambia el resultado, arriba y en un solo panel que se lee de un vistazo.
+              Antes era una columna de 300 px con su propio scroll donde la mitad quedaba escondida. */}
+          <div className="divide-y divide-border rounded-xl border border-border bg-card px-4">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <FileImage className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <p className="min-w-0 text-sm">
+                  <span className="font-medium break-all text-foreground">{leido?.archivo}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {usables.length === 1 ? tx(FP.mesasUna, lang) : rellenar(tx(FP.mesas, lang), { n: usables.length })}: {usables.map((m) => `${m.w}×${m.h}`).join(", ")}
+                  </span>
+                </p>
+                <Button variant="outline" className={BOTON_TARJETA} onClick={cambiarPsd}>
+                  <FileUp className="size-3.5" aria-hidden="true" /> {tx(FP.cambiar, lang)}
+                </Button>
+              </div>
+              {selectorCliente(false)}
+            </div>
+            <div className="py-3">
+              <PastillasMedidas lista={lista} apagadas={apagadas} sinLugar={sinLugar} lang={lang} alAlternar={alternarMedida} alQuitar={quitarMedida} alAgregar={agregarMedidas} alRestablecer={restablecerMedidas} />
+            </div>
+            <div className="py-3">
+              <PastillasCanal canal={canal} n916={n916} detalle={canal && n916 ? cifrasCanal(canal, lang) : ""} lang={lang} alElegir={elegirCanal} />
+            </div>
+            {(totalTextos > 0 || fueraDeGuia.length > 0 || notasArchivo.length > 0) && (
+              <div className="flex flex-wrap gap-2 py-3">
+                {totalTextos > 0 && (
+                  <ChipEstado
+                    tono={chipTipos.tono}
+                    icono={chipTipos.icono}
+                    titulo="psd-texto-titulo"
+                    lang={lang}
+                    detalle={
+                      <div>
+                        <h2 id="psd-texto-titulo" className="text-sm font-semibold text-foreground">
+                          {tx(FP.textoTitulo, lang)}
+                        </h2>
+                        {/* Vivo: al sumar tipografías el resultado cambia aquí, y se anuncia. */}
+                        <p aria-live="polite" className="mt-1 flex items-center gap-1.5 text-sm font-medium text-foreground">
+                          {(probando || trayendo > 0) && <Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+                          {trayendo > 0 ? tx(FP.textoTrayendo, lang) : probando ? tx(FP.textoProbando, lang) : tipos.size ? rellenar(tx(FP.textoEstado, lang), { n: escritos, m: totalTextos }) : tx(FP.textoSinFuentes, lang)}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">{tx(FP.textoAyuda, lang)}</p>
+                        {faltanOtras.length > 0 && !trayendo && resueltoPara === leido && (
+                          <p className="mt-1 break-words text-xs text-foreground">
+                            {tx(FP.textoFaltan, lang)} {unos(faltanOtras)}. <span className="text-muted-foreground">{tx(FP.textoFaltanAdmin, lang)}</span>
+                          </p>
+                        )}
+                        {!trayendo &&
+                          resueltoPara === leido &&
+                          deOtroCliente.map((a) => (
+                            <p key={a.cliente} className="mt-1 flex items-start gap-1.5 break-words text-xs text-foreground">
+                              <Lock className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                              {textoAjenas(a, lang)}
                             </p>
-                          )}
+                          ))}
+                        {comoImagen.length > 0 && (
+                          <>
+                            <p id="psd-texto-imagen" className="mt-2 text-xs font-medium text-foreground">
+                              {tx(FP.textoComoImagen, lang)}
+                            </p>
+                            <ul aria-labelledby="psd-texto-imagen" className="mt-0.5 list-disc space-y-0.5 pl-5 text-xs text-foreground">
+                              {comoImagen.map((r, i) => (
+                                <li key={i} className="break-words">
+                                  <span lang={delMotor} title={r.capa.length > CAPA_MAX ? r.capa : undefined}>
+                                    «{corto(r.capa)}»
+                                  </span>{" "}
+                                  ({rellenar(tx(r.mesas.length > 1 ? FP.textoMesas : FP.textoMesa, lang), { m: r.mesas.join(", ") })}): <span lang={delMotor}>{r.motivo}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                        {notaFuentes && (
+                          <p role={notaMala(notaFuentes) ? "alert" : undefined} className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
+                            {notaMala(notaFuentes) && <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden="true" />} {textoNotaFuentes(notaFuentes, lang)}
+                          </p>
+                        )}
+                        <Button
+                          ref={botonAgregar}
+                          variant="outline"
+                          size="lg"
+                          className={cn("mt-2 w-full aria-disabled:cursor-wait", BOTON)}
+                          onClick={() => cargandoFuentes > 0 || entradaFuentes.current?.click()}
+                          aria-disabled={cargandoFuentes > 0 || undefined}
+                          aria-busy={cargandoFuentes > 0}
+                        >
+                          {cargandoFuentes > 0 ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Type className="size-4" aria-hidden="true" />}
+                          {tx(cargandoFuentes > 0 ? FP.textoCargando : FP.textoAgregar, lang)}
+                        </Button>
+                        {tipos.size > 0 && (
+                          <button type="button" onClick={olvidar} className={cn("mt-2 min-h-9 w-full cursor-pointer rounded-md text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground pointer-coarse:min-h-11", FOCO)}>
+                            {tx(FP.textoOlvidar, lang)}
+                          </button>
+                        )}
+                      </div>
+                    }
+                  >
+                    {chipTipos.texto}
+                  </ChipEstado>
+                )}
+                {fueraDeGuia.length > 0 && (
+                  <ChipEstado
+                    // Ámbar hasta que la persona revise alguna; ya revisadas, la palomita y la palabra lo dicen (no sólo el color).
+                    tono={elegidos?.size ? "neutro" : "aviso"}
+                    icono={elegidos?.size ? <CircleCheck className="size-3.5 shrink-0 text-status-completed" aria-hidden="true" /> : <Folder className="size-3.5 shrink-0 text-status-warning" aria-hidden="true" />}
+                    titulo="psd-carpetas-titulo"
+                    lang={lang}
+                    detalle={
+                      <fieldset aria-describedby="psd-carpetas-ayuda">
+                        <legend id="psd-carpetas-titulo" className="text-sm font-semibold text-foreground">{tx(FP.carpetasTitulo, lang)}</legend>
+                        <p id="psd-carpetas-ayuda" className="mt-0.5 text-xs text-muted-foreground">
+                          {tx(FP.carpetasAyuda, lang)}
+                        </p>
+                        <ul className="mt-2 space-y-1.5">
+                          {fueraDeGuia.map(([nombre, rol], i) => (
+                            <li key={nombre} className="flex items-center gap-2">
+                              <label htmlFor={`psd-carpeta-${i}`} className="min-w-0 flex-1 truncate text-sm text-foreground" title={nombre}>
+                                <span lang={delMotor}>«{nombre}»</span>
+                              </label>
+                              <select
+                                id={`psd-carpeta-${i}`}
+                                value={rol ?? ""}
+                                onChange={(e) => elegirPapel(nombre, (e.target.value || null) as Rol | null)}
+                                className="h-9 w-44 shrink-0 cursor-pointer rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:h-11 pointer-coarse:text-base"
+                              >
+                                {PAPELES.map((p) => (
+                                  <option key={p} value={p}>
+                                    {tx(FP_PAPEL[p || "NINGUNO"], lang)}
+                                  </option>
+                                ))}
+                              </select>
+                            </li>
+                          ))}
+                        </ul>
+                      </fieldset>
+                    }
+                  >
+                    {fueraDeGuia.length === 1 ? tx(FP.carpetasChipUna, lang) : rellenar(tx(FP.carpetasChip, lang), { n: fueraDeGuia.length })}
+                    {elegidos?.size ? tx(FP.carpetasRevisadas, lang) : ""}
+                  </ChipEstado>
+                )}
+                {notasArchivo.length > 0 && (
+                  <ChipEstado
+                    tono="aviso"
+                    icono={<AlertTriangle className="size-3.5 shrink-0 text-status-warning" aria-hidden="true" />}
+                    titulo="psd-notas"
+                    lang={lang}
+                    detalle={
+                      <div>
+                        <h2 id="psd-notas" className="text-sm font-semibold text-foreground">
+                          {tx(FP.avisosDelArchivo, lang)}
+                        </h2>
+                        <ul aria-labelledby="psd-notas" lang={delMotor} className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-foreground">
+                          {notasArchivo.map((n, i) => (
+                            <li key={i} className="break-words">
+                              {n}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    }
+                  >
+                    {notasTxt}
+                  </ChipEstado>
+                )}
+              </div>
+            )}
+          </div>
+          {/* Fuera del Popover: así el botón «Agregar tipografías» lo encuentra aunque el detalle se cierre y se abra. */}
+          <input
+            ref={entradaFuentes}
+            type="file"
+            multiple
+            accept=".otf,.ttf,font/otf,font/ttf"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={(e) => {
+              const archivos = [...(e.target.files ?? [])];
+              e.target.value = "";
+              if (archivos.length) void agregarFuentes(archivos);
+            }}
+          />
+
+          {/* Lo que se repite en varias medidas se arregla UNA vez aquí (antes, el aviso salía en 11 de 12 tarjetas y el
+              botón vivía en la columna de la izquierda). */}
+          {(copiasEnVista.length > 0 || legalChico.length > 0) && (
+            <section aria-labelledby="psd-varias" className={cn("rounded-xl border px-4 py-3", variasPendiente ? "border-status-warning/40 bg-status-warning/5" : "border-border bg-card")}>
+              <h2 id="psd-varias" className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                {variasPendiente ? <AlertTriangle className="size-4 shrink-0 text-status-warning" aria-hidden="true" /> : <CircleCheck className="size-4 shrink-0 text-status-completed" aria-hidden="true" />}
+                {tx(FP.enVarias, lang)}
+                <span className="sr-only">: {tx(variasPendiente ? FP.enVariasPendiente : FP.enVariasListo, lang)}</span>
+              </h2>
+              <ul className="divide-y divide-border">
+                {copiasEnVista.map((c) => {
+                  const q = c.quitada;
+                  const estimado = `≈ ${usd(COSTO_COPIA_IA_USD, 3)}`;
+                  const v = {
+                    p: c.nombre,
+                    m: deMesa(c.m),
+                    pct: String(Math.round(c.parecido * 100)),
+                    n: String(c.n),
+                    t: String(filas.length),
+                    c: q?.metodo === "ia" && q.costoUsd !== null ? usd(q.costoUsd, 3) : estimado,
+                    e: estimado,
+                  };
+                  const trabajando = iaEnCurso === c.i;
+                  const g = copias[c.i];
+                  // La IA se ofrece desde el principio, junto al gratis (Pedro, 2026-10-15: "i didnt see the ai button
+                  // anywhere": sólo salía después de quitar la copia), si cabe un recorte para mandarle.
+                  const conBotonIA = iaCopia && !!g && recorteParaIA(c.m, g) !== null;
+                  return (
+                    <li key={c.i} className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 py-2.5">
+                      <div className="min-w-0 flex-1 basis-80">
+                        <p className="text-xs font-medium text-muted-foreground">{tx(FP.copiaTitulo, lang)}</p>
+                        <p className="break-words text-sm text-foreground">{rellenar(tx(!q ? FP.copiaTexto : q.metodo === "ia" ? FP.copiaQuitadaIA : FP.copiaQuitada, lang), v)}</p>
+                        {q?.metodo === "ia" && q.deriva !== null && q.deriva > DERIVA_IA_REVISAR && (
+                          <p className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
+                            <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> {tx(FP.copiaIaDeriva, lang)}
+                          </p>
+                        )}
+                        {conBotonIA && (
+                          <p id={`psd-copia-ia-${c.i}`} className="mt-1 text-xs text-muted-foreground">
+                            {rellenar(tx(FP.copiaIaAyuda, lang), v)}
+                            {trabajando ? ` ${tx(FP.copiaIaEspera, lang)}` : iaEnCurso !== null ? ` ${tx(FP.copiaIaOtra, lang)}` : ""}
+                          </p>
+                        )}
+                        <p className="mt-1 text-xs text-muted-foreground">{tx(FP.copiaAyuda, lang)}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-1.5">
+                        <Button
+                          id={`psd-copia-btn-${c.i}`}
+                          variant={q ? "outline" : "default"}
+                          size="lg"
+                          className={cn(BOTON, FOCO)}
+                          disabled={trabajando}
+                          onClick={(e) => {
+                            // El segundo clic de un doble clic (detail 2) llega cuando el botón ya cambió: desharía lo que el primero hizo.
+                            if (e.detail > 1) return;
+                            if (q) devolverCopia(c.i, c.nombre, e.timeStamp);
+                            else quitarCopia(c.i, e.timeStamp);
+                          }}
+                        >
+                          {q ? <Undo2 className="size-4" aria-hidden="true" /> : <Eraser className="size-4" aria-hidden="true" />} {tx(q ? FP.copiaDevolver : FP.copiaQuitar, lang)}
+                          {/* El nombre que oye el lector empieza con lo que dice el botón (así también lo encuentra el control por voz). */}
+                          <span className="sr-only">{rellenar(tx(q ? FP.copiaDevolverSr : FP.copiaQuitarSr, lang), v)}</span>
+                        </Button>
+                        {conBotonIA && (
                           <Button
-                            id={`psd-copia-btn-${c.i}`}
-                            variant={q ? "outline" : "default"}
+                            variant="secondary"
                             size="lg"
-                            className={cn("mt-1.5 w-full", BOTON, FOCO)}
-                            disabled={trabajando}
+                            className={cn(BOTON, FOCO)}
+                            aria-disabled={iaEnCurso !== null}
+                            aria-busy={trabajando}
+                            aria-describedby={`psd-copia-ia-${c.i}`}
                             onClick={(e) => {
-                              // El segundo clic de un doble clic (detail 2) llega cuando el botón ya cambió: desharía lo que el primero hizo.
-                              if (e.detail > 1) return;
-                              if (q) devolverCopia(c.i, c.nombre, e.timeStamp);
-                              else quitarCopia(c.i, e.timeStamp);
+                              if (e.detail > 1 || iaEnCurso !== null) return;
+                              void rellenarConIA(c.i);
                             }}
                           >
-                            {q ? <Undo2 className="size-4" aria-hidden="true" /> : <Eraser className="size-4" aria-hidden="true" />} {tx(q ? FP.copiaDevolver : FP.copiaQuitar, lang)}
-                            {/* El nombre que oye el lector empieza con lo que dice el botón (así también lo encuentra el control por voz). */}
-                            <span className="sr-only">{rellenar(tx(q ? FP.copiaDevolverSr : FP.copiaQuitarSr, lang), v)}</span>
+                            {trabajando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}{" "}
+                            {trabajando ? tx(FP.copiaIaTrabajando, lang) : rellenar(tx(!q ? FP.copiaIaDirecto : q.metodo === "ia" ? FP.copiaIaOtraVez : FP.copiaIa, lang), v)}
+                            <span className="sr-only">{rellenar(tx(FP.copiaQuitarSr, lang), v)}</span>
                           </Button>
-                          {conBotonIA && (
-                            <>
-                              <p id={`psd-copia-ia-${c.i}`} className="mt-2 text-xs text-muted-foreground">
-                                {rellenar(tx(FP.copiaIaAyuda, lang), v)}
-                                {trabajando ? ` ${tx(FP.copiaIaEspera, lang)}` : iaEnCurso !== null ? ` ${tx(FP.copiaIaOtra, lang)}` : ""}
-                              </p>
-                              <Button
-                                variant="secondary"
-                                size="lg"
-                                className={cn("mt-1 w-full", BOTON, FOCO)}
-                                aria-disabled={iaEnCurso !== null}
-                                aria-busy={trabajando}
-                                aria-describedby={`psd-copia-ia-${c.i}`}
-                                onClick={(e) => {
-                                  if (e.detail > 1 || iaEnCurso !== null) return;
-                                  void rellenarConIA(c.i);
-                                }}
-                              >
-                                {trabajando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}{" "}
-                                {trabajando ? tx(FP.copiaIaTrabajando, lang) : rellenar(tx(!q ? FP.copiaIaDirecto : q.metodo === "ia" ? FP.copiaIaOtraVez : FP.copiaIa, lang), v)}
-                                <span className="sr-only">{rellenar(tx(FP.copiaQuitarSr, lang), v)}</span>
-                              </Button>
-                            </>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  <p className="mt-1.5 text-xs text-muted-foreground">{tx(FP.copiaAyuda, lang)}</p>
-                </div>
-              )}
-              <Button variant="outline" size="lg" className={cn("mt-3 w-full", BOTON)} onClick={cambiarPsd}>
-                <FileUp className="size-4" aria-hidden="true" /> {tx(FP.cambiar, lang)}
-              </Button>
-            </div>
-
-            <form
-              className="rounded-xl border border-border bg-card p-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                usarLista();
-              }}
-            >
-              <label htmlFor="psd-lista" className="text-sm font-medium text-foreground">
-                {tx(FX.pegarLista, lang)}
-              </label>
-              <p id="psd-lista-ayuda" className="text-xs text-muted-foreground">
-                {tx(FX.pegarAyuda, lang)}
-              </p>
-              <textarea
-                id="psd-lista"
-                value={texto}
-                onChange={(e) => {
-                  setTexto(e.target.value);
-                  setNotaLista(null);
-                }}
-                rows={4}
-                spellCheck={false}
-                aria-invalid={notaLista?.mal || undefined}
-                aria-describedby={notaLista ? "psd-lista-ayuda psd-lista-nota" : "psd-lista-ayuda"}
-                className="mt-2 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              {notaLista && (
-                <p id="psd-lista-nota" role={notaLista.mal ? "alert" : undefined} className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
-                  {notaLista.mal && <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden="true" />} {notaLista.texto}
-                </p>
-              )}
-              <Button type="submit" variant="secondary" size="lg" className={cn("mt-2 w-full", BOTON)}>
-                {tx(FX.pegarUsar, lang)}
-              </Button>
-            </form>
-
-            {totalTextos > 0 && (
-              <section aria-labelledby="psd-texto-titulo" className="rounded-xl border border-border bg-card p-3">
-                <h2 id="psd-texto-titulo" className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  {tx(FP.textoTitulo, lang)}
-                </h2>
-                {/* Vivo: al sumar tipografías el resultado cambia aquí, y se anuncia. */}
-                <p aria-live="polite" className="mt-1 flex items-center gap-1.5 text-sm font-medium text-foreground">
-                  {(probando || trayendo > 0) && <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />}
-                  {trayendo > 0 ? tx(FP.textoTrayendo, lang) : probando ? tx(FP.textoProbando, lang) : tipos.size ? rellenar(tx(FP.textoEstado, lang), { n: escritos, m: totalTextos }) : tx(FP.textoSinFuentes, lang)}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{tx(FP.textoAyuda, lang)}</p>
-                {faltanOtras.length > 0 && !trayendo && resueltoPara === leido && (
-                  <p className="mt-1 break-words text-xs text-foreground">
-                    {tx(FP.textoFaltan, lang)} {unos(faltanOtras)}. <span className="text-muted-foreground">{tx(FP.textoFaltanAdmin, lang)}</span>
-                  </p>
-                )}
-                {!trayendo &&
-                  resueltoPara === leido &&
-                  deOtroCliente.map((a) => (
-                    <p key={a.cliente} className="mt-1 flex items-start gap-1.5 break-words text-xs text-foreground">
-                      <Lock className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                      {textoAjenas(a, lang)}
-                    </p>
-                  ))}
-                {comoImagen.length > 0 && (
-                  <>
-                    <p id="psd-texto-imagen" className="mt-2 text-xs font-medium text-foreground">
-                      {tx(FP.textoComoImagen, lang)}
-                    </p>
-                    <ul aria-labelledby="psd-texto-imagen" className="mt-0.5 list-disc space-y-0.5 pl-5 text-xs text-foreground">
-                      {comoImagen.map((r, i) => (
-                        <li key={i} className="break-words">
-                          <span lang={delMotor} title={r.capa.length > CAPA_MAX ? r.capa : undefined}>
-                            «{corto(r.capa)}»
-                          </span>{" "}
-                          ({rellenar(tx(r.mesas.length > 1 ? FP.textoMesas : FP.textoMesa, lang), { m: r.mesas.join(", ") })}): <span lang={delMotor}>{r.motivo}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-                {notaFuentes && (
-                  <p role={notaMala(notaFuentes) ? "alert" : undefined} className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
-                    {notaMala(notaFuentes) && <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden="true" />} {textoNotaFuentes(notaFuentes, lang)}
-                  </p>
-                )}
-                <input
-                  ref={entradaFuentes}
-                  type="file"
-                  multiple
-                  accept=".otf,.ttf,font/otf,font/ttf"
-                  className="sr-only"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  onChange={(e) => {
-                    const archivos = [...(e.target.files ?? [])];
-                    e.target.value = "";
-                    if (archivos.length) void agregarFuentes(archivos);
-                  }}
-                />
-                <Button
-                  ref={botonAgregar}
-                  variant="outline"
-                  size="lg"
-                  className={cn("mt-2 w-full aria-disabled:cursor-wait", BOTON)}
-                  onClick={() => cargandoFuentes > 0 || entradaFuentes.current?.click()}
-                  aria-disabled={cargandoFuentes > 0 || undefined}
-                  aria-busy={cargandoFuentes > 0}
-                >
-                  {cargandoFuentes > 0 ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Type className="size-4" aria-hidden="true" />}
-                  {tx(cargandoFuentes > 0 ? FP.textoCargando : FP.textoAgregar, lang)}
-                </Button>
-                {tipos.size > 0 && (
-                  <button type="button" onClick={olvidar} className={cn("mt-2 min-h-11 w-full cursor-pointer rounded text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground sm:min-h-9", FOCO)}>
-                    {tx(FP.textoOlvidar, lang)}
-                  </button>
-                )}
-              </section>
-            )}
-
-            <section aria-labelledby="psd-zona-titulo" className="rounded-xl border border-border bg-card p-3">
-              <h2 id="psd-zona-titulo" className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                {tx(FP.zona, lang)}
-              </h2>
-              <label htmlFor="psd-canal" className="mt-1 block text-sm font-medium text-foreground">
-                {tx(FP.zonaCanal, lang)}
-              </label>
-              <select
-                id="psd-canal"
-                value={canal ?? ""}
-                onChange={(e) => {
-                  const v = esCanal(e.target.value) ? e.target.value : null;
-                  setCanal(v);
-                  if (v) anunciar(n916 ? rellenar(tx(FP.zonaMarcadas, lang), { c: CANALES[v].nombre, n: n916 }) : tx(FP.zonaSin916, lang));
-                }}
-                aria-describedby="psd-canal-ayuda"
-                className="mt-1 min-h-11 w-full cursor-pointer rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
-              >
-                <option value="">{tx(FP.zonaNinguno, lang)}</option>
-                {(Object.keys(CANALES) as Canal[]).map((c) => (
-                  <option key={c} value={c}>
-                    {CANALES[c].nombre}
-                  </option>
-                ))}
-              </select>
-              {canal && <p className="mt-1 text-xs font-medium text-foreground">{n916 ? cifrasCanal(canal, lang) : tx(FP.zonaSin916, lang)}</p>}
-              <p id="psd-canal-ayuda" className="mt-1 text-xs text-muted-foreground">
-                {tx(FP.zonaAyuda, lang)}
-              </p>
-            </section>
-          </aside>
-
-          <section aria-labelledby="psd-resultado" className="@container min-w-0">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0">
-                <h2 id="psd-resultado" ref={tituloResultado} tabIndex={-1} className="text-lg font-semibold text-foreground outline-none">
-                  {tx(FX.resultados, lang)}
-                </h2>
-                <p className="text-sm text-muted-foreground">{resumen}</p>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+                {/* El legal es obligatorio (CAT de una tarjeta) y nunca se quita: dónde queda chico se dice aquí, no sólo en su tarjeta. */}
                 {legalChico.length > 0 && (
-                  <p className="mt-1 flex items-start gap-1.5 text-sm text-foreground">
+                  <li className="flex items-start gap-1.5 py-2.5 text-sm text-foreground">
                     <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-warning" aria-hidden="true" />
                     {legalChico.length === 1
                       ? rellenar(tx(FP.legalChicoUna, lang), { m: legalChico[0], px: LETRA_MIN_PX })
                       : rellenar(tx(FP.legalChico, lang), { n: legalChico.length, m: legalChico.join(", "), px: LETRA_MIN_PX })}
-                  </p>
+                  </li>
                 )}
+              </ul>
+            </section>
+          )}
+
+          <section aria-labelledby="psd-resultado" className="min-w-0">
+            {/* Pegajosa bajo la barra de la app (h-16): el ZIP y «Voltear todas» siguen a la mano al bajar por las tarjetas. */}
+            <div className="sticky top-16 z-20 mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background/90 py-2 backdrop-blur-sm">
+              <div className="min-w-0">
+                <h2 id="psd-resultado" ref={tituloResultado} tabIndex={-1} className="text-lg font-semibold text-foreground outline-none">
+                  {tx(FX.resultados, lang)}
+                </h2>
+                {resumen && <p className="text-sm text-muted-foreground">{resumen}</p>}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {volteables.length > 0 && (
@@ -1766,20 +1865,50 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                     <FlipHorizontal2 className="size-4" aria-hidden="true" /> {tx(FP.voltearTodas, lang)}
                   </Button>
                 )}
-                {/* aria-disabled, no disabled: un botón con foco que se deshabilita suelta el foco al tope de la página. */}
-                <Button size="lg" className={cn(BOTON, "aria-disabled:opacity-60")} onClick={() => void bajarZip()} aria-disabled={zipeando || undefined} aria-busy={zipeando}>
-                  {zipeando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
-                  {zipeando ? tx(FX.armandoZip, lang) : rellenar(tx(FX.bajarZipN, lang), { n: filas.length })}
-                </Button>
+                {filas.length > 0 && (
+                  // aria-disabled, no disabled: un botón con foco que se deshabilita suelta el foco al tope de la página.
+                  <Button size="lg" className={cn(BOTON, "aria-disabled:opacity-60")} onClick={() => void bajarZip()} aria-disabled={zipeando || undefined} aria-busy={zipeando}>
+                    {zipeando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
+                    {zipeando ? tx(FX.armandoZip, lang) : rellenar(tx(FX.bajarZipN, lang), { n: filas.length })}
+                  </Button>
+                )}
               </div>
             </div>
-            {/* Dos columnas cuando la COLUMNA de resultados da para ello (la barra y el panel de al lado la angostan);
-                las horizontales y los banners ocupan la fila entera. El orden es el de la lista del cliente. */}
-            <ul className="grid items-start gap-4 @xl:grid-cols-2">
-              {medidas.map((m) => (
-                <TarjetaMedida key={clave(m)} maestros={maestrosVista} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} />
-              ))}
-            </ul>
+            {!medidas.length ? (
+              <div role="status" className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                {tx(FP.medidasNinguna, lang)}
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className={BOTON}
+                  onClick={() => {
+                    restablecerMedidas();
+                    // Este botón desaparece con las tarjetas de vuelta: el foco pasa al título de resultados.
+                    tituloResultado.current?.focus();
+                  }}
+                >
+                  <RotateCcw className="size-4" aria-hidden="true" /> {tx(FP.medidasRestablecer, lang)}
+                </Button>
+              </div>
+            ) : (
+              // Agrupadas por forma, como las pastillas de arriba; dentro de cada grupo, en el orden de la lista.
+              FORMAS.map((f) => {
+                const grupo = medidas.filter((m) => formaDe(m.w, m.h) === f);
+                if (!grupo.length) return null;
+                return (
+                  <div key={f} className="mb-6">
+                    <h3 id={`psd-grupo-${f}`} className="mb-2 text-base font-semibold text-foreground">
+                      {tx(NOMBRE_FORMA[f], lang)} <span className="font-normal text-muted-foreground tabular-nums">({grupo.length})</span>
+                    </h3>
+                    <ul className={cn("grid gap-3", COLUMNAS[f])}>
+                      {grupo.map((m) => (
+                        <TarjetaMedida key={clave(m)} maestros={maestrosVista} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} />
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })
+            )}
           </section>
         </div>
       )}

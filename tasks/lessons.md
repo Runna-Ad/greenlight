@@ -1082,3 +1082,23 @@ TAGS: #formatos #medir-antes-de-decir #contraste #comparar-opciones
 ROOT CAUSE: supuse que el servidor local con CORS bastaba (sí basta para localhost:3000, que es local).
 RULE: para mandar archivos de la Mac a la preview, poner los archivos en una carpeta de Pedro (Escritorio › formatos-prueba) y un selector de archivos en la página; Pedro da el clic. Todo lo que hay que ver se dibuja en la misma página (nada regresa a la Mac).
 TAGS: #navegador #preview #archivos #pruebas-ia
+
+[2026-10-15] PEDRO_OVERRIDE (Formatos es de escritorio, a lo mucho iPad): en el plan del rediseño (B19) medí el teléfono (375 px, resultados a 2157 px) y propuse un Sheet para los ajustes en pantallas chicas.
+PEDRO'S APPROACH: "this will be a strict desktop use maybe ipad but no smaller than that at least for now so plan on that".
+WHY IT WAS BETTER: el equipo arma anuncios en la compu; diseñar y probar el teléfono gasta tiempo en un uso que no existe.
+RULE: en Formatos (y HÜE Prisma mientras Pedro no diga otra cosa) el ancho mínimo es el iPad vertical (~768-834 px de pantalla, ~580 px de contenido con el menú de 240 px). Se diseña y se prueba en 1440, iPad horizontal (1180) e iPad vertical (820). Como el iPad es táctil: nada que sólo aparezca con hover y botones de 44 px con `pointer: coarse`.
+TAGS: #override #formatos #responsivo #ipad #diseno
+
+[2026-10-15] LESSON (rediseño de Formatos: un toggle armado con el estado del pintado pierde clics): las pastillas de medidas calculaban el conjunto nuevo desde `apagadas` del pintado (no con una actualización funcional). Al probar "apagar todas" con varios clics seguidos sólo quedó apagada la última: cada clic partía del mismo estado viejo. Una persona con mouse no llega tan rápido, pero un doble toque o una tablet lenta sí.
+ROOT CAUSE: React junta los cambios y repinta después; los clics que llegan antes del repintado ven el estado anterior.
+RULE: prender/apagar algo de un conjunto o lista va con `setX((antes) => ...)`. Probarlo con varios clics en la misma vuelta (un bucle de `.click()`), no sólo con uno.
+TAGS: #react #estado #toggle #formatos #probar-en-navegador
+
+[2026-10-15] LESSON (iPad: los breakpoints de ancho deshacen el tamaño táctil): la página usaba `min-h-11 sm:min-h-9` para dar 44 px en teléfono. El iPad mide más de 640 px, así que justo en el aparato que Pedro nombró los botones quedaban en 36 px (o en 0 con `sm:min-h-0`). Lo encontró el revisor de accesibilidad.
+ROOT CAUSE: usar el ancho de pantalla como señal de "dedo".
+RULE: el tamaño para dedo va con `pointer-coarse:` (Tailwind 4.1+), no con `sm:`/`md:`. Buscar `sm:min-h` al tocar una pantalla que se usa en iPad.
+TAGS: #ipad #accesibilidad #tailwind #touch #formatos
+
+[2026-10-15] LESSON (un Popover de Radix sale fuera de la página): el contenido de un Popover se pinta en un portal, así que no hereda el `lang` de la página (en inglés el lector lo leía como español) y es un `role="dialog"` sin nombre si no se le da `aria-labelledby`. Lo encontraron los dos revisores.
+RULE: todo PopoverContent lleva `aria-labelledby` (el encabezado o la etiqueta de adentro) y `lang={lang}` en pantallas con dos idiomas.
+TAGS: #accesibilidad #radix #popover #idioma #formatos

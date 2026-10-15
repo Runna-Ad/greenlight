@@ -78,6 +78,7 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 ### Plan B — puerta PSD (2026-10-13)
 **Next Step (2026-10-15):** B15 (editor + botón IA) y B16 (contraste: los dos, la plataforma elige) en la preview.
 Pedro prueba. Colchón: Pedro eligió que diseño lo arregle a mano → B18 (PSD por medida). Falta que un diseñador abra los 2 PSD de prueba (Escritorio › formatos-prueba › psd-prueba) y diga si Photoshop acepta los objetos inteligentes.
+B19 (rediseño de la página): opción A construida y en la preview; falta que Pedro la pruebe.
 Reels se queda sin zoom (Pedro: "yes leave reels as it is").
 **Antes:** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
 subir. La prueba de punta a punta de tipografías espera el "ship it" de 0079 + bucket. 320×50 se queda igual
@@ -568,6 +569,49 @@ largo: estacionado por él.
         su PNG del maestro adentro (5 de 5 leídos de vuelta). Si Photoshop lo acepta, se cambia la opción 1 por ésta.
       · No probado: abrir los PSD en Photoshop (no hay Photoshop aquí). Piezas quitadas (subtítulo) no van en el PSD.
       · test-formatos 311/0 (3 nuevos) · npm test verde · tsc y eslint limpios.
+- [~] B19. Rediseño de la página Formatos (Pedro, 2026-10-15: "feels too dirty and ugly… seems confusing what is
+      what and where are things"; /design-god-mode). Pedro eligió A ("yes build option A").
+      · Hecho: ajustes.tsx (pastillas de medidas por forma Vertical/Horizontal/Banner, «Agregar medida» con «Usar sólo
+        éstas», canal en pastillas con punto de color, chips de estado con Popover); panel de ajustes arriba; «En varias
+        medidas» (pieza repetida + legal chico, una vez); resultados agrupados por forma con barra pegajosa; tarjeta nueva
+        (estado «Listo»/«N avisos», contraste en una línea que se abre, avisos repetidos en una línea corta, botones al
+        pie). `--plat-ig`. 8 textos muertos fuera de copy.ts. Grupos: vertical si ancho/alto < 0.95, banner si ≥ 3.
+      · Medido (localhost, s33): página 6259 → 3055 px a 1440; 5/4/2 tarjetas por fila a 1440, 4/3/2 a 1180, 2/2/1 a
+        820; sin scroll horizontal. Los resultados empiezan a 868 px a 1440×900 (la barra con el ZIP se ve al pie).
+      · Revisión (2 revisores: accesibilidad + código): arreglado lo serio (cuadros sin nombre, foco perdido al borrar
+        una pastilla o volver a la lista, h3 dentro de h3, estado sólo por color en carpetas y «En varias medidas», foco
+        tapado por la barra pegajosa, errores de tipografías escondidos en el chip cerrado) y lo barato (anuncios al
+        prender/apagar, estado vacío con botón, 44 px con `pointer-coarse` también en enlaces y contraste, «×» de 44 px,
+        idioma en los cuadros, tope de 2000 letras al pegar, «0 de N» de la pieza repetida con medidas apagadas, texto
+        EN «Retouched background»). Probado en el navegador después.
+      · Sin hacer (reporte): canal y contraste como `radiogroup` con flechas (hoy botones `aria-pressed`); ayuda del
+        cliente y del «PSD» sólo con el mouse (`title`; lo del cliente también está en el chip de tipografías);
+        `edicionesVista` relee localStorage en cada clic de pastilla (no repinta); medidas que no caben por el tope
+        siguen viéndose prendidas (sólo pasa con más de 30).
+      · No probado: táctil real (44 px con `pointer-coarse`, la regla está en el CSS), Enter en el campo de medidas,
+        zoom de Safari en iPad al tocar el campo.
+      · Medido hoy (localhost, s33, 1440×900): la columna de ajustes mide 300 px y trae 1675 px de contenido en una
+        ventana de 804 (más de la mitad escondida, con su propia barra de scroll); 424 palabras, 208 de ayuda gris en
+        7 párrafos; 4 cajas iguales; 5 selects. «Se ve dos veces CARD» se repite en 11 de 12 tarjetas y su arreglo
+        está en la columna. En el teléfono (375 px) los resultados empiezan a 2157 px (2.7 pantallas abajo).
+      · Propuesta A (recomendada): barra de control arriba y resultados a todo lo ancho. Archivo y cliente en chips;
+        medidas como pastillas agrupadas por forma (Vertical / Feed / Horizontal / Display) que se prenden y apagan al
+        clic, más «Agregar medida» (escribir o pegar la lista: reusa `leerMedidas`); canal como pastillas con el color
+        de la app (falta `--plat-ig`); tipografías y carpetas como chips de estado con detalle en un Popover; «Por
+        revisar» junta los avisos repetidos con su botón una sola vez; resultados agrupados por forma, 3-4 por fila,
+        tarjetas más ligeras (contraste en una línea, avisos en un conteo que se abre).
+      · Sólo escritorio e iPad (Pedro, 2026-10-15: "strict desktop use maybe ipad but no smaller"). Hoy en iPad: la
+        página se apila como en teléfono. Vertical 820: contenido 580 px, resultados a 1763 px, 1 por fila. Horizontal
+        1180: 1 por fila (568 px). Meta con A: 1440 → 4 por fila; iPad horizontal → 3; iPad vertical → 2, con la barra
+        de ajustes arriba en los tres. Táctil: nada sólo con hover, pastillas y botones de 44 px con `pointer: coarse`.
+        Debajo de 768 no se diseña ni se prueba (la página carga, nada más).
+      · Alternativas: B paso a paso (1 PSD → 2 medidas → 3 canal → 4 revisa), más claro la primera vez pero más
+        lento a diario y no deja ver el resultado mientras se cambian medidas; C limpiar la columna actual (menos
+        riesgo, pero 12 pastillas en 300 px dan 5-6 renglones y los resultados siguen a 2 por fila).
+      · Medidas de DiDi: siguen en código (`MEDIDAS_EQUIPO`) y se rotulan con el cliente; guardarlas por cliente es
+        el 3e (migración, más adelante).
+      · Skills: ui-ux-pro-max (base), design-taste-frontend (herramienta interna: variación baja, movimiento bajo,
+        densidad alta), shadcn-ui (Popover, Sheet, Tooltip ya existen), §R3 responsivo, §R4 revisión.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.
