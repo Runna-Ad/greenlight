@@ -76,8 +76,9 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 - Siguen abiertas: letra mínima aceptable del legal (hoy 10 px provisional) · 3-5 PSD más.
 
 ### Plan B — puerta PSD (2026-10-13)
-**Next Step (2026-10-14, noche):** B13 + zoom del fondo en la preview: que Pedro lo vea con s33 (sin canal, Stories,
-TikTok). Reels sigue con la tarjeta flotando (pediría ×1.95 de zoom): decidir si se queda así.
+**Next Step (2026-10-15):** B14 en la preview. Pendiente de Pedro: (1) el editor por medida (mover y cambiar de tamaño
+las piezas) y cómo construirlo; (2) arreglo automático del contraste (mover el fondo o sombra detrás del texto).
+Reels se queda sin zoom (Pedro: "yes leave reels as it is").
 **Antes:** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
 subir. La prueba de punta a punta de tipografías espera el "ship it" de 0079 + bucket. 320×50 se queda igual
 (Pedro). Después: que pruebe la preview con su PSD y las DiDi; B4.
@@ -483,6 +484,18 @@ largo: estacionado por él.
         (a tamaño real se lee; el fondo, más suave). Reels pediría ×1.95 (tarjeta chiquita, nubes borradas): no
         se agranda y la tarjeta flota. APGIANT con Stories pediría ×2.1: tampoco. Navegador (localhost): con
         Stories la 9:16 sale con el zoom. test-formatos 290/0 · npm test 81/0 y 44/0 · tsc y eslint limpios.
+- [x] B14. Lo que vio Pedro en la preview (2026-10-15):
+      · Silueta de la tarjeta en 768×1024: era la sombra del título (Copy, multiplicar) detrás de la tarjeta, guardada
+        "sin sombra" porque el PSD no la deja ver. psd.ts la llena con la de alrededor (`rellenarSuave`, Laplace de
+        grueso a fino). Comprobado: sobre azul liso ya no hay marco. +21 a +62 ms al leer cada mesa.
+      · 640×100 logos chicos / 600×500 botón chico: en columnas, la pieza más ancha que la columna se ajusta sola y
+        el alto que suelta va a las demás (botón y marca hasta 1.3× el título); en banners, el ancho que una celda no
+        usa pasa a las que se quedan cortas (marca hasta 40 % del alto, botón 55 %). s33: logos 98×12 → 196×24,
+        botón 105×29 → 180×50 (640×100); botón 108×30 → 209×57 y título 188×141 → 278×209 (600×500).
+      · El legal NUNCA se quita (PEDRO_OVERRIDE). Su franja crece si el resto del texto puede ceder; el resumen dice
+        en qué medidas queda bajo 10 px. Costo medido: en 640×100 el título de s33 baja de 11.6 a 7.8 px; en 320×50
+        el legal queda en 3.1 px y el título en 3.9 px (un legal de 3 renglones no cabe legible en 50 px).
+      · test-formatos 294/0 · npm test 81/0 y 44/0 · tsc y eslint limpios.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

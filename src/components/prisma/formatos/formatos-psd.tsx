@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
-import { CANALES, MEDIDAS_EQUIPO, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Lado } from "@/lib/prisma/formatos/acomodo";
+import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Lado } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type CopiaEnFondo } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
@@ -1033,8 +1033,11 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const porRevisar = filas.filter((f) => f.acomodo.avisos.length).length;
   const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia));
   const n916 = medidas.filter((m) => es916(m.w, m.h)).length;
-  // El legal puede ser obligatorio (CAT de una tarjeta): las medidas donde se quitó se dicen junto al ZIP, no sólo en su tarjeta.
-  const sinLegal = filas.filter((f) => f.acomodo.quitadas.some((i) => maestrosVista[f.maestro]?.piezas[i]?.rol === "FOOTER")).map((f) => etiqueta(f.m));
+  // El legal es obligatorio (CAT de una tarjeta) y nunca se quita: las medidas donde queda chico se dicen junto al ZIP,
+  // no sólo en su tarjeta.
+  const legalChico = filas
+    .filter((f) => f.acomodo.letras.some((l) => maestrosVista[f.maestro]?.piezas[l.pieza]?.rol === "FOOTER" && l.px < LETRA_MIN_PX))
+    .map((f) => etiqueta(f.m));
   const voltearTodas = () => {
     setLados((p) => ({ ...p, ...Object.fromEntries(volteables.map((f) => [clave(f.m), p[clave(f.m)] === "izquierda" ? "derecha" : "izquierda"])) }));
     anunciar(rellenar(tx(FP.voltearTodasHecho, lang), { n: volteables.length }));
@@ -1559,10 +1562,12 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                   {tx(FX.resultados, lang)}
                 </h2>
                 <p className="text-sm text-muted-foreground">{resumen}</p>
-                {sinLegal.length > 0 && (
+                {legalChico.length > 0 && (
                   <p className="mt-1 flex items-start gap-1.5 text-sm text-foreground">
                     <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-warning" aria-hidden="true" />
-                    {sinLegal.length === 1 ? rellenar(tx(FP.sinLegalUna, lang), { m: sinLegal[0] }) : rellenar(tx(FP.sinLegal, lang), { n: sinLegal.length, m: sinLegal.join(", ") })}
+                    {legalChico.length === 1
+                      ? rellenar(tx(FP.legalChicoUna, lang), { m: legalChico[0], px: LETRA_MIN_PX })
+                      : rellenar(tx(FP.legalChico, lang), { n: legalChico.length, m: legalChico.join(", "), px: LETRA_MIN_PX })}
                   </p>
                 )}
               </div>

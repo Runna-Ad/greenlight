@@ -458,6 +458,47 @@ const a8 = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255);
 /** Debajo de esto, "cuánto oscurece" no se puede medir (dividir entre casi cero): se deja sin oscurecer. */
 const NEGRO = 8 / 255;
 
+/**
+ * Llena lo `desconocido` de un campo suave (w × h, un canal) con lo que lo rodea, sin escalones: cada punto queda en
+ * el promedio de sus vecinos (Laplace), resuelto de grueso a fino para que converja rápido. Lo conocido no se toca.
+ */
+export function rellenarSuave(v: Float32Array, desconocido: Uint8Array, w: number, h: number): void {
+  let conocidos = 0, suma = 0;
+  for (let i = 0; i < w * h; i++) if (!desconocido[i]) { suma += v[i]; conocidos++; }
+  if (!conocidos) return;
+  let prev: Float32Array | null = null, pw = 0, ph = 0;
+  for (const [f, vueltas] of [[8, 300], [4, 150], [2, 60], [1, 30]] as const) {
+    const cw = Math.ceil(w / f), ch = Math.ceil(h / f);
+    const val = new Float32Array(cw * ch), fijo = new Uint8Array(cw * ch), cuenta = new Float32Array(cw * ch);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (desconocido[i]) continue;
+        const k = Math.floor(y / f) * cw + Math.floor(x / f);
+        val[k] += v[i];
+        cuenta[k]++;
+      }
+    for (let k = 0; k < cw * ch; k++) {
+      if (cuenta[k]) { val[k] /= cuenta[k]; fijo[k] = 1; }
+      else val[k] = prev ? prev[Math.min(ph - 1, Math.floor(k / cw) >> 1) * pw + Math.min(pw - 1, (k % cw) >> 1)] : suma / conocidos;
+    }
+    for (let n = 0; n < vueltas; n++)
+      for (let y = 0; y < ch; y++)
+        for (let x = 0; x < cw; x++) {
+          const k = y * cw + x;
+          if (fijo[k]) continue;
+          let t = 0, c = 0;
+          if (x > 0) { t += val[k - 1]; c++; }
+          if (x < cw - 1) { t += val[k + 1]; c++; }
+          if (y > 0) { t += val[k - cw]; c++; }
+          if (y < ch - 1) { t += val[k + cw]; c++; }
+          val[k] = t / c;
+        }
+    prev = val; pw = cw; ph = ch;
+  }
+  for (let i = 0; i < w * h; i++) if (desconocido[i] && prev) v[i] = prev[i];
+}
+
 // ── Mesas enormes: se leen reducidas ─────────────────────────────────────
 
 /** Lo que una función de píxeles promete: decodificar (o reducir) UNA vez, la primera vez que se pide. */
@@ -776,6 +817,39 @@ function despiezarMesa(doc: DocPsd, mesa: number): MaestroPsd {
       const x = i % m.w, y = (i / m.w) | 0;
       if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
       if (a > 0.5) { if (x < sx0) sx0 = x; if (x > sx1) sx1 = x; if (y < sy0) sy0 = y; if (y > sy1) sy1 = y; }
+    }
+    // Lo que su sombra oscurece DETRÁS de una pieza de más arriba no se ve en el PSD: quedaba en blanco (sin sombra) y
+    // en otra medida, donde esa pieza se corre, asomaba con su forma (Pedro, 2026-10-15: en 768×1024 se veía la
+    // silueta de la tarjeta, más clara, en la sombra del título). Se llena con la sombra de alrededor.
+    if (osc && t.sombra) {
+      let bx0 = m.w, by0 = m.h, bx1 = -1, by1 = -1;
+      for (let i = 0; i < N; i++)
+        if (t.sombra[i] > 0.02 && tope[i] > k && !(t.alfa[i] > 0)) {
+          const x = i % m.w, y = (i / m.w) | 0;
+          if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y;
+        }
+      if (bx1 >= 0) {
+        bx0 = Math.max(0, bx0 - 1); by0 = Math.max(0, by0 - 1); bx1 = Math.min(m.w - 1, bx1 + 1); by1 = Math.min(m.h - 1, by1 + 1);
+        const w = bx1 - bx0 + 1, h = by1 - by0 + 1, oculto = new Uint8Array(w * h), canal = new Float32Array(w * h);
+        for (let yy = 0; yy < h; yy++)
+          for (let xx = 0; xx < w; xx++) {
+            const i = (yy + by0) * m.w + xx + bx0;
+            if (t.sombra[i] > 0.02 && tope[i] > k && !(t.alfa[i] > 0)) oculto[yy * w + xx] = 1;
+          }
+        for (let c = 0; c < 3; c++) {
+          for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) canal[yy * w + xx] = osc[((yy + by0) * m.w + xx + bx0) * 3 + c];
+          rellenarSuave(canal, oculto, w, h);
+          for (let yy = 0; yy < h; yy++)
+            for (let xx = 0; xx < w; xx++) if (oculto[yy * w + xx]) osc[((yy + by0) * m.w + xx + bx0) * 3 + c] = Math.round(canal[yy * w + xx]);
+        }
+        for (let yy = 0; yy < h; yy++)
+          for (let xx = 0; xx < w; xx++) {
+            if (!oculto[yy * w + xx]) continue;
+            const i = (yy + by0) * m.w + xx + bx0, x = xx + bx0, y = yy + by0;
+            if (Math.min(osc[i * 3], osc[i * 3 + 1], osc[i * 3 + 2]) >= 0.985 * 255) continue;
+            if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+          }
+      }
     }
     if (x1 < 0) { armadas.push(null); continue; } // carpeta sin nada pintado en esta mesa
     const caja = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };

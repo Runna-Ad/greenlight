@@ -1051,3 +1051,14 @@ ROOT CAUSE: estimé con una cuenta de servilleta en vez de correr el motor (que 
 RULE: un número que le doy a Pedro para decidir (zoom, costo, alcance) sale de correr el código o el prototipo, no de una cuenta a mano; si no lo corrí, digo "estimado sin medir". Es el mismo patrón de "medir antes de decir", tercera vez hoy.
 TAGS: #formatos #medir-antes-de-decir #estimaciones #zoom
 
+[2026-10-15] PEDRO_OVERRIDE (el legal nunca se quita): la regla de arranque (2026-10-14) quitaba primero el legal y luego el subtítulo cuando la letra no llegaba al mínimo, y avisaba "revisar con el cliente si esta medida puede ir sin legal".
+PEDRO'S APPROACH: "legales can never be removed so always find a way to add it as close to legible as possible but dont remove it".
+WHY IT WAS BETTER: el legal (CAT, tasas) es obligatorio para una tarjeta de crédito; una medida sin legal no se puede entregar, y un aviso no lo arregla. Un legal chico se puede revisar con el cliente; uno ausente es un anuncio ilegal.
+RULE: el legal va siempre. Si su letra no llega, se le da más alto a su franja mientras el resto del texto siga legible, y la medida se marca ("el legal queda con letra de menos de 10 px"). Sólo el subtítulo se puede quitar.
+TAGS: #pedro-override #formatos #legal #obligatorio
+
+[2026-10-15] LESSON (Formatos: la silueta de la tarjeta NO venía del relleno): Pedro vio en 768×1024 "la silueta de la tarjeta quitada". Yo supuse el relleno gratis y construí una corrección sin costura (bajó el escalón de la orilla de 7.9 a 1.5) que no cambió nada a la vista. Pintando la tarjeta sobre un azul liso, el marco seguía: venía de la SOMBRA del título (capa en multiplicar de la carpeta Copy), que pasa detrás de la tarjeta. Ahí el PSD no la deja ver, se guardaba "sin sombra", y en otra medida, con la tarjeta corrida, asomaba el hueco claro con su forma.
+ROOT CAUSE: diagnostiqué por la causa más cercana a lo último que construí (el relleno) sin aislar capas.
+RULE: ante un artefacto visual, aislarlo antes de arreglar: pintar sobre un fondo liso, quitar piezas una a una, preguntar qué pieza pinta ese píxel. Y lo que una pieza de arriba tapa en el PSD (sombras, colores) no se sabe: se estima de alrededor, nunca se deja en "nada".
+TAGS: #formatos #diagnostico #sombras #aislar #psd
+

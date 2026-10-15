@@ -303,11 +303,14 @@ export const FP = {
   zonaDerecha: t("derecha", "right"),
   zonaLados: t("cada lado", "each side"),
   zonaDe1080: t("(sobre 1080×1920)", "(on 1080×1920)"),
-  sinLegal: t(
-    "Sin legal en {n} medidas ({m}): no cabía legible. Revisa si el cliente lo exige.",
-    "No legal on {n} sizes ({m}): it didn't fit legibly. Check whether the client requires it.",
+  legalChico: t(
+    "El legal queda con letra de menos de {px} px en {n} medidas ({m}): no cabe más grande. Revisa que el cliente lo acepte.",
+    "The legal text is under {px} px in {n} sizes ({m}): it can't fit any bigger. Check that the client accepts it.",
   ),
-  sinLegalUna: t("Sin legal en {m}: no cabía legible. Revisa si el cliente lo exige.", "No legal on {m}: it didn't fit legibly. Check whether the client requires it."),
+  legalChicoUna: t(
+    "El legal queda con letra de menos de {px} px en {m}: no cabe más grande. Revisa que el cliente lo acepte.",
+    "The legal text is under {px} px in {m}: it can't fit any bigger. Check that the client accepts it.",
+  ),
   zonaFranja: t("{c} tapa aquí (aprox.)", "{c} covers this (approx.)"),
   lienzoAria: t("Vista de {m}", "Preview of {m}"),
   lienzoGuia: t(", con la zona segura de {c} encima", ", with the {c} safe zone on top"),

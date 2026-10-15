@@ -9,7 +9,7 @@ import {
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
 import { writePsdBuffer } from "ag-psd";
 import { nombreDeGuia, etiquetaPieza } from "../src/lib/prisma/formatos/roles.ts";
-import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd } from "../src/lib/prisma/formatos/psd.ts";
+import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
 import { textoDe, maquetar, fuentesDe, compararAlfa } from "../src/lib/prisma/formatos/textos.ts";
@@ -473,6 +473,28 @@ console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
     const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("HERO", [capa("p", HE, () => [250, 120, 20])]), carpeta("FOOTER", [capa("velo", SC, () => [153, 153, 153], { blendMode: "multiply" })])], v)), 0);
     ok(`velo del FOOTER sobre el HERO: rearmado exacto (dif. máx ${maxDif(rearmar(x), v)}) y el HERO queda marcado, no usable`, maxDif(rearmar(x), v) <= 6 && despieceUsable(x).motivos.some((s) => s.includes("HERO")));
   }
+  // La sombra del título que pasa DETRÁS de la tarjeta (s33, 2026-10-15): ahí no se ve, y quedaba sin sombra; en otra
+  // medida, con la tarjeta corrida, asomaba un hueco claro con su forma. Ahora se llena con la sombra de alrededor.
+  {
+    const TI = [60, 60, 280, 60], SO = [20, 40, 360, 360], HE = [140, 200, 120, 160];
+    const v = (x, y) => { let c = base(x, y); if (dentro(x, y, TI)) c = [255, 255, 255]; if (dentro(x, y, SO)) c = c.map((n) => n * 0.6); if (dentro(x, y, HE)) c = [250, 120, 20]; return c; };
+    const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("TITULO", [capa("t", TI, () => [255, 255, 255]), capa("sombra", SO, () => [153, 153, 153], { blendMode: "multiply" })]), carpeta("HERO", [capa("p", HE, () => [250, 120, 20])])], v)), 0);
+    const t = x.piezas.find((p) => p.rol === "TITULO");
+    const oscEn = (X, Y) => (t.oscurece ? t.oscurece[((Y - t.caja.y) * t.caja.w + (X - t.caja.x)) * 3] : -1);
+    ok(`sombra del título detrás de la tarjeta: se llena con la de alrededor (${oscEn(200, 280)} ≈ 153, no 255) y el rearmado no cambia (dif. máx ${maxDif(rearmar(x), v)})`, Math.abs(oscEn(200, 280) - 153) <= 4 && maxDif(rearmar(x), v) <= 6);
+  }
+  ok(
+    "rellenarSuave: un anillo parejo deja el centro parejo; una rampa de 0 a 90 queda en rampa (45 ± 2 a la mitad)",
+    (([c, m]) => c === 100 && Math.abs(m - 45) <= 2)((() => {
+      const w = 40, h = 40, v = new Float32Array(w * h).fill(100), d = new Uint8Array(w * h);
+      for (let y = 5; y < 35; y++) for (let x = 5; x < 35; x++) { d[y * w + x] = 1; v[y * w + x] = 0; }
+      rellenarSuave(v, d, w, h);
+      const r = new Float32Array(31 * 5), dr = new Uint8Array(31 * 5);
+      for (let y = 0; y < 5; y++) for (let x = 0; x < 31; x++) { r[y * 31 + x] = x * 3; if (x > 0 && x < 30) dr[y * 31 + x] = 1; }
+      rellenarSuave(r, dr, 31, 5);
+      return [Math.round(v[20 * w + 20]), Math.round(r[2 * 31 + 15])];
+    })()),
+  );
   // Una capa de sombra es un rectángulo OPACO, blanco salvo donde oscurece: lo blanco no cuenta como sombra.
   // (En el PSD real, la sombra del HERO "tapaba" 90 % del FOOTER sin tocarlo.)
   {
@@ -656,15 +678,28 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
   eq("cada medida sale de la misma mesa que en el script del equipo, con su familia", DOCE.map(([W, H]) => [elegirMaestro(MESAS, W, H), familiaDe(W, H, MESAS[elegirMaestro(MESAS, W, H)])]), DOCE.map(([, , i, f]) => [i, f]));
   const hechos = DOCE.map(([W, H, i]) => ({ W, H, ma: MESAS[i], a: acomodar(MESAS[i], W, H) }));
   // Medidas chicas (Pedro, 2026-10-14): se quita el legal y luego el subtítulo, y el texto que queda se agranda.
-  eq("en las 9 grandes se colocan las 6 piezas; en las 3 chicas se quitan el legal y/o el subtítulo, nada más", hechos.map((x) => x.a.puestas.length), [6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 5, 4]);
-  ok("lo que se quitó es exactamente lo que no se colocó, y sólo legal o subtítulo", hechos.every((x) => x.a.quitadas.every((i) => ["FOOTER", "SUBTITULO"].includes(x.ma.piezas[i].rol)) && x.ma.piezas.every((_, i) => x.a.puestas.some((q) => q.pieza === i) !== x.a.quitadas.includes(i))));
-  eq("cada quitada lleva su aviso (el del legal pide revisarlo con el cliente)", hechos.filter((x) => x.a.quitadas.length).map((x) => [`${x.W}x${x.H}`, x.a.avisos.filter((v) => v.tipo === "quitada").length, x.a.avisos.some((v) => v.texto.includes("revisar con el cliente"))]), [["320x250", 2, true], ["640x100", 1, true], ["320x50", 2, true]]);
-  eq(`9 pasan todas las comprobaciones; las 3 chicas se marcan por lo que se quitó, y 320×50 además por letra chica (< ${LETRA_MIN_PX} px)`, hechos.filter((x) => x.a.avisos.length).map((x) => [`${x.W}x${x.H}`, [...new Set(x.a.avisos.map((v) => v.tipo))]]), [["320x250", ["quitada"]], ["640x100", ["quitada"]], ["320x50", ["quitada", "letra"]]]);
+  // El legal NUNCA se quita (Pedro, 2026-10-15: "legales can never be removed"): sólo el subtítulo, en 320×50.
+  eq("las 12 llevan el legal; sólo 320×50 quita el subtítulo para que el resto se lea", hechos.map((x) => x.a.puestas.length), [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5]);
+  ok("lo que se quitó es exactamente lo que no se colocó, y sólo el subtítulo", hechos.every((x) => x.a.quitadas.every((i) => x.ma.piezas[i].rol === "SUBTITULO") && x.ma.piezas.every((_, i) => x.a.puestas.some((q) => q.pieza === i) !== x.a.quitadas.includes(i))));
+  eq("cada quitada lleva su aviso", hechos.filter((x) => x.a.quitadas.length).map((x) => [`${x.W}x${x.H}`, x.a.avisos.filter((v) => v.tipo === "quitada").length]), [["320x50", 1]]);
+  eq(`9 pasan todas las comprobaciones; en las 3 chicas el legal queda bajo ${LETRA_MIN_PX} px y se marca (320×50 además por el subtítulo quitado)`, hechos.filter((x) => x.a.avisos.length).map((x) => [`${x.W}x${x.H}`, [...new Set(x.a.avisos.map((v) => v.tipo))]]), [["320x250", ["letra"]], ["640x100", ["letra"]], ["320x50", ["quitada", "letra"]]]);
   const anchaChica = acomodar(MESAS[1], 438, 162);
-  ok(`una ancha chica (438×162, tres zonas): se quitan legal y subtítulo y lo que queda llega a ${LETRA_MIN_PX} px`, anchaChica.familia === "ancho" && anchaChica.quitadas.map((i) => MESAS[1].piezas[i].rol).join() === "FOOTER,SUBTITULO" && anchaChica.letras.every((l) => l.px >= LETRA_MIN_PX), JSON.stringify([anchaChica.quitadas, anchaChica.letras]));
+  const textoDe = (ma, a) => a.letras.filter((l) => ma.piezas[l.pieza].rol !== "FOOTER");
+  ok(`una ancha chica (438×162, tres zonas): se queda el legal, se quita el subtítulo y el resto del texto llega a ${LETRA_MIN_PX} px`, anchaChica.familia === "ancho" && anchaChica.quitadas.map((i) => MESAS[1].piezas[i].rol).join() === "SUBTITULO" && anchaChica.puestas.some((q) => MESAS[1].piezas[q.pieza].rol === "FOOTER") && textoDe(MESAS[1], anchaChica).every((l) => l.px >= LETRA_MIN_PX), JSON.stringify([anchaChica.quitadas, anchaChica.letras]));
   const chico916 = acomodar(MESAS[0], 360, 640);
   ok("en el acomodo del diseñador (un 9:16 a un tercio) no se quita nada: la letra chica se marca", chico916.familia === "igual" && chico916.quitadas.length === 0 && chico916.puestas.length === 6 && chico916.avisos.some((v) => v.tipo === "letra"), JSON.stringify(chico916.avisos));
-  ok(`320×250 y 640×100: todo el texto que queda llega a ${LETRA_MIN_PX} px`, hechos.filter((x) => ["320x250", "640x100"].includes(`${x.W}x${x.H}`)).every((x) => x.a.letras.every((l) => l.px >= LETRA_MIN_PX)), JSON.stringify(hechos.slice(9, 11).map((x) => x.a.letras)));
+  ok(`320×250 y 640×100: todo el texto (menos el legal, que va en su franja) llega a ${LETRA_MIN_PX} px`, hechos.filter((x) => ["320x250", "640x100"].includes(`${x.W}x${x.H}`)).every((x) => textoDe(x.ma, x.a).every((l) => l.px >= LETRA_MIN_PX)), JSON.stringify(hechos.slice(9, 11).map((x) => x.a.letras)));
+  // La franja del legal crece sólo si el resto del texto puede ceder alto sin bajar del mínimo. Con M45 en 640×100 no
+  // puede (el título queda en 10.3 px): el legal se queda en su franja de siempre (6.2 px). Con un título de letra
+  // grande sí puede, y el legal sube.
+  const pieDe = (ma, a) => a.letras.find((l) => ma.piezas[l.pieza].rol === "FOOTER")?.px ?? 0;
+  const tituloGrande = { ...M45, piezas: M45.piezas.map((p) => (p.rol === "TITULO" || p.rol === "SUBTITULO" || p.rol === "CTA" ? { ...p, letraMinPx: p.letraMinPx * 3 } : p)) };
+  const banner = acomodar(tituloGrande, 640, 100);
+  ok(
+    `el legal que no llega a ${LETRA_MIN_PX} px gana una franja más alta cuando el resto del texto puede ceder (y el resto sigue ≥ ${LETRA_MIN_PX} px)`,
+    pieDe(tituloGrande, banner) > pieDe(M45, hechos[10].a) + 0.5 && textoDe(tituloGrande, banner).every((l) => l.px >= LETRA_MIN_PX),
+    JSON.stringify([pieDe(M45, hechos[10].a), pieDe(tituloGrande, banner), banner.letras]),
+  );
   const pie = (x) => x.a.puestas.find((q) => x.ma.piezas[q.pieza].rol === "FOOTER");
   ok("regla del legal: el pie nunca queda más grande de como lo dejó el diseñador", hechos.filter((x) => x.a.familia === "igual").every((x) => pie(x).k <= Math.max(1, Math.min(x.W / x.ma.w, x.H / x.ma.h)) + 1e-9) && pie({ ma: M45, a: acomodar(M45, 2400, 3000) }).k === 2);
   ok("regla del legal: en las medidas con la forma del maestro el pie crece más que el resto, sin tocar la pieza de arriba", hechos.filter((x) => x.a.familia === "igual" && x.W !== x.ma.w).every((x) => pie(x).k > Math.min(x.W / x.ma.w, x.H / x.ma.h) + 0.01 && x.a.puestas.every((q) => q === pie(x) || q.y + q.h <= pie(x).y || q.y >= pie(x).y + pie(x).h || q.x + q.w <= pie(x).x || q.x >= pie(x).x + pie(x).w)));
@@ -776,6 +811,14 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
           }
       }
   ok("anclar al fondo nunca encima dos piezas que el diseñador dejó separadas (todos los raros × medidas × zonas)", separadas.length === 0, separadas.slice(0, 4).join(" | "));
+  const sinLegal = [];
+  for (const [nombre, ma] of Object.entries(RAROS))
+    for (const [W, H] of MEDIDAS)
+      for (const [nz, zona] of Object.entries(ZONAS)) {
+        const fi = ma.piezas.findIndex((p) => p.rol === "FOOTER");
+        if (fi >= 0 && !acomodar(ma, W, H, { zona: zona(W, H) }).puestas.some((q) => q.pieza === fi)) sinLegal.push(`${nombre} → ${W}x${H} ${nz}`);
+      }
+  ok("el legal nunca se quita: en todos los raros × medidas × zonas, si el maestro lo trae, se coloca", sinLegal.length === 0, sinLegal.slice(0, 4).join(" | "));
   eq("nombre de entrega: la medida de la mesa se cambia por la nueva; si no trae medida, se agrega", [nombreSalida(M45, 1200, 627), nombreSalida(M916, 320, 50), nombreSalida({ ...M45, nombre: "ANUNCIO" }, 600, 500)], ["APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "APGIANTCARDUGC_320x50_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "ANUNCIO_600x500"]);
   eq("nombre con una promo '2x1', o con la medida al principio / al final: se cambia la ficha que tiene la forma de la mesa", [nombreSalida({ nombre: "BUENFIN_2x1_9x16_FB", w: 1080, h: 1920 }, 1200, 627), nombreSalida({ nombre: "4x5_AD", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_4X5", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_", w: 1200, h: 1500 }, 600, 500)], ["BUENFIN_2x1_1200x627_FB", "600x500_AD", "AD_600x500", "AD_600x500"]);
 
@@ -790,7 +833,7 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
   ok("una zona segura más grande que la medida: se avisa y se acomoda sin ella (antes salían tamaños negativos)", zg.avisos.filter((v) => v.tipo === "zona").length === 1 && JSON.stringify(zg.puestas) === JSON.stringify(acomodar(M45, 1000, 500).puestas));
   ok("zona con valores que no son medidas (NaN, negativos, infinito) cuenta como sin zona", JSON.stringify(acomodar(M45, 1280, 720, { zona: { top: NaN, right: -50, bottom: undefined, left: Infinity } })) === JSON.stringify(acomodar(M45, 1280, 720)));
   const aplanado = { ...M45, piezas: M45.piezas.map((p) => (p.rol === "FOOTER" ? { ...p, letraMinPx: null } : p)) };
-  ok("legal aplanado (su letra no se puede medir): se avisa en cuanto se reduce; si se quita, también; a su tamaño, nada", acomodar(aplanado, 600, 500).avisos.some((v) => v.tipo === "letra" && v.texto.includes("FOOTER")) && acomodar(aplanado, 320, 50).avisos.some((v) => v.tipo === "quitada" && v.texto.includes("FOOTER")) && acomodar(aplanado, 1200, 1500).avisos.length === 0);
+  ok("legal aplanado (su letra no se puede medir): se avisa en cuanto se reduce, nunca se quita; a su tamaño, nada", acomodar(aplanado, 600, 500).avisos.some((v) => v.tipo === "letra" && v.texto.includes("FOOTER")) && acomodar(aplanado, 320, 50).avisos.some((v) => v.tipo === "letra" && v.texto.includes("FOOTER")) && !acomodar(aplanado, 320, 50).quitadas.some((i) => aplanado.piezas[i].rol === "FOOTER") && acomodar(aplanado, 1200, 1500).avisos.length === 0);
   eq("una medida vertical lejos de la forma del maestro sale con aviso; ninguna de las 12 del equipo lo lleva", [acomodar(M45, 1080, 1920).avisos.map((v) => v.tipo), hechos.some((x) => x.a.avisos.some((v) => v.tipo === "forma"))], [["forma"], false]);
   const rotas = acomodar({ ...M45, piezas: [...M45.piezas, pz("HERO", 0, 0, 0, 100), pz("CTA", NaN, 5, 10, 10)] }, 1200, 627);
   ok("una caja vacía o con NaN no se coloca y se avisa", rotas.puestas.length === 6 && rotas.avisos.filter((v) => v.tipo === "falta" && v.texto.includes("inválida")).length === 2, JSON.stringify(rotas.avisos));
