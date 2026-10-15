@@ -36,7 +36,15 @@ export type Acomodo = {
   avisos: AvisoAcomodo[];
   /** Piezas que se quitaron A PROPÓSITO para que el texto que queda se lea (índices en `maestro.piezas`). */
   quitadas: number[];
+  /** Alguien movió o cambió de tamaño piezas a mano (`aplicarEdicion`). */
+  editada?: boolean;
 };
+/**
+ * Lo que la persona movió o cambió de tamaño a mano en una medida (Pedro, 2026-10-15: "an edit button that allows us
+ * to move and or resize the elements"): por pieza (índice en `maestro.piezas`), la esquina de su parte sólida y su
+ * escala, en px de la medida.
+ */
+export type Edicion = Readonly<Record<number, { x: number; y: number; k: number }>>;
 export type Lado = "derecha" | "izquierda";
 /** px de la medida final que la plataforma tapa por cada borde. */
 export type Zona = { top: number; right: number; bottom: number; left: number };
@@ -342,14 +350,8 @@ export function acomodar(ma: MaestroCaja, W: number, H: number, op: OpcionesAcom
 function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo, quitar: Set<number>, texto: number, pie = 1): Acomodo {
   if (![ma.w, ma.h, W, H].every((v) => Number.isFinite(v) && v > 0)) throw new Error("acomodar: medidas inválidas");
   const familia = familiaDe(W, H, ma);
-  const avisos: AvisoAcomodo[] = [];
-  const borde = (v: number | undefined) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
-  let zona = { top: borde(op.zona?.top), right: borde(op.zona?.right), bottom: borde(op.zona?.bottom), left: borde(op.zona?.left) };
-  if (zona.left + zona.right > W * ZONA_MAX || zona.top + zona.bottom > H * ZONA_MAX) {
-    avisos.push({ tipo: "zona", texto: "La zona segura no deja espacio en esta medida: se acomodó sin ella. Revisar." });
-    zona = { top: 0, right: 0, bottom: 0, left: 0 };
-  }
-  const valida = (p: PiezaCaja) => [p.solido.x, p.solido.y, p.solido.w, p.solido.h].every(Number.isFinite) && p.solido.w > 0 && p.solido.h > 0;
+  const { zona, aviso } = zonaUsable(op.zona, W, H);
+  const avisos: AvisoAcomodo[] = aviso ? [aviso] : [];
   const de = (rol: Rol): Suelta | undefined => {
     const i = ma.piezas.findIndex((p, k) => p.rol === rol && valida(p) && !quitar.has(k));
     return i < 0 ? undefined : { i, p: ma.piezas[i] };
@@ -485,9 +487,30 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
   }
   const fondo = fondoAntes ?? { k: kb, x: Math.min(0, Math.max(W - ma.w * kb, fx)), y: Math.min(0, Math.max(H - ma.h * kb, fy)) };
 
-  // ── Lo que revisa la guía de diseño (sección 4), lo que se puede medir ──
+  const revision = comprobar(ma, W, H, familia, puestas, quitar, zona);
+  return { familia, puestas, fondo, letras: revision.letras, avisos: [...avisos, ...revision.avisos], quitadas: [...quitar].sort((x, y) => x - y) };
+}
+
+const valida = (p: PiezaCaja) => [p.solido.x, p.solido.y, p.solido.w, p.solido.h].every(Number.isFinite) && p.solido.w > 0 && p.solido.h > 0;
+
+/** La zona del canal con números de verdad; si se come más de ZONA_MAX de un lado, no se usa y se avisa. */
+function zonaUsable(z: Partial<Zona> | undefined, W: number, H: number): { zona: Zona; aviso: AvisoAcomodo | null } {
+  const borde = (v: number | undefined) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
+  const zona = { top: borde(z?.top), right: borde(z?.right), bottom: borde(z?.bottom), left: borde(z?.left) };
+  if (zona.left + zona.right > W * ZONA_MAX || zona.top + zona.bottom > H * ZONA_MAX)
+    return { zona: { top: 0, right: 0, bottom: 0, left: 0 }, aviso: { tipo: "zona", texto: "La zona segura no deja espacio en esta medida: se acomodó sin ella. Revisar." } };
+  return { zona, aviso: null };
+}
+
+/**
+ * Lo que revisa la guía de diseño (sección 4), lo que se puede medir, sobre unas piezas ya puestas. `aMano`: las que
+ * puso una persona (`aplicarEdicion`). Si encimó una de ésas, lo decidió a la vista y no se avisa; dos que no tocó se
+ * revisan igual. Tampoco se avisa de la forma: alguien ya revisó esta medida.
+ */
+function comprobar(ma: MaestroCaja, W: number, H: number, familia: Familia, puestas: Puesta[], quitar: ReadonlySet<number>, zona: Zona, aMano: ReadonlySet<number> = new Set()): { avisos: AvisoAcomodo[]; letras: Acomodo["letras"] } {
+  const avisos: AvisoAcomodo[] = [];
   const nom = (q: Puesta) => etiquetaPieza(ma.piezas[q.pieza]);
-  if (familia === "igual" && razon(W, H, ma) >= PARECIDO_MAX) avisos.push({ tipo: "forma", texto: "Esta proporción todavía no tiene acomodo propio: se usó el del maestro, más chico, con cada pieza sobre su mismo lugar del fondo. Revisar." });
+  if (!aMano.size && familia === "igual" && razon(W, H, ma) >= PARECIDO_MAX) avisos.push({ tipo: "forma", texto: "Esta proporción todavía no tiene acomodo propio: se usó el del maestro, más chico, con cada pieza sobre su mismo lugar del fondo. Revisar." });
   ma.piezas.forEach((p, i) => {
     if (puestas.some((q) => q.pieza === i)) return;
     const n = etiquetaPieza(p);
@@ -505,6 +528,7 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
     for (let i = 0; i < puestas.length; i++)
       for (let j = i + 1; j < puestas.length; j++) {
         const a = puestas[i], b = puestas[j];
+        if (aMano.has(a.pieza) || aMano.has(b.pieza)) continue;
         if (Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 2 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 2) avisos.push({ tipo: "encima", texto: `${nom(a)} y ${nom(b)} se enciman.` });
       }
   const letras: Acomodo["letras"] = [];
@@ -519,5 +543,36 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
     letras.push({ pieza: q.pieza, px });
     if (px < LETRA_MIN_PX) avisos.push({ tipo: "letra", texto: `${nom(q)}: la letra queda de ${px.toFixed(1)} px (mínimo ${LETRA_MIN_PX}).` });
   }
-  return { familia, puestas, fondo, letras, avisos, quitadas: [...quitar].sort((x, y) => x - y) };
+  return { avisos, letras };
+}
+
+/** Lo más chica que se deja una pieza a mano (px de su lado corto): más chica ya no se ve ni se agarra. */
+export const PIEZA_MIN_PX = 6;
+
+/** La escala más chica y más grande que se deja a mano: ni invisible ni mucho más grande que la medida. */
+export function topesPieza(s: { w: number; h: number }, W: number, H: number): { min: number; max: number } {
+  return { min: PIEZA_MIN_PX / Math.min(s.w, s.h), max: (2 * Math.max(W, H)) / Math.max(s.w, s.h) };
+}
+
+/**
+ * El acomodo automático con lo que la persona movió o cambió de tamaño a mano: esas piezas van donde ella las dejó y
+ * TODO se vuelve a revisar (letra, fuera de la medida, zona del canal, piezas sin tocar encimadas). El fondo y las
+ * demás piezas no se tocan. Una edición con números que no sirven (NaN, escala ≤ 0) se ignora para esa pieza; una
+ * escala o un lugar fuera de lo que deja el editor (dato viejo o cambiado a mano) se recorta a ese tope.
+ */
+export function aplicarEdicion(ma: MaestroCaja, a: Acomodo, ed: Edicion, W: number, H: number, zona?: Partial<Zona> | null): Acomodo {
+  const aMano = new Set<number>();
+  const lejos = 2 * Math.max(W, H);
+  const entre = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+  const puestas = a.puestas.map((q) => {
+    const e = ed[q.pieza], s = ma.piezas[q.pieza]?.solido;
+    if (!e || !s || ![e.x, e.y, e.k].every(Number.isFinite) || !(e.k > 0)) return q;
+    aMano.add(q.pieza);
+    const t = topesPieza(s, W, H), k = entre(e.k, t.min, t.max);
+    return { pieza: q.pieza, k, x: entre(e.x, -lejos, lejos), y: entre(e.y, -lejos, lejos), w: s.w * k, h: s.h * k };
+  });
+  if (!aMano.size) return a;
+  const z = zonaUsable(zona ?? undefined, W, H);
+  const r = comprobar(ma, W, H, a.familia, puestas, new Set(a.quitadas), z.zona, aMano);
+  return { ...a, puestas, letras: r.letras, avisos: [...(z.aviso ? [z.aviso] : []), ...r.avisos], editada: true };
 }

@@ -18,7 +18,7 @@ import { carpetaGoogle, archivosDeMetadata, archivosQueSirven, buscarEnGoogle, A
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { acomodar, acomodarMedida, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
+import { acomodar, acomodarMedida, aplicarEdicion, topesPieza, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida } from "../src/lib/prisma/formatos/revisar.ts";
@@ -819,6 +819,38 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
         if (fi >= 0 && !acomodar(ma, W, H, { zona: zona(W, H) }).puestas.some((q) => q.pieza === fi)) sinLegal.push(`${nombre} → ${W}x${H} ${nz}`);
       }
   ok("el legal nunca se quita: en todos los raros × medidas × zonas, si el maestro lo trae, se coloca", sinLegal.length === 0, sinLegal.slice(0, 4).join(" | "));
+
+  const M33R = { nombre: "R", w: 120, h: 150, fondo: new Uint8ClampedArray(120 * 150 * 4).fill(200), piezas: [{ nombre: "CTA", rol: "CTA", caja: { x: 40, y: 110, w: 40, h: 12 }, solido: { x: 40, y: 110, w: 40, h: 12 }, letraMinPx: 6, rgba: new Uint8ClampedArray(40 * 12 * 4).fill(255), oscurece: null }] };
+  // Edición a mano (Pedro, 2026-10-15: "an edit button ... move and or resize the elements ... and save your changes").
+  const base1200 = acomodar(M45, 1200, 627);
+  const iCta = M45.piezas.findIndex((p) => p.rol === "CTA"), iPie = M45.piezas.findIndex((p) => p.rol === "FOOTER");
+  const movida = aplicarEdicion(M45, base1200, { [iCta]: { x: 40, y: 30, k: 0.8 } }, 1200, 627);
+  const cta = movida.puestas.find((q) => q.pieza === iCta);
+  ok(
+    "editar: la pieza va donde la dejó la persona (caja = sólido × escala), las demás y el fondo no se mueven, y queda marcada",
+    cta.x === 40 && cta.y === 30 && cta.k === 0.8 && cta.w === M45.piezas[iCta].solido.w * 0.8 && movida.editada === true &&
+      JSON.stringify(movida.fondo) === JSON.stringify(base1200.fondo) && movida.puestas.every((q) => q.pieza === iCta || JSON.stringify(q) === JSON.stringify(base1200.puestas.find((r) => r.pieza === q.pieza))),
+  );
+  const chico = aplicarEdicion(M45, base1200, { [iPie]: { x: 10, y: 620, k: 0.3 } }, 1200, 627);
+  ok("editar: lo que la persona hace se revisa igual (legal bajo 10 px → aviso de letra; fuera de la medida → aviso)", chico.avisos.some((v) => v.tipo === "letra" && v.texto.includes("FOOTER")) && chico.avisos.some((v) => v.tipo === "fuera" && v.texto.includes("FOOTER")), JSON.stringify(chico.avisos));
+  const enZona = aplicarEdicion(M45, acomodar(M45, 1080, 1920), { [iCta]: { x: 300, y: 1800, k: 0.8 } }, 1080, 1920, { top: 0, right: 0, bottom: 300, left: 0 });
+  ok("editar: con canal, una pieza que la persona deja bajo la franja de la app se avisa", enZona.avisos.some((v) => v.tipo === "zona" && v.texto.includes("CTA")));
+  const encimada = aplicarEdicion(M45, base1200, { [iCta]: { ...base1200.puestas.find((q) => M45.piezas[q.pieza].rol === "HERO"), k: 0.5 } }, 1200, 627);
+  ok("editar: encimar piezas lo decidió la persona a la vista: no se avisa (sí en el automático)", !encimada.avisos.some((v) => v.tipo === "encima"));
+  ok("editar: una edición con números que no sirven (NaN, escala 0 o negativa) se ignora: queda el automático", aplicarEdicion(M45, base1200, { [iCta]: { x: NaN, y: 0, k: 1 }, [iPie]: { x: 0, y: 0, k: 0 } }, 1200, 627) === base1200);
+  // Dos piezas que la persona NO tocó y se enciman se siguen avisando aunque haya movido otra (reap 2026-10-15).
+  const iHero = M45.piezas.findIndex((p) => p.rol === "HERO"), iTit = M45.piezas.findIndex((p) => p.rol === "TITULO");
+  const tit = base1200.puestas.find((q) => q.pieza === iTit);
+  const conChoque = { ...base1200, puestas: base1200.puestas.map((q) => (q.pieza === iHero ? { ...q, x: tit.x, y: tit.y } : q)) };
+  const otraMovida = aplicarEdicion(M45, conChoque, { [iCta]: { x: 40, y: 30, k: 0.8 } }, 1200, 627);
+  ok("editar: mover una pieza no calla el aviso de otras dos (sin tocar) que se enciman", base1200.familia !== "igual" && otraMovida.avisos.some((v) => v.tipo === "encima" && v.texto.includes("HERO") && v.texto.includes("TITULO")), JSON.stringify(otraMovida.avisos));
+  const loca = aplicarEdicion(M45, base1200, { [iCta]: { x: 1e9, y: -1e9, k: 1e6 } }, 1200, 627).puestas.find((q) => q.pieza === iCta);
+  eq("editar: un dato guardado fuera de lo que deja el editor (k 1e6, x 1e9) se recorta a sus topes", [loca.k, loca.x, loca.y], [topesPieza(M45.piezas[iCta].solido, 1200, 627).max, 2400, -2400]);
+  const r1 = revisarMedida([M33R], 1200, 627, { edicion: { 0: { x: 20, y: 20, k: 0.5 } } });
+  ok(
+    "revisarMedida con edición: la tarjeta y el resumen comparten la misma (misma edición → mismo objeto; otra → otro; sin edición → el automático)",
+    r1 === revisarMedida([M33R], 1200, 627, { edicion: { 0: { x: 20, y: 20, k: 0.5 } } }) && r1 !== revisarMedida([M33R], 1200, 627, { edicion: { 0: { x: 21, y: 20, k: 0.5 } } }) && !revisarMedida([M33R], 1200, 627).acomodo.editada && r1.acomodo.editada === true,
+  );
   eq("nombre de entrega: la medida de la mesa se cambia por la nueva; si no trae medida, se agrega", [nombreSalida(M45, 1200, 627), nombreSalida(M916, 320, 50), nombreSalida({ ...M45, nombre: "ANUNCIO" }, 600, 500)], ["APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "APGIANTCARDUGC_320x50_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "ANUNCIO_600x500"]);
   eq("nombre con una promo '2x1', o con la medida al principio / al final: se cambia la ficha que tiene la forma de la mesa", [nombreSalida({ nombre: "BUENFIN_2x1_9x16_FB", w: 1080, h: 1920 }, 1200, 627), nombreSalida({ nombre: "4x5_AD", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_4X5", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_", w: 1200, h: 1500 }, 600, 500)], ["BUENFIN_2x1_1200x627_FB", "600x500_AD", "AD_600x500", "AD_600x500"]);
 

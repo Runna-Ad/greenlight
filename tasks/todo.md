@@ -76,8 +76,8 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 - Siguen abiertas: letra mínima aceptable del legal (hoy 10 px provisional) · 3-5 PSD más.
 
 ### Plan B — puerta PSD (2026-10-13)
-**Next Step (2026-10-15):** B14 en la preview. Pendiente de Pedro: (1) el editor por medida (mover y cambiar de tamaño
-las piezas) y cómo construirlo; (2) arreglo automático del contraste (mover el fondo o sombra detrás del texto).
+**Next Step (2026-10-15):** B15 (editor + botón IA) en la preview. Pendiente de Pedro: elegir A (mover el fondo
+detrás del texto) o B (sombra detrás del texto) para el contraste automático; luego construirlo con nota y «Deshacer».
 Reels se queda sin zoom (Pedro: "yes leave reels as it is").
 **Antes:** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
 subir. La prueba de punta a punta de tipografías espera el "ship it" de 0079 + bucket. 320×50 se queda igual
@@ -496,6 +496,38 @@ largo: estacionado por él.
         en qué medidas queda bajo 10 px. Costo medido: en 640×100 el título de s33 baja de 11.6 a 7.8 px; en 320×50
         el legal queda en 3.1 px y el título en 3.9 px (un legal de 3 renglones no cabe legible en 50 px).
       · test-formatos 294/0 · npm test 81/0 y 44/0 · tsc y eslint limpios.
+- [x] B15. Editor por medida + botón de IA visible (Pedro, 2026-10-15: "yes build the editor"):
+      · «Editar» en cada tarjeta abre esa medida: arrastrar mueve una pieza, las 4 esquinas la agrandan o achican sin
+        deformarla, flechas 1 px (Mayús 10), + / − ×1.02. Imán al centro con guías. Panel: estado, lista de piezas con
+        «automático» por pieza, avisos en vivo. «Volver al automático» + Guardar borra la edición.
+      · Se guarda sólo lo que cambió ({x,y,k} por pieza) en el navegador, por archivo + mesa + medida, con huella de
+        las piezas (otro PSD con el mismo nombre no la hereda). Tarjeta, resumen y ZIP leen la misma edición
+        (`revisarMedida(..., { edicion })`); una medida editada no se voltea.
+      · `aplicarEdicion` vuelve a revisar con la edición; a mano no se avisa "encima" ni "forma" (es decisión del
+        diseñador), sí lo que se sale, la zona del canal y la letra.
+      · Botón de IA: sólo aparecía después de «Quitar del fondo». Ahora sale desde el inicio como «Quitar con IA
+        (≈ US$0.041)». Modelo: `gemini-nano-banana-2.1` (el más nuevo, 2026-10-06). En local no sale (sin llave).
+      · Probado en localhost con s33: mover, esquina, flechas, −, guardar, chip, recarga, volver al automático. Bug
+        encontrado probando: la esquina del botón agarraba la tarjeta (caja de abajo en el DOM) → la seleccionada va
+        al frente (z-20). test-formatos 300/0 · npm test verde · tsc y eslint limpios.
+      · Revisión (2 revisores en paralelo: código + accesibilidad/UX), arreglado:
+        - Una edición callaba el aviso "se enciman" de piezas que la persona NO tocó (y el editor lo callaba sin
+          cambios). Ahora sólo se calla si una de las dos es hecha a mano; test nuevo (falla con la regla vieja).
+        - Lo guardado no sabía de qué acomodo era: el lado del HERO y la zona del canal van en la clave (v2) y la
+          huella lleva el papel de cada pieza. Con otro lado/canal la medida sale en automático, no mezclada.
+        - Datos guardados fuera de rango se recortan a los topes del editor (test nuevo, `topesPieza` compartido).
+        - Esc / clic afuera con cambios sin guardar no cierran (el pie lo explica); Esc a medio arrastre la regresa.
+        - El foco vuelve al «Editar» de la tarjeta (por `data-editar`, también en Safari).
+        - Cmd/Ctrl + / − vuelve a ser el zoom del navegador; un clic sin mover ya no cuenta como edición (umbral 3 px);
+          Alt quita el imán; el lector de pantalla oye la posición y los avisos medio segundo después, no cada píxel.
+        - Repintar la vista medía 69-97 ms (s33): el fondo se guarda y a medio arrastre se pinta a la mitad.
+        - Los avisos de píxeles (contraste, pieza repetida) se recalculan en vivo en el editor (~1 ms), igual que la
+          tarjeta. El texto se escribe con la tipografía también en la vista del editor.
+        - Pie pegado abajo, 2 columnas desde 1024 px, «cambiada» en la lista, «Volver al automático» apagado sin cambios,
+          chip con explicación de por qué no se voltea, aviso si el navegador no deja guardar.
+      · No arreglado (bajo): rayas de la zona sin etiqueta en el editor; Mayús + / − para pasos grandes; el foco
+        inicial cae en la primera pieza; la caché de `revisarMedida` recalcula el automático por cada edición nueva.
+      · Pendiente: Pedro elige A o B para el contraste automático (renders en la conversación).
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

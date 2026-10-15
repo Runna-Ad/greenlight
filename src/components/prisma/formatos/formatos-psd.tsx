@@ -2,14 +2,14 @@
 
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CircleCheck, Download, Eraser, FileUp, FlipHorizontal2, Languages, Loader2, Lock, Sparkles, Type, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CircleCheck, Download, Eraser, FileUp, FlipHorizontal2, Languages, Loader2, Lock, Move, Sparkles, Type, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { zipSync } from "fflate";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
-import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Lado } from "@/lib/prisma/formatos/acomodo";
+import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Edicion, type Lado } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type CopiaEnFondo } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
@@ -21,6 +21,7 @@ import { nombreDeGuia, type Rol } from "@/lib/prisma/formatos/roles";
 import { colaVacia, enCola, pintar } from "./pintar";
 import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, fuentesRecordadas, olvidarFuentes, recordarFuentes, revisarTextos, textoEscrito, type ArchivoFuente, type Escritura, type Tipografias } from "./escritura";
 import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
+import { EditorMedida, edicionGuardada, guardarEdicion } from "./editor-medida";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD. El anuncio llega en Photoshop: un Web Worker lo lee y lo separa en fondo
@@ -60,6 +61,11 @@ const SOLTAR_URL_MS = 10_000;
 const FOCO = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
 const BOTON = "min-h-11 sm:min-h-9";
 const clave = (m: Medida) => `${m.w}x${m.h}`;
+/** De qué acomodo automático es una edición: el lado del HERO y la zona del canal lo cambian (editor-medida.tsx). */
+const contextoEdicion = (m: Medida, lado: Lado | undefined, canal: Canal | null) => {
+  const z = zonaCanal(canal, m.w, m.h);
+  return `${lado ?? "derecha"}:${z ? `${z.top},${z.right},${z.bottom},${z.left}` : "-"}`;
+};
 const etiqueta = (m: Medida) => `${m.w}×${m.h}`;
 /** El nombre de entrega del equipo (el de la mesa con la medida nueva), limpio para ser nombre de archivo. */
 const archivoDe = (ma: MaestroListo, m: Medida) => `${nombreSalida({ nombre: limpiarNombre(ma.nombre, NOMBRE_MESA_MAX), w: ma.w, h: ma.h }, m.w, m.h)}.png`;
@@ -231,6 +237,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
   lang,
   alVoltear,
   registrar,
+  edicion,
+  alEditar,
 }: {
   maestros: MaestroVista[];
   medida: Medida;
@@ -241,11 +249,15 @@ const TarjetaMedida = memo(function TarjetaMedida({
   lang: Lang;
   alVoltear: (m: Medida, a: Lado) => void;
   registrar: (k: string, lienzo: HTMLCanvasElement | null) => void;
+  /** Lo que se movió a mano en esta medida (editor-medida.tsx); null = el acomodo automático. */
+  edicion: Edicion | null;
+  alEditar: (m: Medida) => void;
 }) {
   const { w, h } = medida;
   const k = clave(medida);
-  // La zona del canal también acomoda (en 9:16 de otra forma las piezas la evitan): la misma que usa el resumen.
-  const { maestro, acomodo } = useMemo(() => revisarMedida(maestros, w, h, { heroLado: lado, zona: zonaCanal(canal, w, h) }), [maestros, w, h, lado, canal]);
+  // La zona del canal también acomoda (en 9:16 de otra forma las piezas la evitan) y la edición va encima: lo mismo
+  // que usa el resumen.
+  const { maestro, acomodo } = useMemo(() => revisarMedida(maestros, w, h, { heroLado: lado, zona: zonaCanal(canal, w, h), edicion }), [maestros, w, h, lado, canal, edicion]);
   const guia = zonaCanal(canal, w, h);
   const nombreCanal = canal ? CANALES[canal].nombre : "";
   const ma = maestros[maestro];
@@ -275,7 +287,9 @@ const TarjetaMedida = memo(function TarjetaMedida({
   }, [ma, maestro, acomodo, w, h, k, registrar, escritura, tipos]);
 
   const letra = acomodo.letras.length ? Math.min(...acomodo.letras.map((l) => l.px)) : null;
-  const volteable = sePuedeVoltear(acomodo.familia);
+  // Editada a mano, voltear movería sólo lo que no se tocó: se vuelve al automático desde el editor. La misma regla
+  // que «Voltear todas» (`acomodo.editada`).
+  const volteable = sePuedeVoltear(acomodo.familia) && !acomodo.editada;
   const franja = rellenar(tx(FP.zonaFranja, lang), { c: nombreCanal });
   const revisar = noPinto || acomodo.avisos.length > 0;
   const bajar = async () => {
@@ -325,6 +339,12 @@ const TarjetaMedida = memo(function TarjetaMedida({
                 <AlertTriangle className="size-3 text-status-warning" aria-hidden="true" /> {tx(FP.revisarCorto, lang)}
               </span>
             )}
+            {acomodo.editada && (
+              <span title={tx(FP.editadaTitulo, lang)} className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs font-medium text-foreground">
+                <Move className="size-3" aria-hidden="true" /> {tx(FP.editada, lang)}
+                <span className="sr-only">: {tx(FP.editadaTitulo, lang)}</span>
+              </span>
+            )}
           </h3>
           <p className="text-xs text-muted-foreground">
             {tx(FP_FAMILIA[acomodo.familia], lang)} · {rellenar(tx(FP.deMesa, lang), { m: `${ma.w}×${ma.h}` })}
@@ -332,7 +352,10 @@ const TarjetaMedida = memo(function TarjetaMedida({
             {letra !== null && <> · {rellenar(tx(FP.letra, lang), { px: letra.toFixed(1) })}</>}
           </p>
         </div>
-        <div className="flex shrink-0 gap-1.5">
+        <div className="flex shrink-0 flex-wrap gap-1.5">
+          <Button variant="outline" size="lg" className={BOTON} data-editar={k} onClick={() => alEditar(medida)} disabled={noPinto} aria-label={rellenar(tx(FP.editarAria, lang), { m: etiqueta(medida) })}>
+            <Move className="size-4" aria-hidden="true" /> {tx(FP.editar, lang)}
+          </Button>
           {volteable && (
             <Button variant="outline" size="lg" className={BOTON} onClick={() => alVoltear(medida, lado === "izquierda" ? "derecha" : "izquierda")} aria-label={rellenar(tx(FP.voltearAria, lang), { m: etiqueta(medida) })}>
               <FlipHorizontal2 className="size-4" aria-hidden="true" /> {tx(FP.voltear, lang)}
@@ -389,6 +412,10 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const [papeles, setPapeles] = useState<{ leido: Leido; mapa: Map<string, Rol | null> } | null>(null);
   /** Las copias del HERO que la persona aprobó quitar del fondo, por maestro (índice), de qué PSD: el fondo ya rellenado. */
   const [sinCopia, setSinCopia] = useState<{ leido: Leido; mapa: Map<number, Quitada> } | null>(null);
+  /** Lo que se editó a mano en ESTE PSD, por medida («WxH»); null = se volvió al automático (manda sobre lo guardado). */
+  const [ediciones, setEdiciones] = useState<{ leido: Leido; mapa: Map<string, Edicion | null> } | null>(null);
+  /** La medida abierta en el editor. */
+  const [editando, setEditando] = useState<Medida | null>(null);
   /** Cuándo se quitó o devolvió la última copia (ver COPIA_PAUSA_MS). */
   const ultimaCopia = useRef(0);
   /** La copia que está borrando la IA ahora (de qué PSD y qué maestro): una a la vez, y su botón espera. */
@@ -1024,14 +1051,52 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
       .values(),
   ];
 
+  // Lo editado de cada medida (con el lado y el canal de ahora): lo de esta sesión y, si no, lo que quedó guardado en
+  // este navegador de este mismo PSD. La sesión se guarda por medida + contexto; la vista, por medida.
+  const edicionesVista = useMemo(() => {
+    const mapa = new Map<string, Edicion | null>();
+    const deSesion = ediciones?.leido === leido ? ediciones.mapa : null;
+    if (!leido || !maestrosVista.length) return mapa;
+    for (const m of medidas) {
+      const ctx = contextoEdicion(m, lados[clave(m)], canal), c = `${clave(m)}:${ctx}`;
+      if (deSesion?.has(c)) mapa.set(clave(m), deSesion.get(c) ?? null);
+      else mapa.set(clave(m), edicionGuardada(leido.archivo, maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)], m.w, m.h, ctx));
+    }
+    return mapa;
+  }, [ediciones, leido, maestrosVista, medidas, lados, canal]);
+  const abrirEditor = useCallback((m: Medida) => setEditando(m), []);
+  const guardarEditada = (m: Medida, ed: Edicion | null) => {
+    const l = leido;
+    setEditando(null);
+    if (!l || !maestrosVista.length) return;
+    const ctx = contextoEdicion(m, lados[clave(m)], canal);
+    const guardada = guardarEdicion(l.archivo, maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)], m.w, m.h, ctx, ed);
+    setEdiciones((antes) => ({ leido: l, mapa: new Map([...(antes?.leido === l ? antes.mapa : []), [`${clave(m)}:${ctx}`, ed]]) }));
+    if (!guardada && ed) return void toast.warning(rellenar(tx(FP.editorSoloSesion, lang), { m: etiqueta(m) }));
+    anunciar(rellenar(tx(ed ? FP.editorGuardado : FP.editorAutoHecho, lang), { m: etiqueta(m) }));
+  };
+  // Lo que el editor necesita, calculado una vez por medida abierta (no en cada pintada de la página: una zona o un
+  // texto nuevos lo harían repintar la vista entera).
+  const paraEditor = useMemo(() => {
+    if (!editando || !leido || !maestrosVista.length) return null;
+    const m = editando, mi = elegirMaestro(maestrosVista, m.w, m.h), zona = zonaCanal(canal, m.w, m.h);
+    return {
+      m,
+      mi,
+      zona,
+      auto: revisarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)], zona }).acomodo,
+      texto: textoEscrito(escritura, mi, maestrosVista[mi], tiposEscritos),
+    };
+  }, [editando, leido, maestrosVista, canal, lados, escritura, tiposEscritos]);
+
   // El mismo acomodo y los mismos avisos que cada tarjeta (`revisarMedida` guarda lo ya hecho): aquí sirven para el
   // resumen, el legal y los nombres del ZIP.
   const filas = useMemo(
-    () => (maestrosVista.length ? medidas.map((m) => ({ m, ...revisarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h) }) })) : []),
-    [maestrosVista, medidas, lados, canal],
+    () => (maestrosVista.length ? medidas.map((m) => ({ m, ...revisarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h), edicion: edicionesVista.get(clave(m)) ?? null }) })) : []),
+    [maestrosVista, medidas, lados, canal, edicionesVista],
   );
   const porRevisar = filas.filter((f) => f.acomodo.avisos.length).length;
-  const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia));
+  const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia) && !f.acomodo.editada);
   const n916 = medidas.filter((m) => es916(m.w, m.h)).length;
   // El legal es obligatorio (CAT de una tarjeta) y nunca se quita: las medidas donde queda chico se dicen junto al ZIP,
   // no sólo en su tarjeta.
@@ -1088,6 +1153,22 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     <div lang={lang} className="prisma-root mx-auto max-w-6xl">
       {/* Un solo anuncio para lectores de pantalla: el avance de la lectura, lo último que se hizo, o el resumen. Al
           abrirse el elegidor el foco ya lee su título: aquí no se repite. */}
+      {paraEditor && (
+        <EditorMedida
+          key={`${clave(paraEditor.m)}:${paraEditor.mi}`}
+          ma={maestrosVista[paraEditor.mi]}
+          W={paraEditor.m.w}
+          H={paraEditor.m.h}
+          auto={paraEditor.auto}
+          inicial={edicionesVista.get(clave(paraEditor.m)) ?? null}
+          zona={paraEditor.zona}
+          nombre={etiqueta(paraEditor.m)}
+          texto={paraEditor.texto}
+          lang={lang}
+          alGuardar={(ed) => guardarEditada(paraEditor.m, ed)}
+          alCerrar={() => setEditando(null)}
+        />
+      )}
       <p role="status" className="sr-only">
         {leyendo ? textoAvance : aviso ? `${aviso.texto}${aviso.n % 2 ? "​" : ""}` : eligiendo ? "" : resumen}
       </p>
@@ -1344,8 +1425,9 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                       };
                       const trabajando = iaEnCurso === c.i;
                       const g = copias[c.i];
-                      // La IA se ofrece después de quitar la copia (gratis o con IA) y sólo si cabe un recorte para mandarle.
-                      const conBotonIA = iaCopia && !!q && !!g && recorteParaIA(c.m, g) !== null;
+                      // La IA se ofrece desde el principio, junto al gratis (Pedro, 2026-10-15: "i didnt see the ai button
+                      // anywhere": sólo salía después de quitar la copia), si cabe un recorte para mandarle.
+                      const conBotonIA = iaCopia && !!g && recorteParaIA(c.m, g) !== null;
                       return (
                         <li key={c.i}>
                           <p className="break-words text-sm text-foreground">{rellenar(tx(!q ? FP.copiaTexto : q.metodo === "ia" ? FP.copiaQuitadaIA : FP.copiaQuitada, lang), v)}</p>
@@ -1390,7 +1472,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                                 }}
                               >
                                 {trabajando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}{" "}
-                                {trabajando ? tx(FP.copiaIaTrabajando, lang) : rellenar(tx(q?.metodo === "ia" ? FP.copiaIaOtraVez : FP.copiaIa, lang), v)}
+                                {trabajando ? tx(FP.copiaIaTrabajando, lang) : rellenar(tx(!q ? FP.copiaIaDirecto : q.metodo === "ia" ? FP.copiaIaOtraVez : FP.copiaIa, lang), v)}
                                 <span className="sr-only">{rellenar(tx(FP.copiaQuitarSr, lang), v)}</span>
                               </Button>
                             </>
@@ -1588,7 +1670,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                 las horizontales y los banners ocupan la fila entera. El orden es el de la lista del cliente. */}
             <ul className="grid items-start gap-4 @xl:grid-cols-2">
               {medidas.map((m) => (
-                <TarjetaMedida key={clave(m)} maestros={maestrosVista} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} />
+                <TarjetaMedida key={clave(m)} maestros={maestrosVista} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} />
               ))}
             </ul>
           </section>

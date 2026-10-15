@@ -163,12 +163,18 @@ function encima(dest: Float32Array, W: number, capa: Float32Array, x0: number, y
     }
 }
 
+/** El fondo de la medida ya remuestreado: el editor lo guarda y no lo rehace en cada cuadro de un arrastre. */
+export function armarFondo(ma: MaestroDatos, a: Acomodo, W: number, H: number): Float32Array {
+  return remuestrear(ma.fondo, ma.w, ma.h, a.fondo.k, a.fondo.x, a.fondo.y, 0, 0, W, H, "extender", false);
+}
+
 /**
  * La medida W × H armada: el fondo que la cubre y cada pieza donde la dejó el acomodo (sin redondear su lugar al
  * píxel), sus sombras en "multiplicar". RGBA opaco, listo para `ImageData`. `enfoque: false` = sin enfoque extra.
+ * `fondo`: el de `armarFondo` para este mismo acomodo y tamaño (no se modifica; se copia).
  */
-export function armarMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, op: { enfoque?: boolean; texto?: TextoEscrito } = {}): Uint8ClampedArray {
-  const dest = remuestrear(ma.fondo, ma.w, ma.h, a.fondo.k, a.fondo.x, a.fondo.y, 0, 0, W, H, "extender", false);
+export function armarMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, op: { enfoque?: boolean; texto?: TextoEscrito; fondo?: Float32Array } = {}): Uint8ClampedArray {
+  const dest = op.fondo?.length === W * H * 4 ? op.fondo.slice() : armarFondo(ma, a, W, H);
   for (const q of a.puestas) {
     const p = ma.piezas[q.pieza];
     // Dónde cae la esquina de la caja completa (con sombra) para que su parte sólida quede donde dijo el acomodo.

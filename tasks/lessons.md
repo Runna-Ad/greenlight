@@ -1062,3 +1062,13 @@ ROOT CAUSE: diagnostiqué por la causa más cercana a lo último que construí (
 RULE: ante un artefacto visual, aislarlo antes de arreglar: pintar sobre un fondo liso, quitar piezas una a una, preguntar qué pieza pinta ese píxel. Y lo que una pieza de arriba tapa en el PSD (sombras, colores) no se sabe: se estima de alrededor, nunca se deja en "nada".
 TAGS: #formatos #diagnostico #sombras #aislar #psd
 
+
+[2026-10-15] LESSON (editor: las cajas encimadas se roban los clics): en el editor por medida, arrastrar la esquina del botón (CTA) movía la TARJETA. La caja de la tarjeta venía después en el DOM y tapaba la esquina del botón, así que el clic le llegaba a ella. Ni tsc ni los tests lo ven; salió arrastrando de verdad en el navegador.
+ROOT CAUSE: en una capa de controles encima de una imagen, el orden del DOM decide quién recibe el clic donde dos cajas se enciman, y en un anuncio las piezas se enciman a propósito.
+RULE: en un editor con cajas que se pueden encimar, la seleccionada va al frente (z-index) para que sus asas siempre se puedan agarrar. Probar el arrastre de esquinas sobre una pieza que tenga otra encima, no sobre una suelta.
+TAGS: #formatos #editor #pointer-events #z-index #probar-en-navegador
+
+[2026-10-15] LESSON (una excepción "lo hizo la persona" se tiene que limitar a lo que la persona tocó): al construir el editor, `aplicarEdicion` dejaba de avisar "se enciman" para TODAS las piezas en cuanto había una edición, y el editor mandaba todas las posiciones (no sólo las cambiadas), así que con abrirlo ya se callaba. Una tarjeta con el botón movido salía "limpia" aunque dos piezas que nadie tocó siguieran encimadas. Tests, tsc y mi prueba en el navegador pasaron; lo encontró el revisor de código.
+ROOT CAUSE: puse la excepción a nivel de medida ("está editada") cuando la razón de la excepción ("la persona lo vio y lo decidió") sólo vale para las piezas que movió.
+RULE: cuando un aviso se calla porque una persona decidió algo, callarlo sólo para lo que esa persona tocó (aquí: pares donde al menos una pieza es hecha a mano), y mandar al motor sólo lo cambiado. Probar con un caso donde lo NO tocado sigue mal, y comprobar que el test falla con la regla vieja.
+TAGS: #formatos #editor #avisos #excepciones #reap #revisor

@@ -12,7 +12,7 @@
  * Una sola entrada, `revisarMedida`, para la tarjeta de cada medida y para el resumen de la pantalla: los dos cuentan
  * los mismos avisos.
  */
-import { acomodar, elegirMaestro, type Acomodo, type AvisoAcomodo, type Lado, type MaestroCaja, type Zona } from "./acomodo.ts";
+import { acomodar, aplicarEdicion, elegirMaestro, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type Zona } from "./acomodo.ts";
 import type { Caja, Rol } from "./psd.ts";
 import { etiquetaPieza } from "./roles.ts";
 
@@ -154,8 +154,15 @@ export function avisosDePixeles(ma: MaestroRevisable, a: Acomodo, W: number, H: 
  *  cambia OTRO maestro, ésta devuelve lo mismo y su tarjeta no se vuelve a pintar. */
 const hechas = new WeakMap<MaestroRevisable, Map<string, { maestro: number; acomodo: Acomodo }>>();
 
-/** Una medida completa: de qué maestro sale, su acomodo y TODOS sus avisos (los del acomodo y los de píxeles). */
-export function revisarMedida(maestros: readonly MaestroRevisable[], W: number, H: number, op: { heroLado?: Lado; zona?: Zona | null } = {}): { maestro: number; acomodo: Acomodo } {
+/** Para la clave de la caché: la misma edición da la misma firma (números redondeados, piezas en orden). */
+const firma = (ed: Edicion | null | undefined) =>
+  ed ? Object.keys(ed).map(Number).sort((a, b) => a - b).map((i) => `${i}@${ed[i].x.toFixed(2)},${ed[i].y.toFixed(2)},${ed[i].k.toFixed(4)}`).join(";") : "-";
+
+/**
+ * Una medida completa: de qué maestro sale, su acomodo y TODOS sus avisos (los del acomodo y los de píxeles).
+ * `edicion`: lo que la persona movió a mano en ESTA medida (va sobre el acomodo automático; se revisa todo igual).
+ */
+export function revisarMedida(maestros: readonly MaestroRevisable[], W: number, H: number, op: { heroLado?: Lado; zona?: Zona | null; edicion?: Edicion | null } = {}): { maestro: number; acomodo: Acomodo } {
   const maestro = elegirMaestro([...maestros], W, H);
   if (maestro < 0) throw new Error("revisarMedida: sin maestros");
   const ma = maestros[maestro];
@@ -165,10 +172,11 @@ export function revisarMedida(maestros: readonly MaestroRevisable[], W: number, 
   if (!porMedida) hechas.set(ma, (porMedida = new Map()));
   // La zona del canal mueve piezas (acomodo.ts): entra en la clave, o al cambiar de canal se queda el acomodo viejo.
   const z = op.zona ?? undefined;
-  const clave = `${maestro}:${W}x${H}:${lado}:${z ? `${z.top},${z.right},${z.bottom},${z.left}` : "-"}`;
+  const clave = `${maestro}:${W}x${H}:${lado}:${z ? `${z.top},${z.right},${z.bottom},${z.left}` : "-"}:${firma(op.edicion)}`;
   const ya = porMedida.get(clave);
   if (ya) return ya;
-  const acomodo = acomodar(ma, W, H, { heroLado: lado, zona: z });
+  const auto = acomodar(ma, W, H, { heroLado: lado, zona: z });
+  const acomodo = op.edicion ? aplicarEdicion(ma, auto, op.edicion, W, H, z) : auto;
   // Los avisos de píxeles son una ayuda: si algo raro del PSD los rompe, la medida sale igual, sin ellos.
   let extra: AvisoAcomodo[] = [];
   try {
