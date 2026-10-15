@@ -76,8 +76,8 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 - Siguen abiertas: letra mínima aceptable del legal (hoy 10 px provisional) · 3-5 PSD más.
 
 ### Plan B — puerta PSD (2026-10-13)
-**Next Step (2026-10-15):** B15 (editor + botón IA) en la preview. Pendiente de Pedro: elegir A (mover el fondo
-detrás del texto) o B (sombra detrás del texto) para el contraste automático; luego construirlo con nota y «Deshacer».
+**Next Step (2026-10-15):** B15 (editor + botón IA) y B16 (contraste: los dos, la plataforma elige) en la preview.
+Pedro prueba. Abierto: separar el colchón del fondo con IA (respondido, sin construir; ver conversación).
 Reels se queda sin zoom (Pedro: "yes leave reels as it is").
 **Antes:** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
 subir. La prueba de punta a punta de tipografías espera el "ship it" de 0079 + bucket. 320×50 se queda igual
@@ -527,7 +527,22 @@ largo: estacionado por él.
           chip con explicación de por qué no se voltea, aviso si el navegador no deja guardar.
       · No arreglado (bajo): rayas de la zona sin etiqueta en el editor; Mayús + / − para pasos grandes; el foco
         inicial cae en la primera pieza; la caché de `revisarMedida` recalcula el automático por cada edición nueva.
-      · Pendiente: Pedro elige A o B para el contraste automático (renders en la conversación).
+      · Contraste: Pedro eligió "do both and let the user decide" → B16.
+- [x] B16. Arreglos de contraste, los dos, y la plataforma elige (Pedro, 2026-10-15: "yes build it that way"):
+      · «Mover fondo»: busca dentro de la holgura del fondo (rejilla 9×9 + afinado) el lugar donde se pierde menos.
+        «Sombra detrás» (halo.ts): sombra suave que viaja con la pieza, con un tono oscuro del mismo fondo.
+      · La plataforma elige sola el que deja TODO legible y se pierde menos, nunca un fondo que deja la tarjeta
+        flotando (piso bajo el HERO corrido > 5 % de su alto) ni uno que haga asomar la copia; si ninguno alcanza, se
+        queda el original con el aviso y se dice. La tarjeta lo explica en una frase y ofrece los tres con su %.
+      · Orden: acomodo → contraste → edición a mano. Con fondo movido, la edición guardada lleva ":fondo" en su clave;
+        editada a mano, el contraste no se cambia (se vuelve al automático en el editor). El editor, la tarjeta y el
+        ZIP pintan lo mismo (la sombra se pinta en `armarMedida` y la mide `perdidas`).
+      · Medido en s33 (copia quitada): 5 medidas pierden el título (42-58 %); mover fondo → 0 % pero la tarjeta flota
+        en las 5; sombra → 0-2 % → la plataforma elige la sombra en las 5. APGIANT: nada que arreglar. ≤ 33 ms por
+        medida. En el navegador: nota, cambio a «Mover fondo» (repinta, avisa que flota), «Original» (vuelve el aviso),
+        y el editor pinta la sombra.
+      · test-formatos 308/0 (6 nuevos) · npm test verde · tsc y eslint limpios.
+      · No probado en el navegador: los botones apagados en una medida editada a mano.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

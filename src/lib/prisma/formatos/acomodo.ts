@@ -38,6 +38,8 @@ export type Acomodo = {
   quitadas: number[];
   /** Alguien movió o cambió de tamaño piezas a mano (`aplicarEdicion`). */
   editada?: boolean;
+  /** Piezas con una sombra suave detrás para que se lean (arreglo de contraste, `revisar.ts` + `halo.ts`). */
+  sombras?: readonly number[];
 };
 /**
  * Lo que la persona movió o cambió de tamaño a mano en una medida (Pedro, 2026-10-15: "an edit button that allows us

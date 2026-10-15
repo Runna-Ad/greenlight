@@ -9,6 +9,7 @@
  * todos los navegadores, y a la medida del maestro sale EXACTAMENTE el anuncio (prueba de identidad).
  */
 import type { Acomodo } from "./acomodo.ts";
+import { haloDe } from "./halo.ts";
 import type { Caja, Rol } from "./psd.ts";
 
 /** Lo que hace falta de un maestro para pintarlo: los mismos arreglos que manda el worker (RGBA). */
@@ -17,7 +18,7 @@ export type MaestroDatos = {
   h: number;
   /** RGBA opaco, w × h. */
   fondo: Uint8ClampedArray;
-  piezas: { rol: Rol | null; caja: Caja; solido: Caja; rgba: Uint8ClampedArray; oscurece: Uint8ClampedArray | null; base?: Uint8ClampedArray | null }[];
+  piezas: { rol: Rol | null; caja: Caja; solido: Caja; rgba: Uint8ClampedArray; oscurece: Uint8ClampedArray | null; base?: Uint8ClampedArray | null; letraMinPx?: number | null }[];
   /** Gamma con que se mezcla el texto vuelto a escribir, la misma que usó Photoshop (sin dato: la mezcla normal). */
   textoGamma?: number;
 };
@@ -163,6 +164,21 @@ function encima(dest: Float32Array, W: number, capa: Float32Array, x0: number, y
     }
 }
 
+/** Multiplica lo ya pintado por un mapa de sombra (blanco = no oscurece; fuera del mapa, tampoco) de `mw × mh`
+ *  puesto a escala k con su esquina en (ox, oy). */
+function oscurecer(dest: Float32Array, W: number, H: number, mapa: Uint8ClampedArray, mw: number, mh: number, k: number, ox: number, oy: number): void {
+  const x0 = Math.max(0, Math.floor(ox) - 1), y0 = Math.max(0, Math.floor(oy) - 1);
+  const x1 = Math.min(W, Math.ceil(ox + mw * k) + 1), y1 = Math.min(H, Math.ceil(oy + mh * k) + 1);
+  if (x1 <= x0 || y1 <= y0) return;
+  const rw = x1 - x0;
+  const s = remuestrear(mapa, mw, mh, k, ox, oy, x0, y0, x1, y1, "fuera", false);
+  for (let y = y0; y < y1; y++)
+    for (let x = x0; x < x1; x++) {
+      const i = ((y - y0) * rw + (x - x0)) * 4, d = (y * W + x) * 4, cub = s[i + 3] / 255;
+      for (let c = 0; c < 3; c++) dest[d + c] *= (s[i + c] + 255 * (1 - cub)) / 255;
+    }
+}
+
 /** El fondo de la medida ya remuestreado: el editor lo guarda y no lo rehace en cada cuadro de un arrastre. */
 export function armarFondo(ma: MaestroDatos, a: Acomodo, W: number, H: number): Float32Array {
   return remuestrear(ma.fondo, ma.w, ma.h, a.fondo.k, a.fondo.x, a.fondo.y, 0, 0, W, H, "extender", false);
@@ -175,23 +191,20 @@ export function armarFondo(ma: MaestroDatos, a: Acomodo, W: number, H: number): 
  */
 export function armarMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, op: { enfoque?: boolean; texto?: TextoEscrito; fondo?: Float32Array } = {}): Uint8ClampedArray {
   const dest = op.fondo?.length === W * H * 4 ? op.fondo.slice() : armarFondo(ma, a, W, H);
+  const sombras = new Set(a.sombras ?? []);
   for (const q of a.puestas) {
     const p = ma.piezas[q.pieza];
     // Dónde cae la esquina de la caja completa (con sombra) para que su parte sólida quede donde dijo el acomodo.
     const ox = q.x - (p.solido.x - p.caja.x) * q.k, oy = q.y - (p.solido.y - p.caja.y) * q.k;
+    // La sombra de contraste va primero (más abajo que las del PSD) y puede salir de la caja: su margen es suyo.
+    const halo = sombras.has(q.pieza) ? haloDe(ma, q.pieza) : null;
+    if (halo) oscurecer(dest, W, H, halo.mapa, halo.w, halo.h, q.k, ox - halo.pad * q.k, oy - halo.pad * q.k);
     const x0 = Math.max(0, Math.floor(ox) - 1), y0 = Math.max(0, Math.floor(oy) - 1);
     const x1 = Math.min(W, Math.ceil(ox + p.caja.w * q.k) + 1), y1 = Math.min(H, Math.ceil(oy + p.caja.h * q.k) + 1);
     if (x1 <= x0 || y1 <= y0) continue;
     const rw = x1 - x0;
-    if (p.oscurece) {
-      // Mapa de sombra: blanco = no oscurece. Afuera de su caja tampoco.
-      const s = remuestrear(p.oscurece, p.caja.w, p.caja.h, q.k, ox, oy, x0, y0, x1, y1, "fuera", false);
-      for (let y = y0; y < y1; y++)
-        for (let x = x0; x < x1; x++) {
-          const i = ((y - y0) * rw + (x - x0)) * 4, d = (y * W + x) * 4, cub = s[i + 3] / 255;
-          for (let c = 0; c < 3; c++) dest[d + c] *= (s[i + c] + 255 * (1 - cub)) / 255;
-        }
-    }
+    // Sus sombras del PSD (blanco = no oscurece; afuera de su caja tampoco).
+    if (p.oscurece) oscurecer(dest, W, H, p.oscurece, p.caja.w, p.caja.h, q.k, ox, oy);
     // Texto vuelto a escribir: la pieza va SIN sus letras (su base) y las letras nuevas encima, en su mismo turno
     // (lo que esté más arriba las sigue tapando como en Photoshop). Sin enfoque: las letras ya salen nítidas.
     const escribir = p.base && Math.abs(q.k - 1) >= ESCRIBIR_LEJOS_DE_1;

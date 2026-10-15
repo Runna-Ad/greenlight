@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { acomodar, acomodarMedida, aplicarEdicion, topesPieza, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
-import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida } from "../src/lib/prisma/formatos/revisar.ts";
+import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContraste } from "../src/lib/prisma/formatos/revisar.ts";
 import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
 import { specVacio } from "../src/lib/prisma/spec.ts";
 
@@ -1382,6 +1382,32 @@ console.log("\n▶ v2 · copia del HERO pintada en el fondo (gemela.ts) y avisos
   const heroOscuro = { nombre: "CARD", rol: "HERO", caja: { x: 220, y: 80, w: 160, h: 100 }, solido: { x: 220, y: 80, w: 160, h: 100 }, letraMinPx: null, rgba: bloque(160, 100, [20, 20, 20, 255]) };
   const conHero = { ...sobreAzul, piezas: [heroOscuro, titulo(50)] };
   ok("contraste: lo de atrás también son las piezas de abajo (blanco sobre un HERO oscuro, encima del fondo blanco, se lee)", (perdidas(conHero, aDerecha(conHero), C, C).get(1) ?? 1) < 0.05);
+
+  // Arreglos de contraste (Pedro, 2026-10-15: "can we do both and let the user decide?"). Fondo blanco a la izquierda
+  // y azul a la derecha; en el maestro el titular blanco va sobre el azul. En una medida de 300 de ancho cae sobre el
+  // blanco, y el fondo (400 de ancho) tiene 100 px para correrse hasta que atrás quede azul.
+  const fc2 = new Uint8ClampedArray(C * C * 4);
+  for (let y = 0; y < C; y++) for (let x = 0; x < C; x++) fc2.set(x >= 200 ? [30, 60, 200, 255] : [245, 245, 245, 255], (y * C + x) * 4);
+  const m2 = { nombre: "C2", w: C, h: C, fondo: fc2, piezas: [titulo(250)] };
+  const a2 = { familia: "horizontal", puestas: [{ pieza: 0, k: 1, x: 100, y: 100, w: 100, h: 40 }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] };
+  const op2 = opcionesDeContraste(m2, a2, 300, C);
+  ok(
+    "contraste: «Mover fondo» corre el fondo dentro de su holgura hasta que atrás quede el azul (se pierde ~0) y sigue cubriendo la medida",
+    op2.info.perdida.original > 0.95 && op2.info.perdida.fondo < 0.05 && op2.fondo.fondo.x <= -95 && op2.fondo.fondo.x >= -100,
+    JSON.stringify({ p: op2.info.perdida, f: op2.fondo?.fondo }),
+  );
+  ok("contraste: «Sombra» oscurece lo de atrás del titular blanco y deja de perderse; va marcada en el acomodo", op2.info.perdida.sombra < 0.1 && op2.sombra.sombras.includes(0), JSON.stringify(op2.info.perdida));
+  ok("contraste: sin tarjeta que quede flotando, la plataforma elige uno de los dos (no el original)", op2.info.auto !== "original" && !op2.info.fondoSacaHero, op2.info.auto);
+  const sinSombra = armarMedida(m2, a2, 300, C), conSombra = armarMedida(m2, op2.sombra, 300, C);
+  const gris = (px, x, y) => px[(y * 300 + x) * 4];
+  ok("contraste: la sombra se pinta (a 2 px del titular, fuera de su caja, el fondo blanco queda más oscuro; sin letra medida el radio es chico) y lejos no toca nada", gris(conSombra, 98, 120) < gris(sinSombra, 98, 120) - 40 && gris(conSombra, 20, 350) === gris(sinSombra, 20, 350), `${gris(sinSombra, 98, 120)} → ${gris(conSombra, 98, 120)}`);
+  // Con un HERO parado en el fondo, correr el fondo 100 px lo deja flotando: se ofrece, pero la plataforma no lo elige.
+  const heroM2 = { nombre: "CARD", rol: "HERO", caja: { x: 20, y: 250, w: 100, h: 100 }, solido: { x: 20, y: 250, w: 100, h: 100 }, letraMinPx: null, rgba: bloque(100, 100, [200, 80, 20, 255]) };
+  const m3 = { ...m2, piezas: [heroM2, titulo(250)] };
+  const a3 = { ...a2, puestas: [{ pieza: 0, k: 1, x: 20, y: 250, w: 100, h: 100 }, { ...a2.puestas[0], pieza: 1 }] };
+  const op3 = opcionesDeContraste(m3, a3, 300, C);
+  ok("contraste: si mover el fondo saca a la tarjeta de su lugar, se ofrece pero la plataforma elige la sombra", op3.fondo !== null && op3.info.fondoSacaHero && op3.info.auto === "sombra", JSON.stringify(op3.info));
+  eq("contraste: si nada se pierde, no hay arreglos que ofrecer", opcionesDeContraste(sobreAzul, acomodar(sobreAzul, C, C), C, C), null);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

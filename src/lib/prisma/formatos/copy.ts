@@ -174,6 +174,27 @@ export const FP = {
   // Editor por medida (Pedro, 2026-10-15): mover y cambiar de tamaño las piezas de una medida, y guardar.
   editar: t("Editar", "Edit"),
   editarAria: t("Editar {m}: mover y cambiar de tamaño las piezas", "Edit {m}: move and resize the pieces"),
+  contrasteGrupo: t("Arreglo de contraste de {m}", "Contrast fix for {m}"),
+  contrasteOpciones: t("Cuánto se pierde con cada opción:", "How much gets lost with each option:"),
+  contrasteOriginal: t("Original", "Original"),
+  contrasteFondo: t("Mover fondo", "Move background"),
+  contrasteSombra: t("Sombra detrás", "Shadow behind"),
+  contrasteAuto: t("automático", "automatic"),
+  contrasteNotaSombra: t(
+    "{p} se perdía en el fondo ({antes}). Se le puso una sombra suave detrás: ahora {ahora}.",
+    "{p} was getting lost in the background ({antes}). A soft shadow was added behind it: now {ahora}.",
+  ),
+  contrasteNotaFondo: t(
+    "{p} se perdía en el fondo ({antes}). Se movió el fondo para que atrás quede otra cosa: ahora {ahora}.",
+    "{p} was getting lost in the background ({antes}). The background was moved so something else sits behind it: now {ahora}.",
+  ),
+  contrasteFlota: t(" Ojo: la tarjeta ya no queda sobre su lugar del fondo.", " Note: the card no longer sits on its spot in the background."),
+  contrasteNinguno: t(
+    "{p} se pierde en el fondo ({antes}) y ningún arreglo lo deja legible del todo: elige el que se vea mejor, o acomódalo con «Editar».",
+    "{p} gets lost in the background ({antes}) and no fix makes it fully readable: pick the one that looks best, or arrange it with «Edit».",
+  ),
+  contrasteSinArreglo: t("Sin arreglo, como elegiste: {p} se pierde en un {antes}.", "No fix, as you chose: {antes} of {p} gets lost."),
+  contrasteEditada: t("Editada a mano: para cambiar el contraste, «Editar» › «Volver al automático».", "Edited by hand: to change the contrast, «Edit» › «Back to automatic»."),
   editada: t("Editada a mano", "Edited by hand"),
   editadaTitulo: t(
     "Acomodada a mano y guardada en este navegador. No se voltea: para voltearla, «Editar» › «Volver al automático».",

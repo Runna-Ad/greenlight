@@ -10,14 +10,14 @@ import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
 import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, esCanal, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Edicion, type Lado } from "@/lib/prisma/formatos/acomodo";
-import { revisarMedida, type CopiaEnFondo } from "@/lib/prisma/formatos/revisar";
+import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionContraste, type InfoContraste } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
 import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
 import { LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
-import { nombreDeGuia, type Rol } from "@/lib/prisma/formatos/roles";
+import { etiquetaPieza, nombreDeGuia, type Rol } from "@/lib/prisma/formatos/roles";
 import { colaVacia, enCola, pintar } from "./pintar";
 import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, fuentesRecordadas, olvidarFuentes, recordarFuentes, revisarTextos, textoEscrito, type ArchivoFuente, type Escritura, type Tipografias } from "./escritura";
 import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
@@ -61,11 +61,17 @@ const SOLTAR_URL_MS = 10_000;
 const FOCO = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
 const BOTON = "min-h-11 sm:min-h-9";
 const clave = (m: Medida) => `${m.w}x${m.h}`;
-/** De qué acomodo automático es una edición: el lado del HERO y la zona del canal lo cambian (editor-medida.tsx). */
-const contextoEdicion = (m: Medida, lado: Lado | undefined, canal: Canal | null) => {
+/**
+ * De qué acomodo automático es una edición: el lado del HERO, la zona del canal y si el contraste movió el fondo lo
+ * cambian (editor-medida.tsx). La sombra no mueve nada: no entra (y sin fondo movido la clave queda como antes).
+ */
+const contextoEdicion = (m: Medida, lado: Lado | undefined, canal: Canal | null, contraste: ArregloContraste | undefined) => {
   const z = zonaCanal(canal, m.w, m.h);
-  return `${lado ?? "derecha"}:${z ? `${z.top},${z.right},${z.bottom},${z.left}` : "-"}`;
+  return `${lado ?? "derecha"}:${z ? `${z.top},${z.right},${z.bottom},${z.left}` : "-"}${contraste === "fondo" ? ":fondo" : ""}`;
 };
+/** El contexto de la edición de una medida con lo elegido ahora (el arreglo que de verdad se usa, sin la edición). */
+const contextoDe = (maestros: MaestroVista[], m: Medida, lados: Record<string, Lado>, canal: Canal | null, contrastes: Record<string, EleccionContraste>) =>
+  contextoEdicion(m, lados[clave(m)], canal, revisarMedida(maestros, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h), contraste: contrastes[clave(m)] }).contraste?.usado);
 const etiqueta = (m: Medida) => `${m.w}×${m.h}`;
 /** El nombre de entrega del equipo (el de la mesa con la medida nueva), limpio para ser nombre de archivo. */
 const archivoDe = (ma: MaestroListo, m: Medida) => `${nombreSalida({ nombre: limpiarNombre(ma.nombre, NOMBRE_MESA_MAX), w: ma.w, h: ma.h }, m.w, m.h)}.png`;
@@ -227,6 +233,56 @@ function cifrasCanal(c: Canal, lang: Lang): string {
   return rellenar(tx(FP.zonaCifras, lang), { z: `${partes.join(", ")}${px ? ` ${tx(FP.zonaDe1080, lang)}` : ""}` });
 }
 
+const ARREGLOS: ArregloContraste[] = ["original", "fondo", "sombra"];
+const NOMBRE_ARREGLO = { original: FP.contrasteOriginal, fondo: FP.contrasteFondo, sombra: FP.contrasteSombra } as const;
+const porciento = (v: number) => `${Math.round(v * 100)} %`;
+
+/**
+ * El contraste de una medida donde el texto se pierde (Pedro, 2026-10-15: "can we do both and let the user decide?"):
+ * qué hizo la plataforma, en una frase, y los tres caminos con cuánto se pierde en cada uno. Elegir el automático
+ * vuelve a "auto" (si la plataforma cambia de opinión, la medida la sigue).
+ */
+function ContrasteMedida({ info, ma, medida, editada, lang, alElegir }: { info: InfoContraste; ma: MaestroVista; medida: Medida; editada: boolean; lang: Lang; alElegir: (m: Medida, e: EleccionContraste) => void }) {
+  const p = info.piezas.map((i) => etiquetaPieza(ma.piezas[i])).join(", ");
+  const antes = porciento(info.perdida.original ?? 0), ahora = info.perdida[info.usado];
+  const nota =
+    info.usado === "sombra"
+      ? rellenar(tx(FP.contrasteNotaSombra, lang), { p, antes, ahora: porciento(ahora ?? 0) })
+      : info.usado === "fondo"
+        ? rellenar(tx(FP.contrasteNotaFondo, lang), { p, antes, ahora: porciento(ahora ?? 0) }) + (info.fondoSacaHero ? tx(FP.contrasteFlota, lang) : "")
+        : info.auto === "original"
+          ? rellenar(tx(FP.contrasteNinguno, lang), { p, antes })
+          : rellenar(tx(FP.contrasteSinArreglo, lang), { p, antes });
+  return (
+    <div className="mt-2 rounded-lg border border-border p-2">
+      <p className="text-sm text-foreground">{nota}</p>
+      <p className="mt-1.5 text-xs text-muted-foreground">{tx(FP.contrasteOpciones, lang)}</p>
+      <div role="group" aria-label={rellenar(tx(FP.contrasteGrupo, lang), { m: etiqueta(medida) })} className="mt-1 flex flex-wrap gap-1.5">
+        {ARREGLOS.map((a) => {
+          const L = info.perdida[a], elegido = info.usado === a;
+          return (
+            <Button
+              key={a}
+              variant={elegido ? "secondary" : "outline"}
+              size="sm"
+              aria-pressed={elegido}
+              disabled={L === null || editada}
+              onClick={() => alElegir(medida, a === info.auto ? "auto" : a)}
+              className={cn("min-h-9", elegido && "font-semibold")}
+            >
+              {elegido && <CircleCheck className="size-3.5" aria-hidden="true" />}
+              {tx(NOMBRE_ARREGLO[a], lang)}
+              {L !== null && <span className="font-normal text-muted-foreground">{porciento(L)}</span>}
+              {a === info.auto && <span className="font-normal text-muted-foreground">· {tx(FP.contrasteAuto, lang)}</span>}
+            </Button>
+          );
+        })}
+      </div>
+      {editada && <p className="mt-1 text-xs text-muted-foreground">{tx(FP.contrasteEditada, lang)}</p>}
+    </div>
+  );
+}
+
 const TarjetaMedida = memo(function TarjetaMedida({
   maestros,
   medida,
@@ -239,6 +295,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
   registrar,
   edicion,
   alEditar,
+  contraste: eleccion,
+  alContraste,
 }: {
   maestros: MaestroVista[];
   medida: Medida;
@@ -252,12 +310,18 @@ const TarjetaMedida = memo(function TarjetaMedida({
   /** Lo que se movió a mano en esta medida (editor-medida.tsx); null = el acomodo automático. */
   edicion: Edicion | null;
   alEditar: (m: Medida) => void;
+  /** El arreglo de contraste elegido para esta medida ("auto": el de la plataforma). */
+  contraste: EleccionContraste;
+  alContraste: (m: Medida, e: EleccionContraste) => void;
 }) {
   const { w, h } = medida;
   const k = clave(medida);
-  // La zona del canal también acomoda (en 9:16 de otra forma las piezas la evitan) y la edición va encima: lo mismo
-  // que usa el resumen.
-  const { maestro, acomodo } = useMemo(() => revisarMedida(maestros, w, h, { heroLado: lado, zona: zonaCanal(canal, w, h), edicion }), [maestros, w, h, lado, canal, edicion]);
+  // La zona del canal también acomoda (en 9:16 de otra forma las piezas la evitan), luego el contraste y la edición
+  // encima: lo mismo que usa el resumen.
+  const { maestro, acomodo, contraste } = useMemo(
+    () => revisarMedida(maestros, w, h, { heroLado: lado, zona: zonaCanal(canal, w, h), contraste: eleccion, edicion }),
+    [maestros, w, h, lado, canal, eleccion, edicion],
+  );
   const guia = zonaCanal(canal, w, h);
   const nombreCanal = canal ? CANALES[canal].nombre : "";
   const ma = maestros[maestro];
@@ -371,6 +435,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" /> {tx(FP.noPinto, lang)}
         </p>
       )}
+      {contraste && <ContrasteMedida info={contraste} ma={ma} medida={medida} editada={!!acomodo.editada} lang={lang} alElegir={alContraste} />}
       {acomodo.avisos.length > 0 ? (
         <div className="mt-2 rounded-lg border border-border bg-secondary/50 p-2">
           <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
@@ -434,6 +499,8 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const [medidas, setMedidas] = useState<Medida[]>(() => leerMedidas(MEDIDAS_EQUIPO).medidas);
   const [notaLista, setNotaLista] = useState<{ mal: boolean; texto: string } | null>(null);
   const [lados, setLados] = useState<Record<string, Lado>>({});
+  /** El arreglo de contraste que la persona eligió por medida; sin entrada, el que elige la plataforma. */
+  const [contrastes, setContrastes] = useState<Record<string, EleccionContraste>>({});
   /** Canal contra el que se revisa la zona segura. Sin canal no se marca nada (nadie ve una franja sin nombre). */
   const [canal, setCanal] = useState<Canal | null>(null);
   /** Tipografías cargadas (nombre PostScript → cómo pedirla). Vacío = el texto va como imagen. */
@@ -693,6 +760,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     setLeido(null);
     soltarElegido();
     setLados({});
+    setContrastes({});
     setAviso(null);
     setNotaFuentes(null);
     setEleccion(null);
@@ -920,6 +988,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     },
     [anunciar, lang],
   );
+  const elegirContraste = useCallback((m: Medida, e: EleccionContraste) => setContrastes((p) => ({ ...p, [clave(m)]: e })), []);
 
   // Cada texto se prueba contra Photoshop con las tipografías cargadas; sólo los que coinciden se vuelven a escribir.
   // La prueba va FUERA del pintado de la pantalla (dibuja en un canvas; si algo falla no la tumba). Mientras
@@ -1058,18 +1127,18 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     const deSesion = ediciones?.leido === leido ? ediciones.mapa : null;
     if (!leido || !maestrosVista.length) return mapa;
     for (const m of medidas) {
-      const ctx = contextoEdicion(m, lados[clave(m)], canal), c = `${clave(m)}:${ctx}`;
+      const ctx = contextoDe(maestrosVista, m, lados, canal, contrastes), c = `${clave(m)}:${ctx}`;
       if (deSesion?.has(c)) mapa.set(clave(m), deSesion.get(c) ?? null);
       else mapa.set(clave(m), edicionGuardada(leido.archivo, maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)], m.w, m.h, ctx));
     }
     return mapa;
-  }, [ediciones, leido, maestrosVista, medidas, lados, canal]);
+  }, [ediciones, leido, maestrosVista, medidas, lados, canal, contrastes]);
   const abrirEditor = useCallback((m: Medida) => setEditando(m), []);
   const guardarEditada = (m: Medida, ed: Edicion | null) => {
     const l = leido;
     setEditando(null);
     if (!l || !maestrosVista.length) return;
-    const ctx = contextoEdicion(m, lados[clave(m)], canal);
+    const ctx = contextoDe(maestrosVista, m, lados, canal, contrastes);
     const guardada = guardarEdicion(l.archivo, maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)], m.w, m.h, ctx, ed);
     setEdiciones((antes) => ({ leido: l, mapa: new Map([...(antes?.leido === l ? antes.mapa : []), [`${clave(m)}:${ctx}`, ed]]) }));
     if (!guardada && ed) return void toast.warning(rellenar(tx(FP.editorSoloSesion, lang), { m: etiqueta(m) }));
@@ -1084,16 +1153,23 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
       m,
       mi,
       zona,
-      auto: revisarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)], zona }).acomodo,
+      // Con su arreglo de contraste: el editor parte de lo que se ve en la tarjeta (fondo movido o sombra incluidos).
+      auto: revisarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)], zona, contraste: contrastes[clave(m)] }).acomodo,
       texto: textoEscrito(escritura, mi, maestrosVista[mi], tiposEscritos),
     };
-  }, [editando, leido, maestrosVista, canal, lados, escritura, tiposEscritos]);
+  }, [editando, leido, maestrosVista, canal, lados, contrastes, escritura, tiposEscritos]);
 
   // El mismo acomodo y los mismos avisos que cada tarjeta (`revisarMedida` guarda lo ya hecho): aquí sirven para el
   // resumen, el legal y los nombres del ZIP.
   const filas = useMemo(
-    () => (maestrosVista.length ? medidas.map((m) => ({ m, ...revisarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h), edicion: edicionesVista.get(clave(m)) ?? null }) })) : []),
-    [maestrosVista, medidas, lados, canal, edicionesVista],
+    () =>
+      maestrosVista.length
+        ? medidas.map((m) => ({
+            m,
+            ...revisarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h), contraste: contrastes[clave(m)], edicion: edicionesVista.get(clave(m)) ?? null }),
+          }))
+        : [],
+    [maestrosVista, medidas, lados, canal, contrastes, edicionesVista],
   );
   const porRevisar = filas.filter((f) => f.acomodo.avisos.length).length;
   const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia) && !f.acomodo.editada);
@@ -1670,7 +1746,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                 las horizontales y los banners ocupan la fila entera. El orden es el de la lista del cliente. */}
             <ul className="grid items-start gap-4 @xl:grid-cols-2">
               {medidas.map((m) => (
-                <TarjetaMedida key={clave(m)} maestros={maestrosVista} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} />
+                <TarjetaMedida key={clave(m)} maestros={maestrosVista} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} />
               ))}
             </ul>
           </section>

@@ -1072,3 +1072,8 @@ TAGS: #formatos #editor #pointer-events #z-index #probar-en-navegador
 ROOT CAUSE: puse la excepción a nivel de medida ("está editada") cuando la razón de la excepción ("la persona lo vio y lo decidió") sólo vale para las piezas que movió.
 RULE: cuando un aviso se calla porque una persona decidió algo, callarlo sólo para lo que esa persona tocó (aquí: pares donde al menos una pieza es hecha a mano), y mandar al motor sólo lo cambiado. Probar con un caso donde lo NO tocado sigue mal, y comprobar que el test falla con la regla vieja.
 TAGS: #formatos #editor #avisos #excepciones #reap #revisor
+
+[2026-10-15] LESSON (dije "la sombra casi no ayuda" mirando, sin medir, y era la mejor opción): al mandarle a Pedro los renders A/B del contraste escribí que B "barely helps here". Al construirlo y medir con la misma regla del aviso, B bajó lo que se pierde de 42-58 % a 0-2 % en las 5 medidas, y A (que recomendé) deja la tarjeta flotando en las 5. Pedro pidió los dos y casi se decide por A con mi dato.
+ROOT CAUSE: el script de los renders sólo medía A; a B lo juzgué a ojo en una hoja chica. Cuarta vez de "medir antes de decir" en dos días.
+RULE: cuando comparo opciones para que Pedro elija, cada una sale con el MISMO número medido (aquí: % perdido con `perdidas`), no una medida y otra a ojo. Si una no la medí, lo digo: "sin medir".
+TAGS: #formatos #medir-antes-de-decir #contraste #comparar-opciones
