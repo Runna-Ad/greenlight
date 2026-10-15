@@ -78,7 +78,7 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 ### Plan B — puerta PSD (2026-10-13)
 **Next Step (2026-10-15):** B15 (editor + botón IA) y B16 (contraste: los dos, la plataforma elige) en la preview.
 Pedro prueba. Colchón: Pedro eligió que diseño lo arregle a mano → B18 (PSD por medida). Falta que un diseñador abra los 2 PSD de prueba (Escritorio › formatos-prueba › psd-prueba) y diga si Photoshop acepta los objetos inteligentes.
-B19 (rediseño de la página): opción A construida y en la preview; falta que Pedro la pruebe.
+B19 (rediseño de la página): opción A en la preview; Pedro la probó ("overall looking way better") y pidió 3 arreglos (vista grande, contraste en medida editada, editor a la forma de la medida): hechos el 2026-10-15, falta que los pruebe.
 Reels se queda sin zoom (Pedro: "yes leave reels as it is").
 **Antes:** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
 subir. La prueba de punta a punta de tipografías espera el "ship it" de 0079 + bucket. 320×50 se queda igual
@@ -590,6 +590,30 @@ largo: estacionado por él.
         siguen viéndose prendidas (sólo pasa con más de 30).
       · No probado: táctil real (44 px con `pointer-coarse`, la regla está en el CSS), Enter en el campo de medidas,
         zoom de Safari en iPad al tocar el campo.
+      · Arreglos tras la prueba de Pedro (2026-10-15):
+        - [x] Vista grande (vista-grande.tsx): clic en la vista de la tarjeta abre la medida casi a pantalla completa,
+          «Ajustar a la pantalla · N %» (crece si es chica; píxeles nítidos desde 200 %) o «Tamaño real · 100 %» con
+          desplazamiento. Copia el lienzo de la tarjeta (mismos píxeles que el PNG). Ícono de la esquina siempre visible.
+          Medido: 1080×1920 al 37 % (400×712) y a 100 % con scroll; 320×50 al 425 % (1360×212); 0 píxeles distintos
+          de la tarjeta; el foco vuelve a la tarjeta; cada vez que se abre empieza ajustada.
+        - [x] Contraste en una medida editada: ya se puede cambiar. La clave de la edición ya no lleva el contraste
+          (sólo lado del HERO y zona del canal); la clave vieja «:fondo» se lee y se borra al guardar. Probado: editar
+          1280×720, guardar, elegir «Original»: queda elegido y la tarjeta sigue «Editada».
+        - [x] Editor a la forma de la medida: diálogo casi a pantalla completa, la vista toma lo más grande que cabe con
+          su forma; tiras (ancho ÷ alto ≥ 2) con el panel abajo. Pintado limitado por área (1400², nítido en Retina).
+          Medido a 1440×900: 320×50 en 1360×213 (antes 790×123), 1080×1920 en 393×699 (antes 344×612). A 1180×820:
+          876×324 en 1057×391. A 820×1180: 1080×1920 en 422×750, panel abajo en 3 columnas. Pie del editor y lista de
+          piezas con 44 px al dedo.
+        - Revisión (1 revisor): arreglado lo serio (la vista grande podía copiar una tarjeta aún sin pintar o quedarse
+          vieja si la tarjeta se repintaba: ahora espera la primera pintada y vuelve a copiar con cada una) y lo barato
+          (aviso si no se puede copiar, memoria de la copia soltada al cerrar, «Cerrar» de 44 px al dedo en vez de la X
+          de 28 px, título «Vista de …», recuadro con nombre que entra al Tab sólo si se desplaza, píxeles nítidos a
+          100 % en Retina, sin «0 %» antes de medir, una sola medición en el editor, idioma en el editor, la ayuda
+          ligada a las piezas, franjas en un solo lugar).
+        - Sin hacer (reporte): el editor guarda hasta 4 fondos de ~31 MB y repinta en cada cambio de tamaño de ventana
+          sin esperar (igual que antes en un cuadrado; podría pesar en iPad); la clave vieja «:fondo» se lee una vez más
+          por medida sin edición (sólo localStorage); el % de «Ajustar» puede moverse 1-3 % con barras de scroll fijas.
+        - No probado: un iPad de verdad; la vista grande con una medida de más de 4000 px.
       · Medido hoy (localhost, s33, 1440×900): la columna de ajustes mide 300 px y trae 1675 px de contenido en una
         ventana de 804 (más de la mitad escondida, con su propia barra de scroll); 424 palabras, 208 de ayuda gris en
         7 párrafos; 4 cajas iguales; 5 selects. «Se ve dos veces CARD» se repite en 11 de 12 tarjetas y su arreglo

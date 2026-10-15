@@ -1102,3 +1102,18 @@ TAGS: #ipad #accesibilidad #tailwind #touch #formatos
 [2026-10-15] LESSON (un Popover de Radix sale fuera de la página): el contenido de un Popover se pinta en un portal, así que no hereda el `lang` de la página (en inglés el lector lo leía como español) y es un `role="dialog"` sin nombre si no se le da `aria-labelledby`. Lo encontraron los dos revisores.
 RULE: todo PopoverContent lleva `aria-labelledby` (el encabezado o la etiqueta de adentro) y `lang={lang}` en pantallas con dos idiomas.
 TAGS: #accesibilidad #radix #popover #idioma #formatos
+
+[2026-10-15] PEDRO_OVERRIDE (el contraste no se bloquea en una medida editada): en el rediseño B19 dejé los arreglos de contraste desactivados en una medida editada a mano, con la nota "para cambiar el contraste, «Editar» › «Volver al automático»". Mi razón: la edición se guardaba con el contraste en la clave, así que cambiarlo "perdía" la edición.
+PEDRO'S APPROACH: "after editing it doesnt let me switch between contrast options unles i revert to the automatic" — tiene que poder cambiarlo siempre.
+WHY IT WAS BETTER: la edición guarda sólo dónde quedaron las piezas, y ningún arreglo de contraste mueve piezas (la sombra se pinta detrás, «Mover fondo» mueve el fondo). La edición vale con cualquier contraste; el candado protegía algo que no hacía falta proteger y obligaba a deshacer trabajo.
+RULE: antes de bloquear un control porque "rompería" otro dato, revisar si de verdad dependen uno del otro. Si no, sacar la dependencia de la clave (aquí: la clave de la edición ya no lleva el contraste; la clave vieja se lee y se borra al guardar). Bloquear es el último recurso.
+TAGS: #override #formatos #contraste #editor #ux
+
+[2026-10-15] LESSON (un editor con alto fijo y panel al lado aplasta las medidas que no son cuadradas): el editor medía la vista con `min(68vh, 760px)` de alto y un panel de 17rem a la derecha dentro de un diálogo de 1180 px. Un 320×50 quedaba en 790×123 px con las esquinas de agarre encima de las piezas; un 1080×1920 se cortaba en 612 px de alto aunque la ventana tuviera más. Pedro: "some look smooshed and can confuse the designer".
+ROOT CAUSE: el tamaño de la vista salía de una regla fija, no del espacio que de verdad quedaba ni de la forma de la medida.
+RULE: un lienzo que muestra medidas de forma variable se mide con el espacio libre (ResizeObserver de ancho Y alto) y toma lo más grande que cabe con su forma; el panel se mueve abajo para las tiras (ancho ÷ alto ≥ 2). La resolución del pintado se limita por área, no por lado, para que una tira salga nítida en Retina sin costar más que un cuadrado.
+TAGS: #formatos #editor #layout #canvas #resizeobserver
+
+[2026-10-15] LESSON (el panel del navegador oculto congela animaciones y ResizeObserver): al probar los diálogos, un diálogo cerrado se quedaba en la página (`data-state=closed`, la animación de salida nunca terminaba) y la vista del editor medía 300 px en todas las medidas. `document.timeline.currentTime` estaba en 0: sin cuadros pintados no corren animaciones, no llega `animationend` y ResizeObserver no avisa. No eran fallas de la app.
+RULE: en el panel oculto, (1) una captura de pantalla obliga a pintar un cuadro: tomar una antes de medir algo que dependa de ResizeObserver; (2) para cerrar de verdad un diálogo de Radix, mandar `new AnimationEvent('animationend', {animationName: getComputedStyle(el).animationName})` a cada elemento `[data-state=closed][data-slot^=dialog]`; (3) medir con `offsetWidth` (sin el zoom de entrada congelado), no con `getBoundingClientRect`.
+TAGS: #navegador #pruebas #radix #animaciones #resizeobserver

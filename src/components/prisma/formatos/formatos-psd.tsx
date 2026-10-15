@@ -2,10 +2,11 @@
 
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, ChevronDown, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Languages, Layers, Loader2, Lock, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ChevronDown, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Languages, Layers, Loader2, Lock, Maximize2, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { zipSync } from "fflate";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
@@ -19,6 +20,7 @@ import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
 import { etiquetaPieza, nombreDeGuia, type Rol } from "@/lib/prisma/formatos/roles";
 import { colaVacia, enCola, pintar } from "./pintar";
+import { Franjas, VistaGrande } from "./vista-grande";
 import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, fuentesRecordadas, olvidarFuentes, recordarFuentes, revisarTextos, textoEscrito, type ArchivoFuente, type Escritura, type Tipografias } from "./escritura";
 import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
 import { EditorMedida, edicionGuardada, guardarEdicion } from "./editor-medida";
@@ -68,16 +70,17 @@ const BAJO_BARRA = "scroll-mt-40";
 /** Los botones de cada tarjeta, más bajos (van cuatro en una tarjeta angosta). */
 const BOTON_TARJETA = cn("h-8 px-2 text-xs pointer-coarse:h-11", BAJO_BARRA);
 /**
- * De qué acomodo automático es una edición: el lado del HERO, la zona del canal y si el contraste movió el fondo lo
- * cambian (editor-medida.tsx). La sombra no mueve nada: no entra (y sin fondo movido la clave queda como antes).
+ * De qué acomodo automático es una edición: el lado del HERO y la zona del canal mueven las piezas, así que entran en
+ * la clave. El contraste no: sus arreglos dejan las piezas donde están (la sombra se pinta detrás, «Mover fondo» mueve
+ * sólo el fondo) y la edición guarda sólo piezas, así que vale con cualquiera (Pedro, 2026-10-15: "after editing it
+ * doesnt let me switch between contrast options"). Antes del 2026-10-15 la clave llevaba ":fondo" con ese arreglo:
+ * se sigue leyendo (CONTEXTO_VIEJO) para no perder lo que se editó así.
  */
-const contextoEdicion = (m: Medida, lado: Lado | undefined, canal: Canal | null, contraste: ArregloContraste | undefined) => {
+const contextoEdicion = (m: Medida, lado: Lado | undefined, canal: Canal | null) => {
   const z = zonaCanal(canal, m.w, m.h);
-  return `${lado ?? "derecha"}:${z ? `${z.top},${z.right},${z.bottom},${z.left}` : "-"}${contraste === "fondo" ? ":fondo" : ""}`;
+  return `${lado ?? "derecha"}:${z ? `${z.top},${z.right},${z.bottom},${z.left}` : "-"}`;
 };
-/** El contexto de la edición de una medida con lo elegido ahora (el arreglo que de verdad se usa, sin la edición). */
-const contextoDe = (maestros: MaestroVista[], m: Medida, lados: Record<string, Lado>, canal: Canal | null, contrastes: Record<string, EleccionContraste>) =>
-  contextoEdicion(m, lados[clave(m)], canal, revisarMedida(maestros, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h), contraste: contrastes[clave(m)] }).contraste?.usado);
+const CONTEXTO_VIEJO = ":fondo";
 /** El nombre de entrega del equipo (el de la mesa con la medida nueva), limpio para ser nombre de archivo. */
 const archivoDe = (ma: MaestroListo, m: Medida) => `${nombreSalida({ nombre: limpiarNombre(ma.nombre, NOMBRE_MESA_MAX), w: ma.w, h: ma.h }, m.w, m.h)}.png`;
 const sinExtension = (archivo: string) => archivo.replace(/\.psd$/i, "");
@@ -148,7 +151,6 @@ function descargar(blob: Blob, nombre: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), SOLTAR_URL_MS);
 }
 
-const pct = (v: number, de: number) => `${(v / de) * 100}%`;
 
 const SOLTAR_NIVELES = 4;
 /** Archivos que sirven (la carpeta de tipografías trae ~20) y entradas recorridas en total, para no andar sin fin. */
@@ -284,7 +286,7 @@ function ContrasteMedida({ info, ma, medida, editada, lang, alElegir }: { info: 
                 variant={elegido ? "secondary" : "outline"}
                 size="sm"
                 aria-pressed={elegido}
-                disabled={L === null || editada}
+                disabled={L === null}
                 onClick={() => alElegir(medida, a === info.auto ? "auto" : a)}
                 className={cn("min-h-9 pointer-coarse:min-h-11", BAJO_BARRA, elegido && "font-semibold")}
               >
@@ -296,7 +298,9 @@ function ContrasteMedida({ info, ma, medida, editada, lang, alElegir }: { info: 
             );
           })}
         </div>
-        {editada && <p className="mt-1 text-xs text-muted-foreground">{tx(FP.contrasteEditada, lang)}</p>}
+        {/* Los % se miden con el acomodo automático: con piezas movidas a mano pueden cambiar (el aviso de la tarjeta sí
+          mide lo editado). */}
+      {editada && <p className="mt-1 text-xs text-muted-foreground">{tx(FP.contrasteEditadaNota, lang)}</p>}
       </div>
     </details>
   );
@@ -346,6 +350,9 @@ const TarjetaMedida = memo(function TarjetaMedida({
   const ma = maestros[maestro];
   const lienzo = useRef<HTMLCanvasElement>(null);
   const [noPinto, setNoPinto] = useState(false);
+  // Cuántas veces se pintó bien: la vista grande no se abre antes de la primera (copiaría un lienzo en blanco) y se
+  // vuelve a copiar si la tarjeta cambia con ella abierta.
+  const [pintadas, setPintadas] = useState(0);
   // Pinta (en su turno de la fila) y, SÓLO si salió bien, se anota para la descarga: una vista que espera turno o
   // que no se pudo pintar nunca va al ZIP ni se queda en blanco con una palomita al lado.
   useEffect(() => {
@@ -362,6 +369,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
       }
       registrar(k, bien ? l : null);
       setNoPinto(!bien);
+      if (bien) setPintadas((n) => n + 1);
     });
     return () => {
       cancelar();
@@ -408,34 +416,32 @@ const TarjetaMedida = memo(function TarjetaMedida({
   return (
     // `@container`: los botones van en dos columnas si la tarjeta es angosta (vertical) y en fila si es ancha (banner).
     <li className="@container flex flex-col rounded-xl border border-border bg-card p-2.5">
-      <div className="flex justify-center rounded-lg bg-secondary/60 p-2">
-        {/* El contenedor fija el tamaño a la vista; las franjas de la guía van encima, nunca dentro del lienzo. */}
-        <div className="relative" style={{ width: `min(100%, ${Math.round(Math.min(w, (VISTA_ALTO_MAX * w) / h))}px)`, aspectRatio: `${w} / ${h}` }}>
-          <canvas
-            ref={lienzo}
-            role="img"
-            aria-label={`${rellenar(tx(FP.lienzoAria, lang), { m: etiqueta(medida) })}${guia ? rellenar(tx(FP.lienzoGuia, lang), { c: nombreCanal }) : ""}`}
-            className="block size-full rounded-sm"
-          />
-          {guia && (
-            <>
-              {guia.top > 0 && (
-                <span aria-hidden="true" className="p-zona absolute inset-x-0 top-0 flex items-end justify-center" style={{ height: pct(guia.top, h) }}>
-                  <span className="p-zona-texto">{franja}</span>
-                </span>
-              )}
-              {guia.bottom > 0 && (
-                <span aria-hidden="true" className="p-zona absolute inset-x-0 bottom-0 flex items-start justify-center" style={{ height: pct(guia.bottom, h) }}>
-                  <span className="p-zona-texto">{franja}</span>
-                </span>
-              )}
-              {/* Los costados van ENTRE las franjas de arriba y abajo: las esquinas no se rayan dos veces. */}
-              {guia.left > 0 && <span aria-hidden="true" className="p-zona absolute left-0" style={{ top: pct(guia.top, h), bottom: pct(guia.bottom, h), width: pct(guia.left, w) }} />}
-              {guia.right > 0 && <span aria-hidden="true" className="p-zona absolute right-0" style={{ top: pct(guia.top, h), bottom: pct(guia.bottom, h), width: pct(guia.right, w) }} />}
-            </>
-          )}
-        </div>
-      </div>
+      {/* La vista abre la vista grande (vista-grande.tsx). Todo el recuadro es el botón: con el ratón o con el dedo, y el
+          ícono de la esquina se ve siempre (en iPad no hay hover que lo descubra). */}
+      <Dialog>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            disabled={noPinto || pintadas === 0}
+            aria-label={`${rellenar(tx(FP.verGrandeAria, lang), { m: etiqueta(medida) })}${guia ? rellenar(tx(FP.lienzoGuia, lang), { c: nombreCanal }) : ""}`}
+            className={cn("group relative flex w-full cursor-zoom-in justify-center rounded-lg bg-secondary/60 p-2 transition-colors hover:bg-secondary disabled:cursor-default", FOCO, BAJO_BARRA)}
+          >
+            {/* El contenedor fija el tamaño a la vista; las franjas de la guía van encima, nunca dentro del lienzo. */}
+            <span className="relative block" style={{ width: `min(100%, ${Math.round(Math.min(w, (VISTA_ALTO_MAX * w) / h))}px)`, aspectRatio: `${w} / ${h}` }}>
+              <canvas ref={lienzo} aria-hidden="true" className="block size-full rounded-sm" />
+              {guia && <Franjas guia={guia} w={w} h={h} texto={franja} />}
+            </span>
+            {!noPinto && pintadas > 0 && (
+              <span aria-hidden="true" className="absolute top-1 right-1 rounded-md bg-background/85 p-1 text-foreground shadow-sm ring-1 ring-border group-hover:bg-background">
+                <Maximize2 className="size-3.5" />
+              </span>
+            )}
+          </button>
+        </DialogTrigger>
+        <VistaGrande fuente={lienzo} version={pintadas} w={w} h={h} nombre={etiqueta(medida)} lang={lang}>
+          {guia && <Franjas guia={guia} w={w} h={h} texto={franja} />}
+        </VistaGrande>
+      </Dialog>
       {/* El encabezado lleva sólo la medida (así se oye en la lista de encabezados); el estado va al lado, en palabras
           (no sólo color): «Listo» o cuántos avisos tiene. */}
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
@@ -1227,19 +1233,22 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     const deSesion = ediciones?.leido === leido ? ediciones.mapa : null;
     if (!leido || !maestrosVista.length) return mapa;
     for (const m of medidas) {
-      const ctx = contextoDe(maestrosVista, m, lados, canal, contrastes), c = `${clave(m)}:${ctx}`;
+      const ctx = contextoEdicion(m, lados[clave(m)], canal), c = `${clave(m)}:${ctx}`;
+      const ma = maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)];
       if (deSesion?.has(c)) mapa.set(clave(m), deSesion.get(c) ?? null);
-      else mapa.set(clave(m), edicionGuardada(leido.archivo, maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)], m.w, m.h, ctx));
+      else mapa.set(clave(m), edicionGuardada(leido.archivo, ma, m.w, m.h, ctx) ?? edicionGuardada(leido.archivo, ma, m.w, m.h, ctx + CONTEXTO_VIEJO));
     }
     return mapa;
-  }, [ediciones, leido, maestrosVista, medidas, lados, canal, contrastes]);
+  }, [ediciones, leido, maestrosVista, medidas, lados, canal]);
   const abrirEditor = useCallback((m: Medida) => setEditando(m), []);
   const guardarEditada = (m: Medida, ed: Edicion | null) => {
     const l = leido;
     setEditando(null);
     if (!l || !maestrosVista.length) return;
-    const ctx = contextoDe(maestrosVista, m, lados, canal, contrastes);
-    const guardada = guardarEdicion(l.archivo, maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)], m.w, m.h, ctx, ed);
+    const ctx = contextoEdicion(m, lados[clave(m)], canal), ma = maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)];
+    const guardada = guardarEdicion(l.archivo, ma, m.w, m.h, ctx, ed);
+    // Lo guardado con la clave vieja se borra: si no, «Volver al automático» lo dejaría volver a aparecer.
+    guardarEdicion(l.archivo, ma, m.w, m.h, ctx + CONTEXTO_VIEJO, null);
     setEdiciones((antes) => ({ leido: l, mapa: new Map([...(antes?.leido === l ? antes.mapa : []), [`${clave(m)}:${ctx}`, ed]]) }));
     if (!guardada && ed) return void toast.warning(rellenar(tx(FP.editorSoloSesion, lang), { m: etiqueta(m) }));
     anunciar(rellenar(tx(ed ? FP.editorGuardado : FP.editorAutoHecho, lang), { m: etiqueta(m) }));

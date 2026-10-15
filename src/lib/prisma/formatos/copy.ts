@@ -192,7 +192,7 @@ export const FP = {
     "{p} gets lost in the background ({antes}) and no fix makes it fully readable: pick the one that looks best, or arrange it with «Edit».",
   ),
   contrasteSinArreglo: t("Sin arreglo, como elegiste: {p} se pierde en un {antes}.", "No fix, as you chose: {antes} of {p} gets lost."),
-  contrasteEditada: t("Editada a mano: para cambiar el contraste, «Editar» › «Volver al automático».", "Edited by hand: to change the contrast, «Edit» › «Back to automatic»."),
+  contrasteEditadaNota: t("Editada a mano: los % son del acomodo automático; con tus cambios pueden variar. La tarjeta avisa si algo se pierde.", "Edited by hand: the % are from the automatic layout and can change with your edits. The card warns if something gets lost."),
   bajarPsd: t("PSD", "PSD"),
   bajarPsdAria: t("Bajar {m} como PSD con capas, para terminarla a mano", "Download {m} as a layered PSD, to finish it by hand"),
   bajarPsdTitulo: t(
@@ -372,6 +372,17 @@ export const FP = {
   zonaFranja: t("{c} tapa aquí (aprox.)", "{c} covers this (approx.)"),
   lienzoAria: t("Vista de {m}", "Preview of {m}"),
   lienzoGuia: t(", con la zona segura de {c} encima", ", with the {c} safe zone on top"),
+  // Vista grande (vista-grande.tsx): la tarjeta se abre con un clic.
+  verGrandeAria: t("Ver {m} en grande", "View {m} larger"),
+  vistaDescripcion: t(
+    "Así queda el PNG. «Tamaño real» lo muestra a 100 % (un píxel del PNG por píxel de la página); si no cabe, se desplaza.",
+    "This is how the PNG comes out. “Actual size” shows it at 100% (one PNG pixel per page pixel); scroll if it doesn't fit.",
+  ),
+  vistaZoom: t("Tamaño de la vista", "View size"),
+  vistaAjustar: t("Ajustar a la pantalla · {p} %", "Fit to screen · {p}%"),
+  vistaAjustarSolo: t("Ajustar a la pantalla", "Fit to screen"),
+  vistaCerrar: t("Cerrar", "Close"),
+  vistaReal: t("Tamaño real · 100 %", "Actual size · 100%"),
   planaLink: t("¿Sólo tienes una imagen plana (PNG o JPG)? Usa Formatos con imagen plana", "Only have a flat image (PNG or JPG)? Use Formats with a flat image"),
   avisosDelArchivo: t("Notas del archivo", "File notes"),
   // Rediseño B19 (2026-10-15): ajustes arriba en pastillas y chips; resultados agrupados por forma.

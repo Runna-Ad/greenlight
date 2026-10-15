@@ -11,6 +11,7 @@ import { armarFondo, armarMedida, type TextoEscrito } from "@/lib/prisma/formato
 import { avisosDePixeles } from "@/lib/prisma/formatos/revisar";
 import { etiquetaPieza } from "@/lib/prisma/formatos/roles";
 import { FP, rellenar } from "@/lib/prisma/formatos/copy";
+import { DIALOGO_GRANDE, Franjas } from "./vista-grande";
 import type { MaestroListo } from "@/lib/prisma/formatos/listo";
 
 /**
@@ -28,10 +29,13 @@ type Modo = "mover" | Esquina;
 type Arrastre = { pieza: number; modo: Modo; px: number; py: number; inicio: Pos; vivo: boolean; puntero: number };
 
 const ESQUINAS: Esquina[] = ["nw", "ne", "sw", "se"];
-/** Lado mayor (px) con el que se pinta la vista: más grande sólo hace lento el arrastre. */
-const VISTA_MAX = 1400;
-/** Alto de la vista: lo que deja la ventana para los botones y el panel. */
-const VISTA_ALTO = "min(68vh, 760px)";
+/** Píxeles (ancho × alto) con los que se pinta la vista, como mucho: más sólo hace lento el arrastre. Va por área y
+ *  no por lado para que una tira (320×50 a todo lo ancho) salga nítida en pantalla Retina sin costar más que un
+ *  cuadrado. */
+const VISTA_PX = 1400 * 1400;
+/** Desde esta forma (ancho ÷ alto) la medida es una tira (banners, 876×324): el panel va abajo y la vista usa todo
+ *  el ancho del editor. Con el panel al lado, un 320×50 quedaba en 790×123 px y las piezas se enciman. */
+const TIRA = 2;
 /** A cuántos px (de la medida) del centro una pieza se queda pegada al centro mientras se arrastra. */
 const IMAN_PX = 6;
 /** A qué escala se pinta la vista a medio arrastre (medido con s33: 75-97 ms la vista completa, la mitad con el fondo
@@ -43,6 +47,8 @@ const PASO = 1, PASO_LARGO = 10, CRECE = 1.02;
 const UMBRAL_PX = 3;
 /** Debajo de esto (px de pantalla) la pieza es chica y sus esquinas se achican, para que quede de dónde arrastrarla. */
 const PIEZA_CHICA_PX = 48;
+/** En iPad (dedo) los botones del pie miden 44 px; con ratón, los de siempre. */
+const DEDO = "pointer-coarse:h-11";
 /** Espera tras el último cambio para leerlo en voz alta (un arrastre no dicta cada píxel). */
 const ANUNCIO_MS = 500;
 
@@ -87,7 +93,9 @@ export function EditorMedida({
   const [pos, setPos] = useState<Record<number, Pos>>(() => ({ ...deAuto, ...(inicial ?? {}) }));
   const [sel, setSel] = useState<number | null>(null);
   const [iman, setIman] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
-  const [anchoCss, setAnchoCss] = useState(0);
+  /** El espacio libre para la vista (ancho y alto): la medida se ajusta a él sin deformarse, sea alta o una tira
+   *  (Pedro, 2026-10-15: "the edit window should open a canvas that can accommodate the size its editing"). */
+  const [caja, setCaja] = useState({ w: 0, h: 0 });
   const [noPinto, setNoPinto] = useState(false);
   const [modo, setModo] = useState<Modo | null>(null);
   const [arrastrando, setArrastrando] = useState(false);
@@ -112,6 +120,10 @@ export function EditorMedida({
       return a;
     }
   }, [ma, auto, deAuto, pos, W, H, zona]);
+  const tira = W / H >= TIRA;
+  /** El ancho de la vista en pantalla: lo más grande que cabe en el marco con la forma de la medida. Sale de una sola
+   *  medición (la del marco): con dos, el primer cuadro se pintaba al tamaño equivocado y luego otra vez. */
+  const anchoCss = caja.w > 0 && caja.h > 0 ? Math.floor(Math.min(caja.w, (caja.h * W) / H)) : 0;
   const e = anchoCss > 0 ? anchoCss / W : 0;
   const cambiada = (i: number) => !!pos[i] && !!deAuto[i] && !igual(pos[i], deAuto[i]);
   const hayCambios = auto.puestas.some((q) => cambiada(q.pieza));
@@ -121,10 +133,10 @@ export function EditorMedida({
     return !!pos[q.pieza] && !!antes && !igual(pos[q.pieza], antes);
   });
 
-  // El ancho de la vista en pantalla, desde que el diálogo la pone (y cada vez que cambia la ventana).
-  const escenario = useCallback((el: HTMLDivElement | null) => {
+  // El espacio libre para la vista, desde que el diálogo la pone (y cada vez que cambia la ventana).
+  const marco = useCallback((el: HTMLDivElement | null) => {
     if (!el) return;
-    const ro = new ResizeObserver(([r]) => setAnchoCss(r.contentRect.width));
+    const ro = new ResizeObserver(([r]) => setCaja({ w: r.contentRect.width, h: r.contentRect.height }));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -135,8 +147,8 @@ export function EditorMedida({
     const l = lienzo.current;
     if (!l || anchoCss <= 0) return;
     const id = requestAnimationFrame(() => {
-      const lado = Math.min(VISTA_MAX, Math.round(anchoCss * (window.devicePixelRatio || 1)) * Math.max(1, H / W)) * (arrastrando ? ESCALA_ARRASTRE : 1);
-      const s = lado / Math.max(W, H), Wd = Math.max(1, Math.round(W * s)), Hd = Math.max(1, Math.round(H * s));
+      const s = Math.min((anchoCss * (window.devicePixelRatio || 1)) / W, Math.sqrt(VISTA_PX / (W * H))) * (arrastrando ? ESCALA_ARRASTRE : 1);
+      const Wd = Math.max(1, Math.round(W * s)), Hd = Math.max(1, Math.round(H * s));
       const chico: Acomodo = {
         ...editado,
         puestas: editado.puestas.map((q) => ({ ...q, k: q.k * s, x: q.x * s, y: q.y * s, w: q.w * s, h: q.h * s })),
@@ -284,7 +296,10 @@ export function EditorMedida({
   return (
     <Dialog open onOpenChange={(abierto) => !abierto && alCerrar()}>
       <DialogContent
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-[min(1180px,calc(100%-2rem))]"
+        // Casi toda la pantalla, para que quepa la medida grande: alto fijo y cada parte en su renglón (la vista se
+        // lleva lo que sobra). `lang`: el diálogo sale fuera de la página y no hereda el idioma.
+        lang={lang}
+        className={cn(DIALOGO_GRANDE, "grid-rows-[auto_minmax(0,1fr)_auto]")}
         // Esc suelta primero un arrastre a medias; con cambios sin guardar, ni Esc ni un clic afuera cierran
         // (Cancelar y la X sí: son a propósito).
         onEscapeKeyDown={(ev) => {
@@ -309,18 +324,13 @@ export function EditorMedida({
           <DialogTitle className="text-base">{rellenar(tx(FP.editorTitulo, lang), { m: nombre })}</DialogTitle>
           <DialogDescription className="text-sm">{tx(FP.editorDescripcion, lang)}</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
-          <div className="flex min-w-0 justify-center rounded-lg bg-secondary/60 p-2">
-            <div ref={escenario} className="relative touch-none select-none" style={{ width: `min(100%, calc(${VISTA_ALTO} * ${W / H}))`, aspectRatio: `${W} / ${H}` }}>
+        {/* Medida alta o cuadrada: el panel a la derecha (desde lg). Tira, o pantalla angosta: el panel abajo, más bajo y
+            en columnas, y la vista con todo el ancho. */}
+        <div className={cn("grid min-h-0 gap-4 grid-rows-[minmax(0,1fr)_auto]", !tira && "lg:grid-cols-[minmax(0,1fr)_18rem] lg:grid-rows-1")}>
+          <div ref={marco} className="flex min-h-0 min-w-0 items-center justify-center overflow-hidden rounded-lg bg-secondary/60 p-2">
+            <div className="relative touch-none select-none" style={{ width: anchoCss || undefined, aspectRatio: `${W} / ${H}` }}>
               <canvas ref={lienzo} aria-hidden="true" className="block size-full rounded-sm" />
-              {zona && (
-                <>
-                  {zona.top > 0 && <span aria-hidden="true" className="p-zona pointer-events-none absolute inset-x-0 top-0" style={{ height: pctY(zona.top) }} />}
-                  {zona.bottom > 0 && <span aria-hidden="true" className="p-zona pointer-events-none absolute inset-x-0 bottom-0" style={{ height: pctY(zona.bottom) }} />}
-                  {zona.left > 0 && <span aria-hidden="true" className="p-zona pointer-events-none absolute left-0" style={{ top: pctY(zona.top), bottom: pctY(zona.bottom), width: pctX(zona.left) }} />}
-                  {zona.right > 0 && <span aria-hidden="true" className="p-zona pointer-events-none absolute right-0" style={{ top: pctY(zona.top), bottom: pctY(zona.bottom), width: pctX(zona.right) }} />}
-                </>
-              )}
+              {zona && <Franjas guia={zona} w={W} h={H} />}
               {iman.x && <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-primary" />}
               {iman.y && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-1/2 h-px bg-primary" />}
               {editado.puestas.map((q) => {
@@ -332,6 +342,7 @@ export function EditorMedida({
                     key={q.pieza}
                     type="button"
                     data-pieza={q.pieza}
+                    aria-describedby="editor-ayuda"
                     aria-label={rellenar(tx(FP.editorPiezaAria, lang), { p: etiquetaPieza(ma.piezas[q.pieza]) })}
                     className={cn(
                       "absolute rounded-[2px] outline-hidden",
@@ -367,16 +378,18 @@ export function EditorMedida({
               })}
             </div>
           </div>
-          <div className="flex min-w-0 flex-col gap-3 text-sm">
-            <p id="editor-ayuda" className="text-muted-foreground">
-              {tx(FP.editorAyuda, lang)}
-            </p>
-            {/* A la vista, al momento; al lector de pantalla, medio segundo después del último cambio (abajo). */}
-            <p className="min-h-10 text-foreground">{estado}</p>
-            <p role="status" className="sr-only">
-              {anuncio}
-            </p>
-            {noPinto && <p role="alert" className="text-foreground">{tx(FP.editorNoPinto, lang)}</p>}
+          <div className={cn("grid max-h-48 min-h-0 min-w-0 content-start gap-3 overflow-y-auto text-sm md:grid-cols-3", !tira && "lg:max-h-none lg:grid-cols-1")}>
+            <div className="flex flex-col gap-3">
+              <p id="editor-ayuda" className="text-muted-foreground">
+                {tx(FP.editorAyuda, lang)}
+              </p>
+              {/* A la vista, al momento; al lector de pantalla, medio segundo después del último cambio (abajo). */}
+              <p className="min-h-10 text-foreground">{estado}</p>
+              <p role="status" className="sr-only">
+                {anuncio}
+              </p>
+              {noPinto && <p role="alert" className="text-foreground">{tx(FP.editorNoPinto, lang)}</p>}
+            </div>
             <div>
               <h3 className="text-xs font-semibold text-foreground">{tx(FP.editorPiezas, lang)}</h3>
               <ul className="mt-1 space-y-1">
@@ -389,7 +402,7 @@ export function EditorMedida({
                         type="button"
                         aria-current={sel === q.pieza || undefined}
                         className={cn(
-                          "min-h-9 min-w-0 flex-1 truncate rounded-md border-l-2 border-transparent px-2 text-left hover:bg-secondary",
+                          "min-h-9 min-w-0 flex-1 truncate rounded-md border-l-2 pointer-coarse:min-h-11 border-transparent px-2 text-left hover:bg-secondary",
                           sel === q.pieza && "border-primary bg-secondary font-medium",
                         )}
                         onClick={() => enfocar(q.pieza)}
@@ -436,20 +449,22 @@ export function EditorMedida({
             </div>
           </div>
         </div>
-        {/* Pegado abajo: con muchas piezas o avisos, Guardar y Cancelar no se van de la pantalla. `-bottom-4` porque
-            el pegado respeta el p-4 del diálogo: con bottom-0 el texto de abajo se asomaba debajo del pie. */}
-        <DialogFooter className="sticky -bottom-4 -mx-4 -mb-4 gap-2 border-t border-border bg-popover px-4 py-3 sm:items-center sm:justify-between">
-          <Button variant="ghost" disabled={!hayCambios} onClick={() => setPos({ ...deAuto })}>
+        {/* El último renglón del diálogo: con muchas piezas o avisos se desplaza el panel, y Guardar y Cancelar se
+            quedan a la vista. */}
+        <DialogFooter className="-mx-4 -mb-4 gap-2 border-t border-border bg-popover px-4 py-3 sm:items-center sm:justify-between">
+          <Button variant="ghost" className={DEDO} disabled={!hayCambios} onClick={() => setPos({ ...deAuto })}>
             <RotateCcw className="size-4" aria-hidden="true" /> {tx(FP.editorAuto, lang)}
           </Button>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
             <span role="status" className={cn("text-xs", escNegado ? "font-medium text-foreground" : "text-muted-foreground")}>
               {sinGuardar ? tx(escNegado ? FP.editorSinGuardarEsc : FP.editorSinGuardar, lang) : ""}
             </span>
-            <Button variant="outline" onClick={alCerrar}>
+            <Button variant="outline" className={DEDO} onClick={alCerrar}>
               {tx(FP.editorCancelar, lang)}
             </Button>
-            <Button onClick={guardar}>{tx(FP.editorGuardar, lang)}</Button>
+            <Button className={DEDO} onClick={guardar}>
+              {tx(FP.editorGuardar, lang)}
+            </Button>
           </div>
         </DialogFooter>
       </DialogContent>
