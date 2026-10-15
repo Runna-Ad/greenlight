@@ -77,7 +77,7 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 
 ### Plan B — puerta PSD (2026-10-13)
 **Next Step (2026-10-15):** B15 (editor + botón IA) y B16 (contraste: los dos, la plataforma elige) en la preview.
-Pedro prueba. Abierto: separar el colchón del fondo con IA (respondido, sin construir; ver conversación).
+Pedro prueba. Abierto: separar el colchón del fondo con IA → prueba hecha (B17), falta que Pedro elija camino.
 Reels se queda sin zoom (Pedro: "yes leave reels as it is").
 **Antes:** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
 subir. La prueba de punta a punta de tipografías espera el "ship it" de 0079 + bucket. 320×50 se queda igual
@@ -543,6 +543,20 @@ largo: estacionado por él.
         y el editor pinta la sombra.
       · test-formatos 308/0 (6 nuevos) · npm test verde · tsc y eslint limpios.
       · No probado en el navegador: los botones apagados en una medida editada a mano.
+- [~] B17. Prueba: separar el colchón del fondo con IA (Pedro, 2026-10-15: "yes run the mattress test on s33" + su idea
+      de tapar con nubes lo enredado). Sin código nuevo: la ruta de «Quitar con IA» con el colchón como "la pieza"
+      (recorte 1120×480, 21:9). US$0.0422, 15 s. Panel temporal en la preview (Pedro eligió los 2 PNG; el panel del
+      navegador bloquea que una página pública lea archivos de la Mac: ERR_BLOCKED_BY_CLIENT).
+      · La IA quitó el colchón muy limpio: nubes continuas, las 2 almohadas intactas.
+      · El colchón se sacó comparando original contra lo de la IA: lados y orilla de arriba limpios; la cara de
+        arriba (blanco sobre nubes blancas) salía con hoyos → relleno por dentro del contorno, gratis, y la orilla de
+        atrás creciendo hacia arriba fila por fila. La base enredada con nubes se resuelve con la idea de Pedro: un
+        desvanecido de 22 % del alto hacia las nubes nuevas. Movido 50 px abajo y 60 arriba se ve creíble.
+      · Defectos que quedan: la neblina de sol pintada detrás de la cara de arriba viaja con el colchón (y su borde de
+        arriba queda recto si se mueve mucho); las puntas izquierda/derecha salen un poco cuadradas.
+      · Caminos: (1) que diseño entregue el colchón en su propia capa (gratis, perfecto); (2) segunda llamada que
+        pida el colchón solo sobre un color plano (idea de Pedro: "colchón nuevo generado") para orillas limpias,
+        ≈ US$0.04 más; (3) seguir con la comparación + arreglos. En el motor falta: tarjeta y colchón como grupo.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

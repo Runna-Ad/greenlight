@@ -1077,3 +1077,8 @@ TAGS: #formatos #editor #avisos #excepciones #reap #revisor
 ROOT CAUSE: el script de los renders sólo medía A; a B lo juzgué a ojo en una hoja chica. Cuarta vez de "medir antes de decir" en dos días.
 RULE: cuando comparo opciones para que Pedro elija, cada una sale con el MISMO número medido (aquí: % perdido con `perdidas`), no una medida y otra a ojo. Si una no la medí, lo digo: "sin medir".
 TAGS: #formatos #medir-antes-de-decir #contraste #comparar-opciones
+
+[2026-10-15] LESSON (el panel del navegador no deja que la preview lea archivos de la Mac): para la prueba del colchón quise que la página de la preview (https, Vercel) bajara los PNG de mi servidor local (127.0.0.1:8765) y los mandara a la ruta de IA. Falló con ERR_BLOCKED_BY_CLIENT: el panel bloquea que una página pública pida algo a la Mac, con o sin CORS. No hay que rodearlo.
+ROOT CAUSE: supuse que el servidor local con CORS bastaba (sí basta para localhost:3000, que es local).
+RULE: para mandar archivos de la Mac a la preview, poner los archivos en una carpeta de Pedro (Escritorio › formatos-prueba) y un selector de archivos en la página; Pedro da el clic. Todo lo que hay que ver se dibuja en la misma página (nada regresa a la Mac).
+TAGS: #navegador #preview #archivos #pruebas-ia
