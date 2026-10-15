@@ -223,3 +223,69 @@ export function armarMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, 
   }
   return out;
 }
+
+/** Una capa suelta para el PSD de salida: RGBA de 8 bits sin premultiplicar, con su esquina en la medida (puede
+ *  salirse de ella: el diseñador la recorre en Photoshop y lo de afuera sigue ahí). */
+export type CapaSalida = { x: number; y: number; w: number; h: number; rgba: Uint8ClampedArray };
+/** Las capas de una pieza puesta, de abajo hacia arriba: sombra de contraste, sombras del PSD (las dos en
+ *  "multiplicar") y la pieza. */
+export type CapasPieza = { pieza: number; halo: CapaSalida | null; sombra: CapaSalida | null; color: CapaSalida };
+
+/** Premultiplicado (0-255) → RGBA normal. Sirve también para los mapas de sombra: "fuera" de su caja los deja
+ *  mezclados con 0, que es lo mismo que premultiplicados por su cobertura (ver `oscurecer`). */
+function aCapa(f: Float32Array, x: number, y: number, w: number, h: number): CapaSalida {
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i++) {
+    const a = f[i * 4 + 3];
+    if (!(a > 0)) continue;
+    for (let c = 0; c < 3; c++) rgba[i * 4 + c] = Math.round((f[i * 4 + c] * 255) / a);
+    rgba[i * 4 + 3] = Math.round(a);
+  }
+  return { x, y, w, h, rgba };
+}
+
+/**
+ * La medida en capas, para bajarla como PSD y terminarla a mano (Pedro, 2026-10-15: "download that specific size as a
+ * psd with the available layers"): el fondo entero a su escala (más grande que la medida si así quedó: se puede
+ * recorrer) y cada pieza con sus sombras, tal como las pinta `armarMedida`. Con las capas puestas en orden (normal y
+ * "multiplicar") sale la misma imagen; la diferencia: el texto vuelto a escribir se mezcla normal dentro de su pieza,
+ * no con la gamma de Photoshop sobre lo de abajo.
+ */
+export function capasDeMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, op: { enfoque?: boolean; texto?: TextoEscrito } = {}): { fondo: CapaSalida; piezas: CapasPieza[] } {
+  const f = a.fondo;
+  const fx0 = Math.floor(f.x), fy0 = Math.floor(f.y), fx1 = Math.ceil(f.x + ma.w * f.k), fy1 = Math.ceil(f.y + ma.h * f.k);
+  const fondo = aCapa(remuestrear(ma.fondo, ma.w, ma.h, f.k, f.x, f.y, fx0, fy0, fx1, fy1, "extender", false), fx0, fy0, fx1 - fx0, fy1 - fy0);
+  const sombras = new Set(a.sombras ?? []);
+  const piezas = a.puestas.map((q): CapasPieza => {
+    const p = ma.piezas[q.pieza];
+    const ox = q.x - (p.solido.x - p.caja.x) * q.k, oy = q.y - (p.solido.y - p.caja.y) * q.k;
+    /** Un mapa (caja de mw × mh con esquina en mx, my) remuestreado a su rectángulo, sin recortar a la medida. */
+    const mapa = (src: Uint8ClampedArray, mw: number, mh: number, mx: number, my: number, premult: boolean) => {
+      const x0 = Math.floor(mx) - 1, y0 = Math.floor(my) - 1, x1 = Math.ceil(mx + mw * q.k) + 1, y1 = Math.ceil(my + mh * q.k) + 1;
+      return { x0, y0, x1, y1, v: remuestrear(src, mw, mh, q.k, mx, my, x0, y0, x1, y1, "fuera", premult) };
+    };
+    const halo = sombras.has(q.pieza) ? haloDe(ma, q.pieza) : null;
+    const h = halo && mapa(halo.mapa, halo.w, halo.h, ox - halo.pad * q.k, oy - halo.pad * q.k, false);
+    const s = p.oscurece && mapa(p.oscurece, p.caja.w, p.caja.h, ox, oy, false);
+    const x0 = Math.floor(ox) - 1, y0 = Math.floor(oy) - 1, x1 = Math.ceil(ox + p.caja.w * q.k) + 1, y1 = Math.ceil(oy + p.caja.h * q.k) + 1;
+    const w = x1 - x0, alto = y1 - y0;
+    // Igual que `armarMedida`: con texto vuelto a escribir va la base y las letras nuevas encima (aquí, dentro de la
+    // misma capa); si no, la pieza con su enfoque.
+    const escribir = p.base && Math.abs(q.k - 1) >= ESCRIBIR_LEJOS_DE_1;
+    const escrito = escribir ? (op.texto?.(q.pieza, { k: q.k, ox, oy, x0, y0, x1, y1 }) ?? null) : null;
+    const col = remuestrear(escrito && p.base ? p.base : p.rgba, p.caja.w, p.caja.h, q.k, ox, oy, x0, y0, x1, y1, "fuera", true);
+    if (!escrito && op.enfoque !== false && q.k < ENFOQUE_DESDE && DE_TEXTO.has(p.rol)) enfocar(col, w, alto, ENFOQUE);
+    if (escrito)
+      for (let i = 0; i < w * alto; i++) {
+        const e = escrito[i * 4 + 3] / 255;
+        for (let c = 0; c < 4; c++) col[i * 4 + c] = escrito[i * 4 + c] + col[i * 4 + c] * (1 - e);
+      }
+    return {
+      pieza: q.pieza,
+      halo: h ? aCapa(h.v, h.x0, h.y0, h.x1 - h.x0, h.y1 - h.y0) : null,
+      sombra: s ? aCapa(s.v, s.x0, s.y0, s.x1 - s.x0, s.y1 - s.y0) : null,
+      color: aCapa(col, x0, y0, w, alto),
+    };
+  });
+  return { fondo, piezas };
+}

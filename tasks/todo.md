@@ -77,7 +77,7 @@ letra de arriba eran la aproximación del laboratorio; las reales (del texto del
 
 ### Plan B — puerta PSD (2026-10-13)
 **Next Step (2026-10-15):** B15 (editor + botón IA) y B16 (contraste: los dos, la plataforma elige) en la preview.
-Pedro prueba. Abierto: separar el colchón del fondo con IA → prueba hecha (B17), falta que Pedro elija camino.
+Pedro prueba. Colchón: Pedro eligió que diseño lo arregle a mano → B18 (PSD por medida). Falta que un diseñador abra los 2 PSD de prueba (Escritorio › formatos-prueba › psd-prueba) y diga si Photoshop acepta los objetos inteligentes.
 Reels se queda sin zoom (Pedro: "yes leave reels as it is").
 **Antes:** B9 (Google + exclusivas + selector de cliente) construido; falta cerrar la revisión y
 subir. La prueba de punta a punta de tipografías espera el "ship it" de 0079 + bucket. 320×50 se queda igual
@@ -557,6 +557,17 @@ largo: estacionado por él.
       · Caminos: (1) que diseño entregue el colchón en su propia capa (gratis, perfecto); (2) segunda llamada que
         pida el colchón solo sobre un color plano (idea de Pedro: "colchón nuevo generado") para orillas limpias,
         ≈ US$0.04 más; (3) seguir con la comparación + arreglos. En el motor falta: tarjeta y colchón como grupo.
+- [x] B18. «PSD» en cada tarjeta: la medida en capas para terminarla a mano (Pedro, 2026-10-15: "give them the option
+      to download that specific size as a psd with the available layers"; eligió la opción 1 + archivo de prueba de la 2).
+      · psd-salida.ts + `capasDeMedida` (nitido.ts): carpeta BACKGROUND con el fondo entero (más grande que la medida,
+        se recorre), y una carpeta por pieza con el nombre del PSD original: la pieza a su tamaño, «· sombra» y la
+        sombra de contraste en multiplicar. Texto como imagen. La librería se carga al hacer clic.
+      · Medido con s33: 1200×627 → 7.8 MB (armar 228 ms, escribir 44 ms); 1080×1920 → 13.1 MB. Las capas puestas en
+        orden dan la tarjeta ±2. En el navegador: nombre de entrega con .psd, 7.9 MB, firma 8BPS, mismas carpetas.
+      · Opción 2 (prueba, no está en la app): s33_1200x627_objetos-inteligentes.psd, cada pieza objeto inteligente con
+        su PNG del maestro adentro (5 de 5 leídos de vuelta). Si Photoshop lo acepta, se cambia la opción 1 por ésta.
+      · No probado: abrir los PSD en Photoshop (no hay Photoshop aquí). Piezas quitadas (subtítulo) no van en el PSD.
+      · test-formatos 311/0 (3 nuevos) · npm test verde · tsc y eslint limpios.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

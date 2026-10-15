@@ -195,6 +195,14 @@ export const FP = {
   ),
   contrasteSinArreglo: t("Sin arreglo, como elegiste: {p} se pierde en un {antes}.", "No fix, as you chose: {antes} of {p} gets lost."),
   contrasteEditada: t("Editada a mano: para cambiar el contraste, «Editar» › «Volver al automático».", "Edited by hand: to change the contrast, «Edit» › «Back to automatic»."),
+  bajarPsd: t("PSD", "PSD"),
+  bajarPsdAria: t("Bajar {m} como PSD con capas, para terminarla a mano", "Download {m} as a layered PSD, to finish it by hand"),
+  bajarPsdTitulo: t(
+    "Una carpeta por pieza (con sus sombras aparte) y el fondo entero para recorrerlo. El texto va como imagen: para cambiar la copia, el PSD maestro.",
+    "One folder per piece (shadows on their own layers) and the whole background so it can slide. Text comes as images: to change the copy, use the master PSD.",
+  ),
+  bajarPsdHaciendo: t("Armando…", "Building…"),
+  bajarPsdFallo: t("No se pudo armar el PSD. Reintenta; si sigue, baja el PNG.", "The PSD couldn't be built. Try again; if it keeps failing, download the PNG."),
   editada: t("Editada a mano", "Edited by hand"),
   editadaTitulo: t(
     "Acomodada a mano y guardada en este navegador. No se voltea: para voltearla, «Editar» › «Volver al automático».",

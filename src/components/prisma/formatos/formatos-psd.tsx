@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CircleCheck, Download, Eraser, FileUp, FlipHorizontal2, Languages, Loader2, Lock, Move, Sparkles, Type, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CircleCheck, Download, Eraser, FileUp, FlipHorizontal2, Languages, Layers, Loader2, Lock, Move, Sparkles, Type, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { zipSync } from "fflate";
 import { Button } from "@/components/ui/button";
@@ -364,6 +364,24 @@ const TarjetaMedida = memo(function TarjetaMedida({
       toast.error(tx(FP.bajarFallo, lang));
     }
   };
+  // La medida en capas para terminarla a mano (psd-salida.ts). La librería se carga al hacer clic, no con la página.
+  const [armandoPsd, setArmandoPsd] = useState(false);
+  const bajarPsd = async () => {
+    if (armandoPsd) return;
+    setArmandoPsd(true);
+    try {
+      const [{ writePsdUint8Array }, { psdDeMedida }] = await Promise.all([import("ag-psd"), import("@/lib/prisma/formatos/psd-salida")]);
+      // Un cuadro para que se vea «Armando…» antes del trabajo pesado (un segundo o menos, en la página).
+      await new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 0)));
+      const bytes = writePsdUint8Array(psdDeMedida(ma, acomodo, w, h, { texto: textoEscrito(escritura, maestro, ma, tipos) }), { noBackground: true });
+      descargar(new Blob([bytes as BlobPart], { type: "image/vnd.adobe.photoshop" }), archivoDe(ma, medida).replace(/\.png$/, ".psd"));
+    } catch (err) {
+      console.error("[formatos-psd] psd", err);
+      toast.error(tx(FP.bajarPsdFallo, lang));
+    } finally {
+      setArmandoPsd(false);
+    }
+  };
   return (
     <li className={cn("rounded-xl border border-border bg-card p-3", w / h >= FORMA_FILA && "@xl:col-span-2")}>
       <div className="flex justify-center rounded-lg bg-secondary/60 p-2">
@@ -427,6 +445,19 @@ const TarjetaMedida = memo(function TarjetaMedida({
           )}
           <Button variant="outline" size="lg" className={BOTON} onClick={() => void bajar()} disabled={noPinto} aria-label={rellenar(tx(FP.bajarPngAria, lang), { m: etiqueta(medida) })}>
             <Download className="size-4" aria-hidden="true" /> {tx(FP.bajarPng, lang)}
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            className={BOTON}
+            onClick={() => void bajarPsd()}
+            disabled={noPinto || armandoPsd}
+            aria-busy={armandoPsd}
+            aria-label={rellenar(tx(FP.bajarPsdAria, lang), { m: etiqueta(medida) })}
+            title={tx(FP.bajarPsdTitulo, lang)}
+          >
+            {armandoPsd ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Layers className="size-4" aria-hidden="true" />}
+            {armandoPsd ? tx(FP.bajarPsdHaciendo, lang) : tx(FP.bajarPsd, lang)}
           </Button>
         </div>
       </div>

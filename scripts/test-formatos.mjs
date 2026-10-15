@@ -11,7 +11,9 @@ import { writePsdBuffer } from "ag-psd";
 import { nombreDeGuia, etiquetaPieza } from "../src/lib/prisma/formatos/roles.ts";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
-import { armarMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
+import { armarMedida, capasDeMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
+import { psdDeMedida, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prisma/formatos/psd-salida.ts";
+import { readPsd as readPsdAg } from "ag-psd";
 import { textoDe, maquetar, fuentesDe, compararAlfa } from "../src/lib/prisma/formatos/textos.ts";
 import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, elegirParaCliente, exclusivasDeOtros, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIA_GOOGLE_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
 import { carpetaGoogle, archivosDeMetadata, archivosQueSirven, buscarEnGoogle, ARCHIVOS_POR_FAMILIA_MAX, GOOGLE_BYTES_POR_PEDIDO } from "../src/lib/prisma/formatos/google-fonts.ts";
@@ -1408,6 +1410,27 @@ console.log("\n▶ v2 · copia del HERO pintada en el fondo (gemela.ts) y avisos
   const op3 = opcionesDeContraste(m3, a3, 300, C);
   ok("contraste: si mover el fondo saca a la tarjeta de su lugar, se ofrece pero la plataforma elige la sombra", op3.fondo !== null && op3.info.fondoSacaHero && op3.info.auto === "sombra", JSON.stringify(op3.info));
   eq("contraste: si nada se pierde, no hay arreglos que ofrecer", opcionesDeContraste(sobreAzul, acomodar(sobreAzul, C, C), C, C), null);
+
+  // PSD de una medida (Pedro, 2026-10-15: "download that specific size as a psd with the available layers"). Con una
+  // pieza con sombra del PSD (multiplicar) y la sombra de contraste, el fondo corrido 100 px fuera de la medida.
+  const conSombraPsd = { ...m3, piezas: [{ ...heroM2, oscurece: bloque(100, 100, [128, 128, 128, 255]) }, m3.piezas[1]] };
+  const aPsd = { ...op3.sombra, fondo: { k: 1, x: -60, y: 0 } };
+  const capas = capasDeMedida(conSombraPsd, aPsd, 300, C);
+  const rec = new Float32Array(300 * C * 3);
+  const poner = (c, multiplicar) => { for (let y = Math.max(0, c.y); y < Math.min(C, c.y + c.h); y++) for (let x = Math.max(0, c.x); x < Math.min(300, c.x + c.w); x++) { const i = ((y - c.y) * c.w + (x - c.x)) * 4, o = (y * 300 + x) * 3, al = c.rgba[i + 3] / 255; for (let k = 0; k < 3; k++) rec[o + k] = multiplicar ? rec[o + k] * (1 - al + (al * c.rgba[i + k]) / 255) : c.rgba[i + k] * al + rec[o + k] * (1 - al); } };
+  poner(capas.fondo, false);
+  for (const p of capas.piezas) { if (p.halo) poner(p.halo, true); if (p.sombra) poner(p.sombra, true); poner(p.color, false); }
+  const tarjeta = armarMedida(conSombraPsd, aPsd, 300, C);
+  let difMax = 0;
+  for (let i = 0; i < 300 * C; i++) for (let k = 0; k < 3; k++) difMax = Math.max(difMax, Math.abs(Math.round(rec[i * 3 + k]) - tarjeta[i * 4 + k]));
+  ok("PSD: las capas puestas en orden (normal y multiplicar) dan la misma imagen que la tarjeta (±2)", difMax <= 2 && capas.piezas.some((p) => p.halo) && capas.piezas.some((p) => p.sombra), `diferencia máxima ${difMax}`);
+  eq("PSD: el fondo va entero aunque se salga de la medida (se puede recorrer en Photoshop)", [capas.fondo.x, capas.fondo.w], [-60, C]);
+  const leidoPsd = readPsdAg(writePsdBuffer(psdDeMedida(conSombraPsd, aPsd, 300, C), { noBackground: true }), { skipLayerImageData: true, skipCompositeImageData: true });
+  eq(
+    "PSD: escrito y leído de vuelta: carpetas de abajo hacia arriba con el nombre del PSD, sombras en multiplicar",
+    leidoPsd.children.map((g) => `${g.name}: ${g.children.map((l) => `${l.name}${l.blendMode === "multiply" ? " (mult)" : ""}`).join(", ")}`),
+    ["BACKGROUND: Fondo", "CARD: CARD · sombra (mult), CARD", `Copy: ${CAPA_SOMBRA_CONTRASTE} (mult), Copy`],
+  );
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);
