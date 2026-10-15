@@ -436,8 +436,9 @@ export function EditorMedida({
             </div>
           </div>
         </div>
-        {/* Pegado abajo: con muchas piezas o avisos, Guardar y Cancelar no se van de la pantalla. */}
-        <DialogFooter className="sticky bottom-0 -mx-4 -mb-4 gap-2 border-t border-border bg-popover px-4 py-3 sm:items-center sm:justify-between">
+        {/* Pegado abajo: con muchas piezas o avisos, Guardar y Cancelar no se van de la pantalla. `-bottom-4` porque
+            el pegado respeta el p-4 del diálogo: con bottom-0 el texto de abajo se asomaba debajo del pie. */}
+        <DialogFooter className="sticky -bottom-4 -mx-4 -mb-4 gap-2 border-t border-border bg-popover px-4 py-3 sm:items-center sm:justify-between">
           <Button variant="ghost" disabled={!hayCambios} onClick={() => setPos({ ...deAuto })}>
             <RotateCcw className="size-4" aria-hidden="true" /> {tx(FP.editorAuto, lang)}
           </Button>
