@@ -8,6 +8,13 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+## 🔺 HÜE Prisma › Formatos (rama `prisma`) — 2026-10-16 — en la PREVIEW, Pedro probando
+- **Puerta PSD (Formatos):** página rediseñada (B19 opción A, c75ac8c) + vista grande, contraste libre en medidas
+  editadas y editor a la forma de la medida (ccc05fa). Sólo escritorio e iPad (1440 / 1180 / 820).
+- **Esperando a Pedro:** su prueba de esos 3 arreglos; veredicto del diseñador sobre los objetos inteligentes del PSD;
+  "ship it" para 0078 + bucket `greenlight-formatos` (0079 + `greenlight-tipografias` ya aplicadas el 2026-10-14).
+- **No mezclar `prisma` a `main`** hasta que Pedro lo diga.
+
 ## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-17 — TODO LIVE en preview (0065–0075 APLICADAS)
 - **Higgsfield prompt-first:** el equipo genera en higgsfield.ai (ilimitados sólo ahí); Prisma escribe el prompt del
   MODELO, dice en qué modelo y cómo llegar ("Abrir en Higgsfield" por modelo + "Paso a paso"), y estima créditos con

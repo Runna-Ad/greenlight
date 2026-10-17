@@ -2585,3 +2585,34 @@ contadores (el endpoint público de verify de Supabase la vuelve insuficiente �
 - [ ] Opcional: límites DURABLES de códigos (tabla + RPC) y/o CAPTCHA (Turnstile) en pedir/confirmar código.
 - [ ] Diferido con el candado @runna: la puerta del equipo acepta cualquier login por correo (no sólo Google).
 
+
+## 2026-10-15/16 — HÜE Prisma › Formatos: rediseño B19 (opción A) + 3 arreglos tras la prueba de Pedro — PREVIEW (rama `prisma`), sin migración
+**Waiting on Pedro:** probar en la preview (https://greenlight-git-prisma-pedros-projects-c43384db.vercel.app/prisma/formatos/psd)
+la vista grande, el contraste en una medida editada y el editor a la forma de la medida. Sigue pendiente el veredicto del
+diseñador sobre `s33_1200x627_objetos-inteligentes.psd` y el "ship it" de 0078 + bucket `greenlight-formatos`.
+**Hecho:**
+- B19 análisis y plan (/design-god-mode): opciones A/B/C con maqueta. Pedro: sólo escritorio y iPad, nada de teléfono
+  (PEDRO_OVERRIDE + memoria `formatos-desktop-ipad-only`). Pedro eligió A → **c75ac8c**: ajustes arriba en pastillas
+  (medidas por forma con «Agregar medida», canal con color, chips de estado), «En varias medidas», resultados por forma
+  con barra pegajosa, tarjeta nueva. Página 6259 → 3055 px a 1440. Dos revisores; preview "success".
+- Pedro probó ("overall looking way better") y pidió 3 cosas → **ccc05fa**:
+  1. Vista grande (vista-grande.tsx): clic en la tarjeta abre la medida casi a pantalla completa, ajustada (crece si es
+     chica, píxeles nítidos desde 200 %) o a tamaño real 100 % con desplazamiento. Copia el lienzo de la tarjeta.
+  2. Contraste libre en una medida editada: la clave de la edición ya no lleva el contraste (PEDRO_OVERRIDE: yo lo había
+     bloqueado). La clave vieja «:fondo» se lee y se borra al guardar (confirmado con `git show HEAD`).
+  3. Editor casi a pantalla completa, vista del tamaño que cabe con la forma de la medida, tiras con el panel abajo,
+     pintado limitado por área. 320×50: 790×123 → 1360×213 px; 1080×1920: 344×612 → 393×699 (1440×900).
+  Revisor (sonnet) encontró 1 serio (la vista podía copiar una tarjeta sin pintar o quedarse vieja): arreglado con un
+  contador de pintadas. Más 10 arreglos baratos (ver todo.md B19). Lección en **7b81d2f**.
+- Pruebas: tsc 0 · eslint 0 · test-formatos 311/0 · navegador en 1440×900, 1180×820 y 820×1180 (medidas en todo.md) ·
+  consola sin errores tras las marcas · preview de ccc05fa "success | Deployment has completed".
+**Decisiones:** la vista grande copia el lienzo (no vuelve a pintar); «Tamaño real» = 1 píxel del PNG por píxel de la
+página; el editor pone el panel abajo cuando ancho ÷ alto ≥ 2.
+**Lecciones nuevas (tasks/lessons.md):** PEDRO_OVERRIDE del contraste bloqueado; editor con alto fijo aplasta medidas;
+el panel oculto del navegador congela animaciones y ResizeObserver (cómo probar igual); copiar un lienzo que se pinta en fila.
+**Sin hacer (reporte):** canal y contraste como `radiogroup`; ayuda del cliente sólo con `title`; caché de 4 fondos del
+editor (~31 MB c/u) y repintado sin espera al cambiar la ventana; % de «Ajustar» se mueve 1-3 % con barras fijas.
+**No probado:** un iPad de verdad; la vista grande con una medida de más de 4000 px; Enter en el campo de medidas.
+**Pick up next:** lo que diga Pedro de la prueba; luego B4 (banners delgados) o el paso que él elija de todo.md.
+**Environment:** el servidor de archivos de prueba (`servir2.mjs`, 127.0.0.1:8765) se apaga al cerrar la sesión; no hay
+dependencias nuevas.
