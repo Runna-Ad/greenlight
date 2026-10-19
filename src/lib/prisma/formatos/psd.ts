@@ -48,6 +48,13 @@ export const esVersionPsd = (cab: Uint8Array): boolean => cab.length >= 6 && cab
 export const ES_PSB = "Es un PSB (documento grande), no un PSD. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas, como PSD.";
 /** El detalle cuando ag-psd lanza uno de MAL_FORMADO (sus mensajes, en inglés técnico, no le dicen nada a la persona). */
 export const PSD_MAL_FORMADO = "El archivo no sigue el formato PSD exactamente (puede estar dañado o incompleto) y no se deja leer con seguridad.";
+/** Los modos de color que ag-psd no lee, con el nombre que da en su error ("Color mode not supported: CMYK"). Un PSD
+ *  de imprenta llega en CMYK. */
+const MODOS_SIN_LEER: Record<string, string> = { CMYK: "CMYK", lab: "Lab", multichannel: "multicanal", duotone: "duotono" };
+export const noEsRgb = (modo: string): string =>
+  `El PSD está en ${MODOS_SIN_LEER[modo] ?? "un modo de color que no es RGB"} y Formatos sólo lee RGB. Qué hacer: guarda una copia en RGB (en Photoshop: Imagen › Modo › Color RGB) y elige esa copia aquí.`;
+export const noEs8Bits = (bits: number): string =>
+  `El PSD está en ${bits} bits por canal y Formatos sólo lee 8. Qué hacer: guarda una copia en 8 bits (en Photoshop: Imagen › Modo › 8 bits/canal) y elige esa copia aquí.`;
 /** El mismo mensaje lo dan el worker (antes de juntar los bytes) y `leerPsd`: un solo texto. */
 export const pesaDemasiado = (mb: number, nota: string): string =>
   `Sus capas pesan ${mb} MB (máximo ${Math.round(PSD_BYTES_MAX / 1e6)})${nota}. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas y sin capas ocultas.`;
@@ -196,11 +203,13 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
     psd = readPsd(buf, { useRawData: true, useRawThumbnail: true, skipLinkedFilesData: true, totalMemoryLimit: 64 * 1024 * 1024, strict: true });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);
-    throw new ErrorPsd("no-soportado", MAL_FORMADO.test(detalle) ? PSD_MAL_FORMADO : `No se pudo leer el PSD: ${detalle}`);
+    const modo = /^Color mode not supported: (.*)$/.exec(detalle);
+    throw new ErrorPsd("no-soportado", modo ? noEsRgb(modo[1]) : MAL_FORMADO.test(detalle) ? PSD_MAL_FORMADO : `No se pudo leer el PSD: ${detalle}`);
   }
   if (!(psd.width > 0 && psd.height > 0)) throw new ErrorPsd("no-soportado", "El PSD no declara medidas");
   if (psd.width > PSD_LADO_MAX || psd.height > PSD_LADO_MAX || psd.width * psd.height > PSD_LIENZO_MAX_PX) throw new ErrorPsd("demasiado-grande", `El lienzo mide ${psd.width}×${psd.height}: más de ${PSD_LIENZO_MAX_PX / 1e6} millones de píxeles en total. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas, o acércalas entre sí.`);
-  if ((psd.bitsPerChannel ?? 8) !== 8) throw new ErrorPsd("no-soportado", `${psd.bitsPerChannel} bits por canal (sólo 8)`);
+  const bits = psd.bitsPerChannel ?? 8;
+  if (bits !== 8) throw new ErrorPsd("no-soportado", noEs8Bits(bits));
 
   const avisos: string[] = [];
   const mesas: MesaPsd[] = [];

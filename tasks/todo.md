@@ -712,6 +712,19 @@ largo: estacionado por él.
         (los dos son del Toaster de toda la app, `components/ui/sonner.tsx`); si se edita una medida mientras espera en la
         fila, baja lo que la tarjeta mostraba al hacer clic; sin botón para cancelar la fila (se cancela al salir).
       · Sin revisar: si Chrome (perfil normal) pide permiso para «descargar varios archivos» con 3+ clics seguidos.
+- [~] B21. La lectura de la PANTALLA también en modo estricto (2026-10-19, sesión lateral, rama
+      `claude/inspiring-curie-f734db`, SIN fusionar en `prisma`: lo decide Pedro).
+      · Hecho: `leerPsd` con `strict: true` (un dato que dice medir más de lo que queda del archivo ya no reserva hasta
+        100 MB en ceros); error de archivo mal formado → mensaje claro en español; CMYK / Lab / otro modo y 16 bits →
+        "El PSD está en … Qué hacer: guarda una copia en RGB / en 8 bits" (Pedro: "yes" a arreglar el de CMYK).
+        test-formatos 365/0; navegador (localhost :3017): copia rota y copia en CMYK dan su mensaje, s33 real 12/12.
+      · Riesgo abierto: strict puede rechazar un PSD BUENO si un Photoshop distinto guarda un recurso con bytes de más
+        (p. ej. el 1082, información de impresión). Probado sólo con 2 de Photoshop (s33, APGIANTCARD); los otros 3 son
+        nuestros. **Siguiente:** que diseño mande 3-4 PSD de otras computadoras (y uno de otra app si alguien la usa)
+        a Escritorio › formatos-prueba y correr `node scripts/test-formatos.mjs` (agregar sus rutas a `reales`).
+      · Para después (sólo con archivos dañados): un bloque malo dentro de una capa se pierde sin aviso (la capa va
+        como imagen, sin texto vivo); el worker editable llama «formato» a un "Invalid signature" de NUESTRO escritor
+        (psdWriter.js:104), culpando al archivo.
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
 - iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los
   pendientes de iPad de B19 (caché de 4 fondos, táctil real, zoom de Safari) quedan fuera.

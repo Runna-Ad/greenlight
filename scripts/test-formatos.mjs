@@ -9,7 +9,7 @@ import {
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
 import { writePsdBuffer } from "ag-psd";
 import { nombreDeGuia, etiquetaPieza } from "../src/lib/prisma/formatos/roles.ts";
-import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO } from "../src/lib/prisma/formatos/psd.ts";
+import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, capasDeMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
 import { psdDeMedida, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prisma/formatos/psd-salida.ts";
@@ -1784,6 +1784,22 @@ console.log("\n▶ lectura de la pantalla en modo estricto: los PSD reales se le
     let errC = null;
     try { leerPsd(await flaco(crudo.subarray(0, Math.floor(crudo.length * 0.6)))); } catch (e) { errC = e; }
     eq("s33 cortado al 60 %: «no-soportado» con el mensaje claro, no el de la librería", [errC instanceof ErrorPsd && errC.motivo, errC?.message], ["no-soportado", PSD_MAL_FORMADO]);
+    // D. Lo que Formatos no lee, con qué hacer en español (antes: "Color mode not supported: CMYK"). Sólo cambia la
+    // cabecera de s33: modo de color en el byte 24 (4 CMYK, 9 Lab, 5 uno sin nombre), bits por canal en el 22.
+    const base = await flaco(crudo);
+    const conCabecera = (pos, valor) => {
+      const c = new Uint8Array(base);
+      new DataView(c.buffer).setUint16(pos, valor);
+      return c;
+    };
+    const lectura = (bytes) => { try { leerPsd(bytes); return "se abre"; } catch (e) { return e instanceof ErrorPsd ? `${e.motivo}: ${e.message}` : `otro: ${e}`; } };
+    eq("s33 en CMYK, Lab, un modo sin nombre y 16 bits: «no-soportado» con el modo y qué hacer, en español", [conCabecera(24, 4), conCabecera(24, 9), conCabecera(24, 5), conCabecera(22, 16)].map(lectura), [
+      "no-soportado: El PSD está en CMYK y Formatos sólo lee RGB. Qué hacer: guarda una copia en RGB (en Photoshop: Imagen › Modo › Color RGB) y elige esa copia aquí.",
+      `no-soportado: ${noEsRgb("lab")}`,
+      "no-soportado: El PSD está en un modo de color que no es RGB y Formatos sólo lee RGB. Qué hacer: guarda una copia en RGB (en Photoshop: Imagen › Modo › Color RGB) y elige esa copia aquí.",
+      `no-soportado: ${noEs8Bits(16)}`,
+    ]);
+    ok("los mensajes nombran el modo y los bits que trae el archivo", noEsRgb("lab").includes("está en Lab") && noEs8Bits(16).includes("está en 16 bits"));
   }
 }
 
