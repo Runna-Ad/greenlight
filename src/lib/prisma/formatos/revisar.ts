@@ -12,12 +12,13 @@
  * Una sola entrada, `revisarMedida`, para la tarjeta de cada medida y para el resumen de la pantalla: los dos cuentan
  * los mismos avisos.
  */
-import { acomodar, aplicarEdicion, elegirMaestro, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type Zona } from "./acomodo.ts";
+import { acomodar, aplicarEdicion, dibujosDe, elegirMaestro, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type ParteCaja, type Zona } from "./acomodo.ts";
 import { haloDe } from "./halo.ts";
 import type { Caja, Rol } from "./psd.ts";
 import { etiquetaPieza } from "./roles.ts";
 
-type PiezaRevisable = MaestroCaja["piezas"][number] & { caja: Caja; rgba: Uint8ClampedArray };
+type Pixeles = { caja: Caja; rgba: Uint8ClampedArray };
+type PiezaRevisable = MaestroCaja["piezas"][number] & Pixeles & { partes?: readonly (ParteCaja & Pixeles)[] };
 /** La copia del HERO en el fondo de un maestro: de qué pieza, y si ya se quitó. */
 export type CopiaEnFondo = { pieza: number; quitada: boolean };
 export type MaestroRevisable = MaestroCaja & { fondo: Uint8ClampedArray; piezas: PiezaRevisable[]; copia?: CopiaEnFondo | null };
@@ -61,32 +62,49 @@ function pixel(w: number, h: number, k: number, ox: number, oy: number, X: numbe
 }
 
 /** Esquina de la caja completa de una pieza puesta (la parte sólida queda donde dijo el acomodo), como en nitido.ts. */
-const esquina = (p: PiezaRevisable, q: Acomodo["puestas"][number]) => [q.x - (p.solido.x - p.caja.x) * q.k, q.y - (p.solido.y - p.caja.y) * q.k] as const;
+const esquina = (p: { solido: Caja; caja: Caja }, q: { x: number; y: number; k: number }) => [q.x - (p.solido.x - p.caja.x) * q.k, q.y - (p.solido.y - p.caja.y) * q.k] as const;
 
 /**
  * Por cada pieza medible que quedó puesta: qué parte de ella (0-1) se pierde contra lo que tiene atrás (fondo, piezas
  * de abajo y las sombras de contraste de `a.sombras`). `solo`: medir sólo esas piezas (la búsqueda del arreglo).
  */
 export function perdidas(ma: MaestroRevisable, a: Acomodo, W: number, H: number, solo?: ReadonlySet<number>): Map<number, number> {
-  const out = new Map<number, number>();
-  // La esquina de cada pieza puesta y su sombra de contraste, una vez (no por punto).
-  const esquinas = a.puestas.map((q) => esquina(ma.piezas[q.pieza], q));
+  // Lo que se pinta, de abajo hacia arriba (una pieza abierta, parte por parte), de qué pieza es, su esquina y su sombra
+  // de contraste, una vez (no por punto). Una pieza abierta se mide como si fuera una (como en el original, con el que
+  // se compara): sus puntos se suman, salen de la rejilla de la pieza entera, y lo de atrás de una parte es lo de atrás
+  // de la pieza (sus otras partes no cuentan).
   const sombras = new Set(a.sombras ?? []);
-  const halos = a.puestas.map((q) => (sombras.has(q.pieza) ? haloDe(ma, q.pieza) : null));
-  const completa = (p: PiezaRevisable) => p.rgba.length >= p.caja.w * p.caja.h * 4;
+  const todos = a.puestas.flatMap((q) => dibujosDe(ma.piezas[q.pieza], q).map((d) => ({ pieza: q.pieza, puesta: q, d })));
+  const esquinas = todos.map(({ d }) => esquina(d.d, d));
+  const halos = todos.map(({ pieza, d }) => (sombras.has(pieza) ? haloDe(ma, d.d) : null));
+  /** El primer dibujo de la pieza de cada dibujo, y los de cada pieza. */
+  const primero = todos.map(({ pieza }) => todos.findIndex((t) => t.pieza === pieza));
+  const dePieza = new Map<number, number[]>();
+  todos.forEach(({ pieza }, n) => dePieza.set(pieza, [...(dePieza.get(pieza) ?? []), n]));
+  const cuenta = new Map<number, { puntos: number; perdidos: number }>();
+  const completa = (p: Pixeles) => p.rgba.length >= p.caja.w * p.caja.h * 4;
   /** Cuánto deja pasar (0-1, por canal) la sombra de contraste de la puesta m en el punto (X, Y). */
   const bajoHalo = (m: number, X: number, Y: number): [number, number, number] | null => {
     const h = halos[m];
     if (!h) return null;
-    const q = a.puestas[m], [px, py] = esquinas[m];
+    const q = todos[m].d, [px, py] = esquinas[m];
     const j = pixel(h.w, h.h, q.k, px - h.pad * q.k, py - h.pad * q.k, X, Y, false);
     return j < 0 ? null : [h.mapa[j] / 255, h.mapa[j + 1] / 255, h.mapa[j + 2] / 255];
   };
-  a.puestas.forEach((q, n) => {
-    const p = ma.piezas[q.pieza];
-    if (!SE_MIDE.has(p.rol) || !completa(p) || (solo && !solo.has(q.pieza))) return;
+  /** Lo mismo con las de TODA la pieza del dibujo m (van juntas, debajo de su primera parte, como en nitido.ts). */
+  const bajoHalos = (m: number, X: number, Y: number): [number, number, number] | null => {
+    let t: [number, number, number] | null = null;
+    for (const o of dePieza.get(todos[m].pieza) ?? []) {
+      const u = bajoHalo(o, X, Y);
+      if (u) t = t ? [t[0] * u[0], t[1] * u[1], t[2] * u[2]] : u;
+    }
+    return t;
+  };
+  todos.forEach(({ pieza, puesta, d: q }, n) => {
+    const p = q.d;
+    if (!SE_MIDE.has(ma.piezas[pieza].rol) || !completa(p) || (solo && !solo.has(pieza))) return;
     const [ox, oy] = esquinas[n];
-    const paso = Math.max(1, Math.sqrt((q.w * q.h) / PUNTOS));
+    const paso = Math.max(1, Math.sqrt((puesta.w * puesta.h) / PUNTOS));
     let puntos = 0, perdidos = 0;
     for (let y = Math.max(0, q.y); y < Math.min(H, q.y + q.h); y += paso)
       for (let x = Math.max(0, q.x); x < Math.min(W, q.x + q.w); x += paso) {
@@ -96,10 +114,10 @@ export function perdidas(ma: MaestroRevisable, a: Acomodo, W: number, H: number,
         // Lo de atrás: el fondo y, encima, las piezas que van debajo de ésta.
         const f = pixel(ma.w, ma.h, a.fondo.k, a.fondo.x, a.fondo.y, X, Y, true);
         let r = ma.fondo[f], g = ma.fondo[f + 1], b = ma.fondo[f + 2];
-        for (let m = 0; m < n; m++) {
-          const qq = a.puestas[m], pp = ma.piezas[qq.pieza], [px, py] = esquinas[m];
+        for (let m = 0; m < primero[n]; m++) {
+          const qq = todos[m].d, pp = qq.d, [px, py] = esquinas[m];
           // Su sombra de contraste (sale de su caja) oscurece antes de que se pinte la pieza, como en nitido.ts.
-          const t = bajoHalo(m, X, Y);
+          const t = primero[m] === m ? bajoHalos(m, X, Y) : null;
           if (t) {
             r *= t[0];
             g *= t[1];
@@ -115,7 +133,7 @@ export function perdidas(ma: MaestroRevisable, a: Acomodo, W: number, H: number,
           b = pp.rgba[j + 2] * al + b * (1 - al);
         }
         // Y la suya, justo debajo de ella.
-        const t = bajoHalo(n, X, Y);
+        const t = bajoHalos(n, X, Y);
         if (t) {
           r *= t[0];
           g *= t[1];
@@ -127,8 +145,11 @@ export function perdidas(ma: MaestroRevisable, a: Acomodo, W: number, H: number,
         puntos++;
         if ((Math.max(y1, y2) + 0.05) / (Math.min(y1, y2) + 0.05) < CONTRASTE_MIN && Math.hypot(R - r, G - g, B - b) < DISTANCIA_MIN) perdidos++;
       }
-    if (puntos >= PUNTOS_MIN) out.set(q.pieza, perdidos / puntos);
+    const c = cuenta.get(pieza) ?? { puntos: 0, perdidos: 0 };
+    cuenta.set(pieza, { puntos: c.puntos + puntos, perdidos: c.perdidos + perdidos });
   });
+  const out = new Map<number, number>();
+  for (const [i, c] of cuenta) if (c.puntos >= PUNTOS_MIN) out.set(i, c.perdidos / c.puntos);
   return out;
 }
 
@@ -278,9 +299,12 @@ const opcionesHechas = new WeakMap<MaestroRevisable, Map<string, Opciones | null
  *  las capas si cambió). */
 const firma = (ed: Edicion | null | undefined) => {
   if (!ed) return "-";
-  const p = ed.piezas ?? {};
-  const lugares = Object.keys(p).map(Number).sort((a, b) => a - b).map((i) => `${i}@${p[i].x.toFixed(2)},${p[i].y.toFixed(2)},${p[i].k.toFixed(4)}`).join(";");
-  return ed.orden?.length ? `${lugares}|${ed.orden.join(",")}` : lugares;
+  const enOrden = <T,>(r: Readonly<Record<number, T>>, f: (i: number, v: T) => string) => Object.keys(r).map(Number).sort((a, b) => a - b).map((i) => f(i, r[i])).join(";");
+  const lugar = (i: number, v: { x: number; y: number; k: number }) => `${i}@${v.x.toFixed(2)},${v.y.toFixed(2)},${v.k.toFixed(4)}`;
+  const lugares = enOrden(ed.piezas ?? {}, lugar);
+  const partes = ed.partes ? enOrden(ed.partes, (i, r) => `${i}{${enOrden(r, lugar)}}`) : "";
+  const ordenPartes = ed.ordenPartes ? enOrden(ed.ordenPartes, (i, o) => `${i}:${o.join(",")}`) : "";
+  return [lugares, ed.orden?.length ? ed.orden.join(",") : "", partes, ordenPartes].join("|").replace(/\|+$/, "");
 };
 
 /**

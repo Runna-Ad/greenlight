@@ -8,7 +8,7 @@
  * oscurezcan la orilla, y las piezas de texto reciben además un enfoque suave cuando se reducen. Mismo resultado en
  * todos los navegadores, y a la medida del maestro sale EXACTAMENTE el anuncio (prueba de identidad).
  */
-import type { Acomodo } from "./acomodo.ts";
+import { dibujosDe, type Acomodo, type Dibujo } from "./acomodo.ts";
 import { haloDe } from "./halo.ts";
 import type { Caja, Rol } from "./psd.ts";
 
@@ -18,15 +18,17 @@ export type MaestroDatos = {
   h: number;
   /** RGBA opaco, w × h. */
   fondo: Uint8ClampedArray;
-  piezas: { rol: Rol | null; caja: Caja; solido: Caja; rgba: Uint8ClampedArray; oscurece: Uint8ClampedArray | null; base?: Uint8ClampedArray | null; letraMinPx?: number | null }[];
+  piezas: (PiezaDatos & { rol: Rol | null; partes?: readonly PiezaDatos[] })[];
   /** Gamma con que se mezcla el texto vuelto a escribir, la misma que usó Photoshop (sin dato: la mezcla normal). */
   textoGamma?: number;
 };
+/** Lo que se pinta de una pieza (o de una de sus partes). */
+type PiezaDatos = { caja: Caja; solido: Caja; rgba: Uint8ClampedArray; oscurece: Uint8ClampedArray | null; base?: Uint8ClampedArray | null; letraMinPx?: number | null };
 /** Lugar de una pieza en la medida: su escala, dónde cae la esquina de su caja y el rectángulo [x0, x1) × [y0, y1). */
 export type Lugar = { k: number; ox: number; oy: number; x0: number; y0: number; x1: number; y1: number };
-/** El texto de una pieza ya escrito a la medida final: RGBA premultiplicado (0-255) del rectángulo de `Lugar`, o
- *  null si esa pieza va con su texto como imagen. */
-export type TextoEscrito = (pieza: number, lugar: Lugar) => Float32Array | null;
+/** El texto de una pieza (o de una de sus partes, `parte`) ya escrito a la medida final: RGBA premultiplicado (0-255)
+ *  del rectángulo de `Lugar`, o null si va con su texto como imagen. */
+export type TextoEscrito = (pieza: number, lugar: Lugar, parte: number | null) => Float32Array | null;
 
 /** Bajo esta escala, a las piezas de texto se les aplica el enfoque (a su tamaño o casi, no hace falta). */
 export const ENFOQUE_DESDE = 0.75;
@@ -192,27 +194,35 @@ export function armarFondo(ma: MaestroDatos, a: Acomodo, W: number, H: number): 
 export function armarMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, op: { enfoque?: boolean; texto?: TextoEscrito; fondo?: Float32Array } = {}): Uint8ClampedArray {
   const dest = op.fondo?.length === W * H * 4 ? op.fondo.slice() : armarFondo(ma, a, W, H);
   const sombras = new Set(a.sombras ?? []);
-  for (const q of a.puestas) {
-    const p = ma.piezas[q.pieza];
-    // Dónde cae la esquina de la caja completa (con sombra) para que su parte sólida quede donde dijo el acomodo.
-    const ox = q.x - (p.solido.x - p.caja.x) * q.k, oy = q.y - (p.solido.y - p.caja.y) * q.k;
-    // La sombra de contraste va primero (más abajo que las del PSD) y puede salir de la caja: su margen es suyo.
-    const halo = sombras.has(q.pieza) ? haloDe(ma, q.pieza) : null;
-    if (halo) oscurecer(dest, W, H, halo.mapa, halo.w, halo.h, q.k, ox - halo.pad * q.k, oy - halo.pad * q.k);
-    const x0 = Math.max(0, Math.floor(ox) - 1), y0 = Math.max(0, Math.floor(oy) - 1);
-    const x1 = Math.min(W, Math.ceil(ox + p.caja.w * q.k) + 1), y1 = Math.min(H, Math.ceil(oy + p.caja.h * q.k) + 1);
-    if (x1 <= x0 || y1 <= y0) continue;
-    const rw = x1 - x0;
-    // Sus sombras del PSD (blanco = no oscurece; afuera de su caja tampoco).
-    if (p.oscurece) oscurecer(dest, W, H, p.oscurece, p.caja.w, p.caja.h, q.k, ox, oy);
-    // Texto vuelto a escribir: la pieza va SIN sus letras (su base) y las letras nuevas encima, en su mismo turno
-    // (lo que esté más arriba las sigue tapando como en Photoshop). Sin enfoque: las letras ya salen nítidas.
-    const escribir = p.base && Math.abs(q.k - 1) >= ESCRIBIR_LEJOS_DE_1;
-    const escrito = escribir ? (op.texto?.(q.pieza, { k: q.k, ox, oy, x0, y0, x1, y1 }) ?? null) : null;
-    const col = remuestrear(escrito && p.base ? p.base : p.rgba, p.caja.w, p.caja.h, q.k, ox, oy, x0, y0, x1, y1, "fuera", true);
-    if (!escrito && op.enfoque !== false && q.k < ENFOQUE_DESDE && DE_TEXTO.has(p.rol)) enfocar(col, rw, y1 - y0, ENFOQUE);
-    encima(dest, W, col, x0, y0, x1, y1, 1);
-    if (escrito) encima(dest, W, escrito, x0, y0, x1, y1, ma.textoGamma ?? 1);
+  // Dónde cae la esquina de la caja completa (con sombra) para que su parte sólida quede donde dijo el acomodo.
+  const esquina = (q: Dibujo<PiezaDatos>) => [q.x - (q.d.solido.x - q.d.caja.x) * q.k, q.y - (q.d.solido.y - q.d.caja.y) * q.k];
+  for (const pq of a.puestas) {
+    const dibujos = dibujosDe(ma.piezas[pq.pieza], pq);
+    // La sombra de contraste va primero, debajo de TODA la pieza (de todas sus partes, si se abrió: una parte no
+    // oscurece a la de abajo), más abajo que las del PSD, y puede salir de la caja: su margen es suyo.
+    if (sombras.has(pq.pieza))
+      for (const q of dibujos) {
+        const halo = haloDe(ma, q.d), [ox, oy] = esquina(q);
+        if (halo) oscurecer(dest, W, H, halo.mapa, halo.w, halo.h, q.k, ox - halo.pad * q.k, oy - halo.pad * q.k);
+      }
+    for (const q of dibujos) {
+      const p = q.d, rol = ma.piezas[pq.pieza].rol;
+      const [ox, oy] = esquina(q);
+      const x0 = Math.max(0, Math.floor(ox) - 1), y0 = Math.max(0, Math.floor(oy) - 1);
+      const x1 = Math.min(W, Math.ceil(ox + p.caja.w * q.k) + 1), y1 = Math.min(H, Math.ceil(oy + p.caja.h * q.k) + 1);
+      if (x1 <= x0 || y1 <= y0) continue;
+      const rw = x1 - x0;
+      // Sus sombras del PSD (blanco = no oscurece; afuera de su caja tampoco).
+      if (p.oscurece) oscurecer(dest, W, H, p.oscurece, p.caja.w, p.caja.h, q.k, ox, oy);
+      // Texto vuelto a escribir: la pieza va SIN sus letras (su base) y las letras nuevas encima, en su mismo turno
+      // (lo que esté más arriba las sigue tapando como en Photoshop). Sin enfoque: las letras ya salen nítidas.
+      const escribir = p.base && Math.abs(q.k - 1) >= ESCRIBIR_LEJOS_DE_1;
+      const escrito = escribir ? (op.texto?.(pq.pieza, { k: q.k, ox, oy, x0, y0, x1, y1 }, q.parte) ?? null) : null;
+      const col = remuestrear(escrito && p.base ? p.base : p.rgba, p.caja.w, p.caja.h, q.k, ox, oy, x0, y0, x1, y1, "fuera", true);
+      if (!escrito && op.enfoque !== false && q.k < ENFOQUE_DESDE && DE_TEXTO.has(rol)) enfocar(col, rw, y1 - y0, ENFOQUE);
+      encima(dest, W, col, x0, y0, x1, y1, 1);
+      if (escrito) encima(dest, W, escrito, x0, y0, x1, y1, ma.textoGamma ?? 1);
+    }
   }
   const out = new Uint8ClampedArray(W * H * 4);
   for (let i = 0; i < W * H; i++) {
@@ -227,9 +237,9 @@ export function armarMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, 
 /** Una capa suelta para el PSD de salida: RGBA de 8 bits sin premultiplicar, con su esquina en la medida (puede
  *  salirse de ella: el diseñador la recorre en Photoshop y lo de afuera sigue ahí). */
 export type CapaSalida = { x: number; y: number; w: number; h: number; rgba: Uint8ClampedArray };
-/** Las capas de una pieza puesta, de abajo hacia arriba: sombra de contraste, sombras del PSD (las dos en
- *  "multiplicar") y la pieza. */
-export type CapasPieza = { pieza: number; halo: CapaSalida | null; sombra: CapaSalida | null; color: CapaSalida };
+/** Las capas de una pieza puesta (o de una de sus partes, si se abrió), de abajo hacia arriba: sombra de contraste,
+ *  sombras del PSD (las dos en "multiplicar") y la pieza. */
+export type CapasPieza = { pieza: number; parte: number | null; halo: CapaSalida | null; sombra: CapaSalida | null; color: CapaSalida };
 
 /** Premultiplicado (0-255) → RGBA normal. Sirve también para los mapas de sombra: "fuera" de su caja los deja
  *  mezclados con 0, que es lo mismo que premultiplicados por su cobertura (ver `oscurecer`). */
@@ -244,9 +254,14 @@ export function aCapa(f: Float32Array, x: number, y: number, w: number, h: numbe
   return { x, y, w, h, rgba };
 }
 
-/** La sombra de contraste de una pieza puesta (`halo.ts`) como capa de la medida, en "multiplicar"; null si no lleva. */
-export function haloEnMedida(ma: MaestroDatos, q: Acomodo["puestas"][number]): CapaSalida | null {
-  const p = ma.piezas[q.pieza], halo = haloDe(ma, q.pieza);
+/** La sombra de contraste de una pieza puesta (`halo.ts`) como capas de la medida, en "multiplicar": una, o una por
+ *  parte si la pieza se abrió (cada una va con la suya). Vacío si no lleva. */
+export function halosEnMedida(ma: MaestroDatos, q: Acomodo["puestas"][number]): CapaSalida[] {
+  return dibujosDe(ma.piezas[q.pieza], q).flatMap((d) => haloDeDibujo(ma, d) ?? []);
+}
+
+function haloDeDibujo(ma: MaestroDatos, q: Dibujo<PiezaDatos>): CapaSalida | null {
+  const p = q.d, halo = haloDe(ma, p);
   if (!halo) return null;
   const mx = q.x - (p.solido.x - p.caja.x) * q.k - halo.pad * q.k, my = q.y - (p.solido.y - p.caja.y) * q.k - halo.pad * q.k;
   const x0 = Math.floor(mx) - 1, y0 = Math.floor(my) - 1, x1 = Math.ceil(mx + halo.w * q.k) + 1, y1 = Math.ceil(my + halo.h * q.k) + 1;
@@ -265,8 +280,8 @@ export function capasDeMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number
   const fx0 = Math.floor(f.x), fy0 = Math.floor(f.y), fx1 = Math.ceil(f.x + ma.w * f.k), fy1 = Math.ceil(f.y + ma.h * f.k);
   const fondo = aCapa(remuestrear(ma.fondo, ma.w, ma.h, f.k, f.x, f.y, fx0, fy0, fx1, fy1, "extender", false), fx0, fy0, fx1 - fx0, fy1 - fy0);
   const sombras = new Set(a.sombras ?? []);
-  const piezas = a.puestas.map((q): CapasPieza => {
-    const p = ma.piezas[q.pieza];
+  const piezas = a.puestas.flatMap((pq) => dibujosDe(ma.piezas[pq.pieza], pq).map((q): CapasPieza => {
+    const p = q.d, rol = ma.piezas[pq.pieza].rol;
     const ox = q.x - (p.solido.x - p.caja.x) * q.k, oy = q.y - (p.solido.y - p.caja.y) * q.k;
     /** Un mapa (caja de mw × mh con esquina en mx, my) remuestreado a su rectángulo, sin recortar a la medida. */
     const mapa = (src: Uint8ClampedArray, mw: number, mh: number, mx: number, my: number, premult: boolean) => {
@@ -279,20 +294,21 @@ export function capasDeMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number
     // Igual que `armarMedida`: con texto vuelto a escribir va la base y las letras nuevas encima (aquí, dentro de la
     // misma capa); si no, la pieza con su enfoque.
     const escribir = p.base && Math.abs(q.k - 1) >= ESCRIBIR_LEJOS_DE_1;
-    const escrito = escribir ? (op.texto?.(q.pieza, { k: q.k, ox, oy, x0, y0, x1, y1 }) ?? null) : null;
+    const escrito = escribir ? (op.texto?.(pq.pieza, { k: q.k, ox, oy, x0, y0, x1, y1 }, q.parte) ?? null) : null;
     const col = remuestrear(escrito && p.base ? p.base : p.rgba, p.caja.w, p.caja.h, q.k, ox, oy, x0, y0, x1, y1, "fuera", true);
-    if (!escrito && op.enfoque !== false && q.k < ENFOQUE_DESDE && DE_TEXTO.has(p.rol)) enfocar(col, w, alto, ENFOQUE);
+    if (!escrito && op.enfoque !== false && q.k < ENFOQUE_DESDE && DE_TEXTO.has(rol)) enfocar(col, w, alto, ENFOQUE);
     if (escrito)
       for (let i = 0; i < w * alto; i++) {
         const e = escrito[i * 4 + 3] / 255;
         for (let c = 0; c < 4; c++) col[i * 4 + c] = escrito[i * 4 + c] + col[i * 4 + c] * (1 - e);
       }
     return {
-      pieza: q.pieza,
-      halo: sombras.has(q.pieza) ? haloEnMedida(ma, q) : null,
+      pieza: pq.pieza,
+      parte: q.parte,
+      halo: sombras.has(pq.pieza) ? haloDeDibujo(ma, q) : null,
       sombra: s ? aCapa(s.v, s.x0, s.y0, s.x1 - s.x0, s.y1 - s.y0) : null,
       color: aCapa(col, x0, y0, w, alto),
     };
-  });
+  }));
   return { fondo, piezas };
 }

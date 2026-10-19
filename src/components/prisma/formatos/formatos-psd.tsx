@@ -493,7 +493,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
             // Otra medida en la fila ya falló con este archivo: ésta no vuelve a esperar al worker.
             if (sinEditable.has(archivo)) throw new FallaPsd("otro", "este archivo ya falló en otra medida");
             setPsdEstado("armando");
-            const [{ armarMedida, haloEnMedida }, { planDeMedida, retoqueDeFondo }] = await Promise.all([import("@/lib/prisma/formatos/nitido"), import("@/lib/prisma/formatos/psd-editable")]);
+            const [{ armarMedida, halosEnMedida }, { planDeMedida, retoqueDeFondo }] = await Promise.all([import("@/lib/prisma/formatos/nitido"), import("@/lib/prisma/formatos/psd-editable")]);
             // Un cuadro para que se vea «Armando…» antes del trabajo pesado. En una pestaña de fondo no se pinta nada (y el
             // navegador estira los relojes a 1 s): ahí no se espera.
             if (!document.hidden)
@@ -509,10 +509,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
               });
             if (!enPagina.current) return null;
             const sombras = new Set(acomodo.sombras ?? []);
-            const halos = acomodo.puestas.flatMap((q) => {
-              const capa = sombras.has(q.pieza) ? haloEnMedida(ma, q) : null;
-              return capa ? [{ nombre: ma.piezas[q.pieza].nombre, capa }] : [];
-            });
+            const halos = acomodo.puestas.flatMap((q) => (sombras.has(q.pieza) ? halosEnMedida(ma, q).map((capa) => ({ nombre: ma.piezas[q.pieza].nombre, capa })) : []));
             const retoque = ma.fondoOriginal ? retoqueDeFondo(ma.fondoOriginal, ma.fondo, ma.w, ma.h, acomodo.fondo, w, h) : null;
             const compuesto = armarMedida(ma, acomodo, w, h, { texto });
             const pedido: PedidoPsdMedida = { archivo, plan: planDeMedida({ piezas: ma.piezas, origen }, acomodo, w, h), extras: { compuesto, halos, retoque } };

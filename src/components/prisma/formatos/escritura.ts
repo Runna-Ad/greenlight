@@ -295,9 +295,12 @@ export function revisarTextos(maestros: MaestroListo[], t: Tipografias): Escritu
  */
 export function textoEscrito(e: Escritura | null, maestro: number, ma: MaestroListo, t: Tipografias): TextoEscrito | undefined {
   if (!e?.piezas.size) return undefined;
-  return (pieza: number, l: Lugar) => {
-    const listos = e.piezas.get(clavePieza(maestro, pieza));
-    if (!listos) return null;
+  return (pieza: number, l: Lugar, parte: number | null) => {
+    const todos = e.piezas.get(clavePieza(maestro, pieza));
+    // Una parte (pieza abierta en el editor) escribe sólo sus textos: son los mismos objetos que los de su pieza.
+    const d = parte === null ? ma.piezas[pieza] : ma.piezas[pieza]?.partes?.[parte];
+    const listos = d && todos && (parte === null ? todos : todos.filter((s) => d.textos.includes(s.tp)));
+    if (!d || !listos?.length) return null;
     const w = l.x1 - l.x0, h = l.y1 - l.y0;
     const lienzo = document.createElement("canvas");
     try {
@@ -305,7 +308,7 @@ export function textoEscrito(e: Escritura | null, maestro: number, ma: MaestroLi
       lienzo.height = h;
       const x = lienzo.getContext("2d", { willReadFrequently: true });
       if (!x) return null;
-      const caja = ma.piezas[pieza].caja;
+      const caja = d.caja;
       for (const s of listos) {
         x.globalAlpha = s.tp.opacidad;
         // De la mesa a este rectángulo: la esquina de la caja de la pieza cae en (ox, oy); más el corrimiento de la prueba.

@@ -12,9 +12,9 @@
  */
 import type { Layer, Psd } from "ag-psd";
 import type { Acomodo } from "./acomodo.ts";
-import { armarMedida, capasDeMedida, type CapaSalida, type MaestroDatos, type TextoEscrito } from "./nitido.ts";
+import { armarMedida, capasDeMedida, type CapaSalida, type CapasPieza, type MaestroDatos, type TextoEscrito } from "./nitido.ts";
 
-type MaestroConNombres = MaestroDatos & { piezas: (MaestroDatos["piezas"][number] & { nombre: string })[] };
+type MaestroConNombres = MaestroDatos & { piezas: (MaestroDatos["piezas"][number] & { nombre: string; partes?: readonly { nombre: string }[] })[] };
 
 /** Nombre de la carpeta del fondo, el de la guía de diseño de DiDi. */
 export const CARPETA_FONDO = "BACKGROUND";
@@ -32,6 +32,13 @@ const capa = (name: string, c: CapaSalida, extra: Partial<Layer> = {}): Layer =>
 /** El documento PSD de la medida W × H: lo mismo que la tarjeta, en capas. `children` va de abajo hacia arriba. */
 export function psdDeMedida(ma: MaestroConNombres, a: Acomodo, W: number, H: number, op: { texto?: TextoEscrito } = {}): Psd {
   const { fondo, piezas } = capasDeMedida(ma, a, W, H, op);
+  // Una pieza abierta en el editor trae una capa por parte (seguidas): van juntas en la carpeta de su pieza.
+  const carpetas: CapasPieza[][] = [];
+  for (const c of piezas) {
+    const ultima = carpetas.at(-1);
+    if (ultima && ultima[0].pieza === c.pieza) ultima.push(c);
+    else carpetas.push([c]);
+  }
   return {
     width: W,
     height: H,
@@ -39,15 +46,18 @@ export function psdDeMedida(ma: MaestroConNombres, a: Acomodo, W: number, H: num
     imageData: { width: W, height: H, data: armarMedida(ma, a, W, H, op) } as ImageData,
     children: [
       { name: CARPETA_FONDO, opened: true, children: [capa("Fondo", fondo)] },
-      ...piezas.map(({ pieza, halo, sombra, color }): Layer => {
-        const nombre = ma.piezas[pieza].nombre;
+      ...carpetas.map((capas): Layer => {
+        const p = ma.piezas[capas[0].pieza];
         return {
-          name: nombre,
+          name: p.nombre,
           opened: true,
+          // Las sombras de contraste primero, debajo de todas sus partes (como `armarMedida`).
           children: [
-            ...(halo ? [capa(CAPA_SOMBRA_CONTRASTE, halo, { blendMode: "multiply" })] : []),
-            ...(sombra ? [capa(`${nombre} · sombra`, sombra, { blendMode: "multiply" })] : []),
-            capa(nombre, color),
+            ...capas.flatMap(({ halo }) => (halo ? [capa(CAPA_SOMBRA_CONTRASTE, halo, { blendMode: "multiply" })] : [])),
+            ...capas.flatMap(({ parte, sombra, color }) => {
+              const nombre = (parte !== null && p.partes?.[parte]?.nombre) || p.nombre;
+              return [...(sombra ? [capa(`${nombre} · sombra`, sombra, { blendMode: "multiply" })] : []), capa(nombre, color)];
+            }),
           ],
         };
       }),

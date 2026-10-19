@@ -9,7 +9,7 @@ import type { Caja } from "./psd.ts";
 
 export type Halo = { pad: number; w: number; h: number; mapa: Uint8ClampedArray };
 type PiezaHalo = { caja: Caja; rgba: Uint8ClampedArray; letraMinPx?: number | null };
-type MaestroHalo = { w: number; h: number; fondo: Uint8ClampedArray; piezas: readonly PiezaHalo[] };
+type MaestroHalo = { w: number; h: number; fondo: Uint8ClampedArray };
 
 /** Qué tan oscuro queda junto a las letras (0-1). */
 const FUERZA = 0.55;
@@ -23,9 +23,9 @@ const LLENO = 1.6;
 
 const hechos = new WeakMap<object, Halo | null>();
 
-/** La sombra de la pieza `i` del maestro, una vez por pieza. null si la pieza no trae píxeles completos. */
-export function haloDe(ma: MaestroHalo, i: number): Halo | null {
-  const p = ma.piezas[i];
+/** La sombra de una pieza del maestro (o de una de sus partes, si se abrió: cada una lleva la suya), una vez por
+ *  pieza. null si no trae píxeles completos. */
+export function haloDe(ma: MaestroHalo, p: PiezaHalo | undefined): Halo | null {
   if (!p) return null;
   const ya = hechos.get(p);
   if (ya !== undefined) return ya;

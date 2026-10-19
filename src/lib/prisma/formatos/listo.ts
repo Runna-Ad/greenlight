@@ -3,7 +3,7 @@
  * SIN la librería de PSD: la pantalla sólo importa de aquí, así `ag-psd` vive en el worker y no en la página.
  */
 import type { ExtrasEditable, NotaCapa, PlanEditable } from "./psd-editable.ts";
-import type { Caja, MaestroPsd, MotivoPsd, Origen, Rol, TextoPieza } from "./psd.ts";
+import type { Caja, MaestroPsd, MotivoPsd, Origen, PartePsd, Rol, TextoPieza } from "./psd.ts";
 
 /** Tope de lo que se LEE de un PSD: sus capas y su copia aplanada, ya sin los originales de los objetos inteligentes
  *  ni los filtros inteligentes (`adelgazar.ts`). El PSD real del equipo pesa 72 MB en disco y 22 MB así. */
@@ -52,7 +52,14 @@ export type PiezaLista = {
   /** La pieza sin sus textos (RGBA, caja.w × caja.h), para cuando el texto se vuelve a escribir. */
   base: Uint8ClampedArray | null;
   textos: TextoPieza[];
+  /** Sus partes (subcarpetas), de abajo hacia arriba, para moverlas solas en el editor (`PartePsd`). */
+  partes?: ParteLista[];
+  /** Con partes: cuál carpeta de la mesa es (`PiezaPsd.carpeta`). */
+  carpeta?: number;
 };
+/** Una parte de una pieza, en el formato que la pantalla pinta (como `PiezaLista`). Sus textos son los MISMOS objetos
+ *  que los de su pieza. */
+export type ParteLista = Pick<PiezaLista, "caja" | "solido" | "letraMinPx" | "rgba" | "oscurece" | "base" | "textos"> & Pick<PartePsd, "nombre" | "hijo" | "rellenoPct" | "tapadaPor">;
 export type MaestroListo = {
   nombre: string;
   w: number;
@@ -112,13 +119,18 @@ export function prepararMaestro(ma: MaestroPsd): { maestro: MaestroListo; transf
     h: ma.h,
     origen: ma.origen,
     fondo: opaco(ma.fondo),
-    piezas: ma.piezas.map((p) => ({ nombre: p.nombre, rol: p.rol, caja: p.caja, solido: p.solido, letraMinPx: p.letraMinPx, rgba: p.rgba, oscurece: p.oscurece ? opaco(p.oscurece) : null, base: p.base, textos: p.textos })),
+    piezas: ma.piezas.map((p) => ({
+      nombre: p.nombre, rol: p.rol, caja: p.caja, solido: p.solido, letraMinPx: p.letraMinPx, rgba: p.rgba, oscurece: p.oscurece ? opaco(p.oscurece) : null, base: p.base, textos: p.textos,
+      ...(p.partes ? { carpeta: p.carpeta, partes: p.partes.map((q) => ({ nombre: q.nombre, hijo: q.hijo, rellenoPct: q.rellenoPct, tapadaPor: q.tapadaPor, caja: q.caja, solido: q.solido, letraMinPx: q.letraMinPx, rgba: q.rgba, oscurece: q.oscurece ? opaco(q.oscurece) : null, base: q.base, textos: q.textos })) } : {}),
+    })),
     textoGamma: ma.textoGamma,
     avisos: ma.avisos,
   };
-  // Un búfer repetido en la lista de transferencia tumba el postMessage: se manda cada uno una vez.
-  const transferibles = [...new Set([maestro.fondo.buffer, ...maestro.piezas.flatMap((p) => [p.rgba.buffer, ...(p.oscurece ? [p.oscurece.buffer] : []), ...(p.base ? [p.base.buffer] : []), ...p.textos.map((t) => t.alfa.buffer)])])];
-  const bytes = maestro.fondo.length + maestro.piezas.reduce((s, p) => s + p.rgba.length + (p.oscurece?.length ?? 0) + (p.base?.length ?? 0) + p.textos.reduce((t, x) => t + x.alfa.length, 0), 0);
+  // Un búfer repetido en la lista de transferencia tumba el postMessage: se manda cada uno una vez (los textos de una
+  // parte son los de su pieza). Lo que pesa son esos mismos búferes, contados una vez.
+  const dibujos = maestro.piezas.flatMap((p) => [p, ...(p.partes ?? [])]);
+  const transferibles = [...new Set([maestro.fondo.buffer, ...dibujos.flatMap((p) => [p.rgba.buffer, ...(p.oscurece ? [p.oscurece.buffer] : []), ...(p.base ? [p.base.buffer] : []), ...p.textos.map((t) => t.alfa.buffer)])])];
+  const bytes = transferibles.reduce((s, b) => s + b.byteLength, 0);
   return { maestro, transferibles, bytes };
 }
 

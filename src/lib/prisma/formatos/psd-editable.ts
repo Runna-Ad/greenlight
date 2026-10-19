@@ -36,7 +36,12 @@ export type PlanEditable = {
   /** Qué pieza va encima de cuál en esta medida (nombres, de abajo hacia arriba), como la pinta la tarjeta. Falta =
    *  el orden del original. */
   orden?: string[];
+  /** Las piezas que se abrieron en partes en el editor (su nombre y `carpeta`: su lugar entre los hijos de la mesa): el
+   *  movimiento de cada parte (`hijo`: su subcarpeta entre los hijos de la carpeta; null = las capas sueltas) y, si
+   *  cambió, qué parte va encima de cuál (sus `hijo`, de abajo hacia arriba). La carpeta misma se mueve con su pieza. */
+  partes?: PartesEditable[];
 };
+export type PartesEditable = { pieza: string; carpeta: number; partes: { hijo: number | null; A: Afin }[]; orden?: (number | null)[] };
 /** Lo que la página ya pintó y va encima de las capas del original. */
 export type ExtrasEditable = {
   /** La medida tal cual la tarjeta (W × H, RGBA): la imagen aplanada del PSD (miniatura y programas sin capas). */
@@ -71,10 +76,30 @@ const MISMA = 1e-9;
  * El movimiento de cada carpeta en una medida, del documento original a la medida: lo mismo que pinta `armarMedida`.
  * Una pieza puesta lleva su parte sólida a (q.x, q.y) con escala q.k; el fondo pone su esquina en (fondo.x, fondo.y).
  */
-export function planDeMedida(ma: { piezas: readonly { nombre: string; solido: { x: number; y: number } }[]; origen: Origen }, a: Acomodo, W: number, H: number): PlanEditable {
+export function planDeMedida(
+  ma: { piezas: readonly { nombre: string; solido: { x: number; y: number }; carpeta?: number; partes?: readonly { hijo: number | null; solido: { x: number; y: number } }[] }[]; origen: Origen },
+  a: Acomodo,
+  W: number,
+  H: number,
+): PlanEditable {
   const o = ma.origen;
   const fk = a.fondo.k * o.s;
   const puestas = new Map(a.puestas.map((q) => [q.pieza, q]));
+  /** El movimiento que lleva la parte sólida de `s` a (q.x, q.y) con escala q.k (lo mismo para una pieza o una parte). */
+  const afin = (q: { k: number; x: number; y: number }, s: { x: number; y: number }): Afin => {
+    const k = q.k * o.s;
+    return { k, x: q.x - q.k * s.x - k * o.x, y: q.y - q.k * s.y - k * o.y };
+  };
+  const partes = a.puestas.flatMap((q): PartesEditable[] => {
+    const p = ma.piezas[q.pieza];
+    if (!q.partes?.length || !p.partes || p.carpeta === undefined) return [];
+    const suyas = q.partes.flatMap((pp) => {
+      const d = p.partes?.[pp.parte];
+      return d ? [{ hijo: d.hijo, A: afin(pp, d.solido), parte: pp.parte }] : [];
+    });
+    const cambio = suyas.some((x, i) => i > 0 && x.parte < suyas[i - 1].parte);
+    return [{ pieza: p.nombre, carpeta: p.carpeta, partes: suyas.map(({ hijo, A }) => ({ hijo, A })), ...(cambio ? { orden: suyas.map((x) => x.hijo) } : {}) }];
+  });
   return {
     W,
     H,
@@ -82,13 +107,12 @@ export function planDeMedida(ma: { piezas: readonly { nombre: string; solido: { 
     fondo: { k: fk, x: a.fondo.x - fk * o.x, y: a.fondo.y - fk * o.y },
     piezas: ma.piezas.map((p, i): [string, Afin | null] => {
       const q = puestas.get(i);
-      if (!q) return [p.nombre, null];
-      const k = q.k * o.s;
-      return [p.nombre, { k, x: q.x - q.k * p.solido.x - k * o.x, y: q.y - q.k * p.solido.y - k * o.y }];
+      return [p.nombre, q ? afin(q, p.solido) : null];
     }),
     // Sólo si alguien cambió el orden (el automático va en el del maestro): sin cambio, el PSD sale con el orden del
     // original tal cual, aunque dos carpetas se llamen igual (una sola pieza) y tengan otra en medio.
     ...(a.puestas.some((q, i) => i > 0 && q.pieza < a.puestas[i - 1].pieza) ? { orden: a.puestas.map((q) => ma.piezas[q.pieza].nombre) } : {}),
+    ...(partes.length ? { partes } : {}),
   };
 }
 
@@ -300,14 +324,15 @@ function moverOrigen(d: KeyDescriptorItem, A: Afin): KeyDescriptorItem {
   return out;
 }
 
-/** Una capa (y lo que tenga adentro) movida con `A`. No toca la original. */
-function mover(l: Layer, A: Afin, W: number, H: number, px: PixelesDe, notas: NotaCapa[]): Layer {
+/** Una capa (y lo que tenga adentro) movida con `A`. No toca la original. `deHijo`: en la carpeta de una pieza abierta
+ *  en partes, el movimiento de cada hijo (el de su parte); la carpeta misma va con `A`. */
+function mover(l: Layer, A: Afin, W: number, H: number, px: PixelesDe, notas: NotaCapa[], deHijo?: (i: number) => Afin): Layer {
   const out: Layer = { ...l };
   delete out.rawData;
   delete out.canvas;
   delete out.imageData;
   if (l.children) {
-    out.children = l.children.map((c) => mover(c, A, W, H, px, notas));
+    out.children = l.children.map((c, i) => mover(c, deHijo ? deHijo(i) : A, W, H, px, notas));
   } else {
     const img = (l.right ?? 0) > (l.left ?? 0) && (l.bottom ?? 0) > (l.top ?? 0) ? px.capa(l) : undefined;
     const c = img && moverPixeles(img, l.left ?? 0, l.top ?? 0, A, W, H);
@@ -368,29 +393,77 @@ const capaSalida = (name: string, c: CapaSalida, extra: Partial<Layer> = {}): La
 
 /** Cómo se mueve cada capa de primer nivel de la mesa: su pieza, o el fondo. `pieza`: el nombre de la pieza PUESTA en
  *  esta medida que es esta capa (no en sus recortadas), para el orden. */
-type Paso = { l: Layer; nombre: string; A: Afin; quitada: boolean; halo: CapaSalida | undefined; pieza: string | null };
+type Paso = { l: Layer; nombre: string; A: Afin; quitada: boolean; halos: CapaSalida[]; pieza: string | null; partes?: PartesEditable };
 
 /**
  * El movimiento de cada capa de primer nivel, antes de tocar un píxel. Una capa recortada (clipping) va con la de abajo
  * a la que se recorta: su mismo movimiento y, si esa pieza se quitó, oculta también. Lo oculto, el fondo y lo que no
  * es pieza (un ajuste suelto) se mueven con el fondo; una pieza quitada en esta medida va con el fondo y oculta.
  */
-function pasosDe(mesa: Layer[], plan: PlanEditable, halos: Map<string, CapaSalida>): Paso[] {
+function pasosDe(mesa: Layer[], plan: PlanEditable, halos: Map<string, CapaSalida[]>): Paso[] {
   const piezas = new Map(plan.piezas);
+  const partes = new Map((plan.partes ?? []).map((x) => [x.carpeta, x]));
   let base: { A: Afin; quitada: boolean } = { A: plan.fondo, quitada: false };
-  return mesa.map((l): Paso => {
+  return mesa.map((l, i): Paso => {
     const nombre = nombreDeCapa(l.name);
-    let halo: CapaSalida | undefined;
+    let suyos: CapaSalida[] = [];
     let puesta: string | null = null;
+    let abierta: PartesEditable | undefined;
     if (!l.clipping) {
       const pieza = l.hidden || rolDe(nombre) === "BACKGROUND" ? undefined : piezas.get(nombre);
       base = { A: pieza ?? plan.fondo, quitada: pieza === null };
-      halo = pieza ? halos.get(nombre) : undefined;
-      if (halo) halos.delete(nombre);
+      suyos = (pieza && halos.get(nombre)) || [];
+      if (suyos.length) halos.delete(nombre);
       if (pieza) puesta = nombre;
+      // Sólo una carpeta se abre en partes: la de la pieza (salió de UNA, `gruposDe`), por su lugar en la mesa.
+      const suya = partes.get(i);
+      if (pieza && l.children && suya?.pieza === nombre) abierta = suya;
     }
-    return { l, nombre, ...base, halo, pieza: puesta };
+    return { l, nombre, ...base, halos: suyos, pieza: puesta, partes: abierta };
   });
+}
+
+/**
+ * La carpeta de una pieza abierta en partes, movida: cada subcarpeta que es parte con su movimiento, las capas sueltas
+ * con el de las sueltas (null), y una recortada con la capa a la que se recorta. Lo demás (una subcarpeta oculta o
+ * vacía, que no es parte) va con la pieza, como la carpeta misma. Con `orden`, las partes cambian de lugar entre sí
+ * dentro de la carpeta (lo que no es parte se queda donde estaba).
+ */
+function moverConPartes(l: Layer, A: Afin, abierta: PartesEditable, W: number, H: number, px: PixelesDe, notas: NotaCapa[]): Layer {
+  const { claves, deHijo } = hijosDe(l, A, abierta);
+  const movida = mover(l, A, W, H, px, notas, deHijo);
+  if (!abierta.orden?.length || !movida.children) return movida;
+  // Bloques: un hijo que no se recorta más los recortados que lo siguen. Los de una parte se reparten en los lugares que
+  // ya ocupaban partes, en el orden nuevo; las sueltas (varios bloques) conservan su orden entre ellas.
+  const rango = new Map(abierta.orden.map((h, i) => [h, i]));
+  const bloques: { clave: number | null | undefined; capas: Layer[] }[] = [];
+  movida.children.forEach((h, i) => {
+    if (h.clipping && bloques.length) bloques[bloques.length - 1].capas.push(h);
+    else bloques.push({ clave: claves[i], capas: [h] });
+  });
+  const esParte = (b: (typeof bloques)[number]) => b.clave !== undefined && rango.has(b.clave);
+  const deLasPartes = bloques.filter(esParte).sort((x, y) => rango.get(x.clave as number | null)! - rango.get(y.clave as number | null)!);
+  let k = 0;
+  movida.children = bloques.flatMap((b) => (esParte(b) ? deLasPartes[k++] : b).capas);
+  return movida;
+}
+
+/** De qué parte es cada hijo de la carpeta de una pieza abierta (su `hijo`; null = las sueltas; undefined = no es parte
+ *  y va con la pieza), y su movimiento. Una recortada va con la capa a la que se recorta. Lo usan el tope de cada medida
+ *  y el que mueve las capas: los dos miden lo mismo. */
+function hijosDe(l: Layer, A: Afin, abierta: PartesEditable): { claves: (number | null | undefined)[]; deHijo: (i: number) => Afin } {
+  const hijos = l.children ?? [];
+  const deParte = new Map(abierta.partes.map((x) => [x.hijo, x.A]));
+  const claveDe = (i: number): number | null | undefined => (hijos[i].children ? (deParte.has(i) ? i : undefined) : deParte.has(null) ? null : undefined);
+  const claves: (number | null | undefined)[] = [];
+  hijos.forEach((h, i) => claves.push(h.clipping && i > 0 ? claves[i - 1] : claveDe(i)));
+  return {
+    claves,
+    deHijo: (i) => {
+      const c = claves[i];
+      return c === undefined ? A : (deParte.get(c) ?? A);
+    },
+  };
 }
 
 /**
@@ -438,7 +511,7 @@ function revisarTopes(pasos: Paso[], W: number, H: number, extra: number): void 
     if (px > EDITABLE_PX_MAX) throw new TopeEditable(`las capas de la mesa suman más de ${EDITABLE_PX_MAX / 1e6} millones de píxeles`, true);
     for (const c of l.children ?? []) delArchivo(c);
   };
-  const deLaMedida = (l: Layer, A: Afin) => {
+  const deLaMedida = (l: Layer, A: Afin, deHijo?: (i: number) => Afin) => {
     const nombre = nombreDeCapa(l.name);
     for (const c of cajas(l)) {
       const { w, h } = medida(c);
@@ -448,10 +521,11 @@ function revisarTopes(pasos: Paso[], W: number, H: number, extra: number): void 
       salida += m.w * m.h;
     }
     if (salida > EDITABLE_SALIDA_PX_MAX) throw new TopeEditable(`en esta medida las capas sumarían más de ${EDITABLE_SALIDA_PX_MAX / 1e6} millones de píxeles`, false);
-    for (const c of l.children ?? []) deLaMedida(c, A);
+    (l.children ?? []).forEach((c, i) => deLaMedida(c, deHijo ? deHijo(i) : A));
   };
   for (const p of pasos) delArchivo(p.l);
-  for (const p of pasos) deLaMedida(p.l, p.A);
+  // Una pieza abierta: cada hijo con el movimiento de su parte, como lo va a mover `moverConPartes`.
+  for (const p of pasos) deLaMedida(p.l, p.A, p.partes && hijosDe(p.l, p.A, p.partes).deHijo);
 }
 
 
@@ -471,7 +545,9 @@ function idsUsados(capas: Layer[], ids = new Set<string>()): Set<string> {
 export function psdEditable(fuente: Psd, plan: PlanEditable, extras: ExtrasEditable, px: PixelesDe): { psd: Psd; notas: NotaCapa[] } {
   const notas: NotaCapa[] = [];
   const mesa = mesaDe(fuente, plan.origen);
-  const pasos = ordenarPasos(pasosDe(mesa.capas, plan, new Map(extras.halos.map((h) => [h.nombre, h.capa]))), plan.orden);
+  const halos = new Map<string, CapaSalida[]>();
+  for (const h of extras.halos) halos.set(h.nombre, [...(halos.get(h.nombre) ?? []), h.capa]);
+  const pasos = ordenarPasos(pasosDe(mesa.capas, plan, halos), plan.orden);
   // La capa del color de la mesa también cuenta en el tope de salida.
   revisarTopes(pasos, plan.W, plan.H, mesa.color ? plan.W * plan.H : 0);
   const hijos: Layer[] = [];
@@ -491,16 +567,14 @@ export function psdEditable(fuente: Psd, plan: PlanEditable, extras: ExtrasEdita
   const ultimoFondo = debajo >= 0 ? debajo : pasos.findLastIndex(esFondo);
   let finFondo = ultimoFondo;
   while (finFondo + 1 < pasos.length && pasos[finFondo + 1].l.clipping) finFondo++;
-  pasos.forEach(({ l, A, quitada, halo }, i) => {
-    const movida = mover(l, A, plan.W, plan.H, px, notas);
+  pasos.forEach(({ l, A, quitada, halos: suyos, partes }, i) => {
+    const movida = partes ? moverConPartes(l, A, partes, plan.W, plan.H, px, notas) : mover(l, A, plan.W, plan.H, px, notas);
     if (quitada) movida.hidden = true;
-    if (halo) {
-      // La sombra de contraste va justo debajo de la carpeta de su pieza, como la pinta la tarjeta. Dentro de la carpeta
-      // cambiaría lo que se ve: su caja es opaca (blanco = no oscurece), así que el estilo de capa de la carpeta, su
-      // máscara vectorial o una capa recortada a la carpeta tomarían la caja entera como forma. (Una pieza nunca está
-      // recortada: lo recortado va con su base, `pasosDe`.)
-      hijos.push(capaSalida(CAPA_SOMBRA_CONTRASTE, halo, { blendMode: "multiply" }));
-    }
+    // La sombra de contraste va justo debajo de la carpeta de su pieza, como la pinta la tarjeta (una por parte si la
+    // pieza se abrió). Dentro de la carpeta cambiaría lo que se ve: su caja es opaca (blanco = no oscurece), así que el
+    // estilo de capa de la carpeta, su máscara vectorial o una capa recortada a la carpeta tomarían la caja entera como
+    // forma. (Una pieza nunca está recortada: lo recortado va con su base, `pasosDe`.)
+    for (const halo of suyos) hijos.push(capaSalida(CAPA_SOMBRA_CONTRASTE, halo, { blendMode: "multiply" }));
     hijos.push(movida);
     if (extras.retoque && i === finFondo) {
       const capa = capaSalida(CAPA_RETOQUE, extras.retoque);

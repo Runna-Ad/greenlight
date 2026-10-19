@@ -1175,3 +1175,34 @@ TAGS: #teclado #accesibilidad #atajos #formatos #editor
 [2026-10-19] LESSON (marcar "lo que se movió" en una lista reordenada): marqué «otra capa» a toda pieza cuya posición era distinta de la automática. Subir el CTA del fondo al frente marcaba las 5, porque las otras 4 bajaron un lugar sin que nadie las tocara.
 RULE: lo "movido" en una permutación son las menos piezas que, sacadas, dejan a las demás en orden: las que quedan fuera de la subsecuencia creciente más larga. Comparar índices uno a uno marca de más.
 TAGS: #ux #listas #orden #formatos
+
+[2026-10-19] LESSON (una pieza hija hereda la escala de su madre: los topes sólo frenan lo propio): al abrir una pieza en partes, cada parte pasaba por el tope de tamaño mínimo de una pieza (6 px de lado corto). En 320×50 la pieza entera ya está más chica que eso, así que el tope AGRANDABA sus partes al abrirla sin mover nada: 208 niveles de diferencia. Lo encontré midiendo "abrir sin mover pinta igual" en las 5 medidas, no en la de 1200×1500 (ahí daba 0).
+ROOT CAUSE: apliqué a la escala final de la parte (la de su pieza × la suya) el tope que es para lo que la persona decide.
+RULE: cuando algo hereda una transformación, sus topes se aplican sólo a lo que cambia él (aquí: el tope nunca baja de la escala que ya trae la pieza ni sube de ella). Y la prueba de "sin cambios = igual" se corre en la medida más chica, no sólo en la del maestro.
+TAGS: #formatos #partes #escala #pruebas
+
+[2026-10-19] LESSON (un ayudante que devuelve JSX dentro de un componente se LLAMA, no se usa como <Etiqueta/>): escribí `const Marco = (...) => <button/>` dentro del editor y lo usé como `<Marco/>`. React lo toma como un componente nuevo en cada render: lo desmonta y lo vuelve a montar, y con eso se pierden el foco y la captura del puntero a medio arrastre. Lo vi al releer, antes de probarlo. Luego el lint de React (react-hooks/refs) marcó otro: pasarle funciones que tocan refs a un ayudante que devuelve JSX; con los `onClick` escritos dentro del JSX del ayudante, pasa.
+RULE: dentro de un componente, un pedazo de JSX repetido es una función que se llama (`marcoDe(i, j, q)`) y sus manejadores se escriben en el propio JSX, no se reciben como parámetros.
+TAGS: #react #componentes #foco #lint #editor
+
+[2026-10-19] LESSON (un clic que es una orden no debe mover el foco): cerrar la pieza abierta con un clic en la vista dejaba el foco en el diálogo (el navegador enfoca lo que se clica después del pointerdown), y las flechas ya no movían la pieza. `preventDefault()` en ese pointerdown deja el foco donde lo pone el efecto (la pieza).
+RULE: un pointerdown que ejecuta algo y luego pone el foco a propósito lleva `preventDefault()`; probar con un clic de verdad (no un evento sintético) y mirar `document.activeElement`.
+TAGS: #foco #accesibilidad #editor #navegador
+
+[2026-10-19] LESSON (la captura de pantalla puede llegar antes que el cuadro nuevo): tras un arrastre con la herramienta del navegador, la captura mostraba la parte en su lugar viejo y concluí que el arrastre no había pasado; al leer su caja en el DOM ya se había movido 99 px (luego la moví otros 100 por error).
+RULE: después de un arrastre o un clic, leer la posición o el estado del DOM antes de decidir que no pasó; la captura sólo para ver cómo se ve.
+TAGS: #navegador #pruebas #capturas
+
+[2026-10-19] LESSON (dos de al lado que cambian de lugar es un empate): la marca «otra capa» sale de la subsecuencia creciente más larga, y con un solo paso (subir una capa) hay dos igual de largas: marcó «Iconos» cuando yo había movido el legal. Lo vi en el navegador, no en las pruebas (la prueba sólo contaba "una de las dos").
+ROOT CAUSE: la regla "las menos que, sacadas, dejan a las demás en orden" no dice cuál cuando hay empate, y el paso más común (un lugar) siempre empata.
+RULE: con empate, gana lo que la persona movió: guardar qué movió en la sesión y, a igual largo, quedarse con la subsecuencia que deja más de las NO movidas. Una prueba de "una de dos" no prueba cuál.
+TAGS: #ux #listas #orden #formatos #pruebas
+
+[2026-10-19] LESSON (una prueba que no puede fallar no prueba nada): la primera prueba del tope del PSD editable puso las partes 60 veces más grandes con su esquina en (0, 0) del documento: quedaron fuera de la medida, el recorte las dejó en 0 px y no había nada que medir. Pasaba o fallaba igual con el arreglo o sin él.
+ROOT CAUSE: no la corrí contra el código viejo; supuse que "60 veces" ya era grande.
+RULE: una prueba de un arreglo se corre una vez SIN el arreglo (quitarlo, ver que falla, volver a ponerlo) antes de contarla.
+TAGS: #pruebas #regresion #psd #editable
+
+[2026-10-19] LESSON (la consola del navegador guarda todo desde que se abrió la pestaña): leer los errores después de varios cambios trajo 20 errores de horas antes (pruebas forzadas, archivos a medio editar), y parecían nuevos.
+RULE: antes de una corrida limpia, recargar y escribir una marca (`console.error("MARCA-…")`); contar sólo lo que viene después de ella.
+TAGS: #navegador #pruebas #consola

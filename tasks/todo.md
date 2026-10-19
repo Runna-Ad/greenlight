@@ -682,8 +682,81 @@ largo: estacionado por él.
         un orden roto); sin orden cambiado el PSD editable sale con el orden del original (dos carpetas del mismo nombre
         con otra en medio no se juntan). Aceptado: la clave del navegador sigue en v2 (sólo preview; una pestaña vieja
         no ve el orden). test-formatos 369/0; mutaciones 3/3 en lo nuevo.
-      **Next Step:** paso 2b (partes): planearlo y proponerlo a Pedro antes de construir.
-      **Paso 2b — partes (subcarpetas):** se planea al terminar 2a.
+      **Paso 2b — partes (subcarpetas)** (Pedro, 2026-10-19, eligió: "Double-click to open", "Yes, parts stay
+      attached", "Only inside its piece", "Fill and warn"):
+      · Lo que ve el diseñador: doble clic (o Enter) sobre una pieza la abre; adentro cada parte tiene su marco y se
+        mueve o cambia de tamaño sola; Esc (o clic fuera) la cierra. Mover la pieza después mueve sus partes con ella
+        (lo de cada parte se guarda relativo a su pieza). El orden de las partes se cambia sólo dentro de su pieza. Lo
+        que una parte tapaba de otra se rellena, y la tarjeta dice «Revisar» si el relleno es grande (el tope se fija
+        midiendo s33).
+      · Las 12 medidas automáticas NO cambian: una pieza con las partes sin tocar se pinta igual que hoy.
+      - [x] Lectura (psd.ts): `CapaPsd.parte` = la subcarpeta directa de la carpeta de su pieza (clave: posición +
+            nombre; null = suelta, y las sueltas van juntas como la parte «resto»). Lo más hondo se queda dentro de su
+            parte. Hay partes sólo si la pieza sale de UNA carpeta de arriba y trae 2 o más partes con algo visible;
+            las vacías u ocultas no cuentan.
+      - [x] Despiece (`despiezarMesa`): una segunda pasada dentro de la caja de cada pieza con partes: lo de abajo
+            (lo que había antes de la pieza) más las partes en el orden de su primera capa; el color de cada parte se
+            des-mezcla igual que el de las piezas. Lo que tapa una parte de arriba se rellena (`rellenarSuave` /
+            `rellenar`) y se mide (tapada por parte) sólo para avisar: una parte nunca rechaza el maestro. Cada parte
+            trae lo suyo: textos, base, oscurece, letraMinPx, sólido, caja.
+      - [x] Modelo: `PiezaLista.partes?: ParteLista[]`; los campos de la pieza no cambian. Búferes transferidos.
+      - [x] Edición: `Edicion.partes?` (por pieza, por parte: `{x,y,k}` relativo a la pieza) y `ordenPartes?` (por
+            pieza). `leerEdicion` lo valida (lo guardado antes se sigue leyendo); la firma de la caché lo lleva.
+            `aplicarEdicion` abre en partes (`Puesta.parte?`) sólo las piezas con partes tocadas.
+      - [x] Una sola función dice qué se pinta de una puesta (la pieza o una parte) y reemplaza las ~18 lecturas de
+            `ma.piezas[q.pieza]` (nitido, sombra, revisar, escritura, psd-salida, letras de acomodo, editor, gemela,
+            formatos-psd). Texto reescrito: `TextoEscrito` recibe la parte y escribe sólo los textos de ella.
+      - [x] PSD editable: `plan.partes` (posición de la subcarpeta → su movimiento). Las capas de una pieza abierta se
+            mueven con su parte (las sueltas con «resto»); la carpeta de la pieza con la pieza; las subcarpetas se
+            reordenan con `ordenPartes`; la sombra de contraste, junta, debajo de la carpeta. PSD de capas planas:
+            una capa por parte dentro de la carpeta de la pieza.
+      - [x] Editor: doble clic / Enter abre la pieza, Esc la cierra; marcos de las partes; en «Capas» la pieza se
+            despliega con sus partes y «Más al frente / Más atrás» dentro de ella; «Volver al automático» por parte;
+            el aviso del relleno.
+      **Verificación 2b:** s33 lee 3 piezas con partes (Legales: Iconos + legal; Copy: Subtítulo + Hasta; Logo:
+      buenfin + logo con divisor) y las demás sin partes; las 12 medidas sin tocar salen idénticas a las de hoy
+      (píxel por píxel); una parte movida: tarjeta, PNG y los dos PSD (el editable con la subcarpeta movida y nada
+      perdido); la pieza movida lleva sus partes; orden de partes; lo guardado antes se lee; mutaciones; navegador
+      (localhost, s33): abrir Legales con doble clic, mover el legal, Esc, mover la pieza, guardar, recargar, bajar y
+      leer de vuelta; revisión en paralelo; tsc, eslint, npm test, build.
+      · Hecho y medido (2026-10-19, Pedro: "Yes, build delivery 2b in the order you listed"): s33 da las 3 piezas con
+        partes que se esperaban (Legales: Iconos + el legal; Copy: Subtitulo + Hasta; Logo: logo y divisor sueltos +
+        buenfin), 0 % de relleno, y rearmar con las partes en su lugar da 0 píxeles distintos. Las 12 medidas sin tocar,
+        con el código de HEAD y el de ahora: 12 de 12 idénticas (píxeles, capas, avisos y plan del PSD editable). Abrir
+        las piezas sin mover nada: a 1200×1500 igual (0); en otras medidas, la orilla del filtro entre partes (máx. 6, 5,
+        3 niveles; 320×50 hasta 30 en 57 px: las partes quedan a 3 px). test-formatos 407/0 (28 nuevas, sección "2b").
+        Navegador (localhost, s33, 1200×627): doble clic abre Legales (foco en su parte de enfrente), arrastrar el legal,
+        Esc cierra (foco en Legales), Mayús+flecha mueve la pieza y el legal va con ella, Enter abre, `[` cambia la parte
+        de capa dentro de su pieza, Guardar guarda `partes` (relativo) y `ordenPartes`; el PSD editable bajado trae en
+        Legales el legal (texto vivo) más arriba y abajo de «Iconos», los iconos en su lugar; al recargar sigue igual.
+        Logo desde su botón de carpeta: agrandar buenfin por su esquina (169 %), la otra parte quieta; «Volver a su lugar»
+        de la parte y «Volver al automático» (también las partes). Consola: 0 errores en una corrida limpia.
+      · Arreglado en el camino: el tope de tamaño por parte agrandaba en 320×50 las partes que su pieza ya achicaba (208
+        niveles de diferencia): ahora sólo frena lo que la persona cambió. Un clic fuera de las partes dejaba el foco en
+        el diálogo: ahora queda en la pieza.
+      · Revisión en paralelo (5 pasadas, 2026-10-19) y arreglos, medidos:
+        - Motor: el tope del PSD editable medía las partes con el movimiento de su pieza (ahora con el de cada parte;
+          prueba con s33 que falla sin el arreglo); el costo en memoria de abrir una pieza se contaba a la mitad (ahora
+          por pieza y por mesa, y si algo falla la pieza se mueve entera, con aviso); prueba por pieza de que sus partes
+          juntas dan la pieza (si no, entera con aviso); si la mesa pesa demasiado para la página se sueltan primero las
+          partes; las sombras de contraste de una pieza abierta van todas debajo de sus partes (tarjeta, PSD plano,
+          contraste); el contraste de una pieza abierta se mide como si fuera una; el aviso de relleno sale sólo si se
+          puede ver; la carpeta se encuentra por su lugar en la mesa; el tamaño máximo lo frena también la caja con
+          sombras; lo guardado de partes que ya no sirve deja rastro en la consola.
+        - Editor: marcas en su propio renglón (no se cortan), aviso «Abierta: … · Esc» con «Cerrar la pieza» sobre la
+          vista, orilla doble, «Abrir en partes» visible al elegir una pieza con partes, clic en el margen también cierra,
+          las piezas de atrás `inert`, botón de carpeta con nombre fijo, `aria-expanded`/`aria-controls` y el foco se queda
+          en él, la lista de partes dentro del renglón de su pieza, nombres en palabras («Iconos» de Legales), «otra capa»
+          también en partes (y con un empate entre dos de al lado, en la que se movió), «Volver a su lugar» de una pieza
+          también regresa sus partes, botón de volver con lugar reservado, ayuda de partes aparte.
+        - Medido: test-formatos 416/0; npm test completo verde; tsc y eslint limpios; build 0; 12 de 12 medidas sin
+          tocar idénticas a HEAD. Navegador (localhost, s33, 1200×627): todo lo de arriba probado con clics y teclado;
+          consola sin errores después de una marca, en una corrida completa (cargar, editar, abrir, reordenar, guardar).
+        - No arreglado (anotado): confirmar «Volver al automático»; marca en el lienzo de las partes movidas; atenuar lo
+          de atrás al abrir; decodificar las capas una sola vez y no recorrer la mesa entera por pieza; Safari y Firefox
+          (foco) sin probar; un lector de pantalla real sin probar; el respaldo de «sin partes si pesa demasiado» del
+          worker no tiene prueba automática (corre en el Web Worker).
+      **Next Step:** commit y push a `prisma` (preview, NO main). Después: paso 3 (el legal editable en el editor).
       **Paso 1 — el PSD por medida, editable:**
       - [x] `psd-editable.ts` (puro): copia el árbol de la mesa (carpetas, subcarpetas, orden, ocultas incluidas) y
             a cada capa le aplica el movimiento de SU pieza (escala pareja + desplazamiento; el fondo, el del fondo):

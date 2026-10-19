@@ -80,6 +80,17 @@ export const TOLERANCIA = 12;
 export const FONDO_FIEL_MAX_PCT = 10;
 export const REARMADO_MAX_PCT = 2;
 export const TAPADA_MAX_PCT = 2;
+/** Lo que cuesta abrir una pieza en partes, en bytes por píxel de la caja de todo lo que toca: lo fijo (lo de atrás, lo
+ *  des-mezclado, quién tapa a quién, la prueba del rearmado) y lo de cada parte (su silueta, su sombra, su color de
+ *  trabajo y su relleno, y lo que se queda: color, sombra y base). */
+const PARTES_BYTES_PX = 40;
+const PARTES_BYTES_PX_PARTE = 44;
+/** Lo que puede costar abrir UNA pieza en partes, y todas las de una mesa (lo que se quedan las ya abiertas más lo que
+ *  cuesta la que sigue). Más: la pieza se mueve entera, con aviso. */
+export const PARTES_MAX_BYTES = 400_000_000;
+export const PARTES_MESA_MAX_BYTES = 600_000_000;
+/** Partes por pieza, como mucho (una carpeta con más subcarpetas se mueve entera, con aviso). */
+export const PARTES_MAX = 12;
 
 // Los papeles de las carpetas viven en roles.ts (chico: también lo usa la pantalla, sin cargar ag-psd).
 export { ROLES, rolDe, type Rol };
@@ -117,6 +128,12 @@ export type CapaPsd = {
   mesa: number;
   /** La carpeta de primer nivel dentro de la mesa (o la capa misma si está suelta). */
   pieza: string;
+  /** Cuál es esa carpeta: su lugar entre los hijos de la mesa (contando los ocultos); −1 = capa suelta en la mesa. Dos
+   *  carpetas con el mismo nombre son una sola pieza, pero no la misma carpeta. */
+  carpeta: number;
+  /** La subcarpeta de la carpeta de su pieza en la que está (su lugar entre los hijos de esa carpeta, contando los
+   *  ocultos, y su nombre): una PARTE de la pieza. null = capa suelta dentro de la carpeta (las sueltas van juntas). */
+  parte: { hijo: number; nombre: string } | null;
   mascara: MascaraPsd | null;
   /** Capas de texto: el tamaño de su letra más chica, en px del lienzo (ya con la escala de la capa). */
   letraPx: number | null;
@@ -215,9 +232,11 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
   const mesas: MesaPsd[] = [];
   const capas: CapaPsd[] = [];
   let vistas = 0;
-  type Ctx = { mesa: number; pieza: string | null };
+  // `nivel`: 0 = en la mesa (una carpeta aquí es una pieza), 1 = dentro de la carpeta de una pieza (una subcarpeta aquí
+  // es una parte), 2 = más adentro (se queda en su parte).
+  type Ctx = { mesa: number; pieza: string | null; carpeta: number; parte: CapaPsd["parte"]; nivel: number };
   const andar = (nodos: Layer[] | undefined, opPadre: number, ctx: Ctx) => {
-    for (const l of nodos ?? []) {
+    for (const [hijoN, l] of (nodos ?? []).entries()) {
       if (l.hidden) continue;
       if (++vistas > PSD_CAPAS_MAX) throw new ErrorPsd("demasiado-grande", `Más de ${PSD_CAPAS_MAX} capas visibles. Qué hacer: borra las que no se usan o acopla las carpetas que no son de la guía.`);
       const nombre = limpio(l.name);
@@ -228,9 +247,10 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
           const r = l.artboard.rect;
           const x = Math.round(r.left), y = Math.round(r.top);
           mesas.push({ nombre, x, y, w: Math.round(r.right) - x, h: Math.round(r.bottom) - y });
-          hijo = { mesa: mesas.length - 1, pieza: null };
+          hijo = { mesa: mesas.length - 1, pieza: null, carpeta: -1, parte: null, nivel: 0 };
         } else {
-          if (ctx.pieza === null) hijo = { ...ctx, pieza: nombre };
+          if (ctx.nivel === 0) hijo = { ...ctx, pieza: nombre, carpeta: hijoN, nivel: 1 };
+          else if (ctx.nivel === 1) hijo = { ...ctx, parte: { hijo: hijoN, nombre }, nivel: 2 };
           const raro = [
             ...((l.opacity ?? 1) < 1 ? ["opacidad"] : []),
             ...(l.blendMode && l.blendMode !== "pass through" && l.blendMode !== "normal" ? [`fusión ${l.blendMode}`] : []),
@@ -255,6 +275,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
       capas.push({
         nombre, tipo: tipoDe(l), left: l.left ?? 0, top: l.top ?? 0, w, h, opacidad, relleno: l.fillOpacity ?? 1,
         mezcla: l.blendMode ?? "normal", halos: halosDe(l), conEfectos: hayEfectos(l), recorte: !!l.clipping, mesa: ctx.mesa, pieza: ctx.pieza ?? nombre,
+        carpeta: ctx.pieza === null ? -1 : ctx.carpeta, parte: ctx.parte,
         mascara: k && mw > 0 && mh > 0 ? { left: k.left ?? 0, top: k.top ?? 0, right: k.right ?? 0, bottom: k.bottom ?? 0, defecto: k.defaultColor ?? 255, pixeles: () => getLayerMaskImageData(l) } : null,
         letraPx: letraDe(l),
         texto: l.text ? textoDe(l.text as TextoPsdCrudo) : null,
@@ -262,7 +283,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
       });
     }
   };
-  andar(psd.children, 1, { mesa: -1, pieza: null });
+  andar(psd.children, 1, { mesa: -1, pieza: null, carpeta: -1, parte: null, nivel: 0 });
 
   if (!mesas.length) {
     // Sin mesas de trabajo: el lienzo entero es el anuncio.
@@ -301,6 +322,27 @@ export type PiezaPsd = {
   /** La pieza SIN sus textos (RGBA, caja.w × caja.h): lo que queda debajo de las letras. Sólo si TODOS sus textos
    *  se pueden intentar redibujar; si no, null y la pieza va entera como imagen. */
   base: Uint8ClampedArray | null;
+  /** Sus partes (`partesDe`), de abajo hacia arriba, si sale de UNA carpeta con 2 o más. Sólo para moverlas a mano: sin
+   *  edición la pieza se pinta entera, como siempre. */
+  partes?: PartePsd[];
+  /** Con partes: su carpeta (`CapaPsd.carpeta`), para encontrarla en el PSD editable sin depender del nombre. */
+  carpeta?: number;
+};
+/**
+ * Una PARTE de una pieza: una subcarpeta de su carpeta, o sus capas sueltas juntas (Pedro, 2026-10-19: "Parts inside a
+ * piece" y "One part together"). Se pinta como una pieza: sus campos miden igual (px de la mesa).
+ */
+export type PartePsd = Pick<PiezaPsd, "caja" | "solido" | "rgba" | "oscurece" | "letraMinPx" | "textos" | "base"> & {
+  /** El de su subcarpeta; el de las sueltas son sus capas, juntas. */
+  nombre: string;
+  /** Su subcarpeta: su lugar entre los hijos de la carpeta de la pieza (contando los ocultos). null = las sueltas. */
+  hijo: number | null;
+  /** % de sus píxeles que otra parte de la misma pieza le tapa: ahí no se sabe su color y se rellenó con el de al lado
+   *  (se ve si la parte de encima se mueve). */
+  rellenoPct: number;
+  /** Las partes (índices en `partes` de su pieza) que le tapan algo: el relleno sólo se ve si ella o una de éstas se
+   *  mueve, o si una de éstas pasa debajo de ella. */
+  tapadaPor: number[];
 };
 /** Una capa de texto de una pieza: su texto (transform en px de la MESA), y su tinta en Photoshop para la prueba. */
 export type TextoPieza = {
@@ -806,8 +848,38 @@ function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
   const propios = new Uint32Array(K), ajenos = new Uint32Array(K);
   const contado = new Uint8Array(N); // un píxel de una pieza cuenta como "oscurecido por otra" una sola vez
   const armadas: (PiezaPsd | null)[] = [];
+  // Abrir una pieza en partes nunca tumba el despiece: si algo falla o no cuadra, la pieza se mueve entera, con aviso.
+  const entera = (nombre: string, porque: string) => avisos.push(`«${nombre}» se mueve entera en el editor: ${porque}.`);
+  let partesRetenidas = 0; // bytes de las partes ya abiertas en esta mesa (se quedan hasta el final)
   for (let k = 0; k < K; k++) {
     const t = trabajos[k];
+    // Sus partes: lo de atrás ANTES de pintar esta pieza, en la caja de todo lo que toca (con eso se des-mezcla cada
+    // parte, `partesDe`). Sólo si la pieza sale de UNA carpeta con 2 o más grupos.
+    const deLaPieza = capas.filter((c) => c.pieza === t.nombre);
+    const grupos = gruposDe(deLaPieza);
+    let atras: Atras | null = null;
+    if (grupos) {
+      let bx0 = m.w, by0 = m.h, bx1 = -1, by1 = -1;
+      for (let i = 0; i < N; i++)
+        if (t.alfa[i] > 0.02 || (t.sombra && t.sombra[i] > 0.02)) {
+          const x = i % m.w, y = (i / m.w) | 0;
+          if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y;
+        }
+      const caja = { x: bx0, y: by0, w: bx1 - bx0 + 1, h: by1 - by0 + 1 };
+      const pico = caja.w * caja.h * (PARTES_BYTES_PX + PARTES_BYTES_PX_PARTE * grupos.length);
+      // bx1 < 0: no pinta nada en esta mesa, no hay partes que abrir.
+      if (bx1 >= 0 && grupos.length > PARTES_MAX) entera(t.nombre, `tiene más de ${PARTES_MAX} subcarpetas`);
+      else if (bx1 >= 0 && (pico > PARTES_MAX_BYTES || partesRetenidas + pico > PARTES_MESA_MAX_BYTES)) entera(t.nombre, "es demasiado grande para abrirla en partes");
+      else if (bx1 >= 0)
+        try {
+          const Da = new Float32Array(caja.w * caja.h * 3);
+          for (let yy = 0; yy < caja.h; yy++) Da.set(D.subarray(((yy + caja.y) * m.w + caja.x) * 3, ((yy + caja.y) * m.w + caja.x + caja.w) * 3), yy * caja.w * 3);
+          atras = { caja, D: Da };
+        } catch (err) {
+          console.warn("[psd] no se pudo guardar lo de atrás para abrir en partes", t.nombre, err);
+          entera(t.nombre, "no se pudo abrir en partes");
+        }
+    }
     const osc = t.sombra ? new Uint8ClampedArray(N * 3).fill(255) : null;
     let x0 = m.w, y0 = m.h, x1 = -1, y1 = -1, sx0 = m.w, sy0 = m.h, sx1 = -1, sy1 = -1;
     for (let i = 0; i < N; i++) {
@@ -889,10 +961,28 @@ function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
     const pieza: PiezaPsd = {
       nombre: t.nombre, rol: rolDe(t.nombre), caja, solido: sx1 < 0 ? caja : { x: sx0, y: sy0, w: sx1 - sx0 + 1, h: sy1 - sy0 + 1 },
       rgba, oscurece, tapadaPct: 0,
-      letraMinPx: capas.reduce<number | null>((min, c) => (c.pieza === t.nombre && c.letraPx !== null && (min === null || c.letraPx < min) ? c.letraPx : min), null),
+      letraMinPx: letraMinDe(deLaPieza),
       textos: [], base: null,
     };
-    Object.assign(pieza, textosDe(capas.filter((c) => c.pieza === t.nombre), m, pieza));
+    // Un texto se mide una vez: la pieza y su parte comparten el mismo (así la página sabe que es el mismo).
+    const tintas = new Map<CapaPsd, TextoPieza | null>();
+    Object.assign(pieza, textosDe(deLaPieza, m, pieza, tintas));
+    if (grupos && atras)
+      try {
+        const partes = partesDe(deLaPieza, grupos, m, pieza, D, atras, tintas);
+        // La prueba de las partes, como la del maestro: pintadas una sobre otra encima de lo de atrás tienen que dar la
+        // pieza. Si no (un relleno donde la de encima casi no tapa), moverlas dejaría ver algo que no es del PSD.
+        const distinto = partes ? partesDistintasPct(atras, pieza, partes) : 0;
+        if (partes && distinto > REARMADO_MAX_PCT) entera(t.nombre, `sus partes, juntas, no dan la pieza (${distinto.toFixed(1)} % distinto)`);
+        else if (partes) {
+          pieza.partes = partes;
+          pieza.carpeta = deLaPieza[0].carpeta;
+          partesRetenidas += partes.reduce((s, q) => s + q.rgba.byteLength + (q.oscurece?.byteLength ?? 0) + (q.base?.byteLength ?? 0), 0);
+        }
+      } catch (err) {
+        console.warn("[psd] no se pudo abrir en partes", t.nombre, err);
+        entera(t.nombre, "no se pudo abrir en partes");
+      }
     armadas.push(pieza);
   }
   const piezas: PiezaPsd[] = [];
@@ -997,7 +1087,33 @@ function gammaDeTexto(capas: CapaPsd[], m: MesaPsd, C: Float32Array): number {
  * "des-mezclar" el borde suavizado dejaba un fantasma claro de cada letra. `capas` = las de esa pieza, de abajo
  * hacia arriba.
  */
-function textosDe(capas: CapaPsd[], m: MesaPsd, p: PiezaPsd): Pick<PiezaPsd, "textos" | "base"> {
+/** Una capa de texto como `TextoPieza`: su tinta en Photoshop (caja y alfa, sin la opacidad de la capa) dentro de la
+ *  mesa, y por qué no se redibujaría. `encima`: las capas de su pieza que van arriba de ella. null = no pinta nada aquí. */
+function tintaDe(c: CapaPsd & { texto: TextoCapa }, encima: CapaPsd[], m: MesaPsd): TextoPieza | null {
+  let x0 = m.w, y0 = m.h, x1 = -1, y1 = -1;
+  porPixel(c, m, false, (i, a) => {
+    if (a <= 0.02) return;
+    const x = i % m.w, y = (i / m.w) | 0;
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  });
+  if (x1 < 0) return null;
+  const caja = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  // Una tinta enorme no es un texto que valga probar en el navegador (y congelaría la página al compararla).
+  const motivo = c.texto.motivo ?? motivoCapa(c, encima) ?? (caja.w * caja.h > TEXTO_CAJA_MAX_PX ? "texto demasiado grande para probarlo" : null);
+  const alfa = new Uint8ClampedArray(motivo ? 0 : caja.w * caja.h);
+  const peso = c.opacidad || 1;
+  if (!motivo)
+    porPixel(c, m, false, (i, a) => {
+      const x = (i % m.w) - x0, y = ((i / m.w) | 0) - y0;
+      if (x >= 0 && x < caja.w && y >= 0 && y < caja.h) alfa[y * caja.w + x] = Math.round((a / peso) * 255);
+    });
+  const tr = c.texto.transform;
+  return { capa: c.nombre, texto: { ...c.texto, transform: [tr[0], tr[1], tr[2], tr[3], tr[4] - m.x, tr[5] - m.y] }, opacidad: c.opacidad * c.relleno, caja, alfa, motivo };
+}
+
+/** `tintas`: lo ya medido de cada capa de texto (la pieza y sus partes comparten el mismo objeto; el de la pieza, que
+ *  mira todo lo que va encima en la carpeta, es el más estricto). */
+function textosDe(capas: CapaPsd[], m: MesaPsd, p: Pick<PiezaPsd, "caja" | "rgba">, tintas: Map<CapaPsd, TextoPieza | null>): Pick<PiezaPsd, "textos" | "base"> {
   const { x: cx, y: cy, w: cw, h: ch } = p.caja;
   const textos: TextoPieza[] = [];
   const hueco = new Uint8Array(cw * ch);
@@ -1005,27 +1121,11 @@ function textosDe(capas: CapaPsd[], m: MesaPsd, p: PiezaPsd): Pick<PiezaPsd, "te
   for (let k = capas.length - 1; k >= 0; k--) {
     const c = capas[k];
     if (!c.texto) continue;
-    // Su tinta en Photoshop: caja y alfa (sin la opacidad de la capa), dentro de la mesa.
-    let x0 = m.w, y0 = m.h, x1 = -1, y1 = -1;
-    porPixel(c, m, false, (i, a) => {
-      if (a <= 0.02) return;
-      const x = i % m.w, y = (i / m.w) | 0;
-      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
-    });
-    if (x1 < 0) continue; // capa de texto sin nada pintado en esta mesa
-    const caja = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
-    // Una tinta enorme no es un texto que valga probar en el navegador (y congelaría la página al compararla).
-    const motivo = c.texto.motivo ?? motivoCapa(c, capas.slice(k + 1)) ?? (caja.w * caja.h > TEXTO_CAJA_MAX_PX ? "texto demasiado grande para probarlo" : null);
-    const alfa = new Uint8ClampedArray(motivo ? 0 : caja.w * caja.h);
-    const peso = c.opacidad || 1;
-    if (!motivo)
-      porPixel(c, m, false, (i, a) => {
-        const x = (i % m.w) - x0, y = ((i / m.w) | 0) - y0;
-        if (x >= 0 && x < caja.w && y >= 0 && y < caja.h) alfa[y * caja.w + x] = Math.round((a / peso) * 255);
-      });
-    const tr = c.texto.transform;
-    textos.push({ capa: c.nombre, texto: { ...c.texto, transform: [tr[0], tr[1], tr[2], tr[3], tr[4] - m.x, tr[5] - m.y] }, opacidad: c.opacidad * c.relleno, caja, alfa, motivo });
-    if (motivo) { todas = false; continue; }
+    let tp = tintas.get(c);
+    if (tp === undefined) tintas.set(c, (tp = tintaDe(c as CapaPsd & { texto: TextoCapa }, capas.slice(k + 1), m)));
+    if (!tp) continue; // capa de texto sin nada pintado en esta mesa
+    textos.push(tp);
+    if (tp.motivo) { todas = false; continue; }
     porPixel(c, m, true, (i, a) => {
       const x = (i % m.w) - cx, y = ((i / m.w) | 0) - cy;
       if (a > 0.02 && x >= 0 && x < cw && y >= 0 && y < ch) hueco[y * cw + x] = 1;
@@ -1059,9 +1159,218 @@ function textosDe(capas: CapaPsd[], m: MesaPsd, p: PiezaPsd): Pick<PiezaPsd, "te
   return { textos, base };
 }
 
+const letraMinDe = (capas: CapaPsd[]): number | null => capas.reduce<number | null>((min, c) => (c.letraPx !== null && (min === null || c.letraPx < min) ? c.letraPx : min), null);
+
+// ── Partes de una pieza ──────────────────────────────────────────────────
+
+/** Las capas de una parte, antes de des-mezclarla. */
+type Grupo = { hijo: number | null; nombre: string; capas: CapaPsd[] };
+/** Lo de atrás ANTES de pintar una pieza (RGB 0-1) en una caja (px de la mesa) que cubre la de la pieza. */
+type Atras = { caja: Caja; D: Float32Array };
+/** Largo del nombre de la parte de las capas sueltas (son sus nombres, juntos). */
+const NOMBRE_SUELTAS_MAX = 60;
+
+/**
+ * Las partes de una pieza, sin píxeles: sus capas por subcarpeta directa de su carpeta, y las sueltas juntas, en el
+ * orden de su primera capa. Lo más hondo se queda en su parte. Sólo cuenta un grupo que pinta algo (no sólo ajustes o
+ * recortadas). null si la pieza no sale de UNA carpeta (dos con el mismo nombre son una pieza, pero sus subcarpetas no
+ * se pueden emparejar) o si no hay al menos dos grupos.
+ */
+function gruposDe(capas: CapaPsd[]): Grupo[] | null {
+  const carpeta = capas[0]?.carpeta ?? -1;
+  if (carpeta < 0 || capas.some((c) => c.carpeta !== carpeta)) return null;
+  const porHijo = new Map<number, Grupo>();
+  for (const c of capas) {
+    const h = c.parte?.hijo ?? -1;
+    let g = porHijo.get(h);
+    if (!g) porHijo.set(h, (g = { hijo: c.parte?.hijo ?? null, nombre: c.parte?.nombre ?? "", capas: [] }));
+    g.capas.push(c);
+  }
+  const grupos = [...porHijo.values()].filter((g) => g.capas.some((c) => !c.recorte && c.tipo !== "ajuste"));
+  for (const g of grupos) {
+    if (g.hijo !== null) continue;
+    const n = [...new Set(g.capas.filter((c) => c.tipo !== "ajuste").map((c) => c.nombre))].join(" + ");
+    g.nombre = n.length > NOMBRE_SUELTAS_MAX ? `${n.slice(0, NOMBRE_SUELTAS_MAX - 1)}…` : n;
+  }
+  return grupos.length >= 2 ? grupos : null;
+}
+
+/**
+ * Cada parte de una pieza ya armada, con su propio color (Pedro, 2026-10-19: "Fill and warn"). Dentro de la caja de la
+ * pieza: la silueta de cada parte sale de sus capas, y su color se des-mezcla de la pieza ya pintada (`D`, lo de atrás
+ * después de ella) sobre lo de atrás de antes (`atras`) más las partes de abajo, igual que las piezas sobre el fondo.
+ * Donde otra parte le pinta encima (la capa de más arriba en ese píxel es de otra parte) su color no se sabe: se
+ * rellena con el de alrededor y se mide (`rellenoPct`) para avisar si se mueve. Una parte nunca hace inservible el
+ * maestro. Las sombras de la pieza se reparten: cada píxel de sombra es de la parte que más oscurece ahí. undefined si
+ * al final no quedan 2 partes que pinten algo.
+ */
+function partesDe(capas: CapaPsd[], grupos: Grupo[], m: MesaPsd, p: PiezaPsd, D: Float32Array, atras: Atras, tintas: Map<CapaPsd, TextoPieza | null>): PartePsd[] | undefined {
+  const { x: cx, y: cy, w: cw, h: ch } = p.caja, n = cw * ch, G = grupos.length;
+  const local = (X: number, Y: number) => (X >= cx && X < cx + cw && Y >= cy && Y < cy + ch ? (Y - cy) * cw + (X - cx) : -1);
+  const deGrupo = new Map(grupos.flatMap((g, j) => g.capas.map((c) => [c, j] as const)));
+  const alfas = grupos.map(() => new Float32Array(n));
+  const sombras: (Float32Array | null)[] = grupos.map(() => null);
+  // La parte de la capa de MÁS ARRIBA que pinta sólido en cada píxel (−1 = ninguna): en el orden de las capas, no
+  // en el de las partes (las sueltas pueden ir arriba y abajo de una subcarpeta).
+  const tope = new Int8Array(n).fill(-1);
+  for (let c of capas) {
+    const j = deGrupo.get(c);
+    if (j === undefined || c.recorte || c.tipo === "ajuste") continue;
+    const al = alfas[j];
+    if (c.halos.length) c = conCache(c);
+    // Las mismas reglas que la silueta de la pieza (`despiezarMesa`).
+    const conRelleno = !c.conEfectos;
+    if (c.mezcla === "normal")
+      porPixel(c, m, conRelleno, (i, a) => {
+        const l = local(i % m.w, (i / m.w) | 0);
+        if (l < 0) return;
+        al[l] = a + al[l] * (1 - a);
+        if (a > 0.05) tope[l] = j;
+      });
+    else if (OSCURECE.has(c.mezcla)) {
+      const so = (sombras[j] ??= new Float32Array(n));
+      porPixel(c, m, conRelleno, (i, a, data, s) => {
+        const l = local(i % m.w, (i / m.w) | 0);
+        const fuerza = a * (1 - Math.min(data[s], data[s + 1], data[s + 2]) / 255);
+        if (l >= 0 && fuerza > so[l]) so[l] = fuerza;
+      });
+    }
+    for (const hl of c.halos) {
+      const g = engordar(c, m, hl.radio);
+      if (!g) continue;
+      const destino = hl.tipo === "contorno" ? al : (sombras[j] ??= new Float32Array(n));
+      for (let yy = 0; yy < g.h; yy++)
+        for (let xx = 0; xx < g.w; xx++) {
+          const l = local(xx + g.x, yy + g.y);
+          if (l < 0 || !g.on[yy * g.w + xx] || !(hl.fuerza > destino[l])) continue;
+          destino[l] = hl.fuerza;
+          if (hl.tipo === "contorno" && hl.fuerza > 0.05) tope[l] = j;
+        }
+    }
+  }
+
+  // De abajo hacia arriba: cada parte sobre lo de atrás de antes más las partes de abajo (`Dp`).
+  const Dp = new Float32Array(n * 3);
+  for (let yy = 0; yy < ch; yy++)
+    for (let xx = 0; xx < cw; xx++) {
+      const s = ((yy + cy - atras.caja.y) * atras.caja.w + (xx + cx - atras.caja.x)) * 3, d = (yy * cw + xx) * 3;
+      Dp[d] = atras.D[s]; Dp[d + 1] = atras.D[s + 1]; Dp[d + 2] = atras.D[s + 2];
+    }
+  const enMesa = (l: number) => ((((l / cw) | 0) + cy) * m.w + (l % cw) + cx) * 3;
+  const colores: Uint8ClampedArray[] = [], rellenos: number[] = [], tapadoras: Set<number>[] = [];
+  for (let j = 0; j < G; j++) {
+    const al = alfas[j], F = new Float32Array(n * 3), sabe = new Uint8Array(n), por = new Set<number>();
+    let propios = 0, tapados = 0;
+    for (let l = 0; l < n; l++) {
+      const a = al[l];
+      if (!(a > 0.02)) { al[l] = 0; continue; }
+      propios++;
+      const P = enMesa(l);
+      // Toda tapada (no queda de dónde rellenar): su color es el que se ve ahí.
+      const otra = tope[l] >= 0 && tope[l] !== j;
+      if (otra) { tapados++; por.add(tope[l]); }
+      for (let q = 0; q < 3; q++) F[l * 3 + q] = Math.min(1, Math.max(0, otra ? D[P + q] : (D[P + q] - Dp[l * 3 + q] * (1 - a)) / a));
+      if (!otra) sabe[l] = 1;
+    }
+    // Lo que no se sabe toma el color de alrededor (también fuera de la parte: ahí no se usa).
+    if (tapados && tapados < propios) rellenar(F, sabe, cw, ch);
+    const rgba = new Uint8ClampedArray(n * 4);
+    for (let l = 0; l < n; l++) {
+      const a = al[l];
+      if (!(a > 0)) continue;
+      for (let q = 0; q < 3; q++) {
+        rgba[l * 4 + q] = Math.round(F[l * 3 + q] * 255);
+        Dp[l * 3 + q] = F[l * 3 + q] * a + Dp[l * 3 + q] * (1 - a);
+      }
+      rgba[l * 4 + 3] = a8(a);
+    }
+    colores.push(rgba);
+    rellenos.push(propios ? (tapados / propios) * 100 : 0);
+    tapadoras.push(por);
+  }
+
+  // Cada píxel de sombra de la pieza, a la parte que más oscurece ahí.
+  const duena = new Int8Array(n).fill(-1);
+  const osc = p.oscurece;
+  if (osc)
+    for (let l = 0; l < n; l++) {
+      if (Math.min(osc[l * 3], osc[l * 3 + 1], osc[l * 3 + 2]) >= 255) continue;
+      let mejor = -1, f = 0.02;
+      for (let j = 0; j < G; j++) {
+        const v = sombras[j]?.[l] ?? 0;
+        if (v > f) { f = v; mejor = j; }
+      }
+      duena[l] = mejor;
+    }
+
+  const partes: PartePsd[] = [];
+  const lugar = new Map<number, number>(); // grupo → su índice en `partes` (las que no pintan nada no quedan)
+  for (let j = 0; j < G; j++) {
+    const al = alfas[j];
+    let x0 = cw, y0 = ch, x1 = -1, y1 = -1, sx0 = cw, sy0 = ch, sx1 = -1, sy1 = -1;
+    for (let l = 0; l < n; l++) {
+      const toca = al[l] > 0 || (duena[l] === j && osc !== null && Math.min(osc[l * 3], osc[l * 3 + 1], osc[l * 3 + 2]) < 0.985 * 255);
+      if (!toca) continue;
+      const x = l % cw, y = (l / cw) | 0;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (al[l] > 0.5) { if (x < sx0) sx0 = x; if (x > sx1) sx1 = x; if (y < sy0) sy0 = y; if (y > sy1) sy1 = y; }
+    }
+    if (x1 < 0) continue; // no pinta nada en esta mesa
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    const caja = { x: cx + x0, y: cy + y0, w, h };
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    let oscurece: Uint8ClampedArray | null = null;
+    for (let yy = 0; yy < h; yy++) {
+      const desde = (yy + y0) * cw + x0;
+      rgba.set(colores[j].subarray(desde * 4, (desde + w) * 4), yy * w * 4);
+      if (!osc) continue;
+      for (let xx = 0; xx < w; xx++) {
+        const l = desde + xx;
+        if (duena[l] !== j) continue;
+        oscurece ??= new Uint8ClampedArray(w * h * 3).fill(255);
+        oscurece.set(osc.subarray(l * 3, l * 3 + 3), (yy * w + xx) * 3);
+      }
+    }
+    const g = grupos[j];
+    const parte: PartePsd = {
+      nombre: g.nombre, hijo: g.hijo, caja, solido: sx1 < 0 ? caja : { x: cx + sx0, y: cy + sy0, w: sx1 - sx0 + 1, h: sy1 - sy0 + 1 },
+      rgba, oscurece, letraMinPx: letraMinDe(g.capas), textos: [], base: null, rellenoPct: rellenos[j], tapadaPor: [],
+    };
+    Object.assign(parte, textosDe(g.capas, m, parte, tintas));
+    lugar.set(j, partes.length);
+    partes.push(parte);
+  }
+  // Una parte que tapa a otra pinta algo ahí (alfa > 0.05): siempre queda en `partes`.
+  for (const [j, i] of lugar) partes[i].tapadaPor = [...tapadoras[j]].flatMap((o) => lugar.get(o) ?? []);
+  return partes.length >= 2 ? partes : undefined;
+}
+
+/** % de los píxeles que toca la pieza en que sus partes, pintadas una sobre otra encima de lo de atrás, no dan la pieza
+ *  (más de TOLERANCIA en un canal, como mide el maestro). */
+function partesDistintasPct(atras: Atras, p: PiezaPsd, partes: PartePsd[]): number {
+  const c = p.caja, n = c.w * c.h, fondo = new Uint8ClampedArray(n * 3);
+  for (let yy = 0; yy < c.h; yy++)
+    for (let xx = 0; xx < c.w; xx++) {
+      const s = ((yy + c.y - atras.caja.y) * atras.caja.w + (xx + c.x - atras.caja.x)) * 3, d = (yy * c.w + xx) * 3;
+      for (let q = 0; q < 3; q++) fondo[d + q] = Math.round(atras.D[s + q] * 255);
+    }
+  const aqui = (b: Pick<PiezaPsd, "caja" | "rgba" | "oscurece">) => ({ ...b, caja: { ...b.caja, x: b.caja.x - c.x, y: b.caja.y - c.y } });
+  const entera = rearmar({ w: c.w, h: c.h, fondo, piezas: [aqui(p)] });
+  const juntas = rearmar({ w: c.w, h: c.h, fondo, piezas: partes.map(aqui) });
+  let tocados = 0, mal = 0;
+  for (let j = 0; j < n; j++) {
+    const o = p.oscurece;
+    if (!(p.rgba[j * 4 + 3] > 0) && !(o && Math.min(o[j * 3], o[j * 3 + 1], o[j * 3 + 2]) < 255)) continue;
+    tocados++;
+    for (let q = 0; q < 3; q++)
+      if (!(Math.abs(entera[j * 3 + q] - juntas[j * 3 + q]) <= TOLERANCIA)) { mal++; break; }
+  }
+  return tocados ? (mal / tocados) * 100 : 0;
+}
+
 /** Arma el anuncio con cada pieza en su lugar (RGB, w × h). Es la prueba del despiece: tiene que salir el de
  *  Photoshop. */
-export function rearmar(ma: Pick<MaestroPsd, "w" | "h" | "fondo" | "piezas">): Uint8ClampedArray {
+export function rearmar(ma: Pick<MaestroPsd, "w" | "h" | "fondo"> & { piezas: readonly Pick<PiezaPsd, "caja" | "rgba" | "oscurece">[] }): Uint8ClampedArray {
   const out = new Uint8ClampedArray(ma.fondo);
   for (const p of ma.piezas) {
     for (let yy = 0; yy < p.caja.h; yy++)

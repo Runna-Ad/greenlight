@@ -11,10 +11,10 @@ import { writePsdBuffer } from "ag-psd";
 import { nombreDeGuia, etiquetaPieza } from "../src/lib/prisma/formatos/roles.ts";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
-import { armarMedida, capasDeMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
+import { armarMedida, capasDeMedida, halosEnMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
 import { psdDeMedida, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prisma/formatos/psd-salida.ts";
 import { readPsd as readPsdAg, getLayerImageData, getLayerMaskImageData, getLayerRealMaskImageData } from "ag-psd";
-import { planDeMedida, psdEditable, retoqueDeFondo, CAPA_RETOQUE, CAPA_COLOR_MESA } from "../src/lib/prisma/formatos/psd-editable.ts";
+import { planDeMedida, psdEditable, retoqueDeFondo, TopeEditable, CAPA_RETOQUE, CAPA_COLOR_MESA } from "../src/lib/prisma/formatos/psd-editable.ts";
 import { textoDe, maquetar, fuentesDe, compararAlfa } from "../src/lib/prisma/formatos/textos.ts";
 import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, elegirParaCliente, exclusivasDeOtros, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIA_GOOGLE_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
 import { carpetaGoogle, archivosDeMetadata, archivosQueSirven, buscarEnGoogle, ARCHIVOS_POR_FAMILIA_MAX, GOOGLE_BYTES_POR_PEDIDO } from "../src/lib/prisma/formatos/google-fonts.ts";
@@ -22,7 +22,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, topesPieza, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
+import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContraste } from "../src/lib/prisma/formatos/revisar.ts";
@@ -849,7 +849,8 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
   const otraMovida = aplicarEdicion(M45, conChoque, { piezas: { [iCta]: { x: 40, y: 30, k: 0.8 } } }, 1200, 627);
   ok("editar: mover una pieza no calla el aviso de otras dos (sin tocar) que se enciman", base1200.familia !== "igual" && otraMovida.avisos.some((v) => v.tipo === "encima" && v.texto.includes("HERO") && v.texto.includes("TITULO")), JSON.stringify(otraMovida.avisos));
   const loca = aplicarEdicion(M45, base1200, { piezas: { [iCta]: { x: 1e9, y: -1e9, k: 1e6 } } }, 1200, 627).puestas.find((q) => q.pieza === iCta);
-  eq("editar: un dato guardado fuera de lo que deja el editor (k 1e6, x 1e9) se recorta a sus topes", [loca.k, loca.x, loca.y], [topesPieza(M45.piezas[iCta].solido, 1200, 627).max, 2400, -2400]);
+  eq("editar: un dato guardado fuera de lo que deja el editor (k 1e6, x 1e9) se recorta a sus topes", [loca.k, loca.x, loca.y], [topesPieza(M45.piezas[iCta].solido, 1200, 627, M45.piezas[iCta].caja).max, 2400, -2400]);
+  eq("topes: lo más grande también lo frena la caja con sombras (que mide cada capa del PSD), no sólo la parte sólida", [topesPieza({ w: 10, h: 10 }, 100, 100).max, topesPieza({ w: 10, h: 10 }, 100, 100, { w: 100, h: 40 }).max, topesPieza({ w: 10, h: 10 }, 100, 100, { w: 4, h: 4 }).max], [20, 2, 20]);
   const r1 = revisarMedida([M33R], 1200, 627, { edicion: { piezas: { 0: { x: 20, y: 20, k: 0.5 } } } });
   ok(
     "revisarMedida con edición: la tarjeta y el resumen comparten la misma (misma edición → mismo objeto; otra → otro; sin edición → el automático)",
@@ -900,6 +901,11 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
     "capas: se marca sólo lo que la persona cambió de capa (subir el CTA al frente marca al CTA; cambiar dos de lugar, a una; nada, a ninguna)",
     [[...cambiadasDeCapa([1, 2, 3, 4, 0], [0, 1, 2, 3, 4])], [...cambiadasDeCapa([0, 2, 1, 3], [0, 1, 2, 3])].length, [...cambiadasDeCapa([0, 1, 2], [0, 1, 2])], [...cambiadasDeCapa([], [])]],
     [[0], 1, [], []],
+  );
+  eq(
+    "capas: dos de al lado que cambian de lugar es un empate; se marca la que la persona movió (sin saberlo, una de las dos)",
+    [[...cambiadasDeCapa([1, 0], [0, 1], new Set([1]))], [...cambiadasDeCapa([1, 0], [0, 1], new Set([0]))], [...cambiadasDeCapa([1, 0], [0, 1])].length, [...cambiadasDeCapa([1, 2, 3, 4, 0], [0, 1, 2, 3, 4], new Set([1, 0]))]],
+    [[1], [0], 1, [0]],
   );
   // Mismos lugares, otro orden: la caché no puede devolver la primera.
   const mismoLugar = { 0: { x: 5, y: 5, k: 1 } };
@@ -969,7 +975,7 @@ console.log("\n▶ v2 · pantalla PSD: una medida completa, la guía de zona seg
   const crudo = { nombre: "mesa", w: W2, h: H2, fondo: fondoRgb, piezas: [{ nombre: "HERO", rol: "HERO", caja: { x: 0, y: 0, w: 2, h: 2 }, solido: { x: 0, y: 0, w: 2, h: 2 }, rgba, oscurece: osc, tapadaPct: 0, letraMinPx: null, textos: [], base: null }, { nombre: "CTA", rol: "CTA", caja: { x: 1, y: 1, w: 2, h: 2 }, solido: { x: 1, y: 1, w: 2, h: 2 }, rgba, oscurece: null, tapadaPct: 0, letraMinPx: 12, textos: [texto], base }], fondoDistintoPct: 0, rearmadoDistintoPct: 0, textoGamma: 1.45, avisos: ["nota"] };
   const { maestro: listo, transferibles, bytes: pesoListo } = prepararMaestro(crudo);
   eq("la gamma del texto de Photoshop viaja con el maestro", listo.textoGamma, 1.45);
-  eq("lo que pesa un maestro al cruzar a la página = fondo + color, sombra, pieza sin texto y tinta de cada texto", pesoListo, W2 * H2 * 4 + (16 + 16) + 16 + 16 + 6);
+  eq("lo que pesa un maestro al cruzar a la página = fondo + color, sombra, pieza sin texto y tinta de cada texto (un búfer que comparten dos piezas cuenta una vez: cruza una vez)", pesoListo, W2 * H2 * 4 + 16 + 16 + 16 + 6);
   ok("la pieza sin texto y la tinta de cada texto también cruzan sin copiarse", listo.piezas[1].base === base && listo.piezas[1].textos[0].alfa === alfaTexto && transferibles.includes(base.buffer) && transferibles.includes(alfaTexto.buffer));
   ok("el fondo y el mapa de sombras llegan en RGBA opaco, con los mismos colores", listo.fondo.length === W2 * H2 * 4 && [...listo.fondo].every((v, i) => (i % 4 === 3 ? v === 255 : v === fondoRgb[Math.floor(i / 4) * 3 + (i % 4)])) && listo.piezas[0].oscurece.length === 16 && [...listo.piezas[0].oscurece].every((v, i) => (i % 4 === 3 ? v === 255 : v === osc[Math.floor(i / 4) * 3 + (i % 4)])) && listo.piezas[1].oscurece === null);
   ok("las piezas conservan su orden, rol, cajas y letra; los píxeles van sin copiar", listo.piezas.map((p) => p.rol).join() === "HERO,CTA" && listo.piezas[1].letraMinPx === 12 && listo.piezas[0].rgba === rgba && listo.avisos[0] === "nota" && listo.piezas[1].caja.x === 1);
@@ -1889,6 +1895,198 @@ console.log("\n▶ lectura de la pantalla en modo estricto: los PSD reales se le
       `no-soportado: ${noEs8Bits(16)}`,
     ]);
     ok("los mensajes nombran el modo y los bits que trae el archivo", noEsRgb("lab").includes("está en Lab") && noEs8Bits(16).includes("está en 16 bits"));
+  }
+}
+
+// ── 2b · partes: las subcarpetas de una pieza se mueven solas en el editor ─────────
+console.log("\n▶ 2b · partes de una pieza (subcarpetas): lectura, despiece, edición, pintado y los dos PSD");
+{
+  // Sintético: un botón (subcarpeta) y una flecha suelta encima que le tapa una esquina (30×30 de sus 100×60).
+  const W = 200, H = 120;
+  const img = (w, h, fn) => {
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const [r, g, b, a = 255] = fn(x, y); data.set([r, g, b, a], (y * w + x) * 4); }
+    return { data, width: w, height: h };
+  };
+  const capa = (name, [l, t, w, h], color, extra = {}) => ({ name, left: l, top: t, right: l + w, bottom: t + h, blendMode: "normal", opacity: 1, imageData: img(w, h, () => color), ...extra });
+  const carpeta = (name, children, extra = {}) => ({ name, opened: true, children, ...extra });
+  const dentro = (x, y, [l, t, w, h]) => x >= l && x < l + w && y >= t && y < t + h;
+  const ROJO = [230, 30, 30], AZUL = [20, 40, 220], GRIS = [100, 100, 100];
+  const R = { boton: [20, 20, 100, 60], flecha: [90, 30, 60, 30] };
+  const verdad = (x, y) => (dentro(x, y, R.flecha) ? AZUL : dentro(x, y, R.boton) ? ROJO : GRIS);
+  const arbolCta = (extra = []) => [
+    carpeta("Background", [capa("base", [0, 0, W, H], GRIS)]),
+    carpeta("CTA", [carpeta("boton", [capa("rojo", R.boton, ROJO)]), capa("flecha", R.flecha, AZUL), carpeta("vacia", []), carpeta("oculta", [capa("verde", [0, 0, 10, 10], [0, 255, 0])], { hidden: true })]),
+    ...extra,
+  ];
+  const psdDe = (children) => writePsdBuffer({ width: W, height: H, children, imageData: img(W, H, verdad), imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } } });
+  const cerca = (a, b, tol) => a.length >= b.length && b.every((v, i) => Math.abs(a[i] - v) <= tol);
+
+  const doc = leerPsd(psdDe(arbolCta()));
+  eq("leerPsd: cada capa sabe su carpeta de primer nivel y su subcarpeta (las sueltas: null; la oculta no entra)", doc.capas.map((c) => [c.nombre, c.carpeta, c.parte?.hijo ?? null, c.parte?.nombre ?? null]), [["base", 0, null, null], ["rojo", 1, 0, "boton"], ["flecha", 1, null, null]]);
+  const ma = despiezar(doc, 0);
+  const cta = ma.piezas.find((p) => p.nombre === "CTA");
+  eq("despiezar: la pieza trae 2 partes (la subcarpeta y la suelta; la vacía y la oculta no cuentan), en el orden de su primera capa, con su caja", cta.partes?.map((q) => [q.nombre, q.hijo, q.caja]), [["boton", 0, { x: 20, y: 20, w: 100, h: 60 }], ["flecha", null, { x: 90, y: 30, w: 60, h: 30 }]]);
+  const pxDe = (p, x, y) => [...p.rgba.subarray(((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4, ((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4 + 4)];
+  const [boton, flecha] = cta.partes;
+  ok(
+    `la parte tapada se rellena con su color (${pxDe(boton, 100, 45)}) y se mide lo tapado (${boton.rellenoPct.toFixed(1)} %); la de encima sale exacta (${pxDe(flecha, 120, 45)}), sin relleno`,
+    cerca(pxDe(boton, 100, 45), [...ROJO, 255], 3) && Math.abs(boton.rellenoPct - 15) < 0.5 && flecha.rellenoPct === 0 && cerca(pxDe(flecha, 120, 45), [...AZUL, 255], 1),
+  );
+  eq("cada parte sabe qué partes le tapan algo (el botón: la flecha; la flecha: ninguna)", [boton.tapadaPor, flecha.tapadaPor], [[1], []]);
+  const conPartes = (m) => ({ ...m, piezas: m.piezas.flatMap((p) => p.partes ?? [p]) });
+  ok("rearmar con las partes en su lugar da lo mismo que con la pieza entera", rearmar(conPartes(ma)).every((v, i) => Math.abs(v - rearmar(ma)[i]) <= 1));
+  {
+    // Un velo casi transparente (6 %) sobre la mitad verde de un botón rojo y verde: lo tapado se rellena con el rojo de al
+    // lado, y des-mezclar el velo sobre ese rojo se pasa de rango. Juntas, las partes no dan la pieza: va entera, con aviso.
+    const VERDE = [30, 200, 60], BLANCO = [255, 255, 255];
+    const mitad = [70, 20, 50, 60];
+    const verdad2 = (x, y) => (dentro(x, y, mitad) ? VERDE.map((v, c) => v * 0.94 + BLANCO[c] * 0.06) : dentro(x, y, R.boton) ? ROJO : GRIS);
+    const dos = { name: "dos", left: 20, top: 20, right: 120, bottom: 80, blendMode: "normal", opacity: 1, imageData: img(100, 60, (x) => (x < 50 ? ROJO : VERDE)) };
+    const arbol = [carpeta("Background", [capa("base", [0, 0, W, H], GRIS)]), carpeta("CTA", [carpeta("boton", [dos]), capa("velo", mitad, BLANCO, { opacity: 0.06 })])];
+    const mv = despiezar(leerPsd(writePsdBuffer({ width: W, height: H, children: arbol, imageData: img(W, H, verdad2), imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } } })), 0);
+    const pv = mv.piezas.find((p) => p.nombre === "CTA");
+    ok("si las partes, juntas, no dan la pieza (la prueba del rearmado, por pieza), se mueve entera y se avisa", !pv.partes && mv.avisos.some((v) => v.includes("«CTA» se mueve entera") && v.includes("no dan la pieza")), JSON.stringify(mv.avisos));
+  }
+  const doble = despiezar(leerPsd(psdDe(arbolCta([carpeta("CTA", [capa("otra", [150, 90, 20, 20], [0, 0, 0])])]))), 0);
+  ok("dos carpetas «CTA» son una pieza, pero sin partes (sus subcarpetas no se emparejan)", doble.piezas.filter((p) => p.nombre === "CTA").length === 1 && !doble.piezas.find((p) => p.nombre === "CTA").partes);
+
+  // Edición: la flecha 30 px a la derecha y 40 abajo, relativo a la pieza (sin tocar: 70, 10 desde su esquina sólida).
+  const lista = prepararMaestro(ma).maestro;
+  const auto = acomodar(lista, W, H);
+  const iC = lista.piezas.findIndex((p) => p.nombre === "CTA"), q0 = auto.puestas.find((q) => q.pieza === iC);
+  eq("una parte sin tocar está donde va en el maestro, relativo a su pieza", [parteSinTocar(lista.piezas[iC], 1), [q0.x, q0.y, q0.k]], [{ x: 70, y: 10, k: 1 }, [20, 20, 1]]);
+  ok("sin tocar partes la pieza no se abre (mismo acomodo, sin `partes`)", aplicarEdicion(lista, auto, { piezas: {} }, W, H) === auto && !q0.partes);
+  const rel = { x: 100, y: 50, k: 1 };
+  const a1 = aplicarEdicion(lista, auto, { piezas: {}, partes: { [iC]: { 1: rel } } }, W, H);
+  const q1 = a1.puestas.find((q) => q.pieza === iC);
+  eq("una parte movida: la pieza se abre en sus 2 partes y la otra queda en su lugar del maestro", q1.partes?.map((pp) => [pp.parte, pp.x, pp.y, pp.k]), [[0, 20, 20, 1], [1, 120, 70, 1]]);
+  ok("y se avisa del relleno («boton» tenía 15 % tapado por la flecha)", a1.editada && a1.avisos.some((v) => v.tipo === "relleno" && v.texto.includes("«boton»") && v.texto.includes("15.0 %")), JSON.stringify(a1.avisos));
+  const en = (px, x, y) => [...px.subarray((y * W + x) * 4, (y * W + x) * 4 + 3)];
+  {
+    // Una tercera parte lejos: moverla abre la pieza, pero lo rellenado del botón sigue tapado por la flecha.
+    const m3 = despiezar(leerPsd(psdDe(arbolCta().map((l) => (l.name === "CTA" ? { ...l, children: [...l.children, carpeta("extra", [capa("punto", [150, 90, 20, 20], GRIS)])] } : l)))), 0);
+    const l3 = prepararMaestro(m3).maestro, i3 = l3.piezas.findIndex((p) => p.nombre === "CTA"), auto3 = acomodar(l3, W, H);
+    const lejos = (j, dx, dy) => ({ [j]: { ...parteSinTocar(l3.piezas[i3], j), x: parteSinTocar(l3.piezas[i3], j).x + dx, y: parteSinTocar(l3.piezas[i3], j).y + dy } });
+    const avisa = (ed) => aplicarEdicion(l3, auto3, { piezas: {}, ...ed }, W, H).avisos.some((v) => v.tipo === "relleno");
+    eq(
+      "el relleno se avisa sólo si se puede ver: mover otra parte no; mover la de encima o la tapada, o pasar la de encima abajo, sí",
+      [l3.piezas[i3].partes.map((q) => q.nombre), avisa({ partes: { [i3]: lejos(2, -10, 0) } }), avisa({ partes: { [i3]: lejos(1, 30, 40) } }), avisa({ partes: { [i3]: lejos(0, 0, 5) } }), avisa({ ordenPartes: { [i3]: [1, 0, 2] } })],
+      [["boton", "flecha", "extra"], false, true, true, true],
+    );
+  }
+  // Sombra de contraste de una pieza abierta: todas van debajo de TODAS sus partes (la de la flecha no oscurece al botón).
+  const conSombra = { ...a1, sombras: [iC] };
+  const pxS = armarMedida(lista, conSombra, W, H);
+  ok(`sombra de contraste con la pieza abierta: el botón, junto a la flecha movida, queda de su color (${en(pxS, 118, 75)}) aunque la sombra de la flecha llega ahí, y fuera de las partes sí oscurece (${en(pxS, 118, 90)})`, cerca(en(pxS, 118, 75), ROJO, 4) && en(pxS, 118, 90).every((v, c) => v < GRIS[c] - 3));
+  eq("en el PSD de capas planas, igual: las sombras de contraste primero en la carpeta, luego las partes", plano0(psdDeMedida(lista, conSombra, W, H)), [CAPA_SOMBRA_CONTRASTE, CAPA_SOMBRA_CONTRASTE, "boton", "flecha"]);
+  const px1 = armarMedida(lista, a1, W, H);
+  ok(`pintado: donde estaba la flecha se ve el botón rellenado (${en(px1, 100, 45)}), lo que dejó fuera del botón es fondo (${en(px1, 135, 45)}) y la flecha está en su lugar nuevo (${en(px1, 150, 85)})`, cerca(en(px1, 100, 45), ROJO, 4) && cerca(en(px1, 135, 45), GRIS, 1) && cerca(en(px1, 150, 85), AZUL, 1));
+  ok("abrir la pieza dejando cada parte en su lugar pinta exactamente lo mismo que la pieza entera (a la medida del maestro)", armarMedida(lista, aplicarEdicion(lista, auto, { piezas: {}, partes: { [iC]: { 1: parteSinTocar(lista.piezas[iC], 1) } } }, W, H), W, H).every((v, i) => v === armarMedida(lista, auto, W, H)[i]));
+  const a2 = aplicarEdicion(lista, auto, { piezas: { [iC]: { x: 10, y: 15, k: 1 } }, partes: { [iC]: { 1: rel } } }, W, H);
+  eq("mover la pieza mueve sus partes (van pegadas a ella)", a2.puestas.find((q) => q.pieza === iC).partes.map((pp) => [pp.x, pp.y]), [[10, 15], [110, 65]]);
+  const a3 = aplicarEdicion(lista, auto, { piezas: { [iC]: { x: 20, y: 20, k: 0.5 } }, partes: { [iC]: { 1: rel } } }, W, H);
+  eq("achicar la pieza achica sus partes y lo que las separa, desde la esquina de la pieza", a3.puestas.find((q) => q.pieza === iC).partes.map((pp) => [pp.x, pp.y, pp.k]), [[20, 20, 0.5], [70, 45, 0.5]]);
+  const a4 = aplicarEdicion(lista, auto, { piezas: {}, ordenPartes: { [iC]: [1, 0] } }, W, H);
+  ok("orden de las partes (sólo dentro de su pieza): la flecha abajo del botón; donde se enciman se ve el botón", a4.puestas.find((q) => q.pieza === iC).partes.map((pp) => pp.parte).join() === "1,0" && cerca(en(armarMedida(lista, a4, W, H), 100, 45), ROJO, 4));
+  ok("el mismo orden del automático no abre la pieza", aplicarEdicion(lista, auto, { piezas: {}, ordenPartes: { [iC]: [0, 1] } }, W, H) === auto);
+  const a5 = aplicarEdicion(lista, auto, { piezas: {}, partes: { [iC]: { 1: { x: 100, y: 50, k: 1e-6 } } } }, W, H);
+  ok("una parte achicada a casi nada se queda en el mínimo que deja el editor (como una pieza)", Math.abs(a5.puestas.find((q) => q.pieza === iC).partes[1].k * 30 - 6) < 1e-9);
+  ok("la caché distingue partes movidas (otra firma, otro resultado)", revisarMedida([lista], W, H, { edicion: { piezas: {}, partes: { [iC]: { 1: rel } } } }) !== revisarMedida([lista], W, H, { edicion: { piezas: {}, partes: { [iC]: { 1: { ...rel, x: 101 } } } } }));
+  // Lo guardado: partes y orden de partes se leen sin confiar.
+  const avisos = [], warnAntes = console.warn;
+  console.warn = (...a) => avisos.push(a.join(" "));
+  const leidas = [
+    leerEdicion({ piezas: {}, partes: { [iC]: { 1: rel, 5: rel, x: rel, 0: { x: NaN, y: 0, k: 1 } }, 9: { 0: rel } }, ordenPartes: { [iC]: [1, 0] } }, lista.piezas),
+    leerEdicion({ ordenPartes: { [iC]: [1, 1] } }, lista.piezas),
+    leerEdicion({ partes: { [iC]: { 1: rel } } }, lista.piezas.length),
+  ];
+  console.warn = warnAntes;
+  eq("lo guardado: una parte que no existe o con números rotos se salta; un orden de partes repetido se descarta y se avisa; sin saber las partes, no se leen", [...leidas, avisos.length], [{ piezas: {}, partes: { [iC]: { 1: rel } }, ordenPartes: { [iC]: [1, 0] } }, null, null, 1]);
+  // Los dos PSD.
+  function plano0(psd) {
+    return psd.children.find((l) => l.name === "CTA").children.map((l) => l.name);
+  }
+  const plano = readPsdAg(writePsdBuffer(psdDeMedida(lista, a1, W, H), { noBackground: true }), { skipLayerImageData: true, skipCompositeImageData: true, skipThumbnail: true });
+  eq("PSD de capas planas: la pieza abierta lleva una capa por parte en su carpeta, cada una en su lugar (con el px de margen del filtro)", plano.children.map((l) => [l.name, (l.children ?? []).map((c) => [c.name, c.left, c.top])]), [["BACKGROUND", [["Fondo", 0, 0]]], ["CTA", [["boton", 19, 19], ["flecha", 119, 69]]]]);
+  eq("las capas de la medida dicen de qué parte son (null = la pieza entera)", [capasDeMedida(lista, a1, W, H).piezas.map((c) => c.parte), capasDeMedida(lista, auto, W, H).piezas.map((c) => c.parte)], [[0, 1], [null]]);
+  eq("sombra de contraste: una por parte si la pieza se abrió, una si no", [halosEnMedida(lista, q1).length, halosEnMedida(lista, q0).length], [2, 1]);
+
+  const ruta = join(homedir(), "Desktop/formatos-prueba/s33-BFDIRECT20CASH.psd");
+  if (!existsSync(ruta)) console.log("  · (s33 no está en el Escritorio: no se probaron las partes con el PSD real)");
+  else {
+    const crudo = readFileSync(ruta);
+    const d33 = leerPsd((await adelgazarPsd(new Blob([crudo]), PSD_BYTES_MAX)).datos);
+    const m33 = despiezar(d33, d33.mesas.findIndex((m) => m.w === 1200 && m.h === 1500));
+    eq(
+      "s33: Legales (Iconos + el legal), Copy (Subtitulo + Hasta; Titulo está vacía) y Logo (logo y divisor sueltos + buenfin) traen partes; CTA y CARD no",
+      m33.piezas.map((p) => [p.nombre, p.partes?.map((q) => [q.nombre.slice(0, 20), q.hijo]) ?? null]),
+      [["CTA", null], ["Legales", [["Iconos", 0], ["Regigold, S.A. de C.", null]]], ["Copy", [["Subtitulo", 0], ["Hasta", null]]], ["CARD", null], ["Logo", [["Logo DD_Card + Shape", null], ["buenfin", 1]]]],
+    );
+    const dif = rearmar(conPartes(m33)), ref = rearmar(m33);
+    ok("s33: ninguna parte tapa a otra (0 % de relleno) y rearmar con las partes da exactamente lo mismo que con las piezas", m33.piezas.every((p) => (p.partes ?? []).every((q) => q.rellenoPct === 0)) && dif.every((v, i) => v === ref[i]));
+    ok("s33: los textos de cada parte son los MISMOS objetos que los de su pieza (la página reconoce cuáles escribir)", m33.piezas.every((p) => (p.partes ?? []).every((q) => q.textos.every((t) => p.textos.includes(t)))) && m33.piezas.find((p) => p.nombre === "Legales").partes[1].textos.length === 1);
+    const l33 = prepararMaestro(m33).maestro;
+    const iL = l33.piezas.findIndex((p) => p.nombre === "Legales"), iLogo = l33.piezas.findIndex((p) => p.nombre === "Logo");
+    // Abrir las tres sin mover nada: a la medida del maestro, idéntico; en otra, sólo la orilla del filtro entre partes.
+    const abiertas = { piezas: {}, partes: Object.fromEntries(l33.piezas.flatMap((p, i) => (p.partes ? [[i, { 0: parteSinTocar(p, 0) }]] : []))) };
+    const pierde = (W2, H2) => { const a = acomodar(l33, W2, H2); return [perdidas(l33, a, W2, H2), perdidas(l33, aplicarEdicion(l33, a, abiertas, W2, H2), W2, H2)]; };
+    const [p0, p1] = pierde(1200, 1500);
+    ok(`s33: el contraste de una pieza abierta sin mover se mide como el de la pieza entera (${[...p0].map(([i, v]) => `${l33.piezas[i].nombre} ${v.toFixed(3)}/${(p1.get(i) ?? NaN).toFixed(3)}`).join(", ")})`, [...p0].every(([i, v]) => Math.abs(v - (p1.get(i) ?? NaN)) < 0.03));
+    const maxDif = (W2, H2) => { const a = acomodar(l33, W2, H2), x = armarMedida(l33, a, W2, H2), y = armarMedida(l33, aplicarEdicion(l33, a, abiertas, W2, H2), W2, H2); let m = 0; for (let i = 0; i < x.length; i++) m = Math.max(m, Math.abs(x[i] - y[i])); return m; };
+    const difs = [[1200, 1500], [1080, 1920], [1200, 627], [320, 250]].map(([w, h]) => maxDif(w, h));
+    ok(`s33: abrir las piezas sin mover nada pinta lo mismo a 1200×1500 (0) y casi lo mismo en otras medidas (máx. ${difs.slice(1).join(", ")} niveles, la orilla entre partes)`, difs[0] === 0 && difs.slice(1).every((d) => d <= 8), JSON.stringify(difs));
+    // PSD editable: el legal 40 px a la derecha (del maestro) y el orden del Logo al revés.
+    const fuente = readPsdAg(await prepararParaEditable(new Blob([crudo]), EDITABLE_MAX_BYTES), { useRawData: true, skipThumbnail: true, skipCompositeImageData: true, totalMemoryLimit: 64 * 1024 * 1024, strict: true });
+    const px = { capa: (l) => getLayerImageData(l), mascara: (l) => getLayerMaskImageData(l), mascaraReal: (l) => getLayerRealMaskImageData(l) };
+    const hojas = (ls, r = []) => ls.flatMap((l) => (l.children ? hojas(l.children, [...r, l.name]) : [{ l, ruta: [...r, l.name].join(" / ") }]));
+    const vacios = (W2, H2) => ({ compuesto: new Uint8ClampedArray(W2 * H2 * 4), halos: [], retoque: null });
+    const a = acomodar(l33, 1200, 627);
+    const sinTocar = parteSinTocar(l33.piezas[iL], 1);
+    const ae = aplicarEdicion(l33, a, { piezas: {}, partes: { [iL]: { 1: { ...sinTocar, x: sinTocar.x + 40 } } }, ordenPartes: { [iLogo]: [1, 0] } }, 1200, 627);
+    const plan = planDeMedida(l33, ae, 1200, 627);
+    eq("plan del PSD editable: Legales y Logo van abiertas (cada parte con su subcarpeta; null = las sueltas) y el Logo con su orden", plan.partes?.map((x) => [x.pieza, x.partes.map((p) => p.hijo), x.orden ?? null]), [["Legales", [0, null], null], ["Logo", [1, null], [1, null]]]);
+    const sinAbrir = psdEditable(fuente, planDeMedida(l33, a, 1200, 627), vacios(1200, 627), px).psd;
+    const halosL = halosEnMedida(l33, ae.puestas.find((q) => q.pieza === iL)).map((c) => ({ nombre: "Legales", capa: c }));
+    const abierto = readPsdAg(writePsdBuffer(psdEditable(fuente, plan, { ...vacios(1200, 627), halos: halosL }, px).psd, { invalidateTextLayers: true, noBackground: true }), { useImageData: true, skipThumbnail: true });
+    const en33 = (psd, c, n) => hojas(psd.children.find((l) => l.name === c).children).find(({ l }) => l.name.startsWith(n)).l;
+    const k = plan.piezas.find(([n]) => n === "Legales")[1].k;
+    const t0 = en33(sinAbrir, "Legales", "Regigold").text.transform, t1 = en33(abierto, "Legales", "Regigold").text.transform;
+    ok(
+      `s33 1200×627: el legal (texto vivo) se movió 40 px del maestro (${(t1[4] - t0[4]).toFixed(2)} px = 40 × ${k.toFixed(3)}) y los iconos de su otra parte no`,
+      Math.abs(t1[4] - t0[4] - 40 * k) < 1e-4 && Math.abs(t1[5] - t0[5]) < 1e-9 && JSON.stringify(en33(sinAbrir, "Legales", "Icon DD").placedLayer.transform) === JSON.stringify(en33(abierto, "Legales", "Icon DD").placedLayer.transform),
+      JSON.stringify([t0, t1]),
+    );
+    // El tope de cada medida mide cada hijo con el movimiento de SU parte: partes enormes (un dato que el editor no deja)
+    // se rechazan antes de decodificar nada, aunque sus piezas estén a su tamaño.
+    const a19 = acomodar(l33, 1080, 1920);
+    const sinMover = { piezas: {}, partes: { [iL]: { 0: parteSinTocar(l33.piezas[iL], 0) }, [iLogo]: { 0: parteSinTocar(l33.piezas[iLogo], 0) } } };
+    const plan19 = planDeMedida(l33, aplicarEdicion(l33, a19, sinMover, 1080, 1920), 1080, 1920);
+    // Cada parte 60 veces más grande, con su esquina sólida fuera de la medida arriba a la izquierda: sus capas la cubren.
+    const o19 = plan19.origen, os = o19.s ?? 1;
+    const enorme = {
+      ...plan19,
+      partes: plan19.partes.map((x) => ({
+        ...x,
+        partes: x.partes.map((p) => {
+          const sol = l33.piezas.find((pz) => pz.nombre === x.pieza).partes.find((q) => q.hijo === p.hijo).solido;
+          return { ...p, A: { k: 60, x: -1080 - 60 * (sol.x / os + o19.x), y: -1920 - 60 * (sol.y / os + o19.y) } };
+        }),
+      })),
+    };
+    let tope = null;
+    try {
+      psdEditable(fuente, enorme, vacios(1080, 1920), px);
+    } catch (err) {
+      tope = err;
+    }
+    ok(`s33: el tope del PSD editable mide la parte con su propio movimiento (${tope?.message})`, tope instanceof TopeEditable && !tope.deArchivo && /en esta medida/.test(tope.message) && plan19.partes.length === 2);
+    const nombres = (psd) => psd.children.map((l) => l.name);
+    eq(
+      "s33 1200×627: el Logo con sus partes al revés (buenfin abajo de las sueltas, que no se separan entre sí), lo demás igual; las sombras de contraste de cada parte del legal van juntas justo debajo de su carpeta",
+      [abierto.children.find((l) => l.name === "Logo").children.map((l) => l.name), hojas(abierto.children).length - 2 === hojas(sinAbrir.children).length, nombres(abierto).slice(nombres(abierto).indexOf("Legales") - 2, nombres(abierto).indexOf("Legales") + 1)],
+      [["buenfin", "Logo DD_Card", "Shape 1"], true, [CAPA_SOMBRA_CONTRASTE, CAPA_SOMBRA_CONTRASTE, "Legales"]],
+    );
   }
 }
 

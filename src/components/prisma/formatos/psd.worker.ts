@@ -34,7 +34,11 @@ function entregar(d: DocPsd, indices: number[]): void {
       const ma = despiezar(d, i);
       const uso = despieceUsable(ma);
       if (!uso.ok) return void descartadas.push({ nombre: ma.nombre || mesa.nombre, motivos: uso.motivos });
-      const listo = prepararMaestro(ma);
+      let listo = prepararMaestro(ma);
+      // Lo primero que se suelta son las partes (las piezas se mueven enteras): pesan casi lo mismo que sus piezas.
+      if (bytes + listo.bytes > TRANSFERIR_MAX_BYTES && ma.piezas.some((p) => p.partes)) {
+        listo = prepararMaestro({ ...ma, piezas: ma.piezas.map((p) => ({ ...p, partes: undefined, carpeta: undefined })), avisos: [...ma.avisos, "Las piezas con subcarpetas se mueven enteras: abrirlas en partes pesaba demasiado para el navegador."] });
+      }
       if (bytes + listo.bytes > TRANSFERIR_MAX_BYTES) return void descartadas.push({ nombre: ma.nombre || mesa.nombre, motivos: ["Sus piezas pesan demasiado para armarlas en el navegador. Qué hacer: elige menos mesas."] });
       bytes += listo.bytes;
       maestros.push(listo.maestro);

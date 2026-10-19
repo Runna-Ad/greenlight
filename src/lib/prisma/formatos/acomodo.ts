@@ -15,15 +15,24 @@
 import type { Caja, Rol } from "./psd.ts";
 import { etiquetaPieza } from "./roles.ts";
 
-/** Lo que el acomodo necesita de una pieza (PiezaPsd lo cumple). */
-export type PiezaCaja = { nombre: string; rol: Rol | null; solido: Caja; letraMinPx?: number | null };
+/** Lo que el acomodo necesita de una pieza (PiezaPsd lo cumple). `caja`: todo lo que pinta, con sombras (frena lo
+ *  grande que se deja a mano). */
+export type PiezaCaja = { nombre: string; rol: Rol | null; solido: Caja; caja?: Caja; letraMinPx?: number | null; partes?: readonly ParteCaja[] };
+/** Lo que necesita de una parte de una pieza (`PartePsd`). Sin `tapadaPor` no se sabe quién le tapa: su relleno se
+ *  avisa siempre que la pieza se abre. */
+export type ParteCaja = { nombre: string; solido: Caja; caja?: Caja; letraMinPx?: number | null; rellenoPct?: number; tapadaPor?: readonly number[] };
 export type MaestroCaja = { nombre: string; w: number; h: number; piezas: PiezaCaja[] };
 
 export type Familia = "igual" | "display" | "horizontal" | "ancho" | "banner";
-/** Una pieza colocada: índice en `maestro.piezas`, su escala y la caja de su parte sólida en la medida final. */
-export type Puesta = { pieza: number; k: number; x: number; y: number; w: number; h: number };
+/** Una pieza colocada: índice en `maestro.piezas`, su escala y la caja de su parte sólida en la medida final. Con
+ *  `partes`, la pieza se abrió en el editor: se pinta parte por parte (en ese orden, de abajo hacia arriba), cada una en
+ *  su lugar; si no, entera. Su escala y su lugar siguen siendo los de la pieza (sus partes van pegadas a ella). */
+export type Puesta = { pieza: number; k: number; x: number; y: number; w: number; h: number; partes?: readonly PuestaParte[] };
+/** Una parte colocada: índice en `pieza.partes`, su escala y la caja de su parte sólida en la medida final. `movida`: la
+ *  persona la movió o la cambió de tamaño dentro de su pieza. */
+export type PuestaParte = { parte: number; k: number; x: number; y: number; w: number; h: number; movida: boolean };
 /** `contraste`, `copia` y `retoque` los pone `revisar.ts` (miran píxeles); los demás, el acomodo. */
-export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque"; texto: string };
+export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque" | "relleno"; texto: string };
 export type Acomodo = {
   familia: Familia;
   /** De abajo hacia arriba: en el orden del maestro, o en el que eligió la persona (`aplicarEdicion`). */
@@ -43,12 +52,24 @@ export type Acomodo = {
 };
 /** Dónde dejó la persona una pieza: la esquina de su parte sólida y su escala, en px de la medida. */
 export type PosicionPieza = { x: number; y: number; k: number };
+/** Dónde dejó la persona una parte, RELATIVO a su pieza (así va pegada a ella: Pedro, 2026-10-19, "Yes, parts stay
+ *  attached"): la esquina de su parte sólida desde la de la pieza, en px del maestro (antes de la escala de la pieza), y
+ *  su escala respecto a la pieza. Sin tocar: su lugar en el maestro y 1. */
+export type PosicionParte = { x: number; y: number; k: number };
 /**
  * Lo que la persona cambió a mano en una medida (Pedro, 2026-10-15: "an edit button that allows us to move and or
  * resize the elements"; 2026-10-19: "re arrenge layers to move whats on top of what"). `piezas`: por pieza (índice en
  * `maestro.piezas`), dónde quedó. `orden`: qué va encima de qué, índices de abajo hacia arriba (sólo si cambió).
  */
-export type Edicion = Readonly<{ piezas: Readonly<Record<number, PosicionPieza>>; orden?: readonly number[] }>;
+export type Edicion = Readonly<{
+  piezas: Readonly<Record<number, PosicionPieza>>;
+  orden?: readonly number[];
+  /** Por pieza, por parte (índice en `pieza.partes`): dónde quedó, relativo a su pieza. */
+  partes?: Readonly<Record<number, Readonly<Record<number, PosicionParte>>>>;
+  /** Por pieza: qué parte va encima de cuál (índices, de abajo hacia arriba), sólo dentro de su pieza ("Only inside its
+   *  piece"), y sólo si cambió. */
+  ordenPartes?: Readonly<Record<number, readonly number[]>>;
+}>;
 export type Lado = "derecha" | "izquierda";
 /** px de la medida final que la plataforma tapa por cada borde. */
 export type Zona = { top: number; right: number; bottom: number; left: number };
@@ -523,10 +544,31 @@ function comprobar(ma: MaestroCaja, W: number, H: number, familia: Familia, pues
     const duplicada = p.rol !== null && puestas.some((q) => ma.piezas[q.pieza].rol === p.rol);
     avisos.push({ tipo: "falta", texto: !valida(p) ? `${n} trae una caja vacía o inválida: no se colocó.` : duplicada ? `Hay más de una carpeta ${n}: sólo se colocó una. Revisar.` : `${n} no entra en este acomodo: revisar.` });
   });
-  for (const q of puestas) {
-    if (!(q.x >= -0.5 && q.y >= -0.5 && q.x + q.w <= W + 0.5 && q.y + q.h <= H + 0.5)) avisos.push({ tipo: "fuera", texto: `${nom(q)} se sale de la medida.` });
-    else if (q.x < zona.left - 0.5 || q.y < zona.top - 0.5 || q.x + q.w > W - zona.right + 0.5 || q.y + q.h > H - zona.bottom + 0.5) avisos.push({ tipo: "zona", texto: `${nom(q)} entra en la zona que tapa la plataforma.` });
-  }
+  // Una pieza abierta en partes se revisa parte por parte (cada una está donde la dejó la persona).
+  const cajas = (q: Puesta) => {
+    const p = ma.piezas[q.pieza];
+    const partes = q.partes;
+    if (!partes?.length || !p.partes) return [{ c: q, n: nom(q), l: p.letraMinPx, relleno: 0 }];
+    // Lo rellenado de una parte sólo se ve si ella o una de las que le tapaban se movió, o si una de ésas quedó debajo.
+    const seVe = (pos: number, d: ParteCaja) =>
+      partes[pos].movida ||
+      d.tapadaPor === undefined ||
+      d.tapadaPor.some((t) => {
+        const o = partes.findIndex((x) => x.parte === t);
+        return o >= 0 && (partes[o].movida || o < pos);
+      });
+    return partes.flatMap((pp, pos) => {
+      const d = p.partes?.[pp.parte];
+      return d ? [{ c: pp, n: `${nom(q)} › «${d.nombre}»`, l: d.letraMinPx, relleno: seVe(pos, d) ? (d.rellenoPct ?? 0) : 0 }] : [];
+    });
+  };
+  for (const q of puestas)
+    for (const { c, n, relleno } of cajas(q)) {
+      if (!(c.x >= -0.5 && c.y >= -0.5 && c.x + c.w <= W + 0.5 && c.y + c.h <= H + 0.5)) avisos.push({ tipo: "fuera", texto: `${n} se sale de la medida.` });
+      else if (c.x < zona.left - 0.5 || c.y < zona.top - 0.5 || c.x + c.w > W - zona.right + 0.5 || c.y + c.h > H - zona.bottom + 0.5) avisos.push({ tipo: "zona", texto: `${n} entra en la zona que tapa la plataforma.` });
+      // Lo que otra parte de la pieza le tapaba ahora se puede ver ("Fill and warn").
+      if (relleno > RELLENO_AVISO_PCT) avisos.push({ tipo: "relleno", texto: `${n}: lo que otra parte le tapaba (${relleno.toFixed(1)} %) se rellenó con el color de alrededor. Revisar que se vea bien.` });
+    }
   // En "igual" las cajas se enciman por diseño (los beneficios van junto a la persona): ahí no se revisa.
   if (familia !== "igual")
     for (let i = 0; i < puestas.length; i++)
@@ -537,25 +579,31 @@ function comprobar(ma: MaestroCaja, W: number, H: number, familia: Familia, pues
       }
   const letras: Acomodo["letras"] = [];
   for (const q of puestas) {
-    const l = ma.piezas[q.pieza].letraMinPx;
-    if (!(typeof l === "number" && l > 0)) {
+    const conLetra = cajas(q).filter((x) => typeof x.l === "number" && x.l > 0);
+    if (!conLetra.length) {
       // El legal nunca sale chico sin avisar: si su letra no se puede medir (texto aplanado), se avisa al reducirlo.
-      if (ma.piezas[q.pieza].rol === "FOOTER" && q.k < 0.995) avisos.push({ tipo: "letra", texto: `${nom(q)}: no se pudo medir su letra (texto aplanado) y queda al ${Math.round(q.k * 100)} % de su tamaño. Revisar.` });
+      const k = Math.min(q.k, ...(q.partes ?? []).map((pp) => pp.k));
+      if (ma.piezas[q.pieza].rol === "FOOTER" && k < 0.995) avisos.push({ tipo: "letra", texto: `${nom(q)}: no se pudo medir su letra (texto aplanado) y queda al ${Math.round(k * 100)} % de su tamaño. Revisar.` });
       continue;
     }
-    const px = l * q.k;
-    letras.push({ pieza: q.pieza, px });
-    if (px < LETRA_MIN_PX) avisos.push({ tipo: "letra", texto: `${nom(q)}: la letra queda de ${px.toFixed(1)} px (mínimo ${LETRA_MIN_PX}).` });
+    for (const { c, n, l } of conLetra) {
+      const px = (l as number) * c.k;
+      letras.push({ pieza: q.pieza, px });
+      if (px < LETRA_MIN_PX) avisos.push({ tipo: "letra", texto: `${n}: la letra queda de ${px.toFixed(1)} px (mínimo ${LETRA_MIN_PX}).` });
+    }
   }
   return { avisos, letras };
 }
 
 /** Lo más chica que se deja una pieza a mano (px de su lado corto): más chica ya no se ve ni se agarra. */
 export const PIEZA_MIN_PX = 6;
+/** Una parte abierta con más de esto (%) de relleno donde otra parte le tapaba se avisa (como una pieza tapada). */
+export const RELLENO_AVISO_PCT = 2;
 
-/** La escala más chica y más grande que se deja a mano: ni invisible ni mucho más grande que la medida. */
-export function topesPieza(s: { w: number; h: number }, W: number, H: number): { min: number; max: number } {
-  return { min: PIEZA_MIN_PX / Math.min(s.w, s.h), max: (2 * Math.max(W, H)) / Math.max(s.w, s.h) };
+/** La escala más chica y más grande que se deja a mano: ni invisible (su parte sólida, `s`) ni mucho más grande que la
+ *  medida (tampoco su `caja` con sombras: cada capa del PSD de la medida mide lo que ella). */
+export function topesPieza(s: { w: number; h: number }, W: number, H: number, caja?: { w: number; h: number }): { min: number; max: number } {
+  return { min: PIEZA_MIN_PX / Math.min(s.w, s.h), max: (2 * Math.max(W, H)) / Math.max(s.w, s.h, caja?.w ?? 0, caja?.h ?? 0) };
 }
 
 /**
@@ -564,25 +612,51 @@ export function topesPieza(s: { w: number; h: number }, W: number, H: number): {
  * `piezas`). Un lugar con números que no sirven se salta; un orden con algo raro (índice fuera o repetido) no se
  * adivina: se descarta entero, con un aviso en la consola.
  */
-export function leerEdicion(v: unknown, nPiezas: number): Edicion | null {
+export function leerEdicion(v: unknown, piezasDe: number | readonly { partes?: readonly unknown[] }[]): Edicion | null {
   if (!v || typeof v !== "object") return null;
-  const guardada = v as { piezas?: unknown; orden?: unknown };
+  const nPiezas = typeof piezasDe === "number" ? piezasDe : piezasDe.length;
+  const nPartes = (i: number) => (typeof piezasDe === "number" ? 0 : (piezasDe[i]?.partes?.length ?? 0));
+  const guardada = v as { piezas?: unknown; orden?: unknown; partes?: unknown; ordenPartes?: unknown };
   const lugares = (guardada.piezas && typeof guardada.piezas === "object" ? guardada.piezas : guardada) as Record<string, unknown>;
-  const valida = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0 && n < nPiezas;
+  const indice = (n: unknown, hasta: number): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0 && n < hasta;
+  const valida = (n: unknown): n is number => indice(n, nPiezas);
+  const lugar = (p: unknown): PosicionPieza | null => {
+    if (!p || typeof p !== "object") return null;
+    const { x, y, k } = p as Partial<PosicionPieza>;
+    return typeof x === "number" && typeof y === "number" && typeof k === "number" && [x, y, k].every(Number.isFinite) && k > 0 ? { x, y, k } : null;
+  };
+  /** Un orden sin nada raro (índices de 0 a `hasta`, sin repetir); con algo raro no se adivina: se descarta, con aviso. */
+  const ordenValido = (o: unknown, hasta: number, que: string): number[] | undefined => {
+    if (!Array.isArray(o) || !o.length) return undefined;
+    if (o.every((n) => indice(n, hasta)) && new Set(o).size === o.length) return o;
+    console.warn(`[acomodo] ${que} guardado con índices que no sirven: se usa el automático`, o);
+    return undefined;
+  };
   const piezas: Record<number, PosicionPieza> = {};
   for (const [i, p] of Object.entries(lugares)) {
-    const n = Number(i);
-    if (i === "orden" || !valida(n) || !p || typeof p !== "object") continue;
-    const { x, y, k } = p as Partial<PosicionPieza>;
-    if (typeof x === "number" && typeof y === "number" && typeof k === "number" && [x, y, k].every(Number.isFinite) && k > 0) piezas[n] = { x, y, k };
+    const n = Number(i), l = lugar(p);
+    if (valida(n) && l) piezas[n] = l;
   }
-  const o = guardada.orden;
-  let orden: number[] | undefined;
-  if (Array.isArray(o) && o.length) {
-    if (o.every(valida) && new Set(o).size === o.length) orden = o;
-    else console.warn("[acomodo] orden de capas guardado con índices que no sirven: se usa el automático", o);
-  }
-  return Object.keys(piezas).length || orden ? { piezas, orden } : null;
+  const orden = ordenValido(guardada.orden, nPiezas, "orden de capas");
+  const partes: Record<number, Record<number, PosicionParte>> = {};
+  const ordenPartes: Record<number, number[]> = {};
+  if (guardada.partes && typeof guardada.partes === "object")
+    for (const [i, porParte] of Object.entries(guardada.partes as Record<string, unknown>)) {
+      const n = Number(i);
+      if (!valida(n) || !porParte || typeof porParte !== "object") continue;
+      for (const [j, p] of Object.entries(porParte as Record<string, unknown>)) {
+        const m = Number(j), l = lugar(p);
+        if (indice(m, nPartes(n)) && l) (partes[n] ??= {})[m] = l;
+      }
+    }
+  if (guardada.ordenPartes && typeof guardada.ordenPartes === "object")
+    for (const [i, o] of Object.entries(guardada.ordenPartes as Record<string, unknown>)) {
+      const n = Number(i), op = valida(n) ? ordenValido(o, nPartes(n), "orden de las partes") : undefined;
+      if (op) ordenPartes[n] = op;
+    }
+  const hay = (r: object) => Object.keys(r).length > 0;
+  if (!hay(piezas) && !orden && !hay(partes) && !hay(ordenPartes)) return null;
+  return { piezas, orden, ...(hay(partes) ? { partes } : {}), ...(hay(ordenPartes) ? { ordenPartes } : {}) };
 }
 
 /**
@@ -591,33 +665,108 @@ export function leerEdicion(v: unknown, nPiezas: number): Edicion | null {
  * suyo. Un índice repetido cuenta una vez. Mismo arreglo si no cambia nada.
  */
 export function ordenarPuestas(puestas: Puesta[], orden: readonly number[] | undefined): Puesta[] {
-  if (!orden?.length) return puestas;
+  return ordenarPor(puestas, (q) => q.pieza, orden);
+}
+
+/** `ordenarPuestas` para cualquier lista con índices (también las partes de una pieza). */
+function ordenarPor<T>(lista: T[], indice: (x: T) => number, orden: readonly number[] | undefined): T[] {
+  if (!orden?.length) return lista;
   const rango = new Map<number, number>();
   for (const p of orden) if (!rango.has(p)) rango.set(p, rango.size);
-  const nombradas = puestas.filter((q) => rango.has(q.pieza)).sort((x, y) => rango.get(x.pieza)! - rango.get(y.pieza)!);
+  const nombradas = lista.filter((q) => rango.has(indice(q))).sort((x, y) => rango.get(indice(x))! - rango.get(indice(y))!);
   let i = 0;
-  const out = puestas.map((q) => (rango.has(q.pieza) ? nombradas[i++] : q));
-  return out.every((q, j) => q === puestas[j]) ? puestas : out;
+  const out = lista.map((q) => (rango.has(indice(q)) ? nombradas[i++] : q));
+  return out.every((q, j) => q === lista[j]) ? lista : out;
+}
+
+/** Lo que se pinta de una puesta, de abajo hacia arriba, y dónde: la pieza entera o, si se abrió, cada parte en su
+ *  lugar. Todo lo que pinta o mira píxeles (tarjeta, PNG, los dos PSD, contraste, texto reescrito) pasa por aquí. */
+export type Dibujo<D> = { d: D; parte: number | null; k: number; x: number; y: number; w: number; h: number };
+export function dibujosDe<D extends { solido: Caja }, E extends { solido: Caja }>(p: D & { partes?: readonly E[] }, q: Puesta): Dibujo<D | E>[] {
+  if (!q.partes?.length || !p.partes) return [{ d: p, parte: null, k: q.k, x: q.x, y: q.y, w: q.w, h: q.h }];
+  return q.partes.flatMap((pp) => {
+    const d = p.partes?.[pp.parte];
+    return d ? [{ d, ...pp }] : [];
+  });
+}
+
+/** Dónde queda una parte sin tocar, relativo a su pieza: su lugar en el maestro, a la escala de la pieza. */
+export const parteSinTocar = (p: PiezaCaja, parte: number): PosicionParte => {
+  const s = p.partes?.[parte]?.solido;
+  return s ? { x: s.x - p.solido.x, y: s.y - p.solido.y, k: 1 } : { x: 0, y: 0, k: 1 };
+};
+
+/** Las partes de una pieza en el orden que eligió la persona (sólo dentro de su pieza), de abajo hacia arriba. */
+export const ordenDePartes = (p: PiezaCaja, orden: readonly number[] | undefined): number[] =>
+  ordenarPor(Array.from({ length: p.partes?.length ?? 0 }, (_, j) => j), (j) => j, orden);
+
+/**
+ * Dónde queda cada parte de una pieza ya puesta (q), en el orden elegido (de abajo hacia arriba): donde la dejó la
+ * persona relativo a la pieza, o en su lugar del maestro. Lo que la persona agrandó o achicó tiene los mismos topes que
+ * una pieza. `tocada`: si algo es distinto del maestro (entonces la pieza se abre). null si la pieza no tiene partes.
+ * El editor usa lo mismo para dibujar sus marcos.
+ */
+export function ponerPartes(p: PiezaCaja | undefined, q: Puesta, ed: Pick<Edicion, "partes" | "ordenPartes">, W: number, H: number): { puestas: PuestaParte[]; tocada: boolean } | null {
+  const partes = p?.partes;
+  if (!p || !partes || partes.length < 2) return null;
+  const lugares = ed.partes?.[q.pieza];
+  const base = Array.from({ length: partes.length }, (_, j) => j), orden = ordenarPor(base, (j) => j, ed.ordenPartes?.[q.pieza]);
+  const lejos = 2 * Math.max(W, H);
+  const entre = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+  let tocada = orden !== base;
+  const puestas = orden.map((j): PuestaParte => {
+    const s = partes[j].solido, e = lugares?.[j];
+    let r = parteSinTocar(p, j);
+    const movida = !!e && [e.x, e.y, e.k].every(Number.isFinite) && e.k > 0;
+    if (movida) {
+      r = e;
+      tocada = true;
+    }
+    // Los topes sólo frenan lo que la persona agrandó o achicó: una parte a la escala de su pieza va igual que ella
+    // (en 320×50 los iconos del legal miden menos que el mínimo, y la pieza entera también).
+    const t = topesParte(s, q.k, W, H, partes[j].caja), k = entre(q.k * r.k, t.min, t.max);
+    return { parte: j, k, x: entre(q.x + r.x * q.k, -lejos, lejos), y: entre(q.y + r.y * q.k, -lejos, lejos), w: s.w * k, h: s.h * k, movida };
+  });
+  return { puestas, tocada };
+}
+
+/** Los topes de escala de una parte (en la medida): los de una pieza, sin frenar la escala que ya trae su pieza (`k`). */
+export function topesParte(s: { w: number; h: number }, k: number, W: number, H: number, caja?: { w: number; h: number }): { min: number; max: number } {
+  const t = topesPieza(s, W, H, caja);
+  return { min: Math.min(t.min, k), max: Math.max(t.max, k) };
+}
+
+/** La pieza ya puesta abierta en sus partes si la persona movió o reordenó alguna; si no, la misma puesta (la pieza se
+ *  pinta entera, como siempre). */
+function abrirEnPartes(p: PiezaCaja | undefined, q: Puesta, ed: Edicion, W: number, H: number): Puesta {
+  const r = ponerPartes(p, q, ed, W, H);
+  return r?.tocada ? { ...q, partes: r.puestas } : q;
 }
 
 /**
  * Qué piezas se movieron de capa: las menos posibles que, sacadas, dejan a las demás en el orden automático (las que
  * quedan fuera de la subsecuencia creciente más larga). Subir el CTA del fondo al frente marca sólo al CTA, aunque todas
- * las demás bajaron un lugar.
+ * las demás bajaron un lugar. Con un empate (dos de al lado que cambian de lugar: cualquiera de las dos), se marca la
+ * que la persona movió (`movidas`), si se sabe.
  */
-export function cambiadasDeCapa(orden: readonly number[], ordenAuto: readonly number[]): Set<number> {
+export function cambiadasDeCapa(orden: readonly number[], ordenAuto: readonly number[], movidas?: ReadonlySet<number>): Set<number> {
   const rango = new Map(ordenAuto.map((p, i) => [p, i]));
   const r = orden.map((p) => rango.get(p) ?? -1);
-  // Subsecuencia creciente más larga, O(n²): son ≤ 40 piezas.
-  const largo = r.map(() => 1), antes = r.map(() => -1);
+  // Subsecuencia creciente más larga, O(n²): son ≤ 40 piezas. A igual largo, la que deja más de las NO movidas.
+  const quieta = orden.map((p): number => (movidas?.has(p) ? 0 : 1));
+  const largo = r.map(() => 1), quietas = [...quieta], antes = r.map(() => -1);
+  const mejor = (l: number, q: number, i: number) => l > largo[i] || (l === largo[i] && q > quietas[i]);
   for (let i = 0; i < r.length; i++)
     for (let j = 0; j < i; j++)
-      if (r[j] < r[i] && largo[j] + 1 > largo[i]) {
+      if (r[j] < r[i] && mejor(largo[j] + 1, quietas[j] + quieta[i], i)) {
         largo[i] = largo[j] + 1;
+        quietas[i] = quietas[j] + quieta[i];
         antes[i] = j;
       }
+  let fin = -1;
+  for (let i = 0; i < r.length; i++) if (fin < 0 || largo[i] > largo[fin] || (largo[i] === largo[fin] && quietas[i] > quietas[fin])) fin = i;
   const quedan = new Set<number>();
-  for (let i = largo.length ? largo.indexOf(Math.max(...largo)) : -1; i >= 0; i = antes[i]) quedan.add(i);
+  for (let i = fin; i >= 0; i = antes[i]) quedan.add(i);
   return new Set(orden.filter((_, i) => !quedan.has(i)));
 }
 
@@ -633,10 +782,15 @@ export function aplicarEdicion(ma: MaestroCaja, a: Acomodo, ed: Edicion, W: numb
   const entre = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
   const movidas = a.puestas.map((q) => {
     const e = ed.piezas?.[q.pieza], s = ma.piezas[q.pieza]?.solido;
-    if (!e || !s || ![e.x, e.y, e.k].every(Number.isFinite) || !(e.k > 0)) return q;
-    aMano.add(q.pieza);
-    const t = topesPieza(s, W, H), k = entre(e.k, t.min, t.max);
-    return { pieza: q.pieza, k, x: entre(e.x, -lejos, lejos), y: entre(e.y, -lejos, lejos), w: s.w * k, h: s.h * k };
+    let movida = q;
+    if (e && s && [e.x, e.y, e.k].every(Number.isFinite) && e.k > 0) {
+      aMano.add(q.pieza);
+      const t = topesPieza(s, W, H, ma.piezas[q.pieza].caja), k = entre(e.k, t.min, t.max);
+      movida = { pieza: q.pieza, k, x: entre(e.x, -lejos, lejos), y: entre(e.y, -lejos, lejos), w: s.w * k, h: s.h * k };
+    }
+    const abierta = abrirEnPartes(ma.piezas[q.pieza], movida, ed, W, H);
+    if (abierta !== movida) aMano.add(q.pieza);
+    return abierta;
   });
   const puestas = ordenarPuestas(movidas, ed.orden);
   if (!aMano.size && puestas === movidas) return a;
