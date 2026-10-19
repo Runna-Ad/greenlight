@@ -10,6 +10,10 @@
 export const ROLES = ["BACKGROUND", "HERO", "TITULO", "SUBTITULO", "CTA", "BRAND", "FOOTER"] as const;
 export type Rol = (typeof ROLES)[number];
 
+/** El nombre de una capa o carpeta como lo usa la herramienta: sin caracteres de control ni invisibles, con tope. El
+ *  lector del PSD y el PSD editable de cada medida (psd-editable.ts) lo limpian igual, para que la carpeta se reconozca. */
+export const nombreDeCapa = (s: string | undefined): string => (s ?? "").replace(/[\p{Cc}\p{Cf}]/gu, "").slice(0, 120);
+
 /** Sin mayúsculas, acentos ni espacios a los lados ("Subtítulo " → SUBTITULO). */
 const normal = (nombre: string) => nombre.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toUpperCase();
 

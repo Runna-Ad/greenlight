@@ -194,13 +194,32 @@ export const FP = {
   contrasteSinArreglo: t("Sin arreglo, como elegiste: {p} se pierde en un {antes}.", "No fix, as you chose: {antes} of {p} gets lost."),
   contrasteEditadaNota: t("Editada a mano: los % son del acomodo automático; con tus cambios pueden variar. La tarjeta avisa si algo se pierde.", "Edited by hand: the % are from the automatic layout and can change with your edits. The card warns if something gets lost."),
   bajarPsd: t("PSD", "PSD"),
-  bajarPsdAria: t("Bajar {m} como PSD con capas, para terminarla a mano", "Download {m} as a layered PSD, to finish it by hand"),
+  bajarPsdAria: t("Descargar {m} como PSD editable, con las capas del original", "Download {m} as an editable PSD with the original's layers"),
   bajarPsdTitulo: t(
-    "Una carpeta por pieza (con sus sombras aparte) y el fondo entero para recorrerlo. El texto va como imagen: para cambiar la copia, el PSD maestro.",
-    "One folder per piece (shadows on their own layers) and the whole background so it can slide. Text comes as images: to change the copy, use the master PSD.",
+    "PSD con las capas del original acomodadas en esta medida: texto editable, objetos inteligentes, formas y carpetas. Al abrirlo, Photoshop pregunta si actualiza el texto. Elige «Actualizar».",
+    "PSD with the original's layers arranged for this size: editable text, smart objects, shapes and folders. When you open it, Photoshop asks whether to update the text. Choose «Update».",
   ),
   bajarPsdHaciendo: t("Armando…", "Building…"),
-  bajarPsdFallo: t("No se pudo armar el PSD. Reintenta; si sigue, baja el PNG.", "The PSD couldn't be built. Try again; if it keeps failing, download the PNG."),
+  bajarPsdEnFila: t("En fila…", "Queued…"),
+  bajarPsdFallo: t("No se pudo armar el PSD de {m}. Reintenta; si sigue, baja el PNG.", "The PSD for {m} couldn't be built. Try again; if it keeps failing, download the PNG."),
+  psdListo: t("PSD de {m} listo. Al abrirlo, Photoshop pregunta si actualiza las capas de texto: elige «Actualizar».", "PSD for {m} ready. When you open it, Photoshop asks whether to update the text layers: choose «Update»."),
+  psdAplanadas: t(
+    "PSD de {m} listo. Estas capas van como imagen porque no pueden quedar editables: {capas}. Al abrirlo, Photoshop pregunta si actualiza las capas de texto: elige «Actualizar».",
+    "PSD for {m} ready. These layers went in as images because they can't stay editable: {capas}. When you open it, Photoshop asks whether to update the text layers: choose «Update».",
+  ),
+  psdPlano: t("Se descargó el PSD de {m} con capas planas (el texto va como imagen): {motivo}", "The PSD for {m} was downloaded with flat layers (text as images): {motivo}"),
+  psdPlanoPesado: t("el archivo pesa {mb} MB y el PSD editable se arma con archivos de hasta {max} MB.", "the file is {mb} MB and the editable PSD works with files up to {max} MB."),
+  psdPlanoFallo: t("no se pudo armar el PSD editable con este archivo. Para intentarlo otra vez, vuelve a abrir el PSD.", "the editable PSD couldn't be built from this file. To try again, open the PSD again."),
+  psdRevisar: t(
+    "Estas capas siguen editables, pero sus filtros inteligentes no se ajustaron a la medida. Revísalas al abrirlo: {capas}.",
+    "These layers are still editable, but their smart filters weren't adjusted to the size. Check them when you open it: {capas}.",
+  ),
+  psdPlanoTopes: t("tiene capas demasiado grandes para el PSD editable en esta medida.", "it has layers too large for the editable PSD at this size."),
+  psdPlanoArchivo: t("el archivo tiene capas que el PSD editable no puede leer (comprimidas en ZIP, demasiadas o muy grandes).", "the file has layers the editable PSD can't read (ZIP-compressed, too many or too large)."),
+  psdPlanoFormato: t("el archivo no sigue el formato PSD exactamente y no se deja leer con seguridad.", "the file doesn't follow the PSD format exactly, so it can't be read safely."),
+  psdPlanoInseguro: t("el archivo trae datos de objetos inteligentes que no se pueden leer con seguridad.", "the file has smart-object data that can't be read safely."),
+  psdPlanoSinOriginal: t("no se encontró la mesa de trabajo de la que salió esta medida. Vuelve a abrir el PSD.", "the artboard this size came from wasn't found. Open the PSD again."),
+  capaSinNombre: t("(sin nombre)", "(unnamed)"),
   editada: t("Editada a mano", "Edited by hand"),
   editadaTitulo: t(
     "Acomodada a mano y guardada en este navegador. No se voltea: para voltearla, «Editar» › «Volver al automático».",
@@ -447,6 +466,12 @@ export const FP_PAPEL: Record<"HERO" | "TITULO" | "SUBTITULO" | "CTA" | "BRAND" 
   NINGUNO: t("Sin papel", "No role"),
 };
 
+/** Por qué una capa va como imagen en el PSD editable (`MotivoCapa` de psd-editable.ts). */
+export const FP_APLANADA: Record<"texto-vertical" | "texto-en-trayecto" | "filtros-inteligentes", Par> = {
+  "texto-vertical": t("texto vertical", "vertical text"),
+  "texto-en-trayecto": t("texto en un trayecto", "text on a path"),
+  "filtros-inteligentes": t("filtros inteligentes", "smart filters"),
+};
 export const FP_FAMILIA: Record<"igual" | "display" | "horizontal" | "ancho" | "banner", Par> = {
   igual: t("acomodo del diseñador", "designer's layout"),
   display: t("dos columnas", "two columns"),

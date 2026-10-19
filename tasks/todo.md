@@ -636,6 +636,85 @@ largo: estacionado por él.
         el 3e (migración, más adelante).
       · Skills: ui-ux-pro-max (base), design-taste-frontend (herramienta interna: variación baja, movimiento bajo,
         densidad alta), shadcn-ui (Popover, Sheet, Tooltip ya existen), §R3 responsivo, §R4 revisión.
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+      funcionaron ("the fixes worked"). El diseñador abrió el PSD de objetos inteligentes sin problema, pero:
+      · "every single element that is editable in the orignal psd should be editable in the one you can download by
+        size individually ... the legales should be editable not an image" → el «PSD» por medida conserva texto vivo,
+        objetos inteligentes, formas, subcarpetas y orden de capas, movidos y escalados (hoy: una imagen por carpeta).
+      · Leer SUBCARPETAS, no sólo las 7 principales: más piezas movibles y editables en el editor.
+      · Editor: reordenar capas (qué va encima de qué) y el LEGAL editable (cambiar o borrar el texto).
+      · Pedro eligió (2026-10-19): "lets do download first", probando con `Desktop/formatos-prueba/s33-BFDIRECT20CASH.psd`
+        (nada de PSD inventado). Después: subcarpetas y orden de capas en el editor, y el legal editable.
+      · Prueba de factibilidad (scratchpad, s33 real): ag-psd lee y vuelve a escribir la mesa 4x5 con 5 textos, 11
+        objetos inteligentes, 4 formas, efectos y subcarpetas (57.7 MB, 79 ms al escribir; casi todo el peso son los
+        archivos de adentro de los objetos inteligentes). Las coordenadas de las formas vienen en px del documento.
+      **Next Step:** que un diseñador abra los PSD de 3 medidas en Photoshop con la lista de B20 (en la preview). Luego
+      el paso 2 de Pedro: subcarpetas y orden de capas en el editor; después, el legal editable en el editor.
+      **Paso 1 — el PSD por medida, editable:**
+      - [x] `psd-editable.ts` (puro): copia el árbol de la mesa (carpetas, subcarpetas, orden, ocultas incluidas) y
+            a cada capa le aplica el movimiento de SU pieza (escala pareja + desplazamiento; el fondo, el del fondo):
+            píxeles y máscaras remuestreados (Lanczos de nitido.ts), texto vivo (matriz del texto), objetos
+            inteligentes (sus 4 esquinas, con su archivo adentro), formas (trazo, caja de origen, radios, grosor),
+            efectos en px ×k. Sólo se aplana lo que no se puede escribir (texto vertical) y se dice por capa.
+      - [x] Piezas quitadas en esa medida: van ocultas. Sombra de contraste de HÜE: capa en multiplicar al pie de su
+            carpeta. Fondo retocado («Quitar del fondo» / IA): sólo el parche, arriba en la carpeta del fondo.
+      - [x] `MaestroPsd`/`MaestroListo` cargan qué mesa son y si se leyeron reducidas (para volver a las coordenadas
+            del PSD original).
+      - [x] Worker nuevo para la descarga: vuelve a leer el archivo ENTERO (con los originales de los objetos
+            inteligentes, que la lectura normal quita), arma y escribe; la página no se congela.
+      - [x] El botón «PSD» de la tarjeta usa esto; textos del botón al día; aviso con las capas aplanadas, si hay.
+      **Verificación:** (1) identidad en s33: a la medida del maestro sale lo mismo capa por capa (píxeles, textos,
+      esquinas, trazos); (2) s33 a 1200×627 y 320×250: mismo árbol y nombres que el original, textos con su letra,
+      y la caja de cada pieza cae donde la puso el acomodo (±2 px); (3) mutaciones atrapadas; (4) en el navegador
+      (localhost, s33): bajar el PSD de una tarjeta editada, leerlo de vuelta; (5) tsc, eslint, test-formatos;
+      (6) la prueba REAL: un diseñador lo abre en Photoshop con una lista corta de qué revisar.
+      · Hecho y medido (2026-10-19): test-formatos 340/0. s33 identidad: las 24 capas salen iguales (píxeles, caja,
+        texto, esquinas, trazos, efectos). 1200×627 / 320×250 / 1080×1920: mismo árbol que el original, textos vivos
+        con su letra DiDi (ver la corrección de «Hasta» abajo), 11 objetos inteligentes con su archivo, cada pieza a ±1.5 px de donde la puso
+        el acomodo, trazos, esquinas, formas vivas y sombras de capa a escala. 15 mutaciones, las 15 atrapadas (3 se
+        escapaban al principio: radios, grosor y caja de la forma viva → prueba nueva). 200-600 ms y 42-60 MB por medida.
+      · Navegador (localhost, s33 real, servidor de prueba en 127.0.0.1:8765): «Quitar del fondo» + «PSD» de 1200×627
+        → 56 MB en 0.75 s, con «Fondo retocado (HÜE)» en Background y «Sombra de contraste (HÜE)» en Copy; tres clics
+        seguidos (y un doble clic) → 3 archivos, uno tras otro; worker forzado a fallar → sale el de capas planas con
+        el aviso. Pintando sus capas a mano, cada pieza cae donde la tarjeta (sin efectos: eso lo pinta Photoshop).
+      · Arreglado en la revisión propia: recortadas (clipping) de primer nivel iban con el fondo y no con su base;
+        topes antes de decodificar (capas ocultas enormes, máscaras, ZIP); de a uno por página (cola).
+      · Corrección (2026-10-19): «Hasta» es texto en un trayecto (en arco; `textPath.data.type === 2`) y ag-psd no
+        lo sabe escribir: va como imagen y el aviso lo dice. Quedan 4 textos vivos, el legal entre ellos.
+      · Revisión (4 revisores + barrido propio), todo arreglado con su prueba: máscaras de carpeta y capas ocultas
+        con tope antes de decodificar; registros de objetos inteligentes revisados antes de leer (FEid/FXid fuera);
+        tope de memoria 64 MB al leer; tope de lo que sale (las capas crecen con k²) y cajas recortadas a la medida;
+        remuestreo por bandas; archivo de hasta 200 MB (antes 500); worker cancelable al salir; la fila arma el pedido
+        en su turno; avisos con la medida, persistentes si hay capas aplanadas; códigos de falla («topes» se puede
+        reintentar en otra medida, lo demás marca el archivo hasta volver a abrirlo); mesas buscadas a cualquier
+        profundidad, con su caja; la sombra de HÜE va dentro de la carpeta sólo si la carpeta no la aísla.
+        Rechazado con evidencia: conjugar la transformación de la forma viva (en s33 la mía da la misma caja de
+        origen en las dos mesas). test-formatos 348/0.
+      · Navegador otra vez (localhost, s33, 2026-10-19): 3 clics → «Armando…» / «En fila…» / «En fila…», 3 archivos en
+        2.4 s (55.6 / 42.6 / 64.3 MB), «Hasta» como imagen y el legal como texto vivo al leerlos de vuelta; fallas
+        forzadas: «topes» (no marca el archivo), «inseguro» y «otro» (marcan; las que ya estaban en fila no vuelven a
+        abrir el worker); «Cambiar PSD» a media armada → worker cerrado, nada se descarga; sin requestAnimationFrame
+        (pestaña de fondo) la fila sigue (0.8 s). Arreglados en esta prueba: la fila se detenía en pestaña de fondo y
+        las medidas en fila no veían que el archivo ya había fallado.
+      · Segunda vuelta de los 4 revisores (2026-10-19), arreglado con prueba (8 de 8 cambios a propósito atrapados):
+        recorrido estricto de los bloques del final en el editable (se salta los ceros como ag-psd y lo que no sabe
+        seguir lo rechaza, en vez de dejarlo sin revisar); `strict` al leer (nada reserva memoria por leer más allá del
+        final, también en los bloques de cada capa); sólo PSD versión 1; la sombra de HÜE va SIEMPRE justo debajo de la
+        carpeta de su pieza (adentro, el estilo o la máscara de la carpeta la tomarían como forma); el retoque va sobre
+        el fondo de abajo aunque otro fondo vaya encima de una pieza; código «archivo» para topes del archivo (marca el
+        archivo y lo dice); sin memoria en una medida = «topes»; las de capas planas también en la fila, de una en una;
+        sin espera de cuadro en pestaña de fondo; avisos: el repetido de un mismo archivo se va solo, el de capas planas
+        se queda hasta cerrarlo, frases arregladas. Los 5 PSD reales de la Mac se leen igual con todo esto.
+      · Límites conocidos: los rellenos de patrón conservan su escala (ag-psd no la escribe); filtros inteligentes van
+        con aviso «revisar» (s33 no los trae); texto en trayecto y vertical van como imagen; en mesas leídas reducidas
+        (más de 12 MP) puede haber ±1 px; Photoshop pide «Actualizar» los textos al abrir.
+      · Pendiente a propósito: contraste del aviso amarillo de sonner y el «Close toast» en inglés del botón de cerrar
+        (los dos son del Toaster de toda la app, `components/ui/sonner.tsx`); si se edita una medida mientras espera en la
+        fila, baja lo que la tarjeta mostraba al hacer clic; sin botón para cancelar la fila (se cancela al salir).
+      · Sin revisar: si Chrome (perfil normal) pide permiso para «descargar varios archivos» con 3+ clics seguidos.
+- B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
+- iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los
+  pendientes de iPad de B19 (caché de 4 fondos, táctil real, zoom de Safari) quedan fuera.
 - 3d (visión con Gemini) baja de prioridad: sólo sirve a la vía plana.
 **Verificación:** `npm test` verde · fidelidad medida en los PSD reales · página A vs B revisada por Pedro · tsc,
 eslint y build limpios. Sin migración nueva ni deploy.

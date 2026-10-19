@@ -1122,3 +1122,39 @@ TAGS: #navegador #pruebas #radix #animaciones #resizeobserver
 ROOT CAUSE: tratar "el lienzo existe" como "el lienzo está listo".
 RULE: quien lee un lienzo que otro pinta después necesita una señal de "ya se pintó" (aquí un contador que sube en cada pintada buena): el botón espera a la primera y la copia se rehace con cada una. Probar también el clic ANTES de que termine de pintar.
 TAGS: #canvas #formatos #estado #revision
+
+[2026-10-19] PEDRO_OVERRIDE (Formatos, el PSD por medida debe seguir EDITABLE como el original): en B18 armé el «PSD» de cada medida con una carpeta por pieza y cada pieza como UNA imagen (texto incluido), porque eso es lo que el motor ya tenía a mano (piezas sacadas de la copia aplanada). El diseñador lo abrió bien en Photoshop, pero Pedro: "every single element that is editable in the original psd should be editable in the one you can download by size individually ... the legales should be editable not an image". Además: leer las SUBCARPETAS (no sólo las 7 principales) para tener más piezas movibles, reordenar capas (qué va encima de qué) en el editor, y el legal editable en el editor (cambiar o borrar el texto).
+POR QUÉ ES MEJOR: el PSD por medida existe para que diseño TERMINE a mano; si llega aplanado, terminar = rehacer, que es justo el trabajo que Formatos quiere quitar.
+ROOT CAUSE: diseñé la salida desde lo que el motor guarda (píxeles por pieza) y no desde lo que necesita quien la recibe (las capas vivas del original: texto, formas, objetos inteligentes, subcarpetas).
+REGLA: un archivo que entregamos para que otra persona lo siga trabajando conserva TODO lo editable del original (texto vivo, objetos inteligentes, carpetas y subcarpetas, orden de capas), movido y escalado; aplanar sólo lo que no podamos escribir, y decirlo por capa.
+TAGS: #pedro-override #formatos #psd #editable #salida-para-quien-la-recibe
+
+[2026-10-19] LESSON (un lector nuevo del mismo archivo necesita sus propios topes): el worker del PSD editable lee MÁS del archivo que la lectura de la pantalla: capas ocultas, máscaras de carpeta, los archivos de los objetos inteligentes (lnk*), filtros inteligentes (FEid/FXid) y patrones con el tope de 2 GB que trae ag-psd por defecto. Los topes de la pantalla no cubrían nada de eso; lo encontraron mi barrido y el revisor de seguridad.
+ROOT CAUSE: dar el archivo por "ya revisado" porque abrió bien en la pantalla.
+RULE: cada lector nuevo de un archivo que no controlamos dice qué lee que los anteriores se saltaban y le pone tope a eso ANTES de decodificar. Si además agranda (escala k → k² píxeles), también lleva tope de salida.
+TAGS: #seguridad #psd #ag-psd #topes #formatos
+
+[2026-10-19] LESSON (lo que dice un revisor sobre un formato se prueba con el archivo real): un revisor dijo que la transformación de la forma viva (vectorOrigination) había que conjugarla. En s33, al invertir la de las dos mesas sale la misma caja de origen (1224,660 273×68), así que la mía (A∘T) era la correcta. Con la del revisor se rompían todas las formas vivas.
+RULE: un hallazgo sobre cómo guarda algo un formato se mide en el archivo real antes de tocar código; la evidencia va en el reporte.
+TAGS: #revision #psd #evidencia
+
+[2026-10-19] LESSON (marcar por el valor, no por la presencia del campo): ag-psd le pone `textPath` a TODA capa de texto. Revisar "trae textPath" marcó los 5 textos de s33 como texto en trayecto. Sólo `textPath.data.type === 2` lo es (en s33, «Hasta», que sí va en arco).
+RULE: antes de usar un campo de una librería como señal, leer sus valores en el archivo real; un campo que la librería llena por defecto no dice nada.
+TAGS: #ag-psd #psd #pruebas
+
+[2026-10-19] LESSON (esperar "un cuadro" detiene una fila en una pestaña de fondo): la fila de PSD esperaba a requestAnimationFrame antes del trabajo pesado, para que se viera «Armando…». En una pestaña oculta ese cuadro nunca llega: quien pide 6 medidas y se va a otra pestaña no recibe nada hasta volver. Salió porque el panel del navegador estaba oculto en la prueba. En la misma prueba: las medidas que ya estaban en la fila volvían a abrir el worker aunque el archivo acababa de fallar (el "ya falló" se revisaba sólo al hacer clic).
+RULE: nunca detener trabajo sólo con requestAnimationFrame: correrlo contra un reloj corto (aquí 100 ms). En una fila, lo que puede cambiar mientras se espera (aquí, "este archivo ya falló") se revisa DENTRO del turno, no sólo al encolar.
+TAGS: #fila #worker #navegador #formatos
+
+[2026-10-19] LESSON (en las pruebas del navegador, confirmar que la acción pasó): para "volver a abrir" el PSD metí el archivo en el primer `input[type=file]`, pero con resultados en pantalla el único que queda es el de tipografías. Parecía un error de la app (no se limpiaba el "ya falló"). Volver a abrir es «Cambiar PSD».
+RULE: elegir el input por su `accept` y confirmar que la acción ocurrió (aquí, un worker de lectura nuevo) antes de leer el resultado.
+TAGS: #pruebas #navegador #formatos
+
+[2026-10-19] LESSON (una revisión previa que "deja pasar lo que no entiende" no revisa nada): el recorrido que revisa los objetos inteligentes antes de ag-psd, al toparse con algo raro (unos ceros, una firma desconocida), dejaba el resto del archivo tal cual y sin revisar. ag-psd se salta esos ceros y lee el bloque de después: la revisión se podía brincar. Lo encontraron dos revisores por separado.
+ROOT CAUSE: copié la regla de la lectura de la pantalla ("nunca quitar lo que no se entiende"), que está bien para QUITAR bloques, pero no para una revisión de seguridad.
+RULE: un filtro que va delante de un lector tiene que seguir el archivo como lo sigue el lector (aquí, saltar ceros como ag-psd) y rechazar lo que no pueda seguir. Si además el lector tiene modo estricto, usarlo y probarlo con los archivos reales.
+TAGS: #seguridad #psd #ag-psd #revision
+
+[2026-10-19] LESSON (una capa que agregamos va donde la pinta la vista previa): metí la sombra de contraste DENTRO de la carpeta de su pieza "cuando la carpeta deja pasar", y la revisión encontró tres casos más que cambian lo que se ve (estilo de capa de la carpeta, máscara vectorial, una capa recortada a la carpeta). Cada condición nueva era otro parche.
+RULE: una capa que agrega HÜE se pone exactamente donde la pinta la tarjeta (aquí, justo debajo de la carpeta). Ordenar mejor el archivo no vale si cambia cómo se ve.
+TAGS: #psd #formatos #editable #capas

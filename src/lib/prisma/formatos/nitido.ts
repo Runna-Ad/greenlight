@@ -80,7 +80,7 @@ function pesos(n: number, d0: number, d1: number, k: number, off: number, borde:
  * Remuestrea `src` (RGBA, premultiplicado si `premult`) al rectángulo [x0, x1) × [y0, y1) de la medida, con el
  * original puesto a escala `k` y su esquina en (ox, oy). Devuelve RGBA en flotantes, PREMULTIPLICADO.
  */
-function remuestrear(src: Uint8ClampedArray, sw: number, sh: number, k: number, ox: number, oy: number, x0: number, y0: number, x1: number, y1: number, borde: "extender" | "fuera", premult: boolean): Float32Array {
+export function remuestrear(src: Uint8ClampedArray, sw: number, sh: number, k: number, ox: number, oy: number, x0: number, y0: number, x1: number, y1: number, borde: "extender" | "fuera", premult: boolean): Float32Array {
   const dw = x1 - x0, dh = y1 - y0;
   const px = pesos(sw, x0, x1, k, ox, borde), py = pesos(sh, y0, y1, k, oy, borde);
   // Qué filas del original hacen falta.
@@ -233,7 +233,7 @@ export type CapasPieza = { pieza: number; halo: CapaSalida | null; sombra: CapaS
 
 /** Premultiplicado (0-255) → RGBA normal. Sirve también para los mapas de sombra: "fuera" de su caja los deja
  *  mezclados con 0, que es lo mismo que premultiplicados por su cobertura (ver `oscurecer`). */
-function aCapa(f: Float32Array, x: number, y: number, w: number, h: number): CapaSalida {
+export function aCapa(f: Float32Array, x: number, y: number, w: number, h: number): CapaSalida {
   const rgba = new Uint8ClampedArray(w * h * 4);
   for (let i = 0; i < w * h; i++) {
     const a = f[i * 4 + 3];
@@ -242,6 +242,15 @@ function aCapa(f: Float32Array, x: number, y: number, w: number, h: number): Cap
     rgba[i * 4 + 3] = Math.round(a);
   }
   return { x, y, w, h, rgba };
+}
+
+/** La sombra de contraste de una pieza puesta (`halo.ts`) como capa de la medida, en "multiplicar"; null si no lleva. */
+export function haloEnMedida(ma: MaestroDatos, q: Acomodo["puestas"][number]): CapaSalida | null {
+  const p = ma.piezas[q.pieza], halo = haloDe(ma, q.pieza);
+  if (!halo) return null;
+  const mx = q.x - (p.solido.x - p.caja.x) * q.k - halo.pad * q.k, my = q.y - (p.solido.y - p.caja.y) * q.k - halo.pad * q.k;
+  const x0 = Math.floor(mx) - 1, y0 = Math.floor(my) - 1, x1 = Math.ceil(mx + halo.w * q.k) + 1, y1 = Math.ceil(my + halo.h * q.k) + 1;
+  return aCapa(remuestrear(halo.mapa, halo.w, halo.h, q.k, mx, my, x0, y0, x1, y1, "fuera", false), x0, y0, x1 - x0, y1 - y0);
 }
 
 /**
@@ -264,8 +273,6 @@ export function capasDeMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number
       const x0 = Math.floor(mx) - 1, y0 = Math.floor(my) - 1, x1 = Math.ceil(mx + mw * q.k) + 1, y1 = Math.ceil(my + mh * q.k) + 1;
       return { x0, y0, x1, y1, v: remuestrear(src, mw, mh, q.k, mx, my, x0, y0, x1, y1, "fuera", premult) };
     };
-    const halo = sombras.has(q.pieza) ? haloDe(ma, q.pieza) : null;
-    const h = halo && mapa(halo.mapa, halo.w, halo.h, ox - halo.pad * q.k, oy - halo.pad * q.k, false);
     const s = p.oscurece && mapa(p.oscurece, p.caja.w, p.caja.h, ox, oy, false);
     const x0 = Math.floor(ox) - 1, y0 = Math.floor(oy) - 1, x1 = Math.ceil(ox + p.caja.w * q.k) + 1, y1 = Math.ceil(oy + p.caja.h * q.k) + 1;
     const w = x1 - x0, alto = y1 - y0;
@@ -282,7 +289,7 @@ export function capasDeMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number
       }
     return {
       pieza: q.pieza,
-      halo: h ? aCapa(h.v, h.x0, h.y0, h.x1 - h.x0, h.y1 - h.y0) : null,
+      halo: sombras.has(q.pieza) ? haloEnMedida(ma, q) : null,
       sombra: s ? aCapa(s.v, s.x0, s.y0, s.x1 - s.x0, s.y1 - s.y0) : null,
       color: aCapa(col, x0, y0, w, alto),
     };

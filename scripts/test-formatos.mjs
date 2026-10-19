@@ -10,10 +10,11 @@ import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib
 import { writePsdBuffer } from "ag-psd";
 import { nombreDeGuia, etiquetaPieza } from "../src/lib/prisma/formatos/roles.ts";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave } from "../src/lib/prisma/formatos/psd.ts";
-import { adelgazarPsd, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
+import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, capasDeMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
 import { psdDeMedida, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prisma/formatos/psd-salida.ts";
-import { readPsd as readPsdAg } from "ag-psd";
+import { readPsd as readPsdAg, getLayerImageData, getLayerMaskImageData, getLayerRealMaskImageData } from "ag-psd";
+import { planDeMedida, psdEditable, retoqueDeFondo, CAPA_RETOQUE, CAPA_COLOR_MESA } from "../src/lib/prisma/formatos/psd-editable.ts";
 import { textoDe, maquetar, fuentesDe, compararAlfa } from "../src/lib/prisma/formatos/textos.ts";
 import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, elegirParaCliente, exclusivasDeOtros, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIA_GOOGLE_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
 import { carpetaGoogle, archivosDeMetadata, archivosQueSirven, buscarEnGoogle, ARCHIVOS_POR_FAMILIA_MAX, GOOGLE_BYTES_POR_PEDIDO } from "../src/lib/prisma/formatos/google-fonts.ts";
@@ -21,7 +22,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { acomodar, acomodarMedida, aplicarEdicion, topesPieza, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
-import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO } from "../src/lib/prisma/formatos/listo.ts";
+import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContraste } from "../src/lib/prisma/formatos/revisar.ts";
 import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
@@ -1431,6 +1432,294 @@ console.log("\n▶ v2 · copia del HERO pintada en el fondo (gemela.ts) y avisos
     leidoPsd.children.map((g) => `${g.name}: ${g.children.map((l) => `${l.name}${l.blendMode === "multiply" ? " (mult)" : ""}`).join(", ")}`),
     ["BACKGROUND: Fondo", "CARD: CARD · sombra (mult), CARD", `Copy: ${CAPA_SOMBRA_CONTRASTE} (mult), Copy`],
   );
+}
+
+// ── v2 · PSD editable por medida (B20): las capas del original, movidas con su pieza ─────────
+console.log("\n▶ v2 · PSD editable por medida: texto vivo, objetos inteligentes, formas y subcarpetas (s33 real)");
+{
+  // El plan, a mano: mesa corrida (100, 50) y leída reducida a la mitad. Un punto del original cae donde lo pondría
+  // el acomodo (sólido de la pieza en q.x, q.y con escala q.k, en px del maestro).
+  const maPlan = { origen: { mesa: 0, x: 100, y: 50, s: 0.5 }, piezas: [{ nombre: "A", solido: { x: 10, y: 20 } }, { nombre: "B", solido: { x: 0, y: 0 } }] };
+  const plan = planDeMedida(maPlan, { familia: "igual", puestas: [{ pieza: 0, k: 2, x: 7, y: 9, w: 1, h: 1 }], fondo: { k: 3, x: -4, y: -6 }, letras: [], avisos: [], quitadas: [1] }, 50, 40);
+  const A = plan.piezas[0][1], F = plan.fondo;
+  // El sólido de A en el original está en (100 + 10/0.5, 50 + 20/0.5) = (120, 90).
+  eq("plan: el sólido de una pieza cae en (q.x, q.y) aunque la mesa esté corrida y reducida; el fondo, en su esquina", [A.k, A.k * 120 + A.x, A.k * 90 + A.y, F.k, F.k * 100 + F.x, F.k * 50 + F.y], [1, 7, 9, 1.5, -4, -6]);
+  eq("plan: una pieza quitada en la medida no lleva movimiento", plan.piezas[1], ["B", null]);
+
+  // Texto vertical: ag-psd advierte que escribirlo puede tumbar a Photoshop → va como imagen y se dice.
+  const vert = psdEditable(
+    { width: 10, height: 10, children: [{ name: "BACKGROUND", children: [{ name: "fondo", left: 0, top: 0, right: 2, bottom: 2 }] }, { name: "TITULO", children: [{ name: "vertical", left: 0, top: 0, right: 2, bottom: 2, text: { text: "hola", orientation: "vertical", transform: [1, 0, 0, 1, 0, 0] } }] }] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["TITULO", { k: 1, x: 1, y: 1 }]] },
+    { compuesto: new Uint8ClampedArray(64), halos: [{ nombre: "TITULO", capa: { x: 0, y: 0, w: 1, h: 1, rgba: new Uint8ClampedArray(4) } }], retoque: { x: 0, y: 0, w: 1, h: 1, rgba: new Uint8ClampedArray(4) } },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  );
+  // Topes ANTES de decodificar (también las capas ocultas, que la lectura normal ni mira).
+  const tope = (capa) => { try { psdEditable({ width: 10, height: 10, children: [{ name: "BACKGROUND", children: [capa] }] }, { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [] }, { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null }, { capa: () => { throw new Error("no debió decodificar"); }, mascara: () => undefined, mascaraReal: () => undefined }); return "pasó"; } catch (e) { return e.message.split(" ").slice(-3).join(" "); } };
+  eq("topes del PSD editable: una capa oculta enorme, una máscara enorme o una capa en ZIP, también la máscara de una carpeta, se rechazan sin decodificar (sale el de capas planas)", [tope({ name: "x", hidden: true, left: 0, top: 0, right: 8000, bottom: 7000 }), tope({ name: "m", left: 0, top: 0, right: 0, bottom: 0, mask: { left: 0, top: 0, right: 9000, bottom: 9000 } }), tope({ name: "z", left: 0, top: 0, right: 2, bottom: 2, rawData: { channels: [{ id: 0, compression: 2 }] } }), tope({ name: "carpeta", children: [], mask: { left: 0, top: 0, right: 9000, bottom: 9000 } })], ["«x» mide 8000×7000", "«m» mide 9000×9000", "comprimida en ZIP", "«carpeta» mide 9000×9000"]);
+  // Recortadas (clipping): van con su base. Fondo suelto con un tinte recortado y un título suelto con un brillo
+  // recortado: el brillo se mueve con el título, el tinte con el fondo, y el retoque no se mete entre base y recortada.
+  const capa2 = (name, extra = {}) => ({ name, left: 0, top: 0, right: 2, bottom: 2, ...extra });
+  const rec = psdEditable(
+    { width: 10, height: 10, children: [capa2("BACKGROUND"), capa2("tinte", { clipping: true }), capa2("TITULO"), capa2("brillo", { clipping: true })] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["TITULO", { k: 1, x: 1, y: 1 }]] },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: { x: 0, y: 0, w: 1, h: 1, rgba: new Uint8ClampedArray(4).fill(255) } },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children;
+  eq("recortadas: van con la capa a la que se recortan; el retoque de un fondo suelto va encima de sus recortadas", rec.map((l) => `${l.name}@${l.left}`), ["BACKGROUND@0", "tinte@0", `${CAPA_RETOQUE}@0`, "TITULO@1", "brillo@1"]);
+  // Tope de SALIDA: una capa chica muy agrandada (k = 200) en una medida grande pasaría de 48 MP aun recortada.
+  let salida = "";
+  try { psdEditable({ width: 10, height: 10, children: [{ name: "BACKGROUND", children: [capa2("fondo")] }, { name: "TITULO", children: [capa2("t", { right: 100, bottom: 100 })] }] }, { W: 4096, H: 4096, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["TITULO", { k: 200, x: 0, y: 0 }]] }, { compuesto: new Uint8ClampedArray(4), halos: [], retoque: null }, { capa: () => { throw new Error("no debió decodificar"); }, mascara: () => undefined, mascaraReal: () => undefined }); } catch (e) { salida = e.message; }
+  ok("tope de salida: una capa que quedaría enorme en la medida se rechaza antes de decodificar (sale el de capas planas)", /quedaría de 8193×8193/.test(salida), salida);
+  // Lo del ARCHIVO se revisa antes que lo de la medida: con una capa enorme en esta medida ABAJO y una en ZIP arriba,
+  // sale el tope del archivo (el que marca el archivo), no "demasiado grande en esta medida".
+  let primero = null;
+  try { psdEditable({ width: 10, height: 10, children: [{ name: "TITULO", children: [capa2("t", { right: 100, bottom: 100 })] }, { name: "BACKGROUND", children: [capa2("z", { rawData: { channels: [{ id: 0, compression: 2 }] } })] }] }, { W: 4096, H: 4096, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["TITULO", { k: 200, x: 0, y: 0 }]] }, { compuesto: new Uint8ClampedArray(4), halos: [], retoque: null }, { capa: () => { throw new Error("no debió decodificar"); }, mascara: () => undefined, mascaraReal: () => undefined }); } catch (e) { primero = e; }
+  eq("topes: lo del archivo antes que lo de la medida (ZIP arriba gana a una capa enorme abajo)", [primero?.constructor.name, primero?.deArchivo, /ZIP/.test(primero?.message ?? "")], ["TopeEditable", true, true]);
+  // La sombra de contraste va justo debajo de la carpeta de su pieza (aislada o no: adentro, el estilo o la máscara de
+  // la carpeta la tomarían como forma); una copia oculta de la carpeta no se queda con ella; el retoque va sobre el ÚLTIMO fondo; la mesa blanca deja su color abajo; un
+  // objeto inteligente con filtros inteligentes sigue editable, con nota.
+  const halo1 = { x: 0, y: 0, w: 1, h: 1, rgba: new Uint8ClampedArray(4) };
+  const mix = psdEditable(
+    { width: 10, height: 10, children: [{ name: "Mesa", artboard: { rect: { left: 0, top: 0, right: 10, bottom: 10 }, backgroundType: 1 }, children: [
+      capa2("BACKGROUND"), capa2("FONDO"), { name: "TITULO", hidden: true, children: [capa2("viejo")] },
+      { name: "TITULO", blendMode: "normal", children: [capa2("t")] }, { name: "CTA", children: [capa2("b")] },
+      capa2("HERO", { placedLayer: { id: "x", type: "raster", transform: [0, 0, 2, 0, 2, 2, 0, 2], filter: { list: [{}] } } }),
+    ] }] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["TITULO", { k: 1, x: 0, y: 0 }], ["CTA", { k: 1, x: 0, y: 0 }], ["HERO", { k: 1, x: 0, y: 0 }]] },
+    { compuesto: new Uint8ClampedArray(64), halos: [{ nombre: "TITULO", capa: halo1 }, { nombre: "CTA", capa: halo1 }], retoque: halo1 },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  );
+  eq(
+    "sombra justo debajo de la carpeta de su pieza (aislada o no); la copia oculta no se queda con ella; retoque sobre el último fondo; color de la mesa abajo; filtros inteligentes con nota",
+    [mix.psd.children.map((l) => `${l.name}${l.children ? `[${l.children.map((c) => c.name).join(",")}]` : ""}`), mix.notas, mix.psd.children[0].imageData.data.slice(0, 4).join()],
+    [[CAPA_COLOR_MESA, "BACKGROUND", "FONDO", CAPA_RETOQUE, "TITULO[viejo]", CAPA_SOMBRA_CONTRASTE, "TITULO[t]", CAPA_SOMBRA_CONTRASTE, "CTA[b]", "HERO"], [{ capa: "HERO", motivo: "filtros-inteligentes", aplanada: false }], "255,255,255,255"],
+  );
+  // La capa del color de la mesa (W × H) también cuenta en el tope de salida: un fondo de 6800×6800 sin mover (46 MP)
+  // más la mesa de 4096×4096 (17 MP) pasan de 60 MP y se rechazan sin decodificar.
+  let conMesa = "";
+  try { psdEditable({ width: 6800, height: 6800, children: [{ name: "Mesa", artboard: { rect: { left: 0, top: 0, right: 6800, bottom: 6800 }, backgroundType: 1 }, children: [capa2("BACKGROUND", { right: 6800, bottom: 6800 })] }] }, { W: 4096, H: 4096, origen: { mesa: 0, x: 0, y: 0, w: 6800, h: 6800, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [] }, { compuesto: new Uint8ClampedArray(4), halos: [], retoque: null }, { capa: () => { throw new Error("no debió decodificar"); }, mascara: () => undefined, mascaraReal: () => undefined }); } catch (e) { conMesa = `${e.constructor.name}: ${e.message}`; }
+  ok("tope de salida: cuenta también la capa del color de la mesa (sale el de capas planas, de ESTA medida)", /^TopeEditable: en esta medida las capas sumarían/.test(conMesa), conMesa);
+  // Un fondo ENCIMA de una pieza (una viñeta arriba del héroe): el retoque va sobre el fondo de abajo, nunca encima
+  // de la pieza (la tarjeta pinta todo el fondo debajo de las piezas). Una mesa de otro color deja ese color.
+  const encima = psdEditable(
+    { width: 10, height: 10, children: [{ name: "Mesa", artboard: { rect: { left: 0, top: 0, right: 10, bottom: 10 }, backgroundType: 4, color: { r: 10.4, g: 200, b: 30.6 } }, children: [capa2("BACKGROUND"), capa2("HERO"), capa2("FONDO")] }] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["HERO", { k: 1, x: 1, y: 1 }]] },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: halo1 },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children;
+  eq("retoque: sobre el fondo de abajo aunque otro fondo vaya encima de una pieza; la mesa de color deja su color (redondeado)", [encima.map((l) => l.name), [...encima[0].imageData.data.slice(0, 4)], [...encima[0].imageData.data.slice(-4)]], [[CAPA_COLOR_MESA, "BACKGROUND", CAPA_RETOQUE, "HERO", "FONDO"], [10, 200, 31, 255], [10, 200, 31, 255]]);
+  // La segunda máscara (la de píxeles, cuando la capa también trae vectorial) se mueve con sus píxeles, no se pierde.
+  const dos = psdEditable({ width: 10, height: 10, children: [{ name: "BACKGROUND", children: [capa2("f", { realMask: { left: 0, top: 0, right: 2, bottom: 2, defaultColor: 0 } })] }] }, { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 1, y: 1 }, piezas: [] }, { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null }, { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(200) }) }).psd.children[0].children[0].realMask;
+  eq("segunda máscara (realMask): va con sus píxeles y movida", [dos.left, dos.top, dos.imageData?.width, dos.imageData?.data[0]], [1, 1, 2, 200]);
+  const tit = vert.psd.children[2].children;
+  eq(
+    "texto vertical: va como imagen (sin datos de texto) y se avisa por nombre; la sombra de contraste va justo debajo de su carpeta en multiplicar; el retoque del fondo, arriba en la suya",
+    [vert.notas, tit[0].text, tit[0].left, vert.psd.children.map((l) => `${l.name}${l.blendMode === "multiply" ? " (mult)" : ""}`), vert.psd.children[0].children.map((l) => l.name)],
+    [[{ capa: "vertical", motivo: "texto-vertical", aplanada: true }], undefined, 1, ["BACKGROUND", `${CAPA_SOMBRA_CONTRASTE} (mult)`, "TITULO"], ["fondo", CAPA_RETOQUE]],
+  );
+
+  // El retoque del fondo: sólo el parche de lo que cambió (con margen), puesto donde cae el fondo en la medida.
+  const fa = new Uint8ClampedArray(20 * 10 * 4).fill(100), fd = fa.slice();
+  for (let y = 4; y < 6; y++) for (let x = 8; x < 10; x++) fd.set([200, 50, 0, 255], (y * 20 + x) * 4);
+  const parche = retoqueDeFondo(fa, fd, 20, 10, { k: 1, x: -3, y: 1 }, 30, 30);
+  const pixel = (c, X, Y) => [...c.rgba.subarray(((Y - c.y) * c.w + (X - c.x)) * 4, ((Y - c.y) * c.w + (X - c.x)) * 4 + 4)];
+  eq("retoque del fondo: un parche de 2×2 + margen de 2 (6×6), corrido como el fondo; el centro trae el color nuevo y la orilla del margen el de antes", [parche.x, parche.y, parche.w, parche.h, pixel(parche, 5, 5), pixel(parche, 3, 3)], [3, 3, 6, 6, [200, 50, 0, 255], [100, 100, 100, 255]]);
+  eq("retoque del fondo: sin cambios, no hay parche", retoqueDeFondo(fa, fa.slice(), 20, 10, { k: 1, x: 0, y: 0 }, 30, 30), null);
+
+  const ruta = join(homedir(), "Desktop/formatos-prueba/s33-BFDIRECT20CASH.psd");
+  if (!existsSync(ruta)) console.log("  · (s33 no está en el Escritorio: no se probó con el PSD real)");
+  else {
+    const crudo = readFileSync(ruta);
+    const doc = leerPsd((await adelgazarPsd(new Blob([crudo]), PSD_BYTES_MAX)).datos);
+    const nMesa = doc.mesas.findIndex((m) => m.w === 1200 && m.h === 1500);
+    const ma = prepararMaestro(despiezar(doc, nMesa)).maestro;
+    // Como el worker: sin filtros inteligentes, con los objetos inteligentes revisados, y el mismo tope de memoria.
+    const fuente = readPsdAg(await prepararParaEditable(new Blob([crudo]), EDITABLE_MAX_BYTES), { useRawData: true, skipThumbnail: true, skipCompositeImageData: true, totalMemoryLimit: 64 * 1024 * 1024, strict: true });
+    const px = { capa: (l) => getLayerImageData(l), mascara: (l) => getLayerMaskImageData(l), mascaraReal: (l) => getLayerRealMaskImageData(l) };
+    const orig = fuente.children.find((l) => !l.hidden && l.artboard).children;
+    const hojas = (ls, ruta = []) => ls.flatMap((l) => (l.children ? hojas(l.children, [...ruta, l.name]) : [{ l, ruta: [...ruta, l.name].join(" / ") }]));
+    const arbol = (ls) => ls.map((l) => `${l.hidden ? "(oculta) " : ""}${l.name}${l.children ? ` [${arbol(l.children).join(", ")}]` : ""}`);
+    const extrasVacios = (W, H) => ({ compuesto: new Uint8ClampedArray(W * H * 4), halos: [], retoque: null });
+    // Los objetos inteligentes se revisan antes de que ag-psd los lea: un registro que declara más datos de los que
+    // trae (aquí, el primero del s33 real, con su largo de datos inflado) se rechaza y sale el PSD de capas planas.
+    const roto = new Uint8Array(crudo);
+    const enlace = Buffer.from(roto).indexOf("8BIMlnk2");
+    const dv = new DataView(roto.buffer, roto.byteOffset, roto.byteLength);
+    let q = enlace + 12 + 8 + 8; // largo del bloque y del registro, tipo y versión
+    q += 1 + roto[q];
+    q += 4 + 2 * dv.getUint32(q);
+    q += 8;
+    const sizeReg = dv.getUint32(enlace + 12 + 4);
+    dv.setUint32(q + 4, sizeReg + 1000);
+    let inseguro = "";
+    try { await prepararParaEditable(new Blob([roto]), EDITABLE_MAX_BYTES); } catch (e) { inseguro = e instanceof PsdInseguro ? e.message : `otro: ${e}`; }
+    let deEnlazados = null;
+    try { await prepararParaEditable(new Blob([roto]), EDITABLE_MAX_BYTES); } catch (e) { deEnlazados = e.deEnlazados; }
+    ok("objetos inteligentes: un registro del s33 con más datos de los que trae se rechaza ANTES de leerlo (PsdInseguro, de los objetos inteligentes)", enlace > 0 && /declara más datos/.test(inseguro) && deEnlazados === true, `${inseguro} · deEnlazados=${deEnlazados}`);
+    // Ceros en lugar del bloque de antes (GenI): ag-psd se los salta y lee el registro roto igual. El recorrido del
+    // editable también se los salta y lo revisa; el de la pantalla, no estricto, se queda como estaba (no revisa nada).
+    const genI = Buffer.from(roto).indexOf("8BIMGenI");
+    const conCeros = new Uint8Array(roto);
+    conCeros.fill(0, genI, enlace);
+    let tras = "";
+    try { await prepararParaEditable(new Blob([conCeros]), EDITABLE_MAX_BYTES); } catch (e) { tras = e instanceof PsdInseguro ? e.message : `otro: ${e}`; }
+    ok("objetos inteligentes: tras unos ceros (como los salta ag-psd) el registro roto también se revisa y se rechaza", genI > 0 && genI < enlace && /declara más datos/.test(tras), tras);
+    // Ceros ANTES del primer bloque (en lugar del de patrones, vacío): ag-psd se los salta y el recorrido también; un
+    // archivo así se arma igual, no se rechaza de más.
+    const patt = Buffer.from(crudo).indexOf("8BIMPatt");
+    const cerosArriba = new Uint8Array(crudo);
+    cerosArriba.fill(0, patt, patt + 12);
+    let arriba = "sin error";
+    try { await prepararParaEditable(new Blob([cerosArriba]), EDITABLE_MAX_BYTES); } catch (e) { arriba = `${e.constructor.name}: ${e.message}`; }
+    eq("bloques del final: ceros antes del primero se saltan como en ag-psd (el archivo sigue sirviendo)", [patt > 0 && new DataView(cerosArriba.buffer).getUint32(patt + 8) === 0, arriba], [true, "sin error"]);
+    // Lo que el recorrido estricto no sabe seguir no se conserva sin revisar: se rechaza.
+    const sinFirma = new Uint8Array(crudo);
+    sinFirma.set([0x58, 0x58, 0x58, 0x58], Buffer.from(sinFirma).indexOf("8BIMGenI"));
+    let firma = "";
+    try { await prepararParaEditable(new Blob([sinFirma]), EDITABLE_MAX_BYTES); } catch (e) { firma = e instanceof PsdInseguro ? e.message : `otro: ${e}`; }
+    let firmaEnlazados = null;
+    try { await prepararParaEditable(new Blob([sinFirma]), EDITABLE_MAX_BYTES); } catch (e) { firmaEnlazados = e.deEnlazados; }
+    ok("bloques del final: uno sin firma ya no deja el resto sin revisar (PsdInseguro de la estructura, no de los objetos inteligentes)", /no se dejan seguir/.test(firma) && firmaEnlazados === false, `${firma} · deEnlazados=${firmaEnlazados}`);
+    const psb = new Uint8Array(crudo.slice(0, 64));
+    psb[5] = 2;
+    let version = "";
+    try { await prepararParaEditable(new Blob([psb]), EDITABLE_MAX_BYTES); } catch (e) { version = e instanceof PsdInseguro ? e.message : `otro: ${e}`; }
+    ok("PSD editable: sólo PSD de versión 1 (un PSB se rechaza antes de leerlo)", /versión 1/.test(version), version);
+    eq("s33: el maestro sabe de qué mesa salió (la 4x5, la única visible; la 9-16 está oculta)", ma.origen, { mesa: 0, x: 0, y: 0, w: 1200, h: 1500, s: 1 });
+
+    // La caja de lo sólido (alfa > 50 %, con su máscara) de las capas normales de una carpeta, como la mide `despiezar`.
+    const solidoDe = (ls, W, H) => {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const { l } of hojas(ls.filter((l) => !l.hidden))) {
+        if (l.hidden || l.clipping || l.adjustment || (l.blendMode ?? "normal") !== "normal") continue;
+        const img = l.imageData ?? px.capa(l);
+        if (!img) continue;
+        const mk = l.mask && !l.mask.disabled ? l.mask : null, mi = mk && (mk.imageData ?? px.mascara(l));
+        for (let y = 0; y < img.height; y++)
+          for (let x = 0; x < img.width; x++) {
+            const X = l.left + x, Y = l.top + y;
+            if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+            let a = img.data[(y * img.width + x) * 4 + 3] * (l.opacity ?? 1);
+            if (mk) {
+              const mx = X - mk.left, my = Y - mk.top;
+              a *= (mi && mx >= 0 && my >= 0 && mx < mi.width && my < mi.height ? mi.data[(my * mi.width + mx) * 4] : (mk.defaultColor ?? 255)) / 255;
+            }
+            if (a <= 127.5) continue;
+            if (X < x0) x0 = X;
+            if (Y < y0) y0 = Y;
+            if (X > x1) x1 = X;
+            if (Y > y1) y1 = Y;
+          }
+      }
+      return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+    };
+    const carpetas = (ls) => new Map(ls.filter((l) => !l.hidden).map((l) => [l.name, l.children ?? [l]]));
+    // Calibración de la medición: en el original, la caja de cada pieza es la que midió `despiezar` (±1 px).
+    const enOrig = carpetas(orig);
+    const calibra = ma.piezas.map((p) => { const s = solidoDe(enOrig.get(p.nombre), 1200, 1500); return [p.nombre, s && Math.max(Math.abs(s.x - p.solido.x), Math.abs(s.y - p.solido.y), Math.abs(s.w - p.solido.w), Math.abs(s.h - p.solido.h))]; });
+    ok("s33: la medición de la prueba da la misma caja sólida que `despiezar` en el original (±1 px)", calibra.every(([, d]) => d !== null && d <= 1), JSON.stringify(calibra));
+
+    // El texto en un trayecto (s33: «Hasta», en arco) ag-psd no lo sabe escribir: va como imagen, y se dice.
+    const enTrayecto = (l) => l.text?.textPath?.data?.type === 2;
+    const notasEsperadas = hojas(orig).filter(({ l }) => enTrayecto(l)).map(({ l }) => ({ capa: l.name, motivo: "texto-en-trayecto", aplanada: true }));
+    eq("s33: «Hasta» es texto en un trayecto (el único)", notasEsperadas.map((n) => n.capa), ["Hasta"]);
+    // 1) IDENTIDAD: a la medida del maestro, cada capa sale igual (píxeles, caja, texto, esquinas, trazos).
+    const aId = acomodar(ma, 1200, 1500);
+    const id = psdEditable(fuente, planDeMedida(ma, aId, 1200, 1500), extrasVacios(1200, 1500), px);
+    const ho = hojas(orig), hi = hojas(id.psd.children);
+    const distintas = ho.flatMap(({ l, ruta }, i) => {
+      const n = hi[i]?.l;
+      if (!n || hi[i].ruta !== ruta) return [`${ruta}: falta`];
+      const a = px.capa(l), b = n.imageData;
+      const mal = [
+        [l.left, l.top, l.right, l.bottom].join() !== [n.left, n.top, n.right, n.bottom].join() && "caja",
+        a && (!b || a.data.length !== b.data.length || a.data.some((v, j) => v !== b.data[j])) && "píxeles",
+        JSON.stringify(enTrayecto(l) ? undefined : l.text?.transform) !== JSON.stringify(n.text?.transform) && "texto",
+        JSON.stringify(l.placedLayer?.transform) !== JSON.stringify(n.placedLayer?.transform) && "esquinas",
+        JSON.stringify(l.vectorMask?.paths) !== JSON.stringify(n.vectorMask?.paths) && "trazo",
+        JSON.stringify(l.vectorOrigination) !== JSON.stringify(n.vectorOrigination) && "forma viva",
+        JSON.stringify(l.effects) !== JSON.stringify(n.effects) && "efectos",
+        JSON.stringify([l.mask?.left, l.mask?.top, l.mask?.right, l.mask?.bottom, l.realMask?.left, l.realMask?.right]) !== JSON.stringify([n.mask?.left, n.mask?.top, n.mask?.right, n.mask?.bottom, n.realMask?.left, n.realMask?.right]) && "máscaras",
+      ].filter(Boolean);
+      return mal.length ? [`${ruta}: ${mal.join(", ")}`] : [];
+    });
+    ok(`s33 identidad: a 1200×1500 las ${ho.length} capas salen iguales (píxeles, caja, texto, esquinas, trazos, efectos, máscaras) y en el mismo árbol; sólo «Hasta» va como imagen`, distintas.length === 0 && JSON.stringify(arbol(id.psd.children)) === JSON.stringify(arbol(orig)) && JSON.stringify(id.notas) === JSON.stringify(notasEsperadas), distintas.slice(0, 6).join(" | "));
+
+    // 2) Medidas reales: escrito con ag-psd y leído de vuelta.
+    for (const [W, H] of [[1200, 627], [320, 250], [1080, 1920]]) {
+      const a = acomodar(ma, W, H);
+      const plan = planDeMedida(ma, a, W, H);
+      const t0 = performance.now();
+      const { psd, notas } = psdEditable(fuente, plan, extrasVacios(W, H), px);
+      const bytes = writePsdBuffer(psd, { invalidateTextLayers: true, noBackground: true });
+      const ms = performance.now() - t0;
+      const vuelta = readPsdAg(bytes, { useImageData: true, skipThumbnail: true });
+      const quitadas = new Set(a.quitadas.map((i) => ma.piezas[i].nombre));
+      const esperado = orig.map((l) => ({ ...l, hidden: l.hidden || quitadas.has(l.name) }));
+      const hv = hojas(vuelta.children);
+      const textos = hv.filter(({ l }) => l.text).map(({ l, ruta }) => [ruta, l.text.text, l.text.style?.font?.name]);
+      const textosOrig = ho.filter(({ l }) => l.text && !enTrayecto(l)).map(({ l, ruta }) => [ruta, l.text.text, l.text.style?.font?.name]);
+      const kDe = new Map(plan.piezas);
+      const escalas = hv.filter(({ l }) => l.text).map(({ l, ruta }, i) => {
+        const o = ho.filter(({ l }) => l.text && !enTrayecto(l))[i].l, A = kDe.get(ruta.split(" / ")[0]) ?? plan.fondo;
+        return Math.abs(l.text.transform[0] - o.text.transform[0] * A.k) < 1e-6 && Math.abs(l.text.transform[4] - (o.text.transform[4] * A.k + A.x)) < 1e-6;
+      });
+      const so = hv.filter(({ l }) => l.placedLayer);
+      const ids = new Set(so.map(({ l }) => l.placedLayer.id));
+      ok(
+        `s33 ${W}×${H}: mismo árbol que el original (carpetas, subcarpetas, orden, ocultas; quitadas: ${[...quitadas].join(", ") || "ninguna"} van ocultas), ${textos.length} textos vivos con su letra (y «Hasta», en trayecto, como imagen), ${so.length} objetos inteligentes con su archivo (${ms.toFixed(0)} ms, ${(bytes.length / 1e6).toFixed(1)} MB)`,
+        JSON.stringify(arbol(vuelta.children)) === JSON.stringify(arbol(esperado)) && JSON.stringify(textos) === JSON.stringify(textosOrig) && escalas.every(Boolean) && so.length === ho.filter(({ l }) => l.placedLayer).length && [...ids].every((i) => vuelta.linkedFiles?.some((f) => f.id === i && f.data?.length)) && JSON.stringify(notas) === JSON.stringify(notasEsperadas),
+        JSON.stringify({ arbol: arbol(vuelta.children), escalas, notas }),
+      );
+      // Cada pieza puesta: sus capas, ya leídas de vuelta, tienen su parte sólida donde la puso el acomodo (±2 px).
+      const enVuelta = carpetas(vuelta.children);
+      const lejos = a.puestas.map((q) => {
+        const s = solidoDe(enVuelta.get(ma.piezas[q.pieza].nombre), W, H);
+        const recorte = { x: Math.max(0, q.x), y: Math.max(0, q.y) };
+        return [ma.piezas[q.pieza].nombre, s && Math.max(Math.abs(s.x - Math.round(recorte.x)), Math.abs(s.y - Math.round(recorte.y)), Math.abs(Math.min(W, q.x + q.w) - recorte.x - s.w), Math.abs(Math.min(H, q.y + q.h) - recorte.y - s.h))];
+      });
+      ok(`s33 ${W}×${H}: cada pieza leída de vuelta tiene su parte sólida donde la puso el acomodo (±1.5 px: la orilla al agrandar)`, lejos.every(([, d]) => d !== null && d <= 1.5), JSON.stringify(lejos));
+      // Lo vectorial se movió con sus píxeles: el trazo de cada forma abraza su capa, las esquinas de cada objeto
+      // inteligente contienen su capa (la misma relación que en el original), y los efectos crecen o se achican con k.
+      const cajaDe = (v) => { const xs = v.filter((_, i) => i % 2 === 0), ys = v.filter((_, i) => i % 2); return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) }; };
+      const trazoLejos = hv.filter(({ l }) => l.vectorMask && l.right > l.left).map(({ l, ruta }) => { const c = cajaDe(l.vectorMask.paths.flatMap((p) => p.knots.flatMap((k) => k.points))); return [ruta, Math.max(Math.abs(c.x0 - l.left), Math.abs(c.y0 - l.top), Math.abs(c.x1 - l.right), Math.abs(c.y1 - l.bottom))]; });
+      const borde = (l) => 2 + 2 * (l.vectorStroke?.lineWidth?.value ?? 0);
+      ok(`s33 ${W}×${H}: el trazo de cada forma abraza sus píxeles (${trazoLejos.length} formas)`, trazoLejos.length > 0 && trazoLejos.every(([, d], i) => d <= borde(hv.filter(({ l }) => l.vectorMask && l.right > l.left)[i].l)), JSON.stringify(trazoLejos));
+      const fueraDeEsquinas = (ls) => ls.filter(({ l }) => l.placedLayer && l.right > l.left && (l.placedLayer.warp?.style ?? "none") === "none").map(({ l, ruta }) => { const c = cajaDe(l.placedLayer.transform); return [ruta, Math.max(c.x0 - l.left, c.y0 - l.top, l.right - c.x1, l.bottom - c.y1)]; });
+      const fe = fueraDeEsquinas(hv), feOrig = fueraDeEsquinas(ho);
+      ok(`s33 ${W}×${H}: las esquinas de cada objeto inteligente contienen su capa, como en el original (${fe.length})`, fe.length > 0 && fe.every(([, d], i) => d <= Math.max(2, feOrig[i][1] + 2)), JSON.stringify([fe, feOrig]));
+      const efectos = hv.flatMap(({ l, ruta }, i) => {
+        const o = ho[i].l, A = kDe.get(ruta.split(" / ")[0]) ?? plan.fondo;
+        return o.effects?.dropShadow ? o.effects.dropShadow.map((e, j) => Math.abs(l.effects.dropShadow[j].size.value - e.size.value * A.k) < 1e-6 && Math.abs(l.effects.dropShadow[j].distance.value - e.distance.value * A.k) < 1e-6) : [];
+      });
+      ok(`s33 ${W}×${H}: las sombras de capa (tamaño y distancia) van por la escala de su pieza (${efectos.length})`, efectos.length > 0 && efectos.every(Boolean));
+      // La forma viva (rectángulo con esquinas redondas): su caja sigue abrazando su trazo, y radios y contorno
+      // crecen o se achican con la pieza, para que Photoshop la siga editando como rectángulo.
+      const vivas = hv.flatMap(({ l, ruta }, i) => {
+        const o = ho[i].l, d = l.vectorOrigination?.keyDescriptorList?.[0], dO = o.vectorOrigination?.keyDescriptorList?.[0];
+        if (!d?.keyOriginShapeBoundingBox) return [];
+        const A = kDe.get(ruta.split(" / ")[0]) ?? plan.fondo, b = d.keyOriginShapeBoundingBox, c = cajaDe(l.vectorMask.paths.flatMap((p) => p.knots.flatMap((k) => k.points)));
+        const caja = Math.max(Math.abs(b.left.value - c.x0), Math.abs(b.top.value - c.y0), Math.abs(b.right.value - c.x1), Math.abs(b.bottom.value - c.y1));
+        const radio = !dO.keyOriginRRectRadii || ["topLeft", "topRight", "bottomLeft", "bottomRight"].every((e) => Math.abs(d.keyOriginRRectRadii[e].value - dO.keyOriginRRectRadii[e].value * A.k) < 1e-6);
+        const grosor = Math.abs(l.vectorStroke.lineWidth.value - o.vectorStroke.lineWidth.value * A.k) < 1e-6;
+        return [[ruta, +caja.toFixed(2), radio, grosor]];
+      });
+      // La matriz de una forma viva lleva su caja ORIGINAL (de cuando se dibujó) a la de hoy; en s33 los dos «Rectangle 2»
+      // (9-16 y 4x5) vuelven a la misma (1224, 660, 273×68). Movida la forma, la caja original tiene que seguir igual.
+      const original = (d) => { const [xx, , , yy, tx, ty] = d.transform, c = d.keyOriginBoxCorners; return [(c[0].x - tx) / xx, (c[0].y - ty) / yy, (c[2].x - c[0].x) / xx, (c[2].y - c[0].y) / yy].map((v) => +v.toFixed(3)); };
+      const cajasOriginales = hv.flatMap(({ l }, i) => { const d = l.vectorOrigination?.keyDescriptorList?.[0], dO = ho[i].l.vectorOrigination?.keyDescriptorList?.[0]; return d?.transform && d.keyOriginBoxCorners ? [[original(dO), original(d)]] : []; });
+      ok(`s33 ${W}×${H}: formas vivas: su caja original (la matriz al revés) no cambia al moverlas (${cajasOriginales.length})`, cajasOriginales.length > 0 && cajasOriginales.every(([a, b]) => a.every((v, j) => Math.abs(v - b[j]) < 0.01)), JSON.stringify(cajasOriginales));
+      ok(`s33 ${W}×${H}: formas vivas: su caja abraza el trazo (±2 px), radios y contorno por k (${vivas.length})`, vivas.length > 0 && vivas.every(([, c, r, g]) => c <= 2 && r && g), JSON.stringify(vivas));
+      if (W === 1200) {
+        // Una pieza quitada en la medida (s33 no trae SUBTITULO suelto: se simula quitando el CTA) va oculta, con el fondo.
+        const iCta = ma.piezas.findIndex((p) => p.rol === "CTA");
+        const sin = psdEditable(fuente, planDeMedida(ma, { ...a, puestas: a.puestas.filter((q) => q.pieza !== iCta), quitadas: [iCta] }, W, H), extrasVacios(W, H), px).psd;
+        const cta = sin.children.find((l) => l.name === ma.piezas[iCta].nombre);
+        const tx = hojas(cta.children).find(({ l }) => l.text).l.text.transform, txo = ho.find(({ l }) => l.text && l.name === "Aplica hoy").l.text.transform;
+        ok("s33: una pieza quitada en la medida va oculta, movida con el fondo (para prenderla a mano)", cta.hidden === true && Math.abs(tx[0] - txo[0] * plan.fondo.k) < 1e-9 && sin.children.filter((l) => l.hidden).length === 2, JSON.stringify([cta.hidden, tx, plan.fondo]));
+      }
+    }
+  }
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

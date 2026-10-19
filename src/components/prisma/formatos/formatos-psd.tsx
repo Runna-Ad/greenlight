@@ -13,9 +13,9 @@ import { useLang } from "@/components/prisma/use-lang";
 import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Edicion, type Lado } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionContraste, type InfoContraste } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
-import { FP, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
+import { FP, FP_APLANADA, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
 import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
-import { LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoWorker } from "@/lib/prisma/formatos/listo";
+import { EDITABLE_MAX_BYTES, EDITABLE_MAX_MS, LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajePsdMedida, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoPsdMedida, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
 import { etiquetaPieza, nombreDeGuia, type Rol } from "@/lib/prisma/formatos/roles";
@@ -35,9 +35,10 @@ import { COLUMNAS, ChipEstado, FOCO, FORMAS, NOMBRE_FORMA, PastillasCanal, Pasti
  */
 
 type Falla = { clave: keyof typeof FP_ERROR; detalle?: string };
-type Leido = { archivo: string; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] };
+/** `psdOriginal`: el archivo tal cual, para armar el PSD editable de cada medida (se vuelve a leer entero al pedirlo). */
+type Leido = { archivo: string; psdOriginal: Blob; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] };
 /** Un maestro como se acomoda y se pinta: con el papel elegido en cada carpeta y, si se aprobó, sin la copia del fondo. */
-type MaestroVista = MaestroListo & { copia?: CopiaEnFondo | null };
+type MaestroVista = MaestroListo & { copia?: CopiaEnFondo | null; fondoOriginal?: Uint8ClampedArray };
 /** Cómo se quitó: gratis (espejo) o con la IA (lo que costó y cuánto cambió lo de alrededor). */
 type Quitada = { pieza: number; fondo: Uint8ClampedArray } & ({ metodo: "espejo" } | { metodo: "ia"; costoUsd: number | null; deriva: number | null });
 
@@ -149,6 +150,66 @@ function descargar(blob: Blob, nombre: string) {
   a.download = nombre;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), SOLTAR_URL_MS);
+}
+
+/** Los PSD editables se arman de uno en uno: cada uno lee el archivo entero (s33: 61 MB) y escribe otro casi igual;
+ *  doce clics seguidos en doce tarjetas no deben pedir 1.4 GB de golpe. Lo pesado de la página (la imagen aplanada,
+ *  las sombras) también se arma en su turno, no al hacer clic. */
+let colaPsd: Promise<unknown> = Promise.resolve();
+/** Archivos con los que el PSD editable ya falló o tardó: los demás clics van directo al de capas planas (sin volver a
+ *  esperar el tope de tiempo por cada medida). Abrir el PSD otra vez lo vuelve a intentar. */
+const sinEditable = new WeakSet<Blob>();
+/** Avisos de capas aplanadas o a revisar ya enseñados por archivo: son los mismos en cada medida, así que sólo el
+ *  primero se queda hasta cerrarlo; los repetidos se van solos. */
+const notasVistas = new WeakMap<Blob, Set<string>>();
+function enFilaPsd<T>(trabajo: () => Promise<T>): Promise<T> {
+  const turno = colaPsd.then(trabajo, trabajo);
+  colaPsd = turno.catch(() => undefined);
+  return turno;
+}
+
+/** Una falla del worker del PSD editable, con su código (el tiempo agotado y lo inesperado son "otro"). */
+class FallaPsd extends Error {
+  codigo: Extract<MensajePsdMedida, { tipo: "error" }>["codigo"];
+  constructor(codigo: FallaPsd["codigo"], detalle: string) {
+    super(detalle);
+    this.codigo = codigo;
+  }
+}
+
+/** Arma el PSD editable de una medida en su propio worker (psd-medida.worker.ts): la página no se congela, y si tarda
+ *  más de EDITABLE_MAX_MS se mata. `alArrancar` recibe con qué cancelarlo si la tarjeta se va: mata el worker y
+ *  termina en null (así la fila sigue con la siguiente medida). */
+function psdEditableEnWorker(pedido: PedidoPsdMedida, transferir: Transferable[], alArrancar: (cancelar: () => void) => void): Promise<Extract<MensajePsdMedida, { tipo: "listo" }> | null> {
+  return new Promise((ok, mal) => {
+    const worker = new Worker(new URL("./psd-medida.worker.ts", import.meta.url), { type: "module" });
+    let reloj = 0;
+    const fin = () => {
+      window.clearTimeout(reloj);
+      worker.terminate();
+    };
+    const fallar = (detalle: string) => {
+      fin();
+      mal(new FallaPsd("otro", detalle));
+    };
+    reloj = window.setTimeout(() => fallar(`el PSD editable tardó más de ${EDITABLE_MAX_MS / 1000} s`), EDITABLE_MAX_MS);
+    worker.onmessage = (e: MessageEvent<MensajePsdMedida>) => {
+      fin();
+      if (e.data.tipo === "listo") ok(e.data);
+      else mal(new FallaPsd(e.data.codigo, e.data.detalle));
+    };
+    worker.onerror = (e) => fallar(e.message || "el worker del PSD falló");
+    worker.onmessageerror = () => fallar("la respuesta del worker del PSD no se pudo leer");
+    alArrancar(() => {
+      fin();
+      ok(null);
+    });
+    try {
+      worker.postMessage(pedido, transferir);
+    } catch (err) {
+      fallar(err instanceof Error ? err.message : String(err));
+    }
+  });
 }
 
 
@@ -320,6 +381,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
   alEditar,
   contraste: eleccion,
   alContraste,
+  psdOriginal,
 }: {
   maestros: MaestroVista[];
   medida: Medida;
@@ -336,6 +398,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
   /** El arreglo de contraste elegido para esta medida ("auto": el de la plataforma). */
   contraste: EleccionContraste;
   alContraste: (m: Medida, e: EleccionContraste) => void;
+  /** El PSD tal cual se abrió, para armar el PSD editable de esta medida; null = sólo el de capas planas. */
+  psdOriginal: Blob | null;
 }) {
   const { w, h } = medida;
   const k = clave(medida);
@@ -395,22 +459,116 @@ const TarjetaMedida = memo(function TarjetaMedida({
       toast.error(tx(FP.bajarFallo, lang));
     }
   };
-  // La medida en capas para terminarla a mano (psd-salida.ts). La librería se carga al hacer clic, no con la página.
-  const [armandoPsd, setArmandoPsd] = useState(false);
+  // La medida como PSD EDITABLE (psd-editable.ts): las capas del original movidas a esta medida, armadas en un worker y
+  // de una en una (`enFilaPsd`). Si no se puede (archivo muy pesado, falla o tarda), sale el de capas planas de antes
+  // (psd-salida.ts) y se dice por qué. Se baja lo que la tarjeta mostraba al hacer clic. Las librerías se cargan al
+  // hacer clic, no con la página.
+  const [psdEstado, setPsdEstado] = useState<"fila" | "armando" | null>(null);
+  const cancelarPsd = useRef<(() => void) | null>(null);
+  /** La tarjeta sigue en la página: si se fue mientras esperaba turno o armaba, no se arranca ni se baja nada. */
+  const enPagina = useRef(true);
+  useEffect(() => {
+    enPagina.current = true;
+    return () => {
+      enPagina.current = false;
+      cancelarPsd.current?.();
+    };
+  }, []);
   const bajarPsd = async () => {
-    if (armandoPsd) return;
-    setArmandoPsd(true);
+    if (psdEstado) return;
+    setPsdEstado("fila");
+    const m = etiqueta(medida), id = `psd-${k}`;
+    const nombre = archivoDe(ma, medida).replace(/\.png$/, ".psd");
     try {
-      const [{ writePsdUint8Array }, { psdDeMedida }] = await Promise.all([import("ag-psd"), import("@/lib/prisma/formatos/psd-salida")]);
-      // Un cuadro para que se vea «Armando…» antes del trabajo pesado (un segundo o menos, en la página).
-      await new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 0)));
-      const bytes = writePsdUint8Array(psdDeMedida(ma, acomodo, w, h, { texto: textoEscrito(escritura, maestro, ma, tipos) }), { noBackground: true });
-      descargar(new Blob([bytes as BlobPart], { type: "image/vnd.adobe.photoshop" }), archivoDe(ma, medida).replace(/\.png$/, ".psd"));
+      const texto = textoEscrito(escritura, maestro, ma, tipos);
+      let motivo: string;
+      if (!psdOriginal || !ma.origen) motivo = tx(FP.psdPlanoSinOriginal, lang);
+      else if (psdOriginal.size > EDITABLE_MAX_BYTES) motivo = rellenar(tx(FP.psdPlanoPesado, lang), { mb: String(Math.round(psdOriginal.size / 1e6)), max: String(EDITABLE_MAX_BYTES / 1e6) });
+      else if (sinEditable.has(psdOriginal)) motivo = tx(FP.psdPlanoFallo, lang);
+      else {
+        const archivo = psdOriginal, origen = ma.origen;
+        try {
+          const r = await enFilaPsd(async () => {
+            if (!enPagina.current) return null;
+            // Otra medida en la fila ya falló con este archivo: ésta no vuelve a esperar al worker.
+            if (sinEditable.has(archivo)) throw new FallaPsd("otro", "este archivo ya falló en otra medida");
+            setPsdEstado("armando");
+            const [{ armarMedida, haloEnMedida }, { planDeMedida, retoqueDeFondo }] = await Promise.all([import("@/lib/prisma/formatos/nitido"), import("@/lib/prisma/formatos/psd-editable")]);
+            // Un cuadro para que se vea «Armando…» antes del trabajo pesado. En una pestaña de fondo no se pinta nada (y el
+            // navegador estira los relojes a 1 s): ahí no se espera.
+            if (!document.hidden)
+              await new Promise<void>((ok) => {
+                const cuadro = requestAnimationFrame(() => {
+                  clearTimeout(reloj);
+                  setTimeout(ok, 0);
+                });
+                const reloj = setTimeout(() => {
+                  cancelAnimationFrame(cuadro);
+                  ok();
+                }, 100);
+              });
+            if (!enPagina.current) return null;
+            const sombras = new Set(acomodo.sombras ?? []);
+            const halos = acomodo.puestas.flatMap((q) => {
+              const capa = sombras.has(q.pieza) ? haloEnMedida(ma, q) : null;
+              return capa ? [{ nombre: ma.piezas[q.pieza].nombre, capa }] : [];
+            });
+            const retoque = ma.fondoOriginal ? retoqueDeFondo(ma.fondoOriginal, ma.fondo, ma.w, ma.h, acomodo.fondo, w, h) : null;
+            const compuesto = armarMedida(ma, acomodo, w, h, { texto });
+            const pedido: PedidoPsdMedida = { archivo, plan: planDeMedida({ piezas: ma.piezas, origen }, acomodo, w, h), extras: { compuesto, halos, retoque } };
+            // Lo pintado aquí cruza al worker sin copiarse (son arreglos nuevos: nada más los usa).
+            const transferir = [compuesto.buffer, ...halos.map((x) => x.capa.rgba.buffer), ...(retoque ? [retoque.rgba.buffer] : [])] as ArrayBuffer[];
+            return psdEditableEnWorker(pedido, transferir, (c) => (cancelarPsd.current = c));
+          });
+          if (!r || !enPagina.current) return;
+          descargar(r.archivo, nombre);
+          // Las aplanadas llevan su porqué; las de revisar, no (la frase ya dice que son los filtros inteligentes).
+          const lista = (aplanada: boolean) => unos(r.notas.filter((x) => x.aplanada === aplanada).map((x) => `«${corto(x.capa || tx(FP.capaSinNombre, lang))}»${aplanada ? ` (${tx(FP_APLANADA[x.motivo], lang)})` : ""}`));
+          if (!r.notas.length) toast.success(rellenar(tx(FP.psdListo, lang), { m }), { id, duration: 10_000 });
+          else {
+            // Es lo único que dice qué no quedó editable o qué revisar: el primero de cada archivo se queda hasta que la
+            // persona lo cierre.
+            const aplanadas = r.notas.some((x) => x.aplanada), revisar = r.notas.some((x) => !x.aplanada);
+            const texto = [aplanadas ? rellenar(tx(FP.psdAplanadas, lang), { m, capas: lista(true) }) : rellenar(tx(FP.psdListo, lang), { m }), ...(revisar ? [rellenar(tx(FP.psdRevisar, lang), { capas: lista(false) })] : [])].join(" ");
+            const vistas = notasVistas.get(archivo) ?? new Set<string>(), clave = JSON.stringify(r.notas);
+            notasVistas.set(archivo, vistas);
+            if (vistas.has(clave)) toast.warning(texto, { id, duration: 10_000 });
+            else {
+              vistas.add(clave);
+              toast.warning(texto, { id, duration: Infinity, closeButton: true });
+            }
+          }
+          return;
+        } catch (err) {
+          if (!enPagina.current) return;
+          console.error("[formatos-psd] psd editable", err);
+          const codigo = err instanceof FallaPsd ? err.codigo : "otro";
+          // Un tope es de ESTA medida (otra, más chica, puede salir); lo demás es del archivo: no se vuelve a esperar.
+          if (codigo !== "topes") sinEditable.add(archivo);
+          motivo = tx({ topes: FP.psdPlanoTopes, archivo: FP.psdPlanoArchivo, inseguro: FP.psdPlanoInseguro, formato: FP.psdPlanoFormato, otro: FP.psdPlanoFallo }[codigo], lang);
+        } finally {
+          cancelarPsd.current = null;
+        }
+      }
+      // También en la fila y de una en una: si el archivo falló con doce medidas esperando, las doce de capas planas no
+      // se arman seguidas sin soltar la página (cada vuelta deja pintar antes de la siguiente).
+      const plano = await enFilaPsd(async () => {
+        if (!enPagina.current) return null;
+        setPsdEstado("armando");
+        await new Promise((ok) => setTimeout(ok, 0));
+        const [{ writePsdUint8Array }, { psdDeMedida }] = await Promise.all([import("ag-psd"), import("@/lib/prisma/formatos/psd-salida")]);
+        if (!enPagina.current) return null;
+        return new Blob([writePsdUint8Array(psdDeMedida(ma, acomodo, w, h, { texto }), { noBackground: true }) as BlobPart], { type: "image/vnd.adobe.photoshop" });
+      });
+      if (!plano || !enPagina.current) return;
+      descargar(plano, nombre);
+      // Se queda hasta cerrarlo: el archivo se llama igual que uno editable y éste es el único aviso de que no lo es.
+      toast.warning(rellenar(tx(FP.psdPlano, lang), { m, motivo }), { id, duration: Infinity, closeButton: true });
     } catch (err) {
       console.error("[formatos-psd] psd", err);
-      toast.error(tx(FP.bajarPsdFallo, lang));
+      if (enPagina.current) toast.error(rellenar(tx(FP.bajarPsdFallo, lang), { m }), { id, duration: 10_000 });
     } finally {
-      setArmandoPsd(false);
+      if (enPagina.current) setPsdEstado(null);
     }
   };
   return (
@@ -506,13 +664,14 @@ const TarjetaMedida = memo(function TarjetaMedida({
           variant="outline"
           className={BOTON_TARJETA}
           onClick={() => void bajarPsd()}
-          disabled={noPinto || armandoPsd}
-          aria-busy={armandoPsd}
-          aria-label={rellenar(tx(FP.bajarPsdAria, lang), { m: etiqueta(medida) })}
+          // Ocupado no lo saca del Tab (el foco no se pierde) ni lo atenúa: `bajarPsd` ignora otro clic mientras arma.
+          disabled={noPinto}
+          aria-disabled={psdEstado ? true : undefined}
+          aria-label={psdEstado ? `${rellenar(tx(FP.bajarPsdAria, lang), { m: etiqueta(medida) })}: ${tx(psdEstado === "fila" ? FP.bajarPsdEnFila : FP.bajarPsdHaciendo, lang)}` : rellenar(tx(FP.bajarPsdAria, lang), { m: etiqueta(medida) })}
           title={tx(FP.bajarPsdTitulo, lang)}
         >
-          {armandoPsd ? <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Layers className="size-3.5" aria-hidden="true" />}
-          {armandoPsd ? tx(FP.bajarPsdHaciendo, lang) : tx(FP.bajarPsd, lang)}
+          {psdEstado ? <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Layers className="size-3.5" aria-hidden="true" />}
+          {psdEstado ? tx(psdEstado === "fila" ? FP.bajarPsdEnFila : FP.bajarPsdHaciendo, lang) : tx(FP.bajarPsd, lang)}
         </Button>
       </div>
     </li>
@@ -676,7 +835,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
         const vale = q && g && q.pieza === g.pieza ? q : null;
         const antes = vistas.get(m);
         if (antes && antes.q === vale && antes.g === g) return antes.v;
-        const v: MaestroVista = vale ? { ...m, fondo: vale.fondo, copia: { pieza: vale.pieza, quitada: true } } : g ? { ...m, copia: { pieza: g.pieza, quitada: false } } : m;
+        const v: MaestroVista = vale ? { ...m, fondo: vale.fondo, fondoOriginal: m.fondo, copia: { pieza: vale.pieza, quitada: true } } : g ? { ...m, copia: { pieza: g.pieza, quitada: false } } : m;
         vistas.set(m, { q: vale, g, v });
         return v;
       }),
@@ -888,7 +1047,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
       cerrar(null);
       // Un PSD sin mesas de trabajo no trae nombre de mesa: el del archivo hace de nombre de entrega.
       const maestros = m.maestros.map((x) => (x.nombre ? x : { ...x, nombre: sinExtension(file.name) }));
-      setLeido({ archivo: file.name, maestros, descartadas: m.descartadas, avisos: m.avisos });
+      setLeido({ archivo: file.name, psdOriginal: file, maestros, descartadas: m.descartadas, avisos: m.avisos });
       if (maestros.length) setAvance(null);
       else fallar({ clave: "ningunaMesa" });
     };
@@ -1911,7 +2070,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                     </h3>
                     <ul className={cn("grid gap-3", COLUMNAS[f])}>
                       {grupo.map((m) => (
-                        <TarjetaMedida key={clave(m)} maestros={maestrosVista} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} />
+                        <TarjetaMedida key={clave(m)} maestros={maestrosVista} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} />
                       ))}
                     </ul>
                   </div>

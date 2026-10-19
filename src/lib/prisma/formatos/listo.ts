@@ -2,7 +2,8 @@
  * HÜE Prisma › Formatos — lo que cruza del Web Worker (que lee el PSD) a la pantalla (que lo pinta). Módulo puro y
  * SIN la librería de PSD: la pantalla sólo importa de aquí, así `ag-psd` vive en el worker y no en la página.
  */
-import type { Caja, MaestroPsd, MotivoPsd, Rol, TextoPieza } from "./psd.ts";
+import type { ExtrasEditable, NotaCapa, PlanEditable } from "./psd-editable.ts";
+import type { Caja, MaestroPsd, MotivoPsd, Origen, Rol, TextoPieza } from "./psd.ts";
 
 /** Tope de lo que se LEE de un PSD: sus capas y su copia aplanada, ya sin los originales de los objetos inteligentes
  *  ni los filtros inteligentes (`adelgazar.ts`). El PSD real del equipo pesa 72 MB en disco y 22 MB así. */
@@ -17,6 +18,21 @@ export const MESAS_AUTO = 4;
 /** Bytes de píxeles que el worker le puede pasar a la página en total (la página los vuelve a tener como lienzos).
  *  El PSD real del equipo (2 mesas) pasa ~70 MB. */
 export const TRANSFERIR_MAX_BYTES = 600_000_000;
+/** Tope del archivo para armar el PSD EDITABLE de una medida: se lee ENTERO (con los originales de sus objetos
+ *  inteligentes, que la lectura normal quita) y el PSD que sale pesa casi lo mismo. s33 (61 MB) → 42-64 MB por medida;
+ *  el worker llega a ~3-4 veces el archivo en memoria. Más grande: sale el PSD de capas planas (psd-salida.ts), con aviso. */
+export const EDITABLE_MAX_BYTES = 200_000_000;
+/** Topes de lo que se DECODIFICA para el PSD editable. Incluye las capas ocultas de la mesa, que la lectura normal ni
+ *  mira: una capa oculta enorme tumbaría la pestaña. Por capa, el mismo tope que `psd.ts`; en total, holgado (s33:
+ *  24 capas, 9 MP). */
+export const EDITABLE_CAPA_MAX_PX = 48_000_000;
+export const EDITABLE_PX_MAX = 150_000_000;
+export const EDITABLE_CAPAS_MAX = 600;
+/** Lo que pueden sumar las capas YA MOVIDAS a la medida (una capa se agranda con k²): s33 a 1080×1920 suma ~15 MP.
+ *  Cada MP son 4 MB que se quedan hasta escribir el PSD, más lo que ag-psd copia al comprimir. */
+export const EDITABLE_SALIDA_PX_MAX = 60_000_000;
+/** Si el PSD editable no sale en este tiempo, se mata su worker y sale el de capas planas. */
+export const EDITABLE_MAX_MS = 90_000;
 /** Medidas por anuncio en la pantalla (cada una es un lienzo en memoria). */
 export const MEDIDAS_MAX = 30;
 /** Píxeles que pueden sumar todas las medidas de un anuncio. Cada una es un lienzo en memoria (4 bytes por píxel):
@@ -41,6 +57,8 @@ export type MaestroListo = {
   nombre: string;
   w: number;
   h: number;
+  /** De qué mesa del PSD salió (para el PSD editable de cada medida). Falta en maestros armados a mano (pruebas). */
+  origen?: Origen;
   /** Fondo limpio, RGBA opaco, w × h. */
   fondo: Uint8ClampedArray;
   /** De abajo hacia arriba. */
@@ -62,6 +80,14 @@ export type MensajeWorker =
   | { tipo: "listo"; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] }
   | { tipo: "error"; motivo: MotivoPsd | "desconocido"; detalle: string };
 
+/** Lo que la tarjeta le pide al worker del PSD editable (psd-medida.worker.ts) y lo que le contesta. */
+export type PedidoPsdMedida = { archivo: Blob; plan: PlanEditable; extras: ExtrasEditable };
+/** `codigo`: "topes" = capas demasiado grandes para ESTA medida (otra puede salir); "archivo" = el archivo trae capas
+ *  que el editable no arma en ninguna medida (en ZIP, demasiadas, muy grandes); "inseguro" = los datos de sus objetos
+ *  inteligentes no se leen con seguridad; "formato" = el archivo no sigue el formato PSD exactamente; "otro" = cualquier
+ *  otra falla. */
+export type MensajePsdMedida = { tipo: "listo"; archivo: Blob; notas: NotaCapa[] } | { tipo: "error"; codigo: "topes" | "archivo" | "inseguro" | "formato" | "otro"; detalle: string };
+
 /** RGB → RGBA opaco (lo que pide `ImageData`). */
 function opaco(rgb: Uint8ClampedArray): Uint8ClampedArray {
   const n = Math.floor(rgb.length / 3), out = new Uint8ClampedArray(n * 4);
@@ -81,6 +107,7 @@ export function prepararMaestro(ma: MaestroPsd): { maestro: MaestroListo; transf
     nombre: ma.nombre,
     w: ma.w,
     h: ma.h,
+    origen: ma.origen,
     fondo: opaco(ma.fondo),
     piezas: ma.piezas.map((p) => ({ nombre: p.nombre, rol: p.rol, caja: p.caja, solido: p.solido, letraMinPx: p.letraMinPx, rgba: p.rgba, oscurece: p.oscurece ? opaco(p.oscurece) : null, base: p.base, textos: p.textos })),
     textoGamma: ma.textoGamma,

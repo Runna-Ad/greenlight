@@ -42,11 +42,40 @@ const u32 = async (a: Archivo, pos: number): Promise<number> => {
 };
 const texto4 = async (a: Archivo, pos: number): Promise<string> => String.fromCharCode(...new Uint8Array(await a.slice(pos, pos + 4).arrayBuffer()));
 
+/** El archivo trae algo que no se deja leer con seguridad para el PSD editable (la lectura normal no lo mira).
+ *  `deEnlazados` = son los datos de sus objetos inteligentes; si no, es la estructura del archivo. */
+export class PsdInseguro extends Error {
+  deEnlazados: boolean;
+  constructor(mensaje: string, deEnlazados = false) {
+    super(mensaje);
+    this.deEnlazados = deEnlazados;
+  }
+}
+
+/** La primera posición desde `q` que no es un byte 0 (ag-psd se salta los ceros entre bloques), o `fin`. */
+async function sinCeros(a: Archivo, q: number, fin: number): Promise<number> {
+  while (q < fin) {
+    const b = new Uint8Array(await a.slice(q, Math.min(fin, q + 4096)).arrayBuffer());
+    if (!b.length) return fin;
+    const i = b.findIndex((x) => x !== 0);
+    if (i >= 0) return q + i;
+    q += b.length;
+  }
+  return fin;
+}
+
 /**
  * Los tramos [desde, hasta) del archivo que se conservan, y dónde va el largo nuevo de "capas y máscaras".
  * null = no se pudo seguir la estructura con seguridad: quien llama usa el archivo entero (y su tope de peso).
+ * `revisar`: se llama con cada bloque que se CONSERVA ([desde, hasta) de sus datos); si lanza PsdInseguro, se propaga.
+ * Con `revisar` (el PSD editable) el recorrido es ESTRICTO: se salta los ceros como ag-psd, y lo que no se pueda seguir
+ * hasta el final lanza PsdInseguro en vez de conservarse sin revisar (ag-psd sí lo leería).
  */
-async function tramos(a: Archivo): Promise<{ tramos: [number, number][]; posLargo: number; quitados: number } | null> {
+async function tramos(
+  a: Archivo,
+  sobran: ReadonlySet<string> = BLOQUES_QUE_SOBRAN,
+  revisar?: (clave: string, desde: number, hasta: number) => Promise<void>,
+): Promise<{ tramos: [number, number][]; posLargo: number; quitados: number } | null> {
   try {
     let p = 26;
     p += 4 + (await u32(a, p)); // datos de color
@@ -61,12 +90,27 @@ async function tramos(a: Archivo): Promise<{ tramos: [number, number][]; posLarg
     if (q + 4 <= fin) q += 4 + (await u32(a, q)); // máscara global
     if (q > fin) return null;
     const out: [number, number][] = [];
+    const estricto = !!revisar;
+    const inseguro = (porque: string) => {
+      throw new PsdInseguro(`los bloques del final de las capas no se dejan seguir (${porque})`);
+    };
     let desde = 0, quitados = 0;
-    for (let vistos = 0; q + 12 <= fin && vistos < BLOQUES_MAX; vistos++) {
+    for (let vistos = 0; ; vistos++) {
+      if (estricto) q = await sinCeros(a, q, fin);
+      if (q + 12 > fin) break;
+      if (vistos >= BLOQUES_MAX) {
+        if (estricto) inseguro(`más de ${BLOQUES_MAX}`);
+        break;
+      }
       const sig = await texto4(a, q);
       // Algo que no es un bloque (relleno raro, un archivo dañado): de ahí al final se conserva tal cual y que lo
       // resuelva ag-psd. Nunca se quita lo que no se entiende.
-      if (sig !== "8BIM" && sig !== "8B64") break;
+      if (sig !== "8BIM" && sig !== "8B64") {
+        if (estricto) inseguro("un bloque sin firma");
+        break;
+      }
+      // 8B64 lleva el largo en 8 bytes (es de los PSB): en un PSD no se revisa, no se arma el editable.
+      if (estricto && sig === "8B64") inseguro("un bloque de 64 bits");
       const clave = await texto4(a, q + 4);
       const n = await u32(a, q + 8);
       // Relleno tras los datos: la especificación dice "a par", pero Photoshop rellena a 4 (ag-psd lee a par y se
@@ -79,30 +123,89 @@ async function tramos(a: Archivo): Promise<{ tramos: [number, number][]; posLarg
         if (p2 >= fin) hasta = fin;
         else if (p2 + 4 <= fin && ["8BIM", "8B64"].includes(await texto4(a, p2))) hasta = p2;
       }
+      // Como ag-psd: el byte de relleno a par y luego ceros. Lo que sobre al final (menos de un bloque) ag-psd lo salta.
+      if (hasta < 0 && estricto) {
+        const p2 = await sinCeros(a, datosFin + (n % 2), fin);
+        if (p2 + 12 > fin || ["8BIM", "8B64"].includes(await texto4(a, p2))) hasta = Math.min(p2, fin);
+      }
       // Después de este bloque no hay otro reconocible: se deja de recorrer y se conserva todo lo que sigue.
-      if (hasta < 0) break;
-      if (BLOQUES_QUE_SOBRAN.has(clave)) {
+      if (hasta < 0) {
+        if (estricto) inseguro("después de un bloque no sigue otro");
+        break;
+      }
+      if (sobran.has(clave)) {
         out.push([desde, q]);
         quitados += hasta - q;
         desde = hasta;
-      }
+      } else if (revisar) await revisar(clave, q + 12, datosFin);
       q = hasta;
     }
     out.push([desde, a.size]);
     return { tramos: out.filter(([x, y]) => y > x), posLargo, quitados };
-  } catch {
+  } catch (err) {
+    if (err instanceof PsdInseguro) throw err;
     return null;
   }
 }
 
+/** Para el PSD editable sólo sobran los filtros inteligentes (la salida no los escribe); los originales de los objetos
+ *  inteligentes SÍ se quedan, y por eso se revisan antes de que los lea ag-psd. */
+const SOBRAN_EN_EDITABLE = new Set(["FEid", "FXid"]);
+const ENLAZADOS = new Set(["lnk2", "lnk3", "lnkD", "lnkE"]);
+/** Archivos de objetos inteligentes por bloque: los PSD reales traen una docena. */
+const ENLAZADOS_MAX = 512;
+
 /**
- * El PSD sin los bloques que sobran, listo para `leerPsd`. Si la estructura no se deja seguir, devuelve el
- * archivo entero sin tocar: `leerPsd` decide si lo puede leer. `topeBytes` se revisa ANTES de reservar memoria.
+ * Cada registro de un bloque de objetos inteligentes cabe en su bloque, y lo que declara de datos cabe en su registro.
+ * ag-psd, al leer más allá del final, reserva hasta 100 MB vacíos POR registro: un bloque chico con miles de registros
+ * que mienten pediría gigas antes de cualquier tope nuestro. Mismo formato que lee ag-psd (additionalInfo.js, lnk2).
  */
-export async function adelgazarPsd(a: Archivo, topeBytes: number): Promise<Adelgazado> {
-  const t = (await tramos(a)) ?? { tramos: [[0, a.size]] as [number, number][], posLargo: -1, quitados: 0 };
+async function revisarEnlazados(a: Archivo, desde: number, hasta: number): Promise<void> {
+  const malo = (porque: string) => new PsdInseguro(porque, true);
+  const leer = async (p: number, n: number) => {
+    if (p + n > hasta) throw malo("un objeto inteligente declara más datos de los que trae");
+    return new DataView(await a.slice(p, p + n).arrayBuffer());
+  };
+  let p = desde;
+  for (let n = 0; hasta - p > 8; n++) {
+    if (n >= ENLAZADOS_MAX) throw malo(`más de ${ENLAZADOS_MAX} archivos de objetos inteligentes en un bloque`);
+    const largo = await leer(p, 8);
+    if (largo.getUint32(0)) throw malo("un objeto inteligente declara más de 4 GB");
+    const size = largo.getUint32(4), ini = p + 8;
+    const fin = ini + size + ((4 - (size % 4)) % 4);
+    if (ini + size > hasta) throw malo("un objeto inteligente se sale de su bloque");
+    // tipo (4) · versión (4) · id (1 + n) · nombre (4 + 2n) · tipo de archivo (4) · creador (4) · datos (8)
+    const cab = await leer(ini, 8);
+    const tipo = String.fromCharCode(cab.getUint8(0), cab.getUint8(1), cab.getUint8(2), cab.getUint8(3)), version = cab.getInt32(4);
+    let q = ini + 8;
+    q += 1 + (await leer(q, 1)).getUint8(0);
+    q += 4 + 2 * (await leer(q, 4)).getUint32(0);
+    q += 8;
+    const datos = await leer(q, 8);
+    if (datos.getUint32(0) || datos.getUint32(4) > size) throw malo("un objeto inteligente declara más datos de los que trae");
+    // liFE versión 2 trae su archivo con otro largo, más adelante, que no se revisa aquí: no se arma el editable.
+    if (tipo === "liFE" ? version === 2 : tipo !== "liFD" && tipo !== "liFA") throw malo(`un objeto inteligente de un tipo que no se revisa (${tipo.replace(/[^\x20-\x7e]/g, "?")})`);
+    p = fin;
+  }
+}
+
+/**
+ * El PSD para armar el editable de una medida: entero salvo los filtros inteligentes, con los bloques de objetos
+ * inteligentes revisados ANTES de que los lea ag-psd. Lanza PsdInseguro si algo no cuadra (sale el de capas planas),
+ * PsdPesado si pasa de `topeBytes`.
+ */
+export async function prepararParaEditable(a: Archivo, topeBytes: number): Promise<ArrayBuffer> {
+  if (a.size > topeBytes) throw new PsdPesado(a.size, 0);
+  const cab = new Uint8Array(await a.slice(0, 6).arrayBuffer());
+  if (String.fromCharCode(...cab.slice(0, 4)) !== "8BPS" || cab[4] !== 0 || cab[5] !== 1) throw new PsdInseguro("no es un PSD de versión 1");
+  const t = await tramos(a, SOBRAN_EN_EDITABLE, (clave, desde, hasta) => (ENLAZADOS.has(clave) ? revisarEnlazados(a, desde, hasta) : Promise.resolve()));
+  if (!t) throw new PsdInseguro("la estructura del PSD no se deja seguir");
+  return juntar(a, t);
+}
+
+/** Copia los tramos a un búfer y corrige el largo de "capas y máscaras" por lo que se quitó. */
+async function juntar(a: Archivo, t: { tramos: [number, number][]; posLargo: number; quitados: number }): Promise<ArrayBuffer> {
   const total = t.tramos.reduce((s, [x, y]) => s + (y - x), 0);
-  if (total > topeBytes) throw new PsdPesado(total, t.quitados);
   const datos = new Uint8Array(total);
   let o = 0;
   for (const [x, y] of t.tramos)
@@ -117,5 +220,16 @@ export async function adelgazarPsd(a: Archivo, topeBytes: number): Promise<Adelg
     const v = new DataView(datos.buffer);
     v.setUint32(t.posLargo, v.getUint32(t.posLargo) - t.quitados);
   }
-  return { datos: datos.buffer, quitados: t.quitados };
+  return datos.buffer;
+}
+
+/**
+ * El PSD sin los bloques que sobran, listo para `leerPsd`. Si la estructura no se deja seguir, devuelve el
+ * archivo entero sin tocar: `leerPsd` decide si lo puede leer. `topeBytes` se revisa ANTES de reservar memoria.
+ */
+export async function adelgazarPsd(a: Archivo, topeBytes: number): Promise<Adelgazado> {
+  const t = (await tramos(a)) ?? { tramos: [[0, a.size]] as [number, number][], posLargo: -1, quitados: 0 };
+  const total = t.tramos.reduce((s, [x, y]) => s + (y - x), 0);
+  if (total > topeBytes) throw new PsdPesado(total, t.quitados);
+  return { datos: await juntar(a, t), quitados: t.quitados };
 }

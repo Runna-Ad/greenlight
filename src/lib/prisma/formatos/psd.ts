@@ -24,7 +24,7 @@
 import { readPsd, getLayerImageData, getLayerMaskImageData, getCompositeImageData, initializeCanvas, type Layer } from "ag-psd";
 import { PSD_BYTES_MAX } from "./listo.ts";
 import { textoDe, type TextoCapa, type TextoPsdCrudo } from "./textos.ts";
-import { ROLES, rolDe, type Rol } from "./roles.ts";
+import { ROLES, nombreDeCapa, rolDe, type Rol } from "./roles.ts";
 
 /** Sólo se LEEN por índice. (La librería tipa también 16 y 32 bits; aquí siempre son 8: `leerPsd` rechaza lo demás.) */
 type Pixeles = { data: ArrayLike<number>; width: number; height: number };
@@ -63,7 +63,6 @@ export const PIEZAS_MAX = 40;
 /** Tope de memoria de un despiece: ≈ 60 bytes por píxel de la mesa + 15 por pieza (8 de trabajo y, si su caja
  *  abarca toda la mesa, 7 del resultado). */
 export const DESPIECE_MAX_BYTES = 2_000_000_000;
-const NOMBRE_MAX = 120;
 /** Lo más lejos que se busca una sombra paralela, resplandor o contorno alrededor de su capa. */
 export const HALO_MAX_PX = 200;
 /** Diferencia de canal (0-255) que ya se nota a simple vista. */
@@ -169,7 +168,7 @@ function halosDe(l: Layer): Halo[] {
 
 /** Los nombres vienen del archivo y acaban en pantalla: sin caracteres de control ni de dirección de texto, y
  *  con tope de largo. (Quien los pinte: siempre como texto, nunca como HTML.) */
-const limpio = (s: string | undefined): string => (s ?? "").replace(/[\p{Cc}\p{Cf}]/gu, "").slice(0, NOMBRE_MAX);
+const limpio = nombreDeCapa;
 
 /**
  * Lee la estructura (sin decodificar píxeles) y revisa los límites.
@@ -301,10 +300,14 @@ export type TextoPieza = {
   /** Por qué NO se redibuja (null = se intenta, y decide la prueba en la página). */
   motivo: string | null;
 };
+/** De dónde salió un maestro, para volver a las capas del PSD original (psd-editable.ts): qué mesa (en el orden de
+ *  `doc.mesas`), su caja en el documento y si se leyó reducida (`s` < 1: 1 px del original = s px del maestro). */
+export type Origen = { mesa: number; x: number; y: number; w: number; h: number; s: number };
 export type MaestroPsd = {
   nombre: string;
   w: number;
   h: number;
+  origen: Origen;
   /** Fondo limpio: RGB, w × h. */
   fondo: Uint8ClampedArray;
   /** De abajo hacia arriba. */
@@ -641,9 +644,9 @@ export function despiezar(doc: DocPsd, mesa: number, op: { mesaMaxPx?: number } 
     if (!m) throw new ErrorPsd("no-soportado", `No existe la mesa ${mesa}`);
     if (![m.x, m.y, m.w, m.h].every(Number.isInteger) || !(m.w > 0 && m.h > 0) || m.x < 0 || m.y < 0 || m.x + m.w > doc.w || m.y + m.h > doc.h) throw new ErrorPsd("no-soportado", `La mesa «${m.nombre}» se sale del lienzo`);
     const max = op.mesaMaxPx ?? MESA_MAX_PX;
-    if (m.w * m.h <= max) return despiezarMesa(doc, mesa);
+    if (m.w * m.h <= max) return { ...despiezarMesa(doc, mesa), origen: { mesa, x: m.x, y: m.y, w: m.w, h: m.h, s: 1 } };
     const r = reducirMesa(doc, mesa, max);
-    const ma = despiezarMesa(r.doc, 0);
+    const ma = { ...despiezarMesa(r.doc, 0), origen: { mesa, x: m.x, y: m.y, w: m.w, h: m.h, s: r.w / m.w } };
     ma.avisos.unshift(`La mesa mide ${m.w}×${m.h}: se leyó reducida a ${r.w}×${r.h} (las medidas de entrega son más chicas).`);
     return ma;
   } catch (err) {
@@ -652,7 +655,7 @@ export function despiezar(doc: DocPsd, mesa: number, op: { mesaMaxPx?: number } 
   }
 }
 
-function despiezarMesa(doc: DocPsd, mesa: number): MaestroPsd {
+function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
   const m = doc.mesas[mesa];
   const N = m.w * m.h;
   if (N > MESA_MAX_PX) throw new ErrorPsd("demasiado-grande", `La mesa «${m.nombre}» mide ${m.w}×${m.h}`);
@@ -885,7 +888,7 @@ function despiezarMesa(doc: DocPsd, mesa: number): MaestroPsd {
     piezas.push(p);
   });
 
-  const maestro: MaestroPsd = { nombre: m.nombre, w: m.w, h: m.h, fondo, piezas, fondoDistintoPct: (guiaMal / nVisible) * 100, rearmadoDistintoPct: 0, textoGamma: gammaDeTexto(capas, m, C), avisos };
+  const maestro: Omit<MaestroPsd, "origen"> = { nombre: m.nombre, w: m.w, h: m.h, fondo, piezas, fondoDistintoPct: (guiaMal / nVisible) * 100, rearmadoDistintoPct: 0, textoGamma: gammaDeTexto(capas, m, C), avisos };
   const otra = rearmar(maestro);
   let mal = 0;
   for (let i = 0; i < N; i++) {
