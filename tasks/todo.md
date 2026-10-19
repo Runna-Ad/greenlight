@@ -713,7 +713,8 @@ largo: estacionado por él.
         fila, baja lo que la tarjeta mostraba al hacer clic; sin botón para cancelar la fila (se cancela al salir).
       · Sin revisar: si Chrome (perfil normal) pide permiso para «descargar varios archivos» con 3+ clics seguidos.
 - [~] B21. La lectura de la PANTALLA también en modo estricto (2026-10-19, sesión lateral, rama
-      `claude/inspiring-curie-f734db`, SIN fusionar en `prisma`: lo decide Pedro).
+      `claude/inspiring-curie-f734db`). En `prisma` (GitHub) desde 2026-10-19 por orden de Pedro ("merge the 2 fixes into
+      prisma (test version only, not the live app)"): 2b51dab + 3cc9f7b, avance directo sobre 1e6d99b. NO en main.
       · Hecho: `leerPsd` con `strict: true` (un dato que dice medir más de lo que queda del archivo ya no reserva hasta
         100 MB en ceros); error de archivo mal formado → mensaje claro en español; CMYK / Lab / otro modo y 16 bits →
         "El PSD está en … Qué hacer: guarda una copia en RGB / en 8 bits" (Pedro: "yes" a arreglar el de CMYK).
