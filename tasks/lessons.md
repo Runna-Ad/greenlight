@@ -1167,3 +1167,11 @@ TAGS: #psd #ag-psd #pruebas #archivo-real #seguridad
 [2026-10-19] LESSON (un worktree de la app nace de main; Prisma vive en `prisma`): la sesión lateral abrió en un worktree cuya rama apuntaba a main, donde no existe Formatos. Como la rama no tenía commits propios, se movió a la punta de `prisma` (`git checkout -B <rama> prisma`) antes de tocar nada.
 RULE: en una sesión de Prisma, lo primero es `git log --oneline main..prisma | wc -l` y `ls src/lib/prisma/formatos`; si la rama del worktree no trae Prisma y no tiene commits propios, moverla a `prisma`. Nunca mezclar main en ella (eso es decisión de Pedro).
 TAGS: #worktree #git #prisma #sesion-lateral
+
+[2026-10-19] LESSON (un atajo con [ o ] no sirve si se revisa Alt antes): el editor ignoraba cualquier tecla con Alt o Ctrl antes de mirar cuál era. En teclado español [ y ] se escriben con Option (Mac) o AltGr (Windows, que llega como Ctrl+Alt): el atajo de capas que anunciaba la ayuda no funcionaba para el equipo. Lo encontró el revisor de accesibilidad; en mis pruebas mandé la tecla sin modificadores.
+RULE: un atajo con signos ([ ] { } / ;) se revisa ANTES de descartar modificadores, rechazando sólo Cmd y Ctrl sin Alt; y lleva un alias que no dependa del teclado (aquí Re Pág / Av Pág). Probar el atajo con los modificadores con que se escribe en español.
+TAGS: #teclado #accesibilidad #atajos #formatos #editor
+
+[2026-10-19] LESSON (marcar "lo que se movió" en una lista reordenada): marqué «otra capa» a toda pieza cuya posición era distinta de la automática. Subir el CTA del fondo al frente marcaba las 5, porque las otras 4 bajaron un lugar sin que nadie las tocara.
+RULE: lo "movido" en una permutación son las menos piezas que, sacadas, dejan a las demás en orden: las que quedan fuera de la subsecuencia creciente más larga. Comparar índices uno a uno marca de más.
+TAGS: #ux #listas #orden #formatos

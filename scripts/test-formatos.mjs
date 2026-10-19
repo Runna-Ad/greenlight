@@ -22,7 +22,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { acomodar, acomodarMedida, aplicarEdicion, topesPieza, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
+import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, topesPieza, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContraste } from "../src/lib/prisma/formatos/revisar.ts";
@@ -828,33 +828,87 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
   // Edición a mano (Pedro, 2026-10-15: "an edit button ... move and or resize the elements ... and save your changes").
   const base1200 = acomodar(M45, 1200, 627);
   const iCta = M45.piezas.findIndex((p) => p.rol === "CTA"), iPie = M45.piezas.findIndex((p) => p.rol === "FOOTER");
-  const movida = aplicarEdicion(M45, base1200, { [iCta]: { x: 40, y: 30, k: 0.8 } }, 1200, 627);
+  const movida = aplicarEdicion(M45, base1200, { piezas: { [iCta]: { x: 40, y: 30, k: 0.8 } } }, 1200, 627);
   const cta = movida.puestas.find((q) => q.pieza === iCta);
   ok(
     "editar: la pieza va donde la dejó la persona (caja = sólido × escala), las demás y el fondo no se mueven, y queda marcada",
     cta.x === 40 && cta.y === 30 && cta.k === 0.8 && cta.w === M45.piezas[iCta].solido.w * 0.8 && movida.editada === true &&
       JSON.stringify(movida.fondo) === JSON.stringify(base1200.fondo) && movida.puestas.every((q) => q.pieza === iCta || JSON.stringify(q) === JSON.stringify(base1200.puestas.find((r) => r.pieza === q.pieza))),
   );
-  const chico = aplicarEdicion(M45, base1200, { [iPie]: { x: 10, y: 620, k: 0.3 } }, 1200, 627);
+  const chico = aplicarEdicion(M45, base1200, { piezas: { [iPie]: { x: 10, y: 620, k: 0.3 } } }, 1200, 627);
   ok("editar: lo que la persona hace se revisa igual (legal bajo 10 px → aviso de letra; fuera de la medida → aviso)", chico.avisos.some((v) => v.tipo === "letra" && v.texto.includes("FOOTER")) && chico.avisos.some((v) => v.tipo === "fuera" && v.texto.includes("FOOTER")), JSON.stringify(chico.avisos));
-  const enZona = aplicarEdicion(M45, acomodar(M45, 1080, 1920), { [iCta]: { x: 300, y: 1800, k: 0.8 } }, 1080, 1920, { top: 0, right: 0, bottom: 300, left: 0 });
+  const enZona = aplicarEdicion(M45, acomodar(M45, 1080, 1920), { piezas: { [iCta]: { x: 300, y: 1800, k: 0.8 } } }, 1080, 1920, { top: 0, right: 0, bottom: 300, left: 0 });
   ok("editar: con canal, una pieza que la persona deja bajo la franja de la app se avisa", enZona.avisos.some((v) => v.tipo === "zona" && v.texto.includes("CTA")));
-  const encimada = aplicarEdicion(M45, base1200, { [iCta]: { ...base1200.puestas.find((q) => M45.piezas[q.pieza].rol === "HERO"), k: 0.5 } }, 1200, 627);
+  const encimada = aplicarEdicion(M45, base1200, { piezas: { [iCta]: { ...base1200.puestas.find((q) => M45.piezas[q.pieza].rol === "HERO"), k: 0.5 } } }, 1200, 627);
   ok("editar: encimar piezas lo decidió la persona a la vista: no se avisa (sí en el automático)", !encimada.avisos.some((v) => v.tipo === "encima"));
-  ok("editar: una edición con números que no sirven (NaN, escala 0 o negativa) se ignora: queda el automático", aplicarEdicion(M45, base1200, { [iCta]: { x: NaN, y: 0, k: 1 }, [iPie]: { x: 0, y: 0, k: 0 } }, 1200, 627) === base1200);
+  ok("editar: una edición con números que no sirven (NaN, escala 0 o negativa) se ignora: queda el automático", aplicarEdicion(M45, base1200, { piezas: { [iCta]: { x: NaN, y: 0, k: 1 }, [iPie]: { x: 0, y: 0, k: 0 } } }, 1200, 627) === base1200);
   // Dos piezas que la persona NO tocó y se enciman se siguen avisando aunque haya movido otra (reap 2026-10-15).
   const iHero = M45.piezas.findIndex((p) => p.rol === "HERO"), iTit = M45.piezas.findIndex((p) => p.rol === "TITULO");
   const tit = base1200.puestas.find((q) => q.pieza === iTit);
   const conChoque = { ...base1200, puestas: base1200.puestas.map((q) => (q.pieza === iHero ? { ...q, x: tit.x, y: tit.y } : q)) };
-  const otraMovida = aplicarEdicion(M45, conChoque, { [iCta]: { x: 40, y: 30, k: 0.8 } }, 1200, 627);
+  const otraMovida = aplicarEdicion(M45, conChoque, { piezas: { [iCta]: { x: 40, y: 30, k: 0.8 } } }, 1200, 627);
   ok("editar: mover una pieza no calla el aviso de otras dos (sin tocar) que se enciman", base1200.familia !== "igual" && otraMovida.avisos.some((v) => v.tipo === "encima" && v.texto.includes("HERO") && v.texto.includes("TITULO")), JSON.stringify(otraMovida.avisos));
-  const loca = aplicarEdicion(M45, base1200, { [iCta]: { x: 1e9, y: -1e9, k: 1e6 } }, 1200, 627).puestas.find((q) => q.pieza === iCta);
+  const loca = aplicarEdicion(M45, base1200, { piezas: { [iCta]: { x: 1e9, y: -1e9, k: 1e6 } } }, 1200, 627).puestas.find((q) => q.pieza === iCta);
   eq("editar: un dato guardado fuera de lo que deja el editor (k 1e6, x 1e9) se recorta a sus topes", [loca.k, loca.x, loca.y], [topesPieza(M45.piezas[iCta].solido, 1200, 627).max, 2400, -2400]);
-  const r1 = revisarMedida([M33R], 1200, 627, { edicion: { 0: { x: 20, y: 20, k: 0.5 } } });
+  const r1 = revisarMedida([M33R], 1200, 627, { edicion: { piezas: { 0: { x: 20, y: 20, k: 0.5 } } } });
   ok(
     "revisarMedida con edición: la tarjeta y el resumen comparten la misma (misma edición → mismo objeto; otra → otro; sin edición → el automático)",
-    r1 === revisarMedida([M33R], 1200, 627, { edicion: { 0: { x: 20, y: 20, k: 0.5 } } }) && r1 !== revisarMedida([M33R], 1200, 627, { edicion: { 0: { x: 21, y: 20, k: 0.5 } } }) && !revisarMedida([M33R], 1200, 627).acomodo.editada && r1.acomodo.editada === true,
+    r1 === revisarMedida([M33R], 1200, 627, { edicion: { piezas: { 0: { x: 20, y: 20, k: 0.5 } } } }) && r1 !== revisarMedida([M33R], 1200, 627, { edicion: { piezas: { 0: { x: 21, y: 20, k: 0.5 } } } }) && !revisarMedida([M33R], 1200, 627).acomodo.editada && r1.acomodo.editada === true,
   );
+  // Orden de capas (Pedro, 2026-10-19: "re arrenge layers to move whats on top of what"): `orden`, de abajo hacia arriba.
+  const ordenAuto = base1200.puestas.map((q) => q.pieza);
+  const conOrden = aplicarEdicion(M45, base1200, { piezas: {}, orden: [iCta, ...ordenAuto.filter((p) => p !== iCta)] }, 1200, 627);
+  eq(
+    "capas: el orden elegido manda (el CTA al fondo), los lugares no cambian, queda marcada como editada",
+    [conOrden.puestas.map((q) => q.pieza), conOrden.puestas.every((q) => JSON.stringify(q) === JSON.stringify(base1200.puestas.find((r) => r.pieza === q.pieza))), conOrden.editada],
+    [[iCta, ...ordenAuto.filter((p) => p !== iCta)], true, true],
+  );
+  const ordenYLugar = aplicarEdicion(M45, base1200, { piezas: { [iCta]: { x: 40, y: 30, k: 0.8 } }, orden: [iCta] }, 1200, 627);
+  eq("capas: con lugar y orden a la vez; una pieza que el orden no nombra se queda en su lugar (aquí, todas menos el CTA, que ya era el único nombrado)", [ordenYLugar.puestas.map((q) => q.pieza), ordenYLugar.puestas.find((q) => q.pieza === iCta).x], [ordenAuto, 40]);
+  const sinCambio = aplicarEdicion(M45, base1200, { piezas: {}, orden: ordenAuto }, 1200, 627);
+  ok("capas: el mismo orden del automático no cuenta como edición (mismo objeto)", sinCambio === base1200);
+  eq("capas: un índice repetido o que no está puesto no rompe nada", aplicarEdicion(M45, base1200, { piezas: {}, orden: [iCta, iCta, 99, ordenAuto[0]] }, 1200, 627).puestas.map((q) => q.pieza), (() => {
+    const quedan = ordenAuto.filter((p) => p === iCta || p === ordenAuto[0]);
+    const nuevo = [iCta, ordenAuto[0]].filter((p) => quedan.includes(p));
+    let i = 0;
+    return ordenAuto.map((p) => (quedan.includes(p) ? nuevo[i++] : p));
+  })());
+  // Con píxeles (revisarMedida también mira contraste): dos piezas, el título al fondo.
+  const pz2 = (nombre, rol, y0) => ({ nombre, rol, caja: { x: 20, y: y0, w: 60, h: 12 }, solido: { x: 20, y: y0, w: 60, h: 12 }, letraMinPx: 12, rgba: new Uint8ClampedArray(60 * 12 * 4).fill(255), oscurece: null });
+  const M2R = { nombre: "R2", w: 120, h: 150, fondo: new Uint8ClampedArray(120 * 150 * 4).fill(90), piezas: [pz2("TITULO", "TITULO", 20), pz2("CTA", "CTA", 110)] };
+  const autoR = revisarMedida([M2R], 1200, 627).acomodo.puestas.map((q) => q.pieza);
+  const conOrdenR = revisarMedida([M2R], 1200, 627, { edicion: { piezas: {}, orden: [...autoR].reverse() } });
+  // Lo guardado en el navegador se lee sin confiar: el formato nuevo, el viejo (sólo lugares) y datos rotos.
+  const avisosConsola = [];
+  const warnAntes = console.warn;
+  console.warn = (...a) => avisosConsola.push(a.join(" "));
+  const leidas = [
+    leerEdicion({ piezas: { 1: { x: 1, y: 2, k: 0.5 } }, orden: [2, 0, 1] }, 3),
+    leerEdicion({ 1: { x: 1, y: 2, k: 0.5 } }, 3),
+    leerEdicion({ piezas: { 1: { x: 1, y: 2, k: 0.5 }, 7: { x: 0, y: 0, k: 1 }, 0: { x: NaN, y: 0, k: 1 } }, orden: [0, 0, 1] }, 3),
+    leerEdicion({ piezas: {}, orden: [5] }, 3),
+    leerEdicion(null, 3),
+    leerEdicion("basura", 3),
+  ];
+  console.warn = warnAntes;
+  eq(
+    "capas: lo guardado se lee (nuevo con orden; viejo, sólo lugares; lugares rotos fuera; un orden roto se descarta entero y se avisa; nada útil = null)",
+    [...leidas, avisosConsola.length],
+    [{ piezas: { 1: { x: 1, y: 2, k: 0.5 } }, orden: [2, 0, 1] }, { piezas: { 1: { x: 1, y: 2, k: 0.5 } }, orden: undefined }, { piezas: { 1: { x: 1, y: 2, k: 0.5 } }, orden: undefined }, null, null, null, 2],
+  );
+  eq(
+    "capas: se marca sólo lo que la persona cambió de capa (subir el CTA al frente marca al CTA; cambiar dos de lugar, a una; nada, a ninguna)",
+    [[...cambiadasDeCapa([1, 2, 3, 4, 0], [0, 1, 2, 3, 4])], [...cambiadasDeCapa([0, 2, 1, 3], [0, 1, 2, 3])].length, [...cambiadasDeCapa([0, 1, 2], [0, 1, 2])], [...cambiadasDeCapa([], [])]],
+    [[0], 1, [], []],
+  );
+  // Mismos lugares, otro orden: la caché no puede devolver la primera.
+  const mismoLugar = { 0: { x: 5, y: 5, k: 1 } };
+  const sinOrdenR = revisarMedida([M2R], 1200, 627, { edicion: { piezas: mismoLugar } }), otroOrdenR = revisarMedida([M2R], 1200, 627, { edicion: { piezas: mismoLugar, orden: [...autoR].reverse() } });
+  ok("capas: mismos lugares y otro orden → otro resultado (el orden va en la clave de la caché)", sinOrdenR !== otroOrdenR && otroOrdenR.acomodo.puestas.map((q) => q.pieza).join() === [...autoR].reverse().join() && sinOrdenR.acomodo.puestas.map((q) => q.pieza).join() === autoR.join());
+  // El PSD de capas planas lleva las carpetas en el orden de la medida (de abajo hacia arriba).
+  const planoOrden = readPsdAg(writePsdBuffer(psdDeMedida(M2R, otroOrdenR.acomodo, 1200, 627), { noBackground: true }), { skipLayerImageData: true, skipCompositeImageData: true });
+  eq("capas: el PSD de capas planas sale en el orden elegido", planoOrden.children.map((l) => l.name).filter((n) => n !== "BACKGROUND"), [...autoR].reverse().map((i) => M2R.piezas[i].nombre));
+  ok("capas: revisarMedida lleva el orden en su clave (otro orden → otro acomodo, ya ordenado)", autoR.length === 2 && conOrdenR !== revisarMedida([M2R], 1200, 627) && conOrdenR.acomodo.puestas.map((q) => q.pieza).join() === [...autoR].reverse().join(), JSON.stringify(autoR));
   eq("nombre de entrega: la medida de la mesa se cambia por la nueva; si no trae medida, se agrega", [nombreSalida(M45, 1200, 627), nombreSalida(M916, 320, 50), nombreSalida({ ...M45, nombre: "ANUNCIO" }, 600, 500)], ["APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "APGIANTCARDUGC_320x50_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "ANUNCIO_600x500"]);
   eq("nombre con una promo '2x1', o con la medida al principio / al final: se cambia la ficha que tiene la forma de la mesa", [nombreSalida({ nombre: "BUENFIN_2x1_9x16_FB", w: 1080, h: 1920 }, 1200, 627), nombreSalida({ nombre: "4x5_AD", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_4X5", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_", w: 1200, h: 1500 }, 600, 500)], ["BUENFIN_2x1_1200x627_FB", "600x500_AD", "AD_600x500", "AD_600x500"]);
 
@@ -1446,6 +1500,27 @@ console.log("\n▶ v2 · PSD editable por medida: texto vivo, objetos inteligent
   // El sólido de A en el original está en (100 + 10/0.5, 50 + 20/0.5) = (120, 90).
   eq("plan: el sólido de una pieza cae en (q.x, q.y) aunque la mesa esté corrida y reducida; el fondo, en su esquina", [A.k, A.k * 120 + A.x, A.k * 90 + A.y, F.k, F.k * 100 + F.x, F.k * 50 + F.y], [1, 7, 9, 1.5, -4, -6]);
   eq("plan: una pieza quitada en la medida no lleva movimiento", plan.piezas[1], ["B", null]);
+  ok("plan: sin orden cambiado (el automático va en el del maestro) el plan no lleva orden: el PSD sale con el del original", !("orden" in planDeMedida(maPlan, { familia: "igual", puestas: [{ pieza: 0, k: 1, x: 0, y: 0, w: 1, h: 1 }, { pieza: 1, k: 1, x: 0, y: 0, w: 1, h: 1 }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] }, 50, 40)));
+  eq("plan: el orden de las capas de la medida va en el plan (nombres de abajo hacia arriba, sólo las puestas)", planDeMedida(maPlan, { familia: "igual", puestas: [{ pieza: 1, k: 1, x: 0, y: 0, w: 1, h: 1 }, { pieza: 0, k: 1, x: 0, y: 0, w: 1, h: 1 }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] }, 50, 40).orden, ["B", "A"]);
+  // Reordenar en el PSD editable: las piezas cambian de lugar entre ellas; el fondo, lo oculto y lo suelto no se mueven,
+  // y una recortada va pegada a su base.
+  const capa1 = (name, extra = {}) => ({ name, left: 0, top: 0, right: 2, bottom: 2, ...extra });
+  const reord = psdEditable(
+    { width: 10, height: 10, children: [capa1("BACKGROUND"), capa1("TITULO"), capa1("brillo", { clipping: true }), capa1("suelta", { hidden: true }), capa1("CTA"), capa1("HERO")] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["TITULO", { k: 1, x: 0, y: 0 }], ["CTA", { k: 1, x: 0, y: 0 }], ["HERO", { k: 1, x: 0, y: 0 }]], orden: ["HERO", "TITULO", "CTA"] },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children.map((l) => l.name);
+  eq("PSD editable: el orden de la medida reacomoda las piezas en sus lugares; fondo y oculta quietos; la recortada va con su base", reord, ["BACKGROUND", "HERO", "suelta", "TITULO", "brillo", "CTA"]);
+  // Dos carpetas con el mismo nombre (una sola pieza, como la pinta la tarjeta) con otra en medio, y una recortada sin
+  // base al principio: con orden, las dos van juntas donde va su pieza; la recortada huérfana no se mueve.
+  const mismoNombre = (orden) => psdEditable(
+    { width: 10, height: 10, children: [capa1("huerfana", { clipping: true }), capa1("BACKGROUND"), capa1("A"), capa1("B"), capa1("A")] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["A", { k: 1, x: 0, y: 0 }], ["B", { k: 1, x: 0, y: 0 }]], ...(orden ? { orden } : {}) },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children.map((l) => l.name);
+  eq("PSD editable: carpetas del mismo nombre: sin orden, como el original; con B abajo, las dos A arriba de B; la recortada huérfana, quieta", [mismoNombre(null), mismoNombre(["B", "A"])], [["huerfana", "BACKGROUND", "A", "B", "A"], ["huerfana", "BACKGROUND", "B", "A", "A"]]);
 
   // Texto vertical: ag-psd advierte que escribirlo puede tumbar a Photoshop → va como imagen y se dice.
   const vert = psdEditable(
@@ -1718,6 +1793,20 @@ console.log("\n▶ v2 · PSD editable por medida: texto vivo, objetos inteligent
         const cta = sin.children.find((l) => l.name === ma.piezas[iCta].nombre);
         const tx = hojas(cta.children).find(({ l }) => l.text).l.text.transform, txo = ho.find(({ l }) => l.text && l.name === "Aplica hoy").l.text.transform;
         ok("s33: una pieza quitada en la medida va oculta, movida con el fondo (para prenderla a mano)", cta.hidden === true && Math.abs(tx[0] - txo[0] * plan.fondo.k) < 1e-9 && sin.children.filter((l) => l.hidden).length === 2, JSON.stringify([cta.hidden, tx, plan.fondo]));
+        // El CTA al frente (Pedro, 2026-10-19: "re arrenge layers"): su carpeta sube encima de las demás piezas, entera;
+        // el fondo sigue abajo y la capa oculta de arriba se queda arriba.
+        const ordenAlFrente = [...a.puestas.map((q) => q.pieza).filter((p) => p !== iCta), iCta];
+        const alFrente = aplicarEdicion(ma, a, { piezas: {}, orden: ordenAlFrente }, W, H);
+        const arriba = readPsdAg(writePsdBuffer(psdEditable(fuente, planDeMedida(ma, alFrente, W, H), extrasVacios(W, H), px).psd, { invalidateTextLayers: true, noBackground: true }), { skipLayerImageData: true, skipCompositeImageData: true, skipThumbnail: true });
+        const nombresArriba = arriba.children.map((l) => l.name), nombresOrig = orig.map((l) => l.name);
+        const ctaNombre = ma.piezas[iCta].nombre;
+        const esperadoArriba = (() => {
+          const piezasN = new Set(a.puestas.map((q) => ma.piezas[q.pieza].nombre));
+          const nuevas = ordenAlFrente.map((p) => ma.piezas[p].nombre);
+          let i = 0;
+          return nombresOrig.map((n, j) => (piezasN.has(n) && !orig[j].hidden ? nuevas[i++] : n));
+        })();
+        eq("s33 1200×627: el CTA al frente: su carpeta va arriba de las demás piezas, el fondo abajo y la oculta en su lugar", [nombresArriba, nombresArriba.at(-2), JSON.stringify(arbol(arriba.children.find((l) => l.name === ctaNombre).children)) === JSON.stringify(arbol(orig.find((l) => l.name === ctaNombre).children))], [esperadoArriba, ctaNombre, true]);
       }
     }
   }

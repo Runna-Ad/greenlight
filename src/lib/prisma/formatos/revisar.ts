@@ -274,9 +274,14 @@ const hechas = new WeakMap<MaestroRevisable, Map<string, Revisada>>();
 /** Los arreglos de contraste, por maestro y acomodo automático (sin elección ni edición): se buscan una vez. */
 const opcionesHechas = new WeakMap<MaestroRevisable, Map<string, Opciones | null>>();
 
-/** Para la clave de la caché: la misma edición da la misma firma (números redondeados, piezas en orden). */
-const firma = (ed: Edicion | null | undefined) =>
-  ed ? Object.keys(ed).map(Number).sort((a, b) => a - b).map((i) => `${i}@${ed[i].x.toFixed(2)},${ed[i].y.toFixed(2)},${ed[i].k.toFixed(4)}`).join(";") : "-";
+/** Para la clave de la caché: la misma edición da la misma firma (números redondeados, piezas en orden, y el orden de
+ *  las capas si cambió). */
+const firma = (ed: Edicion | null | undefined) => {
+  if (!ed) return "-";
+  const p = ed.piezas ?? {};
+  const lugares = Object.keys(p).map(Number).sort((a, b) => a - b).map((i) => `${i}@${p[i].x.toFixed(2)},${p[i].y.toFixed(2)},${p[i].k.toFixed(4)}`).join(";");
+  return ed.orden?.length ? `${lugares}|${ed.orden.join(",")}` : lugares;
+};
 
 /**
  * Una medida completa: de qué maestro sale, su acomodo y TODOS sus avisos (los del acomodo y los de píxeles).

@@ -26,7 +26,7 @@ export type Puesta = { pieza: number; k: number; x: number; y: number; w: number
 export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque"; texto: string };
 export type Acomodo = {
   familia: Familia;
-  /** De abajo hacia arriba, en el orden del maestro. */
+  /** De abajo hacia arriba: en el orden del maestro, o en el que eligió la persona (`aplicarEdicion`). */
   puestas: Puesta[];
   /** El fondo limpio: su escala y dónde cae su esquina (siempre cubre toda la medida). */
   fondo: { k: number; x: number; y: number };
@@ -41,12 +41,14 @@ export type Acomodo = {
   /** Piezas con una sombra suave detrás para que se lean (arreglo de contraste, `revisar.ts` + `halo.ts`). */
   sombras?: readonly number[];
 };
+/** Dónde dejó la persona una pieza: la esquina de su parte sólida y su escala, en px de la medida. */
+export type PosicionPieza = { x: number; y: number; k: number };
 /**
- * Lo que la persona movió o cambió de tamaño a mano en una medida (Pedro, 2026-10-15: "an edit button that allows us
- * to move and or resize the elements"): por pieza (índice en `maestro.piezas`), la esquina de su parte sólida y su
- * escala, en px de la medida.
+ * Lo que la persona cambió a mano en una medida (Pedro, 2026-10-15: "an edit button that allows us to move and or
+ * resize the elements"; 2026-10-19: "re arrenge layers to move whats on top of what"). `piezas`: por pieza (índice en
+ * `maestro.piezas`), dónde quedó. `orden`: qué va encima de qué, índices de abajo hacia arriba (sólo si cambió).
  */
-export type Edicion = Readonly<Record<number, { x: number; y: number; k: number }>>;
+export type Edicion = Readonly<{ piezas: Readonly<Record<number, PosicionPieza>>; orden?: readonly number[] }>;
 export type Lado = "derecha" | "izquierda";
 /** px de la medida final que la plataforma tapa por cada borde. */
 export type Zona = { top: number; right: number; bottom: number; left: number };
@@ -557,23 +559,87 @@ export function topesPieza(s: { w: number; h: number }, W: number, H: number): {
 }
 
 /**
- * El acomodo automático con lo que la persona movió o cambió de tamaño a mano: esas piezas van donde ella las dejó y
- * TODO se vuelve a revisar (letra, fuera de la medida, zona del canal, piezas sin tocar encimadas). El fondo y las
- * demás piezas no se tocan. Una edición con números que no sirven (NaN, escala ≤ 0) se ignora para esa pieza; una
- * escala o un lugar fuera de lo que deja el editor (dato viejo o cambiado a mano) se recorta a ese tope.
+ * Una edición guardada (lo que se leyó del navegador, sin confiar en nada) para un maestro de `nPiezas` piezas; null si
+ * no queda nada que sirva. Lee también lo guardado antes del orden de capas (2026-10-19: sólo los lugares, sin
+ * `piezas`). Un lugar con números que no sirven se salta; un orden con algo raro (índice fuera o repetido) no se
+ * adivina: se descarta entero, con un aviso en la consola.
+ */
+export function leerEdicion(v: unknown, nPiezas: number): Edicion | null {
+  if (!v || typeof v !== "object") return null;
+  const guardada = v as { piezas?: unknown; orden?: unknown };
+  const lugares = (guardada.piezas && typeof guardada.piezas === "object" ? guardada.piezas : guardada) as Record<string, unknown>;
+  const valida = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0 && n < nPiezas;
+  const piezas: Record<number, PosicionPieza> = {};
+  for (const [i, p] of Object.entries(lugares)) {
+    const n = Number(i);
+    if (i === "orden" || !valida(n) || !p || typeof p !== "object") continue;
+    const { x, y, k } = p as Partial<PosicionPieza>;
+    if (typeof x === "number" && typeof y === "number" && typeof k === "number" && [x, y, k].every(Number.isFinite) && k > 0) piezas[n] = { x, y, k };
+  }
+  const o = guardada.orden;
+  let orden: number[] | undefined;
+  if (Array.isArray(o) && o.length) {
+    if (o.every(valida) && new Set(o).size === o.length) orden = o;
+    else console.warn("[acomodo] orden de capas guardado con índices que no sirven: se usa el automático", o);
+  }
+  return Object.keys(piezas).length || orden ? { piezas, orden } : null;
+}
+
+/**
+ * Las piezas puestas en el orden que eligió la persona (de abajo hacia arriba). Las que `orden` nombra se reparten en
+ * los lugares que ya ocupaban ellas; las que no nombra (una que el automático puso después de guardar) se quedan en el
+ * suyo. Un índice repetido cuenta una vez. Mismo arreglo si no cambia nada.
+ */
+export function ordenarPuestas(puestas: Puesta[], orden: readonly number[] | undefined): Puesta[] {
+  if (!orden?.length) return puestas;
+  const rango = new Map<number, number>();
+  for (const p of orden) if (!rango.has(p)) rango.set(p, rango.size);
+  const nombradas = puestas.filter((q) => rango.has(q.pieza)).sort((x, y) => rango.get(x.pieza)! - rango.get(y.pieza)!);
+  let i = 0;
+  const out = puestas.map((q) => (rango.has(q.pieza) ? nombradas[i++] : q));
+  return out.every((q, j) => q === puestas[j]) ? puestas : out;
+}
+
+/**
+ * Qué piezas se movieron de capa: las menos posibles que, sacadas, dejan a las demás en el orden automático (las que
+ * quedan fuera de la subsecuencia creciente más larga). Subir el CTA del fondo al frente marca sólo al CTA, aunque todas
+ * las demás bajaron un lugar.
+ */
+export function cambiadasDeCapa(orden: readonly number[], ordenAuto: readonly number[]): Set<number> {
+  const rango = new Map(ordenAuto.map((p, i) => [p, i]));
+  const r = orden.map((p) => rango.get(p) ?? -1);
+  // Subsecuencia creciente más larga, O(n²): son ≤ 40 piezas.
+  const largo = r.map(() => 1), antes = r.map(() => -1);
+  for (let i = 0; i < r.length; i++)
+    for (let j = 0; j < i; j++)
+      if (r[j] < r[i] && largo[j] + 1 > largo[i]) {
+        largo[i] = largo[j] + 1;
+        antes[i] = j;
+      }
+  const quedan = new Set<number>();
+  for (let i = largo.length ? largo.indexOf(Math.max(...largo)) : -1; i >= 0; i = antes[i]) quedan.add(i);
+  return new Set(orden.filter((_, i) => !quedan.has(i)));
+}
+
+/**
+ * El acomodo automático con lo que la persona cambió a mano: las piezas que movió van donde ella las dejó, en el orden
+ * que eligió, y TODO se vuelve a revisar (letra, fuera de la medida, zona del canal, piezas sin tocar encimadas). El
+ * fondo y las demás piezas no se tocan. Una edición con números que no sirven (NaN, escala ≤ 0) se ignora para esa
+ * pieza; una escala o un lugar fuera de lo que deja el editor (dato viejo o cambiado a mano) se recorta a ese tope.
  */
 export function aplicarEdicion(ma: MaestroCaja, a: Acomodo, ed: Edicion, W: number, H: number, zona?: Partial<Zona> | null): Acomodo {
   const aMano = new Set<number>();
   const lejos = 2 * Math.max(W, H);
   const entre = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-  const puestas = a.puestas.map((q) => {
-    const e = ed[q.pieza], s = ma.piezas[q.pieza]?.solido;
+  const movidas = a.puestas.map((q) => {
+    const e = ed.piezas?.[q.pieza], s = ma.piezas[q.pieza]?.solido;
     if (!e || !s || ![e.x, e.y, e.k].every(Number.isFinite) || !(e.k > 0)) return q;
     aMano.add(q.pieza);
     const t = topesPieza(s, W, H), k = entre(e.k, t.min, t.max);
     return { pieza: q.pieza, k, x: entre(e.x, -lejos, lejos), y: entre(e.y, -lejos, lejos), w: s.w * k, h: s.h * k };
   });
-  if (!aMano.size) return a;
+  const puestas = ordenarPuestas(movidas, ed.orden);
+  if (!aMano.size && puestas === movidas) return a;
   const z = zonaUsable(zona ?? undefined, W, H);
   const r = comprobar(ma, W, H, a.familia, puestas, new Set(a.quitadas), z.zona, aMano);
   return { ...a, puestas, letras: r.letras, avisos: [...(z.aviso ? [z.aviso] : []), ...r.avisos], editada: true };

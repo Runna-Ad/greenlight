@@ -648,8 +648,42 @@ largo: estacionado por él.
       · Prueba de factibilidad (scratchpad, s33 real): ag-psd lee y vuelve a escribir la mesa 4x5 con 5 textos, 11
         objetos inteligentes, 4 formas, efectos y subcarpetas (57.7 MB, 79 ms al escribir; casi todo el peso son los
         archivos de adentro de los objetos inteligentes). Las coordenadas de las formas vienen en px del documento.
-      **Next Step:** que un diseñador abra los PSD de 3 medidas en Photoshop con la lista de B20 (en la preview). Luego
-      el paso 2 de Pedro: subcarpetas y orden de capas en el editor; después, el legal editable en el editor.
+      **Next Step:** ver el de abajo (paso 2b). En paralelo, un diseñador abre los PSD de B20.
+      **Paso 2 — subcarpetas y orden de capas en el editor** (Pedro, 2026-10-19, eligió: "Parts inside a piece" y
+      "One part together"; en dos entregas, primero el orden):
+      · Las 12 medidas automáticas NO cambian. Una subcarpeta es una PARTE de su pieza: en el editor se abre la pieza y
+        la parte se mueve o cambia de tamaño sola; las capas sueltas de la carpeta van juntas como una parte.
+      **Paso 2a — orden de capas:**
+      - [x] `Edicion` pasa a `{ piezas, orden? }` (orden = índices de abajo hacia arriba); lo guardado antes (sólo
+            lugares) se sigue leyendo. `aplicarEdicion` reordena las piezas puestas (las que no estén en `orden` se
+            quedan en su lugar); la firma de la caché lleva el orden.
+      - [x] Todo lo que pinta sigue `puestas` (tarjeta, vista grande, PNG, PSD de capas planas): sale solo.
+      - [x] PSD editable: `PlanEditable.orden` (nombres de abajo hacia arriba); las carpetas de las piezas se reacomodan
+            en los lugares que ya ocupaban piezas (fondo, ocultas y sueltas no se mueven; una recortada va con su base).
+      - [x] Editor: la lista «Piezas» pasa a «Capas», la de arriba al frente (como Photoshop), con «Más al frente» /
+            «Más atrás» por renglón y `]` / `[` con la pieza elegida; el estado dice «capa n de m»; «Volver al
+            automático» también vuelve el orden.
+      **Verificación 2a:** pruebas de `aplicarEdicion` (orden, orden con lugar, orden inválido, lo viejo se lee),
+      del PSD editable con s33 (reordenado: árbol con las carpetas en el orden nuevo, fondo abajo, nada perdido;
+      sin orden: igual que hoy) y mutaciones; navegador (localhost, s33): subir el CTA encima de la tarjeta, guardar,
+      ver la tarjeta, bajar PNG y los dos PSD y leerlos de vuelta; tsc, eslint, npm test, build.
+      · Hecho y medido (2026-10-19): test-formatos 365/0 (orden en `aplicarEdicion`, caché, PSD de capas planas y
+        editable; s33 con el CTA al frente: su carpeta sube entera, fondo abajo, la oculta en su lugar); 7 de 7 cambios
+        a propósito atrapados. Navegador (localhost, s33): el CTA sube capa por capa con «Más al frente» (el foco sigue
+        en su botón y, arriba del todo, pasa a la pieza), `[` y `]` lo bajan y suben, el estado dice «capa 1 de 5 desde
+        el frente», «Guardar» guarda `{ orden: [1,2,3,4,0], piezas: {} }`, la tarjeta dice «Editada a mano», el PSD
+        editable sale con «CTA» arriba de «Logo»; al recargar sigue igual; una edición guardada al modo viejo (sólo
+        lugares) se abre con su lugar y el orden automático.
+      · Revisión (2026-10-19), arreglado: con los botones de la lista la pieza queda elegida (el lector de pantalla
+        dice su capa); `[` y `]` también con Option / AltGr (teclado español) y Re Pág / Av Pág; en el tope el foco pasa
+        al otro botón del renglón; «Volver al automático» deja el foco en «Guardar»; «otra capa» marca sólo lo que se
+        movió (la subsecuencia más larga en orden queda sin marca); renglón con el texto entero al pasar el ratón; un
+        renglón fijo «Fondo (siempre hasta atrás)»; lo guardado se lee en `leerEdicion` (con pruebas, avisa si descarta
+        un orden roto); sin orden cambiado el PSD editable sale con el orden del original (dos carpetas del mismo nombre
+        con otra en medio no se juntan). Aceptado: la clave del navegador sigue en v2 (sólo preview; una pestaña vieja
+        no ve el orden). test-formatos 369/0; mutaciones 3/3 en lo nuevo.
+      **Next Step:** paso 2b (partes): planearlo y proponerlo a Pedro antes de construir.
+      **Paso 2b — partes (subcarpetas):** se planea al terminar 2a.
       **Paso 1 — el PSD por medida, editable:**
       - [x] `psd-editable.ts` (puro): copia el árbol de la mesa (carpetas, subcarpetas, orden, ocultas incluidas) y
             a cada capa le aplica el movimiento de SU pieza (escala pareja + desplazamiento; el fondo, el del fondo):

@@ -33,6 +33,9 @@ export type PlanEditable = {
   fondo: Afin;
   /** Por carpeta de primer nivel (el nombre de su pieza): su movimiento, o null si se quitó en esta medida. */
   piezas: [string, Afin | null][];
+  /** Qué pieza va encima de cuál en esta medida (nombres, de abajo hacia arriba), como la pinta la tarjeta. Falta =
+   *  el orden del original. */
+  orden?: string[];
 };
 /** Lo que la página ya pintó y va encima de las capas del original. */
 export type ExtrasEditable = {
@@ -83,6 +86,9 @@ export function planDeMedida(ma: { piezas: readonly { nombre: string; solido: { 
       const k = q.k * o.s;
       return [p.nombre, { k, x: q.x - q.k * p.solido.x - k * o.x, y: q.y - q.k * p.solido.y - k * o.y }];
     }),
+    // Sólo si alguien cambió el orden (el automático va en el del maestro): sin cambio, el PSD sale con el orden del
+    // original tal cual, aunque dos carpetas se llamen igual (una sola pieza) y tengan otra en medio.
+    ...(a.puestas.some((q, i) => i > 0 && q.pieza < a.puestas[i - 1].pieza) ? { orden: a.puestas.map((q) => ma.piezas[q.pieza].nombre) } : {}),
   };
 }
 
@@ -360,8 +366,9 @@ const capaSalida = (name: string, c: CapaSalida, extra: Partial<Layer> = {}): La
   ...extra,
 });
 
-/** Cómo se mueve cada capa de primer nivel de la mesa: su pieza, o el fondo. */
-type Paso = { l: Layer; nombre: string; A: Afin; quitada: boolean; halo: CapaSalida | undefined };
+/** Cómo se mueve cada capa de primer nivel de la mesa: su pieza, o el fondo. `pieza`: el nombre de la pieza PUESTA en
+ *  esta medida que es esta capa (no en sus recortadas), para el orden. */
+type Paso = { l: Layer; nombre: string; A: Afin; quitada: boolean; halo: CapaSalida | undefined; pieza: string | null };
 
 /**
  * El movimiento de cada capa de primer nivel, antes de tocar un píxel. Una capa recortada (clipping) va con la de abajo
@@ -374,14 +381,37 @@ function pasosDe(mesa: Layer[], plan: PlanEditable, halos: Map<string, CapaSalid
   return mesa.map((l): Paso => {
     const nombre = nombreDeCapa(l.name);
     let halo: CapaSalida | undefined;
+    let puesta: string | null = null;
     if (!l.clipping) {
       const pieza = l.hidden || rolDe(nombre) === "BACKGROUND" ? undefined : piezas.get(nombre);
       base = { A: pieza ?? plan.fondo, quitada: pieza === null };
       halo = pieza ? halos.get(nombre) : undefined;
       if (halo) halos.delete(nombre);
+      if (pieza) puesta = nombre;
     }
-    return { l, nombre, ...base, halo };
+    return { l, nombre, ...base, halo, pieza: puesta };
   });
+}
+
+/**
+ * Las capas de primer nivel en el orden de la medida: cada pieza puesta (con sus recortadas, que van pegadas a su
+ * base) se reparte en los lugares que ya ocupaban piezas; el fondo, lo oculto, lo quitado y lo suelto se quedan donde
+ * estaban. Dos carpetas con el mismo nombre (una sola pieza) conservan su orden entre ellas.
+ */
+function ordenarPasos(pasos: Paso[], orden: readonly string[] | undefined): Paso[] {
+  if (!orden?.length) return pasos;
+  const rango = new Map<string, number>();
+  for (const n of orden) if (!rango.has(n)) rango.set(n, rango.size);
+  // Bloques: una capa que no se recorta más las recortadas que la siguen.
+  const bloques: Paso[][] = [];
+  for (const p of pasos) {
+    if (p.l.clipping && bloques.length) bloques[bloques.length - 1].push(p);
+    else bloques.push([p]);
+  }
+  const deUna = (b: Paso[]) => (b[0].pieza !== null && rango.has(b[0].pieza) ? rango.get(b[0].pieza)! : -1);
+  const piezas = bloques.filter((b) => deUna(b) >= 0).sort((x, y) => deUna(x) - deUna(y));
+  let i = 0;
+  return bloques.flatMap((b) => (deUna(b) >= 0 ? piezas[i++] : b));
 }
 
 /**
@@ -441,7 +471,7 @@ function idsUsados(capas: Layer[], ids = new Set<string>()): Set<string> {
 export function psdEditable(fuente: Psd, plan: PlanEditable, extras: ExtrasEditable, px: PixelesDe): { psd: Psd; notas: NotaCapa[] } {
   const notas: NotaCapa[] = [];
   const mesa = mesaDe(fuente, plan.origen);
-  const pasos = pasosDe(mesa.capas, plan, new Map(extras.halos.map((h) => [h.nombre, h.capa])));
+  const pasos = ordenarPasos(pasosDe(mesa.capas, plan, new Map(extras.halos.map((h) => [h.nombre, h.capa]))), plan.orden);
   // La capa del color de la mesa también cuenta en el tope de salida.
   revisarTopes(pasos, plan.W, plan.H, mesa.color ? plan.W * plan.H : 0);
   const hijos: Layer[] = [];

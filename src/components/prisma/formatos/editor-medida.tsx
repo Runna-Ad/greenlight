@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
-import { aplicarEdicion, topesPieza, type Acomodo, type Edicion, type Zona } from "@/lib/prisma/formatos/acomodo";
+import { aplicarEdicion, cambiadasDeCapa, leerEdicion, ordenarPuestas, topesPieza, type Acomodo, type Edicion, type Zona } from "@/lib/prisma/formatos/acomodo";
 import { armarFondo, armarMedida, type TextoEscrito } from "@/lib/prisma/formatos/nitido";
 import { avisosDePixeles } from "@/lib/prisma/formatos/revisar";
 import { etiquetaPieza } from "@/lib/prisma/formatos/roles";
@@ -17,7 +17,8 @@ import type { MaestroListo } from "@/lib/prisma/formatos/listo";
 /**
  * HÜE Prisma › Formatos, puerta PSD — el editor de UNA medida (Pedro, 2026-10-15: "an edit button that opens that
  * specific size asset and you can only either move the elements around and or resize them and the save your changes").
- * Sólo mueve y cambia de tamaño piezas (sin deformarlas); el fondo no se toca. La vista se pinta con el mismo
+ * Mueve y cambia de tamaño piezas (sin deformarlas) y cambia qué va encima de qué (Pedro, 2026-10-19: "re arrenge
+ * layers to move whats on top of what"); el fondo no se toca. La vista se pinta con el mismo
  * `armarMedida` que la tarjeta, pero al tamaño de la pantalla, para que arrastrar no se trabe; la tarjeta vuelve a
  * pintar a tamaño real al guardar. Lo que se guarda es la `Edicion` (sólo lo que cambió); `aplicarEdicion` la revisa.
  */
@@ -59,6 +60,8 @@ function soloCambios(pos: Record<number, Pos>, deAuto: Record<number, Pos>, pues
   for (const q of puestas) if (pos[q.pieza] && deAuto[q.pieza] && !igual(pos[q.pieza], deAuto[q.pieza])) ed[q.pieza] = pos[q.pieza];
   return ed;
 }
+/** El orden de las capas, si es distinto del automático (si no, nada que guardar). */
+const ordenSiCambio = (orden: readonly number[], deAuto: readonly number[]) => (orden.some((p, i) => p !== deAuto[i]) ? orden : undefined);
 const CURSOR: Record<Modo, string> ={ mover: "cursor-grabbing", nw: "cursor-nwse-resize", se: "cursor-nwse-resize", ne: "cursor-nesw-resize", sw: "cursor-nesw-resize" };
 
 export function EditorMedida({
@@ -90,7 +93,13 @@ export function EditorMedida({
   alCerrar: () => void;
 }) {
   const deAuto = useMemo(() => Object.fromEntries(auto.puestas.map((q) => [q.pieza, { x: q.x, y: q.y, k: q.k }])) as Record<number, Pos>, [auto]);
-  const [pos, setPos] = useState<Record<number, Pos>>(() => ({ ...deAuto, ...(inicial ?? {}) }));
+  /** Qué va encima de qué (índices, de abajo hacia arriba): el automático y el que se abrió (con lo guardado). */
+  const ordenAuto = useMemo(() => auto.puestas.map((q) => q.pieza), [auto]);
+  const ordenInicial = useMemo(() => ordenarPuestas(auto.puestas, inicial?.orden).map((q) => q.pieza), [auto, inicial]);
+  const [pos, setPos] = useState<Record<number, Pos>>(() => ({ ...deAuto, ...(inicial?.piezas ?? {}) }));
+  const [orden, setOrden] = useState<number[]>(ordenInicial);
+  /** Tras subir o bajar una capa, a qué volver el foco (el renglón o la pieza cambian de lugar y el foco se pierde). */
+  const reenfocar = useRef<{ pieza: number; donde: "pieza" | "subir" | "bajar" } | null>(null);
   const [sel, setSel] = useState<number | null>(null);
   const [iman, setIman] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
   /** El espacio libre para la vista (ancho y alto): la medida se ajusta a él sin deformarse, sea alta o una tira
@@ -110,8 +119,9 @@ export function EditorMedida({
   // Lo que se ve y se revisa: el automático con lo que ya se movió, con las mismas reglas que la tarjeta y en el mismo
   // orden que `revisarMedida` (acomodo, edición, avisos de píxeles: ~1 ms). Sólo lo que cambió cuenta como hecho a
   // mano; dos piezas sin tocar que se enciman se siguen avisando.
+  const edicion = useMemo((): Edicion => ({ piezas: soloCambios(pos, deAuto, auto.puestas), orden: ordenSiCambio(orden, ordenAuto) }), [pos, deAuto, auto, orden, ordenAuto]);
   const editado = useMemo(() => {
-    const a = aplicarEdicion(ma, auto, soloCambios(pos, deAuto, auto.puestas), W, H, zona);
+    const a = aplicarEdicion(ma, auto, edicion, W, H, zona);
     if (a === auto) return a; // `auto` ya trae los suyos
     try {
       return { ...a, avisos: [...a.avisos, ...avisosDePixeles(ma, a, W, H)] };
@@ -119,19 +129,26 @@ export function EditorMedida({
       console.error("[editor-medida] avisos de píxeles", err);
       return a;
     }
-  }, [ma, auto, deAuto, pos, W, H, zona]);
+  }, [ma, auto, edicion, W, H, zona]);
   const tira = W / H >= TIRA;
   /** El ancho de la vista en pantalla: lo más grande que cabe en el marco con la forma de la medida. Sale de una sola
    *  medición (la del marco): con dos, el primer cuadro se pintaba al tamaño equivocado y luego otra vez. */
   const anchoCss = caja.w > 0 && caja.h > 0 ? Math.floor(Math.min(caja.w, (caja.h * W) / H)) : 0;
   const e = anchoCss > 0 ? anchoCss / W : 0;
   const cambiada = (i: number) => !!pos[i] && !!deAuto[i] && !igual(pos[i], deAuto[i]);
-  const hayCambios = auto.puestas.some((q) => cambiada(q.pieza));
+  const hayCambios = auto.puestas.some((q) => cambiada(q.pieza)) || !!edicion.orden;
   // Distinto de como se abrió (lo automático más lo ya guardado): eso es lo que se perdería al cerrar.
-  const sinGuardar = auto.puestas.some((q) => {
-    const antes = inicial?.[q.pieza] ?? deAuto[q.pieza];
-    return !!pos[q.pieza] && !!antes && !igual(pos[q.pieza], antes);
-  });
+  const sinGuardar =
+    orden.some((p, i) => p !== ordenInicial[i]) ||
+    auto.puestas.some((q) => {
+      const antes = inicial?.piezas[q.pieza] ?? deAuto[q.pieza];
+      return !!pos[q.pieza] && !!antes && !igual(pos[q.pieza], antes);
+    });
+  /** De arriba (al frente) hacia abajo, como el panel de capas de Photoshop. */
+  const capas = [...editado.puestas].reverse();
+  const capaDe = (i: number) => capas.findIndex((q) => q.pieza === i);
+  /** Las que la persona cambió de capa (no las que sólo se recorrieron un lugar por eso). */
+  const deOtraCapa = useMemo(() => cambiadasDeCapa(orden, ordenAuto), [orden, ordenAuto]);
 
   // El espacio libre para la vista, desde que el diálogo la pone (y cada vez que cambia la ventana).
   const marco = useCallback((el: HTMLDivElement | null) => {
@@ -191,6 +208,31 @@ export function EditorMedida({
   };
 
   const enfocar = (i: number) => (document.querySelector(`[data-pieza="${i}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
+  /** Sube (+1, más al frente) o baja (−1, más atrás) una capa: cambia de lugar con la de al lado. La pieza queda elegida,
+   *  así el estado (y el lector de pantalla) dice en qué capa quedó. */
+  const cambiarCapa = (i: number, paso: 1 | -1, donde: "pieza" | "subir" | "bajar") => {
+    reenfocar.current = { pieza: i, donde };
+    setSel(i);
+    setOrden((antes) => {
+      const j = antes.indexOf(i), k = j + paso;
+      if (j < 0 || k < 0 || k >= antes.length) return antes;
+      const nuevo = [...antes];
+      [nuevo[j], nuevo[k]] = [nuevo[k], nuevo[j]];
+      return nuevo;
+    });
+  };
+  // Al subir o bajar, el renglón se mueve en la lista (React lo saca y lo vuelve a poner): el foco vuelve a su botón;
+  // si ese ya no se puede (llegó arriba o abajo del todo), al otro del mismo renglón, y desde la pieza, a la pieza.
+  // Antes de pintar, para que no haya un cuadro sin foco.
+  useLayoutEffect(() => {
+    const r = reenfocar.current;
+    if (!r) return;
+    reenfocar.current = null;
+    const boton = (d: string) => document.querySelector<HTMLButtonElement>(`[data-capa="${r.pieza}"][data-mover="${d}"]:not(:disabled)`);
+    const b = r.donde === "pieza" ? null : (boton(r.donde) ?? boton(r.donde === "subir" ? "bajar" : "subir"));
+    if (b) b.focus();
+    else document.querySelector<HTMLElement>(`[data-pieza="${r.pieza}"]`)?.focus({ preventScroll: true });
+  }, [orden]);
 
   const empezar = (ev: PointerEvent<HTMLElement>, i: number, m: Modo) => {
     if (ev.button !== 0) return;
@@ -250,6 +292,15 @@ export function EditorMedida({
     return true;
   };
   const tecla = (ev: KeyboardEvent<HTMLElement>, i: number) => {
+    // La capa: ] y [ como Photoshop (allá con Cmd; aquí sin, porque Cmd+[ es «atrás» en el navegador). Van antes de
+    // revisar Alt porque en teclado español [ y ] SE escriben con Option (Mac) o AltGr (Windows: Ctrl+Alt). Re Pág /
+    // Av Pág hacen lo mismo en cualquier teclado.
+    const capa = ev.key === "]" || ev.key === "PageUp" ? 1 : ev.key === "[" || ev.key === "PageDown" ? -1 : 0;
+    if (capa && !ev.metaKey && !(ev.ctrlKey && !ev.altKey)) {
+      ev.preventDefault();
+      cambiarCapa(i, capa, "pieza");
+      return;
+    }
     // Cmd/Ctrl + / − es el zoom del navegador y Alt + flecha es atrás/adelante: no son de la pieza.
     if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
     const paso = ev.shiftKey ? PASO_LARGO : PASO, p = pos[i];
@@ -268,10 +319,7 @@ export function EditorMedida({
     }
   };
 
-  const guardar = () => {
-    const ed = soloCambios(pos, deAuto, auto.puestas);
-    alGuardar(Object.keys(ed).length ? ed : null);
-  };
+  const guardar = () => alGuardar(Object.keys(edicion.piezas).length || edicion.orden ? edicion : null);
 
   // Lo que se lee de la pieza elegida (también para el lector de pantalla).
   const estado = (() => {
@@ -283,7 +331,7 @@ export function EditorMedida({
       y: Math.round(p.y),
       t: Math.round((p.k / deAuto[sel].k) * 100),
       l: typeof l === "number" && l > 0 ? rellenar(tx(FP.editorLetra, lang), { px: (l * p.k).toFixed(1) }) : "",
-    });
+    }) + rellenar(tx(FP.editorCapa, lang), { n: capaDe(sel) + 1, m: capas.length });
   })();
   // Lo que oye el lector de pantalla: lo mismo más cuántos avisos hay, medio segundo después del último cambio.
   const dicho = estado && estado + rellenar(tx(FP.editorAvisosN, lang), { n: editado.avisos.length });
@@ -333,7 +381,9 @@ export function EditorMedida({
               {zona && <Franjas guia={zona} w={W} h={H} />}
               {iman.x && <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-primary" />}
               {iman.y && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-1/2 h-px bg-primary" />}
-              {editado.puestas.map((q) => {
+              {/* En el orden del maestro (el del Tab no cambia al reordenar, y React no mueve los botones, que perderían el
+                  foco): lo que va encima de qué lo dice su capa. */}
+              {[...editado.puestas].sort((x, y) => x.pieza - y.pieza).map((q) => {
                 const elegida = sel === q.pieza;
                 // Media esquina (px de pantalla): 24 px para agarrarla; en una pieza chica, 16, para que quede centro.
                 const m = q.w * e < PIEZA_CHICA_PX || q.h * e < PIEZA_CHICA_PX ? 8 : 12;
@@ -343,16 +393,17 @@ export function EditorMedida({
                     type="button"
                     data-pieza={q.pieza}
                     aria-describedby="editor-ayuda"
-                    aria-label={rellenar(tx(FP.editorPiezaAria, lang), { p: etiquetaPieza(ma.piezas[q.pieza]) })}
+                    aria-label={rellenar(tx(FP.editorPiezaAria, lang), { p: etiquetaPieza(ma.piezas[q.pieza]), n: capaDe(q.pieza) + 1, m: capas.length })}
                     className={cn(
                       "absolute rounded-[2px] outline-hidden",
                       elegida && modo ? CURSOR[modo] : "cursor-grab",
                       // La elegida va al frente: sus esquinas se agarran aunque otra pieza la tape en parte. Las demás,
                       // con orilla blanca y oscura, para verse sobre un cielo claro o un fondo oscuro.
-                      elegida ? "z-20 ring-2 ring-primary" : "shadow-[0_0_0_2px_rgb(0_0_0/0.3)] ring-1 ring-white/80 hover:ring-2 hover:ring-primary/70",
+                      elegida ? "ring-2 ring-primary" : "shadow-[0_0_0_2px_rgb(0_0_0/0.3)] ring-1 ring-white/80 hover:ring-2 hover:ring-primary/70",
                       "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                     )}
-                    style={{ left: pctX(q.x), top: pctY(q.y), width: pctX(q.w), height: pctY(q.h) }}
+                    // Encima, la que está más al frente (un clic donde dos se enciman agarra la de adelante).
+                    style={{ left: pctX(q.x), top: pctY(q.y), width: pctX(q.w), height: pctY(q.h), zIndex: elegida ? capas.length + 1 : capas.length - capaDe(q.pieza) }}
                     onFocus={() => setSel(q.pieza)}
                     onPointerDown={(ev) => empezar(ev, q.pieza, "mover")}
                     onPointerMove={mover}
@@ -384,7 +435,7 @@ export function EditorMedida({
                 {tx(FP.editorAyuda, lang)}
               </p>
               {/* A la vista, al momento; al lector de pantalla, medio segundo después del último cambio (abajo). */}
-              <p className="min-h-10 text-foreground">{estado}</p>
+              <p className="min-h-[3.75rem] text-foreground">{estado}</p>
               <p role="status" className="sr-only">
                 {anuncio}
               </p>
@@ -393,11 +444,13 @@ export function EditorMedida({
             <div>
               <h3 className="text-xs font-semibold text-foreground">{tx(FP.editorPiezas, lang)}</h3>
               <ul className="mt-1 space-y-1">
-                {auto.puestas.map((q) => {
+                {capas.map((q, c) => {
                   const p = pos[q.pieza], cambio = cambiada(q.pieza);
                   const n = etiquetaPieza(ma.piezas[q.pieza]);
+                  const otraCapa = deOtraCapa.has(q.pieza);
+                  const detalle = p ? ` · ${Math.round((p.k / deAuto[q.pieza].k) * 100)} %${cambio ? ` · ${tx(FP.editorCambiada, lang)}` : ""}${otraCapa ? ` · ${tx(FP.editorOtraCapa, lang)}` : ""}` : "";
                   return (
-                    <li key={q.pieza} className="flex items-center justify-between gap-2">
+                    <li key={q.pieza} className="flex items-center justify-between gap-1">
                       <button
                         type="button"
                         aria-current={sel === q.pieza || undefined}
@@ -405,14 +458,12 @@ export function EditorMedida({
                           "min-h-9 min-w-0 flex-1 truncate rounded-md border-l-2 pointer-coarse:min-h-11 border-transparent px-2 text-left hover:bg-secondary",
                           sel === q.pieza && "border-primary bg-secondary font-medium",
                         )}
+                        // Recortado en un panel angosto: el texto entero, al pasar el ratón.
+                        title={n + detalle}
                         onClick={() => enfocar(q.pieza)}
                       >
-                        {n}{" "}
-                        {p && (
-                          <span className="text-muted-foreground">
-                            · {Math.round((p.k / deAuto[q.pieza].k) * 100)} %{cambio && ` · ${tx(FP.editorCambiada, lang)}`}
-                          </span>
-                        )}
+                        {n}
+                        {detalle && <span className="text-muted-foreground">{detalle}</span>}
                       </button>
                       {cambio && (
                         // Al volver, el foco pasa a la pieza: este botón desaparece y el teclado no se pierde.
@@ -429,9 +480,35 @@ export function EditorMedida({
                           <RotateCcw className="size-3.5" aria-hidden="true" />
                         </Button>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        data-capa={q.pieza}
+                        data-mover="subir"
+                        disabled={c === 0}
+                        onClick={() => cambiarCapa(q.pieza, 1, "subir")}
+                        aria-label={rellenar(tx(FP.editorSubirAria, lang), { p: n })}
+                        title={tx(FP.editorSubir, lang)}
+                      >
+                        <ChevronUp className="size-3.5" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        data-capa={q.pieza}
+                        data-mover="bajar"
+                        disabled={c === capas.length - 1}
+                        onClick={() => cambiarCapa(q.pieza, -1, "bajar")}
+                        aria-label={rellenar(tx(FP.editorBajarAria, lang), { p: n })}
+                        title={tx(FP.editorBajar, lang)}
+                      >
+                        <ChevronDown className="size-3.5" aria-hidden="true" />
+                      </Button>
                     </li>
                   );
                 })}
+                {/* El fondo no es una capa que se mueva: va siempre hasta atrás (lo dice la lista, como en Photoshop). */}
+                <li className="px-2 py-1 text-muted-foreground">{tx(FP.editorFondoCapa, lang)}</li>
               </ul>
             </div>
             <div className="rounded-lg border border-border bg-secondary/50 p-2">
@@ -452,7 +529,17 @@ export function EditorMedida({
         {/* El último renglón del diálogo: con muchas piezas o avisos se desplaza el panel, y Guardar y Cancelar se
             quedan a la vista. */}
         <DialogFooter className="-mx-4 -mb-4 gap-2 border-t border-border bg-popover px-4 py-3 sm:items-center sm:justify-between">
-          <Button variant="ghost" className={DEDO} disabled={!hayCambios} onClick={() => setPos({ ...deAuto })}>
+          <Button
+            variant="ghost"
+            className={DEDO}
+            disabled={!hayCambios}
+            onClick={() => {
+              setPos({ ...deAuto });
+              setOrden(ordenAuto);
+              // Este botón se apaga (ya no hay cambios): el foco pasa a «Guardar» en vez de perderse.
+              document.querySelector<HTMLElement>("[data-editor-guardar]")?.focus();
+            }}
+          >
             <RotateCcw className="size-4" aria-hidden="true" /> {tx(FP.editorAuto, lang)}
           </Button>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
@@ -462,7 +549,7 @@ export function EditorMedida({
             <Button variant="outline" className={DEDO} onClick={alCerrar}>
               {tx(FP.editorCancelar, lang)}
             </Button>
-            <Button className={DEDO} onClick={guardar}>
+            <Button className={DEDO} data-editor-guardar onClick={guardar}>
               {tx(FP.editorGuardar, lang)}
             </Button>
           </div>
@@ -487,15 +574,8 @@ const huella = (ma: MaestroListo) => ma.piezas.map((p) => `${p.nombre}|${p.rol ?
 export function edicionGuardada(archivo: string, ma: MaestroListo, W: number, H: number, contexto: string): Edicion | null {
   try {
     const v = JSON.parse(localStorage.getItem(claveGuardada(archivo, ma, W, H, contexto)) ?? "null") as { huella?: unknown; ed?: unknown } | null;
-    if (!v || v.huella !== huella(ma) || !v.ed || typeof v.ed !== "object") return null;
-    const ed: Record<number, Pos> = {};
-    for (const [i, p] of Object.entries(v.ed as Record<string, Partial<Pos> | null>)) {
-      const n = Number(i);
-      if (!Number.isInteger(n) || n < 0 || n >= ma.piezas.length || !p) continue;
-      const { x, y, k } = p;
-      if (typeof x === "number" && typeof y === "number" && typeof k === "number" && [x, y, k].every(Number.isFinite) && k > 0) ed[n] = { x, y, k };
-    }
-    return Object.keys(ed).length ? ed : null;
+    if (!v || v.huella !== huella(ma)) return null;
+    return leerEdicion(v.ed, ma.piezas.length);
   } catch (err) {
     // Navegador sin almacenamiento o dato roto: la medida sale en automático, pero queda rastro.
     console.warn("[editor-medida] leer lo guardado", err);
