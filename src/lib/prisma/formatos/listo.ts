@@ -87,6 +87,9 @@ export type PedidoPsdMedida = { archivo: Blob; plan: PlanEditable; extras: Extra
  *  inteligentes no se leen con seguridad; "formato" = el archivo no sigue el formato PSD exactamente; "otro" = cualquier
  *  otra falla. */
 export type MensajePsdMedida = { tipo: "listo"; archivo: Blob; notas: NotaCapa[] } | { tipo: "error"; codigo: "topes" | "archivo" | "inseguro" | "formato" | "otro"; detalle: string };
+/** Lo que lanza ag-psd cuando el archivo no cuadra consigo mismo (las tres primeras, sólo en modo `strict`). Lo usan
+ *  las dos lecturas con ag-psd: la de la pantalla (`leerPsd`) y la del PSD editable (su worker). */
+export const MAL_FORMADO = /exceeding buffer length|Exceeded section limits|Unread section data|Section exceeds file size|past end of file|Invalid signature/;
 
 /** RGB → RGBA opaco (lo que pide `ImageData`). */
 function opaco(rgb: Uint8ClampedArray): Uint8ClampedArray {

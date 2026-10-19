@@ -7,7 +7,7 @@
 import { getLayerImageData, getLayerMaskImageData, getLayerRealMaskImageData, initializeCanvas, readPsd, writePsdUint8Array } from "ag-psd";
 import { TopeEditable, psdEditable } from "@/lib/prisma/formatos/psd-editable";
 import { PsdInseguro, PsdPesado, prepararParaEditable } from "@/lib/prisma/formatos/adelgazar";
-import { EDITABLE_MAX_BYTES, type MensajePsdMedida, type PedidoPsdMedida } from "@/lib/prisma/formatos/listo";
+import { EDITABLE_MAX_BYTES, MAL_FORMADO, type MensajePsdMedida, type PedidoPsdMedida } from "@/lib/prisma/formatos/listo";
 
 // tsconfig compila con la librería del DOM, no la de workers: se tipa sólo lo que se usa.
 const hilo = self as unknown as { onmessage: ((e: MessageEvent<PedidoPsdMedida>) => void) | null; postMessage(m: MensajePsdMedida, transferir?: Transferable[]): void };
@@ -19,9 +19,6 @@ initializeCanvas(
   },
   (width, height) => ({ data: new Uint8ClampedArray(width * height * 4), width, height }) as unknown as ImageData,
 );
-
-/** Lo que lanza ag-psd en modo `strict` cuando el archivo no cuadra consigo mismo. */
-const MAL_FORMADO = /exceeding buffer length|Exceeded section limits|Unread section data|Section exceeds file size|past end of file|Invalid signature/;
 
 /** "topes" = de esta medida (otra puede salir; también si se acabó la memoria armándola); "archivo" = topes que trae el
  *  archivo; "inseguro" = los datos de sus objetos inteligentes no se dejan leer con seguridad; "formato" = el archivo no

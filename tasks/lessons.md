@@ -1158,3 +1158,12 @@ TAGS: #seguridad #psd #ag-psd #revision
 [2026-10-19] LESSON (una capa que agregamos va donde la pinta la vista previa): metí la sombra de contraste DENTRO de la carpeta de su pieza "cuando la carpeta deja pasar", y la revisión encontró tres casos más que cambian lo que se ve (estilo de capa de la carpeta, máscara vectorial, una capa recortada a la carpeta). Cada condición nueva era otro parche.
 RULE: una capa que agrega HÜE se pone exactamente donde la pinta la tarjeta (aquí, justo debajo de la carpeta). Ordenar mejor el archivo no vale si cambia cómo se ve.
 TAGS: #psd #formatos #editable #capas
+
+[2026-10-19] LESSON (lectura estricta de la pantalla: "5 PSD reales" eran 2 de Photoshop y 3 nuestros): al poner `strict: true` en `leerPsd` probé los 5 PSD del Escritorio (mismo árbol con y sin strict). Al revisar quién los escribió (`imageResources.versionInfo.writerName`), los 3 de `psd-prueba/` no traen sello de Photoshop: son el «PSD» por medida que HÜE exportó el 2026-10-15 con ag-psd, la misma librería que los lee. Sólo s33 y APGIANTCARD prueban archivos de Photoshop, y ninguno de otro programa (Affinity, Photopea, Illustrator).
+ROOT CAUSE: contar como "real" todo archivo que vive en la carpeta de prueba, sin mirar qué programa lo escribió.
+RULE: antes de decir "probado con N archivos reales", leer el sello del programa que los escribió y separar los nuestros; al reportar un riesgo de "rechazar archivos de otras apps", decir cuántos de otras apps se probaron (aquí: 0).
+TAGS: #psd #ag-psd #pruebas #archivo-real #seguridad
+
+[2026-10-19] LESSON (un worktree de la app nace de main; Prisma vive en `prisma`): la sesión lateral abrió en un worktree cuya rama apuntaba a main, donde no existe Formatos. Como la rama no tenía commits propios, se movió a la punta de `prisma` (`git checkout -B <rama> prisma`) antes de tocar nada.
+RULE: en una sesión de Prisma, lo primero es `git log --oneline main..prisma | wc -l` y `ls src/lib/prisma/formatos`; si la rama del worktree no trae Prisma y no tiene commits propios, moverla a `prisma`. Nunca mezclar main en ella (eso es decisión de Pedro).
+TAGS: #worktree #git #prisma #sesion-lateral

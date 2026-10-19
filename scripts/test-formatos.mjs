@@ -9,7 +9,7 @@ import {
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
 import { writePsdBuffer } from "ag-psd";
 import { nombreDeGuia, etiquetaPieza } from "../src/lib/prisma/formatos/roles.ts";
-import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave } from "../src/lib/prisma/formatos/psd.ts";
+import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, capasDeMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
 import { psdDeMedida, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prisma/formatos/psd-salida.ts";
@@ -19,6 +19,7 @@ import { textoDe, maquetar, fuentesDe, compararAlfa } from "../src/lib/prisma/fo
 import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, elegirParaCliente, exclusivasDeOtros, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIA_GOOGLE_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
 import { carpetaGoogle, archivosDeMetadata, archivosQueSirven, buscarEnGoogle, ARCHIVOS_POR_FAMILIA_MAX, GOOGLE_BYTES_POR_PEDIDO } from "../src/lib/prisma/formatos/google-fonts.ts";
 import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { acomodar, acomodarMedida, aplicarEdicion, topesPieza, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
@@ -1719,6 +1720,70 @@ console.log("\n▶ v2 · PSD editable por medida: texto vivo, objetos inteligent
         ok("s33: una pieza quitada en la medida va oculta, movida con el fondo (para prenderla a mano)", cta.hidden === true && Math.abs(tx[0] - txo[0] * plan.fondo.k) < 1e-9 && sin.children.filter((l) => l.hidden).length === 2, JSON.stringify([cta.hidden, tx, plan.fondo]));
       }
     }
+  }
+}
+
+console.log("\n▶ lectura de la pantalla en modo estricto: los PSD reales se leen igual y uno roto no reserva memoria");
+{
+  const dir = join(homedir(), "Desktop/formatos-prueba");
+  // 2 de Photoshop y 3 que escribió HÜE (el «PSD» por medida del 2026-10-15, para que diseño los abriera).
+  const reales = ["s33-BFDIRECT20CASH.psd", "APGIANTCARDUGC 2.psd", "psd-prueba/s33_1080x1920_capas.psd", "psd-prueba/s33_1200x627_capas.psd", "psd-prueba/s33_1200x627_objetos-inteligentes.psd"].map((f) => join(dir, f)).filter((r) => existsSync(r));
+  if (!reales.length) console.log("  · (los PSD de prueba no están en el Escritorio: no se probó con los reales)");
+  const LEER = { useRawData: true, useRawThumbnail: true, skipLinkedFilesData: true, totalMemoryLimit: 64 * 1024 * 1024 }; // las de leerPsd, sin strict
+  const huella = (psd) => JSON.stringify(psd, (_, x) => (ArrayBuffer.isView(x) ? `${x.byteLength}:${createHash("sha1").update(x).digest("hex")}` : x));
+  const flaco = async (bytes) => new Uint8Array((await adelgazarPsd(new Blob([bytes]), PSD_BYTES_MAX)).datos);
+  for (const ruta of reales) {
+    const datos = await flaco(readFileSync(ruta));
+    let estricto, doc = null;
+    try { estricto = huella(readPsdAg(datos, { ...LEER, strict: true })); doc = leerPsd(datos); } catch (e) { estricto = `falla: ${e.message}`; }
+    ok(`${ruta.split("/").pop()}: se lee en modo estricto, con el MISMO árbol que sin él (${doc?.mesas.length} mesas, ${doc?.capas.length} capas visibles)`, doc !== null && estricto === huella(readPsdAg(datos, LEER)), estricto.slice(0, 200));
+  }
+  const ruta = join(dir, "s33-BFDIRECT20CASH.psd");
+  if (existsSync(ruta)) {
+    const crudo = readFileSync(ruta);
+    const sinStrict = (datos) => {
+      const avisos = [];
+      try { readPsdAg(datos, { ...LEER, debug: true, log: (m) => avisos.push(m) }); } catch (e) { return `no se abre: ${e.message}`; }
+      return `se abre · ${avisos.join(" · ")}`;
+    };
+    const RESERVA = "se abre · Reading bytes exceeding buffer length";
+    // A. El último canal con datos (el de la última capa; son lo último de la información de capas) dice medir 50 MB más
+    // de lo que trae: pasa del final del archivo. Sin strict, ag-psd reservaba esos 50 MB en ceros y abría el archivo.
+    const roto = new Uint8Array(crudo), v = new DataView(roto.buffer);
+    let p = 26;
+    p += 4 + v.getUint32(p); // datos de color
+    p += 4 + v.getUint32(p); // recursos
+    p += 8; // largo de capas y máscaras, y de la información de capas
+    const n = Math.abs(v.getInt16(p));
+    p += 2;
+    let canal = -1;
+    for (let i = 0; i < n; i++) {
+      p += 16;
+      const nc = v.getUint16(p);
+      p += 2;
+      for (let c = 0; c < nc; c++, p += 6) if (v.getUint32(p + 2) >= 2) canal = p + 2;
+      p += 12; // firma, fusión, opacidad, recorte, banderas, relleno
+      p += 4 + v.getUint32(p);
+    }
+    v.setUint32(canal, v.getUint32(canal) + 50_000_000);
+    const datosA = await flaco(roto);
+    let errA = null;
+    try { leerPsd(datosA); } catch (e) { errA = e; }
+    eq("s33 con un canal que pasa del final del archivo: sin strict se abría reservando 50 MB en ceros; ahora se rechaza («no-soportado», con el mensaje claro)", [sinStrict(datosA), errA instanceof ErrorPsd && errA.motivo, errA?.message], [RESERVA, "no-soportado", PSD_MAL_FORMADO]);
+    // B. Lo mismo DENTRO del bloque de una capa: el texto vivo de «Hasta» (el último bloque TySh del archivo) dice medir
+    // 50 MB. Con strict, ag-psd se salta sólo ese bloque: el archivo se abre igual y «Hasta» llega sin su texto vivo.
+    const rotoB = new Uint8Array(crudo), b = Buffer.from(rotoB.buffer);
+    new DataView(rotoB.buffer).setUint32(b.indexOf("EngineDatatdta", b.lastIndexOf("8BIMTySh")) + 14, 50_000_000);
+    const datosB = await flaco(rotoB);
+    const sano = leerPsd(await flaco(crudo));
+    let docB = null;
+    try { docB = leerPsd(datosB); } catch { /* lo dice la prueba */ }
+    const textos = (d) => d?.capas.filter((c) => c.texto).map((c) => c.nombre) ?? [];
+    eq("s33 con el texto de «Hasta» diciendo medir 50 MB: sin strict reservaba los 50 MB; con strict se abre con las mismas capas y sólo «Hasta» pierde su texto vivo", [sinStrict(datosB), docB?.capas.map((c) => c.nombre).join("|") === sano.capas.map((c) => c.nombre).join("|"), textos(sano).filter((t) => !textos(docB).includes(t))], [RESERVA, true, ["Hasta"]]);
+    // C. Un PSD cortado (una descarga a medias): antes salía el error de ag-psd en inglés; ahora, el mensaje claro.
+    let errC = null;
+    try { leerPsd(await flaco(crudo.subarray(0, Math.floor(crudo.length * 0.6)))); } catch (e) { errC = e; }
+    eq("s33 cortado al 60 %: «no-soportado» con el mensaje claro, no el de la librería", [errC instanceof ErrorPsd && errC.motivo, errC?.message], ["no-soportado", PSD_MAL_FORMADO]);
   }
 }
 

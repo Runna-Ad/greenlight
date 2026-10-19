@@ -22,7 +22,7 @@
  * por capa cuando se piden (un PSD puede declarar medidas enormes sin traer datos).
  */
 import { readPsd, getLayerImageData, getLayerMaskImageData, getCompositeImageData, initializeCanvas, type Layer } from "ag-psd";
-import { PSD_BYTES_MAX } from "./listo.ts";
+import { MAL_FORMADO, PSD_BYTES_MAX } from "./listo.ts";
 import { textoDe, type TextoCapa, type TextoPsdCrudo } from "./textos.ts";
 import { ROLES, nombreDeCapa, rolDe, type Rol } from "./roles.ts";
 
@@ -46,6 +46,8 @@ export { PSD_BYTES_MAX };
 /** Versión 1 en la cabecera ("8BPS" + 00 01); la 2 es un PSB (documento grande), que no se lee. */
 export const esVersionPsd = (cab: Uint8Array): boolean => cab.length >= 6 && cab[4] === 0 && cab[5] === 1;
 export const ES_PSB = "Es un PSB (documento grande), no un PSD. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas, como PSD.";
+/** El detalle cuando ag-psd lanza uno de MAL_FORMADO (sus mensajes, en inglés técnico, no le dicen nada a la persona). */
+export const PSD_MAL_FORMADO = "El archivo no sigue el formato PSD exactamente (puede estar dañado o incompleto) y no se deja leer con seguridad.";
 /** El mismo mensaje lo dan el worker (antes de juntar los bytes) y `leerPsd`: un solo texto. */
 export const pesaDemasiado = (mb: number, nota: string): string =>
   `Sus capas pesan ${mb} MB (máximo ${Math.round(PSD_BYTES_MAX / 1e6)})${nota}. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas y sin capas ocultas.`;
@@ -188,9 +190,13 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
   let psd;
   try {
     // totalMemoryLimit: con useRawData lo único que se decodifica al leer son los patrones del documento.
-    psd = readPsd(buf, { useRawData: true, useRawThumbnail: true, skipLinkedFilesData: true, totalMemoryLimit: 64 * 1024 * 1024 });
+    // `strict`: un dato que dice medir más de lo que queda del archivo (un canal, o algo dentro de un bloque de una capa)
+    // ya no reserva hasta 100 MB vacíos por cada uno: ag-psd lanza antes. Dentro de un bloque de una capa, ag-psd se
+    // salta ese bloque y sigue; en lo demás, el archivo no se lee. Los 5 PSD de prueba dan el mismo árbol que sin strict.
+    psd = readPsd(buf, { useRawData: true, useRawThumbnail: true, skipLinkedFilesData: true, totalMemoryLimit: 64 * 1024 * 1024, strict: true });
   } catch (err) {
-    throw new ErrorPsd("no-soportado", `No se pudo leer el PSD: ${err instanceof Error ? err.message : String(err)}`);
+    const detalle = err instanceof Error ? err.message : String(err);
+    throw new ErrorPsd("no-soportado", MAL_FORMADO.test(detalle) ? PSD_MAL_FORMADO : `No se pudo leer el PSD: ${detalle}`);
   }
   if (!(psd.width > 0 && psd.height > 0)) throw new ErrorPsd("no-soportado", "El PSD no declara medidas");
   if (psd.width > PSD_LADO_MAX || psd.height > PSD_LADO_MAX || psd.width * psd.height > PSD_LIENZO_MAX_PX) throw new ErrorPsd("demasiado-grande", `El lienzo mide ${psd.width}×${psd.height}: más de ${PSD_LIENZO_MAX_PX / 1e6} millones de píxeles en total. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas, o acércalas entre sí.`);
