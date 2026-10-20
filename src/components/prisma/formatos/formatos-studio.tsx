@@ -29,6 +29,11 @@ const MAX_TAMANOS = 20;
 /** Cada cuánto se pregunta por los tamaños que se están armando fuera de esta tanda (otra pestaña, respuesta cortada). */
 const SONDEO_MS = 5_000;
 const FOCO = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
+/** Un solo tamaño de botón, el mismo que la puerta PSD (pasada de diseño B23): 36 px de alto y letra de 13 px; 44 px
+ *  con dedo. Va con `size="lg"` (h-9, el relleno de los lados). */
+const BOTON = "min-h-9 text-[13px] pointer-coarse:min-h-11";
+/** Los campos junto a esos botones: el mismo alto y la misma letra (con dedo, 16 px para que el teléfono no acerque). */
+const CAMPO = "h-9 rounded-md border border-input bg-background px-2 text-[13px] text-foreground pointer-coarse:h-11 pointer-coarse:text-base";
 
 const usd = (n: number, lang: Lang) => (n <= 0 ? tx(FX.gratis, lang) : `${new Intl.NumberFormat(lang === "es" ? "es-MX" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)} USD`);
 
@@ -526,7 +531,7 @@ export function FormatosStudio({
   };
 
   const botonGenerar = (extra?: string) => (
-    <Button className={cn("w-full", extra)} onClick={() => void generar(porGenerar)} disabled={corriendo || esDemo || porGenerar.length === 0} aria-busy={corriendo}>
+    <Button size="lg" className={cn("w-full", BOTON, extra)} onClick={() => void generar(porGenerar)} disabled={corriendo || esDemo || porGenerar.length === 0} aria-busy={corriendo}>
       {corriendo ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
       {corriendo
         ? f(tx(FX.progreso, lang), { listos: listosTanda, n: tanda.length })
@@ -556,7 +561,7 @@ export function FormatosStudio({
       {/* Sin wrap: el botón de idioma se queda a la derecha del título (a 1280 se bajaba a su propio renglón). */}
       <div className="mb-4 flex items-end justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <Link href="/prisma" className={cn("inline-flex min-h-9 items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground", FOCO)}>
+          <Link href="/prisma" className={cn("inline-flex min-h-9 items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground pointer-coarse:min-h-11", FOCO)}>
             <ArrowLeft className="size-4" aria-hidden="true" /> {tx(FX.volver, lang)}
           </Link>
           {/* El mismo encabezado que la puerta PSD (B23): título y lema en una banda. */}
@@ -572,7 +577,7 @@ export function FormatosStudio({
           type="button"
           onClick={() => setLang(lang === "es" ? "en" : "es")}
           lang={lang === "es" ? "en" : "es"}
-          className={cn("inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary", FOCO)}
+          className={cn("inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary pointer-coarse:min-h-11", FOCO)}
           aria-label={lang === "es" ? "Switch to English" : "Cambiar a español"}
         >
           <Languages className="size-3.5" aria-hidden="true" /> {lang === "es" ? "EN" : "ES"}
@@ -589,7 +594,7 @@ export function FormatosStudio({
             value={marcaId}
             onChange={(e) => setMarcaId(e.target.value)}
             disabled={!!subiendo}
-            className="mt-1 h-10 w-full max-w-xs rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(CAMPO, "mt-1 block w-full max-w-xs cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring")}
           >
             <option value="">{tx(FX.sinMarca, lang)}</option>
             {marcas.map((m) => (
@@ -673,19 +678,19 @@ export function FormatosStudio({
                 <div className="mt-2 space-y-2 rounded-lg border border-border p-2" role="group" aria-label={tx(FX.cambiar, lang)}>
                   <p className="text-xs text-foreground">{f(tx(FX.cambiarConfirmar, lang), { n: listas.length })}</p>
                   <div className="flex flex-wrap gap-2">
-                    <Button ref={primeraConfirmacion} size="sm" variant="secondary" onClick={() => void bajarZip()} disabled={zipeando}>
+                    <Button ref={primeraConfirmacion} size="lg" variant="secondary" className={BOTON} onClick={() => void bajarZip()} disabled={zipeando}>
                       <Download className="size-4" aria-hidden="true" /> {tx(FX.bajarZip, lang)}
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={cambiarAnuncio}>
+                    <Button size="lg" variant="ghost" className={BOTON} onClick={cambiarAnuncio}>
                       {tx(FX.siCambiar, lang)}
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setConfirmarCambio(false)}>
+                    <Button size="lg" variant="ghost" className={BOTON} onClick={() => setConfirmarCambio(false)}>
                       {tx(FX.cancelar, lang)}
                     </Button>
                   </div>
                 </div>
               ) : (
-                <Button ref={botonCambiar} size="sm" variant="ghost" className="mt-1 -ml-2" disabled={corriendo || esDemo} onClick={() => (listas.length ? setConfirmarCambio(true) : cambiarAnuncio())}>
+                <Button ref={botonCambiar} size="lg" variant="ghost" className={cn(BOTON, "mt-1 -ml-2.5")} disabled={corriendo || esDemo} onClick={() => (listas.length ? setConfirmarCambio(true) : cambiarAnuncio())}>
                   {tx(FX.cambiar, lang)}
                 </Button>
               )}
@@ -706,8 +711,9 @@ export function FormatosStudio({
                 </h2>
                 <div className="flex gap-1">
                   <Button
-                    size="sm"
+                    size="lg"
                     variant="ghost"
+                    className={BOTON}
                     aria-label={tx(FX.todosAria, lang)}
                     onClick={() =>
                       setEleccion((prev) => {
@@ -725,7 +731,7 @@ export function FormatosStudio({
                   >
                     {tx(FX.todos, lang)}
                   </Button>
-                  <Button size="sm" variant="ghost" aria-label={tx(FX.ningunoAria, lang)} onClick={() => setEleccion((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, { ...v, on: false }])))}>
+                  <Button size="lg" variant="ghost" className={BOTON} aria-label={tx(FX.ningunoAria, lang)} onClick={() => setEleccion((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, { ...v, on: false }])))}>
                     {tx(FX.ninguno, lang)}
                   </Button>
                 </div>
@@ -751,9 +757,9 @@ export function FormatosStudio({
                     }}
                     aria-invalid={!!errorLista}
                     aria-describedby={errorLista ? "formatos-pegar-error" : "formatos-pegar-ayuda"}
-                    className="min-h-10 min-w-0 flex-1 basis-60 resize-y rounded-md border border-input bg-background px-2 py-1.5 font-mono text-xs text-foreground [field-sizing:fixed]"
+                    className="min-h-9 min-w-0 flex-1 basis-60 resize-y rounded-md border border-input bg-background px-2 py-1.5 font-mono text-xs text-foreground [field-sizing:fixed]"
                   />
-                  <Button type="submit" size="sm" variant="outline" className="h-10" disabled={!lista.trim() || corriendo}>
+                  <Button type="submit" size="lg" variant="outline" className={BOTON} disabled={!lista.trim() || corriendo}>
                     {tx(FX.pegarUsar, lang)}
                   </Button>
                 </div>
@@ -836,7 +842,7 @@ export function FormatosStudio({
                               </label>
                               <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
                                 {el.modo === "ia" && el.on && <span className="text-xs text-muted-foreground">{f(tx(FX.precioIa, lang), { c: usd(lienzoIA(lote.w, lote.h, p.w, p.h).costoUsd, lang) })}</span>}
-                                <div role="group" aria-label={`${tx(FX.modoRelleno, lang)} · ${nombre}`} className="inline-flex rounded-lg border border-border p-0.5">
+                                <div role="group" aria-label={`${tx(FX.modoRelleno, lang)} · ${nombre}`} className="inline-flex h-9 rounded-lg border border-border p-0.5 pointer-coarse:h-11">
                                   {MODOS.map((m) => {
                                     const deshabilitado = m === "ia" && !iaOn;
                                     return (
@@ -848,7 +854,7 @@ export function FormatosStudio({
                                         aria-describedby={deshabilitado ? "formatos-ia-apagada" : undefined}
                                         onClick={() => cambiar(p.id, { modo: m })}
                                         className={cn(
-                                          "min-h-10 cursor-pointer rounded-md px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-8",
+                                          "cursor-pointer rounded-md px-2.5 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
                                           FOCO,
                                           el.modo === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                                         )}
@@ -865,7 +871,7 @@ export function FormatosStudio({
                                       value={HEX.test(el.color) ? el.color : "#000000"}
                                       onChange={(ev) => cambiar(p.id, { color: ev.target.value })}
                                       aria-label={`${tx(FX.colorRelleno, lang)} · ${nombre}`}
-                                      className={cn("size-9 cursor-pointer rounded border border-border bg-transparent sm:size-8", FOCO)}
+                                      className={cn("size-9 cursor-pointer rounded border border-border bg-transparent pointer-coarse:size-11", FOCO)}
                                     />
                                     {[...new Set([lote.colorBorde, ...colores])].slice(0, 5).map((c, i) => (
                                       <button
@@ -875,7 +881,7 @@ export function FormatosStudio({
                                         aria-label={i === 0 ? tx(FX.colorBordeLabel, lang) : f(tx(FX.colorMarca, lang), { c })}
                                         title={i === 0 ? tx(FX.colorBordeLabel, lang) : c}
                                         onClick={() => cambiar(p.id, { color: c })}
-                                        className={cn("size-8 cursor-pointer rounded-full border sm:size-6", FOCO, el.color === c ? "border-foreground ring-2 ring-ring" : "border-border")}
+                                        className={cn("size-6 cursor-pointer rounded-full border pointer-coarse:size-8", FOCO, el.color === c ? "border-foreground ring-2 ring-ring" : "border-border")}
                                         style={{ background: c } as CSSProperties}
                                       />
                                     ))}
@@ -888,7 +894,7 @@ export function FormatosStudio({
                                     // Con resultado ya generado (o generándose) la medida se queda: quitarla escondería su tarjeta.
                                     disabled={corriendo || !!salidas[p.id]}
                                     aria-label={f(tx(FX.quitarMedida, lang), { w: p.w, h: p.h })}
-                                    className={cn("flex size-9 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40", FOCO)}
+                                    className={cn("flex size-9 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:size-11", FOCO)}
                                   >
                                     <X className="size-4" aria-hidden="true" />
                                   </button>
@@ -908,16 +914,16 @@ export function FormatosStudio({
                   <input type="number" inputMode="numeric" min={LADO_MIN} max={LADO_MAX} value={cw} onChange={(e) => {
                       setCw(e.target.value);
                       setErrorMedida(null);
-                    }} aria-invalid={!!errorMedida} aria-describedby={errorMedida ? "formatos-medida-error" : "formatos-medida-ayuda"} className="mt-1 block h-10 w-24 rounded-md border border-input bg-background px-2 text-sm text-foreground" />
+                    }} aria-invalid={!!errorMedida} aria-describedby={errorMedida ? "formatos-medida-error" : "formatos-medida-ayuda"} className={cn(CAMPO, "mt-1 block w-24")} />
                 </label>
                 <label className="text-xs text-muted-foreground">
                   {tx(FX.alto, lang)}
                   <input type="number" inputMode="numeric" min={LADO_MIN} max={LADO_MAX} value={ch} onChange={(e) => {
                       setCh(e.target.value);
                       setErrorMedida(null);
-                    }} aria-invalid={!!errorMedida} aria-describedby={errorMedida ? "formatos-medida-error" : "formatos-medida-ayuda"} className="mt-1 block h-10 w-24 rounded-md border border-input bg-background px-2 text-sm text-foreground" />
+                    }} aria-invalid={!!errorMedida} aria-describedby={errorMedida ? "formatos-medida-error" : "formatos-medida-ayuda"} className={cn(CAMPO, "mt-1 block w-24")} />
                 </label>
-                <Button type="submit" size="sm" variant="outline" className="h-10" disabled={!cw || !ch}>
+                <Button type="submit" size="lg" variant="outline" className={BOTON} disabled={!cw || !ch}>
                   <Plus className="size-4" aria-hidden="true" /> {tx(FX.medidaLibre, lang)}
                 </Button>
                 {errorMedida ? (
@@ -941,11 +947,11 @@ export function FormatosStudio({
                   </h2>
                   <div className="flex flex-wrap gap-2">
                     {fallidos.length > 0 && !corriendo && (
-                      <Button size="sm" variant="outline" disabled={esDemo} onClick={() => void generar(fallidos)}>
+                      <Button size="lg" variant="outline" className={BOTON} disabled={esDemo} onClick={() => void generar(fallidos)}>
                         <RefreshCw className="size-4" aria-hidden="true" /> {tx(FX.reintentarFallidos, lang)}
                       </Button>
                     )}
-                    <Button size="sm" onClick={() => void bajarZip()} disabled={!listas.length || zipeando || corriendo || esDemo} aria-busy={zipeando} aria-describedby="formatos-zip-ayuda">
+                    <Button size="lg" className={BOTON} onClick={() => void bajarZip()} disabled={!listas.length || zipeando || corriendo || esDemo} aria-busy={zipeando} aria-describedby="formatos-zip-ayuda">
                       {zipeando ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
                       {zipeando ? tx(FX.armandoZip, lang) : f(tx(FX.bajarZipN, lang), { n: listas.length })}
                     </Button>
