@@ -952,7 +952,16 @@ largo: estacionado por él.
         abajo a la derecha (arriba tapaban el botón del ZIP: lo vi al probar), uno a la vez y con título + líneas; las
         notas de capas ya vistas no detienen el aviso; nombres para lector de pantalla que empiezan con lo que se ve
         («Ninguna: …»); casillas y enlaces más grandes (36 px la de la tarjeta); textos sin "1 PNGs".
-      · No arreglado (anotado): el ZIP de la puerta de imagen plana sigue sin carpetas (allí no hay PSD); «Cancelando…»
+      · Después (Pedro, 2026-10-20: "i want to use entregables too … if the zip is to big dont drop psd just generate
+        separate zips and named them"): (1) un ZIP que pasaría de 2 GiB sale en varios, `…_formatos_1.zip`,
+        `…_formatos_2.zip`… (cada uno se baja al llenarse; abiertos en la misma carpeta se juntan sin pisarse); sólo un
+        PSD que no cabe ni solo se salta y se nombra. Probado con el tope bajado a 200 MB: 4 ZIP (189/165/191/85 MB),
+        `unzip -t` sin errores en los 4, `ditto` los junta en 12 + 12, el PSD 320×250 idéntico al de la tarjeta.
+        (2) La puerta de imagen plana: su ZIP va en `Entregables/png/` y `Entregables/jpg/` (no probado en el
+        navegador: necesita sesión y un anuncio generado). (3) Falla encontrada al probar: el TERCER ZIP seguido fallaba
+        ("network error": el navegador sin espacio). El ZIP ya no copia los PSD (lo escribe `zip.ts`, sin fflate) y suelta
+        el anterior al empezar: 4 seguidos sin falla. Un PSD que no se deja leer queda fuera y se dice; el ZIP sigue.
+      · No arreglado (anotado): «Cancelando…»
         sólo se ve si parar tarda (aquí paró antes de pintarse); cuánta memoria pide un ZIP de 12 PSD: sin medir; Safari,
         Firefox y Windows sin probar; el aviso del «PSD» de cada tarjeta sigue en un solo párrafo (el del ZIP ya va en
         título + líneas); los «Todas»/«Ninguna» miden 28 px de alto (la norma de la app es 36).

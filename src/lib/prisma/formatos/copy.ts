@@ -64,7 +64,7 @@ export const FX = {
   bajarJpg: t("JPG", "JPG"),
   bajarZip: t("Descargar ZIP", "Download ZIP"),
   armandoZip: t("Armando ZIP…", "Building ZIP…"),
-  zipAyuda: t("PNG (original exacto) y JPG (más ligero) de cada tamaño.", "PNG (exact original) and JPG (lighter) of each size."),
+  zipAyuda: t("PNG (original exacto) y JPG (más ligero) de cada tamaño, en la carpeta «Entregables».", "PNG (exact original) and JPG (lighter) of each size, in the «Entregables» folder."),
   sinConexion: t("Sin conexión con el servidor. Reintenta.", "No connection to the server. Retry."),
   demo: t("Vista de muestra: nada se guarda.", "Sample view: nothing is saved."),
   // ── reap 2026-10-02: todo lo que antes vivía sólo en un `title` ahora se ve ──
@@ -247,7 +247,14 @@ export const FP = {
   zipPsdPlanos: t("Estos PSD llevan capas planas (el texto va como imagen): {m}, porque {motivo}", "These PSDs have flat layers (text as images): {m}, because {motivo}"),
   zipPsdAplanadas: t("Estas capas van como imagen porque no pueden quedar editables: {capas}.", "These layers went in as images because they can't stay editable: {capas}."),
   zipPsdFalta: t("No se pudieron armar estos PSD y el ZIP va sin ellos: {m}. Prueba con el botón «PSD» de su tarjeta.", "These PSDs couldn't be built, so the ZIP goes without them: {m}. Try the «PSD» button on their card."),
-  zipPsdSinLugar: t("Estos PSD no cupieron (el ZIP pasaría de {gb} GB): {m}. Bájalos con el botón «PSD» de su tarjeta o en otro ZIP con menos medidas.", "These PSDs didn't fit (the ZIP would pass {gb} GB): {m}. Download them with the «PSD» button on their card, or in another ZIP with fewer sizes."),
+  zipPsdSinLugar: t("Estos PSD pesan más de {gb} GB cada uno y no caben ni solos en un ZIP: {m}. Bájalos con el botón «PSD» de su tarjeta.", "These PSDs are over {gb} GB each and don't fit in a ZIP even alone: {m}. Download them with the «PSD» button on their card."),
+  zipEnPartes: t(
+    "Pasaba de {gb} GB, así que salió en {k} ZIP: {z}. Ábrelos en la misma carpeta (las carpetas se juntan). Si el navegador pregunta si permites varias descargas, elige «Permitir».",
+    "It was over {gb} GB, so it came out as {k} ZIPs: {z}. Open them in the same folder (the folders merge). If the browser asks whether to allow several downloads, choose «Allow».",
+  ),
+  zipCanceladoAMedias: t("Se canceló el ZIP.", "ZIP cancelled."),
+  zipSinEspacio: t("Puede que al navegador le falte espacio: cierra otras pestañas o marca menos medidas, y reintenta.", "The browser may be out of space: close other tabs or tick fewer sizes, and try again."),
+  zipYaBajados: t("Ya se había descargado: {z}; lo demás no.", "Already downloaded: {z}; the rest wasn't."),
   zipSinPsd: t("No se pudo armar ningún PSD ({m}), así que no se descargó el ZIP. Reintenta; si sigue, baja los PNG.", "No PSD could be built ({m}), so the ZIP wasn't downloaded. Try again; if it keeps failing, download the PNGs."),
   editada: t("Editada a mano", "Edited by hand"),
   editadaTitulo: t(

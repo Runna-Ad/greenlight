@@ -30,7 +30,7 @@ import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContra
 import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
 import { specVacio } from "../src/lib/prisma/spec.ts";
 import { unzipSync } from "fflate";
-import { zipPorPartes, rutaLibre, CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES } from "../src/lib/prisma/formatos/zip.ts";
+import { zipPorPartes, zipsEnPartes, rutaLibre, CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES } from "../src/lib/prisma/formatos/zip.ts";
 
 let pass = 0,
   fail = 0;
@@ -2406,13 +2406,55 @@ console.log("\n▶ B22 · el ZIP con «Entregables» (PNG) y «Editables» (PSD)
   for (const r of malas) if (await falla(() => zs.agregar(r, new Blob([new Uint8Array([1])])))) rechazadas.push(r);
   ok("zipPorPartes: una ruta que se saldría de su carpeta (.., /, \\, subcarpetas, raros) no entra", rechazadas.length === malas.length, JSON.stringify(malas.filter((r) => !rechazadas.includes(r))));
 
-  // Un archivo que falla a medias deja el ZIP roto: se dice en ese momento y los siguientes ya no entran.
+  // Lo que no cabe en un ZIP sale en varios (Pedro: "dont drop psd just generate separate zips"): nada se queda fuera.
+  const cerrados = [];
+  const zp = zipsEnPartes((zip, n) => cerrados.push({ zip, n }), 12_000);
+  const up = new Set();
+  const pedazo = (k) => new Blob([new Uint8Array(4_000).fill(k)]);
+  await zp.agregar(rutaLibre(up, CARPETA_ENTREGABLES, "a.png"), pedazo(1));
+  await zp.agregar(rutaLibre(up, CARPETA_EDITABLES, "a.psd"), pedazo(2));
+  const enCurso = zp.partes;
+  await zp.agregar(rutaLibre(up, CARPETA_EDITABLES, "a.psd"), pedazo(3));
+  const fin = zp.terminar();
+  const abrir = async (b) => unzipSync(new Uint8Array(await b.arrayBuffer()));
+  const p1 = cerrados.length ? await abrir(cerrados[0].zip) : {}, p2 = await abrir(fin.zip);
+  ok(
+    "zipsEnPartes: cuando el siguiente ya no cabe, el ZIP 1 se cierra y entrega y sigue el 2; entre los dos están todos, sin nombres repetidos",
+    cerrados.length === 1 && cerrados[0].n === 1 && enCurso === 1 && fin.numero === 2 && Object.keys(p1).join() === "Entregables/a.png,Editables/a.psd" && Object.keys(p2).join() === "Editables/a-2.psd" && p2["Editables/a-2.psd"][0] === 3,
+    JSON.stringify([cerrados.map((c) => c.n), Object.keys(p1), Object.keys(p2), fin.numero]),
+  );
+  const z1 = zipsEnPartes(() => cerrados.push("no"), 12_000);
+  await z1.agregar("Entregables/x.png", pedazo(1));
+  ok("zipsEnPartes: si todo cabe, sale UN ZIP (número 1) y no se cierra ninguno antes; `cabeSolo` dice si un archivo no cabe ni solo", z1.terminar().numero === 1 && !cerrados.includes("no") && z1.cabeSolo(10_000) && !z1.cabeSolo(12_000));
+
+  // Un archivo que no se deja leer (el navegador sin espacio) no entra, y el ZIP sigue sirviendo con los demás.
   const zr = zipPorPartes();
   const roto = { size: 10, stream: () => new ReadableStream({ pull(c) { c.error(new Error("lectura rota")); } }) };
   const e1 = await falla(() => zr.agregar("Editables/roto.psd", roto));
-  const e2 = await falla(() => zr.agregar("Editables/otro.psd", new Blob([new Uint8Array([1])])));
-  const e3 = await falla(async () => zr.terminar());
-  ok("zipPorPartes: un archivo que no se deja leer a medias tira el ZIP en ese momento (el siguiente y el cierre fallan igual, sin armar los demás)", e1 === "lectura rota" && e2 === "lectura rota" && e3 === "lectura rota", JSON.stringify([e1, e2, e3]));
+  const e2 = await falla(() => zr.agregar("Editables/otro.psd", new Blob([new Uint8Array([7, 8])])));
+  const tras = await abrir(zr.terminar());
+  ok("zipPorPartes: un archivo que no se deja leer no entra, y el ZIP queda bueno con los demás", e1 === "lectura rota" && e2 === null && Object.keys(tras).join() === "Editables/otro.psd" && tras["Editables/otro.psd"].join() === "7,8", JSON.stringify([e1, e2, Object.keys(tras)]));
+
+  // El ZIP lo escribe nuestro código (no copia los archivos): que lo abra también el unzip del sistema.
+  const unzipSistema = ["/usr/bin/unzip"].find((r) => existsSync(r));
+  if (!unzipSistema) console.log("  · (sin unzip del sistema: se salta esa prueba)");
+  else {
+    const { execFileSync } = await import("node:child_process");
+    const { writeFileSync, mkdtempSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const dir = mkdtempSync(join(tmpdir(), "b22-zip-"));
+    try {
+      const zs2 = zipPorPartes();
+      await zs2.agregar("Entregables/a.png", new Blob([chico]));
+      await zs2.agregar("Editables/b.psd", new Blob([grande]));
+      const ruta2 = join(dir, "prueba.zip");
+      writeFileSync(ruta2, new Uint8Array(await zs2.terminar().arrayBuffer()));
+      const salidaT = execFileSync(unzipSistema, ["-t", ruta2], { encoding: "utf8" });
+      ok("zipPorPartes: el unzip del sistema lo prueba sin errores (sus 2 archivos, en su carpeta)", /No errors detected/.test(salidaT) && /Entregables\/a\.png/.test(salidaT) && /Editables\/b\.psd/.test(salidaT), salidaT.slice(0, 300));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
 
   // El PSD real (s33, 61 MB) entra dos veces, como dos medidas: el ZIP lo guarda tal cual.
   const ruta = join(homedir(), "Desktop/formatos-prueba/s33-BFDIRECT20CASH.psd");

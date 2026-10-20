@@ -1243,3 +1243,14 @@ TAGS: #formatos #avisos #sonner #ux #barra-pegajosa #b22
 ROOT CAUSE: traté cada archivo del ZIP como independiente (un PSD que falla no tira los otros), pero el ZIP es UN flujo: una entrada a medias lo invalida. Y no revisé los límites del formato que escribe la librería.
 RULE: en un archivo armado por partes, separar "no se pudo PREPARAR esta parte" (se salta y se dice) de "falló al ESCRIBIRLA" (se aborta todo en ese momento). Antes de escribir un formato con una librería, buscar sus topes (ZIP64, 4 GiB) y poner uno propio por debajo, con aviso de lo que no cupo. Y abrir el resultado con las herramientas del sistema (`unzip -t`, `ditto`), no sólo con la misma librería.
 TAGS: #zip #fflate #streaming #zip64 #formatos #b22 #revision
+
+[2026-10-20] PEDRO_OVERRIDE (Formatos B22: un ZIP demasiado grande NO deja PSD fuera): con el tope de 2 GiB (fflate no escribe ZIP64), hice que los PSD que ya no cabían se saltaran y se nombraran en el aviso ("bájalos con el botón de su tarjeta").
+PEDRO'S APPROACH: "if the zip is to big dont drop psd just generate separate zips and named them": partir en varios ZIP numerados (`…_formatos_1.zip`, `…_formatos_2.zip`).
+WHY IT WAS BETTER: la persona recibe TODO lo que marcó sin pasos extra; saltarse archivos la obliga a bajar a mano lo que faltó, justo el trabajo que el ZIP debía quitar. Es otra vez su línea "sigue y avisa, no dejes fuera". (El porqué es mío, inferido; Pedro no lo dijo.)
+RULE: en Formatos, cuando un tope técnico no deja meter todo en una entrega, se parte la entrega (varios archivos con número) y se dice; no se deja nada fuera. Dejar fuera sólo lo que no cabe ni solo, y nombrarlo.
+TAGS: #override #formatos #zip #b22 #no-dejar-fuera
+
+[2026-10-20] LESSON (una descarga grande que se repite deja al navegador sin espacio: probarla 3 veces seguidas): con el ZIP partido en 4, el tercer ZIP de s33 seguido falló con "network error" al leer un PSD. Cada ZIP COPIABA los PSD (629 MB más) y su enlace vivía 2 minutos (lo alargué yo en la revisión "por si tarda el Guardar como"): tres seguidos ≈ 2 GB vivos y el navegador ya no pudo leer. Lo reproduje sin mi arnés de prueba (que además guardaba otra copia). Arreglo: el ZIP ya no copia (es un Blob hecho de los mismos Blobs de los PSD + encabezados; CRC propio), y los enlaces del ZIP anterior se sueltan al pedir el siguiente. Después: 4 seguidos sin falla.
+ROOT CAUSE: medí UNA descarga (bien) y supuse que la memoria se soltaba sola; nunca repetí la acción como la repite una persona (bajar, corregir, volver a bajar).
+RULE: toda acción que arma archivos de cientos de MB en el navegador se prueba al menos 3 veces seguidas en la misma página, sin que la prueba guarde copias. Armar el archivo con referencias a los Blobs que ya existen (no copiarlos), y soltar lo de la vez anterior al empezar la siguiente.
+TAGS: #navegador #memoria #blob #zip #formatos #b22 #pruebas

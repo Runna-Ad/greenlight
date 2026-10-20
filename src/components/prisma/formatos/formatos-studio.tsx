@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowLeft, Clock, Download, ExternalLink, ImagePlus, Languages, Loader2, Plus, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { zipSync } from "fflate";
+import { CARPETA_ENTREGABLES } from "@/lib/prisma/formatos/zip";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -486,8 +487,10 @@ export function FormatosStudio({
           try {
             const p = presetDeSalida(s);
             const [png, jpg] = await Promise.all([bytesDe(s.pngUrl!), bytesDe(s.jpgUrl!)]);
-            archivos[`png/${nombreArchivo(lote.nombre, p, "png")}`] = png;
-            archivos[`jpg/${nombreArchivo(lote.nombre, p, "jpg")}`] = jpg;
+            // Como en la puerta PSD (Pedro, 2026-10-20: "i want to use entregables too"): todo lo que se entrega va en
+            // «Entregables», con sus dos formatos aparte.
+            archivos[`${CARPETA_ENTREGABLES}/png/${nombreArchivo(lote.nombre, p, "png")}`] = png;
+            archivos[`${CARPETA_ENTREGABLES}/jpg/${nombreArchivo(lote.nombre, p, "jpg")}`] = jpg;
           } catch (e) {
             fallo = e;
           }

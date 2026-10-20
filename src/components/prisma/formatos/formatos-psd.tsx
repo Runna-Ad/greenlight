@@ -18,7 +18,7 @@ import { EDITABLE_MAX_BYTES, EDITABLE_MAX_MS, LEER_MAX_MS, MEDIDAS_MAX, MESAS_MA
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
 import type { NotaCapa } from "@/lib/prisma/formatos/psd-editable";
-import { CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES, rutaLibre, zipPorPartes } from "@/lib/prisma/formatos/zip";
+import { CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES, rutaLibre, zipsEnPartes } from "@/lib/prisma/formatos/zip";
 import { etiquetaPieza, nombreDeGuia, type Rol } from "@/lib/prisma/formatos/roles";
 import { colaVacia, enCola, pintar } from "./pintar";
 import { Franjas, VistaGrande } from "./vista-grande";
@@ -186,13 +186,16 @@ async function aRgba(imagen: Blob, w: number, h: number): Promise<Uint8ClampedAr
 class ErrorDeRuta extends Error {}
 const usd = (v: number, decimales: number) => `US$${v.toFixed(decimales)}`;
 
-function descargar(blob: Blob, nombre: string, soltarEn = SOLTAR_URL_MS) {
+/** Baja un archivo; devuelve su enlace (se suelta solo a los `soltarEn` ms). */
+function descargar(blob: Blob, nombre: string, soltarEn = SOLTAR_URL_MS): string {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = nombre;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), soltarEn);
+  return a.href;
 }
+
 /** Los avisos de lo que se baja (el ZIP y el PSD de cada tarjeta) van abajo a la derecha: arriba taparían el botón del
  *  ZIP de la barra pegajosa, y algunos se quedan hasta cerrarlos. */
 const AVISO_ABAJO = { position: "bottom-right" } as const;
@@ -870,6 +873,10 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const cancelarZip = useRef<(() => void) | null>(null);
   const botonZip = useRef<HTMLButtonElement>(null);
   const botonCancelarZip = useRef<HTMLButtonElement>(null);
+  /** Los enlaces del último ZIP (cientos de MB cada uno): se sueltan al pedir el siguiente, no 2 minutos después. Su
+   *  descarga ya empezó (el navegador la lleva aparte); sin esto, tres ZIP de s33 seguidos dejaban al navegador sin
+   *  espacio a la tercera ("network error", probado 2026-10-20). */
+  const enlacesZip = useRef<string[]>([]);
   /** Qué lleva el ZIP (B22, Pedro: "Both folders, can untick"): los PNG en «Entregables», los PSD en «Editables». */
   const [enZip, setEnZip] = useState({ png: true, psd: true });
   /** Las medidas que se DESMARCARON para el ZIP en este PSD («WxH»): al abrir uno, todas van (una medida nueva también). */
@@ -1659,8 +1666,9 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const bajarZip = async () => {
     if (!leido || zip) return;
     const l = leido, lista = elegidas, { png, psd } = enZip;
-    // Un ZIP nuevo reemplaza el aviso del anterior (no se apilan).
+    // Un ZIP nuevo reemplaza el aviso del anterior (no se apilan) y suelta lo del anterior.
     toast.dismiss(AVISO_ZIP.id);
+    for (const u of enlacesZip.current.splice(0)) URL.revokeObjectURL(u);
     if (!lista.length) return void toast.error(tx(FP.zipNingunaMedida, lang), AVISO_ZIP);
     if (!png && !psd) return void toast.error(tx(FP.zipNadaQueBajar, lang), AVISO_ZIP);
     const { maestros: mas, escritura: esc } = conTextos, tps = tiposEscritos;
@@ -1671,15 +1679,26 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
       matar?.();
     };
     const sigue = () => !cancelado && vivo.current && leidoVigente.current === l;
+    // Si no cabe en un ZIP sale en varios (Pedro: "generate separate zips and named them"): cada uno se baja en cuanto
+    // se llena, como «…_formatos_1.zip», «…_formatos_2.zip»; uno solo se llama «…_formatos.zip».
+    const base = `${limpiarNombre(sinExtension(l.archivo), NOMBRE_ZIP_MAX)}_formatos`;
+    const bajados: string[] = [];
+    // Un ZIP de cientos de MB puede tardar en empezar a guardarse (el diálogo de «Guardar como»): su enlace vive más.
+    const bajar = (zip: Blob, nombre: string) => {
+      enlacesZip.current.push(descargar(zip, nombre, SOLTAR_ZIP_MS));
+      bajados.push(nombre);
+    };
+    // Lo ya bajado (de un ZIP en partes) no se deshace: si se corta después, se dice qué sí llegó.
+    const yaBajados = () => (bajados.length ? ` ${rellenar(tx(FP.zipYaBajados, lang), { z: bajados.join(", ") })}` : "");
     // Cancelado (con el botón o al abrir otro PSD) se dice; si se cerró la pantalla, no hay a quién decírselo.
-    const avisarCancelado = () => void (cancelado && vivo.current && toast.info(tx(FP.zipCancelado, lang), AVISO_ZIP));
+    const avisarCancelado = () => void (cancelado && vivo.current && toast.info(bajados.length ? tx(FP.zipCanceladoAMedias, lang) + yaBajados() : tx(FP.zipCancelado, lang), AVISO_ZIP));
     // Lo que explica por qué NO llegó el ZIP se queda hasta cerrarlo: con doce PSD la persona pudo haberse ido un rato.
-    const fallo = (texto: string) => void (vivo.current && toast.error(texto, { ...AVISO_ZIP, ...FIJO }));
+    const fallo = (texto: string) => void (vivo.current && toast.error(texto + yaBajados(), { ...AVISO_ZIP, ...FIJO }));
     // «Armando ZIP…» mientras van los PNG; «Armando PSD i de n…» desde el primer PSD.
     setZip({ hechos: 0, total: 0 });
     if (psd) anunciar(rellenar(tx(FP.zipPsdEmpieza, lang), { n: lista.length }));
     try {
-      const salida = zipPorPartes(), usadas = new Set<string>();
+      const salida = zipsEnPartes((zip, n) => bajar(zip, `${base}_${n}.zip`)), usadas = new Set<string>();
       if (png) {
         // Las vistas se pintan una por vuelta (al abrir, al voltear, al sumar tipografías): se espera a la última.
         await colaVacia();
@@ -1695,9 +1714,11 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
         for (const [i, f] of lista.entries()) await salida.agregar(rutaLibre(usadas, CARPETA_ENTREGABLES, archivoDe(mas[f.maestro], f.m)), pngs[i]);
       }
       /** Los de capas planas, por motivo; las notas de las capas (las mismas en cada medida, una vez); los que no se
-       *  pudieron armar; los que ya no cupieron (ZIP_MAX_BYTES). */
+       *  pudieron armar; los que no caben ni solos en un ZIP (ZIP_MAX_BYTES). */
       const planos = new Map<string, string[]>(), notas = new Map<string, NotaCapa>(), sinPsd: string[] = [], sinLugar: string[] = [];
       let nPsd = 0;
+      /** Algún PSD ya armado no se dejó leer al meterlo al ZIP: casi siempre, el navegador sin espacio. */
+      let sinEspacio = false;
       if (psd) {
         if (!sigue()) return avisarCancelado();
         setZip((z) => z && { ...z, total: lista.length });
@@ -1727,13 +1748,21 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
             continue;
           }
           if (!r) return avisarCancelado();
-          // Lo que no cabe se salta y se dice; meterlo en el ZIP (no `agregar`) sí lo tira entero si falla.
-          if (!salida.cabe(r.archivo.size)) sinLugar.push(etiqueta(f.m));
+          // Lo que ya no cabe va al ZIP siguiente; sólo lo que no cabe ni solo se salta (y se dice). Si no se deja leer
+          // al meterlo, no entra y el ZIP sigue con los demás.
+          if (!salida.cabeSolo(r.archivo.size)) sinLugar.push(etiqueta(f.m));
           else {
-            await salida.agregar(rutaLibre(usadas, CARPETA_EDITABLES, archivoPsdDe(mas[f.maestro], f.m)), r.archivo);
-            nPsd++;
-            if (r.plano !== null) planos.set(r.plano, [...(planos.get(r.plano) ?? []), etiqueta(f.m)]);
-            for (const x of r.notas) notas.set(JSON.stringify(x), x);
+            try {
+              await salida.agregar(rutaLibre(usadas, CARPETA_EDITABLES, archivoPsdDe(mas[f.maestro], f.m)), r.archivo);
+              nPsd++;
+              if (r.plano !== null) planos.set(r.plano, [...(planos.get(r.plano) ?? []), etiqueta(f.m)]);
+              for (const x of r.notas) notas.set(JSON.stringify(x), x);
+            } catch (err) {
+              if (!sigue()) return avisarCancelado();
+              console.error("[formatos-psd] zip psd al meterlo", err);
+              sinPsd.push(etiqueta(f.m));
+              sinEspacio = true;
+            }
           }
           setZip((z) => z && { ...z, hechos: i + 1 });
         }
@@ -1741,8 +1770,8 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
       if (!sigue()) return avisarCancelado();
       // Sin PNG y sin un solo PSD, el ZIP saldría vacío.
       if (!png && !nPsd) return fallo(rellenar(tx(FP.zipSinPsd, lang), { m: unos([...sinPsd, ...sinLugar]) }));
-      // Un ZIP de cientos de MB puede tardar en empezar a guardarse (el diálogo de «Guardar como»): su enlace vive más.
-      descargar(salida.terminar(), `${limpiarNombre(sinExtension(l.archivo), NOMBRE_ZIP_MAX)}_formatos.zip`, SOLTAR_ZIP_MS);
+      const ultimo = salida.terminar();
+      bajar(ultimo.zip, ultimo.numero > 1 ? `${base}_${ultimo.numero}.zip` : `${base}.zip`);
       const nPlanos = [...planos.values()].reduce((t, ms) => t + ms.length, 0);
       const lasNotas = [...notas.values()];
       const avisos = [
@@ -1750,11 +1779,14 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
         ...(lasNotas.some((x) => x.aplanada) ? [rellenar(tx(FP.zipPsdAplanadas, lang), { capas: capasDe(lasNotas, true, lang) })] : []),
         ...(lasNotas.some((x) => !x.aplanada) ? [rellenar(tx(FP.psdRevisar, lang), { capas: capasDe(lasNotas, false, lang) })] : []),
         ...(sinPsd.length ? [rellenar(tx(FP.zipPsdFalta, lang), { m: unos(sinPsd) })] : []),
+        ...(sinEspacio ? [tx(FP.zipSinEspacio, lang)] : []),
         ...(sinLugar.length ? [rellenar(tx(FP.zipPsdSinLugar, lang), { m: unos(sinLugar), gb: ZIP_MAX_BYTES / 1024 ** 3 })] : []),
       ];
       // Una idea por línea: el resultado arriba, y abajo qué hacer al abrirlo y lo que no quedó como se pidió.
       const titulo = rellenar(tx(png && nPsd ? FP.zipListoAmbos : png ? FP.zipListoPng : FP.zipListoPsd, lang), { n: lista.length, p: nPsd });
-      const lineas = [...(nPsd > nPlanos ? [tx(FP.zipPsdActualizar, lang)] : []), ...avisos];
+      // En partes, se dice primero: el navegador puede preguntar si deja bajar varios archivos.
+      const enPartes = bajados.length > 1 ? [rellenar(tx(FP.zipEnPartes, lang), { k: bajados.length, gb: ZIP_MAX_BYTES / 1024 ** 3, z: bajados.join(", ") })] : [];
+      const lineas = [...enPartes, ...(nPsd > nPlanos ? [tx(FP.zipPsdActualizar, lang)] : []), ...avisos];
       const description = lineas.length ? (
         <div className="space-y-1">
           {lineas.map((x, i) => (
@@ -1765,8 +1797,9 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
       // Lo que no quedó como se pidió se queda hasta cerrarlo (es el único lugar donde se dice). Las notas de capas son
       // las mismas en cada medida y en cada ZIP del archivo: como en las tarjetas, ya vistas no detienen el aviso.
       const nuevas = notasNuevas(l.psdOriginal, lasNotas);
-      if (!avisos.length) toast.success(titulo, { ...AVISO_ZIP, description, duration: 10_000 });
-      else toast.warning(titulo, { ...AVISO_ZIP, description, ...(planos.size || sinPsd.length || sinLugar.length || nuevas ? FIJO : { duration: 10_000 }) });
+      // En varios ZIP también se queda: hay que abrirlos juntos y quizá permitir las descargas en el navegador.
+      const fijo = planos.size || sinPsd.length || sinLugar.length || nuevas || enPartes.length;
+      (avisos.length ? toast.warning : toast.success)(titulo, { ...AVISO_ZIP, description, ...(fijo ? FIJO : { duration: 10_000 }) });
     } catch (err) {
       console.error("[formatos-psd] zip", err);
       fallo(tx(FP.bajarFallo, lang));
