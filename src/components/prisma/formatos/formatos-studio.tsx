@@ -121,6 +121,9 @@ export function FormatosStudio({
   const [aviso, setAviso] = useState("");
   /** Tamaños cuyo PNG/JPG se está bajando ahora (botón ocupado). */
   const [bajando, setBajando] = useState<string | null>(null);
+  /** El «Rehacer»/«Reintentar» que se pulsó y qué decía: su tarjeta conserva el pie mientras espera en la fila (si el
+   *  botón se quita, el foco cae al <body>) y el botón no cambia de nombre hasta que termina. */
+  const [rehaciendo, setRehaciendo] = useState<{ id: string; listo: boolean } | null>(null);
   const vivo = useRef(true);
   const tituloTamanos = useRef<HTMLHeadingElement>(null);
   const tituloResultados = useRef<HTMLHeadingElement>(null);
@@ -399,6 +402,7 @@ export function FormatosStudio({
       toast.error(tx(FX.sinConexion, lang));
     } finally {
       setCorriendo(false);
+      setRehaciendo(null);
     }
   };
 
@@ -970,6 +974,9 @@ export function FormatosStudio({
                       const nombre = `${tx(PLATAFORMA_LABEL[p.plataforma], lang)} ${p.w}×${p.h}`;
                       const ocupado = s.estado === "pendiente" || s.estado === "procesando";
                       const modoRehacer = eleccion[p.id]?.modo ?? s.modo;
+                      const pulsado = ocupado && rehaciendo?.id === p.id ? rehaciendo : null;
+                      const etiquetaRehacer = (pulsado ? pulsado.listo : s.estado === "listo") ? f(tx(FX.rehacerCon, lang), { m: tx(MODO_LABEL[modoRehacer], lang) }) : tx(FX.reintentar, lang);
+                      const rehacerOcupado = corriendo || s.estado === "procesando";
                       return (
                         <li key={p.id} className="flex flex-col rounded-xl border border-border bg-card p-3" aria-busy={ocupado}>
                           <div className="relative flex h-48 items-center justify-center overflow-hidden rounded-lg bg-[repeating-conic-gradient(var(--secondary)_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]">
@@ -1018,7 +1025,7 @@ export function FormatosStudio({
                             )}
                           </div>
                           {/* Los botones al pie, bajo una línea, como en la puerta PSD (B23): PNG y JPG juntos, sin uno suelto. */}
-                          {s.estado !== "pendiente" && (
+                          {(s.estado !== "pendiente" || pulsado) && (
                             <div className="mt-auto pt-2.5">
                               <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2.5">
                                 {s.estado === "listo" && s.pngUrl && s.jpgUrl && (
@@ -1050,17 +1057,23 @@ export function FormatosStudio({
                                     </Button>
                                   </>
                                 )}
-                                {/* Mientras se arma queda a la vista, deshabilitado. */}
+                                {/* Ocupado no se deshabilita: Chrome manda el foco al <body> si se deshabilita el botón que lo tiene
+                                    (medido en Chrome 152). Se anuncia como no disponible y el clic no hace nada. */}
                                 <Button
                                   size="lg"
                                   variant="ghost"
-                                  className={BOTON}
-                                  disabled={corriendo || esDemo || s.estado === "procesando"}
-                                  aria-label={`${s.estado === "listo" ? f(tx(FX.rehacerCon, lang), { m: tx(MODO_LABEL[modoRehacer], lang) }) : tx(FX.reintentar, lang)} · ${nombre}${modoRehacer === "ia" ? ` (${usd(lienzoIA(lote.w, lote.h, p.w, p.h).costoUsd, lang)})` : ""}`}
-                                  onClick={() => void generar([p])}
+                                  className={cn(BOTON, "aria-disabled:cursor-not-allowed aria-disabled:opacity-50")}
+                                  disabled={esDemo}
+                                  aria-disabled={rehacerOcupado || undefined}
+                                  aria-label={`${etiquetaRehacer} · ${nombre}${modoRehacer === "ia" ? ` (${usd(lienzoIA(lote.w, lote.h, p.w, p.h).costoUsd, lang)})` : ""}`}
+                                  onClick={() => {
+                                    if (rehacerOcupado) return;
+                                    setRehaciendo({ id: p.id, listo: s.estado === "listo" });
+                                    void generar([p]);
+                                  }}
                                 >
                                   <RefreshCw className="size-3.5" aria-hidden="true" />
-                                  {s.estado === "listo" ? f(tx(FX.rehacerCon, lang), { m: tx(MODO_LABEL[modoRehacer], lang) }) : tx(FX.reintentar, lang)}
+                                  {etiquetaRehacer}
                                   {modoRehacer === "ia" && <span className="text-muted-foreground">({usd(lienzoIA(lote.w, lote.h, p.w, p.h).costoUsd, lang)})</span>}
                                 </Button>
                               </div>
