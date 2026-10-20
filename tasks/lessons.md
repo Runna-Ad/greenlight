@@ -1254,3 +1254,13 @@ TAGS: #override #formatos #zip #b22 #no-dejar-fuera
 ROOT CAUSE: medí UNA descarga (bien) y supuse que la memoria se soltaba sola; nunca repetí la acción como la repite una persona (bajar, corregir, volver a bajar).
 RULE: toda acción que arma archivos de cientos de MB en el navegador se prueba al menos 3 veces seguidas en la misma página, sin que la prueba guarde copias. Armar el archivo con referencias a los Blobs que ya existen (no copiarlos), y soltar lo de la vez anterior al empezar la siguiente.
 TAGS: #navegador #memoria #blob #zip #formatos #b22 #pruebas
+
+[2026-10-20] LESSON (B23, propuesta de diseño: un número sacado de una prueba de CSS prometió de más): para la opción B le dije a Pedro que la primera tarjeta subía "270 px en una prueba de CSS; lo real devuelve un poco". Construido, subió 162 px (1001 → 839 a 1440×900). La prueba escondía cosas en vez de moverlas (las fichas del archivo con `display:none`, el «Cómo funciona» sin su renglón), dejaba los controles en 32 px cuando el plan los subía a 36, y corrió sin el selector de cliente, que con sesión (como lo usa Pedro) también ocupa la fila del archivo.
+ROOT CAUSE: medí una maqueta más chica que el plan y la reporté como estimado del plan.
+RULE: antes de dar una cifra de una maqueta en vivo, la maqueta lleva los tamaños reales del plan (36 px, lo que se mueve se mueve, no se esconde) y el estado real de uso (con sesión: selector de cliente, chips). Si no se pudo, decir "maqueta sin X, la cifra real será menor" con la razón, no "un poco".
+TAGS: #medir-antes-de-decir #maqueta #estimaciones #formatos #b23
+
+[2026-10-20] LESSON (B23: agrupé avisos por DE DÓNDE vienen, no por QUÉ pide cada uno): para bajar el ámbar hice "aviso común" (gris, fuera del conteo) a todo lo que nace en «En varias medidas»: la pieza repetida Y el «Fondo retocado». La revisión lo vio: después de «Quitar del fondo» las 11 tarjetas retocadas quedaban en gris, el resumen ya no decía «para revisar» y el aviso del ZIP seguía diciendo "Revisa las 11 medidas marcadas «Fondo retocado»". La pieza repetida se arregla UNA vez arriba; el relleno se mira medida por medida.
+ROOT CAUSE: la regla vieja ya juntaba los dos tipos (los dos iban en "línea corta"); copié esa agrupación para el color sin preguntar qué tiene que hacer la persona con cada uno.
+RULE: antes de bajarle el tono a un aviso, contestar por cada tipo: ¿se arregla una vez para todas o hay que mirarlo aquí? Sólo lo primero va en gris. Y probar el flujo que lo cambia (aquí: quitar y deshacer) con clics reales, no sólo el estado inicial.
+TAGS: #formatos #avisos #b23 #revision #ux

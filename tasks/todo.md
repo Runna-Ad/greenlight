@@ -965,6 +965,67 @@ largo: estacionado por él.
         sólo se ve si parar tarda (aquí paró antes de pintarse); cuánta memoria pide un ZIP de 12 PSD: sin medir; Safari,
         Firefox y Windows sin probar; el aviso del «PSD» de cada tarjeta sigue en un solo párrafo (el del ZIP ya va en
         título + líneas); los «Todas»/«Ninguna» miden 28 px de alto (la norma de la app es 36).
+- [x] B23. Pasada de diseño de la puerta PSD (Pedro, 2026-10-20: "what do you propose?" para que sea más bonita y fácil:
+      botones, controles, tarjetas, espacios). Sesión lateral. Propuesta: https://claude.ai/artifact/EiXDS4FkRiB1Zeqxx4VpUT.
+      Pedro eligió **B** ("Build B (tidy and lift the results)"). Construida y en `prisma` (preview).
+      **Next Step:** que Pedro o diseño abra la puerta PSD en el preview de `prisma` y diga qué estorba todavía; aparte, la
+      misma pasada para la puerta de imagen plana (necesita sesión).
+      · Medido hoy (localhost, s33, 12 medidas de DiDi): a 1440×900 la primera tarjeta empieza en 1001 px (bajo el borde
+        de la pantalla); a 1280×960 en 1017. Título 88-232, ajustes 252-657, «En varias medidas» 673-856, barra 872-957.
+        Cinco altos de botón (24, 28, 32, 36, 40 px): 41 botones de tarjeta + «Cambiar PSD» en 32; «Todas», «Ninguna» y
+        las 2 casillas del ZIP en 28; en el editor, flechas de capa 28 y «Quitar en esta medida» 24. Letra de botón 12 px
+        y de pastilla 14. 11 de 12 tarjetas en ámbar («11 para revisar»): la pieza repetida cuenta en cada una. En las 5
+        verticales «PSD» queda solo en un segundo renglón. «Esta proporción todavía no…» (24 palabras) ocupa 5 renglones
+        en tarjetas de 200 px; las verticales miden 688 px. Contraste en caja dentro de la tarjeta. La fila del ZIP mezcla
+        enlaces, casillas y botones (la regla de ajustes.tsx dice que lo que se prende es pastilla). Huérfanas: horizontal
+        4 + 1 a 1440, 3 + 2 a 1280. Editor: ~100 palabras de ayuda gris antes de «Textos»/«Capas»; panel con scroll (990
+        en 875); «Cancelar»/«Guardar» de 32. Prueba de CSS en la página (tirada después): la primera tarjeta sube de 1001
+        a 731 px con título en una banda, chips en la fila del archivo y «En varias medidas» en una línea por punto.
+      · A (sólo ordenar): un alto (36) y una letra (13) para todo; tarjeta con acciones en 2 renglones («Editar» arriba,
+        PNG|PSD juntos abajo), el aviso común en gris con salto al arreglo, texto largo en 2 renglones con «Ver más»,
+        contraste sin caja; fila del ZIP con Todas/Ninguna junto al conteo y carpetas como pastillas. Nada se mueve.
+      · B (recomendada): A + arriba más corto (título en una banda, chips junto al archivo, «Agregar medida» al final
+        de Banner, «En varias medidas» en una línea con «¿Por qué?»); editor con «Capas»/«Textos» primero.
+      · C (mesa de revisión): B + tarjetas tipo mosaico con los detalles a un clic, vista grande con ← → y botones, ZIP
+        con menú. Más corta, pero esconde notas, contraste y carpetas; cambia el flujo justo cuando diseño prueba B22.
+      · No hacer nada: funciona y diseño está por probar B22; pierde porque los 5 altos y el ámbar en 11 tarjetas se
+        ven cada vez.
+      · No revisado: modo oscuro, tarjeta mientras espera su pintada, la puerta de imagen plana (necesita sesión).
+      · **Review (2026-10-20, B construida: 1000ff8 · e158800 · 1977df3 · 0fb1609 · 977ae7a + d105f3a de la revisión):**
+        - Un alto (36 px) y una letra (13 px) para los botones de la página, el editor y la vista grande (`BOTON`,
+          `BOTON_TARJETA`, `PASTILLA`). Medido en el DOM: todos 36/13 salvo «Todas»/«Ninguna» (34, dentro del grupo con
+          borde) y el «Cerrar» que flota sobre la vista del editor (24, a propósito: uno de 36 tapaba piezas de un banner).
+          Los enlaces dentro de una frase («Ver más», «Cómo funciona») van con la letra de su frase (12).
+        - Tarjetas: acciones al pie (angosta: «Editar» arriba y PNG|PSD juntos abajo; banner: una fila). La pieza repetida
+          ya no pinta ámbar: gris «Aviso común» con un botón que sube a «En varias medidas». Resumen con s33: "12 medidas ·
+          6 para revisar · 11 con un aviso común" (antes "11 para revisar"). Tras «Quitar del fondo»: "11 para revisar",
+          las 11 retocadas en ámbar (clic real, y «Deshacer» lo regresa). Aviso largo en 2 renglones con «Ver más».
+          Contraste sin caja.
+        - Arriba: título en una banda; fichas en la fila del archivo; «Agregar medida» al final de Banner; «En varias
+          medidas» con una frase por pieza y «Cómo funciona» que se abre; junto al botón de la IA, a la vista, qué se le
+          manda a Google. Fila del ZIP: conteo + Todas + Ninguna juntos; carpetas como pastillas.
+        - Editor: «Capas»/«Textos» primero; la ayuda en «Cómo se usa: mouse y teclado». Panel: 990 px de contenido en 875
+          → 746 en 691.
+        - Medido (s33, 12 medidas, localhost, sin sesión): 1440×900 primera tarjeta 1001 → 839 px; 1280×960 1017 → 883;
+          verticales 688 → 669; barra pegajosa 93 px a los dos anchos (192 de `scroll-mt-48` alcanzan). Sin scroll de
+          lado. Ningún botón de contraste se sale de su tarjeta (todas las filas abiertas, 221 y 239 px). La propuesta
+          prometía 731: la maqueta era más chica que el plan (lección del día).
+        - Revisión (5 pasadas). Seguridad: nada. Arreglado: «Fondo retocado» había quedado como aviso común (lección);
+          anillo de foco cortado en «Todas»/«Ninguna» y en «Cómo se usa»; «Ver más» aparecía un cuadro tarde y no decía de
+          qué aviso era; «Cómo funciona» sin nombre de la pieza y abierto con otro PSD; la ayuda del editor dentro de un
+          <details> cerrado como descripción (ahora copia `hidden`); la nota de Google escondida; grupo PNG|PSD con nombre
+          repetido; carpetas del ZIP sin `lang="es"` en inglés; «Volver a la lista» hacía brincar la fila; EN "fixed
+          above" → "fix it above"; `lang` del botón de idioma en la puerta plana.
+        - No arreglado (anotado): el mismo tamaño escrito en 3 archivos (verificado: 50, sólo mantenimiento); íconos de 14
+          en tarjetas y 16 en la barra; «Voltear» desaparece en una tarjeta editada y la razón sólo la oye el lector (ya
+          era así); «Volver a los textos del PSD» de 16 px en la barra (ya era así); el «Cerrar» del editor en español con
+          la pantalla en inglés (ya era así); `backdrop-blur` de la barra (ya era así); huérfanas 4 + 1 a 1440 y 3 + 2 a
+          1280 (ningún `minmax` arregla los dos anchos); a 1440 las fichas bajan a un 2º renglón en la fila del archivo.
+        - No revisado: la línea de Google junto a la IA (el botón de la IA no sale en este localhost); la barra con la
+          línea de textos cambiados o con zoom; lectores de pantalla reales (VoiceOver/NVDA); la puerta de imagen plana en
+          el navegador (sólo cambió su encabezado; sus 14 botones siguen en 28 px / 12 px); Safari y Firefox.
+        - Pruebas (sobre d105f3a): test-formatos 469/0 · npm test todas las suites con 0 fallas (prisma 975, formatos 469,
+          481, 574, 81, 44) · tsc 0 · eslint 0 · `npm run build` exit 0.
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
 - iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los
   pendientes de iPad de B19 (caché de 4 fondos, táctil real, zoom de Safari) quedan fuera.
