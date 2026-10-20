@@ -1060,6 +1060,11 @@ pegado duro es una copia de bytes sobre el RGBA crudo, no un modo de mezcla.
 - [ ] ZIP en streaming (hoy todo en memoria; ~20 tamaños × 2 archivos aguanta) y miniaturas WebP chicas en la cuadrícula.
 - [ ] Revisar (sólo lectura) que ninguna policy de `storage.objects` del proyecto compartido exponga `greenlight-formatos`.
 - [ ] Avisos previos de npm audit: next 16.3.2 (crítico) y nodemailer (alto) — tarea aparte ya sugerida.
+      · 2026-10-20 (Pedro: "do the fix"): next 16.3.8 listo en `chore/next-security-patch` (08fa0da, UN commit sobre
+        main f78f651: next + eslint-config-next 16.3.2 → 16.3.8 y el lock). Probado en esa carpeta: npm test todo en 0
+        fallas, build con "Next.js 16.3.8" exit 0, `npm audit` ya no marca next. FALTA el "ship it" de Pedro: subirlo a
+        main despliega la app real. `prisma` sigue en 16.3.2 (su preview también); siguen marcados nodemailer (alto),
+        sharp (alto), source-map-js (alto) y sprintf-js (moderado).
 
 ### Para la prueba real — necesita "ship it" de Pedro (en este orden)
 1. `~/.claude/hooks/claim.sh` del esquema → `node scripts/migrate.mjs` (aplica 0078) → soltar el claim.
