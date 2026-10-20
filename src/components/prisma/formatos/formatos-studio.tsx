@@ -960,7 +960,9 @@ export function FormatosStudio({
                 <p id="formatos-zip-ayuda" className="mb-2 text-xs text-muted-foreground">
                   {tx(FX.zipAyuda, lang)}
                 </p>
-                <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {/* Columnas por ancho de tarjeta, como la puerta PSD: con botones de 36 px «Rehacer · IA (0.07 USD)» mide ~190 y
+                    se salía de la tarjeta de 208 px que dejaban 3 columnas a 1280. */}
+                <ul className="grid grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] gap-3">
                   {todos
                     .filter((p) => salidas[p.id])
                     .map((p) => {
@@ -1015,40 +1017,55 @@ export function FormatosStudio({
                               </p>
                             )}
                           </div>
-                          <div className="mt-auto flex flex-wrap gap-2 pt-2">
-                            {s.estado === "listo" && s.pngUrl && s.jpgUrl && (
-                              <>
-                                {(["png", "jpg"] as const).map((ext) => {
-                                  const esta = bajando === `${p.id}.${ext}`;
-                                  const etiqueta = tx(ext === "png" ? FX.bajarPng : FX.bajarJpg, lang);
-                                  return (
-                                    <Button key={ext} size="sm" variant="outline" disabled={esDemo || !!bajando} aria-busy={esta} aria-label={`${etiqueta} · ${nombre}`} onClick={() => void bajar(p, ext)}>
-                                      {esta ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />} {etiqueta}
+                          {/* Los botones al pie, bajo una línea, como en la puerta PSD (B23): PNG y JPG juntos, sin uno suelto. */}
+                          {s.estado !== "pendiente" && (
+                            <div className="mt-auto pt-2.5">
+                              <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2.5">
+                                {s.estado === "listo" && s.pngUrl && s.jpgUrl && (
+                                  <>
+                                    <div className="flex">
+                                      {(["png", "jpg"] as const).map((ext, i) => {
+                                        const esta = bajando === `${p.id}.${ext}`;
+                                        const etiqueta = tx(ext === "png" ? FX.bajarPng : FX.bajarJpg, lang);
+                                        return (
+                                          <Button
+                                            key={ext}
+                                            size="lg"
+                                            variant="outline"
+                                            className={cn(BOTON, "relative focus-visible:z-10", i === 0 ? "rounded-r-none" : "-ml-px rounded-l-none")}
+                                            disabled={esDemo || !!bajando}
+                                            aria-busy={esta}
+                                            aria-label={`${etiqueta} · ${nombre}`}
+                                            onClick={() => void bajar(p, ext)}
+                                          >
+                                            {esta ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Download className="size-3.5" aria-hidden="true" />} {etiqueta}
+                                          </Button>
+                                        );
+                                      })}
+                                    </div>
+                                    <Button size="lg" variant="ghost" className={BOTON} asChild>
+                                      <a href={s.pngUrl} target="_blank" rel="noopener noreferrer" aria-label={`${tx(FX.verGrande, lang)} · ${nombre}`}>
+                                        <ExternalLink className="size-3.5" aria-hidden="true" /> {tx(FX.verGrande, lang)}
+                                      </a>
                                     </Button>
-                                  );
-                                })}
-                                <Button size="sm" variant="ghost" asChild>
-                                  <a href={s.pngUrl} target="_blank" rel="noopener noreferrer" aria-label={`${tx(FX.verGrande, lang)} · ${nombre}`}>
-                                    <ExternalLink className="size-4" aria-hidden="true" /> {tx(FX.verGrande, lang)}
-                                  </a>
+                                  </>
+                                )}
+                                {/* Mientras se arma queda a la vista, deshabilitado. */}
+                                <Button
+                                  size="lg"
+                                  variant="ghost"
+                                  className={BOTON}
+                                  disabled={corriendo || esDemo || s.estado === "procesando"}
+                                  aria-label={`${s.estado === "listo" ? f(tx(FX.rehacerCon, lang), { m: tx(MODO_LABEL[modoRehacer], lang) }) : tx(FX.reintentar, lang)} · ${nombre}${modoRehacer === "ia" ? ` (${usd(lienzoIA(lote.w, lote.h, p.w, p.h).costoUsd, lang)})` : ""}`}
+                                  onClick={() => void generar([p])}
+                                >
+                                  <RefreshCw className="size-3.5" aria-hidden="true" />
+                                  {s.estado === "listo" ? f(tx(FX.rehacerCon, lang), { m: tx(MODO_LABEL[modoRehacer], lang) }) : tx(FX.reintentar, lang)}
+                                  {modoRehacer === "ia" && <span className="text-muted-foreground">({usd(lienzoIA(lote.w, lote.h, p.w, p.h).costoUsd, lang)})</span>}
                                 </Button>
-                              </>
-                            )}
-                            {/* Siempre montado (deshabilitado mientras corre): el foco no se pierde al rehacer. */}
-                            {s.estado !== "pendiente" && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={corriendo || esDemo || s.estado === "procesando"}
-                                aria-label={`${s.estado === "listo" ? f(tx(FX.rehacerCon, lang), { m: tx(MODO_LABEL[modoRehacer], lang) }) : tx(FX.reintentar, lang)} · ${nombre}${modoRehacer === "ia" ? ` (${usd(lienzoIA(lote.w, lote.h, p.w, p.h).costoUsd, lang)})` : ""}`}
-                                onClick={() => void generar([p])}
-                              >
-                                <RefreshCw className="size-4" aria-hidden="true" />
-                                {s.estado === "listo" ? f(tx(FX.rehacerCon, lang), { m: tx(MODO_LABEL[modoRehacer], lang) }) : tx(FX.reintentar, lang)}
-                                {modoRehacer === "ia" && <span className="text-muted-foreground">({usd(lienzoIA(lote.w, lote.h, p.w, p.h).costoUsd, lang)})</span>}
-                              </Button>
-                            )}
-                          </div>
+                              </div>
+                            </div>
+                          )}
                         </li>
                       );
                     })}
