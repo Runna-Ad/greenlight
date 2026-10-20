@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, ChevronDown, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Languages, Layers, Loader2, Lock, Maximize2, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, ChevronDown, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Languages, Layers, Loader2, Lock, Maximize2, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
@@ -27,7 +27,7 @@ import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
 import { EditorMedida, edicionGuardada, guardarEdicion, guardarTextos, textosGuardados } from "./editor-medida";
 import { cambiarTextos, marcarSinEscribir, NO_SE_ESCRIBIO, type CambiosTexto, type Listo } from "@/lib/prisma/formatos/cambios-texto";
 import { porQueNoSeCambia } from "@/lib/prisma/formatos/textos";
-import { COLUMNAS, ChipEstado, FOCO, FORMAS, NOMBRE_FORMA, PastillasCanal, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
+import { APAGADA, COLUMNAS, ChipEstado, FOCO, FORMAS, NOMBRE_FORMA, PRENDIDA, PastillasCanal, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD. El anuncio llega en Photoshop: un Web Worker lo lee y lo separa en fondo
@@ -105,13 +105,18 @@ const NOMBRE_ZIP_MAX = 80;
 const SOLTAR_URL_MS = 10_000;
 /** El ZIP (cientos de MB) puede tardar en empezar a guardarse: su enlace se suelta más tarde. */
 const SOLTAR_ZIP_MS = 120_000;
-/** Escritorio e iPad: 36 px con mouse, 44 px con dedo. */
-const BOTON = "min-h-9 pointer-coarse:min-h-11";
+/** Un solo tamaño de botón en la página (pasada de diseño B23): 36 px de alto y letra de 13 px; 44 px con dedo. */
+const BOTON = "min-h-9 text-[13px] pointer-coarse:min-h-11";
 /** Al llegar con Tab, lo de las tarjetas no queda debajo de la barra pegajosa de resultados (y la de la app): 64 px de
- *  la app + 85 de la barra con lo del ZIP (medido, 2026-10-20), y margen para la línea de textos cambiados. */
+ *  la app + 93 de la barra con lo del ZIP (medido con controles de 36 px, 2026-10-20), y margen para la línea de textos
+ *  cambiados. */
 const BAJO_BARRA = "scroll-mt-48";
-/** Los botones de cada tarjeta, más bajos (van cuatro en una tarjeta angosta). */
-const BOTON_TARJETA = cn("h-8 px-2 text-xs pointer-coarse:h-11", BAJO_BARRA);
+/** Los botones de cada tarjeta: el mismo alto que los demás (antes 32 px), un poco menos de relleno a los lados. */
+const BOTON_TARJETA = cn("h-9 px-2.5 text-[13px] pointer-coarse:h-11", BAJO_BARRA);
+/** Un botón dentro de un grupo con borde («Todas» / «Ninguna» junto al conteo del ZIP). */
+const SEGMENTO = cn("cursor-pointer border-l border-border px-2.5 font-medium hover:bg-secondary focus-visible:relative focus-visible:z-10", FOCO);
+/** Una carpeta del ZIP como pastilla: la casilla va escondida adentro y el anillo de foco lo pinta la pastilla. */
+const PASTILLA_ZIP = "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-1 pointer-coarse:h-11";
 /**
  * De qué acomodo automático es una edición: el lado del HERO y la zona del canal mueven las piezas, así que entran en
  * la clave. El contraste no: sus arreglos dejan las piezas donde están (la sombra se pinta detrás, «Mover fondo» mueve
@@ -492,7 +497,7 @@ function ContrasteMedida({ info, ma, medida, editada, lang, alElegir }: { info: 
       : rellenar(tx(FP.contrasteLinea, lang), { o: tx(NOMBRE_ARREGLO[info.usado], lang).toLowerCase(), a: antes, b: porciento(ahora ?? 0) });
   return (
     <details className="group mt-2 rounded-md border border-border">
-      <summary className={cn("flex min-h-8 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground hover:bg-secondary/60 pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden", FOCO, BAJO_BARRA)}>
+      <summary className={cn("flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground hover:bg-secondary/60 pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden", FOCO, BAJO_BARRA)}>
         <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
         <span className="min-w-0">
           {linea}
@@ -513,7 +518,7 @@ function ContrasteMedida({ info, ma, medida, editada, lang, alElegir }: { info: 
                 aria-pressed={elegido}
                 disabled={L === null}
                 onClick={() => alElegir(medida, a === info.auto ? "auto" : a)}
-                className={cn("min-h-9 pointer-coarse:min-h-11", BAJO_BARRA, elegido && "font-semibold")}
+                className={cn(BOTON, BAJO_BARRA, elegido && "font-semibold")}
               >
                 {elegido && <CircleCheck className="size-3.5" aria-hidden="true" />}
                 {tx(NOMBRE_ARREGLO[a], lang)}
@@ -1836,7 +1841,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
           aria-describedby="psd-cliente-ayuda"
           title={conAyuda ? undefined : tx(FP.clienteAyuda, lang)}
           className={cn(
-            "h-9 cursor-pointer rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:h-11 pointer-coarse:text-base",
+            "h-9 cursor-pointer rounded-md border border-input bg-background px-2 text-[13px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:h-11 pointer-coarse:text-base",
             conAyuda ? "mt-1 block w-full max-w-xs" : "min-w-36",
           )}
         >
@@ -2409,22 +2414,26 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                 </div>
                 {/* Qué lleva el ZIP: cuántas medidas marcadas (en cada tarjeta) y qué carpetas. */}
                 {filas.length > 0 && (
-                  <div role="group" aria-label={tx(FP.zipQueLleva, lang)} className="flex flex-wrap items-center justify-end gap-x-3 text-sm text-foreground">
-                    <span className="tabular-nums">{rellenar(tx(FP.zipElegidasN, lang), { n: elegidas.length, t: filas.length })}</span>
-                    <Button variant="link" size="sm" className="h-7 px-1 text-sm" onClick={() => elegirTodas(true)} aria-label={tx(FP.zipTodasAria, lang)}>
-                      {tx(FP.zipTodas, lang)}
-                    </Button>
-                    <Button variant="link" size="sm" className="-ml-2 h-7 px-1 text-sm" onClick={() => elegirTodas(false)} aria-label={tx(FP.zipNingunaAria, lang)}>
-                      {tx(FP.zipNinguna, lang)}
-                    </Button>
-                    <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
-                      <input type="checkbox" checked={enZip.png} onChange={(e) => setEnZip((z) => ({ ...z, png: e.target.checked }))} className={cn("size-4 shrink-0 cursor-pointer accent-primary", FOCO)} />
-                      {tx(FP.zipEntregables, lang)}
-                    </label>
-                    <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
-                      <input type="checkbox" checked={enZip.psd} onChange={(e) => setEnZip((z) => ({ ...z, psd: e.target.checked }))} className={cn("size-4 shrink-0 cursor-pointer accent-primary", FOCO)} />
-                      {tx(FP.zipEditables, lang)}
-                    </label>
+                  // Todo de 36 px (B23): el conteo con «Todas» y «Ninguna» en un solo grupo, y las dos carpetas como
+                  // pastillas, como el resto de lo que se prende y se apaga (por dentro siguen siendo casillas).
+                  <div role="group" aria-label={tx(FP.zipQueLleva, lang)} className="flex flex-wrap items-center justify-end gap-1.5 text-[13px] text-foreground">
+                    <span className="inline-flex h-9 items-stretch overflow-hidden rounded-md border border-border bg-card pointer-coarse:h-11">
+                      <span className="flex items-center px-2.5 text-muted-foreground tabular-nums">{rellenar(tx(FP.zipElegidasN, lang), { n: elegidas.length, t: filas.length })}</span>
+                      <button type="button" className={SEGMENTO} onClick={() => elegirTodas(true)} aria-label={tx(FP.zipTodasAria, lang)}>
+                        {tx(FP.zipTodas, lang)}
+                      </button>
+                      <button type="button" className={SEGMENTO} onClick={() => elegirTodas(false)} aria-label={tx(FP.zipNingunaAria, lang)}>
+                        {tx(FP.zipNinguna, lang)}
+                      </button>
+                    </span>
+                    {([["png", FP.zipEntregables], ["psd", FP.zipEditables]] as const).map(([k, texto]) => (
+                      <label key={k} className={cn(PASTILLA_ZIP, enZip[k] ? cn(PRENDIDA, "hover:bg-primary/15") : cn(APAGADA, "hover:border-primary/40 hover:text-foreground"))}>
+                        <input type="checkbox" checked={enZip[k]} onChange={(e) => setEnZip((z) => ({ ...z, [k]: e.target.checked }))} className="sr-only" />
+                        {/* El lugar de la palomita se guarda: prender o apagar no mueve lo de al lado. */}
+                        <Check className={cn("size-3.5 shrink-0", !enZip[k] && "invisible")} aria-hidden="true" />
+                        {tx(texto, lang)}
+                      </label>
+                    ))}
                   </div>
                 )}
               </div>

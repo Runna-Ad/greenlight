@@ -71,8 +71,8 @@ const PASO = 1, PASO_LARGO = 10, CRECE = 1.02;
 const UMBRAL_PX = 3;
 /** Debajo de esto (px de pantalla) la pieza es chica y sus esquinas se achican, para que quede de dónde arrastrarla. */
 const PIEZA_CHICA_PX = 48;
-/** En iPad (dedo) los botones del pie miden 44 px; con ratón, los de siempre. */
-const DEDO = "pointer-coarse:h-11";
+/** Un solo tamaño de botón, como en la página (pasada de diseño B23): 36 px y letra de 13 px; 44 px con dedo. */
+const BOTON = "h-9 text-[13px] pointer-coarse:h-11";
 /** Espera tras el último cambio para leerlo en voz alta (un arrastre no dicta cada píxel). */
 const ANUNCIO_MS = 500;
 /** Espera tras la última letra para volver a escribir la vista (canvas, píxeles y el acomodo): teclear no se traba. */
@@ -691,7 +691,7 @@ export function EditorMedida({
       {/* Al volver, el foco pasa a la pieza: este botón se esconde y el teclado no se pierde. */}
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="icon-lg"
         className={cn(!cambio && "invisible")}
         disabled={!cambio}
         onClick={() => {
@@ -713,7 +713,7 @@ export function EditorMedida({
       </Button>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="icon-lg"
         data-capa={j === null ? `${i}` : `${i}.${j}`}
         data-mover="subir"
         disabled={arriba}
@@ -725,7 +725,7 @@ export function EditorMedida({
       </Button>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="icon-lg"
         data-capa={j === null ? `${i}` : `${i}.${j}`}
         data-mover="bajar"
         disabled={abajo}
@@ -744,7 +744,8 @@ export function EditorMedida({
         // Casi toda la pantalla, para que quepa la medida grande: alto fijo y cada parte en su renglón (la vista se
         // lleva lo que sobra). `lang`: el diálogo sale fuera de la página y no hereda el idioma.
         lang={lang}
-        className={cn(DIALOGO_GRANDE, "grid-rows-[auto_minmax(0,1fr)_auto]")}
+        // La X de cerrar, del mismo alto que los demás botones (36 px).
+        className={cn(DIALOGO_GRANDE, "grid-rows-[auto_minmax(0,1fr)_auto] [&>[data-slot=dialog-close]]:size-9")}
         // Esc suelta primero un arrastre a medias, luego cierra la pieza abierta; con cambios sin guardar, ni Esc ni un
         // clic afuera cierran (Cancelar y la X sí: son a propósito).
         onEscapeKeyDown={(ev) => {
@@ -776,7 +777,7 @@ export function EditorMedida({
         </DialogHeader>
         {/* Medida alta o cuadrada: el panel a la derecha (desde lg). Tira, o pantalla angosta: el panel abajo, más bajo y
             en columnas, y la vista con todo el ancho. */}
-        <div className={cn("grid min-h-0 gap-4 grid-rows-[minmax(0,1fr)_auto]", !tira && "lg:grid-cols-[minmax(0,1fr)_18rem] lg:grid-rows-1")}>
+        <div className={cn("grid min-h-0 gap-4 grid-rows-[minmax(0,1fr)_auto]", !tira && "lg:grid-cols-[minmax(0,1fr)_20rem] lg:grid-rows-1")}>
           <div
             ref={marco}
             className="relative flex min-h-0 min-w-0 items-center justify-center overflow-hidden rounded-lg bg-secondary/60 p-2"
@@ -797,7 +798,7 @@ export function EditorMedida({
                 onPointerDown={(ev) => ev.stopPropagation()}
               >
                 <span className="truncate">{rellenar(tx(FP.editorAbierta, lang), { p: nombrePieza(abierta) })}</span>
-                <Button variant="outline" size="xs" onClick={() => cerrar()}>
+                <Button variant="outline" size="xs" className={BOTON} onClick={() => cerrar()}>
                   {tx(FP.editorCerrar, lang)}
                 </Button>
               </div>
@@ -844,7 +845,7 @@ export function EditorMedida({
               <p className={cn("text-foreground", abierta !== null ? "min-h-[5rem]" : "min-h-[3.75rem]")}>{estado}</p>
               {/* El doble clic no se adivina: elegida una pieza con partes, el botón lo dice. */}
               {sel !== null && abierta === null && tienePartes(sel) && (
-                <Button variant="outline" size="sm" className="self-start" onClick={() => abrir(sel)}>
+                <Button variant="outline" size="sm" className={cn(BOTON, "self-start")} onClick={() => abrir(sel)}>
                   <FolderOpen className="size-3.5" aria-hidden="true" /> {tx(FP.editorAbrir, lang)}
                 </Button>
               )}
@@ -901,7 +902,7 @@ export function EditorMedida({
                           <Button
                             variant="outline"
                             size="xs"
-                            className={cn(DEDO, "aria-disabled:opacity-50")}
+                            className={cn(BOTON, "aria-disabled:opacity-50")}
                             aria-disabled={(!quitado && !puede) || undefined}
                             aria-label={`${tx(quitado ? FP.editorTextoPoner : FP.editorTextoQuitar, lang)}: ${nombre}`}
                             aria-describedby={`${id}-nota`}
@@ -917,7 +918,7 @@ export function EditorMedida({
                             <Button
                               variant="ghost"
                               size="xs"
-                              className={DEDO}
+                              className={BOTON}
                               aria-label={`${tx(FP.editorTextoOriginal, lang)}: ${nombre}`}
                               onClick={() => {
                                 // Este botón se va al volver al original: el foco pasa a su cuadro de texto.
@@ -983,7 +984,7 @@ export function EditorMedida({
                         {conP && (
                           <Button
                             variant="ghost"
-                            size="icon-sm"
+                            size="icon-lg"
                             data-carpeta={q.pieza}
                             aria-expanded={abiertaAqui}
                             aria-controls={abiertaAqui ? `editor-partes-${q.pieza}` : undefined}
@@ -1063,7 +1064,7 @@ export function EditorMedida({
         <DialogFooter className="-mx-4 -mb-4 gap-2 border-t border-border bg-popover px-4 py-3 sm:items-center sm:justify-between">
           <Button
             variant="ghost"
-            className={DEDO}
+            className={BOTON}
             disabled={!hayCambios}
             onClick={() => {
               setPos({});
@@ -1083,10 +1084,10 @@ export function EditorMedida({
             <span role="status" className={cn("text-xs", escNegado ? "font-medium text-foreground" : "text-muted-foreground")}>
               {sinGuardar ? tx(escNegado ? FP.editorSinGuardarEsc : FP.editorSinGuardar, lang) : ""}
             </span>
-            <Button variant="outline" className={DEDO} onClick={alCerrar}>
+            <Button variant="outline" className={BOTON} onClick={alCerrar}>
               {tx(FP.editorCancelar, lang)}
             </Button>
-            <Button className={DEDO} data-editor-guardar onClick={guardar}>
+            <Button className={BOTON} data-editor-guardar onClick={guardar}>
               {tx(FP.editorGuardar, lang)}
             </Button>
           </div>

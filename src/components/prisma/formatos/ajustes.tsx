@@ -16,8 +16,9 @@ import { MEDIDAS_MAX } from "@/lib/prisma/formatos/listo";
  * pinta y se avisa: el estado vive en formatos-psd.tsx.
  *
  * Forma de cada cosa (una regla para toda la página): lo que se prende y se apaga es pastilla redonda; lo que abre un
- * detalle (chips de estado) y los botones son de esquina chica; las tarjetas, de esquina grande. Es para escritorio y
- * iPad (Pedro: "no smaller"): con dedo (`pointer-coarse`) todo lo que se toca mide 44 px.
+ * detalle (chips de estado) y los botones son de esquina chica; las tarjetas, de esquina grande. Todo lo que se toca mide
+ * 36 px de alto con letra de 13 px (pasada de diseño B23: antes convivían 24, 28, 32 y 36 px, y letra de 12 y 14).
+ * Escritorio primero (Pedro, 2026-10-19); con dedo (`pointer-coarse`) mide 44 px.
  */
 
 export type Medida = { w: number; h: number };
@@ -39,11 +40,11 @@ export const COLUMNAS: Record<Forma, string> = {
 };
 
 export const FOCO = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
-const PASTILLA = cn("inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-sm font-medium tabular-nums transition-colors pointer-coarse:h-11", FOCO);
+const PASTILLA = cn("inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium tabular-nums transition-colors pointer-coarse:h-11", FOCO);
 /** Prendida: tinte de la marca y borde, más la palomita (el color no es la única señal). Mismo peso de letra prendida
  *  y apagada: si cambiara, la pastilla crecería y las de al lado brincarían al hacer clic. */
-const PRENDIDA = "border-primary/50 bg-primary/10 text-foreground";
-const APAGADA = "border-border bg-card text-muted-foreground";
+export const PRENDIDA = "border-primary/50 bg-primary/10 text-foreground";
+export const APAGADA = "border-border bg-card text-muted-foreground";
 
 function PastillaMedida({ m, on, lang, alAlternar, alQuitar }: { m: MedidaLista; on: boolean; lang: Lang; alAlternar: (k: string) => void; alQuitar: (k: string) => void }) {
   const k = clave(m);
@@ -64,7 +65,7 @@ function PastillaMedida({ m, on, lang, alAlternar, alQuitar }: { m: MedidaLista;
   // Una agregada a mano: borde punteado (no es de la lista de DiDi) y su «×» para borrarla (dos botones, cada uno con
   // su nombre; con dedo la «×» crece a 44 px de ancho).
   return (
-    <span className={cn("inline-flex h-8 items-center rounded-full border border-dashed text-sm font-medium transition-colors pointer-coarse:h-11", on ? PRENDIDA : APAGADA)}>
+    <span className={cn("inline-flex h-9 items-center rounded-full border border-dashed text-[13px] font-medium transition-colors pointer-coarse:h-11", on ? PRENDIDA : APAGADA)}>
       <button type="button" aria-pressed={on} onClick={() => alAlternar(k)} className={cn("inline-flex h-full cursor-pointer items-center gap-1.5 rounded-l-full pr-1 pl-3 tabular-nums hover:text-foreground", FOCO)}>
         {contenido}
       </button>
@@ -156,10 +157,10 @@ function AgregarMedida({ lang, alAgregar, ref }: { lang: Lang; alAgregar: (texto
             </p>
           )}
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <Button type="submit" size="sm" className="pointer-coarse:h-11">
+            <Button type="submit" size="lg" className="text-[13px] pointer-coarse:h-11">
               {tx(FP.agregarBoton, lang)}
             </Button>
-            <Button type="button" variant="outline" size="sm" className="pointer-coarse:h-11" onClick={() => usar(true)}>
+            <Button type="button" variant="outline" size="lg" className="text-[13px] pointer-coarse:h-11" onClick={() => usar(true)}>
               {tx(FP.agregarSoloEstas, lang)}
             </Button>
           </div>
@@ -218,7 +219,7 @@ export function PastillasMedidas({
           {propias ? rellenar(tx(FP.medidasMas, lang), { n: propias }) : ""}, {rellenar(tx(FP.medidasPrendidas, lang), { n: prendidas, t: lista.length })}. {tx(FP.medidasAyuda, lang)}
         </p>
         {cambiada && (
-          <button type="button" onClick={restablecer} className={cn("inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-md text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground pointer-coarse:min-h-11", FOCO)}>
+          <button type="button" onClick={restablecer} className={cn("inline-flex min-h-9 cursor-pointer items-center gap-1 rounded-md text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground pointer-coarse:min-h-11", FOCO)}>
             <RotateCcw className="size-3" aria-hidden="true" /> {tx(FP.medidasRestablecer, lang)}
           </button>
         )}
@@ -229,8 +230,8 @@ export function PastillasMedidas({
           if (!grupo.length) return null;
           return (
             <Fragment key={f}>
-              {/* El rótulo se alinea con el centro del primer renglón de pastillas (32 px, o 44 con dedo). */}
-              <span id={`${id}-${f}`} className="text-xs text-muted-foreground sm:pt-2 pointer-coarse:sm:pt-3.5">
+              {/* El rótulo se alinea con el centro del primer renglón de pastillas (36 px, o 44 con dedo). */}
+              <span id={`${id}-${f}`} className="text-xs text-muted-foreground sm:pt-2.5 pointer-coarse:sm:pt-3.5">
                 {tx(NOMBRE_FORMA[f], lang)}
               </span>
               <div role="group" aria-labelledby={`${id}-titulo ${id}-${f}`} className="flex flex-wrap gap-1.5">
@@ -313,7 +314,7 @@ export function ChipEstado({ tono, icono, titulo, lang, children, detalle }: { t
         <button
           type="button"
           className={cn(
-            "group inline-flex min-h-8 max-w-full cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-left text-sm text-foreground transition-colors hover:border-primary/50 data-[state=open]:border-primary/60 pointer-coarse:min-h-11",
+            "group inline-flex min-h-9 max-w-full cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-left text-[13px] text-foreground transition-colors hover:border-primary/50 data-[state=open]:border-primary/60 pointer-coarse:min-h-11",
             FOCO,
             TONO[tono],
           )}

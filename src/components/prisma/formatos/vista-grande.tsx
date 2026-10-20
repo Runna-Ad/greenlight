@@ -150,14 +150,14 @@ function Contenido({ fuente, version, w, h, nombre, lang, children }: Props) {
               size="sm"
               aria-pressed={modo === m}
               onClick={() => setModo(m)}
-              className={cn("min-h-9 tabular-nums pointer-coarse:min-h-11", modo === m && "font-semibold")}
+              className={cn("min-h-9 text-[13px] tabular-nums pointer-coarse:min-h-11", modo === m && "font-semibold")}
             >
               {modo === m && <CircleCheck className="size-3.5" aria-hidden="true" />}
               {texto}
             </Button>
           ))}
           <DialogClose asChild>
-            <Button variant="outline" size="sm" className="ml-auto min-h-9 pointer-coarse:min-h-11">
+            <Button variant="outline" size="sm" className="ml-auto min-h-9 text-[13px] pointer-coarse:min-h-11">
               <X className="size-3.5" aria-hidden="true" /> {tx(FP.vistaCerrar, lang)}
             </Button>
           </DialogClose>
