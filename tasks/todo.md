@@ -1047,9 +1047,17 @@ largo: estacionado por él.
         - No revisado: con sesión, la lista de tamaños y las tarjetas (subir un anuncio necesita la 0078, que no está en la
           base: se vieron sólo en la muestra local); la confirmación de «Cambiar anuncio» (en la muestra está apagado);
           modo oscuro; Safari y Firefox; lectores de pantalla reales.
-        - Encontrado, ya era así (no arreglado): «Rehacer» desaparece mientras su tamaño espera en la fila, así que el foco
-          del teclado se pierde después del clic; su comentario decía que no y ya dice lo que pasa. El mismo tamaño de
-          botón queda escrito en 4 archivos (antes 3).
+        - Encontrado, ya era así, y arreglado aparte (adf8cb0, Pedro: "do this task here"): «Rehacer»/«Reintentar»
+          desaparecía mientras su tamaño esperaba en la fila y, ya armándose, quedaba deshabilitado; el foco del teclado
+          caía al <body> (Chrome 152 lo manda ahí al deshabilitar el botón que lo tiene: medido). Ahora la tarjeta pulsada
+          conserva su pie, el botón ocupado va con `aria-disabled` y no hace nada al clic, y no cambia de nombre hasta que
+          termina. Medido con un sustituto temporal en la muestra (quitado antes del commit): el foco sigue en el mismo
+          botón en fila, armando y al terminar (listo y con error); 2 clics más mientras se arma no arrancan otra tanda;
+          con la lógica de antes, el foco caía al <body> a los 42 ms. Pruebas sobre adf8cb0: npm test exit 0 (formatos
+          469/0 y las demás con 0 fallas) · tsc 0 · eslint 0 · build exit 0.
+        - Mismo problema, sin arreglar: «Generar», «Descargar ZIP» y PNG/JPG se deshabilitan al pulsarlos, y «Reintentar
+          los que no salieron» se quita mientras corre; en los cuatro el foco cae al <body>.
+        - El mismo tamaño de botón queda escrito en 4 archivos (antes 3).
         - Pruebas (sobre d15bec3): test-formatos 469/0 · npm test exit 0 (481, 975, 469, 574, 81, 44; 0 fallas) · tsc 0 ·
           eslint 0 · `npm run build` exit 0.
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
