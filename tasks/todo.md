@@ -968,8 +968,8 @@ largo: estacionado por él.
 - [x] B23. Pasada de diseño de la puerta PSD (Pedro, 2026-10-20: "what do you propose?" para que sea más bonita y fácil:
       botones, controles, tarjetas, espacios). Sesión lateral. Propuesta: https://claude.ai/artifact/EiXDS4FkRiB1Zeqxx4VpUT.
       Pedro eligió **B** ("Build B (tidy and lift the results)"). Construida y en `prisma` (preview).
-      **Next Step:** que Pedro o diseño abra la puerta PSD en el preview de `prisma` y diga qué estorba todavía; aparte, la
-      misma pasada para la puerta de imagen plana (necesita sesión).
+      **Next Step:** que Pedro o diseño abra las dos puertas en el preview de `prisma` y diga qué estorba todavía (la de
+      imagen plana ya tiene la misma pasada: ver su Review abajo).
       · Medido hoy (localhost, s33, 12 medidas de DiDi): a 1440×900 la primera tarjeta empieza en 1001 px (bajo el borde
         de la pantalla); a 1280×960 en 1017. Título 88-232, ajustes 252-657, «En varias medidas» 673-856, barra 872-957.
         Cinco altos de botón (24, 28, 32, 36, 40 px): 41 botones de tarjeta + «Cambiar PSD» en 32; «Todas», «Ninguna» y
@@ -1026,6 +1026,32 @@ largo: estacionado por él.
           el navegador (sólo cambió su encabezado; sus 14 botones siguen en 28 px / 12 px); Safari y Firefox.
         - Pruebas (sobre d105f3a): test-formatos 469/0 · npm test todas las suites con 0 fallas (prisma 975, formatos 469,
           481, 574, 81, 44) · tsc 0 · eslint 0 · `npm run build` exit 0.
+      · **Review puerta de imagen plana (2026-10-20, 57ad8ea · d15bec3, sesión lateral):**
+        - Lo mismo que la puerta PSD en `formatos-studio.tsx`: los 14 botones `size="sm"` (28 px, letra de 12) y «Generar»
+          (32) pasan a 36 px con letra de 13 (`BOTON`, 44 con dedo); «Usar estas medidas» y «Agregar medida libre» de 40 a
+          36; el selector de marca y los campos de ancho y alto de 40/14 a 36/13 (`CAMPO`). El selector de relleno mide 36
+          por fuera (sus botones, 30 dentro del riel). «Todos»/«Ninguno»: lo que oye el lector ahora empieza con lo que
+          dice el botón ("Todos: elegir…", "None: clear every size"); antes "Elegir…" y "Quitar…".
+        - Tarjetas de resultado como en la PSD: botones al pie bajo una línea, PNG|JPG en un par, íconos de 14. Columnas
+          por ancho de tarjeta (`minmax(13.5rem,1fr)`), no por ancho de pantalla: con 36 px «Rehacer · IA (0.07 USD)» mide
+          ~190 y la tarjeta de 208 px (3 columnas a 1280) deja 182 adentro. 1440: 3 columnas de 261 (tarjetas 446/374 →
+          479/407, 3 renglones de botones). 1280: 2 columnas de 318 (2 renglones). Descartado: dejar que ese botón se
+          parta en 2 renglones (rompe el alto único) o quitarle relleno (cabía con 0 px de sobra).
+        - Medido en el DOM, muestra `?demo=formatos` a 1440×900 y 1280×960: antes 16 botones + 3 enlaces de 28, 57 de 32
+          y 2 de 40; después 19 botones + 3 enlaces de 36/13 y campos de 36/13, sin scroll de lado. Con sesión (Pedro, con
+          Google): encabezado igual al de la PSD al píxel (1440: título 124-162 con el lema en la misma banda, idioma en
+          y126; 1280: el lema baja a 166-186 en las dos puertas); selector de marca 36/13 con 3 opciones; consola sin
+          errores.
+        - Igual que la PSD a propósito: botón de idioma 36/12 y «Volver» 36/14. Sin tocar: casillas de 20, puntos de color
+          de 24, cuadro de la lista de 2 renglones (46).
+        - No revisado: con sesión, la lista de tamaños y las tarjetas (subir un anuncio necesita la 0078, que no está en la
+          base: se vieron sólo en la muestra local); la confirmación de «Cambiar anuncio» (en la muestra está apagado);
+          modo oscuro; Safari y Firefox; lectores de pantalla reales.
+        - Encontrado, ya era así (no arreglado): «Rehacer» desaparece mientras su tamaño espera en la fila, así que el foco
+          del teclado se pierde después del clic; su comentario decía que no y ya dice lo que pasa. El mismo tamaño de
+          botón queda escrito en 4 archivos (antes 3).
+        - Pruebas (sobre d15bec3): test-formatos 469/0 · npm test exit 0 (481, 975, 469, 574, 81, 44; 0 fallas) · tsc 0 ·
+          eslint 0 · `npm run build` exit 0.
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
 - iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los
   pendientes de iPad de B19 (caché de 4 fondos, táctil real, zoom de Safari) quedan fuera.
