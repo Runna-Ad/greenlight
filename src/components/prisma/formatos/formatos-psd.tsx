@@ -9,7 +9,7 @@ import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
-import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, nombreSalida, sePuedeVoltear, zonaCanal, type Acomodo, type Canal, type Edicion, type Lado } from "@/lib/prisma/formatos/acomodo";
+import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, nombreSalida, sePuedeVoltear, zonaCanal, type Acomodo, type AvisoAcomodo, type Canal, type Edicion, type Lado } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionContraste, type InfoContraste } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_APLANADA, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
@@ -99,6 +99,9 @@ const VISTA_ALTO_MAX = 360;
 const LISTA_DIDI: MedidaLista[] = leerMedidas(MEDIDAS_EQUIPO).medidas.map((m) => ({ ...m, propia: false }));
 /** Avisos que se arreglan una sola vez arriba, en «En varias medidas»: en la tarjeta van en una línea corta. */
 const AVISO_CORTO = { copia: FP.avisoCopiaCorto, retoque: FP.avisoRetoqueCorto } as const;
+/** Un aviso común: se arregla UNA vez arriba («En varias medidas»). La tarjeta, el resumen y «En varias medidas» usan
+ *  esta misma regla (B23), para que el ámbar de cada tarjeta y el conteo de arriba no se separen. */
+const esComun = (a: AvisoAcomodo): a is AvisoAcomodo & { tipo: keyof typeof AVISO_CORTO } => Object.hasOwn(AVISO_CORTO, a.tipo);
 /** El nombre de la mesa se acorta ANTES de ponerle la medida: así la medida nunca se corta y dos medidas no chocan. */
 const NOMBRE_MESA_MAX = 100;
 const NOMBRE_ZIP_MAX = 80;
@@ -657,8 +660,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
   const letra = acomodo.letras.length ? Math.min(...acomodo.letras.map((l) => l.px)) : null;
   // «Pieza repetida» y «fondo retocado» se arreglan UNA vez arriba (en «En varias medidas»): aquí, una línea corta
   // y una sola vez aunque el motor los diga por cada pieza. Los demás avisos son de esta medida y van completos.
-  const cortos = [...new Set(acomodo.avisos.flatMap((v) => (v.tipo === "copia" || v.tipo === "retoque" ? [v.tipo] : [])))];
-  const propios = acomodo.avisos.filter((v) => v.tipo !== "copia" && v.tipo !== "retoque");
+  const cortos = [...new Set(acomodo.avisos.filter(esComun).map((v) => v.tipo))];
+  const propios = acomodo.avisos.filter((v) => !esComun(v));
   // El ámbar cuenta sólo lo de ESTA medida (B23): antes la pieza repetida ponía 11 de 12 tarjetas en ámbar y las que
   // de verdad tenían un problema propio no se distinguían. Lo común sigue en la tarjeta, en gris y con salto al arreglo.
   const nPropios = propios.length + (noPinto ? 1 : 0);
@@ -1682,8 +1685,8 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     [conTextos, maestrosVista.length, medidas, lados, canal, contrastes, edicionesVista],
   );
   // Lo propio de cada medida y lo que se arregla una vez arriba se cuentan por separado (B23), como en las tarjetas.
-  const porRevisar = filas.filter((f) => f.acomodo.avisos.some((a) => a.tipo !== "copia" && a.tipo !== "retoque")).length;
-  const conComun = filas.filter((f) => f.acomodo.avisos.some((a) => a.tipo === "copia" || a.tipo === "retoque")).length;
+  const porRevisar = filas.filter((f) => f.acomodo.avisos.some((a) => !esComun(a))).length;
+  const conComun = filas.filter((f) => f.acomodo.avisos.some(esComun)).length;
   const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia) && !f.acomodo.editada);
   const n916 = medidas.filter((m) => es916(m.w, m.h)).length;
   const elegirCanal = (v: Canal | null) => {
@@ -1948,7 +1951,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   /** Las piezas repetidas que se ven en alguna medida prendida, con en cuántas (antes de quitarla: dos veces; después:
    *  el relleno). Una ya quitada se queda aunque no se vea, para poder deshacerla. */
   const copiasEnVista = copiasVista.flatMap((c) => {
-    const n = filas.filter((f) => f.maestro === c.i && f.acomodo.avisos.some((a) => a.tipo === "copia" || a.tipo === "retoque")).length;
+    const n = filas.filter((f) => f.maestro === c.i && f.acomodo.avisos.some(esComun)).length;
     return n || c.quitada ? [{ ...c, n }] : [];
   });
   /** ¿Queda algo por hacer en «En varias medidas»? (Si todo se arregló, el panel se queda, sin el ámbar.) */
