@@ -1055,8 +1055,23 @@ largo: estacionado por él.
           botón en fila, armando y al terminar (listo y con error); 2 clics más mientras se arma no arrancan otra tanda;
           con la lógica de antes, el foco caía al <body> a los 42 ms. Pruebas sobre adf8cb0: npm test exit 0 (formatos
           469/0 y las demás con 0 fallas) · tsc 0 · eslint 0 · build exit 0.
-        - Mismo problema, sin arreglar: «Generar», «Descargar ZIP» y PNG/JPG se deshabilitan al pulsarlos, y «Reintentar
-          los que no salieron» se quita mientras corre; en los cuatro el foco cae al <body>.
+        - Mismo problema, arreglado después (9687a3f, Pedro: "fix the same focus loss on Generar, Descargar ZIP, PNG/JPG
+          and Reintentar los que no salieron"): «Generar», los dos «Descargar ZIP» (Resultados y la confirmación de «Cambiar
+          anuncio») y PNG/JPG se deshabilitaban al pulsarlos, y «Reintentar los que no salieron» se quitaba mientras
+          corría. Ahora van apagados con `aria-disabled` (`APAGADO`: opacidad 0.5 y cursor no permitido, medido) y el clic
+          no hace nada mientras están ocupados. «Reintentar…» se queda mientras corre; si al final ya no queda ninguno, se
+          va y el foco pasa al ZIP de al lado. «Generar» sin nada por generar también va con `aria-disabled` (antes
+          `disabled`): se llega con Tab y se anuncia como no disponible.
+          Medido con el mismo sustituto en la muestra (quitado antes del commit), antes → después: los cinco perdían el foco
+          al <body> a los 41-44 ms → en los cinco el foco sigue en el botón hasta el final; «Reintentar…» con un tamaño que
+          vuelve a fallar se queda con el foco y, si sale, el foco pasa a «Descargar ZIP (4)»; 2 clics más mientras están
+          ocupados no arrancan otra tanda, otro ZIP ni otra descarga (terminan a tiempo: 830-848 ms ZIP/PNG, sin volver a
+          «En fila» en Generar y Rehacer). Hallazgo al probar: en el panel del navegador `focus()` por código no dispara
+          eventos de foco (la ventana no está activa), y un botón que se quita no avisa con blur; por eso «tenía el foco» se
+          lee al pulsar, no con onFocus/onBlur. Pruebas sobre 9687a3f: npm test exit 0 (481, 975, 469, 574, 81, 44; 0 fallas) ·
+          tsc 0 · eslint 0 · build exit 0.
+        - Mismo problema, sin arreglar (leído en el código, no medido): «Usar estas medidas» y «Agregar medida libre» se
+          deshabilitan solos al vaciar su campo después de usarse; si el foco estaba en el botón, cae al <body>.
         - El mismo tamaño de botón queda escrito en 4 archivos (antes 3).
         - Pruebas (sobre d15bec3): test-formatos 469/0 · npm test exit 0 (481, 975, 469, 574, 81, 44; 0 fallas) · tsc 0 ·
           eslint 0 · `npm run build` exit 0.
