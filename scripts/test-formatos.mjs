@@ -29,6 +29,8 @@ import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../sr
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContraste } from "../src/lib/prisma/formatos/revisar.ts";
 import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
 import { specVacio } from "../src/lib/prisma/spec.ts";
+import { unzipSync } from "fflate";
+import { zipPorPartes, rutaLibre, CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES } from "../src/lib/prisma/formatos/zip.ts";
 
 let pass = 0,
   fail = 0;
@@ -2353,6 +2355,75 @@ console.log("\n▶ 3 · textos editables: cambiar las letras (todas las medidas,
     ok("s33 320×50: quitado el único texto del legal, ya no se avisa su letra chica", !q320.avisos.some((v) => v.tipo === "letra" && v.texto.includes("Legales")) && acomodar(d3, 320, 50).avisos.some((v) => v.tipo === "letra" && v.texto.includes("Legales")));
     const sinCambio = legalDe(leerDe(planDeMedida(l33, acomodar(l33, 1200, 627), 1200, 627)));
     ok("s33: sin cambios, el legal sale con sus letras del PSD", sinCambio?.text?.text.replace(/\r|\u0003/g, "\n") === tL.texto.texto && !sinCambio.hidden, JSON.stringify([sinCambio?.text?.text.slice(0, 90), tL.texto.texto.slice(0, 90), sinCambio?.hidden]));
+  }
+}
+
+console.log("\n▶ B22 · el ZIP con «Entregables» (PNG) y «Editables» (PSD), armado por partes");
+{
+  const u = new Set();
+  const rutas = [rutaLibre(u, CARPETA_ENTREGABLES, "a_300x250.png"), rutaLibre(u, CARPETA_ENTREGABLES, "a_300x250.png"), rutaLibre(u, CARPETA_ENTREGABLES, "A_300x250.png"), rutaLibre(u, CARPETA_EDITABLES, "a_300x250.psd"), rutaLibre(u, CARPETA_ENTREGABLES, "sin-punto")];
+  ok("rutaLibre: cada archivo en su carpeta; el repetido (también sólo en mayúsculas: en una Mac sería el mismo) lleva -2, -3", JSON.stringify(rutas) === JSON.stringify(["Entregables/a_300x250.png", "Entregables/a_300x250-2.png", "Entregables/A_300x250-3.png", "Editables/a_300x250.psd", "Entregables/sin-punto"]), JSON.stringify(rutas));
+
+  // Pasa de los 16 MB de una parte (se junta en varios Blobs) y mezcla un archivo vacío.
+  const grande = new Uint8Array(40 * 1024 * 1024);
+  for (let i = 0; i < grande.length; i++) grande[i] = (i * 7 + (i >> 12)) & 255;
+  const chico = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+  const z = zipPorPartes();
+  await z.agregar("Entregables/x.png", new Blob([chico]));
+  await z.agregar("Editables/x.psd", new Blob([grande]));
+  await z.agregar("Entregables/vacio.png", new Blob([]));
+  const blob = z.terminar();
+  const fuera = unzipSync(new Uint8Array(await blob.arrayBuffer()));
+  const igual = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+  ok(
+    `zipPorPartes: el ZIP se abre con sus 3 archivos en su carpeta y los bytes exactos (40 MB incluidos), sin comprimir (${(blob.size / 1e6).toFixed(1)} MB)`,
+    JSON.stringify(Object.keys(fuera)) === JSON.stringify(["Entregables/x.png", "Editables/x.psd", "Entregables/vacio.png"]) && igual(fuera["Editables/x.psd"], grande) && igual(fuera["Entregables/x.png"], chico) && fuera["Entregables/vacio.png"].length === 0 && blob.size > grande.length && blob.size < grande.length + 4096 && blob.type === "application/zip",
+    JSON.stringify(Object.keys(fuera)),
+  );
+  ok("zipPorPartes: un ZIP sin archivos también cierra (vacío, pero válido)", Object.keys(unzipSync(new Uint8Array(await zipPorPartes().terminar().arrayBuffer()))).length === 0);
+
+  // El tope (fflate no escribe ZIP64: pasando de 4 GiB saldría roto sin avisar).
+  const falla = async (f) => {
+    try {
+      await f();
+      return null;
+    } catch (e) {
+      return e.message;
+    }
+  };
+  const zt = zipPorPartes(10_000);
+  const cabeAntes = zt.cabe(5_000), noCabe = zt.cabe(9_500);
+  await zt.agregar("Editables/a.psd", new Blob([new Uint8Array(5_000)]));
+  const tope = await falla(() => zt.agregar("Editables/b.psd", new Blob([new Uint8Array(5_000)])));
+  ok(
+    `zipPorPartes: \`cabe\` dice si entra y \`agregar\` no pasa del tope (${ZIP_MAX_BYTES / 1024 ** 3} GiB de verdad); lo que ya entró sigue sirviendo`,
+    cabeAntes && !noCabe && !zt.cabe(5_000) && /pasaría/.test(tope ?? "") && ZIP_MAX_BYTES < 4 * 1024 ** 3 && Object.keys(unzipSync(new Uint8Array(await zt.terminar().arrayBuffer()))).join() === "Editables/a.psd",
+    tope,
+  );
+  const malas = ["../x.png", "Entregables/../x.png", "/x.png", "Entregables\\x.png", "Entregables/sub/x.png", "x.png", "Entregables/..", "Entregables/a:b.png", "Entregables/a\u0001.png"];
+  const zs = zipPorPartes();
+  const rechazadas = [];
+  for (const r of malas) if (await falla(() => zs.agregar(r, new Blob([new Uint8Array([1])])))) rechazadas.push(r);
+  ok("zipPorPartes: una ruta que se saldría de su carpeta (.., /, \\, subcarpetas, raros) no entra", rechazadas.length === malas.length, JSON.stringify(malas.filter((r) => !rechazadas.includes(r))));
+
+  // Un archivo que falla a medias deja el ZIP roto: se dice en ese momento y los siguientes ya no entran.
+  const zr = zipPorPartes();
+  const roto = { size: 10, stream: () => new ReadableStream({ pull(c) { c.error(new Error("lectura rota")); } }) };
+  const e1 = await falla(() => zr.agregar("Editables/roto.psd", roto));
+  const e2 = await falla(() => zr.agregar("Editables/otro.psd", new Blob([new Uint8Array([1])])));
+  const e3 = await falla(async () => zr.terminar());
+  ok("zipPorPartes: un archivo que no se deja leer a medias tira el ZIP en ese momento (el siguiente y el cierre fallan igual, sin armar los demás)", e1 === "lectura rota" && e2 === "lectura rota" && e3 === "lectura rota", JSON.stringify([e1, e2, e3]));
+
+  // El PSD real (s33, 61 MB) entra dos veces, como dos medidas: el ZIP lo guarda tal cual.
+  const ruta = join(homedir(), "Desktop/formatos-prueba/s33-BFDIRECT20CASH.psd");
+  if (!existsSync(ruta)) console.log("  · (sin s33 en el Escritorio: se salta el ZIP con el PSD real)");
+  else {
+    const real = readFileSync(ruta);
+    const z2 = zipPorPartes(), u2 = new Set();
+    for (const n of ["s33_300x250.psd", "s33_300x250.psd"]) await z2.agregar(rutaLibre(u2, CARPETA_EDITABLES, n), new Blob([real]));
+    const f2 = unzipSync(new Uint8Array(await z2.terminar().arrayBuffer()));
+    const h = (b) => createHash("sha256").update(b).digest("hex");
+    ok("zipPorPartes con s33 real (61 MB ×2): los dos PSD salen idénticos al original, el segundo como -2", JSON.stringify(Object.keys(f2)) === JSON.stringify(["Editables/s33_300x250.psd", "Editables/s33_300x250-2.psd"]) && Object.values(f2).every((b) => h(b) === h(real)));
   }
 }
 

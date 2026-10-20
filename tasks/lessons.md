@@ -1227,3 +1227,19 @@ TAGS: #psd #editable #mapas #pruebas #ida-vuelta #formatos
 ROOT CAUSE: pensé en un solo tipo de pieza (el botón) y la prueba sintética era justo ese tipo.
 RULE: una regla que mira dónde cae algo dentro de su pieza se corre contra cada clase de pieza del PSD real (botón, texto suelto, texto junto a iconos) antes de darla por buena; la prueba sintética lleva al menos un caso de cada clase.
 TAGS: #formatos #avisos #geometria #pruebas #s33
+
+[2026-10-20] PEDRO_OVERRIDE (Formatos B22: la IA no se elige por medida): Pedro pidió que el selector de medidas también eligiera "the sizes you want to modify with ai"; al ver que el arreglo del fondo ya es UNA llamada por mesa (≈ US$0.041) y que donde la pieza no se ve dos veces casi queda tapado, recomendé "un arreglo, sólo en las medidas elegidas".
+PEDRO'S APPROACH: "Do nothing for AI": el arreglo sigue en todas las medidas de la mesa, como hoy; el selector sirve sólo para bajar.
+WHY IT WAS BETTER: menos que construir y nada que explicar (una medida con fondo retocado y otra sin él, del mismo anuncio, sería un estado nuevo que revisar). (El porqué es mío, inferido; Pedro no lo dijo.)
+RULE: cuando una petición de Pedro se basa en cómo cree que funciona algo (aquí, "la IA cambia todas las medidas una por una"), primero decirle cómo funciona de verdad y poner "no hacer nada" como opción real: puede que, sabiéndolo, ya no la quiera.
+TAGS: #override #formatos #ia #selector #no-hacer-nada
+
+[2026-10-20] LESSON (un aviso que se queda hasta cerrarlo no va encima del botón principal): al probar el ZIP de B22, mi clic en «Descargar ZIP» cayó en un aviso: los avisos de sonner salen arriba a la derecha, justo donde vive el botón del ZIP en la barra pegajosa, y los de capas aplanadas se quedan hasta cerrarlos. Dos ZIP seguidos apilaban dos avisos fijos encima del botón.
+ROOT CAUSE: puse la duración de los avisos (fijos para lo importante) sin mirar DÓNDE salen respecto a la acción que la persona repite.
+RULE: un aviso que se queda va lejos del botón que lo provoca (aquí `position: "bottom-right"` por aviso, sin tocar el Toaster de la app), lleva un `id` fijo para que el siguiente lo reemplace, y lo ya visto no se vuelve a quedar. Probar la acción DOS veces seguidas con clics reales, no una.
+TAGS: #formatos #avisos #sonner #ux #barra-pegajosa #b22
+
+[2026-10-20] LESSON (un archivo de un ZIP que falla a medias rompe el ZIP entero; y fflate no escribe ZIP64): dos revisiones vieron lo mismo en `zipPorPartes`: si un archivo fallaba al leerse a medias, fflate se quedaba esperando su final y guardaba en memoria todos los siguientes sin escribirlos; el ZIP seguía armando los demás PSD y al final decía "no se cerró". Y el escritor de fflate no tiene ZIP64: pasando de 4 GiB el ZIP sale roto sin error (30 medidas × un PSD de 200 MB llega).
+ROOT CAUSE: traté cada archivo del ZIP como independiente (un PSD que falla no tira los otros), pero el ZIP es UN flujo: una entrada a medias lo invalida. Y no revisé los límites del formato que escribe la librería.
+RULE: en un archivo armado por partes, separar "no se pudo PREPARAR esta parte" (se salta y se dice) de "falló al ESCRIBIRLA" (se aborta todo en ese momento). Antes de escribir un formato con una librería, buscar sus topes (ZIP64, 4 GiB) y poner uno propio por debajo, con aviso de lo que no cupo. Y abrir el resultado con las herramientas del sistema (`unzip -t`, `ditto`), no sólo con la misma librería.
+TAGS: #zip #fflate #streaming #zip64 #formatos #b22 #revision

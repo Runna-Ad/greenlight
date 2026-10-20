@@ -4,13 +4,12 @@ import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, ChevronDown, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Languages, Layers, Loader2, Lock, Maximize2, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
-import { zipSync } from "fflate";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
-import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, nombreSalida, sePuedeVoltear, zonaCanal, type Canal, type Edicion, type Lado } from "@/lib/prisma/formatos/acomodo";
+import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, nombreSalida, sePuedeVoltear, zonaCanal, type Acomodo, type Canal, type Edicion, type Lado } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionContraste, type InfoContraste } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_APLANADA, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
@@ -18,6 +17,8 @@ import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/for
 import { EDITABLE_MAX_BYTES, EDITABLE_MAX_MS, LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajePsdMedida, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoPsdMedida, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
+import type { NotaCapa } from "@/lib/prisma/formatos/psd-editable";
+import { CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES, rutaLibre, zipPorPartes } from "@/lib/prisma/formatos/zip";
 import { etiquetaPieza, nombreDeGuia, type Rol } from "@/lib/prisma/formatos/roles";
 import { colaVacia, enCola, pintar } from "./pintar";
 import { Franjas, VistaGrande } from "./vista-grande";
@@ -54,6 +55,7 @@ const IA_ESPERA_MS = 170_000;
 const COPIA_PAUSA_MS = 400;
 const SIN_TIPOS: Tipografias = new Map();
 const SIN_CAMBIOS: CambiosTexto = {};
+const SIN_FUERA: ReadonlySet<string> = new Set();
 
 /**
  * Los textos cambiados en el editor (del anuncio entero, paso 3): cada maestro con esas piezas ya escritas
@@ -101,10 +103,13 @@ const AVISO_CORTO = { copia: FP.avisoCopiaCorto, retoque: FP.avisoRetoqueCorto }
 const NOMBRE_MESA_MAX = 100;
 const NOMBRE_ZIP_MAX = 80;
 const SOLTAR_URL_MS = 10_000;
+/** El ZIP (cientos de MB) puede tardar en empezar a guardarse: su enlace se suelta más tarde. */
+const SOLTAR_ZIP_MS = 120_000;
 /** Escritorio e iPad: 36 px con mouse, 44 px con dedo. */
 const BOTON = "min-h-9 pointer-coarse:min-h-11";
-/** Al llegar con Tab, lo de las tarjetas no queda debajo de la barra pegajosa de resultados (y la de la app). */
-const BAJO_BARRA = "scroll-mt-40";
+/** Al llegar con Tab, lo de las tarjetas no queda debajo de la barra pegajosa de resultados (y la de la app): 64 px de
+ *  la app + 85 de la barra con lo del ZIP (medido, 2026-10-20), y margen para la línea de textos cambiados. */
+const BAJO_BARRA = "scroll-mt-48";
 /** Los botones de cada tarjeta, más bajos (van cuatro en una tarjeta angosta). */
 const BOTON_TARJETA = cn("h-8 px-2 text-xs pointer-coarse:h-11", BAJO_BARRA);
 /**
@@ -181,13 +186,20 @@ async function aRgba(imagen: Blob, w: number, h: number): Promise<Uint8ClampedAr
 class ErrorDeRuta extends Error {}
 const usd = (v: number, decimales: number) => `US$${v.toFixed(decimales)}`;
 
-function descargar(blob: Blob, nombre: string) {
+function descargar(blob: Blob, nombre: string, soltarEn = SOLTAR_URL_MS) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = nombre;
   a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), SOLTAR_URL_MS);
+  setTimeout(() => URL.revokeObjectURL(a.href), soltarEn);
 }
+/** Los avisos de lo que se baja (el ZIP y el PSD de cada tarjeta) van abajo a la derecha: arriba taparían el botón del
+ *  ZIP de la barra pegajosa, y algunos se quedan hasta cerrarlos. */
+const AVISO_ABAJO = { position: "bottom-right" } as const;
+/** El aviso del ZIP: uno a la vez (cada ZIP reemplaza el del anterior). */
+const AVISO_ZIP = { ...AVISO_ABAJO, id: "zip-resultado" } as const;
+/** Un aviso que se queda hasta que la persona lo cierra. */
+const FIJO = { duration: Infinity, closeButton: true } as const;
 
 /** Los PSD editables se arman de uno en uno: cada uno lee el archivo entero (s33: 61 MB) y escribe otro casi igual;
  *  doce clics seguidos en doce tarjetas no deben pedir 1.4 GB de golpe. Lo pesado de la página (la imagen aplanada,
@@ -247,6 +259,118 @@ function psdEditableEnWorker(pedido: PedidoPsdMedida, transferir: Transferable[]
       fallar(err instanceof Error ? err.message : String(err));
     }
   });
+}
+
+const archivoPsdDe = (ma: MaestroListo, m: Medida) => archivoDe(ma, m).replace(/\.png$/, ".psd");
+/** Un PSD ya armado: `plano` = por qué salió de capas planas (null = editable, con sus `notas`). */
+type PsdArmado = { archivo: Blob; notas: NotaCapa[]; plano: string | null };
+/** Lo que dicen las notas de un PSD editable: las capas aplanadas (con su porqué) y las de revisar (la frase ya dice que
+ *  son los filtros inteligentes). `m`: de qué medida. */
+function avisoNotas(notas: NotaCapa[], m: string, lang: Lang): string {
+  const aplanadas = notas.some((x) => x.aplanada), revisar = notas.some((x) => !x.aplanada);
+  return [aplanadas ? rellenar(tx(FP.psdAplanadas, lang), { m, capas: capasDe(notas, true, lang) }) : rellenar(tx(FP.psdListo, lang), { m }), ...(revisar ? [rellenar(tx(FP.psdRevisar, lang), { capas: capasDe(notas, false, lang) })] : [])].join(" ");
+}
+/** La primera vez que se ven estas notas de capas de este archivo (y quedan anotadas): entonces su aviso se queda hasta
+ *  cerrarlo. Repetidas (otra medida, otro ZIP del mismo archivo), su aviso se va solo. */
+function notasNuevas(archivo: Blob | null, notas: NotaCapa[]): boolean {
+  if (!archivo || !notas.length) return false;
+  const vistas = notasVistas.get(archivo) ?? new Set<string>(), clave = JSON.stringify(notas);
+  notasVistas.set(archivo, vistas);
+  if (vistas.has(clave)) return false;
+  vistas.add(clave);
+  return true;
+}
+/** Las capas aplanadas (con su porqué) o las de revisar de unas notas, en una lista corta. */
+const capasDe = (notas: NotaCapa[], aplanada: boolean, lang: Lang) =>
+  unos(notas.filter((x) => x.aplanada === aplanada).map((x) => `«${corto(x.capa || tx(FP.capaSinNombre, lang))}»${aplanada ? ` (${tx(FP_APLANADA[x.motivo], lang)})` : ""}`));
+
+/**
+ * El PSD de una medida, como lo piden el botón «PSD» de su tarjeta y el ZIP (B22): UNA vía, así los dos salen iguales.
+ * El EDITABLE (psd-editable.ts): las capas del original movidas a esta medida, armadas en un worker y de una en una
+ * (`enFilaPsd`). Si no se puede (archivo muy pesado, falla o tarda), sale el de capas planas (psd-salida.ts) con el
+ * porqué. Las librerías se cargan al pedirlo, no con la página. null = `sigue` dijo que no (se fue la tarjeta, se
+ * canceló el ZIP): no se arranca ni se entrega nada. `alArmar`: le tocó su turno; `alArrancar`: con qué matar el
+ * worker en curso (null cuando ya terminó).
+ */
+async function armarPsdMedida(o: {
+  ma: MaestroVista;
+  maestro: number;
+  acomodo: Acomodo;
+  medida: Medida;
+  escritura: Escritura | null;
+  tipos: Tipografias;
+  psdOriginal: Blob | null;
+  lang: Lang;
+  sigue: () => boolean;
+  alArmar: () => void;
+  alArrancar: (cancelar: (() => void) | null) => void;
+}): Promise<PsdArmado | null> {
+  const { ma, acomodo, sigue, lang } = o;
+  const { w, h } = o.medida;
+  const texto = textoEscrito(o.escritura, o.maestro, ma, o.tipos);
+  let motivo: string;
+  if (!o.psdOriginal || !ma.origen) motivo = tx(FP.psdPlanoSinOriginal, lang);
+  else if (o.psdOriginal.size > EDITABLE_MAX_BYTES) motivo = rellenar(tx(FP.psdPlanoPesado, lang), { mb: String(Math.round(o.psdOriginal.size / 1e6)), max: String(EDITABLE_MAX_BYTES / 1e6) });
+  else if (sinEditable.has(o.psdOriginal)) motivo = tx(FP.psdPlanoFallo, lang);
+  else {
+    const archivo = o.psdOriginal, origen = ma.origen;
+    try {
+      const r = await enFilaPsd(async () => {
+        if (!sigue()) return null;
+        // Otra medida en la fila ya falló con este archivo: ésta no vuelve a esperar al worker.
+        if (sinEditable.has(archivo)) throw new FallaPsd("otro", "este archivo ya falló en otra medida");
+        o.alArmar();
+        const [{ armarMedida, halosEnMedida }, { planDeMedida, retoqueDeFondo }] = await Promise.all([import("@/lib/prisma/formatos/nitido"), import("@/lib/prisma/formatos/psd-editable")]);
+        // Un cuadro para que se vea «Armando…» antes del trabajo pesado. En una pestaña de fondo no se pinta nada (y el
+        // navegador estira los relojes a 1 s): ahí no se espera.
+        if (!document.hidden)
+          await new Promise<void>((ok) => {
+            const cuadro = requestAnimationFrame(() => {
+              clearTimeout(reloj);
+              setTimeout(ok, 0);
+            });
+            const reloj = setTimeout(() => {
+              cancelAnimationFrame(cuadro);
+              ok();
+            }, 100);
+          });
+        if (!sigue()) return null;
+        const sombras = new Set(acomodo.sombras ?? []);
+        const halos = acomodo.puestas.flatMap((q) => (sombras.has(q.pieza) ? halosEnMedida(ma, q).map((capa) => ({ nombre: ma.piezas[q.pieza].nombre, capa })) : []));
+        const retoque = ma.fondoOriginal ? retoqueDeFondo(ma.fondoOriginal, ma.fondo, ma.w, ma.h, acomodo.fondo, w, h) : null;
+        const compuesto = armarMedida(ma, acomodo, w, h, { texto });
+        // Los textos con letras nuevas llevan su tinta (en px del maestro) hasta que Photoshop los vuelva a dibujar.
+        const textos = ma.piezas.flatMap((p) => p.textos.flatMap((t) => (t.cambio?.tinta ? [{ ruta: t.ruta, tinta: t.cambio.tinta }] : [])));
+        const pedido: PedidoPsdMedida = { archivo, plan: planDeMedida({ piezas: ma.piezas, origen }, acomodo, w, h), extras: { compuesto, halos, retoque, textos } };
+        // Lo pintado aquí cruza al worker sin copiarse (son arreglos nuevos: nada más los usa).
+        const transferir = [compuesto.buffer, ...halos.map((x) => x.capa.rgba.buffer), ...(retoque ? [retoque.rgba.buffer] : [])] as ArrayBuffer[];
+        return psdEditableEnWorker(pedido, transferir, o.alArrancar);
+      });
+      if (!r || !sigue()) return null;
+      return { archivo: r.archivo, notas: r.notas, plano: null };
+    } catch (err) {
+      if (!sigue()) return null;
+      console.error("[formatos-psd] psd editable", err);
+      const codigo = err instanceof FallaPsd ? err.codigo : "otro";
+      // Un tope es de ESTA medida (otra, más chica, puede salir); lo demás es del archivo: no se vuelve a esperar.
+      if (codigo !== "topes") sinEditable.add(archivo);
+      motivo = tx({ topes: FP.psdPlanoTopes, archivo: FP.psdPlanoArchivo, inseguro: FP.psdPlanoInseguro, formato: FP.psdPlanoFormato, otro: FP.psdPlanoFallo }[codigo], lang);
+    } finally {
+      o.alArrancar(null);
+    }
+  }
+  // También en la fila y de una en una: si el archivo falló con doce medidas esperando, las doce de capas planas no
+  // se arman seguidas sin soltar la página (cada vuelta deja pintar antes de la siguiente).
+  const plano = await enFilaPsd(async () => {
+    if (!sigue()) return null;
+    o.alArmar();
+    await new Promise((ok) => setTimeout(ok, 0));
+    const [{ writePsdUint8Array }, { psdDeMedida }] = await Promise.all([import("ag-psd"), import("@/lib/prisma/formatos/psd-salida")]);
+    if (!sigue()) return null;
+    return new Blob([writePsdUint8Array(psdDeMedida(ma, acomodo, w, h, { texto }), { noBackground: true }) as BlobPart], { type: "image/vnd.adobe.photoshop" });
+  });
+  if (!plano || !sigue()) return null;
+  return { archivo: plano, notas: [], plano: motivo };
 }
 
 
@@ -419,6 +543,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
   contraste: eleccion,
   alContraste,
   psdOriginal,
+  elegida,
+  alElegir,
 }: {
   maestros: MaestroVista[];
   medida: Medida;
@@ -437,6 +563,9 @@ const TarjetaMedida = memo(function TarjetaMedida({
   alContraste: (m: Medida, e: EleccionContraste) => void;
   /** El PSD tal cual se abrió, para armar el PSD editable de esta medida; null = sólo el de capas planas. */
   psdOriginal: Blob | null;
+  /** Va en «Descargar ZIP» (B22): su casilla. */
+  elegida: boolean;
+  alElegir: (m: Medida, si: boolean) => void;
 }) {
   const { w, h } = medida;
   const k = clave(medida);
@@ -496,10 +625,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
       toast.error(tx(FP.bajarFallo, lang));
     }
   };
-  // La medida como PSD EDITABLE (psd-editable.ts): las capas del original movidas a esta medida, armadas en un worker y
-  // de una en una (`enFilaPsd`). Si no se puede (archivo muy pesado, falla o tarda), sale el de capas planas de antes
-  // (psd-salida.ts) y se dice por qué. Se baja lo que la tarjeta mostraba al hacer clic. Las librerías se cargan al
-  // hacer clic, no con la página.
+  // La medida como PSD (`armarPsdMedida`: editable, o de capas planas con su porqué). Se baja lo que la tarjeta
+  // mostraba al hacer clic.
   const [psdEstado, setPsdEstado] = useState<"fila" | "armando" | null>(null);
   const cancelarPsd = useRef<(() => void) | null>(null);
   /** La tarjeta sigue en la página: si se fue mientras esperaba turno o armaba, no se arranca ni se baja nada. */
@@ -515,101 +642,40 @@ const TarjetaMedida = memo(function TarjetaMedida({
     if (psdEstado) return;
     setPsdEstado("fila");
     const m = etiqueta(medida), id = `psd-${k}`;
-    const nombre = archivoDe(ma, medida).replace(/\.png$/, ".psd");
     try {
-      const texto = textoEscrito(escritura, maestro, ma, tipos);
-      let motivo: string;
-      if (!psdOriginal || !ma.origen) motivo = tx(FP.psdPlanoSinOriginal, lang);
-      else if (psdOriginal.size > EDITABLE_MAX_BYTES) motivo = rellenar(tx(FP.psdPlanoPesado, lang), { mb: String(Math.round(psdOriginal.size / 1e6)), max: String(EDITABLE_MAX_BYTES / 1e6) });
-      else if (sinEditable.has(psdOriginal)) motivo = tx(FP.psdPlanoFallo, lang);
-      else {
-        const archivo = psdOriginal, origen = ma.origen;
-        try {
-          const r = await enFilaPsd(async () => {
-            if (!enPagina.current) return null;
-            // Otra medida en la fila ya falló con este archivo: ésta no vuelve a esperar al worker.
-            if (sinEditable.has(archivo)) throw new FallaPsd("otro", "este archivo ya falló en otra medida");
-            setPsdEstado("armando");
-            const [{ armarMedida, halosEnMedida }, { planDeMedida, retoqueDeFondo }] = await Promise.all([import("@/lib/prisma/formatos/nitido"), import("@/lib/prisma/formatos/psd-editable")]);
-            // Un cuadro para que se vea «Armando…» antes del trabajo pesado. En una pestaña de fondo no se pinta nada (y el
-            // navegador estira los relojes a 1 s): ahí no se espera.
-            if (!document.hidden)
-              await new Promise<void>((ok) => {
-                const cuadro = requestAnimationFrame(() => {
-                  clearTimeout(reloj);
-                  setTimeout(ok, 0);
-                });
-                const reloj = setTimeout(() => {
-                  cancelAnimationFrame(cuadro);
-                  ok();
-                }, 100);
-              });
-            if (!enPagina.current) return null;
-            const sombras = new Set(acomodo.sombras ?? []);
-            const halos = acomodo.puestas.flatMap((q) => (sombras.has(q.pieza) ? halosEnMedida(ma, q).map((capa) => ({ nombre: ma.piezas[q.pieza].nombre, capa })) : []));
-            const retoque = ma.fondoOriginal ? retoqueDeFondo(ma.fondoOriginal, ma.fondo, ma.w, ma.h, acomodo.fondo, w, h) : null;
-            const compuesto = armarMedida(ma, acomodo, w, h, { texto });
-            // Los textos con letras nuevas llevan su tinta (en px del maestro) hasta que Photoshop los vuelva a dibujar.
-            const textos = ma.piezas.flatMap((p) => p.textos.flatMap((t) => (t.cambio?.tinta ? [{ ruta: t.ruta, tinta: t.cambio.tinta }] : [])));
-            const pedido: PedidoPsdMedida = { archivo, plan: planDeMedida({ piezas: ma.piezas, origen }, acomodo, w, h), extras: { compuesto, halos, retoque, textos } };
-            // Lo pintado aquí cruza al worker sin copiarse (son arreglos nuevos: nada más los usa).
-            const transferir = [compuesto.buffer, ...halos.map((x) => x.capa.rgba.buffer), ...(retoque ? [retoque.rgba.buffer] : [])] as ArrayBuffer[];
-            return psdEditableEnWorker(pedido, transferir, (c) => (cancelarPsd.current = c));
-          });
-          if (!r || !enPagina.current) return;
-          descargar(r.archivo, nombre);
-          // Las aplanadas llevan su porqué; las de revisar, no (la frase ya dice que son los filtros inteligentes).
-          const lista = (aplanada: boolean) => unos(r.notas.filter((x) => x.aplanada === aplanada).map((x) => `«${corto(x.capa || tx(FP.capaSinNombre, lang))}»${aplanada ? ` (${tx(FP_APLANADA[x.motivo], lang)})` : ""}`));
-          if (!r.notas.length) toast.success(rellenar(tx(FP.psdListo, lang), { m }), { id, duration: 10_000 });
-          else {
-            // Es lo único que dice qué no quedó editable o qué revisar: el primero de cada archivo se queda hasta que la
-            // persona lo cierre.
-            const aplanadas = r.notas.some((x) => x.aplanada), revisar = r.notas.some((x) => !x.aplanada);
-            const texto = [aplanadas ? rellenar(tx(FP.psdAplanadas, lang), { m, capas: lista(true) }) : rellenar(tx(FP.psdListo, lang), { m }), ...(revisar ? [rellenar(tx(FP.psdRevisar, lang), { capas: lista(false) })] : [])].join(" ");
-            const vistas = notasVistas.get(archivo) ?? new Set<string>(), clave = JSON.stringify(r.notas);
-            notasVistas.set(archivo, vistas);
-            if (vistas.has(clave)) toast.warning(texto, { id, duration: 10_000 });
-            else {
-              vistas.add(clave);
-              toast.warning(texto, { id, duration: Infinity, closeButton: true });
-            }
-          }
-          return;
-        } catch (err) {
-          if (!enPagina.current) return;
-          console.error("[formatos-psd] psd editable", err);
-          const codigo = err instanceof FallaPsd ? err.codigo : "otro";
-          // Un tope es de ESTA medida (otra, más chica, puede salir); lo demás es del archivo: no se vuelve a esperar.
-          if (codigo !== "topes") sinEditable.add(archivo);
-          motivo = tx({ topes: FP.psdPlanoTopes, archivo: FP.psdPlanoArchivo, inseguro: FP.psdPlanoInseguro, formato: FP.psdPlanoFormato, otro: FP.psdPlanoFallo }[codigo], lang);
-        } finally {
-          cancelarPsd.current = null;
-        }
-      }
-      // También en la fila y de una en una: si el archivo falló con doce medidas esperando, las doce de capas planas no
-      // se arman seguidas sin soltar la página (cada vuelta deja pintar antes de la siguiente).
-      const plano = await enFilaPsd(async () => {
-        if (!enPagina.current) return null;
-        setPsdEstado("armando");
-        await new Promise((ok) => setTimeout(ok, 0));
-        const [{ writePsdUint8Array }, { psdDeMedida }] = await Promise.all([import("ag-psd"), import("@/lib/prisma/formatos/psd-salida")]);
-        if (!enPagina.current) return null;
-        return new Blob([writePsdUint8Array(psdDeMedida(ma, acomodo, w, h, { texto }), { noBackground: true }) as BlobPart], { type: "image/vnd.adobe.photoshop" });
+      const r = await armarPsdMedida({
+        ma,
+        maestro,
+        acomodo,
+        medida,
+        escritura,
+        tipos,
+        psdOriginal,
+        lang,
+        sigue: () => enPagina.current,
+        alArmar: () => setPsdEstado("armando"),
+        alArrancar: (c) => (cancelarPsd.current = c),
       });
-      if (!plano || !enPagina.current) return;
-      descargar(plano, nombre);
+      if (!r || !enPagina.current) return;
+      descargar(r.archivo, archivoPsdDe(ma, medida));
       // Se queda hasta cerrarlo: el archivo se llama igual que uno editable y éste es el único aviso de que no lo es.
-      toast.warning(rellenar(tx(FP.psdPlano, lang), { m, motivo }), { id, duration: Infinity, closeButton: true });
+      if (r.plano !== null) return void toast.warning(rellenar(tx(FP.psdPlano, lang), { m, motivo: r.plano }), { ...AVISO_ABAJO, id, ...FIJO });
+      if (!r.notas.length) return void toast.success(rellenar(tx(FP.psdListo, lang), { m }), { ...AVISO_ABAJO, id, duration: 10_000 });
+      // Es lo único que dice qué no quedó editable o qué revisar: el primero de cada archivo se queda hasta que la
+      // persona lo cierre.
+      toast.warning(avisoNotas(r.notas, m, lang), { ...AVISO_ABAJO, id, ...(notasNuevas(psdOriginal, r.notas) ? FIJO : { duration: 10_000 }) });
     } catch (err) {
       console.error("[formatos-psd] psd", err);
-      if (enPagina.current) toast.error(rellenar(tx(FP.bajarPsdFallo, lang), { m }), { id, duration: 10_000 });
+      if (enPagina.current) toast.error(rellenar(tx(FP.bajarPsdFallo, lang), { m }), { ...AVISO_ABAJO, id, duration: 10_000 });
     } finally {
+      cancelarPsd.current = null;
       if (enPagina.current) setPsdEstado(null);
     }
   };
   return (
     // `@container`: los botones van en dos columnas si la tarjeta es angosta (vertical) y en fila si es ancha (banner).
-    <li className="@container flex flex-col rounded-xl border border-border bg-card p-2.5">
+    // Desmarcada para el ZIP: borde punteado, además de la casilla vacía.
+    <li className={cn("@container flex flex-col rounded-xl border border-border bg-card p-2.5", !elegida && "border-dashed border-muted-foreground/50")}>
       {/* La vista abre la vista grande (vista-grande.tsx). Todo el recuadro es el botón: con el ratón o con el dedo, y el
           ícono de la esquina se ve siempre (en iPad no hay hover que lo descubra). */}
       <Dialog>
@@ -639,6 +705,16 @@ const TarjetaMedida = memo(function TarjetaMedida({
       {/* El encabezado lleva sólo la medida (así se oye en la lista de encabezados); el estado va al lado, en palabras
           (no sólo color): «Listo» o cuántos avisos tiene. */}
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        {/* La etiqueta agranda dónde se puede hacer clic a 36 px (la casilla sola mide 16), sin mover lo de al lado. */}
+        <label className="-m-2.5 flex cursor-pointer p-2.5" title={tx(FP.zipElegirTitulo, lang)}>
+          <input
+            type="checkbox"
+            checked={elegida}
+            onChange={(e) => alElegir(medida, e.target.checked)}
+            aria-label={rellenar(tx(FP.zipElegirAria, lang), { m: etiqueta(medida) })}
+            className={cn("size-4 shrink-0 cursor-pointer accent-primary", FOCO, BAJO_BARRA)}
+          />
+        </label>
         <h4 className="text-sm font-semibold text-foreground tabular-nums">{etiqueta(medida)}</h4>
         {nAvisos > 0 ? (
           <span className="inline-flex items-center gap-1 rounded-md border border-status-warning/50 bg-status-warning/10 px-1.5 py-0.5 text-xs font-medium">
@@ -787,7 +863,17 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const [prueba, setPrueba] = useState<{ leido: Leido; tipos: Tipografias; e: Escritura | null } | null>(null);
   const entradaFuentes = useRef<HTMLInputElement>(null);
   const botonAgregar = useRef<HTMLButtonElement>(null);
-  const [zipeando, setZipeando] = useState(false);
+  /** El ZIP en curso: cuántos PSD van de cuántos (0 de 0 = sólo PNG). null = no se está armando. */
+  const [zip, setZip] = useState<{ hechos: number; total: number; cancelando?: boolean } | null>(null);
+  const zipeando = zip !== null;
+  /** Para «Cancelar» el ZIP en curso (corta también el PSD que se está armando). */
+  const cancelarZip = useRef<(() => void) | null>(null);
+  const botonZip = useRef<HTMLButtonElement>(null);
+  const botonCancelarZip = useRef<HTMLButtonElement>(null);
+  /** Qué lleva el ZIP (B22, Pedro: "Both folders, can untick"): los PNG en «Entregables», los PSD en «Editables». */
+  const [enZip, setEnZip] = useState({ png: true, psd: true });
+  /** Las medidas que se DESMARCARON para el ZIP en este PSD («WxH»): al abrir uno, todas van (una medida nueva también). */
+  const [fueraZip, setFueraZip] = useState<{ leido: Leido; fuera: ReadonlySet<string> } | null>(null);
   /** Lo último que pasó, para lectores de pantalla. `n` cambia cuando el mismo texto se repite (si no, no se anuncia). */
   const [aviso, setAviso] = useState<{ texto: string; n: number } | null>(null);
   /** El PSD trae muchas mesas: la persona elige cuáles leer (el worker espera, con el reloj en pausa). */
@@ -819,6 +905,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
       vivo.current = false;
       soltar();
       pedidoIA.current?.abort();
+      cancelarZip.current?.();
     };
   }, [soltar]);
   const anunciar = useCallback((t: string) => setAviso((p) => ({ texto: t, n: p?.texto === t ? p.n + 1 : 0 })), []);
@@ -997,6 +1084,9 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     setAjenas(null);
     pedidoIA.current?.abort();
     setConIA(null);
+    // El ZIP en curso es del PSD anterior: se corta (y su worker), y lo marcado se suelta con él.
+    cancelarZip.current?.();
+    setFueraZip(null);
   };
   const cambiarPsd = () => {
     volverASubir.current = true;
@@ -1534,35 +1624,159 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   };
   const notasArchivo = leido ? [...leido.descartadas.map((d) => rellenar(tx(FP.mesaNoUsada, lang), { n: d.nombre || tx(FP.sinNombre, lang), m: d.motivos.join(" · ") })), ...leido.avisos, ...usables.flatMap((m) => m.avisos.map((a) => `${m.w}×${m.h}: ${a}`))] : [];
 
+  // Qué medidas van en el ZIP (B22): una casilla en cada tarjeta y «Todas» / «Ninguna». Funcional: dos clics seguidos
+  // se suman.
+  const fueraDelZip = fueraZip?.leido === leido ? fueraZip.fuera : SIN_FUERA;
+  const elegidas = filas.filter((f) => !fueraDelZip.has(clave(f.m)));
+  const elegirParaZip = useCallback(
+    (m: Medida, si: boolean) => {
+      if (!leido) return;
+      setFueraZip((antes) => {
+        const fuera = new Set(antes?.leido === leido ? antes.fuera : []);
+        if (si) fuera.delete(clave(m));
+        else fuera.add(clave(m));
+        return { leido, fuera };
+      });
+    },
+    [leido],
+  );
+  const elegirTodas = (si: boolean) => {
+    if (!leido) return;
+    setFueraZip({ leido, fuera: si ? new Set() : new Set(filas.map((f) => clave(f.m))) });
+    anunciar(si ? rellenar(tx(FP.zipTodasHecho, lang), { n: filas.length }) : tx(FP.zipNingunaHecho, lang));
+  };
+
+  // El ZIP (B22, Pedro: "Both folders, can untick"): los PNG de las medidas marcadas en «Entregables» y sus PSD en
+  // «Editables», armados con la MISMA vía que el botón «PSD» de cada tarjeta, de uno en uno, con avance y «Cancelar».
+  // Los PSD salen de lo que había al hacer clic (si mientras se arman se voltea o se edita una medida, no cambian). Los
+  // PNG, de las tarjetas en cuanto terminan de pintarse: un cambio en ese instante (una fracción de segundo) sí entraría.
+  // «Cancelar» se ve al momento («Cancelando…»): el PSD en fila o los PNG pueden tardar un poco en soltarse.
+  const cancelarElZip = () => {
+    if (!cancelarZip.current) return;
+    cancelarZip.current();
+    setZip((z) => z && { ...z, cancelando: true });
+  };
   const bajarZip = async () => {
-    if (!leido || zipeando || !filas.length) return;
-    setZipeando(true);
+    if (!leido || zip) return;
+    const l = leido, lista = elegidas, { png, psd } = enZip;
+    // Un ZIP nuevo reemplaza el aviso del anterior (no se apilan).
+    toast.dismiss(AVISO_ZIP.id);
+    if (!lista.length) return void toast.error(tx(FP.zipNingunaMedida, lang), AVISO_ZIP);
+    if (!png && !psd) return void toast.error(tx(FP.zipNadaQueBajar, lang), AVISO_ZIP);
+    const { maestros: mas, escritura: esc } = conTextos, tps = tiposEscritos;
+    let cancelado = false;
+    let matar: (() => void) | null = null;
+    cancelarZip.current = () => {
+      cancelado = true;
+      matar?.();
+    };
+    const sigue = () => !cancelado && vivo.current && leidoVigente.current === l;
+    // Cancelado (con el botón o al abrir otro PSD) se dice; si se cerró la pantalla, no hay a quién decírselo.
+    const avisarCancelado = () => void (cancelado && vivo.current && toast.info(tx(FP.zipCancelado, lang), AVISO_ZIP));
+    // Lo que explica por qué NO llegó el ZIP se queda hasta cerrarlo: con doce PSD la persona pudo haberse ido un rato.
+    const fallo = (texto: string) => void (vivo.current && toast.error(texto, { ...AVISO_ZIP, ...FIJO }));
+    // «Armando ZIP…» mientras van los PNG; «Armando PSD i de n…» desde el primer PSD.
+    setZip({ hechos: 0, total: 0 });
+    if (psd) anunciar(rellenar(tx(FP.zipPsdEmpieza, lang), { n: lista.length }));
     try {
-      // Las vistas se pintan una por vuelta (al abrir, al voltear, al sumar tipografías): se espera a la última.
-      await colaVacia();
-      if (!vivo.current) return;
-      const con = filas.map((f) => ({ nombre: archivoDe(leido.maestros[f.maestro], f.m), lienzo: lienzos.current.get(clave(f.m)) }));
-      const faltan = con.filter((c) => !c.lienzo).length;
-      // Un ZIP incompleto que diga "listo" es peor que no entregarlo.
-      if (faltan) return void toast.error(rellenar(tx(FP.zipIncompleto, lang), { n: faltan }));
-      // `toBlob` toma la foto del lienzo al llamarse: se piden TODAS en este mismo instante, antes de esperar a
-      // ninguna, así un volteo o un cambio de lista a media descarga no mezcla estados.
-      const pngs = await Promise.all(con.map((c) => aPng(c.lienzo as HTMLCanvasElement)));
-      const archivos: Record<string, Uint8Array> = {};
-      for (const [i, c] of con.entries()) {
-        let nombre = c.nombre;
-        for (let n = 2; nombre in archivos; n++) nombre = c.nombre.replace(/\.png$/, `-${n}.png`);
-        archivos[nombre] = new Uint8Array(await pngs[i].arrayBuffer());
+      const salida = zipPorPartes(), usadas = new Set<string>();
+      if (png) {
+        // Las vistas se pintan una por vuelta (al abrir, al voltear, al sumar tipografías): se espera a la última.
+        await colaVacia();
+        if (!sigue()) return avisarCancelado();
+        const con = lista.map((f) => lienzos.current.get(clave(f.m)));
+        const faltan = con.filter((c) => !c).length;
+        // Un ZIP incompleto que diga "listo" es peor que no entregarlo.
+        if (faltan) return fallo(rellenar(tx(FP.zipIncompleto, lang), { n: faltan }));
+        // `toBlob` toma la foto del lienzo al llamarse: se piden TODAS en este mismo instante, antes de esperar a
+        // ninguna, así un volteo o un cambio de lista a media descarga no mezcla estados.
+        const pngs = await Promise.all(con.map((c) => aPng(c as HTMLCanvasElement)));
+        if (!sigue()) return avisarCancelado();
+        for (const [i, f] of lista.entries()) await salida.agregar(rutaLibre(usadas, CARPETA_ENTREGABLES, archivoDe(mas[f.maestro], f.m)), pngs[i]);
       }
-      if (!vivo.current) return;
-      // PNG ya viene comprimido: se guarda tal cual.
-      descargar(new Blob([zipSync(archivos, { level: 0 }) as BlobPart], { type: "application/zip" }), `${limpiarNombre(sinExtension(leido.archivo), NOMBRE_ZIP_MAX)}_formatos.zip`);
-      toast.success(tx(FX.zipListo, lang));
+      /** Los de capas planas, por motivo; las notas de las capas (las mismas en cada medida, una vez); los que no se
+       *  pudieron armar; los que ya no cupieron (ZIP_MAX_BYTES). */
+      const planos = new Map<string, string[]>(), notas = new Map<string, NotaCapa>(), sinPsd: string[] = [], sinLugar: string[] = [];
+      let nPsd = 0;
+      if (psd) {
+        if (!sigue()) return avisarCancelado();
+        setZip((z) => z && { ...z, total: lista.length });
+        for (const [i, f] of lista.entries()) {
+          if (!sigue()) return avisarCancelado();
+          let r: PsdArmado | null;
+          try {
+            r = await armarPsdMedida({
+              ma: mas[f.maestro],
+              maestro: f.maestro,
+              acomodo: f.acomodo,
+              medida: f.m,
+              escritura: esc,
+              tipos: tps,
+              psdOriginal: l.psdOriginal,
+              lang,
+              sigue,
+              alArmar: () => {},
+              alArrancar: (c) => (matar = c),
+            });
+          } catch (err) {
+            if (!sigue()) return avisarCancelado();
+            // Sigue con las demás y lo dice al final: un PSD que no se arma no tira los otros.
+            console.error("[formatos-psd] zip psd", err);
+            sinPsd.push(etiqueta(f.m));
+            setZip((z) => z && { ...z, hechos: i + 1 });
+            continue;
+          }
+          if (!r) return avisarCancelado();
+          // Lo que no cabe se salta y se dice; meterlo en el ZIP (no `agregar`) sí lo tira entero si falla.
+          if (!salida.cabe(r.archivo.size)) sinLugar.push(etiqueta(f.m));
+          else {
+            await salida.agregar(rutaLibre(usadas, CARPETA_EDITABLES, archivoPsdDe(mas[f.maestro], f.m)), r.archivo);
+            nPsd++;
+            if (r.plano !== null) planos.set(r.plano, [...(planos.get(r.plano) ?? []), etiqueta(f.m)]);
+            for (const x of r.notas) notas.set(JSON.stringify(x), x);
+          }
+          setZip((z) => z && { ...z, hechos: i + 1 });
+        }
+      }
+      if (!sigue()) return avisarCancelado();
+      // Sin PNG y sin un solo PSD, el ZIP saldría vacío.
+      if (!png && !nPsd) return fallo(rellenar(tx(FP.zipSinPsd, lang), { m: unos([...sinPsd, ...sinLugar]) }));
+      // Un ZIP de cientos de MB puede tardar en empezar a guardarse (el diálogo de «Guardar como»): su enlace vive más.
+      descargar(salida.terminar(), `${limpiarNombre(sinExtension(l.archivo), NOMBRE_ZIP_MAX)}_formatos.zip`, SOLTAR_ZIP_MS);
+      const nPlanos = [...planos.values()].reduce((t, ms) => t + ms.length, 0);
+      const lasNotas = [...notas.values()];
+      const avisos = [
+        ...[...planos].map(([motivo, ms]) => rellenar(tx(FP.zipPsdPlanos, lang), { m: unos(ms), motivo })),
+        ...(lasNotas.some((x) => x.aplanada) ? [rellenar(tx(FP.zipPsdAplanadas, lang), { capas: capasDe(lasNotas, true, lang) })] : []),
+        ...(lasNotas.some((x) => !x.aplanada) ? [rellenar(tx(FP.psdRevisar, lang), { capas: capasDe(lasNotas, false, lang) })] : []),
+        ...(sinPsd.length ? [rellenar(tx(FP.zipPsdFalta, lang), { m: unos(sinPsd) })] : []),
+        ...(sinLugar.length ? [rellenar(tx(FP.zipPsdSinLugar, lang), { m: unos(sinLugar), gb: ZIP_MAX_BYTES / 1024 ** 3 })] : []),
+      ];
+      // Una idea por línea: el resultado arriba, y abajo qué hacer al abrirlo y lo que no quedó como se pidió.
+      const titulo = rellenar(tx(png && nPsd ? FP.zipListoAmbos : png ? FP.zipListoPng : FP.zipListoPsd, lang), { n: lista.length, p: nPsd });
+      const lineas = [...(nPsd > nPlanos ? [tx(FP.zipPsdActualizar, lang)] : []), ...avisos];
+      const description = lineas.length ? (
+        <div className="space-y-1">
+          {lineas.map((x, i) => (
+            <p key={i}>{x}</p>
+          ))}
+        </div>
+      ) : undefined;
+      // Lo que no quedó como se pidió se queda hasta cerrarlo (es el único lugar donde se dice). Las notas de capas son
+      // las mismas en cada medida y en cada ZIP del archivo: como en las tarjetas, ya vistas no detienen el aviso.
+      const nuevas = notasNuevas(l.psdOriginal, lasNotas);
+      if (!avisos.length) toast.success(titulo, { ...AVISO_ZIP, description, duration: 10_000 });
+      else toast.warning(titulo, { ...AVISO_ZIP, description, ...(planos.size || sinPsd.length || sinLugar.length || nuevas ? FIJO : { duration: 10_000 }) });
     } catch (err) {
       console.error("[formatos-psd] zip", err);
-      toast.error(tx(FP.bajarFallo, lang));
+      fallo(tx(FP.bajarFallo, lang));
     } finally {
-      setZipeando(false);
+      cancelarZip.current = null;
+      if (vivo.current) {
+        // «Cancelar» se va con el ZIP: si tenía el foco, pasa al botón del ZIP (no al tope de la página).
+        if (document.activeElement === botonCancelarZip.current) botonZip.current?.focus();
+        setZip(null);
+      }
     }
   };
 
@@ -2117,18 +2331,68 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {volteables.length > 0 && (
-                  <Button variant="outline" size="lg" className={BOTON} onClick={voltearTodas}>
-                    <FlipHorizontal2 className="size-4" aria-hidden="true" /> {tx(FP.voltearTodas, lang)}
-                  </Button>
-                )}
+              {/* Los botones y, debajo, qué lleva el ZIP (en la misma columna: la barra no crece en alto). */}
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex flex-wrap justify-end gap-1.5">
+                  {volteables.length > 0 && (
+                    <Button variant="outline" size="lg" className={BOTON} onClick={voltearTodas}>
+                      <FlipHorizontal2 className="size-4" aria-hidden="true" /> {tx(FP.voltearTodas, lang)}
+                    </Button>
+                  )}
+                  {/* A la IZQUIERDA del ZIP: así el ZIP no se corre al aparecer, y un doble clic en él no cancela. */}
+                  {zipeando && (
+                    <Button
+                      ref={botonCancelarZip}
+                      variant="outline"
+                      size="lg"
+                      className={cn(BOTON, "aria-disabled:opacity-60")}
+                      onClick={cancelarElZip}
+                      aria-disabled={zip?.cancelando || undefined}
+                    >
+                      <X className="size-4" aria-hidden="true" /> {tx(FP.zipCancelar, lang)}
+                    </Button>
+                  )}
+                  {filas.length > 0 && (
+                    // aria-disabled, no disabled: un botón con foco que se deshabilita suelta el foco al tope de la página.
+                    // Sin nada marcado se ve apagado, pero el clic dice qué falta.
+                    <Button
+                      ref={botonZip}
+                      size="lg"
+                      className={cn(BOTON, "aria-disabled:opacity-60")}
+                      onClick={() => void bajarZip()}
+                      aria-disabled={zipeando || !elegidas.length || (!enZip.png && !enZip.psd) || undefined}
+                      aria-busy={zipeando}
+                    >
+                      {zipeando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
+                      {zip
+                        ? zip.cancelando
+                          ? tx(FP.zipCancelando, lang)
+                          : zip.hechos < zip.total
+                            ? rellenar(tx(FP.zipPsdAvance, lang), { i: zip.hechos + 1, n: zip.total })
+                            : tx(FX.armandoZip, lang)
+                        : rellenar(tx(FX.bajarZipN, lang), { n: elegidas.length })}
+                    </Button>
+                  )}
+                </div>
+                {/* Qué lleva el ZIP: cuántas medidas marcadas (en cada tarjeta) y qué carpetas. */}
                 {filas.length > 0 && (
-                  // aria-disabled, no disabled: un botón con foco que se deshabilita suelta el foco al tope de la página.
-                  <Button size="lg" className={cn(BOTON, "aria-disabled:opacity-60")} onClick={() => void bajarZip()} aria-disabled={zipeando || undefined} aria-busy={zipeando}>
-                    {zipeando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
-                    {zipeando ? tx(FX.armandoZip, lang) : rellenar(tx(FX.bajarZipN, lang), { n: filas.length })}
-                  </Button>
+                  <div role="group" aria-label={tx(FP.zipQueLleva, lang)} className="flex flex-wrap items-center justify-end gap-x-3 text-sm text-foreground">
+                    <span className="tabular-nums">{rellenar(tx(FP.zipElegidasN, lang), { n: elegidas.length, t: filas.length })}</span>
+                    <Button variant="link" size="sm" className="h-7 px-1 text-sm" onClick={() => elegirTodas(true)} aria-label={tx(FP.zipTodasAria, lang)}>
+                      {tx(FP.zipTodas, lang)}
+                    </Button>
+                    <Button variant="link" size="sm" className="-ml-2 h-7 px-1 text-sm" onClick={() => elegirTodas(false)} aria-label={tx(FP.zipNingunaAria, lang)}>
+                      {tx(FP.zipNinguna, lang)}
+                    </Button>
+                    <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
+                      <input type="checkbox" checked={enZip.png} onChange={(e) => setEnZip((z) => ({ ...z, png: e.target.checked }))} className={cn("size-4 shrink-0 cursor-pointer accent-primary", FOCO)} />
+                      {tx(FP.zipEntregables, lang)}
+                    </label>
+                    <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
+                      <input type="checkbox" checked={enZip.psd} onChange={(e) => setEnZip((z) => ({ ...z, psd: e.target.checked }))} className={cn("size-4 shrink-0 cursor-pointer accent-primary", FOCO)} />
+                      {tx(FP.zipEditables, lang)}
+                    </label>
+                  </div>
                 )}
               </div>
             </div>
@@ -2160,7 +2424,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                     </h3>
                     <ul className={cn("grid gap-3", COLUMNAS[f])}>
                       {grupo.map((m) => (
-                        <TarjetaMedida key={clave(m)} maestros={conTextos.maestros} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={conTextos.escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} />
+                        <TarjetaMedida key={clave(m)} maestros={conTextos.maestros} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={conTextos.escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} elegida={!fueraDelZip.has(clave(m))} alElegir={elegirParaZip} />
                       ))}
                     </ul>
                   </div>

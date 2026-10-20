@@ -908,6 +908,54 @@ largo: estacionado por él.
       · Para después (sólo con archivos dañados): un bloque malo dentro de una capa se pierde sin aviso (la capa va
         como imagen, sin texto vivo); el worker editable llama «formato» a un "Invalid signature" de NUESTRO escritor
         (psdWriter.js:104), culpando al archivo.
+- [x] B22. Elegir medidas: para bajar y para la IA (Pedro, 2026-10-20: "select which sizes to download… the zip needs
+      to have folders inside "Editables" (with the psd's inside) and "Entregables" (with the png's) also that same
+      selector should let you select the sizes you want to modify with ai"). Pedro eligió (2026-10-20): "Checkbox on
+      each card", "Both folders, can untick" y, para la IA, "Do nothing for AI" (el arreglo del fondo sigue en todas
+      las medidas de la mesa, como hoy).
+      **Next Step:** B22 hecho (abajo, Review B22), en `prisma` (preview). Que Pedro o un diseñador bajen un ZIP con
+      2-3 medidas marcadas en la preview y lo abran con doble clic (Mac; y Windows si alguien lo usa).
+      · Hoy: no hay selector. El ZIP lleva SÓLO los PNG, sueltos, de todas las medidas prendidas; la única forma de
+        dejar una fuera es apagar su pastilla arriba (y entonces su tarjeta también se va). El PSD de cada medida sale
+        sólo con el botón de su tarjeta, uno por uno. «Quitar del fondo» y «Rellenar con IA» arreglan el fondo de la
+        mesa UNA vez (una llamada, ≈ US$0.041) y todas las medidas que salen de esa mesa lo usan.
+      · Peso (s33): cada PSD editable pesa 42-55 MB → 12 medidas ≈ 600 MB en un ZIP. Tiempo de 12 seguidas: sin medir.
+      · Lo que se propuso: (1) casilla en cada tarjeta + barra «5 de 12 elegidas · Todas · Ninguna», empiezan todas
+        elegidas; (2) el ZIP lleva `Entregables/` (PNG) y `Editables/` (PSD) de las elegidas, con dos casillas para
+        dejar fuera una de las dos (las dos prendidas de inicio), avance «PSD 3 de 5» y Cancelar; (3) la IA y el
+        espejo se piden UNA vez por mesa (mismo costo) y el fondo retocado se pone sólo en las medidas elegidas al
+        hacer clic; cada medida lo recuerda, así luego se puede elegir otras para bajar.
+      · Plan:
+        - [x] a. Elegidas en la página (un Set por PSD, todas al abrir), casilla en la tarjeta, barra Todas/Ninguna.
+        - [x] b. Sacar el armado del PSD de la tarjeta a UNA función que usen el botón de la tarjeta y el ZIP (mismo
+              editable, mismo respaldo plano, mismas notas).
+        - [x] c. ZIP por partes (fflate `Zip`, sin copiar todo dos veces en memoria), carpetas, avance, Cancelar, un
+              resumen al final (cuáles PSD salieron planos y por qué).
+        - ~~d. Retoque de fondo por medida~~: FUERA (Pedro: "Do nothing for AI").
+        - [x] e. Pruebas (test-formatos) + navegador con s33: elegir 3, bajar, abrir el ZIP y leer de vuelta sus PSD y
+              PNG; con «Quitar del fondo» puesto, el ZIP lleva el fondo retocado igual que la tarjeta.
+      · Verificación: npm test verde; el ZIP real abierto (carpetas, nombres, sólo las elegidas); los PNG iguales a la
+        tarjeta; los PSD iguales al botón de la tarjeta; tsc, eslint y build limpios. Sin migración ni deploy.
+      **Review B22 (2026-10-20):** con s33 en el navegador (localhost, DiDi cargadas): 3 marcadas → ZIP de 141.5 MB con
+      sólo esas 3 en `Entregables/` y `Editables/`; su PSD 320×250 es IDÉNTICO byte a byte (sha256) al del botón «PSD»
+      de la tarjeta, y sus PNG iguales píxel a píxel a las tarjetas. Las 12 con PNG + PSD: 629.3 MB en 8.4 s; `unzip -t`
+      sin errores y `ditto` (lo que usa el doble clic de Finder) saca las 2 carpetas con 12 cada una. Sólo PNG: 15.4 MB.
+      Ninguna marcada / ninguna carpeta: lo dice y no baja nada. «Cancelar» a la mitad (PSD 5 de 12): para en ~0.2 s,
+      no baja nada, lo dice y el foco vuelve al ZIP. Abrir el PSD otra vez: las 12 marcadas de nuevo. Consola limpia.
+      Pruebas: test-formatos 463/0 + las de tope/rutas/falla a medias; npm test todo verde; tsc, eslint y build limpios.
+      · Revisión (5 pasadas): arreglado: un archivo que falla a medias dejaba el ZIP trabado hasta el final (ahora lo
+        tira al momento); sin tope, más de 4 GiB salía roto sin avisar (fflate no escribe ZIP64) → tope de 2 GiB y los
+        PSD que no caben se saltan y se nombran; ruta insegura rechazada en el ZIP; abrir otro PSD corta el ZIP en curso
+        y suelta lo marcado (no retiene el PSD viejo); «Cancelar» a la IZQUIERDA del ZIP (el ZIP ya no se corre: un
+        doble clic no cancela); «Cancelando…»; la barra no crece en alto (lo del ZIP bajo los botones) y el margen bajo
+        la barra subió a 192 px (medido: barra hasta 149 px; foco a 192); los avisos de bajar (ZIP y PSD de tarjeta)
+        abajo a la derecha (arriba tapaban el botón del ZIP: lo vi al probar), uno a la vez y con título + líneas; las
+        notas de capas ya vistas no detienen el aviso; nombres para lector de pantalla que empiezan con lo que se ve
+        («Ninguna: …»); casillas y enlaces más grandes (36 px la de la tarjeta); textos sin "1 PNGs".
+      · No arreglado (anotado): el ZIP de la puerta de imagen plana sigue sin carpetas (allí no hay PSD); «Cancelando…»
+        sólo se ve si parar tarda (aquí paró antes de pintarse); cuánta memoria pide un ZIP de 12 PSD: sin medir; Safari,
+        Firefox y Windows sin probar; el aviso del «PSD» de cada tarjeta sigue en un solo párrafo (el del ZIP ya va en
+        título + líneas); los «Todas»/«Ninguna» miden 28 px de alto (la norma de la app es 36).
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
 - iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los
   pendientes de iPad de B19 (caché de 4 fondos, táctil real, zoom de Safari) quedan fuera.
