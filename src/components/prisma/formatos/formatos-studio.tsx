@@ -556,7 +556,7 @@ export function FormatosStudio({
       {/* Sin wrap: el botón de idioma se queda a la derecha del título (a 1280 se bajaba a su propio renglón). */}
       <div className="mb-4 flex items-end justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <Link href="/prisma" className={cn("inline-flex min-h-9 items-center gap-1 rounded text-sm text-muted-foreground hover:text-foreground", FOCO)}>
+          <Link href="/prisma" className={cn("inline-flex min-h-9 items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground", FOCO)}>
             <ArrowLeft className="size-4" aria-hidden="true" /> {tx(FX.volver, lang)}
           </Link>
           {/* El mismo encabezado que la puerta PSD (B23): título y lema en una banda. */}
@@ -571,6 +571,7 @@ export function FormatosStudio({
         <button
           type="button"
           onClick={() => setLang(lang === "es" ? "en" : "es")}
+          lang={lang === "es" ? "en" : "es"}
           className={cn("inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary", FOCO)}
           aria-label={lang === "es" ? "Switch to English" : "Cambiar a español"}
         >

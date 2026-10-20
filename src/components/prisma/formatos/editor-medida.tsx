@@ -798,7 +798,9 @@ export function EditorMedida({
                 onPointerDown={(ev) => ev.stopPropagation()}
               >
                 <span className="truncate">{rellenar(tx(FP.editorAbierta, lang), { p: nombrePieza(abierta) })}</span>
-                <Button variant="outline" size="xs" className={BOTON} onClick={() => cerrar()}>
+                {/* Chico a propósito (24 px): flota sobre la vista y uno más alto tapaba las piezas de arriba en un
+                    banner. Esc también la cierra. */}
+                <Button variant="outline" size="xs" onClick={() => cerrar()}>
                   {tx(FP.editorCerrar, lang)}
                 </Button>
               </div>
@@ -832,24 +834,24 @@ export function EditorMedida({
           </div>
           <div className={cn("grid max-h-48 min-h-0 min-w-0 content-start gap-3 overflow-y-auto text-sm md:grid-cols-3", !tira && "lg:max-h-none lg:grid-cols-1")}>
             <div className="flex flex-col gap-3">
-              {/* La ayuda en una línea que se abre (B23): antes eran ~100 palabras grises antes de «Textos» y «Capas».
-                  Cerrada sigue siendo la descripción de cada pieza (el lector la lee al llegar a ella). */}
+              {/* La ayuda en una línea que se abre (B23): antes eran ~100 palabras grises antes de «Textos» y «Capas». */}
               <details className="group">
-                <summary className="-mx-1.5 flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary/60 hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden">
                   <ChevronDown className="size-3.5 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
                   {tx(FP.editorComoSeUsa, lang)}
                 </summary>
                 <div className="mt-1 space-y-2">
-                  <p id="editor-ayuda" className="text-muted-foreground">
-                    {tx(FP.editorAyuda, lang)}
-                  </p>
-                  {hayPartes && (
-                    <p id="editor-ayuda-partes" className="text-muted-foreground">
-                      {tx(FP.editorAyudaPartes, lang)}
-                    </p>
-                  )}
+                  <p className="text-muted-foreground">{tx(FP.editorAyuda, lang)}</p>
+                  {hayPartes && <p className="text-muted-foreground">{tx(FP.editorAyudaPartes, lang)}</p>}
                 </div>
               </details>
+              {/* La descripción de cada pieza (aria-describedby), en una copia `hidden` fuera de «Cómo se usa»: lo que
+                  está dentro de un <details> cerrado no todos los lectores lo leen como descripción; lo `hidden` que se
+                  nombra por id, sí (como el botón de la IA en la página). */}
+              <div hidden>
+                <p id="editor-ayuda">{tx(FP.editorAyuda, lang)}</p>
+                {hayPartes && <p id="editor-ayuda-partes">{tx(FP.editorAyudaPartes, lang)}</p>}
+              </div>
               {/* A la vista, al momento; al lector de pantalla, medio segundo después del último cambio (abajo). Con una
                   pieza abierta el estado es más largo (pieza y parte): más alto, para que el panel no brinque. */}
               <p className={cn("text-foreground", abierta !== null ? "min-h-[5rem]" : "min-h-[3.75rem]")}>{estado}</p>

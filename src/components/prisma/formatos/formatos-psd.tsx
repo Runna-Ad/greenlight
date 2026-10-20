@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, ArrowUp, Check, ChevronDown, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Languages, Layers, Loader2, Lock, Maximize2, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -56,6 +56,7 @@ const COPIA_PAUSA_MS = 400;
 const SIN_TIPOS: Tipografias = new Map();
 const SIN_CAMBIOS: CambiosTexto = {};
 const SIN_FUERA: ReadonlySet<string> = new Set();
+const SIN_ABIERTOS: ReadonlySet<number> = new Set();
 
 /**
  * Los textos cambiados en el editor (del anuncio entero, paso 3): cada maestro con esas piezas ya escritas
@@ -97,11 +98,12 @@ const CLAVE_ERROR: Record<MotivoPsd | "desconocido", keyof typeof FP_ERROR> = { 
 const VISTA_ALTO_MAX = 360;
 /** La lista de DiDi, como pastillas (Pedro, 2026-10-15: "we have them pre loaded those are tied to didi"). */
 const LISTA_DIDI: MedidaLista[] = leerMedidas(MEDIDAS_EQUIPO).medidas.map((m) => ({ ...m, propia: false }));
-/** Avisos que se arreglan una sola vez arriba, en «En varias medidas»: en la tarjeta van en una línea corta. */
-const AVISO_CORTO = { copia: FP.avisoCopiaCorto, retoque: FP.avisoRetoqueCorto } as const;
-/** Un aviso común: se arregla UNA vez arriba («En varias medidas»). La tarjeta, el resumen y «En varias medidas» usan
- *  esta misma regla (B23), para que el ámbar de cada tarjeta y el conteo de arriba no se separen. */
-const esComun = (a: AvisoAcomodo): a is AvisoAcomodo & { tipo: keyof typeof AVISO_CORTO } => Object.hasOwn(AVISO_CORTO, a.tipo);
+/** Avisos de «En varias medidas» (la pieza repetida y, ya quitada, su relleno): en la tarjeta van en una línea corta. */
+const deVarias = (a: AvisoAcomodo) => a.tipo === "copia" || a.tipo === "retoque";
+/** Un aviso común: la pieza repetida se arregla UNA vez arriba. La tarjeta y el resumen usan esta misma regla (B23),
+ *  para que el ámbar de cada tarjeta y el conteo de arriba no se separen. El relleno ya hecho («Fondo retocado») NO es
+ *  común: se revisa medida por medida, así que sigue en ámbar y cuenta. */
+const esComun = (a: AvisoAcomodo) => a.tipo === "copia";
 /** El nombre de la mesa se acorta ANTES de ponerle la medida: así la medida nunca se corta y dos medidas no chocan. */
 const NOMBRE_MESA_MAX = 100;
 const NOMBRE_ZIP_MAX = 80;
@@ -116,8 +118,9 @@ const BOTON = "min-h-9 text-[13px] pointer-coarse:min-h-11";
 const BAJO_BARRA = "scroll-mt-48";
 /** Los botones de cada tarjeta: el mismo alto que los demás (antes 32 px), un poco menos de relleno a los lados. */
 const BOTON_TARJETA = cn("h-9 px-2.5 text-[13px] pointer-coarse:h-11", BAJO_BARRA);
-/** Un botón dentro de un grupo con borde («Todas» / «Ninguna» junto al conteo del ZIP). */
-const SEGMENTO = cn("cursor-pointer border-l border-border px-2.5 font-medium hover:bg-secondary focus-visible:relative focus-visible:z-10", FOCO);
+/** Un botón dentro de un grupo con borde («Todas» / «Ninguna» junto al conteo del ZIP). El anillo de foco va por dentro:
+ *  el borde redondo del grupo (overflow-hidden) cortaría uno por fuera. */
+const SEGMENTO = cn("cursor-pointer border-l border-border px-2.5 font-medium hover:bg-secondary", FOCO, "focus-visible:ring-inset focus-visible:ring-offset-0");
 /** Una carpeta del ZIP como pastilla: la casilla va escondida adentro y el anillo de foco lo pinta la pastilla. */
 const PASTILLA_ZIP = "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-1 pointer-coarse:h-11";
 /**
@@ -534,7 +537,7 @@ function ContrasteMedida({ info, ma, medida, editada, lang, alElegir }: { info: 
         </div>
         {/* Los % se miden con el acomodo automático: con piezas movidas a mano pueden cambiar (el aviso de la tarjeta sí
           mide lo editado). */}
-      {editada && <p className="mt-1 text-xs text-muted-foreground">{tx(FP.contrasteEditadaNota, lang)}</p>}
+        {editada && <p className="mt-1 text-xs text-muted-foreground">{tx(FP.contrasteEditadaNota, lang)}</p>}
       </div>
     </details>
   );
@@ -551,10 +554,12 @@ function irAVarias() {
 /** Un aviso largo en una tarjeta angosta (B23): dos renglones y «Ver más». El texto entero sigue en la página (el lector
  *  de pantalla lo lee completo) y el botón sólo sale si de verdad no cabe. */
 function NotaLarga({ texto, lang }: { texto: string; lang: Lang }) {
+  const id = useId();
   const caja = useRef<HTMLSpanElement>(null);
   const [abierta, setAbierta] = useState(false);
   const [noCabe, setNoCabe] = useState(false);
-  useEffect(() => {
+  // Antes de pintar: si no, «Ver más» aparece un cuadro después y la fila de tarjetas brinca.
+  useLayoutEffect(() => {
     const el = caja.current;
     if (!el || abierta) return;
     const medir = () => setNoCabe(el.scrollHeight > el.clientHeight + 1);
@@ -565,12 +570,13 @@ function NotaLarga({ texto, lang }: { texto: string; lang: Lang }) {
   }, [texto, abierta]);
   return (
     <span className="min-w-0">
-      <span ref={caja} className={cn("block", !abierta && "line-clamp-2")}>
+      <span ref={caja} id={id} className={cn("block", !abierta && "line-clamp-2")}>
         {texto}
       </span>
       {(noCabe || abierta) && (
-        // -my: el clic mide 36 px sin separar más los renglones.
-        <button type="button" lang={lang} aria-expanded={abierta} onClick={() => setAbierta((a) => !a)} className={cn("-my-1.5 inline-flex h-9 cursor-pointer items-center rounded-md font-medium text-primary hover:underline", FOCO, BAJO_BARRA)}>
+        // -my: el clic mide 36 px sin separar más los renglones. Lleva el aviso como descripción: con Tab, cada «Ver más»
+        // dice de qué aviso es.
+        <button type="button" lang={lang} aria-expanded={abierta} aria-controls={id} aria-describedby={id} onClick={() => setAbierta((a) => !a)} className={cn("-my-1.5 inline-flex h-9 cursor-pointer items-center rounded-md font-medium text-primary hover:underline", FOCO, BAJO_BARRA)}>
           {tx(abierta ? FP.verMenos : FP.verMas, lang)}
         </button>
       )}
@@ -658,13 +664,15 @@ const TarjetaMedida = memo(function TarjetaMedida({
   }, [ma, maestro, acomodo, w, h, k, registrar, escritura, tipos]);
 
   const letra = acomodo.letras.length ? Math.min(...acomodo.letras.map((l) => l.px)) : null;
-  // «Pieza repetida» y «fondo retocado» se arreglan UNA vez arriba (en «En varias medidas»): aquí, una línea corta
-  // y una sola vez aunque el motor los diga por cada pieza. Los demás avisos son de esta medida y van completos.
-  const cortos = [...new Set(acomodo.avisos.filter(esComun).map((v) => v.tipo))];
-  const propios = acomodo.avisos.filter((v) => !esComun(v));
+  // «Pieza repetida» y «fondo retocado» vienen de «En varias medidas»: aquí, una línea corta y una sola vez aunque el
+  // motor los diga por cada pieza. Los demás avisos son de esta medida y van completos.
+  const comun = acomodo.avisos.some(esComun);
+  const retocada = acomodo.avisos.some((v) => v.tipo === "retoque");
+  const propios = acomodo.avisos.filter((v) => !deVarias(v));
   // El ámbar cuenta sólo lo de ESTA medida (B23): antes la pieza repetida ponía 11 de 12 tarjetas en ámbar y las que
-  // de verdad tenían un problema propio no se distinguían. Lo común sigue en la tarjeta, en gris y con salto al arreglo.
-  const nPropios = propios.length + (noPinto ? 1 : 0);
+  // de verdad tenían un problema propio no se distinguían. La pieza repetida sigue en la tarjeta, en gris y con salto
+  // al arreglo; el relleno que dejó sí es de esta medida (hay que mirarlo aquí).
+  const nPropios = propios.length + (retocada ? 1 : 0) + (noPinto ? 1 : 0);
   // Editada a mano, voltear movería sólo lo que no se tocó: se vuelve al automático desde el editor. La misma regla
   // que «Voltear todas» (`acomodo.editada`).
   const volteable = sePuedeVoltear(acomodo.familia) && !acomodo.editada;
@@ -780,7 +788,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
             <span className="inline-flex items-center gap-1 rounded-md border border-status-warning/50 bg-status-warning/10 px-1.5 py-0.5 text-xs font-medium">
               <AlertTriangle className="size-3 text-status-warning" aria-hidden="true" /> {nPropios === 1 ? tx(FP.avisoUno, lang) : rellenar(tx(FP.avisosN, lang), { n: nPropios })}
             </span>
-          ) : cortos.length > 0 ? (
+          ) : comun ? (
             <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
               <ArrowUp className="size-3" aria-hidden="true" /> {tx(FP.avisoComun, lang)}
             </span>
@@ -803,26 +811,33 @@ const TarjetaMedida = memo(function TarjetaMedida({
         </p>
       )}
       {contraste && <ContrasteMedida info={contraste} ma={ma} medida={medida} editada={!!acomodo.editada} lang={lang} alElegir={alContraste} />}
-      {(propios.length > 0 || cortos.length > 0) && (
+      {(propios.length > 0 || retocada || comun) && (
         // Los avisos los escribe el motor (acomodo.ts), en español: marcados así cuando la pantalla está en inglés.
         <ul lang={lang === "en" ? "es" : undefined} className="mt-2 space-y-1 text-xs leading-snug text-foreground">
           {propios.map((v, i) => (
-            <li key={i} className="flex items-start gap-1.5">
+            // La llave lleva el texto: si el aviso cambia, «Ver más» vuelve a cerrado.
+            <li key={`${i}:${v.texto}`} className="flex items-start gap-1.5">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> <NotaLarga texto={v.texto} lang={lang} />
             </li>
           ))}
-          {cortos.map((t) => (
-            <li key={t} lang={lang}>
+          {retocada && (
+            <li lang={lang} className="flex items-start gap-1.5">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> <span className="min-w-0">{tx(FP.avisoRetoqueCorto, lang)}</span>
+            </li>
+          )}
+          {comun && (
+            // mt-2: con un renglón arriba (y su «Ver más»), los dos clics de 36 px no se enciman.
+            <li lang={lang} className={cn((propios.length > 0 || retocada) && "mt-2")}>
               {/* -my: el clic mide 36 px sin separar más los renglones. */}
               <button type="button" onClick={irAVarias} className={cn("-my-1.5 flex min-h-9 w-full cursor-pointer items-start gap-1.5 rounded-md py-1.5 text-left text-muted-foreground hover:text-foreground", FOCO, BAJO_BARRA)}>
                 <ArrowUp className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                <span className="min-w-0">
-                  {tx(AVISO_CORTO[t], lang)}
+                <span className="min-w-0 underline decoration-dotted underline-offset-4">
+                  {tx(FP.avisoCopiaCorto, lang)}
                   <span className="sr-only">{tx(FP.avisoIrArriba, lang)}</span>
                 </span>
               </button>
             </li>
-          ))}
+          )}
         </ul>
       )}
       {/* Los botones al pie de la tarjeta (mt-auto): en una fila de tarjetas quedan a la misma altura, bajo una línea.
@@ -838,7 +853,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
               <FlipHorizontal2 className="size-3.5" aria-hidden="true" /> {tx(FP.voltear, lang)}
             </Button>
           )}
-          <div role="group" aria-label={rellenar(tx(FP.bajarGrupo, lang), { m: etiqueta(medida) })} className="col-span-2 grid grid-cols-2 @[22rem]:ml-auto @[22rem]:flex">
+          <div className="col-span-2 grid grid-cols-2 @[22rem]:ml-auto @[22rem]:flex">
             <Button variant="outline" className={cn(BOTON_TARJETA, "relative rounded-r-none focus-visible:z-10")} onClick={() => void bajar()} disabled={noPinto} aria-label={rellenar(tx(FP.bajarPngAria, lang), { m: etiqueta(medida) })}>
               <Download className="size-3.5" aria-hidden="true" /> {tx(FP.bajarPng, lang)}
             </Button>
@@ -1022,8 +1037,10 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const quitadas = sinCopia?.leido === leido ? sinCopia.mapa : null;
   /** El maestro cuya copia está borrando la IA en ESTE PSD (null si ninguno). */
   const iaEnCurso = conIA && conIA.leido === leido ? conIA.i : null;
-  /** «Cómo funciona» abierto en «En varias medidas», por maestro (B23: la explicación larga, a un clic). */
-  const [comoFunciona, setComoFunciona] = useState<ReadonlySet<number>>(() => new Set());
+  /** «Cómo funciona» abierto en «En varias medidas», por maestro (B23: la explicación larga, a un clic). De ESTE PSD:
+   *  con otro archivo vuelve cerrado. */
+  const [comoFuncionaDe, setComoFuncionaDe] = useState<{ leido: Leido; abiertos: ReadonlySet<number> } | null>(null);
+  const comoFunciona = comoFuncionaDe?.leido === leido ? comoFuncionaDe.abiertos : SIN_ABIERTOS;
   /** Lo quitado de un maestro sigue valiendo sólo si su copia es la misma pieza (si la persona cambió el papel de las
    *  carpetas, el HERO puede ser otro: entonces se vuelve a ofrecer en vez de dejar un retoque viejo). */
   const quitadaDe = (i: number): Quitada | null => {
@@ -1951,7 +1968,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   /** Las piezas repetidas que se ven en alguna medida prendida, con en cuántas (antes de quitarla: dos veces; después:
    *  el relleno). Una ya quitada se queda aunque no se vea, para poder deshacerla. */
   const copiasEnVista = copiasVista.flatMap((c) => {
-    const n = filas.filter((f) => f.maestro === c.i && f.acomodo.avisos.some(esComun)).length;
+    const n = filas.filter((f) => f.maestro === c.i && f.acomodo.avisos.some(deVarias)).length;
     return n || c.quitada ? [{ ...c, n }] : [];
   });
   /** ¿Queda algo por hacer en «En varias medidas»? (Si todo se arregló, el panel se queda, sin el ámbar.) */
@@ -2367,10 +2384,16 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                             type="button"
                             aria-expanded={comoFunciona.has(c.i)}
                             aria-controls={`psd-copia-mas-${c.i}`}
-                            onClick={() => setComoFunciona((antes) => (antes.has(c.i) ? new Set([...antes].filter((x) => x !== c.i)) : new Set([...antes, c.i])))}
+                            onClick={() => {
+                              if (!leido) return;
+                              const abiertos = new Set(comoFunciona);
+                              if (!abiertos.delete(c.i)) abiertos.add(c.i);
+                              setComoFuncionaDe({ leido, abiertos });
+                            }}
                             className={cn("-my-2 inline-flex h-9 cursor-pointer items-center gap-0.5 rounded-md px-1 align-baseline text-xs font-medium whitespace-nowrap text-primary hover:underline", FOCO)}
                           >
                             {tx(FP.copiaComoFunciona, lang)}
+                            <span className="sr-only">{rellenar(tx(FP.copiaQuitarSr, lang), v)}</span>
                             <ChevronDown className={cn("size-3.5 transition-transform motion-reduce:transition-none", comoFunciona.has(c.i) && "rotate-180")} aria-hidden="true" />
                           </button>
                         </p>
@@ -2379,10 +2402,14 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                             <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> {tx(FP.copiaIaDeriva, lang)}
                           </p>
                         )}
-                        {/* Lo que pasa ahora con la IA se queda a la vista; cómo funciona, a un clic. */}
-                        {conBotonIA && (trabajando || iaEnCurso !== null) && (
-                          <p className="mt-1 text-xs text-foreground">{tx(trabajando ? FP.copiaIaEspera : FP.copiaIaOtra, lang)}</p>
-                        )}
+                        {/* Lo que pasa ahora con la IA se queda a la vista, y también qué se le manda a Google (antes de
+                            gastar y de mandar nada); cómo funciona, a un clic. */}
+                        {conBotonIA &&
+                          (trabajando || iaEnCurso !== null ? (
+                            <p className="mt-1 text-xs text-foreground">{tx(trabajando ? FP.copiaIaEspera : FP.copiaIaOtra, lang)}</p>
+                          ) : (
+                            <p className="mt-1 text-xs text-muted-foreground">{tx(FP.copiaIaGoogle, lang)}</p>
+                          ))}
                         {/* Escondida sigue siendo la descripción del botón de la IA (el lector la lee al llegar a él). */}
                         <div id={`psd-copia-mas-${c.i}`} hidden={!comoFunciona.has(c.i)} className="mt-1 space-y-1 text-xs text-muted-foreground">
                           {conBotonIA && <p id={`psd-copia-ia-${c.i}`}>{rellenar(tx(FP.copiaIaAyuda, lang), v)}</p>}
@@ -2523,7 +2550,8 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                         <input type="checkbox" checked={enZip[k]} onChange={(e) => setEnZip((z) => ({ ...z, [k]: e.target.checked }))} className="sr-only" />
                         {/* El lugar de la palomita se guarda: prender o apagar no mueve lo de al lado. */}
                         <Check className={cn("size-3.5 shrink-0", !enZip[k] && "invisible")} aria-hidden="true" />
-                        {tx(texto, lang)}
+                        {/* Son los nombres de las carpetas del ZIP: en español también con la pantalla en inglés. */}
+                        <span lang={lang === "en" ? "es" : undefined}>{tx(texto, lang)}</span>
                       </label>
                     ))}
                   </div>

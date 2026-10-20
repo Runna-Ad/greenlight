@@ -223,7 +223,8 @@ export function PastillasMedidas({
           {propias ? rellenar(tx(FP.medidasMas, lang), { n: propias }) : ""}, {rellenar(tx(FP.medidasPrendidas, lang), { n: prendidas, t: lista.length })}. {tx(FP.medidasAyuda, lang)}
         </p>
         {cambiada && (
-          <button type="button" onClick={restablecer} className={cn("inline-flex min-h-9 cursor-pointer items-center gap-1 rounded-md text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground pointer-coarse:min-h-11", FOCO)}>
+          // -my-2: el clic mide 36 px, pero el renglón no crece (y lo de abajo no brinca) cuando aparece.
+          <button type="button" onClick={restablecer} className={cn("-my-2 inline-flex min-h-9 cursor-pointer items-center gap-1 rounded-md text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground pointer-coarse:min-h-11", FOCO)}>
             <RotateCcw className="size-3" aria-hidden="true" /> {tx(FP.medidasRestablecer, lang)}
           </button>
         )}

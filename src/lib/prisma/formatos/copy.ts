@@ -444,6 +444,11 @@ export const FP = {
     "Con IA (Nano Banana) el hueco se redibuja en vez de copiarse de los lados, y sólo cambia ahí; «Deshacer» vuelve al fondo original. A Google se le manda sólo un recorte del fondo y la pieza: tu PSD no se sube.",
     "With AI (Nano Banana) the gap is redrawn instead of copied from the sides, and only the gap changes; “Undo” goes back to the original background. Google only gets a crop of the background and the piece: your PSD isn't uploaded.",
   ),
+  /** A la vista junto al botón de la IA (B23): la explicación larga va en «Cómo funciona», esto no se esconde. */
+  copiaIaGoogle: t(
+    "Con IA, a Google se le manda sólo un recorte del fondo y la pieza: tu PSD no se sube.",
+    "With AI, Google only gets a crop of the background and the piece: your PSD isn't uploaded.",
+  ),
   copiaIaDirecto: t("Quitar con IA ({e})", "Remove with AI ({e})"),
   copiaIaTrabajando: t("Rellenando con IA…", "Filling with AI…"),
   copiaIaEspera: t("Puede tardar hasta un minuto.", "It can take up to a minute."),
@@ -561,14 +566,13 @@ export const FP = {
   enVariasPendiente: t("hay algo por revisar", "something to check"),
   enVariasListo: t("todo arreglado", "all fixed"),
   // En la tarjeta es un botón que lleva a «En varias medidas» (B23): por eso ya no repite el nombre de la sección.
-  avisoCopiaCorto: t("Pieza repetida en el fondo: se arregla arriba", "Repeated piece in the background: fixed above"),
+  avisoCopiaCorto: t("Pieza repetida en el fondo: se arregla arriba", "Repeated piece in the background: fix it above"),
   avisoRetoqueCorto: t("Fondo retocado: revisa que el relleno se vea bien.", "Retouched background: check that the fill looks right."),
   avisoIrArriba: t(" (ir a «En varias medidas»)", " (go to “Across sizes”)"),
   /** El estado de una tarjeta cuyo único aviso es el que se arregla una vez arriba (B23): gris, no ámbar. */
   avisoComun: t("Aviso común", "Shared warning"),
   verMas: t("Ver más", "Show more"),
   verMenos: t("Ver menos", "Show less"),
-  bajarGrupo: t("Descargar {m}", "Download {m}"),
   listo: t("Listo", "Ready"),
   avisosN: t("{n} avisos", "{n} warnings"),
   avisoUno: t("1 aviso", "1 warning"),
