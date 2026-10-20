@@ -12,12 +12,12 @@
  * Una sola entrada, `revisarMedida`, para la tarjeta de cada medida y para el resumen de la pantalla: los dos cuentan
  * los mismos avisos.
  */
-import { acomodar, aplicarEdicion, dibujosDe, elegirMaestro, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type ParteCaja, type Zona } from "./acomodo.ts";
+import { acomodar, aplicarEdicion, dibujosDe, elegirMaestro, sinSusLetras, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type ParteCaja, type Zona } from "./acomodo.ts";
 import { haloDe } from "./halo.ts";
 import type { Caja, Rol } from "./psd.ts";
 import { etiquetaPieza } from "./roles.ts";
 
-type Pixeles = { caja: Caja; rgba: Uint8ClampedArray };
+type Pixeles = { caja: Caja; rgba: Uint8ClampedArray; base?: Uint8ClampedArray | null; textos?: readonly unknown[] };
 type PiezaRevisable = MaestroCaja["piezas"][number] & Pixeles & { partes?: readonly (ParteCaja & Pixeles)[] };
 /** La copia del HERO en el fondo de un maestro: de qué pieza, y si ya se quitó. */
 export type CopiaEnFondo = { pieza: number; quitada: boolean };
@@ -76,7 +76,10 @@ export function perdidas(ma: MaestroRevisable, a: Acomodo, W: number, H: number,
   const sombras = new Set(a.sombras ?? []);
   const todos = a.puestas.flatMap((q) => dibujosDe(ma.piezas[q.pieza], q).map((d) => ({ pieza: q.pieza, puesta: q, d })));
   const esquinas = todos.map(({ d }) => esquina(d.d, d));
-  const halos = todos.map(({ pieza, d }) => (sombras.has(pieza) ? haloDe(ma, d.d) : null));
+  // Un dibujo sin ninguno de sus textos en esta medida (quitados a mano) se pinta con su base: se mide igual.
+  const sinLetras = todos.map(({ pieza, puesta, d }) => !!d.d.base && sinSusLetras(d.d, ma.piezas[pieza], puesta.sinTexto));
+  const pxDe = todos.map(({ d }, n) => (sinLetras[n] && d.d.base ? d.d.base : d.d.rgba));
+  const halos = todos.map(({ pieza, d }, n) => (sombras.has(pieza) ? haloDe(ma, d.d, sinLetras[n]) : null));
   /** El primer dibujo de la pieza de cada dibujo, y los de cada pieza. */
   const primero = todos.map(({ pieza }) => todos.findIndex((t) => t.pieza === pieza));
   const dePieza = new Map<number, number[]>();
@@ -110,7 +113,8 @@ export function perdidas(ma: MaestroRevisable, a: Acomodo, W: number, H: number,
       for (let x = Math.max(0, q.x); x < Math.min(W, q.x + q.w); x += paso) {
         const X = Math.floor(x), Y = Math.floor(y);
         const i = pixel(p.caja.w, p.caja.h, q.k, ox, oy, X, Y, false);
-        if (i < 0 || p.rgba[i + 3] / 255 < ALFA_PIEZA) continue;
+        const prgba = pxDe[n];
+        if (i < 0 || prgba[i + 3] / 255 < ALFA_PIEZA) continue;
         // Lo de atrás: el fondo y, encima, las piezas que van debajo de ésta.
         const f = pixel(ma.w, ma.h, a.fondo.k, a.fondo.x, a.fondo.y, X, Y, true);
         let r = ma.fondo[f], g = ma.fondo[f + 1], b = ma.fondo[f + 2];
@@ -127,10 +131,10 @@ export function perdidas(ma: MaestroRevisable, a: Acomodo, W: number, H: number,
           if (X < px - 1 || Y < py - 1 || X > px + pp.caja.w * qq.k + 1 || Y > py + pp.caja.h * qq.k + 1 || !completa(pp)) continue;
           const j = pixel(pp.caja.w, pp.caja.h, qq.k, px, py, X, Y, false);
           if (j < 0) continue;
-          const al = pp.rgba[j + 3] / 255;
-          r = pp.rgba[j] * al + r * (1 - al);
-          g = pp.rgba[j + 1] * al + g * (1 - al);
-          b = pp.rgba[j + 2] * al + b * (1 - al);
+          const rgba = pxDe[m], al = rgba[j + 3] / 255;
+          r = rgba[j] * al + r * (1 - al);
+          g = rgba[j + 1] * al + g * (1 - al);
+          b = rgba[j + 2] * al + b * (1 - al);
         }
         // Y la suya, justo debajo de ella.
         const t = bajoHalos(n, X, Y);
@@ -139,8 +143,8 @@ export function perdidas(ma: MaestroRevisable, a: Acomodo, W: number, H: number,
           g *= t[1];
           b *= t[2];
         }
-        const al = p.rgba[i + 3] / 255;
-        const R = p.rgba[i] * al + r * (1 - al), G = p.rgba[i + 1] * al + g * (1 - al), B = p.rgba[i + 2] * al + b * (1 - al);
+        const al = prgba[i + 3] / 255;
+        const R = prgba[i] * al + r * (1 - al), G = prgba[i + 1] * al + g * (1 - al), B = prgba[i + 2] * al + b * (1 - al);
         const y1 = brillo(R, G, B), y2 = brillo(r, g, b);
         puntos++;
         if ((Math.max(y1, y2) + 0.05) / (Math.min(y1, y2) + 0.05) < CONTRASTE_MIN && Math.hypot(R - r, G - g, B - b) < DISTANCIA_MIN) perdidos++;
@@ -304,7 +308,8 @@ const firma = (ed: Edicion | null | undefined) => {
   const lugares = enOrden(ed.piezas ?? {}, lugar);
   const partes = ed.partes ? enOrden(ed.partes, (i, r) => `${i}{${enOrden(r, lugar)}}`) : "";
   const ordenPartes = ed.ordenPartes ? enOrden(ed.ordenPartes, (i, o) => `${i}:${o.join(",")}`) : "";
-  return [lugares, ed.orden?.length ? ed.orden.join(",") : "", partes, ordenPartes].join("|").replace(/\|+$/, "");
+  const sinTexto = ed.sinTexto ? enOrden(ed.sinTexto, (i, t) => `${i}:${[...t].sort((a, b) => a - b).join(",")}`) : "";
+  return [lugares, ed.orden?.length ? ed.orden.join(",") : "", partes, ordenPartes, sinTexto].join("|").replace(/\|+$/, "");
 };
 
 /**

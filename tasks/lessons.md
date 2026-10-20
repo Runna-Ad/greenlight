@@ -1206,3 +1206,24 @@ TAGS: #pruebas #regresion #psd #editable
 [2026-10-19] LESSON (la consola del navegador guarda todo desde que se abrió la pestaña): leer los errores después de varios cambios trajo 20 errores de horas antes (pruebas forzadas, archivos a medio editar), y parecían nuevos.
 RULE: antes de una corrida limpia, recargar y escribir una marca (`console.error("MARCA-…")`); contar sólo lo que viene después de ella.
 TAGS: #navegador #pruebas #consola
+
+[2026-10-20] PEDRO_OVERRIDE (Formatos: no bloquear, dejar seguir y avisar; otra vez): para el paso 3 (textos editables) recomendé "si el texto nuevo no cabe en su caja, no se guarda" y "sólo el legal".
+PEDRO'S APPROACH: "Let the box grow down" (la caja crece) y "Any text HÜE can redraw" (todo texto que HÜE sabe volver a escribir).
+WHY IT WAS BETTER: la persona nunca se queda atorada, y un mismo mecanismo sirve para todos los textos. Es la misma línea que su override del 2026-10-15 ("el contraste no se bloquea en una medida editada"): yo volví a proponer un bloqueo. (El porqué es mío, inferido; Pedro no lo dijo.)
+RULE: en Formatos, al proponer qué pasa cuando algo no cuadra, la opción recomendada es "sigue y avisa" (crecer, rellenar, marcar), no "no se guarda". Bloquear sólo si se pierde algo sin remedio, y decirlo con la prueba.
+TAGS: #override #formatos #ux #bloqueo #textos
+
+[2026-10-20] LESSON (una caja de párrafo de Photoshop guarda sus saltos de línea como "\u0003"): el legal de s33 parte sus líneas con saltos suaves (Mayús+Enter), que ag-psd lee como "\u0003". Para dibujar, `textoDe` los pasa a "\n"; al escribir las letras nuevas en el PSD editable, ese "\n" lo escribe ag-psd como "\r", que en Photoshop es un PÁRRAFO nuevo (con el espacio entre párrafos que tenga el estilo). Lo vi sólo al leer de vuelta el PSD real: la prueba a mano usaba "\n" de los dos lados y pasaba.
+ROOT CAUSE: normalicé los saltos para medir y pintar, y usé el texto normalizado también para escribir.
+RULE: lo que se lee normalizado para calcular no se escribe de vuelta tal cual: al devolver un dato al formato original, usar los separadores del original (aquí, si la capa traía "\u0003", los saltos nuevos van como "\u0003"). Probar la ida y vuelta con el archivo real.
+TAGS: #psd #texto #ag-psd #ida-vuelta #formatos
+
+[2026-10-20] LESSON (dos cosas que se pisan en un mapa: la segunda no debe borrar a la primera): en el plan del PSD editable, un texto cambiado (letras nuevas, todas las medidas) y quitado en ESTA medida (oculto) iban al mismo mapa por su ruta, y "quitado" reemplazaba la entrada entera: el 320×50 bajado salía con el legal oculto pero con las letras VIEJAS; al prenderlo en Photoshop diría otra cosa que las otras 11 medidas. Las pruebas pasaban porque yo mismo había escrito "quitado = { texto: null }" como lo esperado. Lo vi al leer de vuelta el PSD que bajó la página.
+ROOT CAUSE: modelé "oculto" como un valor de las letras (null) en vez de una marca aparte; así las dos cosas no podían convivir.
+RULE: cuando dos decisiones distintas caen en la misma entrada (letras, visibilidad), cada una es su propio campo y se MEZCLAN (`{ ...lo de antes, oculto: true }`), no se reemplazan. Y leer de vuelta el archivo real que baja la página, no sólo el plan.
+TAGS: #psd #editable #mapas #pruebas #ida-vuelta #formatos
+
+[2026-10-20] LESSON (un aviso geométrico se prueba con las piezas de verdad, no con la de la prueba): el aviso «se sale de su pieza» comparaba la tinta nueva con la parte sólida de la pieza. La revisión vio que en una pieza que es sólo texto eso avisa siempre; lo cambié a "lo sólido de su base" y la prueba con s33 lo tumbó: el legal es iconos + texto LADO A LADO, su base sólida son los iconos y el texto ya estaba fuera. Arreglo: sólo se revisa si el texto del PSD estaba DENTRO de lo sólido de su base (un botón, una placa).
+ROOT CAUSE: pensé en un solo tipo de pieza (el botón) y la prueba sintética era justo ese tipo.
+RULE: una regla que mira dónde cae algo dentro de su pieza se corre contra cada clase de pieza del PSD real (botón, texto suelto, texto junto a iconos) antes de darla por buena; la prueba sintética lleva al menos un caso de cada clase.
+TAGS: #formatos #avisos #geometria #pruebas #s33

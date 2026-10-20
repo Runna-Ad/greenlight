@@ -21,9 +21,11 @@ import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
 import { etiquetaPieza, nombreDeGuia, type Rol } from "@/lib/prisma/formatos/roles";
 import { colaVacia, enCola, pintar } from "./pintar";
 import { Franjas, VistaGrande } from "./vista-grande";
-import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, fuentesRecordadas, olvidarFuentes, recordarFuentes, revisarTextos, textoEscrito, type ArchivoFuente, type Escritura, type Tipografias } from "./escritura";
+import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, escrituraCon, fuentesRecordadas, listosDe, maquetadorDe, olvidarFuentes, pintorDe, recordarFuentes, revisarTextos, textoEscrito, type ArchivoFuente, type Escritura, type Tipografias } from "./escritura";
 import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
-import { EditorMedida, edicionGuardada, guardarEdicion } from "./editor-medida";
+import { EditorMedida, edicionGuardada, guardarEdicion, guardarTextos, textosGuardados } from "./editor-medida";
+import { cambiarTextos, marcarSinEscribir, NO_SE_ESCRIBIO, type CambiosTexto, type Listo } from "@/lib/prisma/formatos/cambios-texto";
+import { porQueNoSeCambia } from "@/lib/prisma/formatos/textos";
 import { COLUMNAS, ChipEstado, FOCO, FORMAS, NOMBRE_FORMA, PastillasCanal, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
 
 /**
@@ -51,6 +53,41 @@ const IA_ESPERA_MS = 170_000;
  *  aparte, por `detail`: su segundo clic puede llegar más tarde que esto si el primero tuvo ocupada la página. */
 const COPIA_PAUSA_MS = 400;
 const SIN_TIPOS: Tipografias = new Map();
+const SIN_CAMBIOS: CambiosTexto = {};
+
+/**
+ * Los textos cambiados en el editor (del anuncio entero, paso 3): cada maestro con esas piezas ya escritas
+ * (`cambiarTextos`) y lo que la página escribe de ellas. Sin cambios, sin tipografías probadas o si algo falla al
+ * escribir, el MISMO maestro (nada se repinta y la medida sale con el texto del PSD). `solo`: sólo ese maestro (el
+ * editor, mientras se teclea, ve una medida: las demás mesas esperan a «Guardar»).
+ */
+function derivarTextos<M extends MaestroListo>(maestros: M[], cambios: CambiosTexto, e: Escritura | null, t: Tipografias, solo?: number): { maestros: M[]; escritura: Escritura | null } {
+  if (!e || !Object.keys(cambios).length) return { maestros, escritura: e };
+  let escritura = e;
+  const pintarTexto = pintorDe(t), maquetar = maquetadorDe(t);
+  const clave = JSON.stringify(Object.entries(cambios).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+  const out = maestros.map((m, i) => {
+    if (solo !== undefined && i !== solo) return m;
+    // Lo ya escrito de este maestro con estos mismos cambios, prueba y tipografías (el editor y la página lo comparten:
+    // al guardar no se vuelve a escribir; otra mesa que cambia no repinta ésta).
+    const ya = derivados.get(m);
+    let r = ya && ya.i === i && ya.clave === clave && ya.e === e && ya.t === t ? ya.r : null;
+    if (!r) {
+      try {
+        r = cambiarTextos(m, cambios, (p) => listosDe(e, i, p), maquetar, pintarTexto);
+      } catch (err) {
+        // Se ve el texto del PSD y cada medida lo dice (no el texto nuevo en el campo y el viejo en la tarjeta, callado).
+        console.error("[formatos-psd] textos cambiados", err);
+        r = { maestro: marcarSinEscribir(m, cambios, NO_SE_ESCRIBIO.pintar), listos: new Map() };
+      }
+      derivados.set(m, { i, clave, e, t, r });
+    }
+    escritura = escrituraCon(escritura, i, r.listos);
+    return r.maestro as M;
+  });
+  return { maestros: out, escritura };
+}
+const derivados = new WeakMap<MaestroListo, { i: number; clave: string; e: Escritura; t: Tipografias; r: { maestro: MaestroListo; listos: Map<number, Listo[]> } }>();
 
 const CLAVE_ERROR: Record<MotivoPsd | "desconocido", keyof typeof FP_ERROR> = { "no-soportado": "noSoportado", "demasiado-grande": "grande", "sin-aplanado": "sinAplanado", "sin-fondo": "sinFondo", desconocido: "desconocido" };
 /** Alto máximo con el que se ENSEÑA una medida (la descarga va siempre a tamaño real). Con 360 caben cinco
@@ -512,7 +549,9 @@ const TarjetaMedida = memo(function TarjetaMedida({
             const halos = acomodo.puestas.flatMap((q) => (sombras.has(q.pieza) ? halosEnMedida(ma, q).map((capa) => ({ nombre: ma.piezas[q.pieza].nombre, capa })) : []));
             const retoque = ma.fondoOriginal ? retoqueDeFondo(ma.fondoOriginal, ma.fondo, ma.w, ma.h, acomodo.fondo, w, h) : null;
             const compuesto = armarMedida(ma, acomodo, w, h, { texto });
-            const pedido: PedidoPsdMedida = { archivo, plan: planDeMedida({ piezas: ma.piezas, origen }, acomodo, w, h), extras: { compuesto, halos, retoque } };
+            // Los textos con letras nuevas llevan su tinta (en px del maestro) hasta que Photoshop los vuelva a dibujar.
+            const textos = ma.piezas.flatMap((p) => p.textos.flatMap((t) => (t.cambio?.tinta ? [{ ruta: t.ruta, tinta: t.cambio.tinta }] : [])));
+            const pedido: PedidoPsdMedida = { archivo, plan: planDeMedida({ piezas: ma.piezas, origen }, acomodo, w, h), extras: { compuesto, halos, retoque, textos } };
             // Lo pintado aquí cruza al worker sin copiarse (son arreglos nuevos: nada más los usa).
             const transferir = [compuesto.buffer, ...halos.map((x) => x.capa.rgba.buffer), ...(retoque ? [retoque.rgba.buffer] : [])] as ArrayBuffer[];
             return psdEditableEnWorker(pedido, transferir, (c) => (cancelarPsd.current = c));
@@ -694,6 +733,8 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const [sinCopia, setSinCopia] = useState<{ leido: Leido; mapa: Map<number, Quitada> } | null>(null);
   /** Lo que se editó a mano en ESTE PSD, por medida («WxH»); null = se volvió al automático (manda sobre lo guardado). */
   const [ediciones, setEdiciones] = useState<{ leido: Leido; mapa: Map<string, Edicion | null> } | null>(null);
+  /** Los textos cambiados en esta sesión (del anuncio entero); si no, los guardados en este navegador para este PSD. */
+  const [textosSesion, setTextosSesion] = useState<{ leido: Leido; cambios: CambiosTexto } | null>(null);
   /** La medida abierta en el editor. */
   const [editando, setEditando] = useState<Medida | null>(null);
   /** Cuándo se quitó o devolvió la última copia (ver COPIA_PAUSA_MS). */
@@ -1382,6 +1423,21 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
       .values(),
   ];
 
+  const cambiosTexto = useMemo(() => (!leido ? SIN_CAMBIOS : textosSesion?.leido === leido ? textosSesion.cambios : textosGuardados(leido.archivo)), [leido, textosSesion]);
+  // Lo que se acomoda, se pinta y se baja: con los textos cambiados ya escritos. Lo guardado de cada medida se sigue
+  // reconociendo con el maestro de antes (`maestrosVista`): cambiar un texto no borra las ediciones.
+  const conTextos = useMemo(() => derivarTextos(maestrosVista, cambiosTexto, escritura, tiposEscritos), [maestrosVista, cambiosTexto, escritura, tiposEscritos]);
+  /** Por qué un texto de una pieza no se cambia en el editor (null = sí se puede). */
+  const motivoTexto = (mi: number, pieza: number, j: number): string | null => {
+    const tp = maestrosVista[mi]?.piezas[pieza]?.textos[j];
+    if (!tp) return tx(FP.editorTextoNoEsta, lang);
+    const no = porQueNoSeCambia(tp.texto);
+    if (no) return no;
+    if (listosDe(escritura, mi, pieza)) return null;
+    if (probando) return tx(FP.editorTextoProbando, lang);
+    return revisiones.find((r) => r.maestro === mi && r.pieza === pieza && r.capa === tp.capa)?.motivo ?? tx(FP.editorTextoSinTipografia, lang);
+  };
+
   // Lo editado de cada medida (con el lado y el canal de ahora): lo de esta sesión y, si no, lo que quedó guardado en
   // este navegador de este mismo PSD. La sesión se guarda por medida + contexto; la vista, por medida.
   const edicionesVista = useMemo(() => {
@@ -1397,32 +1453,56 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     return mapa;
   }, [ediciones, leido, maestrosVista, medidas, lados, canal]);
   const abrirEditor = useCallback((m: Medida) => setEditando(m), []);
-  const guardarEditada = (m: Medida, ed: Edicion | null) => {
+  const guardarEditada = (m: Medida, ed: Edicion | null, cambios: CambiosTexto) => {
     const l = leido;
     setEditando(null);
     if (!l || !maestrosVista.length) return;
+    // Los textos son del anuncio: se guardan aparte y cambian en todas las medidas (se dice a la vista).
+    const textos = cambios !== cambiosTexto;
+    if (textos) {
+      setTextosSesion({ leido: l, cambios });
+      if (!guardarTextos(l.archivo, cambios)) toast.warning(tx(FP.editorTextosSoloSesion, lang));
+      else toast.success(rellenar(tx(Object.keys(cambios).length ? FP.editorTextosGuardados : FP.editorTextosDelPsd, lang), { n: medidas.length }));
+    }
+    const antes = edicionesVista.get(clave(m)) ?? null;
     const ctx = contextoEdicion(m, lados[clave(m)], canal), ma = maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)];
     const guardada = guardarEdicion(l.archivo, ma, m.w, m.h, ctx, ed);
     // Lo guardado con la clave vieja se borra: si no, «Volver al automático» lo dejaría volver a aparecer.
     guardarEdicion(l.archivo, ma, m.w, m.h, ctx + CONTEXTO_VIEJO, null);
     setEdiciones((antes) => ({ leido: l, mapa: new Map([...(antes?.leido === l ? antes.mapa : []), [`${clave(m)}:${ctx}`, ed]]) }));
     if (!guardada && ed) return void toast.warning(rellenar(tx(FP.editorSoloSesion, lang), { m: etiqueta(m) }));
-    anunciar(rellenar(tx(ed ? FP.editorGuardado : FP.editorAutoHecho, lang), { m: etiqueta(m) }));
+    // Si sólo cambiaron los textos, lo de la medida no se anuncia (no «volvió al automático»: no cambió).
+    if (!textos || JSON.stringify(ed) !== JSON.stringify(antes)) anunciar(rellenar(tx(ed ? FP.editorGuardado : FP.editorAutoHecho, lang), { m: etiqueta(m) }));
+  };
+  /** Todos los textos vuelven a los del PSD (en todas las medidas), con «Deshacer». */
+  const volverTextosPsd = () => {
+    const l = leido, antes = cambiosTexto;
+    if (!l || !Object.keys(antes).length) return;
+    const poner = (c: CambiosTexto) => {
+      setTextosSesion({ leido: l, cambios: c });
+      if (!guardarTextos(l.archivo, c)) toast.warning(tx(FP.editorTextosSoloSesion, lang));
+    };
+    poner(SIN_CAMBIOS);
+    toast.success(rellenar(tx(FP.editorTextosDelPsd, lang), { n: medidas.length }), { duration: 10_000, action: { label: tx(FP.copiaDevolver, lang), onClick: () => poner(antes) } });
   };
   // Lo que el editor necesita, calculado una vez por medida abierta (no en cada pintada de la página: una zona o un
   // texto nuevos lo harían repintar la vista entera).
   const paraEditor = useMemo(() => {
     if (!editando || !leido || !maestrosVista.length) return null;
     const m = editando, mi = elegirMaestro(maestrosVista, m.w, m.h), zona = zonaCanal(canal, m.w, m.h);
+    const op = { heroLado: lados[clave(m)], zona, contraste: contrastes[clave(m)] };
     return {
       m,
       mi,
       zona,
-      // Con su arreglo de contraste: el editor parte de lo que se ve en la tarjeta (fondo movido o sombra incluidos).
-      auto: revisarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)], zona, contraste: contrastes[clave(m)] }).acomodo,
-      texto: textoEscrito(escritura, mi, maestrosVista[mi], tiposEscritos),
+      /** El maestro con estos textos cambiados, cómo se escriben y el acomodo automático de esta medida con ellos (un
+       *  texto que crece cambia el acomodo). Con su arreglo de contraste: el editor parte de lo que se ve en la tarjeta. */
+      derivar: (cambios: CambiosTexto) => {
+        const d = cambios === cambiosTexto ? conTextos : derivarTextos(maestrosVista, cambios, escritura, tiposEscritos, mi);
+        return { ma: d.maestros[mi], texto: textoEscrito(d.escritura, mi, d.maestros[mi], tiposEscritos), auto: revisarMedida(d.maestros, m.w, m.h, op).acomodo };
+      },
     };
-  }, [editando, leido, maestrosVista, canal, lados, contrastes, escritura, tiposEscritos]);
+  }, [editando, leido, maestrosVista, canal, lados, contrastes, escritura, tiposEscritos, cambiosTexto, conTextos]);
 
   // El mismo acomodo y los mismos avisos que cada tarjeta (`revisarMedida` guarda lo ya hecho): aquí sirven para el
   // resumen, el legal y los nombres del ZIP.
@@ -1431,10 +1511,10 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
       maestrosVista.length
         ? medidas.map((m) => ({
             m,
-            ...revisarMedida(maestrosVista, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h), contraste: contrastes[clave(m)], edicion: edicionesVista.get(clave(m)) ?? null }),
+            ...revisarMedida(conTextos.maestros, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h), contraste: contrastes[clave(m)], edicion: edicionesVista.get(clave(m)) ?? null }),
           }))
         : [],
-    [maestrosVista, medidas, lados, canal, contrastes, edicionesVista],
+    [conTextos, maestrosVista.length, medidas, lados, canal, contrastes, edicionesVista],
   );
   const porRevisar = filas.filter((f) => f.acomodo.avisos.length).length;
   const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia) && !f.acomodo.editada);
@@ -1558,16 +1638,19 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
       {paraEditor && (
         <EditorMedida
           key={`${clave(paraEditor.m)}:${paraEditor.mi}`}
-          ma={maestrosVista[paraEditor.mi]}
+          original={maestrosVista[paraEditor.mi]}
           W={paraEditor.m.w}
           H={paraEditor.m.h}
-          auto={paraEditor.auto}
+          derivar={paraEditor.derivar}
+          cambios={cambiosTexto}
+          motivoTexto={(pieza, j) => motivoTexto(paraEditor.mi, pieza, j)}
+          piezaEscrita={(pieza) => !!listosDe(escritura, paraEditor.mi, pieza)}
+          nMedidas={medidas.length}
           inicial={edicionesVista.get(clave(paraEditor.m)) ?? null}
           zona={paraEditor.zona}
           nombre={etiqueta(paraEditor.m)}
-          texto={paraEditor.texto}
           lang={lang}
-          alGuardar={(ed) => guardarEditada(paraEditor.m, ed)}
+          alGuardar={(ed, cambios) => guardarEditada(paraEditor.m, ed, cambios)}
           alCerrar={() => setEditando(null)}
         />
       )}
@@ -2023,6 +2106,16 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                   {tx(FX.resultados, lang)}
                 </h2>
                 {resumen && <p className="text-sm text-muted-foreground">{resumen}</p>}
+                {/* Los textos cambiados viven en este navegador y valen para todas las medidas: siempre a la vista, con su
+                    vuelta atrás (al recargar, o con otro PSD del mismo nombre, también se ven). */}
+                {Object.keys(cambiosTexto).length > 0 && (
+                  <p className="flex flex-wrap items-center gap-x-2 text-sm text-foreground">
+                    {Object.keys(cambiosTexto).length === 1 ? tx(FP.textosCambiadosUno, lang) : rellenar(tx(FP.textosCambiadosN, lang), { n: Object.keys(cambiosTexto).length })}
+                    <Button variant="link" size="sm" className="h-auto p-0" onClick={volverTextosPsd}>
+                      {tx(FP.textosVolverPsd, lang)}
+                    </Button>
+                  </p>
+                )}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {volteables.length > 0 && (
@@ -2067,7 +2160,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                     </h3>
                     <ul className={cn("grid gap-3", COLUMNAS[f])}>
                       {grupo.map((m) => (
-                        <TarjetaMedida key={clave(m)} maestros={maestrosVista} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} />
+                        <TarjetaMedida key={clave(m)} maestros={conTextos.maestros} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={conTextos.escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} />
                       ))}
                     </ul>
                   </div>

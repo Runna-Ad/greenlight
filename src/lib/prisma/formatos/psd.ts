@@ -134,6 +134,9 @@ export type CapaPsd = {
   /** La subcarpeta de la carpeta de su pieza en la que está (su lugar entre los hijos de esa carpeta, contando los
    *  ocultos, y su nombre): una PARTE de la pieza. null = capa suelta dentro de la carpeta (las sueltas van juntas). */
   parte: { hijo: number; nombre: string } | null;
+  /** Dónde está en el árbol de su mesa: su lugar entre los hijos de cada carpeta, desde la mesa (contando los ocultos).
+   *  Con esto el PSD editable encuentra ESTA capa aunque otra se llame igual. */
+  ruta: number[];
   mascara: MascaraPsd | null;
   /** Capas de texto: el tamaño de su letra más chica, en px del lienzo (ya con la escala de la capa). */
   letraPx: number | null;
@@ -234,7 +237,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
   let vistas = 0;
   // `nivel`: 0 = en la mesa (una carpeta aquí es una pieza), 1 = dentro de la carpeta de una pieza (una subcarpeta aquí
   // es una parte), 2 = más adentro (se queda en su parte).
-  type Ctx = { mesa: number; pieza: string | null; carpeta: number; parte: CapaPsd["parte"]; nivel: number };
+  type Ctx = { mesa: number; pieza: string | null; carpeta: number; parte: CapaPsd["parte"]; nivel: number; ruta: number[] };
   const andar = (nodos: Layer[] | undefined, opPadre: number, ctx: Ctx) => {
     for (const [hijoN, l] of (nodos ?? []).entries()) {
       if (l.hidden) continue;
@@ -247,10 +250,11 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
           const r = l.artboard.rect;
           const x = Math.round(r.left), y = Math.round(r.top);
           mesas.push({ nombre, x, y, w: Math.round(r.right) - x, h: Math.round(r.bottom) - y });
-          hijo = { mesa: mesas.length - 1, pieza: null, carpeta: -1, parte: null, nivel: 0 };
+          hijo = { mesa: mesas.length - 1, pieza: null, carpeta: -1, parte: null, nivel: 0, ruta: [] };
         } else {
-          if (ctx.nivel === 0) hijo = { ...ctx, pieza: nombre, carpeta: hijoN, nivel: 1 };
-          else if (ctx.nivel === 1) hijo = { ...ctx, parte: { hijo: hijoN, nombre }, nivel: 2 };
+          hijo = { ...ctx, ruta: [...ctx.ruta, hijoN] };
+          if (ctx.nivel === 0) hijo = { ...hijo, pieza: nombre, carpeta: hijoN, nivel: 1 };
+          else if (ctx.nivel === 1) hijo = { ...hijo, parte: { hijo: hijoN, nombre }, nivel: 2 };
           const raro = [
             ...((l.opacity ?? 1) < 1 ? ["opacidad"] : []),
             ...(l.blendMode && l.blendMode !== "pass through" && l.blendMode !== "normal" ? [`fusión ${l.blendMode}`] : []),
@@ -275,7 +279,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
       capas.push({
         nombre, tipo: tipoDe(l), left: l.left ?? 0, top: l.top ?? 0, w, h, opacidad, relleno: l.fillOpacity ?? 1,
         mezcla: l.blendMode ?? "normal", halos: halosDe(l), conEfectos: hayEfectos(l), recorte: !!l.clipping, mesa: ctx.mesa, pieza: ctx.pieza ?? nombre,
-        carpeta: ctx.pieza === null ? -1 : ctx.carpeta, parte: ctx.parte,
+        carpeta: ctx.pieza === null ? -1 : ctx.carpeta, parte: ctx.parte, ruta: [...ctx.ruta, hijoN],
         mascara: k && mw > 0 && mh > 0 ? { left: k.left ?? 0, top: k.top ?? 0, right: k.right ?? 0, bottom: k.bottom ?? 0, defecto: k.defaultColor ?? 255, pixeles: () => getLayerMaskImageData(l) } : null,
         letraPx: letraDe(l),
         texto: l.text ? textoDe(l.text as TextoPsdCrudo) : null,
@@ -283,7 +287,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
       });
     }
   };
-  andar(psd.children, 1, { mesa: -1, pieza: null, carpeta: -1, parte: null, nivel: 0 });
+  andar(psd.children, 1, { mesa: -1, pieza: null, carpeta: -1, parte: null, nivel: 0, ruta: [] });
 
   if (!mesas.length) {
     // Sin mesas de trabajo: el lienzo entero es el anuncio.
@@ -356,6 +360,11 @@ export type TextoPieza = {
   alfa: Uint8ClampedArray;
   /** Por qué NO se redibuja (null = se intenta, y decide la prueba en la página). */
   motivo: string | null;
+  /** Su capa en el árbol de la mesa (`CapaPsd.ruta`). */
+  ruta: number[];
+  /** Sólo si se le cambiaron las letras en el editor (`cambiarTextos`): las del PSD y su tinta nueva a la escala del
+   *  maestro (RGBA sin premultiplicar, en px de la mesa), para la capa del PSD editable. */
+  cambio?: { de: string; tinta: { x: number; y: number; w: number; h: number; rgba: Uint8ClampedArray } | null };
 };
 /** De dónde salió un maestro, para volver a las capas del PSD original (psd-editable.ts): qué mesa (en el orden de
  *  `doc.mesas`), su caja en el documento y si se leyó reducida (`s` < 1: 1 px del original = s px del maestro). */
@@ -1108,7 +1117,7 @@ function tintaDe(c: CapaPsd & { texto: TextoCapa }, encima: CapaPsd[], m: MesaPs
       if (x >= 0 && x < caja.w && y >= 0 && y < caja.h) alfa[y * caja.w + x] = Math.round((a / peso) * 255);
     });
   const tr = c.texto.transform;
-  return { capa: c.nombre, texto: { ...c.texto, transform: [tr[0], tr[1], tr[2], tr[3], tr[4] - m.x, tr[5] - m.y] }, opacidad: c.opacidad * c.relleno, caja, alfa, motivo };
+  return { capa: c.nombre, texto: { ...c.texto, transform: [tr[0], tr[1], tr[2], tr[3], tr[4] - m.x, tr[5] - m.y] }, opacidad: c.opacidad * c.relleno, caja, alfa, motivo, ruta: c.ruta };
 }
 
 /** `tintas`: lo ya medido de cada capa de texto (la pieza y sus partes comparten el mismo objeto; el de la pieza, que

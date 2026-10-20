@@ -15,7 +15,8 @@ import { armarMedida, capasDeMedida, halosEnMedida, ENFOQUE_DESDE, ESCRIBIR_LEJO
 import { psdDeMedida, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prisma/formatos/psd-salida.ts";
 import { readPsd as readPsdAg, getLayerImageData, getLayerMaskImageData, getLayerRealMaskImageData } from "ag-psd";
 import { planDeMedida, psdEditable, retoqueDeFondo, TopeEditable, CAPA_RETOQUE, CAPA_COLOR_MESA } from "../src/lib/prisma/formatos/psd-editable.ts";
-import { textoDe, maquetar, fuentesDe, compararAlfa } from "../src/lib/prisma/formatos/textos.ts";
+import { textoDe, maquetar, fuentesDe, compararAlfa, textoCambiado, porQueNoSeCambia, cajaQueCabe, TEXTO_CAMBIADO_MAX } from "../src/lib/prisma/formatos/textos.ts";
+import { cambiarTextos, claveTexto, marcarSinEscribir, NO_SE_ESCRIBIO } from "../src/lib/prisma/formatos/cambios-texto.ts";
 import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, elegirParaCliente, exclusivasDeOtros, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIA_GOOGLE_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
 import { carpetaGoogle, archivosDeMetadata, archivosQueSirven, buscarEnGoogle, ARCHIVOS_POR_FAMILIA_MAX, GOOGLE_BYTES_POR_PEDIDO } from "../src/lib/prisma/formatos/google-fonts.ts";
 import { existsSync, readFileSync } from "node:fs";
@@ -2087,6 +2088,271 @@ console.log("\n▶ 2b · partes de una pieza (subcarpetas): lectura, despiece, e
       [abierto.children.find((l) => l.name === "Logo").children.map((l) => l.name), hojas(abierto.children).length - 2 === hojas(sinAbrir.children).length, nombres(abierto).slice(nombres(abierto).indexOf("Legales") - 2, nombres(abierto).indexOf("Legales") + 1)],
       [["buenfin", "Logo DD_Card", "Shape 1"], true, [CAPA_SOMBRA_CONTRASTE, CAPA_SOMBRA_CONTRASTE, "Legales"]],
     );
+  }
+}
+
+// ── 3 · textos editables: letras nuevas en todas las medidas; quitar un texto en una ─────────
+console.log("\n▶ 3 · textos editables: cambiar las letras (todas las medidas, la caja crece hacia abajo) y quitar un texto en una medida");
+{
+  const tramo = (n, extra = {}) => ({ n, fuente: "F-Regular", tam: 10, color: [200, 20, 40], track: 0, interlineado: null, subir: 0, mayusculas: false, ...extra });
+  const capaT = (texto, caja = null, tramos = [tramo(texto.length)]) => ({ texto, tramos, alineacion: "left", transform: [1, 0, 0, 1, 20, 30], caja, motivo: null });
+  eq("porQueNoSeCambia: su motivo de siempre, «varios estilos», o nada (sí se cambia)", [porQueNoSeCambia({ ...capaT("ab"), motivo: "efectos de capa" }), porQueNoSeCambia(capaT("ab", null, [tramo(1), tramo(1, { tam: 12 })])), porQueNoSeCambia(capaT("ab"))], ["efectos de capa", "tiene varios estilos", null]);
+  const tc = textoCambiado(capaT("ab"), "uno\r\ndos\rtres\u0003cuatro");
+  eq("textoCambiado: los saltos de Windows, de Mac y de caja de Photoshop pasan a \\n, y su único estilo cubre las letras nuevas", [tc.texto, tc.tramos.length, tc.tramos[0].n, tc.tramos[0].fuente], ["uno\ndos\ntres\ncuatro", 1, 19, "F-Regular"]);
+  eq(
+    "textoCambiado: fuera los caracteres de control y de formato (nulo, cambio de sentido, ancho cero) salvo el tabulador; separador de línea Unicode = salto; se corta por letra, sin dejar media",
+    [textoCambiado(capaT("ab"), "a\u0000b\u202Ec\u200Bd\te\u2028f").texto, textoCambiado(capaT("ab"), "x".repeat(TEXTO_CAMBIADO_MAX - 1) + "😀").texto.length],
+    ["abcd\te\nf", TEXTO_CAMBIADO_MAX - 1],
+  );
+  eq("textoCambiado: se corta en el máximo; con varios estilos no se cambia (null)", [textoCambiado(capaT("ab"), "x".repeat(TEXTO_CAMBIADO_MAX + 50)).texto.length, textoCambiado(capaT("ab", null, [tramo(1), tramo(1)]), "zz")], [TEXTO_CAMBIADO_MAX, null]);
+  // Medidor de mentiras: cada letra mide medio tamaño y sube 0.7. Caja de 80 de ancho: caben 3 «hola» por línea.
+  const medir = (s0, t) => ({ ancho: s0.length * t.tam * 0.5, sube: t.tam * 0.7 });
+  const maq = (t) => maquetar(t, medir);
+  const enCaja = capaT("hola", [0, -10, 80, 10]);
+  const largo = Array(12).fill("hola").join(" ");
+  const lin = maq(textoCambiado(enCaja, largo));
+  eq("cajaQueCabe: con 4 líneas la caja de párrafo baja hasta la última (+0.3 de su letra); si cabe, o es de punto, la misma", [lin.length, cajaQueCabe(textoCambiado(enCaja, largo), lin).caja, cajaQueCabe(enCaja, maq(enCaja)) === enCaja, ((t) => cajaQueCabe(t, maq(t)) === t)(textoCambiado(capaT("hola"), largo))], [4, [0, -10, 80, 36], true, true]);
+
+  // Un maestro a mano: el legal (caja 100×40 en (10, 10), con base) y un HERO sin textos.
+  const lleno = (w, h, c) => { const d = new Uint8ClampedArray(w * h * 4); for (let i = 0; i < w * h; i++) d.set(c, i * 4); return d; };
+  const GRIS = [90, 90, 90, 255];
+  /** Escribe cada pedazo como un rectángulo de su color (premultiplicado), de la base hacia arriba 0.7 de su letra. */
+  const pintarFalso = (listos, x0, y0, w, h) => {
+    const f = new Float32Array(w * h * 4);
+    for (const l of listos) {
+      const tr = l.tp.texto.transform;
+      for (const ln of l.lineas)
+        for (const pz of ln.pedazos) {
+          const X0 = Math.round(tr[0] * pz.x + tr[4] + l.dx), X1 = Math.round(tr[0] * (pz.x + pz.ancho) + tr[4] + l.dx);
+          const Y0 = Math.round(tr[3] * (ln.base - pz.tramo.tam * 0.7) + tr[5] + l.dy), Y1 = Math.round(tr[3] * ln.base + tr[5] + l.dy);
+          for (let y = Math.max(Y0, y0); y < Math.min(Y1, y0 + h); y++)
+            for (let x = Math.max(X0, x0); x < Math.min(X1, x0 + w); x++) f.set([...pz.tramo.color.map((v) => v * l.tp.opacidad), 255 * l.tp.opacidad], ((y - y0) * w + (x - x0)) * 4);
+        }
+    }
+    return f;
+  };
+  // Su tinta de Photoshop: «hola» en (20, 23), 20 × 7 (dentro de la pieza, como el texto de un botón).
+  const tpDe = (capa, texto, ruta) => ({ capa, texto, opacidad: 1, caja: { x: 20, y: 23, w: 20, h: 7 }, alfa: new Uint8ClampedArray(0), motivo: null, ruta });
+  const caja = { x: 10, y: 10, w: 100, h: 40 };
+  const tpCaja = tpDe("legal", enCaja, [1, 0]);
+  const piezaT = (tp, extra = {}) => ({ nombre: "Legales", rol: "FOOTER", caja, solido: caja, letraMinPx: 10, rgba: lleno(100, 40, GRIS), oscurece: null, base: lleno(100, 40, GRIS), textos: [tp], ...extra });
+  const hero = { nombre: "HERO", rol: "HERO", caja: { x: 0, y: 100, w: 50, h: 50 }, solido: { x: 0, y: 100, w: 50, h: 50 }, letraMinPx: null, rgba: lleno(50, 50, GRIS), oscurece: null, base: null, textos: [] };
+  const maT = { nombre: "m", w: 200, h: 200, fondo: lleno(200, 200, [255, 255, 255, 255]), piezas: [piezaT(tpCaja), hero], textoGamma: 1, avisos: [] };
+  const listosT = (m) => (i) => (m.piezas[i].base ? m.piezas[i].textos.map((tp) => ({ tp, lineas: maq(tp.texto), dx: 0, dy: 0 })) : undefined);
+  const cambiar = (m, c) => cambiarTextos(m, c, listosT(m), maq, pintarFalso);
+  const k = claveTexto(tpCaja);
+  ok("sin cambios, con las mismas letras o con un cambio de otro texto: el MISMO maestro (nada se repinta)", cambiar(maT, {}).maestro === maT && cambiar(maT, { [k]: "hola" }).maestro === maT && cambiar(maT, { "otra\nhola": "x" }).maestro === maT);
+  ok("un texto que la página no escribe (sin sus líneas probadas) no cambia: mismos píxeles y textos (sólo dice por qué)", ((m) => m.piezas[0].rgba === maT.piezas[0].rgba && m.piezas[0].textos === maT.piezas[0].textos && m.piezas[1] === hero)(cambiarTextos(maT, { [k]: "adiós" }, () => undefined, maq, pintarFalso).maestro));
+  const r1 = cambiar(maT, { [k]: largo });
+  const p1 = r1.maestro.piezas[0], t1 = p1.textos[0];
+  eq(
+    "caja de párrafo con 4 líneas: su caja baja (36) y la pieza crece hacia abajo hasta la última línea (y 63); arriba y a los lados, igual",
+    [t1.texto.caja, [p1.caja.x, p1.caja.y, p1.caja.w, p1.caja.y + p1.caja.h], [p1.solido.y, p1.solido.y + p1.solido.h], p1.rgba.length === p1.caja.w * p1.caja.h * 4 && p1.base.length === p1.rgba.length],
+    [[0, -10, 80, 36], [10, 10, 100, 63], [10, 63], true],
+  );
+  const pxT = (p, x, y) => [...p.rgba.subarray(((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4, ((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4 + 4)];
+  eq("sus píxeles: la 4.ª línea con su color, entre líneas debajo de la pieza vieja nada, y su base donde no hay letras", [pxT(p1, 25, 60), pxT(p1, 25, 54), pxT(p1, 100, 30)], [[200, 20, 40, 255], [0, 0, 0, 0], GRIS]);
+  ok(
+    "el texto nuevo recuerda sus letras del PSD (la misma clave en todas las mesas), trae su tinta para el PSD editable y es el MISMO objeto que escribe la página; el HERO, sin tocar",
+    t1.cambio?.de === "hola" && claveTexto(t1) === k && t1.cambio.tinta?.y === 20 && t1.cambio.tinta.y + t1.cambio.tinta.h === 63 && t1.cambio.tinta.rgba[3] === 255 && r1.listos.get(0)[0].tp === t1 && r1.maestro.piezas[1] === hero,
+    JSON.stringify(t1.cambio && { ...t1.cambio, tinta: t1.cambio.tinta && { ...t1.cambio.tinta, rgba: t1.cambio.tinta.rgba.length } }),
+  );
+  ok("una caja de párrafo que crece hacia abajo no avisa «se sale de su pieza»", !p1.textoFuera);
+  const enPunto = tpDe("cta", capaT("hola"), [2, 0]), kP = claveTexto(enPunto);
+  const maPunto = { ...maT, piezas: [piezaT(enPunto), hero] };
+  const medio = Array(5).fill("hola").join(" ");
+  eq("texto de punto: más largo que su pieza, o con una línea de más (crece hacia abajo sin caja), sí avisa; más corto, no", [cambiar(maPunto, { [kP]: medio }).maestro.piezas[0].textoFuera, cambiar(maPunto, { [kP]: "hola\nhola\nhola" }).maestro.piezas[0].textoFuera, cambiar(maPunto, { [kP]: "ho" }).maestro.piezas[0].textoFuera], [true, true, undefined]);
+  // Una pieza que es sólo texto (su base, vacía) no tiene de qué salirse: un título más largo no avisa.
+  const soloTexto = { ...maPunto, piezas: [piezaT(enPunto, { base: new Uint8ClampedArray(100 * 40 * 4) }), hero] };
+  const alLado = { ...maPunto, piezas: [piezaT({ ...enPunto, caja: { x: 120, y: 23, w: 20, h: 7 } }), hero] };
+  eq("pieza sólo de texto (base vacía), o texto al lado de lo sólido y no adentro (el legal junto a sus iconos): un texto más largo no avisa «se sale de su pieza»", [cambiar(soloTexto, { [kP]: medio }).maestro.piezas[0].textoFuera, cambiar(alLado, { [kP]: medio }).maestro.piezas[0].textoFuera], [undefined, undefined]);
+  // Lo que no se puede escribir se queda como en el PSD y se dice por qué (nunca la tarjeta con otro texto, callada).
+  const sinListos = cambiarTextos(maT, { [k]: "adiós" }, () => undefined, maq, pintarFalso).maestro;
+  const enorme = cambiar(maT, { [k]: Array(400).fill("hola").join("\n") }).maestro;
+  const sinTinta = cambiarTextos(maT, { [k]: "adiós" }, listosT(maT), maq, (_l, _x, _y, w, h) => new Float32Array(w * h * 4)).maestro;
+  eq(
+    "sin tipografía probada, con un texto que caería fuera de la mesa (400 líneas) o si el lienzo no pinta nada: va el texto del PSD (la misma pieza) y la pieza dice por qué",
+    [sinListos.piezas[0].textoSinEscribir, sinListos.piezas[0].textos[0] === tpCaja, enorme.piezas[0].textoSinEscribir, enorme.piezas[0].textos[0] === tpCaja, sinTinta.piezas[0].textoSinEscribir, sinTinta.piezas[0].rgba === maT.piezas[0].rgba],
+    [NO_SE_ESCRIBIO.tipografia, true, NO_SE_ESCRIBIO.largo, true, NO_SE_ESCRIBIO.pintar, true],
+  );
+  ok("marcarSinEscribir: sin textos cambiados, el MISMO maestro; con uno, la pieza marcada", marcarSinEscribir(maT, {}, "x") === maT && marcarSinEscribir(maT, { [k]: "adiós" }, "x").piezas[0].textoSinEscribir === "x" && marcarSinEscribir(maT, { [k]: "hola" }, "x") === maT);
+  // Mezcla con la gamma de Photoshop (como `armarMedida`): letra al 50 % sobre su base gris.
+  const tpMedio = { ...tpCaja, opacidad: 0.5 }, maG = { ...maT, textoGamma: 1.45, piezas: [piezaT(tpMedio), hero] };
+  const pG = cambiarTextos(maG, { [k]: "hola hola" }, listosT(maG), maq, pintarFalso).maestro.piezas[0];
+  const g = (c, b) => Math.round(255 * Math.pow(0.5 * Math.pow(c / 255, 1.45) + 0.5 * Math.pow(b / 255, 1.45), 1 / 1.45));
+  eq("la letra nueva se mezcla sobre su base con la gamma de Photoshop (1.45), como la escribe la tarjeta", pxT(pG, 25, 25).slice(0, 3), [g(200, 90), g(20, 90), g(40, 90)]);
+  // Partes: los iconos (sin texto) y el legal.
+  const parte = (nombre, hijo, c, textos, base = true) => ({ nombre, hijo, rellenoPct: 0, tapadaPor: [], caja: c, solido: c, letraMinPx: null, rgba: lleno(c.w, c.h, GRIS), oscurece: null, base: base ? lleno(c.w, c.h, GRIS) : null, textos });
+  const iconos = parte("Iconos", 0, { x: 10, y: 10, w: 8, h: 8 }, []);
+  const conP = (base) => ({ ...maT, piezas: [piezaT(tpCaja, { partes: [iconos, parte("legal", null, caja, [tpCaja], base)], carpeta: 1 }), hero] });
+  const pp = cambiar(conP(true), { [k]: largo }).maestro.piezas[0], ps = cambiar(conP(false), { [k]: largo }).maestro.piezas[0];
+  ok("con partes: la del legal se vuelve a escribir con el MISMO objeto de texto que la pieza (y crece igual); los iconos, sin tocar", pp.partes[1].textos[0] === pp.textos[0] && pp.partes[0] === iconos && pp.carpeta === 1 && pp.partes[1].caja.y + pp.partes[1].caja.h === 63);
+  ok("una parte sin base no se puede volver a escribir: la pieza va entera (sin partes), ya con el texto nuevo", ps.partes === undefined && ps.carpeta === undefined && ps.textos[0].texto.texto === largo);
+
+  // Quitar un texto en UNA medida: lo guardado, el acomodo y el pintado.
+  const avisosW = [], warn0 = console.warn;
+  console.warn = (...a) => avisosW.push(a.join(" "));
+  const leida = leerEdicion({ sinTexto: { 0: [0, 0, 3, -1, 1.5, "0"], 1: [0], 7: [0], x: [0] } }, maT.piezas);
+  console.warn = warn0;
+  eq("lo guardado: sinTexto se lee sin confiar (sólo textos que existen, sin repetir; el HERO no tiene textos; piezas que no hay, fuera)", leida, { piezas: {}, sinTexto: { 0: [0] } });
+  eq("sinTexto vacío no es una edición", leerEdicion({ sinTexto: { 0: [] } }, maT.piezas), null);
+  // Con el maestro de s33 abajo se prueba el acomodo; aquí, el pintado: quitar el único texto deja la base, sin
+  // preguntar por letras (sin tipografía también se puede).
+  const conLetras = lleno(100, 40, GRIS);
+  for (let y = 20; y < 27; y++) for (let x = 20; x < 40; x++) conLetras.set([200, 20, 40, 255], (y * 100 + x) * 4);
+  const maQ = { ...maT, piezas: [piezaT(tpCaja, { rgba: conLetras })] };
+  const puestaQ = (sin) => ({ familia: "igual", puestas: [{ pieza: 0, k: 1, x: 10, y: 10, w: 100, h: 40, ...(sin ? { sinTexto: sin } : {}) }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] });
+  let preguntas = 0;
+  const contar = () => (preguntas++, null);
+  const sinL = armarMedida(maQ, puestaQ([0]), 200, 200, { texto: contar }), conL = armarMedida(maQ, puestaQ(null), 200, 200, { texto: contar });
+  // Las letras de la pieza (20-40, 20-27 en ella) caen en la medida en (30-50, 30-37).
+  const en35 = (px) => [...px.subarray((32 * 200 + 35) * 4, (32 * 200 + 35) * 4 + 3)];
+  eq("pintado: quitado su único texto, a su tamaño, va la base (gris donde estaban las letras) sin preguntar por letras; sin quitar, las letras del PSD", [en35(sinL), en35(conL), preguntas], [[90, 90, 90], [200, 20, 40], 0]);
+  // La sombra de contraste («Sombra detrás») de una pieza sin sus letras en esa medida sale de su base: no queda la
+  // mancha de las letras que ya no están. Pieza transparente salvo sus letras; su base, vacía.
+  const soloLetras = new Uint8ClampedArray(100 * 40 * 4);
+  for (let y = 20; y < 27; y++) for (let x = 20; x < 40; x++) soloLetras.set([200, 20, 40, 255], (y * 100 + x) * 4);
+  const maH = { ...maT, piezas: [piezaT(tpCaja, { rgba: soloLetras, base: new Uint8ClampedArray(100 * 40 * 4) })] };
+  const conSombraH = (sin) => ({ ...puestaQ(sin), sombras: [0] });
+  const bajo = (px) => px[(41 * 200 + 35) * 4];
+  eq("sombra de contraste: con sus letras oscurece junto a ellas; sin ellas (quitadas en la medida), ni en la imagen ni en el PSD de capas planas", [bajo(armarMedida(maH, conSombraH(null), 200, 200)) < 250, bajo(armarMedida(maH, conSombraH([0]), 200, 200)), halosEnMedida(maH, conSombraH([0]).puestas[0]).every((c) => c.rgba.every((v, i) => i % 4 === 3 || v === 255) || c.rgba.length === 0)], [true, 255, true]);
+  // El contraste de una pieza sin sus letras en esa medida se mide con su base: letras casi del color del fondo se
+  // pierden; sin ellas (base vacía), no hay nada que medir.
+  const casiBlanco = new Uint8ClampedArray(100 * 40 * 4);
+  for (let y = 0; y < 40; y++) for (let x = 0; x < 100; x++) casiBlanco.set([250, 250, 250, 255], (y * 100 + x) * 4);
+  const maC = { ...maT, piezas: [piezaT(tpCaja, { rgba: casiBlanco, base: new Uint8ClampedArray(100 * 40 * 4) })] };
+  eq("contraste: con sus letras (casi blancas sobre blanco) se pierde la pieza; quitadas en la medida, se mide su base (vacía: nada que perder)", [perdidas(maC, puestaQ(null), 200, 200).get(0) > 0.5, perdidas(maC, puestaQ([0]), 200, 200).get(0) ?? 0], [true, 0]);
+  {
+    // El aviso del legal dice si se quitó su texto o sólo uno de sus textos.
+    const dosF = { ...maT, piezas: [{ ...piezaT(tpCaja), textos: [tpCaja, enPunto] }] }, aF = acomodar(dosF, 200, 200);
+    const avisoF = (sin) => aplicarEdicion(dosF, aF, { piezas: {}, sinTexto: { 0: sin } }, 200, 200).avisos.find((v) => /obligatorio/.test(v.texto))?.texto;
+    eq("legal con dos textos: quitar uno dice «uno de sus textos»; quitar los dos, «su texto»", [avisoF([1]), avisoF([0, 1])], ["«Legales» (FOOTER): se quitó uno de sus textos en esta medida. El legal es obligatorio: revisar.", "«Legales» (FOOTER): se quitó su texto en esta medida. El legal es obligatorio: revisar."]);
+  }
+  // Con dos textos, quitar uno pide escribir el otro (a su tamaño también) y se le dice cuál no.
+  const dos = { ...maQ, piezas: [{ ...maQ.piezas[0], textos: [tpCaja, enPunto] }] };
+  let pedido = null;
+  armarMedida(dos, puestaQ([1]), 200, 200, { texto: (pieza, lugar, parte, sin) => ((pedido = [pieza, lugar.k, parte, sin]), null) });
+  eq("con dos textos, quitar uno a su tamaño escribe la pieza y dice cuál no (índice 1)", pedido, [0, 1, null, [1]]);
+  const enCapa = (c) => [...c.rgba.subarray(((32 - c.y) * c.w + (35 - c.x)) * 4, ((32 - c.y) * c.w + (35 - c.x)) * 4 + 3)].join();
+  eq("el PSD de capas planas también: quitado, la base; sin quitar, las letras", [enCapa(capasDeMedida(maQ, puestaQ([0]), 200, 200).piezas[0].color), enCapa(capasDeMedida(maQ, puestaQ(null), 200, 200).piezas[0].color)], ["90,90,90", "200,20,40"]);
+
+  // Plan del PSD editable: el cambiado lleva sus letras y su caja; vacío o quitado aquí, oculto (quitado gana).
+  const maPlan = { origen: { mesa: 0, x: 0, y: 0, w: 200, h: 200, s: 1 }, piezas: r1.maestro.piezas };
+  const conPuesta = (sin) => ({ familia: "igual", puestas: [{ pieza: 0, k: 1, x: 10, y: 10, w: 100, h: 53, ...(sin ? { sinTexto: sin } : {}) }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [1] });
+  eq(
+    "plan editable: el texto cambiado va con sus letras y su caja nueva; quitado en la medida, oculto CON las letras nuevas; unas letras vacías, oculto con las de siempre; sin cambios, sin textos",
+    [planDeMedida(maPlan, conPuesta(null), 200, 200).textos, planDeMedida(maPlan, conPuesta([0]), 200, 200).textos, planDeMedida({ ...maPlan, piezas: cambiar(maT, { [k]: "  " }).maestro.piezas }, conPuesta(null), 200, 200).textos, "textos" in planDeMedida({ ...maPlan, piezas: maT.piezas }, conPuesta(null), 200, 200)],
+    [[{ ruta: [1, 0], texto: largo, caja: [0, -10, 80, 36] }], [{ ruta: [1, 0], texto: largo, caja: [0, -10, 80, 36], oculto: true }], [{ ruta: [1, 0], texto: null, oculto: true }], false],
+  );
+  // Sin cambiar letras, quitar el texto de una pieza sin texto nuevo también va al plan.
+  eq("plan editable: quitar un texto sin cambiarlo también lo oculta (con sus letras de siempre)", planDeMedida({ ...maPlan, piezas: maT.piezas }, conPuesta([0]), 200, 200).textos, [{ ruta: [1, 0], texto: null, oculto: true }]);
+
+  // El PSD editable a mano: una capa de texto con dos corridas y su párrafo. Con letras nuevas: una corrida (la primera)
+  // que las cubre, su caja nueva y la tinta que pintó la página; el PSD leído no se toca. Oculta si va sin letras.
+  const capaTexto = { name: "legal", left: 0, top: 0, right: 2, bottom: 2, imageData: { width: 2, height: 2, data: new Uint8ClampedArray(16).fill(9) }, text: { text: "hola", transform: [1, 0, 0, 1, 0, 0], shapeType: "box", boxBounds: [0, 0, 80, 10], style: { fontSize: 10 }, styleRuns: [{ length: 0, style: { fontSize: 99 } }, { length: 2, style: { fontSize: 10 } }, { length: 2, style: { fontSize: 12 } }], paragraphStyleRuns: [{ length: 4, style: { justification: "left" } }] } };
+  const leido = { width: 10, height: 10, children: [{ name: "BACKGROUND", left: 0, top: 0, right: 2, bottom: 2 }, { name: "FOOTER", children: [capaTexto, { name: "otra", left: 0, top: 0, right: 2, bottom: 2 }] }] };
+  const editableCon = (textos) => psdEditable(
+    leido,
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["FOOTER", { k: 1, x: 0, y: 0 }]], textos },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null, textos: [{ ruta: [1, 0], tinta: { x: 1, y: 1, w: 2, h: 1, rgba: new Uint8ClampedArray(8).fill(200) } }] },
+    { capa: (l) => l.imageData ?? { width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }, mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children.find((l) => l.name === "FOOTER").children;
+  const [nueva, otraCapa] = editableCon([{ ruta: [1, 0], texto: "adiós amigos", caja: [0, 0, 80, 30] }, { ruta: [1, 1], texto: "no es texto", caja: null }, { ruta: [5, 2], texto: "no existe", caja: null }]);
+  eq(
+    "PSD editable: letras nuevas con una corrida (la primera con letras: una de largo 0 no cuenta) que las cubre, su párrafo, su caja y la tinta de la página; una ruta que no es texto o no existe, igual; el leído, sin tocar",
+    [nueva.text.text, nueva.text.styleRuns.map((r) => [r.length, r.style.fontSize]), nueva.text.paragraphStyleRuns.map((r) => r.length), nueva.text.boxBounds, [nueva.left, nueva.top, nueva.right, nueva.bottom], nueva.imageData?.data[0], !!otraCapa.text, leido.children[1].children[0].text.text, leido.children[1].children[0].text.styleRuns.length],
+    ["adiós amigos", [[12, 10]], [12], [0, 0, 80, 30], [1, 1, 3, 2], 200, false, "hola", 3],
+  );
+  const suave = psdEditable(
+    { ...leido, children: [leido.children[0], { name: "FOOTER", children: [{ ...capaTexto, text: { ...capaTexto.text, text: "ho\u0003la" } }] }] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["FOOTER", { k: 1, x: 0, y: 0 }]], textos: [{ ruta: [1, 0], texto: "uno\ndos\ntres", caja: null }] },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children.find((l) => l.name === "FOOTER").children[0];
+  eq("PSD editable: en una caja con saltos suaves (Mayús+Enter) los saltos nuevos también son suaves (un párrafo); sin tinta, Photoshop la dibuja", [suave.text.text, suave.text.boxBounds, [suave.left, suave.right]], ["uno\u0003dos\u0003tres", [0, 0, 80, 10], [0, 0]]);
+  const conParrafos = psdEditable(
+    { ...leido, children: [leido.children[0], { name: "FOOTER", children: [{ ...capaTexto, text: { ...capaTexto.text, text: "ho\u0003la\notro" } }] }] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["FOOTER", { k: 1, x: 0, y: 0 }]], textos: [{ ruta: [1, 0], texto: "uno\ndos", caja: null }] },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children.find((l) => l.name === "FOOTER").children[0];
+  eq("PSD editable: si la caja ya traía párrafos además de saltos suaves, los saltos nuevos van como párrafos (no se adivina)", conParrafos.text.text, "uno\ndos");
+  eq(
+    "PSD editable: oculta sin letras nuevas, con su texto de siempre; oculta con letras nuevas (quitada en esa medida), con las nuevas",
+    [((l) => [l.hidden, l.text.text])(editableCon([{ ruta: [1, 0], texto: null, oculto: true }])[0]), ((l) => [l.hidden, l.text.text])(editableCon([{ ruta: [1, 0], texto: "adiós", caja: null, oculto: true }])[0])],
+    [[true, "hola"], [true, "adiós"]],
+  );
+
+  const ruta33 = join(homedir(), "Desktop/formatos-prueba/s33-BFDIRECT20CASH.psd");
+  if (!existsSync(ruta33)) console.log("  · (s33 no está en el Escritorio: no se probaron los textos con el PSD real)");
+  else {
+    const crudo = readFileSync(ruta33);
+    const d33 = leerPsd((await adelgazarPsd(new Blob([crudo]), PSD_BYTES_MAX)).datos);
+    const l33 = prepararMaestro(despiezar(d33, d33.mesas.findIndex((m) => m.w === 1200 && m.h === 1500))).maestro;
+    const fuente = readPsdAg(await prepararParaEditable(new Blob([crudo]), EDITABLE_MAX_BYTES), { useRawData: true, skipThumbnail: true, skipCompositeImageData: true, totalMemoryLimit: 64 * 1024 * 1024, strict: true });
+    // La mesa del maestro en el PSD entero (como `mesaDe`): las mesas de trabajo visibles, en orden.
+    const mesas = [];
+    const andarM = (ls) => { for (const l of ls ?? []) { if (l.hidden || !l.children) continue; if (l.artboard?.rect) mesas.push(l); andarM(l.children); } };
+    andarM(fuente.children);
+    const enRuta = (r) => r.reduce((ls, i, n) => (n === r.length - 1 ? ls?.[i] : ls?.[i]?.children), mesas[l33.origen.mesa].children);
+    const todas = l33.piezas.flatMap((p) => p.textos);
+    const malas = todas.filter((t) => { const l = enRuta(t.ruta); return !l?.text || l.name.trim() !== t.capa; }).map((t) => t.capa);
+    ok(`s33: la ruta de cada texto (${todas.length}) lleva a su misma capa de texto en el PSD entero (el que se baja editable), aunque el leído venga adelgazado`, todas.length >= 5 && malas.length === 0, JSON.stringify(malas));
+
+    // Las líneas probadas: las del medidor de mentiras, en las piezas con base y todos sus textos sin motivo (CTA y legal).
+    const listos33 = (m) => (i) => { const p = m.piezas[i]; return p.base && p.textos.length && p.textos.every((t) => !t.motivo && !t.texto.motivo) ? p.textos.map((tp) => ({ tp, lineas: maq(tp.texto), dx: 0, dy: 0 })) : undefined; };
+    const iL = l33.piezas.findIndex((p) => p.rol === "FOOTER"), iC = l33.piezas.findIndex((p) => p.rol === "CTA");
+    const tL = l33.piezas[iL].textos[0], tC = l33.piezas[iC].textos[0];
+    const legalNuevo = `${tL.texto.texto} Consulta más condiciones, comisiones y requisitos de contratación en didi.com.mx/card antes de solicitar tu tarjeta.`;
+    const d3 = cambiarTextos(l33, { [claveTexto(tL)]: legalNuevo }, listos33(l33), maq, pintarFalso).maestro;
+    const L0 = l33.piezas[iL], L1 = d3.piezas[iL];
+    ok(
+      `s33: el legal más largo hace crecer su caja hacia abajo (${tL.texto.caja[3]} → ${L1.textos[0].texto.caja[3].toFixed(0)}) y su pieza (alto ${L0.caja.h} → ${L1.caja.h}), con el mismo arriba`,
+      L1.textos[0].texto.caja[3] > tL.texto.caja[3] && L1.caja.h > L0.caja.h && L1.caja.y === L0.caja.y && !L1.textoFuera && d3.piezas.every((p, i) => i === iL || p === l33.piezas[i]),
+    );
+    const medidas = leerMedidas(MEDIDAS_EQUIPO).medidas;
+    const dentro = medidas.map((m) => {
+      const a = acomodar(d3, m.w, m.h), q = a.puestas.find((x) => x.pieza === iL);
+      return [`${m.w}x${m.h}`, q ? q.x >= -0.5 && q.y >= -0.5 && q.x + q.w <= m.w + 0.5 && q.y + q.h <= m.h + 0.5 && !a.avisos.some((v) => v.tipo === "fuera" && v.texto.includes("Legales")) : "quitado"];
+    });
+    ok(`s33: el acomodo automático deja el legal crecido dentro de las ${medidas.length} medidas`, medidas.length === 12 && dentro.every(([, v]) => v === true), JSON.stringify(dentro));
+    const dC = cambiarTextos(l33, { [claveTexto(tC)]: "Aplica hoy mismo y empieza a ganar" }, listos33(l33), maq, pintarFalso).maestro;
+    const avisoC = acomodar(dC, 1200, 627).avisos.filter((v) => v.tipo === "texto").map((v) => v.texto);
+    ok(`s33: «Aplica hoy» más largo que su botón avisa en cada medida y no se bloquea (${avisoC.join(" | ")})`, dC.piezas[iC].textoFuera === true && avisoC.length === 1 && /se sale de su pieza/.test(avisoC[0]));
+    // Quitado el legal en 320×50: el aviso del legal obligatorio; en las demás medidas no.
+    const a320 = acomodar(d3, 320, 50), q320 = aplicarEdicion(d3, a320, { piezas: {}, sinTexto: { [iL]: [0] } }, 320, 50);
+    const vacio = cambiarTextos(l33, { [claveTexto(tL)]: " \n " }, listos33(l33), maq, pintarFalso).maestro;
+    ok("s33: el legal con letras vacías avisa en cada medida que el legal es obligatorio (sin bloquear)", vacio.piezas[iL].sinLetras === true && medidas.every((m) => acomodar(vacio, m.w, m.h).avisos.some((v) => /quedó vacío en todas las medidas/.test(v.texto))) && !acomodar(d3, 1200, 627).avisos.some((v) => /quedó vacío/.test(v.texto)));
+    const avisosDe = (m, ed, W2, H2) => aplicarEdicion(m, acomodar(m, W2, H2), { piezas: {}, ...ed }, W2, H2).avisos.filter((v) => v.tipo === "texto").map((v) => v.texto);
+    const sinEsc = cambiarTextos(l33, { [claveTexto(tL)]: legalNuevo }, () => undefined, maq, pintarFalso).maestro;
+    eq(
+      "s33: un texto cambiado que no se pudo escribir avisa en cada medida (con el porqué); quitado ahí, ya no; el CTA más largo que su botón, quitado su texto en la medida, tampoco avisa",
+      [avisosDe(sinEsc, {}, 1200, 627), avisosDe(sinEsc, { sinTexto: { [iL]: [0] } }, 1200, 627).filter((v) => /no se pudo escribir/.test(v)).length, avisosDe(dC, { sinTexto: { [iC]: [0] } }, 1200, 627)],
+      [[`«Legales» (FOOTER): el texto cambiado no se pudo escribir aquí (${NO_SE_ESCRIBIO.tipografia}); va el del PSD.`], 0, []],
+    );
+    ok("s33 320×50: quitar el texto del legal es una edición (va a mano) y avisa que el legal es obligatorio", q320.editada && q320.puestas.find((q) => q.pieza === iL)?.sinTexto?.join() === "0" && q320.avisos.some((v) => /El legal es obligatorio/.test(v.texto)) && !acomodar(d3, 320, 50).avisos.some((v) => /obligatorio/.test(v.texto)));
+
+    // PSD editable de 1200×627 con el legal nuevo: texto vivo con las letras nuevas, una corrida, caja más alta y su tinta.
+    const pxDe = { capa: (l) => getLayerImageData(l), mascara: (l) => getLayerMaskImageData(l), mascaraReal: (l) => getLayerRealMaskImageData(l) };
+    const vacios = (W2, H2) => ({ compuesto: new Uint8ClampedArray(W2 * H2 * 4), halos: [], retoque: null });
+    const a627 = acomodar(d3, 1200, 627);
+    const tintas = d3.piezas.flatMap((p) => p.textos.flatMap((t) => (t.cambio?.tinta ? [{ ruta: t.ruta, tinta: t.cambio.tinta }] : [])));
+    const leerDe = (plan) => readPsdAg(writePsdBuffer(psdEditable(fuente, plan, { ...vacios(plan.W, plan.H), textos: tintas }, pxDe).psd, { invalidateTextLayers: true, noBackground: true }), { useImageData: true, skipThumbnail: true });
+    const hojas = (ls) => ls.flatMap((l) => (l.children ? hojas(l.children) : [l]));
+    const legalDe = (psd) => hojas(psd.children).find((l) => l.name.trim() === tL.capa);
+    const v627 = legalDe(leerDe(planDeMedida(d3, a627, 1200, 627)));
+    const bb0 = enRuta(tL.ruta).text.boxBounds;
+    ok(
+      `s33 1200×627 PSD editable: el legal sigue vivo con las letras nuevas (sus saltos suaves de caja, como el original), un solo estilo que las cubre, su caja más alta (${bb0[3]} → ${v627?.text?.boxBounds?.[3]?.toFixed(1)}) y sus píxeles (${v627 ? `${v627.right - v627.left}×${v627.bottom - v627.top}` : "-"})`,
+      // El legal de s33 trae un solo estilo (`style`, sin corridas): sigue igual, y cubre todo.
+      v627?.text?.text === legalNuevo.replace(/\n/g, "\u0003") && (v627.text.styleRuns ?? [{ length: legalNuevo.length }]).every((r) => r.length === legalNuevo.length) && v627.text.style?.font?.name === "DiDiSans-Pro-Medium" && v627.text.boxBounds[3] > bb0[3] && v627.text.boxBounds[0] === bb0[0] && v627.right > v627.left && !v627.hidden,
+      JSON.stringify(v627?.text && { len: v627.text.text.length, runs: v627.text.styleRuns?.map((r) => r.length), font: v627.text.style?.font?.name, bb: v627.text.boxBounds }),
+    );
+    const v320 = legalDe(leerDe(planDeMedida(d3, q320, 320, 50)));
+    ok("s33 320×50 PSD editable: el legal quitado en esa medida va oculto, con las letras nuevas (al prenderlo dice lo mismo que las demás medidas)", v320?.hidden === true && v320.text?.text === legalNuevo.replace(/\n/g, "\u0003"));
+    ok("s33 320×50: quitado el único texto del legal, ya no se avisa su letra chica", !q320.avisos.some((v) => v.tipo === "letra" && v.texto.includes("Legales")) && acomodar(d3, 320, 50).avisos.some((v) => v.tipo === "letra" && v.texto.includes("Legales")));
+    const sinCambio = legalDe(leerDe(planDeMedida(l33, acomodar(l33, 1200, 627), 1200, 627)));
+    ok("s33: sin cambios, el legal sale con sus letras del PSD", sinCambio?.text?.text.replace(/\r|\u0003/g, "\n") === tL.texto.texto && !sinCambio.hidden, JSON.stringify([sinCambio?.text?.text.slice(0, 90), tL.texto.texto.slice(0, 90), sinCambio?.hidden]));
   }
 }
 

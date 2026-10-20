@@ -756,7 +756,82 @@ largo: estacionado por él.
           de atrás al abrir; decodificar las capas una sola vez y no recorrer la mesa entera por pieza; Safari y Firefox
           (foco) sin probar; un lector de pantalla real sin probar; el respaldo de «sin partes si pesa demasiado» del
           worker no tiene prueba automática (corre en el Web Worker).
-      **Next Step:** commit y push a `prisma` (preview, NO main). Después: paso 3 (el legal editable en el editor).
+      **Next Step:** paso 3 hecho (abajo, Review 3), en `prisma` (preview). Que Pedro o un diseñador abran en
+      Photoshop el PSD de una medida con el legal cambiado y lo prendan donde se quitó.
+      **Paso 3 — textos editables en el editor** (Pedro, 2026-10-20, eligió: "All sizes, once", "Let the box grow
+      down", "Any text HÜE can redraw"):
+      · Lo que ve la persona: en el editor de cualquier medida, al elegir una pieza (o parte) con texto que HÜE sabe
+        volver a escribir, el panel trae su texto en un campo. Lo que escribe se ve al momento en la vista; al guardar,
+        las 12 medidas usan el texto nuevo. «Quitar en esta medida» lo quita sólo de esa medida (como mover una pieza);
+        «Volver al original» regresa el texto del PSD. Si no cabe en su caja de párrafo, la caja crece hacia abajo.
+      · Qué textos: los que pasan la prueba contra Photoshop con la tipografía cargada y cuya pieza tiene base (s33: el
+        legal y «Aplica hoy»; los de Copy no, porque «esta temporada» trae efectos de capa). Con varios estilos dentro
+        del mismo texto: no se edita aquí (el campo lo dice: "cámbialo en Photoshop"). Sin la tipografía: el campo dice
+        cuál falta y cómo cargarla; quitar sí se puede (sólo pide la base).
+      · Medido en s33 (2026-10-20): debajo del legal caben 1-2 líneas más en las medidas altas (99 px en 1080×1920, una
+        línea ≈ 19 px) y menos de una en las tiras (876×324: 14 px, 320×50: 2 px). Por eso la pieza crece EN EL MAESTRO
+        y el acomodo automático la vuelve a poner en cada medida; en una medida movida a mano crece desde donde quedó
+        y, si se sale, lo dice el aviso de siempre («se sale de la medida»). «Aplica hoy» mide 216 px en un botón de
+        352: un texto más largo que el botón se avisa («se sale de su pieza»), no se corta.
+      **Cómo (un maestro derivado):** el texto cambiado se escribe UNA vez a la escala del maestro y sale un maestro
+      nuevo con esa pieza (y su parte) ya con el texto nuevo: su color, su base y su caja crecen lo que haga falta. Todo
+      lo de después (acomodo, tarjeta, vista del editor, PNG, PSD plano, contraste, plan del PSD editable) lo usa sin
+      cambios. La huella de lo guardado por medida sale del maestro ORIGINAL (si no, cambiar un texto borraría las
+      ediciones guardadas).
+      - [x] `textos.ts` (puro): `textoCambiado(capa, nuevo)` (un estilo: el tramo cubre el texto nuevo) y la caja de
+            párrafo que crece hasta que quepan las líneas (`maquetar` con el medidor); pruebas con un medidor de mentira.
+      - [x] Lectura: cada capa de texto sabe su ruta en el árbol de la mesa (índices de hijos) para encontrarla en el
+            PSD editable aunque dos se llamen igual.
+      - [x] `cambiarTextos(ma, cambios, escritura, pintar)` (puro, con `pintar` inyectado): maestro y escritura
+            derivados (mismos objetos de texto compartidos entre pieza y parte), caja y sólido que crecen, base y sombras
+            con margen; sin cambios, el mismo maestro (las 12 medidas idénticas).
+      - [x] `Edicion.sinTexto` por medida (qué textos se quitan en esa medida): `nitido` escribe la pieza con su base y
+            sus otros textos aunque esté a su tamaño; lo leído de lo guardado se revisa como lo demás.
+      - [x] Avisos: «se sale de su pieza» (tinta nueva fuera de la parte sólida original) y el de la medida.
+      - [x] PSD editable: la capa de texto con sus letras nuevas, su tramo y su caja de párrafo crecida (Photoshop la
+            vuelve a dibujar); sus píxeles, los que pinta la página (pasan como las sombras de contraste); quitada en esa
+            medida = capa oculta (el diseñador la vuelve a prender).
+      - [x] Lo guardado del anuncio: `hue-formatos-textos:v1` por nombre de PSD; la clave de cada texto es «capa +
+            letras del PSD» (eso es su huella: con otro texto no aplica); se lee sin confiar (largo máximo, 200, claves
+            con «\n»). A la vista en la página («N textos cambiados…» + «Volver a los textos del PSD», con Deshacer).
+      - [x] Editor: el campo de cada texto de lo elegido (con su nombre de capa), vista al momento, «Cambia en las 12
+            medidas», «Quitar en esta medida» / «Volver a ponerlo», «Volver al original», motivo si no se puede; Guardar
+            guarda las dos cosas; Cancelar y «sin guardar» cuentan el texto; las teclas del campo no mueven la pieza.
+      - [x] La pantalla: el maestro derivado alimenta tarjetas, PNG, los dos PSD y el resumen.
+      **Verificación 3:** pruebas puras (texto y caja que crece, maestro derivado, sin cambios = mismo objeto, huella
+      del original, `sinTexto`, lo guardado roto); s33 en Node con un pintor de prueba: el legal con una línea más crece
+      en el maestro y el acomodo lo deja dentro en las 12; PSD editable de s33 leído de vuelta (texto nuevo, tramo del
+      largo nuevo, caja crecida, oculto donde se quitó); 12 de 12 medidas idénticas sin cambios; mutaciones; navegador
+      (localhost, s33, con las tipografías de `Desktop/formatos-prueba/DiDi Sans Pro`): cambiar el legal en 1200×627,
+      verlo al momento, guardar, ver las 12 tarjetas con el texto nuevo, quitarlo en 320×50, «Aplica hoy» más largo
+      que su botón (aviso), bajar PNG y los dos PSD y leerlos de vuelta, recargar; tsc, eslint, npm test, build;
+      revisión en paralelo (5 pasadas). Sin probar (se dirá): Photoshop abriendo el PSD con el texto cambiado.
+      **Review 3 (2026-10-20):** pruebas 459/0; 12 de 12 medidas idénticas a 4c8eed5 sin cambios de texto; 10 + 11
+      mutaciones, cada una tumba una prueba. Navegador (localhost, s33, DiDi Medium/Bold): legal +1 frase en 1200×627 se
+      ve en el editor y en las 12 tarjetas (crece hacia abajo, el acomodo lo reacomoda: letra 18.4 → 12.8 px en esa
+      medida); quitado en 320×50 (sólo cambian 379 px, en el legal; aviso del legal obligatorio); «Aplica hoy» largo:
+      aviso, sin bloquear; Cancelar lo descarta; PNG = tarjeta y igual tras recargar; PSD editable leído de vuelta:
+      1200×627 legal vivo con las letras nuevas (289), caja 50 → 83, DiDi Medium; 320×50 oculto CON las letras nuevas.
+      Encontrado al leer de vuelta y arreglado: saltos suaves («\u0003») de la caja; oculto con letras viejas.
+      Revisión en paralelo (5 pasadas) — arreglado: tope de tamaño (un texto pegado enorme pedía GB de lienzo); un
+      texto que no se pudo escribir (sin tipografía en otra mesa, demasiado largo, lienzo vacío, error) va como en el
+      PSD y CADA medida lo avisa (antes: callado); la vista se reescribe 200 ms después de la última letra («Actualizando
+      la vista…»); lo ya escrito se guarda por maestro (guardar no reescribe; otra mesa no repinta ésta); aviso visible
+      al guardar textos (antes decía «volvió al automático»); nota en la página con vuelta a los del PSD; el panel de
+      textos se desplaza a la vista (tiras); «Volver al original» deja el foco en su campo; el lector de pantalla oye
+      quitar/poner/original; etiquetas por pieza («Texto de «Legales» (FOOTER)»); motivo del motor marcado en español;
+      «Quitar» dice por qué no se puede; nota de «vacío»; Esc en el campo no cierra la pieza; la sombra y el contraste
+      de una pieza sin sus letras salen de su base; las piezas sin mover siguen al automático aunque vuelvan a su lugar
+      con Esc o flechas; el orden de capas se rehace sobre las piezas de ahora; «se sale de su pieza» sólo si el texto
+      del PSD estaba dentro de algo sólido (botón), no en un texto suelto ni junto a iconos; mezcla con la gamma de
+      Photoshop; caracteres de control fuera, corte por letra; primera corrida con letras; párrafos no se vuelven
+      saltos suaves; «uno de sus textos».
+      No arreglado (anotado): confirmar al Cancelar con texto escrito (igual que con piezas movidas); avisos de texto
+      también junto al campo (hoy en «Revisar» y en la tarjeta); lo guardado no va por persona (en una Mac compartida,
+      otra persona con un PSD del mismo nombre ve los textos: la nota de la página lo enseña y se vuelven al PSD de un
+      clic); un texto quitado en una pieza de varios textos, si después se olvidan las tipografías, sale en el PNG (el
+      editor no deja quitarlo sin ellas); pintar una vez por texto en vez de dos; Photoshop abriendo el PSD con texto
+      cambiado, Safari/Firefox y un lector de pantalla real: sin probar.
       **Paso 1 — el PSD por medida, editable:**
       - [x] `psd-editable.ts` (puro): copia el árbol de la mesa (carpetas, subcarpetas, orden, ocultas incluidas) y
             a cada capa le aplica el movimiento de SU pieza (escala pareja + desplazamiento; el fondo, el del fondo):

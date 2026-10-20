@@ -215,6 +215,46 @@ function trimFin<T extends { c: string }>(ls: T[]): T[] {
   return ls.slice(0, k);
 }
 
+// ── Cambiar las letras (editor, paso 3) ──────────────────────────────────
+
+/** Largo máximo de un texto cambiado en el editor (el mismo tope que al leerlo del PSD). */
+export const TEXTO_CAMBIADO_MAX = TEXTO_MAX;
+/** Lo que baja la letra bajo su base (la cola de la g o la p), como parte de su tamaño. */
+const BAJA_LETRA = 0.3;
+
+/** Por qué las letras de una capa no se pueden cambiar en el editor (null = sí se puede). Con varios estilos no se
+ *  sabe cuál le toca a una letra nueva: eso se cambia en Photoshop. */
+export function porQueNoSeCambia(t: TextoCapa): string | null {
+  if (t.motivo) return t.motivo;
+  if (t.tramos.length !== 1) return "tiene varios estilos";
+  return null;
+}
+
+/** La misma capa con otras letras: su estilo, su lugar y su alineación; saltos de línea como "\n". null si no se puede
+ *  (`porQueNoSeCambia`). */
+export function textoCambiado(t: TextoCapa, nuevo: string): TextoCapa | null {
+  if (porQueNoSeCambia(t)) return null;
+  // Saltos de cualquier sistema a "\n"; fuera los caracteres de control y de formato (invisibles, o que cambian el
+  // sentido de lectura) salvo el salto y el tabulador; se corta por letra, no a media letra.
+  const limpio = nuevo.replace(/\r\n?|\u0003|\u2028|\u2029/g, "\n").replace(/(?![\n\t])[\p{Cc}\p{Cf}\p{Cs}]/gu, "");
+  let texto = "";
+  for (const c of limpio) {
+    if (texto.length + c.length > TEXTO_CAMBIADO_MAX) break;
+    texto += c;
+  }
+  return { ...t, texto, tramos: [{ ...t.tramos[0], n: texto.length }] };
+}
+
+/** Texto de párrafo: la caja con lugar para todas sus líneas (Pedro, 2026-10-20: "Let the box grow down"); crece
+ *  sólo hacia abajo, como al jalar la orilla de abajo en Photoshop. Igual si ya cabían, y el texto de punto, igual. */
+export function cajaQueCabe(t: TextoCapa, lineas: LineaTexto[]): TextoCapa {
+  const ultima = lineas.at(-1);
+  if (!t.caja || !ultima) return t;
+  const tam = Math.max(t.tramos[0]?.tam ?? 0, ...ultima.pedazos.map((p) => p.tramo.tam));
+  const abajo = ultima.base + tam * BAJA_LETRA;
+  return abajo > t.caja[3] ? { ...t, caja: [t.caja[0], t.caja[1], t.caja[2], Math.ceil(abajo)] } : t;
+}
+
 // ── Tipografías: qué trae un archivo ─────────────────────────────────────
 
 /** Una tipografía que se puede pedir por su nombre PostScript; `peso` sólo en las variables (valor del eje wght). */

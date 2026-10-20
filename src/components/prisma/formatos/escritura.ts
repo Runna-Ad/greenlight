@@ -8,6 +8,7 @@
  *     (`compararAlfa`). Sólo si coincide se usa; si no, esa pieza va con su texto como imagen.
  *   · `textoEscrito`: lo que `armarMedida` pide para pintar una pieza con sus letras nuevas.
  */
+import type { Listo, Maquetar, Pintar } from "@/lib/prisma/formatos/cambios-texto";
 import type { MaestroListo } from "@/lib/prisma/formatos/listo";
 import type { Lugar, TextoEscrito } from "@/lib/prisma/formatos/nitido";
 import type { TextoPieza } from "@/lib/prisma/formatos/psd";
@@ -210,8 +211,6 @@ const matriz = (tr: TextoPieza["texto"]["transform"], k: number, ex: number, ey:
 
 // ── La prueba y lo que usa `armarMedida` ─────────────────────────────────
 
-/** Un texto que pasó la prueba: sus líneas y cuánto se corrió para empatar con Photoshop (px del maestro). */
-type Listo = { tp: TextoPieza; lineas: LineaTexto[]; dx: number; dy: number };
 /** Resultado de la prueba de un texto, para enseñar. */
 export type Revision = { maestro: number; pieza: number; capa: string; ok: boolean; motivo: string | null; faltan: string[] };
 /** Por maestro y pieza: sus textos listos para escribir (sólo piezas donde TODOS pasaron). */
@@ -290,45 +289,70 @@ export function revisarTextos(maestros: MaestroListo[], t: Tipografias): Escritu
 }
 
 /**
+ * Escribe textos en un lienzo de w × h; `mover(s)` = de unidades de su capa a px del lienzo. RGBA premultiplicado
+ * (0-255). Lanza si el navegador no da el lienzo.
+ */
+function pintarEn(t: Tipografias, listos: readonly Listo[], w: number, h: number, mover: (s: Listo) => DOMMatrix): Float32Array {
+  const lienzo = document.createElement("canvas");
+  try {
+    lienzo.width = w;
+    lienzo.height = h;
+    const x = lienzo.getContext("2d", { willReadFrequently: true });
+    if (!x) throw new Error("sin lienzo 2d");
+    for (const s of listos) {
+      x.globalAlpha = s.tp.opacidad;
+      escribir(x, t, s.lineas, mover(s), true);
+    }
+    const px = x.getImageData(0, 0, w, h).data;
+    const out = new Float32Array(w * h * 4);
+    for (let i = 0; i < w * h; i++) {
+      const a = px[i * 4 + 3];
+      out[i * 4] = (px[i * 4] * a) / 255;
+      out[i * 4 + 1] = (px[i * 4 + 1] * a) / 255;
+      out[i * 4 + 2] = (px[i * 4 + 2] * a) / 255;
+      out[i * 4 + 3] = a;
+    }
+    return out;
+  } finally {
+    lienzo.width = lienzo.height = 0;
+  }
+}
+
+/** Para `cambiarTextos`: escribir a la escala del maestro (un rectángulo de la mesa) y maquetar con estas tipografías. */
+export const pintorDe = (t: Tipografias): Pintar => (listos, x0, y0, w, h) => pintarEn(t, listos, w, h, (s) => matriz(s.tp.texto.transform, 1, s.dx - x0, s.dy - y0));
+export const maquetadorDe = (t: Tipografias): Maquetar => (capa) => maquetar(capa, medidorDe(t));
+
+/** La escritura con lo que `cambiarTextos` volvió a escribir en el maestro `maestro` (sus piezas cambiadas). */
+export function escrituraCon(e: Escritura, maestro: number, listos: ReadonlyMap<number, Listo[]>): Escritura {
+  if (!listos.size) return e;
+  const piezas = new Map(e.piezas);
+  for (const [pi, l] of listos) piezas.set(clavePieza(maestro, pi), l);
+  return { ...e, piezas };
+}
+/** Los textos que la página escribe de una pieza (undefined = va como imagen). */
+export const listosDe = (e: Escritura | null, maestro: number, pieza: number): readonly Listo[] | undefined => e?.piezas.get(clavePieza(maestro, pieza));
+
+/**
  * Lo que `armarMedida` llama para una pieza: sus letras escritas a la escala de la medida, o null (va como imagen:
- * también si el lienzo falla, así la medida sale con el texto de Photoshop en vez de perderse).
+ * también si el lienzo falla, así la medida sale con el texto de Photoshop en vez de perderse). Los quitados en esta
+ * medida (`sin`) no se escriben.
  */
 export function textoEscrito(e: Escritura | null, maestro: number, ma: MaestroListo, t: Tipografias): TextoEscrito | undefined {
   if (!e?.piezas.size) return undefined;
-  return (pieza: number, l: Lugar, parte: number | null) => {
+  return (pieza: number, l: Lugar, parte: number | null, sin?: readonly number[]) => {
     const todos = e.piezas.get(clavePieza(maestro, pieza));
     // Una parte (pieza abierta en el editor) escribe sólo sus textos: son los mismos objetos que los de su pieza.
-    const d = parte === null ? ma.piezas[pieza] : ma.piezas[pieza]?.partes?.[parte];
-    const listos = d && todos && (parte === null ? todos : todos.filter((s) => d.textos.includes(s.tp)));
-    if (!d || !listos?.length) return null;
+    const p = ma.piezas[pieza], d = parte === null ? p : p?.partes?.[parte];
+    const suyos = d && todos && (parte === null ? todos : todos.filter((s) => d.textos.includes(s.tp)));
+    if (!d || !suyos?.length) return null;
+    const listos = sin?.length ? suyos.filter((s) => !sin.includes(p.textos.indexOf(s.tp))) : suyos;
     const w = l.x1 - l.x0, h = l.y1 - l.y0;
-    const lienzo = document.createElement("canvas");
     try {
-      lienzo.width = w;
-      lienzo.height = h;
-      const x = lienzo.getContext("2d", { willReadFrequently: true });
-      if (!x) return null;
-      const caja = d.caja;
-      for (const s of listos) {
-        x.globalAlpha = s.tp.opacidad;
-        // De la mesa a este rectángulo: la esquina de la caja de la pieza cae en (ox, oy); más el corrimiento de la prueba.
-        escribir(x, t, s.lineas, matriz(s.tp.texto.transform, l.k, l.ox - l.x0 + (s.dx - caja.x) * l.k, l.oy - l.y0 + (s.dy - caja.y) * l.k), true);
-      }
-      const px = x.getImageData(0, 0, w, h).data;
-      const out = new Float32Array(w * h * 4);
-      for (let i = 0; i < w * h; i++) {
-        const a = px[i * 4 + 3];
-        out[i * 4] = (px[i * 4] * a) / 255;
-        out[i * 4 + 1] = (px[i * 4 + 1] * a) / 255;
-        out[i * 4 + 2] = (px[i * 4 + 2] * a) / 255;
-        out[i * 4 + 3] = a;
-      }
-      return out;
+      // De la mesa a este rectángulo: la esquina de la caja del dibujo cae en (ox, oy); más el corrimiento de la prueba.
+      return pintarEn(t, listos, w, h, (s) => matriz(s.tp.texto.transform, l.k, l.ox - l.x0 + (s.dx - d.caja.x) * l.k, l.oy - l.y0 + (s.dy - d.caja.y) * l.k));
     } catch (err) {
       console.error("[formatos-psd] escribir texto", err);
       return null;
-    } finally {
-      lienzo.width = lienzo.height = 0;
     }
   };
 }

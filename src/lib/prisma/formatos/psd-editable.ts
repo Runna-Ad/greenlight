@@ -7,7 +7,9 @@
  * aplica el movimiento de SU carpeta de primer nivel: la escala pareja `k` y el desplazamiento que le dio el acomodo
  * (o la edición a mano). El fondo se mueve como el fondo de la medida. Lo que cambia por tipo de capa:
  * - píxeles y máscaras: remuestreados con el mismo filtro de la tarjeta (nitido.ts);
- * - texto: sigue VIVO, sólo cambia su matriz (Photoshop pide «Actualizar» las capas de texto al abrirlo);
+ * - texto: sigue VIVO, sólo cambia su matriz (Photoshop pide «Actualizar» las capas de texto al abrirlo); si sus
+ *   letras se cambiaron en el editor, lleva las nuevas (y su caja de párrafo crecida), y si se quitó en esta medida,
+ *   va oculta (el diseñador la vuelve a prender);
  * - objeto inteligente: sus 4 esquinas, con su archivo adentro (el original completo, no los píxeles);
  * - forma: el trazo, la caja de la forma viva, los radios y el grosor del contorno;
  * - efectos (sombra, contorno, bisel…): sus medidas en px por k.
@@ -40,7 +42,12 @@ export type PlanEditable = {
    *  movimiento de cada parte (`hijo`: su subcarpeta entre los hijos de la carpeta; null = las capas sueltas) y, si
    *  cambió, qué parte va encima de cuál (sus `hijo`, de abajo hacia arriba). La carpeta misma se mueve con su pieza. */
   partes?: PartesEditable[];
+  /** Las capas de texto que cambian en esta medida (por su `ruta` en la mesa): letras nuevas y su caja de párrafo, o
+   *  `texto` null = oculta (quitada en esta medida, o sin letras). */
+  textos?: TextoEditable[];
 };
+/** Un texto del PSD editable: sus letras nuevas (null = las de siempre) con su caja de párrafo, y si va oculto. */
+export type TextoEditable = { ruta: number[]; texto: string | null; caja?: [number, number, number, number] | null; oculto?: boolean };
 export type PartesEditable = { pieza: string; carpeta: number; partes: { hijo: number | null; A: Afin }[]; orden?: (number | null)[] };
 /** Lo que la página ya pintó y va encima de las capas del original. */
 export type ExtrasEditable = {
@@ -50,6 +57,9 @@ export type ExtrasEditable = {
   halos: { nombre: string; capa: CapaSalida }[];
   /** Sólo lo que cambió del fondo al quitar la copia («Quitar del fondo» / IA), en px de la medida. */
   retoque: CapaSalida | null;
+  /** La tinta nueva de cada texto con letras cambiadas (por su `ruta`), en px de la MESA: los píxeles de su capa hasta
+   *  que Photoshop la vuelva a dibujar. */
+  textos?: { ruta: number[]; tinta: CapaSalida }[];
 };
 /** Lo que hay que decir de una capa (la pantalla lo dice en su idioma): `aplanada` = va como imagen porque no se puede
  *  escribir bien; si no, sigue editable pero hay que revisarla al editarla en Photoshop. */
@@ -77,7 +87,16 @@ const MISMA = 1e-9;
  * Una pieza puesta lleva su parte sólida a (q.x, q.y) con escala q.k; el fondo pone su esquina en (fondo.x, fondo.y).
  */
 export function planDeMedida(
-  ma: { piezas: readonly { nombre: string; solido: { x: number; y: number }; carpeta?: number; partes?: readonly { hijo: number | null; solido: { x: number; y: number } }[] }[]; origen: Origen },
+  ma: {
+    piezas: readonly {
+      nombre: string;
+      solido: { x: number; y: number };
+      carpeta?: number;
+      partes?: readonly { hijo: number | null; solido: { x: number; y: number } }[];
+      textos?: readonly { ruta: number[]; texto: { texto: string; caja: [number, number, number, number] | null }; cambio?: unknown }[];
+    }[];
+    origen: Origen;
+  },
   a: Acomodo,
   W: number,
   H: number,
@@ -100,6 +119,18 @@ export function planDeMedida(
     const cambio = suyas.some((x, i) => i > 0 && x.parte < suyas[i - 1].parte);
     return [{ pieza: p.nombre, carpeta: p.carpeta, partes: suyas.map(({ hijo, A }) => ({ hijo, A })), ...(cambio ? { orden: suyas.map((x) => x.hijo) } : {}) }];
   });
+  // Los textos: los cambiados en el editor (todas las medidas) llevan sus letras nuevas; vacíos, o quitados en ÉSTA, van
+  // ocultos (quitado: con las letras de ahora, para que al prenderlo diga lo mismo que las demás medidas).
+  const porRuta = new Map<string, TextoEditable>();
+  for (const p of ma.piezas)
+    for (const t of p.textos ?? [])
+      if (t.cambio) porRuta.set(t.ruta.join("/"), t.texto.texto.trim() ? { ruta: t.ruta, texto: t.texto.texto, caja: t.texto.caja } : { ruta: t.ruta, texto: null, oculto: true });
+  for (const q of a.puestas)
+    for (const j of q.sinTexto ?? []) {
+      const t = ma.piezas[q.pieza].textos?.[j], k = t?.ruta.join("/");
+      if (t && k) porRuta.set(k, { ...(porRuta.get(k) ?? { ruta: t.ruta, texto: null }), oculto: true });
+    }
+  const textos = [...porRuta.values()];
   return {
     W,
     H,
@@ -113,6 +144,7 @@ export function planDeMedida(
     // original tal cual, aunque dos carpetas se llamen igual (una sola pieza) y tengan otra en medio.
     ...(a.puestas.some((q, i) => i > 0 && q.pieza < a.puestas[i - 1].pieza) ? { orden: a.puestas.map((q) => ma.piezas[q.pieza].nombre) } : {}),
     ...(partes.length ? { partes } : {}),
+    ...(textos.length ? { textos } : {}),
   };
 }
 
@@ -539,12 +571,68 @@ function idsUsados(capas: Layer[], ids = new Set<string>()): Set<string> {
 }
 
 /**
+ * Las capas de la mesa con los textos de `plan.textos` ya cambiados: se copia sólo el camino hasta cada una (el
+ * original no se toca). Una con letras nuevas lleva la tinta que pintó la página (`nuevos`, para quien decodifica sus
+ * píxeles) o, si el maestro se leyó reducido, ninguna: Photoshop la dibuja al actualizar. Una ruta que ya no lleva a
+ * una capa de texto (otro PSD) se deja como está.
+ */
+function conTextos(capas: Layer[], plan: PlanEditable, tintas: ExtrasEditable["textos"], nuevos: WeakMap<Layer, PixelData>): Layer[] {
+  if (!plan.textos?.length) return capas;
+  const raiz = [...capas];
+  const o = plan.origen;
+  for (const t of plan.textos) {
+    let hijos = raiz, l: Layer | undefined;
+    for (const [n, i] of t.ruta.entries()) {
+      const antes = hijos[i];
+      if (!antes || (n < t.ruta.length - 1 && !antes.children)) {
+        l = undefined;
+        break;
+      }
+      l = hijos[i] = { ...antes, ...(antes.children ? { children: [...antes.children] } : {}) };
+      if (l.children) hijos = l.children;
+    }
+    if (!l?.text) continue;
+    if (t.oculto) l.hidden = true;
+    if (t.texto === null) continue;
+    const { styleRuns, paragraphStyleRuns } = l.text;
+    // Los saltos como los traía: en una caja de párrafo con saltos suaves (Mayús+Enter, "\u0003") siguen siendo suaves,
+    // un solo párrafo; si no, "\n" (ag-psd lo escribe como el "\r" de Photoshop: un párrafo nuevo).
+    // (Con párrafos, "\n" al leer, ya no se adivina cuál era cuál: van como párrafos.)
+    const antes = l.text.text ?? "", letras = antes.includes("\u0003") && !antes.includes("\n") ? t.texto.replace(/\n/g, "\u0003") : t.texto;
+    // El estilo de la primera corrida que cubre letras (una de largo 0 no es de nadie).
+    const run = styleRuns?.find((r) => r.length > 0) ?? styleRuns?.[0], par = paragraphStyleRuns?.find((r) => r.length > 0) ?? paragraphStyleRuns?.[0];
+    l.text = {
+      ...l.text,
+      text: letras,
+      // Un solo estilo (lo único que se cambia en el editor): una corrida que cubre las letras nuevas.
+      ...(run ? { styleRuns: [{ length: letras.length, style: run.style }] } : {}),
+      ...(par ? { paragraphStyleRuns: [{ length: letras.length, style: par.style }] } : {}),
+      ...(t.caja && l.text.boxBounds ? { boxBounds: [...t.caja] } : {}),
+    };
+    delete l.rawData;
+    delete l.imageData;
+    delete l.canvas;
+    const tinta = o.s === 1 ? tintas?.find((x) => x.ruta.join("/") === t.ruta.join("/"))?.tinta : undefined;
+    if (!tinta) {
+      Object.assign(l, { left: 0, top: 0, right: 0, bottom: 0 });
+      continue;
+    }
+    Object.assign(l, { left: tinta.x + o.x, top: tinta.y + o.y, right: tinta.x + o.x + tinta.w, bottom: tinta.y + o.y + tinta.h });
+    nuevos.set(l, { width: tinta.w, height: tinta.h, data: tinta.rgba });
+  }
+  return raiz;
+}
+
+/**
  * La medida como PSD editable. `fuente`: el PSD leído ENTERO (con los archivos de sus objetos inteligentes), con
  * `useRawData`; `px` decodifica los píxeles de una capa cuando hace falta. `children` va de abajo hacia arriba.
  */
-export function psdEditable(fuente: Psd, plan: PlanEditable, extras: ExtrasEditable, px: PixelesDe): { psd: Psd; notas: NotaCapa[] } {
+export function psdEditable(fuente: Psd, plan: PlanEditable, extras: ExtrasEditable, pxOriginal: PixelesDe): { psd: Psd; notas: NotaCapa[] } {
   const notas: NotaCapa[] = [];
-  const mesa = mesaDe(fuente, plan.origen);
+  const original = mesaDe(fuente, plan.origen);
+  const nuevos = new WeakMap<Layer, PixelData>();
+  const mesa = { ...original, capas: conTextos(original.capas, plan, extras.textos, nuevos) };
+  const px: PixelesDe = { ...pxOriginal, capa: (l) => nuevos.get(l) ?? pxOriginal.capa(l) };
   const halos = new Map<string, CapaSalida[]>();
   for (const h of extras.halos) halos.set(h.nombre, [...(halos.get(h.nombre) ?? []), h.capa]);
   const pasos = ordenarPasos(pasosDe(mesa.capas, plan, halos), plan.orden);

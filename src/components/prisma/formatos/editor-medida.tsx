@@ -1,7 +1,7 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { ChevronDown, ChevronUp, FolderClosed, FolderOpen, RotateCcw } from "lucide-react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { AlertTriangle, ChevronDown, ChevronUp, FolderClosed, FolderOpen, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,8 @@ import { etiquetaPieza } from "@/lib/prisma/formatos/roles";
 import { FP, rellenar } from "@/lib/prisma/formatos/copy";
 import { DIALOGO_GRANDE, Franjas } from "./vista-grande";
 import type { MaestroListo } from "@/lib/prisma/formatos/listo";
+import { claveTexto, type CambiosTexto, type PiezaCambiada } from "@/lib/prisma/formatos/cambios-texto";
+import { TEXTO_CAMBIADO_MAX } from "@/lib/prisma/formatos/textos";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD — el editor de UNA medida (Pedro, 2026-10-15: "an edit button that opens that
@@ -73,6 +75,8 @@ const PIEZA_CHICA_PX = 48;
 const DEDO = "pointer-coarse:h-11";
 /** Espera tras el último cambio para leerlo en voz alta (un arrastre no dicta cada píxel). */
 const ANUNCIO_MS = 500;
+/** Espera tras la última letra para volver a escribir la vista (canvas, píxeles y el acomodo): teclear no se traba. */
+const ESPERA_TEXTO_MS = 200;
 
 const igual = (a: Pos, b: Pos) => Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5 && Math.abs(a.k / b.k - 1) < 0.002;
 const redondo = (p: Pos): Pos => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, k: Math.round(p.k * 10000) / 10000 });
@@ -99,42 +103,86 @@ function sin<T>(o: Record<number, T>, k: number): Record<number, T> {
   delete r[k];
   return r;
 }
+/** Los mismos textos cambiados (mismas llaves, mismas letras). */
+function igualesCambios(a: CambiosTexto, b: CambiosTexto): boolean {
+  const ka = Object.keys(a);
+  return ka.length === Object.keys(b).length && ka.every((k) => b[k] === a[k]);
+}
+/** Los textos quitados, sin piezas vacías y en orden (así dos iguales se comparan como iguales). */
+function normalSin(s: Readonly<Record<number, readonly number[]>> | undefined): Record<number, number[]> {
+  const r: Record<number, number[]> = {};
+  for (const [i, t] of Object.entries(s ?? {})) if (t.length) r[+i] = [...new Set(t)].sort((a, b) => a - b);
+  return r;
+}
 const CURSOR: Record<Modo, string> = { mover: "cursor-grabbing", nw: "cursor-nwse-resize", se: "cursor-nwse-resize", ne: "cursor-nesw-resize", sw: "cursor-nesw-resize" };
 
 export function EditorMedida({
-  ma,
+  original,
   W,
   H,
-  auto,
+  derivar,
+  cambios,
+  motivoTexto,
+  piezaEscrita,
+  nMedidas,
   inicial,
   zona,
   nombre,
-  texto,
   lang,
   alGuardar,
   alCerrar,
 }: {
-  ma: MaestroListo;
+  /** El maestro del PSD, sin textos cambiados: con él se reconoce cada texto (`claveTexto`) y se lee lo del PSD. */
+  original: MaestroListo;
   W: number;
   H: number;
-  /** El acomodo automático de esta medida (sin edición): de ahí arranca y a eso vuelve «Volver al automático». */
-  auto: Acomodo;
+  /** El maestro con esos textos cambiados, cómo se escriben (como en la tarjeta) y el acomodo automático de esta medida
+   *  con ellos: de ahí arranca y a eso vuelve «Volver al automático». */
+  derivar: (cambios: CambiosTexto) => { ma: MaestroListo; texto?: TextoEscrito; auto: Acomodo };
+  /** Los textos cambiados del anuncio al abrir (todas las medidas). */
+  cambios: CambiosTexto;
+  /** Por qué el texto `j` de una pieza no se cambia aquí (null = sí se puede). */
+  motivoTexto: (pieza: number, j: number) => string | null;
+  /** Si la página escribe los textos de esa pieza (para quitar uno y dejar los demás). */
+  piezaEscrita: (pieza: number) => boolean;
+  /** Cuántas medidas hay (un texto cambia en todas). */
+  nMedidas: number;
   inicial: Edicion | null;
   zona: Zona | null;
-  /** El texto vuelto a escribir con la tipografía, como en la tarjeta. */
-  texto?: TextoEscrito;
   /** «1080×1920», para el título y los avisos. */
   nombre: string;
   lang: Lang;
-  alGuardar: (ed: Edicion | null) => void;
+  alGuardar: (ed: Edicion | null, cambios: CambiosTexto) => void;
   alCerrar: () => void;
 }) {
+  /** Los textos cambiados aquí (del anuncio entero): se ven en la vista y, al guardar, en todas las medidas. */
+  const [cambiosLocal, setCambiosLocal] = useState<CambiosTexto>(cambios);
+  // Volver a escribir el maestro con las letras nuevas (canvas, píxeles y el acomodo otra vez) no se puede cortar a la
+  // mitad: la vista se escribe cuando la persona deja de teclear un momento, y mientras tanto lo dice.
+  const [cambiosVista, setCambiosVista] = useState<CambiosTexto>(cambios);
+  useEffect(() => {
+    if (cambiosVista === cambiosLocal) return;
+    const t = setTimeout(() => setCambiosVista(cambiosLocal), ESPERA_TEXTO_MS);
+    return () => clearTimeout(t);
+  }, [cambiosLocal, cambiosVista]);
+  const actualizando = cambiosVista !== cambiosLocal;
+  const { ma, auto, texto } = useMemo(() => derivar(cambiosVista), [derivar, cambiosVista]);
+  /** Lo último hecho con un texto (quitar, volver a poner, volver al original), para el lector de pantalla. */
+  const [dichoTexto, setDichoTexto] = useState("");
+  const mismosTextos = igualesCambios(cambiosLocal, cambios);
+  /** Los textos quitados en ESTA medida, por pieza (sólo piezas con alguno). */
+  const [sinTexto, setSinTexto] = useState<Record<number, number[]>>(() => normalSin(inicial?.sinTexto));
   const deAuto = useMemo(() => Object.fromEntries(auto.puestas.map((q) => [q.pieza, { x: q.x, y: q.y, k: q.k }])) as Record<number, Pos>, [auto]);
   /** Qué va encima de qué (índices, de abajo hacia arriba): el automático y el que se abrió (con lo guardado). */
   const ordenAuto = useMemo(() => auto.puestas.map((q) => q.pieza), [auto]);
   const ordenInicial = useMemo(() => ordenarPuestas(auto.puestas, inicial?.orden).map((q) => q.pieza), [auto, inicial]);
-  const [pos, setPos] = useState<Record<number, Pos>>(() => ({ ...deAuto, ...(inicial?.piezas ?? {}) }));
-  const [orden, setOrden] = useState<number[]>(ordenInicial);
+  /** Sólo las piezas que la persona movió (las demás siguen al automático: un texto que crece lo cambia). */
+  const [pos, setPos] = useState<Record<number, Pos>>(() => ({ ...(inicial?.piezas ?? {}) }));
+  const posDe = (i: number): Pos | undefined => pos[i] ?? deAuto[i];
+  /** El orden que eligió la persona (o el guardado); null = el automático. Si un texto cambia qué piezas entran, el
+   *  orden se rehace sobre las de ahora (no queda un orden de piezas que ya no están). */
+  const [ordenElegido, setOrdenElegido] = useState<readonly number[] | null>(() => inicial?.orden ?? null);
+  const orden = useMemo(() => ordenarPuestas(auto.puestas, ordenElegido ?? undefined).map((q) => q.pieza), [auto, ordenElegido]);
   // Las partes: lo que se abrió (con lo guardado). Los órdenes, completos (de abajo hacia arriba) por pieza.
   const relsInicial = useMemo((): Rels => Object.fromEntries(Object.entries(inicial?.partes ?? {}).map(([i, r]) => [i, { ...r }])), [inicial]);
   const ordenesInicial = useMemo((): OrdenesP => Object.fromEntries(Object.entries(inicial?.ordenPartes ?? {}).map(([i, o]) => [i, ordenDePartes(ma.piezas[+i], o)])), [inicial, ma]);
@@ -171,8 +219,13 @@ export function EditorMedida({
   // mano; dos piezas sin tocar que se enciman se siguen avisando.
   const conPartes = useMemo(() => partesCambiadas(ma, rels, ordenesP), [ma, rels, ordenesP]);
   const edicion = useMemo(
-    (): Edicion => ({ piezas: soloCambios(pos, deAuto, auto.puestas), orden: ordenSiCambio(orden, ordenAuto), ...conPartes }),
-    [pos, deAuto, auto, orden, ordenAuto, conPartes],
+    (): Edicion => ({
+      piezas: soloCambios(pos, deAuto, auto.puestas),
+      orden: ordenSiCambio(orden, ordenAuto),
+      ...conPartes,
+      ...(Object.keys(sinTexto).length ? { sinTexto } : {}),
+    }),
+    [pos, deAuto, auto, orden, ordenAuto, conPartes, sinTexto],
   );
   const editado = useMemo(() => {
     const a = aplicarEdicion(ma, auto, edicion, W, H, zona);
@@ -190,15 +243,18 @@ export function EditorMedida({
   const anchoCss = caja.w > 0 && caja.h > 0 ? Math.floor(Math.min(caja.w, (caja.h * W) / H)) : 0;
   const e = anchoCss > 0 ? anchoCss / W : 0;
   const cambiada = (i: number) => !!pos[i] && !!deAuto[i] && !igual(pos[i], deAuto[i]);
-  const hayCambios = auto.puestas.some((q) => cambiada(q.pieza)) || !!edicion.orden || !!conPartes.partes || !!conPartes.ordenPartes;
+  const hayCambios = auto.puestas.some((q) => cambiada(q.pieza)) || !!edicion.orden || !!conPartes.partes || !!conPartes.ordenPartes || !!edicion.sinTexto;
   // Distinto de como se abrió (lo automático más lo ya guardado): eso es lo que se perdería al cerrar.
   const partesAlAbrir = useMemo(() => JSON.stringify(partesCambiadas(ma, relsInicial, ordenesInicial)), [ma, relsInicial, ordenesInicial]);
+  const sinAlAbrir = useMemo(() => JSON.stringify(normalSin(inicial?.sinTexto)), [inicial]);
   const sinGuardar =
+    !mismosTextos ||
+    JSON.stringify(sinTexto) !== sinAlAbrir ||
     orden.some((p, i) => p !== ordenInicial[i]) ||
     JSON.stringify(conPartes) !== partesAlAbrir ||
     auto.puestas.some((q) => {
-      const antes = inicial?.piezas[q.pieza] ?? deAuto[q.pieza];
-      return !!pos[q.pieza] && !!antes && !igual(pos[q.pieza], antes);
+      const antes = inicial?.piezas[q.pieza] ?? deAuto[q.pieza], p = posDe(q.pieza);
+      return !!p && !!antes && !igual(p, antes);
     });
   /** De arriba (al frente) hacia abajo, como el panel de capas de Photoshop. */
   const capas = [...editado.puestas].reverse();
@@ -271,13 +327,18 @@ export function EditorMedida({
   const solido = (i: number, j: number | null) => (j === null ? ma.piezas[i].solido : (ma.piezas[i].partes?.[j]?.solido ?? ma.piezas[i].solido));
   /** Dónde está en la medida: la esquina de su parte sólida y su escala. */
   const lugarDe = (i: number, j: number | null): Pos => {
-    if (j === null) return pos[i];
+    const p = posDe(i) ?? { x: 0, y: 0, k: 1 };
+    if (j === null) return p;
     const pp = partesPuestas(i).find((x) => x.parte === j);
-    return pp ? { x: pp.x, y: pp.y, k: pp.k } : pos[i];
+    return pp ? { x: pp.x, y: pp.y, k: pp.k } : p;
   };
   /** Pone una pieza, o una parte (se guarda relativa a su pieza: así va pegada a ella), en un lugar de la medida. */
   const poner = (i: number, j: number | null, p: Pos) => {
-    if (j === null) return setPos((antes) => ({ ...antes, [i]: redondo(p) }));
+    if (j === null) {
+      // De vuelta en su lugar automático (Esc a medio arrastre, flechas de ida y vuelta): vuelve a seguirlo.
+      const r = redondo(p);
+      return setPos((antes) => (deAuto[i] && igual(r, deAuto[i]) ? sin(antes, i) : { ...antes, [i]: r }));
+    }
     const q = puestaDe(i);
     if (!q) return;
     const rel = redondo({ x: (p.x - q.x) / q.k, y: (p.y - q.y) / q.k, k: p.k / q.k });
@@ -308,7 +369,7 @@ export function EditorMedida({
     if (abierta !== null && abierta !== i) setAbierta(null);
     const nuevo = [...orden];
     [nuevo[j], nuevo[k]] = [nuevo[k], nuevo[j]];
-    setOrden(nuevo);
+    setOrdenElegido(nuevo);
     setMovidasCapa((m) => new Set(m).add(i));
   };
   /** Lo mismo con una parte, sólo dentro de su pieza. */
@@ -364,6 +425,10 @@ export function EditorMedida({
     if (j === undefined || Number.isNaN(j)) enfocar(i);
     else enfocarParte(i, j);
   }, [orden, ordenesP, abierta]);
+  // Al elegir una pieza con texto, sus textos se ven (en una tira el panel es bajo y quedaban abajo del todo).
+  useEffect(() => {
+    if (sel !== null && original.piezas[sel]?.textos.length) document.querySelector("section[aria-labelledby='editor-textos']")?.scrollIntoView({ block: "nearest" });
+  }, [sel, original]);
   // Al abrir una pieza, la lista de sus partes se ve (en el panel con scroll podía quedar abajo).
   useEffect(() => {
     if (abierta !== null) document.getElementById(`editor-partes-${abierta}`)?.scrollIntoView({ block: "nearest" });
@@ -461,7 +526,9 @@ export function EditorMedida({
     }
   };
 
-  const guardar = () => alGuardar(Object.keys(edicion.piezas).length || edicion.orden || edicion.partes || edicion.ordenPartes ? edicion : null);
+  // Los textos, sólo si cambiaron (el MISMO objeto si no: la página no vuelve a escribir todas las medidas).
+  const guardar = () =>
+    alGuardar(Object.keys(edicion.piezas).length || edicion.orden || edicion.partes || edicion.ordenPartes || edicion.sinTexto ? edicion : null, mismosTextos ? cambios : cambiosLocal);
 
   // La pieza abierta: sus partes en la medida (de abajo hacia arriba) y su nombre.
   const abiertaQ = abierta === null ? undefined : puestaDe(abierta);
@@ -481,9 +548,51 @@ export function EditorMedida({
     return o.length - 1 - o.indexOf(j);
   };
 
+  // ── Textos ──
+  /** Los textos de una pieza tal como vienen del PSD (con ellos se reconoce cada uno en todas las medidas). */
+  const textosDe = (i: number) => original.piezas[i]?.textos ?? [];
+  const textoCambio = (i: number) => textosDe(i).some((tp) => cambiosLocal[claveTexto(tp)] !== undefined);
+  /** Quitar un texto pide volver a escribir la pieza sin él: hace falta su base y, si le quedan otros, escribirlos. */
+  const sePuedeQuitar = (i: number) => !!original.piezas[i]?.base && (textosDe(i).length === 1 || piezaEscrita(i));
+  const escribirTexto = (tp: (typeof original.piezas)[number]["textos"][number], v: string) => {
+    const k = claveTexto(tp);
+    // Volver a las letras del PSD es no tener cambio (no un cambio igual al original).
+    setCambiosLocal((antes) => {
+      if (v === tp.texto.texto) {
+        if (!(k in antes)) return antes;
+        const r = { ...antes };
+        delete r[k];
+        return r;
+      }
+      return { ...antes, [k]: v };
+    });
+  };
+  /** Una frase con un motivo que escribe el motor (siempre en español): el motivo, marcado como tal para el lector. */
+  const delMotor = (plantilla: string, motivo: string): ReactNode => {
+    const [antes, despues = ""] = plantilla.split("{m}");
+    return (
+      <>
+        {antes}
+        <span lang={lang === "en" ? "es" : undefined}>{motivo}</span>
+        {despues}
+      </>
+    );
+  };
+  const quitarTexto = (i: number, j: number) =>
+    setSinTexto((antes) => {
+      const t = antes[i] ?? [], r = { ...antes };
+      if (t.includes(j)) {
+        const quedan = t.filter((x) => x !== j);
+        if (quedan.length) r[i] = quedan;
+        else delete r[i];
+      } else r[i] = [...t, j].sort((a, b) => a - b);
+      return r;
+    });
+
   // Lo que se lee de la pieza (o la parte) elegida (también para el lector de pantalla).
   const estado = (() => {
-    if (sel === null || !pos[sel] || !deAuto[sel]) return "";
+    const p = sel === null ? undefined : posDe(sel);
+    if (sel === null || !p || !deAuto[sel]) return "";
     const letraDe = (l: number | null | undefined, k: number) => (typeof l === "number" && l > 0 ? rellenar(tx(FP.editorLetra, lang), { px: (l * k).toFixed(1) }) : "");
     if (abierta === sel && selParte !== null) {
       const d = ma.piezas[sel].partes?.[selParte], pp = partesAbierta.find((x) => x.parte === selParte);
@@ -493,7 +602,6 @@ export function EditorMedida({
         rellenar(tx(FP.editorParteCapa, lang), { n: capaParte(sel, selParte) + 1, m: ordenPartesDe(sel).length })
       );
     }
-    const p = pos[sel];
     return rellenar(tx(FP.editorEstado, lang), {
       p: nombrePieza(sel),
       x: Math.round(p.x),
@@ -588,7 +696,8 @@ export function EditorMedida({
         disabled={!cambio}
         onClick={() => {
           if (j === null) {
-            poner(i, null, deAuto[i]);
+            // Vuelve a seguir al automático (también si un texto lo cambia).
+            setPos((antes) => sin(antes, i));
             // Sus partes también vuelven a su lugar y orden en la pieza.
             setRels((antes) => sin(antes, i));
             setOrdenesP((antes) => sin(antes, i));
@@ -640,7 +749,8 @@ export function EditorMedida({
         // clic afuera cierran (Cancelar y la X sí: son a propósito).
         onEscapeKeyDown={(ev) => {
           if (cancelarArrastre()) return ev.preventDefault();
-          if (abierta !== null) {
+          // En un cuadro de texto, Esc no cierra la pieza abierta (ni le quita el foco a lo que se escribe).
+          if (abierta !== null && !(ev.target instanceof HTMLTextAreaElement)) {
             ev.preventDefault();
             return cerrar();
           }
@@ -702,7 +812,8 @@ export function EditorMedida({
               {[...editado.puestas]
                 .sort((x, y) => x.pieza - y.pieza)
                 .map((q) => {
-                  if (abierta !== q.pieza) return marcoDe(q.pieza, null, q, capas.length - capaDe(q.pieza), abierta !== null);
+                  // Si al volver a escribir un texto la pieza ya no se abre en partes, se ve entera.
+                  if (abierta !== q.pieza || !partesAbierta.length) return marcoDe(q.pieza, null, q, capas.length - capaDe(q.pieza), abierta !== null && abierta !== q.pieza);
                   // La pieza abierta: un marco punteado alrededor de sus partes y un marco por parte.
                   const x0 = Math.min(...partesAbierta.map((p) => p.x)), y0 = Math.min(...partesAbierta.map((p) => p.y));
                   const x1 = Math.max(...partesAbierta.map((p) => p.x + p.w)), y1 = Math.max(...partesAbierta.map((p) => p.y + p.h));
@@ -737,6 +848,96 @@ export function EditorMedida({
                   <FolderOpen className="size-3.5" aria-hidden="true" /> {tx(FP.editorAbrir, lang)}
                 </Button>
               )}
+              {sel !== null && textosDe(sel).length > 0 && (
+                <section aria-labelledby="editor-textos" aria-busy={actualizando || undefined} className="flex flex-col gap-3 rounded-lg border border-border p-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 id="editor-textos" className="text-xs font-semibold text-foreground">
+                      {tx(FP.editorTextos, lang)}
+                    </h3>
+                    {actualizando && <span className="text-xs text-muted-foreground">{tx(FP.editorTextoActualizando, lang)}</span>}
+                  </div>
+                  {(ma.piezas[sel] as PiezaCambiada | undefined)?.textoSinEscribir && (
+                    <p className="flex items-start gap-1 text-xs text-foreground">
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
+                      <span>{delMotor(tx(FP.editorTextoSinEscribir, lang), (ma.piezas[sel] as PiezaCambiada).textoSinEscribir ?? "")}</span>
+                    </p>
+                  )}
+                  {textosDe(sel).map((tp, j, todos) => {
+                    const k = claveTexto(tp), no = motivoTexto(sel, j), quitado = sinTexto[sel]?.includes(j) ?? false;
+                    const valor = cambiosLocal[k] ?? tp.texto.texto, puede = sePuedeQuitar(sel);
+                    const id = `editor-texto-${sel}-${j}`;
+                    // Por su pieza (la capa de texto de Photoshop se llama como sus primeras palabras): entera, al pasar el ratón.
+                    const nombre = todos.length > 1 ? rellenar(tx(FP.editorTextoDeN, lang), { j: j + 1, n: todos.length, c: nombrePieza(sel) }) : rellenar(tx(FP.editorTextoDe, lang), { c: nombrePieza(sel) });
+                    const porQueNo = puede ? null : tx(original.piezas[sel]?.base ? FP.editorTextoNoQuitar : FP.editorTextoNoQuitarBase, lang);
+                    const vacio = !no && !valor.trim();
+                    return (
+                      <div key={`${sel}.${j}`} role="group" aria-labelledby={`${id}-nombre`} className="flex flex-col gap-1">
+                        <label id={`${id}-nombre`} htmlFor={id} title={tp.capa} className="text-xs text-foreground">
+                          {nombre}
+                        </label>
+                        {/* Sin poder cambiarse, se lee igual (sólo lectura, no apagado: el lector de pantalla lo dice). */}
+                        <textarea
+                          id={id}
+                          value={valor}
+                          readOnly={!!no}
+                          maxLength={TEXTO_CAMBIADO_MAX}
+                          rows={4}
+                          aria-describedby={`${id}-nota`}
+                          onChange={(ev) => escribirTexto(tp, ev.target.value)}
+                          className={cn(
+                            "min-h-16 w-full resize-y rounded-md border border-muted-foreground/60 bg-background px-2 py-1 text-sm text-foreground",
+                            "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary",
+                            no && "bg-secondary/60",
+                            quitado && "opacity-60",
+                          )}
+                        />
+                        <p id={`${id}-nota`} className={cn("text-xs", vacio ? "text-foreground" : "text-muted-foreground")}>
+                          {no ? delMotor(tx(FP.editorTextoNo, lang), no) : vacio ? tx(FP.editorTextoVacio, lang) : nMedidas === 1 ? tx(FP.editorTextoUna, lang) : rellenar(tx(FP.editorTextoTodas, lang), { n: nMedidas })}
+                          {quitado && <> {tx(FP.editorTextoQuitado, lang)}</>}
+                          {porQueNo && !quitado && <> {porQueNo}</>}
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {/* aria-disabled, no disabled: sigue en el Tab y su nota dice por qué no. */}
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            className={cn(DEDO, "aria-disabled:opacity-50")}
+                            aria-disabled={(!quitado && !puede) || undefined}
+                            aria-label={`${tx(quitado ? FP.editorTextoPoner : FP.editorTextoQuitar, lang)}: ${nombre}`}
+                            aria-describedby={`${id}-nota`}
+                            onClick={() => {
+                              if (!quitado && !puede) return;
+                              quitarTexto(sel, j);
+                              setDichoTexto(rellenar(tx(quitado ? FP.editorTextoPuestoDicho : FP.editorTextoQuitadoDicho, lang), { c: nombre }));
+                            }}
+                          >
+                            {tx(quitado ? FP.editorTextoPoner : FP.editorTextoQuitar, lang)}
+                          </Button>
+                          {cambiosLocal[k] !== undefined && (
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              className={DEDO}
+                              aria-label={`${tx(FP.editorTextoOriginal, lang)}: ${nombre}`}
+                              onClick={() => {
+                                // Este botón se va al volver al original: el foco pasa a su cuadro de texto.
+                                document.getElementById(id)?.focus();
+                                escribirTexto(tp, tp.texto.texto);
+                                setDichoTexto(rellenar(tx(FP.editorTextoOriginalDicho, lang), { c: nombre }));
+                              }}
+                            >
+                              <RotateCcw className="size-3" aria-hidden="true" /> {tx(FP.editorTextoOriginal, lang)}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </section>
+              )}
+              <p role="status" className="sr-only">
+                {dichoTexto}
+              </p>
               <p role="status" className="sr-only">
                 {anuncio}
               </p>
@@ -746,7 +947,7 @@ export function EditorMedida({
               <h3 className="text-xs font-semibold text-foreground">{tx(FP.editorPiezas, lang)}</h3>
               <ul className="mt-1 space-y-1">
                 {capas.map((q, c) => {
-                  const p = pos[q.pieza], cambio = cambiada(q.pieza);
+                  const p = posDe(q.pieza), cambio = cambiada(q.pieza);
                   const n = nombrePieza(q.pieza);
                   const conP = tienePartes(q.pieza), abiertaAqui = abierta === q.pieza, tocadas = partesTocadas(q.pieza);
                   // Lo que cambió, en su propio renglón: en un panel angosto no se corta.
@@ -756,6 +957,8 @@ export function EditorMedida({
                         ...(cambio ? [tx(FP.editorCambiada, lang)] : []),
                         ...(deOtraCapa.has(q.pieza) ? [tx(FP.editorOtraCapa, lang)] : []),
                         ...(tocadas ? [tx(FP.editorPartesCambiadas, lang)] : []),
+                        ...(textoCambio(q.pieza) ? [tx(FP.editorTextoCambiado, lang)] : []),
+                        ...(sinTexto[q.pieza] ? [tx(FP.editorSinTextoMarca, lang)] : []),
                       ].join(" · ")
                     : "";
                   const ordenP = ordenPartesDe(q.pieza);
@@ -863,8 +1066,9 @@ export function EditorMedida({
             className={DEDO}
             disabled={!hayCambios}
             onClick={() => {
-              setPos({ ...deAuto });
-              setOrden(ordenAuto);
+              setPos({});
+              setSinTexto({});
+              setOrdenElegido(null);
               setRels({});
               setOrdenesP({});
               setMovidasCapa(new Set());
@@ -938,6 +1142,40 @@ export function guardarEdicion(archivo: string, ma: MaestroListo, W: number, H: 
     return true;
   } catch (err) {
     console.error("[editor-medida] guardar", err);
+    return false;
+  }
+}
+
+/** Lo que dicen los textos cambiados es del ANUNCIO (todas sus medidas y mesas), no de una medida: aparte, por PSD. */
+const TEXTOS = "hue-formatos-textos:v1";
+/** Cuántos textos cambiados se leen de lo guardado, como mucho (un PSD real trae unos pocos). */
+const TEXTOS_GUARDADOS_MAX = 200;
+
+/** Los textos cambiados que se guardaron en este navegador para ese PSD (vacío si no hay o si el dato no sirve). */
+export function textosGuardados(archivo: string): CambiosTexto {
+  try {
+    const v = JSON.parse(localStorage.getItem(`${TEXTOS}:${archivo}`) ?? "null") as unknown;
+    if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+    const out: Record<string, string> = {};
+    for (const [k, t] of Object.entries(v as Record<string, unknown>).slice(0, TEXTOS_GUARDADOS_MAX))
+      // Una clave de verdad es «capa\nletras» (`claveTexto`); otra cosa no se lee.
+      if (typeof t === "string" && t.length <= TEXTO_CAMBIADO_MAX && k.includes("\n") && k.length <= 2 * TEXTO_CAMBIADO_MAX) out[k] = t;
+    return out;
+  } catch (err) {
+    console.warn("[editor-medida] leer los textos guardados", err);
+    return {};
+  }
+}
+
+/** Guarda (o, vacío, borra) los textos cambiados de ese PSD. false = el navegador no dejó (siguen en esta sesión). */
+export function guardarTextos(archivo: string, cambios: CambiosTexto): boolean {
+  try {
+    const k = `${TEXTOS}:${archivo}`;
+    if (Object.keys(cambios).length) localStorage.setItem(k, JSON.stringify(cambios));
+    else localStorage.removeItem(k);
+    return true;
+  } catch (err) {
+    console.error("[editor-medida] guardar los textos", err);
     return false;
   }
 }
