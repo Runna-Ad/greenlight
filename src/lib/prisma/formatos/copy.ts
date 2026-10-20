@@ -167,6 +167,8 @@ export const FP = {
   listaFuera: t("Ignoradas por salirse de {min} a {max} px por lado: {m}.", "Ignored for falling outside {min} to {max} px per side: {m}."),
   resumenOk: t("{n} medidas, todas sin avisos", "{n} sizes, none with warnings"),
   resumenRevisar: t("{n} medidas · {r} para revisar", "{n} sizes · {r} to review"),
+  resumenN: t("{n} medidas", "{n} sizes"),
+  resumenComun: t("{c} con un aviso común", "{c} with a shared warning"),
   voltear: t("Voltear", "Flip"),
   voltearAria: t("Voltear {m}", "Flip {m}"),
   // Editor por medida (Pedro, 2026-10-15): mover y cambiar de tamaño las piezas de una medida, y guardar.
@@ -556,8 +558,15 @@ export const FP = {
   enVarias: t("En varias medidas", "Across sizes"),
   enVariasPendiente: t("hay algo por revisar", "something to check"),
   enVariasListo: t("todo arreglado", "all fixed"),
-  avisoCopiaCorto: t("Pieza repetida en el fondo: se arregla arriba, en «En varias medidas».", "Repeated piece in the background: fix it above, in “Across sizes”."),
+  // En la tarjeta es un botón que lleva a «En varias medidas» (B23): por eso ya no repite el nombre de la sección.
+  avisoCopiaCorto: t("Pieza repetida en el fondo: se arregla arriba", "Repeated piece in the background: fixed above"),
   avisoRetoqueCorto: t("Fondo retocado: revisa que el relleno se vea bien.", "Retouched background: check that the fill looks right."),
+  avisoIrArriba: t(" (ir a «En varias medidas»)", " (go to “Across sizes”)"),
+  /** El estado de una tarjeta cuyo único aviso es el que se arregla una vez arriba (B23): gris, no ámbar. */
+  avisoComun: t("Aviso común", "Shared warning"),
+  verMas: t("Ver más", "Show more"),
+  verMenos: t("Ver menos", "Show less"),
+  bajarGrupo: t("Descargar {m}", "Download {m}"),
   listo: t("Listo", "Ready"),
   avisosN: t("{n} avisos", "{n} warnings"),
   avisoUno: t("1 aviso", "1 warning"),

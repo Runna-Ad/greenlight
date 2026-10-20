@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Check, ChevronDown, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Languages, Layers, Loader2, Lock, Maximize2, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowUp, Check, ChevronDown, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Languages, Layers, Loader2, Lock, Maximize2, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
@@ -496,15 +496,16 @@ function ContrasteMedida({ info, ma, medida, editada, lang, alElegir }: { info: 
       ? rellenar(tx(FP.contrasteLineaSin, lang), { a: antes })
       : rellenar(tx(FP.contrasteLinea, lang), { o: tx(NOMBRE_ARREGLO[info.usado], lang).toLowerCase(), a: antes, b: porciento(ahora ?? 0) });
   return (
-    <details className="group mt-2 rounded-md border border-border">
-      <summary className={cn("flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground hover:bg-secondary/60 pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden", FOCO, BAJO_BARRA)}>
+    // Sin caja propia (B23): una línea con su flecha; la tarjeta ya es el recuadro.
+    <details className="group mt-1.5">
+      <summary className={cn("-mx-1.5 flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-foreground hover:bg-secondary/60 pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden", FOCO, BAJO_BARRA)}>
         <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
         <span className="min-w-0">
           {linea}
           <span className="sr-only"> ({etiqueta(medida)})</span>
         </span>
       </summary>
-      <div className="border-t border-border p-2">
+      <div className="pt-1 pb-1 pl-5">
         <p className="text-sm text-foreground">{nota}</p>
         <p className="mt-1.5 text-xs text-muted-foreground">{tx(FP.contrasteOpciones, lang)}</p>
         <div role="group" aria-label={rellenar(tx(FP.contrasteGrupo, lang), { m: etiqueta(medida) })} className="mt-1 flex flex-wrap gap-1.5">
@@ -533,6 +534,44 @@ function ContrasteMedida({ info, ma, medida, editada, lang, alElegir }: { info: 
       {editada && <p className="mt-1 text-xs text-muted-foreground">{tx(FP.contrasteEditadaNota, lang)}</p>}
       </div>
     </details>
+  );
+}
+
+/** De la tarjeta al arreglo de arriba («En varias medidas»): lo trae a la vista y le pasa el foco a su título. */
+function irAVarias() {
+  const t = document.getElementById("psd-varias");
+  if (!t) return;
+  t.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  t.focus({ preventScroll: true });
+}
+
+/** Un aviso largo en una tarjeta angosta (B23): dos renglones y «Ver más». El texto entero sigue en la página (el lector
+ *  de pantalla lo lee completo) y el botón sólo sale si de verdad no cabe. */
+function NotaLarga({ texto, lang }: { texto: string; lang: Lang }) {
+  const caja = useRef<HTMLSpanElement>(null);
+  const [abierta, setAbierta] = useState(false);
+  const [noCabe, setNoCabe] = useState(false);
+  useEffect(() => {
+    const el = caja.current;
+    if (!el || abierta) return;
+    const medir = () => setNoCabe(el.scrollHeight > el.clientHeight + 1);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [texto, abierta]);
+  return (
+    <span className="min-w-0">
+      <span ref={caja} className={cn("block", !abierta && "line-clamp-2")}>
+        {texto}
+      </span>
+      {(noCabe || abierta) && (
+        // -my: el clic mide 36 px sin separar más los renglones.
+        <button type="button" lang={lang} aria-expanded={abierta} onClick={() => setAbierta((a) => !a)} className={cn("-my-1.5 inline-flex h-9 cursor-pointer items-center rounded-md font-medium text-primary hover:underline", FOCO, BAJO_BARRA)}>
+          {tx(abierta ? FP.verMenos : FP.verMas, lang)}
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -620,7 +659,9 @@ const TarjetaMedida = memo(function TarjetaMedida({
   // y una sola vez aunque el motor los diga por cada pieza. Los demás avisos son de esta medida y van completos.
   const cortos = [...new Set(acomodo.avisos.flatMap((v) => (v.tipo === "copia" || v.tipo === "retoque" ? [v.tipo] : [])))];
   const propios = acomodo.avisos.filter((v) => v.tipo !== "copia" && v.tipo !== "retoque");
-  const nAvisos = acomodo.avisos.length + (noPinto ? 1 : 0);
+  // El ámbar cuenta sólo lo de ESTA medida (B23): antes la pieza repetida ponía 11 de 12 tarjetas en ámbar y las que
+  // de verdad tenían un problema propio no se distinguían. Lo común sigue en la tarjeta, en gris y con salto al arreglo.
+  const nPropios = propios.length + (noPinto ? 1 : 0);
   // Editada a mano, voltear movería sólo lo que no se tocó: se vuelve al automático desde el editor. La misma regla
   // que «Voltear todas» (`acomodo.editada`).
   const volteable = sePuedeVoltear(acomodo.familia) && !acomodo.editada;
@@ -724,21 +765,28 @@ const TarjetaMedida = memo(function TarjetaMedida({
           />
         </label>
         <h4 className="text-sm font-semibold text-foreground tabular-nums">{etiqueta(medida)}</h4>
-        {nAvisos > 0 ? (
-          <span className="inline-flex items-center gap-1 rounded-md border border-status-warning/50 bg-status-warning/10 px-1.5 py-0.5 text-xs font-medium">
-            <AlertTriangle className="size-3 text-status-warning" aria-hidden="true" /> {nAvisos === 1 ? tx(FP.avisoUno, lang) : rellenar(tx(FP.avisosN, lang), { n: nAvisos })}
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 rounded-md border border-status-completed/40 bg-status-completed/8 px-1.5 py-0.5 text-xs font-medium">
-            <CircleCheck className="size-3 text-status-completed" aria-hidden="true" /> {tx(FP.listo, lang)}
-          </span>
-        )}
-        {acomodo.editada && (
-          <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs font-medium">
-            <Move className="size-3" aria-hidden="true" /> {tx(FP.editada, lang)}
-            <span className="sr-only">: {tx(FP.editadaTitulo, lang)}</span>
-          </span>
-        )}
+        {/* El estado a la derecha, en el mismo lugar en todas las tarjetas. */}
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-1">
+          {acomodo.editada && (
+            <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs font-medium">
+              <Move className="size-3" aria-hidden="true" /> {tx(FP.editada, lang)}
+              <span className="sr-only">: {tx(FP.editadaTitulo, lang)}</span>
+            </span>
+          )}
+          {nPropios > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-md border border-status-warning/50 bg-status-warning/10 px-1.5 py-0.5 text-xs font-medium">
+              <AlertTriangle className="size-3 text-status-warning" aria-hidden="true" /> {nPropios === 1 ? tx(FP.avisoUno, lang) : rellenar(tx(FP.avisosN, lang), { n: nPropios })}
+            </span>
+          ) : cortos.length > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+              <ArrowUp className="size-3" aria-hidden="true" /> {tx(FP.avisoComun, lang)}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-md border border-status-completed/40 bg-status-completed/8 px-1.5 py-0.5 text-xs font-medium">
+              <CircleCheck className="size-3 text-status-completed" aria-hidden="true" /> {tx(FP.listo, lang)}
+            </span>
+          )}
+        </span>
       </div>
       <p className="mt-0.5 text-xs text-muted-foreground">
         {tx(FP_FAMILIA[acomodo.familia], lang)}
@@ -757,42 +805,55 @@ const TarjetaMedida = memo(function TarjetaMedida({
         <ul lang={lang === "en" ? "es" : undefined} className="mt-2 space-y-1 text-xs leading-snug text-foreground">
           {propios.map((v, i) => (
             <li key={i} className="flex items-start gap-1.5">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> <span className="min-w-0">{v.texto}</span>
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> <NotaLarga texto={v.texto} lang={lang} />
             </li>
           ))}
           {cortos.map((t) => (
-            <li key={t} lang={lang} className="flex items-start gap-1.5 text-muted-foreground">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> <span className="min-w-0">{tx(AVISO_CORTO[t], lang)}</span>
+            <li key={t} lang={lang}>
+              {/* -my: el clic mide 36 px sin separar más los renglones. */}
+              <button type="button" onClick={irAVarias} className={cn("-my-1.5 flex min-h-9 w-full cursor-pointer items-start gap-1.5 rounded-md py-1.5 text-left text-muted-foreground hover:text-foreground", FOCO, BAJO_BARRA)}>
+                <ArrowUp className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                <span className="min-w-0">
+                  {tx(AVISO_CORTO[t], lang)}
+                  <span className="sr-only">{tx(FP.avisoIrArriba, lang)}</span>
+                </span>
+              </button>
             </li>
           ))}
         </ul>
       )}
-      {/* Los botones al pie de la tarjeta (mt-auto): en una fila de tarjetas quedan a la misma altura. */}
-      <div className="mt-auto grid grid-cols-2 gap-1.5 pt-2.5 @[22rem]:flex @[22rem]:flex-wrap">
-        <Button variant="outline" className={BOTON_TARJETA} data-editar={k} onClick={() => alEditar(medida)} disabled={noPinto} aria-label={rellenar(tx(FP.editarAria, lang), { m: etiqueta(medida) })}>
-          <Move className="size-3.5" aria-hidden="true" /> {tx(FP.editar, lang)}
-        </Button>
-        {volteable && (
-          <Button variant="outline" className={BOTON_TARJETA} onClick={() => alVoltear(medida, lado === "izquierda" ? "derecha" : "izquierda")} aria-label={rellenar(tx(FP.voltearAria, lang), { m: etiqueta(medida) })}>
-            <FlipHorizontal2 className="size-3.5" aria-hidden="true" /> {tx(FP.voltear, lang)}
+      {/* Los botones al pie de la tarjeta (mt-auto): en una fila de tarjetas quedan a la misma altura, bajo una línea.
+          Angosta: «Editar» (y «Voltear») arriba y las dos descargas juntas abajo, sin un botón suelto; ancha (banner), en
+          una fila con las descargas a la derecha. */}
+      <div className="mt-auto pt-2.5">
+        <div className="grid grid-cols-2 gap-1.5 border-t border-border pt-2.5 @[22rem]:flex @[22rem]:flex-wrap @[22rem]:items-center">
+          <Button variant="outline" className={cn(BOTON_TARJETA, !volteable && "col-span-2")} data-editar={k} onClick={() => alEditar(medida)} disabled={noPinto} aria-label={rellenar(tx(FP.editarAria, lang), { m: etiqueta(medida) })}>
+            <Move className="size-3.5" aria-hidden="true" /> {tx(FP.editar, lang)}
           </Button>
-        )}
-        <Button variant="outline" className={BOTON_TARJETA} onClick={() => void bajar()} disabled={noPinto} aria-label={rellenar(tx(FP.bajarPngAria, lang), { m: etiqueta(medida) })}>
-          <Download className="size-3.5" aria-hidden="true" /> {tx(FP.bajarPng, lang)}
-        </Button>
-        <Button
-          variant="outline"
-          className={BOTON_TARJETA}
-          onClick={() => void bajarPsd()}
-          // Ocupado no lo saca del Tab (el foco no se pierde) ni lo atenúa: `bajarPsd` ignora otro clic mientras arma.
-          disabled={noPinto}
-          aria-disabled={psdEstado ? true : undefined}
-          aria-label={psdEstado ? `${rellenar(tx(FP.bajarPsdAria, lang), { m: etiqueta(medida) })}: ${tx(psdEstado === "fila" ? FP.bajarPsdEnFila : FP.bajarPsdHaciendo, lang)}` : rellenar(tx(FP.bajarPsdAria, lang), { m: etiqueta(medida) })}
-          title={tx(FP.bajarPsdTitulo, lang)}
-        >
-          {psdEstado ? <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Layers className="size-3.5" aria-hidden="true" />}
-          {psdEstado ? tx(psdEstado === "fila" ? FP.bajarPsdEnFila : FP.bajarPsdHaciendo, lang) : tx(FP.bajarPsd, lang)}
-        </Button>
+          {volteable && (
+            <Button variant="outline" className={BOTON_TARJETA} onClick={() => alVoltear(medida, lado === "izquierda" ? "derecha" : "izquierda")} aria-label={rellenar(tx(FP.voltearAria, lang), { m: etiqueta(medida) })}>
+              <FlipHorizontal2 className="size-3.5" aria-hidden="true" /> {tx(FP.voltear, lang)}
+            </Button>
+          )}
+          <div role="group" aria-label={rellenar(tx(FP.bajarGrupo, lang), { m: etiqueta(medida) })} className="col-span-2 grid grid-cols-2 @[22rem]:ml-auto @[22rem]:flex">
+            <Button variant="outline" className={cn(BOTON_TARJETA, "relative rounded-r-none focus-visible:z-10")} onClick={() => void bajar()} disabled={noPinto} aria-label={rellenar(tx(FP.bajarPngAria, lang), { m: etiqueta(medida) })}>
+              <Download className="size-3.5" aria-hidden="true" /> {tx(FP.bajarPng, lang)}
+            </Button>
+            <Button
+              variant="outline"
+              className={cn(BOTON_TARJETA, "relative -ml-px rounded-l-none focus-visible:z-10")}
+              onClick={() => void bajarPsd()}
+              // Ocupado no lo saca del Tab (el foco no se pierde) ni lo atenúa: `bajarPsd` ignora otro clic mientras arma.
+              disabled={noPinto}
+              aria-disabled={psdEstado ? true : undefined}
+              aria-label={psdEstado ? `${rellenar(tx(FP.bajarPsdAria, lang), { m: etiqueta(medida) })}: ${tx(psdEstado === "fila" ? FP.bajarPsdEnFila : FP.bajarPsdHaciendo, lang)}` : rellenar(tx(FP.bajarPsdAria, lang), { m: etiqueta(medida) })}
+              title={tx(FP.bajarPsdTitulo, lang)}
+            >
+              {psdEstado ? <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Layers className="size-3.5" aria-hidden="true" />}
+              {psdEstado ? tx(psdEstado === "fila" ? FP.bajarPsdEnFila : FP.bajarPsdHaciendo, lang) : tx(FP.bajarPsd, lang)}
+            </Button>
+          </div>
+        </div>
       </div>
     </li>
   );
@@ -1618,7 +1679,9 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
         : [],
     [conTextos, maestrosVista.length, medidas, lados, canal, contrastes, edicionesVista],
   );
-  const porRevisar = filas.filter((f) => f.acomodo.avisos.length).length;
+  // Lo propio de cada medida y lo que se arregla una vez arriba se cuentan por separado (B23), como en las tarjetas.
+  const porRevisar = filas.filter((f) => f.acomodo.avisos.some((a) => a.tipo !== "copia" && a.tipo !== "retoque")).length;
+  const conComun = filas.filter((f) => f.acomodo.avisos.some((a) => a.tipo === "copia" || a.tipo === "retoque")).length;
   const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia) && !f.acomodo.editada);
   const n916 = medidas.filter((m) => es916(m.w, m.h)).length;
   const elegirCanal = (v: Canal | null) => {
@@ -1820,7 +1883,13 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
 
   const notasTxt = notasArchivo.length === 1 ? tx(FP.notasUna, lang) : notasArchivo.length ? rellenar(tx(FP.notasN, lang), { n: notasArchivo.length }) : "";
   const resumen = filas.length
-    ? [porRevisar ? rellenar(tx(FP.resumenRevisar, lang), { n: filas.length, r: porRevisar }) : rellenar(tx(FP.resumenOk, lang), { n: filas.length }), notasTxt].filter(Boolean).join(" · ")
+    ? [
+        porRevisar ? rellenar(tx(FP.resumenRevisar, lang), { n: filas.length, r: porRevisar }) : rellenar(tx(conComun ? FP.resumenN : FP.resumenOk, lang), { n: filas.length }),
+        conComun ? rellenar(tx(FP.resumenComun, lang), { c: conComun }) : "",
+        notasTxt,
+      ]
+        .filter(Boolean)
+        .join(" · ")
     : "";
   const textoAvance = avance && avance.de > 0 && avance.mesa > 0 ? rellenar(tx(FP.leyendoMesa, lang), { m: avance.mesa, n: avance.de }) : tx(FP.leyendo, lang);
   /** El motor y el archivo hablan español: con la pantalla en inglés esos textos se marcan como español. */
@@ -2256,7 +2325,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
               botón vivía en la columna de la izquierda). */}
           {(copiasEnVista.length > 0 || legalChico.length > 0) && (
             <section aria-labelledby="psd-varias" className={cn("rounded-xl border px-4 py-3", variasPendiente ? "border-status-warning/40 bg-status-warning/5" : "border-border bg-card")}>
-              <h2 id="psd-varias" className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <h2 id="psd-varias" tabIndex={-1} className="flex scroll-mt-24 items-center gap-1.5 rounded-sm text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {variasPendiente ? <AlertTriangle className="size-4 shrink-0 text-status-warning" aria-hidden="true" /> : <CircleCheck className="size-4 shrink-0 text-status-completed" aria-hidden="true" />}
                 {tx(FP.enVarias, lang)}
                 <span className="sr-only">: {tx(variasPendiente ? FP.enVariasPendiente : FP.enVariasListo, lang)}</span>
