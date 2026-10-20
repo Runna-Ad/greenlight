@@ -34,6 +34,10 @@ const FOCO = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring
 const BOTON = "min-h-9 text-[13px] pointer-coarse:min-h-11";
 /** Los campos junto a esos botones: el mismo alto y la misma letra (con dedo, 16 px para que el teléfono no acerque). */
 const CAMPO = "h-9 rounded-md border border-input bg-background px-2 text-[13px] text-foreground pointer-coarse:h-11 pointer-coarse:text-base";
+/** Un botón que se ocupa al pulsarlo no se deshabilita: Chrome manda el foco al <body> si se deshabilita el botón que lo
+ *  tiene (medido en Chrome 152). Va con `aria-disabled` (se anuncia como no disponible), se ve apagado y su clic no hace
+ *  nada. */
+const APAGADO = "aria-disabled:cursor-not-allowed aria-disabled:opacity-50";
 
 const usd = (n: number, lang: Lang) => (n <= 0 ? tx(FX.gratis, lang) : `${new Intl.NumberFormat(lang === "es" ? "es-MX" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)} USD`);
 
@@ -124,11 +128,16 @@ export function FormatosStudio({
   /** El «Rehacer»/«Reintentar» que se pulsó y qué decía: su tarjeta conserva el pie mientras espera en la fila (si el
    *  botón se quita, el foco cae al <body>) y el botón no cambia de nombre hasta que termina. */
   const [rehaciendo, setRehaciendo] = useState<{ id: string; listo: boolean } | null>(null);
+  /** Se pulsó «Reintentar los que no salieron»: el botón se queda mientras corre (los fallidos pasan a la fila). */
+  const [reintentando, setReintentando] = useState(false);
   const vivo = useRef(true);
   const tituloTamanos = useRef<HTMLHeadingElement>(null);
   const tituloResultados = useRef<HTMLHeadingElement>(null);
   const zonaSubida = useRef<HTMLInputElement>(null);
   const botonCambiar = useRef<HTMLButtonElement>(null);
+  const botonZip = useRef<HTMLButtonElement>(null);
+  /** «Reintentar los que no salieron» tenía el foco al pulsarlo (al quitarse, el foco caería al <body>). */
+  const focoEnReintentar = useRef(false);
   const primeraConfirmacion = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -403,6 +412,7 @@ export function FormatosStudio({
     } finally {
       setCorriendo(false);
       setRehaciendo(null);
+      setReintentando(false);
     }
   };
 
@@ -445,6 +455,16 @@ export function FormatosStudio({
 
   const listas = todos.map((p) => salidas[p.id]).filter((s): s is SalidaVista => !!s && s.estado === "listo" && !!s.pngUrl && !!s.jpgUrl);
   const fallidos = todos.filter((p) => salidas[p.id]?.estado === "error");
+  const zipApagado = !listas.length || zipeando || corriendo;
+  // Mientras se reintentan, los fallidos pasan a la fila: el botón se queda (apagado) hasta que termina. Si al final ya no
+  // queda ninguno, se va; si tenía el foco y el foco cayó al <body>, pasa al ZIP de al lado. (No con onFocus/onBlur: un
+  // botón que se quita no avisa con blur.)
+  const verReintentar = (fallidos.length > 0 && !corriendo) || reintentando;
+  useEffect(() => {
+    if (verReintentar || !focoEnReintentar.current) return;
+    focoEnReintentar.current = false;
+    if (document.activeElement === document.body) botonZip.current?.focus();
+  }, [verReintentar]);
   const costoReal = Object.values(salidas).reduce((sum, s) => sum + (s.costoRealUsd ?? 0), 0);
   // Los resultados viven en esta pantalla: salir sin descargarlos (o con tamaños armándose) pide confirmación.
   const hayQuePerder = !esDemo && (corriendo || listas.length > 0);
@@ -534,8 +554,18 @@ export function FormatosStudio({
     }
   };
 
+  const generarApagado = corriendo || porGenerar.length === 0;
   const botonGenerar = (extra?: string) => (
-    <Button size="lg" className={cn("w-full", BOTON, extra)} onClick={() => void generar(porGenerar)} disabled={corriendo || esDemo || porGenerar.length === 0} aria-busy={corriendo}>
+    <Button
+      size="lg"
+      className={cn("w-full", BOTON, APAGADO, extra)}
+      onClick={() => {
+        if (!generarApagado) void generar(porGenerar);
+      }}
+      disabled={esDemo}
+      aria-disabled={generarApagado || undefined}
+      aria-busy={corriendo}
+    >
       {corriendo ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
       {corriendo
         ? f(tx(FX.progreso, lang), { listos: listosTanda, n: tanda.length })
@@ -682,7 +712,16 @@ export function FormatosStudio({
                 <div className="mt-2 space-y-2 rounded-lg border border-border p-2" role="group" aria-label={tx(FX.cambiar, lang)}>
                   <p className="text-xs text-foreground">{f(tx(FX.cambiarConfirmar, lang), { n: listas.length })}</p>
                   <div className="flex flex-wrap gap-2">
-                    <Button ref={primeraConfirmacion} size="lg" variant="secondary" className={BOTON} onClick={() => void bajarZip()} disabled={zipeando}>
+                    <Button
+                      ref={primeraConfirmacion}
+                      size="lg"
+                      variant="secondary"
+                      className={cn(BOTON, APAGADO)}
+                      onClick={() => {
+                        if (!zipeando) void bajarZip();
+                      }}
+                      aria-disabled={zipeando || undefined}
+                    >
                       <Download className="size-4" aria-hidden="true" /> {tx(FX.bajarZip, lang)}
                     </Button>
                     <Button size="lg" variant="ghost" className={BOTON} onClick={cambiarAnuncio}>
@@ -950,12 +989,35 @@ export function FormatosStudio({
                     {tx(FX.resultados, lang)}
                   </h2>
                   <div className="flex flex-wrap gap-2">
-                    {fallidos.length > 0 && !corriendo && (
-                      <Button size="lg" variant="outline" className={BOTON} disabled={esDemo} onClick={() => void generar(fallidos)}>
+                    {verReintentar && (
+                      <Button
+                        size="lg"
+                        variant="outline"
+                        className={cn(BOTON, APAGADO)}
+                        disabled={esDemo}
+                        aria-disabled={corriendo || undefined}
+                        onClick={(e) => {
+                          if (corriendo) return;
+                          focoEnReintentar.current = document.activeElement === e.currentTarget;
+                          setReintentando(true);
+                          void generar(fallidos);
+                        }}
+                      >
                         <RefreshCw className="size-4" aria-hidden="true" /> {tx(FX.reintentarFallidos, lang)}
                       </Button>
                     )}
-                    <Button size="lg" className={BOTON} onClick={() => void bajarZip()} disabled={!listas.length || zipeando || corriendo || esDemo} aria-busy={zipeando} aria-describedby="formatos-zip-ayuda">
+                    <Button
+                      ref={botonZip}
+                      size="lg"
+                      className={cn(BOTON, APAGADO)}
+                      onClick={() => {
+                        if (!zipApagado) void bajarZip();
+                      }}
+                      disabled={esDemo}
+                      aria-disabled={zipApagado || undefined}
+                      aria-busy={zipeando}
+                      aria-describedby="formatos-zip-ayuda"
+                    >
                       {zipeando ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
                       {zipeando ? tx(FX.armandoZip, lang) : f(tx(FX.bajarZipN, lang), { n: listas.length })}
                     </Button>
@@ -1039,8 +1101,9 @@ export function FormatosStudio({
                                             key={ext}
                                             size="lg"
                                             variant="outline"
-                                            className={cn(BOTON, "relative focus-visible:z-10", i === 0 ? "rounded-r-none" : "-ml-px rounded-l-none")}
-                                            disabled={esDemo || !!bajando}
+                                            className={cn(BOTON, APAGADO, "relative focus-visible:z-10", i === 0 ? "rounded-r-none" : "-ml-px rounded-l-none")}
+                                            disabled={esDemo}
+                                            aria-disabled={!!bajando || undefined}
                                             aria-busy={esta}
                                             aria-label={`${etiqueta} · ${nombre}`}
                                             onClick={() => void bajar(p, ext)}
@@ -1057,12 +1120,11 @@ export function FormatosStudio({
                                     </Button>
                                   </>
                                 )}
-                                {/* Ocupado no se deshabilita: Chrome manda el foco al <body> si se deshabilita el botón que lo tiene
-                                    (medido en Chrome 152). Se anuncia como no disponible y el clic no hace nada. */}
+                                {/* Ocupado va apagado sin deshabilitarse (`APAGADO`): el foco se queda en el botón. */}
                                 <Button
                                   size="lg"
                                   variant="ghost"
-                                  className={cn(BOTON, "aria-disabled:cursor-not-allowed aria-disabled:opacity-50")}
+                                  className={cn(BOTON, APAGADO)}
                                   disabled={esDemo}
                                   aria-disabled={rehacerOcupado || undefined}
                                   aria-label={`${etiquetaRehacer} · ${nombre}${modoRehacer === "ia" ? ` (${usd(lienzoIA(lote.w, lote.h, p.w, p.h).costoUsd, lang)})` : ""}`}
