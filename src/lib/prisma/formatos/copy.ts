@@ -272,6 +272,7 @@ export const FP = {
     "Arrastra una pieza para moverla, o una esquina para cambiarla de tamaño sin deformarla. Cerca del centro se pega sola; con Alt, no. Con el teclado: Tab elige la pieza, las flechas la mueven (con Mayús, de 10 en 10 px), + o − cambian su tamaño y ] o [ (o Re Pág / Av Pág) la ponen más al frente o más atrás.",
     "Drag a piece to move it, or a corner to resize it without distorting it. Near the center it snaps; hold Alt to stop that. With the keyboard: Tab picks the piece, the arrow keys move it (with Shift, 10 px at a time), + or − resize it, and ] or [ (or Page Up / Page Down) bring it forward or send it backward.",
   ),
+  editorComoSeUsa: t("Cómo se usa: mouse y teclado", "How to use it: mouse and keyboard"),
   editorAyudaPartes: t(
     "Una pieza con subcarpetas se abre con doble clic (o Enter): cada parte se mueve, cambia de tamaño y de capa sola, pegada a su pieza. Esc o un clic fuera de sus partes la cierra.",
     "Double-click (or Enter) a piece with subfolders to open it: each part moves, resizes and changes layer on its own, attached to its piece. Esc or a click outside its parts closes it.",
