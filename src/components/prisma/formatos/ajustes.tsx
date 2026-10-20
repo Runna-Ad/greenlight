@@ -195,6 +195,10 @@ export function PastillasMedidas({
   const id = useId();
   const titulo = useRef<HTMLHeadingElement>(null);
   const agregar = useRef<HTMLButtonElement>(null);
+  const grupos = FORMAS.flatMap((f) => {
+    const grupo = lista.filter((m) => formaDe(m.w, m.h) === f);
+    return grupo.length ? [{ f, grupo }] : [];
+  });
   const prendidas = lista.filter((m) => !apagadas.has(clave(m))).length;
   const propias = lista.filter((m) => m.propia).length;
   const cambiada = apagadas.size > 0 || propias > 0;
@@ -225,25 +229,33 @@ export function PastillasMedidas({
         )}
       </div>
       <div className="mt-2 grid items-start gap-x-3 gap-y-2 sm:grid-cols-[5rem_minmax(0,1fr)]">
-        {FORMAS.map((f) => {
-          const grupo = lista.filter((m) => formaDe(m.w, m.h) === f);
-          if (!grupo.length) return null;
+        {grupos.map(({ f, grupo }, i) => {
+          const pastillas = (
+            <div role="group" aria-labelledby={`${id}-titulo ${id}-${f}`} className="flex flex-wrap gap-1.5">
+              {grupo.map((m) => (
+                <PastillaMedida key={clave(m)} m={m} on={!apagadas.has(clave(m))} lang={lang} alAlternar={alAlternar} alQuitar={quitar} />
+              ))}
+            </div>
+          );
           return (
             <Fragment key={f}>
               {/* El rótulo se alinea con el centro del primer renglón de pastillas (36 px, o 44 con dedo). */}
               <span id={`${id}-${f}`} className="text-xs text-muted-foreground sm:pt-2.5 pointer-coarse:sm:pt-3.5">
                 {tx(NOMBRE_FORMA[f], lang)}
               </span>
-              <div role="group" aria-labelledby={`${id}-titulo ${id}-${f}`} className="flex flex-wrap gap-1.5">
-                {grupo.map((m) => (
-                  <PastillaMedida key={clave(m)} m={m} on={!apagadas.has(clave(m))} lang={lang} alAlternar={alAlternar} alQuitar={quitar} />
-                ))}
-              </div>
+              {/* «Agregar medida» al final del último renglón (B23: antes ocupaba uno propio), fuera del grupo de la forma. */}
+              {i === grupos.length - 1 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {pastillas}
+                  <AgregarMedida ref={agregar} lang={lang} alAgregar={alAgregar} />
+                </div>
+              ) : (
+                pastillas
+              )}
             </Fragment>
           );
         })}
-        <span aria-hidden="true" className="hidden sm:block" />
-        <AgregarMedida ref={agregar} lang={lang} alAgregar={alAgregar} />
+        {!grupos.length && <AgregarMedida ref={agregar} lang={lang} alAgregar={alAgregar} />}
       </div>
       {sinLugar > 0 && (
         <p className="mt-2 flex items-start gap-1.5 text-xs text-foreground">

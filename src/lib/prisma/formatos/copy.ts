@@ -422,6 +422,7 @@ export const FP = {
     "The background{m} already has “{p}” painted under the folder ({pct}% match), so it shows twice in {n} of {t} sizes. If you remove it, the gap is filled with what's on each side. You can undo it.",
   ),
   copiaQuitar: t("Quitar del fondo", "Remove from background"),
+  copiaComoFunciona: t("Cómo funciona", "How it works"),
   copiaQuitarSr: t(": «{p}»{m}", ": “{p}”{m}"),
   copiaQuitada: t(
     "Se quitó «{p}» del fondo{m} y el hueco se rellenó con lo que tiene a los lados. Revisa las {n} medidas marcadas «Fondo retocado».",

@@ -1019,6 +1019,8 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const quitadas = sinCopia?.leido === leido ? sinCopia.mapa : null;
   /** El maestro cuya copia está borrando la IA en ESTE PSD (null si ninguno). */
   const iaEnCurso = conIA && conIA.leido === leido ? conIA.i : null;
+  /** «Cómo funciona» abierto en «En varias medidas», por maestro (B23: la explicación larga, a un clic). */
+  const [comoFunciona, setComoFunciona] = useState<ReadonlySet<number>>(() => new Set());
   /** Lo quitado de un maestro sigue valiendo sólo si su copia es la misma pieza (si la persona cambió el papel de las
    *  carpetas, el HERO puede ser otro: entonces se vuelve a ofrecer en vez de dejar un retoque viejo). */
   const quitadaDe = (i: number): Quitada | null => {
@@ -1979,21 +1981,25 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
         {leyendo ? textoAvance : aviso ? `${aviso.texto}${aviso.n % 2 ? "​" : ""}` : eligiendo ? "" : resumen}
       </p>
 
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <Link href="/prisma" className={cn("mb-2 inline-flex min-h-9 items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground pointer-coarse:min-h-11", FOCO)}>
+      {/* Sin wrap: el botón de idioma se queda a la derecha del título (a 1280 se bajaba a su propio renglón). */}
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <Link href="/prisma" className={cn("inline-flex min-h-9 items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground pointer-coarse:min-h-11", FOCO)}>
             <ArrowLeft className="size-4" aria-hidden="true" /> {tx(FX.volver, lang)}
           </Link>
-          <h1 className="font-heading text-[34px] font-bold leading-none tracking-tight text-foreground md:text-[44px]">
-            HÜE <span className="p-spectrum-text">{tx(FX.titulo, lang)}</span>
-          </h1>
-          <p className="mt-2 max-w-2xl text-base text-muted-foreground">{tx(FP.tagline, lang)}</p>
+          {/* Título y lema en una sola banda (B23: antes 144 px de alto; los resultados suben a la pantalla). */}
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <h1 className="font-heading text-[30px] font-bold leading-tight tracking-tight text-foreground">
+              HÜE <span className="p-spectrum-text">{tx(FX.titulo, lang)}</span>
+            </h1>
+            <p className="text-sm text-muted-foreground">{tx(FP.tagline, lang)}</p>
+          </div>
         </div>
         <button
           type="button"
           onClick={() => setLang(lang === "es" ? "en" : "es")}
           lang={lang === "es" ? "en" : "es"}
-          className={cn("inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary pointer-coarse:min-h-11", FOCO)}
+          className={cn("inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary pointer-coarse:min-h-11", FOCO)}
           aria-label={lang === "es" ? "Switch to English" : "Cambiar a español"}
         >
           <Languages className="size-3.5" aria-hidden="true" /> {lang === "es" ? "EN" : "ES"}
@@ -2138,7 +2144,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
           {/* Ajustes (rediseño B19): todo lo que cambia el resultado, arriba y en un solo panel que se lee de un vistazo.
               Antes era una columna de 300 px con su propio scroll donde la mitad quedaba escondida. */}
           <div className="divide-y divide-border rounded-xl border border-border bg-card px-4">
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5">
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <FileImage className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <p className="min-w-0 text-sm">
@@ -2152,16 +2158,10 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                   <FileUp className="size-3.5" aria-hidden="true" /> {tx(FP.cambiar, lang)}
                 </Button>
               </div>
-              {selectorCliente(false)}
-            </div>
-            <div className="py-3">
-              <PastillasMedidas lista={lista} apagadas={apagadas} sinLugar={sinLugar} lang={lang} alAlternar={alternarMedida} alQuitar={quitarMedida} alAgregar={agregarMedidas} alRestablecer={restablecerMedidas} />
-            </div>
-            <div className="py-3">
-              <PastillasCanal canal={canal} n916={n916} detalle={canal && n916 ? cifrasCanal(canal, lang) : ""} lang={lang} alElegir={elegirCanal} />
-            </div>
-            {(totalTextos > 0 || fueraDeGuia.length > 0 || notasArchivo.length > 0) && (
-              <div className="flex flex-wrap gap-2 py-3">
+              {/* El cliente y cómo vino el archivo (tipografías, carpetas, notas) en la misma fila (B23): antes eran un
+                  renglón aparte del panel. */}
+              <div className="flex flex-wrap items-center gap-2">
+                {selectorCliente(false)}
                 {totalTextos > 0 && (
                   <ChipEstado
                     tono={chipTipos.tono}
@@ -2303,7 +2303,13 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                   </ChipEstado>
                 )}
               </div>
-            )}
+            </div>
+            <div className="py-2.5">
+              <PastillasMedidas lista={lista} apagadas={apagadas} sinLugar={sinLugar} lang={lang} alAlternar={alternarMedida} alQuitar={quitarMedida} alAgregar={agregarMedidas} alRestablecer={restablecerMedidas} />
+            </div>
+            <div className="py-2.5">
+              <PastillasCanal canal={canal} n916={n916} detalle={canal && n916 ? cifrasCanal(canal, lang) : ""} lang={lang} alElegir={elegirCanal} />
+            </div>
           </div>
           {/* Fuera del Popover: así el botón «Agregar tipografías» lo encuentra aunque el detalle se cierre y se abra. */}
           <input
@@ -2324,7 +2330,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
           {/* Lo que se repite en varias medidas se arregla UNA vez aquí (antes, el aviso salía en 11 de 12 tarjetas y el
               botón vivía en la columna de la izquierda). */}
           {(copiasEnVista.length > 0 || legalChico.length > 0) && (
-            <section aria-labelledby="psd-varias" className={cn("rounded-xl border px-4 py-3", variasPendiente ? "border-status-warning/40 bg-status-warning/5" : "border-border bg-card")}>
+            <section aria-labelledby="psd-varias" className={cn("rounded-xl border px-4 pt-3 pb-1", variasPendiente ? "border-status-warning/40 bg-status-warning/5" : "border-border bg-card")}>
               <h2 id="psd-varias" tabIndex={-1} className="flex scroll-mt-24 items-center gap-1.5 rounded-sm text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {variasPendiente ? <AlertTriangle className="size-4 shrink-0 text-status-warning" aria-hidden="true" /> : <CircleCheck className="size-4 shrink-0 text-status-completed" aria-hidden="true" />}
                 {tx(FP.enVarias, lang)}
@@ -2349,22 +2355,36 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                   // anywhere": sólo salía después de quitar la copia), si cabe un recorte para mandarle.
                   const conBotonIA = iaCopia && !!g && recorteParaIA(c.m, g) !== null;
                   return (
-                    <li key={c.i} className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 py-2.5">
+                    <li key={c.i} className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 py-2">
                       <div className="min-w-0 flex-1 basis-80">
-                        <p className="text-xs font-medium text-muted-foreground">{tx(FP.copiaTitulo, lang)}</p>
-                        <p className="break-words text-sm text-foreground">{rellenar(tx(!q ? FP.copiaTexto : q.metodo === "ia" ? FP.copiaQuitadaIA : FP.copiaQuitada, lang), v)}</p>
+                        <p className="break-words text-sm text-foreground">
+                          <span className="font-medium">{tx(FP.copiaTitulo, lang)}.</span> {rellenar(tx(!q ? FP.copiaTexto : q.metodo === "ia" ? FP.copiaQuitadaIA : FP.copiaQuitada, lang), v)}{" "}
+                          {/* Al final de la frase, sin renglón propio; -my: el clic mide 36 px sin agrandar el renglón. */}
+                          <button
+                            type="button"
+                            aria-expanded={comoFunciona.has(c.i)}
+                            aria-controls={`psd-copia-mas-${c.i}`}
+                            onClick={() => setComoFunciona((antes) => (antes.has(c.i) ? new Set([...antes].filter((x) => x !== c.i)) : new Set([...antes, c.i])))}
+                            className={cn("-my-2 inline-flex h-9 cursor-pointer items-center gap-0.5 rounded-md px-1 align-baseline text-xs font-medium whitespace-nowrap text-primary hover:underline", FOCO)}
+                          >
+                            {tx(FP.copiaComoFunciona, lang)}
+                            <ChevronDown className={cn("size-3.5 transition-transform motion-reduce:transition-none", comoFunciona.has(c.i) && "rotate-180")} aria-hidden="true" />
+                          </button>
+                        </p>
                         {q?.metodo === "ia" && q.deriva !== null && q.deriva > DERIVA_IA_REVISAR && (
                           <p className="mt-1 flex items-start gap-1.5 text-xs text-foreground">
                             <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> {tx(FP.copiaIaDeriva, lang)}
                           </p>
                         )}
-                        {conBotonIA && (
-                          <p id={`psd-copia-ia-${c.i}`} className="mt-1 text-xs text-muted-foreground">
-                            {rellenar(tx(FP.copiaIaAyuda, lang), v)}
-                            {trabajando ? ` ${tx(FP.copiaIaEspera, lang)}` : iaEnCurso !== null ? ` ${tx(FP.copiaIaOtra, lang)}` : ""}
-                          </p>
+                        {/* Lo que pasa ahora con la IA se queda a la vista; cómo funciona, a un clic. */}
+                        {conBotonIA && (trabajando || iaEnCurso !== null) && (
+                          <p className="mt-1 text-xs text-foreground">{tx(trabajando ? FP.copiaIaEspera : FP.copiaIaOtra, lang)}</p>
                         )}
-                        <p className="mt-1 text-xs text-muted-foreground">{tx(FP.copiaAyuda, lang)}</p>
+                        {/* Escondida sigue siendo la descripción del botón de la IA (el lector la lee al llegar a él). */}
+                        <div id={`psd-copia-mas-${c.i}`} hidden={!comoFunciona.has(c.i)} className="mt-1 space-y-1 text-xs text-muted-foreground">
+                          {conBotonIA && <p id={`psd-copia-ia-${c.i}`}>{rellenar(tx(FP.copiaIaAyuda, lang), v)}</p>}
+                          <p>{tx(FP.copiaAyuda, lang)}</p>
+                        </div>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-1.5">
                         <Button
@@ -2408,7 +2428,7 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
                 })}
                 {/* El legal es obligatorio (CAT de una tarjeta) y nunca se quita: dónde queda chico se dice aquí, no sólo en su tarjeta. */}
                 {legalChico.length > 0 && (
-                  <li className="flex items-start gap-1.5 py-2.5 text-sm text-foreground">
+                  <li className="flex items-start gap-1.5 py-2 text-sm text-foreground">
                     <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-warning" aria-hidden="true" />
                     {legalChico.length === 1
                       ? rellenar(tx(FP.legalChicoUna, lang), { m: legalChico[0], px: LETRA_MIN_PX })

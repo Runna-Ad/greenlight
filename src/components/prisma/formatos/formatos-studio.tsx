@@ -553,21 +553,25 @@ export function FormatosStudio({
         {corriendo ? f(tx(FX.progreso, lang), { listos: listosTanda, n: tanda.length }) : aviso}
       </p>
 
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <Link href="/prisma" className={cn("mb-2 inline-flex items-center gap-1 rounded text-sm text-muted-foreground hover:text-foreground", FOCO)}>
+      {/* Sin wrap: el botón de idioma se queda a la derecha del título (a 1280 se bajaba a su propio renglón). */}
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <Link href="/prisma" className={cn("inline-flex min-h-9 items-center gap-1 rounded text-sm text-muted-foreground hover:text-foreground", FOCO)}>
             <ArrowLeft className="size-4" aria-hidden="true" /> {tx(FX.volver, lang)}
           </Link>
-          <h1 className="font-heading text-[34px] font-bold leading-none tracking-tight text-foreground md:text-[44px]">
-            HÜE <span className="p-spectrum-text">{tx(FX.titulo, lang)}</span>
-          </h1>
-          <p className="mt-2 max-w-2xl text-base text-muted-foreground">{tx(FX.tagline, lang)}</p>
+          {/* El mismo encabezado que la puerta PSD (B23): título y lema en una banda. */}
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <h1 className="font-heading text-[30px] font-bold leading-tight tracking-tight text-foreground">
+              HÜE <span className="p-spectrum-text">{tx(FX.titulo, lang)}</span>
+            </h1>
+            <p className="text-sm text-muted-foreground">{tx(FX.tagline, lang)}</p>
+          </div>
           {esDemo && <p className="mt-1 text-xs font-medium text-muted-foreground">{tx(FX.demo, lang)}</p>}
         </div>
         <button
           type="button"
           onClick={() => setLang(lang === "es" ? "en" : "es")}
-          className={cn("inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary", FOCO)}
+          className={cn("inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary", FOCO)}
           aria-label={lang === "es" ? "Switch to English" : "Cambiar a español"}
         >
           <Languages className="size-3.5" aria-hidden="true" /> {lang === "es" ? "EN" : "ES"}
