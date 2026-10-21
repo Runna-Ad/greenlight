@@ -1070,8 +1070,16 @@ largo: estacionado por él.
           eventos de foco (la ventana no está activa), y un botón que se quita no avisa con blur; por eso «tenía el foco» se
           lee al pulsar, no con onFocus/onBlur. Pruebas sobre 9687a3f: npm test exit 0 (481, 975, 469, 574, 81, 44; 0 fallas) ·
           tsc 0 · eslint 0 · build exit 0.
-        - Mismo problema, sin arreglar (leído en el código, no medido): «Usar estas medidas» y «Agregar medida libre» se
-          deshabilitan solos al vaciar su campo después de usarse; si el foco estaba en el botón, cae al <body>.
+        - Mismo problema en «Usar estas medidas» y «Agregar medida libre», arreglado (3631b1f, Pedro: "Yes, fix the
+          focus loss on «Usar estas medidas» and «Agregar medida libre» the same way"): se deshabilitaban solos al vaciar
+          su campo después de usarse. Ahora van con `aria-disabled` (`APAGADO`) y su envío no hace nada con el campo
+          vacío (antes lo frenaba el botón deshabilitado; Enter en un campo vacío tampoco agrega ni marca error). Medido con
+          uso real en la muestra (sin sustituto: los dos sólo cambian la pantalla), antes → después: hacían su trabajo y
+          el foco caía al <body> a los ~84 ms → hacen lo mismo («2 medidas de la lista · 1 elegidas · 1 requieren
+          rediseño», 500×400 agregada una vez, campos vacíos) y el foco sigue en el botón; pulsarlos apagados (cuadro
+          vacío, un solo campo) no agrega nada ni muestra error; `requestSubmit()` con un solo campo no hace nada y con
+          los dos agrega 640×480 con el foco en el campo. Pruebas sobre 3631b1f: npm test exit 0 (481, 975, 469, 574,
+          81, 44; 0 fallas) · tsc 0 · eslint 0 · build exit 0.
         - El mismo tamaño de botón queda escrito en 4 archivos (antes 3).
         - Pruebas (sobre d15bec3): test-formatos 469/0 · npm test exit 0 (481, 975, 469, 574, 81, 44; 0 fallas) · tsc 0 ·
           eslint 0 · `npm run build` exit 0.
