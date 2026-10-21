@@ -136,6 +136,10 @@ export function FormatosStudio({
   const zonaSubida = useRef<HTMLInputElement>(null);
   const botonCambiar = useRef<HTMLButtonElement>(null);
   const botonZip = useRef<HTMLButtonElement>(null);
+  const campoAncho = useRef<HTMLInputElement>(null);
+  /** A dónde va el foco después de quitar una medida libre: el id de la medida cuya ✕ lo recibe, "" para el campo
+   *  «Ancho», null si no hay que moverlo. */
+  const focoTrasQuitar = useRef<string | null>(null);
   /** «Reintentar los que no salieron» tenía el foco al pulsarlo (al quitarse, el foco caería al <body>). */
   const focoEnReintentar = useRef(false);
   const primeraConfirmacion = useRef<HTMLButtonElement>(null);
@@ -309,10 +313,22 @@ export function FormatosStudio({
     setResumenLista(resumen);
     setAviso(resumen);
   };
-  const quitarCustom = (id: string) => {
+  /** Quitar una medida libre se lleva su renglón con su ✕. Si la ✕ tenía el foco, pasa a la ✕ de al lado (la siguiente o,
+   *  si no hay, la anterior) o, si no queda otra que se pueda quitar, al campo «Ancho»; si no, caería al <body>. */
+  const quitarCustom = (id: string, teniaFoco: boolean) => {
+    const libres = todos.filter((p) => p.plataforma === "otro" && eleccion[p.id]);
+    const i = libres.findIndex((p) => p.id === id);
+    const vecina = [libres[i + 1], libres[i - 1]].find((p) => p && !corriendo && !salidas[p.id]);
+    focoTrasQuitar.current = teniaFoco ? (vecina?.id ?? "") : null;
     setCustoms((prev) => prev.filter((p) => p.id !== id));
     setEleccion((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== id)));
   };
+  useEffect(() => {
+    const destino = focoTrasQuitar.current;
+    if (destino === null) return;
+    focoTrasQuitar.current = null;
+    (destino ? document.querySelector<HTMLButtonElement>(`[data-quitar="${CSS.escape(destino)}"]`) : campoAncho.current)?.focus();
+  }, [customs]);
 
   const procesar = async (s: SalidaVista): Promise<Fin> => {
     setSalidas((prev) => ({ ...prev, [s.preset]: { ...(prev[s.preset] ?? s), id: s.id, modo: s.modo, estado: "procesando", error: null } }));
@@ -935,7 +951,8 @@ export function FormatosStudio({
                                 {p.plataforma === "otro" && (
                                   <button
                                     type="button"
-                                    onClick={() => quitarCustom(p.id)}
+                                    onClick={(e) => quitarCustom(p.id, document.activeElement === e.currentTarget)}
+                                    data-quitar={p.id}
                                     // Con resultado ya generado (o generándose) la medida se queda: quitarla escondería su tarjeta.
                                     disabled={corriendo || !!salidas[p.id]}
                                     aria-label={f(tx(FX.quitarMedida, lang), { w: p.w, h: p.h })}
@@ -956,7 +973,7 @@ export function FormatosStudio({
               <form onSubmit={agregarCustom} noValidate className="mt-3 flex flex-wrap items-end gap-2" aria-label={tx(FX.medidaLibre, lang)}>
                 <label className="text-xs text-muted-foreground">
                   {tx(FX.ancho, lang)}
-                  <input type="number" inputMode="numeric" min={LADO_MIN} max={LADO_MAX} value={cw} onChange={(e) => {
+                  <input ref={campoAncho} type="number" inputMode="numeric" min={LADO_MIN} max={LADO_MAX} value={cw} onChange={(e) => {
                       setCw(e.target.value);
                       setErrorMedida(null);
                     }} aria-invalid={!!errorMedida} aria-describedby={errorMedida ? "formatos-medida-error" : "formatos-medida-ayuda"} className={cn(CAMPO, "mt-1 block w-24")} />
