@@ -2648,3 +2648,99 @@ dependencias nuevas.
 - [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
 - [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
 
+
+## 2026-10-20 14:11
+**Shipped (recent commits):**
+  - docs(todo): Next.js 16.3.8 ya en main (desplegado)
+  - docs(todo): estado del arreglo de Next.js (esperando ship it) y B22 partes
+  - feat(prisma): Formatos: ZIP grande en varias partes, sin copiar los PSD; Entregables también en imagen plana
+  - feat(prisma): Formatos: elegir medidas para el ZIP, con Entregables y Editables (B22)
+  - feat(prisma): Formatos: textos editables en el editor (paso 3)
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
+
+## 2026-10-20 14:26
+**Shipped (recent commits):**
+  - docs(todo): Next.js 16.3.8 ya en main (desplegado)
+  - docs(todo): estado del arreglo de Next.js (esperando ship it) y B22 partes
+  - feat(prisma): Formatos: ZIP grande en varias partes, sin copiar los PSD; Entregables también en imagen plana
+  - feat(prisma): Formatos: elegir medidas para el ZIP, con Entregables y Editables (B22)
+  - feat(prisma): Formatos: textos editables en el editor (paso 3)
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] B23. Pasada de diseño de la puerta PSD (Pedro, 2026-10-20: "what do you propose?" para que sea más bonita y fácil:
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+
+
+## 2026-10-20 15:25
+**Shipped (recent commits):**
+  - feat(prisma): Formatos imagen plana: tarjetas de resultado como en la puerta PSD
+  - feat(prisma): Formatos imagen plana: un solo tamaño de control (36 px, letra de 13)
+  - docs(todo): B23 construida (opción B) con su revisión, medidas y pendientes
+  - fix(prisma): Formatos: arreglos de la revisión de diseño (B23)
+  - refactor(prisma): Formatos: una sola regla para el aviso común
+  - feat(prisma): Formatos: en el editor, las herramientas primero
+  - feat(prisma): Formatos: la parte de arriba más corta, los resultados suben
+  - feat(prisma): Formatos: tarjetas más tranquilas y ordenadas
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
+## 2026-10-20/21 — HÜE Prisma › Formatos: puerta de imagen plana con B23, foco del teclado arreglado y 0078 + bucket APLICADOS — rama `prisma` (preview) + base compartida
+**Waiting on Pedro:** nada obligatorio. Puede volver a subir su anuncio en http://localhost:3000/prisma/formatos (ya
+funciona). Sin revisar: si la preview de Vercel tiene `NEXT_PUBLIC_PRISMA_FORMATOS_ENABLED=true` para mostrar la página.
+**Hecho:**
+- Sesión lateral pedida por la sesión de B23: la puerta de imagen plana (`formatos-studio.tsx`) con el mismo sistema de
+  controles de la PSD → **57ad8ea** (botones 36 px / letra 13, campos 36/13, «Todos»/«Ninguno» con su nombre al
+  inicio de lo que oye el lector) y **d15bec3** (tarjetas con botones al pie bajo una línea, PNG|JPG juntos, columnas
+  por ancho de tarjeta: a 1280 «Rehacer · IA (0.07 USD)» ya no se sale). Review en **c96a707**. Medido en el DOM a
+  1440 y 1280; encabezado con sesión de Pedro igual al de la PSD al píxel.
+- Foco del teclado (Pedro pidió cada uno): «Rehacer» (**adf8cb0**), «Generar», los dos «Descargar ZIP», PNG/JPG y
+  «Reintentar los que no salieron» (**9687a3f**), «Usar estas medidas» y «Agregar medida libre» (**3631b1f**), la ✕ de
+  una medida libre (**af74f50**). Antes → después medido en cada uno (el foco caía al <body> a los 41-84 ms → se
+  queda o pasa a un lugar con sentido). Notas en todo.md B23 (8f8786e, d232130, 69277d4, 09cd7cb).
+- Pedro: "not letting me upload images" → faltaban la 0078 y el bucket (consultas de sólo lectura). Con su "Ship it":
+  revisión de seguridad (Opus, nada bloqueaba) → `node scripts/migrate.mjs --only 20261005120002 --project-ref
+  ybbrpqzbedaxsmotgtkh` exit 0 → `node scripts/setup-storage.mjs --only greenlight-formatos` exit 0. Verificado en la
+  base: 2 tablas, RLS, política master-only, permisos sólo service_role, fila en el registro; bucket privado 25 MB
+  png/jpeg/webp; 0 políticas en storage.objects. Subida con su sesión: lote «prueba-claude» listo en ~4 s; 1 tamaño
+  gratis (desenfoque) listo en ~5 s con pixel-lock. Registrado en todo.md (**c2ce704**) y en la memoria del proyecto.
+**Decisiones:** botón ocupado = `aria-disabled` + clic ignorado (`APAGADO`), nunca `disabled`; columnas de resultados
+por ancho mínimo de tarjeta (13.5rem) como la PSD; botón de idioma y «Volver» igual que la PSD (12 y 14 px).
+**Lecciones nuevas (tasks/lessons.md):** etiqueta más larga en la tarjeta más angosta; Chrome manda el foco al <body>
+al deshabilitar el botón enfocado; en el panel del navegador `focus()` no dispara eventos de foco; un error genérico
+escondió una migración sin aplicar.
+**Sin hacer (reporte):** los datos de prueba «prueba-claude» siguen en la base (1 lote, 1 salida, 3 archivos; sólo master
+los ve); el mismo tamaño de botón queda escrito en 4 archivos; un bucket que falta todavía da el mensaje genérico.
+**No probado:** la confirmación de «Cambiar anuncio» con sesión; modo oscuro; Safari y Firefox; lectores de pantalla
+reales; la preview de Vercel con la 0078.
+**Pick up next:** la prueba real de la puerta plana con anuncios de verdad (paso 2 de todo.md) cuando Pedro quiera.
+**Environment:** sin dependencias nuevas; ningún claim tomado; el servidor de desarrollo en :3000 no lo arrancó esta sesión.

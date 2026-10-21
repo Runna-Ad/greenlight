@@ -1264,3 +1264,23 @@ TAGS: #medir-antes-de-decir #maqueta #estimaciones #formatos #b23
 ROOT CAUSE: la regla vieja ya juntaba los dos tipos (los dos iban en "línea corta"); copié esa agrupación para el color sin preguntar qué tiene que hacer la persona con cada uno.
 RULE: antes de bajarle el tono a un aviso, contestar por cada tipo: ¿se arregla una vez para todas o hay que mirarlo aquí? Sólo lo primero va en gris. Y probar el flujo que lo cambia (aquí: quitar y deshacer) con clics reales, no sólo el estado inicial.
 TAGS: #formatos #avisos #b23 #revision #ux
+
+[2026-10-20] LESSON (B23 en la puerta plana: con botones más grandes, la etiqueta más larga ya no cabía): al pasar los botones de 28/12 a 36/13, medí las tarjetas de la muestra (`?demo=formatos`) y todo cabía. Calculando cada etiqueta posible, «Rehacer · IA (0.07 USD)» medía ~190 px y la tarjeta de 1280 (3 columnas, 208 px) deja 182 adentro: se salía. La muestra nunca la enseña porque ahí la IA está apagada.
+ROOT CAUSE: medí sólo las etiquetas que la muestra pinta, no las que el código puede pintar (precio de la IA, inglés).
+RULE: cuando un control crece, medir la etiqueta MÁS LARGA que puede mostrar (con precio, en los dos idiomas) dentro de la tarjeta MÁS ANGOSTA, no sólo lo que se ve en pantalla. Columnas por ancho mínimo de tarjeta (como la puerta PSD), no por ancho de pantalla.
+TAGS: #formatos #b23 #medir-antes-de-decir #layout #i18n
+
+[2026-10-21] LESSON (Chrome 152: deshabilitar el botón que tiene el foco manda el foco al <body>): en la puerta plana, nueve botones se deshabilitaban o se quitaban justo al pulsarlos («Rehacer», «Generar», los dos ZIP, PNG/JPG, «Reintentar…», «Usar estas medidas», «Agregar medida libre», la ✕ de una medida libre). Medido: el foco caía al <body> a los 41-84 ms y Chrome no dispara blur. Quien usa teclado o lector de pantalla pierde su lugar después de cada clic.
+ROOT CAUSE: `disabled={ocupado}` es la forma corta de "no lo pulses otra vez", pero también saca el botón del foco; y un botón que sólo existe en cierto estado (`{!corriendo && <Button/>}`) desaparece en cuanto se pulsa.
+RULE: un botón que se ocupa al pulsarlo va con `aria-disabled` + clic ignorado (`APAGADO`), nunca `disabled`; no se quita mientras su acción corre; si al final ya no tiene sentido, el foco pasa a un vecino con sentido (la ✕ de al lado, el campo de al lado, el ZIP). Probar antes y después con un sustituto temporal en la muestra y quitarlo antes del commit (grep de la marca).
+TAGS: #a11y #foco #teclado #chrome #formatos #react
+
+[2026-10-21] LESSON (en el panel del navegador, `focus()` por código no dispara eventos de foco): para pasar el foco al ZIP cuando «Reintentar…» se va, guardé "tenía el foco" con onFocus/onBlur. En la prueba nunca se movió: el panel no es la ventana activa, así que `el.focus()` cambia `document.activeElement` pero no dispara focus/focusin; y quitar un elemento enfocado tampoco dispara blur. Lo vi con un console.log temporal (onFocus nunca se llamó).
+ROOT CAUSE: confié en eventos de foco para saber dónde estaba el foco.
+RULE: para saber si un botón tenía el foco, leer `document.activeElement === e.currentTarget` al pulsarlo, y al final mover el foco sólo si cayó al <body>. No depender de onFocus/onBlur para eso, y no creer una prueba de foco en el panel sin leer `document.activeElement`.
+TAGS: #a11y #foco #pruebas #navegador #react
+
+[2026-10-21] LESSON (un error genérico escondió una migración sin aplicar): Pedro intentó subir un anuncio a la puerta plana y vio "No se pudo guardar… avísale a Pedro". El código ya tenía un mensaje de "falta la migración", pero el primer paso es pedir el enlace de subida al bucket `greenlight-formatos`, que tampoco existía, y ese fallo cae al mensaje genérico. Lo confirmé con consultas de sólo lectura (sin tablas, sin bucket, registro hasta 0079) antes de decir nada.
+ROOT CAUSE: el chequeo de "falta la migración" estaba en el SEGUNDO paso (insert); el primero (bucket) fallaba antes con el mensaje de siempre.
+RULE: cuando una función necesita tabla + bucket, el PRIMER paso que puede fallar por falta de instalación debe decir qué falta. Ante un "no se pudo guardar", consultar el estado real de la base (sólo lectura) antes de suponer la causa.
+TAGS: #formatos #migracion #bucket #errores #diagnostico
