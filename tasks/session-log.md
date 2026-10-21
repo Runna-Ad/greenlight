@@ -2744,3 +2744,33 @@ los ve); el mismo tamaño de botón queda escrito en 4 archivos; un bucket que f
 reales; la preview de Vercel con la 0078.
 **Pick up next:** la prueba real de la puerta plana con anuncios de verdad (paso 2 de todo.md) cuando Pedro quiera.
 **Environment:** sin dependencias nuevas; ningún claim tomado; el servidor de desarrollo en :3000 no lo arrancó esta sesión.
+
+## 2026-10-20/21 — HÜE Prisma › Formatos: pasada de diseño B23 de la puerta PSD (opción B) — rama `prisma` (preview), sin migración
+**Waiting on Pedro:** nada obligatorio. Cuando quiera: abrir la puerta PSD en el preview de `prisma` (o localhost:3000/prisma/formatos/psd)
+y decir qué estorba todavía.
+**Hecho:**
+- Sesión lateral pedida por la sesión de Prisma Formatos. Medí la página (5 altos de botón, 11 de 12 tarjetas en ámbar, primera
+  tarjeta bajo el borde de la pantalla) y propuse A / B / C + "no hacer nada" en un artifact
+  (https://claude.ai/artifact/EiXDS4FkRiB1Zeqxx4VpUT). Pedro: "Build B (tidy and lift the results)".
+- Construido en 5 commits (1000ff8 · e158800 · 1977df3 · 0fb1609 · 977ae7a): un alto de control 36 px y letra 13; tarjetas con
+  acciones al pie y PNG|PSD juntos; la pieza repetida en gris («Aviso común») con salto al arreglo; aviso largo en 2 renglones con
+  «Ver más»; arriba más corto (título en banda, fichas en la fila del archivo, «Agregar medida» en línea, «Cómo funciona» que se
+  abre); fila del ZIP ordenada; editor con «Capas»/«Textos» primero.
+- Medido con s33 (12 medidas): primera tarjeta 1001 → 839 px a 1440×900 y 1017 → 883 a 1280×960; barra 93 px a los dos anchos.
+- Revisión en 5 pasadas paralelas (seguridad en Opus: nada). Arreglado en **d105f3a**: «Fondo retocado» había quedado como aviso
+  común (vuelve a ámbar y a contar; probado con clic real en «Quitar del fondo» y «Deshacer»), anillos de foco cortados, «Ver más»
+  tardío y sin contexto, «Cómo funciona» sin nombre y abierto con otro PSD, ayuda del editor en un <details> cerrado como
+  descripción, la nota de Google escondida, y otros 5 menores. Review completo en todo.md B23 (**38f1e25**).
+- Propuse la misma pasada para la puerta de imagen plana; Pedro la arrancó y esa sesión la hizo (su propia entrada arriba).
+- 2026-10-21: el preview no arrancaba ("Another next dev server is already running"): Next 16 deja un solo `next dev` por carpeta
+  y el de :3000 (PID 21674) seguía vivo con la sesión de Pedro. Me conecté a él con `preview_start {url}` en vez de matarlo.
+- Antes de pasarle a Pedro que la otra sesión aplicó 0078, revisé su transcripción: Pedro sí le dijo "Ship it" ahí.
+**Decisiones:** sólo la pieza repetida es aviso común; el relleno se revisa en cada tarjeta. El «Cerrar» que flota sobre la vista
+del editor queda en 24 px a propósito. Los enlaces dentro de una frase llevan la letra de su frase (12).
+**Pruebas (sobre d105f3a):** test-formatos 469/0 · npm test todas las suites con 0 fallas · tsc 0 · eslint 0 · build exit 0.
+**No probado:** la línea de Google junto a la IA (el botón no sale en este localhost); lectores de pantalla reales; Safari y
+Firefox; la barra con la línea de textos cambiados o con zoom.
+**Sin hacer (en todo.md B23):** huérfanas 4 + 1 / 3 + 2; íconos de 14 y 16; el mismo tamaño escrito en varios archivos.
+**Pick up next:** la prueba de Pedro o de diseño en la puerta PSD.
+**Environment:** sin dependencias nuevas; sin migraciones ni escrituras en la base desde esta sesión; el servidor de :3000 no lo
+arrancó esta sesión.

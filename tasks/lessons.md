@@ -1284,3 +1284,13 @@ TAGS: #a11y #foco #pruebas #navegador #react
 ROOT CAUSE: el chequeo de "falta la migración" estaba en el SEGUNDO paso (insert); el primero (bucket) fallaba antes con el mensaje de siempre.
 RULE: cuando una función necesita tabla + bucket, el PRIMER paso que puede fallar por falta de instalación debe decir qué falta. Ante un "no se pudo guardar", consultar el estado real de la base (sólo lectura) antes de suponer la causa.
 TAGS: #formatos #migracion #bucket #errores #diagnostico
+
+[2026-10-21] LESSON (Next 16 deja un solo `next dev` por carpeta): `preview_start` con el nombre de launch.json falló con "Another next dev server is already running" (PID 21674, en :3000 desde hacía 2 días, con la sesión de Pedro abierta y otra sesión usándolo). El mensaje sugiere `kill 21674`.
+ROOT CAUSE: launch.json sólo tiene la entrada que ARRANCA el servidor; con uno vivo en la misma carpeta, Next 16 se niega a abrir otro aunque elija otro puerto.
+RULE: antes de matar un `next dev`, ver quién lo usa (`ps -p <pid> -o etime`, `lsof -iTCP:3000`). Si es de esta misma carpeta, conectarse con `preview_start {url: "http://localhost:3000/..."}`; matarlo corta el trabajo de otras sesiones.
+TAGS: #dev-server #nextjs16 #preview #sesiones-paralelas
+
+[2026-10-20] LESSON (revisores sin navegador estiman medidas; medir antes de arreglar): en la revisión de B23, tres pasadas dijeron que la barra pegajosa crecería a 150-170 px a 1280 y una que los botones de contraste se salían de las tarjetas verticales (marcado SERIO). Medido en el DOM con todas las filas de contraste abiertas: barra de 93 px a 1440 y 1280, ningún botón fuera (tarjetas de 221 y 239 px).
+ROOT CAUSE: los agentes de revisión sólo leen el código; los anchos de texto los adivinan.
+RULE: un hallazgo de acomodo o tamaño de un revisor sin navegador se mide en el DOM antes de tocar código; si la medida no lo confirma, va a "no arreglado" con la cifra medida.
+TAGS: #revision #reap #medir-antes-de-decir #formatos #b23

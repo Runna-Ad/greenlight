@@ -10,8 +10,10 @@
 
 ## 🔺 HÜE Prisma › Formatos (rama `prisma`) — 2026-10-21 — en la PREVIEW, Pedro probando
 - **Puerta PSD (Formatos):** página rediseñada (B19 opción A, c75ac8c) + vista grande, contraste libre en medidas
-  editadas y editor a la forma de la medida (ccc05fa). Sólo escritorio e iPad (1440 / 1180 / 820).
-- **Esperando a Pedro:** su prueba de esos 3 arreglos; veredicto del diseñador sobre los objetos inteligentes del PSD.
+  editadas y editor a la forma de la medida (ccc05fa). **Pasada de diseño B23 (opción B, 2026-10-20, 1000ff8 …
+  d105f3a):** controles de 36 px / letra 13, la pieza repetida en gris como aviso común, arriba más corto (primera tarjeta
+  1001 → 839 px a 1440), editor con las herramientas primero. Sólo escritorio (Pedro 2026-10-19: sin más trabajo de iPad).
+- **Esperando a Pedro:** su prueba de esos 3 arreglos y de B23; veredicto del diseñador sobre los objetos inteligentes del PSD.
 - **Puerta de imagen plana (2026-10-20/21):** mismo sistema de controles de B23 (36 px / letra 13, tarjetas como la PSD)
   y foco del teclado que ya no se pierde en 9 botones (c96a707 … 09cd7cb). **0078 + bucket `greenlight-formatos`
   APLICADOS 2026-10-21** con el "ship it" de Pedro (verificado en la base; subida y 1 tamaño gratis probados con su
