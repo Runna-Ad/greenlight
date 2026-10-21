@@ -1045,7 +1045,9 @@ largo: estacionado por él.
         - Igual que la PSD a propósito: botón de idioma 36/12 y «Volver» 36/14. Sin tocar: casillas de 20, puntos de color
           de 24, cuadro de la lista de 2 renglones (46).
         - No revisado: con sesión, la lista de tamaños y las tarjetas (subir un anuncio necesita la 0078, que no está en la
-          base: se vieron sólo en la muestra local); la confirmación de «Cambiar anuncio» (en la muestra está apagado);
+          base: se vieron sólo en la muestra local; ACTUALIZADO 2026-10-21: con la 0078 aplicada se subió un anuncio y se
+          generó 1 tamaño con sesión, botones de la tarjeta 36/13 y el foco siguió en «Generar» de la fila a «listo»);
+          la confirmación de «Cambiar anuncio» (en la muestra está apagado);
           modo oscuro; Safari y Firefox; lectores de pantalla reales.
         - Encontrado, ya era así, y arreglado aparte (adf8cb0, Pedro: "do this task here"): «Rehacer»/«Reintentar»
           desaparecía mientras su tamaño esperaba en la fila y, ya armándose, quedaba deshabilitado; el foco del teclado
@@ -1117,8 +1119,8 @@ eslint y build limpios. Sin migración nueva ni deploy.
         gratis (320×50 y 640×100 siguen "rediseño" → paso 4).
   - [ ] 3d. Análisis del anuncio UNA vez (Gemini visión → cajas de titular/logo/CTA/producto/caras) para recortar
         también fondo de FOTO sin tocar el contenido. Necesita la llave + anuncios reales (paso 2).
-  - [ ] 3e. Juegos de medidas guardados por cliente (necesita tabla/columna → va en una migración nueva o en 0078
-        mientras siga sin aplicar).
+  - [ ] 3e. Juegos de medidas guardados por cliente (necesita tabla/columna → va en una migración NUEVA: la 0078 ya
+        está aplicada desde 2026-10-21 y no se puede editar).
 - [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
 - [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
       dibujar → caer a la puerta de imagen plana con aviso.
@@ -1195,8 +1197,17 @@ pegado duro es una copia de bytes sobre el RGBA crudo, no un modo de mezcla.
         sharp (alto), source-map-js (alto) y sprintf-js (moderado).
 
 ### Para la prueba real — necesita "ship it" de Pedro (en este orden)
-1. `~/.claude/hooks/claim.sh` del esquema → `node scripts/migrate.mjs` (aplica 0078) → soltar el claim.
-2. `node scripts/setup-storage.mjs` (crea `greenlight-formatos`, privado, 25 MB, png/jpeg/webp).
+1. [x] HECHO 2026-10-21 (Pedro: "Ship it: apply migration 0078 to the shared database and create the
+   greenlight-formatos bucket, then check that an upload works"): `node scripts/migrate.mjs --only 20261005120002
+   --project-ref ybbrpqzbedaxsmotgtkh` exit 0 (sin claims tomados ni pendientes). Antes: revisión de seguridad (Opus),
+   nada bloqueaba; 0 políticas en storage.objects (revisado ese día). Verificado en la base: las 2 tablas (13 y 19
+   columnas), RLS encendido, una política master-only cada una, permisos sólo para service_role (nada para anon ni
+   authenticated), fila 20261005120002 en `produccion._migrations`.
+2. [x] HECHO 2026-10-21: `node scripts/setup-storage.mjs --only greenlight-formatos` exit 0; en la base: privado,
+   25000000, png/jpeg/webp. Prueba con sesión de Pedro en localhost: subir «prueba-claude.jpg» (480×358) llegó a la
+   lista de tamaños en ~4 s (lote «listo», archivo en el bucket); 1 tamaño gratis (Meta 1080×1080, desenfoque) listo
+   en ~5 s: «Original sin cambios», pixel_lock_ok true, US$0, PNG y JPG en el bucket, la imagen carga 1080×1080 por
+   URL firmada. Quedan en la base esos datos de prueba (1 lote, 1 salida, 3 archivos), visibles sólo para master.
 3. Pedro en Vercel › Preview: `NEXT_PUBLIC_PRISMA_FORMATOS_ENABLED=true` (requiere redeploy). Para IA además:
    `PRISMA_FORMATOS_IA=gemini` + `GEMINI_API_KEY`, y saldo en la cuenta de Gemini.
 4. Prueba: anuncio real → 15 tamaños → ZIP → pixel-lock en cada tarjeta → `costo_real_usd` en la tabla.
