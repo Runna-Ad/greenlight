@@ -1,13 +1,15 @@
 "use client";
 
 import { Fragment, useId, useRef, useState, type ReactNode, type Ref } from "react";
-import { AlertTriangle, Check, ChevronDown, Plus, RotateCcw, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Plus, RotateCcw, Scale, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { CANALES, type Canal } from "@/lib/prisma/formatos/acomodo";
 import { FP, rellenar } from "@/lib/prisma/formatos/copy";
+import { legalCabe, type GrupoLegal, type LegalGuardado, type LegalVigente } from "@/lib/prisma/formatos/legal";
+import { TEXTO_CAMBIADO_MAX } from "@/lib/prisma/formatos/textos";
 import { MEDIDAS_MAX } from "@/lib/prisma/formatos/listo";
 
 /**
@@ -304,6 +306,203 @@ export function PastillasCanal({ canal, n916, detalle, lang, alElegir }: { canal
         })}
       </div>
       {detalle && <p className="mt-1.5 text-xs text-foreground">{detalle}</p>}
+    </div>
+  );
+}
+
+/** Una opción de la lista de legales: su título (su nombre para el lector) y el texto entero (su descripción: es lo que
+ *  se va a poner en el anuncio). `nota`: una línea más (igual al del PSD, o por qué no se puede elegir). Los legales
+ *  son español aunque la pantalla esté en inglés: `langTitulo` / `langTexto` lo dicen al lector («El que trae el PSD» es
+ *  de la pantalla; su texto, no). */
+function OpcionLegal({ on, titulo, texto, nota, deshabilitada, langTitulo, langTexto, alElegir }: { on: boolean; titulo: string; texto: string; nota?: string; deshabilitada?: boolean; langTitulo?: string; langTexto?: string; alElegir: () => void }) {
+  const id = useId();
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      aria-labelledby={`${id}-t`}
+      aria-describedby={nota ? `${id}-x ${id}-n` : `${id}-x`}
+      aria-disabled={deshabilitada || undefined}
+      onClick={() => deshabilitada || alElegir()}
+      className={cn(
+        "flex w-full cursor-pointer items-start gap-2 rounded-xl border px-3 py-2 text-left transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-60",
+        FOCO,
+        on ? cn(PRENDIDA, "hover:bg-primary/15") : "border-border bg-card hover:border-primary/40",
+      )}
+    >
+      <Check className={cn("mt-0.5 size-3.5 shrink-0 text-primary", !on && "invisible")} aria-hidden="true" />
+      <span className="min-w-0">
+        <span id={`${id}-t`} lang={langTitulo} className="block text-xs font-semibold tracking-wide text-foreground uppercase">
+          {titulo}
+        </span>
+        <span id={`${id}-x`} lang={langTexto} className="mt-0.5 block text-[13px] leading-normal break-words text-muted-foreground">
+          {texto}
+        </span>
+        {nota && (
+          <span id={`${id}-n`} className="mt-1 block text-xs font-medium text-foreground">
+            {nota}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+/** Una plantilla con un dato en español (un título o un legal): el dato marcado como español para el lector cuando la
+ *  pantalla está en inglés, como los avisos del motor. */
+function conDato(plantilla: string, vars: Record<string, string>, langDato: string | undefined): ReactNode {
+  return plantilla.split(/(\{\w+\})/).map((pedazo, i) => {
+    const k = /^\{(\w+)\}$/.exec(pedazo)?.[1];
+    return k && k in vars ? (
+      <span key={i} lang={langDato}>
+        {vars[k]}
+      </span>
+    ) : (
+      <Fragment key={i}>{pedazo}</Fragment>
+    );
+  });
+}
+
+/**
+ * La fila «Legal» (B24; Pedro, 2026-10-21): qué legal lleva el anuncio y, con «Elegir legal», los guardados en la
+ * Biblioteca para el cliente elegido (por marca) más «El que trae el PSD». Elegir uno lo pone en todas las medidas (lo
+ * hace la página, como un texto cambiado en el editor). `vigente` null = el PSD no trae legal. `motivo`: por qué su
+ * legal no se puede volver a escribir (null = sí se puede); lo escribe el motor, en español. `ajeno`: el legal puesto es
+ * de un cliente que no es el elegido arriba. `parcial`: en cuántas mesas del PSD no se puede poner.
+ */
+export function FilaLegal({
+  vigente,
+  textoPsd,
+  grupos,
+  nombreCliente,
+  motivo,
+  fallaron,
+  ajeno,
+  parcial,
+  lang,
+  alElegir,
+}: {
+  vigente: LegalVigente | null;
+  textoPsd: string;
+  grupos: GrupoLegal[];
+  /** "" = sin cliente elegido. */
+  nombreCliente: string;
+  motivo: string | null;
+  /** No se pudieron leer los legales de la Biblioteca (no es lo mismo que no tener). */
+  fallaron: boolean;
+  ajeno: boolean;
+  parcial: { n: number; de: number } | null;
+  lang: Lang;
+  alElegir: (legal: LegalGuardado | null) => void;
+}) {
+  const id = useId();
+  const [abierto, setAbierto] = useState(false);
+  const lista = useRef<HTMLDivElement>(null);
+  const langEs = lang === "en" ? "es" : undefined;
+  const corto = textoPsd.replace(/\s+/g, " ").trim();
+  const estado: ReactNode = !vigente
+    ? tx(FP.legalNoEnPsd, lang)
+    : vigente.tipo === "biblioteca"
+      ? vigente.legal.marca
+        ? conDato(tx(FP.legalEstadoBibliotecaMarca, lang), { t: vigente.legal.titulo, m: vigente.legal.marca }, langEs)
+        : conDato(tx(FP.legalEstadoBiblioteca, lang), { t: vigente.legal.titulo }, langEs)
+      : vigente.tipo === "mano"
+        ? tx(FP.legalEstadoMano, lang)
+        : vigente.igualA
+          ? conDato(tx(FP.legalEstadoPsdIgual, lang), { t: vigente.igualA.titulo }, langEs)
+          : conDato(tx(FP.legalEstadoPsd, lang), { t: corto }, langEs);
+  // Lo que se dice debajo, uno por renglón: por qué no se puede, de dónde salen (o no) los legales, y los avisos.
+  const notas: { texto: ReactNode; aviso?: boolean }[] = [];
+  if (vigente) {
+    if (motivo) notas.push({ texto: conDato(tx(FP.editorTextoNo, lang), { m: motivo }, langEs) });
+    else if (fallaron) notas.push({ texto: tx(FP.legalFallaron, lang) });
+    else if (!nombreCliente) notas.push({ texto: tx(FP.legalSinCliente, lang) });
+    else if (!grupos.length) notas.push({ texto: rellenar(tx(FP.legalSinGuardados, lang), { c: nombreCliente }) });
+    if (ajeno) notas.push({ texto: nombreCliente ? rellenar(tx(FP.legalAjeno, lang), { c: nombreCliente }) : tx(FP.legalAjenoSinCliente, lang), aviso: true });
+    if (parcial && !motivo) notas.push({ texto: rellenar(tx(FP.legalParcial, lang), { n: parcial.n, t: parcial.de }), aviso: true });
+  }
+  // El botón también sin legales para este cliente si hay que poder volver al que trae el PSD.
+  const puede = !!vigente && !motivo && (grupos.length > 0 || vigente.tipo !== "psd");
+  const igualA = vigente?.tipo === "psd" ? vigente.igualA : null;
+  const elegir = (g: LegalGuardado | null) => {
+    setAbierto(false);
+    alElegir(g);
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <h2 className="text-sm font-semibold text-foreground">{tx(FP.legal, lang)}</h2>
+      <div className="min-w-0 flex-1 basis-64 text-[13px] text-foreground">
+        <p className="line-clamp-1 break-words">{estado}</p>
+        {notas.map((n, i) => (
+          <p key={i} className={cn("text-xs", n.aviso ? "font-medium text-foreground" : "text-muted-foreground")}>
+            {n.aviso && <AlertTriangle className="mr-1 inline size-3.5 -translate-y-px text-status-warning" aria-hidden="true" />}
+            {n.texto}
+          </p>
+        ))}
+      </div>
+      {puede && (
+        <Popover open={abierto} onOpenChange={setAbierto}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="group h-9 px-2.5 text-[13px] pointer-coarse:h-11">
+              <Scale className="size-3.5" aria-hidden="true" /> {tx(FP.legalElegir, lang)}
+              <ChevronDown className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            aria-labelledby={`${id}-titulo`}
+            aria-describedby={`${id}-ayuda`}
+            lang={lang}
+            // Al abrir, el foco va al que está puesto (no al primero de la lista).
+            onOpenAutoFocus={(e) => {
+              const puesto = lista.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
+              if (!puesto) return;
+              e.preventDefault();
+              puesto.focus();
+              puesto.scrollIntoView({ block: "nearest" });
+            }}
+            className="max-h-[min(32rem,var(--radix-popover-content-available-height))] w-[min(30rem,calc(100vw-2rem))] gap-0 overflow-y-auto p-3 text-sm"
+          >
+            <h2 id={`${id}-titulo`} className="text-sm font-semibold text-foreground">
+              {nombreCliente ? rellenar(tx(FP.legalTitulo, lang), { c: nombreCliente }) : tx(FP.legalTituloSin, lang)}
+            </h2>
+            <p id={`${id}-ayuda`} className="mt-0.5 text-xs text-muted-foreground">
+              {tx(FP.legalAyuda, lang)}
+            </p>
+            <div ref={lista} className="mt-2 space-y-3">
+              <OpcionLegal on={vigente.tipo === "psd"} titulo={tx(FP.legalOpcionPsd, lang)} texto={corto} langTexto={langEs} alElegir={() => elegir(null)} />
+              {grupos.map((gr) => {
+                const idGrupo = `${id}-g-${gr.marca ?? "global"}`;
+                return (
+                  <div key={gr.marca ?? "global"} role="group" aria-labelledby={idGrupo}>
+                    <p id={idGrupo} lang={gr.marca ? langEs : undefined} className="text-xs font-medium text-muted-foreground">
+                      {gr.marca ?? tx(FP.legalGlobales, lang)}
+                    </p>
+                    <div className="mt-1 space-y-1.5">
+                      {gr.legales.map((g) => {
+                        const cabe = legalCabe(g.texto);
+                        return (
+                          <OpcionLegal
+                            key={g.id}
+                            on={vigente.tipo === "biblioteca" && vigente.legal.id === g.id}
+                            titulo={g.titulo}
+                            texto={g.texto}
+                            nota={!cabe ? rellenar(tx(FP.legalLargo, lang), { n: TEXTO_CAMBIADO_MAX }) : igualA?.id === g.id ? tx(FP.legalIgualPsd, lang) : undefined}
+                            deshabilitada={!cabe}
+                            langTitulo={langEs}
+                            langTexto={langEs}
+                            alElegir={() => elegir(g)}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
     </div>
   );
 }

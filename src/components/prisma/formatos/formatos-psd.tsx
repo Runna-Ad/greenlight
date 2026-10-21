@@ -27,7 +27,8 @@ import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
 import { EditorMedida, edicionGuardada, guardarEdicion, guardarTextos, textosGuardados } from "./editor-medida";
 import { cambiarTextos, marcarSinEscribir, NO_SE_ESCRIBIO, type CambiosTexto, type Listo } from "@/lib/prisma/formatos/cambios-texto";
 import { porQueNoSeCambia } from "@/lib/prisma/formatos/textos";
-import { APAGADA, COLUMNAS, ChipEstado, FOCO, FORMAS, NOMBRE_FORMA, PRENDIDA, PastillasCanal, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
+import { APAGADA, COLUMNAS, ChipEstado, FOCO, FORMAS, FilaLegal, NOMBRE_FORMA, PRENDIDA, PastillasCanal, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
+import { conLegal, conLegalDe, legalDelPsd, legalesParaCliente, legalVigente, type LegalGuardado } from "@/lib/prisma/formatos/legal";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD. El anuncio llega en Photoshop: un Web Worker lo lee y lo separa en fondo
@@ -108,6 +109,8 @@ const esComun = (a: AvisoAcomodo) => a.tipo === "copia";
 const NOMBRE_MESA_MAX = 100;
 const NOMBRE_ZIP_MAX = 80;
 const SOLTAR_URL_MS = 10_000;
+/** Lo que dura un aviso con «Deshacer» (textos del anuncio, legal). */
+const DESHACER_MS = 10_000;
 /** El ZIP (cientos de MB) puede tardar en empezar a guardarse: su enlace se suelta más tarde. */
 const SOLTAR_ZIP_MS = 120_000;
 /** Un solo tamaño de botón en la página (pasada de diseño B23): 36 px de alto y letra de 13 px; 44 px con dedo. */
@@ -881,7 +884,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
 export type ClientePsd = { id: string; nombre: string };
 
 /** `iaCopia`: el respaldo con IA de «Quitar del fondo» está encendido en el servidor (proveedor.ts). */
-export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: boolean; clientes: ClientePsd[]; iaCopia: boolean }) {
+export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, iaCopia }: { planaActiva: boolean; clientes: ClientePsd[]; legales: LegalGuardado[]; legalesFallaron: boolean; iaCopia: boolean }) {
   const [lang, setLang] = useLang();
   /** "" = Sin cliente: sólo las tipografías que sirven para todos. */
   const [cliente, setCliente] = useState("");
@@ -945,6 +948,8 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   const [otraVez, setOtraVez] = useState(0);
   /** Lo vigente para lo que termina tarde (tras esperar a la red): el PSD en pantalla y las tipografías cargadas. */
   const leidoVigente = useRef<Leido | null>(null);
+  /** Los textos del anuncio de ahora, para un «Deshacer» que llega después (no los de cuando salió el aviso). */
+  const cambiosVigentes = useRef<CambiosTexto>(SIN_CAMBIOS);
   const tiposVigentes = useRef<Tipografias>(new Map());
   /** La última prueba de los textos: de qué PSD y con qué tipografías se hizo (ver el efecto que la corre). */
   const [prueba, setPrueba] = useState<{ leido: Leido; tipos: Tipografias; e: Escritura | null } | null>(null);
@@ -1609,18 +1614,21 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
   ];
 
   const cambiosTexto = useMemo(() => (!leido ? SIN_CAMBIOS : textosSesion?.leido === leido ? textosSesion.cambios : textosGuardados(leido.archivo)), [leido, textosSesion]);
+  useEffect(() => {
+    cambiosVigentes.current = cambiosTexto;
+  }, [cambiosTexto]);
   // Lo que se acomoda, se pinta y se baja: con los textos cambiados ya escritos. Lo guardado de cada medida se sigue
   // reconociendo con el maestro de antes (`maestrosVista`): cambiar un texto no borra las ediciones.
   const conTextos = useMemo(() => derivarTextos(maestrosVista, cambiosTexto, escritura, tiposEscritos), [maestrosVista, cambiosTexto, escritura, tiposEscritos]);
   /** Por qué un texto de una pieza no se cambia en el editor (null = sí se puede). */
-  const motivoTexto = (mi: number, pieza: number, j: number): string | null => {
+  const motivoTexto = (mi: number, pieza: number, j: number, sinTipografia = FP.editorTextoSinTipografia): string | null => {
     const tp = maestrosVista[mi]?.piezas[pieza]?.textos[j];
     if (!tp) return tx(FP.editorTextoNoEsta, lang);
     const no = porQueNoSeCambia(tp.texto);
     if (no) return no;
     if (listosDe(escritura, mi, pieza)) return null;
     if (probando) return tx(FP.editorTextoProbando, lang);
-    return revisiones.find((r) => r.maestro === mi && r.pieza === pieza && r.capa === tp.capa)?.motivo ?? tx(FP.editorTextoSinTipografia, lang);
+    return revisiones.find((r) => r.maestro === mi && r.pieza === pieza && r.capa === tp.capa)?.motivo ?? tx(sinTipografia, lang);
   };
 
   // Lo editado de cada medida (con el lado y el canal de ahora): lo de esta sesión y, si no, lo que quedó guardado en
@@ -1638,17 +1646,20 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     return mapa;
   }, [ediciones, leido, maestrosVista, medidas, lados, canal]);
   const abrirEditor = useCallback((m: Medida) => setEditando(m), []);
+  /** Los textos del anuncio (todas las medidas): en la sesión y en este navegador. false = sólo en la sesión (se dice). */
+  const ponerTextos = (l: Leido, c: CambiosTexto): boolean => {
+    setTextosSesion({ leido: l, cambios: c });
+    const guardados = guardarTextos(l.archivo, c);
+    if (!guardados) toast.warning(tx(FP.editorTextosSoloSesion, lang));
+    return guardados;
+  };
   const guardarEditada = (m: Medida, ed: Edicion | null, cambios: CambiosTexto) => {
     const l = leido;
     setEditando(null);
     if (!l || !maestrosVista.length) return;
     // Los textos son del anuncio: se guardan aparte y cambian en todas las medidas (se dice a la vista).
     const textos = cambios !== cambiosTexto;
-    if (textos) {
-      setTextosSesion({ leido: l, cambios });
-      if (!guardarTextos(l.archivo, cambios)) toast.warning(tx(FP.editorTextosSoloSesion, lang));
-      else toast.success(rellenar(tx(Object.keys(cambios).length ? FP.editorTextosGuardados : FP.editorTextosDelPsd, lang), { n: medidas.length }));
-    }
+    if (textos && ponerTextos(l, cambios)) toast.success(rellenar(tx(Object.keys(cambios).length ? FP.editorTextosGuardados : FP.editorTextosDelPsd, lang), { n: medidas.length }));
     const antes = edicionesVista.get(clave(m)) ?? null;
     const ctx = contextoEdicion(m, lados[clave(m)], canal), ma = maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)];
     const guardada = guardarEdicion(l.archivo, ma, m.w, m.h, ctx, ed);
@@ -1659,16 +1670,45 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
     // Si sólo cambiaron los textos, lo de la medida no se anuncia (no «volvió al automático»: no cambió).
     if (!textos || JSON.stringify(ed) !== JSON.stringify(antes)) anunciar(rellenar(tx(ed ? FP.editorGuardado : FP.editorAutoHecho, lang), { m: etiqueta(m) }));
   };
+  /** Un aviso con «Deshacer» (y lo mismo al lector). `deshacer` recibe los textos de AHORA: lo que se cambió después
+   *  del aviso no se pierde, y con otro PSD abierto ya no hace nada. */
+  const avisarConDeshacer = (l: Leido, texto: string, deshacer: (ahora: CambiosTexto) => CambiosTexto) => {
+    anunciar(texto);
+    toast.success(texto, {
+      duration: DESHACER_MS,
+      action: { label: tx(FP.copiaDevolver, lang), onClick: () => void (leidoVigente.current === l && ponerTextos(l, deshacer(cambiosVigentes.current))) },
+    });
+  };
   /** Todos los textos vuelven a los del PSD (en todas las medidas), con «Deshacer». */
   const volverTextosPsd = () => {
     const l = leido, antes = cambiosTexto;
     if (!l || !Object.keys(antes).length) return;
-    const poner = (c: CambiosTexto) => {
-      setTextosSesion({ leido: l, cambios: c });
-      if (!guardarTextos(l.archivo, c)) toast.warning(tx(FP.editorTextosSoloSesion, lang));
-    };
-    poner(SIN_CAMBIOS);
-    toast.success(rellenar(tx(FP.editorTextosDelPsd, lang), { n: medidas.length }), { duration: 10_000, action: { label: tx(FP.copiaDevolver, lang), onClick: () => poner(antes) } });
+    // Deshacer devuelve los de antes sin quitar lo que se haya cambiado después.
+    if (ponerTextos(l, SIN_CAMBIOS)) avisarConDeshacer(l, rellenar(tx(FP.editorTextosDelPsd, lang), { n: medidas.length }), (ahora) => ({ ...antes, ...ahora }));
+  };
+
+  // El legal (B24): elegido de la Biblioteca, es un texto cambiado más (todas las medidas, «Deshacer»). Se reconoce
+  // con el maestro de antes de los cambios, como los demás textos.
+  const legalPsd = useMemo(() => legalDelPsd(maestrosVista), [maestrosVista]);
+  const vigenteLegal = useMemo(() => (legalPsd.length ? legalVigente(cambiosTexto, legalPsd, legales) : null), [legalPsd, cambiosTexto, legales]);
+  const gruposLegal = useMemo(() => legalesParaCliente(legales, cliente), [legales, cliente]);
+  // Se puede elegir si al menos una mesa sabe escribir su legal; en las que no (o sin legal), se queda como está y se dice.
+  const motivosLegal = legalPsd.map((l) => motivoTexto(l.mi, l.pieza, l.j, FP.legalSinTipografia));
+  const motivoLegal = motivosLegal.length && motivosLegal.every((m) => m !== null) ? motivosLegal[0] : null;
+  const sinLegalAqui = maestrosVista.length - motivosLegal.filter((m) => m === null).length;
+  const parcialLegal = sinLegalAqui > 0 && maestrosVista.length > 1 ? { n: sinLegalAqui, de: maestrosVista.length } : null;
+  // Un legal de la Biblioteca de otro cliente (se eligió y luego se cambió el cliente de arriba) se avisa.
+  const legalAjeno = vigenteLegal?.tipo === "biblioteca" && vigenteLegal.legal.clienteId !== null && vigenteLegal.legal.clienteId !== cliente;
+  const elegirLegal = (g: LegalGuardado | null) => {
+    const l = leido, antes = cambiosTexto;
+    if (!l) return;
+    const c = conLegal(antes, legalPsd, g?.texto ?? null);
+    if (c === antes) {
+      anunciar(tx(FP.legalYaVa, lang));
+      return void toast.info(tx(FP.legalYaVa, lang));
+    }
+    // Deshacer devuelve sólo el legal de antes: los demás textos, como estén.
+    if (ponerTextos(l, c)) avisarConDeshacer(l, g ? rellenar(tx(FP.legalPuesto, lang), { t: g.titulo }) : tx(FP.legalVuelto, lang), (ahora) => conLegalDe(ahora, legalPsd, antes));
   };
   // Lo que el editor necesita, calculado una vez por medida abierta (no en cada pintada de la página: una zona o un
   // texto nuevos lo harían repintar la vista entera).
@@ -2330,6 +2370,23 @@ export function FormatosPsd({ planaActiva, clientes, iaCopia }: { planaActiva: b
             <div className="py-2.5">
               <PastillasCanal canal={canal} n916={n916} detalle={canal && n916 ? cifrasCanal(canal, lang) : ""} lang={lang} alElegir={elegirCanal} />
             </div>
+            {/* Sin sesión no hay Biblioteca (ni selector de cliente): la fila no se pinta. */}
+            {clientes.length > 0 && (
+              <div className="py-2.5">
+                <FilaLegal
+                  vigente={vigenteLegal}
+                  textoPsd={legalPsd[0]?.texto ?? ""}
+                  grupos={gruposLegal}
+                  nombreCliente={nombreCliente}
+                  motivo={motivoLegal}
+                  fallaron={legalesFallaron}
+                  ajeno={legalAjeno}
+                  parcial={parcialLegal}
+                  lang={lang}
+                  alElegir={elegirLegal}
+                />
+              </div>
+            )}
           </div>
           {/* Fuera del Popover: así el botón «Agregar tipografías» lo encuentra aunque el detalle se cierre y se abra. */}
           <input

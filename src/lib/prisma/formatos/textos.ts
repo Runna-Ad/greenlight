@@ -230,13 +230,17 @@ export function porQueNoSeCambia(t: TextoCapa): string | null {
   return null;
 }
 
+/** Las letras que se pueden escribir en una capa: saltos de cualquier sistema a "\n"; fuera los caracteres de control y
+ *  de formato (invisibles, o que cambian el sentido de lectura) salvo el salto y el tabulador. Lo usan el editor y los
+ *  legales de la Biblioteca (legal.ts), para comparar y escribir lo mismo. */
+export const limpiarTexto = (s: string): string => s.replace(/\r\n?|\u0003|\u2028|\u2029/g, "\n").replace(/(?![\n\t])[\p{Cc}\p{Cf}\p{Cs}]/gu, "");
+
 /** La misma capa con otras letras: su estilo, su lugar y su alineación; saltos de línea como "\n". null si no se puede
  *  (`porQueNoSeCambia`). */
 export function textoCambiado(t: TextoCapa, nuevo: string): TextoCapa | null {
   if (porQueNoSeCambia(t)) return null;
-  // Saltos de cualquier sistema a "\n"; fuera los caracteres de control y de formato (invisibles, o que cambian el
-  // sentido de lectura) salvo el salto y el tabulador; se corta por letra, no a media letra.
-  const limpio = nuevo.replace(/\r\n?|\u0003|\u2028|\u2029/g, "\n").replace(/(?![\n\t])[\p{Cc}\p{Cf}\p{Cs}]/gu, "");
+  // Se corta por letra, no a media letra.
+  const limpio = limpiarTexto(nuevo);
   let texto = "";
   for (const c of limpio) {
     if (texto.length + c.length > TEXTO_CAMBIADO_MAX) break;

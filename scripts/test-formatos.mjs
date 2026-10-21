@@ -8,14 +8,15 @@ import {
 } from "../src/lib/prisma/formatos/geometria.ts";
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
 import { writePsdBuffer } from "ag-psd";
-import { nombreDeGuia, etiquetaPieza } from "../src/lib/prisma/formatos/roles.ts";
+import { nombreDeGuia, etiquetaPieza, esNombreLegal } from "../src/lib/prisma/formatos/roles.ts";
+import { legalDelPsd, conLegal, conLegalDe, legalCabe, legalVigente, legalesParaCliente } from "../src/lib/prisma/formatos/legal.ts";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, capasDeMedida, halosEnMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
 import { psdDeMedida, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prisma/formatos/psd-salida.ts";
 import { readPsd as readPsdAg, getLayerImageData, getLayerMaskImageData, getLayerRealMaskImageData } from "ag-psd";
 import { planDeMedida, psdEditable, retoqueDeFondo, TopeEditable, CAPA_RETOQUE, CAPA_COLOR_MESA } from "../src/lib/prisma/formatos/psd-editable.ts";
-import { textoDe, maquetar, fuentesDe, compararAlfa, textoCambiado, porQueNoSeCambia, cajaQueCabe, TEXTO_CAMBIADO_MAX } from "../src/lib/prisma/formatos/textos.ts";
+import { textoDe, maquetar, fuentesDe, compararAlfa, textoCambiado, porQueNoSeCambia, cajaQueCabe, limpiarTexto, TEXTO_CAMBIADO_MAX } from "../src/lib/prisma/formatos/textos.ts";
 import { cambiarTextos, claveTexto, marcarSinEscribir, NO_SE_ESCRIBIO } from "../src/lib/prisma/formatos/cambios-texto.ts";
 import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, elegirParaCliente, exclusivasDeOtros, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIA_GOOGLE_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
 import { carpetaGoogle, archivosDeMetadata, archivosQueSirven, buscarEnGoogle, ARCHIVOS_POR_FAMILIA_MAX, GOOGLE_BYTES_POR_PEDIDO } from "../src/lib/prisma/formatos/google-fonts.ts";
@@ -2306,6 +2307,8 @@ console.log("\n▶ 3 · textos editables: cambiar las letras (todas las medidas,
     const iL = l33.piezas.findIndex((p) => p.rol === "FOOTER"), iC = l33.piezas.findIndex((p) => p.rol === "CTA");
     const tL = l33.piezas[iL].textos[0], tC = l33.piezas[iC].textos[0];
     const legalNuevo = `${tL.texto.texto} Consulta más condiciones, comisiones y requisitos de contratación en didi.com.mx/card antes de solicitar tu tarjeta.`;
+    const leg33 = legalDelPsd([l33]);
+    ok(`B24 s33: legalDelPsd encuentra el legal en «${l33.piezas[iL].nombre}» (FOOTER), el mismo texto que cambia el editor, y conLegal lo pone`, leg33.length === 1 && leg33[0].pieza === iL && leg33[0].clave === claveTexto(tL) && conLegal({}, leg33, legalNuevo)[claveTexto(tL)] === legalNuevo, JSON.stringify(leg33.map((l) => [l.pieza, l.j])));
     const d3 = cambiarTextos(l33, { [claveTexto(tL)]: legalNuevo }, listos33(l33), maq, pintarFalso).maestro;
     const L0 = l33.piezas[iL], L1 = d3.piezas[iL];
     ok(
@@ -2467,6 +2470,52 @@ console.log("\n▶ B22 · el ZIP con «Entregables» (PNG) y «Editables» (PSD)
     const h = (b) => createHash("sha256").update(b).digest("hex");
     ok("zipPorPartes con s33 real (61 MB ×2): los dos PSD salen idénticos al original, el segundo como -2", JSON.stringify(Object.keys(f2)) === JSON.stringify(["Editables/s33_300x250.psd", "Editables/s33_300x250-2.psd"]) && Object.values(f2).every((b) => h(b) === h(real)));
   }
+}
+
+console.log("\n▶ B24 · el legal de la Biblioteca en todas las medidas");
+{
+  const tp = (capa, texto) => ({ capa, texto: { texto } });
+  const largo = "Términos y condiciones aplican. Consulta requisitos en didi.com.mx";
+  ok("esNombreLegal: LEGAL / «Legales » / disclaimer sí; «LEGAL 2» y PIE no (nombre completo)", esNombreLegal("LEGAL") && esNombreLegal("Legales ") && esNombreLegal("disclaimer") && !esNombreLegal("LEGAL 2") && !esNombreLegal("PIE"));
+  // Mesa 0: FOOTER con dos partes; la de nombre LEGAL gana aunque sea más corta que el texto de las tiendas.
+  const tiendas = tp("Tiendas", "Descárgala en App Store y Google Play hoy mismo, gratis"), corto = tp("Legal", "Aplican TyC.");
+  const m0 = { piezas: [{ nombre: "TITULO", rol: "TITULO", textos: [tp("Título", "Un título larguísimo que no es el legal para nada")] }, { nombre: "FOOTER", rol: "FOOTER", textos: [tiendas, corto], partes: [{ nombre: "APP STORES", textos: [tiendas] }, { nombre: "LEGAL", textos: [corto] }] }] };
+  // Mesa 1: FOOTER sin nombres: el texto más largo (los vacíos no cuentan). Mesa 2: sin FOOTER.
+  const m1 = { piezas: [{ nombre: "Pie", rol: "FOOTER", textos: [tp("Tienda", "App Store"), tp("Vacío", "   "), tp("Texto", largo)] }] };
+  const m2 = { piezas: [{ nombre: "HERO", rol: "HERO", textos: [] }] };
+  const leg = legalDelPsd([m0, m1, m2]);
+  eq("legalDelPsd: por mesa; prefiere la parte LEGAL, si no el más largo de FOOTER; una mesa sin FOOTER no tiene legal", leg.map((l) => [l.mi, l.pieza, l.j, l.texto]), [[0, 1, 1, "Aplican TyC."], [1, 0, 2, largo]]);
+  const kA = leg[0].clave, kB = leg[1].clave;
+  const otro = { [claveTexto(tp("Título", "x"))]: "Otro título" };
+  const puesto = conLegal(otro, leg, "  Legal nuevo de DiDi.\n");
+  eq("conLegal: pone el legal (sin espacios a los lados) en las claves de todas las mesas y deja los demás textos", puesto, { ...otro, [kA]: "Legal nuevo de DiDi.", [kB]: "Legal nuevo de DiDi." });
+  ok("conLegal: el mismo legal otra vez devuelve EL MISMO objeto (la página no reescribe)", conLegal(puesto, leg, "Legal nuevo de DiDi.") === puesto);
+  eq("conLegal: null vuelve al del PSD (quita sólo las claves del legal)", conLegal(puesto, leg, null), otro);
+  eq("conLegal: un legal igual al del PSD en una mesa no es cambio ahí (como el editor)", conLegal({}, leg, ` ${largo} `), { [kA]: largo });
+  ok("conLegal: sin legal en el PSD, nada cambia", conLegal(otro, [], "x") === otro);
+  ok("conLegal: un legal vacío (o sólo espacios / invisibles) no se pone: el legal nunca se borra", conLegal(otro, leg, " \n ") === otro && conLegal(otro, leg, "\u200b") === otro);
+  const enorme = "a".repeat(TEXTO_CAMBIADO_MAX + 1);
+  ok(`conLegal / legalCabe: uno de más de ${TEXTO_CAMBIADO_MAX} letras no se pone (saldría cortado)`, conLegal(otro, leg, enorme) === otro && !legalCabe(enorme) && legalCabe("a".repeat(TEXTO_CAMBIADO_MAX)));
+  // El legal del PSD trae los saltos del diseñador; el de la Biblioteca, un párrafo: mismas palabras = sin cambio.
+  const conSaltos = [{ ...leg[1], texto: "Términos y condiciones aplican.\nConsulta requisitos en didi.com.mx" }];
+  eq("conLegal: las mismas palabras con otros saltos o espacios no es cambio (se quedan los saltos del PSD)", [conLegal({}, conSaltos, "Términos y condiciones  aplican. Consulta requisitos en didi.com.mx"), conLegal({ [kB]: "x" }, conSaltos, "Términos y condiciones aplican. Consulta requisitos en didi.com.mx ")], [{}, {}]);
+  eq("conLegal: escribe lo que escribiría el editor (sin invisibles, \\r\\n como salto)", conLegal({}, leg, "Uno\r\ndos\u200e")[kA], limpiarTexto("Uno\r\ndos\u200e").trim());
+  const tras = { ...puesto, [claveTexto(tp("Título", "x"))]: "Otro título cambiado después" };
+  eq("conLegalDe (Deshacer): vuelve el legal de antes y deja lo que se cambió después", conLegalDe(tras, leg, otro), { [claveTexto(tp("Título", "x"))]: "Otro título cambiado después" });
+  ok("conLegalDe: si el legal ya está como antes, EL MISMO objeto", conLegalDe(otro, leg, otro) === otro);
+  const g = (id, texto, clienteId, marca = null) => ({ id, titulo: id.toUpperCase(), texto, marca, clienteId });
+  const bib = [g("card", "Legal nuevo de DiDi.\n", "didi", "Card"), g("tyc", "Aplican TyC.", "didi", "Card")];
+  eq("legalVigente: sin cambios = el del PSD; no es de la Biblioteca porque las mesas traen legales distintos", legalVigente({}, leg, bib), { tipo: "psd", igualA: null });
+  eq("legalVigente: el del PSD igual a uno guardado dice cuál es", legalVigente({}, leg.slice(0, 1), bib), { tipo: "psd", igualA: bib[1] });
+  eq("legalVigente: el mismo legal de la Biblioteca en todas las mesas", legalVigente(puesto, leg, bib), { tipo: "biblioteca", legal: bib[0] });
+  eq("legalVigente: escrito a mano (o distinto entre mesas) = a mano", [legalVigente({ [kA]: "A mano" }, leg, bib).tipo, legalVigente({ [kB]: "Legal nuevo de DiDi." }, leg, bib).tipo], ["mano", "mano"]);
+  eq("legalVigente: el del PSD con saltos es el de la Biblioteca en un párrafo", legalVigente({}, conSaltos, [g("par", "Términos y condiciones aplican. Consulta requisitos en didi.com.mx", null)]).igualA?.id, "par");
+  const todos = [g("z", "z", "didi", "Préstamos"), g("glob", "g", null), g("a", "a", "didi", "Card"), g("a2", "a2", "didi", "Card"), g("otro", "o", "uber", "Eats")];
+  eq(
+    "legalesParaCliente: los del cliente por marca (A-Z, en su orden dentro), luego los globales; nada de otros clientes ni sin cliente",
+    [legalesParaCliente(todos, "didi").map((gr) => [gr.marca, gr.legales.map((l) => l.id)]), legalesParaCliente(todos, "")],
+    [[["Card", ["a", "a2"]], ["Préstamos", ["z"]], [null, ["glob"]]], []],
+  );
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

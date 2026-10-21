@@ -28,6 +28,10 @@ const OTROS_NOMBRES: Record<string, Rol> = {
   FONDO: "BACKGROUND", BG: "BACKGROUND",
 };
 
+/** Los nombres de carpeta o subcarpeta que SON el legal (dentro de FOOTER, junto a las tiendas). Nombre completo. */
+const NOMBRES_LEGAL = new Set(["LEGAL", "LEGALES", "LEGALS", "DISCLAIMER"]);
+export const esNombreLegal = (nombre: string) => NOMBRES_LEGAL.has(normal(nombre));
+
 /** ¿Es exactamente uno de los 7 nombres de la guía? */
 export const nombreDeGuia = (nombre: string) => (ROLES as readonly string[]).includes(normal(nombre));
 

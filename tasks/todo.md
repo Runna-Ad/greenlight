@@ -1093,6 +1093,59 @@ largo: estacionado por él.
         - El mismo tamaño de botón queda escrito en 4 archivos (antes 3).
         - Pruebas (sobre d15bec3): test-formatos 469/0 · npm test exit 0 (481, 975, 469, 574, 81, 44; 0 fallas) · tsc 0 ·
           eslint 0 · `npm run build` exit 0.
+- [x] B24. Elegir el LEGAL de la biblioteca en la puerta PSD (Pedro, 2026-10-21: "a section at the top kind of like
+      the legales tab on greenlight where they can click and select one of the saved legales… it gets changed on all
+      the sizes but if they go into one specific size and modify it there… it only gets moved in that size"). Pedro
+      eligió la **opción 1** ("ok go with option 1"): el selector alimenta los textos cambiados que ya existen (un
+      cambio es del anuncio: todas las medidas); mover/agrandar en el editor sigue siendo de UNA medida (ya es así).
+      Sin migración: sólo LEE `snippets` (kind legal). Alternativas descartadas: (2) legal distinto por medida (rompe
+      "All sizes, once"; sólo si DiDi pide uno corto en banners chicos), (3) nada nuevo (pegar a mano en el editor:
+      riesgo de erratas en texto de cumplimiento).
+      **Next Step:** que Pedro o diseño lo prueben en el preview de `prisma` con un PSD de DiDi (elegir cliente DiDi,
+      «Elegir legal», revisar 2-3 medidas y el ZIP). Y revisar la Biblioteca: los legales de Card guardados dicen CAT
+      130.4 % al 31 de mayo; el PSD s33 ya trae 133.9 % al 31 de agosto (¿falta sincronizar Notion?).
+      - [x] 1. `page.tsx` (psd): lee los legales activos (kind legal, scope marca o global, como la tarea) con la misma
+            condición que los clientes (Supabase + sesión); sólo de marcas activas de clientes activos; letras limpias
+            (`limpiarTexto`); los vacíos fuera; si la lectura falla, la fila lo dice (no "no hay").
+      - [x] 2. `legal.ts` (puro): `legalDelPsd` (por mesa, en FOOTER: el de la carpeta/parte LEGAL/LEGALES/LEGALS/
+            DISCLAIMER, si no el de más letras), `conLegal` (las mismas palabras con otros saltos = sin cambio; vacío o
+            de más de 2000 letras no se pone), `conLegalDe` (Deshacer: sólo el legal), `legalVigente`, `legalCabe`,
+            `legalesParaCliente`. `limpiarTexto` sale de `textoCambiado` (textos.ts) para que editor y selector limpien
+            igual.
+      - [x] 3. Fila «Legal» al final del panel de Ajustes (`FilaLegal` en ajustes.tsx): qué legal va (el que trae el PSD,
+            uno de la Biblioteca con su marca, o a mano) y «Elegir legal» abre los del cliente por marca + «El que trae
+            el PSD». Avisos: legal de otro cliente, mesas donde no se puede poner, lectura fallida, sin cliente, sin
+            legales, PSD sin legal, por qué no se puede escribir. «Deshacer» y «El anuncio ya lleva ese legal».
+      - [x] 4. Pruebas: test-formatos 489/0 (469 + 20 de B24, una con s33 real) · tsc 0 · eslint 0 · `npm run build`
+            exit 0 · npm test (abajo).
+      - [x] 5. Revisión (5 revisores en paralelo + Pass 0) y arreglos; navegador con s33 y DiDi (abajo).
+      **Review B24 (2026-10-21):**
+        - Navegador (localhost, sesión de Pedro, s33, 1440×900): elegir «Legales cuando se hable de CASHBACK*» → la fila
+          lo dice, el aviso «Legal «…» en todas las medidas.» con «Deshacer», «1 texto cambiado» en la barra; el editor
+          de 1200×627, 1280×720 y 320×250 trae las letras del legal elegido (130.4 %, 31 de mayo). Agrandar el legal en
+          1200×627 (102 %, «cambiada») NO cambió 1280×720 ni 320×250 (100 %): sólo esa medida quedó guardada. «El que
+          trae el PSD» lo devuelve; «Deshacer» lo vuelve a poner; recargar lo recuerda. Volver a elegir el mismo: «El
+          anuncio ya lleva ese legal.» Sin cliente con un legal de DiDi puesto: aviso y el botón sigue (para volver).
+          En inglés: la pantalla en inglés y los legales marcados `lang="es"`. Consola: 0 errores después de la marca.
+        - Pass 0: los 3 que escriben los textos del anuncio (editor, «Volver a los textos del PSD», legal) usan
+          `ponerTextos`; el aviso de éxito sólo si se guardó (como el editor). La consulta de legales = la de la tarea
+          (marca o global).
+        - Arreglado de la revisión: «Deshacer» restauraba TODOS los textos de antes (borraba lo cambiado en esos 10 s)
+          y escribía en otro PSD si ya se había abierto otro → ahora sólo el legal, sobre los textos de ahora, y nada con
+          otro PSD (también «Volver a los textos del PSD»); legal de más de 2000 letras se cortaba sin aviso → no se
+          ofrece (dice por qué); mesas donde no se puede poner → se dice; vacío → no se pone; lectura fallida decía "no
+          hay legales"; el botón desaparecía justo cuando había que volver; legal de otro cliente sin aviso; dos
+          palomitas cuando el del PSD = uno guardado; español sin `lang` con la pantalla en inglés; nombre accesible de
+          200 letras (ahora título + descripción); grupos por marca con nombre; foco al abrir en el elegido (con
+          teclado); «en las 1 medidas»; letra 11/12 px → 12/13 px; sólo marcas y clientes activos; tope de 500 al
+          registro.
+        - Hallado con el PSD real: su legal trae los saltos del diseñador y los de la Biblioteca son un párrafo; ahora
+          las mismas palabras = sin cambio (se quedan los saltos del PSD).
+        - No arreglado (dicho): la fila suma ~56 px al panel (B23 cuidó la altura; es la sección que pidió Pedro); con
+          varias mesas de legales distintos, «El que trae el PSD» muestra el de la primera y la barra cuenta un texto por
+          mesa; con el mouse el foco se queda en «Elegir legal» al abrir (con teclado va al elegido); todos los legales
+          de todos los clientes van en la página (5 hoy; cargarlos por cliente si la Biblioteca crece); el aviso de
+          «Deshacer» sólo vive 10 s.
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
 - iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los
   pendientes de iPad de B19 (caché de 4 fondos, táctil real, zoom de Safari) quedan fuera.
