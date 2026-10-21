@@ -1294,3 +1294,15 @@ TAGS: #dev-server #nextjs16 #preview #sesiones-paralelas
 ROOT CAUSE: los agentes de revisión sólo leen el código; los anchos de texto los adivinan.
 RULE: un hallazgo de acomodo o tamaño de un revisor sin navegador se mide en el DOM antes de tocar código; si la medida no lo confirma, va a "no arreglado" con la cifra medida.
 TAGS: #revision #reap #medir-antes-de-decir #formatos #b23
+
+[2026-10-21] WIN (mezclar a `prisma` sin tocar la carpeta de otra sesión): Pedro pidió mezclar 2 arreglos de una rama lateral a `prisma` mientras otra sesión tenía 9 archivos sin guardar en la carpeta principal (2 de ellos también cambiados por mí). En vez de mezclar ahí: `git fetch`, confirmar que `origin/prisma` era la base de la rama lateral (avance directo, mismo árbol que se probó) y `git push origin <rama-lateral>:prisma`. La preview arrancó y la otra sesión jaló cuando le tocó.
+REPLICABLE: sí, cuando la rama destino está abierta en una carpeta con trabajo ajeno sin guardar. Si no es avance directo, no: ahí mezcla la sesión dueña de esa carpeta.
+TAGS: #git #worktree #sesiones-paralelas #prisma #win
+
+[2026-10-21] LESSON (el modo estricto de una librería hace dos cosas según dónde caiga el error): en ag-psd, un error estricto DENTRO del bloque de una capa lo atrapa la propia librería y se salta sólo ese bloque (el archivo abre y esa capa pierde su texto vivo, sin aviso); FUERA (secciones principales, un recurso de imagen que no lee todo su bloque, rangos de fusión) rechaza el archivo entero, también uno válido que la librería lee "de menos" (recurso 1082). Lo vio el revisor leyendo dónde quedan los try/catch; mis pruebas sólo cubrían archivos buenos y archivos rotos a propósito.
+RULE: antes de prender el modo estricto de un lector, listar dónde lanza y si cae dentro o fuera de un catch de la librería: dentro = se pierde un pedazo en silencio; fuera = se rechaza el archivo. Probar las dos ramas y, al reportar el riesgo de rechazar archivos buenos, decir con cuántos archivos de otras apps se probó.
+TAGS: #ag-psd #psd #seguridad #strict #formatos
+
+[2026-10-21] WIN (probar Formatos desde un worktree sin .env): la puerta PSD funciona sin las variables de Supabase (login apagado, rol creative, Prisma encendido en desarrollo). Receta: entrada temporal en `.claude/launch.json` con su propio puerto (3017; el 3000 era de otra sesión) y `preview_start`; un servidor de 2 archivos en 127.0.0.1 con CORS para ese origen; en la página `fetch`, `File` y `DataTransfer` en el `input[accept*=".psd"]`. Al final quitar la entrada con Edit (el hook bloquea `git checkout -- <archivo>`).
+REPLICABLE: sí, para cualquier prueba de navegador de Formatos en una sesión lateral.
+TAGS: #formatos #worktree #navegador #pruebas #win

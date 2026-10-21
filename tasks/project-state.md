@@ -19,6 +19,10 @@
   APLICADOS 2026-10-21** con el "ship it" de Pedro (verificado en la base; subida y 1 tamaño gratis probados con su
   sesión). Todas las migraciones de Greenlight hasta 0079 están aplicadas; lo nuevo de Formatos va en una migración
   nueva. Datos de prueba «prueba-claude» quedan en la base (sólo master los ve). La IA de relleno sigue apagada.
+- **Lectura del PSD en modo estricto (B21, en `prisma` desde 2026-10-19: 2b51dab + 3cc9f7b):** un PSD dañado o hecho a
+  mano da un mensaje claro en vez de tumbar la pestaña; CMYK y 16 bits dicen qué hacer. Riesgo abierto: podría rechazar
+  un PSD bueno de otro Photoshop u otra app (probados sólo 2 de Photoshop). Siguiente: 3-4 PSD de diseño para el chequeo
+  (todo.md B21).
 - **No mezclar `prisma` a `main`** hasta que Pedro lo diga.
 
 ## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-17 — TODO LIVE en preview (0065–0075 APLICADAS)

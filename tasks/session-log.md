@@ -2774,3 +2774,37 @@ Firefox; la barra con la línea de textos cambiados o con zoom.
 **Pick up next:** la prueba de Pedro o de diseño en la puerta PSD.
 **Environment:** sin dependencias nuevas; sin migraciones ni escrituras en la base desde esta sesión; el servidor de :3000 no lo
 arrancó esta sesión.
+
+## 2026-10-19/21 · HÜE Prisma › Formatos: lectura estricta de la pantalla y mensajes de CMYK / 16 bits (B21) · sesión lateral, en `prisma` (preview), sin migración
+**Waiting on Pedro:** pedirle a diseño 3-4 PSD guardados en otras computadoras (y uno de otra app si alguien la usa), ponerlos
+en Escritorio › formatos-prueba y avisar para correr el chequeo de strict. No urge.
+**Hecho:**
+- Sesión lateral pedida por la sesión de Prisma Formatos: cerrar el hueco que dejó la revisión de seguridad del 2026-10-19
+  (la lectura de la pantalla llamaba a ag-psd sin `strict`; un PSD hecho a mano podía hacerle reservar GB en ceros y tumbar
+  la pestaña).
+- El worktree nació en `main` (sin Formatos): su rama, sin commits propios, se movió a la punta de `prisma` (1e6d99b).
+- **2b51dab:** `leerPsd` con `strict: true`; un archivo mal formado sale como «no-soportado» con detalle claro en español
+  (`PSD_MAL_FORMADO`); el regex `MAL_FORMADO` pasa a `listo.ts` y lo comparte el worker editable. 8 pruebas nuevas.
+- Revisor de seguridad (Opus, sólo lectura): strict llega a todo lo que lee `readPsd`; decodificar píxeles después queda
+  acotado en memoria (el costo de CPU lo corta el reloj de 120 s). Encontró el riesgo de abajo.
+- Pedro: "so what do you suggest". Recomendé conservar strict, pedir más PSD a diseño, arreglar el mensaje de CMYK y dejar
+  2 cosas para después. Pedro: "yes".
+- **3cc9f7b:** CMYK / Lab / multicanal / duotono / modo sin nombre y 16-32 bits dicen "El PSD está en … Qué hacer: guarda
+  una copia en RGB / en 8 bits … y elige esa copia aquí".
+- Pedro: "Yes, merge the 2 fixes into prisma (test version only, not the live app)". `prisma` en GitHub pasó de 1e6d99b a
+  9fce671 (con la nota en todo.md B21), avance directo desde la rama lateral; la carpeta principal no se tocó (otra sesión
+  tenía 9 archivos sin guardar ahí). Vercel arrancó la preview; no la vi terminar.
+**Decisiones:** strict se queda aunque pueda rechazar un PSD bueno (la tarea pedía no aflojar en silencio); la guardia es la
+prueba con archivos reales. La mezcla a `prisma` se hizo empujando la rama lateral a GitHub, no en la carpeta de otra sesión.
+**Pruebas:** test-formatos 365/0 en la rama (con strict apagado la prueba de rechazo falla: 362/1) · npm test 8 suites
+verdes · tsc 0 · eslint 0 errores (1 aviso viejo, `k1`, línea 978) · navegador (dev server del worktree en :3017, sin
+sesión): copia rota de s33 da el mensaje claro, copia en CMYK da el suyo, s33 real abre su mesa 1200×1500 con 12/12 medidas.
+**No probado:** PSD de otras apps (no hay ninguno); PSD de otro Photoshop; la preview de Vercel terminada.
+**Riesgo abierto (todo.md B21):** strict rechaza un PSD VÁLIDO si un recurso trae bytes de más (p. ej. el 1082, información
+de impresión, imageResources.js:106) o los rangos de fusión de una capa se pasan; diría "dañado o incompleto". De los 5 PSD
+de prueba sólo 2 son de Photoshop; los 3 de `psd-prueba/` los escribió HÜE.
+**Sin hacer (todo.md B21):** un bloque malo dentro de una capa se pierde sin aviso; el worker editable culpa al archivo por un
+"Invalid signature" de nuestro propio escritor.
+**Pick up next:** el chequeo con los PSD de diseño (agregar sus rutas a `reales` en test-formatos.mjs y correrlo).
+**Environment:** sin dependencias nuevas, sin migraciones ni escrituras en la base. Los servidores de esta sesión (:3017 y el
+de archivos en :8766) se apagaron y la entrada temporal de launch.json se quitó.
