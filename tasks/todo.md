@@ -1080,6 +1080,14 @@ largo: estacionado por él.
           vacío, un solo campo) no agrega nada ni muestra error; `requestSubmit()` con un solo campo no hace nada y con
           los dos agrega 640×480 con el foco en el campo. Pruebas sobre 3631b1f: npm test exit 0 (481, 975, 469, 574,
           81, 44; 0 fallas) · tsc 0 · eslint 0 · build exit 0.
+        - La ✕ de una medida libre, arreglada (af74f50, Pedro: "yes fix it"): quitar la medida se lleva su renglón y el
+          foco caía al <body>. Ahora, si la ✕ tenía el foco, pasa a la ✕ de la medida siguiente o, si no hay, a la anterior;
+          si no queda otra que se pueda quitar, al campo «Ancho». Medido con uso real en la muestra (500×400, 640×480 y
+          700×300), antes → después: las tres quitadas dejaban el foco en el <body> → quitar 640×480 lo pasa a la ✕ de
+          700×300, quitar 700×300 a la de 500×400 y quitar 500×400 al campo «Ancho»; quitar una con el foco en otro lado
+          no lo mueve. No medido: una vecina con resultado (su ✕ está deshabilitada y se salta), porque en la muestra las
+          medidas libres no llegan a tener resultado. Pruebas sobre af74f50: npm test exit 0 (481, 975, 469, 574, 81, 44; 0 fallas) ·
+          tsc 0 · eslint 0 · build exit 0.
         - El mismo tamaño de botón queda escrito en 4 archivos (antes 3).
         - Pruebas (sobre d15bec3): test-formatos 469/0 · npm test exit 0 (481, 975, 469, 574, 81, 44; 0 fallas) · tsc 0 ·
           eslint 0 · `npm run build` exit 0.
