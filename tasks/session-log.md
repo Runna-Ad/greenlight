@@ -2808,3 +2808,45 @@ de prueba sólo 2 son de Photoshop; los 3 de `psd-prueba/` los escribió HÜE.
 **Pick up next:** el chequeo con los PSD de diseño (agregar sus rutas a `reales` en test-formatos.mjs y correrlo).
 **Environment:** sin dependencias nuevas, sin migraciones ni escrituras en la base. Los servidores de esta sesión (:3017 y el
 de archivos en :8766) se apagaron y la entrada temporal de launch.json se quitó.
+
+## 2026-10-20/21 · Dependencias: nodemailer 10, sharp y source-map-js (auditoría de npm) · sesión lateral, SHIPPEADO en `main` (254b745) · `prisma` todavía NO lo tiene
+**Waiting on Pedro:** una prueba en producción: hacer una acción que cree una notificación para alguien con email activo y
+confirmar que llega. Esa ruta (el disparador de la app) no la probé yo ni la cubre el script `scripts/send-test-email.mjs`.
+**Hecho:**
+- Sesión lateral pedida por la sesión de Prisma Formatos, después del parche de Next.js 16.3.8 (08fa0da): arreglar lo que
+  `npm audit --omit=dev` seguía marcando (nodemailer, sharp, source-map-js y sprintf-js). Rama `chore/audit-deps-batch`
+  cortada de `main`, en su propio worktree.
+- **254b745** (sólo `package.json` y `package-lock.json`): nodemailer 9.1.1 → **10.0.9** (la versión más chica que limpia sus 5
+  avisos; su único cambio incompatible es "Node 20 o más" y la app corre Node 24; `src/lib/email.ts` sin cambios),
+  sharp 0.35.4 → 0.35.5 y source-map-js 1.2.1 → 1.2.2 (sólo el lock, dentro de los rangos que ya aceptan Next y PostCSS).
+  Se eligió 10.0.9 y no 10.1.7 (publicada 2 días antes, con cambios para conexiones en pool y 5 parches en un día).
+- Auditoría: 6 hallazgos (3 altos, 3 moderados) → 3 moderados, todos la misma cadena sprintf-js → argparse → mammoth.
+  sprintf-js NO tiene versión parcheada (el aviso dice "hasta 1.1.3", que es la última). Sólo entra por el CLI de mammoth
+  (`bin/mammoth`); la app usa `mammoth.extractRawText` y nunca lo corre. Se dejó a propósito, sin `overrides` (forzaría
+  argparse 2 y rompería ese CLI sin que nadie lo note). `npm audit fix --force` ofrece bajar mammoth a 0.3.29: NO correrlo.
+- Revisor de seguridad (Opus, sólo lectura): nada encontrado; confirmó versiones, enlaces, que sprintf-js no se alcanza y que
+  los 3 scripts de email importan bien nodemailer 10 (paquete ESM).
+- Pedro: "it works", escrito justo después de que le di los pasos para correr el script de prueba de email. No vi la salida
+  ni le pregunté qué probó; lo leí como el script. Luego "ship it" (2026-10-21).
+- **Shippeado:** `git push origin 254b745:main`, avance directo 08fa0da..254b745 (`main` no se había movido). GitHub: deploy de
+  Producción de 254b745 en success, estado "Vercel" success, check `test` de CI en success; runna-greenlight.vercel.app
+  responde 200 en /robots.txt, /login y /portal/login.
+**Decisiones:** 10.0.9 y no la última; sprintf-js se deja documentado en vez de forzarlo con `overrides`; este cierre se escribió
+sobre `prisma` (vista previa) y no sobre `main` porque un commit de docs en `main` sería un segundo deploy a producción.
+**Pruebas:** `npm test` exit 0 (isolation 63 migraciones, server-actions 22 archivos, lib 549/0, db 420/0, import 81/0,
+sync 44/0) · `tsc --noEmit` 0 · `npm run build` 0 (Next 16.3.8) · el mismo email armado como lo hace `email.ts` con
+nodemailer 9.1.1 y con 10.0.9 (sin enviar, `streamTransport`) da el MISMO texto con Message-ID/Date/boundary enmascarados ·
+hashes de integridad de los 3 paquetes iguales a los del registro de npm · lock sin paquetes nuevos ni quitados y todos los
+enlaces en registry.npmjs.org.
+**No probado:** un email real mandado por la propia app desde producción; un envío real por Gmail confirmado por mí (sólo la
+frase de Pedro); Node 24 en local (la Mac sólo tiene Node 26; el CI sí corre 24 y pasó).
+**Estado de `prisma`:** NO tiene este cambio. `prisma` (5fa0e60 al empezar este cierre) está 29 commits detrás de `main`: sigue
+con Next 16.3.2 y nodemailer ^9.0.5, o sea que la preview de Formatos todavía carga esos avisos hasta que se mezcle `main` en
+`prisma`. Al mezclar, esperar conflicto en `package-lock.json`: regenerarlo (`npm install`) en vez de resolverlo como texto.
+**Pick up next:** (1) la prueba de Pedro de arriba; (2) cuando Pedro lo diga, mezclar `main` en `prisma`; (3) opcional: quitar
+`@types/nodemailer` de `package.json` (nodemailer 10 trae sus propios tipos; `tsc` pasa con y sin él).
+**Environment:** `npm ci` en el worktree de esta sesión; sin migraciones ni escrituras en la base; no se tocaron archivos `.env`.
+Las ramas de Dependabot `minor-and-patch-*` ya no existían en origin al hacer fetch (no las borré yo). El commit de este cierre
+se armó en un worktree temporal desde `origin/prisma` (un hook de la sesión lateral bloquea editar la carpeta principal) y se
+subió como avance directo; la carpeta principal quedó 1 commit detrás de origin, sin cambios sin guardar míos. Nota larga:
+`side-session-notes/local_a6bd3f4b-…/dependency-advisories-batch.md`.

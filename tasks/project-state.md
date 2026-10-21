@@ -8,6 +8,19 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+## 🔺 Dependencias y auditoría de npm · 2026-10-21 · en `main` (LIVE) · `prisma` todavía NO lo tiene
+- **En `main` (producción):** Next.js **16.3.8** (08fa0da, 2026-10-20) + nodemailer **10.0.9**, sharp **0.35.5** y source-map-js
+  **1.2.2** (254b745, 2026-10-21: Vercel Production success, CI `test` success, runna-greenlight.vercel.app responde 200).
+  `npm audit --omit=dev`: 3 moderados, una sola cadena (sprintf-js → argparse → mammoth), SIN versión parcheada en ningún lado y
+  no alcanzable desde la app (argparse sólo lo usa el CLI de mammoth). No usar `npm audit fix --force` (baja mammoth a 0.3.29).
+- **`prisma` (preview de Formatos) está 29 commits detrás de `main`:** sigue con Next 16.3.2 y nodemailer ^9.0.5 (con sus avisos)
+  hasta que Pedro pida mezclar `main` en `prisma`. Al mezclar: regenerar `package-lock.json` (`npm install`), no resolverlo como
+  texto. `prisma` declara `sharp` ^0.35.5 como dependencia directa (Formatos), así que su rango ya exige la versión parcheada.
+- **Esperando a Pedro:** probar en producción un email que mande la propia app (una acción que cree una notificación para
+  alguien con email activo). Pedro escribió "it works" tras los pasos del script de prueba; no vi la salida.
+- **Opcional:** quitar `@types/nodemailer` de `package.json` (nodemailer 10 trae sus propios tipos).
+- Node: `.nvmrc` y `engines` dicen 24; la Mac de Pedro sólo tiene Node 26 (el aviso EBADENGINE es inofensivo; el CI usa 24).
+
 ## 🔺 HÜE Prisma › Formatos (rama `prisma`) — 2026-10-21 — en la PREVIEW, Pedro probando
 - **Puerta PSD (Formatos):** página rediseñada (B19 opción A, c75ac8c) + vista grande, contraste libre en medidas
   editadas y editor a la forma de la medida (ccc05fa). **Pasada de diseño B23 (opción B, 2026-10-20, 1000ff8 …
