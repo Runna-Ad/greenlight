@@ -256,6 +256,8 @@ export function FormatosStudio({
 
   const agregarCustom = (ev: FormEvent) => {
     ev.preventDefault();
+    // Con un campo vacío el botón va apagado (`APAGADO`) y no agrega nada; Enter en un campo vacío, tampoco.
+    if (!cw || !ch) return;
     const w = Number(cw);
     const h = Number(ch);
     if (!lote || !medidaValida(w, h)) return void setErrorMedida(f(tx(FX.medidaInvalida, lang), { min: LADO_MIN, max: LADO_MAX }));
@@ -278,7 +280,7 @@ export function FormatosStudio({
    *  lista pero apagadas, igual que al elegir a mano. */
   const usarLista = (ev: FormEvent) => {
     ev.preventDefault();
-    if (!lote) return;
+    if (!lote || !lista.trim() || corriendo) return;
     const { medidas, fuera } = leerMedidas(lista);
     if (!medidas.length) return void setErrorLista(fuera.length ? tx(FX.pegarNada, lang) + f(tx(FX.pegarFuera, lang), { m: fuera.join(", ") }) : tx(FX.pegarNada, lang));
     const caben = medidas.slice(0, MAX_TAMANOS);
@@ -802,7 +804,7 @@ export function FormatosStudio({
                     aria-describedby={errorLista ? "formatos-pegar-error" : "formatos-pegar-ayuda"}
                     className="min-h-9 min-w-0 flex-1 basis-60 resize-y rounded-md border border-input bg-background px-2 py-1.5 font-mono text-xs text-foreground [field-sizing:fixed]"
                   />
-                  <Button type="submit" size="lg" variant="outline" className={BOTON} disabled={!lista.trim() || corriendo}>
+                  <Button type="submit" size="lg" variant="outline" className={cn(BOTON, APAGADO)} aria-disabled={!lista.trim() || corriendo || undefined}>
                     {tx(FX.pegarUsar, lang)}
                   </Button>
                 </div>
@@ -966,7 +968,7 @@ export function FormatosStudio({
                       setErrorMedida(null);
                     }} aria-invalid={!!errorMedida} aria-describedby={errorMedida ? "formatos-medida-error" : "formatos-medida-ayuda"} className={cn(CAMPO, "mt-1 block w-24")} />
                 </label>
-                <Button type="submit" size="lg" variant="outline" className={BOTON} disabled={!cw || !ch}>
+                <Button type="submit" size="lg" variant="outline" className={cn(BOTON, APAGADO)} aria-disabled={!cw || !ch || undefined}>
                   <Plus className="size-4" aria-hidden="true" /> {tx(FX.medidaLibre, lang)}
                 </Button>
                 {errorMedida ? (
