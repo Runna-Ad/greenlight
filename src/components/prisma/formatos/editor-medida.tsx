@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { AlertTriangle, ChevronDown, ChevronUp, FolderClosed, FolderOpen, RotateCcw } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronUp, FolderClosed, FolderOpen, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ import { DIALOGO_GRANDE, Franjas } from "./vista-grande";
 import type { MaestroListo } from "@/lib/prisma/formatos/listo";
 import { claveTexto, type CambiosTexto, type PiezaCambiada } from "@/lib/prisma/formatos/cambios-texto";
 import { TEXTO_CAMBIADO_MAX } from "@/lib/prisma/formatos/textos";
+import type { ModoCopia } from "@/lib/prisma/formatos/matriz";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD — el editor de UNA medida (Pedro, 2026-10-15: "an edit button that opens that
@@ -129,6 +130,7 @@ export function EditorMedida({
   zona,
   nombre,
   lang,
+  tambien = [],
   alGuardar,
   alCerrar,
 }: {
@@ -152,7 +154,10 @@ export function EditorMedida({
   /** «1080×1920», para el título y los avisos. */
   nombre: string;
   lang: Lang;
-  alGuardar: (ed: Edicion | null, cambios: CambiosTexto) => void;
+  /** Sus hermanas en la matriz (B25, `hermanas`): a cuáles se puede copiar lo editado aquí al guardar. */
+  tambien?: readonly { m: { w: number; h: number }; modo: ModoCopia; tieneEdicion: boolean }[];
+  /** `copiarA`: las hermanas que la persona marcó (vacío = sólo esta medida). */
+  alGuardar: (ed: Edicion | null, cambios: CambiosTexto, copiarA: readonly { w: number; h: number }[]) => void;
   alCerrar: () => void;
 }) {
   /** Los textos cambiados aquí (del anuncio entero): se ven en la vista y, al guardar, en todas las medidas. */
@@ -227,8 +232,11 @@ export function EditorMedida({
     }),
     [pos, deAuto, auto, orden, ordenAuto, conPartes, sinTexto],
   );
+  // Una copia de otra medida (B25) se ve con sus avisos, como en la tarjeta. Al guardar aquí ya es de esta medida
+  // (alguien la vio): `guardar` no lleva `copiaDe`, y la nota de arriba de los avisos lo dice.
+  const copiaDe = inicial?.copiaDe;
   const editado = useMemo(() => {
-    const a = aplicarEdicion(ma, auto, edicion, W, H, zona);
+    const a = aplicarEdicion(ma, auto, copiaDe ? { ...edicion, copiaDe } : edicion, W, H, zona);
     if (a === auto) return a; // `auto` ya trae los suyos
     try {
       return { ...a, avisos: [...a.avisos, ...avisosDePixeles(ma, a, W, H)] };
@@ -236,7 +244,7 @@ export function EditorMedida({
       console.error("[editor-medida] avisos de píxeles", err);
       return a;
     }
-  }, [ma, auto, edicion, W, H, zona]);
+  }, [ma, auto, edicion, copiaDe, W, H, zona]);
   const tira = W / H >= TIRA;
   /** El ancho de la vista en pantalla: lo más grande que cabe en el marco con la forma de la medida. Sale de una sola
    *  medición (la del marco): con dos, el primer cuadro se pintaba al tamaño equivocado y luego otra vez. */
@@ -527,8 +535,15 @@ export function EditorMedida({
   };
 
   // Los textos, sólo si cambiaron (el MISMO objeto si no: la página no vuelve a escribir todas las medidas).
+  /** Las hermanas marcadas en «Aplicar también a» (por «WxH»); ninguna al abrir: copiar es una decisión. */
+  const [copiarA, setCopiarA] = useState<ReadonlySet<string>>(() => new Set());
+  const claveM = (m: { w: number; h: number }) => `${m.w}x${m.h}`;
   const guardar = () =>
-    alGuardar(Object.keys(edicion.piezas).length || edicion.orden || edicion.partes || edicion.ordenPartes || edicion.sinTexto ? edicion : null, mismosTextos ? cambios : cambiosLocal);
+    alGuardar(
+      Object.keys(edicion.piezas).length || edicion.orden || edicion.partes || edicion.ordenPartes || edicion.sinTexto ? edicion : null,
+      mismosTextos ? cambios : cambiosLocal,
+      tambien.filter((t) => copiarA.has(claveM(t.m))).map((t) => t.m),
+    );
 
   // La pieza abierta: sus partes en la medida (de abajo hacia arriba) y su nombre.
   const abiertaQ = abierta === null ? undefined : puestaDe(abierta);
@@ -1056,6 +1071,11 @@ export function EditorMedida({
                 <li className="px-2 py-1 text-muted-foreground">{tx(FP.editorFondoCapa, lang)}</li>
               </ul>
             </div>
+            {copiaDe && (
+              <p className="rounded-lg border border-border bg-card p-2 text-xs text-muted-foreground">
+                {rellenar(tx(FP.editorEsCopia, lang), { m: `${copiaDe.w}×${copiaDe.h}` })}
+              </p>
+            )}
             <div className="rounded-lg border border-border bg-secondary/50 p-2">
               <h3 className="text-xs font-semibold text-foreground">{tx(FP.editorAvisos, lang)}</h3>
               {editado.avisos.length ? (
@@ -1073,7 +1093,7 @@ export function EditorMedida({
         </div>
         {/* El último renglón del diálogo: con muchas piezas o avisos se desplaza el panel, y Guardar y Cancelar se
             quedan a la vista. */}
-        <DialogFooter className="-mx-4 -mb-4 gap-2 border-t border-border bg-popover px-4 py-3 sm:items-center sm:justify-between">
+        <DialogFooter className="-mx-4 -mb-4 gap-2 border-t border-border bg-popover px-4 py-3 sm:flex-wrap sm:items-center sm:justify-between">
           <Button
             variant="ghost"
             className={BOTON}
@@ -1092,6 +1112,59 @@ export function EditorMedida({
           >
             <RotateCcw className="size-4" aria-hidden="true" /> {tx(FP.editorAuto, lang)}
           </Button>
+          {/* B25: lo de aquí, también en sus hermanas de la matriz (pastillas: se prenden y se apagan). En el mismo
+              renglón que los botones: un renglón más le quitaba 67 px de alto a la vista (medido a 1440×900). */}
+          {tambien.length > 0 && (
+            <fieldset aria-describedby="editor-tambien-ayuda" className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <legend className="float-left mr-1 text-[13px] font-medium text-foreground">{tx(FP.editorTambien, lang)}</legend>
+              {tambien.map((t) => {
+                const k = claveM(t.m), on = copiarA.has(k);
+                const sr = tx(t.modo === "igual" ? FP.editorTambienIgualSr : FP.editorTambienRevisarSr, lang);
+                return (
+                  <label
+                    key={k}
+                    title={sr}
+                    className={cn(
+                      "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium tabular-nums transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-1 pointer-coarse:h-11",
+                      on ? "border-primary/50 bg-primary/10 text-foreground hover:bg-primary/15" : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={on}
+                      onChange={(e) =>
+                        setCopiarA((antes) => {
+                          const n = new Set(antes);
+                          if (e.target.checked) n.add(k);
+                          else n.delete(k);
+                          return n;
+                        })
+                      }
+                    />
+                    <Check className={cn("size-3.5 shrink-0", !on && "invisible")} aria-hidden="true" />
+                    {t.m.w}×{t.m.h}
+                    {/* Marcada, sobre el fondo morado: un gris más oscuro (el de siempre quedaba en 4.4:1 al pasar el mouse). */}
+                    <span className={cn("font-normal", on ? "text-foreground/80" : "text-muted-foreground")}>
+                      <span aria-hidden="true"> · </span>
+                      {tx(t.modo === "igual" ? FP.editorTambienIgual : FP.editorTambienRevisar, lang)}
+                      <span className="sr-only"> ({sr})</span>
+                      {t.tieneEdicion && (
+                        <>
+                          <span aria-hidden="true"> · </span>
+                          <span className="sr-only">, </span>
+                          {tx(FP.editorTambienReemplaza, lang)}
+                        </>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+              <p id="editor-tambien-ayuda" className="sr-only">
+                {tx(FP.editorTambienAyuda, lang)}
+              </p>
+            </fieldset>
+          )}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
             <span role="status" className={cn("text-xs", escNegado ? "font-medium text-foreground" : "text-muted-foreground")}>
               {sinGuardar ? tx(escNegado ? FP.editorSinGuardarEsc : FP.editorSinGuardar, lang) : ""}
@@ -1100,7 +1173,7 @@ export function EditorMedida({
               {tx(FP.editorCancelar, lang)}
             </Button>
             <Button className={BOTON} data-editor-guardar onClick={guardar}>
-              {tx(FP.editorGuardar, lang)}
+              {copiarA.size ? rellenar(tx(FP.editorGuardarCopiar, lang), { n: copiarA.size }) : tx(FP.editorGuardar, lang)}
             </Button>
           </div>
         </DialogFooter>

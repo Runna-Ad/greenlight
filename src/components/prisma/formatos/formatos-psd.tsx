@@ -29,6 +29,7 @@ import { cambiarTextos, marcarSinEscribir, NO_SE_ESCRIBIO, type CambiosTexto, ty
 import { porQueNoSeCambia } from "@/lib/prisma/formatos/textos";
 import { APAGADA, COLUMNAS, ChipEstado, FOCO, FORMAS, FilaLegal, NOMBRE_FORMA, PRENDIDA, PastillasCanal, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
 import { conLegal, conLegalDe, legalDelPsd, legalesParaCliente, legalVigente, type LegalGuardado } from "@/lib/prisma/formatos/legal";
+import { copiarEdicion, hermanas } from "@/lib/prisma/formatos/matriz";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD. El anuncio llega en Photoshop: un Web Worker lo lee y lo separa en fondo
@@ -783,8 +784,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
         <span className="ml-auto flex flex-wrap items-center justify-end gap-1">
           {acomodo.editada && (
             <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs font-medium">
-              <Move className="size-3" aria-hidden="true" /> {tx(FP.editada, lang)}
-              <span className="sr-only">: {tx(FP.editadaTitulo, lang)}</span>
+              <Move className="size-3" aria-hidden="true" /> {acomodo.copiadaDe ? rellenar(tx(FP.copiada, lang), { m: etiqueta(acomodo.copiadaDe) }) : tx(FP.editada, lang)}
+              <span className="sr-only">: {acomodo.copiadaDe ? rellenar(tx(FP.copiadaTitulo, lang), { m: etiqueta(acomodo.copiadaDe) }) : tx(FP.editadaTitulo, lang)}</span>
             </span>
           )}
           {nPropios > 0 ? (
@@ -950,6 +951,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   const leidoVigente = useRef<Leido | null>(null);
   /** Los textos del anuncio de ahora, para un «Deshacer» que llega después (no los de cuando salió el aviso). */
   const cambiosVigentes = useRef<CambiosTexto>(SIN_CAMBIOS);
+  /** Las ediciones de AHORA, para «Deshacer la copia» (el aviso vive más que el render en que se creó). */
+  const edicionesVigentes = useRef<{ leido: Leido; mapa: Map<string, Edicion | null> } | null>(null);
   const tiposVigentes = useRef<Tipografias>(new Map());
   /** La última prueba de los textos: de qué PSD y con qué tipografías se hizo (ver el efecto que la corre). */
   const [prueba, setPrueba] = useState<{ leido: Leido; tipos: Tipografias; e: Escritura | null } | null>(null);
@@ -1617,6 +1620,9 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   useEffect(() => {
     cambiosVigentes.current = cambiosTexto;
   }, [cambiosTexto]);
+  useEffect(() => {
+    edicionesVigentes.current = ediciones;
+  }, [ediciones]);
   // Lo que se acomoda, se pinta y se baja: con los textos cambiados ya escritos. Lo guardado de cada medida se sigue
   // reconociendo con el maestro de antes (`maestrosVista`): cambiar un texto no borra las ediciones.
   const conTextos = useMemo(() => derivarTextos(maestrosVista, cambiosTexto, escritura, tiposEscritos), [maestrosVista, cambiosTexto, escritura, tiposEscritos]);
@@ -1653,7 +1659,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     if (!guardados) toast.warning(tx(FP.editorTextosSoloSesion, lang));
     return guardados;
   };
-  const guardarEditada = (m: Medida, ed: Edicion | null, cambios: CambiosTexto) => {
+  const guardarEditada = (m: Medida, ed: Edicion | null, cambios: CambiosTexto, copiarA: readonly Medida[] = []) => {
     const l = leido;
     setEditando(null);
     if (!l || !maestrosVista.length) return;
@@ -1665,10 +1671,51 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     const guardada = guardarEdicion(l.archivo, ma, m.w, m.h, ctx, ed);
     // Lo guardado con la clave vieja se borra: si no, «Volver al automático» lo dejaría volver a aparecer.
     guardarEdicion(l.archivo, ma, m.w, m.h, ctx + CONTEXTO_VIEJO, null);
-    setEdiciones((antes) => ({ leido: l, mapa: new Map([...(antes?.leido === l ? antes.mapa : []), [`${clave(m)}:${ctx}`, ed]]) }));
-    if (!guardada && ed) return void toast.warning(rellenar(tx(FP.editorSoloSesion, lang), { m: etiqueta(m) }));
+    // B25: lo mismo en las hermanas marcadas (sólo las de la matriz, del mismo maestro), cada una con su contexto. Lo
+    // que tenían antes se guarda para «Deshacer la copia» (una copia reemplaza lo editado ahí a mano).
+    const modos = new Map(hermanas(m, medidas).map((t) => [clave(t.m), t.modo]));
+    const copias = copiarA.flatMap((t) => {
+      const modo = modos.get(clave(t));
+      if (!modo || maestrosVista[elegirMaestro(maestrosVista, t.w, t.h)] !== ma) return [];
+      const espejo = (lados[clave(m)] ?? "derecha") !== (lados[clave(t)] ?? "derecha");
+      const ctxT = contextoEdicion(t, lados[clave(t)], canal);
+      const edT = ed ? copiarEdicion(ed, ma.piezas, m, t, modo, espejo) : null;
+      const ok = guardarEdicion(l.archivo, ma, t.w, t.h, ctxT, edT);
+      guardarEdicion(l.archivo, ma, t.w, t.h, ctxT + CONTEXTO_VIEJO, null);
+      return [{ t, modo, ok, ctx: ctxT, clave: `${clave(t)}:${ctxT}`, ed: edT, previa: edicionesVista.get(clave(t)) ?? null }];
+    });
+    setEdiciones((previas) => ({ leido: l, mapa: new Map([...(previas?.leido === l ? previas.mapa : []), [`${clave(m)}:${ctx}`, ed], ...copias.map((c) => [c.clave, c.ed] as const)]) }));
+    const sinGuardar = copias.filter((c) => !c.ok).map((c) => etiqueta(c.t));
+    if (sinGuardar.length) toast.warning(rellenar(tx(FP.copiadoSoloSesion, lang), { d: sinGuardar.join(", ") }));
+    // Lo que se dice de las copias, sólo de las que sí se guardaron (las otras ya las avisó el aviso de arriba).
+    const hechas = copias.filter((c) => c.ok);
+    const nombres = hechas.map((c) => etiqueta(c.t)).join(", "), revisar = hechas.filter((c) => c.modo !== "igual").map((c) => etiqueta(c.t)).join(", ");
+    const dichoCopias = !hechas.length ? "" : !ed ? rellenar(tx(FP.copiadoAuto, lang), { d: nombres }) : revisar ? rellenar(tx(FP.copiadoARevisar, lang), { d: nombres, r: revisar }) : rellenar(tx(FP.copiadoA, lang), { d: nombres });
+    /** «Deshacer la copia»: cada hermana vuelve a lo que tenía, si sigue con la copia (lo hecho después se queda). */
+    const deshacerCopias = () => {
+      const ahora = edicionesVigentes.current;
+      if (leidoVigente.current !== l || ahora?.leido !== l) return;
+      const vuelven = hechas.filter((c) => ahora.mapa.get(c.clave) === c.ed);
+      if (!vuelven.length) return;
+      for (const c of vuelven) guardarEdicion(l.archivo, ma, c.t.w, c.t.h, c.ctx, c.previa);
+      setEdiciones((previas) => ({ leido: l, mapa: new Map([...(previas?.leido === l ? previas.mapa : []), ...vuelven.map((c) => [c.clave, c.previa] as const)]) }));
+      anunciar(rellenar(tx(FP.copiadoDeshecho, lang), { d: vuelven.map((c) => etiqueta(c.t)).join(", ") }));
+    };
+    const conDeshacer = (texto: string) => toast.success(texto, { duration: DESHACER_MS, action: { label: tx(FP.copiadoDeshacer, lang), onClick: deshacerCopias } });
+    if (!guardada && ed) {
+      toast.warning(rellenar(tx(FP.editorSoloSesion, lang), { m: etiqueta(m) }));
+      if (dichoCopias) {
+        anunciar(dichoCopias);
+        conDeshacer(dichoCopias);
+      }
+      return;
+    }
     // Si sólo cambiaron los textos, lo de la medida no se anuncia (no «volvió al automático»: no cambió).
-    if (!textos || JSON.stringify(ed) !== JSON.stringify(antes)) anunciar(rellenar(tx(ed ? FP.editorGuardado : FP.editorAutoHecho, lang), { m: etiqueta(m) }));
+    const dicho = !textos || JSON.stringify(ed) !== JSON.stringify(antes) ? rellenar(tx(ed ? FP.editorGuardado : FP.editorAutoHecho, lang), { m: etiqueta(m) }) : "";
+    const todo = [dicho, dichoCopias].filter(Boolean).join(" ");
+    if (todo) anunciar(todo);
+    // Con copias, el aviso a la vista dice también qué medida se guardó, y se puede deshacer la copia.
+    if (dichoCopias) conDeshacer(todo);
   };
   /** Un aviso con «Deshacer» (y lo mismo al lector). `deshacer` recibe los textos de AHORA: lo que se cambió después
    *  del aviso no se pierde, y con otro PSD abierto ya no hace nada. */
@@ -2033,7 +2080,10 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
           zona={paraEditor.zona}
           nombre={etiqueta(paraEditor.m)}
           lang={lang}
-          alGuardar={(ed, cambios) => guardarEditada(paraEditor.m, ed, cambios)}
+          tambien={hermanas(paraEditor.m, medidas)
+            .filter((t) => elegirMaestro(maestrosVista, t.m.w, t.m.h) === paraEditor.mi)
+            .map((t) => ({ m: t.m, modo: t.modo, tieneEdicion: !!edicionesVista.get(clave(t.m)) }))}
+          alGuardar={(ed, cambios, copiarA) => guardarEditada(paraEditor.m, ed, cambios, copiarA)}
           alCerrar={() => setEditando(null)}
         />
       )}

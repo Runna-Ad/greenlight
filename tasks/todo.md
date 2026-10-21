@@ -1146,6 +1146,76 @@ largo: estacionado por él.
           mesa; con el mouse el foco se queda en «Elegir legal» al abrir (con teclado va al elegido); todos los legales
           de todos los clientes van en la página (5 hoy; cargarlos por cliente si la Biblioteca crece); el aviso de
           «Deshacer» sólo vive 10 s.
+- [x] B25. Copiar lo editado en una medida a sus medidas hermanas, según la matriz de producción de Pedro (2026-10-21:
+      "if i go to a size and do some changes and based on this table it matches a rule to suggest if you want to apply
+      those same changes to the other available size or sizes"). Pedro eligió la **opción 2** ("yes option 2"): la
+      tabla entera como reglas; las de la misma forma, copia exacta; las parecidas, copia proporcional marcada
+      «revisar». Descartadas: (1) sólo las exactas (4 de 12 medidas), (3) sugerencias esperando en las tarjetas (más
+      estado que guardar). Sin migración (todo en el navegador, como las ediciones).
+      La matriz (base → hija): 1080×1920 → 720×1280 (escala directa 66.67 %) y → 720×1600 (expansión vertical);
+      1200×1500 → 768×1024 (reencuadre leve); 1280×720 → 1200×627 (similar, más comprimida); 600×500 → 320×250 (misma
+      lógica); 640×100 → 320×50 (escala directa 50 %). 876×324 sin hermanas.
+      **Next Step:** hecho; falta que Pedro lo pruebe en la preview de `prisma`.
+      - [x] 1. `matriz.ts` (puro): la tabla (base y modo de cada medida) y `hermanas(medida, activas)`: hijas de la
+            medida, su base si es escala directa (las dos direcciones), y cualquier medida activa con la MISMA forma
+            (medidas libres). Modo: «igual» (misma forma), «proporcional», «estirar» (720×1600).
+      - [x] 2. `copiarEdicion` (puro): igual = todo × el factor; proporcional = cada pieza con su centro en el mismo
+            punto relativo y su escala × el factor menor; estirar = escala × el ancho, lo de arriba pegado arriba y lo de
+            abajo (legal) pegado abajo. Partes, orden, capas y textos quitados, tal cual. Marca `copiaDe` (de qué medida
+            y si hay que revisarla).
+      - [x] 3. `aplicarEdicion`: una copia «revisar» avisa «Copiada de W×H con otra forma: revisar» y NO calla los
+            avisos de piezas encimadas (nadie la vio). La tarjeta: «Copiada de W×H» en vez de «Editada a mano».
+      - [x] 4. Editor: «Aplicar también a» junto a Guardar, una casilla por hermana activa del mismo maestro (igual /
+            revisar; «reemplaza sus cambios» si ya tiene), sin marcar. Guardar las copia (también «Volver al
+            automático»: las vuelve a su automático). Aviso de lo copiado.
+      - [x] 5. Pruebas (matriz, las 3 copias, leerEdicion con copiaDe, s33 1080×1920 → 720×1280 igual al px) · tsc ·
+            eslint · npm test · build · revisión · navegador con s33.
+      **Verificación:** editar 1080×1920 y marcar 720×1280: sale igual a escala; 720×1600 copiada con «revisar»; una
+      medida que no se marcó no cambia; «Volver al automático» con casilla limpia la copia; recargar la recuerda.
+      **Review B25 (2026-10-21):**
+        - Navegador (localhost, sesión de Pedro, s33, 1440×900 y 1280×800): en 1080×1920 el CTA a (523.7, 1296.5, k 0.9)
+          y marcadas las dos → 720×1280 (349.13, 864.33, k 0.6) = exacto × 2/3, sin aviso; 720×1600 (349.13, 1184.33):
+          a su distancia × 2/3 del borde de abajo, con «Copiada de 1080×1920, con otra forma…: revisar». 768×1024 y las
+          demás, sin cambio. Recargar lo recuerda. «Volver al automático» con 720×1280 marcada: las dos vuelven al
+          automático y 720×1600 se queda copiada. Guardar en el editor de la copia: «Editada a mano» (ya es suya).
+          «Deshacer la copia»: 720×1280 al automático y 720×1600 a su edición de antes; 1080×1920 se queda. Consola: 0
+          errores después de la marca. Pruebas: formatos 506/0, prisma 975/0, npm test y build verdes.
+        - Pass 0: un solo camino guarda ediciones (`guardarEditada` → `guardarEdicion`) y una sola etiqueta en la tarjeta.
+        - Arreglado de la revisión (5 pasadas): la escala copiada se recorta a los topes de la medida ANTES de ubicar
+          la pieza (en 320×50 una pieza chica crecía desde su esquina); «revisar» sale de las dos medidas (misma forma
+          o no), no de un dato guardado que podía quitar el aviso; «copiada de» se lee con `medidaValida`; con el HERO
+          del otro lado, la copia se refleja; en una copia de la misma forma sí se avisa si una pieza movida queda
+          encima de una del automático de AQUÍ; «Deshacer la copia» (reemplazaba lo editado a mano en la hermana sin
+          vuelta); el aviso dice qué medida se guardó y sólo cuenta las copias guardadas; el renglón de pastillas le
+          quitaba 67 px de alto a la vista (608 → 674 px, medido) → ahora va en el renglón de los botones; «Al guardar,
+          aplicar también a:», «misma forma» / «otra forma: revisar», «Guardar y copiar (2)»; el editor de una copia
+          la ve con sus avisos y dice «Lo de aquí se copió de… Al guardar, queda como suyo»; lector de pantalla: qué
+          quiere decir cada modo, sin «punto» ni la medida dos veces; gris más oscuro en la pastilla marcada.
+        - No arreglado (dicho): «estirar» decide arriba/abajo por pieza (el centro justo en medio va arriba): una pieza
+          que cruza la mitad puede quedar lejos de la de al lado; va marcada «revisar» y la familia vertical alta es de
+          B26. En la familia «igual» el acomodo no busca piezas encimadas: ahí lo que pide revisar es el aviso
+          «copiada». Una copia reflejada de la misma forma (sólo pasa con medidas libres horizontales) no se marca
+          «revisar». «Copiada de» no se actualiza si después se edita la de origen sin marcar la copia. Los avisos de
+          Sonner salen sin `lang` en inglés (todos los de la página, no sólo éstos). «Deshacer la copia» vive 10 s.
+- [ ] B26. «Comportamiento» de la matriz en el acomodo AUTOMÁTICO (Pedro, 2026-10-21: "yes i do want the
+      comportamiento thing"). Primero una comparación del acomodo de hoy contra cada fila (con s33), luego opciones a
+      Pedro para las filas que no coincidan. **Next Step:** llevarle a Pedro las opciones (comparación hecha).
+      **Comparación (2026-10-21, agente opus, sin cambios al repo; s33 y APGIANTCARDUGC 2, que sí trae 9:16 y 4:5
+      visibles; scripts y 24 renders en el scratchpad de la sesión, b26/):**
+      - Coinciden: 1080×1920 (AP; s33 no tiene 9:16 visible), 1200×1500, 1280×720, 1200×627, 600×500 (estructura),
+        320×250.
+      - 720×1280 «escala directa»: todo × 0.667 MENOS el legal (k 0.80 en AP, 0.83 en s33): lo agranda la «Regla del
+        LEGAL» (más legible). Cambio chico: en la misma forma, no agrandarlo. Choca con esa regla de Pedro.
+      - 768×1024 «hero gana presencia»: hoy todo a 0.64 sobre el fondo; el HERO no gana. Chico-mediano; choca con
+        B13 ("they should look like the 1200x1500").
+      - 720×1600 «expansión vertical»: hoy cada pieza en su lugar del fondo estirado: el bloque de arriba baja, 19 %
+        vacío bajo el legal. Necesita una familia vertical nueva (el script del equipo tiene «tall»). Grande.
+      - 876×324: hoy texto · beneficios · hero; la matriz pide copy · hero · beneficios+CTA. Chico; el orden de hoy
+        viene del script del equipo (sin cita de Pedro).
+      - 640×100: se arma solo desde el 4:5 (HERO de 6-9 % de ancho). La matriz pide diseñarlo primero: una mesa
+        640×100 en el PSD ya se usaría como maestro para 640×100 y 320×50 (probado sintético).
+      - 320×50 «escala directa 50 %» de 640×100: hoy sale del 4:5, no de 640×100. Mediano (derivar de otra medida
+        de salida). Choca con «320×50 se queda igual» (B8) y con la regla del legal.
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
 - iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los
   pendientes de iPad de B19 (caché de 4 fondos, táctil real, zoom de Safari) quedan fuera.

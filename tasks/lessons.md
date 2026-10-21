@@ -1333,3 +1333,13 @@ TAGS: #ag-psd #psd #seguridad #strict #formatos
 [2026-10-21] WIN (probar Formatos desde un worktree sin .env): la puerta PSD funciona sin las variables de Supabase (login apagado, rol creative, Prisma encendido en desarrollo). Receta: entrada temporal en `.claude/launch.json` con su propio puerto (3017; el 3000 era de otra sesión) y `preview_start`; un servidor de 2 archivos en 127.0.0.1 con CORS para ese origen; en la página `fetch`, `File` y `DataTransfer` en el `input[accept*=".psd"]`. Al final quitar la entrada con Edit (el hook bloquea `git checkout -- <archivo>`).
 REPLICABLE: sí, para cualquier prueba de navegador de Formatos en una sesión lateral.
 TAGS: #formatos #worktree #navegador #pruebas #win
+
+[2026-10-21] LESSON (un dato que después recorta otra función se recorta ANTES de calcular lo que depende de él): en B25 `copiarEdicion` escalaba la pieza (k × f) y calculaba su lugar con esa escala; `aplicarEdicion` la subía después a su tope mínimo (6 px) y la pieza crecía desde su esquina: la copia «misma forma» dejaba de ser exacta en 320×50. Lo vio la pasada de código; mis pruebas usaban piezas grandes.
+ROOT CAUSE: dos funciones aplicaban reglas sobre el mismo número en orden distinto; las pruebas no llegaban al tope.
+RULE: si lo que calculo pasa por un tope en otra función, aplicar ese mismo tope (la misma función, `topesPieza`) dentro de mi cálculo antes de sacar posiciones, y probar un caso que lo toque.
+TAGS: #formatos #b25 #topes #revision
+
+[2026-10-21] LESSON (medir un diálogo de Radix mientras abre da números falsos): medí la vista del editor 0.3 s después de abrirlo y salió 507 px (parecía que el arreglo la achicaba); ya abierto medía 674 px. La animación de entrada escala el diálogo.
+RULE: medir el acomodo de un diálogo después de su animación (esperar ~1 s o volver a medir hasta que dos lecturas coincidan) antes de concluir algo de su tamaño.
+TAGS: #navegador #medir-antes-de-decir #radix #formatos
+

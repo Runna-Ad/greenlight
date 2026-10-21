@@ -300,7 +300,7 @@ const hechas = new WeakMap<MaestroRevisable, Map<string, Revisada>>();
 const opcionesHechas = new WeakMap<MaestroRevisable, Map<string, Opciones | null>>();
 
 /** Para la clave de la caché: la misma edición da la misma firma (números redondeados, piezas en orden, y el orden de
- *  las capas si cambió). */
+ *  las capas si cambió, y de qué medida se copió). */
 const firma = (ed: Edicion | null | undefined) => {
   if (!ed) return "-";
   const enOrden = <T,>(r: Readonly<Record<number, T>>, f: (i: number, v: T) => string) => Object.keys(r).map(Number).sort((a, b) => a - b).map((i) => f(i, r[i])).join(";");
@@ -309,7 +309,9 @@ const firma = (ed: Edicion | null | undefined) => {
   const partes = ed.partes ? enOrden(ed.partes, (i, r) => `${i}{${enOrden(r, lugar)}}`) : "";
   const ordenPartes = ed.ordenPartes ? enOrden(ed.ordenPartes, (i, o) => `${i}:${o.join(",")}`) : "";
   const sinTexto = ed.sinTexto ? enOrden(ed.sinTexto, (i, t) => `${i}:${[...t].sort((a, b) => a - b).join(",")}`) : "";
-  return [lugares, ed.orden?.length ? ed.orden.join(",") : "", partes, ordenPartes, sinTexto].join("|").replace(/\|+$/, "");
+  // La copia de otra medida (B25) cambia los avisos (la de otra forma se revisa entera): entra en la firma.
+  const copia = ed.copiaDe ? `c${ed.copiaDe.w}x${ed.copiaDe.h}` : "";
+  return [lugares, ed.orden?.length ? ed.orden.join(",") : "", partes, ordenPartes, sinTexto, copia].join("|").replace(/\|+$/, "");
 };
 
 /**

@@ -58,6 +58,11 @@ export function presetDe(id: string): Preset | null {
   return medidaValida(w, h) ? { id: idCustom(w, h), plataforma: "otro", w, h } : null;
 }
 
+/** Hasta dónde dos medidas tienen «la misma forma» (|ln| de la razón de proporciones): medio por ciento. */
+const MISMA_FORMA = 0.005;
+/** ¿La misma forma? Una copia de lo editado (B25, `matriz.ts`) sale idéntica a escala; con otra forma, se revisa. */
+export const mismaForma = (a: { w: number; h: number }, b: { w: number; h: number }): boolean => Math.abs(Math.log(a.w / a.h / (b.w / b.h))) < MISMA_FORMA;
+
 export const medidaValida = (w: number, h: number): boolean =>
   Number.isInteger(w) && Number.isInteger(h) && w >= LADO_MIN && h >= LADO_MIN && w <= LADO_MAX && h <= LADO_MAX;
 

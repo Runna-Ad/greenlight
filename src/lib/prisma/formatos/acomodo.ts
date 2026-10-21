@@ -14,6 +14,7 @@
  */
 import type { Caja, Rol } from "./psd.ts";
 import { etiquetaPieza } from "./roles.ts";
+import { medidaValida, mismaForma } from "./geometria.ts";
 
 /** Lo que el acomodo necesita de una pieza (PiezaPsd lo cumple). `caja`: todo lo que pinta, con sombras (frena lo
  *  grande que se deja a mano). */
@@ -57,7 +58,7 @@ export type Puesta = {
  *  persona la movió o la cambió de tamaño dentro de su pieza. */
 export type PuestaParte = { parte: number; k: number; x: number; y: number; w: number; h: number; movida: boolean };
 /** `contraste`, `copia` y `retoque` los pone `revisar.ts` (miran píxeles); los demás, el acomodo. */
-export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque" | "relleno" | "texto"; texto: string };
+export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque" | "relleno" | "texto" | "copiada"; texto: string };
 export type Acomodo = {
   familia: Familia;
   /** De abajo hacia arriba: en el orden del maestro, o en el que eligió la persona (`aplicarEdicion`). */
@@ -72,6 +73,8 @@ export type Acomodo = {
   quitadas: number[];
   /** Alguien movió o cambió de tamaño piezas a mano (`aplicarEdicion`). */
   editada?: boolean;
+  /** Lo editado se copió de otra medida (B25, `matriz.ts`): de cuál. */
+  copiadaDe?: { w: number; h: number };
   /** Piezas con una sombra suave detrás para que se lean (arreglo de contraste, `revisar.ts` + `halo.ts`). */
   sombras?: readonly number[];
 };
@@ -97,6 +100,9 @@ export type Edicion = Readonly<{
   /** Por pieza: qué textos (índices en `pieza.textos`) se quitan en ESTA medida («Quitar en esta medida»; paso 3). Lo
    *  que dicen los textos es del anuncio entero (`cambios-texto.ts`); si se ven, de cada medida. */
   sinTexto?: Readonly<Record<number, readonly number[]>>;
+  /** Copiada de otra medida (B25, `copiarEdicion`): de cuál. Si tiene otra forma que ésta, se revisa (se calcula
+   *  con las dos medidas, no se guarda: lo guardado no puede quitar el aviso). */
+  copiaDe?: Readonly<{ w: number; h: number }>;
 }>;
 export type Lado = "derecha" | "izquierda";
 /** px de la medida final que la plataforma tapa por cada borde. */
@@ -558,9 +564,10 @@ function zonaUsable(z: Partial<Zona> | undefined, W: number, H: number): { zona:
 /**
  * Lo que revisa la guía de diseño (sección 4), lo que se puede medir, sobre unas piezas ya puestas. `aMano`: las que
  * puso una persona (`aplicarEdicion`). Si encimó una de ésas, lo decidió a la vista y no se avisa; dos que no tocó se
- * revisan igual. Tampoco se avisa de la forma: alguien ya revisó esta medida.
+ * revisan igual. Tampoco se avisa de la forma: alguien ya revisó esta medida. `vistas(a, b)`: si la persona vio esas
+ * dos piezas juntas así (por omisión, si movió una de ellas AQUÍ; en una copia, ver `aplicarEdicion`).
  */
-function comprobar(ma: MaestroCaja, W: number, H: number, familia: Familia, puestas: Puesta[], quitar: ReadonlySet<number>, zona: Zona, aMano: ReadonlySet<number> = new Set()): { avisos: AvisoAcomodo[]; letras: Acomodo["letras"] } {
+function comprobar(ma: MaestroCaja, W: number, H: number, familia: Familia, puestas: Puesta[], quitar: ReadonlySet<number>, zona: Zona, aMano: ReadonlySet<number> = new Set(), vistas: (a: number, b: number) => boolean = (a, b) => aMano.has(a) || aMano.has(b)): { avisos: AvisoAcomodo[]; letras: Acomodo["letras"] } {
   const avisos: AvisoAcomodo[] = [];
   const nom = (q: Puesta) => etiquetaPieza(ma.piezas[q.pieza]);
   if (!aMano.size && familia === "igual" && razon(W, H, ma) >= PARECIDO_MAX) avisos.push({ tipo: "forma", texto: "Esta proporción todavía no tiene acomodo propio: se usó el del maestro, más chico, con cada pieza sobre su mismo lugar del fondo. Revisar." });
@@ -612,7 +619,7 @@ function comprobar(ma: MaestroCaja, W: number, H: number, familia: Familia, pues
     for (let i = 0; i < puestas.length; i++)
       for (let j = i + 1; j < puestas.length; j++) {
         const a = puestas[i], b = puestas[j];
-        if (aMano.has(a.pieza) || aMano.has(b.pieza)) continue;
+        if (vistas(a.pieza, b.pieza)) continue;
         if (Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 2 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 2) avisos.push({ tipo: "encima", texto: `${nom(a)} y ${nom(b)} se enciman.` });
       }
   const letras: Acomodo["letras"] = [];
@@ -658,7 +665,7 @@ export function leerEdicion(v: unknown, piezasDe: number | readonly { partes?: r
   const nPiezas = typeof piezasDe === "number" ? piezasDe : piezasDe.length;
   const nPartes = (i: number) => (typeof piezasDe === "number" ? 0 : (piezasDe[i]?.partes?.length ?? 0));
   const nTextos = (i: number) => (typeof piezasDe === "number" ? 0 : (piezasDe[i]?.textos?.length ?? 0));
-  const guardada = v as { piezas?: unknown; orden?: unknown; partes?: unknown; ordenPartes?: unknown; sinTexto?: unknown };
+  const guardada = v as { piezas?: unknown; orden?: unknown; partes?: unknown; ordenPartes?: unknown; sinTexto?: unknown; copiaDe?: unknown };
   const lugares = (guardada.piezas && typeof guardada.piezas === "object" ? guardada.piezas : guardada) as Record<string, unknown>;
   const indice = (n: unknown, hasta: number): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0 && n < hasta;
   const valida = (n: unknown): n is number => indice(n, nPiezas);
@@ -707,7 +714,10 @@ export function leerEdicion(v: unknown, piezasDe: number | readonly { partes?: r
     }
   const hay = (r: object) => Object.keys(r).length > 0;
   if (!hay(piezas) && !orden && !hay(partes) && !hay(ordenPartes) && !hay(sinTexto)) return null;
-  return { piezas, orden, ...(hay(partes) ? { partes } : {}), ...(hay(ordenPartes) ? { ordenPartes } : {}), ...(hay(sinTexto) ? { sinTexto } : {}) };
+  // De qué medida se copió (B25): una medida de verdad (la que acepta la lista de medidas), o nada.
+  const c = guardada.copiaDe as { w?: unknown; h?: unknown } | null | undefined;
+  const copiaDe = c && typeof c === "object" && typeof c.w === "number" && typeof c.h === "number" && medidaValida(c.w, c.h) ? { w: c.w, h: c.h } : undefined;
+  return { piezas, orden, ...(hay(partes) ? { partes } : {}), ...(hay(ordenPartes) ? { ordenPartes } : {}), ...(hay(sinTexto) ? { sinTexto } : {}), ...(copiaDe ? { copiaDe } : {}) };
 }
 
 /**
@@ -856,6 +866,12 @@ export function aplicarEdicion(ma: MaestroCaja, a: Acomodo, ed: Edicion, W: numb
   const puestas = ordenarPuestas(movidas, ed.orden);
   if (!aMano.size && puestas === movidas) return a;
   const z = zonaUsable(zona ?? undefined, W, H);
-  const r = comprobar(ma, W, H, a.familia, puestas, new Set(a.quitadas), z.zona, aMano);
-  return { ...a, puestas, letras: r.letras, avisos: [...(z.aviso ? [z.aviso] : []), ...r.avisos], editada: true };
+  // Una copia (B25): de otra forma, nadie la vio así (se revisa todo); de la misma forma, la persona vio juntas las
+  // piezas que movió, pero no junto a las del automático de AQUÍ (que puede no ser el de allá: el legal crece). En la
+  // familia «igual» `comprobar` no busca piezas encimadas: ahí lo que pide revisar una copia es el aviso «copiada».
+  const copia = ed.copiaDe, revisar = !!copia && !mismaForma(copia, { w: W, h: H });
+  const vistas = !copia ? undefined : revisar ? () => false : (i: number, j: number) => aMano.has(i) && aMano.has(j);
+  const r = comprobar(ma, W, H, a.familia, puestas, new Set(a.quitadas), z.zona, aMano, vistas);
+  const avisoCopia: AvisoAcomodo[] = copia && revisar ? [{ tipo: "copiada", texto: `Copiada de ${copia.w}×${copia.h}, con otra forma que esta medida: revisar que todo quede bien.` }] : [];
+  return { ...a, puestas, letras: r.letras, avisos: [...avisoCopia, ...(z.aviso ? [z.aviso] : []), ...r.avisos], editada: true, ...(copia ? { copiadaDe: { w: copia.w, h: copia.h } } : {}) };
 }

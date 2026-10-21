@@ -10,6 +10,7 @@ import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib
 import { writePsdBuffer } from "ag-psd";
 import { nombreDeGuia, etiquetaPieza, esNombreLegal } from "../src/lib/prisma/formatos/roles.ts";
 import { legalDelPsd, conLegal, conLegalDe, legalCabe, legalVigente, legalesParaCliente } from "../src/lib/prisma/formatos/legal.ts";
+import { hermanas, copiarEdicion } from "../src/lib/prisma/formatos/matriz.ts";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, capasDeMedida, halosEnMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
@@ -24,7 +25,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
+import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContraste } from "../src/lib/prisma/formatos/revisar.ts";
@@ -2516,6 +2517,123 @@ console.log("\n▶ B24 · el legal de la Biblioteca en todas las medidas");
     [legalesParaCliente(todos, "didi").map((gr) => [gr.marca, gr.legales.map((l) => l.id)]), legalesParaCliente(todos, "")],
     [[["Card", ["a", "a2"]], ["Préstamos", ["z"]], [null, ["glob"]]], []],
   );
+}
+
+console.log("\n▶ B25 · copiar lo editado en una medida a sus hermanas (la matriz de producción de Pedro)");
+{
+  const doce = leerMedidas(MEDIDAS_EQUIPO).medidas;
+  const k = (m) => `${m.w}x${m.h}`;
+  const de = (w, h) => hermanas({ w, h }, doce).map((t) => [k(t.m), t.modo]).sort();
+  eq(
+    "hermanas: las filas de la matriz (las dos direcciones si tienen la misma forma) y nada para las que no tienen hijas",
+    [de(1080, 1920), de(720, 1280), de(720, 1600), de(1200, 1500), de(768, 1024), de(1280, 720), de(1200, 627), de(876, 324), de(600, 500), de(320, 250), de(640, 100), de(320, 50)],
+    [[["720x1280", "igual"], ["720x1600", "estirar"]], [["1080x1920", "igual"]], [], [["768x1024", "proporcional"]], [], [["1200x627", "proporcional"]], [], [], [["320x250", "proporcional"]], [], [["320x50", "igual"]], [["640x100", "igual"]]],
+  );
+  eq("hermanas: una medida libre con la misma forma es «igual» (también desde ella); otra forma no", hermanas({ w: 540, h: 960 }, [...doce, { w: 540, h: 960 }, { w: 500, h: 960 }]).map((t) => [k(t.m), t.modo]), [["1080x1920", "igual"], ["720x1280", "igual"]]);
+
+  const sol = [{ solido: { w: 100, h: 50 } }, { solido: { w: 200, h: 100 } }];
+  const partes = { 1: { 0: { x: 0.1, y: 0.2, k: 1 } } };
+  const ed = { piezas: { 0: { x: 30, y: 60, k: 1 }, 1: { x: 500, y: 1500, k: 0.5 } }, orden: [1, 0], partes, sinTexto: { 1: [0] } };
+  const r6 = (o) => JSON.parse(JSON.stringify(o, (_, v) => (typeof v === "number" ? Math.round(v * 1e6) / 1e6 : v)));
+  const igual = copiarEdicion(ed, sol, { w: 1080, h: 1920 }, { w: 720, h: 1280 }, "igual");
+  eq(
+    "copiar «igual» (1080×1920 → 720×1280): lugar y escala × 2/3; capas, partes y textos quitados tal cual; marcada de dónde vino",
+    r6(igual),
+    r6({ piezas: { 0: { x: 20, y: 40, k: 2 / 3 }, 1: { x: 1000 / 3, y: 1000, k: 1 / 3 } }, orden: [1, 0], partes, sinTexto: { 1: [0] }, copiaDe: { w: 1080, h: 1920 } }),
+  );
+  ok("copiar: las partes (relativas a su pieza) son las mismas, no una copia", igual.partes === partes);
+  const est = copiarEdicion(ed, sol, { w: 1080, h: 1920 }, { w: 720, h: 1600 }, "estirar");
+  eq(
+    "copiar «estirar» (1080×1920 → 720×1600): escala × 2/3; lo de arriba a su distancia (× 2/3) del borde de arriba, lo de abajo a la suya del de abajo",
+    r6([est.piezas, est.copiaDe]),
+    r6([{ 0: { x: 20, y: 40, k: 2 / 3 }, 1: { x: 1000 / 3, y: 1600 - 100 / 3 - (370 * 2) / 3, k: 1 / 3 } }, { w: 1080, h: 1920 }]),
+  );
+  const pro = copiarEdicion(ed, sol, { w: 1200, h: 1500 }, { w: 768, h: 1024 }, "proporcional");
+  eq(
+    "copiar «proporcional» (1200×1500 → 768×1024): cada centro en el mismo punto relativo, escala × 0.64 (el factor menor)",
+    r6(pro.piezas[0]),
+    r6({ x: (80 / 1200) * 768 - 32, y: (85 / 1500) * 1024 - 16, k: 0.64 }),
+  );
+  eq(
+    "copiar con el HERO del otro lado en la otra medida: lo editado se refleja (x → ancho − x − ancho de la pieza), lo demás igual",
+    r6(copiarEdicion(ed, sol, { w: 640, h: 100 }, { w: 320, h: 50 }, "igual", true).piezas),
+    r6({ 0: { x: 320 - 15 - 50, y: 30, k: 0.5 }, 1: { x: 320 - 250 - 50, y: 750, k: 0.25 } }),
+  );
+  const chica = copiarEdicion({ piezas: { 0: { x: 10, y: 10, k: 0.1 } } }, sol, { w: 640, h: 100 }, { w: 320, h: 50 }, "igual").piezas[0];
+  eq(
+    `copiar: una pieza que a escala queda bajo el mínimo (${PIEZA_MIN_PX} px) se recorta a su tope ANTES de ubicarla, con su centro en el mismo lugar (aplicarEdicion ya no la mueve)`,
+    r6([chica, aplicarEdicion({ w: 640, h: 100, piezas: [{ nombre: "BRAND", rol: "BRAND", solido: { x: 0, y: 0, w: 100, h: 50 }, letraMinPx: null }] }, { familia: "banner", puestas: [{ pieza: 0, k: 0.1, x: 0, y: 0, w: 10, h: 5 }], letras: [], avisos: [], quitadas: [] }, { piezas: { 0: chica } }, 320, 50).puestas[0]]),
+    r6([{ x: 1.5, y: 3.25, k: 0.12 }, { pieza: 0, k: 0.12, x: 1.5, y: 3.25, w: 12, h: 6 }]),
+  );
+  eq("copiar «estirar»: una pieza con su centro justo en medio va con lo de arriba", r6(copiarEdicion({ piezas: { 1: { x: 0, y: 910, k: 1 } } }, sol, { w: 1080, h: 1920 }, { w: 720, h: 1600 }, "estirar").piezas[1].y), r6((910 * 2) / 3));
+  ok("copiar: una pieza que el maestro no tiene se salta", Object.keys(copiarEdicion({ piezas: { 0: { x: 1, y: 1, k: 1 }, 9: { x: 1, y: 1, k: 1 } } }, sol, { w: 100, h: 100 }, { w: 50, h: 50 }, "igual").piezas).join() === "0");
+
+  const pieza = { 0: { x: 1, y: 2, k: 0.5 } };
+  eq(
+    "leerEdicion: «copiada de» se lee si es una medida que acepta la lista (lo demás guardado ahí no se lee); rota, se ignora; sola no es una edición",
+    [
+      leerEdicion({ piezas: pieza, copiaDe: { w: 1080, h: 1920, revisar: false, x: 1 } }, 3)?.copiaDe,
+      ...[{ w: 0, h: 100 }, { w: 1.5, h: 100 }, { w: 20, h: 100 }, { w: 5000, h: 100 }, { w: "1080", h: 1920 }, null, "1080x1920"].map((c) => "copiaDe" in leerEdicion({ piezas: pieza, copiaDe: c }, 3)),
+      leerEdicion({ piezas: {}, copiaDe: { w: 1080, h: 1920 } }, 3),
+    ],
+    [{ w: 1080, h: 1920 }, false, false, false, false, false, false, false, null],
+  );
+
+  const pz = (nombre, x, y, w, h, letraMinPx = null) => ({ nombre, rol: rolDe(nombre), solido: { x, y, w, h }, letraMinPx });
+  const M45 = { nombre: "AD_4x5", w: 1200, h: 1500, piezas: [pz("FOOTER", 204, 1361, 790, 62, 16), pz("HERO", 113, 508, 788, 791), pz("CTA", 788, 856, 306, 97, 45), pz("Subtitulo", 684, 617, 383, 194, 32), pz("TITULO", 188, 238, 824, 212, 42), pz("BRAND", 364, 86, 472, 83)] };
+  const iCta = M45.piezas.findIndex((p) => p.rol === "CTA"), iHero = M45.piezas.findIndex((p) => p.rol === "HERO");
+  const base = acomodar(M45, 1200, 627), hero = base.puestas.find((q) => q.pieza === iHero);
+  // El CTA encima del HERO: movido sólo el CTA (el HERO es del automático), o movidos los dos.
+  const encima = { piezas: { [iCta]: { x: hero.x, y: hero.y, k: 0.5 } } };
+  const ambas = { piezas: { ...encima.piezas, [iHero]: { x: hero.x, y: hero.y, k: hero.k } } };
+  // De 2400×1254 = la misma forma que 1200×627; de 1280×720, otra. Lo dicen las dos medidas, no lo guardado.
+  const conCopia = (e, revisar) => aplicarEdicion(M45, base, { ...e, copiaDe: revisar ? { w: 1280, h: 720, revisar: false } : { w: 2400, h: 1254 } }, 1200, 627);
+  const [aMano, deIgual, deOtra] = [aplicarEdicion(M45, base, encima, 1200, 627), conCopia(encima, false), conCopia(encima, true)];
+  const tipos = (a) => a.avisos.map((v) => v.tipo);
+  ok(
+    "copia de otra forma: su aviso va primero y las piezas que se enciman se avisan (nadie las vio así); la hecha a mano, no",
+    tipos(deOtra)[0] === "copiada" && deOtra.avisos[0].texto.includes("1280×720") && tipos(deOtra).includes("encima") && !tipos(aMano).includes("encima"),
+    JSON.stringify([tipos(aMano), tipos(deOtra)]),
+  );
+  ok(
+    "copia de la misma forma: sin aviso de copia; una movida encima de una del automático de AQUÍ se avisa; dos movidas (vistas juntas allá), no",
+    !tipos(deIgual).includes("copiada") && tipos(deIgual).includes("encima") && !tipos(conCopia(ambas, false)).includes("encima") && tipos(conCopia(ambas, true)).includes("encima"),
+    JSON.stringify([tipos(deIgual), tipos(conCopia(ambas, false))]),
+  );
+  eq("copia: el acomodo dice de qué medida vino (la hecha a mano, no)", [deIgual.copiadaDe, deOtra.copiadaDe, aMano.copiadaDe], [{ w: 2400, h: 1254 }, { w: 1280, h: 720 }, undefined]);
+  const M33R = { nombre: "R", w: 120, h: 150, fondo: new Uint8ClampedArray(120 * 150 * 4).fill(200), piezas: [{ nombre: "CTA", rol: "CTA", caja: { x: 40, y: 110, w: 40, h: 12 }, solido: { x: 40, y: 110, w: 40, h: 12 }, letraMinPx: 6, rgba: new Uint8ClampedArray(40 * 12 * 4).fill(255), oscurece: null }] };
+  const edR = { piezas: { 0: { x: 20, y: 20, k: 0.5 } } };
+  const sinMarca = revisarMedida([M33R], 1200, 627, { edicion: edR }), marcada = revisarMedida([M33R], 1200, 627, { edicion: { ...edR, copiaDe: { w: 1280, h: 720 } } });
+  ok("revisarMedida: la misma edición copiada de otra forma no sale de la caché de la hecha a mano (trae su aviso)", !sinMarca.acomodo.avisos.some((v) => v.tipo === "copiada") && marcada.acomodo.avisos[0]?.tipo === "copiada", JSON.stringify(marcada.acomodo.avisos.map((v) => v.tipo)));
+
+  const ruta33 = join(homedir(), "Desktop/formatos-prueba/s33-BFDIRECT20CASH.psd");
+  if (!existsSync(ruta33)) console.log("  · (s33 no está en el Escritorio: no se probó la copia con el PSD real)");
+  else {
+    const d33 = leerPsd((await adelgazarPsd(new Blob([readFileSync(ruta33)]), PSD_BYTES_MAX)).datos);
+    const l33 = prepararMaestro(despiezar(d33, d33.mesas.findIndex((m) => m.w === 1200 && m.h === 1500))).maestro;
+    const iC = l33.piezas.findIndex((p) => p.rol === "CTA"), iT = l33.piezas.findIndex((p) => p.rol === "TITULO");
+    const a1920 = acomodar(l33, 1080, 1920), qC = a1920.puestas.find((q) => q.pieza === iC), qT = a1920.puestas.find((q) => q.pieza === iT);
+    const ed33 = { piezas: { [iC]: { x: qC.x + 40, y: qC.y - 60, k: qC.k }, [iT]: { x: qT.x - 20, y: qT.y + 30, k: qT.k * 1.1 } } };
+    const e1920 = aplicarEdicion(l33, a1920, ed33, 1080, 1920);
+    const llevar = (W2, H2, modo) => aplicarEdicion(l33, acomodar(l33, W2, H2), copiarEdicion(ed33, l33.piezas, { w: 1080, h: 1920 }, { w: W2, h: H2 }, modo), W2, H2);
+    const e1280 = llevar(720, 1280, "igual"), e1600 = llevar(720, 1600, "estirar");
+    const en = (a, i) => a.puestas.find((q) => q.pieza === i);
+    const veces = (q, f) => ({ k: q.k * f, x: q.x * f, y: q.y * f, w: q.w * f, h: q.h * f });
+    const sinPieza = ({ pieza, ...r }) => r;
+    eq(
+      "s33: lo editado en 1080×1920 (CTA movido, título más grande) sale en 720×1280 idéntico a 2/3, sin aviso de copia",
+      r6([sinPieza(en(e1280, iC)), sinPieza(en(e1280, iT)), e1280.avisos.some((v) => v.tipo === "copiada"), e1280.copiadaDe]),
+      r6([veces(en(e1920, iC), 2 / 3), veces(en(e1920, iT), 2 / 3), false, { w: 1080, h: 1920 }]),
+    );
+    const C = en(e1920, iC), T = en(e1920, iT), C2 = en(e1600, iC), T2 = en(e1600, iT);
+    const arriba = (q) => q.y + q.h / 2 <= 960;
+    const dist = (q, q2) => (arriba(q) ? [q2.y, q.y * (2 / 3)] : [1600 - q2.y - q2.h, (1920 - q.y - q.h) * (2 / 3)]);
+    ok(
+      `s33 720×1600 («estirar»): cada pieza a su distancia (× 2/3) del borde más cercano (CTA ${arriba(C) ? "arriba" : "abajo"}, título ${arriba(T) ? "arriba" : "abajo"}) y con su aviso de revisar`,
+      [dist(C, C2), dist(T, T2)].every(([a, b]) => Math.abs(a - b) < 1e-6) && Math.abs(C2.k - (C.k * 2) / 3) < 1e-9 && e1600.avisos[0]?.tipo === "copiada",
+      JSON.stringify([dist(C, C2), dist(T, T2), e1600.avisos.map((v) => v.tipo)]),
+    );
+  }
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);
