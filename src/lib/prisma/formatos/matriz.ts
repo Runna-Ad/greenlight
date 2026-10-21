@@ -13,22 +13,12 @@
  *     arriba se queda a la misma distancia (escalada) del borde de arriba y lo de abajo, del de abajo. Se revisa.
  */
 import { topesPieza, type Edicion, type PosicionPieza } from "./acomodo.ts";
-import { mismaForma } from "./geometria.ts";
+import { MATRIZ, mismaForma, type ModoCopia } from "./tabla-matriz.ts";
 
-export type ModoCopia = "igual" | "proporcional" | "estirar";
+export type { ModoCopia } from "./tabla-matriz.ts";
 type Lados = { w: number; h: number };
 
 const clave = (m: Lados) => `${m.w}x${m.h}`;
-
-/** La tabla: cada medida hija, su base y cómo se le copia lo editado en la base. 876×324 no tiene hermanas. */
-const MATRIZ: Readonly<Record<string, { base: string; modo: ModoCopia }>> = {
-  "720x1280": { base: "1080x1920", modo: "igual" },
-  "720x1600": { base: "1080x1920", modo: "estirar" },
-  "768x1024": { base: "1200x1500", modo: "proporcional" },
-  "1200x627": { base: "1280x720", modo: "proporcional" },
-  "320x250": { base: "600x500", modo: "proporcional" },
-  "320x50": { base: "640x100", modo: "igual" },
-};
 
 /**
  * A qué medidas (de `activas`) se le ofrece copiar lo editado en `de`, y cómo: las de la misma forma (las dos

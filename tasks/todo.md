@@ -1197,9 +1197,67 @@ largo: estacionado por él.
           «copiada». Una copia reflejada de la misma forma (sólo pasa con medidas libres horizontales) no se marca
           «revisar». «Copiada de» no se actualiza si después se edita la de origen sin marcar la copia. Los avisos de
           Sonner salen sin `lang` en inglés (todos los de la página, no sólo éstos). «Deshacer la copia» vive 10 s.
-- [ ] B26. «Comportamiento» de la matriz en el acomodo AUTOMÁTICO (Pedro, 2026-10-21: "yes i do want the
+- [x] B26. «Comportamiento» de la matriz en el acomodo AUTOMÁTICO (Pedro, 2026-10-21: "yes i do want the
       comportamiento thing"). Primero una comparación del acomodo de hoy contra cada fila (con s33), luego opciones a
-      Pedro para las filas que no coincidan. **Next Step:** llevarle a Pedro las opciones (comparación hecha).
+      Pedro para las filas que no coincidan.
+      **Decisiones de Pedro (2026-10-21), opción 2 ("yes with your recommendation"):**
+      1. Legal: "you shouod be able to expand the legals like if they are normally 3 lines reduced to 2 lines or even
+         one in the long banners" → el legal sigue lo más legible posible (como hoy) y, en anchas y banners, se puede
+         volver a acomodar en menos renglones. Investigación aparte (agente), con opciones a Pedro.
+      2. HERO en 768×1024 y altura extra en 720×1600: "middle point as long as it looks good" → a la mitad entre el
+         acomodo de B13 (cada pieza en su lugar del fondo) y el de la tabla (bloque de arriba arriba, legal abajo, el
+         HERO crece con la altura extra).
+      3. 876×324: "whatever comes from the script takes precedence and if its different from the table have a warning
+         saying that but leave it to the designer to choose" → se queda el orden del script, con un aviso.
+      4. 320×50: "follow the table" → la mitad exacta de 640×100 (deja sin efecto «320×50 se queda igual» de B8).
+      **Next Step:** hecho; falta que Pedro lo pruebe en la preview de `prisma` y elija cómo seguir con el legal (A/B/C).
+      - [x] 1. 876×324 (familia ancha): aviso «la matriz pide texto · HERO · beneficios+CTA; este sigue el script»
+            (no sale si la persona ya la editó).
+      - [x] 2. Más alta que su maestro (familia «igual»: 768×1024, 720×1600; y las 9:16 cuando el PSD sólo trae 4:5):
+            el acomodo de la tabla (arriba / HERO / abajo; el HERO toma la altura extra hasta ×1.5 y sin pasar de sus
+            píxeles) mezclado a la mitad con el de hoy. El aviso de «forma» dice lo que se hizo.
+      - [x] 3. Medidas que la matriz saca a escala de otra (320×50 ← 640×100; 720×1280 ← 1080×1920): si el maestro no
+            tiene su forma, su acomodo es el de la base × el factor, y el legal crece si cabe sin tocar a nadie.
+      - [x] 4. Pruebas · tsc · eslint · npm test · build · revisión · navegador y hojas de contacto con s33 y AP.
+      **Review B26 (2026-10-21):**
+        - Hecho: la tabla vive en `tabla-matriz.ts` (sin imports; la leen `acomodo.ts` y `matriz.ts`). 720×1280 y 320×50
+          salen de su base × el factor cuando el maestro no tiene su forma (`aEscala`), con una nota gris. Más alta que
+          su mesa (768×1024, 720×1600, 1080×1920 desde un 4:5): `acomodoAlto` (bloque de arriba arriba, legal abajo, el
+          HERO crece con su pie fijo en su punto del fondo, hasta ×1.5 y sin pasar de ×1.25 sus píxeles), mezclado a la
+          mitad con B13. 876×324: nota «distinto de la matriz… como el script del equipo» (se voltea con el lado del
+          HERO; se va al editarla). Las notas (`esNota`) no cuentan en tarjeta, resumen ni editor.
+        - Hojas de contacto antes/después (s33 y APGIANTCARDUGC 2, scratchpad b26/ y b26/despues/): HERO ×1.12 en AP
+          720×1600, ×1.055 en AP 768×1024; tarjeta de s33 ×1.19 en 1080×1920, ×1.25 en 720×1600, ×1.09 en 768×1024.
+          Las demás medidas, sin cambio. Repetido después de los últimos arreglos: las 12 medidas de los 2 PSD, iguales.
+        - 320×50 = 640×100 × 0.5, como pidió Pedro: las letras quedan más chicas (s33: título 7.8 → 3.9 px, legal 5.9 →
+          3.5 px; AP: título 5.1, subtítulo 5.0, legal 3.5). Dicho a Pedro una vez con la alternativa.
+        - Navegador (localhost, sesión de Pedro, s33, 1440×900 y 1280×800): nota gris en 720×1600; 876×324 con su
+          «Aviso común» y la nota; el resumen pasa de 7 a 6 «para revisar»; el editor de 320×50 abre; 0 errores en
+          consola después de la marca. Pruebas: formatos 523/0, prisma 975/0, npm test y build verdes.
+        - Arreglado de la revisión (5 pasadas + 2.ª vuelta de código): el HERO se salía 69 px de su punto (pie fijo);
+          crecía poco (tope de píxeles 1.25); una búsqueda podía dar k negativo; posible recursión (`acomodarPropio`);
+          la nota contaba como defecto en cada 876×324 (ahora nota, sólo en 876×324, con el lado correcto); zonas de los
+          lados ignoradas; reparto del aire muerto; helpers duplicados; el legal podía crecer más alto que el área;
+          editar sólo el orden borraba las notas; el texto decía que la matriz se aplicaba a cualquier medida más alta;
+          una prueba negativa que nunca podía fallar (/más alta/ sin /i); el legal usa `mayor`; el grupo del HERO guarda
+          el aire de abajo como el de arriba; sin nada arriba, el tope es el margen del maestro o la zona.
+        - No arreglado (dicho): el legal en menos renglones espera la decisión de Pedro (A/B/C abajo). `capasDeMedida`
+          en nítido no se protege de k ≤ 0 (de antes; hoy no se llega). `crecerPie` parte del tamaño ya puesto, así que
+          con zona segura el legal puede salir algo más grande que antes (más legible: la regla del legal). Las dos
+          copias de `entre` en las ediciones son de antes de B26. Los avisos de Sonner siguen sin `lang`.
+      **Investigación del legal en menos renglones (2026-10-21, agente opus, sólo lectura; scripts en el scratchpad
+      b26-legal/):** el legal es texto de caja (DiDiSans-Pro-Medium 16 px, 205 letras, 3 renglones) con saltos suaves del
+      diseñador (U+0003, que `textoDe` vuelve "\n"), en su propia capa dentro de FOOTER junto a los iconos de las
+      tiendas. Hoy los renglones se deciden una vez, a la escala del maestro (`maquetar`); ninguna medida re-acomoda.
+      Ganancia estimada con las medidas de la tipografía real (sin dibujarla): 876×324 12.5 → 14.8 px (2 renglones),
+      640×100 6.2 → 11.0 px (2, deja de marcarse), 320×50 3.1 → 5.5 px (sigue marcado); 1280×720 y 1200×627 ya están al
+      tope. Un solo renglón nunca gana (~1,480 px de largo). Los iconos tienen que achicarse con el legal o no se gana
+      nada. Sin la tipografía del cliente no se puede (queda como hoy y se dice). Opciones A (banners, M), B (todas las
+      anchas + elegir renglones en el editor, L), C (sin tipografía, cortando los píxeles en palabras: adivina). Su
+      recomendación: A.
+      **Verificación:** 720×1600 (AP y s33): el bloque de arriba más cerca de arriba que hoy, el legal más abajo, el
+      HERO más grande que hoy y sin encimarse; 768×1024: HERO ~×1.06; 876×324 con su aviso; 320×50 = 640×100 × 0.5
+      (salvo el legal); las 6 que ya coincidían, sin cambio.
       **Comparación (2026-10-21, agente opus, sin cambios al repo; s33 y APGIANTCARDUGC 2, que sí trae 9:16 y 4:5
       visibles; scripts y 24 renders en el scratchpad de la sesión, b26/):**
       - Coinciden: 1080×1920 (AP; s33 no tiene 9:16 visible), 1200×1500, 1280×720, 1200×627, 600×500 (estructura),

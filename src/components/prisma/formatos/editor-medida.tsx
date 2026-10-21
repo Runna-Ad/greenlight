@@ -1,26 +1,12 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { AlertTriangle, Check, ChevronDown, ChevronUp, FolderClosed, FolderOpen, RotateCcw } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronUp, FolderClosed, FolderOpen, Info, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
-import {
-  aplicarEdicion,
-  cambiadasDeCapa,
-  leerEdicion,
-  ordenDePartes,
-  ordenarPuestas,
-  parteSinTocar,
-  ponerPartes,
-  topesParte,
-  topesPieza,
-  RELLENO_AVISO_PCT,
-  type Acomodo,
-  type Edicion,
-  type Zona,
-} from "@/lib/prisma/formatos/acomodo";
+import { aplicarEdicion, cambiadasDeCapa, leerEdicion, ordenDePartes, ordenarPuestas, parteSinTocar, ponerPartes, topesParte, topesPieza, RELLENO_AVISO_PCT, type Acomodo, type Edicion, type Zona, esNota } from "@/lib/prisma/formatos/acomodo";
 import { armarFondo, armarMedida, type TextoEscrito } from "@/lib/prisma/formatos/nitido";
 import { avisosDePixeles } from "@/lib/prisma/formatos/revisar";
 import { etiquetaPieza } from "@/lib/prisma/formatos/roles";
@@ -245,6 +231,10 @@ export function EditorMedida({
       return a;
     }
   }, [ma, auto, edicion, copiaDe, W, H, zona]);
+  // Las notas de la matriz (B26) salen del automático: se quedan a la vista mientras se acomoda (dicen lo que pidió la
+  // matriz), y no cuentan como avisos.
+  const avisosEditor = useMemo(() => editado.avisos.filter((v) => !esNota(v)), [editado]);
+  const notasEditor = useMemo(() => auto.avisos.filter(esNota), [auto]);
   const tira = W / H >= TIRA;
   /** El ancho de la vista en pantalla: lo más grande que cabe en el marco con la forma de la medida. Sale de una sola
    *  medición (la del marco): con dos, el primer cuadro se pintaba al tamaño equivocado y luego otra vez. */
@@ -626,7 +616,7 @@ export function EditorMedida({
     }) + rellenar(tx(FP.editorCapa, lang), { n: capaDe(sel) + 1, m: capas.length });
   })();
   // Lo que oye el lector de pantalla: lo mismo más cuántos avisos hay, medio segundo después del último cambio.
-  const dicho = estado && estado + rellenar(tx(FP.editorAvisosN, lang), { n: editado.avisos.length });
+  const dicho = estado && estado + rellenar(tx(FP.editorAvisosN, lang), { n: avisosEditor.length });
   useEffect(() => {
     const t = setTimeout(() => setAnuncio(dicho), ANUNCIO_MS);
     return () => clearTimeout(t);
@@ -1078,15 +1068,28 @@ export function EditorMedida({
             )}
             <div className="rounded-lg border border-border bg-secondary/50 p-2">
               <h3 className="text-xs font-semibold text-foreground">{tx(FP.editorAvisos, lang)}</h3>
-              {editado.avisos.length ? (
+              {avisosEditor.length ? (
                 // Los avisos los escribe el motor, en español.
                 <ul lang={lang === "en" ? "es" : undefined} className="mt-1 list-disc space-y-0.5 pl-5 text-foreground">
-                  {editado.avisos.map((v, i) => (
+                  {avisosEditor.map((v, i) => (
                     <li key={i}>{v.texto}</li>
                   ))}
                 </ul>
               ) : (
                 <p className="mt-1 text-muted-foreground">{tx(FP.editorSinAvisos, lang)}</p>
+              )}
+              {notasEditor.length > 0 && (
+                <ul lang={lang === "en" ? "es" : undefined} className="mt-1.5 space-y-0.5 text-muted-foreground">
+                  {notasEditor.map((v, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                      <span className="min-w-0">
+                        <span lang={lang} className="sr-only">{tx(FP.nota, lang)}</span>
+                        {v.texto}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>

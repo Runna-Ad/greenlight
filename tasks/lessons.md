@@ -1343,3 +1343,16 @@ TAGS: #formatos #b25 #topes #revision
 RULE: medir el acomodo de un diálogo después de su animación (esperar ~1 s o volver a medir hasta que dos lecturas coincidan) antes de concluir algo de su tamaño.
 TAGS: #navegador #medir-antes-de-decir #radix #formatos
 
+[2026-10-21] LESSON (repetido: una nota informativa no es un aviso; decidir qué hace la persona con cada tipo ANTES de mostrarlo): en B26 el aviso «la matriz pide otro orden; manda el script» entró como un aviso más: cada 876×324 perdía su «Listo», sumaba a «N para revisar» y el lector de pantalla lo anunciaba, en TODOS los PSD, sin nada que arreglar. Lo vio la pasada de UX. Es la misma lección del 2026-10-20 (agrupar avisos por la acción que piden), que la memoria del cerebro me mostró en esta sesión.
+ROOT CAUSE: agregué un tipo nuevo al arreglo de avisos sin pasar por la pregunta "¿esto lo tiene que revisar alguien en cada medida?".
+RULE: cada tipo nuevo de aviso se clasifica al crearlo: para revisar (cuenta, ámbar), común (se arregla una vez) o nota (gris, no cuenta). Una sola regla exportada (`esNota`) para tarjeta, resumen y editor, y una prueba de que no cuenta.
+TAGS: #formatos #avisos #ux #repetido #b26
+
+[2026-10-21] LESSON (una prueba negativa con un patrón que nunca coincide pasa por la razón equivocada): `!avisos.some((v) => /más alta/.test(v.texto))` pasaba siempre porque el texto empieza con «Más» (mayúscula). Lo noté al cambiar el texto; la prueba no probaba nada.
+RULE: toda prueba de "no aparece X" va junto a una de "sí aparece X" en el caso que debe tenerlo (aquí: 768×1024 sí lleva la nota), y los patrones de texto con /i.
+TAGS: #pruebas #regex #formatos
+
+[2026-10-21] LESSON (en una medida más alta el fondo cubre justo a lo alto: el pie del HERO no se puede mover): mi primer acomodo de la tabla repartía el aire arriba y abajo del HERO, pero con kb = H / alto del maestro el fondo no tiene margen vertical y el pie queda fijo; el reparto era código muerto y el HERO podía quedar pegado al título. Las pruebas de B13 lo agarraron a medias (la tarjeta salía 69 px fuera de su punto antes de fijar el pie) y la pasada de código lo explicó.
+RULE: antes de diseñar dónde va una pieza anclada al fondo, calcular cuánto margen tiene el fondo en cada eje (W − ma.w·kb, H − ma.h·kb); el eje sin margen fija la pieza, y el crecimiento va hacia el otro lado con un aire mínimo.
+TAGS: #formatos #acomodo #b26 #b13 #geometria
+

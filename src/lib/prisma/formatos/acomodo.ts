@@ -14,7 +14,8 @@
  */
 import type { Caja, Rol } from "./psd.ts";
 import { etiquetaPieza } from "./roles.ts";
-import { medidaValida, mismaForma } from "./geometria.ts";
+import { medidaValida } from "./geometria.ts";
+import { baseAEscala, DISTINTO_DEL_SCRIPT, mismaForma } from "./tabla-matriz.ts";
 
 /** Lo que el acomodo necesita de una pieza (PiezaPsd lo cumple). `caja`: todo lo que pinta, con sombras (frena lo
  *  grande que se deja a mano). */
@@ -57,8 +58,12 @@ export type Puesta = {
 /** Una parte colocada: índice en `pieza.partes`, su escala y la caja de su parte sólida en la medida final. `movida`: la
  *  persona la movió o la cambió de tamaño dentro de su pieza. */
 export type PuestaParte = { parte: number; k: number; x: number; y: number; w: number; h: number; movida: boolean };
-/** `contraste`, `copia` y `retoque` los pone `revisar.ts` (miran píxeles); los demás, el acomodo. */
-export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque" | "relleno" | "texto" | "copiada"; texto: string };
+/** `contraste`, `copia` y `retoque` los pone `revisar.ts` (miran píxeles); los demás, el acomodo. `matriz` es una nota
+ *  (qué pide la matriz de producción y qué se hizo): se ve en gris y no cuenta como algo que revisar. */
+export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque" | "relleno" | "texto" | "copiada" | "matriz"; texto: string };
+/** Una nota de la matriz (qué pidió y qué se hizo): la tarjeta, el resumen y el editor la muestran en gris y no la
+ *  cuentan como algo que revisar. Una sola regla para los tres. */
+export const esNota = (a: AvisoAcomodo): boolean => a.tipo === "matriz";
 export type Acomodo = {
   familia: Familia;
   /** De abajo hacia arriba: en el orden del maestro, o en el que eligió la persona (`aplicarEdicion`). */
@@ -153,6 +158,42 @@ const PIE_MAS = [1.5, 2, 2.5];
 const CORTE_MAX = 0.7;
 /** Cuántos tamaños de "más lugar al texto" se prueban entre el acomodo del equipo (0) y el máximo (1). */
 const PASOS_TEXTO = 10;
+/**
+ * Más alta que su maestro (B26, la matriz de producción: 768×1024 "hero gana presencia"; 720×1600 "mantener bloque
+ * superior, altura extra en hero/aire, legales hacia zona inferior"): desde esta diferencia de forma (|ln| de la razón)
+ * se arma también el acomodo de la tabla (`acomodoAlto`).
+ */
+const ALTA_MIN = 0.02;
+/** Pedro, 2026-10-21: "middle point as long as it looks good": a la mitad entre el de B13 (0: cada pieza sobre su
+ *  lugar del fondo, "they should look like the 1200x1500") y el de la tabla (1). */
+const ALTA_MEZCLA = 0.5;
+/** En el de la tabla, lo más que crece el HERO respecto a las demás piezas. */
+const HERO_CRECE_MAX = 1.5;
+/** ...y lo más grande respecto a sus píxeles del PSD (las horizontales ya lo llevan a ×1.31; más se ve borroso). */
+const HERO_PX_MAX = 1.25;
+/** Una pieza que tapa al menos esto de su área con el HERO va con él (el botón sobre la tarjeta). */
+const CON_HERO_MIN = 0.25;
+
+/** El valor más grande entre lo y hi que todavía cumple (lo cumple, hi no). */
+function mayor(cumple: (t: number) => boolean, lo: number, hi: number): number {
+  for (let n = 0; n < 30; n++) {
+    const t = (lo + hi) / 2;
+    if (cumple(t)) lo = t;
+    else hi = t;
+  }
+  return lo;
+}
+/** El valor más chico entre lo y hi que todavía cumple (hi cumple, lo no). */
+function menor(cumple: (t: number) => boolean, lo: number, hi: number): number {
+  for (let n = 0; n < 30; n++) {
+    const t = (lo + hi) / 2;
+    if (cumple(t)) hi = t;
+    else lo = t;
+  }
+  return hi;
+}
+/** El fondo a escala z, corrido hacia (x, y) sólo lo que deje que siga cubriendo la medida. */
+const cubrir = (ma: { w: number; h: number }, W: number, H: number, z: number, x: number, y: number): { k: number; x: number; y: number } => ({ k: z, x: Math.min(0, Math.max(W - ma.w * z, x)), y: Math.min(0, Math.max(H - ma.h * z, y)) });
 
 const razon = (W: number, H: number, ma: { w: number; h: number }) => Math.abs(Math.log(W / H / (ma.w / ma.h)));
 
@@ -313,24 +354,6 @@ function anclarAlFondo(ps: Suelta[], k0: number, kb: number, r: Rect, ref: { x: 
   // Donde `ref` sigue sobre su punto con el fondo a escala z: el fondo se corre lo que le sobra y sigue cubriendo.
   const enSuPunto = (z: number): Rect => ({ x0: W - ma.w * z + z * ref.x, x1: z * ref.x, y0: H - ma.h * z + z * ref.y, y1: z * ref.y });
   const fijo = (t: number, kk = k0, z = kb) => cruce(rango(t, kk), enSuPunto(z));
-  // El valor más grande entre lo y hi que todavía cumple (lo cumple, hi no).
-  const mayor = (cumple: (t: number) => boolean, lo: number, hi: number) => {
-    for (let n = 0; n < 30; n++) {
-      const t = (lo + hi) / 2;
-      if (cumple(t)) lo = t;
-      else hi = t;
-    }
-    return lo;
-  };
-  // El valor más chico entre lo y hi que todavía cumple (hi cumple, lo no).
-  const menor = (cumple: (t: number) => boolean, lo: number, hi: number) => {
-    for (let n = 0; n < 30; n++) {
-      const t = (lo + hi) / 2;
-      if (cumple(t)) hi = t;
-      else lo = t;
-    }
-    return hi;
-  };
   const kMin = k0 * ZONA_ACHICA_MAX;
   // Lo más grande que caben las piezas juntas (como las dejó el diseñador) fuera de la zona; null si ni a kMin.
   const kCabe = rango(k0, k0) ? k0 : rango(kMin, kMin) ? mayor((t) => !!rango(t, t), kMin, k0) : null;
@@ -352,7 +375,135 @@ function anclarAlFondo(ps: Suelta[], k0: number, kb: number, r: Rect, ref: { x: 
     const w = p.solido.w * k, h = p.solido.h * k;
     return { pieza: i, k, x: X + s * d[n].dx - w / 2, y: Y + s * d[n].dy - h, w, h };
   });
-  return { puestas, fondo: { k: z, x: Math.min(0, Math.max(W - ma.w * z, X - z * ref.x)), y: Math.min(0, Math.max(H - ma.h * z, Y - z * ref.y)) } };
+  return { puestas, fondo: cubrir(ma, W, H, z, X - z * ref.x, Y - z * ref.y) };
+}
+
+/** ¿Se arma el acomodo de la tabla para una medida más alta (`acomodoAlto`)? */
+const esAlta = (W: number, H: number, ma: { w: number; h: number }) => W / H < ma.w / ma.h && razon(W, H, ma) >= ALTA_MIN;
+
+/**
+ * El acomodo de la tabla para una medida más alta que su maestro, con las piezas a la escala `k` del maestro (cabe a lo
+ * ancho): lo de arriba del HERO a su distancia (× k) del borde de arriba; el legal y lo de abajo, a la suya del de
+ * abajo; el HERO (con lo que tiene encima, como el botón sobre la tarjeta) crece hacia arriba desde su pie, hasta
+ * HERO_CRECE_MAX y HERO_PX_MAX, sin comerse el aire que el diseñador dejó sobre él (× k). El pie no se mueve: en una
+ * medida más alta el fondo cubre justo a lo alto (kb = H / ma.h), así que el pie va sobre su punto (B13: la tarjeta no
+ * flota); a lo ancho el fondo sobra y el grupo se centra como en el maestro. `r`: dónde pueden ir (la zona del canal
+ * fuera, también a los lados). null si algo no cabe (se queda el acomodo de siempre).
+ */
+function acomodoAlto(ps: Suelta[], hero: Suelta, k: number, kb: number, r: Rect, ma: { w: number; h: number }, W: number, H: number): { puestas: Puesta[]; fondo: Acomodo["fondo"] } | null {
+  const hs = hero.p.solido;
+  const conHero = (c: Caja) => (Math.max(0, Math.min(c.x + c.w, hs.x + hs.w) - Math.max(c.x, hs.x)) * Math.max(0, Math.min(c.y + c.h, hs.y + hs.h) - Math.max(c.y, hs.y))) / (c.w * c.h) >= CON_HERO_MIN;
+  const grupo = (s: Suelta) => (s.i === hero.i ? "hero" : s.p.rol === "FOOTER" ? "abajo" : conHero(s.p.solido) ? "hero" : s.p.solido.y + s.p.solido.h / 2 < hs.y + hs.h / 2 ? "arriba" : "abajo");
+  const arriba = ps.filter((s) => grupo(s) === "arriba"), abajo = ps.filter((s) => grupo(s) === "abajo"), centro = ps.filter((s) => grupo(s) === "hero");
+  const ox = (W - ma.w * k) / 2;
+  const x0 = Math.min(...centro.map((s) => s.p.solido.x)), y0 = Math.min(...centro.map((s) => s.p.solido.y));
+  const G = { x: x0, y: y0, w: Math.max(...centro.map((s) => s.p.solido.x + s.p.solido.w)) - x0, h: Math.max(...centro.map((s) => s.p.solido.y + s.p.solido.h)) - y0 };
+  // El aire que el diseñador dejó entre el grupo del HERO y lo de arriba y lo de abajo: se conserva (× k), para que no
+  // queden pegados al crecer.
+  const finArriba = arriba.length ? Math.max(...arriba.map((s) => s.p.solido.y + s.p.solido.h)) : 0;
+  const inicioAbajo = abajo.length ? Math.min(...abajo.map((s) => s.p.solido.y)) : ma.h;
+  const aire = Math.max(0, G.y - finArriba) * k, aireAbajo = Math.max(0, inicioAbajo - G.y - G.h) * k;
+  // Arriba: a su distancia del borde de arriba (bajando si la zona lo pide); abajo: a la suya del de abajo (subiendo).
+  const dyA = arriba.length ? Math.max(0, r.y0 - Math.min(...arriba.map((s) => s.p.solido.y * k))) : 0;
+  const dyB = abajo.length ? Math.min(0, r.y1 - Math.max(...abajo.map((s) => H - (ma.h - s.p.solido.y - s.p.solido.h) * k))) : 0;
+  const puesta = (s: Suelta, kk: number, x: number, y: number): Puesta => ({ pieza: s.i, k: kk, x, y, w: s.p.solido.w * kk, h: s.p.solido.h * kk });
+  const puestasA = arriba.map((s) => puesta(s, k, ox + s.p.solido.x * k, s.p.solido.y * k + dyA));
+  const puestasB = abajo.map((s) => puesta(s, k, ox + s.p.solido.x * k, H - (ma.h - s.p.solido.y) * k + dyB));
+  // Una zona a los lados (TikTok, Reels) no se pisa: lo de arriba y lo de abajo van como en el maestro, sin correrse.
+  const enZona = (q: Puesta) => (r.x0 > 0 && q.x < r.x0 - 1e-6) || (r.x1 < W && q.x + q.w > r.x1 + 1e-6);
+  if ([...puestasA, ...puestasB].some(enZona)) return null;
+  const T = puestasA.length ? Math.max(...puestasA.map((q) => q.y + q.h)) : Math.max(0, r.y0);
+  const B = puestasB.length ? Math.min(...puestasB.map((q) => q.y)) : Math.min(H, r.y1);
+  const ref = { x: hs.x + hs.w / 2, y: hs.y + hs.h };
+  const py = ref.y * kb;
+  // Hasta dónde puede subir el grupo: el aire de arriba bajo lo de arriba; sin nada arriba, su margen del maestro (o la
+  // zona, si tapa más). Y hasta dónde bajar: el aire de abajo sobre lo de abajo, sin pedir más del que ya hay a escala k.
+  const techo = arriba.length ? T + aire : Math.max(r.y0, G.y * k);
+  const piso = B - Math.min(aireAbajo, Math.max(0, B - (py - (ref.y - G.y) * k + G.h * k)));
+  const lugar = (kh: number) => {
+    // El grupo centrado como en el maestro, con el pie corrido sólo hasta donde el fondo alcanza a poner su punto.
+    const px = Math.max(W - (ma.w - ref.x) * kb, Math.min(ref.x * kb, ox + (G.x + G.w / 2) * k + (ref.x - G.x - G.w / 2) * kh));
+    const gx = px - (ref.x - G.x) * kh, gy = py - (ref.y - G.y) * kh;
+    const cabe = kh > 0 && [gx, gy, px].every(Number.isFinite) && gy >= techo - 1e-6 && gy + G.h * kh <= piso + 1e-6 && gx >= r.x0 - 1e-6 && gx + G.w * kh <= r.x1 + 1e-6;
+    return cabe ? { gx, gy, px } : null;
+  };
+  // El HERO nunca queda más chico que las demás piezas (k): si ni a k cabe, se queda el acomodo de siempre.
+  if (!(k > 0) || !lugar(k)) return null;
+  const khMax = Math.min(k * HERO_CRECE_MAX, Math.max(k, HERO_PX_MAX), (r.x1 - r.x0) / G.w);
+  const kh = !(khMax > k) ? k : lugar(khMax) ? khMax : mayor((t) => !!lugar(t), k, khMax);
+  const en = lugar(kh);
+  if (!en) return null;
+  const puestasH = centro.map((s) => puesta(s, kh, en.gx + (s.p.solido.x - G.x) * kh, en.gy + (s.p.solido.y - G.y) * kh));
+  const fondo = { k: kb, x: en.px - ref.x * kb, y: py - ref.y * kb };
+  const todas = [...puestasA, ...puestasH, ...puestasB];
+  if (!todas.every((q) => q.k > 0 && [q.x, q.y, q.w, q.h].every(Number.isFinite)) || ![fondo.x, fondo.y].every(Number.isFinite)) return null;
+  return { puestas: ps.map((s) => todas.find((q) => q.pieza === s.i)!), fondo };
+}
+
+/**
+ * El pie recupera lo que la reducción le quitó: crece sobre su mismo borde de abajo y su mismo centro, hasta el ancho
+ * útil, y nunca más grande de como lo dejó el diseñador (a la medida del maestro no se mueve nada: el original es
+ * intocable). Tampoco se arrima a otra pieza: se prueba cada tamaño contra TODAS, no sólo la de arriba. Cambia `puestas`.
+ */
+function crecerPie(puestas: Puesta[], pieF: Suelta, area: Rect, hueco: number): void {
+  const pf = puestas.find((q) => q.pieza === pieF.i);
+  if (!pf) return;
+  const k = pf.k, abajo = pf.y + pf.h, centro = pf.x + pf.w / 2, aire = hueco * 0.5;
+  const crecido = (kf: number) => {
+    const w = pieF.p.solido.w * kf, h = pieF.p.solido.h * kf;
+    return { k: kf, w, h, x: Math.max(area.x0, Math.min(centro - w / 2, area.x1 - w)), y: abajo - h };
+  };
+  const choca = (r: { x: number; y: number; w: number; h: number }) => puestas.some((q) => q !== pf && q.x < r.x + r.w + aire && q.x + q.w > r.x - aire && q.y < r.y + r.h && q.y + q.h > r.y - aire);
+  const hi = Math.min((area.x1 - area.x0) / pieF.p.solido.w, (abajo - area.y0) / pieF.p.solido.h, 1);
+  // Si ya viene pegado a otra pieza (así lo quiso el diseñador), ningún tamaño mayor pasa la prueba y se queda igual.
+  if (hi <= k) return;
+  const kf = choca(crecido(hi)) ? mayor((t) => !choca(crecido(t)), k, hi) : hi;
+  if (kf > k) Object.assign(pf, crecido(kf));
+}
+
+/** El área útil de una medida: menos la zona segura y un margen (el mismo de `acomodarSin`), y el hueco entre piezas. */
+function areaDe(W: number, H: number, zona: Zona): { area: Rect; m: number; hueco: number } {
+  const m = Math.round(Math.min(H * 0.07, W * 0.045));
+  return { m, hueco: Math.round(H * 0.035), area: { x0: zona.left + m, x1: W - zona.right - m, y0: zona.top + m, y1: H - zona.bottom - Math.round(m * 0.6) } };
+}
+
+/**
+ * Una medida que la matriz saca a escala directa de otra (B26, Pedro 2026-10-21: 320×50 "follow the table" = 640×100 ×
+ * 0.5; 720×1280 = 1080×1920 × 2/3) cuando el maestro no tiene su forma: el acomodo de la base, todo × el factor. El
+ * legal después crece lo que quepa sin tocar a nadie (la regla del legal: lo más legible posible). Se revisa igual.
+ */
+function aEscala(ma: MaestroCaja, base: { w: number; h: number }, W: number, H: number, op: OpcionesAcomodo): Acomodo {
+  const f = W / base.w, z = op.zona;
+  // Sin volver a buscar base: una base que a su vez saliera de otra (o de sí misma) daría vueltas para siempre.
+  const b = acomodarPropio(ma, base.w, base.h, { ...op, zona: z ? { top: z.top / f, right: z.right / f, bottom: z.bottom / f, left: z.left / f } : undefined });
+  const { zona, aviso } = zonaUsable(op.zona, W, H);
+  const puestas = b.puestas.map((q) => ({ ...q, k: q.k * f, x: q.x * f, y: q.y * f, w: q.w * f, h: q.h * f }));
+  const pie = ma.piezas.findIndex((p, i) => p.rol === "FOOTER" && puestas.some((q) => q.pieza === i));
+  if (pie >= 0) {
+    const { area, hueco } = areaDe(W, H, zona);
+    crecerPie(puestas, { i: pie, p: ma.piezas[pie] }, area, hueco);
+  }
+  const zf = b.fondo.k * f;
+  const fondo = cubrir(ma, W, H, zf, b.fondo.x * f, b.fondo.y * f);
+  const quitar = new Set(b.quitadas);
+  const revision = comprobar(ma, W, H, b.familia, puestas, quitar, zona);
+  // El aviso de forma de la base (el de una medida más alta dice lo que se hizo) en vez del genérico.
+  const deBase = b.avisos.find((v) => v.tipo === "forma");
+  const avisos = revision.avisos.map((v) => (v.tipo === "forma" && deBase ? deBase : v));
+  const nota: AvisoAcomodo = { tipo: "matriz", texto: `Sale de ${base.w}×${base.h} a escala exacta, como pide la matriz de producción: las letras quedan más chicas (el legal crece si cabe).` };
+  return { familia: b.familia, puestas, fondo, letras: revision.letras, avisos: [...(aviso ? [aviso] : []), ...avisos, nota], quitadas: b.quitadas };
+}
+
+/** A `t` del camino entre dos acomodos de las mismas piezas (lugar y escala de cada una, y el fondo, que sigue cubriendo). */
+function mezclar(a: { puestas: Puesta[]; fondo: Acomodo["fondo"] }, b: { puestas: Puesta[]; fondo: Acomodo["fondo"] }, t: number, ma: MaestroCaja, W: number, H: number): { puestas: Puesta[]; fondo: Acomodo["fondo"] } {
+  const hacia = (x: number, y: number) => x + t * (y - x);
+  const puestas = a.puestas.map((p) => {
+    const q = b.puestas.find((x) => x.pieza === p.pieza);
+    if (!q) return p;
+    const k = hacia(p.k, q.k), s = ma.piezas[p.pieza].solido;
+    return { pieza: p.pieza, k, x: hacia(p.x, q.x), y: hacia(p.y, q.y), w: s.w * k, h: s.h * k };
+  });
+  return { puestas, fondo: cubrir(ma, W, H, hacia(a.fondo.k, b.fondo.k), hacia(a.fondo.x, b.fondo.x), hacia(a.fondo.y, b.fondo.y)) };
 }
 
 /** Espejo horizontal de un rectángulo dentro de [a0, a1]. */
@@ -362,6 +513,14 @@ const espejo = (r: Rect, a0: number, a1: number): Rect => ({ ...r, x0: a0 + a1 -
 const letraDe = (a: Acomodo, de: (i: number) => boolean) => Math.min(Infinity, ...a.letras.filter((l) => de(l.pieza)).map((l) => l.px));
 
 export function acomodar(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo = {}): Acomodo {
+  // La matriz la saca a escala de otra medida y el maestro no tiene su forma (con su forma, el maestro ya manda).
+  const base = baseAEscala(W, H);
+  if (base && mismaForma(base, { w: W, h: H }) && !mismaForma(ma, { w: W, h: H })) return aEscala(ma, base, W, H, op);
+  return acomodarPropio(ma, W, H, op);
+}
+
+/** El acomodo de la medida por sí misma (sin sacarla a escala de otra). */
+function acomodarPropio(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo): Acomodo {
   // El legal va en su propia franja (no gana nada con ensanchar el texto ni con quitar el subtítulo): se mide aparte.
   const texto = (i: number) => ma.piezas[i]?.rol !== "FOOTER";
   const delPie = (x: Acomodo) => letraDe(x, (i) => !texto(i));
@@ -415,15 +574,15 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
     const i = ma.piezas.findIndex((p, k) => p.rol === rol && valida(p) && !quitar.has(k));
     return i < 0 ? undefined : { i, p: ma.piezas[i] };
   };
-  const m = Math.round(Math.min(H * 0.07, W * 0.045));
-  const hueco = Math.round(H * 0.035);
   // El área útil: la medida menos la zona segura y un margen.
-  const area: Rect = { x0: zona.left + m, x1: W - zona.right - m, y0: zona.top + m, y1: H - zona.bottom - Math.round(m * 0.6) };
+  const { area, m, hueco } = areaDe(W, H, zona);
   const pieF = de("FOOTER");
   let puestas: Puesta[] = [];
   const kb = Math.max(W / ma.w, H / ma.h);
   /** En «igual» el fondo se decide antes que las piezas (ellas se anclan a él); en lo demás, después (sigue al HERO). */
   let fondoAntes: Acomodo["fondo"] | null = null;
+  /** Se usó el acomodo de una medida más alta (`acomodoAlto`): su aviso de forma dice lo que se hizo. */
+  let alta = false;
 
   if (familia === "igual") {
     // El acomodo del diseñador a escala pareja, cada pieza sobre su lugar del fondo (`anclarAlFondo`).
@@ -439,30 +598,13 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
     const libre: Rect = { x0: lado(zona.left), x1: W - lado(zona.right), y0: lado(zona.top), y1: H - lado(zona.bottom) };
     const conZona = otraForma && (zona.top > 0 || zona.right > 0 || zona.bottom > 0 || zona.left > 0);
     ({ puestas, fondo: fondoAntes } = anclarAlFondo(sueltas, k, kb, libre, ref, ma, W, H, conZona));
-    // El pie recupera lo que la reducción le quitó: crece sobre su mismo borde de abajo y su mismo centro, hasta el
-    // ancho útil, y nunca más grande de como lo dejó el diseñador (a la medida del maestro no se mueve nada: el
-    // original es intocable). Tampoco se arrima a otra pieza: se prueba cada tamaño contra TODAS, no sólo la de arriba.
-    const pf = pieF && puestas.find((q) => q.pieza === pieF.i);
-    if (pf && pieF) {
-      const abajo = pf.y + pf.h, centro = pf.x + pf.w / 2, aire = hueco * 0.5;
-      const crecido = (kf: number) => {
-        const w = pieF.p.solido.w * kf, h = pieF.p.solido.h * kf;
-        return { k: kf, w, h, x: Math.max(area.x0, Math.min(centro - w / 2, area.x1 - w)), y: abajo - h };
-      };
-      const choca = (r: { x: number; y: number; w: number; h: number }) => puestas.some((q) => q !== pf && q.x < r.x + r.w + aire && q.x + q.w > r.x - aire && q.y < r.y + r.h && q.y + q.h > r.y - aire);
-      let lo = k, hi = Math.min((area.x1 - area.x0) / pieF.p.solido.w, 1);
-      // Si ya viene pegado a otra pieza (así lo quiso el diseñador), ningún tamaño mayor pasa la prueba y se queda igual.
-      if (hi > lo) {
-        if (!choca(crecido(hi))) lo = hi;
-        else
-          for (let n = 0; n < 20; n++) {
-            const medio = (lo + hi) / 2;
-            if (choca(crecido(medio))) hi = medio;
-            else lo = medio;
-          }
-        if (lo > k) Object.assign(pf, crecido(lo));
-      }
+    // Más alta que el maestro (B26): a la mitad entre esto y el acomodo de la tabla.
+    const tabla = heroS && esAlta(W, H, ma) ? acomodoAlto(sueltas, heroS, k, kb, libre, ma, W, H) : null;
+    if (tabla) {
+      ({ puestas, fondo: fondoAntes } = mezclar({ puestas, fondo: fondoAntes }, tabla, ALTA_MEZCLA, ma, W, H));
+      alta = true;
     }
+    if (pieF) crecerPie(puestas, pieF, area, hueco);
   } else {
     // Pie: lo más grande que quepa a lo ancho, sin pasar de una franja del alto.
     const tope = (familia === "banner" ? 0.24 : familia === "ancho" ? 0.15 : 0.12) * pie;
@@ -544,10 +686,23 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
     fx = heroP.x + heroP.w / 2 - (heroS.p.solido.x + heroS.p.solido.w / 2) * kb;
     fy = heroP.y + heroP.h - (heroS.p.solido.y + heroS.p.solido.h) * kb;
   }
-  const fondo = fondoAntes ?? { k: kb, x: Math.min(0, Math.max(W - ma.w * kb, fx)), y: Math.min(0, Math.max(H - ma.h * kb, fy)) };
+  const fondo = fondoAntes ?? cubrir(ma, W, H, kb, fx, fy);
 
   const revision = comprobar(ma, W, H, familia, puestas, quitar, zona);
-  return { familia, puestas, fondo, letras: revision.letras, avisos: [...avisos, ...revision.avisos], quitadas: [...quitar].sort((x, y) => x - y) };
+  const deForma = (v: AvisoAcomodo): AvisoAcomodo => (alta && v.tipo === "forma" ? { tipo: "forma", texto: "Más alta que su mesa: el HERO crece con la altura que sobra (a medio camino) y lo de arriba y el legal se acercan a su borde. Revisar que el HERO se vea bien." } : v);
+  // Notas (tipo «matriz»): qué pide la matriz de producción y qué se hizo. Van al final y no son algo que revisar.
+  const notas: AvisoAcomodo[] = [];
+  if (alta && razon(W, H, ma) < PARECIDO_MAX)
+    notas.push({ tipo: "matriz", texto: "Más alta que su mesa: el HERO crece con la altura que sobra (a medio camino) y lo de arriba y el legal se acercan a su borde." });
+  // Donde el script del equipo y la matriz no coinciden, manda el script y se dice (Pedro, 2026-10-21: "whatever comes
+  // from the script takes precedence and if its different from the table have a warning saying that but leave it to
+  // the designer to choose"). Editada a mano, la persona ya eligió (`aplicarEdicion` no la repite).
+  const pide = DISTINTO_DEL_SCRIPT[`${W}x${H}`];
+  if (pide && familia === "ancho") {
+    const aqui = op.heroLado === "izquierda" ? "HERO · beneficios · texto y botón" : "texto y botón · beneficios · HERO";
+    notas.push({ tipo: "matriz", texto: `Distinto de la matriz de producción (de izquierda a derecha: ${pide}): aquí va ${aqui}, como el script del equipo. Para cambiarlo, muévelo a mano.` });
+  }
+  return { familia, puestas, fondo, letras: revision.letras, avisos: [...avisos, ...revision.avisos.map(deForma), ...notas], quitadas: [...quitar].sort((x, y) => x - y) };
 }
 
 const valida = (p: PiezaCaja) => [p.solido.x, p.solido.y, p.solido.w, p.solido.h].every(Number.isFinite) && p.solido.w > 0 && p.solido.h > 0;
@@ -873,5 +1028,10 @@ export function aplicarEdicion(ma: MaestroCaja, a: Acomodo, ed: Edicion, W: numb
   const vistas = !copia ? undefined : revisar ? () => false : (i: number, j: number) => aMano.has(i) && aMano.has(j);
   const r = comprobar(ma, W, H, a.familia, puestas, new Set(a.quitadas), z.zona, aMano, vistas);
   const avisoCopia: AvisoAcomodo[] = copia && revisar ? [{ tipo: "copiada", texto: `Copiada de ${copia.w}×${copia.h}, con otra forma que esta medida: revisar que todo quede bien.` }] : [];
-  return { ...a, puestas, letras: r.letras, avisos: [...avisoCopia, ...(z.aviso ? [z.aviso] : []), ...r.avisos], editada: true, ...(copia ? { copiadaDe: { w: copia.w, h: copia.h } } : {}) };
+  // Sólo cambió el orden de capas (nada se movió): el acomodo sigue siendo el automático, con su aviso de forma (el de
+  // una medida más alta o el de su base) y sus notas de la matriz.
+  const formaA = a.avisos.find((v) => v.tipo === "forma");
+  const propios = aMano.size ? r.avisos : r.avisos.map((v) => (v.tipo === "forma" && formaA ? formaA : v));
+  const notas = aMano.size ? [] : a.avisos.filter(esNota);
+  return { ...a, puestas, letras: r.letras, avisos: [...avisoCopia, ...(z.aviso ? [z.aviso] : []), ...propios, ...notas], editada: true, ...(copia ? { copiadaDe: { w: copia.w, h: copia.h } } : {}) };
 }

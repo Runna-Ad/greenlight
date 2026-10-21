@@ -11,6 +11,7 @@ import { writePsdBuffer } from "ag-psd";
 import { nombreDeGuia, etiquetaPieza, esNombreLegal } from "../src/lib/prisma/formatos/roles.ts";
 import { legalDelPsd, conLegal, conLegalDe, legalCabe, legalVigente, legalesParaCliente } from "../src/lib/prisma/formatos/legal.ts";
 import { hermanas, copiarEdicion } from "../src/lib/prisma/formatos/matriz.ts";
+import { MATRIZ, baseAEscala } from "../src/lib/prisma/formatos/tabla-matriz.ts";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, capasDeMedida, halosEnMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
@@ -25,7 +26,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
+import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContraste } from "../src/lib/prisma/formatos/revisar.ts";
@@ -687,11 +688,13 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
   eq("cada medida sale de la misma mesa que en el script del equipo, con su familia", DOCE.map(([W, H]) => [elegirMaestro(MESAS, W, H), familiaDe(W, H, MESAS[elegirMaestro(MESAS, W, H)])]), DOCE.map(([, , i, f]) => [i, f]));
   const hechos = DOCE.map(([W, H, i]) => ({ W, H, ma: MESAS[i], a: acomodar(MESAS[i], W, H) }));
   // Medidas chicas (Pedro, 2026-10-14): se quita el legal y luego el subtítulo, y el texto que queda se agranda.
-  // El legal NUNCA se quita (Pedro, 2026-10-15: "legales can never be removed"): sólo el subtítulo, en 320×50.
-  eq("las 12 llevan el legal; sólo 320×50 quita el subtítulo para que el resto se lea", hechos.map((x) => x.a.puestas.length), [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5]);
+  // El legal NUNCA se quita (Pedro, 2026-10-15: "legales can never be removed"). 320×50 ya no quita el subtítulo: es
+  // 640×100 × 0.5 (B26, Pedro 2026-10-21: "follow the table"); lo chico se marca.
+  eq("las 12 llevan todas sus piezas (320×50 es la mitad de 640×100, con su subtítulo)", hechos.map((x) => x.a.puestas.length), [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]);
   ok("lo que se quitó es exactamente lo que no se colocó, y sólo el subtítulo", hechos.every((x) => x.a.quitadas.every((i) => x.ma.piezas[i].rol === "SUBTITULO") && x.ma.piezas.every((_, i) => x.a.puestas.some((q) => q.pieza === i) !== x.a.quitadas.includes(i))));
-  eq("cada quitada lleva su aviso", hechos.filter((x) => x.a.quitadas.length).map((x) => [`${x.W}x${x.H}`, x.a.avisos.filter((v) => v.tipo === "quitada").length]), [["320x50", 1]]);
-  eq(`9 pasan todas las comprobaciones; en las 3 chicas el legal queda bajo ${LETRA_MIN_PX} px y se marca (320×50 además por el subtítulo quitado)`, hechos.filter((x) => x.a.avisos.length).map((x) => [`${x.W}x${x.H}`, [...new Set(x.a.avisos.map((v) => v.tipo))]]), [["320x250", ["letra"]], ["640x100", ["letra"]], ["320x50", ["quitada", "letra"]]]);
+  eq("cada quitada lleva su aviso", hechos.filter((x) => x.a.quitadas.length).map((x) => [`${x.W}x${x.H}`, x.a.avisos.filter((v) => v.tipo === "quitada").length]), []);
+  eq(`9 pasan todas las comprobaciones; en las 3 chicas la letra queda bajo ${LETRA_MIN_PX} px y se marca`, hechos.filter((x) => x.a.avisos.some((v) => !esNota(v))).map((x) => [`${x.W}x${x.H}`, [...new Set(x.a.avisos.filter((v) => !esNota(v)).map((v) => v.tipo))]]), [["320x250", ["letra"]], ["640x100", ["letra"]], ["320x50", ["letra"]]]);
+  eq("notas de la matriz (B26, no cuentan): las más altas que su mesa, 876×324 (manda el script) y 320×50 (mitad de 640×100)", hechos.filter((x) => x.a.avisos.some(esNota)).map((x) => `${x.W}x${x.H}`), ["720x1600", "768x1024", "876x324", "320x50"]);
   const anchaChica = acomodar(MESAS[1], 438, 162);
   const textoDe = (ma, a) => a.letras.filter((l) => ma.piezas[l.pieza].rol !== "FOOTER");
   ok(`una ancha chica (438×162, tres zonas): se queda el legal, se quita el subtítulo y el resto del texto llega a ${LETRA_MIN_PX} px`, anchaChica.familia === "ancho" && anchaChica.quitadas.map((i) => MESAS[1].piezas[i].rol).join() === "SUBTITULO" && anchaChica.puestas.some((q) => MESAS[1].piezas[q.pieza].rol === "FOOTER") && textoDe(MESAS[1], anchaChica).every((l) => l.px >= LETRA_MIN_PX), JSON.stringify([anchaChica.quitadas, anchaChica.letras]));
@@ -782,8 +785,14 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
     return [(q.x + q.w / 2 - a.fondo.x) / a.fondo.k - (s.x + s.w / 2), (q.y + q.h - a.fondo.y) / a.fondo.k - (s.y + s.h)];
   };
   const v916 = acomodar(M45, 1080, 1920);
-  ok("4:5 → 1080×1920 sin canal: cada pieza (menos el legal, que crece) cae sobre su mismo punto del fondo (< 1 px del maestro)", v916.familia === "igual" && v916.puestas.filter((q) => M45.piezas[q.pieza].rol !== "FOOTER").every((q) => alFondo(M45, v916, q).every((d) => Math.abs(d) < 1)), JSON.stringify(v916.puestas.map((q) => alFondo(M45, v916, q).map(Math.round))));
-  ok("y el legal también: su pie sobre su punto (crece hacia arriba desde ahí)", (([dx, dy]) => Math.abs(dy) < 1 && Math.abs(dx) < 1)(alFondo(M45, v916, v916.puestas.find((q) => M45.piezas[q.pieza].rol === "FOOTER"))));
+  // B26 (Pedro, 2026-10-21, "middle point as long as it looks good"): más alta que el maestro, a la mitad entre esto y
+  // la tabla (lo de arriba arriba, el legal abajo, el HERO crece). La tarjeta sigue sobre su punto.
+  const enV916 = (rol) => alFondo(M45, v916, v916.puestas.find((q) => M45.piezas[q.pieza].rol === rol));
+  ok(
+    "4:5 → 1080×1920 sin canal (B26): el HERO sobre su punto del fondo (< 1 px); la marca y el título suben hacia el borde de arriba y el legal baja",
+    v916.familia === "igual" && enV916("HERO").every((d) => Math.abs(d) < 1) && enV916("BRAND")[1] < -1 && enV916("TITULO")[1] < -1 && enV916("FOOTER")[1] > 1 && v916.puestas.every((q) => q.y >= 0 && q.y + q.h <= 1920),
+    JSON.stringify(v916.puestas.map((q) => [M45.piezas[q.pieza].rol, ...alFondo(M45, v916, q).map(Math.round)])),
+  );
   const historia = { top: 1920 * 0.14, right: 0, bottom: 1920 * 0.2, left: 0 };
   const conCanal = acomodar(M45, 1080, 1920, { zona: historia });
   const heroCanal = conCanal.puestas.find((q) => M45.piezas[q.pieza].rol === "HERO");
@@ -799,13 +808,13 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
     s33Historia.fondo.k > 1.28 && s33Historia.fondo.k <= 1.28 * FONDO_ZOOM_MAX + 1e-9 && alFondo(M33, s33Historia, heroS33).every((d) => Math.abs(d) < 1) && !s33Historia.avisos.some((v) => v.tipo === "zona"),
     JSON.stringify([s33Historia.fondo.k, alFondo(M33, s33Historia, heroS33)]),
   );
-  ok("s33 sin canal: todas sobre su punto y el fondo cubre justo (×1.28)", ((a) => a.fondo.k === 1.28 && a.puestas.every((q) => alFondo(M33, a, q).every((d) => Math.abs(d) < 1)))(acomodar(M33, 1080, 1920)));
+  ok("s33 sin canal: la tarjeta sobre su punto y el fondo cubre justo (×1.28)", ((a) => a.fondo.k === 1.28 && alFondo(M33, a, a.puestas.find((q) => M33.piezas[q.pieza].rol === "HERO")).every((d) => Math.abs(d) < 1))(acomodar(M33, 1080, 1920)));
   const reels = acomodar(M45, 1080, 1920, { zona: { top: 1920 * 0.14, right: 1080 * 0.06, bottom: 1920 * 0.35, left: 1080 * 0.06 } });
   ok("si el HERO pide más zoom que el tope (APGIANT con reels, franja de 35 % abajo: pediría ×2), el fondo no se agranda y nada queda en la zona", reels.fondo.k === 1.28 && !reels.avisos.some((v) => v.tipo === "zona"), JSON.stringify([reels.fondo.k, reels.avisos]));
   ok("sin canal el fondo nunca se agranda de más (cubre justo)", [[1080, 1920], [720, 1600], [768, 1024]].every(([W, H]) => acomodar(M45, W, H).fondo.k === Math.max(W / 1200, H / 1500)));
   const arriba = acomodar(M45, 1080, 1920, { zona: { top: 250, right: 0, bottom: 0, left: 0 } });
   const heroArriba = arriba.puestas.find((q) => M45.piezas[q.pieza].rol === "HERO");
-  ok("con una zona sólo arriba (el HERO sí cabe en su lugar): el HERO se queda sobre su punto y lo de arriba se junta hacia él, fuera de la zona", alFondo(M45, arriba, heroArriba).every((d) => Math.abs(d) < 1) && arriba.puestas.every((q) => q.y >= 250) && heroArriba.k === 0.9, JSON.stringify([alFondo(M45, arriba, heroArriba), arriba.puestas.map((q) => Math.round(q.y))]));
+  ok("con una zona sólo arriba (el HERO sí cabe en su lugar): el HERO se queda sobre su punto y lo de arriba se junta hacia él, fuera de la zona", alFondo(M45, arriba, heroArriba).every((d) => Math.abs(d) < 1) && arriba.puestas.every((q) => q.y >= 250) && heroArriba.k >= 0.9, JSON.stringify([alFondo(M45, arriba, heroArriba), arriba.puestas.map((q) => Math.round(q.y))]));
   // Lo que el diseñador dejó separado sigue separado, en todos los maestros raros, medidas «igual» y zonas.
   const separadas = [];
   for (const [nombre, ma] of Object.entries(RAROS))
@@ -2634,6 +2643,70 @@ console.log("\n▶ B25 · copiar lo editado en una medida a sus hermanas (la mat
       JSON.stringify([dist(C, C2), dist(T, T2), e1600.avisos.map((v) => v.tipo)]),
     );
   }
+}
+
+console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo automático");
+{
+  const pz = (nombre, x, y, w, h, letraMinPx = null) => ({ nombre, rol: rolDe(nombre), solido: { x, y, w, h }, letraMinPx });
+  const M45 = { nombre: "AD_4x5", w: 1200, h: 1500, piezas: [pz("FOOTER", 204, 1361, 790, 62, 16), pz("HERO", 113, 508, 788, 791), pz("CTA", 788, 856, 306, 97, 45), pz("Subtitulo", 684, 617, 383, 194, 32), pz("TITULO", 188, 238, 824, 212, 42), pz("BRAND", 364, 86, 472, 83)] };
+  const M916 = { nombre: "AD_9x16", w: 1080, h: 1920, piezas: [pz("FOOTER", 131, 1485, 818, 70, 16), pz("HERO", 105, 558, 692, 695), pz("CTA", 365, 1290, 348, 110, 51.2), pz("Subtitulo", 646, 640, 368, 190, 32), pz("TITULO", 136, 260, 808, 205, 42), pz("BRAND", 304, 108, 472, 83)] };
+  const rol = (ma, a, r) => a.puestas.find((q) => ma.piezas[q.pieza].rol === r);
+  const sinPie = (ma, a) => a.puestas.filter((q) => ma.piezas[q.pieza].rol !== "FOOTER").map(({ pieza, ...r }) => [pieza, r]);
+  const r6 = (o) => JSON.parse(JSON.stringify(o, (_, v) => (typeof v === "number" ? Math.round(v * 1e6) / 1e6 : v)));
+  const veces = (ma, a, f) => sinPie(ma, a).map(([i, q]) => [i, { k: q.k * f, x: q.x * f, y: q.y * f, w: q.w * f, h: q.h * f }]);
+
+  // 3. 320×50 = 640×100 × 0.5 (sin mesa de banner en el PSD); con una mesa 640×100, ésa manda (su forma).
+  const a640 = acomodar(M45, 640, 100), a320 = acomodar(M45, 320, 50);
+  eq("320×50 sin mesa de banner: todo lo de 640×100 × 0.5 (menos el legal), con su subtítulo y su familia", r6([sinPie(M45, a320), a320.familia, a320.quitadas]), r6([veces(M45, a640, 0.5), "banner", []]));
+  ok("320×50: el legal, al menos la mitad del de 640×100 (crece si cabe sin tocar a nadie) y dentro de la medida", ((p, q) => p.k >= q.k * 0.5 - 1e-9 && p.x >= 0 && p.x + p.w <= 320 && p.y + p.h <= 50)(rol(M45, a320, "FOOTER"), rol(M45, a640, "FOOTER")));
+  const B640 = { nombre: "AD_640x100", w: 640, h: 100, piezas: [pz("FOOTER", 100, 80, 440, 14, 6), pz("HERO", 400, 10, 60, 60), pz("TITULO", 120, 20, 200, 40, 20), pz("BRAND", 10, 30, 80, 30)] };
+  eq("con una mesa 640×100 en el PSD, 320×50 sale de ella (su forma: el acomodo del diseñador a la mitad)", [elegirMaestro([M45, B640], 320, 50), acomodar(B640, 320, 50).familia], [1, "igual"]);
+  // 720×1280 = 1080×1920 × 2/3 cuando el PSD sólo trae 4:5; con un 9:16 en el PSD, sale de él como siempre.
+  const a1920 = acomodar(M45, 1080, 1920), a1280 = acomodar(M45, 720, 1280);
+  eq("720×1280 sin 9:16 en el PSD: lo de 1080×1920 × 2/3 (menos el legal), con su aviso de forma", r6([sinPie(M45, a1280), a1280.avisos.find((v) => v.tipo === "forma")?.texto]), r6([veces(M45, a1920, 2 / 3), a1920.avisos.find((v) => v.tipo === "forma")?.texto]));
+  const historias = { top: 1280 * 0.14, right: 0, bottom: 1280 * 0.2, left: 0 };
+  ok("720×1280 con la zona de historias: nada cae en lo que tapa la app (la base se acomoda con la misma zona, a su escala)", acomodar(M45, 720, 1280, { zona: historias }).puestas.every((q) => q.y >= historias.top - 0.5 && q.y + q.h <= 1280 - historias.bottom + 0.5));
+
+  // 2. Más alta que el maestro: a la mitad entre B13 y la tabla. La tarjeta sobre su punto; nada se encima.
+  const alFondo = (ma, a, q) => {
+    const s = ma.piezas[q.pieza].solido;
+    return [(q.x + q.w / 2 - a.fondo.x) / a.fondo.k - (s.x + s.w / 2), (q.y + q.h - a.fondo.y) / a.fondo.k - (s.y + s.h)];
+  };
+  const enchimadas = (a) => a.puestas.some((p, i) => a.puestas.some((q, j) => j > i && Math.min(p.x + p.w, q.x + q.w) - Math.max(p.x, q.x) > 2 && Math.min(p.y + p.h, q.y + q.h) - Math.max(p.y, q.y) > 2 && !(["HERO", "CTA", "SUBTITULO"].includes(M916.piezas[p.pieza]?.rol) && ["HERO", "CTA", "SUBTITULO"].includes(M916.piezas[q.pieza]?.rol))));
+  const a1600 = acomodar(M916, 720, 1600), k1600 = 720 / 1080;
+  ok(
+    "9:16 → 720×1600: el HERO crece (más que ×1 y hasta ×1.5), con su pie sobre su punto del fondo; la marca sube, el legal baja; nada nuevo encimado",
+    ((h) => h.k > k1600 * 1.01 && h.k <= k1600 * 1.5 + 1e-9 && alFondo(M916, a1600, h).every((d) => Math.abs(d) < 1))(rol(M916, a1600, "HERO")) && alFondo(M916, a1600, rol(M916, a1600, "BRAND"))[1] < -1 && alFondo(M916, a1600, rol(M916, a1600, "FOOTER"))[1] > 1 && !enchimadas(a1600),
+    JSON.stringify(a1600.puestas.map((q) => [M916.piezas[q.pieza].rol, +(q.k / k1600).toFixed(3), ...alFondo(M916, a1600, q).map(Math.round)])),
+  );
+  const a768 = acomodar(M45, 768, 1024);
+  ok("4:5 → 768×1024: el HERO gana un poco (la mitad de la altura que sobra), lo demás a la escala de siempre", ((h) => h.k > 0.64 * 1.03 && h.k < 0.64 * 1.1)(rol(M45, a768, "HERO")) && rol(M45, a768, "TITULO").k === 0.64 && !a768.avisos.some((v) => v.tipo === "forma"), String(rol(M45, a768, "HERO").k / 0.64));
+  ok("las de la misma forma no cambian: 1080×1920 desde el 9:16 y 1200×1500 desde el 4:5 son el acomodo del diseñador", acomodar(M916, 1080, 1920).puestas.every((q) => q.k === 1 && q.x === M916.piezas[q.pieza].solido.x) && acomodar(M45, 1200, 1500).puestas.every((q) => q.k === 1));
+  ok("más ancha que el maestro (1080×1080 desde 4:5): sigue como antes, sin el acomodo de la tabla", !acomodar(M45, 1080, 1080).avisos.some((v) => /más alta/i.test(v.texto)) && acomodar(M45, 768, 1024).avisos.some((v) => esNota(v) && /más alta/i.test(v.texto)));
+
+  // Lo que no debe pasar nunca: una base que salga de otra (daría vueltas) ni un HERO de tamaño cero o negativo.
+  ok("la matriz: ninguna base «igual» sale a su vez de otra", Object.values(MATRIZ).filter((f) => f.modo === "igual").every((f) => !baseAEscala(...f.base.split("x").map(Number))));
+  const finito = (a) => a.puestas.every((q) => q.k > 0 && [q.x, q.y, q.w, q.h].every(Number.isFinite)) && [a.fondo.k, a.fondo.x, a.fondo.y].every(Number.isFinite);
+  const flaco = { nombre: "FLACO", w: 1200, h: 1500, piezas: [pz("TITULO", 200, 50, 800, 100, 30), pz("HERO", 200, 700, 800, 10), pz("FOOTER", 200, 1400, 800, 50, 12)] };
+  const reels = { top: 1920 * 0.14, right: 1080 * 0.06, bottom: 1920 * 0.35, left: 1080 * 0.06 };
+  ok("un HERO casi sin alto con huecos grandes y la zona de reels: nada de tamaños negativos ni números rotos (720×1280, 1080×1920, 720×1600)", [[720, 1280], [1080, 1920], [720, 1600]].every(([W, H]) => finito(acomodar(flaco, W, H, { zona: reels })) && finito(acomodar(flaco, W, H))));
+
+  // Con zona a los lados (TikTok: 120 px a la derecha), nada de lo de arriba o de abajo se mete en ella.
+  const alto = { nombre: "ALTO", w: 1200, h: 1500, piezas: [pz("BRAND", 100, 60, 1000, 80), pz("TITULO", 60, 180, 1080, 200, 40), pz("HERO", 300, 420, 600, 600), pz("CTA", 400, 1080, 400, 90, 40), pz("FOOTER", 60, 1380, 1080, 60, 14)] };
+  const tiktok = { top: 0, right: 120, bottom: 0, left: 0 };
+  const conTiktok = acomodar(alto, 1080, 1920, { zona: tiktok });
+  ok("con la zona de TikTok a la derecha: ninguna pieza entra en ella (la tabla no se usa si la pisaría)", conTiktok.puestas.every((q) => q.x + q.w <= 1080 - 120 + 0.5), JSON.stringify(conTiktok.puestas.map((q) => [alto.piezas[q.pieza].rol, Math.round(q.x + q.w)])));
+  const sinZona = acomodar(alto, 1080, 1920), hA = rol(alto, sinZona, "HERO"), tA = rol(alto, sinZona, "TITULO");
+  ok("el HERO crece sin pegarse al título: le queda al menos el aire que dejó el diseñador (× la escala)", hA.y - (tA.y + tA.h) >= (420 - 380) * 0.9 * 0.5 - 0.5, String(hA.y - (tA.y + tA.h)));
+  ok("el legal crece sin pasar del alto útil de la medida", [[320, 50], [640, 100], [720, 1280]].every(([W, H]) => ((q) => q.y >= 0 && q.y + q.h <= H + 0.5)(rol(M45, acomodar(M45, W, H), "FOOTER"))));
+  const soloOrden = aplicarEdicion(M45, a768, { piezas: {}, orden: [...a768.puestas.map((q) => q.pieza)].reverse() }, 768, 1024);
+  ok("cambiar sólo el orden de capas no borra las notas de la matriz ni cambia el aviso de forma", soloOrden.editada === true && soloOrden.avisos.some(esNota) && ((b) => b.avisos.find((v) => v.tipo === "forma")?.texto === a1920.avisos.find((v) => v.tipo === "forma")?.texto)(aplicarEdicion(M45, a1920, { piezas: {}, orden: [...a1920.puestas.map((q) => q.pieza)].reverse() }, 1080, 1920)));
+
+  // 1. 876×324: manda el script; si la persona la edita, ya eligió.
+  const a876 = acomodar(M45, 876, 324);
+  const nota876 = (op) => acomodar(M45, 876, 324, op).avisos.find(esNota)?.texto ?? "";
+  ok("876×324: la nota dice el orden de aquí, también con el HERO volteado; otra medida ancha (970×250) no la lleva", /aquí va texto y botón · beneficios · HERO/.test(nota876()) && /aquí va HERO · beneficios · texto y botón/.test(nota876({ heroLado: "izquierda" })) && !acomodar(M45, 970, 250).avisos.some(esNota));
+  ok("876×324: avisa que sigue el script y no la matriz; editada a mano, el aviso se va", a876.avisos.some((v) => v.tipo === "matriz") && !aplicarEdicion(M45, a876, { piezas: { [M45.piezas.findIndex((p) => p.rol === "CTA")]: { x: 10, y: 10, k: 0.3 } } }, 876, 324).avisos.some((v) => v.tipo === "matriz"));
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

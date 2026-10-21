@@ -417,6 +417,7 @@ export const FP = {
   copiadoDeshacer: t("Deshacer la copia", "Undo the copy"),
   copiadoDeshecho: t("{d}: como estaba antes de copiar.", "{d}: back to how it was before the copy."),
   copiada: t("Copiada de {m}", "Copied from {m}"),
+  nota: t("Nota: ", "Note: "),
   copiadaTitulo: t("Si la editas aquí, queda como suya.", "Edit it here and it becomes its own."),
   editorNoPinto: t("No se pudo pintar la vista (al navegador no le alcanzó la memoria).", "The preview couldn't be drawn (the browser ran out of memory)."),
   voltearTodas: t("Voltear todas", "Flip all"),

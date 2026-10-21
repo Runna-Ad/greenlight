@@ -2,14 +2,14 @@
 
 import { memo, useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, ArrowUp, Check, ChevronDown, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Languages, Layers, Loader2, Lock, Maximize2, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowUp, Check, ChevronDown, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Info, Languages, Layers, Loader2, Lock, Maximize2, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
-import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, nombreSalida, sePuedeVoltear, zonaCanal, type Acomodo, type AvisoAcomodo, type Canal, type Edicion, type Lado } from "@/lib/prisma/formatos/acomodo";
+import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, nombreSalida, sePuedeVoltear, zonaCanal, type Acomodo, type AvisoAcomodo, type Canal, type Edicion, type Lado, esNota } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionContraste, type InfoContraste } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_APLANADA, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
@@ -672,7 +672,9 @@ const TarjetaMedida = memo(function TarjetaMedida({
   // motor los diga por cada pieza. Los demás avisos son de esta medida y van completos.
   const comun = acomodo.avisos.some(esComun);
   const retocada = acomodo.avisos.some((v) => v.tipo === "retoque");
-  const propios = acomodo.avisos.filter((v) => !deVarias(v));
+  const propios = acomodo.avisos.filter((v) => !deVarias(v) && !esNota(v));
+  // Las notas de la matriz (B26): qué pidió y qué se hizo. En gris, al final, y no cuentan.
+  const notas = acomodo.avisos.filter(esNota);
   // El ámbar cuenta sólo lo de ESTA medida (B23): antes la pieza repetida ponía 11 de 12 tarjetas en ámbar y las que
   // de verdad tenían un problema propio no se distinguían. La pieza repetida sigue en la tarjeta, en gris y con salto
   // al arreglo; el relleno que dejó sí es de esta medida (hay que mirarlo aquí).
@@ -815,7 +817,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
         </p>
       )}
       {contraste && <ContrasteMedida info={contraste} ma={ma} medida={medida} editada={!!acomodo.editada} lang={lang} alElegir={alContraste} />}
-      {(propios.length > 0 || retocada || comun) && (
+      {(propios.length > 0 || retocada || comun || notas.length > 0) && (
         // Los avisos los escribe el motor (acomodo.ts), en español: marcados así cuando la pantalla está en inglés.
         <ul lang={lang === "en" ? "es" : undefined} className="mt-2 space-y-1 text-xs leading-snug text-foreground">
           {propios.map((v, i) => (
@@ -829,9 +831,18 @@ const TarjetaMedida = memo(function TarjetaMedida({
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> <span className="min-w-0">{tx(FP.avisoRetoqueCorto, lang)}</span>
             </li>
           )}
+          {notas.map((v, i) => (
+            <li key={`n${i}:${v.texto}`} className="flex items-start gap-1.5 text-muted-foreground">
+              <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+              <span className="min-w-0">
+                <span lang={lang} className="sr-only">{tx(FP.nota, lang)}</span>
+                <NotaLarga texto={v.texto} lang={lang} />
+              </span>
+            </li>
+          ))}
           {comun && (
             // mt-2: con un renglón arriba (y su «Ver más»), los dos clics de 36 px no se enciman.
-            <li lang={lang} className={cn((propios.length > 0 || retocada) && "mt-2")}>
+            <li lang={lang} className={cn((propios.length > 0 || retocada || notas.length > 0) && "mt-2")}>
               {/* -my: el clic mide 36 px sin separar más los renglones. */}
               <button type="button" onClick={irAVarias} className={cn("-my-1.5 flex min-h-9 w-full cursor-pointer items-start gap-1.5 rounded-md py-1.5 text-left text-muted-foreground hover:text-foreground", FOCO, BAJO_BARRA)}>
                 <ArrowUp className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
@@ -1789,7 +1800,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     [conTextos, maestrosVista.length, medidas, lados, canal, contrastes, edicionesVista],
   );
   // Lo propio de cada medida y lo que se arregla una vez arriba se cuentan por separado (B23), como en las tarjetas.
-  const porRevisar = filas.filter((f) => f.acomodo.avisos.some((a) => !esComun(a))).length;
+  const porRevisar = filas.filter((f) => f.acomodo.avisos.some((a) => !esComun(a) && !esNota(a))).length;
   const conComun = filas.filter((f) => f.acomodo.avisos.some(esComun)).length;
   const volteables = filas.filter((f) => sePuedeVoltear(f.acomodo.familia) && !f.acomodo.editada);
   const n916 = medidas.filter((m) => es916(m.w, m.h)).length;
