@@ -884,6 +884,14 @@ for (const tipo of TIPOS) {
   }
 }
 ok(`TS missingRequired() === SQL missing_required() en ${reqChecked} casos`, reqMismatch === 0);
+// 0080: el sheet de oct-2026 ya no trae "# Entrega"; una fila sin ella se crea igual.
+{
+  const sinEntrega = { ...LLENA, "Tipo de Asset": "RP Video" };
+  delete sinEntrega["# Entrega"];
+  eq("sin # Entrega no falta nada (TS)", missingRequired(sinEntrega).join("|"), "");
+  eq("sin # Entrega no falta nada (SQL)",
+     ((await scalar(`select produccion.missing_required($1::jsonb)`, [JSON.stringify(sinEntrega)])) ?? []).join("|"), "");
+}
 
 
 // ── Plantilla de trabajo: reglas, estáticos, planos (0012) ──

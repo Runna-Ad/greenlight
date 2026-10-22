@@ -38,11 +38,11 @@ export function tipoGroup(tipo: string | undefined): TipoGroup {
   return GROUP_BY_TIPO[t] ?? "video";
 }
 
-/** Sin estos no se crea nada, sea del tipo que sea. */
+/** Sin estos no se crea nada, sea del tipo que sea.
+ *  "# Entrega" salió en oct-2026: DiDi ya no usa esa columna en su sheet. */
 export const ALWAYS_REQUIRED: SheetColumn[] = [
   "Asignación",
   "Marca",
-  "# Entrega",
   "Tipo de Asset",
   "Concepto",
   "Plataforma",

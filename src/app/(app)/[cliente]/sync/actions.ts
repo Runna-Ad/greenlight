@@ -21,8 +21,9 @@ type SyncConfig =
 /** What the CLIENT is allowed to know — never includes credentials. */
 export type SyncMode = { kind: "apps_script" | "csv" };
 
-// Fallback while a client has no Apps Script connected.
-const DIDI_SHEET = "16QAbNy9sljgm610uTLwIIGDbZAv5_d0o4L0Iu3_JTjA";
+// Fallback while a client has no Apps Script connected. This sheet (Oct 2026) is
+// private, so the CSV path answers HTTP 401: a loud failure, never stale rows.
+const DIDI_SHEET = "1KZkgHXDaCH6RRMqjrtD7qKIF18rIhJQid8jSofOtK9Q";
 const FALLBACK_TABS = [
   "Real (Card/Préstamos | Brief 24/07)",
   "Normal (Card/Préstamos | Brief 24/07)",

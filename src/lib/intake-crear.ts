@@ -306,7 +306,6 @@ export const CAMPOS_COPIABLES: { key: keyof TaskDraft; label: string }[] = [
   { key: "naming", label: "Naming" },
   { key: "version", label: "Versión" },
   { key: "marca", label: "Marca" },
-  { key: "entrega", label: "# Entrega" },
   { key: "asignacion", label: "Asignación" },
   { key: "tipoAsset", label: "Tipo de Asset" },
   { key: "formato", label: "Formato" },

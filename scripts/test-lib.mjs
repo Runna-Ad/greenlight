@@ -105,9 +105,9 @@ eq("sin Asignación siempre falta, en los 3 grupos",
   ["RP Video","Images","Copies"].every(t => missingRequired({ ...COPY_REAL, "Tipo de Asset": t, "Asignación": "", "Naming":"X", "# Idea":"A1", "Tamaño":"9:16", "Duración":"10s" }).includes("Asignación")),
   true);
 
-eq("video pide 10 campos", requiredFor("RP Video").length, 10);
-eq("images pide 9", requiredFor("Images").length, 9);
-eq("copies pide 6", requiredFor("Copies").length, 6);
+eq("video pide 9 campos (sin # Entrega desde oct-2026)", requiredFor("RP Video").length, 9);
+eq("images pide 8", requiredFor("Images").length, 8);
+eq("copies pide 5", requiredFor("Copies").length, 5);
 
 // El fantasma: un copy no es un archivo con proporción.
 eq("Copies NO genera entregables", generatesFiles("Copies"), false);

@@ -2,9 +2,10 @@
 //
 // Source adapters:
 //   csv          — public CSV export. Zero setup, works while the sheet is
-//                  link-shared. Used for the current DiDi sheet.
+//                  link-shared. Fallback only.
 //   apps_script  — an Apps Script web app the team deploys on their own sheet.
-//                  Works on PRIVATE sheets and can list tabs. Production path.
+//                  Works on PRIVATE sheets and can list tabs. Production path
+//                  (DiDi, since Jul 2026).
 //
 // SAFETY: Google silently returns the FIRST tab when you ask for a tab name
 // that doesn't exist. We therefore validate the header row on every fetch and
@@ -92,7 +93,8 @@ export function mapHeader(header: string[]): Record<SheetColumn, number> | null 
     if (at !== -1) index[col] = at;
   }
   // Require the identifying columns; a different tab won't have these.
-  const required: SheetColumn[] = ["# Entrega", "Asignación", "Marca", "Naming", "# Idea"];
+  // "# Entrega" is NOT here: DiDi dropped that column in the Oct 2026 sheet.
+  const required: SheetColumn[] = ["Asignación", "Marca", "Naming", "# Idea"];
   if (required.some((c) => index[c] === undefined)) return null;
   return index as Record<SheetColumn, number>;
 }

@@ -9,7 +9,6 @@ import type { SheetRow } from "@/lib/sheet-sync";
 import { missingBloqueante, requiredFor, faltaLead } from "@/lib/required";
 import { puedeSerLead } from "@/lib/roles";
 import {
-  ENTREGA,
   FORMATO,
   GENERO,
   MARCA,
@@ -169,8 +168,6 @@ export function StagedCard({
         <div className="space-y-5 border-t border-border bg-secondary/25 px-4 py-4">
           <Section title="Entrega">
             <Grid>
-              <Picker label="# Entrega" required={isRequired("# Entrega")} options={ENTREGA} value={val("# Entrega")} edited={isEdited("# Entrega")}
-                onChange={(v) => onEdit("# Entrega", v[0] ?? "")} onReset={() => onResetField("# Entrega")} />
               <Picker label="Marca" required={isRequired("Marca")} options={MARCA} value={val("Marca")} edited={isEdited("Marca")}
                 onChange={(v) => onEdit("Marca", v[0] ?? "")} onReset={() => onResetField("Marca")} />
             </Grid>

@@ -16,7 +16,6 @@ export const TRACK_HINT: Record<Track, string> = {
 };
 
 // ── Shared across both tracks ──
-export const ENTREGA = ["1ra entrega", "2da entrega"];
 export const MARCA = ["Card", "Préstamos"];
 export const PLATAFORMA = ["GG", "FB", "TT", "EC"]; // EC = extra channel
 export const PLATAFORMA_LABEL: Record<string, string> = {

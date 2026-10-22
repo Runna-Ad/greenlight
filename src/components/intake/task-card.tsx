@@ -8,7 +8,6 @@ import { ChipSelect } from "./chip-select";
 import { CopyFieldButton, MultiCopyButton, type PickCard } from "./copy-to-picker";
 import {
   DURACION,
-  ENTREGA,
   FORMATO,
   GENERO,
   MARCA,
@@ -23,7 +22,7 @@ import { camposLlenos, combosDeTarjeta, nombresDeTarjeta, type TaskDraft } from 
 import { puedeSerAsignado } from "@/lib/roles";
 
 type ChipKey =
-  | "entrega" | "asignacion" | "marca" | "plataforma"
+  | "asignacion" | "marca" | "plataforma"
   | "tipoAsset" | "formato" | "tamano" | "genero" | "duracion";
 type TextKey =
   | "comentariosLeads" | "peloteo" | "concepto" | "sellingPoints"
@@ -178,8 +177,7 @@ export function TaskCard({
             {chip("marca", "Marca", MARCA)}
           </div>
 
-          {/* Entrega + gente */}
-          {chip("entrega", "# Entrega", ENTREGA)}
+          {/* Gente */}
           {/* MISMA regla que el gate del servidor y el picker del tablero (lib/roles). */}
           {chip("asignacion", "Asignación", pool.filter((p) => puedeSerAsignado(p, track)).map((p) => ({ value: p.name, color: p.color })), { multi: true, hint: "Lead + especialistas de este track" })}
 

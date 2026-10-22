@@ -40,6 +40,8 @@ console.log("\n▶ CSV parser (offline)");
 console.log("\n▶ Header validation (the wrong-tab guard)");
 {
   ok("valid header maps", mapHeader(["# Entrega", "Asignación", "Marca", "Naming", "# Idea"]) !== null);
+  // Oct 2026: DiDi's new sheet has no "# Entrega" column.
+  ok("header without # Entrega maps", mapHeader(["Asignación", "Marca", "Naming", "# Idea"]) !== null);
   ok(
     "foreign tab header rejected",
     mapHeader(["Tripleta", "Comentarios", "Peloteo", "Plataforma"]) === null,
