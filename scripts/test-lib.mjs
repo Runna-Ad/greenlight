@@ -1028,6 +1028,34 @@ console.log("\n▶ Guión (paste importer)");
   ok("mencionaCta: un 'CTA' suelto antes del Plano 1 es encabezado de columna, no cuenta",
      !mencionaCta("ACCIÓN + COPY IN | CTA | DIÁLOGO\nPlano 1 - x\nAcción."));
   ok("mencionaCta: rótulo solo DENTRO de un plano sí cuenta", mencionaCta("Plano 1 - x\nCTA\nPídela"));
+  ok("mencionaCta: 'CTA:' CON dos puntos antes del Plano 1 sí cuenta (es rótulo, no encabezado)",
+     mencionaCta("CTA:\nPídela\nPlano 1 - x\nAcción."));
+  ok("mencionaCta: 'botón CTA:' describiendo un GFX no cuenta (el parser tampoco lo saca)",
+     !mencionaCta("Plano 1 - x\nGFX: Aparece el botón CTA: amarillo"));
+  ok("mencionaCta: GFX con ' · CTA:' sí cuenta", mencionaCta("Plano 1 - x\nGFX: flecha · CTA: Pídela"));
+
+  // Reap 0081, segunda pasada
+  const pick = (t) => parseGuion(t)[0];
+  const neg1 = pick("Plano 1 - x\nCopy in: Sin anualidad · **CTA: Pídela**");
+  eq("negrita que abre el rótulo: sin '**' huérfano en el CTA", [neg1.copy_in, neg1.cta].join("|"), "Sin anualidad|Pídela");
+  eq("negrita que abre el rótulo tras viñeta: sin '**' huérfano", pick("Plano 1 - x\n- **CTA: Pídela**").cta, "Pídela");
+  const neg2 = pick("Plano 1 - x\nCopy in: **Sin anualidad · CTA:** Pídela");
+  eq("negrita que cierra en el rótulo: se cierra en el copy", [neg2.copy_in, neg2.cta].join("|"), "**Sin anualidad**|Pídela");
+  eq("un '**' legal sin pareja junto a un CTA sigue intacto",
+     pick("Plano 1 - x\nCopy in: CASHBACK** · CTA: Pídela").copy_in, "CASHBACK**");
+  const loc1 = pick("Plano 6 - cierre\nCopy in: X\nCTA:\nActriz\nDiDi Card");
+  eq("'CTA:' solo + locutor + renglón con cara de locutor: el locutor NO se va a CTA", loc1.cta, null);
+  eq("…y el diálogo queda como sin CTA", loc1.dialogo, pick("Plano 6 - cierre\nCopy in: X\nActriz\nDiDi Card").dialogo);
+  const loc2 = pick("Plano 6 - cierre\nCopy in: X\nCTA:\nPídela\nActriz\nPídela ya.");
+  eq("'CTA:' solo + botón + locutor con su texto: el botón sí es CTA", [loc2.cta, loc2.dialogo].join("|"), "Pídela|(Actriz) Pídela ya.");
+  const gfx = pick("Plano 1 - x\nGFX: Aparece el botón CTA: amarillo\nActriz\nHola.");
+  eq("GFX: 'botón CTA:' a mitad de descripción se queda en GFX", [gfx.gfx, gfx.cta].join("|"), "Aparece el botón CTA: amarillo|");
+  const sfx = pick("Plano 1 - x\nSFX: whoosh · CTA: Pídela\nActriz\nHola.");
+  eq("SFX: ' · CTA:' sí se separa", [sfx.sfx, sfx.cta].join("|"), "whoosh|Pídela");
+  const hueAbajo = normalizarCta({ ...limpio, copy_in: "Sin anualidad\nCTA:\nPídela", gfx: "Aparece el botón CTA: amarillo" });
+  eq("normalizarCta: 'CTA:' solo dentro de copy_in se lleva el renglón de abajo",
+     [hueAbajo.copy_in, hueAbajo.cta].join("|"), "Sin anualidad|Pídela");
+  eq("normalizarCta: GFX describiendo el botón queda igual", hueAbajo.gfx, "Aparece el botón CTA: amarillo");
 
   // Separadores colgando: lineal, no cuadrático (antes 39 000 guiones tardaban ~0.5 s)
   const largo = "a" + "-".repeat(39000) + " b";

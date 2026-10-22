@@ -135,8 +135,8 @@ const valorEtiqueta = (l: string, re: RegExp): string => l.replace(re, "").trim(
 // adelante; o un renglón que es SÓLO "CTA" / "Botón CTA" con el texto abajo. Sin dos
 // puntos dentro de una frase es una acotación ("señala el CTA.") y se queda donde está.
 // A mitad de renglón sólo cuentan las formas cortas (CTA:/Botón CTA:), y fuera de un
-// renglón de campo (Copy in:, SFX:…) sólo después de un separador (" · CTA:", ". CTA:"):
-// "Aparece el botón CTA: Pídela" es una descripción. `(?<![\p{L}\d])` evita partir
+// renglón de copy (Copy in:, Título:…) sólo después de un separador (" · CTA:", ". CTA:"):
+// "Aparece el botón CTA: Pídela" en Acción, SFX o GFX es una descripción. `(?<![\p{L}\d])` evita partir
 // dentro de una palabra ("Acta:").
 const CTA_CORTA = "(?:bot[oó]n\\s*)?cta";
 const CTA_LARGA = "(?:call\\s*to\\s*action|llamad[oa]\\s+a\\s+la\\s+acci[oó]n)";
@@ -144,8 +144,9 @@ const CTA_CUALQUIERA = `(?:${CTA_CORTA}|${CTA_LARGA})`;
 const PREFIJO = "(?:[•·\\-–—]\\s*|\\p{Extended_Pictographic}\\uFE0F?\\s*)?";
 const rotuloCta = (nucleo: string): string => `(?:\\*\\*)?${nucleo}(?:\\*\\*)?\\s*:(?:\\*\\*)?`;
 const CTA_INICIO = new RegExp(`^${PREFIJO}${rotuloCta(CTA_CUALQUIERA)}`, "iu");
-const CTA_ADENTRO = new RegExp(`(?<![\\p{L}\\d])${rotuloCta(CTA_CORTA)}`, "iu");
-const CTA_TRAS_SEPARADOR = new RegExp(`(?<=[·•|;.!?–—-]\\s*)${rotuloCta(CTA_CORTA)}`, "iu");
+// Con el rótulo en un grupo: `split` lo devuelve entre los pedazos (ver negritaDelRotulo).
+const CTA_ADENTRO = new RegExp(`(?<![\\p{L}\\d])(${rotuloCta(CTA_CORTA)})`, "iu");
+const CTA_TRAS_SEPARADOR = new RegExp(`(?<=[·•|;.!?–—-]\\s*)(${rotuloCta(CTA_CORTA)})`, "iu");
 const CTA_SOLO = new RegExp(`^${PREFIJO}(?:\\*\\*)?${CTA_CORTA}(?:\\*\\*)?\\s*:?(?:\\*\\*)?$`, "iu");
 // El extractor/writer a veces pone el CTA como locutor: "(CTA) Pídela".
 const CTA_LOCUTOR = new RegExp(`^\\(\\s*${CTA_CUALQUIERA}\\s*\\)\\s*`, "iu");
@@ -166,24 +167,50 @@ function sinSeparadorFinal(s: string): string {
 /** Si un corte partió una negrita (`**Sin anualidad · CTA: Pídela**`), la cierra en un
  *  pedazo y la reabre en el siguiente. Si el renglón trae un `**` sin pareja (una marca
  *  legal como "CASHBACK**"), no adivina: lo deja como está. */
+const negritas = (p: string): number => (p.match(/\*\*/g) ?? []).length;
+
+/** Un rótulo que se llevó un `**` sin pareja. Si la negrita venía abierta de antes
+ *  ("**Sin anualidad · CTA:** Pídela"), ese `**` la cerraba: se cierra en el pedazo de
+ *  antes. Si la abrió el rótulo ("· **CTA: Pídela**", "- **CTA: Pídela**"), es andamiaje,
+ *  como la negrita al inicio de renglón en limpiarPegado: se quita también su cierre. */
+function negritaDelRotulo(partes: string[], rotulos: string[]): string[] {
+  const out = [...partes];
+  let abierta = false;
+  let quitarCierre = false;
+  for (let i = 0; i < out.length; i++) {
+    if (quitarCierre && out[i].includes("**")) {
+      out[i] = out[i].replace("**", "");
+      quitarCierre = false;
+    }
+    abierta = abierta !== (negritas(out[i]) % 2 === 1);
+    if (negritas(rotulos[i] ?? "") % 2 === 0) continue;
+    if (abierta && out[i]) { out[i] = `${out[i]}**`; abierta = false; }
+    else if (!abierta) quitarCierre = true;
+  }
+  return out;
+}
+
 function repartirNegrita(partes: string[]): string[] {
-  const n = (p: string): number => (p.match(/\*\*/g) ?? []).length;
-  if (partes.reduce((suma, p) => suma + n(p), 0) % 2) return partes;
+  if (partes.reduce((suma, p) => suma + negritas(p), 0) % 2) return partes;
   let abierta = false;
   return partes.map((p) => {
     let out = p;
     if (abierta && out) out = `**${out}`;
-    const abiertaAlFinal = abierta !== (n(p) % 2 === 1);
+    const abiertaAlFinal = abierta !== (negritas(p) % 2 === 1);
     if (abiertaAlFinal && out) out = `${out}**`;
     abierta = abiertaAlFinal;
     return out;
   });
 }
 
-/** Dónde puede ir un CTA dentro del renglón: "campo" (valor de Copy in:/SFX:/Título:…,
- *  en cualquier parte), "accion" (sólo al inicio o tras un separador), "hablado" (sólo
- *  al inicio: "dale clic al CTA: es fácil" no se parte). */
+/** Dónde puede ir un CTA dentro del renglón: "campo" (valor de un campo de copy, Copy
+ *  in:/Título:…, en cualquier parte), "accion" (Acción y notas de producción SFX:/GFX:/
+ *  Edición:, sólo al inicio o tras un separador: "Aparece el botón CTA: amarillo" es una
+ *  descripción), "hablado" (sólo al inicio: "dale clic al CTA: es fácil" no se parte). */
 export type ModoCta = "campo" | "accion" | "hablado";
+
+/** El modo de un campo del plano: el copy en cualquier parte; las notas, tras separador. */
+const modoDe = (campo: Etiqueta["campo"]): ModoCta => (campo === "copy_in" ? "campo" : "accion");
 
 /**
  * Separa las etiquetas de CTA de un renglón. `resto` es lo de antes de la primera
@@ -195,39 +222,50 @@ export function separarCta(linea: string, modo: ModoCta = "campo"): { resto: str
   if (CTA_SOLO.test(t)) return { resto: "", ctas: [""] };
   const adentro = modo === "campo" ? CTA_ADENTRO : CTA_TRAS_SEPARADOR;
   const inicio = CTA_INICIO.exec(t);
-  let partes: string[];
+  let trozos: string[]; // pedazo, rótulo, pedazo, rótulo, pedazo…
   if (inicio) {
     const cola = t.slice(inicio[0].length);
-    partes = ["", ...(modo === "hablado" ? [cola] : cola.split(adentro))];
+    trozos = ["", inicio[0], ...(modo === "hablado" ? [cola] : cola.split(adentro))];
   } else if (modo === "hablado" || !adentro.test(t)) {
     return { resto: t, ctas: [] };
   } else {
-    partes = t.split(adentro);
+    trozos = t.split(adentro);
   }
+  const partes = trozos.filter((_, i) => i % 2 === 0);
+  const rotulos = trozos.filter((_, i) => i % 2 === 1);
   // Sólo se limpia el borde de cada CORTE (el " · " que quedó antes de un rótulo).
   const limpias = partes.map((p, i) => (i < partes.length - 1 ? sinSeparadorFinal(p.trim()) : p.trim()));
-  const [resto, ...ctas] = repartirNegrita(limpias);
+  const [resto, ...ctas] = repartirNegrita(negritaDelRotulo(limpias, rotulos));
   return { resto, ctas };
 }
 
 /** ¿Termina el renglón en un CTA vacío (su texto viene abajo)? */
 const ctaPendiente = (ctas: string[]): boolean => ctas.length > 0 && ctas[ctas.length - 1] === "";
 
-// Renglones de campo (plano o estático): ahí un "CTA:" a mitad de renglón SÍ es rótulo.
-const RENGLON_DE_CAMPO = /^(?:copy\s*in|sfx|gfx|edici[oó]n|t[ií]tulo|subt[ií]tulo|legales?)\s*:/i;
+// Renglones de campo (plano o estático) y con qué modo se parte su valor (como el parser).
+const RENGLONES_DE_CAMPO: [RegExp, ModoCta][] = [
+  [/^(?:copy\s*in|t[ií]tulo|subt[ií]tulo|legales?)\s*:/i, "campo"],
+  [/^(?:sfx|gfx|edici[oó]n)\s*:/i, "accion"],
+];
 
 /** ¿El texto pegado trae un CTA? Para avisar en la vista previa si ningún plano quedó
  *  con CTA (algo se perdió o cayó en otro campo). Cuenta lo mismo que el parser: un
- *  rótulo al inicio del renglón, o a mitad de un renglón de campo. NO cuenta un "CTA:"
- *  a mitad de una frase hablada ("dale clic al CTA: es fácil"), ni un "CTA" suelto
- *  antes del primer plano (es el encabezado de una columna del deck, no un CTA). */
+ *  rótulo al inicio del renglón, o dentro del valor de un renglón de campo con el modo
+ *  de ese campo. NO cuenta un "CTA:" a mitad de una frase hablada ("dale clic al CTA: es
+ *  fácil"), ni un "CTA" suelto SIN dos puntos antes del primer plano (es el encabezado de
+ *  una columna del deck). Un "CTA:" con dos puntos antes del primer plano sí cuenta: es
+ *  un rótulo, y el parser descarta todo lo de antes del primer plano. */
 export function mencionaCta(texto: string): boolean {
   const lineas = limpiarPegado(texto).split("\n").map((l) => l.trim());
   const primerPlano = lineas.findIndex((l) => HEADER.test(l));
   return lineas.some((l, i) => {
-    if (CTA_SOLO.test(l)) return i > primerPlano;
+    if (CTA_SOLO.test(l)) return i > primerPlano || l.includes(":");
     if (CTA_INICIO.test(l)) return true;
-    return RENGLON_DE_CAMPO.test(l) && CTA_ADENTRO.test(l);
+    for (const [re, modo] of RENGLONES_DE_CAMPO) {
+      const m = re.exec(l);
+      if (m) return separarCta(l.slice(m[0].length), modo).ctas.length > 0;
+    }
+    return false;
   });
 }
 
@@ -249,14 +287,18 @@ export function normalizarCta(p: PlanoParsed): PlanoParsed {
     const v = out[k];
     if (!v) continue;
     let movio = false;
-    const lineas = v.split("\n").map((l) => {
-      const r = separarCta(l, k === "accion" ? "accion" : "campo");
-      if (!r.ctas.length) return l;
+    let textoAbajo = false; // "CTA:" solo: su texto es el siguiente renglón con texto
+    const quedan: string[] = [];
+    for (const l of v.split("\n")) {
+      if (textoAbajo && l.trim() && !abreCta(l)) { ctas.push(l.trim()); textoAbajo = false; continue; }
+      const r = separarCta(l, k === "copy_in" ? "campo" : "accion");
+      if (!r.ctas.length) { quedan.push(l); continue; }
       movio = true;
       ctas.push(...r.ctas);
-      return r.resto;
-    });
-    if (movio) out[k] = juntar(lineas);
+      textoAbajo = ctaPendiente(r.ctas);
+      quedan.push(r.resto);
+    }
+    if (movio) out[k] = juntar(quedan);
   }
   if (out.dialogo) {
     let movio = false;
@@ -317,16 +359,25 @@ export function parseGuion(texto: string): PlanoParsed[] {
 
 const esEtiqueta = (l: string): boolean => ETIQUETAS.some((e) => e.re.test(l));
 
+/** ¿Es un renglón de texto corrido (ni etiqueta, ni CTA, ni locutor)? */
+const esTextoLlano = (l: string | undefined): boolean =>
+  !!l && !esEtiqueta(l) && !abreCta(l) && !cueConColon(l) && !esCue(l);
+
 /**
  * ¿`sig` es el texto de un CTA que vino solo en el renglón de arriba? No si es otra
  * etiqueta, otro CTA o un locutor con dos puntos. Un renglón con cara de locutor
- * ("Pídela", "Solicítala Ahora") sólo es locutor si abajo viene su texto; si abajo
- * viene otro locutor, una etiqueta o nada, es el texto del botón.
+ * ("Pídela", "Solicítala Ahora") es el botón si abajo no viene nada, viene una
+ * etiqueta o un "Locutor: …"; si abajo viene texto, es el locutor de ese texto. Si
+ * abajo viene OTRO renglón con cara de locutor, `sig` es el botón sólo cuando ese otro
+ * sí trae su texto abajo ("Pídela / Actriz / Pídela ya."); si no ("Actriz / DiDi
+ * Card"), `sig` es el locutor y lo de abajo lo que dice. Ante la duda se queda en el
+ * diálogo, y el aviso amarillo de la vista previa avisa si ningún plano quedó con CTA.
  */
-function esTextoDeCta(sig: string | undefined, despues: string | undefined): boolean {
+function esTextoDeCta(sig: string | undefined, despues: string | undefined, tras: string | undefined): boolean {
   if (!sig || esEtiqueta(sig) || abreCta(sig) || cueConColon(sig)) return false;
-  if (!esCue(sig)) return true;
-  return !despues || esEtiqueta(despues) || abreCta(despues) || esCue(despues) || !!cueConColon(despues);
+  if (!esCue(sig) || !despues) return true;
+  if (esEtiqueta(despues) || abreCta(despues) || cueConColon(despues)) return true;
+  return esCue(despues) && esTextoLlano(tras);
 }
 
 function parseBloque(lineas: string[]): PlanoParsed {
@@ -349,8 +400,8 @@ function parseBloque(lineas: string[]): PlanoParsed {
   cuerpo.forEach((l, i) => {
     if (valorDeCta.has(i)) return;
     const et = ETIQUETAS.find((e) => e.re.test(l));
-    const ctas = et ? separarCta(valorEtiqueta(l, et.re)).ctas : abreCta(l) ? separarCta(l, "hablado").ctas : [];
-    if (ctaPendiente(ctas) && esTextoDeCta(cuerpo[i + 1], cuerpo[i + 2])) valorDeCta.add(i + 1);
+    const ctas = et ? separarCta(valorEtiqueta(l, et.re), modoDe(et.campo)).ctas : abreCta(l) ? separarCta(l, "hablado").ctas : [];
+    if (ctaPendiente(ctas) && esTextoDeCta(cuerpo[i + 1], cuerpo[i + 2], cuerpo[i + 3])) valorDeCta.add(i + 1);
   });
 
   // La zona de diálogo empieza DESPUÉS de la última etiqueta (Copy in:/SFX:/…). El CTA
@@ -377,7 +428,7 @@ function parseBloque(lineas: string[]): PlanoParsed {
     const et = ETIQUETAS.find((e) => e.re.test(linea));
     if (et) {
       // Etiqueta de campo; si trae un CTA a mitad de renglón, ese pedazo va a CTA.
-      const { resto, ctas } = separarCta(valorEtiqueta(linea, et.re));
+      const { resto, ctas } = separarCta(valorEtiqueta(linea, et.re), modoDe(et.campo));
       bucket[et.campo].push(resto);
       cta.push(...ctas);
       return;

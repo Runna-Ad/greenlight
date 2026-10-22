@@ -21,7 +21,8 @@ CTA después del diálogo → el diálogo se iba a Acción; CTA a mitad de líne
       (aditiva: el código de hoy no la nota) → comprobar `select cta from produccion.planos limit 1`; (2) recién entonces
       push/merge del código. Al revés, la tarea y el portal ahora truenan con error (antes mostraban un guión vacío y
       ofrecían "Reemplazar todos" sobre planos que sí existen).
-Next Step: segunda pasada del revisor de bugs sobre los arreglos → commit en feat/plano-cta → Pedro decide el ship.
+- [x] Segunda pasada del revisor de bugs: 6 mejoras, 5 reales (corridas con node antes de tocar código), 1 falsa alarma.
+Next Step: push de feat/plano-cta a main (fast-forward sobre 62884e9) → revisar el deploy de Vercel.
 
 ### Review (reap 2026-10-22: bugs Sonnet · seguridad Opus · rendimiento/accesibilidad/UI Sonnet)
 Arreglado (con prueba):
@@ -37,6 +38,20 @@ Arreglado (con prueba):
   antes de "CTA:"; normalizarCta quita el rótulo repetido y no toca campos sin CTA; aviso sin falsos positivos (frase hablada,
   encabezado de columna "CTA" antes del Plano 1) y con texto por modo; CTA en la fila de campos cortos de la vista previa
   (no suma un renglón por plano); placeholder "Texto del botón" igual al del estático (medido: 31 px, una línea a 560 px).
+Segunda pasada (revisor de bugs, mismos ojos; 10 de las 15 pruebas nuevas fallan con el código de antes, pasan con el de ahora):
+- "Copy in: Sin anualidad · **CTA: Pídela**" y "- **CTA: Pídela**" dejaban "Pídela**" (asteriscos sueltos en la caja del
+  cliente). Ahora, si el rótulo se lleva un `**` sin pareja: lo abrió el rótulo → andamiaje, se quita su cierre ("Pídela");
+  lo cerraba → se cierra en el copy ("**Sin anualidad**"). `negritaDelRotulo`.
+- "CTA:" solo + "Actriz" + "DiDi Card": "Actriz" se iba a CTA. Ahora un renglón con cara de locutor sólo es el botón si el
+  de abajo también lo parece Y trae su texto abajo; si no, se queda en el diálogo (igual que sin CTA).
+- SFX/GFX/Edición partían en cualquier parte: "GFX: Aparece el botón CTA: amarillo" mandaba "amarillo" a CTA. Ahora usan el
+  modo de Acción (sólo tras separador), en el parser, en normalizarCta y en el aviso.
+- normalizarCta: "CTA:" solo dentro de copy_in/acción/notas dejaba el texto de abajo en ese campo. Ahora se lo lleva.
+- El aviso ignoraba "CTA:" CON dos puntos antes del Plano 1 (lo tomaba por encabezado de columna). Ahora cuenta.
+- Falsa alarma: la lookbehind de CTA_TRAS_SEPARADOR con 40 000 espacios tarda 0-1 ms (medido); el segundo entero que se ve
+  con ese texto es `limpiarPegado` (`/[ \t]+\n/`, pre-existente, abajo).
+- Queda ambiguo a propósito: "CTA:" + "Pídela" + "Descarga la app hoy." sale como locutor "(Pídela)"; un "CTA:" vacío de
+  plantilla seguido de locutor es igual de probable. El aviso amarillo lo cubre si ningún plano quedó con CTA.
 NO arreglado (decisión):
 - El aviso sale sólo si NINGÚN plano quedó con CTA; perder 1 de 3 no avisa. Contar rótulos vs. CTAs por plano es frágil.
 - Borradores viejos de H.Ü.E (hue_generations) sin `cta`: se importaron con el código viejo, así que copy_in coincide en los
@@ -44,7 +59,7 @@ NO arreglado (decisión):
 - COLS_ESTATICO sigue copiado en 3 archivos (fuera de alcance; mismo patrón que COLS_PLANO si se quiere después).
 - limpiarPegado corre 3 veces en "Analizar" (barato, módulo perezoso). `/[ \t]+\n/` de limpiarPegado tiene la misma forma
   cuadrática con espacios (pre-existente, sólo un editor con sesión puede dispararlo).
-Verificación: npm test exit 0 (lib 591 · db 428 · import 81 · sync 45) · tsc 0 · eslint 0 · next build exit 0 (limpio, .next borrado antes) ·
+Verificación: npm test exit 0 (lib 605 tras la segunda pasada · db 428 · import 81 · sync 45) · tsc 0 · eslint 0 · next build exit 0 (limpio, .next borrado antes) ·
 navegador (banco temporal, sin base): 4 planos con CTA en las 4 posiciones → cada CTA en su caja; aviso aparece con CTA antes
 del Plano 1 y se va al escribirlo; estático "CTA:" → Botón CTA; tarjeta del editor y vista cliente (CTA vacío oculto).
 NO comprobado: la tarea real con la base real (necesita la 0081 aplicada); H.Ü.E real (extraer/escribir) con el campo cta.
