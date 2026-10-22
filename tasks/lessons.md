@@ -1356,3 +1356,23 @@ TAGS: #pruebas #regex #formatos
 RULE: antes de diseñar dónde va una pieza anclada al fondo, calcular cuánto margen tiene el fondo en cada eje (W − ma.w·kb, H − ma.h·kb); el eje sin margen fija la pieza, y el crecimiento va hacia el otro lado con un aire mínimo.
 TAGS: #formatos #acomodo #b26 #b13 #geometria
 
+
+[2026-10-22] PEDRO_OVERRIDE: Claude recomendó la opción A del legal (en menos renglones sólo en los banners, automático).
+PEDRO'S APPROACH: la opción B ("Build option B: fewer legal lines on every wide size, plus a lines picker in the editor"): todas las medidas anchas y, además, elegir los renglones a mano en el editor.
+WHY IT WAS BETTER: el diseñador decide la última palabra en cada medida (lo mismo que pidió en B26: "leave it to the designer to choose"); con sólo lo automático, la herramienta decidía por él en un tema de gusto.
+RULE: cuando el acomodo automático decide algo de gusto (cuántos renglones, qué orden), recomendar también un control a mano en el editor, no sólo la regla automática.
+TAGS: #override #formatos #legal #b27 #editor
+
+[2026-10-22] LESSON (repetido 3 veces en B27: una caché cuya clave no lleva todo lo que cambia el resultado): (1) guardé las versiones del maestro por el objeto Escritura, que es una copia nueva en cada tecla del editor, y se rehacían siempre; (2) una caché por maestro y número de renglones sin las tipografías: al cargar otra fuente, devolvía el legal viejo; (3) `revisarMedida` guardaba el resultado sin la lista de opciones de renglones: la tarjeta de 1080×1920 (que no las hace, para ahorrar) llegaba primero y el editor recibía su lista con sólo «3», así que decía «no se pueden cambiar». La (3) la vi sólo en el navegador, abriendo el editor de una medida alta después de verla en la página; las pruebas siempre pedían las opciones y nunca la tarjeta primero. (4) Minutos después de escribir esta lección, al darle a `revisarMedida` la pieza del legal que dice la página (`legal`), no la puse en la clave: la misma edición con otro legal devolvía lo soltado del primero. Esta vez la agarró la prueba nueva, porque llamaba dos veces con la misma medida.
+ROOT CAUSE: al agregar a una función una entrada nueva (las tipografías, las opciones a pedir), no repasé su clave de caché; y llamar perezoso (hacer menos según quién pide) hace que dos llamadores con la misma clave esperen cosas distintas.
+RULE: cada vez que una función cacheada recibe una entrada nueva, o hace menos trabajo según quién la llama, revisar la clave en ese mismo cambio: todo lo que puede cambiar el resultado devuelto va en la clave (o en el objeto que es la clave). Probarlo con los dos llamadores en el orden malo (el que hace menos primero).
+TAGS: #cache #formatos #b27 #repetido #pruebas
+
+[2026-10-22] LESSON (leer el texto de un PSD: un salto de párrafo y un salto de renglón a mano no son lo mismo): para poner el legal en menos renglones, mi `juntar` unía TODOS los saltos; ag-psd entrega los párrafos de verdad como "\n" y los saltos a mano (Shift+Enter) como "\u0003", y un guion al final de un salto a mano parte una palabra. Lo vio la pasada de código.
+RULE: antes de reescribir un texto del PSD, distinguir los dos saltos (`saltosSuaves` en textos.ts) y sólo unir los suaves; un salto a mano después de "-" no se toca.
+TAGS: #psd #ag-psd #textos #formatos #b27
+
+[2026-10-22] LESSON (una edición guardada tiene que decir con qué forma se midió): en B27 lo movido a mano del legal se guardaba sin los renglones cuando eran los del automático, y las ediciones de antes de B27 no los tienen. Si el automático cambiaba, o faltaban las tipografías, lo movido quedaba puesto sobre otra forma del pie, sin aviso; y el editor lo abría sin soltarlo, distinto de la tarjeta. Lo vio la segunda pasada de revisión, no las pruebas ni el navegador.
+ROOT CAUSE: guardé "lo que la persona eligió" (null = automático) en vez de "con qué forma se hizo lo guardado"; una posición sólo vale con la forma de la pieza que se movió.
+RULE: cuando lo guardado depende de una forma que puede cambiar (renglones, textos, tipografías), guardar esa forma junto con lo movido, y decidir qué significa lo guardado de antes (aquí: sin renglones = la forma del PSD). El editor abre con la misma regla que la tarjeta (`edicionMuevePieza`, `edicionSinPieza`).
+TAGS: #formatos #b27 #edicion #guardado #revision

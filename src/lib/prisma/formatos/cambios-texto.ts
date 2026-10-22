@@ -45,10 +45,10 @@ export const NO_SE_ESCRIBIO = {
 type Rect = { x0: number; y0: number; x1: number; y1: number };
 const unir = (a: Rect, b: Rect): Rect => ({ x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) });
 const deCaja = (c: Caja): Rect => ({ x0: c.x, y0: c.y, x1: c.x + c.w, y1: c.y + c.h });
-const aCaja = (r: Rect): Caja => ({ x: r.x0, y: r.y0, w: r.x1 - r.x0, h: r.y1 - r.y0 });
+export const aCaja = (r: Rect): Caja => ({ x: r.x0, y: r.y0, w: r.x1 - r.x0, h: r.y1 - r.y0 });
 
 /** Dónde puede caer la tinta de un texto escrito con estas líneas (px de la mesa, enteros, con margen). */
-function reservado(l: Listo): Rect | null {
+export function reservado(l: Listo): Rect | null {
   const tr = l.tp.texto.transform;
   let r: Rect | null = null;
   for (const ln of l.lineas)
@@ -85,7 +85,7 @@ function aCajaMayor(src: Uint8ClampedArray, de: Caja, a: Caja, fondo: number): U
 }
 
 /** La caja de lo sólido (alfa > 50 %, como en el despiece) de un RGBA u8 con esquina en (x, y); null si nada. */
-function solidoDe(rgba: Uint8ClampedArray, c: Caja): Rect | null {
+export function solidoDe(rgba: Uint8ClampedArray, c: Caja): Rect | null {
   let x0 = c.w, y0 = c.h, x1 = -1, y1 = -1;
   for (let yy = 0; yy < c.h; yy++)
     for (let xx = 0; xx < c.w; xx++)
@@ -103,7 +103,7 @@ function solidoDe(rgba: Uint8ClampedArray, c: Caja): Rect | null {
  * encima, lo pintado, mezclado sobre la base con la gamma de Photoshop (`gamma`, como `armarMedida`). La caja sólida
  * sale de los píxeles nuevos (alfa > 50 %, como en el despiece).
  */
-function reescribir<D extends Pick<PiezaLista, "caja" | "solido" | "rgba" | "oscurece" | "base" | "textos">>(d: D, listos: readonly Listo[], pintar: Pintar, gamma: number): D | null {
+export function reescribir<D extends Pick<PiezaLista, "caja" | "solido" | "rgba" | "oscurece" | "base" | "textos">>(d: D, listos: readonly Listo[], pintar: Pintar, gamma: number): D | null {
   if (!d.base) return null;
   let r = deCaja(d.caja);
   for (const l of listos) {
@@ -143,7 +143,7 @@ function reescribir<D extends Pick<PiezaLista, "caja" | "solido" | "rgba" | "osc
 }
 
 /** La tinta de UN texto sola, sin la opacidad de su capa (la capa del PSD editable la lleva aparte), sin premultiplicar. */
-function tintaSola(l: Listo, pintar: Pintar): NonNullable<TextoPieza["cambio"]>["tinta"] {
+export function tintaSola(l: Listo, pintar: Pintar): NonNullable<TextoPieza["cambio"]>["tinta"] {
   const r = reservado(l);
   if (!r) return null;
   const w = r.x1 - r.x0, h = r.y1 - r.y0;

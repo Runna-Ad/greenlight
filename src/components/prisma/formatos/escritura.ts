@@ -9,9 +9,12 @@
  *   · `textoEscrito`: lo que `armarMedida` pide para pintar una pieza con sus letras nuevas.
  */
 import type { Listo, Maquetar, Pintar } from "@/lib/prisma/formatos/cambios-texto";
-import type { MaestroListo } from "@/lib/prisma/formatos/listo";
+import type { MaestroListo, PiezaLista } from "@/lib/prisma/formatos/listo";
 import type { Lugar, TextoEscrito } from "@/lib/prisma/formatos/nitido";
 import type { TextoPieza } from "@/lib/prisma/formatos/psd";
+import { legalDelPsd } from "@/lib/prisma/formatos/legal";
+import { conRenglones, legalParaRenglones, type LegalRenglones, type SinRenglones } from "@/lib/prisma/formatos/renglones";
+import type { Renglonero } from "@/lib/prisma/formatos/revisar";
 import { TEXTO_ANCHO_TOL, TEXTO_CORRER_MAX, TEXTO_DIF_MAX, compararAlfa, fuentesDe, maquetar, type LineaTexto, type Medidor, type TramoTexto } from "@/lib/prisma/formatos/textos";
 
 /** Una tipografía cargada: con qué familia se pide en el canvas y, si es variable, su peso (eje wght). */
@@ -354,5 +357,115 @@ export function textoEscrito(e: Escritura | null, maestro: number, ma: MaestroLi
       console.error("[formatos-psd] escribir texto", err);
       return null;
     }
+  };
+}
+
+// ── El legal en otros renglones (B27) ────────────────────────────────────
+
+/** Los renglones del legal de cada maestro con esta escritura y estas tipografías: `de` para `revisarMedida`, por qué no
+ *  se puede (null = sí) y la escritura de una versión del maestro (la de su maestro, con el legal nuevo). */
+export type Renglones<M extends MaestroListo = MaestroListo> = {
+  de: (mi: number) => Renglonero<M> | null;
+  porQueNo: (mi: number) => SinRenglones | null;
+  escrituraDe: (ma: MaestroListo) => Escritura | null;
+  /** La pieza del legal de cada maestro, sin tipografías (`legalDelPsd`); null si no trae. */
+  legal: (mi: number) => number | null;
+};
+type PieUsado = { pieza: PiezaLista; listos: Map<number, Listo[]> } | null;
+/** El pie en otros renglones, por la pieza del legal, las tipografías y el legal tal como lo escribe la página (su
+ *  `Listo`): el mismo objeto mientras ninguno cambie. Así no se vuelve a pintar cuando cambia OTRO texto (el editor
+ *  deriva el maestro en cada pausa al teclear) ni cuando la escritura es otro objeto con lo mismo. Pintar cuesta. */
+const pies = new WeakMap<PiezaLista, WeakMap<Tipografias, WeakMap<Listo, Map<number, PieUsado>>>>();
+/** La versión de cada maestro con ese pie (el mismo objeto cada vez: lo de `revisarMedida` se guarda por él). Por el
+ *  pie, no por `n`: con otras tipografías el pie es otro y la versión también. */
+const versiones = new WeakMap<MaestroListo, WeakMap<NonNullable<PieUsado>, MaestroListo>>();
+/** Cuántas veces falló cada versión (por el mismo mapa de `pies`): a la segunda ya no se intenta. */
+const fallas = new WeakMap<Map<number, PieUsado>, Map<number, number>>();
+const escriturasDe = new WeakMap<MaestroListo, Escritura>();
+
+export function renglonesDe<M extends MaestroListo>(maestros: readonly M[], e: Escritura | null, t: Tipografias): Renglones<M> {
+  // Qué legal y con qué `Listo`, una vez por maestro en cada `renglonesDe` (es poco trabajo).
+  const hechos = new Map<number, { info: LegalRenglones | { no: SinRenglones }; listo: Listo | null }>();
+  const legales = new Map<number, number | null>();
+  const legal = (mi: number) => {
+    if (!legales.has(mi)) {
+      const ma = maestros[mi];
+      legales.set(mi, ma ? (legalDelPsd([ma])[0]?.pieza ?? null) : null);
+    }
+    return legales.get(mi) ?? null;
+  };
+  const de = (mi: number) => {
+    const ma = maestros[mi];
+    if (!ma || !e) return null;
+    const ya = hechos.get(mi);
+    if (ya) return ya;
+    let info: LegalRenglones | { no: SinRenglones };
+    try {
+      info = legalParaRenglones(ma, (p) => listosDe(e, mi, p));
+    } catch (err) {
+      // Algo raro del PSD: el legal se queda como viene (no se cae la medida).
+      console.error("[formatos-psd] legal en otros renglones", err);
+      info = { no: "partes" };
+    }
+    const listo = "no" in info ? null : (listosDe(e, mi, info.pieza)?.find((x) => x.tp === ma.piezas[info.pieza].textos[info.j]) ?? null);
+    const v = { info, listo };
+    hechos.set(mi, v);
+    return v;
+  };
+  const version = (mi: number, legal: LegalRenglones, listo: Listo, n: number): M | null => {
+    const ma = maestros[mi];
+    const pieza = ma.piezas[legal.pieza];
+    let porT = pies.get(pieza);
+    if (!porT) pies.set(pieza, (porT = new WeakMap()));
+    let porL = porT.get(t);
+    if (!porL) porT.set(t, (porL = new WeakMap()));
+    let porNP = porL.get(listo);
+    if (!porNP) porL.set(listo, (porNP = new Map()));
+    try {
+      let pie = porNP.get(n), recien: MaestroListo | null = null;
+      if (pie === undefined) {
+        const r = e ? conRenglones(ma, legal, n, listo, maquetadorDe(t), pintorDe(t)) : null;
+        pie = r && { pieza: r.maestro.piezas[legal.pieza], listos: r.listos };
+        porNP.set(n, pie);
+        recien = r?.maestro ?? null;
+      }
+      if (!pie) return null;
+      let porPie = versiones.get(ma);
+      if (!porPie) versiones.set(ma, (porPie = new WeakMap()));
+      const ya = porPie.get(pie);
+      if (ya) return ya as M;
+      const usado = pie, hecha = recien ?? { ...ma, piezas: ma.piezas.map((q, i) => (i === legal.pieza ? usado.pieza : q)) };
+      porPie.set(pie, hecha);
+      if (e) escriturasDe.set(hecha, escrituraCon(e, mi, usado.listos));
+      return hecha as M;
+    } catch (err) {
+      // Sin esa versión, la medida sale con el legal del PSD (no sin medida). No se recuerda: puede ser pasajero (el
+      // navegador sin memoria para el lienzo) y la próxima vez saldría.
+      console.error("[formatos-psd] legal en otros renglones", err);
+      // Una vez puede ser pasajero; dos, ya no: se recuerda que no sale (si no, se volvería a pintar en cada medida).
+      let f = fallas.get(porNP);
+      if (!f) fallas.set(porNP, (f = new Map()));
+      const veces = (f.get(n) ?? 0) + 1;
+      f.set(n, veces);
+      if (veces >= 2) porNP.set(n, null);
+      else porNP.delete(n);
+      return null;
+    }
+  };
+  return {
+    de: (mi) => {
+      const v = de(mi);
+      if (!v || "no" in v.info || !v.listo) return null;
+      const legal = v.info, listo = v.listo;
+      return { pieza: legal.pieza, psd: legal.psd, de: (n) => version(mi, legal, listo, n) };
+    },
+    porQueNo: (mi) => {
+      const v = de(mi);
+      // Sin escritura todavía: un PSD sin legal no espera ninguna tipografía.
+      if (!v) return maestros[mi] && legal(mi) === null ? "sin-legal" : "tipografia";
+      return !("no" in v.info) && !v.listo ? "tipografia" : "no" in v.info ? v.info.no : null;
+    },
+    escrituraDe: (ma) => escriturasDe.get(ma) ?? e,
+    legal,
   };
 }

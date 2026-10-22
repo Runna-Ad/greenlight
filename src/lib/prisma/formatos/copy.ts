@@ -3,6 +3,7 @@
  */
 import { t, type Par } from "../copy.ts";
 import type { Modo, Plataforma } from "./geometria.ts";
+import type { SinRenglones } from "./renglones.ts";
 
 export const PLATAFORMA_LABEL: Record<Plataforma, Par> = {
   meta: t("Meta (Facebook e Instagram)", "Meta (Facebook & Instagram)"),
@@ -418,6 +419,24 @@ export const FP = {
   copiadoDeshecho: t("{d}: como estaba antes de copiar.", "{d}: back to how it was before the copy."),
   copiada: t("Copiada de {m}", "Copied from {m}"),
   nota: t("Nota: ", "Note: "),
+  // B27: el legal en otros renglones, elegido en el editor.
+  editorRenglones: t("Renglones del legal", "Legal lines"),
+  editorRenglonesAuto: t("Automático ({n})", "Automatic ({n})"),
+  editorRenglonesAutoPsd: t("Automático ({n}, como el PSD)", "Automatic ({n}, as in the PSD)"),
+  editorRenglonesPsd: t("como el PSD", "as in the PSD"),
+  editorRenglonesUno: t("1 renglón", "1 line"),
+  editorRenglonesN: t("{n} renglones", "{n} lines"),
+  editorRenglonesAyuda: t("Con menos renglones el legal sale más ancho. Sólo en esta medida.", "With fewer lines the legal gets wider. This size only."),
+  editorRenglonesLetra: t("Letra del legal aquí: {px} px", "Legal letters here: {px} px"),
+  editorRenglonesNo: t("No se pueden cambiar: {m}.", "They can't be changed: {m}."),
+  editorRenglonesNoCabe: t("en menos renglones el legal sería demasiado ancho", "in fewer lines the legal would be too wide"),
+  editorRenglonesDicho: t("Legal en {r}.", "Legal in {r}."),
+  editorRenglonesDichoAuto: t("Legal en automático ({r}).", "Legal on automatic ({r})."),
+  editorRenglonesSoltado: t("Lo que moviste del legal a mano volvió a su lugar automático.", "What you moved of the legal by hand went back to its automatic place."),
+  editorRenglonesSoltadoAbrir: t(
+    "Lo guardado del legal se movió con otros renglones, que ahora no se pueden usar: volvió a su lugar automático.",
+    "The saved legal was moved with other lines, which can't be used now: it went back to its automatic place.",
+  ),
   copiadaTitulo: t("Si la editas aquí, queda como suya.", "Edit it here and it becomes its own."),
   editorNoPinto: t("No se pudo pintar la vista (al navegador no le alcanzó la memoria).", "The preview couldn't be drawn (the browser ran out of memory)."),
   voltearTodas: t("Voltear todas", "Flip all"),
@@ -640,6 +659,27 @@ export const FP_PAPEL: Record<"HERO" | "TITULO" | "SUBTITULO" | "CTA" | "BRAND" 
   BRAND: t("Marca (logo)", "Brand (logo)"),
   FOOTER: t("Legal", "Legal"),
   NINGUNO: t("Sin papel", "No role"),
+};
+
+/** Por qué el legal no se puede poner en otros renglones (`SinRenglones` de renglones.ts). */
+export const FP_SIN_RENGLONES: Record<SinRenglones | "probando", Par> = {
+  "sin-legal": t("el PSD no trae texto en el legal", "the PSD has no text in its legal"),
+  tipografia: t(
+    "falta su tipografía (guarda, cierra el editor y usa «Agregar tipografías» en «Texto nítido») o no pasó la prueba contra Photoshop",
+    "its font is missing (save, close the editor and use «Add fonts» in «Sharp text») or it didn't pass the check against Photoshop",
+  ),
+  probando: t("todavía se están probando las tipografías", "the fonts are still being checked"),
+  estilos: t("el texto del legal usa varios estilos; en Photoshop, déjalo con uno solo", "the legal text uses several styles; in Photoshop, leave it with one"),
+  "de-punto": t("el legal es texto de punto (sus renglones van con Enter); en Photoshop, hazlo texto de párrafo", "the legal is point text (its lines use Enter); in Photoshop, make it paragraph text"),
+  girado: t("el legal está girado o inclinado", "the legal is rotated or skewed"),
+  "un-renglon": t("ya va en un renglón", "it's already one line"),
+  guion: t("el legal corta una palabra con guion al final de un renglón; en Photoshop, quita el guion y el salto", "the legal splits a word with a hyphen at a line end; in Photoshop, remove the hyphen and the break"),
+  placa: t("hay algo pintado detrás del texto del legal; en Photoshop, ponlo en otra subcarpeta de Legal", "something is drawn behind the legal text; in Photoshop, put it in another subfolder of Legal"),
+  partes: t(
+    "lo demás de la carpeta Legal (los iconos) no está a un lado del texto, o va en su misma capa; en Photoshop, ponlo a un lado y en una subcarpeta",
+    "the rest of the Legal folder (the icons) isn't beside the text, or shares its layer; in Photoshop, put it beside the text in a subfolder",
+  ),
+  "otro-texto": t("la carpeta Legal trae otro texto además del legal", "the Legal folder has another text besides the legal"),
 };
 
 /** Por qué una capa va como imagen en el PSD editable (`MotivoCapa` de psd-editable.ts). */

@@ -85,6 +85,8 @@ const MISMA = 1e-9;
 /**
  * El movimiento de cada carpeta en una medida, del documento original a la medida: lo mismo que pinta `armarMedida`.
  * Una pieza puesta lleva su parte sólida a (q.x, q.y) con escala q.k; el fondo pone su esquina en (fondo.x, fondo.y).
+ * En una versión del maestro con el legal en otros renglones (B27), lo que se movió dentro de su pieza dice cómo
+ * (`desde`): esa pieza va siempre parte por parte.
  */
 export function planDeMedida(
   ma: {
@@ -92,7 +94,8 @@ export function planDeMedida(
       nombre: string;
       solido: { x: number; y: number };
       carpeta?: number;
-      partes?: readonly { hijo: number | null; solido: { x: number; y: number } }[];
+      desde?: Afin;
+      partes?: readonly { hijo: number | null; solido: { x: number; y: number }; desde?: Afin }[];
       textos?: readonly { ruta: number[]; texto: { texto: string; caja: [number, number, number, number] | null }; cambio?: unknown }[];
     }[];
     origen: Origen;
@@ -104,18 +107,24 @@ export function planDeMedida(
   const o = ma.origen;
   const fk = a.fondo.k * o.s;
   const puestas = new Map(a.puestas.map((q) => [q.pieza, q]));
-  /** El movimiento que lleva la parte sólida de `s` a (q.x, q.y) con escala q.k (lo mismo para una pieza o una parte). */
-  const afin = (q: { k: number; x: number; y: number }, s: { x: number; y: number }): Afin => {
-    const k = q.k * o.s;
-    return { k, x: q.x - q.k * s.x - k * o.x, y: q.y - q.k * s.y - k * o.y };
+  /** El movimiento que lleva la parte sólida de `s` a (q.x, q.y) con escala q.k (lo mismo para una pieza o una parte).
+   *  `desde`: cómo se movió del PSD a su maestro (B27; falta = no se movió). */
+  const afin = (q: { k: number; x: number; y: number }, s: { x: number; y: number }, desde?: Afin): Afin => {
+    const d = desde ?? { k: 1, x: 0, y: 0 }, k = q.k * d.k * o.s;
+    return { k, x: q.x + q.k * (d.x - s.x) - k * o.x, y: q.y + q.k * (d.y - s.y) - k * o.y };
   };
   const partes = a.puestas.flatMap((q): PartesEditable[] => {
     const p = ma.piezas[q.pieza];
-    if (!q.partes?.length || !p.partes || p.carpeta === undefined) return [];
-    const suyas = q.partes.flatMap((pp) => {
-      const d = p.partes?.[pp.parte];
-      return d ? [{ hijo: d.hijo, A: afin(pp, d.solido), parte: pp.parte }] : [];
-    });
+    if (!p.partes || p.carpeta === undefined) return [];
+    // Sin abrir en el editor, una pieza con partes movidas (B27) va igual parte por parte, todas con su pieza.
+    const movidas = !q.partes?.length && p.partes.some((d) => d.desde);
+    if (!q.partes?.length && !movidas) return [];
+    const suyas = movidas
+      ? p.partes.map((d, parte) => ({ hijo: d.hijo, A: afin(q, p.solido, d.desde), parte }))
+      : (q.partes ?? []).flatMap((pp) => {
+          const d = p.partes?.[pp.parte];
+          return d ? [{ hijo: d.hijo, A: afin(pp, d.solido, d.desde), parte: pp.parte }] : [];
+        });
     const cambio = suyas.some((x, i) => i > 0 && x.parte < suyas[i - 1].parte);
     return [{ pieza: p.nombre, carpeta: p.carpeta, partes: suyas.map(({ hijo, A }) => ({ hijo, A })), ...(cambio ? { orden: suyas.map((x) => x.hijo) } : {}) }];
   });
@@ -138,7 +147,10 @@ export function planDeMedida(
     fondo: { k: fk, x: a.fondo.x - fk * o.x, y: a.fondo.y - fk * o.y },
     piezas: ma.piezas.map((p, i): [string, Afin | null] => {
       const q = puestas.get(i);
-      return [p.nombre, q ? afin(q, p.solido) : null];
+      // Con partes movidas (B27), la carpeta (su máscara, lo que no es parte, lo recortado a ella) va con la que sólo se
+      // corrió (el texto del legal), no donde estaba la pieza entera.
+      const corrida = p.partes?.find((d) => d.desde?.k === 1)?.desde;
+      return [p.nombre, q ? afin(q, p.solido, p.partes ? corrida : p.desde) : null];
     }),
     // Sólo si alguien cambió el orden (el automático va en el del maestro): sin cambio, el PSD sale con el orden del
     // original tal cual, aunque dos carpetas se llamen igual (una sola pieza) y tengan otra en medio.

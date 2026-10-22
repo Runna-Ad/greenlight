@@ -60,10 +60,14 @@ export type Puesta = {
 export type PuestaParte = { parte: number; k: number; x: number; y: number; w: number; h: number; movida: boolean };
 /** `contraste`, `copia` y `retoque` los pone `revisar.ts` (miran píxeles); los demás, el acomodo. `matriz` es una nota
  *  (qué pide la matriz de producción y qué se hizo): se ve en gris y no cuenta como algo que revisar. */
-export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque" | "relleno" | "texto" | "copiada" | "matriz"; texto: string };
-/** Una nota de la matriz (qué pidió y qué se hizo): la tarjeta, el resumen y el editor la muestran en gris y no la
- *  cuentan como algo que revisar. Una sola regla para los tres. */
-export const esNota = (a: AvisoAcomodo): boolean => a.tipo === "matriz";
+export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque" | "relleno" | "texto" | "copiada" | "matriz" | "renglones"; texto: string };
+/** Una nota (qué pidió la matriz y qué se hizo; el legal en otros renglones, B27): la tarjeta, el resumen y el editor
+ *  la muestran en gris y no la cuentan como algo que revisar. Una sola regla para los tres. */
+export const esNota = (a: AvisoAcomodo): boolean => a.tipo === "matriz" || a.tipo === "renglones";
+/** Hasta cuántos renglones MENOS que en el PSD se le ofrecen al legal (B27, `renglones.ts`). */
+export const RENGLONES_MAX = 6;
+/** Lo más que se lee guardado de renglones (los del PSD también se eligen, y un legal puede traer más de 6). */
+const RENGLONES_LEER_MAX = 60;
 export type Acomodo = {
   familia: Familia;
   /** De abajo hacia arriba: en el orden del maestro, o en el que eligió la persona (`aplicarEdicion`). */
@@ -108,6 +112,9 @@ export type Edicion = Readonly<{
   /** Copiada de otra medida (B25, `copiarEdicion`): de cuál. Si tiene otra forma que ésta, se revisa (se calcula
    *  con las dos medidas, no se guarda: lo guardado no puede quitar el aviso). */
   copiaDe?: Readonly<{ w: number; h: number }>;
+  /** En cuántos renglones va el legal en ESTA medida, elegido en el editor (B27); falta = el automático. Se usa antes del
+   *  acomodo (otra versión del maestro, `renglones.ts`), no en `aplicarEdicion`. */
+  renglones?: number;
 }>;
 export type Lado = "derecha" | "izquierda";
 /** px de la medida final que la plataforma tapa por cada borde. */
@@ -820,7 +827,7 @@ export function leerEdicion(v: unknown, piezasDe: number | readonly { partes?: r
   const nPiezas = typeof piezasDe === "number" ? piezasDe : piezasDe.length;
   const nPartes = (i: number) => (typeof piezasDe === "number" ? 0 : (piezasDe[i]?.partes?.length ?? 0));
   const nTextos = (i: number) => (typeof piezasDe === "number" ? 0 : (piezasDe[i]?.textos?.length ?? 0));
-  const guardada = v as { piezas?: unknown; orden?: unknown; partes?: unknown; ordenPartes?: unknown; sinTexto?: unknown; copiaDe?: unknown };
+  const guardada = v as { piezas?: unknown; orden?: unknown; partes?: unknown; ordenPartes?: unknown; sinTexto?: unknown; copiaDe?: unknown; renglones?: unknown };
   const lugares = (guardada.piezas && typeof guardada.piezas === "object" ? guardada.piezas : guardada) as Record<string, unknown>;
   const indice = (n: unknown, hasta: number): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0 && n < hasta;
   const valida = (n: unknown): n is number => indice(n, nPiezas);
@@ -868,11 +875,12 @@ export function leerEdicion(v: unknown, piezasDe: number | readonly { partes?: r
       if (t.length) sinTexto[n] = t;
     }
   const hay = (r: object) => Object.keys(r).length > 0;
-  if (!hay(piezas) && !orden && !hay(partes) && !hay(ordenPartes) && !hay(sinTexto)) return null;
+  const renglones = indice(guardada.renglones, RENGLONES_LEER_MAX + 1) && guardada.renglones >= 1 ? guardada.renglones : undefined;
+  if (!hay(piezas) && !orden && !hay(partes) && !hay(ordenPartes) && !hay(sinTexto) && !renglones) return null;
   // De qué medida se copió (B25): una medida de verdad (la que acepta la lista de medidas), o nada.
   const c = guardada.copiaDe as { w?: unknown; h?: unknown } | null | undefined;
   const copiaDe = c && typeof c === "object" && typeof c.w === "number" && typeof c.h === "number" && medidaValida(c.w, c.h) ? { w: c.w, h: c.h } : undefined;
-  return { piezas, orden, ...(hay(partes) ? { partes } : {}), ...(hay(ordenPartes) ? { ordenPartes } : {}), ...(hay(sinTexto) ? { sinTexto } : {}), ...(copiaDe ? { copiaDe } : {}) };
+  return { piezas, orden, ...(hay(partes) ? { partes } : {}), ...(hay(ordenPartes) ? { ordenPartes } : {}), ...(hay(sinTexto) ? { sinTexto } : {}), ...(copiaDe ? { copiaDe } : {}), ...(renglones ? { renglones } : {}) };
 }
 
 /**
@@ -1019,7 +1027,8 @@ export function aplicarEdicion(ma: MaestroCaja, a: Acomodo, ed: Edicion, W: numb
     return { ...abierta, sinTexto: sin };
   });
   const puestas = ordenarPuestas(movidas, ed.orden);
-  if (!aMano.size && puestas === movidas) return a;
+  // Sólo los renglones del legal (B27): ya vienen en el maestro que se usó; el acomodo es el automático, elegido a mano.
+  if (!aMano.size && puestas === movidas) return ed.renglones ? { ...a, editada: true, ...(ed.copiaDe ? { copiadaDe: { w: ed.copiaDe.w, h: ed.copiaDe.h } } : {}) } : a;
   const z = zonaUsable(zona ?? undefined, W, H);
   // Una copia (B25): de otra forma, nadie la vio así (se revisa todo); de la misma forma, la persona vio juntas las
   // piezas que movió, pero no junto a las del automático de AQUÍ (que puede no ser el de allá: el legal crece). En la

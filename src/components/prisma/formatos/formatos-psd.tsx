@@ -22,7 +22,7 @@ import { CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES, rutaLibre, zipsE
 import { etiquetaPieza, nombreDeGuia, type Rol } from "@/lib/prisma/formatos/roles";
 import { colaVacia, enCola, pintar } from "./pintar";
 import { Franjas, VistaGrande } from "./vista-grande";
-import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, escrituraCon, fuentesRecordadas, listosDe, maquetadorDe, olvidarFuentes, pintorDe, recordarFuentes, revisarTextos, textoEscrito, type ArchivoFuente, type Escritura, type Tipografias } from "./escritura";
+import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, escrituraCon, fuentesRecordadas, listosDe, maquetadorDe, olvidarFuentes, pintorDe, recordarFuentes, renglonesDe, revisarTextos, textoEscrito, type ArchivoFuente, type Escritura, type Renglones, type Tipografias } from "./escritura";
 import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
 import { EditorMedida, edicionGuardada, guardarEdicion, guardarTextos, textosGuardados } from "./editor-medida";
 import { cambiarTextos, marcarSinEscribir, NO_SE_ESCRIBIO, type CambiosTexto, type Listo } from "@/lib/prisma/formatos/cambios-texto";
@@ -593,7 +593,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
   medida,
   lado,
   canal,
-  escritura,
+  renglones,
   tipos,
   lang,
   alVoltear,
@@ -610,7 +610,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
   medida: Medida;
   lado: Lado;
   canal: Canal | null;
-  escritura: Escritura | null;
+  /** Cómo se escribe cada maestro, y con el legal en otros renglones (B27) la versión del maestro y su escritura. */
+  renglones: Renglones<MaestroVista>;
   tipos: Tipografias;
   lang: Lang;
   alVoltear: (m: Medida, a: Lado) => void;
@@ -631,13 +632,14 @@ const TarjetaMedida = memo(function TarjetaMedida({
   const k = clave(medida);
   // La zona del canal también acomoda (en 9:16 de otra forma las piezas la evitan), luego el contraste y la edición
   // encima: lo mismo que usa el resumen.
-  const { maestro, acomodo, contraste } = useMemo(
-    () => revisarMedida(maestros, w, h, { heroLado: lado, zona: zonaCanal(canal, w, h), contraste: eleccion, edicion }),
-    [maestros, w, h, lado, canal, eleccion, edicion],
+  // Con el legal en otros renglones (B27), `ma` es esa versión del maestro y se escribe con su escritura.
+  const { maestro, ma, acomodo, contraste } = useMemo(
+    () => revisarMedida(maestros, w, h, { heroLado: lado, zona: zonaCanal(canal, w, h), contraste: eleccion, edicion, renglones: { de: renglones.de, legal: renglones.legal } }),
+    [maestros, w, h, lado, canal, eleccion, edicion, renglones],
   );
+  const escritura = renglones.escrituraDe(ma);
   const guia = zonaCanal(canal, w, h);
   const nombreCanal = canal ? CANALES[canal].nombre : "";
-  const ma = maestros[maestro];
   const lienzo = useRef<HTMLCanvasElement>(null);
   const [noPinto, setNoPinto] = useState(false);
   // Cuántas veces se pintó bien: la vista grande no se abre antes de la primera (copiaría un lienzo en blanco) y se
@@ -1637,6 +1639,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   // Lo que se acomoda, se pinta y se baja: con los textos cambiados ya escritos. Lo guardado de cada medida se sigue
   // reconociendo con el maestro de antes (`maestrosVista`): cambiar un texto no borra las ediciones.
   const conTextos = useMemo(() => derivarTextos(maestrosVista, cambiosTexto, escritura, tiposEscritos), [maestrosVista, cambiosTexto, escritura, tiposEscritos]);
+  // El legal en otros renglones (B27): cada versión del maestro se hace al pedirla, con estos textos y tipografías.
+  const renglones = useMemo(() => renglonesDe(conTextos.maestros, conTextos.escritura, tiposEscritos), [conTextos, tiposEscritos]);
   /** Por qué un texto de una pieza no se cambia en el editor (null = sí se puede). */
   const motivoTexto = (mi: number, pieza: number, j: number, sinTipografia = FP.editorTextoSinTipografia): string | null => {
     const tp = maestrosVista[mi]?.piezas[pieza]?.textos[j];
@@ -1685,12 +1689,17 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     // B25: lo mismo en las hermanas marcadas (sólo las de la matriz, del mismo maestro), cada una con su contexto. Lo
     // que tenían antes se guarda para «Deshacer la copia» (una copia reemplaza lo editado ahí a mano).
     const modos = new Map(hermanas(m, medidas).map((t) => [clave(t.m), t.modo]));
+    // Con el legal en otros renglones (B27), el pie tiene otra forma: la copia se calcula con la versión del maestro que
+    // usa esta medida con lo guardado (la de la tarjeta; también la del automático).
+    const mi = elegirMaestro(maestrosVista, m.w, m.h);
+    const usado = revisarMedida(conTextos.maestros, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h), contraste: contrastes[clave(m)], edicion: ed, renglones: { de: renglones.de, legal: renglones.legal } }).ma;
+    const piezasCopia = usado !== conTextos.maestros[mi] ? usado.piezas : ma.piezas;
     const copias = copiarA.flatMap((t) => {
       const modo = modos.get(clave(t));
       if (!modo || maestrosVista[elegirMaestro(maestrosVista, t.w, t.h)] !== ma) return [];
       const espejo = (lados[clave(m)] ?? "derecha") !== (lados[clave(t)] ?? "derecha");
       const ctxT = contextoEdicion(t, lados[clave(t)], canal);
-      const edT = ed ? copiarEdicion(ed, ma.piezas, m, t, modo, espejo) : null;
+      const edT = ed ? copiarEdicion(ed, piezasCopia, m, t, modo, espejo) : null;
       const ok = guardarEdicion(l.archivo, ma, t.w, t.h, ctxT, edT);
       guardarEdicion(l.archivo, ma, t.w, t.h, ctxT + CONTEXTO_VIEJO, null);
       return [{ t, modo, ok, ctx: ctxT, clave: `${clave(t)}:${ctxT}`, ed: edT, previa: edicionesVista.get(clave(t)) ?? null }];
@@ -1780,12 +1789,17 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       zona,
       /** El maestro con estos textos cambiados, cómo se escriben y el acomodo automático de esta medida con ellos (un
        *  texto que crece cambia el acomodo). Con su arreglo de contraste: el editor parte de lo que se ve en la tarjeta. */
-      derivar: (cambios: CambiosTexto) => {
+      // B27: con los renglones del legal que eligió la persona (null = el automático), de la versión del maestro que toque.
+      derivar: (cambios: CambiosTexto, elegidos: number | null) => {
         const d = cambios === cambiosTexto ? conTextos : derivarTextos(maestrosVista, cambios, escritura, tiposEscritos, mi);
-        return { ma: d.maestros[mi], texto: textoEscrito(d.escritura, mi, d.maestros[mi], tiposEscritos), auto: revisarMedida(d.maestros, m.w, m.h, op).acomodo };
+        const rg = cambios === cambiosTexto ? renglones : renglonesDe(d.maestros, d.escritura, tiposEscritos);
+        const r = revisarMedida(d.maestros, m.w, m.h, { ...op, renglones: { de: rg.de, elegidos, legal: rg.legal } });
+        // Mientras se prueban las tipografías no falta ninguna todavía: se dice eso.
+        const no = rg.porQueNo(mi), sinRenglones = no === "tipografia" && probando ? ("probando" as const) : no;
+        return { ma: r.ma, texto: textoEscrito(rg.escrituraDe(r.ma), mi, r.ma, tiposEscritos), auto: r.acomodo, renglones: r.renglones, sinRenglones, piezaLegal: rg.legal(mi) };
       },
     };
-  }, [editando, leido, maestrosVista, canal, lados, contrastes, escritura, tiposEscritos, cambiosTexto, conTextos]);
+  }, [editando, leido, maestrosVista, canal, lados, contrastes, escritura, tiposEscritos, cambiosTexto, conTextos, renglones, probando]);
 
   // El mismo acomodo y los mismos avisos que cada tarjeta (`revisarMedida` guarda lo ya hecho): aquí sirven para el
   // resumen, el legal y los nombres del ZIP.
@@ -1794,10 +1808,10 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       maestrosVista.length
         ? medidas.map((m) => ({
             m,
-            ...revisarMedida(conTextos.maestros, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h), contraste: contrastes[clave(m)], edicion: edicionesVista.get(clave(m)) ?? null }),
+            ...revisarMedida(conTextos.maestros, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h), contraste: contrastes[clave(m)], edicion: edicionesVista.get(clave(m)) ?? null, renglones: { de: renglones.de, legal: renglones.legal } }),
           }))
         : [],
-    [conTextos, maestrosVista.length, medidas, lados, canal, contrastes, edicionesVista],
+    [conTextos, maestrosVista.length, medidas, lados, canal, contrastes, edicionesVista, renglones],
   );
   // Lo propio de cada medida y lo que se arregla una vez arriba se cuentan por separado (B23), como en las tarjetas.
   const porRevisar = filas.filter((f) => f.acomodo.avisos.some((a) => !esComun(a) && !esNota(a))).length;
@@ -1859,7 +1873,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     for (const u of enlacesZip.current.splice(0)) URL.revokeObjectURL(u);
     if (!lista.length) return void toast.error(tx(FP.zipNingunaMedida, lang), AVISO_ZIP);
     if (!png && !psd) return void toast.error(tx(FP.zipNadaQueBajar, lang), AVISO_ZIP);
-    const { maestros: mas, escritura: esc } = conTextos, tps = tiposEscritos;
+    const tps = tiposEscritos, rgl = renglones;
     let cancelado = false;
     let matar: (() => void) | null = null;
     cancelarZip.current = () => {
@@ -1899,7 +1913,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
         // ninguna, así un volteo o un cambio de lista a media descarga no mezcla estados.
         const pngs = await Promise.all(con.map((c) => aPng(c as HTMLCanvasElement)));
         if (!sigue()) return avisarCancelado();
-        for (const [i, f] of lista.entries()) await salida.agregar(rutaLibre(usadas, CARPETA_ENTREGABLES, archivoDe(mas[f.maestro], f.m)), pngs[i]);
+        for (const [i, f] of lista.entries()) await salida.agregar(rutaLibre(usadas, CARPETA_ENTREGABLES, archivoDe(f.ma, f.m)), pngs[i]);
       }
       /** Los de capas planas, por motivo; las notas de las capas (las mismas en cada medida, una vez); los que no se
        *  pudieron armar; los que no caben ni solos en un ZIP (ZIP_MAX_BYTES). */
@@ -1915,11 +1929,12 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
           let r: PsdArmado | null;
           try {
             r = await armarPsdMedida({
-              ma: mas[f.maestro],
+              ma: f.ma,
               maestro: f.maestro,
               acomodo: f.acomodo,
               medida: f.m,
-              escritura: esc,
+              // Con el legal en otros renglones (B27), la escritura de esa versión del maestro.
+              escritura: rgl.escrituraDe(f.ma),
               tipos: tps,
               psdOriginal: l.psdOriginal,
               lang,
@@ -1941,7 +1956,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
           if (!salida.cabeSolo(r.archivo.size)) sinLugar.push(etiqueta(f.m));
           else {
             try {
-              await salida.agregar(rutaLibre(usadas, CARPETA_EDITABLES, archivoPsdDe(mas[f.maestro], f.m)), r.archivo);
+              await salida.agregar(rutaLibre(usadas, CARPETA_EDITABLES, archivoPsdDe(f.ma, f.m)), r.archivo);
               nPsd++;
               if (r.plano !== null) planos.set(r.plano, [...(planos.get(r.plano) ?? []), etiqueta(f.m)]);
               for (const x of r.notas) notas.set(JSON.stringify(x), x);
@@ -2704,7 +2719,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
                     </h3>
                     <ul className={cn("grid gap-3", COLUMNAS[f])}>
                       {grupo.map((m) => (
-                        <TarjetaMedida key={clave(m)} maestros={conTextos.maestros} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} escritura={conTextos.escritura} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} elegida={!fueraDelZip.has(clave(m))} alElegir={elegirParaZip} />
+                        <TarjetaMedida key={clave(m)} maestros={conTextos.maestros} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} renglones={renglones} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} elegida={!fueraDelZip.has(clave(m))} alElegir={elegirParaZip} />
                       ))}
                     </ul>
                   </div>

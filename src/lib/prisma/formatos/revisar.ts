@@ -12,7 +12,7 @@
  * Una sola entrada, `revisarMedida`, para la tarjeta de cada medida y para el resumen de la pantalla: los dos cuentan
  * los mismos avisos.
  */
-import { acomodar, aplicarEdicion, dibujosDe, elegirMaestro, sinSusLetras, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type ParteCaja, type Zona } from "./acomodo.ts";
+import { acomodar, aplicarEdicion, dibujosDe, elegirMaestro, RENGLONES_MAX, sinSusLetras, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type OpcionesAcomodo, type ParteCaja, type Zona } from "./acomodo.ts";
 import { haloDe } from "./halo.ts";
 import type { Caja, Rol } from "./psd.ts";
 import { etiquetaPieza } from "./roles.ts";
@@ -160,10 +160,14 @@ export function perdidas(ma: MaestroRevisable, a: Acomodo, W: number, H: number,
 /** Lo perdido en el ORIGINAL (el maestro a su medida), una vez por maestro. */
 const enOriginal = new WeakMap<MaestroRevisable, Map<number, number>>();
 function perdidasDelOriginal(ma: MaestroRevisable): Map<number, number> {
-  let v = enOriginal.get(ma);
-  if (!v) enOriginal.set(ma, (v = perdidas(ma, acomodar(ma, ma.w, ma.h), ma.w, ma.h)));
+  // Una versión con el legal en otros renglones (B27) se compara con el PSD: lo que aprobó el diseñador es el suyo.
+  const del = delPsdDe.get(ma) ?? ma;
+  let v = enOriginal.get(del);
+  if (!v) enOriginal.set(del, (v = perdidas(del, acomodar(del, del.w, del.h), del.w, del.h)));
   return v;
 }
+/** De qué maestro del PSD es cada versión con el legal en otros renglones (`revisarMedida` lo anota). */
+const delPsdDe = new WeakMap<MaestroRevisable, MaestroRevisable>();
 
 /** ¿En esta medida se ve la parte del fondo donde está (o estaba) la copia? Se ve si cae dentro de la medida y la
  *  pieza ya no está justo encima de ella, del mismo tamaño. */
@@ -292,12 +296,70 @@ export function opcionesDeContraste(ma: MaestroRevisable, a: Acomodo, W: number,
   };
 }
 
+/** Los renglones del legal de un maestro (B27, `renglones.ts`): su pieza, en cuántos viene del PSD y la versión del
+ *  maestro con `n` (null = no sale). */
+export type Renglonero<M extends MaestroRevisable = MaestroRevisable> = { pieza: number; psd: number; de: (n: number) => M | null };
+/** Lo que se hizo con el legal en una medida: en cuántos renglones viene del PSD, cuántos daría el automático, cuántos
+ *  se usaron y cuáles se pueden elegir. */
+export type InfoRenglones = { pieza: number; psd: number; auto: number; usados: number; opciones: number[] };
+/** Cuánto más grande tiene que salir la letra del legal para dejar los renglones del PSD (menos no se nota). */
+export const RENGLONES_GANA = 1.03;
+/** Lo que se acepta que se achique la letra de lo demás al cambiar los renglones del legal (nada que se note). */
+const RENGLONES_RESTO = 0.98;
+/** Por la versión con menos renglones (otra con otras tipografías: el automático también puede ser otro). */
+const autos = new WeakMap<MaestroRevisable, Map<string, number>>();
+
+/**
+ * En una medida más ancha que alta (B27, "every wide size"): los renglones con que la letra del legal sale más grande,
+ * sin achicar lo demás ni dejar fuera otra pieza; si nada gana por `RENGLONES_GANA`, los del PSD. En las demás, los del
+ * PSD (ahí menos renglones nunca agrandan el legal: el pie se hace más ancho). El automático quita como mucho la mitad
+ * de los renglones (con más, los iconos de las tiendas se achican demasiado); a mano, los que sean.
+ */
+function renglonesAuto<M extends MaestroRevisable>(base: M, rg: Renglonero<M>, opciones: number[], W: number, H: number, op: OpcionesAcomodo, clave: string): number {
+  if (W <= H) return rg.psd;
+  const candidatos = opciones.filter((x) => x < rg.psd && x >= Math.ceil(rg.psd / 2));
+  const llave = (candidatos.length && rg.de(candidatos[0])) || base;
+  let porMedida = autos.get(llave);
+  if (!porMedida) autos.set(llave, (porMedida = new Map()));
+  const ya = porMedida.get(clave);
+  if (ya !== undefined) return ya;
+  const medir = (m: MaestroRevisable) => {
+    const a = acomodar(m, W, H, op);
+    const resto = a.letras.filter((l) => l.pieza !== rg.pieza).map((l) => l.px);
+    return { legal: a.letras.find((l) => l.pieza === rg.pieza)?.px ?? 0, resto: resto.length ? Math.min(...resto) : Infinity, quitadas: a.quitadas.length };
+  };
+  const ref = medir(base);
+  let mejor = rg.psd, px = ref.legal;
+  for (const n of [...candidatos].sort((x, y) => y - x)) {
+    const m = rg.de(n);
+    if (!m) continue;
+    const r = medir(m);
+    if (r.legal > px * RENGLONES_GANA && r.resto >= ref.resto * RENGLONES_RESTO && r.quitadas <= ref.quitadas) {
+      mejor = n;
+      px = r.legal;
+    }
+  }
+  porMedida.set(clave, mejor);
+  return mejor;
+}
+
 /** Hechas, por maestro (el objeto): la tarjeta y el resumen piden la misma medida y no se calcula dos veces; y si sólo
- *  cambia OTRO maestro, ésta devuelve lo mismo y su tarjeta no se vuelve a pintar. */
-type Revisada = { maestro: number; acomodo: Acomodo; contraste: InfoContraste | null };
+ *  cambia OTRO maestro, ésta devuelve lo mismo y su tarjeta no se vuelve a pintar. `ma`: el maestro que se usó (con el
+ *  legal en otros renglones, otra versión del de `maestro`). */
+export type Revisada<M extends MaestroRevisable = MaestroRevisable> = { maestro: number; ma: M; acomodo: Acomodo; contraste: InfoContraste | null; renglones: InfoRenglones | null };
 const hechas = new WeakMap<MaestroRevisable, Map<string, Revisada>>();
 /** Los arreglos de contraste, por maestro y acomodo automático (sin elección ni edición): se buscan una vez. */
 const opcionesHechas = new WeakMap<MaestroRevisable, Map<string, Opciones | null>>();
+
+/** La edición sin lo de la pieza `i` (sus lugares, sus partes y el orden de sus partes). */
+export function edicionSinPieza(ed: Edicion, i: number): Edicion {
+  const sin = <T,>(r: Readonly<Record<number, T>> | undefined) => (r ? Object.fromEntries(Object.entries(r).filter(([k]) => +k !== i)) : r);
+  return { ...ed, piezas: sin(ed.piezas) ?? {}, partes: sin(ed.partes), ordenPartes: sin(ed.ordenPartes) };
+}
+
+/** B27: si la edición movió a mano la pieza `i` (ella, sus partes o el orden de sus partes): eso se midió con la forma
+ *  que tenía la pieza al editar. */
+export const edicionMuevePieza = (ed: Edicion | null | undefined, i: number): boolean => !!(ed?.piezas?.[i] || ed?.partes?.[i] || ed?.ordenPartes?.[i]);
 
 /** Para la clave de la caché: la misma edición da la misma firma (números redondeados, piezas en orden, y el orden de
  *  las capas si cambió, y de qué medida se copió). */
@@ -311,7 +373,8 @@ const firma = (ed: Edicion | null | undefined) => {
   const sinTexto = ed.sinTexto ? enOrden(ed.sinTexto, (i, t) => `${i}:${[...t].sort((a, b) => a - b).join(",")}`) : "";
   // La copia de otra medida (B25) cambia los avisos (la de otra forma se revisa entera): entra en la firma.
   const copia = ed.copiaDe ? `c${ed.copiaDe.w}x${ed.copiaDe.h}` : "";
-  return [lugares, ed.orden?.length ? ed.orden.join(",") : "", partes, ordenPartes, sinTexto, copia].join("|").replace(/\|+$/, "");
+  const renglones = ed.renglones ? `r${ed.renglones}` : "";
+  return [lugares, ed.orden?.length ? ed.orden.join(",") : "", partes, ordenPartes, sinTexto, copia, renglones].join("|").replace(/\|+$/, "");
 };
 
 /**
@@ -319,26 +382,77 @@ const firma = (ed: Edicion | null | undefined) => {
  * Orden: acomodo automático → arreglo de contraste (`contraste`: el que elija la plataforma, por omisión, u otro) →
  * `edicion` (lo que la persona movió a mano en ESTA medida, sobre lo anterior; se revisa todo igual).
  */
-export function revisarMedida(
-  maestros: readonly MaestroRevisable[],
+export function revisarMedida<M extends MaestroRevisable>(
+  maestros: readonly M[],
   W: number,
   H: number,
-  op: { heroLado?: Lado; zona?: Zona | null; edicion?: Edicion | null; contraste?: EleccionContraste } = {},
-): Revisada {
+  op: {
+    heroLado?: Lado;
+    zona?: Zona | null;
+    edicion?: Edicion | null;
+    contraste?: EleccionContraste;
+    /** B27: los renglones del legal de cada maestro (por su índice), y los que pide el editor sin edición guardada. */
+    renglones?: { de: (maestro: number) => Renglonero<M> | null; elegidos?: number | null; legal?: (maestro: number) => number | null };
+  } = {},
+): Revisada<M> {
   const maestro = elegirMaestro([...maestros], W, H);
   if (maestro < 0) throw new Error("revisarMedida: sin maestros");
-  const ma = maestros[maestro];
   // Sin lado es "derecha" (acomodo.ts): la misma clave para los dos, o la medida se calcula dos veces.
   const lado: Lado = op.heroLado === "izquierda" ? "izquierda" : "derecha";
-  let porMedida = hechas.get(ma);
-  if (!porMedida) hechas.set(ma, (porMedida = new Map()));
   // La zona del canal mueve piezas (acomodo.ts): entra en la clave, o al cambiar de canal se queda el acomodo viejo.
   const z = op.zona ?? undefined;
-  const eleccion = op.contraste ?? "auto";
   const base = `${maestro}:${W}x${H}:${lado}:${z ? `${z.top},${z.right},${z.bottom},${z.left}` : "-"}`;
-  const clave = `${base}:${eleccion}:${firma(op.edicion)}`;
+  // El legal en otros renglones (B27): lo pedido en el editor, si se puede; si no, el automático. Con otros renglones,
+  // todo lo de abajo sale de esa versión del maestro.
+  const delPsd = maestros[maestro];
+  let pedidos = op.edicion?.renglones ?? op.renglones?.elegidos ?? null;
+  let ma = delPsd, renglones: InfoRenglones | null = null, aMano = false, piezaLegal: number | null = null;
+  // Como los avisos de píxeles: si algo raro del PSD rompe los renglones, la medida sale con el legal del PSD.
+  try {
+    const rg = op.renglones?.de(maestro) ?? null;
+    if (rg) {
+      piezaLegal = rg.pieza;
+      // Lo movido a mano del legal sin renglones guardados se movió con la forma del PSD (lo guardado antes de B27, o
+      // con los del PSD: el editor no los escribe): con ésa se queda, o quedaría puesto sobre otra forma.
+      if (pedidos === null && edicionMuevePieza(op.edicion, rg.pieza)) pedidos = rg.psd;
+      // Las versiones se hacen al pedirlas: en una medida alta sólo si alguien las pide (el editor, o lo guardado).
+      const todas = W > H || (pedidos !== null && pedidos !== rg.psd) || (!!op.renglones && "elegidos" in op.renglones);
+      // Los `RENGLONES_MAX` de justo abajo de los del PSD (de 8, del 2 al 7; de 3, el 1 y el 2).
+      const desde = Math.max(1, rg.psd - RENGLONES_MAX);
+      const menos = todas ? Array.from({ length: rg.psd - desde }, (_, i) => desde + i).filter((n) => !!rg.de(n)) : [];
+      const opciones = [...menos, rg.psd];
+      const auto = renglonesAuto(delPsd, rg, opciones, W, H, { heroLado: lado, zona: z }, base);
+      aMano = !!pedidos && opciones.includes(pedidos);
+      const usados = aMano && pedidos ? pedidos : auto;
+      ma = usados === rg.psd ? delPsd : (rg.de(usados) ?? delPsd);
+      if (ma !== delPsd) delPsdDe.set(ma, delPsd);
+      renglones = { pieza: rg.pieza, psd: rg.psd, auto, usados: ma === delPsd ? rg.psd : usados, opciones };
+    }
+  } catch (err) {
+    console.error("[formatos] renglones del legal", err);
+    ma = delPsd;
+    renglones = null;
+    aMano = false;
+  }
+  // Lo guardado pedía otros renglones y ahora no se pueden (las tipografías todavía no llegan, o falta la del legal): lo
+  // movido a mano del legal se midió con aquella forma del pie, así que se deja de lado (no queda mal puesto) y se dice.
+  const noSePudo = !!op.edicion?.renglones && !aMano;
+  if (noSePudo && piezaLegal === null) {
+    // Sin las versiones (sin tipografías) el legal lo dice la página (`legalDelPsd`, sin letras); sin ella, el pie con
+    // texto.
+    const i = op.renglones?.legal ? op.renglones.legal(maestro) : delPsd.piezas.findIndex((p) => p.rol === "FOOTER" && (p.textos?.length ?? 0) > 0);
+    piezaLegal = i !== null && i >= 0 ? i : null;
+  }
+  const soltada = noSePudo && piezaLegal !== null && edicionMuevePieza(op.edicion, piezaLegal);
+  const edicion = op.edicion && soltada && piezaLegal !== null ? edicionSinPieza(op.edicion, piezaLegal) : op.edicion;
+  let porMedida = hechas.get(ma);
+  if (!porMedida) hechas.set(ma, (porMedida = new Map()));
+  const eleccion = op.contraste ?? "auto";
+  // Las opciones también: la tarjeta de una medida alta no las hace y el editor sí (con la misma medida y lo mismo usado).
+  // Y qué pieza se soltó: la misma edición con otro legal es otro resultado.
+  const clave = `${base}:${eleccion}:${firma(op.edicion)}:${renglones ? `${renglones.usados}/${renglones.auto}/${renglones.opciones.join(",")}${aMano ? "m" : ""}` : "-"}${soltada ? `:s${piezaLegal}` : ""}`;
   const ya = porMedida.get(clave);
-  if (ya) return ya;
+  if (ya) return ya as Revisada<M>;
   const auto = acomodar(ma, W, H, { heroLado: lado, zona: z });
   let porOpciones = opcionesHechas.get(ma);
   if (!porOpciones) opcionesHechas.set(ma, (porOpciones = new Map()));
@@ -356,7 +470,7 @@ export function revisarMedida(
   const quiere = !opc ? "original" : eleccion === "auto" ? opc.info.auto : eleccion;
   const usado: ArregloContraste = quiere === "fondo" && opc?.fondo ? "fondo" : quiere === "sombra" && opc?.sombra ? "sombra" : "original";
   const arreglada = usado === "fondo" && opc?.fondo ? opc.fondo : usado === "sombra" && opc?.sombra ? opc.sombra : auto;
-  const acomodo = op.edicion ? aplicarEdicion(ma, arreglada, op.edicion, W, H, z) : arreglada;
+  const acomodo = edicion ? aplicarEdicion(ma, arreglada, edicion, W, H, z) : arreglada;
   // Los avisos de píxeles son una ayuda: si algo raro del PSD los rompe, la medida sale igual, sin ellos.
   let extra: AvisoAcomodo[] = [];
   try {
@@ -364,7 +478,13 @@ export function revisarMedida(
   } catch (err) {
     console.error("[formatos] avisos de píxeles", err);
   }
-  const r: Revisada = { maestro, acomodo: { ...acomodo, avisos: [...acomodo.avisos, ...extra] }, contraste: opc ? { ...opc.info, usado } : null };
+  // Menos renglones que en el PSD por el automático: se dice en gris (no hay nada que revisar). Elegidos a mano, no.
+  const nota: AvisoAcomodo[] = noSePudo
+    ? [{ tipo: "renglones", texto: `Los renglones del legal elegidos a mano (${op.edicion?.renglones}) no se pueden usar ahora: va ${renglones && renglones.usados < renglones.psd ? `en ${renglones.usados}` : "como en el PSD"}${soltada ? ", y lo movido a mano del legal se deja de lado" : ""}.` }]
+    : renglones && !aMano && renglones.usados < renglones.psd
+      ? [{ tipo: "renglones", texto: `El legal va en ${renglones.usados === 1 ? "1 renglón" : `${renglones.usados} renglones`} (en el PSD, ${renglones.psd}), para que se lea más grande.` }]
+      : [];
+  const r: Revisada<M> = { maestro, ma, acomodo: { ...acomodo, avisos: [...acomodo.avisos, ...extra, ...nota] }, contraste: opc ? { ...opc.info, usado } : null, renglones };
   porMedida.set(clave, r);
   return r;
 }

@@ -1274,6 +1274,70 @@ largo: estacionado por él.
         640×100 en el PSD ya se usaría como maestro para 640×100 y 320×50 (probado sintético).
       - 320×50 «escala directa 50 %» de 640×100: hoy sale del 4:5, no de 640×100. Mediano (derivar de otra medida
         de salida). Choca con «320×50 se queda igual» (B8) y con la regla del legal.
+- [x] B27. El legal en menos renglones en las medidas anchas + elegir los renglones en el editor (Pedro, 2026-10-22:
+      "Build option B: fewer legal lines on every wide size, plus a lines picker in the editor"; yo recomendé A, sólo
+      banners: PEDRO_OVERRIDE en lessons.md). Sin migración (la elección va en la edición de cada medida, en el navegador).
+      **Cómo (mi recomendación; alternativas en una línea abajo):** cada número de renglones es OTRA versión del pie
+      (como hace `cambiarTextos` con un texto cambiado): el legal vuelto a escribir con los saltos del PSD juntos y la
+      caja de párrafo al ancho mínimo que da N renglones (renglones parejos), los iconos de las tiendas a escala con el
+      legal (la misma proporción de alto que en el PSD, del mismo lado y con el hueco a escala), el pie con su mismo
+      centro y su mismo borde de abajo. Todo lo de después (acomodo, tarjeta, PNG, contraste, los dos PSD, ZIP) usa esa
+      versión sin saber que cambió. En el PSD editable: el texto vivo con sus letras y su caja nuevas, y los iconos
+      escalados como capas (no como imagen).
+      Alternativas descartadas: (a) que el acomodo mueva las partes del pie sin otra versión del maestro (el texto nuevo
+      igual hay que escribirlo, y lo de después tendría que saberlo en 6 lugares); (b) iconos al alto del legal (más
+      grande el legal, pero cambia la proporción que eligió el diseñador).
+      **Next Step:** hecho (commit en `prisma`, preview). Lo que sigue: que Pedro o el diseñador lo prueben con un PSD real
+      y la tipografía del cliente; luego B4/B20.
+      - [x] 1. `renglones.ts` (puro): qué legal se puede (pie con UN texto de caja, un estilo, que la página escribe, sin
+            placa detrás, con lo demás del pie a un lado; si no, el porqué) y la versión del maestro con N renglones.
+      - [x] 2. `revisarMedida`: en las anchas (más anchas que altas) prueba cada N y se queda con el legal más grande sin
+            achicar lo demás (empate: los del PSD); la edición puede pedir N (`Edicion.renglones`). Devuelve el maestro
+            usado y los renglones (PSD, automático, usados, opciones). Nota gris (no cuenta) cuando van menos que en el PSD.
+      - [x] 3. La página: tarjeta, resumen, ZIP y PSD de cada medida con el maestro usado y su escritura; el PSD editable
+            con los iconos escalados (`desde` de cada parte) y el texto con su caja nueva.
+      - [x] 4. Editor: «Renglones del legal: Automático (N) · 1 · 2 · 3», en todas las medidas donde se puede; si no, el
+            porqué. Guardar lo guarda; «Volver al automático» lo quita; B25 lo copia a las hermanas.
+      - [x] 5. Pruebas · tsc · eslint · npm test · build · revisión · navegador con s33 (876×324, 640×100, 320×50,
+            1280×720, y elegir a mano en 1080×1920) · PSD editable abierto con ag-psd.
+      **Verificación:** con la tipografía, 640×100 de s33: legal en 2 renglones y ~11 px (hoy 6.2); 876×324: ~14-15 px;
+      1280×720 y 1200×627 se quedan en 3 (ya al tope); las verticales, igual que hoy; elegir 1 o 2 en el editor cambia la
+      tarjeta, se guarda, y «Volver al automático» regresa; sin la tipografía, todo igual que hoy y el editor dice por qué.
+      **Review B27 (2026-10-22):**
+      - Con la DiDi Sans (simulación en Node con la fuente real, s33): 876×324 va en 2 renglones (legal 12.5 → 14.8 px);
+        640×100 en 2 (6.2 → 11.2 en la simulación; la página dice 9.8 px, abajo del mínimo de 10, así que su aviso
+        sigue); 320×50 en 2 (3.5 → 5.6). 1280×720 y 1200×627 se quedan en 3 (ya al tope). Las altas, como el PSD. El AP
+        da lo mismo. En la página: 3 notas grises, el resumen sigue en «6 para revisar», 0 errores en la consola.
+      - Editor (navegador, s33): 640×100 ofrece «Automático (2)», «1», «3 · como el PSD» y dice la letra del legal
+        (9.8 px; con 1 renglón baja a 6.5 px, porque el pie tiene que caber a lo ancho). 1080×1920 ofrece «Automático
+        (3, como el PSD)», «1», «2» (16.0 px). Guardar, recargar y «Volver al automático»: probado antes de la ronda de
+        arreglos de la revisión, no otra vez después.
+      - Error que vi en el navegador después de la revisión: la tarjeta de una medida alta guardaba su resultado sin
+        las opciones y el editor recibía sólo «3» («no se pueden cambiar»). Las opciones van ahora en la clave; prueba
+        nueva con la tarjeta primero y el editor después (lessons.md).
+      - Segunda pasada de revisión (re-verificación): confirmó los 5 arreglos y encontró 3 serios, arreglados:
+        (1) el editor abría lo movido a mano del legal sobre otra forma cuando los renglones guardados no se podían usar
+        (ahora lo suelta al abrir, como la tarjeta, y lo dice); (2) lo movido sobre el automático se guardaba sin
+        renglones (ahora se guardan los de la forma con que se movió; sin renglones = la forma del PSD, que también
+        cuida lo guardado antes de B27); (3) las opciones eran 1..6 y no las 6 de justo abajo del PSD (un legal de 8
+        no ofrecía 7). También: la pieza del legal sin tipografías la dice la página (`legalDelPsd`), un PSD sin legal
+        ya no dice «falta la tipografía», una versión que falla dos veces no se vuelve a pintar, y la nota sólo habla de
+        lo movido si se movió. La copia a las hermanas (B25) usa la forma que usa la medida.
+      - Navegador después de esos arreglos (s33, 640×100): mover el legal sobre el automático y guardar escribe
+        `renglones: 2`; al volver a abrir, «Automático (2)» elegido y sin «Cambios sin guardar». Con lo guardado en 5
+        renglones (no se ofrecen): la tarjeta dice «no se pueden usar ahora: va en 2, y lo movido… se deja de lado» y
+        el editor abre con el legal en su lugar automático y la frase nueva. Sin renglones y con el legal movido: la
+        tarjeta y el editor usan los 3 del PSD. 0 errores en la consola. Mis entradas de prueba se borraron.
+      - PSD editable: el texto vivo con su caja nueva y los iconos escalados por partes, probado en Node con ag-psd
+        (planDeMedida, boxBounds); la descarga en el navegador no la hice (descargar pide permiso).
+      - Pruebas (después de todos los arreglos): formatos 552/0, prisma 975/0, npm test exit 0, build exit 0, tsc
+        limpio, eslint sólo las 2 advertencias viejas de scripts/test-formatos.mjs.
+      - Sin arreglar (anotado): cada versión se pinta dos veces (para la tinta del PSD editable y para la vista); cada
+        versión ocupa ~7 MB de memoria; el párrafo del «por qué no» cambia de alto al escribir; no hay tamaño mínimo
+        de los iconos de las tiendas al elegir a mano (el automático quita como mucho la mitad de los renglones);
+        algunos ayudantes repetidos entre renglones.ts y cambios-texto.ts.
+      - Necesita la tipografía del cliente cargada en «Texto nítido»; sin ella todo sale como antes y el editor dice
+        por qué. El build de Vercel del preview: no revisado.
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
 - iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los
   pendientes de iPad de B19 (caché de 4 fondos, táctil real, zoom de Safari) quedan fuera.

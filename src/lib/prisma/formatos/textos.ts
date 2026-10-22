@@ -38,6 +38,9 @@ export type TextoCapa = {
   caja: [number, number, number, number] | null;
   /** Por qué NO se puede redibujar (null = se puede intentar). */
   motivo: string | null;
+  /** Todos sus saltos eran suaves (Mayús+Enter en una caja, "\u0003"; ni un párrafo nuevo): es UN párrafo partido a mano,
+   *  y se puede volver a partir en otros renglones (B27). Con un párrafo nuevo, sus saltos se quedan. */
+  saltosSuaves?: boolean;
 };
 
 /** Lo que trae ag-psd de una capa de texto (sólo lo que se usa; tipado aquí para no importar la librería). */
@@ -129,6 +132,8 @@ export function textoDe(t: TextoPsdCrudo): TextoCapa {
     transform: [tr[0], tr[1], tr[2], tr[3], tr[4], tr[5]],
     caja,
     motivo: motivos.length ? [...new Set(motivos)].join(", ") : null,
+    // ag-psd da los párrafos como "\n" y los saltos suaves como "\u0003" (la misma regla que el PSD editable).
+    ...((t.text ?? "").includes("\u0003") && !(t.text ?? "").includes("\n") ? { saltosSuaves: true } : {}),
   };
 }
 

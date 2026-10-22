@@ -8,14 +8,15 @@ import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { aplicarEdicion, cambiadasDeCapa, leerEdicion, ordenDePartes, ordenarPuestas, parteSinTocar, ponerPartes, topesParte, topesPieza, RELLENO_AVISO_PCT, type Acomodo, type Edicion, type Zona, esNota } from "@/lib/prisma/formatos/acomodo";
 import { armarFondo, armarMedida, type TextoEscrito } from "@/lib/prisma/formatos/nitido";
-import { avisosDePixeles } from "@/lib/prisma/formatos/revisar";
+import { avisosDePixeles, edicionMuevePieza, edicionSinPieza, type InfoRenglones } from "@/lib/prisma/formatos/revisar";
 import { etiquetaPieza } from "@/lib/prisma/formatos/roles";
-import { FP, rellenar } from "@/lib/prisma/formatos/copy";
+import { FP, FP_SIN_RENGLONES, rellenar } from "@/lib/prisma/formatos/copy";
 import { DIALOGO_GRANDE, Franjas } from "./vista-grande";
 import type { MaestroListo } from "@/lib/prisma/formatos/listo";
 import { claveTexto, type CambiosTexto, type PiezaCambiada } from "@/lib/prisma/formatos/cambios-texto";
 import { TEXTO_CAMBIADO_MAX } from "@/lib/prisma/formatos/textos";
 import type { ModoCopia } from "@/lib/prisma/formatos/matriz";
+import type { SinRenglones } from "@/lib/prisma/formatos/renglones";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD — el editor de UNA medida (Pedro, 2026-10-15: "an edit button that opens that
@@ -38,6 +39,8 @@ type Arrastre = { pieza: number; parte: number | null; modo: Modo; px: number; p
 /** Lugares de las partes, relativos a su pieza (`PosicionParte`), y su orden: por pieza. */
 type Rels = Record<number, Record<number, Pos>>;
 type OrdenesP = Record<number, number[]>;
+/** Lo mismo sin lo de la pieza `i`. */
+const sinPieza = <T,>(r: Record<number, T>, i: number): Record<number, T> => Object.fromEntries(Object.entries(r).filter(([k]) => +k !== i));
 
 const ESQUINAS: Esquina[] = ["nw", "ne", "sw", "se"];
 /** Píxeles (ancho × alto) con los que se pinta la vista, como mucho: más sólo hace lento el arrastre. Va por área y
@@ -125,8 +128,9 @@ export function EditorMedida({
   W: number;
   H: number;
   /** El maestro con esos textos cambiados, cómo se escriben (como en la tarjeta) y el acomodo automático de esta medida
-   *  con ellos: de ahí arranca y a eso vuelve «Volver al automático». */
-  derivar: (cambios: CambiosTexto) => { ma: MaestroListo; texto?: TextoEscrito; auto: Acomodo };
+   *  con ellos: de ahí arranca y a eso vuelve «Volver al automático». `renglones`: los del legal que eligió la persona
+   *  (null = el automático; B27): el maestro es esa versión, y dice cuáles se pueden elegir o por qué no. */
+  derivar: (cambios: CambiosTexto, renglones: number | null) => { ma: MaestroListo; texto?: TextoEscrito; auto: Acomodo; renglones: InfoRenglones | null; sinRenglones: SinRenglones | "probando" | null; piezaLegal: number | null };
   /** Los textos cambiados del anuncio al abrir (todas las medidas). */
   cambios: CambiosTexto;
   /** Por qué el texto `j` de una pieza no se cambia aquí (null = sí se puede). */
@@ -157,7 +161,29 @@ export function EditorMedida({
     return () => clearTimeout(t);
   }, [cambiosLocal, cambiosVista]);
   const actualizando = cambiosVista !== cambiosLocal;
-  const { ma, auto, texto } = useMemo(() => derivar(cambiosVista), [derivar, cambiosVista]);
+  /** En cuántos renglones va el legal en ESTA medida (B27); null = el automático. Al abrir, lo guardado; o, si lo
+   *  guardado movió el legal sin decir renglones, los del PSD (con esa forma se movió; igual que `revisarMedida`). */
+  const [alAbrir] = useState<number | null>(() => {
+    if (inicial?.renglones) return inicial.renglones;
+    if (!inicial) return null;
+    const r = derivar(cambios, null).renglones;
+    return r && edicionMuevePieza(inicial, r.pieza) ? r.psd : null;
+  });
+  const [renglones, setRenglones] = useState<number | null>(alAbrir);
+  const { ma, auto, texto, renglones: infoRenglones, sinRenglones, piezaLegal } = useMemo(() => derivar(cambiosVista, renglones), [derivar, cambiosVista, renglones]);
+  /** La pieza del legal; sin tipografías, la que dice la página. */
+  const iLegal = infoRenglones?.pieza ?? piezaLegal;
+  /** Lo guardado movió el legal con otros renglones que ahora no se pueden usar (faltan las tipografías, o ya no se
+   *  ofrecen): se abre sin eso, como lo muestra la tarjeta (`revisarMedida`), y se dice. */
+  const [soltadoAlAbrir] = useState(() => alAbrir !== null && infoRenglones?.usados !== alAbrir && iLegal !== null && edicionMuevePieza(inicial, iLegal));
+  /** Lo guardado tal como se abre (sin lo del legal, si se soltó). */
+  const [guardada] = useState(() => (inicial && soltadoAlAbrir && iLegal !== null ? edicionSinPieza(inicial, iLegal) : inicial));
+  /** Lo elegido que cuenta: uno que se ofrece y que no es el del automático (ése ES el automático, y no se fija). Sin
+   *  saber todavía cuáles se ofrecen (tipografías), lo guardado se queda. */
+  const normal = (n: number | null) => (n !== null && infoRenglones && (n === infoRenglones.auto || !infoRenglones.opciones.includes(n)) ? null : n);
+  const elegidos = normal(renglones);
+  /** Se soltó lo movido a mano del legal: al cambiar de renglones, o al abrir (se dice, a la vista y al lector). */
+  const [soltado, setSoltado] = useState<"elegir" | "abrir" | null>(soltadoAlAbrir ? "abrir" : null);
   /** Lo último hecho con un texto (quitar, volver a poner, volver al original), para el lector de pantalla. */
   const [dichoTexto, setDichoTexto] = useState("");
   const mismosTextos = igualesCambios(cambiosLocal, cambios);
@@ -168,15 +194,15 @@ export function EditorMedida({
   const ordenAuto = useMemo(() => auto.puestas.map((q) => q.pieza), [auto]);
   const ordenInicial = useMemo(() => ordenarPuestas(auto.puestas, inicial?.orden).map((q) => q.pieza), [auto, inicial]);
   /** Sólo las piezas que la persona movió (las demás siguen al automático: un texto que crece lo cambia). */
-  const [pos, setPos] = useState<Record<number, Pos>>(() => ({ ...(inicial?.piezas ?? {}) }));
+  const [pos, setPos] = useState<Record<number, Pos>>(() => ({ ...(guardada?.piezas ?? {}) }));
   const posDe = (i: number): Pos | undefined => pos[i] ?? deAuto[i];
   /** El orden que eligió la persona (o el guardado); null = el automático. Si un texto cambia qué piezas entran, el
    *  orden se rehace sobre las de ahora (no queda un orden de piezas que ya no están). */
   const [ordenElegido, setOrdenElegido] = useState<readonly number[] | null>(() => inicial?.orden ?? null);
   const orden = useMemo(() => ordenarPuestas(auto.puestas, ordenElegido ?? undefined).map((q) => q.pieza), [auto, ordenElegido]);
   // Las partes: lo que se abrió (con lo guardado). Los órdenes, completos (de abajo hacia arriba) por pieza.
-  const relsInicial = useMemo((): Rels => Object.fromEntries(Object.entries(inicial?.partes ?? {}).map(([i, r]) => [i, { ...r }])), [inicial]);
-  const ordenesInicial = useMemo((): OrdenesP => Object.fromEntries(Object.entries(inicial?.ordenPartes ?? {}).map(([i, o]) => [i, ordenDePartes(ma.piezas[+i], o)])), [inicial, ma]);
+  const relsInicial = useMemo((): Rels => Object.fromEntries(Object.entries(guardada?.partes ?? {}).map(([i, r]) => [i, { ...r }])), [guardada]);
+  const ordenesInicial = useMemo((): OrdenesP => Object.fromEntries(Object.entries(guardada?.ordenPartes ?? {}).map(([i, o]) => [i, ordenDePartes(ma.piezas[+i], o)])), [guardada, ma]);
   const [rels, setRels] = useState<Rels>(relsInicial);
   const [ordenesP, setOrdenesP] = useState<OrdenesP>(ordenesInicial);
   /** Lo que la persona cambió de capa al editar (piezas, y partes por pieza): si dos de al lado cambian de lugar, la
@@ -209,15 +235,20 @@ export function EditorMedida({
   // orden que `revisarMedida` (acomodo, edición, avisos de píxeles: ~1 ms). Sólo lo que cambió cuenta como hecho a
   // mano; dos piezas sin tocar que se enciman se siguen avisando.
   const conPartes = useMemo(() => partesCambiadas(ma, rels, ordenesP), [ma, rels, ordenesP]);
-  const edicion = useMemo(
-    (): Edicion => ({
+  const edicion = useMemo((): Edicion => {
+    const ed: Edicion = {
       piezas: soloCambios(pos, deAuto, auto.puestas),
       orden: ordenSiCambio(orden, ordenAuto),
       ...conPartes,
       ...(Object.keys(sinTexto).length ? { sinTexto } : {}),
-    }),
-    [pos, deAuto, auto, orden, ordenAuto, conPartes, sinTexto],
-  );
+    };
+    // B27: con el legal movido a mano van los renglones de la forma con que se movió (la que se ve), aunque sean los del
+    // automático: si mañana el automático cambia, lo movido no queda puesto sobre otra forma. Los del PSD no se
+    // escriben: lo movido sin renglones es con la forma del PSD (`revisarMedida`).
+    const movido = iLegal !== null && edicionMuevePieza(ed, iLegal);
+    const r = !movido ? elegidos : infoRenglones && infoRenglones.usados < infoRenglones.psd ? infoRenglones.usados : null;
+    return r !== null ? { ...ed, renglones: r } : ed;
+  }, [pos, deAuto, auto, orden, ordenAuto, conPartes, sinTexto, elegidos, iLegal, infoRenglones]);
   // Una copia de otra medida (B25) se ve con sus avisos, como en la tarjeta. Al guardar aquí ya es de esta medida
   // (alguien la vio): `guardar` no lleva `copiaDe`, y la nota de arriba de los avisos lo dice.
   const copiaDe = inicial?.copiaDe;
@@ -241,17 +272,18 @@ export function EditorMedida({
   const anchoCss = caja.w > 0 && caja.h > 0 ? Math.floor(Math.min(caja.w, (caja.h * W) / H)) : 0;
   const e = anchoCss > 0 ? anchoCss / W : 0;
   const cambiada = (i: number) => !!pos[i] && !!deAuto[i] && !igual(pos[i], deAuto[i]);
-  const hayCambios = auto.puestas.some((q) => cambiada(q.pieza)) || !!edicion.orden || !!conPartes.partes || !!conPartes.ordenPartes || !!edicion.sinTexto;
+  const hayCambios = auto.puestas.some((q) => cambiada(q.pieza)) || !!edicion.orden || !!conPartes.partes || !!conPartes.ordenPartes || !!edicion.sinTexto || elegidos !== null;
   // Distinto de como se abrió (lo automático más lo ya guardado): eso es lo que se perdería al cerrar.
   const partesAlAbrir = useMemo(() => JSON.stringify(partesCambiadas(ma, relsInicial, ordenesInicial)), [ma, relsInicial, ordenesInicial]);
   const sinAlAbrir = useMemo(() => JSON.stringify(normalSin(inicial?.sinTexto)), [inicial]);
   const sinGuardar =
     !mismosTextos ||
+    elegidos !== normal(alAbrir) ||
     JSON.stringify(sinTexto) !== sinAlAbrir ||
     orden.some((p, i) => p !== ordenInicial[i]) ||
     JSON.stringify(conPartes) !== partesAlAbrir ||
     auto.puestas.some((q) => {
-      const antes = inicial?.piezas[q.pieza] ?? deAuto[q.pieza], p = posDe(q.pieza);
+      const antes = guardada?.piezas[q.pieza] ?? deAuto[q.pieza], p = posDe(q.pieza);
       return !!p && !!antes && !igual(p, antes);
     });
   /** De arriba (al frente) hacia abajo, como el panel de capas de Photoshop. */
@@ -530,7 +562,7 @@ export function EditorMedida({
   const claveM = (m: { w: number; h: number }) => `${m.w}x${m.h}`;
   const guardar = () =>
     alGuardar(
-      Object.keys(edicion.piezas).length || edicion.orden || edicion.partes || edicion.ordenPartes || edicion.sinTexto ? edicion : null,
+      Object.keys(edicion.piezas).length || edicion.orden || edicion.partes || edicion.ordenPartes || edicion.sinTexto || edicion.renglones ? edicion : null,
       mismosTextos ? cambios : cambiosLocal,
       tambien.filter((t) => copiarA.has(claveM(t.m))).map((t) => t.m),
     );
@@ -552,6 +584,27 @@ export function EditorMedida({
     const o = ordenPartesDe(i);
     return o.length - 1 - o.indexOf(j);
   };
+
+  // ── Renglones del legal (B27) ──
+  /** Otros renglones = otra forma del pie: lo movido a mano de esa pieza (y de sus partes) se suelta y vuelve a su
+   *  lugar automático, que ya sale de la forma nueva. */
+  const cuantos = (n: number) => rellenar(tx(n === 1 ? FP.editorRenglonesUno : FP.editorRenglonesN, lang), { n });
+  const elegirRenglones = (n: number | null) => {
+    if (n === elegidos) return;
+    const i = infoRenglones?.pieza;
+    const suelta = i !== undefined && (pos[i] !== undefined || rels[i] !== undefined || ordenesP[i] !== undefined);
+    if (suelta) {
+      setPos((p) => sinPieza(p, i));
+      setRels((r) => sinPieza(r, i));
+      setOrdenesP((o) => sinPieza(o, i));
+    }
+    setSoltado(suelta ? "elegir" : null);
+    setRenglones(n);
+    const r = cuantos(n ?? infoRenglones?.auto ?? 0);
+    setDichoTexto(`${rellenar(tx(n === null ? FP.editorRenglonesDichoAuto : FP.editorRenglonesDicho, lang), { r })}${suelta ? ` ${tx(FP.editorRenglonesSoltado, lang)}` : ""}`);
+  };
+  /** La letra del legal como queda aquí (con lo movido a mano): lo que cambia de verdad al elegir. */
+  const letraLegal = infoRenglones ? editado.letras.find((l) => l.pieza === infoRenglones.pieza)?.px : undefined;
 
   // ── Textos ──
   /** Los textos de una pieza tal como vienen del PSD (con ellos se reconoce cada uno en todas las medidas). */
@@ -857,6 +910,64 @@ export function EditorMedida({
                 <p id="editor-ayuda">{tx(FP.editorAyuda, lang)}</p>
                 {hayPartes && <p id="editor-ayuda-partes">{tx(FP.editorAyudaPartes, lang)}</p>}
               </div>
+              {/* B27: en cuántos renglones va el legal en esta medida (pastillas, una sola elegida). Si no se puede, por qué. */}
+              {infoRenglones && infoRenglones.opciones.length > 1 ? (
+                <fieldset aria-describedby="editor-renglones-ayuda" className="flex flex-col gap-1.5 rounded-lg border border-border p-2">
+                  {/* El nombre, dentro del recuadro como «Textos» (la leyenda se queda para el lector de pantalla). */}
+                  <legend className="sr-only">{tx(FP.editorRenglones, lang)}</legend>
+                  <p aria-hidden="true" className="text-xs font-semibold text-foreground">
+                    {tx(FP.editorRenglones, lang)}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {/* El número del automático no va dos veces: «Automático (2)» y «2» harían lo mismo, pero el «2» la
+                        fijaría a mano (sin nota y sin voltear). */}
+                    {[null, ...infoRenglones.opciones.filter((x) => x !== infoRenglones.auto)].map((n) => {
+                      const on = elegidos === n;
+                      const comoPsd = (
+                        <>
+                          <span aria-hidden="true"> · </span>
+                          <span className="sr-only">, </span>
+                          {tx(FP.editorRenglonesPsd, lang)}
+                        </>
+                      );
+                      const nombre =
+                        n === null ? (
+                          rellenar(tx(infoRenglones.auto === infoRenglones.psd ? FP.editorRenglonesAutoPsd : FP.editorRenglonesAuto, lang), { n: infoRenglones.auto })
+                        ) : (
+                          <>
+                            <span aria-hidden="true">{n}</span>
+                            <span className="sr-only">{cuantos(n)}</span>
+                            {n === infoRenglones.psd && comoPsd}
+                          </>
+                        );
+                      return (
+                        <label
+                          key={n ?? "auto"}
+                          className={cn(
+                            "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium tabular-nums transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-1 pointer-coarse:h-11",
+                            on ? "border-primary/50 bg-primary/10 text-foreground hover:bg-primary/15" : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                          )}
+                        >
+                          <input type="radio" name="editor-renglones" className="sr-only" checked={on} onChange={() => elegirRenglones(n)} />
+                          <Check className={cn("size-3.5 shrink-0", !on && "invisible")} aria-hidden="true" />
+                          {nombre}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {letraLegal !== undefined && <p className="text-xs tabular-nums text-foreground">{rellenar(tx(FP.editorRenglonesLetra, lang), { px: letraLegal.toFixed(1) })}</p>}
+                  {soltado && <p className="text-xs text-foreground">{tx(soltado === "abrir" ? FP.editorRenglonesSoltadoAbrir : FP.editorRenglonesSoltado, lang)}</p>}
+                  <p id="editor-renglones-ayuda" className="text-xs text-muted-foreground">
+                    {tx(FP.editorRenglonesAyuda, lang)}
+                  </p>
+                </fieldset>
+              ) : (sinRenglones && sinRenglones !== "sin-legal" && sinRenglones !== "un-renglon") || infoRenglones ? (
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{tx(FP.editorRenglones, lang)}. </span>
+                  {rellenar(tx(FP.editorRenglonesNo, lang), { m: tx(sinRenglones && !infoRenglones ? FP_SIN_RENGLONES[sinRenglones] : FP.editorRenglonesNoCabe, lang) })}
+                  {soltado === "abrir" && <span className="mt-1 block text-foreground">{tx(FP.editorRenglonesSoltadoAbrir, lang)}</span>}
+                </p>
+              ) : null}
               {/* A la vista, al momento; al lector de pantalla, medio segundo después del último cambio (abajo). Con una
                   pieza abierta el estado es más largo (pieza y parte): más alto, para que el panel no brinque. */}
               <p className={cn("text-foreground", abierta !== null ? "min-h-[5rem]" : "min-h-[3.75rem]")}>{estado}</p>
@@ -1104,6 +1215,8 @@ export function EditorMedida({
             onClick={() => {
               setPos({});
               setSinTexto({});
+              setRenglones(null);
+              setSoltado(null);
               setOrdenElegido(null);
               setRels({});
               setOrdenesP({});

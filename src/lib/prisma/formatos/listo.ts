@@ -2,7 +2,7 @@
  * HÜE Prisma › Formatos — lo que cruza del Web Worker (que lee el PSD) a la pantalla (que lo pinta). Módulo puro y
  * SIN la librería de PSD: la pantalla sólo importa de aquí, así `ag-psd` vive en el worker y no en la página.
  */
-import type { ExtrasEditable, NotaCapa, PlanEditable } from "./psd-editable.ts";
+import type { Afin, ExtrasEditable, NotaCapa, PlanEditable } from "./psd-editable.ts";
 import type { Caja, MaestroPsd, MotivoPsd, Origen, PartePsd, Rol, TextoPieza } from "./psd.ts";
 
 /** Tope de lo que se LEE de un PSD: sus capas y su copia aplanada, ya sin los originales de los objetos inteligentes
@@ -56,10 +56,13 @@ export type PiezaLista = {
   partes?: ParteLista[];
   /** Con partes: cuál carpeta de la mesa es (`PiezaPsd.carpeta`). */
   carpeta?: number;
+  /** Sólo en una versión del maestro con el legal en otros renglones (B27, `renglones.ts`): cómo se movió desde la mesa
+   *  del PSD, (X, Y) de la mesa → (k·X + x, k·Y + y), para el PSD editable. Falta = donde estaba. */
+  desde?: Afin;
 };
 /** Una parte de una pieza, en el formato que la pantalla pinta (como `PiezaLista`). Sus textos son los MISMOS objetos
  *  que los de su pieza. */
-export type ParteLista = Pick<PiezaLista, "caja" | "solido" | "letraMinPx" | "rgba" | "oscurece" | "base" | "textos"> & Pick<PartePsd, "nombre" | "hijo" | "rellenoPct" | "tapadaPor">;
+export type ParteLista = Pick<PiezaLista, "caja" | "solido" | "letraMinPx" | "rgba" | "oscurece" | "base" | "textos" | "desde"> & Pick<PartePsd, "nombre" | "hijo" | "rellenoPct" | "tapadaPor">;
 export type MaestroListo = {
   nombre: string;
   w: number;
