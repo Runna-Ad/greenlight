@@ -10,6 +10,7 @@ import { getSoyId } from "@/lib/soy";
 import { assertCanActOnTask, assertCanActOnRow } from "@/lib/auth/task-scope";
 import { fixSeguro } from "@/lib/ortografia";
 import { sinNegrita } from "@/lib/negrita";
+import { COLS_PLANO } from "@/lib/vista-tipos";
 import { registrarOrtografia, marcarOrtografiaAplicada, ignorarOrtografia } from "@/lib/hue-log";
 import { guardarCampo, type GuardarResultado } from "./actions";
 import { CAMPOS, type Tabla } from "@/lib/campos";
@@ -45,6 +46,7 @@ const LABEL_PLANO: Record<string, string> = {
   titulo: "Plano",
   accion: "Acción",
   copy_in: "Copy in",
+  cta: "CTA",
   sfx: "SFX",
   gfx: "GFX",
   edicion: "Edición",
@@ -130,7 +132,7 @@ export async function revisarOrtografia(
     const db = supabaseAdmin();
     const { data: planos } = await db
       .from("planos")
-      .select("id, orden, titulo, accion, copy_in, sfx, gfx, edicion, dialogo")
+      .select(COLS_PLANO)
       .eq("idea_id", ideaId)
       .order("orden");
     const planosArr = (planos ?? []) as Record<string, unknown>[];

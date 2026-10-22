@@ -43,7 +43,7 @@ export async function correrSintesis(actorMemberId: string | null): Promise<Sint
     ((existentesRaw ?? []) as { title: string }[]).map((r) => r.title.toLowerCase().trim()),
   );
 
-  // Corpus: el contenido de los ganadores (acción/copy/diálogo por plano).
+  // Corpus: el contenido de los ganadores (acción/copy/CTA/diálogo por plano).
   const corpus = winners
     .map((w, i) => {
       const guion = w.planos
@@ -51,6 +51,7 @@ export async function correrSintesis(actorMemberId: string | null): Promise<Sint
           [
             p.accion && `Acción: ${p.accion}`,
             p.copy_in && `Copy: ${p.copy_in}`,
+            p.cta && `CTA: ${p.cta}`,
             p.dialogo && `Diálogo: ${p.dialogo}`,
           ]
             .filter(Boolean)

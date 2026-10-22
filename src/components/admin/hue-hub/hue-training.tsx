@@ -533,6 +533,7 @@ function WinnerCard({ w }: { w: Winner }) {
                 <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Plano {p.orden}</div>
                 {p.accion && <p><span className="text-muted-foreground">Acción:</span> {p.accion}</p>}
                 {p.copy_in && <p><span className="text-muted-foreground">Copy:</span> {p.copy_in}</p>}
+                {p.cta && <p><span className="text-muted-foreground">CTA:</span> {p.cta}</p>}
                 {p.dialogo && <p><span className="text-muted-foreground">Diálogo:</span> {p.dialogo}</p>}
               </div>
             ))

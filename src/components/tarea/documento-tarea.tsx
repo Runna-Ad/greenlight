@@ -12,6 +12,7 @@ import {
   Trash2,
   Plus,
   Clock,
+  MousePointerClick,
 } from "lucide-react";
 import { memo, useCallback, useState, type ComponentType } from "react";
 
@@ -30,6 +31,7 @@ export type ModoDoc = "editable" | "lectura";
 /** Íconos de cada campo — del mockup de Pedro. */
 const IconoAccion = CirclePlay;
 const IconoCopy = Type;
+const IconoCta = MousePointerClick;
 const IconoSfx = Headphones;
 const IconoGfx = Presentation;
 const IconoEdicion = Scissors;
@@ -41,6 +43,7 @@ type PH = {
   titulo: string;
   accion: string;
   copy_in: string;
+  cta: string;
   sfx: string;
   gfx: string;
   edicion: string;
@@ -106,7 +109,7 @@ export function DocumentoTarea({
             <CampoDoc modo={modo} icono={IconoCopy} label="Subtítulo" tabla="estaticos" filaId={estatico.id}
               campo="copy_subtitulo" grupo="Estático" valor={estatico.copy_subtitulo} placeholder={phEstatico.copy_subtitulo}
               rows={3} soloLectura={soloLectura} onEditarEstatico={onEditarEstatico} />
-            <CampoDoc modo={modo} icono={IconoCopy} label="Botón CTA" tabla="estaticos" filaId={estatico.id}
+            <CampoDoc modo={modo} icono={IconoCta} label="Botón CTA" tabla="estaticos" filaId={estatico.id}
               campo="copy_cta" grupo="Estático" valor={estatico.copy_cta} placeholder={phEstatico.copy_cta}
               rows={1} soloLectura={soloLectura} onEditarEstatico={onEditarEstatico} />
             {/* El legal del estático ya NO es un texto libre aquí: sale de la
@@ -181,6 +184,9 @@ export function DocumentoTarea({
                 <CampoDoc modo={modo} icono={IconoCopy} label="Copy in" tabla="planos" filaId={p.id}
                   campo="copy_in" grupo={`Plano ${p.orden}`} valor={p.copy_in} placeholder={ph.copy_in}
                   rows={2} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
+                <CampoDoc modo={modo} icono={IconoCta} label="CTA" tabla="planos" filaId={p.id}
+                  campo="cta" grupo={`Plano ${p.orden}`} valor={p.cta} placeholder={ph.cta}
+                  rows={1} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 <CampoDoc modo={modo} icono={IconoSfx} label="SFX" tabla="planos" filaId={p.id}
                   campo="sfx" grupo={`Plano ${p.orden}`} valor={p.sfx} placeholder={ph.sfx}
                   rows={1} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
@@ -321,7 +327,7 @@ type CampoDocProps = {
  *  re-renderizaría en cada tecla pasara lo que pasara con las props — el contexto se
  *  salta a React.memo. Partido así, el DocCtx re-renderiza este cascarón barato mientras
  *  el <Campo> pesado detrás del memo se salta cuando sus props no cambian: teclear en un
- *  campo ya no re-renderiza los otros N×7. (reap perf 2026-08-26) */
+ *  campo ya no re-renderiza los demás campos de cada plano. (reap perf 2026-08-26) */
 function CampoDoc(props: CampoDocProps) {
   const { reseed } = useWorkspace();
   // Nonce de re-siembra del campo: al aplicar una sugerencia de H.Ü.E sube y fuerza el
@@ -448,6 +454,7 @@ function planoTieneContenido(p: PlanoVista, refs: RefVista[]): boolean {
     p.titulo?.trim() ||
       p.accion?.trim() ||
       p.copy_in?.trim() ||
+      p.cta?.trim() ||
       p.sfx?.trim() ||
       p.gfx?.trim() ||
       p.edicion?.trim() ||

@@ -28,6 +28,7 @@ export type DiffGuion = {
 const CAMPOS_PLANO: { key: keyof PlanoParsed; label: string }[] = [
   { key: "accion", label: "Acción" },
   { key: "copy_in", label: "Copy" },
+  { key: "cta", label: "CTA" },
   { key: "dialogo", label: "Diálogo" },
 ];
 

@@ -22,7 +22,7 @@ export type TablaGuardable = Tabla | "copies_temas" | "copies";
 export const CAMPOS: Record<TablaGuardable, Set<string>> = {
   planos: new Set([
     "titulo", "hook_narrativo", "hook_visual", "accion",
-    "copy_in", "sfx", "gfx", "edicion", "dialogo",
+    "copy_in", "cta", "sfx", "gfx", "edicion", "dialogo",
   ]),
   estaticos: new Set([
     "copy_titulo", "copy_subtitulo", "copy_cta", "legales_extra",

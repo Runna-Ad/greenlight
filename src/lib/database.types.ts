@@ -168,6 +168,7 @@ export type Plano = {
   hook_visual: string | null;
   accion: string | null;
   copy_in: string | null;
+  cta: string | null;
   gfx_sfx: string | null;
   edicion: string | null;
   dialogo: string | null;

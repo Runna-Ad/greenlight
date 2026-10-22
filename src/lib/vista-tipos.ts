@@ -13,12 +13,18 @@ export type PlanoVista = {
   titulo: string | null;
   accion: string | null;
   copy_in: string | null;
+  cta: string | null;
   sfx: string | null;
   gfx: string | null;
   edicion: string | null;
   dialogo: string | null;
   es_cierre: boolean;
 };
+
+/** Las columnas de `PlanoVista`, para el `.select()`. UNA lista para la tarea, el
+ *  portal y las server actions: eran 4 copias a mano y un campo nuevo tenía que
+ *  acordarse de las 4. */
+export const COLS_PLANO = "id, orden, titulo, accion, copy_in, cta, sfx, gfx, edicion, dialogo, es_cierre";
 
 export type EstaticoVista = {
   id: string;

@@ -33,7 +33,7 @@ import { legalSugerido } from "@/lib/legal-sugerido";
 import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
 import type { RefVista } from "@/components/tarea/referencias-plano";
-import type { EstaticoVista, PlanoVista } from "@/lib/vista-tipos";
+import { COLS_PLANO, type EstaticoVista, type PlanoVista } from "@/lib/vista-tipos";
 
 export const dynamic = "force-dynamic";
 // Las acciones de H.Ü.E de esta ruta (crearGuion escribe un guión completo, extraerGuion,
@@ -166,17 +166,21 @@ export default async function TareaPage({
   let temas: TemaRow[] = [];
 
   if (plantilla === "guion") {
-    const { data } = await db
+    const { data, error: planosErr } = await db
       .from("planos")
-      .select("id, orden, titulo, accion, copy_in, sfx, gfx, edicion, dialogo, es_cierre")
+      .select(COLS_PLANO)
       .eq("idea_id", idea.id)
       .order("orden")
       .returns<PlanoVista[]>();
+    // Fallar honesto: un error (p. ej. la columna `cta` sin la migración 0081) NO puede
+    // verse como "sin planos" — el editor ofrecería "Pegar guión → Reemplazar todos"
+    // sobre planos que sí existen.
+    if (planosErr) throw new Error(`planos: ${planosErr.message}`);
     planos = data ?? [];
     if (!planos.length) {
       const { data: creado } = await db
         .from("planos").insert({ idea_id: idea.id, orden: 1 })
-        .select("id, orden, titulo, accion, copy_in, sfx, gfx, edicion, dialogo, es_cierre")
+        .select(COLS_PLANO)
         .single<PlanoVista>();
       if (creado) planos = [creado];
     }
@@ -312,7 +316,7 @@ export default async function TareaPage({
   const guionTexto = [
     idea.concepto,
     idea.peloteo_raw,
-    ...planos.flatMap((p) => [p.titulo, p.accion, p.copy_in, p.sfx, p.gfx, p.edicion, p.dialogo]),
+    ...planos.flatMap((p) => [p.titulo, p.accion, p.copy_in, p.cta, p.sfx, p.gfx, p.edicion, p.dialogo]),
     // El estático no tiene planos: su "guión" es el copy del arte (título/subtítulo/
     // CTA + legal libre). Incluirlo deja que la sugerencia detecte cashback/MSI/etc.
     estatico?.copy_titulo,

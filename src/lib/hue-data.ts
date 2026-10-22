@@ -168,7 +168,7 @@ export async function cargarHubIntelligence(mes: string | null): Promise<HubInte
   };
 }
 
-export type WinnerPlano = { orden: number; accion: string | null; copy_in: string | null; dialogo: string | null };
+export type WinnerPlano = { orden: number; accion: string | null; copy_in: string | null; cta: string | null; dialogo: string | null };
 export type Winner = {
   ideaId: string;
   code: string | null;
@@ -194,10 +194,12 @@ export async function cargarWinners(): Promise<Winner[]> {
   if (!filas.length) return [];
   const ideaIds = filas.map((s) => s.idea_id);
 
-  const [{ data: ideas }, { data: planos }] = await Promise.all([
+  const [{ data: ideas }, planosRes] = await Promise.all([
     db.from("ideas").select("id, code, naming_base, brief_id").in("id", ideaIds),
-    db.from("planos").select("idea_id, orden, accion, copy_in, dialogo").in("idea_id", ideaIds).order("orden"),
+    db.from("planos").select("idea_id, orden, accion, copy_in, cta, dialogo").in("idea_id", ideaIds).order("orden"),
   ]);
+  // Sin planos los ganadores llegarían vacíos al writer sin que nadie lo note.
+  const planos = must(planosRes, "planos");
   const ideaById = new Map(
     ((ideas ?? []) as { id: string; code: string | null; naming_base: string | null; brief_id: string }[]).map((i) => [i.id, i]),
   );
@@ -216,6 +218,7 @@ export async function cargarWinners(): Promise<Winner[]> {
       orden: p.orden,
       accion: p.accion,
       copy_in: p.copy_in,
+      cta: p.cta,
       dialogo: p.dialogo,
     });
   }
@@ -308,14 +311,14 @@ export async function cargarEdiciones(): Promise<EdicionesResumen> {
   if (!enviadas.length) return vacio;
 
   const planos =
-    must<{ idea_id: string; orden: number; accion: string | null; copy_in: string | null; dialogo: string | null }[]>(
-      await db.from("planos").select("idea_id, orden, accion, copy_in, dialogo").in("idea_id", enviadas.map((i) => i.id)).order("orden"),
+    must<{ idea_id: string; orden: number; accion: string | null; copy_in: string | null; cta: string | null; dialogo: string | null }[]>(
+      await db.from("planos").select("idea_id, orden, accion, copy_in, cta, dialogo").in("idea_id", enviadas.map((i) => i.id)).order("orden"),
       "planos",
     ) ?? [];
   const planosByIdea = new Map<string, PlanoParsed[]>();
   for (const p of planos) {
     const arr = planosByIdea.get(p.idea_id) ?? planosByIdea.set(p.idea_id, []).get(p.idea_id)!;
-    arr.push({ titulo: null, accion: p.accion, copy_in: p.copy_in, sfx: null, gfx: null, edicion: null, dialogo: p.dialogo });
+    arr.push({ titulo: null, accion: p.accion, copy_in: p.copy_in, cta: p.cta, sfx: null, gfx: null, edicion: null, dialogo: p.dialogo });
   }
 
   const briefIds = [...new Set(enviadas.map((i) => i.brief_id))];

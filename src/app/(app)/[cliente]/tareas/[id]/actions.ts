@@ -13,14 +13,13 @@ import { urlSegura } from "@/lib/url-segura";
 import { programarLecturas } from "@/lib/referencia-lectura";
 import { combinarConsideraciones } from "@/lib/consideraciones";
 import type { AssetStatus } from "@/lib/brand";
-import { sinInventar, limpiarPegado, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
+import { sinInventar, limpiarPegado, normalizarCta, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
 import { sinNegrita } from "@/lib/negrita";
 import { CAMPOS, type TablaGuardable } from "@/lib/campos";
-import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
+import { COLS_PLANO, type PlanoVista, type EstaticoVista } from "@/lib/vista-tipos";
 
-// Columnas que alimentan a PlanoVista/EstaticoVista (para devolver la fila creada
-// al cliente y que actualice su estado sin recargar la página).
-const COLS_PLANO = "id, orden, titulo, accion, copy_in, sfx, gfx, edicion, dialogo, es_cierre";
+// Columnas que alimentan a EstaticoVista (para devolver la fila creada al cliente y que
+// actualice su estado sin recargar la página). Las de PlanoVista: COLS_PLANO, en vista-tipos.
 const COLS_ESTATICO =
   "id, copy_titulo, copy_subtitulo, copy_cta, legales_extra, referencia_url, referencia_nota";
 const COLS_TEMA = "id, idea_id, tema, cuota, orden";
@@ -394,7 +393,7 @@ export async function guardarBrief(
  */
 // Campos de contenido de un plano que pueden recibir correcciones (para atribuir
 // autoría al importar un guión). Excluye id/orden/es_cierre.
-const PLANO_CONTENT = ["titulo", "accion", "copy_in", "sfx", "gfx", "edicion", "dialogo"];
+const PLANO_CONTENT = ["titulo", "accion", "copy_in", "cta", "sfx", "gfx", "edicion", "dialogo"];
 
 // ¿El trabajo de esta persona cuenta como AUTORÍA? Sólo el equipo creativo, y por
 // su IDENTIDAD REAL (soy.role), NO por el view-as: un especialista puede estar
@@ -865,10 +864,10 @@ export async function extraerGuion(
         items: {
           type: "object" as const,
           properties: {
-            titulo: CAMPO, accion: CAMPO, copy_in: CAMPO,
+            titulo: CAMPO, accion: CAMPO, copy_in: CAMPO, cta: CAMPO,
             sfx: CAMPO, gfx: CAMPO, edicion: CAMPO, dialogo: CAMPO,
           },
-          required: ["titulo", "accion", "copy_in", "sfx", "gfx", "edicion", "dialogo"],
+          required: ["titulo", "accion", "copy_in", "cta", "sfx", "gfx", "edicion", "dialogo"],
           additionalProperties: false,
         },
       },
@@ -885,7 +884,11 @@ export async function extraerGuion(
     "Campos de cada plano:\n" +
     "- titulo: el encabezado del plano (ej. \"Plano 1 - int Sala - MCU\").\n" +
     "- accion: la descripción de lo que pasa en pantalla.\n" +
-    "- copy_in: el texto que aparece SOBRE la pantalla (incluye el valor de \"Botón CTA\" si lo hay).\n" +
+    "- copy_in: el texto que aparece SOBRE la pantalla, SIN el CTA.\n" +
+    "- cta: el texto del CTA / botón. Viene con rótulos como \"CTA:\", \"Botón CTA:\", \"Call to action:\" " +
+    "o \"Llamado a la acción:\", en su renglón, a mitad de otro, antes o después del diálogo, o en una " +
+    "columna CTA. Va SÓLO aquí: nunca en copy_in ni como locutor del diálogo. Sin rótulo, cadena vacía. " +
+    "\"señala el CTA\" sin dos puntos es una acción, no un CTA.\n" +
     "- sfx: efectos de sonido.\n" +
     "- gfx: gráficos / lettering.\n" +
     "- edicion: notas de edición o transición SÓLO si hay una etiqueta explícita; si no, cadena vacía.\n" +
@@ -928,10 +931,12 @@ export async function extraerGuion(
       typeof v === "string" && v.trim() ? v.trim() : null;
     const planos: PlanoParsed[] = crudos.map((p) => {
       const o = (p ?? {}) as Record<string, unknown>;
-      return {
-        titulo: s(o.titulo), accion: s(o.accion), copy_in: s(o.copy_in),
+      // normalizarCta: si H.Ü.E dejó un "CTA: …" en otro campo o "(CTA) …" como
+      // locutor, lo pasa a su campo con las mismas etiquetas que el parser.
+      return normalizarCta({
+        titulo: s(o.titulo), accion: s(o.accion), copy_in: s(o.copy_in), cta: s(o.cta),
         sfx: s(o.sfx), gfx: s(o.gfx), edicion: s(o.edicion), dialogo: s(o.dialogo),
-      };
+      });
     });
 
     // Guardarraíl: junta TODO lo extraído y verifica que no inventó nada. Se quitan

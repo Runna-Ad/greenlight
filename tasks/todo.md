@@ -1,5 +1,54 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-10-22 — CTA EN CADA PLANO (rama `feat/plano-cta`, de main, worktree ../greenlight-cta · 0081 APLICADA)
+Pedro eligió la opción 1: una caja CTA en cada plano, debajo de Copy in. Antes "Botón CTA:" caía en Copy in sin etiqueta
+(decisión vieja en guion.ts) y 4 de 5 formas de escribir el CTA quedaban mal (CTA: suelto → locutor falso "(CTA)";
+CTA después del diálogo → el diálogo se iba a Acción; CTA a mitad de línea → se quedaba en Copy in; estático "CTA:" → se perdía).
+- [x] Migración 0081: `planos.cta` (text, nullable) + rpc_import_planos escribe cta. Aditiva: segura para el código viejo.
+- [x] guion.ts: etiquetas CTA:/Botón CTA:/Boton CTA:/Call to action:/Llamado(a) a la acción:, con o sin negrita; en su renglón,
+      a mitad de renglón (no en renglones hablados), antes o después del diálogo, etiqueta sola con el texto abajo. "CTA" sin
+      dos puntos y los títulos no se tocan. El CTA no mueve dónde empieza el diálogo. Estático con las mismas etiquetas.
+- [x] H.Ü.E lee el pegado (extraerGuion) y escribe el guión (escribirGuion): campo cta en el esquema y el prompt + limpieza en
+      código (normalizarCta) sobre lo que devuelve. Aviso amarillo en la vista previa si el texto trae CTA y ningún plano lo tiene.
+- [x] Todos los lectores: editor, vista previa, portal, validar, ortografía, autoría, diff/síntesis/ganadores/training, tipos.
+      Una sola lista de columnas (COLS_PLANO) en vez de 4 copias.
+- [x] Tests: los 5 casos de la tabla + bordes ("señala el CTA", "Acta:", negrita, etiqueta sola) en test-lib; rpc con cta en test-db.
+- [x] (1) 0081 APLICADA a la base real 2026-10-22 con el "ship it" de Pedro (runner de `prisma` con --only 20261022120002
+      --project-ref ybbrpqzbedaxsmotgtkh). Verificado en vivo: columna `cta` existe; rpc_import_planos sigue sólo para
+      postgres/service_role; anon no ejecuta ninguna rutina (0); ledger anotado; prueba con rollback (DO … RAISE): importó
+      cta "Pídela desde tu celular" (recortado) y copy_in "Sin anualidad", y quedaron 0 planos de prueba.
+- [ ] (2) push del código a main (auto-deploy). Orden original: (1) `node scripts/migrate.mjs` aplica la 0081 a la base real
+      (aditiva: el código de hoy no la nota) → comprobar `select cta from produccion.planos limit 1`; (2) recién entonces
+      push/merge del código. Al revés, la tarea y el portal ahora truenan con error (antes mostraban un guión vacío y
+      ofrecían "Reemplazar todos" sobre planos que sí existen).
+Next Step: segunda pasada del revisor de bugs sobre los arreglos → commit en feat/plano-cta → Pedro decide el ship.
+
+### Review (reap 2026-10-22: bugs Sonnet · seguridad Opus · rendimiento/accesibilidad/UI Sonnet)
+Arreglado (con prueba):
+- SERIO seguridad: la 0081 copiaba el `grant ... to anon, authenticated` de 0030 y le reabría a la llave pública una función
+  SECURITY DEFINER que 0056/0061 habían cerrado. Ahora revoke public/anon/authenticated + grant service_role. test-db nuevo:
+  "anon/authenticated no pueden ejecutar ninguna rutina de produccion" (falló 1 y 1 con la mala, pasa con la buena).
+- SERIO bugs: renglones SIN CTA se alteraban (coma final perdida, "CASHBACK**" → "CASHBACK****"). Ahora salen intactos.
+- SERIO bugs: "CTA:" solo + "Pídela" abajo volvía a hacer locutor falso. Ahora mira el renglón siguiente.
+- SERIO rendimiento/resiliencia: con el código antes que la migración, las lecturas de planos fallaban EN SILENCIO (guión
+  vacío). page.tsx y portal-data ahora truenan; cargarWinners usa must().
+- Mejoras: regex cuadrática en separadores (39 000 guiones: 478 ms → 0 ms); "el botón CTA:" a media frase en Acción ya no se
+  parte; "Llamado a la acción" sin dos puntos ya no se traga el renglón; "Copy in: … · CTA:" con texto abajo; viñeta/emoji
+  antes de "CTA:"; normalizarCta quita el rótulo repetido y no toca campos sin CTA; aviso sin falsos positivos (frase hablada,
+  encabezado de columna "CTA" antes del Plano 1) y con texto por modo; CTA en la fila de campos cortos de la vista previa
+  (no suma un renglón por plano); placeholder "Texto del botón" igual al del estático (medido: 31 px, una línea a 560 px).
+NO arreglado (decisión):
+- El aviso sale sólo si NINGÚN plano quedó con CTA; perder 1 de 3 no avisa. Contar rótulos vs. CTAs por plano es frágil.
+- Borradores viejos de H.Ü.E (hue_generations) sin `cta`: se importaron con el código viejo, así que copy_in coincide en los
+  dos lados; sólo un borrador creado antes del deploy e importado después daría ruido en "aprende de ediciones".
+- COLS_ESTATICO sigue copiado en 3 archivos (fuera de alcance; mismo patrón que COLS_PLANO si se quiere después).
+- limpiarPegado corre 3 veces en "Analizar" (barato, módulo perezoso). `/[ \t]+\n/` de limpiarPegado tiene la misma forma
+  cuadrática con espacios (pre-existente, sólo un editor con sesión puede dispararlo).
+Verificación: npm test exit 0 (lib 591 · db 428 · import 81 · sync 45) · tsc 0 · eslint 0 · next build exit 0 (limpio, .next borrado antes) ·
+navegador (banco temporal, sin base): 4 planos con CTA en las 4 posiciones → cada CTA en su caja; aviso aparece con CTA antes
+del Plano 1 y se va al escribirlo; estático "CTA:" → Botón CTA; tarjeta del editor y vista cliente (CTA vacío oculto).
+NO comprobado: la tarea real con la base real (necesita la 0081 aplicada); H.Ü.E real (extraer/escribir) con el campo cta.
+
 ## 🟡 2026-10-08 — MASTER VE TODO (rama `claude/sharp-swirles-54ddbf`, de main · SIN migración · preview pushed)
 PEDRO_OVERRIDE: el Master Builder ve TODAS las acciones de la tarea (doer + revisor), asignado o no. Lead/admin igual que antes.
 - [x] `veTodo`/`haceDeDoer` en src/lib/task-actions.ts → actionsFor (tablero/Mi Trabajo) + AccionesTarea + panel de correcciones ("Marcar atendido").

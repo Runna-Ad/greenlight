@@ -356,6 +356,16 @@ console.log("\n▶ Candado RLS 0056 (anon/authenticated fuera de produccion)");
                      and c.relacl::text like '%${rol}=%'`),
       0,
     );
+    // Las RUTINAS también: 0056 se las quitó y una migración que copia un `grant ... to
+    // anon, authenticated` viejo (como 0030) se las devolvería sin que nada lo note. Es
+    // el segundo candado por si algún día vuelve el `usage` del esquema. (reap 0081)
+    eq(
+      `${rol} no puede ejecutar ninguna rutina de produccion`,
+      await priv(`select count(*)::int as n from pg_proc p
+                    join pg_namespace ns on ns.oid = p.pronamespace
+                   where ns.nspname='produccion' and has_function_privilege('${rol}', p.oid, 'execute')`),
+      0,
+    );
   }
 
   // El otro lado de la moneda: si esto se rompiera, la APP dejaría de funcionar.
@@ -1643,7 +1653,7 @@ console.log("\n▶ rpc_import_planos — importar guión pegado");
     scalar(`select produccion.rpc_import_planos($1, $2::jsonb, $3)`, [IDEA, JSON.stringify(planos), modo]);
   const planos = [
     { titulo: "Plano 1", accion: "hace algo", copy_in: "compra ya", dialogo: "(Actriz) hola cómo estás tú" },
-    { titulo: "Plano 2", accion: "otra cosa", sfx: "pop" },
+    { titulo: "Plano 2", accion: "otra cosa", sfx: "pop", cta: "  Pídela desde tu celular " },
     { titulo: "Plano 3" }, // sin más campos → todos null
   ];
 
@@ -1657,6 +1667,10 @@ console.log("\n▶ rpc_import_planos — importar guión pegado");
      Number(await scalar(`select count(*) from produccion.planos where idea_id=$1 and titulo like 'viejo%'`, [IDEA])), 0);
   eq("un campo no provisto queda null (plano 3 sin accion)",
      await scalar(`select accion from produccion.planos where idea_id=$1 and orden=3`, [IDEA]), null);
+  eq("0081: el CTA se importa a su columna (recortado)",
+     await scalar(`select cta from produccion.planos where idea_id=$1 and orden=2`, [IDEA]), "Pídela desde tu celular");
+  eq("0081: sin CTA → null, y no se cuela en copy_in",
+     await scalar(`select coalesce(cta,'∅') || ' | ' || copy_in from produccion.planos where idea_id=$1 and orden=1`, [IDEA]), "∅ | compra ya");
   ok("read_time_s lo pone el trigger desde el diálogo (>0 con diálogo)",
      Number(await scalar(`select read_time_s from produccion.planos where idea_id=$1 and orden=1`, [IDEA])) > 0);
 

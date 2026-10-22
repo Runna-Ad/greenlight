@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { cargarWinners } from "@/lib/hue-data";
 import { legalSugerido, type LegalLite } from "@/lib/legal-sugerido";
 import { voz, varianteGuion, readTimeS, presupuestoDialogoS, PALABRAS_POR_MINUTO } from "@/lib/plantilla";
-import { convertirDialogo } from "@/lib/guion";
+import { convertirDialogo, normalizarCta } from "@/lib/guion";
 import { combinarConsideraciones } from "@/lib/consideraciones";
 import { parseReferencias } from "@/lib/referencia";
 import { lecturasPara } from "@/lib/referencia-lectura";
@@ -175,7 +175,7 @@ export async function reunirContextoTarea(ideaId: string): Promise<ContextoWrite
   const winners = winnersFuente.map((w) => ({
     etiqueta: `${w.clienteName} · ${w.namingBase ?? w.code ?? "s/n"}`,
     guion: w.planos
-      .map((p) => [p.accion && `Acción: ${p.accion}`, p.copy_in && `Copy: ${p.copy_in}`, p.dialogo && `Diálogo: ${p.dialogo}`].filter(Boolean).join(" · "))
+      .map((p) => [p.accion && `Acción: ${p.accion}`, p.copy_in && `Copy: ${p.copy_in}`, p.cta && `CTA: ${p.cta}`, p.dialogo && `Diálogo: ${p.dialogo}`].filter(Boolean).join(" · "))
       .filter(Boolean)
       .join("\n"),
   }));
@@ -232,9 +232,14 @@ function bloqueEstable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
   if (modo === "guion") {
     s +=
       "- Cada plano es un objeto con: titulo (encabezado tipo \"Plano 1 - …\"), accion (qué pasa en pantalla), " +
-      "copy_in (texto en pantalla), sfx (audio), gfx (gráficos/emojis), edicion (transición/insert; vacío si no aplica), " +
+      "copy_in (texto en pantalla, SIN el CTA), cta (el texto del CTA / botón en pantalla), sfx (audio), " +
+      "gfx (gráficos/emojis), edicion (transición/insert; vacío si no aplica), " +
       "dialogo. El diálogo va en el formato \"(Quién) texto\", con el locutor entre paréntesis; junta varios locutores " +
       "con saltos de línea.\n" +
+      "- CTA: va SÓLO en el campo cta, nunca dentro de copy_in ni como locutor del diálogo. Normalmente sólo el " +
+      "plano de CIERRE lleva CTA; en los demás deja cta vacío. Si una regla de marca dice que la plataforma NO " +
+      "lleva CTA, déjalo vacío en todos los planos. (Si la actriz o el locutor DICEN el llamado a la acción, eso " +
+      "sigue siendo diálogo.)\n" +
       "- Arranca con un HOOK fuerte en los primeros segundos. Escribe un guión coherente de principio a fin " +
       "(no incluyas la cortinilla legal final: se agrega desde la biblioteca).\n" +
       "- En el PRIMER plano (los primeros 3–5 segundos) SIEMPRE menciona un Selling Point o nombra el " +
@@ -384,8 +389,8 @@ async function generarUnGuion(
         type: "array" as const,
         items: {
           type: "object" as const,
-          properties: { titulo: CAMPO, accion: CAMPO, copy_in: CAMPO, sfx: CAMPO, gfx: CAMPO, edicion: CAMPO, dialogo: CAMPO },
-          required: ["titulo", "accion", "copy_in", "sfx", "gfx", "edicion", "dialogo"],
+          properties: { titulo: CAMPO, accion: CAMPO, copy_in: CAMPO, cta: CAMPO, sfx: CAMPO, gfx: CAMPO, edicion: CAMPO, dialogo: CAMPO },
+          required: ["titulo", "accion", "copy_in", "cta", "sfx", "gfx", "edicion", "dialogo"],
           additionalProperties: false,
         },
       },
@@ -425,14 +430,16 @@ async function generarUnGuion(
       .slice(0, 40)
       .map((p) => {
         const o = (p ?? {}) as Record<string, unknown>;
-        return {
-          titulo: s0(o.titulo), accion: s0(o.accion), copy_in: s0(o.copy_in),
+        // normalizarCta: un "CTA: …" que el modelo dejó en otro campo (o "(CTA) …" como
+        // locutor) pasa a su campo, con las mismas etiquetas que "Pegar guión".
+        return normalizarCta({
+          titulo: s0(o.titulo), accion: s0(o.accion), copy_in: s0(o.copy_in), cta: s0(o.cta),
           sfx: s0(o.sfx), gfx: s0(o.gfx), edicion: s0(o.edicion),
           // El diálogo pasa por la MISMA normalización que "Pegar guión"
           // (convertirDialogo → "(Quién) texto"), para que la Vista cliente ponga el
           // locutor en negritas. Antes se guardaba crudo del modelo y no se seccionaba.
           dialogo: typeof o.dialogo === "string" ? s0(convertirDialogo(o.dialogo.split("\n"))) : null,
-        };
+        });
       })
       .filter((p) => Object.values(p).some(Boolean)); // descarta planos totalmente vacíos (reap M6)
     if (!planos.length) return { ok: false, error: "H.Ü.E devolvió un guión vacío. Intenta de nuevo." };

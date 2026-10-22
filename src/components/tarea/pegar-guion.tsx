@@ -21,6 +21,7 @@ const CAMPOS_PLANO: { k: keyof PlanoParsed; label: string; rows: number; ancho?:
   { k: "titulo", label: "Plano", rows: 1, ancho: true },
   { k: "accion", label: "Acción", rows: 2, ancho: true },
   { k: "copy_in", label: "Copy in", rows: 2, ancho: true },
+  { k: "cta", label: "CTA", rows: 1 },
   { k: "sfx", label: "SFX", rows: 1 },
   { k: "gfx", label: "GFX", rows: 1 },
   { k: "edicion", label: "Edición", rows: 1 },
@@ -70,6 +71,9 @@ export function PegarGuion({
   // Fase 2: cuando H.Ü.E ESCRIBIÓ el guión (no lo extrajo de un pegado) → nudge distinto
   // (revisá datos/precios/legales, no "omisiones").
   const [escritoPorIA, setEscritoPorIA] = useState(false);
+  // El texto pegado trae una etiqueta de CTA ("CTA:", "Botón CTA:"…). Si ningún plano
+  // quedó con CTA, la vista previa avisa: algo se perdió o cayó en otro campo.
+  const [ctaEnTexto, setCtaEnTexto] = useState(false);
   const [pendiente, start] = useTransition();
   const [leyendo, startLectura] = useTransition();
   const [generando, startGenerar] = useTransition();
@@ -83,6 +87,7 @@ export function PegarGuion({
     setOfrecerHue(false);
     setExtraidoPorIA(false);
     setEscritoPorIA(false);
+    setCtaEnTexto(false);
   };
   const cerrar = () => { setAbierto(false); reset(); };
 
@@ -102,6 +107,7 @@ export function PegarGuion({
       setOfrecerHue(false);
       setExtraidoPorIA(false);
       setEscritoPorIA(true);
+      setCtaEnTexto(false);
       setPaso("revisar");
     });
 
@@ -111,7 +117,8 @@ export function PegarGuion({
     // era el único import CLIENTE que la metía en el bundle de CADA tarea. Al importarlo
     // aquí, dentro del handler, sólo se baja cuando el usuario de verdad pega y analiza
     // (raro comparado con abrir la tarea). Los botones siguen siendo eager. (reap 2026-08-26)
-    const { parseGuion, parseEstatico, contarPlanos } = await import("@/lib/guion");
+    const { parseGuion, parseEstatico, contarPlanos, mencionaCta } = await import("@/lib/guion");
+    setCtaEnTexto(mencionaCta(texto));
     if (modo === "guion") {
       const p = parseGuion(texto);
       setPlanos(p);
@@ -182,6 +189,9 @@ export function PegarGuion({
     });
 
   const nPlanos = planos.length;
+  const ctaPerdido =
+    ctaEnTexto &&
+    (modo === "guion" ? nPlanos > 0 && !planos.some((p) => p.cta?.trim()) : !!estatico && !estatico.copy_cta?.trim());
   const puedeConfirmar =
     modo === "guion"
       ? nPlanos > 0
@@ -252,7 +262,7 @@ export function PegarGuion({
                 aria-label="Texto del guión"
                 placeholder={
                   modo === "guion"
-                    ? "Plano 1 - int. Sala - MCU\nAcción…\nCopy in: …\nSFX: …\nActriz\nDiálogo…\n\nPlano 2 - …"
+                    ? "Plano 1 - int. Sala - MCU\nAcción…\nCopy in: …\nCTA: …\nSFX: …\nActriz\nDiálogo…\n\nPlano 2 - …"
                     : "Título: …\nSubtítulo: …\nBotón CTA: …"
                 }
                 className="min-h-0 flex-1 resize-none overflow-y-auto font-mono [field-sizing:fixed]"
@@ -280,6 +290,17 @@ export function PegarGuion({
                       <Sparkles className="size-3.5" /> {leyendo ? "H.Ü.E está leyendo…" : "Deja que H.Ü.E lo lea"}
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {ctaPerdido && (
+                <div className="flex items-start gap-2 rounded-md border border-status-progress/40 bg-[color-mix(in_srgb,var(--status-progress)_10%,transparent)] p-2.5 text-[12px]">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-progress" />
+                  <p>
+                    {modo === "guion"
+                      ? "El texto trae un CTA, pero ningún plano quedó con CTA. Revisa si cayó en Copy in, Acción o Diálogo y pásalo a su caja antes de importar."
+                      : "El texto trae un CTA, pero Botón CTA quedó vacío. Revisa si cayó en Título o Subtítulo y pásalo a Botón CTA antes de importar."}
+                  </p>
                 </div>
               )}
 
@@ -327,9 +348,11 @@ export function PegarGuion({
                           <Trash2 className="size-3.5" />
                         </button>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-3">
+                      {/* 4 columnas: el CTA va en la fila de los campos cortos (CTA · SFX ·
+                          GFX · Edición), así no suma un renglón entero a cada plano. */}
+                      <div className="grid gap-2 sm:grid-cols-4">
                         {CAMPOS_PLANO.map((c) => (
-                          <label key={c.k} className={c.ancho ? "sm:col-span-3" : ""}>
+                          <label key={c.k} className={c.ancho ? "sm:col-span-4" : ""}>
                             <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                               {c.label}
                             </span>

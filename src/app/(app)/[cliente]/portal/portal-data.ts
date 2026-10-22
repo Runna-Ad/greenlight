@@ -2,7 +2,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { plantillaPara, type Plantilla } from "@/lib/plantilla";
 import { cargarRefsPorPlano, cargarRefsEstatico } from "@/lib/referencias-data";
 import type { AssetStatus } from "@/lib/brand";
-import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
+import { COLS_PLANO, type PlanoVista, type EstaticoVista } from "@/lib/vista-tipos";
 import type { RefVista } from "@/components/tarea/referencias-plano";
 import type { TemaRow } from "@/components/tarea/documento-copies";
 import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
@@ -383,7 +383,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
       : Promise.resolve({ data: null }),
     db
       .from("planos")
-      .select("id, orden, titulo, accion, copy_in, sfx, gfx, edicion, dialogo, es_cierre")
+      .select(COLS_PLANO)
       .eq("idea_id", idea.id)
       .order("orden")
       .returns<PlanoVista[]>(),
@@ -445,6 +445,8 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
       .returns<PinRow[]>(),
   ]);
 
+  // Un error de lectura no puede verse como "sin contenido" en el portal del cliente.
+  if (planosRes.error) throw new Error(`planos: ${planosRes.error.message}`);
   const planos = (planosRes.data ?? []) as PlanoVista[];
   const estatico = (estaticoRes.data ?? null) as EstaticoVista | null;
   const plantilla = plantillaPara(idea.tipo_asset);

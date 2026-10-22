@@ -9,6 +9,7 @@ import { getViewAs } from "@/lib/view-as";
 import { getSoyId } from "@/lib/soy";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { sinNegrita } from "@/lib/negrita";
+import { COLS_PLANO } from "@/lib/vista-tipos";
 import { registrarVeredictos, marcarVeredictoAplicado, ignorarVeredicto } from "@/lib/hue-log";
 
 /**
@@ -32,6 +33,7 @@ const LABEL_PLANO: Record<string, string> = {
   titulo: "Plano",
   accion: "Acción",
   copy_in: "Copy in",
+  cta: "CTA",
   sfx: "SFX",
   gfx: "GFX",
   edicion: "Edición",
@@ -105,7 +107,7 @@ export async function validarCambios(
   const [{ data: planos }, { data: est }] = await Promise.all([
     db
       .from("planos")
-      .select("id, orden, titulo, accion, copy_in, sfx, gfx, edicion, dialogo")
+      .select(COLS_PLANO)
       .eq("idea_id", ideaId),
     db
       .from("estaticos")

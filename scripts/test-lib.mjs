@@ -824,7 +824,7 @@ console.log("\n▶ fixSeguro (chequeo de ortografía)");
 
 console.log("\n▶ Guión (paste importer)");
 {
-  const { parseGuion, parseEstatico, contarPlanos, convertirDialogo, mismoContenido, sinInventar, desdeElPrimerPlano, limpiarPegado } =
+  const { parseGuion, parseEstatico, contarPlanos, convertirDialogo, mismoContenido, sinInventar, desdeElPrimerPlano, limpiarPegado, normalizarCta, mencionaCta } =
     await import("../src/lib/guion.ts");
 
   // Pegado RICO: tabla Markdown/Notion (| celda |, **negrita**, <br>, |---|). Debe
@@ -938,10 +938,102 @@ console.log("\n▶ Guión (paste importer)");
   eq("p3 copy_in une los dos Copy in", p[2].copy_in, "✓ Sin anualidad de por vida\n✓ Sin comisiones ocultas");
   eq("p3 dialogo", p[2].dialogo, "(Actriz) Y no tiene anualidad de por vida ni comisiones ocultas. Eso me da tranquilidad al usar mi tarjeta de crédito.");
 
-  // Plano 6 — "Botón CTA:" alimenta copy_in
+  // Plano 6 — "Botón CTA:" va a su propio campo (Pedro 2026-10-22; antes caía en copy_in)
   eq("p6 titulo", p[5].titulo, "Plano 6 - int. Sala - MCU");
-  eq("p6 copy_in viene del Botón CTA", p[5].copy_in, "Pídela desde tu celular");
-  eq("p6 accion no se traga el CTA ni el diálogo", p[5].accion, acc6);
+  eq("p6 cta viene del Botón CTA", p[5].cta, "Pídela desde tu celular");
+  eq("p6 copy_in ya no se lleva el CTA", p[5].copy_in, null);
+  eq("p6 accion no se traga el CTA ni el diálogo (y 'señala el CTA.' se queda)", p[5].accion, acc6);
+  eq("planos sin CTA → cta null", p[0].cta, null);
+
+  // ── CTA en cualquier parte del plano ──
+  const cta1 = (t) => parseGuion(`Plano 6 - cierre\nLa actriz señala el CTA.\n${t}`)[0];
+  const base = (p) => JSON.stringify([p.accion, p.copy_in, p.cta, p.dialogo]);
+  const esperado = JSON.stringify(["La actriz señala el CTA.", "Sin anualidad", "Pídela desde tu celular", "(Actriz) Pídela ya."]);
+  eq("CTA: suelto ya no es un locutor falso",
+     base(cta1("Copy in: Sin anualidad\nCTA: Pídela desde tu celular\nActriz\nPídela ya.")), esperado);
+  eq("CTA a mitad del renglón de Copy in se separa",
+     base(cta1("Copy in: Sin anualidad · CTA: Pídela desde tu celular\nActriz\nPídela ya.")), esperado);
+  eq("CTA después del diálogo no manda el diálogo a Acción",
+     base(cta1("Copy in: Sin anualidad\nActriz\nPídela ya.\nBotón CTA: Pídela desde tu celular")), esperado);
+  eq("etiqueta sola con el texto en el renglón de abajo",
+     base(cta1("Copy in: Sin anualidad\nCTA:\nPídela desde tu celular\nActriz\nPídela ya.")), esperado);
+  eq("rótulo 'Botón CTA' sin dos puntos no se vuelve locutor",
+     base(cta1("Copy in: Sin anualidad\nBotón CTA\nPídela desde tu celular\nActriz\nPídela ya.")), esperado);
+  eq("etiqueta sola NO se come al locutor de abajo",
+     base(cta1("Copy in: Sin anualidad\nCTA:\nActriz\nPídela ya.")), JSON.stringify(["La actriz señala el CTA.", "Sin anualidad", null, "(Actriz) Pídela ya."]));
+  eq("en un renglón hablado el CTA a mitad NO se parte",
+     parseGuion("Plano 1 - x\nCopy in: X\nActriz\nDale clic al CTA: es fácil.")[0].dialogo, "(Actriz) Dale clic al CTA: es fácil.");
+  eq("'Acta:' no es CTA (no parte dentro de palabra)", parseGuion("Plano 1 - x\nCopy in: Acta: firmada")[0].copy_in, "Acta: firmada");
+  eq("'llamado a la acción:' a mitad de una acotación se queda en Acción",
+     parseGuion("Plano 1 - x\nCierra con un llamado a la acción: la actriz señala la app.\nActor\nHola.")[0].cta, null);
+  eq("'Llamado a la acción:' al inicio del renglón sí es CTA",
+     parseGuion("Plano 1 - x\nAcción.\nLlamado a la acción: Descarga DiDi\nActor\nHola.")[0].cta, "Descarga DiDi");
+  eq("negrita partida por el CTA queda cerrada en los dos lados",
+     JSON.stringify([parseGuion("Plano 1 - x\nCopy in: **Sin anualidad · CTA: Pídela**")[0].copy_in, parseGuion("Plano 1 - x\nCopy in: **Sin anualidad · CTA: Pídela**")[0].cta]),
+     JSON.stringify(["**Sin anualidad**", "**Pídela**"]));
+  eq("el * legal antes del CTA no se recorta",
+     parseGuion("Plano 1 - x\nCopy in: 6% de CASHBACK* CTA: Pídela")[0].copy_in, "6% de CASHBACK*");
+  eq("dos CTA en un renglón → dos renglones de CTA", parseGuion("Plano 1 - x\nCopy in: X CTA: A · CTA: B")[0].cta, "A\nB");
+  eq("**Botón CTA:** en negrita al inicio", parseGuion("Plano 1 - x\n**Botón CTA:** Pídela")[0].cta, "Pídela");
+
+  // Reap 0081: un renglón SIN CTA sale intacto (antes perdía la coma final y "**" se duplicaba)
+  const intacto = parseGuion("Plano 1 - x\nLa actriz abre la app,\nse ve el saldo\nCopy in: 6% de CASHBACK**")[0];
+  eq("sin CTA: la coma al final de la acción se queda", intacto.accion, "La actriz abre la app, se ve el saldo");
+  eq("sin CTA: una marca legal '**' suelta no se toca", intacto.copy_in, "6% de CASHBACK**");
+  eq("sin CTA: los dos puntos al final se quedan", parseGuion("Plano 1 - x\nCopy in: Ahora:")[0].copy_in, "Ahora:");
+  // El texto del botón en el renglón de abajo aunque parezca locutor ("Pídela", "Solicítala Ahora")
+  const unaPalabra = parseGuion("Plano 6 - cierre\nCopy in: Sin anualidad\nCTA:\nPídela\nActriz\nPídela ya.")[0];
+  eq("CTA: + 'Pídela' abajo → CTA, no locutor falso",
+     JSON.stringify([unaPalabra.cta, unaPalabra.dialogo]), JSON.stringify(["Pídela", "(Actriz) Pídela ya."]));
+  const titulo = parseGuion("Plano 6 - cierre\nAcción.\nBotón CTA\nSolicítala Ahora\nActriz\nPídela ya.")[0];
+  eq("Botón CTA + 'Solicítala Ahora' (con mayúsculas) → CTA",
+     JSON.stringify([titulo.accion, titulo.cta, titulo.dialogo]), JSON.stringify(["Acción.", "Solicítala Ahora", "(Actriz) Pídela ya."]));
+  eq("fuera de un campo, 'el botón CTA:' a media frase no se parte",
+     parseGuion("Plano 1 - x\nAparece el botón CTA: Pídela ya\nActriz\nHola.")[0].accion, "Aparece el botón CTA: Pídela ya");
+  eq("en la acción, tras un punto, 'CTA:' sí se parte",
+     parseGuion("Plano 1 - x\nLa actriz señala la app. CTA: Pídela\nActriz\nHola.")[0].cta, "Pídela");
+  eq("'Llamado a la acción' sin dos puntos no se traga el renglón de abajo",
+     parseGuion("Plano 6 - cierre\nLlamado a la acción\nLa actriz señala la app.\nActriz\nHola.")[0].cta, null);
+  eq("'Copy in: … · CTA:' con el texto abajo",
+     parseGuion("Plano 6 - cierre\nCopy in: Sin anualidad · CTA:\nPídela desde tu celular\nActriz\nHola.")[0].cta, "Pídela desde tu celular");
+  eq("viñeta antes del CTA en la zona hablada ('• CTA: Pídela')",
+     parseGuion("Plano 6 - cierre\nCopy in: X\nActriz\nHola.\n• CTA: Pídela")[0].cta, "Pídela");
+
+  // normalizarCta — lo que devuelve H.Ü.E: "CTA:" dentro de otro campo o "(CTA)" como locutor
+  const hue = normalizarCta({
+    titulo: "Plano 6", accion: null, copy_in: "Sin anualidad\nCTA: Pídela", cta: "Pídela",
+    sfx: null, gfx: null, edicion: null, dialogo: "(Actriz) Hola\n(CTA) Descarga DiDi",
+  });
+  eq("normalizarCta: saca el CTA de copy_in", hue.copy_in, "Sin anualidad");
+  eq("normalizarCta: '(CTA) …' del diálogo es CTA, sin repetir el que ya tenía", hue.cta, "Pídela\nDescarga DiDi");
+  eq("normalizarCta: el diálogo real se queda", hue.dialogo, "(Actriz) Hola");
+  const limpio = { titulo: "P", accion: "a", copy_in: "b", cta: null, sfx: null, gfx: null, edicion: null, dialogo: "(Actor) c" };
+  eq("normalizarCta: sin CTA no cambia nada", JSON.stringify(normalizarCta(limpio)), JSON.stringify(limpio));
+  const hue2 = normalizarCta({
+    titulo: null, accion: null, copy_in: "CTA: A", cta: "Botón CTA: B\nA",
+    sfx: null, gfx: null, edicion: null, dialogo: "(CTA)\nDescarga DiDi",
+  });
+  eq("normalizarCta: quita el rótulo repetido en cta, sin duplicar por renglón, y '(CTA)' con el texto abajo",
+     JSON.stringify([hue2.cta, hue2.copy_in, hue2.dialogo]), JSON.stringify(["B\nA\nDescarga DiDi", null, null]));
+  const conBlancos = { ...limpio, copy_in: "uno\n\ndos" };
+  eq("normalizarCta: un campo sin CTA conserva hasta sus renglones vacíos", normalizarCta(conBlancos).copy_in, "uno\n\ndos");
+
+  // mencionaCta — para el aviso de la vista previa
+  ok("mencionaCta: 'CTA:' a mitad de renglón", mencionaCta("Plano 1\nCopy in: X · CTA: Y"));
+  ok("mencionaCta: 'señala el CTA.' no cuenta", !mencionaCta("Plano 1\nseñala el CTA."));
+  ok("mencionaCta: CTA antes del Plano 1 sí cuenta (el parser lo descarta → hay que avisar)",
+     mencionaCta("CTA: Pídela\nPlano 1 - x\nAcción."));
+  ok("mencionaCta: 'CTA:' a mitad de una frase hablada no cuenta (el parser tampoco lo saca)",
+     !mencionaCta("Plano 1 - x\nCopy in: X\nActriz\nDale clic al CTA: es fácil."));
+  ok("mencionaCta: un 'CTA' suelto antes del Plano 1 es encabezado de columna, no cuenta",
+     !mencionaCta("ACCIÓN + COPY IN | CTA | DIÁLOGO\nPlano 1 - x\nAcción."));
+  ok("mencionaCta: rótulo solo DENTRO de un plano sí cuenta", mencionaCta("Plano 1 - x\nCTA\nPídela"));
+
+  // Separadores colgando: lineal, no cuadrático (antes 39 000 guiones tardaban ~0.5 s)
+  const largo = "a" + "-".repeat(39000) + " b";
+  const t0 = performance.now();
+  parseGuion(`Plano 1 - x\nCopy in: ${largo}`);
+  ok("una tira de 39 000 guiones no congela el parser (< 200 ms)", performance.now() - t0 < 200);
 
   // El diálogo generado round-trip-ea con parseDialogo (la vista del cliente)
   const seg = parseDialogo(p[0].dialogo);
@@ -1056,6 +1148,11 @@ console.log("\n▶ Guión (paste importer)");
   const est = parseEstatico("Título: Beneficio principal\nSubtítulo: Dos beneficios\nBotón CTA: Solicítala");
   eq("estatico copy_titulo", est.copy_titulo, "Beneficio principal");
   eq("estatico copy_cta", est.copy_cta, "Solicítala");
+  eq("estatico: 'CTA:' sin 'Botón' ya no se pierde", parseEstatico("Título: Tu DiDi Card\nCTA: Pídela").copy_cta, "Pídela");
+  eq("estatico: CTA a mitad del título", parseEstatico("Título: Tu DiDi Card · Botón CTA: Pídela").copy_titulo, "Tu DiDi Card");
+  eq("estatico: rótulo solo con el texto abajo",
+     JSON.stringify([parseEstatico("Título: T\nCTA\nPídela\nSubtítulo: S").copy_cta, parseEstatico("Título: T\nCTA\nPídela\nSubtítulo: S").copy_subtitulo]),
+     JSON.stringify(["Pídela", "S"]));
 }
 
 // ── Negrita: helper de render (partirNegrita) + strip para la IA (sinNegrita) ──
