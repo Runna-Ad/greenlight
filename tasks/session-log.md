@@ -1,5 +1,29 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-10-22 — DiDi cambió de Google Sheet: sync al sheet nuevo + "# Entrega" ya no es obligatorio (SHIPPEADO en `main`; `prisma` NO tiene el código)
+Pedro: "quiero cambiar el spreadsheet a otro" → sheet nuevo de DiDi `1KZkgHXDaCH6RRMqjrtD7qKIF18rIhJQid8jSofOtK9Q` (privado),
+mismo formato y pestañas, SIN la columna "# Entrega" ("creo que no afectaba nada"). Sí afectaba: `mapHeader` la exigía en el
+encabezado (guard de pestaña equivocada → TODAS las pestañas habrían fallado) y `ALWAYS_REQUIRED` la pedía en cada tarea.
+**Hecho (en `main`, worktree `../greenlight-sheet` desde origin/main, ya borrado):**
+- `5c54f11` fix(sync): fuera del guard y de los obligatorios; migración **0080** (espejo SQL `missing_required`, sólo lo usa el
+  contract test); fuera del formulario "Crear brief" y de la tarjeta de revisión del sync; `ENTREGA` de vocab borrado;
+  fallback CSV apunta al sheet nuevo (privado → 401 ruidoso, nunca filas viejas). `ideas.entrega_num` se queda (tareas viejas).
+- `62884e9` quitar el aviso "Secreto del Sheet pendiente de rotar" de Admin › Integraciones (el secreto se rotó el 2026-08-25;
+  Pedro aprobó en chat; el clasificador lo bloqueó la 1ª vez como "borrar aviso de seguridad").
+- Gates: tsc 0 · lint 0 · build ok · `npm test` 1,098 checks 0 fallas (nuevos: header sin "# Entrega", fila sin "# Entrega" TS y SQL).
+**Apps Script (Pedro, en Google):** pegarlo DENTRO del sheet nuevo no se pudo publicar ("You do not have permission…", también en
+Incognito: el script de un sheet es del dueño del sheet). Se hizo un proyecto INDEPENDIENTE en el Drive de Pedro con
+`SHEET_ID` = sheet nuevo y el mismo `GREENLIGHT_SECRET`. URL nueva en Vercel `SHEETS_SCRIPT_URL` (production, sensitive).
+**Ship ("deploy it"):** push `254b745..62884e9` a main → deploy READY (aún con la URL vieja) → cambio de `SHEETS_SCRIPT_URL` →
+redeploy `dpl_6uBqyWw9…` READY en runna-greenlight.vercel.app. **0080**: el clasificador bloqueó mi `migrate.mjs`; Pedro la corrió
+(`--only 20261022120001 --project-ref ybbrpqzbedaxsmotgtkh`) → ledger 1, `missing_required` de una fila sin "# Entrega" = `{}`.
+**Verificado en vivo (Pedro logueado):** Sincronizar lista Brief 16/10 → 26/06 (Real/Normal); preview de Brief 16/10 = 12 + 11
+nuevas, sin errores (nada importado); "Crear brief" sin "# Entrega" (tampoco en "Falta:"); Executions del script nuevo muestra
+`doGet` → la app en vivo lee el sheet nuevo.
+**Pick up next:** las 23 tareas de Brief 16/10 esperan que el lead las revise/importe. Rama remota `origin/fix/sheet-sin-entrega`
+(ya en main) se puede borrar. Al juntar main → prisma entra el fix (choca sólo en tasks/*.md).
+**Rollback:** URL vieja en el script viejo ▸ Deploy ▸ Manage deployments (Vercel no deja leer la sensitive).
+
 ## 2026-09-11 (2) — SHIP de la 1ª tanda (0065 + push) · otra versión BAJO DEMANDA · H.Ü.E aprende solo (rama `prisma`; 0066 PENDIENTE)
 Pedro: "ship it and yes variants on demand plus just make sure hue does learn and improve automatic".
 **Shippeado (1ª tanda):** pre-check en prod (6 prompts, 1 explicación con prefijo `[es]`, 0 sin prefijo) → `npm run migrate`
