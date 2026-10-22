@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { FileSpreadsheet, KeyRound, BookText, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { FileSpreadsheet, BookText, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { IntegracionesEstado } from "@/lib/admin-tipos";
@@ -51,22 +51,6 @@ export function IntegracionesTab({ estado }: { estado: IntegracionesEstado }) {
         <p className="mt-2 text-xs text-muted-foreground">
           La sincronización se hace desde <strong>Sincronizar</strong> en cada cliente.
         </p>
-      </section>
-
-      {/* Rotación del secreto */}
-      <section className="rounded-xl border border-status-corrections/40 bg-[color-mix(in_srgb,var(--status-corrections)_6%,transparent)] p-4">
-        <div className="flex items-center gap-2">
-          <KeyRound className="size-4 text-status-corrections" />
-          <h3 className="font-medium text-foreground">Secreto del Sheet — pendiente de rotar</h3>
-        </div>
-        <p className="mt-2 text-sm text-muted-foreground">
-          El <code className="rounded bg-secondary px-1 text-xs">SHEETS_SCRIPT_SECRET</code> estuvo
-          expuesto ~4 min y no se ha rotado. Rotarlo es manual, en dos lados:
-        </p>
-        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-          <li>Apps Script → <em>Configuración del proyecto ▸ Propiedades del script</em> → nuevo valor de <code className="rounded bg-secondary px-1 text-xs">GREENLIGHT_SECRET</code>.</li>
-          <li>Vercel → <em>Environment Variables</em> → mismo valor en <code className="rounded bg-secondary px-1 text-xs">SHEETS_SCRIPT_SECRET</code>, y re-deploy.</li>
-        </ol>
       </section>
 
       {/* Notion — Legales */}
