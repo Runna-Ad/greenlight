@@ -29,7 +29,14 @@
 - **Opcional:** quitar `@types/nodemailer` de `package.json` (nodemailer 10 trae sus propios tipos).
 - Node: `.nvmrc` y `engines` dicen 24; la Mac de Pedro sólo tiene Node 26 (el aviso EBADENGINE es inofensivo; el CI usa 24).
 
-## 🔺 HÜE Prisma › Formatos (rama `prisma`) — 2026-10-21 — en la PREVIEW, Pedro probando
+## 🔺 HÜE Prisma › Formatos (rama `prisma`) — 2026-10-22 — en la PREVIEW, Pedro probando
+- **Legal y matriz (B24–B27, 2026-10-21/22, 6d45126 · a17ba7f · 182323c · 29804c7):** elegir el legal de la Biblioteca para
+  todas las medidas; copiar lo editado a las medidas hermanas de la matriz; la matriz de producción en el acomodo
+  automático; y el legal en menos renglones en las medidas anchas (automático, nota gris) con un selector de renglones por
+  medida en el editor (B27, opción B de Pedro). B27 necesita la tipografía del cliente cargada; sin ella sale como antes.
+  640×100 de s33 sigue con el legal en 9.8 px (mínimo 10, su aviso se queda). Sin migración. Build de Vercel de la preview:
+  no revisado.
+- **Esperando a Pedro (B27):** probar el selector de renglones en la preview con un PSD real y la tipografía del cliente.
 - **Puerta PSD (Formatos):** página rediseñada (B19 opción A, c75ac8c) + vista grande, contraste libre en medidas
   editadas y editor a la forma de la medida (ccc05fa). **Pasada de diseño B23 (opción B, 2026-10-20, 1000ff8 …
   d105f3a):** controles de 36 px / letra 13, la pieza repetida en gris como aviso común, arriba más corto (primera tarjeta

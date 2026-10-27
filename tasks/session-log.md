@@ -1,5 +1,35 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-10-21/22 — HÜE Prisma › Formatos: el legal (B24–B27) — rama `prisma` (preview), sin migración
+**Hecho (4 commits en `prisma`, todos pusheados):** B24 elegir el legal de la Biblioteca para todas las medidas (6d45126) ·
+B25 copiar lo editado a las medidas hermanas de la matriz (a17ba7f) · B26 la matriz de producción en el acomodo automático
+(182323c) · **B27 el legal en menos renglones** (29804c7). Detalle y números de cada uno en todo.md § Review B24…B27.
+**B27 (Pedro eligió la opción B; yo recomendé A, sólo banners → PEDRO_OVERRIDE en lessons.md):** cada número de renglones
+es otra versión del maestro (legal reescrito al ancho justo, iconos del pie a escala, mismo borde de abajo y centro). Las
+medidas anchas eligen solas la que da el legal más grande sin achicar lo demás (nota gris, no cuenta). En el editor, un
+selector «Automático (N) · 1 · 2 · 3 · como el PSD» por medida, con la letra del legal en px. Con s33 y la DiDi Sans:
+876×324 12.5 → 14.8 px; 640×100 en 2 renglones pero 9.8 px en la página (abajo del mínimo de 10, su aviso sigue);
+320×50 3.5 → 5.6; 1280×720 y 1200×627 se quedan en 3; las altas como el PSD.
+**Revisión:** dos pasadas. La segunda (re-verificación con el mismo revisor) encontró 3 serios que las pruebas y el navegador
+no vieron: lo movido a mano del legal no decía con qué forma del pie se movió, el editor lo abría sobre otra forma, y las
+opciones eran 1..6 en vez de las 6 de justo abajo del PSD. Arreglados (lo movido guarda sus renglones; sin renglones = la
+forma del PSD, que cuida lo guardado antes de B27). El navegador encontró otro: la clave de la caché de `revisarMedida` no
+llevaba las opciones y el editor de 1080×1920 decía «no se pueden cambiar».
+**Pruebas:** formatos 552/0 · prisma 975/0 · `npm test` exit 0 · `npm run build` exit 0 · tsc 0 · eslint sólo 2 advertencias
+viejas. Navegador (localhost, s33 + fuentes DiDi locales): selector en 640×100 y 1080×1920, guardar con el legal movido
+escribe `renglones: 2`, guardado imposible (5) suelta lo movido en tarjeta y editor, guardado sin renglones usa los 3 del
+PSD; 0 errores en consola; mis entradas de prueba en localStorage borradas.
+**No probado:** el build de Vercel de la preview; bajar el PSD editable en el navegador (sólo en Node con ag-psd).
+**Decisiones:** sin renglones guardados + legal movido = la forma del PSD; el automático quita como mucho la mitad de los
+renglones; las versiones de las medidas altas sólo se hacen si alguien las pide (editor o lo guardado).
+**Esperando a Pedro:** probar el selector en la preview con un PSD real y la tipografía del cliente.
+**Pick up next:** el veredicto de Pedro sobre B27; luego B4/B20 (todo.md). Pendiente menor anotado: cada versión se pinta dos
+veces y ocupa ~7 MB; sin tamaño mínimo de iconos al elegir a mano.
+**Environment:** sin dependencias nuevas, sin migraciones, sin `.env`. Servidores locales de prueba (s33 en :8765, fuentes en
+:8766) desde el scratchpad de la sesión. Este cierre se escribió en un worktree temporal desde `origin/prisma`: la carpeta
+principal tiene cambios sin guardar de OTRA sesión (el reset content-only del 2026-10-22: `scripts/reset-blank-slate.mjs`,
+una lección y 3 bloques automáticos en este archivo) y quedó detrás de origin; no los toqué.
+
 ## 2026-10-22 — DiDi cambió de Google Sheet: sync al sheet nuevo + "# Entrega" ya no es obligatorio (SHIPPEADO en `main`; `prisma` NO tiene el código)
 Pedro: "quiero cambiar el spreadsheet a otro" → sheet nuevo de DiDi `1KZkgHXDaCH6RRMqjrtD7qKIF18rIhJQid8jSofOtK9Q` (privado),
 mismo formato y pestañas, SIN la columna "# Entrega" ("creo que no afectaba nada"). Sí afectaba: `mapHeader` la exigía en el

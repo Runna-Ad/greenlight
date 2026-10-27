@@ -1388,3 +1388,12 @@ TAGS: #psd #ag-psd #textos #formatos #b27
 ROOT CAUSE: guardé "lo que la persona eligió" (null = automático) en vez de "con qué forma se hizo lo guardado"; una posición sólo vale con la forma de la pieza que se movió.
 RULE: cuando lo guardado depende de una forma que puede cambiar (renglones, textos, tipografías), guardar esa forma junto con lo movido, y decidir qué significa lo guardado de antes (aquí: sin renglones = la forma del PSD). El editor abre con la misma regla que la tarjeta (`edicionMuevePieza`, `edicionSinPieza`).
 TAGS: #formatos #b27 #edicion #guardado #revision
+
+[2026-10-22] WIN (probar estados guardados difíciles de producir editando localStorage): para B27 necesitaba ver tres casos que la interfaz casi no deja hacer: una edición con renglones que ya no se ofrecen, una de antes de B27 (legal movido sin renglones) y una guardada bien. Guardé una de verdad desde el editor y luego cambié su JSON en localStorage (`renglones: 5`, luego sin `renglones`), recargué y volví a subir el PSD. Así vi tarjeta y editor en cada caso en minutos, y al final borré mis entradas.
+RULE: cuando un caso depende de lo guardado (localStorage, una fila), guardar uno real por la interfaz y editar ESE registro para cada variante, en vez de intentar llegar a cada estado con clics; anotar las claves y borrarlas al terminar.
+TAGS: #navegador #pruebas #localstorage #formatos #b27 #win
+
+[2026-10-22] LESSON (las pruebas de formatos tardan más de 2 minutos: correrlas en segundo plano desde el principio): `npm run test:formatos` en primer plano chocó con el tope de 120 s y se fue al fondo solo; esperé su aviso igual. Lo mismo `npm test` + build.
+RULE: en Greenlight, `test:formatos`, `npm test` y `npm run build` van siempre con `run_in_background` y un archivo de salida; mientras, otra cosa (navegador, docs).
+TAGS: #greenlight #pruebas #tiempo #formatos
+
