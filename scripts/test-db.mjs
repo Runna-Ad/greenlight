@@ -1268,6 +1268,26 @@ await resetRole();
   ok("submit NO resuelve los pins (siguen OPEN para el lifecycle)",
      Number(await scalar(`select count(*) from produccion.comments
        where idea_id='${IDEA}' and kind='client_change' and resolved_at is null`)) === 2);
+  // 0085: "Sin cambio (acordado)" sólo existe sobre un cambio del cliente YA resuelto.
+  {
+    let sinResolver = false;
+    try { await db.query(`update produccion.comments set sin_cambio=true where id=$1`, [pin1]); } catch { sinResolver = true; }
+    ok("0085: sin_cambio exige el cambio resuelto", sinResolver);
+    await db.query(`update produccion.comments set sin_cambio=true, resolved_at=now() where id=$1`, [pin1]);
+    ok("0085: un cambio del cliente resuelto puede cerrarse sin cambio",
+       await scalar(`select sin_cambio from produccion.comments where id=$1`, [pin1]));
+    let reabrirSolo = false;
+    try { await db.query(`update produccion.comments set resolved_at=null where id=$1`, [pin1]); } catch { reabrirSolo = true; }
+    ok("0085: reabrir sin limpiar sin_cambio se rechaza", reabrirSolo);
+    await db.query(`update produccion.comments set sin_cambio=false, resolved_at=null where id=$1`, [pin1]);
+    let interna = false;
+    try {
+      await db.query(`update produccion.comments set sin_cambio=true, resolved_at=now()
+                       where idea_id=$1 and kind='correction_request'`, [IDEA]);
+      interna = Number(await scalar(`select count(*) from produccion.comments where idea_id=$1 and kind='correction_request'`, [IDEA])) === 0;
+    } catch { interna = true; }
+    ok("0085: una corrección interna no puede ser sin cambio", interna);
+  }
   // El client_change enviado cuenta en la ronda: correction_next_round lo ve OPEN →
   // devuelve la ronda actual (no abre una nueva), como con una corrección interna viva.
   const rondaCC = Number(await scalar(`select ronda from produccion.comments

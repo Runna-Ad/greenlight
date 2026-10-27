@@ -257,7 +257,7 @@ export default async function TareaPage({
     target_tabla: string | null; target_fila_id: string | null; target_campo: string | null;
     target_label: string | null; target_quote: string | null;
     target_start: number | null; target_end: number | null;
-    body: string; atendido_at: string | null; resolved_at: string | null;
+    body: string; atendido_at: string | null; resolved_at: string | null; sin_cambio: boolean;
   };
   // TODO lo que sólo depende de idea.* corre EN PARALELO (antes: bundle, legales,
   // correcciones y feedback del cliente iban en serie, un viaje de red tras otro).
@@ -299,7 +299,7 @@ export default async function TareaPage({
       db
         .from("comments")
         .select(
-          "id, ronda, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, body, atendido_at, resolved_at",
+          "id, ronda, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, body, atendido_at, resolved_at, sin_cambio",
         )
         .eq("idea_id", idea.id)
         .eq("kind", "client_change")
@@ -447,6 +447,7 @@ export default async function TareaPage({
       estado: estadoDeTimestamps(c),
       categoria: null,
       cliente: true,
+      sinCambio: c.sin_cambio,
       respuestas: respuestasPorCambio.get(c.id) ?? [],
     })),
   ];

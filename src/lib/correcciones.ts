@@ -58,6 +58,8 @@ export type Correccion = {
    *  presentación: badge "Cliente" en vez de la categoría de rúbrica, y sin veredicto
    *  de H.Ü.E (los cambios del cliente no puntúan en Evaluación). */
   cliente?: boolean;
+  /** Cerrado SIN CAMBIO de común acuerdo con el cliente (0085). Va con estado "closed". */
+  sinCambio?: boolean;
   /** Hilo INTERNO lead ↔ especialista (0082), en orden. Sólo lo llena la página interna
    *  de la tarea; el portal del cliente nunca lo carga. */
   respuestas?: RespuestaCorreccion[];

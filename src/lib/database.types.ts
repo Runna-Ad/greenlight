@@ -215,6 +215,8 @@ export type Comment = {
   kind: CommentKind;
   resolved_at: string | null;
   resolved_by: string | null;
+  /** Cambio del cliente cerrado "Sin cambio (acordado)" (0085). */
+  sin_cambio: boolean;
   created_at: string;
   // Corrección localizada (0028): a qué campo apunta + dos estados de resolución.
   author_member_id: string | null;

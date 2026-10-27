@@ -51,8 +51,8 @@ export function PortalTarea({ t, puedeActuar }: { t: TareaPortal; puedeActuar: b
         clienteSlug={t.clienteSlug}
         ideaId={t.ideaId}
         status={t.status}
-        reReview={t.status === "published" && t.revisiones.length > 0}
-        nRevisados={t.revisiones.length}
+        reReview={t.status === "published" && t.revisiones.some((c) => !c.sinCambio)}
+        nRevisados={t.revisiones.filter((c) => !c.sinCambio).length}
         puedeActuar={puedeActuar}
         teRespondieron={equipoEscribioUltimo(
           [...t.revisiones, ...t.enProceso].flatMap((c) =>

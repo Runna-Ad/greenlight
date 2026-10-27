@@ -98,7 +98,10 @@ export function CampoLectura({
   // los provee; en el interno la lista viene vacía. NO se resaltan inline (su cita es
   // del texto VIEJO, casi siempre ya editado → no la encontraríamos): se muestran a
   // nivel campo como chips "aplicado" + acento verde, honesto y sin depender de offsets.
-  const rev = ctx?.revisionesDeCampo?.(tabla, filaId, campo) ?? [];
+  const revTodas = ctx?.revisionesDeCampo?.(tabla, filaId, campo) ?? [];
+  // Lo cerrado "sin cambio" de común acuerdo (0085) no se cambió: ni acento verde ni "aplicado".
+  const rev = revTodas.filter((c) => !c.sinCambio);
+  const revSinCambio = revTodas.filter((c) => c.sinCambio);
   // byId incluye cs (pins vivos) Y rev (aplicados) para que la tarjeta flotante
   // abra con cualquiera de los dos al pasar el ratón.
   const byId = new Map([...cs, ...rev].map((c) => [c.id, c]));
@@ -336,9 +339,9 @@ export function CampoLectura({
       aria-haspopup="dialog"
       aria-expanded={abierta === c.id}
       className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] italic text-foreground"
-      style={{ background: "color-mix(in srgb, var(--status-progress) 26%, transparent)" }}
+      style={{ background: c.sinCambio ? "var(--secondary)" : "color-mix(in srgb, var(--status-progress) 26%, transparent)" }}
     >
-      <Check className="size-2.5 shrink-0 text-status-progress" />
+      {!c.sinCambio && <Check className="size-2.5 shrink-0 text-status-progress" />}
       &laquo;{c.targetQuote ?? "este campo"}&raquo;
     </button>
   );
@@ -420,6 +423,14 @@ export function CampoLectura({
             {rev.length === 1 ? "Cambio que pediste — aplicado" : "Cambios que pediste — aplicados"}:
           </span>
           {rev.map((c) => chipRevision(c))}
+        </div>
+      )}
+      {revSinCambio.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <span className="text-[10px] font-semibold text-muted-foreground">
+            {revSinCambio.length === 1 ? "Acordado sin cambio" : "Acordados sin cambio"}:
+          </span>
+          {revSinCambio.map((c) => chipRevision(c))}
         </div>
       )}
 
@@ -529,9 +540,9 @@ export function CampoLectura({
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span
                       className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
-                      style={{ background: PIN_BG[corrAbierta.estado] }}
+                      style={{ background: corrAbierta.sinCambio ? "color-mix(in srgb, var(--muted-foreground) 88%, #000)" : PIN_BG[corrAbierta.estado] }}
                     >
-                      {ETIQUETA_ESTADO[corrAbierta.estado]}
+                      {corrAbierta.sinCambio ? "Sin cambio" : ETIQUETA_ESTADO[corrAbierta.estado]}
                     </span>
                     {corrAbierta.cliente ? (
                       <BadgeCliente color={ctx.marcaColor} />
@@ -571,9 +582,16 @@ export function CampoLectura({
               ) : corrAbierta.estado === "closed" ? (
                 // Cambio de una ronda pasada que el equipo YA aplicó — read-only (el
                 // cliente no lo quita; es el registro de "esto lo pediste y ya está").
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-status-progress">
-                  <Check className="size-3.5" /> Aplicado
-                </span>
+                corrAbierta.sinCambio ? (
+                  // Acordado con el cliente en el hilo: no se cambió nada (0085).
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                    Sin cambio
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-status-progress">
+                    <Check className="size-3.5" /> Aplicado
+                  </span>
+                )
               ) : (
                 // El cliente: su cambio (borrador), con la opción de quitarlo antes de enviar.
                 <>

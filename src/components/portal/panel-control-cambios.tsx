@@ -131,7 +131,8 @@ export function PanelControlCambios({ mobile = false }: { mobile?: boolean }) {
             {visible && (
               <div className="grid gap-2 px-2.5 pb-2.5">
                 {items.map((c) => (
-                  <Tarjeta key={c.id} c={c} tono={AMARILLO} etiqueta="Aplicado" hilo={hilo(c)} />
+                  // Cerrado "sin cambio" de común acuerdo (0085): gris, no "Aplicado".
+                  <Tarjeta key={c.id} c={c} tono={c.sinCambio ? GRIS : AMARILLO} etiqueta={c.sinCambio ? "Sin cambio" : "Aplicado"} hilo={hilo(c)} />
                 ))}
               </div>
             )}
@@ -192,7 +193,7 @@ function Tarjeta({
 }) {
   // Barra de color a la izquierda = estado (Pedro 2026-10-27, opción 1). Si lo último del
   // hilo es del equipo, manda el morado: le toca al cliente contestar.
-  const teRespondieron = !!hilo && ultimoVisibleDe(c) === "equipo";
+  const teRespondieron = !!hilo && !c.sinCambio && ultimoVisibleDe(c) === "equipo";
   const color = teRespondieron ? MORADO : tono;
   return (
     // Ya NO es role="button": dentro puede ir la caja de respuesta, y los hijos de un botón

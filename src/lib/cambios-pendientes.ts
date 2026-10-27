@@ -91,6 +91,21 @@ export async function ideasConRespuestaDelCliente(
   ideaIds: string[],
 ): Promise<Set<string>> {
   if (!ideaIds.length) return new Set();
+  // Sólo cuentan los cambios del cliente AÚN ABIERTOS: uno confirmado o cerrado "sin cambio"
+  // ya no espera al lead aunque lo último del hilo sea del cliente ("ok, olvídalo").
+  const { data: abiertos, error: errAbiertos } = await db
+    .from("comments")
+    .select("id")
+    .in("idea_id", ideaIds)
+    .eq("kind", "client_change")
+    .not("ronda", "is", null)
+    .is("resolved_at", null);
+  if (errAbiertos) {
+    console.error("[mi-trabajo] cambios abiertos del cliente:", errAbiertos.message);
+    return new Set();
+  }
+  const abiertoIds = new Set(((abiertos ?? []) as { id: string }[]).map((r) => r.id));
+  if (!abiertoIds.size) return new Set();
   type Resp = { idea_id: string; comment_id: string; created_at: string; de_cliente: boolean; para_cliente: boolean };
   const PAGINA = 1000;
   const resps: Resp[] = [];
@@ -111,6 +126,7 @@ export async function ideasConRespuestaDelCliente(
   }
   const porIdea = new Map<string, { commentId: string; createdAt: string; deCliente: boolean; paraCliente: boolean }[]>();
   for (const r of resps) {
+    if (!abiertoIds.has(r.comment_id)) continue;
     (porIdea.get(r.idea_id) ?? porIdea.set(r.idea_id, []).get(r.idea_id)!).push({
       commentId: r.comment_id, createdAt: r.created_at, deCliente: r.de_cliente, paraCliente: r.para_cliente,
     });

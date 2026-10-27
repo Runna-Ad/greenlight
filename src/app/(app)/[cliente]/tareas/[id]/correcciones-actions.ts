@@ -127,6 +127,8 @@ export async function setEstadoCorreccion(
       : estado === "open"
         ? { atendido_at: null, atendido_by: null, resolved_at: null, resolved_by: null, resolved_member_id: null }
         : { resolved_at: new Date().toISOString(), resolved_member_id: soy?.id ?? null, resolved_by: await actorId() };
+  // Cualquier cambio de estado deja de ser "sin cambio" (0085): reabrir, atender o confirmar.
+  const patchFinal: Record<string, string | boolean | null> = { ...patch, sin_cambio: false };
 
   // Sólo correcciones (internas o del cliente): sin el filtro por `kind`, el mismo POST
   // podía sellar atendido/confirmado en CUALQUIER comentario de la tarea (una aprobación,
@@ -134,13 +136,48 @@ export async function setEstadoCorreccion(
   // devolvía ok con 0 filas tocadas).
   const { data, error } = await db
     .from("comments")
-    .update(patch)
+    .update(patchFinal)
     .eq("id", commentId)
     .eq("idea_id", ideaId)
     .in("kind", ["correction_request", "client_change"])
     .select("id");
   if (error) return { ok: false, error: error.message };
   if (!data?.length) return { ok: false, error: "Esa corrección ya no existe." };
+  return { ok: true };
+}
+
+/**
+ * El lead cierra un cambio del CLIENTE como "Sin cambio (acordado)" (0085, Pedro
+ * 2026-10-27): lo hablaron en el hilo y el cliente aceptó no hacerlo. Queda RESUELTO
+ * (no bloquea la ronda ni la aprobación) pero no se presenta como "Aplicado" ni entra a
+ * lo que el cliente tiene que revisar. La razón ya está en el hilo: no se pide otra.
+ */
+export async function cerrarSinCambio(ideaId: string, commentId: string): Promise<CorreccionResultado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const [role, soy] = await Promise.all([getViewAs(), getSoy()]);
+  if (!canOverrideStatus(role)) return { ok: false, error: "Sólo un lead cierra un cambio sin cambio." };
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+
+  const { data, error } = await supabaseAdmin()
+    .from("comments")
+    .update({
+      sin_cambio: true,
+      atendido_at: null,
+      atendido_by: null,
+      resolved_at: new Date().toISOString(),
+      resolved_member_id: soy?.id ?? null,
+      resolved_by: await actorId(),
+    })
+    .eq("id", commentId)
+    .eq("idea_id", ideaId)
+    .eq("kind", "client_change")
+    .not("ronda", "is", null)
+    // Una pestaña vieja no puede volver "sin cambio" algo ya confirmado como aplicado.
+    .is("resolved_at", null)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!data?.length) return { ok: false, error: "Ese cambio ya no está abierto (recarga la página)." };
   return { ok: true };
 }
 

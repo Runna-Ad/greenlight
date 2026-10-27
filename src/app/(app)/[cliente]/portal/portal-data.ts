@@ -177,6 +177,8 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
       .eq("kind", "client_change")
       .not("ronda", "is", null)
       .not("resolved_at", "is", null)
+      // Lo cerrado "sin cambio" (0085) no es algo que el cliente tenga que revisar.
+      .eq("sin_cambio", false)
       .not("target_campo", "is", null);
     for (const r of (sent ?? []) as { idea_id: string }[]) conRonda.add(r.idea_id);
   }
@@ -377,6 +379,7 @@ type PinRow = {
   ronda: number | null;
   atendido_at: string | null;
   resolved_at: string | null;
+  sin_cambio: boolean;
 };
 
 /**
@@ -453,7 +456,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     db
       .from("comments")
       .select(
-        "id, body, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, ronda, atendido_at, resolved_at",
+        "id, body, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, ronda, atendido_at, resolved_at, sin_cambio",
       )
       .eq("idea_id", idea.id)
       .eq("kind", "client_change")
@@ -469,7 +472,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     db
       .from("comments")
       .select(
-        "id, body, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, ronda, atendido_at, resolved_at",
+        "id, body, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, ronda, atendido_at, resolved_at, sin_cambio",
       )
       .eq("idea_id", idea.id)
       .eq("kind", "client_change")
@@ -487,7 +490,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     db
       .from("comments")
       .select(
-        "id, body, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, ronda, atendido_at, resolved_at",
+        "id, body, target_tabla, target_fila_id, target_campo, target_label, target_quote, target_start, target_end, ronda, atendido_at, resolved_at, sin_cambio",
       )
       .eq("idea_id", idea.id)
       .eq("kind", "client_change")
@@ -563,6 +566,7 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     estado: estadoDeTimestamps(r),
     categoria: null,
     cliente: true,
+    sinCambio: r.sin_cambio,
   });
   const cambios: Correccion[] = (pinsRes.data ?? []).map(aCorreccion);
   const revisiones: Correccion[] = (revsRes.data ?? []).map(aCorreccion);

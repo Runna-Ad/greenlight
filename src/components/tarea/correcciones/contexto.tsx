@@ -11,6 +11,7 @@ import {
   setEstadoCorreccion,
   confirmarCampo as confirmarCampoAction,
   descartarCorreccion,
+  cerrarSinCambio,
   responderCorreccion,
   type CorreccionTarget,
 } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
@@ -64,6 +65,8 @@ export type Ctx = {
   confirmarCampo: (tabla: string, filaId: string | null, campo: string) => void;
   /** El revisor descarta una corrección que fijó (borrado duro). */
   descartar: (id: string) => void;
+  /** El lead cierra un cambio del cliente "Sin cambio (acordado)" (0085). */
+  sinCambio?: (id: string) => void;
   /** Responde en el hilo de un cambio (0082/0083). Devuelve el id de la respuesta si se
    *  guardó (null si no), para que el hilo la pinte ya y limpie la caja sólo entonces. */
   responder?: (id: string, body: string, destinoEsperado?: DestinoRespuesta) => Promise<string | null>;
@@ -207,6 +210,7 @@ export function CorreccionesProvider({
       confirmarCampo: (tabla, filaId, campo) =>
         run(confirmarCampoAction(ideaId, tabla, filaId, campo), "Campo confirmado"),
       descartar: (id) => run(descartarCorreccion(ideaId, id), "Corrección descartada"),
+      sinCambio: (id) => run(cerrarSinCambio(ideaId, id), "Cerrado sin cambio"),
       responder: async (id, body, destinoEsperado = "equipo") => {
         const res = await responderCorreccion(ideaId, id, body, destinoEsperado);
         if (!res.ok) {
