@@ -14,7 +14,8 @@
 - Lo que hay ahora en prod: 1 brief con 2 ideas del sheet nuevo de DiDi (entró después del reset, 2026-10-22 22:14 UTC).
 - `scripts/reset-blank-slate.mjs` acepta `--project-ref` y conoce las tablas hasta 0079 (597211f, rama `prisma`).
   Si Prisma/Formatos pasa a DELETE algún día: anular `prisma_specs.correccion_de` antes (ciclo de FK).
-- Pendiente opcional: ~64 archivos huérfanos en storage (greenlight-referencias, greenlight-formatos).
+- Pendiente opcional: 16 imágenes de referencia de las tareas borradas (21 MB) quedaron huérfanas en
+  greenlight-referencias/<id>/. Los archivos de prisma/ y de greenlight-formatos son de trabajo conservado: NO tocarlos.
 
 ## 🔺 Sync de DiDi en el sheet NUEVO · 2026-10-22 · en `main` (LIVE) · `prisma` todavía NO tiene el código
 - **Sheet:** `1KZkgHXDaCH6RRMqjrtD7qKIF18rIhJQid8jSofOtK9Q` (privado, sin columna "# Entrega"). Lo lee un Apps Script

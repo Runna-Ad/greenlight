@@ -2922,6 +2922,26 @@ profiles 12, hue_instructions 7, hue_kb_documents 7, snippets 5, tipografias 10,
 del sync); no es residuo del reset y no se tocó.
 **Commit:** 597211f (script + lección), rebaseado sobre b0b577c/8b1884e (cierres de otras sesiones; conflicto sólo en
 lessons.md, se conservaron ambas). Sin migraciones; sin push.
-**No hecho / pendiente:** ~64 archivos huérfanos en storage (greenlight-referencias ~38 MB incl. 16 de tareas borradas;
-greenlight-formatos 24): limpiarlos es un paso aparte si Pedro quiere. Stash `wrap-up 2026-10-27` guarda un bloque automático
+**No hecho / pendiente:** 16 imágenes de referencia de las tareas borradas (21 MB, greenlight-referencias/<id>/…)
+quedaron huérfanas en storage (`references` ya no tiene ninguna storage_path); limpiarlas es un paso aparte si Pedro quiere.
+(Corrección 2026-10-27: antes decía "~64 archivos"; los 16 de prisma/ y los 24 de Formatos son de trabajo que se CONSERVÓ.) Stash `wrap-up 2026-10-27` guarda un bloque automático
 del session-log del 2026-10-22 13:10 (ruido de un hook; se puede soltar) y una copia del CLAUDE.md de replay P3 (restaurado).
+
+## 2026-10-27 08:45
+**Shipped (recent commits):**
+  - docs(tasks): cierre del reset content-only #2 (1,052 filas de prueba borradas en prod)
+  - chore(reset): --project-ref y clasificar las 16 tablas nuevas (prisma_*, tipografias, referencia_lecturas)
+  - docs(tasks): cierre de la sesión del legal en Formatos (B24–B27)
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
