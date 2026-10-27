@@ -1,5 +1,14 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-10-27 — Hilo de respuestas bajo cada cambio (rama `feat/hilos-cambios` desde main, worktree ../greenlight-hilos; SIN pushear, 0082 SIN aplicar)
+Pedro: cuando el lead pide un cambio, el especialista contesta ("la puse porque…") y el lead decide (descartar o hacerlo igual). Eligió la opción 1 (hilo por cambio) y que el cliente NUNCA vea las respuestas, aunque el cambio sea suyo.
+**Hecho:** migración **0082** `produccion.correccion_respuestas` (tabla aparte, RLS sin policies, revoke anon/authenticated, cascade al borrar el cambio); acción `responderCorreccion` (rol equipo + scope de tarea + cambio de ESTA tarea, interno o del cliente ya enviado; tope 2000 caracteres y 100 respuestas por cambio); la página carga el hilo; el panel "Control de Cambios" muestra respuestas + botón Responder (borrador sobrevive a que la tarjeta se compacte; lo enviado se pinta al instante; hora fija en America/Mexico_City). La decisión final usa los botones que ya había (Descartar / seguir).
+**Decisión:** tabla aparte y NO `comments.parent_id` (lo que le dije a Pedro primero): `comments` se lee en ~30 sitios, incluido el portal; una respuesta ahí podía aparecer en el portal o contar en rondas/gates.
+**Revisión:** seguridad (Opus): 0 serios, 2 mejoras arregladas (borrador del cliente, tope). Código/UI (Sonnet): 4 serios arreglados (hidratación de la hora, role=button con textarea dentro, borrador perdido al compactar, doble envío) + mejoras.
+**Pruebas:** test-db 433/0 (4 nuevas de 0082) · `npm test` exit 0 · tsc 0 · eslint 0 · `npm run build` exit 0.
+**No probado:** en el navegador. El dev local usa la base de producción y la tabla no existe allí hasta aplicar 0082 (necesita "ship it"); la carpeta nueva no tiene `.env.local` y no lo copié (regla 3).
+**Pick up next:** Pedro prueba → aplicar 0082 (`node scripts/migrate.mjs --only 20261027120001 --project-ref ybbrpqzbedaxsmotgtkh`) → merge a main. Sin avisos todavía (notificación/email cuando alguien responde = siguiente paso). Al juntar main → prisma, clasificar `correccion_respuestas` en `scripts/reset-blank-slate.mjs`.
+
 ## 2026-09-08 — H.Ü.E LEE REFERENCIAS · Tier 2 (TikTok caption) — SHIPPEADO a main + reminder de medición
 **Qué hicimos:** Pedro llegó con la idea de "analizar referencias en video" (spec de Whisper audio-only). Challenge
 protocol: volteé el plan a "lo más barato con más señal primero" — caption por oEmbed (gratis, in-house) → MEDIR →

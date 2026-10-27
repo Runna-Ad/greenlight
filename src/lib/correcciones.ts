@@ -58,7 +58,23 @@ export type Correccion = {
    *  presentación: badge "Cliente" en vez de la categoría de rúbrica, y sin veredicto
    *  de H.Ü.E (los cambios del cliente no puntúan en Evaluación). */
   cliente?: boolean;
+  /** Hilo INTERNO lead ↔ especialista (0082), en orden. Sólo lo llena la página interna
+   *  de la tarea; el portal del cliente nunca lo carga. */
+  respuestas?: RespuestaCorreccion[];
 };
+
+export type RespuestaCorreccion = {
+  id: string;
+  body: string;
+  autor: string | null;
+  createdAt: string;
+};
+
+/** Tope de una respuesta del hilo — el mismo que el CHECK de 0082. */
+export const RESPUESTA_MAX = 2000;
+
+/** Tope de respuestas por cambio (lo cuida responderCorreccion). */
+export const RESPUESTAS_POR_CAMBIO_MAX = 100;
 
 /** El estado de una fila de `comments` a partir de sus timestamps. */
 export function estadoDeTimestamps(row: {

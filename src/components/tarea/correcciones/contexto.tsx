@@ -11,6 +11,7 @@ import {
   setEstadoCorreccion,
   confirmarCampo as confirmarCampoAction,
   descartarCorreccion,
+  responderCorreccion,
   type CorreccionTarget,
 } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
 import {
@@ -63,6 +64,10 @@ export type Ctx = {
   confirmarCampo: (tabla: string, filaId: string | null, campo: string) => void;
   /** El revisor descarta una corrección que fijó (borrado duro). */
   descartar: (id: string) => void;
+  /** Responde en el hilo interno de un cambio (0082). Devuelve el id de la respuesta si se
+   *  guardó (null si no), para que el hilo la pinte ya y limpie la caja sólo entonces. Sólo
+   *  el lado interno lo trae. */
+  responder?: (id: string, body: string) => Promise<string | null>;
   /** Veredicto ADVISORY de la IA por corrección (¿ya se hizo el cambio?). */
   veredictos: Map<string, VeredictoCambio>;
   validando: boolean;
@@ -190,6 +195,15 @@ export function CorreccionesProvider({
       confirmarCampo: (tabla, filaId, campo) =>
         run(confirmarCampoAction(ideaId, tabla, filaId, campo), "Campo confirmado"),
       descartar: (id) => run(descartarCorreccion(ideaId, id), "Corrección descartada"),
+      responder: async (id, body) => {
+        const res = await responderCorreccion(ideaId, id, body);
+        if (!res.ok) {
+          toast.error(res.error);
+          return null;
+        }
+        start(() => router.refresh());
+        return res.id ?? null;
+      },
       veredictos,
       validando,
       validar,
@@ -238,7 +252,7 @@ export function CorreccionesProvider({
           toast.success("Sugerencia aplicada");
         }),
     }),
-    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, veTodo, borrador, correcciones, pendiente, veredictos, validando, validar, run, setWsPlanos, setWsEstatico, bumpReseed],
+    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, veTodo, borrador, correcciones, pendiente, veredictos, validando, validar, run, router, setWsPlanos, setWsEstatico, bumpReseed],
   );
 
   return <CorreccionesCtx.Provider value={value}>{children}</CorreccionesCtx.Provider>;

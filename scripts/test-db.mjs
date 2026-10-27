@@ -2560,5 +2560,41 @@ console.log("\n▶ 0077 — cambios del cliente: cancha del lead, enrutado y pas
   await db.exec(`select set_config('request.jwt.claims','',false)`);
 }
 
+// ── 0082 — hilo interno bajo cada cambio: se borra con su cambio y nadie lo lee por la API ──
+console.log("\n▶ 0082 — respuestas bajo un cambio");
+{
+  await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false)`);
+  const I = flIdea;
+  const cambio = await scalar(
+    `insert into produccion.comments (idea_id, body, kind) values ($1,'cambia la palabra','correction_request') returning id`,
+    [I],
+  );
+  await db.query(
+    `insert into produccion.correccion_respuestas (comment_id, idea_id, body) values ($1,$2,'la puse por el brief'),($1,$2,'ok, déjala')`,
+    [cambio, I],
+  );
+  eq("el hilo guarda 2 respuestas",
+     Number(await scalar(`select count(*) from produccion.correccion_respuestas where comment_id=$1`, [cambio])), 2);
+
+  let vacia = false;
+  try {
+    await db.query(`insert into produccion.correccion_respuestas (comment_id, idea_id, body) values ($1,$2,'   ')`, [cambio, I]);
+  } catch { vacia = true; }
+  ok("una respuesta en blanco se rechaza", vacia);
+
+  // RLS sin policies: un usuario logueado (o el cliente) no lee el hilo aunque tenga GRANT.
+  const anyP = await scalar(`select id from produccion.profiles limit 1`);
+  await asRole(anyP);
+  eq("authenticated no ve respuestas (RLS)",
+     Number(await scalar(`select count(*) from produccion.correccion_respuestas`)), 0);
+  await resetRole();
+
+  // Descartar el cambio (borrado duro) se lleva su hilo.
+  await db.query(`delete from produccion.comments where id=$1`, [cambio]);
+  eq("descartar el cambio borra su hilo",
+     Number(await scalar(`select count(*) from produccion.correccion_respuestas where comment_id=$1`, [cambio])), 0);
+  await db.exec(`select set_config('request.jwt.claims','',false)`);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -31,7 +31,7 @@ import { DocumentoCopies, type TemaRow } from "@/components/tarea/documento-copi
 import { BloqueLegal } from "@/components/tarea/bloque-legal";
 import { legalSugerido } from "@/lib/legal-sugerido";
 import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
-import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
+import { estadoDeTimestamps, type Correccion, type RespuestaCorreccion } from "@/lib/correcciones";
 import type { RefVista } from "@/components/tarea/referencias-plano";
 import { COLS_PLANO, type EstaticoVista, type PlanoVista } from "@/lib/vista-tipos";
 
@@ -258,7 +258,13 @@ export default async function TareaPage({
   };
   // TODO lo que sólo depende de idea.* corre EN PARALELO (antes: bundle, legales,
   // correcciones y feedback del cliente iban en serie, un viaje de red tras otro).
-  const [bundle, [{ data: bibliotecaLegal }, { data: idSnippets }], { data: corrRows }, { data: cambiosCliente }] =
+  const [
+    bundle,
+    [{ data: bibliotecaLegal }, { data: idSnippets }],
+    { data: corrRows },
+    { data: cambiosCliente },
+    { data: respuestaRows, error: errRespuestas },
+  ] =
     await Promise.all([
       cargarBundle(idea.brief_id, role, soy?.id ?? null, soy?.tracks ?? null),
       Promise.all([
@@ -297,6 +303,15 @@ export default async function TareaPage({
         .not("ronda", "is", null)
         .order("created_at")
         .returns<ClientChangeRow[]>(),
+      // Hilo interno bajo cada cambio (0082). Sólo esta página lo lee; el portal no.
+      db
+        .from("correccion_respuestas")
+        .select("id, comment_id, body, author_member_id, created_at")
+        .eq("idea_id", idea.id)
+        .order("created_at")
+        .returns<
+          { id: string; comment_id: string; body: string; author_member_id: string | null; created_at: string }[]
+        >(),
     ]);
   const posicion = posicionEnBundle(bundle, idea.id);
   const seleccionadosIds = new Set((idSnippets ?? []).map((s) => s.snippet_id));
@@ -359,11 +374,29 @@ export default async function TareaPage({
     .filter((m) => puedeSerEspecialista(m, idea.track as Track | null))
     .map(({ id, name, color }) => ({ id, name, color }));
 
-  const autorIds = [...new Set((corrRows ?? []).map((r) => r.author_member_id).filter(Boolean) as string[])];
+  const autorIds = [
+    ...new Set(
+      [...(corrRows ?? []), ...(respuestaRows ?? [])].map((r) => r.author_member_id).filter(Boolean) as string[],
+    ),
+  ];
   const { data: autores } = autorIds.length
     ? await db.from("track_members").select("id, name").in("id", autorIds).returns<{ id: string; name: string }[]>()
     : { data: [] as { id: string; name: string }[] };
   const nombrePorId = new Map((autores ?? []).map((a) => [a.id, a.name]));
+  // Si el hilo no carga, la tarea se ve igual (sin respuestas) pero que quede en el log:
+  // un fallo silencioso parecería "nadie contestó".
+  if (errRespuestas) console.error("correccion_respuestas:", errRespuestas.message);
+  const respuestasPorCambio = new Map<string, RespuestaCorreccion[]>();
+  for (const r of respuestaRows ?? []) {
+    const lista = respuestasPorCambio.get(r.comment_id) ?? [];
+    lista.push({
+      id: r.id,
+      body: r.body,
+      autor: r.author_member_id ? nombrePorId.get(r.author_member_id) ?? null : null,
+      createdAt: r.created_at,
+    });
+    respuestasPorCambio.set(r.comment_id, lista);
+  }
 
   // Correcciones = internas (correction_request) + cambios del cliente ENVIADOS
   // (client_change, ronda not null). Ambos son de PRIMERA CLASE: mismo lifecycle
@@ -384,6 +417,7 @@ export default async function TareaPage({
       ronda: r.ronda ?? 1,
       estado: estadoDeTimestamps(r),
       categoria: r.categoria,
+      respuestas: respuestasPorCambio.get(r.id) ?? [],
     })),
     ...(cambiosCliente ?? []).map((c) => ({
       id: c.id,
@@ -400,6 +434,7 @@ export default async function TareaPage({
       estado: estadoDeTimestamps(c),
       categoria: null,
       cliente: true,
+      respuestas: respuestasPorCambio.get(c.id) ?? [],
     })),
   ];
   const abiertasN = correcciones.filter((c) => c.estado === "open").length;

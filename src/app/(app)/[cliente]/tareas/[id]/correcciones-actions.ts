@@ -13,6 +13,7 @@ import { getCurrentUser } from "@/lib/identity";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { faltaCortinilla, MSG_FALTA_LEGAL } from "@/lib/cortinilla";
 import { enCanchaDelLead, MSG_CANCHA_DEL_LEAD } from "@/lib/cambios-pendientes";
+import { RESPUESTA_MAX, RESPUESTAS_POR_CAMBIO_MAX } from "@/lib/correcciones";
 
 export type CorreccionResultado = { ok: true; id?: string } | { ok: false; error: string };
 
@@ -176,6 +177,71 @@ export async function descartarCorreccion(
     .in("kind", ["correction_request", "client_change"]);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * Responde en el hilo INTERNO de un cambio (0082): el especialista explica por qué lo
+ * hizo así, el lead contesta. Cualquiera del equipo que puede tocar la tarea; el cliente
+ * nunca (su portal no lee esta tabla). La decisión final sigue siendo de los botones que
+ * ya existen: "Descartar" (lo deja como estaba, se borra con su hilo) o seguir el cambio.
+ */
+export async function responderCorreccion(
+  ideaId: string,
+  commentId: string,
+  body: string,
+): Promise<CorreccionResultado> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const [role, soy] = await Promise.all([getViewAs(), getSoy()]);
+  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no responde en los cambios." };
+  const texto = body.trim();
+  if (!texto) return { ok: false, error: "Escribe tu respuesta." };
+  if (texto.length > RESPUESTA_MAX) {
+    return { ok: false, error: `La respuesta pasa de ${RESPUESTA_MAX} caracteres.` };
+  }
+  const scope = await assertCanActOnTask(ideaId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+
+  const db = supabaseAdmin();
+  // El cambio debe ser de ESTA tarea y ser una corrección: interna, o del cliente YA
+  // ENVIADA (ronda not null) — el mismo filtro con que page.tsx los carga. Un borrador del
+  // cliente no se ve en la tarea y el cliente lo puede borrar (con su hilo, en cascada).
+  const { data: cambio, error: errCambio } = await db
+    .from("comments")
+    .select("id")
+    .eq("id", commentId)
+    .eq("idea_id", ideaId)
+    .or("kind.eq.correction_request,and(kind.eq.client_change,ronda.not.is.null)")
+    .maybeSingle();
+  if (errCambio) return { ok: false, error: errCambio.message };
+  if (!cambio) return { ok: false, error: "Ese cambio ya no existe." };
+
+  // Tope por cambio: una conversación real no llega aquí; un bucle sí.
+  const { count, error: errCount } = await db
+    .from("correccion_respuestas")
+    .select("id", { count: "exact", head: true })
+    .eq("comment_id", commentId);
+  // 42P01 = la tabla aún no existe (código desplegado antes de aplicar 0082).
+  if (errCount?.code === "42P01") return { ok: false, error: "Las respuestas aún no están disponibles." };
+  if (errCount) return { ok: false, error: errCount.message };
+  if ((count ?? 0) >= RESPUESTAS_POR_CAMBIO_MAX) {
+    return { ok: false, error: "Este cambio ya tiene demasiadas respuestas. Decídanlo en persona." };
+  }
+
+  const { data, error } = await db
+    .from("correccion_respuestas")
+    .insert({
+      comment_id: commentId,
+      idea_id: ideaId,
+      author_member_id: soy?.id ?? null,
+      author_id: await actorId(),
+      body: texto,
+    })
+    .select("id")
+    .single();
+  // 23503 = el cambio se descartó entre la verificación y el insert (el FK ya no existe).
+  if (error?.code === "23503") return { ok: false, error: "Ese cambio ya no existe." };
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, id: data.id };
 }
 
 /** El revisor confirma (verde) TODAS las correcciones abiertas de un campo. */

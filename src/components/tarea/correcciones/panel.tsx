@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { Trash2, ChevronDown, Sparkles } from "lucide-react";
+import { useRef, useState } from "react";
+import { Trash2, ChevronDown, Sparkles, MessageSquare } from "lucide-react";
 import { useCorrecciones } from "./contexto";
 import { TagTipoCambio, BadgeCliente } from "../selector-tipo-cambio";
 import { VeredictoChip } from "../veredicto-chip";
-import { keyCampo, porRonda, sinResolver, type Correccion, type EstadoCorreccion } from "@/lib/correcciones";
+import {
+  keyCampo,
+  porRonda,
+  sinResolver,
+  RESPUESTA_MAX,
+  type Correccion,
+  type EstadoCorreccion,
+  type RespuestaCorreccion,
+} from "@/lib/correcciones";
 import type { VeredictoCambio } from "@/app/(app)/[cliente]/tareas/[id]/validar-actions";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +69,17 @@ export function PanelCorrecciones() {
   const [expandidoManual, setExpandidoManual] = useState<Map<string, boolean>>(new Map());
   const fijarExpandido = (id: string, expandido: boolean) =>
     setExpandidoManual((prev) => new Map(prev).set(id, expandido));
+  // Respuestas a medio escribir, por id del cambio. Viven AQUÍ y no en el hilo: la tarjeta se
+  // compacta sola (otra pasa a abierta y corre la frontera de los 5) y desmontaría el hilo con
+  // el texto. Una tarjeta con borrador además se queda expandida.
+  const [borradores, setBorradores] = useState<Map<string, string>>(new Map());
+  const fijarBorrador = (id: string, texto: string) =>
+    setBorradores((prev) => {
+      const n = new Map(prev);
+      if (texto.trim()) n.set(id, texto);
+      else n.delete(id);
+      return n;
+    });
   if (!ctx || !ctx.correcciones.length) return null;
 
   const grupos = porRonda(ctx.correcciones);
@@ -167,7 +186,8 @@ export function PanelCorrecciones() {
                         abiertasVistas++;
                       }
                       const manual = expandidoManual.get(c.id); // boolean | undefined
-                      const compacta = manual === undefined ? compactaDefault : !manual;
+                      const compacta =
+                        !borradores.has(c.id) && (manual === undefined ? compactaDefault : !manual);
                       if (compacta) {
                         return (
                           <TarjetaCompacta
@@ -180,16 +200,14 @@ export function PanelCorrecciones() {
                         );
                       }
                       return (
+                        // Ya NO es role="button": dentro vive la caja de respuesta, y los hijos de
+                        // un botón ARIA son "presentacionales" (el lector de pantalla perdía el
+                        // textarea). El clic de mouse sigue saltando al campo; con teclado, el
+                        // botón "Ver campo" de abajo hace lo mismo.
                         <div
                           key={c.id}
-                          role="button"
-                          tabIndex={0}
-                          className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--status-corrections)_50%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                          className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--status-corrections)_50%,transparent)]"
                           onClick={() => verCampo(c)}
-                          onKeyDown={(e) => {
-                            if (e.target !== e.currentTarget) return;
-                            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); verCampo(c); }
-                          }}
                         >
                       <div className="mb-1 flex flex-wrap items-center gap-1.5">
                         {c.targetLabel && (
@@ -231,6 +249,17 @@ export function PanelCorrecciones() {
                       )}
                       <p className="text-[12.5px] leading-snug text-foreground">{c.body}</p>
                       {c.autor && <p className="mt-1 text-[10.5px] text-muted-foreground">{c.autor}</p>}
+
+                      {/* Hilo INTERNO (0082): el especialista explica, el lead contesta. Nunca
+                          en el portal: allá no hay `responder` ni se cargan las respuestas. */}
+                      {ctx.responder && !ctx.esCliente && (ctx.esEquipo || ctx.esRevisor) && (
+                        <HiloRespuestas
+                          c={c}
+                          responder={ctx.responder}
+                          texto={borradores.get(c.id) ?? ""}
+                          setTexto={(t) => fijarBorrador(c.id, t)}
+                        />
+                      )}
 
                       {/* H.Ü.E propuso un texto concreto → el lead lo aplica de un clic
                           directo al campo (ADVISORY→acción; el lead decide). */}
@@ -369,6 +398,15 @@ function TarjetaCompacta({
         </span>
       )}
       <VeredictoChip v={veredicto} />
+      {!!c.respuestas?.length && (
+        <span className="inline-flex items-center gap-0.5 text-[10.5px] font-semibold text-muted-foreground">
+          <MessageSquare className="size-3" aria-hidden />
+          <span aria-hidden>{c.respuestas.length}</span>
+          <span className="sr-only">
+            {c.respuestas.length} respuesta{c.respuestas.length === 1 ? "" : "s"}
+          </span>
+        </span>
+      )}
       <span
         className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
         style={{ background: PILL[c.estado] }}
@@ -378,6 +416,149 @@ function TarjetaCompacta({
       <ChevronDown className="size-3.5 -rotate-90 text-muted-foreground" />
     </button>
   );
+}
+
+/**
+ * El hilo bajo un cambio: las respuestas en orden y una caja para contestar. La caja
+ * empieza cerrada ("Responder") para que 30 tarjetas no sean 30 cajas de texto. El texto a
+ * medio escribir vive en el panel (ver `borradores`), así que sobrevive a que la tarjeta se
+ * compacte; si hay borrador, la caja abre ya abierta.
+ */
+function HiloRespuestas({
+  c,
+  responder,
+  texto,
+  setTexto,
+}: {
+  c: Correccion;
+  responder: (id: string, body: string) => Promise<string | null>;
+  texto: string;
+  setTexto: (t: string) => void;
+}) {
+  const [abierta, setAbierta] = useState(texto.trim() !== "");
+  const caja = useRef<HTMLTextAreaElement>(null);
+  const hilo = useRef<HTMLDivElement>(null);
+  const [enviando, setEnviando] = useState(false);
+  // Lo recién enviado se pinta YA (el refresh de la página tarda): sin esto la caja se vaciaba
+  // y la respuesta no aparecía por segundos, y la gente la mandaba otra vez. Se descarta en
+  // cuanto la respuesta real llega en `c.respuestas` (mismo id).
+  const [enviadas, setEnviadas] = useState<RespuestaCorreccion[]>([]);
+  const btnResponder = useRef<HTMLButtonElement>(null);
+  const inputId = `respuesta-${c.id}`;
+  const deServidor = c.respuestas ?? [];
+  const idsServidor = new Set(deServidor.map((r) => r.id));
+  const respuestas = [...deServidor, ...enviadas.filter((r) => !idsServidor.has(r.id))];
+
+  const abrir = () => {
+    setAbierta(true);
+    // Foco a la caja SÓLO cuando la abre el usuario (no autoFocus: al re-expandir una tarjeta
+    // con borrador, la caja se monta abierta y robaba el foco).
+    requestAnimationFrame(() => caja.current?.focus());
+  };
+
+  // Cerrar = descartar el borrador (si no, la tarjeta queda fijada abierta por él).
+  const cerrar = () => {
+    setTexto("");
+    setAbierta(false);
+    // El foco vuelve a "Responder" sólo si estaba en este hilo o cayó al <body>: si el usuario
+    // ya está escribiendo en otra tarjeta mientras se enviaba ésta, no se lo quitamos.
+    requestAnimationFrame(() => {
+      const a = document.activeElement;
+      if (!a || a === document.body || hilo.current?.contains(a)) btnResponder.current?.focus();
+    });
+  };
+
+  const enviar = async () => {
+    const enviado = texto;
+    if (!enviado.trim() || enviando) return;
+    setEnviando(true);
+    const id = await responder(c.id, enviado);
+    setEnviando(false);
+    if (id) {
+      setEnviadas((prev) => [
+        ...prev,
+        { id, body: enviado.trim(), autor: "Tú", createdAt: new Date().toISOString() },
+      ]);
+      cerrar();
+    }
+  };
+
+  return (
+    // Los clics del hilo no saltan al campo (un clic en la tarjeta sí lo hace).
+    <div ref={hilo} className="mt-2" onClick={(e) => e.stopPropagation()}>
+      {respuestas.length > 0 && (
+        <ul className="grid gap-1.5 border-l-2 border-border pl-2.5">
+          {respuestas.map((r) => (
+            <li key={r.id}>
+              <p className="whitespace-pre-wrap text-[12px] leading-snug text-foreground">{r.body}</p>
+              <p className="mt-0.5 text-[10.5px] text-muted-foreground">
+                {r.autor ?? "Equipo"} · {fechaCorta(r.createdAt)}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {abierta ? (
+        <div className="mt-2">
+          <label htmlFor={inputId} className="sr-only">
+            Tu respuesta{c.targetLabel ? ` sobre ${c.targetLabel}` : ""}
+          </label>
+          <textarea
+            ref={caja}
+            id={inputId}
+            rows={2}
+            maxLength={RESPUESTA_MAX}
+            readOnly={enviando}
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                void enviar();
+              }
+              if (e.key === "Escape" && !enviando) cerrar();
+            }}
+            placeholder="Explica por qué, o contesta…"
+            className="w-full resize-y rounded-md border border-border bg-card px-2 py-1.5 text-[12px] leading-snug text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          />
+          <p className="text-[10.5px] text-muted-foreground">Sólo el equipo lo ve, el cliente no. ⌘/Ctrl + Enter envía.</p>
+          <div className="mt-1 flex items-center gap-1.5">
+            <BtnAccion disabled={enviando || !texto.trim()} tone="primary" onClick={() => void enviar()}>
+              {enviando ? "Enviando…" : "Enviar"}
+            </BtnAccion>
+            <BtnAccion disabled={enviando} onClick={cerrar}>
+              Cancelar
+            </BtnAccion>
+          </div>
+        </div>
+      ) : (
+        <button
+          ref={btnResponder}
+          type="button"
+          onClick={abrir}
+          aria-expanded={false}
+          aria-label={c.targetLabel ? `Responder sobre ${c.targetLabel}` : undefined}
+          className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground transition-colors hover:bg-secondary"
+        >
+          <MessageSquare className="size-3" aria-hidden />
+          Responder
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** "27 oct, 14:05". Zona FIJA: este componente también se pinta en el servidor (UTC en
+ *  Vercel); sin zona, servidor y navegador escribían horas distintas (error de hidratación). */
+function fechaCorta(iso: string) {
+  return new Date(iso).toLocaleString("es-MX", {
+    timeZone: "America/Mexico_City",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function BtnAccion({
