@@ -8,6 +8,14 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+## 🔺 Reset content-only #2 · 2026-10-22 · PROD (datos, sin código en prod)
+- Borrados todos los proyectos/tareas de prueba de Greenlight (1,052 filas, 4 briefs, 56 ideas). Se conservaron equipo,
+  cuentas, DiDi y sus marcas, el cerebro de H.Ü.E, bibliotecas, y TODO el trabajo de prueba de HÜE Prisma / Formatos.
+- Lo que hay ahora en prod: 1 brief con 2 ideas del sheet nuevo de DiDi (entró después del reset, 2026-10-22 22:14 UTC).
+- `scripts/reset-blank-slate.mjs` acepta `--project-ref` y conoce las tablas hasta 0079 (597211f, rama `prisma`).
+  Si Prisma/Formatos pasa a DELETE algún día: anular `prisma_specs.correccion_de` antes (ciclo de FK).
+- Pendiente opcional: ~64 archivos huérfanos en storage (greenlight-referencias, greenlight-formatos).
+
 ## 🔺 Sync de DiDi en el sheet NUEVO · 2026-10-22 · en `main` (LIVE) · `prisma` todavía NO tiene el código
 - **Sheet:** `1KZkgHXDaCH6RRMqjrtD7qKIF18rIhJQid8jSofOtK9Q` (privado, sin columna "# Entrega"). Lo lee un Apps Script
   INDEPENDIENTE en el Drive de Pedro (propiedad `SHEET_ID`, mismo `GREENLIGHT_SECRET`); su /exec está en Vercel

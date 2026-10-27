@@ -2904,3 +2904,24 @@ Las ramas de Dependabot `minor-and-patch-*` ya no existían en origin al hacer f
 se armó en un worktree temporal desde `origin/prisma` (un hook de la sesión lateral bloquea editar la carpeta principal) y se
 subió como avance directo; la carpeta principal quedó 1 commit detrás de origin, sin cambios sin guardar míos. Nota larga:
 `side-session-notes/local_a6bd3f4b-…/dependency-advisories-batch.md`.
+
+## 2026-10-22 → 27 — RESET content-only #2: borrados todos los proyectos/tareas de prueba (prod) · rama `prisma`
+Pedro: "erase all the projects / tasks currently in greenlight (they all been tests)" → eligió "only greenlight projects and
+tasks" (el trabajo de prueba de HÜE Prisma / Formatos se queda).
+**Hecho:** `scripts/reset-blank-slate.mjs` (1) no llegaba a la base porque esta Mac no tiene `supabase link`: se le añadió
+`--project-ref` como migrate.mjs; (2) abortó por 16 tablas nuevas sin clasificar (la red funcionó). Clasificadas: config y
+bibliotecas de Prisma + tipografias + trabajo de prueba prisma_* → KEEP; referencia_lecturas → DELETE; las tablas DELETE que
+no existen en el esquema de la rama se ignoran. Self-test en PGlite con --run: OK. Dry-run en prod: 1,052 filas.
+El clasificador de auto mode bloqueó mi `--run` (la respuesta de Pedro elegía opción pero no decía "run it"); **Pedro lo corrió
+él mismo** en la terminal: 1,052 filas borradas en 1 transacción (4 briefs, 56 ideas, 277 assets, 99 planos, 135
+notificaciones, 214 envíos, 64 status_events, 40 hue_suggestions, 19 comments…). `snippets.brief_id` anulado.
+**Verificado (yo, después):** briefs/ideas/assets/notifications/comments = 0; KEEP igual (clients 1, marcas 2, track_members 7,
+profiles 12, hue_instructions 7, hue_kb_documents 7, snippets 5, tipografias 10, prisma_specs 15…); login de prod 200.
+⚠ de la recuenta: prisma_formatos_lotes 2→3, un lote creado 19:20 UTC durante el run (alguien en la preview); tabla KEEP, inofensivo.
+**Después del reset:** el 2026-10-22 22:14 UTC entró 1 brief con 2 ideas (y 2 staged_rows) por el sheet nuevo de DiDi (sesión
+del sync); no es residuo del reset y no se tocó.
+**Commit:** 597211f (script + lección), rebaseado sobre b0b577c/8b1884e (cierres de otras sesiones; conflicto sólo en
+lessons.md, se conservaron ambas). Sin migraciones; sin push.
+**No hecho / pendiente:** ~64 archivos huérfanos en storage (greenlight-referencias ~38 MB incl. 16 de tareas borradas;
+greenlight-formatos 24): limpiarlos es un paso aparte si Pedro quiere. Stash `wrap-up 2026-10-27` guarda un bloque automático
+del session-log del 2026-10-22 13:10 (ruido de un hook; se puede soltar) y una copia del CLAUDE.md de replay P3 (restaurado).
