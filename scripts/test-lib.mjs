@@ -1473,5 +1473,32 @@ console.log("\n▶ destinoRespuesta — la regla automática de Pedro");
      d({ enCanchaDelLead: true, ultimaDeCliente: true, piezaEnPortal: false }), "equipo");
 }
 
+console.log("\n▶ Correos agrupados (0084) — la plantilla del correo junto");
+{
+  const tpl = await import("../src/lib/email-template.ts");
+  const a = (type, title, body = null) => ({ type, title, body, ctaUrl: `https://g.test/didi/portal?marca=m&brief=b&tarea=${title}` });
+  const tres = [a("ready_for_review", "A"), a("ready_for_review", "B"), a("ready_for_review", "C")];
+  eq("asunto: mismo tipo → plural con el número", tpl.asuntoAgrupado(tres, true), "3 piezas listas para tu revisión");
+  eq("asunto: tipos mezclados al cliente", tpl.asuntoAgrupado([a("ready_for_review", "A"), a("change_reply_client", "B")], true), "Tienes 2 novedades en Greenlight");
+  eq("asunto: tipos mezclados al equipo", tpl.asuntoAgrupado([a("task_submitted", "A"), a("change_reply", "B")], false), "2 avisos nuevos en Greenlight");
+  eq("botón del cliente: su portal, sin la tarea, en el dominio de Greenlight", tpl.ctaAgrupado(tres, true), "https://runna-greenlight.vercel.app/didi/portal");
+  ok("una liga guardada con otro dominio no saca al cliente de Greenlight",
+     tpl.ctaAgrupado([{ ...tres[0], ctaUrl: "https://malo.test/didi/portal?x=1" }], true).startsWith("https://runna-greenlight.vercel.app/"));
+  ok("botón del equipo: Mi trabajo", tpl.ctaAgrupado(tres, false).endsWith("/mi-trabajo"));
+  const html = tpl.htmlAgrupado({ avisos: [...tres, a("ready_for_review", "<script>x</script>", "cuerpo & más")], esCliente: true });
+  ok("lista cada aviso", ["A", "B", "C"].every((t) => html.includes(`>${t}</div>`)));
+  ok("escapa el HTML de los títulos", !html.includes("<script>x</script>") && html.includes("&lt;script&gt;"));
+  ok("escapa el cuerpo", html.includes("cuerpo &amp; más"));
+  ok("cada aviso trae su propia liga", html.includes("tarea=A") && html.includes("tarea=C"));
+  ok("pie de cliente (no le habla de /admin)", !html.includes("/admin"));
+  ok("al equipo sí le dice dónde apagarlos", tpl.htmlAgrupado({ avisos: tres, esCliente: false }).includes("/admin"));
+  const muchos = Array.from({ length: 30 }, (_, i) => a("task_assigned", `T${i}`));
+  const hm = tpl.htmlAgrupado({ avisos: muchos, esCliente: false });
+  ok("lista hasta 25 y dice cuántos más", hm.includes(">T24</div>") && !hm.includes(">T25</div>") && hm.includes("Y 5 m&aacute;s"));
+  ok("tarea asignada trae su propia etiqueta", hm.includes("Tarea asignada"));
+  const txt = tpl.textAgrupado(tres, true);
+  ok("texto plano: asunto, cada aviso y el portal", txt.startsWith("3 piezas") && txt.includes("• B") && txt.endsWith("https://runna-greenlight.vercel.app/didi/portal"));
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

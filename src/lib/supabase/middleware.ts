@@ -10,7 +10,9 @@ const DB_SCHEMA = process.env.NEXT_PUBLIC_DB_SCHEMA ?? "produccion";
 // del cliente (sólo quedaba el guard de cada página). (security review 2026-09-21)
 // /robots.txt tiene que servirse SIN sesión, o el buscador recibe un redirect a /login en
 // vez del "Disallow: /" (visto en prod al desplegar el noindex, 2026-09-02).
-const PUBLIC_PATHS = ["/login", "/portal/login", "/auth/callback", "/auth/confirm", "/robots.txt"];
+// /api/avisos/enviar lo llama el reloj de la base (0084), sin sesión: se protege él solo
+// con su secreto (CRON_SECRET); el muro de login lo mandaba a /login.
+const PUBLIC_PATHS = ["/login", "/portal/login", "/auth/callback", "/auth/confirm", "/robots.txt", "/api/avisos/enviar"];
 
 // Refreshes the Supabase session cookie on every request and gates auth.
 export async function updateSession(request: NextRequest) {

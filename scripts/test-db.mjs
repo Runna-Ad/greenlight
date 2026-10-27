@@ -382,6 +382,14 @@ console.log("\n▶ Candado RLS 0056 (anon/authenticated fuera de produccion)");
   );
 }
 
+// 0084: un usuario con sesión NO reclama la cola de correos.
+// Va aquí: el bloque de abajo le re-concede todas las rutinas a `authenticated` a propósito.
+console.log("\n▶ 0084 — candado de la cola de correos (authenticated)");
+for (const fn of ["produccion.rpc_reclamar_emails(int)", "produccion.rpc_reservar_envio(text,uuid[])"]) {
+  ok(`authenticated NO puede ejecutar ${fn}`,
+     !(await scalar(`select has_function_privilege('authenticated', $1, 'execute')`, [fn])));
+}
+
 // ── RLS enforcement (run queries as the authenticated role) ──
 console.log("\n▶ RLS enforcement");
 await db.exec(`create role authenticated;`).catch(() => {});
@@ -2696,6 +2704,96 @@ console.log("\n▶ 0083 — respuestas: destino, avisos y candados");
   await db.query(`delete from produccion.profiles where email like '%@0083.test'`);
   await db.query(`delete from produccion.clients where id=$1`, [otroClient]);
   await db.exec(`select set_config('request.jwt.claims','',false)`);
+}
+
+// ── 0084 — correos agrupados: el reclamo de la cola y quién puede tocarlo ──
+console.log("\n▶ 0084 — correos agrupados: reclamo de la cola");
+{
+  const p = await scalar(`insert into produccion.profiles (id, email, full_name, role) values (gen_random_uuid(),'agr@0084.test','Agr','creative') returning id`);
+  const n = await scalar(`insert into produccion.notifications (recipient_id, type, title) values ($1,'task_assigned','Prueba 0084') returning id`, [p]);
+  const fila = async (extra) => scalar(
+    `insert into produccion.notification_deliveries (notification_id, channel, status, not_before, claimed_at, created_at)
+     values ($1,'email',$2,$3,$4,coalesce($5, now())) returning id`,
+    [n, extra.status ?? "pending", extra.not_before ?? null, extra.claimed_at ?? null, extra.created_at ?? null]);
+  const lista   = await fila({});
+  const pasada  = await fila({ not_before: new Date(Date.now() - 60_000).toISOString() });
+  const espera  = await fila({ not_before: new Date(Date.now() + 5 * 60_000).toISOString() });
+  const fresca  = await fila({ status: "sending", claimed_at: new Date().toISOString() });
+  const vieja   = await fila({ status: "sending", claimed_at: new Date(Date.now() - 20 * 60_000).toISOString() });
+  // Reclamada hace poco pero CREADA hace mucho (esperó su turno): NO está atascada.
+  const esperoTurno = await fila({ status: "sending", claimed_at: new Date().toISOString(), created_at: new Date(Date.now() - 30 * 60_000).toISOString() });
+  const enviada = await fila({ status: "sent" });
+  const terca = await fila({ status: "sending", claimed_at: new Date(Date.now() - 20 * 60_000).toISOString() });
+  await db.query(`update produccion.notification_deliveries set intentos=2, claimed_at=claimed_at - interval '1 second' where id=$1`, [terca]);
+  const mias = [lista, pasada, espera, fresca, vieja, esperoTurno, enviada, terca];
+
+  const tomadas = new Set((await q(`select id from produccion.rpc_reclamar_emails(200)`)).map((r) => r.id).filter((id) => mias.includes(id)));
+  ok("reclama la pendiente", tomadas.has(lista));
+  ok("reclama la que ya cumplió su espera", tomadas.has(pasada));
+  ok("NO reclama la que espera su turno", !tomadas.has(espera));
+  ok("NO reclama una recién reclamada por otro envío", !tomadas.has(fresca));
+  ok("rescata la atascada (>15 min desde que se reclamó)", tomadas.has(vieja));
+  ok("NO toma por atascada la que esperó turno y se acaba de reclamar", !tomadas.has(esperoTurno));
+  ok("NO toca lo ya enviado", !tomadas.has(enviada));
+  ok("ya rescatada 2 veces (3 envíos): no se reintenta más…", !tomadas.has(terca));
+  eq("…se da por fallida", await scalar(`select status from produccion.notification_deliveries where id=$1`, [terca]), "failed");
+  eq("reclamar algo pendiente NO cuenta como intento", Number(await scalar(`select intentos from produccion.notification_deliveries where id=$1`, [lista])), 0);
+  eq("rescatar una atascada SÍ cuenta", Number(await scalar(`select intentos from produccion.notification_deliveries where id=$1`, [vieja])), 1);
+  eq("lo reclamado queda en 'sending' con su hora de reclamo",
+     Number(await scalar(`select count(*) from produccion.notification_deliveries
+       where id = any($1::uuid[]) and status='sending' and claimed_at > now() - interval '1 minute'`, [[lista, pasada, vieja]])), 3);
+  eq("un segundo reclamo no vuelve a tomar lo mismo",
+     (await q(`select id from produccion.rpc_reclamar_emails(200)`)).filter((r) => mias.includes(r.id)).length, 0);
+
+  // ── ¿Sale ya o espera? (rpc_reservar_envio, con candado por dirección) ──
+  const reclamada = async () => {
+    const id = await fila({});
+    await db.query(`update produccion.notification_deliveries set status='sending', claimed_at=now() where id=$1`, [id]);
+    return id;
+  };
+  const reservar = async (email, ids) => (await q(`select hasta as h from produccion.rpc_reservar_envio($1, $2::uuid[])`, [email, ids]))[0].h;
+  const apartadas = async (email, ids) => (await q(`select ids from produccion.rpc_reservar_envio($1, $2::uuid[])`, [email, ids]))[0].ids;
+  const a1 = await reclamada(), a2 = await reclamada();
+  eq("primer correo a la dirección: sale ya (dos del mismo lote no se frenan entre sí)", await reservar("Uno@0084.Test ", [a1, a2]), null);
+  eq("…y quedan apartadas a esa dirección (minúsculas, sin espacios)",
+     Number(await scalar(`select count(*) from produccion.notification_deliveries where id = any($1::uuid[]) and to_email='uno@0084.test' and status='sending'`, [[a1, a2]])), 2);
+  const b1 = await reclamada();
+  const h = await reservar("uno@0084.test", [b1]);
+  ok("otro aviso a la misma persona mientras el primero sale: espera su turno", h !== null);
+  eq("…vuelve a la cola con su hora", await scalar(`select status from produccion.notification_deliveries where id=$1`, [b1]), "pending");
+  ok("…unos 10 minutos después del primero",
+     Number(await scalar(`select extract(epoch from (not_before - now())) from produccion.notification_deliveries where id=$1`, [b1])) > 590);
+  await db.query(`update produccion.notification_deliveries set status='sent', sent_at=now() - interval '11 minutes' where id = any($1::uuid[])`, [[a1, a2]]);
+  const c1 = await reclamada();
+  eq("pasados los 10 minutos, el siguiente sale ya", await reservar("uno@0084.test", [c1]), null);
+  const otro = await reclamada();
+  eq("otra persona no espera por la primera", await reservar("dos@0084.test", [otro]), null);
+  await db.query(`update produccion.notification_deliveries set status='failed' where id=$1`, [otro]);
+  const otro2 = await reclamada();
+  eq("un envío FALLIDO no cuenta como 'le escribimos'", await reservar("dos@0084.test", [otro2]), null);
+
+  // Sólo se manda lo que de verdad se apartó: una fila que otra corrida ya mandó no vuelve.
+  const x1 = await reclamada(), x2 = await reclamada();
+  await db.query(`update produccion.notification_deliveries set status='sent', sent_at=now() - interval '1 hour' where id=$1`, [x2]);
+  eq("reserva sólo devuelve las filas que siguen siendo suyas", JSON.stringify(await apartadas("tres@0084.test", [x1, x2])), JSON.stringify([x1]));
+
+  // Candado contra la app VIEJA: su reclamo (status→sending sin claimed_at) no toma nada.
+  const vieja2 = await fila({});
+  const tocadas = await q(`update produccion.notification_deliveries set status='sending' where id=$1 returning id`, [vieja2]);
+  eq("el reclamo de la versión vieja no toma la fila", tocadas.length, 0);
+  eq("…y sigue pendiente", await scalar(`select status from produccion.notification_deliveries where id=$1`, [vieja2]), "pending");
+  const enviadaVieja = await q(`update produccion.notification_deliveries set status='sent', sent_at=now() where id=$1 returning id`, [vieja2]);
+  eq("otros cambios de estado (sent) siguen pasando", enviadaVieja.length, 1);
+
+  const puede = async (rol, fn) => scalar(`select has_function_privilege($1, $2, 'execute')`, [rol, fn]);
+  // (`authenticated` se prueba antes de "RLS enforcement", que le re-concede todo a propósito.)
+  ok("anon NO puede reclamar la cola", !(await puede("anon", "produccion.rpc_reclamar_emails(int)")));
+  ok("service_role (la app) sí", await puede("service_role", "produccion.rpc_reclamar_emails(int)"));
+  ok("anon NO puede reservar envíos", !(await puede("anon", "produccion.rpc_reservar_envio(text,uuid[])")));
+  ok("service_role sí reserva", await puede("service_role", "produccion.rpc_reservar_envio(text,uuid[])"));
+
+  await db.query(`delete from produccion.notifications where id=$1`, [n]);
+  await db.query(`delete from produccion.profiles where id=$1`, [p]);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
