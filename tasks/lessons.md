@@ -796,3 +796,11 @@ TAGS: #override #ux #color #marca #greenlight #pedro
 [2026-10-27] LESSON (empujé código que no compilaba: el chequeo corrió en segundo plano y el commit no dependía de su resultado): leí la última línea del log ("exit 2") en el MISMO comando que hacía commit + push, así que se subió f1b76c1 roto a la rama de preview (sólo preview; main intacto). Causa: el arreglo pasó el color a PortalTarea pero el panel vive en CuerpoTarea, otro componente del mismo archivo.
 RULE: el commit/push va en un comando APARTE que sólo corre si el log dice "exit 0" (`tail -1 log | grep -q "exit 0" || exit 1`). Y al pasar una prop nueva, grep cada `<Componente` hasta donde se usa, no sólo el de arriba.
 TAGS: #greenlight #git #verificacion #props
+
+[2026-10-27] LESSON (el botón nuevo vivía en un estado que el flujo real se salta): "Sin cambio (acordado)" sólo salía en cambios ABIERTOS. En la prueba de Pedro el lead contestó al cliente y 34 s después usó "Reenviar al cliente", que confirma TODOS los cambios abiertos (rpc_lead_reenvia_cliente); el "ok, déjalo" del cliente llegó después, con el cambio ya "Confirmado", y el botón ya no estaba. Lo vi leyendo la historia real del cambio en la base (respuestas + status_events), no adivinando.
+RULE: antes de esconder una acción tras un estado, seguir el flujo real de punta a punta (qué otras acciones cambian ese estado en masa). Una decisión que llega DESPUÉS de la conversación tiene que poder tomarse sobre lo ya cerrado.
+TAGS: #greenlight #flujo #estados #sin-cambio #pedro
+
+[2026-10-27] PEDRO_OVERRIDE (ningún estado en gris): "En proceso" seguía en gris oscuro. Pedro: "no quiero colores neutros, brillantes y visuales, elige tú". Portal: En proceso = amarillo vivo, Aplicado = turquesa, Sin cambio = azul, Sin enviar = coral.
+RULE: en Greenlight cada estado lleva un color vivo con significado; gris sólo para texto secundario, nunca para un estado.
+TAGS: #override #color #ux #pedro

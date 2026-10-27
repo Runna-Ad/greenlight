@@ -322,7 +322,7 @@ export function PanelCorrecciones() {
                         )}
                         {/* Cambio del CLIENTE que, hablado en el hilo, no se hará (0085): queda
                             resuelto, con su conversación, sin pasar por "Aplicado". */}
-                        {ctx.esRevisor && c.cliente && !c.sinCambio && c.estado !== "closed" && ctx.sinCambio && (
+                        {ctx.esRevisor && c.cliente && !c.sinCambio && ctx.sinCambio && (
                           <BtnAccion disabled={ctx.pendiente} onClick={() => ctx.sinCambio!(c.id)}>
                             Sin cambio (acordado)
                           </BtnAccion>
@@ -387,8 +387,8 @@ export function PanelCorrecciones() {
 // Barra de color a la izquierda de cada cambio = su estado (Pedro 2026-10-27, opción 1). Si
 // el cliente contestó al último en el hilo, manda el morado: le toca al lead.
 const MORADO = "color-mix(in srgb, var(--primary) 88%, #000)";
-// Cerrado "sin cambio" de común acuerdo con el cliente (0085): gris, ni verde ni ámbar.
-const GRIS = "color-mix(in srgb, var(--muted-foreground) 88%, #000)";
+// Cerrado "sin cambio" de común acuerdo con el cliente (0085): AZUL (Pedro: nada neutro).
+const GRIS = "var(--status-published)";
 function barraDe(c: Correccion): string {
   if (c.sinCambio) return GRIS;
   return c.estado !== "closed" && ultimoVisibleDe(c) === "cliente" ? MORADO : PILL[c.estado];

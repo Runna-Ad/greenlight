@@ -159,7 +159,23 @@ export async function cerrarSinCambio(ideaId: string, commentId: string): Promis
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
 
-  const { data, error } = await supabaseAdmin()
+  const db = supabaseAdmin();
+  // YA confirmado (lo más común: "Reenviar al cliente" confirma todo, y el "ok, déjalo" del
+  // cliente llega después — Pedro 2026-10-27): sólo se marca, sin tocar quién/cuándo resolvió.
+  const ya = await db
+    .from("comments")
+    .update({ sin_cambio: true })
+    .eq("id", commentId)
+    .eq("idea_id", ideaId)
+    .eq("kind", "client_change")
+    .not("ronda", "is", null)
+    .not("resolved_at", "is", null)
+    .select("id");
+  if (ya.error) return { ok: false, error: ya.error.message };
+  if (ya.data?.length) return { ok: true };
+
+  // Aún abierto: se resuelve aquí mismo.
+  const { data, error } = await db
     .from("comments")
     .update({
       sin_cambio: true,
@@ -173,11 +189,10 @@ export async function cerrarSinCambio(ideaId: string, commentId: string): Promis
     .eq("idea_id", ideaId)
     .eq("kind", "client_change")
     .not("ronda", "is", null)
-    // Una pestaña vieja no puede volver "sin cambio" algo ya confirmado como aplicado.
     .is("resolved_at", null)
     .select("id");
   if (error) return { ok: false, error: error.message };
-  if (!data?.length) return { ok: false, error: "Ese cambio ya no está abierto (recarga la página)." };
+  if (!data?.length) return { ok: false, error: "Ese cambio del cliente ya no existe." };
   return { ok: true };
 }
 

@@ -339,9 +339,9 @@ export function CampoLectura({
       aria-haspopup="dialog"
       aria-expanded={abierta === c.id}
       className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] italic text-foreground"
-      style={{ background: c.sinCambio ? "var(--secondary)" : "color-mix(in srgb, var(--status-progress) 26%, transparent)" }}
+      style={{ background: c.sinCambio ? "color-mix(in srgb, var(--status-published) 22%, transparent)" : "color-mix(in srgb, var(--status-completed) 24%, transparent)" }}
     >
-      {!c.sinCambio && <Check className="size-2.5 shrink-0 text-status-progress" />}
+      {!c.sinCambio && <Check className="size-2.5 shrink-0 text-status-completed" />}
       &laquo;{c.targetQuote ?? "este campo"}&raquo;
     </button>
   );
@@ -353,7 +353,7 @@ export function CampoLectura({
         // Campo con un cambio ya aplicado (portal, re-revisión): acento verde para que
         // salte a la vista DÓNDE se cambió algo que el cliente pidió.
         rev.length > 0 &&
-          "rounded-md border-l-2 border-[color-mix(in_srgb,var(--status-progress)_50%,transparent)] bg-[color-mix(in_srgb,var(--status-progress)_8%,transparent)] pl-1.5",
+          "rounded-md border-l-2 border-[color-mix(in_srgb,var(--status-completed)_60%,transparent)] bg-[color-mix(in_srgb,var(--status-completed)_8%,transparent)] pl-1.5",
       )}
     >
       <div
@@ -418,7 +418,7 @@ export function CampoLectura({
           en este campo. Read-only — pasar el ratón muestra qué pidió. */}
       {rev.length > 0 && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-status-progress">
+          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-status-completed">
             <Check className="size-3" />
             {rev.length === 1 ? "Cambio que pediste — aplicado" : "Cambios que pediste — aplicados"}:
           </span>
@@ -427,7 +427,7 @@ export function CampoLectura({
       )}
       {revSinCambio.length > 0 && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          <span className="text-[10px] font-semibold text-muted-foreground">
+          <span className="text-[10px] font-semibold text-status-published">
             {revSinCambio.length === 1 ? "Acordado sin cambio" : "Acordados sin cambio"}:
           </span>
           {revSinCambio.map((c) => chipRevision(c))}
@@ -540,7 +540,7 @@ export function CampoLectura({
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span
                       className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
-                      style={{ background: corrAbierta.sinCambio ? "color-mix(in srgb, var(--muted-foreground) 88%, #000)" : PIN_BG[corrAbierta.estado] }}
+                      style={{ background: corrAbierta.sinCambio ? "var(--status-published)" : PIN_BG[corrAbierta.estado] }}
                     >
                       {corrAbierta.sinCambio ? "Sin cambio" : ETIQUETA_ESTADO[corrAbierta.estado]}
                     </span>
@@ -584,11 +584,11 @@ export function CampoLectura({
                 // cliente no lo quita; es el registro de "esto lo pediste y ya está").
                 corrAbierta.sinCambio ? (
                   // Acordado con el cliente en el hilo: no se cambió nada (0085).
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-status-published">
                     Sin cambio
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-status-progress">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-status-completed">
                     <Check className="size-3.5" /> Aplicado
                   </span>
                 )

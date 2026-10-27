@@ -11,10 +11,16 @@ import { cn } from "@/lib/utils";
 // amarillo (el equipo lo hizo) → APROBADO=verde (a nivel tarea). Mismo lenguaje que el
 // panel interno (open=coral, done=amber, closed=green).
 const CORAL = "color-mix(in srgb, var(--status-corrections) 78%, #000)";
-const AMARILLO = "color-mix(in srgb, var(--status-progress) 80%, #000)";
+// APLICADO: turquesa ("listo para que lo revises"). Pedro 2026-10-27: nada neutro, y el
+// amarillo pasó a "En proceso".
+const AMARILLO = "var(--status-completed)";
 // EN PROCESO (enviado, el equipo trabajando): gris neutro — ni rojo (sin enviar), ni
 // amarillo (aplicado), ni verde (aprobado). Un estado de ESPERA, sin colisión semántica.
-const GRIS = "color-mix(in srgb, var(--muted-foreground) 88%, #000)";
+const GRIS = "#f2b705"; // EN PROCESO: amarillo vivo (texto oscuro encima)
+// Cerrado "sin cambio" de común acuerdo (0085): azul.
+const AZUL = "var(--status-published)";
+/** Texto legible sobre cada color de estado (el amarillo lleva texto oscuro). */
+const tinta = (fondo: string) => (fondo === GRIS ? "#3b2a00" : "#fff");
 // El equipo te contestó en ESTE cambio: la barra y la pastilla pasan a morado ("Te respondieron").
 const MORADO = "color-mix(in srgb, var(--primary) 88%, #000)";
 
@@ -91,9 +97,9 @@ export function PanelControlCambios({ mobile = false, colorCliente }: { mobile?:
       {/* Grupo: cambios ENVIADOS que el equipo aún trabaja — read-only, "En proceso". */}
       {gruposProceso.map(({ ronda, items }) => (
         <div key={`proc-${ronda}`} className="border-b border-border last:border-b-0">
-          <div className="flex items-center gap-2 px-3.5 pb-1.5 pt-2.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          <div className="flex items-center gap-2 px-3.5 pb-1.5 pt-2.5 text-[11px] font-bold uppercase tracking-wide text-[#8a6500] dark:text-[#f2b705]">
             En proceso
-            <span className="ml-auto rounded-full px-2 py-0.5 text-[10.5px] font-semibold normal-case tracking-normal text-white" style={{ background: GRIS }}>
+            <span className="ml-auto rounded-full px-2 py-0.5 text-[10.5px] font-semibold normal-case tracking-normal" style={{ background: GRIS, color: tinta(GRIS) }}>
               {items.length}
             </span>
           </div>
@@ -132,7 +138,7 @@ export function PanelControlCambios({ mobile = false, colorCliente }: { mobile?:
               <div className="grid gap-2 px-2.5 pb-2.5">
                 {items.map((c) => (
                   // Cerrado "sin cambio" de común acuerdo (0085): gris, no "Aplicado".
-                  <Tarjeta key={c.id} c={c} tono={c.sinCambio ? GRIS : AMARILLO} etiqueta={c.sinCambio ? "Sin cambio" : "Aplicado"} hilo={hilo(c)} />
+                  <Tarjeta key={c.id} c={c} tono={c.sinCambio ? AZUL : AMARILLO} etiqueta={c.sinCambio ? "Sin cambio" : "Aplicado"} hilo={hilo(c)} />
                 ))}
               </div>
             )}
@@ -211,8 +217,8 @@ function Tarjeta({
           </span>
         )}
         <span
-          className="ml-auto inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
-          style={{ background: color }}
+          className="ml-auto inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+          style={{ background: color, color: tinta(color) }}
         >
           {teRespondieron ? <MessageSquare className="size-2.5" aria-hidden /> : etiqueta === "Aplicado" && <Check className="size-2.5" />}
           {teRespondieron ? "Te respondieron" : etiqueta}
