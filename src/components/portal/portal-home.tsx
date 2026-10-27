@@ -6,6 +6,7 @@ import { Flame, ArrowRight, Eye, RefreshCw, CheckCircle2, CheckCheck, ChevronDow
 import type { PortalBrief, PortalTarea, PortalMarca } from "@/app/(app)/[cliente]/portal/portal-data";
 import type { AssetStatus } from "@/lib/brand";
 import { estadoCliente, estadoBriefPanel } from "@/lib/portal-bucket";
+import { cn } from "@/lib/utils";
 
 /**
  * NIVEL 0 del portal — la VISTA GENERAL (home) del cliente. Un pantallazo de dónde va TODO su
@@ -261,10 +262,16 @@ function SecHead({ titulo, hint }: { titulo: string; hint: string }) {
 
 function EstadoPill({ status, reReview, teRespondieron = false }: { status: AssetStatus; reReview: boolean; teRespondieron?: boolean }) {
   const est = estadoCliente(status, reReview, teRespondieron);
+  // "Te respondieron" va SÓLIDA (Pedro 2026-10-27: el tinte suave se perdía); el resto, tinte.
+  const solida = status === "in_corrections" && teRespondieron;
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold"
-      style={{ background: `color-mix(in srgb, ${est.tone} 14%, #fff)`, color: `color-mix(in srgb, ${est.tone} 78%, #000)` }}
+      className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px]", solida ? "font-bold text-white shadow-sm" : "font-semibold")}
+      style={
+        solida
+          ? { background: `color-mix(in srgb, ${est.tone} 88%, #000)` }
+          : { background: `color-mix(in srgb, ${est.tone} 14%, #fff)`, color: `color-mix(in srgb, ${est.tone} 78%, #000)` }
+      }
     >
       <EstadoIcon status={status} reReview={reReview} teRespondieron={teRespondieron} className="size-2.5" /> {est.label}
     </span>

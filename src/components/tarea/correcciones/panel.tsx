@@ -14,6 +14,7 @@ import {
   destinoRespuesta,
   type Correccion,
   type EstadoCorreccion,
+  ultimoVisibleDe,
 } from "@/lib/correcciones";
 import type { VeredictoCambio } from "@/app/(app)/[cliente]/tareas/[id]/validar-actions";
 import { cn } from "@/lib/utils";
@@ -204,7 +205,8 @@ export function PanelCorrecciones() {
                         // botón "Ver campo" de abajo hace lo mismo.
                         <div
                           key={c.id}
-                          className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--status-corrections)_50%,transparent)]"
+                          className="cursor-pointer rounded-lg border border-l-4 border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--status-corrections)_50%,transparent)]"
+                          style={{ borderLeftColor: barraDe(c) }}
                           onClick={() => verCampo(c)}
                         >
                       <div className="mb-1 flex flex-wrap items-center gap-1.5">
@@ -221,6 +223,7 @@ export function PanelCorrecciones() {
                           <TagTipoCambio slug={c.categoria} />
                         )}
                         <VeredictoChip v={ctx.veredictos.get(c.id)} />
+                        {ultimoVisibleDe(c) === "cliente" && <ClienteRespondio />}
                         <span
                           className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
                           style={{ background: PILL[c.estado] }}
@@ -374,6 +377,21 @@ export function PanelCorrecciones() {
  * Fila compacta de una corrección (label + veredicto + estado). Un clic la expande.
  * Es el formato "encogido" del panel para que 30+ cambios no lo hagan gigante (Pedro).
  */
+// Barra de color a la izquierda de cada cambio = su estado (Pedro 2026-10-27, opción 1). Si
+// el cliente contestó al último en el hilo, manda el morado: le toca al lead.
+const MORADO = "color-mix(in srgb, var(--primary) 88%, #000)";
+function barraDe(c: Correccion): string {
+  return ultimoVisibleDe(c) === "cliente" ? MORADO : PILL[c.estado];
+}
+
+function ClienteRespondio() {
+  return (
+    <span className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: MORADO }}>
+      <MessageSquare className="size-2.5" aria-hidden /> El cliente respondió
+    </span>
+  );
+}
+
 function TarjetaCompacta({
   borrador,
   c,
@@ -390,7 +408,8 @@ function TarjetaCompacta({
     <button
       type="button"
       onClick={onExpandir}
-      className="flex w-full items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-left transition-colors hover:bg-secondary/40"
+      className="flex w-full items-center gap-1.5 rounded-lg border border-l-4 border-border bg-card px-2.5 py-1.5 text-left transition-colors hover:bg-secondary/40"
+      style={{ borderLeftColor: barraDe(c) }}
     >
       {c.targetLabel && (
         <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-bold text-secondary-foreground">

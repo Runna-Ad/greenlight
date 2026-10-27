@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Files, CheckCircle2 } from "lucide-react";
+import { Files, CheckCircle2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -31,6 +31,8 @@ export type MyTask = {
   clientChangesPending?: boolean;
   /** La ronda actual trae cambios pedidos por el CLIENTE (pastilla, igual que el tablero). */
   cambiosDelCliente?: boolean;
+  /** El cliente contestó en el hilo de un cambio y espera al lead (pastilla "El cliente respondió"). */
+  clienteRespondio?: boolean;
 };
 
 /**
@@ -125,6 +127,12 @@ export function MyTasks({
                 {t.marca && (
                   <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
                     {t.marca}
+                  </span>
+                )}
+                {enCorrecciones && t.clienteRespondio && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10.5px] font-bold text-primary-foreground shadow-sm">
+                    <MessageSquare className="size-3" aria-hidden />
+                    El cliente respondió
                   </span>
                 )}
                 {enCorrecciones && t.cambiosDelCliente && (

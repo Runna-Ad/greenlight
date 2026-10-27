@@ -186,23 +186,43 @@ export function porRonda(correcciones: Correccion[]): { ronda: number; items: Co
     .map(([ronda, items]) => ({ ronda, items }));
 }
 
-/**
- * ¿Le toca al CLIENTE contestar? (Pedro, 2026-10-27: "Te respondieron".) Sí cuando, en al
- * menos uno de sus cambios, lo ÚLTIMO que él puede ver del hilo lo escribió el equipo. Se
- * apaga solo en cuanto el cliente contesta. Sólo cuentan las respuestas visibles para el
- * cliente (de él o para él); lo interno no existe para esta pregunta.
- */
-export function equipoEscribioUltimo(
-  respuestas: { commentId: string; createdAt: string; deCliente?: boolean; paraCliente?: boolean }[],
-): boolean {
+type RespuestaVisible = { commentId: string; createdAt: string; deCliente?: boolean; paraCliente?: boolean };
+
+/** Por cambio, quién escribió lo ÚLTIMO que el cliente puede ver (lo interno no cuenta).
+ *  Se comparan HORAS (no texto: Postgres recorta los ceros de los segundos). Empate exacto →
+ *  gana la del cliente. */
+function ultimaVisiblePorCambio(respuestas: RespuestaVisible[]): { delEquipo: boolean }[] {
   const ultima = new Map<string, { t: number; delEquipo: boolean }>();
   for (const r of respuestas) {
     if (!r.deCliente && !r.paraCliente) continue;
     const t = Date.parse(r.createdAt);
     const prev = ultima.get(r.commentId);
-    // Se comparan HORAS (no texto: Postgres recorta los ceros de los segundos). Empate exacto
-    // → gana la del cliente: ante la duda, no le decimos que le toca.
     if (!prev || t > prev.t || (t === prev.t && r.deCliente)) ultima.set(r.commentId, { t, delEquipo: !!r.paraCliente });
   }
-  return [...ultima.values()].some((u) => u.delEquipo);
+  return [...ultima.values()];
+}
+
+/**
+ * ¿Le toca al CLIENTE contestar? (Pedro, 2026-10-27: "Te respondieron".) Sí cuando, en al
+ * menos uno de sus cambios, lo ÚLTIMO que él puede ver del hilo lo escribió el equipo. Se
+ * apaga solo en cuanto el cliente contesta.
+ */
+export function equipoEscribioUltimo(respuestas: RespuestaVisible[]): boolean {
+  return ultimaVisiblePorCambio(respuestas).some((u) => u.delEquipo);
+}
+
+/** Por UN cambio: quién escribió lo último que el cliente ve en su hilo (null = nadie). Pinta
+ *  la barra morada de la tarjeta en Control de Cambios (Pedro 2026-10-27, opción 1). */
+export function ultimoVisibleDe(c: Pick<Correccion, "id" | "respuestas">): "equipo" | "cliente" | null {
+  const [u] = ultimaVisiblePorCambio((c.respuestas ?? []).map((r) => ({ ...r, commentId: c.id })));
+  return u ? (u.delEquipo ? "equipo" : "cliente") : null;
+}
+
+/**
+ * El espejo para el LEAD (Pedro, 2026-10-27: "El cliente respondió" en Mi trabajo): en al
+ * menos un cambio del cliente, lo último del hilo lo escribió el cliente. Se apaga cuando el
+ * lead le contesta.
+ */
+export function clienteEscribioUltimo(respuestas: RespuestaVisible[]): boolean {
+  return ultimaVisiblePorCambio(respuestas).some((u) => !u.delEquipo);
 }

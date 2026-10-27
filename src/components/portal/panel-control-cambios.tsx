@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronDown, ArrowRight, Trash2, SlidersHorizontal } from "lucide-react";
+import { Check, ChevronDown, ArrowRight, Trash2, SlidersHorizontal, MessageSquare } from "lucide-react";
 import { useCorrecciones, type Ctx } from "@/components/tarea/correcciones/contexto";
 import { HiloRespuestas } from "@/components/tarea/correcciones/hilo-respuestas";
-import { keyCampo, porRonda, type Correccion } from "@/lib/correcciones";
+import { keyCampo, porRonda, ultimoVisibleDe, type Correccion } from "@/lib/correcciones";
 import { cn } from "@/lib/utils";
 
 // Semáforo del flujo de cambios (Pedro): SOLICITADO=rojo (sin enviar) → HECHO/APLICADO=
@@ -15,6 +15,8 @@ const AMARILLO = "color-mix(in srgb, var(--status-progress) 80%, #000)";
 // EN PROCESO (enviado, el equipo trabajando): gris neutro — ni rojo (sin enviar), ni
 // amarillo (aplicado), ni verde (aprobado). Un estado de ESPERA, sin colisión semántica.
 const GRIS = "color-mix(in srgb, var(--muted-foreground) 88%, #000)";
+// El equipo te contestó en ESTE cambio: la barra y la pastilla pasan a morado ("Te respondieron").
+const MORADO = "color-mix(in srgb, var(--primary) 88%, #000)";
 
 // Salta al campo del cambio y lo hace parpadear (mismo data-campo-key + gl-flash que el
 // panel interno) — así "Ver" lleva al cliente justo a donde está el cambio.
@@ -72,7 +74,7 @@ export function PanelControlCambios({ mobile = false }: { mobile?: boolean }) {
       {/* Grupo: cambios SIN ENVIAR (borradores del cliente) — con Quitar. */}
       {drafts.length > 0 && (
         <div className="border-b border-border last:border-b-0">
-          <div className="flex items-center gap-2 px-3.5 pb-1.5 pt-2.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          <div className="flex items-center gap-2 px-3.5 pb-1.5 pt-2.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: CORAL }}>
             Sin enviar
             <span className="ml-auto rounded-full px-2 py-0.5 text-[10.5px] font-semibold normal-case tracking-normal text-white" style={{ background: CORAL }}>
               {drafts.length}
@@ -188,12 +190,17 @@ function Tarjeta({
   /** El hilo con el equipo (sólo cambios ya enviados). */
   hilo?: React.ReactNode;
 }) {
+  // Barra de color a la izquierda = estado (Pedro 2026-10-27, opción 1). Si lo último del
+  // hilo es del equipo, manda el morado: le toca al cliente contestar.
+  const teRespondieron = !!hilo && ultimoVisibleDe(c) === "equipo";
+  const color = teRespondieron ? MORADO : tono;
   return (
     // Ya NO es role="button": dentro puede ir la caja de respuesta, y los hijos de un botón
     // ARIA son "presentacionales" (el lector perdía el textarea). El clic de ratón sigue
     // saltando al campo; con teclado, el botón "Ver campo" de abajo hace lo mismo.
     <div
-      className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--primary)_45%,transparent)]"
+      className="cursor-pointer rounded-lg border border-l-4 border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--primary)_45%,transparent)]"
+      style={{ borderLeftColor: color }}
       onClick={() => verCampo(c)}
     >
       <div className="mb-1 flex flex-wrap items-center gap-1.5">
@@ -204,10 +211,10 @@ function Tarjeta({
         )}
         <span
           className="ml-auto inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
-          style={{ background: tono }}
+          style={{ background: color }}
         >
-          {etiqueta === "Aplicado" && <Check className="size-2.5" />}
-          {etiqueta}
+          {teRespondieron ? <MessageSquare className="size-2.5" aria-hidden /> : etiqueta === "Aplicado" && <Check className="size-2.5" />}
+          {teRespondieron ? "Te respondieron" : etiqueta}
         </span>
       </div>
       {c.targetQuote && (

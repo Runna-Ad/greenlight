@@ -3,7 +3,7 @@ import { UserRound, Lock } from "lucide-react";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getSoy } from "@/lib/soy";
 import { getViewAs } from "@/lib/view-as";
-import { ideasConCambiosDelCliente, ideasEnRondaDelCliente } from "@/lib/cambios-pendientes";
+import { ideasConCambiosDelCliente, ideasEnRondaDelCliente, ideasConRespuestaDelCliente } from "@/lib/cambios-pendientes";
 import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { STATUS_LABEL, STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
 import { MyTasks, type MyTask } from "@/components/board/my-tasks";
@@ -57,16 +57,20 @@ export default async function MiTrabajoPage() {
     // tarea en in_corrections con cambios del cliente sin resolver NO es suya hasta que
     // se la reasignen — fuera de su lista. El lead SÍ la ve (se marca "Cambios del cliente").
     const enCorr = tasks.filter((t) => t.status === "in_corrections").map((t) => t.id);
-    const [conCambios, rondaCliente] = await Promise.all([
+    // "El cliente respondió": la conversación con el cliente es del LEAD (a él le llega el
+    // aviso), así que el especialista no ve la pastilla.
+    const [conCambios, rondaCliente, respondio] = await Promise.all([
       ideasConCambiosDelCliente(db, enCorr),
       ideasEnRondaDelCliente(db, enCorr),
+      role === "creative" ? Promise.resolve(new Set<string>()) : ideasConRespuestaDelCliente(db, enCorr),
     ]);
-    if (conCambios.size || rondaCliente.size) {
+    if (conCambios.size || rondaCliente.size || respondio.size) {
       tasks = tasks
         .map((t) => ({
           ...t,
           clientChangesPending: conCambios.has(t.id),
           cambiosDelCliente: rondaCliente.has(t.id),
+          clienteRespondio: respondio.has(t.id),
         }))
         .filter((t) => !(role === "creative" && t.clientChangesPending));
     }
@@ -74,7 +78,10 @@ export default async function MiTrabajoPage() {
 
   const grupos = ORDEN.map((status) => ({
     status,
-    items: tasks.filter((t) => t.status === status),
+    // Lo que el cliente acaba de contestar va ARRIBA de su grupo (orden estable para el resto).
+    items: tasks
+      .filter((t) => t.status === status)
+      .sort((a, b) => Number(!!b.clienteRespondio) - Number(!!a.clienteRespondio)),
   })).filter((g) => g.items.length > 0);
 
   const pendientes = tasks.filter((t) => t.status !== "under_review").length;

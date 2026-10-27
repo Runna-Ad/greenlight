@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import { useId, useRef, useState } from "react";
 import { MessageSquare } from "lucide-react";
 import { BtnAccion } from "./btn-accion";
@@ -104,9 +105,21 @@ export function HiloRespuestas({
     <div ref={hilo} className="mt-2" onClick={(e) => e.stopPropagation()}>
       {respuestas.length > 0 && (
         // aria-live: una respuesta nueva (la propia, al enviar) se anuncia al lector de pantalla.
-        <ul className="grid gap-1.5 border-l-2 border-border pl-2.5" aria-live="polite">
+        <ul className="grid gap-1.5" aria-live="polite">
           {respuestas.map((r) => (
-            <li key={r.id}>
+            // Burbuja por quién habla (Pedro 2026-10-27, opción 1): lo del equipo que ve el
+            // cliente en morado; lo del cliente en gris; lo interno sólo con borde punteado.
+            <li
+              key={r.id}
+              className={cn(
+                "rounded-md px-2 py-1.5",
+                r.deCliente
+                  ? "bg-secondary"
+                  : r.paraCliente || vistaCliente
+                    ? "bg-accent"
+                    : "border border-dashed border-border",
+              )}
+            >
               <p className="whitespace-pre-wrap text-[12px] leading-snug text-foreground">{r.body}</p>
               <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[10.5px] text-muted-foreground">
                 <span>{autorVisible(r, vistaCliente)}</span>

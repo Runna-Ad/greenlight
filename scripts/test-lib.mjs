@@ -10,7 +10,7 @@ import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, 
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
 import { puedeSerLead, puedeSerEspecialista } from "../src/lib/roles.ts";
-import { destinoRespuesta, equipoEscribioUltimo } from "../src/lib/correcciones.ts";
+import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo } from "../src/lib/correcciones.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
 
 let pass = 0,
@@ -1521,6 +1521,13 @@ console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo e
   ok("empate exacto: gana el cliente (no se prende la etiqueta)",
      !equipoEscribioUltimo([r("a", 1, "equipo"), r("a", 1, "cliente")]) && !equipoEscribioUltimo([r("a", 1, "cliente"), r("a", 1, "equipo")]));
   ok("lo interno no cuenta", !equipoEscribioUltimo([r("a", 1, "cliente"), { ...r("a", 2, "x"), deCliente: false, paraCliente: false }]));
+  // El espejo para el lead (Mi trabajo: "El cliente respondió").
+  ok("lead: sin respuestas → no", !clienteEscribioUltimo([]));
+  ok("lead: el cliente contestó después del equipo → sí", clienteEscribioUltimo([r("a", 1, "equipo"), r("a", 2, "cliente")]));
+  ok("lead: el equipo ya le volvió a contestar → no", !clienteEscribioUltimo([r("a", 1, "equipo"), r("a", 2, "cliente"), r("a", 3, "equipo")]));
+  ok("lead: basta con UN cambio esperando", clienteEscribioUltimo([r("a", 1, "equipo"), r("b", 1, "equipo"), r("b", 2, "cliente")]));
+  ok("lead: lo interno del equipo no lo apaga", clienteEscribioUltimo([r("a", 1, "cliente"), { ...r("a", 2, "x"), deCliente: false, paraCliente: false }]));
+  ok("lead: empate exacto cuenta como del cliente", clienteEscribioUltimo([r("a", 1, "equipo"), r("a", 1, "cliente")]));
   eq("etiqueta en cambios con respuesta", estadoCliente("in_corrections", false, true).label, "Te respondieron");
   eq("en cambios sin respuesta sigue igual", estadoCliente("in_corrections", false).label, "En cambios");
   eq("aprobada no cambia aunque haya respuesta vieja", estadoCliente("delivered", false, true).label, "Aprobado");
