@@ -1,5 +1,16 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-10-27 (5) — Mi trabajo "El cliente respondió", colores vivos, "Sin cambio (acordado)", responder ≠ aplicar — SHIPPEADO (main ffd5ed7, 0085 aplicada)
+**En vivo (3 ships, todos fast-forward):**
+- **b6edce5:** Mi trabajo marca "El cliente respondió" (cambio del cliente abierto donde el cliente escribió al último; leads/admin, arriba del grupo). Control de Cambios con barra de color por estado; respuestas del cliente en un tinte de SU color de marca (DiDi naranja), equipo en morado. **0085** (`comments.sin_cambio` + CHECK: sólo client_change resuelto) y botón "Sin cambio (acordado)" del lead: queda resuelto con su hilo, no sale "Aplicado" ni prende "Cambios listos".
+- **00707fb:** "Sin cambio" también sobre un cambio YA confirmado (el envío de la pieza confirma todo y el "ok, déjalo" llega después). Portal: En proceso amarillo, Aplicado turquesa, Sin cambio azul (PEDRO_OVERRIDE: nada neutro).
+- **ffd5ed7:** responder ≠ aplicar (PEDRO_OVERRIDE). Botón del hilo "Responder al cliente"; banner "Ya hice los cambios · enviar pieza". Enviar la pieza se bloquea (server + UI, `bloqueoEnvioPieza`) mientras un cambio espera al cliente o el cliente contestó y el lead no decidió.
+**Pruebas:** test-lib + test-db 1,271/0 · tsc 0 · build ✓ en cada ship. Revisión Opus del 0085: 2 serios + 3 menores, todos arreglados salvo el texto de la RPC.
+**Errores míos (en lessons.md):** subí f1b76c1 roto a la rama de preview (commit no dependía del chequeo); gris neutro cuando se pidió visibilidad; el botón nuevo vivía en un estado que el flujo real se salta.
+**GIRLTHREE (DiDi A2, 30a9fcf2…):** reseteada 3 veces a pedido de Pedro (cambios, respuestas, avisos + entregas, status_events del 10-27); queda limpia, "published", contenido intacto. Script: scratchpad/reset-girlthree.sql.
+**Verificado en vivo:** deploy de producción ffd5ed7 READY; Vercel 0 errores (3 h). En navegador vi la preview anterior (tarea y portal cargan, consola limpia); NO vi en pantalla los colores finales ni el botón bloqueado.
+**Pick up next:** (1) Pedro prueba en vivo en GIRLTHREE; (2) recordatorio al cliente a las 24 h sin respuesta (necesita el reloj: CRON_SECRET + Vault + `supabase/manual/0084_reloj_correos.sql`); (3) texto de `rpc_lead_reenvia_cliente` dice "aplicó" siempre (migración nueva); (4) merge main → prisma y clasificar `correccion_respuestas` en el reset; (5) `scripts/test-dispatch.mjs` cambia el email de un miembro real.
+
 ## 2026-10-27 (4) — "Te respondieron" en el portal (rama `feat/portal-te-respondieron` desde main 1397d7c; SIN migración)
 Pedro: probando el hilo, el cliente no veía en su portal que el lead le contestó (sólo el correo). Diagnóstico: la campana del cliente SÍ recibe el aviso (4 cuentas DiDi, sin leer); el master no lo ve. Faltaba la señal EN el portal. Pedro eligió opción 1.
 **Hecho:** `equipoEscribioUltimo` (lib/correcciones) = en algún cambio, lo último visible para el cliente lo escribió el equipo. `estadoCliente(..., teRespondieron)` → "Te respondieron" (morado, ícono de mensaje) en home, nav y lista; la tarea entra a la cola de arriba ("Necesitan tu atención"); la barra de la tarea dice "El equipo te respondió… contéstale ahí". portal-data lee respuestas por páginas (tope 1000 de PostgREST) con el MISMO filtro de cambios que la vista de la tarea.
