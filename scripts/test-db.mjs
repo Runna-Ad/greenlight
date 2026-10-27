@@ -2748,7 +2748,10 @@ console.log("\n▶ 0084 — correos agrupados: reclamo de la cola");
   // ── ¿Sale ya o espera? (rpc_reservar_envio, con candado por dirección) ──
   const reclamada = async () => {
     const id = await fila({});
-    await db.query(`update produccion.notification_deliveries set status='sending', claimed_at=now() where id=$1`, [id]);
+    // Reclamada hace 1 s: el reloj de PGlite sólo cuenta milisegundos y el clock_timestamp()
+    // de la reserva salía IGUAL a este now() (179 de 200); el candado de 0084 lo tomaba por un
+    // reclamo de la app vieja y la prueba fallaba 2 de cada 3. Producción cuenta microsegundos.
+    await db.query(`update produccion.notification_deliveries set status='sending', claimed_at=now() - interval '1 second' where id=$1`, [id]);
     return id;
   };
   const reservar = async (email, ids) => (await q(`select hasta as h from produccion.rpc_reservar_envio($1, $2::uuid[])`, [email, ids]))[0].h;

@@ -42,8 +42,14 @@ export const BUCKETS_PORTAL: { k: BucketPortal; label: string }[] = [
  * y el de las tarjetas. El VERDE es sólo "Aprobado"; una tarea que volvió tras una ronda
  * (published + reReview) es "Cambios listos" (morado de marca), nunca verde.
  */
-export function estadoCliente(status: AssetStatus, reReview: boolean): { label: string; tone: string } {
+export function estadoCliente(
+  status: AssetStatus,
+  reReview: boolean,
+  /** En cambios y el equipo le contestó en un hilo: le toca a él (equipoEscribioUltimo). */
+  teRespondieron = false,
+): { label: string; tone: string } {
   if (status === "delivered") return { label: "Aprobado", tone: "var(--status-completed)" };
+  if (status === "in_corrections" && teRespondieron) return { label: "Te respondieron", tone: "var(--primary)" };
   if (status === "in_corrections") return { label: "En cambios", tone: "var(--status-corrections)" };
   if (status === "published" && reReview) return { label: "Cambios listos", tone: "var(--primary)" };
   return { label: "Por revisar", tone: "var(--status-progress)" };

@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Eye,
   CheckCheck,
+  MessageSquare,
 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import type { PortalBrief, PortalTarea } from "@/app/(app)/[cliente]/portal/portal-data";
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 /** Ícono por estado — la etiqueta/color viene de estadoCliente (compartido con las cards). */
 function iconoDe(t: PortalTarea) {
   if (t.status === "delivered") return CheckCircle2;
+  if (t.status === "in_corrections" && t.teRespondieron) return MessageSquare;
   if (t.status === "in_corrections") return RefreshCw;
   if (t.status === "published" && t.reReview) return CheckCheck;
   return Eye;
@@ -221,7 +223,7 @@ export function PortalNav({
                 <p className="px-3 py-6 text-center text-[13px] text-muted-foreground">Ninguna tarea en este estado.</p>
               ) : (
                 visibles.map((t) => {
-                  const est = estadoCliente(t.status, t.reReview);
+                  const est = estadoCliente(t.status, t.reReview, t.teRespondieron);
                   const Icono = iconoDe(t);
                   const activo = t.id === selTareaId;
                   return (

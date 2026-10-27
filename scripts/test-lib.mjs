@@ -10,7 +10,7 @@ import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, 
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
 import { puedeSerLead, puedeSerEspecialista } from "../src/lib/roles.ts";
-import { destinoRespuesta } from "../src/lib/correcciones.ts";
+import { destinoRespuesta, equipoEscribioUltimo } from "../src/lib/correcciones.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
 
 let pass = 0,
@@ -1498,6 +1498,33 @@ console.log("\n▶ Correos agrupados (0084) — la plantilla del correo junto");
   ok("tarea asignada trae su propia etiqueta", hm.includes("Tarea asignada"));
   const txt = tpl.textAgrupado(tres, true);
   ok("texto plano: asunto, cada aviso y el portal", txt.startsWith("3 piezas") && txt.includes("• B") && txt.endsWith("https://runna-greenlight.vercel.app/didi/portal"));
+}
+
+console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo escribió al último");
+{
+  const { estadoCliente } = await import("../src/lib/portal-bucket.ts");
+  const r = (commentId, min, quien) => ({
+    commentId, createdAt: `2026-10-27T18:${String(min).padStart(2, "0")}:00Z`,
+    deCliente: quien === "cliente", paraCliente: quien === "equipo",
+  });
+  ok("sin respuestas → no", !equipoEscribioUltimo([]));
+  ok("el equipo le contestó → sí", equipoEscribioUltimo([r("a", 1, "equipo")]));
+  ok("…y el cliente ya contestó después → no", !equipoEscribioUltimo([r("a", 1, "equipo"), r("a", 2, "cliente")]));
+  ok("el equipo volvió a contestar → sí otra vez", equipoEscribioUltimo([r("a", 1, "equipo"), r("a", 2, "cliente"), r("a", 3, "equipo")]));
+  ok("basta con UN cambio donde el equipo escribió al último",
+     equipoEscribioUltimo([r("a", 1, "equipo"), r("a", 2, "cliente"), r("b", 1, "equipo")]));
+  ok("el orden de llegada no importa (manda la hora)", !equipoEscribioUltimo([r("a", 2, "cliente"), r("a", 1, "equipo")]));
+  ok("horas con distinto número de decimales se comparan como horas",
+     !equipoEscribioUltimo([{ commentId: "a", createdAt: "2026-10-27 18:00:01.5+00", paraCliente: true },
+                            { commentId: "a", createdAt: "2026-10-27 18:00:01.25+00", deCliente: true },
+                            { commentId: "a", createdAt: "2026-10-27 18:00:02+00", deCliente: true }]));
+  ok("empate exacto: gana el cliente (no se prende la etiqueta)",
+     !equipoEscribioUltimo([r("a", 1, "equipo"), r("a", 1, "cliente")]) && !equipoEscribioUltimo([r("a", 1, "cliente"), r("a", 1, "equipo")]));
+  ok("lo interno no cuenta", !equipoEscribioUltimo([r("a", 1, "cliente"), { ...r("a", 2, "x"), deCliente: false, paraCliente: false }]));
+  eq("etiqueta en cambios con respuesta", estadoCliente("in_corrections", false, true).label, "Te respondieron");
+  eq("en cambios sin respuesta sigue igual", estadoCliente("in_corrections", false).label, "En cambios");
+  eq("aprobada no cambia aunque haya respuesta vieja", estadoCliente("delivered", false, true).label, "Aprobado");
+  eq("por revisar no cambia", estadoCliente("published", false, true).label, "Por revisar");
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Flame, ArrowRight, Eye, RefreshCw, CheckCircle2, CheckCheck, ChevronDown, Archive } from "lucide-react";
+import { Flame, ArrowRight, Eye, RefreshCw, CheckCircle2, CheckCheck, ChevronDown, Archive, MessageSquare } from "lucide-react";
 import type { PortalBrief, PortalTarea, PortalMarca } from "@/app/(app)/[cliente]/portal/portal-data";
 import type { AssetStatus } from "@/lib/brand";
 import { estadoCliente, estadoBriefPanel } from "@/lib/portal-bucket";
@@ -32,8 +32,9 @@ type Bucket = keyof typeof PAL;
 
 // Icono por estado como componente ESTÁTICO (no un componente ligado a un const en render:
 // react-hooks/static-components) — devuelve el JSX del icono directo.
-function EstadoIcon({ status, reReview, className }: { status: AssetStatus; reReview: boolean; className?: string }) {
+function EstadoIcon({ status, reReview, teRespondieron = false, className }: { status: AssetStatus; reReview: boolean; teRespondieron?: boolean; className?: string }) {
   if (status === "delivered") return <CheckCircle2 className={className} />;
+  if (status === "in_corrections" && teRespondieron) return <MessageSquare className={className} />;
   if (status === "in_corrections") return <RefreshCw className={className} />;
   if (status === "published" && reReview) return <CheckCheck className={className} />;
   return <Eye className={className} />;
@@ -79,10 +80,14 @@ export function PortalHome({
     aprobado: visibles.filter((t) => t.status === "delivered").length,
   };
 
-  // Zona A — la cola: piezas `published` (su turno), re-revisiones al final (lo nuevo primero).
+  // Zona A — la cola de SU TURNO: piezas `published` (aprobar o pedir cambios) y piezas en
+  // cambios donde el equipo le contestó ("Te respondieron", Pedro 2026-10-27). Orden: lo nuevo
+  // por revisar, luego las respuestas, luego las re-revisiones.
+  const peso = (t: QItem) => (t.status === "in_corrections" ? 1 : t.reReview ? 2 : 0);
   const cola = visibles
-    .filter((t) => t.status === "published")
-    .sort((a, b) => Number(a.reReview) - Number(b.reReview));
+    .filter((t) => t.status === "published" || (t.status === "in_corrections" && t.teRespondieron))
+    .sort((a, b) => peso(a) - peso(b));
+  const nRespuestas = cola.filter((t) => t.status === "in_corrections").length;
 
   // Zona C — avance por brief. Cada brief con ≥1 pieza tras el filtro; entra por la marca del
   // filtro, o (en "Todas") por la marca de su primera pieza.
@@ -140,17 +145,22 @@ export function PortalHome({
       {/* Zona A — Necesitan tu aprobación */}
       {cola.length > 0 && (
         <>
-          <SecHead titulo="Necesitan tu aprobación" hint={`— tu turno en ${cola.length} ${cola.length === 1 ? "pieza" : "piezas"}`} />
+          <SecHead
+            titulo={nRespuestas ? "Necesitan tu atención" : "Necesitan tu aprobación"}
+            hint={`— tu turno en ${cola.length} ${cola.length === 1 ? "pieza" : "piezas"}`}
+          />
           <section
             className="overflow-hidden rounded-xl border shadow-sm"
             style={{ borderColor: "var(--border-strong, #d9d2f0)", background: "linear-gradient(180deg, color-mix(in srgb, var(--primary) 7%, #fff) 0%, var(--card) 100%)" }}
-            aria-label="Piezas que necesitan tu aprobación"
+            aria-label={nRespuestas ? "Piezas que necesitan tu atención" : "Piezas que necesitan tu aprobación"}
           >
             <div className="flex items-center gap-2 px-5 pt-3.5 pb-2.5">
               <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-primary">
                 <Flame className="size-3.5" /> Ahora
               </span>
-              <span className="text-xs text-muted-foreground">Ábrelas para aprobar o pedir cambios.</span>
+              <span className="text-xs text-muted-foreground">
+                {nRespuestas ? "Ábrelas para aprobar, pedir cambios o contestarle al equipo." : "Ábrelas para aprobar o pedir cambios."}
+              </span>
             </div>
             <ul>
               {cola.map((t, i) => (
@@ -166,7 +176,7 @@ export function PortalHome({
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Resumen por estado">
         <Tile k="prod" n={cuenta.prod} foot="El equipo las arma · aún no es tu turno" />
         <Tile k="revisar" n={cuenta.revisar} foot="Esperan tu aprobación" destacado />
-        <Tile k="cambios" n={cuenta.cambios} foot="Aplicando lo que pediste" />
+        <Tile k="cambios" n={cuenta.cambios} foot={nRespuestas ? "Aplicando lo que pediste · en algunas te respondieron" : "Aplicando lo que pediste"} />
         <Tile k="aprobado" n={cuenta.aprobado} foot="Listas y cerradas" />
       </section>
 
@@ -249,14 +259,14 @@ function SecHead({ titulo, hint }: { titulo: string; hint: string }) {
   );
 }
 
-function EstadoPill({ status, reReview }: { status: AssetStatus; reReview: boolean }) {
-  const est = estadoCliente(status, reReview);
+function EstadoPill({ status, reReview, teRespondieron = false }: { status: AssetStatus; reReview: boolean; teRespondieron?: boolean }) {
+  const est = estadoCliente(status, reReview, teRespondieron);
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold"
       style={{ background: `color-mix(in srgb, ${est.tone} 14%, #fff)`, color: `color-mix(in srgb, ${est.tone} 78%, #000)` }}
     >
-      <EstadoIcon status={status} reReview={reReview} className="size-2.5" /> {est.label}
+      <EstadoIcon status={status} reReview={reReview} teRespondieron={teRespondieron} className="size-2.5" /> {est.label}
     </span>
   );
 }
@@ -276,12 +286,13 @@ function QueueRow({ idx, t }: { idx: number; t: QItem }) {
             {t.marcaName && (
               <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[10.5px] font-semibold text-secondary-foreground">{t.marcaName}</span>
             )}
-            <EstadoPill status={t.status} reReview={t.reReview} />
+            <EstadoPill status={t.status} reReview={t.reReview} teRespondieron={t.teRespondieron} />
           </span>
           <span className="block truncate text-[14.5px] font-semibold text-foreground">{nombreTarea(t)}</span>
           <span className="block truncate text-xs text-muted-foreground">
             {t.briefLabel}
             {t.reReview ? " · ya aplicamos los cambios que pediste" : ""}
+            {t.status === "in_corrections" && t.teRespondieron ? " · el equipo contestó uno de tus cambios" : ""}
           </span>
         </span>
         <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />

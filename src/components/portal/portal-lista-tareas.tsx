@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2, RefreshCw, Eye, CheckCheck, ArrowRight } from "lucide-react";
+import { CheckCircle2, RefreshCw, Eye, CheckCheck, ArrowRight, MessageSquare } from "lucide-react";
 import type { PortalTarea } from "@/app/(app)/[cliente]/portal/portal-data";
 import { estadoCliente, type BucketPortal } from "@/lib/portal-bucket";
 
@@ -14,6 +14,7 @@ const LABEL_BUCKET: Record<BucketPortal, string> = {
 /** Ícono por estado — presentación (la etiqueta/color viene de estadoCliente, compartido). */
 function iconoDe(t: PortalTarea) {
   if (t.status === "delivered") return CheckCircle2;
+  if (t.status === "in_corrections" && t.teRespondieron) return MessageSquare;
   if (t.status === "in_corrections") return RefreshCw;
   if (t.status === "published" && t.reReview) return CheckCheck;
   return Eye;
@@ -61,7 +62,7 @@ export function PortalListaTareas({
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {tareas.map((t) => {
-            const est = estadoCliente(t.status, t.reReview);
+            const est = estadoCliente(t.status, t.reReview, t.teRespondieron);
             const Icono = iconoDe(t);
             return (
               <Link

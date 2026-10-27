@@ -3,7 +3,7 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, RefreshCw, Clock, Eye } from "lucide-react";
+import { Check, RefreshCw, Clock, Eye, MessageSquare } from "lucide-react";
 import { clienteAprobar, clienteEnviarCambios } from "@/app/(app)/[cliente]/portal/portal-actions";
 import { useCorrecciones } from "@/components/tarea/correcciones/contexto";
 import type { AssetStatus } from "@/lib/brand";
@@ -25,6 +25,7 @@ export function PortalAcciones({
   reReview = false,
   nRevisados = 0,
   puedeActuar = true,
+  teRespondieron = false,
 }: {
   clienteSlug: string;
   ideaId: string;
@@ -33,6 +34,8 @@ export function PortalAcciones({
   reReview?: boolean;
   /** Cuántos cambios aplicó el equipo (para el copy de la barra). */
   nRevisados?: number;
+  /** En cambios y el equipo le contestó en un hilo: la barra se lo dice (equipoEscribioUltimo). */
+  teRespondieron?: boolean;
   /** ¿El visor puede aprobar / pedir cambios? (cliente de esta marca o master).
    *  Un admin en sólo-lectura ve la barra informativa, sin botones. */
   puedeActuar?: boolean;
@@ -69,7 +72,15 @@ export function PortalAcciones({
   if (status === "in_corrections")
     return (
       <Barra>
-        <Estado tono="var(--status-corrections)" Icon={Clock} texto="Pediste cambios — el equipo está en ello." />
+        {teRespondieron ? (
+          <Estado
+            tono="var(--primary)"
+            Icon={MessageSquare}
+            texto="El equipo te respondió en uno de tus cambios. Míralo en Control de Cambios y contéstale ahí."
+          />
+        ) : (
+          <Estado tono="var(--status-corrections)" Icon={Clock} texto="Pediste cambios — el equipo está en ello." />
+        )}
       </Barra>
     );
 

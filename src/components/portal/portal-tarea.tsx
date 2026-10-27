@@ -12,6 +12,7 @@ import { PortalAcciones } from "@/components/portal/portal-acciones";
 import { PanelControlCambios } from "@/components/portal/panel-control-cambios";
 import { PLACEHOLDER_ESTATICO, placeholdersGuion } from "@/lib/plantilla";
 import type { TareaPortal } from "@/app/(app)/[cliente]/portal/portal-data";
+import { equipoEscribioUltimo } from "@/lib/correcciones";
 
 const noop = () => {};
 
@@ -53,6 +54,11 @@ export function PortalTarea({ t, puedeActuar }: { t: TareaPortal; puedeActuar: b
         reReview={t.status === "published" && t.revisiones.length > 0}
         nRevisados={t.revisiones.length}
         puedeActuar={puedeActuar}
+        teRespondieron={equipoEscribioUltimo(
+          [...t.revisiones, ...t.enProceso].flatMap((c) =>
+            (c.respuestas ?? []).map((r) => ({ commentId: c.id, createdAt: r.createdAt, deCliente: r.deCliente, paraCliente: r.paraCliente })),
+          ),
+        )}
       />
       <CuerpoTarea t={t} />
       </CorreccionesClienteProvider>

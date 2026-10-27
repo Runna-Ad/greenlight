@@ -5,7 +5,7 @@ import type { AssetStatus } from "@/lib/brand";
 import { COLS_PLANO, type PlanoVista, type EstaticoVista } from "@/lib/vista-tipos";
 import type { RefVista } from "@/components/tarea/referencias-plano";
 import type { TemaRow } from "@/components/tarea/documento-copies";
-import { estadoDeTimestamps, type Correccion } from "@/lib/correcciones";
+import { estadoDeTimestamps, equipoEscribioUltimo, type Correccion } from "@/lib/correcciones";
 import { ESTADOS_PORTAL, estadoBriefPanel } from "@/lib/portal-bucket";
 
 // El portal muestra SÓLO lo que ya se envió al cliente: published_at != null (el
@@ -26,6 +26,9 @@ export type PortalTarea = {
    *  client_change enviados). Distingue "vuelve a revisión, ya aplicamos lo que
    *  pediste" de una idea nueva por revisar. */
   reReview: boolean;
+  /** En cambios y el equipo le contestó en el hilo de uno de sus cambios: le toca a él
+   *  ("Te respondieron"). Se apaga cuando el cliente contesta. */
+  teRespondieron: boolean;
 };
 
 export type PortalBrief = {
@@ -178,6 +181,55 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
     for (const r of (sent ?? []) as { idea_id: string }[]) conRonda.add(r.idea_id);
   }
 
+  // "Te respondieron": tareas EN CAMBIOS donde lo último visible para el cliente en algún
+  // hilo lo escribió el equipo. Sólo cambios que el portal enseña (client_change enviado y
+  // anclado a un campo: el mismo filtro que `enProceso`/`revisiones` de la tarea), así la
+  // etiqueta nunca promete un hilo que la tarea no muestra.
+  const teRespondieron = new Set<string>();
+  const enCambios = ideaRows.filter((i) => i.status === "in_corrections").map((i) => i.id);
+  if (enCambios.length) {
+    // Por páginas: PostgREST corta en silencio a 1000 filas, y una página cortada podía
+    // perder justo la respuesta más nueva (y prender o apagar la etiqueta mal).
+    type Resp = { idea_id: string; comment_id: string; created_at: string; de_cliente: boolean; para_cliente: boolean };
+    const PAGINA = 1000;
+    const leerRespuestas = async (): Promise<Resp[]> => {
+      const todas: Resp[] = [];
+      for (let desde = 0; ; desde += PAGINA) {
+        const { data, error } = await db.from("correccion_respuestas")
+          .select("idea_id, comment_id, created_at, de_cliente, para_cliente")
+          .in("idea_id", enCambios)
+          .or("de_cliente.eq.true,para_cliente.eq.true")
+          .order("id")
+          .range(desde, desde + PAGINA - 1);
+        if (error) {
+          console.error("portal te-respondieron (respuestas):", error.message);
+          break;
+        }
+        todas.push(...((data ?? []) as Resp[]));
+        if ((data ?? []).length < PAGINA) break;
+      }
+      return todas;
+    };
+    const [{ data: cambiosVisibles, error: errCambios }, resps] = await Promise.all([
+      db.from("comments").select("id")
+        .in("idea_id", enCambios)
+        .eq("kind", "client_change")
+        .not("ronda", "is", null)
+        .not("target_campo", "is", null),
+      leerRespuestas(),
+    ]);
+    if (errCambios) console.error("portal te-respondieron (cambios):", errCambios.message);
+    const visibles = new Set(((cambiosVisibles ?? []) as { id: string }[]).map((c) => c.id));
+    const porIdea = new Map<string, { commentId: string; createdAt: string; deCliente: boolean; paraCliente: boolean }[]>();
+    for (const r of resps) {
+      if (!visibles.has(r.comment_id)) continue;
+      (porIdea.get(r.idea_id) ?? porIdea.set(r.idea_id, []).get(r.idea_id)!).push({
+        commentId: r.comment_id, createdAt: r.created_at, deCliente: r.de_cliente, paraCliente: r.para_cliente,
+      });
+    }
+    for (const [ideaId, rs] of porIdea) if (equipoEscribioUltimo(rs)) teRespondieron.add(ideaId);
+  }
+
   const porBrief = new Map<string, PortalTarea[]>();
   for (const i of ideaRows) {
     const m = i.marca_id ? marcaById.get(i.marca_id) : undefined;
@@ -190,6 +242,7 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
       marcaName: m?.name ?? null,
       marcaLogo: m?.logo_url ?? null,
       reReview: i.status === "published" && conRonda.has(i.id),
+      teRespondieron: teRespondieron.has(i.id),
     });
   }
 

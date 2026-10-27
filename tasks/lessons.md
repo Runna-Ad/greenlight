@@ -778,3 +778,11 @@ TAGS: #greenlight #test-db #permisos #pglite
 [2026-10-27] WIN (dos revisores independientes cazaron lo que las pruebas no): el revisor de código (Sonnet) vio la carrera de dos envíos simultáneos a la misma persona (los dos ven "nada reciente" y mandan) y que una lectura fallida marcaba los correos como 'skipped' para siempre; el de seguridad (Opus) vio que las versiones viejas de la app que comparten la base ignorarían `not_before`. Ninguna prueba lo habría mostrado.
 RULE: cuando una regla depende de "lo último que pasó" (ventanas, topes, cuotas), la decisión y la reserva van JUNTAS en la base con un candado por clave (`pg_advisory_xact_lock`), no leer-en-la-app-y-luego-escribir. Y en una base compartida por varias versiones de la app, el orden de despliegue es parte del diseño.
 TAGS: #greenlight #concurrencia #correos #revision #win
+
+[2026-10-27] LESSON (PGlite cuenta milisegundos; Postgres de verdad, microsegundos): las pruebas de 0084 fallaban 2 de cada 3 corridas. El candado contra la app vieja exige que `claimed_at` CAMBIE; en PGlite el now() de una consulta y el clock_timestamp() de la siguiente salían iguales 179 de 200 veces. En producción el reloj da microsegundos (medido) y los dos pasos van en requests distintos: no aplica.
+RULE: una prueba que dependa de que dos horas sean DISTINTAS tiene que fabricar la diferencia (now() - interval '1 second'); no confiar en el reloj de PGlite. Y cuando una prueba "pasó" una vez, correrla 3 veces antes de dar el verde.
+TAGS: #greenlight #pglite #flaky #reloj #test-db
+
+[2026-10-27] LESSON (el aviso al cliente sí llegaba; lo que faltaba era el portal): Pedro probó como master-actuando-de-cliente y no vio nada salvo el correo. La campana del cliente SÍ tenía el aviso (4 cuentas DiDi, sin leer); el master no lo ve porque no es su buzón. El hueco real: el portal no marcaba en ningún lado la tarea con respuesta del equipo.
+RULE: antes de dar por perdido un aviso, revisar en la base a QUIÉN le llegó y si se leyó; y probar como el rol real, no como master.
+TAGS: #greenlight #portal #avisos #verificar-como-usuario
