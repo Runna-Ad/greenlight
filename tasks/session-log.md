@@ -1,13 +1,14 @@
 # Session log — Greenlight · by Rünna
 
-## 2026-10-27 (4) — "Te respondieron" en el portal (rama `feat/portal-te-respondieron` desde main 1397d7c; SIN migración)
+## 2026-10-27 (4) — "Te respondieron" en el portal — SHIPPED (main 30476ef, SIN migración)
 Pedro: probando el hilo, el cliente no veía en su portal que el lead le contestó (sólo el correo). Diagnóstico: la campana del cliente SÍ recibe el aviso (4 cuentas DiDi, sin leer); el master no lo ve. Faltaba la señal EN el portal. Pedro eligió opción 1.
 **Hecho:** `equipoEscribioUltimo` (lib/correcciones) = en algún cambio, lo último visible para el cliente lo escribió el equipo. `estadoCliente(..., teRespondieron)` → "Te respondieron" (morado, ícono de mensaje) en home, nav y lista; la tarea entra a la cola de arriba ("Necesitan tu atención"); la barra de la tarea dice "El equipo te respondió… contéstale ahí". portal-data lee respuestas por páginas (tope 1000 de PostgREST) con el MISMO filtro de cambios que la vista de la tarea.
 **Revisión (Sonnet):** paridad lista↔tarea OK; arreglados: tope de 1000 filas, error no registrado, comparación de horas como texto (+ empate → gana el cliente), texto del contador "En cambios".
 **También:** pruebas de 0084 eran intermitentes (reloj de PGlite en ms) → la prueba fabrica 1 s de diferencia; 3 corridas verdes. Producción no afectada (reloj en µs, medido).
 **Pruebas:** test-lib 639/0 · test-db 486/0 (×3) · npm test exit 0 · tsc 0 · eslint 0 · build ✓.
 **No probado en navegador con la etiqueta prendida:** no hay hoy ninguna tarea real con hilo visible para el cliente; hace falta una tarea PRUEBA (pedir permiso a Pedro).
-**Pick up next:** preview → (con permiso) tarea PRUEBA con respuesta del equipo, ver la etiqueta como master en el portal → "ship it" para main.
+**En vivo:** Pedro dijo "ship it" sin prueba PRUEBA ("ill test it there"). Deploy de producción success; /didi/portal carga, consola limpia, 0 errores en Vercel. La etiqueta prendida NO se ha visto todavía en pantalla.
+**Pick up next:** Pedro la prueba en vivo (lead contesta un cambio de cliente en una tarea En cambios → portal del cliente). Luego: reloj de correos (secreto + archivo manual), merge main → prisma.
 
 ## 2026-10-27 (3) — Correos AGRUPADOS (rama `feat/avisos-agrupados` desde main ade0757; 0084 SIN aplicar, reloj SIN instalar)
 Pedro: opción 1 para clientes y equipo: el primer correo a una persona sale ya; lo que le llegue en los 10 min siguientes espera y sale junto en UN correo ("3 piezas listas para tu revisión"). Cuentas (invitaciones, accesos, bienvenidas) siguen al instante.
