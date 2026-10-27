@@ -13,7 +13,8 @@ import { getCurrentUser } from "@/lib/identity";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { faltaCortinilla, MSG_FALTA_LEGAL } from "@/lib/cortinilla";
 import { enCanchaDelLead, MSG_CANCHA_DEL_LEAD } from "@/lib/cambios-pendientes";
-import { RESPUESTA_MAX, RESPUESTAS_POR_CAMBIO_MAX } from "@/lib/correcciones";
+import { RESPUESTA_MAX, destinoRespuesta, type DestinoRespuesta } from "@/lib/correcciones";
+import { piezaEnPortal } from "@/lib/portal-bucket";
 
 export type CorreccionResultado = { ok: true; id?: string } | { ok: false; error: string };
 
@@ -179,17 +180,27 @@ export async function descartarCorreccion(
   return { ok: true };
 }
 
+export type RespuestaResultado =
+  | { ok: true; id: string; destino: DestinoRespuesta }
+  /** `destinoCambio`: la pantalla está vieja (el "Va para" ya no es cierto) → refrescar. */
+  | { ok: false; error: string; destinoCambio?: boolean };
+
 /**
- * Responde en el hilo INTERNO de un cambio (0082): el especialista explica por qué lo
- * hizo así, el lead contesta. Cualquiera del equipo que puede tocar la tarea; el cliente
- * nunca (su portal no lee esta tabla). La decisión final sigue siendo de los botones que
- * ya existen: "Descartar" (lo deja como estaba, se borra con su hilo) o seguir el cambio.
+ * Responde en el hilo de un cambio (0082/0083). El DESTINO se decide solo
+ * (`destinoRespuesta`, la misma regla que pinta el letrero "Va para"): en un cambio del
+ * cliente que sigue en la cancha del lead, o si lo último lo escribió el cliente, lo que
+ * contesta un lead le llega AL CLIENTE; todo lo demás queda en el equipo. La RPC guarda,
+ * valida (nada interno puede ir al cliente) y crea los avisos en un solo paso.
  */
 export async function responderCorreccion(
   ideaId: string,
   commentId: string,
   body: string,
-): Promise<CorreccionResultado> {
+  /** El destino que la pantalla le ENSEÑÓ a quien escribe ("Va para"). Si al enviar ya es
+   *  otro (el cliente contestó entretanto, o mandó otra ronda), no se guarda nada: así
+   *  una nota interna nunca le llega al cliente por una pantalla vieja. */
+  destinoEsperado: DestinoRespuesta,
+): Promise<RespuestaResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const [role, soy] = await Promise.all([getViewAs(), getSoy()]);
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no responde en los cambios." };
@@ -202,46 +213,75 @@ export async function responderCorreccion(
   if (!scope.ok) return { ok: false, error: scope.error };
 
   const db = supabaseAdmin();
-  // El cambio debe ser de ESTA tarea y ser una corrección: interna, o del cliente YA
-  // ENVIADA (ronda not null) — el mismo filtro con que page.tsx los carga. Un borrador del
-  // cliente no se ve en la tarea y el cliente lo puede borrar (con su hilo, en cascada).
+  // El cambio debe ser de ESTA tarea: interno, o del cliente YA ENVIADO (ronda not null),
+  // el mismo filtro con que page.tsx los carga. (La RPC lo vuelve a exigir.)
   const { data: cambio, error: errCambio } = await db
     .from("comments")
-    .select("id")
+    .select("id, kind")
     .eq("id", commentId)
     .eq("idea_id", ideaId)
     .or("kind.eq.correction_request,and(kind.eq.client_change,ronda.not.is.null)")
-    .maybeSingle();
+    .maybeSingle<{ id: string; kind: string }>();
   if (errCambio) return { ok: false, error: errCambio.message };
   if (!cambio) return { ok: false, error: "Ese cambio ya no existe." };
 
-  // Tope por cambio: una conversación real no llega aquí; un bucle sí.
-  const { count, error: errCount } = await db
-    .from("correccion_respuestas")
-    .select("id", { count: "exact", head: true })
-    .eq("comment_id", commentId);
-  // 42P01 = la tabla aún no existe (código desplegado antes de aplicar 0082).
-  if (errCount?.code === "42P01") return { ok: false, error: "Las respuestas aún no están disponibles." };
-  if (errCount) return { ok: false, error: errCount.message };
-  if ((count ?? 0) >= RESPUESTAS_POR_CAMBIO_MAX) {
-    return { ok: false, error: "Este cambio ya tiene demasiadas respuestas. Decídanlo en persona." };
+  const cambioDelCliente = cambio.kind === "client_change";
+  let destino: DestinoRespuesta = "equipo";
+  if (cambioDelCliente && canOverrideStatus(role)) {
+    const [{ data: pieza }, { data: ultima }] = await Promise.all([
+      // Bandera CRUDA (sin mirar el estado), igual que el letrero del panel (page.tsx):
+      // el trigger la apaga al salir de in_corrections, y piezaEnPortal cubre el resto.
+      db
+        .from("ideas")
+        .select("status, deleted_at, published_at, cambios_cliente_en_lead")
+        .eq("id", ideaId)
+        .maybeSingle<{
+          status: string;
+          deleted_at: string | null;
+          published_at: string | null;
+          cambios_cliente_en_lead: boolean;
+        }>(),
+      db
+        .from("correccion_respuestas")
+        .select("de_cliente")
+        .eq("comment_id", commentId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<{ de_cliente: boolean }>(),
+    ]);
+    destino = destinoRespuesta({
+      cambioDelCliente,
+      esLead: true,
+      enCanchaDelLead: !!pieza?.cambios_cliente_en_lead,
+      ultimaDeCliente: !!ultima?.de_cliente,
+      piezaEnPortal: !!pieza && piezaEnPortal(pieza),
+    });
+  }
+  if (destino !== destinoEsperado) {
+    return {
+      ok: false,
+      destinoCambio: true,
+      error:
+        destino === "cliente"
+          ? "Mientras escribías, el cliente contestó: esta respuesta ahora le llegaría a él. Revisa y vuelve a enviar."
+          : "Esta respuesta ya no le llegaría al cliente (la pieza cambió de etapa). Revisa y vuelve a enviar.",
+    };
   }
 
-  const { data, error } = await db
-    .from("correccion_respuestas")
-    .insert({
-      comment_id: commentId,
-      idea_id: ideaId,
-      author_member_id: soy?.id ?? null,
-      author_id: await actorId(),
-      body: texto,
-    })
-    .select("id")
-    .single();
-  // 23503 = el cambio se descartó entre la verificación y el insert (el FK ya no existe).
+  const { data, error } = await db.rpc("rpc_responder_cambio", {
+    p_comment_id: commentId,
+    p_idea_id: ideaId,
+    p_body: texto,
+    p_de_cliente: false,
+    p_para_cliente: destino === "cliente",
+    p_actor_member: soy?.id ?? null,
+    p_actor_profile: await actorId(),
+  });
+  // 23503 = el cambio se descartó entre la verificación y el guardado.
   if (error?.code === "23503") return { ok: false, error: "Ese cambio ya no existe." };
   if (error) return { ok: false, error: error.message };
-  return { ok: true, id: data.id };
+  after(() => dispatchPendingEmails());
+  return { ok: true, id: data as string, destino };
 }
 
 /** El revisor confirma (verde) TODAS las correcciones abiertas de un campo. */

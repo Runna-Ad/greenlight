@@ -515,6 +515,34 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
   const revisiones: Correccion[] = (revsRes.data ?? []).map(aCorreccion);
   const enProceso: Correccion[] = (enProcRes.data ?? []).map(aCorreccion);
 
+  // El hilo con el equipo (0083) de cada cambio ENVIADO. SÓLO lo que escribió el cliente o
+  // lo que el equipo le escribió A ÉL: el filtro va en la consulta, así lo interno (lead ↔
+  // especialista) nunca sale de la base hacia el portal. Sin autor: el cliente ve "Tú" /
+  // "Equipo Rünna", no los nombres internos.
+  const enviados = [...revisiones, ...enProceso];
+  if (enviados.length) {
+    const { data: resp, error: errResp } = await db
+      .from("correccion_respuestas")
+      .select("id, comment_id, body, created_at, de_cliente, para_cliente")
+      .eq("idea_id", idea.id)
+      .in("comment_id", enviados.map((c) => c.id))
+      .or("de_cliente.eq.true,para_cliente.eq.true")
+      .order("created_at")
+      .returns<
+        { id: string; comment_id: string; body: string; created_at: string; de_cliente: boolean; para_cliente: boolean }[]
+      >();
+    if (errResp) console.error("portal correccion_respuestas:", errResp.message);
+    const porCambio = new Map<string, Correccion["respuestas"]>();
+    for (const r of resp ?? []) {
+      // Cinturón y tirantes: aunque la consulta ya filtra, nada interno pasa de aquí.
+      if (!r.de_cliente && !r.para_cliente) continue;
+      const lista = porCambio.get(r.comment_id) ?? [];
+      lista!.push({ id: r.id, body: r.body, autor: null, createdAt: r.created_at, deCliente: r.de_cliente, paraCliente: r.para_cliente });
+      porCambio.set(r.comment_id, lista);
+    }
+    for (const c of enviados) c.respuestas = porCambio.get(c.id) ?? [];
+  }
+
   return {
     ideaId: idea.id,
     clienteSlug,

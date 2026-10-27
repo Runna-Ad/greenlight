@@ -1,6 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { BtnAccion, BG_CORAL, BG_GREEN } from "./btn-accion";
+import { HiloRespuestas } from "./hilo-respuestas";
 import { Trash2, ChevronDown, Sparkles, MessageSquare } from "lucide-react";
 import { useCorrecciones } from "./contexto";
 import { TagTipoCambio, BadgeCliente } from "../selector-tipo-cambio";
@@ -9,17 +11,13 @@ import {
   keyCampo,
   porRonda,
   sinResolver,
-  RESPUESTA_MAX,
+  destinoRespuesta,
   type Correccion,
   type EstadoCorreccion,
-  type RespuestaCorreccion,
 } from "@/lib/correcciones";
 import type { VeredictoCambio } from "@/app/(app)/[cliente]/tareas/[id]/validar-actions";
 import { cn } from "@/lib/utils";
 
-// Fondos sólidos de botón (texto blanco) — un pelín más oscuros para AA.
-const BG_CORAL = "color-mix(in srgb, var(--status-corrections) 78%, #000)";
-const BG_GREEN = "color-mix(in srgb, var(--status-completed) 92%, #000)";
 // Pastilla de ESTADO: fondo sólido + texto blanco (texto-de-color-sobre-tinte-del-
 // mismo-tono no pasa AA; lección de los chips). Amber va oscuro para el blanco.
 const PILL: Record<EstadoCorreccion, string> = {
@@ -258,6 +256,8 @@ export function PanelCorrecciones() {
                           responder={ctx.responder}
                           texto={borradores.get(c.id) ?? ""}
                           setTexto={(t) => fijarBorrador(c.id, t)}
+                          colorCliente={ctx.marcaColor}
+                          {...vaParaDe(c, ctx.esRevisor, !!ctx.enCanchaDelLead, !!ctx.piezaEnPortal)}
                         />
                       )}
 
@@ -418,181 +418,17 @@ function TarjetaCompacta({
   );
 }
 
-/**
- * El hilo bajo un cambio: las respuestas en orden y una caja para contestar. La caja
- * empieza cerrada ("Responder") para que 30 tarjetas no sean 30 cajas de texto. El texto a
- * medio escribir vive en el panel (ver `borradores`), así que sobrevive a que la tarjeta se
- * compacte; si hay borrador, la caja abre ya abierta.
- */
-function HiloRespuestas({
-  c,
-  responder,
-  texto,
-  setTexto,
-}: {
-  c: Correccion;
-  responder: (id: string, body: string) => Promise<string | null>;
-  texto: string;
-  setTexto: (t: string) => void;
-}) {
-  const [abierta, setAbierta] = useState(texto.trim() !== "");
-  const caja = useRef<HTMLTextAreaElement>(null);
-  const hilo = useRef<HTMLDivElement>(null);
-  const [enviando, setEnviando] = useState(false);
-  // Lo recién enviado se pinta YA (el refresh de la página tarda): sin esto la caja se vaciaba
-  // y la respuesta no aparecía por segundos, y la gente la mandaba otra vez. Se descarta en
-  // cuanto la respuesta real llega en `c.respuestas` (mismo id).
-  const [enviadas, setEnviadas] = useState<RespuestaCorreccion[]>([]);
-  const btnResponder = useRef<HTMLButtonElement>(null);
-  const inputId = `respuesta-${c.id}`;
-  const deServidor = c.respuestas ?? [];
-  const idsServidor = new Set(deServidor.map((r) => r.id));
-  const respuestas = [...deServidor, ...enviadas.filter((r) => !idsServidor.has(r.id))];
-
-  const abrir = () => {
-    setAbierta(true);
-    // Foco a la caja SÓLO cuando la abre el usuario (no autoFocus: al re-expandir una tarjeta
-    // con borrador, la caja se monta abierta y robaba el foco).
-    requestAnimationFrame(() => caja.current?.focus());
-  };
-
-  // Cerrar = descartar el borrador (si no, la tarjeta queda fijada abierta por él).
-  const cerrar = () => {
-    setTexto("");
-    setAbierta(false);
-    // El foco vuelve a "Responder" sólo si estaba en este hilo o cayó al <body>: si el usuario
-    // ya está escribiendo en otra tarjeta mientras se enviaba ésta, no se lo quitamos.
-    requestAnimationFrame(() => {
-      const a = document.activeElement;
-      if (!a || a === document.body || hilo.current?.contains(a)) btnResponder.current?.focus();
-    });
-  };
-
-  const enviar = async () => {
-    const enviado = texto;
-    if (!enviado.trim() || enviando) return;
-    setEnviando(true);
-    const id = await responder(c.id, enviado);
-    setEnviando(false);
-    if (id) {
-      setEnviadas((prev) => [
-        ...prev,
-        { id, body: enviado.trim(), autor: "Tú", createdAt: new Date().toISOString() },
-      ]);
-      cerrar();
-    }
-  };
-
-  return (
-    // Los clics del hilo no saltan al campo (un clic en la tarjeta sí lo hace).
-    <div ref={hilo} className="mt-2" onClick={(e) => e.stopPropagation()}>
-      {respuestas.length > 0 && (
-        <ul className="grid gap-1.5 border-l-2 border-border pl-2.5">
-          {respuestas.map((r) => (
-            <li key={r.id}>
-              <p className="whitespace-pre-wrap text-[12px] leading-snug text-foreground">{r.body}</p>
-              <p className="mt-0.5 text-[10.5px] text-muted-foreground">
-                {r.autor ?? "Equipo"} · {fechaCorta(r.createdAt)}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {abierta ? (
-        <div className="mt-2">
-          <label htmlFor={inputId} className="sr-only">
-            Tu respuesta{c.targetLabel ? ` sobre ${c.targetLabel}` : ""}
-          </label>
-          <textarea
-            ref={caja}
-            id={inputId}
-            rows={2}
-            maxLength={RESPUESTA_MAX}
-            readOnly={enviando}
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                void enviar();
-              }
-              if (e.key === "Escape" && !enviando) cerrar();
-            }}
-            placeholder="Explica por qué, o contesta…"
-            className="w-full resize-y rounded-md border border-border bg-card px-2 py-1.5 text-[12px] leading-snug text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-          />
-          <p className="text-[10.5px] text-muted-foreground">Sólo el equipo lo ve, el cliente no. ⌘/Ctrl + Enter envía.</p>
-          <div className="mt-1 flex items-center gap-1.5">
-            <BtnAccion disabled={enviando || !texto.trim()} tone="primary" onClick={() => void enviar()}>
-              {enviando ? "Enviando…" : "Enviar"}
-            </BtnAccion>
-            <BtnAccion disabled={enviando} onClick={cerrar}>
-              Cancelar
-            </BtnAccion>
-          </div>
-        </div>
-      ) : (
-        <button
-          ref={btnResponder}
-          type="button"
-          onClick={abrir}
-          aria-expanded={false}
-          aria-label={c.targetLabel ? `Responder sobre ${c.targetLabel}` : undefined}
-          className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground transition-colors hover:bg-secondary"
-        >
-          <MessageSquare className="size-3" aria-hidden />
-          Responder
-        </button>
-      )}
-    </div>
-  );
-}
-
-/** "27 oct, 14:05". Zona FIJA: este componente también se pinta en el servidor (UTC en
- *  Vercel); sin zona, servidor y navegador escribían horas distintas (error de hidratación). */
-function fechaCorta(iso: string) {
-  return new Date(iso).toLocaleString("es-MX", {
-    timeZone: "America/Mexico_City",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
+/** El letrero "Va para" del hilo: la MISMA regla que usa el server al guardar. */
+function vaParaDe(c: Correccion, esLead: boolean, enCanchaDelLead: boolean, piezaEnPortal: boolean) {
+  const respuestas = c.respuestas ?? [];
+  const destino = destinoRespuesta({
+    cambioDelCliente: !!c.cliente,
+    esLead,
+    enCanchaDelLead,
+    ultimaDeCliente: !!respuestas[respuestas.length - 1]?.deCliente,
+    piezaEnPortal,
   });
+  if (destino === "cliente") return { vaPara: "el cliente", alCliente: true };
+  return { vaPara: esLead ? "el equipo (el cliente no lo ve)" : "el lead (el cliente no lo ve)", alCliente: false };
 }
 
-function BtnAccion({
-  children,
-  onClick,
-  disabled,
-  tone,
-  autoFocus,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-  tone?: "primary" | "go" | "danger";
-  autoFocus?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      autoFocus={autoFocus}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50",
-        tone ? "border-transparent text-white" : "border-border bg-card text-foreground hover:bg-secondary",
-      )}
-      style={
-        tone === "primary" || tone === "danger"
-          ? { background: BG_CORAL }
-          : tone === "go"
-            ? { background: BG_GREEN }
-            : undefined
-      }
-    >
-      {children}
-    </button>
-  );
-}

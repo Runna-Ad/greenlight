@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Check, ChevronDown, ArrowRight, Trash2, SlidersHorizontal } from "lucide-react";
-import { useCorrecciones } from "@/components/tarea/correcciones/contexto";
+import { useCorrecciones, type Ctx } from "@/components/tarea/correcciones/contexto";
+import { HiloRespuestas } from "@/components/tarea/correcciones/hilo-respuestas";
 import { keyCampo, porRonda, type Correccion } from "@/lib/correcciones";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +45,17 @@ export function PanelControlCambios({ mobile = false }: { mobile?: boolean }) {
   const ctx = useCorrecciones();
   const [colMovil, setColMovil] = useState(true); // en móvil arranca colapsado
   const [colapsadas, setColapsadas] = useState<Set<number>>(new Set());
+  // Respuestas a medio escribir, por cambio: viven aquí para sobrevivir a colapsar una ronda.
+  const [borradores, setBorradores] = useState<Map<string, string>>(new Map());
+  const hilo = (c: Correccion) =>
+    hiloDe(c, ctx, borradores.get(c.id) ?? "", (t) =>
+      setBorradores((prev) => {
+        const n = new Map(prev);
+        if (t.trim()) n.set(c.id, t);
+        else n.delete(c.id);
+        return n;
+      }),
+    );
 
   const drafts = ctx?.correcciones ?? []; // sin enviar
   const enProceso = ctx?.enProceso ?? []; // enviados, el equipo trabajando
@@ -85,7 +97,7 @@ export function PanelControlCambios({ mobile = false }: { mobile?: boolean }) {
           </div>
           <div className="grid gap-2 px-2.5 pb-2.5">
             {items.map((c) => (
-              <Tarjeta key={c.id} c={c} tono={GRIS} etiqueta="En proceso" />
+              <Tarjeta key={c.id} c={c} tono={GRIS} etiqueta="En proceso" hilo={hilo(c)} />
             ))}
           </div>
         </div>
@@ -117,7 +129,7 @@ export function PanelControlCambios({ mobile = false }: { mobile?: boolean }) {
             {visible && (
               <div className="grid gap-2 px-2.5 pb-2.5">
                 {items.map((c) => (
-                  <Tarjeta key={c.id} c={c} tono={AMARILLO} etiqueta="Aplicado" />
+                  <Tarjeta key={c.id} c={c} tono={AMARILLO} etiqueta="Aplicado" hilo={hilo(c)} />
                 ))}
               </div>
             )}
@@ -166,24 +178,23 @@ function Tarjeta({
   etiqueta,
   onQuitar,
   pendiente,
+  hilo,
 }: {
   c: Correccion;
   tono: string;
   etiqueta: string;
   onQuitar?: () => void;
   pendiente?: boolean;
+  /** El hilo con el equipo (sólo cambios ya enviados). */
+  hilo?: React.ReactNode;
 }) {
   return (
+    // Ya NO es role="button": dentro puede ir la caja de respuesta, y los hijos de un botón
+    // ARIA son "presentacionales" (el lector perdía el textarea). El clic de ratón sigue
+    // saltando al campo; con teclado, el botón "Ver campo" de abajo hace lo mismo.
     <div
-      // Tarjeta clicable: también por TECLADO (Enter/Espacio) — antes sólo con ratón.
-      role="button"
-      tabIndex={0}
-      className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--primary)_45%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+      className="cursor-pointer rounded-lg border border-border bg-card p-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--primary)_45%,transparent)]"
       onClick={() => verCampo(c)}
-      onKeyDown={(e) => {
-        if (e.target !== e.currentTarget) return; // los botones de dentro manejan lo suyo
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); verCampo(c); }
-      }}
     >
       <div className="mb-1 flex flex-wrap items-center gap-1.5">
         {c.targetLabel && (
@@ -206,6 +217,7 @@ function Tarjeta({
         </p>
       )}
       <p className="text-[12.5px] leading-snug text-foreground">{c.body}</p>
+      {hilo}
 
       <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
         <button
@@ -229,3 +241,20 @@ function Tarjeta({
     </div>
   );
 }
+
+/** El hilo de un cambio enviado, visto por el cliente: lo suyo va siempre al equipo. */
+function hiloDe(c: Correccion, ctx: Ctx | null, texto: string, setTexto: (t: string) => void) {
+  if (!ctx) return null;
+  return (
+    <HiloRespuestas
+      c={c}
+      responder={ctx.responder ?? null}
+      texto={texto}
+      setTexto={setTexto}
+      vaPara="el equipo de Rünna"
+      alCliente={false}
+      vistaCliente
+    />
+  );
+}
+

@@ -8,6 +8,7 @@ import { CorreccionesCtx, type Ctx } from "@/components/tarea/correcciones/conte
 import {
   clienteFijarCambio,
   clienteQuitarCambio,
+  clienteResponderCambio,
 } from "@/app/(app)/[cliente]/portal/portal-actions";
 
 /**
@@ -26,6 +27,7 @@ export function CorreccionesClienteProvider({
   revisiones,
   enProceso,
   editable,
+  puedeResponder = false,
   children,
 }: {
   ideaId: string;
@@ -37,6 +39,9 @@ export function CorreccionesClienteProvider({
   /** Los cambios ya ENVIADOS que el equipo aún no resuelve (read-only, "en proceso"). */
   enProceso: Correccion[];
   editable: boolean;
+  /** Puede contestar en el hilo de sus cambios ENVIADOS (0083). Más amplio que `editable`:
+   *  justo mientras el equipo trabaja (in_corrections) es cuando el lead le contesta. */
+  puedeResponder?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -94,8 +99,20 @@ export function CorreccionesClienteProvider({
       veredictos: new Map(),
       validando: false,
       validar: () => {},
+      responder: puedeResponder
+        ? async (id, body) => {
+            const res = await clienteResponderCambio(clienteSlug, ideaId, id, body);
+            if (!res.ok) {
+              toast.error(res.error);
+              return null;
+            }
+            toast.success("Le llegó al equipo");
+            start(() => router.refresh());
+            return res.id;
+          }
+        : undefined,
     };
-  }, [ideaId, clienteSlug, editable, cambios, revisiones, enProceso, pendiente, router, start]);
+  }, [ideaId, clienteSlug, editable, puedeResponder, cambios, revisiones, enProceso, pendiente, router, start]);
 
   return <CorreccionesCtx.Provider value={value}>{children}</CorreccionesCtx.Provider>;
 }

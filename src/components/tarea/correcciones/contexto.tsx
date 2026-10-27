@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { keyCampo, type Correccion } from "@/lib/correcciones";
+import { keyCampo, type Correccion, type DestinoRespuesta } from "@/lib/correcciones";
 import { useWorkspaceView } from "@/components/tarea/workspace-provider";
 import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
 import {
@@ -64,10 +64,14 @@ export type Ctx = {
   confirmarCampo: (tabla: string, filaId: string | null, campo: string) => void;
   /** El revisor descarta una corrección que fijó (borrado duro). */
   descartar: (id: string) => void;
-  /** Responde en el hilo interno de un cambio (0082). Devuelve el id de la respuesta si se
-   *  guardó (null si no), para que el hilo la pinte ya y limpie la caja sólo entonces. Sólo
-   *  el lado interno lo trae. */
-  responder?: (id: string, body: string) => Promise<string | null>;
+  /** Responde en el hilo de un cambio (0082/0083). Devuelve el id de la respuesta si se
+   *  guardó (null si no), para que el hilo la pinte ya y limpie la caja sólo entonces. */
+  responder?: (id: string, body: string, destinoEsperado?: DestinoRespuesta) => Promise<string | null>;
+  /** La pieza está a la vista en el portal del cliente (sólo entonces algo le puede llegar). */
+  piezaEnPortal?: boolean;
+  /** Los cambios del cliente siguen en la cancha del lead (aún no los pasa a un
+   *  especialista): lo que conteste un lead le llega al cliente. Sólo el lado interno. */
+  enCanchaDelLead?: boolean;
   /** Veredicto ADVISORY de la IA por corrección (¿ya se hizo el cambio?). */
   veredictos: Map<string, VeredictoCambio>;
   validando: boolean;
@@ -92,6 +96,8 @@ export function CorreccionesProvider({
   veTodo = false,
   borrador,
   correcciones,
+  enCanchaDelLead = false,
+  piezaEnPortal = false,
   children,
 }: {
   ideaId: string;
@@ -105,6 +111,10 @@ export function CorreccionesProvider({
   /** Correcciones internas + cambios del cliente ENVIADOS (con `cliente:true`) —
    *  ambos de primera clase, mismo lifecycle/panel/gate/rondas (0038). */
   correcciones: Correccion[];
+  /** Ver Ctx.enCanchaDelLead. */
+  enCanchaDelLead?: boolean;
+  /** Ver Ctx.piezaEnPortal. */
+  piezaEnPortal?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -175,6 +185,8 @@ export function CorreccionesProvider({
       esEquipo,
       veTodo,
       correcciones,
+      enCanchaDelLead,
+      piezaEnPortal,
       pendiente,
       deCampo: (tabla, filaId, campo) => {
         const k = keyCampo(tabla, filaId, campo);
@@ -195,14 +207,18 @@ export function CorreccionesProvider({
       confirmarCampo: (tabla, filaId, campo) =>
         run(confirmarCampoAction(ideaId, tabla, filaId, campo), "Campo confirmado"),
       descartar: (id) => run(descartarCorreccion(ideaId, id), "Corrección descartada"),
-      responder: async (id, body) => {
-        const res = await responderCorreccion(ideaId, id, body);
+      responder: async (id, body, destinoEsperado = "equipo") => {
+        const res = await responderCorreccion(ideaId, id, body, destinoEsperado);
         if (!res.ok) {
           toast.error(res.error);
+          // Pantalla vieja: refrescar para que el "Va para" diga la verdad antes de reenviar
+          // (el borrador se conserva: vive en el panel).
+          if (res.destinoCambio) start(() => router.refresh());
           return null;
         }
+        if (res.destino === "cliente") toast.success("Enviado al cliente");
         start(() => router.refresh());
-        return res.id ?? null;
+        return res.id;
       },
       veredictos,
       validando,
@@ -252,7 +268,7 @@ export function CorreccionesProvider({
           toast.success("Sugerencia aplicada");
         }),
     }),
-    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, veTodo, borrador, correcciones, pendiente, veredictos, validando, validar, run, router, setWsPlanos, setWsEstatico, bumpReseed],
+    [ideaId, clienteSlug, marcaColor, esRevisor, esEquipo, veTodo, borrador, correcciones, enCanchaDelLead, piezaEnPortal, pendiente, veredictos, validando, validar, run, router, setWsPlanos, setWsEstatico, bumpReseed],
   );
 
   return <CorreccionesCtx.Provider value={value}>{children}</CorreccionesCtx.Provider>;

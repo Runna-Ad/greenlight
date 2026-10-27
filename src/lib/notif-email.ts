@@ -2,7 +2,7 @@ import "server-only";
 
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { sendEmail, hasEmail } from "@/lib/email";
-import { decisionEmail } from "@/lib/notif-routing";
+import { decisionEmail, CLIENT_TYPES } from "@/lib/notif-routing";
 import { htmlFor, textFor, ctaUrl } from "@/lib/email-template";
 
 export type DispatchResult = { sent: number; skipped: number; failed: number; sinConfig?: boolean };
@@ -146,7 +146,7 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
     });
     if (!decision.enviar) { await marcar(d.id, { status: "skipped", error: decision.razon }); skipped++; continue; }
 
-    const cta = ctaUrl({ ...n, esCliente: !n.recipient_member_id && !!n.recipient_id && n.type === "ready_for_review" });
+    const cta = ctaUrl({ ...n, esCliente: !n.recipient_member_id && !!n.recipient_id && CLIENT_TYPES.has(n.type ?? "") });
     const res = await sendEmail({
       to: email!,
       subject: n.title,

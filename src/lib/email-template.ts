@@ -5,6 +5,8 @@
 // correo tiran flex/grid y el <style>), charset UTF-8 explícito (los acentos se
 // rompen si no), y un CTA que lleva a DONDE está el trabajo, no a un genérico.
 
+import { CLIENT_TYPES } from "./notif-routing";
+
 type TipoConfig = { chip: string; color: string; cta: string; darkChip?: boolean };
 
 // Colores NEON por tipo (Pedro: "más visual, versión neón de cada uno"). Aprobada
@@ -21,6 +23,8 @@ const TIPO: Record<string, TipoConfig> = {
   client_invite: { chip: "Tu acceso está listo", color: "#00e676", cta: "Entrar a mi portal", darkChip: true }, // verde logo
   team_welcome: { chip: "Bienvenido al equipo", color: "#9d4edd", cta: "Ver mis tareas" }, // púrpura neón
   ready_for_review: { chip: "Lista para tu revisión", color: "#00c2ff", cta: "Abrir mi portal" }, // azul neón — al CLIENTE
+  change_reply: { chip: "Respuesta", color: "#ff2d6f", cta: "Ver la conversación" }, // rosa-rojo: es de un cambio
+  change_reply_client: { chip: "Te respondieron", color: "#00c2ff", cta: "Ver la respuesta" }, // azul: de cara al cliente
 };
 const DEFECTO: TipoConfig = { chip: "Aviso", color: "#9d4edd", cta: "Abrir en Greenlight" };
 
@@ -135,8 +139,12 @@ export function htmlFor(args: {
       </td></tr>
       <tr><td style="padding:20px 28px 24px;">
         <div style="border-top:1px solid #efeaf9;padding-top:14px;font-size:11px;line-height:1.55;color:#9a95bd;">
-          Recibes esto porque trabajas en <b style="color:#6f6b8d;">Greenlight &middot; by r&uuml;nna</b>.
-          Puedes desactivar los correos en /admin &#9656; Equipo.
+          ${
+            CLIENT_TYPES.has(args.type ?? "")
+              ? `Recibes esto porque el equipo de <b style="color:#6f6b8d;">r&uuml;nna</b> te escribi&oacute; desde Greenlight.`
+              : `Recibes esto porque trabajas en <b style="color:#6f6b8d;">Greenlight &middot; by r&uuml;nna</b>.
+          Puedes desactivar los correos en /admin &#9656; Equipo.`
+          }
         </div>
       </td></tr>
     </table>

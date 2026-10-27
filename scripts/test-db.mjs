@@ -2596,5 +2596,107 @@ console.log("\n▶ 0082 — respuestas bajo un cambio");
   await db.exec(`select set_config('request.jwt.claims','',false)`);
 }
 
+// ── 0083 — respuestas con el cliente + avisos: quién recibe qué, y qué NO se permite ──
+console.log("\n▶ 0083 — respuestas: destino, avisos y candados");
+{
+  await db.exec(`select set_config('produccion.acting_member','',false);
+                 select set_config('request.jwt.claims','{"role":"service_role"}',false)`);
+  const I = flIdea;
+  const m = async (name) => scalar(`select id from produccion.track_members where name=$1`, [name]);
+  const galie = await m("Galie"), mony = await m("Mony");
+  const leadM = await scalar(
+    `select id from produccion.track_members where role='lead' and active and (track='real' or 'real'=any(tracks)) limit 1`);
+  // Cada miembro necesita un perfil para recibir avisos (la campana es por perfil).
+  const perfilDe = async (memberId, tag) => {
+    let p = await scalar(`select profile_id from produccion.track_members where id=$1`, [memberId]);
+    if (!p) {
+      p = await scalar(`insert into produccion.profiles (id, email, full_name, role) values (gen_random_uuid(),$1,$1,'creative') returning id`, [`${tag}@0083.test`]);
+      await db.query(`update produccion.track_members set profile_id=$2 where id=$1`, [memberId, p]);
+    }
+    return p;
+  };
+  const pLead = await perfilDe(leadM, "lead"), pGalie = await perfilDe(galie, "galie"), pMony = await perfilDe(mony, "mony");
+  const clientId = await scalar(
+    `select b.client_id from produccion.ideas i join produccion.briefs b on b.id=i.brief_id where i.id=$1`, [I]);
+  const pCliente = await scalar(
+    `insert into produccion.profiles (id, email, full_name, role, client_id) values (gen_random_uuid(),'cliente@0083.test','Cliente','client',$1) returning id`, [clientId]);
+  // Otro cliente (otra marca de la agencia) NUNCA debe recibir nada.
+  const otroClient = await scalar(`insert into produccion.clients (name, slug) values ('Otro0083','otro0083') returning id`);
+  const pOtro = await scalar(
+    `insert into produccion.profiles (id, email, full_name, role, client_id) values (gen_random_uuid(),'otro@0083.test','Otro','client',$1) returning id`, [otroClient]);
+
+  await db.query(`select produccion.rpc_set_assignees($1,$2,$3::uuid[],null,null)`, [I, leadM, `{${galie},${mony}}`]);
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [I]);
+  const interno = await scalar(
+    `insert into produccion.comments (idea_id, body, kind, author_member_id) values ($1,'interno 0083','correction_request',$2) returning id`, [I, leadM]);
+  const delCliente = await scalar(
+    `insert into produccion.comments (idea_id, body, kind, ronda) values ($1,'del cliente 0083','client_change',99) returning id`, [I]);
+  const borrador = await scalar(
+    `insert into produccion.comments (idea_id, body, kind) values ($1,'borrador 0083','client_change') returning id`, [I]);
+  const responder = (c, body, deC, paraC, member, profile) =>
+    scalar(`select produccion.rpc_responder_cambio($1,$2,$3,$4,$5,$6,$7)`, [c, I, body, deC, paraC, member, profile]);
+  const avisos = async () => (await q(
+    `select recipient_id, type, url from produccion.notifications where entity_id=$1 order by created_at`, [I]));
+  const rechaza = async (fn) => { try { await fn(); return false; } catch { return true; } };
+
+  // Candados: nada interno cruza al cliente.
+  ok("para_cliente en un cambio INTERNO se rechaza", await rechaza(() => responder(interno, "x", false, true, leadM, pLead)));
+  ok("de_cliente en un cambio INTERNO se rechaza", await rechaza(() => responder(interno, "x", true, false, null, pCliente)));
+  ok("de y para el cliente a la vez se rechaza", await rechaza(() => responder(delCliente, "x", true, true, leadM, pLead)));
+  ok("en un BORRADOR del cliente se rechaza", await rechaza(() => responder(borrador, "x", false, false, leadM, pLead)));
+  ok("un cambio de OTRA tarea se rechaza",
+     await rechaza(() => scalar(`select produccion.rpc_responder_cambio($1,gen_random_uuid(),'x',false,false,null,null)`, [interno])));
+
+  // Interno: Galie contesta → lead + Mony (+ quien pidió el cambio = lead); Galie no.
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [I]);
+  await responder(interno, "la puse por el brief", false, false, galie, pGalie);
+  let a = await avisos();
+  const dest = (xs) => new Set(xs.map((x) => x.recipient_id));
+  ok("especialista contesta → le llega al lead", dest(a).has(pLead));
+  ok("…y al otro especialista", dest(a).has(pMony));
+  ok("…no a quien escribió", !dest(a).has(pGalie));
+  ok("…y NUNCA al cliente", !dest(a).has(pCliente) && !dest(a).has(pOtro));
+  ok("…tipo change_reply con liga a la tarea", a.every((x) => x.type === "change_reply" && /\/tareas\//.test(x.url)));
+  eq("…un aviso por persona (sin duplicar al lead autor+asignado)", a.length, dest(a).size);
+
+  // Al cliente sólo si la pieza está en su portal.
+  // (La papelera la saca del portal; el guard de estados no deja saltar a in_progress.)
+  await db.query(`update produccion.ideas set deleted_at=now() where id=$1`, [I]);
+  ok("pieza fuera del portal (papelera) → para_cliente se rechaza",
+     await rechaza(() => responder(delCliente, "x", false, true, leadM, pLead)));
+  await db.query(`update produccion.ideas set deleted_at=null, published_at=coalesce(published_at, now()) where id=$1`, [I]);
+
+  // Lead → cliente: sólo los perfiles cliente de ESTE cliente.
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [I]);
+  await responder(delCliente, "lo dejamos así porque…", false, true, leadM, pLead);
+  a = await avisos();
+  ok("lead contesta al cliente → le llega al cliente", dest(a).has(pCliente));
+  ok("…no a otro cliente", !dest(a).has(pOtro));
+  ok("…ni al equipo", !dest(a).has(pGalie) && !dest(a).has(pMony) && !dest(a).has(pLead));
+  ok("…tipo change_reply_client con liga al portal (marca+brief+tarea)",
+     a.length > 0 && a.every((x) => x.type === "change_reply_client" && /\/portal\?marca=.+&brief=.+&tarea=/.test(x.url)));
+
+  // Cliente contesta → los leads + quien del equipo ya le contestó; no los especialistas.
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [I]);
+  await responder(delCliente, "ok, gracias", true, false, null, pCliente);
+  a = await avisos();
+  ok("cliente contesta → le llega al lead", dest(a).has(pLead));
+  ok("…no a los especialistas", !dest(a).has(pGalie) && !dest(a).has(pMony));
+  ok("…ni a sí mismo", !dest(a).has(pCliente));
+
+  // Lo que el portal puede ver: sólo de/para el cliente (la respuesta interna no).
+  await responder(delCliente, "nota interna en cambio del cliente", false, false, galie, pGalie);
+  eq("en un cambio del cliente, el portal ve 2 de 3 respuestas (la interna no)",
+     Number(await scalar(`select count(*) from produccion.correccion_respuestas
+       where comment_id=$1 and (de_cliente or para_cliente)`, [delCliente])), 2);
+
+  // Limpieza.
+  await db.query(`delete from produccion.comments where id = any($1::uuid[])`, [[interno, delCliente, borrador]]);
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [I]);
+  await db.query(`delete from produccion.profiles where email like '%@0083.test'`);
+  await db.query(`delete from produccion.clients where id=$1`, [otroClient]);
+  await db.exec(`select set_config('request.jwt.claims','',false)`);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

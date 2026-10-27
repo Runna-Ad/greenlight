@@ -10,6 +10,7 @@ import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, 
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
 import { puedeSerLead, puedeSerEspecialista } from "../src/lib/roles.ts";
+import { destinoRespuesta } from "../src/lib/correcciones.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
 
 let pass = 0,
@@ -1456,6 +1457,20 @@ console.log("\n▶ agruparCarga() — scope por track del Workload (Paso B)");
   const t = de(all, "esp").porEstado.find((e) => e.status === "under_review").tareas[0];
   eq("la tarea usa su naming como label", t.label, "TAREA3");
   eq("la tarea trae el slug del cliente para el enlace", t.clientSlug, "didi");
+}
+
+// ── destinoRespuesta (0083): a quién le llega lo que escribe el equipo ──
+console.log("\n▶ destinoRespuesta — la regla automática de Pedro");
+{
+  const d = (o) => destinoRespuesta({ cambioDelCliente: true, esLead: true, enCanchaDelLead: false, ultimaDeCliente: false, piezaEnPortal: true, ...o });
+  eq("cambio del cliente en la cancha del lead → el lead le contesta al cliente", d({ enCanchaDelLead: true }), "cliente");
+  eq("ya se lo pasó a un especialista → equipo", d({}), "equipo");
+  eq("…pero si lo último lo escribió el cliente → al cliente", d({ ultimaDeCliente: true }), "cliente");
+  eq("el especialista NUNCA le escribe al cliente (aunque esté en la cancha del lead)",
+     d({ esLead: false, enCanchaDelLead: true, ultimaDeCliente: true }), "equipo");
+  eq("cambio interno: siempre equipo, aunque haya bandera", d({ cambioDelCliente: false, enCanchaDelLead: true, ultimaDeCliente: true }), "equipo");
+  eq("pieza fuera del portal (regresó a producción / papelera): nada al cliente",
+     d({ enCanchaDelLead: true, ultimaDeCliente: true, piezaEnPortal: false }), "equipo");
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

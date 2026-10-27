@@ -68,13 +68,39 @@ export type RespuestaCorreccion = {
   body: string;
   autor: string | null;
   createdAt: string;
+  /** La escribió el cliente desde su portal (0083). */
+  deCliente?: boolean;
+  /** La escribió el equipo PARA el cliente (0083): el cliente la ve. */
+  paraCliente?: boolean;
 };
+
+/** A quién va una respuesta del EQUIPO: al cliente (la ve en su portal) o sólo al equipo. */
+export type DestinoRespuesta = "cliente" | "equipo";
+
+/**
+ * La regla de Pedro (2026-10-27), automática por etapa — FUENTE ÚNICA: la usa el server
+ * al guardar y el panel para el letrero "Va para". (El cliente no pasa por aquí: lo suyo
+ * siempre va al lead.)
+ *   · Cambio interno, o quien escribe es especialista → equipo.
+ *   · Cambio del cliente aún en la cancha del lead → el lead le contesta AL CLIENTE.
+ *   · Ya se lo pasó a un especialista → equipo… salvo que lo último del hilo lo haya
+ *     escrito el cliente: entonces el lead le está contestando a él.
+ *   · Si la pieza NO está a la vista en su portal (regresó a producción interna, papelera),
+ *     nada le llega al cliente: queda en el equipo.
+ */
+export function destinoRespuesta(a: {
+  cambioDelCliente: boolean;
+  esLead: boolean;
+  enCanchaDelLead: boolean;
+  ultimaDeCliente: boolean;
+  piezaEnPortal: boolean;
+}): DestinoRespuesta {
+  if (!a.cambioDelCliente || !a.esLead || !a.piezaEnPortal) return "equipo";
+  return a.enCanchaDelLead || a.ultimaDeCliente ? "cliente" : "equipo";
+}
 
 /** Tope de una respuesta del hilo — el mismo que el CHECK de 0082. */
 export const RESPUESTA_MAX = 2000;
-
-/** Tope de respuestas por cambio (lo cuida responderCorreccion). */
-export const RESPUESTAS_POR_CAMBIO_MAX = 100;
 
 /** El estado de una fila de `comments` a partir de sus timestamps. */
 export function estadoDeTimestamps(row: {

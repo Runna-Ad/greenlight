@@ -6,6 +6,8 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { dispatchPendingEmails } from "@/lib/notif-email";
 import { getCurrentUser } from "@/lib/identity";
 import type { CorreccionTarget } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
+import { RESPUESTA_MAX } from "@/lib/correcciones";
+import { ESTADOS_PORTAL } from "@/lib/portal-bucket";
 
 export type PortalResultado = { ok: true } | { ok: false; error: string };
 
@@ -143,6 +145,70 @@ export async function clienteQuitarCambio(
 
   revalidatePath(`/${clienteSlug}/portal`);
   return { ok: true };
+}
+
+/**
+ * El cliente CONTESTA en el hilo de un cambio suyo ya enviado (0083). Le llega al lead
+ * (bell + email). Sólo en sus cambios, sólo con la pieza a la vista en su portal; la RPC
+ * vuelve a exigir que el cambio sea suyo (client_change enviado de ESTA idea).
+ */
+export async function clienteResponderCambio(
+  clienteSlug: string,
+  ideaId: string,
+  commentId: string,
+  body: string,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const texto = body.trim();
+  if (!texto) return { ok: false, error: "Escribe tu respuesta." };
+  if (texto.length > RESPUESTA_MAX) {
+    return { ok: false, error: `La respuesta pasa de ${RESPUESTA_MAX} caracteres.` };
+  }
+
+  const db = supabaseAdmin();
+  if (!(await puedeActuarComoCliente(db, clienteSlug))) {
+    return { ok: false, error: "No tienes acceso a este portal." };
+  }
+  if (!(await esDelCliente(db, clienteSlug, ideaId))) {
+    return { ok: false, error: "Esta idea no está disponible para revisión." };
+  }
+  // La pieza tiene que estar A LA VISTA en su portal (pestaña vieja de una tarea que el
+  // equipo ya regresó a producción interna → no).
+  const { data: idea } = await db.from("ideas").select("status").eq("id", ideaId).maybeSingle<{ status: string }>();
+  if (!idea || !(ESTADOS_PORTAL as string[]).includes(idea.status)) {
+    return { ok: false, error: "Esta pieza ya no está en tu portal. Recarga la página." };
+  }
+
+  // Sólo cambios que el cliente VE en su portal: suyos, enviados y anclados a un campo
+  // (mismo filtro que portal-data). Un client_change legacy sin campo no se lista allá.
+  const { data: cambio } = await db
+    .from("comments")
+    .select("id")
+    .eq("id", commentId)
+    .eq("idea_id", ideaId)
+    .eq("kind", "client_change")
+    .not("ronda", "is", null)
+    .not("target_campo", "is", null)
+    .maybeSingle();
+  if (!cambio) return { ok: false, error: "Ese cambio ya no existe." };
+
+  const u = await getCurrentUser();
+  const { data, error } = await db.rpc("rpc_responder_cambio", {
+    p_comment_id: commentId,
+    p_idea_id: ideaId,
+    p_body: texto,
+    p_de_cliente: true,
+    p_para_cliente: false,
+    p_actor_member: null,
+    p_actor_profile: u?.userId ?? null,
+  });
+  if (error?.code === "23503") return { ok: false, error: "Ese cambio ya no existe." };
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/${clienteSlug}/portal`);
+  revalidatePath("/[cliente]/tareas/[id]", "page");
+  after(() => dispatchPendingEmails());
+  return { ok: true, id: data as string };
 }
 
 /** El cliente ENVÍA todos sus cambios pendientes al equipo (published→in_corrections). */

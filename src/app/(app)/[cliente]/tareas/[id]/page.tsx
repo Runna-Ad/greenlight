@@ -31,6 +31,7 @@ import { DocumentoCopies, type TemaRow } from "@/components/tarea/documento-copi
 import { BloqueLegal } from "@/components/tarea/bloque-legal";
 import { legalSugerido } from "@/lib/legal-sugerido";
 import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
+import { piezaEnPortal } from "@/lib/portal-bucket";
 import { estadoDeTimestamps, type Correccion, type RespuestaCorreccion } from "@/lib/correcciones";
 import type { RefVista } from "@/components/tarea/referencias-plano";
 import { COLS_PLANO, type EstaticoVista, type PlanoVista } from "@/lib/vista-tipos";
@@ -49,6 +50,8 @@ type Idea = {
   trend: string | null; notas: string | null; legales_libres: string | null; nota_guion: string | null;
   comentarios_creativo: string | null; peloteo_raw: string | null; selling_points: string[] | null;
   cambios_cliente_en_lead: boolean;
+  deleted_at: string | null;
+  published_at: string | null;
 };
 
 export default async function TareaPage({
@@ -70,7 +73,7 @@ export default async function TareaPage({
   const { data: idea } = await db
     .from("ideas")
     .select(
-      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo, peloteo_raw, selling_points, cambios_cliente_en_lead",
+      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo, peloteo_raw, selling_points, cambios_cliente_en_lead, deleted_at, published_at",
     )
     .eq("id", id)
     .is("deleted_at", null) // en la papelera (0057) = 404; se restaura desde /admin
@@ -306,11 +309,19 @@ export default async function TareaPage({
       // Hilo interno bajo cada cambio (0082). Sólo esta página lo lee; el portal no.
       db
         .from("correccion_respuestas")
-        .select("id, comment_id, body, author_member_id, created_at")
+        .select("id, comment_id, body, author_member_id, created_at, de_cliente, para_cliente")
         .eq("idea_id", idea.id)
         .order("created_at")
         .returns<
-          { id: string; comment_id: string; body: string; author_member_id: string | null; created_at: string }[]
+          {
+            id: string;
+            comment_id: string;
+            body: string;
+            author_member_id: string | null;
+            created_at: string;
+            de_cliente: boolean;
+            para_cliente: boolean;
+          }[]
         >(),
     ]);
   const posicion = posicionEnBundle(bundle, idea.id);
@@ -392,8 +403,10 @@ export default async function TareaPage({
     lista.push({
       id: r.id,
       body: r.body,
-      autor: r.author_member_id ? nombrePorId.get(r.author_member_id) ?? null : null,
+      autor: r.de_cliente ? "Cliente" : r.author_member_id ? nombrePorId.get(r.author_member_id) ?? null : null,
       createdAt: r.created_at,
+      deCliente: r.de_cliente,
+      paraCliente: r.para_cliente,
     });
     respuestasPorCambio.set(r.comment_id, lista);
   }
@@ -535,6 +548,10 @@ export default async function TareaPage({
         veTodo={veTodo(role)}
         borrador={borrador}
         correcciones={correccionesVisibles}
+        // Bandera CRUDA a propósito: es el mismo dato que lee el server al enviar
+        // (responderCorreccion). No sumarle el estado aquí o el letrero y el envío divergen.
+        enCanchaDelLead={idea.cambios_cliente_en_lead}
+        piezaEnPortal={piezaEnPortal(idea)}
       >
         {/* Un solo flujo. Los DOS menús son PERSISTENTES (Pedro): el de arriba
             (sub-header) se queda pegado arriba TODA la página — como el de abajo

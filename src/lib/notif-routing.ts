@@ -12,7 +12,13 @@ export const EMAIL_TYPES = new Set<string>([
   "task_approved", // "tu tarea fue aprobada" → al asignado
   "task_published", // "se envió al cliente" → al asignado
   "ready_for_review", // "lista para TU revisión" → al CLIENTE (0051)
+  "change_reply", // "te contestaron en un cambio" → lead/especialista (0083)
+  "change_reply_client", // "el equipo te contestó" → al CLIENTE (0083)
 ]);
+
+/** Avisos de cara al CLIENTE: su liga va al PORTAL (no se reescribe a /tareas) y el pie del
+ *  correo no le habla de /admin. Fuente única para el dispatcher y la plantilla. */
+export const CLIENT_TYPES = new Set<string>(["ready_for_review", "change_reply_client"]);
 
 export function tipoEmailea(type: string | null | undefined): boolean {
   return !!type && EMAIL_TYPES.has(type);

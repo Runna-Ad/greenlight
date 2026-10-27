@@ -8,7 +8,8 @@ export type NotifEvento =
   | "task_changes_requested"
   | "task_approved"
   | "task_published"
-  | "brief_created";
+  | "brief_created"
+  | "change_reply";
 
 export const NOTIF_EVENTOS: { key: NotifEvento; label: string; hint: string }[] = [
   { key: "task_assigned", label: "Se me asignó una tarea", hint: "Cuando te asignan una tarea" },
@@ -17,12 +18,14 @@ export const NOTIF_EVENTOS: { key: NotifEvento; label: string; hint: string }[] 
   { key: "task_approved", label: "Tarea aprobada", hint: "Cuando el lead aprueba una tarea" },
   { key: "task_published", label: "Enviada al cliente", hint: "Cuando la tarea sale al cliente (greenlit)" },
   { key: "brief_created", label: "Nuevo brief", hint: "Cuando entra un brief nuevo" },
+  { key: "change_reply", label: "Respuestas en cambios", hint: "Cuando te contestan en un cambio" },
 ];
 
 // Eventos de cara al CLIENTE (portal). Separados del catálogo interno: el cliente no
 // ve la matriz interna. Hoy sólo "ready_for_review" (0051); su default de email es ON.
 export const NOTIF_EVENTOS_CLIENTE: { key: string; label: string; hint: string }[] = [
   { key: "ready_for_review", label: "Listo para tu revisión", hint: "Cuando te mandan una pieza a revisar" },
+  { key: "change_reply_client", label: "Respuestas del equipo", hint: "Cuando el equipo te contesta en un cambio que pediste" },
 ];
 
 export const EVENTOS_VALIDOS = new Set<string>([
@@ -35,9 +38,9 @@ export function eventosParaRol(role: string): string[] {
   if (role === "client") return NOTIF_EVENTOS_CLIENTE.map((e) => e.key);
   if (role === "admin" || role === "master") return NOTIF_EVENTOS.map((e) => e.key);
   if (role === "lead")
-    return ["task_submitted", "task_changes_requested", "task_approved", "task_published", "brief_created"];
+    return ["task_submitted", "task_changes_requested", "task_approved", "task_published", "brief_created", "change_reply"];
   // creative / especialista: sólo eventos de SUS tareas
-  return ["task_assigned", "task_changes_requested", "task_approved", "task_published"];
+  return ["task_assigned", "task_changes_requested", "task_approved", "task_published", "change_reply"];
 }
 
 export type NotifScope = "all" | "my_track" | "only_mine";

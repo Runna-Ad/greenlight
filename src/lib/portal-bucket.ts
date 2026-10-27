@@ -18,6 +18,13 @@ import type { AssetStatus } from "@/lib/brand";
  */
 export const ESTADOS_PORTAL: AssetStatus[] = ["published", "in_corrections", "delivered"];
 
+/** ¿La pieza está A LA VISTA en el portal del cliente? (Enviada alguna vez, fuera de la
+ *  papelera, en un estado de portal.) Mismo criterio que la RPC rpc_responder_cambio (0083):
+ *  lo usan el server al decidir si una respuesta le llega al cliente y el letrero "Va para". */
+export function piezaEnPortal(i: { status: string; deleted_at: string | null; published_at: string | null }): boolean {
+  return !i.deleted_at && !!i.published_at && (ESTADOS_PORTAL as string[]).includes(i.status);
+}
+
 export type BucketPortal = "activas" | "revision" | "aprobado";
 
 export function bucketPortal(status: AssetStatus): BucketPortal {

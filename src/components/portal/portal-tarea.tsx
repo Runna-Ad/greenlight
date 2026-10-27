@@ -7,6 +7,7 @@ import { TabsTarea } from "@/components/tarea/tabs-tarea";
 import { DocumentoTarea } from "@/components/tarea/documento-tarea";
 import { DocumentoCopies } from "@/components/tarea/documento-copies";
 import { CorreccionesClienteProvider } from "@/components/portal/correcciones-cliente-provider";
+import { ESTADOS_PORTAL } from "@/lib/portal-bucket";
 import { PortalAcciones } from "@/components/portal/portal-acciones";
 import { PanelControlCambios } from "@/components/portal/panel-control-cambios";
 import { PLACEHOLDER_ESTATICO, placeholdersGuion } from "@/lib/plantilla";
@@ -39,6 +40,7 @@ export function PortalTarea({ t, puedeActuar }: { t: TareaPortal; puedeActuar: b
         revisiones={t.revisiones}
         enProceso={t.enProceso}
         editable={puedeActuar && t.status === "published"}
+        puedeResponder={puedeActuar && (ESTADOS_PORTAL as string[]).includes(t.status)}
       >
       {/* Barra de acción PEGADA ARRIBA (Aprobar ⇄ Pedir cambios). Vive dentro del
           provider para leer cuántos cambios anotó el cliente. `reReview` cambia el

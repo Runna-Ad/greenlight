@@ -21,6 +21,7 @@ import {
   type MisPrefs,
 } from "@/lib/notif-eventos";
 import type { ViewRole } from "@/lib/roles";
+import { tipoEmailea } from "@/lib/notif-routing";
 
 type Soy = {
   id: string;
@@ -254,7 +255,8 @@ export function PerfilTab({
 
           <div className="mt-1 divide-y divide-border/60">
             {eventos.map((key) => {
-              const meta = NOTIF_EVENTOS.find((e) => e.key === key)!;
+              const meta = NOTIF_EVENTOS.find((e) => e.key === key);
+              if (!meta) return null;
               return (
                 <label key={key} className="flex items-center justify-between gap-3 py-2">
                   <span className="text-sm text-foreground">
@@ -264,7 +266,9 @@ export function PerfilTab({
                     </span>
                   </span>
                   <Switch
-                    checked={!!prefs[key]}
+                    // Sin fila guardada = el default del catálogo (el que el dispatcher usa de
+                    // verdad); antes se pintaba apagado mientras los correos sí salían.
+                    checked={prefs[key] ?? tipoEmailea(key)}
                     disabled={pending}
                     onCheckedChange={(v) => togglePref(key, v)}
                   />
