@@ -804,3 +804,8 @@ TAGS: #greenlight #flujo #estados #sin-cambio #pedro
 [2026-10-27] PEDRO_OVERRIDE (ningún estado en gris): "En proceso" seguía en gris oscuro. Pedro: "no quiero colores neutros, brillantes y visuales, elige tú". Portal: En proceso = amarillo vivo, Aplicado = turquesa, Sin cambio = azul, Sin enviar = coral.
 RULE: en Greenlight cada estado lleva un color vivo con significado; gris sólo para texto secundario, nunca para un estado.
 TAGS: #override #color #ux #pedro
+
+[2026-10-27] PEDRO_OVERRIDE (responder no es aplicar): el banner del lead tenía "Enviar a cliente" (= ya hice los cambios, reenvía la pieza y marca TODO lo abierto como aplicado) y el hilo tenía "Enviar al cliente" (= mandar una respuesta). En la prueba, una respuesta y el envío de la pieza quedaron 6 s aparte y el cliente pasó de "Te respondieron" a "Cambios listos" sin que se cambiara nada. Yo propuse un aviso o un bloqueo.
+PEDRO'S APPROACH: una respuesta es sólo un comentario y nunca se liga con aplicar; no hay "reenviar" mientras se conversa; si el cliente no contesta, un recordatorio al día (después).
+RULE: dos botones con casi el mismo texto nunca pueden hacer cosas distintas; una acción que cambia estados en masa no corre sobre algo con una conversación abierta. Hecho: "Responder al cliente" vs "Ya hice los cambios · enviar pieza", bloqueado en server y UI.
+TAGS: #override #ux #cambios #botones #pedro
