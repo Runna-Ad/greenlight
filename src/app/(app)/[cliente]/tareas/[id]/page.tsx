@@ -32,7 +32,7 @@ import { BloqueLegal } from "@/components/tarea/bloque-legal";
 import { legalSugerido } from "@/lib/legal-sugerido";
 import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
 import { piezaEnPortal } from "@/lib/portal-bucket";
-import { estadoDeTimestamps, type Correccion, type RespuestaCorreccion } from "@/lib/correcciones";
+import { estadoDeTimestamps, bloqueoEnvioPieza, motivoBloqueoEnvio, type Correccion, type RespuestaCorreccion } from "@/lib/correcciones";
 import type { RefVista } from "@/components/tarea/referencias-plano";
 import { COLS_PLANO, type EstaticoVista, type PlanoVista } from "@/lib/vista-tipos";
 
@@ -582,6 +582,7 @@ export default async function TareaPage({
             <BannerCambiosCliente
               ideaId={idea.id}
               nCambios={cambiosClienteRonda.length}
+              motivoBloqueo={motivoBloqueoEnvio(bloqueoEnvioPieza(correcciones.filter((c) => c.cliente)))}
               leadActualId={leadActualId}
               especialistasPool={especialistasPool}
               especialistasActuales={personas.filter((p) => !p.es_lead).map((p) => p.id)}

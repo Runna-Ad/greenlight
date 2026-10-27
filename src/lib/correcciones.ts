@@ -221,6 +221,38 @@ export function ultimoVisibleDe(c: Pick<Correccion, "id" | "respuestas">): "equi
 }
 
 /**
+ * ¿Puede el lead enviar la pieza de vuelta al cliente ("Ya hice los cambios")? Ese envío
+ * marca APLICADOS todos los cambios abiertos, así que un cambio con conversación no puede ir
+ * en el paquete: una respuesta es un comentario, no un cambio hecho (Pedro 2026-10-27).
+ *  - `esperaCliente`: el equipo contestó al último y el cliente aún no responde.
+ *  - `porDecidir`: el cliente contestó al último; el lead decide (Confirmar o Sin cambio).
+ * Sólo cuenta cambios ABIERTOS (los ya cerrados ya tienen su decisión).
+ */
+export function bloqueoEnvioPieza(
+  cambios: Pick<Correccion, "id" | "respuestas" | "estado">[],
+): { esperaCliente: number; porDecidir: number } {
+  let esperaCliente = 0;
+  let porDecidir = 0;
+  for (const c of cambios) {
+    if (c.estado === "closed") continue;
+    const u = ultimoVisibleDe(c);
+    if (u === "equipo") esperaCliente++;
+    else if (u === "cliente") porDecidir++;
+  }
+  return { esperaCliente, porDecidir };
+}
+
+/** El texto del bloqueo para el lead (banner y error del server dicen lo mismo). */
+export function motivoBloqueoEnvio(b: { esperaCliente: number; porDecidir: number }): string | null {
+  const partes: string[] = [];
+  if (b.esperaCliente)
+    partes.push(`${b.esperaCliente} cambio${b.esperaCliente === 1 ? " espera" : "s esperan"} respuesta del cliente`);
+  if (b.porDecidir)
+    partes.push(`el cliente contestó en ${b.porDecidir} cambio${b.porDecidir === 1 ? "" : "s"}: márcalo aplicado o "Sin cambio (acordado)"`);
+  return partes.length ? `No se puede enviar la pieza todavía: ${partes.join("; ")}.` : null;
+}
+
+/**
  * El espejo para el LEAD (Pedro, 2026-10-27: "El cliente respondió" en Mi trabajo): en al
  * menos un cambio del cliente, lo último del hilo lo escribió el cliente. Se apaga cuando el
  * lead le contesta.

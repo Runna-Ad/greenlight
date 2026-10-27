@@ -24,12 +24,15 @@ type Pool = { id: string; name: string; color: string };
 export function BannerCambiosCliente({
   ideaId,
   nCambios,
+  motivoBloqueo = null,
   leadActualId,
   especialistasPool,
   especialistasActuales,
 }: {
   ideaId: string;
   nCambios: number;
+  /** Hay conversación abierta con el cliente: la pieza no puede ir de vuelta aún (por qué). */
+  motivoBloqueo?: string | null;
   leadActualId: string | null;
   especialistasPool: Pool[];
   /** Los especialistas YA asignados: vienen marcados (el caso común es pasárselo a quien
@@ -57,7 +60,7 @@ export function BannerCambiosCliente({
         toast.error(res.error ?? "No se pudo reenviar.");
         return;
       }
-      toast.success("Cambios aplicados — reenviado al cliente.");
+      toast.success("Cambios aplicados — la pieza ya está con el cliente.");
       router.refresh();
     });
 
@@ -82,8 +85,12 @@ export function BannerCambiosCliente({
               El cliente pidió {nCambios} cambio{nCambios === 1 ? "" : "s"}
             </p>
             <p className="text-xs text-muted-foreground">
-              Hazlos tú y reenvía, o asígnalos a un especialista para que los trabaje.
+              Hazlos tú y envía la pieza, o asígnalos a un especialista para que los trabaje.
+              Contestar en un cambio es sólo un comentario: no lo marca como hecho.
             </p>
+            {motivoBloqueo && (
+              <p className="mt-1 text-xs font-semibold text-status-corrections">{motivoBloqueo}</p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -132,8 +139,8 @@ export function BannerCambiosCliente({
               </Button>
             </PopoverContent>
           </Popover>
-          <Button size="sm" disabled={pending} onClick={reenviar}>
-            <Send className="size-4" /> Enviar a cliente
+          <Button size="sm" disabled={pending || !!motivoBloqueo} onClick={reenviar} title={motivoBloqueo ?? undefined}>
+            <Send className="size-4" /> Ya hice los cambios · enviar pieza
           </Button>
         </div>
       </div>

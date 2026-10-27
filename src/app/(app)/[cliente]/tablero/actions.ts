@@ -18,6 +18,7 @@ import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import type { AssetStatus } from "@/lib/brand";
 import { faltaCortinilla, MSG_FALTA_LEGAL } from "@/lib/cortinilla";
 import { enCanchaDelLead, MSG_CANCHA_DEL_LEAD } from "@/lib/cambios-pendientes";
+import { bloqueoEnvioPieza, motivoBloqueoEnvio } from "@/lib/correcciones";
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -432,6 +433,35 @@ export async function reenviarACliente(ideaId: string): Promise<ActionResult> {
   // Misma puerta legal que "Mandar a revisión" y que el envío directo del lead-solo: sin
   // revisión de por medio, aquí es el único punto antes de que el cliente la vuelva a ver.
   if (await faltaCortinilla(db, ideaId)) return { ok: false, error: MSG_FALTA_LEGAL };
+  // Una conversación abierta con el cliente NO viaja como "aplicado" (Pedro 2026-10-27): la
+  // RPC confirma todo lo abierto, así que primero se cierra cada cambio conversado.
+  const { data: abiertos, error: errAb } = await db
+    .from("comments")
+    .select("id")
+    .eq("idea_id", ideaId)
+    .eq("kind", "client_change")
+    .not("ronda", "is", null)
+    .is("resolved_at", null);
+  if (errAb) return { ok: false, error: errAb.message };
+  const idsAbiertos = ((abiertos ?? []) as { id: string }[]).map((r) => r.id);
+  if (idsAbiertos.length) {
+    const { data: resps, error: errR } = await db
+      .from("correccion_respuestas")
+      .select("comment_id, created_at, de_cliente, para_cliente")
+      .in("comment_id", idsAbiertos)
+      .or("de_cliente.eq.true,para_cliente.eq.true");
+    if (errR) return { ok: false, error: errR.message };
+    const porCambio = new Map<string, { id: string; body: string; autor: null; createdAt: string; deCliente: boolean; paraCliente: boolean }[]>();
+    for (const r of (resps ?? []) as { comment_id: string; created_at: string; de_cliente: boolean; para_cliente: boolean }[]) {
+      (porCambio.get(r.comment_id) ?? porCambio.set(r.comment_id, []).get(r.comment_id)!).push({
+        id: "", body: "", autor: null, createdAt: r.created_at, deCliente: r.de_cliente, paraCliente: r.para_cliente,
+      });
+    }
+    const motivo = motivoBloqueoEnvio(
+      bloqueoEnvioPieza(idsAbiertos.map((id) => ({ id, estado: "open" as const, respuestas: porCambio.get(id) ?? [] }))),
+    );
+    if (motivo) return { ok: false, error: motivo };
+  }
   const { error } = await db.rpc("rpc_lead_reenvia_cliente", {
     p_idea_id: ideaId,
     p_actor_member: soyId,

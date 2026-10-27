@@ -10,7 +10,7 @@ import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, 
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
 import { puedeSerLead, puedeSerEspecialista } from "../src/lib/roles.ts";
-import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo } from "../src/lib/correcciones.ts";
+import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoEnvioPieza, motivoBloqueoEnvio } from "../src/lib/correcciones.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
 
 let pass = 0,
@@ -1528,6 +1528,20 @@ console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo e
   ok("lead: basta con UN cambio esperando", clienteEscribioUltimo([r("a", 1, "equipo"), r("b", 1, "equipo"), r("b", 2, "cliente")]));
   ok("lead: lo interno del equipo no lo apaga", clienteEscribioUltimo([r("a", 1, "cliente"), { ...r("a", 2, "x"), deCliente: false, paraCliente: false }]));
   ok("lead: empate exacto cuenta como del cliente", clienteEscribioUltimo([r("a", 1, "equipo"), r("a", 1, "cliente")]));
+  // Enviar la pieza de vuelta: una conversación abierta la bloquea (Pedro 2026-10-27).
+  {
+    const cam = (id, estado, ...rs) => ({ id, estado, respuestas: rs.map(([min, q]) => ({ ...r(id, min, q), id: id + min, body: "", autor: null })) });
+    const sinHilo = cam("a", "open");
+    const esperaCli = cam("b", "open", [1, "equipo"]);
+    const contesto = cam("c", "open", [1, "equipo"], [2, "cliente"]);
+    const cerrado = cam("d", "closed", [1, "equipo"]);
+    eq("pieza: sin conversación → libre", JSON.stringify(bloqueoEnvioPieza([sinHilo])), JSON.stringify({ esperaCliente: 0, porDecidir: 0 }));
+    eq("pieza: el equipo contestó al último → espera al cliente", bloqueoEnvioPieza([sinHilo, esperaCli]).esperaCliente, 1);
+    eq("pieza: el cliente contestó → el lead decide", bloqueoEnvioPieza([contesto]).porDecidir, 1);
+    eq("pieza: un cambio ya cerrado no bloquea", JSON.stringify(bloqueoEnvioPieza([cerrado])), JSON.stringify({ esperaCliente: 0, porDecidir: 0 }));
+    ok("pieza: libre → sin motivo", motivoBloqueoEnvio({ esperaCliente: 0, porDecidir: 0 }) === null);
+    ok("pieza: el motivo nombra lo que espera", (motivoBloqueoEnvio({ esperaCliente: 1, porDecidir: 0 }) ?? "").includes("1 cambio espera respuesta del cliente"));
+  }
   eq("etiqueta en cambios con respuesta", estadoCliente("in_corrections", false, true).label, "Te respondieron");
   eq("en cambios sin respuesta sigue igual", estadoCliente("in_corrections", false).label, "En cambios");
   eq("aprobada no cambia aunque haya respuesta vieja", estadoCliente("delivered", false, true).label, "Aprobado");

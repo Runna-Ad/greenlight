@@ -175,7 +175,7 @@ export function HiloRespuestas({
           </p>
           <div className="mt-1 flex items-center gap-1.5">
             <BtnAccion disabled={enviando || !texto.trim()} tone="primary" onClick={() => void enviar()}>
-              {enviando ? "Enviando…" : alCliente && !vistaCliente ? "Enviar al cliente" : "Enviar"}
+              {enviando ? "Enviando…" : alCliente && !vistaCliente ? "Responder al cliente" : "Enviar"}
             </BtnAccion>
             <BtnAccion disabled={enviando} onClick={cerrar}>
               Cancelar
