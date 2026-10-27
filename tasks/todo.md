@@ -1338,6 +1338,142 @@ largo: estacionado por él.
         algunos ayudantes repetidos entre renglones.ts y cambios-texto.ts.
       - Necesita la tipografía del cliente cargada en «Texto nítido»; sin ella todo sale como antes y el editor dice
         por qué. El build de Vercel del preview: no revisado.
+- [~] B28. Imagen plana → piezas movibles y textos editables con la tipografía del cliente (Pedro, 2026-10-27: "is
+      there a way we can trace the elements and separate them so we are able to move them delete if needed or using
+      didi fonts change texts"; eligió la opción 1: "Go with option 1. Run the Gemini reading test on the DiDi Card
+      image first."). Plan: la IA LEE (caja, rol y letras de cada elemento) y NUESTRO código corta, rellena el hueco y
+      reescribe el texto con la tipografía del cliente → el mismo `MaestroPsd` (fondo limpio + piezas) que da la puerta
+      PSD, así editor, cambios de texto, medidas y PSD funcionan sin cambios. Pantalla de revisión para corregir cajas
+      (= trazar a mano, la opción 3, como respaldo). Descartada la opción 2 (la IA de imagen redibuja con
+      instrucciones): no usa la tipografía y puede errar números. Lo que no se pueda reescribir igual (degradado,
+      contorno, texto sobre foto) queda como imagen movible, con aviso.
+      · Prueba de lectura (scratchpad `plano-prueba/leer-plano.mjs` + `medir-plano.mjs`; anuncio DiDi Card × iPhone 18,
+        1200×1500, fondo casi liso): gemini-3.8-flash, 2 corridas, 8 s y 18 s, < 1 ¢ cada una (tokens 1523/936 y
+        1535/1135 + 1330 pensando; el precio exacto de 3.8 Flash no se revisó). La llave la pegó Pedro en la terminal
+        (`read -s`); no está en la shell de Claude y `.env.local` está bloqueado.
+        - Encontró los 14-15 elementos (la 2.ª separó el ícono de DiDi Finanzas de las tiendas). Cajas a 0-4 px de la
+          tinta real; entre corridas se mueven ≤ 4 px (el teléfono 17 px: con o sin reflejo).
+        - Letras: la 1.ª no las mandó (campo opcional); con `responseSchema` que las exige, las 7 exactas, legal
+          incluido (2 renglones, acentos, %, comas).
+        - No sirve para el peso (la 2.ª dijo "bold" a todo) ni para el color (#f04e17 vs #fc4c02 real; #2c0902 vs
+          #38161d) → salen de los píxeles. La sombra suave de la tarjeta (≈25 px abajo) quedó FUERA de la caja en las 2
+          → crecer cada caja desde los píxeles.
+      · Tipografía para el laboratorio: `~/Desktop/formatos-prueba/DiDi Sans Pro/DiDiSansVariableVF/DiDiSansVariableVF.ttf`.
+      · Laboratorio (Pedro, 2026-10-27: "Yes, build the lab test of the three edits on the DiDi Card ad."): corre en el
+        navegador (el mismo canvas que la app; en el repo no hay librería de tipografías para Node), servidor local
+        127.0.0.1:4787. Copia durable: `~/Desktop/formatos-prueba/b28-imagen-plana/` (lab/, resultados/, scripts de
+        lectura). Sin IA: todo local.
+        - Texto: alfa por "desmezcla" (color de la tinta sobre el fondo, y 0 si el color no está en esa recta) → orilla
+          al 50 % → tamaño por el alto, espaciado por el ancho, lugar con ±0.5 px. El PESO se elige por la tinta (grosor),
+          no por el IoU. Resultado: renglones oscuros = DiDi Sans Pro Medium, naranjas y precio = Bold, pagos y legal =
+          Regular. IoU (lo sólido que coincide): 3 MSI 0.88 · DiDi Card 0.78 · precio 0.74 · Tu nuevo 0.74 · con tus
+          cupones 0.70 · pagos 0.64 · legal 0.27-0.33. Helvetica como control: más baja en todos los grandes (0.31-0.74)
+          → la letra del anuncio sí es DiDi Sans. La diferencia ×4 sólo marca las orillas de las letras.
+        - Fondo: plano inclinado ajustado al anillo LIMPIO (16 px alrededor) + el grano del anillo; se borra la tinta
+          + 10 px (las letras traen un halo suave), sin meterse en otro elemento que se queda. Brillo medio del hueco
+          253.8 vs 254.0 del fondo de al lado: no se ve; con contraste ×10 se nota un rectángulo un poco más granoso.
+        - Las 3 ediciones salen limpias (a-ediciones.png) y una versión con el bloque que queda centrado en el hueco,
+          moviendo "Tu nuevo…" con SUS píxeles 69 px (b-ediciones-movido.png).
+        - Límites vistos: (1) texto sobre una forma con sombreado (precio sobre la pastilla): el relleno plano deja un
+          rectángulo tenue y tocó la orilla de abajo de la pastilla → rellenar sólo dentro de lo sólido de la forma, o
+          redibujar la forma; (2) el legal (letra de ~9 px) no se puede confirmar con IoU (Helvetica sacó 0.35-0.42);
+          (3) la alineación (centrada / izquierda) la puse a mano: la app la tiene que deducir o preguntar; (4) fondo de
+          FOTO no probado (éste es liso) → ahí va la IA (~US$0.04); (5) sombras de objetos (la tarjeta) sin tocar: en el
+          lab sólo se movió texto.
+      **Pedro (2026-10-27): "Option 1: build B28 in the app, plain backgrounds first."** Plan de construcción:
+      Diseño (mapa de la puerta PSD hecho por un agente, 2026-10-27): una imagen plana sale como el MISMO maestro que un
+      PSD: UNA pieza por rol (el acomodo busca la pieza por rol, `acomodo.ts:581`, como las 7 carpetas de la guía), cada
+      elemento leído es una PARTE de su pieza (`PartePsd`, igual que las subcarpetas), y un texto sobre una forma
+      ("sobre") va en la parte de la forma. Cada texto es un `TextoPieza` con un `TextoCapa` de UN tramo (fuente
+      PostScript de la biblioteca del cliente, tamaño, track, color, alineación, transform) y su tinta original
+      (`caja` + `alfa`); `base` = la pieza sin sus letras. Así la "prueba contra Photoshop" de la página (`probar` →
+      `compararAlfa`, escritura.ts) decide sola qué texto se puede reescribir: lo que no pase va como imagen, con su
+      motivo. Nada de lo de después cambia; el PSD por medida cae al de capas planas (no hay original).
+      - [x] 1. Lectura en el servidor: `POST /api/prisma/formatos/leer` (mismo gate, freno 20/10 min, PRISMA_FORMATOS_IA)
+            → `lector()` en proveedor.ts (gemini-3.8-flash con `responseSchema`; precio de listas de terceros) →
+            `limpiarLectura` (plano.ts: cajas a px, roles y tipos conocidos, letras limpias, «sobre» por id). Pruebas.
+      - [x] 2. Píxeles (puro, plano.ts): ajustar cada caja a su tinta (+ sombra suave), color de fondo y de tinta,
+            alfa de los textos por desmezcla y de imágenes/formas por diferencia con el fondo, fondo limpio (plano
+            inclinado + grano, tinta + 10 px sin pisar a los vecinos), "fondo no liso" → aviso y parar (foto = después),
+            piezas por rol con sus partes, `base` sin letras. Pruebas con imágenes sintéticas.
+      - [x] 3. Texto contra la biblioteca (página, canvas): con `maquetar` + el medidor de la página, buscar fuente del
+            cliente (peso por la tinta), tamaño (alto al 50 %), track (ancho) y lugar; arma el `TextoCapa`. La prueba de
+            la página decide. Alineación: centrada si su centro cae a ≤ 2 % del centro de la mesa o de lo que tiene
+            debajo; si no, izquierda. Pruebas con un medidor falso.
+      - [x] 4. Página: la puerta PSD acepta PNG/JPG/WebP; reduce a 1600 px, lee, pantalla de revisión (cajas sobre la
+            imagen, lista con rol, tipo y letras editables, quitar un elemento), y sigue al flujo de siempre. Nombre sin
+            extensión; aviso propio en el PSD por medida.
+            · Probado en localhost (2026-10-27) con la lectura guardada de Gemini en lugar de la ruta (en este navegador
+              no hay sesión: la ruta da 401 «Inicia sesión», y la pantalla lo dice bien). Revisión: 15 elementos, 7
+              textos; DiDi Sans en 6 (3 MSI Bold 12 % · DiDi Card Bold 26 % · Tu nuevo Medium 25 % · cupones Medium 37 %
+              · precio Bold 31 % · pagos Regular 55 %), el legal de ~9 px como imagen (96 %). Continuar → 12 medidas.
+              Editor 1080×1920: «12 MSI», quitar las dos líneas de cupones, «12 pagos de $3,999» → se ven en DiDi Sans;
+              al guardar, «Texto cambiado en las 12 medidas» y la tarjeta «Editada a mano · Listo».
+            · Arreglos de esta prueba: (a) la prueba sólo corría el texto a píxeles enteros; ahora las 3 tipografías
+              que mejor empatan se prueban corridas a cuartos de píxel (como el laboratorio): el precio pasó de Medium
+              a Bold (31 %). (b) `TEXTO_DIF_MAX_PLANO` 0.55 → 0.65: «3 pagos de…» con su DiDi Sans daba 0.551 y lado a
+              lado se ve igual (la letra original es más gruesa y borrosa); el legal queda en 0.96. (c) Sin cliente, la
+              revisión decía «todos van como imagen» aunque las tipografías que recuerda el navegador sí se prueban.
+            · Pendiente fuera de B28: «Quitar» un texto es por medida (como en un PSD); para quitarlo en todas hay que
+              repetirlo o usar «aplicar también a». (Arreglado en el reap: los textos del editor que decían «del PSD»
+              ahora dicen «original», que sirve para las dos entradas.)
+      - [x] 4b. PSD por medida de una imagen plana: hoy cae al de capas planas (texto como imagen). Por la regla de Pedro
+            del 2026-10-19 (lo editable sigue editable en el PSD que se baja), los textos reescritos van como capas de
+            texto vivo con su tipografía; lo demás, una capa por parte.
+            · Hecho (2026-10-27): `textosVivos` (escritura.ts, comparte `listosDelDibujo` con `textoEscrito`) da cada
+              texto con su tinta y su `TextoCapa` en px de la medida; `capasDeMedida` (nitido.ts) con `vivos` pone la
+              base sin letras y los textos aparte (los quitados en esta medida, apagados, como el PSD editable);
+              `psdDeMedida` los escribe como capas de texto (`textoDePsd`: tipografía, tamaño, color, track,
+              interlineado, mayúsculas, alineación, caja) y no escribe la base vacía de un texto suelto. La página abre
+              cada pieza en sus partes (una capa por elemento) y escribe con `invalidateTextLayers`.
+            · Probado: el PSD de 1080×1920 del anuncio editado (capturado en la página, sin bajarlo) trae BACKGROUND +
+              5 carpetas, cada elemento en su capa, «12 MSI» Bold, «12 pagos de $3,999» Regular, el precio Bold y
+              «Tu nuevo…» Medium como texto vivo, y las dos líneas quitadas como texto apagado; sus capas visibles
+              sobre blanco = la tarjeta. Aviso: «PSD de 1080×1920 listo… elige «Actualizar»». Sin probar: abrirlo en
+              Photoshop (no hay Photoshop aquí).
+      - [~] 5. Revisión (reap) + navegador en la preview con el anuncio DiDi Card: las 3 ediciones de Pedro hechas con
+            el editor de siempre.
+            · Reap 2026-10-27 (3 revisores en paralelo: salud y rendimiento, seguridad, accesibilidad y UI). Arreglado:
+              seguridad (la ruta decodifica ≤ 2048 px por lado y revisa el peso del archivo; la llamada a Gemini con
+              `maxOutputTokens` 12k, `maxItems` 60, corte si llega al tope, y se cancela si la persona cancela; sin
+              `modelo` en la respuesta; letras sin caracteres invisibles ni de dirección; freno a
+              `tipografiasDelCliente`); datos (un elemento sobre otro que va sobre otro ya no se pierde, los círculos
+              de «sobre» se rompen; la prueba de tipografías y la nueva medida no dejan la pantalla colgada si fallan;
+              tope de 16 MP y el de 600 MB del maestro); pantalla (un solo selector de cliente; «Continuar» justo
+              después de corregir letras espera y sigue solo; foco al título al aparecer y a la fila siguiente al
+              quitar, con aviso hablado; cada fila con su número para lector de pantalla; colores de rol a 4.5:1;
+              avisos de la medida con números de la lista; costo como estimado; imagen con alto tope; la frase de
+              arriba ya no dice «no se sube a ningún lado» para una imagen plana); textos del editor dicen «original».
+              Prueba fina de tipografía: 8 corrimientos, no 24 (mismos resultados; la revisión 1.4 s, antes 1.8 s).
+            · Sin arreglar (anotado): medir y probar siguen en el hilo de la página (un worker sería lo siguiente si
+              una imagen grande se traba); la imagen se decodifica antes de revisar su tamaño (sólo afecta la pestaña
+              de quien la sube); sin botón de «agregar tipografías» en la revisión (soltar archivos sí funciona); sin
+              tope diario en la base para la IA (el PENDIENTE de la ruta, antes de producción); tope 0.65 deja pasar
+              una tipografía parecida pero no la misma (la revisión enseña el %).
+            · Preguntas para Pedro: ¿las tipografías «exclusivas» de un cliente son un límite de licencia (hoy
+              cualquier rol de Prisma las baja de cualquier cliente activo, igual que con un PSD)? ¿La llave de Gemini
+              está en un proyecto de Google con facturación (en la gratuita Google puede usar las imágenes)?
+            · Sin probar: la ruta de lectura de verdad (en este navegador no hay sesión) y abrir el PSD en Photoshop.
+      · Hecho 1-3 (2026-10-27, sin commit): `leer/route.ts` + `lector()` + `limpiarLectura`; `medirPlano` (figura = lo
+        que el fondo no alcanza dentro de su caja + lo fuerte pegado; sombra = lo que oscurece, del elemento más
+        cercano; fondo = plano + grano por hueco conectado; "no liso" si el anillo se aleja > 6 niveles) y
+        `maestroDePlano` (una pieza por rol, partes, la pastilla sin letras como base); `capaDeTexto` +
+        `alineacionDe` (puro) y `ajustarTextosPlano` en escritura.ts (prueba cada tipografía con la MISMA comparación
+        que un PSD: `compararCon` + `pasa`); acción `tipografiasDelCliente` (todas las del cliente elegido).
+        Con el anuncio DiDi Card en Node: medir 336 ms, maestro 85 ms, 5 piezas (HERO 2 partes, BRAND 3, TITULO 4,
+        CTA 2, FOOTER 3), 26 MB; fondo + piezas en su lugar vs el original: 0.32 niveles de diferencia media, 0.9 % de
+        píxeles > 12 (orillas de letras). Queda en el fondo un reflejo muy tenue bajo los teléfonos (más de 60 px).
+      · Tope de la prueba para textos de imagen plana: con el de un PSD (0.30) sólo pasaban "3 MSI" y "DiDi Card".
+        Medido con la cuenta de la app (laboratorio, 2026-10-27), mejor DiDi Sans vs mejor Helvetica: 3 MSI 0.13/0.36 ·
+        DiDi Card 0.25/0.32 · Tu nuevo 0.29/0.42 · precio 0.30/0.81 · con tus cupones 0.38/0.47 · pagos 0.50/0.61 ·
+        legal 0.92-1.07/0.83-0.93. → `TEXTO_DIF_MAX_PLANO` = 0.55 en su `TextoPieza.difMax` (la prueba de la página lo
+        usa); el legal de ~9 px va como imagen. Sin probar en la app: su cuenta usa corrimientos enteros (el
+        laboratorio, de 0.25 px), así que puede salir un poco más alto.
+      **Verificación:** test-formatos verde con las pruebas nuevas · tsc y eslint limpios · build · en la preview: subir
+      didi-card.webp → 15 elementos en la revisión → tarjetas por medida → en el editor "3 MSI" → "12 MSI" y "12 pagos de
+      $3,999", quitar "con tus cupones de DiDi Card" → PNG. Sin migración ni deploy a producción.
+      **Next Step:** cuando Pedro diga, commit en `prisma` (rutas explícitas) y push para la preview; ahí, con su sesión
+      y PRISMA_FORMATOS_IA + GEMINI_API_KEY en el entorno de preview de Vercel, subir didi-card.webp de verdad.
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
 - iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los
   pendientes de iPad de B19 (caché de 4 fondos, táctil real, zoom de Safari) quedan fuera.

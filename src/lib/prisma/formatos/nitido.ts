@@ -11,6 +11,7 @@
 import { dibujosDe, sinSusLetras, type Acomodo, type Dibujo } from "./acomodo.ts";
 import { haloDe } from "./halo.ts";
 import type { Caja, Rol } from "./psd.ts";
+import type { TextoCapa } from "./textos.ts";
 
 /** Lo que hace falta de un maestro para pintarlo: los mismos arreglos que manda el worker (RGBA). */
 export type MaestroDatos = {
@@ -30,6 +31,12 @@ export type Lugar = { k: number; ox: number; oy: number; x0: number; y0: number;
  *  del rectángulo de `Lugar`, o null si va con su texto como imagen. `sin`: los textos de la pieza (índices en
  *  `pieza.textos`) que no se escriben (quitados en esta medida). */
 export type TextoEscrito = (pieza: number, lugar: Lugar, parte: number | null, sin?: readonly number[]) => Float32Array | null;
+/** Un texto vuelto a escribir como capa de texto VIVO (el PSD por medida de una imagen plana, B28): su tinta en el
+ *  rectángulo de `Lugar` (RGBA premultiplicado, lo que se ve hasta que Photoshop lo vuelva a dibujar) y su `TextoCapa`
+ *  con el `transform` ya en px de la medida. `oculto`: se quitó en esta medida (va, apagado, como en el PSD editable). */
+export type TextoVivo = { nombre: string; px: Float32Array; texto: TextoCapa; oculto: boolean };
+/** Como `TextoEscrito`, pero un texto por capa: null = el dibujo va con sus letras como imagen. */
+export type TextosVivos = (pieza: number, lugar: Lugar, parte: number | null, sin?: readonly number[]) => TextoVivo[] | null;
 
 /** Bajo esta escala, a las piezas de texto se les aplica el enfoque (a su tamaño o casi, no hace falta). */
 export const ENFOQUE_DESDE = 0.75;
@@ -251,7 +258,7 @@ export function armarMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, 
 export type CapaSalida = { x: number; y: number; w: number; h: number; rgba: Uint8ClampedArray };
 /** Las capas de una pieza puesta (o de una de sus partes, si se abrió), de abajo hacia arriba: sombra de contraste,
  *  sombras del PSD (las dos en "multiplicar") y la pieza. */
-export type CapasPieza = { pieza: number; parte: number | null; halo: CapaSalida | null; sombra: CapaSalida | null; color: CapaSalida };
+export type CapasPieza = { pieza: number; parte: number | null; halo: CapaSalida | null; sombra: CapaSalida | null; color: CapaSalida; textos?: { nombre: string; capa: CapaSalida; texto: TextoCapa; oculto: boolean }[] };
 
 /** Premultiplicado (0-255) → RGBA normal. Sirve también para los mapas de sombra: "fuera" de su caja los deja
  *  mezclados con 0, que es lo mismo que premultiplicados por su cobertura (ver `oscurecer`). */
@@ -264,6 +271,23 @@ export function aCapa(f: Float32Array, x: number, y: number, w: number, h: numbe
     rgba[i * 4 + 3] = Math.round(a);
   }
   return { x, y, w, h, rgba };
+}
+
+/** Una capa recortada a lo que tiene pintado (un texto ocupa una tira de su pieza). Vacía → 1 × 1 transparente. */
+function recortada(c: CapaSalida): CapaSalida {
+  let x0 = c.w, y0 = c.h, x1 = -1, y1 = -1;
+  for (let y = 0; y < c.h; y++)
+    for (let x = 0; x < c.w; x++)
+      if (c.rgba[(y * c.w + x) * 4 + 3]) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+  if (x1 < 0) return { x: c.x, y: c.y, w: 1, h: 1, rgba: new Uint8ClampedArray(4) };
+  const w = x1 - x0 + 1, h = y1 - y0 + 1, rgba = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) rgba.set(c.rgba.subarray(((y0 + y) * c.w + x0) * 4, ((y0 + y) * c.w + x1 + 1) * 4), y * w * 4);
+  return { x: c.x + x0, y: c.y + y0, w, h, rgba };
 }
 
 /** La sombra de contraste de una pieza puesta (`halo.ts`) como capas de la medida, en "multiplicar": una, o una por
@@ -287,7 +311,7 @@ function haloDeDibujo(ma: MaestroDatos, q: Dibujo<PiezaDatos>, pq: Acomodo["pues
  * "multiplicar") sale la misma imagen; la diferencia: el texto vuelto a escribir se mezcla normal dentro de su pieza,
  * no con la gamma de Photoshop sobre lo de abajo.
  */
-export function capasDeMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, op: { enfoque?: boolean; texto?: TextoEscrito } = {}): { fondo: CapaSalida; piezas: CapasPieza[] } {
+export function capasDeMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number, op: { enfoque?: boolean; texto?: TextoEscrito; vivos?: TextosVivos } = {}): { fondo: CapaSalida; piezas: CapasPieza[] } {
   const f = a.fondo;
   const fx0 = Math.floor(f.x), fy0 = Math.floor(f.y), fx1 = Math.ceil(f.x + ma.w * f.k), fy1 = Math.ceil(f.y + ma.h * f.k);
   const fondo = aCapa(remuestrear(ma.fondo, ma.w, ma.h, f.k, f.x, f.y, fx0, fy0, fx1, fy1, "extender", false), fx0, fy0, fx1 - fx0, fy1 - fy0);
@@ -306,9 +330,13 @@ export function capasDeMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number
     // Igual que `armarMedida`: con texto vuelto a escribir va la base y las letras nuevas encima (aquí, dentro de la
     // misma capa); si no, la pieza con su enfoque.
     const { soloBase, escribir } = conTexto(p, ma.piezas[pq.pieza], pq.sinTexto, q.k);
-    const escrito = escribir ? (op.texto?.(pq.pieza, { k: q.k, ox, oy, x0, y0, x1, y1 }, q.parte, pq.sinTexto) ?? null) : null;
-    const col = remuestrear((escrito || soloBase) && p.base ? p.base : p.rgba, p.caja.w, p.caja.h, q.k, ox, oy, x0, y0, x1, y1, "fuera", true);
-    if (!escrito && op.enfoque !== false && q.k < ENFOQUE_DESDE && DE_TEXTO.has(rol)) enfocar(col, w, alto, ENFOQUE);
+    const lugar = { k: q.k, ox, oy, x0, y0, x1, y1 };
+    // Con `vivos` (un PSD de imagen plana) cada texto escrito va en su propia capa de texto, a cualquier escala (los
+    // quitados en esta medida, apagados), y el dibujo lleva su base sin letras.
+    const vivos = op.vivos && p.base && p.textos?.length ? op.vivos(pq.pieza, lugar, q.parte, pq.sinTexto) : null;
+    const escrito = !vivos && escribir ? (op.texto?.(pq.pieza, lugar, q.parte, pq.sinTexto) ?? null) : null;
+    const col = remuestrear((vivos || escrito || soloBase) && p.base ? p.base : p.rgba, p.caja.w, p.caja.h, q.k, ox, oy, x0, y0, x1, y1, "fuera", true);
+    if (!vivos && !escrito && op.enfoque !== false && q.k < ENFOQUE_DESDE && DE_TEXTO.has(rol)) enfocar(col, w, alto, ENFOQUE);
     if (escrito)
       for (let i = 0; i < w * alto; i++) {
         const e = escrito[i * 4 + 3] / 255;
@@ -320,6 +348,7 @@ export function capasDeMedida(ma: MaestroDatos, a: Acomodo, W: number, H: number
       halo: sombras.has(pq.pieza) ? haloDeDibujo(ma, q, pq) : null,
       sombra: s ? aCapa(s.v, s.x0, s.y0, s.x1 - s.x0, s.y1 - s.y0) : null,
       color: aCapa(col, x0, y0, w, alto),
+      ...(vivos ? { textos: vivos.map((v) => ({ nombre: v.nombre, capa: recortada(aCapa(v.px, x0, y0, w, alto)), texto: v.texto, oculto: v.oculto })) } : {}),
     };
   }));
   return { fondo, piezas };

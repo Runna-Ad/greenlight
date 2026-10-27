@@ -15,10 +15,10 @@ import { MATRIZ, baseAEscala } from "../src/lib/prisma/formatos/tabla-matriz.ts"
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, capasDeMedida, halosEnMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
-import { psdDeMedida, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prisma/formatos/psd-salida.ts";
+import { psdDeMedida, textoDePsd, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prisma/formatos/psd-salida.ts";
 import { readPsd as readPsdAg, getLayerImageData, getLayerMaskImageData, getLayerRealMaskImageData } from "ag-psd";
 import { planDeMedida, psdEditable, retoqueDeFondo, TopeEditable, CAPA_RETOQUE, CAPA_COLOR_MESA } from "../src/lib/prisma/formatos/psd-editable.ts";
-import { textoDe, maquetar, fuentesDe, compararAlfa, textoCambiado, porQueNoSeCambia, cajaQueCabe, limpiarTexto, TEXTO_CAMBIADO_MAX } from "../src/lib/prisma/formatos/textos.ts";
+import { textoDe, maquetar, fuentesDe, compararAlfa, textoCambiado, porQueNoSeCambia, cajaQueCabe, limpiarTexto, TEXTO_CAMBIADO_MAX, TEXTO_DIF_MAX_PLANO } from "../src/lib/prisma/formatos/textos.ts";
 import { cambiarTextos, claveTexto, marcarSinEscribir, NO_SE_ESCRIBIO } from "../src/lib/prisma/formatos/cambios-texto.ts";
 import { conRenglones, legalParaRenglones } from "../src/lib/prisma/formatos/renglones.ts";
 import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, elegirParaCliente, exclusivasDeOtros, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIA_GOOGLE_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
@@ -35,6 +35,7 @@ import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
 import { specVacio } from "../src/lib/prisma/spec.ts";
 import { unzipSync } from "fflate";
 import { zipPorPartes, zipsEnPartes, rutaLibre, CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES } from "../src/lib/prisma/formatos/zip.ts";
+import { limpiarLectura, medirPlano, maestroDePlano, capaDeTexto, alineacionDe, ELEMENTOS_MAX, TEXTO_LEIDO_MAX } from "../src/lib/prisma/formatos/plano.ts";
 
 let pass = 0,
   fail = 0;
@@ -2860,6 +2861,176 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   const nota876 = (op) => acomodar(M45, 876, 324, op).avisos.find(esNota)?.texto ?? "";
   ok("876×324: la nota dice el orden de aquí, también con el HERO volteado; otra medida ancha (970×250) no la lleva", /aquí va texto y botón · beneficios · HERO/.test(nota876()) && /aquí va HERO · beneficios · texto y botón/.test(nota876({ heroLado: "izquierda" })) && !acomodar(M45, 970, 250).avisos.some(esNota));
   ok("876×324: avisa que sigue el script y no la matriz; editada a mano, el aviso se va", a876.avisos.some((v) => v.tipo === "matriz") && !aplicarEdicion(M45, a876, { piezas: { [M45.piezas.findIndex((p) => p.rol === "CTA")]: { x: 10, y: 10, k: 0.3 } } }, 876, 324).avisos.some((v) => v.tipo === "matriz"));
+}
+
+
+// ── B28: imagen plana — limpiar la lectura de la IA (dato de afuera) ──
+{
+  const leida = [
+    { label: "headline_msi", rol: "TITULO", tipo: "texto", box_2d: [214, 304, 306, 694], texto: "3 MSI" },
+    { label: "price_pill", rol: "CTA", tipo: "forma", box_2d: [454, 560, 509, 955], texto: "" },
+    { label: "price_text", rol: "CTA", tipo: "texto", box_2d: [461, 592, 501, 925], texto: "$47,999 m.n.", sobre: "price_pill" },
+    { label: "Legal Text", rol: "FOOTER", tipo: "texto", box_2d: [876, 379, 901, 826], texto: "  Línea\u0007 uno \r\nTasa  de\tinterés\n\n" },
+    { label: "rara", rol: "JEFE", tipo: "video", box_2d: [0, 0, 100, 100], texto: "hola" },
+    { label: "vacia", rol: "HERO", tipo: "imagen", box_2d: [500, 500, 501, 501], texto: "" },
+    { label: "fuera", rol: "HERO", tipo: "imagen", box_2d: [-50, 900, 2000, 1400], texto: "" },
+    { label: "sin_letras", rol: "TITULO", tipo: "texto", box_2d: [10, 10, 50, 300], texto: "  " },
+    { label: "headline_msi", rol: "TITULO", tipo: "texto", box_2d: [313, 321, 344, 681], texto: "con tus cupones de", sobre: "nadie" },
+    { label: "lejos", rol: "CTA", tipo: "texto", box_2d: [100, 100, 120, 200], texto: "x", sobre: "price_pill" },
+    "basura", null, { box_2d: [1, 2, 3] }, { label: "nan", rol: "HERO", tipo: "imagen", box_2d: [0, 0, NaN, 10] },
+  ];
+  const L = limpiarLectura(leida, 1200, 1500) ?? [];
+  const de = (id) => L.find((e) => e.id === id);
+  ok("lectura: se queda con lo usable y descarta basura, cajas vacías y números rotos (9 de 14)", L.length === 9, L.map((e) => e.id).join(","));
+  ok("lectura: box_2d [ymin, xmin, ymax, xmax] de 0-1000 → px de la imagen, hacia afuera", JSON.stringify(de("headline_msi")?.caja) === JSON.stringify({ x0: 364, y0: 321, x1: 833, y1: 459 }), JSON.stringify(de("headline_msi")?.caja));
+  ok("lectura: una caja fuera de la imagen se recorta a la imagen", JSON.stringify(de("fuera")?.caja) === JSON.stringify({ x0: 1080, y0: 0, x1: 1200, y1: 1500 }), JSON.stringify(de("fuera")?.caja));
+  ok("lectura: «sobre» se traduce al id y sólo vale si el de abajo lo contiene", de("price_text")?.sobre === "price_pill" && de("lejos")?.sobre === null && de("headline_msi_2")?.sobre === null);
+  ok("lectura: las letras sin controles, el tabulador como espacio, sin espacios ni renglones vacíos de más", de("legal_text")?.texto === "Línea uno\nTasa de interés", JSON.stringify(de("legal_text")?.texto));
+  ok("lectura: rol o tipo desconocidos → OTRO / imagen (sin letras); un texto sin letras pasa a imagen", de("rara")?.rol === "OTRO" && de("rara")?.tipo === "imagen" && de("rara")?.texto === "" && de("sin_letras")?.tipo === "imagen");
+  ok("lectura: dos labels iguales no chocan (headline_msi, headline_msi_2)", !!de("headline_msi") && de("headline_msi_2")?.texto === "con tus cupones de");
+  ok("lectura: no-lista, lista vacía o medidas inválidas → null", [limpiarLectura("no", 10, 10), limpiarLectura([], 10, 10), limpiarLectura(leida, 0, 10)].every((x) => x === null));
+  const caja = (x0, y0, x1, y1) => [y0, x0, y1, x1];
+  const ciclo = limpiarLectura([
+    { label: "grande", rol: "CTA", tipo: "forma", box_2d: caja(100, 100, 500, 300), texto: "", sobre: "chica" },
+    { label: "chica", rol: "CTA", tipo: "forma", box_2d: caja(101, 101, 499, 299), texto: "", sobre: "grande" },
+    { label: "tarjeta", rol: "HERO", tipo: "imagen", box_2d: caja(600, 100, 900, 600), texto: "", sobre: null },
+    { label: "pastilla", rol: "CTA", tipo: "forma", box_2d: caja(650, 150, 850, 300), texto: "", sobre: "tarjeta" },
+    { label: "precio", rol: "CTA", tipo: "texto", box_2d: caja(700, 180, 800, 280), texto: "$1,999", sobre: "pastilla" },
+  ], 1000, 1000) ?? [];
+  const sob = (id) => ciclo.find((e) => e.id === id)?.sobre;
+  ok("lectura: dos cajas casi iguales que se apuntan: la más grande queda de base; una cadena se queda", sob("grande") === null && sob("chica") === "grande" && sob("pastilla") === "tarjeta" && sob("precio") === "pastilla", JSON.stringify(ciclo.map((e) => [e.id, e.sobre])));
+  const raras = limpiarLectura([{ label: "p", rol: "CTA", tipo: "texto", box_2d: [0, 0, 500, 500], texto: "12\u200b pagos\u202e de\u0085 $3,999" }], 100, 100);
+  ok("lectura: sin caracteres invisibles (ancho cero, cambio de dirección, controles C1)", raras?.[0].texto === "12 pagos de $3,999", JSON.stringify(raras?.[0].texto));
+  const muchos = Array.from({ length: ELEMENTOS_MAX + 15 }, (_, i) => ({ label: `e${i}`, rol: "HERO", tipo: "texto", box_2d: [0, 0, 500, 500], texto: "y".repeat(TEXTO_LEIDO_MAX + 50) }));
+  const M = limpiarLectura(muchos, 100, 100) ?? [];
+  ok(`lectura: a lo sumo ${ELEMENTOS_MAX} elementos y ${TEXTO_LEIDO_MAX} letras por texto`, M.length === ELEMENTOS_MAX && M.every((e) => e.texto.length === TEXTO_LEIDO_MAX));
+  const real = join(homedir(), "Desktop/formatos-prueba/b28-imagen-plana/resultados/lectura-2.json");
+  if (existsSync(real)) {
+    const R = limpiarLectura(JSON.parse(readFileSync(real, "utf8")).elementos, 1200, 1500) ?? [];
+    ok("lectura real (DiDi Card, gemini-3.8-flash): 15 elementos, 7 textos con sus letras, el precio sobre la pastilla", R.length === 15 && R.filter((e) => e.tipo === "texto").length === 7 && R.find((e) => e.texto === "$47,999 m.n.")?.sobre === "price_pill", R.map((e) => `${e.id}:${e.tipo}`).join(" "));
+  }
+}
+
+
+// ── B28: imagen plana — medir en los píxeles, fondo limpio y el maestro (imagen sintética: el fondo real se conoce) ──
+{
+  const W = 400, H = 300;
+  const fondoReal = (x, y) => [240 + (10 * x) / W, 238 + (8 * y) / H, 235];
+  const rgba = new Uint8ClampedArray(W * H * 4);
+  const poner = (x, y, c, a = 1) => { const i = (y * W + x) * 4; for (let k = 0; k < 3; k++) rgba[i + k] = Math.round(a * c[k] + (1 - a) * rgba[i + k]); };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { poner(x, y, fondoReal(x, y)); rgba[(y * W + x) * 4 + 3] = 255; }
+  /** Un "renglón" de bloques con orilla suave (letras de mentira). */
+  const letras = (x0, y0, n, alto, color) => { for (let b = 0; b < n; b++) for (let y = y0; y < y0 + alto; y++) for (let x = x0 + b * 14; x < x0 + b * 14 + 10; x++) { const orilla = y === y0 || y === y0 + alto - 1 || x === x0 + b * 14 || x === x0 + b * 14 + 9; poner(x, y, color, orilla ? 0.5 : 1); } };
+  const TINTA = [40, 20, 30], NARANJA = [250, 80, 10];
+  letras(30, 40, 6, 20, TINTA);
+  letras(30, 70, 4, 20, TINTA);
+  // Un "teléfono": marco gris, cara casi blanca (casi del color del fondo) y una sombra suave abajo.
+  for (let y = 120; y < 261; y++) for (let x = 200; x < 301; x++) poner(x, y, x < 203 || x > 297 || y < 123 || y > 257 ? [150, 150, 155] : [250, 250, 250]);
+  for (let y = 261; y < 276; y++) for (let x = 200; x < 301; x++) { const f = 0.9 + (0.1 * (y - 261)) / 15, [r, g, b] = fondoReal(x, y); poner(x, y, [r * f, g * f, b * f]); }
+  // Una pastilla naranja con un texto blanco encima.
+  for (let y = 150; y < 191; y++) for (let x = 40; x < 181; x++) poner(x, y, NARANJA);
+  letras(62, 162, 7, 18, [255, 255, 255]);
+  const leidos = [
+    { id: "titulo", rol: "TITULO", tipo: "texto", caja: { x0: 29, y0: 39, x1: 116, y1: 91 }, texto: "ABCDEF\nABCD", sobre: null },
+    { id: "telefono", rol: "HERO", tipo: "imagen", caja: { x0: 199, y0: 119, x1: 302, y1: 262 }, texto: "", sobre: null },
+    { id: "pastilla", rol: "CTA", tipo: "forma", caja: { x0: 39, y0: 149, x1: 182, y1: 192 }, texto: "", sobre: null },
+    { id: "precio", rol: "CTA", tipo: "texto", caja: { x0: 61, y0: 161, x1: 159, y1: 181 }, texto: "$1,999", sobre: "pastilla" },
+  ];
+  const img = { w: W, h: H, rgba };
+  const r = medirPlano(img, leidos);
+  const de = (id) => r.elementos.find((e) => e.id === id);
+  ok("plano: fondo liso (un degradado) y los 4 elementos medidos", r.liso && r.elementos.length === 4, JSON.stringify(r.avisos));
+  const tt = de("titulo");
+  ok("plano: el texto sale con el color de su tinta, sus 2 renglones y su parte sólida (la orilla justo al 50 % no cuenta)", tt?.color?.every((v, k) => Math.abs(v - TINTA[k]) <= 3) && tt.renglones.length === 2 && tt.solido.x === 31 && tt.solido.y === 41 && tt.solido.w === 78 && tt.solido.h === 48, JSON.stringify({ c: tt?.color, r: tt?.renglones, s: tt?.solido }));
+  const tel = de("telefono"), cen = (tel.solido.h >> 1) * tel.pinta.w + (tel.solido.w >> 1) + (tel.solido.x - tel.pinta.x) + (tel.solido.y - tel.pinta.y) * tel.pinta.w;
+  // La sombra más oscura pegada a la figura y dentro de la caja de la IA cuenta como figura (sombra de contacto): hasta 3 px.
+  ok("plano: una figura casi del color del fondo es sólida por dentro (su marco la encierra)", tel.alfa[cen] === 255 && Math.abs(tel.solido.x - 200) <= 1 && Math.abs(tel.solido.w - 101) <= 2 && tel.solido.y === 120 && tel.solido.h >= 141 && tel.solido.h <= 144, JSON.stringify(tel.solido));
+  const somb = tel.oscurece && tel.oscurece[((265 - tel.pinta.y) * tel.pinta.w + (250 - tel.pinta.x)) * 3];
+  ok("plano: su sombra suave (fuera de la caja de la IA) va con ella como «oscurece», no como sólido", !!tel.oscurece && somb > 200 && somb < 245 && tel.solido.y + tel.solido.h <= 264, String(somb));
+  let peor = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const f = fondoReal(x, y); for (let k = 0; k < 3; k++) peor = Math.max(peor, Math.abs(r.fondo[(y * W + x) * 3 + k] - f[k])); }
+  ok("plano: el fondo limpio es el degradado de verdad (a ≤ 3 niveles en todos lados)", peor <= 3, `peor ${peor.toFixed(1)}`);
+  const ruido = new Uint8ClampedArray(rgba);
+  let s = 7;
+  for (let i = 0; i < ruido.length; i += 4) { s = (s * 1664525 + 1013904223) >>> 0; const n = ((s >>> 8) % 61) - 30; for (let k = 0; k < 3; k++) ruido[i + k] += n; }
+  ok("plano: con un fondo de textura no se dice que es liso", !medirPlano({ w: W, h: H, rgba: ruido }, leidos.slice(0, 1)).liso);
+
+  const capa = (texto) => ({ texto, tramos: [{ n: texto.length, fuente: "Prueba-Bold", tam: 20, color: [255, 255, 255], track: 0, interlineado: null, subir: 0, mayusculas: false }], alineacion: "center", transform: [1, 0, 0, 1, 110, 178], caja: null, motivo: null });
+  const ma = maestroDePlano("prueba", img, r.elementos, r.fondo, new Map([["precio", capa("$1,999")]]), r.avisos);
+  const pz = (rol) => ma.piezas.find((p) => p.rol === rol);
+  ok("maestro: una pieza por rol, en orden (HERO abajo), sin partes cuando la pieza es un solo elemento", ma.piezas.map((p) => p.rol).join(",") === "HERO,TITULO,CTA" && ma.piezas.every((p) => !p.partes));
+  const cta = pz("CTA"), en = (p, x, y, buf, n = 4) => buf[((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * n];
+  ok("maestro: el texto ajustado va como TextoPieza (con su tinta y el tope de imagen plana) y la base es la pastilla SIN sus letras", cta.textos.length === 1 && cta.textos[0].capa === "precio" && cta.textos[0].difMax === TEXTO_DIF_MAX_PLANO && cta.textos[0].alfa.length === cta.textos[0].caja.w * cta.textos[0].caja.h && en(cta, 66, 170, cta.base) >= 240 && en(cta, 66, 170, cta.rgba) >= 250 && cta.base[((170 - cta.caja.y) * cta.caja.w + 66 - cta.caja.x) * 4 + 1] < 120);
+  const tit = pz("TITULO");
+  ok("maestro: un texto sin tipografía ajustada va como píxeles en la base (no como TextoPieza)", tit.textos.length === 0 && en(tit, 35, 50, tit.base, 1) < 60 && tit.base[((50 - tit.caja.y) * tit.caja.w + 35 - tit.caja.x) * 4 + 3] === 255);
+  const re = new Float32Array(W * H * 3);
+  for (let k = 0; k < W * H * 3; k++) re[k] = ma.fondo[k];
+  for (const p of ma.piezas) for (let y = 0; y < p.caja.h; y++) for (let x = 0; x < p.caja.w; x++) {
+    const k = (p.caja.y + y) * W + p.caja.x + x, j = y * p.caja.w + x, a = p.rgba[j * 4 + 3] / 255;
+    for (let c = 0; c < 3; c++) { if (p.oscurece) re[k * 3 + c] *= p.oscurece[j * 3 + c] / 255; re[k * 3 + c] = a * p.rgba[j * 4 + c] + (1 - a) * re[k * 3 + c]; }
+  }
+  let suma = 0;
+  for (let k = 0; k < W * H; k++) for (let c = 0; c < 3; c++) suma += Math.abs(re[k * 3 + c] - rgba[k * 4 + c]);
+  ok("maestro: fondo limpio + cada pieza en su lugar = la imagen original (diferencia media < 1 nivel)", suma / (W * H * 3) < 1, (suma / (W * H * 3)).toFixed(2));
+  // Reap: un elemento sobre otro que va sobre otro (texto sobre pastilla sobre teléfono) no se pierde, y un círculo
+  // tampoco: cada uno queda en alguna parte.
+  const conSobre = (cambios) => r.elementos.map((e) => (e.id in cambios ? { ...e, sobre: cambios[e.id] } : e));
+  const cadena = maestroDePlano("cadena", img, conSobre({ pastilla: "telefono" }), r.fondo, new Map([["precio", capa("$1,999")]]), []);
+  ok("maestro: una cadena (precio sobre pastilla sobre teléfono) va entera en la parte del de abajo, con su texto", cadena.piezas.map((p) => p.rol).join(",") === "HERO,TITULO" && cadena.piezas[0].textos.map((t) => t.capa).join() === "precio", cadena.piezas.map((p) => `${p.rol}:${p.textos.map((t) => t.capa)}`).join(" "));
+  const circulo = maestroDePlano("circulo", img, conSobre({ pastilla: "telefono", telefono: "pastilla" }), r.fondo, new Map(), []);
+  ok("maestro: un círculo de «sobre» no borra a nadie (cada uno su parte)", circulo.piezas.map((p) => p.rol).join(",") === "HERO,TITULO,CTA", circulo.piezas.map((p) => p.rol).join(","));
+  const { maestro } = prepararMaestro(ma);
+  ok("maestro: pasa por prepararMaestro sin «origen» (su PSD por medida será el de capas planas)", maestro.origen === undefined && maestro.fondo.length === W * H * 4 && maestro.piezas.length === 3);
+
+  // 4b: su PSD por medida lleva el texto reescrito como capa de TEXTO VIVO sobre la pastilla sin letras.
+  const a1 = { familia: "cuadrado", fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [], puestas: maestro.piezas.map((p, i) => ({ pieza: i, k: 1, x: p.solido.x, y: p.solido.y, w: p.solido.w, h: p.solido.h })) };
+  const ic = maestro.piezas.findIndex((p) => p.rol === "CTA"), pedidos = [];
+  const tinta = (l) => { const w = l.x1 - l.x0, px = new Float32Array(w * (l.y1 - l.y0) * 4); for (let y = 10; y < 14; y++) for (let x = 20; x < 30; x++) px.set([255, 255, 255, 255], (y * w + x) * 4); return px; };
+  const vivos = (pieza, l, parte, sin) => { pedidos.push({ pieza, parte, sin }); return pieza === ic ? [{ nombre: "precio", px: tinta(l), texto: { ...capa("$1,999"), transform: [1, 0, 0, 1, 110, 178] } }] : null; };
+  const psdVivo = psdDeMedida(maestro, a1, W, H, { vivos });
+  const carpeta = (psd, rol) => psd.children.find((c) => c.name === maestro.piezas.find((p) => p.rol === rol).nombre);
+  const cv = carpeta(psdVivo, "CTA").children, capaCta = cv.find((l) => !l.text), capaTexto = cv.find((l) => l.text);
+  const enCapa = (l, x, y, c) => l.imageData.data[((y - l.top) * l.imageData.width + (x - l.left)) * 4 + c];
+  ok("PSD de imagen plana: sólo se piden textos vivos de lo que tiene textos (la pastilla), sin quitados", pedidos.length === 1 && pedidos[0].pieza === ic && pedidos[0].parte === null && !pedidos[0].sin, JSON.stringify(pedidos));
+  ok("PSD de imagen plana: la pastilla va SIN sus letras y encima su capa de texto, con la tinta recortada a lo pintado", cv.length === 2 && cv[1] === capaTexto && enCapa(capaCta, 66, 170, 1) < 120 && capaTexto.imageData.width === 10 && capaTexto.imageData.height === 4, `${cv.length} capas · G ${enCapa(capaCta, 66, 170, 1)} · ${capaTexto?.imageData.width}×${capaTexto?.imageData.height}`);
+  const tt2 = capaTexto.text;
+  ok("PSD de imagen plana: la capa de texto lleva letras, tipografía, tamaño, color, alineación y lugar (nombre = sus letras)", capaTexto.name === "$1,999" && tt2.text === "$1,999" && tt2.style.font.name === "Prueba-Bold" && tt2.style.fontSize === 20 && tt2.style.fillColor.r === 255 && tt2.style.autoLeading === true && tt2.paragraphStyle.justification === "center" && tt2.transform.join() === "1,0,0,1,110,178" && !tt2.boxBounds, JSON.stringify(tt2));
+  const apagado = carpeta(psdDeMedida(maestro, a1, W, H, { vivos: (pieza, l) => (pieza === ic ? [{ nombre: "precio", px: tinta(l), texto: capa("$1,999"), oculto: true }] : null) }), "CTA").children;
+  ok("PSD de imagen plana: un texto quitado en esta medida va como capa de texto apagada (como en el PSD editable)", apagado.length === 2 && apagado[1].text?.text === "$1,999" && apagado[1].hidden === true && !capaTexto.hidden);
+  const sinVivos = carpeta(psdDeMedida(maestro, a1, W, H, { vivos: () => null }), "CTA").children;
+  ok("PSD de imagen plana: si el texto no se escribe (null), la pastilla va con sus letras y sin capa de texto", sinVivos.length === 1 && !sinVivos[0].text && enCapa(sinVivos[0], 66, 170, 1) >= 250);
+  const vuelta = readPsdAg(writePsdBuffer(psdVivo, { noBackground: true, invalidateTextLayers: true }), { skipLayerImageData: true, skipCompositeImageData: true, skipThumbnail: true });
+  const tl = vuelta.children.flatMap((c) => c.children ?? []).find((l) => l.text);
+  ok("PSD de imagen plana: ag-psd lo escribe y lo vuelve a leer con su texto vivo", tl?.text.text === "$1,999" && tl.text.style?.font?.name === "Prueba-Bold" && tl.text.paragraphStyle?.justification === "center" && Math.round(tl.text.style?.fontSize) === 20, JSON.stringify(tl?.text?.style));
+  const dosTramos = textoDePsd({ ...capa("ABCdef"), tramos: [{ ...capa("ABC").tramos[0], n: 3, interlineado: 30 }, { ...capa("def").tramos[0], n: 3, fuente: "Prueba-Regular", mayusculas: true }], caja: [0, 0, 200, 40] });
+  ok("textoDePsd: un tramo por corrida, interlineado fijo, mayúsculas y caja de párrafo", dosTramos.styleRuns.map((r) => `${r.length}:${r.style.font.name}`).join() === "3:Prueba-Bold,3:Prueba-Regular" && dosTramos.styleRuns[0].style.leading === 30 && dosTramos.styleRuns[0].style.autoLeading === false && dosTramos.styleRuns[1].style.fontCaps === 2 && dosTramos.shapeType === "box" && dosTramos.boxBounds.join() === "0,0,200,40");
+}
+
+
+// ── B28: el texto contra una tipografía (medidor falso: letras de 0.6 eme, tinta 0.05 eme adentro, sube 0.7) ──
+{
+  const falsa = (texto, fuente, tam, track) => {
+    const n = [...texto].length, ls = (track * tam) / 1000, k = fuente === "Ancha" ? 2 : 0.6;
+    return { avance: n * k * tam + n * ls, izq: -0.05 * tam, der: n * k * tam + (n - 1) * ls - 0.05 * tam, sube: 0.7 * tam, baja: /[gjpqy]/.test(texto) ? 0.2 * tam : 0 };
+  };
+  const el = (texto, renglones) => ({ id: "t", rol: "TITULO", tipo: "texto", texto, sobre: null, pinta: renglones[0], solido: renglones[0], alfa: new Uint8ClampedArray(1), oscurece: null, debajo: [255, 255, 255], color: [10, 20, 30], renglones });
+  // "ABCDEFGH" a 40 px con track 50: tinta 8·24 + 7·2 − 4 = 202 de ancho, 28 de alto.
+  const uno = el("ABCDEFGH", [{ x: 100, y: 60, w: 202, h: 28 }]);
+  const c = capaDeTexto(uno, "Falsa", "center", falsa);
+  const tr = c?.tramos[0];
+  ok("texto plano: el tamaño sale del alto de la tinta y el track de su ancho", !!tr && Math.abs(tr.tam - 40) < 1e-9 && Math.abs(tr.track - 50) < 1e-9 && tr.n === 8 && tr.fuente === "Falsa" && tr.color.join() === "10,20,30", JSON.stringify(tr));
+  ok("texto plano: centrado, el origen es el centro del avance y la base, donde termina la tinta", c?.transform.join() === "1,0,0,1,202,88" && c.alineacion === "center" && c.caja === null && c.motivo === null, JSON.stringify(c?.transform));
+  ok("texto plano: a la izquierda, el origen es donde empieza la pluma", capaDeTexto(uno, "Falsa", "left", falsa)?.transform[4] === 98);
+  const dos = el("ABCD\nABCDEFGH", [{ x: 100, y: 60, w: 98, h: 28 }, { x: 100, y: 110, w: 202, h: 28 }]);
+  const c2 = capaDeTexto(dos, "Falsa", "left", falsa);
+  ok("texto plano: con 2 renglones, el tamaño sale del más ancho y el interlineado de sus bases", !!c2 && Math.abs(c2.tramos[0].tam - 40) < 1e-9 && Math.abs(c2.tramos[0].interlineado - 50) < 1e-9 && c2.transform[5] === 88, JSON.stringify(c2?.tramos[0]));
+  ok("texto plano: una tipografía que pediría un track absurdo no es ésa (null)", capaDeTexto(uno, "Ancha", "center", falsa) === null);
+  ok("texto plano: sin renglones que cuadren con las letras, null", capaDeTexto(el("A\nB", [{ x: 0, y: 0, w: 10, h: 10 }]), "Falsa", "left", falsa) === null);
+  const fig = (id, x, y, w, h) => ({ ...el("", []), id, tipo: "forma", solido: { x, y, w, h }, renglones: [] });
+  const solo = (x, w, y = 300) => ({ ...el("X", [{ x, y, w, h: 20 }]), solido: { x, y, w, h: 20 } });
+  ok("alineación: centrado si cae en el centro de la mesa", alineacionDe(solo(500, 200), 1200, []) === "center");
+  ok("alineación: centrado si cae en el centro de lo que tiene arriba (el precio bajo la pastilla)", alineacionDe(solo(700, 420, 300), 1200, [fig("pastilla", 671, 220, 473, 70)]) === "center" && alineacionDe(solo(700, 300, 300), 1200, [fig("pastilla", 671, 220, 473, 70)]) === "left");
+  ok("alineación: con varios renglones, la orilla que comparten", alineacionDe(el("A\nB", [{ x: 455, y: 0, w: 500, h: 10 }, { x: 455, y: 20, w: 420, h: 10 }]), 1200, []) === "left" && alineacionDe(el("A\nB", [{ x: 100, y: 0, w: 400, h: 10 }, { x: 150, y: 20, w: 300, h: 10 }]), 1200, []) === "center");
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

@@ -10,12 +10,13 @@
  */
 import type { Listo, Maquetar, Pintar } from "@/lib/prisma/formatos/cambios-texto";
 import type { MaestroListo, PiezaLista } from "@/lib/prisma/formatos/listo";
-import type { Lugar, TextoEscrito } from "@/lib/prisma/formatos/nitido";
+import type { Lugar, TextoEscrito, TextosVivos } from "@/lib/prisma/formatos/nitido";
 import type { TextoPieza } from "@/lib/prisma/formatos/psd";
 import { legalDelPsd } from "@/lib/prisma/formatos/legal";
 import { conRenglones, legalParaRenglones, type LegalRenglones, type SinRenglones } from "@/lib/prisma/formatos/renglones";
 import type { Renglonero } from "@/lib/prisma/formatos/revisar";
-import { TEXTO_ANCHO_TOL, TEXTO_CORRER_MAX, TEXTO_DIF_MAX, compararAlfa, fuentesDe, maquetar, type LineaTexto, type Medidor, type TramoTexto } from "@/lib/prisma/formatos/textos";
+import { TEXTO_ANCHO_TOL, TEXTO_CORRER_MAX, TEXTO_DIF_MAX, TEXTO_DIF_MAX_PLANO, compararAlfa, fuentesDe, maquetar, type LineaTexto, type Medidor, type TextoCapa, type TramoTexto } from "@/lib/prisma/formatos/textos";
+import { alineacionDe, capaDeTexto, type ElementoMedido, type MedirTinta } from "@/lib/prisma/formatos/plano";
 
 /** Una tipografía cargada: con qué familia se pide en el canvas y, si es variable, su peso (eje wght). */
 type Cargada = { familia: string; peso: number | null };
@@ -227,7 +228,8 @@ const OTRO_COMO_IMAGEN = "otro texto de la misma pieza va como imagen, así que 
  */
 const margenDe = (h: number) => Math.min(256, Math.max(8, Math.round(h / 2)));
 
-function probar(x: CanvasRenderingContext2D, lienzo: HTMLCanvasElement, tp: TextoPieza, t: Tipografias, medir: Medidor): Listo | string {
+/** Escribe el texto en negro con un margen alrededor de su tinta original y compara las dos (`compararAlfa`). */
+function compararCon(x: CanvasRenderingContext2D, lienzo: HTMLCanvasElement, tp: TextoPieza, t: Tipografias, medir: Medidor) {
   const lineas = maquetar(tp.texto, medir);
   const { w, h } = tp.caja, M = margenDe(h);
   const W = w + 2 * M, H = h + 2 * M;
@@ -238,10 +240,98 @@ function probar(x: CanvasRenderingContext2D, lienzo: HTMLCanvasElement, tp: Text
   const nuestro = new Uint8ClampedArray(W * H), ps = new Uint8ClampedArray(W * H);
   for (let i = 0; i < W * H; i++) nuestro[i] = px[i * 4 + 3];
   for (let y = 0; y < h; y++) ps.set(tp.alfa.subarray(y * w, y * w + w), (y + M) * W + M);
-  const c = compararAlfa(nuestro, ps, W, H);
-  if (c.dif > TEXTO_DIF_MAX || Math.abs(c.anchoRazon - 1) > TEXTO_ANCHO_TOL || Math.abs(c.dx) > TEXTO_CORRER_MAX || Math.abs(c.dy) > TEXTO_CORRER_MAX)
-    return `no coincide con Photoshop (${Math.round(c.dif * 100)} % distinto)`;
+  return { lineas, c: compararAlfa(nuestro, ps, W, H) };
+}
+const pasa = (c: ReturnType<typeof compararAlfa>, difMax = TEXTO_DIF_MAX) =>
+  c.dif <= difMax && Math.abs(c.anchoRazon - 1) <= TEXTO_ANCHO_TOL && Math.abs(c.dx) <= TEXTO_CORRER_MAX && Math.abs(c.dy) <= TEXTO_CORRER_MAX;
+
+function probar(x: CanvasRenderingContext2D, lienzo: HTMLCanvasElement, tp: TextoPieza, t: Tipografias, medir: Medidor): Listo | string {
+  const { lineas, c } = compararCon(x, lienzo, tp, t, medir);
+  if (!pasa(c, tp.difMax)) return `no coincide con ${tp.difMax === undefined ? "Photoshop" : "la imagen"} (${Math.round(c.dif * 100)} % distinto)`;
   return { tp, lineas, dx: c.dx, dy: c.dy };
+}
+
+// ── Imagen plana (B28): qué tipografía del cliente es la de cada texto ────
+
+/** Tipografías que se prueban por texto, a lo más (cada una escribe el texto y lo compara). */
+const FUENTES_PLANO_MAX = 80;
+/** Las que mejor empataron se vuelven a probar corridas a cuartos de píxel (24 pruebas más cada una). */
+const FUENTES_AFINAR = 3;
+const CORRER_FINO = [-0.5, -0.25, 0, 0.25, 0.5];
+/** Lo que se sabe de cada texto de una imagen plana: con qué tipografía empata mejor (`ok` = pasa la prueba) y cuánto
+ *  difiere de su tinta; `fuente` null = no había tipografías del cliente con qué probar. */
+export type NotaTextoPlano = { id: string; fuente: string | null; dif: number | null; ok: boolean };
+
+/**
+ * Para cada texto de una imagen plana, la tipografía cargada que mejor empata con su tinta y su `TextoCapa`
+ * (`capaDeTexto`), con la MISMA prueba que un texto de un PSD (`compararCon` + `pasa`) pero con su tope de imagen plana
+ * (`TEXTO_DIF_MAX_PLANO`, el mismo que lleva su `TextoPieza`). Los que no empatan con ninguna no van en `capas`: el
+ * maestro los lleva como imagen.
+ */
+export function ajustarTextosPlano(medidos: readonly ElementoMedido[], W: number, t: Tipografias): { capas: Map<string, TextoCapa>; notas: NotaTextoPlano[] } {
+  const capas = new Map<string, TextoCapa>(), notas: NotaTextoPlano[] = [];
+  const fuentes = [...t.keys()].slice(0, FUENTES_PLANO_MAX);
+  lienzoMedir ??= document.createElement("canvas").getContext("2d");
+  const lm = lienzoMedir;
+  const medirTinta: MedirTinta = (texto, fuente, tam, track) => {
+    const tramo: TramoTexto = { n: texto.length, fuente, tam, color: [0, 0, 0], track, interlineado: null, subir: 0, mayusculas: false };
+    const css = cssDe(t, tramo);
+    if (!lm || !css) return { avance: 0, izq: 0, der: 0, sube: 0, baja: 0 };
+    lm.font = css;
+    lm.letterSpacing = espaciado(tramo);
+    const k = lm.measureText(texto);
+    return { avance: k.width, izq: k.actualBoundingBoxLeft, der: k.actualBoundingBoxRight, sube: k.actualBoundingBoxAscent, baja: k.actualBoundingBoxDescent };
+  };
+  const medir = medidorDe(t);
+  const lienzo = document.createElement("canvas");
+  const x = lienzo.getContext("2d", { willReadFrequently: true });
+  try {
+    for (const m of medidos) {
+      if (m.tipo !== "texto") continue;
+      const al = alineacionDe(m, W, medidos);
+      type Prueba = { capa: TextoCapa; fuente: string; dif: number; ok: boolean };
+      const probarCapa = (ctx: CanvasRenderingContext2D, capa: TextoCapa, fuente: string): Prueba => {
+        const { c } = compararCon(ctx, lienzo, { capa: m.id, texto: capa, opacidad: 1, caja: m.pinta, alfa: m.alfa, motivo: null, ruta: [] }, t, medir);
+        return { capa, fuente, dif: c.dif, ok: pasa(c, TEXTO_DIF_MAX_PLANO) };
+      };
+      const mejorQue = (a: Prueba, b: Prueba | null) => !b || (a.ok && !b.ok) || (a.ok === b.ok && a.dif < b.dif);
+      const pruebas: Prueba[] = [];
+      let mejor: Prueba | null = null;
+      // Un texto que no se deja probar (sin memoria para el lienzo, una tipografía rota) va como imagen; los demás
+      // siguen y la revisión no se queda «Probando…».
+      if (x)
+        try {
+          for (const fuente of fuentes) {
+            const capa = capaDeTexto(m, fuente, al, medirTinta);
+            if (capa) pruebas.push(probarCapa(x, capa, fuente));
+          }
+          // La prueba corre el texto a píxeles enteros; en letra chica medio píxel pesa casi como un grosor de más (el
+          // laboratorio probaba a cuartos de píxel). Las que mejor quedaron se prueban corridas un poco: primero a lo
+          // ancho y luego a lo alto desde el mejor (8 pruebas, no 24).
+          pruebas.sort((a, b) => a.dif - b.dif);
+          for (const p of pruebas.slice(0, FUENTES_AFINAR)) {
+            let suya = p;
+            for (const eje of [4, 5] as const)
+              for (const paso of CORRER_FINO) {
+                if (!paso) continue;
+                const tr = [...suya.capa.transform] as TextoCapa["transform"];
+                tr[eje] = p.capa.transform[eje] + paso;
+                const q = probarCapa(x, { ...suya.capa, transform: tr }, p.fuente);
+                if (mejorQue(q, suya)) suya = q;
+              }
+            if (mejorQue(suya, mejor)) mejor = suya;
+          }
+        } catch (err) {
+          console.error("[formatos-psd] probar texto de imagen plana", err);
+          mejor = null;
+        }
+      if (mejor?.ok) capas.set(m.id, mejor.capa);
+      notas.push({ id: m.id, fuente: mejor?.fuente ?? null, dif: mejor?.dif ?? null, ok: !!mejor?.ok });
+    }
+  } finally {
+    lienzo.width = lienzo.height = 0;
+  }
+  return { capas, notas };
 }
 
 /**
@@ -343,18 +433,60 @@ export const listosDe = (e: Escritura | null, maestro: number, pieza: number): r
 export function textoEscrito(e: Escritura | null, maestro: number, ma: MaestroListo, t: Tipografias): TextoEscrito | undefined {
   if (!e?.piezas.size) return undefined;
   return (pieza: number, l: Lugar, parte: number | null, sin?: readonly number[]) => {
-    const todos = e.piezas.get(clavePieza(maestro, pieza));
-    // Una parte (pieza abierta en el editor) escribe sólo sus textos: son los mismos objetos que los de su pieza.
-    const p = ma.piezas[pieza], d = parte === null ? p : p?.partes?.[parte];
-    const suyos = d && todos && (parte === null ? todos : todos.filter((s) => d.textos.includes(s.tp)));
-    if (!d || !suyos?.length) return null;
-    const listos = sin?.length ? suyos.filter((s) => !sin.includes(p.textos.indexOf(s.tp))) : suyos;
+    const r = listosDelDibujo(e, maestro, ma, pieza, parte, sin);
+    if (!r) return null;
     const w = l.x1 - l.x0, h = l.y1 - l.y0;
     try {
-      // De la mesa a este rectángulo: la esquina de la caja del dibujo cae en (ox, oy); más el corrimiento de la prueba.
-      return pintarEn(t, listos, w, h, (s) => matriz(s.tp.texto.transform, l.k, l.ox - l.x0 + (s.dx - d.caja.x) * l.k, l.oy - l.y0 + (s.dy - d.caja.y) * l.k));
+      return pintarEn(t, r.listos, w, h, (s) => matriz(s.tp.texto.transform, l.k, ...esquinaDe(s, r.caja, l)));
     } catch (err) {
       console.error("[formatos-psd] escribir texto", err);
+      return null;
+    }
+  };
+}
+
+/** Los textos listos de un dibujo (la pieza, o una de sus partes) menos los quitados en esta medida; null = el dibujo
+ *  no tiene textos que escribir (va con sus letras como imagen). */
+function listosDelDibujo(e: Escritura, maestro: number, ma: MaestroListo, pieza: number, parte: number | null, sin?: readonly number[]) {
+  const todos = e.piezas.get(clavePieza(maestro, pieza));
+  // Una parte (pieza abierta en el editor) escribe sólo sus textos: son los mismos objetos que los de su pieza.
+  const p = ma.piezas[pieza], d = parte === null ? p : p?.partes?.[parte];
+  const suyos = d && todos && (parte === null ? todos : todos.filter((s) => d.textos.includes(s.tp)));
+  if (!d || !suyos?.length) return null;
+  const quitado = (s: Listo) => !!sin?.includes(p.textos.indexOf(s.tp));
+  return { caja: d.caja, suyos, quitado, listos: sin?.length ? suyos.filter((s) => !quitado(s)) : suyos };
+}
+/** De la mesa al rectángulo de `Lugar`: la esquina de la caja del dibujo cae en (ox, oy); más el corrimiento de la
+ *  prueba. Sin restar la esquina del rectángulo (`absoluto`) queda en px de la medida. */
+const esquinaDe = (s: Listo, caja: { x: number; y: number }, l: Lugar, absoluto = false): [number, number] => [
+  l.ox - (absoluto ? 0 : l.x0) + (s.dx - caja.x) * l.k,
+  l.oy - (absoluto ? 0 : l.y0) + (s.dy - caja.y) * l.k,
+];
+
+/**
+ * Para el PSD por medida de una imagen plana (B28): cada texto del dibujo por separado, con su tinta (lo que se ve
+ * hasta que Photoshop lo vuelva a dibujar) y su `TextoCapa` puesto en la medida, para escribirlo como capa de texto
+ * vivo. Mismo lugar que `textoEscrito`; null = va como imagen (también si el lienzo falla). Los quitados en esta
+ * medida también van, marcados `oculto` (el PSD editable los deja apagados).
+ */
+export function textosVivos(e: Escritura | null, maestro: number, ma: MaestroListo, t: Tipografias): TextosVivos | undefined {
+  if (!e?.piezas.size) return undefined;
+  return (pieza: number, l: Lugar, parte: number | null, sin?: readonly number[]) => {
+    const r = listosDelDibujo(e, maestro, ma, pieza, parte, sin);
+    if (!r) return null;
+    const w = l.x1 - l.x0, h = l.y1 - l.y0;
+    try {
+      return r.suyos.map((s) => {
+        const [a, b, c, d, tx, ty] = s.tp.texto.transform, [ex, ey] = esquinaDe(s, r.caja, l, true);
+        return {
+          nombre: s.tp.capa,
+          px: pintarEn(t, [s], w, h, (u) => matriz(u.tp.texto.transform, l.k, ...esquinaDe(u, r.caja, l))),
+          texto: { ...s.tp.texto, transform: [a * l.k, b * l.k, c * l.k, d * l.k, tx * l.k + ex, ty * l.k + ey] },
+          oculto: r.quitado(s),
+        };
+      });
+    } catch (err) {
+      console.error("[formatos-psd] texto vivo", err);
       return null;
     }
   };

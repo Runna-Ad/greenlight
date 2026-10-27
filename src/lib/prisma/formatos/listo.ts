@@ -115,7 +115,8 @@ function opaco(rgb: Uint8ClampedArray): Uint8ClampedArray {
 
 /** Un maestro despiezado, en el formato que la pantalla pinta, los búferes que se pueden TRANSFERIR (sin copiar) y
  *  cuántos bytes de píxeles suma (para el tope de lo que cruza a la página). */
-export function prepararMaestro(ma: MaestroPsd): { maestro: MaestroListo; transferibles: ArrayBufferLike[]; bytes: number } {
+/** Sin `origen`: un maestro que no sale de un PSD (imagen plana, B28): su PSD por medida es el de capas planas. */
+export function prepararMaestro(ma: Omit<MaestroPsd, "origen"> & { origen?: MaestroPsd["origen"] }): { maestro: MaestroListo; transferibles: ArrayBufferLike[]; bytes: number } {
   const maestro: MaestroListo = {
     nombre: ma.nombre,
     w: ma.w,

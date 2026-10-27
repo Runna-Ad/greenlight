@@ -83,21 +83,58 @@ export async function tipografiasDelPsd(raw: unknown, clienteRaw: unknown): Prom
     siguenFaltando = faltan.filter((n) => !cubiertos.has(n));
   }
   const ajenas = exclusivasDeOtros(filas, siguenFaltando, clienteId);
-  if (!entregar.length) return { ok: true, tipografias: [], ajenas };
+  const tipografias = await firmar(db, entregar);
+  return tipografias ? { ok: true, tipografias, ajenas } : { ok: false, error: FALLO };
+}
 
+/**
+ * Imagen plana (B28): una imagen no dice con qué tipografía se escribió, así que se traen TODAS las del cliente elegido
+ * arriba (las suyas, exclusivas o no) y la página prueba cuál empata con cada texto. Sin cliente, ninguna: los
+ * textos van como imagen y la pantalla pide elegir el cliente.
+ */
+export async function tipografiasDelCliente(clienteRaw: unknown): Promise<TipografiasDelPsd | Fail> {
+  const g = await gate();
+  if ("ok" in g) return g;
+  const clienteId = typeof clienteRaw === "string" && UUID.test(clienteRaw) ? clienteRaw : null;
+  if (!clienteId) return { ok: true, tipografias: [], ajenas: [] };
+  // Cada llamada firma hasta 30 archivos: el mismo tope que las demás lecturas de la biblioteca por persona.
+  if (saturado(g.soyId, Date.now(), "tipografias-cliente", TRAER_POR_PERSONA)) return { ok: false, error: "Muchas llamadas en poco tiempo. Espera unos minutos." };
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("tipografias")
+    .select("archivo, ruta, nombres, client_id, exclusiva, clients(name)")
+    .eq("client_id", clienteId)
+    .order("created_at")
+    .limit(ARCHIVOS_ENTREGADOS_MAX);
+  if (error) {
+    if (faltaTablaTipografias(error)) return { ok: true, tipografias: [], ajenas: [] };
+    console.error("[prisma] leer tipografias del cliente:", error.message);
+    return { ok: false, error: FALLO };
+  }
+  if ((data ?? []).length >= ARCHIVOS_ENTREGADOS_MAX) console.error(`[prisma] el cliente ${clienteId} tiene más de ${ARCHIVOS_ENTREGADOS_MAX} tipografías: sólo se entregan las primeras`);
+  const entregar = ((data ?? []) as unknown as Fila[]).map((f) => ({ archivo: f.archivo, ruta: f.ruta, nombres: f.nombres, cliente: f.clients?.name ?? GOOGLE, exclusivaDe: f.exclusiva ? f.client_id : null }));
+  const tipografias = await firmar(db, entregar);
+  return tipografias ? { ok: true, tipografias, ajenas: [] } : { ok: false, error: FALLO };
+}
+/** Pedidos de todas las tipografías de un cliente por persona cada 10 min (una imagen plana pide una vez por cliente). */
+const TRAER_POR_PERSONA = 30;
+
+/** Enlaces firmados (1 minuto) a cada archivo; null si la firma falla. Un archivo que ya no está en el bucket no se
+ *  firma: queda fuera (la pantalla lo sigue contando como faltante). */
+async function firmar(db: ReturnType<typeof supabaseAdmin>, entregar: Entregar[]): Promise<TipografiaEnlace[] | null> {
+  if (!entregar.length) return [];
   const firmadas = await db.storage.from(TIPOGRAFIAS_BUCKET).createSignedUrls(entregar.map((e) => e.ruta), FIRMA_SEG);
   if (firmadas.error) {
     console.error("[prisma] firmar tipografías:", firmadas.error.message);
-    return { ok: false, error: FALLO };
+    return null;
   }
-  // Un archivo que ya no está en el bucket no se firma: queda fuera (la pantalla lo sigue contando como faltante).
   const enlacePorRuta = new Map(firmadas.data.filter((f) => !f.error && f.signedUrl).map((f) => [f.path, f.signedUrl]));
   const tipografias: TipografiaEnlace[] = [];
   for (const e of entregar) {
     const url = enlacePorRuta.get(e.ruta);
     if (url) tipografias.push({ archivo: e.archivo, ext: e.ruta.endsWith(".otf") ? "otf" : "ttf", cliente: e.cliente, url, nombres: e.nombres, exclusivaDe: e.exclusivaDe });
   }
-  return { ok: true, tipografias, ajenas };
+  return tipografias;
 }
 
 /** ¿Cabe otra de Google en la biblioteca? Si la cuenta falla, no (nada de pasar el tope por un error). */

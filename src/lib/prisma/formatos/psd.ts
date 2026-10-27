@@ -362,6 +362,9 @@ export type TextoPieza = {
   motivo: string | null;
   /** Su capa en el árbol de la mesa (`CapaPsd.ruta`). */
   ruta: number[];
+  /** Cuánto puede diferir de su tinta al probarlo (`compararAlfa`); sin esto, `TEXTO_DIF_MAX`. Un texto de una imagen
+   *  plana (B28) lleva `TEXTO_DIF_MAX_PLANO`: su letra la dibujó otro programa, no Photoshop con el archivo. */
+  difMax?: number;
   /** Sólo si se le cambiaron las letras en el editor (`cambiarTextos`): las del PSD y su tinta nueva a la escala del
    *  maestro (RGBA sin premultiplicar, en px de la mesa), para la capa del PSD editable. */
   cambio?: { de: string; tinta: { x: number; y: number; w: number; h: number; rgba: Uint8ClampedArray } | null };

@@ -9,10 +9,10 @@ import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
-import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, nombreSalida, sePuedeVoltear, zonaCanal, type Acomodo, type AvisoAcomodo, type Canal, type Edicion, type Lado, esNota } from "@/lib/prisma/formatos/acomodo";
+import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, nombreSalida, ponerPartes, sePuedeVoltear, zonaCanal, type Acomodo, type AvisoAcomodo, type Canal, type Edicion, type Lado, esNota } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionContraste, type InfoContraste } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
-import { FP, FP_APLANADA, FP_ERROR, FP_FAMILIA, FP_PAPEL, FX, rellenar } from "@/lib/prisma/formatos/copy";
+import { FP, FP_APLANADA, FP_ERROR, FP_FAMILIA, FP_PAPEL, FPL, FX, rellenar } from "@/lib/prisma/formatos/copy";
 import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
 import { EDITABLE_MAX_BYTES, EDITABLE_MAX_MS, LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajePsdMedida, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoPsdMedida, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
@@ -22,8 +22,10 @@ import { CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES, rutaLibre, zipsE
 import { etiquetaPieza, nombreDeGuia, type Rol } from "@/lib/prisma/formatos/roles";
 import { colaVacia, enCola, pintar } from "./pintar";
 import { Franjas, VistaGrande } from "./vista-grande";
-import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, escrituraCon, fuentesRecordadas, listosDe, maquetadorDe, olvidarFuentes, pintorDe, recordarFuentes, renglonesDe, revisarTextos, textoEscrito, type ArchivoFuente, type Escritura, type Renglones, type Tipografias } from "./escritura";
-import { tipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
+import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, escrituraCon, fuentesRecordadas, listosDe, maquetadorDe, olvidarFuentes, pintorDe, recordarFuentes, renglonesDe, revisarTextos, textoEscrito, textosVivos, type ArchivoFuente, type Escritura, type Renglones, type Tipografias } from "./escritura";
+import { tipografiasDelCliente, tipografiasDelPsd, type TipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
+import { esImagenPlana, leerPlano, type Plano } from "./plano-lector";
+import { RevisionPlano } from "./revision-plano";
 import { EditorMedida, edicionGuardada, guardarEdicion, guardarTextos, textosGuardados } from "./editor-medida";
 import { cambiarTextos, marcarSinEscribir, NO_SE_ESCRIBIO, type CambiosTexto, type Listo } from "@/lib/prisma/formatos/cambios-texto";
 import { porQueNoSeCambia } from "@/lib/prisma/formatos/textos";
@@ -40,8 +42,9 @@ import { copiarEdicion, hermanas } from "@/lib/prisma/formatos/matriz";
  */
 
 type Falla = { clave: keyof typeof FP_ERROR; detalle?: string };
-/** `psdOriginal`: el archivo tal cual, para armar el PSD editable de cada medida (se vuelve a leer entero al pedirlo). */
-type Leido = { archivo: string; psdOriginal: Blob; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] };
+/** `psdOriginal`: el archivo tal cual, para armar el PSD editable de cada medida (se vuelve a leer entero al pedirlo);
+ *  null si salió de una imagen plana (B28). */
+type Leido = { archivo: string; psdOriginal: Blob | null; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] };
 /** Un maestro como se acomoda y se pinta: con el papel elegido en cada carpeta y, si se aprobó, sin la copia del fondo. */
 type MaestroVista = MaestroListo & { copia?: CopiaEnFondo | null; fondoOriginal?: Uint8ClampedArray };
 /** Cómo se quitó: gratis (espejo) o con la IA (lo que costó y cuánto cambió lo de alrededor). */
@@ -141,7 +144,7 @@ const contextoEdicion = (m: Medida, lado: Lado | undefined, canal: Canal | null)
 const CONTEXTO_VIEJO = ":fondo";
 /** El nombre de entrega del equipo (el de la mesa con la medida nueva), limpio para ser nombre de archivo. */
 const archivoDe = (ma: MaestroListo, m: Medida) => `${nombreSalida({ nombre: limpiarNombre(ma.nombre, NOMBRE_MESA_MAX), w: ma.w, h: ma.h }, m.w, m.h)}.png`;
-const sinExtension = (archivo: string) => archivo.replace(/\.psd$/i, "");
+const sinExtension = (archivo: string) => archivo.replace(/\.(psd|png|jpe?g|webp)$/i, "");
 
 const aPng = (lienzo: HTMLCanvasElement): Promise<Blob> =>
   new Promise((ok, mal) => lienzo.toBlob((b) => (b ? ok(b) : mal(new Error("toBlob"))), "image/png"));
@@ -327,7 +330,8 @@ async function armarPsdMedida(o: {
   const { w, h } = o.medida;
   const texto = textoEscrito(o.escritura, o.maestro, ma, o.tipos);
   let motivo: string;
-  if (!o.psdOriginal || !ma.origen) motivo = tx(FP.psdPlanoSinOriginal, lang);
+  if (!o.psdOriginal && !ma.origen) motivo = tx(FP.psdPlanoImagen, lang);
+  else if (!o.psdOriginal || !ma.origen) motivo = tx(FP.psdPlanoSinOriginal, lang);
   else if (o.psdOriginal.size > EDITABLE_MAX_BYTES) motivo = rellenar(tx(FP.psdPlanoPesado, lang), { mb: String(Math.round(o.psdOriginal.size / 1e6)), max: String(EDITABLE_MAX_BYTES / 1e6) });
   else if (sinEditable.has(o.psdOriginal)) motivo = tx(FP.psdPlanoFallo, lang);
   else {
@@ -377,6 +381,11 @@ async function armarPsdMedida(o: {
       o.alArrancar(null);
     }
   }
+  // De una imagen plana (B28) no hay original que mover: cada elemento en su capa (las piezas se abren en sus partes,
+  // donde las dejó el editor o en su lugar) y los textos reescritos como texto vivo con la tipografía del cliente.
+  const deImagen = !o.psdOriginal && !ma.origen;
+  const vivos = deImagen ? textosVivos(o.escritura, o.maestro, ma, o.tipos) : undefined;
+  const a = deImagen ? { ...acomodo, puestas: acomodo.puestas.map((q) => (q.partes?.length ? q : { ...q, partes: ponerPartes(ma.piezas[q.pieza], q, {}, w, h)?.puestas })) } : acomodo;
   // También en la fila y de una en una: si el archivo falló con doce medidas esperando, las doce de capas planas no
   // se arman seguidas sin soltar la página (cada vuelta deja pintar antes de la siguiente).
   const plano = await enFilaPsd(async () => {
@@ -385,10 +394,13 @@ async function armarPsdMedida(o: {
     await new Promise((ok) => setTimeout(ok, 0));
     const [{ writePsdUint8Array }, { psdDeMedida }] = await Promise.all([import("ag-psd"), import("@/lib/prisma/formatos/psd-salida")]);
     if (!sigue()) return null;
-    return new Blob([writePsdUint8Array(psdDeMedida(ma, acomodo, w, h, { texto }), { noBackground: true }) as BlobPart], { type: "image/vnd.adobe.photoshop" });
+    const psd = psdDeMedida(ma, a, w, h, { texto, vivos });
+    const vivo = !!psd.children?.some((c) => c.children?.some((l) => l.text));
+    // invalidateTextLayers: Photoshop vuelve a dibujar el texto al abrir (pide «Actualizar»), como el PSD editable.
+    return { vivo, archivo: new Blob([writePsdUint8Array(psd, { noBackground: true, invalidateTextLayers: vivo }) as BlobPart], { type: "image/vnd.adobe.photoshop" }) };
   });
   if (!plano || !sigue()) return null;
-  return { archivo: plano, notas: [], plano: motivo };
+  return { archivo: plano.archivo, notas: [], plano: deImagen && plano.vivo ? null : motivo };
 }
 
 
@@ -396,7 +408,7 @@ const SOLTAR_NIVELES = 4;
 /** Archivos que sirven (la carpeta de tipografías trae ~20) y entradas recorridas en total, para no andar sin fin. */
 const SOLTAR_ARCHIVOS_MAX = 500;
 const SOLTAR_ENTRADAS_MAX = 5000;
-const SIRVE = /\.(psd|otf|ttf)$/i;
+const SIRVE = /\.(psd|otf|ttf|png|jpe?g|webp)$/i;
 
 /**
  * Los archivos de lo que se soltó, entrando a las carpetas. Lo soltado suelto entra siempre (un PNG dice "no es un
@@ -929,6 +941,11 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   const [ajenas, setAjenas] = useState<{ leido: Leido; cliente: string; lista: { cliente: string; nombres: string[] }[] } | null>(null);
   const [leido, setLeido] = useState<Leido | null>(null);
   const [avance, setAvance] = useState<{ mesa: number; de: number } | null>(null);
+  /** Imagen plana (B28): lo leído, en revisión; y en qué va la lectura. */
+  const [plano, setPlano] = useState<Plano | null>(null);
+  const [etapaPlano, setEtapaPlano] = useState<"leer" | "separar" | null>(null);
+  const pedidoPlano = useRef<AbortController | null>(null);
+  const planoVigente = useRef<Plano | null>(null);
   const [falla, setFalla] = useState<Falla | null>(null);
   const [over, setOver] = useState(false);
   /** Las medidas del panel, en orden: la lista de DiDi y las agregadas a mano. */
@@ -1017,6 +1034,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       vivo.current = false;
       soltar();
       pedidoIA.current?.abort();
+      pedidoPlano.current?.abort();
+      if (planoVigente.current) URL.revokeObjectURL(planoVigente.current.url);
       cancelarZip.current?.();
     };
   }, [soltar]);
@@ -1213,9 +1232,42 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   const cancelar = () => {
     turno.current++;
     soltar();
+    pedidoPlano.current?.abort();
+    setEtapaPlano(null);
     volverASubir.current = true;
     setAvance(null);
     setEleccion(null);
+  };
+
+  /** Imagen plana (B28): se lee con IA, se separa y pasa a la revisión; de ahí sigue como un PSD. */
+  const abrirPlano = async (file: File, vigente: () => boolean, fallar: (f: Falla) => void) => {
+    const pedido = new AbortController();
+    pedidoPlano.current = pedido;
+    setEtapaPlano("leer");
+    try {
+      const r = await leerPlano(file, pedido.signal, (e) => vigente() && setEtapaPlano(e));
+      if (!vigente()) {
+        if ("url" in r) URL.revokeObjectURL(r.url);
+        return;
+      }
+      setEtapaPlano(null);
+      if ("clave" in r) return fallar(r);
+      setAvance(null);
+      planoVigente.current = r;
+      setPlano(r);
+    } catch (err) {
+      if (pedido.signal.aborted) return;
+      console.error("[formatos-psd] imagen plana", err);
+      if (vigente()) {
+        setEtapaPlano(null);
+        fallar({ clave: "planoLectura" });
+      }
+    }
+  };
+  const salirDePlano = () => {
+    if (planoVigente.current) URL.revokeObjectURL(planoVigente.current.url);
+    planoVigente.current = null;
+    setPlano(null);
   };
 
   const abrir = async (file: File) => {
@@ -1230,6 +1282,10 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     setAviso(null);
     setNotaFuentes(null);
     setEleccion(null);
+    pedidoPlano.current?.abort();
+    setEtapaPlano(null);
+    // También corta lo que pedía la imagen anterior (sus tipografías): `pedirDelCliente` mira esta referencia.
+    salirDePlano();
     const fallar = (f: Falla) => {
       volverASubir.current = true;
       setAvance(null);
@@ -1241,8 +1297,9 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     if (file.size > PSD_ARCHIVO_MAX) return fallar({ clave: "pesado" });
     setAvance({ mesa: 0, de: 0 }); // antes del primer await: el cuadro se cierra a otro archivo desde ya
     try {
-      const cabeza = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+      const cabeza = new Uint8Array(await file.slice(0, 12).arrayBuffer());
       if (!vigente()) return;
+      if (esImagenPlana(cabeza)) return void abrirPlano(file, vigente, fallar);
       if (!(cabeza[0] === 0x38 && cabeza[1] === 0x42 && cabeza[2] === 0x50 && cabeza[3] === 0x53)) return fallar({ clave: "noEsPsd" });
     } catch (err) {
       console.error("[formatos-psd] leer archivo", err);
@@ -1410,7 +1467,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       const archivos = entradas.length ? await archivosDe(entradas) : sueltos;
       const fuentes = archivos.filter((f) => EXTENSIONES_FUENTE.test(f.name));
       if (fuentes.length) void agregarFuentes(fuentes);
-      const psd = archivos.find((f) => /\.psd$/i.test(f.name));
+      const psd = archivos.find((f) => /\.psd$/i.test(f.name)) ?? archivos.find((f) => /\.(png|jpe?g|webp)$/i.test(f.name));
       if (psd) return void (leyendo || abrir(psd));
       if (fuentes.length || !archivos.length) return;
       // Ni PSD ni tipografías (un .zip de fuentes, un .woff2): con resultados en pantalla no se pierden por eso; en el
@@ -1526,6 +1583,31 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     () => [...new Set((leido?.maestros ?? []).flatMap((m) => m.piezas.flatMap((p) => p.textos.flatMap((t) => t.texto.tramos.map((r) => r.fuente)))))].filter((f) => f && !tipos.has(f)),
     [leido, tipos],
   );
+  /** Baja las tipografías que entregó Greenlight y las carga por el mismo camino que soltarlas. */
+  const bajarYAgregar = async (r: Extract<TipografiasDelPsd, { ok: true }>, sigue: () => boolean, extra: string) => {
+    // Cada archivo por su lado: uno que falle (enlace vencido, red) no tumba a los demás; se nombra.
+    const bajadas = await Promise.allSettled(
+      r.tipografias.map(async (t) => {
+        const res = await fetch(t.url, { signal: AbortSignal.timeout(GREENLIGHT_MS) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // El nombre lleva la extensión de sus bytes (la que revisa elegirFuentes), aunque al subirlo no la trajera.
+        return new File([await res.blob()], t.archivo.toLowerCase().endsWith(`.${t.ext}`) ? t.archivo : `${t.archivo}.${t.ext}`);
+      }),
+    );
+    if (!sigue()) return;
+    const archivos = bajadas.flatMap((b) => (b.status === "fulfilled" ? [b.value] : []));
+    const fallaron = r.tipografias.filter((_, i) => bajadas[i].status === "rejected").map((t) => t.archivo);
+    if (fallaron.length) console.error("[formatos-psd] tipografías de Greenlight que no bajaron", fallaron, bajadas.filter((b) => b.status === "rejected"));
+    const de = [...new Set(r.tipografias.map((t) => t.cliente).filter(Boolean))].join(", ");
+    if (!archivos.length) return avisarFuentes({ nuevas: 0, malas: [], greenlightNo: true });
+    // Las exclusivas se anotan ANTES de cargarlas (sólo los nombres que no había): si se cambia de cliente mientras
+    // cargan, el cambio ya las encuentra y las suelta.
+    for (const [i, t] of r.tipografias.entries()) {
+      if (!t.exclusivaDe || bajadas[i].status !== "fulfilled") continue;
+      for (const n of t.nombres) if (!tiposVigentes.current.has(n)) deExclusiva.current.set(n, t.exclusivaDe);
+    }
+    await agregarFuentes(archivos, { de, noBajaron: fallaron, vigente: sigue, extra });
+  };
   // Lo que le falta al PSD se pide a Greenlight UNA vez por PSD y cliente: las que un admin guardó en Admin › Marcas
   // (las exclusivas, sólo si se eligió su cliente) y, si no están, las gratuitas de Google Fonts. Espera a las
   // recordadas en este navegador (con ellas casi nunca falta nada y no se pregunta). Llegan por el mismo camino que
@@ -1548,28 +1630,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       setAjenas(r.ajenas.length ? { leido: l, cliente: c, lista: r.ajenas } : null);
       const extra = r.ajenas.map((a) => textoAjenas(a, lang)).join(" ");
       if (!r.tipografias.length) return void (extra && anunciar(extra));
-      // Cada archivo por su lado: uno que falle (enlace vencido, red) no tumba a los demás; se nombra.
-      const bajadas = await Promise.allSettled(
-        r.tipografias.map(async (t) => {
-          const res = await fetch(t.url, { signal: AbortSignal.timeout(GREENLIGHT_MS) });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          // El nombre lleva la extensión de sus bytes (la que revisa elegirFuentes), aunque al subirlo no la trajera.
-          return new File([await res.blob()], t.archivo.toLowerCase().endsWith(`.${t.ext}`) ? t.archivo : `${t.archivo}.${t.ext}`);
-        }),
-      );
-      if (!sigue()) return;
-      const archivos = bajadas.flatMap((b) => (b.status === "fulfilled" ? [b.value] : []));
-      const fallaron = r.tipografias.filter((_, i) => bajadas[i].status === "rejected").map((t) => t.archivo);
-      if (fallaron.length) console.error("[formatos-psd] tipografías de Greenlight que no bajaron", fallaron, bajadas.filter((b) => b.status === "rejected"));
-      const de = [...new Set(r.tipografias.map((t) => t.cliente).filter(Boolean))].join(", ");
-      if (!archivos.length) return avisarFuentes({ nuevas: 0, malas: [], greenlightNo: true });
-      // Las exclusivas se anotan ANTES de cargarlas (sólo los nombres que no había): si se cambia de cliente mientras
-      // cargan, el cambio ya las encuentra y las suelta.
-      for (const [i, t] of r.tipografias.entries()) {
-        if (!t.exclusivaDe || bajadas[i].status !== "fulfilled") continue;
-        for (const n of t.nombres) if (!tiposVigentes.current.has(n)) deExclusiva.current.set(n, t.exclusivaDe);
-      }
-      await agregarFuentes(archivos, { de, noBajaron: fallaron, vigente: sigue, extra });
+      await bajarYAgregar(r, sigue, extra);
     } catch (err) {
       console.error("[formatos-psd] tipografías de Greenlight", err);
       if (sigue()) avisarFuentes({ nuevas: 0, malas: [], greenlightNo: true });
@@ -1580,6 +1641,38 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       }
     }
   });
+  /** Imagen plana (B28): una imagen no dice su tipografía; se traen TODAS las del cliente elegido, una vez por imagen
+   *  y cliente, y la revisión prueba cuál empata con cada texto. */
+  const pedidasPlano = useRef<{ p: Plano; c: string } | null>(null);
+  const pedirDelCliente = useEffectEvent(async (p: Plano, c: string) => {
+    if (!c || (pedidasPlano.current?.p === p && pedidasPlano.current.c === c)) return;
+    pedidasPlano.current = { p, c };
+    const sigue = () => vivo.current && planoVigente.current === p && clienteVigente.current === c;
+    setTrayendo((n) => n + 1);
+    try {
+      const r = await Promise.race([
+        tipografiasDelCliente(c),
+        new Promise<never>((_, no) => window.setTimeout(() => no(new Error("Greenlight no respondió")), PEDIDO_MS)),
+      ]);
+      if (!sigue()) return;
+      if (!r.ok) {
+        pedidasPlano.current = null; // otro clic en el cliente lo vuelve a pedir
+        return avisarFuentes({ nuevas: 0, malas: [], greenlightNo: true });
+      }
+      if (r.tipografias.length) await bajarYAgregar(r, sigue, "");
+    } catch (err) {
+      console.error("[formatos-psd] tipografías del cliente", err);
+      pedidasPlano.current = null;
+      if (sigue()) avisarFuentes({ nuevas: 0, malas: [], greenlightNo: true });
+    } finally {
+      if (vivo.current) setTrayendo((n) => n - 1);
+    }
+  });
+  useEffect(() => {
+    if (!plano || !cliente) return;
+    const reloj = window.setTimeout(() => void pedirDelCliente(plano, cliente), 0);
+    return () => window.clearTimeout(reloj);
+  }, [plano, cliente]);
   /**
    * Cambiar de cliente: se sueltan las tipografías que llegaron por ser exclusivas de OTRO cliente (DiDi Sans Pro deja
    * de usarse si ya no es DiDi) y se vuelve a pedir lo que le falte al PSD en pantalla, ahora con el cliente nuevo.
@@ -2026,7 +2119,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
         .filter(Boolean)
         .join(" · ")
     : "";
-  const textoAvance = avance && avance.de > 0 && avance.mesa > 0 ? rellenar(tx(FP.leyendoMesa, lang), { m: avance.mesa, n: avance.de }) : tx(FP.leyendo, lang);
+  const textoAvance = etapaPlano ? tx(etapaPlano === "leer" ? FPL.leyendo : FPL.separando, lang)
+    : avance && avance.de > 0 && avance.mesa > 0 ? rellenar(tx(FP.leyendoMesa, lang), { m: avance.mesa, n: avance.de }) : tx(FP.leyendo, lang);
   /** El motor y el archivo hablan español: con la pantalla en inglés esos textos se marcan como español. */
   const delMotor = lang === "en" ? "es" : undefined;
 
@@ -2143,7 +2237,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       </div>
 
       {/* Sin PSD el cliente va arriba del cuadro (con su ayuda a la vista); con PSD, en el panel de ajustes. */}
-      {(eleccion || !usables.length) && selectorCliente(true)}
+      {/* En la revisión de una imagen plana el cliente va dentro de ella (uno solo en la página). */}
+      {(eleccion || (!usables.length && !plano)) && selectorCliente(true)}
 
       {eleccion ? (
         <section className="p-enter max-w-2xl" aria-labelledby="psd-elegir-titulo">
@@ -2204,6 +2299,23 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
             </div>
           </div>
         </section>
+      ) : plano && !usables.length ? (
+        <RevisionPlano
+          plano={plano}
+          tipos={tipos}
+          cliente={cliente}
+          selectorCliente={selectorCliente(false)}
+          trayendo={trayendo > 0}
+          lang={lang}
+          alContinuar={(maestro) => {
+            setLeido({ archivo: plano.archivo, psdOriginal: null, maestros: [maestro], descartadas: [], avisos: [] });
+            salirDePlano();
+          }}
+          alCancelar={() => {
+            salirDePlano();
+            volverASubir.current = true;
+          }}
+        />
       ) : !usables.length ? (
         <section className="p-enter max-w-2xl space-y-3" aria-label={tx(FP.subir, lang)}>
           {/* <label>, no <button>: mismo patrón que la puerta de imagen plana (el input de archivo vive adentro).
@@ -2227,13 +2339,13 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
                 {leyendo ? textoAvance : tx(FP.subir, lang)}
               </span>
               <span id="psd-subir-ayuda" className="block text-sm text-muted-foreground">
-                {leyendo ? tx(FP.leyendoAyuda, lang) : `${tx(FP.subirAyuda, lang)} ${tx(FP.subirTipos, lang)}`}
+                {leyendo ? tx(etapaPlano ? FPL.leyendoAyuda : FP.leyendoAyuda, lang) : `${tx(FP.subirAyuda, lang)} ${tx(FP.subirTipos, lang)}`}
               </span>
             </span>
             <input
               ref={entrada}
               type="file"
-              accept=".psd,image/vnd.adobe.photoshop"
+              accept=".psd,image/vnd.adobe.photoshop,image/png,image/jpeg,image/webp"
               className="sr-only"
               aria-labelledby="psd-subir-titulo"
               aria-describedby={falla ? "psd-subir-ayuda psd-subir-error" : "psd-subir-ayuda"}

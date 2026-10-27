@@ -363,6 +363,13 @@ export function fuentesDe(buf: ArrayBuffer): FuenteArchivo[] {
  *  (Antes 0.2 dejaba el legal como imagen; Pedro pidió escribirlo si sale mejor, y sale: más nítido al ampliarlo y
  *  al reducirlo, con el mismo tono de Photoshop desde que el texto se mezcla con su gamma.) */
 export const TEXTO_DIF_MAX = 0.3;
+/** Lo mismo para un texto de una IMAGEN PLANA (B28): su letra la dibujó otro programa (o una IA), blanda y
+ *  comprimida, así que ni con su tipografía empata como la de Photoshop. Medido en la app con el anuncio DiDi Card
+ *  (2026-10-27, corrida a cuartos de píxel): con la DiDi Sans que le toca, 0.12-0.37 en titulares y precio y 0.55 en
+ *  "3 pagos de…" (36 px: la letra original sale más gruesa y borrosa, y lado a lado se ve igual); el legal de ~9 px,
+ *  0.96. Con Helvetica (laboratorio), 0.32-0.81 y peor en cada uno: este tope NO separa tipografías (eso lo hace
+ *  quedarse con la que mejor empata del cliente); sólo deja como imagen lo que ninguna puede reproducir. */
+export const TEXTO_DIF_MAX_PLANO = 0.65;
 /** Lo más que se acepta corregir de lugar (px del maestro) al alinear: más que esto es que la maqueta está mal. */
 export const TEXTO_CORRER_MAX = 6;
 /** Cuánto puede diferir el ancho de la tinta (fracción): con otra tipografía o un salto de línea distinto, se pasa. */
