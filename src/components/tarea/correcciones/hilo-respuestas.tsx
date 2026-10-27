@@ -113,10 +113,12 @@ export function HiloRespuestas({
               key={r.id}
               className={cn(
                 "rounded-md px-2 py-1.5",
+                // Gris NEUTRO de verdad (secondary/muted del tema son lilas: las dos burbujas
+                // salían iguales). El morado del equipo, un poco más fuerte para distinguirlo.
                 r.deCliente
-                  ? "bg-secondary"
+                  ? "bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)]"
                   : r.paraCliente || vistaCliente
-                    ? "bg-accent"
+                    ? "bg-[color-mix(in_srgb,var(--primary)_14%,transparent)]"
                     : "border border-dashed border-border",
               )}
             >
