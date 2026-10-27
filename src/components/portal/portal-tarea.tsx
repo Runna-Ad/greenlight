@@ -60,7 +60,7 @@ export function PortalTarea({ t, puedeActuar, colorCliente }: { t: TareaPortal; 
           ),
         )}
       />
-      <CuerpoTarea t={t} />
+      <CuerpoTarea t={t} colorCliente={colorCliente} />
       </CorreccionesClienteProvider>
     </WorkspaceProvider>
   );
@@ -69,7 +69,7 @@ export function PortalTarea({ t, puedeActuar, colorCliente }: { t: TareaPortal; 
 // El cuerpo de la tarea: contenido (Hero + Tabs + documento) y, cuando el cliente tiene
 // cambios (sin enviar o aplicados), el panel "Control de Cambios" — a la DERECHA en
 // desktop (sticky, mismo formato que el interno) y COLAPSABLE arriba en móvil (Pedro).
-function CuerpoTarea({ t }: { t: TareaPortal }) {
+function CuerpoTarea({ t, colorCliente }: { t: TareaPortal; colorCliente?: string }) {
   const hayPanel = t.cambios.length > 0 || t.revisiones.length > 0 || t.enProceso.length > 0;
   const hero = (
     <HeroTarea

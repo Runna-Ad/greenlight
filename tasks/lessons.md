@@ -792,3 +792,7 @@ PEDRO'S APPROACH: "¿por qué gris si pedí colores más visuales? un naranja cl
 WHY IT WAS BETTER: el gris volvía a esconder justo lo que se pidió destacar; el color de marca además dice QUIÉN habla sin leer el autor, y ya existe por cliente.
 RULE: cuando el pedido de diseño es visibilidad, un arreglo nunca regresa a neutro; si dos cosas chocan de color, se separan con OTRO color con significado (marca del cliente, estado), y se revisa que los tokens "neutros" del tema de verdad lo sean (aquí secondary/muted eran lilas).
 TAGS: #override #ux #color #marca #greenlight #pedro
+
+[2026-10-27] LESSON (empujé código que no compilaba: el chequeo corrió en segundo plano y el commit no dependía de su resultado): leí la última línea del log ("exit 2") en el MISMO comando que hacía commit + push, así que se subió f1b76c1 roto a la rama de preview (sólo preview; main intacto). Causa: el arreglo pasó el color a PortalTarea pero el panel vive en CuerpoTarea, otro componente del mismo archivo.
+RULE: el commit/push va en un comando APARTE que sólo corre si el log dice "exit 0" (`tail -1 log | grep -q "exit 0" || exit 1`). Y al pasar una prop nueva, grep cada `<Componente` hasta donde se usa, no sólo el de arriba.
+TAGS: #greenlight #git #verificacion #props
