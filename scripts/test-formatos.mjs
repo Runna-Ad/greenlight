@@ -2904,6 +2904,10 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   const muchos = Array.from({ length: ELEMENTOS_MAX + 15 }, (_, i) => ({ label: `e${i}`, rol: "HERO", tipo: "texto", box_2d: [0, 0, 500, 500], texto: "y".repeat(TEXTO_LEIDO_MAX + 50) }));
   const M = limpiarLectura(muchos, 100, 100) ?? [];
   ok(`lectura: a lo sumo ${ELEMENTOS_MAX} elementos y ${TEXTO_LEIDO_MAX} letras por texto`, M.length === ELEMENTOS_MAX && M.every((e) => e.texto.length === TEXTO_LEIDO_MAX));
+  // proveedor.ts es server-only (no se puede importar aquí): se revisa su texto. Con `maxItems` en el esquema,
+  // gemini-3.8-flash responde 400 "invalid argument" (la preview, 2026-10-27); el tope lo pone limpiarLectura.
+  const esquemaLeer = /const ESQUEMA_LEER = \{[\s\S]*?\n\};/.exec(readFileSync(new URL("../src/lib/prisma/formatos/proveedor.ts", import.meta.url), "utf8"))?.[0] ?? "";
+  ok("lectura: el esquema para Gemini no lleva maxItems (Gemini lo rechaza)", esquemaLeer.includes("required") && !/maxItems/.test(esquemaLeer), esquemaLeer.slice(0, 80));
   const real = join(homedir(), "Desktop/formatos-prueba/b28-imagen-plana/resultados/lectura-2.json");
   if (existsSync(real)) {
     const R = limpiarLectura(JSON.parse(readFileSync(real, "utf8")).elementos, 1200, 1500) ?? [];

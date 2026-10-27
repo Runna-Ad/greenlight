@@ -1472,8 +1472,10 @@ largo: estacionado por él.
       **Verificación:** test-formatos verde con las pruebas nuevas · tsc y eslint limpios · build · en la preview: subir
       didi-card.webp → 15 elementos en la revisión → tarjetas por medida → en el editor "3 MSI" → "12 MSI" y "12 pagos de
       $3,999", quitar "con tus cupones de DiDi Card" → PNG. Sin migración ni deploy a producción.
-      **Next Step:** cuando Pedro diga, commit en `prisma` (rutas explícitas) y push para la preview; ahí, con su sesión
-      y PRISMA_FORMATOS_IA + GEMINI_API_KEY en el entorno de preview de Vercel, subir didi-card.webp de verdad.
+      **Next Step:** commit af54d72 en `prisma`, push hecho 2026-10-27 (Pedro: "commit B28 to the prisma branch").
+      PRISMA_FORMATOS_IA y GEMINI_API_KEY existen en Vercel Preview (prisma) (`vercel env ls`, sólo nombres). Falta:
+      Pedro entra a la preview con su sesión y sube didi-card.webp de verdad. 1er intento: 502, Gemini rechazó
+      `maxItems` del esquema (400 invalid argument); quitado (el tope lo pone limpiarLectura) y vuelto a subir.
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
 - iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los
   pendientes de iPad de B19 (caché de 4 fondos, táctil real, zoom de Safari) quedan fuera.

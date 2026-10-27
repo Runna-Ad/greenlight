@@ -147,11 +147,12 @@ const PROMPT_LEER =
   'Text inside a logo is part of the logo (tipo "imagen"). Text on a pill or button: the pill is one "forma" item and its text another "texto" item with "sobre" set. ' +
   "Do not skip small items: separators, icons, app and store badges, and the legal text.";
 
-/** Sin esquema, el modelo se salta los campos "opcionales" (en la prueba no mandó las letras). `maxItems` y
- *  `LECTURA_TOKENS_MAX`: el texto de la imagen no puede hacer que la respuesta (y lo que cobra) crezca sin fin. */
+/** Sin esquema, el modelo se salta los campos "opcionales" (en la prueba no mandó las letras). SIN `maxItems`:
+ *  gemini-3.8-flash rechaza el esquema con 400 "invalid argument" (probado 2026-10-27, variante por variante; `enum`
+ *  y `maxOutputTokens` sí pasan). El tope de elementos lo pone `limpiarLectura` (ELEMENTOS_MAX) y el de lo que
+ *  cobra, `LECTURA_TOKENS_MAX`. */
 const ESQUEMA_LEER = {
   type: "ARRAY",
-  maxItems: 60,
   items: {
     type: "OBJECT",
     properties: {
