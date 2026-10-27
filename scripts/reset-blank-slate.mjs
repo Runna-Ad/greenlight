@@ -18,6 +18,8 @@
 //   node scripts/reset-blank-slate.mjs            # dry run against PROD (linked)
 //   node scripts/reset-blank-slate.mjs --pglite   # self-test the order on PGlite
 //   node scripts/reset-blank-slate.mjs --run       # DESTRUCTIVE: delete on PROD
+//   --content-only                                 # keep people (track_members/profiles/invites)
+//   --project-ref <ref>                            # target that project (no `supabase link` needed)
 //
 // PROD access uses the same `supabase db query --linked` path as migrate.mjs
 // (the CLI has a persistent login). `produccion` schema only — never public/storage.
@@ -27,6 +29,14 @@ import { execFileSync } from "node:child_process";
 
 const DRY = !process.argv.includes("--run");
 const PGLITE = process.argv.includes("--pglite");
+// --project-ref <ref> → target that project instead of the linked one (same as migrate.mjs).
+const refIdx = process.argv.indexOf("--project-ref");
+const ref = refIdx >= 0 ? process.argv[refIdx + 1] : undefined;
+if (refIdx >= 0 && !/^[a-z]{20}$/.test(ref ?? "")) {
+  console.error("--project-ref necesita el id del proyecto (20 letras).");
+  process.exit(1);
+}
+const destino = ref ? ["--linked", "--project-ref", ref] : ["--linked"];
 
 // ── Table classification — the heart of the review. Edit these lists to move a
 // table between buckets; the script fails loudly if any produccion table is left
@@ -51,6 +61,19 @@ const KEEP = new Set([
   "hue_settings",           // interruptor de auto-aprendizaje (singleton)
   "hue_adaptations",        // auditoría del auto-aprendizaje (cita hue_instructions, no ideas)
   "notification_prefs",     // preferencias de notificación POR USUARIO — config, no contenido
+  // HÜE Prisma: conocimiento y bibliotecas (config del Hub, no trabajo de prueba) — KEEP (2026-10-22)
+  "prisma_herramientas",    // herramientas/modelos de Higgsfield (Hub)
+  "prisma_reglas",          // reglas del writer (Hub)
+  "prisma_fuentes",         // fuentes que lee el Vigía
+  "prisma_propuestas",      // propuestas del Vigía (aprobadas/descartadas = historial del conocimiento)
+  "prisma_vigia_estado",    // candado del Vigía (una fila)
+  "prisma_characters",      // personajes/productos guardados por marca (biblioteca)
+  "tipografias",            // biblioteca de fuentes por cliente (0079)
+  // Trabajo de prueba de HÜE Prisma / Formatos: Pedro (2026-10-22) "only greenlight projects and tasks"
+  // → se queda. Ojo si un día pasa a DELETE: prisma_specs.correccion_de ↔ prisma_resultados.spec_id es un
+  // ciclo de FK y deleteOrder() aborta; anular correccion_de antes.
+  "prisma_specs", "prisma_prompts", "prisma_jobs", "prisma_ratings", "prisma_eventos",
+  "prisma_resultados", "prisma_formatos_lotes", "prisma_formatos_salidas",
 ]);
 
 // Ordered children→parents is computed automatically from the FK graph; this is
@@ -69,6 +92,7 @@ const DELETE = new Set([
   "hue_suggestions",              // veredictos/ortografía POR TAREA
   "hue_generations",              // borradores del writer POR TAREA
   "hue_top_performers",           // "ganadores" = ideas estrelladas (apuntan a las tareas borradas)
+  "referencia_lecturas",          // caché de lo que H.Ü.E leyó de las referencias de las tareas (0064)
   "track_members", "profiles",
 ]);
 
@@ -85,6 +109,7 @@ if (CONTENT_ONLY) {
 
 // Ambiguous — Pedro decides. Treated as KEEP (never auto-deleted) until moved.
 // Resolved 2026-08-20: references→DELETE, sheet_sources→KEEP. None left.
+// Resolved 2026-10-22: prisma_* de prueba → KEEP. None left.
 const REVIEW = new Set([]);
 
 // ── SQL backends ─────────────────────────────────────────────────────────────
@@ -116,7 +141,7 @@ async function makeRunner() {
     try {
       const out = execFileSync(
         "supabase",
-        ["db", "query", "--linked", "--file", tmp, "-o", "json"],
+        ["db", "query", ...destino, "--file", tmp, "-o", "json"],
         { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] },
       );
       const s = out.indexOf("["), e = out.lastIndexOf("]");
@@ -128,7 +153,7 @@ async function makeRunner() {
   return {
     query: async (sql) => query(sql),
     exec: async (sql) => { query(sql); },
-    label: "PROD (Supabase --linked · produccion)",
+    label: `PROD (Supabase ${ref ?? "--linked"} · produccion)`,
   };
 }
 
@@ -255,8 +280,10 @@ const toArr = (v) =>
   : [];
 const edges = (await R.query(FK_SQL)).map((e) => ({ ...e, child_cols: toArr(e.child_cols) }));
 const keptSet = new Set([...KEEP, ...REVIEW]); // REVIEW is treated as kept until resolved
-const order = deleteOrder(edges, DELETE);
-const nulls = keepToDeleteNulls(edges, DELETE, keptSet);
+// Only tables that exist here (a branch's migrations can lag behind prod's schema).
+const delSet = new Set([...DELETE].filter((t) => allTables.includes(t)));
+const order = deleteOrder(edges, delSet);
+const nulls = keepToDeleteNulls(edges, delSet, keptSet);
 
 // ── Report ───────────────────────────────────────────────────────────────────
 const show = (title, list) => {
