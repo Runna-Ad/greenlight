@@ -177,6 +177,6 @@ export default async function PortalPage({
   return (
     <PortalShell cliente={clienteInfo} briefs={briefsMarca} selBriefId={briefSel} selTareaId={tareaSel}
       vistaBucket={null} marcaId={marcaSel} backHref={backHref} backLabel={backLabel} mostrarNav
-      vista={tareaData ? <PortalTarea t={tareaData} puedeActuar={puedeActuar} /> : null} />
+      vista={tareaData ? <PortalTarea t={tareaData} puedeActuar={puedeActuar} colorCliente={marca} /> : null} />
   );
 }

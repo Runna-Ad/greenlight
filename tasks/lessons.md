@@ -786,3 +786,9 @@ TAGS: #greenlight #pglite #flaky #reloj #test-db
 [2026-10-27] LESSON (el aviso al cliente sí llegaba; lo que faltaba era el portal): Pedro probó como master-actuando-de-cliente y no vio nada salvo el correo. La campana del cliente SÍ tenía el aviso (4 cuentas DiDi, sin leer); el master no lo ve porque no es su buzón. El hueco real: el portal no marcaba en ningún lado la tarea con respuesta del equipo.
 RULE: antes de dar por perdido un aviso, revisar en la base a QUIÉN le llegó y si se leyó; y probar como el rol real, no como master.
 TAGS: #greenlight #portal #avisos #verificar-como-usuario
+
+[2026-10-27] PEDRO_OVERRIDE (colores con significado, no neutros, cuando el pedido es "que no se pierda"): Pedro pidió más color en Control de Cambios porque "se pierde, se ve muy neutro". Al ver que las burbujas del cliente y del equipo salían iguales (secondary/muted del tema son lilas), las cambié a gris NEUTRO.
+PEDRO'S APPROACH: "¿por qué gris si pedí colores más visuales? un naranja claro: DiDi es naranja, y que aplique a cada cliente según su color principal". Las burbujas del cliente van en un tinte de SU color de marca (clients.brand_color), las del equipo en morado Rünna.
+WHY IT WAS BETTER: el gris volvía a esconder justo lo que se pidió destacar; el color de marca además dice QUIÉN habla sin leer el autor, y ya existe por cliente.
+RULE: cuando el pedido de diseño es visibilidad, un arreglo nunca regresa a neutro; si dos cosas chocan de color, se separan con OTRO color con significado (marca del cliente, estado), y se revisa que los tokens "neutros" del tema de verdad lo sean (aquí secondary/muted eran lilas).
+TAGS: #override #ux #color #marca #greenlight #pedro

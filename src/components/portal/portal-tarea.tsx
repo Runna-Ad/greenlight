@@ -23,7 +23,7 @@ const noop = () => {};
  * `runna` se omite (oculta lead/equipo/consideraciones/archivos), verCliente=true y
  * todos los callbacks de edición son no-op.
  */
-export function PortalTarea({ t, puedeActuar }: { t: TareaPortal; puedeActuar: boolean }) {
+export function PortalTarea({ t, puedeActuar, colorCliente }: { t: TareaPortal; puedeActuar: boolean; colorCliente?: string }) {
   return (
     <WorkspaceProvider
       key={t.ideaId}
@@ -116,7 +116,7 @@ function CuerpoTarea({ t }: { t: TareaPortal }) {
     <div className="space-y-4">
       {/* Móvil: Control de Cambios colapsable arriba del contenido. */}
       <div className="lg:hidden">
-        <PanelControlCambios mobile />
+        <PanelControlCambios mobile colorCliente={colorCliente} />
       </div>
       {hero}
       {tabs}
@@ -128,7 +128,7 @@ function CuerpoTarea({ t }: { t: TareaPortal }) {
           <CuerpoDoc t={t} />
         </div>
         <div className="hidden lg:sticky lg:top-[11.75rem] lg:block lg:max-h-[calc(100vh-13rem)] lg:overflow-y-auto">
-          <PanelControlCambios />
+          <PanelControlCambios colorCliente={colorCliente} />
         </div>
       </div>
     </div>

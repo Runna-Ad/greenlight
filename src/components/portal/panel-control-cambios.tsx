@@ -43,14 +43,14 @@ function verCampo(c: Correccion) {
  * el equipo YA aplicó (read-only "Aplicado"), agrupados; "Ver" salta al campo. `mobile` lo vuelve colapsable
  * (arriba del contenido en móvil); en desktop va como panel fijo a la derecha.
  */
-export function PanelControlCambios({ mobile = false }: { mobile?: boolean }) {
+export function PanelControlCambios({ mobile = false, colorCliente }: { mobile?: boolean; colorCliente?: string }) {
   const ctx = useCorrecciones();
   const [colMovil, setColMovil] = useState(true); // en móvil arranca colapsado
   const [colapsadas, setColapsadas] = useState<Set<number>>(new Set());
   // Respuestas a medio escribir, por cambio: viven aquí para sobrevivir a colapsar una ronda.
   const [borradores, setBorradores] = useState<Map<string, string>>(new Map());
   const hilo = (c: Correccion) =>
-    hiloDe(c, ctx, borradores.get(c.id) ?? "", (t) =>
+    hiloDe(c, ctx, colorCliente, borradores.get(c.id) ?? "", (t) =>
       setBorradores((prev) => {
         const n = new Map(prev);
         if (t.trim()) n.set(c.id, t);
@@ -251,7 +251,7 @@ function Tarjeta({
 }
 
 /** El hilo de un cambio enviado, visto por el cliente: lo suyo va siempre al equipo. */
-function hiloDe(c: Correccion, ctx: Ctx | null, texto: string, setTexto: (t: string) => void) {
+function hiloDe(c: Correccion, ctx: Ctx | null, colorCliente: string | undefined, texto: string, setTexto: (t: string) => void) {
   if (!ctx) return null;
   return (
     <HiloRespuestas
@@ -261,6 +261,7 @@ function hiloDe(c: Correccion, ctx: Ctx | null, texto: string, setTexto: (t: str
       setTexto={setTexto}
       vaPara="el equipo de Rünna"
       alCliente={false}
+      colorCliente={colorCliente}
       vistaCliente
     />
   );

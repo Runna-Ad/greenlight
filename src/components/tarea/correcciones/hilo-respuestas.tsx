@@ -36,11 +36,13 @@ export function HiloRespuestas({
   vaPara: string;
   /** Lo que se escriba ahora lo lee el cliente: la caja lo dice en su color. */
   alCliente: boolean;
-  /** Color de marca del cliente (badge de sus respuestas en el lado interno). */
+  /** Color de marca del cliente: tiñe sus burbujas (y su badge en el lado interno). */
   colorCliente?: string | null;
   /** Se pinta en el portal: el cliente ve "Tú" en lo suyo y "Rünna" en lo del equipo. */
   vistaCliente?: boolean;
 }) {
+  // Sin color de marca registrado: ámbar (nunca el morado del equipo, se confundirían).
+  const marca = colorCliente || "var(--status-progress)";
   const [abierta, setAbierta] = useState(texto.trim() !== "");
   const [enviando, setEnviando] = useState(false);
   // Lo recién enviado se pinta YA (el refresh de la página tarda): sin esto la caja se vaciaba
@@ -113,14 +115,19 @@ export function HiloRespuestas({
               key={r.id}
               className={cn(
                 "rounded-md px-2 py-1.5",
-                // Gris NEUTRO de verdad (secondary/muted del tema son lilas: las dos burbujas
-                // salían iguales). El morado del equipo, un poco más fuerte para distinguirlo.
+                // Lo del cliente en un tinte de SU color de marca (Pedro 2026-10-27: DiDi =
+                // naranja; cada cliente el suyo). Lo del equipo en morado Rünna.
                 r.deCliente
-                  ? "bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)]"
+                  ? "border-l-[3px]"
                   : r.paraCliente || vistaCliente
-                    ? "bg-[color-mix(in_srgb,var(--primary)_14%,transparent)]"
+                    ? "border-l-[3px] border-primary bg-[color-mix(in_srgb,var(--primary)_14%,transparent)]"
                     : "border border-dashed border-border",
               )}
+              style={
+                r.deCliente
+                  ? { borderLeftColor: marca, background: `color-mix(in srgb, ${marca} 16%, transparent)` }
+                  : undefined
+              }
             >
               <p className="whitespace-pre-wrap text-[12px] leading-snug text-foreground">{r.body}</p>
               <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[10.5px] text-muted-foreground">
