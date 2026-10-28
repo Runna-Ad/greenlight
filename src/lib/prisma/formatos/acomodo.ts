@@ -66,6 +66,8 @@ export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zon
 export const esNota = (a: AvisoAcomodo): boolean => a.tipo === "matriz" || a.tipo === "renglones";
 /** Hasta cuántos renglones MENOS que en el PSD se le ofrecen al legal (B27, `renglones.ts`). */
 export const RENGLONES_MAX = 6;
+/** Y hasta cuántos MÁS (B29: en sus 1.91:1 el legal va en 2-3 renglones bajo el texto, más angosto que en el 4:5). */
+export const RENGLONES_MAS = 2;
 /** Lo más que se lee guardado de renglones (los del PSD también se eligen, y un legal puede traer más de 6). */
 const RENGLONES_LEER_MAX = 60;
 export type Acomodo = {
@@ -149,6 +151,10 @@ export const FONDO_ZOOM_MAX = 1.5;
 const SOBRE_TITULO_MAX = 1.3;
 /** En los banners, hasta qué parte del alto de la fila llegan la marca y el botón (el resto, hasta todo el alto). */
 const BANNER_TECHO: Partial<Record<Rol, number>> = { BRAND: 0.4, CTA: 0.55 };
+/** En los banners el legal va bajo el botón, en la última celda (B29, los 320×50 del equipo): hasta esta parte del alto. */
+const PIE_BANNER = 0.4;
+/** En «horizontal» el legal va bajo la columna del texto (B29, los 1.91:1 del equipo): hasta esta parte del alto. */
+const PIE_COLUMNA = 0.2;
 /** Donde hay columnas, ninguna pieza de texto se agranda más que esto respecto al HERO (para que no se coma el anuncio). */
 const TEXTO_SOBRE_HERO_MAX = 1.8;
 /**
@@ -322,7 +328,7 @@ type Rect = { x0: number; x1: number; y0: number; y1: number };
  * una fila de logos muy ancha achicaba el título y el botón: "the cta has no need to be that small"). Ninguna pasa
  * de SOBRE_TITULO_MAX × la escala del título: el título sigue siendo lo más grande del texto.
  */
-function columna(piezas: (Suelta | undefined)[], r: Rect, hueco: number, kTope: number): Puesta[] {
+function columna(piezas: (Suelta | undefined)[], r: Rect, hueco: number, kTope: number, pegada?: "izquierda" | "derecha"): Puesta[] {
   const ps = piezas.filter((s): s is Suelta => !!s);
   if (!ps.length || r.x1 <= r.x0 || r.y1 <= r.y0) return [];
   const ancho = r.x1 - r.x0;
@@ -347,7 +353,8 @@ function columna(piezas: (Suelta | undefined)[], r: Rect, hueco: number, kTope: 
   let y = r.y0 + (r.y1 - r.y0 - alto - sep * (ps.length - 1)) / 2;
   return ps.map((s) => {
     const ks = escala(s), w = s.p.solido.w * ks, h = s.p.solido.h * ks;
-    const puesta = { pieza: s.i, k: ks, x: r.x0 + (r.x1 - r.x0 - w) / 2, y, w, h };
+    const x = pegada === "izquierda" ? r.x0 : pegada === "derecha" ? r.x1 - w : r.x0 + (r.x1 - r.x0 - w) / 2;
+    const puesta = { pieza: s.i, k: ks, x, y, w, h };
     y += h + sep;
     return puesta;
   });
@@ -672,16 +679,18 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
     if (pieF) crecerPie(puestas, pieF, area, hueco);
   } else {
     // Pie: lo más grande que quepa a lo ancho, sin pasar de una franja del alto.
-    const tope = (familia === "banner" ? 0.24 : familia === "ancho" ? 0.15 : 0.12) * pie;
+    const tope = (familia === "ancho" ? 0.15 : 0.12) * pie;
     let franja: Puesta[] = [];
     let arriba = area.y1;
-    if (pieF) {
+    // En «horizontal» y en los banners el legal va bajo el texto o el botón, no a todo lo ancho: se pone con ellos.
+    const pieEnColumna = familia === "horizontal" || familia === "banner";
+    if (pieF && !pieEnColumna) {
       const k = Math.min((area.x1 - area.x0) / pieF.p.solido.w, (H * tope) / pieF.p.solido.h, PIE_ESCALA_MAX);
       const w = pieF.p.solido.w * k, h = pieF.p.solido.h * k;
       franja = [{ pieza: pieF.i, k, x: area.x0 + (area.x1 - area.x0 - w) / 2, y: area.y1 - h, w, h }];
-      arriba = area.y1 - h - Math.round(familia === "banner" ? H * 0.05 : m * 0.7);
+      arriba = area.y1 - h - Math.round(m * 0.7);
     }
-    const cuerpo: Rect = { x0: area.x0, x1: area.x1, y0: familia === "banner" ? zona.top + Math.round(H * 0.06) : area.y0, y1: arriba };
+    const cuerpo: Rect = { x0: area.x0, x1: area.x1, y0: area.y0, y1: arriba };
     const ancho = cuerpo.x1 - cuerpo.x0;
     const voltear = op.heroLado === "izquierda";
     const zonaX = (a: number, b: number): Rect => {
@@ -689,41 +698,68 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
       return voltear ? espejo(r, cuerpo.x0, cuerpo.x1) : r;
     };
     if (familia === "banner") {
-      // Una sola fila: marca · título · beneficios · hero · botón. Las celdas se reparten entre las piezas que SÍ
-      // están: una que falta (o que se quitó) no deja un hueco, le da su lugar a las demás.
-      // Con `texto`, las celdas de texto (título, beneficios, botón) crecen con lo que les cede el HERO (hasta
-      // quedarse con un tercio de su celda). La marca conserva exactamente la suya.
-      const crudas = ([["BRAND", 0.13], ["TITULO", 0.27], ["SUBTITULO", 0.19], ["HERO", 0.21], ["CTA", 0.14]] as [Rol, number][]).flatMap(([rol, frac]) => {
-        const s = de(rol);
-        return s ? [{ s, rol, frac }] : [];
-      });
-      const deTexto = (r: Rol) => r === "TITULO" || r === "SUBTITULO" || r === "CTA";
-      const textoF = crudas.reduce((t, c) => t + (deTexto(c.rol) ? c.frac : 0), 0);
-      const heroF = crudas.find((c) => c.rol === "HERO")?.frac ?? 0;
-      const cede = Math.min(textoF * texto, (heroF * 2) / 3);
-      const celdas = crudas.map((c) => ({ s: c.s, frac: deTexto(c.rol) ? c.frac * (1 + cede / textoF) : c.rol === "HERO" ? c.frac - cede : c.frac }));
-      const total = celdas.reduce((t, c) => t + c.frac, 0);
-      const altoF = cuerpo.y1 - cuerpo.y0;
-      const kDe = (s: Suelta, cw: number) => Math.min((cw * 0.9) / s.p.solido.w, (altoF * (BANNER_TECHO[s.p.rol as Rol] ?? 1)) / s.p.solido.h);
-      // El ancho que una pieza no usa (llegó a su alto antes que al ancho de su celda) pasa a las que se quedan cortas
-      // de ancho (Pedro, 2026-10-15: en 640×100 la fila de logos salía de 12 px de alto junto a celdas medio vacías).
-      let cws = celdas.map((c) => (ancho * c.frac) / total);
+      // Una sola fila, como los 320×50 del equipo (B29, 2026-10-28): [marca sobre título] · hero · beneficios ·
+      // [botón sobre legal]. Aquí no se voltea (`sePuedeVoltear`). Las celdas se reparten entre las que SÍ están: una que falta (o que se quitó) no deja un
+      // hueco, le da su lugar a las demás. Con `texto`, las de texto crecen con lo que les cede el HERO (hasta
+      // quedarse con un tercio de su celda).
+      const fila = cuerpo;
+      const altoF = fila.y1 - fila.y0;
+      const marca = de("BRAND"), titulo = de("TITULO"), heroB = de("HERO"), sub = de("SUBTITULO"), cta = de("CTA");
+      /** Una pieza lo más grande que quepa en `r` (sin pasar de su techo del alto), centrada de alto. */
+      const llena = (s: Suelta, r: Rect, pegada?: "derecha"): Puesta => {
+        const k = Math.min((r.x1 - r.x0) / s.p.solido.w, ((r.y1 - r.y0) * (BANNER_TECHO[s.p.rol as Rol] ?? 1)) / s.p.solido.h);
+        const w = s.p.solido.w * k, h = s.p.solido.h * k;
+        return { pieza: s.i, k, x: pegada ? r.x1 - w : r.x0 + (r.x1 - r.x0 - w) / 2, y: r.y0 + (r.y1 - r.y0 - h) / 2, w, h };
+      };
+      const sep = Math.round(altoF * 0.06);
+      type Celda = { frac: number; texto: boolean; poner: (r: Rect) => Puesta[] };
+      const celdas: Celda[] = [];
+      if (marca || titulo) celdas.push({ frac: 0.34, texto: true, poner: (r) => columna([marca, titulo], r, sep, Infinity, "izquierda") });
+      if (heroB) celdas.push({ frac: 0.22, texto: false, poner: (r) => parada(heroB, r) });
+      if (sub) celdas.push({ frac: 0.2, texto: true, poner: (r) => [llena(sub, r)] });
+      // Con `pie` (el legal no llega, PIE_MAS) esta celda se ensancha: aquí al legal lo limita el ancho, no el alto.
+      if (cta || pieF)
+        celdas.push({
+          frac: 0.24 * (pieF ? pie : 1),
+          texto: true,
+          poner: (r) => {
+            const out: Puesta[] = [];
+            let y1 = r.y1;
+            if (pieF) {
+              const k = Math.min((r.x1 - r.x0) / pieF.p.solido.w, (altoF * PIE_BANNER * pie) / pieF.p.solido.h, PIE_ESCALA_MAX);
+              const w = pieF.p.solido.w * k, h = pieF.p.solido.h * k;
+              out.push({ pieza: pieF.i, k, x: r.x1 - w, y: r.y1 - h, w, h });
+              y1 = r.y1 - h - sep;
+            }
+            if (cta) out.push(llena(cta, { ...r, y1: pieF ? y1 : r.y1 }));
+            return out;
+          },
+        });
+      const textoF = celdas.reduce((t, c) => t + (c.texto ? c.frac : 0), 0);
+      const heroF = celdas.find((c) => !c.texto)?.frac ?? 0;
+      const cede = textoF ? Math.min(textoF * texto, (heroF * 2) / 3) : 0;
+      const fr = celdas.map((c) => (c.texto ? c.frac * (1 + cede / textoF) : c.frac - cede));
+      const total = fr.reduce((t, f) => t + f, 0);
+      // El ancho que una celda no usa (sus piezas llegan a su alto antes que al ancho) pasa a las que se quedan cortas
+      // (Pedro, 2026-10-15: en 640×100 la fila de logos salía de 12 px de alto junto a celdas medio vacías).
+      const rect = (x: number, cw: number): Rect => ({ ...fila, x0: x, x1: x + cw });
+      const pide = (c: Celda, cw: number) => {
+        const ps = c.poner(rect(0, cw * 0.9));
+        return ps.length ? Math.max(...ps.map((q) => q.x + q.w)) - Math.min(...ps.map((q) => q.x)) : 0;
+      };
+      let cws = fr.map((f) => (ancho * f) / total);
       for (let n = 0; n < celdas.length; n++) {
-        const pide = celdas.map((c, i) => (c.s.p.solido.w * kDe(c.s, cws[i])) / 0.9);
-        const sobra = cws.reduce((t, cw, i) => t + Math.max(0, cw - pide[i]), 0);
-        const cortas = new Set(celdas.flatMap((_, i) => (pide[i] >= cws[i] - 0.5 ? [i] : [])));
+        const pid = celdas.map((c, i) => pide(c, cws[i]) / 0.9);
+        const sobra = cws.reduce((t, cw, i) => t + Math.max(0, cw - pid[i]), 0);
+        const cortas = new Set(celdas.flatMap((_, i) => (pid[i] >= cws[i] - 0.5 ? [i] : [])));
         if (sobra < 1 || !cortas.size) break;
-        const fr = celdas.reduce((t, c, i) => t + (cortas.has(i) ? c.frac : 0), 0);
-        cws = cws.map((cw, i) => (cortas.has(i) ? cw + (sobra * celdas[i].frac) / fr : Math.min(cw, pide[i])));
+        const fc = fr.reduce((t, f, i) => t + (cortas.has(i) ? f : 0), 0);
+        cws = cws.map((cw, i) => (cortas.has(i) ? cw + (sobra * fr[i]) / fc : Math.min(cw, pid[i])));
       }
       let x = cuerpo.x0;
-      celdas.forEach(({ s }, i) => {
+      celdas.forEach((c, i) => {
         const cw = cws[i];
-        if (altoF > 0) {
-          const k = kDe(s, cw);
-          const w = s.p.solido.w * k, h = s.p.solido.h * k;
-          puestas.push({ pieza: s.i, k, x: x + (cw - w) / 2, y: cuerpo.y0 + (altoF - h) / 2, w, h });
-        }
+        if (altoF > 0) puestas.push(...c.poner(rect(x + cw * 0.05, cw * 0.9)));
         x += cw;
       });
     } else if (familia === "ancho") {
@@ -738,7 +774,18 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
       // horizontal / display: dos columnas, texto de un lado y hero del otro.
       const base = familia === "display" ? 0.53 : 0.51, corte = base + texto * (CORTE_MAX - base);
       const hero = parada(de("HERO"), zonaX(corte + 0.02, 1));
-      puestas = [...hero, ...columna([de("BRAND"), de("TITULO"), de("SUBTITULO"), de("CTA")], zonaX(0, corte - 0.02), hueco, texto > 0 ? Infinity : (hero[0]?.k ?? 1) * TEXTO_SOBRE_HERO_MAX)];
+      const col = zonaX(0, corte - 0.02);
+      // Como los 1.91:1 del equipo (B29, 2026-10-28): el texto pegado a su orilla, el legal abajo SÓLO bajo el texto
+      // y el HERO con todo el alto. Si su letra no llega, PIE_MAS le da más alto y el legal en más renglones
+      // (`renglones.ts`) lo hace más angosto.
+      const pegada = pieEnColumna ? (voltear ? "derecha" : "izquierda") : undefined;
+      if (pieEnColumna && pieF) {
+        const k = Math.min((col.x1 - col.x0) / pieF.p.solido.w, (H * PIE_COLUMNA * pie) / pieF.p.solido.h, PIE_ESCALA_MAX);
+        const w = pieF.p.solido.w * k, h = pieF.p.solido.h * k;
+        franja = [{ pieza: pieF.i, k, x: voltear ? col.x1 - w : col.x0, y: area.y1 - h, w, h }];
+        col.y1 = area.y1 - h - Math.round(m * 0.7);
+      }
+      puestas = [...hero, ...columna([de("BRAND"), de("TITULO"), de("SUBTITULO"), de("CTA")], col, hueco, texto > 0 ? Infinity : (hero[0]?.k ?? 1) * TEXTO_SOBRE_HERO_MAX, pegada)];
     }
     puestas.push(...franja);
     puestas.sort((a, b) => a.pieza - b.pieza);

@@ -27,7 +27,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, MEDIDAS_RATIO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
+import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, RENGLONES_MAS, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, MEDIDAS_RATIO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContraste, edicionMuevePieza, edicionSinPieza } from "../src/lib/prisma/formatos/revisar.ts";
@@ -724,6 +724,16 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
   const chico916 = acomodar(MESAS[0], 360, 640);
   ok("en el acomodo del diseñador (un 9:16 a un tercio) no se quita nada: la letra chica se marca", chico916.familia === "igual" && chico916.quitadas.length === 0 && chico916.puestas.length === 6 && chico916.avisos.some((v) => v.tipo === "letra"), JSON.stringify(chico916.avisos));
   ok(`320×250 y 640×100: todo el texto (menos el legal, que va en su franja) llega a ${LETRA_MIN_PX} px`, hechos.filter((x) => ["320x250", "640x100"].includes(`${x.W}x${x.H}`)).every((x) => textoDe(x.ma, x.a).every((l) => l.px >= LETRA_MIN_PX)), JSON.stringify(hechos.slice(9, 11).map((x) => x.a.letras)));
+  // B29: como los ejemplos del equipo (2026-10-28). 1.91:1: el texto pegado a la izquierda, el legal abajo SÓLO bajo
+  // el texto y el HERO con todo el alto. 640×100: [marca sobre título] · hero · beneficios · [botón sobre legal].
+  {
+    const a = acomodar(M45, 1200, 628), q = (rol) => a.puestas.find((p) => M45.piezas[p.pieza].rol === rol);
+    const [F, Hr, T, B] = ["FOOTER", "HERO", "TITULO", "BRAND"].map(q);
+    ok("B29 1.91:1: el legal abajo a la izquierda, bajo el texto (no bajo el HERO); el HERO baja hasta el borde del legal; el texto pegado a la izquierda", F.x === T.x && T.x === B.x && F.x + F.w <= Hr.x && Math.abs(F.y + F.h - (Hr.y + Hr.h)) < 1, JSON.stringify(a.puestas));
+    const b = acomodar(M45, 640, 100), r = (rol) => b.puestas.find((p) => M45.piezas[p.pieza].rol === rol);
+    const [Fb, Hb, Tb, Bb, Sb, Cb] = ["FOOTER", "HERO", "TITULO", "BRAND", "SUBTITULO", "CTA"].map(r);
+    ok("B29 640×100: marca sobre el título a la izquierda, luego HERO, beneficios y el botón con el legal debajo", Bb.y + Bb.h <= Tb.y && Bb.x === Tb.x && Tb.x + Tb.w <= Hb.x && Hb.x + Hb.w <= Sb.x && Sb.x + Sb.w <= Math.min(Cb.x, Fb.x) && Cb.y + Cb.h <= Fb.y && Fb.x + Fb.w <= 640, JSON.stringify(b.puestas));
+  }
   // La franja del legal crece sólo si el resto del texto puede ceder alto sin bajar del mínimo. Con M45 en 640×100 no
   // puede (el título queda en 10.3 px): el legal se queda en su franja de siempre (6.2 px). Con un título de letra
   // grande sí puede, y el legal sube.
@@ -2337,7 +2347,7 @@ console.log("\n▶ 3 · textos editables: cambiar las letras (todas las medidas,
   eq("B27 legalParaRenglones: un pie que es sólo el legal (caja de párrafo, un estilo, 4 renglones): se puede, sin partes", infoS, { pieza: 0, parte: null, j: 0, psd: 4 });
   const conTp = (tp, extra = {}) => ({ ...maT, piezas: [piezaT(tp, { base: transparente, ...extra }), hero] });
   eq(
-    "B27 legalParaRenglones: por qué no (sin tipografía · varios estilos · texto de punto · un renglón · con otra cosa en su misma capa · con otro texto · sin legal)",
+    "B27 legalParaRenglones: por qué no (sin tipografía · varios estilos · texto de punto · con otra cosa en su misma capa · con otro texto · sin legal); en un renglón SÍ se puede (B29: puede ir en más)",
     [
       legalParaRenglones(soloLegal, () => undefined),
       ((m) => legalParaRenglones(m, listosT(m)))(conTp(tpDe("legal", capaT(largo, [0, -10, 80, 10], [tramo(20), tramo(largo.length - 20)]), [1, 0]))),
@@ -2347,9 +2357,13 @@ console.log("\n▶ 3 · textos editables: cambiar las letras (todas las medidas,
       ((m) => legalParaRenglones(m, listosT(m)))(conTp(tpLargo, { textos: [tpLargo, tpDe("otro", enCaja, [1, 1])] })),
       legalParaRenglones({ ...maT, piezas: [hero] }, () => undefined),
     ].map((r) => r.no),
-    ["tipografia", "estilos", "de-punto", "un-renglon", "partes", "otro-texto", "sin-legal"],
+    ["tipografia", "estilos", "de-punto", undefined, "partes", "otro-texto", "sin-legal"],
   );
   const listoS = listosT(soloLegal)(0)[0];
+  // B29: también en MÁS renglones (hasta RENGLONES_MAS más), con la caja más angosta; ni uno más.
+  // (12 palabras: 4 renglones son 3 por renglón; 5 justos no salen, 6 sí, 2 por renglón.)
+  const v5 = conRenglones(soloLegal, infoS, 6, listoS, maq, pintarFalso), t5 = v5?.maestro.piezas[0].textos[0];
+  ok(`B29 conRenglones: en 6 renglones (de 4) la caja es más angosta (${t5?.texto.caja}); en 5 justos no se puede; en ${4 + RENGLONES_MAS + 1}, nada`, conRenglones(soloLegal, infoS, 5, listoS, maq, pintarFalso) === null && v5?.listos.get(0)?.[0].lineas.length === 6 && t5.texto.caja[2] - t5.texto.caja[0] < tpLargo.texto.caja[2] - tpLargo.texto.caja[0] && conRenglones(soloLegal, infoS, 4 + RENGLONES_MAS + 1, listoS, maq, pintarFalso) === null);
   const vS = conRenglones(soloLegal, infoS, 2, listoS, maq, pintarFalso);
   const pS = vS?.maestro.piezas[0], tS = pS?.textos[0], lS = vS?.listos.get(0)?.[0];
   ok(
@@ -2476,12 +2490,12 @@ console.log("\n▶ 3 · textos editables: cambiar las letras (todas las medidas,
     const rg33 = (mi) => (mi !== 0 ? null : { pieza: iL, psd: info33.psd, de: (n) => (hechas33.has(n) ? hechas33.get(n) : (hechas33.set(n, conRenglones(l33, info33, n, listoL, maq, pintarFalso)?.maestro ?? null), hechas33.get(n))) });
     const conR = (W2, H2, op = {}) => revisarMedida([l33], W2, H2, { ...op, renglones: { de: rg33, elegidos: op.elegidos ?? null } });
     const pxL = (r) => r.acomodo.letras.find((l) => l.pieza === iL)?.px ?? 0;
-    const r640 = conR(640, 100), b640 = revisarMedida([l33], 640, 100), r1080 = conR(1080, 1920), r1280 = conR(1280, 720);
+    const r876 = conR(876, 324), b876 = revisarMedida([l33], 876, 324), r1080 = conR(1080, 1920), r1280 = conR(1280, 720);
     const notaR = (r) => r.acomodo.avisos.filter((v) => v.tipo === "renglones");
     ok(
-      `B27 s33 640×100 (ancha): el automático pone el legal en ${r640.renglones?.usados} renglones (de ${info33.psd}) y su letra crece (${pxL(b640).toFixed(1)} → ${pxL(r640).toFixed(1)} px), con una nota gris que no cuenta (${notaR(r640)[0]?.texto})`,
-      r640.renglones.usados < info33.psd && r640.renglones.auto === r640.renglones.usados && pxL(r640) > pxL(b640) * 1.03 && r640.ma === hechas33.get(r640.renglones.usados) && notaR(r640).length === 1 && esNota(notaR(r640)[0]) && /renglones \(en el PSD, \d\)/i.test(notaR(r640)[0].texto),
-      JSON.stringify(r640.renglones),
+      `B27 s33 876×324 (ancha): el automático pone el legal en ${r876.renglones?.usados} renglones (de ${info33.psd}) y su letra crece (${pxL(b876).toFixed(1)} → ${pxL(r876).toFixed(1)} px), con una nota gris que no cuenta (${notaR(r876)[0]?.texto})`,
+      r876.renglones.usados < info33.psd && r876.renglones.auto === r876.renglones.usados && pxL(r876) > pxL(b876) * 1.03 && r876.ma === hechas33.get(r876.renglones.usados) && notaR(r876).length === 1 && esNota(notaR(r876)[0]) && /renglones \(en el PSD, \d\)/i.test(notaR(r876)[0].texto),
+      JSON.stringify(r876.renglones),
     );
     ok(
       "B27 s33: 1080×1920 (más alta que ancha) y 1280×720 (el legal ya al tope): los renglones del PSD, el mismo maestro, sin nota",
@@ -2492,65 +2506,66 @@ console.log("\n▶ 3 · textos editables: cambiar las letras (todas las medidas,
       `B27 s33 1080×1350: la tarjeta (sin elegidos) no hace las versiones (${tarjetaAlta.renglones?.opciones}); el editor, abierto después, sí ofrece menos renglones (${editorAlta.renglones?.opciones}): las opciones van en la clave del resultado guardado`,
       tarjetaAlta.renglones.opciones.join() === String(info33.psd) && editorAlta.renglones.opciones.includes(info33.psd - 1) && editorAlta.renglones.usados === info33.psd,
     );
-    const rPsd = conR(640, 100, { elegidos: info33.psd }), rUno = conR(640, 100, { edicion: { piezas: {}, renglones: 1 } }), rRaro = conR(640, 100, { edicion: { piezas: {}, renglones: RENGLONES_MAX } });
+    const rPsd = conR(876, 324, { elegidos: info33.psd }), rUno = conR(876, 324, { edicion: { piezas: {}, renglones: 1 } }), rRaro = conR(876, 324, { edicion: { piezas: {}, renglones: info33.psd + RENGLONES_MAS + 1 } });
     ok(
-      "B27 s33 640×100: elegidos a mano (los del PSD en el editor, 1 guardado) se usan y no llevan nota (la persona ya lo sabe); guardado uno que no se ofrece, el automático",
-      rPsd.ma === l33 && rPsd.renglones.usados === info33.psd && !notaR(rPsd).length && rUno.renglones.usados === 1 && rUno.ma === hechas33.get(1) && rUno.acomodo.editada === true && !notaR(rUno).length && rRaro.renglones.usados === r640.renglones.auto && !!notaR(rRaro).length,
+      "B27 s33 876×324: elegidos a mano (los del PSD en el editor, 1 guardado) se usan y no llevan nota (la persona ya lo sabe); guardado uno que no se ofrece, el automático",
+      rPsd.ma === l33 && rPsd.renglones.usados === info33.psd && !notaR(rPsd).length && rUno.renglones.usados === 1 && rUno.ma === hechas33.get(1) && rUno.acomodo.editada === true && !notaR(rUno).length && rRaro.renglones.usados === r876.renglones.auto && !!notaR(rRaro).length,
     );
-    ok("B27: sin renglones (sin tipografía, o con otro PSD) la medida sale como siempre", revisarMedida([l33], 640, 100).renglones === null && revisarMedida([l33], 640, 100, { renglones: { de: () => null } }).ma === l33);
-    const qL = r640.acomodo.puestas.find((q) => q.pieza === iL), edMov = { piezas: { [iL]: { x: 5, y: 5, k: qL.k } }, renglones: 2 };
-    const sinFuentes = revisarMedida([l33], 640, 100, { edicion: edMov }), autoPsd = revisarMedida([l33], 640, 100).acomodo.puestas.find((q) => q.pieza === iL);
-    const qSin = sinFuentes.acomodo.puestas.find((q) => q.pieza === iL), qCon = conR(640, 100, { edicion: edMov }).acomodo.puestas.find((q) => q.pieza === iL);
+    ok("B27: sin renglones (sin tipografía, o con otro PSD) la medida sale como siempre", revisarMedida([l33], 876, 324).renglones === null && revisarMedida([l33], 876, 324, { renglones: { de: () => null } }).ma === l33);
+    const qL = r876.acomodo.puestas.find((q) => q.pieza === iL), edMov = { piezas: { [iL]: { x: 5, y: 5, k: qL.k } }, renglones: 2 };
+    const sinFuentes = revisarMedida([l33], 876, 324, { edicion: edMov }), autoPsd = revisarMedida([l33], 876, 324).acomodo.puestas.find((q) => q.pieza === iL);
+    const qSin = sinFuentes.acomodo.puestas.find((q) => q.pieza === iL), qCon = conR(876, 324, { edicion: edMov }).acomodo.puestas.find((q) => q.pieza === iL);
     const notaSin = sinFuentes.acomodo.avisos.find((v) => v.tipo === "renglones");
     ok(
-      `B27 s33 640×100: guardado en 2 renglones y con el legal movido, sin poder usar los renglones (sin tipografías): el legal va a su lugar automático (lo movido se midió con otra forma) y una nota gris lo dice («${notaSin?.texto}»); con ellos, va donde se movió`,
+      `B27 s33 876×324: guardado en 2 renglones y con el legal movido, sin poder usar los renglones (sin tipografías): el legal va a su lugar automático (lo movido se midió con otra forma) y una nota gris lo dice («${notaSin?.texto}»); con ellos, va donde se movió`,
       qSin.x === autoPsd.x && qSin.y === autoPsd.y && !!notaSin && esNota(notaSin) && /no se pueden usar ahora/.test(notaSin.texto) && qCon.x === 5 && qCon.y === 5,
     );
     // Lo movido a mano del legal sin renglones se movió con la forma del PSD (lo guardado antes de B27): con ésa se queda.
-    const edViejo = { piezas: { [iL]: { x: 5, y: 5, k: qL.k } } }, rViejo = conR(640, 100, { edicion: edViejo });
-    const otraPieza = l33.piezas.findIndex((p, i) => i !== iL && r640.acomodo.puestas.some((q) => q.pieza === i));
-    const qO = r640.acomodo.puestas.find((q) => q.pieza === otraPieza), rOtra = conR(640, 100, { edicion: { piezas: { [otraPieza]: { x: qO.x + 3, y: qO.y, k: qO.k } } } });
+    const edViejo = { piezas: { [iL]: { x: 5, y: 5, k: qL.k } } }, rViejo = conR(876, 324, { edicion: edViejo });
+    const otraPieza = l33.piezas.findIndex((p, i) => i !== iL && r876.acomodo.puestas.some((q) => q.pieza === i));
+    const qO = r876.acomodo.puestas.find((q) => q.pieza === otraPieza), rOtra = conR(876, 324, { edicion: { piezas: { [otraPieza]: { x: qO.x + 3, y: qO.y, k: qO.k } } } });
     ok(
-      `B27 s33 640×100: lo guardado que movió el legal sin decir renglones se queda con los del PSD (sin nota, el legal donde se movió); si movió otra pieza, el automático (${rOtra.renglones?.usados})`,
-      rViejo.renglones.usados === info33.psd && rViejo.ma === l33 && !notaR(rViejo).length && ((q) => q.x === 5 && q.y === 5)(rViejo.acomodo.puestas.find((q) => q.pieza === iL)) && rOtra.renglones.usados === r640.renglones.auto && rOtra.ma !== l33,
+      `B27 s33 876×324: lo guardado que movió el legal sin decir renglones se queda con los del PSD (sin nota, el legal donde se movió); si movió otra pieza, el automático (${rOtra.renglones?.usados})`,
+      rViejo.renglones.usados === info33.psd && rViejo.ma === l33 && !notaR(rViejo).length && ((q) => q.x === 5 && q.y === 5)(rViejo.acomodo.puestas.find((q) => q.pieza === iL)) && rOtra.renglones.usados === r876.renglones.auto && rOtra.ma !== l33,
     );
     ok(
       "B27 edicionMuevePieza / edicionSinPieza: la pieza, sus partes o el orden de sus partes; quitarla deja lo demás",
       edicionMuevePieza(edViejo, iL) && !edicionMuevePieza(edViejo, otraPieza) && edicionMuevePieza({ piezas: {}, partes: { 3: {} } }, 3) && edicionMuevePieza({ piezas: {}, ordenPartes: { 2: [0] } }, 2) && !edicionMuevePieza(null, 0) && ((e) => !e.piezas[iL] && e.piezas[otraPieza] !== undefined)(edicionSinPieza({ piezas: { [iL]: { x: 1, y: 1, k: 1 }, [otraPieza]: { x: 2, y: 2, k: 1 } } }, iL)),
     );
     // Sin tipografías, el legal lo dice la página (`legal`): se suelta ésa, no la primera del pie con texto.
-    const sinFuentesL = (legal) => revisarMedida([l33], 640, 100, { edicion: edMov, renglones: { de: () => null, legal: () => legal } });
+    const sinFuentesL = (legal) => revisarMedida([l33], 876, 324, { edicion: edMov, renglones: { de: () => null, legal: () => legal } });
     const qSinOtra = sinFuentesL(otraPieza).acomodo.puestas.find((q) => q.pieza === iL), qSinL = sinFuentesL(iL).acomodo.puestas.find((q) => q.pieza === iL);
     ok("B27 s33 sin tipografías: se suelta la pieza que la página dice que es el legal", qSinOtra.x === 5 && qSinOtra.y === 5 && qSinL.x === autoPsd.x && qSinL.y === autoPsd.y);
-    const notaSola = revisarMedida([l33], 640, 100, { edicion: { piezas: {}, renglones: 2 } }).acomodo.avisos.find((v) => v.tipo === "renglones");
+    const notaSola = revisarMedida([l33], 876, 324, { edicion: { piezas: {}, renglones: 2 } }).acomodo.avisos.find((v) => v.tipo === "renglones");
     ok(`B27: renglones guardados sin nada movido del legal, sin tipografías: la nota no habla de lo movido («${notaSola?.texto}»)`, !!notaSola && /no se pueden usar ahora/i.test(notaSola.texto) && !/movido/i.test(notaSola.texto) && /movido/i.test(notaSin.texto));
-    // Las opciones son las `RENGLONES_MAX` de justo abajo de los del PSD (un legal largo no se ofrece en 1).
+    // Las opciones son las `RENGLONES_MAX` de justo abajo de los del PSD (un legal largo no se ofrece en 1) y hasta
+    // RENGLONES_MAS arriba (B29).
     const largo = revisarMedida([l33], 1080, 1920, { renglones: { de: () => ({ pieza: iL, psd: 10, de: () => l33 }), elegidos: null } });
-    ok(`B27: un legal de 10 renglones ofrece del 4 al 9 y los del PSD (${largo.renglones?.opciones})`, largo.renglones?.opciones.join() === "4,5,6,7,8,9,10");
+    ok(`B27: un legal de 10 renglones ofrece del 4 al 9, los del PSD, y 11 y 12 (${largo.renglones?.opciones})`, largo.renglones?.opciones.join() === "4,5,6,7,8,9,10,11,12");
     ok("B27 s33: el automático quita como mucho la mitad de los renglones (de 4, nunca 1)", [640, 876, 320].every((w) => ((r) => r.renglones.auto >= Math.ceil(info33.psd / 2))(conR(w, w === 876 ? 324 : w === 640 ? 100 : 50))));
-    const aR = acomodar(l33, 640, 100), eR = aplicarEdicion(l33, aR, { piezas: {}, renglones: 2 }, 640, 100);
+    const aR = acomodar(l33, 876, 324), eR = aplicarEdicion(l33, aR, { piezas: {}, renglones: 2 }, 876, 324);
     ok("B27 aplicarEdicion: sólo los renglones (ya vienen en el maestro): el mismo acomodo, marcado editado a mano", eR.editada === true && eR.puestas === aR.puestas && eR.avisos === aR.avisos);
 
     // El PSD editable de esa medida: el pie va parte por parte (sin abrirlo en el editor), los iconos con su escala.
-    const V = r640.ma, q640 = r640.acomodo.puestas.find((q) => q.pieza === iL), plan640 = planDeMedida(V, r640.acomodo, 640, 100);
-    const pPlan = plan640.partes?.find((x) => x.pieza === P0.nombre), o33 = l33.origen;
+    const V = r876.ma, q876 = r876.acomodo.puestas.find((q) => q.pieza === iL), plan876 = planDeMedida(V, r876.acomodo, 876, 324);
+    const pPlan = plan876.partes?.find((x) => x.pieza === P0.nombre), o33 = l33.origen;
     const Aic = pPlan?.partes.find((x) => x.hijo === I0.hijo)?.A, IV = V.piezas[iL].partes[parteI];
     // La esquina sólida de los iconos del PSD (en el documento) cae donde la pinta la tarjeta (±1 px del maestro).
     const enPsd = Aic && [Aic.k * (I0.solido.x / o33.s + o33.x) + Aic.x, Aic.k * (I0.solido.y / o33.s + o33.y) + Aic.y];
-    const enTarjeta = [q640.x + (IV.solido.x - V.piezas[iL].solido.x) * q640.k, q640.y + (IV.solido.y - V.piezas[iL].solido.y) * q640.k];
-    const tPlan = plan640.textos?.find((t) => t.ruta.join("/") === tL.ruta.join("/"));
+    const enTarjeta = [q876.x + (IV.solido.x - V.piezas[iL].solido.x) * q876.k, q876.y + (IV.solido.y - V.piezas[iL].solido.y) * q876.k];
+    const tPlan = plan876.textos?.find((t) => t.ruta.join("/") === tL.ruta.join("/"));
     ok(
-      `B27 s33 640×100 PSD editable: el pie parte por parte sin abrirlo; los iconos con su escala (×${(Aic?.k / q640.k).toFixed(3)}) y su lugar (PSD ${enPsd?.map((v) => v.toFixed(1))} · tarjeta ${enTarjeta.map((v) => v.toFixed(1))}); el legal con sus letras en un párrafo y su caja nueva`,
-      !!pPlan && pPlan.partes.length === 2 && Math.abs(Aic.k - q640.k * IV.desde.k * o33.s) < 1e-9 && enPsd.every((v, i) => Math.abs(v - enTarjeta[i]) <= q640.k * 1.5) && tPlan?.texto === V.piezas[iL].textos[0].texto.texto && tPlan?.caja === V.piezas[iL].textos[0].texto.caja,
+      `B27 s33 876×324 PSD editable: el pie parte por parte sin abrirlo; los iconos con su escala (×${(Aic?.k / q876.k).toFixed(3)}) y su lugar (PSD ${enPsd?.map((v) => v.toFixed(1))} · tarjeta ${enTarjeta.map((v) => v.toFixed(1))}); el legal con sus letras en un párrafo y su caja nueva`,
+      !!pPlan && pPlan.partes.length === 2 && Math.abs(Aic.k - q876.k * IV.desde.k * o33.s) < 1e-9 && enPsd.every((v, i) => Math.abs(v - enTarjeta[i]) <= q876.k * 1.5) && tPlan?.texto === V.piezas[iL].textos[0].texto.texto && tPlan?.caja === V.piezas[iL].textos[0].texto.caja,
       JSON.stringify({ partes: pPlan?.partes.length, A: Aic }),
     );
-    const Acarpeta = plan640.piezas.find(([n]) => n === P0.nombre)?.[1], Alegal = pPlan?.partes.find((x) => x.hijo === P0.partes[parteL].hijo)?.A;
-    eq("B27 s33 640×100 PSD editable: la carpeta del pie (su máscara, lo recortado a ella) va con el texto del legal, que sólo se corrió", Acarpeta, Alegal);
-    const tintas640 = V.piezas.flatMap((p) => p.textos.flatMap((t) => (t.cambio?.tinta ? [{ ruta: t.ruta, tinta: t.cambio.tinta }] : [])));
-    const v640 = legalDe(readPsdAg(writePsdBuffer(psdEditable(fuente, plan640, { ...vacios(640, 100), textos: tintas640 }, pxDe).psd, { invalidateTextLayers: true, noBackground: true }), { useImageData: true, skipThumbnail: true }));
+    const Acarpeta = plan876.piezas.find(([n]) => n === P0.nombre)?.[1], Alegal = pPlan?.partes.find((x) => x.hijo === P0.partes[parteL].hijo)?.A;
+    eq("B27 s33 876×324 PSD editable: la carpeta del pie (su máscara, lo recortado a ella) va con el texto del legal, que sólo se corrió", Acarpeta, Alegal);
+    const tintas876 = V.piezas.flatMap((p) => p.textos.flatMap((t) => (t.cambio?.tinta ? [{ ruta: t.ruta, tinta: t.cambio.tinta }] : [])));
+    const v876 = legalDe(readPsdAg(writePsdBuffer(psdEditable(fuente, plan876, { ...vacios(876, 324), textos: tintas876 }, pxDe).psd, { invalidateTextLayers: true, noBackground: true }), { useImageData: true, skipThumbnail: true }));
     ok(
-      `B27 s33 640×100 PSD editable: el legal sigue vivo, en un párrafo sin saltos y con la caja de párrafo nueva (${bb0.map((v) => v.toFixed(0))} → ${v640?.text?.boxBounds?.map((v) => v.toFixed(0))})`,
-      !!v640?.text && !/[\r\n\u0003]/.test(v640.text.text) && v640.text.text === V.piezas[iL].textos[0].texto.texto && v640.text.boxBounds[2] - v640.text.boxBounds[0] > bb0[2] - bb0[0] && !v640.hidden,
+      `B27 s33 876×324 PSD editable: el legal sigue vivo, en un párrafo sin saltos y con la caja de párrafo nueva (${bb0.map((v) => v.toFixed(0))} → ${v876?.text?.boxBounds?.map((v) => v.toFixed(0))})`,
+      !!v876?.text && !/[\r\n\u0003]/.test(v876.text.text) && v876.text.text === V.piezas[iL].textos[0].texto.texto && v876.text.boxBounds[2] - v876.text.boxBounds[0] > bb0[2] - bb0[0] && !v876.hidden,
     );
   }
 }

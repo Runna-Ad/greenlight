@@ -429,7 +429,7 @@ export const FP = {
   editorRenglonesPsd: t("como el original", "as in the original"),
   editorRenglonesUno: t("1 renglón", "1 line"),
   editorRenglonesN: t("{n} renglones", "{n} lines"),
-  editorRenglonesAyuda: t("Con menos renglones el legal sale más ancho. Sólo en esta medida.", "With fewer lines the legal gets wider. This size only."),
+  editorRenglonesAyuda: t("Con menos renglones el legal sale más ancho; con más, más angosto. Sólo en esta medida.", "With fewer lines the legal gets wider; with more, narrower. This size only."),
   editorRenglonesLetra: t("Letra del legal aquí: {px} px", "Legal letters here: {px} px"),
   editorRenglonesNo: t("No se pueden cambiar: {m}.", "They can't be changed: {m}."),
   editorRenglonesNoCabe: t("en menos renglones el legal sería demasiado ancho", "in fewer lines the legal would be too wide"),
@@ -683,7 +683,6 @@ export const FP_SIN_RENGLONES: Record<SinRenglones | "probando", Par> = {
   estilos: t("el texto del legal usa varios estilos; en Photoshop, déjalo con uno solo", "the legal text uses several styles; in Photoshop, leave it with one"),
   "de-punto": t("el legal es texto de punto (sus renglones van con Enter); en Photoshop, hazlo texto de párrafo", "the legal is point text (its lines use Enter); in Photoshop, make it paragraph text"),
   girado: t("el legal está girado o inclinado", "the legal is rotated or skewed"),
-  "un-renglon": t("ya va en un renglón", "it's already one line"),
   guion: t("el legal corta una palabra con guion al final de un renglón; en Photoshop, quita el guion y el salto", "the legal splits a word with a hyphen at a line end; in Photoshop, remove the hyphen and the break"),
   placa: t("hay algo pintado detrás del texto del legal; en Photoshop, ponlo en otra subcarpeta de Legal", "something is drawn behind the legal text; in Photoshop, put it in another subfolder of Legal"),
   partes: t(

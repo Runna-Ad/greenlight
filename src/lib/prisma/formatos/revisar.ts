@@ -12,7 +12,7 @@
  * Una sola entrada, `revisarMedida`, para la tarjeta de cada medida y para el resumen de la pantalla: los dos cuentan
  * los mismos avisos.
  */
-import { acomodar, aplicarEdicion, dibujosDe, elegirMaestro, RENGLONES_MAX, sinSusLetras, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type OpcionesAcomodo, type ParteCaja, type Zona } from "./acomodo.ts";
+import { acomodar, aplicarEdicion, dibujosDe, elegirMaestro, RENGLONES_MAS, RENGLONES_MAX, sinSusLetras, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type OpcionesAcomodo, type ParteCaja, type Zona } from "./acomodo.ts";
 import { haloDe } from "./halo.ts";
 import type { Caja, Rol } from "./psd.ts";
 import { etiquetaPieza } from "./roles.ts";
@@ -317,7 +317,7 @@ const autos = new WeakMap<MaestroRevisable, Map<string, number>>();
  */
 function renglonesAuto<M extends MaestroRevisable>(base: M, rg: Renglonero<M>, opciones: number[], W: number, H: number, op: OpcionesAcomodo, clave: string): number {
   if (W <= H) return rg.psd;
-  const candidatos = opciones.filter((x) => x < rg.psd && x >= Math.ceil(rg.psd / 2));
+  const candidatos = opciones.filter((x) => x !== rg.psd && x >= Math.ceil(rg.psd / 2));
   const llave = (candidatos.length && rg.de(candidatos[0])) || base;
   let porMedida = autos.get(llave);
   if (!porMedida) autos.set(llave, (porMedida = new Map()));
@@ -420,7 +420,9 @@ export function revisarMedida<M extends MaestroRevisable>(
       // Los `RENGLONES_MAX` de justo abajo de los del PSD (de 8, del 2 al 7; de 3, el 1 y el 2).
       const desde = Math.max(1, rg.psd - RENGLONES_MAX);
       const menos = todas ? Array.from({ length: rg.psd - desde }, (_, i) => desde + i).filter((n) => !!rg.de(n)) : [];
-      const opciones = [...menos, rg.psd];
+      // Y hasta RENGLONES_MAS más (B29): bajo una columna de texto el legal va más angosto.
+      const mas = todas ? Array.from({ length: RENGLONES_MAS }, (_, i) => rg.psd + 1 + i).filter((n) => !!rg.de(n)) : [];
+      const opciones = [...menos, rg.psd, ...mas];
       const auto = renglonesAuto(delPsd, rg, opciones, W, H, { heroLado: lado, zona: z }, base);
       aMano = !!pedidos && opciones.includes(pedidos);
       const usados = aMano && pedidos ? pedidos : auto;

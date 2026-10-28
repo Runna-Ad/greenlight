@@ -961,7 +961,7 @@ export function EditorMedida({
                     {tx(FP.editorRenglonesAyuda, lang)}
                   </p>
                 </fieldset>
-              ) : (sinRenglones && sinRenglones !== "sin-legal" && sinRenglones !== "un-renglon") || infoRenglones ? (
+              ) : (sinRenglones && sinRenglones !== "sin-legal") || infoRenglones ? (
                 <p className="text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">{tx(FP.editorRenglones, lang)}. </span>
                   {rellenar(tx(FP.editorRenglonesNo, lang), { m: tx(sinRenglones && !infoRenglones ? FP_SIN_RENGLONES[sinRenglones] : FP.editorRenglonesNoCabe, lang) })}

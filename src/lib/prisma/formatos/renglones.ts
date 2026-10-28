@@ -9,6 +9,7 @@
  * mismo centro y su mismo borde de abajo. Todo lo de después (acomodo, tarjeta, PNG, contraste, los dos PSD) la usa sin
  * saber que cambió. Cada parte movida dice cómo (`desde`), para el PSD editable.
  */
+import { RENGLONES_MAS } from "./acomodo.ts";
 import { aCaja, reescribir, reservado, solidoDe, tintaSola, type Listo, type Maquetar, type Pintar } from "./cambios-texto.ts";
 import { legalDelPsd } from "./legal.ts";
 import type { MaestroListo, ParteLista, PiezaLista } from "./listo.ts";
@@ -26,7 +27,6 @@ export type SinRenglones =
   | "estilos" // tiene varios estilos
   | "de-punto" // texto de punto: sus renglones los pone Photoshop con Enter
   | "girado" // girado o inclinado: menos renglones no lo hacen más ancho a lo largo de la medida
-  | "un-renglon" // ya viene en un renglón
   | "guion" // corta una palabra con guion al final de un renglón: juntarlo cambiaría las letras
   | "placa" // algo pintado detrás del legal en su misma carpeta
   | "partes" // lo demás del pie no está a un lado del legal (o viene en la misma capa)
@@ -63,8 +63,8 @@ export function legalParaRenglones(ma: Pick<MaestroListo, "piezas">, listosDe: (
   if (!tp.texto.caja) return { no: "de-punto" };
   const [a, b, c, d0] = tp.texto.transform, escala = Math.hypot(a, b);
   if (!(escala > 0) || Math.abs(b) > 1e-3 * escala || Math.abs(c) > 1e-3 * escala || !(d0 > 0)) return { no: "girado" };
+  // Uno solo también: puede ir en MÁS renglones (B29).
   const psd = l.lineas.length;
-  if (psd < 2) return { no: "un-renglon" };
   if (tp.texto.saltosSuaves && /-[ \t]*\n/.test(tp.texto.texto)) return { no: "guion" };
   if (!p.partes) return hayTinta(p.base) ? { no: "partes" } : { pieza: legal.pieza, parte: null, j: legal.j, psd };
   const parte = p.partes.findIndex((d) => d.textos.includes(tp));
@@ -215,12 +215,12 @@ function armarPieza(p: PiezaLista, partes: ParteLista[]): PiezaLista {
 }
 
 /**
- * El maestro con el legal en `n` renglones (menos que en el PSD) y lo que la página escribe de su pieza (sus `Listo`).
+ * El maestro con el legal en `n` renglones (menos que en el PSD, o hasta RENGLONES_MAS más: B29) y lo que la página escribe de su pieza (sus `Listo`).
  * `listo`: el legal tal como la página ya lo escribe (`legalParaRenglones` dijo que se puede). null si no sale (un
  * texto que en `n` renglones sería demasiado largo, o que no se pudo pintar).
  */
 export function conRenglones<M extends MaestroListo>(ma: M, legal: LegalRenglones, n: number, listo: Listo, maquetar: Maquetar, pintar: Pintar): { maestro: M; listos: Map<number, Listo[]> } | null {
-  if (!Number.isInteger(n) || n < 1 || n >= legal.psd) return null;
+  if (!Number.isInteger(n) || n < 1 || n === legal.psd || n > legal.psd + RENGLONES_MAS) return null;
   const p = ma.piezas[legal.pieza], tp = listo.tp;
   const plano = textoCambiado(tp.texto, juntar(tp.texto)), tr = tp.texto.transform;
   // Tope del ancho del legal (unidades de su capa): ANCHO_MAX veces la mesa.
