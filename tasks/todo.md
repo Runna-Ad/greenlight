@@ -4228,7 +4228,7 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
           Mandan un doc con las zonas seguras.
         - Falta aún: ejemplo terminado de 1.91:1 y 320×50; si eligieron DiDi como cliente; el doc de zonas seguras.
 
-      · CACHÉ DE LECTURAS (2026-10-28, código en `prisma`; migración 0087 SIN APLICAR, espera "ship it"):
+      · CACHÉ DE LECTURAS (2026-10-28, código en `prisma`; migración 0087 APLICADA 2026-10-28 con "ship it" de Pedro (86 aplicadas · 0 pendientes; tabla con RLS, sólo el servidor escribe)):
         `prisma_formatos_lecturas` (sha256 del archivo original + modelo → elementos crudos, w, h). La ruta /leer la usa
         antes de llamar a la IA (no cuenta para el tope de lecturas) y guarda la nueva; «Leer otra vez con IA» en la
         revisión pide otra y la reemplaza; la revisión dice «ya se había leído: misma lectura, sin costo». Sin la tabla,
