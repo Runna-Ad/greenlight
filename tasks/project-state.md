@@ -8,6 +8,9 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-10-27 — hilos de cambios con el cliente SHIPPEADOS (main ffd5ed7). Antes: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+## ✅ 2026-10-27 — AUDITORÍA DEL FLUJO DE CAMBIOS — SHIPPEADO (main ba7f105; 0086 aplicada)
+13 fallas serias arregladas; las reglas que protegen datos viven ahora en la base (0086). Menores abiertas en `tasks/audit-cambios-2026-10-27.md`. prisma no lo tiene.
+
 ## ✅ 2026-10-27 — HILOS DE CAMBIOS CON EL CLIENTE — SHIPPEADO (main ffd5ed7; 0082–0085 aplicadas)
 - Hilo de respuestas por cambio (interno y con el cliente), avisos (bell + correo), correos agrupados en 10 min.
 - Portal: "Te respondieron"; estados en color (Sin enviar coral, En proceso amarillo, Aplicado turquesa, Sin cambio azul); respuestas del cliente en su color de marca.
