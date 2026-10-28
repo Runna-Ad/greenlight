@@ -4232,6 +4232,6 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
         `prisma_formatos_lecturas` (sha256 del archivo original + modelo → elementos crudos, w, h). La ruta /leer la usa
         antes de llamar a la IA (no cuenta para el tope de lecturas) y guarda la nueva; «Leer otra vez con IA» en la
         revisión pide otra y la reemplaza; la revisión dice «ya se había leído: misma lectura, sin costo». Sin la tabla,
-        la ruta lee con IA como antes (el error se registra). Aplicar: `node scripts/migrate.mjs --only
-        20261028120001_greenlight_0087_formatos_lecturas.sql --project-ref ybbrpqzbedaxsmotgtkh`. Probar en la preview:
+        la ruta lee con IA como antes (el error se registra). Aplicar: `node scripts/migrate.mjs --only 20261028120001
+        --project-ref ybbrpqzbedaxsmotgtkh` (sólo los 14 dígitos). Probar en la preview:
         subir la misma imagen dos veces (la 2ª dice «ya se había leído») y que los textos cambiados sigan.
