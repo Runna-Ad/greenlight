@@ -168,6 +168,13 @@ export type PiezaCambiada = PiezaLista & { textoFuera?: boolean; sinLetras?: boo
 /** ¿Algún texto de la pieza tiene letras nuevas en `cambios`? */
 const conCambio = (p: PiezaLista, cambios: CambiosTexto) => p.textos.some((tp) => cambios[claveTexto(tp)] !== undefined && cambios[claveTexto(tp)] !== tp.texto.texto);
 
+/** Las claves de `cambios` que sí cambian un texto de estos maestros (la misma prueba que `conCambio`). Lo guardado de
+ *  otro archivo con el mismo nombre, o de otra lectura de la misma imagen plana (otros ids), se queda pero no cuenta. */
+export function cambiosQueAplican(maestros: readonly { piezas: readonly Pick<PiezaLista, "textos">[] }[], cambios: CambiosTexto): string[] {
+  const original = new Map(maestros.flatMap((m) => m.piezas.flatMap((p) => p.textos.map((tp) => [claveTexto(tp), tp.texto.texto] as const))));
+  return Object.keys(cambios).filter((k) => original.has(k) && cambios[k] !== original.get(k));
+}
+
 /** El maestro con cada pieza que tiene un texto cambiado marcada como no escrita (por `motivo`): lo que se ve es el
  *  texto del PSD, y cada medida lo dice. Sin piezas así, el MISMO maestro. */
 export function marcarSinEscribir<M extends MaestroListo>(ma: M, cambios: CambiosTexto, motivo: string): M {

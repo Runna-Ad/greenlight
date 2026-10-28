@@ -19,7 +19,7 @@ import { psdDeMedida, textoDePsd, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prism
 import { readPsd as readPsdAg, getLayerImageData, getLayerMaskImageData, getLayerRealMaskImageData } from "ag-psd";
 import { planDeMedida, psdEditable, retoqueDeFondo, TopeEditable, CAPA_RETOQUE, CAPA_COLOR_MESA } from "../src/lib/prisma/formatos/psd-editable.ts";
 import { textoDe, maquetar, fuentesDe, compararAlfa, textoCambiado, porQueNoSeCambia, cajaQueCabe, limpiarTexto, TEXTO_CAMBIADO_MAX, TEXTO_DIF_MAX_PLANO } from "../src/lib/prisma/formatos/textos.ts";
-import { cambiarTextos, claveTexto, marcarSinEscribir, NO_SE_ESCRIBIO } from "../src/lib/prisma/formatos/cambios-texto.ts";
+import { cambiarTextos, cambiosQueAplican, claveTexto, marcarSinEscribir, NO_SE_ESCRIBIO } from "../src/lib/prisma/formatos/cambios-texto.ts";
 import { conRenglones, legalParaRenglones } from "../src/lib/prisma/formatos/renglones.ts";
 import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, elegirParaCliente, exclusivasDeOtros, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIA_GOOGLE_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
 import { carpetaGoogle, archivosDeMetadata, archivosQueSirven, buscarEnGoogle, ARCHIVOS_POR_FAMILIA_MAX, GOOGLE_BYTES_POR_PEDIDO } from "../src/lib/prisma/formatos/google-fonts.ts";
@@ -2157,6 +2157,10 @@ console.log("\n▶ 3 · textos editables: cambiar las letras (todas las medidas,
   const cambiar = (m, c) => cambiarTextos(m, c, listosT(m), maq, pintarFalso);
   const k = claveTexto(tpCaja);
   ok("sin cambios, con las mismas letras o con un cambio de otro texto: el MISMO maestro (nada se repinta)", cambiar(maT, {}).maestro === maT && cambiar(maT, { [k]: "hola" }).maestro === maT && cambiar(maT, { "otra\nhola": "x" }).maestro === maT);
+  // B28 (preview, 2026-10-27): otra lectura de didi-card.webp trajo otros ids y el aviso decía «2 textos cambiados»
+  // con los textos del original a la vista. Sólo cuenta lo que sí cambia un texto de este archivo.
+  eq("textos cambiados que cuentan: sólo los de un texto de este archivo y con otras letras (no los de otra lectura)", cambiosQueAplican([maT], { [k]: "adiós", "headline_msi\nhola": "12 MSI", [`${tpCaja.capa}\nadiós`]: "x" }), [k]);
+  eq("con las mismas letras que el original no cuenta como cambio", cambiosQueAplican([maT], { [k]: "hola" }), []);
   ok("un texto que la página no escribe (sin sus líneas probadas) no cambia: mismos píxeles y textos (sólo dice por qué)", ((m) => m.piezas[0].rgba === maT.piezas[0].rgba && m.piezas[0].textos === maT.piezas[0].textos && m.piezas[1] === hero)(cambiarTextos(maT, { [k]: "adiós" }, () => undefined, maq, pintarFalso).maestro));
   const r1 = cambiar(maT, { [k]: largo });
   const p1 = r1.maestro.piezas[0], t1 = p1.textos[0];

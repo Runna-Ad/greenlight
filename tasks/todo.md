@@ -1510,7 +1510,10 @@ largo: estacionado por él.
       revisión se puede regresar. Localhost con la lectura guardada marcada así: la fila sale TITULO, «5 piezas», y
       en 1080×1920 «3 MSI» termina en 537 y «con tus cupones de» empieza en 548 (10 px, como el original).
       (e) causa vista: los textos guardados van por «id de la lectura + letras»; otra lectura del mismo archivo trae
-      otros ids, así que no aplican pero el aviso los cuenta. SIN ARREGLAR.
+      otros ids, así que no aplican pero el aviso los cuenta. ARREGLADO (Pedro: "fix the banner so it only counts
+      saved edits that match a text in this reading"): `cambiosQueAplican` (cambios-texto.ts, la misma prueba que
+      `conCambio`) cuenta el aviso y el toast del editor. Localhost: 1 que aplica + 2 de otra lectura → «1 texto
+      cambiado»; sólo de otra lectura → sin aviso (antes «2»). Lo guardado no se borra.
       **Next Step:** commit + push a `prisma`.
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
 - iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los

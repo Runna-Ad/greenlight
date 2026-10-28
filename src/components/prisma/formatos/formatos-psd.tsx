@@ -27,7 +27,7 @@ import { tipografiasDelCliente, tipografiasDelPsd, type TipografiasDelPsd } from
 import { esImagenPlana, leerPlano, type Plano } from "./plano-lector";
 import { RevisionPlano } from "./revision-plano";
 import { EditorMedida, edicionGuardada, guardarEdicion, guardarTextos, textosGuardados } from "./editor-medida";
-import { cambiarTextos, marcarSinEscribir, NO_SE_ESCRIBIO, type CambiosTexto, type Listo } from "@/lib/prisma/formatos/cambios-texto";
+import { cambiarTextos, cambiosQueAplican, marcarSinEscribir, NO_SE_ESCRIBIO, type CambiosTexto, type Listo } from "@/lib/prisma/formatos/cambios-texto";
 import { porQueNoSeCambia } from "@/lib/prisma/formatos/textos";
 import { APAGADA, COLUMNAS, ChipEstado, FOCO, FORMAS, FilaLegal, NOMBRE_FORMA, PRENDIDA, PastillasCanal, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
 import { conLegal, conLegalDe, legalDelPsd, legalesParaCliente, legalVigente, type LegalGuardado } from "@/lib/prisma/formatos/legal";
@@ -1773,7 +1773,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     if (!l || !maestrosVista.length) return;
     // Los textos son del anuncio: se guardan aparte y cambian en todas las medidas (se dice a la vista).
     const textos = cambios !== cambiosTexto;
-    if (textos && ponerTextos(l, cambios)) toast.success(rellenar(tx(Object.keys(cambios).length ? FP.editorTextosGuardados : FP.editorTextosDelPsd, lang), { n: medidas.length }));
+    if (textos && ponerTextos(l, cambios)) toast.success(rellenar(tx(cambiosQueAplican(maestrosVista, cambios).length ? FP.editorTextosGuardados : FP.editorTextosDelPsd, lang), { n: medidas.length }));
     const antes = edicionesVista.get(clave(m)) ?? null;
     const ctx = contextoEdicion(m, lados[clave(m)], canal), ma = maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)];
     const guardada = guardarEdicion(l.archivo, ma, m.w, m.h, ctx, ed);
@@ -1850,6 +1850,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   // El legal (B24): elegido de la Biblioteca, es un texto cambiado más (todas las medidas, «Deshacer»). Se reconoce
   // con el maestro de antes de los cambios, como los demás textos.
   const legalPsd = useMemo(() => legalDelPsd(maestrosVista), [maestrosVista]);
+  /** Los textos cambiados que tocan este archivo: lo guardado con el mismo nombre de otra lectura no cuenta. */
+  const cambiados = useMemo(() => cambiosQueAplican(maestrosVista, cambiosTexto).length, [maestrosVista, cambiosTexto]);
   const vigenteLegal = useMemo(() => (legalPsd.length ? legalVigente(cambiosTexto, legalPsd, legales) : null), [legalPsd, cambiosTexto, legales]);
   const gruposLegal = useMemo(() => legalesParaCliente(legales, cliente), [legales, cliente]);
   // Se puede elegir si al menos una mesa sabe escribir su legal; en las que no (o sin legal), se queda como está y se dice.
@@ -2724,9 +2726,9 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
                 {resumen && <p className="text-sm text-muted-foreground">{resumen}</p>}
                 {/* Los textos cambiados viven en este navegador y valen para todas las medidas: siempre a la vista, con su
                     vuelta atrás (al recargar, o con otro PSD del mismo nombre, también se ven). */}
-                {Object.keys(cambiosTexto).length > 0 && (
+                {cambiados > 0 && (
                   <p className="flex flex-wrap items-center gap-x-2 text-sm text-foreground">
-                    {Object.keys(cambiosTexto).length === 1 ? tx(FP.textosCambiadosUno, lang) : rellenar(tx(FP.textosCambiadosN, lang), { n: Object.keys(cambiosTexto).length })}
+                    {cambiados === 1 ? tx(FP.textosCambiadosUno, lang) : rellenar(tx(FP.textosCambiadosN, lang), { n: cambiados })}
                     <Button variant="link" size="sm" className="h-auto p-0" onClick={volverTextosPsd}>
                       {tx(FP.textosVolverPsd, lang)}
                     </Button>
