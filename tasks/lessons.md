@@ -1464,3 +1464,7 @@ TAGS: #formatos #acomodo #margen #b28 #b26 #tests
 [2026-10-27] LESSON (la lectura de Gemini no sale igual dos veces, aun con temperature 0): la misma imagen de DiDi Card dio 15 elementos la primera vez y 12 la segunda (logos juntos, ícono y tiendas juntos) y un renglón del titular pasó de TITULO a SUBTITULO. Ese cambio de rol, y no el código nuevo, encimó «con tus cupones de» sobre «3 MSI» en 1080×1920 (el acomodo viejo daba lo mismo). Arreglado en limpiarLectura: un SUBTITULO entre dos renglones del TITULO pasa al TITULO.
 RULE: lo que dependa de los roles o de cómo agrupa la IA se prueba con variantes de la lectura (roles cambiados, elementos juntos), no sólo con la lectura guardada; y cuando algo aparece tras un cambio, correr el código de antes con la misma entrada antes de culpar al cambio.
 TAGS: #b28 #gemini #lectura #roles #pruebas
+
+[2026-10-27] LESSON (Pedro preguntó "hows it going?" y luego "are you stuck?" mientras corrían pruebas): la suite de formatos tarda ~1 min por corrida y se corrió dos veces seguidas en un comando, más un build en segundo plano, sin decir antes cuánto iba a tardar. Desde su lado parecía trabado.
+RULE: antes de algo que tarda más de ~30 s (suite completa, build, esperar un deploy), decir en una línea qué corre y cuánto tarda más o menos; si Pedro pregunta a media tarea, contestar en una línea y seguir.
+TAGS: #comunicacion #pedro #pruebas #time-sink

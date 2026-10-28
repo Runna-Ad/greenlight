@@ -2945,3 +2945,27 @@ del session-log del 2026-10-22 13:10 (ruido de un hook; se puede soltar) y una c
 - [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
 - [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
 
+## 2026-10-27 — B28: imagen plana → piezas editables con letras del cliente · rama `prisma` (PREVIEW)
+Pedro: separar los elementos de un anuncio plano (sin PSD) para moverlos, quitarlos y cambiar textos con las tipografías
+de DiDi (DiDi Card: «3 MSI» → «12 MSI», quitar «con tus cupones de DiDi Card», «12 pagos de $3,999»). Eligió la opción 1
+(Gemini lee cajas y letras; nuestro código corta, limpia el fondo y reescribe) y "A on all three": misma página del PSD,
+revisión siempre, fondos de foto se detienen con un mensaje.
+**Commits (todos con push → preview):** af54d72 B28 completo (ruta /api/prisma/formatos/leer, plano.ts, revision-plano.tsx,
+PSD por medida con capas de texto vivas, reap) · 090bf78 la 1a lectura real dio 502: Gemini rechaza `maxItems` en el
+esquema (400 "invalid argument"; hallado con un script de variantes y la llave pegada por Pedro) · 2a7758e margen a los
+lados en medidas altas (acomodo.ts, `alAire`), enlace a la página vieja sólo para fondos de foto, error sin repetir ·
+018b937 un SUBTITULO entre renglones del TITULO va con el TITULO (limpiarLectura) · 8870f1e el aviso de textos cambiados
+sólo cuenta los que aplican (`cambiosQueAplican`).
+**Verificado en la preview (sesión de Pedro, 2 lecturas reales, ≈ US$0.011 y US$0.006):** lectura 200 con letras exactas;
+revisión con tipografías DiDi; las 3 ediciones en 1080×1920 («Texto cambiado en las 12 medidas»); PSD 1080×1920 leído en
+la página: BACKGROUND + 5 carpetas, capa por elemento, textos vivos DiDi, lo quitado como capa oculta; margen del precio
+51/34/33/36 px en 1080×1920/720×1280/720×1600/768×1024 (antes 2 y 1), 1200×1500 igual.
+**Sólo en localhost (lectura guardada inyectada):** el SUBTITULO doblado al TITULO y el aviso de textos.
+**Pruebas en cada commit:** npm test exit 0 (formatos 599, prisma 975), tsc 0 errores, npm run build OK.
+**Decisión:** Pedro: B28 se queda en la preview ("keep it in preview"); no se mezcla a main ni se lanza.
+**Pendiente (Pedro: "none for now"):** abrir un PSD en Photoshop (con DiDi Sans Variable instalada); otro anuncio plano
+(uno liso de otro cliente y uno con foto: el aviso de foto sólo está probado en código); el ZIP con PSD de una imagen
+plana; acceso de otra persona (¿tiene cuenta @runna.com.mx?); tope diario de IA en la base antes de producción; `prisma`
+va atrás de `main` (CTA por plano, hilos de respuesta, correos agrupados, auditoría de cambios).
+**Herramientas:** el panel del navegador no deja que la preview llame a localhost (ERR_BLOCKED_BY_CLIENT): en la preview
+Pedro arrastra el archivo; en localhost se inyecta la lectura guardada.

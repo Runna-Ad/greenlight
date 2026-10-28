@@ -51,6 +51,11 @@
   d105f3a):** controles de 36 px / letra 13, la pieza repetida en gris como aviso común, arriba más corto (primera tarjeta
   1001 → 839 px a 1440), editor con las herramientas primero. Sólo escritorio (Pedro 2026-10-19: sin más trabajo de iPad).
 - **Esperando a Pedro:** su prueba de esos 3 arreglos y de B23; veredicto del diseñador sobre los objetos inteligentes del PSD.
+- **B28 imagen plana → piezas editables (2026-10-27, af54d72 … 8870f1e):** la puerta PSD acepta PNG/JPG/WebP; Gemini
+  (gemini-3.8-flash) lee cajas y letras, revisión siempre, cada elemento en su capa y los textos reescritos con las
+  tipografías del cliente; PSD por medida con capas de texto vivas. Probado en la preview con la sesión de Pedro y
+  2 lecturas reales de DiDi Card. Fondos de foto: se detiene con un mensaje. Se queda en la PREVIEW (Pedro).
+  Sin probar: Photoshop, otro anuncio, el ZIP con PSD. Antes de producción: tope diario de IA en la base.
 - **Puerta de imagen plana (2026-10-20/21):** mismo sistema de controles de B23 (36 px / letra 13, tarjetas como la PSD)
   y foco del teclado que ya no se pierde en 9 botones (c96a707 … 09cd7cb). **0078 + bucket `greenlight-formatos`
   APLICADOS 2026-10-21** con el "ship it" de Pedro (verificado en la base; subida y 1 tamaño gratis probados con su
