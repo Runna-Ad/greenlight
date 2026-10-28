@@ -2,14 +2,14 @@
 
 import { memo, useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, ArrowUp, Check, ChevronDown, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Info, Languages, Layers, Loader2, Lock, Maximize2, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Info, Languages, Layers, Loader2, Lock, Maximize2, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
-import { CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, elegirMaestro, es916, nombreSalida, ponerPartes, sePuedeVoltear, zonaCanal, type Acomodo, type AvisoAcomodo, type Canal, type Edicion, type Lado, esNota } from "@/lib/prisma/formatos/acomodo";
+import { CANALES, LETRA_MIN_PX, MEDIDAS_INICIO, elegirMaestro, es916, nombreSalida, ponerPartes, sePuedeVoltear, zonaCanal, type Acomodo, type AvisoAcomodo, type Canal, type Edicion, type Lado, esNota } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionContraste, type InfoContraste } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_APLANADA, FP_ERROR, FP_FAMILIA, FP_PAPEL, FPL, FX, rellenar } from "@/lib/prisma/formatos/copy";
@@ -102,7 +102,7 @@ const CLAVE_ERROR: Record<MotivoPsd | "desconocido", keyof typeof FP_ERROR> = { 
  *  verticales en una fila a 1440 px; para verla grande está «Editar». */
 const VISTA_ALTO_MAX = 360;
 /** La lista de DiDi, como pastillas (Pedro, 2026-10-15: "we have them pre loaded those are tied to didi"). */
-const LISTA_DIDI: MedidaLista[] = leerMedidas(MEDIDAS_EQUIPO).medidas.map((m) => ({ ...m, propia: false }));
+const LISTA_DIDI: MedidaLista[] = leerMedidas(MEDIDAS_INICIO).medidas.map((m) => ({ ...m, propia: false }));
 /** Avisos de «En varias medidas» (la pieza repetida y, ya quitada, su relleno): en la tarjeta van en una línea corta. */
 const deVarias = (a: AvisoAcomodo) => a.tipo === "copia" || a.tipo === "retoque";
 /** Un aviso común: la pieza repetida se arregla UNA vez arriba. La tarjeta y el resumen usan esta misma regla (B23),
@@ -2340,9 +2340,9 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
               <span id="psd-subir-titulo" className="block text-base font-medium text-foreground">
                 {leyendo ? textoAvance : tx(FP.subir, lang)}
               </span>
-              <span id="psd-subir-ayuda" className="block text-sm text-muted-foreground">
-                {leyendo ? tx(etapaPlano ? FPL.leyendoAyuda : FP.leyendoAyuda, lang) : `${tx(FP.subirAyuda, lang)} ${tx(FP.subirTipos, lang)}`}
-              </span>
+              {leyendo && (
+                <span className="block text-sm text-muted-foreground">{tx(etapaPlano ? FPL.leyendoAyuda : FP.leyendoAyuda, lang)}</span>
+              )}
             </span>
             <input
               ref={entrada}
@@ -2359,6 +2359,16 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
               }}
             />
           </label>
+          {/* Qué archivo sirve: plegado (fuera del <label>, si no abrirlo abriría el selector de archivo). */}
+          <details className="group text-sm text-muted-foreground">
+            <summary className={cn("inline-flex min-h-9 cursor-pointer list-none items-center gap-1 rounded-md hover:text-foreground pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden", FOCO)}>
+              <ChevronRight className="size-4 shrink-0 transition-transform group-open:rotate-90 motion-reduce:transition-none" aria-hidden="true" />
+              {tx(FP.subirGuia, lang)}
+            </summary>
+            <p id="psd-subir-ayuda" className="pb-1 pl-5">
+              {tx(FP.subirAyuda, lang)} {tx(FP.subirTipos, lang)}
+            </p>
+          </details>
           {leyendo && (
             <Button ref={botonCancelar} variant="outline" size="lg" className={BOTON} onClick={cancelar}>
               <X className="size-4" aria-hidden="true" /> {tx(FP.cancelar, lang)}
@@ -2738,6 +2748,10 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
               {/* Los botones y, debajo, qué lleva el ZIP (en la misma columna: la barra no crece en alto). */}
               <div className="flex flex-col items-end gap-1">
                 <div className="flex flex-wrap justify-end gap-1.5">
+                  {/* También aquí, pegajoso: al terminar abajo de las tarjetas no hay que subir hasta el panel (2026-10-28). */}
+                  <Button variant="outline" size="lg" className={BOTON} onClick={cambiarPsd}>
+                    <FileUp className="size-4" aria-hidden="true" /> {tx(FP.cambiar, lang)}
+                  </Button>
                   {volteables.length > 0 && (
                     <Button variant="outline" size="lg" className={BOTON} onClick={voltearTodas}>
                       <FlipHorizontal2 className="size-4" aria-hidden="true" /> {tx(FP.voltearTodas, lang)}

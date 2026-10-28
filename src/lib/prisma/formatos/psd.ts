@@ -80,6 +80,9 @@ export const TOLERANCIA = 12;
 export const FONDO_FIEL_MAX_PCT = 10;
 export const REARMADO_MAX_PCT = 2;
 export const TAPADA_MAX_PCT = 2;
+/** Lo de una pieza que otra de más arriba tapa (sólido) se rellena con su color de alrededor (como en las partes):
+ *  en el PSD no se ve y sólo asoma si una de las dos se mueve. Arriba de esto ya no queda de dónde sacar el color. */
+export const RELLENO_MAX_PCT = 50;
 /** Lo que cuesta abrir una pieza en partes, en bytes por píxel de la caja de todo lo que toca: lo fijo (lo de atrás, lo
  *  des-mezclado, quién tapa a quién, la prueba del rearmado) y lo de cada parte (su silueta, su sombra, su color de
  *  trabajo y su relleno, y lo que se queda: color, sombra y base). */
@@ -317,8 +320,11 @@ export type PiezaPsd = {
   rgba: Uint8ClampedArray;
   /** RGB: cuánto oscurece lo que tenga debajo (255 = nada). null si la pieza no trae sombras. */
   oscurece: Uint8ClampedArray | null;
-  /** % de sus píxeles que otra pieza de más arriba tapa u oscurece (ahí su color no es confiable). */
+  /** % de sus píxeles que la sombra de otra pieza de más arriba oscurece (esa sombra se queda pintada en ella). */
   tapadaPct: number;
+  /** % de sus píxeles que otra pieza de más arriba tapa (sólido): ahí no se sabe su color y se rellenó con el de al lado
+   *  (se ve si una de las dos se mueve). Falta = 0. */
+  rellenoPct?: number;
   /** El tamaño de su letra más chica en px de la mesa; null si no trae capas de texto. */
   letraMinPx: number | null;
   /** Sus capas de texto (de abajo hacia arriba), para volver a escribirlas a la medida final. */
@@ -857,7 +863,7 @@ function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
   const tope = new Int8Array(N).fill(-1);
   for (let k = K - 1; k >= 0; k--) { const al = trabajos[k].alfa; for (let i = 0; i < N; i++) if (tope[i] < 0 && al[i] > 0.05) tope[i] = k; }
   const ultima = new Int8Array(N).fill(-1); // la última pieza sólida ya armada ahí
-  const propios = new Uint32Array(K), ajenos = new Uint32Array(K);
+  const propios = new Uint32Array(K), ajenos = new Uint32Array(K), cubiertos = new Uint32Array(K);
   const contado = new Uint8Array(N); // un píxel de una pieza cuenta como "oscurecido por otra" una sola vez
   const armadas: (PiezaPsd | null)[] = [];
   // Abrir una pieza en partes nunca tumba el despiece: si algo falla o no cuadra, la pieza se mueve entera, con aviso.
@@ -899,7 +905,7 @@ function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
       let toca = a > 0.02;
       if (toca) {
         propios[k]++;
-        if (tope[i] > k) ajenos[k]++;
+        if (tope[i] > k) cubiertos[k]++;
       } else {
         t.alfa[i] = 0;
         // Lo que oscurece, sólo donde ninguna pieza de más arriba lo tapa.
@@ -957,13 +963,28 @@ function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
     const caja = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
     const rgba = new Uint8ClampedArray(caja.w * caja.h * 4);
     const oscurece = osc ? new Uint8ClampedArray(caja.w * caja.h * 3) : null;
+    // Su color sale de la copia aplanada menos lo de atrás. Donde otra pieza de más arriba la tapa, la copia trae el color
+    // de ESA: ahí se rellena con el de alrededor (un SUBTITULO con su recuadro detrás de la tarjeta del HERO, 2026-10-28).
+    const F = new Float32Array(caja.w * caja.h * 3), sabe = new Uint8Array(caja.w * caja.h);
+    let tapados = 0, suyos = 0;
     for (let yy = 0; yy < caja.h; yy++)
       for (let xx = 0; xx < caja.w; xx++) {
         const i = (yy + caja.y) * m.w + (xx + caja.x), j = yy * caja.w + xx, a = t.alfa[i];
         if (oscurece && osc) { oscurece[j * 3] = osc[i * 3]; oscurece[j * 3 + 1] = osc[i * 3 + 1]; oscurece[j * 3 + 2] = osc[i * 3 + 2]; }
         if (!(a > 0)) continue;
+        suyos++;
+        if (tope[i] > k) { tapados++; continue; }
+        sabe[j] = 1;
+        for (let c = 0; c < 3; c++) F[j * 3 + c] = Math.min(1, Math.max(0, (C[i * 3 + c] - D[i * 3 + c] * (1 - a)) / a));
+      }
+    if (tapados && tapados < suyos) rellenar(F, sabe, caja.w, caja.h);
+    for (let yy = 0; yy < caja.h; yy++)
+      for (let xx = 0; xx < caja.w; xx++) {
+        const i = (yy + caja.y) * m.w + (xx + caja.x), j = yy * caja.w + xx, a = t.alfa[i];
+        if (!(a > 0)) continue;
         for (let c = 0; c < 3; c++) {
-          const f = Math.min(1, Math.max(0, (C[i * 3 + c] - D[i * 3 + c] * (1 - a)) / a));
+          // Toda tapada (no queda de dónde rellenar): su color es el que se ve ahí.
+          const f = sabe[j] || tapados < suyos ? F[j * 3 + c] : Math.min(1, Math.max(0, (C[i * 3 + c] - D[i * 3 + c] * (1 - a)) / a));
           rgba[j * 4 + c] = Math.round(f * 255);
           D[i * 3 + c] = f * a + D[i * 3 + c] * (1 - a);
         }
@@ -1001,7 +1022,10 @@ function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
   armadas.forEach((p, k) => {
     if (!p) return;
     p.tapadaPct = propios[k] ? Math.min(100, (ajenos[k] / propios[k]) * 100) : 0;
-    if (p.tapadaPct > TAPADA_MAX_PCT) avisos.push(`«${p.nombre}» queda ${p.tapadaPct.toFixed(1)} % tapada u oscurecida por otra pieza: ahí su color no es confiable.`);
+    p.rellenoPct = propios[k] ? Math.min(100, (cubiertos[k] / propios[k]) * 100) : 0;
+    if (p.tapadaPct > TAPADA_MAX_PCT) avisos.push(`«${p.nombre}» queda ${p.tapadaPct.toFixed(1)} % oscurecida por la sombra de otra pieza: ahí su color no es confiable.`);
+    if (p.rellenoPct > RELLENO_MAX_PCT) avisos.push(`«${p.nombre}» queda ${p.rellenoPct.toFixed(1)} % tapada por otra pieza: no queda de dónde sacar su color.`);
+    else if (p.rellenoPct > TAPADA_MAX_PCT) avisos.push(`«${p.nombre}» tiene ${p.rellenoPct.toFixed(1)} % tapado por otra pieza: ahí se rellenó con su color de alrededor (se nota sólo si una de las dos se mueve).`);
     piezas.push(p);
   });
 
@@ -1402,7 +1426,8 @@ export function despieceUsable(ma: MaestroPsd): { ok: boolean; motivos: string[]
   const motivos = [
     ...(ma.rearmadoDistintoPct > REARMADO_MAX_PCT ? [`al rearmarlo difiere de Photoshop en ${ma.rearmadoDistintoPct.toFixed(1)} % de los píxeles`] : []),
     ...(ma.fondoDistintoPct > FONDO_FIEL_MAX_PCT ? [`el fondo no se pudo reconstruir con certeza (${ma.fondoDistintoPct.toFixed(1)} % distinto)`] : []),
-    ...ma.piezas.filter((p) => p.tapadaPct > TAPADA_MAX_PCT).map((p) => `«${p.nombre}» está tapada u oscurecida por otra pieza`),
+    ...ma.piezas.filter((p) => p.tapadaPct > TAPADA_MAX_PCT).map((p) => `«${p.nombre}» está oscurecida por la sombra de otra pieza`),
+    ...ma.piezas.filter((p) => (p.rellenoPct ?? 0) > RELLENO_MAX_PCT).map((p) => `«${p.nombre}» está casi toda tapada por otra pieza`),
     ...(ma.piezas.length ? [] : ["no hay piezas fuera del fondo"]),
   ];
   return { ok: motivos.length === 0, motivos };

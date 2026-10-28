@@ -4156,3 +4156,22 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
 - [x] SHIP 0075 (DoP = Standard/Turbo/Lite; Kling Turbo con su página) — aplicada y verificada 2026-09-17: catálogo vivo = código 8/8
 - [ ] Pedro: ¿qué modelo convertir en "365 Ilimitado"? (el plan permite uno más; Seedance 2.0 = 59 % del gasto)
 - [ ] Pedro: quedan 15/1,200 créditos del mes
+
+- [~] B29. Comentarios de los diseñadores (2026-10-28, con su PSD «SPGFAPPLE1PLATA- s7 s8.psd»). Hecho en `prisma`:
+      · 1. Su PSD se rechazaba: la tarjeta del HERO tapa 15.2 % del recuadro semitransparente del SUBTITULO y el tope era
+        2 %. Ahora lo tapado por una pieza de más arriba se RELLENA con su color de alrededor (`rellenoPct`, como en las
+        partes) y sólo se rechaza arriba de `RELLENO_MAX_PCT` = 50 %; la sombra de otra pieza sigue con el tope de 2 %
+        (`tapadaPct`). Con su PSD: usable, rearmado 0.00 %, el recuadro sale limpio. No aplica a imagen plana (ahí no hay
+        piezas tapadas).
+      · 2. 1080×1080 en la lista con la que arranca la pantalla (`MEDIDAS_INICIO`; `MEDIDAS_EQUIPO` siguen siendo las 12
+        del script del equipo). «Subir otro archivo» también en la barra pegajosa de resultados (y así se llama el botón
+        en las dos puertas, PSD e imagen plana). La guía de qué archivo sirve, plegada en «¿Qué archivo sirve?».
+      Falta (esperando las respuestas de los diseñadores, mandadas por Pedro):
+      · 3. Modo ratios (1:1, 4:5, 9:16, 16:9, 1.91:1) con nombre por ratio (`_9x16_`). Bug: `nombreSalida` cambia el
+        `4x5` del nombre por píxeles. Falta: a qué medida en px sale cada ratio.
+      · 4. Zonas seguras automáticas por red (hoy sólo 9:16, sólo con canal elegido, y en la forma del maestro no mueve
+        nada). Falta: qué redes.
+      · 5. Mover / escalar el FONDO en el editor (hoy `Edicion` no lo tiene).
+      · 6. Medidas muy horizontales: el legal sólo puede bajar de renglones (`conRenglones`: n < los del PSD) y necesita la
+        tipografía del cliente; su captura decía «Sin cliente». Tamaño del legal a partir de un ejemplo. Falta: un
+        ejemplo terminado de 1.91:1 y 320×50, y si eligieron DiDi.

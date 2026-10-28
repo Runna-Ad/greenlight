@@ -235,8 +235,11 @@ export function nombreSalida(ma: { nombre: string; w: number; h: number }, W: nu
   return `${ma.nombre.slice(0, desde)}${W}x${H}${ma.nombre.slice((f.index ?? 0) + f[0].length)}`;
 }
 
-/** Las 12 medidas que el equipo entrega hoy (las de su script de Photoshop): con ellas arranca la pantalla. */
+/** Las 12 medidas que el equipo entrega hoy (las de su script de Photoshop). */
 export const MEDIDAS_EQUIPO = "1080×1920 720×1280 720×1600 1200×1500 768×1024 1280×720 1200×627 876×324 600×500 320×250 640×100 320×50";
+/** Con las que arranca la pantalla: las del equipo y el cuadrado de feed, que su script no hace y los diseñadores tenían
+ *  que agregar cada vez (2026-10-28). */
+export const MEDIDAS_INICIO = `${MEDIDAS_EQUIPO} 1080×1080`;
 
 /**
  * Zona segura POR CANAL, como guía (Pedro, 2026-10-14: "select a Channel and then it shows you"). Cada app tapa

@@ -12,7 +12,7 @@ import { nombreDeGuia, etiquetaPieza, esNombreLegal } from "../src/lib/prisma/fo
 import { legalDelPsd, conLegal, conLegalDe, legalCabe, legalVigente, legalesParaCliente } from "../src/lib/prisma/formatos/legal.ts";
 import { hermanas, copiarEdicion } from "../src/lib/prisma/formatos/matriz.ts";
 import { MATRIZ, baseAEscala } from "../src/lib/prisma/formatos/tabla-matriz.ts";
-import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
+import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, RELLENO_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, capasDeMedida, halosEnMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
 import { psdDeMedida, textoDePsd, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prisma/formatos/psd-salida.ts";
@@ -443,11 +443,24 @@ console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
   const ma3 = despiezar(leerPsd(psdDe(arbol(), verdad((x, y) => { const v = 40 + ruido[y * W + x]; return [v, v, v]; }))), 0);
   ok(`fondo que las capas no explican (${ma3.fondoDistintoPct.toFixed(0)} % distinto) → no usable`, ma3.fondoDistintoPct > 50 && !despieceUsable(ma3).ok);
 
-  // Dos piezas que se tapan: se avisa y no es usable.
+  // Dos piezas que se tapan casi del todo: no queda de dónde sacar el color, se avisa y no es usable.
   const tapado = arbol();
   tapado[6] = carpeta("BRAND", [capa("logo", [40, 30, 200, 50], () => [240, 60, 30])]);
   const ma4 = despiezar(leerPsd(psdDe(tapado, (x, y) => (dentro(x, y, [40, 30, 200, 50]) ? [240, 60, 30] : verdad(fondoVerdad)(x, y)))), 0);
-  ok(`BRAND encima del TITULO: tapada ${ma4.piezas.find((p) => p.rol === "TITULO").tapadaPct.toFixed(0)} % → no usable, con motivo`, ma4.piezas.find((p) => p.rol === "TITULO").tapadaPct > 50 && despieceUsable(ma4).motivos.some((x) => x.includes("TITULO")));
+  ok(`BRAND encima del TITULO: tapada ${ma4.piezas.find((p) => p.rol === "TITULO").rellenoPct.toFixed(0)} % → no usable, con motivo`, ma4.piezas.find((p) => p.rol === "TITULO").rellenoPct > RELLENO_MAX_PCT && despieceUsable(ma4).motivos.some((x) => x.includes("TITULO")));
+
+  // Tapada en parte (2026-10-28: el recuadro del SUBTITULO detrás de la tarjeta del HERO): lo tapado se rellena con su
+  // color de alrededor, se avisa y SÍ es usable; el rearmado sigue siendo el de Photoshop.
+  const enParte = arbol(), LOGO = [250, 170, 30, 60];
+  enParte[6] = carpeta("BRAND", [capa("logo", LOGO, () => [240, 60, 30])]);
+  const ma4b = despiezar(leerPsd(psdDe(enParte, (x, y) => (dentro(x, y, LOGO) ? [240, 60, 30] : verdad(fondoVerdad)(x, y)))), 0);
+  const sub4b = ma4b.piezas.find((p) => p.rol === "SUBTITULO");
+  const pxSub = (x, y) => { const j = ((y - sub4b.caja.y) * sub4b.caja.w + (x - sub4b.caja.x)) * 4; return [...sub4b.rgba.slice(j, j + 4)]; };
+  ok(
+    `SUBTITULO tapado en parte (${sub4b.rellenoPct.toFixed(0)} %): usable, lo tapado sale amarillo (${pxSub(260, 200)}), con aviso, rearmado ${ma4b.rearmadoDistintoPct.toFixed(1)} %`,
+    sub4b.rellenoPct > 20 && sub4b.rellenoPct < 30 && sub4b.tapadaPct === 0 && despieceUsable(ma4b).ok && pxSub(260, 200).join() === "255,212,0,255" && ma4b.avisos.some((v) => v.includes("se rellenó")) && ma4b.rearmadoDistintoPct <= 0.5,
+    JSON.stringify([despieceUsable(ma4b), ma4b.avisos]),
+  );
 
   // Lo que manda el anuncio a la vía plana.
   eq("sin copia aplanada real → sin-aplanado", motivo(() => despiezar(leerPsd(psdDe(arbol(), verdad(fondoVerdad), false)), 0)), "sin-aplanado");
