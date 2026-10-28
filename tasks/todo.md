@@ -4175,3 +4175,17 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
       · 6. Medidas muy horizontales: el legal sólo puede bajar de renglones (`conRenglones`: n < los del PSD) y necesita la
         tipografía del cliente; su captura decía «Sin cliente». Tamaño del legal a partir de un ejemplo. Falta: un
         ejemplo terminado de 1.91:1 y 320×50, y si eligieron DiDi.
+- [~] B30. Imagen plana, más arreglos del 2026-10-28 (en `prisma`, probados en la preview con la imagen real de DiDi, beige):
+      · El texto escrito en la revisión es un cambio de verdad (a6982d2); si va como imagen, la fila lo dice.
+      · Un fondo que no se puede limpiar ya no rechaza la imagen (PEDRO_OVERRIDE): lo de ahí se queda fijo en el fondo
+        (`medirPlanoFijo`, 5089a9e). Probado con la imagen gris de Pedro (pasó la lectura).
+      · Precio blanco sobre la pastilla naranja/blanca: ya sale nítido, sin rectángulo (e15181f, ad13308, 6f27bf0):
+        fondo = color más común DENTRO de la caja, tinta = más común de lo lejano, filas/columnas sin fondo no son tinta,
+        y lo que contiene al texto cuenta como su fondo. Va como imagen (dos tamaños de letra), como en un PSD.
+      · Sin mancha rosa al cambiar «3 pagos de» (cada texto se borra con su propio fondo); visto sólo en la vista
+        chica del editor (236×295), no a tamaño real.
+      Falta:
+      · Los textos cambiados de una imagen plana se guardan con el id que inventa la IA, y cada lectura da ids
+        distintos: al volver a subir la misma imagen, lo cambiado no vuelve (se vio con «12 pagos de / $9,000»).
+        Guardarlos por las letras leídas + posición, no por el id.
+      · Lo de «Aplica ahora» pálido en la captura de Pedro no salió en estas lecturas (salió nítido); sin reproducir.
