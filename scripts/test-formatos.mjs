@@ -3026,7 +3026,9 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
     bloques(70, 52, 10, 22, [255, 255, 255]);
     bloques(80, 98, 9, 18, [40, 20, 30]);
     const lei = [
-      { id: "caja", rol: "TITULO", tipo: "forma", caja: { x0: 39, y0: 39, x1: 261, y1: 141 }, texto: "", sobre: null },
+      // Y la IA a veces lee la pastilla DOS veces, una dentro de otra (la banda naranja «sobre» la pastilla entera).
+      { id: "marco", rol: "TITULO", tipo: "forma", caja: { x0: 36, y0: 24, x1: 264, y1: 144 }, texto: "", sobre: null },
+      { id: "caja", rol: "TITULO", tipo: "forma", caja: { x0: 39, y0: 39, x1: 261, y1: 141 }, texto: "", sobre: "marco" },
       // Como en la lectura real: la caja del precio empieza ARRIBA de la pastilla (en el fondo beige) y la de las cuotas
       // se le encima por abajo; lo pegado a la caja del precio es casi todo beige.
       { id: "precio", rol: "TITULO", tipo: "texto", caja: { x0: 68, y0: 28, x1: 210, y1: 78 }, texto: "$28,499", sobre: "caja" },

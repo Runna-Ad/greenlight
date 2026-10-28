@@ -200,7 +200,10 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
    *  el que tiene debajo, que ES su fondo). */
   function alrededor(e: ElementoLeido): RGB {
     const r: number[] = [], g: number[] = [], b: number[] = [];
-    const otros = leidos.filter((o) => o.id !== e.id && o.id !== e.sobre);
+    // Lo que lo contiene entero tampoco se quita: es su fondo aunque no sea su «sobre» directo (la IA leyó la banda
+    // naranja del precio de DiDi «sobre» la pastilla entera, y con la pastilla fuera no quedaba ni un píxel, 2026-10-28).
+    const loTapa = (o: ElementoLeido) => o.caja.x0 <= e.caja.x0 && o.caja.y0 <= e.caja.y0 && o.caja.x1 >= e.caja.x1 && o.caja.y1 >= e.caja.y1;
+    const otros = leidos.filter((o) => o.id !== e.id && o.id !== e.sobre && !loTapa(o));
     // Un texto: el anillo pegado a su caja (1-5 px), que es lo que tiene detrás; más lejos, en una pastilla de dos
     // colores ya entra el otro (2026-10-28). Una figura: 6-14 px, fuera de su sombra.
     const [dentroPx, fueraPx] = e.tipo === "texto" ? [1, 5] : [6, 14];
