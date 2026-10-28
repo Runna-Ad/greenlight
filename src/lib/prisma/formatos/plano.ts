@@ -164,6 +164,26 @@ export const LISO_MAX = 6;
 const lum = (c: ArrayLike<number>) => (c[0] + c[1] + c[2]) / 3;
 
 /**
+ * El color que MÁS hay (no la mediana de cada canal): alrededor de un texto sobre una pastilla de dos colores (naranja
+ * arriba, blanco abajo) la mediana por canal inventaba un rosa que no estaba en ningún lado, y con ese "fondo" la tinta
+ * blanca salía pálida y transparente (2026-10-28, el precio de la pastilla de DiDi). Se cuentan colores en cubos de 32
+ * niveles y del más lleno sale la mediana de sus píxeles. Sin píxeles, blanco (como `mediana` de nada).
+ */
+function dominante(r: readonly number[], g: readonly number[], b: readonly number[]): [number, number, number] {
+  if (!r.length) return [255, 255, 255];
+  const cubos = new Map<number, number[]>();
+  for (let i = 0; i < r.length; i++) {
+    const k = ((r[i] >> 5) << 6) | ((g[i] >> 5) << 3) | (b[i] >> 5);
+    const l = cubos.get(k);
+    if (l) l.push(i); else cubos.set(k, [i]);
+  }
+  let mejor: number[] = [];
+  for (const l of cubos.values()) if (l.length > mejor.length) mejor = l;
+  const med = (v: readonly number[]) => { const o = mejor.map((i) => v[i]).sort((x, y) => x - y); return o[o.length >> 1]; };
+  return [med(r), med(g), med(b)];
+}
+
+/**
  * Mide cada elemento leído en la imagen y saca el fondo limpio (RGB). Sólo sirve con fondo liso o en degradado: si
  * el anillo alrededor de lo que se quitó no se parece a un plano, `liso` sale en falso (la pantalla avisa y no
  * sigue: el fondo de foto necesita la IA, que viene después).
@@ -176,17 +196,20 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
   const mediana = (v: number[]) => (v.length ? [...v].sort((a, b) => a - b)[v.length >> 1] : 255);
   const avisos: string[] = [];
 
-  /** El color de alrededor: la mediana de un anillo de 6-14 px fuera de la caja, sin los demás elementos (salvo el
-   *  que tiene debajo, que ES su fondo). */
+  /** El color de alrededor: el que más hay (`dominante`) en un anillo fuera de la caja, sin los demás elementos (salvo
+   *  el que tiene debajo, que ES su fondo). */
   function alrededor(e: ElementoLeido): RGB {
     const r: number[] = [], g: number[] = [], b: number[] = [];
     const otros = leidos.filter((o) => o.id !== e.id && o.id !== e.sobre);
-    for (let y = e.caja.y0 - 14; y < e.caja.y1 + 14; y++) for (let x = e.caja.x0 - 14; x < e.caja.x1 + 14; x++) {
-      if (x < 0 || y < 0 || x >= W || y >= H || dentro(e.caja, x, y, 6) || otros.some((o) => dentro(o.caja, x, y))) continue;
+    // Un texto: el anillo pegado a su caja (1-5 px), que es lo que tiene detrás; más lejos, en una pastilla de dos
+    // colores ya entra el otro (2026-10-28). Una figura: 6-14 px, fuera de su sombra.
+    const [dentroPx, fueraPx] = e.tipo === "texto" ? [1, 5] : [6, 14];
+    for (let y = e.caja.y0 - fueraPx; y < e.caja.y1 + fueraPx; y++) for (let x = e.caja.x0 - fueraPx; x < e.caja.x1 + fueraPx; x++) {
+      if (x < 0 || y < 0 || x >= W || y >= H || dentro(e.caja, x, y, dentroPx) || otros.some((o) => dentro(o.caja, x, y))) continue;
       const i = at(x, y);
       r.push(d[i]); g.push(d[i + 1]); b.push(d[i + 2]);
     }
-    return [mediana(r), mediana(g), mediana(b)];
+    return dominante(r, g, b);
   }
 
   const medidos: ElementoMedido[] = [];
@@ -506,25 +529,36 @@ export function maestroDePlano(nombre: string, img: Imagen, medidos: ElementoMed
     }
     return { caja: pinta, rgba, oscurece: m.oscurece };
   };
-  /** Una figura sin los textos que lleva encima: donde estaban, su propio color (un plano ajustado a ella alrededor). */
+  /** Una figura sin los textos que lleva encima: donde estaban, su propio color (un plano ajustado a ella alrededor de
+   *  CADA texto: uno para todos cruzaba una pastilla de dos colores y dejaba una mancha rosa, 2026-10-28). */
   const sinLetras = (m: ElementoMedido, hijos: ElementoMedido[]): Dibujo => {
     const base = dibujo(m);
     if (!hijos.length) return base;
     const quitar = new Uint8Array(W * H);
-    for (const t of hijos) for (let y = 0; y < t.pinta.h; y++) for (let x = 0; x < t.pinta.w; x++) {
-      if (!t.alfa[y * t.pinta.w + x]) continue;
-      const X = t.pinta.x + x, Y = t.pinta.y + y;
-      for (let yy = Math.max(0, Y - 2); yy <= Math.min(H - 1, Y + 2); yy++) quitar.fill(1, yy * W + Math.max(0, X - 2), yy * W + Math.min(W - 1, X + 2) + 1);
-    }
+    const marcar = (t: ElementoMedido, v: Uint8Array) => {
+      for (let y = 0; y < t.pinta.h; y++) for (let x = 0; x < t.pinta.w; x++) {
+        if (!t.alfa[y * t.pinta.w + x]) continue;
+        const X = t.pinta.x + x, Y = t.pinta.y + y;
+        for (let yy = Math.max(0, Y - 2); yy <= Math.min(H - 1, Y + 2); yy++) v.fill(1, yy * W + Math.max(0, X - 2), yy * W + Math.min(W - 1, X + 2) + 1);
+      }
+    };
+    // Lo de TODOS los textos queda fuera del anillo de cada uno (las letras del vecino no son su fondo).
+    for (const t of hijos) marcar(t, quitar);
     const rgb = new Uint8ClampedArray(W * H * 3);
     for (let k = 0; k < W * H; k++) for (let c = 0; c < 3; c++) rgb[k * 3 + c] = d[k * 4 + c];
     const lleno = (k: number) => { const x = k % W, y = (k / W) | 0; return x >= m.pinta.x && x < m.pinta.x + m.pinta.w && y >= m.pinta.y && y < m.pinta.y + m.pinta.h && m.alfa[(y - m.pinta.y) * m.pinta.w + (x - m.pinta.x)] === 255; };
-    const c = union(hijos.map((t) => t.pinta));
-    const ajuste = planoDelAnillo(rgb, W, H, quitar, { x0: c.x - 2, y0: c.y - 2, x1: c.x + c.w + 1, y1: c.y + c.h + 1 }, lleno);
-    for (let y = 0; y < m.pinta.h; y++) for (let x = 0; x < m.pinta.w; x++) {
-      const X = m.pinta.x + x, Y = m.pinta.y + y, j = (y * m.pinta.w + x) * 4;
-      if (!quitar[Y * W + X] || !base.rgba[j + 3]) continue;
-      for (let q = 0; q < 3; q++) base.rgba[j + q] = ajuste ? ajuste.valor(X, Y, q) : m.debajo[q];
+    for (const t of hijos) {
+      const suyo = new Uint8Array(W * H);
+      marcar(t, suyo);
+      const c = t.pinta;
+      // Del anillo, sólo lo del color de SU fondo: el otro color de la pastilla no entra al plano.
+      const B = t.debajo, parecido = (k: number) => lleno(k) && Math.max(Math.abs(rgb[k * 3] - B[0]), Math.abs(rgb[k * 3 + 1] - B[1]), Math.abs(rgb[k * 3 + 2] - B[2])) <= 48;
+      const ajuste = planoDelAnillo(rgb, W, H, quitar, { x0: c.x - 2, y0: c.y - 2, x1: c.x + c.w + 1, y1: c.y + c.h + 1 }, parecido);
+      for (let y = 0; y < m.pinta.h; y++) for (let x = 0; x < m.pinta.w; x++) {
+        const X = m.pinta.x + x, Y = m.pinta.y + y, j = (y * m.pinta.w + x) * 4;
+        if (!suyo[Y * W + X] || !base.rgba[j + 3]) continue;
+        for (let q = 0; q < 3; q++) base.rgba[j + q] = ajuste ? ajuste.valor(X, Y, q) : t.debajo[q];
+      }
     }
     return base;
   };

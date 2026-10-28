@@ -3015,6 +3015,33 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   const cta = pz("CTA"), en = (p, x, y, buf, n = 4) => buf[((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * n];
   ok("maestro: el texto ajustado va como TextoPieza (con su tinta y el tope de imagen plana) y la base es la pastilla SIN sus letras", cta.textos.length === 1 && cta.textos[0].capa === "precio" && cta.textos[0].difMax === TEXTO_DIF_MAX_PLANO && cta.textos[0].alfa.length === cta.textos[0].caja.w * cta.textos[0].caja.h && en(cta, 66, 170, cta.base) >= 240 && en(cta, 66, 170, cta.rgba) >= 250 && cta.base[((170 - cta.caja.y) * cta.caja.w + 66 - cta.caja.x) * 4 + 1] < 120);
   const tit = pz("TITULO");
+  {
+    // 2026-10-28 (la pastilla de precio de DiDi: naranja arriba, blanca abajo): el fondo de cada texto es el color que
+    // más hay alrededor (la mediana por canal inventaba un rosa → tinta blanca pálida) y cada texto se borra con SU color.
+    const W2 = 300, H2 = 200, px = new Uint8ClampedArray(W2 * H2 * 4), NAR = [240, 80, 30];
+    const p2 = (x, y, c, a = 1) => { const i = (y * W2 + x) * 4; for (let k = 0; k < 3; k++) px[i + k] = Math.round(a * c[k] + (1 - a) * px[i + k]); px[i + 3] = 255; };
+    for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) p2(x, y, [235, 230, 225]);
+    for (let y = 40; y < 140; y++) for (let x = 40; x < 260; x++) p2(x, y, y < 82 ? NAR : [250, 250, 250]);
+    const bloques = (x0, y0, n, alto, color) => { for (let k = 0; k < n; k++) for (let y = y0; y < y0 + alto; y++) for (let x = x0 + k * 14; x < x0 + k * 14 + 10; x++) p2(x, y, color, y === y0 || y === y0 + alto - 1 ? 0.5 : 1); };
+    bloques(70, 52, 10, 22, [255, 255, 255]);
+    bloques(80, 98, 9, 18, [40, 20, 30]);
+    const lei = [
+      { id: "caja", rol: "TITULO", tipo: "forma", caja: { x0: 39, y0: 39, x1: 261, y1: 141 }, texto: "", sobre: null },
+      { id: "precio", rol: "TITULO", tipo: "texto", caja: { x0: 68, y0: 50, x1: 210, y1: 76 }, texto: "$28,499", sobre: "caja" },
+      { id: "cuotas", rol: "TITULO", tipo: "texto", caja: { x0: 78, y0: 96, x1: 208, y1: 118 }, texto: "3 pagos", sobre: "caja" },
+    ];
+    const im2 = { w: W2, h: H2, rgba: px }, r2 = medirPlano(im2, lei), pr = r2.elementos.find((e) => e.id === "precio");
+    ok("plano: un texto blanco sobre una pastilla de dos colores sale blanco (su fondo es el naranja, no un rosa)", pr && pr.color.every((v) => v >= 240) && Math.abs(pr.debajo[1] - NAR[1]) <= 16, JSON.stringify({ color: pr?.color, debajo: pr?.debajo }));
+    const capa2 = (texto, y) => ({ ...capa(texto), transform: [1, 0, 0, 1, 150, y] });
+    const m2 = maestroDePlano("dos", im2, r2.elementos, r2.fondo, new Map([["precio", capa2("$28,499", 70)], ["cuotas", capa2("3 pagos", 114)]]), r2.avisos);
+    const t2 = m2.piezas.find((p) => p.rol === "TITULO"), parteCaja = t2.partes?.find((q) => q.nombre === "caja") ?? t2;
+    const b2 = (x, y) => { const j = ((y - parteCaja.caja.y) * parteCaja.caja.w + (x - parteCaja.caja.x)) * 4; return [...parteCaja.base.slice(j, j + 3)]; };
+    ok(
+      "plano: sin sus letras, la pastilla queda naranja donde estaba el precio y blanca donde estaban las cuotas (sin mancha rosa)",
+      !!parteCaja.base && b2(75, 62)[1] < 110 && b2(75, 62)[0] > 220 && b2(85, 106).every((v) => v >= 235),
+      JSON.stringify({ precio: b2(75, 62), cuotas: b2(85, 106) }),
+    );
+  }
   ok("maestro: un texto sin tipografía ajustada va como píxeles en la base (no como TextoPieza)", tit.textos.length === 0 && en(tit, 35, 50, tit.base, 1) < 60 && tit.base[((50 - tit.caja.y) * tit.caja.w + 35 - tit.caja.x) * 4 + 3] === 255);
   const re = new Float32Array(W * H * 3);
   for (let k = 0; k < W * H * 3; k++) re[k] = ma.fondo[k];
