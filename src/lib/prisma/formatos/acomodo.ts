@@ -468,6 +468,24 @@ function crecerPie(puestas: Puesta[], pieF: Suelta, area: Rect, hueco: number): 
   if (kf > k) Object.assign(pf, crecido(kf));
 }
 
+/**
+ * Corre a lo ancho, hasta `r`, lo que quedó en el aire de un lado (su altura y su tamaño no cambian). No la corre si
+ * eso la encima a una pieza que no tocaba (lo que ya iba encima, como el precio sobre el HERO, puede seguir encima).
+ * Si se corre el HERO, el fondo va con él: sigue sobre su punto
+ * (B13) mientras el fondo siga cubriendo. Cambia `puestas`; devuelve el fondo.
+ */
+function alAire(puestas: Puesta[], fondo: Acomodo["fondo"], r: Rect, hero: number | undefined, ma: { w: number; h: number }, W: number, H: number): Acomodo["fondo"] {
+  const encima = (a: Puesta, b: Puesta) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  for (const q of puestas) {
+    if (q.w > r.x1 - r.x0) continue;
+    const corrida = { ...q, x: Math.min(Math.max(q.x, r.x0), r.x1 - q.w) };
+    if (corrida.x === q.x || puestas.some((o) => o !== q && encima(q, o) <= 1 && encima(corrida, o) > 1)) continue;
+    if (q.pieza === hero) fondo = cubrir(ma, W, H, fondo.k, fondo.x + corrida.x - q.x, fondo.y);
+    q.x = corrida.x;
+  }
+  return fondo;
+}
+
 /** El área útil de una medida: menos la zona segura y un margen (el mismo de `acomodarSin`), y el hueco entre piezas. */
 function areaDe(W: number, H: number, zona: Zona): { area: Rect; m: number; hueco: number } {
   const m = Math.round(Math.min(H * 0.07, W * 0.045));
@@ -603,14 +621,20 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
     const otraForma = razon(W, H, ma) >= PARECIDO_MAX;
     const lado = (z: number) => (otraForma && z > 0 ? z + m : 0);
     const libre: Rect = { x0: lado(zona.left), x1: W - lado(zona.right), y0: lado(zona.top), y1: H - lado(zona.bottom) };
+    // A los lados, ninguna pieza se arrima más que como la dejó el diseñador (a escala k) ni más que el margen de
+    // siempre: sin esto el fondo que se abre y el HERO que crece las llevaban al borde (B28, DiDi Card 1080×1920: la
+    // pastilla del precio a 2 px, los teléfonos fuera 7 px). A la medida del maestro nada se mueve; lo sangrado sigue igual.
+    const aire = (margen: (s: Suelta) => number) => Math.max(0, Math.min(m, k * Math.min(...sueltas.map(margen))));
+    const conAire: Rect = { ...libre, x0: Math.max(libre.x0, aire((s) => s.p.solido.x)), x1: Math.min(libre.x1, W - aire((s) => ma.w - s.p.solido.x - s.p.solido.w)) };
     const conZona = otraForma && (zona.top > 0 || zona.right > 0 || zona.bottom > 0 || zona.left > 0);
     ({ puestas, fondo: fondoAntes } = anclarAlFondo(sueltas, k, kb, libre, ref, ma, W, H, conZona));
     // Más alta que el maestro (B26): a la mitad entre esto y el acomodo de la tabla.
-    const tabla = heroS && esAlta(W, H, ma) ? acomodoAlto(sueltas, heroS, k, kb, libre, ma, W, H) : null;
+    const tabla = heroS && esAlta(W, H, ma) ? acomodoAlto(sueltas, heroS, k, kb, conAire, ma, W, H) : null;
     if (tabla) {
       ({ puestas, fondo: fondoAntes } = mezclar({ puestas, fondo: fondoAntes }, tabla, ALTA_MEZCLA, ma, W, H));
       alta = true;
     }
+    fondoAntes = alAire(puestas, fondoAntes, conAire, heroS?.i, ma, W, H);
     if (pieF) crecerPie(puestas, pieF, area, hueco);
   } else {
     // Pie: lo más grande que quepa a lo ancho, sin pasar de una franja del alto.

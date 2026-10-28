@@ -2836,7 +2836,14 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   const a768 = acomodar(M45, 768, 1024);
   ok("4:5 → 768×1024: el HERO gana un poco (la mitad de la altura que sobra), lo demás a la escala de siempre", ((h) => h.k > 0.64 * 1.03 && h.k < 0.64 * 1.1)(rol(M45, a768, "HERO")) && rol(M45, a768, "TITULO").k === 0.64 && !a768.avisos.some((v) => v.tipo === "forma"), String(rol(M45, a768, "HERO").k / 0.64));
   ok("las de la misma forma no cambian: 1080×1920 desde el 9:16 y 1200×1500 desde el 4:5 son el acomodo del diseñador", acomodar(M916, 1080, 1920).puestas.every((q) => q.k === 1 && q.x === M916.piezas[q.pieza].solido.x) && acomodar(M45, 1200, 1500).puestas.every((q) => q.k === 1));
-  ok("más ancha que el maestro (1080×1080 desde 4:5): sigue como antes, sin el acomodo de la tabla", !acomodar(M45, 1080, 1080).avisos.some((v) => /más alta/i.test(v.texto)) && acomodar(M45, 768, 1024).avisos.some((v) => esNota(v) && /más alta/i.test(v.texto)));
+  // B28 (preview, 2026-10-27): DiDi Card (cajas de la lectura real) en 1080×1920 llevaba el precio a 2 px del borde y
+  // los teléfonos 7 px fuera. Cada lado guarda el menor entre el margen del diseñador × k y el de siempre.
+  const cajaDidi = (rol, x0, y0, x1, y1) => ({ nombre: rol, rol, solido: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, letraMinPx: null });
+  const DIDI = { nombre: "didi-card", w: 1200, h: 1500, piezas: [cajaDidi("FOOTER", 243, 1305, 990, 1364), cajaDidi("HERO", 93, 667, 960, 1254), cajaDidi("CTA", 670, 679, 1146, 809), cajaDidi("TITULO", 364, 271, 833, 602), cajaDidi("BRAND", 252, 130, 945, 200)] };
+  const aLosLados = [[1080, 1920], [720, 1600], [768, 1024]].map(([W, H]) => [W, H, Math.round(Math.min(H * 0.07, W * 0.045)), acomodar(DIDI, W, H)]);
+  ok("más alta que el maestro: ninguna pieza se arrima al borde de los lados (DiDi Card en 1080×1920, 720×1600 y 768×1024)", aLosLados.every(([W, , m, a]) => a.puestas.every((q) => q.x >= m - 0.5 && q.x + q.w <= W - m + 0.5)), aLosLados.map(([W, H, m, a]) => `${W}x${H} m${m}: ${a.puestas.map((q) => `${Math.round(q.x)}/${Math.round(W - q.x - q.w)}`).join(" ")}`).join(" · "));
+  ok("a la medida del maestro, DiDi Card queda como la dejó el diseñador", acomodar(DIDI, 1200, 1500).puestas.every((q) => q.k === 1 && q.x === DIDI.piezas[q.pieza].solido.x));
+  ok("más ancha que el maestro (1080×1080 desde 4:5): sigue como antes, sin el acomodo de la tabla",!acomodar(M45, 1080, 1080).avisos.some((v) => /más alta/i.test(v.texto)) && acomodar(M45, 768, 1024).avisos.some((v) => esNota(v) && /más alta/i.test(v.texto)));
 
   // Lo que no debe pasar nunca: una base que salga de otra (daría vueltas) ni un HERO de tamaño cero o negativo.
   ok("la matriz: ninguna base «igual» sale a su vez de otra", Object.values(MATRIZ).filter((f) => f.modo === "igual").every((f) => !baseAEscala(...f.base.split("x").map(Number))));

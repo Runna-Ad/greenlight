@@ -3,6 +3,7 @@
  * reducida a leer (`/api/prisma/formatos/leer`), llevar lo leído a los píxeles de la imagen entera y medirlo
  * (`medirPlano`). Lo que sigue (revisar y armar el maestro) es `revision-plano.tsx`.
  */
+import { FP_ERROR } from "@/lib/prisma/formatos/copy";
 import { LADO_LECTURA, medirPlano, type ElementoLeido, type Imagen } from "@/lib/prisma/formatos/plano";
 
 type Medido = ReturnType<typeof medirPlano>;
@@ -93,7 +94,13 @@ export async function leerPlano(file: File, senal: AbortSignal, etapa: (e: "sepa
   if (!res) return { clave: "planoTarde" };
   type Respuesta = { ok: true; elementos: ElementoLeido[]; w: number; h: number; costoUsd: number | null } | { ok: false; error: string };
   const r = (await res.json().catch(() => null)) as Respuesta | null;
-  if (!r || !r.ok) return { clave: "planoLectura", detalle: r && !r.ok ? r.error : undefined };
+  if (!r || !r.ok) {
+    // El servidor a veces repite la frase de esta falla («La IA no pudo leer la imagen. Reintenta.»): se muestra una vez,
+    // y debajo sólo lo que agrega.
+    const base = FP_ERROR.planoLectura.es;
+    const detalle = r && !r.ok ? (r.error.startsWith(base) ? r.error.slice(base.length).trim() : r.error) : "";
+    return { clave: "planoLectura", detalle: detalle || undefined };
+  }
 
   // De los px de la copia leída a los de la imagen entera (hacia afuera: mejor una caja de más que cortar un borde).
   const sx = W / r.w, sy = H / r.h;

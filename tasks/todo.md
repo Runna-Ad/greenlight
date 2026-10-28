@@ -1476,6 +1476,28 @@ largo: estacionado por él.
       PRISMA_FORMATOS_IA y GEMINI_API_KEY existen en Vercel Preview (prisma) (`vercel env ls`, sólo nombres). Falta:
       Pedro entra a la preview con su sesión y sube didi-card.webp de verdad. 1er intento: 502, Gemini rechazó
       `maxItems` del esquema (400 invalid argument); quitado (el tope lo pone limpiarLectura) y vuelto a subir.
+      PREVIEW PROBADA 2026-10-27 (090bf78, sesión de Pedro, didi-card.webp real):
+      - Lectura real: 200, 15 elementos, 7 textos, ≈ US$0.0111; letras exactas (las mismas del laboratorio).
+      - Revisión: 6 textos con tipografía DiDi, legal como imagen (89 %). La biblioteca de la preview trae 12 DiDi
+        con DiDiSansVariable: 3 de 7 eligieron la variable (precio Variable-Medium 30 % contra Pro-Bold 31 % en
+        localhost). Comparado a 2.6×: el precio se ve igual al original.
+      - Editor 1080×1920: «12 MSI», quitados «con tus cupones de» y «DiDi Card», «12 pagos de $3,999»; guardado,
+        «Texto cambiado en las 12 medidas».
+      - PSD 1080×1920 (5.5 MB, leído en la página): BACKGROUND + 5 carpetas, capa por elemento, textos vivos con
+        las ediciones y DiDi Sans; los 2 quitados como capas de texto ocultas.
+      HALLAZGOS (sin arreglar): (a) la pastilla del precio queda a 2 px del borde derecho en 1080×1920 y a 1 px en
+      720×1280 (57 px en el original; su capa sale 3 px del lienzo); (b) bajo la caja de subida sigue el enlace
+      «¿Sólo tienes una imagen plana? Usa Formatos con imagen plana» a la página vieja; (c) si la lectura falla, el
+      mensaje sale dos veces; (d) la variable en el PSD pide que diseño tenga DiDi Sans Variable instalada.
+      NO PROBADO: abrir el PSD en Photoshop.
+      ARREGLADOS (Pedro: "fix the price pill edge, the old flat-image link and the double error message"):
+      (a) acomodo.ts: en la familia «igual» el HERO crece dentro de un margen por lado (el menor entre el del
+      diseñador × k y el de siempre) y `alAire` corre a lo ancho lo que quedó en el borde. Localhost con la
+      lectura guardada: pastilla a 51 px del borde en 1080×1920 (antes 2), 34 en 720×1280 (antes 1), 33 en
+      720×1600, 36 en 768×1024, 57 en 1200×1500 (igual); teléfonos a 54/36/35/61 px. (b) el enlace ahora dice
+      «¿Tu imagen tiene fondo de foto o textura? Usa Formatos con imagen plana, que rellena el fondo con IA».
+      (c) plano-lector quita la frase repetida: «La IA no pudo leer la imagen.» + «Reintenta.».
+      **Next Step:** commit + push a `prisma`; Pedro revisa una medida alta en la preview.
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
 - iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los
   pendientes de iPad de B19 (caché de 4 fondos, táctil real, zoom de Safari) quedan fuera.
