@@ -4189,3 +4189,14 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
         distintos: al volver a subir la misma imagen, lo cambiado no vuelve (se vio con «12 pagos de / $9,000»).
         Guardarlos por las letras leídas + posición, no por el id.
       · Lo de «Aplica ahora» pálido en la captura de Pedro no salió en estas lecturas (salió nítido); sin reproducir.
+      · RESPUESTAS de los diseñadores (2026-10-28, vía Pedro):
+        - Dos entregas que NUNCA se mezclan: (a) RATIO = masters, artes nuevos o iteraciones en canales directos;
+          el nombre lleva el ratio (1x1, 4x5, 9x16, 191x1). (b) PÍXELES = EC (external channel); el nombre lleva
+          AnchoxAlto (1200x1200). La lista EC es la de `MEDIDAS_EQUIPO` (las 12).
+        - Ratios por red (estáticos, Loans y Card igual): GG 1:1 = 1200×1200, 1.91:1 = 1200×628 · FB 9:16 =
+          1080×1920, 4:5 = 1080×1350 · TT: vacío en su tabla. (Ojo: 1.91:1 es 1200×628 en ratio; la lista EC trae
+          1200×627.) 16:9 lo mencionaron antes pero no está en la tabla: preguntar.
+        - Zonas seguras: en 9:16 es OBLIGATORIO que toda la info quede dentro (botones de la red tapan). En las demás
+          medidas es recomendación estética: unos px fuera no importa, sólo alejarse de los bordes del lienzo.
+          Mandan un doc con las zonas seguras.
+        - Falta aún: ejemplo terminado de 1.91:1 y 320×50; si eligieron DiDi como cliente; el doc de zonas seguras.
