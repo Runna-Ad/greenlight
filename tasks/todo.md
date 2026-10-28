@@ -4233,5 +4233,5 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
         antes de llamar a la IA (no cuenta para el tope de lecturas) y guarda la nueva; «Leer otra vez con IA» en la
         revisión pide otra y la reemplaza; la revisión dice «ya se había leído: misma lectura, sin costo». Sin la tabla,
         la ruta lee con IA como antes (el error se registra). Aplicar: `node scripts/migrate.mjs --only 20261028120001
-        --project-ref ybbrpqzbedaxsmotgtkh` (sólo los 14 dígitos). Probar en la preview:
+        --project-ref ybbrpqzbedaxsmotgtkh` (sólo los 14 dígitos). PROBADO en la preview 2026-10-28 (Pedro, SPGFAPPLE1PLATA plano 1080×1350): 1 fila guardada (17 elementos, gemini-3.8-flash), la 2ª subida dijo «ya se había leído: misma lectura, sin costo». Era:
         subir la misma imagen dos veces (la 2ª dice «ya se había leído») y que los textos cambiados sigan.
