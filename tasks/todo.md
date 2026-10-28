@@ -4173,8 +4173,23 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
         nada). Falta: qué redes.
       · 5. Mover / escalar el FONDO en el editor (hoy `Edicion` no lo tiene).
       · 6. Medidas muy horizontales: el legal sólo puede bajar de renglones (`conRenglones`: n < los del PSD) y necesita la
-        tipografía del cliente; su captura decía «Sin cliente». Tamaño del legal a partir de un ejemplo. Falta: un
-        ejemplo terminado de 1.91:1 y 320×50, y si eligieron DiDi.
+        tipografía del cliente; su captura decía «Sin cliente». Tamaño del legal a partir de un ejemplo. Falta: si
+        eligieron DiDi.
+        EJEMPLOS RECIBIDOS (Pedro, 2026-10-28, ~/Downloads/1.91x1.zip = 16 PNG 1200×628 GG; 320x50.zip = 8 PNG EC):
+        1.91:1 (casi todos igual):
+          - Marca arriba a la izquierda; título/beneficios en la mitad izquierda (~50 %); HERO a la derecha (~45 %),
+            muchas veces sangrado al borde de abajo o de la derecha. Fondo de foto a todo lo ancho.
+          - Legal ABAJO A LA IZQUIERDA, sólo en la columna del texto (~45-60 % del ancho), 2-3 renglones, letra ~14 px
+            (renglón ~16 px). Insignias (DiDi Finanzas + Play/Apple) arriba del legal o a su izquierda en la misma fila.
+          - Hoy Formatos («horizontal») pone el legal en una franja centrada a TODO lo ancho abajo y con los renglones
+            del PSD (o menos). Debe: legal en la columna del texto, MÁS renglones (3), y el HERO libre hasta abajo.
+        320×50 (fila, pero no la de hoy):
+          - Columna izquierda: marca ARRIBA del título/precio (no en celda aparte). Centro: HERO (tarjeta), sangra
+            arriba/abajo. Derecha: beneficio o botón arriba, insignias + legal abajo.
+          - Legal: bloque de 3-4 renglones de ~100 px de ancho, letra de 1-2 px (no se lee), junto a las insignias,
+            abajo a la derecha o bajo el título. Hoy Formatos lo pone en franja a todo lo ancho (hasta 24 % del alto).
+          - OJO: hoy Formatos avisa cuando el legal queda ilegible; en 320×50 el equipo lo entrega así. Preguntar si
+            en 320×50 (y 640×100) el aviso del legal chico se apaga.
 - [~] B30. Imagen plana, más arreglos del 2026-10-28 (en `prisma`, probados en la preview con la imagen real de DiDi, beige):
       · El texto escrito en la revisión es un cambio de verdad (a6982d2); si va como imagen, la fila lo dice.
       · Un fondo que no se puede limpiar ya no rechaza la imagen (PEDRO_OVERRIDE): lo de ahí se queda fijo en el fondo
