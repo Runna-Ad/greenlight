@@ -69,6 +69,8 @@ export function CampoLectura({
   // salir permite cruzar el hueco marca→tarjeta sin que se cierre (la tarjeta es
   // interactiva: lleva confirmar/descartar).
   const [abierta, setAbierta] = useState<string | null>(null);
+  // Descartar borra el cambio y su hilo (borrado duro): dos pasos, como en el panel.
+  const [confirmaDescartar, setConfirmaDescartar] = useState<string | null>(null);
   const cerrarTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const marcaRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [referenceEl, setReferenceEl] = useState<HTMLElement | null>(null);
@@ -564,19 +566,41 @@ export function CampoLectura({
                         <Check className="size-4" />
                       </button>
                     )}
-                    <button
-                      type="button"
-                      disabled={ctx.pendiente}
-                      onClick={() => {
-                        ctx.descartar(corrAbierta.id);
-                        setAbierta(null);
-                      }}
-                      aria-label="Descartar corrección"
-                      title="Descartar"
-                      className="rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-status-corrections disabled:opacity-50"
-                    >
-                      <X className="size-4" />
-                    </button>
+                    {confirmaDescartar === corrAbierta.id ? (
+                      <span className="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={ctx.pendiente}
+                          onClick={() => {
+                            ctx.descartar(corrAbierta.id);
+                            setConfirmaDescartar(null);
+                            setAbierta(null);
+                          }}
+                          className="rounded px-1.5 py-0.5 text-[11px] font-bold text-status-corrections hover:bg-secondary disabled:opacity-50"
+                        >
+                          Sí, descartar
+                        </button>
+                        <button
+                          type="button"
+                          autoFocus
+                          onClick={() => setConfirmaDescartar(null)}
+                          className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-secondary"
+                        >
+                          Cancelar
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={ctx.pendiente}
+                        onClick={() => setConfirmaDescartar(corrAbierta.id)}
+                        aria-label="Descartar corrección"
+                        title="Descartar"
+                        className="rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-status-corrections disabled:opacity-50"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    )}
                   </div>
                 </>
               ) : corrAbierta.estado === "closed" ? (

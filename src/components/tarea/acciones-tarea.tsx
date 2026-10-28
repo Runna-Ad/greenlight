@@ -63,6 +63,7 @@ export function AccionesTarea({
   ctx,
   abiertas,
   faltaLegal = false,
+  bloqueoAprobar = null,
   variante = "compacta",
 }: {
   ideaId: string;
@@ -73,6 +74,9 @@ export function AccionesTarea({
   abiertas: number;
   /** Falta la cortinilla obligatoria (legales) → no se puede mandar a revisión. */
   faltaLegal?: boolean;
+  /** Hay conversación abierta con el cliente: aprobar marcaría esos cambios como aplicados
+   *  (la base también lo niega, 0086). El texto dice qué falta. */
+  bloqueoAprobar?: string | null;
   variante?: "compacta" | "prominente";
 }) {
   const router = useRouter();
@@ -125,6 +129,10 @@ export function AccionesTarea({
 
   const ejecutar = (a: Accion) =>
     startTransition(async () => {
+      if (a.verb === "approve" && bloqueoAprobar) {
+        toast.error(bloqueoAprobar);
+        return;
+      }
       // Mandar a revisión, devolver a revisión (tras corregir) Y el envío directo del lead-solo
       // pasan por el corrector de H.Ü.E: se revisa CADA vez que la tarea deja las manos de quien
       // la trabaja — sea la 1ª o la 4ª (Pedro 2026-09-03). El lead-solo es el ÚNICO checkpoint

@@ -242,14 +242,18 @@ export function bloqueoEnvioPieza(
   return { esperaCliente, porDecidir };
 }
 
-/** El texto del bloqueo para el lead (banner y error del server dicen lo mismo). */
-export function motivoBloqueoEnvio(b: { esperaCliente: number; porDecidir: number }): string | null {
+/** El texto del bloqueo para el lead (banner y error del server dicen lo mismo; la base,
+ *  0086 motivo_bloqueo_envio, arma el mismo texto). `accion`: enviar o aprobar la pieza. */
+export function motivoBloqueoEnvio(
+  b: { esperaCliente: number; porDecidir: number },
+  accion: "enviar la pieza" | "aprobar la pieza" = "enviar la pieza",
+): string | null {
   const partes: string[] = [];
   if (b.esperaCliente)
     partes.push(`${b.esperaCliente} cambio${b.esperaCliente === 1 ? " espera" : "s esperan"} respuesta del cliente`);
   if (b.porDecidir)
     partes.push(`el cliente contestó en ${b.porDecidir} cambio${b.porDecidir === 1 ? "" : "s"}: márcalo aplicado o "Sin cambio (acordado)"`);
-  return partes.length ? `No se puede enviar la pieza todavía: ${partes.join("; ")}.` : null;
+  return partes.length ? `No se puede ${accion} todavía: ${partes.join("; ")}.` : null;
 }
 
 /**

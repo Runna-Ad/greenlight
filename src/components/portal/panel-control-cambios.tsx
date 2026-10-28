@@ -199,7 +199,7 @@ function Tarjeta({
 }) {
   // Barra de color a la izquierda = estado (Pedro 2026-10-27, opción 1). Si lo último del
   // hilo es del equipo, manda el morado: le toca al cliente contestar.
-  const teRespondieron = !!hilo && !c.sinCambio && ultimoVisibleDe(c) === "equipo";
+  const teRespondieron = !!hilo && c.estado !== "closed" && ultimoVisibleDe(c) === "equipo";
   const color = teRespondieron ? MORADO : tono;
   return (
     // Ya NO es role="button": dentro puede ir la caja de respuesta, y los hijos de un botón
@@ -262,7 +262,9 @@ function hiloDe(c: Correccion, ctx: Ctx | null, colorCliente: string | undefined
   return (
     <HiloRespuestas
       c={c}
-      responder={ctx.responder ?? null}
+      // Un cambio cerrado (aplicado o sin cambio) se lee, ya no se contesta: si algo sigue
+      // mal, el cliente pide un cambio nuevo (la base también lo niega, 0086).
+      responder={c.estado === "closed" ? null : ctx.responder ?? null}
       texto={texto}
       setTexto={setTexto}
       vaPara="el equipo de Rünna"

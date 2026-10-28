@@ -134,15 +134,23 @@ export async function setEstadoCorreccion(
   // podía sellar atendido/confirmado en CUALQUIER comentario de la tarea (una aprobación,
   // una nota). Mismo filtro que descartarCorreccion. Si no matchea nada, se DICE (antes
   // devolvía ok con 0 filas tocadas).
-  const { data, error } = await db
+  const esLead = canOverrideStatus(role);
+  let upd = db
     .from("comments")
     .update(patchFinal)
     .eq("id", commentId)
     .eq("idea_id", ideaId)
-    .in("kind", ["correction_request", "client_change"])
-    .select("id");
+    // Interna, o del cliente YA ENVIADA (un borrador del cliente no se toca desde aquí).
+    .or("kind.eq.correction_request,and(kind.eq.client_change,ronda.not.is.null)");
+  // Lo que el lead ya cerró (confirmado o "sin cambio") sólo lo reabre un lead: antes el
+  // especialista mandaba "open"/"done" y borraba la decisión. En el MISMO update (no leer
+  // y luego escribir): si el lead la cierra en ese instante, no se pisa.
+  if (!esLead) upd = upd.is("resolved_at", null);
+  const { data, error } = await upd.select("id");
   if (error) return { ok: false, error: error.message };
-  if (!data?.length) return { ok: false, error: "Esa corrección ya no existe." };
+  if (!data?.length) {
+    return { ok: false, error: esLead ? "Esa corrección ya no existe." : "Esa corrección ya no existe o ya la cerró un lead." };
+  }
   return { ok: true };
 }
 
@@ -297,6 +305,9 @@ export async function responderCorreccion(
         .from("correccion_respuestas")
         .select("de_cliente")
         .eq("comment_id", commentId)
+        // Sólo lo que el cliente ve: una nota interna en medio no cambia a quién le toca
+        // (antes la nota dejaba al lead sin poder contestarle al cliente).
+        .or("de_cliente.eq.true,para_cliente.eq.true")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle<{ de_cliente: boolean }>(),
@@ -355,7 +366,8 @@ export async function confirmarCampo(
     .from("comments")
     .update({ resolved_at: new Date().toISOString(), resolved_member_id: soy?.id ?? null, resolved_by: await actorId() })
     .eq("idea_id", ideaId)
-    .in("kind", ["correction_request", "client_change"])
+    // Borradores del cliente (ronda null) no: todavía no los manda.
+    .or("kind.eq.correction_request,and(kind.eq.client_change,ronda.not.is.null)")
     .is("resolved_at", null)
     .eq("target_tabla", tabla)
     .eq("target_campo", campo);

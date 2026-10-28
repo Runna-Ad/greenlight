@@ -10,7 +10,7 @@ import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, 
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
 import { puedeSerLead, puedeSerEspecialista } from "../src/lib/roles.ts";
-import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoEnvioPieza, motivoBloqueoEnvio } from "../src/lib/correcciones.ts";
+import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoEnvioPieza, motivoBloqueoEnvio, ultimoVisibleDe } from "../src/lib/correcciones.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
 
 let pass = 0,
@@ -1541,6 +1541,16 @@ console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo e
     eq("pieza: un cambio ya cerrado no bloquea", JSON.stringify(bloqueoEnvioPieza([cerrado])), JSON.stringify({ esperaCliente: 0, porDecidir: 0 }));
     ok("pieza: libre → sin motivo", motivoBloqueoEnvio({ esperaCliente: 0, porDecidir: 0 }) === null);
     ok("pieza: el motivo nombra lo que espera", (motivoBloqueoEnvio({ esperaCliente: 1, porDecidir: 0 }) ?? "").includes("1 cambio espera respuesta del cliente"));
+    // Mismo texto que la base (0086 motivo_bloqueo_envio; test-db revisa el de la base).
+    eq("pieza: el texto de aprobar es el de la base",
+       motivoBloqueoEnvio({ esperaCliente: 0, porDecidir: 1 }, "aprobar la pieza"),
+       'No se puede aprobar la pieza todavía: el cliente contestó en 1 cambio: márcalo aplicado o "Sin cambio (acordado)".');
+    // Una nota interna después de la del cliente no cambia a quién le toca contestar.
+    const conNota = { id: "n", respuestas: [
+      { ...r("n", 1, "cliente"), id: "n1", body: "", autor: null },
+      { ...r("n", 2, "x"), id: "n2", body: "", autor: null, deCliente: false, paraCliente: false },
+    ] };
+    eq("pieza: nota interna al final → sigue siendo el cliente", ultimoVisibleDe(conNota), "cliente");
   }
   eq("etiqueta en cambios con respuesta", estadoCliente("in_corrections", false, true).label, "Te respondieron");
   eq("en cambios sin respuesta sigue igual", estadoCliente("in_corrections", false).label, "En cambios");

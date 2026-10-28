@@ -217,7 +217,9 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
         .in("idea_id", enCambios)
         .eq("kind", "client_change")
         .not("ronda", "is", null)
-        .not("target_campo", "is", null),
+        .not("target_campo", "is", null)
+        // Sólo abiertos: un cambio ya cerrado no deja "te respondieron" pendiente.
+        .is("resolved_at", null),
       leerRespuestas(),
     ]);
     if (errCambios) console.error("portal te-respondieron (cambios):", errCambios.message);

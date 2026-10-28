@@ -55,7 +55,8 @@ export function PortalTarea({ t, puedeActuar, colorCliente }: { t: TareaPortal; 
         nRevisados={t.revisiones.filter((c) => !c.sinCambio).length}
         puedeActuar={puedeActuar}
         teRespondieron={equipoEscribioUltimo(
-          [...t.revisiones, ...t.enProceso].flatMap((c) =>
+          // Sólo cambios abiertos: en uno ya cerrado no le toca contestar al cliente.
+          t.enProceso.flatMap((c) =>
             (c.respuestas ?? []).map((r) => ({ commentId: c.id, createdAt: r.createdAt, deCliente: r.deCliente, paraCliente: r.paraCliente })),
           ),
         )}

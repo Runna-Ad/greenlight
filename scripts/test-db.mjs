@@ -1337,7 +1337,7 @@ await resetRole();
   // (in_corrections→published no es transición normal). Se simula con el claim service_role.
   await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false)`);
   const stReenvio = await scalar(
-    `select produccion.rpc_lead_reenvia_cliente($1::uuid,$2::uuid,null)::text`, [IDEA, mGalie]);
+    `select produccion.rpc_lead_reenvia_cliente($1::uuid,null,$2::uuid)::text`, [IDEA, LEAD]);
   eq("reenvia mueve in_corrections→published", stReenvio, "published");
   ok("reenvia RESUELVE los client_change enviados sin resolver",
      Number(await scalar(`select count(*) from produccion.comments
@@ -2570,7 +2570,7 @@ console.log("\n▶ 0077 — cambios del cliente: cancha del lead, enrutado y pas
 
   // Reenviar al cliente cierra TODO lo abierto (cliente + internas).
   await db.query(`update produccion.ideas set cambios_cliente_en_lead=true where id=$1`, [I]);
-  eq("reenviar → published", await scalar(`select produccion.rpc_lead_reenvia_cliente($1,null,null)::text`, [I]), "published");
+  eq("reenviar → published", await scalar(`select produccion.rpc_lead_reenvia_cliente($1,$2,null)::text`, [I, leadM]), "published");
   eq("reenviar resolvió también la corrección interna abierta",
      Number(await scalar(`select count(*) from produccion.comments where idea_id=$1 and resolved_at is null
        and (kind='correction_request' or ronda is not null)`, [I])), 0);
@@ -2817,6 +2817,117 @@ console.log("\n▶ 0084 — correos agrupados: reclamo de la cola");
 
   await db.query(`delete from produccion.notifications where id=$1`, [n]);
   await db.query(`delete from produccion.profiles where id=$1`, [p]);
+}
+
+// ── 0086 — auditoría del flujo de cambios: lo que la base ahora hace cumplir ──
+console.log("\n▶ 0086 — auditoría de cambios y conversaciones");
+{
+  await db.exec(`select set_config('produccion.acting_member','',false);
+                 select set_config('request.jwt.claims','{"role":"service_role"}',false)`);
+  const I = flIdea;
+  const galie = await scalar(`select id from produccion.track_members where name='Galie'`);
+  const leadM = await scalar(
+    `select id from produccion.track_members where role='lead' and active and (track='real' or 'real'=any(tracks)) limit 1`);
+  const estado = (st) => db.exec(`select set_config('produccion.lead_override','on',false);
+    update produccion.ideas set status='${st}', deleted_at=null, published_at=coalesce(published_at, now()) where id='${I}';
+    select set_config('produccion.lead_override','',false)`);
+  const err = async (fn) => { try { await fn(); return null; } catch (e) { return e.message; } };
+  const clientId = await scalar(
+    `select b.client_id from produccion.ideas i join produccion.briefs b on b.id=i.brief_id where i.id=$1`, [I]);
+  const pCli = await scalar(
+    `insert into produccion.profiles (id, email, full_name, role, client_id) values (gen_random_uuid(),'cli@0086.test','Cli','client',$1) returning id`, [clientId]);
+  const responder = (c, deC, paraC, member, profile) =>
+    scalar(`select produccion.rpc_responder_cambio($1,$2,'x',$3,$4,$5,$6)`, [c, I, deC, paraC, member, profile]);
+  await db.query(`delete from produccion.comments where idea_id=$1 and kind in ('client_change','correction_request')`, [I]);
+  const cambio = await scalar(
+    `insert into produccion.comments (idea_id, body, kind, ronda) values ($1,'cambio 0086','client_change',1) returning id`, [I]);
+
+  // 1. Aprobar con la conversación abierta se niega, con el mismo texto que la app.
+  await estado("in_corrections");
+  await responder(cambio, false, true, leadM, LEAD);
+  await estado("under_review");
+  eq("aprobar con el cliente esperando respuesta se niega",
+     await err(() => scalar(`select produccion.rpc_task_approve($1,$2,null,null)`, [I, leadM])),
+     "No se puede aprobar la pieza todavía: 1 cambio espera respuesta del cliente.");
+  eq("…y el cambio sigue abierto", await scalar(`select resolved_at is null from produccion.comments where id=$1`, [cambio]), true);
+
+  // 4. El cliente contesta (abierto: sí); y en un cambio cerrado ya no.
+  await estado("in_corrections");
+  await responder(cambio, true, false, null, pCli);
+  await estado("under_review");
+  eq("aprobar con el cliente pendiente de decisión se niega",
+     await err(() => scalar(`select produccion.rpc_task_approve($1,$2,null,null)`, [I, leadM])),
+     'No se puede aprobar la pieza todavía: el cliente contestó en 1 cambio: márcalo aplicado o "Sin cambio (acordado)".');
+
+  // 10 + 1. Enviar la pieza: sólo un lead, y no con la conversación abierta.
+  await estado("in_corrections");
+  eq("un especialista no puede enviar la pieza",
+     await err(() => scalar(`select produccion.rpc_lead_reenvia_cliente($1,$2,null)`, [I, galie])),
+     "Sólo un lead reenvía al cliente.");
+  eq("el lead tampoco, con la conversación abierta",
+     await err(() => scalar(`select produccion.rpc_lead_reenvia_cliente($1,null,$2)`, [I, LEAD])),
+     'No se puede enviar la pieza todavía: el cliente contestó en 1 cambio: márcalo aplicado o "Sin cambio (acordado)".');
+
+  // Cerrado sin cambio → ya se puede, y el cliente ya no contesta ahí.
+  await db.query(`update produccion.comments set resolved_at=now(), sin_cambio=true where id=$1`, [cambio]);
+  ok("el cliente ya no contesta en un cambio cerrado",
+     /ya está cerrado/.test(await err(() => responder(cambio, true, false, null, pCli)) ?? ""));
+  ok("el equipo sí puede dejar una nota en el cerrado", !(await err(() => responder(cambio, false, false, galie, null))));
+  eq("cerrado el cambio, el lead envía la pieza",
+     await scalar(`select produccion.rpc_lead_reenvia_cliente($1,null,$2)::text`, [I, LEAD]), "published");
+
+  // 7. El cliente aprueba sólo desde published (pestaña vieja → error, sin "aprobado" falso).
+  await estado("in_corrections");
+  const aprobacionesAntes = Number(await scalar(`select count(*) from produccion.comments where idea_id=$1 and kind='approval'`, [I]));
+  ok("aprobar fuera de published se niega",
+     /ya no está esperando tu aprobación/.test(await err(() => scalar(`select produccion.rpc_client_approve($1)`, [I])) ?? ""));
+  eq("…sin dejar un 'Aprobado por el cliente.'",
+     Number(await scalar(`select count(*) from produccion.comments where idea_id=$1 and kind='approval'`, [I])), aprobacionesAntes);
+
+  // 4. El cliente no escribe en una pieza que ya no está en su portal.
+  const abierto = await scalar(
+    `insert into produccion.comments (idea_id, body, kind, ronda) values ($1,'otro 0086','client_change',2) returning id`, [I]);
+  await db.query(`update produccion.ideas set deleted_at=now() where id=$1`, [I]);
+  ok("respuesta del cliente en la papelera se niega",
+     /ya no está en el portal/.test(await err(() => responder(abierto, true, false, null, pCli)) ?? ""));
+  await db.query(`update produccion.ideas set deleted_at=null where id=$1`, [I]);
+
+  // 5. Sin lead asignado, lo que escribe el cliente le llega a los leads/admins del alcance.
+  await db.query(`update produccion.idea_assignments set es_lead=false where idea_id=$1`, [I]);
+  await db.query(`update produccion.profiles set notify_scope='all' where id=$1`, [LEAD]);
+  await db.query(`delete from produccion.notifications where entity_id=$1`, [I]);
+  await responder(abierto, true, false, null, pCli);
+  ok("sin lead asignado, la respuesta del cliente le llega a un lead",
+     Number(await scalar(`select count(*) from produccion.notifications where entity_id=$1 and recipient_id=$2 and type='change_reply'`, [I, LEAD])) === 1);
+  ok("…y al cliente no",
+     Number(await scalar(`select count(*) from produccion.notifications where entity_id=$1 and recipient_id=$2`, [I, pCli])) === 0);
+
+  // 9. Borrar un plano con un cambio del cliente sin cerrar se niega; cerrado, se borra como siempre.
+  const pid = await scalar(`insert into produccion.planos (idea_id, orden) values ($1, 186) returning id`, [I]);
+  const anclado = await scalar(
+    `insert into produccion.comments (idea_id, body, kind, ronda, target_tabla, target_fila_id) values ($1,'en el plano','client_change',2,'planos',$2) returning id`, [I, pid]);
+  await responder(anclado, true, false, null, pCli);
+  ok("borrar un plano con un cambio del cliente abierto se niega",
+     /cambios del cliente sin cerrar/.test(await err(() => db.query(`delete from produccion.planos where id=$1`, [pid])) ?? ""));
+  eq("…y la conversación sigue ahí",
+     Number(await scalar(`select count(*) from produccion.correccion_respuestas where comment_id=$1`, [anclado])), 1);
+  await db.query(`update produccion.comments set resolved_at=now() where id=$1`, [anclado]);
+  await db.query(`delete from produccion.planos where id=$1`, [pid]);
+  eq("cerrado, el plano se borra con su cambio",
+     Number(await scalar(`select count(*) from produccion.comments where id=$1`, [anclado])), 0);
+
+  // Borrar la TAREA entera (cascada ideas → planos) no se frena: la idea ya no se ve.
+  const otra = await scalar(
+    `insert into produccion.ideas (brief_id, family_id, variant_number) select brief_id, family_id, 86 from produccion.ideas where id=$1 returning id`, [I]);
+  const pOtra = await scalar(`insert into produccion.planos (idea_id, orden) values ($1, 1) returning id`, [otra]);
+  await db.query(`insert into produccion.comments (idea_id, body, kind, ronda, target_tabla, target_fila_id) values ($1,'x','client_change',1,'planos',$2)`, [otra, pOtra]);
+  ok("borrar la tarea entera con un cambio abierto sí procede", !(await err(() => db.query(`delete from produccion.ideas where id=$1`, [otra]))));
+  eq("…y no deja nada colgado", Number(await scalar(`select count(*) from produccion.planos where id=$1`, [pOtra])), 0);
+
+  ok("anon no puede leer el bloqueo", !(await scalar(`select has_function_privilege('anon','produccion.motivo_bloqueo_envio(uuid,text)','execute')`)));
+  await db.query(`delete from produccion.comments where idea_id=$1 and kind='client_change'`, [I]);
+  await db.query(`delete from produccion.profiles where id=$1`, [pCli]);
+  await db.exec(`select set_config('request.jwt.claims','',false)`);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

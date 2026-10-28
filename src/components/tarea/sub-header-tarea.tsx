@@ -33,6 +33,7 @@ export function SubHeaderTarea({
   ideaId,
   status,
   faltaLegal = false,
+  bloqueoAprobar = null,
   ctx,
   abiertas,
   indice,
@@ -45,6 +46,8 @@ export function SubHeaderTarea({
   status: AssetStatus;
   /** Falta la cortinilla obligatoria → bloquea "Mandar a revisión". */
   faltaLegal?: boolean;
+  /** Conversación abierta con el cliente → "Aprobar" no procede (ver AccionesTarea). */
+  bloqueoAprobar?: string | null;
   ctx: TaskContext;
   abiertas: number;
   indice: number;
@@ -99,6 +102,7 @@ export function SubHeaderTarea({
           abiertas={abiertas}
           ctx={ctx}
           faltaLegal={faltaLegal}
+          bloqueoAprobar={bloqueoAprobar}
         />
         <NavBundle
           cliente={cliente}

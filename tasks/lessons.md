@@ -809,3 +809,8 @@ TAGS: #override #color #ux #pedro
 PEDRO'S APPROACH: una respuesta es sólo un comentario y nunca se liga con aplicar; no hay "reenviar" mientras se conversa; si el cliente no contesta, un recordatorio al día (después).
 RULE: dos botones con casi el mismo texto nunca pueden hacer cosas distintas; una acción que cambia estados en masa no corre sobre algo con una conversación abierta. Hecho: "Responder al cliente" vs "Ya hice los cambios · enviar pieza", bloqueado en server y UI.
 TAGS: #override #ux #cambios #botones #pedro
+
+[2026-10-27] LESSON (una regla que sólo vive en la app se salta por la puerta de al lado): el bloqueo "no enviar la pieza con una conversación abierta" se puso en reenviarACliente y en el banner, pero "Aprobar" (rpc_task_approve) cerraba los mismos cambios como aplicados sin pasar por él. La auditoría de 5 agentes encontró 13 fallas serias en el flujo de cambios; varias eran la misma forma: la regla en un camino y no en su hermano (aprobar vs enviar, panel vs hover del campo, botón escondido vs servidor que sí acepta). Además, un test viejo llamaba rpc_lead_reenvia_cliente con un ESPECIALISTA como actor y pasaba: el test tenía el bug escrito adentro.
+ROOT CAUSE: la regla se escribió donde nació el reporte (el botón que Pedro usó), no donde ocurre el efecto (el UPDATE que pone resolved_at).
+RULE: una regla que protege datos va en la función de la base que hace el cambio (con FOR UPDATE si compite con otra escritura), y la app sólo la repite para dar el mensaje antes. Al agregarla, grep de TODOS los UPDATE que tocan esa columna. Si un test viejo se rompe con la regla nueva, revisar si el test probaba el bug antes de "arreglar" el test.
+TAGS: #auditoria #paridad #rpc #tests #correcciones #cambios-cliente

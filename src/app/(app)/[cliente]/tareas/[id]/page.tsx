@@ -568,6 +568,7 @@ export default async function TareaPage({
               status={idea.status}
               ctx={ctx}
               faltaLegal={faltaLegal}
+              bloqueoAprobar={motivoBloqueoEnvio(bloqueoEnvioPieza(correcciones.filter((c) => c.cliente)), "aprobar la pieza")}
               abiertas={abiertasN}
               indice={posicion.indice}
               total={posicion.total}

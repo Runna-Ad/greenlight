@@ -452,12 +452,12 @@ function TarjetaCompacta({
 
 /** El letrero "Va para" del hilo: la MISMA regla que usa el server al guardar. */
 function vaParaDe(c: Correccion, esLead: boolean, enCanchaDelLead: boolean, piezaEnPortal: boolean) {
-  const respuestas = c.respuestas ?? [];
   const destino = destinoRespuesta({
     cambioDelCliente: !!c.cliente,
     esLead,
     enCanchaDelLead,
-    ultimaDeCliente: !!respuestas[respuestas.length - 1]?.deCliente,
+    // Lo último VISIBLE (como el server): una nota interna no cambia a quién le toca.
+    ultimaDeCliente: ultimoVisibleDe(c) === "cliente",
     piezaEnPortal,
   });
   if (destino === "cliente") return { vaPara: "el cliente", alCliente: true };

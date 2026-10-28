@@ -59,7 +59,8 @@ export function CampoCorrecciones({
     <>
       {/* Barra del revisor: aparece al pasar el mouse por el campo */}
       <div className="absolute right-0 top-0 z-20 hidden gap-1.5 group-hover:flex group-focus-within:flex">
-        {hay && estado !== "closed" && (
+        {/* Mismo criterio que el panel: una corrección interna "Por enviar" se manda, no se confirma. */}
+        {hay && estado !== "closed" && !(ctx.borrador && cs.some((c) => c.estado === "open" && !c.cliente)) && (
           <button
             type="button"
             disabled={ctx.pendiente}

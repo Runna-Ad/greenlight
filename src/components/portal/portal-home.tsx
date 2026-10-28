@@ -100,6 +100,8 @@ export function PortalHome({
         cambios: ts.filter((t) => t.status === "in_corrections").length,
         aprobado: ts.filter((t) => t.status === "delivered").length,
         prod: produccion.filter((p) => p.briefId === b.id && (!filtro || p.marcaId === filtro)).length,
+        // En cambios con respuesta del equipo: también es su turno (misma regla que la cola).
+        respondidas: ts.filter((t) => t.status === "in_corrections" && t.teRespondieron).length,
       };
       const total = seg.revisar + seg.cambios + seg.aprobado + seg.prod;
       const entryMarca = filtro ?? b.tasks[0]?.marcaId ?? "__none__";
@@ -329,12 +331,12 @@ function BriefCard({
   entryMarca,
 }: {
   brief: PortalBrief;
-  seg: { revisar: number; cambios: number; aprobado: number; prod: number };
+  seg: { revisar: number; cambios: number; aprobado: number; prod: number; respondidas: number };
   total: number;
   entryMarca: string;
 }) {
   const orden: Bucket[] = ["revisar", "cambios", "prod", "aprobado"];
-  const esperanTurno = seg.revisar;
+  const esperanTurno = seg.revisar + seg.respondidas;
   return (
     <Link
       href={`?marca=${entryMarca}&brief=${brief.id}`}
