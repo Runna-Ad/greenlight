@@ -8,6 +8,7 @@
  * "Continuar" arma el maestro (`maestroDePlano`) y la página sigue como con un PSD.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { AlertTriangle, Loader2, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -30,8 +31,10 @@ const idQuitar = (id: string) => `plano-quitar-${id}`;
 const idDevolver = (id: string) => `plano-devolver-${id}`;
 type Ajuste = { para: object; tipos: Tipografias; capas: Map<string, TextoCapa>; notas: NotaTextoPlano[] };
 
-export function RevisionPlano({ plano, tipos, cliente, selectorCliente, trayendo, lang, alContinuar, alCancelar }: {
+export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorCliente, trayendo, lang, alContinuar, alCancelar }: {
   plano: Plano;
+  /** La otra puerta (rellena el fondo con IA) está prendida: se ofrece sólo si algo se quedó fijo en el fondo. */
+  planaActiva: boolean;
   tipos: Tipografias;
   cliente: string;
   selectorCliente: ReactNode;
@@ -219,9 +222,17 @@ export function RevisionPlano({ plano, tipos, cliente, selectorCliente, trayendo
       {avisos.length > 0 && (
         <div className="flex max-w-3xl gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-          <ul className="space-y-0.5">
-            {avisos.map((a, i) => <li key={i}>{a}</li>)}
-          </ul>
+          <div className="space-y-1">
+            <ul className="space-y-0.5">
+              {avisos.map((a, i) => <li key={i}>{a}</li>)}
+            </ul>
+            {/* Antes iba siempre bajo el cuadro de subir; sólo sirve cuando algo se quedó fijo en el fondo (2026-10-28). */}
+            {planaActiva && fijos.length > 0 && (
+              <Link href="/prisma/formatos" className="inline-block text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-primary">
+                {tx(FP.planaLink, lang)}
+              </Link>
+            )}
+          </div>
         </div>
       )}
 

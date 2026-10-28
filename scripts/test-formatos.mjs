@@ -443,6 +443,14 @@ console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
   const ma3 = despiezar(leerPsd(psdDe(arbol(), verdad((x, y) => { const v = 40 + ruido[y * W + x]; return [v, v, v]; }))), 0);
   ok(`fondo que las capas no explican (${ma3.fondoDistintoPct.toFixed(0)} % distinto) → no usable`, ma3.fondoDistintoPct > 50 && !despieceUsable(ma3).ok);
 
+  // El fondo sólo debe ser fondo (Pedro, 2026-10-28): una foto de producto dentro de BACKGROUND se avisa; el fondo entero
+  // y una sombra tenue no.
+  const conFoto = arbol(), FOTO = [60, 120, 280, 300];
+  conFoto[0] = carpeta("Background", [...conFoto[0].children, capa("foto producto", FOTO, () => [200, 120, 60]), capa("brillo", [0, 0, W, 60], () => [255, 255, 255, 40])]);
+  const maF = despiezar(leerPsd(psdDe(conFoto, (x, y) => (dentro(x, y, FOTO) ? [200, 120, 60] : verdad(fondoVerdad)(x, y)))), 0);
+  const avisoFoto = maF.avisos.filter((v) => v.includes("el fondo sólo debe ser fondo"));
+  ok("PSD: una foto que tapa parte del anuncio dentro de BACKGROUND se avisa (y sólo ella)", avisoFoto.length === 1 && avisoFoto[0].includes("«BACKGROUND / foto producto»") && !ma.avisos.some((v) => v.includes("el fondo sólo debe ser fondo")), JSON.stringify(avisoFoto));
+
   // Dos piezas que se tapan casi del todo: no queda de dónde sacar el color, se avisa y no es usable.
   const tapado = arbol();
   tapado[6] = carpeta("BRAND", [capa("logo", [40, 30, 200, 50], () => [240, 60, 30])]);

@@ -2304,6 +2304,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       ) : plano && !usables.length ? (
         <RevisionPlano
           plano={plano}
+          planaActiva={planaActiva}
           tipos={tipos}
           cliente={cliente}
           selectorCliente={selectorCliente(false)}
@@ -2395,11 +2396,6 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
                 ))}
               </div>
             </div>
-          )}
-          {planaActiva && (
-            <Link href="/prisma/formatos" className={cn("inline-flex min-h-9 items-center rounded-md text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline pointer-coarse:min-h-11", FOCO)}>
-              {tx(FP.planaLink, lang)}
-            </Link>
           )}
         </section>
       ) : (

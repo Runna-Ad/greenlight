@@ -595,7 +595,7 @@ export const FP = {
   vistaCerrar: t("Cerrar", "Close"),
   vistaReal: t("Tamaño real · 100 %", "Actual size · 100%"),
   // B28: una imagen plana de fondo liso ya entra aquí; lo que tiene fondo de foto o textura se queda pintado en el fondo (`medirPlanoFijo`).
-  planaLink: t("¿Tu imagen tiene fondo de foto o textura? Usa Formatos con imagen plana, que rellena el fondo con IA", "Image with a photo or textured background? Use Formats with a flat image, which fills the background with AI"),
+  planaLink: t("¿Prefieres extender el fondo de foto con IA? Usa Formatos con imagen plana (la imagen va entera).", "Rather extend the photo background with AI? Use Formats with a flat image (the image goes whole)."),
   avisosDelArchivo: t("Notas del archivo", "File notes"),
   // Rediseño B19 (2026-10-15): ajustes arriba en pastillas y chips; resultados agrupados por forma.
   medidasTitulo: t("Medidas", "Sizes"),

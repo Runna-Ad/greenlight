@@ -80,6 +80,9 @@ export const TOLERANCIA = 12;
 export const FONDO_FIEL_MAX_PCT = 10;
 export const REARMADO_MAX_PCT = 2;
 export const TAPADA_MAX_PCT = 2;
+/** Una capa de BACKGROUND con lo sólido (alfa > 50 %) entre estos % de la mesa parece un elemento, no fondo. */
+export const FONDO_ELEMENTO_MIN_PCT = 20;
+export const FONDO_ELEMENTO_MAX_PCT = 90;
 /** Lo de una pieza que otra de más arriba tapa (sólido) se rellena con su color de alrededor (como en las partes):
  *  en el PSD no se ve y sólo asoma si una de las dos se mueve. Arriba de esto ya no queda de dónde sacar el color. */
 export const RELLENO_MAX_PCT = 50;
@@ -799,10 +802,12 @@ function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
   const guia = new Float32Array(N * 3).fill(1);
   for (const c of delFondo) {
     if (c.tipo === "ajuste") continue;
+    let solidos = 0;
     const f = FUSION[c.mezcla];
     if (!f && !FUSION_ENTERA.has(c.mezcla)) avisos.push(`Fondo: fusión ${c.mezcla} pintada como normal.`);
     const modo = c.mezcla;
     porPixel(c, m, true, (i, a, data, s) => {
+      if (a > 0.5) solidos++;
       const d = i * 3;
       const br = guia[d], bg = guia[d + 1], bb = guia[d + 2];
       let r = data[s] / 255, g = data[s + 1] / 255, b = data[s + 2] / 255;
@@ -811,6 +816,13 @@ function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
       else if (modo === "darker color") { if (lum(br, bg, bb) < lum(r, g, b)) { r = br; g = bg; b = bb; } }
       guia[d] = br + (r - br) * a; guia[d + 1] = bg + (g - bg) * a; guia[d + 2] = bb + (b - bb) * a;
     });
+    // El fondo debe ser sólo fondo (Pedro, 2026-10-28: "a rule of thumb should be always separate all the elements if
+    // possible and the background should be only the bg"). Una capa de BACKGROUND que tapa buena parte del anuncio,
+    // pero no todo, casi siempre es un producto o una persona (el iPhone de DiDi venía como foto en BACKGROUND): se
+    // queda pintado y no se acomoda. Las de casi todo el lienzo son fondos; las tenues (luces, sombras) no llegan.
+    const pct = (solidos / N) * 100;
+    if (pct >= FONDO_ELEMENTO_MIN_PCT && pct < FONDO_ELEMENTO_MAX_PCT)
+      avisos.push(`«BACKGROUND / ${c.nombre}» tapa el ${Math.round(pct)} % del anuncio: si es un producto o una persona, recórtalo de su fondo y ponlo en HERO (el fondo sólo debe ser fondo). Así como está, se queda pintado y no se acomoda en las medidas.`);
   }
 
   // Dónde se VE el fondo: fuera de toda pieza y de sus sombras, con 3 px de holgura para los bordes suavizados.
