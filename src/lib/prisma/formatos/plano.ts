@@ -168,7 +168,7 @@ const lum = (c: ArrayLike<number>) => (c[0] + c[1] + c[2]) / 3;
  * el anillo alrededor de lo que se quitó no se parece a un plano, `liso` sale en falso (la pantalla avisa y no
  * sigue: el fondo de foto necesita la IA, que viene después).
  */
-export function medirPlano(img: Imagen, leidos: ElementoLeido[]): { elementos: ElementoMedido[]; fondo: Uint8ClampedArray; liso: boolean; avisos: string[] } {
+export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: ReadonlySet<string> = new Set()): { elementos: ElementoMedido[]; fondo: Uint8ClampedArray; liso: boolean; avisos: string[]; fallan: string[] } {
   const { w: W, h: H, rgba: d } = img;
   const at = (x: number, y: number) => (y * W + x) * 4;
   const dif = (i: number, f: RGB) => Math.max(Math.abs(d[i] - f[0]), Math.abs(d[i + 1] - f[1]), Math.abs(d[i + 2] - f[2]));
@@ -327,7 +327,9 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[]): { elementos: E
   // al anillo de fondo de alrededor, más su grano. Copiar la orilla arrastraba los halos de las letras vecinas
   // ("fantasmas"); una cuadrática hacía "tazones" en los huecos grandes (laboratorio B28).
   const quitar = new Uint8Array(W * H);
+  // Los fijos se miden igual (ocupan su lugar: si no, sus píxeles parecerían la sombra de un vecino) pero no se sacan.
   for (const m of medidos) {
+    if (fijos.has(m.id)) continue;
     const halo = m.tipo === "texto" ? HALO_PX : 3;
     for (let y = 0; y < m.pinta.h; y++) for (let x = 0; x < m.pinta.w; x++) {
       const j = y * m.pinta.w + x;
@@ -339,6 +341,8 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[]): { elementos: E
   const fondo = new Uint8ClampedArray(W * H * 3);
   for (let k = 0, i = 0; k < W * H; k++, i += 4) { fondo[k * 3] = d[i]; fondo[k * 3 + 1] = d[i + 1]; fondo[k * 3 + 2] = d[i + 2]; }
   const visto = new Uint8Array(W * H);
+  /** Los huecos donde el fondo no es liso: los elementos que caen ahí no se pueden sacar (`medirPlanoFijo`). */
+  const malo = new Uint8Array(W * H);
   let liso = true;
   for (let s = 0; s < W * H; s++) {
     if (!quitar[s] || visto[s]) continue;
@@ -353,8 +357,11 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[]): { elementos: E
       for (const n of [x > 0 ? k - 1 : -1, x < W - 1 ? k + 1 : -1, y > 0 ? k - W : -1, y < H - 1 ? k + W : -1]) if (n >= 0 && quitar[n] && !visto[n]) { visto[n] = 1; cola.push(n); }
     }
     const ajuste = planoDelAnillo(fondo, W, H, quitar, { x0: cx0, y0: cy0, x1: cx1, y1: cy1 });
-    if (!ajuste) { liso = false; continue; }
-    if (ajuste.error > LISO_MAX) liso = false;
+    if (!ajuste || ajuste.error > LISO_MAX) {
+      liso = false;
+      for (const k of pix) malo[k] = 1;
+      if (!ajuste) continue;
+    }
     let semilla = (cx0 * 7919 + cy0 * 104729) >>> 0;
     const azar = () => { semilla = (semilla * 1664525 + 1013904223) >>> 0; return semilla / 4294967296 - 0.5; };
     const grano = Math.min(3, ajuste.error);
@@ -364,7 +371,38 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[]): { elementos: E
     }
   }
   if (!liso) avisos.push("El fondo no es liso (foto o textura): todavía no se puede limpiar sin IA.");
-  return { elementos: medidos, fondo, liso, avisos };
+  const fallan = liso ? [] : medidos.filter((m) => !fijos.has(m.id)).filter((m) => {
+    for (let y = 0; y < m.pinta.h; y++) for (let x = 0; x < m.pinta.w; x++)
+      if ((m.alfa[y * m.pinta.w + x] > 0 || (m.oscurece && m.oscurece[(y * m.pinta.w + x) * 3] < 255)) && malo[(m.pinta.y + y) * W + m.pinta.x + x]) return true;
+    return false;
+  }).map((m) => m.id);
+  return { elementos: fijos.size ? medidos.filter((m) => !fijos.has(m.id)) : medidos, fondo, liso, avisos, fallan };
+}
+
+/** Lo más que se vuelve a medir quitando elementos: cada vuelta saca al menos uno. */
+const VUELTAS_FIJO = 8;
+
+/**
+ * Como `medirPlano`, pero no rechaza la imagen si el fondo no es liso (Pedro, 2026-10-28: "even if it cant edit or move
+ * the background shouldnt outwrite refuse the asset it should just say the bg is not editable"): los elementos de los
+ * huecos que no se pueden rellenar se quedan pintados en el fondo (`fijos`, no se mueven ni se editan) y se vuelve a
+ * medir con los demás (los fijos se siguen midiendo: ocupan su lugar). Con todo fijo, la imagen va entera de fondo.
+ */
+export function medirPlanoFijo(img: Imagen, leidos: ElementoLeido[]): ReturnType<typeof medirPlano> & { fijos: string[] } {
+  const fijos = new Set<string>();
+  for (let vuelta = 0; ; vuelta++) {
+    const m = medirPlano(img, leidos, fijos);
+    const nuevos = m.fallan.filter((id) => !fijos.has(id));
+    if (m.liso || !nuevos.length || vuelta >= VUELTAS_FIJO) {
+      // Sin liso al final (no debería: sin elementos no hay huecos), lo que falla también se queda fijo.
+      if (!m.liso) for (const id of m.fallan) fijos.add(id);
+      // Un texto sobre un elemento fijo ya no va en su pieza (ese se queda en el fondo): va suelto.
+      const elementos = m.elementos.filter((e) => !fijos.has(e.id)).map((e) => (e.sobre && fijos.has(e.sobre) ? { ...e, sobre: null } : e));
+      const avisos = m.avisos.filter((a) => !a.startsWith("El fondo no es liso"));
+      return { ...m, elementos, liso: true, avisos, fallan: [], fijos: [...fijos] };
+    }
+    for (const id of nuevos) fijos.add(id);
+  }
 }
 
 /** La caja de lo que pasa del umbral en un búfer w × h que empieza en (ox, oy); null si no hay nada. */

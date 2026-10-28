@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { FP, FPL, rellenar } from "@/lib/prisma/formatos/copy";
-import { ROLES_LECTURA, TEXTO_LEIDO_MAX, limpiarLetras, maestroDePlano, medirPlano, type RolLeido } from "@/lib/prisma/formatos/plano";
+import { ROLES_LECTURA, TEXTO_LEIDO_MAX, limpiarLetras, maestroDePlano, medirPlanoFijo, type RolLeido } from "@/lib/prisma/formatos/plano";
 import { TRANSFERIR_MAX_BYTES, prepararMaestro, type MaestroListo } from "@/lib/prisma/formatos/listo";
 import { claveTexto, type CambiosTexto } from "@/lib/prisma/formatos/cambios-texto";
 import type { TextoCapa } from "@/lib/prisma/formatos/textos";
@@ -69,7 +69,7 @@ export function RevisionPlano({ plano, tipos, cliente, selectorCliente, trayendo
       .filter((e) => !quitados.has(e.id))
       .map((e) => ({ ...e, sobre: e.sobre && !quitados.has(e.sobre) ? e.sobre : null }));
     try {
-      return { medido: medirPlano(plano.img, leidos), fallo: false };
+      return { medido: medirPlanoFijo(plano.img, leidos), fallo: false };
     } catch (err) {
       console.error("[formatos-psd] volver a separar la imagen plana", err);
       return { medido: plano.medido, fallo: true };
@@ -120,7 +120,10 @@ export function RevisionPlano({ plano, tipos, cliente, selectorCliente, trayendo
             : null;
   // Lo que la medida dejó dicho (un elemento que no se encontró, el fondo que dejó de ser liso al quitar algo), con
   // el número de la lista en vez del id de la IA ("headline_msi: …" → "Elemento 5 · «3 MSI»: …").
+  const fijos = medido.fijos.map(nombre);
   const avisos = [
+    // El fondo que no se puede limpiar no rechaza la imagen: lo de ahí se queda pintado en el fondo (2026-10-28).
+    ...(!fijos.length ? [] : elementos.length ? [rellenar(tx(FPL.fijos, lang), { e: fijos.join(", ") })] : [tx(FPL.todoFijo, lang)]),
     ...(remedido.fallo ? [tx(FPL.noSeVolvioAMedir, lang)] : []),
     ...medido.avisos.map((a) => a.replace(/^([a-z0-9_]+): /, (todo, id: string) => (numero.has(id) ? `${tx(FPL.elemento, lang)} ${nombre(id)}: ` : todo))),
   ];

@@ -4,9 +4,9 @@
  * (`medirPlano`). Lo que sigue (revisar y armar el maestro) es `revision-plano.tsx`.
  */
 import { FP_ERROR } from "@/lib/prisma/formatos/copy";
-import { LADO_LECTURA, medirPlano, type ElementoLeido, type Imagen } from "@/lib/prisma/formatos/plano";
+import { LADO_LECTURA, medirPlanoFijo, type ElementoLeido, type Imagen } from "@/lib/prisma/formatos/plano";
 
-type Medido = ReturnType<typeof medirPlano>;
+type Medido = ReturnType<typeof medirPlanoFijo>;
 
 /** Lo mismo que acepta la puerta de imagen plana (vista.ts). */
 export const PLANO_BYTES_MAX = 25_000_000;
@@ -28,7 +28,7 @@ export type Plano = {
   medido: Medido;
   costoUsd: number | null;
 };
-export type FallaPlano = { clave: "planoPesado" | "planoGrande" | "planoIlegible" | "planoLectura" | "planoTarde" | "planoNoLiso"; detalle?: string };
+export type FallaPlano = { clave: "planoPesado" | "planoGrande" | "planoIlegible" | "planoLectura" | "planoTarde"; detalle?: string };
 
 /** ¿Los primeros bytes son de PNG, JPEG o WebP? */
 export function esImagenPlana(c: Uint8Array): boolean {
@@ -126,11 +126,10 @@ export async function leerPlano(file: File, senal: AbortSignal, etapa: (e: "sepa
   const img = { w: W, h: H, rgba };
   let medido: Medido;
   try {
-    medido = medirPlano(img, leidos);
+    medido = medirPlanoFijo(img, leidos);
   } catch (err) {
     console.error("[formatos-psd] separar imagen plana", err);
     return { clave: "planoGrande" };
   }
-  if (!medido.liso) return { clave: "planoNoLiso" };
   return { archivo: file.name, img, url: URL.createObjectURL(file), leidos, medido, costoUsd: r.costoUsd };
 }

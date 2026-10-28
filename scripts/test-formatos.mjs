@@ -35,7 +35,7 @@ import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
 import { specVacio } from "../src/lib/prisma/spec.ts";
 import { unzipSync } from "fflate";
 import { zipPorPartes, zipsEnPartes, rutaLibre, CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES } from "../src/lib/prisma/formatos/zip.ts";
-import { limpiarLectura, medirPlano, maestroDePlano, capaDeTexto, alineacionDe, ELEMENTOS_MAX, TEXTO_LEIDO_MAX } from "../src/lib/prisma/formatos/plano.ts";
+import { limpiarLectura, medirPlano, medirPlanoFijo, maestroDePlano, capaDeTexto, alineacionDe, ELEMENTOS_MAX, TEXTO_LEIDO_MAX } from "../src/lib/prisma/formatos/plano.ts";
 
 let pass = 0,
   fail = 0;
@@ -2994,6 +2994,19 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   let s = 7;
   for (let i = 0; i < ruido.length; i += 4) { s = (s * 1664525 + 1013904223) >>> 0; const n = ((s >>> 8) % 61) - 30; for (let k = 0; k < 3; k++) ruido[i + k] += n; }
   ok("plano: con un fondo de textura no se dice que es liso", !medirPlano({ w: W, h: H, rgba: ruido }, leidos.slice(0, 1)).liso);
+  // Pedro, 2026-10-28: un fondo que no se puede limpiar no rechaza la imagen; lo de ahí se queda pintado en el fondo.
+  const parches = new Uint8ClampedArray(rgba);
+  for (let y = 10; y < 100; y++) for (let x = 0; x < 150; x++) { const i = (y * W + x) * 4; s = (s * 1664525 + 1013904223) >>> 0; const n = ((s >>> 8) % 61) - 30; for (let k = 0; k < 3; k++) parches[i + k] += n; }
+  const rp = medirPlanoFijo({ w: W, h: H, rgba: parches }, leidos);
+  ok(
+    "plano: textura sólo alrededor del titular → el titular se queda fijo en el fondo y los demás siguen siendo piezas",
+    rp.liso && rp.fijos.join() === "titulo" && rp.elementos.map((e) => e.id).sort().join() === "pastilla,precio,telefono" && !rp.avisos.some((a) => a.startsWith("El fondo no es liso")),
+    JSON.stringify({ fijos: rp.fijos, el: rp.elementos.map((e) => e.id) }),
+  );
+  const rt = medirPlanoFijo({ w: W, h: H, rgba: ruido }, leidos);
+  ok("plano: textura en todo el fondo → todo fijo, la imagen va entera (sin piezas)", rt.liso && rt.elementos.length === 0 && rt.fijos.length === 4, JSON.stringify(rt.fijos));
+  const rl = medirPlanoFijo(img, leidos);
+  ok("plano: con fondo liso, medirPlanoFijo es medirPlano (nada fijo)", rl.fijos.length === 0 && rl.elementos.length === 4);
 
   const capa = (texto) => ({ texto, tramos: [{ n: texto.length, fuente: "Prueba-Bold", tam: 20, color: [255, 255, 255], track: 0, interlineado: null, subir: 0, mayusculas: false }], alineacion: "center", transform: [1, 0, 0, 1, 110, 178], caja: null, motivo: null });
   const ma = maestroDePlano("prueba", img, r.elementos, r.fondo, new Map([["precio", capa("$1,999")]]), r.avisos);

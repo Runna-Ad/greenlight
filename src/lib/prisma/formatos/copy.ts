@@ -594,7 +594,7 @@ export const FP = {
   vistaAjustarSolo: t("Ajustar a la pantalla", "Fit to screen"),
   vistaCerrar: t("Cerrar", "Close"),
   vistaReal: t("Tamaño real · 100 %", "Actual size · 100%"),
-  // B28: una imagen plana de fondo liso ya entra aquí; la página vieja queda para fondos de foto o textura (planoNoLiso).
+  // B28: una imagen plana de fondo liso ya entra aquí; lo que tiene fondo de foto o textura se queda pintado en el fondo (`medirPlanoFijo`).
   planaLink: t("¿Tu imagen tiene fondo de foto o textura? Usa Formatos con imagen plana, que rellena el fondo con IA", "Image with a photo or textured background? Use Formats with a flat image, which fills the background with AI"),
   avisosDelArchivo: t("Notas del archivo", "File notes"),
   // Rediseño B19 (2026-10-15): ajustes arriba en pastillas y chips; resultados agrupados por forma.
@@ -707,10 +707,6 @@ export const FP_ERROR = {
   planoIlegible: t("No se pudo abrir la imagen en este navegador. Qué hacer: guárdala de nuevo como PNG o JPG.", "This browser couldn't open the image. What to do: save it again as PNG or JPG."),
   planoLectura: t("La IA no pudo leer la imagen.", "The AI couldn't read the image."),
   planoTarde: t("La IA tardó demasiado o no respondió. Qué hacer: reintenta.", "The AI took too long or didn't answer. What to do: try again."),
-  planoNoLiso: t(
-    "El fondo de esta imagen no es liso (es foto o textura): todavía no se puede separar en piezas. Qué hacer: usa Formatos con imagen plana, que rellena el fondo con IA.",
-    "This image's background isn't plain (it's a photo or a texture): it can't be split into pieces yet. What to do: use Formats with a flat image, which fills the background with AI.",
-  ),
   pesado: t(
     "El archivo pesa más de 2 GB, el máximo de un PSD. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas.",
     "The file is over 2 GB, the most a PSD can be. What to do: save a copy with only the artboards you need.",
@@ -764,6 +760,14 @@ export const FPL = {
   textoImagen: t("Va como imagen (lo elegiste).", "Stays as an image (your choice)."),
   comoImagen: t("Dejar como imagen", "Keep as image"),
   comoTexto: t("Reescribir", "Rewrite"),
+  fijos: t(
+    "El fondo no es liso alrededor de {e}: se quedan pintados en el fondo, así que no se pueden mover ni editar. Lo demás sí.",
+    "The background isn't plain around {e}: they stay painted on the background, so they can't be moved or edited. Everything else can.",
+  ),
+  todoFijo: t(
+    "El fondo no es liso: la imagen sale entera, escalada a cada medida, sin piezas que mover ni textos que editar.",
+    "The background isn't plain: the image comes out whole, scaled to each size, with no pieces to move or texts to edit.",
+  ),
   letras: t("Texto", "Text"),
   // 2026-10-28: los diseñadores escribían aquí el texto nuevo y no pasaba nada (sólo corregía la lectura de la IA).
   letrasAyuda: t(
