@@ -4200,7 +4200,7 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
         ensancha. El legal puede ir en hasta RENGLONES_MAS = 2 renglones MÁS que en el PSD (y uno de un renglón ya
         entra). Con su PSD s7 en 1200×627: automático 3 renglones = 11.2 px con el título grande; 5 renglones = 14.3 px
         (como sus ejemplos) pero el texto se achica mucho, así que el automático se queda en 3 y 4/5 se eligen en el
-        editor. Falta: ver si quieren que el automático prefiera el legal más grande; y este PSD trae el teléfono en
+        editor. Pedro (2026-10-28): "Keep title big", el automático se queda así. Y este PSD trae el teléfono en
         BACKGROUND (sale detrás del texto: el aviso ya lo dice).
 - [~] B30. Imagen plana, más arreglos del 2026-10-28 (en `prisma`, probados en la preview con la imagen real de DiDi, beige):
       · El texto escrito en la revisión es un cambio de verdad (a6982d2); si va como imagen, la fila lo dice.
