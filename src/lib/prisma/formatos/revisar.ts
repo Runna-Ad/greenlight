@@ -374,7 +374,8 @@ const firma = (ed: Edicion | null | undefined) => {
   // La copia de otra medida (B25) cambia los avisos (la de otra forma se revisa entera): entra en la firma.
   const copia = ed.copiaDe ? `c${ed.copiaDe.w}x${ed.copiaDe.h}` : "";
   const renglones = ed.renglones ? `r${ed.renglones}` : "";
-  return [lugares, ed.orden?.length ? ed.orden.join(",") : "", partes, ordenPartes, sinTexto, copia, renglones].join("|").replace(/\|+$/, "");
+  const fondo = ed.fondo ? `f${ed.fondo.z.toFixed(4)},${ed.fondo.cx.toFixed(4)},${ed.fondo.cy.toFixed(4)}` : "";
+  return [lugares, ed.orden?.length ? ed.orden.join(",") : "", partes, ordenPartes, sinTexto, copia, renglones, fondo].join("|").replace(/\|+$/, "");
 };
 
 /**

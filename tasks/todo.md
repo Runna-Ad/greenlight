@@ -4175,7 +4175,11 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
         sale en px), ¿1080×1080 sigue en EC?, y 1.91:1 es 1200×628 en ratio y 1200×627 en EC (se dejó así).
       · 4. Zonas seguras automáticas por red (hoy sólo 9:16, sólo con canal elegido, y en la forma del maestro no mueve
         nada). Falta: qué redes.
-      · 5. Mover / escalar el FONDO en el editor (hoy `Edicion` no lo tiene).
+      · 5. HECHO (2026-10-28): «Mover el fondo» en la fila Fondo del editor: arrastrar en la vista o flechas, «Tamaño»
+        100-300 % (+/−), «Fondo como el automático». `Edicion.fondo` = {z, cx, cy} relativo (sirve al copiar a otra
+        medida; volteada se refleja), `aplicarEdicion` lo pone siempre cubriendo la medida. Probado con su PSD s7 en
+        1200×627 (arrastre real con el ratón, guardado, la tarjeta y el PNG salen con el fondo movido). El PSD editable
+        toma el fondo del acomodo (psd-editable.ts), no se abrió en Photoshop.
       · 6. Medidas muy horizontales: el legal sólo puede bajar de renglones (`conRenglones`: n < los del PSD) y necesita la
         tipografía del cliente; su captura decía «Sin cliente». Tamaño del legal a partir de un ejemplo. Falta: si
         eligieron DiDi.

@@ -269,8 +269,8 @@ export const FP = {
   ),
   editorTitulo: t("Editar {m}", "Edit {m}"),
   editorDescripcion: t(
-    "Mueve las piezas, cámbialas de tamaño o de capa (qué va encima de qué); el fondo no se mueve. Elige una pieza con texto para cambiar sus palabras (en todas las medidas) o quitarlo sólo aquí. Al guardar, esta medida se revisa otra vez y la descarga sale así. Se guarda en este navegador, para este archivo.",
-    "Move or resize the pieces, or change their layer (what goes on top of what); the background stays put. Pick a piece with text to change its words (in every size) or remove it only here. When you save, this size is checked again and downloads like this. It's saved in this browser, for this file.",
+    "Mueve las piezas, cámbialas de tamaño o de capa (qué va encima de qué); el fondo, con «Mover el fondo». Elige una pieza con texto para cambiar sus palabras (en todas las medidas) o quitarlo sólo aquí. Al guardar, esta medida se revisa otra vez y la descarga sale así. Se guarda en este navegador, para este archivo.",
+    "Move or resize the pieces, or change their layer (what goes on top of what); the background, with “Move the background”. Pick a piece with text to change its words (in every size) or remove it only here. When you save, this size is checked again and downloads like this. It's saved in this browser, for this file.",
   ),
   editorAyuda: t(
     "Arrastra una pieza para moverla, o una esquina para cambiarla de tamaño sin deformarla. Cerca del centro se pega sola; con Alt, no. Con el teclado: Tab elige la pieza, las flechas la mueven (con Mayús, de 10 en 10 px), + o − cambian su tamaño y ] o [ (o Re Pág / Av Pág) la ponen más al frente o más atrás.",
@@ -284,6 +284,13 @@ export const FP = {
   editorCambiada: t("cambiada", "changed"),
   editorOtraCapa: t("otra capa", "layer changed"),
   editorFondoCapa: t("Fondo (siempre hasta atrás)", "Background (always at the back)"),
+  // B29: el fondo se corre y se agranda a mano (sólo en esta medida; siempre cubre toda la medida).
+  editorFondoMover: t("Mover el fondo", "Move the background"),
+  editorFondoListo: t("Listo", "Done"),
+  editorFondoZoom: t("Tamaño", "Size"),
+  editorFondoAyuda: t("Arrastra en la vista o usa las flechas; + y − cambian el tamaño. Siempre cubre toda la medida. Sólo en esta medida.", "Drag in the view or use the arrow keys; + and − change the size. It always covers the whole size. This size only."),
+  editorFondoAuto: t("Fondo como el automático", "Background as automatic"),
+  editorFondoArrastrar: t("Fondo: arrastra o usa las flechas para correrlo; + y − cambian el tamaño", "Background: drag or use the arrow keys to move it; + and − change the size"),
   editorAbrir: t("Abrir en partes", "Open into parts"),
   editorCerrar: t("Cerrar la pieza", "Close the piece"),
   editorAbrirTitulo: t("Doble clic: abrir en partes", "Double-click: open into parts"),

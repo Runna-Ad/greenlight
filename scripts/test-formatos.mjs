@@ -27,7 +27,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, RENGLONES_MAS, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, MEDIDAS_RATIO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
+import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, RENGLONES_MAS, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, MEDIDAS_RATIO, FONDO_ZOOM_MAX, FONDO_EDITOR_MAX, fondoDeEdicion, edicionDeFondo } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContraste, edicionMuevePieza, edicionSinPieza } from "../src/lib/prisma/formatos/revisar.ts";
@@ -963,6 +963,20 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
   eq("capas: el PSD de capas planas sale en el orden elegido", planoOrden.children.map((l) => l.name).filter((n) => n !== "BACKGROUND"), [...autoR].reverse().map((i) => M2R.piezas[i].nombre));
   ok("capas: revisarMedida lleva el orden en su clave (otro orden → otro acomodo, ya ordenado)", autoR.length === 2 && conOrdenR !== revisarMedida([M2R], 1200, 627) && conOrdenR.acomodo.puestas.map((q) => q.pieza).join() === [...autoR].reverse().join(), JSON.stringify(autoR));
   eq("nombre de entrega: la medida de la mesa se cambia por la nueva; si no trae medida, se agrega", [nombreSalida(M45, 1200, 627), nombreSalida(M916, 320, 50), nombreSalida({ ...M45, nombre: "ANUNCIO" }, 600, 500)], ["APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_EC_V2_OCT26_RN", "APGIANTCARDUGC_320x50_WOMAN_REAL_STATIC_IDEAH2_EC_V2_OCT26_RN", "ANUNCIO_600x500"]);
+  // B29: el fondo movido y agrandado a mano en el editor (relativo: z sobre lo que justo cubre, y qué punto va al centro).
+  {
+    const auto = acomodar(M45, 1200, 627), ed = { piezas: {}, fondo: { z: 2, cx: 0.3, cy: 0.6 } };
+    const a = aplicarEdicion(M45, auto, ed, 1200, 627), f = a.fondo, kMin = Math.max(1200 / 1200, 627 / 1500);
+    const cubre = (g, W, H) => g.x <= 0 && g.y <= 0 && g.x + 1200 * g.k >= W - 1e-6 && g.y + 1500 * g.k >= H - 1e-6;
+    ok("B29 fondo a mano: sólo el fondo cambia (las piezas, igual), queda editada, al doble de lo que cubre, con el punto pedido al centro y cubriendo", a.editada === true && JSON.stringify(a.puestas) === JSON.stringify(auto.puestas) && Math.abs(f.k - 2 * kMin) < 1e-9 && Math.abs(600 - (f.x + 0.3 * 1200 * f.k)) < 1e-6 && Math.abs(313.5 - (f.y + 0.6 * 1500 * f.k)) < 1e-6 && cubre(f, 1200, 627), JSON.stringify(f));
+    const lejos = fondoDeEdicion(M45, 1200, 627, { z: 9, cx: -5, cy: 7 }), chico = fondoDeEdicion(M45, 1200, 627, { z: 0.2, cx: 0.5, cy: 0.5 });
+    ok(`B29 fondo a mano: el tamaño se queda entre 1 y ${FONDO_EDITOR_MAX} y nunca deja un hueco (pegado a la orilla)`, Math.abs(lejos.k - FONDO_EDITOR_MAX * kMin) < 1e-9 && cubre(lejos, 1200, 627) && lejos.x === 0 && Math.abs(chico.k - kMin) < 1e-9 && cubre(chico, 1200, 627));
+    const ida = edicionDeFondo(M45, 1200, 627, f), vuelta = fondoDeEdicion(M45, 1200, 627, ida);
+    ok("B29 fondo a mano: de lo puesto a lo guardado y de vuelta, el mismo lugar", ["k", "x", "y"].every((c) => Math.abs(vuelta[c] - f[c]) < 1e-6));
+    eq("B29 leerEdicion: guarda el fondo; uno raro se descarta; sólo el fondo también es una edición", [leerEdicion({ piezas: {}, fondo: { z: 1.5, cx: 0.4, cy: 0.5 } }, 6)?.fondo, leerEdicion({ piezas: {}, fondo: { z: "2", cx: 0, cy: 0 } }, 6), leerEdicion({ fondo: { z: NaN, cx: 0, cy: 0 } }, 6)], [{ z: 1.5, cx: 0.4, cy: 0.5 }, null, null]);
+    eq("B29 copiarEdicion: el fondo va tal cual a la hermana y, volteada, reflejado", [copiarEdicion(ed, M45.piezas, { w: 1200, h: 627 }, { w: 1280, h: 720 }, "igual").fondo, copiarEdicion(ed, M45.piezas, { w: 1200, h: 627 }, { w: 1280, h: 720 }, "igual", true).fondo.cx], [{ z: 2, cx: 0.3, cy: 0.6 }, 0.7]);
+    ok("B29 sin fondo a mano, el acomodo es el mismo objeto (nada se recalcula)", aplicarEdicion(M45, auto, { piezas: {} }, 1200, 627) === auto);
+  }
   // B29: la entrega por ratio lleva el ratio y la red de ese ratio (como sus archivos: «CMHEROWOMEN_191x1_…_GG_V1»).
   eq("entrega por ratio: el nombre lleva el ratio y la red de ese ratio", [nombreSalida(M45, 1200, 628, "ratio"), nombreSalida(M45, 1200, 1200, "ratio"), nombreSalida(M45, 1080, 1920, "ratio"), nombreSalida(M45, 1080, 1350, "ratio")], ["APGIANTCARDUGC_191x1_WOMAN_REAL_STATIC_IDEAH2_GG_V2_OCT26_RN", "APGIANTCARDUGC_1x1_WOMAN_REAL_STATIC_IDEAH2_GG_V2_OCT26_RN", "APGIANTCARDUGC_9x16_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "APGIANTCARDUGC_4x5_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN"]);
   eq("entrega por ratio: una medida sin ratio conocido va en píxeles y su red no cambia; sin ficha de red no se agrega", [nombreSalida(M45, 1920, 1080, "ratio"), nombreSalida({ ...M45, nombre: "ANUNCIO_4x5" }, 1200, 628, "ratio"), nombreSalida({ ...M45, nombre: "ANUNCIO" }, 1080, 1920, "ratio")], ["APGIANTCARDUGC_1920x1080_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "ANUNCIO_191x1", "ANUNCIO_9x16"]);

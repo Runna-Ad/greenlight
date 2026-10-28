@@ -91,6 +91,15 @@ export type Acomodo = {
 };
 /** Dónde dejó la persona una pieza: la esquina de su parte sólida y su escala, en px de la medida. */
 export type PosicionPieza = { x: number; y: number; k: number };
+/**
+ * El fondo movido a mano (B29: "background folder can't be moved"). Relativo, para que sirva en cualquier medida (y al
+ * copiar a otra): `z` = zoom sobre lo mínimo que cubre la medida (1 = justo cubre), `cx`/`cy` = qué punto del fondo
+ * del maestro (0-1) queda en el centro de la medida. Al aplicarlo el fondo sigue cubriendo toda la medida: se corre
+ * sólo dentro de lo que le sobra.
+ */
+export type FondoEditado = Readonly<{ z: number; cx: number; cy: number }>;
+/** Lo más que se agranda el fondo a mano. */
+export const FONDO_EDITOR_MAX = 3;
 /** Dónde dejó la persona una parte, RELATIVO a su pieza (así va pegada a ella: Pedro, 2026-10-19, "Yes, parts stay
  *  attached"): la esquina de su parte sólida desde la de la pieza, en px del maestro (antes de la escala de la pieza), y
  *  su escala respecto a la pieza. Sin tocar: su lugar en el maestro y 1. */
@@ -117,6 +126,8 @@ export type Edicion = Readonly<{
   /** En cuántos renglones va el legal en ESTA medida, elegido en el editor (B27); falta = el automático. Se usa antes del
    *  acomodo (otra versión del maestro, `renglones.ts`), no en `aplicarEdicion`. */
   renglones?: number;
+  /** El fondo movido o agrandado a mano en ESTA medida; falta = el del automático. */
+  fondo?: FondoEditado;
 }>;
 export type Lado = "derecha" | "izquierda";
 /** px de la medida final que la plataforma tapa por cada borde. */
@@ -932,7 +943,7 @@ export function leerEdicion(v: unknown, piezasDe: number | readonly { partes?: r
   const nPiezas = typeof piezasDe === "number" ? piezasDe : piezasDe.length;
   const nPartes = (i: number) => (typeof piezasDe === "number" ? 0 : (piezasDe[i]?.partes?.length ?? 0));
   const nTextos = (i: number) => (typeof piezasDe === "number" ? 0 : (piezasDe[i]?.textos?.length ?? 0));
-  const guardada = v as { piezas?: unknown; orden?: unknown; partes?: unknown; ordenPartes?: unknown; sinTexto?: unknown; copiaDe?: unknown; renglones?: unknown };
+  const guardada = v as { piezas?: unknown; orden?: unknown; partes?: unknown; ordenPartes?: unknown; sinTexto?: unknown; copiaDe?: unknown; renglones?: unknown; fondo?: unknown };
   const lugares = (guardada.piezas && typeof guardada.piezas === "object" ? guardada.piezas : guardada) as Record<string, unknown>;
   const indice = (n: unknown, hasta: number): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0 && n < hasta;
   const valida = (n: unknown): n is number => indice(n, nPiezas);
@@ -981,11 +992,12 @@ export function leerEdicion(v: unknown, piezasDe: number | readonly { partes?: r
     }
   const hay = (r: object) => Object.keys(r).length > 0;
   const renglones = indice(guardada.renglones, RENGLONES_LEER_MAX + 1) && guardada.renglones >= 1 ? guardada.renglones : undefined;
-  if (!hay(piezas) && !orden && !hay(partes) && !hay(ordenPartes) && !hay(sinTexto) && !renglones) return null;
+  const fondo = fondoValido(guardada.fondo) ? { z: guardada.fondo.z, cx: guardada.fondo.cx, cy: guardada.fondo.cy } : undefined;
+  if (!hay(piezas) && !orden && !hay(partes) && !hay(ordenPartes) && !hay(sinTexto) && !renglones && !fondo) return null;
   // De qué medida se copió (B25): una medida de verdad (la que acepta la lista de medidas), o nada.
   const c = guardada.copiaDe as { w?: unknown; h?: unknown } | null | undefined;
   const copiaDe = c && typeof c === "object" && typeof c.w === "number" && typeof c.h === "number" && medidaValida(c.w, c.h) ? { w: c.w, h: c.h } : undefined;
-  return { piezas, orden, ...(hay(partes) ? { partes } : {}), ...(hay(ordenPartes) ? { ordenPartes } : {}), ...(hay(sinTexto) ? { sinTexto } : {}), ...(copiaDe ? { copiaDe } : {}), ...(renglones ? { renglones } : {}) };
+  return { piezas, orden, ...(hay(partes) ? { partes } : {}), ...(hay(ordenPartes) ? { ordenPartes } : {}), ...(hay(sinTexto) ? { sinTexto } : {}), ...(copiaDe ? { copiaDe } : {}), ...(renglones ? { renglones } : {}), ...(fondo ? { fondo } : {}) };
 }
 
 /**
@@ -1112,7 +1124,26 @@ export function cambiadasDeCapa(orden: readonly number[], ordenAuto: readonly nu
  * fondo y las demás piezas no se tocan. Una edición con números que no sirven (NaN, escala ≤ 0) se ignora para esa
  * pieza; una escala o un lugar fuera de lo que deja el editor (dato viejo o cambiado a mano) se recorta a ese tope.
  */
-export function aplicarEdicion(ma: MaestroCaja, a: Acomodo, ed: Edicion, W: number, H: number, zona?: Partial<Zona> | null): Acomodo {
+/** Dónde queda el fondo con lo elegido a mano (siempre cubre la medida). */
+export function fondoDeEdicion(ma: { w: number; h: number }, W: number, H: number, f: FondoEditado): Acomodo["fondo"] {
+  const z = Math.min(FONDO_EDITOR_MAX, Math.max(1, f.z)), k = Math.max(W / ma.w, H / ma.h) * z;
+  const cx = Math.min(1, Math.max(0, f.cx)), cy = Math.min(1, Math.max(0, f.cy));
+  return cubrir(ma, W, H, k, W / 2 - cx * ma.w * k, H / 2 - cy * ma.h * k);
+}
+/** Lo contrario: un fondo puesto (el del automático, para empezar a moverlo) como se guarda. */
+export function edicionDeFondo(ma: { w: number; h: number }, W: number, H: number, f: Acomodo["fondo"]): FondoEditado {
+  return { z: f.k / Math.max(W / ma.w, H / ma.h), cx: (W / 2 - f.x) / (ma.w * f.k), cy: (H / 2 - f.y) / (ma.h * f.k) };
+}
+const fondoValido = (f: unknown): f is FondoEditado => {
+  if (!f || typeof f !== "object") return false;
+  const { z, cx, cy } = f as Partial<FondoEditado>;
+  return typeof z === "number" && typeof cx === "number" && typeof cy === "number" && [z, cx, cy].every(Number.isFinite);
+};
+
+export function aplicarEdicion(ma: MaestroCaja, a0: Acomodo, ed: Edicion, W: number, H: number, zona?: Partial<Zona> | null): Acomodo {
+  // El fondo a mano no mueve piezas ni cambia sus avisos: sólo dónde cae el fondo (lo que se pinta detrás).
+  const a = ed.fondo && fondoValido(ed.fondo) ? { ...a0, fondo: fondoDeEdicion(ma, W, H, ed.fondo) } : a0;
+  const conFondo = a !== a0;
   const aMano = new Set<number>();
   const lejos = 2 * Math.max(W, H);
   const entre = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
@@ -1133,7 +1164,7 @@ export function aplicarEdicion(ma: MaestroCaja, a: Acomodo, ed: Edicion, W: numb
   });
   const puestas = ordenarPuestas(movidas, ed.orden);
   // Sólo los renglones del legal (B27): ya vienen en el maestro que se usó; el acomodo es el automático, elegido a mano.
-  if (!aMano.size && puestas === movidas) return ed.renglones ? { ...a, editada: true, ...(ed.copiaDe ? { copiadaDe: { w: ed.copiaDe.w, h: ed.copiaDe.h } } : {}) } : a;
+  if (!aMano.size && puestas === movidas) return ed.renglones || conFondo ? { ...a, editada: true, ...(ed.copiaDe ? { copiadaDe: { w: ed.copiaDe.w, h: ed.copiaDe.h } } : {}) } : a;
   const z = zonaUsable(zona ?? undefined, W, H);
   // Una copia (B25): de otra forma, nadie la vio así (se revisa todo); de la misma forma, la persona vio juntas las
   // piezas que movió, pero no junto a las del automático de AQUÍ (que puede no ser el de allá: el legal crece). En la

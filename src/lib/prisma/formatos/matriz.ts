@@ -70,5 +70,7 @@ export function copiarEdicion(ed: Edicion, piezasMa: readonly PiezaCopia[], de: 
     const x = eje(p.x, w, w2, de.w, a.w, fx > f), y = eje(p.y, h, h2, de.h, a.h, fy > f);
     piezas[Number(i)] = { x: espejo ? a.w - x - w2 : x, y, k };
   }
-  return { ...ed, piezas, copiaDe: { w: de.w, h: de.h } };
+  // El fondo a mano es relativo (sirve tal cual en `a`); con el HERO del otro lado, se refleja como las piezas.
+  const fondo = ed.fondo && espejo ? { ...ed.fondo, cx: 1 - ed.fondo.cx } : ed.fondo;
+  return { ...ed, piezas, ...(fondo ? { fondo } : {}), copiaDe: { w: de.w, h: de.h } };
 }

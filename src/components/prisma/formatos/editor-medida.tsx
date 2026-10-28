@@ -1,12 +1,12 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { AlertTriangle, Check, ChevronDown, ChevronUp, FolderClosed, FolderOpen, Info, RotateCcw } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronUp, FolderClosed, FolderOpen, Info, Move, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
-import { aplicarEdicion, cambiadasDeCapa, leerEdicion, ordenDePartes, ordenarPuestas, parteSinTocar, ponerPartes, topesParte, topesPieza, RELLENO_AVISO_PCT, type Acomodo, type Edicion, type Zona, esNota } from "@/lib/prisma/formatos/acomodo";
+import { aplicarEdicion, edicionDeFondo, fondoDeEdicion, FONDO_EDITOR_MAX, type FondoEditado, cambiadasDeCapa, leerEdicion, ordenDePartes, ordenarPuestas, parteSinTocar, ponerPartes, topesParte, topesPieza, RELLENO_AVISO_PCT, type Acomodo, type Edicion, type Zona, esNota } from "@/lib/prisma/formatos/acomodo";
 import { armarFondo, armarMedida, type TextoEscrito } from "@/lib/prisma/formatos/nitido";
 import { avisosDePixeles, edicionMuevePieza, edicionSinPieza, type InfoRenglones } from "@/lib/prisma/formatos/revisar";
 import { etiquetaPieza } from "@/lib/prisma/formatos/roles";
@@ -189,6 +189,11 @@ export function EditorMedida({
   const mismosTextos = igualesCambios(cambiosLocal, cambios);
   /** Los textos quitados en ESTA medida, por pieza (sólo piezas con alguno). */
   const [sinTexto, setSinTexto] = useState<Record<number, number[]>>(() => normalSin(inicial?.sinTexto));
+  /** El fondo movido o agrandado a mano (B29); null = el del automático. `moverFondo`: la vista arrastra el fondo, no
+   *  las piezas. */
+  const [fondoEd, setFondoEd] = useState<FondoEditado | null>(() => inicial?.fondo ?? null);
+  const [moverFondo, setMoverFondo] = useState(false);
+  const arrastreFondo = useRef<{ px: number; py: number; inicio: FondoEditado; puntero: number } | null>(null);
   const deAuto = useMemo(() => Object.fromEntries(auto.puestas.map((q) => [q.pieza, { x: q.x, y: q.y, k: q.k }])) as Record<number, Pos>, [auto]);
   /** Qué va encima de qué (índices, de abajo hacia arriba): el automático y el que se abrió (con lo guardado). */
   const ordenAuto = useMemo(() => auto.puestas.map((q) => q.pieza), [auto]);
@@ -241,6 +246,7 @@ export function EditorMedida({
       orden: ordenSiCambio(orden, ordenAuto),
       ...conPartes,
       ...(Object.keys(sinTexto).length ? { sinTexto } : {}),
+      ...(fondoEd ? { fondo: fondoEd } : {}),
     };
     // B27: con el legal movido a mano van los renglones de la forma con que se movió (la que se ve), aunque sean los del
     // automático: si mañana el automático cambia, lo movido no queda puesto sobre otra forma. Los del PSD no se
@@ -248,7 +254,7 @@ export function EditorMedida({
     const movido = iLegal !== null && edicionMuevePieza(ed, iLegal);
     const r = !movido ? elegidos : infoRenglones && infoRenglones.usados < infoRenglones.psd ? infoRenglones.usados : null;
     return r !== null ? { ...ed, renglones: r } : ed;
-  }, [pos, deAuto, auto, orden, ordenAuto, conPartes, sinTexto, elegidos, iLegal, infoRenglones]);
+  }, [pos, deAuto, auto, orden, ordenAuto, conPartes, sinTexto, fondoEd, elegidos, iLegal, infoRenglones]);
   // Una copia de otra medida (B25) se ve con sus avisos, como en la tarjeta. Al guardar aquí ya es de esta medida
   // (alguien la vio): `guardar` no lleva `copiaDe`, y la nota de arriba de los avisos lo dice.
   const copiaDe = inicial?.copiaDe;
@@ -272,7 +278,7 @@ export function EditorMedida({
   const anchoCss = caja.w > 0 && caja.h > 0 ? Math.floor(Math.min(caja.w, (caja.h * W) / H)) : 0;
   const e = anchoCss > 0 ? anchoCss / W : 0;
   const cambiada = (i: number) => !!pos[i] && !!deAuto[i] && !igual(pos[i], deAuto[i]);
-  const hayCambios = auto.puestas.some((q) => cambiada(q.pieza)) || !!edicion.orden || !!conPartes.partes || !!conPartes.ordenPartes || !!edicion.sinTexto || elegidos !== null;
+  const hayCambios = auto.puestas.some((q) => cambiada(q.pieza)) || !!edicion.orden || !!conPartes.partes || !!conPartes.ordenPartes || !!edicion.sinTexto || !!fondoEd || elegidos !== null;
   // Distinto de como se abrió (lo automático más lo ya guardado): eso es lo que se perdería al cerrar.
   const partesAlAbrir = useMemo(() => JSON.stringify(partesCambiadas(ma, relsInicial, ordenesInicial)), [ma, relsInicial, ordenesInicial]);
   const sinAlAbrir = useMemo(() => JSON.stringify(normalSin(inicial?.sinTexto)), [inicial]);
@@ -280,6 +286,7 @@ export function EditorMedida({
     !mismosTextos ||
     elegidos !== normal(alAbrir) ||
     JSON.stringify(sinTexto) !== sinAlAbrir ||
+    JSON.stringify(fondoEd) !== JSON.stringify(inicial?.fondo ?? null) ||
     orden.some((p, i) => p !== ordenInicial[i]) ||
     JSON.stringify(conPartes) !== partesAlAbrir ||
     auto.puestas.some((q) => {
@@ -464,6 +471,58 @@ export function EditorMedida({
     if (abierta !== null) document.getElementById(`editor-partes-${abierta}`)?.scrollIntoView({ block: "nearest" });
   }, [abierta]);
 
+  // ── El fondo a mano (B29) ──
+  /** Dónde está el fondo ahora, como se guarda (el del automático si no se ha tocado). */
+  const fondoAhora = (): FondoEditado => fondoEd ?? edicionDeFondo(ma, W, H, editado.fondo);
+  /** Lo pone como lo deja `aplicarEdicion` (siempre cubre): lo guardado es lo que se ve. */
+  const ponerFondo = (f: FondoEditado) => {
+    const p = fondoDeEdicion(ma, W, H, f);
+    setFondoEd(edicionDeFondo(ma, W, H, p));
+  };
+  /** Corre el fondo `dx`/`dy` px de la medida (el fondo sigue al ratón). */
+  const correrFondo = (f0: FondoEditado, dx: number, dy: number) => {
+    const k = fondoDeEdicion(ma, W, H, f0).k;
+    ponerFondo({ ...f0, cx: f0.cx - dx / (ma.w * k), cy: f0.cy - dy / (ma.h * k) });
+  };
+  const empezarFondo = (ev: PointerEvent<HTMLElement>) => {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    ev.currentTarget.focus({ preventScroll: true });
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+    arrastreFondo.current = { px: ev.clientX, py: ev.clientY, inicio: fondoAhora(), puntero: ev.pointerId };
+    setArrastrando(true);
+  };
+  const moverFondoA = (ev: PointerEvent<HTMLElement>) => {
+    const a = arrastreFondo.current;
+    if (!a || e <= 0 || ev.pointerId !== a.puntero) return;
+    if (ev.buttons === 0) return soltarFondo();
+    correrFondo(a.inicio, (ev.clientX - a.px) / e, (ev.clientY - a.py) / e);
+  };
+  function soltarFondo() {
+    arrastreFondo.current = null;
+    setArrastrando(false);
+  }
+  const teclaFondo = (ev: KeyboardEvent<HTMLElement>) => {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (ev.key === "Escape" && arrastreFondo.current) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      ponerFondo(arrastreFondo.current.inicio);
+      return soltarFondo();
+    }
+    const paso = ev.shiftKey ? PASO_LARGO : PASO;
+    const flechas: Record<string, [number, number]> = { ArrowLeft: [-paso, 0], ArrowRight: [paso, 0], ArrowUp: [0, -paso], ArrowDown: [0, paso] };
+    const f = flechas[ev.key], f0 = fondoAhora();
+    if (f) {
+      ev.preventDefault();
+      correrFondo(f0, f[0], f[1]);
+    } else if (ev.key === "+" || ev.key === "=" || ev.key === "-" || ev.key === "_") {
+      ev.preventDefault();
+      ponerFondo({ ...f0, z: Math.min(FONDO_EDITOR_MAX, Math.max(1, f0.z * (ev.key === "+" || ev.key === "=" ? CRECE : 1 / CRECE))) });
+    }
+  };
+
   const empezar = (ev: PointerEvent<HTMLElement>, i: number, j: number | null, m: Modo) => {
     if (ev.button !== 0) return;
     ev.preventDefault();
@@ -562,7 +621,7 @@ export function EditorMedida({
   const claveM = (m: { w: number; h: number }) => `${m.w}x${m.h}`;
   const guardar = () =>
     alGuardar(
-      Object.keys(edicion.piezas).length || edicion.orden || edicion.partes || edicion.ordenPartes || edicion.sinTexto || edicion.renglones ? edicion : null,
+      Object.keys(edicion.piezas).length || edicion.orden || edicion.partes || edicion.ordenPartes || edicion.sinTexto || edicion.renglones || edicion.fondo ? edicion : null,
       mismosTextos ? cambios : cambiosLocal,
       tambien.filter((t) => copiarA.has(claveM(t.m))).map((t) => t.m),
     );
@@ -866,6 +925,21 @@ export function EditorMedida({
             <div className="relative touch-none select-none" style={{ width: anchoCss || undefined, aspectRatio: `${W} / ${H}` }}>
               <canvas ref={lienzo} aria-hidden="true" className="block size-full rounded-sm" />
               {zona && <Franjas guia={zona} w={W} h={H} />}
+              {moverFondo && (
+                // «Mover el fondo»: la vista arrastra el fondo (las piezas no se tocan mientras tanto).
+                <div
+                  role="application"
+                  tabIndex={0}
+                  aria-label={tx(FP.editorFondoArrastrar, lang)}
+                  data-fondo-vista=""
+                  className="absolute inset-0 z-[2000] cursor-move rounded-sm outline-2 -outline-offset-2 outline-primary outline-dashed focus-visible:outline-solid"
+                  onPointerDown={empezarFondo}
+                  onPointerMove={moverFondoA}
+                  onPointerUp={soltarFondo}
+                  onPointerCancel={soltarFondo}
+                  onKeyDown={teclaFondo}
+                />
+              )}
               {iman.x && <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-primary" />}
               {iman.y && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-1/2 h-px bg-primary" />}
               {/* En el orden del maestro (el del Tab no cambia al reordenar, y React no mueve los botones, que perderían el
@@ -1168,8 +1242,50 @@ export function EditorMedida({
                     </li>
                   );
                 })}
-                {/* El fondo no es una capa que se mueva: va siempre hasta atrás (lo dice la lista, como en Photoshop). */}
-                <li className="px-2 py-1 text-muted-foreground">{tx(FP.editorFondoCapa, lang)}</li>
+                {/* El fondo va siempre hasta atrás (como en Photoshop), pero se puede correr y agrandar (B29). */}
+                <li className="px-2 py-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-muted-foreground">{tx(FP.editorFondoCapa, lang)}</span>
+                    <Button
+                      variant={moverFondo ? "default" : "outline"}
+                      size="sm"
+                      aria-pressed={moverFondo}
+                      onClick={() => {
+                        const on = !moverFondo;
+                        setMoverFondo(on);
+                        setSel(null);
+                        setSelParte(null);
+                        if (abierta !== null) setAbierta(null);
+                        if (on) requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-fondo-vista]")?.focus({ preventScroll: true }));
+                      }}
+                    >
+                      <Move className="size-3.5" aria-hidden="true" /> {tx(moverFondo ? FP.editorFondoListo : FP.editorFondoMover, lang)}
+                    </Button>
+                  </div>
+                  {(moverFondo || fondoEd) && (
+                    <div className="mt-2 grid gap-1.5">
+                      <label className="flex items-center gap-2 text-xs text-foreground">
+                        <span className="shrink-0">{tx(FP.editorFondoZoom, lang)}</span>
+                        <input
+                          type="range"
+                          min={100}
+                          max={FONDO_EDITOR_MAX * 100}
+                          step={1}
+                          value={Math.round(fondoAhora().z * 100)}
+                          onChange={(ev) => ponerFondo({ ...fondoAhora(), z: Number(ev.target.value) / 100 })}
+                          className="min-w-0 flex-1 accent-primary"
+                        />
+                        <span className="w-10 shrink-0 text-right tabular-nums">{Math.round(fondoAhora().z * 100)} %</span>
+                      </label>
+                      <p className="text-xs text-muted-foreground">{tx(FP.editorFondoAyuda, lang)}</p>
+                      {fondoEd && (
+                        <button type="button" className="justify-self-start text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => setFondoEd(null)}>
+                          {tx(FP.editorFondoAuto, lang)}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </li>
               </ul>
             </div>
             {copiaDe && (
@@ -1215,6 +1331,7 @@ export function EditorMedida({
             onClick={() => {
               setPos({});
               setSinTexto({});
+              setFondoEd(null);
               setRenglones(null);
               setSoltado(null);
               setOrdenElegido(null);
