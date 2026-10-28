@@ -194,7 +194,6 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
   const at = (x: number, y: number) => (y * W + x) * 4;
   const dif = (i: number, f: RGB) => Math.max(Math.abs(d[i] - f[0]), Math.abs(d[i + 1] - f[1]), Math.abs(d[i + 2] - f[2]));
   const dentro = (c: ElementoLeido["caja"], x: number, y: number, m = 0) => x >= c.x0 - m && x < c.x1 + m && y >= c.y0 - m && y < c.y1 + m;
-  const mediana = (v: number[]) => (v.length ? [...v].sort((a, b) => a - b)[v.length >> 1] : 255);
   const avisos: string[] = [];
 
   /** El color de alrededor: el que más hay (`dominante`) en un anillo fuera de la caja, sin los demás elementos (salvo
