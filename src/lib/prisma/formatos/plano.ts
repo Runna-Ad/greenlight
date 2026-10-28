@@ -114,6 +114,17 @@ export function limpiarLectura(v: unknown, w: number, h: number): ElementoLeido[
     const ciclo = vistos.slice(vistos.indexOf(cierra));
     ciclo.reduce((a, b) => (area(b) > area(a) ? b : a)).sobre = null;
   }
+  // Un renglón que la IA marca SUBTITULO entre dos del TITULO es parte del titular (DiDi Card, 2a lectura en la
+  // preview: «con tus cupones de» entre «3 MSI» y «DiDi Card»). Como pieza aparte su caja queda dentro de la del
+  // TITULO, y en una medida alta el acomodo los mueve distinto y se encima a «3 MSI». En la revisión se puede regresar.
+  const titulo = limpios.filter((e) => e.rol === "TITULO");
+  const medioY = (c: ElementoLeido["caja"]) => (c.y0 + c.y1) / 2;
+  const cruzaX = (a: ElementoLeido["caja"], b: ElementoLeido["caja"]) => Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0);
+  for (const e of limpios) {
+    if (e.rol !== "SUBTITULO") continue;
+    const junto = titulo.filter((t) => cruzaX(t.caja, e.caja));
+    if (junto.some((t) => medioY(t.caja) < e.caja.y0) && junto.some((t) => medioY(t.caja) > e.caja.y1)) e.rol = "TITULO";
+  }
   return limpios.length ? limpios : null;
 }
 

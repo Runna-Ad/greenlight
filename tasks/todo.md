@@ -1497,7 +1497,21 @@ largo: estacionado por él.
       720×1600, 36 en 768×1024, 57 en 1200×1500 (igual); teléfonos a 54/36/35/61 px. (b) el enlace ahora dice
       «¿Tu imagen tiene fondo de foto o textura? Usa Formatos con imagen plana, que rellena el fondo con IA».
       (c) plano-lector quita la frase repetida: «La IA no pudo leer la imagen.» + «Reintenta.».
-      **Next Step:** commit + push a `prisma`; Pedro revisa una medida alta en la preview.
+      Commit 2a7758e. PREVIEW 2026-10-27 (2a idea de Pedro, 2a lectura real, US$0.006): margen medido en la preview:
+      precio 51/34/33/36 px (1080×1920, 720×1280, 720×1600, 768×1024), teléfonos 51/34/34/61, 1200×1500 igual.
+      HALLAZGOS NUEVOS (sin arreglar): (d) la lectura cambia de una corrida a otra (temperature 0): esta vez 12
+      elementos (los 3 logos en uno, el ícono y las tiendas en uno) y «con tus cupones de» como SUBTITULO; su caja
+      queda DENTRO de la del TITULO y en 1080×1920 el acomodo alto la sube 15 px sobre su hueco: se encima a «3 MSI».
+      No lo causó 2a7758e (el acomodo viejo da lo mismo, probado con 090bf78). (e) sale «2 textos cambiados en
+      todas las medidas» (ediciones guardadas de la lectura anterior, mismo archivo) pero el lienzo muestra los
+      textos originales: el aviso cuenta ediciones que ya no aplican (no revisado a fondo).
+      (d) ARREGLADO (Pedro: "Go with 1 ... treat it as part of the headline (flat images only)"): limpiarLectura
+      pasa al TITULO un SUBTITULO con un renglón del TITULO arriba y otro abajo (que lo cruzan a lo ancho); en la
+      revisión se puede regresar. Localhost con la lectura guardada marcada así: la fila sale TITULO, «5 piezas», y
+      en 1080×1920 «3 MSI» termina en 537 y «con tus cupones de» empieza en 548 (10 px, como el original).
+      (e) causa vista: los textos guardados van por «id de la lectura + letras»; otra lectura del mismo archivo trae
+      otros ids, así que no aplican pero el aviso los cuenta. SIN ARREGLAR.
+      **Next Step:** commit + push a `prisma`.
 - B17 (colchón): ESTACIONADO por Pedro (2026-10-19, "ignore the matress for now").
 - iPad: sin más trabajo (Pedro, 2026-10-19: "it will very rarely be used on anything other than desktop"). Los
   pendientes de iPad de B19 (caché de 4 fondos, táctil real, zoom de Safari) quedan fuera.

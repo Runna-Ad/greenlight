@@ -2906,6 +2906,18 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   ], 1000, 1000) ?? [];
   const sob = (id) => ciclo.find((e) => e.id === id)?.sobre;
   ok("lectura: dos cajas casi iguales que se apuntan: la más grande queda de base; una cadena se queda", sob("grande") === null && sob("chica") === "grande" && sob("pastilla") === "tarjeta" && sob("precio") === "pastilla", JSON.stringify(ciclo.map((e) => [e.id, e.sobre])));
+  // DiDi Card, 2a lectura real en la preview (2026-10-27): «con tus cupones de» como SUBTITULO entre dos renglones del
+  // TITULO; como pieza aparte, en 1080×1920 se encimaba a «3 MSI».
+  const titular = limpiarLectura([
+    { label: "intro", rol: "TITULO", tipo: "texto", box_2d: caja(370, 181, 833, 206), texto: "Tu nuevo iPhone Duo a" },
+    { label: "msi", rol: "TITULO", tipo: "texto", box_2d: caja(364, 212, 832, 306), texto: "3 MSI" },
+    { label: "medio", rol: "SUBTITULO", tipo: "texto", box_2d: caja(385, 313, 817, 345), texto: "con tus cupones de" },
+    { label: "marca", rol: "TITULO", tipo: "texto", box_2d: caja(368, 348, 826, 401), texto: "DiDi Card" },
+    { label: "abajo", rol: "SUBTITULO", tipo: "texto", box_2d: caja(380, 420, 820, 450), texto: "Sólo en la app" },
+    { label: "lado", rol: "SUBTITULO", tipo: "texto", box_2d: caja(860, 313, 990, 345), texto: "Nuevo" },
+  ], 1000, 1000) ?? [];
+  const rolDeLeido = (id) => titular.find((e) => e.id === id)?.rol;
+  ok("lectura: un SUBTITULO entre dos renglones del TITULO pasa al TITULO; uno abajo o a un lado se queda", rolDeLeido("medio") === "TITULO" && rolDeLeido("abajo") === "SUBTITULO" && rolDeLeido("lado") === "SUBTITULO", JSON.stringify(titular.map((e) => [e.id, e.rol])));
   const raras = limpiarLectura([{ label: "p", rol: "CTA", tipo: "texto", box_2d: [0, 0, 500, 500], texto: "12\u200b pagos\u202e de\u0085 $3,999" }], 100, 100);
   ok("lectura: sin caracteres invisibles (ancho cero, cambio de dirección, controles C1)", raras?.[0].texto === "12 pagos de $3,999", JSON.stringify(raras?.[0].texto));
   const muchos = Array.from({ length: ELEMENTOS_MAX + 15 }, (_, i) => ({ label: `e${i}`, rol: "HERO", tipo: "texto", box_2d: [0, 0, 500, 500], texto: "y".repeat(TEXTO_LEIDO_MAX + 50) }));
