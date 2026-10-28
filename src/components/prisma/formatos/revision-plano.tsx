@@ -15,6 +15,7 @@ import { tx, type Lang } from "@/lib/prisma/copy";
 import { FP, FPL, rellenar } from "@/lib/prisma/formatos/copy";
 import { ROLES_LECTURA, TEXTO_LEIDO_MAX, limpiarLetras, maestroDePlano, medirPlano, type RolLeido } from "@/lib/prisma/formatos/plano";
 import { TRANSFERIR_MAX_BYTES, prepararMaestro, type MaestroListo } from "@/lib/prisma/formatos/listo";
+import { claveTexto, type CambiosTexto } from "@/lib/prisma/formatos/cambios-texto";
 import type { TextoCapa } from "@/lib/prisma/formatos/textos";
 import { ajustarTextosPlano, type NotaTextoPlano, type Tipografias } from "./escritura";
 import type { Plano } from "./plano-lector";
@@ -36,7 +37,8 @@ export function RevisionPlano({ plano, tipos, cliente, selectorCliente, trayendo
   selectorCliente: ReactNode;
   trayendo: boolean;
   lang: Lang;
-  alContinuar: (maestro: MaestroListo) => void;
+  /** `cambios`: los textos que se escribieron distinto de lo que leyó la IA, como los del editor (todas las medidas). */
+  alContinuar: (maestro: MaestroListo, cambios: CambiosTexto) => void;
   alCancelar: () => void;
 }) {
   const [quitados, setQuitados] = useState<ReadonlySet<string>>(() => new Set());
@@ -57,20 +59,22 @@ export function RevisionPlano({ plano, tipos, cliente, selectorCliente, trayendo
   // La revisión aparece cuando termina la lectura y el botón de cancelar que tenía el foco ya no existe.
   useEffect(() => titulo.current?.focus(), []);
 
-  // Quitar un elemento o cambiar sus letras cambia el fondo y los renglones: se vuelve a medir. Sin cambios, la medida
-  // de la lectura. Si no se puede (sin memoria), se queda la de la lectura y se dice.
+  // Quitar un elemento cambia el fondo: se vuelve a medir. Sin cambios, la medida de la lectura. Si no se puede (sin
+  // memoria), se queda la de la lectura y se dice. Las letras escritas NO se miden: la medida y la prueba de tipografías
+  // son contra lo que se VE en la imagen (lo que leyó la IA); lo escrito distinto entra como un cambio de texto, igual
+  // que en el editor (2026-10-28: un texto nuevo medido contra la imagen nunca pasaba la prueba y se quedaba la imagen).
   const remedido = useMemo(() => {
-    if (!quitados.size && !letras.size) return { medido: plano.medido, fallo: false };
+    if (!quitados.size) return { medido: plano.medido, fallo: false };
     const leidos = plano.leidos
       .filter((e) => !quitados.has(e.id))
-      .map((e) => ({ ...e, texto: letras.get(e.id) ?? e.texto, sobre: e.sobre && !quitados.has(e.sobre) ? e.sobre : null }));
+      .map((e) => ({ ...e, sobre: e.sobre && !quitados.has(e.sobre) ? e.sobre : null }));
     try {
       return { medido: medirPlano(plano.img, leidos), fallo: false };
     } catch (err) {
       console.error("[formatos-psd] volver a separar la imagen plana", err);
       return { medido: plano.medido, fallo: true };
     }
-  }, [plano, quitados, letras]);
+  }, [plano, quitados]);
   const medido = remedido.medido;
   const elementos = useMemo(() => medido.elementos.map((m) => ({ ...m, rol: roles.get(m.id) ?? m.rol })), [medido, roles]);
 
@@ -129,7 +133,14 @@ export function RevisionPlano({ plano, tipos, cliente, selectorCliente, trayendo
       const { maestro, bytes } = prepararMaestro(ma);
       // El mismo tope que un PSD (psd.worker.ts): más que esto no cabe en el navegador con todo lo que sigue.
       if (bytes > TRANSFERIR_MAX_BYTES) return setFalla(tx(FPL.muyPesada, lang));
-      alContinuar(maestro);
+      // Sólo de los textos que se reescriben (la capa es el id del elemento, `maestroDePlano`); los que van como imagen
+      // ya dicen en su fila que el cambio no se aplica.
+      const cambios: Record<string, string> = {};
+      for (const [id, v] of letras) {
+        const capa = capas.get(id);
+        if (capa && v !== capa.texto) cambios[claveTexto({ capa: id, texto: capa })] = v;
+      }
+      alContinuar(maestro, cambios);
     } catch (err) {
       console.error("[formatos-psd] armar el maestro de la imagen plana", err);
       setFalla(tx(FPL.noSeArmo, lang));
@@ -237,10 +248,12 @@ export function RevisionPlano({ plano, tipos, cliente, selectorCliente, trayendo
 
         <div className="space-y-2">
           {!elementos.length && <p className="text-sm text-foreground">{tx(FPL.ninguno, lang)}</p>}
-          <p id="plano-letras-ayuda" className="sr-only">{tx(FPL.letrasAyuda, lang)}</p>
+          <p id="plano-letras-ayuda" className="text-xs text-muted-foreground">{tx(FPL.letrasAyuda, lang)}</p>
           <ol className="space-y-2">
             {elementos.map((m) => {
               const n = numero.get(m.id) ?? 0, nt = nota(m.id), esTexto = m.tipo === "texto", imagen = comoImagen.has(m.id);
+              // Escrito distinto de lo leído: sólo sale si el texto se reescribe con una tipografía del cliente.
+              const cambiado = esTexto && letras.has(m.id), seEscribe = !imagen && !!vigente?.capas.has(m.id);
               const texto = !esTexto ? null
                 : imagen ? tx(FPL.textoImagen, lang)
                 : !vigente || !nt || nt.fuente === null ? tx(FPL.textoSinFuentes, lang)
@@ -289,20 +302,29 @@ export function RevisionPlano({ plano, tipos, cliente, selectorCliente, trayendo
                       <textarea
                         id={`plano-letras-${m.id}`}
                         key={`${m.id}:${letras.get(m.id) ?? ""}`}
-                        defaultValue={m.texto}
+                        defaultValue={letras.get(m.id) ?? m.texto}
                         maxLength={TEXTO_LEIDO_MAX}
-                        rows={Math.min(4, Math.max(m.texto.split("\n").length, Math.ceil(m.texto.length / 60)))}
+                        rows={Math.min(4, Math.max((letras.get(m.id) ?? m.texto).split("\n").length, Math.ceil((letras.get(m.id) ?? m.texto).length / 60)))}
                         aria-describedby="plano-letras-ayuda"
                         onBlur={(e) => {
                           const v = limpiarLetras(e.target.value).slice(0, TEXTO_LEIDO_MAX);
                           // Vacío no es un texto: vuelven sus letras (para quitarlo está «No es un elemento»).
-                          if (!v) e.target.value = m.texto;
-                          else if (v !== m.texto) setLetras((l) => new Map(l).set(m.id, v));
+                          if (!v) e.target.value = letras.get(m.id) ?? m.texto;
+                          else if (v === m.texto) setLetras((l) => { const n = new Map(l); n.delete(m.id); return n; });
+                          else if (v !== letras.get(m.id)) setLetras((l) => new Map(l).set(m.id, v));
                         }}
                         className="w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       />
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className={cn("text-xs", nt && !nt.ok && !imagen ? "text-foreground" : "text-muted-foreground")}>{texto}</p>
+                        <div className="min-w-0">
+                          <p className={cn("text-xs", nt && !nt.ok && !imagen ? "text-foreground" : "text-muted-foreground")}>{texto}</p>
+                          {cambiado && !probando && (
+                            <p className="mt-0.5 flex items-start gap-1 text-xs text-foreground">
+                              {!seEscribe && <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" />}
+                              {tx(seEscribe ? FPL.cambioOk : FPL.cambioNo, lang)}
+                            </p>
+                          )}
+                        </div>
                         <Button variant="outline" size="sm" className="ml-auto h-8 text-xs" onClick={() => alternar(m.id)}>
                           {imagen ? tx(FPL.comoTexto, lang) : tx(FPL.comoImagen, lang)}
                         </Button>

@@ -764,8 +764,14 @@ export const FPL = {
   textoImagen: t("Va como imagen (lo elegiste).", "Stays as an image (your choice)."),
   comoImagen: t("Dejar como imagen", "Keep as image"),
   comoTexto: t("Reescribir", "Rewrite"),
-  letras: t("Letras", "Letters"),
-  letrasAyuda: t("Si la IA leyó mal una letra, corrígela aquí (se aplica al salir del campo).", "If the AI misread a letter, fix it here (applied when you leave the field)."),
+  letras: t("Texto", "Text"),
+  // 2026-10-28: los diseñadores escribían aquí el texto nuevo y no pasaba nada (sólo corregía la lectura de la IA).
+  letrasAyuda: t(
+    "Cámbialo aquí y sale así en todas las medidas, o corrige una letra que la IA leyó mal (se aplica al salir del campo).",
+    "Change it here and it comes out that way in every size, or fix a letter the AI misread (applied when you leave the field).",
+  ),
+  cambioOk: t("Tu cambio sale en todas las medidas.", "Your change comes out in every size."),
+  cambioNo: t("Tu cambio no se puede aplicar porque este texto va como imagen: sale como en la imagen.", "Your change can't be applied because this text stays as an image: it comes out as in the image."),
   rol: t("Rol", "Role"),
   otro: t("Otro", "Other"),
   sobre: t("sobre {e}", "on {e}"),

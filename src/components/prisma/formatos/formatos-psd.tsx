@@ -2309,8 +2309,11 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
           selectorCliente={selectorCliente(false)}
           trayendo={trayendo > 0}
           lang={lang}
-          alContinuar={(maestro) => {
-            setLeido({ archivo: plano.archivo, psdOriginal: null, maestros: [maestro], descartadas: [], avisos: [] });
+          alContinuar={(maestro, cambios) => {
+            const l: Leido = { archivo: plano.archivo, psdOriginal: null, maestros: [maestro], descartadas: [], avisos: [] };
+            setLeido(l);
+            // Lo escrito en la revisión es un cambio de texto como los del editor (sobre lo que ya hubiera de este archivo).
+            if (Object.keys(cambios).length) ponerTextos(l, { ...textosGuardados(plano.archivo), ...cambios });
             salirDePlano();
           }}
           alCancelar={() => {
