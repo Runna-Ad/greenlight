@@ -166,14 +166,15 @@ const lum = (c: ArrayLike<number>) => (c[0] + c[1] + c[2]) / 3;
 /**
  * El color que MÁS hay (no la mediana de cada canal): alrededor de un texto sobre una pastilla de dos colores (naranja
  * arriba, blanco abajo) la mediana por canal inventaba un rosa que no estaba en ningún lado, y con ese "fondo" la tinta
- * blanca salía pálida y transparente (2026-10-28, el precio de la pastilla de DiDi). Se cuentan colores en cubos de 32
- * niveles y del más lleno sale la mediana de sus píxeles. Sin píxeles, blanco (como `mediana` de nada).
+ * blanca salía pálida y transparente (2026-10-28, el precio de la pastilla de DiDi). Se cuentan colores en cubos de 16
+ * niveles (con 32, un beige claro y el blanco caían juntos) y del más lleno sale la mediana de sus píxeles. Sin
+ * píxeles, blanco (como `mediana` de nada).
  */
 function dominante(r: readonly number[], g: readonly number[], b: readonly number[]): [number, number, number] {
   if (!r.length) return [255, 255, 255];
   const cubos = new Map<number, number[]>();
   for (let i = 0; i < r.length; i++) {
-    const k = ((r[i] >> 5) << 6) | ((g[i] >> 5) << 3) | (b[i] >> 5);
+    const k = ((r[i] >> 4) << 8) | ((g[i] >> 4) << 4) | (b[i] >> 4);
     const l = cubos.get(k);
     if (l) l.push(i); else cubos.set(k, [i]);
   }
@@ -209,7 +210,22 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
       const i = at(x, y);
       r.push(d[i]); g.push(d[i + 1]); b.push(d[i + 2]);
     }
-    return dominante(r, g, b);
+    const fuera = dominante(r, g, b);
+    if (e.tipo !== "texto") return fuera;
+    // Un texto: lo que más hay DENTRO de su caja (entre las letras) es lo que tiene detrás, aunque la caja de la IA se
+    // salga de su pastilla y lo pegado afuera sea otro color (el precio de DiDi, 2026-10-28). Si ese color casi no está
+    // afuera (letras que llenan la caja: ése es la tinta), manda el de afuera.
+    const ri: number[] = [], gi: number[] = [], bi: number[] = [];
+    for (let y = Math.max(0, e.caja.y0); y < Math.min(H, e.caja.y1); y++) for (let x = Math.max(0, e.caja.x0); x < Math.min(W, e.caja.x1); x++) {
+      if (otros.some((o) => dentro(o.caja, x, y))) continue;
+      const i = at(x, y);
+      ri.push(d[i]); gi.push(d[i + 1]); bi.push(d[i + 2]);
+    }
+    if (!ri.length) return fuera;
+    const adentro = dominante(ri, gi, bi);
+    let cerca = 0;
+    for (let k = 0; k < r.length; k++) if (Math.max(Math.abs(r[k] - adentro[0]), Math.abs(g[k] - adentro[1]), Math.abs(b[k] - adentro[2])) <= 48) cerca++;
+    return r.length && cerca / r.length < 0.1 ? fuera : adentro;
   }
 
   const medidos: ElementoMedido[] = [];
@@ -226,15 +242,23 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
   /** Texto: el color de su tinta (lo más lejano del fondo) y cuánto de ese color tiene cada píxel. */
   function medirTexto(e: ElementoLeido, B: RGB): ElementoMedido | null {
     const P = 4, x0 = Math.max(0, e.caja.x0 - P), y0 = Math.max(0, e.caja.y0 - P), x1 = Math.min(W, e.caja.x1 + P), y1 = Math.min(H, e.caja.y1 + P);
+    // Las letras van SOBRE su fondo: una fila o columna de la caja sin nada de ese color no es texto (la franja beige
+    // que la caja de la IA traía arriba de la pastilla del precio de DiDi se medía como tinta: un rectángulo pálido).
+    const cw = x1 - x0, ch = y1 - y0, enFila = new Uint32Array(ch), enCol = new Uint32Array(cw);
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (dif(at(x, y), B) <= 24) { enFila[y - y0]++; enCol[x - x0]++; }
+    const sobreFondo = (x: number, y: number) => enFila[y - y0] >= Math.max(2, 0.03 * cw) && enCol[x - x0] >= Math.max(2, 0.03 * ch);
     let max = 0;
-    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) max = Math.max(max, dif(at(x, y), B));
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (sobreFondo(x, y)) max = Math.max(max, dif(at(x, y), B));
     if (max < 40) return null;
     const r: number[] = [], g: number[] = [], b: number[] = [];
-    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = at(x, y); if (dif(i, B) > 0.85 * max) { r.push(d[i]); g.push(d[i + 1]); b.push(d[i + 2]); } }
-    const F: RGB = [mediana(r), mediana(g), mediana(b)];
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = at(x, y); if (sobreFondo(x, y) && dif(i, B) > 0.85 * max) { r.push(d[i]); g.push(d[i + 1]); b.push(d[i + 2]); } }
+    // La tinta: el color que más hay entre lo más lejano del fondo (la mediana por canal mezclaba la tinta blanca con
+    // la franja beige que la caja de la IA traía arriba de la pastilla).
+    const F: RGB = dominante(r, g, b);
     const v = [F[0] - B[0], F[1] - B[1], F[2] - B[2]], vv = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
     const w = x1 - x0, h = y1 - y0, a = new Float32Array(w * h);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (!sobreFondo(x0 + x, y0 + y)) continue;
       const i = at(x0 + x, y0 + y), p = [d[i] - B[0], d[i + 1] - B[1], d[i + 2] - B[2]];
       const t = Math.min(1, Math.max(0, (p[0] * v[0] + p[1] * v[1] + p[2] * v[2]) / vv));
       // Un color que no está en la recta del fondo a la tinta es de otro elemento (otra tinta, otra forma).

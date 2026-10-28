@@ -3027,8 +3027,10 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
     bloques(80, 98, 9, 18, [40, 20, 30]);
     const lei = [
       { id: "caja", rol: "TITULO", tipo: "forma", caja: { x0: 39, y0: 39, x1: 261, y1: 141 }, texto: "", sobre: null },
-      { id: "precio", rol: "TITULO", tipo: "texto", caja: { x0: 68, y0: 50, x1: 210, y1: 76 }, texto: "$28,499", sobre: "caja" },
-      { id: "cuotas", rol: "TITULO", tipo: "texto", caja: { x0: 78, y0: 96, x1: 208, y1: 118 }, texto: "3 pagos", sobre: "caja" },
+      // Como en la lectura real: la caja del precio empieza ARRIBA de la pastilla (en el fondo beige) y la de las cuotas
+      // se le encima por abajo; lo pegado a la caja del precio es casi todo beige.
+      { id: "precio", rol: "TITULO", tipo: "texto", caja: { x0: 68, y0: 28, x1: 210, y1: 78 }, texto: "$28,499", sobre: "caja" },
+      { id: "cuotas", rol: "TITULO", tipo: "texto", caja: { x0: 78, y0: 76, x1: 208, y1: 118 }, texto: "3 pagos", sobre: "caja" },
     ];
     const im2 = { w: W2, h: H2, rgba: px }, r2 = medirPlano(im2, lei), pr = r2.elementos.find((e) => e.id === "precio");
     ok("plano: un texto blanco sobre una pastilla de dos colores sale blanco (su fondo es el naranja, no un rosa)", pr && pr.color.every((v) => v >= 240) && Math.abs(pr.debajo[1] - NAR[1]) <= 16, JSON.stringify({ color: pr?.color, debajo: pr?.debajo }));
