@@ -27,7 +27,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
+import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, MEDIDAS_RATIO, FONDO_ZOOM_MAX } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContraste, edicionMuevePieza, edicionSinPieza } from "../src/lib/prisma/formatos/revisar.ts";
@@ -952,8 +952,11 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
   const planoOrden = readPsdAg(writePsdBuffer(psdDeMedida(M2R, otroOrdenR.acomodo, 1200, 627), { noBackground: true }), { skipLayerImageData: true, skipCompositeImageData: true });
   eq("capas: el PSD de capas planas sale en el orden elegido", planoOrden.children.map((l) => l.name).filter((n) => n !== "BACKGROUND"), [...autoR].reverse().map((i) => M2R.piezas[i].nombre));
   ok("capas: revisarMedida lleva el orden en su clave (otro orden → otro acomodo, ya ordenado)", autoR.length === 2 && conOrdenR !== revisarMedida([M2R], 1200, 627) && conOrdenR.acomodo.puestas.map((q) => q.pieza).join() === [...autoR].reverse().join(), JSON.stringify(autoR));
-  eq("nombre de entrega: la medida de la mesa se cambia por la nueva; si no trae medida, se agrega", [nombreSalida(M45, 1200, 627), nombreSalida(M916, 320, 50), nombreSalida({ ...M45, nombre: "ANUNCIO" }, 600, 500)], ["APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "APGIANTCARDUGC_320x50_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "ANUNCIO_600x500"]);
-  eq("nombre con una promo '2x1', o con la medida al principio / al final: se cambia la ficha que tiene la forma de la mesa", [nombreSalida({ nombre: "BUENFIN_2x1_9x16_FB", w: 1080, h: 1920 }, 1200, 627), nombreSalida({ nombre: "4x5_AD", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_4X5", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_", w: 1200, h: 1500 }, 600, 500)], ["BUENFIN_2x1_1200x627_FB", "600x500_AD", "AD_600x500", "AD_600x500"]);
+  eq("nombre de entrega: la medida de la mesa se cambia por la nueva; si no trae medida, se agrega", [nombreSalida(M45, 1200, 627), nombreSalida(M916, 320, 50), nombreSalida({ ...M45, nombre: "ANUNCIO" }, 600, 500)], ["APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_EC_V2_OCT26_RN", "APGIANTCARDUGC_320x50_WOMAN_REAL_STATIC_IDEAH2_EC_V2_OCT26_RN", "ANUNCIO_600x500"]);
+  // B29: la entrega por ratio lleva el ratio y la red de ese ratio (como sus archivos: «CMHEROWOMEN_191x1_…_GG_V1»).
+  eq("entrega por ratio: el nombre lleva el ratio y la red de ese ratio", [nombreSalida(M45, 1200, 628, "ratio"), nombreSalida(M45, 1200, 1200, "ratio"), nombreSalida(M45, 1080, 1920, "ratio"), nombreSalida(M45, 1080, 1350, "ratio")], ["APGIANTCARDUGC_191x1_WOMAN_REAL_STATIC_IDEAH2_GG_V2_OCT26_RN", "APGIANTCARDUGC_1x1_WOMAN_REAL_STATIC_IDEAH2_GG_V2_OCT26_RN", "APGIANTCARDUGC_9x16_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "APGIANTCARDUGC_4x5_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN"]);
+  eq("entrega por ratio: una medida sin ratio conocido va en píxeles y su red no cambia; sin ficha de red no se agrega", [nombreSalida(M45, 1920, 1080, "ratio"), nombreSalida({ ...M45, nombre: "ANUNCIO_4x5" }, 1200, 628, "ratio"), nombreSalida({ ...M45, nombre: "ANUNCIO" }, 1080, 1920, "ratio")], ["APGIANTCARDUGC_1920x1080_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "ANUNCIO_191x1", "ANUNCIO_9x16"]);
+  eq("nombre con una promo '2x1', o con la medida al principio / al final: se cambia la ficha que tiene la forma de la mesa", [nombreSalida({ nombre: "BUENFIN_2x1_9x16_FB", w: 1080, h: 1920 }, 1200, 627), nombreSalida({ nombre: "4x5_AD", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_4X5", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_", w: 1200, h: 1500 }, 600, 500)], ["BUENFIN_2x1_1200x627_EC", "600x500_AD", "AD_600x500", "AD_600x500"]);
 
   // Lo que encontró la revisión (2026-10-13). Cada caso se reprodujo ANTES de arreglarlo.
   console.log("\n▶ v2 · acomodo: lo que no debe pasar callado");
@@ -985,6 +988,9 @@ console.log("\n▶ v2 · pantalla PSD: una medida completa, la guía de zona seg
   const M45 = { nombre: "AD_4x5_FB", w: 1200, h: 1500, piezas: [pz("FOOTER", 204, 1361, 790, 62, 16), pz("HERO", 113, 508, 788, 791), pz("CTA", 788, 856, 306, 97, 45), pz("Subtitulo", 684, 617, 383, 194, 32), pz("TITULO", 188, 238, 824, 212, 42), pz("BRAND", 364, 86, 472, 83)] };
   const lista = leerMedidas(MEDIDAS_EQUIPO);
   eq("la lista con la que arranca la pantalla son las 12 medidas del equipo, todas válidas y dentro del tope", [lista.medidas.length, lista.fuera, lista.medidas.length <= MEDIDAS_MAX, lista.medidas[0], lista.medidas[11]], [12, [], true, { w: 1080, h: 1920 }, { w: 320, h: 50 }]);
+  // B29: la entrega por ratio, en la medida de cada red de su tabla; cada una lleva su ratio en el nombre.
+  const ratios = leerMedidas(MEDIDAS_RATIO);
+  eq("la lista por ratio: las 4 medidas de su tabla, cada una con su ratio en el nombre", [ratios.fuera, ratios.medidas.map((m) => nombreSalida({ nombre: "AD_9x16", w: 1080, h: 1920 }, m.w, m.h, "ratio"))], [[], ["AD_1x1", "AD_191x1", "AD_9x16", "AD_4x5"]]);
   // Zona segura POR CANAL (Pedro, 2026-10-14): sin canal no hay guía; con canal, sólo en 9:16 y sus escalas.
   const r1 = (z) => z && Object.fromEntries(Object.entries(z).map(([k, v]) => [k, Math.round(v * 10) / 10]));
   eq("sin canal elegido no se marca nada, ni en 9:16", [zonaCanal(null, 1080, 1920), zonaCanal(undefined, 1080, 1920), zonaCanal("instagram", 1080, 1920), zonaCanal("__proto__", 1080, 1920)], [null, null, null, null]);

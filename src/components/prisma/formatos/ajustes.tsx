@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
-import { CANALES, type Canal } from "@/lib/prisma/formatos/acomodo";
+import { CANALES, type Canal, type Entrega } from "@/lib/prisma/formatos/acomodo";
 import { FP, rellenar } from "@/lib/prisma/formatos/copy";
 import { legalCabe, type GrupoLegal, type LegalGuardado, type LegalVigente } from "@/lib/prisma/formatos/legal";
 import { TEXTO_CAMBIADO_MAX } from "@/lib/prisma/formatos/textos";
@@ -265,6 +265,38 @@ export function PastillasMedidas({
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> {rellenar(tx(FP.listaTope, lang), { n: sinLugar, max: MEDIDAS_MAX })}
         </p>
       )}
+    </div>
+  );
+}
+
+/** La entrega en pastillas (B29): por ratio o en píxeles (EC); una a la vez, cada una con su lista de medidas. */
+export function PastillasEntrega({ entrega, lang, alElegir }: { entrega: Entrega; lang: Lang; alElegir: (e: Entrega) => void }) {
+  const id = useId();
+  const opciones: [Entrega, string][] = [
+    ["ratio", tx(FP.entregaRatio, lang)],
+    ["ec", tx(FP.entregaEc, lang)],
+  ];
+  return (
+    <div>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 id={`${id}-titulo`} className="text-sm font-semibold text-foreground">
+          {tx(FP.entrega, lang)}
+        </h2>
+        <p id={`${id}-ayuda`} className="text-xs text-muted-foreground">
+          {tx(entrega === "ratio" ? FP.entregaRatioAyuda : FP.entregaEcAyuda, lang)}
+        </p>
+      </div>
+      <div role="group" aria-labelledby={`${id}-titulo`} aria-describedby={`${id}-ayuda`} className="mt-2 flex flex-wrap gap-1.5">
+        {opciones.map(([e, nombre]) => {
+          const on = entrega === e;
+          return (
+            <button key={e} type="button" aria-pressed={on} onClick={() => on || alElegir(e)} className={cn(PASTILLA, on ? cn(PRENDIDA, "hover:bg-primary/15") : cn(APAGADA, "hover:border-primary/40 hover:text-foreground"))}>
+              <Check className={cn("size-3.5 shrink-0", !on && "invisible")} aria-hidden="true" />
+              {nombre}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

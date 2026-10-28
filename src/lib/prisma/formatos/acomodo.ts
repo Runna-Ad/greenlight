@@ -223,16 +223,45 @@ export function familiaDe(W: number, H: number, ma: { w: number; h: number }): F
 export const sePuedeVoltear = (f: Familia): boolean => f === "display" || f === "horizontal" || f === "ancho";
 
 /**
- * El nombre de entrega del equipo: el de la mesa, cambiando su medida ("_4x5_") por la nueva ("_1200x627_"). Si el
- * nombre trae varios "NxN" (una promo "2x1"), se cambia el que tiene la forma de la mesa.
+ * Las dos entregas del equipo, que nunca se mezclan (diseñadores, 2026-10-28): «ratio» para masters y canales directos
+ * (el nombre lleva el ratio: "_9x16_", "_191x1_") y «ec» (external channel) en píxeles (el nombre lleva "_1200x627_").
  */
-export function nombreSalida(ma: { nombre: string; w: number; h: number }, W: number, H: number): string {
-  const fichas = [...ma.nombre.matchAll(/(^|_)(\d+)x(\d+)(?=_|$)/gi)];
-  if (!fichas.length) return `${ma.nombre.replace(/_+$/, "")}_${W}x${H}`;
+export type Entrega = "ratio" | "ec";
+/** El ratio de cada medida de la entrega por ratio, como va en el nombre, y la red que lo usa (su tabla, 2026-10-28). */
+const RATIOS: { ficha: string; w: number; h: number; red: string }[] = [
+  { ficha: "1x1", w: 1, h: 1, red: "GG" },
+  { ficha: "191x1", w: 1.91, h: 1, red: "GG" },
+  { ficha: "9x16", w: 9, h: 16, red: "FB" },
+  { ficha: "4x5", w: 4, h: 5, red: "FB" },
+];
+/** Cuánto puede alejarse una medida de su ratio (1200×628 es 1.911 y 1200×627 es 1.914). */
+const RATIO_TOLERANCIA = 0.01;
+const ratioDe = (W: number, H: number) => RATIOS.find((r) => Math.abs(Math.log(W / H / (r.w / r.h))) < RATIO_TOLERANCIA);
+/** Las fichas de red que trae el nombre del equipo ("_FB_", "_GG_", "_EC_"). */
+const REDES = new Set(["FB", "GG", "TT", "IG", "EC"]);
+
+/**
+ * El nombre de entrega del equipo: el de la mesa, cambiando su medida ("_4x5_") por la nueva: en píxeles ("_1200x627_")
+ * en la entrega EC, o su ratio ("_191x1_") en la de ratio (una medida sin ratio conocido va en píxeles). Si el nombre
+ * trae varios "NxN" (una promo "2x1"), se cambia el que tiene la forma de la mesa. La ficha de red también sigue a la
+ * entrega, como en sus archivos: "_EC_" en píxeles; en ratio, la red de ese ratio ("_GG_" en 1x1 y 191x1).
+ */
+export function nombreSalida(ma: { nombre: string; w: number; h: number }, W: number, H: number, entrega: Entrega = "ec"): string {
+  const ratio = entrega === "ratio" ? ratioDe(W, H) : undefined;
+  const medida = ratio ? ratio.ficha : `${W}x${H}`;
+  const red = entrega === "ec" ? "EC" : ratio?.red;
+  const partes = ma.nombre.split("_");
+  if (red) {
+    const i = partes.findLastIndex((p) => REDES.has(p.toUpperCase()));
+    if (i >= 0) partes[i] = red;
+  }
+  const nombre = partes.join("_");
+  const fichas = [...nombre.matchAll(/(^|_)(\d+)x(\d+)(?=_|$)/gi)];
+  if (!fichas.length) return `${nombre.replace(/_+$/, "")}_${medida}`;
   const lejos = (f: RegExpMatchArray) => Math.abs(Math.log(Number(f[2]) / Number(f[3]) / (ma.w / ma.h)));
   const f = fichas.reduce((a, b) => (lejos(b) < lejos(a) ? b : a));
   const desde = (f.index ?? 0) + f[1].length;
-  return `${ma.nombre.slice(0, desde)}${W}x${H}${ma.nombre.slice((f.index ?? 0) + f[0].length)}`;
+  return `${nombre.slice(0, desde)}${medida}${nombre.slice((f.index ?? 0) + f[0].length)}`;
 }
 
 /** Las 12 medidas que el equipo entrega hoy (las de su script de Photoshop). */
@@ -240,6 +269,8 @@ export const MEDIDAS_EQUIPO = "1080×1920 720×1280 720×1600 1200×1500 768×10
 /** Con las que arranca la pantalla: las del equipo y el cuadrado de feed, que su script no hace y los diseñadores tenían
  *  que agregar cada vez (2026-10-28). */
 export const MEDIDAS_INICIO = `${MEDIDAS_EQUIPO} 1080×1080`;
+/** La entrega por ratio, en la medida de cada red (su tabla, 2026-10-28): GG 1:1 y 1.91:1, FB 9:16 y 4:5. */
+export const MEDIDAS_RATIO = "1200×1200 1200×628 1080×1920 1080×1350";
 
 /**
  * Zona segura POR CANAL, como guía (Pedro, 2026-10-14: "select a Channel and then it shows you"). Cada app tapa

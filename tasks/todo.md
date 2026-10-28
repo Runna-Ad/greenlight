@@ -4167,8 +4167,12 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
         del script del equipo). «Subir otro archivo» también en la barra pegajosa de resultados (y así se llama el botón
         en las dos puertas, PSD e imagen plana). La guía de qué archivo sirve, plegada en «¿Qué archivo sirve?».
       Falta (esperando las respuestas de los diseñadores, mandadas por Pedro):
-      · 3. Modo ratios (1:1, 4:5, 9:16, 16:9, 1.91:1) con nombre por ratio (`_9x16_`). Bug: `nombreSalida` cambia el
-        `4x5` del nombre por píxeles. Falta: a qué medida en px sale cada ratio.
+      · 3. HECHO (2026-10-28): «Entrega» arriba de las medidas: Ratios | Píxeles (EC), nunca se mezclan. Ratios =
+        1200×1200 (1x1, GG), 1200×628 (191x1, GG), 1080×1920 (9x16, FB), 1080×1350 (4x5, FB) (`MEDIDAS_RATIO`); EC =
+        las 12 + 1080×1080 de antes. `nombreSalida(…, entrega)`: en ratio el nombre lleva el ratio y la red de ese
+        ratio; en EC la medida y `_EC_` (como sus archivos). Probado con su PSD: sale idéntico a su
+        «SPGFAPPLE1PLATA_191x1_STOCK_STATIC_IDEA1_GG_V2_NOV26_RN». Falta preguntar: 16:9 (no está en su tabla; hoy
+        sale en px), ¿1080×1080 sigue en EC?, y 1.91:1 es 1200×628 en ratio y 1200×627 en EC (se dejó así).
       · 4. Zonas seguras automáticas por red (hoy sólo 9:16, sólo con canal elegido, y en la forma del maestro no mueve
         nada). Falta: qué redes.
       · 5. Mover / escalar el FONDO en el editor (hoy `Edicion` no lo tiene).

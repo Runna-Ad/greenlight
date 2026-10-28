@@ -9,7 +9,7 @@ import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
-import { CANALES, LETRA_MIN_PX, MEDIDAS_INICIO, elegirMaestro, es916, nombreSalida, ponerPartes, sePuedeVoltear, zonaCanal, type Acomodo, type AvisoAcomodo, type Canal, type Edicion, type Lado, esNota } from "@/lib/prisma/formatos/acomodo";
+import { CANALES, LETRA_MIN_PX, MEDIDAS_INICIO, MEDIDAS_RATIO, elegirMaestro, es916, nombreSalida, ponerPartes, sePuedeVoltear, zonaCanal, type Acomodo, type AvisoAcomodo, type Canal, type Edicion, type Entrega, type Lado, esNota } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionContraste, type InfoContraste } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_APLANADA, FP_ERROR, FP_FAMILIA, FP_PAPEL, FPL, FX, rellenar } from "@/lib/prisma/formatos/copy";
@@ -29,7 +29,7 @@ import { RevisionPlano } from "./revision-plano";
 import { EditorMedida, edicionGuardada, guardarEdicion, guardarTextos, textosGuardados } from "./editor-medida";
 import { cambiarTextos, cambiosQueAplican, marcarSinEscribir, NO_SE_ESCRIBIO, type CambiosTexto, type Listo } from "@/lib/prisma/formatos/cambios-texto";
 import { porQueNoSeCambia } from "@/lib/prisma/formatos/textos";
-import { APAGADA, COLUMNAS, ChipEstado, FOCO, FORMAS, FilaLegal, NOMBRE_FORMA, PRENDIDA, PastillasCanal, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
+import { APAGADA, COLUMNAS, ChipEstado, FOCO, FORMAS, FilaLegal, NOMBRE_FORMA, PRENDIDA, PastillasCanal, PastillasEntrega, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
 import { conLegal, conLegalDe, legalDelPsd, legalesParaCliente, legalVigente, type LegalGuardado } from "@/lib/prisma/formatos/legal";
 import { copiarEdicion, hermanas } from "@/lib/prisma/formatos/matriz";
 
@@ -102,7 +102,9 @@ const CLAVE_ERROR: Record<MotivoPsd | "desconocido", keyof typeof FP_ERROR> = { 
  *  verticales en una fila a 1440 px; para verla grande está «Editar». */
 const VISTA_ALTO_MAX = 360;
 /** La lista de DiDi, como pastillas (Pedro, 2026-10-15: "we have them pre loaded those are tied to didi"). */
-const LISTA_DIDI: MedidaLista[] = leerMedidas(MEDIDAS_INICIO).medidas.map((m) => ({ ...m, propia: false }));
+const deLista = (texto: string): MedidaLista[] => leerMedidas(texto).medidas.map((m) => ({ ...m, propia: false }));
+/** Una lista por entrega (B29): en píxeles (EC) la del equipo; por ratio, la medida de cada red. */
+const LISTA_DIDI: Record<Entrega, MedidaLista[]> = { ec: deLista(MEDIDAS_INICIO), ratio: deLista(MEDIDAS_RATIO) };
 /** Avisos de «En varias medidas» (la pieza repetida y, ya quitada, su relleno): en la tarjeta van en una línea corta. */
 const deVarias = (a: AvisoAcomodo) => a.tipo === "copia" || a.tipo === "retoque";
 /** Un aviso común: la pieza repetida se arregla UNA vez arriba. La tarjeta y el resumen usan esta misma regla (B23),
@@ -143,7 +145,7 @@ const contextoEdicion = (m: Medida, lado: Lado | undefined, canal: Canal | null)
 };
 const CONTEXTO_VIEJO = ":fondo";
 /** El nombre de entrega del equipo (el de la mesa con la medida nueva), limpio para ser nombre de archivo. */
-const archivoDe = (ma: MaestroListo, m: Medida) => `${nombreSalida({ nombre: limpiarNombre(ma.nombre, NOMBRE_MESA_MAX), w: ma.w, h: ma.h }, m.w, m.h)}.png`;
+const archivoDe = (ma: MaestroListo, m: Medida, e: Entrega) => `${nombreSalida({ nombre: limpiarNombre(ma.nombre, NOMBRE_MESA_MAX), w: ma.w, h: ma.h }, m.w, m.h, e)}.png`;
 const sinExtension = (archivo: string) => archivo.replace(/\.(psd|png|jpe?g|webp)$/i, "");
 
 const aPng = (lienzo: HTMLCanvasElement): Promise<Blob> =>
@@ -282,7 +284,7 @@ function psdEditableEnWorker(pedido: PedidoPsdMedida, transferir: Transferable[]
   });
 }
 
-const archivoPsdDe = (ma: MaestroListo, m: Medida) => archivoDe(ma, m).replace(/\.png$/, ".psd");
+const archivoPsdDe = (ma: MaestroListo, m: Medida, e: Entrega) => archivoDe(ma, m, e).replace(/\.png$/, ".psd");
 /** Un PSD ya armado: `plano` = por qué salió de capas planas (null = editable, con sus `notas`). */
 type PsdArmado = { archivo: Blob; notas: NotaCapa[]; plano: string | null };
 /** Lo que dicen las notas de un PSD editable: las capas aplanadas (con su porqué) y las de revisar (la frase ya dice que
@@ -605,6 +607,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
   medida,
   lado,
   canal,
+  entrega,
   renglones,
   tipos,
   lang,
@@ -622,6 +625,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
   medida: Medida;
   lado: Lado;
   canal: Canal | null;
+  /** Por ratio o en píxeles: cambia el nombre del archivo (B29). */
+  entrega: Entrega;
   /** Cómo se escribe cada maestro, y con el legal en otros renglones (B27) la versión del maestro y su escritura. */
   renglones: Renglones<MaestroVista>;
   tipos: Tipografias;
@@ -699,7 +704,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
   const franja = rellenar(tx(FP.zonaFranja, lang), { c: nombreCanal });
   const bajar = async () => {
     try {
-      if (lienzo.current && !noPinto) descargar(await aPng(lienzo.current), archivoDe(ma, medida));
+      if (lienzo.current && !noPinto) descargar(await aPng(lienzo.current), archivoDe(ma, medida, entrega));
     } catch (err) {
       console.error("[formatos-psd] png", err);
       toast.error(tx(FP.bajarFallo, lang));
@@ -737,7 +742,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
         alArrancar: (c) => (cancelarPsd.current = c),
       });
       if (!r || !enPagina.current) return;
-      descargar(r.archivo, archivoPsdDe(ma, medida));
+      descargar(r.archivo, archivoPsdDe(ma, medida, entrega));
       // Se queda hasta cerrarlo: el archivo se llama igual que uno editable y éste es el único aviso de que no lo es.
       if (r.plano !== null) return void toast.warning(rellenar(tx(FP.psdPlano, lang), { m, motivo: r.plano }), { ...AVISO_ABAJO, id, ...FIJO });
       if (!r.notas.length) return void toast.success(rellenar(tx(FP.psdListo, lang), { m }), { ...AVISO_ABAJO, id, duration: 10_000 });
@@ -949,7 +954,9 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   const [falla, setFalla] = useState<Falla | null>(null);
   const [over, setOver] = useState(false);
   /** Las medidas del panel, en orden: la lista de DiDi y las agregadas a mano. */
-  const [lista, setLista] = useState<MedidaLista[]>(LISTA_DIDI);
+  /** Por ratio o en píxeles (EC): nunca se mezclan, cada una trae su lista (B29). */
+  const [entrega, setEntrega] = useState<Entrega>("ec");
+  const [lista, setLista] = useState<MedidaLista[]>(LISTA_DIDI.ec);
   /** Las que se apagaron con un clic («WxH»): siguen en el panel, no salen en los resultados. */
   const [apagadas, setApagadas] = useState<ReadonlySet<string>>(() => new Set());
   /** Las que salen: prendidas y dentro del tope por anuncio. El objeto de cada medida es el mismo de `lista`, así una
@@ -1513,9 +1520,18 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     anunciar(rellenar(tx(FP.medidaQuitada, lang), { m: k.replace("x", "×") }));
   };
   const restablecerMedidas = () => {
-    setLista(LISTA_DIDI);
+    setLista(LISTA_DIDI[entrega]);
     setApagadas(new Set());
     anunciar(tx(FP.medidasRestablecidas, lang));
+  };
+  /** Otra entrega: su lista de medidas (las agregadas a mano se quedan, prendidas o apagadas como estaban). */
+  const elegirEntrega = (e: Entrega) => {
+    const propias = lista.filter((m) => m.propia);
+    const nueva = [...LISTA_DIDI[e].filter((m) => !propias.some((p) => clave(p) === clave(m))), ...propias];
+    setEntrega(e);
+    setLista(nueva);
+    setApagadas((a) => new Set([...a].filter((k) => propias.some((p) => clave(p) === k))));
+    anunciar(rellenar(tx(FP.entregaCambiada, lang), { e: tx(e === "ratio" ? FP.entregaRatio : FP.entregaEc, lang) }));
   };
   /** `soloEstas`: las pegadas quedan prendidas y todas las demás se apagan (lo que antes hacía «Usar estas medidas»).
    *  Devuelve lo que hay que enseñar junto al campo (null = todo bien). */
@@ -2008,7 +2024,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
         // ninguna, así un volteo o un cambio de lista a media descarga no mezcla estados.
         const pngs = await Promise.all(con.map((c) => aPng(c as HTMLCanvasElement)));
         if (!sigue()) return avisarCancelado();
-        for (const [i, f] of lista.entries()) await salida.agregar(rutaLibre(usadas, CARPETA_ENTREGABLES, archivoDe(f.ma, f.m)), pngs[i]);
+        for (const [i, f] of lista.entries()) await salida.agregar(rutaLibre(usadas, CARPETA_ENTREGABLES, archivoDe(f.ma, f.m, entrega)), pngs[i]);
       }
       /** Los de capas planas, por motivo; las notas de las capas (las mismas en cada medida, una vez); los que no se
        *  pudieron armar; los que no caben ni solos en un ZIP (ZIP_MAX_BYTES). */
@@ -2051,7 +2067,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
           if (!salida.cabeSolo(r.archivo.size)) sinLugar.push(etiqueta(f.m));
           else {
             try {
-              await salida.agregar(rutaLibre(usadas, CARPETA_EDITABLES, archivoPsdDe(f.ma, f.m)), r.archivo);
+              await salida.agregar(rutaLibre(usadas, CARPETA_EDITABLES, archivoPsdDe(f.ma, f.m, entrega)), r.archivo);
               nPsd++;
               if (r.plano !== null) planos.set(r.plano, [...(planos.get(r.plano) ?? []), etiqueta(f.m)]);
               for (const x of r.notas) notas.set(JSON.stringify(x), x);
@@ -2564,6 +2580,9 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
               </div>
             </div>
             <div className="py-2.5">
+              <PastillasEntrega entrega={entrega} lang={lang} alElegir={elegirEntrega} />
+            </div>
+            <div className="py-2.5">
               <PastillasMedidas lista={lista} apagadas={apagadas} sinLugar={sinLugar} lang={lang} alAlternar={alternarMedida} alQuitar={quitarMedida} alAgregar={agregarMedidas} alRestablecer={restablecerMedidas} />
             </div>
             <div className="py-2.5">
@@ -2846,7 +2865,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
                     </h3>
                     <ul className={cn("grid gap-3", COLUMNAS[f])}>
                       {grupo.map((m) => (
-                        <TarjetaMedida key={clave(m)} maestros={conTextos.maestros} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} renglones={renglones} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} elegida={!fueraDelZip.has(clave(m))} alElegir={elegirParaZip} />
+                        <TarjetaMedida key={clave(m)} maestros={conTextos.maestros} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} entrega={entrega} renglones={renglones} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} elegida={!fueraDelZip.has(clave(m))} alElegir={elegirParaZip} />
                       ))}
                     </ul>
                   </div>

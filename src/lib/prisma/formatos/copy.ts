@@ -604,6 +604,13 @@ export const FP = {
   medidasAyuda: t("Clic en una medida para quitarla o ponerla.", "Click a size to turn it off or on."),
   medidasRestablecer: t("Volver a la lista de DiDi", "Back to DiDi's list"),
   medidasRestablecidas: t("Se volvió a la lista de DiDi.", "Back to DiDi's list."),
+  // B29: las dos entregas del equipo, que nunca se mezclan (diseñadores, 2026-10-28).
+  entrega: t("Entrega", "Delivery"),
+  entregaRatio: t("Ratios", "Ratios"),
+  entregaEc: t("Píxeles (EC)", "Pixels (EC)"),
+  entregaRatioAyuda: t("Masters y canales directos. El nombre lleva el ratio: _1x1_, _191x1_ (GG), _9x16_, _4x5_ (FB).", "Masters and direct channels. The name carries the ratio: _1x1_, _191x1_ (GG), _9x16_, _4x5_ (FB)."),
+  entregaEcAyuda: t("Canales externos. El nombre lleva la medida y _EC_: _1200x627_.", "External channels. The name carries the size and _EC_: _1200x627_."),
+  entregaCambiada: t("Entrega por {e}: la lista de medidas cambió.", "Delivery by {e}: the size list changed."),
   medidasNinguna: t("No hay medidas prendidas. Prende al menos una arriba, en «Medidas».", "No sizes are on. Turn on at least one above, in “Sizes”."),
   medidaQuitarAria: t("Quitar {m} de la lista", "Remove {m} from the list"),
   medidaQuitada: t("{m} se quitó de la lista.", "{m} removed from the list."),
