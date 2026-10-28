@@ -1247,12 +1247,12 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   };
 
   /** Imagen plana (B28): se lee con IA, se separa y pasa a la revisión; de ahí sigue como un PSD. */
-  const abrirPlano = async (file: File, vigente: () => boolean, fallar: (f: Falla) => void) => {
+  const abrirPlano = async (file: File, vigente: () => boolean, fallar: (f: Falla) => void, nueva = false) => {
     const pedido = new AbortController();
     pedidoPlano.current = pedido;
     setEtapaPlano("leer");
     try {
-      const r = await leerPlano(file, pedido.signal, (e) => vigente() && setEtapaPlano(e));
+      const r = await leerPlano(file, pedido.signal, (e) => vigente() && setEtapaPlano(e), nueva);
       if (!vigente()) {
         if ("url" in r) URL.revokeObjectURL(r.url);
         return;
@@ -1277,7 +1277,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     setPlano(null);
   };
 
-  const abrir = async (file: File) => {
+  /** `nueva`: una imagen plana se vuelve a leer con IA aunque ya tenga lectura guardada («Leer otra vez»). */
+  const abrir = async (file: File, nueva = false) => {
     const mio = ++turno.current;
     const vigente = () => vivo.current && mio === turno.current;
     soltar();
@@ -1306,7 +1307,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     try {
       const cabeza = new Uint8Array(await file.slice(0, 12).arrayBuffer());
       if (!vigente()) return;
-      if (esImagenPlana(cabeza)) return void abrirPlano(file, vigente, fallar);
+      if (esImagenPlana(cabeza)) return void abrirPlano(file, vigente, fallar, nueva);
       if (!(cabeza[0] === 0x38 && cabeza[1] === 0x42 && cabeza[2] === 0x50 && cabeza[3] === 0x53)) return fallar({ clave: "noEsPsd" });
     } catch (err) {
       console.error("[formatos-psd] leer archivo", err);
@@ -2337,6 +2338,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
             salirDePlano();
             volverASubir.current = true;
           }}
+          alReleer={() => void abrir(plano.file, true)}
         />
       ) : !usables.length ? (
         <section className="p-enter max-w-2xl space-y-3" aria-label={tx(FP.subir, lang)}>

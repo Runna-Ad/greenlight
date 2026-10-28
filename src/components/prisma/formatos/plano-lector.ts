@@ -27,6 +27,10 @@ export type Plano = {
   /** La medida de `leidos` tal cual (la revisión la reusa mientras no se quite ni cambie nada). */
   medido: Medido;
   costoUsd: number | null;
+  /** Esta imagen ya se había leído: se usó la misma lectura (0087), sin IA. */
+  guardada: boolean;
+  /** El archivo, para «Leer otra vez». */
+  file: File;
 };
 export type FallaPlano = { clave: "planoPesado" | "planoGrande" | "planoIlegible" | "planoLectura" | "planoTarde"; detalle?: string };
 
@@ -42,7 +46,7 @@ export function esImagenPlana(c: Uint8Array): boolean {
  * Abre la imagen, la manda a leer y la mide. `etapa` avisa cuándo pasa de leer a separar. Lanza `AbortError` si se
  * cancela; cualquier otra falla vuelve como `FallaPlano` (lo que dice la pantalla).
  */
-export async function leerPlano(file: File, senal: AbortSignal, etapa: (e: "separar") => void): Promise<Plano | FallaPlano> {
+export async function leerPlano(file: File, senal: AbortSignal, etapa: (e: "separar") => void, nueva = false): Promise<Plano | FallaPlano> {
   if (file.size > PLANO_BYTES_MAX) return { clave: "planoPesado" };
   let bitmap: ImageBitmap;
   try {
@@ -87,12 +91,20 @@ export async function leerPlano(file: File, senal: AbortSignal, etapa: (e: "sepa
 
   const form = new FormData();
   form.append("imagen", reducida, "anuncio.jpg");
+  // La huella del archivo original: la misma imagen reusa su lectura guardada (`nueva`: «Leer otra vez»). Sin ella
+  // (un navegador sin crypto.subtle) se lee igual, sólo que no se guarda.
+  const huella = await crypto.subtle
+    ?.digest("SHA-256", await file.arrayBuffer())
+    .then((d) => Array.from(new Uint8Array(d), (b) => b.toString(16).padStart(2, "0")).join(""))
+    .catch(() => null);
+  if (huella) form.append("huella", huella);
+  if (nueva) form.append("nueva", "1");
   const res = await fetch("/api/prisma/formatos/leer", { method: "POST", body: form, signal: AbortSignal.any([senal, AbortSignal.timeout(LEER_MS)]) }).catch((e: unknown) => {
     if (senal.aborted) throw e;
     return null;
   });
   if (!res) return { clave: "planoTarde" };
-  type Respuesta = { ok: true; elementos: ElementoLeido[]; w: number; h: number; costoUsd: number | null } | { ok: false; error: string };
+  type Respuesta = { ok: true; elementos: ElementoLeido[]; w: number; h: number; costoUsd: number | null; guardada?: boolean } | { ok: false; error: string };
   const r = (await res.json().catch(() => null)) as Respuesta | null;
   if (!r || !r.ok) {
     // El servidor a veces repite la frase de esta falla («La IA no pudo leer la imagen. Reintenta.»): se muestra una vez,
@@ -131,5 +143,5 @@ export async function leerPlano(file: File, senal: AbortSignal, etapa: (e: "sepa
     console.error("[formatos-psd] separar imagen plana", err);
     return { clave: "planoGrande" };
   }
-  return { archivo: file.name, img, url: URL.createObjectURL(file), leidos, medido, costoUsd: r.costoUsd };
+  return { archivo: file.name, img, url: URL.createObjectURL(file), leidos, medido, costoUsd: r.costoUsd, guardada: r.guardada === true, file };
 }

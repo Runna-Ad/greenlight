@@ -4227,3 +4227,11 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
           medidas es recomendación estética: unos px fuera no importa, sólo alejarse de los bordes del lienzo.
           Mandan un doc con las zonas seguras.
         - Falta aún: ejemplo terminado de 1.91:1 y 320×50; si eligieron DiDi como cliente; el doc de zonas seguras.
+
+      · CACHÉ DE LECTURAS (2026-10-28, código en `prisma`; migración 0087 SIN APLICAR, espera "ship it"):
+        `prisma_formatos_lecturas` (sha256 del archivo original + modelo → elementos crudos, w, h). La ruta /leer la usa
+        antes de llamar a la IA (no cuenta para el tope de lecturas) y guarda la nueva; «Leer otra vez con IA» en la
+        revisión pide otra y la reemplaza; la revisión dice «ya se había leído: misma lectura, sin costo». Sin la tabla,
+        la ruta lee con IA como antes (el error se registra). Aplicar: `node scripts/migrate.mjs --only
+        20261028120001_greenlight_0087_formatos_lecturas.sql --project-ref ybbrpqzbedaxsmotgtkh`. Probar en la preview:
+        subir la misma imagen dos veces (la 2ª dice «ya se había leído») y que los textos cambiados sigan.

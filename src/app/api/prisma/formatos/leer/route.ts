@@ -4,13 +4,17 @@ import { ErrorIA, lector } from "@/lib/prisma/formatos/proveedor";
 import { LADO_LECTURA, limpiarLectura } from "@/lib/prisma/formatos/plano";
 import { FRENO, gate, saturado } from "@/app/(app)/prisma/comun";
 import { mismoOrigen } from "@/app/(app)/prisma/formatos-comun";
+import { HUELLA, guardarLectura, lecturaGuardada } from "@/lib/prisma/formatos/lecturas-guardadas";
 
 /**
  * HÜE Prisma › Formatos, imagen plana (B28) — la LECTURA con IA de un anuncio sin PSD: qué elementos tiene, dónde
  * están y, si son texto, sus letras. La pantalla manda la imagen (ya reducida); aquí se decodifica entera, se vuelve
- * a codificar como JPEG (a la IA sólo le llegan píxeles) y se devuelve la lectura limpia. Nada se guarda.
+ * a codificar como JPEG (a la IA sólo le llegan píxeles) y se devuelve la lectura limpia. Con `huella` (sha256 del
+ * archivo original) la lectura se guarda y la misma imagen la reusa sin llamar a la IA (0087, `guardada: true`);
+ * `nueva=1` («Leer otra vez») pide otra y la reemplaza.
  *
- * POST multipart { imagen: PNG | JPEG | WebP } → { ok: true, elementos, w, h, costoUsd } | { ok: false, error }
+ * POST multipart { imagen: PNG | JPEG | WebP, huella?, nueva? } → { ok: true, elementos, w, h, costoUsd, guardada }
+ *   | { ok: false, error }
  * Mismo gate que la copia con IA (copia/route.ts) y apagado salvo PRISMA_FORMATOS_IA=gemini + GEMINI_API_KEY.
  * PENDIENTE antes de producción (igual que la copia): un registro en la base por llamada con tope diario.
  */
@@ -35,7 +39,6 @@ export async function POST(req: Request) {
   if ("ok" in g) return json(g, /sesión/i.test(g.error) ? 401 : 403);
   const ia = lector();
   if (!ia) return json({ ok: false, error: "La lectura con IA está apagada." }, 409);
-  if (saturado(g.soyId, Date.now(), "formatos-leer-ia", LLAMADAS_MAX)) return json({ ok: false, error: "Muchas lecturas con IA en poco tiempo. Espera unos minutos." }, 429);
   if (saturado(g.soyId)) return json(FRENO, 429);
   const largo = Number(req.headers.get("content-length"));
   if (!(largo > 0) || largo > CUERPO_MAX_BYTES) return json({ ok: false, error: "La imagen es demasiado grande." }, 413);
@@ -49,6 +52,9 @@ export async function POST(req: Request) {
   const f = form.get("imagen");
   if (!(f instanceof File) || f.size === 0) return json({ ok: false, error: "No llegó la imagen." }, 400);
   if (f.size > CUERPO_MAX_BYTES) return json({ ok: false, error: "La imagen es demasiado grande." }, 413);
+  const h0 = form.get("huella");
+  const huella = typeof h0 === "string" && HUELLA.test(h0) ? h0 : null;
+  const nueva = form.get("nueva") === "1";
   let jpeg: Buffer, w: number, h: number;
   try {
     const abierta = sharp(Buffer.from(await f.arrayBuffer()), { limitInputPixels: ENTRADA_MAX_PX * ENTRADA_MAX_PX, failOn: "error" });
@@ -65,13 +71,23 @@ export async function POST(req: Request) {
     return json({ ok: false, error: "La imagen no es válida." }, 400);
   }
 
+  // La misma imagen ya leída: su lectura, sin IA (no cuenta para el tope de lecturas).
+  if (huella && !nueva) {
+    const guardada = await lecturaGuardada(huella, ia.modelo, w, h);
+    const elementos = guardada && limpiarLectura(guardada, w, h);
+    if (elementos) return json({ ok: true, elementos, w, h, costoUsd: 0, guardada: true });
+  }
+  if (saturado(g.soyId, Date.now(), "formatos-leer-ia", LLAMADAS_MAX)) return json({ ok: false, error: "Muchas lecturas con IA en poco tiempo. Espera unos minutos." }, 429);
+
   try {
     // Si la persona cancela (o cierra la pestaña), la llamada a la IA también se corta.
     const r = await ia.leer(jpeg, req.signal);
     console.info(`[formatos] lectura con IA: ${r.modelo}, US$${r.costoUsd ?? "?"}`);
     const elementos = limpiarLectura(r.elementos, w, h);
     if (!elementos) return json({ ok: false, error: "La IA no encontró elementos en la imagen. Reintenta." }, 502);
-    return json({ ok: true, elementos, w, h, costoUsd: r.costoUsd });
+    // Sólo una lectura que sirve se guarda (una vacía se reintenta).
+    if (huella) await guardarLectura({ sha256: huella, modelo: r.modelo, w, h, elementos: r.elementos, created_by: g.soyId });
+    return json({ ok: true, elementos, w, h, costoUsd: r.costoUsd, guardada: false });
   } catch (err) {
     const causa = err instanceof ErrorConCosto ? err.causa : err;
     if (err instanceof ErrorConCosto) console.info(`[formatos] lectura con IA sin respuesta válida, US$${err.costoUsd ?? "?"}`);

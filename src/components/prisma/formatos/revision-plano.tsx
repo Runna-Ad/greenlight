@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { AlertTriangle, Loader2, Undo2, X } from "lucide-react";
+import { AlertTriangle, Loader2, RotateCcw, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
@@ -31,7 +31,7 @@ const idQuitar = (id: string) => `plano-quitar-${id}`;
 const idDevolver = (id: string) => `plano-devolver-${id}`;
 type Ajuste = { para: object; tipos: Tipografias; capas: Map<string, TextoCapa>; notas: NotaTextoPlano[] };
 
-export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorCliente, trayendo, lang, alContinuar, alCancelar }: {
+export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorCliente, trayendo, lang, alContinuar, alCancelar, alReleer }: {
   plano: Plano;
   /** La otra puerta (rellena el fondo con IA) está prendida: se ofrece sólo si algo se quedó fijo en el fondo. */
   planaActiva: boolean;
@@ -43,6 +43,8 @@ export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorClie
   /** `cambios`: los textos que se escribieron distinto de lo que leyó la IA, como los del editor (todas las medidas). */
   alContinuar: (maestro: MaestroListo, cambios: CambiosTexto) => void;
   alCancelar: () => void;
+  /** «Leer otra vez»: una lectura nueva con IA (reemplaza la guardada). */
+  alReleer: () => void;
 }) {
   const [quitados, setQuitados] = useState<ReadonlySet<string>>(() => new Set());
   const [comoImagen, setComoImagen] = useState<ReadonlySet<string>>(() => new Set());
@@ -203,7 +205,7 @@ export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorClie
         <p className="text-sm text-muted-foreground">{tx(FPL.ayuda, lang)}</p>
         <p className="text-xs text-muted-foreground">
           <span className="break-all font-medium text-foreground">{plano.archivo}</span> · {plano.img.w}×{plano.img.h} · {rellenar(tx(FPL.resumen, lang), { n: elementos.length, t: textos.length })}
-          {plano.costoUsd !== null && <> · {rellenar(tx(FPL.costo, lang), { c: plano.costoUsd.toFixed(4) })}</>}
+          {plano.guardada ? <> · {tx(FPL.guardada, lang)}</> : plano.costoUsd !== null && <> · {rellenar(tx(FPL.costo, lang), { c: plano.costoUsd.toFixed(4) })}</>}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -386,6 +388,9 @@ export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorClie
         </Button>
         <Button variant="outline" size="lg" className={BOTON} onClick={alCancelar}>
           <X className="size-4" aria-hidden="true" /> {tx(FP.cancelar, lang)}
+        </Button>
+        <Button variant="ghost" size="lg" className={BOTON} onClick={alReleer}>
+          <RotateCcw className="size-4" aria-hidden="true" /> {tx(FPL.releer, lang)}
         </Button>
       </div>
     </section>

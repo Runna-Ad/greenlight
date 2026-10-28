@@ -2800,5 +2800,35 @@ console.log("\n▶ 0079 — tipografias");
   ok("sin tipografías, el cliente sí se borra", !(await rechaza(`delete from produccion.clients where id = $1`, [cli])) && !(await rechaza(`delete from produccion.clients where id = $1`, [otro])));
 }
 
+// ── 0087: lecturas de imagen plana guardadas (la misma imagen, la misma lectura) ──
+console.log("\n▶ 0087 — prisma_formatos_lecturas");
+{
+  const t = "prisma_formatos_lecturas";
+  eq(`${t} existe con RLS`, Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = '${t}' and c.relrowsecurity`)), 1);
+  eq(`${t}: policy master-only`, Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = '${t}' and qual like '%master%'`)), 1);
+  ok(`${t}: service_role puede escribir`, (await q(`select has_table_privilege('service_role', 'produccion.${t}', 'insert') as ok`))[0].ok);
+  const fila = (sha, extra = {}) => db.query(
+    `insert into produccion.${t} (sha256, modelo, w, h, elementos) values ($1, $2, $3, $4, $5::jsonb)`,
+    [sha, extra.modelo ?? "gemini-x", extra.w ?? 1024, extra.h ?? 1280, extra.elementos ?? JSON.stringify([{ label: "titulo", caja: [0, 0, 10, 10] }])],
+  );
+  const sha = "a".repeat(64);
+  ok("una lectura bien formada entra", await fila(sha).then(() => true).catch(() => false));
+  ok("la misma imagen con OTRO modelo entra aparte", await fila(sha, { modelo: "gemini-y" }).then(() => true).catch(() => false));
+  const malas = [
+    ["la misma imagen y modelo dos veces", () => fila(sha)],
+    ["una huella que no es sha256", () => fila("xyz")],
+    ["un modelo vacío", () => fila("b".repeat(64), { modelo: "" })],
+    ["un ancho de 0", () => fila("c".repeat(64), { w: 0 })],
+    ["un alto de más de 4096", () => fila("d".repeat(64), { h: 5000 })],
+    ["elementos que no son lista", () => fila("e".repeat(64), { elementos: JSON.stringify({ a: 1 }) })],
+    ["elementos de más de 500 KB", () => fila("f".repeat(64), { elementos: JSON.stringify(["x".repeat(500_001)]) })],
+  ];
+  for (const [que, hacer] of malas) ok(`la BD rechaza ${que}`, await hacer().then(() => false).catch(() => true));
+  await asRole(CREA);
+  eq("un creativo con sesión NO ve las lecturas (sólo por el servidor)", Number(await scalar(`select count(*) from produccion.${t}`)), 0);
+  await resetRole();
+  await db.query(`delete from produccion.${t}`);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

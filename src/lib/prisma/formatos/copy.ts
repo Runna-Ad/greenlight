@@ -747,6 +747,9 @@ export const FPL = {
   ),
   resumen: t("{n} elementos · {t} textos", "{n} elements · {t} texts"),
   costo: t("lectura: ≈ US${c} (estimado)", "reading: ≈ US${c} (estimate)"),
+  // 0087: la misma imagen reusa su lectura; «Leer otra vez» pide una nueva.
+  guardada: t("ya se había leído: misma lectura, sin costo", "already read: same reading, no cost"),
+  releer: t("Leer otra vez con IA", "Read again with AI"),
   sinCliente: t("Elige el cliente para reescribir los textos con sus tipografías. Sin cliente, todos van como imagen.", "Pick the client to rewrite the texts with its fonts. Without a client, they all stay as images."),
   sinFuentes: t("Este cliente no tiene tipografías guardadas en Admin › Marcas: los textos van como imagen. También puedes soltar los archivos .otf o .ttf aquí.", "This client has no fonts saved in Admin › Brands: the texts stay as images. You can also drop the .otf or .ttf files here."),
   sinClienteRecordadas: t("Elige el cliente para probar con todas sus tipografías. Por ahora se prueban las que este navegador ya recuerda.", "Pick the client to try all of its fonts. For now, the fonts this browser remembers are tried."),
