@@ -71,13 +71,17 @@ for (const f of readdirSync(dirImg).filter((n) => IMAGEN.has(extname(n).toLowerC
     // BATERIA_IA=simulada: «Rehacer el fondo con IA» sin gastar: en lugar de Gemini, el relleno con muestras en la
     // máscara; lo demás (pegar sólo en la máscara, soltar lo pegado) es lo mismo que en la revisión.
     if (process.env.BATERIA_IA === "simulada" && medido.fijos.length) {
-      const mascara = mascaraPegados(medido, W, H), falso = new Uint8ClampedArray(medido.fondo);
+      // El recorte exacto de cada objeto pegado, con el MISMO modelo que la revisión (recortes.ts).
+      const { recortarObjetos } = await import("../src/components/prisma/formatos/recortes.ts");
+      const recortes = await recortarObjetos({ w: W, h: H, rgba: new Uint8ClampedArray(data) }, medido.todos.filter((e) => medido.fijos.includes(e.id)).map((e) => ({ id: e.id, caja: e.leida ?? e.solido })));
+      fila.recortados = recortes.size;
+      const mascara = mascaraPegados(medido, W, H, undefined, recortes), falso = new Uint8ClampedArray(medido.fondo);
       rellenarConMuestras(falso, W, H, mascara);
       const ia = new Uint8ClampedArray(W * H * 4);
       for (let k = 0; k < W * H; k++) { ia[k * 4] = falso[k * 3]; ia[k * 4 + 1] = falso[k * 3 + 1]; ia[k * 4 + 2] = falso[k * 3 + 2]; ia[k * 4 + 3] = 255; }
       const pegado = pegarFondoIA(medido.fondo, W, H, mascara, { x: 0, y: 0, w: W, h: H }, ia);
       fila.fijosAntesDeIA = medido.fijos.length;
-      medido = soltarConFondoIA({ w: W, h: H, rgba: new Uint8ClampedArray(data) }, medido, pegado.fondo);
+      medido = soltarConFondoIA({ w: W, h: H, rgba: new Uint8ClampedArray(data) }, medido, pegado.fondo, recortes);
     }
     fila.fijos = medido.fijos.length;
     fila.idsFijos = medido.fijos;

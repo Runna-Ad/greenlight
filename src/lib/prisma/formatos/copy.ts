@@ -804,7 +804,7 @@ export const FPL = {
     "La IA borra del fondo lo que se quedó pegado y lo rellena; así eso también se puede mover. Sólo se cambia lo de esas zonas: lo demás del fondo queda igual. Una llamada por anuncio.",
     "The AI erases what stayed stuck from the background and fills it in, so those pieces can move too. Only those areas change: the rest of the background stays the same. One call per ad.",
   ),
-  iaFondoTrabajando: t("La IA está rehaciendo el fondo (hasta 2 minutos)…", "The AI is rebuilding the background (up to 2 minutes)…"),
+  iaFondoTrabajando: t("Recortando los objetos y rehaciendo el fondo con IA (hasta 3 minutos)…", "Cutting out the objects and rebuilding the background with AI (up to 3 minutes)…"),
   iaFondoListo: t("Fondo rehecho con IA ({c}): lo que estaba pegado ya es una pieza que se mueve. Revisa las zonas rellenadas en las medidas.", "Background rebuilt with AI ({c}): what was stuck is now a piece that moves. Check the filled areas in the sizes."),
   iaFondoDeriva: t("La IA cambió un poco el fondo cerca de esas zonas: revisa que la unión no se note.", "The AI changed the background a little near those areas: check that the seam doesn't show."),
   iaFondoDeshacer: t("Deshacer el fondo con IA", "Undo the AI background"),

@@ -60,7 +60,7 @@ export function RevisionPlano({ plano, planaActiva, iaFondo, tipos, cliente, sel
   const [quiereSeguir, setQuiereSeguir] = useState(false);
   const [falla, setFalla] = useState<string | null>(null);
   /** El fondo rehecho con IA y para qué medida (al quitar o devolver un elemento la medida cambia y ya no sirve). */
-  const [conIA, setConIA] = useState<{ para: object; fondo: Uint8ClampedArray; costoUsd: number | null; deriva: number | null } | null>(null);
+  const [conIA, setConIA] = useState<{ para: object; fondo: Uint8ClampedArray; recortes: ReadonlyMap<string, Uint8Array>; costoUsd: number | null; deriva: number | null } | null>(null);
   const [rehaciendo, setRehaciendo] = useState(false);
   const pedidoIA = useRef<AbortController | null>(null);
   useEffect(() => () => pedidoIA.current?.abort(), []);
@@ -95,7 +95,7 @@ export function RevisionPlano({ plano, planaActiva, iaFondo, tipos, cliente, sel
   const medido = useMemo(() => {
     if (!iaVigente) return base;
     try {
-      return soltarConFondoIA(plano.img, base, iaVigente.fondo);
+      return soltarConFondoIA(plano.img, base, iaVigente.fondo, iaVigente.recortes);
     } catch (err) {
       console.error("[formatos-psd] soltar lo pegado con el fondo de la IA", err);
       return base;
@@ -167,7 +167,18 @@ export function RevisionPlano({ plano, planaActiva, iaFondo, tipos, cliente, sel
     setFalla(null);
     setAnuncio(tx(FPL.iaFondoTrabajando, lang));
     try {
-      const c = recorte.caja, mascara = mascaraPegados(para, W, H);
+      // Primero, el recorte exacto de cada objeto pegado (recortes.ts, aquí en el navegador): con él la IA repinta sólo
+      // detrás del objeto y la pieza sale con su forma, sin huecos ni pedazos del vecino. Si el modelo no carga, sigue
+      // sin recortes (la pieza sale por diferencia y la revisión avisa si queda con huecos).
+      let recortes: ReadonlyMap<string, Uint8Array> = new Map();
+      try {
+        const { recortarObjetos } = await import("./recortes");
+        recortes = await recortarObjetos(plano.img, para.todos.filter((e) => para.fijos.includes(e.id)).map((e) => ({ id: e.id, caja: e.leida ?? e.solido })));
+      } catch (err) {
+        console.error("[formatos-psd] recortar objetos pegados", err);
+      }
+      if (ctrl.signal.aborted) return;
+      const c = recorte.caja, mascara = mascaraPegados(para, W, H, undefined, recortes);
       const rgba = new Uint8ClampedArray(W * H * 4), mk = new Uint8ClampedArray(W * H * 4);
       for (let k = 0; k < W * H; k++) {
         rgba[k * 4] = para.fondo[k * 3]; rgba[k * 4 + 1] = para.fondo[k * 3 + 1]; rgba[k * 4 + 2] = para.fondo[k * 3 + 2]; rgba[k * 4 + 3] = 255;
@@ -192,7 +203,7 @@ export function RevisionPlano({ plano, planaActiva, iaFondo, tipos, cliente, sel
       if (ctrl.signal.aborted) return;
       const pegado = pegarFondoIA(para.fondo, W, H, mascara, c, ia);
       if (!pegado) throw new Error("pegado");
-      setConIA({ para, fondo: pegado.fondo, costoUsd, deriva: pegado.deriva });
+      setConIA({ para, fondo: pegado.fondo, recortes, costoUsd, deriva: pegado.deriva });
       setAnuncio(rellenar(tx(FPL.iaFondoListo, lang), { c: costoUsd === null ? "?" : `US$${costoUsd.toFixed(3)}` }));
     } catch (err) {
       if (ctrl.signal.aborted) return;

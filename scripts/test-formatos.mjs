@@ -35,7 +35,7 @@ import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
 import { specVacio } from "../src/lib/prisma/spec.ts";
 import { unzipSync } from "fflate";
 import { zipPorPartes, zipsEnPartes, rutaLibre, CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES } from "../src/lib/prisma/formatos/zip.ts";
-import { limpiarLectura, medirPlano, medirPlanoFijo, maestroDePlano, rellenarConMuestras, conRenglonesDeLaImagen, mascaraPegados, pegarFondoIA, soltarConFondoIA, capaDeTexto, alineacionDe, ELEMENTOS_MAX, TEXTO_LEIDO_MAX } from "../src/lib/prisma/formatos/plano.ts";
+import { limpiarLectura, medirPlano, medirPlanoFijo, maestroDePlano, rellenarConMuestras, conRenglonesDeLaImagen, mascaraPegados, pegarFondoIA, soltarConFondoIA, huecosDe, capaDeTexto, alineacionDe, ELEMENTOS_MAX, TEXTO_LEIDO_MAX } from "../src/lib/prisma/formatos/plano.ts";
 
 let pass = 0,
   fail = 0;
@@ -3349,6 +3349,27 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
     !!b && Math.abs(b.solido.x - 40) <= 2 && Math.abs(b.solido.w - 80) <= 4 && Math.abs(b.solido.h - 40) <= 4 && libre.fijos.length === 0 && libre.pegados.length === 0 && libre.anclados.length === 0 && libre.elementos.find((e) => e.id === "pide")?.sobre === "boton",
     JSON.stringify({ s: b?.solido, f: libre.fijos }));
   const ma = maestroDePlano("ia", img, libre.elementos, libre.fondo, new Map(), [], libre.pegados, new Set(), new Set(libre.anclados));
+  {
+    // Preview 2026-10-29 (Pedro): el tablero LED salió con la pantalla transparente. Una pantalla OSCURA con marco
+    // claro sobre una textura oscura: la «IA» pone textura oscura detrás y la diferencia no ve la pantalla.
+    const px = new Uint8ClampedArray(rgba);
+    for (let k = 0; k < W * H; k++) { px[k * 4] = 40 + ruido[k * 3] - 120; px[k * 4 + 1] = 38 + ruido[k * 3] - 120; px[k * 4 + 2] = 36 + ruido[k * 3] - 120; }
+    const caja = (x0, y0, x1, y1, c) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) px.set(c, (y * W + x) * 4); };
+    caja(30, 30, 130, 95, [190, 190, 195]);
+    caja(36, 36, 124, 89, [32, 30, 28]);
+    const tablero = { w: W, h: H, rgba: px };
+    const mt = medirPlanoFijo(tablero, [{ id: "tablero", rol: "HERO", tipo: "imagen", caja: { x0: 29, y0: 29, x1: 131, y1: 96 }, texto: "", sobre: null }]);
+    const iaT = new Uint8ClampedArray(W * H * 4);
+    for (let k = 0; k < W * H; k++) { const v = 40 + ruido[k * 3] - 120; iaT[k * 4] = v + 1; iaT[k * 4 + 1] = v - 1; iaT[k * 4 + 2] = v - 3; iaT[k * 4 + 3] = 255; }
+    const mkT = mascaraPegados(mt, W, H), pT = pegarFondoIA(mt.fondo, W, H, mkT, { x: 0, y: 0, w: W, h: H }, iaT);
+    const t = soltarConFondoIA(tablero, mt, pT.fondo).elementos.find((e) => e.id === "tablero");
+    const centro = t && t.alfa[(60 - t.pinta.y) * t.pinta.w + (80 - t.pinta.x)];
+    ok(`fondo IA: un tablero de pantalla oscura sobre fondo oscuro sale ENTERO, sin hueco en la pantalla (centro ${centro}, huecos ${t ? (huecosDe(t.alfa, t.pinta.w, t.pinta.h) * 100).toFixed(1) : "-"} %)`, mt.fijos.join() === "tablero" && centro === 255 && huecosDe(t.alfa, t.pinta.w, t.pinta.h) < 0.02, JSON.stringify({ f: mt.fijos, p: t?.pinta }));
+    // Y la medida del hueco: una ventana transparente adentro de una forma cuenta; una forma llena, no.
+    const ventana = new Uint8ClampedArray(20 * 20).fill(255);
+    for (let y = 6; y < 14; y++) for (let x = 6; x < 14; x++) ventana[y * 20 + x] = 0;
+    eq("fondo IA: huecosDe ve una ventana de 8×8 en 20×20 (16 %) y nada en una forma llena", [Math.round(huecosDe(ventana, 20, 20) * 100), huecosDe(new Uint8ClampedArray(400).fill(255), 20, 20)], [16, 0]);
+  }
   ok("fondo IA: en el maestro el botón y su texto van en UNA pieza (CTA) y no hay nada anclado", ma.piezas.length === 1 && ma.piezas[0].rol === "CTA" && !ma.piezas.some((p) => p.anclada) && !ma.pegados);
 }
 

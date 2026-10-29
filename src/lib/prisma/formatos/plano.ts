@@ -151,7 +151,7 @@ export type ElementoMedido = Omit<ElementoLeido, "caja"> & {
   color: RGB | null;
   /** Texto: la caja de cada renglón con la orilla al 50 % (como mide la página). */
   renglones: Caja[];
-  /** Texto: la caja que leyó la IA (px de la imagen). */
+  /** La caja que leyó la IA (px de la imagen). */
   leida?: Caja;
   /** Texto: letras de OTRO color dentro de su caja («Te da» oscuro junto a «hasta» naranja): no son su tinta, pero se
    *  borran con ella del fondo (si no, se quedaban pintadas junto al texto reescrito). Máscara de `caja`. */
@@ -437,7 +437,7 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
     }
     const { caja: _c, ...resto } = e;
     void _c;
-    return { ...resto, tipo: e.tipo === "texto" ? "imagen" : e.tipo, texto: e.tipo === "texto" ? "" : e.texto, pinta, solido, alfa, oscurece, debajo: B, color: null, renglones: [] };
+    return { ...resto, tipo: e.tipo === "texto" ? "imagen" : e.tipo, texto: e.tipo === "texto" ? "" : e.texto, pinta, solido, alfa, oscurece, debajo: B, color: null, renglones: [], leida: { x: e.caja.x0, y: e.caja.y0, w: e.caja.x1 - e.caja.x0, h: e.caja.y1 - e.caja.y0 } };
   }
 
   // ── El fondo limpio: lo que pinta cada elemento (un texto, con su halo) se rellena con un plano inclinado ajustado
@@ -757,10 +757,13 @@ export const IA_MARGEN_PX = 10;
 const IA_ANILLO_PX = 6;
 
 /** Lo pegado de una medida (y los textos anclados sobre ello) como máscara W × H: 1 = lo que la IA tiene que borrar. */
-export function mascaraPegados(medido: { todos: ElementoMedido[]; fijos: readonly string[]; anclados?: readonly string[] }, W: number, H: number, r = IA_MARGEN_PX): Uint8Array {
+export function mascaraPegados(medido: { todos: ElementoMedido[]; fijos: readonly string[]; anclados?: readonly string[] }, W: number, H: number, r = IA_MARGEN_PX, recortes?: ReadonlyMap<string, Uint8Array>): Uint8Array {
   const ids = new Set([...medido.fijos, ...(medido.anclados ?? [])]), mk = new Uint8Array(W * H);
   for (const e of medido.todos) {
     if (!ids.has(e.id)) continue;
+    // Con su recorte exacto, eso más r (la IA no repinta el fondo que la silueta medida, un rectángulo, se llevaba).
+    const rc = recortes?.get(e.id);
+    if (rc) { const g = dilatar(rc, W, H, r); for (let k = 0; k < W * H; k++) if (g[k]) mk[k] = 1; continue; }
     for (let y = 0; y < e.pinta.h; y++) for (let x = 0; x < e.pinta.w; x++) {
       const j = y * e.pinta.w + x;
       if (!e.alfa[j] && !(e.oscurece && e.oscurece[j * 3] < 255)) continue;
@@ -810,12 +813,15 @@ const SOLTAR_LLENO = 30, SOLTAR_ORILLA = 15;
  * imagen tiene de distinto de ese fondo, dentro de su silueta medida + SOLTAR_FUERA_PX (lo de otro elemento pegado al
  * lado, o la textura que la IA rehízo distinto, no entra). Los textos vuelven a ir sobre lo suyo (`sobre`) y nada queda anclado ni pegado.
  */
-export function soltarConFondoIA<M extends { elementos: ElementoMedido[]; todos: ElementoMedido[]; fijos: string[]; pegados: PegadoAlFondo[]; anclados: string[]; fondo: Uint8ClampedArray }>(img: Imagen, medido: M, fondoIA: Uint8ClampedArray): M {
+export function soltarConFondoIA<M extends { elementos: ElementoMedido[]; todos: ElementoMedido[]; fijos: string[]; pegados: PegadoAlFondo[]; anclados: string[]; fondo: Uint8ClampedArray }>(img: Imagen, medido: M, fondoIA: Uint8ClampedArray, recortes?: ReadonlyMap<string, Uint8Array>): M {
   const { w: W, h: H, rgba: d } = img, fijos = new Set(medido.fijos);
-  const libres: ElementoMedido[] = [];
+  const libres: ElementoMedido[] = [], avisos: string[] = [];
   for (const e of medido.todos) {
     if (!fijos.has(e.id)) continue;
-    const solo = mascaraPegados({ todos: [e], fijos: [e.id] }, W, H, SOLTAR_FUERA_PX);
+    // Con su recorte exacto (recortes.ts: el modelo de segmentación), la pieza ES el recorte; sin él, la diferencia con
+    // el fondo de la IA dentro de su silueta medida.
+    const rc = recortes?.get(e.id);
+    const solo = rc ?? mascaraPegados({ todos: [e], fijos: [e.id] }, W, H, SOLTAR_FUERA_PX);
     let x0 = W, y0 = H, x1 = -1, y1 = -1;
     for (let k = 0; k < W * H; k++) if (solo[k]) { const x = k % W, y = (k / W) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
     if (x1 < 0) continue;
@@ -823,20 +829,104 @@ export function soltarConFondoIA<M extends { elementos: ElementoMedido[]; todos:
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const k = (y0 + y) * W + x0 + x;
       if (!solo[k]) continue;
+      if (rc) { a[y * w + x] = 1; continue; }
       const i = k * 4, dist = Math.max(Math.abs(d[i] - fondoIA[k * 3]), Math.abs(d[i + 1] - fondoIA[k * 3 + 1]), Math.abs(d[i + 2] - fondoIA[k * 3 + 2]));
       a[y * w + x] = dist >= SOLTAR_LLENO ? 1 : dist >= SOLTAR_ORILLA ? (dist - SOLTAR_ORILLA) / (SOLTAR_LLENO - SOLTAR_ORILLA) : 0;
+    }
+    // Lo encerrado por la pieza también es pieza: donde el objeto se parece al fondo que puso la IA (la pantalla oscura
+    // del tablero LED sobre un estadio oscuro), la diferencia no lo ve y quedaba un hueco por donde se veía el estadio
+    // (Pedro, preview 2026-10-29). Se cierran las rendijas de su contorno y se rellena todo lo que no llega desde afuera.
+    const b = new Uint8Array(w * h);
+    for (let k = 0; k < w * h; k++) b[k] = a[k] >= 0.5 ? 1 : 0;
+    const cerrado = dilatar(b, w, h, SOLTAR_CIERRE_PX), fuera = new Uint8Array(w * h), cola: number[] = [];
+    const entra = (k: number) => { if (!cerrado[k] && !fuera[k]) { fuera[k] = 1; cola.push(k); } };
+    for (let x = 0; x < w; x++) { entra(x); entra((h - 1) * w + x); }
+    for (let y = 0; y < h; y++) { entra(y * w); entra(y * w + w - 1); }
+    while (cola.length) { const k = cola.pop()!, x = k % w; if (x > 0) entra(k - 1); if (x < w - 1) entra(k + 1); if (k >= w) entra(k - w); if (k < w * (h - 1)) entra(k + w); }
+    const lejos = dilatar(fuera, w, h, SOLTAR_CIERRE_PX);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const k = y * w + x; if (!lejos[k] && (rc || solo[(y0 + y) * W + x0 + x])) a[k] = 1; }
+    // Ya llena, se le quitan las motas de la orilla: lo que no aguanta encogerse SOLTAR_MOTA_PX y volver a crecer
+    // (salpicado de gente o pasto que la IA rehízo distinto) no es pieza; lo sólido, sí. (Con recorte no hace falta, y
+    // le quitaría lo delgado de verdad: un poste, un borde.)
+    if (!rc) {
+      const lleno = new Uint8Array(w * h);
+      for (let k = 0; k < w * h; k++) lleno[k] = a[k] >= 0.5 ? 0 : 1;
+      const encogido = dilatar(lleno, w, h, SOLTAR_MOTA_PX);
+      for (let k = 0; k < w * h; k++) encogido[k] = encogido[k] ? 0 : 1;
+      const abierto = dilatar(encogido, w, h, SOLTAR_MOTA_PX);
+      for (let k = 0; k < w * h; k++) if (!abierto[k] && !dilatar1(abierto, w, h, k)) a[k] = 0;
+    }
+    // Y sólo lo que está pegado a la parte más grande (lo suelto en la orilla es fondo).
+    if (!rc) {
+      const comp = new Int32Array(w * h).fill(-1), tam: number[] = [];
+      for (let s = 0; s < w * h; s++) {
+        if (a[s] < 0.5 || comp[s] >= 0) continue;
+        const id = tam.length, pila = [s];
+        comp[s] = id;
+        let n = 0;
+        while (pila.length) { const k = pila.pop()!, x = k % w; n++; for (const v of [x > 0 ? k - 1 : -1, x < w - 1 ? k + 1 : -1, k >= w ? k - w : -1, k < w * (h - 1) ? k + w : -1]) if (v >= 0 && a[v] >= 0.5 && comp[v] < 0) { comp[v] = id; pila.push(v); } }
+        tam.push(n);
+      }
+      const mayor = tam.reduce((m, t, i) => (t > tam[m] ? i : m), 0);
+      if (tam.length) for (let k = 0; k < w * h; k++) if (a[k] >= 0.5 && comp[k] !== mayor && tam[comp[k]] < tam[mayor] * 0.1) a[k] = 0;
     }
     const pinta = cajaDe(a, w, h, 0, x0, y0), solido = cajaDe(a, w, h, 0.5, x0, y0);
     if (!pinta || !solido) continue;
     const alfa = new Uint8ClampedArray(pinta.w * pinta.h);
     for (let y = 0; y < pinta.h; y++) for (let x = 0; x < pinta.w; x++) alfa[y * pinta.w + x] = Math.round(a[(pinta.y - y0 + y) * w + (pinta.x - x0 + x)] * 255);
+    // Y si aun así le queda un hueco (abierto hacia una orilla), se dice: es una falla, no algo que se vea bien.
+    const hueco = huecosDe(alfa, pinta.w, pinta.h);
+    if (hueco > SOLTAR_HUECOS_MAX) avisos.push(`${e.id}: con el fondo de la IA quedó con huecos (el ${Math.round(hueco * 100)} % de su forma deja ver el fondo). Revisa esa pieza; si se ve mal, «Deshacer el fondo con IA».`);
     libres.push({ ...e, pinta, solido, alfa, oscurece: null });
   }
   // `sobre` como lo leyó la IA: un texto que iba suelto porque su botón estaba pegado vuelve a su botón.
   const sobreDe = new Map(medido.todos.map((e) => [e.id, e.sobre]));
   const vivos = new Set([...medido.elementos.map((e) => e.id), ...libres.map((e) => e.id)]);
   const elementos = [...medido.elementos, ...libres].map((e) => { const s = sobreDe.get(e.id) ?? null; return { ...e, sobre: s && vivos.has(s) ? s : null }; });
-  return { ...medido, fondo: fondoIA, elementos, fijos: [], pegados: [], anclados: [] };
+  return { ...medido, fondo: fondoIA, elementos, fijos: [], pegados: [], anclados: [], avisos: [...((medido as { avisos?: string[] }).avisos ?? []), ...avisos] };
+}
+
+/** Lo que tiene que aguantar encogerse una parte de la orilla de una pieza soltada para seguir siendo pieza (px). */
+const SOLTAR_MOTA_PX = 4;
+/** ¿Algún vecino (8) de k en `m` (w × h) está prendido? (la orilla suave de lo abierto se queda). */
+function dilatar1(m: Uint8Array, w: number, h: number, k: number): boolean {
+  const x = k % w, y = (k / w) | 0;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < w && Y < h && m[Y * w + X]) return true; }
+  return false;
+}
+/** Las rendijas del contorno de una pieza soltada que se cierran para rellenar lo de adentro (px). */
+const SOLTAR_CIERRE_PX = 4;
+/** La parte de la forma de una pieza soltada que puede dejar ver el fondo antes de avisar. */
+export const SOLTAR_HUECOS_MAX = 0.02;
+
+/** `b` (0/1, w × h) agrandado r px por lado (un cuadrado): primero por filas y luego por columnas. */
+function dilatar(b: Uint8Array, w: number, h: number, r: number): Uint8Array {
+  const filas = new Uint8Array(w * h), out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    let ultimo = -Infinity;
+    for (let x = 0; x < w + r; x++) { if (x < w && b[y * w + x]) ultimo = x; const c = x - r; if (c >= 0 && c < w && x - ultimo <= 2 * r) filas[y * w + c] = 1; }
+    ultimo = Infinity;
+    for (let x = w - 1; x >= -r; x--) { if (x >= 0 && b[y * w + x]) ultimo = x; const c = x + r; if (c >= 0 && c < w && ultimo - x <= 2 * r) filas[y * w + c] = 1; }
+  }
+  for (let x = 0; x < w; x++) {
+    let ultimo = -Infinity;
+    for (let y = 0; y < h + r; y++) { if (y < h && filas[y * w + x]) ultimo = y; const c = y - r; if (c >= 0 && c < h && y - ultimo <= 2 * r) out[c * w + x] = 1; }
+    ultimo = Infinity;
+    for (let y = h - 1; y >= -r; y--) { if (y >= 0 && filas[y * w + x]) ultimo = y; const c = y + r; if (c >= 0 && c < h && ultimo - y <= 2 * r) out[c * w + x] = 1; }
+  }
+  return out;
+}
+
+/** Qué parte de una forma (alfa ≥ 50 %) tiene huecos: píxeles transparentes que quedan entre píxeles de la forma a lo
+ *  ancho Y a lo alto (una ventana, una muesca), sobre el área de la forma más sus huecos. */
+export function huecosDe(alfa: Uint8ClampedArray, w: number, h: number): number {
+  const lleno = (x: number, y: number) => alfa[y * w + x] >= 128;
+  const fx0 = new Int32Array(h).fill(w), fx1 = new Int32Array(h).fill(-1), cy0 = new Int32Array(w).fill(h), cy1 = new Int32Array(w).fill(-1);
+  let n = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (lleno(x, y)) { n++; if (x < fx0[y]) fx0[y] = x; fx1[y] = x; if (y < cy0[x]) cy0[x] = y; cy1[x] = y; }
+  let huecos = 0;
+  for (let y = 0; y < h; y++) for (let x = fx0[y] + 1; x < fx1[y]; x++) if (!lleno(x, y) && y > cy0[x] && y < cy1[x]) huecos++;
+  return n + huecos ? huecos / (n + huecos) : 0;
 }
 
 // ── (3) El maestro: lo mismo que da un PSD ───────────────────────────────────────────────────────────────────────
