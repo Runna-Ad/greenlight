@@ -227,12 +227,10 @@ export const TEXTO_CAMBIADO_MAX = TEXTO_MAX;
 /** Lo que baja la letra bajo su base (la cola de la g o la p), como parte de su tamaño. */
 const BAJA_LETRA = 0.3;
 
-/** Por qué las letras de una capa no se pueden cambiar en el editor (null = sí se puede). Con varios estilos no se
- *  sabe cuál le toca a una letra nueva: eso se cambia en Photoshop. */
+/** Por qué las letras de una capa no se pueden cambiar en el editor (null = sí se puede). Con varios estilos también se
+ *  puede (B30, el precio «$28,499 m.n.» con «m.n.» más chico): cada letra nueva toma el estilo de la de antes. */
 export function porQueNoSeCambia(t: TextoCapa): string | null {
-  if (t.motivo) return t.motivo;
-  if (t.tramos.length !== 1) return "tiene varios estilos";
-  return null;
+  return t.motivo ?? null;
 }
 
 /** Las letras que se pueden escribir en una capa: saltos de cualquier sistema a "\n"; fuera los caracteres de control y
@@ -251,7 +249,36 @@ export function textoCambiado(t: TextoCapa, nuevo: string): TextoCapa | null {
     if (texto.length + c.length > TEXTO_CAMBIADO_MAX) break;
     texto += c;
   }
-  return { ...t, texto, tramos: [{ ...t.tramos[0], n: texto.length }] };
+  if (t.tramos.length <= 1) return { ...t, texto, tramos: [{ ...t.tramos[0], n: texto.length }] };
+  return { ...t, texto, tramos: tramosCambiados(t, texto) };
+}
+
+/**
+ * Los estilos de un texto de varios estilos con otras letras, como en cualquier editor: lo que no cambió al principio y
+ * al final conserva su estilo, y lo nuevo de en medio toma el de lo que reemplazó (o, si sólo se agregó, el de la letra
+ * de antes). «$28,499 m.n.» → «$30,000 m.n.»: el número sigue grande y «m.n.» sigue chico.
+ */
+function tramosCambiados(t: TextoCapa, nuevo: string): TramoTexto[] {
+  const viejo = t.texto, de: number[] = [];
+  t.tramos.forEach((r, i) => { for (let k = 0; k < r.n; k++) de.push(i); });
+  while (de.length < viejo.length) de.push(t.tramos.length - 1);
+  let p = 0;
+  while (p < viejo.length && p < nuevo.length && viejo[p] === nuevo[p]) p++;
+  let s = 0;
+  while (s < viejo.length - p && s < nuevo.length - p && viejo[viejo.length - 1 - s] === nuevo[nuevo.length - 1 - s]) s++;
+  // Lo que reemplaza letras toma el estilo de las que reemplaza («m.n.» → «MXN» sigue chico); lo que sólo se agrega,
+  // el de la letra de antes (o el de la de después, al principio).
+  const medio = nuevo.length - p - s, reemplaza = viejo.length - p - s > 0;
+  const suyo = reemplaza ? de[p] : p > 0 ? de[p - 1] : (de[p] ?? 0);
+  const nuevos = [...de.slice(0, p), ...Array<number>(medio).fill(suyo), ...de.slice(viejo.length - s)];
+  // Cuántas letras de cada estilo, en orden (los seguidos del mismo estilo, juntos).
+  const out: { i: number; n: number }[] = [];
+  for (const i of nuevos) {
+    const u = out.at(-1);
+    if (u && u.i === i) u.n++;
+    else out.push({ i, n: 1 });
+  }
+  return out.length ? out.map(({ i, n }) => ({ ...t.tramos[i], n })) : [{ ...t.tramos[0], n: 0 }];
 }
 
 /** Texto de párrafo: la caja con lugar para todas sus líneas (Pedro, 2026-10-20: "Let the box grow down"); crece

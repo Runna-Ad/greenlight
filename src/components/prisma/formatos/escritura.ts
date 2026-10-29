@@ -16,7 +16,7 @@ import { legalDelPsd } from "@/lib/prisma/formatos/legal";
 import { conRenglones, legalParaRenglones, type LegalRenglones, type SinRenglones } from "@/lib/prisma/formatos/renglones";
 import type { Renglonero } from "@/lib/prisma/formatos/revisar";
 import { TEXTO_ANCHO_TOL, TEXTO_CORRER_MAX, TEXTO_DIF_MAX, TEXTO_DIF_MAX_PLANO, compararAlfa, fuentesDe, maquetar, type LineaTexto, type Medidor, type TextoCapa, type TramoTexto } from "@/lib/prisma/formatos/textos";
-import { alineacionDe, capaDeTexto, type ElementoMedido, type MedirTinta } from "@/lib/prisma/formatos/plano";
+import { alineacionDe, capaDeLegal, capaDeTexto, type ElementoMedido, type MedirTinta } from "@/lib/prisma/formatos/plano";
 
 /** Una tipografía cargada: con qué familia se pide en el canvas y, si es variable, su peso (eje wght). */
 type Cargada = { familia: string; peso: number | null };
@@ -247,12 +247,15 @@ const pasa = (c: ReturnType<typeof compararAlfa>, difMax = TEXTO_DIF_MAX) =>
 
 function probar(x: CanvasRenderingContext2D, lienzo: HTMLCanvasElement, tp: TextoPieza, t: Tipografias, medir: Medidor): Listo | string {
   const { lineas, c } = compararCon(x, lienzo, tp, t, medir);
+  if (tp.sinPrueba) return { tp, lineas, dx: 0, dy: 0 };
   if (!pasa(c, tp.difMax)) return `no coincide con ${tp.difMax === undefined ? "Photoshop" : "la imagen"} (${Math.round(c.dif * 100)} % distinto)`;
   return { tp, lineas, dx: c.dx, dy: c.dy };
 }
 
 // ── Imagen plana (B28): qué tipografía del cliente es la de cada texto ────
 
+/** Estilos que no se le ponen al legal de una imagen plana. */
+const LEGAL_NO = /italic|oblique|thin|hairline|extralight|ultralight/i;
 /** Tipografías que se prueban por texto, a lo más (cada una escribe el texto y lo compara). */
 const FUENTES_PLANO_MAX = 80;
 /** Las que mejor empataron se vuelven a probar corridas a cuartos de píxel (24 pruebas más cada una). */
@@ -260,7 +263,7 @@ const FUENTES_AFINAR = 3;
 const CORRER_FINO = [-0.5, -0.25, 0, 0.25, 0.5];
 /** Lo que se sabe de cada texto de una imagen plana: con qué tipografía empata mejor (`ok` = pasa la prueba) y cuánto
  *  difiere de su tinta; `fuente` null = no había tipografías del cliente con qué probar. */
-export type NotaTextoPlano = { id: string; fuente: string | null; dif: number | null; ok: boolean };
+export type NotaTextoPlano = { id: string; fuente: string | null; dif: number | null; ok: boolean; legal?: boolean };
 
 /**
  * Para cada texto de una imagen plana, la tipografía cargada que mejor empata con su tinta y su `TextoCapa`
@@ -285,10 +288,33 @@ export function ajustarTextosPlano(medidos: readonly ElementoMedido[], W: number
   const medir = medidorDe(t);
   const lienzo = document.createElement("canvas");
   const x = lienzo.getContext("2d", { willReadFrequently: true });
+  // El legal (B30): el texto del FOOTER con más letras. Va siempre reescrito, en una caja que se vuelve a partir
+  // (`capaDeLegal`), con la tipografía que más se le parece aunque no empate letra por letra.
+  const legalId = medidos.filter((m) => m.tipo === "texto" && m.rol === "FOOTER").sort((a, b) => b.texto.length - a.texto.length)[0]?.id ?? null;
   try {
     for (const m of medidos) {
       if (m.tipo !== "texto") continue;
       const al = alineacionDe(m, W, medidos);
+      if (m.id === legalId) {
+        let mejor: { capa: TextoCapa; fuente: string; dif: number } | null = null;
+        if (x)
+          try {
+            // Ni cursivas ni las muy delgadas: en una letra chica y gris «empatan» por lo pálidas, pero el legal tiene
+            // que leerse (la imagen del iPhone de DiDi elegía DiDiSans-Pro-Thin, 2026-10-28).
+            for (const fuente of fuentes.filter((f) => !LEGAL_NO.test(f))) {
+              const capa = capaDeLegal(m, fuente, al, medirTinta);
+              if (!capa) continue;
+              const { c } = compararCon(x, lienzo, { capa: m.id, texto: capa, opacidad: 1, caja: m.pinta, alfa: m.alfa, motivo: null, ruta: [] }, t, medir);
+              if (!mejor || c.dif < mejor.dif) mejor = { capa, fuente, dif: c.dif };
+            }
+          } catch (err) {
+            console.error("[formatos-psd] probar el legal de imagen plana", err);
+            mejor = null;
+          }
+        if (mejor) capas.set(m.id, mejor.capa);
+        notas.push({ id: m.id, fuente: mejor?.fuente ?? null, dif: mejor?.dif ?? null, ok: !!mejor, legal: true });
+        continue;
+      }
       type Prueba = { capa: TextoCapa; fuente: string; dif: number; ok: boolean };
       const probarCapa = (ctx: CanvasRenderingContext2D, capa: TextoCapa, fuente: string): Prueba => {
         const { c } = compararCon(ctx, lienzo, { capa: m.id, texto: capa, opacidad: 1, caja: m.pinta, alfa: m.alfa, motivo: null, ruta: [] }, t, medir);

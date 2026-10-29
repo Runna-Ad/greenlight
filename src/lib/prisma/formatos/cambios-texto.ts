@@ -38,7 +38,7 @@ const MARGEN_MESA = 0.25;
 export const NO_SE_ESCRIBIO = {
   tipografia: "falta su tipografía o no pasó la prueba contra Photoshop",
   largo: "es demasiado largo para su pieza",
-  estilos: "tiene varios estilos",
+  estilos: "su texto no se puede cambiar",
   pintar: "no se pudo pintar",
 } as const;
 

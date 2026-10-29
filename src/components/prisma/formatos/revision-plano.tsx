@@ -273,6 +273,7 @@ export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorClie
               const texto = !esTexto ? null
                 : imagen ? tx(FPL.textoImagen, lang)
                 : !vigente || !nt || nt.fuente === null ? tx(FPL.textoSinFuentes, lang)
+                : nt.legal ? rellenar(tx(FPL.textoLegal, lang), { f: nt.fuente })
                 : nt.ok ? rellenar(tx(FPL.textoOk, lang), { f: nt.fuente, d: Math.round((nt.dif ?? 0) * 100) })
                 : rellenar(tx(FPL.textoNo, lang), { f: nt.fuente, d: Math.round((nt.dif ?? 0) * 100) });
               return (

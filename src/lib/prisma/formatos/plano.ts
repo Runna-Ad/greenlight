@@ -156,6 +156,8 @@ export type ElementoMedido = Omit<ElementoLeido, "caja"> & {
 const FONDO_TOL = 10;
 /** Lo que se busca alrededor de una imagen o forma: su sombra suave (la IA la deja fuera de la caja). */
 const SOMBRA_PX = 60;
+/** Lo más que una imagen o forma crece fuera de la caja de la IA (su orilla suave, lo que la caja cortó). */
+const FIGURA_FUERA_PX = 8;
 /** El borde de fondo real alrededor de un hueco con que se empareja su relleno (px). */
 const ORILLA_PX = 3;
 /** Lo que se toma por sombra de una figura: más oscuro que el fondo esperado en ese punto por debajo de esta razón. */
@@ -339,7 +341,10 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
       for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
         if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
         const n = ny * w + nx;
-        if (!mio[n] && !fondo[n] && !ajeno[n] && (enCaja(nx, ny) || fuerte(nx, ny))) { mio[n] = 1; pila.push(n); }
+        // Fuera de su caja crece poco (FIGURA_FUERA_PX): una forma sobre otra (la banda naranja del precio sobre la
+        // pastilla blanca) veía el beige de afuera «claramente distinto» de su fondo blanco y se lo tragaba entero
+        // (un rectángulo claro que viajaba con la pieza, 2026-10-28).
+        if (!mio[n] && !fondo[n] && !ajeno[n] && (enCaja(nx, ny) || (fuerte(nx, ny) && dentro(e.caja, x0 + nx, y0 + ny, FIGURA_FUERA_PX)))) { mio[n] = 1; pila.push(n); }
       }
     }
     /** Distancia de un punto a una caja leída (0 adentro). */
@@ -626,7 +631,11 @@ export function maestroDePlano(nombre: string, img: Imagen, medidos: ElementoMed
     }
     return base;
   };
-  const tpDe = (m: ElementoMedido): TextoPieza => ({ capa: m.id, texto: textos.get(m.id)!, opacidad: 1, caja: m.pinta, alfa: m.alfa, motivo: null, ruta: [], difMax: TEXTO_DIF_MAX_PLANO });
+  // El legal (la única capa de imagen plana con caja de párrafo, `capaDeLegal`) va sin prueba: un tamaño, a propósito.
+  const tpDe = (m: ElementoMedido): TextoPieza => {
+    const texto = textos.get(m.id)!;
+    return { capa: m.id, texto, opacidad: 1, caja: m.pinta, alfa: m.alfa, motivo: null, ruta: [], difMax: TEXTO_DIF_MAX_PLANO, ...(texto.caja ? { sinPrueba: true } : {}) };
+  };
   const tamMin = (ts: TextoPieza[]) => (ts.length ? Math.min(...ts.map((t) => t.texto.tramos[0].tam)) : null);
 
   // Las partes: cada elemento que no va sobre otro, con todo lo que va sobre él (también una cadena: texto sobre
@@ -709,6 +718,140 @@ export function alineacionDe(m: ElementoMedido, W: number, otros: readonly Eleme
   return cerca.some((o) => Math.abs(centro(o.solido) - cx) <= Math.max(4, o.solido.w * 0.02)) ? "center" : "left";
 }
 
+/** La caja del legal, más ancha que su renglón más largo por esto: al escribirlo otra vez no parte un renglón de más. */
+const LEGAL_HOLGURA = 1.03;
+
+/**
+ * El legal de una imagen plana como lo trae un PSD (B30; Pedro, 2026-10-28: "it gets rewritten as we have the font and
+ * that way it can be further arranged to 1, 2 or 3 lines depending the size"): UN tamaño (aunque la imagen mezcle dos:
+ * el de la mayoría de sus letras), en una caja de párrafo con sus saltos suaves, así se vuelve a partir en otros
+ * renglones (`renglones.ts`) y crece sin pixelarse. Se escribe aunque no empate letra por letra con la imagen: el legal
+ * es obligatorio, y su texto lo pone la Biblioteca o la persona.
+ */
+export function capaDeLegal(m: ElementoMedido, fuente: string, alineacion: Alineacion, medir: MedirTinta): TextoCapa | null {
+  const lineas = m.texto.split("\n"), R = m.renglones;
+  if (!m.color || !lineas.length || R.length !== lineas.length) return null;
+  // El tamaño: el de la mayoría de sus letras (si se pudo medir por palabra); si no, el de su renglón más ancho.
+  const cs = tramosPorTamano(m, fuente, medir)?.flat().filter((c) => c.tam > 0);
+  let tam: number;
+  if (cs?.length) {
+    const orden = [...cs].sort((a, b) => a.tam - b.tam), total = cs.reduce((t, c) => t + c.texto.length, 0);
+    let acum = 0;
+    tam = orden.find((c) => (acum += c.texto.length) >= total / 2)!.tam;
+  } else {
+    const k = R.reduce((mx, c, i) => (c.w > R[mx].w ? i : mx), 0), ref = medir(lineas[k], fuente, 100, 0);
+    if (!(ref.sube + ref.baja > 0)) return null;
+    tam = (100 * R[k].h) / (ref.sube + ref.baja);
+  }
+  if (!(tam > 0)) return null;
+  // El track del renglón más ancho, sin pasar de lo razonable (aquí no se rechaza: el legal va siempre).
+  const k = R.reduce((mx, c, i) => (c.w > R[mx].w ? i : mx), 0), n = [...lineas[k]].length, sin = medir(lineas[k], fuente, tam, 0);
+  const track = Math.min(TRACK_MAX, Math.max(TRACK_MIN, n > 1 ? ((R[k].w - (sin.izq + sin.der)) * 1000) / ((n - 1) * tam) : 0));
+  const medidas = lineas.map((l) => medir(l, fuente, tam, track));
+  const bases = R.map((c, i) => c.y + medidas[i].sube);
+  const ancho = Math.max(...medidas.map((q) => q.avance)) * LEGAL_HOLGURA + 1;
+  // Dónde empieza cada renglón (la pluma, como en `capaDeTexto`: la tinta + lo que se sale a la izquierda) y acaba.
+  const izq = Math.min(...R.map((c, i) => c.x + medidas[i].izq)), der = Math.max(...R.map((c, i) => c.x + medidas[i].izq + medidas[i].avance));
+  const x0 = alineacion === "center" ? (izq + der) / 2 - ancho / 2 : alineacion === "right" ? der - ancho : izq;
+  const y0 = bases[0] - medir("d", fuente, tam, track).sube;
+  return {
+    texto: m.texto,
+    tramos: [{ n: m.texto.length, fuente, tam, color: m.color, track, interlineado: lineas.length > 1 ? (bases.at(-1)! - bases[0]) / (lineas.length - 1) : null, subir: 0, mayusculas: false }],
+    alineacion,
+    transform: [1, 0, 0, 1, 0, 0],
+    caja: [x0, y0, x0 + ancho, Math.ceil(bases.at(-1)! + tam * 0.3)],
+    motivo: null,
+    saltosSuaves: true,
+  };
+}
+
+/** Dos palabras seguidas son del mismo tamaño si su tamaño difiere menos que esto. */
+const MISMO_TAMANO = 0.15;
+/** Un pedazo de un renglón escrito a un solo tamaño: sus palabras y la caja de su tinta (px de la imagen). */
+type Corrida = { texto: string; tam: number; caja: Caja };
+
+/**
+ * Las palabras de cada renglón con su tamaño, juntadas en corridas del mismo tamaño. Las palabras se encuentran en la
+ * tinta por sus huecos (los más anchos del renglón, tantos como espacios tiene). null si el texto es de un solo tamaño
+ * o si no se puede saber (menos huecos que espacios): entonces va como siempre, un estilo.
+ */
+function tramosPorTamano(m: ElementoMedido, fuente: string, medir: MedirTinta): Corrida[][] | null {
+  const lineas = m.texto.split("\n"), { pinta, alfa } = m;
+  let varios = false;
+  const out: Corrida[][] = [];
+  for (const [i, linea] of lineas.entries()) {
+    const palabras = linea.split(" ").filter(Boolean), R = m.renglones[i];
+    if (palabras.length < 2) { out.push([{ texto: linea.trim(), tam: 0, caja: R }]); continue; }
+    // Tinta por columna del renglón, y sus huecos.
+    const tinta = (x: number, y: number) => alfa[(y - pinta.y) * pinta.w + (x - pinta.x)] > 127;
+    const col = Array.from({ length: R.w }, (_, k) => { for (let y = R.y; y < R.y + R.h; y++) if (tinta(R.x + k, y)) return true; return false; });
+    const huecos: { x0: number; x1: number }[] = [];
+    for (let k = 0; k < R.w; k++) if (!col[k]) { const u = huecos.at(-1); if (u && u.x1 === k - 1) u.x1 = k; else huecos.push({ x0: k, x1: k }); }
+    if (huecos.length < palabras.length - 1) return null;
+    const cortes = [...huecos].sort((a, b) => b.x1 - b.x0 - (a.x1 - a.x0)).slice(0, palabras.length - 1).sort((a, b) => a.x0 - b.x0);
+    const cajas = palabras.map((_, j) => {
+      const x0 = j ? cortes[j - 1].x1 + 1 : 0, x1 = j < cortes.length ? cortes[j].x0 - 1 : R.w - 1;
+      let y0 = R.y + R.h, y1 = R.y - 1;
+      for (let y = R.y; y < R.y + R.h; y++) for (let x = x0; x <= x1; x++) if (tinta(R.x + x, y)) { y0 = Math.min(y0, y); y1 = Math.max(y1, y); break; }
+      return { x: R.x + x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+    });
+    const tams = palabras.map((p, j) => { const k = medir(p, fuente, 100, 0), alto = k.sube + k.baja; return alto > 0 && cajas[j].h > 0 ? (100 * cajas[j].h) / alto : 0; });
+    if (tams.some((t) => !(t > 0))) return null;
+    const corridas: { palabras: string[]; tams: number[]; cajas: Caja[] }[] = [];
+    palabras.forEach((p, j) => {
+      const u = corridas.at(-1), base = u && u.tams[0];
+      if (u && base && Math.abs(tams[j] / base - 1) < MISMO_TAMANO) { u.palabras.push(p); u.tams.push(tams[j]); u.cajas.push(cajas[j]); }
+      else corridas.push({ palabras: [p], tams: [tams[j]], cajas: [cajas[j]] });
+    });
+    if (corridas.length > 1) varios = true;
+    out.push(corridas.map((c) => {
+      const t = [...c.tams].sort((a, b) => a - b)[c.tams.length >> 1];
+      const x0 = Math.min(...c.cajas.map((q) => q.x)), y0 = Math.min(...c.cajas.map((q) => q.y));
+      const x1 = Math.max(...c.cajas.map((q) => q.x + q.w)), y1 = Math.max(...c.cajas.map((q) => q.y + q.h));
+      return { texto: c.palabras.join(" "), tam: t, caja: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } };
+    }));
+  }
+  return varios ? out : null;
+}
+
+/**
+ * Un texto de varios tamaños como texto de punto con un estilo por corrida: cada una con su tamaño y su track (de su
+ * ancho); todas sobre la base de su renglón (la de su corrida más grande). Los espacios entre corridas son de la de
+ * antes, como al escribir en Photoshop. null si algún track se sale de lo razonable (no es esa tipografía).
+ */
+function capaDeTramos(m: ElementoMedido, lineas: Corrida[][], fuente: string, alineacion: Alineacion, medir: MedirTinta): TextoCapa | null {
+  const tramos: TextoCapa["tramos"] = [], bases: number[] = [];
+  let texto = "";
+  for (const [i, cs] of lineas.entries()) {
+    // Un renglón de una sola palabra (sin tamaño medido) toma el del renglón de antes o el de la primera corrida.
+    const tamDe = (c: Corrida) => c.tam || lineas.flat().find((q) => q.tam)?.tam || 0;
+    let baseLinea = 0, mayor = 0;
+    for (const [j, c] of cs.entries()) {
+      const tam = tamDe(c);
+      if (!(tam > 0)) return null;
+      const n = [...c.texto].length, sin = medir(c.texto, fuente, tam, 0);
+      const track = n > 1 ? ((c.caja.w - (sin.izq + sin.der)) * 1000) / ((n - 1) * tam) : 0;
+      if (!Number.isFinite(track) || track < TRACK_MIN || track > TRACK_MAX) return null;
+      if (tam > mayor) { mayor = tam; baseLinea = c.caja.y + medir(c.texto, fuente, tam, track).sube; }
+      const fin = j < cs.length - 1 ? " " : i < lineas.length - 1 ? "\n" : "";
+      texto += c.texto + fin;
+      tramos.push({ n: c.texto.length + fin.length, fuente, tam, color: m.color!, track, interlineado: null, subir: 0, mayusculas: false });
+    }
+    bases.push(baseLinea);
+  }
+  if (lineas.length > 1) {
+    const inter = (bases.at(-1)! - bases[0]) / (lineas.length - 1);
+    for (const t of tramos) t.interlineado = inter;
+  }
+  // El origen: donde empieza la tinta del primer renglón, y el avance de ese renglón para centrar o alinear a la derecha.
+  const c0 = lineas[0][0], t0 = tramos[0], k0 = medir(c0.texto, fuente, t0.tam, t0.track);
+  const pluma = c0.caja.x + k0.izq;
+  let avance = 0, j = 0;
+  for (const c of lineas[0]) { const r = tramos[j++]; avance += medir(c.texto + (j < lineas[0].length ? " " : ""), fuente, r.tam, r.track).avance; }
+  const tx = alineacion === "center" ? pluma + avance / 2 : alineacion === "right" ? pluma + avance : pluma;
+  return { texto, tramos, alineacion, transform: [1, 0, 0, 1, tx, bases[0]], caja: null, motivo: null };
+}
+
 /**
  * El `TextoCapa` de un texto medido escrito con `fuente`: el tamaño sale del alto de su renglón más ancho (la orilla
  * al 50 %, como su tinta), el track de su ancho, cada base de dónde empieza su tinta, y el origen de la alineación.
@@ -718,6 +861,10 @@ export function alineacionDe(m: ElementoMedido, W: number, otros: readonly Eleme
 export function capaDeTexto(m: ElementoMedido, fuente: string, alineacion: Alineacion, medir: MedirTinta): TextoCapa | null {
   const lineas = m.texto.split("\n"), R = m.renglones;
   if (!m.color || !lineas.length || R.length !== lineas.length) return null;
+  // Un texto con palabras de dos tamaños («$28,499» y «m.n.» más chico): un estilo por tamaño (B30).
+  const tramos = tramosPorTamano(m, fuente, medir);
+  const varios = tramos && capaDeTramos(m, tramos, fuente, alineacion, medir);
+  if (varios) return varios;
   const k = R.reduce((mx, c, i) => (c.w > R[mx].w ? i : mx), 0);
   const ref = medir(lineas[k], fuente, 100, 0);
   const altoRef = ref.sube + ref.baja;

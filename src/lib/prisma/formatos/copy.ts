@@ -771,6 +771,8 @@ export const FPL = {
   imagenAyuda: t("La imagen con {n} elementos marcados; la lista es la misma, con sus controles.", "The image with {n} elements marked; the list is the same, with its controls."),
   elemento: t("Elemento", "Element"),
   textoOk: t("Se reescribe con {f} ({d} % distinto de la imagen).", "Rewritten with {f} ({d} % different from the image)."),
+  // B30: el legal va siempre como texto, en un tamaño y en una caja que se vuelve a partir en renglones.
+  textoLegal: t("Es el legal: se reescribe con {f} en un solo tamaño, para que se pueda editar y acomodar en 1, 2 o 3 renglones. Revisa que el texto sea el correcto.", "This is the legal: rewritten with {f} in one size, so it can be edited and arranged in 1, 2 or 3 lines. Check that the text is right."),
   textoNo: t("Va como imagen: ninguna tipografía del cliente se parece (la más cercana, {f}, {d} % distinto).", "Stays as an image: none of the client's fonts match (the closest, {f}, is {d} % different)."),
   textoSinFuentes: t("Va como imagen hasta que haya tipografías del cliente.", "Stays as an image until the client's fonts are loaded."),
   textoImagen: t("Va como imagen (lo elegiste).", "Stays as an image (your choice)."),

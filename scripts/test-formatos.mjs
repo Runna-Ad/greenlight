@@ -2162,7 +2162,7 @@ console.log("\n▶ 3 · textos editables: cambiar las letras (todas las medidas,
 {
   const tramo = (n, extra = {}) => ({ n, fuente: "F-Regular", tam: 10, color: [200, 20, 40], track: 0, interlineado: null, subir: 0, mayusculas: false, ...extra });
   const capaT = (texto, caja = null, tramos = [tramo(texto.length)]) => ({ texto, tramos, alineacion: "left", transform: [1, 0, 0, 1, 20, 30], caja, motivo: null });
-  eq("porQueNoSeCambia: su motivo de siempre, «varios estilos», o nada (sí se cambia)", [porQueNoSeCambia({ ...capaT("ab"), motivo: "efectos de capa" }), porQueNoSeCambia(capaT("ab", null, [tramo(1), tramo(1, { tam: 12 })])), porQueNoSeCambia(capaT("ab"))], ["efectos de capa", "tiene varios estilos", null]);
+  eq("porQueNoSeCambia: su motivo de siempre, o nada (sí se cambia; con varios estilos también, B30)", [porQueNoSeCambia({ ...capaT("ab"), motivo: "efectos de capa" }), porQueNoSeCambia(capaT("ab", null, [tramo(1), tramo(1, { tam: 12 })])), porQueNoSeCambia(capaT("ab"))], ["efectos de capa", null, null]);
   const tc = textoCambiado(capaT("ab"), "uno\r\ndos\rtres\u0003cuatro");
   eq("textoCambiado: los saltos de Windows, de Mac y de caja de Photoshop pasan a \\n, y su único estilo cubre las letras nuevas", [tc.texto, tc.tramos.length, tc.tramos[0].n, tc.tramos[0].fuente], ["uno\ndos\ntres\ncuatro", 1, 19, "F-Regular"]);
   eq(
@@ -2170,7 +2170,13 @@ console.log("\n▶ 3 · textos editables: cambiar las letras (todas las medidas,
     [textoCambiado(capaT("ab"), "a\u0000b\u202Ec\u200Bd\te\u2028f").texto, textoCambiado(capaT("ab"), "x".repeat(TEXTO_CAMBIADO_MAX - 1) + "😀").texto.length],
     ["abcd\te\nf", TEXTO_CAMBIADO_MAX - 1],
   );
-  eq("textoCambiado: se corta en el máximo; con varios estilos no se cambia (null)", [textoCambiado(capaT("ab"), "x".repeat(TEXTO_CAMBIADO_MAX + 50)).texto.length, textoCambiado(capaT("ab", null, [tramo(1), tramo(1)]), "zz")], [TEXTO_CAMBIADO_MAX, null]);
+  eq("textoCambiado: se corta en el máximo", textoCambiado(capaT("ab"), "x".repeat(TEXTO_CAMBIADO_MAX + 50)).texto.length, TEXTO_CAMBIADO_MAX);
+  // B30: con varios estilos, como en cualquier editor: lo que no cambió conserva el suyo y lo nuevo toma el de antes.
+  {
+    const precio = capaT("$28,499 m.n.", null, [tramo(8, { tam: 40 }), tramo(4, { tam: 20 })]);
+    const estilos = (t) => t.tramos.map((r) => `${r.n}@${r.tam}`).join(" ");
+    eq("B30 textoCambiado con dos tamaños: el número cambia y sigue grande, «m.n.» sigue chico; escribir al principio toma el de después", [estilos(textoCambiado(precio, "$30,000 m.n.")), estilos(textoCambiado(precio, "$1,299,000 m.n.")), estilos(textoCambiado(precio, "Desde $28,499 m.n.")), estilos(textoCambiado(precio, "$28,499 MXN")), estilos(textoCambiado(precio, "m.n."))], ["8@40 4@20", "11@40 4@20", "14@40 4@20", "8@40 3@20", "4@20"]);
+  }
   // Medidor de mentiras: cada letra mide medio tamaño y sube 0.7. Caja de 80 de ancho: caben 3 «hola» por línea.
   const medir = (s0, t) => ({ ancho: s0.length * t.tam * 0.5, sube: t.tam * 0.7 });
   const maq = (t) => maquetar(t, medir);
