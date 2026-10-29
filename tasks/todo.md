@@ -29,6 +29,67 @@ Rama `prisma` (preview). Último commit de la sesión anterior: ccc0680 (todo pu
    medidas (sin imágenes), (b) una tabla en la base (necesita migración y "ship it"), (c) usarlo directo como guía del
    acomodo automático (`acomodo.ts`) para las medidas que hoy no tienen acomodo propio. Pedro elige.
 
+**Resultado de la 1ª corrida (2026-10-29):** 12 top performers de Pedro (todos planos 4:5 DiDi Card; 5 son capturas de
+~450 px). Lecturas guardadas en `~/Desktop/formatos-prueba/lecturas/`, salida en `~/Desktop/formatos-prueba/bateria/`.
+Script `scripts/bateria-formatos.mjs` (escribe con DiDi Sans vía `@napi-rs/canvas`, dev). 11 leídas; 1 rechazada por
+pesar 25 MP (límite 16 MP: la app pide achicarla en vez de achicarla sola); la copia chica no llegó a la base.
+- **A (10 de 11): piezas pegadas al fondo.** El fondo con degradado o luz suave no pasa la regla de «liso», así que esas
+  piezas se quedan pintadas en el fondo (`fijos`). Al cambiar de forma el fondo se escala a cubrir: las pegadas se
+  cortan (CTA y tarjeta fuera del lienzo) y las que sí se mueven caen ENCIMA de ellas (logo sobre la tarjeta). 4 ads
+  quedan 100 % pegados (foto o degradado): sale la imagen entera escalada, y en la revisión no hay botón para seguir.
+- **B: los avisos no ven A.** Las piezas pegadas no son piezas, así que «encima»/«fuera» no las revisan: la tabla dice
+  7/13 limpias en un anuncio con el logo sobre la tarjeta. Contar «limpias» no sirve sin mirar las imágenes.
+- **C: textos reescritos.** 6 textos de 3 ads no pasan la prueba de tinta (se quedan imagen) y en tarjetas blancas
+  quitadas dejan manchas; un CTA salió en itálica (se eligió la cara Italic).
+- **D: banners.** CTA a 1.6 px (640×100) y 0.8 px (320×50); legal 3-6 px.
+
+**2ª corrida (2026-10-29, Pedro eligió «Option 3 then 1»), sin commit:** (3) red de seguridad: lo fijo viaja en el
+maestro como `pegados` (plano.ts → psd.ts/listo.ts → acomodo.ts); el fondo se corre para no cortarlo (`fondoSinCortar`;
+en «igual» las piezas se corren con él sin salirse) y `avisosDePegados` (revisar.ts) avisa «fuera» (cortado / no se
+ve) y «encima» (una pieza cae sobre lo pegado, salvo si ya iba ahí en el original). (1) degradados y luz suave:
+`asperezaDelAnillo` deja rellenar un hueco sin plano si su anillo casi no cambia de golpe (ruido ≤ 1.6, orillas ≤ 3 %).
+Resultado en `~/Desktop/formatos-prueba/bateria-2/`: fijos 132 → 61; anuncios todo fijo 4 → 1 (las rocas); con 0 fijos:
+83ed, 1.06.45, 1.08.49, b1cc, d61a. b1cc y d61a se ven bien en 1280×720. Tests: formatos 646/646.
+Lo que la corrida destapó (antes escondido por estar fijo), por tamaño:
+- [ ] E. Piezas «OTRO» (sin papel) no se ponen en las 7 medidas que no son «igual» → «falta» (82947, 83ed, 1.06.45).
+- [ ] F. El brillo/sombra suave de una pieza que no se separa se queda en el fondo como mancha al moverla (82947: la
+      tarjeta naranja deja un halo naranja borroso). La sombra sólo se busca con fondo plano (`lumEsperada`).
+- [ ] G. 83ed: la lectura cortó el titular en dos («¡Lleva tu DiDi Card y d» / «isfruta…») y el precio sale doble
+      (fantasma de «$58,800 m.n.» bajo la pastilla). Revisar esa lectura antes de culpar al relleno.
+- [ ] H. 82947: los 2 renglones del titular siguen fijos (anillo con 8 % de orillas) y en 1280×720 quedan enormes con
+      la tarjeta y el botón encima; ahora sí se avisa (encima 14).
+- [ ] Límite conocido: el relleno suave no inventa un pico de luz escondido detrás de un texto (prueba: ~5 niveles).
+- [ ] Opción 2 (IA para fondos de foto: estadio, rocas, capturas) sigue pendiente; Pedro decide.
+
+**3ª ronda (2026-10-29, Pedro: "fix e-h first" + "texts need to be guaranteed editable", sin IA si se puede), sin
+commit.** Meta medida en la batería (columna «textos editables»): 38/83 → **83/83, sin IA**. Corridas en
+`~/Desktop/formatos-prueba/bateria-3` … `bateria-8` (la buena: bateria-8). Tests formatos 652/652. Lo hecho:
+- E: lo «OTRO» toma el papel de sus textos o del más cercano (`rolDeRaiz`); un texto suelto, el de un texto.
+- F: dos figuras que se cruzan ya no se quitan píxeles (la más grande va detrás): la franja de la tarjeta de 82947.
+- G/H y la causa de casi todo: `medirTexto` medía contra UN color de fondo; en degradado, las letras del lado más
+  oscuro no contaban. Ahora el fondo de cada columna (arriba y abajo de las letras). Letras de otro color dentro de la
+  caja (`otraTinta`) se borran con el texto.
+- Texto que no empata: se reescribe igual con la más parecida, firme (no cursiva ni delgada), marcado `aproximado`
+  (la revisión lo dice y deja «Dejar como imagen»); renglones re-partidos a los que se ven
+  (`conRenglonesDeLaImagen`); si el track sale absurdo, párrafo en su caja (`capaEnCaja`).
+- Texto en fondo de foto: ya nunca se queda pegado: sus letras se rellenan copiando textura de al lado
+  (`rellenarConMuestras`, sin IA) y, si va sobre algo pegado (botón, tablero LED), queda ANCLADO al fondo
+  (`PiezaCaja.anclada`: se mueve con el fondo en todas las medidas).
+Lo que falta (calidad, no editabilidad):
+- [ ] Rellenos con muestras dejan manchas en barras/pastillas angostas (legal sobre barra blanca y botón de 1.07.33).
+- [ ] 29 de 83 textos van «aproximados» (no empatan con DiDi Sans): revisar a ojo cuáles se ven distintos.
+- [ ] En fotos, lo anclado y lo pegado no se mueven y las piezas acomodadas les caen encima (avisos «encima»).
+- [ ] 83ed: «6% de CASHBACK*» sale deslavado (color de tinta mal medido).
+- [x] «Rehacer el fondo con IA» (Pedro, 2026-10-29: "Build AI background"), sin commit: UNA llamada por anuncio, sólo
+      si algo se quedó pegado. La revisión manda el fondo limpio + máscara de lo pegado (`mascaraPegados`) a
+      `/api/prisma/formatos/fondo-plano` (Gemini, mismo gate/frenos que «Quitar del fondo»); se pega SÓLO en la máscara
+      (`pegarFondoIA`, deriva fuera) y lo pegado sale como pieza por diferencia con el fondo nuevo
+      (`soltarConFondoIA`); botón «Deshacer». Probado sin gastar con `BATERIA_IA=simulada` (relleno con muestras en
+      vez de Gemini): pegados 29 → 0 en los 6 anuncios que tenían, sin avisos «fuera»/«encima». Tests 657/657.
+- [ ] PRUEBA REAL de «Rehacer el fondo con IA» en la preview (≈ US$0.04 por anuncio): estadio (8b81), rocas (fcc6),
+      capturas 1.06.30 y 1.07.33. Mirar la unión, que la IA no invente cosas, y el borde de las piezas soltadas.
+- [ ] El botón no se probó en el navegador (necesita sesión y subir una imagen): sólo tsc/lint y la lógica en Node.
+
 **Pendientes de esta sesión que entran en la batería:** probar en la preview la IA de «Quitar del fondo» en una imagen
 de forma rara (ccc0680, sin probar); el legal de la Biblioteca en una imagen real (061f0c7, sin probar); las opciones de
 1/2/3 renglones del legal plano en el editor (sin probar); Google Fonts que el cliente no tiene guardadas no salen en la

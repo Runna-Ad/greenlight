@@ -3052,3 +3052,18 @@ con los top performers + registrarlos como ejemplos de buenas prácticas de acom
 (es público). De antes: zonas seguras de los diseñadores, 16:9.
 **Archivos sin commit que NO son de esta sesión:** CLAUDE.md (+ CLAUDE.md.pre-replay-P3, del replay), brag-brief.md,
 brag-output/ — no los toqué.
+
+## 2026-10-29 07:48
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
