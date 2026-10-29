@@ -8,6 +8,13 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+
+## 🔺 HÜE Prisma › Formatos · 2026-10-28 · rama `prisma` (PREVIEW, no en prod) · último ccc0680
+- Imagen plana: legal reescrito y editable, precio de dos tamaños editable, legal emparejado con la Biblioteca, caché
+  de lecturas (0087 APLICADA en prod 2026-10-28). PSD y plano: barra de texto en el editor (tipografía, tamaño, negrita).
+- Siguiente (Pedro): batería de pruebas con top performers + ejemplos de buenas prácticas (todo.md § ⭐ PRIMERO).
+- `prisma` sigue atrás de `main` (CTA por plano, hilos, correos agrupados, auditoría de cambios, Next 16.3.8); no fusionar
+  sin que Pedro lo pida.
 ## 🔺 Reset content-only #2 · 2026-10-22 · PROD (datos, sin código en prod)
 - Borrados todos los proyectos/tareas de prueba de Greenlight (1,052 filas, 4 briefs, 56 ideas). Se conservaron equipo,
   cuentas, DiDi y sus marcas, el cerebro de H.Ü.E, bibliotecas, y TODO el trabajo de prueba de HÜE Prisma / Formatos.

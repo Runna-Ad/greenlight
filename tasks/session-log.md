@@ -2945,6 +2945,26 @@ del session-log del 2026-10-22 13:10 (ruido de un hook; se puede soltar) y una c
 - [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
 - [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
 
+
+## 2026-10-27 09:43
+**Shipped (recent commits):**
+  - docs(tasks): corrige el conteo de archivos huérfanos del reset (16, no ~64)
+  - docs(tasks): cierre del reset content-only #2 (1,052 filas de prueba borradas en prod)
+  - chore(reset): --project-ref y clasificar las 16 tablas nuevas (prisma_*, tipografias, referencia_lecturas)
+  - docs(tasks): cierre de la sesión del legal en Formatos (B24–B27)
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
 ## 2026-10-27 — B28: imagen plana → piezas editables con letras del cliente · rama `prisma` (PREVIEW)
 Pedro: separar los elementos de un anuncio plano (sin PSD) para moverlos, quitarlos y cambiar textos con las tipografías
 de DiDi (DiDi Card: «3 MSI» → «12 MSI», quitar «con tus cupones de DiDi Card», «12 pagos de $3,999»). Eligió la opción 1
@@ -2969,3 +2989,66 @@ plana; acceso de otra persona (¿tiene cuenta @runna.com.mx?); tope diario de IA
 va atrás de `main` (CTA por plano, hilos de respuesta, correos agrupados, auditoría de cambios).
 **Herramientas:** el panel del navegador no deja que la preview llame a localhost (ERR_BLOCKED_BY_CLIENT): en la preview
 Pedro arrastra el archivo; en localhost se inyecta la lectura guardada.
+
+## 2026-10-28 11:19
+**Shipped (recent commits):**
+  - docs(lessons): cargar un archivo real en la página desde public/
+  - fix(formatos): una pieza tapada en parte se rellena en vez de rechazar el PSD; 1080×1080, «Subir otro archivo» y guía plegada
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
+
+## 2026-10-28 — Formatos: comentarios de los diseñadores + imagen plana más confiable · rama `prisma` (PREVIEW)
+**Hecho (todo pusheado a `prisma`, preview verde; tests formatos 606/0, prisma 975/0):**
+- PSD de los diseñadores (SPGFAPPLE1PLATA s7) se rechazaba: HERO tapaba 15 % del recuadro del SUBTITULO → ahora lo tapado
+  se rellena (`rellenoPct`, rechazo sólo > 50 %) (ca96763). 1080×1080 en la lista inicial (`MEDIDAS_INICIO`), «Subir otro
+  archivo» en la barra pegajosa, guía de archivos plegada.
+- Imagen plana: el texto escrito en la revisión es un cambio real (a6982d2); fondo no liso ya no rechaza, lo de ahí queda
+  fijo (`medirPlanoFijo`, PEDRO_OVERRIDE) (5089a9e); precio blanco sobre pastilla naranja/blanca ya nítido y sin mancha
+  (e15181f, ad13308, 6f27bf0: color dominante, fondo desde dentro de la caja, cajas que contienen = fondo).
+- PSD: aviso si BACKGROUND trae un producto/persona (20-90 % del lienzo) (2f6e8fc); enlace a «Formatos con imagen
+  plana» sólo en la revisión cuando algo quedó fijo.
+- Link para diseñadores (no expira): greenlight-git-prisma-…vercel.app/?_vercel_share=… (en el chat; pide login Greenlight).
+**Esperando a los diseñadores:** zonas seguras por red, px por ratio, ejemplo 1.91:1 y 320×50, si eligieron DiDi (B29 3-6).
+**Pick up next (Pedro aprobó, en este orden):** (1) caché de lecturas por imagen: migración **0087**
+`produccion.formatos_lecturas` (hash del JPEG + modelo → elementos), en `api/prisma/formatos/leer` antes de llamar a
+Gemini; PEDIR "ship it" antes de aplicarla (la preview usa la base de prod); clasificarla en reset-blank-slate. (2)
+biblioteca de pruebas con lecturas reales (Pedro va a mandar top performers). (3) normalizar la lectura (ajustar cajas,
+aplanar anidados, partir texto de dos tamaños). Después: aprender acomodo de los top performers (feature aparte).
+**Pendiente menor:** textos cambiados de imagen plana no vuelven al releer (ids de la IA cambian; lo arregla (1)).
+
+## 2026-10-28 (tarde-noche) — Formatos: legal y precio editables, legal de la Biblioteca, barra de texto, 2 arreglos · rama `prisma` (PREVIEW)
+**Hecho (todo pusheado a `prisma`; Vercel de ccc0680 = success; formatos 638/0, prisma 975/0, tsc 0):**
+- 4b8b9a0 · Imagen plana: el legal se reescribe con la tipografía del cliente en un solo tamaño (caja de párrafo, 1/2/3
+  renglones, sin pixelarse); un texto de dos tamaños («$28,499 m.n.») es UN texto editable (lo que reemplaza letras toma
+  su estilo). Navegador: 6 de 6 nítidos.
+- 061f0c7 · Al «Continuar» la revisión plana, el legal leído se cambia por el guardado del cliente que se le parece
+  (palabras en común ≥ 0.7 y 0.1 de ventaja al segundo), con «Deshacer»; si no hay, aviso de revisarlo. Sin probar en el
+  navegador.
+- 2ef1c80 · Barra de texto en el editor (Pedro: "like photoshop, word google docs"): tipografía, tamaño (− número +) y
+  negrita por texto, en todas las medidas; viaja en `CambiosTexto` (llave `claveEstilo`); al abrir el editor de un PSD se
+  traen todas las tipografías del cliente. Probado en localhost con SPGFAPPLE (DiDi).
+- ccc0680 · Un recuadro de sólo contorno encima de un texto («Rectangle 6») ya no lo bloquea (psd.ts mira píxeles, no
+  cajas): 6 de 6 nítidos (antes 5) y el subtítulo se cambia. Y el recorte para la IA de «Quitar del fondo» puede salirse
+  del maestro (imágenes de forma rara, 788×1262): antes el botón no salía. Lo de la IA SIN PROBAR (Pedro volvió a
+  probar y la lectura ya separó bien la tarjeta: no hubo nada que quitar).
+**Decisiones:** la barra ofrece sólo tipografías CARGADAS (cliente + PSD), no todo Google Fonts; el tamaño se ve en px del
+original; el legal plano siempre se reescribe (no se prueba contra la imagen: `sinPrueba`).
+**Lecciones (tasks/lessons.md):** nombres PostScript reales («-Bold-Italic»), cajas vs píxeles en capas de encima,
+proporciones fijas vs lienzo de forma libre.
+**Pick up next (Pedro, textual: "wrap up with this as the 1st thing to do on the next session"):** la batería de pruebas
+con los top performers + registrarlos como ejemplos de buenas prácticas de acomodo. Plan en todo.md § ⭐ PRIMERO.
+**Esperando a Pedro:** los top performers (PSD y planos); decidir si las lecturas JSON de anuncios se quedan en el repo
+(es público). De antes: zonas seguras de los diseñadores, 16:9.
+**Archivos sin commit que NO son de esta sesión:** CLAUDE.md (+ CLAUDE.md.pre-replay-P3, del replay), brag-brief.md,
+brag-output/ — no los toqué.

@@ -1,5 +1,40 @@
 # Greenlight · by Rünna — Build Todo
 
+## ⭐ PRIMERO EN LA SIGUIENTE SESIÓN (Pedro, 2026-10-28): batería de pruebas de Formatos + ejemplos de buenas prácticas
+Pedro: "do the battery of tests we talked about with different images and different degrees and challenges so we can
+make it work for all those types and more. also all of those examples are top performers and would benefit to have
+them registered as examples of best practices layout etc."
+Rama `prisma` (preview). Último commit de la sesión anterior: ccc0680 (todo pusheado, preview de Vercel en verde).
+
+**Parte A · la batería (que funcione con todo tipo de anuncio):**
+1. Pedir a Pedro los top performers (PSD y planos) si no los ha mandado; anotar de dónde vienen. Variedad buscada:
+   fondo liso / degradado / foto; producto con sombra; texto de dos tamaños (precio + «m.n.»); pastillas de dos
+   colores; recuadros de sólo contorno; anidados; textos claros sobre oscuro y al revés; formas raras (788×1262) y
+   las de la lista (4:5, 9:16, 1:1, 1.91:1); legales largos; repetido en el fondo (para «Quitar del fondo» y su IA).
+2. Las IMÁGENES de clientes NO van al repo (es PÚBLICO): viven en `~/Desktop/formatos-prueba/` (ya hay PSDs y la
+   carpeta b28-imagen-plana). Decidir con Pedro si las lecturas JSON (`scripts/fixtures/lecturas/`, traen textos del
+   anuncio) se quedan en el repo o se mueven ahí también; hoy hay una (aec9a8a15486.json, SPGFAPPLE plano).
+3. Leer cada plano UNA vez en la preview (la caché 0087 la guarda: lecturas siguientes gratis) y bajar la lectura con
+   `select … from produccion.prisma_formatos_lecturas` (sha256 = `shasum -a 256 <imagen>`).
+4. Un script de batería (`scripts/bateria-formatos.mjs`, como `probar-lectura.mjs`) que por cada anuncio: rearma el
+   maestro, cuenta textos nítidos / fijos / como imagen, mide sombras falsas y manchas del fondo, y saca las 13 medidas
+   a una carpeta para ver. Una tabla de resultados por anuncio (qué pasó, qué falló) ANTES de arreglar nada.
+5. Arreglar por grupos de falla (la que más anuncios toca primero), con una prueba por cada arreglo, y volver a correr
+   la batería entera para ver que nada empeoró (diff de la tabla completa, no sólo los casos tocados).
+
+**Parte B · registrar los top performers como ejemplos de buenas prácticas:**
+6. Por cada top performer guardar lo que lo hace bueno: dónde va cada pieza (BRAND, TITULO, precio, HERO, CTA, legal)
+   como parte del lienzo, tamaños de letra, márgenes, jerarquía, por proporción (4:5, 9:16, 1:1, 1.91:1, banners).
+7. Proponer a Pedro 2-3 maneras de guardarlo (antes de construir): (a) un archivo de referencia en el repo con las
+   medidas (sin imágenes), (b) una tabla en la base (necesita migración y "ship it"), (c) usarlo directo como guía del
+   acomodo automático (`acomodo.ts`) para las medidas que hoy no tienen acomodo propio. Pedro elige.
+
+**Pendientes de esta sesión que entran en la batería:** probar en la preview la IA de «Quitar del fondo» en una imagen
+de forma rara (ccc0680, sin probar); el legal de la Biblioteca en una imagen real (061f0c7, sin probar); las opciones de
+1/2/3 renglones del legal plano en el editor (sin probar); Google Fonts que el cliente no tiene guardadas no salen en la
+barra de texto.
+
+
 ## 🔨 2026-10-09 — Prisma › Formatos v2 (rama `prisma`, SIN fusionar main todavía — Pedro: "don't merge yet")
 Pedro trae una lista real de un cliente: 9:16 (1080×1920), 1200×627, 320×250, 320×50, 1280×720, 600×500, 876×324,
 768×1024, 720×1600, 720×1280, 640×100, 4:5 (1200×1500) — varias NO estándar. Quiere rápido, exacto y lo más barato.
