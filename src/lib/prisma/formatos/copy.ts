@@ -378,6 +378,14 @@ export const FP = {
   legalPuesto: t("Legal «{t}» en todas las medidas.", "Legal “{t}” in every size."),
   legalYaVa: t("El anuncio ya lleva ese legal.", "The ad already has that legal."),
   legalVuelto: t("El legal volvió al que trae el PSD en todas las medidas.", "The legal is back to the one in the PSD in every size."),
+  legalDeImagen: t(
+    "El legal de la imagen se parece a «{t}» de la Biblioteca: se puso ése, letra por letra, en todas las medidas. Revísalo; si no es, cámbialo en la fila «Legal» o en el editor.",
+    "The image's legal looks like “{t}” from the Library: that one went in, word for word, in every size. Check it; if it's wrong, change it in the “Legal” row or in the editor.",
+  ),
+  legalDeImagenSinIgual: t(
+    "El legal se leyó de la imagen y no se parece a ninguno guardado de {c}: revísalo letra por letra. Se cambia en la fila «Legal» o en el editor.",
+    "The legal was read from the image and doesn't match any saved for {c}: check it word for word. Change it in the “Legal” row or in the editor.",
+  ),
   editorTextoNo: t("No se puede cambiar aquí: {m}.", "Can't be changed here: {m}."),
   editorTextoNoEsta: t("este texto ya no está en el original", "this text is no longer in the original"),
   editorTextoProbando: t("todavía se están probando las tipografías", "the fonts are still being checked"),

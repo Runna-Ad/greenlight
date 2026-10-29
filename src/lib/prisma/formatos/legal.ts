@@ -121,3 +121,45 @@ export function legalesParaCliente(guardados: readonly LegalGuardado[], clienteI
   }
   return [...grupos.values()].sort((a, b) => (a.marca === null ? 1 : b.marca === null ? -1 : a.marca.localeCompare(b.marca, "es")));
 }
+
+/** Qué tanto se tiene que parecer el legal leído de una imagen plana a uno guardado para ponerlo solo (Pedro,
+ *  2026-10-28: "match it to one of the ones we have and then just copy paste the text"), y por cuánto le tiene que
+ *  ganar al segundo: dos casi iguales (la misma promo con otra fecha) no se eligen a ciegas. */
+export const LEGAL_PARECIDO_MIN = 0.7;
+export const LEGAL_PARECIDO_VENTAJA = 0.1;
+
+/** Las palabras de un legal sin acentos, mayúsculas ni signos: la IA lee «Términos» como «Terminos» o junta un punto. */
+const palabras = (texto: string) =>
+  limpio(texto)
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .split(/[^a-z0-9ñ$%]+/)
+    .filter(Boolean);
+
+/** Cuántas palabras comparten (contando repetidas), de 0 a 1 (Dice): una o dos mal leídas en un legal largo no lo hunden. */
+export function parecidoLegal(a: string, b: string): number {
+  const pa = palabras(a), pb = palabras(b);
+  if (!pa.length || !pb.length) return 0;
+  const cuenta = new Map<string, number>();
+  for (const p of pa) cuenta.set(p, (cuenta.get(p) ?? 0) + 1);
+  let comunes = 0;
+  for (const p of pb) {
+    const n = cuenta.get(p) ?? 0;
+    if (n > 0) {
+      comunes++;
+      cuenta.set(p, n - 1);
+    }
+  }
+  return (2 * comunes) / (pa.length + pb.length);
+}
+
+/** El legal guardado al que se parece el leído (de los que se le ofrecen al cliente), o null si ninguno se parece lo
+ *  bastante o hay dos que se parecen casi igual. Uno que no cabe en la capa no se ofrece. */
+export function legalParecido(leido: string, guardados: readonly LegalGuardado[]): { legal: LegalGuardado; parecido: number } | null {
+  const notas = guardados.filter((g) => legalCabe(g.texto)).map((legal) => ({ legal, parecido: parecidoLegal(leido, legal.texto) })).sort((x, y) => y.parecido - x.parecido);
+  const [mejor, segundo] = notas;
+  if (!mejor || mejor.parecido < LEGAL_PARECIDO_MIN) return null;
+  if (segundo && mejor.parecido - segundo.parecido < LEGAL_PARECIDO_VENTAJA) return null;
+  return mejor;
+}

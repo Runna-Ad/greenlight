@@ -30,7 +30,7 @@ import { EditorMedida, edicionGuardada, guardarEdicion, guardarTextos, textosGua
 import { cambiarTextos, cambiosQueAplican, marcarSinEscribir, NO_SE_ESCRIBIO, type CambiosTexto, type Listo } from "@/lib/prisma/formatos/cambios-texto";
 import { porQueNoSeCambia } from "@/lib/prisma/formatos/textos";
 import { APAGADA, COLUMNAS, ChipEstado, FOCO, FORMAS, FilaLegal, NOMBRE_FORMA, PRENDIDA, PastillasCanal, PastillasEntrega, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
-import { conLegal, conLegalDe, legalDelPsd, legalesParaCliente, legalVigente, type LegalGuardado } from "@/lib/prisma/formatos/legal";
+import { conLegal, conLegalDe, legalDelPsd, legalesParaCliente, legalParecido, legalVigente, type LegalGuardado } from "@/lib/prisma/formatos/legal";
 import { copiarEdicion, hermanas } from "@/lib/prisma/formatos/matriz";
 
 /**
@@ -1889,6 +1889,25 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     // Deshacer devuelve sólo el legal de antes: los demás textos, como estén.
     if (ponerTextos(l, c)) avisarConDeshacer(l, g ? rellenar(tx(FP.legalPuesto, lang), { t: g.titulo }) : tx(FP.legalVuelto, lang), (ahora) => conLegalDe(ahora, legalPsd, antes));
   };
+  /**
+   * Imagen plana: el legal lo leyó la IA y puede traer una letra mal. Si se parece a uno guardado del cliente, se pone
+   * ése (el texto exacto, en todas las medidas, con «Deshacer»); si no, se pide revisarlo. Ya cambiado a mano en la
+   * revisión, o ya igual a uno guardado, no se toca.
+   */
+  const legalDeLaBiblioteca = (l: Leido, antes: CambiosTexto) => {
+    const leg = legalDelPsd(l.maestros);
+    const guardados = legalesParaCliente(legales, cliente).flatMap((g) => g.legales);
+    if (!leg.length || !cliente || !guardados.length) return;
+    const vigente = legalVigente(antes, leg, guardados);
+    if (vigente.tipo !== "psd" || vigente.igualA) return;
+    const igual = legalParecido(leg[0].texto, guardados);
+    if (!igual) {
+      const c = clientes.find((x) => x.id === cliente)?.nombre ?? "";
+      return void toast.warning(rellenar(tx(FP.legalDeImagenSinIgual, lang), { c }), { ...AVISO_ABAJO, ...FIJO });
+    }
+    const c = conLegal(antes, leg, igual.legal.texto);
+    if (c !== antes && ponerTextos(l, c)) avisarConDeshacer(l, rellenar(tx(FP.legalDeImagen, lang), { t: igual.legal.titulo }), (ahora) => conLegalDe(ahora, leg, antes));
+  };
   // Lo que el editor necesita, calculado una vez por medida abierta (no en cada pintada de la página: una zona o un
   // texto nuevos lo harían repintar la vista entera).
   const paraEditor = useMemo(() => {
@@ -2331,8 +2350,10 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
             const l: Leido = { archivo: plano.archivo, psdOriginal: null, maestros: [maestro], descartadas: [], avisos: [] };
             setLeido(l);
             // Lo escrito en la revisión es un cambio de texto como los del editor (sobre lo que ya hubiera de este archivo).
-            if (Object.keys(cambios).length) ponerTextos(l, { ...textosGuardados(plano.archivo), ...cambios });
+            const antes = { ...textosGuardados(plano.archivo), ...cambios };
+            if (Object.keys(cambios).length) ponerTextos(l, antes);
             salirDePlano();
+            legalDeLaBiblioteca(l, antes);
           }}
           alCancelar={() => {
             salirDePlano();

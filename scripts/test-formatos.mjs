@@ -9,7 +9,7 @@ import {
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
 import { writePsdBuffer } from "ag-psd";
 import { nombreDeGuia, etiquetaPieza, esNombreLegal } from "../src/lib/prisma/formatos/roles.ts";
-import { legalDelPsd, conLegal, conLegalDe, legalCabe, legalVigente, legalesParaCliente } from "../src/lib/prisma/formatos/legal.ts";
+import { legalDelPsd, conLegal, conLegalDe, legalCabe, legalVigente, legalesParaCliente, legalParecido, parecidoLegal } from "../src/lib/prisma/formatos/legal.ts";
 import { hermanas, copiarEdicion } from "../src/lib/prisma/formatos/matriz.ts";
 import { MATRIZ, baseAEscala } from "../src/lib/prisma/formatos/tabla-matriz.ts";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, RELLENO_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
@@ -2713,6 +2713,17 @@ console.log("\n▶ B24 · el legal de la Biblioteca en todas las medidas");
   // Mesa 1: FOOTER sin nombres: el texto más largo (los vacíos no cuentan). Mesa 2: sin FOOTER.
   const m1 = { piezas: [{ nombre: "Pie", rol: "FOOTER", textos: [tp("Tienda", "App Store"), tp("Vacío", "   "), tp("Texto", largo)] }] };
   const m2 = { piezas: [{ nombre: "HERO", rol: "HERO", textos: [] }] };
+  {
+    const g = (id, texto) => ({ id, titulo: id, texto, marca: "DiDi", clienteId: "c1" });
+    const tyc = "Aplican términos y condiciones. Promoción válida del 1 al 30 de noviembre de 2026 en Ciudad de México. Consulta didi.com.mx/terminos.";
+    const leidoMal = "Aplican terminos y condiciones. Promocion valida del 1 al 30 de noviembre de 2O26 en Ciudad de Mexico. Consulta didi.com.mx/terminos";
+    const otro = g("Envíos", "Envío gratis en tu primer pedido. Sujeto a disponibilidad. Consulta la app.");
+    const r = legalParecido(leidoMal, [otro, g("Noviembre", tyc)]);
+    ok("B30 legalParecido: el legal leído con acentos perdidos y un 0 por O encuentra el guardado", r?.legal.id === "Noviembre" && r.parecido > 0.85, JSON.stringify(r));
+    const casi = g("Diciembre", tyc.replace("noviembre", "diciembre").replace("30", "31"));
+    ok("B30 legalParecido: dos guardados casi iguales (otra fecha) no se eligen a ciegas", legalParecido(leidoMal, [g("Noviembre", tyc), casi]) === null);
+    ok("B30 legalParecido: nada parecido = null; parecidoLegal de vacío = 0", legalParecido("Hasta 50% de descuento", [otro, g("Noviembre", tyc)]) === null && parecidoLegal("", tyc) === 0);
+  }
   const leg = legalDelPsd([m0, m1, m2]);
   eq("legalDelPsd: por mesa; prefiere la parte LEGAL, si no el más largo de FOOTER; una mesa sin FOOTER no tiene legal", leg.map((l) => [l.mi, l.pieza, l.j, l.texto]), [[0, 1, 1, "Aplican TyC."], [1, 0, 2, largo]]);
   const kA = leg[0].clave, kB = leg[1].clave;
