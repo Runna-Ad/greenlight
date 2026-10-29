@@ -86,6 +86,19 @@ Lo que falta (calidad, no editabilidad):
       (`pegarFondoIA`, deriva fuera) y lo pegado sale como pieza por diferencia con el fondo nuevo
       (`soltarConFondoIA`); botón «Deshacer». Probado sin gastar con `BATERIA_IA=simulada` (relleno con muestras en
       vez de Gemini): pegados 29 → 0 en los 6 anuncios que tenían, sin avisos «fuera»/«encima». Tests 657/657.
+- [ ] **FALLA (Pedro, preview 2026-10-29): piezas soltadas con huecos** (pantalla del tablero LED transparente).
+      Arreglado SIN commit: lo encerrado por la pieza se rellena, se quitan motas de la orilla y se avisa si queda
+      hueco (`huecosDe`, > 2 %). Tablero: huecos 43 % → 2.6 %. Tests 659/659. SIGUE MAL (visto en la simulación):
+      (a) piezas que se cruzan se llevan pedazos de la otra (rocas: las cajas de beneficios traen un pedazo de la
+      tarjeta; la tarjeta trae una muesca); (b) en 1.06.30 salen pedazos de las olas naranjas del fondo como pieza;
+      (c) el tablero trae una franja de estadio a la izquierda. Causa: la silueta medida en foto es un rectángulo
+      que incluye fondo y vecinos, y la diferencia con el fondo de la IA no separa objeto de fondo parecido.
+      Pedro: nada de servicios de pago; dentro de la plataforma. HECHO sin commit: `recortes.ts` corre SlimSAM
+      (modelo abierto Apache-2.0, ~39 MB, transformers.js) en el navegador al pedir el fondo con IA y en Node en la
+      batería; cada objeto pegado se recorta con puntos dentro de su caja de la lectura y se usa sólo si su caja se
+      parece a la de la lectura (≥ 0.6). Con recorte, la pieza ES el recorte (huecos encerrados rellenos) y la IA
+      repinta sólo detrás. Simulación: estadio limpio (tarjeta, tablero, botón), 26 de 29 objetos recortados, sin
+      avisos de huecos. Los pesos se bajan de Hugging Face (público, sin cuenta); se pueden alojar nosotros después.
 - [ ] PRUEBA REAL de «Rehacer el fondo con IA» en la preview (≈ US$0.04 por anuncio): estadio (8b81), rocas (fcc6),
       capturas 1.06.30 y 1.07.33. Mirar la unión, que la IA no invente cosas, y el borde de las piezas soltadas.
 - [ ] El botón no se probó en el navegador (necesita sesión y subir una imagen): sólo tsc/lint y la lógica en Node.
