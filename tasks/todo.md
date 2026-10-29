@@ -99,7 +99,15 @@ Lo que falta (calidad, no editabilidad):
       parece a la de la lectura (≥ 0.6). Con recorte, la pieza ES el recorte (huecos encerrados rellenos) y la IA
       repinta sólo detrás. Simulación: estadio limpio (tarjeta, tablero, botón), 26 de 29 objetos recortados, sin
       avisos de huecos. Los pesos se bajan de Hugging Face (público, sin cuenta); se pueden alojar nosotros después.
-- [ ] PRUEBA REAL de «Rehacer el fondo con IA» en la preview (≈ US$0.04 por anuncio): estadio (8b81), rocas (fcc6),
+- [x] Preview 2026-10-29 (Pedro, Gemini real + recortes): "casi": rayas negras bajo el tablero (pedazos sueltos de la
+      base en el recorte), mancha oscura en las puntas del botón (barandal en el recorte) y el aviso fijo del legal no se
+      cerraba con el editor abierto. ARREGLADO en 5c45348: recorte sólo con su parte mayor (antes de rellenar lo
+      encerrado), orilla afinada contra los colores de la imagen pelando desde afuera (seguro: si abre huecos, recorte
+      tal cual), avisos clicables con un Dialog abierto. Tests 660/660, batería simulada 83/83 editables, 0 avisos de
+      huecos. Límites vistos: los botones de tiendas de fcc6 (contorno delgado) llevan la foto de adentro; fcc6 600×500
+      suma un aviso de contraste del SUBTITULO (5 → 4 limpias); la base del tablero que no entró al recorte puede quedarse
+      en el fondo (sin ver con Gemini).
+- [ ] PRUEBA REAL de «Rehacer el fondo con IA» en la preview (5c45348, Pedro probando) (≈ US$0.04 por anuncio): estadio (8b81), rocas (fcc6),
       capturas 1.06.30 y 1.07.33. Mirar la unión, que la IA no invente cosas, y el borde de las piezas soltadas.
 - [ ] El botón no se probó en el navegador (necesita sesión y subir una imagen): sólo tsc/lint y la lógica en Node.
 

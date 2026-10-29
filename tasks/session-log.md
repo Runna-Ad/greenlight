@@ -1,5 +1,18 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-10-29 — HÜE Prisma › Formatos: textos editables, fondo con IA y recortes — rama `prisma` (preview), sin migración
+**Hecho (pusheado a `prisma`):** 3e4686b/3a7b7ba todo texto de una imagen plana sale editable (83/83 en la batería, sin IA)
+y «Rehacer el fondo con IA» · ca02c7d/6d2f575 piezas soltadas sin huecos con recortes SlimSAM dentro de la plataforma ·
+**5c45348** recortes sin pedazos sueltos (rayas negras bajo el tablero) ni borde del fondo (mancha en las puntas del
+botón), y avisos fijos que se cierran con el editor abierto (Radix ponía `pointer-events: none` en body).
+**Pruebas:** formatos 660/0 · tsc 0 · eslint 2 advertencias viejas · batería `BATERIA_IA=simulada` 83/83, 0 huecos.
+**No probado:** Gemini real con 5c45348; el aviso cerrable en navegador; el build de Vercel.
+**Decisiones / overrides:** Pedro: nunca proponer un servicio de pago nuevo (construir dentro de la plataforma); toda
+falla visible en imágenes de prueba se reporta. Lecciones en lessons.md (sustituto de IA "duro", avisos con diálogo).
+**Esperando a Pedro:** su prueba del estadio en la preview (tablero, botón, aviso del legal).
+**Pick up next:** lo que reporte Pedro; luego límites anotados en todo.md (badges de fcc6, contraste 600×500, base del
+tablero) y la parte B (registro de buenas prácticas).
+
 ## 2026-10-21/22 — HÜE Prisma › Formatos: el legal (B24–B27) — rama `prisma` (preview), sin migración
 **Hecho (4 commits en `prisma`, todos pusheados):** B24 elegir el legal de la Biblioteca para todas las medidas (6d45126) ·
 B25 copiar lo editado a las medidas hermanas de la matriz (a17ba7f) · B26 la matriz de producción en el acomodo automático
