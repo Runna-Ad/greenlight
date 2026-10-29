@@ -11,7 +11,7 @@ import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
 import { CANALES, LETRA_MIN_PX, MEDIDAS_INICIO, MEDIDAS_RATIO, elegirMaestro, es916, nombreSalida, ponerPartes, sePuedeVoltear, zonaCanal, type Acomodo, type AvisoAcomodo, type Canal, type Edicion, type Entrega, type Lado, esNota } from "@/lib/prisma/formatos/acomodo";
 import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionContraste, type InfoContraste } from "@/lib/prisma/formatos/revisar";
-import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
+import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteConOrilla, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_APLANADA, FP_ERROR, FP_FAMILIA, FP_PAPEL, FPL, FX, rellenar } from "@/lib/prisma/formatos/copy";
 import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
 import { EDITABLE_MAX_BYTES, EDITABLE_MAX_MS, LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajePsdMedida, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoPsdMedida, type PedidoWorker } from "@/lib/prisma/formatos/listo";
@@ -179,12 +179,6 @@ function lienzoDe(rgba: Uint8ClampedArray<ArrayBuffer>, w: number, h: number, ma
   ctx.drawImage(c, 0, 0, r.width, r.height);
   c.width = c.height = 0; // suelta la memoria del lienzo grande ya
   return r;
-}
-/** El rectángulo `c` de un RGBA de ancho W. */
-function recortarRgba(rgba: Uint8ClampedArray, W: number, c: { x: number; y: number; w: number; h: number }): Uint8ClampedArray<ArrayBuffer> {
-  const out = new Uint8ClampedArray(c.w * c.h * 4);
-  for (let y = 0; y < c.h; y++) out.set(rgba.subarray(((c.y + y) * W + c.x) * 4, ((c.y + y) * W + c.x + c.w) * 4), y * c.w * 4);
-  return out;
 }
 /** Una imagen (lo que devolvió la IA) en RGBA de exactamente w × h. */
 async function aRgba(imagen: Blob, w: number, h: number): Promise<Uint8ClampedArray> {
@@ -1149,7 +1143,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     try {
       const c = recorte.caja;
       const form = new FormData();
-      form.set("fondo", await pngQueQuepa(recortarRgba(m.fondo, m.w, c), c.w, c.h, RECORTE_IA_MAX, FONDO_IA_MAX_BYTES), "fondo.png");
+      form.set("fondo", await pngQueQuepa(recorteConOrilla(m.fondo, m.w, m.h, c), c.w, c.h, RECORTE_IA_MAX, FONDO_IA_MAX_BYTES), "fondo.png");
       const rgbaPieza = p.rgba.buffer instanceof ArrayBuffer ? (p.rgba as Uint8ClampedArray<ArrayBuffer>) : new Uint8ClampedArray(p.rgba);
       form.set("pieza", await pngQueQuepa(rgbaPieza, p.caja.w, p.caja.h, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES), "pieza.png");
       form.set("aspect", recorte.aspect);

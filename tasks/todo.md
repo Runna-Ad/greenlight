@@ -4245,6 +4245,13 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
         tipografías del cliente. PROBADO en localhost con SPGFAPPLE1PLATA (DiDi): 2 familias, tamaño 35→50, otra
         familia, se guardó y salió en las 13 medidas (640×100 visto); «Volver a los textos originales» lo quita.
         Falta: Google Fonts que el cliente no tiene guardadas no salen en la lista (sólo las cargadas).
+      · DOS ARREGLOS DE LA PRUEBA DE PEDRO (2026-10-28 noche):
+        - El subtítulo de SPGFAPPLE salía «No se puede cambiar aquí: «Rectangle 6» está encima»: «Rectangle 6» es un
+          recuadro de sólo contorno ENCIMA del texto. La regla veía cajas que se tocan; ahora mira píxeles
+          (`pintaSobre` en psd.ts). PROBADO en localhost: 6 de 6 textos nítidos (antes 5) y el subtítulo se cambia.
+        - En una imagen plana de forma rara (788×1262) con una copia grande, el botón de IA de «Quitar del fondo» no
+          salía: ninguna proporción de la IA cabía. Ahora el recorte se sale del maestro (orilla repetida, no se pega).
+          SIN PROBAR con la IA (en localhost está apagada y no tengo esa imagen): probarlo en la preview.
       · CACHÉ DE LECTURAS (2026-10-28, código en `prisma`; migración 0087 APLICADA 2026-10-28 con "ship it" de Pedro (86 aplicadas · 0 pendientes; tabla con RLS, sólo el servidor escribe)):
         `prisma_formatos_lecturas` (sha256 del archivo original + modelo → elementos crudos, w, h). La ruta /leer la usa
         antes de llamar a la IA (no cuenta para el tope de lecturas) y guarda la nueva; «Leer otra vez con IA» en la

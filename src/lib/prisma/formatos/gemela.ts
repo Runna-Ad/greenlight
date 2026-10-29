@@ -276,7 +276,9 @@ export const DERIVA_IA_REVISAR = 18;
 export const COSTO_COPIA_IA_USD = 0.041;
 
 /** El recorte del maestro que se le manda a la IA: la caja de la copia con aire, en una proporción que la IA acepta
- *  (la más parecida), sin salir del maestro. null si no cabe ninguna (la caja casi del tamaño del maestro). */
+ *  (la más parecida), sin salir del maestro. Si no cabe ninguna (la caja casi del tamaño de un maestro de forma rara,
+ *  B30: una imagen plana de 788×1262), el recorte se sale del maestro lo menos posible: lo de fuera se manda con la
+ *  orilla repetida (`recorteConOrilla`) y no se pega. null sólo si la caja está vacía. */
 export function recorteParaIA(ma: { w: number; h: number }, g: Gemela): { caja: Caja; aspect: string } | null {
   const c = g.caja;
   const w0 = c.w * (1 + 2 * AIRE_IA), h0 = c.h * (1 + 2 * AIRE_IA);
@@ -295,7 +297,37 @@ export function recorteParaIA(ma: { w: number; h: number }, g: Gemela): { caja: 
     const error = (w * h) / (w0 * h0);
     if (!mejor || error < mejor.error) mejor = { caja: { x, y, w, h }, aspect, error };
   }
-  return mejor && { caja: mejor.caja, aspect: mejor.aspect };
+  if (mejor) return { caja: mejor.caja, aspect: mejor.aspect };
+  if (!(c.w > 0 && c.h > 0)) return null;
+  // Ninguna cabe adentro: la caja más chica de cada proporción que contiene la copia (sin aire de más), centrada en el
+  // maestro por el lado que se sale; gana la que menos se sale.
+  let fuera: { caja: Caja; aspect: string; area: number } | null = null;
+  for (const aspect of Object.keys(RATIOS_IA)) {
+    const [rw, rh] = aspect.split(":").map(Number), r = rw / rh;
+    const w = Math.ceil(Math.max(c.w, c.h * r)), h = Math.ceil(Math.max(c.h, w / r));
+    const lugar = (lado: number, total: number, centro: number) => (lado <= total ? Math.round(Math.min(Math.max(0, centro - lado / 2), total - lado)) : Math.round((total - lado) / 2));
+    const x = lugar(w, ma.w, cx), y = lugar(h, ma.h, cy);
+    if (x > c.x || y > c.y || x + w < c.x + c.w || y + h < c.y + c.h) continue;
+    const area = w * h - Math.max(0, Math.min(ma.w, x + w) - Math.max(0, x)) * Math.max(0, Math.min(ma.h, y + h) - Math.max(0, y));
+    if (!fuera || area < fuera.area) fuera = { caja: { x, y, w, h }, aspect, area };
+  }
+  return fuera && { caja: fuera.caja, aspect: fuera.aspect };
+}
+
+/** Un recorte (que puede salirse) de un RGBA de `W × H`: lo de fuera, con el píxel de la orilla más cercano. */
+export function recorteConOrilla(rgba: Uint8ClampedArray, W: number, H: number, c: Caja): Uint8ClampedArray<ArrayBuffer> {
+  const out = new Uint8ClampedArray(c.w * c.h * 4);
+  for (let y = 0; y < c.h; y++) {
+    const Y = Math.min(H - 1, Math.max(0, c.y + y));
+    for (let x = 0; x < c.w; x++) {
+      const X = Math.min(W - 1, Math.max(0, c.x + x)), j = (Y * W + X) * 4, k = (y * c.w + x) * 4;
+      out[k] = rgba[j];
+      out[k + 1] = rgba[j + 1];
+      out[k + 2] = rgba[j + 2];
+      out[k + 3] = rgba[j + 3];
+    }
+  }
+  return out;
 }
 
 /** Lo que cuesta un paso derecho y uno en diagonal al medir distancias (≈ √2). */
@@ -345,6 +377,8 @@ export function pegarRellenoIA(ma: ConFondo, g: Gemela, recorte: Caja, ia: Uint8
   for (let y = 0; y < recorte.h; y++)
     for (let x = 0; x < recorte.w; x++) {
       const X = recorte.x + x, Y = recorte.y + y, j = (Y * W + X) * 4, k = (y * recorte.w + x) * 4;
+      // Lo que se salía del maestro (orilla repetida) no es del fondo: ni se pega ni cuenta para la deriva.
+      if (X < 0 || Y < 0 || X >= W || Y >= ma.h) continue;
       const dentro = X >= bx && X < bx + bw && Y >= by && Y < by + bh;
       if (!dentro) {
         for (let c = 0; c < 3; c++) suma += Math.abs(ia[k + c] - ma.fondo[j + c]);

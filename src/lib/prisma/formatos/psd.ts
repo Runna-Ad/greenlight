@@ -1055,8 +1055,9 @@ function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
   return maestro;
 }
 
-/** Por qué una capa de texto no se puede redibujar aunque su texto sí se entienda (null = se puede intentar). */
-function motivoCapa(c: CapaPsd, encima: CapaPsd[]): string | null {
+/** Por qué una capa de texto no se puede redibujar aunque su texto sí se entienda (null = se puede intentar).
+ *  `tapaLetras`: si esa capa de encima pinta de verdad sobre las letras (sin saberlo, las cajas que se tocan bastan). */
+function motivoCapa(c: CapaPsd, encima: CapaPsd[], tapaLetras: (o: CapaPsd) => boolean = () => true): string | null {
   if (c.mezcla !== "normal") return `fusión ${c.mezcla}`;
   if (c.conEfectos) return "efectos de capa";
   if (c.mascara) return "máscara";
@@ -1064,8 +1065,40 @@ function motivoCapa(c: CapaPsd, encima: CapaPsd[]): string | null {
   if (encima[0]?.recorte) return "otra capa recortada a ella";
   // Una capa que NO es texto encima de sus letras: al quitar las letras no se sabría qué hay debajo de esa.
   const toca = (o: CapaPsd) => o.left < c.left + c.w && o.left + o.w > c.left && o.top < c.top + c.h && o.top + o.h > c.top;
-  const tapa = encima.find((o) => !o.texto && o.tipo !== "ajuste" && toca(o));
+  // Que las cajas se toquen no basta: un recuadro de sólo contorno (B30, «Rectangle 6» alrededor del subtítulo de DiDi)
+  // rodea las letras sin pintarles encima.
+  const tapa = encima.find((o) => !o.texto && o.tipo !== "ajuste" && toca(o) && tapaLetras(o));
   return tapa ? `«${tapa.nombre}» está encima` : null;
+}
+
+/** Alrededor de las letras, lo que cuenta como «encima» de ellas (px): el margen que se rellena y uno más. */
+const TAPA_MARGEN = 2;
+/**
+ * ¿La capa `o` pinta sobre las letras de `c` (su tinta en `caja`, px de la mesa, con un margen)? Con sus píxeles a la
+ * mano; si no los hay, o tiene efectos de capa (pintan fuera de sus píxeles: sombra, resplandor), sí: no se sabe.
+ */
+function pintaSobre(o: CapaPsd, c: CapaPsd, caja: { x: number; y: number; w: number; h: number }, m: MesaPsd): boolean {
+  if (o.conEfectos || o.halos.length) return true;
+  const img = o.pixeles();
+  if (!img || img.width !== o.w || img.height !== o.h) return true;
+  const X0 = caja.x - TAPA_MARGEN, Y0 = caja.y - TAPA_MARGEN, W = caja.w + 2 * TAPA_MARGEN, H = caja.h + 2 * TAPA_MARGEN;
+  const tinta = new Uint8Array(W * H);
+  porPixel(c, m, false, (i, a) => {
+    if (a <= 0.02) return;
+    const x = (i % m.w) - X0, y = ((i / m.w) | 0) - Y0;
+    for (let dy = -TAPA_MARGEN; dy <= TAPA_MARGEN; dy++)
+      for (let dx = -TAPA_MARGEN; dx <= TAPA_MARGEN; dx++) {
+        const u = x + dx, v = y + dy;
+        if (u >= 0 && u < W && v >= 0 && v < H) tinta[v * W + u] = 1;
+      }
+  });
+  let pinta = false;
+  porPixel(o, m, true, (i, a) => {
+    if (pinta || a <= 0.02) return;
+    const x = (i % m.w) - X0, y = ((i / m.w) | 0) - Y0;
+    if (x >= 0 && x < W && y >= 0 && y < H && tinta[y * W + x]) pinta = true;
+  });
+  return pinta;
 }
 
 /** Alrededor de cada letra se rellena también este margen: su borde suavizado trae color de la letra. */
@@ -1150,7 +1183,7 @@ function tintaDe(c: CapaPsd & { texto: TextoCapa }, encima: CapaPsd[], m: MesaPs
   if (x1 < 0) return null;
   const caja = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
   // Una tinta enorme no es un texto que valga probar en el navegador (y congelaría la página al compararla).
-  const motivo = c.texto.motivo ?? motivoCapa(c, encima) ?? (caja.w * caja.h > TEXTO_CAJA_MAX_PX ? "texto demasiado grande para probarlo" : null);
+  const motivo = c.texto.motivo ?? motivoCapa(c, encima, (o) => pintaSobre(o, c, caja, m)) ?? (caja.w * caja.h > TEXTO_CAJA_MAX_PX ? "texto demasiado grande para probarlo" : null);
   const alfa = new Uint8ClampedArray(motivo ? 0 : caja.w * caja.h);
   const peso = c.opacidad || 1;
   if (!motivo)

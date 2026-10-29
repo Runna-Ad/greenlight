@@ -29,7 +29,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, RENGLONES_MAS, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, MEDIDAS_RATIO, FONDO_ZOOM_MAX, FONDO_EDITOR_MAX, fondoDeEdicion, edicionDeFondo } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
-import { buscarGemela, quitarGemela, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
+import { buscarGemela, quitarGemela, recorteConOrilla, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContraste, edicionMuevePieza, edicionSinPieza } from "../src/lib/prisma/formatos/revisar.ts";
 import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
 import { specVacio } from "../src/lib/prisma/spec.ts";
@@ -1360,6 +1360,13 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
   eq("textosDe: texto en «trama»: lleva motivo y la pieza va entera como imagen (sin base)", [p3.textos[0].motivo, p3.base], ["fusión screen", null]);
   const p4 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto(), capa("brillo", [100, 35, 20, 10], () => [255, 255, 255, 30])]));
   eq("textosDe: una capa que no es texto encima de las letras: motivo y sin base (no se sabría qué hay debajo)", [p4.textos[0].motivo, p4.base], ["«brillo» está encima", null]);
+  // B30 (Pedro, 2026-10-28): «Rectangle 6» de DiDi es un recuadro de sólo contorno ENCIMA del subtítulo; su caja rodea
+  // las letras pero no las pinta. El texto se tiene que poder cambiar.
+  const contorno = (x0, y0, cw, ch) => capa("Rectangle 6", [x0, y0, cw, ch], (x, y) => [255, 255, 255, x < x0 + 2 || x >= x0 + cw - 2 || y < y0 + 2 || y >= y0 + ch - 2 ? 255 : 0]);
+  const p5 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto(), contorno(50, 33, 80, 34)]));
+  ok("textosDe: un recuadro de sólo contorno encima, alrededor de las letras, no las tapa: sin motivo y con base", p5.textos[0].motivo === null && !!p5.base, JSON.stringify([p5.textos[0].motivo, !!p5.base]));
+  const p6 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto(), contorno(56, 36, 30, 20)]));
+  eq("textosDe: un contorno que cruza las letras sí las tapa", p6.textos[0].motivo, "«Rectangle 6» está encima");
   // La gamma del texto se averigua con las orillas de las letras contra la copia aplanada.
   const gammaDe = (buf) => despiezar(leerPsd(buf), 0).textoGamma;
   const conBoton = (extra) => [capa("boton", [40, 30, 120, 40], () => NARANJA), texto(extra)];
@@ -1466,11 +1473,26 @@ console.log("\n▶ v2 · copia del HERO pintada en el fondo (gemela.ts) y avisos
     !!rc && rc.caja.x <= g.caja.x && rc.caja.y <= g.caja.y && rc.caja.x + rc.caja.w >= g.caja.x + g.caja.w && rc.caja.y + rc.caja.h >= g.caja.y + g.caja.h && rc.caja.x >= 0 && rc.caja.y >= 0 && rc.caja.x + rc.caja.w <= L && rc.caja.y + rc.caja.h <= L && Math.abs(rc.caja.w / rc.caja.h / (rw / rh) - 1) <= 0.03,
     JSON.stringify(rc),
   );
-  eq(
-    "IA: si ninguna proporción de la IA cabe en el maestro con la copia entera, no se manda nada (100×30 en un maestro de 100×31)",
-    recorteParaIA({ w: 100, h: 31 }, { pieza: 0, parecido: 1, caja: { x: 0, y: 0, w: 100, h: 30 } }),
-    null,
-  );
+  // B30 (Pedro, 2026-10-28): en una imagen plana de 788×1262 con una copia grande ninguna proporción cabía y el botón
+  // de la IA no salía. Ahora el recorte se sale del maestro lo menos posible.
+  const contiene = (r, c) => !!r && r.caja.x <= c.x && r.caja.y <= c.y && r.caja.x + r.caja.w >= c.x + c.w && r.caja.y + r.caja.h >= c.y + c.h;
+  const proporcion = (r) => { const [a, b] = r.aspect.split(":").map(Number); return Math.abs(r.caja.w / r.caja.h / (a / b) - 1) <= 0.03; };
+  const raro = recorteParaIA({ w: 788, h: 1262 }, { pieza: 0, parecido: 1, caja: { x: 20, y: 30, w: 760, h: 1220 } });
+  ok("IA: maestro de forma rara (788×1262) con la copia casi entera: hay recorte, contiene la copia, con proporción de la IA y se sale poco", contiene(raro, { x: 20, y: 30, w: 760, h: 1220 }) && proporcion(raro) && raro.caja.w * raro.caja.h < 1.2 * 788 * 1262, JSON.stringify(raro));
+  const chato = recorteParaIA({ w: 100, h: 31 }, { pieza: 0, parecido: 1, caja: { x: 0, y: 0, w: 100, h: 30 } });
+  ok("IA: 100×30 en un maestro de 100×31 (antes: nada): un recorte que lo contiene, saliéndose", contiene(chato, { x: 0, y: 0, w: 100, h: 30 }) && proporcion(chato), JSON.stringify(chato));
+  {
+    const W2 = 4, H2 = 3, src = new Uint8ClampedArray(W2 * H2 * 4);
+    for (let i = 0; i < W2 * H2; i++) src.set([i * 10, 0, 0, 255], i * 4);
+    const rco = recorteConOrilla(src, W2, H2, { x: -1, y: -1, w: 6, h: 5 });
+    eq("recorteConOrilla: lo de fuera repite la orilla (esquinas y lados); lo de dentro, igual", [rco[0], rco[(0 * 6 + 5) * 4], rco[(4 * 6 + 0) * 4], rco[(2 * 6 + 2) * 4]], [0, 30, 80, 50]);
+    // Pegar un recorte que se sale: sólo lo de dentro del maestro se toca, sin pasarse de la orilla.
+    const gChato = { pieza: g.pieza, parecido: 1, caja: g.caja };
+    const fuera = { x: -10, y: -10, w: L + 20, h: L + 20 }, todoVerde = new Uint8ClampedArray(fuera.w * fuera.h * 4);
+    for (let i = 0; i < fuera.w * fuera.h; i++) todoVerde.set([0, 200, 0, 255], i * 4);
+    const pf = pegarRellenoIA(ma, gChato, fuera, todoVerde);
+    ok("IA: pegar un recorte que se sale del maestro no truena y pone lo de la IA en el hueco", !!pf && pf.fondo.length === ma.fondo.length && pf.fondo[((caja.y + 35) * L + caja.x + 25) * 4 + 1] === 200);
+  }
   // Lo que "devuelve la IA": todo verde. Dentro del hueco va verde; lejos de la copia, el fondo original intacto.
   const verde = new Uint8ClampedArray(rc.caja.w * rc.caja.h * 4);
   for (let i = 0; i < rc.caja.w * rc.caja.h; i++) verde.set([0, 200, 0, 255], i * 4);
