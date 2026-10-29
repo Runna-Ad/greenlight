@@ -825,6 +825,8 @@ export function soltarConFondoIA<M extends { elementos: ElementoMedido[]; todos:
     let x0 = W, y0 = H, x1 = -1, y1 = -1;
     for (let k = 0; k < W * H; k++) if (solo[k]) { const x = k % W, y = (k / W) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
     if (x1 < 0) continue;
+    // Con recorte, un margen alrededor: la orilla se afina con el fondo de la imagen que tiene justo afuera.
+    if (rc) { x0 = Math.max(0, x0 - RECORTE_VENTANA_PX); y0 = Math.max(0, y0 - RECORTE_VENTANA_PX); x1 = Math.min(W - 1, x1 + RECORTE_VENTANA_PX); y1 = Math.min(H - 1, y1 + RECORTE_VENTANA_PX); }
     const w = x1 - x0 + 1, h = y1 - y0 + 1, a = new Float32Array(w * h);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const k = (y0 + y) * W + x0 + x;
@@ -833,6 +835,9 @@ export function soltarConFondoIA<M extends { elementos: ElementoMedido[]; todos:
       const i = k * 4, dist = Math.max(Math.abs(d[i] - fondoIA[k * 3]), Math.abs(d[i + 1] - fondoIA[k * 3 + 1]), Math.abs(d[i + 2] - fondoIA[k * 3 + 2]));
       a[y * w + x] = dist >= SOLTAR_LLENO ? 1 : dist >= SOLTAR_ORILLA ? (dist - SOLTAR_ORILLA) / (SOLTAR_LLENO - SOLTAR_ORILLA) : 0;
     }
+    // Un recorte trae a veces pedazos sueltos (el del tablero LED, rayas de su base que salían negras debajo: Pedro,
+    // preview 2026-10-29): fuera ANTES de rellenar lo encerrado, que si no los une a la pieza.
+    if (rc) soloLoMayor(a, w, h);
     // Lo encerrado por la pieza también es pieza: donde el objeto se parece al fondo que puso la IA (la pantalla oscura
     // del tablero LED sobre un estadio oscuro), la diferencia no lo ve y quedaba un hueco por donde se veía el estadio
     // (Pedro, preview 2026-10-29). Se cierran las rendijas de su contorno y se rellena todo lo que no llega desde afuera.
@@ -857,19 +862,10 @@ export function soltarConFondoIA<M extends { elementos: ElementoMedido[]; todos:
       for (let k = 0; k < w * h; k++) if (!abierto[k] && !dilatar1(abierto, w, h, k)) a[k] = 0;
     }
     // Y sólo lo que está pegado a la parte más grande (lo suelto en la orilla es fondo).
-    if (!rc) {
-      const comp = new Int32Array(w * h).fill(-1), tam: number[] = [];
-      for (let s = 0; s < w * h; s++) {
-        if (a[s] < 0.5 || comp[s] >= 0) continue;
-        const id = tam.length, pila = [s];
-        comp[s] = id;
-        let n = 0;
-        while (pila.length) { const k = pila.pop()!, x = k % w; n++; for (const v of [x > 0 ? k - 1 : -1, x < w - 1 ? k + 1 : -1, k >= w ? k - w : -1, k < w * (h - 1) ? k + w : -1]) if (v >= 0 && a[v] >= 0.5 && comp[v] < 0) { comp[v] = id; pila.push(v); } }
-        tam.push(n);
-      }
-      const mayor = tam.reduce((m, t, i) => (t > tam[m] ? i : m), 0);
-      if (tam.length) for (let k = 0; k < w * h; k++) if (a[k] >= 0.5 && comp[k] !== mayor && tam[comp[k]] < tam[mayor] * 0.1) a[k] = 0;
-    }
+    soloLoMayor(a, w, h);
+    // La orilla del recorte, al final: ya sin pedazos sueltos (si no, el hueco entre la pieza y un pedazo contaba como
+    // hueco abierto por afinar).
+    if (rc) afinarOrilla(a, w, h, x0, y0, img);
     const pinta = cajaDe(a, w, h, 0, x0, y0), solido = cajaDe(a, w, h, 0.5, x0, y0);
     if (!pinta || !solido) continue;
     const alfa = new Uint8ClampedArray(pinta.w * pinta.h);
@@ -884,6 +880,106 @@ export function soltarConFondoIA<M extends { elementos: ElementoMedido[]; todos:
   const vivos = new Set([...medido.elementos.map((e) => e.id), ...libres.map((e) => e.id)]);
   const elementos = [...medido.elementos, ...libres].map((e) => { const s = sobreDe.get(e.id) ?? null; return { ...e, sobre: s && vivos.has(s) ? s : null }; });
   return { ...medido, fondo: fondoIA, elementos, fijos: [], pegados: [], anclados: [], avisos: [...((medido as { avisos?: string[] }).avisos ?? []), ...avisos] };
+}
+
+/** Deja en `a` (0-1, w × h) sólo la parte más grande y las que miden al menos el 10 % de ella. */
+function soloLoMayor(a: Float32Array, w: number, h: number) {
+  const comp = new Int32Array(w * h).fill(-1), tam: number[] = [];
+  for (let s = 0; s < w * h; s++) {
+    if (a[s] < 0.5 || comp[s] >= 0) continue;
+    const id = tam.length, pila = [s];
+    comp[s] = id;
+    let n = 0;
+    while (pila.length) { const k = pila.pop()!, x = k % w; n++; for (const v of [x > 0 ? k - 1 : -1, x < w - 1 ? k + 1 : -1, k >= w ? k - w : -1, k < w * (h - 1) ? k + w : -1]) if (v >= 0 && a[v] >= 0.5 && comp[v] < 0) { comp[v] = id; pila.push(v); } }
+    tam.push(n);
+  }
+  const mayor = tam.reduce((m, t, i) => (t > tam[m] ? i : m), 0);
+  if (tam.length) for (let k = 0; k < w * h; k++) if (a[k] >= 0.5 && comp[k] !== mayor && tam[comp[k]] < tam[mayor] * 0.1) a[k] = 0;
+}
+
+/** El ancho de la orilla de un recorte que se revisa contra los colores de la imagen (px), y lo que se mira alrededor. */
+const RECORTE_ORILLA_PX = 6, RECORTE_VENTANA_PX = 14;
+/** Lo que tienen que distinguirse el color del objeto y el del fondo junto a él (distancia RGB) para afinar ahí. */
+const ORILLA_CONTRASTE = 30;
+
+/**
+ * La orilla de un recorte (a: 0-1, w × h desde x0, y0 en la imagen), afinada sin IA: cada píxel de los RECORTE_ORILLA_PX de
+ * adentro se compara con el color del objeto (lo de adentro) y el del fondo (lo de afuera) que tiene cerca, en la
+ * imagen original; lo que se parece al fondo sale. El recorte del botón del estadio se llevaba en las puntas redondas
+ * un pedazo del barandal oscuro, que se veía como una mancha al moverlo (Pedro, preview 2026-10-29). Donde objeto y
+ * fondo se parecen (tablero oscuro sobre barandal oscuro), o el píxel es de un color que no es mezcla de los dos (un
+ * filo delgado de otro color), no se toca.
+ */
+function afinarOrilla(a: Float32Array, w: number, h: number, x0: number, y0: number, img: Imagen) {
+  const antes = Float32Array.from(a), huecos = (m: Float32Array) => huecosDe(Uint8ClampedArray.from(m, (v) => v * 255), w, h);
+  afinar(a, w, h, x0, y0, img);
+  // Afinar nunca abre huecos: en un contorno delgado y cortado (los botones de las tiendas de fcc6) el pelado se
+  // metía por las rendijas y dejaba la foto de adentro a parches. Ahí la pieza se queda con el recorte tal cual.
+  if (huecos(a) > huecos(antes) + 0.005) a.set(antes);
+}
+function afinar(a: Float32Array, w: number, h: number, x0: number, y0: number, img: Imagen) {
+  const n = w * h, dentro = new Uint8Array(n), afuera = new Uint8Array(n);
+  for (let k = 0; k < n; k++) { dentro[k] = a[k] >= 0.5 ? 0 : 1; afuera[k] = a[k] >= 0.5 ? 1 : 0; }
+  // dentro = lo del objeto a más de RECORTE_ORILLA_PX de su orilla; afuera = lo de fuera a más de 2 px (la orilla suave no cuenta).
+  const lejosDeFuera = dilatar(dentro, w, h, RECORTE_ORILLA_PX), lejosDeDentro = dilatar(afuera, w, h, 2);
+  for (let k = 0; k < n; k++) { dentro[k] = lejosDeFuera[k] ? 0 : 1; afuera[k] = lejosDeDentro[k] ? 0 : 1; }
+  // Sumas por área (imagen integral) del color de cada lado: el promedio de una ventana sale en 4 restas.
+  const W1 = w + 1, sumas = (m: Uint8Array) => {
+    const t = new Float64Array(W1 * (h + 1) * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const k = y * w + x, i = ((y0 + y) * img.w + x0 + x) * 4, o = ((y + 1) * W1 + x + 1) * 4, iz = ((y + 1) * W1 + x) * 4, ar = (y * W1 + x + 1) * 4, d = (y * W1 + x) * 4;
+      for (let c = 0; c < 4; c++) t[o + c] = (m[k] ? (c < 3 ? img.rgba[i + c] : 1) : 0) + t[iz + c] + t[ar + c] - t[d + c];
+    }
+    return t;
+  };
+  const sD = sumas(dentro), sF = sumas(afuera), r = RECORTE_VENTANA_PX;
+  const promedio = (t: Float64Array, x: number, y: number) => {
+    const xa = Math.max(0, x - r), ya = Math.max(0, y - r), xb = Math.min(w, x + r + 1), yb = Math.min(h, y + r + 1), v = [0, 0, 0, 0];
+    for (let c = 0; c < 4; c++) v[c] = t[(yb * W1 + xb) * 4 + c] - t[(ya * W1 + xb) * 4 + c] - t[(yb * W1 + xa) * 4 + c] + t[(ya * W1 + xa) * 4 + c];
+    return v[3] ? [v[0] / v[3], v[1] / v[3], v[2] / v[3]] : null;
+  };
+  // Lo que cada píxel de la orilla tiene de objeto (1 = nada que quitar).
+  const nuevo = new Float32Array(n).fill(1);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const k = y * w + x;
+    if (a[k] < 0.5 || dentro[k]) continue;
+    const fg = promedio(sD, x, y), bg = promedio(sF, x, y);
+    if (!fg || !bg) continue;
+    const i = ((y0 + y) * img.w + x0 + x) * 4;
+    let num = 0, den = 0, lejos = 0;
+    for (let c = 0; c < 3; c++) { const e = fg[c] - bg[c], v = img.rgba[i + c] - bg[c]; num += v * e; den += e * e; lejos += v * v; }
+    if (den < ORILLA_CONTRASTE * ORILLA_CONTRASTE) continue;
+    // Un color que no es mezcla de los dos (el filo naranja de un recuadro oscuro sobre una foto oscura) es del objeto.
+    if (lejos - (num * num) / den > ORILLA_CONTRASTE * ORILLA_CONTRASTE) continue;
+    nuevo[k] = Math.max(0, Math.min(1, num / den));
+  }
+  // Se pela desde afuera hacia adentro y se para en el primer píxel del objeto: lo de detrás de un filo (la foto dentro
+  // del contorno blanco de los botones de las tiendas) no se toca, aunque se parezca al fondo (fcc6, 2026-10-29).
+  const visto = new Uint8Array(n), cola: number[] = [];
+  for (let k = 0; k < n; k++) if (a[k] < 0.5) { visto[k] = 1; cola.push(k); }
+  const vecinos = (k: number) => { const x = k % w; return [x > 0 ? k - 1 : -1, x < w - 1 ? k + 1 : -1, k >= w ? k - w : -1, k < n - w ? k + w : -1]; };
+  while (cola.length) {
+    for (const v of vecinos(cola.pop()!)) {
+      if (v < 0 || visto[v]) continue;
+      if (nuevo[v] < 0.5) { visto[v] = 1; a[v] = nuevo[v]; cola.push(v); }
+      // La orilla suave que queda (lo que toca lo pelado), con lo que tiene de objeto.
+      else if (nuevo[v] < 1) a[v] = Math.min(a[v], nuevo[v]);
+    }
+  }
+  // Las motas que el pelado dejó en lo que era fondo (un grano más claro de la foto): un píxel de la orilla con 5 o más
+  // de sus 8 vecinos ya pelados también sale. Un filo delgado o el borde del objeto tienen menos vecinos pelados.
+  for (let vuelta = 0; vuelta < RECORTE_ORILLA_PX; vuelta++) {
+    const motas: number[] = [];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const k = y * w + x;
+      if (visto[k] || dentro[k]) continue;
+      let pelados = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Y = y + dy; if ((dx || dy) && (X < 0 || Y < 0 || X >= w || Y >= h || visto[Y * w + X])) pelados++; }
+      if (pelados >= 5) motas.push(k);
+    }
+    if (!motas.length) break;
+    for (const k of motas) { visto[k] = 1; a[k] = 0; }
+  }
 }
 
 /** Lo que tiene que aguantar encogerse una parte de la orilla de una pieza soltada para seguir siendo pieza (px). */

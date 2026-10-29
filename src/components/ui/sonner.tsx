@@ -39,7 +39,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          // Con un diálogo abierto, Radix pone `pointer-events: none` en <body>: sin esto los avisos no se pueden cerrar.
+          toast: "cn-toast pointer-events-auto",
         },
       }}
       {...props}

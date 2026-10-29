@@ -3370,6 +3370,23 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
     for (let y = 6; y < 14; y++) for (let x = 6; x < 14; x++) ventana[y * 20 + x] = 0;
     eq("fondo IA: huecosDe ve una ventana de 8×8 en 20×20 (16 %) y nada en una forma llena", [Math.round(huecosDe(ventana, 20, 20) * 100), huecosDe(new Uint8ClampedArray(400).fill(255), 20, 20)], [16, 0]);
   }
+  {
+    // Preview 2026-10-29 (Pedro): con el recorte del modelo, el botón traía en las puntas un pedazo del barandal oscuro
+    // y el tablero LED, rayas negras sueltas de su base. Un botón naranja sobre textura oscura; el recorte se pasa 4 px
+    // del botón y trae una raya suelta debajo.
+    const px = new Uint8ClampedArray(W * H * 4);
+    for (let k = 0; k < W * H; k++) { const v = 40 + ruido[k * 3] - 120; px[k * 4] = v; px[k * 4 + 1] = v; px[k * 4 + 2] = v; px[k * 4 + 3] = 255; }
+    for (let y = 40; y < 80; y++) for (let x = 40; x < 140; x++) px.set([250, 80, 0], (y * W + x) * 4);
+    const rc = new Uint8Array(W * H);
+    for (let y = 36; y < 84; y++) for (let x = 36; x < 144; x++) rc[y * W + x] = 1;
+    for (let y = 92; y < 95; y++) for (let x = 50; x < 120; x++) rc[y * W + x] = 1;
+    const fondo = new Uint8ClampedArray(W * H * 3);
+    for (let k = 0; k < W * H; k++) for (let c = 0; c < 3; c++) fondo[k * 3 + c] = px[k * 4 + c];
+    const m = { elementos: [], todos: [{ id: "boton", sobre: null }], fijos: ["boton"], pegados: [], anclados: [], fondo };
+    const b = soltarConFondoIA({ w: W, h: H, rgba: px }, m, fondo, new Map([["boton", rc]])).elementos.find((e) => e.id === "boton");
+    const en = (x, y) => (b && x >= b.pinta.x && y >= b.pinta.y && x < b.pinta.x + b.pinta.w && y < b.pinta.y + b.pinta.h ? b.alfa[(y - b.pinta.y) * b.pinta.w + x - b.pinta.x] : 0);
+    ok(`fondo IA, recorte: el borde oscuro de más y la raya suelta salen; el botón queda entero (centro ${en(90, 60)}, borde ${en(37, 60)}, raya ${en(80, 93)})`, en(90, 60) === 255 && en(41, 41) === 255 && en(37, 60) < 40 && en(141, 38) < 40 && en(80, 93) === 0, JSON.stringify(b?.pinta));
+  }
   ok("fondo IA: en el maestro el botón y su texto van en UNA pieza (CTA) y no hay nada anclado", ma.piezas.length === 1 && ma.piezas[0].rol === "CTA" && !ma.piezas.some((p) => p.anclada) && !ma.pegados);
 }
 
