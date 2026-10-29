@@ -82,7 +82,7 @@ function derivarTextos<M extends MaestroListo>(maestros: M[], cambios: CambiosTe
     let r = ya && ya.i === i && ya.clave === clave && ya.e === e && ya.t === t ? ya.r : null;
     if (!r) {
       try {
-        r = cambiarTextos(m, cambios, (p) => listosDe(e, i, p), maquetar, pintarTexto);
+        r = cambiarTextos(m, cambios, (p) => listosDe(e, i, p), maquetar, pintarTexto, [...t.keys()]);
       } catch (err) {
         // Se ve el texto del PSD y cada medida lo dice (no el texto nuevo en el campo y el viejo en la tarjeta, callado).
         console.error("[formatos-psd] textos cambiados", err);
@@ -969,6 +969,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   const [canal, setCanal] = useState<Canal | null>(null);
   /** Tipografías cargadas (nombre PostScript → cómo pedirla). Vacío = el texto va como imagen. */
   const [tipos, setTipos] = useState<Tipografias>(() => new Map());
+  /** Las que ofrece la barra de texto del editor: las cargadas en esta pestaña. */
+  const fuentesCargadas = useMemo(() => [...tipos.keys()], [tipos]);
   /** Qué pasó al cargar tipografías (se escribe al pintar: así sigue el idioma de la pantalla). */
   const [notaFuentes, setNotaFuentes] = useState<NotaFuentes | null>(null);
   /** Cuántas cargas de tipografías van en curso (soltadas, del botón y de Greenlight pueden cruzarse). */
@@ -1660,11 +1662,11 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   });
   /** Imagen plana (B28): una imagen no dice su tipografía; se traen TODAS las del cliente elegido, una vez por imagen
    *  y cliente, y la revisión prueba cuál empata con cada texto. */
-  const pedidasPlano = useRef<{ p: Plano; c: string } | null>(null);
-  const pedirDelCliente = useEffectEvent(async (p: Plano, c: string) => {
+  const pedidasPlano = useRef<{ p: Plano | Leido; c: string } | null>(null);
+  const pedirDelCliente = useEffectEvent(async (p: Plano | Leido, c: string) => {
     if (!c || (pedidasPlano.current?.p === p && pedidasPlano.current.c === c)) return;
     pedidasPlano.current = { p, c };
-    const sigue = () => vivo.current && planoVigente.current === p && clienteVigente.current === c;
+    const sigue = () => vivo.current && (planoVigente.current === p || leidoVigente.current === p) && clienteVigente.current === c;
     setTrayendo((n) => n + 1);
     try {
       const r = await Promise.race([
@@ -1690,6 +1692,15 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     const reloj = window.setTimeout(() => void pedirDelCliente(plano, cliente), 0);
     return () => window.clearTimeout(reloj);
   }, [plano, cliente]);
+  // Un PSD sólo carga las tipografías que usa; la barra de texto del editor ofrece las cargadas, así que al abrir el
+  // editor se traen también las demás del cliente (una vez por archivo y cliente).
+  const abiertoEditor = editando !== null;
+  useEffect(() => {
+    // Una imagen plana ya las trajo todas (con su revisión): sólo el PSD.
+    if (!abiertoEditor || !leido?.psdOriginal || !cliente) return;
+    const reloj = window.setTimeout(() => void pedirDelCliente(leido, cliente), 0);
+    return () => window.clearTimeout(reloj);
+  }, [abiertoEditor, leido, cliente]);
   /**
    * Cambiar de cliente: se sueltan las tipografías que llegaron por ser exclusivas de OTRO cliente (DiDi Sans Pro deja
    * de usarse si ya no es DiDi) y se vuelve a pedir lo que le falte al PSD en pantalla, ahora con el cliente nuevo.
@@ -2233,6 +2244,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
           cambios={cambiosTexto}
           motivoTexto={(pieza, j) => motivoTexto(paraEditor.mi, pieza, j)}
           piezaEscrita={(pieza) => !!listosDe(escritura, paraEditor.mi, pieza)}
+          fuentes={fuentesCargadas}
           nMedidas={medidas.length}
           inicial={edicionesVista.get(clave(paraEditor.m)) ?? null}
           zona={paraEditor.zona}

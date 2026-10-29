@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { AlertTriangle, Check, ChevronDown, ChevronUp, FolderClosed, FolderOpen, Info, Move, RotateCcw } from "lucide-react";
+import { AlertTriangle, Bold, Check, ChevronDown, ChevronUp, FolderClosed, FolderOpen, Info, Minus, Move, Plus, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,7 @@ import { etiquetaPieza } from "@/lib/prisma/formatos/roles";
 import { FP, FP_SIN_RENGLONES, rellenar } from "@/lib/prisma/formatos/copy";
 import { DIALOGO_GRANDE, Franjas } from "./vista-grande";
 import type { MaestroListo } from "@/lib/prisma/formatos/listo";
-import { claveTexto, type CambiosTexto, type PiezaCambiada } from "@/lib/prisma/formatos/cambios-texto";
+import { claveTexto, conEstilo, esNegrita, estiloDe, familiasDe, fuenteParecida, partesFuente, ESCALA_MAX, ESCALA_MIN, type CambiosTexto, type EstiloCambiado, type PiezaCambiada } from "@/lib/prisma/formatos/cambios-texto";
 import { TEXTO_CAMBIADO_MAX } from "@/lib/prisma/formatos/textos";
 import type { ModoCopia } from "@/lib/prisma/formatos/matriz";
 import type { SinRenglones } from "@/lib/prisma/formatos/renglones";
@@ -114,6 +114,7 @@ export function EditorMedida({
   cambios,
   motivoTexto,
   piezaEscrita,
+  fuentes = [],
   nMedidas,
   inicial,
   zona,
@@ -137,6 +138,8 @@ export function EditorMedida({
   motivoTexto: (pieza: number, j: number) => string | null;
   /** Si la página escribe los textos de esa pieza (para quitar uno y dejar los demás). */
   piezaEscrita: (pieza: number) => boolean;
+  /** Las tipografías cargadas en la página (nombres PostScript): las que ofrece la barra de cada texto. */
+  fuentes?: readonly string[];
   /** Cuántas medidas hay (un texto cambia en todas). */
   nMedidas: number;
   inicial: Edicion | null;
@@ -668,7 +671,7 @@ export function EditorMedida({
   // ── Textos ──
   /** Los textos de una pieza tal como vienen del PSD (con ellos se reconoce cada uno en todas las medidas). */
   const textosDe = (i: number) => original.piezas[i]?.textos ?? [];
-  const textoCambio = (i: number) => textosDe(i).some((tp) => cambiosLocal[claveTexto(tp)] !== undefined);
+  const textoCambio = (i: number) => textosDe(i).some((tp) => cambiosLocal[claveTexto(tp)] !== undefined || estiloDe(cambiosLocal, claveTexto(tp)) !== null);
   /** Quitar un texto pide volver a escribir la pieza sin él: hace falta su base y, si le quedan otros, escribirlos. */
   const sePuedeQuitar = (i: number) => !!original.piezas[i]?.base && (textosDe(i).length === 1 || piezaEscrita(i));
   const escribirTexto = (tp: (typeof original.piezas)[number]["textos"][number], v: string) => {
@@ -684,6 +687,9 @@ export function EditorMedida({
       return { ...antes, [k]: v };
     });
   };
+  /** La barra de un texto (tipografía, tamaño, negrita): su estilo cambiado, del anuncio entero como sus letras. */
+  const ponerEstilo = (tp: (typeof original.piezas)[number]["textos"][number], e: EstiloCambiado) => setCambiosLocal((antes) => conEstilo(antes, claveTexto(tp), e));
+  const familias = useMemo(() => familiasDe(fuentes), [fuentes]);
   /** Una frase con un motivo que escribe el motor (siempre en español): el motivo, marcado como tal para el lector. */
   const delMotor = (plantilla: string, motivo: string): ReactNode => {
     const [antes, despues = ""] = plantilla.split("{m}");
@@ -1094,6 +1100,18 @@ export function EditorMedida({
                             quitado && "opacity-60",
                           )}
                         />
+                        {!no && (
+                          <BarraTexto
+                            id={id}
+                            nombre={nombre}
+                            tramos={tp.texto.tramos}
+                            estilo={estiloDe(cambiosLocal, k) ?? {}}
+                            familias={familias}
+                            fuentes={fuentes}
+                            lang={lang}
+                            alCambiar={(e) => ponerEstilo(tp, e)}
+                          />
+                        )}
                         <p id={`${id}-nota`} className={cn("text-xs", vacio ? "text-foreground" : "text-muted-foreground")}>
                           {no ? delMotor(tx(FP.editorTextoNo, lang), no) : vacio ? tx(FP.editorTextoVacio, lang) : nMedidas === 1 ? tx(FP.editorTextoUna, lang) : rellenar(tx(FP.editorTextoTodas, lang), { n: nMedidas })}
                           {quitado && <> {tx(FP.editorTextoQuitado, lang)}</>}
@@ -1116,7 +1134,7 @@ export function EditorMedida({
                           >
                             {tx(quitado ? FP.editorTextoPoner : FP.editorTextoQuitar, lang)}
                           </Button>
-                          {cambiosLocal[k] !== undefined && (
+                          {(cambiosLocal[k] !== undefined || estiloDe(cambiosLocal, k) !== null) && (
                             <Button
                               variant="ghost"
                               size="xs"
@@ -1126,6 +1144,7 @@ export function EditorMedida({
                                 // Este botón se va al volver al original: el foco pasa a su cuadro de texto.
                                 document.getElementById(id)?.focus();
                                 escribirTexto(tp, tp.texto.texto);
+                                setCambiosLocal((antes) => conEstilo(antes, k, null));
                                 setDichoTexto(rellenar(tx(FP.editorTextoOriginalDicho, lang), { c: nombre }));
                               }}
                             >
@@ -1477,8 +1496,8 @@ export function textosGuardados(archivo: string): CambiosTexto {
     if (!v || typeof v !== "object" || Array.isArray(v)) return {};
     const out: Record<string, string> = {};
     for (const [k, t] of Object.entries(v as Record<string, unknown>).slice(0, TEXTOS_GUARDADOS_MAX))
-      // Una clave de verdad es «capa\nletras» (`claveTexto`); otra cosa no se lee.
-      if (typeof t === "string" && t.length <= TEXTO_CAMBIADO_MAX && k.includes("\n") && k.length <= 2 * TEXTO_CAMBIADO_MAX) out[k] = t;
+      // Una clave de verdad es «capa\nletras» (`claveTexto`), o la de su estilo (`claveEstilo`); otra cosa no se lee.
+      if (typeof t === "string" && t.length <= TEXTO_CAMBIADO_MAX && k.includes("\n") && k.length <= 2 * TEXTO_CAMBIADO_MAX + 16) out[k] = t;
     return out;
   } catch (err) {
     console.warn("[editor-medida] leer los textos guardados", err);
@@ -1497,4 +1516,97 @@ export function guardarTextos(archivo: string, cambios: CambiosTexto): boolean {
     console.error("[editor-medida] guardar los textos", err);
     return false;
   }
+}
+
+/**
+ * La barra de un texto, como la de un editor de documentos (Pedro, 2026-10-28): su tipografía (las cargadas en la
+ * página), su tamaño (el del tramo más grande, en px del original; con dos tamaños, los dos crecen igual) y negrita.
+ */
+function BarraTexto({
+  id,
+  nombre,
+  tramos,
+  estilo,
+  familias,
+  fuentes,
+  lang,
+  alCambiar,
+}: {
+  id: string;
+  nombre: string;
+  tramos: readonly { n: number; fuente: string; tam: number }[];
+  estilo: EstiloCambiado;
+  familias: readonly string[];
+  fuentes: readonly string[];
+  lang: Lang;
+  alCambiar: (e: EstiloCambiado) => void;
+}) {
+  // El tramo que manda: el de más letras (en «$28,499 m.n.», el número).
+  const principal = tramos.reduce((a, b) => (b.n > a.n ? b : a), tramos[0]);
+  const [texto, setTexto] = useState<string | null>(null);
+  if (!principal) return null;
+  const familia = estilo.familia ?? partesFuente(principal.fuente).familia;
+  const negrita = estilo.negrita ?? esNegrita(principal.fuente);
+  const escala = estilo.escala ?? 1;
+  const tam = Math.round(principal.tam * escala);
+  const opciones = familias.includes(familia) ? familias : [familia, ...familias];
+  // Negrita sólo si la familia tiene las dos (una con sólo Bold, o sólo Regular, no cambiaría nada).
+  const conNegrita = fuenteParecida(principal.fuente, familia, !negrita, fuentes);
+  const puedeNegrita = !!conNegrita && esNegrita(conNegrita) !== negrita;
+  const conTam = (px: number) => alCambiar({ ...estilo, escala: Math.min(ESCALA_MAX, Math.max(ESCALA_MIN, px / principal.tam)) });
+  const minimo = Math.ceil(principal.tam * ESCALA_MIN), maximo = Math.floor(principal.tam * ESCALA_MAX);
+  return (
+    <div role="toolbar" aria-label={rellenar(tx(FP.editorBarra, lang), { c: nombre })} className="flex flex-wrap items-center gap-1">
+      <select
+        aria-label={tx(FP.editorFuente, lang)}
+        value={familia}
+        onChange={(ev) => alCambiar({ ...estilo, familia: ev.target.value === partesFuente(principal.fuente).familia ? undefined : ev.target.value })}
+        className="h-9 max-w-[11rem] rounded-md border border-muted-foreground/60 bg-background px-2 text-[13px] text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+      >
+        {opciones.map((f) => (
+          <option key={f} value={f}>
+            {f}
+            {!familias.includes(f) ? ` ${tx(FP.editorFuenteNoCargada, lang)}` : ""}
+          </option>
+        ))}
+      </select>
+      <Button variant="outline" size="xs" className={BOTON} aria-label={tx(FP.editorMasChico, lang)} disabled={tam <= minimo} onClick={() => conTam(tam - 1)}>
+        <Minus className="size-3.5" aria-hidden="true" />
+      </Button>
+      <input
+        id={`${id}-tam`}
+        type="number"
+        inputMode="numeric"
+        min={minimo}
+        max={maximo}
+        aria-label={tx(FP.editorTamano, lang)}
+        value={texto ?? String(tam)}
+        onChange={(ev) => setTexto(ev.target.value)}
+        onBlur={() => {
+          const n = Number(texto);
+          if (texto !== null && Number.isFinite(n) && n > 0) conTam(n);
+          setTexto(null);
+        }}
+        onKeyDown={(ev) => {
+          if (ev.key === "Enter") (ev.target as HTMLInputElement).blur();
+        }}
+        className="h-9 w-14 rounded-md border border-muted-foreground/60 bg-background px-1 text-center text-[13px] text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+      />
+      <Button variant="outline" size="xs" className={BOTON} aria-label={tx(FP.editorMasGrande, lang)} disabled={tam >= maximo} onClick={() => conTam(tam + 1)}>
+        <Plus className="size-3.5" aria-hidden="true" />
+      </Button>
+      <Button
+        variant={negrita ? "secondary" : "outline"}
+        size="xs"
+        className={cn(BOTON, "aria-disabled:opacity-50")}
+        aria-pressed={negrita}
+        aria-disabled={!puedeNegrita || undefined}
+        aria-label={tx(FP.editorNegrita, lang)}
+        title={puedeNegrita ? undefined : tx(FP.editorNegritaNo, lang)}
+        onClick={() => puedeNegrita && alCambiar({ ...estilo, negrita: !negrita })}
+      >
+        <Bold className="size-3.5" aria-hidden="true" />
+      </Button>
+    </div>
+  );
 }

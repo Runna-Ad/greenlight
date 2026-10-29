@@ -24,6 +24,102 @@ export type Maquetar = (t: TextoCapa) => LineaTexto[];
 /** Con qué se reconoce un texto en todas las mesas del PSD: el nombre de su capa y sus letras del PSD. */
 export const claveTexto = (tp: Pick<TextoPieza, "capa" | "texto"> & { cambio?: { de: string } }) => `${tp.capa}\n${tp.cambio?.de ?? tp.texto.texto}`;
 
+/**
+ * El estilo cambiado de un texto con la barra del editor (Pedro, 2026-10-28: "like photoshop, word google docs… the
+ * fonts… bold or not and change sizes"). Es del ANUNCIO como sus letras: viaja en los mismos `CambiosTexto`, en una
+ * llave aparte (`claveEstilo`), así se guarda, se deshace y vuelve al original igual que las letras.
+ *   · `familia`: la familia (el nombre PostScript sin su estilo: «DiDiSans-Pro»), para todos sus tramos.
+ *   · `negrita`: true/false = todos en negrita o no; sin decir, cada tramo con su peso (el precio grande en Bold y su
+ *     «m.n.» en Regular siguen así al cambiar la familia).
+ *   · `escala`: el tamaño de todos sus tramos × esto (con dos tamaños, los dos crecen igual).
+ */
+export type EstiloCambiado = { familia?: string; negrita?: boolean; escala?: number };
+/** Lo que se puede agrandar o achicar un texto (como parte de su tamaño del PSD). */
+export const ESCALA_MIN = 0.3, ESCALA_MAX = 4;
+const ESTILO = "\u0001estilo\n";
+export const claveEstilo = (clave: string) => ESTILO + clave;
+
+/** El estilo cambiado de un texto (null = el del PSD). Lo guardado roto o fuera de rango no cuenta. */
+export function estiloDe(cambios: CambiosTexto, clave: string): EstiloCambiado | null {
+  const v = cambios[claveEstilo(clave)];
+  if (v === undefined) return null;
+  try {
+    const o = JSON.parse(v) as Record<string, unknown>;
+    const e: EstiloCambiado = {};
+    if (typeof o.familia === "string" && /^[\x21-\x7e]{1,127}$/.test(o.familia)) e.familia = o.familia;
+    if (typeof o.negrita === "boolean") e.negrita = o.negrita;
+    if (typeof o.escala === "number" && o.escala >= ESCALA_MIN && o.escala <= ESCALA_MAX && o.escala !== 1) e.escala = o.escala;
+    return Object.keys(e).length ? e : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Los cambios con este estilo para el texto `clave` (null o vacío = el del PSD). Igual que antes: EL MISMO objeto. */
+export function conEstilo(cambios: CambiosTexto, clave: string, e: EstiloCambiado | null): CambiosTexto {
+  const k = claveEstilo(clave), limpio: EstiloCambiado = {};
+  if (e?.familia) limpio.familia = e.familia;
+  if (e?.negrita !== undefined) limpio.negrita = e.negrita;
+  if (e?.escala !== undefined && Math.abs(e.escala - 1) > 1e-6) limpio.escala = Math.min(ESCALA_MAX, Math.max(ESCALA_MIN, Math.round(e.escala * 1000) / 1000));
+  const v = Object.keys(limpio).length ? JSON.stringify(limpio) : undefined;
+  if (cambios[k] === v) return cambios;
+  const r = { ...cambios };
+  if (v === undefined) delete r[k];
+  else r[k] = v;
+  return r;
+}
+
+/** «DiDiSans-Pro-Bold» → familia «DiDiSans-Pro», estilo «Bold»; sin guion, todo es la familia y el estilo es «Regular».
+ *  La cursiva a veces va aparte («DiDiSans-Pro-Bold-Italic», así vienen las de DiDi): es parte del estilo. */
+const PESO = /^(thin|hairline|extralight|ultralight|light|book|regular|normal|roman|medium|semibold|demibold|bold|extrabold|ultrabold|black|heavy)$/i;
+export function partesFuente(ps: string): { familia: string; estilo: string } {
+  let i = ps.lastIndexOf("-");
+  if (i <= 0) return { familia: ps, estilo: "Regular" };
+  const j = ps.lastIndexOf("-", i - 1);
+  if (j > 0 && /^(italic|oblique)$/i.test(ps.slice(i + 1)) && PESO.test(ps.slice(j + 1, i))) i = j;
+  return { familia: ps.slice(0, i), estilo: ps.slice(i + 1).replace("-", "") };
+}
+const NEGRITA = /bold|black|heavy/i;
+const CURSIVA = /italic|oblique/i;
+export const esNegrita = (ps: string) => NEGRITA.test(partesFuente(ps).estilo);
+
+/**
+ * La tipografía cargada (`fuentes`, nombres PostScript) más parecida a `ps` en la familia `familia`, en negrita o no.
+ * Mismo estilo si está; si no, el peso que pide (Bold, luego SemiBold/ExtraBold/Black; o Regular, luego Book/Medium/…)
+ * con la cursiva que traía. null = esa familia no tiene nada cargado.
+ */
+export function fuenteParecida(ps: string, familia: string, negrita: boolean, fuentes: readonly string[]): string | null {
+  const suyas = fuentes.filter((f) => partesFuente(f).familia === familia);
+  if (!suyas.length) return null;
+  const { estilo } = partesFuente(ps), cursiva = CURSIVA.test(estilo);
+  const exacta = suyas.find((f) => partesFuente(f).estilo === estilo);
+  if (exacta && esNegrita(exacta) === negrita) return exacta;
+  const orden = negrita ? ["Bold", "SemiBold", "Semibold", "ExtraBold", "Black", "Heavy"] : ["Regular", "Book", "Roman", "Medium", "Normal", "Light"];
+  const nombre = (f: string) => partesFuente(f).estilo.replace(CURSIVA, "").replace(/^$/, "Regular");
+  const mismaCursiva = suyas.filter((f) => CURSIVA.test(partesFuente(f).estilo) === cursiva && esNegrita(f) === negrita);
+  for (const o of orden) {
+    const f = mismaCursiva.find((x) => nombre(x).toLowerCase() === o.toLowerCase());
+    if (f) return f;
+  }
+  return mismaCursiva[0] ?? suyas.find((f) => esNegrita(f) === negrita) ?? suyas[0];
+}
+
+/** Las familias que se pueden elegir: las que tienen algo cargado, A-Z. */
+export const familiasDe = (fuentes: readonly string[]) => [...new Set(fuentes.map((f) => partesFuente(f).familia))].sort((a, b) => a.localeCompare(b, "es"));
+
+/** Una capa con su estilo cambiado. Un tramo cuya tipografía nueva no está cargada se queda con la suya. */
+export function capaConEstilo(t: TextoCapa, e: EstiloCambiado, fuentes: readonly string[]): TextoCapa {
+  const k = e.escala ?? 1;
+  return {
+    ...t,
+    tramos: t.tramos.map((r) => {
+      const familia = e.familia ?? partesFuente(r.fuente).familia, negrita = e.negrita ?? esNegrita(r.fuente);
+      const fuente = familia === partesFuente(r.fuente).familia && negrita === esNegrita(r.fuente) ? r.fuente : (fuenteParecida(r.fuente, familia, negrita, fuentes) ?? r.fuente);
+      return { ...r, fuente, tam: r.tam * k, interlineado: r.interlineado === null ? null : r.interlineado * k, subir: r.subir * k };
+    }),
+  };
+}
+
 /** Lo que sube la letra sobre su base y baja debajo, como parte de su tamaño, para reservar dónde escribir (de más:
  *  luego se mide la tinta de verdad). */
 const SUBE = 1.1, BAJA = 0.4;
@@ -166,13 +262,16 @@ export function tintaSola(l: Listo, pintar: Pintar): NonNullable<TextoPieza["cam
 export type PiezaCambiada = PiezaLista & { textoFuera?: boolean; sinLetras?: boolean; textoSinEscribir?: string };
 
 /** ¿Algún texto de la pieza tiene letras nuevas en `cambios`? */
-const conCambio = (p: PiezaLista, cambios: CambiosTexto) => p.textos.some((tp) => cambios[claveTexto(tp)] !== undefined && cambios[claveTexto(tp)] !== tp.texto.texto);
+const conCambio = (p: PiezaLista, cambios: CambiosTexto) =>
+  p.textos.some((tp) => (cambios[claveTexto(tp)] !== undefined && cambios[claveTexto(tp)] !== tp.texto.texto) || estiloDe(cambios, claveTexto(tp)) !== null);
 
 /** Las claves de `cambios` que sí cambian un texto de estos maestros (la misma prueba que `conCambio`). Lo guardado de
  *  otro archivo con el mismo nombre, o de otra lectura de la misma imagen plana (otros ids), se queda pero no cuenta. */
 export function cambiosQueAplican(maestros: readonly { piezas: readonly Pick<PiezaLista, "textos">[] }[], cambios: CambiosTexto): string[] {
   const original = new Map(maestros.flatMap((m) => m.piezas.flatMap((p) => p.textos.map((tp) => [claveTexto(tp), tp.texto.texto] as const))));
-  return Object.keys(cambios).filter((k) => original.has(k) && cambios[k] !== original.get(k));
+  // Un estilo cambiado cuenta como su texto (una vez, aunque también cambien sus letras).
+  const k = Object.keys(cambios).map((c) => (c.startsWith(ESTILO) ? c.slice(ESTILO.length) : c));
+  return [...new Set(k)].filter((c) => original.has(c) && (cambios[c] !== undefined ? cambios[c] !== original.get(c) : estiloDe(cambios, c) !== null));
 }
 
 /** El maestro con cada pieza que tiene un texto cambiado marcada como no escrita (por `motivo`): lo que se ve es el
@@ -194,6 +293,8 @@ export function cambiarTextos<M extends MaestroListo>(
   listosDe: (pieza: number) => readonly Listo[] | undefined,
   maquetar: Maquetar,
   pintar: Pintar,
+  /** Las tipografías cargadas (nombres PostScript), para los estilos cambiados con la barra. */
+  fuentes: readonly string[] = [],
 ): { maestro: M; listos: Map<number, Listo[]> } {
   const listos = new Map<number, Listo[]>();
   let tocado = false;
@@ -210,13 +311,14 @@ export function cambiarTextos<M extends MaestroListo>(
     const nuevos = new Map<TextoPieza, Listo>();
     let motivo: string | null = null;
     for (const l of suyos) {
-      const nuevo = cambios[claveTexto(l.tp)];
-      if (nuevo === undefined || nuevo === l.tp.texto.texto) continue;
-      const capa = textoCambiado(l.tp.texto, nuevo);
-      if (!capa) {
+      const nuevo = cambios[claveTexto(l.tp)], estilo = estiloDe(cambios, claveTexto(l.tp));
+      if ((nuevo === undefined || nuevo === l.tp.texto.texto) && !estilo) continue;
+      const letras = textoCambiado(l.tp.texto, nuevo ?? l.tp.texto.texto);
+      if (!letras) {
         motivo ??= NO_SE_ESCRIBIO.estilos;
         continue;
       }
+      const capa = estilo ? capaConEstilo(letras, estilo, fuentes) : letras;
       const lineas = maquetar(capa);
       const sinTinta: Listo = { tp: { ...l.tp, texto: cajaQueCabe(capa, lineas) }, lineas, dx: l.dx, dy: l.dy };
       const r = reservado(sinTinta);
@@ -232,7 +334,7 @@ export function cambiarTextos<M extends MaestroListo>(
       }
       nuevos.set(l.tp, { ...sinTinta, tp: { ...sinTinta.tp, cambio: { de: l.tp.texto.texto, tinta } } });
     }
-    if (p.textos.some((tp) => !suyos.some((l) => l.tp === tp) && cambios[claveTexto(tp)] !== undefined)) motivo ??= NO_SE_ESCRIBIO.tipografia;
+    if (p.textos.some((tp) => !suyos.some((l) => l.tp === tp) && (cambios[claveTexto(tp)] !== undefined || estiloDe(cambios, claveTexto(tp)) !== null))) motivo ??= NO_SE_ESCRIBIO.tipografia;
     if (!nuevos.size) return marcar(motivo ?? NO_SE_ESCRIBIO.tipografia);
     const todos = suyos.map((l) => nuevos.get(l.tp) ?? l);
     const pieza = reescribir(p, todos, pintar, gamma);

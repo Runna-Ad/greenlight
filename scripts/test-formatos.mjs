@@ -19,7 +19,7 @@ import { psdDeMedida, textoDePsd, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prism
 import { readPsd as readPsdAg, getLayerImageData, getLayerMaskImageData, getLayerRealMaskImageData } from "ag-psd";
 import { planDeMedida, psdEditable, retoqueDeFondo, TopeEditable, CAPA_RETOQUE, CAPA_COLOR_MESA } from "../src/lib/prisma/formatos/psd-editable.ts";
 import { textoDe, maquetar, fuentesDe, compararAlfa, textoCambiado, porQueNoSeCambia, cajaQueCabe, limpiarTexto, TEXTO_CAMBIADO_MAX, TEXTO_DIF_MAX_PLANO } from "../src/lib/prisma/formatos/textos.ts";
-import { cambiarTextos, cambiosQueAplican, claveTexto, marcarSinEscribir, NO_SE_ESCRIBIO } from "../src/lib/prisma/formatos/cambios-texto.ts";
+import { cambiarTextos, cambiosQueAplican, claveTexto, marcarSinEscribir, NO_SE_ESCRIBIO, capaConEstilo, claveEstilo, conEstilo, estiloDe, familiasDe, fuenteParecida, partesFuente } from "../src/lib/prisma/formatos/cambios-texto.ts";
 import { conRenglones, legalParaRenglones } from "../src/lib/prisma/formatos/renglones.ts";
 import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, elegirParaCliente, exclusivasDeOtros, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIA_GOOGLE_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
 import { carpetaGoogle, archivosDeMetadata, archivosQueSirven, buscarEnGoogle, ARCHIVOS_POR_FAMILIA_MAX, GOOGLE_BYTES_POR_PEDIDO } from "../src/lib/prisma/formatos/google-fonts.ts";
@@ -2219,6 +2219,24 @@ console.log("\n▶ 3 · textos editables: cambiar las letras (todas las medidas,
   eq("textos cambiados que cuentan: sólo los de un texto de este archivo y con otras letras (no los de otra lectura)", cambiosQueAplican([maT], { [k]: "adiós", "headline_msi\nhola": "12 MSI", [`${tpCaja.capa}\nadiós`]: "x" }), [k]);
   eq("con las mismas letras que el original no cuenta como cambio", cambiosQueAplican([maT], { [k]: "hola" }), []);
   ok("un texto que la página no escribe (sin sus líneas probadas) no cambia: mismos píxeles y textos (sólo dice por qué)", ((m) => m.piezas[0].rgba === maT.piezas[0].rgba && m.piezas[0].textos === maT.piezas[0].textos && m.piezas[1] === hero)(cambiarTextos(maT, { [k]: "adiós" }, () => undefined, maq, pintarFalso).maestro));
+  {
+    // La barra de texto del editor (2026-10-28): tipografía, tamaño y negrita, guardados junto a las letras.
+    const fs = ["DiDiSans-Pro-Regular", "DiDiSans-Pro-Bold", "DiDiSans-Pro-BoldItalic", "DiDiSans-Pro-Italic", "Montserrat-Regular", "Montserrat-SemiBold", "Roboto"];
+    eq("partesFuente: familia y estilo del nombre PostScript; sin guion, Regular", [partesFuente("DiDiSans-Pro-Bold"), partesFuente("Roboto"), partesFuente("DiDiSans-Pro-Bold-Italic"), partesFuente("DiDiSans-Pro-Italic")], [{ familia: "DiDiSans-Pro", estilo: "Bold" }, { familia: "Roboto", estilo: "Regular" }, { familia: "DiDiSans-Pro", estilo: "BoldItalic" }, { familia: "DiDiSans-Pro", estilo: "Italic" }]);
+    eq("familiasDe con los nombres reales de DiDi (cursiva con guion aparte): dos familias, no cinco", familiasDe(["DiDiSans-Pro-Bold-Italic", "DiDiSans-Pro-Bold", "DiDiSans-Pro-Medium-Italic", "DiDiSans-Pro-Thin-Italic", "DiDiSans-Pro-Regular", "DiDiSansVariable-Bold", "DiDiSansVariable-Regular"]), ["DiDiSans-Pro", "DiDiSansVariable"]);
+    eq("fuenteParecida: con la cursiva de guion aparte, negrita de una cursiva es Bold-Italic", fuenteParecida("DiDiSans-Pro-Italic", "DiDiSans-Pro", true, ["DiDiSans-Pro-Italic", "DiDiSans-Pro-Bold", "DiDiSans-Pro-Bold-Italic"]), "DiDiSans-Pro-Bold-Italic");
+    eq("fuenteParecida: negrita de la misma familia (y con su cursiva), sin Bold toma SemiBold, sin la familia null", [fuenteParecida("DiDiSans-Pro-Regular", "DiDiSans-Pro", true, fs), fuenteParecida("DiDiSans-Pro-Italic", "DiDiSans-Pro", true, fs), fuenteParecida("DiDiSans-Pro-Bold", "Montserrat", true, fs), fuenteParecida("DiDiSans-Pro-Bold", "Montserrat", false, fs), fuenteParecida("X-Bold", "Nada", true, fs)], ["DiDiSans-Pro-Bold", "DiDiSans-Pro-BoldItalic", "Montserrat-SemiBold", "Montserrat-Regular", null]);
+    eq("familiasDe: una por familia, A-Z", familiasDe(fs), ["DiDiSans-Pro", "Montserrat", "Roboto"]);
+    const precio = { ...capaT("$28,499 m.n."), tramos: [tramo(8, { fuente: "DiDiSans-Pro-Bold", tam: 40 }), tramo(4, { fuente: "DiDiSans-Pro-Regular", tam: 20 })] };
+    const cE = capaConEstilo(precio, { familia: "Montserrat", escala: 1.5 }, fs);
+    eq("capaConEstilo: otra familia guarda el peso de cada tramo y los dos tamaños crecen igual", cE.tramos.map((r) => `${r.fuente}@${r.tam}`), ["Montserrat-SemiBold@60", "Montserrat-Regular@30"]);
+    eq("capaConEstilo: negrita a todo; una familia no cargada deja la suya", [capaConEstilo(precio, { negrita: true }, fs).tramos.map((r) => r.fuente), capaConEstilo(precio, { familia: "Nada" }, fs).tramos.map((r) => r.fuente)], [["DiDiSans-Pro-Bold", "DiDiSans-Pro-Bold"], ["DiDiSans-Pro-Bold", "DiDiSans-Pro-Regular"]]);
+    const cs = conEstilo({}, k, { escala: 1.2, negrita: true });
+    ok("conEstilo/estiloDe: ida y vuelta; null (o tamaño 1) lo quita; igual que antes = el MISMO objeto; guardado roto = null", JSON.stringify(estiloDe(cs, k)) === JSON.stringify({ negrita: true, escala: 1.2 }) && Object.keys(conEstilo(cs, k, null)).length === 0 && Object.keys(conEstilo({}, k, { escala: 1 })).length === 0 && conEstilo(cs, k, { escala: 1.2, negrita: true }) === cs && estiloDe({ [claveEstilo(k)]: "{roto" }, k) === null && estiloDe({ [claveEstilo(k)]: '{"escala":99}' }, k) === null);
+    eq("cambiosQueAplican: un estilo cambiado cuenta como su texto, una vez", [cambiosQueAplican([maT], cs), cambiosQueAplican([maT], { ...cs, [k]: "adiós" })], [[k], [k]]);
+    const conTam = cambiarTextos(maT, conEstilo({}, k, { escala: 2 }), listosT(maT), maq, pintarFalso, fs).maestro;
+    ok("cambiarTextos: sólo el tamaño cambiado (mismas letras) vuelve a escribir la pieza con la letra al doble", conTam !== maT && conTam.piezas[0].textos[0].texto.tramos[0].tam === 2 * tpCaja.texto.tramos[0].tam && conTam.piezas[0].textos[0].texto.texto === "hola", JSON.stringify(conTam.piezas[0].textos[0].texto.tramos));
+  }
   const r1 = cambiar(maT, { [k]: largo });
   const p1 = r1.maestro.piezas[0], t1 = p1.textos[0];
   eq(

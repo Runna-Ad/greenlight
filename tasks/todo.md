@@ -4232,6 +4232,19 @@ Herramientas v1: Nano Banana · Veo 3.1 · Kling · Sora 2 · Higgsfield. Sólo 
           Mandan un doc con las zonas seguras.
         - Falta aún: ejemplo terminado de 1.91:1 y 320×50; si eligieron DiDi como cliente; el doc de zonas seguras.
 
+      · LEGAL Y PRECIO EDITABLES (2026-10-28, 4b8b9a0): el legal de una imagen plana se reescribe con la tipografía del
+        cliente en un solo tamaño, en caja de párrafo (1/2/3 renglones, sin pixelarse); el precio de dos tamaños
+        («$28,499 m.n.») es UN texto editable: el número sigue grande y «m.n.» chico. Probado en el navegador (6 de 6
+        nítidos). SIN PROBAR: las opciones de renglones del legal plano en el editor.
+      · LEGAL DE LA BIBLIOTECA (2026-10-28, 061f0c7): al «Continuar» la revisión, si el legal leído se parece (≥ 0.7
+        de palabras en común, y le gana por 0.1 al segundo) a uno guardado del cliente, se pone ése, letra por letra,
+        con «Deshacer»; si no, aviso de revisarlo. SIN PROBAR en el navegador con una imagen real.
+      · BARRA DE TEXTO EN EL EDITOR (2026-10-28, Pedro: "like photoshop, word google docs"): tipografía (las cargadas),
+        tamaño (− número +, px del original) y negrita, por texto, en todas las medidas, con «Volver al original».
+        Viaja en los mismos `CambiosTexto` (llave `claveEstilo`). Al abrir el editor de un PSD se traen todas las
+        tipografías del cliente. PROBADO en localhost con SPGFAPPLE1PLATA (DiDi): 2 familias, tamaño 35→50, otra
+        familia, se guardó y salió en las 13 medidas (640×100 visto); «Volver a los textos originales» lo quita.
+        Falta: Google Fonts que el cliente no tiene guardadas no salen en la lista (sólo las cargadas).
       · CACHÉ DE LECTURAS (2026-10-28, código en `prisma`; migración 0087 APLICADA 2026-10-28 con "ship it" de Pedro (86 aplicadas · 0 pendientes; tabla con RLS, sólo el servidor escribe)):
         `prisma_formatos_lecturas` (sha256 del archivo original + modelo → elementos crudos, w, h). La ruta /leer la usa
         antes de llamar a la IA (no cuenta para el tope de lecturas) y guarda la nueva; «Leer otra vez con IA» en la
