@@ -4,6 +4,7 @@
  */
 import type { Afin, ExtrasEditable, NotaCapa, PlanEditable } from "./psd-editable.ts";
 import type { Caja, MaestroPsd, MotivoPsd, Origen, PartePsd, Rol, TextoPieza } from "./psd.ts";
+import type { PegadoAlFondo } from "./acomodo.ts";
 
 /** Tope de lo que se LEE de un PSD: sus capas y su copia aplanada, ya sin los originales de los objetos inteligentes
  *  ni los filtros inteligentes (`adelgazar.ts`). El PSD real del equipo pesa 72 MB en disco y 22 MB así. */
@@ -42,6 +43,9 @@ export const MEDIDAS_PX_MAX = 80_000_000;
 export type PiezaLista = {
   nombre: string;
   rol: Rol | null;
+  /** Imagen plana: va sobre algo que se quedó pintado en el fondo (el texto de un botón de foto): no entra en el
+   *  acomodo, va donde caiga su lugar del fondo, a la escala del fondo. */
+  anclada?: boolean;
   caja: Caja;
   solido: Caja;
   letraMinPx: number | null;
@@ -76,6 +80,8 @@ export type MaestroListo = {
   /** Con qué gamma mezcló Photoshop el texto (`MaestroPsd.textoGamma`). */
   textoGamma: number;
   avisos: string[];
+  /** Imagen plana: lo que se quedó pintado en el fondo (`MaestroPsd.pegados`). */
+  pegados?: readonly PegadoAlFondo[];
 };
 /** Una mesa que no se pudo usar, con el porqué (texto para enseñar tal cual). */
 export type MesaDescartada = { nombre: string; motivos: string[] };
@@ -125,9 +131,11 @@ export function prepararMaestro(ma: Omit<MaestroPsd, "origen"> & { origen?: Maes
     fondo: opaco(ma.fondo),
     piezas: ma.piezas.map((p) => ({
       nombre: p.nombre, rol: p.rol, caja: p.caja, solido: p.solido, letraMinPx: p.letraMinPx, rgba: p.rgba, oscurece: p.oscurece ? opaco(p.oscurece) : null, base: p.base, textos: p.textos,
+      ...(p.anclada ? { anclada: true } : {}),
       ...(p.partes ? { carpeta: p.carpeta, partes: p.partes.map((q) => ({ nombre: q.nombre, hijo: q.hijo, rellenoPct: q.rellenoPct, tapadaPor: q.tapadaPor, caja: q.caja, solido: q.solido, letraMinPx: q.letraMinPx, rgba: q.rgba, oscurece: q.oscurece ? opaco(q.oscurece) : null, base: q.base, textos: q.textos })) } : {}),
     })),
     textoGamma: ma.textoGamma,
+    ...(ma.pegados?.length ? { pegados: ma.pegados } : {}),
     avisos: ma.avisos,
   };
   // Un búfer repetido en la lista de transferencia tumba el postMessage: se manda cada uno una vez (los textos de una

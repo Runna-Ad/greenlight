@@ -790,6 +790,7 @@ export const FPL = {
   // B30: el legal va siempre como texto, en un tamaño y en una caja que se vuelve a partir en renglones.
   textoLegal: t("Es el legal: se reescribe con {f} en un solo tamaño, para que se pueda editar y acomodar en 1, 2 o 3 renglones. Revisa que el texto sea el correcto.", "This is the legal: rewritten with {f} in one size, so it can be edited and arranged in 1, 2 or 3 lines. Check that the text is right."),
   textoNo: t("Va como imagen: ninguna tipografía del cliente se parece (la más cercana, {f}, {d} % distinto).", "Stays as an image: none of the client's fonts match (the closest, {f}, is {d} % different)."),
+  textoAprox: t("Se reescribe con {f}, la más parecida aunque no empata ({d} % distinto de la imagen), para que se pueda editar. Revisa que se vea bien; si no, déjalo como imagen.", "Rewritten with {f}, the closest match even though it isn't exact ({d} % different from the image), so it can be edited. Check that it looks right; if not, keep it as an image."),
   textoSinFuentes: t("Va como imagen hasta que haya tipografías del cliente.", "Stays as an image until the client's fonts are loaded."),
   textoImagen: t("Va como imagen (lo elegiste).", "Stays as an image (your choice)."),
   comoImagen: t("Dejar como imagen", "Keep as image"),
@@ -798,6 +799,17 @@ export const FPL = {
     "El fondo no es liso alrededor de {e}: se quedan pintados en el fondo, así que no se pueden mover ni editar. Lo demás sí.",
     "The background isn't plain around {e}: they stay painted on the background, so they can't be moved or edited. Everything else can.",
   ),
+  iaFondo: t("Rehacer el fondo con IA (≈ {c})", "Rebuild the background with AI (≈ {c})"),
+  iaFondoAyuda: t(
+    "La IA borra del fondo lo que se quedó pegado y lo rellena; así eso también se puede mover. Sólo se cambia lo de esas zonas: lo demás del fondo queda igual. Una llamada por anuncio.",
+    "The AI erases what stayed stuck from the background and fills it in, so those pieces can move too. Only those areas change: the rest of the background stays the same. One call per ad.",
+  ),
+  iaFondoTrabajando: t("La IA está rehaciendo el fondo (hasta 2 minutos)…", "The AI is rebuilding the background (up to 2 minutes)…"),
+  iaFondoListo: t("Fondo rehecho con IA ({c}): lo que estaba pegado ya es una pieza que se mueve. Revisa las zonas rellenadas en las medidas.", "Background rebuilt with AI ({c}): what was stuck is now a piece that moves. Check the filled areas in the sizes."),
+  iaFondoDeriva: t("La IA cambió un poco el fondo cerca de esas zonas: revisa que la unión no se note.", "The AI changed the background a little near those areas: check that the seam doesn't show."),
+  iaFondoDeshacer: t("Deshacer el fondo con IA", "Undo the AI background"),
+  iaFondoFallo: t("La IA no pudo rehacer el fondo. Reintenta o sigue con lo pegado al fondo.", "The AI couldn't rebuild the background. Retry or continue with what stayed stuck."),
+  iaFondoDescartado: t("La imagen cambió mientras la IA trabajaba: se descartó su fondo.", "The image changed while the AI was working: its background was discarded."),
   todoFijo: t(
     "El fondo no es liso: la imagen sale entera, escalada a cada medida, sin piezas que mover ni textos que editar.",
     "The background isn't plain: the image comes out whole, scaled to each size, with no pieces to move or texts to edit.",

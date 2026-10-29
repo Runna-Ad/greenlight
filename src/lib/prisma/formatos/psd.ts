@@ -25,6 +25,7 @@ import { readPsd, getLayerImageData, getLayerMaskImageData, getCompositeImageDat
 import { MAL_FORMADO, PSD_BYTES_MAX } from "./listo.ts";
 import { textoDe, type TextoCapa, type TextoPsdCrudo } from "./textos.ts";
 import { ROLES, nombreDeCapa, rolDe, type Rol } from "./roles.ts";
+import type { PegadoAlFondo } from "./acomodo.ts";
 
 /** Sólo se LEEN por índice. (La librería tipa también 16 y 32 bits; aquí siempre son 8: `leerPsd` rechaza lo demás.) */
 type Pixeles = { data: ArrayLike<number>; width: number; height: number };
@@ -316,6 +317,9 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
 export type PiezaPsd = {
   nombre: string;
   rol: Rol | null;
+  /** Imagen plana: va sobre algo que se quedó pintado en el fondo (el texto de un botón de foto): no entra en el
+   *  acomodo, va donde caiga su lugar del fondo, a la escala del fondo. */
+  anclada?: boolean;
   /** Todo lo que la pieza pinta u oscurece, en px de la mesa. `rgba` y `oscurece` miden caja.w × caja.h. */
   caja: Caja;
   /** Sólo lo sólido (alfa > 50 %): la caja que manda para acomodar. */
@@ -402,6 +406,8 @@ export type MaestroPsd = {
    *  mezcla igual. */
   textoGamma: number;
   avisos: string[];
+  /** Imagen plana: lo que se quedó pintado en el fondo (`medirPlanoFijo`). */
+  pegados?: readonly PegadoAlFondo[];
 };
 
 const OSCURECE = new Set(["multiply", "darken", "linear burn", "color burn", "darker color"]);

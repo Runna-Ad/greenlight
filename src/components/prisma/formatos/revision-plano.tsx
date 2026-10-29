@@ -14,7 +14,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { FP, FPL, rellenar } from "@/lib/prisma/formatos/copy";
-import { ROLES_LECTURA, TEXTO_LEIDO_MAX, limpiarLetras, maestroDePlano, medirPlanoFijo, type RolLeido } from "@/lib/prisma/formatos/plano";
+import { ROLES_LECTURA, TEXTO_LEIDO_MAX, limpiarLetras, maestroDePlano, mascaraPegados, medirPlanoFijo, pegarFondoIA, soltarConFondoIA, type RolLeido } from "@/lib/prisma/formatos/plano";
+import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, RECORTE_IA_MAX, recorteConOrilla, recorteParaIA } from "@/lib/prisma/formatos/gemela";
+import { ErrorDeRuta, IA_ESPERA_MS, aPng, aRgba, lienzoDe, pngQueQuepa } from "./ia-imagen";
 import { TRANSFERIR_MAX_BYTES, prepararMaestro, type MaestroListo } from "@/lib/prisma/formatos/listo";
 import { claveTexto, type CambiosTexto } from "@/lib/prisma/formatos/cambios-texto";
 import type { TextoCapa } from "@/lib/prisma/formatos/textos";
@@ -31,8 +33,10 @@ const idQuitar = (id: string) => `plano-quitar-${id}`;
 const idDevolver = (id: string) => `plano-devolver-${id}`;
 type Ajuste = { para: object; tipos: Tipografias; capas: Map<string, TextoCapa>; notas: NotaTextoPlano[] };
 
-export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorCliente, trayendo, lang, alContinuar, alCancelar, alReleer }: {
+export function RevisionPlano({ plano, planaActiva, iaFondo, tipos, cliente, selectorCliente, trayendo, lang, alContinuar, alCancelar, alReleer }: {
   plano: Plano;
+  /** La IA de Formatos está prendida: si algo se quedó pegado al fondo, se ofrece «Rehacer el fondo con IA». */
+  iaFondo: boolean;
   /** La otra puerta (rellena el fondo con IA) está prendida: se ofrece sólo si algo se quedó fijo en el fondo. */
   planaActiva: boolean;
   tipos: Tipografias;
@@ -55,6 +59,11 @@ export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorClie
   /** Se pidió «Continuar» mientras se probaban las tipografías (p. ej. justo después de corregir letras). */
   const [quiereSeguir, setQuiereSeguir] = useState(false);
   const [falla, setFalla] = useState<string | null>(null);
+  /** El fondo rehecho con IA y para qué medida (al quitar o devolver un elemento la medida cambia y ya no sirve). */
+  const [conIA, setConIA] = useState<{ para: object; fondo: Uint8ClampedArray; costoUsd: number | null; deriva: number | null } | null>(null);
+  const [rehaciendo, setRehaciendo] = useState(false);
+  const pedidoIA = useRef<AbortController | null>(null);
+  useEffect(() => () => pedidoIA.current?.abort(), []);
   /** Lo que se le dice al lector de pantalla al quitar o devolver un elemento. */
   const [anuncio, setAnuncio] = useState("");
   /** El control que recibe el foco después de quitar o devolver (el que tenía el foco desaparece). */
@@ -80,7 +89,18 @@ export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorClie
       return { medido: plano.medido, fallo: true };
     }
   }, [plano, quitados]);
-  const medido = remedido.medido;
+  const base = remedido.medido;
+  // Con el fondo rehecho con IA, lo pegado sale como pieza (`soltarConFondoIA`); si falla, lo de antes.
+  const iaVigente = conIA && conIA.para === base ? conIA : null;
+  const medido = useMemo(() => {
+    if (!iaVigente) return base;
+    try {
+      return soltarConFondoIA(plano.img, base, iaVigente.fondo);
+    } catch (err) {
+      console.error("[formatos-psd] soltar lo pegado con el fondo de la IA", err);
+      return base;
+    }
+  }, [base, iaVigente, plano.img]);
   const elementos = useMemo(() => medido.elementos.map((m) => ({ ...m, rol: roles.get(m.id) ?? m.rol })), [medido, roles]);
 
   // Las tipografías se prueban fuera del render (≈1 s con muchas): primero se pinta «Probando…». Si la prueba falla,
@@ -133,11 +153,62 @@ export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorClie
     ...medido.avisos.map((a) => a.replace(/^([a-z0-9_]+): /, (todo, id: string) => (numero.has(id) ? `${tx(FPL.elemento, lang)} ${nombre(id)}: ` : todo))),
   ];
 
+  // «Rehacer el fondo con IA»: se manda el fondo limpio entero (con lo pegado todavía) y la máscara de lo pegado; de lo
+  // que vuelve se pega SÓLO lo de la máscara (plano.ts › `pegarFondoIA`).
+  const rehacerFondo = async () => {
+    if (rehaciendo || !base.fijos.length) return;
+    const { w: W, h: H } = plano.img, para = base;
+    const recorte = recorteParaIA({ w: W, h: H }, { pieza: 0, parecido: 1, caja: { x: 0, y: 0, w: W, h: H } });
+    if (!recorte) return void setFalla(tx(FPL.iaFondoFallo, lang));
+    const ctrl = new AbortController();
+    pedidoIA.current?.abort();
+    pedidoIA.current = ctrl;
+    setRehaciendo(true);
+    setFalla(null);
+    setAnuncio(tx(FPL.iaFondoTrabajando, lang));
+    try {
+      const c = recorte.caja, mascara = mascaraPegados(para, W, H);
+      const rgba = new Uint8ClampedArray(W * H * 4), mk = new Uint8ClampedArray(W * H * 4);
+      for (let k = 0; k < W * H; k++) {
+        rgba[k * 4] = para.fondo[k * 3]; rgba[k * 4 + 1] = para.fondo[k * 3 + 1]; rgba[k * 4 + 2] = para.fondo[k * 3 + 2]; rgba[k * 4 + 3] = 255;
+        const v = mascara[k] ? 255 : 0;
+        mk[k * 4] = mk[k * 4 + 1] = mk[k * 4 + 2] = v; mk[k * 4 + 3] = 255;
+      }
+      const fondoPng = await pngQueQuepa(recorteConOrilla(rgba, W, H, c), c.w, c.h, RECORTE_IA_MAX, FONDO_IA_MAX_BYTES);
+      // La máscara, al MISMO tamaño que salió el fondo (la ruta lo revisa).
+      const bmp = await createImageBitmap(fondoPng), lado = Math.max(bmp.width, bmp.height);
+      bmp.close();
+      const form = new FormData();
+      form.set("fondo", fondoPng, "fondo.png");
+      form.set("mascara", await aPng(lienzoDe(recorteConOrilla(mk, W, H, c), c.w, c.h, lado)), "mascara.png");
+      form.set("aspect", recorte.aspect);
+      const res = await fetch("/api/prisma/formatos/fondo-plano", { method: "POST", body: form, signal: AbortSignal.any([ctrl.signal, AbortSignal.timeout(IA_ESPERA_MS)]) });
+      if (!res.ok) {
+        const e = (await res.json().catch(() => null)) as { error?: unknown } | null;
+        throw typeof e?.error === "string" ? new ErrorDeRuta(e.error) : new Error(`HTTP ${res.status}`);
+      }
+      const costo = res.headers.get("x-costo-usd"), costoUsd = costo && Number.isFinite(Number(costo)) ? Number(costo) : null;
+      const ia = await aRgba(await res.blob(), c.w, c.h);
+      if (ctrl.signal.aborted) return;
+      const pegado = pegarFondoIA(para.fondo, W, H, mascara, c, ia);
+      if (!pegado) throw new Error("pegado");
+      setConIA({ para, fondo: pegado.fondo, costoUsd, deriva: pegado.deriva });
+      setAnuncio(rellenar(tx(FPL.iaFondoListo, lang), { c: costoUsd === null ? "?" : `US$${costoUsd.toFixed(3)}` }));
+    } catch (err) {
+      if (ctrl.signal.aborted) return;
+      console.error("[formatos-psd] fondo plano con IA", err);
+      setFalla(err instanceof ErrorDeRuta ? err.message : tx(FPL.iaFondoFallo, lang));
+    } finally {
+      if (pedidoIA.current === ctrl) pedidoIA.current = null;
+      setRehaciendo(false);
+    }
+  };
+
   const continuar = () => {
     setFalla(null);
     try {
       const capas = new Map([...(vigente?.capas ?? [])].filter(([id]) => !comoImagen.has(id)));
-      const ma = maestroDePlano(sinExtension(plano.archivo), plano.img, elementos, medido.fondo, capas, medido.avisos);
+      const ma = maestroDePlano(sinExtension(plano.archivo), plano.img, elementos, medido.fondo, capas, medido.avisos, medido.pegados, new Set((vigente?.notas ?? []).filter((n) => n.aproximado).map((n) => n.id)), new Set(medido.anclados));
       const { maestro, bytes } = prepararMaestro(ma);
       // El mismo tope que un PSD (psd.worker.ts): más que esto no cabe en el navegador con todo lo que sigue.
       if (bytes > TRANSFERIR_MAX_BYTES) return setFalla(tx(FPL.muyPesada, lang));
@@ -229,6 +300,25 @@ export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorClie
               {avisos.map((a, i) => <li key={i}>{a}</li>)}
             </ul>
             {/* Antes iba siempre bajo el cuadro de subir; sólo sirve cuando algo se quedó fijo en el fondo (2026-10-28). */}
+            {iaFondo && fijos.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                <p className="text-muted-foreground">{tx(FPL.iaFondoAyuda, lang)}</p>
+                <Button variant="outline" size="sm" className={BOTON} disabled={rehaciendo} aria-busy={rehaciendo} onClick={() => void rehacerFondo()}>
+                  {rehaciendo && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+                  {rehaciendo ? tx(FPL.iaFondoTrabajando, lang) : rellenar(tx(FPL.iaFondo, lang), { c: `US$${COSTO_COPIA_IA_USD.toFixed(2)}` })}
+                </Button>
+              </div>
+            )}
+            {iaVigente && (
+              <div className="space-y-1.5 pt-1">
+                <p>{rellenar(tx(FPL.iaFondoListo, lang), { c: iaVigente.costoUsd === null ? "?" : `US$${iaVigente.costoUsd.toFixed(3)}` })}</p>
+                {iaVigente.deriva !== null && iaVigente.deriva > DERIVA_IA_REVISAR && <p>{tx(FPL.iaFondoDeriva, lang)}</p>}
+                <Button variant="outline" size="sm" className={BOTON} onClick={() => setConIA(null)}>
+                  <Undo2 className="size-3.5" aria-hidden="true" />
+                  {tx(FPL.iaFondoDeshacer, lang)}
+                </Button>
+              </div>
+            )}
             {planaActiva && fijos.length > 0 && (
               <Link href="/prisma/formatos" className="inline-block text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-primary">
                 {tx(FP.planaLink, lang)}
@@ -275,6 +365,7 @@ export function RevisionPlano({ plano, planaActiva, tipos, cliente, selectorClie
                 : !vigente || !nt || nt.fuente === null ? tx(FPL.textoSinFuentes, lang)
                 : nt.legal ? rellenar(tx(FPL.textoLegal, lang), { f: nt.fuente })
                 : nt.ok ? rellenar(tx(FPL.textoOk, lang), { f: nt.fuente, d: Math.round((nt.dif ?? 0) * 100) })
+                : nt.aproximado ? rellenar(tx(FPL.textoAprox, lang), { f: nt.fuente, d: Math.round((nt.dif ?? 0) * 100) })
                 : rellenar(tx(FPL.textoNo, lang), { f: nt.fuente, d: Math.round((nt.dif ?? 0) * 100) });
               return (
                 <li

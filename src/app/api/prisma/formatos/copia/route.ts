@@ -5,6 +5,7 @@ import { RATIOS_IA } from "@/lib/prisma/formatos/geometria";
 import { CUERPO_IA_MAX_BYTES, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX } from "@/lib/prisma/formatos/gemela";
 import { FRENO, gate, saturado } from "@/app/(app)/prisma/comun";
 import { mismoOrigen } from "@/app/(app)/prisma/formatos-comun";
+import { pngDelForm as png } from "@/lib/prisma/formatos/png-form";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD — el respaldo con IA de «Quitar del fondo» (Pedro, 2026-10-14: "build it as a
@@ -28,22 +29,6 @@ const LLAMADAS_MAX = 10;
 const PROPORCION_TOLERANCIA = 0.03;
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
-
-/** Un PNG del form, decodificado entero y vuelto a codificar (sin metadatos ni bytes de más: a la IA sólo le llegan
- *  píxeles), con sus medidas; o el error para el diseñador. */
-async function png(form: FormData, campo: string, maxBytes: number, maxPx: number): Promise<{ bytes: Buffer; w: number; h: number } | string> {
-  const f = form.get(campo);
-  if (!(f instanceof File) || f.size === 0) return "No llegó la imagen.";
-  if (f.size > maxBytes) return "La imagen es demasiado grande.";
-  try {
-    const abierta = sharp(Buffer.from(await f.arrayBuffer()), { limitInputPixels: maxPx * maxPx, failOn: "error" });
-    const m = await abierta.metadata();
-    if (m.format !== "png" || !m.width || !m.height || m.width > maxPx || m.height > maxPx) return "La imagen no es válida.";
-    return { bytes: await abierta.png().toBuffer(), w: m.width, h: m.height };
-  } catch {
-    return "La imagen no es válida.";
-  }
-}
 
 export async function POST(req: Request) {
   if (!mismoOrigen(req)) return json({ ok: false, error: "Origen no permitido." }, 403);

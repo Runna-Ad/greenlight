@@ -27,15 +27,15 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { acomodar, acomodarMedida, aplicarEdicion, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, RENGLONES_MAS, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, MEDIDAS_RATIO, FONDO_ZOOM_MAX, FONDO_EDITOR_MAX, fondoDeEdicion, edicionDeFondo } from "../src/lib/prisma/formatos/acomodo.ts";
+import { acomodar, acomodarMedida, aplicarEdicion, pegadoFuera, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, RENGLONES_MAS, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, MEDIDAS_RATIO, FONDO_ZOOM_MAX, FONDO_EDITOR_MAX, fondoDeEdicion, edicionDeFondo } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteConOrilla, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
-import { perdidas, avisosDePixeles, seVeLaCopia, revisarMedida, opcionesDeContraste, edicionMuevePieza, edicionSinPieza } from "../src/lib/prisma/formatos/revisar.ts";
+import { perdidas, avisosDePixeles, avisosDePegados, seVeLaCopia, revisarMedida, opcionesDeContraste, edicionMuevePieza, edicionSinPieza } from "../src/lib/prisma/formatos/revisar.ts";
 import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
 import { specVacio } from "../src/lib/prisma/spec.ts";
 import { unzipSync } from "fflate";
 import { zipPorPartes, zipsEnPartes, rutaLibre, CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES } from "../src/lib/prisma/formatos/zip.ts";
-import { limpiarLectura, medirPlano, medirPlanoFijo, maestroDePlano, capaDeTexto, alineacionDe, ELEMENTOS_MAX, TEXTO_LEIDO_MAX } from "../src/lib/prisma/formatos/plano.ts";
+import { limpiarLectura, medirPlano, medirPlanoFijo, maestroDePlano, rellenarConMuestras, conRenglonesDeLaImagen, mascaraPegados, pegarFondoIA, soltarConFondoIA, capaDeTexto, alineacionDe, ELEMENTOS_MAX, TEXTO_LEIDO_MAX } from "../src/lib/prisma/formatos/plano.ts";
 
 let pass = 0,
   fail = 0;
@@ -3120,12 +3120,49 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   for (let y = 10; y < 100; y++) for (let x = 0; x < 150; x++) { const i = (y * W + x) * 4; s = (s * 1664525 + 1013904223) >>> 0; const n = ((s >>> 8) % 61) - 30; for (let k = 0; k < 3; k++) parches[i + k] += n; }
   const rp = medirPlanoFijo({ w: W, h: H, rgba: parches }, leidos);
   ok(
-    "plano: textura sólo alrededor del titular → el titular se queda fijo en el fondo y los demás siguen siendo piezas",
-    rp.liso && rp.fijos.join() === "titulo" && rp.elementos.map((e) => e.id).sort().join() === "pastilla,precio,telefono" && !rp.avisos.some((a) => a.startsWith("El fondo no es liso")),
+    "plano: textura sólo alrededor del titular → el titular IGUAL sale como pieza (sus letras se rellenan con la textura de al lado) y nada se queda pegado",
+    rp.liso && rp.fijos.length === 0 && rp.elementos.map((e) => e.id).sort().join() === "pastilla,precio,telefono,titulo" && rp.anclados.length === 0 && !rp.avisos.some((a) => a.startsWith("El fondo no es liso")),
     JSON.stringify({ fijos: rp.fijos, el: rp.elementos.map((e) => e.id) }),
   );
+  {
+    // Batería 2026-10-29: una luz suave (curva, no un plano) detrás del titular ya no lo deja pegado al fondo. Límite
+    // conocido: el relleno suave no inventa un pico de luz ESCONDIDO detrás del texto (con esta luz de 45 px queda ~5 niveles más oscuro en promedio).
+    const luz = (x, y) => { const g = 60 * Math.exp(-((x - 80) ** 2 + (y - 60) ** 2) / (2 * 45 ** 2)); return [180 + g, 150 + g, 140 + g * 0.5]; };
+    const conLuz = new Uint8ClampedArray(rgba);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = (y * W + x) * 4, f = luz(x, y); for (let k = 0; k < 3; k++) conLuz[i + k] = f[k]; }
+    for (let b = 0; b < 6; b++) for (let y = 40; y < 60; y++) for (let x = 30 + b * 14; x < 40 + b * 14; x++) { const i = (y * W + x) * 4, orilla = y === 40 || y === 59 || x === 30 + b * 14 || x === 39 + b * 14; for (let k = 0; k < 3; k++) conLuz[i + k] = Math.round((orilla ? 0.5 : 1) * TINTA[k] + (orilla ? 0.5 : 0) * luz(x, y)[k]); }
+    const uno = [{ ...leidos[0], caja: { x0: 29, y0: 39, x1: 116, y1: 61 }, texto: "ABCDEF" }];
+    const rs = medirPlanoFijo({ w: W, h: H, rgba: conLuz }, uno);
+    let suma = 0, n = 0;
+    for (let y = 30; y < 70; y++) for (let x = 20; x < 126; x++) { const f = luz(x, y); for (let k = 0; k < 3; k++) { suma += Math.abs(rs.fondo[(y * W + x) * 3 + k] - f[k]); n++; } }
+    ok(`plano: con una luz suave detrás, el titular sale como pieza y el hueco se rellena cerca de la luz (en promedio ${(suma / n).toFixed(1)} niveles)`, rs.fijos.length === 0 && rs.elementos.length === 1 && suma / n <= 6, JSON.stringify({ fijos: rs.fijos, media: suma / n }));
+  }
   const rt = medirPlanoFijo({ w: W, h: H, rgba: ruido }, leidos);
-  ok("plano: textura en todo el fondo → todo fijo, la imagen va entera (sin piezas)", rt.liso && rt.elementos.length === 0 && rt.fijos.length === 4, JSON.stringify(rt.fijos));
+  ok("plano: textura en todo el fondo → las figuras se quedan pegadas, pero los 2 textos salen (editables)", rt.liso && rt.fijos.slice().sort().join() === "pastilla,telefono" && rt.elementos.map((e) => e.id).sort().join() === "precio,titulo", JSON.stringify({ f: rt.fijos, e: rt.elementos.map((e) => e.id) }));
+  ok("plano: el precio, que va sobre la pastilla pegada, queda ANCLADO al fondo; el titular, suelto", rt.anclados.join() === "precio", JSON.stringify(rt.anclados));
+  ok("plano: lo que se queda pegado sale como «pegado» con su parte sólida", rt.pegados.length === 2 && rt.pegados.some((p) => p.nombre === "«CTA» (forma)" && Math.abs(p.caja.x - 40) <= 10 && Math.abs(p.caja.w - 141) <= 20), JSON.stringify(rt.pegados));
+  {
+    // Las letras de un texto en una textura: el relleno con muestras copia la textura; un relleno suave dejaba una mancha lisa.
+    const TW = 120, TH = 80, tex = (x, y) => ((x >> 2) + (y >> 2)) % 2 ? 200 : 60;
+    const rgbT = new Uint8ClampedArray(TW * TH * 3);
+    for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) rgbT.fill(tex(x, y), (y * TW + x) * 3, (y * TW + x) * 3 + 3);
+    const hueco = new Uint8Array(TW * TH);
+    for (let y = 30; y < 40; y++) for (let x = 20; x < 100; x++) { hueco[y * TW + x] = 1; rgbT.fill(0, (y * TW + x) * 3, (y * TW + x) * 3 + 3); }
+    rellenarConMuestras(rgbT, TW, TH, hueco);
+    let bien = 0, n = 0;
+    for (let k = 0; k < TW * TH; k++) if (hueco[k]) { n++; if (Math.abs(rgbT[k * 3] - tex(k % TW, (k / TW) | 0)) < 20) bien++; }
+    // Un relleno suave daría el gris de en medio (0 % exactos); copiando, la mayoría cae en su casilla (las orillas de
+    // las casillas, donde dos parches empatan, son lo que falla).
+    ok(`muestras: un hueco de 10 px en un tablero se rellena con el tablero (${Math.round((100 * bien) / n)} % de los píxeles exactos)`, bien / n >= 0.75);
+  }
+  {
+    // La IA leyó en un renglón un titular que va en dos: se reparte por el ancho de cada renglón medido.
+    const medirF = (t, _f, tam) => ({ avance: (t.length * tam) / 2, izq: 0, der: (t.length * tam) / 2, sube: tam * 0.7, baja: tam * 0.2 });
+    const m = { texto: "uno dos tres cuatro cinco seis", renglones: [{ x: 0, y: 0, w: 200, h: 20 }, { x: 0, y: 30, w: 180, h: 20 }] };
+    eq("renglones: el texto se parte donde los anchos se parecen a los de la imagen", conRenglonesDeLaImagen(m, "F", medirF).texto, "uno dos tres\ncuatro cinco seis");
+    eq("renglones: si ya cuadra, igual", conRenglonesDeLaImagen({ ...m, texto: "a b\nc" }, "F", medirF).texto, "a b\nc");
+  }
+
   const rl = medirPlanoFijo(img, leidos);
   ok("plano: con fondo liso, medirPlanoFijo es medirPlano (nada fijo)", rl.fijos.length === 0 && rl.elementos.length === 4);
 
@@ -3236,6 +3273,83 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   ok("alineación: centrado si cae en el centro de la mesa", alineacionDe(solo(500, 200), 1200, []) === "center");
   ok("alineación: centrado si cae en el centro de lo que tiene arriba (el precio bajo la pastilla)", alineacionDe(solo(700, 420, 300), 1200, [fig("pastilla", 671, 220, 473, 70)]) === "center" && alineacionDe(solo(700, 300, 300), 1200, [fig("pastilla", 671, 220, 473, 70)]) === "left");
   ok("alineación: con varios renglones, la orilla que comparten", alineacionDe(el("A\nB", [{ x: 455, y: 0, w: 500, h: 10 }, { x: 455, y: 20, w: 420, h: 10 }]), 1200, []) === "left" && alineacionDe(el("A\nB", [{ x: 100, y: 0, w: 400, h: 10 }, { x: 150, y: 20, w: 300, h: 10 }]), 1200, []) === "center");
+}
+
+// ── Batería 2026-10-29: lo pegado al fondo de una imagen plana (fijos) no se corta y se avisa si le cae algo ──
+{
+  // Un maestro vertical con un logo PEGADO arriba (no se pudo sacar del fondo) y el HERO abajo.
+  const pieza = (rol, x, y, w, h) => ({ nombre: rol, rol, caja: { x, y, w, h }, solido: { x, y, w, h }, letraMinPx: null, rgba: new Uint8ClampedArray(w * h * 4) });
+  const logo = { nombre: "«BRAND» (imagen)", caja: { x: 300, y: 20, w: 200, h: 100 } };
+  const base = { nombre: "M", w: 800, h: 1000, piezas: [pieza("HERO", 250, 600, 300, 350), pieza("TITULO", 100, 300, 600, 120)] };
+  const conPegado = { ...base, pegados: [logo] };
+  const sin = acomodar(base, 1280, 720), con = acomodar(conPegado, 1280, 720);
+  ok("pegado: sin saberlo, el fondo de 1280×720 corta el logo pegado arriba; sabiéndolo, el fondo se corre y se ve entero",
+    pegadoFuera([logo], sin.fondo, 1280, 720) > 0 && pegadoFuera([logo], con.fondo, 1280, 720) === 0 && con.fondo.k === sin.fondo.k,
+    JSON.stringify({ sin: sin.fondo, con: con.fondo }));
+  ok("pegado: el fondo corrido sigue cubriendo toda la medida", con.fondo.x <= 0 && con.fondo.y <= 0 && con.fondo.x + 800 * con.fondo.k >= 1280 && con.fondo.y + 1000 * con.fondo.k >= 720);
+  // Si no cabe de ninguna forma (más alto que la medida a esa escala), se avisa que queda cortado.
+  const alto = { ...base, pegados: [{ nombre: "«HERO» (imagen)", caja: { x: 0, y: 0, w: 800, h: 1000 } }] };
+  const a2 = acomodar(alto, 1280, 720);
+  ok("pegado: lo que no cabe se avisa como «fuera» con lo que se ve", avisosDePegados(alto, a2, 1280, 720).some((v) => v.tipo === "fuera" && /se ve el \d+ %/.test(v.texto)));
+  // Encima: una pieza que cae sobre lo pegado se avisa; la que ya iba encima en el original, en el mismo lugar, no.
+  const tarjeta = { nombre: "«HERO» (imagen)", caja: { x: 200, y: 400, w: 400, h: 300 } };
+  const ma = { nombre: "M", w: 800, h: 1000, piezas: [pieza("CTA", 300, 500, 200, 60), pieza("BRAND", 50, 50, 150, 60)], pegados: [tarjeta] };
+  const igual = acomodar(ma, 800, 1000);
+  eq("pegado: a la medida del maestro, el botón sobre su tarjeta pegada no se avisa", avisosDePegados(ma, igual, 800, 1000), []);
+  const movida = { ...igual, puestas: igual.puestas.map((q) => (q.pieza === 1 ? { ...q, x: 300, y: 450 } : q)) };
+  const av = avisosDePegados(ma, movida, 800, 1000);
+  ok("pegado: el logo movido encima de la tarjeta pegada se avisa como «encima» (y el botón, que no se movió, no)", av.length === 1 && av[0].tipo === "encima" && av[0].texto.includes("BRAND"), JSON.stringify(av));
+  {
+    // Un texto anclado (el de un botón que se quedó pegado) no entra en el acomodo: va sobre su lugar del fondo.
+    const conAncla = { ...conPegado, piezas: [...conPegado.piezas, { ...pieza("CTA", 330, 40, 140, 40), rol: null, nombre: "«Pide tu tarjeta»", anclada: true }] };
+    const a = acomodar(conAncla, 1280, 720), q = a.puestas.find((x) => x.pieza === 2);
+    ok("anclado: va a la escala del fondo, sobre su mismo punto, y no falta en ninguna medida",
+      !!q && Math.abs(q.k - a.fondo.k) < 1e-9 && Math.abs(q.x - (a.fondo.x + 330 * a.fondo.k)) < 1e-6 && Math.abs(q.y - (a.fondo.y + 40 * a.fondo.k)) < 1e-6 && !a.avisos.some((v) => v.tipo === "falta"),
+      JSON.stringify({ q, f: a.fondo, av: a.avisos }));
+    const b = acomodar(conAncla, 320, 50);
+    ok("anclado: también en un banner (sin «falta»)", b.puestas.some((x) => x.pieza === 2) && !b.avisos.some((v) => v.tipo === "falta"));
+  }
+  ok("pegado: avisosDePixeles incluye los de lo pegado", avisosDePixeles({ ...ma, fondo: new Uint8ClampedArray(800 * 1000 * 4).fill(255) }, movida, 800, 1000).some((v) => v.tipo === "encima"));
+}
+
+// ── «Rehacer el fondo con IA» (2026-10-29): una llamada, pegar SÓLO en la máscara, y lo pegado sale como pieza ──
+{
+  const W = 160, H = 120;
+  let s = 11;
+  const ruido = new Uint8ClampedArray(W * H * 3);
+  for (let k = 0; k < W * H; k++) { s = (s * 1664525 + 1013904223) >>> 0; const n = ((s >>> 8) % 61) - 30; ruido[k * 3] = 120 + n; ruido[k * 3 + 1] = 110 + n; ruido[k * 3 + 2] = 100 + n; }
+  // Una caja roja sobre una textura (no se puede sacar gratis: se queda pegada) y un texto blanco encima de ella.
+  const rgba = new Uint8ClampedArray(W * H * 4);
+  for (let k = 0; k < W * H; k++) { rgba[k * 4] = ruido[k * 3]; rgba[k * 4 + 1] = ruido[k * 3 + 1]; rgba[k * 4 + 2] = ruido[k * 3 + 2]; rgba[k * 4 + 3] = 255; }
+  const pinta = (x0, y0, x1, y1, c) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) rgba.set(c, (y * W + x) * 4); };
+  pinta(40, 40, 120, 80, [230, 30, 30]);
+  for (let b = 0; b < 4; b++) pinta(56 + b * 14, 52, 66 + b * 14, 68, [255, 255, 255]);
+  const leidos = [
+    { id: "boton", rol: "CTA", tipo: "forma", caja: { x0: 39, y0: 39, x1: 121, y1: 81 }, texto: "", sobre: null },
+    { id: "pide", rol: "CTA", tipo: "texto", caja: { x0: 55, y0: 51, x1: 109, y1: 69 }, texto: "PIDE", sobre: "boton" },
+  ];
+  const img = { w: W, h: H, rgba };
+  const m = medirPlanoFijo(img, leidos);
+  ok("fondo IA: el botón en la textura se queda pegado y su texto, anclado", m.fijos.join() === "boton" && m.anclados.join() === "pide", JSON.stringify({ f: m.fijos, a: m.anclados }));
+  const mk = mascaraPegados(m, W, H);
+  ok("fondo IA: la máscara cubre el botón entero (con su margen) y nada lejos de él", mk[60 * W + 80] === 1 && mk[40 * W + 40] === 1 && mk[10 * W + 10] === 0 && mk[100 * W + 150] === 0);
+  // La «IA» devuelve la textura sin el botón... y además cambia TODO lo demás (como Gemini, que redibuja el lienzo).
+  const ia = new Uint8ClampedArray(W * H * 4);
+  for (let k = 0; k < W * H; k++) { ia[k * 4] = ruido[k * 3] + 5; ia[k * 4 + 1] = ruido[k * 3 + 1] + 5; ia[k * 4 + 2] = ruido[k * 3 + 2] + 5; ia[k * 4 + 3] = 255; }
+  const pg = pegarFondoIA(m.fondo, W, H, mk, { x: 0, y: 0, w: W, h: H }, ia);
+  let dentro = true, fuera = true;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const k = y * W + x;
+    if (mk[k] && Math.abs(pg.fondo[k * 3] - (ruido[k * 3] + 5)) > 1) dentro = false;
+    if (!mk[k] && (x < 12 || x > 150 || y < 12 || y > 108) && pg.fondo[k * 3] !== m.fondo[k * 3]) fuera = false;
+  }
+  ok(`fondo IA: dentro de la máscara va lo de la IA; lejos de ella el fondo queda IGUAL píxel por píxel (deriva ${pg.deriva})`, dentro && fuera && pg.deriva === 5, JSON.stringify({ dentro, fuera, d: pg.deriva }));
+  const libre = soltarConFondoIA(img, m, pg.fondo), b = libre.elementos.find((e) => e.id === "boton");
+  ok("fondo IA: el botón sale como pieza con su silueta (la caja roja), nada queda pegado ni anclado y el texto vuelve a ir sobre él",
+    !!b && Math.abs(b.solido.x - 40) <= 2 && Math.abs(b.solido.w - 80) <= 4 && Math.abs(b.solido.h - 40) <= 4 && libre.fijos.length === 0 && libre.pegados.length === 0 && libre.anclados.length === 0 && libre.elementos.find((e) => e.id === "pide")?.sobre === "boton",
+    JSON.stringify({ s: b?.solido, f: libre.fijos }));
+  const ma = maestroDePlano("ia", img, libre.elementos, libre.fondo, new Map(), [], libre.pegados, new Set(), new Set(libre.anclados));
+  ok("fondo IA: en el maestro el botón y su texto van en UNA pieza (CTA) y no hay nada anclado", ma.piezas.length === 1 && ma.piezas[0].rol === "CTA" && !ma.piezas.some((p) => p.anclada) && !ma.pegados);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

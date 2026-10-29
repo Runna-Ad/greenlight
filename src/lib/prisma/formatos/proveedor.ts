@@ -124,6 +124,20 @@ export function borrador(): { borrar: (p: PeticionBorrar) => Promise<RespuestaIA
   return iaActiva() ? { borrar: (p) => llamarGemini([{ text: PROMPT_BORRAR }, imagen(p.fondo), imagen(p.pieza)], p.aspect, p.tamano, mensajes), modelo: MODELO_GEMINI } : null;
 }
 
+// ── Rehacer el fondo de una imagen plana detrás de lo que se quedó pegado (2026-10-29) ──
+const PROMPT_FONDO_PLANO =
+  "The first image is an advertisement background. The second image is a mask of the same size: the WHITE areas mark objects (products, cards, buttons, badges, boxes, logos and their shadows) that must be removed. " +
+  "Remove everything inside the white areas of the mask and fill those areas with the background that would be behind them, so it looks like the objects were never there: continue the surrounding textures, perspective and lighting. " +
+  "Do not add any new objects, text, letters, numbers or logos. Keep everything in the black areas of the mask exactly the same, with the same framing.";
+
+export type PeticionFondoPlano = { fondo: Buffer; mascara: Buffer; aspect: string; tamano: PeticionIA["tamano"] };
+
+/** El que rehace el fondo de una imagen plana, o null si la IA está apagada (mismo interruptor que el resto). */
+export function rehacedorFondo(): { rehacer: (p: PeticionFondoPlano) => Promise<RespuestaIA>; modelo: string } | null {
+  const mensajes = { fallo: "La IA no pudo rehacer el fondo. Reintenta o sigue con lo pegado al fondo.", sinImagen: "La IA no quiso rehacer este fondo. Sigue con lo pegado al fondo." };
+  return iaActiva() ? { rehacer: (p) => llamarGemini([{ text: PROMPT_FONDO_PLANO }, imagen(p.fondo), imagen(p.mascara)], p.aspect, p.tamano, mensajes), modelo: MODELO_GEMINI } : null;
+}
+
 // ── Leer una imagen plana (B28): qué elementos tiene, dónde y con qué letras (sólo texto de salida) ──
 /** Probado el 2026-10-27 con el anuncio DiDi Card: 15 elementos, cajas a 0-4 px de la tinta, letras exactas. */
 export const MODELO_LECTURA = "gemini-3.8-flash";

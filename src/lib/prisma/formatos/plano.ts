@@ -13,6 +13,7 @@
 import { rellenarSuave, type Caja, type MaestroPsd, type PartePsd, type PiezaPsd, type TextoPieza } from "./psd.ts";
 import type { Rol } from "./roles.ts";
 import { TEXTO_DIF_MAX_PLANO, type Alineacion, type TextoCapa } from "./textos.ts";
+import type { PegadoAlFondo } from "./acomodo.ts";
 
 /** Lo que la IA puede decir que es cada elemento (los nombres de la guía del equipo, más OTRO). */
 export const ROLES_LECTURA = ["BRAND", "TITULO", "SUBTITULO", "CTA", "HERO", "FOOTER", "OTRO"] as const;
@@ -150,6 +151,11 @@ export type ElementoMedido = Omit<ElementoLeido, "caja"> & {
   color: RGB | null;
   /** Texto: la caja de cada renglón con la orilla al 50 % (como mide la página). */
   renglones: Caja[];
+  /** Texto: la caja que leyó la IA (px de la imagen). */
+  leida?: Caja;
+  /** Texto: letras de OTRO color dentro de su caja («Te da» oscuro junto a «hasta» naranja): no son su tinta, pero se
+   *  borran con ella del fondo (si no, se quedaban pintadas junto al texto reescrito). Máscara de `caja`. */
+  otraTinta?: { caja: Caja; m: Uint8Array } | null;
 };
 
 /** Diferencia máxima por canal (0-255) con el fondo que todavía cuenta como fondo. */
@@ -168,6 +174,7 @@ const HALO_PX = 10;
 export const LISO_MAX = 6;
 
 const lum = (c: ArrayLike<number>) => (c[0] + c[1] + c[2]) / 3;
+const mediana = (v: number[]) => { const o = [...v].sort((a, b) => a - b); return o[o.length >> 1]; };
 
 /**
  * El color que MÁS hay (no la mediana de cada canal): alrededor de un texto sobre una pastilla de dos colores (naranja
@@ -195,7 +202,7 @@ function dominante(r: readonly number[], g: readonly number[], b: readonly numbe
  * el anillo alrededor de lo que se quitó no se parece a un plano, `liso` sale en falso (la pantalla avisa y no
  * sigue: el fondo de foto necesita la IA, que viene después).
  */
-export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: ReadonlySet<string> = new Set()): { elementos: ElementoMedido[]; fondo: Uint8ClampedArray; liso: boolean; avisos: string[]; fallan: string[] } {
+export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: ReadonlySet<string> = new Set()): { elementos: ElementoMedido[]; fondo: Uint8ClampedArray; liso: boolean; avisos: string[]; fallan: string[]; todos: ElementoMedido[] } {
   const { w: W, h: H, rgba: d } = img;
   const at = (x: number, y: number) => (y * W + x) * 4;
   const dif = (i: number, f: RGB) => Math.max(Math.abs(d[i] - f[0]), Math.abs(d[i + 1] - f[1]), Math.abs(d[i + 2] - f[2]));
@@ -245,7 +252,11 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
   const medidos: ElementoMedido[] = [];
   for (const e of leidos) {
     const B = alrededor(e);
-    const otros = leidos.filter((o) => o.id !== e.id && o.sobre !== e.id && o.id !== e.sobre);
+    // Una figura más grande que se cruza con ésta va DETRÁS (la tarjeta sobre la caja de beneficios): no le quita
+    // píxeles. Antes las dos se los quitaban y la franja donde se cruzan no era de nadie: la tarjeta dejaba esa franja
+    // pintada en el fondo (batería 2026-10-29, 82947).
+    const area = (o: ElementoLeido) => (o.caja.x1 - o.caja.x0) * (o.caja.y1 - o.caja.y0);
+    const otros = leidos.filter((o) => o.id !== e.id && o.sobre !== e.id && o.id !== e.sobre && (e.tipo === "texto" || o.tipo === "texto" || area(o) <= area(e)));
     let m = e.tipo === "texto" ? medirTexto(e, B) : null;
     if (e.tipo === "texto" && !m) avisos.push(`${e.id}: no se encontró su tinta; va como imagen.`);
     m ??= medirFigura(e, B, otros);
@@ -259,24 +270,48 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
     // Las letras van SOBRE su fondo: una fila o columna de la caja sin nada de ese color no es texto (la franja beige
     // que la caja de la IA traía arriba de la pastilla del precio de DiDi se medía como tinta: un rectángulo pálido).
     const cw = x1 - x0, ch = y1 - y0, enFila = new Uint32Array(ch), enCol = new Uint32Array(cw);
-    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (dif(at(x, y), B) <= 24) { enFila[y - y0]++; enCol[x - x0]++; }
+    // El fondo de CADA columna: lo de arriba y abajo de las letras (las 3 filas de cada orilla de la caja), suavizado. En
+    // un degradado un solo color no sirve: del lado más oscuro las letras no se veían «sobre su fondo» y se quedaban
+    // fuera (83ed: «¡Lleva tu DiDi Card y d|isfruta…», 82947: «crédit|o»; batería 2026-10-29). Lo que se aleja mucho
+    // de B (otra cosa: la tinta misma, la orilla de una pastilla) no cuenta: ahí, B.
+    const orillaCol: (RGB | null)[] = [];
+    for (let x = x0; x < x1; x++) {
+      const r: number[] = [], g: number[] = [], b: number[] = [];
+      for (const y of [y0, y0 + 1, y0 + 2, y1 - 3, y1 - 2, y1 - 1]) if (y >= 0 && y < H) { const i = at(x, y); if (dif(i, B) <= 150) { r.push(d[i]); g.push(d[i + 1]); b.push(d[i + 2]); } }
+      orillaCol.push(r.length >= 2 ? [mediana(r), mediana(g), mediana(b)] : null);
+    }
+    const BC: RGB[] = [];
+    for (let x = 0; x < cw; x++) {
+      const r: number[] = [], g: number[] = [], b: number[] = [];
+      for (let k = Math.max(0, x - 8); k <= Math.min(cw - 1, x + 8); k++) { const o = orillaCol[k]; if (o) { r.push(o[0]); g.push(o[1]); b.push(o[2]); } }
+      BC.push(r.length ? [mediana(r), mediana(g), mediana(b)] : B);
+    }
+    const Bx = (x: number) => BC[x - x0];
+    const difB = (i: number, x: number) => { const c = Bx(x); return Math.max(Math.abs(d[i] - c[0]), Math.abs(d[i + 1] - c[1]), Math.abs(d[i + 2] - c[2])); };
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (difB(at(x, y), x) <= 24) { enFila[y - y0]++; enCol[x - x0]++; }
     const sobreFondo = (x: number, y: number) => enFila[y - y0] >= Math.max(2, 0.03 * cw) && enCol[x - x0] >= Math.max(2, 0.03 * ch);
     let max = 0;
-    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (sobreFondo(x, y)) max = Math.max(max, dif(at(x, y), B));
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (sobreFondo(x, y)) max = Math.max(max, difB(at(x, y), x));
     if (max < 40) return null;
     const r: number[] = [], g: number[] = [], b: number[] = [];
-    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = at(x, y); if (sobreFondo(x, y) && dif(i, B) > 0.85 * max) { r.push(d[i]); g.push(d[i + 1]); b.push(d[i + 2]); } }
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = at(x, y); if (sobreFondo(x, y) && difB(i, x) > 0.85 * max) { r.push(d[i]); g.push(d[i + 1]); b.push(d[i + 2]); } }
     // La tinta: el color que más hay entre lo más lejano del fondo (la mediana por canal mezclaba la tinta blanca con
     // la franja beige que la caja de la IA traía arriba de la pastilla).
     const F: RGB = dominante(r, g, b);
-    const v = [F[0] - B[0], F[1] - B[1], F[2] - B[2]], vv = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
-    const w = x1 - x0, h = y1 - y0, a = new Float32Array(w * h);
+    const w = x1 - x0, h = y1 - y0, a = new Float32Array(w * h), otra = new Uint8Array(w * h);
+    let hayOtra = false;
+    const otrosT = leidos.filter((o) => o.id !== e.id && o.id !== e.sobre && o.sobre !== e.id);
+    const ajenaT = (X: number, Y: number) => otrosT.some((o) => dentro(o.caja, X, Y));
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       if (!sobreFondo(x0 + x, y0 + y)) continue;
-      const i = at(x0 + x, y0 + y), p = [d[i] - B[0], d[i + 1] - B[1], d[i + 2] - B[2]];
+      const Bl = BC[x], v = [F[0] - Bl[0], F[1] - Bl[1], F[2] - Bl[2]], vv = Math.max(1, v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+      const i = at(x0 + x, y0 + y), p = [d[i] - Bl[0], d[i + 1] - Bl[1], d[i + 2] - Bl[2]];
       const t = Math.min(1, Math.max(0, (p[0] * v[0] + p[1] * v[1] + p[2] * v[2]) / vv));
-      // Un color que no está en la recta del fondo a la tinta es de otro elemento (otra tinta, otra forma).
-      a[y * w + x] = Math.hypot(p[0] - t * v[0], p[1] - t * v[1], p[2] - t * v[2]) > 60 ? 0 : t;
+      // Un color que no está en la recta del fondo a la tinta es de otro elemento (otra tinta, otra forma)... o de
+      // otro color del mismo texto: si no cae en otro elemento leído, se borra con él (`otraTinta`).
+      const fuera = Math.hypot(p[0] - t * v[0], p[1] - t * v[1], p[2] - t * v[2]) > 60;
+      a[y * w + x] = fuera ? 0 : t;
+      if (fuera && difB(i, x0 + x) > 40 && !ajenaT(x0 + x, y0 + y)) { otra[y * w + x] = 1; hayOtra = true; }
     }
     // Renglones: filas con tinta al 50 %; las bandas de más (acentos, puntos) se juntan con su vecina más cercana y,
     // si faltan (renglones pegados), la más alta se parte en su fila con menos tinta.
@@ -309,7 +344,8 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
     for (let y = 0; y < pinta.h; y++) for (let x = 0; x < pinta.w; x++) alfa[y * pinta.w + x] = Math.round(a[(pinta.y - y0 + y) * w + (pinta.x - x0 + x)] * 255);
     const { caja: _c, ...resto } = e;
     void _c;
-    return { ...resto, pinta, solido, alfa, oscurece: null, debajo: B, color: F, renglones };
+    const leida = { x: e.caja.x0, y: e.caja.y0, w: e.caja.x1 - e.caja.x0, h: e.caja.y1 - e.caja.y0 };
+    return { ...resto, pinta, solido, alfa, oscurece: null, debajo: B, color: F, renglones, leida, otraTinta: hayOtra ? { caja: { x: x0, y: y0, w, h }, m: otra } : null };
   }
 
   /** Imagen o forma: su silueta es lo que el fondo de alrededor NO alcanza (relleno desde la orilla de una zona un
@@ -411,6 +447,12 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
   // Los fijos se miden igual (ocupan su lugar: si no, sus píxeles parecerían la sombra de un vecino) pero no se sacan.
   for (const m of medidos) {
     if (fijos.has(m.id)) continue;
+    const o = m.otraTinta;
+    if (o) for (let y = 0; y < o.caja.h; y++) for (let x = 0; x < o.caja.w; x++) {
+      if (!o.m[y * o.caja.w + x]) continue;
+      const X = o.caja.x + x, Y = o.caja.y + y;
+      for (let yy = Math.max(0, Y - 3); yy <= Math.min(H - 1, Y + 3); yy++) quitar.fill(1, yy * W + Math.max(0, X - 3), yy * W + Math.min(W - 1, X + 3) + 1);
+    }
     const halo = m.tipo === "texto" ? HALO_PX : 3;
     for (let y = 0; y < m.pinta.h; y++) for (let x = 0; x < m.pinta.w; x++) {
       const j = y * m.pinta.w + x;
@@ -438,7 +480,12 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
       for (const n of [x > 0 ? k - 1 : -1, x < W - 1 ? k + 1 : -1, y > 0 ? k - W : -1, y < H - 1 ? k + W : -1]) if (n >= 0 && quitar[n] && !visto[n]) { visto[n] = 1; cola.push(n); }
     }
     const ajuste = planoDelAnillo(fondo, W, H, quitar, { x0: cx0, y0: cy0, x1: cx1, y1: cy1 });
-    if (!ajuste || ajuste.error > LISO_MAX) {
+    // Sin plano no quiere decir foto: un degradado curvo o una luz suave no son un plano pero casi no cambian de golpe
+    // (batería 2026-10-29: 10 de 11 anuncios con piezas pegadas por eso). Se rellenan igual: el plano más lo que la
+    // orilla se aparta de él, llevado suave hacia adentro, sigue la curva.
+    const aspera = ajuste && ajuste.error > LISO_MAX ? asperezaDelAnillo(fondo, W, H, quitar, { x0: cx0, y0: cy0, x1: cx1, y1: cy1 }) : null;
+    const suave = !!aspera && aspera.ruido <= SUAVE_RUIDO_MAX && aspera.orillas <= SUAVE_ORILLAS_MAX;
+    if (!ajuste || (ajuste.error > LISO_MAX && !suave)) {
       liso = false;
       for (const k of pix) malo[k] = 1;
       if (!ajuste) continue;
@@ -456,7 +503,7 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
     });
     let semilla = (cx0 * 7919 + cy0 * 104729) >>> 0;
     const azar = () => { semilla = (semilla * 1664525 + 1013904223) >>> 0; return semilla / 4294967296 - 0.5; };
-    const grano = Math.min(3, ajuste.error);
+    const grano = Math.min(3, suave && aspera ? aspera.ruido : ajuste.error);
     for (const k of pix) {
       const x = k % W, y = (k / W) | 0, g = grano * (azar() + azar() + azar()) * 2, j = (y - by0) * bw + (x - bx0);
       for (let c = 0; c < 3; c++) fondo[k * 3 + c] = ajuste.valor(x, y, c) + resto[c][j] + g;
@@ -468,7 +515,114 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
       if ((m.alfa[y * m.pinta.w + x] > 0 || (m.oscurece && m.oscurece[(y * m.pinta.w + x) * 3] < 255)) && malo[(m.pinta.y + y) * W + m.pinta.x + x]) return true;
     return false;
   }).map((m) => m.id);
-  return { elementos: fijos.size ? medidos.filter((m) => !fijos.has(m.id)) : medidos, fondo, liso, avisos, fallan };
+  return { elementos: fijos.size ? medidos.filter((m) => !fijos.has(m.id)) : medidos, fondo, liso, avisos, fallan, todos: medidos };
+}
+
+/** Cómo se nombra en los avisos de cada medida algo pegado al fondo: sus primeras letras, o su papel y qué es. */
+const nombrePegado = (e: ElementoLeido): string => {
+  const t = e.texto.replace(/\s+/g, " ").trim();
+  return e.tipo === "texto" && t ? `«${t.length > 24 ? `${t.slice(0, 23)}…` : t}»` : `«${e.rol}» (${e.tipo})`;
+};
+
+/** Lo que se rellena de un texto en un fondo de foto: sus letras (todo lo que pinta) y esto alrededor (px). */
+const LETRAS_MARGEN_PX = 3;
+/** Las letras de un texto (lo que pinta, más LETRAS_MARGEN_PX) en una máscara W × H. */
+function mascaraDeLetras(t: ElementoMedido, W: number, H: number): Uint8Array {
+  const mk = new Uint8Array(W * H), r = LETRAS_MARGEN_PX;
+  for (let y = 0; y < t.pinta.h; y++) for (let x = 0; x < t.pinta.w; x++) {
+    if (!t.alfa[y * t.pinta.w + x]) continue;
+    const X = t.pinta.x + x, Y = t.pinta.y + y;
+    for (let yy = Math.max(0, Y - r); yy <= Math.min(H - 1, Y + r); yy++) mk.fill(1, yy * W + Math.max(0, X - r), yy * W + Math.min(W - 1, X + r) + 1);
+  }
+  const o = t.otraTinta;
+  if (o) for (let y = 0; y < o.caja.h; y++) for (let x = 0; x < o.caja.w; x++) {
+    if (!o.m[y * o.caja.w + x]) continue;
+    const X = o.caja.x + x, Y = o.caja.y + y;
+    for (let yy = Math.max(0, Y - r); yy <= Math.min(H - 1, Y + r); yy++) mk.fill(1, yy * W + Math.max(0, X - r), yy * W + Math.min(W - 1, X + r) + 1);
+  }
+  return mk;
+}
+
+/** El lado del parche que se compara al rellenar con muestras (px, impar) y hasta dónde se buscan muestras. */
+const PARCHE = 7, BUSCA_PX = 30, BUSCA_PASO = 2;
+/**
+ * Rellena lo marcado en `hueco` (RGB, W × H) copiando de lo que tiene cerca: de la orilla hacia adentro, cada vez el
+ * parche conocido de alrededor que más se parece a lo que ya se ve del parche por llenar (como el «relleno según el
+ * contenido» de Photoshop, en chico). Sirve en fotos y texturas, donde un relleno suave dejaba una mancha lisa; pensado
+ * para huecos delgados (las letras de un texto), no para quitar una figura grande.
+ */
+export function rellenarConMuestras(rgb: Uint8ClampedArray, W: number, H: number, hueco: Uint8Array, evitar?: Uint8Array): void {
+  const falta = hueco.slice(), m = PARCHE >> 1;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let k = 0; k < W * H; k++) if (falta[k]) { const x = k % W, y = (k / W) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return;
+  // Dónde hay un parche ENTERO conocido (de la imagen original, no de lo ya rellenado) y fuera de `evitar` (lo que se
+  // queda pegado): sólo de ahí se copia.
+  const suma = new Int32Array((W + 1) * (H + 1));
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) suma[(y + 1) * (W + 1) + x + 1] = (hueco[y * W + x] || (evitar?.[y * W + x] ?? 0) ? 1 : 0) + suma[y * (W + 1) + x + 1] + suma[(y + 1) * (W + 1) + x] - suma[y * (W + 1) + x];
+  const limpio = (X: number, Y: number) => {
+    const a = X - m, b = Y - m, c = a + PARCHE, d = b + PARCHE;
+    return suma[d * (W + 1) + c] - suma[b * (W + 1) + c] - suma[d * (W + 1) + a] + suma[b * (W + 1) + a] === 0;
+  };
+  /** El parche limpio que más se parece a lo conocido alrededor de (px, py), a ≤ r px; -1 si no hay ninguno. */
+  const buscar = (px: number, py: number, r: number) => {
+    // Con un radio grande, menos puntos (las mismas ~30 × 30 pruebas).
+    const paso = Math.max(BUSCA_PASO, Math.round((2 * r) / 30));
+    let mejor = -1, peor = Infinity;
+    const probar = (sx: number, sy: number) => {
+        if (sx < m || sy < m || sx > W - 1 - m || sy > H - 1 - m || !limpio(sx, sy)) return;
+        let d = 0, n = 0;
+        for (let dy = -m; dy <= m; dy++) {
+          const ty = py + dy;
+          if (ty < 0 || ty >= H) continue;
+          for (let dx = -m; dx <= m; dx++) {
+            const tx = px + dx;
+            if (tx < 0 || tx >= W || falta[ty * W + tx]) continue;
+            const a = (ty * W + tx) * 3, b = ((sy + dy) * W + sx + dx) * 3;
+            d += (rgb[a] - rgb[b]) ** 2 + (rgb[a + 1] - rgb[b + 1]) ** 2 + (rgb[a + 2] - rgb[b + 2]) ** 2;
+            n++;
+          }
+        }
+        if (n && d / n < peor) { peor = d / n; mejor = sy * W + sx; }
+    };
+    for (let sy = Math.max(m, py - r); sy <= Math.min(H - 1 - m, py + r); sy += paso)
+      for (let sx = Math.max(m, px - r); sx <= Math.min(W - 1 - m, px + r); sx += paso) probar(sx, sy);
+    // Y alrededor del mejor, de a un píxel (la rejilla gruesa se salta la fase de una textura fina).
+    if (mejor >= 0) { const bx = mejor % W, by = (mejor / W) | 0; for (let dy = 1 - paso; dy < paso; dy++) for (let dx = 1 - paso; dx < paso; dx++) probar(bx + dx, by + dy); }
+    return mejor;
+  };
+  for (;;) {
+    // La orilla de lo que falta: lo que falta con algo conocido al lado.
+    const orilla: number[] = [];
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const k = y * W + x;
+      if (falta[k] && ((x > 0 && !falta[k - 1]) || (x < W - 1 && !falta[k + 1]) || (y > 0 && !falta[k - W]) || (y < H - 1 && !falta[k + W]))) orilla.push(k);
+    }
+    if (!orilla.length) break;
+    const llenos: [number, number][] = [];
+    for (const k of orilla) {
+      const px = k % W, py = (k / W) | 0;
+      // Más lejos sólo si cerca no hay nada limpio (el centro de un titular grueso, 2026-10-29).
+      let q = -1;
+      for (let r = BUSCA_PX; q < 0 && r <= 2 * Math.max(W, H); r *= 2) q = buscar(px, py, r);
+      if (q >= 0) llenos.push([k, q]);
+    }
+    if (!llenos.length) break;
+    for (const [k, q] of llenos) { for (let c = 0; c < 3; c++) rgb[k * 3 + c] = rgb[q * 3 + c]; falta[k] = 0; }
+  }
+  // Sin ningún parche limpio en toda la imagen (no debería pasar), lo que quede se rellena suave: nunca queda la letra.
+  let quedan = false;
+  for (let k = 0; k < W * H && !quedan; k++) quedan = !!falta[k];
+  if (!quedan) return;
+  const bw = x1 - x0 + 3, bh = y1 - y0 + 3, bx = Math.max(0, x0 - 1), by = Math.max(0, y0 - 1);
+  const desc = new Uint8Array(bw * bh);
+  for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { const X = bx + x, Y = by + y; desc[y * bw + x] = X < W && Y < H ? falta[Y * W + X] : 0; }
+  for (let c = 0; c < 3; c++) {
+    const v = new Float32Array(bw * bh);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { const X = Math.min(W - 1, bx + x), Y = Math.min(H - 1, by + y); v[y * bw + x] = rgb[(Y * W + X) * 3 + c]; }
+    rellenarSuave(v, desc, bw, bh);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) if (desc[y * bw + x]) rgb[((by + y) * W + bx + x) * 3 + c] = v[y * bw + x];
+  }
 }
 
 /** Lo más que se vuelve a medir quitando elementos: cada vuelta saca al menos uno. */
@@ -480,7 +634,7 @@ const VUELTAS_FIJO = 8;
  * huecos que no se pueden rellenar se quedan pintados en el fondo (`fijos`, no se mueven ni se editan) y se vuelve a
  * medir con los demás (los fijos se siguen midiendo: ocupan su lugar). Con todo fijo, la imagen va entera de fondo.
  */
-export function medirPlanoFijo(img: Imagen, leidos: ElementoLeido[]): ReturnType<typeof medirPlano> & { fijos: string[] } {
+export function medirPlanoFijo(img: Imagen, leidos: ElementoLeido[]): ReturnType<typeof medirPlano> & { fijos: string[]; pegados: PegadoAlFondo[]; anclados: string[] } {
   const fijos = new Set<string>();
   for (let vuelta = 0; ; vuelta++) {
     const m = medirPlano(img, leidos, fijos);
@@ -488,10 +642,29 @@ export function medirPlanoFijo(img: Imagen, leidos: ElementoLeido[]): ReturnType
     if (m.liso || !nuevos.length || vuelta >= VUELTAS_FIJO) {
       // Sin liso al final (no debería: sin elementos no hay huecos), lo que falla también se queda fijo.
       if (!m.liso) for (const id of m.fallan) fijos.add(id);
+      // Todo texto sale editable (Pedro, 2026-10-29: "the texts need to be guaranteed editable"): un texto en un fondo
+      // que no se puede rellenar suave (foto, textura) se saca igual, sólo sus letras, rellenando con lo que tiene al
+      // lado (`rellenarConMuestras`). Si va sobre algo que se queda pegado (el botón de una foto), se queda ANCLADO al
+      // fondo: se mueve con él, para no dejar su botón vacío.
+      const { w: W, h: H } = img, fondo = m.fondo.slice();
+      const textos = m.todos.filter((e) => e.tipo === "texto" && fijos.has(e.id));
+      for (const t of textos) fijos.delete(t.id);
+      const quedan = m.todos.filter((e) => fijos.has(e.id));
+      // Todas las letras a la vez: si no, un renglón copiaba las letras del de al lado. (Sí se copia de lo pegado: un
+      // texto sobre una barra blanca pegada se rellena con la barra, no con la foto de afuera.)
+      if (textos.length) {
+        const hueco = new Uint8Array(W * H);
+        for (const t of textos) { const mk = mascaraDeLetras(t, W, H); for (let k = 0; k < W * H; k++) if (mk[k]) hueco[k] = 1; }
+        rellenarConMuestras(fondo, W, H, hueco);
+      }
+      const cruza = (a: Caja, b: Caja) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+      const anclados = textos.filter((t) => quedan.some((q) => q.id === t.sobre || cruza(t.solido, q.solido))).map((t) => t.id);
       // Un texto sobre un elemento fijo ya no va en su pieza (ese se queda en el fondo): va suelto.
-      const elementos = m.elementos.filter((e) => !fijos.has(e.id)).map((e) => (e.sobre && fijos.has(e.sobre) ? { ...e, sobre: null } : e));
+      const elementos = [...m.elementos.filter((e) => !fijos.has(e.id)), ...textos].map((e) => (e.sobre && fijos.has(e.sobre) ? { ...e, sobre: null } : e));
       const avisos = m.avisos.filter((a) => !a.startsWith("El fondo no es liso"));
-      return { ...m, elementos, liso: true, avisos, fallan: [], fijos: [...fijos] };
+      // Lo fijo que se encontró en la imagen, con su parte sólida: cada medida avisa si lo corta o le cae algo encima.
+      const pegados = leidos.flatMap((e) => { const q = quedan.find((x) => x.id === e.id); return q ? [{ nombre: nombrePegado(e), caja: q.solido }] : []; });
+      return { ...m, fondo, elementos, liso: true, avisos, fallan: [], fijos: [...fijos], pegados, anclados };
     }
     for (const id of nuevos) fijos.add(id);
   }
@@ -540,6 +713,132 @@ function planoDelAnillo(rgb: Uint8ClampedArray, W: number, H: number, quitar: Ui
   return { valor, error: Math.sqrt(sq / muestras.length) };
 }
 
+/**
+ * Qué tan áspero es el anillo de 16 px alrededor de la caja (sin lo que se quita): por cada píxel, cuánto se aparta
+ * del promedio de sus vecinos a 2 px (lo que cambia de golpe; un degradado o una luz suave, por curvos que sean, casi no
+ * cambian así). `ruido`: el típico (niveles) de lo que no es orilla; `orillas`: qué parte del anillo cambia de golpe
+ * (más de ORILLA_NIVELES: el canto de una tarjeta, una foto). null si no hay anillo con qué medir.
+ */
+export function asperezaDelAnillo(rgb: Uint8ClampedArray, W: number, H: number, quitar: Uint8Array, c: { x0: number; y0: number; x1: number; y1: number }): { ruido: number; orillas: number } | null {
+  const libre = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && !quitar[y * W + x];
+  const paso = Math.max(1, Math.round(Math.sqrt(((c.x1 - c.x0 + 33) * (c.y1 - c.y0 + 33)) / 40_000)));
+  let n = 0, orillas = 0, sq = 0, lisos = 0;
+  for (let y = Math.max(2, c.y0 - 16); y <= Math.min(H - 3, c.y1 + 16); y += paso) for (let x = Math.max(2, c.x0 - 16); x <= Math.min(W - 3, c.x1 + 16); x += paso) {
+    if (!libre(x, y) || !libre(x - 2, y) || !libre(x + 2, y) || !libre(x, y - 2) || !libre(x, y + 2)) continue;
+    let d = 0;
+    for (let q = 0; q < 3; q++) {
+      const v = (k: number) => rgb[k * 3 + q];
+      d += Math.abs(v(y * W + x) - (v(y * W + x - 2) + v(y * W + x + 2) + v((y - 2) * W + x) + v((y + 2) * W + x)) / 4);
+    }
+    d /= 3;
+    n++;
+    if (d > ORILLA_NIVELES) orillas++;
+    else { sq += d * d; lisos++; }
+  }
+  return n < 30 ? null : { ruido: lisos ? Math.sqrt(sq / lisos) : Infinity, orillas: orillas / n };
+}
+/** Lo que un píxel se aparta de sus vecinos a 2 px para contar como orilla (niveles de 255). */
+const ORILLA_NIVELES = 8;
+/** Un anillo sin plano todavía se rellena si su ruido típico (niveles) no pasa de esto... (batería 2026-10-29: los
+ *  degradados de los anuncios, 0.5-1.3; las rocas, 1.7-3.4). */
+export const SUAVE_RUIDO_MAX = 1.6;
+/** ...y si no más de esta parte cambia de golpe (los degradados, 0-2.4 %; el estadio y las capturas, 3.4-14 %). */
+export const SUAVE_ORILLAS_MAX = 0.03;
+
+// ── Rehacer con IA el fondo detrás de lo pegado (Pedro, 2026-10-29: "Build AI background") ──────────────────────
+// UNA llamada por anuncio, sólo si algo se quedó pegado: se le manda el fondo limpio (lo que sí se pudo sacar ya no
+// está) y una máscara de lo pegado; de lo que devuelve se pega SÓLO lo de la máscara (y un borde que se desvanece):
+// fuera de ahí el fondo queda igual, píxel por píxel. Lo pegado sale después de la diferencia entre la imagen y el
+// fondo nuevo (`soltarConFondoIA`), así que se puede mover como cualquier pieza.
+
+/** Lo que se agranda la máscara alrededor de lo pegado (px): su orilla suave y su sombra cercana. */
+export const IA_MARGEN_PX = 10;
+/** El borde (px) fuera de la máscara donde lo de la IA se desvanece hacia el fondo de antes. */
+const IA_ANILLO_PX = 6;
+
+/** Lo pegado de una medida (y los textos anclados sobre ello) como máscara W × H: 1 = lo que la IA tiene que borrar. */
+export function mascaraPegados(medido: { todos: ElementoMedido[]; fijos: readonly string[]; anclados?: readonly string[] }, W: number, H: number, r = IA_MARGEN_PX): Uint8Array {
+  const ids = new Set([...medido.fijos, ...(medido.anclados ?? [])]), mk = new Uint8Array(W * H);
+  for (const e of medido.todos) {
+    if (!ids.has(e.id)) continue;
+    for (let y = 0; y < e.pinta.h; y++) for (let x = 0; x < e.pinta.w; x++) {
+      const j = y * e.pinta.w + x;
+      if (!e.alfa[j] && !(e.oscurece && e.oscurece[j * 3] < 255)) continue;
+      const X = e.pinta.x + x, Y = e.pinta.y + y;
+      // Cada fila del cuadrado de r alrededor, de una vez (`fill`): la máscara de un anuncio entero no tarda.
+      for (let yy = Math.max(0, Y - r); yy <= Math.min(H - 1, Y + r); yy++) mk.fill(1, yy * W + Math.max(0, X - r), yy * W + Math.min(W - 1, X + r) + 1);
+    }
+  }
+  return mk;
+}
+
+/**
+ * El fondo (RGB, W × H) con lo que devolvió la IA (`ia`: RGBA del tamaño de `recorte`, ya reescalado; el recorte puede
+ * salirse de la imagen): entero dentro de la máscara, desvaneciéndose en IA_ANILLO_PX afuera; el resto, igual.
+ * `deriva`: el error medio (0-255) lejos de la máscara, donde la IA no debía cambiar nada (alto = movió el fondo).
+ */
+export function pegarFondoIA(fondo: Uint8ClampedArray, W: number, H: number, mascara: Uint8Array, recorte: Caja, ia: Uint8ClampedArray): { fondo: Uint8ClampedArray; deriva: number | null } | null {
+  if (ia.length < recorte.w * recorte.h * 4 || fondo.length < W * H * 3) return null;
+  // Distancia (aprox.) de cada píxel a la máscara, sólo hasta IA_ANILLO_PX + 1: dos pasadas.
+  const d = new Float32Array(W * H).fill(Infinity);
+  for (let k = 0; k < W * H; k++) if (mascara[k]) d[k] = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const k = y * W + x; if (x > 0) d[k] = Math.min(d[k], d[k - 1] + 1); if (y > 0) d[k] = Math.min(d[k], d[k - W] + 1); }
+  for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) { const k = y * W + x; if (x < W - 1) d[k] = Math.min(d[k], d[k + 1] + 1); if (y < H - 1) d[k] = Math.min(d[k], d[k + W] + 1); }
+  const out = new Uint8ClampedArray(fondo);
+  let suma = 0, n = 0;
+  for (let y = 0; y < recorte.h; y++) for (let x = 0; x < recorte.w; x++) {
+    const X = recorte.x + x, Y = recorte.y + y;
+    if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+    const k = Y * W + X, j = (y * recorte.w + x) * 4, peso = Math.max(0, 1 - d[k] / IA_ANILLO_PX);
+    if (peso <= 0) {
+      if (d[k] > 3 * IA_ANILLO_PX) { for (let c = 0; c < 3; c++) suma += Math.abs(ia[j + c] - fondo[k * 3 + c]); n += 3; }
+      continue;
+    }
+    for (let c = 0; c < 3; c++) out[k * 3 + c] = ia[j + c] * peso + fondo[k * 3 + c] * (1 - peso);
+  }
+  return { fondo: out, deriva: n ? Math.round((suma / n) * 10) / 10 : null };
+}
+
+/** Hasta dónde fuera de su silueta medida puede llegar una pieza soltada (px): en una foto, la textura que la IA
+ *  rehízo distinto se colaba como un borde roto alrededor (la batería, 2026-10-29). */
+const SOLTAR_FUERA_PX = 2;
+/** Lo que se aparta una imagen de su fondo nuevo (máx. por canal) para ser de la pieza entera / media. */
+const SOLTAR_LLENO = 30, SOLTAR_ORILLA = 15;
+
+/**
+ * Lo medido con lo pegado ya libre: con el fondo nuevo (`fondoIA`, sin lo pegado), cada elemento pegado es lo que la
+ * imagen tiene de distinto de ese fondo, dentro de su silueta medida + SOLTAR_FUERA_PX (lo de otro elemento pegado al
+ * lado, o la textura que la IA rehízo distinto, no entra). Los textos vuelven a ir sobre lo suyo (`sobre`) y nada queda anclado ni pegado.
+ */
+export function soltarConFondoIA<M extends { elementos: ElementoMedido[]; todos: ElementoMedido[]; fijos: string[]; pegados: PegadoAlFondo[]; anclados: string[]; fondo: Uint8ClampedArray }>(img: Imagen, medido: M, fondoIA: Uint8ClampedArray): M {
+  const { w: W, h: H, rgba: d } = img, fijos = new Set(medido.fijos);
+  const libres: ElementoMedido[] = [];
+  for (const e of medido.todos) {
+    if (!fijos.has(e.id)) continue;
+    const solo = mascaraPegados({ todos: [e], fijos: [e.id] }, W, H, SOLTAR_FUERA_PX);
+    let x0 = W, y0 = H, x1 = -1, y1 = -1;
+    for (let k = 0; k < W * H; k++) if (solo[k]) { const x = k % W, y = (k / W) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) continue;
+    const w = x1 - x0 + 1, h = y1 - y0 + 1, a = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const k = (y0 + y) * W + x0 + x;
+      if (!solo[k]) continue;
+      const i = k * 4, dist = Math.max(Math.abs(d[i] - fondoIA[k * 3]), Math.abs(d[i + 1] - fondoIA[k * 3 + 1]), Math.abs(d[i + 2] - fondoIA[k * 3 + 2]));
+      a[y * w + x] = dist >= SOLTAR_LLENO ? 1 : dist >= SOLTAR_ORILLA ? (dist - SOLTAR_ORILLA) / (SOLTAR_LLENO - SOLTAR_ORILLA) : 0;
+    }
+    const pinta = cajaDe(a, w, h, 0, x0, y0), solido = cajaDe(a, w, h, 0.5, x0, y0);
+    if (!pinta || !solido) continue;
+    const alfa = new Uint8ClampedArray(pinta.w * pinta.h);
+    for (let y = 0; y < pinta.h; y++) for (let x = 0; x < pinta.w; x++) alfa[y * pinta.w + x] = Math.round(a[(pinta.y - y0 + y) * w + (pinta.x - x0 + x)] * 255);
+    libres.push({ ...e, pinta, solido, alfa, oscurece: null });
+  }
+  // `sobre` como lo leyó la IA: un texto que iba suelto porque su botón estaba pegado vuelve a su botón.
+  const sobreDe = new Map(medido.todos.map((e) => [e.id, e.sobre]));
+  const vivos = new Set([...medido.elementos.map((e) => e.id), ...libres.map((e) => e.id)]);
+  const elementos = [...medido.elementos, ...libres].map((e) => { const s = sobreDe.get(e.id) ?? null; return { ...e, sobre: s && vivos.has(s) ? s : null }; });
+  return { ...medido, fondo: fondoIA, elementos, fijos: [], pegados: [], anclados: [] };
+}
+
 // ── (3) El maestro: lo mismo que da un PSD ───────────────────────────────────────────────────────────────────────
 
 /** El orden de las piezas, de abajo hacia arriba (en un plano nada dice cuál va encima: lo grande abajo). */
@@ -582,7 +881,7 @@ function juntar(ds: Dibujo[]): Dibujo {
  * (la pastilla con su precio). Cada texto con un `TextoCapa` en `textos` (los que se ajustaron a una tipografía) va
  * como `TextoPieza`, con su tinta original para que la página lo pruebe; los demás van como píxeles en la `base`.
  */
-export function maestroDePlano(nombre: string, img: Imagen, medidos: ElementoMedido[], fondo: Uint8ClampedArray, textos: ReadonlyMap<string, TextoCapa>, avisos: string[]):
+export function maestroDePlano(nombre: string, img: Imagen, medidos: ElementoMedido[], fondo: Uint8ClampedArray, textos: ReadonlyMap<string, TextoCapa>, avisos: string[], pegados: readonly PegadoAlFondo[] = [], aproximados: ReadonlySet<string> = new Set(), anclados: ReadonlySet<string> = new Set()):
   Omit<MaestroPsd, "origen"> {
   const { w: W, h: H, rgba: d } = img;
   const porId = new Map(medidos.map((m) => [m.id, m]));
@@ -632,9 +931,10 @@ export function maestroDePlano(nombre: string, img: Imagen, medidos: ElementoMed
     return base;
   };
   // El legal (la única capa de imagen plana con caja de párrafo, `capaDeLegal`) va sin prueba: un tamaño, a propósito.
+  // Lo reescrito con la tipografía más parecida aunque no empate (`aproximados`, para que TODO texto se edite) tampoco.
   const tpDe = (m: ElementoMedido): TextoPieza => {
     const texto = textos.get(m.id)!;
-    return { capa: m.id, texto, opacidad: 1, caja: m.pinta, alfa: m.alfa, motivo: null, ruta: [], difMax: TEXTO_DIF_MAX_PLANO, ...(texto.caja ? { sinPrueba: true } : {}) };
+    return { capa: m.id, texto, opacidad: 1, caja: m.pinta, alfa: m.alfa, motivo: null, ruta: [], difMax: TEXTO_DIF_MAX_PLANO, ...(texto.caja || aproximados.has(m.id) ? { sinPrueba: true } : {}) };
   };
   const tamMin = (ts: TextoPieza[]) => (ts.length ? Math.min(...ts.map((t) => t.texto.tramos[0].tam)) : null);
 
@@ -652,7 +952,22 @@ export function maestroDePlano(nombre: string, img: Imagen, medidos: ElementoMed
     return x;
   };
   const raices = medidos.filter((m) => raizDe(m) === m);
+  /** El papel de una parte. Una sin papel («OTRO») no se colocaba en las medidas con acomodo propio y se perdía con
+   *  todo lo que llevaba encima (la caja de beneficios de 82947, batería 2026-10-29): toma el papel que más tienen sus
+   *  textos y, si no lleva, el de la parte con papel más cercana. */
+  const rolDeRaiz = (r: ElementoMedido, todos: ElementoMedido[]): Rol | null => {
+    if (r.rol !== "OTRO") return r.rol;
+    const cuenta = new Map<Rol, number>();
+    for (const m of todos) if (m.rol !== "OTRO") cuenta.set(m.rol, (cuenta.get(m.rol) ?? 0) + 1);
+    if (cuenta.size) return [...cuenta].sort((a, b) => b[1] - a[1])[0][0];
+    const c = r.solido, dist = (o: ElementoMedido) => Math.hypot(Math.max(0, o.solido.x - (c.x + c.w), c.x - (o.solido.x + o.solido.w)), Math.max(0, o.solido.y - (c.y + c.h), c.y - (o.solido.y + o.solido.h)));
+    // Un texto suelto va con el texto más cercano (el precio tachado de 83ed se iba con la tarjeta y salía enorme).
+    const deTexto = (o: ElementoMedido) => o.rol !== "HERO" && o.rol !== "BRAND" && o.rol !== "FOOTER";
+    const cerca = raices.filter((o) => o.rol !== "OTRO" && (r.tipo !== "texto" || deTexto(o))).sort((a, b) => dist(a) - dist(b))[0];
+    return cerca ? (cerca.rol as Rol) : null;
+  };
   const partePorRol = new Map<Rol | null, PartePsd[]>();
+  const sueltasAncladas: PiezaPsd[] = [];
   for (const r of raices) {
     const todos = [r];
     for (let i = 0; i < todos.length; i++) todos.push(...medidos.filter((m) => m.sobre === todos[i].id && raizDe(m) === r && !todos.includes(m)));
@@ -668,9 +983,15 @@ export function maestroDePlano(nombre: string, img: Imagen, medidos: ElementoMed
     // La base: lo mismo sin las letras que se escriben (las demás van tal cual).
     const vacio = { caja: vista.caja, rgba: new Uint8ClampedArray(vista.caja.w * vista.caja.h * 4), oscurece: null };
     const base = juntar([...todos.filter((m) => !escritos.includes(m)).map(pintado), vacio]);
-    const rol: Rol | null = r.rol === "OTRO" ? null : r.rol;
+    const parte: PartePsd = { nombre: r.id, hijo: null, rellenoPct: 0, tapadaPor: [], caja: vista.caja, solido: union(todos.map((m) => m.solido)), rgba: vista.rgba, oscurece: vista.oscurece, letraMinPx: tamMin(ts), textos: ts, base: base.rgba };
+    // Anclado al fondo: su propia pieza, sin papel (el acomodo no la mueve: va sobre su lugar del fondo).
+    if (anclados.has(r.id)) {
+      sueltasAncladas.push({ nombre: r.tipo === "texto" && r.texto ? `«${r.texto.replace(/\s+/g, " ").slice(0, 24)}»` : r.id, rol: null, anclada: true, caja: parte.caja, solido: parte.solido, rgba: parte.rgba, oscurece: parte.oscurece, tapadaPct: 0, letraMinPx: parte.letraMinPx, textos: ts, base: parte.base });
+      continue;
+    }
+    const rol = rolDeRaiz(r, todos);
     const lista = partePorRol.get(rol) ?? [];
-    lista.push({ nombre: r.id, hijo: null, rellenoPct: 0, tapadaPor: [], caja: vista.caja, solido: union(todos.map((m) => m.solido)), rgba: vista.rgba, oscurece: vista.oscurece, letraMinPx: tamMin(ts), textos: ts, base: base.rgba });
+    lista.push(parte);
     partePorRol.set(rol, lista);
   }
   const piezas: PiezaPsd[] = [];
@@ -685,7 +1006,8 @@ export function maestroDePlano(nombre: string, img: Imagen, medidos: ElementoMed
       letraMinPx: tamMin(ts), textos: ts, base: base.rgba, ...(partes.length > 1 ? { partes } : {}),
     });
   }
-  return { nombre, w: W, h: H, fondo, piezas, fondoDistintoPct: 0, rearmadoDistintoPct: 0, textoGamma: 1, avisos };
+  piezas.push(...sueltasAncladas);
+  return { nombre, w: W, h: H, fondo, piezas, fondoDistintoPct: 0, rearmadoDistintoPct: 0, textoGamma: 1, avisos, ...(pegados.length ? { pegados } : {}) };
 }
 
 // ── El texto contra una tipografía (la página mide con su canvas; aquí sólo la cuenta) ─────────────────────────────
@@ -697,6 +1019,47 @@ export type MedirTinta = (texto: string, fuente: string, tam: number, track: num
 
 /** El track más estrecho y el más ancho que se aceptan: más allá, esa tipografía no es la del texto. */
 const TRACK_MIN = -200, TRACK_MAX = 400;
+/** Un track más allá de esto (milésimas de eme) en un texto que no empató dice que su medida está mal, no la letra. */
+export const TRACK_RAZONABLE = 100;
+
+/**
+ * El texto como párrafo en su propia caja (la parte sólida que se midió), con track 0: el tamaño más grande con que,
+ * partido por palabras al ancho de la caja, cabe a lo alto. El último recurso para que un texto se pueda editar cuando
+ * sus renglones no se dejan medir (letras sobre una foto: la batería de 2026-10-29 daba tracks de -190 y -200, letras
+ * encimadas). null sin color o sin caja.
+ */
+export function capaEnCaja(m: ElementoMedido, fuente: string, alineacion: Alineacion, medir: MedirTinta): TextoCapa | null {
+  // Si su tinta medida es mucho menos que lo que leyó la IA (un texto de dos colores: sólo se midió uno), la caja de la IA.
+  const c = m.leida && m.solido.w * m.solido.h < 0.6 * m.leida.w * m.leida.h ? m.leida : m.solido;
+  if (!m.color || !(c.w > 0 && c.h > 0) || !m.texto.trim()) return null;
+  const partir = (tam: number) => {
+    const out: string[] = [];
+    for (const parrafo of m.texto.split("\n")) {
+      let linea = "";
+      for (const p of parrafo.split(/\s+/).filter(Boolean)) {
+        const prueba = linea ? `${linea} ${p}` : p;
+        if (linea && medir(prueba, fuente, tam, 0).avance > c.w) { out.push(linea); linea = p; } else linea = prueba;
+      }
+      out.push(linea);
+    }
+    return out;
+  };
+  const cabe = (tam: number) => { const ls = partir(tam); return ls.length * tam * 1.2 <= c.h * 1.05 && ls.every((l) => medir(l, fuente, tam, 0).avance <= c.w * 1.02); };
+  let lo = 1, hi = Math.max(2, c.h * 1.2);
+  if (!cabe(lo)) return null;
+  for (let n = 0; n < 24; n++) { const t = (lo + hi) / 2; if (cabe(t)) lo = t; else hi = t; }
+  const tam = lo, lineas = partir(tam), d = medir("d", fuente, tam, 0);
+  const y0 = c.y + Math.max(0, (c.h - lineas.length * tam * 1.2) / 2);
+  return {
+    texto: m.texto,
+    tramos: [{ n: m.texto.length, fuente, tam, color: m.color, track: 0, interlineado: tam * 1.2, subir: 0, mayusculas: false }],
+    alineacion,
+    transform: [1, 0, 0, 1, 0, 0],
+    caja: [c.x, y0 - Math.max(0, tam * 1.2 - d.sube - d.baja) / 2, c.x + c.w + 1, c.y + c.h + 1],
+    motivo: null,
+    saltosSuaves: true,
+  };
+}
 
 /**
  * Cómo está alineado un texto: con varios renglones, por la orilla (o el centro) que comparten; con uno, centrado si
@@ -728,7 +1091,8 @@ const LEGAL_HOLGURA = 1.03;
  * renglones (`renglones.ts`) y crece sin pixelarse. Se escribe aunque no empate letra por letra con la imagen: el legal
  * es obligatorio, y su texto lo pone la Biblioteca o la persona.
  */
-export function capaDeLegal(m: ElementoMedido, fuente: string, alineacion: Alineacion, medir: MedirTinta): TextoCapa | null {
+export function capaDeLegal(m0: ElementoMedido, fuente: string, alineacion: Alineacion, medir: MedirTinta): TextoCapa | null {
+  const m = conRenglonesDeLaImagen(m0, fuente, medir);
   const lineas = m.texto.split("\n"), R = m.renglones;
   if (!m.color || !lineas.length || R.length !== lineas.length) return null;
   // El tamaño: el de la mayoría de sus letras (si se pudo medir por palabra); si no, el de su renglón más ancho.
@@ -853,12 +1217,44 @@ function capaDeTramos(m: ElementoMedido, lineas: Corrida[][], fuente: string, al
 }
 
 /**
+ * El texto partido en los renglones que SE VEN en la imagen. La IA a veces lee en un solo renglón un titular que va en
+ * dos (83ed: «¡Lleva tu DiDi Card y disfruta tus compras!», batería 2026-10-29), o al revés, y con otro número de
+ * renglones ninguna tipografía cuadraba y el texto se quedaba como imagen. Se reparten sus palabras en tantos renglones
+ * como midió la imagen, con los cortes que dejan el ancho de cada uno más parecido al medido. Igual si ya cuadran, o
+ * si no hay palabras suficientes.
+ */
+export function conRenglonesDeLaImagen(m: ElementoMedido, fuente: string, medir: MedirTinta): ElementoMedido {
+  const R = m.renglones, n = R.length;
+  if (!n || m.texto.split("\n").length === n) return m;
+  const pal = m.texto.split(/\s+/).filter(Boolean);
+  if (pal.length < n) return m;
+  const ancho = (a: number, b: number) => medir(pal.slice(a, b).join(" "), fuente, 100, 0).avance;
+  const total = ancho(0, pal.length), meta = R.reduce((t, c) => t + c.w, 0);
+  if (!(total > 0) || !(meta > 0)) return m;
+  // costo[i][j]: los primeros j renglones con las primeras i palabras.
+  const costo = Array.from({ length: pal.length + 1 }, () => new Array<number>(n + 1).fill(Infinity));
+  const corte = Array.from({ length: pal.length + 1 }, () => new Array<number>(n + 1).fill(-1));
+  costo[0][0] = 0;
+  for (let j = 1; j <= n; j++)
+    for (let i = j; i <= pal.length - (n - j); i++)
+      for (let a = j - 1; a < i; a++) {
+        if (!Number.isFinite(costo[a][j - 1])) continue;
+        const c = costo[a][j - 1] + (ancho(a, i) / total - R[j - 1].w / meta) ** 2;
+        if (c < costo[i][j]) { costo[i][j] = c; corte[i][j] = a; }
+      }
+  const lineas: string[] = [];
+  for (let i = pal.length, j = n; j > 0; j--) { const a = corte[i][j]; if (a < 0) return m; lineas.unshift(pal.slice(a, i).join(" ")); i = a; }
+  return { ...m, texto: lineas.join("\n") };
+}
+
+/**
  * El `TextoCapa` de un texto medido escrito con `fuente`: el tamaño sale del alto de su renglón más ancho (la orilla
  * al 50 %, como su tinta), el track de su ancho, cada base de dónde empieza su tinta, y el origen de la alineación.
  * null si no se puede (sin renglones, o la tipografía pide un track fuera de lo razonable: no es ésa). La página lo
  * prueba después contra la tinta, igual que un texto de un PSD.
  */
-export function capaDeTexto(m: ElementoMedido, fuente: string, alineacion: Alineacion, medir: MedirTinta): TextoCapa | null {
+export function capaDeTexto(m0: ElementoMedido, fuente: string, alineacion: Alineacion, medir: MedirTinta): TextoCapa | null {
+  const m = conRenglonesDeLaImagen(m0, fuente, medir);
   const lineas = m.texto.split("\n"), R = m.renglones;
   if (!m.color || !lineas.length || R.length !== lineas.length) return null;
   // Un texto con palabras de dos tamaños («$28,499» y «m.n.» más chico): un estilo por tamaño (B30).

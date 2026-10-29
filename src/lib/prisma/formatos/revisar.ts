@@ -12,7 +12,7 @@
  * Una sola entrada, `revisarMedida`, para la tarjeta de cada medida y para el resumen de la pantalla: los dos cuentan
  * los mismos avisos.
  */
-import { acomodar, aplicarEdicion, dibujosDe, elegirMaestro, RENGLONES_MAS, RENGLONES_MAX, sinSusLetras, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type OpcionesAcomodo, type ParteCaja, type Zona } from "./acomodo.ts";
+import { acomodar, aplicarEdicion, dibujosDe, elegirMaestro, pegadoFuera, RENGLONES_MAS, RENGLONES_MAX, sinSusLetras, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type OpcionesAcomodo, type ParteCaja, type Zona } from "./acomodo.ts";
 import { haloDe } from "./halo.ts";
 import type { Caja, Rol } from "./psd.ts";
 import { etiquetaPieza } from "./roles.ts";
@@ -186,6 +186,44 @@ export function seVeLaCopia(ma: MaestroRevisable, a: Acomodo, W: number, H: numb
   return Math.abs(ox - fx) > tol || Math.abs(oy - fy) > tol || Math.abs(q.k - k) * Math.max(p.caja.w, p.caja.h) > tol;
 }
 
+/** Lo que una pieza puede tapar de algo pegado al fondo (parte del más chico de los dos) sin que se avise. */
+const PEGADO_ENCIMA_MAX = 0.08;
+/** Lo que una pieza puede correrse respecto a lo pegado sobre lo que ya iba en el original (parte de su tamaño). */
+const PEGADO_MISMO_LUGAR = 0.12;
+
+/**
+ * Lo pegado al fondo de una imagen plana (`MaestroCaja.pegados`) en esta medida: lo que queda cortado y las piezas
+ * que caen encima. Antes no se veía (batería 2026-10-29): una medida con el logo sobre la tarjeta pegada contaba como
+ * limpia. Una pieza que ya iba sobre eso en el original, y sigue igual sobre ello (el texto de una tarjeta pegada), no
+ * se avisa.
+ */
+export function avisosDePegados(ma: MaestroCaja, a: Acomodo, W: number, H: number): AvisoAcomodo[] {
+  const avisos: AvisoAcomodo[] = [];
+  const f = a.fondo;
+  for (const pg of ma.pegados ?? []) {
+    const c = pg.caja, area = c.w * c.h * f.k * f.k;
+    if (!(area > 0)) continue;
+    const ve = 1 - pegadoFuera([pg], f, W, H) / area;
+    if (ve < 0.98)
+      avisos.push({ tipo: "fuera", texto: ve <= 0.02 ? `${pg.nombre} va pintado en el fondo y en esta medida no se ve.` : `${pg.nombre} va pintado en el fondo y aquí queda cortado (se ve el ${Math.round(ve * 100)} %).` });
+    const P = { x: f.x + c.x * f.k, y: f.y + c.y * f.k, w: c.w * f.k, h: c.h * f.k };
+    for (const q of a.puestas) {
+      const p = ma.piezas[q.pieza];
+      const cruce = (A: { x: number; y: number; w: number; h: number }, B: typeof A) => Math.max(0, Math.min(A.x + A.w, B.x + B.w) - Math.max(A.x, B.x)) * Math.max(0, Math.min(A.y + A.h, B.y + B.h) - Math.max(A.y, B.y));
+      const aqui = cruce(q, P) / Math.min(q.w * q.h, P.w * P.h);
+      if (!(aqui > PEGADO_ENCIMA_MAX)) continue;
+      // En el original: dónde iba la pieza respecto a lo pegado (en tamaños de lo pegado) y a qué escala.
+      const s = p.solido, antes = cruce(s, c) / Math.min(s.w * s.h, c.w * c.h);
+      const igual = antes > PEGADO_ENCIMA_MAX
+        && Math.abs((q.x - P.x) / P.w - (s.x - c.x) / c.w) <= PEGADO_MISMO_LUGAR
+        && Math.abs((q.y - P.y) / P.h - (s.y - c.y) / c.h) <= PEGADO_MISMO_LUGAR
+        && Math.abs(q.w / P.w - s.w / c.w) <= PEGADO_MISMO_LUGAR * Math.max(1, s.w / c.w);
+      if (!igual) avisos.push({ tipo: "encima", texto: `${etiquetaPieza(p)} cae encima de ${pg.nombre}, que va pintado en el fondo. Revisar.` });
+    }
+  }
+  return avisos;
+}
+
 /** Los avisos de píxeles de una medida ya acomodada. */
 export function avisosDePixeles(ma: MaestroRevisable, a: Acomodo, W: number, H: number): AvisoAcomodo[] {
   const avisos: AvisoAcomodo[] = [];
@@ -198,6 +236,7 @@ export function avisosDePixeles(ma: MaestroRevisable, a: Acomodo, W: number, H: 
         : { tipo: "copia", texto: `Se ve dos veces ${n}: el fondo ya lo trae pintado y aquí la carpeta no queda encima. Se puede quitar en «Pieza repetida en el fondo».` },
     );
   }
+  avisos.push(...avisosDePegados(ma, a, W, H));
   for (const { pieza: i, v, ref } of pierden(ma, a, W, H))
     avisos.push({ tipo: "contraste", texto: `${nom(i)} se pierde en el fondo: el ${Math.round(v * 100)} % queda casi del mismo tono que lo de atrás (en el original, ${Math.round(ref * 100)} %). Revisar que se lea.` });
   return avisos;

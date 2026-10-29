@@ -22,6 +22,9 @@ import { baseAEscala, DISTINTO_DEL_SCRIPT, mismaForma } from "./tabla-matriz.ts"
 export type PiezaCaja = {
   nombre: string;
   rol: Rol | null;
+  /** Imagen plana: va sobre algo que se quedó pintado en el fondo (el texto de un botón de foto): no entra en el
+   *  acomodo, va donde caiga su lugar del fondo, a la escala del fondo. */
+  anclada?: boolean;
   solido: Caja;
   caja?: Caja;
   letraMinPx?: number | null;
@@ -38,7 +41,10 @@ export type PiezaCaja = {
 /** Lo que necesita de una parte de una pieza (`PartePsd`). Sin `tapadaPor` no se sabe quién le tapa: su relleno se
  *  avisa siempre que la pieza se abre. */
 export type ParteCaja = { nombre: string; solido: Caja; caja?: Caja; letraMinPx?: number | null; rellenoPct?: number; tapadaPor?: readonly number[] };
-export type MaestroCaja = { nombre: string; w: number; h: number; piezas: PiezaCaja[] };
+/** Lo que una imagen plana deja pintado en el fondo (no se pudo sacar: `medirPlanoFijo`): cómo se nombra y su parte
+ *  sólida, en px del maestro. No se mueve con las piezas: va donde caiga el fondo. */
+export type PegadoAlFondo = { nombre: string; caja: Caja };
+export type MaestroCaja = { nombre: string; w: number; h: number; piezas: PiezaCaja[]; pegados?: readonly PegadoAlFondo[] };
 
 export type Familia = "igual" | "display" | "horizontal" | "ancho" | "banner";
 /** Una pieza colocada: índice en `maestro.piezas`, su escala y la caja de su parte sólida en la medida final. Con
@@ -218,6 +224,44 @@ function menor(cumple: (t: number) => boolean, lo: number, hi: number): number {
 }
 /** El fondo a escala z, corrido hacia (x, y) sólo lo que deje que siga cubriendo la medida. */
 const cubrir = (ma: { w: number; h: number }, W: number, H: number, z: number, x: number, y: number): { k: number; x: number; y: number } => ({ k: z, x: Math.min(0, Math.max(W - ma.w * z, x)), y: Math.min(0, Math.max(H - ma.h * z, y)) });
+
+/** Cuánto de lo pegado al fondo (área, px de la medida) queda fuera de la medida con el fondo en (k, x, y). */
+export function pegadoFuera(pegados: readonly PegadoAlFondo[], f: { k: number; x: number; y: number }, W: number, H: number): number {
+  let fuera = 0;
+  for (const { caja: c } of pegados) {
+    const x0 = f.x + c.x * f.k, y0 = f.y + c.y * f.k, x1 = x0 + c.w * f.k, y1 = y0 + c.h * f.k;
+    const dentro = Math.max(0, Math.min(W, x1) - Math.max(0, x0)) * Math.max(0, Math.min(H, y1) - Math.max(0, y0));
+    fuera += (x1 - x0) * (y1 - y0) - dentro;
+  }
+  return fuera;
+}
+/** Las vueltas de la búsqueda del lugar del fondo que menos corta lo pegado (por eje). */
+const PASOS_SIN_CORTAR = 48;
+/**
+ * El fondo corrido (a la misma escala, siempre cubriendo) hasta donde corta lo menos posible de lo pegado a él; a
+ * igual corte, lo más cerca de donde estaba. Con `piezas` (las que van sobre su lugar del fondo y se corren con él),
+ * sólo hasta donde ninguna que estaba dentro de la medida se sale.
+ */
+function fondoSinCortar(ma: MaestroCaja, f: Acomodo["fondo"], W: number, H: number, piezas: Puesta[] | null): Acomodo["fondo"] {
+  const pegados = ma.pegados ?? [];
+  let lx = [W - ma.w * f.k, 0], ly = [H - ma.h * f.k, 0];
+  for (const q of piezas ?? []) {
+    if (q.x >= -0.5 && q.x + q.w <= W + 0.5) lx = [Math.max(lx[0], f.x - q.x), Math.min(lx[1], f.x + W - q.x - q.w)];
+    if (q.y >= -0.5 && q.y + q.h <= H + 0.5) ly = [Math.max(ly[0], f.y - q.y), Math.min(ly[1], f.y + H - q.y - q.h)];
+  }
+  const eje = (r: number[], actual: number, en: (v: number) => Acomodo["fondo"]) => {
+    if (!(r[1] > r[0])) return actual;
+    let mejor = actual, peor = pegadoFuera(pegados, en(actual), W, H);
+    for (let n = 0; n <= PASOS_SIN_CORTAR; n++) {
+      const v = r[0] + ((r[1] - r[0]) * n) / PASOS_SIN_CORTAR, c = pegadoFuera(pegados, en(v), W, H);
+      if (c < peor - 0.5 || (Math.abs(c - peor) <= 0.5 && Math.abs(v - actual) < Math.abs(mejor - actual))) [mejor, peor] = [v, c];
+    }
+    return mejor;
+  };
+  const x = eje(lx, f.x, (v) => ({ ...f, x: v }));
+  const y = eje(ly, f.y, (v) => ({ ...f, x, y: v }));
+  return { k: f.k, x, y };
+}
 
 const razon = (W: number, H: number, ma: { w: number; h: number }) => Math.abs(Math.log(W / H / (ma.w / ma.h)));
 
@@ -648,7 +692,7 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
   const { zona, aviso } = zonaUsable(op.zona, W, H);
   const avisos: AvisoAcomodo[] = aviso ? [aviso] : [];
   const de = (rol: Rol): Suelta | undefined => {
-    const i = ma.piezas.findIndex((p, k) => p.rol === rol && valida(p) && !quitar.has(k));
+    const i = ma.piezas.findIndex((p, k) => p.rol === rol && valida(p) && !quitar.has(k) && !p.anclada);
     return i < 0 ? undefined : { i, p: ma.piezas[i] };
   };
   // El área útil: la medida menos la zona segura y un margen.
@@ -664,7 +708,7 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
   if (familia === "igual") {
     // El acomodo del diseñador a escala pareja, cada pieza sobre su lugar del fondo (`anclarAlFondo`).
     const k = Math.min(W / ma.w, H / ma.h);
-    const sueltas = ma.piezas.flatMap((p, i) => (valida(p) && !quitar.has(i) ? [{ i, p }] : []));
+    const sueltas = ma.piezas.flatMap((p, i) => (valida(p) && !quitar.has(i) && !p.anclada ? [{ i, p }] : []));
     const heroS = de("HERO");
     const ref = heroS
       ? { x: heroS.p.solido.x + heroS.p.solido.w / 2, y: heroS.p.solido.y + heroS.p.solido.h }
@@ -809,7 +853,22 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
     fx = heroP.x + heroP.w / 2 - (heroS.p.solido.x + heroS.p.solido.w / 2) * kb;
     fy = heroP.y + heroP.h - (heroS.p.solido.y + heroS.p.solido.h) * kb;
   }
-  const fondo = fondoAntes ?? cubrir(ma, W, H, kb, fx, fy);
+  let fondo = fondoAntes ?? cubrir(ma, W, H, kb, fx, fy);
+  // Lo pegado al fondo no se corta si se puede evitar (batería 2026-10-29: «¡Solicítala ah…», la tarjeta a la mitad).
+  // En «igual» las piezas van sobre su lugar del fondo: se corren con él, sin salirse de la medida.
+  // Lo anclado al fondo (el texto de un botón que se quedó pegado) cuenta como pegado: tampoco se corta.
+  const anclas = ma.piezas.flatMap((p, i) => (p.anclada && valida(p) && !quitar.has(i) ? [i] : []));
+  if (ma.pegados?.length || anclas.length) {
+    const conAnclas = { ...ma, pegados: [...(ma.pegados ?? []), ...anclas.map((i) => ({ nombre: ma.piezas[i].nombre, caja: ma.piezas[i].solido }))] };
+    const nuevo = fondoSinCortar(conAnclas, fondo, W, H, familia === "igual" ? puestas : null);
+    const dx = nuevo.x - fondo.x, dy = nuevo.y - fondo.y;
+    if (familia === "igual") puestas = puestas.map((q) => ({ ...q, x: q.x + dx, y: q.y + dy }));
+    fondo = nuevo;
+  }
+  if (anclas.length) {
+    for (const i of anclas) { const s = ma.piezas[i].solido; puestas.push({ pieza: i, k: fondo.k, x: fondo.x + s.x * fondo.k, y: fondo.y + s.y * fondo.k, w: s.w * fondo.k, h: s.h * fondo.k }); }
+    puestas.sort((a, b) => a.pieza - b.pieza);
+  }
 
   const revision = comprobar(ma, W, H, familia, puestas, quitar, zona);
   const deForma = (v: AvisoAcomodo): AvisoAcomodo => (alta && v.tipo === "forma" ? { tipo: "forma", texto: "Más alta que su mesa: el HERO crece con la altura que sobra (a medio camino) y lo de arriba y el legal se acercan a su borde. Revisar que el HERO se vea bien." } : v);

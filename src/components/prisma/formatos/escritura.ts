@@ -16,7 +16,7 @@ import { legalDelPsd } from "@/lib/prisma/formatos/legal";
 import { conRenglones, legalParaRenglones, type LegalRenglones, type SinRenglones } from "@/lib/prisma/formatos/renglones";
 import type { Renglonero } from "@/lib/prisma/formatos/revisar";
 import { TEXTO_ANCHO_TOL, TEXTO_CORRER_MAX, TEXTO_DIF_MAX, TEXTO_DIF_MAX_PLANO, compararAlfa, fuentesDe, maquetar, type LineaTexto, type Medidor, type TextoCapa, type TramoTexto } from "@/lib/prisma/formatos/textos";
-import { alineacionDe, capaDeLegal, capaDeTexto, type ElementoMedido, type MedirTinta } from "@/lib/prisma/formatos/plano";
+import { alineacionDe, capaDeLegal, capaDeTexto, capaEnCaja, TRACK_RAZONABLE, type ElementoMedido, type MedirTinta } from "@/lib/prisma/formatos/plano";
 
 /** Una tipografía cargada: con qué familia se pide en el canvas y, si es variable, su peso (eje wght). */
 type Cargada = { familia: string; peso: number | null };
@@ -263,13 +263,15 @@ const FUENTES_AFINAR = 3;
 const CORRER_FINO = [-0.5, -0.25, 0, 0.25, 0.5];
 /** Lo que se sabe de cada texto de una imagen plana: con qué tipografía empata mejor (`ok` = pasa la prueba) y cuánto
  *  difiere de su tinta; `fuente` null = no había tipografías del cliente con qué probar. */
-export type NotaTextoPlano = { id: string; fuente: string | null; dif: number | null; ok: boolean; legal?: boolean };
+/** `aproximado`: ninguna tipografía empató, pero se reescribe con la más parecida (todo texto se edita: Pedro,
+ *  2026-10-29, "the texts need to be guaranteed editable"); la persona revisa que se vea bien. */
+export type NotaTextoPlano = { id: string; fuente: string | null; dif: number | null; ok: boolean; legal?: boolean; aproximado?: boolean };
 
 /**
  * Para cada texto de una imagen plana, la tipografía cargada que mejor empata con su tinta y su `TextoCapa`
  * (`capaDeTexto`), con la MISMA prueba que un texto de un PSD (`compararCon` + `pasa`) pero con su tope de imagen plana
- * (`TEXTO_DIF_MAX_PLANO`, el mismo que lleva su `TextoPieza`). Los que no empatan con ninguna no van en `capas`: el
- * maestro los lleva como imagen.
+ * (`TEXTO_DIF_MAX_PLANO`, el mismo que lleva su `TextoPieza`). Los que no empatan con ninguna van igual en `capas`,
+ * con la más parecida (`aproximado`): la persona decide si se quedan como imagen.
  */
 export function ajustarTextosPlano(medidos: readonly ElementoMedido[], W: number, t: Tipografias): { capas: Map<string, TextoCapa>; notas: NotaTextoPlano[] } {
   const capas = new Map<string, TextoCapa>(), notas: NotaTextoPlano[] = [];
@@ -288,6 +290,17 @@ export function ajustarTextosPlano(medidos: readonly ElementoMedido[], W: number
   const medir = medidorDe(t);
   const lienzo = document.createElement("canvas");
   const x = lienzo.getContext("2d", { willReadFrequently: true });
+  /** El texto como párrafo en su caja (`capaEnCaja`) con la tipografía firme (ni cursiva ni delgada) que menos se aparta. */
+  const enCaja = <P extends { dif: number }>(m: ElementoMedido, al: ReturnType<typeof alineacionDe>, probar: (capa: TextoCapa, fuente: string) => P): P | null => {
+    let mejor: P | null = null;
+    for (const fuente of fuentes.filter((f) => !LEGAL_NO.test(f))) {
+      const capa = capaEnCaja(m, fuente, al, medirTinta);
+      if (!capa) continue;
+      const q = probar(capa, fuente);
+      if (!mejor || q.dif < mejor.dif) mejor = q;
+    }
+    return mejor;
+  };
   // El legal (B30): el texto del FOOTER con más letras. Va siempre reescrito, en una caja que se vuelve a partir
   // (`capaDeLegal`), con la tipografía que más se le parece aunque no empate letra por letra.
   const legalId = medidos.filter((m) => m.tipo === "texto" && m.rol === "FOOTER").sort((a, b) => b.texto.length - a.texto.length)[0]?.id ?? null;
@@ -311,6 +324,8 @@ export function ajustarTextosPlano(medidos: readonly ElementoMedido[], W: number
             console.error("[formatos-psd] probar el legal de imagen plana", err);
             mejor = null;
           }
+        if (x && (!mejor || mejor.capa.tramos.some((r) => Math.abs(r.track) > TRACK_RAZONABLE)))
+          mejor = enCaja(m, al, (capa, fuente) => { const { c } = compararCon(x, lienzo, { capa: m.id, texto: capa, opacidad: 1, caja: m.pinta, alfa: m.alfa, motivo: null, ruta: [] }, t, medir); return { capa, fuente, dif: c.dif }; }) ?? mejor;
         if (mejor) capas.set(m.id, mejor.capa);
         notas.push({ id: m.id, fuente: mejor?.fuente ?? null, dif: mejor?.dif ?? null, ok: !!mejor, legal: true });
         continue;
@@ -351,8 +366,29 @@ export function ajustarTextosPlano(medidos: readonly ElementoMedido[], W: number
           console.error("[formatos-psd] probar texto de imagen plana", err);
           mejor = null;
         }
-      if (mejor?.ok) capas.set(m.id, mejor.capa);
-      notas.push({ id: m.id, fuente: mejor?.fuente ?? null, dif: mejor?.dif ?? null, ok: !!mejor?.ok });
+      // Si ninguna empata, la más parecida que no sea cursiva ni muy delgada: en letras que no empatan, ésas «se
+      // parecen» por pálidas (como en el legal), y el texto tiene que leerse.
+      if (mejor && !mejor.ok) {
+        const firme = pruebas.filter((p) => !LEGAL_NO.test(p.fuente)).sort((a, b) => a.dif - b.dif)[0];
+        if (firme && LEGAL_NO.test(mejor.fuente)) mejor = firme;
+      }
+      // Sin ninguna que se deje acomodar renglón por renglón, la del legal (un tamaño en una caja), que casi siempre sale.
+      if (!mejor && x)
+        try {
+          for (const fuente of fuentes.filter((f) => !LEGAL_NO.test(f))) {
+            const capa = capaDeLegal(m, fuente, al, medirTinta);
+            if (!capa) continue;
+            const q = probarCapa(x, capa, fuente);
+            if (mejorQue(q, mejor)) mejor = q;
+          }
+        } catch (err) {
+          console.error("[formatos-psd] texto de imagen plana en caja", err);
+        }
+      // Y si lo más parecido trae un track absurdo (renglones mal medidos), el texto como párrafo en su caja.
+      if (x && (!mejor || (!mejor.ok && mejor.capa.tramos.some((r) => Math.abs(r.track) > TRACK_RAZONABLE))))
+        mejor = enCaja(m, al, (capa, fuente) => probarCapa(x, capa, fuente)) ?? mejor;
+      if (mejor) capas.set(m.id, mejor.capa);
+      notas.push({ id: m.id, fuente: mejor?.fuente ?? null, dif: mejor?.dif ?? null, ok: !!mejor?.ok, ...(mejor && !mejor.ok ? { aproximado: true } : {}) });
     }
   } finally {
     lienzo.width = lienzo.height = 0;
