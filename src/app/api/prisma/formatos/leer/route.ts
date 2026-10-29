@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { ErrorConCosto } from "@/lib/prisma/formatos/componer";
-import { ErrorIA, lector } from "@/lib/prisma/formatos/proveedor";
+import { ErrorIA, MODELO_LECTURA, lector } from "@/lib/prisma/formatos/proveedor";
 import { LADO_LECTURA, limpiarLectura } from "@/lib/prisma/formatos/plano";
 import { FRENO, gate, saturado } from "@/app/(app)/prisma/comun";
 import { mismoOrigen } from "@/app/(app)/prisma/formatos-comun";
@@ -38,7 +38,6 @@ export async function POST(req: Request) {
   const g = await gate();
   if ("ok" in g) return json(g, /sesión/i.test(g.error) ? 401 : 403);
   const ia = lector();
-  if (!ia) return json({ ok: false, error: "La lectura con IA está apagada." }, 409);
   if (saturado(g.soyId)) return json(FRENO, 429);
   const largo = Number(req.headers.get("content-length"));
   if (!(largo > 0) || largo > CUERPO_MAX_BYTES) return json({ ok: false, error: "La imagen es demasiado grande." }, 413);
@@ -72,11 +71,13 @@ export async function POST(req: Request) {
   }
 
   // La misma imagen ya leída: su lectura, sin IA (no cuenta para el tope de lecturas).
+  // Con la IA apagada (en local) una lectura ya guardada también sirve: así se prueba con lecturas reales.
   if (huella && !nueva) {
-    const guardada = await lecturaGuardada(huella, ia.modelo, w, h);
+    const guardada = await lecturaGuardada(huella, ia?.modelo ?? MODELO_LECTURA, w, h);
     const elementos = guardada && limpiarLectura(guardada, w, h);
     if (elementos) return json({ ok: true, elementos, w, h, costoUsd: 0, guardada: true });
   }
+  if (!ia) return json({ ok: false, error: "La lectura con IA está apagada." }, 409);
   if (saturado(g.soyId, Date.now(), "formatos-leer-ia", LLAMADAS_MAX)) return json({ ok: false, error: "Muchas lecturas con IA en poco tiempo. Espera unos minutos." }, 429);
 
   try {

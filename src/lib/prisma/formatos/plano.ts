@@ -10,7 +10,7 @@
  * (`medirPlano`, sólo fondos lisos o en degradado por ahora); (3) armar el MISMO maestro que da un PSD
  * (`maestroDePlano`): una pieza por rol, cada elemento una parte, cada texto un `TextoPieza` que la página prueba.
  */
-import type { Caja, MaestroPsd, PartePsd, PiezaPsd, TextoPieza } from "./psd.ts";
+import { rellenarSuave, type Caja, type MaestroPsd, type PartePsd, type PiezaPsd, type TextoPieza } from "./psd.ts";
 import type { Rol } from "./roles.ts";
 import { TEXTO_DIF_MAX_PLANO, type Alineacion, type TextoCapa } from "./textos.ts";
 
@@ -156,6 +156,10 @@ export type ElementoMedido = Omit<ElementoLeido, "caja"> & {
 const FONDO_TOL = 10;
 /** Lo que se busca alrededor de una imagen o forma: su sombra suave (la IA la deja fuera de la caja). */
 const SOMBRA_PX = 60;
+/** El borde de fondo real alrededor de un hueco con que se empareja su relleno (px). */
+const ORILLA_PX = 3;
+/** Lo que se toma por sombra de una figura: más oscuro que el fondo esperado en ese punto por debajo de esta razón. */
+const SOMBRA_MIN = 0.985;
 /** Lo que se borra alrededor de la tinta de un texto: las letras de estos anuncios traen un halo suave. */
 const HALO_PX = 10;
 /** Error típico (niveles de 255) del plano ajustado al anillo que todavía es "fondo liso". Más = foto o textura. */
@@ -195,6 +199,12 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
   const dif = (i: number, f: RGB) => Math.max(Math.abs(d[i] - f[0]), Math.abs(d[i + 1] - f[1]), Math.abs(d[i + 2] - f[2]));
   const dentro = (c: ElementoLeido["caja"], x: number, y: number, m = 0) => x >= c.x0 - m && x < c.x1 + m && y >= c.y0 - m && y < c.y1 + m;
   const avisos: string[] = [];
+  // La imagen en RGB y lo que ocupan las cajas leídas: con eso se calcula el fondo ESPERADO cerca de una figura (un
+  // plano ajustado a su anillo), para saber qué es su sombra y qué es el fondo que ya oscurecía (un degradado).
+  const rgb = new Uint8ClampedArray(W * H * 3);
+  for (let k = 0, i = 0; k < W * H; k++, i += 4) { rgb[k * 3] = d[i]; rgb[k * 3 + 1] = d[i + 1]; rgb[k * 3 + 2] = d[i + 2]; }
+  const ocupado = new Uint8Array(W * H);
+  for (const o of leidos) for (let y = Math.max(0, o.caja.y0); y < Math.min(H, o.caja.y1); y++) ocupado.fill(1, y * W + Math.max(0, o.caja.x0), y * W + Math.min(W, o.caja.x1));
 
   /** El color de alrededor: el que más hay (`dominante`) en un anillo fuera de la caja, sin los demás elementos (salvo
    *  el que tiene debajo, que ES su fondo). */
@@ -334,6 +344,12 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
     }
     /** Distancia de un punto a una caja leída (0 adentro). */
     const lejos = (c: ElementoLeido["caja"], X: number, Y: number) => Math.hypot(Math.max(c.x0 - X, 0, X - c.x1 + 1), Math.max(c.y0 - Y, 0, Y - c.y1 + 1));
+    // El fondo esperado aquí: un plano ajustado al anillo de más allá de la zona de sombra (sin las cajas leídas).
+    // Contra un solo color, un fondo que oscurece hacia una orilla (el beige del iPhone de DiDi, 2026-10-28) salía
+    // entero como «sombra» y cada pieza se llevaba un rectángulo oscuro al moverse. Si ahí no hay un plano (foto,
+    // textura), no se busca sombra: se queda en el fondo.
+    const esperado = planoDelAnillo(rgb, W, H, ocupado, { x0, y0, x1: x1 - 1, y1: y1 - 1 });
+    const lumEsperada = esperado && esperado.error <= LISO_MAX ? (X: number, Y: number) => (esperado.valor(X, Y, 0) + esperado.valor(X, Y, 1) + esperado.valor(X, Y, 2)) / 3 : null;
     const a = new Float32Array(w * h), som = new Float32Array(w * h).fill(1);
     let haySombra = false;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -344,11 +360,22 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
         // aleja del fondo).
         const orilla = (x > 0 && !mio[k - 1]) || (x < w - 1 && !mio[k + 1]) || (y > 0 && !mio[k - w]) || (y < h - 1 && !mio[k + w]);
         a[k] = orilla ? Math.min(1, dif(i, B) / 40) : 1;
-      } else {
-        // Sombra: lo que oscurece el fondo cerca, si este elemento es el más cercano.
-        const r = lum([d[i], d[i + 1], d[i + 2]]) / Math.max(1, lum(B)), X = x0 + x, Y = y0 + y;
-        if (r < 0.985 && leidos.every((o) => o.id === e.id || lejos(o.caja, X, Y) > lejos(e.caja, X, Y))) { som[k] = r; haySombra = true; }
+      } else if (lumEsperada) {
+        // Sombra: lo que oscurece el fondo ESPERADO cerca, si este elemento es el más cercano.
+        const X = x0 + x, Y = y0 + y, r = lum([d[i], d[i + 1], d[i + 2]]) / Math.max(1, lumEsperada(X, Y));
+        if (r < SOMBRA_MIN && leidos.every((o) => o.id === e.id || lejos(o.caja, X, Y) > lejos(e.caja, X, Y))) { som[k] = Math.min(1, r); haySombra = true; }
       }
+    }
+    // Y sólo la sombra PEGADA a la figura (conectada a ella): una mancha oscura del fondo más allá no es suya.
+    if (haySombra) {
+      const llega = new Uint8Array(w * h), cola: number[] = [];
+      for (let k = 0; k < w * h; k++) if (mio[k]) { llega[k] = 1; cola.push(k); }
+      while (cola.length) {
+        const k = cola.pop()!, x = k % w, y = (k / w) | 0;
+        for (const n of [x > 0 ? k - 1 : -1, x < w - 1 ? k + 1 : -1, y > 0 ? k - w : -1, y < h - 1 ? k + w : -1]) if (n >= 0 && !llega[n] && som[n] < 1) { llega[n] = 1; cola.push(n); }
+      }
+      haySombra = false;
+      for (let k = 0; k < w * h; k++) if (som[k] < 1) { if (llega[k]) haySombra = true; else som[k] = 1; }
     }
     const solido = cajaDe(a, w, h, 0.5, x0, y0);
     if (!solido) return null;
@@ -411,12 +438,23 @@ export function medirPlano(img: Imagen, leidos: ElementoLeido[], fijos: Readonly
       for (const k of pix) malo[k] = 1;
       if (!ajuste) continue;
     }
+    // El plano, más lo que la orilla real se aparta de él llevado suave hacia adentro (Laplace): sin eso, en un fondo
+    // que oscurece hacia un lado cada hueco se veía como un rectángulo más claro o más oscuro (B30, 2026-10-28).
+    const bx0 = Math.max(0, cx0 - ORILLA_PX), by0 = Math.max(0, cy0 - ORILLA_PX), bx1 = Math.min(W - 1, cx1 + ORILLA_PX), by1 = Math.min(H - 1, cy1 + ORILLA_PX);
+    const bw = bx1 - bx0 + 1, bh = by1 - by0 + 1, desc = new Uint8Array(bw * bh);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) desc[y * bw + x] = quitar[(by0 + y) * W + bx0 + x];
+    const resto = [0, 1, 2].map((c) => {
+      const v = new Float32Array(bw * bh);
+      for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) if (!desc[y * bw + x]) v[y * bw + x] = fondo[((by0 + y) * W + bx0 + x) * 3 + c] - ajuste.valor(bx0 + x, by0 + y, c);
+      rellenarSuave(v, desc, bw, bh);
+      return v;
+    });
     let semilla = (cx0 * 7919 + cy0 * 104729) >>> 0;
     const azar = () => { semilla = (semilla * 1664525 + 1013904223) >>> 0; return semilla / 4294967296 - 0.5; };
     const grano = Math.min(3, ajuste.error);
     for (const k of pix) {
-      const x = k % W, y = (k / W) | 0, g = grano * (azar() + azar() + azar()) * 2;
-      for (let c = 0; c < 3; c++) fondo[k * 3 + c] = ajuste.valor(x, y, c) + g;
+      const x = k % W, y = (k / W) | 0, g = grano * (azar() + azar() + azar()) * 2, j = (y - by0) * bw + (x - bx0);
+      for (let c = 0; c < 3; c++) fondo[k * 3 + c] = ajuste.valor(x, y, c) + resto[c][j] + g;
     }
   }
   if (!liso) avisos.push("El fondo no es liso (foto o textura): todavía no se puede limpiar sin IA.");

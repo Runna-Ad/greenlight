@@ -2995,6 +2995,27 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
 }
 
 
+// ── B30: un fondo que oscurece hacia un lado (el beige del iPhone de DiDi, 2026-10-28): no es sombra de nadie ──
+{
+  const W = 400, H = 300;
+  // 225 a la izquierda, 190 a la derecha: un 15 % más oscuro, como una viñeta.
+  const fondoReal = (x, y) => { const v = 225 - (35 * x) / W - (6 * y) / H; return [v, v - 6, v - 14]; };
+  const rgba = new Uint8ClampedArray(W * H * 4);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = (y * W + x) * 4, f = fondoReal(x, y); rgba[i] = f[0]; rgba[i + 1] = f[1]; rgba[i + 2] = f[2]; rgba[i + 3] = 255; }
+  // Un logo (bloque oscuro) del lado claro y una pastilla del lado oscuro; ninguno tiene sombra.
+  for (let y = 40; y < 70; y++) for (let x = 60; x < 160; x++) { const i = (y * W + x) * 4; rgba[i] = 60; rgba[i + 1] = 40; rgba[i + 2] = 40; }
+  for (let y = 150; y < 210; y++) for (let x = 250; x < 370; x++) { const i = (y * W + x) * 4; rgba[i] = 250; rgba[i + 1] = 90; rgba[i + 2] = 20; }
+  const leidos = [
+    { id: "logo", rol: "BRAND", tipo: "imagen", caja: { x0: 58, y0: 38, x1: 162, y1: 72 }, texto: "", sobre: null },
+    { id: "pastilla", rol: "CTA", tipo: "forma", caja: { x0: 248, y0: 148, x1: 372, y1: 212 }, texto: "", sobre: null },
+  ];
+  const r = medirPlano({ w: W, h: H, rgba }, leidos);
+  const sombra = (id) => { const e = r.elementos.find((m) => m.id === id); let n = 0; if (e?.oscurece) for (let j = 0; j < e.oscurece.length; j += 3) if (e.oscurece[j] < 255) n++; return n; };
+  let peor = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const f = fondoReal(x, y); for (let k = 0; k < 3; k++) peor = Math.max(peor, Math.abs(r.fondo[(y * W + x) * 3 + k] - f[k])); }
+  ok(`B30 fondo que oscurece hacia un lado: ninguna pieza se lleva «sombra» (logo ${sombra("logo")} px, pastilla ${sombra("pastilla")} px) y el fondo limpio no deja rectángulos (peor ${peor.toFixed(1)} niveles)`, sombra("logo") === 0 && sombra("pastilla") === 0 && peor <= 4);
+}
+
 // ── B28: imagen plana — medir en los píxeles, fondo limpio y el maestro (imagen sintética: el fondo real se conoce) ──
 {
   const W = 400, H = 300;
