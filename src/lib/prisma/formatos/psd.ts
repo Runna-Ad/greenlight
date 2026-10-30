@@ -115,8 +115,9 @@ export type Caja = { x: number; y: number; w: number; h: number };
 export type MesaPsd = { nombre: string } & Caja;
 export type TipoCapa = "texto" | "objeto inteligente" | "ajuste" | "forma" | "píxeles";
 export type MascaraPsd = { left: number; top: number; right: number; bottom: number; defecto: number; pixeles: () => Pixeles | undefined };
-/** Un efecto de capa que pinta FUERA de sus píxeles: sombra paralela, resplandor exterior o contorno. */
-export type Halo = { tipo: "sombra" | "luz" | "contorno"; radio: number; fuerza: number };
+/** Un efecto de capa que pinta FUERA de sus píxeles: sombra paralela, resplandor exterior o contorno. `dx`/`dy`: hacia
+ *  dónde se corre (la sombra paralela, por su distancia y ángulo); `radio` es lo que se extiende desde ahí. */
+export type Halo = { tipo: "sombra" | "luz" | "contorno"; radio: number; fuerza: number; dx?: number; dy?: number };
 export type CapaPsd = {
   nombre: string;
   tipo: TipoCapa;
@@ -181,23 +182,40 @@ const hayEfectos = (l: Layer): boolean =>
 /** Un resplandor aclara: no se mide como sombra. Su zona sólo se aparta del fondo limpio. */
 const FUERZA_LUZ = 0.03;
 
-/** A lo más un halo por tipo (el de mayor alcance). `fuerza` = cuánto oscurece como mucho (la opacidad del efecto). */
-function halosDe(l: Layer): Halo[] {
+/** A lo más un halo por tipo (el de mayor alcance). `fuerza` = cuánto oscurece como mucho (la opacidad del efecto).
+ *  `anguloGlobal`: el de «Usar luz global» del documento (grados). */
+function halosDe(l: Layer, anguloGlobal: number): Halo[] {
   const fx = l.effects;
   if (!fx || fx.disabled) return [];
   const escala = fx.scale ?? 1;
   const px = (u: { value: number } | undefined) => Math.max(0, (u?.value ?? 0) * escala) || 0;
   const cero = (v: number | undefined) => Math.min(1, Math.max(FUERZA_LUZ, v ?? 0.75)) || FUERZA_LUZ;
   const crudos: Halo[] = [];
-  for (const s of fx.dropShadow ?? []) if (s.enabled !== false) crudos.push({ tipo: "sombra", radio: px(s.distance) + px(s.size), fuerza: cero(s.opacity) });
+  // La sombra paralela es la capa corrida `distance` en contra de la luz (el ángulo dice de dónde viene: 90° = de arriba,
+  // la sombra baja) y desenfocada `size` (SPAPTOYBOX, 2026-10-30: contarla `distance + size` parejo en todas direcciones
+  // hacía que la del botón "oscureciera" el legal de abajo y de los lados, y la mesa se descartaba).
+  for (const s of fx.dropShadow ?? []) {
+    if (s.enabled === false) continue;
+    const ang = ((s.useGlobalLight ? anguloGlobal : (s.angle ?? anguloGlobal)) * Math.PI) / 180, d = px(s.distance);
+    const dx = Math.round(-Math.cos(ang) * d) || 0, dy = Math.round(Math.sin(ang) * d) || 0;
+    // Una "sombra" que aclara (en trama o sobreexponer, o clara en modo normal) es un resplandor corrido: no oscurece.
+    const col = s.color && "r" in s.color ? s.color : null;
+    const aclara = (s.blendMode && s.blendMode !== "normal" && !OSCURECE.has(s.blendMode)) || (col !== null && (col.r + col.g + col.b) / 3 > 127);
+    crudos.push(aclara ? { tipo: "luz", radio: px(s.size), fuerza: FUERZA_LUZ, dx, dy } : { tipo: "sombra", radio: px(s.size), fuerza: cero(s.opacity), dx, dy });
+  }
   if (fx.outerGlow && fx.outerGlow.enabled !== false) crudos.push({ tipo: "luz", radio: px(fx.outerGlow.size), fuerza: FUERZA_LUZ });
   for (const s of fx.stroke ?? []) if (s.enabled !== false && s.position !== "inside") crudos.push({ tipo: "contorno", radio: s.position === "center" ? px(s.size) / 2 : px(s.size), fuerza: 1 });
   const out: Halo[] = [];
   for (const h of crudos) {
     const radio = Math.min(HALO_MAX_PX, Math.ceil(h.radio) + 1); // +1: el suavizado del borde
     const ya = out.find((o) => o.tipo === h.tipo);
-    if (ya) { ya.radio = Math.max(ya.radio, radio); ya.fuerza = Math.max(ya.fuerza, h.fuerza); }
-    else out.push({ ...h, radio });
+    if (!ya) out.push({ ...h, radio });
+    else if ((ya.dx ?? 0) === (h.dx ?? 0) && (ya.dy ?? 0) === (h.dy ?? 0)) { ya.radio = Math.max(ya.radio, radio); ya.fuerza = Math.max(ya.fuerza, h.fuerza); }
+    else {
+      // Dos sombras corridas distinto: una sola, sin correr, que alcanza a las dos (como antes, a lo más).
+      const alcance = (o: Halo) => Math.hypot(o.dx ?? 0, o.dy ?? 0) + o.radio;
+      Object.assign(ya, { radio: Math.min(HALO_MAX_PX, Math.ceil(Math.max(alcance(ya), alcance({ ...h, radio })))), fuerza: Math.max(ya.fuerza, h.fuerza), dx: 0, dy: 0 });
+    }
   }
   return out;
 }
@@ -241,6 +259,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
   const avisos: string[] = [];
   const mesas: MesaPsd[] = [];
   const capas: CapaPsd[] = [];
+  const anguloGlobal = psd.imageResources?.globalAngle ?? 120; // el de Photoshop si el archivo no lo trae
   let vistas = 0;
   // `nivel`: 0 = en la mesa (una carpeta aquí es una pieza), 1 = dentro de la carpeta de una pieza (una subcarpeta aquí
   // es una parte), 2 = más adentro (se queda en su parte).
@@ -296,7 +315,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
       if (l.rawData?.channels.some((ch) => Number(ch.compression) >= 2)) throw new ErrorPsd("no-soportado", `La capa «${nombre}» viene comprimida en ZIP`);
       capas.push({
         nombre, tipo: tipoDe(l), left: l.left ?? 0, top: l.top ?? 0, w, h, opacidad, relleno: l.fillOpacity ?? 1,
-        mezcla: l.blendMode ?? "normal", halos: halosDe(l), conEfectos: hayEfectos(l), recorte: !!l.clipping, mesa: ctx.mesa, pieza: ctx.pieza ?? nombre,
+        mezcla: l.blendMode ?? "normal", halos: halosDe(l, anguloGlobal), conEfectos: hayEfectos(l), recorte: !!l.clipping, mesa: ctx.mesa, pieza: ctx.pieza ?? nombre,
         carpeta: ctx.pieza === null ? -1 : ctx.carpeta, parte: ctx.parte, ruta: [...ctx.ruta, hijoN],
         mascara: k && mw > 0 && mh > 0 ? { left: k.left ?? 0, top: k.top ?? 0, right: k.right ?? 0, bottom: k.bottom ?? 0, defecto: k.defaultColor ?? 255, pixeles: () => getLayerMaskImageData(l) } : null,
         letraPx: letraDe(l),
@@ -486,9 +505,18 @@ function conCache(c: CapaPsd): CapaPsd {
   return { ...c, pixeles: una(c.pixeles), mascara: c.mascara && { ...c.mascara, pixeles: una(c.mascara.pixeles) } };
 }
 
-/** La silueta de una capa engordada `r` px (cuadrado). Para lo que sus efectos pintan fuera de ella. La caja
- *  sale en px de la mesa y puede asomarse fuera: una capa estacionada junto a la mesa todavía le echa sombra. */
-function engordar(c: CapaPsd, m: MesaPsd, r: number): (Caja & { on: Uint8Array }) | null {
+/** La zona de un halo, corrida a donde cae (la sombra paralela, `Halo.dx/dy`). */
+const correr = <T extends Caja>(g: T | null, hl: Halo): T | null => (g && (hl.dx || hl.dy) ? { ...g, x: g.x + (hl.dx ?? 0), y: g.y + (hl.dy ?? 0) } : g);
+
+/** Cuánto pesa un halo a `d` px de la silueta (0 = encima). Una sombra se desvanece hacia la orilla de su desenfoque:
+ *  a lo lejos ya no se ve (SPAPTOYBOX, 2026-10-30: la orilla de la del botón contaba como si oscureciera el legal). Nunca
+ *  baja de lo que marca la zona (0.02): la zona en sí no cambia. Contorno y resplandor, parejos. */
+const pesoHalo = (hl: Halo, d: number) => (hl.tipo === "sombra" ? Math.max(0.021, hl.fuerza * Math.min(1, (hl.radio + 1 - d) / (hl.radio + 1))) : hl.fuerza);
+
+/** La silueta de una capa engordada `r` px (cuadrado), con la distancia de cada píxel a ella (`lejos`). Para lo que sus
+ *  efectos pintan fuera de ella. La caja sale en px de la mesa y puede asomarse fuera: una capa estacionada junto a la
+ *  mesa todavía le echa sombra. */
+function engordar(c: CapaPsd, m: MesaPsd, r: number): (Caja & { on: Uint8Array; lejos: Uint16Array }) | null {
   const v: MesaPsd = { nombre: m.nombre, x: m.x - r, y: m.y - r, w: m.w + 2 * r, h: m.h + 2 * r }; // la mesa, con margen r
   const x = Math.max(0, c.left - v.x - r), y = Math.max(0, c.top - v.y - r);
   const w = Math.min(v.w, c.left - v.x + c.w + r) - x, h = Math.min(v.h, c.top - v.y + c.h + r) - y;
@@ -499,25 +527,39 @@ function engordar(c: CapaPsd, m: MesaPsd, r: number): (Caja & { on: Uint8Array }
     if (a > 0.02) { on[(((i / v.w) | 0) - y) * w + ((i % v.w) - x)] = 1; alguno = true; }
   });
   if (!alguno) return null;
-  // Separable: por filas y luego por columnas. Cada línea, dos barridas con "distancia al último encendido".
-  const lejos = r + 1;
-  const ida = new Uint16Array(Math.max(w, h));
-  const barrer = (n: number, lineas: number, paso: number, salto: number) => {
-    for (let l = 0; l < lineas; l++) {
-      const base = l * salto;
-      let d = lejos;
-      for (let k = 0; k < n; k++) { d = on[base + k * paso] ? 0 : Math.min(lejos, d + 1); ida[k] = d; }
-      d = lejos;
-      for (let k = n - 1; k >= 0; k--) {
-        const j = base + k * paso;
-        d = on[j] ? 0 : Math.min(lejos, d + 1); // se lee antes de escribir: las de la derecha ya no se vuelven a leer
-        if (d <= r || ida[k] <= r) on[j] = 1;
+  // Distancia "de tablero" (los 8 vecinos a 1) en dos barridas: de arriba a la izquierda y de abajo a la derecha. Lo que
+  // queda a r o menos es la misma silueta engordada en cuadrado de siempre.
+  const tope = r + 1;
+  const lejos = new Uint16Array(w * h).fill(tope);
+  for (let j = 0; j < w * h; j++) if (on[j]) lejos[j] = 0;
+  for (let yy = 0; yy < h; yy++)
+    for (let xx = 0; xx < w; xx++) {
+      const j = yy * w + xx;
+      let d = lejos[j];
+      if (!d) continue;
+      if (xx > 0) d = Math.min(d, lejos[j - 1] + 1);
+      if (yy > 0) {
+        d = Math.min(d, lejos[j - w] + 1);
+        if (xx > 0) d = Math.min(d, lejos[j - w - 1] + 1);
+        if (xx < w - 1) d = Math.min(d, lejos[j - w + 1] + 1);
       }
+      lejos[j] = Math.min(d, tope);
     }
-  };
-  barrer(w, h, 1, w);
-  barrer(h, w, w, 1);
-  return { x: x - r, y: y - r, w, h, on };
+  for (let yy = h - 1; yy >= 0; yy--)
+    for (let xx = w - 1; xx >= 0; xx--) {
+      const j = yy * w + xx;
+      let d = lejos[j];
+      if (!d) continue;
+      if (xx < w - 1) d = Math.min(d, lejos[j + 1] + 1);
+      if (yy < h - 1) {
+        d = Math.min(d, lejos[j + w] + 1);
+        if (xx < w - 1) d = Math.min(d, lejos[j + w + 1] + 1);
+        if (xx > 0) d = Math.min(d, lejos[j + w - 1] + 1);
+      }
+      lejos[j] = Math.min(d, tope);
+    }
+  for (let j = 0; j < w * h; j++) on[j] = lejos[j] <= r ? 1 : 0;
+  return { x: x - r, y: y - r, w, h, on, lejos };
 }
 
 /** Rellena los huecos (peso 0) de un campo RGB suave a partir de lo conocido: pirámide "push-pull". */
@@ -711,7 +753,7 @@ export function reducirMesa(doc: DocPsd, mesa: number, maxPx: number = MESA_MAX_
       return {
         ...c,
         mesa: 0, left: k.x0, top: k.y0, w: k.w, h: k.h,
-        halos: c.halos.map((hl) => ({ ...hl, radio: Math.min(HALO_MAX_PX, Math.ceil(hl.radio / Math.min(invX, invY)) + 1) })),
+        halos: c.halos.map((hl) => ({ ...hl, radio: Math.min(HALO_MAX_PX, Math.ceil(hl.radio / Math.min(invX, invY)) + 1), ...(hl.dx || hl.dy ? { dx: Math.round((hl.dx ?? 0) / invX), dy: Math.round((hl.dy ?? 0) / invY) } : {}) })),
         letraPx: c.letraPx === null ? null : c.letraPx / invY,
         // El texto, a la misma escala: del lienzo a la mesa reducida (que queda en 0, 0).
         texto: c.texto && { ...c.texto, transform: [c.texto.transform[0] / invX, c.texto.transform[1] / invY, c.texto.transform[2] / invX, c.texto.transform[3] / invY, (c.texto.transform[4] - m.x) / invX, (c.texto.transform[5] - m.y) / invY] },
@@ -804,6 +846,9 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
   // Siluetas: por pieza, alfa de lo sólido y zona de lo que oscurece.
   type Trabajo = { nombre: string; alfa: Float32Array; sombra: Float32Array | null };
   const trabajos: Trabajo[] = [];
+  /** Donde cae algo que OSCURECE (una sombra paralela o una capa en multiplicar), no un resplandor: ahí el fondo de
+   *  verdad nunca es más oscuro que lo que se ve. */
+  const oscurecido = new Uint8Array(N);
   for (let c of capas) {
     if (esDelFondo(c.pieza, elegido) || c.recorte || c.tipo === "ajuste") continue; // recortadas y ajustes sólo cambian color
     let t = trabajos.find((x) => x.nombre === c.pieza);
@@ -823,6 +868,7 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
       porPixel(c, m, conRelleno, (i, a, data, s) => {
         const fuerza = a * (1 - Math.min(data[s], data[s + 1], data[s + 2]) / 255);
         if (fuerza > sombra[i]) sombra[i] = fuerza;
+        if (fuerza > 0.02) oscurecido[i] = 1;
       });
     } else {
       avisos.push(`${etiqueta} usa fusión ${c.mezcla}: ese efecto no viaja con la pieza.`);
@@ -830,13 +876,14 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
     // Lo que sus efectos pintan FUERA de la capa: el contorno es parte de la silueta; la sombra paralela y el
     // resplandor son zona "tocada" (si no, se quedarían pintados en el fondo limpio).
     for (const hl of c.halos) {
-      const g = engordar(c, m, hl.radio);
+      const g = correr(engordar(c, m, hl.radio), hl);
       if (!g) continue;
       const destino = hl.tipo === "contorno" ? alfa : (t.sombra ??= new Float32Array(N));
       for (let yy = Math.max(0, -g.y); yy < Math.min(g.h, m.h - g.y); yy++)
         for (let xx = Math.max(0, -g.x); xx < Math.min(g.w, m.w - g.x); xx++) {
-          const i = (yy + g.y) * m.w + (xx + g.x);
-          if (g.on[yy * g.w + xx] && hl.fuerza > destino[i]) destino[i] = hl.fuerza;
+          const i = (yy + g.y) * m.w + (xx + g.x), f = pesoHalo(hl, g.lejos[yy * g.w + xx]);
+          if (g.on[yy * g.w + xx] && hl.tipo === "sombra") oscurecido[i] = 1;
+          if (g.on[yy * g.w + xx] && f > destino[i]) destino[i] = f;
         }
       if (hl.tipo === "luz") avisos.push(`${etiqueta} tiene resplandor exterior: no viaja con la pieza.`);
     }
@@ -915,6 +962,16 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
   const D = guia;
   const fondo = new Uint8ClampedArray(N * 3);
   for (let i = 0; i < N * 3; i++) { D[i] = Math.min(1, Math.max(0, guia[i] + resto[i])); fondo[i] = Math.round(D[i] * 255); }
+  // Donde sólo cae la sombra de una pieza (ninguna pinta ahí), Photoshop deja ver el fondo YA oscurecido: el fondo de
+  // verdad nunca es más oscuro que eso (una sombra sólo oscurece). Un estimado más oscuro (SPAPTOYBOX, 2026-10-30: las
+  // sombras de las capas del BACKGROUND, que no se pintan, se corrían a la zona de los halos) se sube a lo que se ve.
+  // Sólo en zonas de sombra: no en un resplandor (aclara: subirlo pegaría la luz al fondo) ni en la orilla de 3 px.
+  const pinta = new Uint8Array(N);
+  for (const t of trabajos) for (let i = 0; i < N; i++) if (t.alfa[i] > 0.02) pinta[i] = 1;
+  for (let i = 0; i < N; i++) {
+    if (visible[i] || pinta[i] || !oscurecido[i]) continue;
+    for (let c = 0; c < 3; c++) if (D[i * 3 + c] < C[i * 3 + c]) { D[i * 3 + c] = C[i * 3 + c]; fondo[i * 3 + c] = Math.round(C[i * 3 + c] * 255); }
+  }
 
   // tope[i] = la pieza de MÁS ARRIBA que pinta sólido ahí (−1 = ninguna): para saber qué le tapan a cada una.
   const K = trabajos.length;
@@ -1363,14 +1420,14 @@ function partesDe(capas: CapaPsd[], grupos: Grupo[], m: MesaPsd, p: PiezaPsd, D:
       });
     }
     for (const hl of c.halos) {
-      const g = engordar(c, m, hl.radio);
+      const g = correr(engordar(c, m, hl.radio), hl);
       if (!g) continue;
       const destino = hl.tipo === "contorno" ? al : (sombras[j] ??= new Float32Array(n));
       for (let yy = 0; yy < g.h; yy++)
         for (let xx = 0; xx < g.w; xx++) {
-          const l = local(xx + g.x, yy + g.y);
-          if (l < 0 || !g.on[yy * g.w + xx] || !(hl.fuerza > destino[l])) continue;
-          destino[l] = hl.fuerza;
+          const l = local(xx + g.x, yy + g.y), f = pesoHalo(hl, g.lejos[yy * g.w + xx]);
+          if (l < 0 || !g.on[yy * g.w + xx] || !(f > destino[l])) continue;
+          destino[l] = f;
           if (hl.tipo === "contorno" && hl.fuerza > 0.05) tope[l] = j;
         }
     }

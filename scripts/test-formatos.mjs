@@ -486,7 +486,27 @@ console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
     const v = (x, y) => { let c = base(x, y); if (dentro(x, y, S)) c = c.map((n) => n * 0.6); if (dentro(x, y, T)) c = [255, 255, 255]; return c; };
     const sombra = { effects: { dropShadow: [{ enabled: true, size: { value: 0, units: "Pixels" }, distance: { value: 17, units: "Pixels" }, angle: 135, color: { r: 0, g: 0, b: 0 }, blendMode: "multiply", opacity: 0.4 }] } };
     const d = leerPsd(psdDe([soloBase(), carpeta("TITULO", [capa("t", T, () => [255, 255, 255], sombra)])], v));
-    eq("leerPsd: la sombra paralela queda como halo de su capa (distancia + tamaño + 1; fuerza = su opacidad)", d.capas.find((c) => c.nombre === "t").halos, [{ tipo: "sombra", radio: 18, fuerza: 0.4 }]);
+    // Corrida su distancia en contra de la luz (135° = de arriba a la izquierda: baja a la derecha, 17 px → 12, 12) y
+    // extendida su tamaño + 1 (aquí 0 + 1); antes, distancia + tamaño parejo en todas direcciones.
+    eq("leerPsd: la sombra paralela queda como halo de su capa (corrida por distancia y ángulo; tamaño + 1; fuerza = su opacidad)", d.capas.find((c) => c.nombre === "t").halos, [{ tipo: "sombra", radio: 1, fuerza: 0.4, dx: 12, dy: 12 }]);
+    // 90° = la luz viene de arriba y la sombra baja; con «luz global», el ángulo del documento (Photoshop: 120° si el
+    // archivo no lo trae: baja a la derecha). Dos sombras corridas distinto: una sola, sin correr, que alcanza a las dos.
+    // Una "sombra" clara o en trama aclara: es resplandor.
+    const conSombras = (sombras) => leerPsd(psdDe([soloBase(), carpeta("TITULO", [capa("t", T, () => [255, 255, 255], { effects: { dropShadow: sombras } })])], v)).capas.find((c) => c.nombre === "t").halos;
+    const ds = (extra) => ({ enabled: true, size: { value: 4, units: "Pixels" }, distance: { value: 10, units: "Pixels" }, angle: 90, color: { r: 0, g: 0, b: 0 }, blendMode: "multiply", opacity: 0.5, ...extra });
+    eq(
+      "halos: 90° baja; luz global sin ángulo en el archivo = 120°; dos corridas distinto = una centrada que alcanza a ambas; clara o en trama = resplandor",
+      [conSombras([ds()]), conSombras([ds({ useGlobalLight: true, angle: 10 })]), conSombras([ds(), ds({ angle: 0 })]), conSombras([ds({ color: { r: 255, g: 255, b: 255 }, blendMode: "normal" })])[0].tipo, conSombras([ds({ blendMode: "screen" })])[0].tipo],
+      [[{ tipo: "sombra", radio: 5, fuerza: 0.5, dx: 0, dy: 10 }], [{ tipo: "sombra", radio: 5, fuerza: 0.5, dx: 5, dy: 9 }], [{ tipo: "sombra", radio: 15, fuerza: 0.5, dx: 0, dy: 0 }], "luz", "luz"],
+    );
+    // Un resplandor blanco sobre fondo oscuro aclara: el fondo limpio NO se sube a lo que se ve ahí (si no, la luz se
+    // quedaba pegada al fondo al mover el titular). Sólo una sombra que oscurece pone ese piso.
+    const OSCURO = [20, 20, 40], brillo = (x, y) => dentro(x, y, [T[0] - 10, T[1] - 10, T[2] + 20, T[3] + 20]);
+    const conBrillo = despiezar(leerPsd(psdDe(
+      [carpeta("Background", [capa("base", [0, 0, W, H], () => OSCURO)]), carpeta("TITULO", [capa("t", T, () => [255, 255, 255], { effects: { outerGlow: { enabled: true, size: { value: 10, units: "Pixels" }, color: { r: 255, g: 255, b: 255 }, blendMode: "screen", opacity: 0.6 } } })])],
+      (x, y) => (dentro(x, y, T) ? [255, 255, 255] : brillo(x, y) ? [120, 120, 140] : OSCURO),
+    )), 0);
+    ok("resplandor que aclara: el fondo limpio en su zona sigue siendo el fondo oscuro, no la luz", maxDif(conBrillo.fondo, () => OSCURO, [T[0] - 10, T[1] - 10, 8, T[3] + 20]) <= 4, String(maxDif(conBrillo.fondo, () => OSCURO, [T[0] - 10, T[1] - 10, 8, T[3] + 20])));
     const x = despiezar(d, 0);
     ok(`sombra paralela del titular: el fondo limpio no guarda su fantasma (dif. máx ${maxDif(x.fondo, base)}) y viaja con la pieza`, maxDif(x.fondo, base) <= 4 && !!x.piezas[0].oscurece && x.piezas[0].caja.w > T[2] && maxDif(rearmar(x), v) <= 6);
   }
