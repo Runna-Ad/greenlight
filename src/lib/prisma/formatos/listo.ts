@@ -87,12 +87,20 @@ export type MaestroListo = {
 export type MesaDescartada = { nombre: string; motivos: string[] };
 
 /** Lo que la pantalla le pide al worker: leer un archivo (se manda el File, no sus bytes) o, si preguntó, las mesas elegidas. */
-export type PedidoWorker = { tipo: "leer"; archivo: Blob } | { tipo: "mesas"; indices: number[] };
+export type PedidoWorker =
+  | { tipo: "leer"; archivo: Blob }
+  | { tipo: "mesas"; indices: number[] }
+  /** Lo que la persona eligió como fondo en cada mesa que no lo traía (índice de la mesa → nombres de sus piezas). Una
+   *  mesa que falta aquí se descarta con su porqué. */
+  | { tipo: "fondos"; elegidos: Record<number, string[]> };
 export type MesaElegible = { nombre: string; w: number; h: number };
+/** Una mesa sin carpeta de fondo y sus piezas de primer nivel, de ARRIBA hacia abajo (como el panel de capas). */
+export type MesaSinFondo = { indice: number; nombre: string; piezas: { nombre: string; carpeta: boolean; capas: number }[] };
 
 export type MensajeWorker =
   | { tipo: "avance"; mesa: number; de: number }
   | { tipo: "elegir"; mesas: MesaElegible[]; sugeridas: number[] }
+  | { tipo: "fondo"; mesas: MesaSinFondo[] }
   | { tipo: "listo"; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] }
   | { tipo: "error"; motivo: MotivoPsd | "desconocido"; detalle: string };
 

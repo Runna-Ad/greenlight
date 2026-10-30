@@ -8,11 +8,11 @@ import {
 } from "../src/lib/prisma/formatos/geometria.ts";
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
 import { writePsdBuffer } from "ag-psd";
-import { nombreDeGuia, etiquetaPieza, esNombreLegal } from "../src/lib/prisma/formatos/roles.ts";
+import { nombreDeGuia, etiquetaPieza, esNombreLegal, desenvolver, CAPA_DEBAJO_FONDO } from "../src/lib/prisma/formatos/roles.ts";
 import { legalDelPsd, conLegal, conLegalDe, legalCabe, legalVigente, legalesParaCliente, legalParecido, parecidoLegal } from "../src/lib/prisma/formatos/legal.ts";
 import { hermanas, copiarEdicion } from "../src/lib/prisma/formatos/matriz.ts";
 import { MATRIZ, baseAEscala } from "../src/lib/prisma/formatos/tabla-matriz.ts";
-import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, RELLENO_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
+import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, tieneFondo, piezasDeMesa, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, RELLENO_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
 import { armarMedida, capasDeMedida, halosEnMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
 import { psdDeMedida, textoDePsd, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prisma/formatos/psd-salida.ts";
@@ -1372,6 +1372,66 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
   const conBoton = (extra) => [capa("boton", [40, 30, 120, 40], () => NARANJA), texto(extra)];
   eq("gamma del texto: copia aplanada mezclada normal → 1; en gamma 1.45 → 1.45; con la capa al 50 %, igual", [gammaDe(psdTexto(conBoton())), gammaDe(psdTexto(conBoton(), 1, 1.45)), gammaDe(psdTexto(conBoton({ opacity: 0.5 }), 0.5, 1.45)), gammaDe(psdTexto(conBoton({ opacity: 0.5 }), 0.5))], [1, 1.45, 1.45, 1]);
   eq("gamma del texto: sin texto que medir, la del PSD real del equipo (1.45)", gammaDe(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA)])), 1.45);
+
+  // SPAPTOYBOX (2026-10-30): las carpetas de la guía venían dentro de otras («4:5» › «1:1» › Background) y, debajo de
+  // todo, otra versión del anuncio («Group 6») tapada por el fondo. Se abren las envolturas, lo de debajo no se lee, y el
+  // PSD editable encuentra cada texto por la misma `ruta` (su carpeta de debajo se mueve con el fondo).
+  const envuelto = writePsdBuffer({
+    width: OX + W, height: H,
+    children: [{ name: "4-5", opened: true, artboard: { rect: { top: 0, left: OX, bottom: H, right: OX + W } }, children: [
+      { name: "Group 6", opened: true, children: [{ name: "Background", children: [capa("viejo", [0, 0, W, H], () => [200, 0, 0])] }, { name: "CTA", children: [capa("boton viejo", [0, 0, 50, 20], () => [0, 200, 0])] }] },
+      { name: "4:5", opened: true, children: [{ name: "1:1", opened: true, children: [{ name: "Background", opened: true, children: [capa("base", [0, 0, W, H], () => [20, 40, 60])] }] }, { name: "CTA", opened: true, children: [capa("boton", [40, 30, 120, 40], () => NARANJA), texto()] }] },
+    ] }],
+    imageData: img(OX + W, H, (X, y) => { const x = X - OX; if (x < 0) return [0, 0, 0]; const c = enBoton(x, y) ? NARANJA : [20, 40, 60]; const a = tinta(x, y) / 255; return c.map((v) => (1 - a) * v + a * 255); }),
+    imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } },
+  });
+  const dEnv = leerPsd(envuelto), maEnv = despiezar(dEnv, 0);
+  const tEnv = maEnv.piezas.find((p) => p.rol === "CTA")?.textos[0];
+  eq(
+    "envolturas: se abren «4:5» y «1:1», lo de debajo del fondo va con el fondo (nunca pieza), y la mesa se separa en fondo + CTA con su texto",
+    [dEnv.avisos.length, /«4:5», «1:1»/.test(dEnv.avisos[0] ?? ""), maEnv.piezas.map((p) => p.nombre), tEnv?.texto.texto, despieceUsable(maEnv).ok, dEnv.capas.filter((c) => c.nombre === "viejo" || c.nombre === "boton viejo").map((c) => c.pieza)],
+    [2, true, ["CTA"], "Pídela\nya", true, [CAPA_DEBAJO_FONDO, CAPA_DEBAJO_FONDO]],
+  );
+  const fEnv = readPsdAg(envuelto, { useRawData: true, skipThumbnail: true, skipCompositeImageData: true });
+  const outEnv = psdEditable(
+    fEnv,
+    { W, H, origen: maEnv.origen, fondo: { k: 1, x: -OX, y: 0 }, piezas: [["CTA", { k: 1, x: -OX, y: 0 }]], textos: [{ ruta: tEnv.ruta, texto: "Nuevo" }] },
+    { compuesto: new Uint8ClampedArray(W * H * 4), halos: [], retoque: null },
+    { capa: (l) => getLayerImageData(l), mascara: (l) => getLayerMaskImageData(l), mascaraReal: (l) => getLayerRealMaskImageData(l) },
+  );
+  const textosEnv = (ls) => ls.flatMap((l) => (l.children ? textosEnv(l.children) : l.text ? [l.text.text] : []));
+  eq("envolturas: el PSD editable abre lo mismo (lo de debajo en su carpeta) y cambia el texto por su ruta", [outEnv.psd.children.map((l) => l.name), textosEnv(outEnv.psd.children)], [[CAPA_COLOR_MESA, CAPA_DEBAJO_FONDO, "Background", "CTA"], ["Nuevo"]]);
+  // Sin carpeta de fondo en ningún nivel: la página pregunta cuál pieza es (worker → «fondo»), y con lo elegido se separa.
+  const sinCarpeta = writePsdBuffer({
+    width: OX + W, height: H,
+    children: [{ name: "4-5", opened: true, artboard: { rect: { top: 0, left: OX, bottom: H, right: OX + W } }, children: [
+      { name: "Imagen ChatGPT", opened: true, children: [capa("base", [0, 0, W, H], () => [20, 40, 60])] },
+      { name: "CTA", opened: true, children: [capa("boton", [40, 30, 120, 40], () => NARANJA), texto()] },
+    ] }],
+    imageData: img(OX + W, H, (X, y) => { const x = X - OX; if (x < 0) return [0, 0, 0]; const c = enBoton(x, y) ? NARANJA : [20, 40, 60]; const a = tinta(x, y) / 255; return c.map((v) => (1 - a) * v + a * 255); }),
+    imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } },
+  });
+  const dSin = leerPsd(sinCarpeta);
+  let sinElegir = "";
+  try { despiezar(dSin, 0); } catch (e) { sinElegir = `${e.motivo}: ${e.message}`; }
+  const maSin = despiezar(dSin, 0, { fondo: ["Imagen ChatGPT"] });
+  eq(
+    "fondo elegido: sin carpeta de fondo se pide (piezas de abajo hacia arriba); sin elegir no se separa; con lo elegido sí, y queda en el origen",
+    [tieneFondo(dSin, 0), piezasDeMesa(dSin, 0), /^sin-fondo: .*no se eligió/.test(sinElegir), tieneFondo(dSin, 0, ["Imagen ChatGPT"]), maSin.piezas.map((p) => p.nombre), despieceUsable(maSin).ok, maSin.origen.fondo],
+    [false, [{ nombre: "Imagen ChatGPT", carpeta: true, capas: 1 }, { nombre: "CTA", carpeta: true, capas: 2 }], true, true, ["CTA"], true, ["Imagen ChatGPT"]],
+  );
+  const outSin = psdEditable(
+    readPsdAg(sinCarpeta, { useRawData: true, skipThumbnail: true, skipCompositeImageData: true }),
+    { W, H, origen: maSin.origen, fondo: { k: 1, x: -OX, y: 0 }, piezas: [["CTA", { k: 1, x: -OX, y: 0 }]] },
+    { compuesto: new Uint8ClampedArray(W * H * 4), halos: [], retoque: { x: 0, y: 0, w: 1, h: 1, rgba: new Uint8ClampedArray(4) } },
+    { capa: (l) => getLayerImageData(l), mascara: (l) => getLayerMaskImageData(l), mascaraReal: (l) => getLayerRealMaskImageData(l) },
+  );
+  eq("fondo elegido: en el PSD editable el retoque va sobre el fondo elegido, como sobre un BACKGROUND", outSin.psd.children.map((l) => `${l.name}${l.children ? `[${l.children.map((c) => c.name).join(",")}]` : ""}`), [CAPA_COLOR_MESA, `Imagen ChatGPT[base,${CAPA_RETOQUE}]`, "CTA[boton,Pídela]"]);
+  eq(
+    "envolturas: un PSD que ya trae su fondo arriba no cambia; una carpeta con opacidad propia no se abre",
+    [desenvolver([{ name: "Background", children: [] }, { name: "Grupo", children: [{ name: "CTA", children: [] }] }]), desenvolver([{ name: "Grupo", opacity: 0.5, children: [{ name: "Background", children: [] }] }])],
+    [null, null],
+  );
 }
 
 console.log("\n▶ v2 · copia del HERO pintada en el fondo (gemela.ts) y avisos de píxeles (revisar.ts)");

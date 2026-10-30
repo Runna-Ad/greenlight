@@ -14,7 +14,7 @@ import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionC
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteConOrilla, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_APLANADA, FP_ERROR, FP_FAMILIA, FP_PAPEL, FPL, FX, rellenar } from "@/lib/prisma/formatos/copy";
 import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
-import { EDITABLE_MAX_BYTES, EDITABLE_MAX_MS, LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajePsdMedida, type MensajeWorker, type MesaDescartada, type MesaElegible, type PedidoPsdMedida, type PedidoWorker } from "@/lib/prisma/formatos/listo";
+import { EDITABLE_MAX_BYTES, EDITABLE_MAX_MS, LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajePsdMedida, type MensajeWorker, type MesaDescartada, type MesaElegible, type MesaSinFondo, type PedidoPsdMedida, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
 import type { NotaCapa } from "@/lib/prisma/formatos/psd-editable";
@@ -959,6 +959,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   const [aviso, setAviso] = useState<{ texto: string; n: number } | null>(null);
   /** El PSD trae muchas mesas: la persona elige cuáles leer (el worker espera, con el reloj en pausa). */
   const [eleccion, setEleccion] = useState<{ mesas: MesaElegible[]; marcadas: number[] } | null>(null);
+  /** Mesas sin carpeta de fondo: lo que la persona marca como fondo en cada una (índice de la mesa → nombres de piezas). */
+  const [sinFondo, setSinFondo] = useState<{ mesas: MesaSinFondo[]; marcadas: Record<number, string[]> } | null>(null);
   /** `armar` vuelve a poner el reloj que mata al worker (se pausa mientras alguien elige mesas). */
   const trabajo = useRef<{ worker: Worker; reloj: number; armar: () => void } | null>(null);
   /** Cada lectura toma un turno: lo que llegue de un turno viejo (otro archivo, cancelar) se ignora. */
@@ -994,7 +996,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   const anunciar = useCallback((t: string) => setAviso((p) => ({ texto: t, n: p?.texto === t ? p.n + 1 : 0 })), []);
 
   const leyendo = avance !== null;
-  const eligiendo = eleccion !== null;
+  const eligiendo = eleccion !== null || sinFondo !== null;
   const usables = leido?.maestros ?? SIN_MAESTROS;
   const elegidos = papeles?.leido === leido ? papeles.mapa : null;
   /** Los maestros con el papel elegido en cada carpeta. Sólo cambia `rol`, y sólo en los maestros que traen esa carpeta. */
@@ -1189,6 +1191,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     volverASubir.current = true;
     setAvance(null);
     setEleccion(null);
+    setSinFondo(null);
   };
 
   /** Imagen plana (B28): se lee con IA, se separa y pasa a la revisión; de ahí sigue como un PSD. */
@@ -1235,6 +1238,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     setAviso(null);
     setNotaFuentes(null);
     setEleccion(null);
+    setSinFondo(null);
     pedidoPlano.current?.abort();
     setEtapaPlano(null);
     // También corta lo que pedía la imagen anterior (sus tipografías): `pedirDelCliente` mira esta referencia.
@@ -1243,6 +1247,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       volverASubir.current = true;
       setAvance(null);
       setEleccion(null);
+      setSinFondo(null);
       setFalla(f);
     };
     // El peso y la firma se revisan ANTES de abrir el archivo. El archivo NO se carga aquí: el worker lo lee a
@@ -1293,6 +1298,13 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
         setEleccion({ mesas: m.mesas, marcadas: m.sugeridas });
         return;
       }
+      if (m.tipo === "fondo") {
+        // Igual que al elegir mesas: el reloj espera a la persona. Ya va marcada la pieza de hasta abajo de cada mesa.
+        window.clearTimeout(t.reloj);
+        setAvance(null);
+        setSinFondo({ mesas: m.mesas, marcadas: Object.fromEntries(m.mesas.map((x) => [x.indice, [x.piezas[x.piezas.length - 1].nombre]])) });
+        return;
+      }
       if (m.tipo === "error") {
         console.error("[formatos-psd]", m.detalle);
         return void cerrar({ clave: CLAVE_ERROR[m.motivo], detalle: m.motivo === "desconocido" ? undefined : m.detalle });
@@ -1339,6 +1351,36 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     irACancelar.current = true;
     setAvance({ mesa: 0, de: eleccion.marcadas.length });
     setEleccion(null);
+  };
+
+  const marcarFondo = (mesa: number, nombre: string) => {
+    if (!sinFondo) return;
+    const ya = sinFondo.marcadas[mesa] ?? [];
+    const quedan = ya.includes(nombre) ? ya.filter((n) => n !== nombre) : [...ya, nombre];
+    setSinFondo({ ...sinFondo, marcadas: { ...sinFondo.marcadas, [mesa]: quedan } });
+    // Al desmarcar la última, se dice qué pasa con esa mesa (el aviso aparece debajo de su lista).
+    if (!quedan.length) anunciar(rellenar(tx(FP.fondoSinMarcar, lang), { mesa: sinFondo.mesas.find((m) => m.indice === mesa)?.nombre || tx(FP.sinNombre, lang) }));
+  };
+  const algunFondo = !!sinFondo && sinFondo.mesas.some((m) => sinFondo.marcadas[m.indice]?.length);
+  const seguirConFondo = () => {
+    const t = trabajo.current;
+    if (!sinFondo) return;
+    // Sin nada marcado en ninguna mesa no hay qué leer: el botón dice por qué (como al elegir mesas).
+    if (!algunFondo) return void anunciar(tx(FP.fondoNinguno, lang));
+    if (!t) return;
+    try {
+      t.worker.postMessage({ tipo: "fondos", elegidos: sinFondo.marcadas } satisfies PedidoWorker);
+    } catch (err) {
+      console.error("[formatos-psd] worker", err);
+      soltar();
+      volverASubir.current = true;
+      setSinFondo(null);
+      return setFalla({ clave: "desconocido" });
+    }
+    t.armar();
+    irACancelar.current = true;
+    setAvance({ mesa: 0, de: 0 });
+    setSinFondo(null);
   };
 
   // Tipografías: las que se recordaron en este navegador se cargan solas; las nuevas se suman y se recuerdan.
@@ -2231,7 +2273,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
 
       {/* Sin PSD el cliente va arriba del cuadro (con su ayuda a la vista); con PSD, en el panel de ajustes. */}
       {/* En la revisión de una imagen plana el cliente va dentro de ella (uno solo en la página). */}
-      {(eleccion || (!usables.length && !plano)) && selectorCliente(true)}
+      {(eligiendo || (!usables.length && !plano)) && selectorCliente(true)}
 
       {eleccion ? (
         <section className="p-enter max-w-2xl" aria-labelledby="psd-elegir-titulo">
@@ -2285,6 +2327,78 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
                 aria-describedby={eleccion.marcadas.length ? undefined : "psd-elegir-ninguna"}
               >
                 <FileUp className="size-4" aria-hidden="true" /> {rellenar(tx(FP.elegirLeer, lang), { n: eleccion.marcadas.length })}
+              </Button>
+              <Button variant="outline" size="lg" className={BOTON} onClick={cancelar}>
+                <X className="size-4" aria-hidden="true" /> {tx(FP.cancelar, lang)}
+              </Button>
+            </div>
+          </div>
+        </section>
+      ) : sinFondo ? (
+        <section className="p-enter max-w-2xl" aria-labelledby="psd-fondo-titulo">
+          <div className="rounded-2xl border border-border bg-card/50 px-5 py-5">
+            <h2 id="psd-fondo-titulo" ref={tituloElegir} tabIndex={-1} className="text-base font-medium text-foreground outline-none">
+              {sinFondo.mesas.length > 1
+                ? rellenar(tx(FP.fondoTitulo, lang), { n: sinFondo.mesas.length })
+                : sinFondo.mesas[0].nombre
+                  ? rellenar(tx(FP.fondoTituloUna, lang), { mesa: sinFondo.mesas[0].nombre })
+                  : tx(FP.fondoTituloPsd, lang)}
+            </h2>
+            <p id="psd-fondo-ayuda" className="text-sm text-muted-foreground">
+              {tx(FP.fondoAyuda, lang)}
+            </p>
+            {sinFondo.mesas.map((m, n) => {
+              const nombreMesa = m.nombre || tx(FP.sinNombre, lang);
+              const marcadas = sinFondo.marcadas[m.indice] ?? [];
+              return (
+                <fieldset key={m.indice} className="mt-3" aria-describedby={n === 0 ? "psd-fondo-ayuda" : undefined}>
+                  <legend className={sinFondo.mesas.length === 1 ? "sr-only" : "mb-1 break-words text-sm font-semibold text-foreground"}>
+                    {m.nombre ? rellenar(tx(FP.fondoLeyenda, lang), { mesa: m.nombre }) : tx(FP.fondoLeyendaPsd, lang)}
+                  </legend>
+                  {/* Con varias mesas la sección crece y no cada lista con su propia barra. */}
+                  <ul className={cn("space-y-0.5", sinFondo.mesas.length === 1 && "max-h-96 overflow-y-auto")}>
+                    {m.piezas.map((p) => {
+                      const tipo = p.carpeta ? (p.capas === 1 ? tx(FP.fondoCarpetaUna, lang) : rellenar(tx(FP.fondoCarpeta, lang), { n: p.capas })) : tx(FP.fondoCapa, lang);
+                      return (
+                      // Las piezas se juntan por nombre (dos carpetas iguales son una): el nombre no se repite.
+                      <li key={p.nombre}>
+                        <label className="flex min-h-9 cursor-pointer items-center gap-3 rounded-md px-2 hover:bg-secondary/60 pointer-coarse:min-h-11">
+                          {/* Nombre explícito: el texto de la etiqueta pega el nombre y el tipo ("Fondo fotocarpeta · 5 capas"). */}
+                          <input
+                            type="checkbox"
+                            lang={p.nombre ? delMotor : undefined}
+                            aria-label={`${p.nombre || tx(FP.sinNombre, lang)}, ${tipo}`}
+                            className={cn("size-4 shrink-0 accent-primary", FOCO)}
+                            checked={marcadas.includes(p.nombre)}
+                            onChange={() => marcarFondo(m.indice, p.nombre)}
+                          />
+                          <span lang={delMotor} className="min-w-0 break-words text-sm text-foreground">
+                            {p.nombre || tx(FP.sinNombre, lang)}
+                          </span>
+                          <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">{tipo}</span>
+                        </label>
+                      </li>
+                      );
+                    })}
+                  </ul>
+                  {!marcadas.length && (
+                    <p id={`psd-fondo-vacia-${m.indice}`} className="mt-2 flex items-center gap-1.5 text-sm text-foreground">
+                      <AlertTriangle className="size-4 shrink-0 text-status-warning" aria-hidden="true" /> {rellenar(tx(FP.fondoSinMarcar, lang), { mesa: nombreMesa })}
+                    </p>
+                  )}
+                </fieldset>
+              );
+            })}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {/* aria-disabled, no disabled: el botón conserva el foco y dice por qué no hace nada. */}
+              <Button
+                size="lg"
+                className={cn(BOTON, "aria-disabled:cursor-not-allowed aria-disabled:opacity-60")}
+                onClick={seguirConFondo}
+                aria-disabled={!algunFondo || undefined}
+                aria-describedby={sinFondo.mesas.filter((m) => !sinFondo.marcadas[m.indice]?.length).map((m) => `psd-fondo-vacia-${m.indice}`).join(" ") || undefined}
+              >
+                <FileUp className="size-4" aria-hidden="true" /> {tx(FP.fondoSeguir, lang)}
               </Button>
               <Button variant="outline" size="lg" className={BOTON} onClick={cancelar}>
                 <X className="size-4" aria-hidden="true" /> {tx(FP.cancelar, lang)}

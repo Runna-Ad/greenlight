@@ -7,18 +7,35 @@
  *    lo que no se usa (`adelgazar.ts`) y lee su estructura.
  * 2. Con hasta MESAS_AUTO mesas, las despieza todas. Con más, le pregunta a la página cuáles ("elegir") y espera
  *    "mesas" con los índices.
+ * 3. Si alguna mesa elegida no trae carpeta de fondo (ni dentro de otras carpetas), le pregunta a la página cuál de
+ *    sus piezas es ("fondo") y espera "fondos" (Pedro, 2026-10-30: que no se trabe, que pregunte). Sin volver a leer.
  */
-import { ES_PSB, ErrorPsd, despiezar, despieceUsable, esVersionPsd, leerPsd, pesaDemasiado, type DocPsd, type MotivoPsd } from "@/lib/prisma/formatos/psd";
-import { MESAS_AUTO, MESAS_MAX, PSD_BYTES_MAX, TRANSFERIR_MAX_BYTES, prepararMaestro, sugerirMesas, type MaestroListo, type MensajeWorker, type MesaDescartada, type PedidoWorker } from "@/lib/prisma/formatos/listo";
+import { ES_PSB, ErrorPsd, despiezar, despieceUsable, esVersionPsd, leerPsd, pesaDemasiado, piezasDeMesa, tieneFondo, type DocPsd, type MotivoPsd } from "@/lib/prisma/formatos/psd";
+import { MESAS_AUTO, MESAS_MAX, PSD_BYTES_MAX, TRANSFERIR_MAX_BYTES, prepararMaestro, sugerirMesas, type MaestroListo, type MensajeWorker, type MesaDescartada, type MesaSinFondo, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PsdPesado, adelgazarPsd } from "@/lib/prisma/formatos/adelgazar";
 
 // tsconfig compila con la librería del DOM, no la de workers: se tipa sólo lo que se usa.
 const hilo = self as unknown as { onmessage: ((e: MessageEvent<PedidoWorker>) => void) | null; postMessage(m: MensajeWorker, transferir?: Transferable[]): void };
 
-/** El documento leído, mientras la persona elige mesas. */
+/** El documento leído, mientras la persona elige mesas o el fondo de las que no lo traen. */
 let doc: DocPsd | null = null;
+/** Las mesas elegidas, mientras la persona elige el fondo. */
+let pendientes: number[] | null = null;
 
-function entregar(d: DocPsd, indices: number[]): void {
+/** Antes de despiezar: si a alguna mesa le falta el fondo, se pregunta cuál de sus piezas es. */
+function seguir(d: DocPsd, indices: number[]): void {
+  const sinFondo = indices
+    .slice(0, MESAS_MAX)
+    .filter((i) => !tieneFondo(d, i))
+    .map((i): MesaSinFondo => ({ indice: i, nombre: d.mesas[i].nombre, piezas: piezasDeMesa(d, i).reverse() }))
+    .filter((m) => m.piezas.length);
+  if (!sinFondo.length) return entregar(d, indices, {});
+  doc = d;
+  pendientes = indices;
+  hilo.postMessage({ tipo: "fondo", mesas: sinFondo });
+}
+
+function entregar(d: DocPsd, indices: number[], fondos: Record<number, string[]>): void {
   const maestros: MaestroListo[] = [];
   const descartadas: MesaDescartada[] = [];
   const transferir: Transferable[] = [];
@@ -31,7 +48,7 @@ function entregar(d: DocPsd, indices: number[]): void {
     hilo.postMessage({ tipo: "avance", mesa: n + 1, de: Math.min(indices.length, MESAS_MAX) });
     // Una mesa que no se deja separar no tumba a las demás: se anota con su porqué.
     try {
-      const ma = despiezar(d, i);
+      const ma = despiezar(d, i, { fondo: fondos[i] });
       const uso = despieceUsable(ma);
       if (!uso.ok) return void descartadas.push({ nombre: ma.nombre || mesa.nombre, motivos: uso.motivos });
       let listo = prepararMaestro(ma);
@@ -68,7 +85,7 @@ async function leer(archivo: Blob): Promise<void> {
     throw new ErrorPsd("no-soportado", `No se pudo leer el archivo: ${err instanceof Error ? err.message : String(err)}.`);
   }
   const d = leerPsd(datos);
-  if (d.mesas.length <= MESAS_AUTO) return entregar(d, d.mesas.map((_, i) => i));
+  if (d.mesas.length <= MESAS_AUTO) return seguir(d, d.mesas.map((_, i) => i));
   doc = d;
   hilo.postMessage({ tipo: "elegir", mesas: d.mesas.map(({ nombre, w, h }) => ({ nombre, w, h })), sugeridas: sugerirMesas(d.mesas) });
 }
@@ -78,13 +95,27 @@ hilo.onmessage = (e) => {
   const fallar = (err: unknown) => hilo.postMessage({ tipo: "error", motivo: err instanceof ErrorPsd ? err.motivo : "desconocido", detalle: err instanceof Error ? err.message : String(err) });
   try {
     if (p.tipo === "leer") return void leer(p.archivo).catch(fallar);
-    if (p.tipo === "mesas" && doc) {
+    if (p.tipo === "mesas" && doc && !pendientes) {
       const d = doc;
       // Índices que vienen de la página: sólo enteros de mesas que existen, sin repetir, en el orden del archivo.
       const indices = [...new Set(p.indices)].filter((i) => Number.isInteger(i) && i >= 0 && i < d.mesas.length).sort((a, b) => a - b);
       if (!indices.length) return fallar(new ErrorPsd("no-soportado", "No se eligió ninguna mesa"));
-      entregar(d, indices);
       doc = null;
+      seguir(d, indices);
+    } else if (p.tipo === "fondos" && doc && pendientes) {
+      const d = doc, indices = pendientes;
+      doc = null;
+      pendientes = null;
+      // De la página: sólo mesas que se preguntaron y nombres que son piezas de esa mesa.
+      const fondos: Record<number, string[]> = {};
+      for (const i of indices) {
+        const elegidos = p.elegidos[i];
+        if (!Array.isArray(elegidos)) continue;
+        const suyas = new Set(piezasDeMesa(d, i).map((x) => x.nombre));
+        const validos = elegidos.filter((n) => typeof n === "string" && suyas.has(n));
+        if (validos.length) fondos[i] = validos;
+      }
+      entregar(d, indices, fondos);
     }
   } catch (err) {
     fallar(err);

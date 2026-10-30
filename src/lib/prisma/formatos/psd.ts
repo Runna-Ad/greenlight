@@ -24,7 +24,7 @@
 import { readPsd, getLayerImageData, getLayerMaskImageData, getCompositeImageData, initializeCanvas, type Layer } from "ag-psd";
 import { MAL_FORMADO, PSD_BYTES_MAX } from "./listo.ts";
 import { textoDe, type TextoCapa, type TextoPsdCrudo } from "./textos.ts";
-import { ROLES, nombreDeCapa, rolDe, type Rol } from "./roles.ts";
+import { CAPA_DEBAJO_FONDO, ROLES, desenvolver, esDelFondo, nombreDeCapa, rolDe, type Rol } from "./roles.ts";
 import type { PegadoAlFondo } from "./acomodo.ts";
 
 /** Sólo se LEEN por índice. (La librería tipa también 16 y 32 bits; aquí siempre son 8: `leerPsd` rechaza lo demás.) */
@@ -245,6 +245,15 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
   // `nivel`: 0 = en la mesa (una carpeta aquí es una pieza), 1 = dentro de la carpeta de una pieza (una subcarpeta aquí
   // es una parte), 2 = más adentro (se queda en su parte).
   type Ctx = { mesa: number; pieza: string | null; carpeta: number; parte: CapaPsd["parte"]; nivel: number; ruta: number[] };
+  /** Las capas de primer nivel de una mesa, con las envolturas abiertas (`desenvolver`). */
+  const primerNivel = (hijos: Layer[] | undefined, mesa: string): Layer[] | undefined => {
+    const des = desenvolver(hijos ?? []);
+    if (!des) return hijos;
+    const donde = mesa ? `La mesa «${mesa}»` : "El PSD";
+    avisos.push(`${donde} traía las carpetas de la guía dentro de ${des.abiertas.map((n) => `«${n}»`).join(", ")}: se leyeron desde ahí.`);
+    if (des.debajo) avisos.push(`${donde}: lo que está debajo de su fondo (${des.debajo.children?.length ?? 0} capa(s) o carpeta(s)) va con el fondo, en «${CAPA_DEBAJO_FONDO}»; ninguna de sus capas se mueve sola.`);
+    return des.capas;
+  };
   const andar = (nodos: Layer[] | undefined, opPadre: number, ctx: Ctx) => {
     for (const [hijoN, l] of (nodos ?? []).entries()) {
       if (l.hidden) continue;
@@ -258,6 +267,8 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
           const x = Math.round(r.left), y = Math.round(r.top);
           mesas.push({ nombre, x, y, w: Math.round(r.right) - x, h: Math.round(r.bottom) - y });
           hijo = { mesa: mesas.length - 1, pieza: null, carpeta: -1, parte: null, nivel: 0, ruta: [] };
+          andar(primerNivel(l.children, nombre), opacidad, hijo);
+          continue;
         } else {
           hijo = { ...ctx, ruta: [...ctx.ruta, hijoN] };
           if (ctx.nivel === 0) hijo = { ...hijo, pieza: nombre, carpeta: hijoN, nivel: 1 };
@@ -294,7 +305,9 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
       });
     }
   };
-  andar(psd.children, 1, { mesa: -1, pieza: null, carpeta: -1, parte: null, nivel: 0, ruta: [] });
+  // Sin mesas de trabajo, el documento entero es la mesa: también se abren sus envolturas.
+  const conMesas = (ls: Layer[] | undefined): boolean => (ls ?? []).some((l) => !l.hidden && !!l.children && (!!l.artboard?.rect || conMesas(l.children)));
+  andar(conMesas(psd.children) ? psd.children : primerNivel(psd.children, ""), 1, { mesa: -1, pieza: null, carpeta: -1, parte: null, nivel: 0, ruta: [] });
 
   if (!mesas.length) {
     // Sin mesas de trabajo: el lienzo entero es el anuncio.
@@ -387,7 +400,11 @@ export type TextoPieza = {
 };
 /** De dónde salió un maestro, para volver a las capas del PSD original (psd-editable.ts): qué mesa (en el orden de
  *  `doc.mesas`), su caja en el documento y si se leyó reducida (`s` < 1: 1 px del original = s px del maestro). */
-export type Origen = { mesa: number; x: number; y: number; w: number; h: number; s: number };
+export type Origen = {
+  mesa: number; x: number; y: number; w: number; h: number; s: number;
+  /** Las piezas de primer nivel que la persona eligió como fondo, en una mesa sin carpeta de fondo (nombres). */
+  fondo?: string[];
+};
 export type MaestroPsd = {
   nombre: string;
   w: number;
@@ -725,15 +742,16 @@ export function reducirMesa(doc: DocPsd, mesa: number, maxPx: number = MESA_MAX_
  * la vía plana: sin copia aplanada, sin carpeta BACKGROUND, demasiado grande o datos que no se pueden leer.
  * Una mesa de más de `mesaMaxPx` se lee reducida a ese tamaño, con aviso.
  */
-export function despiezar(doc: DocPsd, mesa: number, op: { mesaMaxPx?: number } = {}): MaestroPsd {
+export function despiezar(doc: DocPsd, mesa: number, op: { mesaMaxPx?: number; fondo?: readonly string[] } = {}): MaestroPsd {
   try {
+    const fondo = op.fondo?.length ? { fondo: [...op.fondo] } : {};
     const m = doc.mesas[mesa];
     if (!m) throw new ErrorPsd("no-soportado", `No existe la mesa ${mesa}`);
     if (![m.x, m.y, m.w, m.h].every(Number.isInteger) || !(m.w > 0 && m.h > 0) || m.x < 0 || m.y < 0 || m.x + m.w > doc.w || m.y + m.h > doc.h) throw new ErrorPsd("no-soportado", `La mesa «${m.nombre}» se sale del lienzo`);
     const max = op.mesaMaxPx ?? MESA_MAX_PX;
-    if (m.w * m.h <= max) return { ...despiezarMesa(doc, mesa), origen: { mesa, x: m.x, y: m.y, w: m.w, h: m.h, s: 1 } };
+    if (m.w * m.h <= max) return { ...despiezarMesa(doc, mesa, op.fondo), origen: { mesa, x: m.x, y: m.y, w: m.w, h: m.h, s: 1, ...fondo } };
     const r = reducirMesa(doc, mesa, max);
-    const ma = { ...despiezarMesa(r.doc, 0), origen: { mesa, x: m.x, y: m.y, w: m.w, h: m.h, s: r.w / m.w } };
+    const ma = { ...despiezarMesa(r.doc, 0, op.fondo), origen: { mesa, x: m.x, y: m.y, w: m.w, h: m.h, s: r.w / m.w, ...fondo } };
     ma.avisos.unshift(`La mesa mide ${m.w}×${m.h}: se leyó reducida a ${r.w}×${r.h} (las medidas de entrega son más chicas).`);
     return ma;
   } catch (err) {
@@ -742,15 +760,33 @@ export function despiezar(doc: DocPsd, mesa: number, op: { mesaMaxPx?: number } 
   }
 }
 
-function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
+/** ¿La mesa trae fondo? Sin él no se puede separar: la página pregunta cuál de sus piezas es (`piezasDeMesa`). */
+export const tieneFondo = (doc: DocPsd, mesa: number, fondo?: readonly string[]) => doc.capas.some((c) => c.mesa === mesa && esDelFondo(c.pieza, fondo));
+
+/** Lo que se puede elegir como fondo: las piezas de primer nivel de la mesa (carpetas y capas sueltas), de ABAJO hacia
+ *  arriba, con cuántas capas visibles trae cada una. */
+export function piezasDeMesa(doc: DocPsd, mesa: number): { nombre: string; carpeta: boolean; capas: number }[] {
+  const out = new Map<string, { nombre: string; carpeta: boolean; capas: number }>();
+  for (const c of doc.capas) {
+    if (c.mesa !== mesa) continue;
+    const p = out.get(c.pieza) ?? { nombre: c.pieza, carpeta: false, capas: 0 };
+    p.carpeta ||= c.carpeta >= 0;
+    p.capas++;
+    out.set(c.pieza, p);
+  }
+  return [...out.values()];
+}
+
+function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): Omit<MaestroPsd, "origen"> {
   const m = doc.mesas[mesa];
   const N = m.w * m.h;
   if (N > MESA_MAX_PX) throw new ErrorPsd("demasiado-grande", `La mesa «${m.nombre}» mide ${m.w}×${m.h}`);
   const capas = doc.capas.filter((c) => c.mesa === mesa);
-  const delFondo = capas.filter((c) => rolDe(c.pieza) === "BACKGROUND");
-  if (!delFondo.length) throw new ErrorPsd("sin-fondo", `La mesa «${m.nombre}» no tiene carpeta BACKGROUND`);
+  const delFondo = capas.filter((c) => esDelFondo(c.pieza, elegido));
+  if (!capas.length) throw new ErrorPsd("sin-fondo", `La mesa «${m.nombre}» no tiene capas visibles`);
+  if (!delFondo.length) throw new ErrorPsd("sin-fondo", `La mesa «${m.nombre}» no tiene carpeta de fondo (BACKGROUND, Fondo o BG) y no se eligió cuál es`);
   // Cada carpeta de primer nivel cuesta un búfer del tamaño de la mesa: se cuenta ANTES de reservar nada.
-  const nPiezas = new Set(capas.filter((c) => rolDe(c.pieza) !== "BACKGROUND").map((c) => c.pieza)).size;
+  const nPiezas = new Set(capas.filter((c) => !esDelFondo(c.pieza, elegido)).map((c) => c.pieza)).size;
   if (nPiezas > PIEZAS_MAX || N * (60 + 15 * nPiezas) > DESPIECE_MAX_BYTES) throw new ErrorPsd("demasiado-grande", `La mesa «${m.nombre}» tiene ${nPiezas} carpetas o capas sueltas de primer nivel (máximo ${PIEZAS_MAX}). Qué hacer: mete las capas sueltas en las carpetas de la guía.`);
   const ap = doc.aplanadoReal === false ? undefined : doc.aplanado();
   if (!ap || ap.width !== doc.w || ap.height !== doc.h) throw new ErrorPsd("sin-aplanado", "El PSD no trae copia aplanada: guardarlo con «Maximizar compatibilidad».");
@@ -769,7 +805,7 @@ function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
   type Trabajo = { nombre: string; alfa: Float32Array; sombra: Float32Array | null };
   const trabajos: Trabajo[] = [];
   for (let c of capas) {
-    if (rolDe(c.pieza) === "BACKGROUND" || c.recorte || c.tipo === "ajuste") continue; // recortadas y ajustes sólo cambian color
+    if (esDelFondo(c.pieza, elegido) || c.recorte || c.tipo === "ajuste") continue; // recortadas y ajustes sólo cambian color
     let t = trabajos.find((x) => x.nombre === c.pieza);
     if (!t) trabajos.push((t = { nombre: c.pieza, alfa: new Float32Array(N), sombra: null }));
     const { alfa } = t;
@@ -830,8 +866,9 @@ function despiezarMesa(doc: DocPsd, mesa: number): Omit<MaestroPsd, "origen"> {
     // pero no todo, casi siempre es un producto o una persona (el iPhone de DiDi venía como foto en BACKGROUND): se
     // queda pintado y no se acomoda. Las de casi todo el lienzo son fondos; las tenues (luces, sombras) no llegan.
     const pct = (solidos / N) * 100;
-    if (pct >= FONDO_ELEMENTO_MIN_PCT && pct < FONDO_ELEMENTO_MAX_PCT)
-      avisos.push(`«BACKGROUND / ${c.nombre}» tapa el ${Math.round(pct)} % del anuncio: si es un producto o una persona, recórtalo de su fondo y ponlo en HERO (el fondo sólo debe ser fondo). Así como está, se queda pintado y no se acomoda en las medidas.`);
+    // Lo de debajo del fondo (`desenvolver`) va tapado: no tiene caso pedir que se recorte.
+    if (pct >= FONDO_ELEMENTO_MIN_PCT && pct < FONDO_ELEMENTO_MAX_PCT && c.pieza !== CAPA_DEBAJO_FONDO)
+      avisos.push(`«${rolDe(c.pieza) === "BACKGROUND" ? "BACKGROUND" : c.pieza} / ${c.nombre}» tapa el ${Math.round(pct)} % del anuncio: si es un producto o una persona, recórtalo de su fondo y ponlo en HERO (el fondo sólo debe ser fondo). Así como está, se queda pintado y no se acomoda en las medidas.`);
   }
 
   // Dónde se VE el fondo: fuera de toda pieza y de sus sombras, con 3 px de holgura para los bordes suavizados.
