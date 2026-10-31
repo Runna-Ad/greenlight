@@ -44,7 +44,7 @@ function entregar(d: DocPsd, indices: number[], fondos: Record<number, string[]>
   indices.forEach((i, n) => {
     const mesa = d.mesas[i];
     // Topes del TOTAL (los de psd.ts son por mesa): ni más mesas ni más píxeles de los que la página aguanta.
-    if (n >= MESAS_MAX) return void descartadas.push({ nombre: mesa.nombre, motivos: [`Se eligieron más de ${MESAS_MAX} mesas: ésta no se leyó.`] });
+    if (n >= MESAS_MAX) return void descartadas.push({ nombre: mesa.nombre, motivos: [`Se eligieron más de ${MESAS_MAX} artboards: éste no se leyó.`] });
     hilo.postMessage({ tipo: "avance", mesa: n + 1, de: Math.min(indices.length, MESAS_MAX) });
     // Una mesa que no se deja separar no tumba a las demás: se anota con su porqué.
     try {
@@ -56,7 +56,7 @@ function entregar(d: DocPsd, indices: number[], fondos: Record<number, string[]>
       if (bytes + listo.bytes > TRANSFERIR_MAX_BYTES && ma.piezas.some((p) => p.partes)) {
         listo = prepararMaestro({ ...ma, piezas: ma.piezas.map((p) => ({ ...p, partes: undefined, carpeta: undefined })), avisos: [...ma.avisos, "Las piezas con subcarpetas se mueven enteras: abrirlas en partes pesaba demasiado para el navegador."] });
       }
-      if (bytes + listo.bytes > TRANSFERIR_MAX_BYTES) return void descartadas.push({ nombre: ma.nombre || mesa.nombre, motivos: ["Sus piezas pesan demasiado para armarlas en el navegador. Qué hacer: elige menos mesas."] });
+      if (bytes + listo.bytes > TRANSFERIR_MAX_BYTES) return void descartadas.push({ nombre: ma.nombre || mesa.nombre, motivos: ["Sus piezas pesan demasiado para armarlas en el navegador. Qué hacer: elige menos artboards."] });
       bytes += listo.bytes;
       maestros.push(listo.maestro);
       transferir.push(...(listo.transferibles as ArrayBuffer[]));
@@ -99,7 +99,7 @@ hilo.onmessage = (e) => {
       const d = doc;
       // Índices que vienen de la página: sólo enteros de mesas que existen, sin repetir, en el orden del archivo.
       const indices = [...new Set(p.indices)].filter((i) => Number.isInteger(i) && i >= 0 && i < d.mesas.length).sort((a, b) => a - b);
-      if (!indices.length) return fallar(new ErrorPsd("no-soportado", "No se eligió ninguna mesa"));
+      if (!indices.length) return fallar(new ErrorPsd("no-soportado", "No se eligió ningún artboard"));
       doc = null;
       seguir(d, indices);
     } else if (p.tipo === "fondos" && doc && pendientes) {

@@ -82,6 +82,8 @@ export type MaestroListo = {
   avisos: string[];
   /** Imagen plana: lo que se quedó pintado en el fondo (`MaestroPsd.pegados`). */
   pegados?: readonly PegadoAlFondo[];
+  /** Resplandores pintados en el fondo (`MaestroPsd.resplandores`). */
+  resplandores?: MaestroPsd["resplandores"];
 };
 /** Una mesa que no se pudo usar, con el porqué (texto para enseñar tal cual). */
 export type MesaDescartada = { nombre: string; motivos: string[] };
@@ -144,6 +146,7 @@ export function prepararMaestro(ma: Omit<MaestroPsd, "origen"> & { origen?: Maes
     })),
     textoGamma: ma.textoGamma,
     ...(ma.pegados?.length ? { pegados: ma.pegados } : {}),
+    ...(ma.resplandores?.length ? { resplandores: ma.resplandores } : {}),
     avisos: ma.avisos,
   };
   // Un búfer repetido en la lista de transferencia tumba el postMessage: se manda cada uno una vez (los textos de una

@@ -78,7 +78,7 @@ export class TopeEditable extends Error {
 export type PixelesDe = { capa: (l: Layer) => PixelData | undefined; mascara: (l: Layer) => PixelData | undefined; mascaraReal: (l: Layer) => PixelData | undefined };
 
 export const CAPA_RETOQUE = "Fondo retocado (HÜE)";
-export const CAPA_COLOR_MESA = "Color de la mesa (HÜE)";
+export const CAPA_COLOR_MESA = "Color del artboard (HÜE)";
 /** Una escala a menos de esto de 1 con desplazamiento entero = copiar los píxeles tal cual (identidad exacta). */
 const MISMA = 1e-9;
 
@@ -219,7 +219,7 @@ function mesaDe(psd: Psd, o: Origen): { capas: Layer[]; color: { r: number; g: n
   };
   andar(psd.children);
   if (!mesas.length) {
-    if (o.mesa !== 0 || o.x !== 0 || o.y !== 0 || o.w !== psd.width || o.h !== psd.height) throw new Error("El PSD no trae esa mesa de trabajo");
+    if (o.mesa !== 0 || o.x !== 0 || o.y !== 0 || o.w !== psd.width || o.h !== psd.height) throw new Error("El PSD no trae ese artboard");
     return { capas: primerNivel(psd.children), color: null };
   }
   const r = mesas[o.mesa]?.artboard?.rect;
@@ -549,14 +549,14 @@ function revisarTopes(pasos: Paso[], W: number, H: number, extra: number): void 
   const medida = (c: { left?: number; top?: number; right?: number; bottom?: number }) => ({ w: (c.right ?? 0) - (c.left ?? 0), h: (c.bottom ?? 0) - (c.top ?? 0) });
   const delArchivo = (l: Layer) => {
     const nombre = nombreDeCapa(l.name);
-    if (++n > EDITABLE_CAPAS_MAX) throw new TopeEditable(`la mesa tiene más de ${EDITABLE_CAPAS_MAX} capas`, true);
+    if (++n > EDITABLE_CAPAS_MAX) throw new TopeEditable(`el artboard tiene más de ${EDITABLE_CAPAS_MAX} capas`, true);
     if (l.rawData?.channels.some((ch) => Number(ch.compression) >= 2)) throw new TopeEditable(`la capa «${nombre}» viene comprimida en ZIP`, true);
     for (const c of cajas(l)) {
       const { w, h } = medida(c);
       if (!(w >= 0 && h >= 0) || w * h > EDITABLE_CAPA_MAX_PX) throw new TopeEditable(`la capa «${nombre}» mide ${w}×${h}`, true);
       px += w * h;
     }
-    if (px > EDITABLE_PX_MAX) throw new TopeEditable(`las capas de la mesa suman más de ${EDITABLE_PX_MAX / 1e6} millones de píxeles`, true);
+    if (px > EDITABLE_PX_MAX) throw new TopeEditable(`las capas del artboard suman más de ${EDITABLE_PX_MAX / 1e6} millones de píxeles`, true);
     for (const c of l.children ?? []) delArchivo(c);
   };
   const deLaMedida = (l: Layer, A: Afin, deHijo?: (i: number) => Afin) => {

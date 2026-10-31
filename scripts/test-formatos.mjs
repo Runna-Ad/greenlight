@@ -30,7 +30,7 @@ import { join } from "node:path";
 import { acomodar, acomodarMedida, aplicarEdicion, pegadoFuera, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, RENGLONES_MAS, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, MEDIDAS_RATIO, FONDO_ZOOM_MAX, FONDO_EDITOR_MAX, fondoDeEdicion, edicionDeFondo } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteConOrilla, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
-import { perdidas, avisosDePixeles, avisosDePegados, seVeLaCopia, revisarMedida, opcionesDeContraste, edicionMuevePieza, edicionSinPieza } from "../src/lib/prisma/formatos/revisar.ts";
+import { perdidas, avisosDePixeles, avisosDePegados, avisosDeResplandor, seVeLaCopia, revisarMedida, opcionesDeContraste, edicionMuevePieza, edicionSinPieza } from "../src/lib/prisma/formatos/revisar.ts";
 import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
 import { specVacio } from "../src/lib/prisma/spec.ts";
 import { unzipSync } from "fflate";
@@ -499,14 +499,22 @@ console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
       [conSombras([ds()]), conSombras([ds({ useGlobalLight: true, angle: 10 })]), conSombras([ds(), ds({ angle: 0 })]), conSombras([ds({ color: { r: 255, g: 255, b: 255 }, blendMode: "normal" })])[0].tipo, conSombras([ds({ blendMode: "screen" })])[0].tipo],
       [[{ tipo: "sombra", radio: 5, fuerza: 0.5, dx: 0, dy: 10 }], [{ tipo: "sombra", radio: 5, fuerza: 0.5, dx: 5, dy: 9 }], [{ tipo: "sombra", radio: 15, fuerza: 0.5, dx: 0, dy: 0 }], "luz", "luz"],
     );
-    // Un resplandor blanco sobre fondo oscuro aclara: el fondo limpio NO se sube a lo que se ve ahí (si no, la luz se
-    // quedaba pegada al fondo al mover el titular). Sólo una sombra que oscurece pone ese piso.
-    const OSCURO = [20, 20, 40], brillo = (x, y) => dentro(x, y, [T[0] - 10, T[1] - 10, T[2] + 20, T[3] + 20]);
+    // Un resplandor blanco no viaja con su pieza (Pedro, 2026-10-30: lo de nicho va con aviso): se queda pintado en el
+    // fondo tal cual se ve, se anota de quién es y dónde quedó, y sólo avisa en la medida donde su pieza se mueve.
+    const OSCURO = [20, 20, 40], LUZ = [120, 120, 140], brillo = (x, y) => dentro(x, y, [T[0] - 10, T[1] - 10, T[2] + 20, T[3] + 20]);
     const conBrillo = despiezar(leerPsd(psdDe(
       [carpeta("Background", [capa("base", [0, 0, W, H], () => OSCURO)]), carpeta("TITULO", [capa("t", T, () => [255, 255, 255], { effects: { outerGlow: { enabled: true, size: { value: 10, units: "Pixels" }, color: { r: 255, g: 255, b: 255 }, blendMode: "screen", opacity: 0.6 } } })])],
-      (x, y) => (dentro(x, y, T) ? [255, 255, 255] : brillo(x, y) ? [120, 120, 140] : OSCURO),
+      (x, y) => (dentro(x, y, T) ? [255, 255, 255] : brillo(x, y) ? LUZ : OSCURO),
     )), 0);
-    ok("resplandor que aclara: el fondo limpio en su zona sigue siendo el fondo oscuro, no la luz", maxDif(conBrillo.fondo, () => OSCURO, [T[0] - 10, T[1] - 10, 8, T[3] + 20]) <= 4, String(maxDif(conBrillo.fondo, () => OSCURO, [T[0] - 10, T[1] - 10, 8, T[3] + 20])));
+    const rs = conBrillo.resplandores ?? [];
+    const pz = conBrillo.piezas[0], fondo1 = { k: 1, x: 0, y: 0 };
+    const puesta = (dx) => ({ fondo: fondo1, puestas: [{ pieza: 0, k: 1, x: pz.solido.x + dx, y: pz.solido.y, w: pz.solido.w, h: pz.solido.h }] });
+    const maCaja = { nombre: "m", w: W, h: H, piezas: conBrillo.piezas, resplandores: rs };
+    eq(
+      "resplandor: se queda pintado en el fondo (la medida igual sale idéntica), se anota de quién es, y sólo avisa si su pieza se mueve",
+      [maxDif(conBrillo.fondo, () => LUZ, [T[0] - 9, T[1] - 9, 7, T[3] + 18]) <= 4, rs.map((r) => r.de), despieceUsable(conBrillo).ok, avisosDeResplandor(maCaja, puesta(0)).length, avisosDeResplandor(maCaja, puesta(40)).map((a) => a.tipo)],
+      [true, ["TITULO"], true, 0, ["resplandor"]],
+    );
     const x = despiezar(d, 0);
     ok(`sombra paralela del titular: el fondo limpio no guarda su fantasma (dif. máx ${maxDif(x.fondo, base)}) y viaja con la pieza`, maxDif(x.fondo, base) <= 4 && !!x.piezas[0].oscurece && x.piezas[0].caja.w > T[2] && maxDif(rearmar(x), v) <= 6);
   }
@@ -636,7 +644,7 @@ console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
   });
   const d2 = leerPsd(dosMesas);
   eq("dos mesas de trabajo: medidas, nombres y capas repartidas", [d2.mesas.map((m) => `${m.nombre}@${m.x}:${m.w}x${m.h}`), d2.capas.filter((c) => c.mesa === 0).length, d2.capas.filter((c) => c.mesa === 1).length], [["ANUNCIO_4x5@0:400x500", "ANUNCIO_9x16@440:400x500"], 9, 9]);
-  ok("la capa fuera de las mesas se ignora, con aviso", d2.avisos.some((a) => a.includes("fuera de las mesas")));
+  ok("la capa fuera de las mesas se ignora, con aviso", d2.avisos.some((a) => a.includes("fuera de los artboards")));
   const m2 = despiezar(d2, 1);
   ok(`la segunda mesa se despieza en SUS coordenadas (rearmado ${m2.rearmadoDistintoPct.toFixed(2)} %, HERO en x=${m2.piezas.find((p) => p.rol === "HERO").solido.x})`, m2.rearmadoDistintoPct < 0.5 && m2.piezas.find((p) => p.rol === "HERO").solido.x === R.producto[0] && despieceUsable(m2).ok);
 
@@ -702,7 +710,7 @@ console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
     ok("reducir una mesa a SU MISMO tamaño = el despiece de siempre (identidad)", r1.w === W && r1.h === H && mismoDespiece(despiezar(r1.doc, 0), despiezar(doc, 0)));
     const chica = despiezar(doc, 0, { mesaMaxPx: Math.floor(N / 4) });
     const normal = despiezar(doc, 0);
-    ok(`mesa de más píxeles que el tope: se lee REDUCIDA a ${chica.w}×${chica.h}, usable (rearmado ${chica.rearmadoDistintoPct.toFixed(2)} %), con aviso`, chica.w === W / 2 && chica.h === H / 2 && despieceUsable(chica).ok && chica.avisos[0].includes("reducida a 200×250"), JSON.stringify([chica.w, chica.h, despieceUsable(chica), chica.avisos[0]]));
+    ok(`mesa de más píxeles que el tope: se lee REDUCIDA a ${chica.w}×${chica.h}, usable (rearmado ${chica.rearmadoDistintoPct.toFixed(2)} %), con aviso`, chica.w === W / 2 && chica.h === H / 2 && despieceUsable(chica).ok && chica.avisos[0].includes("reducido a 200×250"), JSON.stringify([chica.w, chica.h, despieceUsable(chica), chica.avisos[0]]));
     const mismasCajas = chica.piezas.every((p, i) => Math.abs(p.solido.x * 2 - normal.piezas[i].solido.x) <= 2 && Math.abs(p.solido.w * 2 - normal.piezas[i].solido.w) <= 2 && Math.abs(p.solido.h * 2 - normal.piezas[i].solido.h) <= 2);
     ok("las piezas reducidas caen donde las originales, a la mitad (±1 px)", chica.piezas.map((p) => p.rol).join() === normal.piezas.map((p) => p.rol).join() && mismasCajas, JSON.stringify(chica.piezas.map((p) => p.solido)));
     const d2c = despiezar(d2, 1, { mesaMaxPx: Math.floor(N / 4) });

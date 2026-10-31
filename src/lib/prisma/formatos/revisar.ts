@@ -224,6 +224,24 @@ export function avisosDePegados(ma: MaestroCaja, a: Acomodo, W: number, H: numbe
   return avisos;
 }
 
+/** Cuánto se puede correr o cambiar de tamaño una pieza respecto al fondo (en px de la medida) sin que su resplandor,
+ *  pintado en el fondo, se note fuera de lugar. */
+const RESPLANDOR_HOLGURA_PX = 2;
+
+/** Un resplandor pintado en el fondo (`MaestroPsd.resplandores`) sólo queda bien si su pieza va donde iba respecto al
+ *  fondo y del mismo tamaño. Si se movió, se quitó o cambió de tamaño, el resplandor se queda donde estaba: aviso para
+ *  arreglarlo en el PSD de esa medida (Pedro, 2026-10-30). */
+export function avisosDeResplandor(ma: MaestroCaja, a: Acomodo): AvisoAcomodo[] {
+  const f = a.fondo;
+  return (ma.resplandores ?? []).flatMap((r): AvisoAcomodo[] => {
+    const i = ma.piezas.findIndex((p) => p.nombre === r.de);
+    if (i < 0) return [];
+    const p = ma.piezas[i], q = a.puestas.find((x) => x.pieza === i), s = p.solido;
+    const enSuLugar = !!q && Math.abs(q.x - (f.x + s.x * f.k)) <= RESPLANDOR_HOLGURA_PX && Math.abs(q.y - (f.y + s.y * f.k)) <= RESPLANDOR_HOLGURA_PX && Math.abs(q.w - s.w * f.k) <= RESPLANDOR_HOLGURA_PX;
+    return enSuLugar ? [] : [{ tipo: "resplandor", texto: `El resplandor de ${etiquetaPieza(p)} va pintado en el fondo y en esta medida no se mueve con la pieza: queda donde estaba. Arréglalo en el PSD de esta medida.` }];
+  });
+}
+
 /** Los avisos de píxeles de una medida ya acomodada. */
 export function avisosDePixeles(ma: MaestroRevisable, a: Acomodo, W: number, H: number): AvisoAcomodo[] {
   const avisos: AvisoAcomodo[] = [];
@@ -236,7 +254,7 @@ export function avisosDePixeles(ma: MaestroRevisable, a: Acomodo, W: number, H: 
         : { tipo: "copia", texto: `Se ve dos veces ${n}: el fondo ya lo trae pintado y aquí la carpeta no queda encima. Se puede quitar en «Pieza repetida en el fondo».` },
     );
   }
-  avisos.push(...avisosDePegados(ma, a, W, H));
+  avisos.push(...avisosDePegados(ma, a, W, H), ...avisosDeResplandor(ma, a));
   for (const { pieza: i, v, ref } of pierden(ma, a, W, H))
     avisos.push({ tipo: "contraste", texto: `${nom(i)} se pierde en el fondo: el ${Math.round(v * 100)} % queda casi del mismo tono que lo de atrás (en el original, ${Math.round(ref * 100)} %). Revisar que se lea.` });
   return avisos;

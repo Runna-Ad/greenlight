@@ -44,7 +44,11 @@ export type ParteCaja = { nombre: string; solido: Caja; caja?: Caja; letraMinPx?
 /** Lo que una imagen plana deja pintado en el fondo (no se pudo sacar: `medirPlanoFijo`): cómo se nombra y su parte
  *  sólida, en px del maestro. No se mueve con las piezas: va donde caiga el fondo. */
 export type PegadoAlFondo = { nombre: string; caja: Caja };
-export type MaestroCaja = { nombre: string; w: number; h: number; piezas: PiezaCaja[]; pegados?: readonly PegadoAlFondo[] };
+export type MaestroCaja = {
+  nombre: string; w: number; h: number; piezas: PiezaCaja[]; pegados?: readonly PegadoAlFondo[];
+  /** Resplandores de una pieza que se quedaron pintados en el fondo (no mueven el acomodo: sólo se avisan). */
+  resplandores?: readonly { de: string; caja: Caja }[];
+};
 
 export type Familia = "igual" | "display" | "horizontal" | "ancho" | "banner";
 /** Una pieza colocada: índice en `maestro.piezas`, su escala y la caja de su parte sólida en la medida final. Con
@@ -66,7 +70,7 @@ export type Puesta = {
 export type PuestaParte = { parte: number; k: number; x: number; y: number; w: number; h: number; movida: boolean };
 /** `contraste`, `copia` y `retoque` los pone `revisar.ts` (miran píxeles); los demás, el acomodo. `matriz` es una nota
  *  (qué pide la matriz de producción y qué se hizo): se ve en gris y no cuenta como algo que revisar. */
-export type AvisoAcomodo = { tipo: "fuera" | "encima" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque" | "relleno" | "texto" | "copiada" | "matriz" | "renglones"; texto: string };
+export type AvisoAcomodo = { tipo: "fuera" | "encima" | "resplandor" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque" | "relleno" | "texto" | "copiada" | "matriz" | "renglones"; texto: string };
 /** Una nota (qué pidió la matriz y qué se hizo; el legal en otros renglones, B27): la tarjeta, el resumen y el editor
  *  la muestran en gris y no la cuentan como algo que revisar. Una sola regla para los tres. */
 export const esNota = (a: AvisoAcomodo): boolean => a.tipo === "matriz" || a.tipo === "renglones";
@@ -871,11 +875,11 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
   }
 
   const revision = comprobar(ma, W, H, familia, puestas, quitar, zona);
-  const deForma = (v: AvisoAcomodo): AvisoAcomodo => (alta && v.tipo === "forma" ? { tipo: "forma", texto: "Más alta que su mesa: el HERO crece con la altura que sobra (a medio camino) y lo de arriba y el legal se acercan a su borde. Revisar que el HERO se vea bien." } : v);
+  const deForma = (v: AvisoAcomodo): AvisoAcomodo => (alta && v.tipo === "forma" ? { tipo: "forma", texto: "Más alta que su artboard: el HERO crece con la altura que sobra (a medio camino) y lo de arriba y el legal se acercan a su borde. Revisar que el HERO se vea bien." } : v);
   // Notas (tipo «matriz»): qué pide la matriz de producción y qué se hizo. Van al final y no son algo que revisar.
   const notas: AvisoAcomodo[] = [];
   if (alta && razon(W, H, ma) < PARECIDO_MAX)
-    notas.push({ tipo: "matriz", texto: "Más alta que su mesa: el HERO crece con la altura que sobra (a medio camino) y lo de arriba y el legal se acercan a su borde." });
+    notas.push({ tipo: "matriz", texto: "Más alta que su artboard: el HERO crece con la altura que sobra (a medio camino) y lo de arriba y el legal se acercan a su borde." });
   // Donde el script del equipo y la matriz no coinciden, manda el script y se dice (Pedro, 2026-10-21: "whatever comes
   // from the script takes precedence and if its different from the table have a warning saying that but leave it to
   // the designer to choose"). Editada a mano, la persona ya eligió (`aplicarEdicion` no la repite).

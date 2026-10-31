@@ -46,7 +46,7 @@ export { PSD_BYTES_MAX };
 
 /** Versión 1 en la cabecera ("8BPS" + 00 01); la 2 es un PSB (documento grande), que no se lee. */
 export const esVersionPsd = (cab: Uint8Array): boolean => cab.length >= 6 && cab[4] === 0 && cab[5] === 1;
-export const ES_PSB = "Es un PSB (documento grande), no un PSD. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas, como PSD.";
+export const ES_PSB = "Es un PSB (documento grande), no un PSD. Qué hacer: guarda una copia sólo con los artboards que necesitas, como PSD.";
 /** El detalle cuando ag-psd lanza uno de MAL_FORMADO (sus mensajes, en inglés técnico, no le dicen nada a la persona). */
 export const PSD_MAL_FORMADO = "El archivo no sigue el formato PSD exactamente (puede estar dañado o incompleto) y no se deja leer con seguridad.";
 /** Los modos de color que ag-psd no lee, con el nombre que da en su error ("Color mode not supported: CMYK"). Un PSD
@@ -58,7 +58,7 @@ export const noEs8Bits = (bits: number): string =>
   `El PSD está en ${bits} bits por canal y Formatos sólo lee 8. Qué hacer: guarda una copia en 8 bits (en Photoshop: Imagen › Modo › 8 bits/canal) y elige esa copia aquí.`;
 /** El mismo mensaje lo dan el worker (antes de juntar los bytes) y `leerPsd`: un solo texto. */
 export const pesaDemasiado = (mb: number, nota: string): string =>
-  `Sus capas pesan ${mb} MB (máximo ${Math.round(PSD_BYTES_MAX / 1e6)})${nota}. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas y sin capas ocultas.`;
+  `Sus capas pesan ${mb} MB (máximo ${Math.round(PSD_BYTES_MAX / 1e6)})${nota}. Qué hacer: guarda una copia sólo con los artboards que necesitas y sin capas ocultas.`;
 /** El tope del formato PSD. Un archivo con una docena de mesas en fila pasa fácil de 12 000 px de ancho. */
 export const PSD_LADO_MAX = 30_000;
 /** La copia aplanada se decodifica entera (4 bytes por píxel): 60 MP = 240 MB. */
@@ -252,7 +252,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
     throw new ErrorPsd("no-soportado", modo ? noEsRgb(modo[1]) : MAL_FORMADO.test(detalle) ? PSD_MAL_FORMADO : `No se pudo leer el PSD: ${detalle}`);
   }
   if (!(psd.width > 0 && psd.height > 0)) throw new ErrorPsd("no-soportado", "El PSD no declara medidas");
-  if (psd.width > PSD_LADO_MAX || psd.height > PSD_LADO_MAX || psd.width * psd.height > PSD_LIENZO_MAX_PX) throw new ErrorPsd("demasiado-grande", `El lienzo mide ${psd.width}×${psd.height}: más de ${PSD_LIENZO_MAX_PX / 1e6} millones de píxeles en total. Qué hacer: guarda una copia sólo con las mesas de trabajo que necesitas, o acércalas entre sí.`);
+  if (psd.width > PSD_LADO_MAX || psd.height > PSD_LADO_MAX || psd.width * psd.height > PSD_LIENZO_MAX_PX) throw new ErrorPsd("demasiado-grande", `El lienzo mide ${psd.width}×${psd.height}: más de ${PSD_LIENZO_MAX_PX / 1e6} millones de píxeles en total. Qué hacer: guarda una copia sólo con los artboards que necesitas, o acércalas entre sí.`);
   const bits = psd.bitsPerChannel ?? 8;
   if (bits !== 8) throw new ErrorPsd("no-soportado", noEs8Bits(bits));
 
@@ -268,7 +268,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
   const primerNivel = (hijos: Layer[] | undefined, mesa: string): Layer[] | undefined => {
     const des = desenvolver(hijos ?? []);
     if (!des) return hijos;
-    const donde = mesa ? `La mesa «${mesa}»` : "El PSD";
+    const donde = mesa ? `El artboard «${mesa}»` : "El PSD";
     avisos.push(`${donde} traía las carpetas de la guía dentro de ${des.abiertas.map((n) => `«${n}»`).join(", ")}: se leyeron desde ahí.`);
     if (des.debajo) avisos.push(`${donde}: lo que está debajo de su fondo (${des.debajo.children?.length ?? 0} capa(s) o carpeta(s)) va con el fondo, en «${CAPA_DEBAJO_FONDO}»; ninguna de sus capas se mueve sola.`);
     return des.capas;
@@ -304,10 +304,10 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
       }
       const w = (l.right ?? 0) - (l.left ?? 0);
       const h = (l.bottom ?? 0) - (l.top ?? 0);
-      if (!(w >= 0 && h >= 0) || w > PSD_LADO_MAX || h > PSD_LADO_MAX || w * h > PSD_CAPA_MAX_PX) throw new ErrorPsd("demasiado-grande", `La capa «${nombre}» mide ${w}×${h} (máximo ${PSD_CAPA_MAX_PX / 1e6} millones de píxeles). Qué hacer: recórtala al tamaño de su mesa.`);
+      if (!(w >= 0 && h >= 0) || w > PSD_LADO_MAX || h > PSD_LADO_MAX || w * h > PSD_CAPA_MAX_PX) throw new ErrorPsd("demasiado-grande", `La capa «${nombre}» mide ${w}×${h} (máximo ${PSD_CAPA_MAX_PX / 1e6} millones de píxeles). Qué hacer: recórtala al tamaño de su artboard.`);
       const k = l.mask && !l.mask.disabled ? l.mask : null;
       const mw = (k?.right ?? 0) - (k?.left ?? 0), mh = (k?.bottom ?? 0) - (k?.top ?? 0);
-      if (!(mw >= 0 && mh >= 0) || mw > PSD_LADO_MAX || mh > PSD_LADO_MAX || mw * mh > PSD_CAPA_MAX_PX) throw new ErrorPsd("demasiado-grande", `La máscara de «${nombre}» mide ${mw}×${mh} (máximo ${PSD_CAPA_MAX_PX / 1e6} millones de píxeles). Qué hacer: recórtala al tamaño de su mesa.`);
+      if (!(mw >= 0 && mh >= 0) || mw > PSD_LADO_MAX || mh > PSD_LADO_MAX || mw * mh > PSD_CAPA_MAX_PX) throw new ErrorPsd("demasiado-grande", `La máscara de «${nombre}» mide ${mw}×${mh} (máximo ${PSD_CAPA_MAX_PX / 1e6} millones de píxeles). Qué hacer: recórtala al tamaño de su artboard.`);
       // Máscara "ocultar todo" sin pintar: Photoshop no dibuja nada de esa capa.
       if (k && !(mw > 0 && mh > 0) && (k.defaultColor ?? 255) === 0) continue;
       // Canales en ZIP: se inflan enteros antes de mirar la medida (bomba de descompresión). Photoshop guarda
@@ -334,7 +334,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
     for (const c of capas) c.mesa = 0;
   } else {
     const sueltas = capas.filter((c) => c.mesa < 0).length;
-    if (sueltas) avisos.push(`${sueltas} capa(s) fuera de las mesas de trabajo: se ignoran.`);
+    if (sueltas) avisos.push(`${sueltas} capa(s) fuera de los artboards: se ignoran.`);
   }
   let copia: Pixeles | undefined | null = null; // la librería la decodifica entera en cada llamada
   return {
@@ -444,6 +444,10 @@ export type MaestroPsd = {
   avisos: string[];
   /** Imagen plana: lo que se quedó pintado en el fondo (`medirPlanoFijo`). */
   pegados?: readonly PegadoAlFondo[];
+  /** Resplandores exteriores que se quedaron pintados en el fondo (`de`: su pieza; `caja`: dónde, en px del maestro).
+   *  No viajan con su pieza: en una medida donde la pieza se mueve, sale aviso (Pedro, 2026-10-30: lo de nicho, aviso
+   *  de color y "arréglalo en el PSD de esta medida", en vez de descartar la mesa). */
+  resplandores?: { de: string; caja: Caja }[];
 };
 
 const OSCURECE = new Set(["multiply", "darken", "linear burn", "color burn", "darker color"]);
@@ -788,13 +792,13 @@ export function despiezar(doc: DocPsd, mesa: number, op: { mesaMaxPx?: number; f
   try {
     const fondo = op.fondo?.length ? { fondo: [...op.fondo] } : {};
     const m = doc.mesas[mesa];
-    if (!m) throw new ErrorPsd("no-soportado", `No existe la mesa ${mesa}`);
-    if (![m.x, m.y, m.w, m.h].every(Number.isInteger) || !(m.w > 0 && m.h > 0) || m.x < 0 || m.y < 0 || m.x + m.w > doc.w || m.y + m.h > doc.h) throw new ErrorPsd("no-soportado", `La mesa «${m.nombre}» se sale del lienzo`);
+    if (!m) throw new ErrorPsd("no-soportado", `No existe el artboard ${mesa}`);
+    if (![m.x, m.y, m.w, m.h].every(Number.isInteger) || !(m.w > 0 && m.h > 0) || m.x < 0 || m.y < 0 || m.x + m.w > doc.w || m.y + m.h > doc.h) throw new ErrorPsd("no-soportado", `El artboard «${m.nombre}» se sale del lienzo`);
     const max = op.mesaMaxPx ?? MESA_MAX_PX;
     if (m.w * m.h <= max) return { ...despiezarMesa(doc, mesa, op.fondo), origen: { mesa, x: m.x, y: m.y, w: m.w, h: m.h, s: 1, ...fondo } };
     const r = reducirMesa(doc, mesa, max);
     const ma = { ...despiezarMesa(r.doc, 0, op.fondo), origen: { mesa, x: m.x, y: m.y, w: m.w, h: m.h, s: r.w / m.w, ...fondo } };
-    ma.avisos.unshift(`La mesa mide ${m.w}×${m.h}: se leyó reducida a ${r.w}×${r.h} (las medidas de entrega son más chicas).`);
+    ma.avisos.unshift(`El artboard mide ${m.w}×${m.h}: se leyó reducido a ${r.w}×${r.h} (las medidas de entrega son más chicas).`);
     return ma;
   } catch (err) {
     if (err instanceof ErrorPsd) throw err;
@@ -822,14 +826,14 @@ export function piezasDeMesa(doc: DocPsd, mesa: number): { nombre: string; carpe
 function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): Omit<MaestroPsd, "origen"> {
   const m = doc.mesas[mesa];
   const N = m.w * m.h;
-  if (N > MESA_MAX_PX) throw new ErrorPsd("demasiado-grande", `La mesa «${m.nombre}» mide ${m.w}×${m.h}`);
+  if (N > MESA_MAX_PX) throw new ErrorPsd("demasiado-grande", `El artboard «${m.nombre}» mide ${m.w}×${m.h}`);
   const capas = doc.capas.filter((c) => c.mesa === mesa);
   const delFondo = capas.filter((c) => esDelFondo(c.pieza, elegido));
-  if (!capas.length) throw new ErrorPsd("sin-fondo", `La mesa «${m.nombre}» no tiene capas visibles`);
-  if (!delFondo.length) throw new ErrorPsd("sin-fondo", `La mesa «${m.nombre}» no tiene carpeta de fondo (BACKGROUND, Fondo o BG) y no se eligió cuál es`);
+  if (!capas.length) throw new ErrorPsd("sin-fondo", `El artboard «${m.nombre}» no tiene capas visibles`);
+  if (!delFondo.length) throw new ErrorPsd("sin-fondo", `El artboard «${m.nombre}» no tiene carpeta de fondo (BACKGROUND, Fondo o BG) y no se eligió cuál es`);
   // Cada carpeta de primer nivel cuesta un búfer del tamaño de la mesa: se cuenta ANTES de reservar nada.
   const nPiezas = new Set(capas.filter((c) => !esDelFondo(c.pieza, elegido)).map((c) => c.pieza)).size;
-  if (nPiezas > PIEZAS_MAX || N * (60 + 15 * nPiezas) > DESPIECE_MAX_BYTES) throw new ErrorPsd("demasiado-grande", `La mesa «${m.nombre}» tiene ${nPiezas} carpetas o capas sueltas de primer nivel (máximo ${PIEZAS_MAX}). Qué hacer: mete las capas sueltas en las carpetas de la guía.`);
+  if (nPiezas > PIEZAS_MAX || N * (60 + 15 * nPiezas) > DESPIECE_MAX_BYTES) throw new ErrorPsd("demasiado-grande", `El artboard «${m.nombre}» tiene ${nPiezas} carpetas o capas sueltas de primer nivel (máximo ${PIEZAS_MAX}). Qué hacer: mete las capas sueltas en las carpetas de la guía.`);
   const ap = doc.aplanadoReal === false ? undefined : doc.aplanado();
   if (!ap || ap.width !== doc.w || ap.height !== doc.h) throw new ErrorPsd("sin-aplanado", "El PSD no trae copia aplanada: guardarlo con «Maximizar compatibilidad».");
   const avisos: string[] = [];
@@ -849,6 +853,8 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
   /** Donde cae algo que OSCURECE (una sombra paralela o una capa en multiplicar), no un resplandor: ahí el fondo de
    *  verdad nunca es más oscuro que lo que se ve. */
   const oscurecido = new Uint8Array(N);
+  /** Donde cae el resplandor exterior de una pieza (su índice en `trabajos`; −1 = ninguno). */
+  const luzDe = new Int16Array(N).fill(-1);
   for (let c of capas) {
     if (esDelFondo(c.pieza, elegido) || c.recorte || c.tipo === "ajuste") continue; // recortadas y ajustes sólo cambian color
     let t = trabajos.find((x) => x.nombre === c.pieza);
@@ -883,9 +889,10 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
         for (let xx = Math.max(0, -g.x); xx < Math.min(g.w, m.w - g.x); xx++) {
           const i = (yy + g.y) * m.w + (xx + g.x), f = pesoHalo(hl, g.lejos[yy * g.w + xx]);
           if (g.on[yy * g.w + xx] && hl.tipo === "sombra") oscurecido[i] = 1;
+          if (g.on[yy * g.w + xx] && hl.tipo === "luz" && luzDe[i] < 0) luzDe[i] = trabajos.indexOf(t);
           if (g.on[yy * g.w + xx] && f > destino[i]) destino[i] = f;
         }
-      if (hl.tipo === "luz") avisos.push(`${etiqueta} tiene resplandor exterior: no viaja con la pieza.`);
+
     }
     if (c.relleno < 1 && c.conEfectos) avisos.push(`${etiqueta} usa Relleno al ${Math.round(c.relleno * 100)} % con efectos: revisar esa pieza.`);
   }
@@ -947,7 +954,7 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
       for (let k = 0; k < 3; k++) { resto[i * 3 + k] = C[i * 3 + k] - guia[i * 3 + k]; suma[j * 3 + k] += resto[i * 3 + k]; }
       cuenta[j]++;
     }
-  if (!nVisible) throw new ErrorPsd("sin-fondo", `En la mesa «${m.nombre}» las piezas tapan todo el fondo`);
+  if (!nVisible) throw new ErrorPsd("sin-fondo", `En el artboard «${m.nombre}» las piezas tapan todo el fondo`);
   let guiaMal = 0;
   for (let y = 0; y < m.h; y++)
     for (let x = 0; x < m.w; x++) {
@@ -965,13 +972,28 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
   // Donde sólo cae la sombra de una pieza (ninguna pinta ahí), Photoshop deja ver el fondo YA oscurecido: el fondo de
   // verdad nunca es más oscuro que eso (una sombra sólo oscurece). Un estimado más oscuro (SPAPTOYBOX, 2026-10-30: las
   // sombras de las capas del BACKGROUND, que no se pintan, se corrían a la zona de los halos) se sube a lo que se ve.
-  // Sólo en zonas de sombra: no en un resplandor (aclara: subirlo pegaría la luz al fondo) ni en la orilla de 3 px.
+  // Sólo en zonas de sombra o de resplandor, no en la orilla de 3 px. Un resplandor no viaja con su pieza: se queda
+  // pintado en el fondo tal cual se ve (así la medida igual al PSD sale idéntica) y se anota dónde quedó, para avisar
+  // en las medidas donde su pieza se mueve.
   const pinta = new Uint8Array(N);
   for (const t of trabajos) for (let i = 0; i < N; i++) if (t.alfa[i] > 0.02) pinta[i] = 1;
+  const cajaLuz = trabajos.map(() => ({ x0: m.w, y0: m.h, x1: -1, y1: -1 }));
   for (let i = 0; i < N; i++) {
-    if (visible[i] || pinta[i] || !oscurecido[i]) continue;
-    for (let c = 0; c < 3; c++) if (D[i * 3 + c] < C[i * 3 + c]) { D[i * 3 + c] = C[i * 3 + c]; fondo[i * 3 + c] = Math.round(C[i * 3 + c] * 255); }
+    if (visible[i] || pinta[i] || (!oscurecido[i] && luzDe[i] < 0)) continue;
+    let subio = 0;
+    for (let c = 0; c < 3; c++)
+      if (D[i * 3 + c] < C[i * 3 + c]) { subio = Math.max(subio, C[i * 3 + c] - D[i * 3 + c]); D[i * 3 + c] = C[i * 3 + c]; fondo[i * 3 + c] = Math.round(C[i * 3 + c] * 255); }
+    const k = luzDe[i];
+    if (k >= 0 && !oscurecido[i] && subio * 255 > TOLERANCIA) {
+      const b = cajaLuz[k], x = i % m.w, y = (i / m.w) | 0;
+      if (x < b.x0) b.x0 = x; if (x > b.x1) b.x1 = x; if (y < b.y0) b.y0 = y; if (y > b.y1) b.y1 = y;
+    }
   }
+  const resplandores = trabajos.flatMap((t, k) => {
+    const b = cajaLuz[k];
+    return b.x1 < 0 ? [] : [{ de: t.nombre, caja: { x: b.x0, y: b.y0, w: b.x1 - b.x0 + 1, h: b.y1 - b.y0 + 1 } }];
+  });
+  for (const r of resplandores) avisos.push(`El resplandor exterior de «${r.de}» se queda pintado en el fondo: en las medidas donde «${r.de}» se mueve, queda donde estaba (sale aviso en esas medidas).`);
 
   // tope[i] = la pieza de MÁS ARRIBA que pinta sólido ahí (−1 = ninguna): para saber qué le tapan a cada una.
   const K = trabajos.length;
@@ -1144,7 +1166,7 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
     piezas.push(p);
   });
 
-  const maestro: Omit<MaestroPsd, "origen"> = { nombre: m.nombre, w: m.w, h: m.h, fondo, piezas, fondoDistintoPct: (guiaMal / nVisible) * 100, rearmadoDistintoPct: 0, textoGamma: gammaDeTexto(capas, m, C), avisos };
+  const maestro: Omit<MaestroPsd, "origen"> = { nombre: m.nombre, w: m.w, h: m.h, fondo, piezas, fondoDistintoPct: (guiaMal / nVisible) * 100, rearmadoDistintoPct: 0, textoGamma: gammaDeTexto(capas, m, C), avisos, ...(resplandores.length ? { resplandores } : {}) };
   const otra = rearmar(maestro);
   let mal = 0;
   for (let i = 0; i < N; i++) {
