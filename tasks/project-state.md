@@ -9,7 +9,11 @@
 Última actualización: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
 
-## 🔺 HÜE Prisma › Formatos · 2026-10-29 · rama `prisma` (PREVIEW, no en prod) · último 5c45348
+## 🔺 HÜE Prisma › Formatos · 2026-10-30 · rama `prisma` (PREVIEW, no en prod) · último 89e039c
+- PSD con las carpetas de la guía dentro de otras carpetas se lee (SPAPTOYBOX); sin fondo, la app pregunta cuál capa es.
+- Sombras paralelas con su lugar real; resplandores pintados en el fondo con aviso «resplandor» por medida.
+- El texto de Formatos dice «artboard», no «mesa». Regla de Pedro: lo de nicho va con aviso de color, no con arreglo grande.
+## 🔺 HÜE Prisma › Formatos · 2026-10-29 (antes) · rama `prisma` (PREVIEW, no en prod) · último 5c45348
 - 2026-10-29: textos de imagen plana 83/83 editables sin IA; «Rehacer el fondo con IA» (Gemini, una llamada por anuncio)
   con recortes de objetos dentro de la plataforma (SlimSAM en el navegador, gratis). Pedro probándolo en la preview.
 ## (antes) Formatos · 2026-10-28 · último ccc0680

@@ -3080,3 +3080,41 @@ brag-output/ — no los toqué.
 - [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
 - [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
 
+
+## 2026-10-30 14:47
+
+**Still open:**
+- [ ] E. Piezas «OTRO» (sin papel) no se ponen en las 7 medidas que no son «igual» → «falta» (82947, 83ed, 1.06.45).
+- [ ] F. El brillo/sombra suave de una pieza que no se separa se queda en el fondo como mancha al moverla (82947: la
+- [ ] G. 83ed: la lectura cortó el titular en dos («¡Lleva tu DiDi Card y d» / «isfruta…») y el precio sale doble
+- [ ] H. 82947: los 2 renglones del titular siguen fijos (anillo con 8 % de orillas) y en 1280×720 quedan enormes con
+- [ ] Límite conocido: el relleno suave no inventa un pico de luz escondido detrás de un texto (prueba: ~5 niveles).
+- [ ] Opción 2 (IA para fondos de foto: estadio, rocas, capturas) sigue pendiente; Pedro decide.
+- [ ] Rellenos con muestras dejan manchas en barras/pastillas angostas (legal sobre barra blanca y botón de 1.07.33).
+- [ ] 29 de 83 textos van «aproximados» (no empatan con DiDi Sans): revisar a ojo cuáles se ven distintos.
+- [ ] En fotos, lo anclado y lo pegado no se mueven y las piezas acomodadas les caen encima (avisos «encima»).
+- [ ] 83ed: «6% de CASHBACK*» sale deslavado (color de tinta mal medido).
+
+
+## 2026-10-30 Session — PSD sin carpeta BACKGROUND, sombras y resplandores (SPAPTOYBOX)
+**What we did:** Pedro reportó «Falta la carpeta BACKGROUND» con SPAPTOYBOX.psd (278 MB). Al leer el archivo, el
+Background SÍ estaba, metido en «4:5» › «1:1». Tres commits en `prisma`, los tres en la preview:
+- ab529a1 — `desenvolver` (roles.ts) abre las carpetas que envuelven cuando el primer nivel no trae fondo (lector y PSD
+  editable igual, para que coincidan ruta/carpeta); lo de debajo del fondo va en «Debajo del fondo (HÜE)», con el fondo.
+  Si aun así no hay fondo, el worker pausa y la página pregunta cuál capa es el fondo (casillas, la de abajo marcada).
+- 9d8673e — sombras paralelas con su lugar real (corridas por distancia/ángulo con la luz global, desvaneciéndose hacia
+  la orilla) y el fondo bajo una sombra nunca más oscuro que lo que se ve.
+- 89e039c — el resplandor exterior se queda pintado en el fondo y sale aviso «resplandor» sólo en las medidas donde su
+  pieza se mueve; todo el texto dice «artboard» en vez de «mesa».
+**Current state:** en la preview (https://greenlight-278hrecpi-pedros-projects-c43384db.vercel.app, Ready). SPAPTOYBOX:
+los 2 artboards dan 13 medidas. Tests: formatos 667/0 y las demás suites verdes. PSD reales del Mac: ninguno empeoró;
+BFDIRECT20CASH 876×324 también pasó a usable.
+**Uncommitted work:** sólo lo que no es de esta sesión (CLAUDE.md + .pre-replay-P3, brag-brief.md, brag-output/) y las
+entradas automáticas de este log.
+**Decisions made:** (1) Pedro eligió "1 y 2": abrir envolturas solas + selector de fondo de respaldo (el selector solo no
+servía con su archivo). (2) PEDRO_OVERRIDE: lo de nicho (un efecto raro en unas medidas) pasa con aviso de color por medida
+y "arréglalo en el PSD de esta medida", no se construye el arreglo grande ni se descarta el artboard. (3) "mesa" → "artboard".
+**Pick up next session:** Pedro prueba SPAPTOYBOX en la preview. En sus medidas anchas falta poner papeles a mano en
+«Carpetas con otro nombre» (Group 5 → TITULO, Group 8 → CTA); el blíster vive en Background (no se mueve: Photoshop).
+Lo de antes sigue: Pedro retesta el fondo con IA del estadio; luego el registro de buenas prácticas.
+**Environment changes:** ninguno (sin dependencias nuevas, sin migraciones).

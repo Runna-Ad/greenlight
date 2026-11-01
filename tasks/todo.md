@@ -117,6 +117,16 @@ de forma rara (ccc0680, sin probar); el legal de la Biblioteca en una imagen rea
 barra de texto.
 
 
+## 🔨 2026-10-30 — PSD sin carpeta BACKGROUND / sombras / resplandores (preview 89e039c)
+- [x] Abrir carpetas que envuelven (`desenvolver`) + selector de fondo de respaldo (ab529a1).
+- [x] Sombras con su lugar real + fondo nunca más oscuro que lo visible bajo una sombra (9d8673e).
+- [x] Resplandor pintado en el fondo con aviso por medida; «mesa» → «artboard» (89e039c).
+- [ ] Pedro prueba SPAPTOYBOX en la preview (anchas: Group 5 → TITULO, Group 8 → CTA en «Carpetas con otro nombre»).
+- Diferido (de las revisiones, no bloquea): los avisos "se leyeron desde ahí" salen también por artboards que no se
+  eligieron; `engordar` no suma el corrimiento de la sombra al margen (una capa estacionada lejos fuera del artboard no
+  echa sombra adentro); `traeGuia` se recalcula por nivel (sólo corre en archivos sin fondo arriba). Que el resplandor
+  viaje con su pieza: NO (Pedro: nicho → aviso).
+
 ## 🔨 2026-10-09 — Prisma › Formatos v2 (rama `prisma`, SIN fusionar main todavía — Pedro: "don't merge yet")
 Pedro trae una lista real de un cliente: 9:16 (1080×1920), 1200×627, 320×250, 320×50, 1280×720, 600×500, 876×324,
 768×1024, 720×1600, 720×1280, 640×100, 4:5 (1200×1500) — varias NO estándar. Quiere rápido, exacto y lo más barato.
