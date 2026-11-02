@@ -51,7 +51,11 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
     setMiembros((ms) => ms.map((m) => (m.id === id ? { ...m, ...local } : m)));
     const r = await guardarMiembro(id, patch);
     if (!r.ok) {
-      if (prev) setMiembros((ms) => ms.map((m) => (m.id === id ? prev : m)));
+      // Sólo lo que tocó este guardado: otro cambio pudo salir bien mientras tanto.
+      if (prev) {
+        const antes = Object.fromEntries(Object.keys(local).map((k) => [k, prev[k as keyof MiembroRow]])) as Partial<MiembroRow>;
+        setMiembros((ms) => ms.map((m) => (m.id === id ? { ...m, ...antes } : m)));
+      }
       toast.error(r.error ?? "No se pudo guardar.");
     }
   }
@@ -483,7 +487,8 @@ function AgregarPersona({
   const crear = async () => {
     setGuardando(true);
     const r = await crearMiembro({
-      name, track, role, color, rama,
+      name, track, role, color,
+      rama: esGlobalNuevo ? undefined : rama,
       email: email || undefined,
       slack_user_id: slack || undefined,
     });
