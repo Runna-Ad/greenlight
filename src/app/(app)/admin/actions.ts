@@ -15,7 +15,7 @@ import { sendEmail, hasEmail } from "@/lib/email";
 import { htmlFor, textFor } from "@/lib/email-template";
 import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
 import { TIPOGRAFIAS_BUCKET, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIAS_POR_CLIENTE_MAX, archivoVisible, faltaTablaTipografias, leerTipografia, rutaTipografia } from "@/lib/prisma/formatos/tipografias";
-import type { MiembroRow, RolAsignable } from "@/lib/equipo";
+import { esRama, type MiembroRow, type Rama, type RolAsignable } from "@/lib/equipo";
 import type {
   ActividadRow,
   ClienteConMarcas,
@@ -47,7 +47,7 @@ export async function listarEquipo(): Promise<MiembroRow[]> {
 
   const { data: miembros } = await db
     .from("track_members")
-    .select("id, name, track, tracks, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
+    .select("id, name, track, tracks, rama, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
     .order("track", { ascending: true })
     .order("sort_order", { ascending: true });
 
@@ -83,6 +83,7 @@ const CAMPOS_EDITABLES = new Set([
   "color",
   "track",
   "tracks",
+  "rama",
   "role",
   "email",
   "slack_user_id",
@@ -139,6 +140,9 @@ export async function guardarMiembro(
         ? [...new Set(v.filter((x): x is "real" | "normal" => TRACKS_VALIDOS.has(x as string)))]
         : [];
       limpio.tracks = ts.length ? ts : null;
+    } else if (k === "rama") {
+      if (!esRama(v)) return { ok: false, error: "Esa rama no existe." };
+      limpio.rama = v;
     } else {
       limpio[k] = v;
     }
@@ -297,6 +301,7 @@ export async function guardarWatchAll(on: boolean): Promise<Guardado> {
 export async function crearMiembro(data: {
   name: string;
   track: "real" | "normal";
+  rama?: Rama;
   color?: string;
   role?: RolAsignable;
   email?: string;
@@ -309,6 +314,7 @@ export async function crearMiembro(data: {
     return { ok: false, error: "Sólo el Master Builder puede nombrar admins." };
   }
   if (!data.name.trim()) return { ok: false, error: "El nombre es obligatorio." };
+  if (data.rama !== undefined && !esRama(data.rama)) return { ok: false, error: "Esa rama no existe." };
 
   const db = supabaseAdmin();
   // admin/master son GLOBALES → sin track (aunque la UI mande uno). lead/creative
@@ -335,6 +341,7 @@ export async function crearMiembro(data: {
     .insert({
       name: data.name.trim(),
       track,
+      rama: data.rama ?? "creativo",
       color: data.color ?? "#775cbf",
       role: rolNuevo,
       email: data.email?.trim() || null,
@@ -342,7 +349,7 @@ export async function crearMiembro(data: {
       es_lead: esLeadDeRol(rolNuevo),
       sort_order,
     })
-    .select("id, name, track, tracks, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
+    .select("id, name, track, tracks, rama, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, sort_order")
     .single();
   if (error) {
     // unique (track, name) — nombre repetido dentro del mismo track.

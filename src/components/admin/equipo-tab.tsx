@@ -16,7 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Pill } from "@/components/ui/pill";
 import { ROLE_LABEL, type ViewRole } from "@/lib/roles";
-import { ROLES_ASIGNABLES, type MiembroRow, type RolAsignable } from "@/lib/equipo";
+import { RAMAS, RAMA_LABEL, ROLES_ASIGNABLES, type MiembroRow, type Rama, type RolAsignable } from "@/lib/equipo";
 import { crearMiembro, guardarMiembro, eliminarMiembro, enviarInvitacion } from "@/app/(app)/admin/actions";
 
 const rolLabel = (r: string) => ROLE_LABEL[r as ViewRole] ?? r;
@@ -289,6 +289,27 @@ function MiembroCard({
             ))}
           </select>
         </Campo>
+        <Campo label="Rama">
+          {esGlobal ? (
+            <span
+              className="flex h-8 items-center rounded-md border border-dashed border-border px-2 text-sm text-muted-foreground"
+              title="Admin/Master son globales: no pertenecen a una rama"
+            >
+              Global · todas
+            </span>
+          ) : (
+            <select
+              value={m.rama}
+              onChange={(e) => guardar(m.id, { rama: e.target.value as Rama })}
+              aria-label={`Rama de ${m.name}`}
+              className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {RAMAS.map((r) => (
+                <option key={r} value={r}>{RAMA_LABEL[r]}</option>
+              ))}
+            </select>
+          )}
+        </Campo>
         <Campo label="Tracks" hint={esGlobal ? undefined : "uno o ambos"}>
           {esGlobal ? (
             <span
@@ -446,6 +467,7 @@ function AgregarPersona({
   const [name, setName] = useState("");
   const [track, setTrack] = useState<"real" | "normal">("real");
   const [role, setRole] = useState<RolAsignable>("creative");
+  const [rama, setRama] = useState<Rama>("creativo");
   const [color, setColor] = useState("#775cbf");
   const [email, setEmail] = useState("");
   const [slack, setSlack] = useState("");
@@ -454,14 +476,14 @@ function AgregarPersona({
   const esGlobalNuevo = role === "admin" || role === "master";
 
   const reset = () => {
-    setName(""); setTrack("real"); setRole("creative");
+    setName(""); setTrack("real"); setRole("creative"); setRama("creativo");
     setColor("#775cbf"); setEmail(""); setSlack("");
   };
 
   const crear = async () => {
     setGuardando(true);
     const r = await crearMiembro({
-      name, track, role, color,
+      name, track, role, color, rama,
       email: email || undefined,
       slack_user_id: slack || undefined,
     });
@@ -530,6 +552,17 @@ function AgregarPersona({
               </select>
             </div>
           </div>
+          {!esGlobalNuevo && (
+            <div>
+              <Label htmlFor="f-rama" className="mb-1 block">Rama</Label>
+              <select id="f-rama" value={rama} onChange={(e) => setRama(e.target.value as Rama)}
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                {RAMAS.map((r) => (
+                  <option key={r} value={r}>{RAMA_LABEL[r]}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <Label htmlFor="f-email" className="mb-1 block">Email <span className="text-muted-foreground">(opcional)</span></Label>
             <input id="f-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@…"

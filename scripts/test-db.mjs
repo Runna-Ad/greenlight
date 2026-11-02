@@ -3341,5 +3341,20 @@ console.log("\n▶ 0088 — prisma_gemini_gastos + tope");
   await db.query(`delete from produccion.prisma_gemini_gastos`);
 }
 
+// ── 0089: rama de cada persona ──
+console.log("\n▶ 0089 — track_members.rama");
+{
+  const idRama = await scalar(`insert into produccion.track_members (name, track, role) values ('Prueba Rama', 'normal', 'creative') returning id`);
+  eq("quien no elige rama queda en Creativo", await scalar(`select rama from produccion.track_members where id = $1`, [idRama]), "creativo");
+  for (const r of ["diseno", "produccion", "creativo"]) {
+    await db.query(`update produccion.track_members set rama = $2 where id = $1`, [idRama, r]);
+    eq(`la rama ${r} se guarda`, await scalar(`select rama from produccion.track_members where id = $1`, [idRama]), r);
+  }
+  let ramaMala = false;
+  try { await db.query(`update produccion.track_members set rama = 'ventas' where id = $1`, [idRama]); } catch { ramaMala = true; }
+  ok("una rama inventada se rechaza", ramaMala);
+  await db.query(`delete from produccion.track_members where id = $1`, [idRama]);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

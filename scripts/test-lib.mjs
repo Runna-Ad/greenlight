@@ -10,6 +10,7 @@ import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, 
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
 import { puedeSerLead, puedeSerEspecialista } from "../src/lib/roles.ts";
+import { RAMAS, esRama, ramaDe } from "../src/lib/equipo.ts";
 import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoEnvioPieza, motivoBloqueoEnvio, ultimoVisibleDe } from "../src/lib/correcciones.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
 
@@ -1556,6 +1557,14 @@ console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo e
   eq("en cambios sin respuesta sigue igual", estadoCliente("in_corrections", false).label, "En cambios");
   eq("aprobada no cambia aunque haya respuesta vieja", estadoCliente("delivered", false, true).label, "Aprobado");
   eq("por revisar no cambia", estadoCliente("published", false, true).label, "Por revisar");
+}
+
+// ── Rama de cada persona (0089) ──
+{
+  ok("rama: hay tres", RAMAS.length === 3 && RAMAS.every(esRama));
+  ok("rama: una inventada no vale", !esRama("ventas") && !esRama(null) && !esRama(undefined));
+  ok("rama: lead y especialista tienen la suya", ramaDe({ role: "lead", rama: "diseno" }) === "diseno" && ramaDe({ role: "creative", rama: "produccion" }) === "produccion");
+  ok("rama: admin y master son globales", ramaDe({ role: "admin", rama: "diseno" }) === null && ramaDe({ role: "master", rama: "creativo" }) === null);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

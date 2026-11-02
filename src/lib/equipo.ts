@@ -7,6 +7,14 @@
 export const ROLES_ASIGNABLES = ["master", "admin", "lead", "creative"] as const;
 export type RolAsignable = (typeof ROLES_ASIGNABLES)[number];
 
+// La rama de cada persona (0089). Una sola por persona; dentro de ella es Lead o Especialista.
+export const RAMAS = ["creativo", "diseno", "produccion"] as const;
+export type Rama = (typeof RAMAS)[number];
+export const RAMA_LABEL: Record<Rama, string> = { creativo: "Creativo", diseno: "Diseño", produccion: "Producción" };
+export const esRama = (v: unknown): v is Rama => (RAMAS as readonly unknown[]).includes(v);
+/** La rama que cuenta: admin y master son globales y no tienen ninguna, aunque la fila guarde una. */
+export const ramaDe = (m: { role: string; rama: Rama }): Rama | null => (m.role === "admin" || m.role === "master" ? null : m.rama);
+
 export type MiembroRow = {
   id: string;
   name: string;
@@ -16,6 +24,8 @@ export type MiembroRow = {
    *  home. El [0] es el home cuando hay grant. Ignorado para creative/admin/master. */
   /** Tracks OTORGADOS (lead o creative, 0059). null/vacío = usa el track HOME. */
   tracks: ("real" | "normal")[] | null;
+  /** Rama guardada (0089). Para leerla usa `ramaDe`: admin y master no cuentan con ella. */
+  rama: Rama;
   color: string;
   role: string;
   email: string | null;
