@@ -485,6 +485,13 @@ export function escrituraCon(e: Escritura, maestro: number, listos: ReadonlyMap<
   return { ...e, piezas };
 }
 /** Los textos que la página escribe de una pieza (undefined = va como imagen). */
+/** Por qué una pieza no se escribe: la tipografía que falta o el texto que no empató, antes que «otro texto de la misma
+ *  pieza». Así se nombra lo que hay que arreglar. */
+export function porQueNoSeEscribe(e: Escritura, maestro: number, pieza: number): string | null {
+  const no = e.revisiones.filter((r) => r.maestro === maestro && r.pieza === pieza && !r.ok);
+  return (no.find((r) => r.faltan.length) ?? no.find((r) => r.motivo !== OTRO_COMO_IMAGEN) ?? no[0])?.motivo ?? null;
+}
+
 export const listosDe = (e: Escritura | null, maestro: number, pieza: number): readonly Listo[] | undefined => e?.piezas.get(clavePieza(maestro, pieza));
 
 /**

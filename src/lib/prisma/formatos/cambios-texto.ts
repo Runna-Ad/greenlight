@@ -295,6 +295,8 @@ export function cambiarTextos<M extends MaestroListo>(
   pintar: Pintar,
   /** Las tipografías cargadas (nombres PostScript), para los estilos cambiados con la barra. */
   fuentes: readonly string[] = [],
+  /** Por qué no se escribe esta pieza, si se sabe (la tipografía que falta, cuál texto no empató). */
+  porQueNo?: (pieza: number) => string | null | undefined,
 ): { maestro: M; listos: Map<number, Listo[]> } {
   const listos = new Map<number, Listo[]>();
   let tocado = false;
@@ -305,7 +307,7 @@ export function cambiarTextos<M extends MaestroListo>(
     if (!conCambio(p, cambios)) return p;
     const marcar = (motivo: string): PiezaCambiada => ((tocado = true), { ...p, textoSinEscribir: motivo });
     const suyos = listosDe(i);
-    if (!suyos?.length) return marcar(NO_SE_ESCRIBIO.tipografia);
+    if (!suyos?.length) return marcar(porQueNo?.(i) || NO_SE_ESCRIBIO.tipografia);
     // Cada texto cambiado: sus letras, su caja de párrafo crecida si hace falta y sus líneas nuevas. Uno que no se
     // puede escribir se queda como en el PSD y se dice por qué (el primero que falle).
     const nuevos = new Map<TextoPieza, Listo>();

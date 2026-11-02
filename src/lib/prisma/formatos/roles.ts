@@ -51,8 +51,12 @@ export function rolDe(nombre: string): Rol | null {
  *  del PSD y el PSD editable deciden con esta misma función. */
 export const esDelFondo = (nombre: string, elegidos: readonly string[] | undefined) => rolDe(nombre) === "BACKGROUND" || !!elegidos?.includes(nombre);
 
-/** El fondo de la guía (BACKGROUND, Background, Fondo, BG), visible. */
-const esFondoGuia = (l: Layer) => !l.hidden && rolDe(nombreDeCapa(l.name)) === "BACKGROUND";
+/** ¿Se ve algo de ella? Una carpeta vacía o con todo apagado no pinta nada. */
+const seVe = (l: Layer): boolean => !l.hidden && (!l.children || l.children.some(seVe));
+
+/** El fondo de la guía (BACKGROUND, Background, Fondo, BG), con algo visible. SPAPDOGCARD 9:16 (2026-11-02) traía hasta
+ *  arriba un «Background» con sólo una guía de zona segura apagada: contarlo mandaba todo el anuncio debajo del fondo. */
+const esFondoGuia = (l: Layer) => seVe(l) && rolDe(nombreDeCapa(l.name)) === "BACKGROUND";
 
 /** ¿Trae adentro, en algún nivel, una carpeta visible con nombre de la guía? */
 const traeGuia = (l: Layer, nivel = 0): boolean =>

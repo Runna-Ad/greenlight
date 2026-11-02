@@ -9,7 +9,7 @@ import {
 import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
 import { writePsdBuffer } from "ag-psd";
 import { nombreDeGuia, etiquetaPieza, esNombreLegal, desenvolver, CAPA_DEBAJO_FONDO } from "../src/lib/prisma/formatos/roles.ts";
-import { legalDelPsd, conLegal, conLegalDe, legalCabe, legalVigente, legalesParaCliente, legalParecido, parecidoLegal } from "../src/lib/prisma/formatos/legal.ts";
+import { legalDelPsd, conLegal, conLegalDe, conLegalFijo, legalCabe, legalVigente, legalesParaCliente, legalParecido, parecidoLegal } from "../src/lib/prisma/formatos/legal.ts";
 import { hermanas, copiarEdicion } from "../src/lib/prisma/formatos/matriz.ts";
 import { MATRIZ, baseAEscala } from "../src/lib/prisma/formatos/tabla-matriz.ts";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, tieneFondo, piezasDeMesa, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, RELLENO_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
@@ -1446,7 +1446,7 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
   eq(
     "fondo elegido: sin carpeta de fondo se pide (piezas de abajo hacia arriba); sin elegir no se separa; con lo elegido sí, y queda en el origen",
     [tieneFondo(dSin, 0), piezasDeMesa(dSin, 0), /^sin-fondo: .*no se eligió/.test(sinElegir), tieneFondo(dSin, 0, ["Imagen ChatGPT"]), maSin.piezas.map((p) => p.nombre), despieceUsable(maSin).ok, maSin.origen.fondo],
-    [false, [{ nombre: "Imagen ChatGPT", carpeta: true, capas: 1 }, { nombre: "CTA", carpeta: true, capas: 2 }], true, true, ["CTA"], true, ["Imagen ChatGPT"]],
+    [false, [{ nombre: "Imagen ChatGPT", carpeta: true, capas: 1, fondoDentro: false }, { nombre: "CTA", carpeta: true, capas: 2, fondoDentro: false }], true, true, ["CTA"], true, ["Imagen ChatGPT"]],
   );
   const outSin = psdEditable(
     readPsdAg(sinCarpeta, { useRawData: true, skipThumbnail: true, skipCompositeImageData: true }),
@@ -1457,8 +1457,15 @@ console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías
   eq("fondo elegido: en el PSD editable el retoque va sobre el fondo elegido, como sobre un BACKGROUND", outSin.psd.children.map((l) => `${l.name}${l.children ? `[${l.children.map((c) => c.name).join(",")}]` : ""}`), [CAPA_COLOR_MESA, `Imagen ChatGPT[base,${CAPA_RETOQUE}]`, "CTA[boton,Pídela]"]);
   eq(
     "envolturas: un PSD que ya trae su fondo arriba no cambia; una carpeta con opacidad propia no se abre",
-    [desenvolver([{ name: "Background", children: [] }, { name: "Grupo", children: [{ name: "CTA", children: [] }] }]), desenvolver([{ name: "Grupo", opacity: 0.5, children: [{ name: "Background", children: [] }] }])],
+    [desenvolver([{ name: "Background", children: [{ name: "foto" }] }, { name: "Grupo", children: [{ name: "CTA", children: [] }] }]), desenvolver([{ name: "Grupo", opacity: 0.5, children: [{ name: "Background", children: [] }] }])],
     [null, null],
+  );
+  // SPAPDOGCARD 9:16: un «Background» hasta arriba con sólo una guía apagada no es el fondo; todo lo de abajo sigue siendo pieza.
+  const conGuia = desenvolver([{ name: "9:16", children: [{ name: "Background", children: [{ name: "real" }] }, { name: "Legales", children: [{ name: "texto" }] }, { name: "Background", children: [{ name: "zona segura", hidden: true }] }, { name: "Background", children: [] }] }]);
+  eq(
+    "envolturas: un fondo vacío o con todo apagado no cuenta: el fondo es el que se ve y las piezas no se van debajo",
+    [conGuia.capas.map((l) => l.name), conGuia.debajo, desenvolver([{ name: "Background", children: [{ name: "guía", hidden: true }] }, { name: "Grupo", children: [{ name: "CTA", children: [] }] }])?.abiertas],
+    [["Background", "Legales", "Background", "Background"], null, ["Grupo"]],
   );
 }
 
@@ -1630,6 +1637,7 @@ console.log("\n▶ v2 · copia del HERO pintada en el fondo (gemela.ts) y avisos
   const fc2 = new Uint8ClampedArray(C * C * 4);
   for (let y = 0; y < C; y++) for (let x = 0; x < C; x++) fc2.set(x >= 200 ? [30, 60, 200, 255] : [245, 245, 245, 255], (y * C + x) * 4);
   const m2 = { nombre: "C2", w: C, h: C, fondo: fc2, piezas: [titulo(250)] };
+  ok("legal fijo: la medida de ese artboard avisa que el legal elegido no está", acomodar({ ...m2, legalFijo: true }, C, C).avisos.some((v) => v.tipo === "texto" && /NO está en esta medida/.test(v.texto)));
   const a2 = { familia: "horizontal", puestas: [{ pieza: 0, k: 1, x: 100, y: 100, w: 100, h: 40 }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] };
   const op2 = opcionesDeContraste(m2, a2, 300, C);
   ok(
@@ -2855,6 +2863,14 @@ console.log("\n▶ B24 · el legal de la Biblioteca en todas las medidas");
   const leg = legalDelPsd([m0, m1, m2]);
   eq("legalDelPsd: por mesa; prefiere la parte LEGAL, si no el más largo de FOOTER; una mesa sin FOOTER no tiene legal", leg.map((l) => [l.mi, l.pieza, l.j, l.texto]), [[0, 1, 1, "Aplican TyC."], [1, 0, 2, largo]]);
   const kA = leg[0].clave, kB = leg[1].clave;
+  {
+    const ms = [m0, m1, m2], nada = {};
+    eq(
+      "conLegalFijo: con otro legal puesto, se marca la mesa sin legal (y sólo ésa); sin cambio o con dos legales distintos, los MISMOS maestros",
+      [conLegalFijo(ms, leg, { [kA]: "Nuevo", [kB]: "Nuevo" }).map((m) => !!m.legalFijo), conLegalFijo(ms, leg, { [kB]: "Nuevo" }).map((m) => !!m.legalFijo), conLegalFijo(ms, leg, nada) === ms, conLegalFijo(ms, leg, { [kA]: "A", [kB]: "B" }) === ms, conLegalFijo([m0, m1], leg, { [kA]: "Nuevo" }).length],
+      [[false, false, true], [false, false, true], true, true, 2],
+    );
+  }
   const otro = { [claveTexto(tp("Título", "x"))]: "Otro título" };
   const puesto = conLegal(otro, leg, "  Legal nuevo de DiDi.\n");
   eq("conLegal: pone el legal (sin espacios a los lados) en las claves de todas las mesas y deja los demás textos", puesto, { ...otro, [kA]: "Legal nuevo de DiDi.", [kB]: "Legal nuevo de DiDi." });

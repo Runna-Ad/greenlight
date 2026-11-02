@@ -19,10 +19,10 @@ import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
 import type { NotaCapa } from "@/lib/prisma/formatos/psd-editable";
 import { CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES, rutaLibre, zipsEnPartes } from "@/lib/prisma/formatos/zip";
-import { etiquetaPieza, nombreDeGuia, type Rol } from "@/lib/prisma/formatos/roles";
+import { etiquetaPieza, nombreDeGuia, rolDe, type Rol } from "@/lib/prisma/formatos/roles";
 import { colaVacia, enCola, pintar } from "./pintar";
 import { Franjas, VistaGrande } from "./vista-grande";
-import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, escrituraCon, fuentesRecordadas, listosDe, maquetadorDe, olvidarFuentes, pintorDe, recordarFuentes, renglonesDe, revisarTextos, textoEscrito, textosVivos, type ArchivoFuente, type Escritura, type Renglones, type Tipografias } from "./escritura";
+import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, escrituraCon, fuentesRecordadas, listosDe, maquetadorDe, olvidarFuentes, pintorDe, porQueNoSeEscribe, recordarFuentes, renglonesDe, revisarTextos, textoEscrito, textosVivos, type ArchivoFuente, type Escritura, type Renglones, type Tipografias } from "./escritura";
 import { tipografiasDelCliente, tipografiasDelPsd, type TipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
 import { esImagenPlana, leerPlano, type Plano } from "./plano-lector";
 import { RevisionPlano } from "./revision-plano";
@@ -30,7 +30,7 @@ import { EditorMedida, edicionGuardada, guardarEdicion, guardarTextos, textosGua
 import { cambiarTextos, cambiosQueAplican, marcarSinEscribir, NO_SE_ESCRIBIO, type CambiosTexto, type Listo } from "@/lib/prisma/formatos/cambios-texto";
 import { porQueNoSeCambia } from "@/lib/prisma/formatos/textos";
 import { APAGADA, COLUMNAS, ChipEstado, FOCO, FORMAS, FilaLegal, NOMBRE_FORMA, PRENDIDA, PastillasCanal, PastillasEntrega, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
-import { conLegal, conLegalDe, legalDelPsd, legalesParaCliente, legalParecido, legalVigente, type LegalGuardado } from "@/lib/prisma/formatos/legal";
+import { conLegal, conLegalDe, conLegalFijo, legalDelPsd, legalesParaCliente, legalParecido, legalVigente, type LegalGuardado } from "@/lib/prisma/formatos/legal";
 import { copiarEdicion, hermanas } from "@/lib/prisma/formatos/matriz";
 import { ErrorDeRuta, IA_ESPERA_MS, aPng, aRgba, pngQueQuepa } from "./ia-imagen";
 
@@ -81,7 +81,7 @@ function derivarTextos<M extends MaestroListo>(maestros: M[], cambios: CambiosTe
     let r = ya && ya.i === i && ya.clave === clave && ya.e === e && ya.t === t ? ya.r : null;
     if (!r) {
       try {
-        r = cambiarTextos(m, cambios, (p) => listosDe(e, i, p), maquetar, pintarTexto, [...t.keys()]);
+        r = cambiarTextos(m, cambios, (p) => listosDe(e, i, p), maquetar, pintarTexto, [...t.keys()], (p) => porQueNoSeEscribe(e, i, p));
       } catch (err) {
         // Se ve el texto del PSD y cada medida lo dice (no el texto nuevo en el campo y el viejo en la tarjeta, callado).
         console.error("[formatos-psd] textos cambiados", err);
@@ -960,7 +960,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   /** El PSD trae muchas mesas: la persona elige cuáles leer (el worker espera, con el reloj en pausa). */
   const [eleccion, setEleccion] = useState<{ mesas: MesaElegible[]; marcadas: number[] } | null>(null);
   /** Mesas sin carpeta de fondo: lo que la persona marca como fondo en cada una (índice de la mesa → nombres de piezas). */
-  const [sinFondo, setSinFondo] = useState<{ mesas: MesaSinFondo[]; marcadas: Record<number, string[]> } | null>(null);
+  const [sinFondo, setSinFondo] = useState<{ mesas: MesaSinFondo[]; marcadas: Record<number, string[]>; conFondo: number } | null>(null);
   /** `armar` vuelve a poner el reloj que mata al worker (se pausa mientras alguien elige mesas). */
   const trabajo = useRef<{ worker: Worker; reloj: number; armar: () => void } | null>(null);
   /** Cada lectura toma un turno: lo que llegue de un turno viejo (otro archivo, cancelar) se ignora. */
@@ -1299,10 +1299,11 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
         return;
       }
       if (m.tipo === "fondo") {
-        // Igual que al elegir mesas: el reloj espera a la persona. Ya va marcada la pieza de hasta abajo de cada mesa.
+        // Igual que al elegir mesas: el reloj espera a la persona. Ya va marcada la pieza de hasta abajo de cada mesa, salvo
+        // que su nombre diga otra cosa (Logo, Legales) o traiga el fondo revuelto adentro: ahí decide la persona.
         window.clearTimeout(t.reloj);
         setAvance(null);
-        setSinFondo({ mesas: m.mesas, marcadas: Object.fromEntries(m.mesas.map((x) => [x.indice, [x.piezas[x.piezas.length - 1].nombre]])) });
+        setSinFondo({ mesas: m.mesas, conFondo: m.conFondo, marcadas: Object.fromEntries(m.mesas.map((x) => [x.indice, x.piezas.slice(-1).filter((p) => rolDe(p.nombre) === null && !p.fondoDentro).map((p) => p.nombre)])) });
         return;
       }
       if (m.tipo === "error") {
@@ -1361,7 +1362,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     // Al desmarcar la última, se dice qué pasa con esa mesa (el aviso aparece debajo de su lista).
     if (!quedan.length) anunciar(rellenar(tx(FP.fondoSinMarcar, lang), { mesa: sinFondo.mesas.find((m) => m.indice === mesa)?.nombre || tx(FP.sinNombre, lang) }));
   };
-  const algunFondo = !!sinFondo && sinFondo.mesas.some((m) => sinFondo.marcadas[m.indice]?.length);
+  // Basta con un artboard que se pueda leer: los que ya traen fondo cuentan (uno sin marcar se salta y se dice en las notas).
+  const algunFondo = !!sinFondo && (sinFondo.conFondo > 0 || sinFondo.mesas.some((m) => sinFondo.marcadas[m.indice]?.length));
   const seguirConFondo = () => {
     const t = trabajo.current;
     if (!sinFondo) return;
@@ -1744,9 +1746,14 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   }, [ediciones]);
   // Lo que se acomoda, se pinta y se baja: con los textos cambiados ya escritos. Lo guardado de cada medida se sigue
   // reconociendo con el maestro de antes (`maestrosVista`): cambiar un texto no borra las ediciones.
-  const conTextos = useMemo(() => derivarTextos(maestrosVista, cambiosTexto, escritura, tiposEscritos), [maestrosVista, cambiosTexto, escritura, tiposEscritos]);
+  const legalPsd = useMemo(() => legalDelPsd(maestrosVista), [maestrosVista]);
+  const conTextos = useMemo(() => {
+    const d = derivarTextos(maestrosVista, cambiosTexto, escritura, tiposEscritos);
+    return { ...d, maestros: conLegalFijo(d.maestros, legalPsd, cambiosTexto) };
+  }, [maestrosVista, cambiosTexto, escritura, tiposEscritos, legalPsd]);
   // El legal en otros renglones (B27): cada versión del maestro se hace al pedirla, con estos textos y tipografías.
   const renglones = useMemo(() => renglonesDe(conTextos.maestros, conTextos.escritura, tiposEscritos), [conTextos, tiposEscritos]);
+  const tiposOcupado = trayendo > 0 || cargandoFuentes > 0 || probando || (faltanFuentes.length > 0 && resueltoPara !== leido);
   /** Por qué un texto de una pieza no se cambia en el editor (null = sí se puede). */
   const motivoTexto = (mi: number, pieza: number, j: number, sinTipografia = FP.editorTextoSinTipografia): string | null => {
     const tp = maestrosVista[mi]?.piezas[pieza]?.textos[j];
@@ -1754,7 +1761,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     const no = porQueNoSeCambia(tp.texto);
     if (no) return no;
     if (listosDe(escritura, mi, pieza)) return null;
-    if (probando) return tx(FP.editorTextoProbando, lang);
+    // Mientras las tipografías bajan o se prueban todavía no falta ninguna: se dice eso.
+    if (tiposOcupado) return tx(FP.editorTextoProbando, lang);
     return revisiones.find((r) => r.maestro === mi && r.pieza === pieza && r.capa === tp.capa)?.motivo ?? tx(sinTipografia, lang);
   };
 
@@ -1845,9 +1853,9 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   };
   /** Un aviso con «Deshacer» (y lo mismo al lector). `deshacer` recibe los textos de AHORA: lo que se cambió después
    *  del aviso no se pierde, y con otro PSD abierto ya no hace nada. */
-  const avisarConDeshacer = (l: Leido, texto: string, deshacer: (ahora: CambiosTexto) => CambiosTexto) => {
+  const avisarConDeshacer = (l: Leido, texto: string, deshacer: (ahora: CambiosTexto) => CambiosTexto, aviso = false) => {
     anunciar(texto);
-    toast.success(texto, {
+    toast[aviso ? "warning" : "success"](texto, {
       duration: DESHACER_MS,
       action: { label: tx(FP.copiaDevolver, lang), onClick: () => void (leidoVigente.current === l && ponerTextos(l, deshacer(cambiosVigentes.current))) },
     });
@@ -1862,7 +1870,6 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
 
   // El legal (B24): elegido de la Biblioteca, es un texto cambiado más (todas las medidas, «Deshacer»). Se reconoce
   // con el maestro de antes de los cambios, como los demás textos.
-  const legalPsd = useMemo(() => legalDelPsd(maestrosVista), [maestrosVista]);
   /** Los textos cambiados que tocan este archivo: lo guardado con el mismo nombre de otra lectura no cuenta. */
   const cambiados = useMemo(() => cambiosQueAplican(maestrosVista, cambiosTexto).length, [maestrosVista, cambiosTexto]);
   const vigenteLegal = useMemo(() => (legalPsd.length ? legalVigente(cambiosTexto, legalPsd, legales) : null), [legalPsd, cambiosTexto, legales]);
@@ -1871,7 +1878,13 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   const motivosLegal = legalPsd.map((l) => motivoTexto(l.mi, l.pieza, l.j, FP.legalSinTipografia));
   const motivoLegal = motivosLegal.length && motivosLegal.every((m) => m !== null) ? motivosLegal[0] : null;
   const sinLegalAqui = maestrosVista.length - motivosLegal.filter((m) => m === null).length;
-  const parcialLegal = sinLegalAqui > 0 && maestrosVista.length > 1 ? { n: sinLegalAqui, de: maestrosVista.length } : null;
+  // Cada artboard donde no se puede, con su razón: la medida y el porqué, no sólo cuántos.
+  const sinLegalLista = maestrosVista.flatMap((m, i) => {
+    const k = legalPsd.findIndex((l) => l.mi === i);
+    if (k >= 0 && motivosLegal[k] === null) return [];
+    return [{ medida: `${m.w}×${m.h}`, porque: k >= 0 ? (motivosLegal[k] ?? "") : tx(FP.legalSinPieza, lang) }];
+  });
+  const parcialLegal = sinLegalAqui > 0 && maestrosVista.length > 1 ? { lista: sinLegalLista.map((x) => `${x.medida} (${x.porque})`).join(", ") } : null;
   // Un legal de la Biblioteca de otro cliente (se eligió y luego se cambió el cliente de arriba) se avisa.
   const legalAjeno = vigenteLegal?.tipo === "biblioteca" && vigenteLegal.legal.clienteId !== null && vigenteLegal.legal.clienteId !== cliente;
   const elegirLegal = (g: LegalGuardado | null) => {
@@ -1883,7 +1896,12 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       return void toast.info(tx(FP.legalYaVa, lang));
     }
     // Deshacer devuelve sólo el legal de antes: los demás textos, como estén.
-    if (ponerTextos(l, c)) avisarConDeshacer(l, g ? rellenar(tx(FP.legalPuesto, lang), { t: g.titulo }) : tx(FP.legalVuelto, lang), (ahora) => conLegalDe(ahora, legalPsd, antes));
+    const puesto = !g
+      ? tx(FP.legalVuelto, lang)
+      : parcialLegal
+        ? rellenar(tx(FP.legalPuestoParcial, lang), { t: g.titulo, n: maestrosVista.length - sinLegalLista.length, de: maestrosVista.length, lista: sinLegalLista.map((x) => x.medida).join(", ") })
+        : rellenar(tx(FP.legalPuesto, lang), { t: g.titulo });
+    if (ponerTextos(l, c)) avisarConDeshacer(l, puesto, (ahora) => conLegalDe(ahora, legalPsd, antes), !!g && !!parcialLegal);
   };
   /**
    * Imagen plana: el legal lo leyó la IA y puede traer una letra mal. Si se parece a uno guardado del cliente, se pone
@@ -2193,7 +2211,6 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   // Tipografías en un chip (Pedro: "if we already selected didi it should just said didis typofrafies loaded"). Mientras
   // se traen o se prueban, lo dice; si falta alguna, en ámbar; si no, "cargadas" y cuántos textos salen nítidos.
   const nombreCliente = clientes.find((c) => c.id === cliente)?.nombre ?? "";
-  const tiposOcupado = trayendo > 0 || cargandoFuentes > 0 || probando || (faltanFuentes.length > 0 && resueltoPara !== leido);
   const nitidos = rellenar(tx(FP.tiposNitidos, lang), { n: escritos, m: totalTextos });
   const chipTipos: { tono: "ok" | "aviso" | "neutro"; icono: ReactNode; texto: string } = tiposOcupado
     ? { tono: "neutro", icono: <Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />, texto: tx(trayendo > 0 ? FP.textoTrayendo : cargandoFuentes > 0 ? FP.textoCargando : FP.textoProbando, lang) }
@@ -2377,6 +2394,11 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
                           </span>
                           <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">{tipo}</span>
                         </label>
+                        {p.fondoDentro && (
+                          <p className="mb-1 flex gap-1.5 px-2 text-xs font-medium text-foreground">
+                            <AlertTriangle className="mt-px size-3.5 shrink-0 text-status-warning" aria-hidden="true" /> {tx(FP.fondoDentro, lang)}
+                          </p>
+                        )}
                       </li>
                       );
                     })}

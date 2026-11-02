@@ -145,6 +145,8 @@ export type CapaPsd = {
   /** Dónde está en el árbol de su mesa: su lugar entre los hijos de cada carpeta, desde la mesa (contando los ocultos).
    *  Con esto el PSD editable encuentra ESTA capa aunque otra se llame igual. */
   ruta: number[];
+  /** Está dentro de una carpeta de fondo que va DENTRO de otra pieza (mal archivada): sólo sirve para avisarlo. */
+  fondoDentro?: boolean;
   mascara: MascaraPsd | null;
   /** Capas de texto: el tamaño de su letra más chica, en px del lienzo (ya con la escala de la capa). */
   letraPx: number | null;
@@ -263,7 +265,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
   let vistas = 0;
   // `nivel`: 0 = en la mesa (una carpeta aquí es una pieza), 1 = dentro de la carpeta de una pieza (una subcarpeta aquí
   // es una parte), 2 = más adentro (se queda en su parte).
-  type Ctx = { mesa: number; pieza: string | null; carpeta: number; parte: CapaPsd["parte"]; nivel: number; ruta: number[] };
+  type Ctx = { mesa: number; pieza: string | null; carpeta: number; parte: CapaPsd["parte"]; nivel: number; ruta: number[]; fondoDentro?: boolean };
   /** Las capas de primer nivel de una mesa, con las envolturas abiertas (`desenvolver`). */
   const primerNivel = (hijos: Layer[] | undefined, mesa: string): Layer[] | undefined => {
     const des = desenvolver(hijos ?? []);
@@ -289,7 +291,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
           andar(primerNivel(l.children, nombre), opacidad, hijo);
           continue;
         } else {
-          hijo = { ...ctx, ruta: [...ctx.ruta, hijoN] };
+          hijo = { ...ctx, ruta: [...ctx.ruta, hijoN], fondoDentro: ctx.fondoDentro || (ctx.nivel > 0 && rolDe(nombre) === "BACKGROUND") };
           if (ctx.nivel === 0) hijo = { ...hijo, pieza: nombre, carpeta: hijoN, nivel: 1 };
           else if (ctx.nivel === 1) hijo = { ...hijo, parte: { hijo: hijoN, nombre }, nivel: 2 };
           const raro = [
@@ -316,7 +318,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
       capas.push({
         nombre, tipo: tipoDe(l), left: l.left ?? 0, top: l.top ?? 0, w, h, opacidad, relleno: l.fillOpacity ?? 1,
         mezcla: l.blendMode ?? "normal", halos: halosDe(l, anguloGlobal), conEfectos: hayEfectos(l), recorte: !!l.clipping, mesa: ctx.mesa, pieza: ctx.pieza ?? nombre,
-        carpeta: ctx.pieza === null ? -1 : ctx.carpeta, parte: ctx.parte, ruta: [...ctx.ruta, hijoN],
+        carpeta: ctx.pieza === null ? -1 : ctx.carpeta, parte: ctx.parte, ruta: [...ctx.ruta, hijoN], fondoDentro: ctx.fondoDentro,
         mascara: k && mw > 0 && mh > 0 ? { left: k.left ?? 0, top: k.top ?? 0, right: k.right ?? 0, bottom: k.bottom ?? 0, defecto: k.defaultColor ?? 255, pixeles: () => getLayerMaskImageData(l) } : null,
         letraPx: letraDe(l),
         texto: l.text ? textoDe(l.text as TextoPsdCrudo) : null,
@@ -810,13 +812,14 @@ export function despiezar(doc: DocPsd, mesa: number, op: { mesaMaxPx?: number; f
 export const tieneFondo = (doc: DocPsd, mesa: number, fondo?: readonly string[]) => doc.capas.some((c) => c.mesa === mesa && esDelFondo(c.pieza, fondo));
 
 /** Lo que se puede elegir como fondo: las piezas de primer nivel de la mesa (carpetas y capas sueltas), de ABAJO hacia
- *  arriba, con cuántas capas visibles trae cada una. */
-export function piezasDeMesa(doc: DocPsd, mesa: number): { nombre: string; carpeta: boolean; capas: number }[] {
-  const out = new Map<string, { nombre: string; carpeta: boolean; capas: number }>();
+ *  arriba, con cuántas capas visibles trae cada una y si trae una carpeta de fondo adentro. */
+export function piezasDeMesa(doc: DocPsd, mesa: number): { nombre: string; carpeta: boolean; capas: number; fondoDentro: boolean }[] {
+  const out = new Map<string, { nombre: string; carpeta: boolean; capas: number; fondoDentro: boolean }>();
   for (const c of doc.capas) {
     if (c.mesa !== mesa) continue;
-    const p = out.get(c.pieza) ?? { nombre: c.pieza, carpeta: false, capas: 0 };
+    const p = out.get(c.pieza) ?? { nombre: c.pieza, carpeta: false, capas: 0, fondoDentro: false };
     p.carpeta ||= c.carpeta >= 0;
+    p.fondoDentro ||= !!c.fondoDentro;
     p.capas++;
     out.set(c.pieza, p);
   }

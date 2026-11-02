@@ -400,7 +400,7 @@ function conDato(plantilla: string, vars: Record<string, string>, langDato: stri
  * Biblioteca para el cliente elegido (por marca) más «El que trae el PSD». Elegir uno lo pone en todas las medidas (lo
  * hace la página, como un texto cambiado en el editor). `vigente` null = el PSD no trae legal. `motivo`: por qué su
  * legal no se puede volver a escribir (null = sí se puede); lo escribe el motor, en español. `ajeno`: el legal puesto es
- * de un cliente que no es el elegido arriba. `parcial`: en cuántas mesas del PSD no se puede poner.
+ * de un cliente que no es el elegido arriba. `parcial`: en qué mesas del PSD no se puede poner y por qué.
  */
 export function FilaLegal({
   vigente,
@@ -423,7 +423,7 @@ export function FilaLegal({
   /** No se pudieron leer los legales de la Biblioteca (no es lo mismo que no tener). */
   fallaron: boolean;
   ajeno: boolean;
-  parcial: { n: number; de: number } | null;
+  parcial: { lista: string } | null;
   lang: Lang;
   alElegir: (legal: LegalGuardado | null) => void;
 }) {
@@ -451,7 +451,7 @@ export function FilaLegal({
     else if (!nombreCliente) notas.push({ texto: tx(FP.legalSinCliente, lang) });
     else if (!grupos.length) notas.push({ texto: rellenar(tx(FP.legalSinGuardados, lang), { c: nombreCliente }) });
     if (ajeno) notas.push({ texto: nombreCliente ? rellenar(tx(FP.legalAjeno, lang), { c: nombreCliente }) : tx(FP.legalAjenoSinCliente, lang), aviso: true });
-    if (parcial && !motivo) notas.push({ texto: rellenar(tx(FP.legalParcial, lang), { n: parcial.n, t: parcial.de }), aviso: true });
+    if (parcial && !motivo) notas.push({ texto: rellenar(tx(FP.legalParcial, lang), { lista: parcial.lista }), aviso: true });
   }
   // El botón también sin legales para este cliente si hay que poder volver al que trae el PSD.
   const puede = !!vigente && !motivo && (grupos.length > 0 || vigente.tipo !== "psd");

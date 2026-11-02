@@ -97,12 +97,12 @@ export type PedidoWorker =
   | { tipo: "fondos"; elegidos: Record<number, string[]> };
 export type MesaElegible = { nombre: string; w: number; h: number };
 /** Una mesa sin carpeta de fondo y sus piezas de primer nivel, de ARRIBA hacia abajo (como el panel de capas). */
-export type MesaSinFondo = { indice: number; nombre: string; piezas: { nombre: string; carpeta: boolean; capas: number }[] };
+export type MesaSinFondo = { indice: number; nombre: string; piezas: { nombre: string; carpeta: boolean; capas: number; fondoDentro: boolean }[] };
 
 export type MensajeWorker =
   | { tipo: "avance"; mesa: number; de: number }
   | { tipo: "elegir"; mesas: MesaElegible[]; sugeridas: number[] }
-  | { tipo: "fondo"; mesas: MesaSinFondo[] }
+  | { tipo: "fondo"; mesas: MesaSinFondo[]; conFondo: number }
   | { tipo: "listo"; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] }
   | { tipo: "error"; motivo: MotivoPsd | "desconocido"; detalle: string };
 

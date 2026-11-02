@@ -93,6 +93,15 @@ export function conLegalDe(cambios: CambiosTexto, legal: readonly TextoLegal[], 
   return out ?? cambios;
 }
 
+/** Los maestros, con los que no tienen legal que cambiar marcados si a los demás ya se les puso uno (el mismo texto en
+ *  todos): sin esto, sus medidas siguen con el legal viejo y nadie lo dice. Sin nada que marcar, los MISMOS maestros. */
+export function conLegalFijo<M extends object>(maestros: M[], legal: readonly TextoLegal[], cambios: CambiosTexto): M[] {
+  // Un artboard cuyo legal ya era ése no lleva cambio (`conLegal`): cuentan los que sí.
+  const puestos = legal.filter((l) => l.clave in cambios);
+  if (!puestos.length || legal.length >= maestros.length || puestos.some((l) => cambios[l.clave] !== cambios[puestos[0].clave])) return maestros;
+  return maestros.map((m, i) => (legal.some((l) => l.mi === i) ? m : { ...m, legalFijo: true }));
+}
+
 /** Qué legal va ahora: el del PSD (y si ése ya es uno de la biblioteca, cuál), uno de la biblioteca (el mismo texto en
  *  todas las mesas) o uno escrito a mano en el editor. */
 export type LegalVigente = { tipo: "psd"; igualA: LegalGuardado | null } | { tipo: "biblioteca"; legal: LegalGuardado } | { tipo: "mano" };

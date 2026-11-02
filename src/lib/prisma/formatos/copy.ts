@@ -160,8 +160,8 @@ export const FP = {
   fondoLeyendaPsd: t("Capas del PSD, de arriba hacia abajo", "The PSD's layers, top to bottom"),
   fondoTitulo: t("{n} artboards no tienen carpeta de fondo. Elige cuál es el fondo en cada uno.", "{n} artboards have no background folder. Pick the background in each one."),
   fondoAyuda: t(
-    "Ninguna carpeta se llama BACKGROUND, Fondo o BG. Marca la que es el fondo; puedes marcar varias. Dejamos marcada la de más abajo: cámbiala si no es.",
-    "No folder is named BACKGROUND, Fondo or BG. Tick the one that is the background; you can tick several. We ticked the bottom one: change it if it's wrong.",
+    "Ninguna carpeta de primer nivel se llama BACKGROUND, Fondo o BG. Marca la que es el fondo; puedes marcar varias. Si ya hay una marcada, es la de más abajo: cámbiala si no es.",
+    "No top-level folder is named BACKGROUND, Fondo or BG. Tick the one that is the background; you can tick several. If one is already ticked, it's the bottom one: change it if it's wrong.",
   ),
   fondoNinguno: t("Marca el fondo de al menos un artboard.", "Tick the background of at least one artboard."),
   fondoLeyenda: t("Capas del artboard «{mesa}», de arriba hacia abajo", "Layers of the «{mesa}» artboard, top to bottom"),
@@ -169,6 +169,10 @@ export const FP = {
   fondoCarpetaUna: t("carpeta · 1 capa", "folder · 1 layer"),
   fondoCapa: t("capa suelta", "loose layer"),
   fondoSinMarcar: t("Sin nada marcado, el artboard «{mesa}» no se lee.", "With nothing ticked, the «{mesa}» artboard isn't read."),
+  fondoDentro: t(
+    "Trae el fondo adentro, revuelto con otras piezas. Si la marcas, todo lo que trae queda fijo en el fondo: no se mueve y su legal no se puede cambiar. Lo mejor: en Photoshop saca la carpeta de fondo al primer nivel.",
+    "It has the background inside, mixed with other pieces. If you tick it, everything in it stays fixed in the background: it won't move and its legal can't be changed. Best: in Photoshop, move the background folder to the top level.",
+  ),
   fondoSeguir: t("Seguir con este fondo", "Continue with this background"),
   soltarNoSirve: t(
     "Ese archivo no se usa aquí: suelta un .psd o tipografías .otf o .ttf (los .zip, .woff y .ttc no se leen).",
@@ -361,8 +365,8 @@ export const FP = {
   editorTextoOriginalDicho: t("{c}: vuelve al texto original.", "{c}: back to the original text."),
   editorTextosGuardados: t("Texto cambiado en las {n} medidas.", "Text changed in all {n} sizes."),
   editorTextosDelPsd: t("Los textos volvieron a los originales en las {n} medidas.", "The texts are back to the original ones in all {n} sizes."),
-  textosCambiadosUno: t("1 texto cambiado en todas las medidas.", "1 text changed in every size."),
-  textosCambiadosN: t("{n} textos cambiados en todas las medidas.", "{n} texts changed in every size."),
+  textosCambiadosUno: t("1 texto cambiado.", "1 text changed."),
+  textosCambiadosN: t("{n} textos cambiados.", "{n} texts changed."),
   textosVolverPsd: t("Volver a los textos originales", "Back to the original texts"),
   // B24: el legal de la Biblioteca de Greenlight, para todas las medidas.
   legal: t("Legal", "Legal"),
@@ -386,11 +390,13 @@ export const FP = {
   legalFallaron: t("No se pudieron leer los legales de la Biblioteca. Recarga la página.", "Couldn't read the Library's legal texts. Reload the page."),
   legalAjeno: t("Este legal es de otro cliente, no de {c}: elige uno de {c} o vuelve al que trae el PSD.", "This legal belongs to another client, not {c}: pick one of {c}'s or go back to the one in the PSD."),
   legalAjenoSinCliente: t("Este legal es de un cliente que no está elegido arriba.", "This legal belongs to a client that isn't picked above."),
-  legalParcial: t("En {n} de {t} artboards del PSD no se puede poner: ahí se queda como está.", "It can't go into {n} of the PSD's {t} artboards: those stay as they are."),
+  legalParcial: t("No se puede poner en {lista}: las medidas que salen de ahí siguen con el legal del PSD. Cámbialo en el PSD de cada medida.", "It can't go into {lista}: the sizes made from there keep the PSD's legal. Change it in each size's PSD."),
+  legalSinPieza: t("su legal no está en una carpeta propia; casi siempre quedó dentro del fondo", "its legal isn't in a folder of its own; it's usually inside the background"),
   legalNoEnPsd: t("Este archivo no trae un texto de legal en FOOTER.", "This file has no legal text in FOOTER."),
   legalSinTipografia: t("falta su tipografía (agrégala con «Agregar tipografías», en el aviso de tipografías de arriba)", "its font is missing (add it with “Add fonts”, in the fonts notice above)"),
   legalGlobales: t("Para todos los clientes", "For every client"),
   legalPuesto: t("Legal «{t}» en todas las medidas.", "Legal “{t}” in every size."),
+  legalPuestoParcial: t("Legal «{t}» sólo en {n} de {de} artboards. En {lista} sigue el del PSD.", "Legal “{t}” in only {n} of {de} artboards. {lista} keep the PSD's legal."),
   legalYaVa: t("El anuncio ya lleva ese legal.", "The ad already has that legal."),
   legalVuelto: t("El legal volvió al que trae el PSD en todas las medidas.", "The legal is back to the one in the PSD in every size."),
   legalDeImagen: t(

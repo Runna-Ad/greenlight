@@ -48,6 +48,8 @@ export type MaestroCaja = {
   nombre: string; w: number; h: number; piezas: PiezaCaja[]; pegados?: readonly PegadoAlFondo[];
   /** Resplandores de una pieza que se quedaron pintados en el fondo (no mueven el acomodo: sólo se avisan). */
   resplandores?: readonly { de: string; caja: Caja }[];
+  /** Se eligió otro legal, pero este maestro no tiene una pieza de legal que se pueda cambiar: aquí sigue el del PSD. */
+  legalFijo?: boolean;
 };
 
 export type Familia = "igual" | "display" | "horizontal" | "ancho" | "banner";
@@ -938,6 +940,7 @@ function comprobar(ma: MaestroCaja, W: number, H: number, familia: Familia, pues
       return d ? [{ c: pp, n: `${nom(q)} › «${d.nombre}»`, l: d.letraMinPx, relleno: seVe(pos, d) ? (d.rellenoPct ?? 0) : 0 }] : [];
     });
   };
+  if (ma.legalFijo) avisos.push({ tipo: "texto", texto: "El legal que elegiste NO está en esta medida: su artboard no trae el legal en una carpeta propia (casi siempre quedó dentro del fondo) y va el del PSD. Cámbialo en el PSD de esta medida o saca el legal del fondo en Photoshop." });
   for (const q of puestas) {
     const p = ma.piezas[q.pieza], nT = p.textos?.length ?? 0, quitados = new Set(q.sinTexto ?? []).size;
     // Sin ninguno de sus textos en esta medida, lo que pase con sus letras nuevas aquí no se ve.

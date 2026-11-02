@@ -32,7 +32,7 @@ function seguir(d: DocPsd, indices: number[]): void {
   if (!sinFondo.length) return entregar(d, indices, {});
   doc = d;
   pendientes = indices;
-  hilo.postMessage({ tipo: "fondo", mesas: sinFondo });
+  hilo.postMessage({ tipo: "fondo", mesas: sinFondo, conFondo: indices.slice(0, MESAS_MAX).filter((i) => tieneFondo(d, i)).length });
 }
 
 function entregar(d: DocPsd, indices: number[], fondos: Record<number, string[]>): void {
