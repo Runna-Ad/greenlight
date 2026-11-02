@@ -77,6 +77,12 @@
 - Pendiente: live-verify de Pedro (Doc compartido → badge "la leyó" + Crear guión). La rama `prisma` (otra sesión) debe mergear main.
 
 
+## 🔺 Greenlight + Prisma juntos · 2026-11-02 · en la PREVIEW (`prisma` = merge de main + tope de Gemini), `main` sigue en ba7f105
+- `prisma` ya trae todo `main` (merge 6e09111). 0088 APLICADA (bitácora de gasto y tope, apagado). Pantalla: Configuración › H.Ü.E HUB › Prisma › Gasto IA.
+- Probado en la preview: registro real en las 4 rutas de Gemini, tope rechaza en las 4, roles y sin sesión. Cuatro llamadas de prueba reales: US$0.14.
+- Sin probar: subir archivos y el flujo completo de imagen plana, por el incidente de Supabase «Storage uploads failing in us-east-1» (2026-11-02).
+- Para producción falta el "ship it": 3 variables (NEXT_PUBLIC_PRISMA_ENABLED, NEXT_PUBLIC_PRISMA_FORMATOS_ENABLED, PRISMA_FORMATOS_IA), GEMINI_API_KEY (Pedro), y push a `main`. Prisma va visible.
+
 ## 🔺 Limpieza y reloj de correos · 2026-11-02 · PROD (datos y config, sin código nuevo)
 - Borrada la prueba de Control de Cambios de CMCOOKINGSP (A1): 0 cambios y 0 respuestas en la base; A1 sigue con el cliente, Margaret Fink de lead.
 - Reloj de correos agrupados INSTALADO: job `greenlight-correos-agrupados` cada minuto, `CRON_SECRET` en Vercel Production, `greenlight_cron_secret` en Vault.
