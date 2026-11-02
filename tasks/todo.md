@@ -1,5 +1,11 @@
 # Greenlight · by Rünna — Build Todo
 
+## Tope de Gemini (0088), límites conocidos, sin arreglar (2026-11-02)
+- [ ] Un tamaño «ia» que el anuncio ya llena no llama a Gemini, pero el tope lo rechaza igual.
+- [ ] Cancelar o agotar el tiempo de una llamada a Gemini no se anota; sin comprobar si Google la cobra.
+- [ ] El tope se revisa antes de la llamada: varias en paralelo pueden cerrar el día un poco arriba.
+- [ ] Tamaño: falla rara al codificar anota una llamada que no hubo; `derivaDe` que truena tras cobrar no se anota.
+
 ## 🟡 2026-10-22 — CTA EN CADA PLANO (rama `feat/plano-cta`, de main, worktree ../greenlight-cta · 0081 APLICADA)
 Pedro eligió la opción 1: una caja CTA en cada plano, debajo de Copy in. Antes "Botón CTA:" caía en Copy in sin etiqueta
 (decisión vieja en guion.ts) y 4 de 5 formas de escribir el CTA quedaban mal (CTA: suelto → locutor falso "(CTA)";

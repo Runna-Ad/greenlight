@@ -82,14 +82,11 @@ export async function POST(req: Request) {
   // Los frenos de la IA se revisan sobre la fila RECLAMADA (su modo es el que se va a cobrar).
   const prov = salida.modo === "ia" ? expandidor() : null;
   if (salida.modo === "ia" && !prov) return await marcarError("El relleno con IA está apagado. Usa desenfoque o color.");
-  // Antes de los frenos: saturado() cuenta cada intento, y una llamada que el tope rechaza no debe gastar el freno.
-  // El 429 detiene el lote en la pantalla: sin esto seguiría intentando cada tamaño que falta.
+  // Antes del freno de la IA, para que un intento rechazado no lo gaste. Sin 429: un 429 detiene el lote, y los tamaños
+  // de desenfoque o color que vienen detrás no cuestan nada; los de IA salen cada uno con este mensaje.
   if (salida.modo === "ia") {
     const sinTope = await revisarTopeGemini();
-    if (sinTope) {
-      await marcarError(sinTope);
-      return json({ ok: false, error: sinTope }, 429);
-    }
+    if (sinTope) return await marcarError(sinTope);
   }
   // Lo que se cobra comparte además el freno de Prisma (40 llamadas / 10 min por persona).
   if (salida.modo === "ia" && saturado(g.soyId)) {

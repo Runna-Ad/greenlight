@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   if ("ok" in g) return json(g, /sesión/i.test(g.error) ? 401 : 403);
   const ia = borrador();
   if (!ia) return json({ ok: false, error: "El relleno con IA está apagado." }, 409);
-  // Antes de los frenos: saturado() cuenta cada intento, y una llamada que el tope rechaza no debe gastar el freno.
+  // Antes de los frenos de la IA, para que un intento rechazado no los gaste.
   const sinTope = await revisarTopeGemini();
   if (sinTope) return json({ ok: false, error: sinTope }, 429);
   if (saturado(g.soyId, Date.now(), "formatos-copia-ia", LLAMADAS_MAX)) return json({ ok: false, error: "Muchos rellenos con IA en poco tiempo. Espera unos minutos." }, 429);

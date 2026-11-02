@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     if (elementos) return json({ ok: true, elementos, w, h, costoUsd: 0, guardada: true });
   }
   if (!ia) return json({ ok: false, error: "La lectura con IA está apagada." }, 409);
-  // Antes de los frenos: saturado() cuenta cada intento, y una llamada que el tope rechaza no debe gastar el freno.
+  // Antes del freno de lecturas, para que un intento rechazado no lo gaste.
   const sinTope = await revisarTopeGemini();
   if (sinTope) return json({ ok: false, error: sinTope }, 429);
   if (saturado(g.soyId, Date.now(), "formatos-leer-ia", LLAMADAS_MAX)) return json({ ok: false, error: "Muchas lecturas con IA en poco tiempo. Espera unos minutos." }, 429);

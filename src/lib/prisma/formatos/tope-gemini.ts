@@ -10,8 +10,8 @@ export function topeAlcanzado(tope: number | null, gastadoHoy: number): boolean 
   return tope !== null && gastadoHoy >= tope;
 }
 
-/** Una llamada sin costo reportado por Google sí se cobró: para el tope cuenta como la imagen más cara, no como 0. */
-export const COSTO_SIN_REPORTE_USD = 0.05;
+/** Una llamada sin costo reportado por Google sí se cobró: para el tope cuenta un poco arriba de la imagen más cara (2K, US$0.0519), no como 0. */
+export const COSTO_SIN_REPORTE_USD = 0.06;
 export const gastoParaTope = (hoyUsd: number, sinCostoHoy: number): number => hoyUsd + sinCostoHoy * COSTO_SIN_REPORTE_USD;
 
 /** Lo que escribe el Master: dólares con 2 decimales como máximo (punto o coma), o null si no sirve. */
