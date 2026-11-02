@@ -3321,7 +3321,7 @@ console.log("\n▶ 0088 — prisma_gemini_gastos + tope");
   ok("un tope de 0 se rechaza", topeCero);
   const resumen = async () => (await q(`select * from produccion.prisma_gemini_resumen()`))[0];
   eq("sin llamadas, hoy suma 0", Number((await resumen()).hoy_usd), 0);
-  await db.query(`insert into produccion.prisma_gemini_gastos (ruta, modelo, usd) values ('copia', 'm', 0.04), ('leer', 'm', 0.01), ('fondo_plano', 'm', null)`);
+  await db.query(`insert into produccion.prisma_gemini_gastos (ruta, modelo, usd) values ('tamano', 'm', 0.04), ('leer', 'm', 0.01), ('fondo_plano', 'm', null)`);
   // Medianoche en México, no en UTC: esto pasó ayer allá.
   await db.query(`insert into produccion.prisma_gemini_gastos (ruta, modelo, usd, created_at)
                   values ('copia', 'm', 7, (date_trunc('day', now() at time zone 'America/Mexico_City') - interval '1 minute') at time zone 'America/Mexico_City')`);
@@ -3334,7 +3334,9 @@ console.log("\n▶ 0088 — prisma_gemini_gastos + tope");
   ok("una ruta inventada se rechaza", rutaMala);
   await asRole(CREA);
   eq("un creativo con sesión NO ve el gasto", Number(await scalar(`select count(*) from produccion.prisma_gemini_gastos`)), 0);
+  await db.query(`update produccion.hue_settings set gemini_tope_diario_usd = 1 where id = 1`).catch(() => {});
   await resetRole();
+  eq("un creativo con sesión NO puede poner el tope", await scalar(`select gemini_tope_diario_usd from produccion.hue_settings where id = 1`), null);
   ok("service_role sí ejecuta el resumen", await scalar(`select has_function_privilege('service_role', 'produccion.prisma_gemini_resumen()', 'execute')`));
   await db.query(`delete from produccion.prisma_gemini_gastos`);
 }

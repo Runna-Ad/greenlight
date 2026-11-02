@@ -10,9 +10,13 @@ export function topeAlcanzado(tope: number | null, gastadoHoy: number): boolean 
   return tope !== null && gastadoHoy >= tope;
 }
 
-/** Lo que escribe el Master: dólares con 2 decimales como máximo, o null si no sirve. */
+/** Una llamada sin costo reportado por Google sí se cobró: para el tope cuenta como la imagen más cara, no como 0. */
+export const COSTO_SIN_REPORTE_USD = 0.05;
+export const gastoParaTope = (hoyUsd: number, sinCostoHoy: number): number => hoyUsd + sinCostoHoy * COSTO_SIN_REPORTE_USD;
+
+/** Lo que escribe el Master: dólares con 2 decimales como máximo (punto o coma), o null si no sirve. */
 export function leerTope(texto: string): number | null {
-  const t = texto.trim().replace(/^\$/, "");
+  const t = texto.trim().replace(/^\$/, "").replace(",", ".");
   if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
   const n = Number(t);
   return n >= TOPE_MIN_USD && n <= TOPE_MAX_USD ? n : null;
@@ -20,5 +24,5 @@ export function leerTope(texto: string): number | null {
 
 export const usd = (n: number): string => `US$${n.toFixed(2)}`;
 
-export const mensajeTope = (tope: number): string =>
-  `Se llegó al tope de gasto de IA de hoy (${usd(tope)}). Se puede mover en Admin › H.Ü.E Hub › Prisma › Gasto IA.`;
+/** Lo que ve quien la usa: cualquier rol de Prisma. El monto y dónde se mueve son del Master. */
+export const MENSAJE_TOPE = "Se llegó al tope de gasto de IA de hoy. Avísale a Pedro.";

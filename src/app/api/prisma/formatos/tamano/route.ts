@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { prismaFormatosActivo } from "@/lib/prisma/flags";
 import { ErrorConCosto, componer } from "@/lib/prisma/formatos/componer";
 import { ErrorIA, expandidor } from "@/lib/prisma/formatos/proveedor";
+import { anotarGastoGemini, revisarTopeGemini } from "@/lib/prisma/formatos/gasto-gemini";
 import type { PrismaFormatosSalidaRow } from "@/lib/database.types";
 import { gate, saturado, FRENO, UUID } from "@/app/(app)/prisma/comun";
 import { BUCKET_FORMATOS, PROCESANDO_MUERTO_MS, bajarFuente, firmarFormatos, loteConPermiso, mismoOrigen, salidaVista } from "@/app/(app)/prisma/formatos-comun";
@@ -81,6 +82,15 @@ export async function POST(req: Request) {
   // Los frenos de la IA se revisan sobre la fila RECLAMADA (su modo es el que se va a cobrar).
   const prov = salida.modo === "ia" ? expandidor() : null;
   if (salida.modo === "ia" && !prov) return await marcarError("El relleno con IA está apagado. Usa desenfoque o color.");
+  // Antes de los frenos: saturado() cuenta cada intento, y una llamada que el tope rechaza no debe gastar el freno.
+  // El 429 detiene el lote en la pantalla: sin esto seguiría intentando cada tamaño que falta.
+  if (salida.modo === "ia") {
+    const sinTope = await revisarTopeGemini();
+    if (sinTope) {
+      await marcarError(sinTope);
+      return json({ ok: false, error: sinTope }, 429);
+    }
+  }
   // Lo que se cobra comparte además el freno de Prisma (40 llamadas / 10 min por persona).
   if (salida.modo === "ia" && saturado(g.soyId)) {
     await marcarError(FRENO.error);
@@ -93,6 +103,7 @@ export async function POST(req: Request) {
     if ("ok" in r) return await marcarError(r.error);
     const c = await componer(r.fuente, salida.ancho, salida.alto, salida.modo, { color: salida.color ?? undefined, expandir: prov?.expandir });
     gastado = c.costoUsd;
+    if (prov && c.modelo === prov.modelo) await anotarGastoGemini({ ruta: "tamano", modelo: c.modelo, usd: c.costoUsd, member_id: g.soyId });
     if (salida.modo === "ia" && c.costoUsd === null) console.warn(`[formatos] ${salida.id}: la IA no reportó uso; costo real sin sumar`);
     // Nunca se entrega un tamaño cuyo original no quedó idéntico (no debería pasar: es la garantía del pegado).
     if (!c.pixelLockOk) {
@@ -144,6 +155,7 @@ export async function POST(req: Request) {
   } catch (e) {
     const costo = e instanceof ErrorConCosto ? e.costoUsd : gastado;
     const causa = e instanceof ErrorConCosto ? e.causa : e;
+    if (prov && e instanceof ErrorConCosto) await anotarGastoGemini({ ruta: "tamano", modelo: prov.modelo, usd: e.costoUsd, member_id: g.soyId });
     if (causa instanceof ErrorIA) {
       console.error(`[formatos] IA (${salida.preset}):`, causa.message);
       return await marcarError(causa.mensaje, costo);

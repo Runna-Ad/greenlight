@@ -1,13 +1,13 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { faltaMigracion } from "@/lib/prisma/migracion";
-import { mensajeTope, topeAlcanzado } from "./tope-gemini";
+import { MENSAJE_TOPE, gastoParaTope, topeAlcanzado, usd } from "./tope-gemini";
 
 /**
  * HÜE Prisma › Formatos — lo que cuesta cada llamada a Gemini y el tope diario (0088). TODA llamada a Gemini pasa por
- * aquí (copia, fondo plano, lectura): un tope que una ruta se salta no es un tope.
+ * aquí (tamaño, copia, fondo plano, lectura): un tope que una ruta se salta no es un tope.
  */
-export type RutaGemini = "copia" | "fondo_plano" | "leer";
+export type RutaGemini = "tamano" | "copia" | "fondo_plano" | "leer";
 export type ResumenGemini = { hoyUsd: number; mesUsd: number; llamadasHoy: number; sinCostoHoy: number };
 
 export async function resumenGemini(): Promise<ResumenGemini | { error: { code?: string; message?: string } }> {
@@ -34,7 +34,9 @@ export async function revisarTopeGemini(): Promise<string | null> {
     console.error("[formatos] gasto de Gemini:", r.error.message);
     return NO_SE_PUDO;
   }
-  return topeAlcanzado(tope, r.hoyUsd) ? mensajeTope(tope) : null;
+  if (!topeAlcanzado(tope, gastoParaTope(r.hoyUsd, r.sinCostoHoy))) return null;
+  console.warn(`[formatos] tope de Gemini alcanzado: ${usd(r.hoyUsd)} de ${usd(tope)}`);
+  return MENSAJE_TOPE;
 }
 
 /** Anota una llamada ya cobrada. Un error se registra y no se propaga: la persona ya pagó su resultado. */

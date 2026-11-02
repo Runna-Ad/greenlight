@@ -11,7 +11,7 @@ alter table produccion.hue_settings
 
 create table produccion.prisma_gemini_gastos (
   id         bigint generated always as identity primary key,
-  ruta       text not null check (ruta in ('copia', 'fondo_plano', 'leer')),
+  ruta       text not null check (ruta in ('tamano', 'copia', 'fondo_plano', 'leer')),
   modelo     text not null check (char_length(modelo) between 1 and 80),
   usd        numeric(10,4) check (usd is null or usd >= 0),
   member_id  uuid references produccion.track_members(id) on delete set null,

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { guardarTopeGemini, hubGastoGemini } from "@/app/(app)/admin/gasto-actions";
-import { leerTope, usd } from "@/lib/prisma/formatos/tope-gemini";
+import { COSTO_SIN_REPORTE_USD, leerTope, usd } from "@/lib/prisma/formatos/tope-gemini";
 
 type Datos = { hoyUsd: number; mesUsd: number; llamadasHoy: number; sinCostoHoy: number };
 
@@ -30,6 +30,8 @@ export function PrismaGasto() {
       setGuardado(tope);
       setActivo(tope !== null);
       setMonto(tope === null ? "" : String(tope));
+    }).catch(() => {
+      if (vivo) setError("No se pudo cargar. Recarga la página.");
     });
     return () => {
       vivo = false;
@@ -66,7 +68,7 @@ export function PrismaGasto() {
         <Cifra titulo="Este mes" valor={usd(datos.mesUsd)} />
         <Cifra titulo="Llamadas hoy" valor={String(datos.llamadasHoy)} />
       </div>
-      {datos.sinCostoHoy > 0 && <p className="text-xs text-muted-foreground">{datos.sinCostoHoy} de hoy sin costo reportado por Google: no suman arriba.</p>}
+      {datos.sinCostoHoy > 0 && <p className="text-xs text-muted-foreground">{datos.sinCostoHoy} de hoy sin costo reportado por Google: no suman arriba, pero para el tope cada una cuenta como {usd(COSTO_SIN_REPORTE_USD)}.</p>}
       <div className="space-y-3 rounded-lg border border-border p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -88,7 +90,7 @@ export function PrismaGasto() {
             <Button type="submit" size="sm" disabled={ocupada || leido === null || leido === guardado}>Guardar</Button>
           </form>
         )}
-        <p className="text-xs text-muted-foreground">El día corre en hora de México. Llamadas que ya iban en camino pueden pasarlo por unos centavos.</p>
+        <p className="text-xs text-muted-foreground">El día corre en hora de México. Lo que ya iba en camino al llegar al tope termina y se cobra, así que el día puede cerrar un poco arriba.</p>
       </div>
     </div>
   );

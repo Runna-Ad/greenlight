@@ -18,7 +18,7 @@ import { pngDelForm as png } from "@/lib/prisma/formatos/png-form";
  * Mismo gate que HÜE Prisma (comun.ts) y apagado salvo PRISMA_FORMATOS_IA=gemini + GEMINI_API_KEY (proveedor.ts).
  * NO mira NEXT_PUBLIC_PRISMA_FORMATOS_ENABLED a propósito: la puerta PSD tampoco (psd/page.tsx). Para apagar el
  * gasto, se quita PRISMA_FORMATOS_IA. Freno: el suyo (10 / 10 min) y además el de todo lo que se cobra en Prisma.
- * PENDIENTE antes de producción: un registro en la base por llamada (persona, costo) con tope diario.
+ * Cada llamada se anota y respeta el tope diario del Hub (gasto-gemini.ts, 0088).
  */
 export const dynamic = "force-dynamic";
 /** La IA tiene 150 s de tope (proveedor.ts). */
@@ -38,6 +38,9 @@ export async function POST(req: Request) {
   if ("ok" in g) return json(g, /sesión/i.test(g.error) ? 401 : 403);
   const ia = borrador();
   if (!ia) return json({ ok: false, error: "El relleno con IA está apagado." }, 409);
+  // Antes de los frenos: saturado() cuenta cada intento, y una llamada que el tope rechaza no debe gastar el freno.
+  const sinTope = await revisarTopeGemini();
+  if (sinTope) return json({ ok: false, error: sinTope }, 429);
   if (saturado(g.soyId, Date.now(), "formatos-copia-ia", LLAMADAS_MAX)) return json({ ok: false, error: "Muchos rellenos con IA en poco tiempo. Espera unos minutos." }, 429);
   // Y el freno de todo lo que se cobra en HÜE Prisma (comun.ts): este gasto cuenta dentro, no aparte.
   if (saturado(g.soyId)) return json(FRENO, 429);
@@ -58,9 +61,6 @@ export async function POST(req: Request) {
   if (typeof pieza === "string") return json({ ok: false, error: pieza }, 400);
   const [rw, rh] = aspect.split(":").map(Number);
   if (Math.abs(fondo.w / fondo.h / (rw / rh) - 1) > PROPORCION_TOLERANCIA) return json({ ok: false, error: "El recorte no tiene la proporción pedida." }, 400);
-
-  const sinTope = await revisarTopeGemini();
-  if (sinTope) return json({ ok: false, error: sinTope }, 429);
 
   try {
     const r = await ia.borrar({ fondo: fondo.bytes, pieza: pieza.bytes, aspect, tamano: "1K" });
