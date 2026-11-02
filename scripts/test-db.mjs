@@ -11,6 +11,7 @@ import { readTimeS } from "../src/lib/plantilla.ts";
 import { reglasQueAplican } from "../src/lib/reglas.ts";
 import { actionsFor } from "../src/lib/task-actions.ts";
 import { greenlitDeBundle } from "../src/lib/bundle.ts";
+import { CATALOGO_BASE, catalogoDesdeFilas } from "../src/lib/prisma/catalogo.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migDir = join(__dirname, "..", "supabase", "migrations");
@@ -2928,6 +2929,387 @@ console.log("\n▶ 0086 — auditoría de cambios y conversaciones");
   await db.query(`delete from produccion.comments where idea_id=$1 and kind='client_change'`, [I]);
   await db.query(`delete from produccion.profiles where id=$1`, [pCli]);
   await db.exec(`select set_config('request.jwt.claims','',false)`);
+}
+
+// ── 0065: HÜE Prisma — la explicación se cachea POR IDIOMA (una columna por idioma) ──
+console.log("\n▶ 0065 — prisma_prompts: una explicación por idioma");
+{
+  const cols = (await q(`select column_name from information_schema.columns where table_schema = 'produccion' and table_name = 'prisma_prompts'`)).map((r) => r.column_name);
+  ok("explicacion_es existe", cols.includes("explicacion_es"));
+  ok("explicacion_en existe", cols.includes("explicacion_en"));
+  ok("la columna vieja `explicacion` ya no existe", !cols.includes("explicacion"));
+  // El backfill de la 0065 usa exactamente esta expresión: el prefijo "[es]⏎" mide 5.
+  eq("backfill: '[es]⏎…' → texto sin prefijo", await scalar(`select substr(E'[es]\\nhola', 6) where E'[es]\\nhola' like E'[es]\\n%'`), "hola");
+  eq("backfill: '[en]⏎…' no cae en la casilla de español", Number(await scalar(`select (E'[en]\\nhi' like E'[es]\\n%')::int`)), 0);
+  eq("backfill: sin prefijo (era español) → explicacion_es entera", await scalar(`select 'hola' where 'hola' is not null and 'hola' not like E'[es]\\n%' and 'hola' not like E'[en]\\n%'`), "hola");
+}
+
+// ── 0066: HÜE Prisma — eventos de uso (con lo que aprende H.Ü.E) ──
+console.log("\n▶ 0066 — prisma_eventos");
+{
+  eq("la tabla existe con RLS encendido", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_eventos' and c.relrowsecurity`)), 1);
+  eq("policy master-only presente", Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = 'prisma_eventos'`)), 1);
+  ok("service_role puede insertar", (await q(`select has_table_privilege('service_role', 'produccion.prisma_eventos', 'insert') as ok`))[0].ok);
+  // Como el barrido I6 de rutinas: un ACL con entrada "=…" sería un grant a PUBLIC.
+  eq("PUBLIC no tiene ningún privilegio", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_eventos' and c.relacl is not null and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+  eq("prisma_specs.origen_spec_id existe (la versión sabe de qué spec viene)", Number(await scalar(`select count(*) from information_schema.columns where table_schema = 'produccion' and table_name = 'prisma_specs' and column_name = 'origen_spec_id'`)), 1);
+  eq("índice único (prompt, quién, tipo): el mismo click no suma", Number(await scalar(`select count(*) from pg_indexes where schemaname = 'produccion' and tablename = 'prisma_eventos' and indexname = 'prisma_eventos_unico_idx' and indexdef like 'CREATE UNIQUE INDEX%'`)), 1);
+  // Con un spec real, los checks se prueban de verdad (no por el FK).
+  const specEv = await scalar(`insert into produccion.prisma_specs (job, tool, spec) values ('foto_producto', 'nanobanana', '{}'::jsonb) returning id`);
+  const tipoMalo = await db.query(`insert into produccion.prisma_eventos (spec_id, job, tool, tipo) values ($1, 'x', 'y', 'inventado')`, [specEv]).then(() => false).catch(() => true);
+  ok("un tipo de evento inventado se rechaza (check)", tipoMalo);
+  const detalleLargo = await db.query(`insert into produccion.prisma_eventos (spec_id, job, tool, tipo, detalle) values ($1, 'x', 'y', 'refinado', $2)`, [specEv, "z".repeat(301)]).then(() => false).catch(() => true);
+  ok("un detalle de más de 300 letras se rechaza (check)", detalleLargo);
+  await db.query(`insert into produccion.prisma_eventos (spec_id, job, tool, tipo, detalle) values ($1, 'x', 'y', 'refinado', 'más luz')`, [specEv]);
+  eq("un evento bien formado entra", Number(await scalar(`select count(*) from produccion.prisma_eventos where spec_id = $1`, [specEv])), 1);
+  await db.query(`delete from produccion.prisma_specs where id = $1`, [specEv]);
+  eq("borrar el spec se lleva sus eventos (cascade)", Number(await scalar(`select count(*) from produccion.prisma_eventos where spec_id = $1`, [specEv])), 0);
+}
+
+// ── 0067: HÜE Prisma v1 — conocimiento vivo (prisma_reglas), entrevista, avisos, eventos ──
+console.log("\n▶ 0067 — prisma_reglas + columnas + eventos");
+{
+  eq("prisma_reglas existe con RLS", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_reglas' and c.relrowsecurity`)), 1);
+  eq("policy master-only", Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = 'prisma_reglas'`)), 1);
+  ok("service_role puede escribir", (await q(`select has_table_privilege('service_role', 'produccion.prisma_reglas', 'insert') as ok`))[0].ok);
+  eq("PUBLIC sin privilegios", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_reglas' and c.relacl is not null and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+  const seed = Number(await scalar(`select count(*) from produccion.prisma_reglas`));
+  ok("el seed metió las notas y reglas (≥ 25)", seed >= 25, String(seed));
+  eq("7 notas sembradas, todas con fuente y fecha", Number(await scalar(`select count(*) from produccion.prisma_reglas where clase = 'nota' and fuente_url is not null and fuente_fecha is not null`)), 7);
+  eq("ninguna regla sin patrón ni umbral", Number(await scalar(`select count(*) from produccion.prisma_reglas where clase = 'regla' and patron is null and umbral is null`)), 0);
+  const dup = await db.query(`insert into produccion.prisma_reglas (codigo, clase, nota_en) values ('nota_veo', 'nota', 'x')`).then(() => false).catch(() => true);
+  ok("el código es único", dup);
+  const codigoMalo = await db.query(`insert into produccion.prisma_reglas (codigo, clase, nota_en) values ('Con Mayúsculas', 'nota', 'x')`).then(() => false).catch(() => true);
+  ok("un código con mayúsculas/espacios se rechaza (check)", codigoMalo);
+  const cols = (await q(`select table_name, column_name from information_schema.columns where table_schema = 'produccion' and (table_name, column_name) in (('prisma_specs','respuestas'),('prisma_prompts','avisos'),('prisma_prompts','modelo_sug'))`)).length;
+  eq("respuestas / avisos / modelo_sug existen", cols, 3);
+  // Eventos: el CHECK nuevo y el índice único parcial
+  const specEv = await scalar(`insert into produccion.prisma_specs (job, tool, spec) values ('foto_producto', 'nanobanana', '{}'::jsonb) returning id`);
+  const nuevoTipo = await db.query(`insert into produccion.prisma_eventos (spec_id, job, tool, tipo, detalle) values ($1, 'x', 'y', 'respondido', 'angulo=frente')`, [specEv]).then(() => true).catch(() => false);
+  ok("el CHECK acepta 'respondido'", nuevoTipo);
+  const inventado = await db.query(`insert into produccion.prisma_eventos (spec_id, job, tool, tipo) values ($1, 'x', 'y', 'inventado')`, [specEv]).then(() => false).catch(() => true);
+  ok("el CHECK sigue rechazando un tipo inventado", inventado);
+  // Por qué anotarEvento hace INSERT llano y tolera 23505 (y NO upsert): Postgres no usa un
+  // índice único PARCIAL como árbitro de ON CONFLICT si la sentencia no repite su WHERE, y
+  // PostgREST no puede mandarlo. Esta prueba fija ese hecho para que nadie vuelva al upsert.
+  const onConflictSinWhere = await db.query(`insert into produccion.prisma_eventos (spec_id, job, tool, tipo) values ($1, 'x', 'y', 'variante') on conflict (prompt_id, user_id, tipo) do nothing`, [specEv]).then(() => false).catch((e) => /no unique or exclusion constraint/i.test(String(e.message)));
+  ok("ON CONFLICT sin el WHERE del índice parcial FALLA (por eso el insert llano + 23505)", onConflictSinWhere);
+  // Invariantes de clase también en la BD
+  const notaSinFuente = await db.query(`insert into produccion.prisma_reglas (codigo, clase, nota_en) values ('nota_sin_fuente', 'nota', 'x')`).then(() => false).catch(() => true);
+  ok("una nota sin fuente/fecha la rechaza la BD", notaSinFuente);
+  const reglaSinPatron = await db.query(`insert into produccion.prisma_reglas (codigo, clase, campo, que_es, que_en) values ('regla_vacia', 'regla', 'idea', 'a', 'b')`).then(() => false).catch(() => true);
+  ok("una regla sin patrón ni umbral la rechaza la BD", reglaSinPatron);
+  const campoMalo = await db.query(`insert into produccion.prisma_reglas (codigo, clase, campo, patron, que_es, que_en) values ('campo_malo', 'regla', 'color', 'x', 'a', 'b')`).then(() => false).catch(() => true);
+  ok("un campo fuera de la lista lo rechaza la BD", campoMalo);
+  const fuenteMala = await db.query(`insert into produccion.prisma_reglas (codigo, clase, nota_en, fuente_url, fuente_fecha) values ('fuente_mala', 'nota', 'x', 'javascript:alert(1)', '2026-01-01')`).then(() => false).catch(() => true);
+  ok("una fuente que no es http(s) la rechaza la BD", fuenteMala);
+  eq("las fuentes de comunidad quedaron marcadas", Number(await scalar(`select count(*) from produccion.prisma_reglas where fuente_tipo = 'comunidad'`)), 5);
+  // 0068: el patrón de texto_no_latino ya va con escapes (sin caracteres de formato crudos)
+  const patronNoLatino = await scalar(`select patron from produccion.prisma_reglas where codigo = 'texto_no_latino'`);
+  ok("0068: texto_no_latino con escapes \\uXXXX y sin caracteres de formato", /\\u0600/.test(patronNoLatino) && !/[\p{Cc}\p{Cf}]/u.test(patronNoLatino), patronNoLatino);
+  eq("0069: prompt_largo con tope 160", Number(await scalar(`select umbral from produccion.prisma_reglas where codigo = 'prompt_largo'`)), 160);
+  const promptEv = await scalar(`insert into produccion.prisma_prompts (spec_id, tool, prompt_version, salida, formato) values ($1, 'nanobanana', 'test', 'p', 'texto') returning id`, [specEv]);
+  const miembro = await scalar(`select id from produccion.track_members limit 1`);
+  if (miembro) {
+    await db.query(`insert into produccion.prisma_eventos (spec_id, prompt_id, user_id, job, tool, tipo, detalle) values ($1, $2, $3, 'x', 'y', 'aviso_aplicado', 'texto_largo')`, [specEv, promptEv, miembro]);
+    const segundo = await db.query(`insert into produccion.prisma_eventos (spec_id, prompt_id, user_id, job, tool, tipo, detalle) values ($1, $2, $3, 'x', 'y', 'aviso_aplicado', 'hex_en_idea')`, [specEv, promptEv, miembro]).then(() => true).catch(() => false);
+    ok("dos 'aviso_aplicado' del mismo prompt y persona SÍ entran (índice parcial)", segundo);
+    await db.query(`insert into produccion.prisma_eventos (spec_id, prompt_id, user_id, job, tool, tipo) values ($1, $2, $3, 'x', 'y', 'copiado')`, [specEv, promptEv, miembro]);
+    const copiado2 = await db.query(`insert into produccion.prisma_eventos (spec_id, prompt_id, user_id, job, tool, tipo) values ($1, $2, $3, 'x', 'y', 'copiado')`, [specEv, promptEv, miembro]).then(() => false).catch(() => true);
+    ok("un segundo 'copiado' del mismo prompt y persona NO entra", copiado2);
+  } else {
+    ok("(sin track_members en la fixture: se omite la prueba del índice parcial)", true);
+  }
+  await db.query(`delete from produccion.prisma_specs where id = $1`, [specEv]);
+}
+
+
+// ── 0070: HÜE Prisma v1 · F4 — prisma_resultados + specs de corrección ──
+console.log("\n▶ 0070 — prisma_resultados + prisma_specs.correccion_de");
+{
+  eq("prisma_resultados existe con RLS", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_resultados' and c.relrowsecurity`)), 1);
+  eq("policy master-only", Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = 'prisma_resultados'`)), 1);
+  ok("service_role puede escribir", (await q(`select has_table_privilege('service_role', 'produccion.prisma_resultados', 'insert') as ok`))[0].ok);
+  eq("PUBLIC sin privilegios", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_resultados' and c.relacl is not null and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+  eq("prisma_specs.correccion_de existe", Number(await scalar(`select count(*) from information_schema.columns where table_schema = 'produccion' and table_name = 'prisma_specs' and column_name = 'correccion_de'`)), 1);
+  const specR = await scalar(`insert into produccion.prisma_specs (job, tool, spec) values ('foto_producto', 'nanobanana', '{}'::jsonb) returning id`);
+  const promptR = await scalar(`insert into produccion.prisma_prompts (spec_id, tool, prompt_version, salida, formato) values ($1, 'nanobanana', 'test', 'p', 'texto') returning id`, [specR]);
+  const ruta = () => `prisma/out/${crypto.randomUUID()}.png`;
+  const resId = await scalar(`insert into produccion.prisma_resultados (spec_id, prompt_id, tool, modelo, storage_path, mime, veredicto, score) values ($1, $2, 'nanobanana', 'gemini-3-pro-image', $3, 'image/png', '{"cumple":[]}'::jsonb, 50) returning id`, [specR, promptR, ruta()]);
+  ok("un resultado bien formado entra", !!resId);
+  eq("aceptado nace en false", await scalar(`select aceptado from produccion.prisma_resultados where id = $1`, [resId]), false);
+  const rutaMala = await db.query(`insert into produccion.prisma_resultados (spec_id, tool, storage_path, mime) values ($1, 'nanobanana', 'prisma/x.png', 'image/png')`, [specR]).then(() => false).catch(() => true);
+  ok("una ruta fuera de prisma/out/<uuid>.<ext> la rechaza la BD", rutaMala);
+  const mimeMalo = await db.query(`insert into produccion.prisma_resultados (spec_id, tool, storage_path, mime) values ($1, 'nanobanana', $2, 'image/avif')`, [specR, ruta()]).then(() => false).catch(() => true);
+  ok("un mime que la visión no lee lo rechaza la BD", mimeMalo);
+  const scoreMalo = await db.query(`insert into produccion.prisma_resultados (spec_id, tool, storage_path, mime, score) values ($1, 'nanobanana', $2, 'image/png', 101)`, [specR, ruta()]).then(() => false).catch(() => true);
+  ok("un score fuera de 0–100 lo rechaza la BD", scoreMalo);
+  const modeloLargo = await db.query(`insert into produccion.prisma_resultados (spec_id, tool, storage_path, mime, modelo) values ($1, 'nanobanana', $2, 'image/png', $3)`, [specR, ruta(), "m".repeat(61)]).then(() => false).catch(() => true);
+  ok("un modelo de más de 60 letras lo rechaza la BD", modeloLargo);
+  // El spec de corrección enlaza al resultado; borrar el resultado deja el enlace en null (el prompt sigue).
+  const specC = await scalar(`insert into produccion.prisma_specs (job, tool, spec, origen_spec_id, correccion_de) values ('correccion', 'nanobanana', '{}'::jsonb, $1, $2) returning id`, [specR, resId]);
+  eq("el spec de corrección apunta al resultado", await scalar(`select correccion_de from produccion.prisma_specs where id = $1`, [specC]), resId);
+  // Borrar el PROMPT deja el resultado sin prompt (set null), no lo borra.
+  await db.query(`delete from produccion.prisma_prompts where id = $1`, [promptR]);
+  eq("borrar el prompt deja el resultado (prompt_id a null)", await scalar(`select prompt_id from produccion.prisma_resultados where id = $1`, [resId]), null);
+  await db.query(`delete from produccion.prisma_resultados where id = $1`, [resId]);
+  eq("borrar el resultado deja el spec de corrección sin enlace (set null)", await scalar(`select correccion_de from produccion.prisma_specs where id = $1`, [specC]), null);
+  const resId2 = await scalar(`insert into produccion.prisma_resultados (spec_id, tool, storage_path, mime) values ($1, 'nanobanana', $2, 'image/png') returning id`, [specR, ruta()]);
+  await db.query(`delete from produccion.prisma_specs where id = $1`, [specR]);
+  eq("borrar el spec se lleva sus resultados (cascade)", Number(await scalar(`select count(*) from produccion.prisma_resultados where id = $1`, [resId2])), 0);
+  eq("…y el spec de corrección sobrevive sin origen (set null)", await scalar(`select origen_spec_id from produccion.prisma_specs where id = $1`, [specC]), null);
+  await db.query(`delete from produccion.prisma_specs where id = $1`, [specC]);
+}
+
+// ── 0071: HÜE Prisma v1 · F6a — prisma_herramientas (los datos de cada herramienta) ──
+console.log("\n▶ 0071 — prisma_herramientas");
+{
+  eq("prisma_herramientas existe con RLS", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_herramientas' and c.relrowsecurity`)), 1);
+  eq("policy master-only", Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = 'prisma_herramientas'`)), 1);
+  ok("service_role puede escribir", (await q(`select has_table_privilege('service_role', 'produccion.prisma_herramientas', 'update') as ok`))[0].ok);
+  eq("PUBLIC sin privilegios", Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = 'prisma_herramientas' and c.relacl is not null and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+  const filas = await q(`select tool, limites, fortalezas, modelos, fuente_url, fuente_fecha from produccion.prisma_herramientas order by tool`);
+  eq("una fila por herramienta (5)", filas.length, 5);
+  // Sin esto el test de abajo sería vacío: si el jsonb llegara como texto, todo caería a la base.
+  eq("el jsonb llega como datos (Veo: 8, 6, 4 en ese orden)", JSON.stringify(filas.find((f) => f.tool === "veo")?.limites?.duraciones), "[8,6,4]");
+  eq("el seed ES el catálogo de las constantes (leído con catalogoDesdeFilas)", JSON.stringify(catalogoDesdeFilas(filas)), JSON.stringify(CATALOGO_BASE));
+  const malas = [
+    ["un tool con mayúsculas/espacios", `insert into produccion.prisma_herramientas (tool) values ('Mala Tool')`],
+    ["limites que no es objeto", `insert into produccion.prisma_herramientas (tool, limites) values ('x_tool', '[]'::jsonb)`],
+    ["modelos que no es lista", `insert into produccion.prisma_herramientas (tool, modelos) values ('x_tool', '{}'::jsonb)`],
+    ["más de 4 modelos", `insert into produccion.prisma_herramientas (tool, modelos) values ('x_tool', '[1,2,3,4,5]'::jsonb)`],
+    ["una fuente que no es http(s)", `insert into produccion.prisma_herramientas (tool, fuente_url) values ('x_tool', 'javascript:alert(1)')`],
+    ["una herramienta repetida", `insert into produccion.prisma_herramientas (tool) values ('veo')`],
+  ];
+  for (const [que, sql] of malas) ok(`la BD rechaza ${que}`, await db.query(sql).then(() => false).catch(() => true));
+}
+
+// ── 0072: los modelos EN HIGGSFIELD (sólo datos; no pisa lo editado en el Hub) ──
+console.log("\n▶ 0072 — modelos en Higgsfield");
+{
+  const kling = (await q(`select modelos from produccion.prisma_herramientas where tool = 'kling'`))[0].modelos;
+  ok("Kling trae Motion Control y cada modelo su página en higgsfield.ai", kling.some((m) => m.id === "kling-3.0-motion-control") && kling.every((m) => typeof m.url === "string" && m.url.startsWith("https://higgsfield.ai/")), JSON.stringify(kling));
+  // Una fila editada a mano (updated_by) no se toca si la 0072 se vuelve a correr.
+  const sql0072 = readFileSync(join(migDir, readdirSync(migDir).find((f) => f.includes("_0072_"))), "utf8");
+  const editado = JSON.stringify([{ id: "a-mano", etiqueta: "A mano", rol: "fino", como_llegar_es: "x", como_llegar_en: "x" }]);
+  await db.query(`update produccion.prisma_herramientas set modelos = $1::jsonb, updated_by = $2 where tool = 'higgsfield'`, [editado, galie]);
+  await db.query(`update produccion.prisma_herramientas set modelos = '[]'::jsonb where tool = 'veo'`);
+  await db.exec(sql0072);
+  const quedo = (await q(`select modelos, updated_by from produccion.prisma_herramientas where tool = 'higgsfield'`))[0];
+  ok("lo editado en el Hub (updated_by) se queda como está", !!galie && quedo.updated_by === galie && quedo.modelos.length === 1 && quedo.modelos[0].id === "a-mano", JSON.stringify(quedo));
+  ok("lo que nadie editó sí se pone al día", (await q(`select modelos from produccion.prisma_herramientas where tool = 'veo'`))[0].modelos.length === 2);
+}
+
+// ── 0075: DoP son 3 modelos y Kling Turbo tiene su página (sólo datos) ──
+console.log("\n▶ 0075 — DoP y Kling Turbo");
+{
+  const sql = (n) => readFileSync(join(migDir, readdirSync(migDir).find((f) => f.includes(`_${n}_`))), "utf8");
+  // Partimos de lo que dejó 0072 (el bloque de arriba la volvió a correr) con DoP sin editar.
+  await db.query(`update produccion.prisma_herramientas set updated_by = null where tool = 'higgsfield'`);
+  await db.exec(sql("0072"));
+  await db.exec(sql("0075"));
+  const { CATALOGO_BASE: cb75, catalogoDesdeFilas: cdf75 } = await import("../src/lib/prisma/catalogo.ts");
+  const filas75 = await q(`select tool, limites, fortalezas, modelos, fuente_url, fuente_fecha from produccion.prisma_herramientas where tool in ('higgsfield', 'kling')`);
+  const leido = cdf75(filas75);
+  eq("tras 0075, DoP y Kling leídos de la tabla = las constantes", JSON.stringify([leido.higgsfield.modelos, leido.kling.modelos]), JSON.stringify([cb75.higgsfield.modelos, cb75.kling.modelos]));
+  ok("los modelos se guardan sin costo (el costo sale del código)", filas75.every((f) => f.modelos.every((m) => !("costo" in m))));
+  await db.exec(sql("0075"));
+  eq("correrla dos veces da lo mismo", JSON.stringify(cdf75(await q(`select tool, limites, fortalezas, modelos, fuente_url, fuente_fecha from produccion.prisma_herramientas where tool in ('higgsfield', 'kling')`)).kling.modelos), JSON.stringify(cb75.kling.modelos));
+  const aMano = JSON.stringify([{ id: "a-mano", etiqueta: "A mano", rol: "fino", como_llegar_es: "x", como_llegar_en: "x" }]);
+  await db.query(`update produccion.prisma_herramientas set modelos = $1::jsonb, updated_by = $2 where tool = 'higgsfield'`, [aMano, galie]);
+  await db.exec(sql("0075"));
+  eq("lo editado en el Hub no se pisa", (await q(`select modelos from produccion.prisma_herramientas where tool = 'higgsfield'`))[0].modelos[0].id, "a-mano");
+}
+
+// ── 0074: el vigía (fuentes + propuestas) ──
+console.log("\n▶ 0074 — vigía");
+{
+  for (const t of ["prisma_fuentes", "prisma_propuestas"]) {
+    eq(`${t} con RLS y una policy master`, Number(await scalar(`select count(*) from pg_policies p join pg_class c on c.relname = p.tablename join pg_namespace n on n.oid = c.relnamespace and n.nspname = p.schemaname where p.schemaname = 'produccion' and p.tablename = '${t}' and c.relrowsecurity`)), 1);
+    ok(`${t}: service_role escribe`, (await q(`select has_table_privilege('service_role', 'produccion.${t}', 'insert') as ok`))[0].ok);
+  }
+  ok("la función de sumar fuente: sólo service_role la ejecuta", (await q(`select has_function_privilege('service_role', 'produccion.prisma_propuesta_sumar(text, uuid)', 'execute') as s, has_function_privilege('anon', 'produccion.prisma_propuesta_sumar(text, uuid)', 'execute') as a`)).map((r) => r.s && !r.a)[0]);
+  const { FUENTES_BASE } = await import("../src/lib/prisma/vigia.ts");
+  eq("seed: las fuentes de FUENTES_BASE, activas y sin leer", Number(await scalar(`select count(*) from produccion.prisma_fuentes where activa and ultimo_hash is null`)), FUENTES_BASE.length);
+  const f = await scalar(`select id from produccion.prisma_fuentes order by url limit 1`);
+  const g = await scalar(`select id from produccion.prisma_fuentes order by url offset 1 limit 1`);
+  const h = "a".repeat(64);
+  await db.query(`insert into produccion.prisma_propuestas (huella, tipo, tool, origen, fuentes, resumen_es, contenido, cita, cita_url) values ($1, 'nota', 'kling', 'comunidad', array[$2]::uuid[], 'x', '{"nota_en":"x"}', 'cita', 'https://x.y/z')`, [h, f]);
+  await db.query(`select produccion.prisma_propuesta_sumar($1, $2)`, [h, g]);
+  await db.query(`select produccion.prisma_propuesta_sumar($1, $2)`, [h, g]);
+  eq("sumar fuente: agrega la nueva una sola vez", Number(await scalar(`select cardinality(fuentes) from produccion.prisma_propuestas where huella = '${h}'`)), 2);
+  const malas = [
+    ["la misma huella dos veces", `insert into produccion.prisma_propuestas (huella, tipo, origen, resumen_es, contenido, cita, cita_url) values ('${h}', 'nota', 'oficial', 'x', '{}', 'c', 'https://x.y')`],
+    ["una huella que no es sha256", `insert into produccion.prisma_propuestas (huella, tipo, origen, resumen_es, contenido, cita, cita_url) values ('abc', 'nota', 'oficial', 'x', '{}', 'c', 'https://x.y')`],
+    ["un tipo desconocido", `insert into produccion.prisma_propuestas (huella, tipo, origen, resumen_es, contenido, cita, cita_url) values ('${"b".repeat(64)}', 'hackear', 'oficial', 'x', '{}', 'c', 'https://x.y')`],
+    ["una cita sin https", `insert into produccion.prisma_propuestas (huella, tipo, origen, resumen_es, contenido, cita, cita_url) values ('${"c".repeat(64)}', 'nota', 'oficial', 'x', '{}', 'c', 'http://x.y')`],
+    ["aprobada sin fecha de decisión", `update produccion.prisma_propuestas set estado = 'aprobada' where huella = '${h}'`],
+    ["contenido que no es objeto", `insert into produccion.prisma_propuestas (huella, tipo, origen, resumen_es, contenido, cita, cita_url) values ('${"d".repeat(64)}', 'nota', 'oficial', 'x', '[]', 'c', 'https://x.y')`],
+    ["una fuente http", `insert into produccion.prisma_fuentes (url, nombre) values ('http://x.y/z', 'x')`],
+    ["una fuente repetida", `insert into produccion.prisma_fuentes (url, nombre) values ('${FUENTES_BASE[0].url}', 'x')`],
+    ["una fuente sin nombre", `insert into produccion.prisma_fuentes (url, nombre) values ('https://x.y/otra', '')`],
+    ["un texto guardado de más de 300 000", `update produccion.prisma_fuentes set ultimo_texto = repeat('x', 300001) where id = '${f}'`],
+  ];
+  for (const [que, sql] of malas) ok(`la BD rechaza ${que}`, await db.query(sql).then(() => false).catch(() => true));
+  eq("candado: la primera toma, la segunda no (corriendo)", JSON.stringify([await scalar(`select produccion.prisma_vigia_tomar(0)`), await scalar(`select produccion.prisma_vigia_tomar(0)`)]), "[true,false]");
+  await db.query(`select produccion.prisma_vigia_soltar()`);
+  eq("candado: soltado pero con pausa de 120 s → no; sin pausa → sí", JSON.stringify([await scalar(`select produccion.prisma_vigia_tomar(120)`), await scalar(`select produccion.prisma_vigia_tomar(0)`)]), "[false,true]");
+  await db.query(`update produccion.prisma_vigia_estado set corriendo_desde = now() - interval '20 minutes'`);
+  eq("candado: una corrida muerta (>15 min) se puede retomar", await scalar(`select produccion.prisma_vigia_tomar(0)`), true);
+  ok("candado: una sola fila (id = 1)", await db.query(`insert into produccion.prisma_vigia_estado (id) values (2)`).then(() => false).catch(() => true));
+  const privs = (await q(`select has_function_privilege('service_role', 'produccion.prisma_vigia_tomar(integer)', 'execute') as s, has_function_privilege('anon', 'produccion.prisma_vigia_tomar(integer)', 'execute') as a, has_function_privilege('authenticated', 'produccion.prisma_vigia_soltar()', 'execute') as u, has_function_privilege('anon', 'produccion.prisma_propuesta_sumar(text, uuid)', 'execute') as a2, has_function_privilege('authenticated', 'produccion.prisma_propuesta_sumar(text, uuid)', 'execute') as u2`))[0];
+  // `authenticated` no se mira aquí: este archivo le concede TODAS las rutinas a propósito más arriba (simulación
+  // pre-0056). En la BD real no las tiene (0056 + el revoke de PUBLIC), y además las funciones son SECURITY INVOKER:
+  // sin rol master, la RLS de las tablas las deja sin efecto.
+  eq("candado y sumar: service_role ejecuta, anon no", JSON.stringify({ s: privs.s, a: privs.a, a2: privs.a2 }), JSON.stringify({ s: true, a: false, a2: false }));
+  ok("aprobada con fecha sí pasa", await db.query(`update produccion.prisma_propuestas set estado = 'aprobada', decidido_at = now() where huella = '${h}'`).then(() => true).catch(() => false));
+}
+
+// ── 0078: HÜE Prisma › Formatos — lotes + salidas ──
+console.log("\n▶ 0078 — prisma_formatos_lotes + prisma_formatos_salidas");
+{
+  for (const t of ["prisma_formatos_lotes", "prisma_formatos_salidas"]) {
+    eq(`${t} existe con RLS`, Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = '${t}' and c.relrowsecurity`)), 1);
+    eq(`${t}: policy master-only`, Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = '${t}' and qual like '%master%'`)), 1);
+    ok(`${t}: service_role puede escribir`, (await q(`select has_table_privilege('service_role', 'produccion.${t}', 'update') as ok`))[0].ok);
+    eq(`${t}: PUBLIC sin privilegios`, Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = '${t}' and c.relacl is not null and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+  }
+  const u = () => crypto.randomUUID();
+  const fuente = `fuente/${u()}.png`;
+  const lote = await scalar(`insert into produccion.prisma_formatos_lotes (fuente_path, nombre) values ($1, 'promo') returning id`, [fuente]);
+  eq("el lote nace 'subiendo'", await scalar(`select estado from produccion.prisma_formatos_lotes where id = $1`, [lote]), "subiendo");
+  const rechaza = async (sql, params = []) => db.query(sql, params).then(() => false).catch(() => true);
+  ok("la BD rechaza 'listo' sin mime ni medidas", await rechaza(`update produccion.prisma_formatos_lotes set estado = 'listo' where id = $1`, [lote]));
+  ok("con mime y medidas, 'listo' pasa", !(await rechaza(`update produccion.prisma_formatos_lotes set estado = 'listo', fuente_mime = 'image/png', fuente_w = 1200, fuente_h = 1500 where id = $1`, [lote])));
+  ok("la BD rechaza una ruta de fuente fuera de fuente/<uuid>", await rechaza(`insert into produccion.prisma_formatos_lotes (fuente_path) values ('prisma/../x.png')`));
+  ok("la BD rechaza la misma fuente en dos lotes", await rechaza(`insert into produccion.prisma_formatos_lotes (fuente_path) values ($1)`, [fuente]));
+  ok("la BD rechaza un mime que no es png/jpg/webp", await rechaza(`insert into produccion.prisma_formatos_lotes (fuente_path, fuente_mime) values ($1, 'image/gif')`, [`fuente/${u()}.png`]));
+  const sal = await scalar(`insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo, costo_estimado_usd) values ($1, 'meta-1080x1920', 1080, 1920, 'ia', 0.102) returning id`, [lote]);
+  eq("la salida nace 'pendiente' con 0 intentos", JSON.stringify(await q(`select estado, intentos from produccion.prisma_formatos_salidas where id = $1`, [sal])), JSON.stringify([{ estado: "pendiente", intentos: 0 }]));
+  const malas = [
+    ["el mismo tamaño dos veces en un lote", `insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo) values ('${lote}', 'meta-1080x1920', 1080, 1920, 'blur')`],
+    ["un modo desconocido", `insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo) values ('${lote}', 'x-1600x900', 1600, 900, 'magia')`],
+    ["modo color sin color", `insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo) values ('${lote}', 'x-1600x900', 1600, 900, 'color')`],
+    ["un color que no es #rrggbb", `insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo, color) values ('${lote}', 'x-1600x900', 1600, 900, 'color', 'red')`],
+    ["una medida de 5000 px", `insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo) values ('${lote}', 'otro-5000x900', 5000, 900, 'blur')`],
+    ["un preset con forma rara", `insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo) values ('${lote}', '../x', 100, 100, 'blur')`],
+    ["'listo' sin archivos ni pixel-lock", `update produccion.prisma_formatos_salidas set estado = 'listo' where id = '${sal}'`],
+    ["'listo' con pixel-lock FALSO", `update produccion.prisma_formatos_salidas set estado = 'listo', png_path = 'salida/${lote}/${u()}.png', jpg_path = 'salida/${lote}/${u()}.jpg', pixel_lock_ok = false where id = '${sal}'`],
+    ["una ruta de salida fuera de salida/<lote>/<uuid>", `update produccion.prisma_formatos_salidas set png_path = 'fuente/x.png' where id = '${sal}'`],
+    ["un costo negativo", `update produccion.prisma_formatos_salidas set costo_real_usd = -1 where id = '${sal}'`],
+  ];
+  for (const [que, sql] of malas) ok(`la BD rechaza ${que}`, await rechaza(sql));
+  const png = `salida/${lote}/${u()}.png`;
+  ok("'listo' con PNG, JPG y pixel-lock pasa", !(await rechaza(`update produccion.prisma_formatos_salidas set estado = 'listo', png_path = $2, jpg_path = $3, pixel_lock_ok = true, costo_real_usd = 0.0712, deriva = 4.2 where id = $1`, [sal, png, png.replace(/\.png$/, ".jpg")])));
+  // Reclamo atómico: sólo un "procesando" gana aunque dos llamadas lleguen juntas.
+  const sal2 = await scalar(`insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo) values ($1, 'google-300x250', 300, 250, 'blur') returning id`, [lote]);
+  const reclamo = `update produccion.prisma_formatos_salidas set estado = 'procesando', intentos = intentos + 1 where id = $1 and estado in ('pendiente', 'error') returning id`;
+  const r1 = await q(reclamo, [sal2]);
+  const r2 = await q(reclamo, [sal2]);
+  eq("reclamo atómico: el primero toma la salida, el segundo no", `${r1.length}/${r2.length}`, "1/0");
+  // Reinicio CONDICIONAL de prepararSalidas: un "procesando" vivo no vuelve a "pendiente"; uno muerto (>4 min) sí.
+  const reinicio = `update produccion.prisma_formatos_salidas set estado = 'pendiente' where id = $1 and (estado <> 'procesando' or updated_at < now() - interval '4 minutes') returning id`;
+  eq("reinicio condicional: un 'procesando' vivo NO se reinicia (no hay segundo reclamo = no hay doble cobro)", (await q(reinicio, [sal2])).length, 0);
+  await db.query(`update produccion.prisma_formatos_salidas set updated_at = now() - interval '5 minutes' where id = $1`, [sal2]);
+  eq("reinicio condicional: un 'procesando' muerto sí se reinicia", (await q(reinicio, [sal2])).length, 1);
+  // Un resultado de "¿Cómo salió?" → UN lote por persona (dos pestañas a la vez no duplican la copia).
+  const specX = await scalar(`insert into produccion.prisma_specs (job, tool, spec) values ('foto_producto', 'nanobanana', '{}'::jsonb) returning id`);
+  const resX = await scalar(`insert into produccion.prisma_resultados (spec_id, tool, storage_path, mime) values ($1, 'nanobanana', $2, 'image/png') returning id`, [specX, `prisma/out/${u()}.png`]);
+  const quien = (await q(`select id from produccion.track_members limit 1`))[0]?.id;
+  ok("hay un resultado y una persona para probar el índice único", !!resX && !!quien);
+  if (resX && quien) {
+    const conRes = `insert into produccion.prisma_formatos_lotes (fuente_path, resultado_id, created_by) values ($1, $2, $3)`;
+    ok("el primer lote de un resultado pasa", !(await rechaza(conRes, [`fuente/${u()}.png`, resX, quien])));
+    ok("la BD rechaza un segundo lote del MISMO resultado y la misma persona", await rechaza(conRes, [`fuente/${u()}.png`, resX, quien]));
+    ok("lotes subidos a mano (sin resultado) no chocan entre sí", !(await rechaza(`insert into produccion.prisma_formatos_lotes (fuente_path, created_by) values ($1, $2)`, [`fuente/${u()}.png`, quien])) && !(await rechaza(`insert into produccion.prisma_formatos_lotes (fuente_path, created_by) values ($1, $2)`, [`fuente/${u()}.png`, quien])));
+    await db.query(`delete from produccion.prisma_formatos_lotes where created_by = $1`, [quien]);
+  }
+  await db.query(`delete from produccion.prisma_specs where id = $1`, [specX]);
+  const borra = await scalar(`select count(*) from produccion.prisma_formatos_salidas where lote_id = $1`, [lote]);
+  await db.query(`delete from produccion.prisma_formatos_lotes where id = $1`, [lote]);
+  eq("borrar el lote se lleva sus salidas (cascade)", `${borra}→${await scalar(`select count(*) from produccion.prisma_formatos_salidas where lote_id = $1`, [lote])}`, "2→0");
+}
+
+// ── 0079: biblioteca de tipografías (Formatos las pide por nombre) ──
+console.log("\n▶ 0079 — tipografias");
+{
+  const t = "tipografias";
+  eq(`${t} existe con RLS`, Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = '${t}' and c.relrowsecurity`)), 1);
+  eq(`${t}: policy master-only`, Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = '${t}' and qual like '%master%'`)), 1);
+  ok(`${t}: service_role puede escribir`, (await q(`select has_table_privilege('service_role', 'produccion.${t}', 'insert') as ok`))[0].ok);
+  eq(`${t}: PUBLIC sin privilegios`, Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = '${t}' and c.relacl is not null and exists (select 1 from unnest(c.relacl) a where a::text like '=%')`)), 0);
+  const rechaza = async (sql, params = []) => db.query(sql, params).then(() => false).catch(() => true);
+  const cli = await scalar(`insert into produccion.clients (name, slug) values ('Tipos SA', 'tipos-sa') returning id`);
+  const otro = await scalar(`insert into produccion.clients (name, slug) values ('Otro SA', 'otro-sa') returning id`);
+  const sha = "a".repeat(64);
+  // c = el cliente (null = de Google); `origen` sale de c si no se dice.
+  const fila = (c, s, ruta, extra = {}) => db.query(
+    `insert into produccion.${t} (client_id, origen, exclusiva, archivo, ruta, sha256, bytes, nombres) values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
+    [c, extra.origen ?? (c ? "subida" : "google"), extra.exclusiva ?? false, extra.archivo ?? "DiDiSans-Pro-Medium.otf", ruta, s, extra.bytes ?? 46768, extra.nombres ?? ["DiDiSans-Pro-Medium"]],
+  );
+  ok("una tipografía de cliente bien formada entra", !!(await fila(cli, sha, `${cli}/${sha}.otf`)).rows[0]?.id);
+  ok("una EXCLUSIVA de cliente entra", !!(await fila(cli, "9".repeat(64), `${cli}/${"9".repeat(64)}.otf`, { exclusiva: true })).rows[0]?.id);
+  const g = "8".repeat(64);
+  ok("una de Google (sin cliente) entra, hasta 10 MB", !!(await fila(null, g, `google/${g}.ttf`, { bytes: 9_000_000, archivo: "Montserrat[wght].ttf" })).rows[0]?.id);
+  const malas = [
+    ["el mismo archivo dos veces en el cliente", () => fila(cli, sha, `${cli}/${sha}.ttf`)],
+    ["una ruta que apunta a OTRO cliente", () => fila(cli, "b".repeat(64), `${otro}/${"b".repeat(64)}.otf`)],
+    ["una ruta con otra huella", () => fila(cli, "c".repeat(64), `${cli}/${"d".repeat(64)}.otf`)],
+    ["una ruta que no es .otf/.ttf", () => fila(cli, "e".repeat(64), `${cli}/${"e".repeat(64)}.woff2`)],
+    ["una ruta con ../", () => fila(cli, "f".repeat(64), `../${"f".repeat(64)}.otf`)],
+    ["una huella que no es sha256", () => fila(cli, "xyz", `${cli}/xyz.otf`)],
+    ["una subida de más de 4 MB", () => fila(cli, "1".repeat(64), `${cli}/${"1".repeat(64)}.otf`, { bytes: 4_000_001 })],
+    ["un archivo sin nombres", () => fila(cli, "2".repeat(64), `${cli}/${"2".repeat(64)}.otf`, { nombres: [] })],
+    ["un nombre vacío en la lista", () => fila(cli, "3".repeat(64), `${cli}/${"3".repeat(64)}.otf`, { nombres: ["A", null] })],
+    ["un nombre de archivo de más de 120", () => fila(cli, "4".repeat(64), `${cli}/${"4".repeat(64)}.otf`, { archivo: "x".repeat(121) })],
+    ["la misma de Google dos veces", () => fila(null, g, `google/${g}.otf`)],
+    ["una de Google de más de 10 MB", () => fila(null, "5".repeat(64), `google/${"5".repeat(64)}.ttf`, { bytes: 10_000_001 })],
+    ["una de Google con cliente", () => fila(cli, "6".repeat(64), `${cli}/${"6".repeat(64)}.ttf`, { origen: "google" })],
+    ["una subida sin cliente", () => fila(null, "7".repeat(64), `google/${"7".repeat(64)}.ttf`, { origen: "subida" })],
+    ["una de Google exclusiva (no es de nadie)", () => fila(null, "0".repeat(64), `google/${"0".repeat(64)}.ttf`, { exclusiva: true })],
+    ["una de Google guardada en la carpeta de un cliente", () => fila(null, "ab".repeat(32), `${cli}/${"ab".repeat(32)}.ttf`)],
+    ["una de cliente guardada en la carpeta de Google", () => fila(cli, "cd".repeat(32), `google/${"cd".repeat(32)}.ttf`)],
+    ["un origen inventado", () => fila(cli, "ef".repeat(32), `${cli}/${"ef".repeat(32)}.ttf`, { origen: "otro" })],
+  ];
+  for (const [que, hacer] of malas) ok(`la BD rechaza ${que}`, await hacer().then(() => false).catch(() => true));
+  ok("el mismo archivo en OTRO cliente sí entra (cada cliente tiene su copia)", !(await rechaza(`insert into produccion.${t} (client_id, archivo, ruta, sha256, bytes, nombres) values ($1, 'x.otf', $2, $3, 46768, '{X}')`, [otro, `${otro}/${sha}.otf`, sha])));
+  ok("una subida nueva es para todos (no exclusiva) y de origen 'subida' si no se dice", (await q(`select exclusiva = false and origen = 'subida' as ok from produccion.${t} where client_id = $1 and archivo = 'x.otf'`, [otro]))[0]?.ok === true);
+  await asRole(CREA);
+  eq("un creativo con sesión NO ve las tipografías (sólo por el servidor)", Number(await scalar(`select count(*) from produccion.${t}`)), 0);
+  await resetRole();
+  ok("la BD NO deja borrar un cliente que aún tiene tipografías (sus archivos quedarían sin fila)", await rechaza(`delete from produccion.clients where id = $1`, [cli]));
+  await db.query(`delete from produccion.${t} where client_id in ($1, $2) or client_id is null`, [cli, otro]);
+  ok("sin tipografías, el cliente sí se borra", !(await rechaza(`delete from produccion.clients where id = $1`, [cli])) && !(await rechaza(`delete from produccion.clients where id = $1`, [otro])));
+}
+
+// ── 0087: lecturas de imagen plana guardadas (la misma imagen, la misma lectura) ──
+console.log("\n▶ 0087 — prisma_formatos_lecturas");
+{
+  const t = "prisma_formatos_lecturas";
+  eq(`${t} existe con RLS`, Number(await scalar(`select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'produccion' and c.relname = '${t}' and c.relrowsecurity`)), 1);
+  eq(`${t}: policy master-only`, Number(await scalar(`select count(*) from pg_policies where schemaname = 'produccion' and tablename = '${t}' and qual like '%master%'`)), 1);
+  ok(`${t}: service_role puede escribir`, (await q(`select has_table_privilege('service_role', 'produccion.${t}', 'insert') as ok`))[0].ok);
+  const fila = (sha, extra = {}) => db.query(
+    `insert into produccion.${t} (sha256, modelo, w, h, elementos) values ($1, $2, $3, $4, $5::jsonb)`,
+    [sha, extra.modelo ?? "gemini-x", extra.w ?? 1024, extra.h ?? 1280, extra.elementos ?? JSON.stringify([{ label: "titulo", caja: [0, 0, 10, 10] }])],
+  );
+  const sha = "a".repeat(64);
+  ok("una lectura bien formada entra", await fila(sha).then(() => true).catch(() => false));
+  ok("la misma imagen con OTRO modelo entra aparte", await fila(sha, { modelo: "gemini-y" }).then(() => true).catch(() => false));
+  const malas = [
+    ["la misma imagen y modelo dos veces", () => fila(sha)],
+    ["una huella que no es sha256", () => fila("xyz")],
+    ["un modelo vacío", () => fila("b".repeat(64), { modelo: "" })],
+    ["un ancho de 0", () => fila("c".repeat(64), { w: 0 })],
+    ["un alto de más de 4096", () => fila("d".repeat(64), { h: 5000 })],
+    ["elementos que no son lista", () => fila("e".repeat(64), { elementos: JSON.stringify({ a: 1 }) })],
+    ["elementos de más de 500 KB", () => fila("f".repeat(64), { elementos: JSON.stringify(["x".repeat(500_001)]) })],
+  ];
+  for (const [que, hacer] of malas) ok(`la BD rechaza ${que}`, await hacer().then(() => false).catch(() => true));
+  await asRole(CREA);
+  eq("un creativo con sesión NO ve las lecturas (sólo por el servidor)", Number(await scalar(`select count(*) from produccion.${t}`)), 0);
+  await resetRole();
+  await db.query(`delete from produccion.${t}`);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

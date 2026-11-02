@@ -26,6 +26,7 @@ const TIPO: Record<string, TipoConfig> = {
   ready_for_review: { chip: "Lista para tu revisión", color: "#00c2ff", cta: "Abrir mi portal" }, // azul neón — al CLIENTE
   change_reply: { chip: "Respuesta", color: "#ff2d6f", cta: "Ver la conversación" }, // rosa-rojo: es de un cambio
   change_reply_client: { chip: "Te respondieron", color: "#00c2ff", cta: "Ver la respuesta" }, // azul: de cara al cliente
+  vigia_propuestas: { chip: "Prisma · Vigía", color: "#00c2ff", cta: "Revisar en el Hub" }, // azul neón — al MASTER
 };
 const DEFECTO: TipoConfig = { chip: "Aviso", color: "#9d4edd", cta: "Abrir en Greenlight" };
 
@@ -163,6 +164,8 @@ export function htmlFor(args: {
   /** Chip en pastilla oscura con el color como TEXTO (trato del wordmark on-light). */
   darkChip?: boolean;
   colorOverride?: string;
+  /** Respeta los saltos de línea del cuerpo (listas en texto plano, p. ej. el aviso del vigía). */
+  saltos?: boolean;
 }): string {
   const cfg = (args.type && TIPO[args.type]) || DEFECTO;
   const color = args.colorOverride ?? cfg.color;
@@ -174,7 +177,7 @@ export function htmlFor(args: {
     title: args.title,
     contenido: body ? `<tr><td style="padding:14px 28px 0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-          <td style="background:#f7f5fc;border-left:3px solid ${color};border-radius:6px;padding:12px 14px;font-size:14px;line-height:1.55;color:#4a4770;">${body}</td>
+          <td style="background:#f7f5fc;border-left:3px solid ${color};border-radius:6px;padding:12px 14px;font-size:14px;line-height:1.55;color:#4a4770;${args.saltos ? "white-space:pre-line;" : ""}">${body}</td>
         </tr></table>
       </td></tr>` : "",
     ctaUrl: args.ctaUrl,

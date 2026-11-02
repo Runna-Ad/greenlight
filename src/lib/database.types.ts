@@ -310,6 +310,249 @@ export type HueAdaptation = {
   reverted_at: string | null;
 };
 
+// ── HÜE Prisma (0063) ────────────────────────────────────────
+export type PrismaVariante = "base" | "segura" | "audaz" | "minima";
+export const PRISMA_VARIANTES_PEDIBLES = ["segura", "audaz", "minima"] as const;
+
+/** Lo que el diseñador HIZO con un prompt (0066): la señal con la que H.Ü.E aprende. */
+export type PrismaEventoTipo =
+  | "copiado" | "abierto" | "variante" | "refinado"
+  | "respondido" | "aviso_aplicado" | "resultado_subido" | "resultado_aceptado" | "correccion_generada"
+  | "generado" | "adjuntado" | "regenerado"; // los 3 últimos: reservados para v2 (0067)
+export type PrismaEventoRow = {
+  id: string;
+  spec_id: string;
+  prompt_id: string | null;
+  client_id: string | null;
+  job: string;
+  tool: string;
+  variante: PrismaVariante;
+  user_id: string | null;
+  tipo: PrismaEventoTipo;
+  detalle: string | null;
+  created_at: string;
+};
+export type PrismaJobStatus = "queued" | "running" | "done" | "error";
+
+/** Referencia guardada con el spec: dónde vive la imagen y qué leyó H.Ü.E de ella. */
+export type PrismaRefGuardada = {
+  role: string;
+  storage_path: string;
+  caption: string | null;
+  dna: Record<string, unknown> | null;
+};
+
+export type PrismaSpecRow = {
+  id: string;
+  client_id: string | null;
+  marca_id: string | null;
+  job: string;
+  tool: string;
+  destino: string | null;
+  idea: string;
+  spec: Record<string, unknown>;
+  refs: PrismaRefGuardada[];
+  created_by: string | null;
+  created_at: string;
+  /** 0066: si es una versión pedida (segura/audaz/mínima), el spec del que viene. */
+  origen_spec_id?: string | null;
+  /** 0067: respuestas de la entrevista (F3). */
+  respuestas?: unknown[];
+  /** 0070: si es un prompt de corrección (F4), el resultado subido que corrige. */
+  correccion_de?: string | null;
+};
+
+/** Una fila de prisma_resultados (0070): lo que salió de la herramienta y el veredicto de H.Ü.E. */
+export type PrismaResultadoRow = {
+  id: string;
+  spec_id: string;
+  prompt_id: string | null;
+  client_id: string | null;
+  tool: string;
+  modelo: string | null;
+  storage_path: string;
+  mime: string;
+  caption: string | null;
+  veredicto: Record<string, unknown>;
+  score: number | null;
+  aceptado: boolean;
+  created_by: string | null;
+  created_at: string;
+};
+
+/** Una fila de prisma_formatos_lotes (0078): un anuncio subido para llevarlo a N tamaños. */
+export type PrismaFormatosLoteRow = {
+  id: string;
+  client_id: string | null;
+  marca_id: string | null;
+  resultado_id: string | null;
+  nombre: string;
+  estado: "subiendo" | "listo";
+  fuente_path: string;
+  fuente_mime: "image/png" | "image/jpeg" | "image/webp" | null;
+  fuente_w: number | null;
+  fuente_h: number | null;
+  /** numeric: PostgREST lo manda como número. */
+  costo_estimado_usd: number;
+  created_by: string | null;
+  created_at: string;
+};
+
+/** Una fila de prisma_formatos_salidas (0078): un tamaño de un lote. */
+export type PrismaFormatosSalidaRow = {
+  id: string;
+  lote_id: string;
+  preset: string;
+  ancho: number;
+  alto: number;
+  modo: "extender" | "ia" | "blur" | "color";
+  color: string | null;
+  estado: "pendiente" | "procesando" | "listo" | "error";
+  png_path: string | null;
+  jpg_path: string | null;
+  proveedor: string | null;
+  costo_estimado_usd: number;
+  costo_real_usd: number | null;
+  pixel_lock_ok: boolean | null;
+  deriva: number | null;
+  error: string | null;
+  intentos: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PrismaPromptRow = {
+  id: string;
+  spec_id: string;
+  tool: string;
+  variante: PrismaVariante;
+  prompt_version: string;
+  salida: string;
+  formato: "texto" | "json";
+  valido: boolean;
+  errores: string[];
+  explicacion_es: string | null; // 0065: una columna por idioma
+  explicacion_en: string | null;
+  /** 0067: avisos que se le enseñaron al diseñador (F2) y el modelo/tier sugerido (F1).
+   *  Opcionales en el tipo: el preview puede correr antes de la migración. */
+  avisos?: unknown[];
+  modelo_sug?: string | null;
+  model: string | null;
+  usage: Record<string, number> | null;
+  created_at: string;
+};
+
+/** Una fila de prisma_reglas (0067): el conocimiento vivo por herramienta. */
+export type PrismaReglaRow = {
+  id: string;
+  codigo: string;
+  clase: "regla" | "nota";
+  tool: string | null;
+  kind: "imagen" | "video" | "edicion" | null;
+  nivel: "bloquea" | "advierte" | "sugiere";
+  campo: string | null;
+  patron: string | null;
+  umbral: number | null;
+  que_es: string | null;
+  que_en: string | null;
+  porque_es: string | null;
+  porque_en: string | null;
+  arreglo_es: string | null;
+  arreglo_en: string | null;
+  accion: Record<string, unknown> | null;
+  nota_en: string | null;
+  fuente_url: string | null;
+  fuente_fecha: string | null;
+  fuente_tipo: "oficial" | "comunidad";
+  activa: boolean;
+  orden: number;
+  updated_by: string | null;
+  updated_at: string;
+  created_at: string;
+};
+
+/** Una fila de prisma_herramientas (0071, F6a): límites, fortalezas y modelos de UNA herramienta,
+ *  editables en Hub › Herramientas. El jsonb se lee con catalogoDesdeFilas (campo raro → constante). */
+export type PrismaHerramientaRow = {
+  tool: string;
+  limites: Record<string, unknown>;
+  fortalezas: Record<string, unknown>;
+  modelos: unknown[];
+  fuente_url: string | null;
+  fuente_fecha: string | null;
+  updated_by: string | null;
+  updated_at: string;
+  created_at: string;
+};
+
+/** F6b (0074): una fuente que lee el vigía. `ultimo_texto` no viaja al navegador. */
+export type PrismaFuenteRow = {
+  id: string;
+  url: string;
+  nombre: string;
+  tool: string | null;
+  origen: "oficial" | "comunidad";
+  activa: boolean;
+  ultimo_hash: string | null;
+  ultimo_texto: string | null;
+  ultima_lectura: string | null;
+  ultimo_error: string | null;
+  updated_by: string | null;
+  updated_at: string;
+  created_at: string;
+};
+
+/** F6b (0074): un cambio al conocimiento que propone el vigía, con su cita. */
+export type PrismaPropuestaRow = {
+  id: string;
+  huella: string;
+  tipo: "nota" | "regla" | "modelo" | "limite" | "fortaleza" | "deprecacion" | "codigo";
+  tool: string | null;
+  origen: "oficial" | "comunidad";
+  fuentes: string[];
+  resumen_es: string;
+  contenido: Record<string, unknown>;
+  cita: string;
+  cita_url: string;
+  cita_fecha: string;
+  estado: "pendiente" | "aprobada" | "descartada";
+  motivo: string | null;
+  decidido_por: string | null;
+  decidido_at: string | null;
+  created_at: string;
+};
+
+export type PrismaCharacterRow = {
+  id: string;
+  client_id: string;
+  name: string;
+  descripcion: string;
+  storage_path: string | null;
+  active: boolean;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type PrismaRatingRow = {
+  id: string;
+  prompt_id: string;
+  user_id: string;
+  score: -1 | 1;
+  nota: string | null;
+  created_at: string;
+};
+
+export type PrismaJobRow = {
+  id: string;
+  prompt_id: string;
+  provider: string;
+  status: PrismaJobStatus;
+  result_path: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 // ── Plantilla Copies (0046) ──────────────────────────────────
 export type CopyTema = {
   id: string;

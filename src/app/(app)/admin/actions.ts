@@ -9,9 +9,12 @@ import { EVENTOS_VALIDOS, SCOPES_VALIDOS, type MisPrefs } from "@/lib/notif-even
 import { canAdmin, canAssignAdmins } from "@/lib/roles";
 import { ESTADOS_ACTIVOS } from "@/lib/workload";
 import { slugify } from "@/lib/slug";
+import { normalizarPreset, presetVacio, validarPreset, type PresetGuardado } from "@/lib/prisma/preset";
+import { prismaActivo } from "@/lib/prisma/flags";
 import { sendEmail, hasEmail } from "@/lib/email";
 import { htmlFor, textFor } from "@/lib/email-template";
 import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
+import { TIPOGRAFIAS_BUCKET, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIAS_POR_CLIENTE_MAX, archivoVisible, faltaTablaTipografias, leerTipografia, rutaTipografia } from "@/lib/prisma/formatos/tipografias";
 import type { MiembroRow, RolAsignable } from "@/lib/equipo";
 import type {
   ActividadRow,
@@ -21,6 +24,8 @@ import type {
   MarcaOpt,
   SnippetKind,
   SnippetRow,
+  TipografiaGuardada,
+  TipografiasEstado,
 } from "@/lib/admin-tipos";
 
 const APP_URL = process.env.APP_URL ?? "https://runna-greenlight.vercel.app";
@@ -593,14 +598,20 @@ export async function listarMarcasPorCliente(): Promise<ClienteConMarcas[]> {
   if (!canAdmin(await getViewAs())) return []; // sólo admin+ (reap S2)
   if (!hasSupabase()) return [];
   const db = supabaseAdmin();
-  const [cliRes, marcaRes] = await Promise.all([
+  const [cliRes, marcaRes, tipoRes] = await Promise.all([
     db.from("clients").select("id, name, slug, logo_url").order("name", { ascending: true }),
-    db.from("marcas").select("id, client_id, name, slug, logo_url").order("name", { ascending: true }),
+    db.from("marcas").select("id, client_id, name, slug, logo_url, prisma_presets").order("name", { ascending: true }),
+    // Sin HÜE Prisma la sección no se enseña: ni se pregunta.
+    prismaActivo() ? db.from("tipografias").select(`client_id, ${COLS_TIPO}`).not("client_id", "is", null).order("archivo", { ascending: true }) : null,
   ]);
   const clientes = (cliRes.data ?? []) as { id: string; name: string; slug: string; logo_url: string | null }[];
   const marcas = (marcaRes.data ?? []) as {
-    id: string; client_id: string; name: string; slug: string; logo_url: string | null;
+    id: string; client_id: string; name: string; slug: string; logo_url: string | null; prisma_presets: unknown;
   }[];
+  // Antes de aplicar la 0079 la tabla no existe: el panel dice que falta, en vez de romperse. Otro error se dice como error.
+  if (tipoRes?.error && !faltaTablaTipografias(tipoRes.error)) console.error("[admin] leer tipografias:", tipoRes.error.message);
+  const estadoTipos: "sin-tabla" | "error" | null = !tipoRes?.error ? null : faltaTablaTipografias(tipoRes.error) ? "sin-tabla" : "error";
+  const tipos = (tipoRes?.data ?? []) as (TipografiaGuardada & { client_id: string })[];
   return clientes.map((c) => ({
     id: c.id,
     name: c.name,
@@ -608,8 +619,130 @@ export async function listarMarcasPorCliente(): Promise<ClienteConMarcas[]> {
     logo_url: c.logo_url,
     marcas: marcas
       .filter((m) => m.client_id === c.id)
-      .map((m) => ({ id: m.id, name: m.name, slug: m.slug, logo_url: m.logo_url })),
+      // El preset se normaliza con la MISMA función que usa el writer al leerlo.
+      .map((m) => ({ id: m.id, name: m.name, slug: m.slug, logo_url: m.logo_url, prisma_preset: normalizarPreset(m.prisma_presets) })),
+    tipografias: estadoTipos ?? tipos.filter((t) => t.client_id === c.id).map(({ id, archivo, nombres, bytes, exclusiva }) => ({ id, archivo, nombres, bytes, exclusiva })),
   }));
+}
+
+/** Las gratuitas que Formatos trajo solo de Google Fonts (de nadie, para todos), para verlas y borrarlas en Marcas. */
+export async function listarTipografiasGoogle(): Promise<TipografiasEstado> {
+  if (!canAdmin(await getViewAs()) || !hasSupabase() || !prismaActivo()) return [];
+  const { data, error } = await supabaseAdmin().from("tipografias").select(COLS_TIPO).is("client_id", null).order("archivo", { ascending: true });
+  if (!error) return (data ?? []) as TipografiaGuardada[];
+  if (faltaTablaTipografias(error)) return "sin-tabla";
+  console.error("[admin] leer tipografias de Google:", error.message);
+  return "error";
+}
+
+// ── Tipografías para HÜE Prisma › Formatos ─────────────
+// Una biblioteca para todos los clientes: bucket PRIVADO, sólo la sube un admin y sólo la baja el equipo con sesión
+// (por URL firmada, en prisma/tipografias-actions.ts). Se valida por sus bytes, nunca por el nombre del archivo.
+// `exclusiva` = sólo para su cliente (Formatos la entrega únicamente cuando se eligió ese cliente).
+const SIN_TABLA_TIPOS = "La base todavía no guarda tipografías: falta aplicar el cambio 0079.";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const COLS_TIPO = "id, archivo, nombres, bytes, exclusiva";
+
+/** `todas`: el error no es de ESE archivo (permiso, tope del cliente, falta la tabla): no vale la pena intentar los demás. */
+type TipoGuardada = { ok: true; tipografia: TipografiaGuardada; repetida: boolean } | { ok: false; error: string; todas?: boolean };
+
+/**
+ * Sube UNA tipografía al cliente. Sólo admin. El mismo archivo dos veces en un cliente queda una vez (y se queda
+ * como estaba: lo exclusiva se cambia en su fila, no subiéndola otra vez).
+ */
+export async function subirTipografiaCliente(clientId: string, form: FormData, exclusiva: boolean): Promise<TipoGuardada> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada.", todas: true };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin sube tipografías.", todas: true };
+  if (!UUID_RE.test(clientId)) return { ok: false, error: "Cliente inválido.", todas: true };
+  const file = form.get("file");
+  if (!(file instanceof File)) return { ok: false, error: "No llegó ningún archivo." };
+  if (file.size > TIPOGRAFIA_MAX_BYTES) return { ok: false, error: `«${archivoVisible(file.name)}» pasa de 4 MB.` };
+  const buf = await file.arrayBuffer();
+  const leida = leerTipografia(buf);
+  if (!leida) return { ok: false, error: `«${archivoVisible(file.name)}» no es una tipografía .otf o .ttf que se pueda usar.` };
+
+  const db = supabaseAdmin();
+  const { data: cli } = await db.from("clients").select("id").eq("id", clientId).maybeSingle();
+  if (!cli) return { ok: false, error: "Ese cliente ya no existe.", todas: true };
+  const sha256 = [...new Uint8Array(await crypto.subtle.digest("SHA-256", buf))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const cols = COLS_TIPO;
+  const ya = await db.from("tipografias").select(cols).eq("client_id", clientId).eq("sha256", sha256).maybeSingle();
+  if (ya.error) {
+    if (faltaTablaTipografias(ya.error)) return { ok: false, error: SIN_TABLA_TIPOS, todas: true };
+    console.error("[admin] leer tipografias:", ya.error.message);
+    return { ok: false, error: "No se pudo guardar. Inténtalo otra vez.", todas: true };
+  }
+  if (ya.data) return { ok: true, tipografia: ya.data as TipografiaGuardada, repetida: true };
+  // El tope se revisa sin "count ?? 0": si la cuenta falla, no se sube (nada de pasar el tope por un error).
+  const { count, error: errCuenta } = await db.from("tipografias").select("id", { count: "exact", head: true }).eq("client_id", clientId);
+  if (errCuenta || count === null) {
+    console.error("[admin] contar tipografías:", errCuenta?.message ?? "sin cuenta");
+    return { ok: false, error: "No se pudo guardar. Inténtalo otra vez.", todas: true };
+  }
+  if (count >= TIPOGRAFIAS_POR_CLIENTE_MAX) return { ok: false, error: `Este cliente ya tiene ${TIPOGRAFIAS_POR_CLIENTE_MAX} tipografías: borra las que ya no se usen.`, todas: true };
+
+  const ruta = rutaTipografia(clientId, sha256, leida.ext);
+  // upsert: si quedó un archivo de un intento anterior sin su fila, es el MISMO (misma huella): se reemplaza.
+  const up = await db.storage.from(TIPOGRAFIAS_BUCKET).upload(ruta, buf, { contentType: `font/${leida.ext}`, upsert: true });
+  if (up.error) {
+    console.error("[admin] subir tipografía:", up.error.message);
+    return { ok: false, error: "No se pudo guardar el archivo. Inténtalo otra vez." };
+  }
+  const ins = await db
+    .from("tipografias")
+    .insert({ client_id: clientId, origen: "subida", exclusiva: exclusiva === true, archivo: archivoVisible(file.name), ruta, sha256, bytes: buf.byteLength, nombres: leida.nombres, created_by: await getSoyId() })
+    .select(cols)
+    .single();
+  if (ins.error) {
+    // Dos subidas del mismo archivo a la vez: la otra ganó y su fila apunta al mismo archivo, que se queda.
+    const otra = await db.from("tipografias").select(cols).eq("client_id", clientId).eq("sha256", sha256).maybeSingle();
+    if (otra.data) return { ok: true, tipografia: otra.data as TipografiaGuardada, repetida: true };
+    console.error("[admin] guardar tipografía:", ins.error.message);
+    await db.storage.from(TIPOGRAFIAS_BUCKET).remove([ruta]);
+    return { ok: false, error: "No se pudo guardar. Inténtalo otra vez." };
+  }
+  return { ok: true, tipografia: ins.data as TipografiaGuardada, repetida: false };
+}
+
+/** Marca una tipografía de un cliente como sólo suya (o la abre a todos). Sólo admin; las de Google no tienen dueño. */
+export async function cambiarExclusiva(id: string, exclusiva: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin cambia tipografías." };
+  if (!UUID_RE.test(id) || typeof exclusiva !== "boolean") return { ok: false, error: "Tipografía inválida." };
+  const { data, error } = await supabaseAdmin().from("tipografias").update({ exclusiva }).eq("id", id).not("client_id", "is", null).select("id");
+  if (error) {
+    console.error("[admin] cambiar exclusiva de tipografía:", error.message);
+    return { ok: false, error: "No se pudo cambiar. Inténtalo otra vez." };
+  }
+  if (!data?.length) return { ok: false, error: "Esa tipografía ya no existe." };
+  return { ok: true };
+}
+
+/** Borra una tipografía de la biblioteca (su fila y su archivo): de un cliente o de Google. Sólo admin. */
+export async function borrarTipografia(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin borra tipografías." };
+  if (!UUID_RE.test(id)) return { ok: false, error: "Tipografía inválida." };
+  const db = supabaseAdmin();
+  const { data, error } = await db.from("tipografias").select("ruta").eq("id", id).maybeSingle();
+  if (error) {
+    console.error("[admin] leer tipografía:", error.message);
+    return { ok: false, error: "No se pudo borrar. Inténtalo otra vez." };
+  }
+  if (!data) return { ok: false, error: "Esa tipografía ya no existe." };
+  // Primero el ARCHIVO: si no se puede borrar, la fila se queda y el admin lo ve (nada de "borrada" con la letra
+  // del cliente todavía guardada). Una fila sin archivo no hace daño: Formatos la cuenta como faltante.
+  const rm = await db.storage.from(TIPOGRAFIAS_BUCKET).remove([(data as { ruta: string }).ruta]);
+  if (rm.error) {
+    console.error("[admin] borrar archivo de tipografía:", rm.error.message);
+    return { ok: false, error: "No se pudo borrar el archivo. Inténtalo otra vez." };
+  }
+  const del = await db.from("tipografias").delete().eq("id", id);
+  if (del.error) {
+    console.error("[admin] borrar fila de tipografía (su archivo ya no está):", del.error.message);
+    return { ok: false, error: "Se borró el archivo pero no su registro. Inténtalo otra vez." };
+  }
+  return { ok: true };
 }
 
 type LogoGuardado = { ok: true; logoUrl: string } | { ok: false; error: string };
@@ -710,7 +843,7 @@ export async function crearMarca(clientId: string, name: string): Promise<MarcaG
     return { ok: false, error: error.message };
   }
   revalidatePath("/admin");
-  return { ok: true, marca: data as MarcaLogo };
+  return { ok: true, marca: { ...(data as Omit<MarcaLogo, "prisma_preset">), prisma_preset: normalizarPreset(null) } };
 }
 
 /** Borra una marca. Sólo admin+. Los FK de la marca son SET NULL (ideas) / CASCADE
@@ -808,4 +941,34 @@ export async function enviarInvitacion(memberId: string): Promise<Guardado> {
   });
   if (!res.ok) return { ok: false, error: res.error ?? "No se pudo enviar el correo." };
   return { ok: true };
+}
+
+// ── HÜE Prisma: preset de marca ─────────────────────────────
+/** Guarda lo que la marca aporta a TODO prompt de HÜE Prisma (marcas.prisma_presets).
+ *  Sólo admin+. Se normaliza con la MISMA función que usa el writer al leer
+ *  (lib/prisma/preset.ts): lo que se guarda es exactamente lo que H.Ü.E va a ver. */
+export async function guardarPrismaPreset(marcaId: string, raw: PresetGuardado): Promise<{ ok: true; preset: PresetGuardado } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!prismaActivo()) return { ok: false, error: "HÜE Prisma todavía no está activo." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin edita el preset de Prisma." };
+  // ESTRICTO al guardar: lo que no cabe se rechaza con motivo, no se recorta en silencio.
+  const v = validarPreset(raw);
+  if (!v.ok) return v;
+  const preset = v.preset;
+  // Vacío se guarda como NULL (= "sin preset": el writer cae al color de marca), no como {}.
+  // El UPDATE debe PROBAR que tocó la fila (.select): 0 filas = la marca ya no existe.
+  const { data, error } = await supabaseAdmin()
+    .from("marcas")
+    .update({ prisma_presets: presetVacio(preset) ? null : preset })
+    .eq("id", marcaId)
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    console.error("[admin] guardarPrismaPreset:", error.message);
+    return { ok: false, error: "No se pudo guardar el preset. Inténtalo otra vez." };
+  }
+  if (!data) return { ok: false, error: "La marca ya no existe." };
+  revalidatePath("/admin");
+  revalidatePath("/prisma");
+  return { ok: true, preset };
 }

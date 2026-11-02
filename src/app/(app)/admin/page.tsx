@@ -10,6 +10,7 @@ import {
   estadoIntegraciones,
   listarBiblioteca,
   listarMarcasPorCliente,
+  listarTipografiasGoogle,
 } from "./actions";
 import { listarInvitaciones, listarClientesUsuarios } from "./clientes-actions";
 
@@ -42,7 +43,7 @@ export default async function AdminPage({
     );
   }
 
-  const [equipo, soy, actividad, integraciones, biblioteca, marcas, invitaciones, clientesUsuarios] =
+  const [equipo, soy, actividad, integraciones, biblioteca, marcas, invitaciones, clientesUsuarios, tipografiasGoogle] =
     await Promise.all([
       listarEquipo(),
       getSoy(),
@@ -52,6 +53,7 @@ export default async function AdminPage({
       listarMarcasPorCliente(),
       listarInvitaciones(),
       listarClientesUsuarios(),
+      listarTipografiasGoogle(),
     ]);
 
   return (
@@ -59,6 +61,7 @@ export default async function AdminPage({
       equipoInicial={equipo}
       soy={soy}
       marcas={marcas}
+      tipografiasGoogle={tipografiasGoogle}
       actividad={actividad}
       integraciones={integraciones}
       biblioteca={biblioteca}

@@ -51,6 +51,7 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -65,6 +66,11 @@ function DialogContent({
           className
         )}
         {...props}
+        // Un clic en un aviso (sonner) no es "afuera": cerrar el aviso no debe cerrar el diálogo.
+        onInteractOutside={(ev) => {
+          if (ev.target instanceof Element && ev.target.closest("[data-sonner-toaster]")) return ev.preventDefault()
+          onInteractOutside?.(ev)
+        }}
       >
         {children}
         {showCloseButton && (

@@ -86,6 +86,174 @@ Pedro: "go with tier 1". La sesión estaba en la rama `prisma` (otra sesión tra
   allowlist de host para la pista de subtítulos, role="list", keys estables. SSRF/RLS/canónicas: limpios.
 - Ship (Pedro "ship it"): ff-merge a main desde el worktree (6fc0f81..d911a3d), push, 0064 aplicada en ybbrpqzbedaxsmotgtkh
   (tabla + RLS + columna verificadas). Live-verify de Pedro con un Doc real pendiente.
+## 2026-10-29 — HÜE Prisma › Formatos: textos editables, fondo con IA y recortes — rama `prisma` (preview), sin migración
+**Hecho (pusheado a `prisma`):** 3e4686b/3a7b7ba todo texto de una imagen plana sale editable (83/83 en la batería, sin IA)
+y «Rehacer el fondo con IA» · ca02c7d/6d2f575 piezas soltadas sin huecos con recortes SlimSAM dentro de la plataforma ·
+**5c45348** recortes sin pedazos sueltos (rayas negras bajo el tablero) ni borde del fondo (mancha en las puntas del
+botón), y avisos fijos que se cierran con el editor abierto (Radix ponía `pointer-events: none` en body).
+**Pruebas:** formatos 660/0 · tsc 0 · eslint 2 advertencias viejas · batería `BATERIA_IA=simulada` 83/83, 0 huecos.
+**No probado:** Gemini real con 5c45348; el aviso cerrable en navegador; el build de Vercel.
+**Decisiones / overrides:** Pedro: nunca proponer un servicio de pago nuevo (construir dentro de la plataforma); toda
+falla visible en imágenes de prueba se reporta. Lecciones en lessons.md (sustituto de IA "duro", avisos con diálogo).
+**Esperando a Pedro:** su prueba del estadio en la preview (tablero, botón, aviso del legal).
+**Pick up next:** lo que reporte Pedro; luego límites anotados en todo.md (badges de fcc6, contraste 600×500, base del
+tablero) y la parte B (registro de buenas prácticas).
+
+## 2026-10-21/22 — HÜE Prisma › Formatos: el legal (B24–B27) — rama `prisma` (preview), sin migración
+**Hecho (4 commits en `prisma`, todos pusheados):** B24 elegir el legal de la Biblioteca para todas las medidas (6d45126) ·
+B25 copiar lo editado a las medidas hermanas de la matriz (a17ba7f) · B26 la matriz de producción en el acomodo automático
+(182323c) · **B27 el legal en menos renglones** (29804c7). Detalle y números de cada uno en todo.md § Review B24…B27.
+**B27 (Pedro eligió la opción B; yo recomendé A, sólo banners → PEDRO_OVERRIDE en lessons.md):** cada número de renglones
+es otra versión del maestro (legal reescrito al ancho justo, iconos del pie a escala, mismo borde de abajo y centro). Las
+medidas anchas eligen solas la que da el legal más grande sin achicar lo demás (nota gris, no cuenta). En el editor, un
+selector «Automático (N) · 1 · 2 · 3 · como el PSD» por medida, con la letra del legal en px. Con s33 y la DiDi Sans:
+876×324 12.5 → 14.8 px; 640×100 en 2 renglones pero 9.8 px en la página (abajo del mínimo de 10, su aviso sigue);
+320×50 3.5 → 5.6; 1280×720 y 1200×627 se quedan en 3; las altas como el PSD.
+**Revisión:** dos pasadas. La segunda (re-verificación con el mismo revisor) encontró 3 serios que las pruebas y el navegador
+no vieron: lo movido a mano del legal no decía con qué forma del pie se movió, el editor lo abría sobre otra forma, y las
+opciones eran 1..6 en vez de las 6 de justo abajo del PSD. Arreglados (lo movido guarda sus renglones; sin renglones = la
+forma del PSD, que cuida lo guardado antes de B27). El navegador encontró otro: la clave de la caché de `revisarMedida` no
+llevaba las opciones y el editor de 1080×1920 decía «no se pueden cambiar».
+**Pruebas:** formatos 552/0 · prisma 975/0 · `npm test` exit 0 · `npm run build` exit 0 · tsc 0 · eslint sólo 2 advertencias
+viejas. Navegador (localhost, s33 + fuentes DiDi locales): selector en 640×100 y 1080×1920, guardar con el legal movido
+escribe `renglones: 2`, guardado imposible (5) suelta lo movido en tarjeta y editor, guardado sin renglones usa los 3 del
+PSD; 0 errores en consola; mis entradas de prueba en localStorage borradas.
+**No probado:** el build de Vercel de la preview; bajar el PSD editable en el navegador (sólo en Node con ag-psd).
+**Decisiones:** sin renglones guardados + legal movido = la forma del PSD; el automático quita como mucho la mitad de los
+renglones; las versiones de las medidas altas sólo se hacen si alguien las pide (editor o lo guardado).
+**Esperando a Pedro:** probar el selector en la preview con un PSD real y la tipografía del cliente.
+**Pick up next:** el veredicto de Pedro sobre B27; luego B4/B20 (todo.md). Pendiente menor anotado: cada versión se pinta dos
+veces y ocupa ~7 MB; sin tamaño mínimo de iconos al elegir a mano.
+**Environment:** sin dependencias nuevas, sin migraciones, sin `.env`. Servidores locales de prueba (s33 en :8765, fuentes en
+:8766) desde el scratchpad de la sesión. Este cierre se escribió en un worktree temporal desde `origin/prisma`: la carpeta
+principal tiene cambios sin guardar de OTRA sesión (el reset content-only del 2026-10-22: `scripts/reset-blank-slate.mjs`,
+una lección y 3 bloques automáticos en este archivo) y quedó detrás de origin; no los toqué.
+
+## 2026-10-22 — DiDi cambió de Google Sheet: sync al sheet nuevo + "# Entrega" ya no es obligatorio (SHIPPEADO en `main`; `prisma` NO tiene el código)
+Pedro: "quiero cambiar el spreadsheet a otro" → sheet nuevo de DiDi `1KZkgHXDaCH6RRMqjrtD7qKIF18rIhJQid8jSofOtK9Q` (privado),
+mismo formato y pestañas, SIN la columna "# Entrega" ("creo que no afectaba nada"). Sí afectaba: `mapHeader` la exigía en el
+encabezado (guard de pestaña equivocada → TODAS las pestañas habrían fallado) y `ALWAYS_REQUIRED` la pedía en cada tarea.
+**Hecho (en `main`, worktree `../greenlight-sheet` desde origin/main, ya borrado):**
+- `5c54f11` fix(sync): fuera del guard y de los obligatorios; migración **0080** (espejo SQL `missing_required`, sólo lo usa el
+  contract test); fuera del formulario "Crear brief" y de la tarjeta de revisión del sync; `ENTREGA` de vocab borrado;
+  fallback CSV apunta al sheet nuevo (privado → 401 ruidoso, nunca filas viejas). `ideas.entrega_num` se queda (tareas viejas).
+- `62884e9` quitar el aviso "Secreto del Sheet pendiente de rotar" de Admin › Integraciones (el secreto se rotó el 2026-08-25;
+  Pedro aprobó en chat; el clasificador lo bloqueó la 1ª vez como "borrar aviso de seguridad").
+- Gates: tsc 0 · lint 0 · build ok · `npm test` 1,098 checks 0 fallas (nuevos: header sin "# Entrega", fila sin "# Entrega" TS y SQL).
+**Apps Script (Pedro, en Google):** pegarlo DENTRO del sheet nuevo no se pudo publicar ("You do not have permission…", también en
+Incognito: el script de un sheet es del dueño del sheet). Se hizo un proyecto INDEPENDIENTE en el Drive de Pedro con
+`SHEET_ID` = sheet nuevo y el mismo `GREENLIGHT_SECRET`. URL nueva en Vercel `SHEETS_SCRIPT_URL` (production, sensitive).
+**Ship ("deploy it"):** push `254b745..62884e9` a main → deploy READY (aún con la URL vieja) → cambio de `SHEETS_SCRIPT_URL` →
+redeploy `dpl_6uBqyWw9…` READY en runna-greenlight.vercel.app. **0080**: el clasificador bloqueó mi `migrate.mjs`; Pedro la corrió
+(`--only 20261022120001 --project-ref ybbrpqzbedaxsmotgtkh`) → ledger 1, `missing_required` de una fila sin "# Entrega" = `{}`.
+**Verificado en vivo (Pedro logueado):** Sincronizar lista Brief 16/10 → 26/06 (Real/Normal); preview de Brief 16/10 = 12 + 11
+nuevas, sin errores (nada importado); "Crear brief" sin "# Entrega" (tampoco en "Falta:"); Executions del script nuevo muestra
+`doGet` → la app en vivo lee el sheet nuevo.
+**Pick up next:** las 23 tareas de Brief 16/10 esperan que el lead las revise/importe. Rama remota `origin/fix/sheet-sin-entrega`
+(ya en main) se puede borrar. Al juntar main → prisma entra el fix (choca sólo en tasks/*.md).
+**Rollback:** URL vieja en el script viejo ▸ Deploy ▸ Manage deployments (Vercel no deja leer la sensitive).
+
+## 2026-09-11 (2) — SHIP de la 1ª tanda (0065 + push) · otra versión BAJO DEMANDA · H.Ü.E aprende solo (rama `prisma`; 0066 PENDIENTE)
+Pedro: "ship it and yes variants on demand plus just make sure hue does learn and improve automatic".
+**Shippeado (1ª tanda):** pre-check en prod (6 prompts, 1 explicación con prefijo `[es]`, 0 sin prefijo) → `npm run migrate`
+aplicó **0065** al esquema `produccion` de Greenlight (ref ybbrpqzbedaxsmotgtkh) → verificado: `explicacion_es`/`_en` existen,
+la explicación quedó en `_es`, ledger = 20260911120001 → commit **fb1107c** → `git push origin prisma` (5a5008d..fb1107c,
+preview de Vercel). main NO tocado.
+**Construido (2ª tanda, working tree):**
+- **Otra versión bajo demanda** — en el resultado: "Más segura / Más audaz / Mínima" → `variar` = UNA llamada extra sólo al
+  pedirla (`bloqueVariante`, instrucción fija por versión). La versión nace como spec HERMANO (misma idea/refs/marca) con su
+  prompt etiquetado `variante`; refinar / cambiar herramienta / explicar / historial / pulgar funcionan igual. Chip "Versión:
+  Audaz"; etiqueta en el historial. Se pide sobre la herramienta que el diseñador está VIENDO (`estadoActual`: herramienta y
+  versión del último prompt) — de paso arregló un bug viejo: refinar después de cambiar de herramienta volvía a la original.
+- **Aprendizaje automático** — migración **0066 `prisma_eventos`** (copiado / abierto en la herramienta / versión pedida /
+  cambio pedido; desnormalizada por marca; RLS master; índice único prompt+quién+tipo; check de 300 letras). Captura sin
+  bloquear (`anotarEvento`). `lib/prisma/aprendizaje.ts` (puro) destila por marca: GANADORES (copiados/abiertos/pulgar
+  arriba, sin pulgar abajo, mismo trabajo primero, sin repetir spec, máx 3 × 500 letras) + VERSIONES preferidas (≥3 pedidas) +
+  últimos 5 CAMBIOS pedidos. `generarPrompt` lo mete al final del bloque variable, cercado (`<winner>`, `<change>`) como
+  dato, no orden; el diseñador ve "HÜE se apoyó en N prompts que ya sirvieron para esta marca". Cero curaduría: mejora sola
+  con el uso. Con 6 prompts en prod hoy no hay nada que aprender aún; empieza a contar desde que se aplique la 0066.
+- Gates: tsc 0 · lint 0 · test-prisma **181** · test-db **417** · isolation · actions · build. Smoke real de `variarSpec`
+  (audaz): válido a la 1ª, cambió luz y cámara, conservó el producto, 6.4 s. Navegador: demo con los 3 botones apagados.
+- Reap seguridad (Opus): 1 crítico + 4 serios; lo de código ARREGLADO (cercas + `cercado()` sin ángulos, invisibles Unicode
+  fuera, freno por identidad 40/10 min en todo lo facturable, eventos deduplicados, UUID central, bug de herramienta). Dos
+  ACEPTADOS como decisión de producto y documentados: la memoria es por MARCA (no por autor) y cualquier interno alimenta
+  la marca (un cliente hoy). Reap de salud (Sonnet): 5 serios, todos arreglados — la versión se perdía al cambiar de
+  herramienta; acciones cruzadas pisaban el resultado; la versión no salía en el historial; aplanar los ganadores borraba
+  la estructura (ahora `cercadoMultilinea`). Detalle en todo.md § Review. Gates finales: test-prisma 183 · test-db 418.
+**Current state:** 1ª tanda LIVE en el preview. 2ª tanda: reapeada, commit **5b5f9b6**, pusheada al preview;
+**0066 APLICADA** con el segundo "ship it" de Pedro (verificada en prod: RLS, policy, índice único, columna origen_spec_id, ledger 20260911120002). Eventos y aprendizaje ENCENDIDOS en el preview.
+**Decisions made:** versiones bajo demanda (no 3 de golpe); versión = spec hermano; memoria por marca; captura fire-and-forget;
+lo humano que entra al prompt siempre cercado y sin ángulos; freno en memoria por identidad (best-effort, como el login).
+**Pick up next session:** live-verify de Pedro (a)–(e) en todo.md → mirar `prisma_eventos` tras una semana de uso real y, si hay
+decenas de eventos por marca, revisar que los ganadores que elige tengan sentido. Nada pendiente de código.
+**Environment changes:** ninguna dependencia nueva.
+**CIERRE (wrap-up 2026-09-11):** 4 commits en `prisma` (fb1107c · 5b5f9b6 · bff75ed · 192864c), 31 archivos, +1,945/−173,
+todo pusheado, working tree limpio. Migraciones 0065 y 0066 APLICADAS y verificadas en prod. main intacto (9 adelante; prisma
+13 adelante; merge en seco sólo choca en tasks/*.md). Stashes que quedan: `stash@{0}` en main = la lección "qué es HÜE Prisma"
+(ya copiada a lessons.md de esta rama; al volver a main, `git stash pop` o `drop`); `stash@{1}` en prisma = bloque auto-generado
+del session-log del 2026-09-08 (ruido; se puede soltar). Lecciones logueadas hoy: 12 (2 WIN, 3 TIME_SINK/LESSON de tooling, 1
+sobre la ventana del "ship it", 1 de tests de privilegios, el resto de diseño). Procesos: dev server local DETENIDO; 4 agentes de
+review terminaron; sin watchers ni crons. Lo único vivo es el preview de Vercel.
+
+## 2026-09-11 — HÜE Prisma: presets en Admin · personajes guardados · explicación por idioma (rama `prisma`, SIN commit · SIN push · 0065 PENDIENTE de "ship it")
+Pedro: "1 yes · 2 needs more thought (¿cuánto más caro? ¿puede H.Ü.E aprender de lo que elige el diseñador?) · 3 yes · 4 yes ·
+don't merge main yet, leave it where it is". Sesión arrancó en `main` con una lección sin commitear (qué ES HÜE Prisma): quedó en
+`git stash@{0}` de main y copiada a lessons.md de esta rama.
+**Hecho (working tree de `prisma`, 16 archivos tocados + 5 nuevos + 2 scripts):**
+- **A. Presets de marca en Admin › Marcas** — botón "Prisma" por marca abre un editor (paleta hex con color picker, tono, evitar,
+  formato por default) → `guardarPrismaPreset` (admin+, flag). `src/lib/prisma/preset.ts` es la ÚNICA forma del preset: la lee el
+  writer (`presetDeMarca`) y la valida el Admin (`validarPreset`, ESTRICTO: rechaza, no recorta). Sin migración (columna de 0063).
+- **B. Personajes / productos guardados** — en el paso 3, bajo la marca: chips de los guardados + "Guardar uno nuevo" (nombre,
+  foto opcional con el mismo uploader, notas en español) → "Que HÜE lo describa" PROPONE la descripción en inglés (40–80 palabras,
+  con lo que vio en la foto) → el diseñador la corrige → Guardar (`crearPersonaje`; el cliente se deriva de la marca en el
+  servidor). Retirar = active=false (el autor o lead/admin/master, misma regla `puedeTocar` que los specs). Al elegir uno con foto,
+  su foto entra como referencia si el slot de persona/producto está vacío y sale al soltarlo (pure fn, 13 tests). Los personajes se
+  PIDEN al elegir la marca (`listarPersonajes`), no viajan con la página. Sin migración.
+- **C. Explicación por idioma** — migración **0065**: `explicacion` → `explicacion_es` + `explicacion_en` (backfill: prefijo
+  "[es]"/"[en]" → su columna; sin prefijo → español, que era el default de 0063; luego drop). `explicar()` lee/escribe la columna del
+  idioma y, si el preview corre antes que la 0065, entrega igual sin cachear (warn en log).
+- Gates: tsc 0 · eslint 0 · test-prisma **161** (+41) · test-db **407** (+7) · isolation · actions · build. Smoke REAL del modelo
+  con el loader nuevo (`node --env-file=.env.local --import ./scripts/register-hooks.mjs`): 80 palabras, inglés, 3.9 s, ~$0.002.
+- Reap: seguridad (Opus) 0 críticos / 4 serios / 8 menores; salud (Sonnet) 1 serio / 6 menores — TODO lo serio arreglado (detalle en
+  todo.md § Review): personajes por marca bajo demanda, cliente derivado de la marca, `plano()` + cercas para todo texto humano que
+  entra al prompt, tope a los ítems del ADN, UUID en ids, errores crudos fuera, paleta sólo hex, backfill sin pérdida, guardar/
+  retirar tardíos no pisan la UI tras cambiar de marca.
+- Navegador (local, sin sesión): estudio → paso 3 → bloque de personajes → formulario → "Que HÜE lo describa" → toast "Inicia
+  sesión para usar HÜE Prisma." (gate, sin 500). `?demo=resultado` sigue. 0 errores de consola/servidor. Lo que exige sesión
+  (guardar de verdad, Admin) queda como LIVE-VERIFY de Pedro en el preview (todo.md).
+**Current state:** código listo y verificado; NADA commiteado ni pusheado (Pedro decide). Migración 0065 NO aplicada a prod.
+**Uncommitted work:** todo lo de arriba + `tasks/*` + `scripts/register-hooks.mjs` + `scripts/node-hooks.mjs`.
+**Decisions made:** (1) el cliente de un personaje lo deriva el servidor de la marca (nunca del navegador); (2) los personajes se
+piden por marca, bajo demanda (no en la página); (3) paleta SÓLO hex, en servidor y editor (una regla); (4) guardar = estricto,
+leer = tolerante; (5) toda frase humana que se inyecta al prompt va en una línea y cercada; (6) `explicar` tolera la columna
+ausente para que preview y migración no tengan que ir juntos.
+
+**Variantes (segura / audaz / mínima) — análisis para la decisión de Pedro.** Precio real de Sonnet 5 (tabla oficial cargada
+hoy): $2 / 1M tokens de entrada, $10 / 1M de salida; caché: escribir $2.50, leer $0.20. Uso real en prod (5 prompts guardados):
+874 entrada + 3,811 escritura de caché + 761 salida por prompt ≈ **$0.019** (≈ 2 centavos). Dato incómodo: `cache_read` = 0 en
+los 5 — la caché de 5 min nunca pegó (las generaciones van espaciadas), así que el bloque "cacheado" cuesta 1.25× en vez de 0.1×.
+- 1 llamada que devuelve 3 specs (entrada igual, salida ×3): ≈ **$0.034** → **1.8×**.
+- 3 llamadas (la 2ª y 3ª sí pegan caché): ≈ **$0.039** → **2.1×**.
+- Por 100 prompts/mes: hoy ≈ $1.90 → con variantes ≈ $3.40–3.90. El costo en dólares NO es el problema; el costo real es
+  latencia (salida ×3: ~10 s → ~25 s) y la atención del diseñador (leer 3 prompts).
+- **Recomendación:** variantes BAJO DEMANDA — en el resultado, "Dame otra versión: más segura / más audaz / mínima" = un refine con
+  instrucción fija (1 llamada extra SÓLO cuando se pide, ~$0.01). Cuesta cero si nadie lo usa y el click ES la señal de
+  aprendizaje. Si Pedro prefiere las 3 de golpe: 1 llamada / 3 specs (1.8×), nunca 3 llamadas.
+**¿Puede H.Ü.E aprender de lo que elige el diseñador? Sí — con el mismo molde que ya usa para guiones (Cerebro + Ganadores):**
+1. CAPTURAR (sin modelo, barato): hoy sólo hay pulgar (prisma_ratings). Faltan las señales fuertes: qué prompt se COPIÓ o se
+   ABRIÓ en la herramienta, qué variante se eligió, qué cambios pidió (el texto del refine no se guarda hoy) y si editó el
+   prompt antes de copiarlo. Una tabla `prisma_eventos` (prompt_id, tipo, nota) o columnas en prisma_prompts.
+2. AGREGAR (SQL/código): por marca + trabajo: "en fotos de producto de DiDi Card copian la audaz 70%; el refine más común es
+   'más luz cálida'".
+3. DEVOLVER al writer: (a) 2–3 "prompts ganadores" de la misma marca+trabajo como ejemplares en el bloque variable (few-shot,
+   igual que GUIONES GANADORES); (b) una línea de "preferencias aprendidas de esta marca"; (c) opcional, un "Cerebro Prisma"
+   destilado (H.Ü.E resume las últimas N elecciones en 3–5 reglas por marca, revisables en el H.Ü.E Hub, patrón hue_sintesis).
+Condición: VOLUMEN. Prod tiene 5 prompts en total; aprender necesita decenas de elecciones por marca. Orden sugerido: capturar ya
+(barato), devolver cuando haya datos. Nada de esto se construyó hoy — es la respuesta a la pregunta 2.
+**Pick up next session:** "ship it" → contar explicaciones sin prefijo → `node scripts/migrate.mjs` (0065) → commit + `git push
+origin prisma` → LIVE-VERIFY de Pedro (a/b/c en todo.md) → decisión de variantes / captura de elecciones.
+**Environment changes:** ninguna dependencia nueva. Scripts nuevos: `scripts/register-hooks.mjs` + `scripts/node-hooks.mjs`
+(smokes de libs server-only en node suelto). Dev server local (preview) quedó corriendo en :3000 al cierre de este turno.
 
 ## 2026-09-03 — LIVE REFRESH (0062) — SHIPPEADO (main 62bb720 · migración aplicada) + evaluación de "H.Ü.E lee referencias"
 Pedro pidió dos cosas: (1) que la plataforma se refresque sola al cambiar estado / asignación; (2) evaluar si H.Ü.E puede
@@ -1904,6 +2072,245 @@ se ve igual que la respuesta correcta).
 - [ ] **LIVE-VERIFY de Pedro**: en una tarea, pega en Referencia una liga de TikTok pública → al recargar, bajo "Ver
 - [ ] **LIVE-VERIFY de Pedro**: en una tarea, pegar en Referencia una liga de Google Doc compartida "cualquiera con la
 - [ ] Decisión pendiente: Tier 2 (TikTok/IG caption+hashtags vía oEmbed) y Tier 3 (video real, API de pago) — medir
+## 2026-09-03 15:33
+**Shipped (recent commits):**
+  - docs(live refresh): shippeado — 0062 aplicada, Realtime arrancado (particiones), lecciones + log
+  - feat(live): la plataforma se refresca sola al cambiar estado/asignación (Realtime Broadcast, 0062)
+  - docs(wrap-up): blank-slate reset content-only HECHO + verificado; learnings de H.Ü.E intactas
+  - chore(reset): clasificar tablas nuevas (copies, hue_*, notification_prefs) + flag --content-only
+  - docs(wrap-up): cierre de sesión — reap + 0061 + 4 features + restructura del portal, todo LIVE
+  - docs: Enviar a cliente persiste al confirmar — todo
+  - fix(cambios cliente): confirmar un cambio ya no hace desaparecer "Enviar a cliente"
+  - docs: confirmar desde el panel de cambios — todo
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-03 (tarde) — HÜE Prisma v1 construido en la rama `prisma` (sin commit, sin migración)
+**What we did:** Teardown de rocoprompt.com (14 bots Gemini; informe + fuente en docs/roco-teardown/). Con eso, plan aprobado
+y construido HÜE Prisma: estudio de prompts dentro de Greenlight. Un spec único (lib/prisma/spec.ts) → 5 compilers (Nano
+Banana, Veo 3.1, Kling, Sora 2, Higgsfield) → validators deterministas; writer con Claude Sonnet 5 (bloque estable cacheado,
+tool_use, 1 reparación) + pase de visión (caption + ADN visual); UI de 3 puertas → trabajo → 3 pasos → resultado (copiar, abrir,
+cambiar herramienta, explicar, refinar, pulgar) + historial + ES/EN; migración 0063 (5 tablas prisma_* + marcas.prisma_presets).
+Reap: 2 agentes (seguridad Opus, salud Sonnet) → 4 serios de seguridad + 1 crítico de UI arreglados (gate exige identidad, IDOR en
+calificar, destino/videoType validados, storage_path estricto, errores de BD no crudos, try/finally en toda llamada a action,
+idioma del diálogo, nombres de herramienta y duraciones en una sola fuente, esSpec() al leer jsonb, reset al cambiar de job).
+**Current state:** tsc · eslint · build · test-lib (481) · test-db (400) · test-prisma (78) en verde. En preview local: subida +
+visión + 3 pasos + sugerencia de herramienta verificados; "Generar" falla con toast limpio porque las tablas no existen aún.
+Writer verificado VIVO contra Claude desde scratchpad (spec válido a la 1ª, refine sólo cambia la luz, cache_read=3811).
+**Uncommitted work:** TODO (13 rutas en git status): src/lib/prisma/*, src/components/prisma/*, src/app/(app)/prisma/*,
+supabase/migrations/…0063_prisma.sql, scripts/test-prisma.mjs, docs/roco-teardown/*, y edits en roles.ts, sidebar.tsx,
+database.types.ts, package.json, tasks/*.
+**Decisions made:** (1) módulo dentro de Greenlight (rama + flag NEXT_PUBLIC_PRISMA_ENABLED; en dev siempre encendido), no repo
+aparte; (2) TODOS los prompts salen en inglés (el diálogo conserva su idioma) para poder recompilar un spec a cualquier herramienta;
+(3) leads ven/tocan los prompts de toda la agencia (canVerTodoPrisma) — deliberado, un solo cliente hoy; (4) Midjourney fuera de v1.
+**Pick up next session:** 1) Pedro: `git add -A && git commit` en `prisma`; 2) "ship it" → `npm run migrate` (0063) — NUNCA
+`supabase db push`; 3) Vercel Preview env: NEXT_PUBLIC_PRISMA_ENABLED=true; 4) probar la pantalla de RESULTADO en vivo (no se
+pudo sin tablas): copiar, cambiar herramienta, explicar, refinar, pulgar, historial; 5) prueba con un diseñador (foto de producto +
+animar foto); 6) deuda: UI de personajes y de presets de marca en Admin, variantes segura/audaz/mínima, throttle por usuario en
+analizarImagen, archivos huérfanos en `prisma/` si el usuario abandona.
+**Environment changes:** ninguno (la entrada temporal `greenlight` en ~/Downloads/.claude/launch.json se creó y se borró).
+
+## 2026-09-04 — "ship it" de HÜE Prisma
+**What we did:** `npm run migrate` → 0063 aplicada al esquema producción de Greenlight (proyecto ybbrpqzbedaxsmotgtkh); verificadas
+5 tablas prisma_* con RLS + marcas.prisma_presets. Commit 98ad6dc en la rama `prisma` y push a GitHub (Runna-Ad/greenlight) → preview
+de Vercel. main intacto.
+**Pick up next session:** flag NEXT_PUBLIC_PRISMA_ENABLED=true en Preview de Vercel · probar resultado/refinar/historial con login
+real · prueba con diseñador · decidir merge a main (= deploy a prod; el módulo queda oculto tras el flag hasta encenderlo).
+
+## 2026-09-04 08:45
+**Shipped (recent commits):**
+  - docs(prisma): 0063 aplicada + ship en rama prisma — todo y session-log
+  - feat(prisma): HÜE Prisma v1 — estudio de prompts (una idea → un prompt por herramienta)
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-04 09:08
+**Shipped (recent commits):**
+  - chore(prisma): redeploy preview con NEXT_PUBLIC_PRISMA_ENABLED
+  - docs(prisma): 0063 aplicada + ship en rama prisma — todo y session-log
+  - feat(prisma): HÜE Prisma v1 — estudio de prompts (una idea → un prompt por herramienta)
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-04 10:25
+**Shipped (recent commits):**
+  - chore(prisma): redeploy preview con las variables de Supabase y Anthropic
+  - chore(prisma): redeploy preview con NEXT_PUBLIC_PRISMA_ENABLED
+  - docs(prisma): 0063 aplicada + ship en rama prisma — todo y session-log
+  - feat(prisma): HÜE Prisma v1 — estudio de prompts (una idea → un prompt por herramienta)
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-04 11:00
+**Shipped (recent commits):**
+  - copy(prisma): español natural de México en toda la interfaz + razones bilingües
+  - feat(prisma): el nombre manda — "HÜE Prisma" en Poppins, "Prisma" con el espectro, ítem del menú encendido
+  - feat(prisma): identidad propia — espectro por herramienta, haz de prisma, motion CSS
+  - chore(prisma): redeploy preview con las variables de Supabase y Anthropic
+  - chore(prisma): redeploy preview con NEXT_PUBLIC_PRISMA_ENABLED
+  - docs(prisma): 0063 aplicada + ship en rama prisma — todo y session-log
+  - feat(prisma): HÜE Prisma v1 — estudio de prompts (una idea → un prompt por herramienta)
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: aprobar una tarea (Greenlit) → como admin/master moverla fuera de Greenlit a
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+## 2026-09-04 (pm) — Prisma: texto en la pieza + ChatGPT Images
+**Pedro reportó:** escribió un titular en la idea y el prompt lo ignoró. Causa: sin casilla `texto` en el spec (el writer lo censuraba como slogan) + el compiler de foto_producto ni leía `accion`.
+**Hecho (commit 77a8f0e, rama prisma, preview auto):**
+- `PromptSpec.texto` {contenido, posicion, estilo} + input propio en paso 1 ("¿Lleva texto la pieza?"). El código impone lo escrito tal cual; el modelo sólo aporta posición/estilo (o rescata frases entre comillas de la idea si el campo va vacío).
+- Los 6 compilers pintan el texto y quitan "no text overlays" cuando hay texto; validator exige el texto entre comillas. foto_producto ya usa `accion`.
+- Nueva herramienta **ChatGPT Images** (verde #3dd68c) para TODOS los trabajos de imagen/edición: cuerpo compartido con Nano Banana (`cuerpoImagen` + etiquetador), refs como "the first attached image", tamaño square/portrait/landscape. Routing: con texto → ChatGPT; sin texto → Nano Banana.
+- PROMPT_VERSION 2026-09-04.1. Gates: tsc ✓ eslint ✓ next build ✓ test-prisma 120 ✓.
+**Pendiente:** Pedro prueba en el preview con un titular real (campo nuevo bajo la idea). Sin migración (tool es `text`). Main intacto.
+
+## 2026-09-11 10:23
+
+**Still open:**
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **Decisión de Pedro — variantes (segura/audaz/mínima)**: ver el análisis de costo y el diseño de "aprender de las
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+
+
+## 2026-09-11 11:08
+**Shipped (recent commits):**
+  - docs(prisma): 0066 aplicada — todo, session-log, project-state
+  - docs(prisma): session-log — commit de la 2ª tanda
+  - feat(prisma): otra versión bajo demanda + H.Ü.E aprende solo (eventos 0066, pendiente de aplicar)
+  - feat(prisma): presets de marca en Admin + personajes guardados + explicación por idioma (0065)
+
+**Still open:**
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro** (portal = cliente, no visible en local): entrar → grid de marcas (Card/Préstamos con
+
+
+## 2026-09-11 14:49
+**Shipped (recent commits):**
+  - docs(prisma): wrap-up — lecciones, observaciones de skills y cierre del session-log
+  - docs(prisma): 0066 aplicada — todo, session-log, project-state
+  - docs(prisma): session-log — commit de la 2ª tanda
+  - feat(prisma): otra versión bajo demanda + H.Ü.E aprende solo (eventos 0066, pendiente de aplicar)
+  - feat(prisma): presets de marca en Admin + personajes guardados + explicación por idioma (0065)
+
+**Still open:**
+- [ ] **SHIP** (necesita "ship it"): `npm run migrate` (0067) → commit → `git push origin prisma`.
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-11 15:07
+**Shipped (recent commits):**
+  - feat(prisma): F0 — Sora fuera, conocimiento vivo por herramienta (0067 pendiente de aplicar)
+  - docs(prisma): wrap-up — lecciones, observaciones de skills y cierre del session-log
+  - docs(prisma): 0066 aplicada — todo, session-log, project-state
+  - docs(prisma): session-log — commit de la 2ª tanda
+  - feat(prisma): otra versión bajo demanda + H.Ü.E aprende solo (eventos 0066, pendiente de aplicar)
+  - feat(prisma): presets de marca en Admin + personajes guardados + explicación por idioma (0065)
+
+**Still open:**
+- [ ] **SHIP** (necesita "ship it"): `npm run migrate` (0067). El código ya está en `prisma` (preview seguro sin la 0067: sin notas,
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-11 16:01
+**Shipped (recent commits):**
+  - feat(prisma): F1 — compilers al día + "Úsalo en…" (Nano Banana 2/Pro, gpt-image-2.5, Veo 3.1, Kling 3)
+  - docs(prisma): 0067 aplicada — todo y project-state (F0 cerrada, sigue F1)
+  - feat(prisma): F0 — Sora fuera, conocimiento vivo por herramienta (0067 pendiente de aplicar)
+  - docs(prisma): wrap-up — lecciones, observaciones de skills y cierre del session-log
+  - docs(prisma): 0066 aplicada — todo, session-log, project-state
+  - docs(prisma): session-log — commit de la 2ª tanda
+  - feat(prisma): otra versión bajo demanda + H.Ü.E aprende solo (eventos 0066, pendiente de aplicar)
+  - feat(prisma): presets de marca en Admin + personajes guardados + explicación por idioma (0065)
+
+**Still open:**
+- [ ] Reap (Opus seguridad + Sonnet salud) → arreglos → commit → `git push origin prisma`.
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
 - [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
 - [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
 - [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
@@ -1919,6 +2326,14 @@ se ve igual que la respuesta correcta).
 - [ ] **LIVE-VERIFY de Pedro**: en una tarea, pega en Referencia una liga de TikTok pública → al recargar, bajo "Ver
 - [ ] **LIVE-VERIFY de Pedro**: en una tarea, pegar en Referencia una liga de Google Doc compartida "cualquiera con la
 - [ ] Decisión pendiente: Tier 2 (TikTok/IG caption+hashtags vía oEmbed) y Tier 3 (video real, API de pago) — medir
+## 2026-09-14 14:09
+
+**Still open:**
+- [ ] Reap (Opus seguridad + Sonnet salud) → arreglos → commit → `git push origin prisma`.
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
 - [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
 - [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
 - [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
@@ -2065,3 +2480,919 @@ oculto en borradores. Lead/admin: arrastre directo (su tarea no tiene "Mandar a 
 H.Ü.E es chequeo del navegador (advisory). SPAPVOYSCRIPT5ONEMANINTRO tiene 4 typos reales (efectibo, acorde, conplicaciones, solisita).
 Copy "Acciones de Master Builder" en la variante prominente de AccionesTarea = código muerto.
 **Environment:** worktree con `npm ci` propio (node_modules real, ver lesson worktree+Turbopack). Rama claude/sharp-swirles-54ddbf ya fusionada.
+## 2026-09-14 15:09
+**Shipped (recent commits):**
+  - fix(prisma): la entrevista se veía vacía — la salida del tool_use puede venir como string JSON
+  - docs(prisma): F3 cerrada — project-state; sigue F4
+  - feat(prisma): F3 — la entrevista (≤ 3 preguntas rápidas, cero cuando la idea ya lo dice todo)
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-14 16:05
+**Shipped (recent commits):**
+  - feat(prisma): F4 — "sube lo que salió": veredicto de H.Ü.E, corrección sobre la imagen, resultado final aceptado (0070 PENDIENTE de "ship it")
+  - docs(prisma): 0069 aplicada — todo, project-state
+  - feat(prisma): H.Ü.E se corrige solo con sus propias reglas + prompts más cortos + palabras llanas
+  - fix(prisma): la entrevista se veía vacía — la salida del tool_use puede venir como string JSON
+  - docs(prisma): F3 cerrada — project-state; sigue F4
+  - feat(prisma): F3 — la entrevista (≤ 3 preguntas rápidas, cero cuando la idea ya lo dice todo)
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: en una tarea devuelta a revisión con un cambio "Atendido · por confirmar", el panel
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-15 10:17
+
+**Still open:**
+- [ ] Reap (security Opus + salud Sonnet) · commit + push a `prisma`.
+- [ ] **Miniaturas de los looks** (pendiente de Pedro): el conector `nano-banana` apunta a un modelo retirado
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-14 → 2026-09-15 Session — HÜE Prisma v1: F4 "sube lo que salió" (0070 aplicada) + F5a pulido y el Look rehecho
+**What we did:** F4 completa y SHIPPEADA (390b013 + docs c847026; migración 0070 aplicada y verificada en prod): el diseñador
+sube lo que salió, H.Ü.E lo compara en una llamada con visión (7 puntos ✓/✗, refine, corrección), "Corregir este resultado"
+(spec hermano oculto `correccion`), "Refinar el original", "Marcar como resultado final"; aprende (ganadores por fuerza de
+señal, patrón de fallos → "Úsalo en…" sube a Pro/sunburst). Reap F4: 0 críticos; 2 medios + 5 bajos arreglados (cercas del
+spec que vuelve al writer, texto pintado en la imagen = contenido, evento aceptado por RESULTADO, tope 3.5 MB, limpieza
+del bucket, sólo prompt vigente). F5a (7a0f8c6, sin migración): paso 2 rehecho como 33 "looks" con H.Ü.E sugiere + hábitos
+de marca + "Ajustar" con Ángulo y etiquetas llanas; marca al paso 1; adaptar a otros formatos; zonas seguras story/TikTok;
+prompt primero, juicio después; Hub › Prisma › Informe; a11y. Tests: prisma 658, db 460, npm test, tsc, lint, build.
+**Current state:** todo en preview (rama `prisma`), sin merge a main (Pedro). 0063–0070 aplicadas en prod.
+**Uncommitted work:** ninguno (árbol limpio tras 7a0f8c6 + este commit de docs).
+**Decisions made:** (1) Comparar el resultado = UNA llamada con visión (caption + veredicto + refine + corrección), no
+caption/ADN + comparación. (2) `correccion` es job OCULTO (rol de ref `resultado`); la corrección la arma el CÓDIGO desde
+`correccion_en`; en video sólo cabe refinar. (3) Looks en código (golden test) y a tabla en F6 (Vigía). (4) La marca se
+elige en el paso 1 porque la entrevista y los hábitos la necesitan antes. (5) Tope de visión 3.5 MB (base64 × 1.33 < 5 MB).
+(6) F5b (ronda con diseñadores) espera a que Pedro tenga 5–10 briefs reales; el Informe del Hub ya la mide.
+**Pick up next session:** (1) El reap de SECURITY de F5a llegó tras el wrap-up y se aplicó (commit siguiente a 0e86f0b:
+hábitos sólo con vocabulario conocido, look cercado, cubo "juicio", bloquea en adaptar); el de SALUD (Sonnet) llegó después y también se aplicó
+(linaje de corrección en variar/adaptar, spinner del informe, juicio sin bloquear, sugerencia que se actualiza, zona segura
+más corta). Los dos reaps de F5a quedaron cerrados en esta misma sesión. (2) Pedro: miniaturas de los looks — exportar GEMINI_API_KEY en la shell,
+`node scripts/looks-thumbs.mjs`, poner `FOTOS_LISTAS = true` en looks.ts, commit; el conector `nano-banana` apunta a un
+modelo retirado (usar `nano-banana-2` o actualizarlo). (3) Pedro live-verify en preview (todo.md § F4 y § F5a). (4) Luego
+F6 Vigía (0071/0072, cada una con "ship it") o F5b si ya hay briefs. Diferido: memoria de marca abierta a cualquier rol
+interno (security LOW F4); referencias > 3.5 MB sin ADN; la corrección repetida no trae su propio resultado.
+**Environment changes:** ninguno (sin deps nuevas; 0070 en prod; `scripts/looks-thumbs.mjs` y `scripts/smoke-veredicto.mjs`
+nuevos, manuales).
+
+## 2026-09-15 11:23
+**Shipped (recent commits):**
+  - refactor(prisma): filaHermana — una función decide qué columnas viajan al spec hermano (variar / adaptar / corregir)
+  - fix(prisma): F5a reap de salud — linaje de corrección en variar/adaptar, juicio sin bloquear, sugerencia al día, informe (spinner, personas), zona segura sólo al crear
+  - fix(prisma): F5a reap de seguridad — hábitos sólo con vocabulario conocido, look cercado al writer, cubo propio del juicio, bloquea en adaptar
+  - docs(prisma): cierre de sesión — session-log, lessons, todo (F5a 7a0f8c6, reap pendiente)
+  - feat(prisma): F5a — el Look rehecho (looks con foto, H.Ü.E sugiere, hábitos de marca), adaptar a otros formatos, zonas seguras, juicio en segundo plano, informe en el Hub, a11y
+
+**Still open:**
+- [ ] Siguiente (mismo tipo de bug, fuera de esta tanda): `cargarHabitos` y el denominador `entrevista.specs` del informe
+- [ ] **Miniaturas de los looks** (pendiente de Pedro): el conector `nano-banana` apunta a un modelo retirado
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-15 13:27
+**Shipped (recent commits):**
+  - refactor(prisma): filaHermana — una función decide qué columnas viajan al spec hermano (variar / adaptar / corregir)
+  - fix(prisma): F5a reap de salud — linaje de corrección en variar/adaptar, juicio sin bloquear, sugerencia al día, informe (spinner, personas), zona segura sólo al crear
+  - fix(prisma): F5a reap de seguridad — hábitos sólo con vocabulario conocido, look cercado al writer, cubo propio del juicio, bloquea en adaptar
+  - docs(prisma): cierre de sesión — session-log, lessons, todo (F5a 7a0f8c6, reap pendiente)
+  - feat(prisma): F5a — el Look rehecho (looks con foto, H.Ü.E sugiere, hábitos de marca), adaptar a otros formatos, zonas seguras, juicio en segundo plano, informe en el Hub, a11y
+
+**Still open:**
+- [ ] Siguiente (mismo tipo de bug, fuera de esta tanda): `cargarHabitos` y el denominador `entrevista.specs` del informe
+- [ ] **Miniaturas de los looks** (pendiente de Pedro): el conector `nano-banana` apunta a un modelo retirado
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+- [ ] **LIVE-VERIFY de Pedro** (el socket NO se puede probar en local: login apagado → sin sesión → sin suscripción):
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+- [ ] **LIVE-VERIFY de Pedro**: cliente pide cambios → como lead, confirmar TODOS los cambios en el panel → la barra
+- [ ] **SHIP** (necesita "ship it"; sólo `git push origin main`, sin migración).
+
+
+## 2026-09-15 14:27
+**Shipped (recent commits):**
+  - fix(prisma): las copias ya no cuentan como ideas — hábitos de marca e informe sólo con specs originales
+  - feat(prisma): miniaturas de los 33 looks (Nano Banana 2, 480 px, 1 MB) + FOTOS_LISTAS = true
+  - refactor(prisma): filaHermana — una función decide qué columnas viajan al spec hermano (variar / adaptar / corregir)
+  - fix(prisma): F5a reap de salud — linaje de corrección en variar/adaptar, juicio sin bloquear, sugerencia al día, informe (spinner, personas), zona segura sólo al crear
+  - fix(prisma): F5a reap de seguridad — hábitos sólo con vocabulario conocido, look cercado al writer, cubo propio del juicio, bloquea en adaptar
+  - docs(prisma): cierre de sesión — session-log, lessons, todo (F5a 7a0f8c6, reap pendiente)
+  - feat(prisma): F5a — el Look rehecho (looks con foto, H.Ü.E sugiere, hábitos de marca), adaptar a otros formatos, zonas seguras, juicio en segundo plano, informe en el Hub, a11y
+
+**Still open:**
+- [ ] Reap (security Opus + salud Sonnet) · docs · commit/push · **"ship it" para 0071**.
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+- [ ] **LIVE-VERIFY de Pedro (preview)**: (d) resultado → "Más audaz" → nueva versión con chip "Versión: Audaz", herramienta
+
+
+## 2026-09-15 15:37
+**Shipped (recent commits):**
+  - feat(prisma): F6a — los datos de cada herramienta, editables en el Hub (0071 APLICADA)
+  - fix(prisma): las copias ya no cuentan como ideas — hábitos de marca e informe sólo con specs originales
+  - feat(prisma): miniaturas de los 33 looks (Nano Banana 2, 480 px, 1 MB) + FOTOS_LISTAS = true
+  - refactor(prisma): filaHermana — una función decide qué columnas viajan al spec hermano (variar / adaptar / corregir)
+  - fix(prisma): F5a reap de salud — linaje de corrección en variar/adaptar, juicio sin bloquear, sugerencia al día, informe (spinner, personas), zona segura sólo al crear
+  - fix(prisma): F5a reap de seguridad — hábitos sólo con vocabulario conocido, look cercado al writer, cubo propio del juicio, bloquea en adaptar
+  - docs(prisma): cierre de sesión — session-log, lessons, todo (F5a 7a0f8c6, reap pendiente)
+  - feat(prisma): F5a — el Look rehecho (looks con foto, H.Ü.E sugiere, hábitos de marca), adaptar a otros formatos, zonas seguras, juicio en segundo plano, informe en el Hub, a11y
+
+**Still open:**
+- [ ] Reap salud (Sonnet): en curso.
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+
+
+## 2026-09-15 Session (2) — HÜE Prisma: filaHermana · miniaturas · copias ≠ ideas · F6a (0071 aplicada) · F5c · investigación Higgsfield
+**What we did:** 5 commits en `prisma`, todos pusheados (preview): 18bd833 `filaHermana` (una función para el spec hermano;
+`adaptar` dejaba de copiar la entrevista); 5d11c6f miniaturas de los 33 looks (Pedro activó billing de Gemini; la 1ª corrida
+dio 429 `limit: 0` del free tier) + `FOTOS_LISTAS = true`; 58a0e1c las copias no cuentan como ideas (hábitos filtran en la
+BD, informe en código); 015bd88 **F6a** — `prisma_herramientas` + `catalogo.ts` + Hub › Herramientas (0071 aplicada con el
+"ship it" de Pedro, verificada en prod); 0be23d2 **F5c** — avisos siempre resolubles, entrevista a fondo (3 rondas), hasta 6
+imágenes. Investigación de Higgsfield (sitio + API) con agente → `tasks/higgsfield-research-2026-09-15.md`. Cada fase con
+reap en paralelo (security Opus + salud Sonnet): F6a 3 bajos + 1 invariante cruzada; F5c 1 medio + 2 bajos + 1 serio,
+todo arreglado (el serio, re-verificado por el mismo revisor).
+**Current state:** todo en preview (rama `prisma`, 0be23d2 + este commit de docs), sin merge a main (Pedro). 0063/0065–0071
+aplicadas en prod. Tests: prisma 770 · npm test ✓ · tsc 0 · lint 0 · build ✓. Nada corriendo (servidor y agentes cerrados).
+**Uncommitted work:** ninguno tras este commit de docs.
+**Decisions made:** (1) F6 en orden datos → vigía → resto; el vigía corre con botón "Revisar ahora" + cron que sólo dispara en
+producción (Vercel cron llama a la URL de producción). (2) Fortalezas = sólo las que el routing usa; seed GENERADO desde las
+constantes; modelos por rol (el código elige el rol, el catálogo el modelo). (3) 0071 se aplicó DESPUÉS de las revisiones
+aunque el "ship it" llegó antes: el arreglo del CHECK entró en la misma 0071. (4) F5c antes de F6b (feedback diario de los
+diseñadores). (5) Avisos: H.Ü.E sólo toma lo que no tiene arreglo mecánico; en el paso 3 viaja el código y el servidor
+recalcula el texto; un bloquea nunca se oculta ni se delega. (6) Entrevista: la ronda 2+ salta la heurística; cada id una
+vez por entrevista. (7) Referencias: principal + extras (la lógica del personaje no se tocó), ROLES_MULTI, tope 6. (8)
+Higgsfield = plataforma que ALOJA modelos → el prompt se escribe para el modelo; la plataforma cambia "cómo llegar" y límites.
+**Pick up next session:** (1) Pedro responde: qué modelos usan DENTRO de Higgsfield (imagen / video); Higgsfield por default
+para todos o por marca; cuenta + tope mensual para la API (él crea la llave en Vercel). (2) F5d Higgsfield como plataforma
+(plan en todo.md). (3) F7 API de Higgsfield: leer el OpenAPI, llave de prueba, rutas/params por modelo, precios reales,
+migración de trabajos ("ship it"). (4) F6b Vigía (0072) si Higgsfield espera. (5) LIVE-VERIFY de Pedro en preview con login:
+Hub › Herramientas; avisos (Entendido / con H.Ü.E); Profundizar; "+ Otra imagen". (6) Opcional: regenerar `poster_grafico`.
+Diferido: `?demo=paso3` (2ª sesión que hace falta), ganadores casi iguales en el aprendizaje (original + adaptación),
+`?demo=resultado` compila con el catálogo base.
+**Environment changes:** billing de Gemini activado en el proyecto de AI Studio de Pedro (miniaturas); migración 0071 en prod;
+sin dependencias ni variables de entorno nuevas.
+
+## 2026-09-16 13:23
+
+**Still open:**
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+
+
+## 2026-09-16 14:00
+**Shipped (recent commits):**
+  - feat(prisma): Higgsfield como plataforma — Seedream, Seedance y Gemini Omni + "Abrir en Higgsfield" por modelo
+  - feat(prisma): "¿Cómo salió?" más rápido — pegar con ⌘V, achicar en el navegador y subir el video
+
+**Still open:**
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+
+
+## 2026-09-17 09:13
+
+**Still open:**
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+
+
+## 2026-09-16/17 Session — Higgsfield prompt-first: costos, Vigía con correo, precios reales leídos del sitio (rama `prisma`)
+**What we did:**
+- Paso 4 ("¿Cómo salió?" rápido), paso 1 (Higgsfield como plataforma, Seedream/Seedance/Omni), deep dive de Higgsfield
+  (bloques Seedance, "Paso a paso en Higgsfield"), Kling 3–15 s (0073), paso 2 (estimado de créditos: ahorrar SIN
+  sacrificar calidad), F6b Vigía (0074, línea base 14 fuentes, 0 llamadas).
+- Vigía manda correo a los Master Builder cuando hay propuestas aprobables (oficiales, o de comunidad al llegar a 2
+  fuentes), con liga directa a Hub › Prisma › Vigía (`?tab=hue&hub=prisma&vista=vigia`).
+- Costo por DURACIÓN (`porDuracion`: 480p/720p/1080p/4K, editable en Hub › Herramientas: `4=12/26/36/-`); el estimado dice
+  el precio exacto a la duración elegida.
+- Precios leídos del botón Generate en el navegador de la app (nunca se pulsó Generar ni se compró nada): sin sesión y con
+  la cuenta de Rünna. Corrigió 2 datos dictados (Seedance 2.0 720p = 4.5/s; Omni 1080p = 4.5/s) y Kling es más barato en
+  la cuenta (720p 1.75 · 1080p 2 · 4K 6). Nano Banana Pro es ilimitado SÓLO con el interruptor «Ilimitado» y en 1K/2K.
+- Seedance 2.0 Fast agregado; DoP = Standard/Turbo/Lite; Kling Turbo con su página; a igual precio gana el fino.
+- **0075 APLICADA** (Pedro "ship it") y verificada: catálogo vivo = código 8/8, ninguna fila editada a mano.
+**Current state:** todo pusheado al preview (último cea9722); 0072–0075 en prod; main NO tocado. Gates: test-prisma 975 ·
+test-db 508 · lint · tsc · build verdes.
+**Uncommitted work:** ninguno mío (este log). 
+**Decisions made:** prompt-first (el ilimitado sólo aplica en higgsfield.ai); rondas se cuentan con las subidas de
+"¿Cómo salió?" (sin botón de intentos); 1 crédito ≈ US$0.04; a igual precio gana la calidad (PEDRO_OVERRIDE); la promo
+"Generar gratis" de Seedance Fast NO entra a la lógica (no es del plan); el "Modo ilimitado" de Kling es un pase de pago
+(US$35/día), no del plan; se guardan los precios CON descuento vigente (Seedance muestra precio de lista tachado).
+**Pick up next session:**
+1. Paso 3 — estadísticas por diseñador al mes en Performance › Evaluación (piezas, rondas hasta aceptar, créditos estimados).
+2. Pedro: elegir el modelo extra "365 Ilimitado" que permite el plan (Seedance 2.0 = 59 % del gasto); quedan 15/1,200 créditos.
+3. Pedro: ¿Seedance hasta 30 s (lo de 16–30 s va a 2.5)? · GMAIL_* en Preview de Vercel si quiere correos del vigía en preview ·
+   CRON_SECRET al pasar Prisma a producción · LIVE-VERIFY del Hub (Vigía, campo de precios) con sesión master.
+4. Si Higgsfield quita el descuento de Seedance, actualizar las tablas (lista: 2.0 = 6/6/12/26; 2.5 720p 7, 1080p 16).
+**Environment changes:** ninguna dependencia nueva; Pedro inició sesión en Higgsfield en el navegador de la app y activó
+"Allow JavaScript from Apple Events" en Chrome (puede apagarlo).
+
+## 2026-09-18 10:25
+
+**Still open:**
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma → se ven las 26 filas → editar una nota → generar un
+- [ ] **SHIP** (necesita "ship it"): (1) ANTES de migrar, contar filas con explicación sin prefijo (el backfill las manda a
+- [ ] **LIVE-VERIFY de Pedro (preview, con login)** — no se puede en local (sin sesión las actions niegan):
+
+
+## 2026-09-21 14:12
+
+**Still open:**
+- [ ] **LIVE-VERIFY de Pedro** (preview con login): como cliente real, pedir el enlace en /portal/login → llega el correo →
+- [ ] Deuda (seguridad, M2): los límites del envío de enlaces viven en memoria (por instancia). Opciones: tabla de
+- [ ] **DIFERIDO por Pedro** ("@runna is fine for now, we're using them for testing — we'll add the lock later"): aprobar
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+- [ ] Propuestas (nota | regla | modelo | limite | fortaleza | deprecacion | codigo): aprobar escribe en prisma_reglas o
+- [ ] "Revisar ahora" (master) + `/api/prisma/vigia` con CRON_SECRET (Pedro lo pone en Vercel al pasar a producción).
+- [ ] Comunidad: una afirmación necesita 2 fuentes. Costo real medido en el smoke (×2, con una página sin cambios).
+- [ ] Referencias revisadas (aspect vs destino, más de una cara, texto dentro de la ref, calidad) · ejemplos de oro por
+
+
+## 2026-09-21 — LOGIN DE CLIENTES: bug de re-entrada → contraseña + Google + blindaje — 2 SHIPS (main f929fc3 · 24ece16), sin migración
+**What we did:**
+1. **Bug (foto de Pedro):** un cliente ya aprobado no podía volver a entrar — caía en el login de Google del EQUIPO. Causas:
+   el magic link se mandaba UNA vez (al aprobar); el proxy sólo mandaba a /portal/login si la ruta empezaba con "/portal"
+   (el portal real es `/{slug}/portal`); "Cerrar sesión" mandaba a todos a /login. **Ship 1 (f929fc3):** "Mándame mi
+   enlace", redirect con `next`, logout del cliente → /portal/login, helper único del enlace. Security review (Opus):
+   `*` en ilike (PostgREST lo vuelve `%`) → enumeración; envío en `after()`.
+2. **Pedro:** "contraseña al pedir acceso y Google" + "que ninguna URL salte el login ni deje fuera a un cliente".
+   Audit Opus del borde cliente → 3 hallazgos reales. **Ship 2 (24ece16):** /portal/login = Google o correo+contraseña
+   (contraseña validada en el NAVEGADOR); pedir acceso / olvidé = código de 6 dígitos al correo; aprobar = aviso sin
+   enlace; contraseña sólo vale si pasó por el código (amr + app_metadata.clave_verificada) — ni pre-registros ni cuentas
+   del equipo; rutas públicas EXACTAS (`/login/tablero` etc. daban 200 sin sesión EN PROD); /auth/confirm ya no abre
+   sesiones; caída de BD ≠ "dado de baja"; perfil revisado también en rutas de portal; signOut scope "local";
+   `marcarOrtografiaIgnorada` exige identidad. 2ª review Opus: 0 takeover; residuales documentados.
+3. Pedro revocó a los 2 testers (Claudia Aguilar, Hermann — DiDi) → NO se borran: harán "Solicita acceso" (opción B).
+**Current state:** deployed & working. Verificado en PROD: rutas-trampa → /login, `/didi/portal` → /portal/login?next,
+enlaces viejos → mensaje, rechazo de Google desde clientes → /portal/login, contraseña mala desde el navegador real.
+**Uncommitted work:** `tasks/*.md` en `prisma` (docs de esta sesión + cambios previos que ya estaban) y `brag-brief.md`
+(de Pedro). Nada sin push en main ni en prisma.
+**Decisions made:** clientes = contraseña + Google (PEDRO_OVERRIDE sobre el magic link); verificación por CÓDIGO, nunca
+enlaces de un solo uso (Safe Links los gasta); login en el navegador por los límites POR IP de Supabase; sin tabla de
+contadores (el endpoint público de verify de Supabase la vuelve insuficiente → la defensa real es config del proyecto);
+@runna sigue sin candado (Pedro lo usa para pruebas); testers no se borran (auth compartido con S.P.A.M, historial).
+**Pick up next session:**
+1. LIVE-VERIFY con Claudia + Hermann (opción B) — si falla, pedir el mensaje exacto + hora → logs de Vercel.
+2. DECIDE PEDRO: Supabase → Auth → Email: OTP length 8 + expiry ~900 s (proyecto compartido con S.P.A.M).
+3. Opcional: límites durables de códigos (tabla+RPC) y/o CAPTCHA (Turnstile).
+4. Diferido: candado @runna (aprobar un correo del equipo lo vuelve cliente; la puerta del equipo acepta logins por
+   correo, no sólo Google).
+5. Al fusionar `prisma` → main: conflicto trivial en `src/lib/supabase/middleware.ts` (su PUBLIC_EXACT de
+   /api/prisma/vigia vs las rutas exactas nuevas — agregar "/api/prisma/vigia" a PUBLIC_PATHS) + los `tasks/*.md`.
+**Environment changes:** ninguna dependencia, env var ni migración. Ramas locales `fix/portal-login` y
+`fix/client-password-login` (ya fusionadas). Worktrees borrados. `.claude/launch.json` restaurado.
+
+## 2026-09-21 15:12
+
+**Still open:**
+- [ ] DECIDE PEDRO (proyecto de auth COMPARTIDO con S.P.A.M): subir "Email OTP Length" a 8 y bajar "Email OTP
+- [ ] Opcional: límites DURABLES de códigos (tabla + RPC) y/o CAPTCHA (Turnstile) en pedir/confirmar código.
+- [ ] Diferido con el candado @runna: la puerta del equipo acepta cualquier login por correo (no sólo Google).
+- [ ] LIVE-VERIFY con testers reales (Pedro 2026-09-21: opción B): Claudia Aguilar y Hermann (DiDi, revocados) hacen
+- [ ] **LIVE-VERIFY de Pedro** (preview con login): como cliente real, pedir el enlace en /portal/login → llega el correo →
+- [ ] Deuda (seguridad, M2): los límites del envío de enlaces viven en memoria (por instancia). Opciones: tabla de
+- [ ] **DIFERIDO por Pedro** ("@runna is fine for now, we're using them for testing — we'll add the lock later"): aprobar
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+
+
+## 2026-10-05 13:07
+
+**Still open:**
+- [ ] DECIDE PEDRO (proyecto de auth COMPARTIDO con S.P.A.M): subir "Email OTP Length" a 8 y bajar "Email OTP
+- [ ] Opcional: límites DURABLES de códigos (tabla + RPC) y/o CAPTCHA (Turnstile) en pedir/confirmar código.
+- [ ] Diferido con el candado @runna: la puerta del equipo acepta cualquier login por correo (no sólo Google).
+- [ ] LIVE-VERIFY con testers reales (Pedro 2026-09-21: opción B): Claudia Aguilar y Hermann (DiDi, revocados) hacen
+- [ ] **LIVE-VERIFY de Pedro** (preview con login): como cliente real, pedir el enlace en /portal/login → llega el correo →
+- [ ] Deuda (seguridad, M2): los límites del envío de enlaces viven en memoria (por instancia). Opciones: tabla de
+- [ ] **DIFERIDO por Pedro** ("@runna is fine for now, we're using them for testing — we'll add the lock later"): aprobar
+- [ ] **F7 — API de Higgsfield en Prisma** (plan; necesita llaves de Pedro en Vercel — yo no toco secretos): "Generar en
+- [ ] **LIVE-VERIFY de Pedro (preview, sesión master)**: Hub › H.Ü.E › Prisma › Herramientas → bajar "caras" de Nano Banana
+- [ ] Fuentes editables (seed: las oficiales ya citadas — developers.openai.com, ai.google.dev, blog.google, klingai.com,
+
+
+## 2026-10-08 13:09
+
+**Still open:**
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+- [ ] Limpieza: lotes que se quedan en 'subiendo' y archivos huérfanos del bucket (cron).
+- [ ] Un PNG con transparencia conserva sus huecos en v1 (el pixel-lock lo exige); opción futura: aplanar sobre el relleno.
+- [ ] ZIP en streaming (hoy todo en memoria; ~20 tamaños × 2 archivos aguanta) y miniaturas WebP chicas en la cuadrícula.
+- [ ] Revisar (sólo lectura) que ninguna policy de `storage.objects` del proyecto compartido exponga `greenlight-formatos`.
+- [ ] Avisos previos de npm audit: next 16.3.2 (crítico) y nodemailer (alto) — tarea aparte ya sugerida.
+- [ ] DECIDE PEDRO (proyecto de auth COMPARTIDO con S.P.A.M): subir "Email OTP Length" a 8 y bajar "Email OTP
+- [ ] Opcional: límites DURABLES de códigos (tabla + RPC) y/o CAPTCHA (Turnstile) en pedir/confirmar código.
+- [ ] Diferido con el candado @runna: la puerta del equipo acepta cualquier login por correo (no sólo Google).
+
+
+## 2026-10-08 13:49
+
+**Still open:**
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+- [ ] Limpieza: lotes que se quedan en 'subiendo' y archivos huérfanos del bucket (cron).
+- [ ] Un PNG con transparencia conserva sus huecos en v1 (el pixel-lock lo exige); opción futura: aplanar sobre el relleno.
+- [ ] ZIP en streaming (hoy todo en memoria; ~20 tamaños × 2 archivos aguanta) y miniaturas WebP chicas en la cuadrícula.
+- [ ] Revisar (sólo lectura) que ninguna policy de `storage.objects` del proyecto compartido exponga `greenlight-formatos`.
+- [ ] Avisos previos de npm audit: next 16.3.2 (crítico) y nodemailer (alto) — tarea aparte ya sugerida.
+- [ ] DECIDE PEDRO (proyecto de auth COMPARTIDO con S.P.A.M): subir "Email OTP Length" a 8 y bajar "Email OTP
+- [ ] Opcional: límites DURABLES de códigos (tabla + RPC) y/o CAPTCHA (Turnstile) en pedir/confirmar código.
+- [ ] Diferido con el candado @runna: la puerta del equipo acepta cualquier login por correo (no sólo Google).
+
+
+## 2026-10-13 10:17
+
+**Still open:**
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+- [ ] Limpieza: lotes que se quedan en 'subiendo' y archivos huérfanos del bucket (cron).
+- [ ] Un PNG con transparencia conserva sus huecos en v1 (el pixel-lock lo exige); opción futura: aplanar sobre el relleno.
+- [ ] ZIP en streaming (hoy todo en memoria; ~20 tamaños × 2 archivos aguanta) y miniaturas WebP chicas en la cuadrícula.
+- [ ] Revisar (sólo lectura) que ninguna policy de `storage.objects` del proyecto compartido exponga `greenlight-formatos`.
+- [ ] Avisos previos de npm audit: next 16.3.2 (crítico) y nodemailer (alto) — tarea aparte ya sugerida.
+- [ ] DECIDE PEDRO (proyecto de auth COMPARTIDO con S.P.A.M): subir "Email OTP Length" a 8 y bajar "Email OTP
+- [ ] Opcional: límites DURABLES de códigos (tabla + RPC) y/o CAPTCHA (Turnstile) en pedir/confirmar código.
+- [ ] Diferido con el candado @runna: la puerta del equipo acepta cualquier login por correo (no sólo Google).
+
+
+## 2026-10-15/16 — HÜE Prisma › Formatos: rediseño B19 (opción A) + 3 arreglos tras la prueba de Pedro — PREVIEW (rama `prisma`), sin migración
+**Waiting on Pedro:** probar en la preview (https://greenlight-git-prisma-pedros-projects-c43384db.vercel.app/prisma/formatos/psd)
+la vista grande, el contraste en una medida editada y el editor a la forma de la medida. Sigue pendiente el veredicto del
+diseñador sobre `s33_1200x627_objetos-inteligentes.psd` y el "ship it" de 0078 + bucket `greenlight-formatos`.
+**Hecho:**
+- B19 análisis y plan (/design-god-mode): opciones A/B/C con maqueta. Pedro: sólo escritorio y iPad, nada de teléfono
+  (PEDRO_OVERRIDE + memoria `formatos-desktop-ipad-only`). Pedro eligió A → **c75ac8c**: ajustes arriba en pastillas
+  (medidas por forma con «Agregar medida», canal con color, chips de estado), «En varias medidas», resultados por forma
+  con barra pegajosa, tarjeta nueva. Página 6259 → 3055 px a 1440. Dos revisores; preview "success".
+- Pedro probó ("overall looking way better") y pidió 3 cosas → **ccc05fa**:
+  1. Vista grande (vista-grande.tsx): clic en la tarjeta abre la medida casi a pantalla completa, ajustada (crece si es
+     chica, píxeles nítidos desde 200 %) o a tamaño real 100 % con desplazamiento. Copia el lienzo de la tarjeta.
+  2. Contraste libre en una medida editada: la clave de la edición ya no lleva el contraste (PEDRO_OVERRIDE: yo lo había
+     bloqueado). La clave vieja «:fondo» se lee y se borra al guardar (confirmado con `git show HEAD`).
+  3. Editor casi a pantalla completa, vista del tamaño que cabe con la forma de la medida, tiras con el panel abajo,
+     pintado limitado por área. 320×50: 790×123 → 1360×213 px; 1080×1920: 344×612 → 393×699 (1440×900).
+  Revisor (sonnet) encontró 1 serio (la vista podía copiar una tarjeta sin pintar o quedarse vieja): arreglado con un
+  contador de pintadas. Más 10 arreglos baratos (ver todo.md B19). Lección en **7b81d2f**.
+- Pruebas: tsc 0 · eslint 0 · test-formatos 311/0 · navegador en 1440×900, 1180×820 y 820×1180 (medidas en todo.md) ·
+  consola sin errores tras las marcas · preview de ccc05fa "success | Deployment has completed".
+**Decisiones:** la vista grande copia el lienzo (no vuelve a pintar); «Tamaño real» = 1 píxel del PNG por píxel de la
+página; el editor pone el panel abajo cuando ancho ÷ alto ≥ 2.
+**Lecciones nuevas (tasks/lessons.md):** PEDRO_OVERRIDE del contraste bloqueado; editor con alto fijo aplasta medidas;
+el panel oculto del navegador congela animaciones y ResizeObserver (cómo probar igual); copiar un lienzo que se pinta en fila.
+**Sin hacer (reporte):** canal y contraste como `radiogroup`; ayuda del cliente sólo con `title`; caché de 4 fondos del
+editor (~31 MB c/u) y repintado sin espera al cambiar la ventana; % de «Ajustar» se mueve 1-3 % con barras fijas.
+**No probado:** un iPad de verdad; la vista grande con una medida de más de 4000 px; Enter en el campo de medidas.
+**Pick up next:** lo que diga Pedro de la prueba; luego B4 (banners delgados) o el paso que él elija de todo.md.
+**Environment:** el servidor de archivos de prueba (`servir2.mjs`, 127.0.0.1:8765) se apaga al cerrar la sesión; no hay
+dependencias nuevas.
+
+## 2026-10-19 13:14
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
+
+## 2026-10-19 15:04
+**Shipped (recent commits):**
+  - feat(prisma): Formatos: «PSD» por medida editable, con las capas vivas del original
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
+
+## 2026-10-20 14:11
+**Shipped (recent commits):**
+  - docs(todo): Next.js 16.3.8 ya en main (desplegado)
+  - docs(todo): estado del arreglo de Next.js (esperando ship it) y B22 partes
+  - feat(prisma): Formatos: ZIP grande en varias partes, sin copiar los PSD; Entregables también en imagen plana
+  - feat(prisma): Formatos: elegir medidas para el ZIP, con Entregables y Editables (B22)
+  - feat(prisma): Formatos: textos editables en el editor (paso 3)
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
+
+## 2026-10-20 14:26
+**Shipped (recent commits):**
+  - docs(todo): Next.js 16.3.8 ya en main (desplegado)
+  - docs(todo): estado del arreglo de Next.js (esperando ship it) y B22 partes
+  - feat(prisma): Formatos: ZIP grande en varias partes, sin copiar los PSD; Entregables también en imagen plana
+  - feat(prisma): Formatos: elegir medidas para el ZIP, con Entregables y Editables (B22)
+  - feat(prisma): Formatos: textos editables en el editor (paso 3)
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] B23. Pasada de diseño de la puerta PSD (Pedro, 2026-10-20: "what do you propose?" para que sea más bonita y fácil:
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+
+
+## 2026-10-20 15:25
+**Shipped (recent commits):**
+  - feat(prisma): Formatos imagen plana: tarjetas de resultado como en la puerta PSD
+  - feat(prisma): Formatos imagen plana: un solo tamaño de control (36 px, letra de 13)
+  - docs(todo): B23 construida (opción B) con su revisión, medidas y pendientes
+  - fix(prisma): Formatos: arreglos de la revisión de diseño (B23)
+  - refactor(prisma): Formatos: una sola regla para el aviso común
+  - feat(prisma): Formatos: en el editor, las herramientas primero
+  - feat(prisma): Formatos: la parte de arriba más corta, los resultados suben
+  - feat(prisma): Formatos: tarjetas más tranquilas y ordenadas
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
+## 2026-10-20/21 — HÜE Prisma › Formatos: puerta de imagen plana con B23, foco del teclado arreglado y 0078 + bucket APLICADOS — rama `prisma` (preview) + base compartida
+**Waiting on Pedro:** nada obligatorio. Puede volver a subir su anuncio en http://localhost:3000/prisma/formatos (ya
+funciona). Sin revisar: si la preview de Vercel tiene `NEXT_PUBLIC_PRISMA_FORMATOS_ENABLED=true` para mostrar la página.
+**Hecho:**
+- Sesión lateral pedida por la sesión de B23: la puerta de imagen plana (`formatos-studio.tsx`) con el mismo sistema de
+  controles de la PSD → **57ad8ea** (botones 36 px / letra 13, campos 36/13, «Todos»/«Ninguno» con su nombre al
+  inicio de lo que oye el lector) y **d15bec3** (tarjetas con botones al pie bajo una línea, PNG|JPG juntos, columnas
+  por ancho de tarjeta: a 1280 «Rehacer · IA (0.07 USD)» ya no se sale). Review en **c96a707**. Medido en el DOM a
+  1440 y 1280; encabezado con sesión de Pedro igual al de la PSD al píxel.
+- Foco del teclado (Pedro pidió cada uno): «Rehacer» (**adf8cb0**), «Generar», los dos «Descargar ZIP», PNG/JPG y
+  «Reintentar los que no salieron» (**9687a3f**), «Usar estas medidas» y «Agregar medida libre» (**3631b1f**), la ✕ de
+  una medida libre (**af74f50**). Antes → después medido en cada uno (el foco caía al <body> a los 41-84 ms → se
+  queda o pasa a un lugar con sentido). Notas en todo.md B23 (8f8786e, d232130, 69277d4, 09cd7cb).
+- Pedro: "not letting me upload images" → faltaban la 0078 y el bucket (consultas de sólo lectura). Con su "Ship it":
+  revisión de seguridad (Opus, nada bloqueaba) → `node scripts/migrate.mjs --only 20261005120002 --project-ref
+  ybbrpqzbedaxsmotgtkh` exit 0 → `node scripts/setup-storage.mjs --only greenlight-formatos` exit 0. Verificado en la
+  base: 2 tablas, RLS, política master-only, permisos sólo service_role, fila en el registro; bucket privado 25 MB
+  png/jpeg/webp; 0 políticas en storage.objects. Subida con su sesión: lote «prueba-claude» listo en ~4 s; 1 tamaño
+  gratis (desenfoque) listo en ~5 s con pixel-lock. Registrado en todo.md (**c2ce704**) y en la memoria del proyecto.
+**Decisiones:** botón ocupado = `aria-disabled` + clic ignorado (`APAGADO`), nunca `disabled`; columnas de resultados
+por ancho mínimo de tarjeta (13.5rem) como la PSD; botón de idioma y «Volver» igual que la PSD (12 y 14 px).
+**Lecciones nuevas (tasks/lessons.md):** etiqueta más larga en la tarjeta más angosta; Chrome manda el foco al <body>
+al deshabilitar el botón enfocado; en el panel del navegador `focus()` no dispara eventos de foco; un error genérico
+escondió una migración sin aplicar.
+**Sin hacer (reporte):** los datos de prueba «prueba-claude» siguen en la base (1 lote, 1 salida, 3 archivos; sólo master
+los ve); el mismo tamaño de botón queda escrito en 4 archivos; un bucket que falta todavía da el mensaje genérico.
+**No probado:** la confirmación de «Cambiar anuncio» con sesión; modo oscuro; Safari y Firefox; lectores de pantalla
+reales; la preview de Vercel con la 0078.
+**Pick up next:** la prueba real de la puerta plana con anuncios de verdad (paso 2 de todo.md) cuando Pedro quiera.
+**Environment:** sin dependencias nuevas; ningún claim tomado; el servidor de desarrollo en :3000 no lo arrancó esta sesión.
+
+## 2026-10-20/21 — HÜE Prisma › Formatos: pasada de diseño B23 de la puerta PSD (opción B) — rama `prisma` (preview), sin migración
+**Waiting on Pedro:** nada obligatorio. Cuando quiera: abrir la puerta PSD en el preview de `prisma` (o localhost:3000/prisma/formatos/psd)
+y decir qué estorba todavía.
+**Hecho:**
+- Sesión lateral pedida por la sesión de Prisma Formatos. Medí la página (5 altos de botón, 11 de 12 tarjetas en ámbar, primera
+  tarjeta bajo el borde de la pantalla) y propuse A / B / C + "no hacer nada" en un artifact
+  (https://claude.ai/artifact/EiXDS4FkRiB1Zeqxx4VpUT). Pedro: "Build B (tidy and lift the results)".
+- Construido en 5 commits (1000ff8 · e158800 · 1977df3 · 0fb1609 · 977ae7a): un alto de control 36 px y letra 13; tarjetas con
+  acciones al pie y PNG|PSD juntos; la pieza repetida en gris («Aviso común») con salto al arreglo; aviso largo en 2 renglones con
+  «Ver más»; arriba más corto (título en banda, fichas en la fila del archivo, «Agregar medida» en línea, «Cómo funciona» que se
+  abre); fila del ZIP ordenada; editor con «Capas»/«Textos» primero.
+- Medido con s33 (12 medidas): primera tarjeta 1001 → 839 px a 1440×900 y 1017 → 883 a 1280×960; barra 93 px a los dos anchos.
+- Revisión en 5 pasadas paralelas (seguridad en Opus: nada). Arreglado en **d105f3a**: «Fondo retocado» había quedado como aviso
+  común (vuelve a ámbar y a contar; probado con clic real en «Quitar del fondo» y «Deshacer»), anillos de foco cortados, «Ver más»
+  tardío y sin contexto, «Cómo funciona» sin nombre y abierto con otro PSD, ayuda del editor en un <details> cerrado como
+  descripción, la nota de Google escondida, y otros 5 menores. Review completo en todo.md B23 (**38f1e25**).
+- Propuse la misma pasada para la puerta de imagen plana; Pedro la arrancó y esa sesión la hizo (su propia entrada arriba).
+- 2026-10-21: el preview no arrancaba ("Another next dev server is already running"): Next 16 deja un solo `next dev` por carpeta
+  y el de :3000 (PID 21674) seguía vivo con la sesión de Pedro. Me conecté a él con `preview_start {url}` en vez de matarlo.
+- Antes de pasarle a Pedro que la otra sesión aplicó 0078, revisé su transcripción: Pedro sí le dijo "Ship it" ahí.
+**Decisiones:** sólo la pieza repetida es aviso común; el relleno se revisa en cada tarjeta. El «Cerrar» que flota sobre la vista
+del editor queda en 24 px a propósito. Los enlaces dentro de una frase llevan la letra de su frase (12).
+**Pruebas (sobre d105f3a):** test-formatos 469/0 · npm test todas las suites con 0 fallas · tsc 0 · eslint 0 · build exit 0.
+**No probado:** la línea de Google junto a la IA (el botón no sale en este localhost); lectores de pantalla reales; Safari y
+Firefox; la barra con la línea de textos cambiados o con zoom.
+**Sin hacer (en todo.md B23):** huérfanas 4 + 1 / 3 + 2; íconos de 14 y 16; el mismo tamaño escrito en varios archivos.
+**Pick up next:** la prueba de Pedro o de diseño en la puerta PSD.
+**Environment:** sin dependencias nuevas; sin migraciones ni escrituras en la base desde esta sesión; el servidor de :3000 no lo
+arrancó esta sesión.
+
+## 2026-10-19/21 · HÜE Prisma › Formatos: lectura estricta de la pantalla y mensajes de CMYK / 16 bits (B21) · sesión lateral, en `prisma` (preview), sin migración
+**Waiting on Pedro:** pedirle a diseño 3-4 PSD guardados en otras computadoras (y uno de otra app si alguien la usa), ponerlos
+en Escritorio › formatos-prueba y avisar para correr el chequeo de strict. No urge.
+**Hecho:**
+- Sesión lateral pedida por la sesión de Prisma Formatos: cerrar el hueco que dejó la revisión de seguridad del 2026-10-19
+  (la lectura de la pantalla llamaba a ag-psd sin `strict`; un PSD hecho a mano podía hacerle reservar GB en ceros y tumbar
+  la pestaña).
+- El worktree nació en `main` (sin Formatos): su rama, sin commits propios, se movió a la punta de `prisma` (1e6d99b).
+- **2b51dab:** `leerPsd` con `strict: true`; un archivo mal formado sale como «no-soportado» con detalle claro en español
+  (`PSD_MAL_FORMADO`); el regex `MAL_FORMADO` pasa a `listo.ts` y lo comparte el worker editable. 8 pruebas nuevas.
+- Revisor de seguridad (Opus, sólo lectura): strict llega a todo lo que lee `readPsd`; decodificar píxeles después queda
+  acotado en memoria (el costo de CPU lo corta el reloj de 120 s). Encontró el riesgo de abajo.
+- Pedro: "so what do you suggest". Recomendé conservar strict, pedir más PSD a diseño, arreglar el mensaje de CMYK y dejar
+  2 cosas para después. Pedro: "yes".
+- **3cc9f7b:** CMYK / Lab / multicanal / duotono / modo sin nombre y 16-32 bits dicen "El PSD está en … Qué hacer: guarda
+  una copia en RGB / en 8 bits … y elige esa copia aquí".
+- Pedro: "Yes, merge the 2 fixes into prisma (test version only, not the live app)". `prisma` en GitHub pasó de 1e6d99b a
+  9fce671 (con la nota en todo.md B21), avance directo desde la rama lateral; la carpeta principal no se tocó (otra sesión
+  tenía 9 archivos sin guardar ahí). Vercel arrancó la preview; no la vi terminar.
+**Decisiones:** strict se queda aunque pueda rechazar un PSD bueno (la tarea pedía no aflojar en silencio); la guardia es la
+prueba con archivos reales. La mezcla a `prisma` se hizo empujando la rama lateral a GitHub, no en la carpeta de otra sesión.
+**Pruebas:** test-formatos 365/0 en la rama (con strict apagado la prueba de rechazo falla: 362/1) · npm test 8 suites
+verdes · tsc 0 · eslint 0 errores (1 aviso viejo, `k1`, línea 978) · navegador (dev server del worktree en :3017, sin
+sesión): copia rota de s33 da el mensaje claro, copia en CMYK da el suyo, s33 real abre su mesa 1200×1500 con 12/12 medidas.
+**No probado:** PSD de otras apps (no hay ninguno); PSD de otro Photoshop; la preview de Vercel terminada.
+**Riesgo abierto (todo.md B21):** strict rechaza un PSD VÁLIDO si un recurso trae bytes de más (p. ej. el 1082, información
+de impresión, imageResources.js:106) o los rangos de fusión de una capa se pasan; diría "dañado o incompleto". De los 5 PSD
+de prueba sólo 2 son de Photoshop; los 3 de `psd-prueba/` los escribió HÜE.
+**Sin hacer (todo.md B21):** un bloque malo dentro de una capa se pierde sin aviso; el worker editable culpa al archivo por un
+"Invalid signature" de nuestro propio escritor.
+**Pick up next:** el chequeo con los PSD de diseño (agregar sus rutas a `reales` en test-formatos.mjs y correrlo).
+**Environment:** sin dependencias nuevas, sin migraciones ni escrituras en la base. Los servidores de esta sesión (:3017 y el
+de archivos en :8766) se apagaron y la entrada temporal de launch.json se quitó.
+
+## 2026-10-20/21 · Dependencias: nodemailer 10, sharp y source-map-js (auditoría de npm) · sesión lateral, SHIPPEADO en `main` (254b745) · `prisma` todavía NO lo tiene
+**Waiting on Pedro:** una prueba en producción: hacer una acción que cree una notificación para alguien con email activo y
+confirmar que llega. Esa ruta (el disparador de la app) no la probé yo ni la cubre el script `scripts/send-test-email.mjs`.
+**Hecho:**
+- Sesión lateral pedida por la sesión de Prisma Formatos, después del parche de Next.js 16.3.8 (08fa0da): arreglar lo que
+  `npm audit --omit=dev` seguía marcando (nodemailer, sharp, source-map-js y sprintf-js). Rama `chore/audit-deps-batch`
+  cortada de `main`, en su propio worktree.
+- **254b745** (sólo `package.json` y `package-lock.json`): nodemailer 9.1.1 → **10.0.9** (la versión más chica que limpia sus 5
+  avisos; su único cambio incompatible es "Node 20 o más" y la app corre Node 24; `src/lib/email.ts` sin cambios),
+  sharp 0.35.4 → 0.35.5 y source-map-js 1.2.1 → 1.2.2 (sólo el lock, dentro de los rangos que ya aceptan Next y PostCSS).
+  Se eligió 10.0.9 y no 10.1.7 (publicada 2 días antes, con cambios para conexiones en pool y 5 parches en un día).
+- Auditoría: 6 hallazgos (3 altos, 3 moderados) → 3 moderados, todos la misma cadena sprintf-js → argparse → mammoth.
+  sprintf-js NO tiene versión parcheada (el aviso dice "hasta 1.1.3", que es la última). Sólo entra por el CLI de mammoth
+  (`bin/mammoth`); la app usa `mammoth.extractRawText` y nunca lo corre. Se dejó a propósito, sin `overrides` (forzaría
+  argparse 2 y rompería ese CLI sin que nadie lo note). `npm audit fix --force` ofrece bajar mammoth a 0.3.29: NO correrlo.
+- Revisor de seguridad (Opus, sólo lectura): nada encontrado; confirmó versiones, enlaces, que sprintf-js no se alcanza y que
+  los 3 scripts de email importan bien nodemailer 10 (paquete ESM).
+- Pedro: "it works", escrito justo después de que le di los pasos para correr el script de prueba de email. No vi la salida
+  ni le pregunté qué probó; lo leí como el script. Luego "ship it" (2026-10-21).
+- **Shippeado:** `git push origin 254b745:main`, avance directo 08fa0da..254b745 (`main` no se había movido). GitHub: deploy de
+  Producción de 254b745 en success, estado "Vercel" success, check `test` de CI en success; runna-greenlight.vercel.app
+  responde 200 en /robots.txt, /login y /portal/login.
+**Decisiones:** 10.0.9 y no la última; sprintf-js se deja documentado en vez de forzarlo con `overrides`; este cierre se escribió
+sobre `prisma` (vista previa) y no sobre `main` porque un commit de docs en `main` sería un segundo deploy a producción.
+**Pruebas:** `npm test` exit 0 (isolation 63 migraciones, server-actions 22 archivos, lib 549/0, db 420/0, import 81/0,
+sync 44/0) · `tsc --noEmit` 0 · `npm run build` 0 (Next 16.3.8) · el mismo email armado como lo hace `email.ts` con
+nodemailer 9.1.1 y con 10.0.9 (sin enviar, `streamTransport`) da el MISMO texto con Message-ID/Date/boundary enmascarados ·
+hashes de integridad de los 3 paquetes iguales a los del registro de npm · lock sin paquetes nuevos ni quitados y todos los
+enlaces en registry.npmjs.org.
+**No probado:** un email real mandado por la propia app desde producción; un envío real por Gmail confirmado por mí (sólo la
+frase de Pedro); Node 24 en local (la Mac sólo tiene Node 26; el CI sí corre 24 y pasó).
+**Estado de `prisma`:** NO tiene este cambio. `prisma` (5fa0e60 al empezar este cierre) está 29 commits detrás de `main`: sigue
+con Next 16.3.2 y nodemailer ^9.0.5, o sea que la preview de Formatos todavía carga esos avisos hasta que se mezcle `main` en
+`prisma`. Al mezclar, esperar conflicto en `package-lock.json`: regenerarlo (`npm install`) en vez de resolverlo como texto.
+**Pick up next:** (1) la prueba de Pedro de arriba; (2) cuando Pedro lo diga, mezclar `main` en `prisma`; (3) opcional: quitar
+`@types/nodemailer` de `package.json` (nodemailer 10 trae sus propios tipos; `tsc` pasa con y sin él).
+**Environment:** `npm ci` en el worktree de esta sesión; sin migraciones ni escrituras en la base; no se tocaron archivos `.env`.
+Las ramas de Dependabot `minor-and-patch-*` ya no existían en origin al hacer fetch (no las borré yo). El commit de este cierre
+se armó en un worktree temporal desde `origin/prisma` (un hook de la sesión lateral bloquea editar la carpeta principal) y se
+subió como avance directo; la carpeta principal quedó 1 commit detrás de origin, sin cambios sin guardar míos. Nota larga:
+`side-session-notes/local_a6bd3f4b-…/dependency-advisories-batch.md`.
+
+## 2026-10-22 → 27 — RESET content-only #2: borrados todos los proyectos/tareas de prueba (prod) · rama `prisma`
+Pedro: "erase all the projects / tasks currently in greenlight (they all been tests)" → eligió "only greenlight projects and
+tasks" (el trabajo de prueba de HÜE Prisma / Formatos se queda).
+**Hecho:** `scripts/reset-blank-slate.mjs` (1) no llegaba a la base porque esta Mac no tiene `supabase link`: se le añadió
+`--project-ref` como migrate.mjs; (2) abortó por 16 tablas nuevas sin clasificar (la red funcionó). Clasificadas: config y
+bibliotecas de Prisma + tipografias + trabajo de prueba prisma_* → KEEP; referencia_lecturas → DELETE; las tablas DELETE que
+no existen en el esquema de la rama se ignoran. Self-test en PGlite con --run: OK. Dry-run en prod: 1,052 filas.
+El clasificador de auto mode bloqueó mi `--run` (la respuesta de Pedro elegía opción pero no decía "run it"); **Pedro lo corrió
+él mismo** en la terminal: 1,052 filas borradas en 1 transacción (4 briefs, 56 ideas, 277 assets, 99 planos, 135
+notificaciones, 214 envíos, 64 status_events, 40 hue_suggestions, 19 comments…). `snippets.brief_id` anulado.
+**Verificado (yo, después):** briefs/ideas/assets/notifications/comments = 0; KEEP igual (clients 1, marcas 2, track_members 7,
+profiles 12, hue_instructions 7, hue_kb_documents 7, snippets 5, tipografias 10, prisma_specs 15…); login de prod 200.
+⚠ de la recuenta: prisma_formatos_lotes 2→3, un lote creado 19:20 UTC durante el run (alguien en la preview); tabla KEEP, inofensivo.
+**Después del reset:** el 2026-10-22 22:14 UTC entró 1 brief con 2 ideas (y 2 staged_rows) por el sheet nuevo de DiDi (sesión
+del sync); no es residuo del reset y no se tocó.
+**Commit:** 597211f (script + lección), rebaseado sobre b0b577c/8b1884e (cierres de otras sesiones; conflicto sólo en
+lessons.md, se conservaron ambas). Sin migraciones; sin push.
+**No hecho / pendiente:** 16 imágenes de referencia de las tareas borradas (21 MB, greenlight-referencias/<id>/…)
+quedaron huérfanas en storage (`references` ya no tiene ninguna storage_path); limpiarlas es un paso aparte si Pedro quiere.
+(Corrección 2026-10-27: antes decía "~64 archivos"; los 16 de prisma/ y los 24 de Formatos son de trabajo que se CONSERVÓ.) Stash `wrap-up 2026-10-27` guarda un bloque automático
+del session-log del 2026-10-22 13:10 (ruido de un hook; se puede soltar) y una copia del CLAUDE.md de replay P3 (restaurado).
+
+## 2026-10-27 08:45
+**Shipped (recent commits):**
+  - docs(tasks): cierre del reset content-only #2 (1,052 filas de prueba borradas en prod)
+  - chore(reset): --project-ref y clasificar las 16 tablas nuevas (prisma_*, tipografias, referencia_lecturas)
+  - docs(tasks): cierre de la sesión del legal en Formatos (B24–B27)
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
+
+## 2026-10-27 09:43
+**Shipped (recent commits):**
+  - docs(tasks): corrige el conteo de archivos huérfanos del reset (16, no ~64)
+  - docs(tasks): cierre del reset content-only #2 (1,052 filas de prueba borradas en prod)
+  - chore(reset): --project-ref y clasificar las 16 tablas nuevas (prisma_*, tipografias, referencia_lecturas)
+  - docs(tasks): cierre de la sesión del legal en Formatos (B24–B27)
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
+## 2026-10-27 — B28: imagen plana → piezas editables con letras del cliente · rama `prisma` (PREVIEW)
+Pedro: separar los elementos de un anuncio plano (sin PSD) para moverlos, quitarlos y cambiar textos con las tipografías
+de DiDi (DiDi Card: «3 MSI» → «12 MSI», quitar «con tus cupones de DiDi Card», «12 pagos de $3,999»). Eligió la opción 1
+(Gemini lee cajas y letras; nuestro código corta, limpia el fondo y reescribe) y "A on all three": misma página del PSD,
+revisión siempre, fondos de foto se detienen con un mensaje.
+**Commits (todos con push → preview):** af54d72 B28 completo (ruta /api/prisma/formatos/leer, plano.ts, revision-plano.tsx,
+PSD por medida con capas de texto vivas, reap) · 090bf78 la 1a lectura real dio 502: Gemini rechaza `maxItems` en el
+esquema (400 "invalid argument"; hallado con un script de variantes y la llave pegada por Pedro) · 2a7758e margen a los
+lados en medidas altas (acomodo.ts, `alAire`), enlace a la página vieja sólo para fondos de foto, error sin repetir ·
+018b937 un SUBTITULO entre renglones del TITULO va con el TITULO (limpiarLectura) · 8870f1e el aviso de textos cambiados
+sólo cuenta los que aplican (`cambiosQueAplican`).
+**Verificado en la preview (sesión de Pedro, 2 lecturas reales, ≈ US$0.011 y US$0.006):** lectura 200 con letras exactas;
+revisión con tipografías DiDi; las 3 ediciones en 1080×1920 («Texto cambiado en las 12 medidas»); PSD 1080×1920 leído en
+la página: BACKGROUND + 5 carpetas, capa por elemento, textos vivos DiDi, lo quitado como capa oculta; margen del precio
+51/34/33/36 px en 1080×1920/720×1280/720×1600/768×1024 (antes 2 y 1), 1200×1500 igual.
+**Sólo en localhost (lectura guardada inyectada):** el SUBTITULO doblado al TITULO y el aviso de textos.
+**Pruebas en cada commit:** npm test exit 0 (formatos 599, prisma 975), tsc 0 errores, npm run build OK.
+**Decisión:** Pedro: B28 se queda en la preview ("keep it in preview"); no se mezcla a main ni se lanza.
+**Pendiente (Pedro: "none for now"):** abrir un PSD en Photoshop (con DiDi Sans Variable instalada); otro anuncio plano
+(uno liso de otro cliente y uno con foto: el aviso de foto sólo está probado en código); el ZIP con PSD de una imagen
+plana; acceso de otra persona (¿tiene cuenta @runna.com.mx?); tope diario de IA en la base antes de producción; `prisma`
+va atrás de `main` (CTA por plano, hilos de respuesta, correos agrupados, auditoría de cambios).
+**Herramientas:** el panel del navegador no deja que la preview llame a localhost (ERR_BLOCKED_BY_CLIENT): en la preview
+Pedro arrastra el archivo; en localhost se inyecta la lectura guardada.
+
+## 2026-10-28 11:19
+**Shipped (recent commits):**
+  - docs(lessons): cargar un archivo real en la página desde public/
+  - fix(formatos): una pieza tapada en parte se rellena en vez de rechazar el PSD; 1080×1080, «Subir otro archivo» y guía plegada
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
+
+## 2026-10-28 — Formatos: comentarios de los diseñadores + imagen plana más confiable · rama `prisma` (PREVIEW)
+**Hecho (todo pusheado a `prisma`, preview verde; tests formatos 606/0, prisma 975/0):**
+- PSD de los diseñadores (SPGFAPPLE1PLATA s7) se rechazaba: HERO tapaba 15 % del recuadro del SUBTITULO → ahora lo tapado
+  se rellena (`rellenoPct`, rechazo sólo > 50 %) (ca96763). 1080×1080 en la lista inicial (`MEDIDAS_INICIO`), «Subir otro
+  archivo» en la barra pegajosa, guía de archivos plegada.
+- Imagen plana: el texto escrito en la revisión es un cambio real (a6982d2); fondo no liso ya no rechaza, lo de ahí queda
+  fijo (`medirPlanoFijo`, PEDRO_OVERRIDE) (5089a9e); precio blanco sobre pastilla naranja/blanca ya nítido y sin mancha
+  (e15181f, ad13308, 6f27bf0: color dominante, fondo desde dentro de la caja, cajas que contienen = fondo).
+- PSD: aviso si BACKGROUND trae un producto/persona (20-90 % del lienzo) (2f6e8fc); enlace a «Formatos con imagen
+  plana» sólo en la revisión cuando algo quedó fijo.
+- Link para diseñadores (no expira): greenlight-git-prisma-…vercel.app/?_vercel_share=… (en el chat; pide login Greenlight).
+**Esperando a los diseñadores:** zonas seguras por red, px por ratio, ejemplo 1.91:1 y 320×50, si eligieron DiDi (B29 3-6).
+**Pick up next (Pedro aprobó, en este orden):** (1) caché de lecturas por imagen: migración **0087**
+`produccion.formatos_lecturas` (hash del JPEG + modelo → elementos), en `api/prisma/formatos/leer` antes de llamar a
+Gemini; PEDIR "ship it" antes de aplicarla (la preview usa la base de prod); clasificarla en reset-blank-slate. (2)
+biblioteca de pruebas con lecturas reales (Pedro va a mandar top performers). (3) normalizar la lectura (ajustar cajas,
+aplanar anidados, partir texto de dos tamaños). Después: aprender acomodo de los top performers (feature aparte).
+**Pendiente menor:** textos cambiados de imagen plana no vuelven al releer (ids de la IA cambian; lo arregla (1)).
+
+## 2026-10-28 (tarde-noche) — Formatos: legal y precio editables, legal de la Biblioteca, barra de texto, 2 arreglos · rama `prisma` (PREVIEW)
+**Hecho (todo pusheado a `prisma`; Vercel de ccc0680 = success; formatos 638/0, prisma 975/0, tsc 0):**
+- 4b8b9a0 · Imagen plana: el legal se reescribe con la tipografía del cliente en un solo tamaño (caja de párrafo, 1/2/3
+  renglones, sin pixelarse); un texto de dos tamaños («$28,499 m.n.») es UN texto editable (lo que reemplaza letras toma
+  su estilo). Navegador: 6 de 6 nítidos.
+- 061f0c7 · Al «Continuar» la revisión plana, el legal leído se cambia por el guardado del cliente que se le parece
+  (palabras en común ≥ 0.7 y 0.1 de ventaja al segundo), con «Deshacer»; si no hay, aviso de revisarlo. Sin probar en el
+  navegador.
+- 2ef1c80 · Barra de texto en el editor (Pedro: "like photoshop, word google docs"): tipografía, tamaño (− número +) y
+  negrita por texto, en todas las medidas; viaja en `CambiosTexto` (llave `claveEstilo`); al abrir el editor de un PSD se
+  traen todas las tipografías del cliente. Probado en localhost con SPGFAPPLE (DiDi).
+- ccc0680 · Un recuadro de sólo contorno encima de un texto («Rectangle 6») ya no lo bloquea (psd.ts mira píxeles, no
+  cajas): 6 de 6 nítidos (antes 5) y el subtítulo se cambia. Y el recorte para la IA de «Quitar del fondo» puede salirse
+  del maestro (imágenes de forma rara, 788×1262): antes el botón no salía. Lo de la IA SIN PROBAR (Pedro volvió a
+  probar y la lectura ya separó bien la tarjeta: no hubo nada que quitar).
+**Decisiones:** la barra ofrece sólo tipografías CARGADAS (cliente + PSD), no todo Google Fonts; el tamaño se ve en px del
+original; el legal plano siempre se reescribe (no se prueba contra la imagen: `sinPrueba`).
+**Lecciones (tasks/lessons.md):** nombres PostScript reales («-Bold-Italic»), cajas vs píxeles en capas de encima,
+proporciones fijas vs lienzo de forma libre.
+**Pick up next (Pedro, textual: "wrap up with this as the 1st thing to do on the next session"):** la batería de pruebas
+con los top performers + registrarlos como ejemplos de buenas prácticas de acomodo. Plan en todo.md § ⭐ PRIMERO.
+**Esperando a Pedro:** los top performers (PSD y planos); decidir si las lecturas JSON de anuncios se quedan en el repo
+(es público). De antes: zonas seguras de los diseñadores, 16:9.
+**Archivos sin commit que NO son de esta sesión:** CLAUDE.md (+ CLAUDE.md.pre-replay-P3, del replay), brag-brief.md,
+brag-output/ — no los toqué.
+
+## 2026-10-29 07:48
+
+**Still open:**
+- [ ] B4. Banners delgados (320×50, 640×100): la fila ya existe (marca · título · beneficios · hero · botón + pie)
+- [ ] B8. Tipografías por cliente (Pedro, 2026-10-14, eligió la opción 1: "1 and leave it"; 320×50 se queda igual).
+- [ ] B20. Todo lo editable sigue editable (Pedro, 2026-10-19, tras la prueba del diseñador). Los 3 arreglos de B19
+- [ ] 2. Prueba con anuncios REALES (2-3 PSD + 2-3 planos de IA) con esa lista de medidas. Necesita de Pedro: los
+- [ ] 4. Motor de acomodo (banner / vertical / cuadrado) con las piezas del anuncio sin redibujar — lo usan las 2 puertas.
+- [ ] 5. Puerta PSD: leer capas en el NAVEGADOR (ag-psd) y subir sólo las capas necesarias; efectos que no se puedan
+- [ ] 6. IA UNA vez por anuncio (1-2 lienzos grandes, todos los tamaños se recortan de ahí) en vez de 1 por tamaño, con
+- [ ] 7. (Último recurso) rediseño con IA marcado "borrador, revisar".
+- [ ] 11. Preview: push. Prueba real necesita "ship it" (0078 + bucket en el proyecto compartido), `GEMINI_API_KEY` +
+- [ ] Tope de gasto DIARIO de IA por persona y global, en la BASE (hoy el freno vive en memoria por instancia). ANTES de
+
+
+## 2026-10-30 14:47
+
+**Still open:**
+- [ ] E. Piezas «OTRO» (sin papel) no se ponen en las 7 medidas que no son «igual» → «falta» (82947, 83ed, 1.06.45).
+- [ ] F. El brillo/sombra suave de una pieza que no se separa se queda en el fondo como mancha al moverla (82947: la
+- [ ] G. 83ed: la lectura cortó el titular en dos («¡Lleva tu DiDi Card y d» / «isfruta…») y el precio sale doble
+- [ ] H. 82947: los 2 renglones del titular siguen fijos (anillo con 8 % de orillas) y en 1280×720 quedan enormes con
+- [ ] Límite conocido: el relleno suave no inventa un pico de luz escondido detrás de un texto (prueba: ~5 niveles).
+- [ ] Opción 2 (IA para fondos de foto: estadio, rocas, capturas) sigue pendiente; Pedro decide.
+- [ ] Rellenos con muestras dejan manchas en barras/pastillas angostas (legal sobre barra blanca y botón de 1.07.33).
+- [ ] 29 de 83 textos van «aproximados» (no empatan con DiDi Sans): revisar a ojo cuáles se ven distintos.
+- [ ] En fotos, lo anclado y lo pegado no se mueven y las piezas acomodadas les caen encima (avisos «encima»).
+- [ ] 83ed: «6% de CASHBACK*» sale deslavado (color de tinta mal medido).
+
+
+## 2026-10-30 Session — PSD sin carpeta BACKGROUND, sombras y resplandores (SPAPTOYBOX)
+**What we did:** Pedro reportó «Falta la carpeta BACKGROUND» con SPAPTOYBOX.psd (278 MB). Al leer el archivo, el
+Background SÍ estaba, metido en «4:5» › «1:1». Tres commits en `prisma`, los tres en la preview:
+- ab529a1 — `desenvolver` (roles.ts) abre las carpetas que envuelven cuando el primer nivel no trae fondo (lector y PSD
+  editable igual, para que coincidan ruta/carpeta); lo de debajo del fondo va en «Debajo del fondo (HÜE)», con el fondo.
+  Si aun así no hay fondo, el worker pausa y la página pregunta cuál capa es el fondo (casillas, la de abajo marcada).
+- 9d8673e — sombras paralelas con su lugar real (corridas por distancia/ángulo con la luz global, desvaneciéndose hacia
+  la orilla) y el fondo bajo una sombra nunca más oscuro que lo que se ve.
+- 89e039c — el resplandor exterior se queda pintado en el fondo y sale aviso «resplandor» sólo en las medidas donde su
+  pieza se mueve; todo el texto dice «artboard» en vez de «mesa».
+**Current state:** en la preview (https://greenlight-278hrecpi-pedros-projects-c43384db.vercel.app, Ready). SPAPTOYBOX:
+los 2 artboards dan 13 medidas. Tests: formatos 667/0 y las demás suites verdes. PSD reales del Mac: ninguno empeoró;
+BFDIRECT20CASH 876×324 también pasó a usable.
+**Uncommitted work:** sólo lo que no es de esta sesión (CLAUDE.md + .pre-replay-P3, brag-brief.md, brag-output/) y las
+entradas automáticas de este log.
+**Decisions made:** (1) Pedro eligió "1 y 2": abrir envolturas solas + selector de fondo de respaldo (el selector solo no
+servía con su archivo). (2) PEDRO_OVERRIDE: lo de nicho (un efecto raro en unas medidas) pasa con aviso de color por medida
+y "arréglalo en el PSD de esta medida", no se construye el arreglo grande ni se descarta el artboard. (3) "mesa" → "artboard".
+**Pick up next session:** Pedro prueba SPAPTOYBOX en la preview. En sus medidas anchas falta poner papeles a mano en
+«Carpetas con otro nombre» (Group 5 → TITULO, Group 8 → CTA); el blíster vive en Background (no se mueve: Photoshop).
+Lo de antes sigue: Pedro retesta el fondo con IA del estadio; luego el registro de buenas prácticas.
+**Environment changes:** ninguno (sin dependencias nuevas, sin migraciones).
+
+## 2026-11-02 Session — Limpieza de la prueba de Control de Cambios (datos de PROD, sin código)
+**What we did:** Pedro aprobó borrar la prueba de hoy (17:59 a 18:12 UTC), toda en CMCOOKINGSP (A1), y quitar la asignación. Borrado en una sola transacción, con conteos esperados: 2 cambios, 3 respuestas, 3 resultados de HÜE, 6 eventos de estado, 22 notificaciones, 44 entregas (5 correos en cola incluidos), la asignación de Nils Vera; `completed_at` de A1 a null.
+**Current state:** comprobado por SQL: 0 cambios y 0 respuestas en toda la base, 0 entregas en cola. A1 sigue `published`, 6 planos, 2 assets, 6 eventos de estado (último del 28/10), Margaret Fink de lead. A2 (GIRLTHREE) sin tocar. No se abrió la app para verlo en pantalla.
+**Correos:** salieron 7 correos reales de la prueba (agrupaban 15 avisos); no se pueden recuperar. Los 5 que seguían en cola ya no salen.
+**Hallazgo:** el reloj de correos agrupados NO está instalado (`cron.job` sin `greenlight-correos-agrupados`, sin `greenlight_privado.tick_correos`, sin secreto en Vault). Lo que espera su turno sólo sale con el siguiente envío normal de la app; a las 18:20:51 había 5 correos con su hora ya pasada, sin salir.
+**Pick up next session:** Pedro decide si instala el reloj (`supabase/manual/0084_reloj_correos.sql`, en `main`; necesita CRON_SECRET en Vercel y greenlight_cron_secret en Vault, los pone Pedro).
+**Uncommitted work:** esta entrada, tasks/lessons.md, y lo que ya no era de esta sesión (CLAUDE.md + .pre-replay-P3, brag-brief.md, brag-output/).
+
+**2026-11-02, reloj de correos instalado:** Pedro puso CRON_SECRET (Vercel, Production), greenlight_cron_secret (Vault), redeploy de producción con el mismo código (13:14 MDT, Ready) y corrió el SQL. Comprobado: job `greenlight-correos-agrupados` activo cada minuto, primera corrida 19:16:00 UTC `succeeded`; POST sin secreto = 401. SIN comprobar: que los dos secretos coincidan. La prueba es el primer correo retenido: revisar `net._http_response` (200 bien, 401 no coinciden) y que salga a tiempo. Pedro lo ve si un segundo aviso a la misma persona llega unos 10 minutos después del primero sin otra acción en la app.
+
+## 2026-11-02 12:16
+**Shipped (recent commits):**
+  - fix(formatos): el legal elegido dice dónde sí y dónde no llegó, y un fondo sin nada visible ya no cuenta
+
+**Still open:**
+- [ ] E. Piezas «OTRO» (sin papel) no se ponen en las 7 medidas que no son «igual» → «falta» (82947, 83ed, 1.06.45).
+- [ ] F. El brillo/sombra suave de una pieza que no se separa se queda en el fondo como mancha al moverla (82947: la
+- [ ] G. 83ed: la lectura cortó el titular en dos («¡Lleva tu DiDi Card y d» / «isfruta…») y el precio sale doble
+- [ ] H. 82947: los 2 renglones del titular siguen fijos (anillo con 8 % de orillas) y en 1280×720 quedan enormes con
+- [ ] Límite conocido: el relleno suave no inventa un pico de luz escondido detrás de un texto (prueba: ~5 niveles).
+- [ ] Opción 2 (IA para fondos de foto: estadio, rocas, capturas) sigue pendiente; Pedro decide.
+- [ ] Rellenos con muestras dejan manchas en barras/pastillas angostas (legal sobre barra blanca y botón de 1.07.33).
+- [ ] 29 de 83 textos van «aproximados» (no empatan con DiDi Sans): revisar a ojo cuáles se ven distintos.
+- [ ] En fotos, lo anclado y lo pegado no se mueven y las piezas acomodadas les caen encima (avisos «encima»).
+- [ ] 83ed: «6% de CASHBACK*» sale deslavado (color de tinta mal medido).
+
+## 2026-11-02 — HÜE Formatos: el legal de la Biblioteca que "cambió" y no cambió (SPAPDOGCARD) — rama `prisma` (preview), sin migración
+**Hecho (pusheado, ada32f6):** un «Background» sin nada visible ya no cuenta como fondo (mi bug del 2026-10-30 perdía el artboard 9:16). Elegir fondo: no marca una carpeta con nombre de otra pieza ni con el fondo adentro, avisa en esa fila y deja saltar el artboard. Legal: aviso naranja con cuántos artboards, cuáles y por qué, y aviso en cada medida afectada. Un texto que no se escribe nombra la causa real; mientras bajan las tipografías no se dice que faltan.
+**Pruebas:** `npm test` todo verde (formatos 670/0) · tsc y eslint limpios · app local con SPAPDOGCARD: 1080×1920 sale con el legal de la Biblioteca (133.9 %, 31 de agosto); marcando «Legales» como fondo, aviso y medida 1200×1500 lo dicen · 11 PSD reales revisados: sólo éste trae un fondo sin nada visible.
+**No probado:** el color naranja del aviso y la línea corta «1 texto cambiado» (cambiados después de la última corrida en el navegador); nada en la preview de Vercel. El texto literal "falta su tipografía" NO se reprodujo.
+**Esperando a Pedro:** probar SPAPDOGCARD y SPAPTOYBOX en la preview. Si vuelve el mensaje de tipografía, mandar la línea «Tipografías de DiDi…» de bajo Cliente. Sus diseñadores: sacar Background al primer nivel en 4:5 y sacar Subtitulo, 10minutos y CTA del Background en 1.91:1.

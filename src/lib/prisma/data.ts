@@ -1,0 +1,256 @@
+import "server-only";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+import type { PrismaCharacterRow, PrismaPromptRow, PrismaSpecRow } from "@/lib/database.types";
+import type { MarcaPreset } from "@/lib/prisma/spec";
+import { presetDeMarca } from "@/lib/prisma/preset";
+import type { JobType } from "@/lib/prisma/spec";
+import { resumirAprendizaje, type Aprendizaje, type EventoRow, type PromptCandidato, type Voto } from "@/lib/prisma/aprendizaje";
+import { notasDe, type NotaTool } from "@/lib/prisma/reglas";
+import type { FilaHabito } from "@/lib/prisma/looks";
+import type { PrismaReglaRow } from "@/lib/database.types";
+import { CATALOGO_BASE, catalogoDesdeFilas, type Catalogo, type FilaHerramienta } from "@/lib/prisma/catalogo";
+
+/**
+ * HÜE Prisma — lecturas de servidor (marcas con preset, personajes, historial, URLs
+ * firmadas). Todo por service_role (la app es el servidor de confianza) y filtrado por
+ * lo que el rol puede ver: el historial es POR AUTOR salvo para lead/admin/master.
+ */
+
+export const BUCKET = "greenlight-referencias";
+
+type Db = ReturnType<typeof supabaseAdmin>;
+
+export type MarcaConPreset = {
+  id: string;
+  name: string;
+  slug: string;
+  client_id: string;
+  client_name: string;
+  client_slug: string;
+  preset: MarcaPreset;
+};
+
+/** Todas las marcas activas con su preset (para el selector "Marca"). */
+export async function cargarMarcas(db: Db): Promise<MarcaConPreset[]> {
+  type Fila = { id: string; name: string; slug: string; client_id: string; prisma_presets?: unknown; clients: { name: string; slug: string; brand_color: string | null; active: boolean } };
+  const base = "id, name, slug, client_id, clients!inner(name, slug, brand_color, active)";
+  let res = await db.from("marcas").select(`${base.replace("client_id,", "client_id, prisma_presets,")}`).eq("active", true).order("name").returns<Fila[]>();
+  // Antes de aplicar la 0063 la columna prisma_presets no existe: en vez de dejar el
+  // selector vacío en silencio, se re-consulta sin ella (preset = color de marca) y se
+  // deja constancia en el log del servidor.
+  if (res.error && /prisma_presets/.test(res.error.message)) {
+    console.warn("[prisma] marcas.prisma_presets no existe todavía (falta la migración 0063); usando color de marca.");
+    res = await db.from("marcas").select(base).eq("active", true).order("name").returns<Fila[]>();
+  }
+  if (res.error) {
+    console.error("[prisma] cargarMarcas:", res.error.message);
+    return [];
+  }
+  const data = res.data;
+  return (data ?? [])
+    .filter((m) => m.clients?.active !== false)
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      slug: m.slug,
+      client_id: m.client_id,
+      client_name: m.clients.name,
+      client_slug: m.clients.slug,
+      // La MISMA normalización que usa el Admin al guardar (lib/prisma/preset.ts).
+      preset: presetDeMarca(`${m.clients.name} ${m.name}`.trim(), m.prisma_presets, m.clients.brand_color),
+    }));
+}
+
+/** Personajes/productos guardados (activos) de un cliente, o de todos. */
+export async function cargarPersonajes(db: Db, clientId: string | null): Promise<PrismaCharacterRow[]> {
+  let q = db.from("prisma_characters").select("*").eq("active", true).order("name");
+  if (clientId) q = q.eq("client_id", clientId);
+  const { data } = await q.returns<PrismaCharacterRow[]>();
+  return data ?? [];
+}
+
+export type ItemHistorial = {
+  spec: PrismaSpecRow;
+  prompt: PrismaPromptRow | null; // el más reciente
+  thumb: string | null; // URL firmada de la primera referencia
+};
+
+/** Historial: los specs del autor (o de todos si `todos`), con su último prompt y un thumb. */
+export async function cargarHistorial(db: Db, autorId: string | null, todos: boolean, limite = 30): Promise<ItemHistorial[]> {
+  let q = db.from("prisma_specs").select("*").order("created_at", { ascending: false }).limit(limite);
+  if (!todos) {
+    if (!autorId) return [];
+    q = q.eq("created_by", autorId);
+  }
+  const { data: specs } = await q.returns<PrismaSpecRow[]>();
+  if (!specs?.length) return [];
+
+  const ids = specs.map((s) => s.id);
+  const { data: prompts } = await db
+    .from("prisma_prompts")
+    .select("*")
+    .in("spec_id", ids)
+    .order("created_at", { ascending: false })
+    .returns<PrismaPromptRow[]>();
+  const ultimo = new Map<string, PrismaPromptRow>();
+  for (const p of prompts ?? []) if (!ultimo.has(p.spec_id)) ultimo.set(p.spec_id, p);
+
+  const paths = [...new Set(specs.map((s) => s.refs?.[0]?.storage_path).filter((p): p is string => !!p))];
+  const urls = await firmar(db, paths);
+  return specs.map((s) => ({ spec: s, prompt: ultimo.get(s.id) ?? null, thumb: s.refs?.[0]?.storage_path ? urls.get(s.refs[0].storage_path) ?? null : null }));
+}
+
+/** Días hacia atrás que H.Ü.E mira para aprender de una marca. */
+const DIAS_APRENDIZAJE = 90;
+
+/**
+ * Lo aprendido de UN cliente para un trabajo: sus eventos recientes + sus prompts recientes
+ * (con votos) → resumirAprendizaje (puro). Nunca lanza: si la tabla de eventos aún no existe
+ * (antes de la 0066) o algo falla, se genera SIN aprendizaje y queda constancia en el log.
+ *
+ * DECISIÓN (Pedro, 2026-09-11): la memoria es POR MARCA, no por autor — "que H.Ü.E aprenda"
+ * significa que lo que le sirvió a un diseñador de DiDi le sirve al siguiente. El historial
+ * sí es por autor (lo que cada quien ve); aquí sólo viajan recortes al MODELO (cercados, como
+ * referencia de estructura) y al diseñador se le enseña únicamente el CONTEO.
+ */
+export async function cargarAprendizaje(db: Db, clientId: string, job: JobType): Promise<Aprendizaje | null> {
+  const desde = new Date(Date.now() - DIAS_APRENDIZAJE * 86400e3).toISOString();
+  type Fila = { id: string; spec_id: string; tool: string; variante: string; salida: string; valido: boolean; prisma_specs: { client_id: string | null; job: string }; prisma_ratings: { prompt_id: string; score: number }[] | null };
+  // Las dos consultas no dependen entre sí: en paralelo (está en el camino caliente de generar).
+  const [ev, pr, resp] = await Promise.all([
+    db
+      .from("prisma_eventos")
+      .select("spec_id, prompt_id, job, tool, variante, tipo, detalle, created_at")
+      .eq("client_id", clientId)
+      // Sólo los tipos que enseñan: un aluvión de otro tipo (aviso_aplicado…) no desplaza la ventana.
+      .in("tipo", ["copiado", "abierto", "variante", "refinado", "resultado_subido", "resultado_aceptado"])
+      .gte("created_at", desde)
+      .order("created_at", { ascending: false })
+      .limit(200)
+      .returns<EventoRow[]>(),
+    db
+      .from("prisma_prompts")
+      .select("id, spec_id, tool, variante, salida, valido, prisma_specs!inner(client_id, job), prisma_ratings(prompt_id, score)")
+      .eq("prisma_specs.client_id", clientId)
+      .gte("created_at", desde)
+      .order("created_at", { ascending: false })
+      .limit(60)
+      .returns<Fila[]>(),
+    // Las respuestas de la entrevista van aparte: con su propia ventana no desplazan a los ganadores.
+    db
+      .from("prisma_eventos")
+      .select("spec_id, prompt_id, job, tool, variante, tipo, detalle, created_at, user_id")
+      .eq("client_id", clientId)
+      .eq("tipo", "respondido")
+      .gte("created_at", desde)
+      .order("created_at", { ascending: false })
+      .limit(60)
+      .returns<EventoRow[]>(),
+  ]);
+  if (ev.error) {
+    console.warn(`[prisma] aprendizaje sin eventos (¿falta la 0066?): ${ev.error.message}`);
+    return null;
+  }
+  if (pr.error) {
+    console.warn(`[prisma] aprendizaje sin prompts: ${pr.error.message}`);
+    return null;
+  }
+  // El filtro por cliente se REPITE en JS: si el filtro embebido no aplicara, nunca entraría
+  // un prompt de otro cliente como "ganador" de esta marca.
+  const filas = (pr.data ?? []).filter((f) => f.prisma_specs?.client_id === clientId);
+  const prompts: PromptCandidato[] = filas.map((f) => ({ id: f.id, spec_id: f.spec_id, job: f.prisma_specs.job, tool: f.tool, variante: f.variante, salida: f.salida, valido: f.valido }));
+  const votos: Voto[] = filas.flatMap((f) => f.prisma_ratings ?? []);
+  return resumirAprendizaje(job, [...(ev.data ?? []), ...(resp.error ? [] : (resp.data ?? []))], prompts, votos);
+}
+
+/** F5a: las filas de look (luz, lente, ángulo, ambiente, estilo, movimiento) de los últimos specs
+ *  de un cliente → lo que la marca "suele usar" (looks.ts los cuenta). Nunca lanza.
+ *  Sólo specs ORIGINALES (`origen_spec_id is null`): una copia (otra versión, adaptar, corrección) no es
+ *  otra elección del diseñador — adaptar a 5 formatos contaba ese look 6 veces. El filtro va en la BD,
+ *  no después: con el tope de 60, las copias se comían la ventana. */
+export async function cargarHabitos(db: Db, clientId: string, limite = 60): Promise<FilaHabito[]> {
+  const { data, error } = await db.from("prisma_specs").select("spec").eq("client_id", clientId).is("origen_spec_id", null).order("created_at", { ascending: false }).limit(limite).returns<{ spec: Record<string, unknown> | null }[]>();
+  if (error) {
+    console.warn(`[prisma] hábitos no disponibles: ${error.message}`);
+    return [];
+  }
+  // Con tope: una frase larga escrita por el modelo no debe volverse una etiqueta de chip kilométrica.
+  const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim().slice(0, 120) : null);
+  return (data ?? []).map((r) => {
+    const s = r.spec ?? {};
+    const cam = (s.camara && typeof s.camara === "object" ? s.camara : {}) as Record<string, unknown>;
+    return { luz: str(s.luz), lente: str(cam.lente), angulo: str(cam.angulo), mood: str(s.mood), estilo: str(s.estilo), movimiento: str(cam.movimiento) };
+  });
+}
+
+/** El conocimiento vivo: notas y reglas (0067) + los datos de cada herramienta (0071, F6a). */
+export type ReglasCargadas = { filas: PrismaReglaRow[]; notas: NotaTool[]; clave: string; catalogo: Catalogo };
+
+/** FNV-1a de 32 bits en base 36: suficiente para distinguir versiones del conocimiento. */
+function huella(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
+}
+const REGLAS_TTL_MS = 60_000;
+let reglasCache: { en: number; valor: ReglasCargadas } | null = null;
+
+/**
+ * El conocimiento vivo por herramienta (prisma_reglas, 0067): las filas activas, las notas ya
+ * listas para TOOL NOTES y una `clave` (= max(updated_at)) que identifica esta versión del
+ * conocimiento. Caché de 60 s por instancia: una generación no debe pagar la consulta.
+ * NUNCA lanza: si la tabla aún no existe (preview antes de la 0067) o algo falla, se sigue
+ * sin notas y queda constancia en el log — mismo patrón que cargarMarcas con prisma_presets.
+ */
+export async function cargarReglas(db: Db): Promise<ReglasCargadas> {
+  const ahora = Date.now();
+  if (reglasCache && ahora - reglasCache.en < REGLAS_TTL_MS) return reglasCache.valor;
+  // F6a: los datos de cada herramienta viajan con las reglas (misma caché, una sola ida a la BD).
+  const [rg, hr] = await Promise.all([
+    db.from("prisma_reglas").select("*").eq("activa", true).order("clase").order("orden").limit(120).returns<PrismaReglaRow[]>(),
+    db.from("prisma_herramientas").select("tool, limites, fortalezas, modelos, fuente_url, fuente_fecha").limit(20).returns<FilaHerramienta[]>(),
+  ]);
+  // Sin la 0071 (o si falla) se sigue con las constantes: nunca rompe una generación.
+  if (hr.error) console.warn(`[prisma] herramientas no disponibles (¿falta la 0071?): ${hr.error.message}`);
+  const catalogo = hr.error ? CATALOGO_BASE : catalogoDesdeFilas(hr.data ?? []);
+  if (rg.error) {
+    console.warn(`[prisma] reglas no disponibles (¿falta la 0067?): ${rg.error.message}`);
+    return { filas: [], notas: [], clave: "0", catalogo };
+  }
+  const filas = rg.data ?? [];
+  const notas = notasDe(filas);
+  // Huella del CONTENIDO que entra al prompt (no max(updated_at): apagar una nota vieja no
+  // movería ese máximo y el caché del writer seguiría sirviendo la nota apagada).
+  const clave = notas.length ? `${notas.length}.${huella(notas.map((n) => `${n.tool ?? ""}|${n.fecha ?? ""}|${n.texto}`).join("\n"))}` : "0";
+  const valor = { filas, notas, clave, catalogo };
+  reglasCache = { en: ahora, valor };
+  return valor;
+}
+
+/** Tras guardar en el Hub (reglas o herramientas): la siguiente lectura va a la BD, no a la caché
+ *  de esta instancia. Otras instancias la renuevan solas en ≤ 60 s. */
+export function olvidarConocimiento(): void {
+  reglasCache = null;
+}
+
+/** URLs firmadas en lote (bucket privado), 1 h. */
+export async function firmar(db: Db, paths: string[], bucket: string = BUCKET): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!paths.length) return out;
+  const { data, error } = await db.storage.from(bucket).createSignedUrls(paths, 60 * 60);
+  if (error) console.error(`[prisma] createSignedUrls (${bucket}):`, error.message);
+  for (const s of data ?? []) if (s.path && s.signedUrl) out.set(s.path, s.signedUrl);
+  return out;
+}
+
+/** Un spec con TODOS sus prompts (para reabrir desde el historial). */
+export async function cargarSpec(db: Db, specId: string): Promise<{ spec: PrismaSpecRow; prompts: PrismaPromptRow[]; urls: Map<string, string> } | null> {
+  const { data: spec } = await db.from("prisma_specs").select("*").eq("id", specId).maybeSingle<PrismaSpecRow>();
+  if (!spec) return null;
+  const { data: prompts } = await db.from("prisma_prompts").select("*").eq("spec_id", specId).order("created_at", { ascending: false }).returns<PrismaPromptRow[]>();
+  const urls = await firmar(db, (spec.refs ?? []).map((r) => r.storage_path));
+  return { spec, prompts: prompts ?? [], urls };
+}

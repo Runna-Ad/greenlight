@@ -98,3 +98,47 @@ el que verificó (el code-reviewer dio por verificado algo que un grep desminti�
 CONTEXT: El PostToolUse hook de Edit pide "abre el preview y verifica" tras CADA edición, incluso a mitad de un
 lote de 40 archivos; verificar por edición sería absurdo. Se verificó al final del lote (correcto).
 RECOMMENDATION: que el hook lo pida una vez por turno/lote, o sólo cuando no haya más ediciones pendientes.
+
+[2026-09-11] OBSERVATION: replicable-win
+CONTEXT: HÜE Prisma, dos tandas de build en un día. Lanzar security-reviewer (Opus) + code-reviewer (Sonnet) en background al terminar de escribir código, y hacer la verificación en navegador/smoke mientras corrían, cazó 1 crítico + 9 serios que los gates (tsc, lint, build, 600 tests) no ven.
+RECOMMENDATION: en beast-mode-dev, Phase 4 debería decir explícitamente "spawn los reviewers ANTES de la verificación manual, no después" — hoy se lee como secuencial (build → reap → verify).
+
+[2026-09-11] OBSERVATION: missing-rule
+CONTEXT: tres comandos rechazados por "control characters" al escribir una regex de caracteres de control con escapes unicode; el rechazo tira el comando entero (y los otros archivos del mismo heredoc). También: el pane del navegador recargó la pestaña en "/" a media verificación de un wizard de 3 pasos y se perdió el estado.
+RECOMMENDATION: nota de tooling en beast-mode-dev (o en research.md): (1) nunca escribir rangos de control literales/escapados en un comando — usar `\p{Cc}`/`\p{Cf}` o `String.fromCharCode`; un archivo por heredoc; (2) para pantallas profundas de un wizard, un `?demo=` dev-only que monte ese paso directo; el chequeo móvil al final.
+
+[2026-09-11] OBSERVATION: skill-gap
+CONTEXT: "verificar de verdad" una acción de servidor que necesita sesión (login apagado en local) sigue sin camino directo: hoy se cubrió con (a) smoke real del modelo con el loader nuevo `scripts/register-hooks.mjs`, (b) `?demo=resultado`, (c) LIVE-VERIFY de Pedro. Funciona, pero cada sesión lo re-arma.
+RECOMMENDATION: un `?demo=paso3` (y en general un demo por pantalla gateada) + documentar el loader en el CLAUDE.md del proyecto como "así se prueba un prompt nuevo antes de cablearlo".
+
+[2026-09-15] OBSERVATION: replicable-win
+CONTEXT: tras arreglar el SERIO de una revisión, devolverle el arreglo al MISMO revisor (SendMessage) lo confirmó en 65 s y cubrió un camino extra.
+RECOMMENDATION: beast-mode-dev, Phase 6: "un hallazgo SERIO/CRÍTICO se re-verifica con el mismo revisor antes del commit".
+
+[2026-09-15] OBSERVATION: skill-gap (recurrente — 2ª vez)
+CONTEXT: verificar los avisos del paso 3 de Prisma exigió un rodeo porque el paso 1 pide subir una foto (necesita sesión en local). Mismo hueco que 2026-09-11.
+RECOMMENDATION: construir `?demo=paso3` en Prisma la próxima sesión; regla general en beast-mode-dev: "si una pantalla profunda se verificó con rodeos dos veces, se le hace su demo dev-only".
+
+[2026-09-15] OBSERVATION: conflict
+CONTEXT: el hook MODEL GUARD repitió "Session model is opusplan → this will EXECUTE on Sonnet" en varias vueltas, pero esta sesión corría en Opus 5; decírselo a Pedro habría sido falso (regla 2: no fabricar), así que no se dijo.
+RECOMMENDATION: que el hook lea el modelo real de la sesión (o lo diga condicional: "si estás en opusplan…") en ~/.claude/hooks.
+
+[2026-09-17] OBSERVATION: skill-gap
+CONTEXT: pedí a Pedro, modelo por modelo, precios que el navegador de la app podía leer solo (Pedro: "cant you access the browser and review those things yourself?"). Leerlos con un script (sliders Radix con teclas, listbox con pointer events, escaneo en segundo plano) tardó minutos y cazó 2 datos dictados erróneos.
+RECOMMENDATION: beast-mode-dev Phase 1: "si el dato vive en una página web, léelo con el navegador antes de pedírselo a Pedro (sólo lectura; nunca botones que gastan)".
+
+[2026-09-17] OBSERVATION: conflict
+CONTEXT: el hook MODEL GUARD disparó "auth / login → opusplan ejecuta en Sonnet" cuando Pedro dijo "ill sign in" (iniciar sesión en un sitio, no código de auth) y el hook CHALLENGE MODE disparó con órdenes directas ("yes add seedance 2.0 fast… you fix the dop name").
+RECOMMENDATION: afinar los disparadores en ~/.claude/hooks (auth = archivos/código de auth; challenge = preguntas de evaluación sin verbo de orden).
+
+[2026-09-21] OBSERVATION: replicable-win
+CONTEXT: fix de PROD mientras `prisma` sigue en preview: worktree desde origin/main + config temporal en `.claude/launch.json` (otro puerto, `AUTH_ENABLED=true` sólo en el proceso, .env sin tocar) → se reprodujo el bug real con el muro encendido y se verificó sin mezclar ramas; luego se restauró el launch.json y se borró el worktree.
+RECOMMENDATION: beast-mode-dev: "fix que debe ir a main con otra rama abierta → worktree + preview temporal en puerto propio; restaurar launch.json y borrar el worktree al cerrar".
+
+[2026-09-21] OBSERVATION: missing-rule
+CONTEXT: en auth, la 2ª pasada del security-reviewer (sobre lo YA arreglado) encontró clases nuevas que la 1ª no podía ver (endpoint público de verify de Supabase, contraseñas en cuentas del equipo, contraseñas pre-registradas vivas en clientes viejos).
+RECOMMENDATION: beast-mode-dev Phase 6: para auth/permisos, re-correr el security-reviewer sobre el diff FINAL antes de shippear, no sólo sobre el primer build.
+
+[2026-09-21] OBSERVATION: conflict
+CONTEXT: el hook MODEL GUARD volvió a decir "opusplan → ejecuta en Sonnet" mientras la sesión corría en Opus 5 (el modelo real lo dice el sistema). Falsa alarma recurrente (ver 2026-09-17).
+RECOMMENDATION: que el hook lea el modelo REAL de la sesión antes de avisar, o que sólo avise cuando settings.json diga opusplan Y no haya override de /model.

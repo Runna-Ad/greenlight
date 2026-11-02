@@ -11,12 +11,29 @@
 //
 //   node scripts/migrate.mjs          → apply pending
 //   node scripts/migrate.mjs --status → show what's applied/pending
+//   --only <version>                  → apply ONLY that pending migration (Pedro approves each one by name)
+//   --project-ref <ref>               → target that project instead of the linked one (no `supabase link` needed)
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
 const DIR = "supabase/migrations";
 const statusOnly = process.argv.includes("--status");
+const arg = (flag) => {
+  const i = process.argv.indexOf(flag);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+};
+const only = arg("--only");
+const ref = arg("--project-ref");
+if (process.argv.includes("--only") && !/^\d{14}$/.test(only ?? "")) {
+  console.error("--only necesita la versión de 14 dígitos (p. ej. 20261014120001).");
+  process.exit(1);
+}
+if (process.argv.includes("--project-ref") && !/^[a-z]{20}$/.test(ref ?? "")) {
+  console.error("--project-ref necesita el id del proyecto (20 letras).");
+  process.exit(1);
+}
+const destino = ref ? ["--linked", "--project-ref", ref] : ["--linked"];
 
 /** Run SQL against the linked project, returning parsed rows. */
 function query(sql) {
@@ -25,7 +42,7 @@ function query(sql) {
   try {
     const out = execFileSync(
       "supabase",
-      ["db", "query", "--linked", "--file", tmp, "-o", "json"],
+      ["db", "query", ...destino, "--file", tmp, "-o", "json"],
       { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] },
     );
     const start = out.indexOf("[");
@@ -51,7 +68,11 @@ const applied = new Set(
 );
 
 const files = readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort();
-const pending = files.filter((f) => !applied.has(f.split("_")[0]));
+const pending = files.filter((f) => !applied.has(f.split("_")[0]) && (!only || f.split("_")[0] === only));
+if (only && !pending.length) {
+  console.error(`\n${only}: no está pendiente (ya aplicada, o no existe ese archivo).\n`);
+  process.exit(1);
+}
 
 console.log(`\n${applied.size} aplicadas · ${pending.length} pendientes\n`);
 for (const f of files) {

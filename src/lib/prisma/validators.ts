@@ -1,0 +1,221 @@
+/**
+ * HÜE Prisma — validadores DETERMINISTAS del prompt compilado. El prompt (a H.Ü.E)
+ * sugiere; el código mide y obliga (misma regla que el guard de tiempo del writer).
+ * Si falla, el writer hace UNA llamada de reparación con estos errores como feedback.
+ * Módulo puro.
+ */
+import { contarPalabras, textoDe, type PromptSpec, type Tool } from "./spec.ts";
+import { KLING_MAX_CHARS_TRANSICION, TOOL_INFO, duracionValida, duracionVeo } from "./tools.ts";
+import { PRESETS_HIGGSFIELD } from "./compilers/higgsfield.ts";
+import { topePalabras } from "./compilers/kling.ts";
+import type { Catalogo, Limites } from "./catalogo.ts";
+import { ORDINAL } from "./compilers/chatgpt.ts";
+import { tipoEn } from "./compilers/video-tipos.ts";
+import { dialogoCitado } from "./compilers/seedance.ts";
+import { movimientos } from "./camara.ts";
+
+/** Kling y Higgsfield siguen UN movimiento de cámara por clip; dos deforman la imagen. */
+function unSoloMovimiento(texto: string): string | null {
+  const m = movimientos(texto);
+  return m.length >= 2 ? `Dos movimientos de cámara (${m.join(" y ")}): esta herramienta sólo sigue uno. Elige uno.` : null;
+}
+
+export type Veredicto = { ok: true } | { ok: false; errores: string[] };
+
+/** Parejas de luz que no pueden coexistir en un mismo prompt. */
+const CONTRADICCIONES: [RegExp, RegExp, string][] = [
+  [/golden hour|sunset|atardecer/i, /neon/i, "golden hour y neón a la vez"],
+  [/\bnight\b|noche|moonlit/i, /\bmidday\b|noon|mediodía|harsh sun/i, "noche y mediodía a la vez"],
+  [/\bsnow\b|nieve/i, /\bdesert heat\b|tropical/i, "nieve y calor tropical a la vez"],
+];
+
+/** Palabras muy frecuentes del español que no deberían aparecer en un prompt en inglés
+ *  (fuera del diálogo). Un par sueltas pasan (nombres propios); muchas = fuga. */
+const STOP_ES = /\b(el|la|los|las|una|unos|unas|con|para|por|que|pero|también|desde|hacia|sobre|mientras|donde|cuando)\b/gi;
+
+function sinDialogo(texto: string): string {
+  // Quita lo que va entre comillas (diálogo o texto en imagen, en su idioma original)
+  // antes de medir idioma.
+  return texto.replace(/"[^"]*"/g, "").replace(/“[^”]*”/g, "");
+}
+
+function comunes(texto: string, spec: PromptSpec): string[] {
+  const e: string[] = [];
+  if (!texto.trim()) e.push("El prompt salió vacío.");
+  if (/\s--[a-z]/i.test(texto) || /::\d/.test(texto)) e.push("Trae parámetros de Midjourney (--ar, --v, ::) que esta herramienta no entiende.");
+  const refsMax = spec.refs.length;
+  for (const m of texto.matchAll(/\[Imagen (\d+)/g)) {
+    if (Number(m[1]) > refsMax) e.push(`Menciona [Imagen ${m[1]}] pero sólo hay ${refsMax} referencia(s).`);
+  }
+  const cuerpo = sinDialogo(texto);
+  const hits = cuerpo.match(STOP_ES)?.length ?? 0;
+  if (hits >= 4) e.push(`Parece haber español fuera del diálogo (${hits} palabras): el prompt debe ir en inglés.`);
+  for (const [a, b, msg] of CONTRADICCIONES) {
+    if (a.test(cuerpo) && b.test(cuerpo)) e.push(`Luz contradictoria: ${msg}.`);
+  }
+  // El texto pedido tiene que ir TAL CUAL (entre comillas) en el prompt: si falta,
+  // la herramienta no lo pinta y el diseñador cree que HÜE lo ignoró (2026-09-04).
+  const t = textoDe(spec);
+  // El JSON de Veo escapa las comillas (\"): se quitan antes de buscar.
+  if (t && !texto.replace(/\\"/g, '"').includes(`"${t.contenido.trim()}"`)) e.push(`No incluye el texto pedido "${t.contenido.trim()}" tal cual.`);
+  return e;
+}
+
+function kling(texto: string, spec: PromptSpec, lim?: Limites): string[] {
+  const e: string[] = [];
+  if (spec.job === "transicion") {
+    if (texto.length > KLING_MAX_CHARS_TRANSICION) e.push(`Transición de ${texto.length} caracteres; Kling corta en ${KLING_MAX_CHARS_TRANSICION}.`);
+    return e;
+  }
+  const max = topePalabras(lim, TOOL_INFO.kling.maxPalabras ?? 60);
+  const n = contarPalabras(texto);
+  if (n > max) e.push(`${n} palabras; Kling rinde con ≤${max}.`);
+  if ((texto.match(/\./g)?.length ?? 0) > 2) e.push("Debe ser una sola oración (separa con comas, no con puntos).");
+  const mov = unSoloMovimiento(texto);
+  if (mov) e.push(mov);
+  return e;
+}
+
+function veo(texto: string, spec: PromptSpec, lim?: Limites): string[] {
+  const e: string[] = [];
+  let j: Record<string, unknown>;
+  try {
+    j = JSON.parse(texto) as Record<string, unknown>;
+  } catch {
+    return ["El JSON de Veo no es válido."];
+  }
+  for (const k of ["description", "style", "camera", "lighting", "environment", "elements", "motion", "ending", "text", "keywords", "timeline", "negative_prompts", "negative_prompt", "duration_seconds"]) {
+    if (!(k in j)) e.push(`Falta el campo "${k}" en el JSON de Veo.`);
+  }
+  // 8 s obligatorio con referencias; sin ellas, una de las duraciones de Veo.
+  const esperada = duracionVeo(spec.duracion, spec.refs.length, lim?.duraciones);
+  if (j.duration_seconds !== esperada) e.push(`duration_seconds debe ser ${esperada}${spec.refs.length ? " (con referencias Veo sólo genera 8 s)" : ""}.`);
+  const kw = Array.isArray(j.keywords) ? (j.keywords as unknown[]) : [];
+  if (!kw.includes(spec.aspect)) e.push(`keywords debe incluir el formato ${spec.aspect}.`);
+  if (textoDe(spec)) {
+    if (j.text === "none") e.push("text no puede ser \"none\": el diseñador pidió texto en pantalla.");
+  } else if (j.text !== "none") e.push('text debe ser "none" (sin texto en pantalla).');
+  const tl = Array.isArray(j.timeline) ? (j.timeline as unknown[]) : [];
+  if (tl.length < 3) e.push("El timeline debe tener 3 bloques.");
+  const neg = Array.isArray(j.negative_prompts) ? (j.negative_prompts as unknown[]) : [];
+  if (!neg.length) e.push("negative_prompts no puede ir vacío.");
+  if (neg.some((n) => typeof n === "string" && /^(no|without|avoid)\b/i.test(n))) e.push("negative_prompts van como sustantivos (\"subtitles\"), nunca \"no X\".");
+  if (typeof j.negative_prompt !== "string" || j.negative_prompt !== neg.join(", ")) e.push("negative_prompt debe ser la misma lista en una línea.");
+  // El tipo de video elegido tiene que verse en `style` (es lo que Veo usa como guía estética).
+  const tipo = tipoEn(spec.video_type);
+  if (tipo && !(typeof j.style === "string" && j.style.includes(tipo))) e.push(`style debe llevar el tipo de video "${tipo}".`);
+  return e;
+}
+
+function higgsfield(texto: string, lim?: Limites): string[] {
+  const e: string[] = [];
+  const [cuerpo, presetLinea] = texto.split("\nCamera preset: ");
+  const max = topePalabras(lim, TOOL_INFO.higgsfield.maxPalabras ?? 60);
+  const n = contarPalabras(cuerpo ?? "");
+  if (n > max) e.push(`${n} palabras; Higgsfield rinde con ≤${max}.`);
+  if (!presetLinea || !(PRESETS_HIGGSFIELD as readonly string[]).includes(presetLinea.trim())) e.push("Falta un preset de cámara válido de Higgsfield.");
+  // El cuerpo no debe pedir un movimiento distinto del preset (un preset por clip).
+  const mov = unSoloMovimiento(texto);
+  if (mov) e.push(mov);
+  return e;
+}
+
+function nanobanana(texto: string, spec: PromptSpec): string[] {
+  const e: string[] = [];
+  spec.refs.forEach((_, i) => {
+    if (!texto.includes(`[Imagen ${i + 1}`)) e.push(`No usa la referencia [Imagen ${i + 1}].`);
+  });
+  if (spec.refs.length && !/Keep unchanged:/.test(texto)) e.push('Falta la cláusula "Keep unchanged" (qué se conserva).');
+  if (!texto.includes(spec.aspect)) e.push(`Falta el formato ${spec.aspect}.`);
+  return e;
+}
+
+function chatgpt(texto: string, spec: PromptSpec): string[] {
+  const e: string[] = [];
+  spec.refs.forEach((_, i) => {
+    if (!texto.includes(`the ${ORDINAL[i] ?? `#${i + 1}`} attached image`)) e.push(`No usa la referencia adjunta ${i + 1}.`);
+  });
+  if (spec.refs.length && !/Keep unchanged:/.test(texto)) e.push('Falta la cláusula "Keep unchanged" (qué se conserva).');
+  if (/\[Imagen \d/.test(texto)) e.push("Usa etiquetas [Imagen N], que ChatGPT no entiende (van como adjuntos).");
+  if (!/(square|portrait|landscape) \(\d+×\d+, \d+:\d+\)/.test(texto)) e.push("Falta el tamaño de salida (square/portrait/landscape con píxeles y aspect).");
+  return e;
+}
+
+/** Seedream nombra las referencias "Image N"; Seedance y Gemini Omni, con la etiqueta de Higgsfield
+ *  "@imageN". Cada una tiene que aparecer, y la etiqueta [Imagen N] de Nano Banana no la entienden. */
+function imagenesNumeradas(texto: string, spec: PromptSpec, arroba = false): string[] {
+  const e: string[] = [];
+  spec.refs.forEach((_, i) => {
+    const re = arroba ? new RegExp(`@image${i + 1}\\b`) : new RegExp(`\\bImage ${i + 1}\\b`);
+    if (!re.test(texto)) e.push(arroba ? `No usa la referencia @image${i + 1}.` : `No usa la referencia Image ${i + 1}.`);
+  });
+  if (/\[Imagen \d/.test(texto)) e.push(`Usa etiquetas [Imagen N]; aquí las referencias se nombran ${arroba ? "@image1, @image2…" : "Image 1, Image 2…"}`);
+  // Una etiqueta que no corresponde a ninguna imagen subida (la herramienta la ignoraría o inventaría).
+  if (arroba) for (const m of texto.matchAll(/@image(\d+)/g)) if (Number(m[1]) < 1 || Number(m[1]) > spec.refs.length) e.push(`Menciona @image${m[1]} pero sólo hay ${spec.refs.length} referencia(s).`);
+  return e;
+}
+
+function seedream(texto: string, spec: PromptSpec): string[] {
+  const e = imagenesNumeradas(texto, spec);
+  if (spec.refs.length && !/Keep unchanged:/.test(texto)) e.push('Falta la cláusula "Keep unchanged" (qué se conserva).');
+  if (!texto.includes(`Output: ${spec.aspect}`)) e.push(`Falta el formato ${spec.aspect}.`);
+  return e;
+}
+
+/** Video con diálogo: el texto va tal cual (entre comillas); sin diálogo, se pide sonido sin voz. */
+function dialogoTalCual(texto: string, spec: PromptSpec): string[] {
+  const d = spec.dialogo?.texto.trim();
+  if (d) return texto.includes(dialogoCitado(d)) ? [] : ["No incluye el diálogo tal cual (entre comillas)."];
+  return /no dialogue/i.test(texto) ? [] : ['Sin diálogo: falta pedir sonido sin voz ("no dialogue").'];
+}
+
+function seedance(texto: string, spec: PromptSpec, lim?: Limites): string[] {
+  const e = [...imagenesNumeradas(texto, spec, true), ...dialogoTalCual(texto, spec)];
+  const dur = duracionValida("seedance", spec.duracion, lim?.duraciones);
+  if (!texto.includes(`OUTPUT: ${spec.aspect}, ${dur} seconds`)) e.push(`Falta "OUTPUT: ${spec.aspect}, ${dur} seconds".`);
+  if (!/^GLOBAL STYLE: /.test(texto)) e.push("Debe abrir con GLOBAL STYLE (una regla visual arriba).");
+  // Sólo dentro de SHOTS (una caption no puede fingir los cortes).
+  const shots = /\nSHOTS\n([\s\S]*?)\n[A-Z][A-Z ]+: /.exec(texto)?.[1] ?? "";
+  if (spec.job === "escena_sora" && !/^\d+\.\ds HARD CUT$/m.test(shots)) e.push("La escena por bloques necesita los planos con tiempo y sus HARD CUT.");
+  return e;
+}
+
+function omni(texto: string, spec: PromptSpec, lim?: Limites): string[] {
+  const e = [...imagenesNumeradas(texto, spec, true), ...dialogoTalCual(texto, spec)];
+  const dur = duracionValida("gemini_omni", spec.duracion, lim?.duraciones);
+  if (!texto.includes(`${dur}-second ${spec.aspect} video`)) e.push(`Debe pedir un video de ${dur} s en ${spec.aspect}.`);
+  return e;
+}
+
+/** F6a: `cat` = el MISMO catálogo con el que se compiló (topes de palabras, duraciones). */
+export function validar(texto: string, spec: PromptSpec, tool: Tool = spec.tool, cat?: Catalogo): Veredicto {
+  const errores = [...comunes(texto, spec)];
+  const lim = cat?.[tool].limites;
+  switch (tool) {
+    case "kling":
+      errores.push(...kling(texto, spec, lim));
+      break;
+    case "veo":
+      errores.push(...veo(texto, spec, lim));
+      break;
+    case "higgsfield":
+      errores.push(...higgsfield(texto, lim));
+      break;
+    case "nanobanana":
+      errores.push(...nanobanana(texto, spec));
+      break;
+    case "chatgpt":
+      errores.push(...chatgpt(texto, spec));
+      break;
+    case "seedream":
+      errores.push(...seedream(texto, spec));
+      break;
+    case "seedance":
+      errores.push(...seedance(texto, spec, lim));
+      break;
+    case "gemini_omni":
+      errores.push(...omni(texto, spec, lim));
+      break;
+  }
+  return errores.length ? { ok: false, errores } : { ok: true };
+}

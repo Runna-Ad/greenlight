@@ -1,0 +1,3498 @@
+// HÜE Prisma › Formatos — geometría (todos los presets) + PIXEL-LOCK con un proveedor de IA falso que
+// devuelve basura (a otra medida). Sin DB ni red. Run: node scripts/test-formatos.mjs
+import sharp from "sharp";
+import {
+  PRESETS, presetDe, idCustom, medidaValida, encajar, sugerir, agrandaPct, lienzoIA, RATIOS_IA, costoEstimado, COSTO_IA_USD,
+  pegarDuro, zonaIdentica, deriva, colorDeBorde, nombreArchivo, LADO_MIN, LADO_MAX,
+  bordesDe, leerMedidas, limpiarNombre, hayExpansion, SIN_RECORTE, MODOS, esModo,
+} from "../src/lib/prisma/formatos/geometria.ts";
+import { leerFuente, escalarVisible, componer, analizarBordes } from "../src/lib/prisma/formatos/componer.ts";
+import { writePsdBuffer } from "ag-psd";
+import { nombreDeGuia, etiquetaPieza, esNombreLegal, desenvolver, CAPA_DEBAJO_FONDO } from "../src/lib/prisma/formatos/roles.ts";
+import { legalDelPsd, conLegal, conLegalDe, conLegalFijo, legalCabe, legalVigente, legalesParaCliente, legalParecido, parecidoLegal } from "../src/lib/prisma/formatos/legal.ts";
+import { hermanas, copiarEdicion } from "../src/lib/prisma/formatos/matriz.ts";
+import { MATRIZ, baseAEscala } from "../src/lib/prisma/formatos/tabla-matriz.ts";
+import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, tieneFondo, piezasDeMesa, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, RELLENO_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
+import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
+import { armarMedida, capasDeMedida, halosEnMedida, ENFOQUE_DESDE, ESCRIBIR_LEJOS_DE_1 } from "../src/lib/prisma/formatos/nitido.ts";
+import { psdDeMedida, textoDePsd, CAPA_SOMBRA_CONTRASTE } from "../src/lib/prisma/formatos/psd-salida.ts";
+import { readPsd as readPsdAg, getLayerImageData, getLayerMaskImageData, getLayerRealMaskImageData } from "ag-psd";
+import { planDeMedida, psdEditable, retoqueDeFondo, TopeEditable, CAPA_RETOQUE, CAPA_COLOR_MESA } from "../src/lib/prisma/formatos/psd-editable.ts";
+import { textoDe, maquetar, fuentesDe, compararAlfa, textoCambiado, porQueNoSeCambia, cajaQueCabe, limpiarTexto, TEXTO_CAMBIADO_MAX, TEXTO_DIF_MAX_PLANO } from "../src/lib/prisma/formatos/textos.ts";
+import { cambiarTextos, cambiosQueAplican, claveTexto, marcarSinEscribir, NO_SE_ESCRIBIO, capaConEstilo, claveEstilo, conEstilo, estiloDe, familiasDe, fuenteParecida, partesFuente } from "../src/lib/prisma/formatos/cambios-texto.ts";
+import { conRenglones, legalParaRenglones } from "../src/lib/prisma/formatos/renglones.ts";
+import { leerTipografia, nombresPedidos, archivoVisible, elegirTipografias, rutaTipografia, elegirParaCliente, exclusivasDeOtros, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIA_GOOGLE_MAX_BYTES, NOMBRES_PEDIDOS_MAX, ARCHIVOS_ENTREGADOS_MAX, ARCHIVO_NOMBRE_MAX } from "../src/lib/prisma/formatos/tipografias.ts";
+import { carpetaGoogle, archivosDeMetadata, archivosQueSirven, buscarEnGoogle, ARCHIVOS_POR_FAMILIA_MAX, GOOGLE_BYTES_POR_PEDIDO } from "../src/lib/prisma/formatos/google-fonts.ts";
+import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { acomodar, acomodarMedida, aplicarEdicion, pegadoFuera, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, RENGLONES_MAS, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, MEDIDAS_RATIO, FONDO_ZOOM_MAX, FONDO_EDITOR_MAX, fondoDeEdicion, edicionDeFondo } from "../src/lib/prisma/formatos/acomodo.ts";
+import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
+import { buscarGemela, quitarGemela, recorteConOrilla, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
+import { perdidas, avisosDePixeles, avisosDePegados, avisosDeResplandor, seVeLaCopia, revisarMedida, opcionesDeContraste, edicionMuevePieza, edicionSinPieza } from "../src/lib/prisma/formatos/revisar.ts";
+import { zonaSeguraImagen } from "../src/lib/prisma/compilers/zonas.ts";
+import { specVacio } from "../src/lib/prisma/spec.ts";
+import { unzipSync } from "fflate";
+import { zipPorPartes, zipsEnPartes, rutaLibre, CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES } from "../src/lib/prisma/formatos/zip.ts";
+import { limpiarLectura, medirPlano, medirPlanoFijo, maestroDePlano, rellenarConMuestras, conRenglonesDeLaImagen, mascaraPegados, pegarFondoIA, soltarConFondoIA, huecosDe, capaDeTexto, alineacionDe, ELEMENTOS_MAX, TEXTO_LEIDO_MAX } from "../src/lib/prisma/formatos/plano.ts";
+
+let pass = 0,
+  fail = 0;
+const ok = (name, cond, extra = "") => {
+  if (cond) {
+    pass++;
+    console.log(`  ✓ ${name}`);
+  } else {
+    fail++;
+    console.error(`  ✗ ${name}${extra ? `\n      ${extra}` : ""}`);
+  }
+};
+const eq = (name, got, want) => ok(name, JSON.stringify(got) === JSON.stringify(want), `got ${JSON.stringify(got)} want ${JSON.stringify(want)}`);
+
+// ── Geometría ────────────────────────────────────────────────
+console.log("\n▶ encajar: todos los presets × formas de anuncio");
+const FORMAS = [[1200, 1500], [1080, 1080], [1920, 1080], [300, 250], [4000, 1000], [999, 1001], [7, 3], [1, 1], [2000, 3]];
+const TODAS = [...PRESETS, { id: "otro-777x333", w: 777, h: 333 }, { id: "otro-32x4096", w: 32, h: 4096 }];
+let malos = [];
+for (const [w0, h0] of FORMAS) {
+  for (const p of TODAS) {
+    const e = encajar(w0, h0, p.w, p.h);
+    const x = e.expansion;
+    const fallas = [];
+    if (x.left + e.sw + x.right !== p.w) fallas.push("ancho no suma");
+    if (x.top + e.sh + x.bottom !== p.h) fallas.push("alto no suma");
+    if (Object.values(x).some((v) => v < 0 || !Number.isInteger(v))) fallas.push("expansión negativa o no entera");
+    if (!(e.sw >= 1 && e.sh >= 1 && e.sw <= p.w && e.sh <= p.h)) fallas.push("original fuera de la medida");
+    if (e.sw !== p.w && e.sh !== p.h) fallas.push("ningún lado toca el borde (no es contain)");
+    if (Math.abs(x.left - x.right) > 1 || Math.abs(x.top - x.bottom) > 1) fallas.push("no está centrado");
+    // Proporción: el lado redondeado se aleja < 1 px del exacto (o se acotó a 1 / al borde).
+    const exactoH = (h0 * e.sw) / w0;
+    const exactoW = (w0 * e.sh) / h0;
+    const desv = e.sw === p.w ? Math.abs(e.sh - exactoH) : Math.abs(e.sw - exactoW);
+    if (desv > 0.5 && !(e.sh === 1 || e.sw === 1)) fallas.push(`proporción desviada ${desv.toFixed(2)} px`);
+    if (fallas.length) malos.push(`${w0}×${h0} → ${p.id}: ${fallas.join(", ")}`);
+  }
+}
+ok(`${FORMAS.length * TODAS.length} combinaciones: suman exacto, centradas, contain, nunca 1 px de más`, malos.length === 0, malos.slice(0, 5).join(" | "));
+eq("1200×1500 → 1080×1920: 1080×1350 centrado (285 arriba, 285 abajo)", (({ sw, sh, expansion }) => ({ sw, sh, ...expansion }))(encajar(1200, 1500, 1080, 1920)), { sw: 1080, sh: 1350, top: 285, right: 0, bottom: 285, left: 0 });
+eq("1080×1080 → 1200×627: 627×627, impar a la derecha (286 / 287)", (({ sw, sh, expansion }) => ({ sw, sh, l: expansion.left, r: expansion.right }))(encajar(1080, 1080, 1200, 627)), { sw: 627, sh: 627, l: 286, r: 287 });
+eq("misma proporción → sin expansión", encajar(1200, 1500, 1080, 1350).expansion, { top: 0, right: 0, bottom: 0, left: 0 });
+ok("encajar con medidas inválidas lanza", (() => { try { encajar(0, 10, 10, 10); return false; } catch { return true; } })());
+
+console.log("\n▶ modo por omisión, rediseño, agrandar");
+const cob = (w0, h0, id) => encajar(w0, h0, presetDe(id).w, presetDe(id).h);
+eq("cuadrado → 300×250: IA", sugerir(cob(1080, 1080, "google-300x250")), { modo: "ia", rediseno: false, encendido: true });
+eq("cuadrado → 1080×1920: IA", sugerir(cob(1080, 1080, "meta-1080x1920")).modo, "ia");
+eq("vertical 4:5 → 300×600: IA (cubre 62 %)", sugerir(cob(1200, 1500, "google-300x600")).modo, "ia");
+eq("vertical 4:5 → 1600×900: desenfoque (cubre 45 %)", sugerir(cob(1200, 1500, "x-1600x900")), { modo: "blur", rediseno: false, encendido: true });
+for (const id of ["google-728x90", "google-320x50", "google-970x250", "google-160x600"]) {
+  eq(`cuadrado → ${id}: "Requiere rediseño", apagado`, sugerir(cob(1080, 1080, id)), { modo: "blur", rediseno: true, encendido: false });
+}
+eq("vertical → 728×90 también es rediseño", sugerir(cob(1200, 1500, "google-728x90")).rediseno, true);
+eq("anuncio de 300×250 → 1080×1920: avisa que se agranda 260 %", agrandaPct(encajar(300, 250, 1080, 1920)), 260);
+eq("1200×1500 → 1080×1920: se achica, sin aviso", agrandaPct(encajar(1200, 1500, 1080, 1920)), null);
+
+console.log("\n▶ presets y medida libre");
+eq("14 presets, ids únicos", [PRESETS.length, new Set(PRESETS.map((p) => p.id)).size], [14, 14]);
+ok("cada id dice su medida (meta-1080x1920 = 1080×1920)", PRESETS.every((p) => p.id.endsWith(`-${p.w}x${p.h}`)));
+eq("medida libre válida", presetDe(idCustom(640, 480)), { id: "otro-640x480", plataforma: "otro", w: 640, h: 480 });
+eq("medida libre: id canónico (\"otro-0640x0480\" = \"otro-640x480\")", presetDe("otro-0640x0480")?.id, "otro-640x480");
+eq("medida libre fuera de límites → null", [presetDe("otro-10x480"), presetDe("otro-5000x480"), presetDe("hack-1x1"), presetDe("otro-640x480;drop")], [null, null, null, null]);
+eq("límites de lado", [medidaValida(LADO_MIN, LADO_MAX), medidaValida(LADO_MIN - 1, 100), medidaValida(100.5, 100)], [true, false, false]);
+eq("nombre de archivo limpio", nombreArchivo("Promo Día del Trabajo!", { plataforma: "meta", w: 1080, h: 1920 }, "png"), "Promo-Dia-del-Trabajo_meta_1080x1920.png");
+
+console.log("\n▶ lienzo de la IA");
+malos = [];
+for (const [w0, h0] of FORMAS.slice(0, 6)) {
+  for (const p of TODAS) {
+    const L = lienzoIA(w0, h0, p.w, p.h);
+    const [gw, gh] = RATIOS_IA[L.aspect][L.tamano];
+    const f = [];
+    if (L.gw !== gw || L.gh !== gh) f.push("lienzo no es una medida de la tabla");
+    if (L.zona.x < 0 || L.zona.y < 0 || L.zona.x + L.zona.w > L.gw || L.zona.y + L.zona.h > L.gh) f.push("zona fuera del lienzo");
+    if (Math.abs(L.zona.w / L.zona.h - p.w / p.h) / (p.w / p.h) > 0.02) f.push("zona con otra proporción");
+    if (L.original.x < L.zona.x || L.original.y < L.zona.y || L.original.x + L.original.w > L.zona.x + L.zona.w || L.original.y + L.original.h > L.zona.y + L.zona.h) f.push("original fuera de la zona");
+    if (f.length) malos.push(`${w0}×${h0} → ${p.id}: ${f.join(", ")}`);
+  }
+}
+ok("lienzo de la IA: medida de la tabla, zona y original adentro, misma proporción", malos.length === 0, malos.slice(0, 5).join(" | "));
+eq("728×90 → 8:1 · 970×250 → 4:1 · 160×600 → 1:4 · 1200×627 → 16:9", ["google-728x90", "google-970x250", "google-160x600", "linkedin-1200x627"].map((id) => lienzoIA(1080, 1080, presetDe(id).w, presetDe(id).h).aspect), ["8:1", "4:1", "1:4", "16:9"]);
+eq("1080×1920 pide 2K (1K se agrandaría 40 %); 300×250 se queda en 1K", [lienzoIA(1080, 1080, 1080, 1920).tamano, lienzoIA(1080, 1080, 300, 250).tamano], ["2K", "1K"]);
+eq("costo estimado: blur y color = $0; IA suma por tamaño", costoEstimado(1080, 1080, [{ w: 1080, h: 1920, modo: "ia" }, { w: 300, h: 250, modo: "ia" }, { w: 728, h: 90, modo: "blur" }, { w: 300, h: 600, modo: "color" }]), Math.round((COSTO_IA_USD["2K"] + COSTO_IA_USD["1K"]) * 1000) / 1000);
+eq("sin tamaños con IA el lote cuesta 0", costoEstimado(1080, 1080, [{ w: 300, h: 250, modo: "blur" }]), 0);
+
+console.log("\n▶ pegarDuro / zonaIdentica / deriva / colorDeBorde (bytes)");
+{
+  const W = 5, H = 4;
+  const lienzo = new Uint8Array(W * H * 4).fill(7);
+  const orig = Uint8Array.from({ length: 2 * 3 * 4 }, (_, i) => i + 100);
+  const e = { sw: 2, sh: 3, ox: 2, oy: 1 };
+  pegarDuro(lienzo, W, orig, e);
+  ok("la zona pegada es idéntica", zonaIdentica(lienzo, W, orig, e));
+  ok("lo de afuera NO se toca (sigue en 7)", [0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 15, 16].every((px) => lienzo.slice(px * 4, px * 4 + 4).every((v) => v === 7)) && lienzo.slice(-4).every((v) => v === 7));
+  lienzo[((1 + 2) * W + 3) * 4 + 1] ^= 1;
+  ok("un solo byte distinto → ya no es idéntica (el check puede fallar)", !zonaIdentica(lienzo, W, orig, e));
+  ok("pegarDuro rechaza un original del tamaño equivocado", (() => { try { pegarDuro(lienzo, W, orig.slice(4), e); return false; } catch { return true; } })());
+  eq("deriva 0 cuando la zona es el original", deriva(Uint8Array.from(orig), 2, orig, { sw: 2, sh: 3, ox: 0, oy: 0 }), 0);
+  const rojo = new Uint8Array(4 * 4 * 4);
+  for (let i = 0; i < rojo.length; i += 4) rojo.set([200, 10, 20, 255], i);
+  rojo.set([0, 0, 0, 255], (1 * 4 + 1) * 4); // un pixel del centro no cuenta
+  eq("color del borde (el centro no cuenta)", colorDeBorde(rojo, 4, 4, 1), "#c80a14");
+}
+
+// ── PIXEL-LOCK con proveedor de basura ───────────────────────
+console.log("\n▶ pixel-lock: anuncio de prueba + IA falsa que devuelve ruido a otra medida");
+{
+  // Anuncio sintético 600×750: ruido determinista + degradado + una franja semitransparente (alpha 128).
+  const w0 = 600, h0 = 750;
+  const px = Buffer.alloc(w0 * h0 * 4);
+  let s = 12345;
+  const rnd = () => ((s = (s * 1103515245 + 12345) >>> 0) >>> 16) & 255;
+  for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) {
+    const i = (y * w0 + x) * 4;
+    px[i] = (x * 255) / w0 ^ rnd();
+    px[i + 1] = (y * 255) / h0;
+    px[i + 2] = rnd();
+    px[i + 3] = y > 300 && y < 320 ? 128 : 255;
+  }
+  const anuncio = await sharp(px, { raw: { width: w0, height: h0, channels: 4 } }).png().toBuffer();
+  const f = await leerFuente(anuncio);
+  eq("leerFuente: medidas, y guarda los BYTES (no 160 MB de píxeles)", [f.w, f.h, f.bytes.length === anuncio.length], [w0, h0, true]);
+  ok("leerFuente rechaza un archivo truncado", await leerFuente(anuncio.subarray(0, Math.floor(anuncio.length / 2))).then(() => false).catch(() => true));
+  // Foto de teléfono: la orientación vive en el EXIF. Se mide y se compone YA girada.
+  const girada = await sharp(px, { raw: { width: w0, height: h0, channels: 4 } }).jpeg().withMetadata({ orientation: 6 }).toBuffer();
+  const fg = await leerFuente(girada);
+  eq("EXIF orientación 6: medidas giradas (750×600)", [fg.w, fg.h], [h0, w0]);
+  const cg = await componer(fg, 1080, 1080, "blur");
+  ok("EXIF: el pixel-lock se cumple sobre la imagen girada", cg.pixelLockOk && cg.encaje.sw === 1080 && cg.encaje.sh === 864);
+
+  let llamadas = 0;
+  const basura = async ({ png, aspect }) => {
+    llamadas++;
+    const m = await sharp(png).metadata();
+    if (!RATIOS_IA[aspect]) throw new Error(`aspect inesperado ${aspect}`);
+    // Ruido puro, y a una medida que NO es la pedida (los proveedores redondean): el código debe reescalar.
+    const gw = m.width + 37, gh = Math.max(16, m.height - 21);
+    const ruido = Buffer.alloc(gw * gh * 3);
+    for (let i = 0; i < ruido.length; i++) ruido[i] = rnd();
+    return { png: await sharp(ruido, { raw: { width: gw, height: gh, channels: 3 } }).png().toBuffer(), costoUsd: 0.068, modelo: "falso" };
+  };
+
+  const fallas = [];
+  let sinRelleno = 0;
+  for (const p of TODAS) {
+    const c = await componer(f, p.w, p.h, "ia", { expandir: basura });
+    const e = c.encaje;
+    if (!hayExpansion(e)) sinRelleno++;
+    // Comprobación INDEPENDIENTE: releer el PNG y compararlo contra una copia escalada calculada aparte.
+    const nuestra = await escalarVisible(f, e);
+    const relei = await sharp(c.png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const ident = relei.info.width === p.w && relei.info.height === p.h && zonaIdentica(relei.data, p.w, nuestra, e);
+    // Lo de afuera existe (opaco) — atrapa la clase de bug de `blend: "source"` (afuera transparente).
+    const esquinas = [[0, 0], [p.w - 1, 0], [0, p.h - 1], [p.w - 1, p.h - 1]];
+    const afueraOpaco = esquinas.every(([x, y]) => {
+      const dentro = x >= e.ox && x < e.ox + e.sw && y >= e.oy && y < e.oy + e.sh;
+      return dentro || relei.data[(y * p.w + x) * 4 + 3] === 255;
+    });
+    const jpg = await sharp(c.jpg).metadata();
+    if (!c.pixelLockOk) fallas.push(`${p.id}: pixelLockOk=false`);
+    if (!ident) fallas.push(`${p.id}: zona distinta al releer`);
+    if (!afueraOpaco) fallas.push(`${p.id}: afuera transparente`);
+    if (jpg.width !== p.w || jpg.height !== p.h || jpg.format !== "jpeg") fallas.push(`${p.id}: JPG mal`);
+    if (hayExpansion(e) && !(c.deriva > 10)) fallas.push(`${p.id}: la basura no llegó al centro (deriva ${c.deriva}) — la prueba no probaría nada`);
+    if (!hayExpansion(e) && (c.costoUsd !== null || c.deriva !== null)) fallas.push(`${p.id}: sin nada que rellenar igual cobró la IA`);
+  }
+  ok(`IA de basura en ${TODAS.length} tamaños: zona original idéntica byte por byte (PNG releído), afuera opaco, JPG a la medida`, fallas.length === 0, fallas.slice(0, 6).join(" | "));
+  ok("hay al menos un tamaño con la misma proporción (sin relleno) en la prueba", sinRelleno >= 1);
+  eq("la IA falsa se llamó una vez por tamaño CON algo que rellenar (sin relleno = $0, sin llamada)", llamadas, TODAS.length - sinRelleno);
+
+  const otros = [];
+  for (const [modo, opts] of [["blur", {}], ["color", { color: "#123456" }], ["extender", {}]]) {
+    for (const id of ["meta-1080x1920", "google-728x90", "linkedin-1200x627", "google-300x250"]) {
+      const p = presetDe(id);
+      const c = await componer(f, p.w, p.h, modo, opts);
+      if (!c.pixelLockOk || c.deriva !== null || c.costoUsd !== null) otros.push(`${modo} ${id}`);
+      if (modo === "color") {
+        const r = await sharp(c.png).raw().toBuffer();
+        if (!(r[0] === 0x12 && r[1] === 0x34 && r[2] === 0x56)) otros.push(`color ${id}: la esquina no es #123456`);
+      }
+    }
+  }
+  ok("desenfoque, color y extender: pixel-lock, sin deriva ni costo, el color llega a la esquina", otros.length === 0, otros.join(" | "));
+  eq("anuncio de ruido: nada liso, nada recortable", await analizarBordes(f), { recortable: SIN_RECORTE, liso: { top: false, right: false, bottom: false, left: false } });
+  ok("modo ia sin proveedor lanza (nunca 'rellena' en silencio)", await componer(f, 300, 250, "ia").then(() => false).catch(() => true));
+
+  // Control negativo: si el pegado NO ocurriera, el check lo atraparía.
+  const c = await componer(f, 1080, 1920, "ia", { expandir: basura });
+  const relei = await sharp(c.png).ensureAlpha().raw().toBuffer();
+  const nuestra = await escalarVisible(f, c.encaje);
+  relei[((c.encaje.oy + 10) * 1080 + c.encaje.ox + 10) * 4] ^= 0xff;
+  ok("control negativo: un píxel tocado dentro de la zona → el check falla", !zonaIdentica(relei, 1080, nuestra, c.encaje));
+}
+
+// ── v2: recorte de fondo liso, extender, pegar la lista ──────
+console.log("\n▶ v2 · encajar recortando fondo liso");
+{
+  const MARGENES = [
+    { top: 200, right: 0, bottom: 200, left: 0 },
+    { top: 0, right: 300, bottom: 0, left: 300 },
+    { top: 120, right: 90, bottom: 60, left: 30 },
+    { top: 5000, right: 5000, bottom: 5000, left: 5000 }, // se acota a 45 %
+  ];
+  const malosR = [];
+  for (const [w0, h0] of FORMAS.filter(([a, b]) => a >= 100 && b >= 100)) {
+    for (const p of TODAS) {
+      const base = encajar(w0, h0, p.w, p.h);
+      for (const m of MARGENES) {
+        const e = encajar(w0, h0, p.w, p.h, m);
+        const x = e.expansion;
+        const k = e.escala;
+        const lim = (v, lado) => Math.min(v, Math.floor(lado * 0.45));
+        const ml = lim(m.left, w0), mr = lim(m.right, w0), mt = lim(m.top, h0), mb = lim(m.bottom, h0);
+        const fl = [];
+        if (x.left + e.sw + x.right !== p.w || x.top + e.sh + x.bottom !== p.h) fl.push("no suma");
+        if (Object.values(x).some((v) => v < 0 || !Number.isInteger(v))) fl.push("expansión negativa");
+        if (e.corte.x < 0 || e.corte.y < 0 || e.corte.x + e.sw > e.completo.w || e.corte.y + e.sh > e.completo.h) fl.push("corte fuera del escalado");
+        // Lo cortado por lado nunca pasa del fondo liso (± 2 px de redondeo).
+        const cortaIzq = e.corte.x, cortaDer = e.completo.w - e.corte.x - e.sw, cortaArr = e.corte.y, cortaAba = e.completo.h - e.corte.y - e.sh;
+        if (cortaIzq > ml * k + 2 || cortaDer > mr * k + 2 || cortaArr > mt * k + 2 || cortaAba > mb * k + 2) fl.push(`corta contenido (${cortaIzq},${cortaDer},${cortaArr},${cortaAba})`);
+        if (e.escala + 1e-9 < base.escala) fl.push("quedó más chico que sin recortar");
+        if (e.cobertura + 1e-9 < base.cobertura) fl.push("cubre menos que sin recortar");
+        if (Math.abs(e.completo.h / e.completo.w - h0 / w0) > 2 / Math.min(e.completo.w, e.completo.h) + 1e-9) fl.push("se deformó");
+        if (e.escala > Math.max(base.escala, 1) + 1e-9) fl.push(`se agrandó de más (${e.escala.toFixed(3)})`);
+        if (fl.length) malosR.push(`${w0}×${h0} → ${p.id} ${JSON.stringify(m)}: ${fl.join(", ")}`);
+      }
+    }
+  }
+  ok("recortando: suma exacto, nunca corta contenido, nunca más chico ni deformado (todas las formas × tamaños × márgenes)", malosR.length === 0, malosR.slice(0, 4).join(" | "));
+  const sin = encajar(1080, 1080, 1200, 627);
+  const con = encajar(1080, 1080, 1200, 627, { top: 220, right: 0, bottom: 220, left: 0 });
+  ok(`1080² con 220 px lisos arriba y abajo → 1200×627: el anuncio crece (${sin.sh}→${con.completo.h} px de alto) y cubre más (${Math.round(sin.cobertura * 100)} → ${Math.round(con.cobertura * 100)} %)`, con.completo.h > sin.sh && con.cobertura > sin.cobertura && con.sh === 627);
+  eq("sin margen, igual que antes (mismo resultado exacto)", encajar(1080, 1080, 1200, 627, SIN_RECORTE), sin);
+  const tope = encajar(1080, 1350, 768, 1024, { top: 0, right: 200, bottom: 0, left: 200 });
+  eq("4:5 → 3:4 con costados lisos: llena la medida (cover), sin nada que rellenar", [hayExpansion(tope), tope.sw, tope.sh], [false, 768, 1024]);
+}
+
+console.log("\n▶ v2 · sugerir con bordes lisos");
+{
+  const LISO = { top: true, right: true, bottom: true, left: true };
+  const NADA = { top: false, right: false, bottom: false, left: false };
+  eq("misma proporción → extender (no se paga IA por nada)", sugerir(encajar(1080, 1350, 1200, 1500), NADA), { modo: "extender", rediseno: false, encendido: true });
+  eq("bordes lisos → extender aunque sobre mucho", sugerir(encajar(1080, 1080, 1080, 1920), LISO).modo, "extender");
+  eq("sólo arriba/abajo lisos y hay que rellenar arriba/abajo → extender", sugerir(encajar(1080, 1080, 1080, 1920), { ...NADA, top: true, bottom: true }).modo, "extender");
+  eq("lisos arriba/abajo pero hay que rellenar a los lados → IA", sugerir(encajar(1080, 1080, 1200, 627), { ...NADA, top: true, bottom: true }).modo, "ia");
+  eq("banner extremo con bordes lisos: sigue siendo rediseño (apagado), con extender", sugerir(encajar(1080, 1080, 320, 50), LISO), { modo: "extender", rediseno: true, encendido: false });
+  eq("modos válidos", [MODOS, esModo("extender"), esModo("nada")], [["extender", "ia", "blur", "color"], true, false]);
+}
+
+console.log("\n▶ v2 · bordesDe (fondo liso / degradado / contenido)");
+{
+  // Lienzo chico 200×200 con una "letra" oscura en medio (60..140) sobre fondo: liso o degradado vertical.
+  const lienzo = (fondo) => {
+    const w = 200, h = 200, a = new Uint8Array(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const [r, g, b] = x >= 60 && x < 140 && y >= 60 && y < 140 ? [10, 10, 10] : fondo(x, y);
+      a.set([r, g, b, 255], i);
+    }
+    return a;
+  };
+  const plano = bordesDe(lienzo(() => [240, 200, 40]), 200, 200, 1000, 1000);
+  ok(`fondo plano: los 4 lados lisos y recortable ≈ 0.7 × 59 líneas × 5 = ${plano.recortable.top} px`, Object.values(plano.liso).every(Boolean) && plano.recortable.top > 180 && plano.recortable.top < 210 && plano.recortable.left === plano.recortable.top);
+  const degr = bordesDe(lienzo((x, y) => [30 + y / 2, 60 + y / 3, 200 - y / 2]), 200, 200, 1000, 1000);
+  ok("degradado vertical: también liso y recortable (un degradado ES fondo)", Object.values(degr.liso).every(Boolean) && degr.recortable.top > 150);
+  let s = 7;
+  const rnd = () => ((s = (s * 1103515245 + 12345) >>> 0) >>> 16) & 255;
+  const foto = bordesDe(lienzo(() => [rnd(), rnd(), rnd()]), 200, 200, 1000, 1000);
+  eq("foto / textura: nada liso, nada recortable", foto, { recortable: SIN_RECORTE, liso: { top: false, right: false, bottom: false, left: false } });
+  // Contenido pegado al borde de arriba: ese lado no es liso ni recortable; los demás sí.
+  const pegado = bordesDe(lienzo((x, y) => (y < 10 && x > 50 && x < 150 ? [0, 0, 0] : [250, 250, 250])), 200, 200, 1000, 1000);
+  ok("texto pegado al borde de arriba: arriba nada, abajo sí", pegado.recortable.top === 0 && !pegado.liso.top && pegado.liso.bottom && pegado.recortable.bottom > 0);
+}
+
+console.log("\n▶ v2 · pegar la lista del cliente");
+{
+  const texto = "9:16 (1080*1920)  1200*627  320*250\n320*50  1280*720  600*500\n876*324  768*1024  720*1600\n720*1280  640*100  4:5 (1200*1500)";
+  const r = leerMedidas(texto);
+  eq("la lista de la captura: 12 medidas, en orden, sin las proporciones sueltas", r.medidas.map((m) => `${m.w}x${m.h}`), ["1080x1920", "1200x627", "320x250", "320x50", "1280x720", "600x500", "876x324", "768x1024", "720x1600", "720x1280", "640x100", "1200x1500"]);
+  eq("separadores x × X * y espacios; repetidas una vez; fuera de límites aparte", leerMedidas("300x250, 300 × 250; 728X90 | 10x10 9000*50"), { medidas: [{ w: 300, h: 250 }, { w: 728, h: 90 }], fuera: ["10×10", "9000×50"] });
+  eq("texto sin medidas", leerMedidas("9:16 y 4:5 por favor"), { medidas: [], fuera: [] });
+}
+
+console.log("\n▶ v2 · componer: recorte + extender sobre un anuncio de fondo liso");
+{
+  // Anuncio 1080×1080: degradado vertical de fondo, "contenido" (bloque con ruido) en 300..780.
+  const w0 = 1080, h0 = 1080;
+  const px = Buffer.alloc(w0 * h0 * 4);
+  let s = 99;
+  const rnd = () => ((s = (s * 1103515245 + 12345) >>> 0) >>> 16) & 255;
+  for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) {
+    const i = (y * w0 + x) * 4;
+    const dentro = x >= 300 && x < 780 && y >= 300 && y < 780;
+    px.set(dentro ? [rnd(), rnd(), rnd(), 255] : [20 + y / 8, 90, 200 - y / 8, 255], i);
+  }
+  const f = await leerFuente(await sharp(px, { raw: { width: w0, height: h0, channels: 4 } }).png().toBuffer());
+  const b = await analizarBordes(f);
+  ok(`analizarBordes: 4 lados lisos, recortable ~${b.recortable.top} px por lado (< 300 del contenido)`, Object.values(b.liso).every(Boolean) && Object.values(b.recortable).every((v) => v > 120 && v < 300));
+  const fallas = [];
+  for (const p of TODAS) {
+    const c = await componer(f, p.w, p.h, "extender", { bordes: b });
+    const e = c.encaje;
+    const nuestra = await escalarVisible(f, e);
+    const relei = await sharp(c.png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    if (!c.pixelLockOk || !zonaIdentica(relei.data, p.w, nuestra, e)) fallas.push(`${p.id}: pixel-lock`);
+    if (c.costoUsd !== null) fallas.push(`${p.id}: costo`);
+    // El contenido (300..780 del original) entero dentro de lo visible.
+    const k = e.escala;
+    const v = { x0: e.corte.x / k, x1: (e.corte.x + e.sw) / k, y0: e.corte.y / k, y1: (e.corte.y + e.sh) / k };
+    if (v.x0 > 300 + 1 / k || v.x1 < 780 - 1 / k || v.y0 > 300 + 1 / k || v.y1 < 780 - 1 / k) fallas.push(`${p.id}: cortó contenido ${JSON.stringify(v)}`);
+    if (relei.data[3] !== 255 || relei.data[relei.data.length - 1] !== 255) fallas.push(`${p.id}: esquina transparente`);
+  }
+  ok(`extender en ${TODAS.length} tamaños: pixel-lock, gratis, el contenido nunca se corta, esquinas opacas`, fallas.length === 0, fallas.slice(0, 5).join(" | "));
+  const c = await componer(f, 1080, 1920, "extender", { bordes: b });
+  const r = await sharp(c.png).raw().toBuffer();
+  // Arriba del todo el degradado sigue con el color de la primera línea del anuncio (≈ [20, 90, 200]).
+  const [R, G, B] = [r[0], r[1], r[2]];
+  ok(`1080×1920 extendido: la esquina de arriba continúa el degradado (${R},${G},${B} ≈ 20,90,200)`, Math.abs(R - 20) <= 6 && Math.abs(G - 90) <= 6 && Math.abs(B - 200) <= 6);
+  const conIA = await componer(f, 768, 1024, "ia", { bordes: b, expandir: async () => { throw new Error("no debía llamarse"); } }).catch((err) => err);
+  ok("768×1024 con costados lisos: el recorte llena la medida → la IA ni se llama", !(conIA instanceof Error) && !hayExpansion(conIA.encaje) && conIA.costoUsd === null && conIA.pixelLockOk);
+  eq("recortar nunca agranda más allá del tamaño real (1080² → 1080×1920 se queda a 1×)", encajar(1080, 1080, 1080, 1920, b.recortable).escala, 1);
+}
+
+// ── v2 · puerta PSD ──────────────────────────────────────────
+console.log("\n▶ v2 · PSD: roles de la guía de diseño");
+eq("rolDe: nombre completo, sin mayúsculas ni acentos", ["BRAND", "Subtitulo", " título ", "background", "Hero", "cta", "FOOTER"].map(rolDe), ["BRAND", "SUBTITULO", "TITULO", "BACKGROUND", "HERO", "CTA", "FOOTER"]);
+eq("rolDe: nunca por 'contiene' (SUBTITULO no es TITULO) ni carpetas ajenas", ["SUBTITULO 2", "TITULOS", "Logo 2", "", "HERO copia", "Capa 1"].map(rolDe), [null, null, null, null, null, null]);
+eq("rolDe: los otros nombres del equipo (PSD s33 de DiDi: Logo, Copy, CARD, Legales), sin mayúsculas ni acentos", ["Logo", "Copy", "CARD", "Legales", "Botón", "fondo", "BG", "Headline", "Beneficios"].map(rolDe), ["BRAND", "TITULO", "HERO", "FOOTER", "CTA", "BACKGROUND", "BACKGROUND", "TITULO", "SUBTITULO"]);
+eq("nombreDeGuia: sólo los 7 nombres exactos de la guía", ["Subtítulo", "BACKGROUND", "Logo", "Copy", "TITULOS"].map(nombreDeGuia), [true, true, false, false, false]);
+
+console.log("\n▶ v2 · PSD: leer y despiezar un anuncio sintético");
+{
+  const W = 400, H = 500;
+  const dentro = (x, y, [l, t, w, h]) => x >= l && x < l + w && y >= t && y < t + h;
+  const img = (w, h, fn) => {
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const [r, g, b, a = 255] = fn(x, y); data.set([r, g, b, a], (y * w + x) * 4); }
+    return { data, width: w, height: h };
+  };
+  const capa = (name, [l, t, w, h], fn, extra = {}) => ({ name, left: l, top: t, right: l + w, bottom: t + h, blendMode: "normal", opacity: 1, imageData: img(w, h, (x, y) => fn(x + l, y + t)), ...extra });
+  const carpeta = (name, children, extra = {}) => ({ name, opened: true, children, ...extra });
+
+  // La verdad, píxel a píxel (lo que "Photoshop" guardaría como copia aplanada).
+  const base = (x, y) => [200 + 30 * Math.sin(x / 40), 180 + 20 * Math.cos(y / 50), 160];
+  const tinte = (x, y) => { const v = 255 - (55 * y) / H; return [v, v, v]; };
+  const fondoVerdad = (x, y) => base(x, y).map((v, k) => (v * tinte(x, y)[k]) / 255);
+  const R = { sombra: [60, 300, 200, 60], producto: [80, 150, 140, 180], titulo: [40, 30, 320, 50], sub: [250, 170, 130, 60], cta: [250, 250, 130, 40], brand: [150, 95, 100, 30], footer: [40, 450, 320, 30] };
+  const OSC = 1 + (128 / 255 - 1) * (200 / 255); // sombra gris 128 al 78 % de alfa, en multiplicar
+  const verdad = (fondo) => (x, y) => {
+    let c = fondo(x, y);
+    if (dentro(x, y, R.sombra)) c = c.map((v) => v * OSC);
+    if (dentro(x, y, R.producto)) c = [250, 120, 20]; // la capa es AZUL: el naranja sólo existe en el aplanado
+    if (dentro(x, y, R.titulo)) c = c.map((v) => v * 0.5 + 255 * 0.5);
+    if (dentro(x, y, R.sub)) c = [255, 212, 0];
+    if (dentro(x, y, [R.cta[0], R.cta[1], R.cta[2] / 2, R.cta[3]])) c = [17, 17, 17]; // la máscara esconde la mitad derecha
+    if (dentro(x, y, R.brand)) c = [240, 60, 30];
+    if (dentro(x, y, R.footer)) c = [90, 90, 90];
+    return c;
+  };
+  const arbol = () => [
+    carpeta("Background", [capa("base", [0, 0, W, H], base), capa("tinte", [0, 0, W, H], tinte, { blendMode: "multiply" })]),
+    carpeta("FOOTER", [capa("legal", R.footer, () => [90, 90, 90])]),
+    carpeta("HERO", [capa("sombra", R.sombra, () => [128, 128, 128, 200], { blendMode: "multiply" }), capa("producto", R.producto, () => [10, 10, 200])]),
+    carpeta("CTA", [capa("boton", R.cta, () => [17, 17, 17], { mask: { left: R.cta[0], top: R.cta[1], right: R.cta[0] + R.cta[2], bottom: R.cta[1] + R.cta[3], defaultColor: 255, imageData: img(R.cta[2], R.cta[3], (x) => (x < R.cta[2] / 2 ? [255, 255, 255] : [0, 0, 0])) } })]),
+    carpeta("Subtitulo", [capa("beneficio", R.sub, () => [255, 212, 0])]),
+    carpeta("TITULO", [capa("titular", R.titulo, () => [255, 255, 255, 128])]),
+    carpeta("BRAND", [capa("logo", R.brand, () => [240, 60, 30])]),
+    capa("borrador oculto", [0, 0, W, H], () => [255, 0, 0], { hidden: true }),
+  ];
+  const psdDe = (children, aplanado, real = true) =>
+    writePsdBuffer({ width: W, height: H, children, imageData: img(W, H, (x, y) => aplanado(x, y)), imageResources: { versionInfo: { hasRealMergedData: real, writerName: "t", readerName: "t", fileVersion: 1 } } });
+  const maxDif = (a, fn, caja = [0, 0, W, H]) => {
+    let mx = 0;
+    for (let y = caja[1]; y < caja[1] + caja[3]; y++) for (let x = caja[0]; x < caja[0] + caja[2]; x++) { const v = fn(x, y); for (let k = 0; k < 3; k++) mx = Math.max(mx, Math.abs(a[(y * W + x) * 3 + k] - v[k])); }
+    return Math.round(mx);
+  };
+
+  const motivo = (fn) => { try { fn(); return "sin error"; } catch (err) { return err instanceof ErrorPsd ? err.motivo : `otro: ${err}`; } };
+  const doc = leerPsd(psdDe(arbol(), verdad(fondoVerdad)));
+  eq("leerPsd: sin mesas de trabajo, el lienzo es la mesa; la capa oculta no entra", [doc.mesas.length, doc.mesas[0].w, doc.mesas[0].h, doc.capas.length, doc.capas.some((c) => c.nombre.includes("oculto"))], [1, W, H, 9, false]);
+  const ma = despiezar(doc, 0);
+  eq("despiezar: 6 piezas con su rol, de abajo hacia arriba", ma.piezas.map((p) => p.rol), ["FOOTER", "HERO", "CTA", "SUBTITULO", "TITULO", "BRAND"]);
+  ok(`el fondo sale como el de Photoshop (${ma.fondoDistintoPct.toFixed(2)} % distinto) y rearmado da el anuncio (${ma.rearmadoDistintoPct.toFixed(2)} %)`, ma.fondoDistintoPct < 0.5 && ma.rearmadoDistintoPct < 0.5 && despieceUsable(ma).ok, JSON.stringify(despieceUsable(ma)));
+  ok(`fondo LIMPIO: bajo el producto y la sombra no queda rastro de ellos (dif. máx ${maxDif(ma.fondo, fondoVerdad)})`, maxDif(ma.fondo, fondoVerdad) <= 4);
+  const pz = (rol) => ma.piezas.find((p) => p.rol === rol);
+  const px = (p, x, y) => [...p.rgba.subarray(((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4, ((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4 + 4)];
+  eq("el COLOR de la pieza sale del aplanado, no de la capa (azul en la capa, naranja en Photoshop)", px(pz("HERO"), 150, 200), [250, 120, 20, 255]);
+  const t = px(pz("TITULO"), 200, 55);
+  ok(`un titular al 50 % se des-mezcla del fondo: blanco con alfa 128 (${t})`, t[3] === 128 && t.slice(0, 3).every((v) => v >= 250));
+  eq("la máscara recorta la silueta: del botón sólo viaja la mitad visible", [pz("CTA").solido.w, pz("CTA").solido.h], [R.cta[2] / 2, R.cta[3]]);
+  const h = pz("HERO");
+  const o = h.oscurece ? h.oscurece[((330 - h.caja.y) * h.caja.w + (70 - h.caja.x)) * 3] : -1;
+  ok(`la sombra viaja con el HERO como "cuánto oscurece" (${o} ≈ ${Math.round(OSC * 255)}) y su caja la incluye`, Math.abs(o - OSC * 255) <= 3 && h.caja.x === R.sombra[0] && h.solido.x === R.producto[0]);
+  ok("rearmar() devuelve el anuncio de Photoshop", maxDif(rearmar(ma), verdad(fondoVerdad)) <= 6, `dif. máx ${maxDif(rearmar(ma), verdad(fondoVerdad))}`);
+
+  // Un ajuste de color sobre el fondo que NO pintamos (tinte parejo): se corrige solo, también bajo las piezas.
+  const ajustado = (x, y) => fondoVerdad(x, y).map((v) => v * 0.85 + 12);
+  const ma2 = despiezar(leerPsd(psdDe(arbol(), verdad(ajustado))), 0);
+  ok(`ajuste de color que no pintamos: el fondo limpio lo trae igual (dif. máx ${maxDif(ma2.fondo, ajustado)}) y sigue usable`, maxDif(ma2.fondo, ajustado) <= 6 && despieceUsable(ma2).ok, JSON.stringify(despieceUsable(ma2)));
+
+  // Textura que no coincide (el aplanado trae un fondo que las capas no explican): NO es usable.
+  let s = 5;
+  const ruido = new Uint8Array(W * H).map(() => ((s = (s * 1103515245 + 12345) & 0x7fffffff) % 200));
+  const ma3 = despiezar(leerPsd(psdDe(arbol(), verdad((x, y) => { const v = 40 + ruido[y * W + x]; return [v, v, v]; }))), 0);
+  ok(`fondo que las capas no explican (${ma3.fondoDistintoPct.toFixed(0)} % distinto) → no usable`, ma3.fondoDistintoPct > 50 && !despieceUsable(ma3).ok);
+
+  // El fondo sólo debe ser fondo (Pedro, 2026-10-28): una foto de producto dentro de BACKGROUND se avisa; el fondo entero
+  // y una sombra tenue no.
+  const conFoto = arbol(), FOTO = [60, 120, 280, 300];
+  conFoto[0] = carpeta("Background", [...conFoto[0].children, capa("foto producto", FOTO, () => [200, 120, 60]), capa("brillo", [0, 0, W, 60], () => [255, 255, 255, 40])]);
+  const maF = despiezar(leerPsd(psdDe(conFoto, (x, y) => (dentro(x, y, FOTO) ? [200, 120, 60] : verdad(fondoVerdad)(x, y)))), 0);
+  const avisoFoto = maF.avisos.filter((v) => v.includes("el fondo sólo debe ser fondo"));
+  ok("PSD: una foto que tapa parte del anuncio dentro de BACKGROUND se avisa (y sólo ella)", avisoFoto.length === 1 && avisoFoto[0].includes("«BACKGROUND / foto producto»") && !ma.avisos.some((v) => v.includes("el fondo sólo debe ser fondo")), JSON.stringify(avisoFoto));
+
+  // Dos piezas que se tapan casi del todo: no queda de dónde sacar el color, se avisa y no es usable.
+  const tapado = arbol();
+  tapado[6] = carpeta("BRAND", [capa("logo", [40, 30, 200, 50], () => [240, 60, 30])]);
+  const ma4 = despiezar(leerPsd(psdDe(tapado, (x, y) => (dentro(x, y, [40, 30, 200, 50]) ? [240, 60, 30] : verdad(fondoVerdad)(x, y)))), 0);
+  ok(`BRAND encima del TITULO: tapada ${ma4.piezas.find((p) => p.rol === "TITULO").rellenoPct.toFixed(0)} % → no usable, con motivo`, ma4.piezas.find((p) => p.rol === "TITULO").rellenoPct > RELLENO_MAX_PCT && despieceUsable(ma4).motivos.some((x) => x.includes("TITULO")));
+
+  // Tapada en parte (2026-10-28: el recuadro del SUBTITULO detrás de la tarjeta del HERO): lo tapado se rellena con su
+  // color de alrededor, se avisa y SÍ es usable; el rearmado sigue siendo el de Photoshop.
+  const enParte = arbol(), LOGO = [250, 170, 30, 60];
+  enParte[6] = carpeta("BRAND", [capa("logo", LOGO, () => [240, 60, 30])]);
+  const ma4b = despiezar(leerPsd(psdDe(enParte, (x, y) => (dentro(x, y, LOGO) ? [240, 60, 30] : verdad(fondoVerdad)(x, y)))), 0);
+  const sub4b = ma4b.piezas.find((p) => p.rol === "SUBTITULO");
+  const pxSub = (x, y) => { const j = ((y - sub4b.caja.y) * sub4b.caja.w + (x - sub4b.caja.x)) * 4; return [...sub4b.rgba.slice(j, j + 4)]; };
+  ok(
+    `SUBTITULO tapado en parte (${sub4b.rellenoPct.toFixed(0)} %): usable, lo tapado sale amarillo (${pxSub(260, 200)}), con aviso, rearmado ${ma4b.rearmadoDistintoPct.toFixed(1)} %`,
+    sub4b.rellenoPct > 20 && sub4b.rellenoPct < 30 && sub4b.tapadaPct === 0 && despieceUsable(ma4b).ok && pxSub(260, 200).join() === "255,212,0,255" && ma4b.avisos.some((v) => v.includes("se rellenó")) && ma4b.rearmadoDistintoPct <= 0.5,
+    JSON.stringify([despieceUsable(ma4b), ma4b.avisos]),
+  );
+
+  // Lo que manda el anuncio a la vía plana.
+  eq("sin copia aplanada real → sin-aplanado", motivo(() => despiezar(leerPsd(psdDe(arbol(), verdad(fondoVerdad), false)), 0)), "sin-aplanado");
+  eq("sin carpeta BACKGROUND → sin-fondo", motivo(() => despiezar(leerPsd(psdDe(arbol().slice(1), verdad(fondoVerdad))), 0)), "sin-fondo");
+  eq("bytes que no son un PSD → no-soportado", motivo(() => leerPsd(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))), "no-soportado");
+  eq("mesa que no existe → no-soportado", motivo(() => despiezar(doc, 3)), "no-soportado");
+
+  // ── Lo que encontró el reap (2026-10-13): cada caso se vio FALLAR antes del arreglo ──
+  const soloBase = () => carpeta("BACKGROUND", [capa("base", [0, 0, W, H], base)]);
+  const px3 = (a, x, y) => [...a.subarray((y * W + x) * 3, (y * W + x) * 3 + 3)];
+
+  // Sombra paralela (efecto de capa): vive FUERA de los píxeles de su capa. Antes se quedaba pintada en el fondo.
+  {
+    const T = [100, 100, 200, 40], S = [112, 112, 200, 40];
+    const v = (x, y) => { let c = base(x, y); if (dentro(x, y, S)) c = c.map((n) => n * 0.6); if (dentro(x, y, T)) c = [255, 255, 255]; return c; };
+    const sombra = { effects: { dropShadow: [{ enabled: true, size: { value: 0, units: "Pixels" }, distance: { value: 17, units: "Pixels" }, angle: 135, color: { r: 0, g: 0, b: 0 }, blendMode: "multiply", opacity: 0.4 }] } };
+    const d = leerPsd(psdDe([soloBase(), carpeta("TITULO", [capa("t", T, () => [255, 255, 255], sombra)])], v));
+    // Corrida su distancia en contra de la luz (135° = de arriba a la izquierda: baja a la derecha, 17 px → 12, 12) y
+    // extendida su tamaño + 1 (aquí 0 + 1); antes, distancia + tamaño parejo en todas direcciones.
+    eq("leerPsd: la sombra paralela queda como halo de su capa (corrida por distancia y ángulo; tamaño + 1; fuerza = su opacidad)", d.capas.find((c) => c.nombre === "t").halos, [{ tipo: "sombra", radio: 1, fuerza: 0.4, dx: 12, dy: 12 }]);
+    // 90° = la luz viene de arriba y la sombra baja; con «luz global», el ángulo del documento (Photoshop: 120° si el
+    // archivo no lo trae: baja a la derecha). Dos sombras corridas distinto: una sola, sin correr, que alcanza a las dos.
+    // Una "sombra" clara o en trama aclara: es resplandor.
+    const conSombras = (sombras) => leerPsd(psdDe([soloBase(), carpeta("TITULO", [capa("t", T, () => [255, 255, 255], { effects: { dropShadow: sombras } })])], v)).capas.find((c) => c.nombre === "t").halos;
+    const ds = (extra) => ({ enabled: true, size: { value: 4, units: "Pixels" }, distance: { value: 10, units: "Pixels" }, angle: 90, color: { r: 0, g: 0, b: 0 }, blendMode: "multiply", opacity: 0.5, ...extra });
+    eq(
+      "halos: 90° baja; luz global sin ángulo en el archivo = 120°; dos corridas distinto = una centrada que alcanza a ambas; clara o en trama = resplandor",
+      [conSombras([ds()]), conSombras([ds({ useGlobalLight: true, angle: 10 })]), conSombras([ds(), ds({ angle: 0 })]), conSombras([ds({ color: { r: 255, g: 255, b: 255 }, blendMode: "normal" })])[0].tipo, conSombras([ds({ blendMode: "screen" })])[0].tipo],
+      [[{ tipo: "sombra", radio: 5, fuerza: 0.5, dx: 0, dy: 10 }], [{ tipo: "sombra", radio: 5, fuerza: 0.5, dx: 5, dy: 9 }], [{ tipo: "sombra", radio: 15, fuerza: 0.5, dx: 0, dy: 0 }], "luz", "luz"],
+    );
+    // Un resplandor blanco no viaja con su pieza (Pedro, 2026-10-30: lo de nicho va con aviso): se queda pintado en el
+    // fondo tal cual se ve, se anota de quién es y dónde quedó, y sólo avisa en la medida donde su pieza se mueve.
+    const OSCURO = [20, 20, 40], LUZ = [120, 120, 140], brillo = (x, y) => dentro(x, y, [T[0] - 10, T[1] - 10, T[2] + 20, T[3] + 20]);
+    const conBrillo = despiezar(leerPsd(psdDe(
+      [carpeta("Background", [capa("base", [0, 0, W, H], () => OSCURO)]), carpeta("TITULO", [capa("t", T, () => [255, 255, 255], { effects: { outerGlow: { enabled: true, size: { value: 10, units: "Pixels" }, color: { r: 255, g: 255, b: 255 }, blendMode: "screen", opacity: 0.6 } } })])],
+      (x, y) => (dentro(x, y, T) ? [255, 255, 255] : brillo(x, y) ? LUZ : OSCURO),
+    )), 0);
+    const rs = conBrillo.resplandores ?? [];
+    const pz = conBrillo.piezas[0], fondo1 = { k: 1, x: 0, y: 0 };
+    const puesta = (dx) => ({ fondo: fondo1, puestas: [{ pieza: 0, k: 1, x: pz.solido.x + dx, y: pz.solido.y, w: pz.solido.w, h: pz.solido.h }] });
+    const maCaja = { nombre: "m", w: W, h: H, piezas: conBrillo.piezas, resplandores: rs };
+    eq(
+      "resplandor: se queda pintado en el fondo (la medida igual sale idéntica), se anota de quién es, y sólo avisa si su pieza se mueve",
+      [maxDif(conBrillo.fondo, () => LUZ, [T[0] - 9, T[1] - 9, 7, T[3] + 18]) <= 4, rs.map((r) => r.de), despieceUsable(conBrillo).ok, avisosDeResplandor(maCaja, puesta(0)).length, avisosDeResplandor(maCaja, puesta(40)).map((a) => a.tipo)],
+      [true, ["TITULO"], true, 0, ["resplandor"]],
+    );
+    const x = despiezar(d, 0);
+    ok(`sombra paralela del titular: el fondo limpio no guarda su fantasma (dif. máx ${maxDif(x.fondo, base)}) y viaja con la pieza`, maxDif(x.fondo, base) <= 4 && !!x.piezas[0].oscurece && x.piezas[0].caja.w > T[2] && maxDif(rearmar(x), v) <= 6);
+  }
+  // Contorno por fuera: es parte de la silueta.
+  {
+    const B0 = [150, 200, 100, 40], B1 = [144, 194, 112, 52];
+    const v = (x, y) => (dentro(x, y, B0) ? [17, 17, 17] : dentro(x, y, B1) ? [255, 0, 0] : base(x, y));
+    const contorno = { effects: { stroke: [{ enabled: true, position: "outside", fillType: "color", size: { value: 6, units: "Pixels" }, color: { r: 255, g: 0, b: 0 }, blendMode: "normal", opacity: 1 }] } };
+    const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("CTA", [capa("b", B0, () => [17, 17, 17], contorno)])], v)), 0);
+    const s = x.piezas[0].solido;
+    ok(`contorno de 6 px: la silueta del botón lo incluye (${s.w}×${s.h} ≥ 112×52) y el fondo queda limpio (dif. máx ${maxDif(x.fondo, base)})`, s.w >= 112 && s.h >= 52 && maxDif(x.fondo, base) <= 4 && maxDif(rearmar(x), v) <= 6);
+  }
+  // Una pieza de ARRIBA que oscurece a una de ABAJO: antes se oscurecía dos veces al rearmar.
+  {
+    const HE = [80, 150, 200, 200], SC = [60, 300, 260, 60];
+    const v = (x, y) => { let c = base(x, y); if (dentro(x, y, HE)) c = [250, 120, 20]; if (dentro(x, y, SC)) c = c.map((n) => n * 0.6); return c; };
+    const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("HERO", [capa("p", HE, () => [250, 120, 20])]), carpeta("FOOTER", [capa("velo", SC, () => [153, 153, 153], { blendMode: "multiply" })])], v)), 0);
+    ok(`velo del FOOTER sobre el HERO: rearmado exacto (dif. máx ${maxDif(rearmar(x), v)}) y el HERO queda marcado, no usable`, maxDif(rearmar(x), v) <= 6 && despieceUsable(x).motivos.some((s) => s.includes("HERO")));
+  }
+  // La sombra del título que pasa DETRÁS de la tarjeta (s33, 2026-10-15): ahí no se ve, y quedaba sin sombra; en otra
+  // medida, con la tarjeta corrida, asomaba un hueco claro con su forma. Ahora se llena con la sombra de alrededor.
+  {
+    const TI = [60, 60, 280, 60], SO = [20, 40, 360, 360], HE = [140, 200, 120, 160];
+    const v = (x, y) => { let c = base(x, y); if (dentro(x, y, TI)) c = [255, 255, 255]; if (dentro(x, y, SO)) c = c.map((n) => n * 0.6); if (dentro(x, y, HE)) c = [250, 120, 20]; return c; };
+    const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("TITULO", [capa("t", TI, () => [255, 255, 255]), capa("sombra", SO, () => [153, 153, 153], { blendMode: "multiply" })]), carpeta("HERO", [capa("p", HE, () => [250, 120, 20])])], v)), 0);
+    const t = x.piezas.find((p) => p.rol === "TITULO");
+    const oscEn = (X, Y) => (t.oscurece ? t.oscurece[((Y - t.caja.y) * t.caja.w + (X - t.caja.x)) * 3] : -1);
+    ok(`sombra del título detrás de la tarjeta: se llena con la de alrededor (${oscEn(200, 280)} ≈ 153, no 255) y el rearmado no cambia (dif. máx ${maxDif(rearmar(x), v)})`, Math.abs(oscEn(200, 280) - 153) <= 4 && maxDif(rearmar(x), v) <= 6);
+  }
+  ok(
+    "rellenarSuave: un anillo parejo deja el centro parejo; una rampa de 0 a 90 queda en rampa (45 ± 2 a la mitad)",
+    (([c, m]) => c === 100 && Math.abs(m - 45) <= 2)((() => {
+      const w = 40, h = 40, v = new Float32Array(w * h).fill(100), d = new Uint8Array(w * h);
+      for (let y = 5; y < 35; y++) for (let x = 5; x < 35; x++) { d[y * w + x] = 1; v[y * w + x] = 0; }
+      rellenarSuave(v, d, w, h);
+      const r = new Float32Array(31 * 5), dr = new Uint8Array(31 * 5);
+      for (let y = 0; y < 5; y++) for (let x = 0; x < 31; x++) { r[y * 31 + x] = x * 3; if (x > 0 && x < 30) dr[y * 31 + x] = 1; }
+      rellenarSuave(r, dr, 31, 5);
+      return [Math.round(v[20 * w + 20]), Math.round(r[2 * 31 + 15])];
+    })()),
+  );
+  // Una capa de sombra es un rectángulo OPACO, blanco salvo donde oscurece: lo blanco no cuenta como sombra.
+  // (En el PSD real, la sombra del HERO "tapaba" 90 % del FOOTER sin tocarlo.)
+  {
+    const HE = [80, 150, 140, 180], FO = [40, 450, 320, 30], SO = [0, 100, W, 400];
+    const gris = (x, y) => (dentro(x, y, [60, 320, 200, 30]) ? [128, 128, 128] : [255, 255, 255]);
+    const v = (x, y) => { let c = base(x, y); if (dentro(x, y, FO)) c = [90, 90, 90]; if (dentro(x, y, [60, 320, 200, 30])) c = c.map((n) => (n * 128) / 255); if (dentro(x, y, HE)) c = [250, 120, 20]; return c; };
+    const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("FOOTER", [capa("legal", FO, () => [90, 90, 90])]), carpeta("HERO", [capa("sombra", SO, gris, { blendMode: "multiply" }), capa("p", HE, () => [250, 120, 20])])], v)), 0);
+    const f = x.piezas.find((p) => p.rol === "FOOTER"), h = x.piezas.find((p) => p.rol === "HERO");
+    ok(`sombra en rectángulo blanco: no tapa al FOOTER (${f.tapadaPct.toFixed(1)} %), la caja del HERO sólo crece por lo gris (${h.caja.w}×${h.caja.h}) y es usable`, f.tapadaPct === 0 && h.caja.w === 200 && h.caja.h === 200 && despieceUsable(x).ok && maxDif(rearmar(x), v) <= 6, JSON.stringify(despieceUsable(x)));
+  }
+  // Un tinte que no pintamos + una pieza que tapa el 70 % de lado a lado: antes el fondo "se olvidaba" del tinte lejos del borde.
+  {
+    const HE = [0, 0, 280, H];
+    const tintado = (x, y) => base(x, y).map((n) => n * 0.85 + 12);
+    const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("HERO", [capa("p", HE, () => [250, 120, 20])])], (a, b) => (dentro(a, b, HE) ? [250, 120, 20] : tintado(a, b)))), 0);
+    ok(`pieza que tapa el 70 %: bajo ella el fondo sigue trayendo el tinte (dif. máx ${maxDif(x.fondo, tintado, HE)}; en x=5 ${px3(x.fondo, 5, 250)})`, maxDif(x.fondo, tintado, HE) <= 10);
+  }
+  // Fondo negro: "cuánto oscurece" no se puede medir ahí → la sombra no agranda la pieza ni ennegrece otro fondo.
+  {
+    const HE = [100, 100, 100, 100], SO = [90, 190, 140, 40];
+    const x = despiezar(leerPsd(psdDe([carpeta("BACKGROUND", [capa("base", [0, 0, W, H], () => [0, 0, 0])]), carpeta("HERO", [capa("s", SO, () => [0, 0, 0, 150], { blendMode: "multiply" }), capa("p", HE, () => [250, 120, 20])])], (a, b) => (dentro(a, b, HE) ? [250, 120, 20] : [0, 0, 0]))), 0);
+    eq("fondo negro con sombra: la caja del HERO es sólo lo sólido y no oscurece nada", [x.piezas[0].caja.w, x.piezas[0].caja.h, Math.min(...x.piezas[0].oscurece)], [100, 100, 255]);
+  }
+  // ── Segunda pasada del reap ──
+  // Botón "fantasma": Relleno al 0 % con contorno INTERIOR. La capa no pinta nada, su efecto sí: la pieza existe.
+  {
+    const B0 = [150, 200, 100, 40];
+    const v = (x, y) => (dentro(x, y, B0) && !dentro(x, y, [153, 203, 94, 34]) ? [255, 0, 0] : base(x, y));
+    const fantasma = { fillOpacity: 0, effects: { stroke: [{ enabled: true, position: "inside", fillType: "color", size: { value: 3, units: "Pixels" }, color: { r: 255, g: 0, b: 0 }, blendMode: "normal", opacity: 1 }] } };
+    const x = despiezar(leerPsd(psdDe([soloBase(), carpeta("CTA", [capa("b", B0, () => [17, 17, 17], fantasma)])], v)), 0);
+    ok("botón al 0 % de Relleno con contorno interior: sigue siendo una pieza (antes desaparecía y su marco se quedaba en el fondo), con aviso", x.piezas.length === 1 && x.piezas[0].solido.w === 100 && x.piezas[0].solido.h === 40 && x.avisos.some((a) => a.includes("Relleno")) && maxDif(x.fondo, base, [150, 200, 100, 3]) <= 4, JSON.stringify([x.piezas.map((p) => p.solido), x.avisos]));
+  }
+  // La sombra paralela de una pieza de arriba que cae sobre una de abajo (sin que las piezas se toquen): sólo
+  // marca a la de abajo si se nota.
+  {
+    const HE = [200, 100, 150, 300], T = [40, 150, 150, 40], S = [100, 210, 150, 40]; // sombra corrida 60 px en diagonal
+    const caso = (opacidad) => {
+      const v = (x, y) => { let c = base(x, y); if (dentro(x, y, HE)) c = [250, 120, 20]; if (dentro(x, y, S)) c = c.map((n) => n * (1 - opacidad)); if (dentro(x, y, T)) c = [255, 255, 255]; return c; };
+      const fx = { effects: { dropShadow: [{ enabled: true, size: { value: 0, units: "Pixels" }, distance: { value: 85, units: "Pixels" }, angle: 135, color: { r: 0, g: 0, b: 0 }, blendMode: "multiply", opacity: opacidad }] } };
+      return despiezar(leerPsd(psdDe([soloBase(), carpeta("HERO", [capa("p", HE, () => [250, 120, 20])]), carpeta("TITULO", [capa("t", T, () => [255, 255, 255], fx)])], v)), 0);
+    };
+    const tenue = caso(0.03), fuerte = caso(0.5);
+    const heroDe = (x) => x.piezas.find((p) => p.rol === "HERO").tapadaPct;
+    ok(`sombra del titular que cae sobre el HERO: al 3 % no lo marca (${heroDe(tenue).toFixed(1)} %), al 50 % sí (${heroDe(fuerte).toFixed(1)} %)`, heroDe(tenue) === 0 && despieceUsable(tenue).ok && heroDe(fuerte) > TAPADA_MAX_PCT && !despieceUsable(fuerte).ok, JSON.stringify([despieceUsable(tenue), despieceUsable(fuerte)]));
+  }
+  // Máscara "ocultar todo" sin pintar: esa capa no existe para Photoshop.
+  {
+    const oculta = capa("fantasma", [20, 20, 360, 60], () => [0, 255, 0], { mask: { left: 0, top: 0, right: 0, bottom: 0, defaultColor: 0 } });
+    const d = leerPsd(psdDe([soloBase(), carpeta("BRAND", [oculta, capa("logo", R.brand, () => [240, 60, 30])])], (x, y) => (dentro(x, y, R.brand) ? [240, 60, 30] : base(x, y))));
+    const x = despiezar(d, 0);
+    eq("capa con máscara 'ocultar todo' sin pintar: no entra a la silueta", [d.capas.some((c) => c.nombre === "fantasma"), x.piezas[0].solido.w, x.piezas[0].solido.h], [false, R.brand[2], R.brand[3]]);
+  }
+  // Una capa en multiplicar casi blanca que cubre todo: no oscurece nada visible y no debe "tapar todo el fondo".
+  {
+    const HE = [100, 100, 100, 100];
+    const v = (x, y) => (dentro(x, y, HE) ? [250, 120, 20] : base(x, y).map((n) => (n * 252) / 255));
+    eq("multiplicar casi blanco sobre toda la mesa: el fondo sigue viéndose (antes: sin-fondo)", motivo(() => despiezar(leerPsd(psdDe([soloBase(), carpeta("HERO", [capa("velo", [0, 0, W, H], () => [252, 252, 252], { blendMode: "multiply" }), capa("p", HE, () => [250, 120, 20])])], v)), 0)), "sin error");
+  }
+  // La copia aplanada con un cuarto canal que NO es transparencia (una selección guardada): se ignora.
+  {
+    const v = verdad(fondoVerdad);
+    const x = despiezar(leerPsd(psdDe(arbol(), (a, b) => [...v(a, b), a < 200 ? 0 : 255])), 0);
+    ok(`cuarto canal del aplanado ignorado: sigue saliendo el anuncio (rearmado ${x.rearmadoDistintoPct.toFixed(2)} %, dif. máx del fondo ${maxDif(x.fondo, fondoVerdad)})`, x.rearmadoDistintoPct < 0.5 && maxDif(x.fondo, fondoVerdad) <= 4);
+  }
+  // Límites para archivos ajenos.
+  {
+    const sueltas = Array.from({ length: PIEZAS_MAX + 1 }, (_, i) => capa(`suelta ${i}`, [i, i, 4, 4], () => [0, 0, 0]));
+    eq(`${PIEZAS_MAX + 1} capas sueltas de primer nivel (cada una sería una pieza del tamaño de la mesa) → demasiado-grande`, motivo(() => despiezar(leerPsd(psdDe([soloBase(), ...sueltas], base)), 0)), "demasiado-grande");
+    const bueno = psdDe(arbol(), verdad(fondoVerdad));
+    const psb = Uint8Array.from(bueno); psb[5] = 2;
+    eq("un PSB (versión 2) → no-soportado, antes de leerlo", motivo(() => leerPsd(psb)), "no-soportado");
+    const pozo = new Uint8Array(bueno.length + 64); pozo.set(bueno, 32);
+    eq("una vista en medio de un búfer más grande se lee igual (se copia)", leerPsd(pozo.subarray(32, 32 + bueno.length)).capas.length, 9);
+    const raro = arbol(); raro[2] = carpeta("HE‮RO\u0007", raro[2].children); raro[1] = carpeta("x".repeat(500), raro[1].children);
+    const dr = leerPsd(psdDe(raro, verdad(fondoVerdad)));
+    eq("nombres del archivo: sin caracteres de control ni de dirección, y con tope de largo", [[...new Set(dr.capas.map((c) => c.pieza))].map((n) => (n.length > 20 ? n.length : n))], [["Background", 120, "HERO", "CTA", "Subtitulo", "TITULO", "BRAND"]]);
+  }
+
+  // Mesas de trabajo: dos anuncios en un archivo, cada capa en la suya; lo que queda fuera se ignora con aviso.
+  const mesa = (name, dx, hijos) => carpeta(name, hijos.map((g) => (g.children ? { ...g, children: g.children.map((l) => ({ ...l, left: l.left + dx, right: l.right + dx, ...(l.mask ? { mask: { ...l.mask, left: l.mask.left + dx, right: l.mask.right + dx } } : {}) })) } : g)), { artboard: { rect: { top: 0, left: dx, bottom: H, right: dx + W } } });
+  const dosMesas = writePsdBuffer({
+    width: W * 2 + 40, height: H,
+    children: [mesa("ANUNCIO_4x5", 0, arbol().slice(0, 7)), mesa("ANUNCIO_9x16", W + 40, arbol().slice(0, 7)), capa("nota suelta", [W + 5, 10, 20, 20], () => [0, 0, 0])],
+    imageData: img(W * 2 + 40, H, (x, y) => (x < W ? verdad(fondoVerdad)(x, y) : x >= W + 40 ? verdad(fondoVerdad)(x - W - 40, y) : [0, 0, 0, 0])),
+    imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } },
+  });
+  const d2 = leerPsd(dosMesas);
+  eq("dos mesas de trabajo: medidas, nombres y capas repartidas", [d2.mesas.map((m) => `${m.nombre}@${m.x}:${m.w}x${m.h}`), d2.capas.filter((c) => c.mesa === 0).length, d2.capas.filter((c) => c.mesa === 1).length], [["ANUNCIO_4x5@0:400x500", "ANUNCIO_9x16@440:400x500"], 9, 9]);
+  ok("la capa fuera de las mesas se ignora, con aviso", d2.avisos.some((a) => a.includes("fuera de los artboards")));
+  const m2 = despiezar(d2, 1);
+  ok(`la segunda mesa se despieza en SUS coordenadas (rearmado ${m2.rearmadoDistintoPct.toFixed(2)} %, HERO en x=${m2.piezas.find((p) => p.rol === "HERO").solido.x})`, m2.rearmadoDistintoPct < 0.5 && m2.piezas.find((p) => p.rol === "HERO").solido.x === R.producto[0] && despieceUsable(m2).ok);
+
+  // ── Filtro propio (nitidez A, 2026-10-14): a la medida del maestro sale EXACTAMENTE el anuncio rearmado ──
+  {
+    const lista = prepararMaestro(ma).maestro, px = armarMedida(lista, acomodar(ma, W, H), W, H), ref = rearmar(ma);
+    let mx = 0;
+    for (let i = 0; i < W * H; i++) for (let c = 0; c < 3; c++) mx = Math.max(mx, Math.abs(px[i * 4 + c] - ref[i * 3 + c]));
+    ok(`armarMedida a la medida del maestro = el anuncio rearmado (dif. máx ${mx}, sólo redondeo)`, mx <= 1 && px.length === W * H * 4 && px.every((v, i) => i % 4 !== 3 || v === 255));
+  }
+
+  // ── PSD muy grandes (Pedro, 2026-10-14: "A and B now") ──
+  const igualBytes = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+  const mismoDespiece = (a, b) => igualBytes(a.fondo, b.fondo) && a.piezas.length === b.piezas.length && a.piezas.every((p, i) => igualBytes(p.rgba, b.piezas[i].rgba) && JSON.stringify(p.caja) === JSON.stringify(b.piezas[i].caja) && p.letraMinPx === b.piezas[i].letraMinPx);
+  {
+    // Un PSD con 3 MB de "original de objeto inteligente" (bloque lnk2), como los reales.
+    const relleno = Uint8Array.from({ length: 3_000_000 }, (_, i) => (i * 31) & 255);
+    const conObjeto = writePsdBuffer({ width: W, height: H, children: arbol(), linkedFiles: [{ id: "20953ddb-9391-11ec-b4f1-c15674f50bc4", name: "foto.psb", type: "8BPB", creator: "8BIM", data: relleno }], imageData: img(W, H, (x, y) => verdad(fondoVerdad)(x, y)), imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } } });
+    const flaco = await adelgazarPsd(new Blob([conObjeto]), PSD_BYTES_MAX);
+    ok(`adelgazar quita el original del objeto inteligente (${(conObjeto.length / 1e6).toFixed(1)} → ${(flaco.datos.byteLength / 1e6).toFixed(1)} MB; quitó ${flaco.quitados} bytes por 3 000 000 de datos) y nada más`, flaco.quitados >= 3_000_000 && flaco.quitados < 3_001_000 && conObjeto.length - flaco.datos.byteLength === flaco.quitados);
+    ok("el PSD adelgazado da EXACTAMENTE el mismo despiece (fondo, piezas, cajas, letra)", mismoDespiece(despiezar(leerPsd(flaco.datos), 0), despiezar(leerPsd(conObjeto), 0)));
+    const sinNada = psdDe(arbol(), verdad(fondoVerdad));
+    const igual = await adelgazarPsd(new Blob([sinNada]), PSD_BYTES_MAX);
+    ok("un PSD sin nada que quitar sale byte por byte igual", igual.quitados === 0 && igualBytes(new Uint8Array(igual.datos), sinNada));
+    const pesado = await adelgazarPsd(new Blob([conObjeto]), 100_000).then(() => null, (e) => e);
+    ok("si aun sin lo que sobra pasa del tope: PsdPesado con lo que pesaría, ANTES de reservar memoria", pesado instanceof PsdPesado && pesado.mb === Math.round(flaco.datos.byteLength / 1e6) && pesado.mb < 1, String(pesado));
+    ok(`PsdPesado dice si se le quitó algo (${pesado?.quitados} bloques): el mensaje "ya sin los originales" sólo si es verdad`, pesado?.quitados > 0);
+    // Lo que no se entiende no se quita: un archivo cortado a la mitad o con basura al final se entrega entero.
+    const cortado = conObjeto.subarray(0, Math.floor(conObjeto.length / 2));
+    const c = await adelgazarPsd(new Blob([cortado]), PSD_BYTES_MAX);
+    ok("PSD cortado: no se quita nada (se entrega tal cual y que leerPsd decida)", c.quitados === 0 && c.datos.byteLength === cortado.length);
+    const basura = await adelgazarPsd(new Blob([new Uint8Array(40).fill(7)]), PSD_BYTES_MAX);
+    ok("bytes que no son un PSD: se entregan tal cual (leerPsd los rechaza con su mensaje)", basura.quitados === 0 && basura.datos.byteLength === 40 && motivo(() => leerPsd(basura.datos)) === "no-soportado");
+    eq("el tope de archivo es el del formato PSD (2 GB)", PSD_ARCHIVO_MAX, 2 ** 31);
+    // Photoshop rellena los bloques a 4 bytes (la especificación dice "a par"): el PSD real de hoy tenía eso y la
+    // primera versión no quitaba NADA. Aquí: un bloque de 2 bytes + 2 de relleno antes del objeto inteligente.
+    const con4 = (() => {
+      const b = Uint8Array.from(conObjeto), v = new DataView(b.buffer);
+      const posLargo = 26 + 4 + v.getUint32(26) + 4 + v.getUint32(26 + 4 + v.getUint32(26));
+      const sig = [...new TextEncoder().encode("8BIMlnk2")];
+      const at = b.findIndex((_, i) => sig.every((c, k) => b[i + k] === c));
+      const extra = Uint8Array.from([...new TextEncoder().encode("8BIMxtra"), 0, 0, 0, 2, 1, 2, 0, 0]);
+      const out = new Uint8Array(b.length + extra.length);
+      out.set(b.subarray(0, at)); out.set(extra, at); out.set(b.subarray(at), at + extra.length);
+      new DataView(out.buffer).setUint32(posLargo, v.getUint32(posLargo) + extra.length);
+      return out;
+    })();
+    const f4 = await adelgazarPsd(new Blob([con4]), PSD_BYTES_MAX);
+    ok(`relleno a 4 bytes (como Photoshop): igual quita el objeto inteligente (${f4.quitados} bytes) y da el mismo despiece`, f4.quitados === flaco.quitados && mismoDespiece(despiezar(leerPsd(f4.datos), 0), despiezar(leerPsd(con4), 0)));
+  }
+  {
+    // Reducir por área: identidad a escala 1, promedio exacto, alfa premultiplicada y lo de afuera.
+    const src = { data: Uint8ClampedArray.from([10, 20, 30, 255, 50, 60, 70, 255, 90, 100, 110, 255, 130, 140, 150, 255]), width: 2, height: 2 };
+    eq("promediarArea a escala 1 = copia exacta", [...promediarArea(src, 0, 0, 1, 1, 2, 2, [0, 0, 0, 0], true).data], [...src.data]);
+    eq("2×2 → 1×1 = el promedio de los cuatro", [...promediarArea(src, 0, 0, 2, 2, 1, 1, [0, 0, 0, 0], true).data], [70, 80, 90, 255]);
+    const medio = { data: Uint8ClampedArray.from([255, 0, 0, 255, 0, 0, 255, 0]), width: 2, height: 1 }; // rojo opaco + azul transparente
+    eq("alfa premultiplicada: un vecino transparente no tiñe el color, sólo baja el alfa", [...promediarArea(medio, 0, 0, 2, 1, 1, 1, [0, 0, 0, 0], true).data], [255, 0, 0, 128]);
+    eq("lo que cae fuera del original vale 'fuera' (una máscara blanca por defecto)", [...promediarArea({ data: Uint8ClampedArray.from([0, 0, 0, 255]), width: 1, height: 1 }, 0, 0, 2, 1, 1, 1, [255, 255, 255, 255], false).data], [128, 128, 128, 255]);
+    ok("promediarArea sólo reduce (ampliar sería inventar píxeles)", motivo(() => promediarArea(src, 0, 0, 0.5, 0.5, 4, 4, [0, 0, 0, 0], true)).startsWith("otro"));
+    // Una mesa enorme ya no se rechaza: se lee reducida, con aviso, y sigue usable.
+    const N = W * H;
+    const r1 = reducirMesa(doc, 0, N);
+    ok("reducir una mesa a SU MISMO tamaño = el despiece de siempre (identidad)", r1.w === W && r1.h === H && mismoDespiece(despiezar(r1.doc, 0), despiezar(doc, 0)));
+    const chica = despiezar(doc, 0, { mesaMaxPx: Math.floor(N / 4) });
+    const normal = despiezar(doc, 0);
+    ok(`mesa de más píxeles que el tope: se lee REDUCIDA a ${chica.w}×${chica.h}, usable (rearmado ${chica.rearmadoDistintoPct.toFixed(2)} %), con aviso`, chica.w === W / 2 && chica.h === H / 2 && despieceUsable(chica).ok && chica.avisos[0].includes("reducido a 200×250"), JSON.stringify([chica.w, chica.h, despieceUsable(chica), chica.avisos[0]]));
+    const mismasCajas = chica.piezas.every((p, i) => Math.abs(p.solido.x * 2 - normal.piezas[i].solido.x) <= 2 && Math.abs(p.solido.w * 2 - normal.piezas[i].solido.w) <= 2 && Math.abs(p.solido.h * 2 - normal.piezas[i].solido.h) <= 2);
+    ok("las piezas reducidas caen donde las originales, a la mitad (±1 px)", chica.piezas.map((p) => p.rol).join() === normal.piezas.map((p) => p.rol).join() && mismasCajas, JSON.stringify(chica.piezas.map((p) => p.solido)));
+    const d2c = despiezar(d2, 1, { mesaMaxPx: Math.floor(N / 4) });
+    ok("la SEGUNDA mesa de un archivo también se reduce en sus coordenadas (no toma píxeles de la primera)", despieceUsable(d2c).ok && d2c.w === W / 2 && d2c.rearmadoDistintoPct < 1, JSON.stringify(despieceUsable(d2c)));
+  }
+  {
+    // Muchas mesas: la persona elige; se propone la más grande de cada forma.
+    const m = (w, h) => ({ w, h });
+    eq("sugerir: la más grande de cada forma, en el orden del archivo", sugerirMesas([m(1080, 1920), m(720, 1280), m(1200, 1500), m(600, 750), m(1080, 1080), m(1280, 720)]), [0, 2, 4, 5]);
+    eq(`sugerir: a lo más ${MESAS_AUTO}, las formas más repetidas primero`, sugerirMesas([m(100, 100), m(200, 100), m(300, 100), m(400, 100), m(500, 100), m(1080, 1920), m(540, 960), m(1200, 1500), m(600, 750)]).length, MESAS_AUTO);
+    eq("sugerir: medidas inválidas no se proponen", sugerirMesas([m(0, 0), m(NaN, 5), m(100, 100)]), [2]);
+    eq("sugerir: la más GRANDE aunque venga después de una chica de la misma forma", sugerirMesas([m(720, 1280), m(600, 750), m(1080, 1920), m(1200, 1500)]), [2, 3]);
+  }
+}
+
+// ── v2 · acomodo: dónde va cada pieza en cada medida ─────────
+console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del PSD real (DiDi Giant Card)");
+{
+  const pz = (nombre, x, y, w, h, letraMinPx = null) => ({ nombre, rol: rolDe(nombre), solido: { x, y, w, h }, letraMinPx });
+  // Las cajas que `despiezar` saca del PSD real (2026-10-13). De abajo hacia arriba.
+  const M916 = { nombre: "APGIANTCARDUGC_9x16_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", w: 1080, h: 1920, piezas: [pz("FOOTER", 131, 1485, 818, 70, 16), pz("HERO", 105, 558, 692, 695), pz("CTA", 365, 1290, 348, 110, 51.2), pz("Subtitulo", 632, 625, 338, 194, 31.9), pz("TITULO", 193, 336, 681, 176, 34.8), pz("BRAND", 312, 202, 457, 80)] };
+  const M45 = { nombre: "APGIANTCARDUGC_4x5_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", w: 1200, h: 1500, piezas: [pz("FOOTER", 204, 1361, 790, 62, 16), pz("HERO", 113, 508, 788, 791), pz("CTA", 788, 856, 306, 97, 45), pz("Subtitulo", 684, 617, 383, 194, 32), pz("TITULO", 188, 238, 824, 212, 42), pz("BRAND", 364, 86, 472, 83)] };
+  const MESAS = [M916, M45];
+  // Medida · de qué mesa sale según el script del equipo · familia.
+  const DOCE = [[1080, 1920, 0, "igual"], [720, 1280, 0, "igual"], [720, 1600, 0, "igual"], [1200, 1500, 1, "igual"], [768, 1024, 1, "igual"], [1280, 720, 1, "horizontal"], [1200, 627, 1, "horizontal"], [876, 324, 1, "ancho"], [600, 500, 1, "display"], [320, 250, 1, "display"], [640, 100, 1, "banner"], [320, 50, 1, "banner"]];
+  eq("cada medida sale de la misma mesa que en el script del equipo, con su familia", DOCE.map(([W, H]) => [elegirMaestro(MESAS, W, H), familiaDe(W, H, MESAS[elegirMaestro(MESAS, W, H)])]), DOCE.map(([, , i, f]) => [i, f]));
+  const hechos = DOCE.map(([W, H, i]) => ({ W, H, ma: MESAS[i], a: acomodar(MESAS[i], W, H) }));
+  // Medidas chicas (Pedro, 2026-10-14): se quita el legal y luego el subtítulo, y el texto que queda se agranda.
+  // El legal NUNCA se quita (Pedro, 2026-10-15: "legales can never be removed"). 320×50 ya no quita el subtítulo: es
+  // 640×100 × 0.5 (B26, Pedro 2026-10-21: "follow the table"); lo chico se marca.
+  eq("las 12 llevan todas sus piezas (320×50 es la mitad de 640×100, con su subtítulo)", hechos.map((x) => x.a.puestas.length), [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]);
+  ok("lo que se quitó es exactamente lo que no se colocó, y sólo el subtítulo", hechos.every((x) => x.a.quitadas.every((i) => x.ma.piezas[i].rol === "SUBTITULO") && x.ma.piezas.every((_, i) => x.a.puestas.some((q) => q.pieza === i) !== x.a.quitadas.includes(i))));
+  eq("cada quitada lleva su aviso", hechos.filter((x) => x.a.quitadas.length).map((x) => [`${x.W}x${x.H}`, x.a.avisos.filter((v) => v.tipo === "quitada").length]), []);
+  eq(`9 pasan todas las comprobaciones; en las 3 chicas la letra queda bajo ${LETRA_MIN_PX} px y se marca`, hechos.filter((x) => x.a.avisos.some((v) => !esNota(v))).map((x) => [`${x.W}x${x.H}`, [...new Set(x.a.avisos.filter((v) => !esNota(v)).map((v) => v.tipo))]]), [["320x250", ["letra"]], ["640x100", ["letra"]], ["320x50", ["letra"]]]);
+  eq("notas de la matriz (B26, no cuentan): las más altas que su mesa, 876×324 (manda el script) y 320×50 (mitad de 640×100)", hechos.filter((x) => x.a.avisos.some(esNota)).map((x) => `${x.W}x${x.H}`), ["720x1600", "768x1024", "876x324", "320x50"]);
+  const anchaChica = acomodar(MESAS[1], 438, 162);
+  const textoDe = (ma, a) => a.letras.filter((l) => ma.piezas[l.pieza].rol !== "FOOTER");
+  ok(`una ancha chica (438×162, tres zonas): se queda el legal, se quita el subtítulo y el resto del texto llega a ${LETRA_MIN_PX} px`, anchaChica.familia === "ancho" && anchaChica.quitadas.map((i) => MESAS[1].piezas[i].rol).join() === "SUBTITULO" && anchaChica.puestas.some((q) => MESAS[1].piezas[q.pieza].rol === "FOOTER") && textoDe(MESAS[1], anchaChica).every((l) => l.px >= LETRA_MIN_PX), JSON.stringify([anchaChica.quitadas, anchaChica.letras]));
+  const chico916 = acomodar(MESAS[0], 360, 640);
+  ok("en el acomodo del diseñador (un 9:16 a un tercio) no se quita nada: la letra chica se marca", chico916.familia === "igual" && chico916.quitadas.length === 0 && chico916.puestas.length === 6 && chico916.avisos.some((v) => v.tipo === "letra"), JSON.stringify(chico916.avisos));
+  ok(`320×250 y 640×100: todo el texto (menos el legal, que va en su franja) llega a ${LETRA_MIN_PX} px`, hechos.filter((x) => ["320x250", "640x100"].includes(`${x.W}x${x.H}`)).every((x) => textoDe(x.ma, x.a).every((l) => l.px >= LETRA_MIN_PX)), JSON.stringify(hechos.slice(9, 11).map((x) => x.a.letras)));
+  // B29: como los ejemplos del equipo (2026-10-28). 1.91:1: el texto pegado a la izquierda, el legal abajo SÓLO bajo
+  // el texto y el HERO con todo el alto. 640×100: [marca sobre título] · hero · beneficios · [botón sobre legal].
+  {
+    const a = acomodar(M45, 1200, 628), q = (rol) => a.puestas.find((p) => M45.piezas[p.pieza].rol === rol);
+    const [F, Hr, T, B] = ["FOOTER", "HERO", "TITULO", "BRAND"].map(q);
+    ok("B29 1.91:1: el legal abajo a la izquierda, bajo el texto (no bajo el HERO); el HERO baja hasta el borde del legal; el texto pegado a la izquierda", F.x === T.x && T.x === B.x && F.x + F.w <= Hr.x && Math.abs(F.y + F.h - (Hr.y + Hr.h)) < 1, JSON.stringify(a.puestas));
+    const b = acomodar(M45, 640, 100), r = (rol) => b.puestas.find((p) => M45.piezas[p.pieza].rol === rol);
+    const [Fb, Hb, Tb, Bb, Sb, Cb] = ["FOOTER", "HERO", "TITULO", "BRAND", "SUBTITULO", "CTA"].map(r);
+    ok("B29 640×100: marca sobre el título a la izquierda, luego HERO, beneficios y el botón con el legal debajo", Bb.y + Bb.h <= Tb.y && Bb.x === Tb.x && Tb.x + Tb.w <= Hb.x && Hb.x + Hb.w <= Sb.x && Sb.x + Sb.w <= Math.min(Cb.x, Fb.x) && Cb.y + Cb.h <= Fb.y && Fb.x + Fb.w <= 640, JSON.stringify(b.puestas));
+  }
+  // La franja del legal crece sólo si el resto del texto puede ceder alto sin bajar del mínimo. Con M45 en 640×100 no
+  // puede (el título queda en 10.3 px): el legal se queda en su franja de siempre (6.2 px). Con un título de letra
+  // grande sí puede, y el legal sube.
+  const pieDe = (ma, a) => a.letras.find((l) => ma.piezas[l.pieza].rol === "FOOTER")?.px ?? 0;
+  const tituloGrande = { ...M45, piezas: M45.piezas.map((p) => (p.rol === "TITULO" || p.rol === "SUBTITULO" || p.rol === "CTA" ? { ...p, letraMinPx: p.letraMinPx * 3 } : p)) };
+  const banner = acomodar(tituloGrande, 640, 100);
+  ok(
+    `el legal que no llega a ${LETRA_MIN_PX} px gana una franja más alta cuando el resto del texto puede ceder (y el resto sigue ≥ ${LETRA_MIN_PX} px)`,
+    pieDe(tituloGrande, banner) > pieDe(M45, hechos[10].a) + 0.5 && textoDe(tituloGrande, banner).every((l) => l.px >= LETRA_MIN_PX),
+    JSON.stringify([pieDe(M45, hechos[10].a), pieDe(tituloGrande, banner), banner.letras]),
+  );
+  const pie = (x) => x.a.puestas.find((q) => x.ma.piezas[q.pieza].rol === "FOOTER");
+  ok("regla del legal: el pie nunca queda más grande de como lo dejó el diseñador", hechos.filter((x) => x.a.familia === "igual").every((x) => pie(x).k <= Math.max(1, Math.min(x.W / x.ma.w, x.H / x.ma.h)) + 1e-9) && pie({ ma: M45, a: acomodar(M45, 2400, 3000) }).k === 2);
+  ok("regla del legal: en las medidas con la forma del maestro el pie crece más que el resto, sin tocar la pieza de arriba", hechos.filter((x) => x.a.familia === "igual" && x.W !== x.ma.w).every((x) => pie(x).k > Math.min(x.W / x.ma.w, x.H / x.ma.h) + 0.01 && x.a.puestas.every((q) => q === pie(x) || q.y + q.h <= pie(x).y || q.y >= pie(x).y + pie(x).h || q.x + q.w <= pie(x).x || q.x >= pie(x).x + pie(x).w)));
+  eq("el maestro tal cual: cada pieza en su lugar, a escala 1", acomodar(M45, 1200, 1500).puestas.map((q) => [q.k, Math.round(q.x), Math.round(q.y)]), M45.piezas.map((p) => [1, p.solido.x, p.solido.y]));
+
+  // HERO a la derecha (como el equipo) y el volteo.
+  const heroX = (ma, a) => { const q = a.puestas.find((p) => ma.piezas[p.pieza].rol === "HERO"); return q.x + q.w / 2; };
+  const conLado = hechos.filter((x) => sePuedeVoltear(x.a.familia));
+  eq("se puede voltear en horizontales, anchas y display", conLado.map((x) => `${x.W}x${x.H}`), ["1280x720", "1200x627", "876x324", "600x500", "320x250"]);
+  ok("por omisión el HERO va a la DERECHA; con heroLado 'izquierda' todo el acomodo es el espejo exacto", conLado.every((x) => {
+    const v = acomodar(x.ma, x.W, x.H, { heroLado: "izquierda" });
+    return heroX(x.ma, x.a) > x.W / 2 && heroX(x.ma, v) < x.W / 2 && v.puestas.every((q, i) => Math.abs(q.x - (x.W - x.a.puestas[i].x - x.a.puestas[i].w)) < 0.01 && q.y === x.a.puestas[i].y && q.k === x.a.puestas[i].k) && v.avisos.length === x.a.avisos.length;
+  }));
+  ok("donde no hay columnas (misma forma, banner) voltear no cambia nada", hechos.filter((x) => !sePuedeVoltear(x.a.familia)).every((x) => JSON.stringify(acomodar(x.ma, x.W, x.H, { heroLado: "izquierda" }).puestas) === JSON.stringify(x.a.puestas)));
+
+  console.log("\n▶ v2 · acomodo: invariantes con maestros raros × todas las medidas");
+  const sin = (ma, rol) => ({ ...ma, piezas: ma.piezas.filter((p) => p.rol !== rol) });
+  const RAROS = {
+    "4:5 real": M45, "9:16 real": M916, "sin CTA": sin(M45, "CTA"), "sin HERO": sin(M45, "HERO"), "sin FOOTER": sin(M45, "FOOTER"), "sólo HERO": { ...M45, piezas: M45.piezas.filter((p) => p.rol === "HERO") },
+    "hero muy ancho": { ...M45, piezas: M45.piezas.map((p) => (p.rol === "HERO" ? pz("HERO", 50, 700, 1100, 250) : p)) },
+    "hero muy alto": { ...M45, piezas: M45.piezas.map((p) => (p.rol === "HERO" ? pz("HERO", 500, 300, 160, 1000) : p)) },
+    "carpeta ajena": { ...M45, piezas: [...M45.piezas, pz("STICKER", 900, 100, 200, 200)] },
+    "calcomanía junto al pie": { ...M45, piezas: [...M45.piezas, pz("STICKER", 20, 1230, 140, 120)] },
+    "hero que pisa el pie": { ...M45, piezas: M45.piezas.map((p) => (p.rol === "HERO" ? pz("HERO", 113, 508, 788, 862) : p)) },
+    "texto alto y angosto": { ...M45, piezas: M45.piezas.map((p) => (p.rol === "TITULO" ? pz("TITULO", 100, 200, 300, 400, 40) : p.rol === "SUBTITULO" ? pz("Subtitulo", 700, 500, 300, 500, 30) : p)) },
+    "maestro horizontal": { nombre: "X_16x9_Y", w: 1920, h: 1080, piezas: [pz("FOOTER", 100, 980, 1700, 60, 18), pz("HERO", 1000, 150, 800, 780), pz("CTA", 150, 760, 380, 120, 50), pz("Subtitulo", 150, 520, 600, 180, 30), pz("TITULO", 150, 250, 800, 220, 40), pz("BRAND", 150, 90, 400, 90)] },
+  };
+  const MEDIDAS = [...DOCE.map(([W, H]) => [W, H]), ...PRESETS.map((p) => [p.w, p.h]), [2000, 100], [100, 2000], [300, 300], [32, 32], [4096, 32]];
+  const solapa = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  // Sin zona · la de historias (15 % arriba, 20 % abajo) · una imposible, más grande que la medida.
+  const ZONAS = { "sin zona": () => undefined, "zona de historia": (W, H) => ({ top: H * 0.15, right: 0, bottom: H * 0.2, left: 0 }), "zona imposible": (W) => ({ top: 0, right: W, bottom: 0, left: W }) };
+  const malas = [];
+  let casos = 0;
+  for (const [nombre, ma] of Object.entries(RAROS))
+    for (const [W, H] of MEDIDAS)
+      for (const [nz, zona] of Object.entries(ZONAS))
+      for (const heroLado of ["derecha", "izquierda"]) {
+        casos++;
+        const a = acomodar(ma, W, H, { heroLado, zona: zona(W, H) });
+        const numeros = [...a.puestas.flatMap((q) => [q.k, q.x, q.y, q.w, q.h]), a.fondo.k, a.fondo.x, a.fondo.y];
+        const cubre = a.fondo.x <= 0.01 && a.fondo.y <= 0.01 && a.fondo.x + ma.w * a.fondo.k >= W - 0.01 && a.fondo.y + ma.h * a.fondo.k >= H - 0.01;
+        const dentro = a.puestas.every((q) => q.k > 0 && q.x >= -0.5 && q.y >= -0.5 && q.x + q.w <= W + 0.5 && q.y + q.h <= H + 0.5);
+        const sinChoque = !a.avisos.some((v) => v.tipo === "fuera" || v.tipo === "encima");
+        const nadaCallado = ma.piezas.every((p, i) => a.puestas.some((q) => q.pieza === i) || a.avisos.some((v) => (v.tipo === "falta" || v.tipo === "quitada") && v.texto.includes(etiquetaPieza(p))));
+        // Con la forma del maestro: el pie puede crecer, pero no MÁS encima de nadie que a la escala de las demás
+        // piezas, sobre su mismo pie (el centro de abajo: ahí lo ancla `anclarAlFondo` y desde ahí crece).
+        let pieQuieto = true;
+        const fi = ma.piezas.findIndex((p) => p.rol === "FOOTER"), f = a.puestas.find((q) => q.pieza === fi);
+        const otra = a.puestas.find((q) => q !== f);
+        if (a.familia === "igual" && f && otra) {
+          const k0 = otra.k, s = ma.piezas[fi].solido;
+          const f0 = { x: f.x + f.w / 2 - (s.w * k0) / 2, y: f.y + f.h - s.h * k0, w: s.w * k0, h: s.h * k0 };
+          pieQuieto = a.puestas.every((q) => q === f || solapa(f, q) <= solapa(f0, q) + 0.01);
+        }
+        const zonaAvisada = nz !== "zona imposible" || a.avisos.some((v) => v.tipo === "zona");
+        if (!numeros.every(Number.isFinite) || !cubre || !dentro || !sinChoque || !nadaCallado || !pieQuieto || !zonaAvisada) malas.push(`${nombre} → ${W}x${H} ${heroLado}, ${nz} (${a.familia}): ${JSON.stringify({ cubre, dentro, sinChoque, nadaCallado, pieQuieto, zonaAvisada })}`);
+      }
+  ok(`${casos} casos: números finitos, el fondo cubre, nada fuera, nada encimado, el pie no crece sobre nadie, y toda pieza o se coloca o se avisa`, malas.length === 0, malas.slice(0, 6).join("\n      "));
+  const ajena = acomodar(RAROS["carpeta ajena"], 1200, 627);
+  ok("una carpeta que no es de la guía no desaparece en silencio: se avisa", ajena.avisos.some((v) => v.tipo === "falta" && v.texto.includes("STICKER")) && acomodar(RAROS["carpeta ajena"], 768, 1024).puestas.length === 7);
+
+  // Zona segura.
+  const z = acomodar(M45, 1280, 720, { zona: { top: 0, right: 0, bottom: 0, left: 200 } });
+  ok("zona segura a la izquierda: ninguna pieza entra en ella", z.puestas.every((q) => q.x >= 200) && !z.avisos.some((v) => v.tipo === "zona"));
+  ok("con la forma del maestro la zona no mueve nada: se avisa qué pieza cae en ella", acomodar(M916, 1080, 1920, { zona: { top: 300, right: 0, bottom: 0, left: 0 } }).avisos.some((v) => v.tipo === "zona" && v.texto.includes("BRAND")));
+
+  // Otra forma con el acomodo del diseñador (Pedro, 2026-10-14, s33: la tarjeta flotaba sobre el colchón y el legal
+  // le caía encima): cada pieza con su pie sobre el mismo punto del fondo que en el maestro.
+  const alFondo = (ma, a, q) => {
+    const s = ma.piezas[q.pieza].solido;
+    return [(q.x + q.w / 2 - a.fondo.x) / a.fondo.k - (s.x + s.w / 2), (q.y + q.h - a.fondo.y) / a.fondo.k - (s.y + s.h)];
+  };
+  const v916 = acomodar(M45, 1080, 1920);
+  // B26 (Pedro, 2026-10-21, "middle point as long as it looks good"): más alta que el maestro, a la mitad entre esto y
+  // la tabla (lo de arriba arriba, el legal abajo, el HERO crece). La tarjeta sigue sobre su punto.
+  const enV916 = (rol) => alFondo(M45, v916, v916.puestas.find((q) => M45.piezas[q.pieza].rol === rol));
+  ok(
+    "4:5 → 1080×1920 sin canal (B26): el HERO sobre su punto del fondo (< 1 px); la marca y el título suben hacia el borde de arriba y el legal baja",
+    v916.familia === "igual" && enV916("HERO").every((d) => Math.abs(d) < 1) && enV916("BRAND")[1] < -1 && enV916("TITULO")[1] < -1 && enV916("FOOTER")[1] > 1 && v916.puestas.every((q) => q.y >= 0 && q.y + q.h <= 1920),
+    JSON.stringify(v916.puestas.map((q) => [M45.piezas[q.pieza].rol, ...alFondo(M45, v916, q).map(Math.round)])),
+  );
+  const historia = { top: 1920 * 0.14, right: 0, bottom: 1920 * 0.2, left: 0 };
+  const conCanal = acomodar(M45, 1080, 1920, { zona: historia });
+  const heroCanal = conCanal.puestas.find((q) => M45.piezas[q.pieza].rol === "HERO");
+  ok("con la zona de historias: ninguna pieza queda debajo de lo que tapa la app (sin aviso de zona)", conCanal.puestas.every((q) => q.y >= historia.top && q.y + q.h <= 1920 - historia.bottom) && !conCanal.avisos.some((v) => v.tipo === "zona"), JSON.stringify(conCanal.puestas.map((q) => [M45.piezas[q.pieza].rol, Math.round(q.y), Math.round(q.y + q.h)])));
+  // Con historias el contenido no cabe ni junto (1337 px del maestro a ×0.9 contra 1169 libres): se achica.
+  ok("con la zona de historias el contenido no cabe ni junto: se achica todo por igual, sin bajar de 60 %", heroCanal.k < 0.9 && heroCanal.k >= 0.9 * 0.6 && conCanal.puestas.every((q) => q.k === heroCanal.k || M45.piezas[q.pieza].rol === "FOOTER"), String(heroCanal.k));
+  // s33 (DiDi Buen Fin, 2026-10-14): la tarjeta parada en un colchón a 3/4 del alto. Cajas reales de `despiezar`.
+  const M33 = { nombre: "BFDIRECT20CASH_4x5_STOCK_STATIC_IDEAE_EC_V1_NOV26_RN", w: 1200, h: 1500, piezas: [pz("CTA", 424, 1179, 352, 97, 44.9), pz("FOOTER", 205, 1361, 788, 62, 16), pz("TITULO", 287, 239, 611, 459, 59), pz("HERO", 468, 726, 279, 408), pz("BRAND", 146, 73, 907, 113)] };
+  const s33Historia = acomodar(M33, 1080, 1920, { zona: historia });
+  const heroS33 = s33Historia.puestas.find((q) => M33.piezas[q.pieza].rol === "HERO");
+  ok(
+    `s33 con historias: el fondo se agranda lo necesario (≤ ×${FONDO_ZOOM_MAX}) para que la tarjeta quede sobre su punto, y nada en la zona`,
+    s33Historia.fondo.k > 1.28 && s33Historia.fondo.k <= 1.28 * FONDO_ZOOM_MAX + 1e-9 && alFondo(M33, s33Historia, heroS33).every((d) => Math.abs(d) < 1) && !s33Historia.avisos.some((v) => v.tipo === "zona"),
+    JSON.stringify([s33Historia.fondo.k, alFondo(M33, s33Historia, heroS33)]),
+  );
+  ok("s33 sin canal: la tarjeta sobre su punto y el fondo cubre justo (×1.28)", ((a) => a.fondo.k === 1.28 && alFondo(M33, a, a.puestas.find((q) => M33.piezas[q.pieza].rol === "HERO")).every((d) => Math.abs(d) < 1))(acomodar(M33, 1080, 1920)));
+  const reels = acomodar(M45, 1080, 1920, { zona: { top: 1920 * 0.14, right: 1080 * 0.06, bottom: 1920 * 0.35, left: 1080 * 0.06 } });
+  ok("si el HERO pide más zoom que el tope (APGIANT con reels, franja de 35 % abajo: pediría ×2), el fondo no se agranda y nada queda en la zona", reels.fondo.k === 1.28 && !reels.avisos.some((v) => v.tipo === "zona"), JSON.stringify([reels.fondo.k, reels.avisos]));
+  ok("sin canal el fondo nunca se agranda de más (cubre justo)", [[1080, 1920], [720, 1600], [768, 1024]].every(([W, H]) => acomodar(M45, W, H).fondo.k === Math.max(W / 1200, H / 1500)));
+  const arriba = acomodar(M45, 1080, 1920, { zona: { top: 250, right: 0, bottom: 0, left: 0 } });
+  const heroArriba = arriba.puestas.find((q) => M45.piezas[q.pieza].rol === "HERO");
+  ok("con una zona sólo arriba (el HERO sí cabe en su lugar): el HERO se queda sobre su punto y lo de arriba se junta hacia él, fuera de la zona", alFondo(M45, arriba, heroArriba).every((d) => Math.abs(d) < 1) && arriba.puestas.every((q) => q.y >= 250) && heroArriba.k >= 0.9, JSON.stringify([alFondo(M45, arriba, heroArriba), arriba.puestas.map((q) => Math.round(q.y))]));
+  // Lo que el diseñador dejó separado sigue separado, en todos los maestros raros, medidas «igual» y zonas.
+  const separadas = [];
+  for (const [nombre, ma] of Object.entries(RAROS))
+    for (const [W, H] of MEDIDAS)
+      for (const [nz, zona] of Object.entries(ZONAS)) {
+        const a = acomodar(ma, W, H, { zona: zona(W, H) });
+        if (a.familia !== "igual") continue;
+        for (const q of a.puestas)
+          for (const r of a.puestas) {
+            const sq = ma.piezas[q.pieza].solido, sr = ma.piezas[r.pieza].solido;
+            if (q.pieza < r.pieza && solapa(sq, sr) === 0 && solapa(q, r) > 1) separadas.push(`${nombre} → ${W}x${H} ${nz}: ${etiquetaPieza(ma.piezas[q.pieza])} / ${etiquetaPieza(ma.piezas[r.pieza])}`);
+          }
+      }
+  ok("anclar al fondo nunca encima dos piezas que el diseñador dejó separadas (todos los raros × medidas × zonas)", separadas.length === 0, separadas.slice(0, 4).join(" | "));
+  const sinLegal = [];
+  for (const [nombre, ma] of Object.entries(RAROS))
+    for (const [W, H] of MEDIDAS)
+      for (const [nz, zona] of Object.entries(ZONAS)) {
+        const fi = ma.piezas.findIndex((p) => p.rol === "FOOTER");
+        if (fi >= 0 && !acomodar(ma, W, H, { zona: zona(W, H) }).puestas.some((q) => q.pieza === fi)) sinLegal.push(`${nombre} → ${W}x${H} ${nz}`);
+      }
+  ok("el legal nunca se quita: en todos los raros × medidas × zonas, si el maestro lo trae, se coloca", sinLegal.length === 0, sinLegal.slice(0, 4).join(" | "));
+
+  const M33R = { nombre: "R", w: 120, h: 150, fondo: new Uint8ClampedArray(120 * 150 * 4).fill(200), piezas: [{ nombre: "CTA", rol: "CTA", caja: { x: 40, y: 110, w: 40, h: 12 }, solido: { x: 40, y: 110, w: 40, h: 12 }, letraMinPx: 6, rgba: new Uint8ClampedArray(40 * 12 * 4).fill(255), oscurece: null }] };
+  // Edición a mano (Pedro, 2026-10-15: "an edit button ... move and or resize the elements ... and save your changes").
+  const base1200 = acomodar(M45, 1200, 627);
+  const iCta = M45.piezas.findIndex((p) => p.rol === "CTA"), iPie = M45.piezas.findIndex((p) => p.rol === "FOOTER");
+  const movida = aplicarEdicion(M45, base1200, { piezas: { [iCta]: { x: 40, y: 30, k: 0.8 } } }, 1200, 627);
+  const cta = movida.puestas.find((q) => q.pieza === iCta);
+  ok(
+    "editar: la pieza va donde la dejó la persona (caja = sólido × escala), las demás y el fondo no se mueven, y queda marcada",
+    cta.x === 40 && cta.y === 30 && cta.k === 0.8 && cta.w === M45.piezas[iCta].solido.w * 0.8 && movida.editada === true &&
+      JSON.stringify(movida.fondo) === JSON.stringify(base1200.fondo) && movida.puestas.every((q) => q.pieza === iCta || JSON.stringify(q) === JSON.stringify(base1200.puestas.find((r) => r.pieza === q.pieza))),
+  );
+  const chico = aplicarEdicion(M45, base1200, { piezas: { [iPie]: { x: 10, y: 620, k: 0.3 } } }, 1200, 627);
+  ok("editar: lo que la persona hace se revisa igual (legal bajo 10 px → aviso de letra; fuera de la medida → aviso)", chico.avisos.some((v) => v.tipo === "letra" && v.texto.includes("FOOTER")) && chico.avisos.some((v) => v.tipo === "fuera" && v.texto.includes("FOOTER")), JSON.stringify(chico.avisos));
+  const enZona = aplicarEdicion(M45, acomodar(M45, 1080, 1920), { piezas: { [iCta]: { x: 300, y: 1800, k: 0.8 } } }, 1080, 1920, { top: 0, right: 0, bottom: 300, left: 0 });
+  ok("editar: con canal, una pieza que la persona deja bajo la franja de la app se avisa", enZona.avisos.some((v) => v.tipo === "zona" && v.texto.includes("CTA")));
+  const encimada = aplicarEdicion(M45, base1200, { piezas: { [iCta]: { ...base1200.puestas.find((q) => M45.piezas[q.pieza].rol === "HERO"), k: 0.5 } } }, 1200, 627);
+  ok("editar: encimar piezas lo decidió la persona a la vista: no se avisa (sí en el automático)", !encimada.avisos.some((v) => v.tipo === "encima"));
+  ok("editar: una edición con números que no sirven (NaN, escala 0 o negativa) se ignora: queda el automático", aplicarEdicion(M45, base1200, { piezas: { [iCta]: { x: NaN, y: 0, k: 1 }, [iPie]: { x: 0, y: 0, k: 0 } } }, 1200, 627) === base1200);
+  // Dos piezas que la persona NO tocó y se enciman se siguen avisando aunque haya movido otra (reap 2026-10-15).
+  const iHero = M45.piezas.findIndex((p) => p.rol === "HERO"), iTit = M45.piezas.findIndex((p) => p.rol === "TITULO");
+  const tit = base1200.puestas.find((q) => q.pieza === iTit);
+  const conChoque = { ...base1200, puestas: base1200.puestas.map((q) => (q.pieza === iHero ? { ...q, x: tit.x, y: tit.y } : q)) };
+  const otraMovida = aplicarEdicion(M45, conChoque, { piezas: { [iCta]: { x: 40, y: 30, k: 0.8 } } }, 1200, 627);
+  ok("editar: mover una pieza no calla el aviso de otras dos (sin tocar) que se enciman", base1200.familia !== "igual" && otraMovida.avisos.some((v) => v.tipo === "encima" && v.texto.includes("HERO") && v.texto.includes("TITULO")), JSON.stringify(otraMovida.avisos));
+  const loca = aplicarEdicion(M45, base1200, { piezas: { [iCta]: { x: 1e9, y: -1e9, k: 1e6 } } }, 1200, 627).puestas.find((q) => q.pieza === iCta);
+  eq("editar: un dato guardado fuera de lo que deja el editor (k 1e6, x 1e9) se recorta a sus topes", [loca.k, loca.x, loca.y], [topesPieza(M45.piezas[iCta].solido, 1200, 627, M45.piezas[iCta].caja).max, 2400, -2400]);
+  eq("topes: lo más grande también lo frena la caja con sombras (que mide cada capa del PSD), no sólo la parte sólida", [topesPieza({ w: 10, h: 10 }, 100, 100).max, topesPieza({ w: 10, h: 10 }, 100, 100, { w: 100, h: 40 }).max, topesPieza({ w: 10, h: 10 }, 100, 100, { w: 4, h: 4 }).max], [20, 2, 20]);
+  const r1 = revisarMedida([M33R], 1200, 627, { edicion: { piezas: { 0: { x: 20, y: 20, k: 0.5 } } } });
+  ok(
+    "revisarMedida con edición: la tarjeta y el resumen comparten la misma (misma edición → mismo objeto; otra → otro; sin edición → el automático)",
+    r1 === revisarMedida([M33R], 1200, 627, { edicion: { piezas: { 0: { x: 20, y: 20, k: 0.5 } } } }) && r1 !== revisarMedida([M33R], 1200, 627, { edicion: { piezas: { 0: { x: 21, y: 20, k: 0.5 } } } }) && !revisarMedida([M33R], 1200, 627).acomodo.editada && r1.acomodo.editada === true,
+  );
+  // Orden de capas (Pedro, 2026-10-19: "re arrenge layers to move whats on top of what"): `orden`, de abajo hacia arriba.
+  const ordenAuto = base1200.puestas.map((q) => q.pieza);
+  const conOrden = aplicarEdicion(M45, base1200, { piezas: {}, orden: [iCta, ...ordenAuto.filter((p) => p !== iCta)] }, 1200, 627);
+  eq(
+    "capas: el orden elegido manda (el CTA al fondo), los lugares no cambian, queda marcada como editada",
+    [conOrden.puestas.map((q) => q.pieza), conOrden.puestas.every((q) => JSON.stringify(q) === JSON.stringify(base1200.puestas.find((r) => r.pieza === q.pieza))), conOrden.editada],
+    [[iCta, ...ordenAuto.filter((p) => p !== iCta)], true, true],
+  );
+  const ordenYLugar = aplicarEdicion(M45, base1200, { piezas: { [iCta]: { x: 40, y: 30, k: 0.8 } }, orden: [iCta] }, 1200, 627);
+  eq("capas: con lugar y orden a la vez; una pieza que el orden no nombra se queda en su lugar (aquí, todas menos el CTA, que ya era el único nombrado)", [ordenYLugar.puestas.map((q) => q.pieza), ordenYLugar.puestas.find((q) => q.pieza === iCta).x], [ordenAuto, 40]);
+  const sinCambio = aplicarEdicion(M45, base1200, { piezas: {}, orden: ordenAuto }, 1200, 627);
+  ok("capas: el mismo orden del automático no cuenta como edición (mismo objeto)", sinCambio === base1200);
+  eq("capas: un índice repetido o que no está puesto no rompe nada", aplicarEdicion(M45, base1200, { piezas: {}, orden: [iCta, iCta, 99, ordenAuto[0]] }, 1200, 627).puestas.map((q) => q.pieza), (() => {
+    const quedan = ordenAuto.filter((p) => p === iCta || p === ordenAuto[0]);
+    const nuevo = [iCta, ordenAuto[0]].filter((p) => quedan.includes(p));
+    let i = 0;
+    return ordenAuto.map((p) => (quedan.includes(p) ? nuevo[i++] : p));
+  })());
+  // Con píxeles (revisarMedida también mira contraste): dos piezas, el título al fondo.
+  const pz2 = (nombre, rol, y0) => ({ nombre, rol, caja: { x: 20, y: y0, w: 60, h: 12 }, solido: { x: 20, y: y0, w: 60, h: 12 }, letraMinPx: 12, rgba: new Uint8ClampedArray(60 * 12 * 4).fill(255), oscurece: null });
+  const M2R = { nombre: "R2", w: 120, h: 150, fondo: new Uint8ClampedArray(120 * 150 * 4).fill(90), piezas: [pz2("TITULO", "TITULO", 20), pz2("CTA", "CTA", 110)] };
+  const autoR = revisarMedida([M2R], 1200, 627).acomodo.puestas.map((q) => q.pieza);
+  const conOrdenR = revisarMedida([M2R], 1200, 627, { edicion: { piezas: {}, orden: [...autoR].reverse() } });
+  // Lo guardado en el navegador se lee sin confiar: el formato nuevo, el viejo (sólo lugares) y datos rotos.
+  const avisosConsola = [];
+  const warnAntes = console.warn;
+  console.warn = (...a) => avisosConsola.push(a.join(" "));
+  const leidas = [
+    leerEdicion({ piezas: { 1: { x: 1, y: 2, k: 0.5 } }, orden: [2, 0, 1] }, 3),
+    leerEdicion({ 1: { x: 1, y: 2, k: 0.5 } }, 3),
+    leerEdicion({ piezas: { 1: { x: 1, y: 2, k: 0.5 }, 7: { x: 0, y: 0, k: 1 }, 0: { x: NaN, y: 0, k: 1 } }, orden: [0, 0, 1] }, 3),
+    leerEdicion({ piezas: {}, orden: [5] }, 3),
+    leerEdicion(null, 3),
+    leerEdicion("basura", 3),
+  ];
+  console.warn = warnAntes;
+  eq(
+    "capas: lo guardado se lee (nuevo con orden; viejo, sólo lugares; lugares rotos fuera; un orden roto se descarta entero y se avisa; nada útil = null)",
+    [...leidas, avisosConsola.length],
+    [{ piezas: { 1: { x: 1, y: 2, k: 0.5 } }, orden: [2, 0, 1] }, { piezas: { 1: { x: 1, y: 2, k: 0.5 } }, orden: undefined }, { piezas: { 1: { x: 1, y: 2, k: 0.5 } }, orden: undefined }, null, null, null, 2],
+  );
+  eq(
+    "capas: se marca sólo lo que la persona cambió de capa (subir el CTA al frente marca al CTA; cambiar dos de lugar, a una; nada, a ninguna)",
+    [[...cambiadasDeCapa([1, 2, 3, 4, 0], [0, 1, 2, 3, 4])], [...cambiadasDeCapa([0, 2, 1, 3], [0, 1, 2, 3])].length, [...cambiadasDeCapa([0, 1, 2], [0, 1, 2])], [...cambiadasDeCapa([], [])]],
+    [[0], 1, [], []],
+  );
+  eq(
+    "capas: dos de al lado que cambian de lugar es un empate; se marca la que la persona movió (sin saberlo, una de las dos)",
+    [[...cambiadasDeCapa([1, 0], [0, 1], new Set([1]))], [...cambiadasDeCapa([1, 0], [0, 1], new Set([0]))], [...cambiadasDeCapa([1, 0], [0, 1])].length, [...cambiadasDeCapa([1, 2, 3, 4, 0], [0, 1, 2, 3, 4], new Set([1, 0]))]],
+    [[1], [0], 1, [0]],
+  );
+  // Mismos lugares, otro orden: la caché no puede devolver la primera.
+  const mismoLugar = { 0: { x: 5, y: 5, k: 1 } };
+  const sinOrdenR = revisarMedida([M2R], 1200, 627, { edicion: { piezas: mismoLugar } }), otroOrdenR = revisarMedida([M2R], 1200, 627, { edicion: { piezas: mismoLugar, orden: [...autoR].reverse() } });
+  ok("capas: mismos lugares y otro orden → otro resultado (el orden va en la clave de la caché)", sinOrdenR !== otroOrdenR && otroOrdenR.acomodo.puestas.map((q) => q.pieza).join() === [...autoR].reverse().join() && sinOrdenR.acomodo.puestas.map((q) => q.pieza).join() === autoR.join());
+  // El PSD de capas planas lleva las carpetas en el orden de la medida (de abajo hacia arriba).
+  const planoOrden = readPsdAg(writePsdBuffer(psdDeMedida(M2R, otroOrdenR.acomodo, 1200, 627), { noBackground: true }), { skipLayerImageData: true, skipCompositeImageData: true });
+  eq("capas: el PSD de capas planas sale en el orden elegido", planoOrden.children.map((l) => l.name).filter((n) => n !== "BACKGROUND"), [...autoR].reverse().map((i) => M2R.piezas[i].nombre));
+  ok("capas: revisarMedida lleva el orden en su clave (otro orden → otro acomodo, ya ordenado)", autoR.length === 2 && conOrdenR !== revisarMedida([M2R], 1200, 627) && conOrdenR.acomodo.puestas.map((q) => q.pieza).join() === [...autoR].reverse().join(), JSON.stringify(autoR));
+  eq("nombre de entrega: la medida de la mesa se cambia por la nueva; si no trae medida, se agrega", [nombreSalida(M45, 1200, 627), nombreSalida(M916, 320, 50), nombreSalida({ ...M45, nombre: "ANUNCIO" }, 600, 500)], ["APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_EC_V2_OCT26_RN", "APGIANTCARDUGC_320x50_WOMAN_REAL_STATIC_IDEAH2_EC_V2_OCT26_RN", "ANUNCIO_600x500"]);
+  // B29: el fondo movido y agrandado a mano en el editor (relativo: z sobre lo que justo cubre, y qué punto va al centro).
+  {
+    const auto = acomodar(M45, 1200, 627), ed = { piezas: {}, fondo: { z: 2, cx: 0.3, cy: 0.6 } };
+    const a = aplicarEdicion(M45, auto, ed, 1200, 627), f = a.fondo, kMin = Math.max(1200 / 1200, 627 / 1500);
+    const cubre = (g, W, H) => g.x <= 0 && g.y <= 0 && g.x + 1200 * g.k >= W - 1e-6 && g.y + 1500 * g.k >= H - 1e-6;
+    ok("B29 fondo a mano: sólo el fondo cambia (las piezas, igual), queda editada, al doble de lo que cubre, con el punto pedido al centro y cubriendo", a.editada === true && JSON.stringify(a.puestas) === JSON.stringify(auto.puestas) && Math.abs(f.k - 2 * kMin) < 1e-9 && Math.abs(600 - (f.x + 0.3 * 1200 * f.k)) < 1e-6 && Math.abs(313.5 - (f.y + 0.6 * 1500 * f.k)) < 1e-6 && cubre(f, 1200, 627), JSON.stringify(f));
+    const lejos = fondoDeEdicion(M45, 1200, 627, { z: 9, cx: -5, cy: 7 }), chico = fondoDeEdicion(M45, 1200, 627, { z: 0.2, cx: 0.5, cy: 0.5 });
+    ok(`B29 fondo a mano: el tamaño se queda entre 1 y ${FONDO_EDITOR_MAX} y nunca deja un hueco (pegado a la orilla)`, Math.abs(lejos.k - FONDO_EDITOR_MAX * kMin) < 1e-9 && cubre(lejos, 1200, 627) && lejos.x === 0 && Math.abs(chico.k - kMin) < 1e-9 && cubre(chico, 1200, 627));
+    const ida = edicionDeFondo(M45, 1200, 627, f), vuelta = fondoDeEdicion(M45, 1200, 627, ida);
+    ok("B29 fondo a mano: de lo puesto a lo guardado y de vuelta, el mismo lugar", ["k", "x", "y"].every((c) => Math.abs(vuelta[c] - f[c]) < 1e-6));
+    eq("B29 leerEdicion: guarda el fondo; uno raro se descarta; sólo el fondo también es una edición", [leerEdicion({ piezas: {}, fondo: { z: 1.5, cx: 0.4, cy: 0.5 } }, 6)?.fondo, leerEdicion({ piezas: {}, fondo: { z: "2", cx: 0, cy: 0 } }, 6), leerEdicion({ fondo: { z: NaN, cx: 0, cy: 0 } }, 6)], [{ z: 1.5, cx: 0.4, cy: 0.5 }, null, null]);
+    eq("B29 copiarEdicion: el fondo va tal cual a la hermana y, volteada, reflejado", [copiarEdicion(ed, M45.piezas, { w: 1200, h: 627 }, { w: 1280, h: 720 }, "igual").fondo, copiarEdicion(ed, M45.piezas, { w: 1200, h: 627 }, { w: 1280, h: 720 }, "igual", true).fondo.cx], [{ z: 2, cx: 0.3, cy: 0.6 }, 0.7]);
+    ok("B29 sin fondo a mano, el acomodo es el mismo objeto (nada se recalcula)", aplicarEdicion(M45, auto, { piezas: {} }, 1200, 627) === auto);
+  }
+  // B29: la entrega por ratio lleva el ratio y la red de ese ratio (como sus archivos: «CMHEROWOMEN_191x1_…_GG_V1»).
+  eq("entrega por ratio: el nombre lleva el ratio y la red de ese ratio", [nombreSalida(M45, 1200, 628, "ratio"), nombreSalida(M45, 1200, 1200, "ratio"), nombreSalida(M45, 1080, 1920, "ratio"), nombreSalida(M45, 1080, 1350, "ratio")], ["APGIANTCARDUGC_191x1_WOMAN_REAL_STATIC_IDEAH2_GG_V2_OCT26_RN", "APGIANTCARDUGC_1x1_WOMAN_REAL_STATIC_IDEAH2_GG_V2_OCT26_RN", "APGIANTCARDUGC_9x16_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "APGIANTCARDUGC_4x5_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN"]);
+  eq("entrega por ratio: una medida sin ratio conocido va en píxeles y su red no cambia; sin ficha de red no se agrega", [nombreSalida(M45, 1920, 1080, "ratio"), nombreSalida({ ...M45, nombre: "ANUNCIO_4x5" }, 1200, 628, "ratio"), nombreSalida({ ...M45, nombre: "ANUNCIO" }, 1080, 1920, "ratio")], ["APGIANTCARDUGC_1920x1080_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "ANUNCIO_191x1", "ANUNCIO_9x16"]);
+  eq("nombre con una promo '2x1', o con la medida al principio / al final: se cambia la ficha que tiene la forma de la mesa", [nombreSalida({ nombre: "BUENFIN_2x1_9x16_FB", w: 1080, h: 1920 }, 1200, 627), nombreSalida({ nombre: "4x5_AD", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_4X5", w: 1200, h: 1500 }, 600, 500), nombreSalida({ nombre: "AD_", w: 1200, h: 1500 }, 600, 500)], ["BUENFIN_2x1_1200x627_EC", "600x500_AD", "AD_600x500", "AD_600x500"]);
+
+  // Lo que encontró la revisión (2026-10-13). Cada caso se reprodujo ANTES de arreglarlo.
+  console.log("\n▶ v2 · acomodo: lo que no debe pasar callado");
+  {
+    const ma = RAROS["calcomanía junto al pie"], a = acomodar(ma, 768, 1024);
+    const f = a.puestas.find((q) => ma.piezas[q.pieza].rol === "FOOTER"), st = a.puestas.find((q) => ma.piezas[q.pieza].nombre === "STICKER");
+    ok("el pie crece (regla del legal) pero nunca encima de una pieza que tiene al lado", f.k > 0.64 + 0.01 && solapa(f, st) === 0, JSON.stringify({ f, st }));
+  }
+  const zg = acomodar(M45, 1000, 500, { zona: { top: 0, right: 600, bottom: 0, left: 600 } });
+  ok("una zona segura más grande que la medida: se avisa y se acomoda sin ella (antes salían tamaños negativos)", zg.avisos.filter((v) => v.tipo === "zona").length === 1 && JSON.stringify(zg.puestas) === JSON.stringify(acomodar(M45, 1000, 500).puestas));
+  ok("zona con valores que no son medidas (NaN, negativos, infinito) cuenta como sin zona", JSON.stringify(acomodar(M45, 1280, 720, { zona: { top: NaN, right: -50, bottom: undefined, left: Infinity } })) === JSON.stringify(acomodar(M45, 1280, 720)));
+  const aplanado = { ...M45, piezas: M45.piezas.map((p) => (p.rol === "FOOTER" ? { ...p, letraMinPx: null } : p)) };
+  ok("legal aplanado (su letra no se puede medir): se avisa en cuanto se reduce, nunca se quita; a su tamaño, nada", acomodar(aplanado, 600, 500).avisos.some((v) => v.tipo === "letra" && v.texto.includes("FOOTER")) && acomodar(aplanado, 320, 50).avisos.some((v) => v.tipo === "letra" && v.texto.includes("FOOTER")) && !acomodar(aplanado, 320, 50).quitadas.some((i) => aplanado.piezas[i].rol === "FOOTER") && acomodar(aplanado, 1200, 1500).avisos.length === 0);
+  eq("una medida vertical lejos de la forma del maestro sale con aviso; ninguna de las 12 del equipo lo lleva", [acomodar(M45, 1080, 1920).avisos.map((v) => v.tipo), hechos.some((x) => x.a.avisos.some((v) => v.tipo === "forma"))], [["forma"], false]);
+  const rotas = acomodar({ ...M45, piezas: [...M45.piezas, pz("HERO", 0, 0, 0, 100), pz("CTA", NaN, 5, 10, 10)] }, 1200, 627);
+  ok("una caja vacía o con NaN no se coloca y se avisa", rotas.puestas.length === 6 && rotas.avisos.filter((v) => v.tipo === "falta" && v.texto.includes("inválida")).length === 2, JSON.stringify(rotas.avisos));
+  const heroRoto = acomodar({ ...M45, piezas: M45.piezas.map((p) => (p.rol === "HERO" ? pz("HERO", NaN, 508, 788, 791) : p)) }, 1200, 627);
+  ok("HERO con caja inválida: se avisa y el fondo sigue con números de verdad", [heroRoto.fondo.k, heroRoto.fondo.x, heroRoto.fondo.y].every(Number.isFinite) && heroRoto.avisos.some((v) => v.tipo === "falta" && v.texto.includes("HERO")));
+  const doble = acomodar({ ...M45, piezas: [...M45.piezas, pz("HERO", 100, 100, 300, 300)] }, 1200, 627);
+  ok("dos carpetas HERO: se coloca una y la otra se avisa por lo que es", doble.puestas.length === 6 && doble.avisos.some((v) => v.tipo === "falta" && v.texto.includes("más de una carpeta «HERO»")), JSON.stringify(doble.avisos));
+  eq("lista de mesas vacía → −1; una medida que no es un número positivo → error claro", [elegirMaestro([], 100, 100), [Infinity, NaN, 0, -5].map((W) => { try { acomodar(M45, W, 100); return "sigue"; } catch { return "error"; } })], [-1, ["error", "error", "error", "error"]]);
+}
+
+// ── v2 · la pantalla de la puerta PSD: lo que NO depende del navegador ─────────
+console.log("\n▶ v2 · pantalla PSD: una medida completa, la guía de zona segura y lo que cruza del worker");
+{
+  const pz = (nombre, x, y, w, h, letraMinPx = null) => ({ nombre, rol: rolDe(nombre), solido: { x, y, w, h }, letraMinPx });
+  const M916 = { nombre: "AD_9x16_FB", w: 1080, h: 1920, piezas: [pz("FOOTER", 131, 1485, 818, 70, 16), pz("HERO", 105, 558, 692, 695), pz("CTA", 365, 1290, 348, 110, 51.2), pz("Subtitulo", 632, 625, 338, 194, 31.9), pz("TITULO", 193, 336, 681, 176, 34.8), pz("BRAND", 312, 202, 457, 80)] };
+  const M45 = { nombre: "AD_4x5_FB", w: 1200, h: 1500, piezas: [pz("FOOTER", 204, 1361, 790, 62, 16), pz("HERO", 113, 508, 788, 791), pz("CTA", 788, 856, 306, 97, 45), pz("Subtitulo", 684, 617, 383, 194, 32), pz("TITULO", 188, 238, 824, 212, 42), pz("BRAND", 364, 86, 472, 83)] };
+  const lista = leerMedidas(MEDIDAS_EQUIPO);
+  eq("la lista con la que arranca la pantalla son las 12 medidas del equipo, todas válidas y dentro del tope", [lista.medidas.length, lista.fuera, lista.medidas.length <= MEDIDAS_MAX, lista.medidas[0], lista.medidas[11]], [12, [], true, { w: 1080, h: 1920 }, { w: 320, h: 50 }]);
+  // B29: la entrega por ratio, en la medida de cada red de su tabla; cada una lleva su ratio en el nombre.
+  const ratios = leerMedidas(MEDIDAS_RATIO);
+  eq("la lista por ratio: las 4 medidas de su tabla, cada una con su ratio en el nombre", [ratios.fuera, ratios.medidas.map((m) => nombreSalida({ nombre: "AD_9x16", w: 1080, h: 1920 }, m.w, m.h, "ratio"))], [[], ["AD_1x1", "AD_191x1", "AD_9x16", "AD_4x5"]]);
+  // Zona segura POR CANAL (Pedro, 2026-10-14): sin canal no hay guía; con canal, sólo en 9:16 y sus escalas.
+  const r1 = (z) => z && Object.fromEntries(Object.entries(z).map(([k, v]) => [k, Math.round(v * 10) / 10]));
+  eq("sin canal elegido no se marca nada, ni en 9:16", [zonaCanal(null, 1080, 1920), zonaCanal(undefined, 1080, 1920), zonaCanal("instagram", 1080, 1920), zonaCanal("__proto__", 1080, 1920)], [null, null, null, null]);
+  eq("con canal: sólo en 9:16 y sus escalas directas", lista.medidas.filter((m) => zonaCanal("tiktok", m.w, m.h)).map((m) => `${m.w}x${m.h}`), ["1080x1920", "720x1280"]);
+  eq("es916 = la misma regla que decide dónde hay guía", lista.medidas.filter((m) => es916(m.w, m.h)).map((m) => `${m.w}x${m.h}`), ["1080x1920", "720x1280"]);
+  eq("Stories (Instagram y Facebook): 14 % arriba y 20 % abajo, sin costados", [r1(zonaCanal("ig-stories", 1080, 1920)), r1(zonaCanal("fb-stories", 1080, 1920))], [{ top: 268.8, right: 0, bottom: 384, left: 0 }, { top: 268.8, right: 0, bottom: 384, left: 0 }]);
+  eq("Reels (Instagram y Facebook): 14 % arriba, 35 % abajo y 6 % a cada lado", [r1(zonaCanal("ig-reels", 1080, 1920)), r1(zonaCanal("fb-reels", 1080, 1920))], [{ top: 268.8, right: 64.8, bottom: 672, left: 64.8 }, { top: 268.8, right: 64.8, bottom: 672, left: 64.8 }]);
+  eq("TikTok: los px que dio Pedro sobre 1080×1920 (el extremo seguro de cada rango) y su escala en 720×1280", [r1(zonaCanal("tiktok", 1080, 1920)), r1(zonaCanal("tiktok", 720, 1280))], [{ top: 200, right: 120, bottom: 300, left: 0 }, { top: 133.3, right: 80, bottom: 200, left: 0 }]);
+  ok("cada canal tiene nombre visible y su zona deja lugar al anuncio (menos del 75 % de cada lado)", Object.values(CANALES).every((c) => c.nombre.length > 0 && c.pct.top + c.pct.bottom < 75 && c.pct.left + c.pct.right < 75) && Object.keys(CANALES).every(esCanal) && !esCanal("toString"));
+  eq("la frase de zona segura del prompt no cambió (los prompts siguen con su propia regla de historia)", zonaSeguraImagen({ ...specVacio("imagen_cero", "nanobanana", "x"), destino: "ig_story", aspect: "9:16" }), "Safe zone: subject and text centered, top 15% and bottom 20% clear");
+  eq("zonaCanal con medidas que no son medidas o que no son 9:16 → sin guía", [zonaCanal("tiktok", 0, 0), zonaCanal("tiktok", NaN, 5), zonaCanal("tiktok", 1080, 1080), zonaCanal("tiktok", 1920, 1080), zonaCanal("tiktok", 1200, 1500), zonaCanal("tiktok", -9, -16)], [null, null, null, null, null, null]);
+  const m916 = acomodarMedida([M916, M45], 1080, 1920);
+  ok("una medida completa: 9:16 sale de la mesa 9:16, y la zona del canal NO marca lo que colocó el diseñador (BRAND está dentro de ella)", m916.maestro === 0 && M916.piezas[5].solido.y < zonaCanal("ig-reels", 1080, 1920).top && m916.acomodo.avisos.length === 0, JSON.stringify(m916.acomodo.avisos));
+  const m627 = acomodarMedida([M916, M45], 1200, 627, { heroLado: "izquierda" });
+  ok("una medida completa: 1200×627 sale de la mesa 4:5 y respeta el lado pedido", m627.maestro === 1 && JSON.stringify(m627.acomodo) === JSON.stringify(acomodar(M45, 1200, 627, { heroLado: "izquierda" })));
+  eq("sin mesas no hay medida: error claro, no un índice inventado", (() => { try { acomodarMedida([], 100, 100); return "sigue"; } catch (e) { return e.message; } })(), "acomodarMedida: sin maestros");
+  eq("nombre de archivo: el de entrega del equipo cabe entero (antes se cortaba a 50) y un nombre con rutas o símbolos sale limpio", [limpiarNombre("APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", 120), limpiarNombre("../../etc/pa ss<wd>", 120), limpiarNombre("x".repeat(300), 120).length, limpiarNombre("x".repeat(300)).length], ["APGIANTCARDUGC_1200x627_WOMAN_REAL_STATIC_IDEAH2_FB_V2_OCT26_RN", "etc-pa-ss-wd", 120, 50]);
+
+  // Lo que el worker le manda a la pantalla.
+  const W2 = 4, H2 = 3;
+  const fondoRgb = Uint8ClampedArray.from({ length: W2 * H2 * 3 }, (_, i) => (i * 7) % 256);
+  const rgba = new Uint8ClampedArray(2 * 2 * 4).fill(9), osc = Uint8ClampedArray.from({ length: 2 * 2 * 3 }, (_, i) => 100 + i);
+  const base = new Uint8ClampedArray(16).fill(3), alfaTexto = new Uint8ClampedArray(6).fill(200);
+  const texto = { capa: "Pídela ya", texto: { texto: "x", tramos: [], alineacion: "left", transform: [1, 0, 0, 1, 0, 0], caja: null, motivo: null }, opacidad: 1, caja: { x: 1, y: 1, w: 3, h: 2 }, alfa: alfaTexto, motivo: null };
+  const crudo = { nombre: "mesa", w: W2, h: H2, fondo: fondoRgb, piezas: [{ nombre: "HERO", rol: "HERO", caja: { x: 0, y: 0, w: 2, h: 2 }, solido: { x: 0, y: 0, w: 2, h: 2 }, rgba, oscurece: osc, tapadaPct: 0, letraMinPx: null, textos: [], base: null }, { nombre: "CTA", rol: "CTA", caja: { x: 1, y: 1, w: 2, h: 2 }, solido: { x: 1, y: 1, w: 2, h: 2 }, rgba, oscurece: null, tapadaPct: 0, letraMinPx: 12, textos: [texto], base }], fondoDistintoPct: 0, rearmadoDistintoPct: 0, textoGamma: 1.45, avisos: ["nota"] };
+  const { maestro: listo, transferibles, bytes: pesoListo } = prepararMaestro(crudo);
+  eq("la gamma del texto de Photoshop viaja con el maestro", listo.textoGamma, 1.45);
+  eq("lo que pesa un maestro al cruzar a la página = fondo + color, sombra, pieza sin texto y tinta de cada texto (un búfer que comparten dos piezas cuenta una vez: cruza una vez)", pesoListo, W2 * H2 * 4 + 16 + 16 + 16 + 6);
+  ok("la pieza sin texto y la tinta de cada texto también cruzan sin copiarse", listo.piezas[1].base === base && listo.piezas[1].textos[0].alfa === alfaTexto && transferibles.includes(base.buffer) && transferibles.includes(alfaTexto.buffer));
+  ok("el fondo y el mapa de sombras llegan en RGBA opaco, con los mismos colores", listo.fondo.length === W2 * H2 * 4 && [...listo.fondo].every((v, i) => (i % 4 === 3 ? v === 255 : v === fondoRgb[Math.floor(i / 4) * 3 + (i % 4)])) && listo.piezas[0].oscurece.length === 16 && [...listo.piezas[0].oscurece].every((v, i) => (i % 4 === 3 ? v === 255 : v === osc[Math.floor(i / 4) * 3 + (i % 4)])) && listo.piezas[1].oscurece === null);
+  ok("las piezas conservan su orden, rol, cajas y letra; los píxeles van sin copiar", listo.piezas.map((p) => p.rol).join() === "HERO,CTA" && listo.piezas[1].letraMinPx === 12 && listo.piezas[0].rgba === rgba && listo.avisos[0] === "nota" && listo.piezas[1].caja.x === 1);
+  ok("cada búfer se transfiere UNA vez aunque dos piezas lo compartan (repetido tumbaría el postMessage)", transferibles.length === new Set(transferibles).size && transferibles.length === 5 && transferibles.includes(rgba.buffer), String(transferibles.length));
+  // Tope de lienzos: una lista pegada no puede pedir 2 GB de memoria.
+  const g = { w: 4096, h: 4096 }, c = { w: 320, h: 50 };
+  eq("las 12 del equipo caben todas", medidasQueCaben(lista.medidas), { caben: lista.medidas, fuera: 0 });
+  eq("30 medidas de 4096×4096 (2 GB de lienzos): sólo entran las que caben en el tope de píxeles, y se dice cuántas no", (({ caben, fuera }) => [caben.length, fuera, caben.reduce((s, m) => s + m.w * m.h, 0) <= MEDIDAS_PX_MAX])(medidasQueCaben(Array.from({ length: 30 }, () => g))), [4, 26, true]);
+  eq("una enorme en medio no le quita su lugar a las chicas que vienen después, y se respeta el orden", medidasQueCaben([g, g, g, g, g, c, { w: 300, h: 250 }]).caben.map((m) => m.w), [4096, 4096, 4096, 4096, 320, 300]);
+  eq(`más de ${MEDIDAS_MAX} medidas chicas: entran ${MEDIDAS_MAX}`, (({ caben, fuera }) => [caben.length, fuera])(medidasQueCaben(Array.from({ length: 45 }, () => c))), [MEDIDAS_MAX, 15]);
+  ok("el tope de peso es uno solo: el que revisa la pantalla es el que aplica el lector", (() => { try { leerPsd(new Uint8Array(0).subarray(0)); } catch { /* vacío: otro error */ } try { leerPsd({ byteLength: PSD_BYTES_MAX + 1 }); return false; } catch (e) { return e instanceof ErrorPsd && e.motivo === "demasiado-grande"; } })());
+}
+
+// ── v2 · nitidez A: el filtro propio con piezas hechas a mano ─────────
+console.log("\n▶ v2 · nitidez: filtro propio (Lanczos-3, alfa premultiplicada, enfoque sólo en texto)");
+{
+  const lleno = (w, h, c) => { const d = new Uint8ClampedArray(w * h * 4); for (let i = 0; i < w * h; i++) d.set(c, i * 4); return d; };
+  // Fondo blanco 200×200; una pieza roja de 100×100 con un borde transparente de 10 px alrededor (caja 120×120).
+  const pieza = new Uint8ClampedArray(120 * 120 * 4);
+  for (let y = 10; y < 110; y++) for (let x = 10; x < 110; x++) pieza.set([255, 0, 0, 255], (y * 120 + x) * 4);
+  const ma = { w: 200, h: 200, fondo: lleno(200, 200, [255, 255, 255, 255]), piezas: [{ rol: "HERO", caja: { x: 40, y: 40, w: 120, h: 120 }, solido: { x: 50, y: 50, w: 100, h: 100 }, rgba: pieza, oscurece: null }] };
+  const conK = (k, x, y) => ({ familia: "display", puestas: [{ pieza: 0, k, x, y, w: 100 * k, h: 100 * k }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] });
+  const px = armarMedida(ma, conK(0.37, 33.3, 41.7), 200, 200);
+  let rojoMin = 255;
+  for (let i = 0; i < 200 * 200; i++) rojoMin = Math.min(rojoMin, px[i * 4]);
+  ok(`alfa premultiplicada: rojo sobre blanco reducido al 37 % en posición fraccionaria, sin orilla oscura (rojo mínimo ${rojoMin}, debe ser 255)`, rojoMin >= 254);
+  // El fondo siempre cubre: ampliado un poco y corrido medio píxel, las orillas no se oscurecen (se extiende la orilla).
+  const fondoDeg = new Uint8ClampedArray(100 * 100 * 4);
+  for (let y = 0; y < 100; y++) for (let x = 0; x < 100; x++) fondoDeg.set([x * 2, 100, 200 - y, 255], (y * 100 + x) * 4);
+  const f = armarMedida({ w: 100, h: 100, fondo: fondoDeg, piezas: [] }, { familia: "igual", puestas: [], fondo: { k: 1.07, x: -0.5, y: -3.2 }, letras: [], avisos: [], quitadas: [] }, 104, 100);
+  const esquinas = [0, 103, 99 * 104, 99 * 104 + 103].map((i) => [f[i * 4], f[i * 4 + 1], f[i * 4 + 2]]);
+  ok(`fondo ampliado y corrido: las esquinas conservan su color, sin negro de "afuera" (${JSON.stringify(esquinas)})`, esquinas.every((c) => c[1] >= 98 && c[2] >= 90));
+  const mitad = armarMedida({ w: 100, h: 100, fondo: fondoDeg, piezas: [] }, { familia: "igual", puestas: [], fondo: { k: 0.5, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] }, 50, 50);
+  ok(`fondo reducido a la mitad: la orilla conserva su color (verde ${mitad[1]} y ${mitad[(49 * 50 + 49) * 4 + 1]}, debe ser ~100)`, Math.abs(mitad[1] - 100) <= 2 && Math.abs(mitad[(49 * 50 + 49) * 4 + 1] - 100) <= 2);
+  // Al reducir, el filtro se ensancha: un ajedrez de 1 px reducido a un tercio sale gris parejo, sin rayas (moiré).
+  const ajedrez = new Uint8ClampedArray(99 * 99 * 4);
+  for (let y = 0; y < 99; y++) for (let x = 0; x < 99; x++) { const v = (x + y) % 2 ? 255 : 0; ajedrez.set([v, v, v, 255], (y * 99 + x) * 4); }
+  const gris = armarMedida({ w: 99, h: 99, fondo: ajedrez, piezas: [] }, { familia: "igual", puestas: [], fondo: { k: 1 / 3, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] }, 33, 33);
+  let gmin = 255, gmax = 0;
+  for (let y = 3; y < 30; y++) for (let x = 3; x < 30; x++) { const v = gris[(y * 33 + x) * 4]; gmin = Math.min(gmin, v); gmax = Math.max(gmax, v); }
+  ok(`ajedrez de 1 px a un tercio: gris parejo (de ${gmin} a ${gmax}), sin moiré`, gmin >= 117 && gmax <= 138);
+  // Enfoque: sólo a piezas de texto y sólo al reducirlas por debajo de ENFOQUE_DESDE.
+  const conRol = (rol) => ({ ...ma, piezas: [{ ...ma.piezas[0], rol }] });
+  const igual = (a, b) => a.every((v, i) => v === b[i]);
+  const chico = conK(0.4, 20, 20), casi = conK(ENFOQUE_DESDE + 0.01, 20, 20);
+  ok("el enfoque cambia una pieza de TEXTO reducida", !igual(armarMedida(conRol("TITULO"), chico, 200, 200), armarMedida(conRol("TITULO"), chico, 200, 200, { enfoque: false })));
+  ok("el enfoque NO toca al HERO ni a la marca, ni a un texto casi a su tamaño", ["HERO", "BRAND"].every((r) => igual(armarMedida(conRol(r), chico, 200, 200), armarMedida(conRol(r), chico, 200, 200, { enfoque: false }))) && igual(armarMedida(conRol("TITULO"), casi, 200, 200), armarMedida(conRol("TITULO"), casi, 200, 200, { enfoque: false })));
+  // Sombra (multiplicar): oscurece lo de abajo sólo dentro de su caja.
+  const osc = lleno(120, 120, [128, 128, 128, 255]);
+  const conSombra = { ...ma, piezas: [{ ...ma.piezas[0], rgba: new Uint8ClampedArray(120 * 120 * 4), oscurece: osc }] };
+  const ps = armarMedida(conSombra, conK(1, 50, 50), 200, 200);
+  eq("sombra a su tamaño: dentro de su caja el blanco queda a la mitad; justo afuera de la caja y lejos, intacto", [ps[(100 * 200 + 100) * 4], ps[(100 * 200 + 39) * 4], ps[(5 * 200 + 5) * 4]], [128, 255, 255]);
+  // Texto vuelto a escribir: la pieza va SIN sus letras (base) y encima lo que devuelva `texto`.
+  const conLetras = new Uint8ClampedArray(pieza);
+  for (let y = 50; y < 60; y++) for (let x = 30; x < 90; x++) conLetras.set([255, 255, 255, 255], (y * 120 + x) * 4);
+  const conBase = { ...ma, piezas: [{ ...ma.piezas[0], rol: "CTA", rgba: conLetras, base: pieza }] };
+  const punto = (color) => (_p, l) => { const o = new Float32Array((l.x1 - l.x0) * (l.y1 - l.y0) * 4); o.set(color, ((100 - l.y0) * (l.x1 - l.x0) + (100 - l.x0)) * 4); return o; };
+  const verde = punto([0, 255, 0, 255]);
+  // Al 120 % la pieza cubre de 38 a 182 y sus letras viejas caerían en y 98-110, x 74-146.
+  const k12 = conK(1.2, 50, 50), k1 = conK(1, 50, 50);
+  const esc = armarMedida(conBase, k12, 200, 200, { texto: verde });
+  let blancas = 0;
+  for (let y = 99; y < 110; y++) for (let x = 76; x < 145; x++) if (esc[(y * 200 + x) * 4 + 1] === 255 && esc[(y * 200 + x) * 4] === 255) blancas++;
+  eq("con texto escrito: va la base (sin las letras viejas) y encima las nuevas", [blancas, [...esc.subarray((100 * 200 + 100) * 4, (100 * 200 + 100) * 4 + 3)]], [0, [0, 255, 0]]);
+  const igualA = (a, b) => a.every((v, i) => v === b[i]);
+  let llamadas = 0;
+  ok("texto que devuelve null (no pasó la prueba): sale la pieza entera, como sin texto", igualA(armarMedida(conBase, k12, 200, 200, { texto: () => null }), armarMedida(conBase, k12, 200, 200)));
+  armarMedida({ ...conBase, piezas: [{ ...conBase.piezas[0], base: null }] }, k12, 200, 200, { texto: () => (llamadas++, null) });
+  eq("pieza sin base (algún texto no se puede redibujar): ni se pregunta por su texto", llamadas, 0);
+  const conto = (k) => { let n = 0; const px = armarMedida(conBase, conK(k, 50, 50), 200, 200, { texto: (p, l) => (n++, verde(p, l)) }); return [n, igualA(px, armarMedida(conBase, conK(k, 50, 50), 200, 200))]; };
+  eq(`a su tamaño (escala a menos de ${ESCRIBIR_LEJOS_DE_1 * 100} % de 1) van las letras de Photoshop tal cual: ni se pregunta`, [conto(1), conto(1.019), conto(0.981)], [[0, true], [0, true], [0, true]]);
+  eq("apenas fuera de ese margen ya se escribe", [conto(1.02)[0], conto(0.98)[0]], [1, 1]);
+  // Mezcla del texto escrito: el legal del PSD real, color (58, 41, 50) al 60 % sobre (240, 222, 211).
+  const legal = { w: 200, h: 200, fondo: lleno(200, 200, [240, 222, 211, 255]), piezas: [{ ...conBase.piezas[0], rol: "FOOTER", rgba: new Uint8ClampedArray(120 * 120 * 4), base: new Uint8ClampedArray(120 * 120 * 4) }] };
+  const tinta60 = punto([58 * 0.6, 41 * 0.6, 50 * 0.6, 153]);
+  const enLegal = (g) => [...armarMedida({ ...legal, textoGamma: g }, k12, 200, 200, { texto: tinta60 }).subarray((100 * 200 + 100) * 4, (100 * 200 + 100) * 4 + 3)];
+  const g145 = [58, 41, 50].map((t, c) => Math.round(255 * Math.pow(0.6 * Math.pow(t / 255, 1.45) + 0.4 * Math.pow([240, 222, 211][c] / 255, 1.45), 1 / 1.45)));
+  eq("texto escrito con la mezcla normal (gamma 1 o sin dato): 60 % de su color + 40 % de lo de abajo", [enLegal(1), enLegal(undefined)], [[131, 113, 114], [131, 113, 114]]);
+  eq(`con gamma 1.45, como Photoshop: más claro (${g145}), cerca de lo que trae la copia aplanada del PSD real (146, 131, 128)`, enLegal(1.45), g145);
+}
+
+// ── v2 · nitidez C: el texto se vuelve a escribir con su tipografía ─────────
+console.log("\n▶ v2 · nitidez C: textos del PSD, su maqueta, las tipografías y la prueba contra Photoshop");
+{
+  const st = { font: { name: "F-Bold" }, fontSize: 20, fillColor: { r: 255, g: 10, b: 0 } };
+  const t1 = textoDe({ text: "Hola\rmundo", transform: [2, 0, 0, 2, 10, 20], style: st, styleRuns: [{ length: 5, style: {} }, { length: 5, style: { font: { name: "F-Regular" }, fontCaps: 2 } }], paragraphStyle: { justification: "center" } });
+  eq("textoDe: \\r pasa a \\n, cada corrida hereda el estilo base, centrado, texto de punto", [t1.texto, t1.tramos.map((r) => [r.n, r.fuente, r.tam, r.color, r.mayusculas]), t1.alineacion, t1.caja, t1.motivo], ["Hola\nmundo", [[5, "F-Bold", 20, [255, 10, 0], false], [5, "F-Regular", 20, [255, 10, 0], true]], "center", null, null]);
+  const t2 = textoDe({ text: "a\u0003b", shapeType: "box", boxBounds: [0, 0, 100, 40], style: { ...st, autoLeading: false, leading: 30 } });
+  eq("textoDe: caja de párrafo, salto forzado (\\u0003) e interlineado fijo", [t2.texto, t2.caja, t2.tramos[0].interlineado], ["a\nb", [0, 0, 100, 40], 30]);
+  eq("textoDe: interlineado automático queda null (120 % al maquetar)", textoDe({ text: "a", style: { ...st, autoLeading: true, leading: 30 } }).tramos[0].interlineado, null);
+  const casos = [
+    [{ style: { ...st, fauxBold: true } }, "negrita o cursiva falsa"],
+    [{ style: { ...st, horizontalScale: 0.9 } }, "letra estirada"],
+    [{ style: { ...st, fontCaps: 1 } }, "versalitas"],
+    [{ style: { ...st, underline: true } }, "subrayado o tachado"],
+    [{ style: { ...st, strokeFlag: true } }, "contorno de letra"],
+    [{ style: st, warp: { style: "arc" } }, "texto deformado"],
+    [{ style: st, orientation: "vertical" }, "texto vertical"],
+    [{ style: st, styleRuns: [{ length: 2, style: {} }] }, "tramos que no cubren el texto"],
+    [{ style: st, paragraphStyle: { justification: "left" }, paragraphStyleRuns: [{ length: 4, style: { justification: "center" } }] }, "párrafos con distinta alineación"],
+    [{ style: st, paragraphStyle: { justification: "justifyAll" } }, "alineación «justifyAll»"],
+    [{ style: { fontSize: 20 } }, "tramo sin tipografía o tamaño"],
+    [{ style: st, shapeType: "box", boxBounds: [0, 0, NaN, 9] }, "caja de párrafo ilegible"],
+  ];
+  eq("textoDe: corridas de largo 0 no cuentan (la librería las conserva)", textoDe({ text: "abcd", style: st, styleRuns: [{ length: 0, style: { font: { name: "Otra" } } }, { length: 4, style: {} }] }).tramos.map((r) => [r.n, r.fuente]), [[4, "F-Bold"]]);
+  const muchas = textoDe({ text: "a".repeat(65), style: st, styleRuns: Array.from({ length: 65 }, () => ({ length: 1, style: {} })) });
+  eq("textoDe: más de 64 cambios de estilo: va como imagen sin maquetarlo (y sin un motivo de más)", [muchas.motivo, muchas.tramos.length], ["demasiados cambios de estilo", 0]);
+  eq("textoDe: el nombre de la tipografía llega sin caracteres de control ni de dirección", textoDe({ text: "a", style: { ...st, font: { name: "F-\u202eBold\u0007" } } }).tramos[0].fuente, "F-Bold");
+  eq("textoDe: lo que no se puede escribir igual lleva su motivo (y va como imagen)", casos.map(([t, m]) => { const mo = textoDe({ text: "abcd", ...t }).motivo; return mo?.includes(m) ? m : mo; }), casos.map(([, m]) => m));
+
+  // maquetar con un medidor falso: cada letra mide medio tamaño; "sube" sólo es razonable para la "d".
+  const medir = (texto, tramo) => ({ ancho: texto.length * tramo.tam * 0.5, sube: texto === "d" ? tramo.tam * 0.7 : 999 });
+  const lin = (ls) => ls.map((l) => [+l.base.toFixed(3), l.pedazos.map((p) => [p.texto, +p.x.toFixed(3)])]);
+  eq("maquetar, texto de punto: base de la primera en 0, centrado en x = 0, mayúsculas aplicadas, 120 % de interlineado", lin(maquetar(t1, medir)), [[0, [["Hola", -20]]], [24, [["MUNDO", -25]]]]);
+  const mezcla = textoDe({ text: "ab\ncd", style: st, styleRuns: [{ length: 3, style: {} }, { length: 1, style: { fontSize: 40 } }, { length: 1, style: {} }] });
+  eq("maquetar: el interlineado automático sale de la letra MÁS GRANDE de esa línea", lin(maquetar(mezcla, medir)).map((l) => l[0]), [0, 48]);
+  const dos = textoDe({ text: "abcd", style: st, styleRuns: [{ length: 2, style: {} }, { length: 2, style: { fontSize: 40 } }] });
+  eq("maquetar: dos tramos en una línea van uno tras otro", lin(maquetar(dos, medir)), [[0, [["ab", 0], ["cd", 20]]]]);
+  const caja = (just, ancho) => textoDe({ text: "aa bb cc", shapeType: "box", boxBounds: [10, 5, 10 + ancho, 60], style: st, paragraphStyle: { justification: just } });
+  eq("maquetar, caja: parte en palabras al ancho, y la primera base baja lo que sube la «d» (regla Ascent de Adobe)", lin(maquetar(caja("left", 60), medir)), [[19, [["aa bb", 10]]], [43, [["cc", 10]]]]);
+  eq("maquetar, caja: una línea que cabe justa no se parte; alineada a la derecha", lin(maquetar(caja("right", 50), medir)), [[19, [["aa bb", 10]]], [43, [["cc", 40]]]]);
+
+  // fuentesDe con tipografías mínimas hechas aquí (tabla de nombres + fvar).
+  const sfnt = ({ nombres, ejes = null, instancias = [], firma = 0x00010000, tamInst = null }) => {
+    const recs = Object.entries(nombres).map(([id, s]) => ({ id: +id, b: [...s].flatMap((ch) => [ch.charCodeAt(0) >> 8, ch.charCodeAt(0) & 255]) }));
+    const ini = 6 + recs.length * 12;
+    const name = new Uint8Array(ini + recs.reduce((s, r) => s + r.b.length, 0));
+    const nv = new DataView(name.buffer);
+    nv.setUint16(2, recs.length); nv.setUint16(4, ini);
+    let off = 0;
+    recs.forEach((r, i) => { const o = 6 + i * 12; nv.setUint16(o, 3); nv.setUint16(o + 2, 1); nv.setUint16(o + 4, 0x409); nv.setUint16(o + 6, r.id); nv.setUint16(o + 8, r.b.length); nv.setUint16(o + 10, off); name.set(r.b, ini + off); off += r.b.length; });
+    const tablas = [["name", name]];
+    if (ejes) {
+      const tam = tamInst ?? 4 + ejes.length * 4 + 2;
+      // + un estilo de más al final: con tamInst 0 todos se escriben en el mismo lugar y no deben salirse.
+      const fv = new Uint8Array(16 + ejes.length * 20 + instancias.length * tam + 4 + ejes.length * 4 + 2);
+      const fd = new DataView(fv.buffer);
+      fd.setUint16(0, 1); fd.setUint16(4, 16); fd.setUint16(6, 2); fd.setUint16(8, ejes.length); fd.setUint16(10, 20); fd.setUint16(12, instancias.length); fd.setUint16(14, tam);
+      ejes.forEach((t, i) => [...t].forEach((ch, k) => fd.setUint8(16 + i * 20 + k, ch.charCodeAt(0))));
+      instancias.forEach((ins, i) => { const o = 16 + ejes.length * 20 + i * tam; fd.setUint16(o, ins.sub); ins.coords.forEach((c, k) => fd.setInt32(o + 4 + k * 4, Math.round(c * 65536))); fd.setUint16(o + 4 + ejes.length * 4, ins.ps ?? 0xffff); });
+      tablas.push(["fvar", fv]);
+    }
+    let pos = 12 + tablas.length * 16;
+    const out = new Uint8Array(pos + tablas.reduce((s, [, b]) => s + b.length, 0));
+    const v = new DataView(out.buffer);
+    v.setUint32(0, firma); v.setUint16(4, tablas.length);
+    tablas.forEach(([tag, b], i) => { const o = 12 + i * 16; [...tag].forEach((ch, k) => v.setUint8(o + k, ch.charCodeAt(0))); v.setUint32(o + 8, pos); v.setUint32(o + 12, b.length); out.set(b, pos); pos += b.length; });
+    return out.buffer;
+  };
+  const fijas = (f) => f.map((x) => [x.ps, x.peso]);
+  eq("fuentesDe: una fija (.ttf y .otf) da su nombre PostScript, sin peso", [fijas(fuentesDe(sfnt({ nombres: { 1: "Fam", 6: "Fam-Medium" } }))), fijas(fuentesDe(sfnt({ nombres: { 6: "Fam-Bold" }, firma: 0x4f54544f })))], [[["Fam-Medium", null]], [["Fam-Bold", null]]]);
+  const variable = sfnt({
+    nombres: { 6: "FamVariable-Regular", 25: "FamVariable", 256: "Thin", 257: "Bold", 258: "Bold Italic", 259: "FamVariable-Black", 260: "Semi Bold" },
+    ejes: ["wght", "ital"],
+    instancias: [{ sub: 256, ps: 256, coords: [0, 0] }, { sub: 257, ps: 257, coords: [100, 0] }, { sub: 258, ps: 258, coords: [100, 100] }, { sub: 259, ps: 259, coords: [90, 0] }, { sub: 260, coords: [33, 0] }],
+  });
+  eq("fuentesDe: una variable da cada estilo NO cursivo como «prefijo-Estilo», con su peso (como lo guarda Photoshop)", fijas(fuentesDe(variable)), [["FamVariable-Thin", 0], ["FamVariable-Bold", 100], ["FamVariable-Black", 90], ["FamVariable-SemiBold", 33]]);
+  eq("fuentesDe: sin prefijo de familia, el prefijo sale del nombre PostScript", fijas(fuentesDe(sfnt({ nombres: { 6: "X-Regular", 256: "Bold" }, ejes: ["wght"], instancias: [{ sub: 256, ps: 256, coords: [700] }] }))), [["X-Bold", 700]]);
+  let lanzo = false;
+  try { fuentesDe(new ArrayBuffer(64)); } catch { lanzo = true; }
+  ok("fuentesDe: un archivo que no es tipografía lanza", lanzo);
+  // Tipografías del cliente (Admin › Marcas → Formatos): se validan por sus bytes y se eligen por nombre.
+  eq("leerTipografia: un .otf (OTTO) y un .ttf dicen su tipo por los bytes y traen sus nombres", [leerTipografia(sfnt({ nombres: { 6: "Fam-Bold" }, firma: 0x4f54544f })), leerTipografia(sfnt({ nombres: { 6: "Fam-Medium" } }))], [{ ext: "otf", nombres: ["Fam-Bold"] }, { ext: "ttf", nombres: ["Fam-Medium"] }]);
+  eq("leerTipografia: una variable trae un nombre por estilo", leerTipografia(variable)?.nombres, ["FamVariable-Thin", "FamVariable-Bold", "FamVariable-Black", "FamVariable-SemiBold"]);
+  eq("leerTipografia: lo que no es tipografía, una sin nombre usable (con espacio) o una de más de 4 MB: null", [leerTipografia(new ArrayBuffer(64)), leerTipografia(sfnt({ nombres: { 6: "Con espacio" } })), leerTipografia(new ArrayBuffer(TIPOGRAFIA_MAX_BYTES + 1))], [null, null, null]);
+  eq("nombresPedidos: sólo nombres válidos, sin repetir, con tope; lo que no es lista, nada", [nombresPedidos(["A-Bold", "A-Bold", "", "con espacio", 7, "x".repeat(128)]), nombresPedidos("A-Bold"), nombresPedidos(Array.from({ length: 100 }, (_, i) => `F-${i}`)).length], [["A-Bold"], [], NOMBRES_PEDIDOS_MAX]);
+  eq("archivoVisible: sin carpetas ni caracteres de control, con tope y nunca vacío", [archivoVisible("C:\\fuentes\\DiDi.otf"), archivoVisible("../../x\u0000y.ttf"), archivoVisible("a".repeat(200)).length, archivoVisible("/")], ["DiDi.otf", "xy.ttf", ARCHIVO_NOMBRE_MAX, "tipografía"]);
+  const guardadas = [{ id: "suelta", nombres: ["D-Medium"] }, { id: "var", nombres: ["DV-Thin", "DV-Bold"] }, { id: "otra", nombres: ["Otra-Bold"] }, { id: "repetida", nombres: ["D-Medium"] }];
+  const el1 = elegirTipografias(guardadas, ["D-Medium", "DV-Bold", "Falta-X"]);
+  const el2 = elegirTipografias(guardadas, ["D-Medium", "DV-Thin", "DV-Bold"]);
+  eq("elegirTipografias: sólo las que cubren lo pedido, cada nombre una vez (la repetida no va), primero la que cubre más; y lo que falta", [el1.elegidas.map((x) => x.id), el1.faltan, el2.elegidas.map((x) => x.id), el2.faltan], [["suelta", "var"], ["Falta-X"], ["var", "suelta"], []]);
+  eq(`elegirTipografias: a lo más ${ARCHIVOS_ENTREGADOS_MAX} archivos por PSD`, elegirTipografias(Array.from({ length: 40 }, (_, i) => ({ nombres: [`F-${i}`] })), Array.from({ length: 40 }, (_, i) => `F-${i}`)).elegidas.length, ARCHIVOS_ENTREGADOS_MAX);
+  eq("rutaTipografia: <cliente>/<huella>.<tipo> (la que exige la base)", rutaTipografia("c1", "ab", "otf"), "c1/ab.otf");
+  // Variables de Google: el estilo con nombre propio completo va tal cual (no "MontserratItalic-Montserrat-…"), y
+  // cada estilo responde también al nombre de su versión estática (lo que guarda el PSD si el diseñador usó ésa).
+  eq("fuentesDe: un estilo con nombre propio completo no lleva otro prefijo", fijas(fuentesDe(sfnt({ nombres: { 1: "Montserrat", 6: "Montserrat-ThinItalic", 25: "MontserratItalic", 256: "Bold Italic", 257: "Montserrat-BoldItalic" }, ejes: ["wght"], instancias: [{ sub: 256, ps: 257, coords: [700] }] }))), [["Montserrat-BoldItalic", 700]]);
+  eq("fuentesDe: un nombre de ESTILO con guion (sin nombre PostScript propio) sí lleva el prefijo", fijas(fuentesDe(sfnt({ nombres: { 6: "Fam-Regular", 25: "Fam", 256: "Semi-Bold" }, ejes: ["wght"], instancias: [{ sub: 256, coords: [600] }] }))), [["Fam-Semi-Bold", 600]]);
+  eq("fuentesDe: cada estilo de una variable responde también al nombre de su estática", fijas(fuentesDe(sfnt({ nombres: { 6: "OpenSansRoman-Regular", 16: "Open Sans", 25: "OpenSansRoman", 256: "Bold" }, ejes: ["wght"], instancias: [{ sub: 256, coords: [700] }] }))), [["OpenSansRoman-Bold", 700], ["OpenSans-Bold", 700]]);
+  // Exclusivas: sólo se entregan con su cliente elegido; las del cliente elegido ganan un empate.
+  const bib = [
+    { id: "didi-pro", client_id: "didi", exclusiva: true, cliente: "DiDi", nombres: ["DiDiSans-Pro-Bold"] },
+    { id: "otro-x", client_id: "otro", exclusiva: false, cliente: "Otro", nombres: ["Comun-Bold"] },
+    { id: "google-m", client_id: null, exclusiva: false, cliente: "Google Fonts", nombres: ["Montserrat-Bold"] },
+    { id: "didi-x", client_id: "didi", exclusiva: false, cliente: "DiDi", nombres: ["Comun-Bold"] },
+  ];
+  const ids = (xs) => xs.map((x) => x.id);
+  const todo = ["DiDiSans-Pro-Bold", "Comun-Bold", "Montserrat-Bold"];
+  const ep = (c) => { const r = elegirParaCliente(bib, todo, c); return [ids(r.elegidas), r.faltan]; };
+  eq("elegirParaCliente: sin cliente, ninguna exclusiva; con DiDi, la suya; con otro, sin la de DiDi", [ep(null), ep("didi"), ep("otro")], [[["otro-x", "google-m"], ["DiDiSans-Pro-Bold"]], [["didi-pro", "didi-x", "google-m"], []], [["otro-x", "google-m"], ["DiDiSans-Pro-Bold"]]]);
+  const grande = [{ id: "google-var", client_id: null, exclusiva: false, cliente: "Google Fonts", nombres: ["Comun-Bold", "Comun-Thin", "Comun-Black"] }, ...bib];
+  eq("elegirParaCliente: la del cliente elegido gana aunque otro archivo cubra más nombres", ids(elegirParaCliente(grande, ["Comun-Bold", "Comun-Thin"], "didi").elegidas), ["didi-x", "google-var"]);
+  eq(`elegirParaCliente: entre las dos vueltas, a lo más ${ARCHIVOS_ENTREGADOS_MAX} archivos`, elegirParaCliente(Array.from({ length: 40 }, (_, i) => ({ client_id: i < 20 ? "c" : null, exclusiva: false, nombres: [`F-${i}`] })), Array.from({ length: 40 }, (_, i) => `F-${i}`), "c").elegidas.length, ARCHIVOS_ENTREGADOS_MAX);
+  eq("exclusivasDeOtros: lo que falta y es exclusivo de otro cliente, por cliente; con su cliente elegido, nada", [exclusivasDeOtros(bib, ["DiDiSans-Pro-Bold", "Nadie-Bold"], null), exclusivasDeOtros(bib, ["DiDiSans-Pro-Bold"], "didi")], [[{ cliente: "DiDi", nombres: ["DiDiSans-Pro-Bold"] }], []]);
+  eq("rutaTipografia: las de Google van en google/<huella>.<tipo>", rutaTipografia("google", "ab", "ttf"), "google/ab.ttf");
+  ok("leerTipografia: hasta 10 MB sólo si se pide (las de Google)", leerTipografia(new ArrayBuffer(TIPOGRAFIA_MAX_BYTES + 1), TIPOGRAFIA_GOOGLE_MAX_BYTES) === null && TIPOGRAFIA_GOOGLE_MAX_BYTES === 10_000_000);
+  // Google Fonts: la carpeta sale del nombre; el METADATA dice qué archivos hay; sólo se bajan los que sirven.
+  eq("carpetaGoogle: lo de antes del guion, minúsculas y sin símbolos; muy corto, null", ["OpenSans-Bold", "Montserrat", "DiDiSans-Pro-Medium", "X-Bold", "-Bold", "Noto_Sans-Bold"].map(carpetaGoogle), ["opensans", "montserrat", "didisans", null, null, "notosans"]);
+  const md = `name: "Fake"\nfonts {\n  name: "Fake"\n  filename: "Fake-Regular.ttf"\n  post_script_name: "Fake-Regular"\n  copyright: "Copyright {2020} } raro"\n}\nfonts {\n  filename: "Fake-Bold.ttf"\n  post_script_name: "Fake-Bold"\n}\nfonts {\n  filename: "../malo.ttf"\n  post_script_name: "Malo"\n}\nfonts {\n  filename: "Fake-Bold.ttf"\n  post_script_name: "Fake-Bold"\n}\n`;
+  eq("archivosDeMetadata: cada archivo con su nombre, sin rutas raras ni repetidos (aunque el copyright traiga llaves)", archivosDeMetadata(md), [{ archivo: "Fake-Regular.ttf", ps: "Fake-Regular" }, { archivo: "Fake-Bold.ttf", ps: "Fake-Bold" }]);
+  eq("archivosQueSirven: las variables si las hay; si no, sólo las estáticas pedidas; con tope", [
+    archivosQueSirven([{ archivo: "V[wght].ttf", ps: "V-Thin" }, { archivo: "V-Italic[wght].ttf", ps: "V-ThinItalic" }], ["V-Bold"]),
+    archivosQueSirven(archivosDeMetadata(md), ["Fake-Bold"]),
+    archivosQueSirven(Array.from({ length: 20 }, (_, i) => ({ archivo: `S-${i}.ttf`, ps: `S-${i}` })), Array.from({ length: 20 }, (_, i) => `S-${i}`)).length,
+  ], [["V[wght].ttf", "V-Italic[wght].ttf"], ["Fake-Bold.ttf"], ARCHIVOS_POR_FAMILIA_MAX]);
+  {
+    const fakeBold = sfnt({ nombres: { 6: "Fake-Bold" } });
+    const pedidos = [];
+    // Un GitHub falso: "fake" está en apache (no en ofl); "nadiea" no está; "caido" responde 500.
+    const pedir = async (url) => {
+      pedidos.push(url.replace("https://raw.githubusercontent.com/google/fonts/main/", ""));
+      if (url.endsWith("/apache/fake/METADATA.pb")) return new Response(md);
+      if (url.endsWith("/apache/fake/Fake-Bold.ttf")) return new Response(fakeBold);
+      if (url.includes("/caido/")) return new Response("", { status: 500 });
+      return new Response("", { status: 404 });
+    };
+    const sinPlazo = new AbortController().signal;
+    const r = await buscarEnGoogle(["Fake-Bold", "Nadiea-Bold", "Caido-Bold"], sinPlazo, pedir);
+    eq("buscarEnGoogle: encuentra la familia en otra licencia y baja sólo el archivo pedido, leído de sus bytes", r.map((x) => [x.archivo, x.leida.nombres]), [["Fake-Bold.ttf", ["Fake-Bold"]]]);
+    pedidos.length = 0;
+    await buscarEnGoogle(["Nadiea-Regular", "Caido-Regular"], sinPlazo, pedir);
+    eq("buscarEnGoogle: lo que Google no tiene no se vuelve a buscar; lo que falló por la red, sí", pedidos, ["ofl/caido/METADATA.pb"]);
+    const mentira = async (url) => (url.endsWith("METADATA.pb") ? new Response(md.replace(/fake/gi, "Mentira").replace("apache", "ofl")) : new Response(sfnt({ nombres: { 6: "Otra-Cosa" } })));
+    eq("buscarEnGoogle: un archivo que no trae el nombre pedido no vuelve (manda lo que dicen sus bytes, no el METADATA)", (await buscarEnGoogle(["Mentira-Bold"], sinPlazo, mentira)).length, 0);
+    pedidos.length = 0;
+    await buscarEnGoogle(["Fake-Zzz"], sinPlazo, pedir);
+    await buscarEnGoogle(["Fake-Zzz"], sinPlazo, pedir);
+    eq("buscarEnGoogle: la familia está pero el estilo no: se baja una vez y luego se recuerda", pedidos, ["ofl/fake/METADATA.pb", "apache/fake/METADATA.pb"]);
+    // Un GitHub que manda archivos enormes sin decir su tamaño: se corta al pasar el tope, no se lee entero.
+    let servidos = 0;
+    const enorme = async (url) => {
+      if (url.endsWith("METADATA.pb")) return new Response(`fonts {\n filename: "Gorda[wght].ttf"\n post_script_name: "Gorda-Thin"\n}\n`);
+      return new Response(new ReadableStream({ pull(c) { servidos += 1_000_000; c.enqueue(new Uint8Array(1_000_000)); if (servidos > 3 * GOOGLE_BYTES_POR_PEDIDO) c.close(); } }));
+    };
+    eq("buscarEnGoogle: un archivo sin tamaño declarado se corta al pasar 10 MB (no se baja entero)", [(await buscarEnGoogle(["Gorda-Bold"], sinPlazo, enorme)).length, servidos <= 12_000_000], [0, true]);
+    const vencido = AbortSignal.abort();
+    pedidos.length = 0;
+    eq("buscarEnGoogle: con el plazo vencido no se pide nada", [(await buscarEnGoogle(["Otrafam-Bold"], vencido, pedir)).length, pedidos.length], [0, 0]);
+  }
+  // Archivos hechos a propósito: no congelan ni inventan estilos.
+  const bomba = (() => {
+    const cuenta = 65535, largo = 65534, ini = 6 + cuenta * 12;
+    const name = new Uint8Array(ini + largo);
+    const nv = new DataView(name.buffer);
+    nv.setUint16(2, cuenta);
+    for (let i = 0; i < cuenta; i++) { const o = 6 + i * 12; nv.setUint16(o, 3); nv.setUint16(o + 6, i); nv.setUint16(o + 8, largo); }
+    const out = new Uint8Array(12 + 16 + name.length);
+    const v = new DataView(out.buffer);
+    v.setUint32(0, 0x00010000); v.setUint16(4, 1);
+    [..."name"].forEach((ch, k) => v.setUint8(12 + k, ch.charCodeAt(0)));
+    v.setUint32(12 + 8, 28); v.setUint32(12 + 12, name.length);
+    out.set(name, 28);
+    return out.buffer;
+  })();
+  const t0b = performance.now();
+  let tiroBomba = false;
+  try { fuentesDe(bomba); } catch { tiroBomba = true; }
+  const msBomba = performance.now() - t0b;
+  ok(`fuentesDe: tabla de nombres con 65 535 nombres de 64 KB: no la decodifica entera (${msBomba.toFixed(0)} ms) y lanza (sin nombre PostScript usable)`, tiroBomba && msBomba < 500);
+  eq("fuentesDe: estilos de tamaño 0 (todos leen el mismo) no se creen: queda el nombre del archivo", fijas(fuentesDe(sfnt({ nombres: { 6: "Fam-Regular", 25: "Fam", 256: "Bold" }, ejes: ["wght"], instancias: [{ sub: 256, coords: [700] }, { sub: 256, coords: [700] }], tamInst: 0 }))), [["Fam-Regular", null]]);
+  eq("fuentesDe: dos estilos con el mismo nombre cuentan una vez", fijas(fuentesDe(sfnt({ nombres: { 6: "Fam-Regular", 25: "Fam", 256: "Bold" }, ejes: ["wght"], instancias: [{ sub: 256, coords: [700] }, { sub: 256, coords: [700] }] }))), [["Fam-Bold", 700]]);
+  const didi = join(homedir(), "Desktop/formatos-prueba/DiDi Sans Pro");
+  const vf = join(didi, "DiDiSansVariableVF/DiDiSansVariableVF.ttf"), med = join(didi, "DiDi Sans Pro/otf/DiDiSans-Pro-Medium.otf");
+  if (existsSync(vf) && existsSync(med)) {
+    const ab = (f) => { const b = readFileSync(f); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
+    eq("fuentesDe con las DiDi reales: la variable da sus 4 estilos con su peso; la Medium, su nombre", [fijas(fuentesDe(ab(vf))), fijas(fuentesDe(ab(med)))], [[["DiDiSansVariable-Thin", 0], ["DiDiSansVariable-Regular", 33], ["DiDiSansVariable-Medium", 66], ["DiDiSansVariable-Bold", 100]], [["DiDiSans-Pro-Medium", null]]]);
+  } else console.log("  · (las DiDi no están en el Escritorio: no se probó con las reales)");
+
+  // compararAlfa: cuánto correr el nuestro y qué tanto no coincide.
+  const w = 40, h = 10;
+  const bloque = (x0, y0, extra = []) => { const a = new Uint8Array(w * h); for (let y = y0; y < y0 + 3; y++) for (let x = x0; x < x0 + 3; x++) a[y * w + x] = 255; for (const [x, y, v] of extra) a[y * w + x] = v; return a; };
+  const psA = bloque(10, 3);
+  eq("compararAlfa: idéntico = sin corrimiento y 0 % distinto", compararAlfa(psA, psA, w, h), { dx: 0, dy: 0, dif: 0, anchoRazon: 1 });
+  const c2 = compararAlfa(bloque(7, 5), psA, w, h);
+  eq("compararAlfa: el nuestro 3 px a la izquierda y 2 abajo se corre (3, -2) y coincide", [c2.dx, c2.dy, c2.dif], [3, -2, 0]);
+  const c3 = compararAlfa(bloque(10, 3, [[34, 4, 40], [35, 4, 40]]), psA, w, h);
+  ok(`compararAlfa: tinta tenue lejos corre el centro casi 1 px; se prueba alrededor y queda el corrimiento exacto (dx ${c3.dx}, ${(c3.dif * 100).toFixed(1)} %)`, c3.dx === 0 && c3.dy === 0 && c3.dif < 0.05);
+  const c4 = compararAlfa(bloque(10, 3, [[10, 9, 219], [12, 9, 219]]), psA, w, h);
+  ok(`compararAlfa: lo mismo hacia abajo (dy ${c4.dy}, ${(c4.dif * 100).toFixed(1)} %)`, c4.dx === 0 && c4.dy === 0 && c4.dif < 0.2);
+  eq("compararAlfa: si no hay tinta nuestra, 100 % distinto", compararAlfa(new Uint8Array(w * h), psA, w, h).dif, 1);
+
+  // textosDe (dentro de despiezar), con un PSD que trae una capa de texto de verdad (ag-psd la escribe), dentro de
+  // una mesa de trabajo corrida OX px (todo lo de la pieza va en px de la MESA). Letras con orilla suave de 2 px.
+  const W = 200, H = 100, OX = 300;
+  const img = (iw, ih, fn) => { const data = new Uint8ClampedArray(iw * ih * 4); for (let y = 0; y < ih; y++) for (let x = 0; x < iw; x++) { const [r, g, b, a = 255] = fn(x, y); data.set([r, g, b, a], (y * iw + x) * 4); } return { data, width: iw, height: ih }; };
+  const capa = (name, [l, t, cw, ch], fn, extra = {}) => ({ name, left: l + OX, top: t, right: l + OX + cw, bottom: t + ch, blendMode: "normal", opacity: 1, imageData: img(cw, ch, (x, y) => fn(x + l, y + t)), ...extra });
+  const tinta = (x, y) => (x >= 60 && x < 120 && y >= 40 && y < 60 && y % 8 < 6 ? [255, 255, 255, 100, 40, 0][x % 6] : 0);
+  const NARANJA = [250, 120, 20];
+  const enBoton = (x, y) => x >= 40 && x < 160 && y >= 30 && y < 70;
+  const texto = (extra = {}) => capa("Pídela", [60, 40, 60, 20], (x, y) => [255, 255, 255, tinta(x, y)], { text: { text: "Pídela\rya", transform: [1, 0, 0, 1, 60 + OX, 55], style: { font: { name: "DiDiSans-Pro-Bold" }, fontSize: 16, fillColor: { r: 255, g: 255, b: 255 } }, paragraphStyle: { justification: "center" } }, ...extra });
+  // `g`: la gamma con que "Photoshop" mezcló el texto blanco al guardar la copia aplanada (1 = la normal).
+  const psdTexto = (cta, op = 1, g = 1) => writePsdBuffer({
+    width: OX + W, height: H,
+    children: [{ name: "Mesa", opened: true, artboard: { rect: { top: 0, left: OX, bottom: H, right: OX + W } }, children: [{ name: "Background", opened: true, children: [capa("base", [0, 0, W, H], () => [20, 40, 60])] }, { name: "CTA", opened: true, children: cta }] }],
+    imageData: img(OX + W, H, (X, y) => { const x = X - OX; if (x < 0) return [0, 0, 0]; let c = [20, 40, 60]; if (enBoton(x, y)) c = NARANJA; const a = (tinta(x, y) / 255) * op; return c.map((v) => 255 * Math.pow((1 - a) * Math.pow(v / 255, g) + a, 1 / g)); }),
+    imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } },
+  });
+  const cta = (buf) => despiezar(leerPsd(buf), 0).piezas.find((p) => p.rol === "CTA");
+  const p1 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto()]));
+  const t0 = p1.textos[0];
+  eq("esVersionPsd: un PSD (versión 1) sí; un PSB (versión 2) o una cabecera corta, no", [esVersionPsd(Uint8Array.of(0x38, 0x42, 0x50, 0x53, 0, 1)), esVersionPsd(Uint8Array.of(0x38, 0x42, 0x50, 0x53, 0, 2)), esVersionPsd(Uint8Array.of(0x38, 0x42))], [true, false, false]);
+  eq("textosDe: el texto de la pieza, su lugar en px de la mesa, su caja de tinta en Photoshop y su alfa ahí", [p1.textos.length, t0?.capa, t0?.texto.texto, t0?.texto.transform[4], t0?.caja, [0, 3, 4, 5].map((i) => t0?.alfa[i]), t0?.motivo, t0?.opacidad], [1, "Pídela", "Pídela\nya", 60, { x: 60, y: 40, w: 59, h: 20 }, [255, 100, 40, 0], null, 1]);
+  const bpx = (p, x, y) => [...p.base.subarray(((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4, ((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4 + 4)];
+  let fueraIgual = true, letrasNaranja = true;
+  for (let y = p1.caja.y; y < p1.caja.y + p1.caja.h; y++)
+    for (let x = p1.caja.x; x < p1.caja.x + p1.caja.w; x++) {
+      const b = bpx(p1, x, y), j = ((y - p1.caja.y) * p1.caja.w + (x - p1.caja.x)) * 4;
+      if (tinta(x, y) && !b.slice(0, 3).every((v, k) => Math.abs(v - NARANJA[k]) <= 2)) letrasNaranja = false;
+      if (x >= 58 && x < 122 && y >= 38 && y < 62) continue; // las letras y su margen
+      if (!b.every((v, k) => v === p1.rgba[j + k])) fueraIgual = false;
+    }
+  ok("textosDe: la base es la pieza sin letras: donde iban (también su orilla suave), el naranja del botón; lejos, idéntica a la pieza", !!p1.base && letrasNaranja && fueraIgual && bpx(p1, 61, 41)[3] === 255);
+  const p2 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto({ opacity: 0.5 })], 0.5));
+  eq("textosDe: con la capa al 50 %, el alfa de la prueba sale SIN la opacidad y la opacidad viaja aparte", [p2.textos[0].alfa[0], +p2.textos[0].opacidad.toFixed(2)], [255, 0.5]);
+  const p3 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto({ blendMode: "screen" })]));
+  eq("textosDe: texto en «trama»: lleva motivo y la pieza va entera como imagen (sin base)", [p3.textos[0].motivo, p3.base], ["fusión screen", null]);
+  const p4 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto(), capa("brillo", [100, 35, 20, 10], () => [255, 255, 255, 30])]));
+  eq("textosDe: una capa que no es texto encima de las letras: motivo y sin base (no se sabría qué hay debajo)", [p4.textos[0].motivo, p4.base], ["«brillo» está encima", null]);
+  // B30 (Pedro, 2026-10-28): «Rectangle 6» de DiDi es un recuadro de sólo contorno ENCIMA del subtítulo; su caja rodea
+  // las letras pero no las pinta. El texto se tiene que poder cambiar.
+  const contorno = (x0, y0, cw, ch) => capa("Rectangle 6", [x0, y0, cw, ch], (x, y) => [255, 255, 255, x < x0 + 2 || x >= x0 + cw - 2 || y < y0 + 2 || y >= y0 + ch - 2 ? 255 : 0]);
+  const p5 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto(), contorno(50, 33, 80, 34)]));
+  ok("textosDe: un recuadro de sólo contorno encima, alrededor de las letras, no las tapa: sin motivo y con base", p5.textos[0].motivo === null && !!p5.base, JSON.stringify([p5.textos[0].motivo, !!p5.base]));
+  const p6 = cta(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA), texto(), contorno(56, 36, 30, 20)]));
+  eq("textosDe: un contorno que cruza las letras sí las tapa", p6.textos[0].motivo, "«Rectangle 6» está encima");
+  // La gamma del texto se averigua con las orillas de las letras contra la copia aplanada.
+  const gammaDe = (buf) => despiezar(leerPsd(buf), 0).textoGamma;
+  const conBoton = (extra) => [capa("boton", [40, 30, 120, 40], () => NARANJA), texto(extra)];
+  eq("gamma del texto: copia aplanada mezclada normal → 1; en gamma 1.45 → 1.45; con la capa al 50 %, igual", [gammaDe(psdTexto(conBoton())), gammaDe(psdTexto(conBoton(), 1, 1.45)), gammaDe(psdTexto(conBoton({ opacity: 0.5 }), 0.5, 1.45)), gammaDe(psdTexto(conBoton({ opacity: 0.5 }), 0.5))], [1, 1.45, 1.45, 1]);
+  eq("gamma del texto: sin texto que medir, la del PSD real del equipo (1.45)", gammaDe(psdTexto([capa("boton", [40, 30, 120, 40], () => NARANJA)])), 1.45);
+
+  // SPAPTOYBOX (2026-10-30): las carpetas de la guía venían dentro de otras («4:5» › «1:1» › Background) y, debajo de
+  // todo, otra versión del anuncio («Group 6») tapada por el fondo. Se abren las envolturas, lo de debajo no se lee, y el
+  // PSD editable encuentra cada texto por la misma `ruta` (su carpeta de debajo se mueve con el fondo).
+  const envuelto = writePsdBuffer({
+    width: OX + W, height: H,
+    children: [{ name: "4-5", opened: true, artboard: { rect: { top: 0, left: OX, bottom: H, right: OX + W } }, children: [
+      { name: "Group 6", opened: true, children: [{ name: "Background", children: [capa("viejo", [0, 0, W, H], () => [200, 0, 0])] }, { name: "CTA", children: [capa("boton viejo", [0, 0, 50, 20], () => [0, 200, 0])] }] },
+      { name: "4:5", opened: true, children: [{ name: "1:1", opened: true, children: [{ name: "Background", opened: true, children: [capa("base", [0, 0, W, H], () => [20, 40, 60])] }] }, { name: "CTA", opened: true, children: [capa("boton", [40, 30, 120, 40], () => NARANJA), texto()] }] },
+    ] }],
+    imageData: img(OX + W, H, (X, y) => { const x = X - OX; if (x < 0) return [0, 0, 0]; const c = enBoton(x, y) ? NARANJA : [20, 40, 60]; const a = tinta(x, y) / 255; return c.map((v) => (1 - a) * v + a * 255); }),
+    imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } },
+  });
+  const dEnv = leerPsd(envuelto), maEnv = despiezar(dEnv, 0);
+  const tEnv = maEnv.piezas.find((p) => p.rol === "CTA")?.textos[0];
+  eq(
+    "envolturas: se abren «4:5» y «1:1», lo de debajo del fondo va con el fondo (nunca pieza), y la mesa se separa en fondo + CTA con su texto",
+    [dEnv.avisos.length, /«4:5», «1:1»/.test(dEnv.avisos[0] ?? ""), maEnv.piezas.map((p) => p.nombre), tEnv?.texto.texto, despieceUsable(maEnv).ok, dEnv.capas.filter((c) => c.nombre === "viejo" || c.nombre === "boton viejo").map((c) => c.pieza)],
+    [2, true, ["CTA"], "Pídela\nya", true, [CAPA_DEBAJO_FONDO, CAPA_DEBAJO_FONDO]],
+  );
+  const fEnv = readPsdAg(envuelto, { useRawData: true, skipThumbnail: true, skipCompositeImageData: true });
+  const outEnv = psdEditable(
+    fEnv,
+    { W, H, origen: maEnv.origen, fondo: { k: 1, x: -OX, y: 0 }, piezas: [["CTA", { k: 1, x: -OX, y: 0 }]], textos: [{ ruta: tEnv.ruta, texto: "Nuevo" }] },
+    { compuesto: new Uint8ClampedArray(W * H * 4), halos: [], retoque: null },
+    { capa: (l) => getLayerImageData(l), mascara: (l) => getLayerMaskImageData(l), mascaraReal: (l) => getLayerRealMaskImageData(l) },
+  );
+  const textosEnv = (ls) => ls.flatMap((l) => (l.children ? textosEnv(l.children) : l.text ? [l.text.text] : []));
+  eq("envolturas: el PSD editable abre lo mismo (lo de debajo en su carpeta) y cambia el texto por su ruta", [outEnv.psd.children.map((l) => l.name), textosEnv(outEnv.psd.children)], [[CAPA_COLOR_MESA, CAPA_DEBAJO_FONDO, "Background", "CTA"], ["Nuevo"]]);
+  // Sin carpeta de fondo en ningún nivel: la página pregunta cuál pieza es (worker → «fondo»), y con lo elegido se separa.
+  const sinCarpeta = writePsdBuffer({
+    width: OX + W, height: H,
+    children: [{ name: "4-5", opened: true, artboard: { rect: { top: 0, left: OX, bottom: H, right: OX + W } }, children: [
+      { name: "Imagen ChatGPT", opened: true, children: [capa("base", [0, 0, W, H], () => [20, 40, 60])] },
+      { name: "CTA", opened: true, children: [capa("boton", [40, 30, 120, 40], () => NARANJA), texto()] },
+    ] }],
+    imageData: img(OX + W, H, (X, y) => { const x = X - OX; if (x < 0) return [0, 0, 0]; const c = enBoton(x, y) ? NARANJA : [20, 40, 60]; const a = tinta(x, y) / 255; return c.map((v) => (1 - a) * v + a * 255); }),
+    imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } },
+  });
+  const dSin = leerPsd(sinCarpeta);
+  let sinElegir = "";
+  try { despiezar(dSin, 0); } catch (e) { sinElegir = `${e.motivo}: ${e.message}`; }
+  const maSin = despiezar(dSin, 0, { fondo: ["Imagen ChatGPT"] });
+  eq(
+    "fondo elegido: sin carpeta de fondo se pide (piezas de abajo hacia arriba); sin elegir no se separa; con lo elegido sí, y queda en el origen",
+    [tieneFondo(dSin, 0), piezasDeMesa(dSin, 0), /^sin-fondo: .*no se eligió/.test(sinElegir), tieneFondo(dSin, 0, ["Imagen ChatGPT"]), maSin.piezas.map((p) => p.nombre), despieceUsable(maSin).ok, maSin.origen.fondo],
+    [false, [{ nombre: "Imagen ChatGPT", carpeta: true, capas: 1, fondoDentro: false }, { nombre: "CTA", carpeta: true, capas: 2, fondoDentro: false }], true, true, ["CTA"], true, ["Imagen ChatGPT"]],
+  );
+  const outSin = psdEditable(
+    readPsdAg(sinCarpeta, { useRawData: true, skipThumbnail: true, skipCompositeImageData: true }),
+    { W, H, origen: maSin.origen, fondo: { k: 1, x: -OX, y: 0 }, piezas: [["CTA", { k: 1, x: -OX, y: 0 }]] },
+    { compuesto: new Uint8ClampedArray(W * H * 4), halos: [], retoque: { x: 0, y: 0, w: 1, h: 1, rgba: new Uint8ClampedArray(4) } },
+    { capa: (l) => getLayerImageData(l), mascara: (l) => getLayerMaskImageData(l), mascaraReal: (l) => getLayerRealMaskImageData(l) },
+  );
+  eq("fondo elegido: en el PSD editable el retoque va sobre el fondo elegido, como sobre un BACKGROUND", outSin.psd.children.map((l) => `${l.name}${l.children ? `[${l.children.map((c) => c.name).join(",")}]` : ""}`), [CAPA_COLOR_MESA, `Imagen ChatGPT[base,${CAPA_RETOQUE}]`, "CTA[boton,Pídela]"]);
+  eq(
+    "envolturas: un PSD que ya trae su fondo arriba no cambia; una carpeta con opacidad propia no se abre",
+    [desenvolver([{ name: "Background", children: [{ name: "foto" }] }, { name: "Grupo", children: [{ name: "CTA", children: [] }] }]), desenvolver([{ name: "Grupo", opacity: 0.5, children: [{ name: "Background", children: [] }] }])],
+    [null, null],
+  );
+  // SPAPDOGCARD 9:16: un «Background» hasta arriba con sólo una guía apagada no es el fondo; todo lo de abajo sigue siendo pieza.
+  const conGuia = desenvolver([{ name: "9:16", children: [{ name: "Background", children: [{ name: "real" }] }, { name: "Legales", children: [{ name: "texto" }] }, { name: "Background", children: [{ name: "zona segura", hidden: true }] }, { name: "Background", children: [] }] }]);
+  eq(
+    "envolturas: un fondo vacío o con todo apagado no cuenta: el fondo es el que se ve y las piezas no se van debajo",
+    [conGuia.capas.map((l) => l.name), conGuia.debajo, desenvolver([{ name: "Background", children: [{ name: "guía", hidden: true }] }, { name: "Grupo", children: [{ name: "CTA", children: [] }] }])?.abiertas],
+    [["Background", "Legales", "Background", "Background"], null, ["Grupo"]],
+  );
+}
+
+console.log("\n▶ v2 · copia del HERO pintada en el fondo (gemela.ts) y avisos de píxeles (revisar.ts)");
+{
+  // Fondo con textura (cada lugar distinto) y el HERO pintado tal cual en su lugar, como la imagen de IA del s33.
+  const L = 200, caja = { x: 60, y: 60, w: 50, h: 70 };
+  const heroPx = (x, y) => [((x * 13 + y * 3) % 200) + 30, ((x * 5 + y * 11) % 200) + 20, 90];
+  const rgba = new Uint8ClampedArray(caja.w * caja.h * 4);
+  for (let y = 0; y < caja.h; y++) for (let x = 0; x < caja.w; x++) rgba.set([...heroPx(x, y), 255], (y * caja.w + x) * 4);
+  const fondo = new Uint8ClampedArray(L * L * 4);
+  for (let y = 0; y < L; y++) for (let x = 0; x < L; x++) fondo.set([(x * 7) % 256, (y * 5) % 256, ((x + y) * 3) % 256, 255], (y * L + x) * 4);
+  for (let y = 0; y < caja.h; y++) for (let x = 0; x < caja.w; x++) fondo.set([...heroPx(x, y), 255], ((caja.y + y) * L + caja.x + x) * 4);
+  const hero = { nombre: "CARD", rol: "HERO", caja, solido: caja, letraMinPx: null, rgba };
+  const ma = { nombre: "M", w: L, h: L, fondo, piezas: [hero] };
+  const g = buscarGemela(ma);
+  ok("gemela: el fondo trae el HERO pintado debajo → se encuentra (pieza 0, parecido 100 %) y lo que se borra cubre la pieza", !!g && g.pieza === 0 && g.parecido === 1 && g.caja.x <= caja.x && g.caja.y <= caja.y && g.caja.x + g.caja.w >= caja.x + caja.w && g.caja.y + g.caja.h >= caja.y + caja.h, JSON.stringify(g));
+  const antes = fondo.slice();
+  const limpio = quitarGemela(ma, g);
+  let fuera = true;
+  for (let y = 0; y < L; y++)
+    for (let x = 0; x < L; x++) {
+      const dentro = x >= g.caja.x && x < g.caja.x + g.caja.w && y >= g.caja.y && y < g.caja.y + g.caja.h;
+      if (!dentro && [0, 1, 2, 3].some((c) => limpio[(y * L + x) * 4 + c] !== fondo[(y * L + x) * 4 + c])) fuera = false;
+    }
+  ok("gemela: quitarla da un fondo NUEVO (el de entrada no cambia) y fuera de su caja no toca ni un píxel", limpio !== fondo && fondo.every((v, i) => v === antes[i]) && fuera);
+  eq("gemela: en el fondo ya rellenado no queda copia que encontrar", buscarGemela({ ...ma, fondo: limpio }), null);
+  const blanco = new Uint8ClampedArray(L * L * 4).fill(250), heroBlanco = new Uint8ClampedArray(caja.w * caja.h * 4).fill(250);
+  eq("gemela: un HERO blanco sobre un fondo blanco se parece en todas partes: NO es copia", buscarGemela({ ...ma, fondo: blanco, piezas: [{ ...hero, rgba: heroBlanco }] }), null);
+  eq("gemela: sólo se busca bajo el HERO (la misma pieza con otro papel no cuenta)", buscarGemela({ ...ma, piezas: [{ ...hero, rol: "TITULO" }] }), null);
+
+  // ¿Se ve la copia? Con el acomodo del maestro, la pieza la tapa; corrida, no.
+  const conCopia = (quitada) => ({ ...ma, fondo: quitada ? limpio : fondo, copia: { pieza: 0, caja: g.caja, quitada } });
+  const enSuLugar = acomodar(conCopia(false), L, L);
+  const corrida = { ...enSuLugar, puestas: enSuLugar.puestas.map((q) => ({ ...q, x: q.x + 60 })) };
+  eq("copia: a la medida del maestro la pieza la tapa (no se ve); corrida 60 px, sí", [seVeLaCopia(conCopia(false), enSuLugar, L, L), seVeLaCopia(conCopia(false), corrida, L, L)], [false, true]);
+  eq("copia: el aviso dice lo que pasa antes y después de quitarla", [avisosDePixeles(conCopia(false), corrida, L, L).map((a) => a.tipo), avisosDePixeles(conCopia(true), corrida, L, L).map((a) => a.tipo), avisosDePixeles(conCopia(false), enSuLugar, L, L).length], [["copia"], ["retoque"], 0]);
+  const uno = conCopia(false);
+  ok(
+    "revisarMedida: la tarjeta (lado «derecha») y el resumen (sin lado) reciben el MISMO resultado; otra lista con el mismo maestro también; otro maestro, no",
+    revisarMedida([uno], 1200, 627) === revisarMedida([uno], 1200, 627, { heroLado: "derecha" }) && revisarMedida([uno], 1200, 627) !== revisarMedida([conCopia(false)], 1200, 627),
+  );
+  eq("avisos: la pieza se nombra por su carpeta, y con su papel si la carpeta no es de la guía", [etiquetaPieza({ nombre: "TITULO", rol: "TITULO" }), etiquetaPieza({ nombre: "Copy", rol: "TITULO" }), etiquetaPieza({ nombre: "Capa suelta", rol: null })], ["«TITULO»", "«Copy» (TITULO)", "«Capa suelta»"]);
+
+  // Piezas grandes: corrida entera cae fuera, se mide corrida a la mitad; sin ningún lado medible, no se marca.
+  const grande = (fondoDe, color) => {
+    const cg = { x: 30, y: 30, w: 140, h: 140 }, rg = new Uint8ClampedArray(cg.w * cg.h * 4), fg = new Uint8ClampedArray(L * L * 4);
+    for (let y = 0; y < cg.h; y++) for (let x = 0; x < cg.w; x++) rg.set([...color(x, y), 255], (y * cg.w + x) * 4);
+    for (let y = 0; y < L; y++) for (let x = 0; x < L; x++) fg.set([...fondoDe(x, y), 255], (y * L + x) * 4);
+    for (let y = 0; y < cg.h; y++) for (let x = 0; x < cg.w; x++) fg.set([...color(x, y), 255], ((cg.y + y) * L + cg.x + x) * 4);
+    return { ...ma, fondo: fg, piezas: [{ ...hero, caja: cg, solido: cg, rgba: rg }] };
+  };
+  const textura = (x, y) => [(x * 7) % 256, (y * 5) % 256, ((x + y) * 3) % 256];
+  eq("gemela: HERO grande (49 % del maestro): blanco sobre blanco NO es copia aunque corrida entera caiga fuera; con textura, sí", [buscarGemela(grande(() => [250, 250, 250], () => [250, 250, 250])), buscarGemela(grande(textura, heroPx))?.pieza], [null, 0]);
+  const enorme = { ...grande(textura, heroPx) };
+  enorme.piezas = [{ ...enorme.piezas[0], caja: { x: 0, y: 0, w: L, h: 150 }, solido: { x: 0, y: 0, w: L, h: 150 }, rgba: enorme.fondo.slice(0, L * 150 * 4) }];
+  eq("gemela: una pieza que tapa más de la mitad del maestro no se ofrece (no queda alrededor de dónde rellenar)", buscarGemela(enorme), null);
+
+  // Copia pegada al borde: el espejo usa el lado que sí existe y nada sale negro.
+  const borde = { ...hero, caja: { x: 0, y: 60, w: 50, h: 70 }, solido: { x: 0, y: 60, w: 50, h: 70 } };
+  const fb = fondo.slice();
+  for (let y = 0; y < 70; y++) for (let x = 0; x < 50; x++) fb.set([...heroPx(x, y), 255], ((60 + y) * L + x) * 4);
+  const mb = { ...ma, fondo: fb, piezas: [borde] }, gb = buscarGemela(mb);
+  const lb = gb && quitarGemela(mb, gb);
+  let negros = 0;
+  if (lb) for (let y = 60; y < 130; y++) for (let x = 0; x < 50; x++) if (lb[(y * L + x) * 4] + lb[(y * L + x) * 4 + 1] + lb[(y * L + x) * 4 + 2] < 10) negros++;
+  ok("gemela: pegada al borde del maestro se encuentra y se rellena sin dejar píxeles negros", !!gb && gb.caja.x === 0 && !!lb && negros === 0, `${JSON.stringify(gb)} negros=${negros}`);
+
+  // El reflejo: alrededor de una copia naranja el fondo blanco-azulado trae un halo naranja; al quitar la copia se le
+  // quita ese tinte (rojo − azul baja) y el brillo se queda.
+  const NARANJA_T = (x, y) => [220 + ((x + y) % 20), 90 + ((x * 3) % 30), 30 + ((y * 7) % 20)];
+  const fr = new Uint8ClampedArray(L * L * 4), cr = { x: 75, y: 70, w: 50, h: 60 };
+  for (let y = 0; y < L; y++)
+    for (let x = 0; x < L; x++) {
+      const dx = Math.max(cr.x - x, 0, x - (cr.x + cr.w - 1)), dy = Math.max(cr.y - y, 0, y - (cr.y + cr.h - 1)), dist = Math.hypot(dx, dy);
+      const halo = dist > 0 && dist < 14 ? 1 - dist / 14 : 0;
+      fr.set([230 + 20 * halo, 235 - 60 * halo, 250 - 110 * halo, 255].map(Math.round), (y * L + x) * 4);
+    }
+  const rr = new Uint8ClampedArray(cr.w * cr.h * 4);
+  for (let y = 0; y < cr.h; y++) for (let x = 0; x < cr.w; x++) { rr.set([...NARANJA_T(x, y), 255], (y * cr.w + x) * 4); fr.set([...NARANJA_T(x, y), 255], ((cr.y + y) * L + cr.x + x) * 4); }
+  const mr = { ...ma, fondo: fr, piezas: [{ ...hero, caja: cr, solido: cr, rgba: rr }] }, gr = buscarGemela(mr), lr = gr && quitarGemela(mr, gr);
+  const anillo = (buf) => {
+    let rb = 0, lum = 0, n = 0;
+    for (let y = cr.y - 12; y < cr.y + cr.h + 12; y++)
+      for (let x = cr.x - 12; x < cr.x + cr.w + 12; x++) {
+        if (x >= cr.x - 6 && x < cr.x + cr.w + 6 && y >= cr.y - 6 && y < cr.y + cr.h + 6) continue; // sólo el halo, lejos del hueco
+        const j = (y * L + x) * 4;
+        rb += buf[j] - buf[j + 2]; lum += buf[j] + buf[j + 1] + buf[j + 2]; n++;
+      }
+    return [rb / n, lum / n];
+  };
+  const [rbAntes, lumAntes] = anillo(fr), [rbDespues, lumDespues] = lr ? anillo(lr) : [NaN, NaN];
+  ok("gemela: el halo naranja alrededor de la copia pierde su tinte (rojo − azul baja a menos de la mitad) y el brillo se queda (±3)", !!gr && rbDespues < rbAntes / 2 && Math.abs(lumDespues - lumAntes) <= 3, `rb ${rbAntes.toFixed(1)} → ${rbDespues.toFixed(1)}, brillo ${lumAntes.toFixed(1)} → ${lumDespues.toFixed(1)}`);
+
+  // Respaldo con IA: el recorte que se manda y lo que se pega de vuelta.
+  const rc = recorteParaIA(ma, g);
+  const [rw, rh] = (rc?.aspect ?? "0:1").split(":").map(Number);
+  ok(
+    "IA: el recorte contiene la caja de la copia, no sale del maestro y tiene una proporción que la IA acepta (±3 %)",
+    !!rc && rc.caja.x <= g.caja.x && rc.caja.y <= g.caja.y && rc.caja.x + rc.caja.w >= g.caja.x + g.caja.w && rc.caja.y + rc.caja.h >= g.caja.y + g.caja.h && rc.caja.x >= 0 && rc.caja.y >= 0 && rc.caja.x + rc.caja.w <= L && rc.caja.y + rc.caja.h <= L && Math.abs(rc.caja.w / rc.caja.h / (rw / rh) - 1) <= 0.03,
+    JSON.stringify(rc),
+  );
+  // B30 (Pedro, 2026-10-28): en una imagen plana de 788×1262 con una copia grande ninguna proporción cabía y el botón
+  // de la IA no salía. Ahora el recorte se sale del maestro lo menos posible.
+  const contiene = (r, c) => !!r && r.caja.x <= c.x && r.caja.y <= c.y && r.caja.x + r.caja.w >= c.x + c.w && r.caja.y + r.caja.h >= c.y + c.h;
+  const proporcion = (r) => { const [a, b] = r.aspect.split(":").map(Number); return Math.abs(r.caja.w / r.caja.h / (a / b) - 1) <= 0.03; };
+  const raro = recorteParaIA({ w: 788, h: 1262 }, { pieza: 0, parecido: 1, caja: { x: 20, y: 30, w: 760, h: 1220 } });
+  ok("IA: maestro de forma rara (788×1262) con la copia casi entera: hay recorte, contiene la copia, con proporción de la IA y se sale poco", contiene(raro, { x: 20, y: 30, w: 760, h: 1220 }) && proporcion(raro) && raro.caja.w * raro.caja.h < 1.2 * 788 * 1262, JSON.stringify(raro));
+  const chato = recorteParaIA({ w: 100, h: 31 }, { pieza: 0, parecido: 1, caja: { x: 0, y: 0, w: 100, h: 30 } });
+  ok("IA: 100×30 en un maestro de 100×31 (antes: nada): un recorte que lo contiene, saliéndose", contiene(chato, { x: 0, y: 0, w: 100, h: 30 }) && proporcion(chato), JSON.stringify(chato));
+  {
+    const W2 = 4, H2 = 3, src = new Uint8ClampedArray(W2 * H2 * 4);
+    for (let i = 0; i < W2 * H2; i++) src.set([i * 10, 0, 0, 255], i * 4);
+    const rco = recorteConOrilla(src, W2, H2, { x: -1, y: -1, w: 6, h: 5 });
+    eq("recorteConOrilla: lo de fuera repite la orilla (esquinas y lados); lo de dentro, igual", [rco[0], rco[(0 * 6 + 5) * 4], rco[(4 * 6 + 0) * 4], rco[(2 * 6 + 2) * 4]], [0, 30, 80, 50]);
+    // Pegar un recorte que se sale: sólo lo de dentro del maestro se toca, sin pasarse de la orilla.
+    const gChato = { pieza: g.pieza, parecido: 1, caja: g.caja };
+    const fuera = { x: -10, y: -10, w: L + 20, h: L + 20 }, todoVerde = new Uint8ClampedArray(fuera.w * fuera.h * 4);
+    for (let i = 0; i < fuera.w * fuera.h; i++) todoVerde.set([0, 200, 0, 255], i * 4);
+    const pf = pegarRellenoIA(ma, gChato, fuera, todoVerde);
+    ok("IA: pegar un recorte que se sale del maestro no truena y pone lo de la IA en el hueco", !!pf && pf.fondo.length === ma.fondo.length && pf.fondo[((caja.y + 35) * L + caja.x + 25) * 4 + 1] === 200);
+  }
+  // Lo que "devuelve la IA": todo verde. Dentro del hueco va verde; lejos de la copia, el fondo original intacto.
+  const verde = new Uint8ClampedArray(rc.caja.w * rc.caja.h * 4);
+  for (let i = 0; i < rc.caja.w * rc.caja.h; i++) verde.set([0, 200, 0, 255], i * 4);
+  const pr = pegarRellenoIA(ma, g, rc.caja, verde);
+  const px = (buf, x, y) => [...buf.slice((y * L + x) * 4, (y * L + x) * 4 + 3)];
+  let fueraIgual = true;
+  for (let y = 0; y < L; y++)
+    for (let x = 0; x < L; x++) {
+      const enCaja = x >= g.caja.x && x < g.caja.x + g.caja.w && y >= g.caja.y && y < g.caja.y + g.caja.h;
+      if (!enCaja && px(pr.fondo, x, y).some((v, c) => v !== fondo[(y * L + x) * 4 + c])) fueraIgual = false;
+    }
+  ok("IA: en el centro del hueco va lo de la IA; fuera de la caja de la copia el fondo queda idéntico (píxel por píxel)", JSON.stringify(px(pr.fondo, caja.x + 25, caja.y + 35)) === "[0,200,0]" && fueraIgual);
+  let orillaIgual = true;
+  for (let y = g.caja.y; y < g.caja.y + g.caja.h; y++)
+    for (let x = g.caja.x; x < g.caja.x + g.caja.w; x++) {
+      const enOrilla = x === g.caja.x || y === g.caja.y || x === g.caja.x + g.caja.w - 1 || y === g.caja.y + g.caja.h - 1;
+      if (enOrilla && px(pr.fondo, x, y).some((v, c) => v !== fondo[(y * L + x) * 4 + c])) orillaIgual = false;
+    }
+  ok("IA: la orilla de la caja de la copia queda idéntica al original aunque la IA mande todo verde (la unión no se nota)", orillaIgual);
+  eq("IA: si lo que vuelve es más chico que el recorte, no se pega nada (null)", pegarRellenoIA(ma, g, rc.caja, new Uint8ClampedArray(4)), null);
+  eq(
+    "IA: con un recorte sin aire alrededor de la copia no hay con qué medir la deriva (null, no 0)",
+    pegarRellenoIA(ma, g, g.caja, new Uint8ClampedArray(g.caja.w * g.caja.h * 4))?.deriva,
+    null,
+  );
+  ok("IA: la deriva mide el aire del recorte: con una IA que lo cambió todo, alta; con una que no tocó el aire, 0", pr.deriva > 18 && pegarRellenoIA(ma, g, rc.caja, (() => { const o = new Uint8ClampedArray(rc.caja.w * rc.caja.h * 4); for (let y = 0; y < rc.caja.h; y++) o.set(fondo.subarray(((rc.caja.y + y) * L + rc.caja.x) * 4, ((rc.caja.y + y) * L + rc.caja.x + rc.caja.w) * 4), y * rc.caja.w * 4); return o; })()).deriva === 0, String(pr.deriva));
+
+  // Contraste: fondo azul a la izquierda, blanco a la derecha; un titular blanco que en el original va sobre el azul.
+  const C = 400, fc = new Uint8ClampedArray(C * C * 4);
+  for (let y = 0; y < C; y++) for (let x = 0; x < C; x++) fc.set(x < 200 ? [30, 60, 200, 255] : [245, 245, 245, 255], (y * C + x) * 4);
+  const bloque = (w, h, color) => { const b = new Uint8ClampedArray(w * h * 4); for (let i = 0; i < w * h; i++) b.set(color, i * 4); return b; };
+  const titulo = (x) => ({ nombre: "Copy", rol: "TITULO", caja: { x, y: 100, w: 100, h: 40 }, solido: { x, y: 100, w: 100, h: 40 }, letraMinPx: null, rgba: bloque(100, 40, [255, 255, 255, 255]) });
+  const sobreAzul = { nombre: "C", w: C, h: C, fondo: fc, piezas: [titulo(50)] };
+  const aDerecha = (m) => { const a = acomodar(m, C, C); return { ...a, familia: "horizontal", puestas: a.puestas.map((q) => (m.piezas[q.pieza].rol === "TITULO" ? { ...q, x: 250 } : q)) }; };
+  const pOrig = perdidas(sobreAzul, acomodar(sobreAzul, C, C), C, C).get(0), pMovido = perdidas(sobreAzul, aDerecha(sobreAzul), C, C).get(0);
+  ok("contraste: blanco sobre azul no se pierde; el mismo blanco sobre blanco, casi todo", pOrig < 0.05 && pMovido > 0.95, `${pOrig} ${pMovido}`);
+  eq("contraste: se avisa cuando la medida lo pone sobre su mismo tono y en el original se leía", avisosDePixeles(sobreAzul, aDerecha(sobreAzul), C, C).map((a) => a.tipo), ["contraste"]);
+  eq("contraste: si en el original ya iba así (el diseñador lo dejó), no se avisa", avisosDePixeles({ ...sobreAzul, piezas: [titulo(250)] }, aDerecha({ ...sobreAzul, piezas: [titulo(250)] }), C, C).length, 0);
+  // Lo de atrás incluye las piezas de abajo: el titular blanco sobre un HERO oscuro se lee aunque el fondo sea blanco.
+  const heroOscuro = { nombre: "CARD", rol: "HERO", caja: { x: 220, y: 80, w: 160, h: 100 }, solido: { x: 220, y: 80, w: 160, h: 100 }, letraMinPx: null, rgba: bloque(160, 100, [20, 20, 20, 255]) };
+  const conHero = { ...sobreAzul, piezas: [heroOscuro, titulo(50)] };
+  ok("contraste: lo de atrás también son las piezas de abajo (blanco sobre un HERO oscuro, encima del fondo blanco, se lee)", (perdidas(conHero, aDerecha(conHero), C, C).get(1) ?? 1) < 0.05);
+
+  // Arreglos de contraste (Pedro, 2026-10-15: "can we do both and let the user decide?"). Fondo blanco a la izquierda
+  // y azul a la derecha; en el maestro el titular blanco va sobre el azul. En una medida de 300 de ancho cae sobre el
+  // blanco, y el fondo (400 de ancho) tiene 100 px para correrse hasta que atrás quede azul.
+  const fc2 = new Uint8ClampedArray(C * C * 4);
+  for (let y = 0; y < C; y++) for (let x = 0; x < C; x++) fc2.set(x >= 200 ? [30, 60, 200, 255] : [245, 245, 245, 255], (y * C + x) * 4);
+  const m2 = { nombre: "C2", w: C, h: C, fondo: fc2, piezas: [titulo(250)] };
+  ok("legal fijo: la medida de ese artboard avisa que el legal elegido no está", acomodar({ ...m2, legalFijo: true }, C, C).avisos.some((v) => v.tipo === "texto" && /NO está en esta medida/.test(v.texto)));
+  const a2 = { familia: "horizontal", puestas: [{ pieza: 0, k: 1, x: 100, y: 100, w: 100, h: 40 }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] };
+  const op2 = opcionesDeContraste(m2, a2, 300, C);
+  ok(
+    "contraste: «Mover fondo» corre el fondo dentro de su holgura hasta que atrás quede el azul (se pierde ~0) y sigue cubriendo la medida",
+    op2.info.perdida.original > 0.95 && op2.info.perdida.fondo < 0.05 && op2.fondo.fondo.x <= -95 && op2.fondo.fondo.x >= -100,
+    JSON.stringify({ p: op2.info.perdida, f: op2.fondo?.fondo }),
+  );
+  ok("contraste: «Sombra» oscurece lo de atrás del titular blanco y deja de perderse; va marcada en el acomodo", op2.info.perdida.sombra < 0.1 && op2.sombra.sombras.includes(0), JSON.stringify(op2.info.perdida));
+  ok("contraste: sin tarjeta que quede flotando, la plataforma elige uno de los dos (no el original)", op2.info.auto !== "original" && !op2.info.fondoSacaHero, op2.info.auto);
+  const sinSombra = armarMedida(m2, a2, 300, C), conSombra = armarMedida(m2, op2.sombra, 300, C);
+  const gris = (px, x, y) => px[(y * 300 + x) * 4];
+  ok("contraste: la sombra se pinta (a 2 px del titular, fuera de su caja, el fondo blanco queda más oscuro; sin letra medida el radio es chico) y lejos no toca nada", gris(conSombra, 98, 120) < gris(sinSombra, 98, 120) - 40 && gris(conSombra, 20, 350) === gris(sinSombra, 20, 350), `${gris(sinSombra, 98, 120)} → ${gris(conSombra, 98, 120)}`);
+  // Con un HERO parado en el fondo, correr el fondo 100 px lo deja flotando: se ofrece, pero la plataforma no lo elige.
+  const heroM2 = { nombre: "CARD", rol: "HERO", caja: { x: 20, y: 250, w: 100, h: 100 }, solido: { x: 20, y: 250, w: 100, h: 100 }, letraMinPx: null, rgba: bloque(100, 100, [200, 80, 20, 255]) };
+  const m3 = { ...m2, piezas: [heroM2, titulo(250)] };
+  const a3 = { ...a2, puestas: [{ pieza: 0, k: 1, x: 20, y: 250, w: 100, h: 100 }, { ...a2.puestas[0], pieza: 1 }] };
+  const op3 = opcionesDeContraste(m3, a3, 300, C);
+  ok("contraste: si mover el fondo saca a la tarjeta de su lugar, se ofrece pero la plataforma elige la sombra", op3.fondo !== null && op3.info.fondoSacaHero && op3.info.auto === "sombra", JSON.stringify(op3.info));
+  eq("contraste: si nada se pierde, no hay arreglos que ofrecer", opcionesDeContraste(sobreAzul, acomodar(sobreAzul, C, C), C, C), null);
+
+  // PSD de una medida (Pedro, 2026-10-15: "download that specific size as a psd with the available layers"). Con una
+  // pieza con sombra del PSD (multiplicar) y la sombra de contraste, el fondo corrido 100 px fuera de la medida.
+  const conSombraPsd = { ...m3, piezas: [{ ...heroM2, oscurece: bloque(100, 100, [128, 128, 128, 255]) }, m3.piezas[1]] };
+  const aPsd = { ...op3.sombra, fondo: { k: 1, x: -60, y: 0 } };
+  const capas = capasDeMedida(conSombraPsd, aPsd, 300, C);
+  const rec = new Float32Array(300 * C * 3);
+  const poner = (c, multiplicar) => { for (let y = Math.max(0, c.y); y < Math.min(C, c.y + c.h); y++) for (let x = Math.max(0, c.x); x < Math.min(300, c.x + c.w); x++) { const i = ((y - c.y) * c.w + (x - c.x)) * 4, o = (y * 300 + x) * 3, al = c.rgba[i + 3] / 255; for (let k = 0; k < 3; k++) rec[o + k] = multiplicar ? rec[o + k] * (1 - al + (al * c.rgba[i + k]) / 255) : c.rgba[i + k] * al + rec[o + k] * (1 - al); } };
+  poner(capas.fondo, false);
+  for (const p of capas.piezas) { if (p.halo) poner(p.halo, true); if (p.sombra) poner(p.sombra, true); poner(p.color, false); }
+  const tarjeta = armarMedida(conSombraPsd, aPsd, 300, C);
+  let difMax = 0;
+  for (let i = 0; i < 300 * C; i++) for (let k = 0; k < 3; k++) difMax = Math.max(difMax, Math.abs(Math.round(rec[i * 3 + k]) - tarjeta[i * 4 + k]));
+  ok("PSD: las capas puestas en orden (normal y multiplicar) dan la misma imagen que la tarjeta (±2)", difMax <= 2 && capas.piezas.some((p) => p.halo) && capas.piezas.some((p) => p.sombra), `diferencia máxima ${difMax}`);
+  eq("PSD: el fondo va entero aunque se salga de la medida (se puede recorrer en Photoshop)", [capas.fondo.x, capas.fondo.w], [-60, C]);
+  const leidoPsd = readPsdAg(writePsdBuffer(psdDeMedida(conSombraPsd, aPsd, 300, C), { noBackground: true }), { skipLayerImageData: true, skipCompositeImageData: true });
+  eq(
+    "PSD: escrito y leído de vuelta: carpetas de abajo hacia arriba con el nombre del PSD, sombras en multiplicar",
+    leidoPsd.children.map((g) => `${g.name}: ${g.children.map((l) => `${l.name}${l.blendMode === "multiply" ? " (mult)" : ""}`).join(", ")}`),
+    ["BACKGROUND: Fondo", "CARD: CARD · sombra (mult), CARD", `Copy: ${CAPA_SOMBRA_CONTRASTE} (mult), Copy`],
+  );
+}
+
+// ── v2 · PSD editable por medida (B20): las capas del original, movidas con su pieza ─────────
+console.log("\n▶ v2 · PSD editable por medida: texto vivo, objetos inteligentes, formas y subcarpetas (s33 real)");
+{
+  // El plan, a mano: mesa corrida (100, 50) y leída reducida a la mitad. Un punto del original cae donde lo pondría
+  // el acomodo (sólido de la pieza en q.x, q.y con escala q.k, en px del maestro).
+  const maPlan = { origen: { mesa: 0, x: 100, y: 50, s: 0.5 }, piezas: [{ nombre: "A", solido: { x: 10, y: 20 } }, { nombre: "B", solido: { x: 0, y: 0 } }] };
+  const plan = planDeMedida(maPlan, { familia: "igual", puestas: [{ pieza: 0, k: 2, x: 7, y: 9, w: 1, h: 1 }], fondo: { k: 3, x: -4, y: -6 }, letras: [], avisos: [], quitadas: [1] }, 50, 40);
+  const A = plan.piezas[0][1], F = plan.fondo;
+  // El sólido de A en el original está en (100 + 10/0.5, 50 + 20/0.5) = (120, 90).
+  eq("plan: el sólido de una pieza cae en (q.x, q.y) aunque la mesa esté corrida y reducida; el fondo, en su esquina", [A.k, A.k * 120 + A.x, A.k * 90 + A.y, F.k, F.k * 100 + F.x, F.k * 50 + F.y], [1, 7, 9, 1.5, -4, -6]);
+  eq("plan: una pieza quitada en la medida no lleva movimiento", plan.piezas[1], ["B", null]);
+  ok("plan: sin orden cambiado (el automático va en el del maestro) el plan no lleva orden: el PSD sale con el del original", !("orden" in planDeMedida(maPlan, { familia: "igual", puestas: [{ pieza: 0, k: 1, x: 0, y: 0, w: 1, h: 1 }, { pieza: 1, k: 1, x: 0, y: 0, w: 1, h: 1 }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] }, 50, 40)));
+  eq("plan: el orden de las capas de la medida va en el plan (nombres de abajo hacia arriba, sólo las puestas)", planDeMedida(maPlan, { familia: "igual", puestas: [{ pieza: 1, k: 1, x: 0, y: 0, w: 1, h: 1 }, { pieza: 0, k: 1, x: 0, y: 0, w: 1, h: 1 }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] }, 50, 40).orden, ["B", "A"]);
+  // Reordenar en el PSD editable: las piezas cambian de lugar entre ellas; el fondo, lo oculto y lo suelto no se mueven,
+  // y una recortada va pegada a su base.
+  const capa1 = (name, extra = {}) => ({ name, left: 0, top: 0, right: 2, bottom: 2, ...extra });
+  const reord = psdEditable(
+    { width: 10, height: 10, children: [capa1("BACKGROUND"), capa1("TITULO"), capa1("brillo", { clipping: true }), capa1("suelta", { hidden: true }), capa1("CTA"), capa1("HERO")] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["TITULO", { k: 1, x: 0, y: 0 }], ["CTA", { k: 1, x: 0, y: 0 }], ["HERO", { k: 1, x: 0, y: 0 }]], orden: ["HERO", "TITULO", "CTA"] },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children.map((l) => l.name);
+  eq("PSD editable: el orden de la medida reacomoda las piezas en sus lugares; fondo y oculta quietos; la recortada va con su base", reord, ["BACKGROUND", "HERO", "suelta", "TITULO", "brillo", "CTA"]);
+  // Dos carpetas con el mismo nombre (una sola pieza, como la pinta la tarjeta) con otra en medio, y una recortada sin
+  // base al principio: con orden, las dos van juntas donde va su pieza; la recortada huérfana no se mueve.
+  const mismoNombre = (orden) => psdEditable(
+    { width: 10, height: 10, children: [capa1("huerfana", { clipping: true }), capa1("BACKGROUND"), capa1("A"), capa1("B"), capa1("A")] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["A", { k: 1, x: 0, y: 0 }], ["B", { k: 1, x: 0, y: 0 }]], ...(orden ? { orden } : {}) },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children.map((l) => l.name);
+  eq("PSD editable: carpetas del mismo nombre: sin orden, como el original; con B abajo, las dos A arriba de B; la recortada huérfana, quieta", [mismoNombre(null), mismoNombre(["B", "A"])], [["huerfana", "BACKGROUND", "A", "B", "A"], ["huerfana", "BACKGROUND", "B", "A", "A"]]);
+
+  // Texto vertical: ag-psd advierte que escribirlo puede tumbar a Photoshop → va como imagen y se dice.
+  const vert = psdEditable(
+    { width: 10, height: 10, children: [{ name: "BACKGROUND", children: [{ name: "fondo", left: 0, top: 0, right: 2, bottom: 2 }] }, { name: "TITULO", children: [{ name: "vertical", left: 0, top: 0, right: 2, bottom: 2, text: { text: "hola", orientation: "vertical", transform: [1, 0, 0, 1, 0, 0] } }] }] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["TITULO", { k: 1, x: 1, y: 1 }]] },
+    { compuesto: new Uint8ClampedArray(64), halos: [{ nombre: "TITULO", capa: { x: 0, y: 0, w: 1, h: 1, rgba: new Uint8ClampedArray(4) } }], retoque: { x: 0, y: 0, w: 1, h: 1, rgba: new Uint8ClampedArray(4) } },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  );
+  // Topes ANTES de decodificar (también las capas ocultas, que la lectura normal ni mira).
+  const tope = (capa) => { try { psdEditable({ width: 10, height: 10, children: [{ name: "BACKGROUND", children: [capa] }] }, { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [] }, { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null }, { capa: () => { throw new Error("no debió decodificar"); }, mascara: () => undefined, mascaraReal: () => undefined }); return "pasó"; } catch (e) { return e.message.split(" ").slice(-3).join(" "); } };
+  eq("topes del PSD editable: una capa oculta enorme, una máscara enorme o una capa en ZIP, también la máscara de una carpeta, se rechazan sin decodificar (sale el de capas planas)", [tope({ name: "x", hidden: true, left: 0, top: 0, right: 8000, bottom: 7000 }), tope({ name: "m", left: 0, top: 0, right: 0, bottom: 0, mask: { left: 0, top: 0, right: 9000, bottom: 9000 } }), tope({ name: "z", left: 0, top: 0, right: 2, bottom: 2, rawData: { channels: [{ id: 0, compression: 2 }] } }), tope({ name: "carpeta", children: [], mask: { left: 0, top: 0, right: 9000, bottom: 9000 } })], ["«x» mide 8000×7000", "«m» mide 9000×9000", "comprimida en ZIP", "«carpeta» mide 9000×9000"]);
+  // Recortadas (clipping): van con su base. Fondo suelto con un tinte recortado y un título suelto con un brillo
+  // recortado: el brillo se mueve con el título, el tinte con el fondo, y el retoque no se mete entre base y recortada.
+  const capa2 = (name, extra = {}) => ({ name, left: 0, top: 0, right: 2, bottom: 2, ...extra });
+  const rec = psdEditable(
+    { width: 10, height: 10, children: [capa2("BACKGROUND"), capa2("tinte", { clipping: true }), capa2("TITULO"), capa2("brillo", { clipping: true })] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["TITULO", { k: 1, x: 1, y: 1 }]] },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: { x: 0, y: 0, w: 1, h: 1, rgba: new Uint8ClampedArray(4).fill(255) } },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children;
+  eq("recortadas: van con la capa a la que se recortan; el retoque de un fondo suelto va encima de sus recortadas", rec.map((l) => `${l.name}@${l.left}`), ["BACKGROUND@0", "tinte@0", `${CAPA_RETOQUE}@0`, "TITULO@1", "brillo@1"]);
+  // Tope de SALIDA: una capa chica muy agrandada (k = 200) en una medida grande pasaría de 48 MP aun recortada.
+  let salida = "";
+  try { psdEditable({ width: 10, height: 10, children: [{ name: "BACKGROUND", children: [capa2("fondo")] }, { name: "TITULO", children: [capa2("t", { right: 100, bottom: 100 })] }] }, { W: 4096, H: 4096, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["TITULO", { k: 200, x: 0, y: 0 }]] }, { compuesto: new Uint8ClampedArray(4), halos: [], retoque: null }, { capa: () => { throw new Error("no debió decodificar"); }, mascara: () => undefined, mascaraReal: () => undefined }); } catch (e) { salida = e.message; }
+  ok("tope de salida: una capa que quedaría enorme en la medida se rechaza antes de decodificar (sale el de capas planas)", /quedaría de 8193×8193/.test(salida), salida);
+  // Lo del ARCHIVO se revisa antes que lo de la medida: con una capa enorme en esta medida ABAJO y una en ZIP arriba,
+  // sale el tope del archivo (el que marca el archivo), no "demasiado grande en esta medida".
+  let primero = null;
+  try { psdEditable({ width: 10, height: 10, children: [{ name: "TITULO", children: [capa2("t", { right: 100, bottom: 100 })] }, { name: "BACKGROUND", children: [capa2("z", { rawData: { channels: [{ id: 0, compression: 2 }] } })] }] }, { W: 4096, H: 4096, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["TITULO", { k: 200, x: 0, y: 0 }]] }, { compuesto: new Uint8ClampedArray(4), halos: [], retoque: null }, { capa: () => { throw new Error("no debió decodificar"); }, mascara: () => undefined, mascaraReal: () => undefined }); } catch (e) { primero = e; }
+  eq("topes: lo del archivo antes que lo de la medida (ZIP arriba gana a una capa enorme abajo)", [primero?.constructor.name, primero?.deArchivo, /ZIP/.test(primero?.message ?? "")], ["TopeEditable", true, true]);
+  // La sombra de contraste va justo debajo de la carpeta de su pieza (aislada o no: adentro, el estilo o la máscara de
+  // la carpeta la tomarían como forma); una copia oculta de la carpeta no se queda con ella; el retoque va sobre el ÚLTIMO fondo; la mesa blanca deja su color abajo; un
+  // objeto inteligente con filtros inteligentes sigue editable, con nota.
+  const halo1 = { x: 0, y: 0, w: 1, h: 1, rgba: new Uint8ClampedArray(4) };
+  const mix = psdEditable(
+    { width: 10, height: 10, children: [{ name: "Mesa", artboard: { rect: { left: 0, top: 0, right: 10, bottom: 10 }, backgroundType: 1 }, children: [
+      capa2("BACKGROUND"), capa2("FONDO"), { name: "TITULO", hidden: true, children: [capa2("viejo")] },
+      { name: "TITULO", blendMode: "normal", children: [capa2("t")] }, { name: "CTA", children: [capa2("b")] },
+      capa2("HERO", { placedLayer: { id: "x", type: "raster", transform: [0, 0, 2, 0, 2, 2, 0, 2], filter: { list: [{}] } } }),
+    ] }] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["TITULO", { k: 1, x: 0, y: 0 }], ["CTA", { k: 1, x: 0, y: 0 }], ["HERO", { k: 1, x: 0, y: 0 }]] },
+    { compuesto: new Uint8ClampedArray(64), halos: [{ nombre: "TITULO", capa: halo1 }, { nombre: "CTA", capa: halo1 }], retoque: halo1 },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  );
+  eq(
+    "sombra justo debajo de la carpeta de su pieza (aislada o no); la copia oculta no se queda con ella; retoque sobre el último fondo; color de la mesa abajo; filtros inteligentes con nota",
+    [mix.psd.children.map((l) => `${l.name}${l.children ? `[${l.children.map((c) => c.name).join(",")}]` : ""}`), mix.notas, mix.psd.children[0].imageData.data.slice(0, 4).join()],
+    [[CAPA_COLOR_MESA, "BACKGROUND", "FONDO", CAPA_RETOQUE, "TITULO[viejo]", CAPA_SOMBRA_CONTRASTE, "TITULO[t]", CAPA_SOMBRA_CONTRASTE, "CTA[b]", "HERO"], [{ capa: "HERO", motivo: "filtros-inteligentes", aplanada: false }], "255,255,255,255"],
+  );
+  // La capa del color de la mesa (W × H) también cuenta en el tope de salida: un fondo de 6800×6800 sin mover (46 MP)
+  // más la mesa de 4096×4096 (17 MP) pasan de 60 MP y se rechazan sin decodificar.
+  let conMesa = "";
+  try { psdEditable({ width: 6800, height: 6800, children: [{ name: "Mesa", artboard: { rect: { left: 0, top: 0, right: 6800, bottom: 6800 }, backgroundType: 1 }, children: [capa2("BACKGROUND", { right: 6800, bottom: 6800 })] }] }, { W: 4096, H: 4096, origen: { mesa: 0, x: 0, y: 0, w: 6800, h: 6800, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [] }, { compuesto: new Uint8ClampedArray(4), halos: [], retoque: null }, { capa: () => { throw new Error("no debió decodificar"); }, mascara: () => undefined, mascaraReal: () => undefined }); } catch (e) { conMesa = `${e.constructor.name}: ${e.message}`; }
+  ok("tope de salida: cuenta también la capa del color de la mesa (sale el de capas planas, de ESTA medida)", /^TopeEditable: en esta medida las capas sumarían/.test(conMesa), conMesa);
+  // Un fondo ENCIMA de una pieza (una viñeta arriba del héroe): el retoque va sobre el fondo de abajo, nunca encima
+  // de la pieza (la tarjeta pinta todo el fondo debajo de las piezas). Una mesa de otro color deja ese color.
+  const encima = psdEditable(
+    { width: 10, height: 10, children: [{ name: "Mesa", artboard: { rect: { left: 0, top: 0, right: 10, bottom: 10 }, backgroundType: 4, color: { r: 10.4, g: 200, b: 30.6 } }, children: [capa2("BACKGROUND"), capa2("HERO"), capa2("FONDO")] }] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["HERO", { k: 1, x: 1, y: 1 }]] },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: halo1 },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children;
+  eq("retoque: sobre el fondo de abajo aunque otro fondo vaya encima de una pieza; la mesa de color deja su color (redondeado)", [encima.map((l) => l.name), [...encima[0].imageData.data.slice(0, 4)], [...encima[0].imageData.data.slice(-4)]], [[CAPA_COLOR_MESA, "BACKGROUND", CAPA_RETOQUE, "HERO", "FONDO"], [10, 200, 31, 255], [10, 200, 31, 255]]);
+  // La segunda máscara (la de píxeles, cuando la capa también trae vectorial) se mueve con sus píxeles, no se pierde.
+  const dos = psdEditable({ width: 10, height: 10, children: [{ name: "BACKGROUND", children: [capa2("f", { realMask: { left: 0, top: 0, right: 2, bottom: 2, defaultColor: 0 } })] }] }, { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 1, y: 1 }, piezas: [] }, { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null }, { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(200) }) }).psd.children[0].children[0].realMask;
+  eq("segunda máscara (realMask): va con sus píxeles y movida", [dos.left, dos.top, dos.imageData?.width, dos.imageData?.data[0]], [1, 1, 2, 200]);
+  const tit = vert.psd.children[2].children;
+  eq(
+    "texto vertical: va como imagen (sin datos de texto) y se avisa por nombre; la sombra de contraste va justo debajo de su carpeta en multiplicar; el retoque del fondo, arriba en la suya",
+    [vert.notas, tit[0].text, tit[0].left, vert.psd.children.map((l) => `${l.name}${l.blendMode === "multiply" ? " (mult)" : ""}`), vert.psd.children[0].children.map((l) => l.name)],
+    [[{ capa: "vertical", motivo: "texto-vertical", aplanada: true }], undefined, 1, ["BACKGROUND", `${CAPA_SOMBRA_CONTRASTE} (mult)`, "TITULO"], ["fondo", CAPA_RETOQUE]],
+  );
+
+  // El retoque del fondo: sólo el parche de lo que cambió (con margen), puesto donde cae el fondo en la medida.
+  const fa = new Uint8ClampedArray(20 * 10 * 4).fill(100), fd = fa.slice();
+  for (let y = 4; y < 6; y++) for (let x = 8; x < 10; x++) fd.set([200, 50, 0, 255], (y * 20 + x) * 4);
+  const parche = retoqueDeFondo(fa, fd, 20, 10, { k: 1, x: -3, y: 1 }, 30, 30);
+  const pixel = (c, X, Y) => [...c.rgba.subarray(((Y - c.y) * c.w + (X - c.x)) * 4, ((Y - c.y) * c.w + (X - c.x)) * 4 + 4)];
+  eq("retoque del fondo: un parche de 2×2 + margen de 2 (6×6), corrido como el fondo; el centro trae el color nuevo y la orilla del margen el de antes", [parche.x, parche.y, parche.w, parche.h, pixel(parche, 5, 5), pixel(parche, 3, 3)], [3, 3, 6, 6, [200, 50, 0, 255], [100, 100, 100, 255]]);
+  eq("retoque del fondo: sin cambios, no hay parche", retoqueDeFondo(fa, fa.slice(), 20, 10, { k: 1, x: 0, y: 0 }, 30, 30), null);
+
+  const ruta = join(homedir(), "Desktop/formatos-prueba/s33-BFDIRECT20CASH.psd");
+  if (!existsSync(ruta)) console.log("  · (s33 no está en el Escritorio: no se probó con el PSD real)");
+  else {
+    const crudo = readFileSync(ruta);
+    const doc = leerPsd((await adelgazarPsd(new Blob([crudo]), PSD_BYTES_MAX)).datos);
+    const nMesa = doc.mesas.findIndex((m) => m.w === 1200 && m.h === 1500);
+    const ma = prepararMaestro(despiezar(doc, nMesa)).maestro;
+    // Como el worker: sin filtros inteligentes, con los objetos inteligentes revisados, y el mismo tope de memoria.
+    const fuente = readPsdAg(await prepararParaEditable(new Blob([crudo]), EDITABLE_MAX_BYTES), { useRawData: true, skipThumbnail: true, skipCompositeImageData: true, totalMemoryLimit: 64 * 1024 * 1024, strict: true });
+    const px = { capa: (l) => getLayerImageData(l), mascara: (l) => getLayerMaskImageData(l), mascaraReal: (l) => getLayerRealMaskImageData(l) };
+    const orig = fuente.children.find((l) => !l.hidden && l.artboard).children;
+    const hojas = (ls, ruta = []) => ls.flatMap((l) => (l.children ? hojas(l.children, [...ruta, l.name]) : [{ l, ruta: [...ruta, l.name].join(" / ") }]));
+    const arbol = (ls) => ls.map((l) => `${l.hidden ? "(oculta) " : ""}${l.name}${l.children ? ` [${arbol(l.children).join(", ")}]` : ""}`);
+    const extrasVacios = (W, H) => ({ compuesto: new Uint8ClampedArray(W * H * 4), halos: [], retoque: null });
+    // Los objetos inteligentes se revisan antes de que ag-psd los lea: un registro que declara más datos de los que
+    // trae (aquí, el primero del s33 real, con su largo de datos inflado) se rechaza y sale el PSD de capas planas.
+    const roto = new Uint8Array(crudo);
+    const enlace = Buffer.from(roto).indexOf("8BIMlnk2");
+    const dv = new DataView(roto.buffer, roto.byteOffset, roto.byteLength);
+    let q = enlace + 12 + 8 + 8; // largo del bloque y del registro, tipo y versión
+    q += 1 + roto[q];
+    q += 4 + 2 * dv.getUint32(q);
+    q += 8;
+    const sizeReg = dv.getUint32(enlace + 12 + 4);
+    dv.setUint32(q + 4, sizeReg + 1000);
+    let inseguro = "";
+    try { await prepararParaEditable(new Blob([roto]), EDITABLE_MAX_BYTES); } catch (e) { inseguro = e instanceof PsdInseguro ? e.message : `otro: ${e}`; }
+    let deEnlazados = null;
+    try { await prepararParaEditable(new Blob([roto]), EDITABLE_MAX_BYTES); } catch (e) { deEnlazados = e.deEnlazados; }
+    ok("objetos inteligentes: un registro del s33 con más datos de los que trae se rechaza ANTES de leerlo (PsdInseguro, de los objetos inteligentes)", enlace > 0 && /declara más datos/.test(inseguro) && deEnlazados === true, `${inseguro} · deEnlazados=${deEnlazados}`);
+    // Ceros en lugar del bloque de antes (GenI): ag-psd se los salta y lee el registro roto igual. El recorrido del
+    // editable también se los salta y lo revisa; el de la pantalla, no estricto, se queda como estaba (no revisa nada).
+    const genI = Buffer.from(roto).indexOf("8BIMGenI");
+    const conCeros = new Uint8Array(roto);
+    conCeros.fill(0, genI, enlace);
+    let tras = "";
+    try { await prepararParaEditable(new Blob([conCeros]), EDITABLE_MAX_BYTES); } catch (e) { tras = e instanceof PsdInseguro ? e.message : `otro: ${e}`; }
+    ok("objetos inteligentes: tras unos ceros (como los salta ag-psd) el registro roto también se revisa y se rechaza", genI > 0 && genI < enlace && /declara más datos/.test(tras), tras);
+    // Ceros ANTES del primer bloque (en lugar del de patrones, vacío): ag-psd se los salta y el recorrido también; un
+    // archivo así se arma igual, no se rechaza de más.
+    const patt = Buffer.from(crudo).indexOf("8BIMPatt");
+    const cerosArriba = new Uint8Array(crudo);
+    cerosArriba.fill(0, patt, patt + 12);
+    let arriba = "sin error";
+    try { await prepararParaEditable(new Blob([cerosArriba]), EDITABLE_MAX_BYTES); } catch (e) { arriba = `${e.constructor.name}: ${e.message}`; }
+    eq("bloques del final: ceros antes del primero se saltan como en ag-psd (el archivo sigue sirviendo)", [patt > 0 && new DataView(cerosArriba.buffer).getUint32(patt + 8) === 0, arriba], [true, "sin error"]);
+    // Lo que el recorrido estricto no sabe seguir no se conserva sin revisar: se rechaza.
+    const sinFirma = new Uint8Array(crudo);
+    sinFirma.set([0x58, 0x58, 0x58, 0x58], Buffer.from(sinFirma).indexOf("8BIMGenI"));
+    let firma = "";
+    try { await prepararParaEditable(new Blob([sinFirma]), EDITABLE_MAX_BYTES); } catch (e) { firma = e instanceof PsdInseguro ? e.message : `otro: ${e}`; }
+    let firmaEnlazados = null;
+    try { await prepararParaEditable(new Blob([sinFirma]), EDITABLE_MAX_BYTES); } catch (e) { firmaEnlazados = e.deEnlazados; }
+    ok("bloques del final: uno sin firma ya no deja el resto sin revisar (PsdInseguro de la estructura, no de los objetos inteligentes)", /no se dejan seguir/.test(firma) && firmaEnlazados === false, `${firma} · deEnlazados=${firmaEnlazados}`);
+    const psb = new Uint8Array(crudo.slice(0, 64));
+    psb[5] = 2;
+    let version = "";
+    try { await prepararParaEditable(new Blob([psb]), EDITABLE_MAX_BYTES); } catch (e) { version = e instanceof PsdInseguro ? e.message : `otro: ${e}`; }
+    ok("PSD editable: sólo PSD de versión 1 (un PSB se rechaza antes de leerlo)", /versión 1/.test(version), version);
+    eq("s33: el maestro sabe de qué mesa salió (la 4x5, la única visible; la 9-16 está oculta)", ma.origen, { mesa: 0, x: 0, y: 0, w: 1200, h: 1500, s: 1 });
+
+    // La caja de lo sólido (alfa > 50 %, con su máscara) de las capas normales de una carpeta, como la mide `despiezar`.
+    const solidoDe = (ls, W, H) => {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const { l } of hojas(ls.filter((l) => !l.hidden))) {
+        if (l.hidden || l.clipping || l.adjustment || (l.blendMode ?? "normal") !== "normal") continue;
+        const img = l.imageData ?? px.capa(l);
+        if (!img) continue;
+        const mk = l.mask && !l.mask.disabled ? l.mask : null, mi = mk && (mk.imageData ?? px.mascara(l));
+        for (let y = 0; y < img.height; y++)
+          for (let x = 0; x < img.width; x++) {
+            const X = l.left + x, Y = l.top + y;
+            if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+            let a = img.data[(y * img.width + x) * 4 + 3] * (l.opacity ?? 1);
+            if (mk) {
+              const mx = X - mk.left, my = Y - mk.top;
+              a *= (mi && mx >= 0 && my >= 0 && mx < mi.width && my < mi.height ? mi.data[(my * mi.width + mx) * 4] : (mk.defaultColor ?? 255)) / 255;
+            }
+            if (a <= 127.5) continue;
+            if (X < x0) x0 = X;
+            if (Y < y0) y0 = Y;
+            if (X > x1) x1 = X;
+            if (Y > y1) y1 = Y;
+          }
+      }
+      return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+    };
+    const carpetas = (ls) => new Map(ls.filter((l) => !l.hidden).map((l) => [l.name, l.children ?? [l]]));
+    // Calibración de la medición: en el original, la caja de cada pieza es la que midió `despiezar` (±1 px).
+    const enOrig = carpetas(orig);
+    const calibra = ma.piezas.map((p) => { const s = solidoDe(enOrig.get(p.nombre), 1200, 1500); return [p.nombre, s && Math.max(Math.abs(s.x - p.solido.x), Math.abs(s.y - p.solido.y), Math.abs(s.w - p.solido.w), Math.abs(s.h - p.solido.h))]; });
+    ok("s33: la medición de la prueba da la misma caja sólida que `despiezar` en el original (±1 px)", calibra.every(([, d]) => d !== null && d <= 1), JSON.stringify(calibra));
+
+    // El texto en un trayecto (s33: «Hasta», en arco) ag-psd no lo sabe escribir: va como imagen, y se dice.
+    const enTrayecto = (l) => l.text?.textPath?.data?.type === 2;
+    const notasEsperadas = hojas(orig).filter(({ l }) => enTrayecto(l)).map(({ l }) => ({ capa: l.name, motivo: "texto-en-trayecto", aplanada: true }));
+    eq("s33: «Hasta» es texto en un trayecto (el único)", notasEsperadas.map((n) => n.capa), ["Hasta"]);
+    // 1) IDENTIDAD: a la medida del maestro, cada capa sale igual (píxeles, caja, texto, esquinas, trazos).
+    const aId = acomodar(ma, 1200, 1500);
+    const id = psdEditable(fuente, planDeMedida(ma, aId, 1200, 1500), extrasVacios(1200, 1500), px);
+    const ho = hojas(orig), hi = hojas(id.psd.children);
+    const distintas = ho.flatMap(({ l, ruta }, i) => {
+      const n = hi[i]?.l;
+      if (!n || hi[i].ruta !== ruta) return [`${ruta}: falta`];
+      const a = px.capa(l), b = n.imageData;
+      const mal = [
+        [l.left, l.top, l.right, l.bottom].join() !== [n.left, n.top, n.right, n.bottom].join() && "caja",
+        a && (!b || a.data.length !== b.data.length || a.data.some((v, j) => v !== b.data[j])) && "píxeles",
+        JSON.stringify(enTrayecto(l) ? undefined : l.text?.transform) !== JSON.stringify(n.text?.transform) && "texto",
+        JSON.stringify(l.placedLayer?.transform) !== JSON.stringify(n.placedLayer?.transform) && "esquinas",
+        JSON.stringify(l.vectorMask?.paths) !== JSON.stringify(n.vectorMask?.paths) && "trazo",
+        JSON.stringify(l.vectorOrigination) !== JSON.stringify(n.vectorOrigination) && "forma viva",
+        JSON.stringify(l.effects) !== JSON.stringify(n.effects) && "efectos",
+        JSON.stringify([l.mask?.left, l.mask?.top, l.mask?.right, l.mask?.bottom, l.realMask?.left, l.realMask?.right]) !== JSON.stringify([n.mask?.left, n.mask?.top, n.mask?.right, n.mask?.bottom, n.realMask?.left, n.realMask?.right]) && "máscaras",
+      ].filter(Boolean);
+      return mal.length ? [`${ruta}: ${mal.join(", ")}`] : [];
+    });
+    ok(`s33 identidad: a 1200×1500 las ${ho.length} capas salen iguales (píxeles, caja, texto, esquinas, trazos, efectos, máscaras) y en el mismo árbol; sólo «Hasta» va como imagen`, distintas.length === 0 && JSON.stringify(arbol(id.psd.children)) === JSON.stringify(arbol(orig)) && JSON.stringify(id.notas) === JSON.stringify(notasEsperadas), distintas.slice(0, 6).join(" | "));
+
+    // 2) Medidas reales: escrito con ag-psd y leído de vuelta.
+    for (const [W, H] of [[1200, 627], [320, 250], [1080, 1920]]) {
+      const a = acomodar(ma, W, H);
+      const plan = planDeMedida(ma, a, W, H);
+      const t0 = performance.now();
+      const { psd, notas } = psdEditable(fuente, plan, extrasVacios(W, H), px);
+      const bytes = writePsdBuffer(psd, { invalidateTextLayers: true, noBackground: true });
+      const ms = performance.now() - t0;
+      const vuelta = readPsdAg(bytes, { useImageData: true, skipThumbnail: true });
+      const quitadas = new Set(a.quitadas.map((i) => ma.piezas[i].nombre));
+      const esperado = orig.map((l) => ({ ...l, hidden: l.hidden || quitadas.has(l.name) }));
+      const hv = hojas(vuelta.children);
+      const textos = hv.filter(({ l }) => l.text).map(({ l, ruta }) => [ruta, l.text.text, l.text.style?.font?.name]);
+      const textosOrig = ho.filter(({ l }) => l.text && !enTrayecto(l)).map(({ l, ruta }) => [ruta, l.text.text, l.text.style?.font?.name]);
+      const kDe = new Map(plan.piezas);
+      const escalas = hv.filter(({ l }) => l.text).map(({ l, ruta }, i) => {
+        const o = ho.filter(({ l }) => l.text && !enTrayecto(l))[i].l, A = kDe.get(ruta.split(" / ")[0]) ?? plan.fondo;
+        return Math.abs(l.text.transform[0] - o.text.transform[0] * A.k) < 1e-6 && Math.abs(l.text.transform[4] - (o.text.transform[4] * A.k + A.x)) < 1e-6;
+      });
+      const so = hv.filter(({ l }) => l.placedLayer);
+      const ids = new Set(so.map(({ l }) => l.placedLayer.id));
+      ok(
+        `s33 ${W}×${H}: mismo árbol que el original (carpetas, subcarpetas, orden, ocultas; quitadas: ${[...quitadas].join(", ") || "ninguna"} van ocultas), ${textos.length} textos vivos con su letra (y «Hasta», en trayecto, como imagen), ${so.length} objetos inteligentes con su archivo (${ms.toFixed(0)} ms, ${(bytes.length / 1e6).toFixed(1)} MB)`,
+        JSON.stringify(arbol(vuelta.children)) === JSON.stringify(arbol(esperado)) && JSON.stringify(textos) === JSON.stringify(textosOrig) && escalas.every(Boolean) && so.length === ho.filter(({ l }) => l.placedLayer).length && [...ids].every((i) => vuelta.linkedFiles?.some((f) => f.id === i && f.data?.length)) && JSON.stringify(notas) === JSON.stringify(notasEsperadas),
+        JSON.stringify({ arbol: arbol(vuelta.children), escalas, notas }),
+      );
+      // Cada pieza puesta: sus capas, ya leídas de vuelta, tienen su parte sólida donde la puso el acomodo (±2 px).
+      const enVuelta = carpetas(vuelta.children);
+      const lejos = a.puestas.map((q) => {
+        const s = solidoDe(enVuelta.get(ma.piezas[q.pieza].nombre), W, H);
+        const recorte = { x: Math.max(0, q.x), y: Math.max(0, q.y) };
+        return [ma.piezas[q.pieza].nombre, s && Math.max(Math.abs(s.x - Math.round(recorte.x)), Math.abs(s.y - Math.round(recorte.y)), Math.abs(Math.min(W, q.x + q.w) - recorte.x - s.w), Math.abs(Math.min(H, q.y + q.h) - recorte.y - s.h))];
+      });
+      ok(`s33 ${W}×${H}: cada pieza leída de vuelta tiene su parte sólida donde la puso el acomodo (±1.5 px: la orilla al agrandar)`, lejos.every(([, d]) => d !== null && d <= 1.5), JSON.stringify(lejos));
+      // Lo vectorial se movió con sus píxeles: el trazo de cada forma abraza su capa, las esquinas de cada objeto
+      // inteligente contienen su capa (la misma relación que en el original), y los efectos crecen o se achican con k.
+      const cajaDe = (v) => { const xs = v.filter((_, i) => i % 2 === 0), ys = v.filter((_, i) => i % 2); return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) }; };
+      const trazoLejos = hv.filter(({ l }) => l.vectorMask && l.right > l.left).map(({ l, ruta }) => { const c = cajaDe(l.vectorMask.paths.flatMap((p) => p.knots.flatMap((k) => k.points))); return [ruta, Math.max(Math.abs(c.x0 - l.left), Math.abs(c.y0 - l.top), Math.abs(c.x1 - l.right), Math.abs(c.y1 - l.bottom))]; });
+      const borde = (l) => 2 + 2 * (l.vectorStroke?.lineWidth?.value ?? 0);
+      ok(`s33 ${W}×${H}: el trazo de cada forma abraza sus píxeles (${trazoLejos.length} formas)`, trazoLejos.length > 0 && trazoLejos.every(([, d], i) => d <= borde(hv.filter(({ l }) => l.vectorMask && l.right > l.left)[i].l)), JSON.stringify(trazoLejos));
+      const fueraDeEsquinas = (ls) => ls.filter(({ l }) => l.placedLayer && l.right > l.left && (l.placedLayer.warp?.style ?? "none") === "none").map(({ l, ruta }) => { const c = cajaDe(l.placedLayer.transform); return [ruta, Math.max(c.x0 - l.left, c.y0 - l.top, l.right - c.x1, l.bottom - c.y1)]; });
+      const fe = fueraDeEsquinas(hv), feOrig = fueraDeEsquinas(ho);
+      ok(`s33 ${W}×${H}: las esquinas de cada objeto inteligente contienen su capa, como en el original (${fe.length})`, fe.length > 0 && fe.every(([, d], i) => d <= Math.max(2, feOrig[i][1] + 2)), JSON.stringify([fe, feOrig]));
+      const efectos = hv.flatMap(({ l, ruta }, i) => {
+        const o = ho[i].l, A = kDe.get(ruta.split(" / ")[0]) ?? plan.fondo;
+        return o.effects?.dropShadow ? o.effects.dropShadow.map((e, j) => Math.abs(l.effects.dropShadow[j].size.value - e.size.value * A.k) < 1e-6 && Math.abs(l.effects.dropShadow[j].distance.value - e.distance.value * A.k) < 1e-6) : [];
+      });
+      ok(`s33 ${W}×${H}: las sombras de capa (tamaño y distancia) van por la escala de su pieza (${efectos.length})`, efectos.length > 0 && efectos.every(Boolean));
+      // La forma viva (rectángulo con esquinas redondas): su caja sigue abrazando su trazo, y radios y contorno
+      // crecen o se achican con la pieza, para que Photoshop la siga editando como rectángulo.
+      const vivas = hv.flatMap(({ l, ruta }, i) => {
+        const o = ho[i].l, d = l.vectorOrigination?.keyDescriptorList?.[0], dO = o.vectorOrigination?.keyDescriptorList?.[0];
+        if (!d?.keyOriginShapeBoundingBox) return [];
+        const A = kDe.get(ruta.split(" / ")[0]) ?? plan.fondo, b = d.keyOriginShapeBoundingBox, c = cajaDe(l.vectorMask.paths.flatMap((p) => p.knots.flatMap((k) => k.points)));
+        const caja = Math.max(Math.abs(b.left.value - c.x0), Math.abs(b.top.value - c.y0), Math.abs(b.right.value - c.x1), Math.abs(b.bottom.value - c.y1));
+        const radio = !dO.keyOriginRRectRadii || ["topLeft", "topRight", "bottomLeft", "bottomRight"].every((e) => Math.abs(d.keyOriginRRectRadii[e].value - dO.keyOriginRRectRadii[e].value * A.k) < 1e-6);
+        const grosor = Math.abs(l.vectorStroke.lineWidth.value - o.vectorStroke.lineWidth.value * A.k) < 1e-6;
+        return [[ruta, +caja.toFixed(2), radio, grosor]];
+      });
+      // La matriz de una forma viva lleva su caja ORIGINAL (de cuando se dibujó) a la de hoy; en s33 los dos «Rectangle 2»
+      // (9-16 y 4x5) vuelven a la misma (1224, 660, 273×68). Movida la forma, la caja original tiene que seguir igual.
+      const original = (d) => { const [xx, , , yy, tx, ty] = d.transform, c = d.keyOriginBoxCorners; return [(c[0].x - tx) / xx, (c[0].y - ty) / yy, (c[2].x - c[0].x) / xx, (c[2].y - c[0].y) / yy].map((v) => +v.toFixed(3)); };
+      const cajasOriginales = hv.flatMap(({ l }, i) => { const d = l.vectorOrigination?.keyDescriptorList?.[0], dO = ho[i].l.vectorOrigination?.keyDescriptorList?.[0]; return d?.transform && d.keyOriginBoxCorners ? [[original(dO), original(d)]] : []; });
+      ok(`s33 ${W}×${H}: formas vivas: su caja original (la matriz al revés) no cambia al moverlas (${cajasOriginales.length})`, cajasOriginales.length > 0 && cajasOriginales.every(([a, b]) => a.every((v, j) => Math.abs(v - b[j]) < 0.01)), JSON.stringify(cajasOriginales));
+      ok(`s33 ${W}×${H}: formas vivas: su caja abraza el trazo (±2 px), radios y contorno por k (${vivas.length})`, vivas.length > 0 && vivas.every(([, c, r, g]) => c <= 2 && r && g), JSON.stringify(vivas));
+      if (W === 1200) {
+        // Una pieza quitada en la medida (s33 no trae SUBTITULO suelto: se simula quitando el CTA) va oculta, con el fondo.
+        const iCta = ma.piezas.findIndex((p) => p.rol === "CTA");
+        const sin = psdEditable(fuente, planDeMedida(ma, { ...a, puestas: a.puestas.filter((q) => q.pieza !== iCta), quitadas: [iCta] }, W, H), extrasVacios(W, H), px).psd;
+        const cta = sin.children.find((l) => l.name === ma.piezas[iCta].nombre);
+        const tx = hojas(cta.children).find(({ l }) => l.text).l.text.transform, txo = ho.find(({ l }) => l.text && l.name === "Aplica hoy").l.text.transform;
+        ok("s33: una pieza quitada en la medida va oculta, movida con el fondo (para prenderla a mano)", cta.hidden === true && Math.abs(tx[0] - txo[0] * plan.fondo.k) < 1e-9 && sin.children.filter((l) => l.hidden).length === 2, JSON.stringify([cta.hidden, tx, plan.fondo]));
+        // El CTA al frente (Pedro, 2026-10-19: "re arrenge layers"): su carpeta sube encima de las demás piezas, entera;
+        // el fondo sigue abajo y la capa oculta de arriba se queda arriba.
+        const ordenAlFrente = [...a.puestas.map((q) => q.pieza).filter((p) => p !== iCta), iCta];
+        const alFrente = aplicarEdicion(ma, a, { piezas: {}, orden: ordenAlFrente }, W, H);
+        const arriba = readPsdAg(writePsdBuffer(psdEditable(fuente, planDeMedida(ma, alFrente, W, H), extrasVacios(W, H), px).psd, { invalidateTextLayers: true, noBackground: true }), { skipLayerImageData: true, skipCompositeImageData: true, skipThumbnail: true });
+        const nombresArriba = arriba.children.map((l) => l.name), nombresOrig = orig.map((l) => l.name);
+        const ctaNombre = ma.piezas[iCta].nombre;
+        const esperadoArriba = (() => {
+          const piezasN = new Set(a.puestas.map((q) => ma.piezas[q.pieza].nombre));
+          const nuevas = ordenAlFrente.map((p) => ma.piezas[p].nombre);
+          let i = 0;
+          return nombresOrig.map((n, j) => (piezasN.has(n) && !orig[j].hidden ? nuevas[i++] : n));
+        })();
+        eq("s33 1200×627: el CTA al frente: su carpeta va arriba de las demás piezas, el fondo abajo y la oculta en su lugar", [nombresArriba, nombresArriba.at(-2), JSON.stringify(arbol(arriba.children.find((l) => l.name === ctaNombre).children)) === JSON.stringify(arbol(orig.find((l) => l.name === ctaNombre).children))], [esperadoArriba, ctaNombre, true]);
+      }
+    }
+  }
+}
+
+console.log("\n▶ lectura de la pantalla en modo estricto: los PSD reales se leen igual y uno roto no reserva memoria");
+{
+  const dir = join(homedir(), "Desktop/formatos-prueba");
+  // 2 de Photoshop y 3 que escribió HÜE (el «PSD» por medida del 2026-10-15, para que diseño los abriera).
+  const reales = ["s33-BFDIRECT20CASH.psd", "APGIANTCARDUGC 2.psd", "psd-prueba/s33_1080x1920_capas.psd", "psd-prueba/s33_1200x627_capas.psd", "psd-prueba/s33_1200x627_objetos-inteligentes.psd"].map((f) => join(dir, f)).filter((r) => existsSync(r));
+  if (!reales.length) console.log("  · (los PSD de prueba no están en el Escritorio: no se probó con los reales)");
+  const LEER = { useRawData: true, useRawThumbnail: true, skipLinkedFilesData: true, totalMemoryLimit: 64 * 1024 * 1024 }; // las de leerPsd, sin strict
+  const huella = (psd) => JSON.stringify(psd, (_, x) => (ArrayBuffer.isView(x) ? `${x.byteLength}:${createHash("sha1").update(x).digest("hex")}` : x));
+  const flaco = async (bytes) => new Uint8Array((await adelgazarPsd(new Blob([bytes]), PSD_BYTES_MAX)).datos);
+  for (const ruta of reales) {
+    const datos = await flaco(readFileSync(ruta));
+    let estricto, doc = null;
+    try { estricto = huella(readPsdAg(datos, { ...LEER, strict: true })); doc = leerPsd(datos); } catch (e) { estricto = `falla: ${e.message}`; }
+    ok(`${ruta.split("/").pop()}: se lee en modo estricto, con el MISMO árbol que sin él (${doc?.mesas.length} mesas, ${doc?.capas.length} capas visibles)`, doc !== null && estricto === huella(readPsdAg(datos, LEER)), estricto.slice(0, 200));
+  }
+  const ruta = join(dir, "s33-BFDIRECT20CASH.psd");
+  if (existsSync(ruta)) {
+    const crudo = readFileSync(ruta);
+    const sinStrict = (datos) => {
+      const avisos = [];
+      try { readPsdAg(datos, { ...LEER, debug: true, log: (m) => avisos.push(m) }); } catch (e) { return `no se abre: ${e.message}`; }
+      return `se abre · ${avisos.join(" · ")}`;
+    };
+    const RESERVA = "se abre · Reading bytes exceeding buffer length";
+    // A. El último canal con datos (el de la última capa; son lo último de la información de capas) dice medir 50 MB más
+    // de lo que trae: pasa del final del archivo. Sin strict, ag-psd reservaba esos 50 MB en ceros y abría el archivo.
+    const roto = new Uint8Array(crudo), v = new DataView(roto.buffer);
+    let p = 26;
+    p += 4 + v.getUint32(p); // datos de color
+    p += 4 + v.getUint32(p); // recursos
+    p += 8; // largo de capas y máscaras, y de la información de capas
+    const n = Math.abs(v.getInt16(p));
+    p += 2;
+    let canal = -1;
+    for (let i = 0; i < n; i++) {
+      p += 16;
+      const nc = v.getUint16(p);
+      p += 2;
+      for (let c = 0; c < nc; c++, p += 6) if (v.getUint32(p + 2) >= 2) canal = p + 2;
+      p += 12; // firma, fusión, opacidad, recorte, banderas, relleno
+      p += 4 + v.getUint32(p);
+    }
+    v.setUint32(canal, v.getUint32(canal) + 50_000_000);
+    const datosA = await flaco(roto);
+    let errA = null;
+    try { leerPsd(datosA); } catch (e) { errA = e; }
+    eq("s33 con un canal que pasa del final del archivo: sin strict se abría reservando 50 MB en ceros; ahora se rechaza («no-soportado», con el mensaje claro)", [sinStrict(datosA), errA instanceof ErrorPsd && errA.motivo, errA?.message], [RESERVA, "no-soportado", PSD_MAL_FORMADO]);
+    // B. Lo mismo DENTRO del bloque de una capa: el texto vivo de «Hasta» (el último bloque TySh del archivo) dice medir
+    // 50 MB. Con strict, ag-psd se salta sólo ese bloque: el archivo se abre igual y «Hasta» llega sin su texto vivo.
+    const rotoB = new Uint8Array(crudo), b = Buffer.from(rotoB.buffer);
+    new DataView(rotoB.buffer).setUint32(b.indexOf("EngineDatatdta", b.lastIndexOf("8BIMTySh")) + 14, 50_000_000);
+    const datosB = await flaco(rotoB);
+    const sano = leerPsd(await flaco(crudo));
+    let docB = null;
+    try { docB = leerPsd(datosB); } catch { /* lo dice la prueba */ }
+    const textos = (d) => d?.capas.filter((c) => c.texto).map((c) => c.nombre) ?? [];
+    eq("s33 con el texto de «Hasta» diciendo medir 50 MB: sin strict reservaba los 50 MB; con strict se abre con las mismas capas y sólo «Hasta» pierde su texto vivo", [sinStrict(datosB), docB?.capas.map((c) => c.nombre).join("|") === sano.capas.map((c) => c.nombre).join("|"), textos(sano).filter((t) => !textos(docB).includes(t))], [RESERVA, true, ["Hasta"]]);
+    // C. Un PSD cortado (una descarga a medias): antes salía el error de ag-psd en inglés; ahora, el mensaje claro.
+    let errC = null;
+    try { leerPsd(await flaco(crudo.subarray(0, Math.floor(crudo.length * 0.6)))); } catch (e) { errC = e; }
+    eq("s33 cortado al 60 %: «no-soportado» con el mensaje claro, no el de la librería", [errC instanceof ErrorPsd && errC.motivo, errC?.message], ["no-soportado", PSD_MAL_FORMADO]);
+    // D. Lo que Formatos no lee, con qué hacer en español (antes: "Color mode not supported: CMYK"). Sólo cambia la
+    // cabecera de s33: modo de color en el byte 24 (4 CMYK, 9 Lab, 5 uno sin nombre), bits por canal en el 22.
+    const base = await flaco(crudo);
+    const conCabecera = (pos, valor) => {
+      const c = new Uint8Array(base);
+      new DataView(c.buffer).setUint16(pos, valor);
+      return c;
+    };
+    const lectura = (bytes) => { try { leerPsd(bytes); return "se abre"; } catch (e) { return e instanceof ErrorPsd ? `${e.motivo}: ${e.message}` : `otro: ${e}`; } };
+    eq("s33 en CMYK, Lab, un modo sin nombre y 16 bits: «no-soportado» con el modo y qué hacer, en español", [conCabecera(24, 4), conCabecera(24, 9), conCabecera(24, 5), conCabecera(22, 16)].map(lectura), [
+      "no-soportado: El PSD está en CMYK y Formatos sólo lee RGB. Qué hacer: guarda una copia en RGB (en Photoshop: Imagen › Modo › Color RGB) y elige esa copia aquí.",
+      `no-soportado: ${noEsRgb("lab")}`,
+      "no-soportado: El PSD está en un modo de color que no es RGB y Formatos sólo lee RGB. Qué hacer: guarda una copia en RGB (en Photoshop: Imagen › Modo › Color RGB) y elige esa copia aquí.",
+      `no-soportado: ${noEs8Bits(16)}`,
+    ]);
+    ok("los mensajes nombran el modo y los bits que trae el archivo", noEsRgb("lab").includes("está en Lab") && noEs8Bits(16).includes("está en 16 bits"));
+  }
+}
+
+// ── 2b · partes: las subcarpetas de una pieza se mueven solas en el editor ─────────
+console.log("\n▶ 2b · partes de una pieza (subcarpetas): lectura, despiece, edición, pintado y los dos PSD");
+{
+  // Sintético: un botón (subcarpeta) y una flecha suelta encima que le tapa una esquina (30×30 de sus 100×60).
+  const W = 200, H = 120;
+  const img = (w, h, fn) => {
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const [r, g, b, a = 255] = fn(x, y); data.set([r, g, b, a], (y * w + x) * 4); }
+    return { data, width: w, height: h };
+  };
+  const capa = (name, [l, t, w, h], color, extra = {}) => ({ name, left: l, top: t, right: l + w, bottom: t + h, blendMode: "normal", opacity: 1, imageData: img(w, h, () => color), ...extra });
+  const carpeta = (name, children, extra = {}) => ({ name, opened: true, children, ...extra });
+  const dentro = (x, y, [l, t, w, h]) => x >= l && x < l + w && y >= t && y < t + h;
+  const ROJO = [230, 30, 30], AZUL = [20, 40, 220], GRIS = [100, 100, 100];
+  const R = { boton: [20, 20, 100, 60], flecha: [90, 30, 60, 30] };
+  const verdad = (x, y) => (dentro(x, y, R.flecha) ? AZUL : dentro(x, y, R.boton) ? ROJO : GRIS);
+  const arbolCta = (extra = []) => [
+    carpeta("Background", [capa("base", [0, 0, W, H], GRIS)]),
+    carpeta("CTA", [carpeta("boton", [capa("rojo", R.boton, ROJO)]), capa("flecha", R.flecha, AZUL), carpeta("vacia", []), carpeta("oculta", [capa("verde", [0, 0, 10, 10], [0, 255, 0])], { hidden: true })]),
+    ...extra,
+  ];
+  const psdDe = (children) => writePsdBuffer({ width: W, height: H, children, imageData: img(W, H, verdad), imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } } });
+  const cerca = (a, b, tol) => a.length >= b.length && b.every((v, i) => Math.abs(a[i] - v) <= tol);
+
+  const doc = leerPsd(psdDe(arbolCta()));
+  eq("leerPsd: cada capa sabe su carpeta de primer nivel y su subcarpeta (las sueltas: null; la oculta no entra)", doc.capas.map((c) => [c.nombre, c.carpeta, c.parte?.hijo ?? null, c.parte?.nombre ?? null]), [["base", 0, null, null], ["rojo", 1, 0, "boton"], ["flecha", 1, null, null]]);
+  const ma = despiezar(doc, 0);
+  const cta = ma.piezas.find((p) => p.nombre === "CTA");
+  eq("despiezar: la pieza trae 2 partes (la subcarpeta y la suelta; la vacía y la oculta no cuentan), en el orden de su primera capa, con su caja", cta.partes?.map((q) => [q.nombre, q.hijo, q.caja]), [["boton", 0, { x: 20, y: 20, w: 100, h: 60 }], ["flecha", null, { x: 90, y: 30, w: 60, h: 30 }]]);
+  const pxDe = (p, x, y) => [...p.rgba.subarray(((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4, ((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4 + 4)];
+  const [boton, flecha] = cta.partes;
+  ok(
+    `la parte tapada se rellena con su color (${pxDe(boton, 100, 45)}) y se mide lo tapado (${boton.rellenoPct.toFixed(1)} %); la de encima sale exacta (${pxDe(flecha, 120, 45)}), sin relleno`,
+    cerca(pxDe(boton, 100, 45), [...ROJO, 255], 3) && Math.abs(boton.rellenoPct - 15) < 0.5 && flecha.rellenoPct === 0 && cerca(pxDe(flecha, 120, 45), [...AZUL, 255], 1),
+  );
+  eq("cada parte sabe qué partes le tapan algo (el botón: la flecha; la flecha: ninguna)", [boton.tapadaPor, flecha.tapadaPor], [[1], []]);
+  const conPartes = (m) => ({ ...m, piezas: m.piezas.flatMap((p) => p.partes ?? [p]) });
+  ok("rearmar con las partes en su lugar da lo mismo que con la pieza entera", rearmar(conPartes(ma)).every((v, i) => Math.abs(v - rearmar(ma)[i]) <= 1));
+  {
+    // Un velo casi transparente (6 %) sobre la mitad verde de un botón rojo y verde: lo tapado se rellena con el rojo de al
+    // lado, y des-mezclar el velo sobre ese rojo se pasa de rango. Juntas, las partes no dan la pieza: va entera, con aviso.
+    const VERDE = [30, 200, 60], BLANCO = [255, 255, 255];
+    const mitad = [70, 20, 50, 60];
+    const verdad2 = (x, y) => (dentro(x, y, mitad) ? VERDE.map((v, c) => v * 0.94 + BLANCO[c] * 0.06) : dentro(x, y, R.boton) ? ROJO : GRIS);
+    const dos = { name: "dos", left: 20, top: 20, right: 120, bottom: 80, blendMode: "normal", opacity: 1, imageData: img(100, 60, (x) => (x < 50 ? ROJO : VERDE)) };
+    const arbol = [carpeta("Background", [capa("base", [0, 0, W, H], GRIS)]), carpeta("CTA", [carpeta("boton", [dos]), capa("velo", mitad, BLANCO, { opacity: 0.06 })])];
+    const mv = despiezar(leerPsd(writePsdBuffer({ width: W, height: H, children: arbol, imageData: img(W, H, verdad2), imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } } })), 0);
+    const pv = mv.piezas.find((p) => p.nombre === "CTA");
+    ok("si las partes, juntas, no dan la pieza (la prueba del rearmado, por pieza), se mueve entera y se avisa", !pv.partes && mv.avisos.some((v) => v.includes("«CTA» se mueve entera") && v.includes("no dan la pieza")), JSON.stringify(mv.avisos));
+  }
+  const doble = despiezar(leerPsd(psdDe(arbolCta([carpeta("CTA", [capa("otra", [150, 90, 20, 20], [0, 0, 0])])]))), 0);
+  ok("dos carpetas «CTA» son una pieza, pero sin partes (sus subcarpetas no se emparejan)", doble.piezas.filter((p) => p.nombre === "CTA").length === 1 && !doble.piezas.find((p) => p.nombre === "CTA").partes);
+
+  // Edición: la flecha 30 px a la derecha y 40 abajo, relativo a la pieza (sin tocar: 70, 10 desde su esquina sólida).
+  const lista = prepararMaestro(ma).maestro;
+  const auto = acomodar(lista, W, H);
+  const iC = lista.piezas.findIndex((p) => p.nombre === "CTA"), q0 = auto.puestas.find((q) => q.pieza === iC);
+  eq("una parte sin tocar está donde va en el maestro, relativo a su pieza", [parteSinTocar(lista.piezas[iC], 1), [q0.x, q0.y, q0.k]], [{ x: 70, y: 10, k: 1 }, [20, 20, 1]]);
+  ok("sin tocar partes la pieza no se abre (mismo acomodo, sin `partes`)", aplicarEdicion(lista, auto, { piezas: {} }, W, H) === auto && !q0.partes);
+  const rel = { x: 100, y: 50, k: 1 };
+  const a1 = aplicarEdicion(lista, auto, { piezas: {}, partes: { [iC]: { 1: rel } } }, W, H);
+  const q1 = a1.puestas.find((q) => q.pieza === iC);
+  eq("una parte movida: la pieza se abre en sus 2 partes y la otra queda en su lugar del maestro", q1.partes?.map((pp) => [pp.parte, pp.x, pp.y, pp.k]), [[0, 20, 20, 1], [1, 120, 70, 1]]);
+  ok("y se avisa del relleno («boton» tenía 15 % tapado por la flecha)", a1.editada && a1.avisos.some((v) => v.tipo === "relleno" && v.texto.includes("«boton»") && v.texto.includes("15.0 %")), JSON.stringify(a1.avisos));
+  const en = (px, x, y) => [...px.subarray((y * W + x) * 4, (y * W + x) * 4 + 3)];
+  {
+    // Una tercera parte lejos: moverla abre la pieza, pero lo rellenado del botón sigue tapado por la flecha.
+    const m3 = despiezar(leerPsd(psdDe(arbolCta().map((l) => (l.name === "CTA" ? { ...l, children: [...l.children, carpeta("extra", [capa("punto", [150, 90, 20, 20], GRIS)])] } : l)))), 0);
+    const l3 = prepararMaestro(m3).maestro, i3 = l3.piezas.findIndex((p) => p.nombre === "CTA"), auto3 = acomodar(l3, W, H);
+    const lejos = (j, dx, dy) => ({ [j]: { ...parteSinTocar(l3.piezas[i3], j), x: parteSinTocar(l3.piezas[i3], j).x + dx, y: parteSinTocar(l3.piezas[i3], j).y + dy } });
+    const avisa = (ed) => aplicarEdicion(l3, auto3, { piezas: {}, ...ed }, W, H).avisos.some((v) => v.tipo === "relleno");
+    eq(
+      "el relleno se avisa sólo si se puede ver: mover otra parte no; mover la de encima o la tapada, o pasar la de encima abajo, sí",
+      [l3.piezas[i3].partes.map((q) => q.nombre), avisa({ partes: { [i3]: lejos(2, -10, 0) } }), avisa({ partes: { [i3]: lejos(1, 30, 40) } }), avisa({ partes: { [i3]: lejos(0, 0, 5) } }), avisa({ ordenPartes: { [i3]: [1, 0, 2] } })],
+      [["boton", "flecha", "extra"], false, true, true, true],
+    );
+  }
+  // Sombra de contraste de una pieza abierta: todas van debajo de TODAS sus partes (la de la flecha no oscurece al botón).
+  const conSombra = { ...a1, sombras: [iC] };
+  const pxS = armarMedida(lista, conSombra, W, H);
+  ok(`sombra de contraste con la pieza abierta: el botón, junto a la flecha movida, queda de su color (${en(pxS, 118, 75)}) aunque la sombra de la flecha llega ahí, y fuera de las partes sí oscurece (${en(pxS, 118, 90)})`, cerca(en(pxS, 118, 75), ROJO, 4) && en(pxS, 118, 90).every((v, c) => v < GRIS[c] - 3));
+  eq("en el PSD de capas planas, igual: las sombras de contraste primero en la carpeta, luego las partes", plano0(psdDeMedida(lista, conSombra, W, H)), [CAPA_SOMBRA_CONTRASTE, CAPA_SOMBRA_CONTRASTE, "boton", "flecha"]);
+  const px1 = armarMedida(lista, a1, W, H);
+  ok(`pintado: donde estaba la flecha se ve el botón rellenado (${en(px1, 100, 45)}), lo que dejó fuera del botón es fondo (${en(px1, 135, 45)}) y la flecha está en su lugar nuevo (${en(px1, 150, 85)})`, cerca(en(px1, 100, 45), ROJO, 4) && cerca(en(px1, 135, 45), GRIS, 1) && cerca(en(px1, 150, 85), AZUL, 1));
+  ok("abrir la pieza dejando cada parte en su lugar pinta exactamente lo mismo que la pieza entera (a la medida del maestro)", armarMedida(lista, aplicarEdicion(lista, auto, { piezas: {}, partes: { [iC]: { 1: parteSinTocar(lista.piezas[iC], 1) } } }, W, H), W, H).every((v, i) => v === armarMedida(lista, auto, W, H)[i]));
+  const a2 = aplicarEdicion(lista, auto, { piezas: { [iC]: { x: 10, y: 15, k: 1 } }, partes: { [iC]: { 1: rel } } }, W, H);
+  eq("mover la pieza mueve sus partes (van pegadas a ella)", a2.puestas.find((q) => q.pieza === iC).partes.map((pp) => [pp.x, pp.y]), [[10, 15], [110, 65]]);
+  const a3 = aplicarEdicion(lista, auto, { piezas: { [iC]: { x: 20, y: 20, k: 0.5 } }, partes: { [iC]: { 1: rel } } }, W, H);
+  eq("achicar la pieza achica sus partes y lo que las separa, desde la esquina de la pieza", a3.puestas.find((q) => q.pieza === iC).partes.map((pp) => [pp.x, pp.y, pp.k]), [[20, 20, 0.5], [70, 45, 0.5]]);
+  const a4 = aplicarEdicion(lista, auto, { piezas: {}, ordenPartes: { [iC]: [1, 0] } }, W, H);
+  ok("orden de las partes (sólo dentro de su pieza): la flecha abajo del botón; donde se enciman se ve el botón", a4.puestas.find((q) => q.pieza === iC).partes.map((pp) => pp.parte).join() === "1,0" && cerca(en(armarMedida(lista, a4, W, H), 100, 45), ROJO, 4));
+  ok("el mismo orden del automático no abre la pieza", aplicarEdicion(lista, auto, { piezas: {}, ordenPartes: { [iC]: [0, 1] } }, W, H) === auto);
+  const a5 = aplicarEdicion(lista, auto, { piezas: {}, partes: { [iC]: { 1: { x: 100, y: 50, k: 1e-6 } } } }, W, H);
+  ok("una parte achicada a casi nada se queda en el mínimo que deja el editor (como una pieza)", Math.abs(a5.puestas.find((q) => q.pieza === iC).partes[1].k * 30 - 6) < 1e-9);
+  ok("la caché distingue partes movidas (otra firma, otro resultado)", revisarMedida([lista], W, H, { edicion: { piezas: {}, partes: { [iC]: { 1: rel } } } }) !== revisarMedida([lista], W, H, { edicion: { piezas: {}, partes: { [iC]: { 1: { ...rel, x: 101 } } } } }));
+  // Lo guardado: partes y orden de partes se leen sin confiar.
+  const avisos = [], warnAntes = console.warn;
+  console.warn = (...a) => avisos.push(a.join(" "));
+  const leidas = [
+    leerEdicion({ piezas: {}, partes: { [iC]: { 1: rel, 5: rel, x: rel, 0: { x: NaN, y: 0, k: 1 } }, 9: { 0: rel } }, ordenPartes: { [iC]: [1, 0] } }, lista.piezas),
+    leerEdicion({ ordenPartes: { [iC]: [1, 1] } }, lista.piezas),
+    leerEdicion({ partes: { [iC]: { 1: rel } } }, lista.piezas.length),
+  ];
+  console.warn = warnAntes;
+  eq("lo guardado: una parte que no existe o con números rotos se salta; un orden de partes repetido se descarta y se avisa; sin saber las partes, no se leen", [...leidas, avisos.length], [{ piezas: {}, partes: { [iC]: { 1: rel } }, ordenPartes: { [iC]: [1, 0] } }, null, null, 1]);
+  // Los dos PSD.
+  function plano0(psd) {
+    return psd.children.find((l) => l.name === "CTA").children.map((l) => l.name);
+  }
+  const plano = readPsdAg(writePsdBuffer(psdDeMedida(lista, a1, W, H), { noBackground: true }), { skipLayerImageData: true, skipCompositeImageData: true, skipThumbnail: true });
+  eq("PSD de capas planas: la pieza abierta lleva una capa por parte en su carpeta, cada una en su lugar (con el px de margen del filtro)", plano.children.map((l) => [l.name, (l.children ?? []).map((c) => [c.name, c.left, c.top])]), [["BACKGROUND", [["Fondo", 0, 0]]], ["CTA", [["boton", 19, 19], ["flecha", 119, 69]]]]);
+  eq("las capas de la medida dicen de qué parte son (null = la pieza entera)", [capasDeMedida(lista, a1, W, H).piezas.map((c) => c.parte), capasDeMedida(lista, auto, W, H).piezas.map((c) => c.parte)], [[0, 1], [null]]);
+  eq("sombra de contraste: una por parte si la pieza se abrió, una si no", [halosEnMedida(lista, q1).length, halosEnMedida(lista, q0).length], [2, 1]);
+
+  const ruta = join(homedir(), "Desktop/formatos-prueba/s33-BFDIRECT20CASH.psd");
+  if (!existsSync(ruta)) console.log("  · (s33 no está en el Escritorio: no se probaron las partes con el PSD real)");
+  else {
+    const crudo = readFileSync(ruta);
+    const d33 = leerPsd((await adelgazarPsd(new Blob([crudo]), PSD_BYTES_MAX)).datos);
+    const m33 = despiezar(d33, d33.mesas.findIndex((m) => m.w === 1200 && m.h === 1500));
+    eq(
+      "s33: Legales (Iconos + el legal), Copy (Subtitulo + Hasta; Titulo está vacía) y Logo (logo y divisor sueltos + buenfin) traen partes; CTA y CARD no",
+      m33.piezas.map((p) => [p.nombre, p.partes?.map((q) => [q.nombre.slice(0, 20), q.hijo]) ?? null]),
+      [["CTA", null], ["Legales", [["Iconos", 0], ["Regigold, S.A. de C.", null]]], ["Copy", [["Subtitulo", 0], ["Hasta", null]]], ["CARD", null], ["Logo", [["Logo DD_Card + Shape", null], ["buenfin", 1]]]],
+    );
+    const dif = rearmar(conPartes(m33)), ref = rearmar(m33);
+    ok("s33: ninguna parte tapa a otra (0 % de relleno) y rearmar con las partes da exactamente lo mismo que con las piezas", m33.piezas.every((p) => (p.partes ?? []).every((q) => q.rellenoPct === 0)) && dif.every((v, i) => v === ref[i]));
+    ok("s33: los textos de cada parte son los MISMOS objetos que los de su pieza (la página reconoce cuáles escribir)", m33.piezas.every((p) => (p.partes ?? []).every((q) => q.textos.every((t) => p.textos.includes(t)))) && m33.piezas.find((p) => p.nombre === "Legales").partes[1].textos.length === 1);
+    const l33 = prepararMaestro(m33).maestro;
+    const iL = l33.piezas.findIndex((p) => p.nombre === "Legales"), iLogo = l33.piezas.findIndex((p) => p.nombre === "Logo");
+    // Abrir las tres sin mover nada: a la medida del maestro, idéntico; en otra, sólo la orilla del filtro entre partes.
+    const abiertas = { piezas: {}, partes: Object.fromEntries(l33.piezas.flatMap((p, i) => (p.partes ? [[i, { 0: parteSinTocar(p, 0) }]] : []))) };
+    const pierde = (W2, H2) => { const a = acomodar(l33, W2, H2); return [perdidas(l33, a, W2, H2), perdidas(l33, aplicarEdicion(l33, a, abiertas, W2, H2), W2, H2)]; };
+    const [p0, p1] = pierde(1200, 1500);
+    ok(`s33: el contraste de una pieza abierta sin mover se mide como el de la pieza entera (${[...p0].map(([i, v]) => `${l33.piezas[i].nombre} ${v.toFixed(3)}/${(p1.get(i) ?? NaN).toFixed(3)}`).join(", ")})`, [...p0].every(([i, v]) => Math.abs(v - (p1.get(i) ?? NaN)) < 0.03));
+    const maxDif = (W2, H2) => { const a = acomodar(l33, W2, H2), x = armarMedida(l33, a, W2, H2), y = armarMedida(l33, aplicarEdicion(l33, a, abiertas, W2, H2), W2, H2); let m = 0; for (let i = 0; i < x.length; i++) m = Math.max(m, Math.abs(x[i] - y[i])); return m; };
+    const difs = [[1200, 1500], [1080, 1920], [1200, 627], [320, 250]].map(([w, h]) => maxDif(w, h));
+    ok(`s33: abrir las piezas sin mover nada pinta lo mismo a 1200×1500 (0) y casi lo mismo en otras medidas (máx. ${difs.slice(1).join(", ")} niveles, la orilla entre partes)`, difs[0] === 0 && difs.slice(1).every((d) => d <= 8), JSON.stringify(difs));
+    // PSD editable: el legal 40 px a la derecha (del maestro) y el orden del Logo al revés.
+    const fuente = readPsdAg(await prepararParaEditable(new Blob([crudo]), EDITABLE_MAX_BYTES), { useRawData: true, skipThumbnail: true, skipCompositeImageData: true, totalMemoryLimit: 64 * 1024 * 1024, strict: true });
+    const px = { capa: (l) => getLayerImageData(l), mascara: (l) => getLayerMaskImageData(l), mascaraReal: (l) => getLayerRealMaskImageData(l) };
+    const hojas = (ls, r = []) => ls.flatMap((l) => (l.children ? hojas(l.children, [...r, l.name]) : [{ l, ruta: [...r, l.name].join(" / ") }]));
+    const vacios = (W2, H2) => ({ compuesto: new Uint8ClampedArray(W2 * H2 * 4), halos: [], retoque: null });
+    const a = acomodar(l33, 1200, 627);
+    const sinTocar = parteSinTocar(l33.piezas[iL], 1);
+    const ae = aplicarEdicion(l33, a, { piezas: {}, partes: { [iL]: { 1: { ...sinTocar, x: sinTocar.x + 40 } } }, ordenPartes: { [iLogo]: [1, 0] } }, 1200, 627);
+    const plan = planDeMedida(l33, ae, 1200, 627);
+    eq("plan del PSD editable: Legales y Logo van abiertas (cada parte con su subcarpeta; null = las sueltas) y el Logo con su orden", plan.partes?.map((x) => [x.pieza, x.partes.map((p) => p.hijo), x.orden ?? null]), [["Legales", [0, null], null], ["Logo", [1, null], [1, null]]]);
+    const sinAbrir = psdEditable(fuente, planDeMedida(l33, a, 1200, 627), vacios(1200, 627), px).psd;
+    const halosL = halosEnMedida(l33, ae.puestas.find((q) => q.pieza === iL)).map((c) => ({ nombre: "Legales", capa: c }));
+    const abierto = readPsdAg(writePsdBuffer(psdEditable(fuente, plan, { ...vacios(1200, 627), halos: halosL }, px).psd, { invalidateTextLayers: true, noBackground: true }), { useImageData: true, skipThumbnail: true });
+    const en33 = (psd, c, n) => hojas(psd.children.find((l) => l.name === c).children).find(({ l }) => l.name.startsWith(n)).l;
+    const k = plan.piezas.find(([n]) => n === "Legales")[1].k;
+    const t0 = en33(sinAbrir, "Legales", "Regigold").text.transform, t1 = en33(abierto, "Legales", "Regigold").text.transform;
+    ok(
+      `s33 1200×627: el legal (texto vivo) se movió 40 px del maestro (${(t1[4] - t0[4]).toFixed(2)} px = 40 × ${k.toFixed(3)}) y los iconos de su otra parte no`,
+      Math.abs(t1[4] - t0[4] - 40 * k) < 1e-4 && Math.abs(t1[5] - t0[5]) < 1e-9 && JSON.stringify(en33(sinAbrir, "Legales", "Icon DD").placedLayer.transform) === JSON.stringify(en33(abierto, "Legales", "Icon DD").placedLayer.transform),
+      JSON.stringify([t0, t1]),
+    );
+    // El tope de cada medida mide cada hijo con el movimiento de SU parte: partes enormes (un dato que el editor no deja)
+    // se rechazan antes de decodificar nada, aunque sus piezas estén a su tamaño.
+    const a19 = acomodar(l33, 1080, 1920);
+    const sinMover = { piezas: {}, partes: { [iL]: { 0: parteSinTocar(l33.piezas[iL], 0) }, [iLogo]: { 0: parteSinTocar(l33.piezas[iLogo], 0) } } };
+    const plan19 = planDeMedida(l33, aplicarEdicion(l33, a19, sinMover, 1080, 1920), 1080, 1920);
+    // Cada parte 60 veces más grande, con su esquina sólida fuera de la medida arriba a la izquierda: sus capas la cubren.
+    const o19 = plan19.origen, os = o19.s ?? 1;
+    const enorme = {
+      ...plan19,
+      partes: plan19.partes.map((x) => ({
+        ...x,
+        partes: x.partes.map((p) => {
+          const sol = l33.piezas.find((pz) => pz.nombre === x.pieza).partes.find((q) => q.hijo === p.hijo).solido;
+          return { ...p, A: { k: 60, x: -1080 - 60 * (sol.x / os + o19.x), y: -1920 - 60 * (sol.y / os + o19.y) } };
+        }),
+      })),
+    };
+    let tope = null;
+    try {
+      psdEditable(fuente, enorme, vacios(1080, 1920), px);
+    } catch (err) {
+      tope = err;
+    }
+    ok(`s33: el tope del PSD editable mide la parte con su propio movimiento (${tope?.message})`, tope instanceof TopeEditable && !tope.deArchivo && /en esta medida/.test(tope.message) && plan19.partes.length === 2);
+    const nombres = (psd) => psd.children.map((l) => l.name);
+    eq(
+      "s33 1200×627: el Logo con sus partes al revés (buenfin abajo de las sueltas, que no se separan entre sí), lo demás igual; las sombras de contraste de cada parte del legal van juntas justo debajo de su carpeta",
+      [abierto.children.find((l) => l.name === "Logo").children.map((l) => l.name), hojas(abierto.children).length - 2 === hojas(sinAbrir.children).length, nombres(abierto).slice(nombres(abierto).indexOf("Legales") - 2, nombres(abierto).indexOf("Legales") + 1)],
+      [["buenfin", "Logo DD_Card", "Shape 1"], true, [CAPA_SOMBRA_CONTRASTE, CAPA_SOMBRA_CONTRASTE, "Legales"]],
+    );
+  }
+}
+
+// ── 3 · textos editables: letras nuevas en todas las medidas; quitar un texto en una ─────────
+console.log("\n▶ 3 · textos editables: cambiar las letras (todas las medidas, la caja crece hacia abajo) y quitar un texto en una medida");
+{
+  const tramo = (n, extra = {}) => ({ n, fuente: "F-Regular", tam: 10, color: [200, 20, 40], track: 0, interlineado: null, subir: 0, mayusculas: false, ...extra });
+  const capaT = (texto, caja = null, tramos = [tramo(texto.length)]) => ({ texto, tramos, alineacion: "left", transform: [1, 0, 0, 1, 20, 30], caja, motivo: null });
+  eq("porQueNoSeCambia: su motivo de siempre, o nada (sí se cambia; con varios estilos también, B30)", [porQueNoSeCambia({ ...capaT("ab"), motivo: "efectos de capa" }), porQueNoSeCambia(capaT("ab", null, [tramo(1), tramo(1, { tam: 12 })])), porQueNoSeCambia(capaT("ab"))], ["efectos de capa", null, null]);
+  const tc = textoCambiado(capaT("ab"), "uno\r\ndos\rtres\u0003cuatro");
+  eq("textoCambiado: los saltos de Windows, de Mac y de caja de Photoshop pasan a \\n, y su único estilo cubre las letras nuevas", [tc.texto, tc.tramos.length, tc.tramos[0].n, tc.tramos[0].fuente], ["uno\ndos\ntres\ncuatro", 1, 19, "F-Regular"]);
+  eq(
+    "textoCambiado: fuera los caracteres de control y de formato (nulo, cambio de sentido, ancho cero) salvo el tabulador; separador de línea Unicode = salto; se corta por letra, sin dejar media",
+    [textoCambiado(capaT("ab"), "a\u0000b\u202Ec\u200Bd\te\u2028f").texto, textoCambiado(capaT("ab"), "x".repeat(TEXTO_CAMBIADO_MAX - 1) + "😀").texto.length],
+    ["abcd\te\nf", TEXTO_CAMBIADO_MAX - 1],
+  );
+  eq("textoCambiado: se corta en el máximo", textoCambiado(capaT("ab"), "x".repeat(TEXTO_CAMBIADO_MAX + 50)).texto.length, TEXTO_CAMBIADO_MAX);
+  // B30: con varios estilos, como en cualquier editor: lo que no cambió conserva el suyo y lo nuevo toma el de antes.
+  {
+    const precio = capaT("$28,499 m.n.", null, [tramo(8, { tam: 40 }), tramo(4, { tam: 20 })]);
+    const estilos = (t) => t.tramos.map((r) => `${r.n}@${r.tam}`).join(" ");
+    eq("B30 textoCambiado con dos tamaños: el número cambia y sigue grande, «m.n.» sigue chico; escribir al principio toma el de después", [estilos(textoCambiado(precio, "$30,000 m.n.")), estilos(textoCambiado(precio, "$1,299,000 m.n.")), estilos(textoCambiado(precio, "Desde $28,499 m.n.")), estilos(textoCambiado(precio, "$28,499 MXN")), estilos(textoCambiado(precio, "m.n."))], ["8@40 4@20", "11@40 4@20", "14@40 4@20", "8@40 3@20", "4@20"]);
+  }
+  // Medidor de mentiras: cada letra mide medio tamaño y sube 0.7. Caja de 80 de ancho: caben 3 «hola» por línea.
+  const medir = (s0, t) => ({ ancho: s0.length * t.tam * 0.5, sube: t.tam * 0.7 });
+  const maq = (t) => maquetar(t, medir);
+  const enCaja = capaT("hola", [0, -10, 80, 10]);
+  const largo = Array(12).fill("hola").join(" ");
+  const lin = maq(textoCambiado(enCaja, largo));
+  eq("cajaQueCabe: con 4 líneas la caja de párrafo baja hasta la última (+0.3 de su letra); si cabe, o es de punto, la misma", [lin.length, cajaQueCabe(textoCambiado(enCaja, largo), lin).caja, cajaQueCabe(enCaja, maq(enCaja)) === enCaja, ((t) => cajaQueCabe(t, maq(t)) === t)(textoCambiado(capaT("hola"), largo))], [4, [0, -10, 80, 36], true, true]);
+
+  // Un maestro a mano: el legal (caja 100×40 en (10, 10), con base) y un HERO sin textos.
+  const lleno = (w, h, c) => { const d = new Uint8ClampedArray(w * h * 4); for (let i = 0; i < w * h; i++) d.set(c, i * 4); return d; };
+  const GRIS = [90, 90, 90, 255];
+  /** Escribe cada pedazo como un rectángulo de su color (premultiplicado), de la base hacia arriba 0.7 de su letra. */
+  const pintarFalso = (listos, x0, y0, w, h) => {
+    const f = new Float32Array(w * h * 4);
+    for (const l of listos) {
+      const tr = l.tp.texto.transform;
+      for (const ln of l.lineas)
+        for (const pz of ln.pedazos) {
+          const X0 = Math.round(tr[0] * pz.x + tr[4] + l.dx), X1 = Math.round(tr[0] * (pz.x + pz.ancho) + tr[4] + l.dx);
+          const Y0 = Math.round(tr[3] * (ln.base - pz.tramo.tam * 0.7) + tr[5] + l.dy), Y1 = Math.round(tr[3] * ln.base + tr[5] + l.dy);
+          for (let y = Math.max(Y0, y0); y < Math.min(Y1, y0 + h); y++)
+            for (let x = Math.max(X0, x0); x < Math.min(X1, x0 + w); x++) f.set([...pz.tramo.color.map((v) => v * l.tp.opacidad), 255 * l.tp.opacidad], ((y - y0) * w + (x - x0)) * 4);
+        }
+    }
+    return f;
+  };
+  // Su tinta de Photoshop: «hola» en (20, 23), 20 × 7 (dentro de la pieza, como el texto de un botón).
+  const tpDe = (capa, texto, ruta) => ({ capa, texto, opacidad: 1, caja: { x: 20, y: 23, w: 20, h: 7 }, alfa: new Uint8ClampedArray(0), motivo: null, ruta });
+  const caja = { x: 10, y: 10, w: 100, h: 40 };
+  const tpCaja = tpDe("legal", enCaja, [1, 0]);
+  const piezaT = (tp, extra = {}) => ({ nombre: "Legales", rol: "FOOTER", caja, solido: caja, letraMinPx: 10, rgba: lleno(100, 40, GRIS), oscurece: null, base: lleno(100, 40, GRIS), textos: [tp], ...extra });
+  const hero = { nombre: "HERO", rol: "HERO", caja: { x: 0, y: 100, w: 50, h: 50 }, solido: { x: 0, y: 100, w: 50, h: 50 }, letraMinPx: null, rgba: lleno(50, 50, GRIS), oscurece: null, base: null, textos: [] };
+  const maT = { nombre: "m", w: 200, h: 200, fondo: lleno(200, 200, [255, 255, 255, 255]), piezas: [piezaT(tpCaja), hero], textoGamma: 1, avisos: [] };
+  const listosT = (m) => (i) => (m.piezas[i].base ? m.piezas[i].textos.map((tp) => ({ tp, lineas: maq(tp.texto), dx: 0, dy: 0 })) : undefined);
+  const cambiar = (m, c) => cambiarTextos(m, c, listosT(m), maq, pintarFalso);
+  const k = claveTexto(tpCaja);
+  ok("sin cambios, con las mismas letras o con un cambio de otro texto: el MISMO maestro (nada se repinta)", cambiar(maT, {}).maestro === maT && cambiar(maT, { [k]: "hola" }).maestro === maT && cambiar(maT, { "otra\nhola": "x" }).maestro === maT);
+  // B28 (preview, 2026-10-27): otra lectura de didi-card.webp trajo otros ids y el aviso decía «2 textos cambiados»
+  // con los textos del original a la vista. Sólo cuenta lo que sí cambia un texto de este archivo.
+  eq("textos cambiados que cuentan: sólo los de un texto de este archivo y con otras letras (no los de otra lectura)", cambiosQueAplican([maT], { [k]: "adiós", "headline_msi\nhola": "12 MSI", [`${tpCaja.capa}\nadiós`]: "x" }), [k]);
+  eq("con las mismas letras que el original no cuenta como cambio", cambiosQueAplican([maT], { [k]: "hola" }), []);
+  ok("un texto que la página no escribe (sin sus líneas probadas) no cambia: mismos píxeles y textos (sólo dice por qué)", ((m) => m.piezas[0].rgba === maT.piezas[0].rgba && m.piezas[0].textos === maT.piezas[0].textos && m.piezas[1] === hero)(cambiarTextos(maT, { [k]: "adiós" }, () => undefined, maq, pintarFalso).maestro));
+  {
+    // La barra de texto del editor (2026-10-28): tipografía, tamaño y negrita, guardados junto a las letras.
+    const fs = ["DiDiSans-Pro-Regular", "DiDiSans-Pro-Bold", "DiDiSans-Pro-BoldItalic", "DiDiSans-Pro-Italic", "Montserrat-Regular", "Montserrat-SemiBold", "Roboto"];
+    eq("partesFuente: familia y estilo del nombre PostScript; sin guion, Regular", [partesFuente("DiDiSans-Pro-Bold"), partesFuente("Roboto"), partesFuente("DiDiSans-Pro-Bold-Italic"), partesFuente("DiDiSans-Pro-Italic")], [{ familia: "DiDiSans-Pro", estilo: "Bold" }, { familia: "Roboto", estilo: "Regular" }, { familia: "DiDiSans-Pro", estilo: "BoldItalic" }, { familia: "DiDiSans-Pro", estilo: "Italic" }]);
+    eq("familiasDe con los nombres reales de DiDi (cursiva con guion aparte): dos familias, no cinco", familiasDe(["DiDiSans-Pro-Bold-Italic", "DiDiSans-Pro-Bold", "DiDiSans-Pro-Medium-Italic", "DiDiSans-Pro-Thin-Italic", "DiDiSans-Pro-Regular", "DiDiSansVariable-Bold", "DiDiSansVariable-Regular"]), ["DiDiSans-Pro", "DiDiSansVariable"]);
+    eq("fuenteParecida: con la cursiva de guion aparte, negrita de una cursiva es Bold-Italic", fuenteParecida("DiDiSans-Pro-Italic", "DiDiSans-Pro", true, ["DiDiSans-Pro-Italic", "DiDiSans-Pro-Bold", "DiDiSans-Pro-Bold-Italic"]), "DiDiSans-Pro-Bold-Italic");
+    eq("fuenteParecida: negrita de la misma familia (y con su cursiva), sin Bold toma SemiBold, sin la familia null", [fuenteParecida("DiDiSans-Pro-Regular", "DiDiSans-Pro", true, fs), fuenteParecida("DiDiSans-Pro-Italic", "DiDiSans-Pro", true, fs), fuenteParecida("DiDiSans-Pro-Bold", "Montserrat", true, fs), fuenteParecida("DiDiSans-Pro-Bold", "Montserrat", false, fs), fuenteParecida("X-Bold", "Nada", true, fs)], ["DiDiSans-Pro-Bold", "DiDiSans-Pro-BoldItalic", "Montserrat-SemiBold", "Montserrat-Regular", null]);
+    eq("familiasDe: una por familia, A-Z", familiasDe(fs), ["DiDiSans-Pro", "Montserrat", "Roboto"]);
+    const precio = { ...capaT("$28,499 m.n."), tramos: [tramo(8, { fuente: "DiDiSans-Pro-Bold", tam: 40 }), tramo(4, { fuente: "DiDiSans-Pro-Regular", tam: 20 })] };
+    const cE = capaConEstilo(precio, { familia: "Montserrat", escala: 1.5 }, fs);
+    eq("capaConEstilo: otra familia guarda el peso de cada tramo y los dos tamaños crecen igual", cE.tramos.map((r) => `${r.fuente}@${r.tam}`), ["Montserrat-SemiBold@60", "Montserrat-Regular@30"]);
+    eq("capaConEstilo: negrita a todo; una familia no cargada deja la suya", [capaConEstilo(precio, { negrita: true }, fs).tramos.map((r) => r.fuente), capaConEstilo(precio, { familia: "Nada" }, fs).tramos.map((r) => r.fuente)], [["DiDiSans-Pro-Bold", "DiDiSans-Pro-Bold"], ["DiDiSans-Pro-Bold", "DiDiSans-Pro-Regular"]]);
+    const cs = conEstilo({}, k, { escala: 1.2, negrita: true });
+    ok("conEstilo/estiloDe: ida y vuelta; null (o tamaño 1) lo quita; igual que antes = el MISMO objeto; guardado roto = null", JSON.stringify(estiloDe(cs, k)) === JSON.stringify({ negrita: true, escala: 1.2 }) && Object.keys(conEstilo(cs, k, null)).length === 0 && Object.keys(conEstilo({}, k, { escala: 1 })).length === 0 && conEstilo(cs, k, { escala: 1.2, negrita: true }) === cs && estiloDe({ [claveEstilo(k)]: "{roto" }, k) === null && estiloDe({ [claveEstilo(k)]: '{"escala":99}' }, k) === null);
+    eq("cambiosQueAplican: un estilo cambiado cuenta como su texto, una vez", [cambiosQueAplican([maT], cs), cambiosQueAplican([maT], { ...cs, [k]: "adiós" })], [[k], [k]]);
+    const conTam = cambiarTextos(maT, conEstilo({}, k, { escala: 2 }), listosT(maT), maq, pintarFalso, fs).maestro;
+    ok("cambiarTextos: sólo el tamaño cambiado (mismas letras) vuelve a escribir la pieza con la letra al doble", conTam !== maT && conTam.piezas[0].textos[0].texto.tramos[0].tam === 2 * tpCaja.texto.tramos[0].tam && conTam.piezas[0].textos[0].texto.texto === "hola", JSON.stringify(conTam.piezas[0].textos[0].texto.tramos));
+  }
+  const r1 = cambiar(maT, { [k]: largo });
+  const p1 = r1.maestro.piezas[0], t1 = p1.textos[0];
+  eq(
+    "caja de párrafo con 4 líneas: su caja baja (36) y la pieza crece hacia abajo hasta la última línea (y 63); arriba y a los lados, igual",
+    [t1.texto.caja, [p1.caja.x, p1.caja.y, p1.caja.w, p1.caja.y + p1.caja.h], [p1.solido.y, p1.solido.y + p1.solido.h], p1.rgba.length === p1.caja.w * p1.caja.h * 4 && p1.base.length === p1.rgba.length],
+    [[0, -10, 80, 36], [10, 10, 100, 63], [10, 63], true],
+  );
+  const pxT = (p, x, y) => [...p.rgba.subarray(((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4, ((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * 4 + 4)];
+  eq("sus píxeles: la 4.ª línea con su color, entre líneas debajo de la pieza vieja nada, y su base donde no hay letras", [pxT(p1, 25, 60), pxT(p1, 25, 54), pxT(p1, 100, 30)], [[200, 20, 40, 255], [0, 0, 0, 0], GRIS]);
+  ok(
+    "el texto nuevo recuerda sus letras del PSD (la misma clave en todas las mesas), trae su tinta para el PSD editable y es el MISMO objeto que escribe la página; el HERO, sin tocar",
+    t1.cambio?.de === "hola" && claveTexto(t1) === k && t1.cambio.tinta?.y === 20 && t1.cambio.tinta.y + t1.cambio.tinta.h === 63 && t1.cambio.tinta.rgba[3] === 255 && r1.listos.get(0)[0].tp === t1 && r1.maestro.piezas[1] === hero,
+    JSON.stringify(t1.cambio && { ...t1.cambio, tinta: t1.cambio.tinta && { ...t1.cambio.tinta, rgba: t1.cambio.tinta.rgba.length } }),
+  );
+  ok("una caja de párrafo que crece hacia abajo no avisa «se sale de su pieza»", !p1.textoFuera);
+  const enPunto = tpDe("cta", capaT("hola"), [2, 0]), kP = claveTexto(enPunto);
+  const maPunto = { ...maT, piezas: [piezaT(enPunto), hero] };
+  const medio = Array(5).fill("hola").join(" ");
+  eq("texto de punto: más largo que su pieza, o con una línea de más (crece hacia abajo sin caja), sí avisa; más corto, no", [cambiar(maPunto, { [kP]: medio }).maestro.piezas[0].textoFuera, cambiar(maPunto, { [kP]: "hola\nhola\nhola" }).maestro.piezas[0].textoFuera, cambiar(maPunto, { [kP]: "ho" }).maestro.piezas[0].textoFuera], [true, true, undefined]);
+  // Una pieza que es sólo texto (su base, vacía) no tiene de qué salirse: un título más largo no avisa.
+  const soloTexto = { ...maPunto, piezas: [piezaT(enPunto, { base: new Uint8ClampedArray(100 * 40 * 4) }), hero] };
+  const alLado = { ...maPunto, piezas: [piezaT({ ...enPunto, caja: { x: 120, y: 23, w: 20, h: 7 } }), hero] };
+  eq("pieza sólo de texto (base vacía), o texto al lado de lo sólido y no adentro (el legal junto a sus iconos): un texto más largo no avisa «se sale de su pieza»", [cambiar(soloTexto, { [kP]: medio }).maestro.piezas[0].textoFuera, cambiar(alLado, { [kP]: medio }).maestro.piezas[0].textoFuera], [undefined, undefined]);
+  // Lo que no se puede escribir se queda como en el PSD y se dice por qué (nunca la tarjeta con otro texto, callada).
+  const sinListos = cambiarTextos(maT, { [k]: "adiós" }, () => undefined, maq, pintarFalso).maestro;
+  const enorme = cambiar(maT, { [k]: Array(400).fill("hola").join("\n") }).maestro;
+  const sinTinta = cambiarTextos(maT, { [k]: "adiós" }, listosT(maT), maq, (_l, _x, _y, w, h) => new Float32Array(w * h * 4)).maestro;
+  eq(
+    "sin tipografía probada, con un texto que caería fuera de la mesa (400 líneas) o si el lienzo no pinta nada: va el texto del PSD (la misma pieza) y la pieza dice por qué",
+    [sinListos.piezas[0].textoSinEscribir, sinListos.piezas[0].textos[0] === tpCaja, enorme.piezas[0].textoSinEscribir, enorme.piezas[0].textos[0] === tpCaja, sinTinta.piezas[0].textoSinEscribir, sinTinta.piezas[0].rgba === maT.piezas[0].rgba],
+    [NO_SE_ESCRIBIO.tipografia, true, NO_SE_ESCRIBIO.largo, true, NO_SE_ESCRIBIO.pintar, true],
+  );
+  ok("marcarSinEscribir: sin textos cambiados, el MISMO maestro; con uno, la pieza marcada", marcarSinEscribir(maT, {}, "x") === maT && marcarSinEscribir(maT, { [k]: "adiós" }, "x").piezas[0].textoSinEscribir === "x" && marcarSinEscribir(maT, { [k]: "hola" }, "x") === maT);
+  // Mezcla con la gamma de Photoshop (como `armarMedida`): letra al 50 % sobre su base gris.
+  const tpMedio = { ...tpCaja, opacidad: 0.5 }, maG = { ...maT, textoGamma: 1.45, piezas: [piezaT(tpMedio), hero] };
+  const pG = cambiarTextos(maG, { [k]: "hola hola" }, listosT(maG), maq, pintarFalso).maestro.piezas[0];
+  const g = (c, b) => Math.round(255 * Math.pow(0.5 * Math.pow(c / 255, 1.45) + 0.5 * Math.pow(b / 255, 1.45), 1 / 1.45));
+  eq("la letra nueva se mezcla sobre su base con la gamma de Photoshop (1.45), como la escribe la tarjeta", pxT(pG, 25, 25).slice(0, 3), [g(200, 90), g(20, 90), g(40, 90)]);
+  // Partes: los iconos (sin texto) y el legal.
+  const parte = (nombre, hijo, c, textos, base = true) => ({ nombre, hijo, rellenoPct: 0, tapadaPor: [], caja: c, solido: c, letraMinPx: null, rgba: lleno(c.w, c.h, GRIS), oscurece: null, base: base ? lleno(c.w, c.h, GRIS) : null, textos });
+  const iconos = parte("Iconos", 0, { x: 10, y: 10, w: 8, h: 8 }, []);
+  const conP = (base) => ({ ...maT, piezas: [piezaT(tpCaja, { partes: [iconos, parte("legal", null, caja, [tpCaja], base)], carpeta: 1 }), hero] });
+  const pp = cambiar(conP(true), { [k]: largo }).maestro.piezas[0], ps = cambiar(conP(false), { [k]: largo }).maestro.piezas[0];
+  ok("con partes: la del legal se vuelve a escribir con el MISMO objeto de texto que la pieza (y crece igual); los iconos, sin tocar", pp.partes[1].textos[0] === pp.textos[0] && pp.partes[0] === iconos && pp.carpeta === 1 && pp.partes[1].caja.y + pp.partes[1].caja.h === 63);
+  ok("una parte sin base no se puede volver a escribir: la pieza va entera (sin partes), ya con el texto nuevo", ps.partes === undefined && ps.carpeta === undefined && ps.textos[0].texto.texto === largo);
+
+  // Quitar un texto en UNA medida: lo guardado, el acomodo y el pintado.
+  const avisosW = [], warn0 = console.warn;
+  console.warn = (...a) => avisosW.push(a.join(" "));
+  const leida = leerEdicion({ sinTexto: { 0: [0, 0, 3, -1, 1.5, "0"], 1: [0], 7: [0], x: [0] } }, maT.piezas);
+  console.warn = warn0;
+  eq("lo guardado: sinTexto se lee sin confiar (sólo textos que existen, sin repetir; el HERO no tiene textos; piezas que no hay, fuera)", leida, { piezas: {}, sinTexto: { 0: [0] } });
+  eq("sinTexto vacío no es una edición", leerEdicion({ sinTexto: { 0: [] } }, maT.piezas), null);
+  // Con el maestro de s33 abajo se prueba el acomodo; aquí, el pintado: quitar el único texto deja la base, sin
+  // preguntar por letras (sin tipografía también se puede).
+  const conLetras = lleno(100, 40, GRIS);
+  for (let y = 20; y < 27; y++) for (let x = 20; x < 40; x++) conLetras.set([200, 20, 40, 255], (y * 100 + x) * 4);
+  const maQ = { ...maT, piezas: [piezaT(tpCaja, { rgba: conLetras })] };
+  const puestaQ = (sin) => ({ familia: "igual", puestas: [{ pieza: 0, k: 1, x: 10, y: 10, w: 100, h: 40, ...(sin ? { sinTexto: sin } : {}) }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [] });
+  let preguntas = 0;
+  const contar = () => (preguntas++, null);
+  const sinL = armarMedida(maQ, puestaQ([0]), 200, 200, { texto: contar }), conL = armarMedida(maQ, puestaQ(null), 200, 200, { texto: contar });
+  // Las letras de la pieza (20-40, 20-27 en ella) caen en la medida en (30-50, 30-37).
+  const en35 = (px) => [...px.subarray((32 * 200 + 35) * 4, (32 * 200 + 35) * 4 + 3)];
+  eq("pintado: quitado su único texto, a su tamaño, va la base (gris donde estaban las letras) sin preguntar por letras; sin quitar, las letras del PSD", [en35(sinL), en35(conL), preguntas], [[90, 90, 90], [200, 20, 40], 0]);
+  // La sombra de contraste («Sombra detrás») de una pieza sin sus letras en esa medida sale de su base: no queda la
+  // mancha de las letras que ya no están. Pieza transparente salvo sus letras; su base, vacía.
+  const soloLetras = new Uint8ClampedArray(100 * 40 * 4);
+  for (let y = 20; y < 27; y++) for (let x = 20; x < 40; x++) soloLetras.set([200, 20, 40, 255], (y * 100 + x) * 4);
+  const maH = { ...maT, piezas: [piezaT(tpCaja, { rgba: soloLetras, base: new Uint8ClampedArray(100 * 40 * 4) })] };
+  const conSombraH = (sin) => ({ ...puestaQ(sin), sombras: [0] });
+  const bajo = (px) => px[(41 * 200 + 35) * 4];
+  eq("sombra de contraste: con sus letras oscurece junto a ellas; sin ellas (quitadas en la medida), ni en la imagen ni en el PSD de capas planas", [bajo(armarMedida(maH, conSombraH(null), 200, 200)) < 250, bajo(armarMedida(maH, conSombraH([0]), 200, 200)), halosEnMedida(maH, conSombraH([0]).puestas[0]).every((c) => c.rgba.every((v, i) => i % 4 === 3 || v === 255) || c.rgba.length === 0)], [true, 255, true]);
+  // El contraste de una pieza sin sus letras en esa medida se mide con su base: letras casi del color del fondo se
+  // pierden; sin ellas (base vacía), no hay nada que medir.
+  const casiBlanco = new Uint8ClampedArray(100 * 40 * 4);
+  for (let y = 0; y < 40; y++) for (let x = 0; x < 100; x++) casiBlanco.set([250, 250, 250, 255], (y * 100 + x) * 4);
+  const maC = { ...maT, piezas: [piezaT(tpCaja, { rgba: casiBlanco, base: new Uint8ClampedArray(100 * 40 * 4) })] };
+  eq("contraste: con sus letras (casi blancas sobre blanco) se pierde la pieza; quitadas en la medida, se mide su base (vacía: nada que perder)", [perdidas(maC, puestaQ(null), 200, 200).get(0) > 0.5, perdidas(maC, puestaQ([0]), 200, 200).get(0) ?? 0], [true, 0]);
+  {
+    // El aviso del legal dice si se quitó su texto o sólo uno de sus textos.
+    const dosF = { ...maT, piezas: [{ ...piezaT(tpCaja), textos: [tpCaja, enPunto] }] }, aF = acomodar(dosF, 200, 200);
+    const avisoF = (sin) => aplicarEdicion(dosF, aF, { piezas: {}, sinTexto: { 0: sin } }, 200, 200).avisos.find((v) => /obligatorio/.test(v.texto))?.texto;
+    eq("legal con dos textos: quitar uno dice «uno de sus textos»; quitar los dos, «su texto»", [avisoF([1]), avisoF([0, 1])], ["«Legales» (FOOTER): se quitó uno de sus textos en esta medida. El legal es obligatorio: revisar.", "«Legales» (FOOTER): se quitó su texto en esta medida. El legal es obligatorio: revisar."]);
+  }
+  // Con dos textos, quitar uno pide escribir el otro (a su tamaño también) y se le dice cuál no.
+  const dos = { ...maQ, piezas: [{ ...maQ.piezas[0], textos: [tpCaja, enPunto] }] };
+  let pedido = null;
+  armarMedida(dos, puestaQ([1]), 200, 200, { texto: (pieza, lugar, parte, sin) => ((pedido = [pieza, lugar.k, parte, sin]), null) });
+  eq("con dos textos, quitar uno a su tamaño escribe la pieza y dice cuál no (índice 1)", pedido, [0, 1, null, [1]]);
+  const enCapa = (c) => [...c.rgba.subarray(((32 - c.y) * c.w + (35 - c.x)) * 4, ((32 - c.y) * c.w + (35 - c.x)) * 4 + 3)].join();
+  eq("el PSD de capas planas también: quitado, la base; sin quitar, las letras", [enCapa(capasDeMedida(maQ, puestaQ([0]), 200, 200).piezas[0].color), enCapa(capasDeMedida(maQ, puestaQ(null), 200, 200).piezas[0].color)], ["90,90,90", "200,20,40"]);
+
+  // Plan del PSD editable: el cambiado lleva sus letras y su caja; vacío o quitado aquí, oculto (quitado gana).
+  const maPlan = { origen: { mesa: 0, x: 0, y: 0, w: 200, h: 200, s: 1 }, piezas: r1.maestro.piezas };
+  const conPuesta = (sin) => ({ familia: "igual", puestas: [{ pieza: 0, k: 1, x: 10, y: 10, w: 100, h: 53, ...(sin ? { sinTexto: sin } : {}) }], fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [1] });
+  eq(
+    "plan editable: el texto cambiado va con sus letras y su caja nueva; quitado en la medida, oculto CON las letras nuevas; unas letras vacías, oculto con las de siempre; sin cambios, sin textos",
+    [planDeMedida(maPlan, conPuesta(null), 200, 200).textos, planDeMedida(maPlan, conPuesta([0]), 200, 200).textos, planDeMedida({ ...maPlan, piezas: cambiar(maT, { [k]: "  " }).maestro.piezas }, conPuesta(null), 200, 200).textos, "textos" in planDeMedida({ ...maPlan, piezas: maT.piezas }, conPuesta(null), 200, 200)],
+    [[{ ruta: [1, 0], texto: largo, caja: [0, -10, 80, 36] }], [{ ruta: [1, 0], texto: largo, caja: [0, -10, 80, 36], oculto: true }], [{ ruta: [1, 0], texto: null, oculto: true }], false],
+  );
+  // Sin cambiar letras, quitar el texto de una pieza sin texto nuevo también va al plan.
+  eq("plan editable: quitar un texto sin cambiarlo también lo oculta (con sus letras de siempre)", planDeMedida({ ...maPlan, piezas: maT.piezas }, conPuesta([0]), 200, 200).textos, [{ ruta: [1, 0], texto: null, oculto: true }]);
+
+  // El PSD editable a mano: una capa de texto con dos corridas y su párrafo. Con letras nuevas: una corrida (la primera)
+  // que las cubre, su caja nueva y la tinta que pintó la página; el PSD leído no se toca. Oculta si va sin letras.
+  const capaTexto = { name: "legal", left: 0, top: 0, right: 2, bottom: 2, imageData: { width: 2, height: 2, data: new Uint8ClampedArray(16).fill(9) }, text: { text: "hola", transform: [1, 0, 0, 1, 0, 0], shapeType: "box", boxBounds: [0, 0, 80, 10], style: { fontSize: 10 }, styleRuns: [{ length: 0, style: { fontSize: 99 } }, { length: 2, style: { fontSize: 10 } }, { length: 2, style: { fontSize: 12 } }], paragraphStyleRuns: [{ length: 4, style: { justification: "left" } }] } };
+  const leido = { width: 10, height: 10, children: [{ name: "BACKGROUND", left: 0, top: 0, right: 2, bottom: 2 }, { name: "FOOTER", children: [capaTexto, { name: "otra", left: 0, top: 0, right: 2, bottom: 2 }] }] };
+  const editableCon = (textos) => psdEditable(
+    leido,
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["FOOTER", { k: 1, x: 0, y: 0 }]], textos },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null, textos: [{ ruta: [1, 0], tinta: { x: 1, y: 1, w: 2, h: 1, rgba: new Uint8ClampedArray(8).fill(200) } }] },
+    { capa: (l) => l.imageData ?? { width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }, mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children.find((l) => l.name === "FOOTER").children;
+  const [nueva, otraCapa] = editableCon([{ ruta: [1, 0], texto: "adiós amigos", caja: [0, 0, 80, 30] }, { ruta: [1, 1], texto: "no es texto", caja: null }, { ruta: [5, 2], texto: "no existe", caja: null }]);
+  eq(
+    "PSD editable: letras nuevas con una corrida (la primera con letras: una de largo 0 no cuenta) que las cubre, su párrafo, su caja y la tinta de la página; una ruta que no es texto o no existe, igual; el leído, sin tocar",
+    [nueva.text.text, nueva.text.styleRuns.map((r) => [r.length, r.style.fontSize]), nueva.text.paragraphStyleRuns.map((r) => r.length), nueva.text.boxBounds, [nueva.left, nueva.top, nueva.right, nueva.bottom], nueva.imageData?.data[0], !!otraCapa.text, leido.children[1].children[0].text.text, leido.children[1].children[0].text.styleRuns.length],
+    ["adiós amigos", [[12, 10]], [12], [0, 0, 80, 30], [1, 1, 3, 2], 200, false, "hola", 3],
+  );
+  const suave = psdEditable(
+    { ...leido, children: [leido.children[0], { name: "FOOTER", children: [{ ...capaTexto, text: { ...capaTexto.text, text: "ho\u0003la" } }] }] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["FOOTER", { k: 1, x: 0, y: 0 }]], textos: [{ ruta: [1, 0], texto: "uno\ndos\ntres", caja: null }] },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children.find((l) => l.name === "FOOTER").children[0];
+  eq("PSD editable: en una caja con saltos suaves (Mayús+Enter) los saltos nuevos también son suaves (un párrafo); sin tinta, Photoshop la dibuja", [suave.text.text, suave.text.boxBounds, [suave.left, suave.right]], ["uno\u0003dos\u0003tres", [0, 0, 80, 10], [0, 0]]);
+  const conParrafos = psdEditable(
+    { ...leido, children: [leido.children[0], { name: "FOOTER", children: [{ ...capaTexto, text: { ...capaTexto.text, text: "ho\u0003la\notro" } }] }] },
+    { W: 4, H: 4, origen: { mesa: 0, x: 0, y: 0, w: 10, h: 10, s: 1 }, fondo: { k: 1, x: 0, y: 0 }, piezas: [["FOOTER", { k: 1, x: 0, y: 0 }]], textos: [{ ruta: [1, 0], texto: "uno\ndos", caja: null }] },
+    { compuesto: new Uint8ClampedArray(64), halos: [], retoque: null },
+    { capa: () => ({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }), mascara: () => undefined, mascaraReal: () => undefined },
+  ).psd.children.find((l) => l.name === "FOOTER").children[0];
+  eq("PSD editable: si la caja ya traía párrafos además de saltos suaves, los saltos nuevos van como párrafos (no se adivina)", conParrafos.text.text, "uno\ndos");
+  eq(
+    "PSD editable: oculta sin letras nuevas, con su texto de siempre; oculta con letras nuevas (quitada en esa medida), con las nuevas",
+    [((l) => [l.hidden, l.text.text])(editableCon([{ ruta: [1, 0], texto: null, oculto: true }])[0]), ((l) => [l.hidden, l.text.text])(editableCon([{ ruta: [1, 0], texto: "adiós", caja: null, oculto: true }])[0])],
+    [[true, "hola"], [true, "adiós"]],
+  );
+
+  // ── B27: el legal en otros renglones (Pedro, 2026-10-22: "fewer legal lines on every wide size, plus a lines picker") ──
+  const tpLargo = tpDe("legal", textoCambiado(enCaja, largo), [1, 0]);
+  const transparente = new Uint8ClampedArray(100 * 40 * 4);
+  const soloLegal = { ...maT, piezas: [piezaT(tpLargo, { base: transparente }), hero] };
+  const infoS = legalParaRenglones(soloLegal, listosT(soloLegal));
+  eq("B27 legalParaRenglones: un pie que es sólo el legal (caja de párrafo, un estilo, 4 renglones): se puede, sin partes", infoS, { pieza: 0, parte: null, j: 0, psd: 4 });
+  const conTp = (tp, extra = {}) => ({ ...maT, piezas: [piezaT(tp, { base: transparente, ...extra }), hero] });
+  eq(
+    "B27 legalParaRenglones: por qué no (sin tipografía · varios estilos · texto de punto · con otra cosa en su misma capa · con otro texto · sin legal); en un renglón SÍ se puede (B29: puede ir en más)",
+    [
+      legalParaRenglones(soloLegal, () => undefined),
+      ((m) => legalParaRenglones(m, listosT(m)))(conTp(tpDe("legal", capaT(largo, [0, -10, 80, 10], [tramo(20), tramo(largo.length - 20)]), [1, 0]))),
+      ((m) => legalParaRenglones(m, listosT(m)))(conTp(tpDe("legal", capaT("hola hola\nhola hola"), [1, 0]))),
+      ((m) => legalParaRenglones(m, listosT(m)))(conTp(tpCaja)),
+      ((m) => legalParaRenglones(m, listosT(m)))({ ...maT, piezas: [piezaT(tpLargo), hero] }),
+      ((m) => legalParaRenglones(m, listosT(m)))(conTp(tpLargo, { textos: [tpLargo, tpDe("otro", enCaja, [1, 1])] })),
+      legalParaRenglones({ ...maT, piezas: [hero] }, () => undefined),
+    ].map((r) => r.no),
+    ["tipografia", "estilos", "de-punto", undefined, "partes", "otro-texto", "sin-legal"],
+  );
+  const listoS = listosT(soloLegal)(0)[0];
+  // B29: también en MÁS renglones (hasta RENGLONES_MAS más), con la caja más angosta; ni uno más.
+  // (12 palabras: 4 renglones son 3 por renglón; 5 justos no salen, 6 sí, 2 por renglón.)
+  const v5 = conRenglones(soloLegal, infoS, 6, listoS, maq, pintarFalso), t5 = v5?.maestro.piezas[0].textos[0];
+  ok(`B29 conRenglones: en 6 renglones (de 4) la caja es más angosta (${t5?.texto.caja}); en 5 justos no se puede; en ${4 + RENGLONES_MAS + 1}, nada`, conRenglones(soloLegal, infoS, 5, listoS, maq, pintarFalso) === null && v5?.listos.get(0)?.[0].lineas.length === 6 && t5.texto.caja[2] - t5.texto.caja[0] < tpLargo.texto.caja[2] - tpLargo.texto.caja[0] && conRenglones(soloLegal, infoS, 4 + RENGLONES_MAS + 1, listoS, maq, pintarFalso) === null);
+  const vS = conRenglones(soloLegal, infoS, 2, listoS, maq, pintarFalso);
+  const pS = vS?.maestro.piezas[0], tS = pS?.textos[0], lS = vS?.listos.get(0)?.[0];
+  ok(
+    `B27 conRenglones: en 2 renglones (de 4), sin saltos, con su caja más ancha; la pieza dentro de la mesa (${pS?.solido.x},${pS?.solido.y} ${pS?.solido.w}×${pS?.solido.h}) con su mismo borde de abajo, movida en enteros y lo dice (desde); el texto movido igual; lo que escribe la página es ESE texto; el HERO, el mismo`,
+    !!vS && lS.lineas.length === 2 && !tS.texto.texto.includes("\n") && tS.texto.caja[2] - tS.texto.caja[0] > 80 && pS.solido.x >= 0 && pS.solido.x + pS.solido.w <= soloLegal.w &&
+      Math.abs(pS.solido.y + pS.solido.h - (caja.y + caja.h)) <= 1 && Number.isInteger(pS.desde.x) && pS.desde.k === 1 && tS.texto.transform[4] === tpLargo.texto.transform[4] + pS.desde.x && tS.texto.transform[5] === tpLargo.texto.transform[5] + pS.desde.y &&
+      lS.tp === tS && tS.cambio?.de === tpLargo.texto.texto && !!tS.cambio.tinta && vS.maestro.piezas[1] === hero,
+    JSON.stringify(pS && { solido: pS.solido, desde: pS.desde, lineas: lS.lineas.length, caja: tS.texto.caja }),
+  );
+  ok("B27 conRenglones: en tantos renglones como el PSD, más, 0 o con decimales, no hay versión", [4, 5, 0, 1.5].every((n) => conRenglones(soloLegal, infoS, n, listoS, maq, pintarFalso) === null));
+  eq(
+    "B27 leerEdicion: los renglones del legal (enteros; también los del PSD aunque pasen de RENGLONES_MAX, p. ej. 8); sólo renglones también es una edición; raros, fuera",
+    [leerEdicion({ piezas: {}, renglones: 2 }, 3)?.renglones, leerEdicion({ renglones: 3 }, 3)?.renglones, leerEdicion({ piezas: {}, renglones: RENGLONES_MAX + 2 }, 3)?.renglones, ...[0, 2.5, "2", 61, -1].map((r) => leerEdicion({ piezas: {}, renglones: r }, 3))],
+    [2, 3, RENGLONES_MAX + 2, null, null, null, null, null],
+  );
+  const crudoT = (text) => ({ text, shapeType: "box", boxBounds: [0, 0, 80, 40], style: { font: { name: "F-Regular" }, fontSize: 10 } });
+  ok("B27 textoDe: sólo saltos suaves (Mayús+Enter) es UN párrafo partido a mano; con un párrafo nuevo (o los dos), no", textoDe(crudoT("a\u0003b")).saltosSuaves === true && textoDe(crudoT("a\nb")).saltosSuaves === undefined && textoDe(crudoT("a\u0003b\nc")).saltosSuaves === undefined);
+  const tres = "hola hola hola\nhola hola hola\nhola hola hola";
+  const conCapa = (capa) => ({ ...maT, piezas: [piezaT(tpDe("legal", capa, [1, 0]), { base: transparente }), hero] });
+  const conSuaves = conCapa({ ...capaT(tres, [0, -10, 80, 10]), saltosSuaves: true }), parrafos = conCapa(capaT(tres, [0, -10, 80, 10]));
+  const en2 = (m) => ((i) => !("no" in i) && conRenglones(m, i, 2, listosT(m)(0)[0], maq, pintarFalso))(legalParaRenglones(m, listosT(m)));
+  const vSuave = en2(conSuaves);
+  ok(
+    "B27 conRenglones: con saltos suaves, los 3 renglones se juntan en 2 (las mismas palabras, en un párrafo); con 3 párrafos de verdad no hay versión en 2 (sus saltos se quedan)",
+    !!vSuave && vSuave.listos.get(0)[0].lineas.length === 2 && vSuave.maestro.piezas[0].textos[0].texto.texto === tres.replace(/\n/g, " ") && en2(parrafos) === null,
+  );
+  eq("B27 legalParaRenglones: una palabra cortada con guion al final de un renglón no se junta (cambiaría las letras)", ((m) => legalParaRenglones(m, listosT(m)).no)(conCapa({ ...capaT("hola hola ho-\nla hola hola\nhola", [0, -10, 80, 10]), saltosSuaves: true })), "guion");
+  eq("B27 copiarEdicion: los renglones elegidos van también a la hermana", copiarEdicion({ piezas: {}, renglones: 2 }, maT.piezas, { w: 1080, h: 1920 }, { w: 720, h: 1280 }, "igual").renglones, 2);
+
+  const ruta33 = join(homedir(), "Desktop/formatos-prueba/s33-BFDIRECT20CASH.psd");
+
+  if (!existsSync(ruta33)) console.log("  · (s33 no está en el Escritorio: no se probaron los textos con el PSD real)");
+  else {
+    const crudo = readFileSync(ruta33);
+    const d33 = leerPsd((await adelgazarPsd(new Blob([crudo]), PSD_BYTES_MAX)).datos);
+    const l33 = prepararMaestro(despiezar(d33, d33.mesas.findIndex((m) => m.w === 1200 && m.h === 1500))).maestro;
+    const fuente = readPsdAg(await prepararParaEditable(new Blob([crudo]), EDITABLE_MAX_BYTES), { useRawData: true, skipThumbnail: true, skipCompositeImageData: true, totalMemoryLimit: 64 * 1024 * 1024, strict: true });
+    // La mesa del maestro en el PSD entero (como `mesaDe`): las mesas de trabajo visibles, en orden.
+    const mesas = [];
+    const andarM = (ls) => { for (const l of ls ?? []) { if (l.hidden || !l.children) continue; if (l.artboard?.rect) mesas.push(l); andarM(l.children); } };
+    andarM(fuente.children);
+    const enRuta = (r) => r.reduce((ls, i, n) => (n === r.length - 1 ? ls?.[i] : ls?.[i]?.children), mesas[l33.origen.mesa].children);
+    const todas = l33.piezas.flatMap((p) => p.textos);
+    const malas = todas.filter((t) => { const l = enRuta(t.ruta); return !l?.text || l.name.trim() !== t.capa; }).map((t) => t.capa);
+    ok(`s33: la ruta de cada texto (${todas.length}) lleva a su misma capa de texto en el PSD entero (el que se baja editable), aunque el leído venga adelgazado`, todas.length >= 5 && malas.length === 0, JSON.stringify(malas));
+
+    // Las líneas probadas: las del medidor de mentiras, en las piezas con base y todos sus textos sin motivo (CTA y legal).
+    const listos33 = (m) => (i) => { const p = m.piezas[i]; return p.base && p.textos.length && p.textos.every((t) => !t.motivo && !t.texto.motivo) ? p.textos.map((tp) => ({ tp, lineas: maq(tp.texto), dx: 0, dy: 0 })) : undefined; };
+    const iL = l33.piezas.findIndex((p) => p.rol === "FOOTER"), iC = l33.piezas.findIndex((p) => p.rol === "CTA");
+    const tL = l33.piezas[iL].textos[0], tC = l33.piezas[iC].textos[0];
+    const legalNuevo = `${tL.texto.texto} Consulta más condiciones, comisiones y requisitos de contratación en didi.com.mx/card antes de solicitar tu tarjeta.`;
+    const leg33 = legalDelPsd([l33]);
+    ok(`B24 s33: legalDelPsd encuentra el legal en «${l33.piezas[iL].nombre}» (FOOTER), el mismo texto que cambia el editor, y conLegal lo pone`, leg33.length === 1 && leg33[0].pieza === iL && leg33[0].clave === claveTexto(tL) && conLegal({}, leg33, legalNuevo)[claveTexto(tL)] === legalNuevo, JSON.stringify(leg33.map((l) => [l.pieza, l.j])));
+    const d3 = cambiarTextos(l33, { [claveTexto(tL)]: legalNuevo }, listos33(l33), maq, pintarFalso).maestro;
+    const L0 = l33.piezas[iL], L1 = d3.piezas[iL];
+    ok(
+      `s33: el legal más largo hace crecer su caja hacia abajo (${tL.texto.caja[3]} → ${L1.textos[0].texto.caja[3].toFixed(0)}) y su pieza (alto ${L0.caja.h} → ${L1.caja.h}), con el mismo arriba`,
+      L1.textos[0].texto.caja[3] > tL.texto.caja[3] && L1.caja.h > L0.caja.h && L1.caja.y === L0.caja.y && !L1.textoFuera && d3.piezas.every((p, i) => i === iL || p === l33.piezas[i]),
+    );
+    const medidas = leerMedidas(MEDIDAS_EQUIPO).medidas;
+    const dentro = medidas.map((m) => {
+      const a = acomodar(d3, m.w, m.h), q = a.puestas.find((x) => x.pieza === iL);
+      return [`${m.w}x${m.h}`, q ? q.x >= -0.5 && q.y >= -0.5 && q.x + q.w <= m.w + 0.5 && q.y + q.h <= m.h + 0.5 && !a.avisos.some((v) => v.tipo === "fuera" && v.texto.includes("Legales")) : "quitado"];
+    });
+    ok(`s33: el acomodo automático deja el legal crecido dentro de las ${medidas.length} medidas`, medidas.length === 12 && dentro.every(([, v]) => v === true), JSON.stringify(dentro));
+    const dC = cambiarTextos(l33, { [claveTexto(tC)]: "Aplica hoy mismo y empieza a ganar" }, listos33(l33), maq, pintarFalso).maestro;
+    const avisoC = acomodar(dC, 1200, 627).avisos.filter((v) => v.tipo === "texto").map((v) => v.texto);
+    ok(`s33: «Aplica hoy» más largo que su botón avisa en cada medida y no se bloquea (${avisoC.join(" | ")})`, dC.piezas[iC].textoFuera === true && avisoC.length === 1 && /se sale de su pieza/.test(avisoC[0]));
+    // Quitado el legal en 320×50: el aviso del legal obligatorio; en las demás medidas no.
+    const a320 = acomodar(d3, 320, 50), q320 = aplicarEdicion(d3, a320, { piezas: {}, sinTexto: { [iL]: [0] } }, 320, 50);
+    const vacio = cambiarTextos(l33, { [claveTexto(tL)]: " \n " }, listos33(l33), maq, pintarFalso).maestro;
+    ok("s33: el legal con letras vacías avisa en cada medida que el legal es obligatorio (sin bloquear)", vacio.piezas[iL].sinLetras === true && medidas.every((m) => acomodar(vacio, m.w, m.h).avisos.some((v) => /quedó vacío en todas las medidas/.test(v.texto))) && !acomodar(d3, 1200, 627).avisos.some((v) => /quedó vacío/.test(v.texto)));
+    const avisosDe = (m, ed, W2, H2) => aplicarEdicion(m, acomodar(m, W2, H2), { piezas: {}, ...ed }, W2, H2).avisos.filter((v) => v.tipo === "texto").map((v) => v.texto);
+    const sinEsc = cambiarTextos(l33, { [claveTexto(tL)]: legalNuevo }, () => undefined, maq, pintarFalso).maestro;
+    eq(
+      "s33: un texto cambiado que no se pudo escribir avisa en cada medida (con el porqué); quitado ahí, ya no; el CTA más largo que su botón, quitado su texto en la medida, tampoco avisa",
+      [avisosDe(sinEsc, {}, 1200, 627), avisosDe(sinEsc, { sinTexto: { [iL]: [0] } }, 1200, 627).filter((v) => /no se pudo escribir/.test(v)).length, avisosDe(dC, { sinTexto: { [iC]: [0] } }, 1200, 627)],
+      [[`«Legales» (FOOTER): el texto cambiado no se pudo escribir aquí (${NO_SE_ESCRIBIO.tipografia}); va el del PSD.`], 0, []],
+    );
+    ok("s33 320×50: quitar el texto del legal es una edición (va a mano) y avisa que el legal es obligatorio", q320.editada && q320.puestas.find((q) => q.pieza === iL)?.sinTexto?.join() === "0" && q320.avisos.some((v) => /El legal es obligatorio/.test(v.texto)) && !acomodar(d3, 320, 50).avisos.some((v) => /obligatorio/.test(v.texto)));
+
+    // PSD editable de 1200×627 con el legal nuevo: texto vivo con las letras nuevas, una corrida, caja más alta y su tinta.
+    const pxDe = { capa: (l) => getLayerImageData(l), mascara: (l) => getLayerMaskImageData(l), mascaraReal: (l) => getLayerRealMaskImageData(l) };
+    const vacios = (W2, H2) => ({ compuesto: new Uint8ClampedArray(W2 * H2 * 4), halos: [], retoque: null });
+    const a627 = acomodar(d3, 1200, 627);
+    const tintas = d3.piezas.flatMap((p) => p.textos.flatMap((t) => (t.cambio?.tinta ? [{ ruta: t.ruta, tinta: t.cambio.tinta }] : [])));
+    const leerDe = (plan) => readPsdAg(writePsdBuffer(psdEditable(fuente, plan, { ...vacios(plan.W, plan.H), textos: tintas }, pxDe).psd, { invalidateTextLayers: true, noBackground: true }), { useImageData: true, skipThumbnail: true });
+    const hojas = (ls) => ls.flatMap((l) => (l.children ? hojas(l.children) : [l]));
+    const legalDe = (psd) => hojas(psd.children).find((l) => l.name.trim() === tL.capa);
+    const v627 = legalDe(leerDe(planDeMedida(d3, a627, 1200, 627)));
+    const bb0 = enRuta(tL.ruta).text.boxBounds;
+    ok(
+      `s33 1200×627 PSD editable: el legal sigue vivo con las letras nuevas (sus saltos suaves de caja, como el original), un solo estilo que las cubre, su caja más alta (${bb0[3]} → ${v627?.text?.boxBounds?.[3]?.toFixed(1)}) y sus píxeles (${v627 ? `${v627.right - v627.left}×${v627.bottom - v627.top}` : "-"})`,
+      // El legal de s33 trae un solo estilo (`style`, sin corridas): sigue igual, y cubre todo.
+      v627?.text?.text === legalNuevo.replace(/\n/g, "\u0003") && (v627.text.styleRuns ?? [{ length: legalNuevo.length }]).every((r) => r.length === legalNuevo.length) && v627.text.style?.font?.name === "DiDiSans-Pro-Medium" && v627.text.boxBounds[3] > bb0[3] && v627.text.boxBounds[0] === bb0[0] && v627.right > v627.left && !v627.hidden,
+      JSON.stringify(v627?.text && { len: v627.text.text.length, runs: v627.text.styleRuns?.map((r) => r.length), font: v627.text.style?.font?.name, bb: v627.text.boxBounds }),
+    );
+    const v320 = legalDe(leerDe(planDeMedida(d3, q320, 320, 50)));
+    ok("s33 320×50 PSD editable: el legal quitado en esa medida va oculto, con las letras nuevas (al prenderlo dice lo mismo que las demás medidas)", v320?.hidden === true && v320.text?.text === legalNuevo.replace(/\n/g, "\u0003"));
+    ok("s33 320×50: quitado el único texto del legal, ya no se avisa su letra chica", !q320.avisos.some((v) => v.tipo === "letra" && v.texto.includes("Legales")) && acomodar(d3, 320, 50).avisos.some((v) => v.tipo === "letra" && v.texto.includes("Legales")));
+    const sinCambio = legalDe(leerDe(planDeMedida(l33, acomodar(l33, 1200, 627), 1200, 627)));
+    ok("s33: sin cambios, el legal sale con sus letras del PSD", sinCambio?.text?.text.replace(/\r|\u0003/g, "\n") === tL.texto.texto && !sinCambio.hidden, JSON.stringify([sinCambio?.text?.text.slice(0, 90), tL.texto.texto.slice(0, 90), sinCambio?.hidden]));
+
+    // ── B27 con s33: el legal (caja de párrafo, en sus capas sueltas) y sus iconos (subcarpeta, a la izquierda) ──
+    const P0 = l33.piezas[iL], info33 = legalParaRenglones(l33, listos33(l33));
+    const parteL = P0.partes?.findIndex((d) => d.textos.includes(tL)) ?? -1, parteI = 1 - parteL;
+    ok(`B27 s33: el legal se puede poner en otros renglones (en el PSD, ${info33.psd} con el medidor de prueba): su parte, sin placa, con los iconos a un lado`, info33.pieza === iL && info33.parte === parteL && parteL >= 0 && info33.psd >= 3 && P0.partes.length === 2, JSON.stringify(info33));
+    const listoL = listos33(l33)(iL)[0];
+    const v2 = conRenglones(l33, info33, 2, listoL, maq, pintarFalso), P2 = v2?.maestro.piezas[iL];
+    const I0 = P0.partes[parteI], I2 = P2?.partes[parteI], L0s = P0.partes[parteL], L2 = P2?.partes[parteL], s2 = I2?.desde?.k;
+    ok(
+      "B27 s33 2 renglones: el legal parejo en 2, sin saltos; su parte y su pieza con el MISMO texto (el que escribe la página), que recuerda sus letras del PSD",
+      !!v2 && v2.listos.get(iL)[0].lineas.length === 2 && !P2.textos[0].texto.texto.includes("\n") && L2.textos[0] === P2.textos[0] && v2.listos.get(iL)[0].tp === P2.textos[0] && P2.textos[0].cambio?.de === tL.texto.texto && !!P2.textos[0].cambio.tinta,
+    );
+    ok(
+      `B27 s33 2 renglones: los iconos a escala con el alto del legal (×${s2?.toFixed(3)}: ${I0.solido.w}×${I0.solido.h} → ${I2?.solido.w}×${I2?.solido.h}), a su izquierda y a su altura`,
+      Math.abs(s2 - L2.solido.h / L0s.solido.h) < 1e-9 && s2 < 1 && I2.solido.x + I2.solido.w <= L2.solido.x && Math.abs(I2.solido.h - I0.solido.h * s2) <= 1.5 && I2.solido.y < L2.solido.y + L2.solido.h && I2.solido.y + I2.solido.h > L2.solido.y && L2.desde.k === 1,
+    );
+    ok(
+      `B27 s33 2 renglones: el pie más ancho y más bajo (${P0.solido.w}×${P0.solido.h} → ${P2?.solido.w}×${P2?.solido.h}) con su mismo borde de abajo y su mismo centro (±1 px); lo demás, las mismas piezas`,
+      Math.abs(P2.solido.y + P2.solido.h - (P0.solido.y + P0.solido.h)) <= 1 && Math.abs(P2.solido.x + P2.solido.w / 2 - (P0.solido.x + P0.solido.w / 2)) <= 1 && P2.solido.w > P0.solido.w && P2.solido.h < P0.solido.h && v2.maestro.piezas.every((p, i) => i === iL || p === l33.piezas[i]),
+    );
+    const hechas33 = new Map();
+    const rg33 = (mi) => (mi !== 0 ? null : { pieza: iL, psd: info33.psd, de: (n) => (hechas33.has(n) ? hechas33.get(n) : (hechas33.set(n, conRenglones(l33, info33, n, listoL, maq, pintarFalso)?.maestro ?? null), hechas33.get(n))) });
+    const conR = (W2, H2, op = {}) => revisarMedida([l33], W2, H2, { ...op, renglones: { de: rg33, elegidos: op.elegidos ?? null } });
+    const pxL = (r) => r.acomodo.letras.find((l) => l.pieza === iL)?.px ?? 0;
+    const r876 = conR(876, 324), b876 = revisarMedida([l33], 876, 324), r1080 = conR(1080, 1920), r1280 = conR(1280, 720);
+    const notaR = (r) => r.acomodo.avisos.filter((v) => v.tipo === "renglones");
+    ok(
+      `B27 s33 876×324 (ancha): el automático pone el legal en ${r876.renglones?.usados} renglones (de ${info33.psd}) y su letra crece (${pxL(b876).toFixed(1)} → ${pxL(r876).toFixed(1)} px), con una nota gris que no cuenta (${notaR(r876)[0]?.texto})`,
+      r876.renglones.usados < info33.psd && r876.renglones.auto === r876.renglones.usados && pxL(r876) > pxL(b876) * 1.03 && r876.ma === hechas33.get(r876.renglones.usados) && notaR(r876).length === 1 && esNota(notaR(r876)[0]) && /renglones \(en el PSD, \d\)/i.test(notaR(r876)[0].texto),
+      JSON.stringify(r876.renglones),
+    );
+    ok(
+      "B27 s33: 1080×1920 (más alta que ancha) y 1280×720 (el legal ya al tope): los renglones del PSD, el mismo maestro, sin nota",
+      [r1080, r1280].every((r) => r.renglones.usados === info33.psd && r.ma === l33 && !notaR(r).length) && pxL(r1280) === pxL(revisarMedida([l33], 1280, 720)),
+    );
+    const tarjetaAlta = revisarMedida([l33], 1080, 1350, { renglones: { de: rg33 } }), editorAlta = conR(1080, 1350);
+    ok(
+      `B27 s33 1080×1350: la tarjeta (sin elegidos) no hace las versiones (${tarjetaAlta.renglones?.opciones}); el editor, abierto después, sí ofrece menos renglones (${editorAlta.renglones?.opciones}): las opciones van en la clave del resultado guardado`,
+      tarjetaAlta.renglones.opciones.join() === String(info33.psd) && editorAlta.renglones.opciones.includes(info33.psd - 1) && editorAlta.renglones.usados === info33.psd,
+    );
+    const rPsd = conR(876, 324, { elegidos: info33.psd }), rUno = conR(876, 324, { edicion: { piezas: {}, renglones: 1 } }), rRaro = conR(876, 324, { edicion: { piezas: {}, renglones: info33.psd + RENGLONES_MAS + 1 } });
+    ok(
+      "B27 s33 876×324: elegidos a mano (los del PSD en el editor, 1 guardado) se usan y no llevan nota (la persona ya lo sabe); guardado uno que no se ofrece, el automático",
+      rPsd.ma === l33 && rPsd.renglones.usados === info33.psd && !notaR(rPsd).length && rUno.renglones.usados === 1 && rUno.ma === hechas33.get(1) && rUno.acomodo.editada === true && !notaR(rUno).length && rRaro.renglones.usados === r876.renglones.auto && !!notaR(rRaro).length,
+    );
+    ok("B27: sin renglones (sin tipografía, o con otro PSD) la medida sale como siempre", revisarMedida([l33], 876, 324).renglones === null && revisarMedida([l33], 876, 324, { renglones: { de: () => null } }).ma === l33);
+    const qL = r876.acomodo.puestas.find((q) => q.pieza === iL), edMov = { piezas: { [iL]: { x: 5, y: 5, k: qL.k } }, renglones: 2 };
+    const sinFuentes = revisarMedida([l33], 876, 324, { edicion: edMov }), autoPsd = revisarMedida([l33], 876, 324).acomodo.puestas.find((q) => q.pieza === iL);
+    const qSin = sinFuentes.acomodo.puestas.find((q) => q.pieza === iL), qCon = conR(876, 324, { edicion: edMov }).acomodo.puestas.find((q) => q.pieza === iL);
+    const notaSin = sinFuentes.acomodo.avisos.find((v) => v.tipo === "renglones");
+    ok(
+      `B27 s33 876×324: guardado en 2 renglones y con el legal movido, sin poder usar los renglones (sin tipografías): el legal va a su lugar automático (lo movido se midió con otra forma) y una nota gris lo dice («${notaSin?.texto}»); con ellos, va donde se movió`,
+      qSin.x === autoPsd.x && qSin.y === autoPsd.y && !!notaSin && esNota(notaSin) && /no se pueden usar ahora/.test(notaSin.texto) && qCon.x === 5 && qCon.y === 5,
+    );
+    // Lo movido a mano del legal sin renglones se movió con la forma del PSD (lo guardado antes de B27): con ésa se queda.
+    const edViejo = { piezas: { [iL]: { x: 5, y: 5, k: qL.k } } }, rViejo = conR(876, 324, { edicion: edViejo });
+    const otraPieza = l33.piezas.findIndex((p, i) => i !== iL && r876.acomodo.puestas.some((q) => q.pieza === i));
+    const qO = r876.acomodo.puestas.find((q) => q.pieza === otraPieza), rOtra = conR(876, 324, { edicion: { piezas: { [otraPieza]: { x: qO.x + 3, y: qO.y, k: qO.k } } } });
+    ok(
+      `B27 s33 876×324: lo guardado que movió el legal sin decir renglones se queda con los del PSD (sin nota, el legal donde se movió); si movió otra pieza, el automático (${rOtra.renglones?.usados})`,
+      rViejo.renglones.usados === info33.psd && rViejo.ma === l33 && !notaR(rViejo).length && ((q) => q.x === 5 && q.y === 5)(rViejo.acomodo.puestas.find((q) => q.pieza === iL)) && rOtra.renglones.usados === r876.renglones.auto && rOtra.ma !== l33,
+    );
+    ok(
+      "B27 edicionMuevePieza / edicionSinPieza: la pieza, sus partes o el orden de sus partes; quitarla deja lo demás",
+      edicionMuevePieza(edViejo, iL) && !edicionMuevePieza(edViejo, otraPieza) && edicionMuevePieza({ piezas: {}, partes: { 3: {} } }, 3) && edicionMuevePieza({ piezas: {}, ordenPartes: { 2: [0] } }, 2) && !edicionMuevePieza(null, 0) && ((e) => !e.piezas[iL] && e.piezas[otraPieza] !== undefined)(edicionSinPieza({ piezas: { [iL]: { x: 1, y: 1, k: 1 }, [otraPieza]: { x: 2, y: 2, k: 1 } } }, iL)),
+    );
+    // Sin tipografías, el legal lo dice la página (`legal`): se suelta ésa, no la primera del pie con texto.
+    const sinFuentesL = (legal) => revisarMedida([l33], 876, 324, { edicion: edMov, renglones: { de: () => null, legal: () => legal } });
+    const qSinOtra = sinFuentesL(otraPieza).acomodo.puestas.find((q) => q.pieza === iL), qSinL = sinFuentesL(iL).acomodo.puestas.find((q) => q.pieza === iL);
+    ok("B27 s33 sin tipografías: se suelta la pieza que la página dice que es el legal", qSinOtra.x === 5 && qSinOtra.y === 5 && qSinL.x === autoPsd.x && qSinL.y === autoPsd.y);
+    const notaSola = revisarMedida([l33], 876, 324, { edicion: { piezas: {}, renglones: 2 } }).acomodo.avisos.find((v) => v.tipo === "renglones");
+    ok(`B27: renglones guardados sin nada movido del legal, sin tipografías: la nota no habla de lo movido («${notaSola?.texto}»)`, !!notaSola && /no se pueden usar ahora/i.test(notaSola.texto) && !/movido/i.test(notaSola.texto) && /movido/i.test(notaSin.texto));
+    // Las opciones son las `RENGLONES_MAX` de justo abajo de los del PSD (un legal largo no se ofrece en 1) y hasta
+    // RENGLONES_MAS arriba (B29).
+    const largo = revisarMedida([l33], 1080, 1920, { renglones: { de: () => ({ pieza: iL, psd: 10, de: () => l33 }), elegidos: null } });
+    ok(`B27: un legal de 10 renglones ofrece del 4 al 9, los del PSD, y 11 y 12 (${largo.renglones?.opciones})`, largo.renglones?.opciones.join() === "4,5,6,7,8,9,10,11,12");
+    ok("B27 s33: el automático quita como mucho la mitad de los renglones (de 4, nunca 1)", [640, 876, 320].every((w) => ((r) => r.renglones.auto >= Math.ceil(info33.psd / 2))(conR(w, w === 876 ? 324 : w === 640 ? 100 : 50))));
+    const aR = acomodar(l33, 876, 324), eR = aplicarEdicion(l33, aR, { piezas: {}, renglones: 2 }, 876, 324);
+    ok("B27 aplicarEdicion: sólo los renglones (ya vienen en el maestro): el mismo acomodo, marcado editado a mano", eR.editada === true && eR.puestas === aR.puestas && eR.avisos === aR.avisos);
+
+    // El PSD editable de esa medida: el pie va parte por parte (sin abrirlo en el editor), los iconos con su escala.
+    const V = r876.ma, q876 = r876.acomodo.puestas.find((q) => q.pieza === iL), plan876 = planDeMedida(V, r876.acomodo, 876, 324);
+    const pPlan = plan876.partes?.find((x) => x.pieza === P0.nombre), o33 = l33.origen;
+    const Aic = pPlan?.partes.find((x) => x.hijo === I0.hijo)?.A, IV = V.piezas[iL].partes[parteI];
+    // La esquina sólida de los iconos del PSD (en el documento) cae donde la pinta la tarjeta (±1 px del maestro).
+    const enPsd = Aic && [Aic.k * (I0.solido.x / o33.s + o33.x) + Aic.x, Aic.k * (I0.solido.y / o33.s + o33.y) + Aic.y];
+    const enTarjeta = [q876.x + (IV.solido.x - V.piezas[iL].solido.x) * q876.k, q876.y + (IV.solido.y - V.piezas[iL].solido.y) * q876.k];
+    const tPlan = plan876.textos?.find((t) => t.ruta.join("/") === tL.ruta.join("/"));
+    ok(
+      `B27 s33 876×324 PSD editable: el pie parte por parte sin abrirlo; los iconos con su escala (×${(Aic?.k / q876.k).toFixed(3)}) y su lugar (PSD ${enPsd?.map((v) => v.toFixed(1))} · tarjeta ${enTarjeta.map((v) => v.toFixed(1))}); el legal con sus letras en un párrafo y su caja nueva`,
+      !!pPlan && pPlan.partes.length === 2 && Math.abs(Aic.k - q876.k * IV.desde.k * o33.s) < 1e-9 && enPsd.every((v, i) => Math.abs(v - enTarjeta[i]) <= q876.k * 1.5) && tPlan?.texto === V.piezas[iL].textos[0].texto.texto && tPlan?.caja === V.piezas[iL].textos[0].texto.caja,
+      JSON.stringify({ partes: pPlan?.partes.length, A: Aic }),
+    );
+    const Acarpeta = plan876.piezas.find(([n]) => n === P0.nombre)?.[1], Alegal = pPlan?.partes.find((x) => x.hijo === P0.partes[parteL].hijo)?.A;
+    eq("B27 s33 876×324 PSD editable: la carpeta del pie (su máscara, lo recortado a ella) va con el texto del legal, que sólo se corrió", Acarpeta, Alegal);
+    const tintas876 = V.piezas.flatMap((p) => p.textos.flatMap((t) => (t.cambio?.tinta ? [{ ruta: t.ruta, tinta: t.cambio.tinta }] : [])));
+    const v876 = legalDe(readPsdAg(writePsdBuffer(psdEditable(fuente, plan876, { ...vacios(876, 324), textos: tintas876 }, pxDe).psd, { invalidateTextLayers: true, noBackground: true }), { useImageData: true, skipThumbnail: true }));
+    ok(
+      `B27 s33 876×324 PSD editable: el legal sigue vivo, en un párrafo sin saltos y con la caja de párrafo nueva (${bb0.map((v) => v.toFixed(0))} → ${v876?.text?.boxBounds?.map((v) => v.toFixed(0))})`,
+      !!v876?.text && !/[\r\n\u0003]/.test(v876.text.text) && v876.text.text === V.piezas[iL].textos[0].texto.texto && v876.text.boxBounds[2] - v876.text.boxBounds[0] > bb0[2] - bb0[0] && !v876.hidden,
+    );
+  }
+}
+
+
+console.log("\n▶ B22 · el ZIP con «Entregables» (PNG) y «Editables» (PSD), armado por partes");
+{
+  const u = new Set();
+  const rutas = [rutaLibre(u, CARPETA_ENTREGABLES, "a_300x250.png"), rutaLibre(u, CARPETA_ENTREGABLES, "a_300x250.png"), rutaLibre(u, CARPETA_ENTREGABLES, "A_300x250.png"), rutaLibre(u, CARPETA_EDITABLES, "a_300x250.psd"), rutaLibre(u, CARPETA_ENTREGABLES, "sin-punto")];
+  ok("rutaLibre: cada archivo en su carpeta; el repetido (también sólo en mayúsculas: en una Mac sería el mismo) lleva -2, -3", JSON.stringify(rutas) === JSON.stringify(["Entregables/a_300x250.png", "Entregables/a_300x250-2.png", "Entregables/A_300x250-3.png", "Editables/a_300x250.psd", "Entregables/sin-punto"]), JSON.stringify(rutas));
+
+  // Pasa de los 16 MB de una parte (se junta en varios Blobs) y mezcla un archivo vacío.
+  const grande = new Uint8Array(40 * 1024 * 1024);
+  for (let i = 0; i < grande.length; i++) grande[i] = (i * 7 + (i >> 12)) & 255;
+  const chico = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+  const z = zipPorPartes();
+  await z.agregar("Entregables/x.png", new Blob([chico]));
+  await z.agregar("Editables/x.psd", new Blob([grande]));
+  await z.agregar("Entregables/vacio.png", new Blob([]));
+  const blob = z.terminar();
+  const fuera = unzipSync(new Uint8Array(await blob.arrayBuffer()));
+  const igual = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+  ok(
+    `zipPorPartes: el ZIP se abre con sus 3 archivos en su carpeta y los bytes exactos (40 MB incluidos), sin comprimir (${(blob.size / 1e6).toFixed(1)} MB)`,
+    JSON.stringify(Object.keys(fuera)) === JSON.stringify(["Entregables/x.png", "Editables/x.psd", "Entregables/vacio.png"]) && igual(fuera["Editables/x.psd"], grande) && igual(fuera["Entregables/x.png"], chico) && fuera["Entregables/vacio.png"].length === 0 && blob.size > grande.length && blob.size < grande.length + 4096 && blob.type === "application/zip",
+    JSON.stringify(Object.keys(fuera)),
+  );
+  ok("zipPorPartes: un ZIP sin archivos también cierra (vacío, pero válido)", Object.keys(unzipSync(new Uint8Array(await zipPorPartes().terminar().arrayBuffer()))).length === 0);
+
+  // El tope (fflate no escribe ZIP64: pasando de 4 GiB saldría roto sin avisar).
+  const falla = async (f) => {
+    try {
+      await f();
+      return null;
+    } catch (e) {
+      return e.message;
+    }
+  };
+  const zt = zipPorPartes(10_000);
+  const cabeAntes = zt.cabe(5_000), noCabe = zt.cabe(9_500);
+  await zt.agregar("Editables/a.psd", new Blob([new Uint8Array(5_000)]));
+  const tope = await falla(() => zt.agregar("Editables/b.psd", new Blob([new Uint8Array(5_000)])));
+  ok(
+    `zipPorPartes: \`cabe\` dice si entra y \`agregar\` no pasa del tope (${ZIP_MAX_BYTES / 1024 ** 3} GiB de verdad); lo que ya entró sigue sirviendo`,
+    cabeAntes && !noCabe && !zt.cabe(5_000) && /pasaría/.test(tope ?? "") && ZIP_MAX_BYTES < 4 * 1024 ** 3 && Object.keys(unzipSync(new Uint8Array(await zt.terminar().arrayBuffer()))).join() === "Editables/a.psd",
+    tope,
+  );
+  const malas = ["../x.png", "Entregables/../x.png", "/x.png", "Entregables\\x.png", "Entregables/sub/x.png", "x.png", "Entregables/..", "Entregables/a:b.png", "Entregables/a\u0001.png"];
+  const zs = zipPorPartes();
+  const rechazadas = [];
+  for (const r of malas) if (await falla(() => zs.agregar(r, new Blob([new Uint8Array([1])])))) rechazadas.push(r);
+  ok("zipPorPartes: una ruta que se saldría de su carpeta (.., /, \\, subcarpetas, raros) no entra", rechazadas.length === malas.length, JSON.stringify(malas.filter((r) => !rechazadas.includes(r))));
+
+  // Lo que no cabe en un ZIP sale en varios (Pedro: "dont drop psd just generate separate zips"): nada se queda fuera.
+  const cerrados = [];
+  const zp = zipsEnPartes((zip, n) => cerrados.push({ zip, n }), 12_000);
+  const up = new Set();
+  const pedazo = (k) => new Blob([new Uint8Array(4_000).fill(k)]);
+  await zp.agregar(rutaLibre(up, CARPETA_ENTREGABLES, "a.png"), pedazo(1));
+  await zp.agregar(rutaLibre(up, CARPETA_EDITABLES, "a.psd"), pedazo(2));
+  const enCurso = zp.partes;
+  await zp.agregar(rutaLibre(up, CARPETA_EDITABLES, "a.psd"), pedazo(3));
+  const fin = zp.terminar();
+  const abrir = async (b) => unzipSync(new Uint8Array(await b.arrayBuffer()));
+  const p1 = cerrados.length ? await abrir(cerrados[0].zip) : {}, p2 = await abrir(fin.zip);
+  ok(
+    "zipsEnPartes: cuando el siguiente ya no cabe, el ZIP 1 se cierra y entrega y sigue el 2; entre los dos están todos, sin nombres repetidos",
+    cerrados.length === 1 && cerrados[0].n === 1 && enCurso === 1 && fin.numero === 2 && Object.keys(p1).join() === "Entregables/a.png,Editables/a.psd" && Object.keys(p2).join() === "Editables/a-2.psd" && p2["Editables/a-2.psd"][0] === 3,
+    JSON.stringify([cerrados.map((c) => c.n), Object.keys(p1), Object.keys(p2), fin.numero]),
+  );
+  const z1 = zipsEnPartes(() => cerrados.push("no"), 12_000);
+  await z1.agregar("Entregables/x.png", pedazo(1));
+  ok("zipsEnPartes: si todo cabe, sale UN ZIP (número 1) y no se cierra ninguno antes; `cabeSolo` dice si un archivo no cabe ni solo", z1.terminar().numero === 1 && !cerrados.includes("no") && z1.cabeSolo(10_000) && !z1.cabeSolo(12_000));
+
+  // Un archivo que no se deja leer (el navegador sin espacio) no entra, y el ZIP sigue sirviendo con los demás.
+  const zr = zipPorPartes();
+  const roto = { size: 10, stream: () => new ReadableStream({ pull(c) { c.error(new Error("lectura rota")); } }) };
+  const e1 = await falla(() => zr.agregar("Editables/roto.psd", roto));
+  const e2 = await falla(() => zr.agregar("Editables/otro.psd", new Blob([new Uint8Array([7, 8])])));
+  const tras = await abrir(zr.terminar());
+  ok("zipPorPartes: un archivo que no se deja leer no entra, y el ZIP queda bueno con los demás", e1 === "lectura rota" && e2 === null && Object.keys(tras).join() === "Editables/otro.psd" && tras["Editables/otro.psd"].join() === "7,8", JSON.stringify([e1, e2, Object.keys(tras)]));
+
+  // El ZIP lo escribe nuestro código (no copia los archivos): que lo abra también el unzip del sistema.
+  const unzipSistema = ["/usr/bin/unzip"].find((r) => existsSync(r));
+  if (!unzipSistema) console.log("  · (sin unzip del sistema: se salta esa prueba)");
+  else {
+    const { execFileSync } = await import("node:child_process");
+    const { writeFileSync, mkdtempSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const dir = mkdtempSync(join(tmpdir(), "b22-zip-"));
+    try {
+      const zs2 = zipPorPartes();
+      await zs2.agregar("Entregables/a.png", new Blob([chico]));
+      await zs2.agregar("Editables/b.psd", new Blob([grande]));
+      const ruta2 = join(dir, "prueba.zip");
+      writeFileSync(ruta2, new Uint8Array(await zs2.terminar().arrayBuffer()));
+      const salidaT = execFileSync(unzipSistema, ["-t", ruta2], { encoding: "utf8" });
+      ok("zipPorPartes: el unzip del sistema lo prueba sin errores (sus 2 archivos, en su carpeta)", /No errors detected/.test(salidaT) && /Entregables\/a\.png/.test(salidaT) && /Editables\/b\.psd/.test(salidaT), salidaT.slice(0, 300));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  // El PSD real (s33, 61 MB) entra dos veces, como dos medidas: el ZIP lo guarda tal cual.
+  const ruta = join(homedir(), "Desktop/formatos-prueba/s33-BFDIRECT20CASH.psd");
+  if (!existsSync(ruta)) console.log("  · (sin s33 en el Escritorio: se salta el ZIP con el PSD real)");
+  else {
+    const real = readFileSync(ruta);
+    const z2 = zipPorPartes(), u2 = new Set();
+    for (const n of ["s33_300x250.psd", "s33_300x250.psd"]) await z2.agregar(rutaLibre(u2, CARPETA_EDITABLES, n), new Blob([real]));
+    const f2 = unzipSync(new Uint8Array(await z2.terminar().arrayBuffer()));
+    const h = (b) => createHash("sha256").update(b).digest("hex");
+    ok("zipPorPartes con s33 real (61 MB ×2): los dos PSD salen idénticos al original, el segundo como -2", JSON.stringify(Object.keys(f2)) === JSON.stringify(["Editables/s33_300x250.psd", "Editables/s33_300x250-2.psd"]) && Object.values(f2).every((b) => h(b) === h(real)));
+  }
+}
+
+console.log("\n▶ B24 · el legal de la Biblioteca en todas las medidas");
+{
+  const tp = (capa, texto) => ({ capa, texto: { texto } });
+  const largo = "Términos y condiciones aplican. Consulta requisitos en didi.com.mx";
+  ok("esNombreLegal: LEGAL / «Legales » / disclaimer sí; «LEGAL 2» y PIE no (nombre completo)", esNombreLegal("LEGAL") && esNombreLegal("Legales ") && esNombreLegal("disclaimer") && !esNombreLegal("LEGAL 2") && !esNombreLegal("PIE"));
+  // Mesa 0: FOOTER con dos partes; la de nombre LEGAL gana aunque sea más corta que el texto de las tiendas.
+  const tiendas = tp("Tiendas", "Descárgala en App Store y Google Play hoy mismo, gratis"), corto = tp("Legal", "Aplican TyC.");
+  const m0 = { piezas: [{ nombre: "TITULO", rol: "TITULO", textos: [tp("Título", "Un título larguísimo que no es el legal para nada")] }, { nombre: "FOOTER", rol: "FOOTER", textos: [tiendas, corto], partes: [{ nombre: "APP STORES", textos: [tiendas] }, { nombre: "LEGAL", textos: [corto] }] }] };
+  // Mesa 1: FOOTER sin nombres: el texto más largo (los vacíos no cuentan). Mesa 2: sin FOOTER.
+  const m1 = { piezas: [{ nombre: "Pie", rol: "FOOTER", textos: [tp("Tienda", "App Store"), tp("Vacío", "   "), tp("Texto", largo)] }] };
+  const m2 = { piezas: [{ nombre: "HERO", rol: "HERO", textos: [] }] };
+  {
+    const g = (id, texto) => ({ id, titulo: id, texto, marca: "DiDi", clienteId: "c1" });
+    const tyc = "Aplican términos y condiciones. Promoción válida del 1 al 30 de noviembre de 2026 en Ciudad de México. Consulta didi.com.mx/terminos.";
+    const leidoMal = "Aplican terminos y condiciones. Promocion valida del 1 al 30 de noviembre de 2O26 en Ciudad de Mexico. Consulta didi.com.mx/terminos";
+    const otro = g("Envíos", "Envío gratis en tu primer pedido. Sujeto a disponibilidad. Consulta la app.");
+    const r = legalParecido(leidoMal, [otro, g("Noviembre", tyc)]);
+    ok("B30 legalParecido: el legal leído con acentos perdidos y un 0 por O encuentra el guardado", r?.legal.id === "Noviembre" && r.parecido > 0.85, JSON.stringify(r));
+    const casi = g("Diciembre", tyc.replace("noviembre", "diciembre").replace("30", "31"));
+    ok("B30 legalParecido: dos guardados casi iguales (otra fecha) no se eligen a ciegas", legalParecido(leidoMal, [g("Noviembre", tyc), casi]) === null);
+    ok("B30 legalParecido: nada parecido = null; parecidoLegal de vacío = 0", legalParecido("Hasta 50% de descuento", [otro, g("Noviembre", tyc)]) === null && parecidoLegal("", tyc) === 0);
+  }
+  const leg = legalDelPsd([m0, m1, m2]);
+  eq("legalDelPsd: por mesa; prefiere la parte LEGAL, si no el más largo de FOOTER; una mesa sin FOOTER no tiene legal", leg.map((l) => [l.mi, l.pieza, l.j, l.texto]), [[0, 1, 1, "Aplican TyC."], [1, 0, 2, largo]]);
+  const kA = leg[0].clave, kB = leg[1].clave;
+  {
+    const ms = [m0, m1, m2], nada = {};
+    eq(
+      "conLegalFijo: con otro legal puesto, se marca la mesa sin legal (y sólo ésa); sin cambio o con dos legales distintos, los MISMOS maestros",
+      [conLegalFijo(ms, leg, { [kA]: "Nuevo", [kB]: "Nuevo" }).map((m) => !!m.legalFijo), conLegalFijo(ms, leg, { [kB]: "Nuevo" }).map((m) => !!m.legalFijo), conLegalFijo(ms, leg, nada) === ms, conLegalFijo(ms, leg, { [kA]: "A", [kB]: "B" }) === ms, conLegalFijo([m0, m1], leg, { [kA]: "Nuevo" }).length],
+      [[false, false, true], [false, false, true], true, true, 2],
+    );
+  }
+  const otro = { [claveTexto(tp("Título", "x"))]: "Otro título" };
+  const puesto = conLegal(otro, leg, "  Legal nuevo de DiDi.\n");
+  eq("conLegal: pone el legal (sin espacios a los lados) en las claves de todas las mesas y deja los demás textos", puesto, { ...otro, [kA]: "Legal nuevo de DiDi.", [kB]: "Legal nuevo de DiDi." });
+  ok("conLegal: el mismo legal otra vez devuelve EL MISMO objeto (la página no reescribe)", conLegal(puesto, leg, "Legal nuevo de DiDi.") === puesto);
+  eq("conLegal: null vuelve al del PSD (quita sólo las claves del legal)", conLegal(puesto, leg, null), otro);
+  eq("conLegal: un legal igual al del PSD en una mesa no es cambio ahí (como el editor)", conLegal({}, leg, ` ${largo} `), { [kA]: largo });
+  ok("conLegal: sin legal en el PSD, nada cambia", conLegal(otro, [], "x") === otro);
+  ok("conLegal: un legal vacío (o sólo espacios / invisibles) no se pone: el legal nunca se borra", conLegal(otro, leg, " \n ") === otro && conLegal(otro, leg, "\u200b") === otro);
+  const enorme = "a".repeat(TEXTO_CAMBIADO_MAX + 1);
+  ok(`conLegal / legalCabe: uno de más de ${TEXTO_CAMBIADO_MAX} letras no se pone (saldría cortado)`, conLegal(otro, leg, enorme) === otro && !legalCabe(enorme) && legalCabe("a".repeat(TEXTO_CAMBIADO_MAX)));
+  // El legal del PSD trae los saltos del diseñador; el de la Biblioteca, un párrafo: mismas palabras = sin cambio.
+  const conSaltos = [{ ...leg[1], texto: "Términos y condiciones aplican.\nConsulta requisitos en didi.com.mx" }];
+  eq("conLegal: las mismas palabras con otros saltos o espacios no es cambio (se quedan los saltos del PSD)", [conLegal({}, conSaltos, "Términos y condiciones  aplican. Consulta requisitos en didi.com.mx"), conLegal({ [kB]: "x" }, conSaltos, "Términos y condiciones aplican. Consulta requisitos en didi.com.mx ")], [{}, {}]);
+  eq("conLegal: escribe lo que escribiría el editor (sin invisibles, \\r\\n como salto)", conLegal({}, leg, "Uno\r\ndos\u200e")[kA], limpiarTexto("Uno\r\ndos\u200e").trim());
+  const tras = { ...puesto, [claveTexto(tp("Título", "x"))]: "Otro título cambiado después" };
+  eq("conLegalDe (Deshacer): vuelve el legal de antes y deja lo que se cambió después", conLegalDe(tras, leg, otro), { [claveTexto(tp("Título", "x"))]: "Otro título cambiado después" });
+  ok("conLegalDe: si el legal ya está como antes, EL MISMO objeto", conLegalDe(otro, leg, otro) === otro);
+  const g = (id, texto, clienteId, marca = null) => ({ id, titulo: id.toUpperCase(), texto, marca, clienteId });
+  const bib = [g("card", "Legal nuevo de DiDi.\n", "didi", "Card"), g("tyc", "Aplican TyC.", "didi", "Card")];
+  eq("legalVigente: sin cambios = el del PSD; no es de la Biblioteca porque las mesas traen legales distintos", legalVigente({}, leg, bib), { tipo: "psd", igualA: null });
+  eq("legalVigente: el del PSD igual a uno guardado dice cuál es", legalVigente({}, leg.slice(0, 1), bib), { tipo: "psd", igualA: bib[1] });
+  eq("legalVigente: el mismo legal de la Biblioteca en todas las mesas", legalVigente(puesto, leg, bib), { tipo: "biblioteca", legal: bib[0] });
+  eq("legalVigente: escrito a mano (o distinto entre mesas) = a mano", [legalVigente({ [kA]: "A mano" }, leg, bib).tipo, legalVigente({ [kB]: "Legal nuevo de DiDi." }, leg, bib).tipo], ["mano", "mano"]);
+  eq("legalVigente: el del PSD con saltos es el de la Biblioteca en un párrafo", legalVigente({}, conSaltos, [g("par", "Términos y condiciones aplican. Consulta requisitos en didi.com.mx", null)]).igualA?.id, "par");
+  const todos = [g("z", "z", "didi", "Préstamos"), g("glob", "g", null), g("a", "a", "didi", "Card"), g("a2", "a2", "didi", "Card"), g("otro", "o", "uber", "Eats")];
+  eq(
+    "legalesParaCliente: los del cliente por marca (A-Z, en su orden dentro), luego los globales; nada de otros clientes ni sin cliente",
+    [legalesParaCliente(todos, "didi").map((gr) => [gr.marca, gr.legales.map((l) => l.id)]), legalesParaCliente(todos, "")],
+    [[["Card", ["a", "a2"]], ["Préstamos", ["z"]], [null, ["glob"]]], []],
+  );
+}
+
+console.log("\n▶ B25 · copiar lo editado en una medida a sus hermanas (la matriz de producción de Pedro)");
+{
+  const doce = leerMedidas(MEDIDAS_EQUIPO).medidas;
+  const k = (m) => `${m.w}x${m.h}`;
+  const de = (w, h) => hermanas({ w, h }, doce).map((t) => [k(t.m), t.modo]).sort();
+  eq(
+    "hermanas: las filas de la matriz (las dos direcciones si tienen la misma forma) y nada para las que no tienen hijas",
+    [de(1080, 1920), de(720, 1280), de(720, 1600), de(1200, 1500), de(768, 1024), de(1280, 720), de(1200, 627), de(876, 324), de(600, 500), de(320, 250), de(640, 100), de(320, 50)],
+    [[["720x1280", "igual"], ["720x1600", "estirar"]], [["1080x1920", "igual"]], [], [["768x1024", "proporcional"]], [], [["1200x627", "proporcional"]], [], [], [["320x250", "proporcional"]], [], [["320x50", "igual"]], [["640x100", "igual"]]],
+  );
+  eq("hermanas: una medida libre con la misma forma es «igual» (también desde ella); otra forma no", hermanas({ w: 540, h: 960 }, [...doce, { w: 540, h: 960 }, { w: 500, h: 960 }]).map((t) => [k(t.m), t.modo]), [["1080x1920", "igual"], ["720x1280", "igual"]]);
+
+  const sol = [{ solido: { w: 100, h: 50 } }, { solido: { w: 200, h: 100 } }];
+  const partes = { 1: { 0: { x: 0.1, y: 0.2, k: 1 } } };
+  const ed = { piezas: { 0: { x: 30, y: 60, k: 1 }, 1: { x: 500, y: 1500, k: 0.5 } }, orden: [1, 0], partes, sinTexto: { 1: [0] } };
+  const r6 = (o) => JSON.parse(JSON.stringify(o, (_, v) => (typeof v === "number" ? Math.round(v * 1e6) / 1e6 : v)));
+  const igual = copiarEdicion(ed, sol, { w: 1080, h: 1920 }, { w: 720, h: 1280 }, "igual");
+  eq(
+    "copiar «igual» (1080×1920 → 720×1280): lugar y escala × 2/3; capas, partes y textos quitados tal cual; marcada de dónde vino",
+    r6(igual),
+    r6({ piezas: { 0: { x: 20, y: 40, k: 2 / 3 }, 1: { x: 1000 / 3, y: 1000, k: 1 / 3 } }, orden: [1, 0], partes, sinTexto: { 1: [0] }, copiaDe: { w: 1080, h: 1920 } }),
+  );
+  ok("copiar: las partes (relativas a su pieza) son las mismas, no una copia", igual.partes === partes);
+  const est = copiarEdicion(ed, sol, { w: 1080, h: 1920 }, { w: 720, h: 1600 }, "estirar");
+  eq(
+    "copiar «estirar» (1080×1920 → 720×1600): escala × 2/3; lo de arriba a su distancia (× 2/3) del borde de arriba, lo de abajo a la suya del de abajo",
+    r6([est.piezas, est.copiaDe]),
+    r6([{ 0: { x: 20, y: 40, k: 2 / 3 }, 1: { x: 1000 / 3, y: 1600 - 100 / 3 - (370 * 2) / 3, k: 1 / 3 } }, { w: 1080, h: 1920 }]),
+  );
+  const pro = copiarEdicion(ed, sol, { w: 1200, h: 1500 }, { w: 768, h: 1024 }, "proporcional");
+  eq(
+    "copiar «proporcional» (1200×1500 → 768×1024): cada centro en el mismo punto relativo, escala × 0.64 (el factor menor)",
+    r6(pro.piezas[0]),
+    r6({ x: (80 / 1200) * 768 - 32, y: (85 / 1500) * 1024 - 16, k: 0.64 }),
+  );
+  eq(
+    "copiar con el HERO del otro lado en la otra medida: lo editado se refleja (x → ancho − x − ancho de la pieza), lo demás igual",
+    r6(copiarEdicion(ed, sol, { w: 640, h: 100 }, { w: 320, h: 50 }, "igual", true).piezas),
+    r6({ 0: { x: 320 - 15 - 50, y: 30, k: 0.5 }, 1: { x: 320 - 250 - 50, y: 750, k: 0.25 } }),
+  );
+  const chica = copiarEdicion({ piezas: { 0: { x: 10, y: 10, k: 0.1 } } }, sol, { w: 640, h: 100 }, { w: 320, h: 50 }, "igual").piezas[0];
+  eq(
+    `copiar: una pieza que a escala queda bajo el mínimo (${PIEZA_MIN_PX} px) se recorta a su tope ANTES de ubicarla, con su centro en el mismo lugar (aplicarEdicion ya no la mueve)`,
+    r6([chica, aplicarEdicion({ w: 640, h: 100, piezas: [{ nombre: "BRAND", rol: "BRAND", solido: { x: 0, y: 0, w: 100, h: 50 }, letraMinPx: null }] }, { familia: "banner", puestas: [{ pieza: 0, k: 0.1, x: 0, y: 0, w: 10, h: 5 }], letras: [], avisos: [], quitadas: [] }, { piezas: { 0: chica } }, 320, 50).puestas[0]]),
+    r6([{ x: 1.5, y: 3.25, k: 0.12 }, { pieza: 0, k: 0.12, x: 1.5, y: 3.25, w: 12, h: 6 }]),
+  );
+  eq("copiar «estirar»: una pieza con su centro justo en medio va con lo de arriba", r6(copiarEdicion({ piezas: { 1: { x: 0, y: 910, k: 1 } } }, sol, { w: 1080, h: 1920 }, { w: 720, h: 1600 }, "estirar").piezas[1].y), r6((910 * 2) / 3));
+  ok("copiar: una pieza que el maestro no tiene se salta", Object.keys(copiarEdicion({ piezas: { 0: { x: 1, y: 1, k: 1 }, 9: { x: 1, y: 1, k: 1 } } }, sol, { w: 100, h: 100 }, { w: 50, h: 50 }, "igual").piezas).join() === "0");
+
+  const pieza = { 0: { x: 1, y: 2, k: 0.5 } };
+  eq(
+    "leerEdicion: «copiada de» se lee si es una medida que acepta la lista (lo demás guardado ahí no se lee); rota, se ignora; sola no es una edición",
+    [
+      leerEdicion({ piezas: pieza, copiaDe: { w: 1080, h: 1920, revisar: false, x: 1 } }, 3)?.copiaDe,
+      ...[{ w: 0, h: 100 }, { w: 1.5, h: 100 }, { w: 20, h: 100 }, { w: 5000, h: 100 }, { w: "1080", h: 1920 }, null, "1080x1920"].map((c) => "copiaDe" in leerEdicion({ piezas: pieza, copiaDe: c }, 3)),
+      leerEdicion({ piezas: {}, copiaDe: { w: 1080, h: 1920 } }, 3),
+    ],
+    [{ w: 1080, h: 1920 }, false, false, false, false, false, false, false, null],
+  );
+
+  const pz = (nombre, x, y, w, h, letraMinPx = null) => ({ nombre, rol: rolDe(nombre), solido: { x, y, w, h }, letraMinPx });
+  const M45 = { nombre: "AD_4x5", w: 1200, h: 1500, piezas: [pz("FOOTER", 204, 1361, 790, 62, 16), pz("HERO", 113, 508, 788, 791), pz("CTA", 788, 856, 306, 97, 45), pz("Subtitulo", 684, 617, 383, 194, 32), pz("TITULO", 188, 238, 824, 212, 42), pz("BRAND", 364, 86, 472, 83)] };
+  const iCta = M45.piezas.findIndex((p) => p.rol === "CTA"), iHero = M45.piezas.findIndex((p) => p.rol === "HERO");
+  const base = acomodar(M45, 1200, 627), hero = base.puestas.find((q) => q.pieza === iHero);
+  // El CTA encima del HERO: movido sólo el CTA (el HERO es del automático), o movidos los dos.
+  const encima = { piezas: { [iCta]: { x: hero.x, y: hero.y, k: 0.5 } } };
+  const ambas = { piezas: { ...encima.piezas, [iHero]: { x: hero.x, y: hero.y, k: hero.k } } };
+  // De 2400×1254 = la misma forma que 1200×627; de 1280×720, otra. Lo dicen las dos medidas, no lo guardado.
+  const conCopia = (e, revisar) => aplicarEdicion(M45, base, { ...e, copiaDe: revisar ? { w: 1280, h: 720, revisar: false } : { w: 2400, h: 1254 } }, 1200, 627);
+  const [aMano, deIgual, deOtra] = [aplicarEdicion(M45, base, encima, 1200, 627), conCopia(encima, false), conCopia(encima, true)];
+  const tipos = (a) => a.avisos.map((v) => v.tipo);
+  ok(
+    "copia de otra forma: su aviso va primero y las piezas que se enciman se avisan (nadie las vio así); la hecha a mano, no",
+    tipos(deOtra)[0] === "copiada" && deOtra.avisos[0].texto.includes("1280×720") && tipos(deOtra).includes("encima") && !tipos(aMano).includes("encima"),
+    JSON.stringify([tipos(aMano), tipos(deOtra)]),
+  );
+  ok(
+    "copia de la misma forma: sin aviso de copia; una movida encima de una del automático de AQUÍ se avisa; dos movidas (vistas juntas allá), no",
+    !tipos(deIgual).includes("copiada") && tipos(deIgual).includes("encima") && !tipos(conCopia(ambas, false)).includes("encima") && tipos(conCopia(ambas, true)).includes("encima"),
+    JSON.stringify([tipos(deIgual), tipos(conCopia(ambas, false))]),
+  );
+  eq("copia: el acomodo dice de qué medida vino (la hecha a mano, no)", [deIgual.copiadaDe, deOtra.copiadaDe, aMano.copiadaDe], [{ w: 2400, h: 1254 }, { w: 1280, h: 720 }, undefined]);
+  const M33R = { nombre: "R", w: 120, h: 150, fondo: new Uint8ClampedArray(120 * 150 * 4).fill(200), piezas: [{ nombre: "CTA", rol: "CTA", caja: { x: 40, y: 110, w: 40, h: 12 }, solido: { x: 40, y: 110, w: 40, h: 12 }, letraMinPx: 6, rgba: new Uint8ClampedArray(40 * 12 * 4).fill(255), oscurece: null }] };
+  const edR = { piezas: { 0: { x: 20, y: 20, k: 0.5 } } };
+  const sinMarca = revisarMedida([M33R], 1200, 627, { edicion: edR }), marcada = revisarMedida([M33R], 1200, 627, { edicion: { ...edR, copiaDe: { w: 1280, h: 720 } } });
+  ok("revisarMedida: la misma edición copiada de otra forma no sale de la caché de la hecha a mano (trae su aviso)", !sinMarca.acomodo.avisos.some((v) => v.tipo === "copiada") && marcada.acomodo.avisos[0]?.tipo === "copiada", JSON.stringify(marcada.acomodo.avisos.map((v) => v.tipo)));
+
+  const ruta33 = join(homedir(), "Desktop/formatos-prueba/s33-BFDIRECT20CASH.psd");
+  if (!existsSync(ruta33)) console.log("  · (s33 no está en el Escritorio: no se probó la copia con el PSD real)");
+  else {
+    const d33 = leerPsd((await adelgazarPsd(new Blob([readFileSync(ruta33)]), PSD_BYTES_MAX)).datos);
+    const l33 = prepararMaestro(despiezar(d33, d33.mesas.findIndex((m) => m.w === 1200 && m.h === 1500))).maestro;
+    const iC = l33.piezas.findIndex((p) => p.rol === "CTA"), iT = l33.piezas.findIndex((p) => p.rol === "TITULO");
+    const a1920 = acomodar(l33, 1080, 1920), qC = a1920.puestas.find((q) => q.pieza === iC), qT = a1920.puestas.find((q) => q.pieza === iT);
+    const ed33 = { piezas: { [iC]: { x: qC.x + 40, y: qC.y - 60, k: qC.k }, [iT]: { x: qT.x - 20, y: qT.y + 30, k: qT.k * 1.1 } } };
+    const e1920 = aplicarEdicion(l33, a1920, ed33, 1080, 1920);
+    const llevar = (W2, H2, modo) => aplicarEdicion(l33, acomodar(l33, W2, H2), copiarEdicion(ed33, l33.piezas, { w: 1080, h: 1920 }, { w: W2, h: H2 }, modo), W2, H2);
+    const e1280 = llevar(720, 1280, "igual"), e1600 = llevar(720, 1600, "estirar");
+    const en = (a, i) => a.puestas.find((q) => q.pieza === i);
+    const veces = (q, f) => ({ k: q.k * f, x: q.x * f, y: q.y * f, w: q.w * f, h: q.h * f });
+    const sinPieza = ({ pieza, ...r }) => r;
+    eq(
+      "s33: lo editado en 1080×1920 (CTA movido, título más grande) sale en 720×1280 idéntico a 2/3, sin aviso de copia",
+      r6([sinPieza(en(e1280, iC)), sinPieza(en(e1280, iT)), e1280.avisos.some((v) => v.tipo === "copiada"), e1280.copiadaDe]),
+      r6([veces(en(e1920, iC), 2 / 3), veces(en(e1920, iT), 2 / 3), false, { w: 1080, h: 1920 }]),
+    );
+    const C = en(e1920, iC), T = en(e1920, iT), C2 = en(e1600, iC), T2 = en(e1600, iT);
+    const arriba = (q) => q.y + q.h / 2 <= 960;
+    const dist = (q, q2) => (arriba(q) ? [q2.y, q.y * (2 / 3)] : [1600 - q2.y - q2.h, (1920 - q.y - q.h) * (2 / 3)]);
+    ok(
+      `s33 720×1600 («estirar»): cada pieza a su distancia (× 2/3) del borde más cercano (CTA ${arriba(C) ? "arriba" : "abajo"}, título ${arriba(T) ? "arriba" : "abajo"}) y con su aviso de revisar`,
+      [dist(C, C2), dist(T, T2)].every(([a, b]) => Math.abs(a - b) < 1e-6) && Math.abs(C2.k - (C.k * 2) / 3) < 1e-9 && e1600.avisos[0]?.tipo === "copiada",
+      JSON.stringify([dist(C, C2), dist(T, T2), e1600.avisos.map((v) => v.tipo)]),
+    );
+  }
+}
+
+console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo automático");
+{
+  const pz = (nombre, x, y, w, h, letraMinPx = null) => ({ nombre, rol: rolDe(nombre), solido: { x, y, w, h }, letraMinPx });
+  const M45 = { nombre: "AD_4x5", w: 1200, h: 1500, piezas: [pz("FOOTER", 204, 1361, 790, 62, 16), pz("HERO", 113, 508, 788, 791), pz("CTA", 788, 856, 306, 97, 45), pz("Subtitulo", 684, 617, 383, 194, 32), pz("TITULO", 188, 238, 824, 212, 42), pz("BRAND", 364, 86, 472, 83)] };
+  const M916 = { nombre: "AD_9x16", w: 1080, h: 1920, piezas: [pz("FOOTER", 131, 1485, 818, 70, 16), pz("HERO", 105, 558, 692, 695), pz("CTA", 365, 1290, 348, 110, 51.2), pz("Subtitulo", 646, 640, 368, 190, 32), pz("TITULO", 136, 260, 808, 205, 42), pz("BRAND", 304, 108, 472, 83)] };
+  const rol = (ma, a, r) => a.puestas.find((q) => ma.piezas[q.pieza].rol === r);
+  const sinPie = (ma, a) => a.puestas.filter((q) => ma.piezas[q.pieza].rol !== "FOOTER").map(({ pieza, ...r }) => [pieza, r]);
+  const r6 = (o) => JSON.parse(JSON.stringify(o, (_, v) => (typeof v === "number" ? Math.round(v * 1e6) / 1e6 : v)));
+  const veces = (ma, a, f) => sinPie(ma, a).map(([i, q]) => [i, { k: q.k * f, x: q.x * f, y: q.y * f, w: q.w * f, h: q.h * f }]);
+
+  // 3. 320×50 = 640×100 × 0.5 (sin mesa de banner en el PSD); con una mesa 640×100, ésa manda (su forma).
+  const a640 = acomodar(M45, 640, 100), a320 = acomodar(M45, 320, 50);
+  eq("320×50 sin mesa de banner: todo lo de 640×100 × 0.5 (menos el legal), con su subtítulo y su familia", r6([sinPie(M45, a320), a320.familia, a320.quitadas]), r6([veces(M45, a640, 0.5), "banner", []]));
+  ok("320×50: el legal, al menos la mitad del de 640×100 (crece si cabe sin tocar a nadie) y dentro de la medida", ((p, q) => p.k >= q.k * 0.5 - 1e-9 && p.x >= 0 && p.x + p.w <= 320 && p.y + p.h <= 50)(rol(M45, a320, "FOOTER"), rol(M45, a640, "FOOTER")));
+  const B640 = { nombre: "AD_640x100", w: 640, h: 100, piezas: [pz("FOOTER", 100, 80, 440, 14, 6), pz("HERO", 400, 10, 60, 60), pz("TITULO", 120, 20, 200, 40, 20), pz("BRAND", 10, 30, 80, 30)] };
+  eq("con una mesa 640×100 en el PSD, 320×50 sale de ella (su forma: el acomodo del diseñador a la mitad)", [elegirMaestro([M45, B640], 320, 50), acomodar(B640, 320, 50).familia], [1, "igual"]);
+  // 720×1280 = 1080×1920 × 2/3 cuando el PSD sólo trae 4:5; con un 9:16 en el PSD, sale de él como siempre.
+  const a1920 = acomodar(M45, 1080, 1920), a1280 = acomodar(M45, 720, 1280);
+  eq("720×1280 sin 9:16 en el PSD: lo de 1080×1920 × 2/3 (menos el legal), con su aviso de forma", r6([sinPie(M45, a1280), a1280.avisos.find((v) => v.tipo === "forma")?.texto]), r6([veces(M45, a1920, 2 / 3), a1920.avisos.find((v) => v.tipo === "forma")?.texto]));
+  const historias = { top: 1280 * 0.14, right: 0, bottom: 1280 * 0.2, left: 0 };
+  ok("720×1280 con la zona de historias: nada cae en lo que tapa la app (la base se acomoda con la misma zona, a su escala)", acomodar(M45, 720, 1280, { zona: historias }).puestas.every((q) => q.y >= historias.top - 0.5 && q.y + q.h <= 1280 - historias.bottom + 0.5));
+
+  // 2. Más alta que el maestro: a la mitad entre B13 y la tabla. La tarjeta sobre su punto; nada se encima.
+  const alFondo = (ma, a, q) => {
+    const s = ma.piezas[q.pieza].solido;
+    return [(q.x + q.w / 2 - a.fondo.x) / a.fondo.k - (s.x + s.w / 2), (q.y + q.h - a.fondo.y) / a.fondo.k - (s.y + s.h)];
+  };
+  const enchimadas = (a) => a.puestas.some((p, i) => a.puestas.some((q, j) => j > i && Math.min(p.x + p.w, q.x + q.w) - Math.max(p.x, q.x) > 2 && Math.min(p.y + p.h, q.y + q.h) - Math.max(p.y, q.y) > 2 && !(["HERO", "CTA", "SUBTITULO"].includes(M916.piezas[p.pieza]?.rol) && ["HERO", "CTA", "SUBTITULO"].includes(M916.piezas[q.pieza]?.rol))));
+  const a1600 = acomodar(M916, 720, 1600), k1600 = 720 / 1080;
+  ok(
+    "9:16 → 720×1600: el HERO crece (más que ×1 y hasta ×1.5), con su pie sobre su punto del fondo; la marca sube, el legal baja; nada nuevo encimado",
+    ((h) => h.k > k1600 * 1.01 && h.k <= k1600 * 1.5 + 1e-9 && alFondo(M916, a1600, h).every((d) => Math.abs(d) < 1))(rol(M916, a1600, "HERO")) && alFondo(M916, a1600, rol(M916, a1600, "BRAND"))[1] < -1 && alFondo(M916, a1600, rol(M916, a1600, "FOOTER"))[1] > 1 && !enchimadas(a1600),
+    JSON.stringify(a1600.puestas.map((q) => [M916.piezas[q.pieza].rol, +(q.k / k1600).toFixed(3), ...alFondo(M916, a1600, q).map(Math.round)])),
+  );
+  const a768 = acomodar(M45, 768, 1024);
+  ok("4:5 → 768×1024: el HERO gana un poco (la mitad de la altura que sobra), lo demás a la escala de siempre", ((h) => h.k > 0.64 * 1.03 && h.k < 0.64 * 1.1)(rol(M45, a768, "HERO")) && rol(M45, a768, "TITULO").k === 0.64 && !a768.avisos.some((v) => v.tipo === "forma"), String(rol(M45, a768, "HERO").k / 0.64));
+  ok("las de la misma forma no cambian: 1080×1920 desde el 9:16 y 1200×1500 desde el 4:5 son el acomodo del diseñador", acomodar(M916, 1080, 1920).puestas.every((q) => q.k === 1 && q.x === M916.piezas[q.pieza].solido.x) && acomodar(M45, 1200, 1500).puestas.every((q) => q.k === 1));
+  // B28 (preview, 2026-10-27): DiDi Card (cajas de la lectura real) en 1080×1920 llevaba el precio a 2 px del borde y
+  // los teléfonos 7 px fuera. Cada lado guarda el menor entre el margen del diseñador × k y el de siempre.
+  const cajaDidi = (rol, x0, y0, x1, y1) => ({ nombre: rol, rol, solido: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, letraMinPx: null });
+  const DIDI = { nombre: "didi-card", w: 1200, h: 1500, piezas: [cajaDidi("FOOTER", 243, 1305, 990, 1364), cajaDidi("HERO", 93, 667, 960, 1254), cajaDidi("CTA", 670, 679, 1146, 809), cajaDidi("TITULO", 364, 271, 833, 602), cajaDidi("BRAND", 252, 130, 945, 200)] };
+  const aLosLados = [[1080, 1920], [720, 1600], [768, 1024]].map(([W, H]) => [W, H, Math.round(Math.min(H * 0.07, W * 0.045)), acomodar(DIDI, W, H)]);
+  ok("más alta que el maestro: ninguna pieza se arrima al borde de los lados (DiDi Card en 1080×1920, 720×1600 y 768×1024)", aLosLados.every(([W, , m, a]) => a.puestas.every((q) => q.x >= m - 0.5 && q.x + q.w <= W - m + 0.5)), aLosLados.map(([W, H, m, a]) => `${W}x${H} m${m}: ${a.puestas.map((q) => `${Math.round(q.x)}/${Math.round(W - q.x - q.w)}`).join(" ")}`).join(" · "));
+  ok("a la medida del maestro, DiDi Card queda como la dejó el diseñador", acomodar(DIDI, 1200, 1500).puestas.every((q) => q.k === 1 && q.x === DIDI.piezas[q.pieza].solido.x));
+  ok("más ancha que el maestro (1080×1080 desde 4:5): sigue como antes, sin el acomodo de la tabla",!acomodar(M45, 1080, 1080).avisos.some((v) => /más alta/i.test(v.texto)) && acomodar(M45, 768, 1024).avisos.some((v) => esNota(v) && /más alta/i.test(v.texto)));
+
+  // Lo que no debe pasar nunca: una base que salga de otra (daría vueltas) ni un HERO de tamaño cero o negativo.
+  ok("la matriz: ninguna base «igual» sale a su vez de otra", Object.values(MATRIZ).filter((f) => f.modo === "igual").every((f) => !baseAEscala(...f.base.split("x").map(Number))));
+  const finito = (a) => a.puestas.every((q) => q.k > 0 && [q.x, q.y, q.w, q.h].every(Number.isFinite)) && [a.fondo.k, a.fondo.x, a.fondo.y].every(Number.isFinite);
+  const flaco = { nombre: "FLACO", w: 1200, h: 1500, piezas: [pz("TITULO", 200, 50, 800, 100, 30), pz("HERO", 200, 700, 800, 10), pz("FOOTER", 200, 1400, 800, 50, 12)] };
+  const reels = { top: 1920 * 0.14, right: 1080 * 0.06, bottom: 1920 * 0.35, left: 1080 * 0.06 };
+  ok("un HERO casi sin alto con huecos grandes y la zona de reels: nada de tamaños negativos ni números rotos (720×1280, 1080×1920, 720×1600)", [[720, 1280], [1080, 1920], [720, 1600]].every(([W, H]) => finito(acomodar(flaco, W, H, { zona: reels })) && finito(acomodar(flaco, W, H))));
+
+  // Con zona a los lados (TikTok: 120 px a la derecha), nada de lo de arriba o de abajo se mete en ella.
+  const alto = { nombre: "ALTO", w: 1200, h: 1500, piezas: [pz("BRAND", 100, 60, 1000, 80), pz("TITULO", 60, 180, 1080, 200, 40), pz("HERO", 300, 420, 600, 600), pz("CTA", 400, 1080, 400, 90, 40), pz("FOOTER", 60, 1380, 1080, 60, 14)] };
+  const tiktok = { top: 0, right: 120, bottom: 0, left: 0 };
+  const conTiktok = acomodar(alto, 1080, 1920, { zona: tiktok });
+  ok("con la zona de TikTok a la derecha: ninguna pieza entra en ella (la tabla no se usa si la pisaría)", conTiktok.puestas.every((q) => q.x + q.w <= 1080 - 120 + 0.5), JSON.stringify(conTiktok.puestas.map((q) => [alto.piezas[q.pieza].rol, Math.round(q.x + q.w)])));
+  const sinZona = acomodar(alto, 1080, 1920), hA = rol(alto, sinZona, "HERO"), tA = rol(alto, sinZona, "TITULO");
+  ok("el HERO crece sin pegarse al título: le queda al menos el aire que dejó el diseñador (× la escala)", hA.y - (tA.y + tA.h) >= (420 - 380) * 0.9 * 0.5 - 0.5, String(hA.y - (tA.y + tA.h)));
+  ok("el legal crece sin pasar del alto útil de la medida", [[320, 50], [640, 100], [720, 1280]].every(([W, H]) => ((q) => q.y >= 0 && q.y + q.h <= H + 0.5)(rol(M45, acomodar(M45, W, H), "FOOTER"))));
+  const soloOrden = aplicarEdicion(M45, a768, { piezas: {}, orden: [...a768.puestas.map((q) => q.pieza)].reverse() }, 768, 1024);
+  ok("cambiar sólo el orden de capas no borra las notas de la matriz ni cambia el aviso de forma", soloOrden.editada === true && soloOrden.avisos.some(esNota) && ((b) => b.avisos.find((v) => v.tipo === "forma")?.texto === a1920.avisos.find((v) => v.tipo === "forma")?.texto)(aplicarEdicion(M45, a1920, { piezas: {}, orden: [...a1920.puestas.map((q) => q.pieza)].reverse() }, 1080, 1920)));
+
+  // 1. 876×324: manda el script; si la persona la edita, ya eligió.
+  const a876 = acomodar(M45, 876, 324);
+  const nota876 = (op) => acomodar(M45, 876, 324, op).avisos.find(esNota)?.texto ?? "";
+  ok("876×324: la nota dice el orden de aquí, también con el HERO volteado; otra medida ancha (970×250) no la lleva", /aquí va texto y botón · beneficios · HERO/.test(nota876()) && /aquí va HERO · beneficios · texto y botón/.test(nota876({ heroLado: "izquierda" })) && !acomodar(M45, 970, 250).avisos.some(esNota));
+  ok("876×324: avisa que sigue el script y no la matriz; editada a mano, el aviso se va", a876.avisos.some((v) => v.tipo === "matriz") && !aplicarEdicion(M45, a876, { piezas: { [M45.piezas.findIndex((p) => p.rol === "CTA")]: { x: 10, y: 10, k: 0.3 } } }, 876, 324).avisos.some((v) => v.tipo === "matriz"));
+}
+
+
+// ── B28: imagen plana — limpiar la lectura de la IA (dato de afuera) ──
+{
+  const leida = [
+    { label: "headline_msi", rol: "TITULO", tipo: "texto", box_2d: [214, 304, 306, 694], texto: "3 MSI" },
+    { label: "price_pill", rol: "CTA", tipo: "forma", box_2d: [454, 560, 509, 955], texto: "" },
+    { label: "price_text", rol: "CTA", tipo: "texto", box_2d: [461, 592, 501, 925], texto: "$47,999 m.n.", sobre: "price_pill" },
+    { label: "Legal Text", rol: "FOOTER", tipo: "texto", box_2d: [876, 379, 901, 826], texto: "  Línea\u0007 uno \r\nTasa  de\tinterés\n\n" },
+    { label: "rara", rol: "JEFE", tipo: "video", box_2d: [0, 0, 100, 100], texto: "hola" },
+    { label: "vacia", rol: "HERO", tipo: "imagen", box_2d: [500, 500, 501, 501], texto: "" },
+    { label: "fuera", rol: "HERO", tipo: "imagen", box_2d: [-50, 900, 2000, 1400], texto: "" },
+    { label: "sin_letras", rol: "TITULO", tipo: "texto", box_2d: [10, 10, 50, 300], texto: "  " },
+    { label: "headline_msi", rol: "TITULO", tipo: "texto", box_2d: [313, 321, 344, 681], texto: "con tus cupones de", sobre: "nadie" },
+    { label: "lejos", rol: "CTA", tipo: "texto", box_2d: [100, 100, 120, 200], texto: "x", sobre: "price_pill" },
+    "basura", null, { box_2d: [1, 2, 3] }, { label: "nan", rol: "HERO", tipo: "imagen", box_2d: [0, 0, NaN, 10] },
+  ];
+  const L = limpiarLectura(leida, 1200, 1500) ?? [];
+  const de = (id) => L.find((e) => e.id === id);
+  ok("lectura: se queda con lo usable y descarta basura, cajas vacías y números rotos (9 de 14)", L.length === 9, L.map((e) => e.id).join(","));
+  ok("lectura: box_2d [ymin, xmin, ymax, xmax] de 0-1000 → px de la imagen, hacia afuera", JSON.stringify(de("headline_msi")?.caja) === JSON.stringify({ x0: 364, y0: 321, x1: 833, y1: 459 }), JSON.stringify(de("headline_msi")?.caja));
+  ok("lectura: una caja fuera de la imagen se recorta a la imagen", JSON.stringify(de("fuera")?.caja) === JSON.stringify({ x0: 1080, y0: 0, x1: 1200, y1: 1500 }), JSON.stringify(de("fuera")?.caja));
+  ok("lectura: «sobre» se traduce al id y sólo vale si el de abajo lo contiene", de("price_text")?.sobre === "price_pill" && de("lejos")?.sobre === null && de("headline_msi_2")?.sobre === null);
+  ok("lectura: las letras sin controles, el tabulador como espacio, sin espacios ni renglones vacíos de más", de("legal_text")?.texto === "Línea uno\nTasa de interés", JSON.stringify(de("legal_text")?.texto));
+  ok("lectura: rol o tipo desconocidos → OTRO / imagen (sin letras); un texto sin letras pasa a imagen", de("rara")?.rol === "OTRO" && de("rara")?.tipo === "imagen" && de("rara")?.texto === "" && de("sin_letras")?.tipo === "imagen");
+  ok("lectura: dos labels iguales no chocan (headline_msi, headline_msi_2)", !!de("headline_msi") && de("headline_msi_2")?.texto === "con tus cupones de");
+  ok("lectura: no-lista, lista vacía o medidas inválidas → null", [limpiarLectura("no", 10, 10), limpiarLectura([], 10, 10), limpiarLectura(leida, 0, 10)].every((x) => x === null));
+  const caja = (x0, y0, x1, y1) => [y0, x0, y1, x1];
+  const ciclo = limpiarLectura([
+    { label: "grande", rol: "CTA", tipo: "forma", box_2d: caja(100, 100, 500, 300), texto: "", sobre: "chica" },
+    { label: "chica", rol: "CTA", tipo: "forma", box_2d: caja(101, 101, 499, 299), texto: "", sobre: "grande" },
+    { label: "tarjeta", rol: "HERO", tipo: "imagen", box_2d: caja(600, 100, 900, 600), texto: "", sobre: null },
+    { label: "pastilla", rol: "CTA", tipo: "forma", box_2d: caja(650, 150, 850, 300), texto: "", sobre: "tarjeta" },
+    { label: "precio", rol: "CTA", tipo: "texto", box_2d: caja(700, 180, 800, 280), texto: "$1,999", sobre: "pastilla" },
+  ], 1000, 1000) ?? [];
+  const sob = (id) => ciclo.find((e) => e.id === id)?.sobre;
+  ok("lectura: dos cajas casi iguales que se apuntan: la más grande queda de base; una cadena se queda", sob("grande") === null && sob("chica") === "grande" && sob("pastilla") === "tarjeta" && sob("precio") === "pastilla", JSON.stringify(ciclo.map((e) => [e.id, e.sobre])));
+  // DiDi Card, 2a lectura real en la preview (2026-10-27): «con tus cupones de» como SUBTITULO entre dos renglones del
+  // TITULO; como pieza aparte, en 1080×1920 se encimaba a «3 MSI».
+  const titular = limpiarLectura([
+    { label: "intro", rol: "TITULO", tipo: "texto", box_2d: caja(370, 181, 833, 206), texto: "Tu nuevo iPhone Duo a" },
+    { label: "msi", rol: "TITULO", tipo: "texto", box_2d: caja(364, 212, 832, 306), texto: "3 MSI" },
+    { label: "medio", rol: "SUBTITULO", tipo: "texto", box_2d: caja(385, 313, 817, 345), texto: "con tus cupones de" },
+    { label: "marca", rol: "TITULO", tipo: "texto", box_2d: caja(368, 348, 826, 401), texto: "DiDi Card" },
+    { label: "abajo", rol: "SUBTITULO", tipo: "texto", box_2d: caja(380, 420, 820, 450), texto: "Sólo en la app" },
+    { label: "lado", rol: "SUBTITULO", tipo: "texto", box_2d: caja(860, 313, 990, 345), texto: "Nuevo" },
+  ], 1000, 1000) ?? [];
+  const rolDeLeido = (id) => titular.find((e) => e.id === id)?.rol;
+  ok("lectura: un SUBTITULO entre dos renglones del TITULO pasa al TITULO; uno abajo o a un lado se queda", rolDeLeido("medio") === "TITULO" && rolDeLeido("abajo") === "SUBTITULO" && rolDeLeido("lado") === "SUBTITULO", JSON.stringify(titular.map((e) => [e.id, e.rol])));
+  const raras = limpiarLectura([{ label: "p", rol: "CTA", tipo: "texto", box_2d: [0, 0, 500, 500], texto: "12\u200b pagos\u202e de\u0085 $3,999" }], 100, 100);
+  ok("lectura: sin caracteres invisibles (ancho cero, cambio de dirección, controles C1)", raras?.[0].texto === "12 pagos de $3,999", JSON.stringify(raras?.[0].texto));
+  const muchos = Array.from({ length: ELEMENTOS_MAX + 15 }, (_, i) => ({ label: `e${i}`, rol: "HERO", tipo: "texto", box_2d: [0, 0, 500, 500], texto: "y".repeat(TEXTO_LEIDO_MAX + 50) }));
+  const M = limpiarLectura(muchos, 100, 100) ?? [];
+  ok(`lectura: a lo sumo ${ELEMENTOS_MAX} elementos y ${TEXTO_LEIDO_MAX} letras por texto`, M.length === ELEMENTOS_MAX && M.every((e) => e.texto.length === TEXTO_LEIDO_MAX));
+  // proveedor.ts es server-only (no se puede importar aquí): se revisa su texto. Con `maxItems` en el esquema,
+  // gemini-3.8-flash responde 400 "invalid argument" (la preview, 2026-10-27); el tope lo pone limpiarLectura.
+  const esquemaLeer = /const ESQUEMA_LEER = \{[\s\S]*?\n\};/.exec(readFileSync(new URL("../src/lib/prisma/formatos/proveedor.ts", import.meta.url), "utf8"))?.[0] ?? "";
+  ok("lectura: el esquema para Gemini no lleva maxItems (Gemini lo rechaza)", esquemaLeer.includes("required") && !/maxItems/.test(esquemaLeer), esquemaLeer.slice(0, 80));
+  const real = join(homedir(), "Desktop/formatos-prueba/b28-imagen-plana/resultados/lectura-2.json");
+  if (existsSync(real)) {
+    const R = limpiarLectura(JSON.parse(readFileSync(real, "utf8")).elementos, 1200, 1500) ?? [];
+    ok("lectura real (DiDi Card, gemini-3.8-flash): 15 elementos, 7 textos con sus letras, el precio sobre la pastilla", R.length === 15 && R.filter((e) => e.tipo === "texto").length === 7 && R.find((e) => e.texto === "$47,999 m.n.")?.sobre === "price_pill", R.map((e) => `${e.id}:${e.tipo}`).join(" "));
+  }
+}
+
+
+// ── B30: un fondo que oscurece hacia un lado (el beige del iPhone de DiDi, 2026-10-28): no es sombra de nadie ──
+{
+  const W = 400, H = 300;
+  // 225 a la izquierda, 190 a la derecha: un 15 % más oscuro, como una viñeta.
+  const fondoReal = (x, y) => { const v = 225 - (35 * x) / W - (6 * y) / H; return [v, v - 6, v - 14]; };
+  const rgba = new Uint8ClampedArray(W * H * 4);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = (y * W + x) * 4, f = fondoReal(x, y); rgba[i] = f[0]; rgba[i + 1] = f[1]; rgba[i + 2] = f[2]; rgba[i + 3] = 255; }
+  // Un logo (bloque oscuro) del lado claro y una pastilla del lado oscuro; ninguno tiene sombra.
+  for (let y = 40; y < 70; y++) for (let x = 60; x < 160; x++) { const i = (y * W + x) * 4; rgba[i] = 60; rgba[i + 1] = 40; rgba[i + 2] = 40; }
+  for (let y = 150; y < 210; y++) for (let x = 250; x < 370; x++) { const i = (y * W + x) * 4; rgba[i] = 250; rgba[i + 1] = 90; rgba[i + 2] = 20; }
+  const leidos = [
+    { id: "logo", rol: "BRAND", tipo: "imagen", caja: { x0: 58, y0: 38, x1: 162, y1: 72 }, texto: "", sobre: null },
+    { id: "pastilla", rol: "CTA", tipo: "forma", caja: { x0: 248, y0: 148, x1: 372, y1: 212 }, texto: "", sobre: null },
+  ];
+  const r = medirPlano({ w: W, h: H, rgba }, leidos);
+  const sombra = (id) => { const e = r.elementos.find((m) => m.id === id); let n = 0; if (e?.oscurece) for (let j = 0; j < e.oscurece.length; j += 3) if (e.oscurece[j] < 255) n++; return n; };
+  let peor = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const f = fondoReal(x, y); for (let k = 0; k < 3; k++) peor = Math.max(peor, Math.abs(r.fondo[(y * W + x) * 3 + k] - f[k])); }
+  ok(`B30 fondo que oscurece hacia un lado: ninguna pieza se lleva «sombra» (logo ${sombra("logo")} px, pastilla ${sombra("pastilla")} px) y el fondo limpio no deja rectángulos (peor ${peor.toFixed(1)} niveles)`, sombra("logo") === 0 && sombra("pastilla") === 0 && peor <= 4);
+}
+
+// ── B28: imagen plana — medir en los píxeles, fondo limpio y el maestro (imagen sintética: el fondo real se conoce) ──
+{
+  const W = 400, H = 300;
+  const fondoReal = (x, y) => [240 + (10 * x) / W, 238 + (8 * y) / H, 235];
+  const rgba = new Uint8ClampedArray(W * H * 4);
+  const poner = (x, y, c, a = 1) => { const i = (y * W + x) * 4; for (let k = 0; k < 3; k++) rgba[i + k] = Math.round(a * c[k] + (1 - a) * rgba[i + k]); };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { poner(x, y, fondoReal(x, y)); rgba[(y * W + x) * 4 + 3] = 255; }
+  /** Un "renglón" de bloques con orilla suave (letras de mentira). */
+  const letras = (x0, y0, n, alto, color) => { for (let b = 0; b < n; b++) for (let y = y0; y < y0 + alto; y++) for (let x = x0 + b * 14; x < x0 + b * 14 + 10; x++) { const orilla = y === y0 || y === y0 + alto - 1 || x === x0 + b * 14 || x === x0 + b * 14 + 9; poner(x, y, color, orilla ? 0.5 : 1); } };
+  const TINTA = [40, 20, 30], NARANJA = [250, 80, 10];
+  letras(30, 40, 6, 20, TINTA);
+  letras(30, 70, 4, 20, TINTA);
+  // Un "teléfono": marco gris, cara casi blanca (casi del color del fondo) y una sombra suave abajo.
+  for (let y = 120; y < 261; y++) for (let x = 200; x < 301; x++) poner(x, y, x < 203 || x > 297 || y < 123 || y > 257 ? [150, 150, 155] : [250, 250, 250]);
+  for (let y = 261; y < 276; y++) for (let x = 200; x < 301; x++) { const f = 0.9 + (0.1 * (y - 261)) / 15, [r, g, b] = fondoReal(x, y); poner(x, y, [r * f, g * f, b * f]); }
+  // Una pastilla naranja con un texto blanco encima.
+  for (let y = 150; y < 191; y++) for (let x = 40; x < 181; x++) poner(x, y, NARANJA);
+  letras(62, 162, 7, 18, [255, 255, 255]);
+  const leidos = [
+    { id: "titulo", rol: "TITULO", tipo: "texto", caja: { x0: 29, y0: 39, x1: 116, y1: 91 }, texto: "ABCDEF\nABCD", sobre: null },
+    { id: "telefono", rol: "HERO", tipo: "imagen", caja: { x0: 199, y0: 119, x1: 302, y1: 262 }, texto: "", sobre: null },
+    { id: "pastilla", rol: "CTA", tipo: "forma", caja: { x0: 39, y0: 149, x1: 182, y1: 192 }, texto: "", sobre: null },
+    { id: "precio", rol: "CTA", tipo: "texto", caja: { x0: 61, y0: 161, x1: 159, y1: 181 }, texto: "$1,999", sobre: "pastilla" },
+  ];
+  const img = { w: W, h: H, rgba };
+  const r = medirPlano(img, leidos);
+  const de = (id) => r.elementos.find((e) => e.id === id);
+  ok("plano: fondo liso (un degradado) y los 4 elementos medidos", r.liso && r.elementos.length === 4, JSON.stringify(r.avisos));
+  const tt = de("titulo");
+  ok("plano: el texto sale con el color de su tinta, sus 2 renglones y su parte sólida (la orilla justo al 50 % no cuenta)", tt?.color?.every((v, k) => Math.abs(v - TINTA[k]) <= 3) && tt.renglones.length === 2 && tt.solido.x === 31 && tt.solido.y === 41 && tt.solido.w === 78 && tt.solido.h === 48, JSON.stringify({ c: tt?.color, r: tt?.renglones, s: tt?.solido }));
+  const tel = de("telefono"), cen = (tel.solido.h >> 1) * tel.pinta.w + (tel.solido.w >> 1) + (tel.solido.x - tel.pinta.x) + (tel.solido.y - tel.pinta.y) * tel.pinta.w;
+  // La sombra más oscura pegada a la figura y dentro de la caja de la IA cuenta como figura (sombra de contacto): hasta 3 px.
+  ok("plano: una figura casi del color del fondo es sólida por dentro (su marco la encierra)", tel.alfa[cen] === 255 && Math.abs(tel.solido.x - 200) <= 1 && Math.abs(tel.solido.w - 101) <= 2 && tel.solido.y === 120 && tel.solido.h >= 141 && tel.solido.h <= 144, JSON.stringify(tel.solido));
+  const somb = tel.oscurece && tel.oscurece[((265 - tel.pinta.y) * tel.pinta.w + (250 - tel.pinta.x)) * 3];
+  ok("plano: su sombra suave (fuera de la caja de la IA) va con ella como «oscurece», no como sólido", !!tel.oscurece && somb > 200 && somb < 245 && tel.solido.y + tel.solido.h <= 264, String(somb));
+  let peor = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const f = fondoReal(x, y); for (let k = 0; k < 3; k++) peor = Math.max(peor, Math.abs(r.fondo[(y * W + x) * 3 + k] - f[k])); }
+  ok("plano: el fondo limpio es el degradado de verdad (a ≤ 3 niveles en todos lados)", peor <= 3, `peor ${peor.toFixed(1)}`);
+  const ruido = new Uint8ClampedArray(rgba);
+  let s = 7;
+  for (let i = 0; i < ruido.length; i += 4) { s = (s * 1664525 + 1013904223) >>> 0; const n = ((s >>> 8) % 61) - 30; for (let k = 0; k < 3; k++) ruido[i + k] += n; }
+  ok("plano: con un fondo de textura no se dice que es liso", !medirPlano({ w: W, h: H, rgba: ruido }, leidos.slice(0, 1)).liso);
+  // Pedro, 2026-10-28: un fondo que no se puede limpiar no rechaza la imagen; lo de ahí se queda pintado en el fondo.
+  const parches = new Uint8ClampedArray(rgba);
+  for (let y = 10; y < 100; y++) for (let x = 0; x < 150; x++) { const i = (y * W + x) * 4; s = (s * 1664525 + 1013904223) >>> 0; const n = ((s >>> 8) % 61) - 30; for (let k = 0; k < 3; k++) parches[i + k] += n; }
+  const rp = medirPlanoFijo({ w: W, h: H, rgba: parches }, leidos);
+  ok(
+    "plano: textura sólo alrededor del titular → el titular IGUAL sale como pieza (sus letras se rellenan con la textura de al lado) y nada se queda pegado",
+    rp.liso && rp.fijos.length === 0 && rp.elementos.map((e) => e.id).sort().join() === "pastilla,precio,telefono,titulo" && rp.anclados.length === 0 && !rp.avisos.some((a) => a.startsWith("El fondo no es liso")),
+    JSON.stringify({ fijos: rp.fijos, el: rp.elementos.map((e) => e.id) }),
+  );
+  {
+    // Batería 2026-10-29: una luz suave (curva, no un plano) detrás del titular ya no lo deja pegado al fondo. Límite
+    // conocido: el relleno suave no inventa un pico de luz ESCONDIDO detrás del texto (con esta luz de 45 px queda ~5 niveles más oscuro en promedio).
+    const luz = (x, y) => { const g = 60 * Math.exp(-((x - 80) ** 2 + (y - 60) ** 2) / (2 * 45 ** 2)); return [180 + g, 150 + g, 140 + g * 0.5]; };
+    const conLuz = new Uint8ClampedArray(rgba);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = (y * W + x) * 4, f = luz(x, y); for (let k = 0; k < 3; k++) conLuz[i + k] = f[k]; }
+    for (let b = 0; b < 6; b++) for (let y = 40; y < 60; y++) for (let x = 30 + b * 14; x < 40 + b * 14; x++) { const i = (y * W + x) * 4, orilla = y === 40 || y === 59 || x === 30 + b * 14 || x === 39 + b * 14; for (let k = 0; k < 3; k++) conLuz[i + k] = Math.round((orilla ? 0.5 : 1) * TINTA[k] + (orilla ? 0.5 : 0) * luz(x, y)[k]); }
+    const uno = [{ ...leidos[0], caja: { x0: 29, y0: 39, x1: 116, y1: 61 }, texto: "ABCDEF" }];
+    const rs = medirPlanoFijo({ w: W, h: H, rgba: conLuz }, uno);
+    let suma = 0, n = 0;
+    for (let y = 30; y < 70; y++) for (let x = 20; x < 126; x++) { const f = luz(x, y); for (let k = 0; k < 3; k++) { suma += Math.abs(rs.fondo[(y * W + x) * 3 + k] - f[k]); n++; } }
+    ok(`plano: con una luz suave detrás, el titular sale como pieza y el hueco se rellena cerca de la luz (en promedio ${(suma / n).toFixed(1)} niveles)`, rs.fijos.length === 0 && rs.elementos.length === 1 && suma / n <= 6, JSON.stringify({ fijos: rs.fijos, media: suma / n }));
+  }
+  const rt = medirPlanoFijo({ w: W, h: H, rgba: ruido }, leidos);
+  ok("plano: textura en todo el fondo → las figuras se quedan pegadas, pero los 2 textos salen (editables)", rt.liso && rt.fijos.slice().sort().join() === "pastilla,telefono" && rt.elementos.map((e) => e.id).sort().join() === "precio,titulo", JSON.stringify({ f: rt.fijos, e: rt.elementos.map((e) => e.id) }));
+  ok("plano: el precio, que va sobre la pastilla pegada, queda ANCLADO al fondo; el titular, suelto", rt.anclados.join() === "precio", JSON.stringify(rt.anclados));
+  ok("plano: lo que se queda pegado sale como «pegado» con su parte sólida", rt.pegados.length === 2 && rt.pegados.some((p) => p.nombre === "«CTA» (forma)" && Math.abs(p.caja.x - 40) <= 10 && Math.abs(p.caja.w - 141) <= 20), JSON.stringify(rt.pegados));
+  {
+    // Las letras de un texto en una textura: el relleno con muestras copia la textura; un relleno suave dejaba una mancha lisa.
+    const TW = 120, TH = 80, tex = (x, y) => ((x >> 2) + (y >> 2)) % 2 ? 200 : 60;
+    const rgbT = new Uint8ClampedArray(TW * TH * 3);
+    for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) rgbT.fill(tex(x, y), (y * TW + x) * 3, (y * TW + x) * 3 + 3);
+    const hueco = new Uint8Array(TW * TH);
+    for (let y = 30; y < 40; y++) for (let x = 20; x < 100; x++) { hueco[y * TW + x] = 1; rgbT.fill(0, (y * TW + x) * 3, (y * TW + x) * 3 + 3); }
+    rellenarConMuestras(rgbT, TW, TH, hueco);
+    let bien = 0, n = 0;
+    for (let k = 0; k < TW * TH; k++) if (hueco[k]) { n++; if (Math.abs(rgbT[k * 3] - tex(k % TW, (k / TW) | 0)) < 20) bien++; }
+    // Un relleno suave daría el gris de en medio (0 % exactos); copiando, la mayoría cae en su casilla (las orillas de
+    // las casillas, donde dos parches empatan, son lo que falla).
+    ok(`muestras: un hueco de 10 px en un tablero se rellena con el tablero (${Math.round((100 * bien) / n)} % de los píxeles exactos)`, bien / n >= 0.75);
+  }
+  {
+    // La IA leyó en un renglón un titular que va en dos: se reparte por el ancho de cada renglón medido.
+    const medirF = (t, _f, tam) => ({ avance: (t.length * tam) / 2, izq: 0, der: (t.length * tam) / 2, sube: tam * 0.7, baja: tam * 0.2 });
+    const m = { texto: "uno dos tres cuatro cinco seis", renglones: [{ x: 0, y: 0, w: 200, h: 20 }, { x: 0, y: 30, w: 180, h: 20 }] };
+    eq("renglones: el texto se parte donde los anchos se parecen a los de la imagen", conRenglonesDeLaImagen(m, "F", medirF).texto, "uno dos tres\ncuatro cinco seis");
+    eq("renglones: si ya cuadra, igual", conRenglonesDeLaImagen({ ...m, texto: "a b\nc" }, "F", medirF).texto, "a b\nc");
+  }
+
+  const rl = medirPlanoFijo(img, leidos);
+  ok("plano: con fondo liso, medirPlanoFijo es medirPlano (nada fijo)", rl.fijos.length === 0 && rl.elementos.length === 4);
+
+  const capa = (texto) => ({ texto, tramos: [{ n: texto.length, fuente: "Prueba-Bold", tam: 20, color: [255, 255, 255], track: 0, interlineado: null, subir: 0, mayusculas: false }], alineacion: "center", transform: [1, 0, 0, 1, 110, 178], caja: null, motivo: null });
+  const ma = maestroDePlano("prueba", img, r.elementos, r.fondo, new Map([["precio", capa("$1,999")]]), r.avisos);
+  const pz = (rol) => ma.piezas.find((p) => p.rol === rol);
+  ok("maestro: una pieza por rol, en orden (HERO abajo), sin partes cuando la pieza es un solo elemento", ma.piezas.map((p) => p.rol).join(",") === "HERO,TITULO,CTA" && ma.piezas.every((p) => !p.partes));
+  const cta = pz("CTA"), en = (p, x, y, buf, n = 4) => buf[((y - p.caja.y) * p.caja.w + (x - p.caja.x)) * n];
+  ok("maestro: el texto ajustado va como TextoPieza (con su tinta y el tope de imagen plana) y la base es la pastilla SIN sus letras", cta.textos.length === 1 && cta.textos[0].capa === "precio" && cta.textos[0].difMax === TEXTO_DIF_MAX_PLANO && cta.textos[0].alfa.length === cta.textos[0].caja.w * cta.textos[0].caja.h && en(cta, 66, 170, cta.base) >= 240 && en(cta, 66, 170, cta.rgba) >= 250 && cta.base[((170 - cta.caja.y) * cta.caja.w + 66 - cta.caja.x) * 4 + 1] < 120);
+  const tit = pz("TITULO");
+  {
+    // 2026-10-28 (la pastilla de precio de DiDi: naranja arriba, blanca abajo): el fondo de cada texto es el color que
+    // más hay alrededor (la mediana por canal inventaba un rosa → tinta blanca pálida) y cada texto se borra con SU color.
+    const W2 = 300, H2 = 200, px = new Uint8ClampedArray(W2 * H2 * 4), NAR = [240, 80, 30];
+    const p2 = (x, y, c, a = 1) => { const i = (y * W2 + x) * 4; for (let k = 0; k < 3; k++) px[i + k] = Math.round(a * c[k] + (1 - a) * px[i + k]); px[i + 3] = 255; };
+    for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) p2(x, y, [235, 230, 225]);
+    for (let y = 40; y < 140; y++) for (let x = 40; x < 260; x++) p2(x, y, y < 82 ? NAR : [250, 250, 250]);
+    const bloques = (x0, y0, n, alto, color) => { for (let k = 0; k < n; k++) for (let y = y0; y < y0 + alto; y++) for (let x = x0 + k * 14; x < x0 + k * 14 + 10; x++) p2(x, y, color, y === y0 || y === y0 + alto - 1 ? 0.5 : 1); };
+    bloques(70, 52, 10, 22, [255, 255, 255]);
+    bloques(80, 98, 9, 18, [40, 20, 30]);
+    const lei = [
+      // Y la IA a veces lee la pastilla DOS veces, una dentro de otra (la banda naranja «sobre» la pastilla entera).
+      { id: "marco", rol: "TITULO", tipo: "forma", caja: { x0: 36, y0: 24, x1: 264, y1: 144 }, texto: "", sobre: null },
+      { id: "caja", rol: "TITULO", tipo: "forma", caja: { x0: 39, y0: 39, x1: 261, y1: 141 }, texto: "", sobre: "marco" },
+      // Como en la lectura real: la caja del precio empieza ARRIBA de la pastilla (en el fondo beige) y la de las cuotas
+      // se le encima por abajo; lo pegado a la caja del precio es casi todo beige.
+      { id: "precio", rol: "TITULO", tipo: "texto", caja: { x0: 68, y0: 28, x1: 210, y1: 78 }, texto: "$28,499", sobre: "caja" },
+      { id: "cuotas", rol: "TITULO", tipo: "texto", caja: { x0: 78, y0: 76, x1: 208, y1: 118 }, texto: "3 pagos", sobre: "caja" },
+    ];
+    const im2 = { w: W2, h: H2, rgba: px }, r2 = medirPlano(im2, lei), pr = r2.elementos.find((e) => e.id === "precio");
+    ok("plano: un texto blanco sobre una pastilla de dos colores sale blanco (su fondo es el naranja, no un rosa)", pr && pr.color.every((v) => v >= 240) && Math.abs(pr.debajo[1] - NAR[1]) <= 16, JSON.stringify({ color: pr?.color, debajo: pr?.debajo }));
+    const capa2 = (texto, y) => ({ ...capa(texto), transform: [1, 0, 0, 1, 150, y] });
+    const m2 = maestroDePlano("dos", im2, r2.elementos, r2.fondo, new Map([["precio", capa2("$28,499", 70)], ["cuotas", capa2("3 pagos", 114)]]), r2.avisos);
+    const t2 = m2.piezas.find((p) => p.rol === "TITULO"), parteCaja = t2.partes?.find((q) => q.nombre === "caja") ?? t2;
+    const b2 = (x, y) => { const j = ((y - parteCaja.caja.y) * parteCaja.caja.w + (x - parteCaja.caja.x)) * 4; return [...parteCaja.base.slice(j, j + 3)]; };
+    ok(
+      "plano: sin sus letras, la pastilla queda naranja donde estaba el precio y blanca donde estaban las cuotas (sin mancha rosa)",
+      !!parteCaja.base && b2(75, 62)[1] < 110 && b2(75, 62)[0] > 220 && b2(85, 106).every((v) => v >= 235),
+      JSON.stringify({ precio: b2(75, 62), cuotas: b2(85, 106) }),
+    );
+  }
+  ok("maestro: un texto sin tipografía ajustada va como píxeles en la base (no como TextoPieza)", tit.textos.length === 0 && en(tit, 35, 50, tit.base, 1) < 60 && tit.base[((50 - tit.caja.y) * tit.caja.w + 35 - tit.caja.x) * 4 + 3] === 255);
+  const re = new Float32Array(W * H * 3);
+  for (let k = 0; k < W * H * 3; k++) re[k] = ma.fondo[k];
+  for (const p of ma.piezas) for (let y = 0; y < p.caja.h; y++) for (let x = 0; x < p.caja.w; x++) {
+    const k = (p.caja.y + y) * W + p.caja.x + x, j = y * p.caja.w + x, a = p.rgba[j * 4 + 3] / 255;
+    for (let c = 0; c < 3; c++) { if (p.oscurece) re[k * 3 + c] *= p.oscurece[j * 3 + c] / 255; re[k * 3 + c] = a * p.rgba[j * 4 + c] + (1 - a) * re[k * 3 + c]; }
+  }
+  let suma = 0;
+  for (let k = 0; k < W * H; k++) for (let c = 0; c < 3; c++) suma += Math.abs(re[k * 3 + c] - rgba[k * 4 + c]);
+  ok("maestro: fondo limpio + cada pieza en su lugar = la imagen original (diferencia media < 1 nivel)", suma / (W * H * 3) < 1, (suma / (W * H * 3)).toFixed(2));
+  // Reap: un elemento sobre otro que va sobre otro (texto sobre pastilla sobre teléfono) no se pierde, y un círculo
+  // tampoco: cada uno queda en alguna parte.
+  const conSobre = (cambios) => r.elementos.map((e) => (e.id in cambios ? { ...e, sobre: cambios[e.id] } : e));
+  const cadena = maestroDePlano("cadena", img, conSobre({ pastilla: "telefono" }), r.fondo, new Map([["precio", capa("$1,999")]]), []);
+  ok("maestro: una cadena (precio sobre pastilla sobre teléfono) va entera en la parte del de abajo, con su texto", cadena.piezas.map((p) => p.rol).join(",") === "HERO,TITULO" && cadena.piezas[0].textos.map((t) => t.capa).join() === "precio", cadena.piezas.map((p) => `${p.rol}:${p.textos.map((t) => t.capa)}`).join(" "));
+  const circulo = maestroDePlano("circulo", img, conSobre({ pastilla: "telefono", telefono: "pastilla" }), r.fondo, new Map(), []);
+  ok("maestro: un círculo de «sobre» no borra a nadie (cada uno su parte)", circulo.piezas.map((p) => p.rol).join(",") === "HERO,TITULO,CTA", circulo.piezas.map((p) => p.rol).join(","));
+  const { maestro } = prepararMaestro(ma);
+  ok("maestro: pasa por prepararMaestro sin «origen» (su PSD por medida será el de capas planas)", maestro.origen === undefined && maestro.fondo.length === W * H * 4 && maestro.piezas.length === 3);
+
+  // 4b: su PSD por medida lleva el texto reescrito como capa de TEXTO VIVO sobre la pastilla sin letras.
+  const a1 = { familia: "cuadrado", fondo: { k: 1, x: 0, y: 0 }, letras: [], avisos: [], quitadas: [], puestas: maestro.piezas.map((p, i) => ({ pieza: i, k: 1, x: p.solido.x, y: p.solido.y, w: p.solido.w, h: p.solido.h })) };
+  const ic = maestro.piezas.findIndex((p) => p.rol === "CTA"), pedidos = [];
+  const tinta = (l) => { const w = l.x1 - l.x0, px = new Float32Array(w * (l.y1 - l.y0) * 4); for (let y = 10; y < 14; y++) for (let x = 20; x < 30; x++) px.set([255, 255, 255, 255], (y * w + x) * 4); return px; };
+  const vivos = (pieza, l, parte, sin) => { pedidos.push({ pieza, parte, sin }); return pieza === ic ? [{ nombre: "precio", px: tinta(l), texto: { ...capa("$1,999"), transform: [1, 0, 0, 1, 110, 178] } }] : null; };
+  const psdVivo = psdDeMedida(maestro, a1, W, H, { vivos });
+  const carpeta = (psd, rol) => psd.children.find((c) => c.name === maestro.piezas.find((p) => p.rol === rol).nombre);
+  const cv = carpeta(psdVivo, "CTA").children, capaCta = cv.find((l) => !l.text), capaTexto = cv.find((l) => l.text);
+  const enCapa = (l, x, y, c) => l.imageData.data[((y - l.top) * l.imageData.width + (x - l.left)) * 4 + c];
+  ok("PSD de imagen plana: sólo se piden textos vivos de lo que tiene textos (la pastilla), sin quitados", pedidos.length === 1 && pedidos[0].pieza === ic && pedidos[0].parte === null && !pedidos[0].sin, JSON.stringify(pedidos));
+  ok("PSD de imagen plana: la pastilla va SIN sus letras y encima su capa de texto, con la tinta recortada a lo pintado", cv.length === 2 && cv[1] === capaTexto && enCapa(capaCta, 66, 170, 1) < 120 && capaTexto.imageData.width === 10 && capaTexto.imageData.height === 4, `${cv.length} capas · G ${enCapa(capaCta, 66, 170, 1)} · ${capaTexto?.imageData.width}×${capaTexto?.imageData.height}`);
+  const tt2 = capaTexto.text;
+  ok("PSD de imagen plana: la capa de texto lleva letras, tipografía, tamaño, color, alineación y lugar (nombre = sus letras)", capaTexto.name === "$1,999" && tt2.text === "$1,999" && tt2.style.font.name === "Prueba-Bold" && tt2.style.fontSize === 20 && tt2.style.fillColor.r === 255 && tt2.style.autoLeading === true && tt2.paragraphStyle.justification === "center" && tt2.transform.join() === "1,0,0,1,110,178" && !tt2.boxBounds, JSON.stringify(tt2));
+  const apagado = carpeta(psdDeMedida(maestro, a1, W, H, { vivos: (pieza, l) => (pieza === ic ? [{ nombre: "precio", px: tinta(l), texto: capa("$1,999"), oculto: true }] : null) }), "CTA").children;
+  ok("PSD de imagen plana: un texto quitado en esta medida va como capa de texto apagada (como en el PSD editable)", apagado.length === 2 && apagado[1].text?.text === "$1,999" && apagado[1].hidden === true && !capaTexto.hidden);
+  const sinVivos = carpeta(psdDeMedida(maestro, a1, W, H, { vivos: () => null }), "CTA").children;
+  ok("PSD de imagen plana: si el texto no se escribe (null), la pastilla va con sus letras y sin capa de texto", sinVivos.length === 1 && !sinVivos[0].text && enCapa(sinVivos[0], 66, 170, 1) >= 250);
+  const vuelta = readPsdAg(writePsdBuffer(psdVivo, { noBackground: true, invalidateTextLayers: true }), { skipLayerImageData: true, skipCompositeImageData: true, skipThumbnail: true });
+  const tl = vuelta.children.flatMap((c) => c.children ?? []).find((l) => l.text);
+  ok("PSD de imagen plana: ag-psd lo escribe y lo vuelve a leer con su texto vivo", tl?.text.text === "$1,999" && tl.text.style?.font?.name === "Prueba-Bold" && tl.text.paragraphStyle?.justification === "center" && Math.round(tl.text.style?.fontSize) === 20, JSON.stringify(tl?.text?.style));
+  const dosTramos = textoDePsd({ ...capa("ABCdef"), tramos: [{ ...capa("ABC").tramos[0], n: 3, interlineado: 30 }, { ...capa("def").tramos[0], n: 3, fuente: "Prueba-Regular", mayusculas: true }], caja: [0, 0, 200, 40] });
+  ok("textoDePsd: un tramo por corrida, interlineado fijo, mayúsculas y caja de párrafo", dosTramos.styleRuns.map((r) => `${r.length}:${r.style.font.name}`).join() === "3:Prueba-Bold,3:Prueba-Regular" && dosTramos.styleRuns[0].style.leading === 30 && dosTramos.styleRuns[0].style.autoLeading === false && dosTramos.styleRuns[1].style.fontCaps === 2 && dosTramos.shapeType === "box" && dosTramos.boxBounds.join() === "0,0,200,40");
+}
+
+
+// ── B28: el texto contra una tipografía (medidor falso: letras de 0.6 eme, tinta 0.05 eme adentro, sube 0.7) ──
+{
+  const falsa = (texto, fuente, tam, track) => {
+    const n = [...texto].length, ls = (track * tam) / 1000, k = fuente === "Ancha" ? 2 : 0.6;
+    return { avance: n * k * tam + n * ls, izq: -0.05 * tam, der: n * k * tam + (n - 1) * ls - 0.05 * tam, sube: 0.7 * tam, baja: /[gjpqy]/.test(texto) ? 0.2 * tam : 0 };
+  };
+  const el = (texto, renglones) => ({ id: "t", rol: "TITULO", tipo: "texto", texto, sobre: null, pinta: renglones[0], solido: renglones[0], alfa: new Uint8ClampedArray(1), oscurece: null, debajo: [255, 255, 255], color: [10, 20, 30], renglones });
+  // "ABCDEFGH" a 40 px con track 50: tinta 8·24 + 7·2 − 4 = 202 de ancho, 28 de alto.
+  const uno = el("ABCDEFGH", [{ x: 100, y: 60, w: 202, h: 28 }]);
+  const c = capaDeTexto(uno, "Falsa", "center", falsa);
+  const tr = c?.tramos[0];
+  ok("texto plano: el tamaño sale del alto de la tinta y el track de su ancho", !!tr && Math.abs(tr.tam - 40) < 1e-9 && Math.abs(tr.track - 50) < 1e-9 && tr.n === 8 && tr.fuente === "Falsa" && tr.color.join() === "10,20,30", JSON.stringify(tr));
+  ok("texto plano: centrado, el origen es el centro del avance y la base, donde termina la tinta", c?.transform.join() === "1,0,0,1,202,88" && c.alineacion === "center" && c.caja === null && c.motivo === null, JSON.stringify(c?.transform));
+  ok("texto plano: a la izquierda, el origen es donde empieza la pluma", capaDeTexto(uno, "Falsa", "left", falsa)?.transform[4] === 98);
+  const dos = el("ABCD\nABCDEFGH", [{ x: 100, y: 60, w: 98, h: 28 }, { x: 100, y: 110, w: 202, h: 28 }]);
+  const c2 = capaDeTexto(dos, "Falsa", "left", falsa);
+  ok("texto plano: con 2 renglones, el tamaño sale del más ancho y el interlineado de sus bases", !!c2 && Math.abs(c2.tramos[0].tam - 40) < 1e-9 && Math.abs(c2.tramos[0].interlineado - 50) < 1e-9 && c2.transform[5] === 88, JSON.stringify(c2?.tramos[0]));
+  ok("texto plano: una tipografía que pediría un track absurdo no es ésa (null)", capaDeTexto(uno, "Ancha", "center", falsa) === null);
+  ok("texto plano: sin renglones que cuadren con las letras, null", capaDeTexto(el("A\nB", [{ x: 0, y: 0, w: 10, h: 10 }]), "Falsa", "left", falsa) === null);
+  const fig = (id, x, y, w, h) => ({ ...el("", []), id, tipo: "forma", solido: { x, y, w, h }, renglones: [] });
+  const solo = (x, w, y = 300) => ({ ...el("X", [{ x, y, w, h: 20 }]), solido: { x, y, w, h: 20 } });
+  ok("alineación: centrado si cae en el centro de la mesa", alineacionDe(solo(500, 200), 1200, []) === "center");
+  ok("alineación: centrado si cae en el centro de lo que tiene arriba (el precio bajo la pastilla)", alineacionDe(solo(700, 420, 300), 1200, [fig("pastilla", 671, 220, 473, 70)]) === "center" && alineacionDe(solo(700, 300, 300), 1200, [fig("pastilla", 671, 220, 473, 70)]) === "left");
+  ok("alineación: con varios renglones, la orilla que comparten", alineacionDe(el("A\nB", [{ x: 455, y: 0, w: 500, h: 10 }, { x: 455, y: 20, w: 420, h: 10 }]), 1200, []) === "left" && alineacionDe(el("A\nB", [{ x: 100, y: 0, w: 400, h: 10 }, { x: 150, y: 20, w: 300, h: 10 }]), 1200, []) === "center");
+}
+
+// ── Batería 2026-10-29: lo pegado al fondo de una imagen plana (fijos) no se corta y se avisa si le cae algo ──
+{
+  // Un maestro vertical con un logo PEGADO arriba (no se pudo sacar del fondo) y el HERO abajo.
+  const pieza = (rol, x, y, w, h) => ({ nombre: rol, rol, caja: { x, y, w, h }, solido: { x, y, w, h }, letraMinPx: null, rgba: new Uint8ClampedArray(w * h * 4) });
+  const logo = { nombre: "«BRAND» (imagen)", caja: { x: 300, y: 20, w: 200, h: 100 } };
+  const base = { nombre: "M", w: 800, h: 1000, piezas: [pieza("HERO", 250, 600, 300, 350), pieza("TITULO", 100, 300, 600, 120)] };
+  const conPegado = { ...base, pegados: [logo] };
+  const sin = acomodar(base, 1280, 720), con = acomodar(conPegado, 1280, 720);
+  ok("pegado: sin saberlo, el fondo de 1280×720 corta el logo pegado arriba; sabiéndolo, el fondo se corre y se ve entero",
+    pegadoFuera([logo], sin.fondo, 1280, 720) > 0 && pegadoFuera([logo], con.fondo, 1280, 720) === 0 && con.fondo.k === sin.fondo.k,
+    JSON.stringify({ sin: sin.fondo, con: con.fondo }));
+  ok("pegado: el fondo corrido sigue cubriendo toda la medida", con.fondo.x <= 0 && con.fondo.y <= 0 && con.fondo.x + 800 * con.fondo.k >= 1280 && con.fondo.y + 1000 * con.fondo.k >= 720);
+  // Si no cabe de ninguna forma (más alto que la medida a esa escala), se avisa que queda cortado.
+  const alto = { ...base, pegados: [{ nombre: "«HERO» (imagen)", caja: { x: 0, y: 0, w: 800, h: 1000 } }] };
+  const a2 = acomodar(alto, 1280, 720);
+  ok("pegado: lo que no cabe se avisa como «fuera» con lo que se ve", avisosDePegados(alto, a2, 1280, 720).some((v) => v.tipo === "fuera" && /se ve el \d+ %/.test(v.texto)));
+  // Encima: una pieza que cae sobre lo pegado se avisa; la que ya iba encima en el original, en el mismo lugar, no.
+  const tarjeta = { nombre: "«HERO» (imagen)", caja: { x: 200, y: 400, w: 400, h: 300 } };
+  const ma = { nombre: "M", w: 800, h: 1000, piezas: [pieza("CTA", 300, 500, 200, 60), pieza("BRAND", 50, 50, 150, 60)], pegados: [tarjeta] };
+  const igual = acomodar(ma, 800, 1000);
+  eq("pegado: a la medida del maestro, el botón sobre su tarjeta pegada no se avisa", avisosDePegados(ma, igual, 800, 1000), []);
+  const movida = { ...igual, puestas: igual.puestas.map((q) => (q.pieza === 1 ? { ...q, x: 300, y: 450 } : q)) };
+  const av = avisosDePegados(ma, movida, 800, 1000);
+  ok("pegado: el logo movido encima de la tarjeta pegada se avisa como «encima» (y el botón, que no se movió, no)", av.length === 1 && av[0].tipo === "encima" && av[0].texto.includes("BRAND"), JSON.stringify(av));
+  {
+    // Un texto anclado (el de un botón que se quedó pegado) no entra en el acomodo: va sobre su lugar del fondo.
+    const conAncla = { ...conPegado, piezas: [...conPegado.piezas, { ...pieza("CTA", 330, 40, 140, 40), rol: null, nombre: "«Pide tu tarjeta»", anclada: true }] };
+    const a = acomodar(conAncla, 1280, 720), q = a.puestas.find((x) => x.pieza === 2);
+    ok("anclado: va a la escala del fondo, sobre su mismo punto, y no falta en ninguna medida",
+      !!q && Math.abs(q.k - a.fondo.k) < 1e-9 && Math.abs(q.x - (a.fondo.x + 330 * a.fondo.k)) < 1e-6 && Math.abs(q.y - (a.fondo.y + 40 * a.fondo.k)) < 1e-6 && !a.avisos.some((v) => v.tipo === "falta"),
+      JSON.stringify({ q, f: a.fondo, av: a.avisos }));
+    const b = acomodar(conAncla, 320, 50);
+    ok("anclado: también en un banner (sin «falta»)", b.puestas.some((x) => x.pieza === 2) && !b.avisos.some((v) => v.tipo === "falta"));
+  }
+  ok("pegado: avisosDePixeles incluye los de lo pegado", avisosDePixeles({ ...ma, fondo: new Uint8ClampedArray(800 * 1000 * 4).fill(255) }, movida, 800, 1000).some((v) => v.tipo === "encima"));
+}
+
+// ── «Rehacer el fondo con IA» (2026-10-29): una llamada, pegar SÓLO en la máscara, y lo pegado sale como pieza ──
+{
+  const W = 160, H = 120;
+  let s = 11;
+  const ruido = new Uint8ClampedArray(W * H * 3);
+  for (let k = 0; k < W * H; k++) { s = (s * 1664525 + 1013904223) >>> 0; const n = ((s >>> 8) % 61) - 30; ruido[k * 3] = 120 + n; ruido[k * 3 + 1] = 110 + n; ruido[k * 3 + 2] = 100 + n; }
+  // Una caja roja sobre una textura (no se puede sacar gratis: se queda pegada) y un texto blanco encima de ella.
+  const rgba = new Uint8ClampedArray(W * H * 4);
+  for (let k = 0; k < W * H; k++) { rgba[k * 4] = ruido[k * 3]; rgba[k * 4 + 1] = ruido[k * 3 + 1]; rgba[k * 4 + 2] = ruido[k * 3 + 2]; rgba[k * 4 + 3] = 255; }
+  const pinta = (x0, y0, x1, y1, c) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) rgba.set(c, (y * W + x) * 4); };
+  pinta(40, 40, 120, 80, [230, 30, 30]);
+  for (let b = 0; b < 4; b++) pinta(56 + b * 14, 52, 66 + b * 14, 68, [255, 255, 255]);
+  const leidos = [
+    { id: "boton", rol: "CTA", tipo: "forma", caja: { x0: 39, y0: 39, x1: 121, y1: 81 }, texto: "", sobre: null },
+    { id: "pide", rol: "CTA", tipo: "texto", caja: { x0: 55, y0: 51, x1: 109, y1: 69 }, texto: "PIDE", sobre: "boton" },
+  ];
+  const img = { w: W, h: H, rgba };
+  const m = medirPlanoFijo(img, leidos);
+  ok("fondo IA: el botón en la textura se queda pegado y su texto, anclado", m.fijos.join() === "boton" && m.anclados.join() === "pide", JSON.stringify({ f: m.fijos, a: m.anclados }));
+  const mk = mascaraPegados(m, W, H);
+  ok("fondo IA: la máscara cubre el botón entero (con su margen) y nada lejos de él", mk[60 * W + 80] === 1 && mk[40 * W + 40] === 1 && mk[10 * W + 10] === 0 && mk[100 * W + 150] === 0);
+  // La «IA» devuelve la textura sin el botón... y además cambia TODO lo demás (como Gemini, que redibuja el lienzo).
+  const ia = new Uint8ClampedArray(W * H * 4);
+  for (let k = 0; k < W * H; k++) { ia[k * 4] = ruido[k * 3] + 5; ia[k * 4 + 1] = ruido[k * 3 + 1] + 5; ia[k * 4 + 2] = ruido[k * 3 + 2] + 5; ia[k * 4 + 3] = 255; }
+  const pg = pegarFondoIA(m.fondo, W, H, mk, { x: 0, y: 0, w: W, h: H }, ia);
+  let dentro = true, fuera = true;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const k = y * W + x;
+    if (mk[k] && Math.abs(pg.fondo[k * 3] - (ruido[k * 3] + 5)) > 1) dentro = false;
+    if (!mk[k] && (x < 12 || x > 150 || y < 12 || y > 108) && pg.fondo[k * 3] !== m.fondo[k * 3]) fuera = false;
+  }
+  ok(`fondo IA: dentro de la máscara va lo de la IA; lejos de ella el fondo queda IGUAL píxel por píxel (deriva ${pg.deriva})`, dentro && fuera && pg.deriva === 5, JSON.stringify({ dentro, fuera, d: pg.deriva }));
+  const libre = soltarConFondoIA(img, m, pg.fondo), b = libre.elementos.find((e) => e.id === "boton");
+  ok("fondo IA: el botón sale como pieza con su silueta (la caja roja), nada queda pegado ni anclado y el texto vuelve a ir sobre él",
+    !!b && Math.abs(b.solido.x - 40) <= 2 && Math.abs(b.solido.w - 80) <= 4 && Math.abs(b.solido.h - 40) <= 4 && libre.fijos.length === 0 && libre.pegados.length === 0 && libre.anclados.length === 0 && libre.elementos.find((e) => e.id === "pide")?.sobre === "boton",
+    JSON.stringify({ s: b?.solido, f: libre.fijos }));
+  const ma = maestroDePlano("ia", img, libre.elementos, libre.fondo, new Map(), [], libre.pegados, new Set(), new Set(libre.anclados));
+  {
+    // Preview 2026-10-29 (Pedro): el tablero LED salió con la pantalla transparente. Una pantalla OSCURA con marco
+    // claro sobre una textura oscura: la «IA» pone textura oscura detrás y la diferencia no ve la pantalla.
+    const px = new Uint8ClampedArray(rgba);
+    for (let k = 0; k < W * H; k++) { px[k * 4] = 40 + ruido[k * 3] - 120; px[k * 4 + 1] = 38 + ruido[k * 3] - 120; px[k * 4 + 2] = 36 + ruido[k * 3] - 120; }
+    const caja = (x0, y0, x1, y1, c) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) px.set(c, (y * W + x) * 4); };
+    caja(30, 30, 130, 95, [190, 190, 195]);
+    caja(36, 36, 124, 89, [32, 30, 28]);
+    const tablero = { w: W, h: H, rgba: px };
+    const mt = medirPlanoFijo(tablero, [{ id: "tablero", rol: "HERO", tipo: "imagen", caja: { x0: 29, y0: 29, x1: 131, y1: 96 }, texto: "", sobre: null }]);
+    const iaT = new Uint8ClampedArray(W * H * 4);
+    for (let k = 0; k < W * H; k++) { const v = 40 + ruido[k * 3] - 120; iaT[k * 4] = v + 1; iaT[k * 4 + 1] = v - 1; iaT[k * 4 + 2] = v - 3; iaT[k * 4 + 3] = 255; }
+    const mkT = mascaraPegados(mt, W, H), pT = pegarFondoIA(mt.fondo, W, H, mkT, { x: 0, y: 0, w: W, h: H }, iaT);
+    const t = soltarConFondoIA(tablero, mt, pT.fondo).elementos.find((e) => e.id === "tablero");
+    const centro = t && t.alfa[(60 - t.pinta.y) * t.pinta.w + (80 - t.pinta.x)];
+    ok(`fondo IA: un tablero de pantalla oscura sobre fondo oscuro sale ENTERO, sin hueco en la pantalla (centro ${centro}, huecos ${t ? (huecosDe(t.alfa, t.pinta.w, t.pinta.h) * 100).toFixed(1) : "-"} %)`, mt.fijos.join() === "tablero" && centro === 255 && huecosDe(t.alfa, t.pinta.w, t.pinta.h) < 0.02, JSON.stringify({ f: mt.fijos, p: t?.pinta }));
+    // Y la medida del hueco: una ventana transparente adentro de una forma cuenta; una forma llena, no.
+    const ventana = new Uint8ClampedArray(20 * 20).fill(255);
+    for (let y = 6; y < 14; y++) for (let x = 6; x < 14; x++) ventana[y * 20 + x] = 0;
+    eq("fondo IA: huecosDe ve una ventana de 8×8 en 20×20 (16 %) y nada en una forma llena", [Math.round(huecosDe(ventana, 20, 20) * 100), huecosDe(new Uint8ClampedArray(400).fill(255), 20, 20)], [16, 0]);
+  }
+  {
+    // Preview 2026-10-29 (Pedro): con el recorte del modelo, el botón traía en las puntas un pedazo del barandal oscuro
+    // y el tablero LED, rayas negras sueltas de su base. Un botón naranja sobre textura oscura; el recorte se pasa 4 px
+    // del botón y trae una raya suelta debajo.
+    const px = new Uint8ClampedArray(W * H * 4);
+    for (let k = 0; k < W * H; k++) { const v = 40 + ruido[k * 3] - 120; px[k * 4] = v; px[k * 4 + 1] = v; px[k * 4 + 2] = v; px[k * 4 + 3] = 255; }
+    for (let y = 40; y < 80; y++) for (let x = 40; x < 140; x++) px.set([250, 80, 0], (y * W + x) * 4);
+    const rc = new Uint8Array(W * H);
+    for (let y = 36; y < 84; y++) for (let x = 36; x < 144; x++) rc[y * W + x] = 1;
+    for (let y = 92; y < 95; y++) for (let x = 50; x < 120; x++) rc[y * W + x] = 1;
+    const fondo = new Uint8ClampedArray(W * H * 3);
+    for (let k = 0; k < W * H; k++) for (let c = 0; c < 3; c++) fondo[k * 3 + c] = px[k * 4 + c];
+    const m = { elementos: [], todos: [{ id: "boton", sobre: null }], fijos: ["boton"], pegados: [], anclados: [], fondo };
+    const b = soltarConFondoIA({ w: W, h: H, rgba: px }, m, fondo, new Map([["boton", rc]])).elementos.find((e) => e.id === "boton");
+    const en = (x, y) => (b && x >= b.pinta.x && y >= b.pinta.y && x < b.pinta.x + b.pinta.w && y < b.pinta.y + b.pinta.h ? b.alfa[(y - b.pinta.y) * b.pinta.w + x - b.pinta.x] : 0);
+    ok(`fondo IA, recorte: el borde oscuro de más y la raya suelta salen; el botón queda entero (centro ${en(90, 60)}, borde ${en(37, 60)}, raya ${en(80, 93)})`, en(90, 60) === 255 && en(41, 41) === 255 && en(37, 60) < 40 && en(141, 38) < 40 && en(80, 93) === 0, JSON.stringify(b?.pinta));
+  }
+  ok("fondo IA: en el maestro el botón y su texto van en UNA pieza (CTA) y no hay nada anclado", ma.piezas.length === 1 && ma.piezas[0].rol === "CTA" && !ma.piezas.some((p) => p.anclada) && !ma.pegados);
+}
+
+console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);
+if (fail) process.exit(1);

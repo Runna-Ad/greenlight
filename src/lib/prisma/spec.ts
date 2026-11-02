@@ -1,0 +1,433 @@
+/**
+ * HÜE Prisma — el "PromptSpec": UNA descripción intermedia de lo que el diseñador
+ * quiere, independiente de la herramienta. Cada compiler (nanobanana/chatgpt/veo/
+ * kling/higgsfield) la convierte al formato exacto de su herramienta.
+ *
+ * Por qué así (lección del teardown de Roco Prompts): allá cada bot tenía su propio
+ * prompt y su propio formulario; cambiar de herramienta era volver a empezar. Con un
+ * spec único, cambiar de herramienta es RECOMPILAR, no re-capturar, y una campaña
+ * entera queda consistente.
+ *
+ * Módulo PURO: sin server-only, sin React, sin DB — se prueba con node directo
+ * (scripts/test-prisma.mjs).
+ */
+
+/** 2026-09-16: el equipo genera TODO en Higgsfield (default para todas las marcas). Cada Tool es una
+ *  FAMILIA de modelos con su forma de prompt; "higgsfield" es el modelo DoP (presets de cámara).
+ *  seedream / seedance / gemini_omni: los modelos que el equipo usa ahí y no tenían compiler. */
+export type Tool = "nanobanana" | "chatgpt" | "veo" | "kling" | "higgsfield" | "seedream" | "seedance" | "gemini_omni";
+export const TOOLS: Tool[] = ["nanobanana", "chatgpt", "veo", "kling", "higgsfield", "seedream", "seedance", "gemini_omni"];
+
+/** Herramientas que alguna vez existieron: una fila guardada no se vuelve ilegible porque
+ *  retiremos una herramienta. Sora 2: OpenAI apaga su API el 24-sep-2026 (retirada en 0067). */
+export const TOOLS_HISTORICAS: string[] = [...TOOLS, "sora"];
+/** Quién hereda los trabajos de una herramienta retirada (al leer una fila vieja). */
+export const TOOL_SUCESORA: Record<string, Tool> = { sora: "veo" };
+/** Nombre con el que se conoció una herramienta retirada (para el aviso "antes era…"). */
+export const NOMBRE_HISTORICO: Record<string, string> = { sora: "Sora 2" };
+
+/** Las tres "puertas" de la pantalla de inicio. */
+export type JobKind = "imagen" | "video" | "edicion";
+
+/** Los trabajos en lenguaje humano. El id es estable; la etiqueta vive en copy.ts. */
+export type JobType =
+  // Crear imagen
+  | "foto_producto"
+  | "escena_persona"
+  | "imagen_libre"
+  // Editar imagen (Nano Banana)
+  | "cambio_outfit"
+  | "cambio_fondo"
+  | "cambio_pose"
+  | "agregar_objeto"
+  | "cambio_angulo"
+  | "restaurar_foto"
+  | "mejora_foto"
+  | "aplicar_logo"
+  | "dos_personajes"
+  | "cambio_epoca"
+  | "figura_coleccionable"
+  // F4: la CORRECCIÓN de un resultado subido (edita ESA imagen: "arregla X, todo lo demás igual").
+  // Job OCULTO: no está en JOBS_POR_KIND (el wizard no lo ofrece); nace en corregirResultado.
+  | "correccion"
+  // Crear video
+  | "animar_foto"
+  | "texto_a_video"
+  | "transicion"
+  // El id nació con Sora 2 y está persistido en filas reales: NO se renombra. Hoy es "escena
+  // por bloques de tiempo" (Veo 3.1 / Kling 3); la etiqueta vive en copy.ts.
+  | "escena_sora";
+
+export const JOB_KIND: Record<JobType, JobKind> = {
+  foto_producto: "imagen",
+  escena_persona: "imagen",
+  imagen_libre: "imagen",
+  cambio_outfit: "edicion",
+  cambio_fondo: "edicion",
+  cambio_pose: "edicion",
+  agregar_objeto: "edicion",
+  cambio_angulo: "edicion",
+  restaurar_foto: "edicion",
+  mejora_foto: "edicion",
+  aplicar_logo: "edicion",
+  dos_personajes: "edicion",
+  cambio_epoca: "edicion",
+  figura_coleccionable: "edicion",
+  correccion: "edicion",
+  animar_foto: "video",
+  texto_a_video: "video",
+  transicion: "video",
+  escena_sora: "video",
+};
+
+/** Los trabajos que el wizard OFRECE por puerta. `correccion` (F4) no está a propósito: sólo
+ *  nace desde "Corregir este resultado". */
+export const JOBS_POR_KIND: Record<JobKind, JobType[]> = {
+  imagen: ["foto_producto", "escena_persona", "imagen_libre"],
+  edicion: [
+    "cambio_outfit",
+    "cambio_fondo",
+    "cambio_pose",
+    "agregar_objeto",
+    "cambio_angulo",
+    "restaurar_foto",
+    "mejora_foto",
+    "aplicar_logo",
+    "dos_personajes",
+    "cambio_epoca",
+    "figura_coleccionable",
+  ],
+  video: ["animar_foto", "texto_a_video", "transicion", "escena_sora"],
+};
+
+/** Qué papel juega cada imagen de referencia. El orden en `refs` es el orden
+ *  "[Imagen 1]", "[Imagen 2]"… con el que la nombra el prompt. */
+export type RefRole =
+  | "sujeto"
+  | "producto"
+  | "outfit"
+  | "pose"
+  | "escena"
+  | "objeto"
+  | "logo"
+  | "estilo"
+  | "empaque"
+  | "personaje2"
+  | "inicio"
+  | "fin"
+  /** F4: la imagen que SALIÓ de la herramienta (la única referencia de un spec de corrección). */
+  | "resultado";
+
+/** Qué imágenes pide cada trabajo, en orden. `opcional` = puede faltar. */
+export const REFS_POR_JOB: Record<JobType, { role: RefRole; opcional?: boolean }[]> = {
+  // Imagen y edición: el slot "estilo" (opcional, siempre al final) deja pasar UNA imagen cuyo
+  // look se toma prestado sin copiar su sujeto (Nano Banana 2 acepta 14 refs; Pro 6 + 3 de estilo).
+  foto_producto: [{ role: "producto" }, { role: "estilo", opcional: true }],
+  escena_persona: [{ role: "sujeto" }, { role: "estilo", opcional: true }],
+  imagen_libre: [{ role: "estilo", opcional: true }],
+  cambio_outfit: [{ role: "sujeto" }, { role: "outfit" }, { role: "estilo", opcional: true }],
+  cambio_fondo: [{ role: "sujeto" }, { role: "estilo", opcional: true }],
+  cambio_pose: [{ role: "sujeto" }, { role: "pose" }, { role: "estilo", opcional: true }],
+  agregar_objeto: [{ role: "escena" }, { role: "objeto" }, { role: "estilo", opcional: true }],
+  cambio_angulo: [{ role: "escena" }, { role: "estilo", opcional: true }],
+  restaurar_foto: [{ role: "sujeto" }],
+  mejora_foto: [{ role: "sujeto" }, { role: "estilo", opcional: true }],
+  aplicar_logo: [{ role: "producto" }, { role: "logo" }],
+  dos_personajes: [{ role: "sujeto" }, { role: "personaje2" }, { role: "pose", opcional: true }, { role: "estilo", opcional: true }],
+  cambio_epoca: [{ role: "sujeto" }, { role: "estilo", opcional: true }],
+  figura_coleccionable: [{ role: "sujeto" }, { role: "empaque", opcional: true }],
+  correccion: [{ role: "resultado" }],
+  animar_foto: [{ role: "sujeto" }],
+  texto_a_video: [],
+  transicion: [{ role: "inicio" }, { role: "fin" }],
+  escena_sora: [{ role: "sujeto", opcional: true }],
+};
+
+/** El "ADN visual" que H.Ü.E extrae de una referencia (pase de visión). Todo en
+ *  palabras llanas y en español: el diseñador lo ve y lo edita como chips. */
+export type VisualDNA = {
+  luz: string; // "luz lateral suave de ventana, sombras largas"
+  lente: string; // "teleobjetivo, fondo desenfocado"
+  paleta: string[]; // hex o nombres: ["#1a1f1c", "beige cálido"]
+  mood: string; // "íntimo, nostálgico"
+  composicion: string; // "sujeto a la izquierda, mucho aire arriba"
+  textura: string; // "grano fino de película"
+};
+
+export type Ref = {
+  role: RefRole;
+  /** Una frase corta de qué hay en la imagen ("una mujer con abrigo negro en un jardín"). */
+  caption: string | null;
+  dna: VisualDNA | null;
+};
+
+export type Aspect = "9:16" | "16:9" | "1:1" | "4:5" | "4:3" | "3:4";
+export const ASPECTS: Aspect[] = ["9:16", "16:9", "1:1", "4:5", "4:3", "3:4"];
+
+/** Dónde va a vivir la pieza. Decide aspect y ayuda a elegir herramienta. */
+export type Destino =
+  | "ig_story"
+  | "ig_feed"
+  | "tiktok"
+  | "fb_ad"
+  | "yt"
+  | "web_banner"
+  | "print"
+  | "libre";
+
+export const DESTINOS: Destino[] = ["ig_story", "ig_feed", "tiktok", "fb_ad", "yt", "web_banner", "print", "libre"];
+/** Guardia de runtime: el destino llega de una fila (text sin CHECK) o de un jsonb viejo. */
+export const esDestino = (v: unknown): v is Destino => typeof v === "string" && (DESTINOS as string[]).includes(v);
+
+export const ASPECT_POR_DESTINO: Record<Destino, Aspect> = {
+  ig_story: "9:16",
+  ig_feed: "4:5",
+  tiktok: "9:16",
+  fb_ad: "1:1",
+  yt: "16:9",
+  web_banner: "16:9",
+  print: "4:3",
+  libre: "16:9",
+};
+
+export type Camara = {
+  angulo: string | null; // "contrapicado", "cenital", "a la altura de los ojos"
+  movimiento: string | null; // "dolly in lento", "órbita", "cámara en mano"
+  lente: string | null; // "85mm, fondo desenfocado", "gran angular 24mm"
+};
+
+export type Dialogo = {
+  texto: string;
+  idioma: string; // "es-MX", "en"
+  voz: string | null; // "voz neutra con acento mexicano, cálida"
+};
+
+/** Estilo/tipo de video. Nació como la taxonomía de Sora 2; sobrevive como VOCABULARIO que
+ *  Veo 3.1 y Kling 3 entienden igual (compilers/video-tipos.ts). */
+export type VideoType =
+  | "Trailer cinematográfico"
+  | "Comercial de producto"
+  | "Video de celular sin cortes"
+  | "GoPro POV"
+  | "Cámara de seguridad"
+  | "Tomas aéreas de drone"
+  | "ASMR"
+  | "Vlog Selfie"
+  | "Unboxing de producto"
+  | "Story Vertical"
+  | "Video Old VHS";
+
+export const VIDEO_TYPES: VideoType[] = [
+  "Trailer cinematográfico",
+  "Comercial de producto",
+  "Video de celular sin cortes",
+  "GoPro POV",
+  "Cámara de seguridad",
+  "Tomas aéreas de drone",
+  "ASMR",
+  "Vlog Selfie",
+  "Unboxing de producto",
+  "Story Vertical",
+  "Video Old VHS",
+];
+
+/** Un "beat" (bloque de tiempo) de un video: qué pasa, cómo se mueve la cámara, qué suena. */
+export type Beat = {
+  desde: number; // segundos
+  hasta: number;
+  accion: string;
+  camara: string;
+  sfx: string; // onomatopeyas / ambiente: "*click* suave, viento"
+};
+
+/** Texto que DEBE aparecer dentro de la imagen o del video (un titular, un precio, un
+ *  "Hasta 20% de cashback"). Se guarda tal cual lo escribió el diseñador, en su idioma:
+ *  las herramientas lo pintan letra por letra, así que traducirlo lo arruinaría.
+ *  Lección 2026-09-04: sin este campo, H.Ü.E trataba el texto como "slogan inventado"
+ *  y lo tiraba; y el compiler de foto de producto ni siquiera leía `accion`. */
+export type TextoEnImagen = {
+  contenido: string;
+  /** Dónde va ("top third", "bottom left"). null = que la herramienta decida. */
+  posicion: string | null;
+  /** Cómo se ve ("bold sans-serif, white"). null = que la herramienta decida. */
+  estilo: string | null;
+};
+
+/** Lo que la marca del cliente aporta a TODO prompt (viene de marcas.prisma_presets). */
+export type MarcaPreset = {
+  nombre: string;
+  paleta: string[];
+  tono: string; // "premium, cálido, directo"
+  evitar: string[]; // ["texto en pantalla", "fondos morados"]
+  aspect_default: Aspect | null;
+};
+
+export type PromptSpec = {
+  job: JobType;
+  tool: Tool;
+  /** La idea del diseñador tal cual (para trazabilidad y para el refine). */
+  idea: string;
+
+  sujeto: string;
+  accion: string;
+  entorno: string;
+  camara: Camara;
+  luz: string;
+  mood: string;
+  estilo: string;
+  paleta: string[];
+  texturas: string[];
+  negativos: string[];
+  /** Qué NO debe cambiar: identidad del rostro, manos, texto del empaque… */
+  preservar: string[];
+
+  refs: Ref[];
+  aspect: Aspect;
+  /** Segundos. null para imagen. */
+  duracion: number | null;
+  dialogo: Dialogo | null;
+  marca: MarcaPreset | null;
+
+  /** Sólo video: beats por bloque de tiempo (Veo los usa; Kling los resume). */
+  beats: Beat[] | null;
+  /** Sólo video: el tipo/estilo (Veo lo lleva en `style`, Kling en su primera capa). */
+  video_type: VideoType | null;
+  /** Sólo Higgsfield: nombre del preset de cámara (ver compilers/higgsfield.ts). */
+  preset: string | null;
+  /** Texto que debe verse en la pieza. null = sin texto (y los compilers lo prohíben).
+   *  Opcional en el tipo porque las filas guardadas antes del 2026-09-04 no lo traen. */
+  texto?: TextoEnImagen | null;
+  /** Dónde se publica (F1: los compilers piden 2K para impresión, "Úsalo en…" lo usa).
+   *  Opcional: las filas de antes del 2026-09-11 lo traen sólo en prisma_specs.destino. */
+  destino?: Destino | null;
+};
+
+/** Un spec en blanco con valores seguros. El writer lo llena; la UI lo edita. */
+export function specVacio(job: JobType, tool: Tool, idea = ""): PromptSpec {
+  return {
+    job,
+    tool,
+    idea,
+    sujeto: "",
+    accion: "",
+    entorno: "",
+    camara: { angulo: null, movimiento: null, lente: null },
+    luz: "",
+    mood: "",
+    estilo: "",
+    paleta: [],
+    texturas: [],
+    negativos: [],
+    preservar: [],
+    refs: [],
+    aspect: "16:9",
+    duracion: null,
+    dialogo: null,
+    marca: null,
+    beats: null,
+    video_type: null,
+    preset: null,
+    texto: null,
+    destino: null,
+  };
+}
+
+/** El texto en imagen del spec, o null (filas viejas no traen el campo). */
+export function textoDe(spec: PromptSpec): TextoEnImagen | null {
+  const t = spec.texto;
+  return t && t.contenido.trim() ? t : null;
+}
+
+/** Los negativos del spec SIN los que prohíben texto, cuando el diseñador SÍ pidió texto.
+ *  H.Ü.E agrega "no text overlays" por reflejo; si lo dejáramos, el prompt se contradice. */
+export function negativosDe(spec: PromptSpec, extra: string[] = []): string[] {
+  const todos = [...spec.negativos, ...(spec.marca?.evitar ?? []), ...extra];
+  const unicos = [...new Set(todos)];
+  if (!textoDe(spec)) return unicos;
+  return unicos.filter((n) => !/\b(text|texto|subtitles|caption|typography|letter)/i.test(n));
+}
+
+/**
+ * ¿Este objeto (p. ej. el jsonb guardado en prisma_specs.spec) tiene la forma de un
+ * PromptSpec? Comprobación de RUNTIME: un cast ciego dejaría pasar filas viejas con
+ * otra forma y reventarían dentro de compilar(). Verifica lo que los compilers tocan.
+ * Acepta herramientas HISTÓRICAS (sora): quien lee la fila la mapea a su sucesora.
+ */
+export function esSpec(v: unknown): v is PromptSpec {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  const str = (k: string) => typeof o[k] === "string";
+  const arr = (k: string) => Array.isArray(o[k]);
+  const cam = o.camara as Record<string, unknown> | undefined;
+  return (
+    str("job") && (o.job as string) in JOB_KIND &&
+    str("tool") && TOOLS_HISTORICAS.includes(o.tool as string) &&
+    str("idea") && str("sujeto") && str("accion") && str("entorno") && str("luz") && str("mood") && str("estilo") &&
+    !!cam && typeof cam === "object" &&
+    arr("paleta") && arr("texturas") && arr("negativos") && arr("preservar") && arr("refs") &&
+    str("aspect") && ASPECTS.includes(o.aspect as Aspect) &&
+    (o.destino === undefined || o.destino === null || esDestino(o.destino))
+  );
+}
+
+/** F5c: hasta 6 imágenes en total (Pedro, 2026-09-15); el tope de CADA herramienta lo cuida el aviso
+ *  "refs de más" con su arreglo (Veo y Kling usan 3). */
+export const MAX_REFS = 6;
+/** Las casillas que aceptan varias imágenes ("+ otra": el producto desde varios ángulos, dos de estilo…).
+ *  Las demás llevan UNA (un logo, la pose, la toma inicial y la final, lo que salió). */
+export const ROLES_MULTI: ReadonlySet<RefRole> = new Set<RefRole>(["producto", "sujeto", "estilo", "escena", "objeto", "outfit", "empaque"]);
+
+/** Índice 1-based de la PRIMERA referencia con ese papel, o null. Es lo que los prompts
+ *  escriben como "[Imagen N]". */
+export function indiceRef(spec: PromptSpec, role: RefRole): number | null {
+  const i = spec.refs.findIndex((r) => r.role === role);
+  return i === -1 ? null : i + 1;
+}
+
+/** F5c: índices 1-based de TODAS las referencias con ese papel (varias imágenes por casilla). */
+export function indicesRef(spec: PromptSpec, role: RefRole): number[] {
+  return spec.refs.flatMap((r, i) => (r.role === role ? [i + 1] : []));
+}
+
+/** "a", "a and b", "a, b and c" — para nombrar varias imágenes de una casilla en una frase. */
+export const unirY = (xs: string[]): string => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+
+/** Etiqueta "[Imagen N]" o, si hay caption, "[Imagen N: caption]"; con varias del mismo papel las
+ *  nombra TODAS ("[Imagen 1: …] and [Imagen 2: …]"): el validador exige que cada imagen se use. */
+export function etiquetaRef(spec: PromptSpec, role: RefRole): string | null {
+  const ns = indicesRef(spec, role);
+  if (!ns.length) return null;
+  return unirY(ns.map((n) => {
+    const r = spec.refs[n - 1];
+    return r.caption ? `[Imagen ${n}: ${r.caption}]` : `[Imagen ${n}]`;
+  }));
+}
+
+/** ¿El trabajo es de video? */
+export const esVideo = (job: JobType): boolean => JOB_KIND[job] === "video";
+
+/** Une frases no vacías con ". " y cierra con punto — evita "..", espacios dobles
+ *  y frases vacías cuando un campo del spec viene en blanco. */
+export function frases(...partes: (string | null | undefined | false)[]): string {
+  const limpias = partes
+    .filter((p): p is string => typeof p === "string" && p.trim().length > 0)
+    .map((p) => p.trim().replace(/[.\s]+$/, ""));
+  return limpias.length ? limpias.join(". ") + "." : "";
+}
+
+/** Une piezas con coma (para prompts de una sola línea tipo Kling). */
+export function comas(...partes: (string | null | undefined | false)[]): string {
+  return partes
+    .filter((p): p is string => typeof p === "string" && p.trim().length > 0)
+    .map((p) => p.trim().replace(/[,.\s]+$/, ""))
+    .join(", ");
+}
+
+/** Quita el pronombre inicial de una acción ("she breathes" → "breathes") para poder
+ *  anteponer el sujeto sin que quede "the woman she breathes". */
+export function sinPronombre(accion: string): string {
+  return accion.replace(/^(he|she|they|it|the subject)\s+/i, "").trim();
+}
+
+export const contarPalabras = (s: string): number =>
+  s.trim().split(/\s+/).filter(Boolean).length;
