@@ -3118,3 +3118,35 @@ y "arréglalo en el PSD de esta medida", no se construye el arreglo grande ni se
 «Carpetas con otro nombre» (Group 5 → TITULO, Group 8 → CTA); el blíster vive en Background (no se mueve: Photoshop).
 Lo de antes sigue: Pedro retesta el fondo con IA del estadio; luego el registro de buenas prácticas.
 **Environment changes:** ninguno (sin dependencias nuevas, sin migraciones).
+
+## 2026-11-02 Session — Limpieza de la prueba de Control de Cambios (datos de PROD, sin código)
+**What we did:** Pedro aprobó borrar la prueba de hoy (17:59 a 18:12 UTC), toda en CMCOOKINGSP (A1), y quitar la asignación. Borrado en una sola transacción, con conteos esperados: 2 cambios, 3 respuestas, 3 resultados de HÜE, 6 eventos de estado, 22 notificaciones, 44 entregas (5 correos en cola incluidos), la asignación de Nils Vera; `completed_at` de A1 a null.
+**Current state:** comprobado por SQL: 0 cambios y 0 respuestas en toda la base, 0 entregas en cola. A1 sigue `published`, 6 planos, 2 assets, 6 eventos de estado (último del 28/10), Margaret Fink de lead. A2 (GIRLTHREE) sin tocar. No se abrió la app para verlo en pantalla.
+**Correos:** salieron 7 correos reales de la prueba (agrupaban 15 avisos); no se pueden recuperar. Los 5 que seguían en cola ya no salen.
+**Hallazgo:** el reloj de correos agrupados NO está instalado (`cron.job` sin `greenlight-correos-agrupados`, sin `greenlight_privado.tick_correos`, sin secreto en Vault). Lo que espera su turno sólo sale con el siguiente envío normal de la app; a las 18:20:51 había 5 correos con su hora ya pasada, sin salir.
+**Pick up next session:** Pedro decide si instala el reloj (`supabase/manual/0084_reloj_correos.sql`, en `main`; necesita CRON_SECRET en Vercel y greenlight_cron_secret en Vault, los pone Pedro).
+**Uncommitted work:** esta entrada, tasks/lessons.md, y lo que ya no era de esta sesión (CLAUDE.md + .pre-replay-P3, brag-brief.md, brag-output/).
+
+**2026-11-02, reloj de correos instalado:** Pedro puso CRON_SECRET (Vercel, Production), greenlight_cron_secret (Vault), redeploy de producción con el mismo código (13:14 MDT, Ready) y corrió el SQL. Comprobado: job `greenlight-correos-agrupados` activo cada minuto, primera corrida 19:16:00 UTC `succeeded`; POST sin secreto = 401. SIN comprobar: que los dos secretos coincidan. La prueba es el primer correo retenido: revisar `net._http_response` (200 bien, 401 no coinciden) y que salga a tiempo. Pedro lo ve si un segundo aviso a la misma persona llega unos 10 minutos después del primero sin otra acción en la app.
+
+## 2026-11-02 12:16
+**Shipped (recent commits):**
+  - fix(formatos): el legal elegido dice dónde sí y dónde no llegó, y un fondo sin nada visible ya no cuenta
+
+**Still open:**
+- [ ] E. Piezas «OTRO» (sin papel) no se ponen en las 7 medidas que no son «igual» → «falta» (82947, 83ed, 1.06.45).
+- [ ] F. El brillo/sombra suave de una pieza que no se separa se queda en el fondo como mancha al moverla (82947: la
+- [ ] G. 83ed: la lectura cortó el titular en dos («¡Lleva tu DiDi Card y d» / «isfruta…») y el precio sale doble
+- [ ] H. 82947: los 2 renglones del titular siguen fijos (anillo con 8 % de orillas) y en 1280×720 quedan enormes con
+- [ ] Límite conocido: el relleno suave no inventa un pico de luz escondido detrás de un texto (prueba: ~5 niveles).
+- [ ] Opción 2 (IA para fondos de foto: estadio, rocas, capturas) sigue pendiente; Pedro decide.
+- [ ] Rellenos con muestras dejan manchas en barras/pastillas angostas (legal sobre barra blanca y botón de 1.07.33).
+- [ ] 29 de 83 textos van «aproximados» (no empatan con DiDi Sans): revisar a ojo cuáles se ven distintos.
+- [ ] En fotos, lo anclado y lo pegado no se mueven y las piezas acomodadas les caen encima (avisos «encima»).
+- [ ] 83ed: «6% de CASHBACK*» sale deslavado (color de tinta mal medido).
+
+## 2026-11-02 — HÜE Formatos: el legal de la Biblioteca que "cambió" y no cambió (SPAPDOGCARD) — rama `prisma` (preview), sin migración
+**Hecho (pusheado, ada32f6):** un «Background» sin nada visible ya no cuenta como fondo (mi bug del 2026-10-30 perdía el artboard 9:16). Elegir fondo: no marca una carpeta con nombre de otra pieza ni con el fondo adentro, avisa en esa fila y deja saltar el artboard. Legal: aviso naranja con cuántos artboards, cuáles y por qué, y aviso en cada medida afectada. Un texto que no se escribe nombra la causa real; mientras bajan las tipografías no se dice que faltan.
+**Pruebas:** `npm test` todo verde (formatos 670/0) · tsc y eslint limpios · app local con SPAPDOGCARD: 1080×1920 sale con el legal de la Biblioteca (133.9 %, 31 de agosto); marcando «Legales» como fondo, aviso y medida 1200×1500 lo dicen · 11 PSD reales revisados: sólo éste trae un fondo sin nada visible.
+**No probado:** el color naranja del aviso y la línea corta «1 texto cambiado» (cambiados después de la última corrida en el navegador); nada en la preview de Vercel. El texto literal "falta su tipografía" NO se reprodujo.
+**Esperando a Pedro:** probar SPAPDOGCARD y SPAPTOYBOX en la preview. Si vuelve el mensaje de tipografía, mandar la línea «Tipografías de DiDi…» de bajo Cliente. Sus diseñadores: sacar Background al primer nivel en 4:5 y sacar Subtitulo, 10minutos y CTA del Background en 1.91:1.
