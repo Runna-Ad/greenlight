@@ -6,8 +6,9 @@ import { PrismaReglas } from "./prisma-reglas";
 import { PrismaInforme } from "./prisma-informe";
 import { PrismaHerramientas } from "./prisma-herramientas";
 import { PrismaVigia } from "./prisma-vigia";
+import { PrismaGasto } from "./prisma-gasto";
 
-const VISTAS = { conocimiento: "Conocimiento", herramientas: "Herramientas", vigia: "Vigía", informe: "Informe" } as const;
+const VISTAS = { conocimiento: "Conocimiento", herramientas: "Herramientas", vigia: "Vigía", gasto: "Gasto IA", informe: "Informe" } as const;
 type Vista = keyof typeof VISTAS;
 
 /** Hub › Prisma: el conocimiento vivo (notas y reglas), los datos de cada herramienta (F6a) y el
@@ -27,7 +28,7 @@ export function PrismaHub() {
           </button>
         ))}
       </div>
-      {vista === "conocimiento" ? <PrismaReglas /> : vista === "herramientas" ? <PrismaHerramientas /> : vista === "vigia" ? <PrismaVigia /> : <PrismaInforme />}
+      {vista === "conocimiento" ? <PrismaReglas /> : vista === "herramientas" ? <PrismaHerramientas /> : vista === "vigia" ? <PrismaVigia /> : vista === "gasto" ? <PrismaGasto /> : <PrismaInforme />}
     </div>
   );
 }

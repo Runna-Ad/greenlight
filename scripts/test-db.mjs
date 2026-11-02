@@ -383,10 +383,10 @@ console.log("\n▶ Candado RLS 0056 (anon/authenticated fuera de produccion)");
   );
 }
 
-// 0084: un usuario con sesión NO reclama la cola de correos.
+// 0084: un usuario con sesión NO reclama la cola de correos (0088: tampoco lee el gasto de Gemini).
 // Va aquí: el bloque de abajo le re-concede todas las rutinas a `authenticated` a propósito.
 console.log("\n▶ 0084 — candado de la cola de correos (authenticated)");
-for (const fn of ["produccion.rpc_reclamar_emails(int)", "produccion.rpc_reservar_envio(text,uuid[])"]) {
+for (const fn of ["produccion.rpc_reclamar_emails(int)", "produccion.rpc_reservar_envio(text,uuid[])", "produccion.prisma_gemini_resumen()"]) {
   ok(`authenticated NO puede ejecutar ${fn}`,
      !(await scalar(`select has_function_privilege('authenticated', $1, 'execute')`, [fn])));
 }
@@ -3310,6 +3310,33 @@ console.log("\n▶ 0087 — prisma_formatos_lecturas");
   eq("un creativo con sesión NO ve las lecturas (sólo por el servidor)", Number(await scalar(`select count(*) from produccion.${t}`)), 0);
   await resetRole();
   await db.query(`delete from produccion.${t}`);
+}
+
+// ── 0088: gasto de Gemini y tope diario ──
+console.log("\n▶ 0088 — prisma_gemini_gastos + tope");
+{
+  eq("el tope nace apagado", await scalar(`select gemini_tope_diario_usd from produccion.hue_settings where id = 1`), null);
+  let topeCero = false;
+  try { await db.query(`update produccion.hue_settings set gemini_tope_diario_usd = 0 where id = 1`); } catch { topeCero = true; }
+  ok("un tope de 0 se rechaza", topeCero);
+  const resumen = async () => (await q(`select * from produccion.prisma_gemini_resumen()`))[0];
+  eq("sin llamadas, hoy suma 0", Number((await resumen()).hoy_usd), 0);
+  await db.query(`insert into produccion.prisma_gemini_gastos (ruta, modelo, usd) values ('copia', 'm', 0.04), ('leer', 'm', 0.01), ('fondo_plano', 'm', null)`);
+  // Medianoche en México, no en UTC: esto pasó ayer allá.
+  await db.query(`insert into produccion.prisma_gemini_gastos (ruta, modelo, usd, created_at)
+                  values ('copia', 'm', 7, (date_trunc('day', now() at time zone 'America/Mexico_City') - interval '1 minute') at time zone 'America/Mexico_City')`);
+  const r = await resumen();
+  eq("hoy suma sólo lo de hoy", Number(r.hoy_usd), 0.05);
+  eq("cuenta las llamadas de hoy", r.llamadas_hoy, 3);
+  eq("cuenta las de hoy sin costo", r.sin_costo_hoy, 1);
+  let rutaMala = false;
+  try { await db.query(`insert into produccion.prisma_gemini_gastos (ruta, modelo) values ('otra', 'm')`); } catch { rutaMala = true; }
+  ok("una ruta inventada se rechaza", rutaMala);
+  await asRole(CREA);
+  eq("un creativo con sesión NO ve el gasto", Number(await scalar(`select count(*) from produccion.prisma_gemini_gastos`)), 0);
+  await resetRole();
+  ok("service_role sí ejecuta el resumen", await scalar(`select has_function_privilege('service_role', 'produccion.prisma_gemini_resumen()', 'execute')`));
+  await db.query(`delete from produccion.prisma_gemini_gastos`);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

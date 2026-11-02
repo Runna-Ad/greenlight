@@ -11,6 +11,7 @@ import { writePsdBuffer } from "ag-psd";
 import { nombreDeGuia, etiquetaPieza, esNombreLegal, desenvolver, CAPA_DEBAJO_FONDO } from "../src/lib/prisma/formatos/roles.ts";
 import { legalDelPsd, conLegal, conLegalDe, conLegalFijo, legalCabe, legalVigente, legalesParaCliente, legalParecido, parecidoLegal } from "../src/lib/prisma/formatos/legal.ts";
 import { hermanas, copiarEdicion } from "../src/lib/prisma/formatos/matriz.ts";
+import { leerTope, mensajeTope, topeAlcanzado } from "../src/lib/prisma/formatos/tope-gemini.ts";
 import { MATRIZ, baseAEscala } from "../src/lib/prisma/formatos/tabla-matriz.ts";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, tieneFondo, piezasDeMesa, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, RELLENO_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
@@ -3492,6 +3493,17 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
     ok(`fondo IA, recorte: el borde oscuro de más y la raya suelta salen; el botón queda entero (centro ${en(90, 60)}, borde ${en(37, 60)}, raya ${en(80, 93)})`, en(90, 60) === 255 && en(41, 41) === 255 && en(37, 60) < 40 && en(141, 38) < 40 && en(80, 93) === 0, JSON.stringify(b?.pinta));
   }
   ok("fondo IA: en el maestro el botón y su texto van en UNA pieza (CTA) y no hay nada anclado", ma.piezas.length === 1 && ma.piezas[0].rol === "CTA" && !ma.piezas.some((p) => p.anclada) && !ma.pegados);
+}
+
+// ── Tope diario de Gemini (0088) ──
+{
+  ok("tope: sin tope nunca se detiene", !topeAlcanzado(null, 1e6));
+  ok("tope: abajo del tope sigue", !topeAlcanzado(5, 4.99));
+  ok("tope: justo en el tope se detiene", topeAlcanzado(5, 5));
+  ok("tope: arriba del tope se detiene", topeAlcanzado(5, 5.01));
+  ok("tope: lee 5 y $5.50", leerTope("5") === 5 && leerTope(" $5.50 ") === 5.5);
+  ok("tope: rechaza vacío, cero, negativo, letras, 3 decimales y de más", [ "", "0", "-1", "abc", "1.234", "10001", "1e3" ].every((t) => leerTope(t) === null));
+  ok("tope: el mensaje dice el monto y dónde moverlo", /US\$5\.00/.test(mensajeTope(5)) && /Gasto IA/.test(mensajeTope(5)));
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

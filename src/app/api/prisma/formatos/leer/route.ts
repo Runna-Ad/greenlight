@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { ErrorConCosto } from "@/lib/prisma/formatos/componer";
 import { ErrorIA, MODELO_LECTURA, lector } from "@/lib/prisma/formatos/proveedor";
 import { LADO_LECTURA, limpiarLectura } from "@/lib/prisma/formatos/plano";
+import { anotarGastoGemini, revisarTopeGemini } from "@/lib/prisma/formatos/gasto-gemini";
 import { FRENO, gate, saturado } from "@/app/(app)/prisma/comun";
 import { mismoOrigen } from "@/app/(app)/prisma/formatos-comun";
 import { HUELLA, guardarLectura, lecturaGuardada } from "@/lib/prisma/formatos/lecturas-guardadas";
@@ -16,7 +17,7 @@ import { HUELLA, guardarLectura, lecturaGuardada } from "@/lib/prisma/formatos/l
  * POST multipart { imagen: PNG | JPEG | WebP, huella?, nueva? } → { ok: true, elementos, w, h, costoUsd, guardada }
  *   | { ok: false, error }
  * Mismo gate que la copia con IA (copia/route.ts) y apagado salvo PRISMA_FORMATOS_IA=gemini + GEMINI_API_KEY.
- * PENDIENTE antes de producción (igual que la copia): un registro en la base por llamada con tope diario.
+ * Cada llamada se anota y respeta el tope diario del Hub (gasto-gemini.ts, 0088).
  */
 export const dynamic = "force-dynamic";
 /** La lectura tiene 60 s de tope (proveedor.ts). */
@@ -80,9 +81,13 @@ export async function POST(req: Request) {
   if (!ia) return json({ ok: false, error: "La lectura con IA está apagada." }, 409);
   if (saturado(g.soyId, Date.now(), "formatos-leer-ia", LLAMADAS_MAX)) return json({ ok: false, error: "Muchas lecturas con IA en poco tiempo. Espera unos minutos." }, 429);
 
+  const sinTope = await revisarTopeGemini();
+  if (sinTope) return json({ ok: false, error: sinTope }, 429);
+
   try {
     // Si la persona cancela (o cierra la pestaña), la llamada a la IA también se corta.
     const r = await ia.leer(jpeg, req.signal);
+    await anotarGastoGemini({ ruta: "leer", modelo: r.modelo, usd: r.costoUsd, member_id: g.soyId });
     console.info(`[formatos] lectura con IA: ${r.modelo}, US$${r.costoUsd ?? "?"}`);
     const elementos = limpiarLectura(r.elementos, w, h);
     if (!elementos) return json({ ok: false, error: "La IA no encontró elementos en la imagen. Reintenta." }, 502);
@@ -91,7 +96,10 @@ export async function POST(req: Request) {
     return json({ ok: true, elementos, w, h, costoUsd: r.costoUsd, guardada: false });
   } catch (err) {
     const causa = err instanceof ErrorConCosto ? err.causa : err;
-    if (err instanceof ErrorConCosto) console.info(`[formatos] lectura con IA sin respuesta válida, US$${err.costoUsd ?? "?"}`);
+    if (err instanceof ErrorConCosto) {
+      console.info(`[formatos] lectura con IA sin respuesta válida, US$${err.costoUsd ?? "?"}`);
+      await anotarGastoGemini({ ruta: "leer", modelo: ia.modelo, usd: err.costoUsd, member_id: g.soyId });
+    }
     if (causa instanceof ErrorIA) {
       console.error("[formatos] lectura con IA:", causa.message);
       return json({ ok: false, error: causa.mensaje }, 502);

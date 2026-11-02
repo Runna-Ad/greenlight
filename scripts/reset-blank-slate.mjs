@@ -75,6 +75,7 @@ const KEEP = new Set([
   "prisma_specs", "prisma_prompts", "prisma_jobs", "prisma_ratings", "prisma_eventos",
   "prisma_resultados", "prisma_formatos_lotes", "prisma_formatos_salidas",
   "prisma_formatos_lecturas", // lecturas de imagen plana guardadas (0087): caché y biblioteca de lecturas reales
+  "prisma_gemini_gastos",     // lo que costó cada llamada a Gemini (0088): historial de gasto
 ]);
 
 // Ordered children→parents is computed automatically from the FK graph; this is

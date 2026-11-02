@@ -3,6 +3,7 @@ import { ErrorConCosto } from "@/lib/prisma/formatos/componer";
 import { ErrorIA, borrador } from "@/lib/prisma/formatos/proveedor";
 import { RATIOS_IA } from "@/lib/prisma/formatos/geometria";
 import { CUERPO_IA_MAX_BYTES, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX } from "@/lib/prisma/formatos/gemela";
+import { anotarGastoGemini, revisarTopeGemini } from "@/lib/prisma/formatos/gasto-gemini";
 import { FRENO, gate, saturado } from "@/app/(app)/prisma/comun";
 import { mismoOrigen } from "@/app/(app)/prisma/formatos-comun";
 import { pngDelForm as png } from "@/lib/prisma/formatos/png-form";
@@ -58,8 +59,12 @@ export async function POST(req: Request) {
   const [rw, rh] = aspect.split(":").map(Number);
   if (Math.abs(fondo.w / fondo.h / (rw / rh) - 1) > PROPORCION_TOLERANCIA) return json({ ok: false, error: "El recorte no tiene la proporción pedida." }, 400);
 
+  const sinTope = await revisarTopeGemini();
+  if (sinTope) return json({ ok: false, error: sinTope }, 429);
+
   try {
     const r = await ia.borrar({ fondo: fondo.bytes, pieza: pieza.bytes, aspect, tamano: "1K" });
+    await anotarGastoGemini({ ruta: "copia", modelo: r.modelo, usd: r.costoUsd, member_id: g.soyId });
     // Lo que vuelve se re-codifica: siempre un PNG limpio (sin metadatos), aunque la IA mande otro formato.
     const salida = await sharp(r.png, { limitInputPixels: 2048 * 2048, failOn: "error" }).png().toBuffer();
     console.info(`[formatos] copia con IA: ${r.modelo}, US$${r.costoUsd ?? "?"}`);
@@ -68,7 +73,10 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     const causa = err instanceof ErrorConCosto ? err.causa : err;
-    if (err instanceof ErrorConCosto) console.info(`[formatos] copia con IA sin imagen, US$${err.costoUsd ?? "?"}`);
+    if (err instanceof ErrorConCosto) {
+      console.info(`[formatos] copia con IA sin imagen, US$${err.costoUsd ?? "?"}`);
+      await anotarGastoGemini({ ruta: "copia", modelo: ia.modelo, usd: err.costoUsd, member_id: g.soyId });
+    }
     if (causa instanceof ErrorIA) {
       console.error("[formatos] copia con IA:", causa.message);
       return json({ ok: false, error: causa.mensaje }, 502);

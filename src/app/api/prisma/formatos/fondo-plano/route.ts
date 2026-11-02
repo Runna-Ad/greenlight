@@ -4,6 +4,7 @@ import { ErrorIA, rehacedorFondo } from "@/lib/prisma/formatos/proveedor";
 import { RATIOS_IA } from "@/lib/prisma/formatos/geometria";
 import { CUERPO_IA_MAX_BYTES, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX } from "@/lib/prisma/formatos/gemela";
 import { pngDelForm } from "@/lib/prisma/formatos/png-form";
+import { anotarGastoGemini, revisarTopeGemini } from "@/lib/prisma/formatos/gasto-gemini";
 import { FRENO, gate, saturado } from "@/app/(app)/prisma/comun";
 import { mismoOrigen } from "@/app/(app)/prisma/formatos-comun";
 
@@ -56,8 +57,12 @@ export async function POST(req: Request) {
   if (Math.abs(fondo.w / fondo.h / (rw / rh) - 1) > PROPORCION_TOLERANCIA) return json({ ok: false, error: "El fondo no tiene la proporción pedida." }, 400);
   if (mascara.w !== fondo.w || mascara.h !== fondo.h) return json({ ok: false, error: "La máscara no mide lo mismo que el fondo." }, 400);
 
+  const sinTope = await revisarTopeGemini();
+  if (sinTope) return json({ ok: false, error: sinTope }, 429);
+
   try {
     const r = await ia.rehacer({ fondo: fondo.bytes, mascara: mascara.bytes, aspect, tamano: "1K" });
+    await anotarGastoGemini({ ruta: "fondo_plano", modelo: r.modelo, usd: r.costoUsd, member_id: g.soyId });
     // Lo que vuelve se re-codifica: siempre un PNG limpio (sin metadatos), aunque la IA mande otro formato.
     const salida = await sharp(r.png, { limitInputPixels: 2048 * 2048, failOn: "error" }).png().toBuffer();
     console.info(`[formatos] fondo plano con IA: ${r.modelo}, US$${r.costoUsd ?? "?"}`);
@@ -66,7 +71,10 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     const causa = err instanceof ErrorConCosto ? err.causa : err;
-    if (err instanceof ErrorConCosto) console.info(`[formatos] fondo plano con IA sin imagen, US$${err.costoUsd ?? "?"}`);
+    if (err instanceof ErrorConCosto) {
+      console.info(`[formatos] fondo plano con IA sin imagen, US$${err.costoUsd ?? "?"}`);
+      await anotarGastoGemini({ ruta: "fondo_plano", modelo: ia.modelo, usd: err.costoUsd, member_id: g.soyId });
+    }
     if (causa instanceof ErrorIA) {
       console.error("[formatos] fondo plano con IA:", causa.message);
       return json({ ok: false, error: causa.mensaje }, 502);
