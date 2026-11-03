@@ -24,7 +24,7 @@ export type ItemHistorialUI = {
 
 export function Historial({ items, lang, onAbrir, abriendo }: { items: ItemHistorialUI[]; lang: Lang; onAbrir: (specId: string) => void; abriendo: string | null }) {
   return (
-    <aside className="rounded-xl border border-border bg-card p-3" aria-label={tx(UI.historial, lang)}>
+    <aside className="self-start rounded-xl border border-border bg-card p-3" aria-label={tx(UI.historial, lang)}>
       <details className="group">
         {/* Cerrado de entrada (Pedro, 2026-11-03): sigue a la mano sin ocupar la pantalla. */}
         <summary className="-m-1 flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground hover:bg-secondary/60 [&::-webkit-details-marker]:hidden">
