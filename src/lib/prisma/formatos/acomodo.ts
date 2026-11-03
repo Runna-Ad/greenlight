@@ -640,6 +640,37 @@ const espejo = (r: Rect, a0: number, a1: number): Rect => ({ ...r, x0: a0 + a1 -
 const letraDe = (a: Acomodo, de: (i: number) => boolean) => Math.min(Infinity, ...a.letras.filter((l) => de(l.pieza)).map((l) => l.px));
 
 export function acomodar(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo = {}): Acomodo {
+  const heroes = ma.piezas.flatMap((p, i) => (p.rol === "HERO" && !p.anclada && valida(p) ? [i] : []));
+  // Con el mismo nombre son la misma carpeta repetida: se coloca una y se avisa.
+  if (heroes.length < 2 || new Set(heroes.map((i) => ma.piezas[i].nombre)).size < heroes.length) return acomodarUno(ma, W, H, op);
+  // Varios HERO (el teléfono que estaba en el fondo y la tarjeta): el acomodo los trata como uno, la caja de todos, y
+  // cada uno conserva su lugar dentro de ella. En el editor se mueven por separado.
+  const area = (i: number) => ma.piezas[i].solido.w * ma.piezas[i].solido.h;
+  const mayor = heroes.reduce((a, b) => (area(b) > area(a) ? b : a));
+  const cajas = heroes.map((i) => ma.piezas[i].solido);
+  const x0 = Math.min(...cajas.map((c) => c.x)), y0 = Math.min(...cajas.map((c) => c.y));
+  const junta: Caja = { x: x0, y: y0, w: Math.max(...cajas.map((c) => c.x + c.w)) - x0, h: Math.max(...cajas.map((c) => c.y + c.h)) - y0 };
+  const unidos: MaestroCaja = {
+    ...ma,
+    piezas: ma.piezas.map((p, i) => (i === mayor ? { ...p, solido: junta, caja: junta, partes: undefined, textos: [] } : heroes.includes(i) ? { ...p, solido: { ...p.solido, w: 0, h: 0 } } : p)),
+  };
+  const a = acomodarUno(unidos, W, H, op);
+  const q = a.puestas.find((o) => o.pieza === mayor);
+  if (!q) return acomodarUno(ma, W, H, op);
+  const puestos = heroes.map((i): Puesta => {
+    const s = ma.piezas[i].solido;
+    return { ...q, pieza: i, x: q.x + (s.x - x0) * q.k, y: q.y + (s.y - y0) * q.k, w: s.w * q.k, h: s.h * q.k };
+  });
+  return {
+    ...a,
+    puestas: a.puestas.flatMap((o) => (o.pieza === mayor ? puestos : [o])),
+    // Lo de sus cajas vacías es del truco de arriba, no del anuncio.
+    avisos: a.avisos.filter((v) => !(v.tipo === "falta" && heroes.some((i) => i !== mayor && v.texto.includes(ma.piezas[i].nombre)))),
+    letras: a.letras,
+  };
+}
+
+function acomodarUno(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo): Acomodo {
   // La matriz la saca a escala de otra medida y el maestro no tiene su forma (con su forma, el maestro ya manda).
   const base = baseAEscala(W, H);
   if (base && mismaForma(base, { w: W, h: H }) && !mismaForma(ma, { w: W, h: H })) return aEscala(ma, base, W, H, op);

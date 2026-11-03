@@ -641,6 +641,10 @@ export const FP = {
   // B28: una imagen plana de fondo liso ya entra aquí; lo que tiene fondo de foto o textura se queda pintado en el fondo (`medirPlanoFijo`).
   planaLink: t("¿Prefieres extender el fondo de foto con IA? Usa Formatos con imagen plana (la imagen va entera).", "Rather extend the photo background with AI? Use Formats with a flat image (the image goes whole)."),
   avisosDelArchivo: t("Notas del archivo", "File notes"),
+  capasTitulo: t("Qué se hizo con cada capa", "What happened to each layer"),
+  capasResumen: t("{n} de {d} capas se mueven", "{n} of {d} layers move"),
+  capaSeMueve: t("se mueve", "moves"),
+  capaSeQueda: t("se queda en el fondo", "stays in the background"),
   // Rediseño B19 (2026-10-15): ajustes arriba en pastillas y chips; resultados agrupados por forma.
   medidasTitulo: t("Medidas", "Sizes"),
   medidasDeDidi: t("Lista de DiDi", "DiDi's list"),

@@ -79,7 +79,7 @@ const esEnvoltura = (l: Layer, siguiente: Layer | undefined) =>
  * null = no hay nada que abrir.
  */
 export function desenvolver(hijos: readonly Layer[]): { capas: Layer[]; abiertas: string[]; debajo: Layer | null } | null {
-  if (hijos.some(esFondoGuia)) return null;
+  if (hijos.some(esFondoGuia)) return debajoSuelto(hijos);
   const abiertas: string[] = [];
   const abrir = (ls: readonly Layer[]): Layer[] =>
     ls.flatMap((l, i) => (esEnvoltura(l, ls[i + 1]) ? (abiertas.push(nombreDeCapa(l.name)), abrir(l.children ?? [])) : [l]));
@@ -89,6 +89,33 @@ export function desenvolver(hijos: readonly Layer[]): { capas: Layer[]; abiertas
   if (k <= 0) return { capas, abiertas, debajo: null };
   const debajo: Layer = { name: CAPA_DEBAJO_FONDO, children: capas.slice(0, k) };
   return { capas: [debajo, ...capas.slice(k)], abiertas, debajo };
+}
+
+/** Una capa suelta debajo del fondo nunca es una pieza: la tapa el fondo. El PSD por medida de Formatos trae una así, el
+ *  color del artboard a todo el lienzo (`4-5_1200x1500.psd`, 2026-11-03): contada como pieza, tapaba todo el fondo. */
+function debajoSuelto(hijos: readonly Layer[]): { capas: Layer[]; abiertas: string[]; debajo: Layer } | null {
+  const k = hijos.findIndex((l) => esFondoGuia(l) && !l.clipping);
+  let n = 0;
+  while (n < k && !hijos[n].children && !hijos[n].text && !hijos[n].clipping && rolDe(nombreDeCapa(hijos[n].name)) === null) n++;
+  if (!n || hijos[n].clipping) return null;
+  const debajo: Layer = { name: CAPA_DEBAJO_FONDO, children: hijos.slice(0, n) };
+  return { capas: [debajo, ...hijos.slice(n)], abiertas: [], debajo };
+}
+
+/** Lo que se separa de la carpeta de fondo: un elemento (los teléfonos, con su parche encima) se vuelve una carpeta suya.
+ *  `hijos`: su lugar entre los hijos de esa carpeta, contando los ocultos, de abajo hacia arriba. */
+export type ElementoDelFondo = { nombre: string; hijos: number[] };
+
+/** Las capas de primer nivel con cada elemento (`separarElementos`) en su carpeta, justo encima del fondo. Las usan el
+ *  lector y el PSD editable: las dos llegan al mismo árbol. */
+export function sacarDelFondo(capas: readonly Layer[], elementos: readonly ElementoDelFondo[] | undefined): readonly Layer[] {
+  if (!elementos?.length) return capas;
+  const k = capas.findIndex((l) => esFondoGuia(l) && !l.clipping && !!l.children && nombreDeCapa(l.name) !== CAPA_DEBAJO_FONDO);
+  const fondo = capas[k];
+  if (!fondo?.children) return capas;
+  const sacados = new Set(elementos.flatMap((e) => e.hijos));
+  const carpetas = elementos.map((e): Layer => ({ name: e.nombre, children: e.hijos.flatMap((h) => fondo.children?.[h] ?? []) }));
+  return [...capas.slice(0, k), { ...fondo, children: fondo.children.filter((_, i) => !sacados.has(i)) }, ...carpetas, ...capas.slice(k + 1)];
 }
 
 /** Cómo se nombra una pieza en los avisos: el nombre de su carpeta (el que ve el diseñador en Photoshop) y, si no es

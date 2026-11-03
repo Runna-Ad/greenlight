@@ -2692,6 +2692,44 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
                     {notasTxt}
                   </ChipEstado>
                 )}
+                {usables.some((m) => m.reporte?.length) && (
+                  <ChipEstado
+                    tono="neutro"
+                    icono={<Layers className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                    titulo="psd-capas"
+                    lang={lang}
+                    detalle={
+                      <div>
+                        <h2 id="psd-capas" className="text-sm font-semibold text-foreground">
+                          {tx(FP.capasTitulo, lang)}
+                        </h2>
+                        {usables.map((m) =>
+                          m.reporte?.length ? (
+                            <div key={`${m.nombre}-${m.w}x${m.h}`} className="mt-2">
+                              {usables.length > 1 && <h3 className="text-xs font-medium text-muted-foreground">{m.nombre || `${m.w}×${m.h}`}</h3>}
+                              <ul lang={delMotor} className="mt-1 max-h-72 space-y-1 overflow-y-auto text-sm text-foreground">
+                                {m.reporte.map((c, i) => (
+                                  <li key={i} className="break-words">
+                                    <span className="font-medium">{c.capa}</span>{" "}
+                                    <span className={c.seMueve ? "text-status-success" : "text-status-warning"} lang={lang}>
+                                      {c.seMueve ? tx(FP.capaSeMueve, lang) : tx(FP.capaSeQueda, lang)}
+                                    </span>
+                                    <span className="block text-xs text-muted-foreground">{c.porque}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null,
+                        )}
+                      </div>
+                    }
+                  >
+                    {rellenar(tx(FP.capasResumen, lang), {
+                      n: usables.reduce((t, m) => t + (m.reporte?.filter((c) => c.seMueve).length ?? 0), 0),
+                      d: usables.reduce((t, m) => t + (m.reporte?.length ?? 0), 0),
+                    })}
+                  </ChipEstado>
+                )}
               </div>
             </div>
             <div className="py-2.5">

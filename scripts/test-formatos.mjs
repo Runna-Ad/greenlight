@@ -3507,5 +3507,59 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   ok("tope: las llamadas sin costo reportado sí cuentan", topeAlcanzado(1, gastoParaTope(0.9, 2)) && !topeAlcanzado(1, gastoParaTope(0.9, 1)));
 }
 
+// Elementos dentro de la carpeta de fondo (Pedro, 2026-11-03: "the iphone is a separate asset").
+{
+  const W = 200, H = 200, ROSA = [248, 235, 228];
+  const pintar = (w, h, fn) => { const data = new Uint8ClampedArray(w * h * 4); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) data.set(fn(x, y), (y * w + x) * 4); return { width: w, height: h, data }; };
+  const capa = (name, left, top, w, h, fn, extra = {}) => ({ name, left, top, right: left + w, bottom: top + h, imageData: pintar(w, h, fn), ...extra });
+  const enCaja = (x, y, x0, y0, x1, y1) => x >= x0 && x < x1 && y >= y0 && y < y1;
+  const leer = (children, verdad) => writePsdBuffer({ width: W, height: H, children, imageData: pintar(W, H, verdad), imageResources: { versionInfo: { hasRealMergedData: true, writerName: "t", readerName: "t", fileVersion: 1 } } }, { noBackground: true });
+  const leerAg = (b) => readPsdAg(b, { useRawData: true, skipThumbnail: true, skipCompositeImageData: true });
+  const px = { capa: (l) => getLayerImageData(l), mascara: (l) => getLayerMaskImageData(l), mascaraReal: (l) => getLayerRealMaskImageData(l) };
+  const fondoLiso = () => capa("FONDO", 0, 0, W, H, () => [...ROSA, 255]);
+  // La foto en Oscurecer: opaca, rosa salvo el teléfono oscuro; encima, el parche casi del mismo rosa; y la tarjeta en HERO.
+  const conTelefono = () => [
+    capa("Color (HÜE)", 0, 0, W, H, () => [255, 255, 255, 255]),
+    { name: "BACKGROUND", children: [
+      fondoLiso(),
+      capa("Teléfono", 0, 0, W, H, (x, y) => (enCaja(x, y, 30, 40, 90, 160) || enCaja(x, y, 115, 55, 145, 85) ? [60, 20, 30, 255] : [250, 240, 235, 255]), { blendMode: "darken" }),
+      capa("Parche", 110, 50, 40, 40, () => [249, 236, 229, 255]),
+    ] },
+    { name: "HERO", children: [capa("Tarjeta", 120, 100, 50, 40, () => [230, 90, 20, 255])] },
+  ];
+  const verdad = (x, y) => (enCaja(x, y, 120, 100, 170, 140) ? [230, 90, 20, 255] : enCaja(x, y, 30, 40, 90, 160) ? [60, 20, 30, 255] : [...ROSA, 255]);
+  const bytes = leer(conTelefono(), verdad);
+  const ma = despiezar(leerPsd(bytes), 0);
+  eq("elementos: la foto en Oscurecer sobre un color liso se vuelve HERO; lo de debajo del fondo no es pieza", ma.piezas.map((p) => [p.nombre, p.rol]), [["Teléfono", "HERO"], ["HERO", "HERO"]]);
+  ok("elementos: se recorta justo al teléfono (el parche tapa la tarjeta que traía su foto)", ma.piezas[0].solido.x === 30 && ma.piezas[0].solido.y === 40 && ma.piezas[0].solido.w === 60 && ma.piezas[0].solido.h === 120);
+  ok("elementos: rearmado igual a Photoshop y sirve", ma.rearmadoDistintoPct < 0.5 && despieceUsable(ma).ok);
+  eq("elementos: el parche viaja con él (tapa lo que traía su foto)", ma.origen.elementos, [{ nombre: "Teléfono", hijos: [1, 2] }]);
+  eq("reporte: cada capa visible, de arriba hacia abajo, con si se mueve", ma.reporte.map((c) => [c.capa, c.seMueve]), [["Tarjeta", true], ["Parche", true], ["Teléfono", true], ["FONDO", false], ["Color (HÜE)", false]]);
+  const editable = psdEditable(leerAg(bytes), { W, H, origen: ma.origen, fondo: { k: 1, x: 0, y: 0 }, piezas: [["Teléfono", { k: 1, x: 5, y: 0 }], ["HERO", { k: 1, x: 0, y: 0 }]] }, { compuesto: new Uint8ClampedArray(W * H * 4), halos: [], retoque: null }, px);
+  const arbol = (ls) => ls.map((l) => (l.children ? `${l.name}[${l.children.map((c) => c.name).join(",")}]` : l.name));
+  eq("elementos: el PSD editable llega al mismo árbol", arbol(editable.psd.children), [`${CAPA_DEBAJO_FONDO}[Color (HÜE)]`, "BACKGROUND[FONDO]", "Teléfono[Teléfono,Parche]", "HERO[Tarjeta]"]);
+  const telEd = editable.psd.children[2].children[0];
+  eq("elementos: en el editable el teléfono se mueve y sigue en Oscurecer", [telEd.left, telEd.blendMode], [5, "darken"]);
+  const ac = acomodar(prepararMaestro(ma).maestro, 400, 400);
+  const [t, c] = [0, 1].map((i) => ac.puestas.find((q) => q.pieza === i));
+  ok("elementos: los dos HERO se colocan juntos, a la misma escala", t && c && t.k === c.k && Math.abs(c.x - t.x - (120 - 30) * t.k) < 0.01 && !ac.avisos.some((v) => v.tipo === "falta"));
+  // Sobre una foto: lo opaco se queda con su porqué; un recorte con transparencia sí se mueve; un retoque que se funde, no.
+  const foto = (x, y) => [100 + x / 4, 120 + y / 4, 90, 255];
+  const conFoto = (...encima) => [{ name: "BACKGROUND", children: [capa("Foto", 0, 0, W, H, foto), ...encima] }, { name: "CTA", children: [capa("Botón", 10, 10, 30, 20, () => [255, 255, 255, 255])] }];
+  const verdadFoto = (over) => (x, y) => (enCaja(x, y, 10, 10, 40, 30) ? [255, 255, 255, 255] : (over?.(x, y) ?? foto(x, y)));
+  const opaca = despiezar(leerPsd(leer(conFoto(capa("Otra foto", 0, 0, W, H, () => [10, 10, 10, 255], { blendMode: "darken" })), verdadFoto(() => [10, 10, 10, 255]))), 0);
+  ok("elementos: sin transparencia sobre una foto se queda, y el reporte lo dice", !opaca.origen.elementos && /Cubre casi todo|No tiene transparencia/.test(opaca.reporte.find((r) => r.capa === "Otra foto").porque));
+  const negro = (x, y) => (enCaja(x, y, 80, 80, 150, 180) ? [10, 10, 10, 255] : undefined);
+  const recorte = despiezar(leerPsd(leer(conFoto(capa("Producto", 80, 80, 70, 100, () => [10, 10, 10, 255])), verdadFoto(negro))), 0);
+  ok("elementos: con transparencia y orilla marcada sobre una foto se mueve", recorte.origen.elementos?.[0].nombre === "Producto" && recorte.piezas.some((p) => p.nombre === "Producto" && p.rol === "HERO") && despieceUsable(recorte).ok);
+  const retoque = despiezar(leerPsd(leer(conFoto(capa("Generative Fill", 80, 80, 70, 100, (x, y) => foto(x + 80, y + 80))), verdadFoto())), 0);
+  ok("elementos: un retoque que se funde con la foto se queda", !retoque.origen.elementos && /Se funde/.test(retoque.reporte.find((r) => r.capa === "Generative Fill").porque));
+  // Un PSD que ya sigue la guía no cambia.
+  const normal = despiezar(leerPsd(leer([{ name: "BACKGROUND", children: [fondoLiso()] }, { name: "HERO", children: [capa("Tarjeta", 120, 100, 50, 40, () => [230, 90, 20, 255])] }], (x, y) => (enCaja(x, y, 120, 100, 170, 140) ? [230, 90, 20, 255] : [...ROSA, 255]))), 0);
+  eq("elementos: un PSD con la guía sale igual", [normal.piezas.map((p) => p.nombre), normal.origen.elementos], [["HERO"], undefined]);
+  const sinNombre = (() => { try { despiezar(leerPsd(leer([{ name: "BACKGROUND", children: [fondoLiso()] }, capa("Tapa", 0, 0, W, H, () => [1, 2, 3, 255])], () => [1, 2, 3, 255])), 0); return ""; } catch (e) { return e.message; } })();
+  ok("error: un PSD sin artboards no enseña «»", /^Este PSD/.test(sinNombre) && !sinNombre.includes("«»"));
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);
 if (fail) process.exit(1);

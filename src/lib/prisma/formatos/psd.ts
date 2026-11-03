@@ -24,7 +24,7 @@
 import { readPsd, getLayerImageData, getLayerMaskImageData, getCompositeImageData, initializeCanvas, type Layer } from "ag-psd";
 import { MAL_FORMADO, PSD_BYTES_MAX } from "./listo.ts";
 import { textoDe, type TextoCapa, type TextoPsdCrudo } from "./textos.ts";
-import { CAPA_DEBAJO_FONDO, ROLES, desenvolver, esDelFondo, nombreDeCapa, rolDe, type Rol } from "./roles.ts";
+import { CAPA_DEBAJO_FONDO, ROLES, desenvolver, esDelFondo, nombreDeCapa, rolDe, type ElementoDelFondo, type Rol } from "./roles.ts";
 import type { PegadoAlFondo } from "./acomodo.ts";
 
 /** Sólo se LEEN por índice. (La librería tipa también 16 y 32 bits; aquí siempre son 8: `leerPsd` rechaza lo demás.) */
@@ -147,6 +147,11 @@ export type CapaPsd = {
   ruta: number[];
   /** Está dentro de una carpeta de fondo que va DENTRO de otra pieza (mal archivada): sólo sirve para avisarlo. */
   fondoDentro?: boolean;
+  /** Salió de la carpeta de fondo como elemento (`separarElementos`). `llave`: el color liso contra el que se recorta;
+   *  null = trae transparencia de verdad. */
+  elemento?: { llave: readonly [number, number, number] | null };
+  /** Por qué se quedó en el fondo aunque se revisó (`separarElementos`): para el reporte de capas. */
+  nota?: string;
   mascara: MascaraPsd | null;
   /** Capas de texto: el tamaño de su letra más chica, en px del lienzo (ya con la escala de la capa). */
   letraPx: number | null;
@@ -271,7 +276,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
     const des = desenvolver(hijos ?? []);
     if (!des) return hijos;
     const donde = mesa ? `El artboard «${mesa}»` : "El PSD";
-    avisos.push(`${donde} traía las carpetas de la guía dentro de ${des.abiertas.map((n) => `«${n}»`).join(", ")}: se leyeron desde ahí.`);
+    if (des.abiertas.length) avisos.push(`${donde} traía las carpetas de la guía dentro de ${des.abiertas.map((n) => `«${n}»`).join(", ")}: se leyeron desde ahí.`);
     if (des.debajo) avisos.push(`${donde}: lo que está debajo de su fondo (${des.debajo.children?.length ?? 0} capa(s) o carpeta(s)) va con el fondo, en «${CAPA_DEBAJO_FONDO}»; ninguna de sus capas se mueve sola.`);
     return des.capas;
   };
@@ -425,6 +430,8 @@ export type Origen = {
   mesa: number; x: number; y: number; w: number; h: number; s: number;
   /** Las piezas de primer nivel que la persona eligió como fondo, en una mesa sin carpeta de fondo (nombres). */
   fondo?: string[];
+  /** Lo que se separó de la carpeta de fondo (`separarElementos`), para llegar al mismo árbol en el PSD editable. */
+  elementos?: ElementoDelFondo[];
 };
 export type MaestroPsd = {
   nombre: string;
@@ -450,7 +457,10 @@ export type MaestroPsd = {
    *  No viajan con su pieza: en una medida donde la pieza se mueve, sale aviso (Pedro, 2026-10-30: lo de nicho, aviso
    *  de color y "arréglalo en el PSD de esta medida", en vez de descartar la mesa). */
   resplandores?: { de: string; caja: Caja }[];
+  /** Cada capa visible, de arriba hacia abajo: si se mueve y por qué. Nunca una capa ignorada sin decirlo. */
+  reporte?: ReporteCapa[];
 };
+export type ReporteCapa = { capa: string; pieza: string; seMueve: boolean; porque: string };
 
 const OSCURECE = new Set(["multiply", "darken", "linear burn", "color burn", "darker color"]);
 const lum = (r: number, g: number, b: number) => 0.3 * r + 0.59 * g + 0.11 * b;
@@ -793,13 +803,28 @@ export function reducirMesa(doc: DocPsd, mesa: number, maxPx: number = MESA_MAX_
 export function despiezar(doc: DocPsd, mesa: number, op: { mesaMaxPx?: number; fondo?: readonly string[] } = {}): MaestroPsd {
   try {
     const fondo = op.fondo?.length ? { fondo: [...op.fondo] } : {};
+    const conElementos = (d: DocPsd, i: number, origen: Origen): MaestroPsd => {
+      const { elementos, ...resto } = despiezarMesa(d, i, op.fondo);
+      const ma = { ...resto, origen: { ...origen, ...(elementos?.length ? { elementos } : {}) } };
+      if (!elementos?.length || despieceUsable(ma).ok) return ma;
+      // Separarlos no cuadró: el anuncio se lee como antes, con esas capas en el fondo, y el reporte lo dice.
+      const nombres = new Set(elementos.map((e) => e.nombre));
+      const sin = despiezarMesa(d, i, op.fondo, false);
+      return {
+        ...sin, origen,
+        reporte: sin.reporte?.map((c) => {
+          const era = ma.reporte?.find((o) => o.capa === c.capa && nombres.has(o.pieza));
+          return era ? { ...c, porque: "Se intentó separar del fondo, pero el anuncio ya no daba igual que en Photoshop: se queda." } : c;
+        }),
+      };
+    };
     const m = doc.mesas[mesa];
     if (!m) throw new ErrorPsd("no-soportado", `No existe el artboard ${mesa}`);
     if (![m.x, m.y, m.w, m.h].every(Number.isInteger) || !(m.w > 0 && m.h > 0) || m.x < 0 || m.y < 0 || m.x + m.w > doc.w || m.y + m.h > doc.h) throw new ErrorPsd("no-soportado", `El artboard «${m.nombre}» se sale del lienzo`);
     const max = op.mesaMaxPx ?? MESA_MAX_PX;
-    if (m.w * m.h <= max) return { ...despiezarMesa(doc, mesa, op.fondo), origen: { mesa, x: m.x, y: m.y, w: m.w, h: m.h, s: 1, ...fondo } };
+    if (m.w * m.h <= max) return conElementos(doc, mesa, { mesa, x: m.x, y: m.y, w: m.w, h: m.h, s: 1, ...fondo });
     const r = reducirMesa(doc, mesa, max);
-    const ma = { ...despiezarMesa(r.doc, 0, op.fondo), origen: { mesa, x: m.x, y: m.y, w: m.w, h: m.h, s: r.w / m.w, ...fondo } };
+    const ma = conElementos(r.doc, 0, { mesa, x: m.x, y: m.y, w: m.w, h: m.h, s: r.w / m.w, ...fondo });
     ma.avisos.unshift(`El artboard mide ${m.w}×${m.h}: se leyó reducido a ${r.w}×${r.h} (las medidas de entrega son más chicas).`);
     return ma;
   } catch (err) {
@@ -826,14 +851,205 @@ export function piezasDeMesa(doc: DocPsd, mesa: number): { nombre: string; carpe
   return [...out.values()];
 }
 
-function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): Omit<MaestroPsd, "origen"> {
+/** Cómo se nombra una mesa en un error. Un PSD sin artboards no tiene nombre que mostrar. */
+const laMesa = (m: MesaPsd) => (m.nombre ? `El artboard «${m.nombre}»` : "Este PSD");
+
+/** Una capa de la carpeta de fondo se recorta contra el color liso desde esta diferencia (niveles, de 255): por debajo no
+ *  se nota y se queda en el fondo; desde LLAVE_MAX es sólida. */
+const LLAVE_MIN = 4;
+const LLAVE_MAX = 28;
+/** Un elemento pinta sólido al menos esto de la mesa (menos es una luz o una textura)… */
+const ELEMENTO_MIN = 0.002;
+/** …y menos que esto (lo demás es un fondo sobre el fondo). */
+const ELEMENTO_MAX = 0.85;
+/** Sobre un fondo que no es liso: de sus píxeles visibles, a lo más esta parte es orilla suave (más es un resplandor). */
+const ELEMENTO_SUAVE_MAX = 0.5;
+const ELEMENTOS_MAX = 6;
+/** Sobre un fondo que no es liso: lo que cambia en su orilla, en promedio (niveles). Un recorte salta contra lo de atrás;
+ *  un retoque (Generative Fill) se funde con la foto y no es un elemento. */
+const ELEMENTO_ORILLA_MIN = 18;
+/** Lo que la propia herramienta agrega a un PSD por medida («Fondo retocado (HÜE)»…): nunca es un elemento. */
+const DE_LA_HERRAMIENTA = /\(HÜE\)$/;
+
+/** Pinta `capa` encima de `G` (RGB 0-1, mesa entera) con su modo de fusión. */
+function pintarCapa(G: Float32Array, c: CapaPsd, m: MesaPsd, alPixel?: (i: number, a: number) => void): void {
+  const f = FUSION[c.mezcla];
+  porPixel(c, m, true, (i, a, data, s) => {
+    alPixel?.(i, a);
+    const d = i * 3, br = G[d], bg = G[d + 1], bb = G[d + 2];
+    let r = data[s] / 255, g = data[s + 1] / 255, b = data[s + 2] / 255;
+    if (f) { r = f(br, r); g = f(bg, g); b = f(bb, b); }
+    else if (c.mezcla === "lighter color") { if (lum(br, bg, bb) > lum(r, g, b)) { r = br; g = bg; b = bb; } }
+    else if (c.mezcla === "darker color") { if (lum(br, bg, bb) < lum(r, g, b)) { r = br; g = bg; b = bb; } }
+    G[d] = br + (r - br) * a; G[d + 1] = bg + (g - bg) * a; G[d + 2] = bb + (b - bb) * a;
+  });
+}
+
+/** El color de una capa si cubre toda la mesa con un solo color; null si no. */
+function colorLiso(c: CapaPsd, m: MesaPsd): [number, number, number] | null {
+  if (c.mezcla !== "normal" || c.opacidad < 1 || c.relleno < 1 || c.conEfectos) return null;
+  if (c.left > m.x || c.top > m.y || c.left + c.w < m.x + m.w || c.top + c.h < m.y + m.h) return null;
+  const min = [255, 255, 255], max = [0, 0, 0];
+  let n = 0, liso = true;
+  porPixel(c, m, true, (_, a, data, s) => {
+    if (a < 0.999) liso = false;
+    n++;
+    for (let k = 0; k < 3; k++) { if (data[s + k] < min[k]) min[k] = data[s + k]; if (data[s + k] > max[k]) max[k] = data[s + k]; }
+  });
+  if (!liso || n < m.w * m.h || [0, 1, 2].some((k) => max[k] - min[k] > 3)) return null;
+  return [(min[0] + max[0]) / 510, (min[1] + max[1]) / 510, (min[2] + max[2]) / 510];
+}
+
+/**
+ * Lee CADA capa de la carpeta de fondo y saca como pieza lo que es un elemento (Pedro, 2026-11-03, con
+ * `4-5_1200x1500.psd`: los iPhones son una capa propia, "the background is just the color image at the back").
+ *   · Con transparencia de verdad: es pieza tal cual.
+ *   · Sin transparencia (una foto en Oscurecer), sobre un color liso: se recorta por lo que cambia contra ese color.
+ *   · Sin transparencia sobre una foto o un degradado: no hay cómo separarla sin inventar; se queda, y el reporte lo dice.
+ * Una capa tenue encima de un elemento (el parche del quitar objetos, que tapa la tarjeta que venía en su foto) viaja
+ * con él. El fondo que queda sigue siendo el de siempre, así que el rearmado se prueba igual que con cualquier PSD.
+ */
+function separarElementos(todas: CapaPsd[], m: MesaPsd, elegido?: readonly string[]): { capas: CapaPsd[]; elementos: ElementoDelFondo[] } {
+  const notas = new Map<CapaPsd, string>();
+  const anotada = (c: CapaPsd) => (notas.has(c) ? { ...c, nota: notas.get(c) } : c);
+  const nada = () => ({ capas: todas.map(anotada), elementos: [] });
+  if (elegido?.length) return nada();
+  const delFondo = todas.filter((c) => c.carpeta >= 0 && rolDe(c.pieza) === "BACKGROUND" && c.pieza !== CAPA_DEBAJO_FONDO);
+  if (!delFondo.length) return nada();
+  const carpeta = Math.min(...delFondo.map((c) => c.carpeta));
+  const porHijo = new Map<number, CapaPsd[]>();
+  for (const c of delFondo) if (c.carpeta === carpeta) porHijo.set(c.ruta[1], [...(porHijo.get(c.ruta[1]) ?? []), c]);
+  const hijos = [...porHijo.entries()].sort((a, b) => a[0] - b[0]);
+  if (hijos.length < 2) return nada();
+  if (delFondo.some((c) => c.recorte || c.tipo === "ajuste")) {
+    for (const c of delFondo) notas.set(c, "La carpeta de fondo trae ajustes de color o capas recortadas: separar una capa cambiaría cómo se ven las demás.");
+    return nada();
+  }
+  const N = m.w * m.h;
+  const unaCapa = hijos[0][1].length === 1 ? hijos[0][1][0] : null;
+  let llave = unaCapa ? colorLiso(unaCapa, m) : null;
+  let grupos: { hijos: number[]; capas: CapaPsd[]; recortar: boolean; caja: Caja }[] = [];
+  // Cómo se ve la carpeta hasta la capa anterior.
+  const atras = new Float32Array(N * 3).fill(1);
+  for (const c of hijos[0][1]) pintarCapa(atras, c, m);
+  for (const [hijo, capas] of hijos.slice(1)) {
+    let solidos = 0, suaves = 0, vistos = 0;
+    const alfa = new Float32Array(N);
+    const G = new Float32Array(N * 3);
+    if (llave) for (let i = 0; i < N; i++) { G[i * 3] = llave[0]; G[i * 3 + 1] = llave[1]; G[i * 3 + 2] = llave[2]; }
+    else G.set(atras);
+    for (const c of capas) {
+      pintarCapa(G, c, m, (i, a) => { alfa[i] = a + alfa[i] * (1 - a); });
+      pintarCapa(atras, c, m);
+    }
+    let x0 = m.w, y0 = m.h, x1 = -1, y1 = -1, fuertes = 0;
+    for (let i = 0; i < N; i++) {
+      if (alfa[i] > 0.5) solidos++;
+      if (alfa[i] > 0.05) { vistos++; if (alfa[i] < 0.95) suaves++; }
+      const d = llave ? Math.max(Math.abs(G[i * 3] - llave[0]), Math.abs(G[i * 3 + 1] - llave[1]), Math.abs(G[i * 3 + 2] - llave[2])) * 255 : 0;
+      if (llave ? d >= LLAVE_MAX : alfa[i] > 0.5) {
+        fuertes++;
+        const x = i % m.w, y = (i / m.w) | 0;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+    const fusion = capas.some((c) => c.mezcla !== "normal");
+    const sinTransparencia = solidos / N >= ELEMENTO_MAX;
+    if (capas.some((c) => DE_LA_HERRAMIENTA.test(c.nombre))) {
+      for (const c of capas) notas.set(c, "La agregó Formatos: va con el fondo.");
+      continue;
+    }
+    const nombre = capas.length === 1 ? capas[0].nombre : (capas[0].parte?.nombre ?? capas[0].nombre);
+    const quedan = (porque: string) => { for (const c of capas) notas.set(c, porque); };
+    // Opaca y en modo normal, no deja ver nada de abajo: una foto de fondo, no un elemento (en Oscurecer, sí lo deja ver).
+    if (fuertes / N >= ELEMENTO_MAX || (sinTransparencia && !fusion)) {
+      // Un fondo encima del fondo: lo de debajo ya no se ve, y lo de encima ya no está sobre un color liso.
+      for (const g of grupos) for (const c of g.capas) notas.set(c, `La tapa «${nombre}», que cubre casi todo el anuncio.`);
+      grupos = [];
+      llave = null;
+      quedan("Cubre casi todo el anuncio: es parte del fondo.");
+      continue;
+    }
+    if (fuertes / N < ELEMENTO_MIN || (!llave && vistos > 0 && suaves / vistos > ELEMENTO_SUAVE_MAX)) {
+      const toca = (g: { caja: Caja }) => capas.some((c) => c.left < m.x + g.caja.x + g.caja.w && c.left + c.w > m.x + g.caja.x && c.top < m.y + g.caja.y + g.caja.h && c.top + c.h > m.y + g.caja.y);
+      const sobre = grupos.findLast(toca);
+      if (sobre && llave) {
+        sobre.hijos.push(hijo);
+        sobre.capas.push(...capas);
+        sobre.recortar = true;
+      } else quedan("Es tenue (una luz, una textura o un retoque): se queda en el fondo.");
+      continue;
+    }
+    if (!llave && !sinTransparencia && !fusion) {
+      let orilla = 0, n = 0;
+      const vecino = (i: number, j: number) => {
+        if (!(alfa[j] < 0.5)) return;
+        n++;
+        orilla += Math.max(Math.abs(G[i * 3] - G[j * 3]), Math.abs(G[i * 3 + 1] - G[j * 3 + 1]), Math.abs(G[i * 3 + 2] - G[j * 3 + 2])) * 255;
+      };
+      for (let y = 1; y < m.h - 1; y++)
+        for (let x = 1; x < m.w - 1; x++) {
+          const i = y * m.w + x;
+          if (alfa[i] > 0.5) { vecino(i, i - 1); vecino(i, i + 1); vecino(i, i - m.w); vecino(i, i + m.w); }
+        }
+      if (!n || orilla / n < ELEMENTO_ORILLA_MIN) {
+        quedan("Se funde con lo que tiene atrás (su orilla casi no cambia): no se puede separar sin inventar. Si es un elemento, recórtala en Photoshop.");
+        continue;
+      }
+    }
+    if (!llave && (sinTransparencia || fusion)) {
+      quedan(sinTransparencia ? "No tiene transparencia y está sobre una foto o un degradado: no se puede separar sin inventar lo que hay detrás. Recórtala en Photoshop para que se mueva." : `Usa fusión ${capas.find((c) => c.mezcla !== "normal")?.mezcla} sobre una foto o un degradado: no se puede separar sin inventar lo que hay detrás.`);
+      continue;
+    }
+    if (grupos.length >= ELEMENTOS_MAX) {
+      quedan(`Ya se separaron ${ELEMENTOS_MAX} elementos de esta carpeta: mete los demás en su propia carpeta para moverlos.`);
+      continue;
+    }
+    grupos.push({ hijos: [hijo], capas: [...capas], recortar: !!llave && (sinTransparencia || fusion), caja: { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 } });
+  }
+  if (!grupos.length) return nada();
+  // El nombre de otra pieza la juntaría con ella; uno de fondo la devolvería al fondo.
+  const usados = new Set(todas.map((c) => c.pieza));
+  const elementos = grupos.map((g): ElementoDelFondo => {
+    const base = g.capas.length && g.capas[0].parte ? g.capas[0].parte.nombre : g.capas[0].nombre;
+    let nombre = rolDe(base) !== "BACKGROUND" && !usados.has(base) ? base : `${base} (elemento)`;
+    for (let n = 2; usados.has(nombre); n++) nombre = `${base} (elemento ${n})`;
+    usados.add(nombre);
+    return { nombre, hijos: g.hijos };
+  });
+  // El mismo árbol que `sacarDelFondo`: el fondo se queda con lo demás y cada elemento es una carpeta justo encima.
+  const sacados = new Set(elementos.flatMap((e) => e.hijos));
+  const de = new Map<number, { e: number; pos: number }>();
+  elementos.forEach((e, n) => e.hijos.forEach((h, pos) => de.set(h, { e: n, pos })));
+  const capas = todas.map(anotada).map((c): CapaPsd => {
+    if (c.carpeta !== carpeta) {
+      if (c.ruta[0] <= carpeta) return c;
+      return { ...c, ruta: [c.ruta[0] + elementos.length, ...c.ruta.slice(1)], ...(c.carpeta >= 0 ? { carpeta: c.carpeta + elementos.length } : {}) };
+    }
+    const d = de.get(c.ruta[1]);
+    if (!d) {
+      const lugar = c.ruta[1] - [...sacados].filter((h) => h < c.ruta[1]).length;
+      return { ...c, ruta: [c.ruta[0], lugar, ...c.ruta.slice(2)], ...(c.parte ? { parte: { ...c.parte, hijo: lugar } } : {}) };
+    }
+    const g = grupos[d.e], nueva = carpeta + 1 + d.e;
+    return {
+      ...c, pieza: elementos[d.e].nombre, carpeta: nueva, ruta: [nueva, d.pos, ...c.ruta.slice(2)],
+      parte: c.parte ? { hijo: d.pos, nombre: c.parte.nombre } : null,
+      elemento: { llave: g.recortar ? llave : null },
+    };
+  });
+  return { capas, elementos };
+}
+
+function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[], separar = true): Omit<MaestroPsd, "origen"> & { elementos?: ElementoDelFondo[] } {
   const m = doc.mesas[mesa];
   const N = m.w * m.h;
-  if (N > MESA_MAX_PX) throw new ErrorPsd("demasiado-grande", `El artboard «${m.nombre}» mide ${m.w}×${m.h}`);
-  const capas = doc.capas.filter((c) => c.mesa === mesa);
+  if (N > MESA_MAX_PX) throw new ErrorPsd("demasiado-grande", `${laMesa(m)} mide ${m.w}×${m.h}`);
+  const separados = separar ? separarElementos(doc.capas.filter((c) => c.mesa === mesa), m, elegido) : { capas: doc.capas.filter((c) => c.mesa === mesa), elementos: [] };
+  const capas = separados.capas;
   const delFondo = capas.filter((c) => esDelFondo(c.pieza, elegido));
-  if (!capas.length) throw new ErrorPsd("sin-fondo", `El artboard «${m.nombre}» no tiene capas visibles`);
-  if (!delFondo.length) throw new ErrorPsd("sin-fondo", `El artboard «${m.nombre}» no tiene carpeta de fondo (BACKGROUND, Fondo o BG) y no se eligió cuál es`);
+  if (!capas.length) throw new ErrorPsd("sin-fondo", `${laMesa(m)} no tiene capas visibles`);
+  if (!delFondo.length) throw new ErrorPsd("sin-fondo", `${laMesa(m)} no tiene carpeta de fondo (BACKGROUND, Fondo o BG) y no se eligió cuál es`);
   // Cada carpeta de primer nivel cuesta un búfer del tamaño de la mesa: se cuenta ANTES de reservar nada.
   const nPiezas = new Set(capas.filter((c) => !esDelFondo(c.pieza, elegido)).map((c) => c.pieza)).size;
   if (nPiezas > PIEZAS_MAX || N * (60 + 15 * nPiezas) > DESPIECE_MAX_BYTES) throw new ErrorPsd("demasiado-grande", `El artboard «${m.nombre}» tiene ${nPiezas} carpetas o capas sueltas de primer nivel (máximo ${PIEZAS_MAX}). Qué hacer: mete las capas sueltas en las carpetas de la guía.`);
@@ -851,7 +1067,7 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
     }
 
   // Siluetas: por pieza, alfa de lo sólido y zona de lo que oscurece.
-  type Trabajo = { nombre: string; alfa: Float32Array; sombra: Float32Array | null };
+  type Trabajo = { nombre: string; alfa: Float32Array; sombra: Float32Array | null; elemento: boolean; recortado?: boolean };
   const trabajos: Trabajo[] = [];
   /** Donde cae algo que OSCURECE (una sombra paralela o una capa en multiplicar), no un resplandor: ahí el fondo de
    *  verdad nunca es más oscuro que lo que se ve. */
@@ -861,8 +1077,22 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
   for (let c of capas) {
     if (esDelFondo(c.pieza, elegido) || c.recorte || c.tipo === "ajuste") continue; // recortadas y ajustes sólo cambian color
     let t = trabajos.find((x) => x.nombre === c.pieza);
-    if (!t) trabajos.push((t = { nombre: c.pieza, alfa: new Float32Array(N), sombra: null }));
+    if (!t) trabajos.push((t = { nombre: c.pieza, alfa: new Float32Array(N), sombra: null, elemento: !!c.elemento }));
     const { alfa } = t;
+    const llave = c.elemento?.llave;
+    if (llave) {
+      // Su silueta es lo que TODAS sus capas cambian contra el color liso: se calcula una vez, con la primera.
+      if (t.recortado) continue;
+      t.recortado = true;
+      const G = new Float32Array(N * 3);
+      for (let i = 0; i < N; i++) { G[i * 3] = llave[0]; G[i * 3 + 1] = llave[1]; G[i * 3 + 2] = llave[2]; }
+      for (const o of capas) if (o.pieza === c.pieza) pintarCapa(G, o, m);
+      for (let i = 0; i < N; i++) {
+        const d = Math.max(Math.abs(G[i * 3] - llave[0]), Math.abs(G[i * 3 + 1] - llave[1]), Math.abs(G[i * 3 + 2] - llave[2])) * 255;
+        alfa[i] = Math.min(1, Math.max(0, (d - LLAVE_MIN) / (LLAVE_MAX - LLAVE_MIN)));
+      }
+      continue;
+    }
     const etiqueta = `«${c.pieza} / ${c.nombre}»`;
     // El Relleno baja los píxeles de la capa pero NO sus efectos: una capa al 0 % con contorno interior o
     // degradado sigue viéndose entera. Con efectos, la silueta es la forma completa.
@@ -905,19 +1135,8 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
   for (const c of delFondo) {
     if (c.tipo === "ajuste") continue;
     let solidos = 0;
-    const f = FUSION[c.mezcla];
-    if (!f && !FUSION_ENTERA.has(c.mezcla)) avisos.push(`Fondo: fusión ${c.mezcla} pintada como normal.`);
-    const modo = c.mezcla;
-    porPixel(c, m, true, (i, a, data, s) => {
-      if (a > 0.5) solidos++;
-      const d = i * 3;
-      const br = guia[d], bg = guia[d + 1], bb = guia[d + 2];
-      let r = data[s] / 255, g = data[s + 1] / 255, b = data[s + 2] / 255;
-      if (f) { r = f(br, r); g = f(bg, g); b = f(bb, b); }
-      else if (modo === "lighter color") { if (lum(br, bg, bb) > lum(r, g, b)) { r = br; g = bg; b = bb; } }
-      else if (modo === "darker color") { if (lum(br, bg, bb) < lum(r, g, b)) { r = br; g = bg; b = bb; } }
-      guia[d] = br + (r - br) * a; guia[d + 1] = bg + (g - bg) * a; guia[d + 2] = bb + (b - bb) * a;
-    });
+    if (!FUSION[c.mezcla] && !FUSION_ENTERA.has(c.mezcla)) avisos.push(`Fondo: fusión ${c.mezcla} pintada como normal.`);
+    pintarCapa(guia, c, m, (_, a) => { if (a > 0.5) solidos++; });
     // El fondo debe ser sólo fondo (Pedro, 2026-10-28: "a rule of thumb should be always separate all the elements if
     // possible and the background should be only the bg"). Una capa de BACKGROUND que tapa buena parte del anuncio,
     // pero no todo, casi siempre es un producto o una persona (el iPhone de DiDi venía como foto en BACKGROUND): se
@@ -957,7 +1176,7 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
       for (let k = 0; k < 3; k++) { resto[i * 3 + k] = C[i * 3 + k] - guia[i * 3 + k]; suma[j * 3 + k] += resto[i * 3 + k]; }
       cuenta[j]++;
     }
-  if (!nVisible) throw new ErrorPsd("sin-fondo", `En el artboard «${m.nombre}» las piezas tapan todo el fondo`);
+  if (!nVisible) throw new ErrorPsd("sin-fondo", `${laMesa(m)}: sus piezas tapan todo el fondo, así que no se puede saber cómo es. Qué hacer: revisa que ninguna capa o carpeta fuera de BACKGROUND cubra el lienzo entero.`);
   let guiaMal = 0;
   for (let y = 0; y < m.h; y++)
     for (let x = 0; x < m.w; x++) {
@@ -1132,7 +1351,7 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
         if (a > 0.05) ultima[i] = k;
       }
     const pieza: PiezaPsd = {
-      nombre: t.nombre, rol: rolDe(t.nombre), caja, solido: sx1 < 0 ? caja : { x: sx0, y: sy0, w: sx1 - sx0 + 1, h: sy1 - sy0 + 1 },
+      nombre: t.nombre, rol: t.elemento ? "HERO" : rolDe(t.nombre), caja, solido: sx1 < 0 ? caja : { x: sx0, y: sy0, w: sx1 - sx0 + 1, h: sy1 - sy0 + 1 },
       rgba, oscurece, tapadaPct: 0,
       letraMinPx: letraMinDe(deLaPieza),
       textos: [], base: null,
@@ -1170,6 +1389,17 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
   });
 
   const maestro: Omit<MaestroPsd, "origen"> = { nombre: m.nombre, w: m.w, h: m.h, fondo, piezas, fondoDistintoPct: (guiaMal / nVisible) * 100, rearmadoDistintoPct: 0, textoGamma: gammaDeTexto(capas, m, C), avisos, ...(resplandores.length ? { resplandores } : {}) };
+  maestro.reporte = capas.toReversed().map((c): ReporteCapa => {
+    const fondo = esDelFondo(c.pieza, elegido);
+    return {
+      capa: c.nombre, pieza: c.pieza, seMueve: !fondo,
+      porque: fondo
+        ? (c.nota ?? (c.pieza === CAPA_DEBAJO_FONDO ? "Está debajo del fondo: va con él." : "Es el fondo."))
+        : c.elemento?.llave ? "Estaba en la carpeta de fondo: se recortó por lo que cambia contra el color liso."
+        : c.elemento ? "Estaba en la carpeta de fondo y trae transparencia: se mueve sola."
+        : `Se mueve con «${c.pieza}».`,
+    };
+  });
   const otra = rearmar(maestro);
   let mal = 0;
   for (let i = 0; i < N; i++) {
@@ -1177,7 +1407,7 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[]): 
       if (!(Math.abs(otra[i * 3 + k] - C[i * 3 + k] * 255) <= TOLERANCIA)) { mal++; break; }
   }
   maestro.rearmadoDistintoPct = (mal / N) * 100;
-  return maestro;
+  return { ...maestro, ...(separados.elementos.length ? { elementos: separados.elementos } : {}) };
 }
 
 /** Por qué una capa de texto no se puede redibujar aunque su texto sí se entienda (null = se puede intentar).

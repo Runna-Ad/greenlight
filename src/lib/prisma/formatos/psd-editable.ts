@@ -24,7 +24,7 @@ import type { Origen } from "./psd.ts";
 import { EDITABLE_CAPAS_MAX, EDITABLE_CAPA_MAX_PX, EDITABLE_PX_MAX, EDITABLE_SALIDA_PX_MAX } from "./listo.ts";
 import { aCapa, remuestrear, type CapaSalida } from "./nitido.ts";
 import { CAPA_SOMBRA_CONTRASTE } from "./psd-salida.ts";
-import { desenvolver, esDelFondo, nombreDeCapa } from "./roles.ts";
+import { desenvolver, esDelFondo, nombreDeCapa, sacarDelFondo } from "./roles.ts";
 
 /** Escala pareja y desplazamiento: el punto (X, Y) del PSD original cae en (k·X + x, k·Y + y) de la medida. */
 export type Afin = { k: number; x: number; y: number };
@@ -220,7 +220,7 @@ function mesaDe(psd: Psd, o: Origen): { capas: Layer[]; color: { r: number; g: n
   andar(psd.children);
   if (!mesas.length) {
     if (o.mesa !== 0 || o.x !== 0 || o.y !== 0 || o.w !== psd.width || o.h !== psd.height) throw new Error("El PSD no trae ese artboard");
-    return { capas: primerNivel(psd.children), color: null };
+    return { capas: [...sacarDelFondo(primerNivel(psd.children), o.elementos)], color: null };
   }
   const r = mesas[o.mesa]?.artboard?.rect;
   const x = r && Math.round(r.left), y = r && Math.round(r.top);
@@ -230,7 +230,7 @@ function mesaDe(psd: Psd, o: Origen): { capas: Layer[]; color: { r: number; g: n
   const ab = mesas[o.mesa].artboard, tipo = ab?.backgroundType;
   const c = ab?.color && "r" in ab.color ? ab.color : null;
   const color = tipo === 1 ? { r: 255, g: 255, b: 255 } : tipo === 2 ? { r: 0, g: 0, b: 0 } : tipo === 4 && c ? { r: c.r, g: c.g, b: c.b } : null;
-  return { capas: primerNivel(mesas[o.mesa].children), color };
+  return { capas: [...sacarDelFondo(primerNivel(mesas[o.mesa].children), o.elementos)], color };
 }
 
 /** Las capas de primer nivel como las ve `leerPsd`: con las envolturas abiertas y lo de debajo del fondo en su carpeta
