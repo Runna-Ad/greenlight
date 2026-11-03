@@ -322,7 +322,9 @@ export async function crearMiembro(data: {
   // conservan el suyo. (Pedro 2026-08-21.)
   const rolNuevo = data.role ?? "creative";
   const esGlobal = rolNuevo === "admin" || rolNuevo === "master";
-  const tracks = [...new Set(data.tracks)].filter((t) => t === "real" || t === "normal");
+  const tracks = Array.isArray(data.tracks)
+    ? [...new Set(data.tracks.filter((x): x is "real" | "normal" => TRACKS_VALIDOS.has(x)))]
+    : [];
   if (!esGlobal && !tracks.length) return { ok: false, error: "Elige al menos un track." };
   const track: "real" | "normal" | null = esGlobal ? null : tracks[0];
 
