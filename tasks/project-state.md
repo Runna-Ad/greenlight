@@ -14,6 +14,7 @@
 - CRON_SECRET reemplazado en Vercel y Vault; comprobado que coinciden (la base llamó a /api/avisos/enviar con el secreto de Vault: 200). Vigía semanal registrado: lunes 13:00 UTC.
 - Rama va primero en Equipo (Rama, Rol, Tracks) y la lista se separa por rama. Por ahora sólo es un dato; el paso 2 (qué ve cada rama, cómo intervienen los admins) está pendiente con Pedro.
 - Sin probar en vivo: correos reales, aprobaciones, respuestas de clientes, vista con cuenta de Lead o Especialista.
+- Interruptor «HÜE Prisma» por persona EN VIVO: `main` = a22cd48, deploy dpl_79Bx5qexJoqmKkbPe4XmdmaGaWDs (versión anterior para volver: dpl_BM8QacfuUrE1rpYxTp1ucP3Pba4M). 0090 aplicada. Comprobado en vivo con la cuenta Master: 8 interruptores, 8/8 con acceso, el del Master bloqueado, /prisma abre, 0 errores. Sin probar: que una persona sin acceso de verdad quede fuera (necesita otra cuenta).
 - Pendiente: datos de prueba (6 PRUEBA-TOPE con 28 medidas, 1 lectura PRUEBA-PLANO) esperan el OK de Pedro para borrarse.
 
 ## ✅ 2026-10-27 — HILOS DE CAMBIOS CON EL CLIENTE — SHIPPEADO (main ffd5ed7; 0082–0085 aplicadas)
