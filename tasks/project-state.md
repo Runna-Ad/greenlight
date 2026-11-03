@@ -16,7 +16,7 @@
 - Sin probar en vivo: correos reales, aprobaciones, respuestas de clientes, vista con cuenta de Lead o Especialista.
 - Interruptor «HÜE Prisma» por persona EN VIVO: `main` = a22cd48, deploy dpl_79Bx5qexJoqmKkbPe4XmdmaGaWDs (versión anterior para volver: dpl_BM8QacfuUrE1rpYxTp1ucP3Pba4M). 0090 aplicada. Comprobado en vivo con la cuenta Master: 8 interruptores, 8/8 con acceso, el del Master bloqueado, /prisma abre, 0 errores. Sin probar: que una persona sin acceso de verdad quede fuera (necesita otra cuenta).
 - Formatos lee cada capa de la carpeta de fondo y saca como pieza lo que es un elemento (`separarElementos`), con reporte por capa: EN VIVO: `main` = 07c0dc9, deploy dpl_4hi1fh3BWFJSpG7tXs25T9oqpaP6 (versión anterior para volver: dpl_79Bx5qexJoqmKkbPe4XmdmaGaWDs). Prueba: 11 PSD reales antes/después, el único cambio es `4-5_1200x1500.psd`, que ya abre; Pedro dio «ship it» tras revisar la vista previa.
-- Pendiente: datos de prueba (6 PRUEBA-TOPE con 28 medidas, 1 lectura PRUEBA-PLANO) esperan el OK de Pedro para borrarse.
+- 2026-11-03, con OK de Pedro: borrados los 6 PRUEBA-TOPE (28 medidas y archivos), la lectura PRUEBA-PLANO y 13 entradas de prueba del historial de Prisma (con sus eventos, votos y archivos). Quedan 2 entradas de Nils Vera del 2026-09-04, en espera de la decisión de Pedro. El registro de gasto de Gemini no se tocó.
 
 ## ✅ 2026-10-27 — HILOS DE CAMBIOS CON EL CLIENTE — SHIPPEADO (main ffd5ed7; 0082–0085 aplicadas)
 - Hilo de respuestas por cambio (interno y con el cliente), avisos (bell + correo), correos agrupados en 10 min.

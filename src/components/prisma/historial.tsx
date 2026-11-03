@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, ImageIcon, Loader2 } from "lucide-react";
+import { ChevronDown, Clock, ImageIcon, Loader2 } from "lucide-react";
 import { JOB_LABEL, TOOL_LABEL, UI, VARIANTE_LABEL, tx, type Lang } from "@/lib/prisma/copy";
 import type { PrismaVariante } from "@/lib/database.types";
 import type { JobType, Tool } from "@/lib/prisma/spec";
@@ -25,9 +25,13 @@ export type ItemHistorialUI = {
 export function Historial({ items, lang, onAbrir, abriendo }: { items: ItemHistorialUI[]; lang: Lang; onAbrir: (specId: string) => void; abriendo: string | null }) {
   return (
     <aside className="rounded-xl border border-border bg-card p-3" aria-label={tx(UI.historial, lang)}>
-      <p className="flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-        <Clock className="size-3.5" /> {tx(UI.historial, lang)}
-      </p>
+      <details className="group">
+        {/* Cerrado de entrada (Pedro, 2026-11-03): sigue a la mano sin ocupar la pantalla. */}
+        <summary className="-m-1 flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground hover:bg-secondary/60 [&::-webkit-details-marker]:hidden">
+          <Clock className="size-3.5" aria-hidden="true" /> {tx(UI.historial, lang)}
+          {items.length > 0 && <span className="font-normal tabular-nums">({items.length})</span>}
+          <ChevronDown className="ml-auto size-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
       {items.length === 0 ? (
         <p className="mt-3 px-1 text-xs text-muted-foreground">{tx(UI.sinHistorial, lang)}</p>
       ) : (
@@ -49,7 +53,7 @@ export function Historial({ items, lang, onAbrir, abriendo }: { items: ItemHisto
                   </span>
                 ) : it.thumb ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={it.thumb} alt="" className="size-9 shrink-0 rounded-md object-cover" />
+                  <img src={it.thumb} alt="" loading="lazy" className="size-9 shrink-0 rounded-md object-cover" />
                 ) : (
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground">
                     <ImageIcon className="size-4" />
@@ -68,6 +72,7 @@ export function Historial({ items, lang, onAbrir, abriendo }: { items: ItemHisto
           ))}
         </ul>
       )}
+      </details>
     </aside>
   );
 }
