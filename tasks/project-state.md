@@ -8,6 +8,14 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-10-27 — hilos de cambios con el cliente SHIPPEADOS (main ffd5ed7). Antes: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+## 🔺 Greenlight y Prisma juntos en vivo · 2026-11-03 · PROD
+- `main` = e9d1266, deploy dpl_BM8QacfuUrE1rpYxTp1ucP3Pba4M (redeploy; el primero falló con INVALID_CRON_SECRET). Versión anterior para volver: dpl_HM6RXftNCxHw7oCBeb7rXRezXzp9 (ba7f105).
+- 0088 (tope de Gemini, apagado) y 0089 (rama) aplicadas. Producción ya tiene GEMINI_API_KEY, NEXT_PUBLIC_PRISMA_ENABLED, NEXT_PUBLIC_PRISMA_FORMATOS_ENABLED y PRISMA_FORMATOS_IA.
+- CRON_SECRET reemplazado en Vercel y Vault; comprobado que coinciden (la base llamó a /api/avisos/enviar con el secreto de Vault: 200). Vigía semanal registrado: lunes 13:00 UTC.
+- Rama va primero en Equipo (Rama, Rol, Tracks) y la lista se separa por rama. Por ahora sólo es un dato; el paso 2 (qué ve cada rama, cómo intervienen los admins) está pendiente con Pedro.
+- Sin probar en vivo: correos reales, aprobaciones, respuestas de clientes, vista con cuenta de Lead o Especialista.
+- Pendiente: datos de prueba (6 PRUEBA-TOPE con 28 medidas, 1 lectura PRUEBA-PLANO) esperan el OK de Pedro para borrarse.
+
 ## ✅ 2026-10-27 — HILOS DE CAMBIOS CON EL CLIENTE — SHIPPEADO (main ffd5ed7; 0082–0085 aplicadas)
 - Hilo de respuestas por cambio (interno y con el cliente), avisos (bell + correo), correos agrupados en 10 min.
 - Portal: "Te respondieron"; estados en color (Sin enviar coral, En proceso amarillo, Aplicado turquesa, Sin cambio azul); respuestas del cliente en su color de marca.
