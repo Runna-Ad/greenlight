@@ -300,7 +300,8 @@ export async function guardarWatchAll(on: boolean): Promise<Guardado> {
 /** Da de alta una persona nueva en el equipo. Devuelve la fila creada (carga 0). */
 export async function crearMiembro(data: {
   name: string;
-  track: "real" | "normal";
+  /** Uno o ambos; el primero es su track de casa. */
+  tracks: ("real" | "normal")[];
   rama?: Rama;
   color?: string;
   role?: RolAsignable;
@@ -321,7 +322,9 @@ export async function crearMiembro(data: {
   // conservan el suyo. (Pedro 2026-08-21.)
   const rolNuevo = data.role ?? "creative";
   const esGlobal = rolNuevo === "admin" || rolNuevo === "master";
-  const track: "real" | "normal" | null = esGlobal ? null : data.track;
+  const tracks = [...new Set(data.tracks)].filter((t) => t === "real" || t === "normal");
+  if (!esGlobal && !tracks.length) return { ok: false, error: "Elige al menos un track." };
+  const track: "real" | "normal" | null = esGlobal ? null : tracks[0];
 
   // sort_order = siguiente en su track (para que aparezca al final). Con track
   // null (globales), `.is` — `.eq(null)` no matchea NULLs en Postgres.
@@ -341,6 +344,7 @@ export async function crearMiembro(data: {
     .insert({
       name: data.name.trim(),
       track,
+      tracks: esGlobal ? null : tracks,
       rama: data.rama ?? "creativo",
       color: data.color ?? "#775cbf",
       role: rolNuevo,
@@ -354,7 +358,7 @@ export async function crearMiembro(data: {
   if (error) {
     // unique (track, name) — nombre repetido dentro del mismo track.
     const msg = /duplicate|unique/i.test(error.message)
-      ? `Ya hay un "${data.name.trim()}" en el track ${data.track === "real" ? "Real" : "Normal"}.`
+      ? `Ya hay un "${data.name.trim()}" en el track ${track === "real" ? "Real" : "Normal"}.`
       : error.message;
     return { ok: false, error: msg };
   }

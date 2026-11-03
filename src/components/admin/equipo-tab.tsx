@@ -16,7 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Pill } from "@/components/ui/pill";
 import { ROLE_LABEL, type ViewRole } from "@/lib/roles";
-import { RAMAS, RAMA_LABEL, ROLES_ASIGNABLES, type MiembroRow, type Rama, type RolAsignable } from "@/lib/equipo";
+import { RAMAS, RAMA_LABEL, ROLES_ASIGNABLES, ramaDe, type MiembroRow, type Rama, type RolAsignable } from "@/lib/equipo";
 import { crearMiembro, guardarMiembro, eliminarMiembro, enviarInvitacion } from "@/app/(app)/admin/actions";
 
 const rolLabel = (r: string) => ROLE_LABEL[r as ViewRole] ?? r;
@@ -57,6 +57,9 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
         setMiembros((ms) => ms.map((m) => (m.id === id ? { ...m, ...antes } : m)));
       }
       toast.error(r.error ?? "No se pudo guardar.");
+    } else if (prev && patch.rama) {
+      // La tarjeta salta a otro grupo: se dice a dónde se fue.
+      toast.success(`${prev.name} ahora está en ${RAMA_LABEL[patch.rama]}.`);
     }
   }
 
@@ -66,11 +69,8 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
     else guardar(m.id, { active: next });
   }
 
-  // Admin/master son GLOBALES (track null): van a su propio grupo, no a Real/Normal
-  // — si no, se caían de ambas columnas y desaparecían de la lista. (Pedro 2026-08-21.)
-  const global = miembros.filter((m) => m.track == null);
-  const real = miembros.filter((m) => m.track === "real");
-  const normal = miembros.filter((m) => m.track === "normal");
+  // Admin/master son GLOBALES: van a su propio grupo. Los demás, por su rama (Pedro 2026-11-03).
+  const global = miembros.filter((m) => ramaDe(m) == null);
 
   return (
     <div>
@@ -84,8 +84,17 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
       </div>
 
       <Grupo titulo="Vista global · Admins y Master" miembros={global} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
-      <Grupo titulo="Equipo Real" miembros={real} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
-      <Grupo titulo="Equipo Normal" miembros={normal} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
+      {RAMAS.map((r) => (
+        <Grupo
+          key={r}
+          titulo={RAMA_LABEL[r]}
+          vacio="Nadie en esta rama todavía."
+          miembros={miembros.filter((m) => ramaDe(m) === r)}
+          guardar={guardar}
+          onActivo={alternarActivo}
+          onBorrar={setConfirmarBorrar}
+        />
+      ))}
 
       {/* Confirmar desactivación de alguien con carga */}
       <Dialog open={!!confirmar} onOpenChange={(o) => !o && setConfirmar(null)}>
@@ -181,23 +190,27 @@ function BotonInvitar({ m }: { m: MiembroRow }) {
 
 function Grupo({
   titulo,
+  vacio,
   miembros,
   guardar,
   onActivo,
   onBorrar,
 }: {
   titulo: string;
+  /** Con esto, el grupo se ve aunque no tenga a nadie. */
+  vacio?: string;
   miembros: MiembroRow[];
   guardar: (id: string, patch: Partial<MiembroRow>) => void;
   onActivo: (m: MiembroRow, next: boolean) => void;
   onBorrar: (m: MiembroRow) => void;
 }) {
-  if (miembros.length === 0) return null;
+  if (miembros.length === 0 && !vacio) return null;
   return (
     <section className="mb-6">
       <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         {titulo}
       </p>
+      {miembros.length === 0 && <p className="text-sm text-muted-foreground">{vacio}</p>}
       <div className="space-y-2">
         {miembros.map((m) => (
           <MiembroCard key={m.id} m={m} guardar={guardar} onActivo={onActivo} onBorrar={onBorrar} />
@@ -282,17 +295,6 @@ function MiembroCard({
 
       {/* fila 2: controles */}
       <div className="mt-3 grid gap-2 border-t border-border pt-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Campo label="Rol">
-          <select
-            value={m.role}
-            onChange={(e) => guardar(m.id, { role: e.target.value })}
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {roles.map((r) => (
-              <option key={r} value={r}>{rolLabel(r)}</option>
-            ))}
-          </select>
-        </Campo>
         <Campo label="Rama">
           {esGlobal ? (
             <span
@@ -313,6 +315,17 @@ function MiembroCard({
               ))}
             </select>
           )}
+        </Campo>
+        <Campo label="Rol">
+          <select
+            value={m.role}
+            onChange={(e) => guardar(m.id, { role: e.target.value })}
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {roles.map((r) => (
+              <option key={r} value={r}>{rolLabel(r)}</option>
+            ))}
+          </select>
         </Campo>
         <Campo label="Tracks" hint={esGlobal ? undefined : "uno o ambos"}>
           {esGlobal ? (
@@ -356,8 +369,8 @@ function MiembroCard({
   );
 }
 
-// Grant de tracks de un LEAD: Real / Normal / ambos. Requiere ≥1 (no se puede dejar
-// a un lead sin ningún track — no podría ver ni asignar nada).
+// Grant de tracks: Real / Normal / ambos. Requiere ≥1 (no se puede dejar a nadie sin
+// ningún track — no podría ver ni asignar nada).
 function TrackMultiSelect({
   value,
   onChange,
@@ -368,7 +381,7 @@ function TrackMultiSelect({
   const has = (t: "real" | "normal") => value.includes(t);
   const toggle = (t: "real" | "normal") => {
     const next = has(t) ? value.filter((x) => x !== t) : [...value, t];
-    if (!next.length) return; // un lead necesita al menos un track
+    if (!next.length) return; // necesita al menos un track
     onChange(next);
   };
   const chip = (t: "real" | "normal", label: string) => (
@@ -388,7 +401,7 @@ function TrackMultiSelect({
     </button>
   );
   return (
-    <div className="flex gap-1.5" role="group" aria-label="Tracks del lead">
+    <div className="flex gap-1.5" role="group" aria-label="Tracks">
       {chip("real", "Real")}
       {chip("normal", "Normal")}
     </div>
@@ -469,7 +482,7 @@ function AgregarPersona({
   onCreado: (m: MiembroRow) => void;
 }) {
   const [name, setName] = useState("");
-  const [track, setTrack] = useState<"real" | "normal">("real");
+  const [tracks, setTracks] = useState<("real" | "normal")[]>(["real"]);
   const [role, setRole] = useState<RolAsignable>("creative");
   const [rama, setRama] = useState<Rama>("creativo");
   const [color, setColor] = useState("#775cbf");
@@ -480,14 +493,14 @@ function AgregarPersona({
   const esGlobalNuevo = role === "admin" || role === "master";
 
   const reset = () => {
-    setName(""); setTrack("real"); setRole("creative"); setRama("creativo");
+    setName(""); setTracks(["real"]); setRole("creative"); setRama("creativo");
     setColor("#775cbf"); setEmail(""); setSlack("");
   };
 
   const crear = async () => {
     setGuardando(true);
     const r = await crearMiembro({
-      name, track, role, color,
+      name, tracks, role, color,
       rama: esGlobalNuevo ? undefined : rama,
       email: email || undefined,
       slack_user_id: slack || undefined,
@@ -531,25 +544,26 @@ function AgregarPersona({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label htmlFor="f-track-esglobalnuevo-global-sin-track-settrack-classname-h-9-w-full-rounded-md-border-border-input-bg-background-px-2-text-sm-outline-none-focus-visible-ring-2-focus-visible-ring-ring-real-normal-rol" className="mb-1 block">Track</Label>
+              <Label htmlFor="f-rama" className="mb-1 block">Rama</Label>
               {esGlobalNuevo ? (
                 <span
                   className="flex h-9 items-center rounded-md border border-dashed border-border px-2 text-sm text-muted-foreground"
-                  title="Admin/Master ven todos los equipos — no se acotan a un track"
+                  title="Admin/Master son globales: no pertenecen a una rama"
                 >
-                  Global · sin track
+                  Global · todas
                 </span>
               ) : (
-                <select value={track} onChange={(e) => setTrack(e.target.value as "real" | "normal")}
+                <select id="f-rama" value={rama} onChange={(e) => setRama(e.target.value as Rama)}
                   className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <option value="real">Real</option>
-                  <option value="normal">Normal</option>
+                  {RAMAS.map((r) => (
+                    <option key={r} value={r}>{RAMA_LABEL[r]}</option>
+                  ))}
                 </select>
               )}
             </div>
             <div>
-              <Label className="mb-1 block">Rol</Label>
-              <select id="f-track-esglobalnuevo-global-sin-track-settrack-classname-h-9-w-full-rounded-md-border-border-input-bg-background-px-2-text-sm-outline-none-focus-visible-ring-2-focus-visible-ring-ring-real-normal-rol" value={role} onChange={(e) => setRole(e.target.value as RolAsignable)}
+              <Label htmlFor="f-rol" className="mb-1 block">Rol</Label>
+              <select id="f-rol" value={role} onChange={(e) => setRole(e.target.value as RolAsignable)}
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {ROLES_ASIGNABLES.map((r) => (
                   <option key={r} value={r}>{rolLabel(r)}</option>
@@ -557,17 +571,19 @@ function AgregarPersona({
               </select>
             </div>
           </div>
-          {!esGlobalNuevo && (
-            <div>
-              <Label htmlFor="f-rama" className="mb-1 block">Rama</Label>
-              <select id="f-rama" value={rama} onChange={(e) => setRama(e.target.value as Rama)}
-                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                {RAMAS.map((r) => (
-                  <option key={r} value={r}>{RAMA_LABEL[r]}</option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div>
+            <Label className="mb-1 block">Tracks {!esGlobalNuevo && <span className="text-muted-foreground">(uno o ambos)</span>}</Label>
+            {esGlobalNuevo ? (
+              <span
+                className="flex h-9 items-center rounded-md border border-dashed border-border px-2 text-sm text-muted-foreground"
+                title="Admin/Master ven todos los equipos — no se acotan a un track"
+              >
+                Global · sin track
+              </span>
+            ) : (
+              <TrackMultiSelect value={tracks} onChange={setTracks} />
+            )}
+          </div>
           <div>
             <Label htmlFor="f-email" className="mb-1 block">Email <span className="text-muted-foreground">(opcional)</span></Label>
             <input id="f-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@…"
