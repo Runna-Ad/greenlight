@@ -3533,7 +3533,7 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   eq("elementos: la foto en Oscurecer sobre un color liso se vuelve HERO; lo de debajo del fondo no es pieza", ma.piezas.map((p) => [p.nombre, p.rol]), [["Teléfono", "HERO"], ["HERO", "HERO"]]);
   ok("elementos: se recorta justo al teléfono (el parche tapa la tarjeta que traía su foto)", ma.piezas[0].solido.x === 30 && ma.piezas[0].solido.y === 40 && ma.piezas[0].solido.w === 60 && ma.piezas[0].solido.h === 120);
   ok("elementos: rearmado igual a Photoshop y sirve", ma.rearmadoDistintoPct < 0.5 && despieceUsable(ma).ok);
-  eq("elementos: el parche viaja con él (tapa lo que traía su foto)", ma.origen.elementos, [{ nombre: "Teléfono", hijos: [1, 2] }]);
+  eq("elementos: el parche viaja con él (tapa lo que traía su foto)", ma.origen.elementos, [{ nombre: "Teléfono", carpeta: 1, hijos: [1, 2] }]);
   eq("reporte: cada capa visible, de arriba hacia abajo, con si se mueve", ma.reporte.map((c) => [c.capa, c.seMueve]), [["Tarjeta", true], ["Parche", true], ["Teléfono", true], ["FONDO", false], ["Color (HÜE)", false]]);
   const editable = psdEditable(leerAg(bytes), { W, H, origen: ma.origen, fondo: { k: 1, x: 0, y: 0 }, piezas: [["Teléfono", { k: 1, x: 5, y: 0 }], ["HERO", { k: 1, x: 0, y: 0 }]] }, { compuesto: new Uint8ClampedArray(W * H * 4), halos: [], retoque: null }, px);
   const arbol = (ls) => ls.map((l) => (l.children ? `${l.name}[${l.children.map((c) => c.name).join(",")}]` : l.name));
@@ -3550,10 +3550,15 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   const opaca = despiezar(leerPsd(leer(conFoto(capa("Otra foto", 0, 0, W, H, () => [10, 10, 10, 255], { blendMode: "darken" })), verdadFoto(() => [10, 10, 10, 255]))), 0);
   ok("elementos: sin transparencia sobre una foto se queda, y el reporte lo dice", !opaca.origen.elementos && /Cubre casi todo|No tiene transparencia/.test(opaca.reporte.find((r) => r.capa === "Otra foto").porque));
   const negro = (x, y) => (enCaja(x, y, 80, 80, 150, 180) ? [10, 10, 10, 255] : undefined);
-  const recorte = despiezar(leerPsd(leer(conFoto(capa("Producto", 80, 80, 70, 100, () => [10, 10, 10, 255])), verdadFoto(negro))), 0);
-  ok("elementos: con transparencia y orilla marcada sobre una foto se mueve", recorte.origen.elementos?.[0].nombre === "Producto" && recorte.piezas.some((p) => p.nombre === "Producto" && p.rol === "HERO") && despieceUsable(recorte).ok);
+  const recorte = despiezar(leerPsd(leer(conFoto(capa("Reloj", 80, 80, 70, 100, () => [10, 10, 10, 255])), verdadFoto(negro))), 0);
+  ok("elementos: con transparencia y orilla marcada sobre una foto se mueve", recorte.origen.elementos?.[0].nombre === "Reloj" && recorte.piezas.some((p) => p.nombre === "Reloj" && p.rol === "HERO") && despieceUsable(recorte).ok);
   const retoque = despiezar(leerPsd(leer(conFoto(capa("Generative Fill", 80, 80, 70, 100, (x, y) => foto(x + 80, y + 80))), verdadFoto())), 0);
   ok("elementos: un retoque que se funde con la foto se queda", !retoque.origen.elementos && /Se funde/.test(retoque.reporte.find((r) => r.capa === "Generative Fill").porque));
+  const conOpacidad = conTelefono(); conOpacidad[1].opacity = 0.5;
+  const opa = despiezar(leerPsd(leer(conOpacidad, verdad)), 0);
+  ok("elementos: una carpeta de fondo con opacidad propia no se separa, y el reporte lo dice", !opa.origen.elementos && /opacidad, fusión/.test(opa.reporte.find((r) => r.capa === "Teléfono").porque));
+  const conRecortada = conTelefono(); conRecortada.splice(2, 0, capa("Textura", 0, 0, W, H, () => [255, 255, 255, 10], { clipping: true }));
+  ok("elementos: con una capa recortada a la carpeta de fondo no se separa", !despiezar(leerPsd(leer(conRecortada, verdad)), 0).origen.elementos);
   // Un PSD que ya sigue la guía no cambia.
   const normal = despiezar(leerPsd(leer([{ name: "BACKGROUND", children: [fondoLiso()] }, { name: "HERO", children: [capa("Tarjeta", 120, 100, 50, 40, () => [230, 90, 20, 255])] }], (x, y) => (enCaja(x, y, 120, 100, 170, 140) ? [230, 90, 20, 255] : [...ROSA, 255]))), 0);
   eq("elementos: un PSD con la guía sale igual", [normal.piezas.map((p) => p.nombre), normal.origen.elementos], [["HERO"], undefined]);

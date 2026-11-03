@@ -152,6 +152,8 @@ export type CapaPsd = {
   elemento?: { llave: readonly [number, number, number] | null };
   /** Por qué se quedó en el fondo aunque se revisó (`separarElementos`): para el reporte de capas. */
   nota?: string;
+  /** Su carpeta de primer nivel tiene opacidad, fusión, máscara o efectos propios: sacarla de ahí cambiaría cómo se ve. */
+  carpetaRara?: boolean;
   mascara: MascaraPsd | null;
   /** Capas de texto: el tamaño de su letra más chica, en px del lienzo (ya con la escala de la capa). */
   letraPx: number | null;
@@ -270,7 +272,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
   let vistas = 0;
   // `nivel`: 0 = en la mesa (una carpeta aquí es una pieza), 1 = dentro de la carpeta de una pieza (una subcarpeta aquí
   // es una parte), 2 = más adentro (se queda en su parte).
-  type Ctx = { mesa: number; pieza: string | null; carpeta: number; parte: CapaPsd["parte"]; nivel: number; ruta: number[]; fondoDentro?: boolean };
+  type Ctx = { mesa: number; pieza: string | null; carpeta: number; parte: CapaPsd["parte"]; nivel: number; ruta: number[]; fondoDentro?: boolean; carpetaRara?: boolean };
   /** Las capas de primer nivel de una mesa, con las envolturas abiertas (`desenvolver`). */
   const primerNivel = (hijos: Layer[] | undefined, mesa: string): Layer[] | undefined => {
     const des = desenvolver(hijos ?? []);
@@ -304,6 +306,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
             ...(l.blendMode && l.blendMode !== "pass through" && l.blendMode !== "normal" ? [`fusión ${l.blendMode}`] : []),
             ...(l.mask && !l.mask.disabled ? ["máscara"] : []),
           ];
+          if (ctx.nivel === 0 && (raro.length || hayEfectos(l))) hijo = { ...hijo, carpetaRara: true };
           if (raro.length) avisos.push(`La carpeta «${nombre}» usa ${raro.join(", ")} propia: no se aplica igual que en Photoshop.`);
         }
         andar(l.children, opacidad, hijo);
@@ -323,7 +326,7 @@ export function leerPsd(entrada: ArrayBuffer | Uint8Array): DocPsd {
       capas.push({
         nombre, tipo: tipoDe(l), left: l.left ?? 0, top: l.top ?? 0, w, h, opacidad, relleno: l.fillOpacity ?? 1,
         mezcla: l.blendMode ?? "normal", halos: halosDe(l, anguloGlobal), conEfectos: hayEfectos(l), recorte: !!l.clipping, mesa: ctx.mesa, pieza: ctx.pieza ?? nombre,
-        carpeta: ctx.pieza === null ? -1 : ctx.carpeta, parte: ctx.parte, ruta: [...ctx.ruta, hijoN], fondoDentro: ctx.fondoDentro,
+        carpeta: ctx.pieza === null ? -1 : ctx.carpeta, parte: ctx.parte, ruta: [...ctx.ruta, hijoN], fondoDentro: ctx.fondoDentro, carpetaRara: ctx.carpetaRara,
         mascara: k && mw > 0 && mh > 0 ? { left: k.left ?? 0, top: k.top ?? 0, right: k.right ?? 0, bottom: k.bottom ?? 0, defecto: k.defaultColor ?? 255, pixeles: () => getLayerMaskImageData(l) } : null,
         letraPx: letraDe(l),
         texto: l.text ? textoDe(l.text as TextoPsdCrudo) : null,
@@ -804,18 +807,23 @@ export function despiezar(doc: DocPsd, mesa: number, op: { mesaMaxPx?: number; f
   try {
     const fondo = op.fondo?.length ? { fondo: [...op.fondo] } : {};
     const conElementos = (d: DocPsd, i: number, origen: Origen): MaestroPsd => {
-      const { elementos, ...resto } = despiezarMesa(d, i, op.fondo);
-      const ma = { ...resto, origen: { ...origen, ...(elementos?.length ? { elementos } : {}) } };
-      if (!elementos?.length || despieceUsable(ma).ok) return ma;
-      // Separarlos no cuadró: el anuncio se lee como antes, con esas capas en el fondo, y el reporte lo dice.
-      const nombres = new Set(elementos.map((e) => e.nombre));
+      let ma: MaestroPsd | null = null, nombres = new Set<string>(), porque = "el anuncio ya no daba igual que en Photoshop";
+      try {
+        const { elementos, ...resto } = despiezarMesa(d, i, op.fondo);
+        ma = { ...resto, origen: { ...origen, ...(elementos?.length ? { elementos } : {}) } };
+        if (!elementos?.length || despieceUsable(ma).ok) return ma;
+        nombres = new Set(elementos.map((e) => e.nombre));
+      } catch (err) {
+        if (!(err instanceof ErrorPsd)) throw err;
+        porque = err.message;
+      }
+      // Separarlos no cuadró: el anuncio se lee como antes, con esas capas en el fondo, y se dice. Si tampoco así, ese error manda.
       const sin = despiezarMesa(d, i, op.fondo, false);
+      const antes = ma?.reporte;
       return {
         ...sin, origen,
-        reporte: sin.reporte?.map((c) => {
-          const era = ma.reporte?.find((o) => o.capa === c.capa && nombres.has(o.pieza));
-          return era ? { ...c, porque: "Se intentó separar del fondo, pero el anuncio ya no daba igual que en Photoshop: se queda." } : c;
-        }),
+        avisos: nombres.size ? [...sin.avisos, `Se intentó separar del fondo ${[...nombres].map((n) => `«${n}»`).join(", ")}, pero ${porque}: se queda en el fondo.`] : sin.avisos,
+        reporte: sin.reporte?.map((c, k) => (antes?.[k] && nombres.has(antes[k].pieza) ? { ...c, porque: `Se intentó separar del fondo, pero ${porque}: se queda.` } : c)),
       };
     };
     const m = doc.mesas[mesa];
@@ -865,6 +873,8 @@ const ELEMENTO_MAX = 0.85;
 /** Sobre un fondo que no es liso: de sus píxeles visibles, a lo más esta parte es orilla suave (más es un resplandor). */
 const ELEMENTO_SUAVE_MAX = 0.5;
 const ELEMENTOS_MAX = 6;
+/** Una carpeta de fondo con más capas que esto no se revisa una por una (cada una cuesta tres búferes de la mesa). */
+const FONDO_HIJOS_MAX = 40;
 /** Sobre un fondo que no es liso: lo que cambia en su orilla, en promedio (niveles). Un recorte salta contra lo de atrás;
  *  un retoque (Generative Fill) se funde con la foto y no es un elemento. */
 const ELEMENTO_ORILLA_MIN = 18;
@@ -921,8 +931,13 @@ function separarElementos(todas: CapaPsd[], m: MesaPsd, elegido?: readonly strin
   for (const c of delFondo) if (c.carpeta === carpeta) porHijo.set(c.ruta[1], [...(porHijo.get(c.ruta[1]) ?? []), c]);
   const hijos = [...porHijo.entries()].sort((a, b) => a[0] - b[0]);
   if (hijos.length < 2) return nada();
-  if (delFondo.some((c) => c.recorte || c.tipo === "ajuste")) {
-    for (const c of delFondo) notas.set(c, "La carpeta de fondo trae ajustes de color o capas recortadas: separar una capa cambiaría cómo se ven las demás.");
+  const noSeSepara = hijos.length > FONDO_HIJOS_MAX
+    ? `La carpeta de fondo trae más de ${FONDO_HIJOS_MAX} capas: no se revisan una por una.`
+    : delFondo.some((c) => c.carpetaRara) ? "La carpeta de fondo tiene opacidad, fusión, máscara o efectos propios: separar una capa cambiaría cómo se ve."
+    : delFondo.some((c) => c.recorte || c.tipo === "ajuste") || todas.some((c) => c.recorte && c.ruta[0] === carpeta + 1) ? "La carpeta de fondo trae ajustes de color o capas recortadas: separar una capa cambiaría cómo se ven las demás."
+    : null;
+  if (noSeSepara) {
+    for (const c of delFondo) notas.set(c, noSeSepara);
     return nada();
   }
   const N = m.w * m.h;
@@ -1008,14 +1023,14 @@ function separarElementos(todas: CapaPsd[], m: MesaPsd, elegido?: readonly strin
     grupos.push({ hijos: [hijo], capas: [...capas], recortar: !!llave && (sinTransparencia || fusion), caja: { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 } });
   }
   if (!grupos.length) return nada();
-  // El nombre de otra pieza la juntaría con ella; uno de fondo la devolvería al fondo.
+  // Un nombre de la guía o el de otra pieza la juntaría con esa carpeta.
   const usados = new Set(todas.map((c) => c.pieza));
   const elementos = grupos.map((g): ElementoDelFondo => {
     const base = g.capas.length && g.capas[0].parte ? g.capas[0].parte.nombre : g.capas[0].nombre;
-    let nombre = rolDe(base) !== "BACKGROUND" && !usados.has(base) ? base : `${base} (elemento)`;
+    let nombre = rolDe(base) === null && !usados.has(base) ? base : `${base} (elemento)`;
     for (let n = 2; usados.has(nombre); n++) nombre = `${base} (elemento ${n})`;
     usados.add(nombre);
-    return { nombre, hijos: g.hijos };
+    return { nombre, carpeta, hijos: g.hijos };
   });
   // El mismo árbol que `sacarDelFondo`: el fondo se queda con lo demás y cada elemento es una carpeta justo encima.
   const sacados = new Set(elementos.flatMap((e) => e.hijos));
@@ -1080,9 +1095,8 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[], s
     if (!t) trabajos.push((t = { nombre: c.pieza, alfa: new Float32Array(N), sombra: null, elemento: !!c.elemento }));
     const { alfa } = t;
     const llave = c.elemento?.llave;
-    if (llave) {
+    if (llave && !t.recortado) {
       // Su silueta es lo que TODAS sus capas cambian contra el color liso: se calcula una vez, con la primera.
-      if (t.recortado) continue;
       t.recortado = true;
       const G = new Float32Array(N * 3);
       for (let i = 0; i < N; i++) { G[i * 3] = llave[0]; G[i * 3 + 1] = llave[1]; G[i * 3 + 2] = llave[2]; }
@@ -1091,14 +1105,15 @@ function despiezarMesa(doc: DocPsd, mesa: number, elegido?: readonly string[], s
         const d = Math.max(Math.abs(G[i * 3] - llave[0]), Math.abs(G[i * 3 + 1] - llave[1]), Math.abs(G[i * 3 + 2] - llave[2])) * 255;
         alfa[i] = Math.min(1, Math.max(0, (d - LLAVE_MIN) / (LLAVE_MAX - LLAVE_MIN)));
       }
-      continue;
     }
     const etiqueta = `«${c.pieza} / ${c.nombre}»`;
     // El Relleno baja los píxeles de la capa pero NO sus efectos: una capa al 0 % con contorno interior o
     // degradado sigue viéndose entera. Con efectos, la silueta es la forma completa.
     const conRelleno = !c.conEfectos;
     if (c.halos.length) c = conCache(c); // sus píxeles se leen una vez por halo
-    if (c.mezcla === "normal") {
+    if (llave) {
+      // Ya está en su silueta.
+    } else if (c.mezcla === "normal") {
       porPixel(c, m, conRelleno, (i, a) => { alfa[i] = a + alfa[i] * (1 - a); });
     } else if (OSCURECE.has(c.mezcla)) {
       // En todos estos modos el BLANCO no hace nada: una capa de sombra suele ser un rectángulo opaco, blanco

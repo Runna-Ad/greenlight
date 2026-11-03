@@ -665,8 +665,8 @@ export function acomodar(ma: MaestroCaja, W: number, H: number, op: OpcionesAcom
     ...a,
     puestas: a.puestas.flatMap((o) => (o.pieza === mayor ? puestos : [o])),
     // Lo de sus cajas vacías es del truco de arriba, no del anuncio.
-    avisos: a.avisos.filter((v) => !(v.tipo === "falta" && heroes.some((i) => i !== mayor && v.texto.includes(ma.piezas[i].nombre)))),
-    letras: a.letras,
+    avisos: a.avisos.filter((v) => !(v.tipo === "falta" && heroes.some((i) => i !== mayor && v.texto.includes(`«${ma.piezas[i].nombre}»`)))),
+    letras: [...a.letras, ...heroes.flatMap((i) => (i !== mayor && ma.piezas[i].letraMinPx ? [{ pieza: i, px: (ma.piezas[i].letraMinPx as number) * q.k }] : []))],
   };
 }
 

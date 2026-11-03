@@ -2703,14 +2703,14 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
                         <h2 id="psd-capas" className="text-sm font-semibold text-foreground">
                           {tx(FP.capasTitulo, lang)}
                         </h2>
-                        {usables.map((m) =>
+                        {usables.map((m, n) =>
                           m.reporte?.length ? (
-                            <div key={`${m.nombre}-${m.w}x${m.h}`} className="mt-2">
+                            <div key={n} className="mt-2">
                               {usables.length > 1 && <h3 className="text-xs font-medium text-muted-foreground">{m.nombre || `${m.w}×${m.h}`}</h3>}
                               <ul lang={delMotor} className="mt-1 max-h-72 space-y-1 overflow-y-auto text-sm text-foreground">
                                 {m.reporte.map((c, i) => (
                                   <li key={i} className="break-words">
-                                    <span className="font-medium">{c.capa}</span>{" "}
+                                    <span className="font-medium">{c.capa || tx(FP.capaSinNombre, lang)}</span>{" "}
                                     <span className={c.seMueve ? "text-status-success" : "text-status-warning"} lang={lang}>
                                       {c.seMueve ? tx(FP.capaSeMueve, lang) : tx(FP.capaSeQueda, lang)}
                                     </span>

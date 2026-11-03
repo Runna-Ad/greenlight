@@ -104,15 +104,15 @@ function debajoSuelto(hijos: readonly Layer[]): { capas: Layer[]; abiertas: stri
 
 /** Lo que se separa de la carpeta de fondo: un elemento (los teléfonos, con su parche encima) se vuelve una carpeta suya.
  *  `hijos`: su lugar entre los hijos de esa carpeta, contando los ocultos, de abajo hacia arriba. */
-export type ElementoDelFondo = { nombre: string; hijos: number[] };
+export type ElementoDelFondo = { nombre: string; carpeta: number; hijos: number[] };
 
 /** Las capas de primer nivel con cada elemento (`separarElementos`) en su carpeta, justo encima del fondo. Las usan el
  *  lector y el PSD editable: las dos llegan al mismo árbol. */
 export function sacarDelFondo(capas: readonly Layer[], elementos: readonly ElementoDelFondo[] | undefined): readonly Layer[] {
   if (!elementos?.length) return capas;
-  const k = capas.findIndex((l) => esFondoGuia(l) && !l.clipping && !!l.children && nombreDeCapa(l.name) !== CAPA_DEBAJO_FONDO);
-  const fondo = capas[k];
-  if (!fondo?.children) return capas;
+  const k = elementos[0].carpeta, fondo = capas[k];
+  // El lector ya partió de este árbol: si no cuadra, el archivo no es el que se leyó, y mover capas sueltas lo rompería.
+  if (!fondo?.children || elementos.some((e) => e.hijos.some((h) => !fondo.children?.[h]))) throw new Error("El PSD no trae los elementos que se leyeron");
   const sacados = new Set(elementos.flatMap((e) => e.hijos));
   const carpetas = elementos.map((e): Layer => ({ name: e.nombre, children: e.hijos.flatMap((h) => fondo.children?.[h] ?? []) }));
   return [...capas.slice(0, k), { ...fondo, children: fondo.children.filter((_, i) => !sacados.has(i)) }, ...carpetas, ...capas.slice(k + 1)];
