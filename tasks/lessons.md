@@ -1645,3 +1645,10 @@ TAGS: #override #formatos #nicho #avisos #alcance #pedro
 
 [2026-11-02] LESSON (dos revisores se contradijeron; se midió): la revisión de código dijo que /tamano no usa Gemini y la de seguridad dijo que sí, sin tope. Leer la ruta dio la razón a seguridad: era la ruta más cara. ROOT CAUSE: construí el tope buscando con grep los llamadores de lector/borrador/rehacedorFondo y dejé fuera expandidor. RULE: un tope se construye desde el punto más bajo (el fetch al proveedor) hacia arriba, listando TODOS los llamadores. TAGS: #gasto #gemini #revision #claimed-vs-measured #greenlight
 
+
+[2026-11-03] PEDRO_OVERRIDE (la rama va primero): puse la Rama como un campo más, después del Rol, y dejé la lista de Equipo separada por Real/Normal.
+PEDRO'S APPROACH: la primera decisión sobre una persona es su rama; luego Rol y Tracks, en ese orden, y la gente se separa por rama.
+WHY IT WAS BETTER: la rama es la estructura del equipo, no un dato suelto; el orden de los campos y los grupos tienen que decir eso. Real/Normal ya se ve en cada tarjeta.
+RULE: un dato nuevo que organiza a la gente cambia también cómo se agrupa y en qué orden se pregunta; no basta con agregar otro campo. TAGS: #override #equipo #ux #ramas
+
+[2026-11-03] LESSON (commit sin el Edit): mandé Edit y un Bash con commit y push en el mismo mensaje; el Edit falló porque el archivo no se había leído y el commit salió sin ese cambio. Se arregló con un segundo commit. RULE: no mandar un commit en el mismo mensaje que un Edit del que depende; ver primero que el Edit entró. TAGS: #git #edit #verificacion
