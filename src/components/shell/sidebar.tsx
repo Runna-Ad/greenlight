@@ -107,9 +107,12 @@ const RESERVED = new Set([
  */
 function SidebarNav({
   role = DEFAULT_ROLE,
+  prismaAcceso = false,
   onNavigate,
 }: {
   role?: ViewRole;
+  /** Quien no tiene acceso a HÜE Prisma no lo ve en el menú (0090). */
+  prismaAcceso?: boolean;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -138,7 +141,7 @@ function SidebarNav({
   // Filtrado por rol: en una vista previa el menú debe ENCOGER, que es
   // justamente lo que no se podía comprobar antes.
   const groups = navFor(clienteMostrado)
-    .map((g) => ({ ...g, items: g.items.filter((i) => canSee(role, i.key)) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => canSee(role, i.key) && (i.key !== "prisma" || prismaAcceso)) }))
     .filter((g) => g.items.length > 0);
 
   return (
@@ -249,12 +252,14 @@ function SidebarNav({
 /** Rail de escritorio (≥ md). Debajo de md el menú vive en <MobileNav>. */
 export function Sidebar({
   role = DEFAULT_ROLE,
+  prismaAcceso = false,
 }: {
   role?: ViewRole;
+  prismaAcceso?: boolean;
 }) {
   return (
     <aside className="sticky top-0 hidden h-dvh shrink-0 flex-col self-start bg-sidebar text-sidebar-foreground md:flex md:w-60">
-      <SidebarNav role={role} />
+      <SidebarNav role={role} prismaAcceso={prismaAcceso} />
     </aside>
   );
 }
@@ -265,8 +270,10 @@ export function Sidebar({
  */
 export function MobileNav({
   role = DEFAULT_ROLE,
+  prismaAcceso = false,
 }: {
   role?: ViewRole;
+  prismaAcceso?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -281,7 +288,7 @@ export function MobileNav({
         className="flex w-64 flex-col bg-sidebar p-0 text-sidebar-foreground [&>button]:top-5 [&>button]:text-sidebar-foreground/70"
       >
         <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
-        <SidebarNav role={role} onNavigate={() => setOpen(false)} />
+        <SidebarNav role={role} prismaAcceso={prismaAcceso} onNavigate={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
   );

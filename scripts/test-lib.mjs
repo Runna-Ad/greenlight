@@ -9,7 +9,7 @@ import { plantillaPara, requiereCortinilla, readTimeS, soloHablado, PALABRAS_POR
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
-import { puedeSerLead, puedeSerEspecialista } from "../src/lib/roles.ts";
+import { puedeSerLead, puedeSerEspecialista, tieneAccesoPrisma } from "../src/lib/roles.ts";
 import { RAMAS, esRama, ramaDe } from "../src/lib/equipo.ts";
 import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoEnvioPieza, motivoBloqueoEnvio, ultimoVisibleDe } from "../src/lib/correcciones.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
@@ -1565,6 +1565,15 @@ console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo e
   ok("rama: una inventada no vale", !esRama("ventas") && !esRama(null) && !esRama(undefined));
   ok("rama: lead y especialista tienen la suya", ramaDe({ role: "lead", rama: "diseno" }) === "diseno" && ramaDe({ role: "creative", rama: "produccion" }) === "produccion");
   ok("rama: admin y master son globales", ramaDe({ role: "admin", rama: "diseno" }) === null && ramaDe({ role: "master", rama: "creativo" }) === null);
+}
+
+// ── Acceso a HÜE Prisma por persona (0090) ──
+{
+  ok("prisma: con acceso entra", tieneAccesoPrisma("creative", true) && tieneAccesoPrisma("lead", true) && tieneAccesoPrisma("admin", true));
+  ok("prisma: sin acceso no entra, tampoco un admin", !tieneAccesoPrisma("creative", false) && !tieneAccesoPrisma("lead", false) && !tieneAccesoPrisma("admin", false));
+  ok("prisma: sin dato no entra", !tieneAccesoPrisma("creative", undefined) && !tieneAccesoPrisma("admin", null));
+  ok("prisma: el Master siempre entra", tieneAccesoPrisma("master", false) && tieneAccesoPrisma("master", undefined));
+  ok("prisma: el cliente nunca, aunque traiga el dato", !tieneAccesoPrisma("client", true));
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

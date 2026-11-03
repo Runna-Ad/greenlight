@@ -24,6 +24,7 @@ export type Soy = {
   role: string | null;
   notify_email: boolean;
   notify_slack: boolean;
+  prisma_acceso: boolean;
 };
 
 /** The signed-in team member, or null (not signed in, or a client with no roster row). */

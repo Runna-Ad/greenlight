@@ -2,7 +2,7 @@ import "./prisma.css";
 import { Lock } from "lucide-react";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
-import { ROLE_LABEL, canSee, canVerTodoPrisma } from "@/lib/roles";
+import { MSG_SIN_ACCESO_PRISMA, ROLE_LABEL, canSee, canVerTodoPrisma, tieneAccesoPrisma } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { prismaActivo } from "@/lib/prisma/flags";
 import { cargarHistorial, cargarMarcas, cargarReglas } from "@/lib/prisma/data";
@@ -97,12 +97,14 @@ export default async function PrismaPage({ searchParams }: { searchParams: Promi
   const demoPreguntas = sp.demo === "entrevista" ? demoEntrevista() : null;
   const profundasDemo = sp.demo === "entrevista" ? demoProfundas() : null;
 
-  if (!prismaActivo() || !canSee(role, "prisma")) {
+  // Sin fila en el equipo tampoco entra: esta página carga el historial de todos. En local quedan las muestras.
+  const sinAcceso = process.env.NODE_ENV !== "development" && !tieneAccesoPrisma(role, soy?.prisma_acceso);
+  if (!prismaActivo() || !canSee(role, "prisma") || sinAcceso) {
     return (
       <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
         <Lock className="mx-auto size-5 text-muted-foreground" />
         <p className="mt-3 text-sm text-foreground">
-          {prismaActivo() ? `Un ${ROLE_LABEL[role]} no tiene acceso a HÜE Prisma.` : "HÜE Prisma todavía no está activo."}
+          {sinAcceso ? MSG_SIN_ACCESO_PRISMA : prismaActivo() ? `Un ${ROLE_LABEL[role]} no tiene acceso a HÜE Prisma.` : "HÜE Prisma todavía no está activo."}
         </p>
       </div>
     );

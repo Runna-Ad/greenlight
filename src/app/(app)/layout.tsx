@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/shell/sidebar";
+import { tieneAccesoPrisma } from "@/lib/roles";
 import { Topbar } from "@/components/shell/topbar";
 import { getViewAs } from "@/lib/view-as";
 import { getSoy } from "@/lib/soy";
@@ -30,7 +31,7 @@ export default async function AppLayout({
       >
         Saltar al contenido principal
       </a>
-      <Sidebar role={role} />
+      <Sidebar role={role} prismaAcceso={tieneAccesoPrisma(role, soy?.prisma_acceso)} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar role={role} soy={soy} avisos={avisos} />
         {/* Sin overflow-y-auto: con la altura sin tope, main no hace scroll (lo

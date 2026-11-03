@@ -57,6 +57,7 @@ export type Profile = {
   client_id: string | null;
   notify_email: boolean;
   notify_slack: boolean;
+  prisma_acceso: boolean;
   active: boolean;
 };
 

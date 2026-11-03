@@ -1,8 +1,8 @@
 import "../../prisma.css";
 import { Lock } from "lucide-react";
 import { getViewAs } from "@/lib/view-as";
-import { getSoyId } from "@/lib/soy";
-import { ROLE_LABEL, canSee } from "@/lib/roles";
+import { getSoy } from "@/lib/soy";
+import { MSG_SIN_ACCESO_PRISMA, ROLE_LABEL, canSee, tieneAccesoPrisma } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { prismaActivo, prismaFormatosActivo } from "@/lib/prisma/flags";
 import { iaActiva } from "@/lib/prisma/formatos/proveedor";
@@ -23,13 +23,15 @@ type FilaLegal = { id: string; title: string; body: string; scope: string; marca
  * puerta de imagen plana (esa sí guarda en la base).
  */
 export default async function FormatosPsdPage() {
-  const [role, soyId] = await Promise.all([getViewAs(), getSoyId()]);
-  if (!prismaActivo() || !canSee(role, "prisma")) {
+  const [role, soy] = await Promise.all([getViewAs(), getSoy()]);
+  const soyId = soy?.id ?? null;
+  const sinAcceso = process.env.NODE_ENV !== "development" && !tieneAccesoPrisma(role, soy?.prisma_acceso);
+  if (!prismaActivo() || !canSee(role, "prisma") || sinAcceso) {
     // El mismo candado que /prisma (mismo gate): sin enlace de regreso, porque llevaría a este mismo candado.
     return (
       <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center">
         <Lock className="mx-auto size-5 text-muted-foreground" aria-hidden="true" />
-        <h1 className="mt-3 text-base font-medium text-foreground">{prismaActivo() ? `Un ${ROLE_LABEL[role]} no tiene acceso a HÜE Prisma.` : "HÜE Prisma todavía no está activo."}</h1>
+        <h1 className="mt-3 text-base font-medium text-foreground">{sinAcceso ? MSG_SIN_ACCESO_PRISMA : prismaActivo() ? `Un ${ROLE_LABEL[role]} no tiene acceso a HÜE Prisma.` : "HÜE Prisma todavía no está activo."}</h1>
       </div>
     );
   }

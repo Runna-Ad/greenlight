@@ -34,6 +34,7 @@ export type CurrentMember = {
   role: string | null; // the profile's REAL role (authorship counts for creatives)
   notify_email: boolean;
   notify_slack: boolean;
+  prisma_acceso: boolean;
 };
 
 /**
@@ -127,12 +128,13 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   let member: CurrentMember | null = null;
   if (appRoleToViewRole(p.role) !== "client") {
-    const { data: m } = await admin
+    const { data: m, error: errorMiembro } = await admin
       .from("track_members")
-      .select("id, name, color, track, tracks, notify_email, notify_slack")
+      .select("id, name, color, track, tracks, notify_email, notify_slack, prisma_acceso")
       .eq("profile_id", user.id)
       .eq("active", true)
       .maybeSingle();
+    if (errorMiembro) console.error("[identity] track_members:", errorMiembro.message);
     if (m) {
       const mm = m as {
         id: string;
@@ -142,6 +144,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
         tracks: ("real" | "normal")[] | null;
         notify_email: boolean;
         notify_slack: boolean;
+        prisma_acceso: boolean;
       };
       member = {
         id: mm.id,
@@ -152,6 +155,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
         role: p.role, // authorship role = the profile's real role
         notify_email: mm.notify_email,
         notify_slack: mm.notify_slack,
+        prisma_acceso: mm.prisma_acceso,
       };
     }
   }

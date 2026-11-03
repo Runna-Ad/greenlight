@@ -159,6 +159,13 @@ export const canAssignAdmins = (role: ViewRole): boolean => role === "master";
 export const canVerTodoPrisma = (role: ViewRole): boolean =>
   esNivelAdmin(role) || role === "lead";
 
+/** HÜE Prisma se abre persona por persona (0090). El Master siempre entra; los demás, si su rol
+ *  lo permite y tienen el acceso prendido. Sin dato (sin fila en el equipo), no entra. */
+export const tieneAccesoPrisma = (role: ViewRole, acceso: boolean | null | undefined): boolean =>
+  canSee(role, "prisma") && (role === "master" || acceso === true);
+
+export const MSG_SIN_ACCESO_PRISMA = "No tienes acceso a HÜE Prisma. Pídeselo a tu Master Builder.";
+
 /**
  * Quién entra al H.Ü.E HUB. Sólo el Master Builder — el HUB entrena y mide a
  * H.Ü.E (Cerebro, KB, ganadores, adopción) y es exclusivo del master. `canAdmin`

@@ -21,7 +21,7 @@ import { crearMiembro, guardarMiembro, eliminarMiembro, enviarInvitacion } from 
 
 const rolLabel = (r: string) => ROLE_LABEL[r as ViewRole] ?? r;
 
-export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
+export function EquipoTab({ inicial, esMaster }: { inicial: MiembroRow[]; esMaster: boolean }) {
   const [miembros, setMiembros] = useState<MiembroRow[]>(inicial);
   const [confirmar, setConfirmar] = useState<MiembroRow | null>(null);
   const [confirmarBorrar, setConfirmarBorrar] = useState<MiembroRow | null>(null);
@@ -83,11 +83,12 @@ export function EquipoTab({ inicial }: { inicial: MiembroRow[] }) {
         </Button>
       </div>
 
-      <Grupo titulo="Vista global · Admins y Master" miembros={global} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
+      <Grupo titulo="Vista global · Admins y Master" esMaster={esMaster} miembros={global} guardar={guardar} onActivo={alternarActivo} onBorrar={setConfirmarBorrar} />
       {RAMAS.map((r) => (
         <Grupo
           key={r}
           titulo={RAMA_LABEL[r]}
+          esMaster={esMaster}
           vacio="Nadie en esta rama todavía."
           miembros={miembros.filter((m) => ramaDe(m) === r)}
           guardar={guardar}
@@ -191,6 +192,7 @@ function BotonInvitar({ m }: { m: MiembroRow }) {
 function Grupo({
   titulo,
   vacio,
+  esMaster,
   miembros,
   guardar,
   onActivo,
@@ -199,6 +201,7 @@ function Grupo({
   titulo: string;
   /** Con esto, el grupo se ve aunque no tenga a nadie. */
   vacio?: string;
+  esMaster: boolean;
   miembros: MiembroRow[];
   guardar: (id: string, patch: Partial<MiembroRow>) => void;
   onActivo: (m: MiembroRow, next: boolean) => void;
@@ -213,7 +216,7 @@ function Grupo({
       {miembros.length === 0 && <p className="text-sm text-muted-foreground">{vacio}</p>}
       <div className="space-y-2">
         {miembros.map((m) => (
-          <MiembroCard key={m.id} m={m} guardar={guardar} onActivo={onActivo} onBorrar={onBorrar} />
+          <MiembroCard key={m.id} m={m} esMaster={esMaster} guardar={guardar} onActivo={onActivo} onBorrar={onBorrar} />
         ))}
       </div>
     </section>
@@ -222,11 +225,13 @@ function Grupo({
 
 function MiembroCard({
   m,
+  esMaster,
   guardar,
   onActivo,
   onBorrar,
 }: {
   m: MiembroRow;
+  esMaster: boolean;
   guardar: (id: string, patch: Partial<MiembroRow>) => void;
   onActivo: (m: MiembroRow, next: boolean) => void;
   onBorrar: (m: MiembroRow) => void;
@@ -363,6 +368,19 @@ function MiembroCard({
         <label className="flex items-center gap-2 text-sm text-foreground" title="Recibe emails de notificación (in-app siempre le llega)">
           <Switch checked={m.notify_email} onCheckedChange={(v) => guardar(m.id, { notify_email: v })} aria-label="Recibe emails" />
           Recibe emails
+        </label>
+        {/* Lo decide sólo el Master, y el Master siempre entra: su propio acceso no se apaga. */}
+        <label
+          className="flex items-center gap-2 text-sm text-foreground"
+          title={m.role === "master" ? "El Master Builder siempre tiene acceso" : esMaster ? "Decide si esta persona ve y usa HÜE Prisma" : "Sólo el Master Builder lo cambia"}
+        >
+          <Switch
+            checked={m.role === "master" || m.prisma_acceso}
+            disabled={!esMaster || m.role === "master"}
+            onCheckedChange={(v) => guardar(m.id, { prisma_acceso: v })}
+            aria-label={`Acceso de ${m.name} a HÜE Prisma`}
+          />
+          HÜE Prisma
         </label>
       </div>
     </div>

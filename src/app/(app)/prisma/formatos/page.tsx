@@ -2,8 +2,8 @@ import "../prisma.css";
 import Link from "next/link";
 import { ArrowLeft, Lock } from "lucide-react";
 import { getViewAs } from "@/lib/view-as";
-import { getSoyId } from "@/lib/soy";
-import { ROLE_LABEL, canSee } from "@/lib/roles";
+import { getSoy } from "@/lib/soy";
+import { MSG_SIN_ACCESO_PRISMA, ROLE_LABEL, canSee, tieneAccesoPrisma } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { prismaFormatosActivo } from "@/lib/prisma/flags";
 import { cargarMarcas } from "@/lib/prisma/data";
@@ -39,7 +39,8 @@ function demoFormatos(): { lote: LoteVista; salidas: SalidaVista[] } | null {
 }
 
 export default async function FormatosPage({ searchParams }: { searchParams: Promise<{ demo?: string; resultado?: string }> }) {
-  const [role, soyId, sp] = await Promise.all([getViewAs(), getSoyId(), searchParams]);
+  const [role, soy, sp] = await Promise.all([getViewAs(), getSoy(), searchParams]);
+  const soyId = soy?.id ?? null;
   const demo = sp.demo === "formatos" ? demoFormatos() : null;
   // Identidad obligatoria (como las acciones): sin sesión no se mandan las marcas ni sus colores. La muestra de
   // desarrollo no la necesita.
@@ -47,9 +48,11 @@ export default async function FormatosPage({ searchParams }: { searchParams: Pro
     ? "Formatos todavía no está activo."
     : !canSee(role, "prisma")
       ? `Un ${ROLE_LABEL[role]} no tiene acceso a HÜE Prisma.`
-      : !soyId && !demo
-        ? "Inicia sesión para usar Formatos."
-        : null;
+      : soy && !tieneAccesoPrisma(role, soy.prisma_acceso)
+        ? MSG_SIN_ACCESO_PRISMA
+        : !soyId && !demo
+          ? "Inicia sesión para usar Formatos."
+          : null;
   if (motivo) {
     return (
       <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center" role="status">

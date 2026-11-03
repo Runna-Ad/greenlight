@@ -3356,5 +3356,15 @@ console.log("\n▶ 0089 — track_members.rama");
   await db.query(`delete from produccion.track_members where id = $1`, [idRama]);
 }
 
+// ── 0090: acceso a HÜE Prisma por persona ──
+console.log("\n▶ 0090 — track_members.prisma_acceso");
+{
+  const idNuevo = await scalar(`insert into produccion.track_members (name, track) values ('Prueba Prisma', 'real') returning id`);
+  eq("una persona nueva entra sin acceso", await scalar(`select prisma_acceso from produccion.track_members where id = $1`, [idNuevo]), false);
+  await db.query(`update produccion.track_members set prisma_acceso = true where id = $1`, [idNuevo]);
+  eq("el acceso se prende", await scalar(`select prisma_acceso from produccion.track_members where id = $1`, [idNuevo]), true);
+  await db.query(`delete from produccion.track_members where id = $1`, [idNuevo]);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

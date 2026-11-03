@@ -152,7 +152,7 @@ export function AdminShell({
         {/* Panel */}
         <div className="min-w-0">
           {tab === "perfil" && <PerfilTab soy={soy} />}
-          {tab === "equipo" && <EquipoTab inicial={equipoInicial} />}
+          {tab === "equipo" && <EquipoTab inicial={equipoInicial} esMaster={esMaster} />}
           {tab === "invitaciones" && (
             <InvitacionesTab pendientes={invitaciones.pendientes} clientes={invitaciones.clientes} />
           )}

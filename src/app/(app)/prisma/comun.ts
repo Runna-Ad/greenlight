@@ -1,8 +1,8 @@
 import "server-only";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { canSee, canVerTodoPrisma, type ViewRole } from "@/lib/roles";
+import { MSG_SIN_ACCESO_PRISMA, canSee, canVerTodoPrisma, tieneAccesoPrisma, type ViewRole } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
-import { getSoyId } from "@/lib/soy";
+import { getSoy } from "@/lib/soy";
 import { prismaActivo } from "@/lib/prisma/flags";
 import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
 import { MODEL, PROMPT_VERSION, type MimeVision, type Uso } from "@/lib/prisma/writer";
@@ -48,9 +48,11 @@ export async function gate(): Promise<Sesion | Fail> {
   // Identidad OBLIGATORIA (estándar de la casa: task-scope.ts). Sin sesión, getViewAs
   // cae a 'creative' y pasaría el gate: eso dejaría llamadas a H.Ü.E (facturables) y
   // specs huérfanos (created_by null) a cualquiera que llegue al endpoint.
-  const soyId = await getSoyId();
-  if (!soyId) return { ok: false, error: "Inicia sesión para usar HÜE Prisma." };
-  return { role, soyId };
+  const soy = await getSoy();
+  if (!soy) return { ok: false, error: "Inicia sesión para usar HÜE Prisma." };
+  // Todo lo de Prisma pasa por aquí (acciones y rutas): este es el candado de verdad del acceso por persona.
+  if (!tieneAccesoPrisma(role, soy.prisma_acceso)) return { ok: false, error: MSG_SIN_ACCESO_PRISMA };
+  return { role, soyId: soy.id };
 }
 
 /** Un error de base o de proveedor NO se le enseña crudo al diseñador (nombres de
