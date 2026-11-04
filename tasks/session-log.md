@@ -3400,4 +3400,4 @@ Lo de antes sigue: Pedro retesta el fondo con IA del estadio; luego el registro 
 ## 2026-11-04 Favicon de Rünna
 
 Greenlight mostraba el triángulo por defecto de Vercel. En la rama `feat/favicon` (worktree ../greenlight-favicon, sobre origin/main 3c92880, SIN commit): `favicon.ico` (16, 32, 48), `icon.png` (192), `apple-icon.png` (180) y `scripts/generar-favicon.mjs`. Diseño: pieza morada rellena con el símbolo en blanco, esquinas amarilla y coral, fondo blanco. Probado en localhost /login: los 3 enlaces dan 200. No revisado: cómo se ve en una pestaña real.
-**Esperando a Pedro:** "ship it" para publicarlo en main.
+Publicado en main c55dba5 con su "ship it"; Pedro lo vio y pidió cambiarlo por su propio ícono (G verde sobre pieza morada rellena, segunda imagen que mandó).
