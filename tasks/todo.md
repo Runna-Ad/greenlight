@@ -2,11 +2,11 @@
 
 ## 🟡 2026-11-04 — Bitácora de actividad y trabajo guardado por persona (rama `feat/actividad-y-guardado` desde origin/prisma, worktree ../greenlight-actividad)
 Pedro eligió A y 1. A = leer lo que ya se registra y anotar sólo lo que falta. 1 = el trabajo a medias vive en el navegador de cada persona; el PSD no se sube.
-Next Step: Pedro prueba el trabajo guardado en la preview de `prisma` con un PSD real. La pantalla de Actividad y su registro necesitan la 0091, que se aplica sólo con su "ship it".
+Next Step: Pedro prueba el trabajo guardado en la preview de `prisma` con un PSD real; en vivo (`main`) sólo con su "ship it".
 
 **Pieza 1, Admin › Actividad (admin y Master, en pantalla, en la función del servidor y en la base):**
 - [x] Se amplió la pestaña que ya existía. Por persona, por proyecto, línea de tiempo; Hoy, 7 días, 30 días, Este mes.
-- [x] 0091 escrita, SIN aplicar: `prisma_actividad`, cliente y archivo en el gasto, rutas `fondo_ampliar` y `rellenar_hueco`, regla de lectura del gasto para admin, funciones de resumen.
+- [x] 0091 APLICADA a la base viva el 2026-11-04 con el OK de Pedro ("Ship the database change"; sólo esa migración, `main` no se tocó): `prisma_actividad`, cliente y archivo en el gasto, rutas `fondo_ampliar` y `rellenar_hueco`, regla de lectura del gasto para admin, funciones de resumen.
 - [x] Ruta de eventos: la persona la pone el servidor; lista cerrada; freno por persona. La pantalla PSD ya anota.
 - [x] Una iteración: en Formatos, llamadas a la IA y medidas editadas; en prompts, variantes y refinados; en Greenlight, rondas. El tiempo trabajado no se mide.
 
@@ -18,9 +18,9 @@ Next Step: Pedro prueba el trabajo guardado en la preview de `prisma` con un PSD
 **Verification:**
 - [x] `npm test` exit 0 (lib 662, prisma 975, formatos 785, db 819, import 81, sync 45; 0 fallas), tsc 0, eslint 0 errores, `npm run build` exit 0.
 - [x] Navegador local con un PSD inventado y la IA simulada: 12 de 12 medidas iguales píxel a píxel tras recargar, fondo con IA sin otra llamada, las tres salidas, dos perfiles separados, segunda pestaña, caducidad, ZIP sin medidas no dice que ya bajó.
-- [x] La pestaña de Actividad vista en el navegador con datos inventados (las tres vistas). Con datos reales: NO probado, falta la 0091.
+- [x] Actividad en la preview con la sesión real de Master y datos reales, por persona: 12 movimientos, 9 llamadas y US$0.2781 a 30 días, igual a las tablas. Ruta de eventos en la preview: acción inválida 400; una persona forjada en el cuerpo se ignoró; las 2 filas de prueba se borraron. A 1440 la IA y los errores se cortaban: ahora van primero (7dbe93c).
 - [x] Seguridad (Opus): 0 críticos, 1 serio arreglado. Código: 11 serios, arreglados; 2 más en la re-revisión, arreglados.
-- [ ] No probado: PSD real grande (se bloqueó copiar el del cliente a `public/`, bien), Safari, disco lleno, IA real, roles reales con sesión, la ruta de eventos contra la base.
+- [ ] No probado: PSD real grande (se bloqueó copiar el del cliente a `public/`, bien), Safari, disco lleno, IA real, entrar como lead, especialista o cliente (sólo por código y reglas), «Por proyecto» y «Línea de tiempo» con datos reales.
 
 **Límites sin arreglar:**
 - No sigue a otra computadora; borrar datos del navegador lo borra; lo guardado no va cifrado: otra persona en ese mismo navegador podría leerlo con herramientas de desarrollador.
