@@ -3,6 +3,34 @@ import type { PresetGuardado } from "@/lib/prisma/preset";
 // Tipos compartidos del panel de administración (puro — lo usan las server
 // actions y los componentes cliente).
 
+/** Los conteos de Admin › Actividad, iguales por persona y por proyecto (funciones SQL de 0091). */
+export type ConteosActividad = {
+  movimientos: number; cambios: number; rondas: number; respuestas: number;
+  prompts: number; variantes: number; resultados: number; lotes: number; psdAbiertos: number; descargas: number; ediciones: number;
+  iaLlamadas: number;
+  /** Suma de lo que sí reportó costo. null = ninguna llamada con costo conocido (nunca US$0). */
+  iaUsd: number | null;
+  iaSinCosto: number;
+  errores: number;
+  ultima: string | null;
+};
+export type PersonaActividad = ConteosActividad & { personaId: string | null; persona: string; color: string | null };
+export type ProyectoActividad = ConteosActividad & { clienteId: string | null; cliente: string; tipoElemento: "archivo" | "tarea" | null; elemento: string | null };
+export type LineaActividad = {
+  id: string; tipo: string; persona: string; color: string | null; cliente: string;
+  tipoElemento: "archivo" | "tarea" | null; elemento: string | null;
+  usd: number | null; ruta: string | null; de: string | null; a: string | null; override: boolean; detalle: string | null; createdAt: string;
+};
+export type PanelActividad =
+  | {
+      ok: true;
+      personas: PersonaActividad[]; totalPersonas: ConteosActividad | null;
+      /** Cada cliente con sus archivos y tareas, ya en orden. */
+      proyectos: (ProyectoActividad & { elementos: ProyectoActividad[] })[]; totalProyectos: ConteosActividad | null;
+      linea: LineaActividad[];
+    }
+  | { ok: false; error: string; sinMigracion?: boolean };
+
 export type ActividadRow = {
   id: string;
   ideaCode: string | null;

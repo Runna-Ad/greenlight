@@ -16,9 +16,15 @@ import { htmlFor, textFor } from "@/lib/email-template";
 import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
 import { TIPOGRAFIAS_BUCKET, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIAS_POR_CLIENTE_MAX, archivoVisible, faltaTablaTipografias, leerTipografia, rutaTipografia } from "@/lib/prisma/formatos/tipografias";
 import { esRama, type MiembroRow, type Rama, type RolAsignable } from "@/lib/equipo";
+import { esRangoActividad, rangoFechas } from "@/lib/prisma/formatos/actividad";
 import type {
   ActividadRow,
   ClienteConMarcas,
+  ConteosActividad,
+  LineaActividad,
+  PanelActividad,
+  PersonaActividad,
+  ProyectoActividad,
   IntegracionesEstado,
   MarcaLogo,
   MarcaOpt,
@@ -435,6 +441,59 @@ export async function listarActividad(limit = 40): Promise<ActividadRow[]> {
       createdAt: r.created_at,
     };
   });
+}
+
+// ── Actividad: por persona, por proyecto y línea de tiempo (0091) ──
+type FilaConteos = {
+  movimientos: number; cambios: number; rondas: number; respuestas: number; prompts: number; variantes: number; resultados: number;
+  lotes: number; psd_abiertos: number; descargas: number; ediciones: number; ia_llamadas: number; ia_usd: number | string | null;
+  ia_sin_costo: number; errores: number; ultima: string | null;
+};
+const conteosDe = (f: FilaConteos): ConteosActividad => ({
+  movimientos: f.movimientos, cambios: f.cambios, rondas: f.rondas, respuestas: f.respuestas,
+  prompts: f.prompts, variantes: f.variantes, resultados: f.resultados, lotes: f.lotes, psdAbiertos: f.psd_abiertos, descargas: f.descargas, ediciones: f.ediciones,
+  iaLlamadas: f.ia_llamadas, iaUsd: f.ia_usd === null ? null : Number(f.ia_usd), iaSinCosto: f.ia_sin_costo, errores: f.errores, ultima: f.ultima,
+});
+
+/** Todo se suma en SQL; aquí sólo se le da forma. Un admin ve el gasto en esta pantalla (el HUB sigue siendo del Master). */
+export async function cargarActividad(rango: unknown): Promise<PanelActividad> {
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin ve la actividad." };
+  if (!esRangoActividad(rango)) return { ok: false, error: "Ese rango de fechas no es válido." };
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const { desde, hasta } = rangoFechas(rango);
+  const db = supabaseAdmin();
+  const params = { p_desde: desde, p_hasta: hasta };
+  const [per, pro, lin] = await Promise.all([
+    db.rpc("prisma_actividad_personas", params),
+    db.rpc("prisma_actividad_proyectos", params),
+    db.rpc("prisma_actividad_linea", { ...params, p_limite: 200 }),
+  ]);
+  const error = per.error ?? pro.error ?? lin.error;
+  if (error) {
+    if (/^(PGRST202|PGRST205|42883|42P01)$/.test(error.code ?? "")) return { ok: false, error: "Esta vista se activa cuando se aplique la migración 0091.", sinMigracion: true };
+    console.error("[admin] actividad:", error.message);
+    return { ok: false, error: "No se pudo leer la actividad. Reintenta." };
+  }
+
+  const filasPer = (per.data ?? []) as (FilaConteos & { es_total: boolean; persona_id: string | null; persona: string; color: string | null })[];
+  const filasPro = (pro.data ?? []) as (FilaConteos & { nivel: "total" | "cliente" | "elemento"; client_id: string | null; cliente: string; tipo_elemento: "archivo" | "tarea" | null; elemento: string | null })[];
+  const totalPer = filasPer.find((f) => f.es_total);
+  const totalPro = filasPro.find((f) => f.nivel === "total");
+  const proyecto = (f: (typeof filasPro)[number]): ProyectoActividad => ({ ...conteosDe(f), clienteId: f.client_id, cliente: f.cliente, tipoElemento: f.tipo_elemento, elemento: f.elemento });
+  return {
+    ok: true,
+    personas: filasPer.filter((f) => !f.es_total).map((f): PersonaActividad => ({ ...conteosDe(f), personaId: f.persona_id, persona: f.persona, color: f.color })),
+    totalPersonas: totalPer ? conteosDe(totalPer) : null,
+    proyectos: filasPro.filter((f) => f.nivel === "cliente").map((c) => ({
+      ...proyecto(c),
+      elementos: filasPro.filter((f) => f.nivel === "elemento" && f.client_id === c.client_id && f.cliente === c.cliente).map(proyecto),
+    })),
+    totalProyectos: totalPro ? conteosDe(totalPro) : null,
+    linea: ((lin.data ?? []) as { fila_id: string; tipo: string; persona: string; color: string | null; cliente: string; tipo_elemento: "archivo" | "tarea" | null; elemento: string | null; usd: number | string | null; ruta: string | null; de: string | null; a: string | null; override: boolean; detalle: string | null; created_at: string }[]).map((f): LineaActividad => ({
+      id: f.fila_id, tipo: f.tipo, persona: f.persona, color: f.color, cliente: f.cliente, tipoElemento: f.tipo_elemento, elemento: f.elemento,
+      usd: f.usd === null ? null : Number(f.usd), ruta: f.ruta, de: f.de, a: f.a, override: f.override, detalle: f.detalle, createdAt: f.created_at,
+    })),
+  };
 }
 
 // ── Integraciones ──────────────────────────────────────────
