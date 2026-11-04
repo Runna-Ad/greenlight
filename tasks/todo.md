@@ -1,8 +1,8 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-11-04 — Bitácora de actividad y trabajo guardado por persona (rama `feat/actividad-y-guardado` desde origin/prisma, worktree ../greenlight-actividad)
+## ✅ 2026-11-04 — Bitácora de actividad y trabajo guardado por persona: EN VIVO (`main` a0cc7f2, deploy dpl_BdmHZNz8oCZ6HHfwSfJ5sDFGkbkk; versión anterior para volver: dpl_DEvuAU41TRZgQr7WogU27LTxZFEH)
 Pedro eligió A y 1. A = leer lo que ya se registra y anotar sólo lo que falta. 1 = el trabajo a medias vive en el navegador de cada persona; el PSD no se sube.
-Next Step: en vivo (`main`) sólo con el "ship it" de Pedro. Falta un PSD real de 60-70 MB en el navegador: sólo Pedro puede soltarlo.
+Next Step: Pedro abre un PSD real en vivo cuando le toque; no se probó en el navegador porque él dijo "Ship it, skip that". Sin probar también: Safari, disco lleno, sesiones reales de lead y especialista.
 
 **Pieza 1, Admin › Actividad (admin y Master, en pantalla, en la función del servidor y en la base):**
 - [x] Se amplió la pestaña que ya existía. Por persona, por proyecto, línea de tiempo; Hoy, 7 días, 30 días, Este mes.
