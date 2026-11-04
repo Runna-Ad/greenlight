@@ -14,11 +14,12 @@ Next Step: Pedro prueba en la preview con la IA real; después merge a `prisma`/
 
 ## 🟡 2026-11-04 — «Mover el fondo»: arrastrar a cualquier lado, y rellenar el hueco con IA sólo si se pide
 Pedro eligió la opción 3: en 640×100 quiere enseñar más cielo azul. El fondo puede salirse de la medida (`FondoEditado.libre`), el hueco se ve con la orilla en rayas y un aviso naranja, y «Rellenar el hueco con IA» es opcional. Las piezas no se mueven.
-Next Step: Pedro prueba en la preview de `prisma` con la IA real; en vivo sólo con su "ship it".
+Next Step: Pedro dijo "Looks good" en la preview (2026-11-04); en vivo sólo con su "ship it".
 - [x] Probado con la IA simulada en la app local: se arrastra de lado, sale el aviso, 1 sola llamada, sin rayas al terminar; arrastrar mientras rellena no mueve nada (firma del canvas igual) y después sí. formatos 733/0.
-- [ ] No probado: IA real rellenando, Photoshop abriendo el PSD, Safari.
+- [x] Pedro revisó la preview: "Looks good" (2026-11-04).
+- [ ] No probado por mí: IA real rellenando (sólo el OK de Pedro), Photoshop abriendo el PSD, Safari.
 - [ ] Límites, sin arreglar: el relleno vive en memoria (al recargar vuelve la posición con el aviso y hay que rellenar otra vez); un hueco sin rellenar sale en el PSD editable sin fondo en esa parte; la búsqueda de contraste del «fondo» puede caer en el margen de IA tras «Volver al automático»; la cadena `previa` retiene lienzos en memoria; rellenar el hueco no ofrece también ampliar la forma.
-- [ ] Texto a revisar: el aviso verde al terminar dice «Fondo ampliado con IA» también cuando sólo se rellenó el hueco.
+- [x] El aviso verde al terminar ya dice «Hueco rellenado con IA» cuando sólo se rellenó el hueco.
 
 ## Tope de Gemini (0088), límites conocidos, sin arreglar (2026-11-02)
 - [ ] Un tamaño «ia» que el anuncio ya llena no llama a Gemini, pero el tope lo rechaza igual.

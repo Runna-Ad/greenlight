@@ -3,8 +3,9 @@
 ## 2026-11-04 — Formatos PSD: «Ampliar fondo con IA» por medida, y «Mover el fondo» a cualquier lado con relleno opcional (preview de `prisma`, no en vivo)
 **Hecho:** botón por medida (f47a5a7; Pedro lo probó con la IA real: "test looks good"). Arrastrar el fondo a cualquier lado con hueco en rayas y relleno opcional con IA (opción 3 de Pedro). Rama `feat/fondo-ia-psd`, worktree ../greenlight-fondo-ia. Sin migración.
 **Pruebas:** formatos 733/0 · tsc 0 · app local con la IA simulada. **Sin probar:** relleno con la IA real, Photoshop, Safari.
-**Waiting on Pedro:** probar 640×100 en la preview de `prisma`; "ship it" para llevarlo a `main`.
-**Pick up next:** detalles en `tasks/todo.md` (límites y el texto del aviso verde).
+**Pedro revisó la preview:** "Looks good".
+**Waiting on Pedro:** "ship it" para llevarlo a `main`.
+**Pick up next:** límites en `tasks/todo.md`.
 
 ## 2026-11-03 — Prisma y Greenlight juntos en vivo, ramas de equipo, interruptor de Prisma, separar elementos del fondo, historial en cero (main 3c92880)
 **En vivo (todo con «ship it» de Pedro):**
