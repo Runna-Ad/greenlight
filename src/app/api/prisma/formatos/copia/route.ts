@@ -4,6 +4,7 @@ import { ErrorIA, borrador } from "@/lib/prisma/formatos/proveedor";
 import { RATIOS_IA } from "@/lib/prisma/formatos/geometria";
 import { CUERPO_IA_MAX_BYTES, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX } from "@/lib/prisma/formatos/gemela";
 import { anotarGastoGemini, revisarTopeGemini } from "@/lib/prisma/formatos/gasto-gemini";
+import { origenDeGasto } from "@/lib/prisma/formatos/actividad";
 import { FRENO, gate, saturado } from "@/app/(app)/prisma/comun";
 import { mismoOrigen } from "@/app/(app)/prisma/formatos-comun";
 import { pngDelForm as png } from "@/lib/prisma/formatos/png-form";
@@ -54,6 +55,7 @@ export async function POST(req: Request) {
   } catch {
     return json({ ok: false, error: "Formato inválido." }, 400);
   }
+  const origen = origenDeGasto(form);
   const aspect = form.get("aspect");
   if (typeof aspect !== "string" || !Object.hasOwn(RATIOS_IA, aspect)) return json({ ok: false, error: "Proporción no válida." }, 400);
   const [fondo, pieza] = await Promise.all([png(form, "fondo", FONDO_IA_MAX_BYTES, RECORTE_IA_MAX), png(form, "pieza", PIEZA_IA_MAX_BYTES, PIEZA_IA_MAX)]);
@@ -64,7 +66,7 @@ export async function POST(req: Request) {
 
   try {
     const r = await ia.borrar({ fondo: fondo.bytes, pieza: pieza.bytes, aspect, tamano: "1K" });
-    await anotarGastoGemini({ ruta: "copia", modelo: r.modelo, usd: r.costoUsd, member_id: g.soyId });
+    await anotarGastoGemini({ ruta: "copia", modelo: r.modelo, usd: r.costoUsd, member_id: g.soyId, ...origen });
     // Lo que vuelve se re-codifica: siempre un PNG limpio (sin metadatos), aunque la IA mande otro formato.
     const salida = await sharp(r.png, { limitInputPixels: 2048 * 2048, failOn: "error" }).png().toBuffer();
     console.info(`[formatos] copia con IA: ${r.modelo}, US$${r.costoUsd ?? "?"}`);
@@ -75,7 +77,7 @@ export async function POST(req: Request) {
     const causa = err instanceof ErrorConCosto ? err.causa : err;
     if (err instanceof ErrorConCosto) {
       console.info(`[formatos] copia con IA sin imagen, US$${err.costoUsd ?? "?"}`);
-      await anotarGastoGemini({ ruta: "copia", modelo: ia.modelo, usd: err.costoUsd, member_id: g.soyId });
+      await anotarGastoGemini({ ruta: "copia", modelo: ia.modelo, usd: err.costoUsd, member_id: g.soyId, ...origen });
     }
     if (causa instanceof ErrorIA) {
       console.error("[formatos] copia con IA:", causa.message);

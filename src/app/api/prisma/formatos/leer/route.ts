@@ -3,6 +3,7 @@ import { ErrorConCosto } from "@/lib/prisma/formatos/componer";
 import { ErrorIA, MODELO_LECTURA, lector } from "@/lib/prisma/formatos/proveedor";
 import { LADO_LECTURA, limpiarLectura } from "@/lib/prisma/formatos/plano";
 import { anotarGastoGemini, revisarTopeGemini } from "@/lib/prisma/formatos/gasto-gemini";
+import { origenDeGasto } from "@/lib/prisma/formatos/actividad";
 import { FRENO, gate, saturado } from "@/app/(app)/prisma/comun";
 import { mismoOrigen } from "@/app/(app)/prisma/formatos-comun";
 import { HUELLA, guardarLectura, lecturaGuardada } from "@/lib/prisma/formatos/lecturas-guardadas";
@@ -49,6 +50,7 @@ export async function POST(req: Request) {
   } catch {
     return json({ ok: false, error: "Formato inválido." }, 400);
   }
+  const origen = origenDeGasto(form);
   const f = form.get("imagen");
   if (!(f instanceof File) || f.size === 0) return json({ ok: false, error: "No llegó la imagen." }, 400);
   if (f.size > CUERPO_MAX_BYTES) return json({ ok: false, error: "La imagen es demasiado grande." }, 413);
@@ -87,7 +89,7 @@ export async function POST(req: Request) {
   try {
     // Si la persona cancela (o cierra la pestaña), la llamada a la IA también se corta.
     const r = await ia.leer(jpeg, req.signal);
-    await anotarGastoGemini({ ruta: "leer", modelo: r.modelo, usd: r.costoUsd, member_id: g.soyId });
+    await anotarGastoGemini({ ruta: "leer", modelo: r.modelo, usd: r.costoUsd, member_id: g.soyId, ...origen });
     console.info(`[formatos] lectura con IA: ${r.modelo}, US$${r.costoUsd ?? "?"}`);
     const elementos = limpiarLectura(r.elementos, w, h);
     if (!elementos) return json({ ok: false, error: "La IA no encontró elementos en la imagen. Reintenta." }, 502);
@@ -98,7 +100,7 @@ export async function POST(req: Request) {
     const causa = err instanceof ErrorConCosto ? err.causa : err;
     if (err instanceof ErrorConCosto) {
       console.info(`[formatos] lectura con IA sin respuesta válida, US$${err.costoUsd ?? "?"}`);
-      await anotarGastoGemini({ ruta: "leer", modelo: ia.modelo, usd: err.costoUsd, member_id: g.soyId });
+      await anotarGastoGemini({ ruta: "leer", modelo: ia.modelo, usd: err.costoUsd, member_id: g.soyId, ...origen });
     }
     if (causa instanceof ErrorIA) {
       console.error("[formatos] lectura con IA:", causa.message);

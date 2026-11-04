@@ -100,7 +100,7 @@ export async function POST(req: Request) {
     if ("ok" in r) return await marcarError(r.error);
     const c = await componer(r.fuente, salida.ancho, salida.alto, salida.modo, { color: salida.color ?? undefined, expandir: prov?.expandir });
     gastado = c.costoUsd;
-    if (prov && c.modelo === prov.modelo) await anotarGastoGemini({ ruta: "tamano", modelo: c.modelo, usd: c.costoUsd, member_id: g.soyId });
+    if (prov && c.modelo === prov.modelo) await anotarGastoGemini({ ruta: "tamano", modelo: c.modelo, usd: c.costoUsd, member_id: g.soyId, archivo: lote.nombre, client_id: lote.client_id });
     if (salida.modo === "ia" && c.costoUsd === null) console.warn(`[formatos] ${salida.id}: la IA no reportó uso; costo real sin sumar`);
     // Nunca se entrega un tamaño cuyo original no quedó idéntico (no debería pasar: es la garantía del pegado).
     if (!c.pixelLockOk) {
@@ -152,7 +152,7 @@ export async function POST(req: Request) {
   } catch (e) {
     const costo = e instanceof ErrorConCosto ? e.costoUsd : gastado;
     const causa = e instanceof ErrorConCosto ? e.causa : e;
-    if (prov && e instanceof ErrorConCosto) await anotarGastoGemini({ ruta: "tamano", modelo: prov.modelo, usd: e.costoUsd, member_id: g.soyId });
+    if (prov && e instanceof ErrorConCosto) await anotarGastoGemini({ ruta: "tamano", modelo: prov.modelo, usd: e.costoUsd, member_id: g.soyId, archivo: lote.nombre, client_id: lote.client_id });
     if (causa instanceof ErrorIA) {
       console.error(`[formatos] IA (${salida.preset}):`, causa.message);
       return await marcarError(causa.mensaje, costo);
