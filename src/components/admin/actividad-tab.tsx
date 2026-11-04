@@ -54,6 +54,8 @@ const GRUPOS: { titulo: string; columnas: ColumnaConteo[] }[] = [
   },
 ];
 const INICIO_GRUPO = "border-l border-border";
+/** La primera columna se queda fija al correr la tabla: sin el nombre, una fila de números no dice de quién es. */
+const FIJA = "sticky left-0 z-10 bg-card";
 
 function Cuenta({ n, peligro }: { n: number; peligro?: boolean }) {
   if (n === 0) return <span className="text-muted-foreground/60" aria-label="cero">–</span>;
@@ -63,6 +65,12 @@ function Cuenta({ n, peligro }: { n: number; peligro?: boolean }) {
 function CeldasConteo({ c }: { c: ConteosActividad }) {
   return (
     <>
+      <TableCell className={`text-right tabular-nums ${INICIO_GRUPO}`}><Cuenta n={c.iaLlamadas} /></TableCell>
+      <TableCell className="text-right tabular-nums">
+        {c.iaUsd === null ? <span className="text-muted-foreground/60" aria-label="sin costo conocido">–</span> : dineroActividad(c.iaUsd)}
+      </TableCell>
+      <TableCell className="text-right tabular-nums"><Cuenta n={c.iaSinCosto} /></TableCell>
+      <TableCell className={`text-right tabular-nums ${INICIO_GRUPO}`}><Cuenta n={c.errores} peligro /></TableCell>
       {GRUPOS.map((g) =>
         g.columnas.map((col, i) => (
           <TableCell key={col.clave} className={`text-right tabular-nums ${i === 0 ? INICIO_GRUPO : ""}`}>
@@ -70,12 +78,6 @@ function CeldasConteo({ c }: { c: ConteosActividad }) {
           </TableCell>
         )),
       )}
-      <TableCell className={`text-right tabular-nums ${INICIO_GRUPO}`}><Cuenta n={c.iaLlamadas} /></TableCell>
-      <TableCell className="text-right tabular-nums">
-        {c.iaUsd === null ? <span className="text-muted-foreground/60" aria-label="sin costo conocido">–</span> : dineroActividad(c.iaUsd)}
-      </TableCell>
-      <TableCell className="text-right tabular-nums"><Cuenta n={c.iaSinCosto} /></TableCell>
-      <TableCell className={`text-right tabular-nums ${INICIO_GRUPO}`}><Cuenta n={c.errores} peligro /></TableCell>
       <TableCell className={`text-right text-muted-foreground ${INICIO_GRUPO}`} title={c.ultima ? new Date(c.ultima).toLocaleString("es-MX") : undefined}>
         {c.ultima ? hace(c.ultima) : "–"}
       </TableCell>
@@ -88,23 +90,23 @@ function Encabezado({ primera }: { primera: string }) {
   return (
     <TableHeader>
       <TableRow className="hover:bg-transparent">
-        <TableHead scope="col" rowSpan={2} className="align-bottom">{primera}</TableHead>
+        <TableHead scope="col" rowSpan={2} className={`align-bottom ${FIJA}`}>{primera}</TableHead>
+        <TableHead scope="colgroup" colSpan={3} className={`h-8 text-center ${INICIO_GRUPO}`}>IA</TableHead>
+        <TableHead scope="col" rowSpan={2} className={`text-right align-bottom ${INICIO_GRUPO}`} title="Errores en el navegador y tamaños que fallaron">Errores</TableHead>
         {GRUPOS.map((g) => (
           <TableHead key={g.titulo} scope="colgroup" colSpan={g.columnas.length} className={`h-8 text-center ${INICIO_GRUPO}`}>{g.titulo}</TableHead>
         ))}
-        <TableHead scope="colgroup" colSpan={3} className={`h-8 text-center ${INICIO_GRUPO}`}>IA</TableHead>
-        <TableHead scope="col" rowSpan={2} className={`text-right align-bottom ${INICIO_GRUPO}`} title="Errores en el navegador y tamaños que fallaron">Errores</TableHead>
         <TableHead scope="col" rowSpan={2} className={`text-right align-bottom ${INICIO_GRUPO}`}>Última</TableHead>
       </TableRow>
       <TableRow className="hover:bg-transparent">
+        <TableHead scope="col" title="Llamadas a la IA" aria-label="Llamadas a la IA" className={`${sub} ${INICIO_GRUPO}`}>Llam.</TableHead>
+        <TableHead scope="col" title="Gasto con costo reportado" aria-label="Gasto en dólares con costo reportado" className={sub}>USD</TableHead>
+        <TableHead scope="col" title="Llamadas sin costo reportado: no se cuentan como cero" aria-label="Llamadas sin costo reportado" className={sub}>Sin costo</TableHead>
         {GRUPOS.map((g) =>
           g.columnas.map((col, i) => (
             <TableHead key={col.clave} scope="col" title={col.ayuda} aria-label={col.ayuda} className={`${sub} ${i === 0 ? INICIO_GRUPO : ""}`}>{col.titulo}</TableHead>
           )),
         )}
-        <TableHead scope="col" title="Llamadas a la IA" aria-label="Llamadas a la IA" className={`${sub} ${INICIO_GRUPO}`}>Llam.</TableHead>
-        <TableHead scope="col" title="Gasto con costo reportado" aria-label="Gasto en dólares con costo reportado" className={sub}>USD</TableHead>
-        <TableHead scope="col" title="Llamadas sin costo reportado: no se cuentan como cero" aria-label="Llamadas sin costo reportado" className={sub}>Sin costo</TableHead>
       </TableRow>
     </TableHeader>
   );
@@ -115,7 +117,7 @@ function Total({ total }: { total: ConteosActividad | null }) {
   return (
     <TableFooter>
       <TableRow className="font-medium">
-        <TableHead scope="row">Total</TableHead>
+        <TableHead scope="row" className={FIJA}>Total</TableHead>
         <CeldasConteo c={total} />
       </TableRow>
     </TableFooter>
@@ -132,7 +134,7 @@ function PorPersona({ filas, total }: { filas: PersonaActividad[]; total: Conteo
         <TableBody>
           {filas.map((f) => (
             <TableRow key={f.personaId ?? "sin-persona"}>
-              <TableHead scope="row" className="font-normal">
+              <TableHead scope="row" className={`font-normal ${FIJA}`}>
                 <span className="flex items-center gap-2">
                   <span aria-hidden className="inline-block size-2.5 shrink-0 rounded-full" style={{ backgroundColor: f.color ?? COLOR_NEUTRO }} />
                   <span className="max-w-52 truncate font-medium" title={f.persona}>{f.persona}</span>
@@ -159,12 +161,12 @@ function PorProyecto({ filas, total }: { filas: (ProyectoActividad & { elementos
           {filas.map((c) => (
             <Fragment key={c.clienteId ?? "sin-cliente"}>
               <TableRow className="bg-muted/40">
-                <TableHead scope="row" className="font-semibold">{c.cliente}</TableHead>
+                <TableHead scope="row" className={`font-semibold ${FIJA}`}>{c.cliente}</TableHead>
                 <CeldasConteo c={c} />
               </TableRow>
               {c.elementos.map((e) => (
                 <TableRow key={`${e.tipoElemento ?? "general"}:${e.elemento ?? ""}`}>
-                  <TableHead scope="row" className="max-w-72 truncate pl-6 font-normal" title={e.elemento ?? undefined}>
+                  <TableHead scope="row" className={`max-w-72 truncate pl-6 font-normal ${FIJA}`} title={e.elemento ?? undefined}>
                     {e.elemento ? (
                       <span className="inline-flex items-center gap-1.5">
                         {e.tipoElemento === "archivo" && <FileText className="size-3 shrink-0 text-muted-foreground" aria-label="Archivo" />}
