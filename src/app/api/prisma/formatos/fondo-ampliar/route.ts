@@ -5,6 +5,7 @@ import { RATIOS_IA, type TamanoIA } from "@/lib/prisma/formatos/geometria";
 import { CUERPO_IA_MAX_BYTES, FONDO_IA_MAX_BYTES, RECORTE_IA_MAX } from "@/lib/prisma/formatos/gemela";
 import { pngDelForm } from "@/lib/prisma/formatos/png-form";
 import { anotarGastoGemini, revisarTopeGemini } from "@/lib/prisma/formatos/gasto-gemini";
+import { origenDeGasto } from "@/lib/prisma/formatos/actividad";
 import { FRENO, gate, saturado } from "@/app/(app)/prisma/comun";
 import { mismoOrigen } from "@/app/(app)/prisma/formatos-comun";
 
@@ -13,9 +14,9 @@ import { mismoOrigen } from "@/app/(app)/prisma/formatos-comun";
  * sin piezas, al centro de un lienzo de la forma de la medida; Gemini pinta lo de alrededor y se devuelve la imagen. Nada
  * se guarda: el fondo original se cose encima en el navegador.
  *
- * POST multipart { imagen: PNG, aspect, tamano } → image/jpeg (+ x-costo-usd) | { ok: false, error }
+ * POST multipart { imagen: PNG, aspect, tamano, hueco?, archivo?, cliente? } → image/jpeg (+ x-costo-usd) | { ok: false, error }
  * Mismo gate, interruptor (PRISMA_FORMATOS_IA=gemini + GEMINI_API_KEY), frenos y tope diario que «Rehacer el fondo con
- * IA» (fondo-plano/route.ts). El gasto se anota como "tamano": es la misma operación que Formatos con imagen plana.
+ * IA» (fondo-plano/route.ts). El gasto se anota como "fondo_ampliar" o, con `hueco=1`, "rellenar_hueco" (0091).
  */
 export const dynamic = "force-dynamic";
 /** La IA tiene 150 s de tope (proveedor.ts). */
@@ -53,6 +54,9 @@ export async function POST(req: Request) {
   } catch {
     return json({ ok: false, error: "Formato inválido." }, 400);
   }
+  const origen = origenDeGasto(form);
+  // Misma operación, dos gestos que la bitácora separa: ampliar la forma o rellenar el hueco que dejó mover el fondo.
+  const ruta = form.get("hueco") === "1" ? "rellenar_hueco" : "fondo_ampliar";
   const aspect = form.get("aspect"), tamano = form.get("tamano");
   if (typeof aspect !== "string" || !Object.hasOwn(RATIOS_IA, aspect)) return json({ ok: false, error: "Proporción no válida." }, 400);
   if (!esTamano(tamano)) return json({ ok: false, error: "Tamaño no válido." }, 400);
@@ -63,7 +67,7 @@ export async function POST(req: Request) {
 
   try {
     const r = await ia.ampliar({ png: imagen.bytes, aspect, tamano });
-    await anotarGastoGemini({ ruta: "tamano", modelo: r.modelo, usd: r.costoUsd, member_id: g.soyId });
+    await anotarGastoGemini({ ruta, modelo: r.modelo, usd: r.costoUsd, member_id: g.soyId, ...origen });
     // Lo que vuelve se re-codifica sin metadatos. En JPEG: un fondo de foto de 2K en PNG pasaría los 4.5 MB que deja Vercel,
     // ya cobrado. Es sólo lo de alrededor: el fondo original se cose encima en el navegador.
     const [sw, sh] = RATIOS_IA[aspect][tamano];
@@ -79,7 +83,7 @@ export async function POST(req: Request) {
     const causa = err instanceof ErrorConCosto ? err.causa : err;
     if (err instanceof ErrorConCosto) {
       console.info(`[formatos] fondo ampliado con IA sin imagen, US$${err.costoUsd ?? "?"}`);
-      await anotarGastoGemini({ ruta: "tamano", modelo: ia.modelo, usd: err.costoUsd, member_id: g.soyId });
+      await anotarGastoGemini({ ruta, modelo: ia.modelo, usd: err.costoUsd, member_id: g.soyId, ...origen });
     }
     if (causa instanceof ErrorIA) {
       console.error("[formatos] fondo ampliado con IA:", causa.message);

@@ -2,12 +2,13 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { faltaMigracion } from "@/lib/prisma/migracion";
 import { MENSAJE_TOPE, gastoParaTope, topeAlcanzado, usd } from "./tope-gemini";
+import { faltaLa0091, gastoSin0091, insertarConCliente } from "./actividad";
 
 /**
  * HÜE Prisma › Formatos — lo que cuesta cada llamada a Gemini y el tope diario (0088). TODA llamada a Gemini pasa por
  * aquí (tamaño, copia, fondo plano, lectura): un tope que una ruta se salta no es un tope.
  */
-export type RutaGemini = "tamano" | "copia" | "fondo_plano" | "leer";
+export type RutaGemini = "tamano" | "copia" | "fondo_plano" | "leer" | "fondo_ampliar" | "rellenar_hueco";
 export type ResumenGemini = { hoyUsd: number; mesUsd: number; llamadasHoy: number; sinCostoHoy: number };
 
 export async function resumenGemini(): Promise<ResumenGemini | { error: { code?: string; message?: string } }> {
@@ -39,10 +40,14 @@ export async function revisarTopeGemini(): Promise<string | null> {
   return MENSAJE_TOPE;
 }
 
-/** Anota una llamada ya cobrada. Un error se registra y no se propaga: la persona ya pagó su resultado. */
-export async function anotarGastoGemini(fila: { ruta: RutaGemini; modelo: string; usd: number | null; member_id: string }): Promise<void> {
+/** Anota una llamada ya cobrada. Un error se registra y no se propaga: la persona ya pagó su resultado. El gasto no se
+ *  pierde por el origen: cliente que ya no existe → sin cliente; base sin la 0091 → como se anotaba antes. */
+export async function anotarGastoGemini(fila: { ruta: RutaGemini; modelo: string; usd: number | null; member_id: string; archivo?: string | null; client_id?: string | null }): Promise<void> {
   try {
-    const { error } = await supabaseAdmin().from("prisma_gemini_gastos").insert(fila);
+    const db = supabaseAdmin();
+    const { archivo, client_id, ...base } = fila;
+    let { error } = await insertarConCliente((f) => db.from("prisma_gemini_gastos").insert(f), { ...base, ...(archivo ? { archivo } : {}), ...(client_id ? { client_id } : {}) });
+    if (error && faltaLa0091(error)) ({ error } = await db.from("prisma_gemini_gastos").insert(gastoSin0091(fila)));
     if (error) console.error("[formatos] anotar gasto de Gemini:", error.message);
   } catch (err) {
     console.error("[formatos] anotar gasto de Gemini:", err);

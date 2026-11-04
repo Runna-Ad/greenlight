@@ -12,6 +12,7 @@ import { nombreDeGuia, etiquetaPieza, esNombreLegal, desenvolver, CAPA_DEBAJO_FO
 import { legalDelPsd, conLegal, conLegalDe, conLegalFijo, legalCabe, legalVigente, legalesParaCliente, legalParecido, parecidoLegal } from "../src/lib/prisma/formatos/legal.ts";
 import { hermanas, copiarEdicion } from "../src/lib/prisma/formatos/matriz.ts";
 import { MENSAJE_TOPE, gastoParaTope, leerTope, topeAlcanzado } from "../src/lib/prisma/formatos/tope-gemini.ts";
+import { ACCIONES_ACTIVIDAD, ARCHIVO_MAX, DETALLE_MAX, RANGOS_ACTIVIDAD, clienteValido, dineroActividad, esAccionActividad, esRangoActividad, faltaLa0091, fraseActividad, gastoSin0091, insertarConCliente, leerEvento, origenDeGasto, rangoFechas, textoCorto } from "../src/lib/prisma/formatos/actividad.ts";
 import { MATRIZ, baseAEscala } from "../src/lib/prisma/formatos/tabla-matriz.ts";
 import { leerPsd, despiezar, rearmar, despieceUsable, rolDe, tieneFondo, piezasDeMesa, ErrorPsd, PIEZAS_MAX, TAPADA_MAX_PCT, RELLENO_MAX_PCT, promediarArea, reducirMesa, esVersionPsd, rellenarSuave, PSD_MAL_FORMADO, noEsRgb, noEs8Bits } from "../src/lib/prisma/formatos/psd.ts";
 import { adelgazarPsd, prepararParaEditable, PsdInseguro, PsdPesado, PSD_ARCHIVO_MAX } from "../src/lib/prisma/formatos/adelgazar.ts";
@@ -3699,6 +3700,74 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   const d2 = desempacarAmpliacion(structuredClone(empacarAmpliacion(relleno, baseDe)), fondoDe);
   ok("relleno: recupera lo que tenía debajo, para poder quitarlo sin otro cobro", d2.hueco.previa?.base === f0 && d2.hueco.forma?.base === f0);
   eq("relleno: sin la ampliación de debajo no se guarda a medias", empacarAmpliacion({ ...geo, base: f0, hueco: { forma: { ...geo, base: new Uint8ClampedArray(4) }, previa: null } }, baseDe), null);
+}
+
+console.log("\n▶ Actividad (0091): lista cerrada, saneo, reintento y fechas");
+{
+  const CLIENTE = "aaaaaaaa-0091-4000-8000-000000000001";
+  ok("actividad: la lista son 8", ACCIONES_ACTIVIDAD.length === 8 && ACCIONES_ACTIVIDAD.every(esAccionActividad));
+  ok("actividad: la migración acepta exactamente la lista", (() => {
+    const sql = readFileSync(new URL("../supabase/migrations/20261104120001_greenlight_0091_actividad.sql", import.meta.url), "utf8");
+    const lista = sql.match(/accion in \(([^)]+)\)/)[1].split(",").map((x) => x.trim().replace(/'/g, ""));
+    return JSON.stringify(lista) === JSON.stringify([...ACCIONES_ACTIVIDAD]);
+  })());
+  ok("actividad: una acción inventada o rara no pasa", !esAccionActividad("hackeo") && !esAccionActividad("toString") && !esAccionActividad(null) && !esAccionActividad(["edicion"]));
+  ok("actividad: el cuerpo sin acción válida es null", leerEvento({ accion: "x" }) === null && leerEvento(null) === null && leerEvento([]) === null && leerEvento("edicion") === null);
+  const ev = leerEvento({ accion: "edicion", archivo: `  a\nb.psd  `, cliente: CLIENTE, detalle: "x".repeat(DETALLE_MAX + 50), member_id: "ajeno" });
+  ok("actividad: limpia el archivo a una línea", ev.archivo === "a b.psd");
+  ok("actividad: recorta el detalle", ev.detalle.length === DETALLE_MAX);
+  ok("actividad: acepta el cliente uuid", ev.client_id === CLIENTE);
+  ok("actividad: la persona del cuerpo no pasa", !("member_id" in ev));
+  ok("actividad: cliente mal formado se ignora, el evento sigue", leerEvento({ accion: "error", cliente: "no-es-uuid" }).client_id === null);
+  ok("actividad: archivo que no es texto se ignora", leerEvento({ accion: "error", archivo: 5 }).archivo === null);
+  ok("textoCorto: sólo espacios es null", textoCorto("   ", 10) === null);
+  ok("textoCorto: no parte un carácter por la mitad", textoCorto("😀".repeat(ARCHIVO_MAX + 5), ARCHIVO_MAX) === "😀".repeat(ARCHIVO_MAX));
+  ok("clienteValido: uuid en mayúsculas se normaliza", clienteValido(CLIENTE.toUpperCase()) === CLIENTE);
+  const origen = origenDeGasto(new Map([["archivo", " anuncio.psd "], ["cliente", "nope"]]));
+  ok("gasto: origen del form validado", origen.archivo === "anuncio.psd" && origen.client_id === null);
+  ok("gasto: sin campos, nulos", (() => { const o = origenDeGasto(new Map()); return o.archivo === null && o.client_id === null; })());
+
+  // El reintento que no pierde el registro.
+  const probar = async (errores, fila) => {
+    const intentos = [];
+    const r = await insertarConCliente(async (f) => { intentos.push(f); return { error: errores[intentos.length - 1] ?? null }; }, fila);
+    return { intentos, r };
+  };
+  let t = await probar([{ code: "23503" }], { a: 1, client_id: CLIENTE });
+  ok("reintento: cliente inexistente reintenta sin él", t.intentos.length === 2 && t.intentos[1].client_id === null && t.intentos[1].a === 1 && t.r.error === null);
+  t = await probar([{ code: "23503" }, { code: "23503" }], { client_id: CLIENTE });
+  ok("reintento: sólo una vez, y el error se ve", t.intentos.length === 2 && t.r.error.code === "23503");
+  t = await probar([{ code: "23503" }], { a: 1 });
+  ok("reintento: sin cliente no hay qué quitar", t.intentos.length === 1);
+  t = await probar([{ code: "XX000" }], { client_id: CLIENTE });
+  ok("reintento: otro error no reintenta", t.intentos.length === 1 && t.r.error.code === "XX000");
+  t = await probar([], { client_id: CLIENTE });
+  ok("reintento: sin error, una sola vez", t.intentos.length === 1 && t.r.error === null);
+
+  // La preview comparte la base real: el código puede llegar antes que la 0091 y el tope no debe perder llamadas.
+  ok("sin 0091: columna o ruta nueva se reconocen", ["PGRST204", "42703", "23514"].every((code) => faltaLa0091({ code })));
+  ok("sin 0091: otro error no", !faltaLa0091({ code: "XX000" }) && !faltaLa0091(null));
+  const vieja = gastoSin0091({ ruta: "rellenar_hueco", modelo: "m", usd: null, member_id: "x", archivo: "a", client_id: CLIENTE });
+  ok("sin 0091: ruta nueva vuelve a tamano, sin columnas nuevas", vieja.ruta === "tamano" && !("archivo" in vieja) && !("client_id" in vieja) && vieja.usd === null);
+  ok("sin 0091: ampliar también", gastoSin0091({ ruta: "fondo_ampliar", modelo: "m", usd: 1, member_id: "x" }).ruta === "tamano");
+  ok("sin 0091: las demás rutas no cambian", gastoSin0091({ ruta: "leer", modelo: "m", usd: 1, member_id: "x" }).ruta === "leer");
+
+  // Fechas en hora de México (UTC-6): las 03:00 UTC del 1 de noviembre todavía son 31 de octubre allá.
+  const ahora = new Date("2026-11-01T03:00:00Z");
+  const igual = (r, d, h) => r.desde === d && r.hasta === h;
+  ok("rango: hoy es hoy en México", igual(rangoFechas("hoy", ahora), "2026-10-31", "2026-10-31"));
+  ok("rango: 7 días incluye hoy", igual(rangoFechas("7d", ahora), "2026-10-25", "2026-10-31"));
+  ok("rango: 30 días", igual(rangoFechas("30d", ahora), "2026-10-02", "2026-10-31"));
+  ok("rango: este mes", igual(rangoFechas("mes", ahora), "2026-10-01", "2026-10-31"));
+  ok("rango: cruza de año", igual(rangoFechas("7d", new Date("2027-01-02T18:00:00Z")), "2026-12-27", "2027-01-02"));
+  ok("rango: sólo los de la lista", RANGOS_ACTIVIDAD.every((r) => esRangoActividad(r.id)) && !esRangoActividad("1y") && !esRangoActividad(undefined));
+
+  // Pantalla
+  ok("frases: cada acción se puede leer", ACCIONES_ACTIVIDAD.every((a) => fraseActividad(a) !== a));
+  ok("frases: cada ruta de IA se distingue", new Set(["tamano", "copia", "fondo_plano", "leer", "fondo_ampliar", "rellenar_hueco"].map((r) => fraseActividad("ia", r))).size === 6);
+  ok("dinero: desconocido no es cero", dineroActividad(null) === "–");
+  ok("dinero: centavos", dineroActividad(0.1) === "US$0.10");
+  ok("dinero: menos de un centavo no se ve como cero", dineroActividad(0.004) === "<US$0.01");
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

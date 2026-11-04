@@ -25,6 +25,8 @@ import { colaVacia, enCola, pintar } from "./pintar";
 import { Franjas, VistaGrande } from "./vista-grande";
 import { barrerCaducados, borrarBorrador, guardarEstado, guardarLeido, guardarPesado, recuperarBorrador, sinEspacio, tomarCandado, type Recuperado } from "./borrador";
 import { fijarPerfil } from "./perfil";
+import { anotarActividad } from "@/lib/prisma/formatos/anotar-actividad";
+import type { AccionActividad } from "@/lib/prisma/formatos/actividad";
 import { claveAmpliacion, claveQuitada, desempacarAmpliacion, empacarAmpliacion, type AmpliacionGuardada, type BaseGuardada } from "@/lib/prisma/formatos/borrador";
 import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, escrituraCon, fuentesRecordadas, listosDe, maquetadorDe, olvidarFuentes, olvidarFuentesSinPerfil, pintorDe, porQueNoSeEscribe, recordarFuentes, renglonesDe, revisarTextos, textoEscrito, textosVivos, type ArchivoFuente, type Escritura, type Renglones, type Tipografias } from "./escritura";
 import { tipografiasDelCliente, tipografiasDelPsd, type TipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
@@ -601,6 +603,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
   ampliacion,
   ampliando,
   alAmpliar,
+  anotar,
   alCancelarAmpliar,
   alQuitarAmpliacion,
 }: {
@@ -631,6 +634,8 @@ const TarjetaMedida = memo(function TarjetaMedida({
   ampliacion: Ampliacion | null;
   ampliando: boolean;
   alAmpliar: (m: Medida, base: MaestroVista) => void;
+  /** Admin › Actividad: lo que hizo la persona en esta tarjeta. */
+  anotar: (accion: AccionActividad, detalle?: string) => void;
   alCancelarAmpliar: (m: Medida) => void;
   alQuitarAmpliacion: (m: Medida, a: Ampliacion) => void;
 }) {
@@ -696,9 +701,13 @@ const TarjetaMedida = memo(function TarjetaMedida({
   const franja = rellenar(tx(FP.zonaFranja, lang), { c: nombreCanal });
   const bajar = async () => {
     try {
-      if (lienzo.current && !noPinto) descargar(await aPng(lienzo.current), archivoDe(ma, medida, entrega));
+      if (lienzo.current && !noPinto) {
+        descargar(await aPng(lienzo.current), archivoDe(ma, medida, entrega));
+        anotar("descarga_png", etiqueta(medida));
+      }
     } catch (err) {
       console.error("[formatos-psd] png", err);
+      anotar("error", `PNG ${etiqueta(medida)}`);
       toast.error(tx(FP.bajarFallo, lang));
     }
   };
@@ -735,6 +744,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
       });
       if (!r || !enPagina.current) return;
       descargar(r.archivo, archivoPsdDe(ma, medida, entrega));
+      anotar("descarga_psd", m);
       // Se queda hasta cerrarlo: el archivo se llama igual que uno editable y éste es el único aviso de que no lo es.
       if (r.plano !== null) return void toast.warning(rellenar(tx(FP.psdPlano, lang), { m, motivo: r.plano }), { ...AVISO_ABAJO, id, ...FIJO });
       if (!r.notas.length) return void toast.success(rellenar(tx(FP.psdListo, lang), { m }), { ...AVISO_ABAJO, id, duration: 10_000 });
@@ -743,6 +753,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
       toast.warning(avisoNotas(r.notas, m, lang), { ...AVISO_ABAJO, id, ...(notasNuevas(psdOriginal, r.notas) ? FIJO : { duration: 10_000 }) });
     } catch (err) {
       console.error("[formatos-psd] psd", err);
+      anotar("error", `PSD ${m}`);
       if (enPagina.current) toast.error(rellenar(tx(FP.bajarPsdFallo, lang), { m }), { ...AVISO_ABAJO, id, duration: 10_000 });
     } finally {
       cancelarPsd.current = null;
@@ -1086,6 +1097,8 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
     };
   }, [soltar]);
   const anunciar = useCallback((t: string) => setAviso((p) => ({ texto: t, n: p?.texto === t ? p.n + 1 : 0 })), []);
+  /** Admin › Actividad (0091): la persona la pone el servidor. Va el nombre del archivo, nunca el archivo. */
+  const anotar = useCallback((accion: AccionActividad, detalle?: string, archivo?: string) => anotarActividad({ accion, archivo: archivo ?? leidoVigente.current?.archivo ?? null, cliente: clienteVigente.current || null, detalle }), []);
 
   const leyendo = avance !== null;
   const eligiendo = eleccion !== null || sinFondo !== null;
@@ -1189,6 +1202,10 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
         form.set("imagen", await pngQueQuepa(lienzoParaAmpliar(fondo, fuente.w, fuente.h, L.gw, L.gh, donde), L.gw, L.gh, RECORTE_IA_MAX, FONDO_IA_MAX_BYTES), "imagen.png");
         form.set("aspect", L.aspect);
         form.set("tamano", L.tamano);
+        // De qué archivo y cliente es el gasto (Admin › Actividad), y si fue rellenar un hueco.
+        form.set("archivo", l.archivo);
+        if (clienteVigente.current) form.set("cliente", clienteVigente.current);
+        if (relleno) form.set("hueco", "1");
         const res = await fetch("/api/prisma/formatos/fondo-ampliar", { method: "POST", body: form, signal: AbortSignal.any([ctrl.signal, AbortSignal.timeout(IA_ESPERA_MS)]) });
         if (!res.ok) {
           const e = (await res.json().catch(() => null)) as { error?: unknown } | null;
@@ -1211,6 +1228,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       } catch (err) {
         if (ctrl.signal.aborted || !vivo.current) return;
         console.error("[formatos-psd] ampliar fondo", err);
+        anotar("error", `Fondo con IA ${etiqueta(m)}: ${err instanceof ErrorDeRuta ? err.message : "falló"}`);
         toast.error(`${etiqueta(m)}: ${err instanceof ErrorDeRuta ? err.message : tx(FP.ampliarFallo, langVigente.current)}`, { duration: 10_000 });
       } finally {
         pedidosAmpliar.current.delete(k);
@@ -1222,7 +1240,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
           });
       }
     },
-    [anunciar],
+    [anunciar, anotar],
   );
   const cancelarAmpliar = useCallback(
     (m: Medida) => {
@@ -1305,6 +1323,8 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       const rgbaPieza = p.rgba.buffer instanceof ArrayBuffer ? (p.rgba as Uint8ClampedArray<ArrayBuffer>) : new Uint8ClampedArray(p.rgba);
       form.set("pieza", await pngQueQuepa(rgbaPieza, p.caja.w, p.caja.h, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES), "pieza.png");
       form.set("aspect", recorte.aspect);
+      form.set("archivo", leidoVigente.current?.archivo ?? "");
+      if (clienteVigente.current) form.set("cliente", clienteVigente.current);
       const res = await fetch("/api/prisma/formatos/copia", { method: "POST", body: form, signal: AbortSignal.any([ctrl.signal, AbortSignal.timeout(IA_ESPERA_MS)]) });
       if (!res.ok) {
         const e = (await res.json().catch(() => null)) as { error?: unknown } | null;
@@ -1325,6 +1345,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       // Cancelado porque cambió el PSD o se salió de la pantalla: nada que decir.
       if (ctrl.signal.aborted || !vivo.current) return;
       console.error("[formatos-psd] copia con IA", err);
+      anotar("error", `Quitar copia con IA: ${err instanceof ErrorDeRuta ? err.message : "falló"}`);
       toast.error(err instanceof ErrorDeRuta ? err.message : tx(FP.copiaIaFallo, langVigente.current), { duration: 10_000 });
     } finally {
       if (pedidoIA.current === ctrl) pedidoIA.current = null;
@@ -1409,7 +1430,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
     pedidoPlano.current = pedido;
     setEtapaPlano("leer");
     try {
-      const r = await leerPlano(file, pedido.signal, (e) => vigente() && setEtapaPlano(e), nueva);
+      const r = await leerPlano(file, pedido.signal, (e) => vigente() && setEtapaPlano(e), nueva, clienteVigente.current);
       if (!vigente()) {
         if ("url" in r) URL.revokeObjectURL(r.url);
         return;
@@ -1458,6 +1479,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       setEleccion(null);
       setSinFondo(null);
       setFalla(f);
+      anotar("error", `Abrir: ${f.clave}`, file.name);
     };
     // El peso y la firma se revisan ANTES de abrir el archivo. El archivo NO se carga aquí: el worker lo lee a
     // pedazos y se salta lo que no usa (un PSD de 1 GB hecho de objetos inteligentes cabe).
@@ -1714,6 +1736,13 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       },
     );
   }, []);
+  /** El PSD que ya se anotó como abierto (uno recuperado no se abrió otra vez). */
+  const anotadoLeido = useRef<Leido | null>(null);
+  useEffect(() => {
+    if (!leido || anotadoLeido.current === leido) return;
+    anotadoLeido.current = leido;
+    anotar("psd_abierto", undefined, leido.archivo);
+  }, [leido, anotar]);
   const ponerRecuperado = useEffectEvent((r: Recuperado<Leido, EstadoPsd>) => {
     const l = r.leido, e = r.estado;
     const quitadasGuardadas = new Map<number, Quitada>();
@@ -1750,6 +1779,8 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       if (e.textos) setTextosSesion({ leido: l, cambios: e.textos });
     }
     toast.info(rellenar(tx(FP.recuperado, langVigente.current), { a: l.archivo }));
+    anotadoLeido.current = l;
+    anotar("trabajo_recuperado", undefined, l.archivo);
   });
   useEffect(() => {
     if (perfil === null) return;
@@ -1869,6 +1900,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
     if (!s) return;
     setSalida(null);
     setSalidaBajada(false);
+    if (l) anotar("trabajo_borrado", undefined, l.archivo);
     if (perfil !== null && dueno.current) {
       borrador.current = null;
       enFila(() => borrarBorrador(perfil));
@@ -2189,6 +2221,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
     // Los textos son del anuncio: se guardan aparte y cambian en todas las medidas (se dice a la vista).
     const textos = cambios !== cambiosTexto;
     if (textos && ponerTextos(l, cambios)) toast.success(rellenar(tx(cambiosQueAplican(maestrosVista, cambios).length ? FP.editorTextosGuardados : FP.editorTextosDelPsd, lang), { n: medidas.length }));
+    anotar("edicion", etiqueta(m));
     const antes = edicionesVista.get(clave(m)) ?? null;
     const ctx = contextoEdicion(m, lados[clave(m)], canal, cambiaAcomodo(ampliacionesVista.get(clave(m)))), ma = maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)];
     const guardada = guardarEdicion(l.archivo, ma, m.w, m.h, ctx, ed);
@@ -2542,9 +2575,11 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       const nuevas = notasNuevas(l.psdOriginal, lasNotas);
       // En varios ZIP también se queda: hay que abrirlos juntos y quizá permitir las descargas en el navegador.
       const fijo = planos.size || sinPsd.length || sinLugar.length || nuevas || enPartes.length;
+      anotar("descarga_zip", `${lista.length} medidas`);
       (avisos.length ? toast.warning : toast.success)(titulo, { ...AVISO_ZIP, description, ...(fijo ? FIJO : { duration: 10_000 }) });
     } catch (err) {
       console.error("[formatos-psd] zip", err);
+      anotar("error", "ZIP");
       fallo(tx(FP.bajarFallo, lang));
     } finally {
       cancelarZip.current = null;
@@ -3459,7 +3494,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
                     </h3>
                     <ul className={cn("grid gap-3", COLUMNAS[f])}>
                       {grupo.map((m) => (
-                        <TarjetaMedida key={clave(m)} maestros={conTextos.maestros} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} entrega={entrega} renglones={renglones} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} elegida={!fueraDelZip.has(clave(m))} alElegir={elegirParaZip} ampliacion={ampliacionesVista.get(clave(m)) ?? null} ampliando={ampliandose.has(clave(m))} alAmpliar={alAmpliar} alCancelarAmpliar={cancelarAmpliar} alQuitarAmpliacion={quitarAmpliacion} />
+                        <TarjetaMedida key={clave(m)} anotar={anotar} maestros={conTextos.maestros} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} entrega={entrega} renglones={renglones} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} elegida={!fueraDelZip.has(clave(m))} alElegir={elegirParaZip} ampliacion={ampliacionesVista.get(clave(m)) ?? null} ampliando={ampliandose.has(clave(m))} alAmpliar={alAmpliar} alCancelarAmpliar={cancelarAmpliar} alQuitarAmpliacion={quitarAmpliacion} />
                       ))}
                     </ul>
                   </div>

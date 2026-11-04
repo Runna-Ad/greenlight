@@ -193,6 +193,9 @@ export function RevisionPlano({ plano, planaActiva, iaFondo, tipos, cliente, sel
       form.set("fondo", fondoPng, "fondo.png");
       form.set("mascara", await aPng(lienzoDe(recorteConOrilla(mk, W, H, c), c.w, c.h, lado)), "mascara.png");
       form.set("aspect", recorte.aspect);
+      // De qué archivo y cliente es el gasto (Admin › Actividad).
+      form.set("archivo", plano.archivo);
+      if (cliente) form.set("cliente", cliente);
       const res = await fetch("/api/prisma/formatos/fondo-plano", { method: "POST", body: form, signal: AbortSignal.any([ctrl.signal, AbortSignal.timeout(IA_ESPERA_MS)]) });
       if (!res.ok) {
         const e = (await res.json().catch(() => null)) as { error?: unknown } | null;

@@ -46,7 +46,7 @@ export function esImagenPlana(c: Uint8Array): boolean {
  * Abre la imagen, la manda a leer y la mide. `etapa` avisa cuándo pasa de leer a separar. Lanza `AbortError` si se
  * cancela; cualquier otra falla vuelve como `FallaPlano` (lo que dice la pantalla).
  */
-export async function leerPlano(file: File, senal: AbortSignal, etapa: (e: "separar") => void, nueva = false): Promise<Plano | FallaPlano> {
+export async function leerPlano(file: File, senal: AbortSignal, etapa: (e: "separar") => void, nueva = false, cliente = ""): Promise<Plano | FallaPlano> {
   if (file.size > PLANO_BYTES_MAX) return { clave: "planoPesado" };
   let bitmap: ImageBitmap;
   try {
@@ -99,6 +99,9 @@ export async function leerPlano(file: File, senal: AbortSignal, etapa: (e: "sepa
     .catch(() => null);
   if (huella) form.append("huella", huella);
   if (nueva) form.append("nueva", "1");
+  // De qué archivo y cliente es el gasto (Admin › Actividad).
+  form.append("archivo", file.name);
+  if (cliente) form.append("cliente", cliente);
   const res = await fetch("/api/prisma/formatos/leer", { method: "POST", body: form, signal: AbortSignal.any([senal, AbortSignal.timeout(LEER_MS)]) }).catch((e: unknown) => {
     if (senal.aborted) throw e;
     return null;
