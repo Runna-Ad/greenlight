@@ -1,5 +1,32 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-11-04 — Bitácora de actividad y trabajo guardado por persona (rama `feat/actividad-y-guardado` desde origin/prisma, worktree ../greenlight-actividad)
+Pedro eligió A y 1. A = leer lo que ya se registra y anotar sólo lo que falta. 1 = el trabajo a medias vive en el navegador de cada persona; el PSD no se sube.
+Next Step: construir las dos piezas y dejarlas en la preview de `prisma`; en vivo sólo con su "ship it" (la 0091 también).
+
+**Pieza 1, Admin › Actividad (admin y Master, en pantalla, en la función del servidor y en la base):**
+- [ ] Ampliar la pestaña que ya existe (`actividad-tab.tsx`, `listarActividad`), no hacer otra. Vistas: por persona, por proyecto, línea de tiempo; filtro de fechas.
+- [ ] 0091: tabla `prisma_actividad` para lo que hoy no queda en ningún lado (PSD abierto, descargas, errores, trabajo borrado). `prisma_gemini_gastos` gana cliente y archivo, y rutas propias para ampliar y rellenar. Funciones SQL para los resúmenes.
+- [ ] Ruta que recibe los eventos: la persona la pone el servidor, nunca el navegador; lista cerrada de acciones; freno por persona.
+- [ ] Greenlight se lee de `status_events`, `comments`, `correccion_respuestas`; Prisma de `prisma_specs`, `prisma_eventos`, `prisma_resultados`, `prisma_formatos_lotes`. Nada se escribe dos veces.
+- [ ] Una iteración: en Formatos, llamadas a la IA y medidas editadas; en prompts, variantes y refinados; en Greenlight, rondas de cambios. El tiempo trabajado no se mide.
+
+**Pieza 2, Formatos PSD, trabajo guardado:**
+- [ ] IndexedDB, un borrador por persona y navegador: lo leído (PSD y maestros), decisiones, ediciones, textos, copias quitadas, fondos con IA.
+- [ ] Recargar o cerrar: vuelve solo, sin preguntar. Aviso visible si no se pudo guardar.
+- [ ] Salir por un enlace de la app o «Cambiar PSD»: «Descargar y salir / Borrar y salir / Quedarme». El botón Atrás del navegador no borra nada.
+- [ ] Borrador olvidado: se borra a los 14 días, al abrir la pantalla en ese navegador.
+- [ ] Separar por persona lo que hoy es del navegador: ediciones y textos (localStorage) y tipografías recordadas (IndexedDB).
+- [ ] Segunda pestaña de la misma persona: no guarda encima y lo dice.
+
+**Verification:**
+- [ ] test-db: admin y Master leen; lead, especialista, cliente y la llave pública no; la base rechaza lo que no está en la lista.
+- [ ] test-formatos para lo puro (empacar y desempacar un borrador, caducidad). `npm test`, tsc, eslint, build.
+- [ ] Navegador en local: PSD real, editar, recargar, sigue igual; fondo con IA simulada sobrevive sin otro cobro; las tres salidas; dos perfiles no se ven.
+- [ ] Revisión de seguridad (Opus) y reap.
+
+**Límites que ya se saben:** no sigue a otra computadora; borrar datos del navegador lo borra; una imagen plana todavía en revisión no se guarda (sí después de la revisión); Safari sin probar; lo guardado no va cifrado en esa computadora; los eventos del navegador pueden perderse sin red; el registro del PSD empieza el día que salga en vivo; depende del fondo con IA, que aún no está en `main`.
+
 ## 🟡 2026-11-04 — «Ampliar fondo con IA» en el lado PSD, por medida (rama `feat/fondo-ia-psd`, worktree ../greenlight-fondo-ia, sin migración)
 Pedro eligió la opción 1 (botón por medida): "with the zoom a lot of the times it brings the other assets right to the edge".
 El lienzo del maestro crece a la forma de la medida (`ampliar.ts`), Gemini pinta lo nuevo, el fondo original se cose encima.
