@@ -127,6 +127,23 @@ export const rellenar = (s: string, vars: Record<string, string | number>): stri
 
 // ── Puerta PSD (2026-10-13): el anuncio llega en Photoshop y se arma desde sus capas, en el navegador ──
 export const FP = {
+  guardadoAqui: t("Tu trabajo se guarda en esta computadora.", "Your work is saved on this computer."),
+  guardadoOtraPestana: t("Ya tienes Formatos abierto en otra pestaña: lo que hagas aquí no se guarda.", "You already have Formats open in another tab: what you do here isn't saved."),
+  guardadoFallo: t("No se pudo guardar tu trabajo en este navegador. Descarga tus archivos antes de recargar.", "Your work couldn't be saved in this browser. Download your files before you reload."),
+  guardadoSinEspacio: t("Tu navegador se quedó sin espacio y tu trabajo ya no se está guardando. Descarga tus archivos antes de recargar.", "Your browser ran out of space and your work is no longer being saved. Download your files before you reload."),
+  guardadoSinPerfil: t("Sin sesión, tu trabajo no se guarda.", "Without a session, your work isn't saved."),
+  recuperando: t("Buscando tu trabajo guardado…", "Looking for your saved work…"),
+  recuperado: t("Seguimos donde ibas: {a}", "Picked up where you left off: {a}"),
+  recuperarFallo: t("No se pudo recuperar tu trabajo guardado. Tendrás que abrir el PSD otra vez.", "Your saved work couldn't be recovered. You'll need to open the PSD again."),
+  salidaTitulo: t("¿Seguro que quieres salir?", "Are you sure you want to leave?"),
+  salidaTexto: t("Si sales, se borra tu trabajo en {a}: el PSD, las ediciones y los fondos con IA. Si quieres tus archivos, descárgalos antes.", "If you leave, your work on {a} is deleted: the PSD, your edits and the AI backgrounds. If you want your files, download them first."),
+  salidaCambiarTexto: t("Si abres otro PSD, se borra tu trabajo en {a}: las ediciones y los fondos con IA. Si quieres tus archivos, descárgalos antes.", "If you open another PSD, your work on {a} is deleted: your edits and the AI backgrounds. If you want your files, download them first."),
+  salidaDescargada: t("Cuando veas tus archivos en Descargas, ya puedes salir.", "Once you see your files in Downloads, you can leave."),
+  salidaDescargar: t("Descargar archivos", "Download files"),
+  salidaDescargando: t("Descargando…", "Downloading…"),
+  salidaBorrar: t("Borrar y salir", "Delete and leave"),
+  salidaBorrarOtro: t("Borrar y abrir otro", "Delete and open another"),
+  salidaQuedarme: t("Quedarme", "Stay"),
   cartaTitulo: t("Adaptar a formatos", "Adapt to formats"),
   cartaAyuda: t("Tu anuncio terminado (PSD), en todas las medidas que pide el cliente.", "Your finished ad (PSD), in every size the client asks for."),
   tagline: t(

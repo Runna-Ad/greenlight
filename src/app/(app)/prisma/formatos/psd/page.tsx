@@ -76,6 +76,8 @@ export default async function FormatosPsdPage() {
     });
   }
   // El respaldo con IA sólo se ofrece con sesión: la ruta que llama a la IA la pide (y cobra).
-  return <FormatosPsd planaActiva={prismaFormatosActivo()} clientes={clientes} legales={legales} legalesFallaron={legalesFallaron} iaCopia={!!soyId && iaActiva()} />;
+  // Lo guardado en el navegador es de esta persona. En desarrollo no hay sesión: un perfil de prueba (la variable se pone al arrancar el servidor).
+  const perfil = soyId ?? (process.env.NODE_ENV === "development" ? (process.env.PRISMA_PERFIL_DEV ?? "local") : null);
+  return <FormatosPsd perfil={perfil} planaActiva={prismaFormatosActivo()} clientes={clientes} legales={legales} legalesFallaron={legalesFallaron} iaCopia={!!soyId && iaActiva()} />;
 }
 

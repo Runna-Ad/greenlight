@@ -2,10 +2,11 @@
 
 import { memo, useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, CircleCheck, Download, Eraser, FileImage, FileUp, FlipHorizontal2, Folder, Info, Languages, Layers, Loader2, Lock, Maximize2, Move, RotateCcw, Sparkles, Type, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { useLang } from "@/components/prisma/use-lang";
@@ -22,11 +23,14 @@ import { CARPETA_EDITABLES, CARPETA_ENTREGABLES, ZIP_MAX_BYTES, rutaLibre, zipsE
 import { etiquetaPieza, nombreDeGuia, rolDe, type Rol } from "@/lib/prisma/formatos/roles";
 import { colaVacia, enCola, pintar } from "./pintar";
 import { Franjas, VistaGrande } from "./vista-grande";
-import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, escrituraCon, fuentesRecordadas, listosDe, maquetadorDe, olvidarFuentes, pintorDe, porQueNoSeEscribe, recordarFuentes, renglonesDe, revisarTextos, textoEscrito, textosVivos, type ArchivoFuente, type Escritura, type Renglones, type Tipografias } from "./escritura";
+import { barrerCaducados, borrarBorrador, guardarEstado, guardarLeido, guardarPesado, recuperarBorrador, sinEspacio, tomarCandado, type Recuperado } from "./borrador";
+import { fijarPerfil } from "./perfil";
+import { claveAmpliacion, claveQuitada, desempacarAmpliacion, empacarAmpliacion, type AmpliacionGuardada, type BaseGuardada } from "@/lib/prisma/formatos/borrador";
+import { EXTENSIONES_FUENTE, cargarFuentes, elegirFuentes, escrituraCon, fuentesRecordadas, listosDe, maquetadorDe, olvidarFuentes, olvidarFuentesSinPerfil, pintorDe, porQueNoSeEscribe, recordarFuentes, renglonesDe, revisarTextos, textoEscrito, textosVivos, type ArchivoFuente, type Escritura, type Renglones, type Tipografias } from "./escritura";
 import { tipografiasDelCliente, tipografiasDelPsd, type TipografiasDelPsd } from "@/app/(app)/prisma/tipografias-actions";
 import { esImagenPlana, leerPlano, type Plano } from "./plano-lector";
 import { RevisionPlano } from "./revision-plano";
-import { EditorMedida, edicionGuardada, guardarEdicion, guardarTextos, textosGuardados } from "./editor-medida";
+import { EditorMedida, edicionGuardada, guardarEdicion, guardarTextos, olvidarGuardado, olvidarSinPerfil, textosGuardados } from "./editor-medida";
 import { cambiarTextos, cambiosQueAplican, marcarSinEscribir, NO_SE_ESCRIBIO, type CambiosTexto, type Listo } from "@/lib/prisma/formatos/cambios-texto";
 import { porQueNoSeCambia } from "@/lib/prisma/formatos/textos";
 import { APAGADA, COLUMNAS, ChipEstado, FOCO, FORMAS, FilaLegal, NOMBRE_FORMA, PRENDIDA, PastillasCanal, PastillasEntrega, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
@@ -37,7 +41,8 @@ import { ErrorDeRuta, IA_ESPERA_MS, aPng, aRgba, lienzoParaAmpliar, pngQueQuepa,
 
 /**
  * HÜE Prisma › Formatos, puerta PSD. El anuncio llega en Photoshop: un Web Worker lo lee y lo separa en fondo
- * limpio + piezas, y cada medida se pinta aquí mismo en un <canvas>. Nada se sube ni se guarda y no hay costo, salvo
+ * limpio + piezas, y cada medida se pinta aquí mismo en un <canvas>. Lo que se hace se guarda en el navegador de esa
+ * persona para sobrevivir a una recarga (`borrador.ts`), hasta que salga. Nada se sube y no hay costo, salvo
  * un caso que la persona pide con un botón: «Rellenar con IA» manda a Gemini un recorte del fondo y la pieza (la ruta
  * /api/prisma/formatos/copia). Lo que decide DÓNDE va cada pieza es `acomodo.ts` (probado aparte); esta pantalla sólo
  * lo enseña.
@@ -47,6 +52,25 @@ type Falla = { clave: keyof typeof FP_ERROR; detalle?: string };
 /** `psdOriginal`: el archivo tal cual, para armar el PSD editable de cada medida (se vuelve a leer entero al pedirlo);
  *  null si salió de una imagen plana (B28). */
 type Leido = { archivo: string; psdOriginal: Blob | null; maestros: MaestroListo[]; descartadas: MesaDescartada[]; avisos: string[] };
+/** Las decisiones que se guardan en el navegador con cada cambio. Lo pesado va aparte (`borrador.ts`). */
+type EstadoPsd = {
+  cliente: string;
+  entrega: Entrega;
+  lista: MedidaLista[];
+  apagadas: string[];
+  lados: Record<string, Lado>;
+  contrastes: Record<string, EleccionContraste>;
+  canal: Canal | null;
+  enZip: { png: boolean; psd: boolean };
+  fueraZip: string[];
+  papeles: [string, Rol | null][];
+  ediciones: [string, Edicion | null][];
+  textos: CambiosTexto | null;
+};
+/** Cómo va lo guardado en este navegador. */
+type Almacen = "ok" | "fallo" | "sinEspacio" | "otraPestana" | "sinPerfil";
+/** A qué iba la persona cuando se le preguntó si de verdad borra su trabajo. */
+type Salida = { tipo: "ir"; href: string } | { tipo: "cambiar" } | { tipo: "abrir"; archivo: File };
 /** Un maestro como se acomoda y se pinta: con el papel elegido en cada carpeta y, si se aprobó, sin la copia del fondo. */
 type MaestroVista = MaestroListo & { copia?: CopiaEnFondo | null; fondoOriginal?: Uint8ClampedArray };
 /** Cómo se quitó: gratis (espejo) o con la IA (lo que costó y cuánto cambió lo de alrededor). */
@@ -906,8 +930,21 @@ const TarjetaMedida = memo(function TarjetaMedida({
 export type ClientePsd = { id: string; nombre: string };
 
 /** `iaCopia`: el respaldo con IA de «Quitar del fondo» está encendido en el servidor (proveedor.ts). */
-export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, iaCopia }: { planaActiva: boolean; clientes: ClientePsd[]; legales: LegalGuardado[]; legalesFallaron: boolean; iaCopia: boolean }) {
+export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFallaron, iaCopia }: { perfil: string | null; planaActiva: boolean; clientes: ClientePsd[]; legales: LegalGuardado[]; legalesFallaron: boolean; iaCopia: boolean }) {
   const [lang, setLang] = useLang();
+  const router = useRouter();
+  // Antes de cualquier lectura de lo guardado (tipografías, ediciones, textos): cada quien ve lo suyo.
+  useState(() => fijarPerfil(perfil));
+  /** Se está buscando lo guardado: el cuadro de subida no aparece para luego desaparecer. */
+  const [recuperando, setRecuperando] = useState(perfil !== null);
+  const [almacen, setAlmacen] = useState<Almacen>(perfil === null ? "sinPerfil" : "ok");
+  const [salida, setSalida] = useState<Salida | null>(null);
+  const [salidaBajada, setSalidaBajada] = useState(false);
+  /** Esta pestaña tiene el candado: sólo ella recupera y guarda. */
+  const dueno = useRef(false);
+  /** El borrador de ahora: de qué PSD y qué fondos ya se escribieron (para no reescribir lo que no cambió). */
+  const borrador = useRef<{ id: string; leido: Leido; pesados: Map<string, object> } | null>(null);
+  const filaGuardado = useRef<Promise<void>>(Promise.resolve());
   /** "" = Sin cliente: sólo las tipografías que sirven para todos. */
   const [cliente, setCliente] = useState("");
   /** El cliente elegido AHORA, para lo que termina tarde (una respuesta de otro cliente no carga nada). */
@@ -931,7 +968,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   const [conIA, setConIA] = useState<{ leido: Leido; i: number } | null>(null);
   /** El pedido a la IA en curso: se cancela al cambiar de PSD o al salir de la pantalla. */
   const pedidoIA = useRef<AbortController | null>(null);
-  /** Los fondos ampliados con IA, por medida y de qué PSD (`ampliar.ts`). Sólo en memoria: se pierden al recargar. */
+  /** Los fondos ampliados con IA, por medida y de qué PSD (`ampliar.ts`). Se guardan en el navegador (`borrador.ts`). */
   const [ampliaciones, setAmpliaciones] = useState<{ leido: Leido; mapa: ReadonlyMap<string, Ampliacion> } | null>(null);
   /** Las medidas con una ampliación en curso, y cómo cancelarla. */
   const [ampliandose, setAmpliandose] = useState<ReadonlySet<string>>(() => new Set());
@@ -1353,6 +1390,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     soltarElegido();
     setAviso(null);
   };
+  /** Cambiar de PSD se pregunta igual que salir: con el trabajo se va lo que ya se pagó a la IA. */
+  const pedirCambiarPsd = () => (leido ? setSalida({ tipo: "cambiar" }) : cambiarPsd());
   const cancelar = () => {
     turno.current++;
     soltar();
@@ -1635,6 +1674,9 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       const fuentes = archivos.filter((f) => EXTENSIONES_FUENTE.test(f.name));
       if (fuentes.length) void agregarFuentes(fuentes);
       const psd = archivos.find((f) => /\.psd$/i.test(f.name)) ?? archivos.find((f) => /\.(png|jpe?g|webp)$/i.test(f.name));
+      if (recuperando) return;
+      // Soltar otro PSD encima de uno abierto también se lleva el trabajo: se pregunta.
+      if (psd && leidoVigente.current) return void setSalida({ tipo: "abrir", archivo: psd });
       if (psd) return void (leyendo || abrir(psd));
       if (fuentes.length || !archivos.length) return;
       // Ni PSD ni tipografías (un .zip de fuentes, un .woff2): con resultados en pantalla no se pierden por eso; en el
@@ -1656,6 +1698,188 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       window.removeEventListener("drop", suelta);
     };
   }, []);
+
+  // ── El trabajo a medias, en el navegador de esta persona (`borrador.ts`). Recargar o cerrar no lo pierde. ──────────────
+  /** Algo de este PSD no se guardó: ya no se dice «guardado» aunque lo siguiente sí entre, porque estaría incompleto. */
+  const conFalla = useRef(false);
+  const enFila = useCallback((fn: () => Promise<void>) => {
+    filaGuardado.current = filaGuardado.current.then(fn).then(
+      () => {
+        if (vivo.current && !conFalla.current) setAlmacen("ok");
+      },
+      (err: unknown) => {
+        console.error("[formatos-psd] guardar en el navegador", err);
+        conFalla.current = true;
+        if (vivo.current) setAlmacen(sinEspacio(err) ? "sinEspacio" : "fallo");
+      },
+    );
+  }, []);
+  const ponerRecuperado = useEffectEvent((r: Recuperado<Leido, EstadoPsd>) => {
+    const l = r.leido, e = r.estado;
+    const quitadasGuardadas = new Map<number, Quitada>();
+    for (const [k, v] of r.pesados) if (k.startsWith("q:")) quitadasGuardadas.set(Number(k.slice(2)), v as Quitada);
+    const fondoDe = (b: BaseGuardada) => (b.sinCopia ? (quitadasGuardadas.get(b.i)?.fondo ?? null) : (l.maestros[b.i]?.fondo ?? null));
+    const fondos = new Map<string, Ampliacion>();
+    for (const [k, v] of r.pesados) {
+      if (!k.startsWith("a:")) continue;
+      const a = desempacarAmpliacion(v as AmpliacionGuardada, fondoDe);
+      if (a) fondos.set(k.slice(2), a);
+    }
+    // Lo recuperado cuenta como ya escrito: no se vuelve a guardar lo que acaba de salir de ahí.
+    borrador.current = {
+      id: r.id,
+      leido: l,
+      pesados: new Map<string, object>([...[...quitadasGuardadas].map(([i, q]): [string, object] => [claveQuitada(i), q]), ...[...fondos].map(([k, a]): [string, object] => [claveAmpliacion(k), a])]),
+    };
+    setLeido(l);
+    if (quitadasGuardadas.size) setSinCopia({ leido: l, mapa: quitadasGuardadas });
+    if (fondos.size) setAmpliaciones({ leido: l, mapa: fondos });
+    if (e) {
+      clienteVigente.current = e.cliente;
+      setCliente(e.cliente);
+      setEntrega(e.entrega);
+      setLista(e.lista);
+      setApagadas(new Set(e.apagadas));
+      setLados(e.lados);
+      setContrastes(e.contrastes);
+      setCanal(e.canal);
+      setEnZip(e.enZip);
+      if (e.fueraZip.length) setFueraZip({ leido: l, fuera: new Set(e.fueraZip) });
+      if (e.papeles.length) setPapeles({ leido: l, mapa: new Map(e.papeles) });
+      if (e.ediciones.length) setEdiciones({ leido: l, mapa: new Map(e.ediciones) });
+      if (e.textos) setTextosSesion({ leido: l, cambios: e.textos });
+    }
+    toast.info(rellenar(tx(FP.recuperado, langVigente.current), { a: l.archivo }));
+  });
+  useEffect(() => {
+    if (perfil === null) return;
+    let sigueAqui = true, soltarCandado = () => {};
+    void (async () => {
+      try {
+        olvidarSinPerfil();
+        olvidarFuentesSinPerfil();
+        const c = await tomarCandado(perfil);
+        if (!sigueAqui) return c.soltar();
+        soltarCandado = c.soltar;
+        if (!c.tomado) return setAlmacen("otraPestana");
+        dueno.current = true;
+        for (const quien of await barrerCaducados()) olvidarGuardado(quien);
+        const r = await recuperarBorrador<Leido, EstadoPsd>(perfil);
+        if (r && sigueAqui) ponerRecuperado(r);
+      } catch (err) {
+        console.error("[formatos-psd] recuperar", err);
+        if (sigueAqui) toast.error(tx(FP.recuperarFallo, langVigente.current));
+      } finally {
+        if (sigueAqui) setRecuperando(false);
+      }
+    })();
+    return () => {
+      sigueAqui = false;
+      dueno.current = false;
+      soltarCandado();
+    };
+  }, [perfil]);
+  // Un PSD nuevo empieza su borrador (y borra el anterior de esta persona).
+  useEffect(() => {
+    if (perfil === null || !leido || !dueno.current || borrador.current?.leido === leido) return;
+    const id = crypto.randomUUID();
+    borrador.current = { id, leido, pesados: new Map() };
+    conFalla.current = false;
+    enFila(() => guardarLeido(perfil, id, leido));
+  }, [leido, perfil, enFila]);
+  // Las decisiones, poco después de cada cambio.
+  useEffect(() => {
+    const b = borrador.current;
+    if (perfil === null || !leido || b?.leido !== leido) return;
+    const estado: EstadoPsd = {
+      cliente,
+      entrega,
+      lista,
+      apagadas: [...apagadas],
+      lados,
+      contrastes,
+      canal,
+      enZip,
+      fueraZip: fueraZip?.leido === leido ? [...fueraZip.fuera] : [],
+      papeles: papeles?.leido === leido ? [...papeles.mapa] : [],
+      ediciones: ediciones?.leido === leido ? [...ediciones.mapa] : [],
+      textos: textosSesion?.leido === leido ? textosSesion.cambios : null,
+    };
+    const reloj = window.setTimeout(() => {
+      if (borrador.current === b) enFila(() => guardarEstado(perfil, b.id, estado));
+    }, 200);
+    return () => window.clearTimeout(reloj);
+  }, [perfil, leido, cliente, entrega, lista, apagadas, lados, contrastes, canal, enZip, fueraZip, papeles, ediciones, textosSesion, enFila]);
+  // Copias quitadas y fondos con IA: sólo lo que cambió, porque pesan. Se paga por cada fondo: no se pierden al recargar.
+  useEffect(() => {
+    const b = borrador.current;
+    if (perfil === null || !leido || b?.leido !== leido) return;
+    const quitadasAhora = sinCopia?.leido === leido ? sinCopia.mapa : null;
+    const baseDe = (fondo: Uint8ClampedArray): BaseGuardada | null => {
+      const i = leido.maestros.findIndex((m) => m.fondo === fondo);
+      if (i >= 0) return { i, sinCopia: false };
+      for (const [q, v] of quitadasAhora ?? []) if (v.fondo === fondo) return { i: q, sinCopia: true };
+      return null;
+    };
+    const ahora = new Map<string, object>([
+      ...[...(quitadasAhora ?? [])].map(([i, q]): [string, object] => [claveQuitada(i), q]),
+      ...[...(ampliaciones?.leido === leido ? ampliaciones.mapa : [])].map(([k, a]): [string, object] => [claveAmpliacion(k), a]),
+    ]);
+    for (const [k, v] of ahora) {
+      if (b.pesados.get(k) === v) continue;
+      b.pesados.set(k, v);
+      const valor = k.startsWith("a:") ? empacarAmpliacion(v as Ampliacion, baseDe) : v;
+      enFila(() => guardarPesado(perfil, b.id, k, valor ?? undefined));
+    }
+    for (const k of [...b.pesados.keys()]) {
+      if (ahora.has(k)) continue;
+      b.pesados.delete(k);
+      enFila(() => guardarPesado(perfil, b.id, k, undefined));
+    }
+  }, [perfil, leido, sinCopia, ampliaciones, enFila]);
+  // Salir por un enlace de la app (el menú, «Volver») pregunta antes de borrar. Se escucha antes de que el enlace reaccione.
+  // El botón Atrás del navegador no se puede detener bien: ése no borra nada y al volver todo sigue aquí.
+  const hayTrabajo = !!leido;
+  useEffect(() => {
+    if (!hayTrabajo) return;
+    const alClic = (e: MouseEvent) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!a || a.hasAttribute("download") || (a.target && a.target !== "_self")) return;
+      const u = new URL(a.href, window.location.href);
+      if (u.origin !== window.location.origin || u.pathname === window.location.pathname) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setSalidaBajada(false);
+      setSalida({ tipo: "ir", href: `${u.pathname}${u.search}${u.hash}` });
+    };
+    document.addEventListener("click", alClic, true);
+    return () => document.removeEventListener("click", alClic, true);
+  }, [hayTrabajo]);
+  // Si lo de esta pestaña NO está guardado, recargar sí lo pierde: ahí el navegador pregunta con su aviso.
+  useEffect(() => {
+    if (!hayTrabajo || almacen === "ok") return;
+    const avisar = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", avisar);
+    return () => window.removeEventListener("beforeunload", avisar);
+  }, [hayTrabajo, almacen]);
+  /** «Borrar y salir»: sólo la pestaña dueña borra (otra pestaña no toca el trabajo que sí está guardado). */
+  const confirmarSalida = async () => {
+    const s = salida, l = leidoVigente.current;
+    if (!s) return;
+    setSalida(null);
+    setSalidaBajada(false);
+    if (perfil !== null && dueno.current) {
+      borrador.current = null;
+      enFila(() => borrarBorrador(perfil));
+      if (l) olvidarGuardado(perfil, l.archivo);
+      await filaGuardado.current;
+    }
+    if (s.tipo === "ir") router.push(s.href);
+    else if (s.tipo === "cambiar") cambiarPsd();
+    else void abrir(s.archivo);
+  };
+  const botonQuedarme = useRef<HTMLButtonElement>(null);
 
   // Las medidas en pastillas (rediseño B19): prender o apagar con un clic, agregar a mano (una o la lista del cliente
   // pegada tal cual), borrar las agregadas y volver a la lista de DiDi.
@@ -2433,6 +2657,39 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
           alCancelarRelleno={() => cancelarAmpliar(paraEditor.m)}
         />
       )}
+      <Dialog
+        open={salida !== null}
+        onOpenChange={(abierto) => {
+          if (abierto || zipeando) return;
+          setSalida(null);
+          setSalidaBajada(false);
+        }}
+      >
+        <DialogContent
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            botonQuedarme.current?.focus();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{tx(FP.salidaTitulo, lang)}</DialogTitle>
+            <DialogDescription>{rellenar(tx(salida?.tipo === "ir" ? FP.salidaTexto : FP.salidaCambiarTexto, lang), { a: leido?.archivo ?? "" })}</DialogDescription>
+          </DialogHeader>
+          {salidaBajada && <p role="status" className="text-sm text-foreground">{tx(FP.salidaDescargada, lang)}</p>}
+          <DialogFooter className="gap-2 sm:flex-wrap sm:justify-end">
+            <Button ref={botonQuedarme} variant="ghost" disabled={zipeando} onClick={() => { setSalida(null); setSalidaBajada(false); }}>
+              {tx(FP.salidaQuedarme, lang)}
+            </Button>
+            <Button variant="outline" disabled={zipeando} onClick={() => void bajarZip().then(() => vivo.current && setSalidaBajada(true))}>
+              {zipeando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
+              {tx(zipeando ? FP.salidaDescargando : FP.salidaDescargar, lang)}
+            </Button>
+            <Button variant="destructive" disabled={zipeando} onClick={() => void confirmarSalida()}>
+              {tx(salida?.tipo === "ir" ? FP.salidaBorrar : FP.salidaBorrarOtro, lang)}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <p role="status" className="sr-only">
         {leyendo ? textoAvance : aviso ? `${aviso.texto}${aviso.n % 2 ? "​" : ""}` : eligiendo ? "" : resumen}
       </p>
@@ -2462,11 +2719,21 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
         </button>
       </div>
 
+      {!recuperando && (leido || almacen === "otraPestana") && (
+        <p role={almacen === "ok" ? undefined : "alert"} className={cn("mb-3 flex items-center gap-1.5 text-xs", almacen === "ok" ? "text-muted-foreground" : "font-medium text-foreground")}>
+          {almacen === "ok" ? <Check className="size-3.5 shrink-0" aria-hidden="true" /> : <AlertTriangle className="size-3.5 shrink-0 text-status-corrections" aria-hidden="true" />}
+          {tx({ ok: FP.guardadoAqui, fallo: FP.guardadoFallo, sinEspacio: FP.guardadoSinEspacio, otraPestana: FP.guardadoOtraPestana, sinPerfil: FP.guardadoSinPerfil }[almacen], lang)}
+        </p>
+      )}
       {/* Sin PSD el cliente va arriba del cuadro (con su ayuda a la vista); con PSD, en el panel de ajustes. */}
       {/* En la revisión de una imagen plana el cliente va dentro de ella (uno solo en la página). */}
-      {(eligiendo || (!usables.length && !plano)) && selectorCliente(true)}
+      {!recuperando && (eligiendo || (!usables.length && !plano)) && selectorCliente(true)}
 
-      {eleccion ? (
+      {recuperando ? (
+        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> {tx(FP.recuperando, lang)}
+        </p>
+      ) : eleccion ? (
         <section className="p-enter max-w-2xl" aria-labelledby="psd-elegir-titulo">
           <div className="rounded-2xl border border-border bg-card/50 px-5 py-5">
             <h2 id="psd-elegir-titulo" ref={tituloElegir} tabIndex={-1} className="text-base font-medium text-foreground outline-none">
@@ -2718,7 +2985,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
                     · {usables.length === 1 ? tx(FP.mesasUna, lang) : rellenar(tx(FP.mesas, lang), { n: usables.length })}: {usables.map((m) => `${m.w}×${m.h}`).join(", ")}
                   </span>
                 </p>
-                <Button variant="outline" className={BOTON_TARJETA} onClick={cambiarPsd}>
+                <Button variant="outline" className={BOTON_TARJETA} onClick={pedirCambiarPsd}>
                   <FileUp className="size-3.5" aria-hidden="true" /> {tx(FP.cambiar, lang)}
                 </Button>
               </div>
@@ -3094,7 +3361,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
               <div className="flex flex-col items-end gap-1">
                 <div className="flex flex-wrap justify-end gap-1.5">
                   {/* También aquí, pegajoso: al terminar abajo de las tarjetas no hay que subir hasta el panel (2026-10-28). */}
-                  <Button variant="outline" size="lg" className={BOTON} onClick={cambiarPsd}>
+                  <Button variant="outline" size="lg" className={BOTON} onClick={pedirCambiarPsd}>
                     <FileUp className="size-4" aria-hidden="true" /> {tx(FP.cambiar, lang)}
                   </Button>
                   {volteables.length > 0 && (

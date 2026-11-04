@@ -3669,5 +3669,37 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   ok("hueco: la IA recibe una proporción que acepta y lo pedido cabe", Object.hasOwn(RATIOS_IA, li.aspect) && li.zona.x + li.zona.w <= li.gw && li.zona.y + li.zona.h <= li.gh, JSON.stringify(li));
 }
 
+// ── El trabajo a medias en el navegador (borrador.ts) ──
+{
+  const { caducado, BORRADOR_DIAS, clavePesado, prefijoBorrador, empacarAmpliacion, desempacarAmpliacion } = await import("../src/lib/prisma/formatos/borrador.ts");
+  const DIA = 86_400_000, T = 1_800_000_000_000;
+  ok("borrador: recién guardado no caduca", !caducado(T, T));
+  ok("borrador: al límite de los días sigue", !caducado(T - BORRADOR_DIAS * DIA, T));
+  ok("borrador: pasado el límite caduca", caducado(T - BORRADOR_DIAS * DIA - 1, T));
+  ok("borrador: sin hora válida caduca, no se queda para siempre", caducado(NaN, T));
+  ok("borrador: la clave de una persona no cae en el prefijo de otra", !clavePesado("ana", "b1", "a:1x1").startsWith(prefijoBorrador("an", "b1")));
+  ok("borrador: un nombre de medida con separador sigue dentro de su borrador", clavePesado("ana", "b1", "a:x|y").startsWith(prefijoBorrador("ana", "b1")));
+
+  const f0 = new Uint8ClampedArray(4), f1 = new Uint8ClampedArray(4), sinCopia = new Uint8ClampedArray(4);
+  const baseDe = (f) => (f === f0 ? { i: 0, sinCopia: false } : f === f1 ? { i: 1, sinCopia: false } : f === sinCopia ? { i: 1, sinCopia: true } : null);
+  const fondoDe = (b) => (b.sinCopia ? (b.i === 1 ? sinCopia : null) : ([f0, f1][b.i] ?? null));
+  const geo = { w: 2, h: 2, ox: 0, oy: 0, rgba: new Uint8ClampedArray(16), costoUsd: 0.04, deriva: 1 };
+  const simple = { ...geo, base: f1 };
+  const e1 = empacarAmpliacion(simple, baseDe);
+  eq("fondo con IA: guarda de qué maestro salió", JSON.stringify(e1.base), JSON.stringify({ i: 1, sinCopia: false }));
+  ok("fondo con IA: al guardar no se lleva el fondo original", !(e1.base instanceof Uint8ClampedArray));
+  const d1 = desempacarAmpliacion(structuredClone(e1), fondoDe);
+  ok("fondo con IA: al recuperar apunta al fondo de verdad (la pantalla compara ese arreglo)", d1.base === f1);
+  eq("fondo con IA: conserva los píxeles", d1.rgba.length, 16);
+  eq("fondo con IA: conserva el costo", d1.costoUsd, 0.04);
+  ok("fondo con IA: el de la copia quitada vuelve al fondo sin copia", desempacarAmpliacion(empacarAmpliacion({ ...geo, base: sinCopia }, baseDe), fondoDe).base === sinCopia);
+  eq("fondo con IA: de un fondo que ya no existe no se guarda", empacarAmpliacion({ ...geo, base: new Uint8ClampedArray(4) }, baseDe), null);
+  eq("fondo con IA: de un maestro que ya no está no se pinta sobre otro", desempacarAmpliacion({ ...geo, base: { i: 7, sinCopia: false } }, fondoDe), null);
+  const relleno = { ...geo, base: f0, hueco: { forma: { ...geo, base: f0 }, previa: { ...geo, base: f0 } } };
+  const d2 = desempacarAmpliacion(structuredClone(empacarAmpliacion(relleno, baseDe)), fondoDe);
+  ok("relleno: recupera lo que tenía debajo, para poder quitarlo sin otro cobro", d2.hueco.previa?.base === f0 && d2.hueco.forma?.base === f0);
+  eq("relleno: sin la ampliación de debajo no se guarda a medias", empacarAmpliacion({ ...geo, base: f0, hueco: { forma: { ...geo, base: new Uint8ClampedArray(4) }, previa: null } }, baseDe), null);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);
 if (fail) process.exit(1);

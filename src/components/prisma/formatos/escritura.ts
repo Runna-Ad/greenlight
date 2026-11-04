@@ -18,6 +18,7 @@ import { conRenglones, legalParaRenglones, type LegalRenglones, type SinRenglone
 import type { Renglonero } from "@/lib/prisma/formatos/revisar";
 import { TEXTO_ANCHO_TOL, TEXTO_CORRER_MAX, TEXTO_DIF_MAX, TEXTO_DIF_MAX_PLANO, compararAlfa, fuentesDe, maquetar, type LineaTexto, type Medidor, type TextoCapa, type TramoTexto } from "@/lib/prisma/formatos/textos";
 import { alineacionDe, capaDeLegal, capaDeTexto, capaEnCaja, TRACK_RAZONABLE, type ElementoMedido, type MedirTinta } from "@/lib/prisma/formatos/plano";
+import { perfilActual } from "./perfil";
 
 /** Una tipografía cargada: con qué familia se pide en el canvas y, si es variable, su peso (eje wght). */
 type Cargada = { familia: string; peso: number | null };
@@ -108,13 +109,15 @@ const espaciado = (tramo: TramoTexto) => (tramo.track ? `${(tramo.track / 1000) 
 
 // ── Recordar las tipografías en este navegador ───────────────────────────
 const BASE = "hue-prisma-formatos", ALMACEN = "tipografias";
+/** Las recordadas antes de que fueran por persona: no se sabe de quién son (ni de qué cliente), se borran una vez. */
+export const olvidarFuentesSinPerfil = (): void => void indexedDB.deleteDatabase(BASE);
 /** Dos archivos con el mismo nombre en carpetas distintas (Regular.otf de dos familias) no se pisan. */
 const claveDe = (a: ArchivoFuente) => `${a.nombre}:${a.datos.byteLength}`;
 const esArchivo = (x: unknown): x is ArchivoFuente => !!x && typeof (x as ArchivoFuente).nombre === "string" && (x as ArchivoFuente).datos instanceof ArrayBuffer;
 
 function abrirBase(): Promise<IDBDatabase> {
   return new Promise((ok, mal) => {
-    const r = indexedDB.open(BASE, 1);
+    const r = indexedDB.open(`${BASE}:${perfilActual()}`, 1);
     r.onupgradeneeded = () => r.result.createObjectStore(ALMACEN);
     r.onsuccess = () => ok(r.result);
     r.onerror = () => mal(r.error);

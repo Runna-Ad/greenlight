@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { AlertTriangle, Bold, Check, ChevronDown, ChevronUp, FolderClosed, FolderOpen, Info, Loader2, Minus, Move, Plus, RotateCcw, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { perfilActual } from "./perfil";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { aplicarEdicion, edicionDeFondo, fondoDeEdicion, FONDO_EDITOR_MAX, type FondoEditado, cambiadasDeCapa, leerEdicion, ordenDePartes, ordenarPuestas, parteSinTocar, ponerPartes, topesParte, topesPieza, RELLENO_AVISO_PCT, type Acomodo, type Edicion, type Zona, esNota } from "@/lib/prisma/formatos/acomodo";
@@ -1482,8 +1483,8 @@ export function EditorMedida({
  * Una edición son lugares en px sobre UN acomodo automático: el lado del HERO y la zona del canal lo cambian, así
  * que van en la clave (`contexto`). Con otro lado u otro canal la medida se ve en automático, no mezclada.
  */
-const GUARDADA = "hue-formatos-edicion:v2";
-const claveGuardada = (archivo: string, ma: MaestroListo, W: number, H: number, contexto: string) => `${GUARDADA}:${archivo}:${ma.w}x${ma.h}:${W}x${H}:${contexto}`;
+const GUARDADA = "hue-formatos-edicion:v3";
+const claveGuardada = (archivo: string, ma: MaestroListo, W: number, H: number, contexto: string) => `${GUARDADA}:${perfilActual()}:${archivo}:${ma.w}x${ma.h}:${W}x${H}:${contexto}`;
 /** Las carpetas de la mesa (y su papel), para saber que la edición guardada es de ESTE PSD y no de otro con el mismo nombre. */
 const huella = (ma: MaestroListo) => ma.piezas.map((p) => `${p.nombre}|${p.rol ?? "-"}|${p.solido.w}x${p.solido.h}`).join("\u0000");
 /** Las partes de cada pieza, aparte: lo guardado antes de que hubiera partes (o con otras subcarpetas) sigue valiendo
@@ -1527,14 +1528,30 @@ export function guardarEdicion(archivo: string, ma: MaestroListo, W: number, H: 
 }
 
 /** Lo que dicen los textos cambiados es del ANUNCIO (todas sus medidas y mesas), no de una medida: aparte, por PSD. */
-const TEXTOS = "hue-formatos-textos:v1";
+const TEXTOS = "hue-formatos-textos:v2";
+const claveTextos = (archivo: string) => `${TEXTOS}:${perfilActual()}:${archivo}`;
 /** Cuántos textos cambiados se leen de lo guardado, como mucho (un PSD real trae unos pocos). */
 const TEXTOS_GUARDADOS_MAX = 200;
+
+const quitarClaves = (cumple: (k: string) => boolean) => {
+  try {
+    for (const k of Object.keys(localStorage)) if (cumple(k)) localStorage.removeItem(k);
+  } catch (err) {
+    console.error("[editor-medida] borrar lo guardado", err);
+  }
+};
+/** Borra las ediciones y los textos guardados de un PSD («Borrar y salir»); sin `archivo`, todo lo de esa persona (caducó). */
+export function olvidarGuardado(perfil: string, archivo?: string): void {
+  if (archivo === undefined) return quitarClaves((k) => k.startsWith(`${GUARDADA}:${perfil}:`) || k.startsWith(`${TEXTOS}:${perfil}:`));
+  quitarClaves((k) => k.startsWith(`${GUARDADA}:${perfil}:${archivo}:`) || k === `${TEXTOS}:${perfil}:${archivo}`);
+}
+/** Lo guardado antes de que hubiera perfiles no se sabe de quién es: se borra una vez, sin repartirlo a quien abra primero. */
+export const olvidarSinPerfil = (): void => quitarClaves((k) => k.startsWith("hue-formatos-edicion:v2:") || k.startsWith("hue-formatos-textos:v1:"));
 
 /** Los textos cambiados que se guardaron en este navegador para ese PSD (vacío si no hay o si el dato no sirve). */
 export function textosGuardados(archivo: string): CambiosTexto {
   try {
-    const v = JSON.parse(localStorage.getItem(`${TEXTOS}:${archivo}`) ?? "null") as unknown;
+    const v = JSON.parse(localStorage.getItem(claveTextos(archivo)) ?? "null") as unknown;
     if (!v || typeof v !== "object" || Array.isArray(v)) return {};
     const out: Record<string, string> = {};
     for (const [k, t] of Object.entries(v as Record<string, unknown>).slice(0, TEXTOS_GUARDADOS_MAX))
@@ -1550,7 +1567,7 @@ export function textosGuardados(archivo: string): CambiosTexto {
 /** Guarda (o, vacío, borra) los textos cambiados de ese PSD. false = el navegador no dejó (siguen en esta sesión). */
 export function guardarTextos(archivo: string, cambios: CambiosTexto): boolean {
   try {
-    const k = `${TEXTOS}:${archivo}`;
+    const k = claveTextos(archivo);
     if (Object.keys(cambios).length) localStorage.setItem(k, JSON.stringify(cambios));
     else localStorage.removeItem(k);
     return true;
