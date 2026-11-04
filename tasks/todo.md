@@ -2,7 +2,7 @@
 
 ## 🟡 2026-11-04 — Bitácora de actividad y trabajo guardado por persona (rama `feat/actividad-y-guardado` desde origin/prisma, worktree ../greenlight-actividad)
 Pedro eligió A y 1. A = leer lo que ya se registra y anotar sólo lo que falta. 1 = el trabajo a medias vive en el navegador de cada persona; el PSD no se sube.
-Next Step: Pedro prueba el trabajo guardado en la preview de `prisma` con un PSD real; en vivo (`main`) sólo con su "ship it".
+Next Step: en vivo (`main`) sólo con el "ship it" de Pedro. Falta un PSD real de 60-70 MB en el navegador: sólo Pedro puede soltarlo.
 
 **Pieza 1, Admin › Actividad (admin y Master, en pantalla, en la función del servidor y en la base):**
 - [x] Se amplió la pestaña que ya existía. Por persona, por proyecto, línea de tiempo; Hoy, 7 días, 30 días, Este mes.
@@ -20,7 +20,10 @@ Next Step: Pedro prueba el trabajo guardado en la preview de `prisma` con un PSD
 - [x] Navegador local con un PSD inventado y la IA simulada: 12 de 12 medidas iguales píxel a píxel tras recargar, fondo con IA sin otra llamada, las tres salidas, dos perfiles separados, segunda pestaña, caducidad, ZIP sin medidas no dice que ya bajó.
 - [x] Actividad en la preview con la sesión real de Master y datos reales, por persona: 12 movimientos, 9 llamadas y US$0.2781 a 30 días, igual a las tablas. Ruta de eventos en la preview: acción inválida 400; una persona forjada en el cuerpo se ignoró; las 2 filas de prueba se borraron. A 1440 la IA y los errores se cortaban: ahora van primero (7dbe93c).
 - [x] Seguridad (Opus): 0 críticos, 1 serio arreglado. Código: 11 serios, arreglados; 2 más en la re-revisión, arreglados.
-- [ ] No probado: PSD real grande (se bloqueó copiar el del cliente a `public/`, bien), Safari, disco lleno, IA real, entrar como lead, especialista o cliente (sólo por código y reglas), «Por proyecto» y «Línea de tiempo» con datos reales.
+- [x] 2026-11-04, preview con sesión real y Gemini real (PSD inventado de 72 KB, PRUEBA-borrador-ia.psd): 37 s, US$0.0595; al recargar 13 de 13 medidas iguales y 0 llamadas nuevas; pregunta de salida, ZIP y borrar dejan el navegador en 0 filas. La base recibió abrir, gasto `fondo_ampliar` con archivo, recuperar, ZIP y borrar, con la persona correcta. Las tres vistas se leen bien.
+- [x] PSD reales de 61 y 72 MB leídos donde están, sin copiarlos: 15 y 36 MB de píxeles, copia en memoria 3 y 7 ms, 13 de 13 acomodos iguales tras clonar, fondo con IA de 26-29 MB vuelve a su fondo. No mide la escritura a disco.
+- [x] Especialista en local: Admin dice «Un Especialista no entra a la configuración», sin tabla, ruta de eventos 403.
+- [ ] No probado: PSD real grande dentro del navegador (copiarlo a `public/` lo bloquea el clasificador, dos veces), Safari, disco lleno, lead y admin reales con su propia sesión.
 
 **Límites sin arreglar:**
 - No sigue a otra computadora; borrar datos del navegador lo borra; lo guardado no va cifrado: otra persona en ese mismo navegador podría leerlo con herramientas de desarrollador.
