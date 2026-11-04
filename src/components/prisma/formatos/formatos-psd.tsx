@@ -1167,7 +1167,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
         const cosido = coserAmpliacion(ia, fuente.fondo, fuente.w, fuente.h, h ? { w: g.w, h: g.h, ox: h.x, oy: h.y } : g);
         const a: Ampliacion = { ...g, ...cosido, base: base.fondo, costoUsd, ...(relleno ? { hueco: { forma: previa?.hueco ? previa.hueco.forma : previa, previa } } : {}) };
         setAmpliaciones((antes) => ({ leido: l, mapa: new Map([...(antes?.leido === l ? antes.mapa : []), [k, a]]) }));
-        const t = langVigente.current, dicho = rellenar(tx(FP.ampliarAviso, t), { m: etiqueta(m) });
+        const t = langVigente.current, dicho = rellenar(tx(relleno ? FP.rellenarHuecoListo : FP.ampliarAviso, t), { m: etiqueta(m) });
         anunciar(dicho);
         if (a.deriva > DERIVA_IA_REVISAR) toast.warning(`${dicho} ${tx(FP.ampliarDeriva, t)}`, { duration: 10_000 });
         else toast.success(dicho);

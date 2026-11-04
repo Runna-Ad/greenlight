@@ -597,6 +597,7 @@ export const FP = {
   ampliarNota: t("Fondo ampliado con IA: revisa que no haya inventado nada. Se pierde al recargar la página y habría que volver a pedirlo.", "Background expanded with AI: check that it didn't invent anything. It's lost if you reload the page, and you'd have to request it again."),
   ampliarPoco: t("El fondo original es menos de un tercio del lienzo: casi todo lo que se ve lo pintó la IA.", "The original background is under a third of the canvas: almost everything you see was painted by AI."),
   ampliarAviso: t("Fondo ampliado con IA en {m}.", "Background expanded with AI in {m}."),
+  rellenarHuecoListo: t("Hueco rellenado con IA en {m}.", "Gap filled with AI in {m}."),
   ampliarDeriva: t("La IA cambió el centro del fondo: revisa que no se note la unión; si se nota, quita el fondo ampliado.", "AI changed the center of the background: check that the seam doesn't show; if it does, remove the expanded background."),
   ampliarFallo: t("La IA no pudo ampliar el fondo. Reintenta o sigue sin ampliarlo.", "AI couldn't expand the background. Try again or continue without it."),
   ampliarQuitado: t("Se quitó el fondo ampliado de {m}. Volver a ampliarlo se cobra otra vez.", "Removed the expanded background from {m}. Expanding it again costs again."),
