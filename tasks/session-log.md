@@ -1,5 +1,11 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-04 — Trabajo guardado por persona en Formatos PSD y Admin › Actividad (rama `feat/actividad-y-guardado`, preview de `prisma`, no en vivo)
+**Hecho:** Pedro eligió log A y guardado 1. El PSD a medias sobrevive a recargar, en el navegador de cada persona; salir pregunta. La pestaña Actividad muestra por persona, por proyecto y línea de tiempo, para admin y Master. Worktree ../greenlight-actividad.
+**Pruebas:** en `tasks/todo.md`. **Sin aplicar:** 0091.
+**Waiting on Pedro:** probar el guardado en la preview con un PSD real; "ship it" para 0091 y para `main`; decidir si cerrar sesión pregunta por el trabajo guardado.
+**Pick up next:** con la 0091 aplicada, revisar Actividad con datos reales y como lead/especialista (no deben entrar).
+
 ## 2026-11-04 — Formatos PSD: «Ampliar fondo con IA» por medida, y «Mover el fondo» a cualquier lado con relleno opcional (preview de `prisma`, no en vivo)
 **Hecho:** botón por medida (f47a5a7; Pedro lo probó con la IA real: "test looks good"). Arrastrar el fondo a cualquier lado con hueco en rayas y relleno opcional con IA (opción 3 de Pedro). Rama `feat/fondo-ia-psd`, worktree ../greenlight-fondo-ia. Sin migración.
 **Pruebas:** formatos 733/0 · tsc 0 · app local con la IA simulada. **Sin probar:** relleno con la IA real, Photoshop, Safari.

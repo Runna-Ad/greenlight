@@ -1516,7 +1516,7 @@ export function edicionGuardada(archivo: string, ma: MaestroListo, W: number, H:
  * sigue en esta sesión, pero al recargar se pierde (quien llama lo dice).
  */
 export function guardarEdicion(archivo: string, ma: MaestroListo, W: number, H: number, contexto: string, ed: Edicion | null): boolean {
-  if (!escribeAqui()) return false;
+  if (!escribeAqui()) return ed === null; // sin nada que guardar, no hay nada que avisar
   try {
     const k = claveGuardada(archivo, ma, W, H, contexto);
     if (ed) localStorage.setItem(k, JSON.stringify({ huella: huella(ma), partes: huellaPartes(ma), ed }));

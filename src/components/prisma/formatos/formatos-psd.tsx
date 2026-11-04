@@ -72,7 +72,7 @@ type EstadoPsd = {
 /** Cómo va lo guardado en este navegador. */
 type Almacen = "ok" | "fallo" | "sinEspacio" | "otraPestana" | "sinPerfil";
 /** A qué iba la persona cuando se le preguntó si de verdad borra su trabajo. */
-type Salida = { tipo: "ir"; href: string } | { tipo: "cambiar" } | { tipo: "abrir"; archivo: File };
+type Salida = ({ tipo: "ir"; href: string } | { tipo: "cambiar" } | { tipo: "abrir"; archivo: File }) & { bajado?: boolean };
 /** Un maestro como se acomoda y se pinta: con el papel elegido en cada carpeta y, si se aprobó, sin la copia del fondo. */
 type MaestroVista = MaestroListo & { copia?: CopiaEnFondo | null; fondoOriginal?: Uint8ClampedArray };
 /** Cómo se quitó: gratis (espejo) o con la IA (lo que costó y cuánto cambió lo de alrededor). */
@@ -950,7 +950,8 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
   const [recuperando, setRecuperando] = useState(perfil !== null);
   const [almacen, setAlmacen] = useState<Almacen>(perfil === null ? "sinPerfil" : "ok");
   const [salida, setSalida] = useState<Salida | null>(null);
-  const [salidaBajada, setSalidaBajada] = useState(false);
+  /** El último ZIP pedido llegó de verdad: sólo entonces se dice que ya se puede salir. */
+  const zipBueno = useRef(false);
   /** Esta pestaña tiene el candado: sólo ella recupera y guarda. */
   const dueno = useRef(false);
   /** El borrador de ahora: de qué PSD y qué fondos ya se escribieron (para no reescribir lo que no cambió). */
@@ -1700,7 +1701,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       const psd = archivos.find((f) => /\.psd$/i.test(f.name)) ?? archivos.find((f) => /\.(png|jpe?g|webp)$/i.test(f.name));
       if (recuperando) return void (psd && toast.info(tx(FP.recuperando, lang)));
       // Con el editor abierto, soltar otro PSD no se lleva lo que se está editando.
-      if (psd && editando) return;
+      if (psd && editando) return void toast.info(tx(FP.cierraEditor, lang));
       // Soltar otro PSD encima de uno abierto también se lleva el trabajo: se pregunta.
       if (psd && leidoVigente.current) return void setSalida({ tipo: "abrir", archivo: psd });
       if (psd) return void (leyendo || abrir(psd));
@@ -1747,6 +1748,16 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       },
     );
   }, []);
+  // Lo que esperaba su turno se escribe al irse de la página, también con el botón Atrás. Declarado antes que el candado:
+  // su limpieza corre primero, y la escritura entra a la fila mientras esta pestaña todavía es la dueña.
+  useEffect(() => {
+    const alIrse = () => estadoPendiente.current?.();
+    window.addEventListener("pagehide", alIrse);
+    return () => {
+      window.removeEventListener("pagehide", alIrse);
+      alIrse();
+    };
+  }, []);
   /** El PSD que ya se anotó como abierto (uno recuperado no se abrió otra vez). */
   const anotadoLeido = useRef<Leido | null>(null);
   useEffect(() => {
@@ -1770,6 +1781,8 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       if (a) fondos.set(k.slice(2), a);
       else fondosPerdidos++;
     }
+    const papelesGuardados = e ? new Map(e.papeles) : null, edicionesGuardadas = e ? new Map(e.ediciones) : null;
+    const apagadasGuardadas = e ? new Set(e.apagadas) : null, fueraGuardadas = e ? new Set(e.fueraZip) : null;
     // Lo recuperado cuenta como ya escrito: no se vuelve a guardar lo que acaba de salir de ahí.
     borrador.current = {
       id: r.id,
@@ -1779,19 +1792,19 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
     setLeido(l);
     if (quitadasGuardadas.size) setSinCopia({ leido: l, mapa: quitadasGuardadas });
     if (fondos.size) setAmpliaciones({ leido: l, mapa: fondos });
-    if (e) {
+    if (e && papelesGuardados && edicionesGuardadas && apagadasGuardadas && fueraGuardadas) {
       clienteVigente.current = e.cliente;
       setCliente(e.cliente);
       setEntrega(e.entrega);
       setLista(e.lista);
-      setApagadas(new Set(e.apagadas));
+      setApagadas(apagadasGuardadas);
       setLados(e.lados);
       setContrastes(e.contrastes);
       setCanal(e.canal);
       setEnZip(e.enZip);
-      if (e.fueraZip.length) setFueraZip({ leido: l, fuera: new Set(e.fueraZip) });
-      if (e.papeles.length) setPapeles({ leido: l, mapa: new Map(e.papeles) });
-      if (e.ediciones.length) setEdiciones({ leido: l, mapa: new Map(e.ediciones) });
+      if (fueraGuardadas.size) setFueraZip({ leido: l, fuera: fueraGuardadas });
+      if (papelesGuardados.size) setPapeles({ leido: l, mapa: papelesGuardados });
+      if (edicionesGuardadas.size) setEdiciones({ leido: l, mapa: edicionesGuardadas });
       if (e.textos) setTextosSesion({ leido: l, cambios: e.textos });
     }
     toast.info(rellenar(tx(FP.recuperado, langVigente.current), { a: l.archivo }));
@@ -1918,7 +1931,6 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       if (u.origin !== window.location.origin || u.pathname === window.location.pathname) return;
       e.preventDefault();
       e.stopPropagation();
-      setSalidaBajada(false);
       setSalida({ tipo: "ir", href: `${u.pathname}${u.search}${u.hash}` });
     };
     document.addEventListener("click", alClic, true);
@@ -1934,21 +1946,11 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
     window.addEventListener("beforeunload", avisar);
     return () => window.removeEventListener("beforeunload", avisar);
   }, [hayTrabajo, almacen]);
-  // Lo que esperaba su turno se escribe al irse de la página, también con el botón Atrás.
-  useEffect(() => {
-    const alIrse = () => estadoPendiente.current?.();
-    window.addEventListener("pagehide", alIrse);
-    return () => {
-      window.removeEventListener("pagehide", alIrse);
-      alIrse();
-    };
-  }, []);
   /** «Borrar y salir»: sólo la pestaña dueña borra (otra pestaña no toca el trabajo que sí está guardado). */
   const confirmarSalida = async () => {
     const s = salida, l = leidoVigente.current;
     if (!s) return;
     setSalida(null);
-    setSalidaBajada(false);
     if (perfil !== null && dueno.current) {
       const antes = borrador.current;
       borrador.current = null;
@@ -1979,6 +1981,12 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
     else void abrir(s.archivo);
   };
   const botonQuedarme = useRef<HTMLButtonElement>(null);
+  /** Sólo un ZIP que sí salió cambia el aviso; uno que falló, se canceló o no tenía medidas no. Si la persona ya cerró la pregunta, no pasa nada. */
+  const pedirZipAlSalir = async () => {
+    zipBueno.current = false;
+    await bajarZip();
+    if (vivo.current && zipBueno.current) setSalida((s) => (s ? { ...s, bajado: true } : s));
+  };
 
   // Las medidas en pastillas (rediseño B19): prender o apagar con un clic, agregar a mano (una o la lista del cliente
   // pegada tal cual), borrar las agregadas y volver a la lista de DiDi.
@@ -2642,6 +2650,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       const nuevas = notasNuevas(l.psdOriginal, lasNotas);
       // En varios ZIP también se queda: hay que abrirlos juntos y quizá permitir las descargas en el navegador.
       const fijo = planos.size || sinPsd.length || sinLugar.length || nuevas || enPartes.length;
+      zipBueno.current = true;
       anotar("descarga_zip", `${lista.length} medidas`);
       (avisos.length ? toast.warning : toast.success)(titulo, { ...AVISO_ZIP, description, ...(fijo ? FIJO : { duration: 10_000 }) });
     } catch (err) {
@@ -2764,7 +2773,6 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
         onOpenChange={(abierto) => {
           if (abierto) return;
           setSalida(null);
-          setSalidaBajada(false);
         }}
       >
         <DialogContent
@@ -2777,12 +2785,12 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
             <DialogTitle>{tx(FP.salidaTitulo, lang)}</DialogTitle>
             <DialogDescription>{rellenar(tx(salida?.tipo === "ir" ? FP.salidaTexto : FP.salidaCambiarTexto, lang), { a: leido?.archivo ?? "" })}</DialogDescription>
           </DialogHeader>
-          {salidaBajada && <p role="status" className="text-sm text-foreground">{tx(FP.salidaDescargada, lang)}</p>}
+          {salida?.bajado && <p role="status" className="text-sm text-foreground">{tx(FP.salidaDescargada, lang)}</p>}
           <DialogFooter className="gap-2 sm:flex-wrap sm:justify-end">
-            <Button ref={botonQuedarme} variant="ghost" onClick={() => { setSalida(null); setSalidaBajada(false); }}>
+            <Button ref={botonQuedarme} variant="ghost" onClick={() => setSalida(null)}>
               {tx(FP.salidaQuedarme, lang)}
             </Button>
-            <Button variant="outline" aria-disabled={zipeando} onClick={() => void (zipeando || bajarZip().then(() => vivo.current && setSalidaBajada(true)))}>
+            <Button variant="outline" aria-disabled={zipeando} onClick={() => void (zipeando || pedirZipAlSalir())}>
               {zipeando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
               {tx(zipeando ? FP.salidaDescargando : FP.salidaDescargar, lang)}
             </Button>
