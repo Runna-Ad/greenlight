@@ -3396,3 +3396,8 @@ Lo de antes sigue: Pedro retesta el fondo con IA del estadio; luego el registro 
 **Pruebas:** `npm test` todo verde (formatos 670/0) · tsc y eslint limpios · app local con SPAPDOGCARD: 1080×1920 sale con el legal de la Biblioteca (133.9 %, 31 de agosto); marcando «Legales» como fondo, aviso y medida 1200×1500 lo dicen · 11 PSD reales revisados: sólo éste trae un fondo sin nada visible.
 **No probado:** el color naranja del aviso y la línea corta «1 texto cambiado» (cambiados después de la última corrida en el navegador); nada en la preview de Vercel. El texto literal "falta su tipografía" NO se reprodujo.
 **Esperando a Pedro:** probar SPAPDOGCARD y SPAPTOYBOX en la preview. Si vuelve el mensaje de tipografía, mandar la línea «Tipografías de DiDi…» de bajo Cliente. Sus diseñadores: sacar Background al primer nivel en 4:5 y sacar Subtitulo, 10minutos y CTA del Background en 1.91:1.
+
+## 2026-11-04 Favicon de Rünna
+
+Greenlight mostraba el triángulo por defecto de Vercel. En la rama `feat/favicon` (worktree ../greenlight-favicon, sobre origin/main 3c92880, SIN commit): `favicon.ico` (16, 32, 48), `icon.png` (192), `apple-icon.png` (180) y `scripts/generar-favicon.mjs`. Diseño: pieza morada rellena con el símbolo en blanco, esquinas amarilla y coral, fondo blanco. Probado en localhost /login: los 3 enlaces dan 200. No revisado: cómo se ve en una pestaña real.
+**Esperando a Pedro:** "ship it" para publicarlo en main.
