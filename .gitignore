@@ -46,3 +46,6 @@ supabase/.branches/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# videos del brag: pesan 228 MB y no van en git
+brag-output/
