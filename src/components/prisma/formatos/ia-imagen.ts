@@ -55,5 +55,45 @@ export async function aRgba(imagen: Blob, w: number, h: number): Promise<Uint8Cl
     bmp.close();
   }
 }
+/** Lo que se le manda a la IA para ampliar un fondo: un lienzo gw × gh con el fondo muy borroso como relleno provisional
+ *  y el fondo nítido en `donde`. */
+export function lienzoParaAmpliar(fondo: Uint8ClampedArray<ArrayBuffer>, w: number, h: number, gw: number, gh: number, donde: { x: number; y: number; w: number; h: number }): Uint8ClampedArray<ArrayBuffer> {
+  const original = lienzoDe(fondo, w, h);
+  const chico = document.createElement("canvas");
+  chico.width = Math.max(8, Math.round(gw / 32));
+  chico.height = Math.max(8, Math.round(gh / 32));
+  const c = chico.getContext("2d");
+  const lienzo = document.createElement("canvas");
+  lienzo.width = gw;
+  lienzo.height = gh;
+  const ctx = lienzo.getContext("2d", { willReadFrequently: true });
+  if (!c || !ctx) throw new Error("sin 2d");
+  c.imageSmoothingQuality = "high";
+  c.drawImage(original, 0, 0, chico.width, chico.height);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(chico, 0, 0, gw, gh);
+  ctx.drawImage(original, donde.x, donde.y, donde.w, donde.h);
+  return ctx.getImageData(0, 0, gw, gh).data;
+}
+/** La parte `zona` (en px de un lienzo gw × gh) de lo que devolvió la IA, en RGBA de exactamente w × h. */
+export async function zonaARgba(imagen: Blob, gw: number, gh: number, zona: { x: number; y: number; w: number; h: number }, w: number, h: number): Promise<Uint8ClampedArray> {
+  const bmp = await createImageBitmap(imagen);
+  try {
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d");
+    if (!ctx) throw new Error("sin 2d");
+    ctx.imageSmoothingQuality = "high";
+    const kx = bmp.width / gw, ky = bmp.height / gh;
+    ctx.drawImage(bmp, zona.x * kx, zona.y * ky, zona.w * kx, zona.h * ky, 0, 0, w, h);
+    const rgba = ctx.getImageData(0, 0, w, h).data;
+    // Un lienzo que el navegador no pudo crear se lee vacío: nunca se confunde con un fondo negro.
+    if (rgba[3] === 0) throw new Error("lienzo vacío");
+    return rgba;
+  } finally {
+    bmp.close();
+  }
+}
 /** Un error que ya trae el mensaje para el diseñador (el de la ruta). */
 export class ErrorDeRuta extends Error {}

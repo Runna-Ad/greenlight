@@ -138,6 +138,19 @@ export function rehacedorFondo(): { rehacer: (p: PeticionFondoPlano) => Promise<
   return iaActiva() ? { rehacer: (p) => llamarGemini([{ text: PROMPT_FONDO_PLANO }, imagen(p.fondo), imagen(p.mascara)], p.aspect, p.tamano, mensajes), modelo: MODELO_GEMINI } : null;
 }
 
+// ── Ampliar el fondo limpio de un PSD a la forma de una medida (`ampliar.ts`, 2026-11-04) ──
+const PROMPT_AMPLIAR =
+  "This image is the empty background of an advertisement, placed in the middle of a larger canvas. The blurry area around it is only a temporary placeholder. " +
+  "Replace the placeholder by extending the background outward so the whole canvas reads as one seamless image: continue its colors, gradients, textures, scenery, perspective and lighting. " +
+  "Do not add any text, letters, numbers, logos, people, products or new objects in the extended area. " +
+  "Do not change, move, resize or redraw anything in the sharp area in the middle.";
+
+/** El que amplía el fondo de un PSD, o null si la IA está apagada (mismo interruptor que el resto). */
+export function ampliadorFondo(): { ampliar: (p: PeticionIA) => Promise<RespuestaIA>; modelo: string } | null {
+  const mensajes = { fallo: "La IA no pudo ampliar el fondo. Reintenta o sigue sin ampliarlo.", sinImagen: "La IA no quiso ampliar este fondo. Sigue sin ampliarlo." };
+  return iaActiva() ? { ampliar: (p) => llamarGemini([{ text: PROMPT_AMPLIAR }, imagen(p.png)], p.aspect, p.tamano, mensajes), modelo: MODELO_GEMINI } : null;
+}
+
 // ── Leer una imagen plana (B28): qué elementos tiene, dónde y con qué letras (sólo texto de salida) ──
 /** Probado el 2026-10-27 con el anuncio DiDi Card: 15 elementos, cajas a 0-4 px de la tinta, letras exactas. */
 export const MODELO_LECTURA = "gemini-3.8-flash";

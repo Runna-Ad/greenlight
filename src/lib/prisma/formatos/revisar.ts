@@ -13,6 +13,7 @@
  * los mismos avisos.
  */
 import { acomodar, aplicarEdicion, dibujosDe, elegirMaestro, pegadoFuera, RENGLONES_MAS, RENGLONES_MAX, sinSusLetras, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type OpcionesAcomodo, type ParteCaja, type Zona } from "./acomodo.ts";
+import { maestroAmpliado, type Ampliacion } from "./ampliar.ts";
 import { haloDe } from "./halo.ts";
 import type { Caja, Rol } from "./psd.ts";
 import { etiquetaPieza } from "./roles.ts";
@@ -451,6 +452,8 @@ export function revisarMedida<M extends MaestroRevisable>(
     contraste?: EleccionContraste;
     /** B27: los renglones del legal de cada maestro (por su índice), y los que pide el editor sin edición guardada. */
     renglones?: { de: (maestro: number) => Renglonero<M> | null; elegidos?: number | null; legal?: (maestro: number) => number | null };
+    /** El fondo ampliado con IA de ESTA medida (`ampliar.ts`). Si el fondo del maestro ya cambió, no se usa. */
+    ampliacion?: Ampliacion | null;
   } = {},
 ): Revisada<M> {
   const maestro = elegirMaestro([...maestros], W, H);
@@ -493,6 +496,10 @@ export function revisarMedida<M extends MaestroRevisable>(
     ma = delPsd;
     renglones = null;
     aMano = false;
+  }
+  if (op.ampliacion && op.ampliacion.base === delPsd.fondo) {
+    ma = maestroAmpliado(ma, op.ampliacion);
+    delPsdDe.set(ma, delPsd);
   }
   // Lo guardado pedía otros renglones y ahora no se pueden (las tipografías todavía no llegan, o falta la del legal): lo
   // movido a mano del legal se midió con aquella forma del pie, así que se deja de lado (no queda mal puesto) y se dice.

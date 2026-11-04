@@ -13,7 +13,7 @@ import { CANALES, LETRA_MIN_PX, MEDIDAS_INICIO, MEDIDAS_RATIO, elegirMaestro, es
 import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionContraste, type InfoContraste } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteConOrilla, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_APLANADA, FP_ERROR, FP_FAMILIA, FP_PAPEL, FPL, FX, rellenar } from "@/lib/prisma/formatos/copy";
-import { LADO_MAX, LADO_MIN, leerMedidas, limpiarNombre } from "@/lib/prisma/formatos/geometria";
+import { LADO_MAX, LADO_MIN, leerMedidas, lienzoIA, limpiarNombre } from "@/lib/prisma/formatos/geometria";
 import { EDITABLE_MAX_BYTES, EDITABLE_MAX_MS, LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajePsdMedida, type MensajeWorker, type MesaDescartada, type MesaElegible, type MesaSinFondo, type PedidoPsdMedida, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
@@ -32,7 +32,8 @@ import { porQueNoSeCambia } from "@/lib/prisma/formatos/textos";
 import { APAGADA, COLUMNAS, ChipEstado, FOCO, FORMAS, FilaLegal, NOMBRE_FORMA, PRENDIDA, PastillasCanal, PastillasEntrega, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
 import { conLegal, conLegalDe, conLegalFijo, legalDelPsd, legalesParaCliente, legalParecido, legalVigente, type LegalGuardado } from "@/lib/prisma/formatos/legal";
 import { copiarEdicion, hermanas } from "@/lib/prisma/formatos/matriz";
-import { ErrorDeRuta, IA_ESPERA_MS, aPng, aRgba, pngQueQuepa } from "./ia-imagen";
+import { ORIGINAL_POCO, ampliacionDe, coserAmpliacion, fondoEnOriginal, lienzoAmpliado, parteOriginal, sinAmpliar, valeAmpliar, type Ampliacion } from "@/lib/prisma/formatos/ampliar";
+import { ErrorDeRuta, IA_ESPERA_MS, aPng, aRgba, lienzoParaAmpliar, pngQueQuepa, zonaARgba } from "./ia-imagen";
 
 /**
  * HÜE Prisma › Formatos, puerta PSD. El anuncio llega en Photoshop: un Web Worker lo lee y lo separa en fondo
@@ -138,13 +139,18 @@ const PASTILLA_ZIP = "inline-flex h-9 cursor-pointer items-center gap-1.5 rounde
  * doesnt let me switch between contrast options"). Antes del 2026-10-15 la clave llevaba ":fondo" con ese arreglo:
  * se sigue leyendo (CONTEXTO_VIEJO) para no perder lo que se editó así.
  */
-const contextoEdicion = (m: Medida, lado: Lado | undefined, canal: Canal | null) => {
+const contextoEdicion = (m: Medida, lado: Lado | undefined, canal: Canal | null, ampliada = false) => {
   const z = zonaCanal(canal, m.w, m.h);
-  return `${lado ?? "derecha"}:${z ? `${z.top},${z.right},${z.bottom},${z.left}` : "-"}`;
+  // Con el fondo ampliado (`ampliar.ts`) el acomodo y el lienzo son otros: lo movido a mano va aparte. Al quitarlo, vuelve lo de antes.
+  return `${lado ?? "derecha"}:${z ? `${z.top},${z.right},${z.bottom},${z.left}` : "-"}${ampliada ? ":ampliado" : ""}`;
 };
 const CONTEXTO_VIEJO = ":fondo";
 /** El nombre de entrega del equipo (el de la mesa con la medida nueva), limpio para ser nombre de archivo. */
-const archivoDe = (ma: MaestroListo, m: Medida, e: Entrega) => `${nombreSalida({ nombre: limpiarNombre(ma.nombre, NOMBRE_MESA_MAX), w: ma.w, h: ma.h }, m.w, m.h, e)}.png`;
+const archivoDe = (ma: MaestroListo, m: Medida, e: Entrega) => {
+  // El nombre lleva la medida de la mesa: con el fondo ampliado, la mesa de verdad, no el lienzo.
+  const { w, h } = sinAmpliar(ma);
+  return `${nombreSalida({ nombre: limpiarNombre(ma.nombre, NOMBRE_MESA_MAX), w, h }, m.w, m.h, e)}.png`;
+};
 const sinExtension = (archivo: string) => archivo.replace(/\.(psd|png|jpe?g|webp)$/i, "");
 
 const usd = (v: number, decimales: number) => `US$${v.toFixed(decimales)}`;
@@ -287,7 +293,7 @@ async function armarPsdMedida(o: {
         // Otra medida en la fila ya falló con este archivo: ésta no vuelve a esperar al worker.
         if (sinEditable.has(archivo)) throw new FallaPsd("otro", "este archivo ya falló en otra medida");
         o.alArmar();
-        const [{ armarMedida, halosEnMedida }, { planDeMedida, retoqueDeFondo }] = await Promise.all([import("@/lib/prisma/formatos/nitido"), import("@/lib/prisma/formatos/psd-editable")]);
+        const [{ armarMedida, halosEnMedida }, { capaDeAmpliacion, planDeMedida, retoqueDeFondo }] = await Promise.all([import("@/lib/prisma/formatos/nitido"), import("@/lib/prisma/formatos/psd-editable")]);
         // Un cuadro para que se vea «Armando…» antes del trabajo pesado. En una pestaña de fondo no se pinta nada (y el
         // navegador estira los relojes a 1 s): ahí no se espera.
         if (!document.hidden)
@@ -304,11 +310,16 @@ async function armarPsdMedida(o: {
         if (!sigue()) return null;
         const sombras = new Set(acomodo.sombras ?? []);
         const halos = acomodo.puestas.flatMap((q) => (sombras.has(q.pieza) ? halosEnMedida(ma, q).map((capa) => ({ nombre: ma.piezas[q.pieza].nombre, capa })) : []));
-        const retoque = ma.fondoOriginal ? retoqueDeFondo(ma.fondoOriginal, ma.fondo, ma.w, ma.h, acomodo.fondo, w, h) : null;
+        // Con el fondo ampliado, las capas del PSD siguen en sus lugares de la mesa (`sinAmpliar`), con el fondo donde
+        // cae dentro del lienzo, y lo que pintó la IA va en la capa del retoque, encima de ellas.
+        const delPsd = sinAmpliar(ma), ampliado = ampliacionDe(ma);
+        const fondoPsd = ampliado ? fondoEnOriginal(acomodo.fondo, ampliado) : acomodo.fondo;
+        const parche = delPsd.fondoOriginal ? retoqueDeFondo(delPsd.fondoOriginal, delPsd.fondo, delPsd.w, delPsd.h, fondoPsd, w, h) : null;
+        const retoque = ampliado ? capaDeAmpliacion(ampliado, delPsd.w, delPsd.h, acomodo.fondo, w, h, parche) : parche;
         const compuesto = armarMedida(ma, acomodo, w, h, { texto });
         // Los textos con letras nuevas llevan su tinta (en px del maestro) hasta que Photoshop los vuelva a dibujar.
         const textos = ma.piezas.flatMap((p) => p.textos.flatMap((t) => (t.cambio?.tinta ? [{ ruta: t.ruta, tinta: t.cambio.tinta }] : [])));
-        const pedido: PedidoPsdMedida = { archivo, plan: planDeMedida({ piezas: ma.piezas, origen }, acomodo, w, h), extras: { compuesto, halos, retoque, textos } };
+        const pedido: PedidoPsdMedida = { archivo, plan: planDeMedida({ piezas: delPsd.piezas, origen }, { ...acomodo, fondo: fondoPsd }, w, h), extras: { compuesto, halos, retoque, textos } };
         // Lo pintado aquí cruza al worker sin copiarse (son arreglos nuevos: nada más los usa).
         const transferir = [compuesto.buffer, ...halos.map((x) => x.capa.rgba.buffer), ...(retoque ? [retoque.rgba.buffer] : [])] as ArrayBuffer[];
         return psdEditableEnWorker(pedido, transferir, o.alArrancar);
@@ -563,6 +574,11 @@ const TarjetaMedida = memo(function TarjetaMedida({
   psdOriginal,
   elegida,
   alElegir,
+  ampliacion,
+  ampliando,
+  alAmpliar,
+  alCancelarAmpliar,
+  alQuitarAmpliacion,
 }: {
   maestros: MaestroVista[];
   medida: Medida;
@@ -587,6 +603,12 @@ const TarjetaMedida = memo(function TarjetaMedida({
   /** Va en «Descargar ZIP» (B22): su casilla. */
   elegida: boolean;
   alElegir: (m: Medida, si: boolean) => void;
+  /** El fondo ampliado con IA de esta medida (`ampliar.ts`), y si se está pidiendo. */
+  ampliacion: Ampliacion | null;
+  ampliando: boolean;
+  alAmpliar: (m: Medida, base: MaestroVista) => void;
+  alCancelarAmpliar: (m: Medida) => void;
+  alQuitarAmpliacion: (m: Medida, a: Ampliacion) => void;
 }) {
   const { w, h } = medida;
   const k = clave(medida);
@@ -594,10 +616,13 @@ const TarjetaMedida = memo(function TarjetaMedida({
   // encima: lo mismo que usa el resumen.
   // Con el legal en otros renglones (B27), `ma` es esa versión del maestro y se escribe con su escritura.
   const { maestro, ma, acomodo, contraste } = useMemo(
-    () => revisarMedida(maestros, w, h, { heroLado: lado, zona: zonaCanal(canal, w, h), contraste: eleccion, edicion, renglones: { de: renglones.de, legal: renglones.legal } }),
-    [maestros, w, h, lado, canal, eleccion, edicion, renglones],
+    () => revisarMedida(maestros, w, h, { heroLado: lado, zona: zonaCanal(canal, w, h), contraste: eleccion, edicion, ampliacion, renglones: { de: renglones.de, legal: renglones.legal } }),
+    [maestros, w, h, lado, canal, eleccion, edicion, ampliacion, renglones],
   );
   const escritura = renglones.escrituraDe(ma);
+  const baseAmpliar = maestros[maestro];
+  const fondoAmpliado = ampliacionDe(ma);
+  const sePuedeAmpliar = !fondoAmpliado && !!baseAmpliar && valeAmpliar(baseAmpliar.w, baseAmpliar.h, w, h);
   const guia = zonaCanal(canal, w, h);
   const nombreCanal = canal ? CANALES[canal].nombre : "";
   const lienzo = useRef<HTMLCanvasElement>(null);
@@ -769,7 +794,7 @@ const TarjetaMedida = memo(function TarjetaMedida({
       </div>
       <p className="mt-0.5 text-xs text-muted-foreground">
         {tx(FP_FAMILIA[acomodo.familia], lang)}
-        {maestros.length > 1 && <> · {rellenar(tx(FP.deMesa, lang), { m: `${ma.w}×${ma.h}` })}</>}
+        {maestros.length > 1 && <> · {rellenar(tx(FP.deMesa, lang), { m: `${sinAmpliar(ma).w}×${sinAmpliar(ma).h}` })}</>}
         {volteable && <> · {tx(lado === "izquierda" ? FP.heroIzquierda : FP.heroDerecha, lang)}</>}
         {letra !== null && <> · {rellenar(tx(FP.letra, lang), { px: letra.toFixed(1) })}</>}
       </p>
@@ -821,7 +846,30 @@ const TarjetaMedida = memo(function TarjetaMedida({
           Angosta: «Editar» (y «Voltear») arriba y las dos descargas juntas abajo, sin un botón suelto; ancha (banner), en
           una fila con las descargas a la derecha. */}
       <div className="mt-auto pt-2.5">
+        {fondoAmpliado && (
+          <p className="mb-2 flex gap-1.5 text-[13px] leading-snug text-muted-foreground">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
+            <span>
+              {tx(FP.ampliarNota, lang)}
+              {baseAmpliar && parteOriginal(baseAmpliar.w, baseAmpliar.h, fondoAmpliado) < ORIGINAL_POCO ? ` ${tx(FP.ampliarPoco, lang)}` : ""}
+              {fondoAmpliado.costoUsd !== null ? ` ${rellenar(tx(FP.ampliarCosto, lang), { c: usd(fondoAmpliado.costoUsd, 3) })}` : ""}
+            </span>
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-1.5 border-t border-border pt-2.5 @[22rem]:flex @[22rem]:flex-wrap @[22rem]:items-center">
+          {ampliando ? (
+            <Button variant="outline" className={cn(BOTON_TARJETA, "col-span-2 @[22rem]:w-full")} onClick={() => alCancelarAmpliar(medida)} aria-busy="true" aria-label={rellenar(tx(FP.ampliarCancelarAria, lang), { m: etiqueta(medida) })}>
+              <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> {tx(FP.ampliarTrabajando, lang)}
+            </Button>
+          ) : fondoAmpliado ? (
+            <Button variant="outline" className={cn(BOTON_TARJETA, "col-span-2 @[22rem]:w-full")} onClick={() => alQuitarAmpliacion(medida, fondoAmpliado)} aria-label={rellenar(tx(FP.ampliarQuitarAria, lang), { m: etiqueta(medida) })}>
+              <RotateCcw className="size-3.5" aria-hidden="true" /> {tx(FP.ampliarQuitar, lang)}
+            </Button>
+          ) : sePuedeAmpliar ? (
+            <Button variant="outline" className={cn(BOTON_TARJETA, "col-span-2 @[22rem]:w-full")} onClick={() => alAmpliar(medida, baseAmpliar)} disabled={noPinto} aria-label={rellenar(tx(FP.ampliarAria, lang), { m: etiqueta(medida), e: `≈ US$${lienzoIA(baseAmpliar.w, baseAmpliar.h, w, h).costoUsd.toFixed(2)}` })}>
+              <Sparkles className="size-3.5" aria-hidden="true" /> {rellenar(tx(FP.ampliarBoton, lang), { e: `≈ US$${lienzoIA(baseAmpliar.w, baseAmpliar.h, w, h).costoUsd.toFixed(2)}` })}
+            </Button>
+          ) : null}
           <Button variant="outline" className={cn(BOTON_TARJETA, !volteable && "col-span-2")} data-editar={k} onClick={() => alEditar(medida)} disabled={noPinto} aria-label={rellenar(tx(FP.editarAria, lang), { m: etiqueta(medida) })}>
             <Move className="size-3.5" aria-hidden="true" /> {tx(FP.editar, lang)}
           </Button>
@@ -883,6 +931,13 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   const [conIA, setConIA] = useState<{ leido: Leido; i: number } | null>(null);
   /** El pedido a la IA en curso: se cancela al cambiar de PSD o al salir de la pantalla. */
   const pedidoIA = useRef<AbortController | null>(null);
+  /** Los fondos ampliados con IA, por medida y de qué PSD (`ampliar.ts`). Sólo en memoria: se pierden al recargar. */
+  const [ampliaciones, setAmpliaciones] = useState<{ leido: Leido; mapa: ReadonlyMap<string, Ampliacion> } | null>(null);
+  /** Las medidas con una ampliación en curso, y cómo cancelarla. */
+  const [ampliandose, setAmpliandose] = useState<ReadonlySet<string>>(() => new Set());
+  const pedidosAmpliar = useRef(new Map<string, AbortController>());
+  /** Cuándo se quitó el último fondo ampliado (ver COPIA_PAUSA_MS). */
+  const ultimaQuitada = useRef(0);
   /** Tras quitar con IA, el foco va al botón de esa copia (el de la IA desaparece). */
   const enfocarCopia = useRef<number | null>(null);
   /** Lo que le falta al PSD pero es exclusivo de OTRO cliente (de qué PSD y con qué cliente elegido se preguntó). */
@@ -1054,6 +1109,106 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
         return v;
       }),
     [conPapel, copias, quitadas],
+  );
+  // Sólo las que siguen valiendo: si el fondo cambió («Quitar del fondo»), la ampliación de ese fondo ya no cuenta.
+  const ampliacionesVista = useMemo<ReadonlyMap<string, Ampliacion>>(
+    () => new Map(ampliaciones && ampliaciones.leido === leido ? [...ampliaciones.mapa].filter(([, a]) => maestrosVista.some((m) => m.fondo === a.base)) : []),
+    [ampliaciones, leido, maestrosVista],
+  );
+  const maestrosVigentes = useRef(maestrosVista);
+  useEffect(() => {
+    maestrosVigentes.current = maestrosVista;
+  }, [maestrosVista]);
+  // Al cambiar de PSD o salir de la pantalla, lo que se le pidió a la IA ya no le sirve a nadie.
+  useEffect(() => {
+    const pedidos = pedidosAmpliar.current;
+    return () => {
+      for (const c of pedidos.values()) c.abort();
+    };
+  }, [leido]);
+  const alAmpliar = useCallback(
+    async (m: Medida, base: MaestroVista) => {
+      const l = leidoVigente.current, k = clave(m);
+      // El botón de quitar se vuelve éste en el mismo lugar: un doble clic en «Quitar» no debe volver a cobrar.
+      if (!l || pedidosAmpliar.current.has(k) || performance.now() - ultimaQuitada.current < COPIA_PAUSA_MS) return;
+      const ctrl = new AbortController();
+      pedidosAmpliar.current.set(k, ctrl);
+      setAmpliandose((p) => new Set(p).add(k));
+      anunciar(rellenar(tx(FP.ampliarEmpieza, langVigente.current), { m: etiqueta(m) }));
+      try {
+        const g = lienzoAmpliado(base.w, base.h, m.w, m.h), L = lienzoIA(base.w, base.h, m.w, m.h);
+        const fondo = base.fondo.buffer instanceof ArrayBuffer ? (base.fondo as Uint8ClampedArray<ArrayBuffer>) : new Uint8ClampedArray(base.fondo);
+        const form = new FormData();
+        form.set("imagen", await pngQueQuepa(lienzoParaAmpliar(fondo, base.w, base.h, L.gw, L.gh, L.original), L.gw, L.gh, RECORTE_IA_MAX, FONDO_IA_MAX_BYTES), "imagen.png");
+        form.set("aspect", L.aspect);
+        form.set("tamano", L.tamano);
+        const res = await fetch("/api/prisma/formatos/fondo-ampliar", { method: "POST", body: form, signal: AbortSignal.any([ctrl.signal, AbortSignal.timeout(IA_ESPERA_MS)]) });
+        if (!res.ok) {
+          const e = (await res.json().catch(() => null)) as { error?: unknown } | null;
+          throw typeof e?.error === "string" ? new ErrorDeRuta(e.error) : new Error(`HTTP ${res.status}`);
+        }
+        const costo = res.headers.get("x-costo-usd"), costoUsd = costo && Number.isFinite(Number(costo)) ? Number(costo) : null;
+        const ia = await zonaARgba(await res.blob(), L.gw, L.gh, L.zona, g.w, g.h);
+        if (!vivo.current || ctrl.signal.aborted || leidoVigente.current !== l) return;
+        // Mientras la IA trabajaba se pudo quitar una copia del fondo: lo que vuelve es del fondo de antes.
+        if (!maestrosVigentes.current.some((x) => x.fondo === base.fondo)) return void toast.warning(rellenar(tx(FP.ampliarCambio, langVigente.current), { m: etiqueta(m) }), { duration: 10_000 });
+        const a: Ampliacion = { ...g, ...coserAmpliacion(ia, base.fondo, base.w, base.h, g), base: base.fondo, costoUsd };
+        setAmpliaciones((antes) => ({ leido: l, mapa: new Map([...(antes?.leido === l ? antes.mapa : []), [k, a]]) }));
+        const t = langVigente.current, dicho = rellenar(tx(FP.ampliarAviso, t), { m: etiqueta(m) });
+        anunciar(dicho);
+        if (a.deriva > DERIVA_IA_REVISAR) toast.warning(`${dicho} ${tx(FP.ampliarDeriva, t)}`, { duration: 10_000 });
+        else toast.success(dicho);
+      } catch (err) {
+        if (ctrl.signal.aborted || !vivo.current) return;
+        console.error("[formatos-psd] ampliar fondo", err);
+        toast.error(`${etiqueta(m)}: ${err instanceof ErrorDeRuta ? err.message : tx(FP.ampliarFallo, langVigente.current)}`, { duration: 10_000 });
+      } finally {
+        pedidosAmpliar.current.delete(k);
+        if (vivo.current)
+          setAmpliandose((p) => {
+            const s = new Set(p);
+            s.delete(k);
+            return s;
+          });
+      }
+    },
+    [anunciar],
+  );
+  const cancelarAmpliar = useCallback(
+    (m: Medida) => {
+      const c = pedidosAmpliar.current.get(clave(m));
+      if (!c) return;
+      c.abort();
+      anunciar(rellenar(tx(FP.ampliarCancelado, langVigente.current), { m: etiqueta(m) }));
+    },
+    [anunciar],
+  );
+  const quitarAmpliacion = useCallback(
+    (m: Medida, a: Ampliacion) => {
+      const l = leidoVigente.current, k = clave(m);
+      if (!l) return;
+      ultimaQuitada.current = performance.now();
+      setAmpliaciones((antes) => {
+        if (!antes) return antes;
+        const mapa = new Map(antes.mapa);
+        mapa.delete(k);
+        return { leido: antes.leido, mapa };
+      });
+      const t = langVigente.current, dicho = rellenar(tx(FP.ampliarQuitado, t), { m: etiqueta(m) });
+      anunciar(dicho);
+      // Se paga por cada una: se puede volver a poner sin otro cobro. Sólo esta medida, y sólo en el mismo PSD.
+      toast.info(dicho, {
+        duration: DESHACER_MS,
+        action: {
+          label: tx(FP.ampliarDeshacer, t),
+          onClick: () => {
+            if (leidoVigente.current !== l) return;
+            setAmpliaciones((antes) => ({ leido: l, mapa: new Map([...(antes?.leido === l ? antes.mapa : []), [k, a]]) }));
+          },
+        },
+      });
+    },
+    [anunciar],
   );
   /** Lo que enseña «Pieza repetida en el fondo»: cada maestro con copia, quitada o no. */
   const copiasVista = conPapel.flatMap((m, i) => {
@@ -1773,13 +1928,13 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     const deSesion = ediciones?.leido === leido ? ediciones.mapa : null;
     if (!leido || !maestrosVista.length) return mapa;
     for (const m of medidas) {
-      const ctx = contextoEdicion(m, lados[clave(m)], canal), c = `${clave(m)}:${ctx}`;
+      const ctx = contextoEdicion(m, lados[clave(m)], canal, ampliacionesVista.has(clave(m))), c = `${clave(m)}:${ctx}`;
       const ma = maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)];
       if (deSesion?.has(c)) mapa.set(clave(m), deSesion.get(c) ?? null);
       else mapa.set(clave(m), edicionGuardada(leido.archivo, ma, m.w, m.h, ctx) ?? edicionGuardada(leido.archivo, ma, m.w, m.h, ctx + CONTEXTO_VIEJO));
     }
     return mapa;
-  }, [ediciones, leido, maestrosVista, medidas, lados, canal]);
+  }, [ediciones, leido, maestrosVista, medidas, lados, canal, ampliacionesVista]);
   const abrirEditor = useCallback((m: Medida) => setEditando(m), []);
   /** Los textos del anuncio (todas las medidas): en la sesión y en este navegador. false = sólo en la sesión (se dice). */
   const ponerTextos = (l: Leido, c: CambiosTexto): boolean => {
@@ -1796,7 +1951,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     const textos = cambios !== cambiosTexto;
     if (textos && ponerTextos(l, cambios)) toast.success(rellenar(tx(cambiosQueAplican(maestrosVista, cambios).length ? FP.editorTextosGuardados : FP.editorTextosDelPsd, lang), { n: medidas.length }));
     const antes = edicionesVista.get(clave(m)) ?? null;
-    const ctx = contextoEdicion(m, lados[clave(m)], canal), ma = maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)];
+    const ctx = contextoEdicion(m, lados[clave(m)], canal, ampliacionesVista.has(clave(m))), ma = maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)];
     const guardada = guardarEdicion(l.archivo, ma, m.w, m.h, ctx, ed);
     // Lo guardado con la clave vieja se borra: si no, «Volver al automático» lo dejaría volver a aparecer.
     guardarEdicion(l.archivo, ma, m.w, m.h, ctx + CONTEXTO_VIEJO, null);
@@ -1812,8 +1967,9 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       const modo = modos.get(clave(t));
       if (!modo || maestrosVista[elegirMaestro(maestrosVista, t.w, t.h)] !== ma) return [];
       const espejo = (lados[clave(m)] ?? "derecha") !== (lados[clave(t)] ?? "derecha");
-      const ctxT = contextoEdicion(t, lados[clave(t)], canal);
-      const edT = ed ? copiarEdicion(ed, piezasCopia, m, t, modo, espejo) : null;
+      const ctxT = contextoEdicion(t, lados[clave(t)], canal, ampliacionesVista.has(clave(t)));
+      // El fondo movido sobre un lienzo ampliado no le sirve a otra medida: se copian sólo las piezas.
+      const edT = ed ? copiarEdicion(ampliacionesVista.has(clave(m)) ? { ...ed, fondo: undefined } : ed, piezasCopia, m, t, modo, espejo) : null;
       const ok = guardarEdicion(l.archivo, ma, t.w, t.h, ctxT, edT);
       guardarEdicion(l.archivo, ma, t.w, t.h, ctxT + CONTEXTO_VIEJO, null);
       return [{ t, modo, ok, ctx: ctxT, clave: `${clave(t)}:${ctxT}`, ed: edT, previa: edicionesVista.get(clave(t)) ?? null }];
@@ -1927,7 +2083,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
   const paraEditor = useMemo(() => {
     if (!editando || !leido || !maestrosVista.length) return null;
     const m = editando, mi = elegirMaestro(maestrosVista, m.w, m.h), zona = zonaCanal(canal, m.w, m.h);
-    const op = { heroLado: lados[clave(m)], zona, contraste: contrastes[clave(m)] };
+    const op = { heroLado: lados[clave(m)], zona, contraste: contrastes[clave(m)], ampliacion: ampliacionesVista.get(clave(m)) };
     return {
       m,
       mi,
@@ -1944,7 +2100,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
         return { ma: r.ma, texto: textoEscrito(rg.escrituraDe(r.ma), mi, r.ma, tiposEscritos), auto: r.acomodo, renglones: r.renglones, sinRenglones, piezaLegal: rg.legal(mi) };
       },
     };
-  }, [editando, leido, maestrosVista, canal, lados, contrastes, escritura, tiposEscritos, cambiosTexto, conTextos, renglones, probando]);
+  }, [editando, leido, maestrosVista, canal, lados, contrastes, escritura, tiposEscritos, cambiosTexto, conTextos, renglones, probando, ampliacionesVista]);
 
   // El mismo acomodo y los mismos avisos que cada tarjeta (`revisarMedida` guarda lo ya hecho): aquí sirven para el
   // resumen, el legal y los nombres del ZIP.
@@ -1953,10 +2109,10 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       maestrosVista.length
         ? medidas.map((m) => ({
             m,
-            ...revisarMedida(conTextos.maestros, m.w, m.h, { heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h), contraste: contrastes[clave(m)], edicion: edicionesVista.get(clave(m)) ?? null, renglones: { de: renglones.de, legal: renglones.legal } }),
+            ...revisarMedida(conTextos.maestros, m.w, m.h, { ampliacion: ampliacionesVista.get(clave(m)), heroLado: lados[clave(m)], zona: zonaCanal(canal, m.w, m.h),contraste: contrastes[clave(m)], edicion: edicionesVista.get(clave(m)) ?? null, renglones: { de: renglones.de, legal: renglones.legal } }),
           }))
         : [],
-    [conTextos, maestrosVista.length, medidas, lados, canal, contrastes, edicionesVista, renglones],
+    [conTextos, maestrosVista.length, medidas, lados, canal, contrastes, edicionesVista, renglones, ampliacionesVista],
   );
   // Lo propio de cada medida y lo que se arregla una vez arriba se cuentan por separado (B23), como en las tarjetas.
   const porRevisar = filas.filter((f) => f.acomodo.avisos.some((a) => !esComun(a) && !esNota(a))).length;
@@ -3018,7 +3174,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
                     </h3>
                     <ul className={cn("grid gap-3", COLUMNAS[f])}>
                       {grupo.map((m) => (
-                        <TarjetaMedida key={clave(m)} maestros={conTextos.maestros} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} entrega={entrega} renglones={renglones} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} elegida={!fueraDelZip.has(clave(m))} alElegir={elegirParaZip} />
+                        <TarjetaMedida key={clave(m)} maestros={conTextos.maestros} medida={m} lado={lados[clave(m)] ?? "derecha"} canal={canal} entrega={entrega} renglones={renglones} tipos={tiposEscritos} lang={lang} alVoltear={voltear} registrar={registrar} edicion={edicionesVista.get(clave(m)) ?? null} alEditar={abrirEditor} contraste={contrastes[clave(m)] ?? "auto"} alContraste={elegirContraste} psdOriginal={leido?.psdOriginal ?? null} elegida={!fueraDelZip.has(clave(m))} alElegir={elegirParaZip} ampliacion={ampliacionesVista.get(clave(m)) ?? null} ampliando={ampliandose.has(clave(m))} alAmpliar={alAmpliar} alCancelarAmpliar={cancelarAmpliar} alQuitarAmpliacion={quitarAmpliacion} />
                       ))}
                     </ul>
                   </div>

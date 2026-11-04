@@ -1,5 +1,17 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-11-04 — «Ampliar fondo con IA» en el lado PSD, por medida (rama `feat/fondo-ia-psd`, worktree ../greenlight-fondo-ia, sin migración)
+Pedro eligió la opción 1 (botón por medida): "with the zoom a lot of the times it brings the other assets right to the edge".
+El lienzo del maestro crece a la forma de la medida (`ampliar.ts`), Gemini pinta lo nuevo, el fondo original se cose encima.
+Next Step: Pedro prueba en la preview con la IA real; después merge a `prisma`/`main` y, en vivo, sólo con su "ship it".
+- [x] Lienzo y maestro corrido; la familia y la zona del canal siguen saliendo de la forma real (`MaestroCaja.forma`).
+- [x] Ruta `fondo-ampliar` (mismo gate, tope y gasto que las demás; el gasto se anota como "tamano"; responde JPEG).
+- [x] Botón en la tarjeta, cancelar, quitar con «Volver a ponerlo», costo real; PNG, ZIP, editor y PSD editable.
+- [x] Pruebas: formatos 719/0, `npm test` y build limpios. `scripts/medir-ampliar.mjs` mide las orillas en PSD reales.
+- [ ] Verification: una llamada real en la preview (`x-costo-usd`, peso del JPEG, qué inventa la IA). No probado: Photoshop abriendo el PSD.
+- [ ] Límites conocidos, sin arreglar: sólo en memoria (se pierde al recargar, cada medida retiene hasta 64 MB); lienzos de más de 16 M de píxeles no se ofrecen (320×50 desde un 1080×1920); la capa del PSD se llama «Fondo retocado (HÜE)»; `coserAmpliacion` y `rellenoDeLienzo` recorren todo en el hilo de la página.
+- [ ] Sin arreglar, comparten con las rutas hermanas: frenos por persona en memoria de cada servidor, tope sin reservar antes de la llamada, llamada cortada sin anotar.
+
 ## Tope de Gemini (0088), límites conocidos, sin arreglar (2026-11-02)
 - [ ] Un tamaño «ia» que el anuncio ya llena no llama a Gemini, pero el tope lo rechaza igual.
 - [ ] Cancelar o agotar el tiempo de una llamada a Gemini no se anota; sin comprobar si Google la cobra.

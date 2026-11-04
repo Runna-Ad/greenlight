@@ -20,6 +20,7 @@
  */
 import type { BezierPath, KeyDescriptorItem, Layer, LayerEffectsInfo, LayerMaskData, PixelData, Psd, UnitsValue } from "ag-psd";
 import type { Acomodo } from "./acomodo.ts";
+import { rellenoDeLienzo, type Ampliacion } from "./ampliar.ts";
 import type { Origen } from "./psd.ts";
 import { EDITABLE_CAPAS_MAX, EDITABLE_CAPA_MAX_PX, EDITABLE_PX_MAX, EDITABLE_SALIDA_PX_MAX } from "./listo.ts";
 import { aCapa, remuestrear, type CapaSalida } from "./nitido.ts";
@@ -204,6 +205,25 @@ export function retoqueDeFondo(antes: Uint8ClampedArray, despues: Uint8ClampedAr
   const X1 = Math.min(W, Math.ceil(ox + pw * fondo.k) + 1), Y1 = Math.min(H, Math.ceil(oy + ph * fondo.k) + 1);
   if (X1 <= X0 || Y1 <= Y0) return null;
   return justa(aCapa(remuestrear(parche, pw, ph, fondo.k, ox, oy, X0, Y0, X1, Y1, "fuera", true), X0, Y0, X1 - X0, Y1 - Y0));
+}
+
+/**
+ * Lo que la IA pintó alrededor del fondo (`ampliar.ts`), puesto en la medida: sale en la misma capa que el retoque, sobre
+ * las capas del fondo, que siguen vivas. `fondo`: el del acomodo, en px del lienzo ampliado. Con `retoque` («Quitar del
+ * fondo» también se usó), ese parche va encima.
+ */
+export function capaDeAmpliacion(a: Ampliacion, w: number, h: number, fondo: Acomodo["fondo"], W: number, H: number, retoque: CapaSalida | null): CapaSalida | null {
+  const c = aCapa(remuestrear(rellenoDeLienzo(a, w, h), a.w, a.h, fondo.k, fondo.x, fondo.y, 0, 0, W, H, "fuera", true), 0, 0, W, H);
+  if (retoque)
+    for (let y = 0; y < retoque.h; y++)
+      for (let x = 0; x < retoque.w; x++) {
+        const s = (y * retoque.w + x) * 4, d = ((y + retoque.y) * W + x + retoque.x) * 4;
+        const ta = retoque.rgba[s + 3] / 255, ba = c.rgba[d + 3] / 255, oa = ta + ba * (1 - ta);
+        if (oa <= 0) continue;
+        for (let n = 0; n < 3; n++) c.rgba[d + n] = (retoque.rgba[s + n] * ta + c.rgba[d + n] * ba * (1 - ta)) / oa;
+        c.rgba[d + 3] = oa * 255;
+      }
+  return justa(c);
 }
 
 /** Las mesas como las cuenta `leerPsd`: las visibles, en el orden en que se recorre el árbol (también dentro de

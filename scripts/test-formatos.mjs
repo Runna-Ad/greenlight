@@ -3566,5 +3566,68 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   ok("error: un PSD sin artboards no enseña «»", /^Este PSD/.test(sinNombre) && !sinNombre.includes("«»"));
 }
 
+// ── «Ampliar fondo con IA» (ampliar.ts) ──
+{
+  const { lienzoAmpliado, valeAmpliar, coserAmpliacion, maestroAmpliado, sinAmpliar, ampliacionDe, fondoEnOriginal } = await import("../src/lib/prisma/formatos/ampliar.ts");
+  const { capaDeAmpliacion } = await import("../src/lib/prisma/formatos/psd-editable.ts");
+  const { revisarMedida } = await import("../src/lib/prisma/formatos/revisar.ts");
+
+  const g = lienzoAmpliado(1200, 1500, 1080, 1920);
+  eq("ampliar: 4:5 a 9:16 crece sólo a lo alto, centrado", [g.w, g.ox, g.h, g.oy], [1200, 0, 2133, 316]);
+  ok("ampliar: de la misma forma no se ofrece", !valeAmpliar(1200, 1500, 1080, 1350));
+  ok("ampliar: de otra forma sí", valeAmpliar(1200, 1500, 1080, 1920));
+  ok("ampliar: un lienzo que no cabe en memoria no se ofrece", !valeAmpliar(4000, 4000, 2000, 100));
+
+  // Un maestro chico para los píxeles: fondo gris 100, la IA pinta 200.
+  const w = 40, h = 50, gc = lienzoAmpliado(w, h, 1080, 1920);
+  const lleno = (n, v) => { const a = new Uint8ClampedArray(n * 4).fill(v); for (let i = 3; i < a.length; i += 4) a[i] = 255; return a; };
+  const fondo = lleno(w * h, 100), ia = lleno(gc.w * gc.h, 200);
+  const cosido = coserAmpliacion(ia, fondo, w, h, gc);
+  const px = (x, y) => cosido.rgba[(y * gc.w + x) * 4];
+  eq("ampliar: fuera del fondo queda lo de la IA", px(0, 0), 200);
+  eq("ampliar: adentro queda el fondo original intacto", px(20, gc.oy + 25), 100);
+  ok("ampliar: en la orilla de la unión hay mezcla, no un corte", px(20, gc.oy) > 100 && px(20, gc.oy) < 200, String(px(20, gc.oy)));
+  eq("ampliar: mide cuánto cambió la IA el centro", Math.round(cosido.deriva), 100);
+
+  // El punto de Pedro: el zoom lleva las piezas a la orilla; ampliado, conservan su aire.
+  const pieza = (nombre, rol, x, y, pw, ph) => ({ nombre, rol, solido: { x, y, w: pw, h: ph }, caja: { x, y, w: pw, h: ph }, letraMinPx: null, textos: [], rgba: new Uint8ClampedArray(pw * ph * 4), oscurece: null, base: null });
+  const M = { nombre: "m", w: 1200, h: 1500, fondo: lleno(1200 * 1500, 100), piezas: [pieza("HERO", "HERO", 300, 500, 600, 700), pieza("BRAND", "BRAND", 60, 60, 300, 100), pieza("CTA", "CTA", 840, 1340, 300, 100)] };
+  const amp = { ...g, rgba: lleno(g.w * g.h, 150), base: M.fondo, costoUsd: 0.05, deriva: 0 };
+  const A = maestroAmpliado(M, amp);
+  ok("ampliar: el mismo maestro y ampliación dan el mismo objeto", maestroAmpliado(M, amp) === A);
+  ok("ampliar: se recupera el maestro y su ampliación", sinAmpliar(A) === M && ampliacionDe(A) === amp && sinAmpliar(M) === M && ampliacionDe(M) === null);
+  eq("ampliar: las cajas se corren lo que creció arriba", A.piezas[1].solido.y, 60 + g.oy);
+  eq("ampliar: el maestro de antes no se toca", M.piezas[1].solido.y, 60);
+  ok("ampliar: los textos son los mismos objetos", A.piezas[0].textos === M.piezas[0].textos);
+  const orilla = (a, W, H) => Math.min(...a.puestas.map((q) => Math.min(q.x, q.y, W - q.x - q.w, H - q.y - q.h)));
+  const hoy = acomodar(M, 1080, 1920), ampliado = acomodar(A, 1080, 1920);
+  ok("ampliar: hoy el fondo se agranda de más", hoy.fondo.k > 1.2, String(hoy.fondo.k));
+  ok("ampliar: ampliado el fondo no pasa de la escala de las piezas", Math.abs(ampliado.fondo.k - 0.9) < 0.002, String(ampliado.fondo.k));
+  ok("ampliar: las piezas quedan más lejos de la orilla", orilla(ampliado, 1080, 1920) > orilla(hoy, 1080, 1920), `${orilla(hoy, 1080, 1920)} → ${orilla(ampliado, 1080, 1920)}`);
+  ok("ampliar: el aire del diseñador se conserva", orilla(ampliado, 1080, 1920) >= 60 * 0.9 - 1, String(orilla(ampliado, 1080, 1920)));
+  ok("ampliar: las piezas no cambian de tamaño", ampliado.puestas.every((q) => Math.abs(q.k - 0.9) < 0.002));
+  const fo = fondoEnOriginal(ampliado.fondo, g);
+  eq("ampliar: el fondo original cae donde va en el lienzo", [fo.k, Math.round(fo.y)], [ampliado.fondo.k, Math.round(ampliado.fondo.y + g.oy * ampliado.fondo.k)]);
+
+  // La familia sale de la forma real: un horizontal sigue siendo horizontal.
+  const gh = lienzoAmpliado(1200, 1500, 1280, 720), ampH = { ...gh, rgba: lleno(gh.w * gh.h, 150), base: M.fondo, costoUsd: null, deriva: 0 };
+  eq("ampliar: la familia no cambia", acomodar(maestroAmpliado(M, ampH), 1280, 720).familia, acomodar(M, 1280, 720).familia);
+
+  const r = revisarMedida([M], 1080, 1920, { ampliacion: amp });
+  ok("ampliar: la revisión usa el maestro ampliado", sinAmpliar(r.ma) === M && r.ma !== M && r.ma.w === g.w);
+  const vieja = revisarMedida([{ ...M, fondo: lleno(1200 * 1500, 90) }], 1080, 1920, { ampliacion: amp });
+  ok("ampliar: si el fondo cambió, no se usa", ampliacionDe(vieja.ma) === null);
+  eq("ampliar: sin ampliación todo sigue igual", revisarMedida([M], 1080, 1920).acomodo.fondo, hoy.fondo);
+
+  // La capa del PSD editable: transparente sobre el fondo original y opaca en lo pintado; el retoque va encima.
+  const c0 = lienzoAmpliado(40, 50, 90, 160), a0 = { ...c0, rgba: lleno(c0.w * c0.h, 150), base: fondo, costoUsd: null, deriva: 0 };
+  const f0 = { k: 90 / c0.w, x: 0, y: 0 }, parche = { x: 40, y: 80, w: 2, h: 2, rgba: lleno(4, 7) };
+  const capa = capaDeAmpliacion(a0, 40, 50, f0, 90, 160, parche);
+  const alfa = (x, y) => capa.rgba[((y - capa.y) * capa.w + x - capa.x) * 4 + 3];
+  eq("ampliar PSD: opaca en lo que pintó la IA", alfa(45, 2), 255);
+  eq("ampliar PSD: transparente sobre las capas del fondo", alfa(20, 70), 0);
+  eq("ampliar PSD: el retoque queda encima", capa.rgba[((81 - capa.y) * capa.w + 41 - capa.x) * 4], 7);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);
 if (fail) process.exit(1);

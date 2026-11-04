@@ -50,6 +50,8 @@ export type MaestroCaja = {
   resplandores?: readonly { de: string; caja: Caja }[];
   /** Se eligió otro legal, pero este maestro no tiene una pieza de legal que se pueda cambiar: aquí sigue el del PSD. */
   legalFijo?: boolean;
+  /** Con el lienzo ampliado (`ampliar.ts`), la forma real del diseño: de ella sale la familia y si cuenta la zona del canal. */
+  forma?: { w: number; h: number };
 };
 
 export type Familia = "igual" | "display" | "horizontal" | "ancho" | "banner";
@@ -725,7 +727,7 @@ function acomodarPropio(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomo
 /** `texto` (0-1): cuánto lugar de más se le da al texto. 0 = el acomodo del equipo, tal cual. `pie`: × la franja del legal. */
 function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo, quitar: Set<number>, texto: number, pie = 1): Acomodo {
   if (![ma.w, ma.h, W, H].every((v) => Number.isFinite(v) && v > 0)) throw new Error("acomodar: medidas inválidas");
-  const familia = familiaDe(W, H, ma);
+  const familia = familiaDe(W, H, ma.forma ?? ma);
   const { zona, aviso } = zonaUsable(op.zona, W, H);
   const avisos: AvisoAcomodo[] = aviso ? [aviso] : [];
   const de = (rol: Rol): Suelta | undefined => {
@@ -751,7 +753,7 @@ function acomodarSin(ma: MaestroCaja, W: number, H: number, op: OpcionesAcomodo,
       ? { x: heroS.p.solido.x + heroS.p.solido.w / 2, y: heroS.p.solido.y + heroS.p.solido.h }
       : { x: ma.w / 2, y: ma.h / 2 };
     // La zona del canal mueve piezas sólo en otra forma; en la del maestro el diseñador manda (se avisa abajo).
-    const otraForma = razon(W, H, ma) >= PARECIDO_MAX;
+    const otraForma = razon(W, H, ma.forma ?? ma) >= PARECIDO_MAX;
     const lado = (z: number) => (otraForma && z > 0 ? z + m : 0);
     const libre: Rect = { x0: lado(zona.left), x1: W - lado(zona.right), y0: lado(zona.top), y1: H - lado(zona.bottom) };
     // A los lados, ninguna pieza se arrima más que como la dejó el diseñador (a escala k) ni más que el margen de

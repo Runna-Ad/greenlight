@@ -3411,3 +3411,11 @@ Lo de antes sigue: Pedro retesta el fondo con IA del estadio; luego el registro 
 **Pruebas:** `npm test` todo verde (formatos 670/0) · tsc y eslint limpios · app local con SPAPDOGCARD: 1080×1920 sale con el legal de la Biblioteca (133.9 %, 31 de agosto); marcando «Legales» como fondo, aviso y medida 1200×1500 lo dicen · 11 PSD reales revisados: sólo éste trae un fondo sin nada visible.
 **No probado:** el color naranja del aviso y la línea corta «1 texto cambiado» (cambiados después de la última corrida en el navegador); nada en la preview de Vercel. El texto literal "falta su tipografía" NO se reprodujo.
 **Esperando a Pedro:** probar SPAPDOGCARD y SPAPTOYBOX en la preview. Si vuelve el mensaje de tipografía, mandar la línea «Tipografías de DiDi…» de bajo Cliente. Sus diseñadores: sacar Background al primer nivel en 4:5 y sacar Subtitulo, 10minutos y CTA del Background en 1.91:1.
+
+## 2026-11-04 — HÜE Formatos: «Ampliar fondo con IA» por medida en el lado PSD — rama `feat/fondo-ia-psd` (preview), sin migración
+**What we did:** botón por medida: el lienzo crece a la forma de la medida, Gemini pinta lo nuevo, el fondo original se cose encima. Las piezas conservan el aire del diseñador en vez de abrirse con el zoom.
+**Medido (2 PSD reales, relleno de prueba, sin IA):** s33 1080×1080 orilla más cercana 0 → 53 px; 1080×1920 84 → 131 px. En familias de otra forma (1280×720, banners) las piezas no se mueven: sólo se ve más fondo.
+**Decisiones:** opción 1 de Pedro; sin tabla nueva (el gasto va como "tamano"); lo movido a mano en una medida ampliada se guarda aparte.
+**Current state:** `npm test` verde (formatos 719/0), build limpio, app local probada con la respuesta de la IA simulada: botón, cancelar, quitar, «Volver a ponerlo», doble clic (1 llamada), editor, tipografías, PSD editable leído de vuelta.
+**No probado:** la IA real, Photoshop, Safari.
+**Pick up next session:** Pedro prueba en la preview; merge a `prisma`/`main` y en vivo sólo con su "ship it".

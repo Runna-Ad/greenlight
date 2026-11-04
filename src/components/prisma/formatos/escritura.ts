@@ -12,6 +12,7 @@ import type { Listo, Maquetar, Pintar } from "@/lib/prisma/formatos/cambios-text
 import type { MaestroListo, PiezaLista } from "@/lib/prisma/formatos/listo";
 import type { Lugar, TextoEscrito, TextosVivos } from "@/lib/prisma/formatos/nitido";
 import type { TextoPieza } from "@/lib/prisma/formatos/psd";
+import { sinAmpliar } from "@/lib/prisma/formatos/ampliar";
 import { legalDelPsd } from "@/lib/prisma/formatos/legal";
 import { conRenglones, legalParaRenglones, type LegalRenglones, type SinRenglones } from "@/lib/prisma/formatos/renglones";
 import type { Renglonero } from "@/lib/prisma/formatos/revisar";
@@ -519,7 +520,8 @@ export function textoEscrito(e: Escritura | null, maestro: number, ma: MaestroLi
 function listosDelDibujo(e: Escritura, maestro: number, ma: MaestroListo, pieza: number, parte: number | null, sin?: readonly number[]) {
   const todos = e.piezas.get(clavePieza(maestro, pieza));
   // Una parte (pieza abierta en el editor) escribe sólo sus textos: son los mismos objetos que los de su pieza.
-  const p = ma.piezas[pieza], d = parte === null ? p : p?.partes?.[parte];
+  // Los textos guardan su lugar en la mesa del PSD: con el lienzo ampliado, las cajas de antes de correrlas.
+  const p = sinAmpliar(ma).piezas[pieza], d = parte === null ? p : p?.partes?.[parte];
   const suyos = d && todos && (parte === null ? todos : todos.filter((s) => d.textos.includes(s.tp)));
   if (!d || !suyos?.length) return null;
   const quitado = (s: Listo) => !!sin?.includes(p.textos.indexOf(s.tp));
@@ -666,7 +668,7 @@ export function renglonesDe<M extends MaestroListo>(maestros: readonly M[], e: E
       if (!v) return maestros[mi] && legal(mi) === null ? "sin-legal" : "tipografia";
       return !("no" in v.info) && !v.listo ? "tipografia" : "no" in v.info ? v.info.no : null;
     },
-    escrituraDe: (ma) => escriturasDe.get(ma) ?? e,
+    escrituraDe: (ma) => escriturasDe.get(sinAmpliar(ma)) ?? e,
     legal,
   };
 }
