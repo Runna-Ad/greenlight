@@ -24,7 +24,7 @@ import { etiquetaPieza, nombreDeGuia, rolDe, type Rol } from "@/lib/prisma/forma
 import { colaVacia, enCola, pintar } from "./pintar";
 import { Franjas, VistaGrande } from "./vista-grande";
 import { barrerCaducados, borrarBorrador, guardarEstado, guardarLeido, guardarPesado, recuperarBorrador, sinEspacio, tomarCandado, type Recuperado } from "./borrador";
-import { fijarPerfil } from "./perfil";
+import { fijarEscritura, fijarPerfil } from "./perfil";
 import { anotarActividad } from "@/lib/prisma/formatos/anotar-actividad";
 import type { AccionActividad } from "@/lib/prisma/formatos/actividad";
 import { claveAmpliacion, claveQuitada, desempacarAmpliacion, empacarAmpliacion, type AmpliacionGuardada, type BaseGuardada } from "@/lib/prisma/formatos/borrador";
@@ -945,7 +945,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
   const [lang, setLang] = useLang();
   const router = useRouter();
   // Antes de cualquier lectura de lo guardado (tipografías, ediciones, textos): cada quien ve lo suyo.
-  useState(() => fijarPerfil(perfil));
+  fijarPerfil(perfil);
   /** Se está buscando lo guardado: el cuadro de subida no aparece para luego desaparecer. */
   const [recuperando, setRecuperando] = useState(perfil !== null);
   const [almacen, setAlmacen] = useState<Almacen>(perfil === null ? "sinPerfil" : "ok");
@@ -954,7 +954,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
   /** Esta pestaña tiene el candado: sólo ella recupera y guarda. */
   const dueno = useRef(false);
   /** El borrador de ahora: de qué PSD y qué fondos ya se escribieron (para no reescribir lo que no cambió). */
-  const borrador = useRef<{ id: string; leido: Leido; pesados: Map<string, object> } | null>(null);
+  const borrador = useRef<{ id: string; leido: Leido; pesados: Map<string, object>; sinLeido?: boolean } | null>(null);
   const filaGuardado = useRef<Promise<void>>(Promise.resolve());
   /** "" = Sin cliente: sólo las tipografías que sirven para todos. */
   const [cliente, setCliente] = useState("");
@@ -1396,6 +1396,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
 
   /** Lo elegido para el PSD anterior se suelta junto con él (no sólo se esconde): cada fondo retocado pesa como la mesa. */
   const soltarElegido = () => {
+    setEditando(null);
     setPapeles(null);
     setSinCopia(null);
     setAjenas(null);
@@ -1479,7 +1480,8 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       setEleccion(null);
       setSinFondo(null);
       setFalla(f);
-      anotar("error", `Abrir: ${f.clave}`, file.name);
+      // El nombre sólo si parecía un PSD: lo que se soltó por error no tiene por qué quedar en la bitácora.
+      anotar("error", `Abrir: ${f.clave}`, f.clave === "noEsPsd" ? undefined : file.name);
     };
     // El peso y la firma se revisan ANTES de abrir el archivo. El archivo NO se carga aquí: el worker lo lee a
     // pedazos y se salta lo que no usa (un PSD de 1 GB hecho de objetos inteligentes cabe).
@@ -1696,7 +1698,9 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       const fuentes = archivos.filter((f) => EXTENSIONES_FUENTE.test(f.name));
       if (fuentes.length) void agregarFuentes(fuentes);
       const psd = archivos.find((f) => /\.psd$/i.test(f.name)) ?? archivos.find((f) => /\.(png|jpe?g|webp)$/i.test(f.name));
-      if (recuperando) return;
+      if (recuperando) return void (psd && toast.info(tx(FP.recuperando, lang)));
+      // Con el editor abierto, soltar otro PSD no se lleva lo que se está editando.
+      if (psd && editando) return;
       // Soltar otro PSD encima de uno abierto también se lleva el trabajo: se pregunta.
       if (psd && leidoVigente.current) return void setSalida({ tipo: "abrir", archivo: psd });
       if (psd) return void (leyendo || abrir(psd));
@@ -1724,12 +1728,19 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
   // ── El trabajo a medias, en el navegador de esta persona (`borrador.ts`). Recargar o cerrar no lo pierde. ──────────────
   /** Algo de este PSD no se guardó: ya no se dice «guardado» aunque lo siguiente sí entre, porque estaría incompleto. */
   const conFalla = useRef(false);
+  /** Escrituras en la fila: mientras haya, recargar sí perdería algo. */
+  const pendientes = useRef(0);
+  /** Escribe ya las decisiones que esperaban su turno. */
+  const estadoPendiente = useRef<(() => void) | null>(null);
   const enFila = useCallback((fn: () => Promise<void>) => {
+    pendientes.current++;
     filaGuardado.current = filaGuardado.current.then(fn).then(
       () => {
+        pendientes.current--;
         if (vivo.current && !conFalla.current) setAlmacen("ok");
       },
       (err: unknown) => {
+        pendientes.current--;
         console.error("[formatos-psd] guardar en el navegador", err);
         conFalla.current = true;
         if (vivo.current) setAlmacen(sinEspacio(err) ? "sinEspacio" : "fallo");
@@ -1744,15 +1755,20 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
     anotar("psd_abierto", undefined, leido.archivo);
   }, [leido, anotar]);
   const ponerRecuperado = useEffectEvent((r: Recuperado<Leido, EstadoPsd>) => {
-    const l = r.leido, e = r.estado;
+    const l = r.leido;
+    // Todo se revisa antes del primer cambio: un dato raro no deja la pantalla a medias.
+    const e = r.estado && Array.isArray(r.estado.lista) && Array.isArray(r.estado.apagadas) && Array.isArray(r.estado.fueraZip) && Array.isArray(r.estado.papeles) && Array.isArray(r.estado.ediciones) ? r.estado : null;
+    if (!Array.isArray(l?.maestros)) throw new Error("borrador sin maestros");
     const quitadasGuardadas = new Map<number, Quitada>();
     for (const [k, v] of r.pesados) if (k.startsWith("q:")) quitadasGuardadas.set(Number(k.slice(2)), v as Quitada);
     const fondoDe = (b: BaseGuardada) => (b.sinCopia ? (quitadasGuardadas.get(b.i)?.fondo ?? null) : (l.maestros[b.i]?.fondo ?? null));
     const fondos = new Map<string, Ampliacion>();
+    let fondosPerdidos = 0;
     for (const [k, v] of r.pesados) {
       if (!k.startsWith("a:")) continue;
       const a = desempacarAmpliacion(v as AmpliacionGuardada, fondoDe);
       if (a) fondos.set(k.slice(2), a);
+      else fondosPerdidos++;
     }
     // Lo recuperado cuenta como ya escrito: no se vuelve a guardar lo que acaba de salir de ahí.
     borrador.current = {
@@ -1779,10 +1795,12 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       if (e.textos) setTextosSesion({ leido: l, cambios: e.textos });
     }
     toast.info(rellenar(tx(FP.recuperado, langVigente.current), { a: l.archivo }));
+    if (fondosPerdidos) toast.warning(rellenar(tx(FP.recuperadoSinFondos, langVigente.current), { n: fondosPerdidos }), { duration: 10_000 });
     anotadoLeido.current = l;
     anotar("trabajo_recuperado", undefined, l.archivo);
   });
   useEffect(() => {
+    fijarEscritura(perfil !== null);
     if (perfil === null) return;
     let sigueAqui = true, soltarCandado = () => {};
     void (async () => {
@@ -1792,11 +1810,16 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
         const c = await tomarCandado(perfil);
         if (!sigueAqui) return c.soltar();
         soltarCandado = c.soltar;
-        if (!c.tomado) return setAlmacen("otraPestana");
+        if (!c.tomado) {
+          fijarEscritura(false);
+          return setAlmacen("otraPestana");
+        }
         dueno.current = true;
-        for (const quien of await barrerCaducados()) olvidarGuardado(quien);
+        for (const quien of await barrerCaducados(perfil)) olvidarGuardado(quien);
         const r = await recuperarBorrador<Leido, EstadoPsd>(perfil);
-        if (r && sigueAqui) ponerRecuperado(r);
+        // Sin trabajo guardado no queda nada que continuar: ediciones sueltas no se le pegan a otro PSD con el mismo nombre.
+        if (!r) olvidarGuardado(perfil);
+        else if (sigueAqui) ponerRecuperado(r);
       } catch (err) {
         console.error("[formatos-psd] recuperar", err);
         if (sigueAqui) toast.error(tx(FP.recuperarFallo, langVigente.current));
@@ -1814,9 +1837,18 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
   useEffect(() => {
     if (perfil === null || !leido || !dueno.current || borrador.current?.leido === leido) return;
     const id = crypto.randomUUID();
-    borrador.current = { id, leido, pesados: new Map() };
+    const b: NonNullable<typeof borrador.current> = { id, leido, pesados: new Map() };
+    borrador.current = b;
     conFalla.current = false;
-    enFila(() => guardarLeido(perfil, id, leido));
+    enFila(async () => {
+      try {
+        await guardarLeido(perfil, id, leido);
+      } catch (err) {
+        // Sin el PSD guardado, lo demás no sirve de nada al recargar.
+        b.sinLeido = true;
+        throw err;
+      }
+    });
   }, [leido, perfil, enFila]);
   // Las decisiones, poco después de cada cambio.
   useEffect(() => {
@@ -1836,9 +1868,12 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       ediciones: ediciones?.leido === leido ? [...ediciones.mapa] : [],
       textos: textosSesion?.leido === leido ? textosSesion.cambios : null,
     };
-    const reloj = window.setTimeout(() => {
-      if (borrador.current === b) enFila(() => guardarEstado(perfil, b.id, estado));
-    }, 200);
+    const escribir = () => {
+      estadoPendiente.current = null;
+      if (borrador.current === b) enFila(async () => void (b.sinLeido || (await guardarEstado(perfil, b.id, estado))));
+    };
+    estadoPendiente.current = escribir;
+    const reloj = window.setTimeout(escribir, 200);
     return () => window.clearTimeout(reloj);
   }, [perfil, leido, cliente, entrega, lista, apagadas, lados, contrastes, canal, enZip, fueraZip, papeles, ediciones, textosSesion, enFila]);
   // Copias quitadas y fondos con IA: sólo lo que cambió, porque pesan. Se paga por cada fondo: no se pierden al recargar.
@@ -1858,14 +1893,16 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
     ]);
     for (const [k, v] of ahora) {
       if (b.pesados.get(k) === v) continue;
-      b.pesados.set(k, v);
       const valor = k.startsWith("a:") ? empacarAmpliacion(v as Ampliacion, baseDe) : v;
-      enFila(() => guardarPesado(perfil, b.id, k, valor ?? undefined));
+      // Su fondo todavía no existe (una copia recién quitada): no cuenta como escrito, y se intenta en el siguiente cambio.
+      if (!valor) continue;
+      b.pesados.set(k, v);
+      enFila(async () => void (b.sinLeido || (await guardarPesado(perfil, b.id, k, valor))));
     }
     for (const k of [...b.pesados.keys()]) {
       if (ahora.has(k)) continue;
       b.pesados.delete(k);
-      enFila(() => guardarPesado(perfil, b.id, k, undefined));
+      enFila(async () => void (b.sinLeido || (await guardarPesado(perfil, b.id, k, undefined))));
     }
   }, [perfil, leido, sinCopia, ampliaciones, enFila]);
   // Salir por un enlace de la app (el menú, «Volver») pregunta antes de borrar. Se escucha antes de que el enlace reaccione.
@@ -1875,8 +1912,8 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
     if (!hayTrabajo) return;
     const alClic = (e: MouseEvent) => {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      const a = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>("a[href]") : null;
-      if (!a || a.hasAttribute("download") || (a.target && a.target !== "_self")) return;
+      const a = e.target instanceof Element ? e.target.closest("a[href]") : null;
+      if (!(a instanceof HTMLAnchorElement) || a.hasAttribute("download") || (a.target && a.target !== "_self")) return;
       const u = new URL(a.href, window.location.href);
       if (u.origin !== window.location.origin || u.pathname === window.location.pathname) return;
       e.preventDefault();
@@ -1887,25 +1924,55 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
     document.addEventListener("click", alClic, true);
     return () => document.removeEventListener("click", alClic, true);
   }, [hayTrabajo]);
-  // Si lo de esta pestaña NO está guardado, recargar sí lo pierde: ahí el navegador pregunta con su aviso.
+  // Si lo de esta pestaña NO está guardado (o se está escribiendo), recargar sí lo pierde: ahí el navegador pregunta con su aviso.
   useEffect(() => {
-    if (!hayTrabajo || almacen === "ok") return;
-    const avisar = (e: BeforeUnloadEvent) => e.preventDefault();
+    if (!hayTrabajo) return;
+    const avisar = (e: BeforeUnloadEvent) => {
+      estadoPendiente.current?.();
+      if (almacen !== "ok" || pendientes.current > 0) e.preventDefault();
+    };
     window.addEventListener("beforeunload", avisar);
     return () => window.removeEventListener("beforeunload", avisar);
   }, [hayTrabajo, almacen]);
+  // Lo que esperaba su turno se escribe al irse de la página, también con el botón Atrás.
+  useEffect(() => {
+    const alIrse = () => estadoPendiente.current?.();
+    window.addEventListener("pagehide", alIrse);
+    return () => {
+      window.removeEventListener("pagehide", alIrse);
+      alIrse();
+    };
+  }, []);
   /** «Borrar y salir»: sólo la pestaña dueña borra (otra pestaña no toca el trabajo que sí está guardado). */
   const confirmarSalida = async () => {
     const s = salida, l = leidoVigente.current;
     if (!s) return;
     setSalida(null);
     setSalidaBajada(false);
-    if (l) anotar("trabajo_borrado", undefined, l.archivo);
     if (perfil !== null && dueno.current) {
+      const antes = borrador.current;
       borrador.current = null;
-      enFila(() => borrarBorrador(perfil));
-      if (l) olvidarGuardado(perfil, l.archivo);
+      estadoPendiente.current = null;
+      let borrado = true;
+      enFila(async () => {
+        try {
+          await borrarBorrador(perfil);
+        } catch (err) {
+          borrado = false;
+          throw err;
+        }
+      });
       await filaGuardado.current;
+      // No se borró: nadie se va creyendo que sí (recargar lo devolvería, quizá en una computadora compartida).
+      if (!(borrado as boolean)) {
+        borrador.current = antes;
+        setSalida(s);
+        return void toast.error(tx(FP.salidaNoBorro, langVigente.current));
+      }
+      if (l) {
+        olvidarGuardado(perfil, l.archivo);
+        anotar("trabajo_borrado", undefined, l.archivo);
+      }
     }
     if (s.tipo === "ir") router.push(s.href);
     else if (s.tipo === "cambiar") cambiarPsd();
@@ -2695,7 +2762,7 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
       <Dialog
         open={salida !== null}
         onOpenChange={(abierto) => {
-          if (abierto || zipeando) return;
+          if (abierto) return;
           setSalida(null);
           setSalidaBajada(false);
         }}
@@ -2712,10 +2779,10 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
           </DialogHeader>
           {salidaBajada && <p role="status" className="text-sm text-foreground">{tx(FP.salidaDescargada, lang)}</p>}
           <DialogFooter className="gap-2 sm:flex-wrap sm:justify-end">
-            <Button ref={botonQuedarme} variant="ghost" disabled={zipeando} onClick={() => { setSalida(null); setSalidaBajada(false); }}>
+            <Button ref={botonQuedarme} variant="ghost" onClick={() => { setSalida(null); setSalidaBajada(false); }}>
               {tx(FP.salidaQuedarme, lang)}
             </Button>
-            <Button variant="outline" disabled={zipeando} onClick={() => void bajarZip().then(() => vivo.current && setSalidaBajada(true))}>
+            <Button variant="outline" aria-disabled={zipeando} onClick={() => void (zipeando || bajarZip().then(() => vivo.current && setSalidaBajada(true)))}>
               {zipeando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
               {tx(zipeando ? FP.salidaDescargando : FP.salidaDescargar, lang)}
             </Button>

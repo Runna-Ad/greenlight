@@ -16,7 +16,8 @@ export type EventoActividad = { accion: AccionActividad; archivo?: string | null
 /** Una línea, sin caracteres de control y con tope por carácter real (como `char_length`). Vacío = null. */
 export function textoCorto(v: unknown, max: number): string | null {
   if (typeof v !== "string") return null;
-  const limpio = v.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
+  // También los invisibles y los que voltean el texto: un nombre no debe verse distinto de lo que es.
+  const limpio = v.replace(/[\p{Cc}\p{Cf}\u2028\u2029]+/gu, " ").trim();
   return limpio ? Array.from(limpio).slice(0, max).join("").trim() : null;
 }
 export const clienteValido = (v: unknown): string | null => (typeof v === "string" && UUID_RE.test(v.trim()) ? v.trim().toLowerCase() : null);

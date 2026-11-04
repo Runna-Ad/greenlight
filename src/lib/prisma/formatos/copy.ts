@@ -135,6 +135,8 @@ export const FP = {
   recuperando: t("Buscando tu trabajo guardado…", "Looking for your saved work…"),
   recuperado: t("Seguimos donde ibas: {a}", "Picked up where you left off: {a}"),
   recuperarFallo: t("No se pudo recuperar tu trabajo guardado. Tendrás que abrir el PSD otra vez.", "Your saved work couldn't be recovered. You'll need to open the PSD again."),
+  recuperadoSinFondos: t("{n} fondos con IA no se pudieron recuperar. Tendrás que pedirlos otra vez.", "{n} AI backgrounds couldn't be recovered. You'll need to request them again."),
+  salidaNoBorro: t("No se pudo borrar tu trabajo de este navegador. Inténtalo otra vez.", "Your work couldn't be deleted from this browser. Try again."),
   salidaTitulo: t("¿Seguro que quieres salir?", "Are you sure you want to leave?"),
   salidaTexto: t("Si sales, se borra tu trabajo en {a}: el PSD, las ediciones y los fondos con IA. Si quieres tus archivos, descárgalos antes.", "If you leave, your work on {a} is deleted: the PSD, your edits and the AI backgrounds. If you want your files, download them first."),
   salidaCambiarTexto: t("Si abres otro PSD, se borra tu trabajo en {a}: las ediciones y los fondos con IA. Si quieres tus archivos, descárgalos antes.", "If you open another PSD, your work on {a} is deleted: your edits and the AI backgrounds. If you want your files, download them first."),

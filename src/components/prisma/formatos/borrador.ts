@@ -12,7 +12,7 @@ const BASE = "hue-prisma-borradores";
 const LEIDOS = "leidos", ESTADOS = "estados", PESADOS = "pesados";
 
 export type LeidoGuardado<L> = { id: string; v: number; leido: L };
-export type EstadoGuardado<E> = { id: string; guardadoEn: number; estado: E };
+export type EstadoGuardado<E> = { id: string; guardadoEn: number; estado: E | null };
 export type Recuperado<L, E> = { id: string; leido: L; estado: E | null; pesados: Map<string, unknown> };
 
 function abrirBase(): Promise<IDBDatabase> {
@@ -25,7 +25,6 @@ function abrirBase(): Promise<IDBDatabase> {
     };
     r.onsuccess = () => ok(r.result);
     r.onerror = () => mal(r.error);
-    r.onblocked = () => mal(new Error("indexeddb bloqueado"));
   });
 }
 
@@ -58,7 +57,6 @@ export async function recuperarBorrador<L, E>(perfil: string, ahora = Date.now()
   });
   if (!r.l) return null;
   const estado = r.e?.id === r.l.id ? r.e : null;
-  // Sin estado no hay hora: el PSD se quedó sin nada de lo que se hizo (un cierre justo al abrirlo). Sigue siendo su PSD.
   const id = r.l.id;
   if (r.l.v !== BORRADOR_VERSION || (estado && caducado(estado.guardadoEn, ahora))) {
     await borrarBorrador(perfil);
@@ -78,13 +76,17 @@ export async function recuperarBorrador<L, E>(perfil: string, ahora = Date.now()
   return { id, leido: r.l.leido, estado: estado?.estado ?? null, pesados };
 }
 
-/** Empieza un borrador nuevo y borra el anterior de esta persona (sus fondos con IA incluidos). */
-export const guardarLeido = <L,>(perfil: string, id: string, leido: L): Promise<void> =>
-  transaccion([LEIDOS, ESTADOS, PESADOS], "readwrite", (tx) => {
-    tx.objectStore(PESADOS).delete(rangoDe(`${perfil}|`));
-    tx.objectStore(ESTADOS).delete(perfil);
+/**
+ * Empieza un borrador nuevo. Lo anterior de esta persona se borra ANTES y aparte: si este PSD no cabe, recargar no debe
+ * devolver el PSD de antes como si fuera el de ahora. Nace con su hora, para que caduque aunque no llegue otra escritura.
+ */
+export async function guardarLeido<L>(perfil: string, id: string, leido: L, ahora = Date.now()): Promise<void> {
+  await borrarBorrador(perfil);
+  await transaccion([LEIDOS, ESTADOS], "readwrite", (tx) => {
     tx.objectStore(LEIDOS).put({ id, v: BORRADOR_VERSION, leido } satisfies LeidoGuardado<L>, perfil);
+    tx.objectStore(ESTADOS).put({ id, guardadoEn: ahora, estado: null } satisfies EstadoGuardado<never>, perfil);
   });
+}
 
 export const guardarEstado = <E,>(perfil: string, id: string, estado: E, ahora = Date.now()): Promise<void> =>
   transaccion([ESTADOS], "readwrite", (tx) => void tx.objectStore(ESTADOS).put({ id, guardadoEn: ahora, estado } satisfies EstadoGuardado<E>, perfil));
@@ -104,8 +106,11 @@ export const borrarBorrador = (perfil: string): Promise<void> =>
     tx.objectStore(PESADOS).delete(rangoDe(`${perfil}|`));
   });
 
-/** Borra lo caducado de OTRAS personas de este navegador y dice de quién era, para soltar también sus ediciones. */
-export async function barrerCaducados(ahora = Date.now()): Promise<string[]> {
+/**
+ * Borra lo caducado de OTRAS personas de este navegador y dice de quién era, para soltar también sus ediciones. Lo de quien
+ * tiene una pestaña abierta (su candado está tomado) no se toca, y una falla con una persona no detiene a las demás.
+ */
+export async function barrerCaducados(perfil: string, ahora = Date.now()): Promise<string[]> {
   const viejos = await transaccion([ESTADOS], "readonly", (tx) => {
     const lista: string[] = [];
     const c = tx.objectStore(ESTADOS).openCursor();
@@ -116,17 +121,32 @@ export async function barrerCaducados(ahora = Date.now()): Promise<string[]> {
     };
     return lista;
   });
-  for (const p of viejos) await borrarBorrador(p);
-  return viejos;
+  const borrados: string[] = [];
+  for (const p of viejos) {
+    if (p === perfil) continue; // lo propio lo resuelve recuperarBorrador
+    try {
+      const c = await tomarCandado(p, 1);
+      if (!c.tomado) continue;
+      try {
+        await borrarBorrador(p);
+        borrados.push(p);
+      } finally {
+        c.soltar();
+      }
+    } catch (err) {
+      console.error("[formatos-psd] borrar lo caducado", err);
+    }
+  }
+  return borrados;
 }
 
 /** Mientras esta pestaña viva, es la dueña del borrador de esta persona. Otra pestaña no recupera ni guarda encima. Sin esta
  *  función en el navegador (muy viejo) se sigue sin el freno. `soltar` la libera. Al recargar, el candado tarda un instante
  *  en soltarse: por eso se reintenta antes de decir que hay otra pestaña. */
-export async function tomarCandado(perfil: string): Promise<{ tomado: boolean; soltar: () => void }> {
+export async function tomarCandado(perfil: string, intentos = 12): Promise<{ tomado: boolean; soltar: () => void }> {
   const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
   if (!locks) return { tomado: true, soltar: () => {} };
-  for (let intento = 0; intento < 5; intento++) {
+  for (let intento = 0; intento < intentos; intento++) {
     let soltar = () => {};
     const tomado = await new Promise<boolean>((responder) => {
       void locks.request(`${BASE}:${perfil}`, { ifAvailable: true }, (lock) => {
@@ -135,7 +155,7 @@ export async function tomarCandado(perfil: string): Promise<{ tomado: boolean; s
       });
     });
     if (tomado) return { tomado, soltar: () => soltar() };
-    await new Promise((r) => setTimeout(r, 250));
+    if (intento + 1 < intentos) await new Promise((r) => setTimeout(r, 250));
   }
   return { tomado: false, soltar: () => {} };
 }

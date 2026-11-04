@@ -26,6 +26,9 @@ create policy prisma_actividad_admin on produccion.prisma_actividad for select u
 revoke all on produccion.prisma_actividad from service_role;
 grant select, insert on produccion.prisma_actividad to service_role;
 
+-- Pedro: el gasto lo ven admins y arriba. 0088 lo dejó sólo al Master; las capas deben decir lo mismo que la pantalla.
+create policy prisma_gemini_gastos_admin_lee on produccion.prisma_gemini_gastos for select using (produccion.auth_role() in ('master', 'admin'));
+
 -- ── 2) El gasto de Gemini sabe de qué archivo y cliente vino, y ampliar ≠ rellenar ──
 alter table produccion.prisma_gemini_gastos
   add column archivo   text check (char_length(archivo) <= 200),

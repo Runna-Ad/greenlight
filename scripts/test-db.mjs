@@ -3368,6 +3368,11 @@ console.log("\n▶ 0090 — track_members.prisma_acceso");
 
 // ── 0091: bitácora de actividad ──
 console.log("\n▶ 0091 — prisma_actividad y los resúmenes");
+for (const t of ["prisma_actividad", "prisma_gemini_gastos"]) {
+  const q = await scalar(`select string_agg(qual, ' ') from pg_policies where schemaname = 'produccion' and tablename = '${t}' and cmd in ('SELECT', 'ALL')`);
+  ok(`0091: ${t} la leen master y admin`, /master/.test(q) && /admin/.test(q));
+  ok(`0091: ${t} no la leen lead, especialista ni cliente`, !/lead|creative|client/.test(q));
+}
 {
   const hoy = (await q(`select (now() at time zone 'America/Mexico_City')::date::text as d`))[0].d;
   const personas = async () => q(`select * from produccion.prisma_actividad_personas($1::date, $1::date)`, [hoy]);

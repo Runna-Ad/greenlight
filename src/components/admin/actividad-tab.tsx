@@ -135,7 +135,7 @@ function PorPersona({ filas, total }: { filas: PersonaActividad[]; total: Conteo
               <TableHead scope="row" className="font-normal">
                 <span className="flex items-center gap-2">
                   <span aria-hidden className="inline-block size-2.5 shrink-0 rounded-full" style={{ backgroundColor: f.color ?? COLOR_NEUTRO }} />
-                  <span className="font-medium">{f.persona}</span>
+                  <span className="max-w-52 truncate font-medium" title={f.persona}>{f.persona}</span>
                 </span>
               </TableHead>
               <CeldasConteo c={f} />

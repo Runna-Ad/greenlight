@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { AlertTriangle, Bold, Check, ChevronDown, ChevronUp, FolderClosed, FolderOpen, Info, Loader2, Minus, Move, Plus, RotateCcw, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { perfilActual } from "./perfil";
+import { escribeAqui, perfilActual } from "./perfil";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { aplicarEdicion, edicionDeFondo, fondoDeEdicion, FONDO_EDITOR_MAX, type FondoEditado, cambiadasDeCapa, leerEdicion, ordenDePartes, ordenarPuestas, parteSinTocar, ponerPartes, topesParte, topesPieza, RELLENO_AVISO_PCT, type Acomodo, type Edicion, type Zona, esNota } from "@/lib/prisma/formatos/acomodo";
@@ -1516,6 +1516,7 @@ export function edicionGuardada(archivo: string, ma: MaestroListo, W: number, H:
  * sigue en esta sesión, pero al recargar se pierde (quien llama lo dice).
  */
 export function guardarEdicion(archivo: string, ma: MaestroListo, W: number, H: number, contexto: string, ed: Edicion | null): boolean {
+  if (!escribeAqui()) return false;
   try {
     const k = claveGuardada(archivo, ma, W, H, contexto);
     if (ed) localStorage.setItem(k, JSON.stringify({ huella: huella(ma), partes: huellaPartes(ma), ed }));
@@ -1566,6 +1567,7 @@ export function textosGuardados(archivo: string): CambiosTexto {
 
 /** Guarda (o, vacío, borra) los textos cambiados de ese PSD. false = el navegador no dejó (siguen en esta sesión). */
 export function guardarTextos(archivo: string, cambios: CambiosTexto): boolean {
+  if (!escribeAqui()) return false;
   try {
     const k = claveTextos(archivo);
     if (Object.keys(cambios).length) localStorage.setItem(k, JSON.stringify(cambios));

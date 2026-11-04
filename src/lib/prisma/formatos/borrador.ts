@@ -8,7 +8,7 @@
  */
 import type { Ampliacion } from "./ampliar.ts";
 
-/** Súbelo cuando cambie la forma de lo que se guarda (`MaestroListo`, `Quitada`, `Ampliacion`): un borrador viejo se descarta en vez de romper la pantalla. */
+/** Súbelo cuando cambie la forma de lo que se guarda (`Leido`, `MaestroListo`, `Quitada`, `Ampliacion`, `EstadoPsd`): un borrador viejo se descarta en vez de romper la pantalla. */
 export const BORRADOR_VERSION = 1;
 
 /** Un trabajo que nadie abrió en este tiempo se borra: son archivos de un cliente en una computadora, quizá compartida. */
