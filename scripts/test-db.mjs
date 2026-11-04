@@ -386,7 +386,7 @@ console.log("\n▶ Candado RLS 0056 (anon/authenticated fuera de produccion)");
 // 0084: un usuario con sesión NO reclama la cola de correos (0088: tampoco lee el gasto de Gemini).
 // Va aquí: el bloque de abajo le re-concede todas las rutinas a `authenticated` a propósito.
 console.log("\n▶ 0084 — candado de la cola de correos (authenticated)");
-for (const fn of ["produccion.rpc_reclamar_emails(int)", "produccion.rpc_reservar_envio(text,uuid[])", "produccion.prisma_gemini_resumen()"]) {
+for (const fn of ["produccion.rpc_reclamar_emails(int)", "produccion.rpc_reservar_envio(text,uuid[])", "produccion.prisma_gemini_resumen()", "produccion.prisma_actividad_eventos(date,date)", "produccion.prisma_actividad_personas(date,date)", "produccion.prisma_actividad_proyectos(date,date)", "produccion.prisma_actividad_linea(date,date,int)"]) {
   ok(`authenticated NO puede ejecutar ${fn}`,
      !(await scalar(`select has_function_privilege('authenticated', $1, 'execute')`, [fn])));
 }
@@ -3364,6 +3364,172 @@ console.log("\n▶ 0090 — track_members.prisma_acceso");
   await db.query(`update produccion.track_members set prisma_acceso = true where id = $1`, [idNuevo]);
   eq("el acceso se prende", await scalar(`select prisma_acceso from produccion.track_members where id = $1`, [idNuevo]), true);
   await db.query(`delete from produccion.track_members where id = $1`, [idNuevo]);
+}
+
+// ── 0091: bitácora de actividad ──
+console.log("\n▶ 0091 — prisma_actividad y los resúmenes");
+{
+  const hoy = (await q(`select (now() at time zone 'America/Mexico_City')::date::text as d`))[0].d;
+  const personas = async () => q(`select * from produccion.prisma_actividad_personas($1::date, $1::date)`, [hoy]);
+  const proyectos = async () => q(`select * from produccion.prisma_actividad_proyectos($1::date, $1::date)`, [hoy]);
+  const vaciarBitacora = async () => db.exec(`delete from produccion.prisma_actividad`);
+
+  // Punto de partida limpio: lo que dejaron bloques anteriores no debe mover las cuentas de aquí.
+  await db.exec(`delete from produccion.status_events; delete from produccion.correccion_respuestas; delete from produccion.comments where kind in ('correction_request','client_change');
+    delete from produccion.prisma_eventos; delete from produccion.prisma_resultados; delete from produccion.prisma_specs; delete from produccion.prisma_formatos_salidas; delete from produccion.prisma_formatos_lotes; delete from produccion.prisma_gemini_gastos;`);
+  eq("sin eventos no hay filas, ni la del total", (await personas()).length + (await proyectos()).length, 0);
+
+  // Lista cerrada y topes.
+  for (const a of ["psd_abierto", "descarga_zip", "descarga_png", "descarga_psd", "edicion", "error", "trabajo_recuperado", "trabajo_borrado"]) {
+    await db.query(`insert into produccion.prisma_actividad (accion) values ($1)`, [a]);
+  }
+  eq("las 8 acciones de la lista entran", Number(await scalar(`select count(*) from produccion.prisma_actividad`)), 8);
+  await vaciarBitacora();
+  const rechaza = async (sql, params) => { try { await db.query(sql, params); return false; } catch { return true; } };
+  ok("una acción inventada se rechaza", await rechaza(`insert into produccion.prisma_actividad (accion) values ('hackeo')`));
+  ok("un archivo de más de 200 se rechaza", await rechaza(`insert into produccion.prisma_actividad (accion, archivo) values ('edicion', repeat('x', 201))`));
+  ok("un detalle de más de 300 se rechaza", await rechaza(`insert into produccion.prisma_actividad (accion, detalle) values ('error', repeat('x', 301))`));
+  ok("un gasto con archivo de más de 200 se rechaza", await rechaza(`insert into produccion.prisma_gemini_gastos (ruta, modelo, archivo) values ('leer', 'm', repeat('x', 201))`));
+
+  // Privilegios: la app inserta y lee; la bitácora no se reescribe.
+  for (const [p, want] of [["select", true], ["insert", true], ["update", false], ["delete", false]]) {
+    eq(`service_role ${p} sobre prisma_actividad`, await scalar(`select has_table_privilege('service_role', 'produccion.prisma_actividad', $1)`, [p]), want);
+  }
+  for (const fn of ["prisma_actividad_eventos(date,date)", "prisma_actividad_personas(date,date)", "prisma_actividad_proyectos(date,date)", "prisma_actividad_linea(date,date,int)"]) {
+    ok(`service_role ejecuta ${fn}`, await scalar(`select has_function_privilege('service_role', $1, 'execute')`, [`produccion.${fn}`]));
+  }
+  // Los resúmenes corren como service_role: tiene que poder leer TODO lo que tocan, o la pantalla truena en la base real.
+  for (const t of ["status_events", "comments", "correccion_respuestas", "assets", "ideas", "briefs", "clients", "profiles", "track_members", "prisma_specs", "prisma_eventos", "prisma_resultados", "prisma_formatos_lotes", "prisma_formatos_salidas", "prisma_gemini_gastos"]) {
+    ok(`service_role lee ${t}`, await scalar(`select has_table_privilege('service_role', $1, 'select')`, [`produccion.${t}`]));
+  }
+
+  // Datos sembrados: dos personas, un cliente, una tarea.
+  const ana = await scalar(`insert into produccion.track_members (name, track, color) values ('Ana 0091', 'real', '#112233') returning id`);
+  const luis = await scalar(`insert into produccion.track_members (name, track) values ('Luis 0091', 'real') returning id`);
+  const cli = await scalar(`insert into produccion.clients (name, slug) values ('Cliente 0091', 'cliente-0091') returning id`);
+  const idea = await scalar(`select i.id from produccion.ideas i limit 1`);
+  const brief = await scalar(`select brief_id from produccion.ideas where id = $1`, [idea]);
+  const clienteTarea = await scalar(`select client_id from produccion.briefs where id = $1`, [brief]);
+  const codigoBrief = await scalar(`select code from produccion.briefs where id = $1`, [brief]);
+
+  // Greenlight
+  await db.query(`insert into produccion.status_events (idea_id, from_status, to_status, actor_member_id, override) values ($1, 'todo', 'in_progress', $2, true), ($1, 'in_progress', 'under_review', $2, false)`, [idea, ana]);
+  const c1 = await scalar(`insert into produccion.comments (idea_id, body, kind, ronda, author_member_id, resolved_member_id, resolved_at) values ($1, 'cambia esto', 'correction_request', 1, $2, $3, now()) returning id`, [idea, ana, luis]);
+  await db.query(`insert into produccion.comments (idea_id, body, kind, ronda, author_member_id) values ($1, 'y esto', 'correction_request', 1, $2), ($1, 'otra', 'client_change', 2, $2)`, [idea, ana]);
+  await db.query(`insert into produccion.comments (idea_id, body, kind, author_member_id) values ($1, 'hola', 'comment', $2)`, [idea, ana]);
+  await db.query(`insert into produccion.correccion_respuestas (comment_id, idea_id, body, author_member_id) values ($1, $2, 'listo', $3)`, [c1, idea, luis]);
+  // Prisma
+  const spec = await scalar(`insert into produccion.prisma_specs (client_id, job, tool, spec, created_by) values ($1, 'x', 't', '{}', $2) returning id`, [cli, ana]);
+  await db.query(`insert into produccion.prisma_specs (client_id, job, tool, spec, created_by, origen_spec_id) values ($1, 'x', 't', '{}', $2, $3)`, [cli, ana, spec]); // hermano de variante: no es prompt nuevo
+  await db.query(`insert into produccion.prisma_eventos (spec_id, client_id, job, tool, user_id, tipo) values ($1,$2,'x','t',$3,'variante'), ($1,$2,'x','t',$3,'refinado'), ($1,$2,'x','t',$3,'copiado')`, [spec, cli, ana]);
+  await db.query(`insert into produccion.prisma_resultados (spec_id, client_id, tool, storage_path, mime, created_by) values ($1, $2, 't', 'prisma/out/00000000-0000-4000-8000-000000000091.png', 'image/png', $3)`, [spec, cli, ana]);
+  const lote = await scalar(`insert into produccion.prisma_formatos_lotes (client_id, nombre, estado, fuente_path, fuente_mime, fuente_w, fuente_h, created_by) values ($1, 'plano.png', 'listo', 'fuente/00000000-0000-4000-8000-000000000091.png', 'image/png', 10, 10, $2) returning id`, [cli, ana]);
+  await db.query(`insert into produccion.prisma_formatos_lotes (nombre, estado, fuente_path, created_by) values ('a-medias', 'subiendo', 'fuente/00000000-0000-4000-8000-000000000092.png', $1)`, [ana]);
+  await db.query(`insert into produccion.prisma_formatos_salidas (lote_id, preset, ancho, alto, modo, estado, error) values ($1, 'ig-100x100', 100, 100, 'extender', 'error', 'falló')`, [lote]);
+  // Navegador
+  await db.query(`insert into produccion.prisma_actividad (member_id, accion, archivo, client_id) values ($1,'psd_abierto','anuncio.psd',$2), ($1,'descarga_zip','anuncio.psd',$2), ($1,'descarga_png','anuncio.psd',$2), ($1,'edicion','anuncio.psd',$2), ($1,'error','anuncio.psd',$2), ($1,'trabajo_borrado','anuncio.psd',$2)`, [ana, cli]);
+  // IA: conocido, desconocido, rutas nuevas, ayer no cuenta, y otra persona sólo con costo desconocido.
+  await db.query(`insert into produccion.prisma_gemini_gastos (ruta, modelo, usd, member_id, archivo, client_id) values ('fondo_ampliar','m',0.04,$1,'anuncio.psd',$2), ('rellenar_hueco','m',0.06,$1,'anuncio.psd',$2), ('tamano','m',null,$1,'anuncio.psd',$2)`, [ana, cli]);
+  await db.query(`insert into produccion.prisma_gemini_gastos (ruta, modelo, usd, member_id) values ('leer','m',null,$1)`, [luis]);
+  await db.query(`insert into produccion.prisma_gemini_gastos (ruta, modelo, usd, member_id, created_at) values ('copia','m',9,$1,(date_trunc('day', now() at time zone 'America/Mexico_City') - interval '1 minute') at time zone 'America/Mexico_City')`, [ana]);
+
+  // El tope diario sigue sumando las rutas nuevas (hoy: 0.04 + 0.06 con costo, 2 sin costo).
+  const res = (await q(`select * from produccion.prisma_gemini_resumen()`))[0];
+  eq("el tope suma las rutas nuevas", Number(res.hoy_usd), 0.1);
+  eq("el tope cuenta las sin costo de las rutas nuevas", res.sin_costo_hoy, 2);
+
+  const per = await personas();
+  const a = per.find((f) => f.persona === "Ana 0091");
+  const l = per.find((f) => f.persona === "Luis 0091");
+  const tp = per.find((f) => f.es_total);
+  eq("Ana: movimientos", a.movimientos, 2);
+  eq("Ana: cambios pedidos (un comentario normal no cuenta)", a.cambios, 3);
+  eq("Ana: rondas distintas, no renglones", a.rondas, 2);
+  eq("Ana: prompts (el hermano no cuenta)", a.prompts, 1);
+  eq("Ana: variantes + refinados (copiado no cuenta)", a.variantes, 2);
+  eq("Ana: resultados", a.resultados, 1);
+  eq("Ana: imágenes planas (la que sigue subiendo no cuenta)", a.lotes, 1);
+  eq("Ana: PSD abiertos", a.psd_abiertos, 1);
+  eq("Ana: descargas", a.descargas, 2);
+  eq("Ana: ediciones", a.ediciones, 1);
+  eq("Ana: llamadas de IA de hoy (ayer no)", a.ia_llamadas, 3);
+  eq("Ana: gasto suma sólo lo reportado", Number(a.ia_usd), 0.1);
+  eq("Ana: sin costo se cuenta aparte", a.ia_sin_costo, 1);
+  eq("Ana: errores = navegador + tamaño fallido", a.errores, 2);
+  eq("Ana: su color", a.color, "#112233");
+  ok("Ana: última actividad", a.ultima instanceof Date);
+  eq("Luis: respuestas", l.respuestas, 1);
+  eq("Luis: rondas tocadas por resolver y responder", l.rondas, 1);
+  eq("Luis: sólo costo desconocido = gasto NULL, nunca 0", l.ia_usd, null);
+  eq("Luis: su llamada sin costo", l.ia_sin_costo, 1);
+  eq("total: una ronda que dos tocaron cuenta una vez", tp.rondas, 2);
+  eq("total: llamadas", tp.ia_llamadas, 4);
+  eq("total: el total va primero", per[0].es_total, true);
+
+  const pro = await proyectos();
+  const cCli = pro.find((f) => f.nivel === "cliente" && f.cliente === "Cliente 0091");
+  const psd = pro.find((f) => f.nivel === "elemento" && f.cliente === "Cliente 0091" && f.elemento === "anuncio.psd");
+  const plano = pro.find((f) => f.nivel === "elemento" && f.elemento === "plano.png");
+  const general = pro.find((f) => f.nivel === "elemento" && f.cliente === "Cliente 0091" && f.elemento === null);
+  const sinCli = pro.find((f) => f.nivel === "cliente" && f.cliente === "Sin cliente");
+  const tarea = pro.find((f) => f.nivel === "elemento" && f.tipo_elemento === "tarea" && f.client_id === clienteTarea);
+  eq("proyecto: gasto del cliente", Number(cCli.ia_usd), 0.1);
+  eq("proyecto: prompts del cliente", cCli.prompts, 1);
+  eq("proyecto: gasto del PSD", Number(psd.ia_usd), 0.1);
+  eq("proyecto: llamadas del PSD", psd.ia_llamadas, 3);
+  eq("proyecto: es archivo", psd.tipo_elemento, "archivo");
+  eq("proyecto: el error del tamaño cae en su imagen plana", plano.errores, 1);
+  eq("proyecto: lo de prompts cae en el cliente, sin archivo", general.prompts, 1);
+  eq("proyecto: gasto sin cliente va a «Sin cliente»", sinCli.ia_llamadas, 1);
+  eq("proyecto: sin cliente, el desconocido sigue sin costo", sinCli.ia_sin_costo, 1);
+  ok("proyecto: la tarea lleva el código del brief", tarea.elemento.startsWith(codigoBrief));
+  eq("proyecto: movimientos de la tarea", tarea.movimientos, 2);
+  eq("proyecto: una sola fila de total", pro.filter((f) => f.nivel === "total").length, 1);
+
+  // Línea de tiempo
+  const linea = await q(`select * from produccion.prisma_actividad_linea($1::date, $1::date, 500)`, [hoy]);
+  ok("línea: mezcla fuentes", ["movimiento", "cambio_pedido", "cambio_resuelto", "respuesta", "prompt", "variante", "resultado", "lote", "psd_abierto", "ia", "error"].every((t) => linea.some((f) => f.tipo === t)));
+  ok("línea: lo más nuevo primero", linea.every((f, i) => i === 0 || linea[i - 1].created_at >= f.created_at));
+  eq("línea: ids únicos", new Set(linea.map((f) => f.fila_id)).size, linea.length);
+  eq("línea: el override llega", linea.filter((f) => f.tipo === "movimiento" && f.override).length, 1);
+  eq("línea: sin costo sigue null", linea.find((f) => f.tipo === "ia" && f.ruta === "leer").usd, null);
+  await db.query(`insert into produccion.prisma_actividad (accion) select 'edicion' from generate_series(1, 250)`);
+  eq("línea: el tope es 200 aunque pidan más", (await q(`select 1 from produccion.prisma_actividad_linea($1::date, $1::date, 500)`, [hoy])).length, 200);
+  eq("línea: sin límite trae 100", (await q(`select 1 from produccion.prisma_actividad_linea($1::date, $1::date)`, [hoy])).length, 100);
+  await vaciarBitacora();
+  await db.query(`insert into produccion.prisma_actividad (member_id, accion) values ($1, 'error')`, [luis]);
+
+  // Medianoche en México, no en UTC.
+  const ayer = (await q(`select ((now() at time zone 'America/Mexico_City')::date - 1)::text as d`))[0].d;
+  const perAyer = await q(`select * from produccion.prisma_actividad_personas($1::date, $1::date)`, [ayer]);
+  eq("ayer en México: sólo lo de ayer", Number(perAyer.find((f) => f.persona === "Ana 0091")?.ia_usd), 9);
+
+  // Un miembro borrado no se lleva su gasto ni su cuenta; queda en «Sin persona».
+  await db.query(`delete from produccion.track_members where id = $1`, [luis]);
+  const sinP = (await personas()).find((f) => f.persona === "Sin persona");
+  ok("miembro borrado: su gasto sigue", sinP && sinP.ia_llamadas === 1 && sinP.ia_sin_costo === 1, JSON.stringify(sinP));
+  eq("miembro borrado: «Sin persona» sin id", sinP.persona_id, null);
+  // Y un cliente borrado manda sus números a «Sin cliente».
+  const llamadasAntes = (await proyectos()).find((f) => f.nivel === "total").ia_llamadas;
+  await db.query(`delete from produccion.clients where id = $1`, [cli]);
+  const proSin = await proyectos();
+  eq("cliente borrado: el total no cambia", proSin.find((f) => f.nivel === "total").ia_llamadas, llamadasAntes);
+  eq("cliente borrado: ya no aparece", proSin.filter((f) => f.cliente === "Cliente 0091").length, 0);
+  eq("cliente borrado: sus llamadas van a «Sin cliente»", proSin.find((f) => f.nivel === "cliente" && f.cliente === "Sin cliente").ia_llamadas, 4);
+
+  // RLS: master y admin leen; lead, especialista, cliente no; nadie escribe por aquí.
+  const ADMIN = "00000000-0000-0000-0000-000000091001", MASTER91 = "00000000-0000-0000-0000-000000091002", CLI91 = "00000000-0000-0000-0000-000000091003";
+  await db.exec(`insert into produccion.profiles (id, email, full_name, role) values ('${ADMIN}','admin91@runna.mx','Admin','admin'), ('${MASTER91}','master91@runna.mx','Master','master'), ('${CLI91}','cli91@cliente.mx','Cliente','client');`);
+  for (const [quien, uid, ve] of [["admin", ADMIN, 1], ["master", MASTER91, 1], ["lead", LEAD, 0], ["creative", CREA, 0], ["client", CLI91, 0]]) {
+    await asRole(uid);
+    eq(`RLS: ${quien} ${ve ? "lee" : "no lee"} la bitácora`, Number(await scalar(`select count(*) from produccion.prisma_actividad`)), ve);
+    const noEscribe = await db.query(`insert into produccion.prisma_actividad (accion) values ('edicion')`).then(() => false, () => true);
+    ok(`RLS: ${quien} no escribe en la bitácora`, noEscribe);
+    await resetRole();
+  }
+  await db.exec(`delete from produccion.profiles where id in ('${ADMIN}','${MASTER91}','${CLI91}'); delete from produccion.prisma_gemini_gastos;`);
+  await vaciarBitacora();
+  await db.query(`delete from produccion.track_members where id = $1`, [ana]);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
