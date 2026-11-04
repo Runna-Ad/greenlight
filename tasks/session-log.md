@@ -1,5 +1,20 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-03 — Prisma y Greenlight juntos en vivo, ramas de equipo, interruptor de Prisma, separar elementos del fondo, historial en cero (main 3c92880)
+**En vivo (todo con «ship it» de Pedro):**
+- Merge de `prisma` a `main`; tope de Gemini (0088, apagado); ramas Creativo/Diseño/Producción (0089; por ahora sólo un dato; el paso 2 falta).
+- CRON_SECRET reemplazado en Vercel y Vault, coincidencia comprobada; vigía semanal, primera corrida el 9 de nov, 13:00 UTC.
+- Interruptor «HÜE Prisma» por persona (0090; sólo el Master decide).
+- Formatos: `separarElementos` lee cada capa de BACKGROUND y saca como pieza lo que es un elemento (con transparencia, o recortado contra un color liso); capas sueltas bajo el fondo van con el fondo; varios HERO se acomodan juntos; reporte por capa. `4-5_1200x1500.psd` ya abre.
+- Historial de Prisma como desplegable, cerrado de entrada (deploy dpl_B3kMoqSs6FjzDaNru78RD7TrNmTT; para volver: dpl_4hi1fh3BWFJSpG7tXs25T9oqpaP6).
+**Borrado con OK de Pedro:** las 15 entradas del historial de Prisma con sus prompts, votos, eventos y archivos; 6 PRUEBA-TOPE con 28 medidas; lectura PRUEBA-PLANO. Queda: gasto de Gemini (7). Aprendizaje de H.Ü.E: desde cero.
+**Pruebas:** test-formatos 693/0 · tsc 0 · 11 PSD reales antes/después con `scripts/bateria-psd.mjs`: el único cambio es el PSD que fallaba. Prueba de punta a punta de Greenlight con tarea falsa en vivo: pasó, datos falsos borrados.
+**Sin probar:** subir un PSD en la página en vivo (el panel bloquea pasarle archivos; Pedro lo revisó en preview y dijo «ship it»); que una persona sin acceso a Prisma quede fuera (necesita otra cuenta); video/copies, sync real del sheet, logins reales de Lead/Especialista/cliente, primer vigía.
+**Límites de la separación:** una capa sobre foto que se funde se queda («iPhone naranja», SPGFAPPLE); carpeta de fondo con ajustes o recortadas no se separa (SPAPDOGCARD, APGIANTCARDUGC); volver a subir un export con el teléfono en su carpeta no se probó.
+**Decisiones abiertas:** lista fija de Marca en el brief (`vocab.ts`); portal dice «aplicó 1 cambio» tras «Sin cambio»; «Nota de diseño» visible al cliente; paso 2 de ramas; poner la rama real de cada persona (Pedro).
+**Herramientas:** el MCP de Supabase se desconectó al final: `supabase db query --linked --project-ref ybbrpqzbedaxsmotgtkh --workdir <carpeta con supabase/.temp/project-ref>` hace lo mismo.
+**Pick up next:** (1) Pedro apaga el interruptor de un compañero y confirma que queda fuera; (2) Pedro sube un PSD real en vivo; (3) paso 2 de ramas. Trabajo en worktree `../greenlight-merge` (rama `feat/prisma-acceso`); la carpeta local `prisma` está muy atrás, con cambios sin commit que no son de esta sesión.
+
 ## 2026-10-27 (5) — Mi trabajo "El cliente respondió", colores vivos, "Sin cambio (acordado)", responder ≠ aplicar — SHIPPEADO (main ffd5ed7, 0085 aplicada)
 **En vivo (3 ships, todos fast-forward):**
 - **b6edce5:** Mi trabajo marca "El cliente respondió" (cambio del cliente abierto donde el cliente escribió al último; leads/admin, arriba del grupo). Control de Cambios con barra de color por estado; respuestas del cliente en un tinte de SU color de marca (DiDi naranja), equipo en morado. **0085** (`comments.sin_cambio` + CHECK: sólo client_change resuelto) y botón "Sin cambio (acordado)" del lead: queda resuelto con su hilo, no sale "Aplicado" ni prende "Cambios listos".
