@@ -10,6 +10,7 @@
 
 ## 🔺 Actividad, trabajo guardado y fondo con IA en PSD en vivo · 2026-11-04 · PROD
 - `main` = a0cc7f2, deploy dpl_BdmHZNz8oCZ6HHfwSfJ5sDFGkbkk. Versión anterior para volver: dpl_DEvuAU41TRZgQr7WogU27LTxZFEH (c55dba5). Incluye el ícono G verde (12f1918), que estaba en `main` sin desplegar. 0091 ya estaba aplicada.
+- Revisado 2026-11-04: no queda código de hoy fuera de `main`; `prisma` sólo lleva notas en `tasks/` de más. Sigue sin probarse un PSD real guardado y recargado.
 - Revisado en vivo: Admin › Actividad con datos reales, Formatos PSD abre con perfil e `iaCopia` true, ícono idéntico al del commit, 0 errores de servidor en 10 min. Sin probar en vivo: un PSD real en el navegador (decisión de Pedro).
 
 ## 🔺 Greenlight y Prisma juntos en vivo · 2026-11-03 · PROD
