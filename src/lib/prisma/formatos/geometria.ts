@@ -302,6 +302,23 @@ export function lienzoIA(w0: number, h0: number, W: number, H: number, recortabl
   };
 }
 
+/** El lienzo de la IA para un lienzo cw × ch de cualquier forma, del que luego se usa una parte a escala `k` (px finales
+ *  por px del lienzo): la proporción más cercana, y 2K sólo si con 1K la imagen se agrandaría de más. */
+export function lienzoIAde(cw: number, ch: number, k: number): Pick<LienzoIA, "aspect" | "tamano" | "gw" | "gh" | "zona" | "costoUsd"> {
+  const objetivo = Math.log(cw / ch);
+  const aspect = Object.keys(RATIOS_IA).reduce((a, b) => {
+    const dist = (r: string) => Math.abs(Math.log(RATIOS_IA[r]["1K"][0] / RATIOS_IA[r]["1K"][1]) - objetivo);
+    return dist(b) < dist(a) ? b : a;
+  });
+  const zonaEn = (t: TamanoIA) => {
+    const [gw, gh] = RATIOS_IA[aspect][t];
+    return { gw, gh, e: encajar(cw, ch, gw, gh) };
+  };
+  const tamano: TamanoIA = (k * cw) / zonaEn("1K").e.sw > TOLERANCIA_AGRANDAR ? "2K" : "1K";
+  const { gw, gh, e } = zonaEn(tamano);
+  return { aspect, tamano, gw, gh, zona: { x: e.ox, y: e.oy, w: e.sw, h: e.sh }, costoUsd: COSTO_IA_USD[tamano] };
+}
+
 /** Costo estimado de un lote: sólo los tamaños con IA cuestan; desenfoque y color son locales ($0). */
 export function costoEstimado(w0: number, h0: number, tamanos: { w: number; h: number; modo: Modo }[]): number {
   const total = tamanos.filter((t) => t.modo === "ia").reduce((s, t) => s + lienzoIA(w0, h0, t.w, t.h).costoUsd, 0);

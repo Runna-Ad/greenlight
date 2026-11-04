@@ -3627,6 +3627,46 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   eq("ampliar PSD: opaca en lo que pintó la IA", alfa(45, 2), 255);
   eq("ampliar PSD: transparente sobre las capas del fondo", alfa(20, 70), 0);
   eq("ampliar PSD: el retoque queda encima", capa.rgba[((81 - capa.y) * capa.w + 41 - capa.x) * 4], 7);
+
+  // Mover el fondo a cualquier lado (640×100) y rellenar el hueco con IA.
+  const { hayHueco, lienzoConHueco } = await import("../src/lib/prisma/formatos/ampliar.ts");
+  const { fondoDeEdicion, edicionDeFondo } = await import("../src/lib/prisma/formatos/acomodo.ts");
+  const { lienzoIAde } = await import("../src/lib/prisma/formatos/geometria.ts");
+  const W1 = 640, H1 = 100;
+  const lado = { z: 1, cx: 0.7, cy: 0.5 };
+  ok("hueco: lo guardado de antes sigue cubriendo", !hayHueco(fondoDeEdicion(M, W1, H1, lado), M, W1, H1));
+  const fl = fondoDeEdicion(M, W1, H1, { ...lado, libre: true });
+  ok("hueco: libre, el fondo se corre de lado y deja hueco", hayHueco(fl, M, W1, H1) && fl.x < 0, String(fl.x));
+  const ida = edicionDeFondo(M, W1, H1, fl);
+  eq("hueco: de ida y vuelta queda igual", [ida.cx.toFixed(4), ida.cy.toFixed(4)], ["0.7000", "0.5000"]);
+  eq("hueco: el centro de la medida nunca sale del fondo", fondoDeEdicion(M, W1, H1, { z: 1, cx: 9, cy: 0.5, libre: true }).x, W1 / 2 - 1200 * (W1 / 1200));
+
+  const conLibre = { piezas: {}, fondo: { ...lado, libre: true } };
+  const sinRelleno = revisarMedida([M], W1, H1, { edicion: conLibre });
+  ok("hueco: la tarjeta lo avisa", sinRelleno.acomodo.avisos.some((a) => a.tipo === "hueco"));
+  const lh = lienzoConHueco(M, sinRelleno.acomodo.fondo, W1, H1, null);
+  ok("hueco: el lienzo crece sólo del lado del hueco", lh.g.w > M.w && lh.g.h === M.h && lh.x === 0 && lh.g.ox === 0, JSON.stringify(lh.g));
+  const ampHueco = { ...lh.g, rgba: lleno(lh.g.w * lh.g.h, 150), base: M.fondo, costoUsd: 0.04, deriva: 0, hueco: { forma: null, previa: null } };
+  const relleno = revisarMedida([M], W1, H1, { edicion: conLibre, ampliacion: ampHueco });
+  ok("hueco: rellenado ya no se avisa", !relleno.acomodo.avisos.some((a) => a.tipo === "hueco"));
+  ok("hueco: las piezas no se mueven al rellenar", JSON.stringify(relleno.acomodo.puestas) === JSON.stringify(sinRelleno.acomodo.puestas));
+  eq("hueco: el fondo se queda donde lo dejaste", [relleno.acomodo.fondo.k, relleno.acomodo.fondo.x + lh.g.ox * relleno.acomodo.fondo.k], [sinRelleno.acomodo.fondo.k, sinRelleno.acomodo.fondo.x]);
+
+  // Sobre una ampliación de forma, las piezas siguen acomodadas sobre ésta y el fondo no se mueve.
+  const gf = lienzoAmpliado(M.w, M.h, W1, H1);
+  if (gf.w * gf.h > 0) {
+    const ampF = { ...gf, rgba: lleno(gf.w * gf.h, 150), base: M.fondo, costoUsd: null, deriva: 0 };
+    const conForma = revisarMedida([M], W1, H1, { edicion: { piezas: {}, fondo: { z: 1.2, cx: 0.9, cy: 0.5, libre: true } }, ampliacion: ampF });
+    ok("hueco sobre ampliación: se avisa", conForma.acomodo.avisos.some((a) => a.tipo === "hueco"));
+    const lf = lienzoConHueco(conForma.ma, conForma.acomodo.fondo, W1, H1, ampF);
+    const ampFH = { ...lf.g, rgba: lleno(lf.g.w * lf.g.h, 150), base: M.fondo, costoUsd: null, deriva: 0, hueco: { forma: ampF, previa: ampF } };
+    const rf = revisarMedida([M], W1, H1, { edicion: { piezas: {}, fondo: { z: 1.2, cx: 0.9, cy: 0.5, libre: true } }, ampliacion: ampFH });
+    ok("hueco sobre ampliación: rellenado ya no se avisa", !rf.acomodo.avisos.some((a) => a.tipo === "hueco"));
+    ok("hueco sobre ampliación: las piezas no se mueven", JSON.stringify(rf.acomodo.puestas) === JSON.stringify(conForma.acomodo.puestas));
+    eq("hueco sobre ampliación: el fondo original no se mueve", Math.round(rf.acomodo.fondo.x + lf.g.ox * rf.acomodo.fondo.k), Math.round(conForma.acomodo.fondo.x + gf.ox * conForma.acomodo.fondo.k));
+  }
+  const li = lienzoIAde(1400, 1500, 0.53);
+  ok("hueco: la IA recibe una proporción que acepta y lo pedido cabe", Object.hasOwn(RATIOS_IA, li.aspect) && li.zona.x + li.zona.w <= li.gw && li.zona.y + li.zona.h <= li.gh, JSON.stringify(li));
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} formatos: ${pass} passed, ${fail} failed\n`);

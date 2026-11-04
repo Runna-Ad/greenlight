@@ -21,6 +21,8 @@ export const ORIGINAL_POCO = 0.3;
 /** Banda de la unión, dentro del fondo original: su parte del lado menor, y lo menos en px. */
 const UNION_PARTE = 0.02;
 const UNION_MIN_PX = 4;
+/** Aire de más al rellenar un hueco: su parte del lado menor de la medida. */
+const AIRE_HUECO = 0.05;
 
 export type GeometriaAmpliada = { w: number; h: number; ox: number; oy: number };
 export type Ampliacion = GeometriaAmpliada & {
@@ -31,7 +33,32 @@ export type Ampliacion = GeometriaAmpliada & {
   costoUsd: number | null;
   /** Error medio (0-255) entre lo que la IA dejó en el centro y el original. */
   deriva: number;
+  /**
+   * Sólo se rellenó el hueco que dejó el fondo movido a mano: las piezas se quedan como estaban. `forma`: la ampliación
+   * sobre la que se acomodan, si la había; `previa`: a la que se vuelve al quitar ésta.
+   */
+  hueco?: { forma: Ampliacion | null; previa: Ampliacion | null };
 };
+/** ¿Esta ampliación cambia el acomodo? Sólo rellenar un hueco, sin ampliación de forma debajo, no lo cambia. */
+export const cambiaAcomodo = (a: Ampliacion | null | undefined): boolean => !!a && (!a.hueco || !!a.hueco.forma);
+
+/** ¿El fondo, puesto así, deja sin cubrir parte de la medida? */
+export const hayHueco = (f: { k: number; x: number; y: number }, ma: { w: number; h: number }, W: number, H: number): boolean =>
+  f.x > 0.5 || f.y > 0.5 || f.x + ma.w * f.k < W - 0.5 || f.y + ma.h * f.k < H - 0.5;
+
+/**
+ * El lienzo que cubre lo que se ve con el fondo movido a mano, más un poco de aire en los lados del hueco para poder
+ * ajustarlo sin volver a pagar. `previa`: la ampliación que `ma` ya trae. Lo que `ma` ya tiene va en (x, y) del lienzo
+ * nuevo; `g.ox`/`g.oy` siguen siendo dónde queda el fondo ORIGINAL.
+ */
+export function lienzoConHueco(ma: { w: number; h: number }, f: { k: number; x: number; y: number }, W: number, H: number, previa: GeometriaAmpliada | null): { g: GeometriaAmpliada; x: number; y: number } {
+  const aire = Math.round((AIRE_HUECO * Math.min(W, H)) / f.k);
+  // Con la misma tolerancia que `hayHueco`: un lado sin hueco de verdad no se paga.
+  const lado = (falta: number) => (falta * f.k > 0.5 ? Math.ceil(falta) + aire : 0);
+  const L = lado(f.x / f.k), T = lado(f.y / f.k);
+  const R = lado((W - f.x) / f.k - ma.w), B = lado((H - f.y) / f.k - ma.h);
+  return { g: { w: ma.w + L + R, h: ma.h + T + B, ox: (previa?.ox ?? 0) + L, oy: (previa?.oy ?? 0) + T }, x: L, y: T };
+}
 
 /** ¿Tiene sentido ampliar? Sólo si el fondo hoy se agranda para cubrir la medida y el lienzo no se sale de la memoria. */
 export function valeAmpliar(w: number, h: number, W: number, H: number): boolean {
@@ -113,6 +140,8 @@ export function maestroAmpliado<M extends Ampliable>(ma: M, a: Ampliacion): M {
     w: a.w,
     h: a.h,
     forma: { w: ma.w, h: ma.h },
+    // Lo movido a mano sigue midiéndose sobre el lienzo con el que se acomodó, no sobre el que trae el relleno.
+    ...(a.hueco ? { lienzo: { w: a.hueco.forma?.w ?? ma.w, h: a.hueco.forma?.h ?? ma.h, dx: a.ox - (a.hueco.forma?.ox ?? 0), dy: a.oy - (a.hueco.forma?.oy ?? 0) } } : {}),
     fondo: a.rgba,
     piezas: ma.piezas.map((p) => ({
       ...p,

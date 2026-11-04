@@ -13,7 +13,7 @@
  * los mismos avisos.
  */
 import { acomodar, aplicarEdicion, dibujosDe, elegirMaestro, pegadoFuera, RENGLONES_MAS, RENGLONES_MAX, sinSusLetras, type Acomodo, type AvisoAcomodo, type Edicion, type Lado, type MaestroCaja, type OpcionesAcomodo, type ParteCaja, type Zona } from "./acomodo.ts";
-import { maestroAmpliado, type Ampliacion } from "./ampliar.ts";
+import { hayHueco, maestroAmpliado, type Ampliacion } from "./ampliar.ts";
 import { haloDe } from "./halo.ts";
 import type { Caja, Rol } from "./psd.ts";
 import { etiquetaPieza } from "./roles.ts";
@@ -432,7 +432,7 @@ const firma = (ed: Edicion | null | undefined) => {
   // La copia de otra medida (B25) cambia los avisos (la de otra forma se revisa entera): entra en la firma.
   const copia = ed.copiaDe ? `c${ed.copiaDe.w}x${ed.copiaDe.h}` : "";
   const renglones = ed.renglones ? `r${ed.renglones}` : "";
-  const fondo = ed.fondo ? `f${ed.fondo.z.toFixed(4)},${ed.fondo.cx.toFixed(4)},${ed.fondo.cy.toFixed(4)}` : "";
+  const fondo = ed.fondo ? `f${ed.fondo.z.toFixed(4)},${ed.fondo.cx.toFixed(4)},${ed.fondo.cy.toFixed(4)}${ed.fondo.libre ? "l" : ""}` : "";
   return [lugares, ed.orden?.length ? ed.orden.join(",") : "", partes, ordenPartes, sinTexto, copia, renglones, fondo].join("|").replace(/\|+$/, "");
 };
 
@@ -497,8 +497,12 @@ export function revisarMedida<M extends MaestroRevisable>(
     renglones = null;
     aMano = false;
   }
-  if (op.ampliacion && op.ampliacion.base === delPsd.fondo) {
-    ma = maestroAmpliado(ma, op.ampliacion);
+  // Con un hueco rellenado las piezas se acomodan como antes de rellenarlo: sólo cambia lo que se pinta detrás.
+  let acomodable = ma;
+  const amp = op.ampliacion && op.ampliacion.base === delPsd.fondo ? op.ampliacion : null;
+  if (amp) {
+    acomodable = amp.hueco ? (amp.hueco.forma ? maestroAmpliado(ma, amp.hueco.forma) : ma) : maestroAmpliado(ma, amp);
+    ma = maestroAmpliado(ma, amp);
     delPsdDe.set(ma, delPsd);
   }
   // Lo guardado pedía otros renglones y ahora no se pueden (las tipografías todavía no llegan, o falta la del legal): lo
@@ -520,7 +524,9 @@ export function revisarMedida<M extends MaestroRevisable>(
   const clave = `${base}:${eleccion}:${firma(op.edicion)}:${renglones ? `${renglones.usados}/${renglones.auto}/${renglones.opciones.join(",")}${aMano ? "m" : ""}` : "-"}${soltada ? `:s${piezaLegal}` : ""}`;
   const ya = porMedida.get(clave);
   if (ya) return ya as Revisada<M>;
-  const auto = acomodar(ma, W, H, { heroLado: lado, zona: z });
+  const puesto = acomodar(acomodable, W, H, { heroLado: lado, zona: z });
+  const corrida = ma.lienzo;
+  const auto = corrida ? { ...puesto, fondo: { k: puesto.fondo.k, x: puesto.fondo.x - corrida.dx * puesto.fondo.k, y: puesto.fondo.y - corrida.dy * puesto.fondo.k } } : puesto;
   let porOpciones = opcionesHechas.get(ma);
   if (!porOpciones) opcionesHechas.set(ma, (porOpciones = new Map()));
   let opc = porOpciones.get(base);
@@ -546,6 +552,7 @@ export function revisarMedida<M extends MaestroRevisable>(
     console.error("[formatos] avisos de píxeles", err);
   }
   // Menos renglones que en el PSD por el automático: se dice en gris (no hay nada que revisar). Elegidos a mano, no.
+  if (hayHueco(acomodo.fondo, ma, W, H)) extra = [...extra, { tipo: "hueco", texto: "El fondo movido deja un hueco: se ve la orilla repetida en rayas. Rellénalo con IA en «Editar» › «Mover el fondo»." }];
   const nota: AvisoAcomodo[] = noSePudo
     ? [{ tipo: "renglones", texto: `Los renglones del legal elegidos a mano (${op.edicion?.renglones}) no se pueden usar ahora: va ${renglones && renglones.usados < renglones.psd ? `en ${renglones.usados}` : "como en el PSD"}${soltada ? ", y lo movido a mano del legal se deja de lado" : ""}.` }]
     : renglones && !aMano && renglones.usados < renglones.psd

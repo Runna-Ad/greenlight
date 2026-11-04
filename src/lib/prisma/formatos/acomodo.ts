@@ -52,6 +52,8 @@ export type MaestroCaja = {
   legalFijo?: boolean;
   /** Con el lienzo ampliado (`ampliar.ts`), la forma real del diseño: de ella sale la familia y si cuenta la zona del canal. */
   forma?: { w: number; h: number };
+  /** Con un hueco rellenado (`ampliar.ts`): el lienzo sobre el que se mide lo movido a mano, y dónde cae dentro de éste. */
+  lienzo?: { w: number; h: number; dx: number; dy: number };
 };
 
 export type Familia = "igual" | "display" | "horizontal" | "ancho" | "banner";
@@ -74,7 +76,7 @@ export type Puesta = {
 export type PuestaParte = { parte: number; k: number; x: number; y: number; w: number; h: number; movida: boolean };
 /** `contraste`, `copia` y `retoque` los pone `revisar.ts` (miran píxeles); los demás, el acomodo. `matriz` es una nota
  *  (qué pide la matriz de producción y qué se hizo): se ve en gris y no cuenta como algo que revisar. */
-export type AvisoAcomodo = { tipo: "fuera" | "encima" | "resplandor" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque" | "relleno" | "texto" | "copiada" | "matriz" | "renglones"; texto: string };
+export type AvisoAcomodo = { tipo: "fuera" | "encima" | "resplandor" | "letra" | "falta" | "zona" | "forma" | "quitada" | "contraste" | "copia" | "retoque" | "relleno" | "texto" | "copiada" | "matriz" | "renglones" | "hueco"; texto: string };
 /** Una nota (qué pidió la matriz y qué se hizo; el legal en otros renglones, B27): la tarjeta, el resumen y el editor
  *  la muestran en gris y no la cuentan como algo que revisar. Una sola regla para los tres. */
 export const esNota = (a: AvisoAcomodo): boolean => a.tipo === "matriz" || a.tipo === "renglones";
@@ -111,7 +113,7 @@ export type PosicionPieza = { x: number; y: number; k: number };
  * del maestro (0-1) queda en el centro de la medida. Al aplicarlo el fondo sigue cubriendo toda la medida: se corre
  * sólo dentro de lo que le sobra.
  */
-export type FondoEditado = Readonly<{ z: number; cx: number; cy: number }>;
+export type FondoEditado = Readonly<{ z: number; cx: number; cy: number; /** Se puede salir de la medida: lo que quede sin cubrir es un hueco que se avisa. Lo guardado antes de esto siempre cubre. */ libre?: boolean }>;
 /** Lo más que se agranda el fondo a mano. */
 export const FONDO_EDITOR_MAX = 3;
 /** Dónde dejó la persona una parte, RELATIVO a su pieza (así va pegada a ella: Pedro, 2026-10-19, "Yes, parts stay
@@ -1091,7 +1093,7 @@ export function leerEdicion(v: unknown, piezasDe: number | readonly { partes?: r
     }
   const hay = (r: object) => Object.keys(r).length > 0;
   const renglones = indice(guardada.renglones, RENGLONES_LEER_MAX + 1) && guardada.renglones >= 1 ? guardada.renglones : undefined;
-  const fondo = fondoValido(guardada.fondo) ? { z: guardada.fondo.z, cx: guardada.fondo.cx, cy: guardada.fondo.cy } : undefined;
+  const fondo = fondoValido(guardada.fondo) ? { z: guardada.fondo.z, cx: guardada.fondo.cx, cy: guardada.fondo.cy, ...(guardada.fondo.libre === true ? { libre: true } : {}) } : undefined;
   if (!hay(piezas) && !orden && !hay(partes) && !hay(ordenPartes) && !hay(sinTexto) && !renglones && !fondo) return null;
   // De qué medida se copió (B25): una medida de verdad (la que acepta la lista de medidas), o nada.
   const c = guardada.copiaDe as { w?: unknown; h?: unknown } | null | undefined;
@@ -1223,15 +1225,20 @@ export function cambiadasDeCapa(orden: readonly number[], ordenAuto: readonly nu
  * fondo y las demás piezas no se tocan. Una edición con números que no sirven (NaN, escala ≤ 0) se ignora para esa
  * pieza; una escala o un lugar fuera de lo que deja el editor (dato viejo o cambiado a mano) se recorta a ese tope.
  */
-/** Dónde queda el fondo con lo elegido a mano (siempre cubre la medida). */
-export function fondoDeEdicion(ma: { w: number; h: number }, W: number, H: number, f: FondoEditado): Acomodo["fondo"] {
-  const z = Math.min(FONDO_EDITOR_MAX, Math.max(1, f.z)), k = Math.max(W / ma.w, H / ma.h) * z;
+/** Dónde queda el fondo con lo elegido a mano. Cubre la medida salvo con `libre`; aun así, el centro de la medida nunca
+ *  sale del fondo. Se mide sobre `ma.lienzo` si lo trae, y se devuelve en px de `ma`. */
+export function fondoDeEdicion(ma: Pick<MaestroCaja, "w" | "h" | "lienzo">, W: number, H: number, f: FondoEditado): Acomodo["fondo"] {
+  const b = ma.lienzo ?? { w: ma.w, h: ma.h, dx: 0, dy: 0 };
+  const z = Math.min(FONDO_EDITOR_MAX, Math.max(1, f.z)), k = Math.max(W / b.w, H / b.h) * z;
   const cx = Math.min(1, Math.max(0, f.cx)), cy = Math.min(1, Math.max(0, f.cy));
-  return cubrir(ma, W, H, k, W / 2 - cx * ma.w * k, H / 2 - cy * ma.h * k);
+  const x = W / 2 - cx * b.w * k, y = H / 2 - cy * b.h * k;
+  const p = f.libre ? { k, x, y } : cubrir(b, W, H, k, x, y);
+  return { k: p.k, x: p.x - b.dx * k, y: p.y - b.dy * k };
 }
 /** Lo contrario: un fondo puesto (el del automático, para empezar a moverlo) como se guarda. */
-export function edicionDeFondo(ma: { w: number; h: number }, W: number, H: number, f: Acomodo["fondo"]): FondoEditado {
-  return { z: f.k / Math.max(W / ma.w, H / ma.h), cx: (W / 2 - f.x) / (ma.w * f.k), cy: (H / 2 - f.y) / (ma.h * f.k) };
+export function edicionDeFondo(ma: Pick<MaestroCaja, "w" | "h" | "lienzo">, W: number, H: number, f: Acomodo["fondo"]): FondoEditado {
+  const b = ma.lienzo ?? { w: ma.w, h: ma.h, dx: 0, dy: 0 };
+  return { z: f.k / Math.max(W / b.w, H / b.h), cx: (W / 2 - f.x - b.dx * f.k) / (b.w * f.k), cy: (H / 2 - f.y - b.dy * f.k) / (b.h * f.k) };
 }
 const fondoValido = (f: unknown): f is FondoEditado => {
   if (!f || typeof f !== "object") return false;

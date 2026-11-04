@@ -71,6 +71,9 @@ export type MaestroListo = {
   nombre: string;
   w: number;
   h: number;
+  /** Sólo en un maestro con el fondo ampliado (`ampliar.ts`). */
+  forma?: { w: number; h: number };
+  lienzo?: { w: number; h: number; dx: number; dy: number };
   /** De qué mesa del PSD salió (para el PSD editable de cada medida). Falta en maestros armados a mano (pruebas). */
   origen?: Origen;
   /** Fondo limpio, RGBA opaco, w × h. */

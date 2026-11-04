@@ -1,12 +1,14 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { AlertTriangle, Bold, Check, ChevronDown, ChevronUp, FolderClosed, FolderOpen, Info, Minus, Move, Plus, RotateCcw } from "lucide-react";
+import { AlertTriangle, Bold, Check, ChevronDown, ChevronUp, FolderClosed, FolderOpen, Info, Loader2, Minus, Move, Plus, RotateCcw, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
 import { aplicarEdicion, edicionDeFondo, fondoDeEdicion, FONDO_EDITOR_MAX, type FondoEditado, cambiadasDeCapa, leerEdicion, ordenDePartes, ordenarPuestas, parteSinTocar, ponerPartes, topesParte, topesPieza, RELLENO_AVISO_PCT, type Acomodo, type Edicion, type Zona, esNota } from "@/lib/prisma/formatos/acomodo";
+import { LIENZO_MAX_PX, ampliacionDe, hayHueco, lienzoConHueco } from "@/lib/prisma/formatos/ampliar";
+import { lienzoIAde } from "@/lib/prisma/formatos/geometria";
 import { armarFondo, armarMedida, type TextoEscrito } from "@/lib/prisma/formatos/nitido";
 import { avisosDePixeles, edicionMuevePieza, edicionSinPieza, type InfoRenglones } from "@/lib/prisma/formatos/revisar";
 import { etiquetaPieza } from "@/lib/prisma/formatos/roles";
@@ -123,7 +125,14 @@ export function EditorMedida({
   tambien = [],
   alGuardar,
   alCerrar,
+  rellenando,
+  alRellenarHueco,
+  alCancelarRelleno,
 }: {
+  /** La IA está rellenando el hueco que deja el fondo movido (`ampliar.ts`). */
+  rellenando: boolean;
+  alRellenarHueco: (fondo: Acomodo["fondo"], ma: MaestroListo) => void;
+  alCancelarRelleno: () => void;
   /** El maestro del PSD, sin textos cambiados: con él se reconoce cada texto (`claveTexto`) y se lee lo del PSD. */
   original: MaestroListo;
   W: number;
@@ -196,7 +205,13 @@ export function EditorMedida({
    *  las piezas. */
   const [fondoEd, setFondoEd] = useState<FondoEditado | null>(() => inicial?.fondo ?? null);
   const [moverFondo, setMoverFondo] = useState(false);
-  const arrastreFondo = useRef<{ px: number; py: number; inicio: FondoEditado; puntero: number } | null>(null);
+  const arrastreFondo = useRef<{ px: number; py: number; inicio: FondoEditado; antes: FondoEditado | null; puntero: number } | null>(null);
+  // Al terminar el relleno su botón se va: el foco vuelve a la vista, no al vacío.
+  const rellenabaAntes = useRef(rellenando);
+  useEffect(() => {
+    if (rellenabaAntes.current && !rellenando) document.querySelector<HTMLElement>("[data-fondo-vista]")?.focus({ preventScroll: true });
+    rellenabaAntes.current = rellenando;
+  }, [rellenando]);
   const deAuto = useMemo(() => Object.fromEntries(auto.puestas.map((q) => [q.pieza, { x: q.x, y: q.y, k: q.k }])) as Record<number, Pos>, [auto]);
   /** Qué va encima de qué (índices, de abajo hacia arriba): el automático y el que se abrió (con lo guardado). */
   const ordenAuto = useMemo(() => auto.puestas.map((q) => q.pieza), [auto]);
@@ -238,6 +253,7 @@ export function EditorMedida({
   const arrastre = useRef<Arrastre | null>(null);
   /** El fondo ya remuestreado por tamaño de vista: no cambia mientras se edita. */
   const fondos = useRef(new Map<string, Float32Array>());
+  const fondosDe = useRef<Uint8ClampedArray | null>(null);
 
   // Lo que se ve y se revisa: el automático con lo que ya se movió, con las mismas reglas que la tarjeta y en el mismo
   // orden que `revisarMedida` (acomodo, edición, avisos de píxeles: ~1 ms). Sólo lo que cambió cuenta como hecho a
@@ -340,6 +356,11 @@ export function EditorMedida({
       };
       try {
         const cf = `${Wd}x${Hd}:${chico.fondo.k}:${chico.fondo.x}:${chico.fondo.y}`;
+        // Otro fondo (se rellenó un hueco o se quitó el relleno): lo pintado antes ya no vale, aunque caiga en el mismo lugar.
+        if (fondosDe.current !== ma.fondo) {
+          fondos.current.clear();
+          fondosDe.current = ma.fondo;
+        }
         let fondo = fondos.current.get(cf);
         if (!fondo) {
           // Uno nítido y uno de arrastre por tamaño de ventana: si la ventana cambia mucho, se empieza de nuevo.
@@ -475,17 +496,21 @@ export function EditorMedida({
   }, [abierta]);
 
   // ── El fondo a mano (B29) ──
+  /** Con hueco: el lienzo que haría falta para rellenarlo (cuánto cuesta, y si cabe). */
+  const lienzoHueco = hayHueco(editado.fondo, ma, W, H) ? lienzoConHueco(ma, editado.fondo, W, H, ampliacionDe(ma)) : null;
   /** Dónde está el fondo ahora, como se guarda (el del automático si no se ha tocado). */
   const fondoAhora = (): FondoEditado => fondoEd ?? edicionDeFondo(ma, W, H, editado.fondo);
   /** Lo pone como lo deja `aplicarEdicion` (siempre cubre): lo guardado es lo que se ve. */
   const ponerFondo = (f: FondoEditado) => {
-    const p = fondoDeEdicion(ma, W, H, f);
-    setFondoEd(edicionDeFondo(ma, W, H, p));
+    // Lo que la IA está pintando es para este lugar: moverlo ahora dejaría otro hueco, ya pagado.
+    if (rellenando) return;
+    const p = fondoDeEdicion(ma, W, H, { ...f, libre: true });
+    setFondoEd({ ...edicionDeFondo(ma, W, H, p), libre: true });
   };
   /** Corre el fondo `dx`/`dy` px de la medida (el fondo sigue al ratón). */
   const correrFondo = (f0: FondoEditado, dx: number, dy: number) => {
-    const k = fondoDeEdicion(ma, W, H, f0).k;
-    ponerFondo({ ...f0, cx: f0.cx - dx / (ma.w * k), cy: f0.cy - dy / (ma.h * k) });
+    const k = fondoDeEdicion(ma, W, H, f0).k, b = ma.lienzo ?? ma;
+    ponerFondo({ ...f0, cx: f0.cx - dx / (b.w * k), cy: f0.cy - dy / (b.h * k) });
   };
   const empezarFondo = (ev: PointerEvent<HTMLElement>) => {
     if (ev.button !== 0) return;
@@ -493,7 +518,7 @@ export function EditorMedida({
     ev.stopPropagation();
     ev.currentTarget.focus({ preventScroll: true });
     ev.currentTarget.setPointerCapture(ev.pointerId);
-    arrastreFondo.current = { px: ev.clientX, py: ev.clientY, inicio: fondoAhora(), puntero: ev.pointerId };
+    arrastreFondo.current = { px: ev.clientX, py: ev.clientY, inicio: fondoAhora(), antes: fondoEd, puntero: ev.pointerId };
     setArrastrando(true);
   };
   const moverFondoA = (ev: PointerEvent<HTMLElement>) => {
@@ -511,7 +536,7 @@ export function EditorMedida({
     if (ev.key === "Escape" && arrastreFondo.current) {
       ev.preventDefault();
       ev.stopPropagation();
-      ponerFondo(arrastreFondo.current.inicio);
+      setFondoEd(arrastreFondo.current.antes);
       return soltarFondo();
     }
     const paso = ev.shiftKey ? PASO_LARGO : PASO;
@@ -1297,6 +1322,23 @@ export function EditorMedida({
                         <span className="w-10 shrink-0 text-right tabular-nums">{Math.round(fondoAhora().z * 100)} %</span>
                       </label>
                       <p className="text-xs text-muted-foreground">{tx(FP.editorFondoAyuda, lang)}</p>
+                      {(rellenando || hayHueco(editado.fondo, ma, W, H)) && (
+                        <div role="status" className="grid gap-1.5 rounded-md border border-status-warning/40 p-2">
+                          <p className="flex gap-1.5 text-xs text-foreground">
+                            <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
+                            {tx(lienzoHueco && lienzoHueco.g.w * lienzoHueco.g.h > LIENZO_MAX_PX ? FP.rellenarGrande : FP.rellenarHuecoAviso, lang)}
+                          </p>
+                          {rellenando ? (
+                            <Button variant="outline" size="sm" onClick={alCancelarRelleno} aria-label={rellenar(tx(FP.ampliarCancelarAria, lang), { m: nombre })}>
+                              <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> {tx(FP.ampliarTrabajando, lang)}
+                            </Button>
+                          ) : lienzoHueco && lienzoHueco.g.w * lienzoHueco.g.h <= LIENZO_MAX_PX ? (
+                            <Button variant="outline" size="sm" onClick={() => alRellenarHueco(editado.fondo, ma)}>
+                              <Sparkles className="size-3.5" aria-hidden="true" /> {rellenar(tx(FP.rellenarHueco, lang), { e: `≈ US$${lienzoIAde(lienzoHueco.g.w, lienzoHueco.g.h, editado.fondo.k).costoUsd.toFixed(2)}` })}
+                            </Button>
+                          ) : null}
+                        </div>
+                      )}
                       {fondoEd && (
                         <button type="button" className="justify-self-start text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => setFondoEd(null)}>
                           {tx(FP.editorFondoAuto, lang)}

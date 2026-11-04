@@ -13,7 +13,7 @@ import { CANALES, LETRA_MIN_PX, MEDIDAS_INICIO, MEDIDAS_RATIO, elegirMaestro, es
 import { revisarMedida, type ArregloContraste, type CopiaEnFondo, type EleccionContraste, type InfoContraste } from "@/lib/prisma/formatos/revisar";
 import { COSTO_COPIA_IA_USD, DERIVA_IA_REVISAR, FONDO_IA_MAX_BYTES, PIEZA_IA_MAX, PIEZA_IA_MAX_BYTES, RECORTE_IA_MAX, buscarGemela, pegarRellenoIA, quitarGemela, recorteConOrilla, recorteParaIA, type Gemela } from "@/lib/prisma/formatos/gemela";
 import { FP, FP_APLANADA, FP_ERROR, FP_FAMILIA, FP_PAPEL, FPL, FX, rellenar } from "@/lib/prisma/formatos/copy";
-import { LADO_MAX, LADO_MIN, leerMedidas, lienzoIA, limpiarNombre } from "@/lib/prisma/formatos/geometria";
+import { LADO_MAX, LADO_MIN, leerMedidas, lienzoIA, lienzoIAde, limpiarNombre } from "@/lib/prisma/formatos/geometria";
 import { EDITABLE_MAX_BYTES, EDITABLE_MAX_MS, LEER_MAX_MS, MEDIDAS_MAX, MESAS_MAX, medidasQueCaben, type MaestroListo, type MensajePsdMedida, type MensajeWorker, type MesaDescartada, type MesaElegible, type MesaSinFondo, type PedidoPsdMedida, type PedidoWorker } from "@/lib/prisma/formatos/listo";
 import { PSD_ARCHIVO_MAX } from "@/lib/prisma/formatos/adelgazar";
 import type { MotivoPsd } from "@/lib/prisma/formatos/psd";
@@ -32,7 +32,7 @@ import { porQueNoSeCambia } from "@/lib/prisma/formatos/textos";
 import { APAGADA, COLUMNAS, ChipEstado, FOCO, FORMAS, FilaLegal, NOMBRE_FORMA, PRENDIDA, PastillasCanal, PastillasEntrega, PastillasMedidas, clave, etiqueta, formaDe, type Medida, type MedidaLista } from "./ajustes";
 import { conLegal, conLegalDe, conLegalFijo, legalDelPsd, legalesParaCliente, legalParecido, legalVigente, type LegalGuardado } from "@/lib/prisma/formatos/legal";
 import { copiarEdicion, hermanas } from "@/lib/prisma/formatos/matriz";
-import { ORIGINAL_POCO, ampliacionDe, coserAmpliacion, fondoEnOriginal, lienzoAmpliado, parteOriginal, sinAmpliar, valeAmpliar, type Ampliacion } from "@/lib/prisma/formatos/ampliar";
+import { LIENZO_MAX_PX, ORIGINAL_POCO, ampliacionDe, cambiaAcomodo, coserAmpliacion, fondoEnOriginal, lienzoAmpliado, lienzoConHueco, parteOriginal, sinAmpliar, valeAmpliar, type Ampliacion } from "@/lib/prisma/formatos/ampliar";
 import { ErrorDeRuta, IA_ESPERA_MS, aPng, aRgba, lienzoParaAmpliar, pngQueQuepa, zonaARgba } from "./ia-imagen";
 
 /**
@@ -1116,9 +1116,11 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     [ampliaciones, leido, maestrosVista],
   );
   const maestrosVigentes = useRef(maestrosVista);
+  const ampliacionesVigentes = useRef(ampliacionesVista);
   useEffect(() => {
     maestrosVigentes.current = maestrosVista;
-  }, [maestrosVista]);
+    ampliacionesVigentes.current = ampliacionesVista;
+  }, [maestrosVista, ampliacionesVista]);
   // Al cambiar de PSD o salir de la pantalla, lo que se le pidió a la IA ya no le sirve a nadie.
   useEffect(() => {
     const pedidos = pedidosAmpliar.current;
@@ -1127,7 +1129,8 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     };
   }, [leido]);
   const alAmpliar = useCallback(
-    async (m: Medida, base: MaestroVista) => {
+    /** `relleno`: sólo el hueco que deja el fondo movido a mano en `relleno.ma` (el maestro de esa medida, tal vez ya ampliado). */
+    async (m: Medida, base: MaestroVista, relleno?: { fondo: Acomodo["fondo"]; ma: MaestroListo }) => {
       const l = leidoVigente.current, k = clave(m);
       // El botón de quitar se vuelve éste en el mismo lugar: un doble clic en «Quitar» no debe volver a cobrar.
       if (!l || pedidosAmpliar.current.has(k) || performance.now() - ultimaQuitada.current < COPIA_PAUSA_MS) return;
@@ -1136,10 +1139,17 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       setAmpliandose((p) => new Set(p).add(k));
       anunciar(rellenar(tx(FP.ampliarEmpieza, langVigente.current), { m: etiqueta(m) }));
       try {
-        const g = lienzoAmpliado(base.w, base.h, m.w, m.h), L = lienzoIA(base.w, base.h, m.w, m.h);
-        const fondo = base.fondo.buffer instanceof ArrayBuffer ? (base.fondo as Uint8ClampedArray<ArrayBuffer>) : new Uint8ClampedArray(base.fondo);
+        const previa = relleno ? ampliacionDe(relleno.ma) : null;
+        const h = relleno ? lienzoConHueco(relleno.ma, relleno.fondo, m.w, m.h, previa) : null;
+        const g = h ? h.g : lienzoAmpliado(base.w, base.h, m.w, m.h);
+        if (g.w * g.h > LIENZO_MAX_PX) throw new ErrorDeRuta(tx(FP.rellenarGrande, langVigente.current));
+        const L = relleno ? lienzoIAde(g.w, g.h, relleno.fondo.k) : lienzoIA(base.w, base.h, m.w, m.h);
+        // Lo que ya se tiene (el fondo, o con un relleno, también lo ya pintado) y dónde va en lo que se le manda a la IA.
+        const fuente = relleno?.ma ?? base, s = L.zona.w / g.w;
+        const donde = h ? { x: L.zona.x + h.x * s, y: L.zona.y + h.y * s, w: fuente.w * s, h: fuente.h * s } : lienzoIA(base.w, base.h, m.w, m.h).original;
+        const fondo = fuente.fondo.buffer instanceof ArrayBuffer ? (fuente.fondo as Uint8ClampedArray<ArrayBuffer>) : new Uint8ClampedArray(fuente.fondo);
         const form = new FormData();
-        form.set("imagen", await pngQueQuepa(lienzoParaAmpliar(fondo, base.w, base.h, L.gw, L.gh, L.original), L.gw, L.gh, RECORTE_IA_MAX, FONDO_IA_MAX_BYTES), "imagen.png");
+        form.set("imagen", await pngQueQuepa(lienzoParaAmpliar(fondo, fuente.w, fuente.h, L.gw, L.gh, donde), L.gw, L.gh, RECORTE_IA_MAX, FONDO_IA_MAX_BYTES), "imagen.png");
         form.set("aspect", L.aspect);
         form.set("tamano", L.tamano);
         const res = await fetch("/api/prisma/formatos/fondo-ampliar", { method: "POST", body: form, signal: AbortSignal.any([ctrl.signal, AbortSignal.timeout(IA_ESPERA_MS)]) });
@@ -1152,7 +1162,10 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
         if (!vivo.current || ctrl.signal.aborted || leidoVigente.current !== l) return;
         // Mientras la IA trabajaba se pudo quitar una copia del fondo: lo que vuelve es del fondo de antes.
         if (!maestrosVigentes.current.some((x) => x.fondo === base.fondo)) return void toast.warning(rellenar(tx(FP.ampliarCambio, langVigente.current), { m: etiqueta(m) }), { duration: 10_000 });
-        const a: Ampliacion = { ...g, ...coserAmpliacion(ia, base.fondo, base.w, base.h, g), base: base.fondo, costoUsd };
+        // Un relleno sale de lo que había al pedirlo: si eso ya se quitó o cambió, no se revive.
+        if (relleno && (ampliacionesVigentes.current.get(k) ?? null) !== previa) return void toast.warning(rellenar(tx(FP.ampliarCambio, langVigente.current), { m: etiqueta(m) }), { duration: 10_000 });
+        const cosido = coserAmpliacion(ia, fuente.fondo, fuente.w, fuente.h, h ? { w: g.w, h: g.h, ox: h.x, oy: h.y } : g);
+        const a: Ampliacion = { ...g, ...cosido, base: base.fondo, costoUsd, ...(relleno ? { hueco: { forma: previa?.hueco ? previa.hueco.forma : previa, previa } } : {}) };
         setAmpliaciones((antes) => ({ leido: l, mapa: new Map([...(antes?.leido === l ? antes.mapa : []), [k, a]]) }));
         const t = langVigente.current, dicho = rellenar(tx(FP.ampliarAviso, t), { m: etiqueta(m) });
         anunciar(dicho);
@@ -1191,7 +1204,9 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       setAmpliaciones((antes) => {
         if (!antes) return antes;
         const mapa = new Map(antes.mapa);
-        mapa.delete(k);
+        // Quitar un relleno regresa a lo que había antes de él.
+        if (a.hueco?.previa) mapa.set(k, a.hueco.previa);
+        else mapa.delete(k);
         return { leido: antes.leido, mapa };
       });
       const t = langVigente.current, dicho = rellenar(tx(FP.ampliarQuitado, t), { m: etiqueta(m) });
@@ -1928,7 +1943,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     const deSesion = ediciones?.leido === leido ? ediciones.mapa : null;
     if (!leido || !maestrosVista.length) return mapa;
     for (const m of medidas) {
-      const ctx = contextoEdicion(m, lados[clave(m)], canal, ampliacionesVista.has(clave(m))), c = `${clave(m)}:${ctx}`;
+      const ctx = contextoEdicion(m, lados[clave(m)], canal, cambiaAcomodo(ampliacionesVista.get(clave(m)))), c = `${clave(m)}:${ctx}`;
       const ma = maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)];
       if (deSesion?.has(c)) mapa.set(clave(m), deSesion.get(c) ?? null);
       else mapa.set(clave(m), edicionGuardada(leido.archivo, ma, m.w, m.h, ctx) ?? edicionGuardada(leido.archivo, ma, m.w, m.h, ctx + CONTEXTO_VIEJO));
@@ -1951,7 +1966,7 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
     const textos = cambios !== cambiosTexto;
     if (textos && ponerTextos(l, cambios)) toast.success(rellenar(tx(cambiosQueAplican(maestrosVista, cambios).length ? FP.editorTextosGuardados : FP.editorTextosDelPsd, lang), { n: medidas.length }));
     const antes = edicionesVista.get(clave(m)) ?? null;
-    const ctx = contextoEdicion(m, lados[clave(m)], canal, ampliacionesVista.has(clave(m))), ma = maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)];
+    const ctx = contextoEdicion(m, lados[clave(m)], canal, cambiaAcomodo(ampliacionesVista.get(clave(m)))), ma = maestrosVista[elegirMaestro(maestrosVista, m.w, m.h)];
     const guardada = guardarEdicion(l.archivo, ma, m.w, m.h, ctx, ed);
     // Lo guardado con la clave vieja se borra: si no, «Volver al automático» lo dejaría volver a aparecer.
     guardarEdicion(l.archivo, ma, m.w, m.h, ctx + CONTEXTO_VIEJO, null);
@@ -1967,9 +1982,9 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
       const modo = modos.get(clave(t));
       if (!modo || maestrosVista[elegirMaestro(maestrosVista, t.w, t.h)] !== ma) return [];
       const espejo = (lados[clave(m)] ?? "derecha") !== (lados[clave(t)] ?? "derecha");
-      const ctxT = contextoEdicion(t, lados[clave(t)], canal, ampliacionesVista.has(clave(t)));
+      const ctxT = contextoEdicion(t, lados[clave(t)], canal, cambiaAcomodo(ampliacionesVista.get(clave(t))));
       // El fondo movido sobre un lienzo ampliado no le sirve a otra medida: se copian sólo las piezas.
-      const edT = ed ? copiarEdicion(ampliacionesVista.has(clave(m)) ? { ...ed, fondo: undefined } : ed, piezasCopia, m, t, modo, espejo) : null;
+      const edT = ed ? copiarEdicion(cambiaAcomodo(ampliacionesVista.get(clave(m))) || cambiaAcomodo(ampliacionesVista.get(clave(t))) ? { ...ed, fondo: undefined } : ed, piezasCopia, m, t, modo, espejo) : null;
       const ok = guardarEdicion(l.archivo, ma, t.w, t.h, ctxT, edT);
       guardarEdicion(l.archivo, ma, t.w, t.h, ctxT + CONTEXTO_VIEJO, null);
       return [{ t, modo, ok, ctx: ctxT, clave: `${clave(t)}:${ctxT}`, ed: edT, previa: edicionesVista.get(clave(t)) ?? null }];
@@ -2413,6 +2428,9 @@ export function FormatosPsd({ planaActiva, clientes, legales, legalesFallaron, i
             .map((t) => ({ m: t.m, modo: t.modo, tieneEdicion: !!edicionesVista.get(clave(t.m)) }))}
           alGuardar={(ed, cambios, copiarA) => guardarEditada(paraEditor.m, ed, cambios, copiarA)}
           alCerrar={() => setEditando(null)}
+          rellenando={ampliandose.has(clave(paraEditor.m))}
+          alRellenarHueco={(fondo, ma) => void alAmpliar(paraEditor.m, sinAmpliar(ma), { fondo, ma })}
+          alCancelarRelleno={() => cancelarAmpliar(paraEditor.m)}
         />
       )}
       <p role="status" className="sr-only">
