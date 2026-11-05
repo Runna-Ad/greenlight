@@ -142,3 +142,7 @@ RECOMMENDATION: beast-mode-dev Phase 6: para auth/permisos, re-correr el securit
 [2026-09-21] OBSERVATION: conflict
 CONTEXT: el hook MODEL GUARD volvió a decir "opusplan → ejecuta en Sonnet" mientras la sesión corría en Opus 5 (el modelo real lo dice el sistema). Falsa alarma recurrente (ver 2026-09-17).
 RECOMMENDATION: que el hook lea el modelo REAL de la sesión antes de avisar, o que sólo avise cuando settings.json diga opusplan Y no haya override de /model.
+
+[2026-11-05] OBSERVATION: missing-rule
+CONTEXT: beast-mode-dev pide verificación en vivo, pero una función de IA generativa se dio por verificada con respuestas simuladas y salió con una línea visible. Además, el push a `main` se reportó como paso hacia "en vivo" sin buscar el deploy, y Vercel no había desplegado.
+RECOMMENDATION: en Pass 6, para IA generativa: una llamada real con un archivo real antes de publicar, o escribir "IA real: no probado" en el reporte. En el DEPLOY PROTOCOL: "en vivo" sólo con el deploy de ese commit en Ready y el dominio apuntando a él.

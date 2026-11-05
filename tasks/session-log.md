@@ -3436,3 +3436,16 @@ Lo de antes sigue: Pedro retesta el fondo con IA del estadio; luego el registro 
 
 Greenlight mostraba el triángulo por defecto de Vercel. En la rama `feat/favicon` (worktree ../greenlight-favicon, sobre origin/main 3c92880, SIN commit): `favicon.ico` (16, 32, 48), `icon.png` (192), `apple-icon.png` (180) y `scripts/generar-favicon.mjs`. Diseño: pieza morada rellena con el símbolo en blanco, esquinas amarilla y coral, fondo blanco. Probado en localhost /login: los 3 enlaces dan 200. No revisado: cómo se ve en una pestaña real.
 Publicado en main c55dba5 con su "ship it"; Pedro lo vio y pidió cambiarlo por su propio ícono (G verde sobre pieza morada rellena, segunda imagen que mandó).
+
+## 2026-11-05 Session — Comentarios, HÜE Creativo y fondo con IA sin línea
+**What we did:**
+- La caja «Dile a H.Ü.E qué quieres» se llama «Comentarios» y sólo usa Comentarios Leads. H.Ü.E ya no lee Comentarios ni Peloteo al escribir guión o copy (tampoco para reglas ni legal sugerido).
+- Interruptor «HÜE Creativo» por persona en Configuración › Equipo, como HÜE Prisma: sólo el Master lo cambia, apagado quita «Crear guión/copy con H.Ü.E» y el servidor lo rechaza. 0092 aplicada (13 de 13 activos prendido).
+- Formatos: la barra «Tamaño» del fondo baja a 50 % (el hueco se rellena con la IA que ya existía); el botón de ampliar ya no se sale de la tarjeta.
+- Arreglo de la línea en «Ampliar fondo con IA»: se corre lo de Gemini sobre el original, se corrige el tono y la unión pasa por donde ambas imágenes se parecen; prompt sin copiar; `?iaCruda=1` baja la imagen cruda.
+**Current state:** en vivo. `main` 90c28f5, deploy dpl_9DEBcr6w1Sw3SJMiNYMQPuAnzt72 (anterior: dpl_71GTwh9B8jreokqPP7t5Ln2etPF2 con 4649cf2; antes de hoy dpl_BdmHZNz8oCZ6HHfwSfJ5sDFGkbkk). Pruebas: tsc 0, eslint 0, `npm test` todo verde (formatos 797/0), build 0, sin errores de servidor tras el deploy. Pedro probó ampliar y alejar con Gemini real: "worked great".
+**No probado:** las pantallas de Comentarios y HÜE Creativo en vivo (el panel pidió login; Pedro no las ha confirmado), una persona con el interruptor apagado, un guión real escrito sin Comentarios.
+**Decisions made:** apagado sólo se quita el botón de crear, «Pegar guión» sigue; el interruptor cubre también el copy; costura con alineado + corte (Pedro preguntó si mover la tarjeta bastaba para usar la imagen entera de la IA; se quedó la costura por las otras medidas, el arte aprobado y las capas del PSD).
+**Vercel:** desde ~20 h antes no creaba deploys de los push (incidente «Build delays» en vercel-status.com). Los dos deploys de hoy se crearon a mano con `create_deployment` desde el commit.
+**Pick up next session:** que Pedro vea Comentarios y HÜE Creativo en vivo; decidir si se quita el campo «Peloteo (notas)» del formulario de crear tarea; revisar que Vercel vuelva a desplegar solo con un push; merge `main` → `prisma` (prisma va 90+ commits atrás).
+**Environment changes:** columna `track_members.hue_creativo` (0092). Sin variables nuevas.

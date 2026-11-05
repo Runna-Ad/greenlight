@@ -1,7 +1,7 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-11-05 — Caja Comentarios e interruptor HÜE Creativo (rama `feat/hue-creativo` desde origin/main, worktree ../greenlight-hue-creativo, sin commit)
-Next Step: con el OK de Pedro, commit y push de la rama para probar en su preview de Vercel; `main` queda para su "ship it". 0092 ya está aplicada, así que el orden base-antes-que-código ya se cumplió.
+## ✅ 2026-11-05 — Caja Comentarios, HÜE Creativo, alejar el fondo y costura de la IA — EN VIVO (main 90c28f5)
+Next Step: que Pedro vea Comentarios y HÜE Creativo en vivo (D5).
 
 - [x] D1 La caja se llama Comentarios y lee y guarda sólo `comentarios_creativo`. Prueba: tsc 0, `npm test` 0. Sin ver en pantalla.
 - [x] D2 H.Ü.E ya no recibe Comentarios ni Peloteo, tampoco en la búsqueda de palabras ni en la sugerencia de legal. Prueba: grep, revisión de código. Sin generar un guión real.
@@ -12,6 +12,11 @@ No se hace: borrar Peloteo de la base, del sheet ni del formulario de crear tare
 
 **Decisiones tomadas sin preguntar, para que Pedro las confirme:** apagado sólo se quita el botón, «Pegar guión» sigue; el interruptor cubre también «Crear copy con H.Ü.E»; arranca prendido para quien ya tiene login (13 de 13 activos), nuevos apagado, igual que Prisma.
 **Deuda:** Peloteo se sigue pidiendo en el sheet y en el formulario de crear tarea, pero ya nadie lo ve (10 de 16 tareas vivas lo tienen). Cambios a Comentarios Leads después de importar no llegan a la tarea (así funciona hoy el sync).
+- [x] D6 Barra del fondo hasta 50 % y botón de ampliar en dos renglones. Prueba: 5 pruebas nuevas, revisado en el navegador local con un PSD real.
+- [x] D7 Costura de «Ampliar fondo con IA» sin línea. Prueba: 7 pruebas con imágenes corridas y retonadas; Pedro con Gemini real: "worked great".
+
+## Review (2026-11-05)
+Salió con una línea porque la IA real nunca se probó (sólo respuestas simuladas): lección en lessons.md. El push a `main` no desplegó por un incidente de Vercel: lección en lessons.md.
 
 ## 🟡 2026-11-04 — Bitácora de actividad y trabajo guardado por persona (rama `feat/actividad-y-guardado` desde origin/prisma, worktree ../greenlight-actividad)
 Pedro eligió A y 1. A = leer lo que ya se registra y anotar sólo lo que falta. 1 = el trabajo a medias vive en el navegador de cada persona; el PSD no se sube.
