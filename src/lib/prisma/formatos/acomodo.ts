@@ -116,6 +116,9 @@ export type PosicionPieza = { x: number; y: number; k: number };
 export type FondoEditado = Readonly<{ z: number; cx: number; cy: number; /** Se puede salir de la medida: lo que quede sin cubrir es un hueco que se avisa. Lo guardado antes de esto siempre cubre. */ libre?: boolean }>;
 /** Lo más que se agranda el fondo a mano. */
 export const FONDO_EDITOR_MAX = 3;
+/** Lo más que se aleja (Pedro, 2026-11-05): sólo con `libre`, porque deja un hueco alrededor para rellenar con IA. Más
+ *  abajo, casi todo lo que se ve sería inventado. */
+export const FONDO_EDITOR_MIN = 0.5;
 /** Dónde dejó la persona una parte, RELATIVO a su pieza (así va pegada a ella: Pedro, 2026-10-19, "Yes, parts stay
  *  attached"): la esquina de su parte sólida desde la de la pieza, en px del maestro (antes de la escala de la pieza), y
  *  su escala respecto a la pieza. Sin tocar: su lugar en el maestro y 1. */
@@ -1229,7 +1232,7 @@ export function cambiadasDeCapa(orden: readonly number[], ordenAuto: readonly nu
  *  sale del fondo. Se mide sobre `ma.lienzo` si lo trae, y se devuelve en px de `ma`. */
 export function fondoDeEdicion(ma: Pick<MaestroCaja, "w" | "h" | "lienzo">, W: number, H: number, f: FondoEditado): Acomodo["fondo"] {
   const b = ma.lienzo ?? { w: ma.w, h: ma.h, dx: 0, dy: 0 };
-  const z = Math.min(FONDO_EDITOR_MAX, Math.max(1, f.z)), k = Math.max(W / b.w, H / b.h) * z;
+  const z = Math.min(FONDO_EDITOR_MAX, Math.max(f.libre ? FONDO_EDITOR_MIN : 1, f.z)), k = Math.max(W / b.w, H / b.h) * z;
   const cx = Math.min(1, Math.max(0, f.cx)), cy = Math.min(1, Math.max(0, f.cy));
   const x = W / 2 - cx * b.w * k, y = H / 2 - cy * b.h * k;
   const p = f.libre ? { k, x, y } : cubrir(b, W, H, k, x, y);

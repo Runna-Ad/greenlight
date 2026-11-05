@@ -29,7 +29,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { acomodar, acomodarMedida, aplicarEdicion, pegadoFuera, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, RENGLONES_MAS, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, MEDIDAS_RATIO, FONDO_ZOOM_MAX, FONDO_EDITOR_MAX, fondoDeEdicion, edicionDeFondo } from "../src/lib/prisma/formatos/acomodo.ts";
+import { acomodar, acomodarMedida, aplicarEdicion, pegadoFuera, cambiadasDeCapa, leerEdicion, parteSinTocar, topesPieza, PIEZA_MIN_PX, esNota, RENGLONES_MAX, RENGLONES_MAS, elegirMaestro, familiaDe, nombreSalida, sePuedeVoltear, zonaCanal, es916, esCanal, CANALES, LETRA_MIN_PX, MEDIDAS_EQUIPO, MEDIDAS_RATIO, FONDO_ZOOM_MAX, FONDO_EDITOR_MAX, FONDO_EDITOR_MIN, fondoDeEdicion, edicionDeFondo } from "../src/lib/prisma/formatos/acomodo.ts";
 import { prepararMaestro, medidasQueCaben, sugerirMesas, PSD_BYTES_MAX, MEDIDAS_MAX, MEDIDAS_PX_MAX, MESAS_AUTO, EDITABLE_MAX_BYTES } from "../src/lib/prisma/formatos/listo.ts";
 import { buscarGemela, quitarGemela, recorteConOrilla, recorteParaIA, pegarRellenoIA } from "../src/lib/prisma/formatos/gemela.ts";
 import { perdidas, avisosDePixeles, avisosDePegados, avisosDeResplandor, seVeLaCopia, revisarMedida, opcionesDeContraste, edicionMuevePieza, edicionSinPieza } from "../src/lib/prisma/formatos/revisar.ts";
@@ -1001,6 +1001,21 @@ console.log("\n▶ v2 · acomodo: las 12 medidas del equipo sobre las cajas del 
     ok("B29 fondo a mano: sólo el fondo cambia (las piezas, igual), queda editada, al doble de lo que cubre, con el punto pedido al centro y cubriendo", a.editada === true && JSON.stringify(a.puestas) === JSON.stringify(auto.puestas) && Math.abs(f.k - 2 * kMin) < 1e-9 && Math.abs(600 - (f.x + 0.3 * 1200 * f.k)) < 1e-6 && Math.abs(313.5 - (f.y + 0.6 * 1500 * f.k)) < 1e-6 && cubre(f, 1200, 627), JSON.stringify(f));
     const lejos = fondoDeEdicion(M45, 1200, 627, { z: 9, cx: -5, cy: 7 }), chico = fondoDeEdicion(M45, 1200, 627, { z: 0.2, cx: 0.5, cy: 0.5 });
     ok(`B29 fondo a mano: el tamaño se queda entre 1 y ${FONDO_EDITOR_MAX} y nunca deja un hueco (pegado a la orilla)`, Math.abs(lejos.k - FONDO_EDITOR_MAX * kMin) < 1e-9 && cubre(lejos, 1200, 627) && lejos.x === 0 && Math.abs(chico.k - kMin) < 1e-9 && cubre(chico, 1200, 627));
+    {
+      // Alejar el fondo (Pedro, 2026-11-05): sólo con `libre`, hasta FONDO_EDITOR_MIN, centrado y con hueco por todos lados.
+      const { hayHueco, lienzoConHueco } = await import("../src/lib/prisma/formatos/ampliar.ts");
+      const lejano = { w: 1080, h: 1920 };
+      const medio = fondoDeEdicion(lejano, 1080, 1920, { z: 0.5, cx: 0.5, cy: 0.5, libre: true });
+      const topado = fondoDeEdicion(lejano, 1080, 1920, { z: 0.1, cx: 0.5, cy: 0.5, libre: true });
+      const viejo = fondoDeEdicion(lejano, 1080, 1920, { z: 0.5, cx: 0.5, cy: 0.5 });
+      ok("alejar el fondo: al 50 % queda chico y centrado, con hueco por los cuatro lados", medio.k === 0.5 && medio.x === 270 && medio.y === 480 && hayHueco(medio, lejano, 1080, 1920));
+      ok(`alejar el fondo: no baja de ${FONDO_EDITOR_MIN}`, topado.k === FONDO_EDITOR_MIN);
+      ok("alejar el fondo: lo guardado sin `libre` sigue cubriendo la medida", viejo.k === 1 && !hayHueco(viejo, lejano, 1080, 1920));
+      const g = lienzoConHueco(lejano, medio, 1080, 1920, null);
+      ok("alejar el fondo: el lienzo a rellenar crece por los cuatro lados y deja el fondo original centrado", g.x > 0 && g.y > 0 && g.g.w - 1080 === 2 * g.x && g.g.h - 1920 === 2 * g.y && g.g.ox === g.x && g.g.oy === g.y);
+      const ida = edicionDeFondo(lejano, 1080, 1920, medio);
+      ok("alejar el fondo: de lo puesto a lo guardado y de vuelta, el mismo lugar", Math.abs(ida.z - 0.5) < 1e-9 && ["k", "x", "y"].every((c) => Math.abs(fondoDeEdicion(lejano, 1080, 1920, { ...ida, libre: true })[c] - medio[c]) < 1e-6));
+    }
     const ida = edicionDeFondo(M45, 1200, 627, f), vuelta = fondoDeEdicion(M45, 1200, 627, ida);
     ok("B29 fondo a mano: de lo puesto a lo guardado y de vuelta, el mismo lugar", ["k", "x", "y"].every((c) => Math.abs(vuelta[c] - f[c]) < 1e-6));
     eq("B29 leerEdicion: guarda el fondo; uno raro se descarta; sólo el fondo también es una edición", [leerEdicion({ piezas: {}, fondo: { z: 1.5, cx: 0.4, cy: 0.5 } }, 6)?.fondo, leerEdicion({ piezas: {}, fondo: { z: "2", cx: 0, cy: 0 } }, 6), leerEdicion({ fondo: { z: NaN, cx: 0, cy: 0 } }, 6)], [{ z: 1.5, cx: 0.4, cy: 0.5 }, null, null]);

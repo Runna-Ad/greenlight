@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { escribeAqui, perfilActual } from "./perfil";
 import { cn } from "@/lib/utils";
 import { tx, type Lang } from "@/lib/prisma/copy";
-import { aplicarEdicion, edicionDeFondo, fondoDeEdicion, FONDO_EDITOR_MAX, type FondoEditado, cambiadasDeCapa, leerEdicion, ordenDePartes, ordenarPuestas, parteSinTocar, ponerPartes, topesParte, topesPieza, RELLENO_AVISO_PCT, type Acomodo, type Edicion, type Zona, esNota } from "@/lib/prisma/formatos/acomodo";
+import { aplicarEdicion, edicionDeFondo, fondoDeEdicion, FONDO_EDITOR_MAX, FONDO_EDITOR_MIN, type FondoEditado, cambiadasDeCapa, leerEdicion, ordenDePartes, ordenarPuestas, parteSinTocar, ponerPartes, topesParte, topesPieza, RELLENO_AVISO_PCT, type Acomodo, type Edicion, type Zona, esNota } from "@/lib/prisma/formatos/acomodo";
 import { LIENZO_MAX_PX, ampliacionDe, hayHueco, lienzoConHueco } from "@/lib/prisma/formatos/ampliar";
 import { lienzoIAde } from "@/lib/prisma/formatos/geometria";
 import { armarFondo, armarMedida, type TextoEscrito } from "@/lib/prisma/formatos/nitido";
@@ -548,7 +548,7 @@ export function EditorMedida({
       correrFondo(f0, f[0], f[1]);
     } else if (ev.key === "+" || ev.key === "=" || ev.key === "-" || ev.key === "_") {
       ev.preventDefault();
-      ponerFondo({ ...f0, z: Math.min(FONDO_EDITOR_MAX, Math.max(1, f0.z * (ev.key === "+" || ev.key === "=" ? CRECE : 1 / CRECE))) });
+      ponerFondo({ ...f0, z: Math.min(FONDO_EDITOR_MAX, Math.max(FONDO_EDITOR_MIN, f0.z * (ev.key === "+" || ev.key === "=" ? CRECE : 1 / CRECE))) });
     }
   };
 
@@ -1313,7 +1313,7 @@ export function EditorMedida({
                         <span className="shrink-0">{tx(FP.editorFondoZoom, lang)}</span>
                         <input
                           type="range"
-                          min={100}
+                          min={FONDO_EDITOR_MIN * 100}
                           max={FONDO_EDITOR_MAX * 100}
                           step={1}
                           value={Math.round(fondoAhora().z * 100)}

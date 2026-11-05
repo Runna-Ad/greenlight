@@ -153,6 +153,8 @@ const BOTON = "min-h-9 text-[13px] pointer-coarse:min-h-11";
 const BAJO_BARRA = "scroll-mt-48";
 /** Los botones de cada tarjeta: el mismo alto que los demás (antes 32 px), un poco menos de relleno a los lados. */
 const BOTON_TARJETA = cn("h-9 px-2.5 text-[13px] pointer-coarse:h-11", BAJO_BARRA);
+/** El botón largo de la tarjeta (ampliar con IA y su precio): en una tarjeta angosta baja a dos renglones, no se sale. */
+const BOTON_LARGO = cn(BOTON_TARJETA, "col-span-2 h-auto min-h-9 py-1.5 leading-tight whitespace-normal pointer-coarse:h-auto pointer-coarse:min-h-11 @[22rem]:w-full");
 /** Un botón dentro de un grupo con borde («Todas» / «Ninguna» junto al conteo del ZIP). El anillo de foco va por dentro:
  *  el borde redondo del grupo (overflow-hidden) cortaría uno por fuera. */
 const SEGMENTO = cn("cursor-pointer border-l border-border px-2.5 font-medium hover:bg-secondary", FOCO, "focus-visible:ring-inset focus-visible:ring-offset-0");
@@ -893,16 +895,16 @@ const TarjetaMedida = memo(function TarjetaMedida({
         )}
         <div className="grid grid-cols-2 gap-1.5 border-t border-border pt-2.5 @[22rem]:flex @[22rem]:flex-wrap @[22rem]:items-center">
           {ampliando ? (
-            <Button variant="outline" className={cn(BOTON_TARJETA, "col-span-2 @[22rem]:w-full")} onClick={() => alCancelarAmpliar(medida)} aria-busy="true" aria-label={rellenar(tx(FP.ampliarCancelarAria, lang), { m: etiqueta(medida) })}>
+            <Button variant="outline" className={BOTON_LARGO} onClick={() => alCancelarAmpliar(medida)} aria-busy="true" aria-label={rellenar(tx(FP.ampliarCancelarAria, lang), { m: etiqueta(medida) })}>
               <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> {tx(FP.ampliarTrabajando, lang)}
             </Button>
           ) : fondoAmpliado ? (
-            <Button variant="outline" className={cn(BOTON_TARJETA, "col-span-2 @[22rem]:w-full")} onClick={() => alQuitarAmpliacion(medida, fondoAmpliado)} aria-label={rellenar(tx(FP.ampliarQuitarAria, lang), { m: etiqueta(medida) })}>
+            <Button variant="outline" className={BOTON_LARGO} onClick={() => alQuitarAmpliacion(medida, fondoAmpliado)} aria-label={rellenar(tx(FP.ampliarQuitarAria, lang), { m: etiqueta(medida) })}>
               <RotateCcw className="size-3.5" aria-hidden="true" /> {tx(FP.ampliarQuitar, lang)}
             </Button>
           ) : sePuedeAmpliar ? (
-            <Button variant="outline" className={cn(BOTON_TARJETA, "col-span-2 @[22rem]:w-full")} onClick={() => alAmpliar(medida, baseAmpliar)} disabled={noPinto} aria-label={rellenar(tx(FP.ampliarAria, lang), { m: etiqueta(medida), e: `≈ US$${lienzoIA(baseAmpliar.w, baseAmpliar.h, w, h).costoUsd.toFixed(2)}` })}>
-              <Sparkles className="size-3.5" aria-hidden="true" /> {rellenar(tx(FP.ampliarBoton, lang), { e: `≈ US$${lienzoIA(baseAmpliar.w, baseAmpliar.h, w, h).costoUsd.toFixed(2)}` })}
+            <Button variant="outline" className={BOTON_LARGO} onClick={() => alAmpliar(medida, baseAmpliar)} disabled={noPinto} aria-label={rellenar(tx(FP.ampliarAria, lang), { m: etiqueta(medida), e: `≈ US$${lienzoIA(baseAmpliar.w, baseAmpliar.h, w, h).costoUsd.toFixed(2)}` })}>
+              <Sparkles className="size-3.5" aria-hidden="true" /> {rellenar(tx(FP.ampliarBoton, lang), { e: `≈ US$${lienzoIA(baseAmpliar.w, baseAmpliar.h, w, h).costoUsd.toFixed(2)}` })}
             </Button>
           ) : null}
           <Button variant="outline" className={cn(BOTON_TARJETA, !volteable && "col-span-2")} data-editar={k} onClick={() => alEditar(medida)} disabled={noPinto} aria-label={rellenar(tx(FP.editarAria, lang), { m: etiqueta(medida) })}>
