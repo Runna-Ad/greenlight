@@ -1,13 +1,13 @@
 # Greenlight · by Rünna — Build Todo
 
 ## ✅ 2026-11-05 — Caja Comentarios, HÜE Creativo, alejar el fondo y costura de la IA — EN VIVO (main 90c28f5)
-Next Step: que Pedro vea Comentarios y HÜE Creativo en vivo (D5).
+Next Step: nada pendiente aquí; queda la deuda de abajo.
 
 - [x] D1 La caja se llama Comentarios y lee y guarda sólo `comentarios_creativo`. Prueba: tsc 0, `npm test` 0. Sin ver en pantalla.
 - [x] D2 H.Ü.E ya no recibe Comentarios ni Peloteo, tampoco en la búsqueda de palabras ni en la sugerencia de legal. Prueba: grep, revisión de código. Sin generar un guión real.
 - [x] D3 Interruptor HÜE Creativo por persona, sólo el Master, el Master siempre entra; apagado quita el botón de crear y el servidor rechaza. Prueba: 5 pruebas de `tieneHueCreativo`, 2 de 0092 en la base de prueba. Sin ver en pantalla.
 - [x] D4 0092 aplicada en la base real con el OK de Pedro (2026-11-05). Prueba: `produccion._migrations` termina en 20261105120001; 13 de 13 activos con `hue_creativo` prendido.
-- [ ] D5 Revisado en el navegador como Master y como persona con el interruptor apagado.
+- [x] D5 Pedro vio Comentarios y HÜE Creativo en vivo: "all good" (2026-11-05). Sin probar: una persona con el interruptor apagado.
 No se hace: borrar Peloteo de la base, del sheet ni del formulario de crear tarea.
 
 **Decisiones tomadas sin preguntar, para que Pedro las confirme:** apagado sólo se quita el botón, «Pegar guión» sigue; el interruptor cubre también «Crear copy con H.Ü.E»; arranca prendido para quien ya tiene login (13 de 13 activos), nuevos apagado, igual que Prisma.
