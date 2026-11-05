@@ -39,6 +39,8 @@ export type MiembroRow = {
   notify_slack: boolean;
   /** ¿Puede usar HÜE Prisma? (0090). Lo decide el Master; para leerlo usa `tieneAccesoPrisma`. */
   prisma_acceso: boolean;
+  /** ¿Puede crear guión y copy con H.Ü.E? (0092). Lo decide el Master; para leerlo usa `tieneHueCreativo`. */
+  hue_creativo: boolean;
   /** Tareas NO terminales asignadas a esta persona (el badge de carga). */
   carga: number;
 };

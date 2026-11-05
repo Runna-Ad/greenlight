@@ -35,6 +35,7 @@ export type CurrentMember = {
   notify_email: boolean;
   notify_slack: boolean;
   prisma_acceso: boolean;
+  hue_creativo: boolean;
 };
 
 /**
@@ -130,7 +131,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   if (appRoleToViewRole(p.role) !== "client") {
     const { data: m, error: errorMiembro } = await admin
       .from("track_members")
-      .select("id, name, color, track, tracks, notify_email, notify_slack, prisma_acceso")
+      .select("id, name, color, track, tracks, notify_email, notify_slack, prisma_acceso, hue_creativo")
       .eq("profile_id", user.id)
       .eq("active", true)
       .maybeSingle();
@@ -145,6 +146,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
         notify_email: boolean;
         notify_slack: boolean;
         prisma_acceso: boolean;
+        hue_creativo: boolean;
       };
       member = {
         id: mm.id,
@@ -156,6 +158,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
         notify_email: mm.notify_email,
         notify_slack: mm.notify_slack,
         prisma_acceso: mm.prisma_acceso,
+        hue_creativo: mm.hue_creativo,
       };
     }
   }

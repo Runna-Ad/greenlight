@@ -58,6 +58,7 @@ export type Profile = {
   notify_email: boolean;
   notify_slack: boolean;
   prisma_acceso: boolean;
+  hue_creativo: boolean;
   active: boolean;
 };
 

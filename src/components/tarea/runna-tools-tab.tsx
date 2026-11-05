@@ -6,8 +6,7 @@ import { ExternalLink, Crown, Check, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { asignarTarea } from "@/app/(app)/[cliente]/tablero/actions";
-import { guardarConsideraciones, guardarSellingPoints } from "@/app/(app)/[cliente]/tareas/[id]/actions";
-import { combinarConsideraciones } from "@/lib/consideraciones";
+import { guardarSellingPoints } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { CampoIntake } from "./campo-intake";
 import { NombresFinales } from "./nombres-finales";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -23,7 +22,7 @@ export type PoolPersona = { id: string; name: string; color: string };
  * servidor, no con CSS, para no filtrar nombres/ligas en el payload RSC), y las
  * pestañas la ocultan en "Vista cliente".
  *
- * Izquierda: Lead / Team asignado + Consideraciones. Derecha: Link de entrega +
+ * Izquierda: Lead / Team asignado + Comentarios. Derecha: Link de entrega +
  * Nombre de archivos.
  */
 export function RunnaToolsTab({
@@ -32,7 +31,6 @@ export function RunnaToolsTab({
   entregaUrl,
   filenames,
   comentariosCreativo,
-  peloteo,
   sellingPoints,
   puedeEditar,
   puedeAsignar,
@@ -44,9 +42,8 @@ export function RunnaToolsTab({
   personas: Persona[];
   entregaUrl: string | null;
   filenames: string[];
-  /** Las dos fuentes de "Dile a H.Ü.E qué quieres" (se combinan en una caja). */
+  /** "Comentarios": la columna Comentarios Leads del sheet. H.Ü.E no la lee al escribir. */
   comentariosCreativo: string | null;
-  peloteo: string | null;
   /** Selling points del brief (texto). Vive aquí — guía interna del equipo. */
   sellingPoints: string | null;
   /** El lead edite (leads + link); el especialista sólo lee esos. */
@@ -56,16 +53,15 @@ export function RunnaToolsTab({
   /** Pool vivo por rol+track (lead/creative de este track) para el editor. */
   leadsPool: PoolPersona[];
   especialistasPool: PoolPersona[];
-  /** Estado cerrado (bloquea Consideraciones para quien no es lead). */
+  /** Estado cerrado (bloquea Comentarios para quien no es lead). */
   soloLectura: boolean;
 }) {
   const leads = personas.filter((p) => p.es_lead);
   const team = personas.filter((p) => !p.es_lead);
-  const consideracionesInicial = combinarConsideraciones(comentariosCreativo, peloteo);
 
   return (
     <div className="grid gap-x-8 gap-y-6 md:grid-cols-2">
-      {/* Columna izquierda: gente + consideraciones */}
+      {/* Columna izquierda: gente + comentarios */}
       <div className="space-y-4">
         {/* Asignación — Lead + Especialistas del pool VIVO por rol+track (Phase 2).
             Editable por lead/admin/master; funciona aunque no haya nadie asignado
@@ -113,19 +109,18 @@ export function RunnaToolsTab({
 
         <div className="leading-tight">
           <span className="block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-            Dile a H.Ü.E qué quieres
+            Comentarios
           </span>
           <div className="mt-1.5">
             <CampoIntake
               ideaId={ideaId}
-              campo="peloteo_raw"
+              campo="comentarios_creativo"
               label=""
-              valorInicial={consideracionesInicial}
-              placeholder="Lo que el equipo quiere para este guión: tono, gancho, qué resaltar, qué evitar… H.Ü.E lo lee y lo toma en cuenta."
+              valorInicial={comentariosCreativo}
+              placeholder="Los comentarios de esta tarea…"
               rows={5}
               caja
               soloLectura={soloLectura}
-              accion={(anterior, nuevo) => guardarConsideraciones(ideaId, anterior, nuevo)}
             />
           </div>
         </div>

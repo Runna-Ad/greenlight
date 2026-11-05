@@ -3,9 +3,9 @@
 import { after } from "next/server";
 
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { canMoveStatus } from "@/lib/roles";
+import { canMoveStatus, tieneHueCreativo, MSG_SIN_HUE_CREATIVO } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
-import { getSoyId } from "@/lib/soy";
+import { getSoy, getSoyId } from "@/lib/soy";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import { reunirContextoTarea, escribirGuion, escribirCopy } from "@/lib/hue-writer";
 import type { PlanoParsed, EstaticoParsed } from "@/lib/guion";
@@ -49,12 +49,15 @@ async function capturarGeneracion(
  *
  * Gates: como `importarGuion` — rol que edita (canMoveStatus) + assertCanActOnTask (la
  * acción LEE los datos de la tarea, así que necesita el scope check que extraerGuion,
- * al ser texto→planos puro, se salta).
+ * al ser texto→planos puro, se salta) + el interruptor HÜE Creativo de la persona (0092):
+ * esconder el botón no basta, este es el candado de verdad.
  */
 async function gate(ideaId: string): Promise<{ ok: false; error: string } | null> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   if (!process.env.ANTHROPIC_API_KEY) return { ok: false, error: "H.Ü.E no está configurado (falta la clave)." };
-  if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
+  const [role, soy] = await Promise.all([getViewAs(), getSoy()]);
+  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
+  if (!tieneHueCreativo(role, soy?.hue_creativo)) return { ok: false, error: MSG_SIN_HUE_CREATIVO };
   const scope = await assertCanActOnTask(ideaId);
   if (!scope.ok) return { ok: false, error: scope.error };
   return null;

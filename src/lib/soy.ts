@@ -25,6 +25,7 @@ export type Soy = {
   notify_email: boolean;
   notify_slack: boolean;
   prisma_acceso: boolean;
+  hue_creativo: boolean;
 };
 
 /** The signed-in team member, or null (not signed in, or a client with no roster row). */

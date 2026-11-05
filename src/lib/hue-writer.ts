@@ -5,7 +5,6 @@ import { cargarWinners } from "@/lib/hue-data";
 import { legalSugerido, type LegalLite } from "@/lib/legal-sugerido";
 import { voz, varianteGuion, readTimeS, presupuestoDialogoS, PALABRAS_POR_MINUTO } from "@/lib/plantilla";
 import { convertirDialogo, normalizarCta } from "@/lib/guion";
-import { combinarConsideraciones } from "@/lib/consideraciones";
 import { parseReferencias } from "@/lib/referencia";
 import { lecturasPara } from "@/lib/referencia-lectura";
 import { MAX_REFS_LEIDAS, TIPO_LABEL, type Lectura } from "@/lib/referencia-lectura-url";
@@ -41,7 +40,6 @@ type IdeaRow = {
   notas: string | null;
   nota_guion: string | null;
   legales_libres: string | null;
-  comentarios_creativo: string | null;
   comentarios_produccion: string | null;
   comentarios_diseno: string | null;
   p_tema: string | null;
@@ -51,7 +49,6 @@ type IdeaRow = {
   p_locacion: string | null;
   p_hook: string | null;
   p_graficos: string | null;
-  peloteo_raw: string | null;
   marca_id: string | null;
   brief_id: string | null;
   family_id: string | null;
@@ -78,9 +75,9 @@ export type ContextoWriter = {
 
 const IDEA_COLS =
   "id, concepto, comunicacion, topico, selling_points, genero_code, tipo_asset, formato_code, " +
-  "duracion, tamanos, plataformas, trend, notas, nota_guion, legales_libres, comentarios_creativo, " +
+  "duracion, tamanos, plataformas, trend, notas, nota_guion, legales_libres, " +
   "comentarios_produccion, comentarios_diseno, p_tema, p_mensaje, p_insight, p_personaje, p_locacion, " +
-  "p_hook, p_graficos, peloteo_raw, marca_id, brief_id, family_id, track";
+  "p_hook, p_graficos, marca_id, brief_id, family_id, track";
 
 /** Junta TODO el contexto de una tarea para el writer. Devuelve null si la tarea no existe. */
 export async function reunirContextoTarea(ideaId: string): Promise<ContextoWriter | null> {
@@ -127,7 +124,7 @@ export async function reunirContextoTarea(ideaId: string): Promise<ContextoWrite
 
   // Proxy del "guión" (aún no escrito) desde el brief, para (a) las reglas condicionadas
   // por texto (CASHBACK/MSI → *Aplican) y (b) el legal sugerido determinista.
-  const proxyTexto = [idea.concepto, idea.comunicacion, idea.peloteo_raw, ...(idea.selling_points ?? [])].filter(Boolean).join(" ");
+  const proxyTexto = [idea.concepto, idea.comunicacion, ...(idea.selling_points ?? [])].filter(Boolean).join(" ");
 
   // Referencias del Trend (0064): en paralelo con las queries y con tope de tiempo propio.
   // Si algo falla, el guión se escribe igual — sin esa referencia (nunca lanza).
@@ -289,11 +286,6 @@ function bloqueVariable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
   s += bloqueReferencias(ctx.referencias);
   s += linea("Notas", i.notas);
   s += linea("Nota de guión", i.nota_guion);
-  // "Dile a H.Ü.E que quieres" — lo que el equipo pide EXPLÍCITAMENTE para esta tarea.
-  // Vive consolidado en peloteo_raw (guardarConsideraciones deja comentarios_creativo en
-  // null); se combinan por si es una tarea vieja sin consolidar. Guía de alta prioridad:
-  // si trae algo relevante, tómalo como parte de todo lo que usas para escribir el guión.
-  s += linea("LO QUE EL EQUIPO TE PIDE PARA ESTA TAREA (considéralo al escribir)", combinarConsideraciones(i.comentarios_creativo, i.peloteo_raw));
   // Peloteo (brief estructurado del lead)
   s += linea("Peloteo · tema", i.p_tema);
   s += linea("Peloteo · mensaje", i.p_mensaje);

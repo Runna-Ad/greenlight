@@ -10,7 +10,7 @@ import { lecturasCacheadas } from "@/lib/referencia-lectura";
 import type { Lectura } from "@/lib/referencia-lectura-url";
 import { assertCanActOnTask } from "@/lib/auth/task-scope";
 import {
-  ROLE_LABEL, canSee, canOverrideStatus, canAssign, puedeSerLead, puedeSerEspecialista,
+  ROLE_LABEL, canSee, canOverrideStatus, canAssign, puedeSerLead, puedeSerEspecialista, tieneHueCreativo,
 } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
 import { type AssetStatus } from "@/lib/brand";
@@ -48,7 +48,7 @@ type Idea = {
   plataformas: string[] | null; marca_id: string | null; brief_id: string;
   entrega_num: string | null; entrega_final: string | null; entrega_url: string | null;
   trend: string | null; notas: string | null; legales_libres: string | null; nota_guion: string | null;
-  comentarios_creativo: string | null; peloteo_raw: string | null; selling_points: string[] | null;
+  comentarios_creativo: string | null; selling_points: string[] | null;
   cambios_cliente_en_lead: boolean;
   deleted_at: string | null;
   published_at: string | null;
@@ -73,7 +73,7 @@ export default async function TareaPage({
   const { data: idea } = await db
     .from("ideas")
     .select(
-      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo, peloteo_raw, selling_points, cambios_cliente_en_lead, deleted_at, published_at",
+      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo, selling_points, cambios_cliente_en_lead, deleted_at, published_at",
     )
     .eq("id", id)
     .is("deleted_at", null) // en la papelera (0057) = 404; se restaura desde /admin
@@ -341,7 +341,6 @@ export default async function TareaPage({
   // sobre el guión GUARDADO (la fuente legalmente relevante); el humano confirma.
   const guionTexto = [
     idea.concepto,
-    idea.peloteo_raw,
     ...planos.flatMap((p) => [p.titulo, p.accion, p.copy_in, p.cta, p.sfx, p.gfx, p.edicion, p.dialogo]),
     // El estático no tiene planos: su "guión" es el copy del arte (título/subtítulo/
     // CTA + legal libre). Incluirlo deja que la sugerencia detecte cashback/MSI/etc.
@@ -634,7 +633,6 @@ export default async function TareaPage({
                     entregaUrl: idea.entrega_url,
                     filenames,
                     comentariosCreativo: idea.comentarios_creativo,
-                    peloteo: idea.peloteo_raw,
                     sellingPoints: (idea.selling_points ?? []).join("\n"),
                     puedeEditar,
                     puedeAsignar: canAssign(role),
@@ -672,7 +670,12 @@ export default async function TareaPage({
                 </>
               ) : (
                 <>
-                  <BannerPegarGuion ideaId={idea.id} esEstatico={esEstatico} soloLectura={soloLectura} />
+                  <BannerPegarGuion
+                    ideaId={idea.id}
+                    esEstatico={esEstatico}
+                    soloLectura={soloLectura}
+                    puedeCrear={tieneHueCreativo(role, soy?.hue_creativo)}
+                  />
 
                   <DocumentoGuion
                     ideaId={idea.id}

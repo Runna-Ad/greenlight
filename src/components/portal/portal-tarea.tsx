@@ -20,7 +20,7 @@ const noop = () => {};
  * La "Vista cliente" de una tarea, SÓLO LECTURA, para el portal. Reusa las mismas
  * piezas del editor (Hero + Tabs + DocumentoTarea) que el revisor ve en su preview
  * "Vista cliente" — así lo que el partner ve ES lo mismo que el equipo aprobó.
- * `runna` se omite (oculta lead/equipo/consideraciones/archivos), verCliente=true y
+ * `runna` se omite (oculta lead/equipo/comentarios/archivos), verCliente=true y
  * todos los callbacks de edición son no-op.
  */
 export function PortalTarea({ t, puedeActuar, colorCliente }: { t: TareaPortal; puedeActuar: boolean; colorCliente?: string }) {
