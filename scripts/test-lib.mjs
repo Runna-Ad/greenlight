@@ -7,9 +7,8 @@ import { filtroBundle, greenlitDeBundle, bundleEnCurso, esGreenlitReciente, MS_V
 import { bucketPortal, ESTADOS_PORTAL, estadoBriefPanel, DIAS_COMPLETADO_EN_PANEL } from "../src/lib/portal-bucket.ts";
 import { plantillaPara, requiereCortinilla, readTimeS, soloHablado, PALABRAS_POR_MINUTO, parseDuracion, presupuestoDialogoS, LEGAL_SECONDS, COLCHON_MIN_S, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
-import { combinarConsideraciones } from "../src/lib/consideraciones.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
-import { puedeSerLead, puedeSerEspecialista, tieneAccesoPrisma } from "../src/lib/roles.ts";
+import { puedeSerLead, puedeSerEspecialista, tieneAccesoPrisma, tieneHueCreativo } from "../src/lib/roles.ts";
 import { RAMAS, esRama, ramaDe } from "../src/lib/equipo.ts";
 import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoEnvioPieza, motivoBloqueoEnvio, ultimoVisibleDe } from "../src/lib/correcciones.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
@@ -1217,18 +1216,6 @@ console.log("\n▶ Negrita (render helper)");
      JSON.stringify(desmarcarNegrita("hola")), JSON.stringify({ texto: "hola", negritas: [] }));
 }
 
-// ── Consideraciones: combina comentarios del lead + peloteo en una caja ──
-console.log("\n▶ Consideraciones (combinar dos columnas)");
-eq("ambas → divididas por línea en blanco",
-   combinarConsideraciones("Comentario del lead", "El peloteo"),
-   "Comentario del lead\n\nEl peloteo");
-eq("sólo comentarios → tal cual", combinarConsideraciones("Sólo comentario", null), "Sólo comentario");
-eq("sólo peloteo → tal cual", combinarConsideraciones(null, "Sólo peloteo"), "Sólo peloteo");
-eq("ambas null → null", combinarConsideraciones(null, null), null);
-eq("ambas vacío/espacios → null", combinarConsideraciones("   ", ""), null);
-eq("NO recorta el contenido (evita conflicto espurio)", combinarConsideraciones("  A  ", "  B  "), "  A  \n\n  B  ");
-eq("una vacía (sólo espacios) no deja separador colgando", combinarConsideraciones("  ", "B"), "B");
-
 // ── Atribución de autor (quién escribió la sección corregida) ──
 console.log("\n▶ atribuirAutor()");
 {
@@ -1574,6 +1561,15 @@ console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo e
   ok("prisma: sin dato no entra", !tieneAccesoPrisma("creative", undefined) && !tieneAccesoPrisma("admin", null));
   ok("prisma: el Master siempre entra", tieneAccesoPrisma("master", false) && tieneAccesoPrisma("master", undefined));
   ok("prisma: el cliente nunca, aunque traiga el dato", !tieneAccesoPrisma("client", true));
+}
+
+// ── Acceso a HÜE Creativo por persona (0092) ──
+{
+  ok("creativo: con acceso entra", tieneHueCreativo("creative", true) && tieneHueCreativo("lead", true) && tieneHueCreativo("admin", true));
+  ok("creativo: sin acceso no entra, tampoco un admin", !tieneHueCreativo("creative", false) && !tieneHueCreativo("lead", false) && !tieneHueCreativo("admin", false));
+  ok("creativo: sin dato no entra", !tieneHueCreativo("creative", undefined) && !tieneHueCreativo("admin", null));
+  ok("creativo: el Master siempre entra", tieneHueCreativo("master", false) && tieneHueCreativo("master", undefined));
+  ok("creativo: el cliente nunca, aunque traiga el dato", !tieneHueCreativo("client", true));
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

@@ -477,8 +477,8 @@ export async function ejecutarImport(
       selling_points: v("Selling Points") ? [v("Selling Points")] : [],
       comentarios_creativo: v("Comentarios Leads") || null,
       peloteo_raw: v("Peloteo") || null,
-      // Trend = columna Referencias; Notas se lee de peloteo_raw. Así estos
-      // campos del workspace ya vienen llenos del sheet (Pedro).
+      // Trend = columna Referencias. Peloteo se guarda pero ya nada lo muestra ni H.Ü.E lo
+      // lee; la caja Comentarios sale de Comentarios Leads. (Pedro 2026-11-05)
       trend: v("Referencias") || null,
       created_by: actorId,
     }];

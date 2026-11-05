@@ -166,6 +166,13 @@ export const tieneAccesoPrisma = (role: ViewRole, acceso: boolean | null | undef
 
 export const MSG_SIN_ACCESO_PRISMA = "No tienes acceso a HÜE Prisma. Pídeselo a tu Master Builder.";
 
+/** HÜE Creativo (crear guión y copy con H.Ü.E) se abre persona por persona (0092), igual que Prisma:
+ *  el Master siempre entra; los demás, si su rol edita y tienen el interruptor prendido. */
+export const tieneHueCreativo = (role: ViewRole, acceso: boolean | null | undefined): boolean =>
+  canMoveStatus(role) && (role === "master" || acceso === true);
+
+export const MSG_SIN_HUE_CREATIVO = "No tienes acceso a HÜE Creativo. Pídeselo a tu Master Builder.";
+
 /**
  * Quién entra al H.Ü.E HUB. Sólo el Master Builder — el HUB entrena y mide a
  * H.Ü.E (Cerebro, KB, ganadores, adopción) y es exclusivo del master. `canAdmin`

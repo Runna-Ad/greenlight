@@ -382,6 +382,18 @@ function MiembroCard({
           />
           HÜE Prisma
         </label>
+        <label
+          className="flex items-center gap-2 text-sm text-foreground"
+          title={m.role === "master" ? "El Master Builder siempre tiene acceso" : esMaster ? "Decide si esta persona puede crear guión y copy con H.Ü.E" : "Sólo el Master Builder lo cambia"}
+        >
+          <Switch
+            checked={m.role === "master" || m.hue_creativo}
+            disabled={!esMaster || m.role === "master"}
+            onCheckedChange={(v) => guardar(m.id, { hue_creativo: v })}
+            aria-label={`Acceso de ${m.name} a HÜE Creativo`}
+          />
+          HÜE Creativo
+        </label>
       </div>
     </div>
   );

@@ -53,7 +53,7 @@ export async function listarEquipo(): Promise<MiembroRow[]> {
 
   const { data: miembros } = await db
     .from("track_members")
-    .select("id, name, track, tracks, rama, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, prisma_acceso, sort_order")
+    .select("id, name, track, tracks, rama, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, prisma_acceso, hue_creativo, sort_order")
     .order("track", { ascending: true })
     .order("sort_order", { ascending: true });
 
@@ -97,6 +97,7 @@ const CAMPOS_EDITABLES = new Set([
   "notify_email",
   "notify_slack",
   "prisma_acceso",
+  "hue_creativo",
 ]);
 
 const TRACKS_VALIDOS = new Set(["real", "normal"]);
@@ -123,6 +124,9 @@ export async function guardarMiembro(
   }
   if ("prisma_acceso" in patch && (!canAssignAdmins(rol) || typeof patch.prisma_acceso !== "boolean")) {
     return { ok: false, error: "Sólo el Master Builder decide quién usa HÜE Prisma." };
+  }
+  if ("hue_creativo" in patch && (!canAssignAdmins(rol) || typeof patch.hue_creativo !== "boolean")) {
+    return { ok: false, error: "Sólo el Master Builder decide quién usa HÜE Creativo." };
   }
 
   const db = supabaseAdmin();
@@ -365,7 +369,7 @@ export async function crearMiembro(data: {
       es_lead: esLeadDeRol(rolNuevo),
       sort_order,
     })
-    .select("id, name, track, tracks, rama, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, prisma_acceso, sort_order")
+    .select("id, name, track, tracks, rama, color, role, email, slack_user_id, es_lead, active, notify_email, notify_slack, prisma_acceso, hue_creativo, sort_order")
     .single();
   if (error) {
     // unique (track, name) — nombre repetido dentro del mismo track.

@@ -11,15 +11,21 @@ import { useWorkspaceView } from "./workspace-provider";
  *
  * Es una acción de EDICIÓN → se oculta en "Vista cliente" y cuando la tarea está
  * cerrada. Escribe el cuerpo vivo del contexto (setPlanos/setEstatico).
+ *
+ * `puedeCrear` es el interruptor HÜE Creativo de la persona (0092): apagado, sólo se
+ * quita el botón de crear con H.Ü.E. La banda y "Pegar" siguen, porque pegar el guión
+ * del deck no usa ese interruptor y la banda además es el separador.
  */
 export function BannerPegarGuion({
   ideaId,
   esEstatico,
   soloLectura,
+  puedeCrear,
 }: {
   ideaId: string;
   esEstatico: boolean;
   soloLectura: boolean;
+  puedeCrear: boolean;
 }) {
   const { verCliente, setPlanos, setEstatico } = useWorkspaceView();
   if (soloLectura || verCliente) return null;
@@ -31,19 +37,25 @@ export function BannerPegarGuion({
           {esEstatico ? "¿El copy?" : "¿El guión?"}
         </p>
         <p className="text-[13px] text-primary-foreground/80">
-          {esEstatico
-            ? "Deja que H.Ü.E lo escriba desde el brief, o pégalo del deck."
-            : "Deja que H.Ü.E lo escriba desde el brief, o pégalo completo del deck."}
+          {puedeCrear
+            ? esEstatico
+              ? "Deja que H.Ü.E lo escriba desde el brief, o pégalo del deck."
+              : "Deja que H.Ü.E lo escriba desde el brief, o pégalo completo del deck."
+            : esEstatico
+              ? "Pégalo del deck."
+              : "Pégalo completo del deck."}
         </p>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <PegarGuion
-          ideaId={ideaId}
-          modo={esEstatico ? "estatico" : "guion"}
-          intent="crear"
-          onPlanos={setPlanos}
-          onEstatico={setEstatico}
-        />
+        {puedeCrear && (
+          <PegarGuion
+            ideaId={ideaId}
+            modo={esEstatico ? "estatico" : "guion"}
+            intent="crear"
+            onPlanos={setPlanos}
+            onEstatico={setEstatico}
+          />
+        )}
         <PegarGuion
           ideaId={ideaId}
           modo={esEstatico ? "estatico" : "guion"}

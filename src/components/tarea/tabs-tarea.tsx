@@ -26,7 +26,6 @@ type RunnaProps = {
   entregaUrl: string | null;
   filenames: string[];
   comentariosCreativo: string | null;
-  peloteo: string | null;
   sellingPoints: string | null;
   puedeEditar: boolean;
   /** Puede cambiar la asignación (lead/admin/master). */
@@ -81,7 +80,6 @@ export function TabsTarea({
             entregaUrl={runna.entregaUrl}
             filenames={runna.filenames}
             comentariosCreativo={runna.comentariosCreativo}
-            peloteo={runna.peloteo}
             sellingPoints={runna.sellingPoints}
             puedeEditar={runna.puedeEditar}
             puedeAsignar={runna.puedeAsignar}

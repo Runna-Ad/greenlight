@@ -1,5 +1,18 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-11-05 — Caja Comentarios e interruptor HÜE Creativo (rama `feat/hue-creativo` desde origin/main, worktree ../greenlight-hue-creativo, sin commit)
+Next Step: con el OK de Pedro, commit y push de la rama para probar en su preview de Vercel; `main` queda para su "ship it". 0092 ya está aplicada, así que el orden base-antes-que-código ya se cumplió.
+
+- [x] D1 La caja se llama Comentarios y lee y guarda sólo `comentarios_creativo`. Prueba: tsc 0, `npm test` 0. Sin ver en pantalla.
+- [x] D2 H.Ü.E ya no recibe Comentarios ni Peloteo, tampoco en la búsqueda de palabras ni en la sugerencia de legal. Prueba: grep, revisión de código. Sin generar un guión real.
+- [x] D3 Interruptor HÜE Creativo por persona, sólo el Master, el Master siempre entra; apagado quita el botón de crear y el servidor rechaza. Prueba: 5 pruebas de `tieneHueCreativo`, 2 de 0092 en la base de prueba. Sin ver en pantalla.
+- [x] D4 0092 aplicada en la base real con el OK de Pedro (2026-11-05). Prueba: `produccion._migrations` termina en 20261105120001; 13 de 13 activos con `hue_creativo` prendido.
+- [ ] D5 Revisado en el navegador como Master y como persona con el interruptor apagado.
+No se hace: borrar Peloteo de la base, del sheet ni del formulario de crear tarea.
+
+**Decisiones tomadas sin preguntar, para que Pedro las confirme:** apagado sólo se quita el botón, «Pegar guión» sigue; el interruptor cubre también «Crear copy con H.Ü.E»; arranca prendido para quien ya tiene login (13 de 13 activos), nuevos apagado, igual que Prisma.
+**Deuda:** Peloteo se sigue pidiendo en el sheet y en el formulario de crear tarea, pero ya nadie lo ve (10 de 16 tareas vivas lo tienen). Cambios a Comentarios Leads después de importar no llegan a la tarea (así funciona hoy el sync).
+
 ## 🟡 2026-11-04 — Bitácora de actividad y trabajo guardado por persona (rama `feat/actividad-y-guardado` desde origin/prisma, worktree ../greenlight-actividad)
 Pedro eligió A y 1. A = leer lo que ya se registra y anotar sólo lo que falta. 1 = el trabajo a medias vive en el navegador de cada persona; el PSD no se sube.
 Next Step: en vivo (`main`) sólo con el "ship it" de Pedro. Falta un PSD real de 60-70 MB en el navegador: sólo Pedro puede soltarlo.

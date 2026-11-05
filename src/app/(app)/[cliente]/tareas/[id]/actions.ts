@@ -11,7 +11,6 @@ import { assertCanActOnTask, assertCanActOnRow } from "@/lib/auth/task-scope";
 import { ESTADOS_SOLO_LECTURA, motivoSoloLectura } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
 import { programarLecturas } from "@/lib/referencia-lectura";
-import { combinarConsideraciones } from "@/lib/consideraciones";
 import type { AssetStatus } from "@/lib/brand";
 import { sinInventar, limpiarPegado, normalizarCta, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
 import { sinNegrita } from "@/lib/negrita";
@@ -57,10 +56,10 @@ const CAMPOS_INTAKE: Record<string, { url?: boolean }> = {
   entrega_num: {},
   legales_libres: {},
   nota_guion: {},
-  // Vienen llenas del sheet y son editables: Resumen ← Concepto, Notas ←
-  // Peloteo, Trend ← Referencias (esta última ya estaba arriba).
+  // Vienen llenas del sheet y son editables: Resumen ← Concepto, Comentarios ←
+  // Comentarios Leads, Trend ← Referencias (esta última ya estaba arriba).
   concepto: {},
-  peloteo_raw: {},
+  comentarios_creativo: {},
 };
 
 export type IntakeResultado =
@@ -181,86 +180,6 @@ export async function guardarDuraciones(
 }
 
 /**
- * Guarda "Consideraciones" (Rünna tools): la caja única que combina Comentarios
- * del lead (comentarios_creativo) + Peloteo (peloteo_raw). Escribe TODO a
- * `peloteo_raw` y, en el mismo write, CONSOLIDA poniendo `comentarios_creativo`
- * a null — así en cargas siguientes no se vuelve a prepender (sin duplicar, sin
- * migración de datos).
- *
- * El compare-and-set NO es contra `peloteo_raw` crudo (que sería sólo la mitad),
- * sino contra el valor COMBINADO que vio la persona: se releen ambas columnas,
- * se combinan igual que en el cliente, y si no coincide con `valorAnterior` es
- * que alguien más lo tocó (conflicto), como en guardarIntake/guardarCampo.
- */
-export async function guardarConsideraciones(
-  ideaId: string,
-  valorAnterior: string | null,
-  valorNuevo: string | null,
-): Promise<IntakeResultado> {
-  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
-
-  const role = await getViewAs();
-  if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
-  const scope = await assertCanActOnTask(ideaId);
-  if (!scope.ok) return { ok: false, error: scope.error };
-
-  const db = supabaseAdmin();
-  const { data: idea } = await db
-    .from("ideas")
-    .select("status, comentarios_creativo, peloteo_raw")
-    .eq("id", ideaId)
-    .maybeSingle();
-  if (!idea) return { ok: false, error: "La tarea ya no existe." };
-
-  const status = idea.status as AssetStatus;
-  if (ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role)) {
-    return { ok: false, error: motivoSoloLectura(status) };
-  }
-
-  const fila = idea as { comentarios_creativo: string | null; peloteo_raw: string | null };
-  const combinadoActual = combinarConsideraciones(fila.comentarios_creativo, fila.peloteo_raw);
-  // Se guarda SIN recortar (como guardarCampo): así el valor que el cliente
-  // recuerda coincide con el guardado y no dispara un conflicto espurio.
-  const limpio = valorNuevo?.trim() ? valorNuevo : null;
-
-  // Ya vale lo que queremos → nada que hacer (idempotente).
-  if ((combinadoActual ?? null) === (limpio ?? null)) return { ok: true };
-  // Cambió desde que se cargó → conflicto (lo decide la persona).
-  if ((valorAnterior ?? null) !== (combinadoActual ?? null)) {
-    return { ok: false, conflicto: true, valorActual: combinadoActual };
-  }
-
-  // Consolidar de forma ATÓMICA: el UPDATE sólo escribe si las DOS columnas
-  // siguen EXACTAMENTE como se leyeron (compare-and-set en el WHERE, no
-  // read-modify-write). Si otra escritura ganó la carrera entre el SELECT y
-  // este UPDATE, 0 filas → se re-lee y se reporta el conflicto. (Sin esto sería
-  // un TOCTOU: dos asignados podrían pisarse sin aviso — la familia del
-  // row_hash 'imported' que guardarCampo evita.)
-  let q = db.from("ideas").update({ peloteo_raw: limpio, comentarios_creativo: null }).eq("id", ideaId);
-  q = fila.peloteo_raw === null ? q.is("peloteo_raw", null) : q.eq("peloteo_raw", fila.peloteo_raw);
-  q = fila.comentarios_creativo === null
-    ? q.is("comentarios_creativo", null)
-    : q.eq("comentarios_creativo", fila.comentarios_creativo);
-  const { data, error } = await q.select("id");
-  if (error) return { ok: false, error: error.message };
-
-  if (!data?.length) {
-    const { data: fresca } = await db
-      .from("ideas")
-      .select("comentarios_creativo, peloteo_raw")
-      .eq("id", ideaId)
-      .maybeSingle();
-    const f2 = (fresca ?? {}) as { comentarios_creativo: string | null; peloteo_raw: string | null };
-    const combinado2 = combinarConsideraciones(f2.comentarios_creativo, f2.peloteo_raw);
-    if ((combinado2 ?? null) === (limpio ?? null)) return { ok: true };
-    return { ok: false, conflicto: true, valorActual: combinado2 };
-  }
-
-  revalidatePath("/[cliente]/tareas/[id]", "page");
-  return { ok: true };
-}
-
-/**
  * Guarda los SELLING POINTS de una tarea (columna `text[]` en `ideas`). El equipo
  * los escribe como texto libre en el "Resumen de brief"; se persisten como un
  * arreglo de UN elemento — igual que el import del sheet y la creación a mano
@@ -274,7 +193,7 @@ export async function guardarConsideraciones(
  * `duracion`, va por RPC — `guardarDuraciones`), y un guard de arreglo que fallara
  * daría un CONFLICTO ESPURIO — justo el fallo "no se guardó" que estamos quitando.
  * Los selling points son contexto de brief de un solo autor (el lead los pone), no
- * un campo de carrera entre asignados como Consideraciones, así que la verificación
+ * un campo de carrera entre asignados como Comentarios, así que la verificación
  * previa cubre el caso real y la ventana TOCTOU es de milisegundos.
  */
 export async function guardarSellingPoints(

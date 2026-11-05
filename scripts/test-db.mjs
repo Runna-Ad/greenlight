@@ -3366,6 +3366,16 @@ console.log("\n▶ 0090 — track_members.prisma_acceso");
   await db.query(`delete from produccion.track_members where id = $1`, [idNuevo]);
 }
 
+// ── 0092: HÜE Creativo por persona ──
+console.log("\n▶ 0092 — track_members.hue_creativo");
+{
+  const idNuevo = await scalar(`insert into produccion.track_members (name, track) values ('Prueba Creativo', 'real') returning id`);
+  eq("una persona nueva entra sin HÜE Creativo", await scalar(`select hue_creativo from produccion.track_members where id = $1`, [idNuevo]), false);
+  await db.query(`update produccion.track_members set hue_creativo = true where id = $1`, [idNuevo]);
+  eq("HÜE Creativo se prende", await scalar(`select hue_creativo from produccion.track_members where id = $1`, [idNuevo]), true);
+  await db.query(`delete from produccion.track_members where id = $1`, [idNuevo]);
+}
+
 // ── 0091: bitácora de actividad ──
 console.log("\n▶ 0091 — prisma_actividad y los resúmenes");
 for (const t of ["prisma_actividad", "prisma_gemini_gastos"]) {

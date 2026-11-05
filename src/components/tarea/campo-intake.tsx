@@ -20,7 +20,7 @@ type CampoIdea =
   | "nota_guion"
   | "concepto"
   | "selling_points"
-  | "peloteo_raw";
+  | "comentarios_creativo";
 type CampoBrief = "description";
 
 /**
@@ -61,8 +61,8 @@ export function CampoIntake({
   caja?: boolean;
   /** Al guardar bien, refresca la página (p. ej. duración → renombra archivos). */
   refrescar?: boolean;
-  /** Acción de guardado a la medida (p. ej. Consideraciones, que consolida dos
-   *  columnas). Si se pasa, reemplaza a guardarIntake/guardarBrief. */
+  /** Acción de guardado a la medida (p. ej. Selling Points, que guarda un arreglo).
+   *  Si se pasa, reemplaza a guardarIntake/guardarBrief. */
   accion?: (anterior: string | null, nuevo: string | null) => Promise<IntakeResultado>;
   onGuardado?: (res: IntakeResultado) => void;
   /** Se llama en cada tecla (para vistas que reaccionan al valor en vivo). */
