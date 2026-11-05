@@ -3600,10 +3600,40 @@ console.log("\n▶ B26 · el «Comportamiento» de la matriz en el acomodo autom
   const fondo = lleno(w * h, 100), ia = lleno(gc.w * gc.h, 200);
   const cosido = coserAmpliacion(ia, fondo, w, h, gc);
   const px = (x, y) => cosido.rgba[(y * gc.w + x) * 4];
-  eq("ampliar: fuera del fondo queda lo de la IA", px(0, 0), 200);
+  eq("ampliar: fuera del fondo queda lo de la IA, con el tono acercado al original lo más que se deja", px(0, 0), 176);
   eq("ampliar: adentro queda el fondo original intacto", px(20, gc.oy + 25), 100);
   ok("ampliar: en la orilla de la unión hay mezcla, no un corte", px(20, gc.oy) > 100 && px(20, gc.oy) < 200, String(px(20, gc.oy)));
   eq("ampliar: mide cuánto cambió la IA el centro", Math.round(cosido.deriva), 100);
+
+  // La línea que vio Pedro (2026-11-05): la IA redibuja el centro un poco corrido, y pegar el original encima deja un corte.
+  {
+    const tw = 300, th = 375, tg = lienzoAmpliado(tw, th, 1080, 1080);
+    const textura = (x, y) => [128 + 70 * Math.sin(x / 9) + 40 * Math.cos(y / 13), 128 + 60 * Math.sin((x + y) / 17), 128 + 80 * Math.cos(x / 23 - y / 11)];
+    const pinta = (W, H, f) => { const a = new Uint8ClampedArray(W * H * 4); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const [r, gv, b] = f(x, y), i = (y * W + x) * 4; a[i] = r; a[i + 1] = gv; a[i + 2] = b; a[i + 3] = 255; } return a; };
+    const tf = pinta(tw, th, textura);
+    const verdad = pinta(tg.w, tg.h, (x, y) => textura(x - tg.ox, y - tg.oy));
+    const lejos = (a, b) => { let s = 0; for (let i = 0; i < a.length; i += 4) s += Math.abs(a[i] - b[i]); return s / (a.length / 4); };
+    const sinCorrer = coserAmpliacion(verdad, tf, tw, th, tg);
+    ok("costura: si la IA no movió nada, sale igual a lo que pintó", lejos(sinCorrer.rgba, verdad) < 0.01, String(lejos(sinCorrer.rgba, verdad)));
+    const corrida = pinta(tg.w, tg.h, (x, y) => textura(x - tg.ox - 7, y - tg.oy + 5));
+    const c1 = coserAmpliacion(corrida, tf, tw, th, tg);
+    ok("costura: la IA corrió el fondo 7 y 5 px: se vuelve a poner en su lugar y no queda línea", lejos(c1.rgba, verdad) < 2, String(lejos(c1.rgba, verdad)));
+    ok("costura: el original queda intacto en el centro", c1.rgba[((tg.oy + 180) * tg.w + tg.ox + 150) * 4] === tf[(180 * tw + 150) * 4]);
+    const aTono = pinta(tg.w, tg.h, (x, y) => textura(x - tg.ox, y - tg.oy).map((v) => v + 15));
+    const c2 = coserAmpliacion(aTono, tf, tw, th, tg);
+    ok("costura: la IA aclaró todo un poco: se le corrige el tono", lejos(c2.rgba, verdad) < 2, String(lejos(c2.rgba, verdad)));
+    // A la IA le salió distinta la franja de la orilla, y parecida más adentro: el corte tiene que irse a donde se parecen.
+    const franja = 20;
+    const conFranja = pinta(tg.w, tg.h, (x, y) => { const X = x - tg.ox; const v = textura(X, y - tg.oy); return X >= 0 && X < franja && y % 2 === 0 ? [0, 0, 0] : v; });
+    const c3 = coserAmpliacion(conFranja, tf, tw, th, tg);
+    ok("costura: el corte evita lo que la IA dibujó distinto", c3.cortes.izq && Math.min(...c3.cortes.izq) >= franja - 1, String(Math.min(...c3.cortes.izq)));
+    const { rellenoDeLienzo } = await import("../src/lib/prisma/formatos/ampliar.ts");
+    const capa = rellenoDeLienzo({ ...tg, ...c3, base: tf, costoUsd: null }, tw, th);
+    const alfa = (x, y) => capa[((tg.oy + y) * tg.w + tg.ox + x) * 4 + 3];
+    ok("costura: la capa del PSD editable corta por el mismo lugar", alfa(2, 100) === 255 && alfa(150, 100) === 0);
+    const otraGeo = rellenoDeLienzo({ ...tg, ...c3, ox: tg.ox + 1, base: tf, costoUsd: null }, tw, th);
+    ok("costura: un corte de otra posición no se usa en la capa", otraGeo.length === capa.length);
+  }
 
   // El punto de Pedro: el zoom lleva las piezas a la orilla; ampliado, conservan su aire.
   const pieza = (nombre, rol, x, y, pw, ph) => ({ nombre, rol, solido: { x, y, w: pw, h: ph }, caja: { x, y, w: pw, h: ph }, letraMinPx: null, textos: [], rgba: new Uint8ClampedArray(pw * ph * 4), oscurece: null, base: null });

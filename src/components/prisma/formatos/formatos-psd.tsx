@@ -1215,7 +1215,16 @@ export function FormatosPsd({ perfil, planaActiva, clientes, legales, legalesFal
           throw typeof e?.error === "string" ? new ErrorDeRuta(e.error) : new Error(`HTTP ${res.status}`);
         }
         const costo = res.headers.get("x-costo-usd"), costoUsd = costo && Number.isFinite(Number(costo)) ? Number(costo) : null;
-        const ia = await zonaARgba(await res.blob(), L.gw, L.gh, L.zona, g.w, g.h);
+        const crudo = await res.blob();
+        // Para revisar lo que pintó Google antes de coserlo: abrir la pantalla con ?iaCruda=1 baja esa imagen.
+        if (new URLSearchParams(location.search).has("iaCruda")) {
+          const liga = document.createElement("a");
+          liga.href = URL.createObjectURL(crudo);
+          liga.download = `ia-cruda-${m.w}x${m.h}.jpg`;
+          liga.click();
+          setTimeout(() => URL.revokeObjectURL(liga.href), 10_000);
+        }
+        const ia = await zonaARgba(crudo, L.gw, L.gh, L.zona, g.w, g.h);
         if (!vivo.current || ctrl.signal.aborted || leidoVigente.current !== l) return;
         // Mientras la IA trabajaba se pudo quitar una copia del fondo: lo que vuelve es del fondo de antes.
         if (!maestrosVigentes.current.some((x) => x.fondo === base.fondo)) return void toast.warning(rellenar(tx(FP.ampliarCambio, langVigente.current), { m: etiqueta(m) }), { duration: 10_000 });

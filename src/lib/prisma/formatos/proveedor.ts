@@ -142,6 +142,7 @@ export function rehacedorFondo(): { rehacer: (p: PeticionFondoPlano) => Promise<
 const PROMPT_AMPLIAR =
   "This image is the empty background of an advertisement, placed in the middle of a larger canvas. The blurry area around it is only a temporary placeholder. " +
   "Replace the placeholder by extending the background outward so the whole canvas reads as one seamless image: continue its colors, gradients, textures, scenery, perspective and lighting. " +
+  "Paint genuinely new scenery in the extended area: do not mirror, repeat or copy any part of the sharp area, and do not leave any visible line or change of style where the sharp area ends. " +
   "Do not add any text, letters, numbers, logos, people, products or new objects in the extended area. " +
   "Do not change, move, resize or redraw anything in the sharp area in the middle.";
 
