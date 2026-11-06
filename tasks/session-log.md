@@ -3460,3 +3460,9 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 **Sin probar:** clic real en las flechas (crear una tarea de prueba en la base viva lo bloqueó el permiso), el aviso de "Devolver a revisión", "solo" y CASHBACK* con H.Ü.E real. Quedan 1 plano con "SFX:" y 1 con "GFX:" dentro del campo (datos viejos, no se tocaron).
 **Pendiente:** merge de `main` → `prisma`; borrar el worktree ../greenlight-ajustes cuando Pedro diga.
 **Después (mismo día):** Pedro decidió dejar de usar `prisma`. La carpeta principal (../greenlight) ahora está en `main`; las notas que sólo tenía `prisma` (session-log, lecciones, project-state, todo, CLAUDE.md, .gitignore) se mezclaron en `main`. El trabajo nuevo sale de `main` en su propia rama y worktree, y la nota de cierre va en esa rama.
+
+## 2026-11-06 Session: HÜE brand rules + Notion sync live
+- Live with Pedro's "Ship it": main e5062fb (dpl_3QNhfbVN5eLy6V8Duw8FR6pcDMf7; rollback dpl_D57uDdxdYyts1ef6LkYep2uwWYXV). No migration.
+- HÜE checks DiDi brand rules in code (m.n., INE vigente, CASHBACK*, Préstamos wording); Notion Onboarding + Lineamientos pages for Card/Préstamos sync into hue_kb_documents; "Cifra no vigente" and "Cifra de otra marca" warnings; "Buscar cifras viejas" in Admin › Integraciones.
+- First sweep found APPBFCOWORKERS + APPBFPROFILEPIC: Card scripts pasted into Préstamos tasks (Pedro confirmed). Simulation-table false positive fixed (34363de).
+- Waiting on Pedro: run supabase/manual/0094_reloj_notion.sql (hourly timer); delete hand-uploaded brand .md docs and old Préstamos "Ejemplos ganadores" in H.Ü.E HUB. Worktree ../greenlight-marca can be removed with his OK.
