@@ -13,7 +13,8 @@ const DB_SCHEMA = process.env.NEXT_PUBLIC_DB_SCHEMA ?? "produccion";
 // /api/avisos/enviar lo llama el reloj de la base (0084), sin sesión: se protege él solo
 // con su secreto (CRON_SECRET); el muro de login lo mandaba a /login.
 // /api/prisma/vigia igual: el cron del vigía llega sin sesión y exige su propio secreto.
-const PUBLIC_PATHS = ["/login", "/portal/login", "/auth/callback", "/auth/confirm", "/robots.txt", "/api/avisos/enviar", "/api/prisma/vigia"];
+// /api/notion/sync igual: el reloj de Notion (0094) llega sin sesión y exige CRON_SECRET.
+const PUBLIC_PATHS = ["/login", "/portal/login", "/auth/callback", "/auth/confirm", "/robots.txt", "/api/avisos/enviar", "/api/prisma/vigia", "/api/notion/sync"];
 
 // Refreshes the Supabase session cookie on every request and gates auth.
 export async function updateSession(request: NextRequest) {

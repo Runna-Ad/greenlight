@@ -1,13 +1,14 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FileSpreadsheet, BookText, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { IntegracionesEstado } from "@/lib/admin-tipos";
-import { sincronizarLegales } from "@/app/(app)/admin/legales-actions";
+import { sincronizarLegales, buscarCifrasViejas, type TareaConCifrasViejas } from "@/app/(app)/admin/legales-actions";
 
 function fecha(iso: string | null): string {
   if (!iso) return "nunca";
@@ -19,6 +20,14 @@ function fecha(iso: string | null): string {
 export function IntegracionesTab({ estado }: { estado: IntegracionesEstado }) {
   const router = useRouter();
   const [pend, start] = useTransition();
+  const [buscando, startBuscar] = useTransition();
+  const [viejas, setViejas] = useState<{ tareas: TareaConCifrasViejas[]; revisadas: number } | null>(null);
+  const buscar = () =>
+    startBuscar(async () => {
+      const r = await buscarCifrasViejas();
+      if (!r.ok) { toast.error(r.error); return; }
+      setViejas({ tareas: r.tareas, revisadas: r.revisadas });
+    });
   const sync = () =>
     start(async () => {
       const r = await sincronizarLegales();
@@ -29,6 +38,8 @@ export function IntegracionesTab({ estado }: { estado: IntegracionesEstado }) {
       const partes = [`${r.nuevos} nuevos`, `${r.actualizados} actualizados`];
       if (r.desactivados) partes.push(`${r.desactivados} desactivados`);
       toast.success(`Legales sincronizados — ${partes.join(" · ")}`);
+      toast.success(`Páginas de marca de Notion: ${r.paginas} de 4 actualizadas`);
+      if (r.paginasConError.length) toast.warning(r.paginasConError.join("; "));
       if (r.sinMarca.length) {
         toast.warning(`${r.sinMarca.length} sin marca reconocible: ${r.sinMarca.join("; ")}`);
       }
@@ -57,7 +68,7 @@ export function IntegracionesTab({ estado }: { estado: IntegracionesEstado }) {
       <section className="gl-card rounded-xl border border-border bg-card p-4">
         <div className="flex items-center gap-2">
           <BookText className="size-4 text-muted-foreground" />
-          <h3 className="font-medium text-foreground">Notion — Legales</h3>
+          <h3 className="font-medium text-foreground">Notion — Legales y selling points</h3>
           <Pill on={estado.notionConfigurado} onLabel="Conectado" offLabel="Sin conectar" />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
@@ -78,6 +89,34 @@ export function IntegracionesTab({ estado }: { estado: IntegracionesEstado }) {
           </Button>
           {!estado.notionConfigurado && (
             <span className="text-[11px] text-muted-foreground">Falta NOTION_TOKEN en el entorno.</span>
+          )}
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          También trae las páginas <strong>Onboarding</strong> y <strong>Lineamientos</strong> de DiDi Card y DiDi
+          Préstamos para H.Ü.E (selling points y cifras de hoy). Se sincroniza solo cada hora.
+        </p>
+        <div className="mt-3 border-t border-border pt-3">
+          <Button type="button" size="sm" variant="outline" disabled={buscando} onClick={buscar} className="gap-1.5">
+            <RefreshCw className={cn("size-3.5", buscando && "animate-spin")} />
+            {buscando ? "Buscando…" : "Buscar cifras viejas en tareas activas"}
+          </Button>
+          {viejas && (
+            <div className="mt-3 space-y-2 text-xs">
+              <p className="text-muted-foreground">
+                {viejas.revisadas} tareas activas revisadas ·{" "}
+                <strong className="text-foreground">{viejas.tareas.length} con cifras que ya no están en Notion</strong>
+              </p>
+              {viejas.tareas.map((t) => (
+                <div key={t.ideaId} className="rounded-lg border border-status-progress/40 p-2">
+                  <Link href={t.url} className="font-semibold text-primary hover:underline">{t.nombre}</Link>
+                  <ul className="mt-1 space-y-0.5">
+                    {t.avisos.map((a, i) => (
+                      <li key={i}><span className="text-muted-foreground">{a.campoLabel}:</span> {a.problema}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </section>

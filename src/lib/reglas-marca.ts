@@ -176,3 +176,58 @@ export function seccionReglas(texto: string | null | undefined): string | null {
   const fin = /^#\s+\S/m.exec(resto);
   return (m[0] + (fin ? resto.slice(0, fin.index) : resto)).trim();
 }
+
+// ── Cifras vigentes (Pedro, 2026-11-06) ───────────────────────────────────────
+// Un guión viejo puede decir "límite de crédito de $30,000" cuando hoy es $60,000 m.n.
+// Se comparan las cifras que son una PROMESA (un monto junto a límite/hasta/CASHBACK…,
+// todo porcentaje, minutos y horas) contra las que aparecen HOY en Notion (páginas de
+// marca + legales) y en el brief de la tarea. Los montos de una simulación ("usé $4,000
+// m.n.") no se revisan: son ejemplos, no promesas.
+
+const PALABRA_PROMESA = /(l[ií]mite|l[ií]nea|hasta|acumula|cashback|desde|monto|cr[eé]dito de|tarjeta de)[^$\n]{0,30}$/i;
+
+const aPesos = (s: string): number => {
+  const t = s.trim();
+  const n = Number(t.replace(/(k|mil)$/i, "").replace(/[$\s,]/g, ""));
+  return /(k|mil)$/i.test(t) ? n * 1000 : n;
+};
+
+const PORCIENTO = /(\d+(?:[.,]\d+)?)\s?%/g;
+const TIEMPO = /(\d+)\s?(minutos?|min\b|horas?|hrs?\b)/gi;
+const claveTiempo = (n: string, u: string) => `${n} ${/^h/i.test(u) ? "h" : "min"}`;
+
+/** Todas las cifras de un texto, normalizadas (para armar lo vigente). */
+export function cifrasDe(texto: string): Set<string> {
+  const out = new Set<string>();
+  for (const m of texto.matchAll(MONTO)) out.add(`$${aPesos(m[0])}`);
+  for (const m of texto.matchAll(PORCIENTO)) out.add(`${m[1].replace(",", ".")}%`);
+  for (const m of texto.matchAll(TIEMPO)) out.add(claveTiempo(m[1], m[2]));
+  return out;
+}
+
+/** Las cifras-promesa de un texto, con cómo se ven escritas. */
+function promesasDe(texto: string): { clave: string; escrito: string }[] {
+  const out: { clave: string; escrito: string }[] = [];
+  for (const m of texto.matchAll(MONTO)) {
+    if (PALABRA_PROMESA.test(texto.slice(Math.max(0, m.index - 45), m.index))) out.push({ clave: `$${aPesos(m[0])}`, escrito: m[0].trim() });
+  }
+  for (const m of texto.matchAll(PORCIENTO)) out.push({ clave: `${m[1].replace(",", ".")}%`, escrito: m[0] });
+  for (const m of texto.matchAll(TIEMPO)) out.push({ clave: claveTiempo(m[1], m[2]), escrito: m[0] });
+  return out;
+}
+
+/** Avisos "Cifra no vigente": promesas del guión que no están en lo vigente. Si no hay
+ *  nada vigente cargado (Notion aún no sincroniza), no revisa: nunca marca a ciegas. */
+export function cifrasNoVigentes(campos: CampoRevisar[], vigente: Set<string>): AvisoMarca[] {
+  if (vigente.size === 0) return [];
+  const avisos: AvisoMarca[] = [];
+  for (const c of campos) {
+    const malas = promesasDe(sinNegrita(c.texto)).filter((p) => !vigente.has(p.clave));
+    if (malas.length)
+      avisos.push({
+        campoLabel: c.label,
+        problema: `Cifra no vigente: ${lista(malas.map((m) => m.escrito))} no aparece en los selling points ni legales de hoy (Notion) ni en el brief. Revisa si cambió.`,
+      });
+  }
+  return avisos;
+}

@@ -4,115 +4,93 @@ import { revalidatePath } from "next/cache";
 import { getViewAs } from "@/lib/view-as";
 import { canAdmin } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { fetchLegalesFromNotion, hasNotion } from "@/lib/notion-legales";
+import { hasNotion } from "@/lib/notion-legales";
+import { sincronizarNotion, type SyncLegalesResultado } from "@/lib/notion-sync";
+import { cifrasDe, cifrasNoVigentes, type AvisoMarca, type CampoRevisar } from "@/lib/reglas-marca";
 
-export type SyncLegalesResultado =
-  | {
-      ok: true;
-      nuevos: number;
-      actualizados: number;
-      desactivados: number;
-      sinMarca: string[];
-    }
-  | { ok: false; error: string };
-
-/**
- * Sincroniza los LEGALES desde Notion → snippets (kind='legal'). Notion es la
- * fuente de verdad para los legales sincronizados: se upsertean por
- * `notion_block_id` (llave estable), y uno que YA NO está en el doc se DESACTIVA
- * (no se borra — reversible). Los legales creados A MANO (notion_block_id NULL)
- * NUNCA se tocan. Sólo admin+.
- */
+/** El botón "Sincronizar" de Integraciones: legales + páginas de marca. Sólo admin+.
+ *  La misma sincronización corre sola cada hora (/api/notion/sync). */
 export async function sincronizarLegales(): Promise<SyncLegalesResultado> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   if (!hasNotion()) return { ok: false, error: "Falta NOTION_TOKEN en el entorno (Vercel)." };
   if (!canAdmin(await getViewAs())) {
     return { ok: false, error: "Sólo un admin sincroniza la biblioteca." };
   }
+  const r = await sincronizarNotion(supabaseAdmin());
+  revalidatePath("/admin");
+  return r;
+}
 
-  let parsed: Awaited<ReturnType<typeof fetchLegalesFromNotion>>;
-  try {
-    parsed = await fetchLegalesFromNotion();
-  } catch (e) {
-    return { ok: false, error: `No se pudo leer Notion: ${e instanceof Error ? e.message : String(e)}` };
-  }
+export type TareaConCifrasViejas = { ideaId: string; nombre: string; url: string; avisos: AvisoMarca[] };
 
+const ESTADOS_ACTIVOS = ["todo", "in_progress", "under_review", "in_corrections", "published"];
+
+/**
+ * Barrido de una vez (Pedro, 2026-11-06): qué tareas ACTIVAS de DiDi Card / Préstamos traen
+ * cifras-promesa que ya no están en Notion (páginas de marca + legales) ni en su brief. Sólo
+ * lee; no cambia nada. Sólo admin+. Sin páginas de Notion sincronizadas, no marca nada.
+ */
+export async function buscarCifrasViejas(): Promise<{ ok: true; tareas: TareaConCifrasViejas[]; revisadas: number } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin." };
   const db = supabaseAdmin();
 
-  // Resolver marca_id + client_id por slug (card / prestamos).
-  const slugs = [...new Set(parsed.legales.map((l) => l.marcaSlug))];
-  const { data: marcaRows } = await db
-    .from("marcas").select("id, slug, client_id").in("slug", slugs);
-  const marcaBySlug = new Map(
-    ((marcaRows ?? []) as { id: string; slug: string; client_id: string }[]).map((m) => [m.slug, m]),
-  );
+  const { data: marcas } = await db.from("marcas").select("id").in("slug", ["card", "prestamos"]);
+  const marcaIds = ((marcas ?? []) as { id: string }[]).map((m) => m.id);
+  if (!marcaIds.length) return { ok: true, tareas: [], revisadas: 0 };
 
-  // Construir filas; un legal cuya marca no exista en la DB se reporta, no se pierde en silencio.
-  const sinMarca: string[] = [];
-  const filas = parsed.legales
-    .map((l) => {
-      const marca = marcaBySlug.get(l.marcaSlug);
-      if (!marca) {
-        sinMarca.push(`${l.marcaSlug}: ${l.title}`);
-        return null;
-      }
-      return {
-        kind: "legal" as const,
-        title: l.title,
-        body: l.body,
-        marca_id: marca.id,
-        // INVARIANTE: una fila scope='marca' guarda client_id = NULL. Si llevara el
-        // client_id de la marca, el filtro OR del writer (`client_id.eq.<cliente>`)
-        // la pescaría para OTRA marca del MISMO cliente (Card → Préstamos). Espeja
-        // cómo hue_instructions/hue_kb_documents guardan las filas de marca. (reap 2026-08-26)
-        client_id: null,
-        scope: "marca",
-        active: true,
-        notion_block_id: l.blockId,
-      };
-    })
-    .filter((x): x is NonNullable<typeof x> => x !== null);
+  const [{ data: docs }, { data: legales }, { data: ideas }] = await Promise.all([
+    db.from("hue_kb_documents").select("marca_id, extracted_text").in("marca_id", marcaIds).like("storage_path", "notion:%"),
+    db.from("snippets").select("marca_id, body").eq("kind", "legal").eq("active", true).in("marca_id", marcaIds),
+    db.from("ideas").select("id, code, naming_base, marca_id, brief_id, selling_points, concepto")
+      .in("marca_id", marcaIds).in("status", ESTADOS_ACTIVOS).is("deleted_at", null).limit(500),
+  ]);
 
-  if (filas.length === 0) {
-    return { ok: false, error: "Notion no devolvió legales con marca reconocible." };
-  }
-
-  const blockIds = filas.map((f) => f.notion_block_id);
-
-  // ¿Cuáles ya existían? (para reportar nuevos vs actualizados — observabilidad).
-  const { data: existentes } = await db
-    .from("snippets").select("notion_block_id").in("notion_block_id", blockIds);
-  const yaExisten = new Set(
-    ((existentes ?? []) as { notion_block_id: string }[]).map((x) => x.notion_block_id),
-  );
-
-  const { error: upErr } = await db
-    .from("snippets")
-    .upsert(filas, { onConflict: "notion_block_id" });
-  if (upErr) return { ok: false, error: `Upsert falló: ${upErr.message}` };
-
-  // Desactivar legales que ANTES venían de Notion pero YA NO están en el doc. Sólo
-  // toca los notion-sourced (block_id not null); los manuales quedan intactos. Se
-  // DESACTIVA (active=false), no se borra → reversible. Se cuenta (no es silencioso).
-  const { data: activos } = await db
-    .from("snippets")
-    .select("id, notion_block_id")
-    .eq("kind", "legal")
-    .not("notion_block_id", "is", null)
-    .eq("active", true);
-  const aDesactivar = ((activos ?? []) as { id: string; notion_block_id: string }[])
-    .filter((s) => !blockIds.includes(s.notion_block_id))
-    .map((s) => s.id);
-  if (aDesactivar.length) {
-    await db.from("snippets").update({ active: false }).in("id", aDesactivar);
-  }
-
-  revalidatePath("/admin");
-  return {
-    ok: true,
-    nuevos: filas.filter((f) => !yaExisten.has(f.notion_block_id)).length,
-    actualizados: filas.filter((f) => yaExisten.has(f.notion_block_id)).length,
-    desactivados: aDesactivar.length,
-    sinMarca,
+  const base = new Map<string, Set<string>>();
+  const sumar = (marcaId: string, texto: string | null) => {
+    const set = base.get(marcaId) ?? new Set<string>();
+    for (const c of cifrasDe(texto ?? "")) set.add(c);
+    base.set(marcaId, set);
   };
+  const conNotion = new Set<string>();
+  for (const d of (docs ?? []) as { marca_id: string; extracted_text: string | null }[]) { sumar(d.marca_id, d.extracted_text); conNotion.add(d.marca_id); }
+  for (const l of (legales ?? []) as { marca_id: string; body: string | null }[]) sumar(l.marca_id, l.body);
+
+  type Idea = { id: string; code: string | null; naming_base: string | null; marca_id: string; brief_id: string; selling_points: string[] | null; concepto: string | null };
+  const lista = ((ideas ?? []) as Idea[]).filter((i) => conNotion.has(i.marca_id));
+  if (!lista.length) return { ok: true, tareas: [], revisadas: 0 };
+  const ids = lista.map((i) => i.id);
+
+  const [{ data: planos }, { data: estaticos }, { data: briefs }] = await Promise.all([
+    db.from("planos").select("idea_id, orden, accion, copy_in, cta, gfx, dialogo").in("idea_id", ids),
+    db.from("estaticos").select("idea_id, copy_titulo, copy_subtitulo, copy_cta").in("idea_id", ids),
+    db.from("briefs").select("id, clients(slug)").in("id", [...new Set(lista.map((i) => i.brief_id))]),
+  ]);
+  const slugDe = new Map(((briefs ?? []) as { id: string; clients: { slug: string } | { slug: string }[] | null }[])
+    .map((b) => [b.id, Array.isArray(b.clients) ? b.clients[0]?.slug : b.clients?.slug]));
+
+  const camposDe = new Map<string, CampoRevisar[]>();
+  const agregar = (ideaId: string, label: string, campo: string, texto: unknown) => {
+    if (typeof texto !== "string" || !texto.trim()) return;
+    (camposDe.get(ideaId) ?? camposDe.set(ideaId, []).get(ideaId)!).push({ label, campo, texto });
+  };
+  for (const p of (planos ?? []) as Record<string, unknown>[]) {
+    const id = p.idea_id as string;
+    for (const [k, l] of [["accion", "Acción"], ["copy_in", "Copy in"], ["cta", "CTA"], ["gfx", "GFX"], ["dialogo", "Diálogos"]] as const)
+      agregar(id, `Plano ${p.orden} · ${l}`, k, p[k]);
+  }
+  for (const e of (estaticos ?? []) as Record<string, unknown>[]) {
+    const id = e.idea_id as string;
+    for (const [k, l] of [["copy_titulo", "Título"], ["copy_subtitulo", "Subtítulo"], ["copy_cta", "Botón CTA"]] as const) agregar(id, l, k, e[k]);
+  }
+
+  const tareas: TareaConCifrasViejas[] = [];
+  for (const i of lista) {
+    const vigente = new Set(base.get(i.marca_id));
+    for (const t of [...(i.selling_points ?? []), i.concepto ?? ""]) for (const c of cifrasDe(t)) vigente.add(c);
+    const avisos = cifrasNoVigentes(camposDe.get(i.id) ?? [], vigente);
+    if (avisos.length)
+      tareas.push({ ideaId: i.id, nombre: i.naming_base ?? i.code ?? i.id.slice(0, 8), url: `/${slugDe.get(i.brief_id) ?? "didi"}/tareas/${i.id}`, avisos });
+  }
+  return { ok: true, tareas, revisadas: lista.length };
 }

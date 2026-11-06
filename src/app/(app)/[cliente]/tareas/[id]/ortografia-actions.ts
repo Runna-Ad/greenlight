@@ -3,7 +3,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { after } from "next/server";
 import { agregaTildeASolo } from "@/lib/ortografia-reglas";
-import { revisarMarca, marcaConReglas, seccionReglas, type MarcaSlug } from "@/lib/reglas-marca";
+import { revisarMarca, marcaConReglas, seccionReglas, cifrasDe, cifrasNoVigentes, type MarcaSlug } from "@/lib/reglas-marca";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canMoveStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
@@ -156,11 +156,13 @@ export async function revisarOrtografia(
   // Reglas de MARCA (Pedro, 2026-11-06). Dos capas: (1) las exactas (m.n., INE vigente,
   // "préstamo", CASHBACK*…) las revisa el código y nunca se escapan; (2) la sección
   // "Lineamientos" del documento de la marca (H.Ü.E HUB), tal cual, para lo que es criterio.
-  const { marca, reglasDoc, plataformas, duracion } = await reglasDeLaTarea(ideaId);
-  const avisosMarca: FlagRevision[] = revisarMarca(
-    campos.map((c) => ({ label: c.label, campo: c.campo, texto: c.texto })),
-    marca,
-  ).map((a, i) => ({ id: `m${i}`, campoLabel: a.campoLabel, problema: a.problema, tipo: "marca" as const }));
+  const { marca, reglasDoc, plataformas, duracion, vigente } = await reglasDeLaTarea(ideaId);
+  const camposMarca = campos.map((c) => ({ label: c.label, campo: c.campo, texto: c.texto }));
+  const avisosMarca: FlagRevision[] = [
+    ...revisarMarca(camposMarca, marca),
+    // Cifras que ya no están vigentes (Notion de hoy + legales + brief). Sin Notion sincronizado, nada.
+    ...cifrasNoVigentes(camposMarca, vigente),
+  ].map((a, i) => ({ id: `m${i}`, campoLabel: a.campoLabel, problema: a.problema, tipo: "marca" as const }));
 
   const porId = new Map(campos.map((c) => [c.campoId, c]));
 
@@ -248,6 +250,7 @@ export async function revisarOrtografia(
         "cómo se escribe DiDi o CASHBACK*, 'préstamo' en lugar de 'crédito', 'línea de crédito', y cuántas " +
         "veces aparecen 'crédito' o 'DiDi Préstamos'.\n"
       : "") +
+    "  Tampoco marques cifras que no coinciden con los selling points vigentes: también las revisa el sistema.\n" +
     "- 'campo_id' del flag = el id entre corchetes del campo. Si no hay avisos, devuelve 'flags' vacío.\n\n" +
     (reglasDoc
       ? `REGLAS DE LA MARCA (del documento de la marca, tal cual):\n<<<\n${reglasDoc}\n>>>\n` +
@@ -418,32 +421,62 @@ export async function marcarOrtografiaIgnorada(
 }
 
 
-/** La marca de la tarea (si tiene reglas) y la sección "Lineamientos" de su documento
- *  de marca más reciente en H.Ü.E HUB. Si algo falla, sin reglas (nunca bloquea la revisión). */
-async function reglasDeLaTarea(
-  ideaId: string,
-): Promise<{ marca: MarcaSlug | null; reglasDoc: string | null; plataformas: string; duracion: string }> {
-  const vacio = { marca: null, reglasDoc: null, plataformas: "", duracion: "" };
+/** La marca de la tarea (si tiene reglas), su texto de REGLAS y las cifras VIGENTES.
+ *  Reglas: la página "Lineamientos" sincronizada de Notion; si no hay, la sección
+ *  "Lineamientos" del documento de marca más reciente. Cifras vigentes: las que aparecen
+ *  hoy en las páginas de Notion de la marca, en sus legales activos y en el brief de la
+ *  tarea. Si algo falla, sin reglas ni cifras (nunca bloquea la revisión). */
+async function reglasDeLaTarea(ideaId: string): Promise<{
+  marca: MarcaSlug | null;
+  reglasDoc: string | null;
+  plataformas: string;
+  duracion: string;
+  vigente: Set<string>;
+}> {
+  const vacio = { marca: null, reglasDoc: null, plataformas: "", duracion: "", vigente: new Set<string>() };
   try {
     const db = supabaseAdmin();
-    const { data: idea } = await db.from("ideas").select("marca_id, plataformas, duracion").eq("id", ideaId).maybeSingle();
-    const fila = idea as { marca_id: string | null; plataformas: string[] | null; duracion: string[] | null } | null;
+    const { data: idea } = await db
+      .from("ideas").select("marca_id, plataformas, duracion, selling_points, concepto").eq("id", ideaId).maybeSingle();
+    const fila = idea as {
+      marca_id: string | null; plataformas: string[] | null; duracion: string[] | null;
+      selling_points: string[] | null; concepto: string | null;
+    } | null;
     const marcaId = fila?.marca_id ?? null;
     if (!marcaId) return vacio;
     const plataformas = (fila?.plataformas ?? []).join(", ");
     const duracion = (fila?.duracion ?? []).join(", ");
-    const [{ data: m }, { data: docs }] = await Promise.all([
+    const [{ data: m }, { data: docs }, { data: legales }] = await Promise.all([
       db.from("marcas").select("slug").eq("id", marcaId).maybeSingle(),
-      db.from("hue_kb_documents").select("extracted_text").eq("marca_id", marcaId)
-        .not("extracted_text", "is", null).order("created_at", { ascending: false }).limit(10),
+      db.from("hue_kb_documents").select("storage_path, extracted_text").eq("marca_id", marcaId)
+        .not("extracted_text", "is", null).order("created_at", { ascending: false }).limit(12),
+      db.from("snippets").select("body").eq("kind", "legal").eq("active", true).eq("marca_id", marcaId),
     ]);
     const marca = marcaConReglas((m as { slug: string } | null)?.slug);
-    let reglasDoc: string | null = null;
-    for (const d of (docs ?? []) as { extracted_text: string }[]) {
-      reglasDoc = seccionReglas(d.extracted_text);
-      if (reglasDoc) break;
+    const lista = (docs ?? []) as { storage_path: string; extracted_text: string }[];
+    const deNotion = lista.filter((d) => d.storage_path.startsWith("notion:"));
+
+    const lineamientos = deNotion.find((d) => d.storage_path.startsWith("notion:lineamientos:"));
+    let reglasDoc: string | null = lineamientos?.extracted_text ?? null;
+    if (!reglasDoc) {
+      for (const d of lista) {
+        reglasDoc = seccionReglas(d.extracted_text);
+        if (reglasDoc) break;
+      }
     }
-    return { marca, reglasDoc: reglasDoc ? reglasDoc.slice(0, 16000) : null, plataformas, duracion };
+
+    // Sin páginas de Notion no hay "lo vigente": el aviso de cifras no corre.
+    const vigente = new Set<string>();
+    if (deNotion.length) {
+      const fuentes = [
+        ...deNotion.map((d) => d.extracted_text),
+        ...((legales ?? []) as { body: string | null }[]).map((l) => l.body ?? ""),
+        ...(fila?.selling_points ?? []),
+        fila?.concepto ?? "",
+      ];
+      for (const f of fuentes) for (const c of cifrasDe(f)) vigente.add(c);
+    }
+    return { marca, reglasDoc: reglasDoc ? reglasDoc.slice(0, 16000) : null, plataformas, duracion, vigente };
   } catch {
     return vacio;
   }

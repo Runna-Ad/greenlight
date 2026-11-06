@@ -1640,6 +1640,51 @@ console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo e
   eq("al final del documento", seccionReglas("# Lineamientos\n- última"), "# Lineamientos\n- última");
 }
 
+// ── Notion: páginas de marca y cifras vigentes (Pedro 2026-11-06) ─────────────
+{
+  const { renderNotion, llaveNotion, esLlaveNotion, PAGINAS_MARCA } = await import("../src/lib/notion-render.ts");
+  const { cifrasDe, cifrasNoVigentes } = await import("../src/lib/reglas-marca.ts");
+  console.log("\n▶ Notion: render de páginas");
+  const rt = (t) => ({ rich_text: [{ plain_text: t }] });
+  const b = (type, t, children = []) => ({ id: type + t, type, has_children: children.length > 0, children, [type]: rt(t) });
+  const arbol = [
+    b("heading_1", "Conocimiento de DiDi Card"),
+    b("toggle", "Selling points", [
+      { id: "cl", type: "column_list", has_children: true, column_list: {}, children: [
+        { id: "c1", type: "column", has_children: true, column: {}, children: [
+          b("paragraph", "Value for money"),
+          b("bulleted_list_item", "Obtén una línea de crédito de hasta $60,000 m.n.", [b("bulleted_list_item", "2% de CASHBACK* en gasolineras")]),
+        ] },
+      ] },
+    ]),
+    { id: "img", type: "image", has_children: false, children: [], image: {} },
+    b("numbered_list_item", "uno"), b("numbered_list_item", "dos"),
+  ];
+  const txt = renderNotion(arbol);
+  ok("encabezado con #", txt.includes("# Conocimiento de DiDi Card"));
+  ok("toggle como subtítulo", txt.includes("**Selling points**"));
+  ok("columnas no agregan sangría extra", txt.includes("  - Obtén una línea de crédito de hasta $60,000 m.n."));
+  ok("lista anidada con más sangría", txt.includes("    - 2% de CASHBACK* en gasolineras"));
+  ok("numerada cuenta", txt.includes("1. uno") && txt.includes("2. dos"));
+  eq("4 páginas de marca", PAGINAS_MARCA.length, 4);
+  ok("llave notion", esLlaveNotion(llaveNotion({ tipo: "onboarding", id: "abc" })) && !esLlaveNotion("1234.pdf"));
+
+  console.log("\n▶ cifras vigentes");
+  const vig = cifrasDe("línea de crédito de hasta $60,000 m.n. · hasta 6% de CASHBACK* · 2% · en 5 minutos · $500 m.n. · del 3.5% al 18%");
+  ok("normaliza montos", vig.has("$60000") && vig.has("$500"));
+  ok("normaliza % y tiempos", vig.has("6%") && vig.has("3.5%") && vig.has("5 min"));
+  const c = (texto) => ({ label: "Plano 1 · Diálogos", campo: "dialogo", texto });
+  const prob = (t) => cifrasNoVigentes([c(t)], vig).map((a) => a.problema).join(" | ");
+  ok("límite viejo se marca", /\$30,000/.test(prob("Tengo un límite de crédito de $30,000 m.n.")));
+  ok("límite vigente pasa", prob("Tengo una línea de crédito de hasta $60,000 m.n.") === "");
+  ok("'$60k' cuenta como $60,000", prob("hasta $60k") === "");
+  ok("simulación no se marca", prob("Usé $4,000 m.n. con un plazo de pago de 4 quincenas") === "");
+  ok("porcentaje viejo se marca", /5%/.test(prob("hasta 5% de CASHBACK*")));
+  ok("tiempo viejo se marca", /15 minutos/.test(prob("aprobada en 15 minutos")));
+  ok("negrita no estorba", prob("**hasta 6% de CASHBACK***") === "");
+  eq("sin nada vigente no revisa", cifrasNoVigentes([c("límite de $1")], new Set()).length, 0);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);
 

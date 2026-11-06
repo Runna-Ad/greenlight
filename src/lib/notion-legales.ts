@@ -17,7 +17,7 @@ export function hasNotion(): boolean {
 }
 
 /** Baja el árbol de bloques COMPLETO (recursivo, paginado). GET only. */
-async function fetchTree(token: string, blockId: string): Promise<Block[]> {
+export async function fetchTree(token: string, blockId: string): Promise<Block[]> {
   const out: Block[] = [];
   let cursor: string | undefined;
   do {

@@ -305,7 +305,8 @@ export async function borrarKb(id: string): Promise<Ok | Fail> {
   const key = (doc as { storage_path: string } | null)?.storage_path;
   const { error } = await db.from("hue_kb_documents").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
-  if (key) {
+  // Las páginas sincronizadas de Notion (llave "notion:…") no tienen archivo en el bucket.
+  if (key && !key.startsWith("notion:")) {
     const { error: rmErr } = await db.storage.from(KB_BUCKET).remove([key]);
     if (rmErr) console.error("[hue] no se pudo borrar el objeto de storage del KB", rmErr);
   }

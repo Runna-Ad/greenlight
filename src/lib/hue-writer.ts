@@ -6,6 +6,7 @@ import { legalSugerido, type LegalLite } from "@/lib/legal-sugerido";
 import { voz, varianteGuion, readTimeS, presupuestoDialogoS, PALABRAS_POR_MINUTO } from "@/lib/plantilla";
 import { convertirDialogo, normalizarCta, limpiarPlano } from "@/lib/guion";
 import { conMN } from "@/lib/reglas-marca";
+import { esLlaveNotion } from "@/lib/notion-render";
 import { parseReferencias } from "@/lib/referencia";
 import { lecturasPara } from "@/lib/referencia-lectura";
 import { MAX_REFS_LEIDAS, TIPO_LABEL, type Lectura } from "@/lib/referencia-lectura-url";
@@ -142,7 +143,7 @@ export async function reunirContextoTarea(ideaId: string): Promise<ContextoWrite
     db.from("hue_instructions").select("title, body").eq("active", true).or(scopeFilter).order("created_at").limit(30),
     // Los MÁS RECIENTES primero: si un día hay más de 6, se quedan fuera los viejos, no el
     // documento de marca que se acaba de subir.
-    db.from("hue_kb_documents").select("title, extracted_text").or(scopeFilter).not("extracted_text", "is", null).order("created_at", { ascending: false }).limit(6),
+    db.from("hue_kb_documents").select("title, storage_path, extracted_text").or(scopeFilter).not("extracted_text", "is", null).order("created_at", { ascending: false }).limit(12),
   ]);
   // Un error de query NO debe degradar en silencio a "sin reglas / sin legal / sin Cerebro"
   // (el writer produciría copy sin *Aplican, sin CTA correcto, etc.) — fallar honesto (reap S1).
@@ -163,8 +164,11 @@ export async function reunirContextoTarea(ideaId: string): Promise<ContextoWrite
 
   // Caps: no inflar el prefijo cacheable sin límite (reap M4).
   const brain = ((brainRes.data ?? []) as { title: string; body: string }[]).slice(0, 30);
-  const kb = ((kbRes.data ?? []) as { title: string; extracted_text: string | null }[])
+  // Las páginas sincronizadas de Notion (selling points y lineamientos de HOY) van primero,
+  // así siempre caben completas; luego los demás documentos, los más recientes primero.
+  const kb = ((kbRes.data ?? []) as { title: string; storage_path: string | null; extracted_text: string | null }[])
     .filter((d) => d.extracted_text)
+    .sort((a, b) => Number(esLlaveNotion(b.storage_path)) - Number(esLlaveNotion(a.storage_path)))
     .slice(0, 6)
     .map((d) => ({ title: d.title, extracted_text: d.extracted_text as string }));
 
@@ -235,7 +239,10 @@ function bloqueEstable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
     "- Si la BASE DE CONOCIMIENTO trae un documento de \"Conocimiento de la marca\", su sección " +
     "\"Lineamientos\" (palabras prohibidas, reglas de diálogo, simulaciones, reglas por plataforma) es " +
     "OBLIGATORIA, igual que estas reglas.\n" +
-    "- Toda cifra en pesos va con $ y m.n. (ej. \"$4,000 m.n.\"), nunca sólo \"$4,000\" ni \"pesos\".\n";
+    "- Toda cifra en pesos va con $ y m.n. (ej. \"$4,000 m.n.\"), nunca sólo \"$4,000\" ni \"pesos\".\n" +
+    "- CIFRAS VIGENTES: los documentos cuyo título empieza con \"Notion ·\" son la fuente de verdad de HOY " +
+    "(selling points, límites de crédito, porcentajes, tasas, tiempos). Si otro documento o un guión ganador " +
+    "trae una cifra distinta, es VIEJA: usa la de Notion (o la del brief de esta tarea).\n";
   if (modo === "guion") {
     s +=
       "- Cada plano es un objeto con: titulo (encabezado tipo \"Plano 1 - …\"), accion (qué pasa en pantalla), " +
