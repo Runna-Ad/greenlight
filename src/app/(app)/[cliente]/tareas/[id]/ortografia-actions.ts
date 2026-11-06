@@ -2,6 +2,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { after } from "next/server";
+import { agregaTildeASolo } from "@/lib/ortografia-reglas";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canMoveStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
@@ -208,6 +209,8 @@ export async function revisarOrtografia(
     "- NO marques como error el uso informal (tú), la jerga, ni las mayúsculas/nombres de " +
     "marca (DiDi, DiDi Card, CASHBACK), ni los anglicismos deliberados.\n" +
     "- NO cambies NINGÚN número, porcentaje, precio, fecha ni signo de legal/oferta (* % $).\n" +
+    "- 'solo' se escribe SIEMPRE sin tilde (regla de la RAE desde 2010, también como adverbio). " +
+    "NUNCA sugieras 'sólo'. Si el texto trae 'sólo', sí puedes sugerir 'solo'.\n" +
     "- 'original' debe ser el fragmento EXACTO y MÍNIMO que contiene el error (una palabra o " +
     "una frase corta), copiado TAL CUAL del campo (mismos acentos/mayúsculas que el texto). " +
     "'sugerencia' es ese MISMO fragmento ya corregido.\n" +
@@ -271,6 +274,9 @@ export async function revisarOrtografia(
       const c = porId.get(campoId);
       // El fix se acepta SÓLO si el original sigue en el campo y no toca datos duros.
       if (!c || !c.texto.includes(original) || !fixSeguro(original, sugerencia)) continue;
+      // Regla de la casa (equipo, 2026-11-05): "solo" va sin tilde. Si la sugerencia sólo
+      // le PONE la tilde a "solo", se descarta aunque el modelo la mande.
+      if (agregaTildeASolo(original, sugerencia)) continue;
       errores.push({
         id: String(errores.length),
         tabla: c.tabla,
@@ -387,3 +393,4 @@ export async function marcarOrtografiaIgnorada(
   await ignorarOrtografia(filas);
   return { ok: true };
 }
+

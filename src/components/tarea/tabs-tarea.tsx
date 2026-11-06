@@ -11,6 +11,8 @@ import { RunnaToolsTab, type Persona } from "./runna-tools-tab";
 
 type DetallesProps = {
   tipoAsset: string | null;
+  /** IN-HOUSE / UGC (sólo Real Person). Sólo lo pasa la vista del equipo. */
+  formato?: string | null;
   plataformas: string[];
   tamanos: string[];
   duracion: string[];
@@ -91,6 +93,7 @@ export function TabsTarea({
           <DetallesTab
             ideaId={ideaId}
             tipoAsset={detalles.tipoAsset}
+            formato={detalles.formato}
             plataformas={detalles.plataformas}
             tamanos={detalles.tamanos}
             duracion={detalles.duracion}

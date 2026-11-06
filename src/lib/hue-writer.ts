@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { cargarWinners } from "@/lib/hue-data";
 import { legalSugerido, type LegalLite } from "@/lib/legal-sugerido";
 import { voz, varianteGuion, readTimeS, presupuestoDialogoS, PALABRAS_POR_MINUTO } from "@/lib/plantilla";
-import { convertirDialogo, normalizarCta } from "@/lib/guion";
+import { convertirDialogo, normalizarCta, limpiarPlano } from "@/lib/guion";
 import { parseReferencias } from "@/lib/referencia";
 import { lecturasPara } from "@/lib/referencia-lectura";
 import { MAX_REFS_LEIDAS, TIPO_LABEL, type Lectura } from "@/lib/referencia-lectura-url";
@@ -424,14 +424,14 @@ async function generarUnGuion(
         const o = (p ?? {}) as Record<string, unknown>;
         // normalizarCta: un "CTA: …" que el modelo dejó en otro campo (o "(CTA) …" como
         // locutor) pasa a su campo, con las mismas etiquetas que "Pegar guión".
-        return normalizarCta({
+        return limpiarPlano(normalizarCta({
           titulo: s0(o.titulo), accion: s0(o.accion), copy_in: s0(o.copy_in), cta: s0(o.cta),
           sfx: s0(o.sfx), gfx: s0(o.gfx), edicion: s0(o.edicion),
           // El diálogo pasa por la MISMA normalización que "Pegar guión"
           // (convertirDialogo → "(Quién) texto"), para que la Vista cliente ponga el
           // locutor en negritas. Antes se guardaba crudo del modelo y no se seccionaba.
           dialogo: typeof o.dialogo === "string" ? s0(convertirDialogo(o.dialogo.split("\n"))) : null,
-        });
+        }));
       })
       .filter((p) => Object.values(p).some(Boolean)); // descarta planos totalmente vacíos (reap M6)
     if (!planos.length) return { ok: false, error: "H.Ü.E devolvió un guión vacío. Intenta de nuevo." };

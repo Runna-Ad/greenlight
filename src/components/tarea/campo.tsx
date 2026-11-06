@@ -326,7 +326,7 @@ export const Campo = memo(function Campo({
       {inline ? (
         <span className="flex items-center gap-1 pt-1.5 text-[11px] font-semibold text-muted-foreground">
           {icono}
-          <span className="whitespace-nowrap">{label}</span>
+          <span className="min-w-0 break-words leading-tight">{label}</span>
         </span>
       ) : (
         <div className="mb-1 flex items-center gap-2">

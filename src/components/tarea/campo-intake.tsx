@@ -2,13 +2,14 @@
 
 import { useId } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil } from "lucide-react";
+import { ExternalLink, Pencil } from "lucide-react";
 import {
   guardarIntake,
   guardarBrief,
   type IntakeResultado,
 } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { cn } from "@/lib/utils";
+import { urlsDe } from "@/lib/urls";
 import { Indicador, PanelConflicto, useAutoguardado } from "./campo";
 
 type CampoIdea =
@@ -45,6 +46,7 @@ export function CampoIntake({
   accion,
   onGuardado,
   onCambio,
+  enlaces,
 }: {
   ideaId?: string;
   briefId?: string;
@@ -67,6 +69,9 @@ export function CampoIntake({
   onGuardado?: (res: IntakeResultado) => void;
   /** Se llama en cada tecla (para vistas que reaccionan al valor en vivo). */
   onCambio?: (valor: string) => void;
+  /** Debajo de la caja, los links que haya en el texto como botones clicables
+   *  (un textarea no puede tener links). Pedido del equipo, 2026-11-05. */
+  enlaces?: boolean;
 }) {
   const listaId = useId();
   const router = useRouter();
@@ -151,9 +156,38 @@ export function CampoIntake({
         </>
       )}
 
+      {enlaces && <Enlaces texto={g.valor} />}
+
       {g.conflicto !== null && (
         <PanelConflicto valorAjeno={g.conflicto} quedarme={g.quedarme} tomarSuyo={g.tomarSuyo} />
       )}
+    </div>
+  );
+}
+
+function Enlaces({ texto }: { texto: string }) {
+  const urls = urlsDe(texto);
+  if (!urls.length) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1.5">
+      {urls.map((url) => {
+        const href = /^https?:/i.test(url) ? url : `https://${url}`;
+        // Etiqueta corta: dominio + inicio de la ruta; la URL completa va en el title.
+        const corta = url.replace(/^https?:\/\/(www\.)?/i, "").replace(/^www\./i, "").replace(/\?.*$/, "");
+        return (
+          <a
+            key={url}
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            title={url}
+            className="inline-flex max-w-full items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
+          >
+            <ExternalLink className="size-3 shrink-0" />
+            <span className="truncate">{corta.length > 48 ? `${corta.slice(0, 47)}…` : corta}</span>
+          </a>
+        );
+      })}
     </div>
   );
 }

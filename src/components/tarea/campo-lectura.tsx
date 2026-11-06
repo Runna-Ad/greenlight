@@ -234,7 +234,7 @@ export function CampoLectura({
     >
       <span className="flex items-center gap-1 pt-1 text-[11px] font-semibold text-muted-foreground">
         {icono}
-        <span className="whitespace-nowrap">{label}</span>
+        <span className="min-w-0 break-words leading-tight">{label}</span>
       </span>
       <div className="min-w-0">{contenido}</div>
     </div>

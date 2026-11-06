@@ -1572,5 +1572,39 @@ console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo e
   ok("creativo: el cliente nunca, aunque traiga el dato", !tieneHueCreativo("client", true));
 }
 
+// ── Pedidos del equipo 2026-11-05 ──────────────────────────────────────────
+{
+  const { sinRotulo, conAsteriscoCashback, limpiarPlano, limpiarEstatico, parseGuion, parseEstatico } = await import("../src/lib/guion.ts");
+  const { agregaTildeASolo } = await import("../src/lib/ortografia-reglas.ts");
+  const { urlsDe } = await import("../src/lib/urls.ts");
+  console.log("\n▶ limpieza de campos al importar (rótulo repetido, CASHBACK*)");
+  eq("SFX repetido se quita", sinRotulo("SFX: inicio de grabación.", /^\s*sfx\s*:\s*/i), "inicio de grabación.");
+  eq("GFX con negrita se quita", limpiarPlano({ titulo: null, accion: null, copy_in: null, cta: null, sfx: null, gfx: "**GFX:** onda de audio", edicion: null, dialogo: null }).gfx, "onda de audio");
+  eq("SFX que menciona sfx a media frase se queda", limpiarPlano({ titulo: null, accion: null, copy_in: null, cta: null, sfx: "Música suave, sin SFX: nada", gfx: null, edicion: null, dialogo: null }).sfx, "Música suave, sin SFX: nada");
+  eq("CASHBACK sin * lo gana", conAsteriscoCashback("Hasta 6% de CASHBACK en tus compras"), "Hasta 6% de CASHBACK* en tus compras");
+  eq("CASHBACK* se queda igual", conAsteriscoCashback("Hasta 6% de CASHBACK* en tus compras"), "Hasta 6% de CASHBACK* en tus compras");
+  eq("**CASHBACK** en negrita → **CASHBACK***", conAsteriscoCashback("Hasta 6% de **CASHBACK** hoy"), "Hasta 6% de **CASHBACK*** hoy");
+  eq("**CASHBACK*** se queda igual", conAsteriscoCashback("**CASHBACK*** hoy"), "**CASHBACK*** hoy");
+  eq("dos CASHBACK, los dos con *", conAsteriscoCashback("CASHBACK y más CASHBACK"), "CASHBACK* y más CASHBACK*");
+  eq("estático: título con CASHBACK", limpiarEstatico({ copy_titulo: "Hasta 6% de CASHBACK en tus compras", copy_subtitulo: null, copy_cta: null, legales_extra: null }).copy_titulo, "Hasta 6% de CASHBACK* en tus compras");
+  eq("pegar estático: CASHBACK* sobrevive", parseEstatico("Título: Hasta 6% de CASHBACK en tus compras").copy_titulo, "Hasta 6% de CASHBACK* en tus compras");
+  const pg = parseGuion("Plano 1 - int. cocina - MCU\nMamá guarda cosas.\nSFX: SFX: inicio de grabación.\nGFX: onda de audio animada.\n(Actriz) Hola");
+  eq("pegar guión: SFX doble → una vez", pg[0]?.sfx, "inicio de grabación.");
+  eq("diálogo con CASHBACK no se toca", limpiarPlano({ titulo: null, accion: null, copy_in: null, cta: null, sfx: null, gfx: null, edicion: null, dialogo: "(Actriz) con CASHBACK" }).dialogo, "(Actriz) con CASHBACK");
+
+  console.log("\n▶ ortografía: 'solo' va sin tilde");
+  ok("solo → sólo se descarta", agregaTildeASolo("solo hoy", "sólo hoy"));
+  ok("Solo → Sólo se descarta", agregaTildeASolo("Solo hoy", "Sólo hoy"));
+  ok("sólo → solo se permite", !agregaTildeASolo("sólo hoy", "solo hoy"));
+  ok("otro arreglo en la frase se permite", !agregaTildeASolo("solo tenes", "solo tienes"));
+
+  console.log("\n▶ links en Comentarios");
+  const u = urlsDe("Diseño: https://www.tiktok.com/@ampch/photo/7696?is_from_webapp=1&sender_device=pc\nver www.didi.com.mx.");
+  eq("2 links", u.length, 2);
+  eq("sin punto final", u[1], "www.didi.com.mx");
+  eq("sin links", urlsDe("Creativo: OK").length, 0);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);
+

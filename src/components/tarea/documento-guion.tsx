@@ -4,7 +4,7 @@ import { useCallback, useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { agregarPlano, borrarPlano, vaciarGuion } from "@/app/(app)/[cliente]/tareas/[id]/actions";
+import { agregarPlano, agregarPlanoDebajo, borrarPlano, moverPlano, vaciarGuion } from "@/app/(app)/[cliente]/tareas/[id]/actions";
 import { PLACEHOLDER_ESTATICO, placeholdersGuion } from "@/lib/plantilla";
 import { DocumentoTarea } from "./documento-tarea";
 import { type LegalSnippet } from "./cortinilla-cierre";
@@ -44,7 +44,7 @@ export function DocumentoGuion({
   };
 }) {
   const { verCliente, planos, setPlanos, estatico, setEstatico } = useWorkspace();
-  const [, startTransition] = useTransition();
+  const [ordenando, startTransition] = useTransition();
   const ph = placeholdersGuion(tipoAsset);
 
   // Envueltos en useCallback: su identidad debe sobrevivir al tecleo para que el memo de
@@ -77,6 +77,31 @@ export function DocumentoGuion({
       const res = await borrarPlano(id);
       if (!res.ok) toast.error("error" in res ? res.error : "No se pudo borrar.");
       else setPlanos((prev) => prev.filter((p) => p.id !== id));
+    });
+
+  // Nuevo orden desde el servidor, pero conservando lo que se tecleó en cada plano: el
+  // autoguardado puede ir unos milisegundos atrás y la lista del servidor no lo traería.
+  const reordenar = (delServidor: PlanoVista[]) =>
+    setPlanos((prev) => {
+      const local = new Map(prev.map((p) => [p.id, p]));
+      return delServidor.map((sp) => {
+        const l = local.get(sp.id);
+        return l ? { ...l, orden: sp.orden } : sp;
+      });
+    });
+
+  const moverUno = (id: string, dir: -1 | 1) =>
+    startTransition(async () => {
+      const res = await moverPlano(id, dir);
+      if (!res.ok) toast.error(res.error);
+      else reordenar(res.planos);
+    });
+
+  const agregarDebajo = (id: string) =>
+    startTransition(async () => {
+      const res = await agregarPlanoDebajo(id);
+      if (!res.ok) toast.error(res.error);
+      else reordenar(res.planos);
     });
 
   // "Descartar guión": borra TODOS los planos de un golpe (empezar de cero tras un
@@ -114,6 +139,9 @@ export function DocumentoGuion({
         onEditarEstatico={editarEstatico}
         onNuevoPlano={nuevoPlano}
         onQuitarPlano={quitarPlano}
+        onMoverPlano={moverUno}
+        onAgregarDebajo={agregarDebajo}
+        ocupado={ordenando}
       />
 
       {/* La biblioteca de legales aplica a TODAS las plantillas: video y estático

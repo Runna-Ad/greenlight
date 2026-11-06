@@ -354,7 +354,7 @@ export function parseGuion(texto: string): PlanoParsed[] {
     // (líneas antes del primer "Plano N", y las vacías, se ignoran)
   }
 
-  return bloques.map(parseBloque);
+  return bloques.map((b) => limpiarPlano(parseBloque(b)));
 }
 
 const esEtiqueta = (l: string): boolean => ETIQUETAS.some((e) => e.re.test(l));
@@ -549,12 +549,60 @@ export function parseEstatico(texto: string): EstaticoParsed {
       i++;
     }
   }
-  return {
+  return limpiarEstatico({
     copy_titulo: juntar(buckets.copy_titulo),
     copy_subtitulo: juntar(buckets.copy_subtitulo),
     copy_cta: juntar(buckets.copy_cta),
     legales_extra: juntar(buckets.legales_extra),
-  };
+  });
+}
+
+// ── Limpieza final de cada campo (pegar, H.Ü.E y guardar pasan por aquí) ──────
+// (equipo, 2026-11-05) (1) El rótulo del propio campo repetido adentro: el campo SFX
+// guardaba "SFX: inicio de grabación." y se leía "SFX  SFX: …". (2) CASHBACK siempre
+// lleva su asterisco legal en lo que sale en pantalla: al copiar de ChatGPT se perdía
+// (lo toma por markdown). El diálogo y la acción no se tocan.
+
+const ROTULO_DE: Partial<Record<keyof PlanoParsed, RegExp>> = {
+  sfx: /^\s*(?:\*\*)?\s*sfx\s*(?:\*\*)?\s*[:：]\s*(?:\*\*)?/i,
+  gfx: /^\s*(?:\*\*)?\s*gfx\s*(?:\*\*)?\s*[:：]\s*(?:\*\*)?/i,
+  copy_in: /^\s*(?:\*\*)?\s*copy\s*in\s*(?:\*\*)?\s*[:：]\s*(?:\*\*)?/i,
+  edicion: /^\s*(?:\*\*)?\s*edici[oó]n\s*(?:\*\*)?\s*[:：]\s*(?:\*\*)?/i,
+};
+
+/** Quita el rótulo del campo al inicio de cada renglón ("SFX: x" en el campo SFX → "x").
+ *  Si quedó un `**` de cierre sin pareja (venía "**SFX:** x"), también se va. */
+export function sinRotulo(valor: string | null, rotulo: RegExp): string | null {
+  if (!valor) return valor;
+  const out = valor
+    .split("\n")
+    .map((l) => (rotulo.test(l) ? l.replace(rotulo, "").trim() : l))
+    .join("\n")
+    .trim();
+  return out || null;
+}
+
+/** CASHBACK siempre con su "*" legal, también dentro de negritas ("**CASHBACK**" →
+ *  "**CASHBACK***", que se lee CASHBACK en negrita seguido del asterisco). */
+export function conAsteriscoCashback(valor: string | null): string | null {
+  if (!valor) return valor;
+  const falta = (s: string) => /cashback(?!\*)/i.test(s.replace(/\*\*(.+?)\*\*/g, "$1"));
+  let out = valor.replace(/(cashback)(?!\*)/gi, "$1*");
+  if (falta(out)) out = out.replace(/(cashback)\*\*(?!\*)/gi, "$1***");
+  return out;
+}
+
+export function limpiarPlano(p: PlanoParsed): PlanoParsed {
+  const out: PlanoParsed = { ...p };
+  for (const [k, re] of Object.entries(ROTULO_DE) as [keyof PlanoParsed, RegExp][]) out[k] = sinRotulo(out[k], re);
+  for (const k of ["copy_in", "cta", "gfx"] as const) out[k] = conAsteriscoCashback(out[k]);
+  return out;
+}
+
+export function limpiarEstatico(e: EstaticoParsed): EstaticoParsed {
+  const out: EstaticoParsed = { ...e };
+  for (const k of ["copy_titulo", "copy_subtitulo", "copy_cta"] as const) out[k] = conAsteriscoCashback(out[k]);
+  return out;
 }
 
 // ── Guardarraíl del normalizador con IA (structure-only) ──────────────────────

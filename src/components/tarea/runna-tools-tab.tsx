@@ -120,6 +120,7 @@ export function RunnaToolsTab({
               placeholder="Los comentarios de esta tarea…"
               rows={5}
               caja
+              enlaces
               soloLectura={soloLectura}
             />
           </div>

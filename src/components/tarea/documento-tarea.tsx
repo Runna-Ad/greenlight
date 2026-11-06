@@ -11,6 +11,8 @@ import {
   Clapperboard,
   Trash2,
   Plus,
+  ArrowUp,
+  ArrowDown,
   Clock,
   MousePointerClick,
 } from "lucide-react";
@@ -80,6 +82,9 @@ export function DocumentoTarea({
   onEditarEstatico,
   onNuevoPlano,
   onQuitarPlano,
+  onMoverPlano,
+  onAgregarDebajo,
+  ocupado = false,
 }: {
   modo: ModoDoc;
   esEstatico: boolean;
@@ -94,6 +99,12 @@ export function DocumentoTarea({
   onEditarEstatico: (campo: keyof EstaticoVista, valor: string) => void;
   onNuevoPlano: () => void;
   onQuitarPlano: (id: string) => void;
+  /** Subir (-1) / bajar (1) un plano. Sin esto (portal) no hay flechas. */
+  onMoverPlano?: (id: string, dir: -1 | 1) => void;
+  /** Agregar un plano vacío justo debajo de éste. */
+  onAgregarDebajo?: (id: string) => void;
+  /** Una operación de orden en curso: se apagan las flechas para no encimar clics. */
+  ocupado?: boolean;
 }) {
   const lectura = modo === "lectura";
 
@@ -139,7 +150,7 @@ export function DocumentoTarea({
         </p>
       )}
 
-      {planosVisibles.map((p) => {
+      {planosVisibles.map((p, i) => {
         const refs = refsPorPlano[p.id] ?? [];
         return (
           <div key={p.id} className="gl-enter overflow-hidden rounded-xl border border-border bg-card shadow-sm">
@@ -163,6 +174,45 @@ export function DocumentoTarea({
               {!lectura && (
                 <span className="ml-auto flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
                   <Clock className="size-3" /> {readTimeS(p.dialogo)}s
+                </span>
+              )}
+              {!lectura && !soloLectura && (onMoverPlano || onAgregarDebajo) && (
+                <span className="flex shrink-0 items-center gap-0.5">
+                  {onAgregarDebajo && (
+                    <button
+                      type="button"
+                      disabled={ocupado}
+                      onClick={() => onAgregarDebajo(p.id)}
+                      title="Agregar un plano vacío justo debajo de éste"
+                      className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-40"
+                    >
+                      <Plus className="size-3" /> Insertar plano debajo
+                    </button>
+                  )}
+                  {onMoverPlano && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={ocupado || i === 0}
+                        onClick={() => onMoverPlano(p.id, -1)}
+                        aria-label={`Subir plano ${p.orden}`}
+                        title="Subir un lugar"
+                        className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+                      >
+                        <ArrowUp className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={ocupado || i === planosVisibles.length - 1}
+                        onClick={() => onMoverPlano(p.id, 1)}
+                        aria-label={`Bajar plano ${p.orden}`}
+                        title="Bajar un lugar"
+                        className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+                      >
+                        <ArrowDown className="size-3.5" />
+                      </button>
+                    </>
+                  )}
                 </span>
               )}
               {!lectura && !soloLectura && (

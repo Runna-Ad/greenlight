@@ -386,7 +386,7 @@ console.log("\n▶ Candado RLS 0056 (anon/authenticated fuera de produccion)");
 // 0084: un usuario con sesión NO reclama la cola de correos (0088: tampoco lee el gasto de Gemini).
 // Va aquí: el bloque de abajo le re-concede todas las rutinas a `authenticated` a propósito.
 console.log("\n▶ 0084 — candado de la cola de correos (authenticated)");
-for (const fn of ["produccion.rpc_reclamar_emails(int)", "produccion.rpc_reservar_envio(text,uuid[])", "produccion.prisma_gemini_resumen()", "produccion.prisma_actividad_eventos(date,date)", "produccion.prisma_actividad_personas(date,date)", "produccion.prisma_actividad_proyectos(date,date)", "produccion.prisma_actividad_linea(date,date,int)"]) {
+for (const fn of ["produccion.rpc_reclamar_emails(int)", "produccion.rpc_reservar_envio(text,uuid[])", "produccion.prisma_gemini_resumen()", "produccion.prisma_actividad_eventos(date,date)", "produccion.prisma_actividad_personas(date,date)", "produccion.prisma_actividad_proyectos(date,date)", "produccion.prisma_actividad_linea(date,date,int)", "produccion.rpc_plano_mover(uuid,int)", "produccion.rpc_plano_insertar_debajo(uuid)", "produccion._planos_renumerar(uuid)"]) {
   ok(`authenticated NO puede ejecutar ${fn}`,
      !(await scalar(`select has_function_privilege('authenticated', $1, 'execute')`, [fn])));
 }
@@ -3545,6 +3545,36 @@ for (const t of ["prisma_actividad", "prisma_gemini_gastos"]) {
   await db.exec(`delete from produccion.profiles where id in ('${ADMIN}','${MASTER91}','${CLI91}'); delete from produccion.prisma_gemini_gastos;`);
   await vaciarBitacora();
   await db.query(`delete from produccion.track_members where id = $1`, [ana]);
+}
+
+console.log("\n▶ 0093 — mover planos y agregar uno debajo");
+{
+  const IDEA = IDEA_D;
+  const err = async (fn) => { try { await fn(); return null; } catch (e) { return e.message; } };
+  const idea = await scalar(
+    `insert into produccion.ideas (brief_id, family_id, variant_number) select brief_id, family_id, 93 from produccion.ideas where id=$1 returning id`, [IDEA]);
+  // Con hueco (1, 2, 4) como queda tras borrar un plano.
+  const ids = [];
+  for (const [o, t] of [[1, "A"], [2, "B"], [4, "C"]])
+    ids.push(await scalar(`insert into produccion.planos (idea_id, orden, titulo) values ($1,$2,$3) returning id`, [idea, o, t]));
+  const orden = async () => (await q(`select titulo, orden from produccion.planos where idea_id=$1 order by orden`, [idea]))
+    .map((r) => `${r.titulo ?? "nuevo"}${r.orden}`).join(" ");
+  await q(`select produccion.rpc_plano_mover($1, -1)`, [ids[2]]);
+  eq("subir C: queda en 2º y los números se emparejan", await orden(), "A1 C2 B3");
+  await q(`select produccion.rpc_plano_mover($1, -1)`, [ids[0]]);
+  eq("subir el primero no hace nada", await orden(), "A1 C2 B3");
+  await q(`select produccion.rpc_plano_mover($1, 1)`, [ids[1]]);
+  eq("bajar el último no hace nada", await orden(), "A1 C2 B3");
+  await q(`select produccion.rpc_plano_mover($1, 1)`, [ids[0]]);
+  eq("bajar A", await orden(), "C1 A2 B3");
+  const nuevo = await scalar(`select produccion.rpc_plano_insertar_debajo($1)`, [ids[2]]);
+  eq("agregar debajo de C: el nuevo en 2º, los demás bajan", await orden(), "C1 nuevo2 A3 B4");
+  ok("devuelve el id del nuevo", Number(await scalar(`select count(*) from produccion.planos where id=$1 and titulo is null`, [nuevo])) === 1);
+  await scalar(`select produccion.rpc_plano_insertar_debajo($1)`, [ids[1]]);
+  eq("agregar debajo del último", await orden(), "C1 nuevo2 A3 B4 nuevo5");
+  ok("dirección inválida se rechaza", await err(() => db.query(`select produccion.rpc_plano_mover($1, 2)`, [ids[0]])));
+  ok("anon no puede mover planos", !(await scalar(`select has_function_privilege('anon','produccion.rpc_plano_mover(uuid,int)','execute')`)));
+  await db.query(`delete from produccion.ideas where id=$1`, [idea]);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

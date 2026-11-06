@@ -19,6 +19,7 @@ import { useWorkspaceView } from "./workspace-provider";
 export function DetallesTab({
   ideaId,
   tipoAsset,
+  formato,
   plataformas,
   tamanos,
   duracion,
@@ -30,6 +31,7 @@ export function DetallesTab({
 }: {
   ideaId: string;
   tipoAsset: string | null;
+  formato?: string | null;
   plataformas: string[];
   tamanos: string[];
   duracion: string[];
@@ -50,6 +52,9 @@ export function DetallesTab({
   const media = plantilla === "copies" ? "Copies" : plantilla === "estatico" ? "Imagen" : "Video";
   const variante =
     plantilla === "guion" ? (varianteGuion(tipoAsset) === "real" ? "Real Person" : "Animado") : null;
+  // Junto a "Real Person": quién lo produce, In-house o UGC (pedido del equipo, 2026-11-05).
+  // Sólo para el equipo; la Vista cliente no lo muestra.
+  const produccion = variante === "Real Person" && !verCliente ? etiquetaProduccion(formato) : null;
 
   return (
     <div className="grid gap-x-8 gap-y-6 md:grid-cols-2">
@@ -61,6 +66,7 @@ export function DetallesTab({
               <IconCT className="size-3.5" /> {media}
             </PastillaGris>
             {variante && <PastillaGris>{variante}</PastillaGris>}
+            {produccion && <PastillaGris>{produccion}</PastillaGris>}
           </div>
         </Grupo>
 
@@ -140,4 +146,12 @@ function PastillaGris({ children }: { children: React.ReactNode }) {
       {children}
     </span>
   );
+}
+
+/** IN-HOUSE → "In-house", UGC → "UGC"; cualquier otro código no aplica a Real Person. */
+function etiquetaProduccion(formato: string | null | undefined): string | null {
+  const f = (formato ?? "").trim().toUpperCase().replace(/[\s_-]/g, "");
+  if (f === "INHOUSE") return "In-house";
+  if (f === "UGC") return "UGC";
+  return null;
 }

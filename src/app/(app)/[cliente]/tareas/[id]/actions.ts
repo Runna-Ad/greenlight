@@ -12,7 +12,7 @@ import { ESTADOS_SOLO_LECTURA, motivoSoloLectura } from "@/lib/plantilla";
 import { urlSegura } from "@/lib/url-segura";
 import { programarLecturas } from "@/lib/referencia-lectura";
 import type { AssetStatus } from "@/lib/brand";
-import { sinInventar, limpiarPegado, normalizarCta, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
+import { sinInventar, limpiarPegado, normalizarCta, limpiarPlano, limpiarEstatico, type PlanoParsed, type EstaticoParsed } from "@/lib/guion";
 import { sinNegrita } from "@/lib/negrita";
 import { CAMPOS, type TablaGuardable } from "@/lib/campos";
 import { COLS_PLANO, type PlanoVista, type EstaticoVista } from "@/lib/vista-tipos";
@@ -472,6 +472,51 @@ export async function agregarPlano(
   return { ok: true, plano: data as PlanoVista };
 }
 
+/** La lista completa de planos de la tarea de un plano, en orden (para reemplazar el estado). */
+async function planosDeLaTarea(db: ReturnType<typeof supabaseAdmin>, ideaId: string): Promise<PlanoVista[]> {
+  const { data } = await db.from("planos").select(COLS_PLANO).eq("idea_id", ideaId).order("orden");
+  return (data ?? []) as PlanoVista[];
+}
+
+/**
+ * Sube (-1) o baja (1) un plano un lugar (0093). Todo pasa en una función de la base:
+ * renumera 1..n y cambia el lugar con su vecino sin chocar con el `unique (idea_id, orden)`.
+ * Devuelve la lista completa para que el editor la reemplace sin recargar.
+ */
+export async function moverPlano(
+  planoId: string,
+  dir: -1 | 1,
+): Promise<{ ok: true; planos: PlanoVista[] } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (dir !== -1 && dir !== 1) return { ok: false, error: "Dirección inválida." };
+  if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnRow("planos", planoId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+
+  const db = supabaseAdmin();
+  const { data: ideaId, error } = await db.rpc("rpc_plano_mover", { p_plano_id: planoId, p_dir: dir });
+  if (error || !ideaId) return { ok: false, error: error?.message ?? "No se pudo mover el plano." };
+  revalidatePath("/[cliente]/tareas/[id]", "page");
+  return { ok: true, planos: await planosDeLaTarea(db, ideaId as string) };
+}
+
+/** Agrega un plano vacío justo debajo de otro (0093); los de abajo bajan un lugar. */
+export async function agregarPlanoDebajo(
+  planoId: string,
+): Promise<{ ok: true; planos: PlanoVista[]; nuevoId: string } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  if (!canMoveStatus(await getViewAs())) return { ok: false, error: "Este rol no edita la plantilla." };
+  const scope = await assertCanActOnRow("planos", planoId);
+  if (!scope.ok) return { ok: false, error: scope.error };
+
+  const db = supabaseAdmin();
+  const { data: nuevoId, error } = await db.rpc("rpc_plano_insertar_debajo", { p_plano_id: planoId });
+  if (error || !nuevoId) return { ok: false, error: error?.message ?? "No se pudo agregar el plano." };
+  const { data: fila } = await db.from("planos").select("idea_id").eq("id", nuevoId as string).single();
+  revalidatePath("/[cliente]/tareas/[id]", "page");
+  return { ok: true, nuevoId: nuevoId as string, planos: fila ? await planosDeLaTarea(db, fila.idea_id as string) : [] };
+}
+
 // ── Plantilla Copies (0046): temas con cuota + copies ──────────
 // El tema (topic + cuota) lo define el lead; el copy llena headline + descripción.
 // Mismo gate que editar (canMoveStatus + assertCanActOnTask/Row). El nombre del tema
@@ -660,7 +705,9 @@ export async function importarGuion(
   const db = supabaseAdmin();
   const { error } = await db.rpc("rpc_import_planos", {
     p_idea_id: ideaId,
-    p_planos: planos,
+    // Última limpieza en el servidor (rótulo repetido, CASHBACK*): la vista previa es
+    // editable y H.Ü.E también llega por aquí.
+    p_planos: planos.map(limpiarPlano),
     p_modo: modo,
   });
   if (error) return { ok: false, error: error.message };
@@ -708,8 +755,9 @@ export async function importarEstatico(
 
   const CAMPOS_ESTATICO = ["copy_titulo", "copy_subtitulo", "copy_cta", "legales_extra"] as const;
   const patch: Record<string, string> = {};
+  const limpios = limpiarEstatico(campos);
   for (const k of CAMPOS_ESTATICO) {
-    const v = campos[k]?.trim();
+    const v = limpios[k]?.trim();
     if (v) patch[k] = v;
   }
   if (!Object.keys(patch).length) return { ok: false, error: "No se encontró copy que importar." };
@@ -872,7 +920,9 @@ export async function extraerGuion(
       };
     }
 
-    return { ok: true, planos };
+    // Después del guardarraíl: quitar el rótulo repetido y poner el "*" de CASHBACK no es
+    // inventar (es regla de la casa), pero el guard lo contaría como un "*" nuevo.
+    return { ok: true, planos: planos.map(limpiarPlano) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error al llamar a H.Ü.E." };
   }

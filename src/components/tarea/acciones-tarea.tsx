@@ -22,8 +22,17 @@ import {
 } from "@/app/(app)/[cliente]/tareas/[id]/ortografia-actions";
 import { DialogoOrtografia } from "./dialogo-ortografia";
 import { useWorkspace } from "./workspace-provider";
+import { useCorrecciones } from "./correcciones/contexto";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 /** Los verbos del workspace: los de flujo + los dos de correcciones localizadas + el envío
  *  directo del lead-solo (sin especialista → él es el revisor, publica sin ronda). */
@@ -95,6 +104,13 @@ export function AccionesTarea({
   // El cuerpo vivo del editor (texto actual en pantalla) para que el chequeo no
   // dependa de que el autosave ya haya escrito en la BD.
   const { planos, estatico } = useWorkspace();
+  // Recordatorio (equipo, 2026-11-05): devolver a revisión con ajustes que nadie marcó
+  // "atendido" suele ser un cambio que se pasó. No bloquea: avisa y deja seguir.
+  const [avisoSinAtender, setAvisoSinAtender] = useState<Accion | null>(null);
+  // El conteo vivo del panel (marcar atendido actualiza el contexto al instante); el
+  // número del servidor sólo como respaldo si no hay panel.
+  const corr = useCorrecciones();
+  const sinAtender = corr ? corr.correcciones.filter((c) => c.estado === "open").length : abiertas;
 
   const acciones = accionesDe(status, ctx, esRevisor, abiertas);
   const espera = waitingLabel(status, ctx);
@@ -127,7 +143,15 @@ export function AccionesTarea({
     router.refresh();
   };
 
-  const ejecutar = (a: Accion) =>
+  const ejecutar = (a: Accion, yaAvisado = false) => {
+    if (a.verb === "devolver" && sinAtender > 0 && !yaAvisado) {
+      setAvisoSinAtender(a);
+      return;
+    }
+    ejecutarConfirmado(a);
+  };
+
+  const ejecutarConfirmado = (a: Accion) =>
     startTransition(async () => {
       if (a.verb === "approve" && bloqueoAprobar) {
         toast.error(bloqueoAprobar);
@@ -190,6 +214,36 @@ export function AccionesTarea({
     if (recargar) window.location.reload();
   };
 
+  const dialogoSinAtender = avisoSinAtender && (
+    <Dialog open onOpenChange={(o) => { if (!o) setAvisoSinAtender(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {sinAtender === 1 ? "Falta 1 ajuste por marcar como atendido" : `Faltan ${sinAtender} ajustes por marcar como atendidos`}
+          </DialogTitle>
+          <DialogDescription>
+            Revisa el panel de cambios: si ya los hiciste, márcalos como atendidos antes de devolver la tarea. Si no, se
+            regresa con esos cambios pendientes.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => setAvisoSinAtender(null)}>
+            Revisar ajustes
+          </Button>
+          <Button
+            onClick={() => {
+              const a = avisoSinAtender;
+              setAvisoSinAtender(null);
+              ejecutar(a, true);
+            }}
+          >
+            Devolver de todos modos
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   const dialogoOrtografia = errores && (
     <DialogoOrtografia
       errores={errores}
@@ -251,6 +305,7 @@ export function AccionesTarea({
           <div className="flex flex-wrap items-center justify-center gap-2">{botones}</div>
         </div>
         {dialogoOrtografia}
+        {dialogoSinAtender}
       </>
     );
   }
@@ -268,6 +323,7 @@ export function AccionesTarea({
         {botones}
       </div>
       {dialogoOrtografia}
+      {dialogoSinAtender}
     </>
   );
 }

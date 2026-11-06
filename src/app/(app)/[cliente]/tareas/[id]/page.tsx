@@ -616,6 +616,7 @@ export default async function TareaPage({
             soloLectura={soloLectura}
             detalles={{
               tipoAsset: idea.tipo_asset,
+              formato: idea.formato_code,
               plataformas: idea.plataformas ?? [],
               tamanos: idea.tamanos ?? [],
               duracion: idea.duracion ?? [],
