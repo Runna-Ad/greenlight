@@ -104,7 +104,7 @@ export function IntegracionesTab({ estado }: { estado: IntegracionesEstado }) {
             <div className="mt-3 space-y-2 text-xs">
               <p className="text-muted-foreground">
                 {viejas.revisadas} tareas activas revisadas ·{" "}
-                <strong className="text-foreground">{viejas.tareas.length} con cifras que ya no están en Notion</strong>
+                <strong className="text-foreground">{viejas.tareas.length} con cifras para revisar</strong>
               </p>
               {viejas.tareas.map((t) => (
                 <div key={t.ideaId} className="rounded-lg border border-status-progress/40 p-2">
