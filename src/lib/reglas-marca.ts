@@ -186,6 +186,8 @@ export function seccionReglas(texto: string | null | undefined): string | null {
 
 const PALABRA_PROMESA = /(l[ií]mite|l[ií]nea|hasta|acumula|cashback|desde|monto|cr[eé]dito de|tarjeta de)[^$\n]{0,30}$/i;
 
+const SIMULACION_DESPUES = /plazo de pago|pago (?:quincenal|mensual|semanal)|\d+\s?(?:quincenas|meses|semanas)\b/i;
+
 const aPesos = (s: string): number => {
   const t = s.trim();
   const n = Number(t.replace(/(k|mil)$/i, "").replace(/[$\s,]/g, ""));
@@ -209,6 +211,9 @@ export function cifrasDe(texto: string): Set<string> {
 function promesasDe(texto: string): { clave: string; escrito: string }[] {
   const out: { clave: string; escrito: string }[] = [];
   for (const m of texto.matchAll(MONTO)) {
+    // Una línea de simulación ("Monto del crédito: $15,000 m.n. Plazo de pago: 12 quincenas")
+    // es un ejemplo aunque diga "monto": se reconoce por lo que viene justo después.
+    if (SIMULACION_DESPUES.test(texto.slice(m.index + m[0].length, m.index + m[0].length + 60))) continue;
     if (PALABRA_PROMESA.test(texto.slice(Math.max(0, m.index - 45), m.index))) out.push({ clave: `$${aPesos(m[0])}`, escrito: m[0].trim() });
   }
   for (const m of texto.matchAll(PORCIENTO)) out.push({ clave: `${m[1].replace(",", ".")}%`, escrito: m[0] });

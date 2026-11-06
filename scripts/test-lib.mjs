@@ -1679,6 +1679,8 @@ console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo e
   ok("límite vigente pasa", prob("Tengo una línea de crédito de hasta $60,000 m.n.") === "");
   ok("'$60k' cuenta como $60,000", prob("hasta $60k") === "");
   ok("simulación no se marca", prob("Usé $4,000 m.n. con un plazo de pago de 4 quincenas") === "");
+  ok("tabla de simulación con «Monto del crédito» no se marca", prob("Monto del crédito: $15,000 m.n. Plazo de pago: 12 quincenas Pago quincenal: $1,550 m.n.") === "");
+  ok("promesa vieja sigue marcándose", prob("Obtén una línea de crédito de hasta $30,000 m.n.").includes("$30,000"));
   ok("porcentaje viejo se marca", /5%/.test(prob("hasta 5% de CASHBACK*")));
   ok("tiempo viejo se marca", /15 minutos/.test(prob("aprobada en 15 minutos")));
   ok("negrita no estorba", prob("**hasta 6% de CASHBACK***") === "");
