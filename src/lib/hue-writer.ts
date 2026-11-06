@@ -5,6 +5,7 @@ import { cargarWinners } from "@/lib/hue-data";
 import { legalSugerido, type LegalLite } from "@/lib/legal-sugerido";
 import { voz, varianteGuion, readTimeS, presupuestoDialogoS, PALABRAS_POR_MINUTO } from "@/lib/plantilla";
 import { convertirDialogo, normalizarCta, limpiarPlano } from "@/lib/guion";
+import { conMN } from "@/lib/reglas-marca";
 import { parseReferencias } from "@/lib/referencia";
 import { lecturasPara } from "@/lib/referencia-lectura";
 import { MAX_REFS_LEIDAS, TIPO_LABEL, type Lectura } from "@/lib/referencia-lectura-url";
@@ -139,7 +140,9 @@ export async function reunirContextoTarea(ideaId: string): Promise<ContextoWrite
     // payload cruzaba la red entero en cada generación. El KB filtra los null en SQL
     // para que el límite rinda 6 docs con texto. (reap perf pre-launch)
     db.from("hue_instructions").select("title, body").eq("active", true).or(scopeFilter).order("created_at").limit(30),
-    db.from("hue_kb_documents").select("title, extracted_text").or(scopeFilter).not("extracted_text", "is", null).order("created_at").limit(6),
+    // Los MÁS RECIENTES primero: si un día hay más de 6, se quedan fuera los viejos, no el
+    // documento de marca que se acaba de subir.
+    db.from("hue_kb_documents").select("title, extracted_text").or(scopeFilter).not("extracted_text", "is", null).order("created_at", { ascending: false }).limit(6),
   ]);
   // Un error de query NO debe degradar en silencio a "sin reglas / sin legal / sin Cerebro"
   // (el writer produciría copy sin *Aplican, sin CTA correcto, etc.) — fallar honesto (reap S1).
@@ -201,6 +204,9 @@ const linea = (label: string, v: string | null | undefined): string => (v && v.t
 
 /** El prefijo ESTABLE (cacheable): rol + instrucciones + Cerebro + KB + ganadores.
  *  Idéntico entre tareas del mismo scope → cache hit. NO metas datos de la tarea aquí. */
+const KB_MAX_DOC = 30000;
+const KB_MAX_TOTAL = 70000;
+
 function bloqueEstable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
   let s =
     "Eres H.Ü.E, el escritor creativo de la agencia Rünna para anuncios de DiDi. Tu trabajo: " +
@@ -225,7 +231,11 @@ function bloqueEstable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
     "- NO escribas el texto legal ni el CAT: el legal se adjunta aparte desde la biblioteca. Sólo, si una " +
     "regla lo pide (p. ej. CASHBACK/MSI → `*Aplican`), deja el asterisco `*` donde corresponda en el copy.\n" +
     "- RESPETA las reglas de marca que te paso (CTA por plataforma, timeframes por marca, conteo de " +
-    "beneficios por duración, asterisco de CASHBACK/MSI).\n";
+    "beneficios por duración, asterisco de CASHBACK/MSI).\n" +
+    "- Si la BASE DE CONOCIMIENTO trae un documento de \"Conocimiento de la marca\", su sección " +
+    "\"Lineamientos\" (palabras prohibidas, reglas de diálogo, simulaciones, reglas por plataforma) es " +
+    "OBLIGATORIA, igual que estas reglas.\n" +
+    "- Toda cifra en pesos va con $ y m.n. (ej. \"$4,000 m.n.\"), nunca sólo \"$4,000\" ni \"pesos\".\n";
   if (modo === "guion") {
     s +=
       "- Cada plano es un objeto con: titulo (encabezado tipo \"Plano 1 - …\"), accion (qué pasa en pantalla), " +
@@ -259,7 +269,16 @@ function bloqueEstable(ctx: ContextoWriter, modo: "guion" | "copy"): string {
   }
   if (ctx.kb.length) {
     s += "\nBASE DE CONOCIMIENTO (documentos de referencia):\n";
-    for (const d of ctx.kb) s += `### ${d.title}\n${d.extracted_text.slice(0, 8000)}\n\n`;
+    // Cada documento se lee COMPLETO hasta KB_MAX_DOC (los de "Conocimiento de la marca"
+    // miden ~20–25 mil caracteres y sus reglas están al final; con el tope viejo de 8 mil
+    // H.Ü.E nunca las leía). Tope total KB_MAX_TOTAL para no inflar el prompt sin límite.
+    let resta = KB_MAX_TOTAL;
+    for (const d of ctx.kb) {
+      if (resta <= 0) break;
+      const texto = d.extracted_text.slice(0, Math.min(KB_MAX_DOC, resta));
+      resta -= texto.length;
+      s += `### ${d.title}\n${texto}\n\n`;
+    }
   }
   if (ctx.winners.length) {
     s += "\nGUIONES GANADORES (ejemplares — inspírate en su ESTRUCTURA y TONO, NO los copies; IGNORA por completo sus precios, cifras, legales y ofertas: usa SÓLO los datos del brief de esta tarea):\n";
@@ -424,14 +443,14 @@ async function generarUnGuion(
         const o = (p ?? {}) as Record<string, unknown>;
         // normalizarCta: un "CTA: …" que el modelo dejó en otro campo (o "(CTA) …" como
         // locutor) pasa a su campo, con las mismas etiquetas que "Pegar guión".
-        return limpiarPlano(normalizarCta({
+        return conMNPlano(limpiarPlano(normalizarCta({
           titulo: s0(o.titulo), accion: s0(o.accion), copy_in: s0(o.copy_in), cta: s0(o.cta),
           sfx: s0(o.sfx), gfx: s0(o.gfx), edicion: s0(o.edicion),
           // El diálogo pasa por la MISMA normalización que "Pegar guión"
           // (convertirDialogo → "(Quién) texto"), para que la Vista cliente ponga el
           // locutor en negritas. Antes se guardaba crudo del modelo y no se seccionaba.
           dialogo: typeof o.dialogo === "string" ? s0(convertirDialogo(o.dialogo.split("\n"))) : null,
-        }));
+        })));
       })
       .filter((p) => Object.values(p).some(Boolean)); // descarta planos totalmente vacíos (reap M6)
     if (!planos.length) return { ok: false, error: "H.Ü.E devolvió un guión vacío. Intenta de nuevo." };
@@ -511,9 +530,9 @@ export async function escribirCopy(ctx: ContextoWriter): Promise<{ ok: true; est
     if (!bloque) return { ok: false, error: "H.Ü.E no devolvió el copy. Intenta de nuevo." };
     const o = bloque.input as Record<string, unknown>;
     const estatico: EstaticoParsed = {
-      copy_titulo: s0(o.copy_titulo),
-      copy_subtitulo: s0(o.copy_subtitulo),
-      copy_cta: s0(o.copy_cta),
+      copy_titulo: conMN(s0(o.copy_titulo)),
+      copy_subtitulo: conMN(s0(o.copy_subtitulo)),
+      copy_cta: conMN(s0(o.copy_cta)),
       legales_extra: null,
     };
     if (!estatico.copy_titulo && !estatico.copy_subtitulo && !estatico.copy_cta) {
@@ -523,4 +542,12 @@ export async function escribirCopy(ctx: ContextoWriter): Promise<{ ok: true; est
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error al llamar a H.Ü.E." };
   }
+}
+
+/** Lo que H.Ü.E escribe sale con m.n. en cada cifra en pesos, aunque el modelo lo olvide
+ *  (regla de marca; se ve en la vista previa antes de importar). */
+function conMNPlano(p: PlanoParsed): PlanoParsed {
+  const out = { ...p };
+  for (const k of ["accion", "copy_in", "cta", "gfx", "dialogo"] as const) out[k] = conMN(out[k]);
+  return out;
 }

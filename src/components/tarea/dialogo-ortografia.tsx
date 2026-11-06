@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { toast } from "sonner";
-import { Check, SpellCheck, Send, Calculator, Scale, AlertTriangle } from "lucide-react";
+import { Check, SpellCheck, Send, Calculator, Scale, AlertTriangle, BadgeCheck } from "lucide-react";
 
 import {
   Dialog,
@@ -68,7 +68,7 @@ export function DialogoOrtografia({
           </DialogTitle>
           <DialogDescription>
             {errores.length + flags.length > 0
-              ? "H.Ü.E revisó ortografía, matemática y legal. Aplica las correcciones que veas bien; los avisos no se auto-corrigen — verifícalos y arréglalos a mano."
+              ? "H.Ü.E revisó ortografía, matemática, legal y reglas de marca. Aplica las correcciones que veas bien; los avisos no se auto-corrigen — verifícalos y arréglalos a mano."
               : "Todo en orden. Puedes mandarla a revisión."}
           </DialogDescription>
         </DialogHeader>
@@ -129,7 +129,9 @@ export function DialogoOrtografia({
                     >
                       {f.tipo === "matemática"
                         ? <Calculator className="mt-0.5 size-4 shrink-0 text-status-progress" />
-                        : <Scale className="mt-0.5 size-4 shrink-0 text-status-progress" />}
+                        : f.tipo === "marca"
+                          ? <BadgeCheck className="mt-0.5 size-4 shrink-0 text-status-progress" />
+                          : <Scale className="mt-0.5 size-4 shrink-0 text-status-progress" />}
                       <div className="min-w-0 flex-1">
                         <span className="mr-1.5 inline-block rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                           {f.tipo}

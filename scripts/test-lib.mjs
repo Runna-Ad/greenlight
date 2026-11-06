@@ -1605,6 +1605,41 @@ console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo e
   eq("sin links", urlsDe("Creativo: OK").length, 0);
 }
 
+// ── Reglas de marca (Pedro 2026-11-06) ────────────────────────────────────────
+{
+  const { conMN, montosSinMN, revisarMarca, seccionReglas, marcaConReglas } = await import("../src/lib/reglas-marca.ts");
+  console.log("\n▶ reglas de marca: m.n.");
+  eq("agrega m.n.", conMN("Usa $4,000 hoy"), "Usa $4,000 m.n. hoy");
+  eq("no duplica m.n.", conMN("$4,000 m.n. y $46,800 M.N."), "$4,000 m.n. y $46,800 M.N.");
+  eq("no parte el número", conMN("pide $46,800, y paga"), "pide $46,800 m.n., y paga");
+  eq("'$22 pesos' → '$22 m.n.'", conMN("$22 pesos al día"), "$22 m.n. al día");
+  eq("decimales", conMN("$3,886.50 cada quincena"), "$3,886.50 m.n. cada quincena");
+  eq("sin montos no cambia", conMN("Hasta 6% de CASHBACK*"), "Hasta 6% de CASHBACK*");
+  eq("detecta sin m.n.", montosSinMN("$500 y $1,000 m.n.").join("|"), "$500");
+  console.log("\n▶ reglas de marca: exactas");
+  const c = (texto, campo = "dialogo", label = "Plano 1 · Diálogos") => ({ label, campo, texto });
+  const prob = (campos, m) => revisarMarca(campos, m).map((a) => a.problema).join(" || ");
+  ok("Préstamos: 'préstamo' se marca", /crédito/.test(prob([c("Pedí un préstamo")], "prestamos")));
+  ok("Préstamos: 'DiDi Préstamos' no se marca", prob([c("Lo pedí en **DiDi Préstamos**.")], "prestamos") === "");
+  ok("Préstamos: 'línea de crédito' se marca", /límite de crédito/.test(prob([c("tu línea de crédito")], "prestamos")));
+  ok("Préstamos: 'crédito' 2 veces en el diálogo", /2 veces/.test(prob([c("Mi crédito"), c("otro crédito", "dialogo", "Plano 2 · Diálogos")], "prestamos")));
+  ok("Préstamos: 'crédito' en Copy in no cuenta", prob([c("Mi crédito"), c("Tu crédito", "copy_in", "Plano 1 · Copy in")], "prestamos") === "");
+  ok("INE sin vigente", /INE vigente/.test(prob([c("con tu INE")], "card")));
+  ok("INE vigente pasa", prob([c("con tu INE vigente")], "card") === "");
+  ok("didi mal escrito", /DiDi/.test(prob([c("con didi")], "card")));
+  ok("Card: Cashback sin asterisco", /CASHBACK\*/.test(prob([c("6% de Cashback")], "card")));
+  ok("Card: **CASHBACK*** en negrita pasa", prob([c("hasta 6% de **CASHBACK***")], "card") === "");
+  ok("Card no revisa reglas de Préstamos", prob([c("préstamo en efectivo")], "card") === "");
+  ok("superlativo", /fácil/.test(prob([c("es facilísimo")], "prestamos")));
+  ok("sin marca: sólo reglas comunes", prob([c("préstamo con $500")], null).includes("m.n.") && !prob([c("préstamo")], null));
+  eq("marcaConReglas", [marcaConReglas("card"), marcaConReglas("prestamos"), marcaConReglas("food")].join(","), "card,prestamos,");
+  console.log("\n▶ reglas de marca: sección del documento");
+  const doc = "# Conocimiento\nhola\n# Lineamientos\n## Simulaciones\n- regla A\n## Prohibidos\n- regla B\n# Buenas prácticas\n- no va";
+  eq("toma de Lineamientos al siguiente #", seccionReglas(doc), "# Lineamientos\n## Simulaciones\n- regla A\n## Prohibidos\n- regla B");
+  eq("sin la sección → null", seccionReglas("# Otra cosa\n- x"), null);
+  eq("al final del documento", seccionReglas("# Lineamientos\n- última"), "# Lineamientos\n- última");
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);
 

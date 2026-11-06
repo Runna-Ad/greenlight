@@ -3,6 +3,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { after } from "next/server";
 import { agregaTildeASolo } from "@/lib/ortografia-reglas";
+import { revisarMarca, marcaConReglas, seccionReglas, type MarcaSlug } from "@/lib/reglas-marca";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canMoveStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
@@ -38,7 +39,7 @@ export type FlagRevision = {
   id: string;
   campoLabel: string;
   problema: string;
-  tipo: "matemática" | "legal";
+  tipo: "matemática" | "legal" | "marca";
 };
 
 // Campos que SÍ se revisan (con su etiqueta visible). Se EXCLUYEN los legales
@@ -152,6 +153,15 @@ export async function revisarOrtografia(
 
   if (campos.length === 0) return { ok: true, errores: [], flags: [] };
 
+  // Reglas de MARCA (Pedro, 2026-11-06). Dos capas: (1) las exactas (m.n., INE vigente,
+  // "préstamo", CASHBACK*…) las revisa el código y nunca se escapan; (2) la sección
+  // "Lineamientos" del documento de la marca (H.Ü.E HUB), tal cual, para lo que es criterio.
+  const { marca, reglasDoc, plataformas, duracion } = await reglasDeLaTarea(ideaId);
+  const avisosMarca: FlagRevision[] = revisarMarca(
+    campos.map((c) => ({ label: c.label, campo: c.campo, texto: c.texto })),
+    marca,
+  ).map((a, i) => ({ id: `m${i}`, campoLabel: a.campoLabel, problema: a.problema, tipo: "marca" as const }));
+
   const porId = new Map(campos.map((c) => [c.campoId, c]));
 
   const schema = {
@@ -179,7 +189,7 @@ export async function revisarOrtografia(
           properties: {
             campo_id: { type: "string" as const },
             problema: { type: "string" as const },
-            tipo: { type: "string" as const, enum: ["matemática", "legal"] },
+            tipo: { type: "string" as const, enum: ["matemática", "legal", "marca"] },
           },
           required: ["campo_id", "problema", "tipo"],
           additionalProperties: false,
@@ -217,21 +227,32 @@ export async function revisarOrtografia(
     "- 'campo_id' es el id entre corchetes del campo donde está el error.\n" +
     "- Si un campo no tiene errores, no lo incluyas. Si no hay ninguno, devuelve la lista vacía.\n\n" +
     "ADEMÁS, en 'flags' emite AVISOS (no correcciones automáticas — son para que un humano " +
-    "verifique y corrija a mano). Dos tipos:\n" +
+    "verifique y corrija a mano). Tres tipos:\n" +
     "- 'matemática': una cifra o cuenta que NO cuadra. Ej.: en una simulación de crédito, el pago " +
     "quincenal × el nº de quincenas no corresponde al monto + intereses; un total mal sumado; un " +
     "porcentaje o rango inconsistente; una cifra que se contradice con otra del guión. En 'problema' " +
     "DESCRIBE la inconsistencia concreta (qué cifras y por qué no cuadran). NO propongas el número " +
     "correcto (no lo sabes con certeza) — sólo señálalo para revisión humana. Si las cuentas cuadran, no marques nada.\n" +
     "- 'legal': falta o está mal un marcador legal REQUERIDO. Reglas ESTRICTAS:\n" +
-    "  · Todo VALOR MONETARIO en pesos (p. ej. '$48,000', '$4,836') DEBE terminar con 'M.N.' o 'm.n.' " +
-    "(moneda nacional). Si un monto en pesos NO lleva 'M.N.'/'m.n.', márcalo — es obligatorio y muy específico.\n" +
-    "  · 'CASHBACK' sin el asterisco '*'; 'MSI'/'meses sin intereses' sin '*'.\n" +
+    "  · 'MSI'/'meses sin intereses' sin '*'.\n" +
     "  · una simulación de crédito SIN su nota al pie ('*Ejemplo de un crédito … interés ordinario anual del …%').\n" +
-    "  · una cifra MÁXIMA (línea de crédito, cashback, quincenas, minutos) sin la palabra 'hasta'.\n" +
+    "  · una cifra MÁXIMA (límite de crédito, CASHBACK*, quincenas, minutos) sin la palabra 'hasta'.\n" +
     "  En 'problema' di QUÉ falta y dónde (cita el fragmento). " +
     "(NO escribas el texto legal completo; sólo señala la falta.)\n" +
+    (reglasDoc
+      ? "- 'marca': algo que rompe una regla de las REGLAS DE LA MARCA de abajo (palabras prohibidas, " +
+        "superlativos, selling points mal usados, reglas por plataforma, situaciones que no son de necesidad, " +
+        "cómo se integran los selling points en los diálogos…). En 'problema' di QUÉ regla, cita el fragmento " +
+        "y cómo debería quedar. Marca sólo lo CLARO; nada de gustos.\n" +
+        "  NO marques (ya los revisa el sistema, no los repitas): cifras sin m.n., 'INE' sin 'vigente', " +
+        "cómo se escribe DiDi o CASHBACK*, 'préstamo' en lugar de 'crédito', 'línea de crédito', y cuántas " +
+        "veces aparecen 'crédito' o 'DiDi Préstamos'.\n"
+      : "") +
     "- 'campo_id' del flag = el id entre corchetes del campo. Si no hay avisos, devuelve 'flags' vacío.\n\n" +
+    (reglasDoc
+      ? `REGLAS DE LA MARCA (del documento de la marca, tal cual):\n<<<\n${reglasDoc}\n>>>\n` +
+        `Datos de la tarea para esas reglas: plataformas ${plataformas || "—"} (GG = Google, FB = Facebook, TT = TikTok); duración ${duracion || "—"}.\n\n`
+      : "") +
     "Campos:\n" + bloques;
 
   try {
@@ -304,7 +325,7 @@ export async function revisarOrtografia(
       const o = (raw ?? {}) as Record<string, unknown>;
       const c = porId.get(typeof o.campo_id === "string" ? o.campo_id : "");
       const problema = typeof o.problema === "string" ? o.problema.trim() : "";
-      const tipo = o.tipo === "matemática" || o.tipo === "legal" ? o.tipo : null;
+      const tipo = o.tipo === "matemática" || o.tipo === "legal" || (o.tipo === "marca" && reglasDoc) ? o.tipo : null;
       if (!c || !problema || !tipo) continue;
       flags.push({ id: `f${flags.length}`, campoLabel: c.label, problema, tipo });
       if (flags.length >= MAX_ERRORES) break;
@@ -316,8 +337,10 @@ export async function revisarOrtografia(
     const filasLog = errores.map((e) => ({ tabla: e.tabla, filaId: e.filaId, campo: e.campo, sugerencia: e.sugerencia, tipo: e.tipo }));
     after(() => registrarOrtografia(ideaId, soyId, filasLog));
 
-    return { ok: true, errores, flags };
+    return { ok: true, errores, flags: [...avisosMarca, ...flags] };
   } catch (e) {
+    // Si H.Ü.E falla, las reglas exactas de marca igual se muestran (no dependen de la IA).
+    if (avisosMarca.length) return { ok: true, errores: [], flags: avisosMarca };
     return { ok: false, error: e instanceof Error ? e.message : "Error al llamar a H.Ü.E." };
   }
 }
@@ -394,3 +417,34 @@ export async function marcarOrtografiaIgnorada(
   return { ok: true };
 }
 
+
+/** La marca de la tarea (si tiene reglas) y la sección "Lineamientos" de su documento
+ *  de marca más reciente en H.Ü.E HUB. Si algo falla, sin reglas (nunca bloquea la revisión). */
+async function reglasDeLaTarea(
+  ideaId: string,
+): Promise<{ marca: MarcaSlug | null; reglasDoc: string | null; plataformas: string; duracion: string }> {
+  const vacio = { marca: null, reglasDoc: null, plataformas: "", duracion: "" };
+  try {
+    const db = supabaseAdmin();
+    const { data: idea } = await db.from("ideas").select("marca_id, plataformas, duracion").eq("id", ideaId).maybeSingle();
+    const fila = idea as { marca_id: string | null; plataformas: string[] | null; duracion: string[] | null } | null;
+    const marcaId = fila?.marca_id ?? null;
+    if (!marcaId) return vacio;
+    const plataformas = (fila?.plataformas ?? []).join(", ");
+    const duracion = (fila?.duracion ?? []).join(", ");
+    const [{ data: m }, { data: docs }] = await Promise.all([
+      db.from("marcas").select("slug").eq("id", marcaId).maybeSingle(),
+      db.from("hue_kb_documents").select("extracted_text").eq("marca_id", marcaId)
+        .not("extracted_text", "is", null).order("created_at", { ascending: false }).limit(10),
+    ]);
+    const marca = marcaConReglas((m as { slug: string } | null)?.slug);
+    let reglasDoc: string | null = null;
+    for (const d of (docs ?? []) as { extracted_text: string }[]) {
+      reglasDoc = seccionReglas(d.extracted_text);
+      if (reglasDoc) break;
+    }
+    return { marca, reglasDoc: reglasDoc ? reglasDoc.slice(0, 16000) : null, plataformas, duracion };
+  } catch {
+    return vacio;
+  }
+}
