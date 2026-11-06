@@ -3436,3 +3436,19 @@ Lo de antes sigue: Pedro retesta el fondo con IA del estadio; luego el registro 
 
 Greenlight mostraba el triángulo por defecto de Vercel. En la rama `feat/favicon` (worktree ../greenlight-favicon, sobre origin/main 3c92880, SIN commit): `favicon.ico` (16, 32, 48), `icon.png` (192), `apple-icon.png` (180) y `scripts/generar-favicon.mjs`. Diseño: pieza morada rellena con el símbolo en blanco, esquinas amarilla y coral, fondo blanco. Probado en localhost /login: los 3 enlaces dan 200. No revisado: cómo se ve en una pestaña real.
 Publicado en main c55dba5 con su "ship it"; Pedro lo vio y pidió cambiarlo por su propio ícono (G verde sobre pieza morada rellena, segunda imagen que mandó).
+
+## 2026-11-04 Actividad, trabajo guardado y fondo con IA en PSD, en vivo
+
+Con el "Ship it, skip that" de Pedro: `main` a0cc7f2, deploy dpl_BdmHZNz8oCZ6HHfwSfJ5sDFGkbkk. Versión anterior para volver: dpl_DEvuAU41TRZgQr7WogU27LTxZFEH (c55dba5). `main` había avanzado (ícono de Greenlight), así que se mezcló y se repitió todo: tsc 0, eslint 0, `npm test` 0, build 0 sobre a0cc7f2. Ese merge sacó en vivo también el ícono G verde (12f1918), que estaba en `main` sin deploy.
+**Revisado en vivo:** Admin › Actividad con datos reales, Formatos PSD abre con perfil y con IA encendida, ícono igual al del commit, 0 errores de servidor en 10 min, consola limpia.
+**Sin probar:** PSD real guardado y recargado en el navegador (decisión de Pedro), Safari, disco lleno, sesiones reales de lead y especialista.
+**Pick up next session:** Pedro abre un PSD real en vivo; borrar worktrees ya fusionados sólo con su OK. Este cierre va en `prisma`, no en `main`.
+
+## 2026-11-04 Revisión de "¿ya está todo en vivo?" y cierre de la sesión del fondo con IA
+
+Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya estaba en `main` a0cc7f2 desde su "Ship it, skip that".
+**Pruebas:** Vercel marca dpl_BdmHZNz8oCZ6HHfwSfJ5sDFGkbkk (a0cc7f2) como producción y Ready · `prisma` y `feat/actividad-y-guardado` sólo difieren de `main` en `tasks/` · `feat/fondo-ia-psd` sólo en `tasks/lessons.md`, y esa lección ya está en `prisma` (fea29ce) · `feat/favicon` está dentro de `main` · 0091 en `produccion._migrations` (19:11 UTC) · 0 errores de servidor en 2 horas · greenlight.runna.agency/login e /icon.png dan 200.
+**Tropiezo:** corrí `node scripts/migrate.mjs --help` sin leer el script. Paró con error en su primera consulta y no aplicó nada: la última fila del registro sigue siendo 0091 de las 19:11 UTC.
+**Sin revisar en vivo por esta sesión:** los botones del fondo con clics, el ícono a ojo. **Sin probar:** PSD real de 60-70 MB guardado y recargado, Safari, disco lleno, sesiones reales de lead y especialista.
+**Pendiente:** el log de Actividad conserva las filas de prueba de PRUEBA-borrador-ia.psd (1 de gasto, 4 eventos). La carpeta principal está en `prisma` 91 commits atrás, con cambios sin commit en `CLAUDE.md` y `tasks/session-log.md` que no son de esta sesión; no se tocaron.
+**Pick up next session:** Pedro abre un PSD real en vivo. Este cierre va en `prisma`, no en `main`.
