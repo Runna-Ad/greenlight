@@ -1685,6 +1685,14 @@ console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo e
   ok("tiempo viejo se marca", /15 minutos/.test(prob("aprobada en 15 minutos")));
   ok("negrita no estorba", prob("**hasta 6% de CASHBACK***") === "");
   eq("sin nada vigente no revisa", cifrasNoVigentes([c("límite de $1")], new Set()).length, 0);
+  const card = cifrasDe("línea de crédito de hasta $58,800 m.n. y hasta 6% de CASHBACK*");
+  const pres = cifrasDe("Puedes obtener hasta $46,800 m.n. · 0.6% diario · 3.5% al 18%");
+  const otra = { tarea: "prestamos", otra: "card", cifras: card };
+  const probO = (t) => cifrasNoVigentes([c(t)], pres, otra).map((a) => a.problema).join(" | ");
+  ok("cifra de Card en tarea de Préstamos nombra la marca", /es de DiDi Card, pero esta tarea es de DiDi Préstamos/.test(probO("¿me da hasta 6% de CASHBACK*?")));
+  ok("…y no dice «no vigente»", !/no vigente/.test(probO("¿me da hasta 6% de CASHBACK*?")));
+  ok("cifra vieja de nadie sigue siendo «no vigente»", /Cifra no vigente: "\$30,000"/.test(probO("límite de crédito de $30,000 m.n.")));
+  ok("cifra propia pasa", probO("Puedes obtener hasta $46,800 m.n.") === "");
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

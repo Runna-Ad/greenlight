@@ -6,7 +6,7 @@ import { canAdmin } from "@/lib/roles";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { hasNotion } from "@/lib/notion-legales";
 import { sincronizarNotion, type SyncLegalesResultado } from "@/lib/notion-sync";
-import { cifrasDe, cifrasNoVigentes, type AvisoMarca, type CampoRevisar } from "@/lib/reglas-marca";
+import { cifrasDe, cifrasNoVigentes, type AvisoMarca, type CampoRevisar, type MarcaSlug } from "@/lib/reglas-marca";
 
 /** El botón "Sincronizar" de Integraciones: legales + páginas de marca. Sólo admin+.
  *  La misma sincronización corre sola cada hora (/api/notion/sync). */
@@ -35,8 +35,9 @@ export async function buscarCifrasViejas(): Promise<{ ok: true; tareas: TareaCon
   if (!canAdmin(await getViewAs())) return { ok: false, error: "Sólo un admin." };
   const db = supabaseAdmin();
 
-  const { data: marcas } = await db.from("marcas").select("id").in("slug", ["card", "prestamos"]);
-  const marcaIds = ((marcas ?? []) as { id: string }[]).map((m) => m.id);
+  const { data: marcas } = await db.from("marcas").select("id, slug").in("slug", ["card", "prestamos"]);
+  const filasMarca = (marcas ?? []) as { id: string; slug: MarcaSlug }[];
+  const marcaIds = filasMarca.map((m) => m.id);
   if (!marcaIds.length) return { ok: true, tareas: [], revisadas: 0 };
 
   const [{ data: docs }, { data: legales }, { data: ideas }] = await Promise.all([
@@ -88,7 +89,11 @@ export async function buscarCifrasViejas(): Promise<{ ok: true; tareas: TareaCon
   for (const i of lista) {
     const vigente = new Set(base.get(i.marca_id));
     for (const t of [...(i.selling_points ?? []), i.concepto ?? ""]) for (const c of cifrasDe(t)) vigente.add(c);
-    const avisos = cifrasNoVigentes(camposDe.get(i.id) ?? [], vigente);
+    // Si la cifra es de la otra marca (guión de Card pegado en Préstamos), el aviso lo dice.
+    const propia = filasMarca.find((m) => m.id === i.marca_id);
+    const otra = filasMarca.find((m) => m.id !== i.marca_id);
+    const otraMarca = propia && otra && conNotion.has(otra.id) ? { tarea: propia.slug, otra: otra.slug, cifras: base.get(otra.id) ?? new Set<string>() } : null;
+    const avisos = cifrasNoVigentes(camposDe.get(i.id) ?? [], vigente, otraMarca);
     if (avisos.length)
       tareas.push({ ideaId: i.id, nombre: i.naming_base ?? i.code ?? i.id.slice(0, 8), url: `/${slugDe.get(i.brief_id) ?? "didi"}/tareas/${i.id}`, avisos });
   }

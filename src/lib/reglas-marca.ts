@@ -221,17 +221,30 @@ function promesasDe(texto: string): { clave: string; escrito: string }[] {
   return out;
 }
 
+export const NOMBRE_MARCA: Record<MarcaSlug, string> = { card: "DiDi Card", prestamos: "DiDi Préstamos" };
+
+/** Las cifras vigentes de la OTRA marca, para decir "esto es de DiDi Card" en vez de
+ *  "no aparece" cuando un guión se pegó en la marca equivocada (Pedro, 2026-11-06). */
+export type CifrasOtraMarca = { tarea: MarcaSlug; otra: MarcaSlug; cifras: Set<string> };
+
 /** Avisos "Cifra no vigente": promesas del guión que no están en lo vigente. Si no hay
  *  nada vigente cargado (Notion aún no sincroniza), no revisa: nunca marca a ciegas. */
-export function cifrasNoVigentes(campos: CampoRevisar[], vigente: Set<string>): AvisoMarca[] {
+export function cifrasNoVigentes(campos: CampoRevisar[], vigente: Set<string>, otraMarca?: CifrasOtraMarca | null): AvisoMarca[] {
   if (vigente.size === 0) return [];
   const avisos: AvisoMarca[] = [];
   for (const c of campos) {
     const malas = promesasDe(sinNegrita(c.texto)).filter((p) => !vigente.has(p.clave));
-    if (malas.length)
+    const deOtra = otraMarca ? malas.filter((m) => otraMarca.cifras.has(m.clave)) : [];
+    const viejas = malas.filter((m) => !deOtra.includes(m));
+    if (deOtra.length && otraMarca)
       avisos.push({
         campoLabel: c.label,
-        problema: `Cifra no vigente: ${lista(malas.map((m) => m.escrito))} no aparece en los selling points ni legales de hoy (Notion) ni en el brief. Revisa si cambió.`,
+        problema: `Cifra de otra marca: ${lista(deOtra.map((m) => m.escrito))} es de ${NOMBRE_MARCA[otraMarca.otra]}, pero esta tarea es de ${NOMBRE_MARCA[otraMarca.tarea]}. Revisa si el guión va en la tarea correcta.`,
+      });
+    if (viejas.length)
+      avisos.push({
+        campoLabel: c.label,
+        problema: `Cifra no vigente: ${lista(viejas.map((m) => m.escrito))} no aparece en los selling points ni legales de hoy (Notion) ni en el brief. Revisa si cambió.`,
       });
   }
   return avisos;

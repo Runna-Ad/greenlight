@@ -3,7 +3,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { after } from "next/server";
 import { agregaTildeASolo } from "@/lib/ortografia-reglas";
-import { revisarMarca, marcaConReglas, seccionReglas, cifrasDe, cifrasNoVigentes, type MarcaSlug } from "@/lib/reglas-marca";
+import { revisarMarca, marcaConReglas, seccionReglas, cifrasDe, cifrasNoVigentes, type MarcaSlug, type CifrasOtraMarca } from "@/lib/reglas-marca";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canMoveStatus } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
@@ -156,12 +156,12 @@ export async function revisarOrtografia(
   // Reglas de MARCA (Pedro, 2026-11-06). Dos capas: (1) las exactas (m.n., INE vigente,
   // "préstamo", CASHBACK*…) las revisa el código y nunca se escapan; (2) la sección
   // "Lineamientos" del documento de la marca (H.Ü.E HUB), tal cual, para lo que es criterio.
-  const { marca, reglasDoc, plataformas, duracion, vigente } = await reglasDeLaTarea(ideaId);
+  const { marca, reglasDoc, plataformas, duracion, vigente, otraMarca } = await reglasDeLaTarea(ideaId);
   const camposMarca = campos.map((c) => ({ label: c.label, campo: c.campo, texto: c.texto }));
   const avisosMarca: FlagRevision[] = [
     ...revisarMarca(camposMarca, marca),
     // Cifras que ya no están vigentes (Notion de hoy + legales + brief). Sin Notion sincronizado, nada.
-    ...cifrasNoVigentes(camposMarca, vigente),
+    ...cifrasNoVigentes(camposMarca, vigente, otraMarca),
   ].map((a, i) => ({ id: `m${i}`, campoLabel: a.campoLabel, problema: a.problema, tipo: "marca" as const }));
 
   const porId = new Map(campos.map((c) => [c.campoId, c]));
@@ -432,8 +432,9 @@ async function reglasDeLaTarea(ideaId: string): Promise<{
   plataformas: string;
   duracion: string;
   vigente: Set<string>;
+  otraMarca: CifrasOtraMarca | null;
 }> {
-  const vacio = { marca: null, reglasDoc: null, plataformas: "", duracion: "", vigente: new Set<string>() };
+  const vacio = { marca: null, reglasDoc: null, plataformas: "", duracion: "", vigente: new Set<string>(), otraMarca: null };
   try {
     const db = supabaseAdmin();
     const { data: idea } = await db
@@ -476,7 +477,22 @@ async function reglasDeLaTarea(ideaId: string): Promise<{
       ];
       for (const f of fuentes) for (const c of cifrasDe(f)) vigente.add(c);
     }
-    return { marca, reglasDoc: reglasDoc ? reglasDoc.slice(0, 16000) : null, plataformas, duracion, vigente };
+
+    // Cifras de la OTRA marca (Card ↔ Préstamos), para nombrarla si el guión se pegó en la
+    // tarea equivocada. Sólo sus páginas de Notion: es lo que se sabe vigente de esa marca.
+    let otraMarca: CifrasOtraMarca | null = null;
+    if (marca && deNotion.length) {
+      const otraSlug: MarcaSlug = marca === "card" ? "prestamos" : "card";
+      const { data: om } = await db.from("marcas").select("id").eq("slug", otraSlug).maybeSingle();
+      const omId = (om as { id: string } | null)?.id;
+      if (omId) {
+        const { data: od } = await db.from("hue_kb_documents").select("extracted_text").eq("marca_id", omId).like("storage_path", "notion:%");
+        const cifras = new Set<string>();
+        for (const d of (od ?? []) as { extracted_text: string | null }[]) for (const c of cifrasDe(d.extracted_text ?? "")) cifras.add(c);
+        if (cifras.size) otraMarca = { tarea: marca, otra: otraSlug, cifras };
+      }
+    }
+    return { marca, reglasDoc: reglasDoc ? reglasDoc.slice(0, 16000) : null, plataformas, duracion, vigente, otraMarca };
   } catch {
     return vacio;
   }
