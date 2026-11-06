@@ -1,5 +1,7 @@
 # Project state — Greenlight · by Rünna
 
+> **2026-11-05: la rama `prisma` se dejó de usar (decisión de Pedro).** La carpeta principal está en `main`. Todo lo que abajo dice "en `prisma`" o "merge main → prisma" es historia: Prisma ya vive en `main` desde 2026-11-03. El trabajo nuevo sale de `main` en su rama y worktree.
+
 > **Nombre único: GREENLIGHT** (2026-09-02). Antes el repo/proyecto se llamaba "runna-command-center"
 > (Rünna Command Center); las menciones en el histórico de abajo son ese mismo proyecto.
 > GitHub `Runna-Ad/greenlight` · Vercel proyecto `greenlight` (prod: runna-greenlight.vercel.app) ·
