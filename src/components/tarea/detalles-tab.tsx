@@ -53,8 +53,8 @@ export function DetallesTab({
   const variante =
     plantilla === "guion" ? (varianteGuion(tipoAsset) === "real" ? "Real Person" : "Animado") : null;
   // Junto a "Real Person": quién lo produce, In-house o UGC (pedido del equipo, 2026-11-05).
-  // Sólo para el equipo; la Vista cliente no lo muestra.
-  const produccion = variante === "Real Person" && !verCliente ? etiquetaProduccion(formato) : null;
+  // Se ve en Modo Lectura y Modo Edición; el portal del cliente no pasa `formato`.
+  const produccion = variante === "Real Person" ? etiquetaProduccion(formato) : null;
 
   return (
     <div className="grid gap-x-8 gap-y-6 md:grid-cols-2">
