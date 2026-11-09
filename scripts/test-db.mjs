@@ -3577,5 +3577,47 @@ console.log("\n▶ 0093 — mover planos y agregar uno debajo");
   await db.query(`delete from produccion.ideas where id=$1`, [idea]);
 }
 
+// ── 0095 — delivered_at es "Greenlit DESDE cuándo": se limpia al salir y se re-estampa al entrar ──
+console.log("\n▶ 0095 — delivered_at se limpia al salir de Greenlit");
+{
+  await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false)`);
+  const idea = await scalar(
+    `insert into produccion.ideas (brief_id, family_id, variant_number) select brief_id, family_id, 95 from produccion.ideas where id=$1 returning id`, [IDEA_D]);
+  const mover = (to) => db.query(`select produccion.rpc_move_task($1,$2,true,null,'test 0095',null)`, [idea, to]);
+  const fecha = async () => scalar(`select delivered_at::text from produccion.ideas where id=$1`, [idea]);
+  const enTablero = async () => scalar(`select delivered_at::text from produccion.board_tasks where id=$1`, [idea]);
+
+  // El caso real (A1 CMCOOKINGSP, 2026-11-09): Greenlit el 22 de octubre, devuelta a Con Cliente,
+  // y vuelta a Greenlit semanas después. Antes conservaba la fecha del 22 de octubre.
+  await mover("delivered");
+  ok("entrar a Greenlit estampa la fecha", (await fecha()) !== null);
+  await db.query(`update produccion.ideas set delivered_at='2026-10-22T22:39:53Z' where id=$1`, [idea]);
+  await mover("published");
+  eq("salir de Greenlit (→ Con Cliente) limpia delivered_at", await fecha(), null);
+  eq("…y el tablero (board_tasks) ya no ve fecha", await enTablero(), null);
+  ok("published_at se conserva (el cliente ya la vio)",
+     (await scalar(`select published_at::text from produccion.ideas where id=$1`, [idea])) !== null);
+  await mover("delivered");
+  const otraVez = await fecha();
+  ok("volver a Greenlit estampa una fecha NUEVA (no la del 22 de octubre)",
+     otraVez !== null && otraVez > "2026-11-01");
+  // Salir por cualquier otro camino también limpia (es el trigger, no la RPC). Ninguna salida de
+  // delivered es legal, así que el UPDATE directo lleva el override de lead encendido (a nivel sesión:
+  // en PGlite un set_config local no sobrevive entre sentencias).
+  await db.exec(`select set_config('produccion.lead_override','on',false)`);
+  await db.query(`update produccion.ideas set status='in_corrections' where id=$1`, [idea]);
+  await db.exec(`select set_config('produccion.lead_override','',false)`);
+  eq("salir por UPDATE directo también limpia", await fecha(), null);
+  // completed_at NO se toca: es inmutable por diseño (unidad del mes en Performance).
+  await mover("completed");
+  const completada = await scalar(`select completed_at::text from produccion.ideas where id=$1`, [idea]);
+  await mover("delivered");
+  await mover("published");
+  eq("completed_at no cambia al entrar y salir de Greenlit",
+     await scalar(`select completed_at::text from produccion.ideas where id=$1`, [idea]), completada);
+  await db.query(`delete from produccion.ideas where id=$1`, [idea]);
+  await db.exec(`select set_config('request.jwt.claims','',false)`);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

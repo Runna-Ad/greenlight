@@ -1,5 +1,11 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🔨 2026-11-09 — Greenlit: la fecha `delivered_at` no se limpia al salir (bug hallado al devolver A1 CMCOOKINGSP a Con Cliente)
+- [x] Arreglo de datos en la base viva: A1 CMCOOKINGSP (DiDi, Brief 16/10) de vuelta en published, `delivered_at` en null, override registrado (detalle en session-log 2026-11-09). No revisado en el navegador.
+- [x] Migración 0095 (`20261109120001_greenlight_0095_delivered_at_se_limpia.sql`, rama `fix/greenlit-fecha`): al salir de `delivered` se limpia `delivered_at`; backfill de las fechas huérfanas (2 tareas en vivo: A2 GIRLTHREE y A1 CMCOOKINGSP, que Nils volvió a mover a Greenlit y de regreso a las 11:41). `completed_at` y `published_at` NO se tocan a propósito: el primero es inmutable (Performance cuenta el mes por él), el segundo significa "el cliente ya la vio" (portal). Sin esto, una tarea re-Greenlit hereda la fecha vieja, se salta la columna Greenlit de 7 días y Entregas enseña la fecha equivocada.
+- [x] Prueba en test-db.mjs (bloque 0095, 7 checks): limpia al salir por RPC y por UPDATE directo, el tablero ya no ve fecha, re-entrar estampa fecha nueva, published_at y completed_at intactos. `npm run test:db`: 843 pass, 0 fail.
+- [ ] Aplicar a la base viva sólo con el "ship it" de Pedro: `node scripts/migrate.mjs --only 20261109120001`; después merge `fix/greenlit-fecha` → `main` y push (sin deploy de Vercel: no cambia código de la app).
+
 ## 🟡 2026-11-05 — Caja Comentarios e interruptor HÜE Creativo (rama `feat/hue-creativo` desde origin/main, worktree ../greenlight-hue-creativo, sin commit)
 Next Step: con el OK de Pedro, commit y push de la rama para probar en su preview de Vercel; `main` queda para su "ship it". 0092 ya está aplicada, así que el orden base-antes-que-código ya se cumplió.
 
