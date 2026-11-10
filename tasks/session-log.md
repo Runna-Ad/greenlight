@@ -3490,3 +3490,8 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 - **En vivo (Pedro: "Ship it"):** `node scripts/migrate.mjs --only 20261109120001 --project-ref ybbrpqzbedaxsmotgtkh` → ok; ledger `produccion._migrations` 2026-11-09 18:50:54 UTC. Antes, un DO block con RAISE (deshecho) en la base viva probó la misma SQL: backfill de 2 filas y A1 sin fecha tras Greenlit→Con Cliente con el trigger nuevo. Después: `pg_get_functiondef` trae la línea que limpia, 0 fechas huérfanas, 0 delivered sin fecha, comentario de columna puesto, A1 CMCOOKINGSP y A2 GIRLTHREE en published sin fecha.
 - `fix/greenlit-fecha` (6d202d2) → `main` por fast-forward; push de main lleva también los 2 commits de docs que estaban sin subir (6df6a55, 0920250). El push crea un deploy de Vercel con el mismo código de app (no hace falta nada). La rama local `fix/greenlit-fecha` se puede borrar.
 - **Sin revisar:** el tablero en el navegador. **Para volver atrás:** definición anterior de `guard_idea_status` en la migración 0009.
+
+## 2026-11-10 Session: numeración de planos en vivo
+- Borrar un plano renumera los demás; Modo Lectura/portal muestran el lugar real aunque el título traiga "PLANO N" escrito (main 334ca09, deploy Ready, sin migración).
+- Por qué: Pedro vio "Plano 3" antes que "Plano 2" en lectura y huecos al borrar en edición.
+- Siguiente (opcional, con OK de Pedro): limpiar el número escrito en 56 de 63 títulos guardados. Detalle completo en la entrada del 2026-11-10 al principio de este archivo.
