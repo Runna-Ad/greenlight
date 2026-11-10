@@ -240,6 +240,19 @@ export const PLACEHOLDER_ESTATICO = {
   referencia_nota: "Tarjeta protagonista, look limpio, foco en 1.91:1",
 } as const;
 
+/**
+ * Encabezado de un plano en Modo Lectura y en el portal. El guión pegado guarda el
+ * número DENTRO del título ("PLANO 3 - EXT. COCHERA - MCU"); al mover, insertar o
+ * borrar planos ese número quedaba viejo y el portal mostraba "Plano 3" antes que
+ * "Plano 2". El número escrito se cambia por el lugar real del plano (`n`); el resto
+ * del título se respeta. Sin número escrito, se le pone delante. (Pedro 2026-11-10)
+ */
+export function encabezadoPlano(titulo: string | null | undefined, n: number): string {
+  const t = (titulo ?? "").trim();
+  const resto = t.replace(/^plano\s*#?\s*\d+\s*(?:[-–—:.|]\s*)?/i, "").trim();
+  return resto ? `Plano ${n} - ${resto}` : `Plano ${n}`;
+}
+
 /** Un plano nuevo llega VACÍO. Las instrucciones son placeholder, no dato. */
 export function nuevoPlano(orden: number) {
   return {

@@ -604,17 +604,35 @@ export async function borrarCopy(copyId: string): Promise<{ ok: true } | { ok: f
   return { ok: true };
 }
 
-export async function borrarPlano(planoId: string): Promise<GuardarResultado> {
+/**
+ * Borra un plano y renumera los que quedan a 1..n (0093 `_planos_renumerar`): sin eso
+ * quedaba un hueco (1, 2, 4) y el encabezado seguía diciendo "Plano 4" en el tercero.
+ * Devuelve la lista completa para que el editor la reemplace sin recargar.
+ */
+export async function borrarPlano(
+  planoId: string,
+): Promise<{ ok: true; planos: PlanoVista[] } | { ok: false; error: string }> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
   if (!canMoveStatus(role)) return { ok: false, error: "Este rol no edita la plantilla." };
   const scope = await assertCanActOnRow("planos", planoId);
   if (!scope.ok) return { ok: false, error: scope.error };
 
-  const { error } = await supabaseAdmin().from("planos").delete().eq("id", planoId);
+  const db = supabaseAdmin();
+  const { data: fila } = await db.from("planos").select("idea_id").eq("id", planoId).maybeSingle();
+  const { error } = await db.from("planos").delete().eq("id", planoId);
   if (error) return { ok: false, error: error.message };
+  if (!fila) {
+    revalidatePath("/[cliente]/tareas/[id]", "page");
+    return { ok: true, planos: [] };
+  }
+  const ideaId = fila.idea_id as string;
+  // Si renumerar falla, el plano ya se borró: no es error para la persona, sólo
+  // queda el hueco en `orden` (la pantalla numera por lugar de todos modos).
+  const { error: errRenum } = await db.rpc("_planos_renumerar", { p_idea_id: ideaId });
+  if (errRenum) console.error("borrarPlano: no se pudo renumerar", errRenum.message);
   revalidatePath("/[cliente]/tareas/[id]", "page");
-  return { ok: true };
+  return { ok: true, planos: await planosDeLaTarea(db, ideaId) };
 }
 
 /**

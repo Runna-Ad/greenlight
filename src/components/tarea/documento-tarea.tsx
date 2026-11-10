@@ -25,7 +25,7 @@ import { useWorkspace, reseedKey } from "./workspace-provider";
 import { ReferenciasPlano, type RefVista } from "./referencias-plano";
 import { TextoRico } from "@/components/ui/linkify";
 import { sinNegrita } from "@/lib/negrita";
-import { readTimeS } from "@/lib/plantilla";
+import { readTimeS, encabezadoPlano } from "@/lib/plantilla";
 import type { PlanoVista, EstaticoVista } from "@/lib/vista-tipos";
 
 export type ModoDoc = "editable" | "lectura";
@@ -152,6 +152,9 @@ export function DocumentoTarea({
 
       {planosVisibles.map((p, i) => {
         const refs = refsPorPlano[p.id] ?? [];
+        // El número es el LUGAR del plano en el guión (no `orden`, que puede tener huecos
+        // en guiones viejos), el mismo en edición y en lectura.
+        const n = planos.indexOf(p) + 1;
         return (
           <div key={p.id} className="gl-enter overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             {/* Encabezado del plano — el "PLANO N" a todo lo ancho. En editable el
@@ -164,11 +167,11 @@ export function DocumentoTarea({
                 // El encabezado ya va en negrita; si el título trae marcadores
                 // `**…**` se quitan para no mostrarlos literales aquí (display only).
                 <span className="truncate text-[11px] font-bold uppercase tracking-wide text-foreground">
-                  {sinNegrita(p.titulo)?.trim() || `Plano ${p.orden}`}
+                  {encabezadoPlano(sinNegrita(p.titulo), n)}
                 </span>
               ) : (
                 <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                  Plano {p.orden}
+                  Plano {n}
                 </span>
               )}
               {!lectura && (
@@ -195,7 +198,7 @@ export function DocumentoTarea({
                         type="button"
                         disabled={ocupado || i === 0}
                         onClick={() => onMoverPlano(p.id, -1)}
-                        aria-label={`Subir plano ${p.orden}`}
+                        aria-label={`Subir plano ${n}`}
                         title="Subir un lugar"
                         className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
                       >
@@ -205,7 +208,7 @@ export function DocumentoTarea({
                         type="button"
                         disabled={ocupado || i === planosVisibles.length - 1}
                         onClick={() => onMoverPlano(p.id, 1)}
-                        aria-label={`Bajar plano ${p.orden}`}
+                        aria-label={`Bajar plano ${n}`}
                         title="Bajar un lugar"
                         className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
                       >
@@ -216,7 +219,7 @@ export function DocumentoTarea({
                 </span>
               )}
               {!lectura && !soloLectura && (
-                <BotonBorrarPlano orden={p.orden} onConfirm={() => onQuitarPlano(p.id)} />
+                <BotonBorrarPlano orden={n} onConfirm={() => onQuitarPlano(p.id)} />
               )}
             </div>
 
@@ -225,26 +228,26 @@ export function DocumentoTarea({
               <div className="space-y-2">
                 {!lectura && (
                   <CampoDoc modo={modo} icono={IconoPlano} label="Plano" tabla="planos" filaId={p.id}
-                    campo="titulo" grupo={`Plano ${p.orden}`} valor={p.titulo} placeholder={ph.titulo}
+                    campo="titulo" grupo={`Plano ${n}`} valor={p.titulo} placeholder={ph.titulo}
                     rows={1} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 )}
                 <CampoDoc modo={modo} icono={IconoAccion} label="Acción" tabla="planos" filaId={p.id}
-                  campo="accion" grupo={`Plano ${p.orden}`} valor={p.accion} placeholder={ph.accion}
+                  campo="accion" grupo={`Plano ${n}`} valor={p.accion} placeholder={ph.accion}
                   rows={2} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 <CampoDoc modo={modo} icono={IconoCopy} label="Copy in" tabla="planos" filaId={p.id}
-                  campo="copy_in" grupo={`Plano ${p.orden}`} valor={p.copy_in} placeholder={ph.copy_in}
+                  campo="copy_in" grupo={`Plano ${n}`} valor={p.copy_in} placeholder={ph.copy_in}
                   rows={2} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 <CampoDoc modo={modo} icono={IconoCta} label="CTA" tabla="planos" filaId={p.id}
-                  campo="cta" grupo={`Plano ${p.orden}`} valor={p.cta} placeholder={ph.cta}
+                  campo="cta" grupo={`Plano ${n}`} valor={p.cta} placeholder={ph.cta}
                   rows={1} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 <CampoDoc modo={modo} icono={IconoSfx} label="SFX" tabla="planos" filaId={p.id}
-                  campo="sfx" grupo={`Plano ${p.orden}`} valor={p.sfx} placeholder={ph.sfx}
+                  campo="sfx" grupo={`Plano ${n}`} valor={p.sfx} placeholder={ph.sfx}
                   rows={1} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 <CampoDoc modo={modo} icono={IconoGfx} label="GFX" tabla="planos" filaId={p.id}
-                  campo="gfx" grupo={`Plano ${p.orden}`} valor={p.gfx} placeholder={ph.gfx}
+                  campo="gfx" grupo={`Plano ${n}`} valor={p.gfx} placeholder={ph.gfx}
                   rows={1} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 <CampoDoc modo={modo} icono={IconoEdicion} label="Edición" tabla="planos" filaId={p.id}
-                  campo="edicion" grupo={`Plano ${p.orden}`} valor={p.edicion} placeholder={ph.edicion}
+                  campo="edicion" grupo={`Plano ${n}`} valor={p.edicion} placeholder={ph.edicion}
                   rows={1} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
               </div>
 
@@ -261,7 +264,7 @@ export function DocumentoTarea({
                       filaId={p.id}
                       campo="dialogo"
                       label="Diálogos"
-                      grupo={`Plano ${p.orden}`}
+                      grupo={`Plano ${n}`}
                       valor={p.dialogo ?? ""}
                       icono={<IconoDialogo className="size-3.5 shrink-0 text-deck-orange" />}
                       pretty={<DialogoLectura texto={p.dialogo} />}
@@ -269,7 +272,7 @@ export function DocumentoTarea({
                   ) : null
                 ) : (
                   <CampoDoc modo={modo} icono={IconoDialogo} label="Diálogos" tono="orange" tabla="planos" filaId={p.id}
-                    campo="dialogo" grupo={`Plano ${p.orden}`} valor={p.dialogo} placeholder={ph.dialogo}
+                    campo="dialogo" grupo={`Plano ${n}`} valor={p.dialogo} placeholder={ph.dialogo}
                     rows={6} soloLectura={soloLectura} onEditarPlano={onEditarPlano} />
                 )}
               </div>

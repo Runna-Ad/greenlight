@@ -75,7 +75,8 @@ export function DocumentoGuion({
   const quitarPlano = (id: string) =>
     startTransition(async () => {
       const res = await borrarPlano(id);
-      if (!res.ok) toast.error("error" in res ? res.error : "No se pudo borrar.");
+      if (!res.ok) toast.error(res.error);
+      else if (res.planos.length) reordenar(res.planos);
       else setPlanos((prev) => prev.filter((p) => p.id !== id));
     });
 

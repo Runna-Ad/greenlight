@@ -3572,6 +3572,10 @@ console.log("\n▶ 0093 — mover planos y agregar uno debajo");
   ok("devuelve el id del nuevo", Number(await scalar(`select count(*) from produccion.planos where id=$1 and titulo is null`, [nuevo])) === 1);
   await scalar(`select produccion.rpc_plano_insertar_debajo($1)`, [ids[1]]);
   eq("agregar debajo del último", await orden(), "C1 nuevo2 A3 B4 nuevo5");
+  // Borrar como lo hace la app (borrarPlano): delete + renumerar. Sin hueco.
+  await q(`delete from produccion.planos where id=$1`, [ids[0]]);
+  await q(`select produccion._planos_renumerar($1)`, [idea]);
+  eq("borrar A y renumerar: sin hueco", await orden(), "C1 nuevo2 B3 nuevo4");
   ok("dirección inválida se rechaza", await err(() => db.query(`select produccion.rpc_plano_mover($1, 2)`, [ids[0]])));
   ok("anon no puede mover planos", !(await scalar(`select has_function_privilege('anon','produccion.rpc_plano_mover(uuid,int)','execute')`)));
   await db.query(`delete from produccion.ideas where id=$1`, [idea]);

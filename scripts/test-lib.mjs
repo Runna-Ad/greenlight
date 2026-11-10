@@ -5,6 +5,7 @@ import { missingRequired, requiredFor, tipoGroup, generatesFiles } from "../src/
 import { actionsFor, waitingLabel, transicionRequiereLead } from "../src/lib/task-actions.ts";
 import { filtroBundle, greenlitDeBundle, bundleEnCurso, esGreenlitReciente, MS_VENTANA_GREENLIT } from "../src/lib/bundle.ts";
 import { bucketPortal, ESTADOS_PORTAL, estadoBriefPanel, DIAS_COMPLETADO_EN_PANEL } from "../src/lib/portal-bucket.ts";
+import { encabezadoPlano } from "../src/lib/plantilla.ts";
 import { plantillaPara, requiereCortinilla, readTimeS, soloHablado, PALABRAS_POR_MINUTO, parseDuracion, presupuestoDialogoS, LEGAL_SECONDS, COLCHON_MIN_S, nuevoPlano, nuevoEstatico, PLACEHOLDER_GUION, PLACEHOLDER_ESTATICO, varianteGuion, placeholdersGuion, voz, notaGlobal } from "../src/lib/plantilla.ts";
 import { splitIdeaCode, nextVariantForLetter, idsIdeaRepetida, combosDeTarjeta, nombresDeTarjeta, faltantesDraft, construirTarea, tarjetaEnBlanco, camposLlenos } from "../src/lib/intake-crear.ts";
 import { evaluarEquipo, atribuirAutor } from "../src/lib/evaluacion.ts";
@@ -289,6 +290,14 @@ eq("plantillaPara y tipoGroup siguen de acuerdo en los 6 tipos + desconocido",
      .every(t => equivalente[plantillaPara(t)] === tipoGroup(t)), true);
 
 // Read-time: espejo del trigger — sólo lo HABLADO, a 200 pal/min (ceil(palabras × 3/10)).
+console.log("\n▶ encabezadoPlano() — número del título = lugar real del plano");
+eq("número viejo se cambia", encabezadoPlano("PLANO 3 - EXT. COCHERA - MCU", 2), "Plano 2 - EXT. COCHERA - MCU");
+eq("minúsculas y dos puntos", encabezadoPlano("plano 10: int sala", 4), "Plano 4 - int sala");
+eq("sin número escrito, se antepone", encabezadoPlano("EXT. COCHERA - MS", 1), "Plano 1 - EXT. COCHERA - MS");
+eq("sólo \"Plano 5\"", encabezadoPlano("Plano 5", 3), "Plano 3");
+eq("vacío", encabezadoPlano(null, 6), "Plano 6");
+eq("\"Planos\" no es número", encabezadoPlano("Planos generales", 1), "Plano 1 - Planos generales");
+
 eq("sin diálogo, 0s", readTimeS(""), 0);
 eq("sólo espacios, 0s", readTimeS("   "), 0);
 eq("null, 0s", readTimeS(null), 0);
