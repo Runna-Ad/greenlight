@@ -1,5 +1,11 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-10 — Numeración de planos: borrar renumera, Modo Lectura muestra el lugar real (main 334ca09)
+**Hecho:** borrar un plano llama `_planos_renumerar` (0093) y el editor recibe la lista; el encabezado numera por el lugar del plano (igual en edición y lectura); en lectura/portal el "PLANO N" escrito en el título se cambia por el lugar real (`encabezadoPlano`). Sin migración.
+**Pruebas:** test-lib 732/0 · test-db 844/0 · tsc 0 · build ✓. En la app local sobre CMHOOKDANI: lectura Plano 1–7 en orden, edición 1–11 sin hueco.
+**Sin probar:** borrar un plano en la app (cambiaría datos reales; cubierto por la prueba de base).
+**Pendiente opcional:** el campo título en edición sigue diciendo "PLANO 3 - …" (56 de 63 títulos traen número); limpiar los títulos guardados sería un cambio de datos en vivo. CMHOOKDANI tiene 4 planos vacíos al final (8–11).
+
 ## 2026-11-04 — Trabajo guardado por persona en Formatos PSD y Admin › Actividad (rama `feat/actividad-y-guardado`, preview de `prisma`, no en vivo)
 **Hecho:** Pedro eligió log A y guardado 1. El PSD a medias sobrevive a recargar, en el navegador de cada persona; salir pregunta. La pestaña Actividad muestra por persona, por proyecto y línea de tiempo, para admin y Master. Worktree ../greenlight-actividad.
 **Pruebas:** en `tasks/todo.md`. **0091 aplicada** con el OK de Pedro; `main` sigue en 3c92880.
