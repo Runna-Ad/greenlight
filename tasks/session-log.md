@@ -3504,7 +3504,8 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 
 ## 2026-11-11 Session: botón Solicitar acceso en el login de clientes
 - Pedro preguntó quién recibe el aviso cuando un cliente pide acceso (admins + master, campana + correo) y cómo es el alta del cliente paso a paso.
-- Cambio (main 00e7941, NO pusheado): recuadro "¿Primera vez aquí?" con botón Solicitar acceso arriba de Google en /portal/login; el aviso de Google sin acceso ahora apunta a ese botón. Revisado en localhost:3000.
+- Cambio (main 00e7941, EN VIVO 2026-11-11, deploy dpl_FvrawG5tzoVX7EAGmHsi8X5srown sobre 438204c; para volver: dpl_2SfTUxyoB5WBqGq7pCLDyjNEbSZc): recuadro "¿Primera vez aquí?" con botón Solicitar acceso arriba de Google en /portal/login; el aviso de Google sin acceso ahora apunta a ese botón. Revisado en localhost:3000.
 - Pedro: sin tiempo de espera en el mensaje de solicitud (aprueban casi al momento).
-- Siguiente: push a main (deploy a producción) sólo con el "ship it" de Pedro.
+- Revisado en vivo: el recuadro sale arriba de Google, sin errores de consola. Sin probar en vivo: mandar una solicitud real (avisaría a todos los admins).
+- Siguiente: nada pendiente de esto.
 - **Actualización:** Pedro dijo "ship it": push de main (334ca09..71e171b), deploy dpl_2SfTUxyoB5WBqGq7pCLDyjNEbSZc Ready, revisado en greenlight.runna.agency con la sesión de Pedro. Otra sesión trabajó en la misma carpeta (login de clientes, 00e7941); sus commits quedaron sin push, son suyos.
