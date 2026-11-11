@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Mail, ShieldOff, ShieldCheck, Plus, Building2 } from "lucide-react";
+import { Mail, ShieldOff, ShieldCheck, Plus, Building2, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -25,6 +25,9 @@ export function ClientesTab({
 
   const setActivo = (id: string, active: boolean) =>
     setUsuarios((prev) => prev.map((u) => (u.id === id ? { ...u, active } : u)));
+
+  const activos = usuarios.filter((u) => u.active);
+  const bajas = usuarios.filter((u) => !u.active);
 
   return (
     <div className="space-y-8">
@@ -56,21 +59,49 @@ export function ClientesTab({
         Partners que entran a su portal. Puedes revocar o reactivar el acceso de cada uno.
       </p>
 
-      {usuarios.length === 0 ? (
+      {activos.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          Todavía no hay clientes con acceso. Aprueba una solicitud en «Invitaciones».
+          {bajas.length === 0
+            ? "Todavía no hay clientes con acceso. Aprueba una solicitud en «Invitaciones»."
+            : "Ningún cliente tiene acceso ahora mismo."}
         </p>
       ) : (
-        <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          {usuarios.map((u) => (
-            <li key={u.id}>
-              <ClienteRow u={u} onActivo={setActivo} />
-            </li>
-          ))}
-        </ul>
+        <ListaClientes usuarios={activos} onActivo={setActivo} />
+      )}
+
+      {/* Los dados de baja se guardan (su historial sigue firmado con su nombre) pero no
+          estorban la lista: van en un bloque plegado. Revocar mueve la fila aquí al instante. */}
+      {bajas.length > 0 && (
+        <details className="group mt-4">
+          <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" />
+            Dados de baja ({bajas.length})
+          </summary>
+          <div className="mt-2">
+            <ListaClientes usuarios={bajas} onActivo={setActivo} />
+          </div>
+        </details>
       )}
       </section>
     </div>
+  );
+}
+
+function ListaClientes({
+  usuarios,
+  onActivo,
+}: {
+  usuarios: ClienteUsuarioRow[];
+  onActivo: (id: string, active: boolean) => void;
+}) {
+  return (
+    <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      {usuarios.map((u) => (
+        <li key={u.id}>
+          <ClienteRow u={u} onActivo={onActivo} />
+        </li>
+      ))}
+    </ul>
   );
 }
 
