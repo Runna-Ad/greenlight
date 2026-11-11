@@ -3525,5 +3525,5 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 ## 2026-11-11 Session: código para clientes cuyo correo no llega
 - Al aprobar a alguien sin contraseña, el correo trae un código; Admin → Clientes → «Generar código» lo muestra para mandarlo por chat; login → «Ya tengo un código» crea la contraseña sin pedir otro.
 - Revisión de seguridad hecha y aplicada: 1 h sin códigos públicos tras uno del admin, código fuera del asunto, nunca cuentas del equipo, aviso si el correo de aprobación no sale. Copiar con respaldo si el navegador niega el portapapeles.
-- Probado en el preview: Pedro creó contraseña con el código y entró al portal (20:51 UTC). main d86bbd5 pusheado; deploy a producción en curso.
+- Probado en el preview: Pedro creó contraseña con el código y entró al portal (20:51 UTC). EN VIVO: main d86bbd5, deploy dpl_BAjhe1Y8m4sdcg1MRnPhLvYik2rY (Ready); para volver: dpl_HG6DdGGv5KZ3D1hwSucogBdqRV9k. Sin probar en vivo: el botón Copiar.
 - Siguiente: aprobar a los tres clientes pendientes en Invitaciones y mandar código por chat si hace falta.
