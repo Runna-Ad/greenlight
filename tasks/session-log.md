@@ -3509,3 +3509,9 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 - Revisado en vivo: el recuadro sale arriba de Google, sin errores de consola. Sin probar en vivo: mandar una solicitud real (avisaría a todos los admins).
 - Siguiente: nada pendiente de esto.
 - **Actualización:** Pedro dijo "ship it": push de main (334ca09..71e171b), deploy dpl_2SfTUxyoB5WBqGq7pCLDyjNEbSZc Ready, revisado en greenlight.runna.agency con la sesión de Pedro. Otra sesión trabajó en la misma carpeta (login de clientes, 00e7941); sus commits quedaron sin push, son suyos.
+
+## 2026-11-11 Session: solicitud de acceso que "no aparecía"
+- Un cliente de DiDi pidió acceso; la solicitud SÍ estaba guardada y avisada. Vive en Admin → Invitaciones, pero la campana y el correo llevaban a /admin, que abre Equipo.
+- Fix 0ac7b25 (NO pusheado): ambos enlaces van a /admin?tab=invitaciones. tsc OK.
+- Otras dos solicitudes de DiDi quedaron a medias (un correo mal escrito, un código sin meter); Pedro les avisa.
+- Siguiente: push con el "ship it" de Pedro.
