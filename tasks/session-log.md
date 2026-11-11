@@ -3495,3 +3495,9 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 - Borrar un plano renumera los demás; Modo Lectura/portal muestran el lugar real aunque el título traiga "PLANO N" escrito (main 334ca09, deploy Ready, sin migración).
 - Por qué: Pedro vio "Plano 3" antes que "Plano 2" en lectura y huecos al borrar en edición.
 - Siguiente (opcional, con OK de Pedro): limpiar el número escrito en 56 de 63 títulos guardados. Detalle completo en la entrada del 2026-11-10 al principio de este archivo.
+
+## 2026-11-11 Session: clientes dados de baja en bloque plegado
+- Admin → Clientes: los revocados pasan a un bloque cerrado «Dados de baja (N)» bajo los activos (main ca78e87, sin migración, sin push).
+- Por qué: Pedro preguntó si podía borrar perfiles de cliente; no existe borrar (sólo Revocar). Eligió ocultarlos en vez de un borrado real (perderían su nombre en 18 tablas de historial).
+- También respondido: entrar con Google con un correo @didi NO une a DiDi solo; pasa por solicitud + aprobación.
+- Revisado en localhost con datos reales (4 activos, 1 en el bloque). Sin probar: pulsar Revocar/Reactivar. Siguiente: push a main con el "ship it" de Pedro (main va 3 commits adelante).
