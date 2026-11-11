@@ -192,7 +192,8 @@ export async function guardarContrasenaVerificada(userId: string, password: stri
   return supabaseAdmin().auth.admin.updateUserById(userId, {
     password,
     email_confirm: true,
-    app_metadata: { clave_verificada: true },
+    // Con la contraseña creada, la ventana del código del admin ya no hace falta.
+    app_metadata: { clave_verificada: true, codigo_admin_hasta: null },
   });
 }
 
@@ -204,7 +205,7 @@ export async function guardarContrasenaVerificada(userId: string, password: stri
  * proyecto exige confirmar el correo (esa cuenta no podría entrar), pero es un ajuste
  * COMPARTIDO con S.P.A.M que puede cambiar sin avisar. (security review 2026-09-21)
  */
-export async function asegurarCuentaCliente(email: string): Promise<{ userId: string } | null> {
+export async function asegurarCuentaCliente(email: string): Promise<{ userId: string; tieneClave: boolean } | null> {
   const db = supabaseAdmin();
   await db.auth.admin.createUser({ email, email_confirm: true }).catch(() => undefined);
   const { data, error } = await db.auth.admin.generateLink({ type: "magiclink", email });
@@ -225,7 +226,7 @@ export async function asegurarCuentaCliente(email: string): Promise<{ userId: st
       return null;
     }
   }
-  return { userId: user.id };
+  return { userId: user.id, tieneClave: user.app_metadata?.clave_verificada === true };
 }
 
 /** Correo al APROBAR: ya puede entrar (con la contraseña que eligió o con Google). */
@@ -242,4 +243,51 @@ export async function mandarCorreoAccesoListo(email: string): Promise<{ ok: bool
     html: htmlFor({ type: "client_invite", title, body, ctaUrl: url }),
   });
   return { ok: r.ok };
+}
+
+/**
+ * Correo al APROBAR a alguien que todavía no tiene contraseña: su cuenta ya está activa
+ * y el código le sirve para crearla en "Ya tengo un código". Si el correo no le llega
+ * (filtros de empresa), un admin genera otro desde Clientes y se lo manda por chat.
+ */
+export async function mandarCorreoCuentaActiva(email: string, codigo: string): Promise<{ ok: boolean }> {
+  const title = "Tu cuenta de Greenlight está activa";
+  const body =
+    `Tu código para crear tu contraseña es: ${codigo}\n\n` +
+    "Entra a la página de Greenlight, toca \"Ya tengo un código\" y escribe tu correo, este código y la contraseña que quieras. " +
+    "El código vence pronto y sirve una sola vez; si ya venció, pídele uno nuevo a tu contacto en Rünna.";
+  const url = `${APP_URL}/portal/login?modo=codigo`;
+  const r = await sendEmail({
+    to: email,
+    // El código NO va en el asunto: el asunto se ve en notificaciones y en los registros
+    // de los filtros de correo.
+    subject: "Greenlight · Tu cuenta está activa",
+    text: textFor(title, body, url),
+    html: htmlFor({ type: "client_invite", title, body, ctaUrl: url, ctaLabel: "Crear mi contraseña", saltos: true }),
+  });
+  return { ok: r.ok };
+}
+
+/** Cuánto tiempo, tras generar un código desde el admin, "Olvidé mi contraseña" no manda otro. */
+export const VENTANA_CODIGO_ADMIN_MS = 60 * 60_000;
+
+/**
+ * Marca (sólo el servidor escribe app_metadata) que un admin acaba de generar un código
+ * para esta cuenta. Mientras dure, un "Olvidé mi contraseña" público NO genera otro —
+ * si no, cualquiera que sepa el correo podría cancelar el código que el admin mandó por
+ * chat, y el nuevo iría al correo que justamente no le llega.
+ */
+export async function marcarCodigoAdmin(userId: string): Promise<boolean> {
+  const { error } = await supabaseAdmin().auth.admin.updateUserById(userId, {
+    app_metadata: { codigo_admin_hasta: new Date(Date.now() + VENTANA_CODIGO_ADMIN_MS).toISOString() },
+  });
+  if (error) console.error("[acceso-cliente] no se pudo marcar el código del admin —", error.message);
+  return !error;
+}
+
+/** ¿Hay un código de admin vigente para esta cuenta? (ver marcarCodigoAdmin) */
+export async function codigoAdminVigente(userId: string): Promise<boolean> {
+  const { data } = await supabaseAdmin().auth.admin.getUserById(userId);
+  const hasta = data?.user?.app_metadata?.codigo_admin_hasta;
+  return typeof hasta === "string" && Date.parse(hasta) > Date.now();
 }

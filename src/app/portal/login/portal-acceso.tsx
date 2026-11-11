@@ -15,12 +15,13 @@ const ERROR_RED = "No se pudo conectar. Revisa tu internet e intenta de nuevo.";
 const linkCls =
   "cursor-pointer font-medium text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none";
 
-type Modo = "entrar" | "solicitar" | "recuperar";
+type Modo = "entrar" | "solicitar" | "recuperar" | "codigo";
 
 const SUBTITULO: Record<Modo, string> = {
   entrar: "Entra con Google o con tu correo y contraseña.",
   solicitar: "Pide acceso a tu portal. Confirmas tu correo con un código y un admin de Rünna lo aprueba.",
   recuperar: "Te mandamos un código para crear una contraseña nueva. También sirve si nunca tuviste una.",
+  codigo: "Escribe el código que te mandamos (por correo o por chat) y crea tu contraseña.",
 };
 
 /**
@@ -29,6 +30,9 @@ const SUBTITULO: Record<Modo, string> = {
  *    directo con Supabase; luego el servidor decide a dónde va).
  *  • "solicitar" — primera vez: datos + contraseña → código al correo → solicitud.
  *  • "recuperar" — olvidó (o nunca tuvo) contraseña: código al correo → nueva.
+ *  • "codigo" — YA tiene un código (del correo de aprobación o que un admin le mandó por
+ *    chat): escribe correo + código + contraseña SIN pedir otro. Pedir otro invalidaría
+ *    el que ya tiene — por eso esta puerta no manda nada.
  */
 export function PortalAcceso({ next, modoInicial, aviso }: { next?: string; modoInicial: Modo; aviso: string | null }) {
   const [modo, setModo] = useState<Modo>(modoInicial);
@@ -66,14 +70,30 @@ export function PortalAcceso({ next, modoInicial, aviso }: { next?: string; modo
       )}
 
       {modo === "entrar" && (
-        <EntrarForm next={next} email={emailCompartido} onEmail={setEmailCompartido} onOlvide={() => ir("recuperar")} />
+        <EntrarForm
+          next={next}
+          email={emailCompartido}
+          onEmail={setEmailCompartido}
+          onOlvide={() => ir("recuperar")}
+          onCodigo={() => ir("codigo")}
+        />
       )}
       {modo === "solicitar" && <CodigoFlow motivo="solicitud" next={next} email={emailCompartido} onEmail={setEmailCompartido} onEntrar={() => ir("entrar")} />}
       {modo === "recuperar" && <CodigoFlow motivo="recuperar" next={next} email={emailCompartido} onEmail={setEmailCompartido} onEntrar={() => ir("entrar")} />}
+      {modo === "codigo" && (
+        <CodigoFlow
+          motivo="recuperar"
+          sinEnvio
+          next={next}
+          email={emailCompartido}
+          onEmail={setEmailCompartido}
+          onEntrar={() => ir("entrar")}
+        />
+      )}
 
       {modo !== "entrar" && (
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          {modo === "solicitar" ? (
+          {modo === "solicitar" || modo === "codigo" ? (
             <>
               ¿Ya tienes acceso?{" "}
               <button type="button" className={linkCls} onClick={() => ir("entrar")}>
@@ -184,11 +204,13 @@ function EntrarForm({
   email,
   onEmail,
   onOlvide,
+  onCodigo,
 }: {
   next?: string;
   email: string;
   onEmail: (v: string) => void;
   onOlvide: () => void;
+  onCodigo: () => void;
 }) {
   const [password, setPassword] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -245,6 +267,10 @@ function EntrarForm({
           <button type="button" className={linkCls} onClick={onOlvide}>
             ¿Olvidaste tu contraseña?
           </button>
+          <span className="text-muted-foreground"> · </span>
+          <button type="button" className={linkCls} onClick={onCodigo}>
+            Ya tengo un código
+          </button>
         </p>
       </form>
     </>
@@ -261,14 +287,18 @@ function CodigoFlow({
   email,
   onEmail,
   onEntrar,
+  sinEnvio: sinEnvioInicial = false,
 }: {
   motivo: "solicitud" | "recuperar";
   next?: string;
   email: string;
   onEmail: (v: string) => void;
   onEntrar: () => void;
+  /** Ya tiene un código: va directo al paso del código y NO pide otro (lo invalidaría). */
+  sinEnvio?: boolean;
 }) {
-  const [paso, setPaso] = useState<"datos" | "codigo" | "hecho">("datos");
+  const [sinEnvio, setSinEnvio] = useState(sinEnvioInicial);
+  const [paso, setPaso] = useState<"datos" | "codigo" | "hecho">(sinEnvioInicial ? "codigo" : "datos");
   const [form, setForm] = useState({ name: "", brand: "", password: "" });
   const [codigo, setCodigo] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -394,17 +424,35 @@ function CodigoFlow({
   if (paso === "codigo") {
     return (
       <form onSubmit={onCodigo} className="mt-6 space-y-3">
-        <div className="flex items-start gap-2 rounded-md bg-secondary/60 px-3 py-2.5 text-sm text-muted-foreground" role="status">
-          <MailCheck className="mt-0.5 size-4 shrink-0 text-[color:var(--greenlight)]" aria-hidden />
-          <span>
-            Si <span className="font-medium text-foreground">{email.trim()}</span>{" "}
-            {motivo === "recuperar" ? "tiene acceso al portal, " : ""}te llegó un código de 6 dígitos. Puede tardar un par
-            de minutos — revisa también spam.
-          </span>
-        </div>
+        {sinEnvio ? (
+          <div className="space-y-1">
+            <label htmlFor="codigo-email" className="text-xs font-medium text-muted-foreground">
+              Tu correo
+            </label>
+            <input
+              id="codigo-email"
+              type="email"
+              autoComplete="email"
+              className={inputCls}
+              placeholder="tucorreo@empresa.com"
+              value={email}
+              onChange={(e) => onEmail(e.target.value)}
+              required
+            />
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 rounded-md bg-secondary/60 px-3 py-2.5 text-sm text-muted-foreground" role="status">
+            <MailCheck className="mt-0.5 size-4 shrink-0 text-[color:var(--greenlight)]" aria-hidden />
+            <span>
+              Si <span className="font-medium text-foreground">{email.trim()}</span>{" "}
+              {motivo === "recuperar" ? "tiene acceso al portal, " : ""}te llegó un código de 6 dígitos. Puede tardar un par
+              de minutos — revisa también spam.
+            </span>
+          </div>
+        )}
         <div className="space-y-1">
           <label htmlFor="codigo" className="text-xs font-medium text-muted-foreground">
-            Código del correo
+            {sinEnvio ? "Tu código" : "Código del correo"}
           </label>
           <input
             id="codigo"
@@ -440,23 +488,25 @@ function CodigoFlow({
         <Button type="submit" size="lg" className="mt-1 w-full" disabled={cargando}>
           {cargando ? "Verificando…" : motivo === "solicitud" ? "Confirmar y enviar solicitud" : "Guardar y entrar"}
         </Button>
-        <p className="text-center text-xs text-muted-foreground">
-          <button type="button" className={linkCls} onClick={onReenviar} disabled={cargando}>
-            Reenviar código
-          </button>
-          {" · "}
-          <button
-            type="button"
-            className={linkCls}
-            onClick={() => {
-              setError(null);
-              setCodigo("");
-              setPaso("datos");
-            }}
-          >
-            Cambiar correo
-          </button>
-        </p>
+        {!sinEnvio && (
+          <p className="text-center text-xs text-muted-foreground">
+            <button type="button" className={linkCls} onClick={onReenviar} disabled={cargando}>
+              Reenviar código
+            </button>
+            {" · "}
+            <button
+              type="button"
+              className={linkCls}
+              onClick={() => {
+                setError(null);
+                setCodigo("");
+                setPaso("datos");
+              }}
+            >
+              Cambiar correo
+            </button>
+          </p>
+        )}
       </form>
     );
   }
@@ -527,6 +577,18 @@ function CodigoFlow({
       </Button>
       {motivo === "recuperar" && (
         <p className="text-center text-xs">
+          <button
+            type="button"
+            className={linkCls}
+            onClick={() => {
+              setError(null);
+              setSinEnvio(true);
+              setPaso("codigo");
+            }}
+          >
+            Ya tengo un código
+          </button>
+          <span className="text-muted-foreground"> · </span>
           <button type="button" className={linkCls} onClick={onEntrar}>
             Volver a la entrada
           </button>

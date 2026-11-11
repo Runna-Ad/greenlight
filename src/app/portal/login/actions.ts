@@ -15,6 +15,7 @@ import {
   mandarCorreoCodigo,
   verificarCodigo,
   guardarContrasenaVerificada,
+  codigoAdminVigente,
   sesionConContrasena,
   contrasenaPermitida,
   type MotivoCodigo,
@@ -119,6 +120,9 @@ async function enviarCodigoSiCorresponde(email: string, motivo: MotivoCodigo): P
   // "Olvidé mi contraseña" sólo para quien ya es cliente o ya tiene una solicitud —
   // así no se crean cuentas de auth para correos al azar.
   if (motivo === "recuperar" && !perfil && !(await tieneSolicitudPendiente(email))) return;
+  // Un admin le mandó un código por chat hace poco: no lo cancelamos con uno nuevo
+  // (la respuesta pública es la misma, así que no revela nada).
+  if (perfil && (await codigoAdminVigente(perfil.profileId))) return;
 
   const gen = await generarCodigo(email);
   if (!gen) return;

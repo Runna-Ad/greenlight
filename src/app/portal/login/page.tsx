@@ -44,7 +44,12 @@ export default async function PortalLoginPage({
     }
   }
 
-  const modoInicial = modo === "recuperar" ? "recuperar" : modo === "solicitar" || solicitar === "1" ? "solicitar" : "entrar";
+  const modoInicial =
+    modo === "recuperar" || modo === "codigo"
+      ? modo
+      : modo === "solicitar" || solicitar === "1"
+        ? "solicitar"
+        : "entrar";
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-sidebar p-6">

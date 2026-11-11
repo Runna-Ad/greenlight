@@ -6,7 +6,14 @@ import { getCurrentUser } from "@/lib/identity";
 import { canAdmin } from "@/lib/roles";
 import { slugify } from "@/lib/slug";
 import { hasEmail } from "@/lib/email";
-import { asegurarCuentaCliente, mandarCorreoAccesoListo } from "@/lib/auth/acceso-cliente";
+import {
+  asegurarCuentaCliente,
+  mandarCorreoAccesoListo,
+  mandarCorreoCuentaActiva,
+  generarCodigo,
+  marcarCodigoAdmin,
+} from "@/lib/auth/acceso-cliente";
+import { isAgencyEmail } from "@/lib/auth/allowlist";
 
 export type InvitacionRow = {
   id: string;
@@ -28,6 +35,8 @@ export type ClienteUsuarioRow = {
 };
 
 export type AccionResult = { ok: true } | { ok: false; error: string };
+/** `correo: false` = se aprobó pero el correo al cliente no salió (para avisar al admin). */
+export type AprobarResult = { ok: true; correo: boolean } | { ok: false; error: string };
 
 async function gate(): Promise<{ userId: string } | null> {
   const u = await getCurrentUser();
@@ -95,7 +104,7 @@ export async function aprobarInvitacion(input: {
   inviteId: string;
   clientId: string;
   marcaId?: string | null;
-}): Promise<AccionResult> {
+}): Promise<AprobarResult> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const g = await gate();
   if (!g) return { ok: false, error: "Sólo un admin aprueba solicitudes." };
@@ -157,14 +166,24 @@ export async function aprobarInvitacion(input: {
   }
   const loSelle = !!(sellada && sellada.length); // sólo quien la selló manda el aviso
 
-  // 5) Avisa al cliente (branded, transaccional): ya puede entrar con su contraseña o
-  //    con Google. Sin enlaces de un solo uso — los escáneres de correo los gastan.
-  if (loSelle && hasEmail()) {
-    await mandarCorreoAccesoListo(email);
+  // 5) Avisa al cliente (branded, transaccional). Quien ya tiene contraseña: "ya puedes
+  //    entrar". Quien no: el correo trae un CÓDIGO para crearla ("Ya tengo un código").
+  //    Sin enlaces de un solo uso — los escáneres de correo los gastan. Si el correo no
+  //    llega (filtros de empresa), un admin genera otro código en Clientes.
+  let correo = true;
+  if (loSelle) {
+    if (!hasEmail()) correo = false;
+    else {
+      // Cuentas del equipo (@runna, pruebas): nunca un código — el proyecto de auth es
+      // compartido con S.P.A.M y el código cambiaría su contraseña allá también.
+      const gen = cuenta.tieneClave || isAgencyEmail(email) ? null : await generarCodigo(email);
+      const r = gen ? await mandarCorreoCuentaActiva(email, gen.codigo) : await mandarCorreoAccesoListo(email);
+      correo = r.ok;
+    }
   }
 
   revalidatePath("/admin");
-  return { ok: true };
+  return { ok: true, correo };
 }
 
 /** RECHAZAR una solicitud (no crea nada, no manda nada). */
@@ -181,6 +200,46 @@ export async function rechazarInvitacion(inviteId: string): Promise<AccionResult
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
   return { ok: true };
+}
+
+export type CodigoClienteResult = { ok: true; codigo: string; email: string } | { ok: false; error: string };
+
+/**
+ * Plan B cuando el correo no llega (filtros de empresa): genera un código NUEVO para un
+ * cliente activo y se lo DEVUELVE al admin para que lo mande por chat. No se guarda en
+ * ningún lado; generar otro invalida el anterior. Con él, el cliente crea su contraseña
+ * en "Ya tengo un código". Queda en los logs quién lo generó y para quién.
+ */
+export async function generarCodigoCliente(profileId: string): Promise<CodigoClienteResult> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const g = await gate();
+  if (!g) return { ok: false, error: "Sólo un admin genera códigos." };
+  if (typeof profileId !== "string" || !profileId) return { ok: false, error: "Falta el cliente." };
+
+  const { data: perfil } = await supabaseAdmin()
+    .from("profiles")
+    .select("id, email, role, active")
+    .eq("id", profileId)
+    .maybeSingle<{ id: string; email: string | null; role: string; active: boolean }>();
+  // Sólo clientes ACTIVOS: nunca una cuenta del equipo (el código le cambiaría la
+  // contraseña) ni alguien dado de baja.
+  if (!perfil || perfil.role !== "client") return { ok: false, error: "Ese cliente no existe." };
+  if (!perfil.active) return { ok: false, error: "Ese cliente está dado de baja. Reactívalo primero." };
+
+  // El correo sale de la cuenta de auth DE ESTE perfil (no de profiles.email, que podría
+  // haberse desviado): así el código nunca toca otra cuenta ni crea una nueva.
+  const { data: au } = await supabaseAdmin().auth.admin.getUserById(perfil.id);
+  const email = au?.user?.email?.trim().toLowerCase();
+  if (!email) return { ok: false, error: "Ese cliente no tiene cuenta de acceso." };
+  if (isAgencyEmail(email)) return { ok: false, error: "Las cuentas del equipo entran con Google." };
+
+  const gen = await generarCodigo(email);
+  if (!gen || gen.userId !== perfil.id) {
+    return { ok: false, error: "No se pudo generar el código. Intenta de nuevo." };
+  }
+  await marcarCodigoAdmin(perfil.id);
+  console.info("[clientes] código generado por admin", { adminId: g.userId, clienteId: perfil.id });
+  return { ok: true, codigo: gen.codigo, email };
 }
 
 /** Revocar / reactivar el acceso de un cliente (soft: active=false). */

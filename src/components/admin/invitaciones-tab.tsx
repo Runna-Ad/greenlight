@@ -73,7 +73,12 @@ function InvitacionRowCard({
         toast.error(res.error);
         return;
       }
-      toast.success(`Acceso aprobado — le avisamos a ${inv.email}.`);
+      if (res.correo) toast.success(`Acceso aprobado — le avisamos a ${inv.email}.`);
+      else
+        toast.warning(
+          `Acceso aprobado, pero el correo a ${inv.email} no salió. Ve a «Clientes» → «Generar código» y mándaselo por chat.`,
+          { duration: 12000 },
+        );
       onDecidir();
     });
 

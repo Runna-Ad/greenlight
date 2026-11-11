@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Mail, ShieldOff, ShieldCheck, Plus, Building2, ChevronRight } from "lucide-react";
+import { Mail, ShieldOff, ShieldCheck, Plus, Building2, ChevronRight, KeyRound, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   cambiarAccesoCliente,
   crearCliente,
+  generarCodigoCliente,
   type ClienteUsuarioRow,
   type EmpresaCliente,
 } from "@/app/(app)/admin/clientes-actions";
@@ -158,6 +159,28 @@ function ClienteRow({
 }) {
   const [confirmando, setConfirmando] = useState(false);
   const [pending, start] = useTransition();
+  // El código se muestra UNA vez, sólo en esta pantalla; no se guarda en ningún lado.
+  const [codigo, setCodigo] = useState<string | null>(null);
+
+  const generar = () =>
+    start(async () => {
+      const res = await generarCodigoCliente(u.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setCodigo(res.codigo);
+    });
+
+  const copiar = async () => {
+    if (!codigo) return;
+    try {
+      await navigator.clipboard.writeText(codigo);
+      toast.success("Código copiado.");
+    } catch {
+      toast.error("No se pudo copiar. Selecciona el código y cópialo a mano.");
+    }
+  };
 
   const cambiar = (active: boolean) =>
     start(async () => {
@@ -172,6 +195,7 @@ function ClienteRow({
     });
 
   return (
+    <div>
     <div className="flex items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{u.name}</p>
@@ -184,6 +208,19 @@ function ClienteRow({
       <Pill status={u.active ? "completed" : "warning"} fill="soft">
         {u.active ? "Activo" : "Sin acceso"}
       </Pill>
+
+      {u.active && !confirmando && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onClick={generar}
+          className="gap-1.5"
+          title="Para cuando el correo no le llega: genera un código y mándaselo por chat"
+        >
+          <KeyRound className="size-3.5" /> Generar código
+        </Button>
+      )}
 
       {u.active ? (
         confirmando ? (
@@ -205,6 +242,29 @@ function ClienteRow({
           <ShieldCheck className="size-3.5" /> Reactivar
         </Button>
       )}
+    </div>
+
+    {codigo && u.active && (
+      <div role="status" className="mx-4 mb-3 rounded-lg border border-border bg-secondary/40 px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="select-all font-mono text-lg font-semibold tracking-[0.25em] text-foreground">{codigo}</span>
+          <Button size="sm" variant="secondary" onClick={copiar} className="gap-1.5">
+            <Copy className="size-3.5" /> Copiar
+          </Button>
+          <button
+            type="button"
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setCodigo(null)}
+          >
+            Ocultar
+          </button>
+        </div>
+        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+          Mándaselo por chat. En la página de entrada toca «Ya tengo un código» y escribe su correo, este código y la
+          contraseña que quiera. Vence pronto y sirve una vez; generar otro cancela éste.
+        </p>
+      </div>
+    )}
     </div>
   );
 }
