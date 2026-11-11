@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Mail, ShieldOff, ShieldCheck, Plus, Building2, ChevronRight, KeyRound, Copy } from "lucide-react";
 import { toast } from "sonner";
 
@@ -172,13 +172,51 @@ function ClienteRow({
       setCodigo(res.codigo);
     });
 
+  const codigoRef = useRef<HTMLSpanElement>(null);
+
+  /** Deja el código seleccionado en pantalla, para que ⌘C / Ctrl+C lo copie. */
+  const seleccionarCodigo = () => {
+    const el = codigoRef.current;
+    const sel = window.getSelection();
+    if (!el || !sel) return;
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(r);
+  };
+
+  // Tres intentos, del más compatible al menos: (1) copia clásica DENTRO del clic
+  // (funciona aunque el navegador niegue el portapapeles moderno, p. ej. un navegador
+  // embebido o sin foco), (2) el portapapeles moderno, (3) dejar el código seleccionado.
   const copiar = async () => {
     if (!codigo) return;
+    let ok = false;
+    const ta = document.createElement("textarea");
+    ta.value = codigo;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
     try {
-      await navigator.clipboard.writeText(codigo);
-      toast.success("Código copiado.");
+      ok = document.execCommand("copy");
     } catch {
-      toast.error("No se pudo copiar. Selecciona el código y cópialo a mano.");
+      ok = false;
+    }
+    ta.remove();
+    if (!ok) {
+      try {
+        await navigator.clipboard.writeText(codigo);
+        ok = true;
+      } catch {
+        ok = false;
+      }
+    }
+    if (ok) {
+      toast.success("Código copiado.");
+    } else {
+      seleccionarCodigo();
+      toast.info("Ya está seleccionado: presiona ⌘C (o Ctrl+C) para copiarlo.");
     }
   };
 
@@ -246,7 +284,13 @@ function ClienteRow({
     {codigo && u.active && (
       <div role="status" className="mx-4 mb-3 rounded-lg border border-border bg-secondary/40 px-3 py-2.5">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="select-all font-mono text-lg font-semibold tracking-[0.25em] text-foreground">{codigo}</span>
+          <span
+            ref={codigoRef}
+            onClick={seleccionarCodigo}
+            className="cursor-text select-all font-mono text-lg font-semibold tracking-[0.25em] text-foreground"
+          >
+            {codigo}
+          </span>
           <Button size="sm" variant="secondary" onClick={copiar} className="gap-1.5">
             <Copy className="size-3.5" /> Copiar
           </Button>
