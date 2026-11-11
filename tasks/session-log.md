@@ -3507,3 +3507,4 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 - Cambio (main 00e7941, NO pusheado): recuadro "¿Primera vez aquí?" con botón Solicitar acceso arriba de Google en /portal/login; el aviso de Google sin acceso ahora apunta a ese botón. Revisado en localhost:3000.
 - Pedro: sin tiempo de espera en el mensaje de solicitud (aprueban casi al momento).
 - Siguiente: push a main (deploy a producción) sólo con el "ship it" de Pedro.
+- **Actualización:** Pedro dijo "ship it": push de main (334ca09..71e171b), deploy dpl_2SfTUxyoB5WBqGq7pCLDyjNEbSZc Ready, revisado en greenlight.runna.agency con la sesión de Pedro. Otra sesión trabajó en la misma carpeta (login de clientes, 00e7941); sus commits quedaron sin push, son suyos.
