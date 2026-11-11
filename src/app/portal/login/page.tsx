@@ -15,7 +15,7 @@ function mensajeDeError(code: string): string {
     case "access-revoked":
       return "Tu acceso fue dado de baja. Si crees que es un error, escríbele a tu contacto en Rünna.";
     case "google-sin-acceso":
-      return "Esa cuenta de Google aún no tiene acceso al portal. Si ya pediste acceso, espera la aprobación; si no, solicítalo abajo.";
+      return "Esa cuenta de Google aún no tiene acceso al portal. Si ya pediste acceso, espera la aprobación; si no, toca \"Solicitar acceso\".";
     case "sesion":
       return "No pudimos confirmar tu sesión. Vuelve a entrar.";
     case "access_denied":

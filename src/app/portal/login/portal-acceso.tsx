@@ -53,29 +53,43 @@ export function PortalAcceso({ next, modoInicial, aviso }: { next?: string; modo
         </p>
       )}
 
+      {/* La puerta de la gente NUEVA va arriba y es un botón: antes era una línea chica
+          al fondo, y quien llegaba por primera vez tocaba Google y se topaba con un error. */}
+      {modo === "entrar" && (
+        <div className="mt-6 rounded-lg border border-border bg-secondary/40 px-4 py-3 text-center">
+          <p className="text-sm font-medium text-foreground">¿Primera vez aquí?</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Pide acceso y un admin de Rünna lo aprueba.</p>
+          <Button type="button" variant="secondary" className="mt-3 w-full" onClick={() => ir("solicitar")}>
+            Solicitar acceso
+          </Button>
+        </div>
+      )}
+
       {modo === "entrar" && (
         <EntrarForm next={next} email={emailCompartido} onEmail={setEmailCompartido} onOlvide={() => ir("recuperar")} />
       )}
       {modo === "solicitar" && <CodigoFlow motivo="solicitud" next={next} email={emailCompartido} onEmail={setEmailCompartido} onEntrar={() => ir("entrar")} />}
       {modo === "recuperar" && <CodigoFlow motivo="recuperar" next={next} email={emailCompartido} onEmail={setEmailCompartido} onEntrar={() => ir("entrar")} />}
 
-      <p className="mt-4 text-center text-xs text-muted-foreground">
-        {modo === "solicitar" ? (
-          <>
-            ¿Ya tienes acceso?{" "}
-            <button type="button" className={linkCls} onClick={() => ir("entrar")}>
-              Entra aquí
-            </button>
-          </>
-        ) : (
-          <>
-            ¿Primera vez aquí?{" "}
-            <button type="button" className={linkCls} onClick={() => ir("solicitar")}>
-              Solicita acceso
-            </button>
-          </>
-        )}
-      </p>
+      {modo !== "entrar" && (
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          {modo === "solicitar" ? (
+            <>
+              ¿Ya tienes acceso?{" "}
+              <button type="button" className={linkCls} onClick={() => ir("entrar")}>
+                Entra aquí
+              </button>
+            </>
+          ) : (
+            <>
+              ¿Primera vez aquí?{" "}
+              <button type="button" className={linkCls} onClick={() => ir("solicitar")}>
+                Solicita acceso
+              </button>
+            </>
+          )}
+        </p>
+      )}
     </>
   );
 }
