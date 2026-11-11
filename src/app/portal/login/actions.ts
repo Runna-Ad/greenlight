@@ -319,13 +319,13 @@ async function notificarAdmins(req: { email: string; name: string; brand: string
       entity_type: "pending_invite",
       title,
       body,
-      url: "/admin",
+      url: "/admin?tab=invitaciones", // directo a la lista de solicitudes (sin ?tab abre Equipo)
     })),
   );
 
   // email: transaccional directo (no pasa por la cola), branded con htmlFor.
   if (!hasEmail()) return;
-  const ctaUrl = `${APP_URL}/admin`;
+  const ctaUrl = `${APP_URL}/admin?tab=invitaciones`;
   const html = htmlFor({ type: "client_access_request", title, body, ctaUrl });
   const text = textFor(title, body, ctaUrl);
   await Promise.allSettled(
