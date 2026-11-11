@@ -3515,3 +3515,9 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 - Fix 0ac7b25 (NO pusheado): ambos enlaces van a /admin?tab=invitaciones. tsc OK.
 - Otras dos solicitudes de DiDi quedaron a medias (un correo mal escrito, un código sin meter); Pedro les avisa.
 - Siguiente: push con el "ship it" de Pedro.
+
+## 2026-11-11 Session: correos de código bloqueados por filtros de empresa
+- Los códigos salen por Gmail desde la cuenta de Pedro; SPF y DKIM ya estaban bien, faltaba DMARC.
+- Agregado en Squarespace Domains: TXT `_dmarc` = `v=DMARC1; p=none` (visible en 8.8.8.8, 1.1.1.1 y ns-cloud-c1). Había un DMARC viejo en `@` (lugar equivocado, sin efecto); Pedro: dejarlo por ahora.
+- p=none y no quarantine porque hay un CNAME de HubSpot que podría no pasar las revisiones.
+- Siguiente: que el contacto del cliente pida a su IT poner runna.com.mx en lista permitida. Sin comprobar si los códigos ya llegan.
