@@ -3501,3 +3501,9 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 - Por qué: Pedro preguntó si podía borrar perfiles de cliente; no existe borrar (sólo Revocar). Eligió ocultarlos en vez de un borrado real (perderían su nombre en 18 tablas de historial).
 - También respondido: entrar con Google con un correo @didi NO une a DiDi solo; pasa por solicitud + aprobación.
 - Revisado en localhost con datos reales (4 activos, 1 en el bloque). Sin probar: pulsar Revocar/Reactivar. Siguiente: push a main con el "ship it" de Pedro (main va 3 commits adelante).
+
+## 2026-11-11 Session: botón Solicitar acceso en el login de clientes
+- Pedro preguntó quién recibe el aviso cuando un cliente pide acceso (admins + master, campana + correo) y cómo es el alta del cliente paso a paso.
+- Cambio (main 00e7941, NO pusheado): recuadro "¿Primera vez aquí?" con botón Solicitar acceso arriba de Google en /portal/login; el aviso de Google sin acceso ahora apunta a ese botón. Revisado en localhost:3000.
+- Pedro: sin tiempo de espera en el mensaje de solicitud (aprueban casi al momento).
+- Siguiente: push a main (deploy a producción) sólo con el "ship it" de Pedro.
