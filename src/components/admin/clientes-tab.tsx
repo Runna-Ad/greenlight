@@ -216,7 +216,6 @@ function ClienteRow({
           disabled={pending}
           onClick={generar}
           className="gap-1.5"
-          title="Para cuando el correo no le llega: genera un código y mándaselo por chat"
         >
           <KeyRound className="size-3.5" /> Generar código
         </Button>

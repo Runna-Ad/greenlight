@@ -166,7 +166,7 @@ export async function confirmarCodigo(input: {
   const name = input.name ? unaLinea(input.name) : "";
   const brand = input.brand ? unaLinea(input.brand) || null : null;
   if (!esEmail(email)) return { ok: false, error: "Escribe un correo válido." };
-  if (!/^\d{6,10}$/.test(codigo)) return { ok: false, error: "Escribe el código de 6 dígitos del correo." };
+  if (!/^\d{6,10}$/.test(codigo)) return { ok: false, error: "Escribe el código completo, sólo los números." };
   if (password.length < 8) return { ok: false, error: "La contraseña debe tener al menos 8 caracteres." };
   if (password.length > 72) return { ok: false, error: "La contraseña es demasiado larga (máximo 72 caracteres)." };
   if (input.motivo === "solicitud" && !name) return { ok: false, error: "Escribe tu nombre." };

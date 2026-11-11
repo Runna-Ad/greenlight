@@ -445,7 +445,7 @@ function CodigoFlow({
             <MailCheck className="mt-0.5 size-4 shrink-0 text-[color:var(--greenlight)]" aria-hidden />
             <span>
               Si <span className="font-medium text-foreground">{email.trim()}</span>{" "}
-              {motivo === "recuperar" ? "tiene acceso al portal, " : ""}te llegó un código de 6 dígitos. Puede tardar un par
+              {motivo === "recuperar" ? "tiene acceso al portal, " : ""}te llegó un código. Puede tardar un par
               de minutos — revisa también spam.
             </span>
           </div>
