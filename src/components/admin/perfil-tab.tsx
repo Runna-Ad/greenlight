@@ -182,16 +182,11 @@ export function PerfilTab({
           />
         </label>
         <label className="flex items-center justify-between py-1.5">
-          <span className="text-sm text-foreground">
-            Slack{" "}
-            <span className="text-[11px] font-normal text-muted-foreground">· pronto</span>
-          </span>
-          {/* Apagado hasta que exista el envío por Slack: el switch decía "pronto" pero
-              guardaba de verdad — un control vivo que no hace nada. */}
+          <span className="text-sm text-foreground">Slack</span>
+          {/* El bot «Greenlight» te manda un mensaje directo en el Slack de Runna (0096). */}
           <Switch
             checked={slack}
-            disabled
-            aria-label="Slack (próximamente)"
+            disabled={pending}
             onCheckedChange={(v) => {
               setSlack(v);
               guardar({ notify_slack: v });
@@ -208,11 +203,11 @@ export function PerfilTab({
       {notif && role && (
         <div className="mt-5 border-t border-border pt-4">
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Qué me llega por correo
+            Qué me llega por correo y Slack
           </p>
           <p className="mb-3 text-[11px] text-muted-foreground">
             La campana te muestra toda tu actividad dentro de tu alcance; aquí eliges qué además
-            te llega por correo.
+            te llega por correo y por Slack.
           </p>
 
           {scopeOpts.length > 0 && (

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { dispatchPendingEmails } from "@/lib/notif-email";
+import { despacharAvisos } from "@/lib/notif-dispatch";
 import { canMoveStatus, canOverrideStatus } from "@/lib/roles";
 import { transicionRequiereLead } from "@/lib/task-actions";
 import { esCategoria } from "@/lib/tipos-cambio";
@@ -343,7 +343,7 @@ export async function responderCorreccion(
   // 23503 = el cambio se descartó entre la verificación y el guardado.
   if (error?.code === "23503") return { ok: false, error: "Ese cambio ya no existe." };
   if (error) return { ok: false, error: error.message };
-  after(() => dispatchPendingEmails());
+  after(() => despacharAvisos());
   return { ok: true, id: data as string, destino };
 }
 
@@ -400,7 +400,7 @@ export async function mandarCorrecciones(
   });
   if (error) return { ok: false, error: error.message };
   revalida(clienteSlug);
-  after(() => dispatchPendingEmails());
+  after(() => despacharAvisos());
   return { ok: true };
 }
 
@@ -430,6 +430,6 @@ export async function devolverARevision(
   });
   if (error) return { ok: false, error: error.message };
   revalida(clienteSlug);
-  after(() => dispatchPendingEmails());
+  after(() => despacharAvisos());
   return { ok: true };
 }

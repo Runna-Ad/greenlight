@@ -1,5 +1,23 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-11-12 — Bot de Slack «Greenlight» (opción 2: Runna hoy, listo para un 2º espacio) — rama `feat/slack-bot`, worktree ../greenlight-slack
+Pedro eligió la opción 2: DM por persona en el Slack de Runna, con el código listo para un segundo espacio (DiDi) si su admin lo aprueba. Mismo patrón que SnapTrack.
+Next Step: con el OK de Pedro, commit y push de `feat/slack-bot` (preview). Pedro crea la app en el Slack de Runna y pone `SLACK_BOT_TOKEN` en Vercel (Preview). Luego 0096 con su «ship it» y una prueba real.
+
+- [x] D1 0096: `slack` entra a `active_notify_channels()`, `track_members.slack_team_id`, `rpc_reclamar_slack` (sólo filas `slack`, SKIP LOCKED), índice de la cola. Prueba: `npm run test:db` 856/0 (bloque 0096: reclama sólo Slack, rescata atascadas, respeta not_before, el de correo no toma filas de Slack, anon/authenticated no pueden). **0096 SIN aplicar** (`migrate.mjs --status`: única pendiente).
+- [x] D2 Despachador `src/lib/notif-slack.ts`: DM con encabezado, línea y botón; respeta `notify_slack`, las preferencias por evento del correo e inactivos; sin token no reclama nada; token malo o Slack caído/429 = todo a la cola sin gastar intento; plazo de 45 s; si revienta, lo que falta vuelve a la cola. Prueba: lógica pura en `npm run test:lib` 779/0. **El despachador en sí no tiene prueba automática** (llama a Slack): se prueba con el token real.
+- [x] D3 Busca a la persona por el correo de su login (o el de Equipo); sólo acepta una persona viva, no bot, del mismo espacio; guarda id y espacio. Prueba: pruebas puras de `usuarioSlackValido`. Real: sin probar hasta tener token.
+- [x] D4 Varios espacios: cada persona usa la conexión de SU espacio (`elegirConexion`). Prueba: 4 pruebas puras.
+- [~] D5 Mi perfil: el interruptor de Slack funciona, texto «Qué me llega por correo y Slack». Prueba: tsc + build. **No visto en el navegador** (el server local necesita `.env.local`; se ve en la preview).
+- [x] D6 `docs/slack-app-manifest.json` (chat:write, im:write, users:read, users:read.email). Pasos en inglés en el mensaje a Pedro.
+- [x] D7 tsc 0, eslint 0, `npm test` exit 0, `npm run build` exit 0 (tras el último cambio).
+- Equipo: un Slack ID escrito a mano debe ser U…/W… (un canal se rechaza); cambiar el correo borra el Slack encontrado para buscarlo otra vez.
+- `supabase/manual/0084_reloj_correos.sql`: el reloj despierta también por Slack. **Pedro tiene que volver a correrlo** en Supabase al salir en vivo.
+
+## Review
+Tres revisiones (código, seguridad, verificación): 8 + 4 serios arreglados en la 1ª, 2 serios nuevos arreglados en la 2ª. Deuda: el reclamo/reintento está copiado entre notif-email y notif-slack (moverlo a un módulo común); un correo cambiado en Equipo borra también un Slack ID escrito a mano; los clientes (DiDi) no reciben Slack hasta que su admin apruebe y se haga la página «Add to Slack».
+No se hace: clientes de DiDi (perfiles sin fila en el equipo), la página «Add to Slack» para otros espacios (sólo si DiDi aprueba), agrupar mensajes de Slack.
+
 ## ✅ 2026-11-09 — Greenlit: la fecha `delivered_at` se limpia al salir — EN VIVO (0095 aplicada 18:50 UTC, `main` 6d202d2 + cierre)
 - [x] Arreglo de datos en la base viva: A1 CMCOOKINGSP (DiDi, Brief 16/10) de vuelta en published, `delivered_at` en null, override registrado (detalle en session-log 2026-11-09). No revisado en el navegador.
 - [x] Migración 0095 (`20261109120001_greenlight_0095_delivered_at_se_limpia.sql`, rama `fix/greenlit-fecha`): al salir de `delivered` se limpia `delivered_at`; backfill de las fechas huérfanas (2 tareas en vivo: A2 GIRLTHREE y A1 CMCOOKINGSP, que Nils volvió a mover a Greenlit y de regreso a las 11:41). `completed_at` y `published_at` NO se tocan a propósito: el primero es inmutable (Performance cuenta el mes por él), el segundo significa "el cliente ya la vio" (portal). Sin esto, una tarea re-Greenlit hereda la fecha vieja, se salta la columna Greenlit de 7 días y Entregas enseña la fecha equivocada.

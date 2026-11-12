@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { dispatchPendingEmails } from "@/lib/notif-email";
+import { despacharAvisos } from "@/lib/notif-dispatch";
 import { getCurrentUser } from "@/lib/identity";
 import type { CorreccionTarget } from "@/app/(app)/[cliente]/tareas/[id]/correcciones-actions";
 import { RESPUESTA_MAX } from "@/lib/correcciones";
@@ -207,7 +207,7 @@ export async function clienteResponderCambio(
 
   revalidatePath(`/${clienteSlug}/portal`);
   revalidatePath("/[cliente]/tareas/[id]", "page");
-  after(() => dispatchPendingEmails());
+  after(() => despacharAvisos());
   return { ok: true, id: data as string };
 }
 
@@ -229,7 +229,7 @@ export async function clienteEnviarCambios(
   if (error) return { ok: false, error: error.message };
 
   revalidarPortalYEquipo(clienteSlug);
-  after(() => dispatchPendingEmails());
+  after(() => despacharAvisos());
   return { ok: true };
 }
 
@@ -251,6 +251,6 @@ export async function clienteAprobar(
   if (error) return { ok: false, error: error.message };
 
   revalidarPortalYEquipo(clienteSlug);
-  after(() => dispatchPendingEmails());
+  after(() => despacharAvisos());
   return { ok: true };
 }

@@ -16,6 +16,9 @@ import { htmlFor, textFor } from "@/lib/email-template";
 import { MAX_BYTES, EXT_POR_MIME, sniffImageMime } from "@/lib/referencia";
 import { TIPOGRAFIAS_BUCKET, TIPOGRAFIA_MAX_BYTES, TIPOGRAFIAS_POR_CLIENTE_MAX, archivoVisible, faltaTablaTipografias, leerTipografia, rutaTipografia } from "@/lib/prisma/formatos/tipografias";
 import { esRama, type MiembroRow, type Rama, type RolAsignable } from "@/lib/equipo";
+import { esSlackUserId } from "@/lib/slack-routing";
+
+const SLACK_ID_INVALIDO = "Ese Slack member ID no es válido: empieza con U y viene en el perfil de Slack ▸ Copy member ID.";
 import { esRangoActividad, rangoFechas } from "@/lib/prisma/formatos/actividad";
 import type {
   ActividadRow,
@@ -134,9 +137,9 @@ export async function guardarMiembro(
   // ni desactivarlo) — el guard de arriba sólo miraba el rol NUEVO, no el actual.
   const { data: actual } = await db
     .from("track_members")
-    .select("role, profile_id, track")
+    .select("role, profile_id, track, email, slack_user_id")
     .eq("id", id)
-    .maybeSingle<{ role: string; profile_id: string | null; track: string | null }>();
+    .maybeSingle<{ role: string; profile_id: string | null; track: string | null; email: string | null; slack_user_id: string | null }>();
   if (!actual) return { ok: false, error: "Esa persona ya no existe." };
   if (ROLES_SOLO_MASTER.has(String(actual.role)) && !canAssignAdmins(rol)) {
     return { ok: false, error: "Sólo el Master Builder puede editar a un admin." };
@@ -148,6 +151,11 @@ export async function guardarMiembro(
     // Los campos de texto opcionales se normalizan a null cuando quedan vacíos.
     if ((k === "email" || k === "slack_user_id") && typeof v === "string") {
       limpio[k] = v.trim() || null;
+      if (k === "slack_user_id" && limpio[k] && !esSlackUserId(limpio[k] as string)) {
+        return { ok: false, error: SLACK_ID_INVALIDO };
+      }
+    } else if (k === "email" || k === "slack_user_id") {
+      return { ok: false, error: "Ese valor no es válido." };
     } else if (k === "tracks") {
       // Sanea el grant: array de tracks válidos, sin duplicados; vacío → null.
       const ts = Array.isArray(v)
@@ -162,6 +170,16 @@ export async function guardarMiembro(
     }
   }
   if (!Object.keys(limpio).length) return { ok: false, error: "Nada que guardar." };
+  // Un Slack escrito a mano es del espacio de Runna (el bot sólo llena otro espacio solo).
+  // Sólo si CAMBIÓ: volver a guardar el mismo id no le borra su espacio.
+  if ("slack_user_id" in limpio && limpio.slack_user_id !== actual.slack_user_id) limpio.slack_team_id = null;
+  // Cambió su correo: el Slack que el bot encontró con el correo VIEJO puede ser de otra
+  // persona. Se borra y el bot lo vuelve a buscar con el nuevo.
+  const mismoCorreo = (String(limpio.email ?? "")).toLowerCase() === (actual.email ?? "").toLowerCase();
+  if ("email" in limpio && !("slack_user_id" in limpio) && !mismoCorreo) {
+    limpio.slack_user_id = null;
+    limpio.slack_team_id = null;
+  }
   // es_lead se deriva del rol: si cambia el rol, se re-sincroniza la bandera.
   if ("role" in limpio) limpio.es_lead = esLeadDeRol(limpio.role);
 
@@ -330,6 +348,8 @@ export async function crearMiembro(data: {
   }
   if (!data.name.trim()) return { ok: false, error: "El nombre es obligatorio." };
   if (data.rama !== undefined && !esRama(data.rama)) return { ok: false, error: "Esa rama no existe." };
+  const slackNuevo = typeof data.slack_user_id === "string" ? data.slack_user_id.trim() : "";
+  if (slackNuevo && !esSlackUserId(slackNuevo)) return { ok: false, error: SLACK_ID_INVALIDO };
 
   const db = supabaseAdmin();
   // admin/master son GLOBALES → sin track (aunque la UI mande uno). lead/creative
@@ -365,7 +385,7 @@ export async function crearMiembro(data: {
       color: data.color ?? "#775cbf",
       role: rolNuevo,
       email: data.email?.trim() || null,
-      slack_user_id: data.slack_user_id?.trim() || null,
+      slack_user_id: slackNuevo || null,
       es_lead: esLeadDeRol(rolNuevo),
       sort_order,
     })

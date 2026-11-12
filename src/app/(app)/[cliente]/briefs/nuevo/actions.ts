@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
-import { dispatchPendingEmails } from "@/lib/notif-email";
+import { despacharAvisos } from "@/lib/notif-dispatch";
 import { getCurrentUser } from "@/lib/identity";
 import { canCreateBrief, puedeSerAsignado } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
@@ -228,7 +228,7 @@ export async function crearBrief(
   if (out.brief_id) {
     const { error: notifErr } = await db.rpc("rpc_notificar_brief", { p_brief_id: out.brief_id });
     if (notifErr) res.errors.push(`aviso: ${notifErr.message}`);
-    else after(() => dispatchPendingEmails());
+    else after(() => despacharAvisos());
   }
 
   revalidatePath(`/${clienteSlug}/briefs`);

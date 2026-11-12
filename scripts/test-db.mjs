@@ -386,7 +386,7 @@ console.log("\n▶ Candado RLS 0056 (anon/authenticated fuera de produccion)");
 // 0084: un usuario con sesión NO reclama la cola de correos (0088: tampoco lee el gasto de Gemini).
 // Va aquí: el bloque de abajo le re-concede todas las rutinas a `authenticated` a propósito.
 console.log("\n▶ 0084 — candado de la cola de correos (authenticated)");
-for (const fn of ["produccion.rpc_reclamar_emails(int)", "produccion.rpc_reservar_envio(text,uuid[])", "produccion.prisma_gemini_resumen()", "produccion.prisma_actividad_eventos(date,date)", "produccion.prisma_actividad_personas(date,date)", "produccion.prisma_actividad_proyectos(date,date)", "produccion.prisma_actividad_linea(date,date,int)", "produccion.rpc_plano_mover(uuid,int)", "produccion.rpc_plano_insertar_debajo(uuid)", "produccion._planos_renumerar(uuid)"]) {
+for (const fn of ["produccion.rpc_reclamar_emails(int)", "produccion.rpc_reservar_envio(text,uuid[])", "produccion.prisma_gemini_resumen()", "produccion.prisma_actividad_eventos(date,date)", "produccion.prisma_actividad_personas(date,date)", "produccion.prisma_actividad_proyectos(date,date)", "produccion.prisma_actividad_linea(date,date,int)", "produccion.rpc_plano_mover(uuid,int)", "produccion.rpc_plano_insertar_debajo(uuid)", "produccion._planos_renumerar(uuid)", "produccion.rpc_reclamar_slack(int)"]) {
   ok(`authenticated NO puede ejecutar ${fn}`,
      !(await scalar(`select has_function_privilege('authenticated', $1, 'execute')`, [fn])));
 }
@@ -717,7 +717,7 @@ ok("y el fallo queda registrado, no invisible",
 await db.exec(`
   create or replace function produccion.active_notify_channels()
   returns produccion.notify_channel[] language sql immutable as $$
-    select array['in_app','email']::produccion.notify_channel[];  -- restaurar al valor de la 0025
+    select array['in_app','email','slack']::produccion.notify_channel[];  -- restaurar al valor de la 0096
   $$;`);
 
 // ── Correcciones localizadas (0028) ──
@@ -1666,9 +1666,9 @@ eq("aviso es tipo brief_created para Vero",
 eq("el cuerpo dice 1 tarea + call to action",
    await scalar(`select body from produccion.notifications where type='brief_created' limit 1`),
    "Tienes 1 tarea en este brief. Da click para ir a tus tareas.");
-eq("entregas: in_app sent + email pending",
+eq("entregas: in_app sent + email y slack pending",
    await scalar(`select string_agg(d.channel||':'||d.status, ',' order by d.channel) from produccion.notification_deliveries d join produccion.notifications n on n.id=d.notification_id where n.type='brief_created'`),
-   "email:pending,in_app:sent");
+   "email:pending,slack:pending,in_app:sent"); // orden del enum: email, slack, in_app
 
 // ── rpc_import_planos: importar un guión pegado (replace / append) ──
 console.log("\n▶ rpc_import_planos — importar guión pegado");
@@ -3621,6 +3621,46 @@ console.log("\n▶ 0095 — delivered_at se limpia al salir de Greenlit");
      await scalar(`select completed_at::text from produccion.ideas where id=$1`, [idea]), completada);
   await db.query(`delete from produccion.ideas where id=$1`, [idea]);
   await db.exec(`select set_config('request.jwt.claims','',false)`);
+}
+
+// ── 0096 — bot de Slack: canal activo, espacio por persona, reclamo sólo de Slack ──
+console.log("\n▶ 0096 — bot de Slack");
+{
+  eq("slack es un canal activo",
+     await scalar(`select array_to_string(produccion.active_notify_channels(), ',')`), "in_app,email,slack");
+  ok("track_members tiene slack_team_id",
+     Number(await scalar(`select count(*) from information_schema.columns
+                           where table_schema='produccion' and table_name='track_members' and column_name='slack_team_id'`)) === 1);
+
+  const p = await scalar(`insert into produccion.profiles (id, email, full_name, role) values (gen_random_uuid(),'bot@0096.test','Bot','creative') returning id`);
+  const n = await scalar(`insert into produccion.notifications (recipient_id, type, title) values ($1,'task_assigned','Prueba 0096') returning id`, [p]);
+  const fila = (canal, extra = {}) => scalar(
+    `insert into produccion.notification_deliveries (notification_id, channel, status, not_before, claimed_at)
+     values ($1,$2,$3,$4,$5) returning id`,
+    [n, canal, extra.status ?? "pending", extra.not_before ?? null, extra.claimed_at ?? null]);
+  const slackLista = await fila("slack");
+  const slackEspera = await fila("slack", { not_before: new Date(Date.now() + 5 * 60_000).toISOString() });
+  const slackVieja = await fila("slack", { status: "sending", claimed_at: new Date(Date.now() - 20 * 60_000).toISOString() });
+  const correo = await fila("email");
+
+  const reclamadas = (await db.query(`select id from produccion.rpc_reclamar_slack(50)`)).rows.map((r) => r.id);
+  ok("reclama la de Slack pendiente", reclamadas.includes(slackLista));
+  ok("…y rescata la atascada", reclamadas.includes(slackVieja));
+  ok("…pero no la que espera su turno", !reclamadas.includes(slackEspera));
+  ok("…ni ninguna de correo", !reclamadas.includes(correo));
+  eq("la reclamada queda en 'sending'",
+     await scalar(`select status from produccion.notification_deliveries where id=$1`, [slackLista]), "sending");
+
+  const deCorreo = (await db.query(`select id from produccion.rpc_reclamar_emails(50)`)).rows.map((r) => r.id);
+  ok("el reclamo de correos no toma filas de Slack", !deCorreo.includes(slackEspera) && !deCorreo.includes(slackLista));
+
+  // (`authenticated` se prueba arriba, en el candado de 0084: más abajo se le re-concede todo.)
+  const puede = (rol) => scalar(`select has_function_privilege($1, 'produccion.rpc_reclamar_slack(int)', 'execute')`, [rol]);
+  ok("anon NO puede reclamar la cola de Slack", !(await puede("anon")));
+  ok("service_role (la app) sí", await puede("service_role"));
+
+  await db.query(`delete from produccion.notifications where id=$1`, [n]);
+  await db.query(`delete from produccion.profiles where id=$1`, [p]);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

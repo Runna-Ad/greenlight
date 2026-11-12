@@ -35,7 +35,7 @@ declare
 begin
   if not exists (
     select 1 from produccion.notification_deliveries d
-     where d.channel = 'email'
+     where d.channel in ('email', 'slack') -- 0096: también despierta por un DM de Slack en reintento
        and (
          (d.status = 'pending' and (d.not_before is null or d.not_before <= now()))
          or (d.status = 'sending' and coalesce(d.claimed_at, d.created_at) < now() - interval '15 minutes')

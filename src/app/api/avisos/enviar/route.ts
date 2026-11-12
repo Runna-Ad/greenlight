@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { dispatchPendingEmails } from "@/lib/notif-email";
+import { despacharAvisos } from "@/lib/notif-dispatch";
 
 // Un drenado manda correo por correo; que Vercel no lo corte a la mitad (lo cortado quedaría
 // en 'sending' y se reenviaría a los 15 min). Igual que las otras rutas largas.
@@ -21,6 +21,7 @@ function autorizado(req: Request): boolean {
 
 export async function POST(req: Request) {
   if (!autorizado(req)) return new Response("No autorizado", { status: 401 });
-  const r = await dispatchPendingEmails();
+  // Correo y Slack (desde 0096 el reloj despierta también por un DM de Slack en reintento).
+  const r = await despacharAvisos();
   return Response.json(r);
 }

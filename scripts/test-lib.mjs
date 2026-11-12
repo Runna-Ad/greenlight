@@ -777,6 +777,74 @@ ok("especialista NO entra a admin", !canAdmin("creative"));
 ok("master ve la sección admin", canSee("master", "admin"));
 ok("master ve el tablero", canSee("master", "tablero"));
 
+// ── Bot de Slack (0096) ──
+console.log("\n▶ Bot de Slack: a quién, por qué espacio, qué mensaje");
+{
+  const {
+    decisionSlack, elegirConexion, errorSlackPermanente, errorTokenSlack, mensajeSlack, escaparSlack,
+    esSlackUserId, usuarioSlackValido, SLACK_MAX_EDAD_MS,
+  } = await import("../src/lib/slack-routing.ts");
+  const ahora = Date.parse("2026-11-12T18:00:00Z");
+  const base = {
+    type: "task_assigned", esDelEquipo: true, notifySlack: true, slackUserId: "U123",
+    email: "vero@runna.com.mx", esMiTarea: true, creadoEn: "2026-11-12T17:59:00Z", ahora,
+  };
+  const S = (extra) => decisionSlack({ ...base, ...extra });
+  eq("tarea suya con Slack conocido → se manda sin buscar", JSON.stringify(S({})), JSON.stringify({ enviar: true, buscarPorCorreo: false }));
+  eq("sin Slack pero con correo → se busca por correo", JSON.stringify(S({ slackUserId: null })), JSON.stringify({ enviar: true, buscarPorCorreo: true }));
+  eq("sin Slack ni correo → no", S({ slackUserId: null, email: "  " }).razon, "sin Slack ni correo");
+  eq("un cliente (sin fila en el equipo) → no", S({ esDelEquipo: false }).razon, "no es del equipo");
+  eq("apagó Slack en Mi perfil → no", S({ notifySlack: false }).razon, "persona desactivó Slack");
+  eq("aviso de su alcance que apagó por evento → no", S({ esMiTarea: false, eventPref: false }).razon, "evento no avisa (pref/def)");
+  ok("aviso de su alcance encendido por evento → sí", S({ esMiTarea: false, eventPref: true }).enviar);
+  ok("…sin fila de preferencia usa el catálogo del correo (task_submitted sí)", S({ esMiTarea: false, type: "task_submitted" }).enviar);
+  ok("…y un tipo fuera del catálogo no", !S({ esMiTarea: false, type: "task_started" }).enviar);
+  ok("lo SUYO llega aunque haya apagado el evento", S({ esMiTarea: true, eventPref: false }).enviar);
+  eq("aviso de hace más de 1 día → no (sin avalancha al conectar)",
+     S({ creadoEn: new Date(ahora - SLACK_MAX_EDAD_MS - 1000).toISOString() }).razon, "aviso de hace más de 1 día");
+  ok("aviso de hace 23 h → sí", S({ creadoEn: new Date(ahora - 23 * 3600_000).toISOString() }).enviar);
+
+  const runna = { teamId: "TRUNNA", token: "xoxb-r" };
+  const didi = { teamId: "TDIDI", token: "xoxb-d" };
+  eq("sin espacio guardado → la conexión de Runna", elegirConexion(null, [runna, didi])?.token, "xoxb-r");
+  eq("espacio de DiDi → la conexión de DiDi", elegirConexion("TDIDI", [runna, didi])?.token, "xoxb-d");
+  eq("espacio que no está conectado → ninguna (no por el equivocado)", elegirConexion("TOTRO", [runna]), null);
+  eq("sin conexiones → ninguna", elegirConexion(null, []), null);
+
+  ok("token revocado es permanente", errorSlackPermanente("token_revoked"));
+  ok("mensaje mal armado es permanente (no se reintenta 3 veces)", errorSlackPermanente("invalid_blocks"));
+  ok("límite de envíos NO es permanente (se reintenta)", !errorSlackPermanente("ratelimited"));
+  ok("fallo de red NO es permanente", !errorSlackPermanente("red: timeout"));
+  ok("token inválido = el token está mal", errorTokenSlack("invalid_auth"));
+  ok("Slack caído ≠ token mal (no se tiran los avisos)", !errorTokenSlack("red: timeout") && !errorTokenSlack("ratelimited"));
+
+  ok("U0123ABCD es un member ID", esSlackUserId("U0123ABCD"));
+  ok("W… (Enterprise) también", esSlackUserId("W0123ABCD"));
+  ok("un canal C… NO (el aviso privado saldría en un canal)", !esSlackUserId("C0123ABCD"));
+  ok("texto cualquiera NO", !esSlackUserId("vero"));
+  const u = { id: "U0123ABCD", team_id: "TRUNNA", deleted: false, is_bot: false };
+  ok("persona viva del espacio → sí", usuarioSlackValido(u, "TRUNNA"));
+  ok("cuenta borrada → no", !usuarioSlackValido({ ...u, deleted: true }, "TRUNNA"));
+  ok("un bot → no", !usuarioSlackValido({ ...u, is_bot: true }, "TRUNNA"));
+  ok("de otro espacio (Slack Connect) → no", !usuarioSlackValido({ ...u, team_id: "TOTRO" }, "TRUNNA"));
+  ok("sin usuario → no", !usuarioSlackValido(undefined, "TRUNNA"));
+
+  eq("escapa &, < y >", escaparSlack("A&B <@here> x>y"), "A&amp;B &lt;@here&gt; x&gt;y");
+  const m = mensajeSlack({ title: "Te asignaron una tarea", body: "A1 GIRLTHREE", ctaUrl: "https://greenlight.runna.mx/didi/tareas/1" });
+  eq("texto de la notificación del teléfono", m.text, "Te asignaron una tarea: A1 GIRLTHREE");
+  eq("título como encabezado", m.blocks[0].text.text, "Te asignaron una tarea");
+  eq("la línea en texto plano (sin negritas ni ligas de lo que escribe un cliente)", m.blocks[1].text.type, "plain_text");
+  eq("botón a la tarea", m.blocks[2].elements[0].url, "https://greenlight.runna.mx/didi/tareas/1");
+  eq("un título con <!channel> no avisa a todo el canal",
+     mensajeSlack({ title: "Hola <!channel>", body: null, ctaUrl: "https://a.b" }).text, "Hola &lt;!channel&gt;");
+  eq("sin liga http(s) → sin botón (Slack rechazaría todo el mensaje)",
+     mensajeSlack({ title: "X", body: null, ctaUrl: "/didi/tareas/1" }).blocks.length, 1);
+  eq("sin línea → sólo el título", mensajeSlack({ title: "X", body: "  ", ctaUrl: "https://a.b" }).text, "X");
+  const largo = mensajeSlack({ title: "T".repeat(300), body: "b".repeat(5000), ctaUrl: "https://a.b" });
+  ok("encabezado recortado a 150 (límite de Slack)", largo.blocks[0].text.text.length <= 150);
+  ok("línea recortada a menos de 3000 (límite de Slack)", largo.blocks[1].text.text.length <= 2900);
+}
+
 // ── Ruteo de emails de notificación ──
 console.log("\n▶ Ruteo de emails");
 const { tipoEmailea, decisionEmail } = await import("../src/lib/notif-routing.ts");
