@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Pill, type PillStatus } from "@/components/ui/pill";
 import { ChevronDown, Files, Layers, Package, Sparkles, Trash2 } from "lucide-react";
 
+import { contentType } from "@/lib/iconos";
 import { desgloseDeBundle, gruposPorPaquete, type Bundle, type BundleTask, type PaqueteEquipo } from "@/lib/bundle";
 import { STATUS_LABEL, STATUS_TOKEN } from "@/lib/brand";
 import { notaEntrega, type TonoEntrega } from "@/lib/paquetes";
@@ -132,7 +133,11 @@ function BotonTareas({ n, abierto, onClick }: { n: number; abierto: boolean; onC
 function ListaTareas({ tareas, cliente, sangria = true }: { tareas: TareaConLugar[]; cliente: string; sangria?: boolean }) {
   return (
     <ul className={`mt-1 overflow-hidden rounded-md border border-border/60 ${sangria ? "ml-5" : ""}`}>
-      {tareas.map(({ t, n, total, pestana }) => (
+      {tareas.map(({ t, n, total, pestana }) => {
+        // Imagen o video en vez del código A1 (Pedro 2026-11-12); el código queda en el tooltip.
+        const tipo = contentType(t.tipo_asset);
+        const IconoTipo = tipo.icon;
+        return (
         <li key={t.id} className="border-t border-border/40 first:border-t-0">
           <Link
             href={`/${cliente}/tareas/${t.id}`}
@@ -141,11 +146,13 @@ function ListaTareas({ tareas, cliente, sangria = true }: { tareas: TareaConLuga
             <span className="w-8 shrink-0 font-mono text-[11px] text-muted-foreground">
               {n}/{total}
             </span>
-            {t.code && (
-              <span className="shrink-0 rounded bg-secondary px-1 py-0.5 font-mono text-[11px] font-semibold text-secondary-foreground">
-                {t.code}
-              </span>
-            )}
+            <span
+              className="grid size-6 shrink-0 place-items-center rounded bg-secondary text-secondary-foreground"
+              title={t.code ? `${tipo.label} · ${t.code}` : tipo.label}
+            >
+              <IconoTipo className="size-3.5" aria-hidden />
+              <span className="sr-only">{tipo.label}</span>
+            </span>
             {/* En un card con Real y Normal, los códigos se repiten (A1 en cada pestaña). */}
             {pestana && (
               <span className="shrink-0 text-[11px] font-medium text-muted-foreground">{pestana}</span>
@@ -161,7 +168,8 @@ function ListaTareas({ tareas, cliente, sangria = true }: { tareas: TareaConLuga
             </span>
           </Link>
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 }

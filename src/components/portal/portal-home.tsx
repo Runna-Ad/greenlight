@@ -8,6 +8,7 @@ import type { AssetStatus } from "@/lib/brand";
 import { estadoCliente, estadoBriefPanel } from "@/lib/portal-bucket";
 import { desgloseTracks, type PaquetePortal } from "@/lib/paquetes";
 import { idDeUnidad } from "@/lib/portal-paquetes";
+import { contentType } from "@/lib/iconos";
 import { cn } from "@/lib/utils";
 
 /**
@@ -46,7 +47,7 @@ function EstadoIcon({ status, reReview, teRespondieron = false, className }: { s
 const nombreTarea = (t: PortalTarea) => t.naming ?? t.code ?? "Idea";
 
 type QItem = PortalTarea & { briefId: string; briefLabel: string; unidadId: string; unidadNombre: string | null };
-type Prod = { id: string; code: string | null; naming: string | null; briefId: string; marcaId: string; paqueteId: string | null; track: string | null };
+type Prod = { id: string; code: string | null; naming: string | null; tipoAsset: string | null; briefId: string; marcaId: string; paqueteId: string | null; track: string | null };
 
 export function PortalHome({
   cliente,
@@ -424,8 +425,8 @@ function PaqueteCard({ c }: { c: Tarjeta }) {
   const equipos = EQUIPOS.map((e) => ({
     ...e,
     filas: [
-      ...c.ts.filter((t) => equipoDe(t.track) === e.k).map((t) => ({ id: t.id, code: t.code, nombre: nombreTarea(t), t })),
-      ...c.prod.filter((p) => equipoDe(p.track) === e.k).map((p) => ({ id: p.id, code: p.code, nombre: p.naming ?? p.code ?? "Pieza", t: null })),
+      ...c.ts.filter((t) => equipoDe(t.track) === e.k).map((t) => ({ id: t.id, code: t.code, tipo: t.tipoAsset, nombre: nombreTarea(t), t })),
+      ...c.prod.filter((p) => equipoDe(p.track) === e.k).map((p) => ({ id: p.id, code: p.code, tipo: p.tipoAsset, nombre: p.naming ?? p.code ?? "Pieza", t: null })),
     ].sort((a, b) => (a.code ?? "￿").localeCompare(b.code ?? "￿") || a.nombre.localeCompare(b.nombre)),
   })).filter((e) => e.filas.length);
 
@@ -485,11 +486,15 @@ function PaqueteCard({ c }: { c: Tarjeta }) {
               <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{e.label}</p>
               <ul className="overflow-hidden rounded-lg border border-border">
                 {e.filas.map((f) => {
+                  // Imagen o video (Pedro 2026-11-12): el ícono del tipo de contenido en vez del código A1.
+                  const tipo = contentType(f.tipo);
+                  const IconoTipo = tipo.icon;
                   const fila = (
                     <>
-                      {f.code && (
-                        <span className="shrink-0 rounded bg-secondary px-1 py-0.5 font-mono text-[11px] font-semibold text-secondary-foreground">{f.code}</span>
-                      )}
+                      <span className="grid size-6 shrink-0 place-items-center rounded bg-secondary text-secondary-foreground" title={tipo.label}>
+                        <IconoTipo className="size-3.5" aria-hidden />
+                        <span className="sr-only">{tipo.label}</span>
+                      </span>
                       <span className={cn("min-w-0 flex-1 truncate font-mono font-medium", f.t ? "text-foreground" : "text-muted-foreground")} title={f.nombre}>
                         {f.nombre}
                       </span>
