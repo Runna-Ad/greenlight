@@ -26,6 +26,12 @@
 - Paquetes con fecha por paquete (la pone un admin en Briefs); el portal agrupa Real+Normal por fecha y muestra el desglose por paquete.
 - Fase 2 pendiente: tablero, Mi trabajo, Entregas, Performance, búsqueda, avisos, Slack.
 
+## 🔺 Título del plano comentable en Modo Lectura + tamaños por plataforma de DiDi · 2026-11-12 · PROD
+- main 02b0b9c, deploy dpl_Aqu3N7FKPN6VapFHvYEsXy64wsV3 (Ready). Para volver: dpl_BAjhe1Y8m4sdcg1MRnPhLvYik2rY (d86bbd5). Sin migración.
+- Modo Lectura y portal: seleccionar el título del plano muestra «Pedir cambio aquí» (CampoLectura `encabezado`).
+- Nomenclatura: tabla tamaño×plataforma por línea en src/lib/brand.ts (Préstamos/Card; estáticos iguales). Sigue un archivo por plataforma. EC abierto. Aplica a briefs nuevos e importación por hoja, no a tareas ya creadas.
+- Probado en local (selección en GIRLTHREE, vista previa de brief Card 5 archivos / Préstamos 6). Sin probar en vivo. Sin probar: fila de hoja con todos sus tamaños fuera de la tabla (quedaría sin archivos).
+
 ## 🔺 Código por chat para clientes sin correo · 2026-11-11 · PROD
 - main d86bbd5, deploy dpl_BAjhe1Y8m4sdcg1MRnPhLvYik2rY (Ready). Para volver: dpl_HG6DdGGv5KZ3D1hwSucogBdqRV9k. Sin migración (usa app_metadata.codigo_admin_hasta).
 - Aprobar a alguien sin contraseña manda un código; Clientes → «Generar código» (+ Copiar); login → «Ya tengo un código». 1 h sin códigos públicos tras uno del admin.
