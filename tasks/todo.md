@@ -33,7 +33,11 @@ Pedro: un brief (Brief 30/10) tiene PAQUETES (columna "Package Name" del sheet, 
 - Un link viejo `?brief=<pestaña en la papelera>` abre el primer brief en silencio.
 - Cambiar el «Package Name» de una tarea YA importada en el sheet no la mueve de paquete (el import sólo crea).
 
-Next Step: commit y push de la rama (preview); pedirle a Pedro el OK para aplicar 0097 y verlo en el navegador.
+**0097 APLICADA en vivo (2026-11-12, OK de Pedro "apply 0097").** 1er intento rechazado y revertido (board_tasks, ver lessons); 2º ok. En vivo: 9 paquetes, 16/16 tareas con paquete, 4 briefs con fecha, board_tasks intacta (33 columnas).
+**Visto en la preview (feat/paquetes 0fe92b6, como Master):** Briefs muestra los paquetes de cada pestaña ("LT AfterBF · 6 piezas · 3 real · 3 normal"); poner fecha 20/11 en LT Categories → aviso "Fecha del paquete guardada" + «Quitar fecha»; portal: "Brief 30/10 · 12 piezas" junta Real+Normal con 6 paquetes; "Brief 23/10 · 2 piezas · fecha 20/11 … LT Categories · 2 normal · Fecha 20/11"; `diasAntes` 0 veces en el HTML; consola sin errores. Fecha de prueba quitada (fecha_entrega = NULL).
+**Sin probar:** la nota "Entregado… (N días antes/tarde)" con un paquete entregado de verdad (no hay ninguno); vista de lead y especialista; un sync real con el encabezado «Package Name»; Safari.
+
+Next Step: "ship it" de Pedro → `feat/paquetes` a `main` (sin migración pendiente). Luego fase 2 (tablero, Mi trabajo, Entregas con "· Real/Normal").
 
 ## 🟡 2026-11-12 — Bot de Slack «Greenlight» (opción 2: Runna hoy, listo para un 2º espacio) — rama `feat/slack-bot`, worktree ../greenlight-slack
 Pedro eligió la opción 2: DM por persona en el Slack de Runna, con el código listo para un segundo espacio (DiDi) si su admin lo aprueba. Mismo patrón que SnapTrack.
