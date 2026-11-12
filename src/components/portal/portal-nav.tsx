@@ -13,6 +13,7 @@ import {
   Eye,
   CheckCheck,
   MessageSquare,
+  Package,
 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import type { PortalBrief, PortalTarea } from "@/app/(app)/[cliente]/portal/portal-data";
@@ -39,6 +40,17 @@ const MESES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 function agruparPorMes(briefs: PortalBrief[]): { titulo: string; items: PortalBrief[] }[] {
+  // Portal por PAQUETE: el selector agrupa los paquetes bajo su brief ("Brief 30/10"), del más
+  // reciente al más viejo; el brief es la etiqueta, el paquete lo que se elige.
+  if (briefs.some((b) => b.etiqueta)) {
+    const porBrief = new Map<string, { titulo: string; fecha: string; items: PortalBrief[] }>();
+    for (const b of briefs) {
+      const titulo = b.etiqueta ?? b.label;
+      const g = porBrief.get(titulo) ?? porBrief.set(titulo, { titulo, fecha: b.date ?? "", items: [] }).get(titulo)!;
+      g.items.push(b);
+    }
+    return [...porBrief.values()].sort((a, b) => b.fecha.localeCompare(a.fecha));
+  }
   const grupos = new Map<string, PortalBrief[]>();
   for (const b of briefs) {
     let key = "zzz"; // sin fecha → al final
@@ -157,10 +169,18 @@ export function PortalNav({
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="inline-flex min-h-11 w-[11rem] shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
+              title={brief?.etiqueta ? `${brief.label} · ${brief.etiqueta}` : brief?.label}
+              className="inline-flex min-h-11 w-[15rem] max-w-full shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
             >
-              <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-left">{brief?.label ?? "Selecciona brief"}</span>
+              {brief?.etiqueta ? (
+                <Package className="size-3.5 shrink-0 text-muted-foreground" />
+              ) : (
+                <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+              )}
+              <span className="flex min-w-0 flex-1 flex-col text-left leading-tight">
+                <span className="truncate">{brief?.label ?? "Selecciona brief"}</span>
+                {brief?.etiqueta && <span className="truncate text-[11px] font-normal text-muted-foreground">{brief.etiqueta}</span>}
+              </span>
               <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
             </button>
           </PopoverTrigger>

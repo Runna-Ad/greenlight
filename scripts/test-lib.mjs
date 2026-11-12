@@ -1959,6 +1959,37 @@ console.log("\n▶ Paquetes — clave, fecha del brief, nota de entrega");
   eq("desglose sólo normal", desgloseTracks([{ track: "normal" }]), "1 normal");
 }
 
+console.log("\n▶ Portal — cada paquete es su propia revisión (Pedro 2026-11-12)");
+{
+  const { idDeUnidad, leerUnidad, unidadesDePaquete, unidadPedida } = await import("../src/lib/portal-paquetes.ts");
+  const t = (id, paqueteId) => ({ id, paqueteId });
+  const P = (id, nombre) => ({ id, nombre, fechaVisible: null });
+  const b30 = {
+    id: "B30", label: "Brief 30/10", date: "2026-10-30",
+    tasks: [t("a", "LT"), t("b", "LT"), t("c", "LING"), t("d", null), t("e", "AJENO")],
+    paquetes: [P("LING", "Ling Hook"), P("LT", "LT AfterBF"), P("VACIO", "Sólo producción")],
+  };
+  const bManual = { id: "BM", label: "Manual", date: null, tasks: [t("m", null)], paquetes: [] };
+  const us = unidadesDePaquete([b30, bManual]);
+  eq("una unidad por paquete con piezas enviadas, 'Otras piezas' y el brief sin paquetes",
+     us.map((u) => u.label).join("|"), "Ling Hook|LT AfterBF|Otras piezas|Manual");
+  eq("un paquete sólo trae SUS piezas", us.find((u) => u.label === "LT AfterBF").tasks.map((x) => x.id).join(), "a,b");
+  eq("'Otras piezas' junta las sin paquete y las de un paquete ajeno al brief",
+     us.find((u) => u.label === "Otras piezas").tasks.map((x) => x.id).join(), "d,e");
+  eq("el paquete lleva su brief como etiqueta", us.find((u) => u.label === "LT AfterBF").etiqueta, "Brief 30/10");
+  eq("el brief sin paquetes no lleva etiqueta", us.find((u) => u.label === "Manual").etiqueta, null);
+  eq("id de unidad = brief.paquete", us.find((u) => u.label === "LT AfterBF").id, "B30.LT");
+  eq("…y se lee de vuelta", JSON.stringify(leerUnidad("B30.otras")), JSON.stringify({ briefId: "B30", paqueteId: null }));
+  eq("un id sin punto es un brief entero (link viejo)", leerUnidad("B30").paqueteId, undefined);
+
+  eq("pedir la unidad exacta la abre", unidadPedida(us, "B30.LT", undefined)?.label, "LT AfterBF");
+  eq("link viejo (brief) + tarea → el paquete de esa tarea", unidadPedida(us, "B30", "c")?.label, "Ling Hook");
+  eq("link viejo sin tarea → el primer paquete del brief", unidadPedida(us, "B30", undefined)?.label, "Ling Hook");
+  eq("sin brief, sólo tarea (aviso por correo) → su paquete", unidadPedida(us, undefined, "b")?.label, "LT AfterBF");
+  eq("un paquete que ya no existe → el primero de su brief", unidadPedida(us, idDeUnidad("B30", "BORRADO"), undefined)?.label, "Ling Hook");
+  eq("sin unidades → null", unidadPedida([], "B30", "a"), null);
+}
+
 console.log("\n▶ Portal — Real y Normal del mismo día son UN brief");
 {
   const { agruparBriefsPortal } = await import("../src/lib/portal-grupos.ts");

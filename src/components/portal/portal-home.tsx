@@ -6,7 +6,8 @@ import { Flame, ArrowRight, Eye, RefreshCw, CheckCircle2, CheckCheck, ChevronDow
 import type { PortalBrief, PortalTarea, PortalMarca } from "@/app/(app)/[cliente]/portal/portal-data";
 import type { AssetStatus } from "@/lib/brand";
 import { estadoCliente, estadoBriefPanel } from "@/lib/portal-bucket";
-import { ddmm, desgloseTracks } from "@/lib/paquetes";
+import { desgloseTracks, type PaquetePortal } from "@/lib/paquetes";
+import { idDeUnidad } from "@/lib/portal-paquetes";
 import { cn } from "@/lib/utils";
 
 /**
@@ -14,7 +15,8 @@ import { cn } from "@/lib/utils";
  * trabajo antes de meterse a un brief o una tarea:
  *   · Zona A — Necesitan tu aprobación: la cola de piezas `published` (su turno) → abre la tarea.
  *   · Zona B — 4 contadores: En producción · Por revisar · En cambios · Aprobadas.
- *   · Zona C — Tus briefs: avance por brief (barra de estados) → entra al brief.
+ *   · Zona C — Tus paquetes: avance por PAQUETE con su brief como etiqueta (Pedro 2026-11-12) →
+ *     entra a revisar SÓLO ese paquete.
  *
  * "En producción" es CONTEO puro (pre-envío): un número de impulso, sin lista, sin fechas, sin
  * detalle — no se filtra WIP al cliente. Todo lo demás se DERIVA de la misma lista filtrada
@@ -43,7 +45,7 @@ function EstadoIcon({ status, reReview, teRespondieron = false, className }: { s
 }
 const nombreTarea = (t: PortalTarea) => t.naming ?? t.code ?? "Idea";
 
-type QItem = PortalTarea & { briefId: string; briefLabel: string };
+type QItem = PortalTarea & { briefId: string; briefLabel: string; unidadId: string; unidadNombre: string | null };
 type Prod = { briefId: string; marcaId: string; paqueteId: string | null; track: string | null };
 
 export function PortalHome({
@@ -71,7 +73,17 @@ export function PortalHome({
   const [verCompletados, setVerCompletados] = useState(false);
   const multiMarca = marcas.length > 1;
 
-  const flat: QItem[] = briefs.flatMap((b) => b.tasks.map((t) => ({ ...t, briefId: b.id, briefLabel: b.label })));
+  // Cada pieza sabe a qué paquete entra (la unidad de revisión del portal).
+  const flat: QItem[] = briefs.flatMap((b) => {
+    const ids = new Set(b.paquetes.map((p) => p.id));
+    return b.tasks.map((t) => {
+      const pid = t.paqueteId && ids.has(t.paqueteId) ? t.paqueteId : null;
+      return {
+        ...t, briefId: b.id, briefLabel: b.label, unidadId: idDeUnidad(b.id, pid),
+        unidadNombre: pid ? b.paquetes.find((p) => p.id === pid)!.nombre : b.paquetes.length ? "Otras piezas" : null,
+      };
+    });
+  });
   const enMarca = <T extends { marcaId: string }>(xs: T[]) => (filtro ? xs.filter((x) => x.marcaId === filtro) : xs);
 
   const visibles = enMarca(flat);
@@ -92,21 +104,44 @@ export function PortalHome({
     .sort((a, b) => peso(a) - peso(b));
   const nRespuestas = cola.filter((t) => t.status === "in_corrections").length;
 
-  // Zona C — avance por brief. Cada brief con ≥1 pieza tras el filtro; entra por la marca del
-  // filtro, o (en "Todas") por la marca de su primera pieza.
-  const tarjetas = briefs
-    .map((b) => {
-      const ts = filtro ? b.tasks.filter((t) => t.marcaId === filtro) : b.tasks;
-      const prodB = produccion.filter((p) => p.briefId === b.id && (!filtro || p.marcaId === filtro));
-      const seg = segmentos(ts, prodB);
-      const total = seg.revisar + seg.cambios + seg.aprobado + seg.prod;
-      const entryMarca = filtro ?? b.tasks[0]?.marcaId ?? "__none__";
-      return { brief: b, seg, total, entryMarca, ts, prodB, arch: estadoBriefPanel(b.greenlitAt, ahora) };
-    })
+  // Zona C — avance por PAQUETE (Pedro 2026-11-12: el paquete es lo importante; el brief es una
+  // etiqueta). Un paquete por card, con lo enviado y lo que sigue en producción; las piezas sin
+  // paquete van en "Otras piezas". Un brief sin paquetes queda como un solo card con su nombre.
+  // Activo/completado sigue al brief (el Archivo es por brief). Primero lo que espera tu turno.
+  const tarjetas: Tarjeta[] = briefs.flatMap((b) => {
+    const ts = filtro ? b.tasks.filter((t) => t.marcaId === filtro) : b.tasks;
+    const prodB = produccion.filter((p) => p.briefId === b.id && (!filtro || p.marcaId === filtro));
+    const ids = new Set(b.paquetes.map((p) => p.id));
+    const de = (pid: string | null) => (x: { paqueteId: string | null }) =>
+      pid ? x.paqueteId === pid : !x.paqueteId || !ids.has(x.paqueteId);
+    const arch = estadoBriefPanel(b.greenlitAt, ahora);
+    return [...b.paquetes.map((p) => p.id), null].map((pid): Tarjeta => {
+      const p = pid ? b.paquetes.find((x) => x.id === pid)! : null;
+      const tsP = ts.filter(de(pid));
+      const prodP = prodB.filter(de(pid));
+      const seg = segmentos(tsP, prodP);
+      return {
+        key: idDeUnidad(b.id, pid),
+        nombre: p ? p.nombre : b.paquetes.length ? "Otras piezas" : b.label,
+        etiqueta: b.paquetes.length ? b.label : null,
+        paquete: p,
+        seg,
+        total: seg.revisar + seg.cambios + seg.aprobado + seg.prod,
+        ts: tsP,
+        prod: prodP,
+        entryMarca: filtro ?? tsP[0]?.marcaId ?? b.tasks[0]?.marcaId ?? "__none__",
+        fecha: b.date ?? "",
+        arch,
+      };
+    });
+  })
     .filter((x) => x.total > 0)
-    .sort((a, b) => b.total - a.total);
+    .sort((a, b) =>
+      Number(b.seg.revisar + b.seg.respondidas > 0) - Number(a.seg.revisar + a.seg.respondidas > 0) ||
+      b.fecha.localeCompare(a.fecha) ||
+      a.nombre.localeCompare(b.nombre));
 
-  // Ciclo de vida del brief: activo → "Tus briefs"; completado ≤15d → "Completados" (colapsado).
+  // Ciclo de vida del brief: activo → "Tus paquetes"; completado ≤15d → "Completados" (colapsado).
   // `briefs` YA viene acotado a NO archivados, así que aquí sólo se separan activo/reciente; los
   // archivados (>15d) no están en `briefs` — su conteo (`nArchivadas`) gobierna el link al Archivo.
   const activas = tarjetas.filter((x) => x.arch === "activo");
@@ -171,7 +206,7 @@ export function PortalHome({
       )}
 
       {/* Zona B — Dónde va todo */}
-      <SecHead titulo="Dónde va todo" hint={`— ${visibles.length + cuenta.prod} piezas en tus briefs`} />
+      <SecHead titulo="Dónde va todo" hint={`— ${visibles.length + cuenta.prod} piezas en tus paquetes`} />
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Resumen por estado">
         <Tile k="prod" n={cuenta.prod} foot="El equipo las arma · aún no es tu turno" />
         <Tile k="revisar" n={cuenta.revisar} foot="Esperan tu aprobación" destacado />
@@ -179,13 +214,13 @@ export function PortalHome({
         <Tile k="aprobado" n={cuenta.aprobado} foot="Listas y cerradas" />
       </section>
 
-      {/* Zona C — Tus briefs (ACTIVOS: con trabajo en curso) */}
+      {/* Zona C — Tus paquetes (de briefs ACTIVOS: con trabajo en curso) */}
       {activas.length > 0 && (
         <>
-          <SecHead titulo="Tus briefs" hint="— avance de cada entrega" />
-          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="Avance por brief">
-            {activas.map(({ brief, seg, total, entryMarca, ts, prodB }) => (
-              <BriefCard key={brief.id} brief={brief} seg={seg} total={total} entryMarca={entryMarca} ts={ts} prodB={prodB} />
+          <SecHead titulo="Tus paquetes" hint="— avance de cada entrega" />
+          <section className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2" aria-label="Avance por paquete">
+            {activas.map((c) => (
+              <PaqueteCard key={c.key} c={c} />
             ))}
           </section>
         </>
@@ -217,9 +252,9 @@ export function PortalHome({
             )}
           </div>
           {recientes.length > 0 && verCompletados && (
-            <section className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="Briefs completados (últimos 15 días)">
-              {recientes.map(({ brief, seg, total, entryMarca, ts, prodB }) => (
-                <BriefCard key={brief.id} brief={brief} seg={seg} total={total} entryMarca={entryMarca} ts={ts} prodB={prodB} />
+            <section className="mt-3 grid grid-cols-1 items-start gap-3 sm:grid-cols-2" aria-label="Paquetes de briefs completados (últimos 15 días)">
+              {recientes.map((c) => (
+                <PaqueteCard key={c.key} c={c} />
               ))}
             </section>
           )}
@@ -280,7 +315,7 @@ function QueueRow({ idx, t }: { idx: number; t: QItem }) {
   return (
     <li className="border-t border-border first:border-t-0">
       <Link
-        href={`?marca=${t.marcaId}&brief=${t.briefId}&tarea=${t.id}`}
+        href={`?marca=${t.marcaId}&brief=${t.unidadId}&tarea=${t.id}`}
         className="group flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-card"
       >
         <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-bold tabular-nums text-primary-foreground">
@@ -295,7 +330,7 @@ function QueueRow({ idx, t }: { idx: number; t: QItem }) {
           </span>
           <span className="block truncate text-[14.5px] font-semibold text-foreground">{nombreTarea(t)}</span>
           <span className="block truncate text-xs text-muted-foreground">
-            {t.briefLabel}
+            {t.unidadNombre ? `${t.unidadNombre} · ${t.briefLabel}` : t.briefLabel}
             {t.reReview ? " · ya aplicamos los cambios que pediste" : ""}
             {t.status === "in_corrections" && t.teRespondieron ? " · el equipo contestó uno de tus cambios" : ""}
           </span>
@@ -345,109 +380,146 @@ function Barra({ seg, total, alto = "h-2" }: { seg: Seg; total: number; alto?: s
   );
 }
 
-/**
- * Brief › PAQUETE › Tarea (0097): cada paquete del brief con su barra, sus piezas por equipo
- * (Real/Normal, Pedro 2026-11-12) y su fecha. Si ya se entregó: "Entregado 18/11 · fecha 20/11
- * (2 días antes)". Si se entregó tarde el cliente sólo ve "Entregado 23/11" (opción A de Pedro).
- */
-function PaquetesDelBrief({ brief, ts, prodB }: { brief: PortalBrief; ts: PortalTarea[]; prodB: Prod[] }) {
-  if (!brief.paquetes.length) return null;
-  const filas = [
-    ...brief.paquetes.map((p) => ({ id: p.id, nombre: p.nombre, p })),
-    { id: null, nombre: "Otras piezas", p: null },
-  ]
-    .map((f) => {
-      const tsP = ts.filter((t) => t.paqueteId === f.id);
-      const prodP = prodB.filter((x) => x.paqueteId === f.id);
-      const seg = segmentos(tsP, prodP);
-      const total = seg.revisar + seg.cambios + seg.aprobado + seg.prod;
-      return { ...f, seg, total, desglose: desgloseTracks([...tsP, ...prodP]) };
-    })
-    .filter((f) => f.total > 0);
-
-  return (
-    <ul className="flex flex-col gap-2.5 border-t border-border pt-3" aria-label="Paquetes del brief">
-      {filas.map((f) => {
-        const nota = f.p?.nota ?? null; // ya viene armada para el cliente desde el servidor
-        return (
-          <li key={f.id ?? "otras"} className="flex flex-col gap-1">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="flex min-w-0 items-center gap-1.5">
-                <Package className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="truncate text-[13px] font-medium text-foreground" title={f.nombre}>{f.nombre}</span>
-              </span>
-              <span className="shrink-0 text-[11.5px] tabular-nums text-muted-foreground">
-                {f.total} {f.total === 1 ? "pieza" : "piezas"}{f.desglose ? ` · ${f.desglose}` : ""}
-              </span>
-            </div>
-            <Barra seg={f.seg} total={f.total} alto="h-1.5" />
-            {nota && (
-              <span
-                className="inline-flex items-center gap-1 text-[11.5px] font-medium"
-                style={{ color: nota.tono === "antes" ? PAL.aprobado.ink : nota.tono === "pendiente" ? "var(--muted-foreground)" : "var(--foreground)" }}
-              >
-                {f.p?.entregado ? <CheckCircle2 className="size-3" aria-hidden /> : <CalendarDays className="size-3" aria-hidden />}
-                {nota.texto}
-              </span>
-            )}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function BriefCard({
-  brief,
-  seg,
-  total,
-  entryMarca,
-  ts,
-  prodB,
-}: {
-  brief: PortalBrief;
+type Tarjeta = {
+  key: string;
+  nombre: string;
+  /** El brief del paquete ("Brief 30/10"), como etiqueta. null = el card ES un brief sin paquetes. */
+  etiqueta: string | null;
+  paquete: PaquetePortal | null;
   seg: Seg;
   total: number;
-  entryMarca: string;
   ts: PortalTarea[];
-  prodB: Prod[];
-}) {
-  const orden = ORDEN;
-  const esperanTurno = seg.revisar + seg.respondidas;
+  prod: Prod[];
+  entryMarca: string;
+  fecha: string;
+  arch: ReturnType<typeof estadoBriefPanel>;
+};
+
+const EQUIPOS = [
+  { k: "real", label: "Real" },
+  { k: "normal", label: "Normal" },
+  { k: "otro", label: "Otras" },
+] as const;
+const equipoDe = (track: string | null) => (track === "real" ? "real" : track === "normal" ? "normal" : "otro");
+
+/**
+ * Un PAQUETE en el panel del cliente (Pedro 2026-11-12): su nombre, su brief como etiqueta, su
+ * barra y la nota de entrega. «Ver piezas» despliega sus piezas por equipo (Real / Normal) con su
+ * estado; las que siguen en producción sólo se CUENTAN (nunca su nombre: no se enseña trabajo sin
+ * enviar). «Abrir» entra a revisar SÓLO este paquete.
+ */
+function PaqueteCard({ c }: { c: Tarjeta }) {
+  const [abierto, setAbierto] = useState(false);
+  const esperanTurno = c.seg.revisar + c.seg.respondidas;
+  const base = `?marca=${c.entryMarca}&brief=${c.key}`;
+  const puedeAbrir = c.ts.length > 0;
+  const nota = c.paquete?.nota ?? null; // ya viene armada para el cliente desde el servidor
+  const desglose = desgloseTracks([...c.ts, ...c.prod]);
+  const equipos = EQUIPOS.map((e) => ({
+    ...e,
+    ts: c.ts.filter((t) => equipoDe(t.track) === e.k),
+    nProd: c.prod.filter((p) => equipoDe(p.track) === e.k).length,
+  })).filter((e) => e.ts.length || e.nProd);
+
+  const titulo = (
+    <span className="flex min-w-0 flex-col gap-1">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <Package className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="truncate font-semibold text-foreground" title={c.nombre}>{c.nombre}</span>
+      </span>
+      {c.etiqueta && (
+        <span className="w-fit rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-secondary-foreground">
+          {c.etiqueta}
+        </span>
+      )}
+    </span>
+  );
+
   return (
-    <Link
-      href={`?marca=${entryMarca}&brief=${brief.id}`}
-      className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="truncate font-semibold text-foreground">{brief.label}</span>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-          {total} {total === 1 ? "pieza" : "piezas"}
-          {brief.fechaEntrega ? ` · fecha ${ddmm(brief.fechaEntrega)}` : ""}
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        {puedeAbrir ? (
+          <Link href={base} className="min-w-0 rounded-md hover:opacity-80" aria-label={`Abrir ${c.nombre}`}>{titulo}</Link>
+        ) : (
+          titulo
+        )}
+        <span className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+          {c.total} {c.total === 1 ? "pieza" : "piezas"}
+          {desglose && <span className="block text-[11px]">{desglose}</span>}
         </span>
       </div>
 
-      <Barra seg={seg} total={total} />
+      <Barra seg={c.seg} total={c.total} />
 
       <div className="flex flex-wrap gap-x-3.5 gap-y-1">
-        {orden.map((k) => seg[k] > 0 && (
+        {ORDEN.map((k) => c.seg[k] > 0 && (
           <span key={k} className="inline-flex items-center gap-1.5 text-[11.5px] text-secondary-foreground">
             <span className="size-2 rounded-[3px]" style={{ background: PAL[k].c }} />
-            {PAL[k].label} <span className="font-bold tabular-nums">{seg[k]}</span>
+            {PAL[k].label} <span className="font-bold tabular-nums">{c.seg[k]}</span>
           </span>
         ))}
       </div>
 
-      <PaquetesDelBrief brief={brief} ts={ts} prodB={prodB} />
-
-      <div className="mt-0.5 flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
-          {esperanTurno > 0 ? `${esperanTurno} ${esperanTurno === 1 ? "espera" : "esperan"} tu turno` : "Al día"}
+      {nota && (
+        <span
+          className="inline-flex items-center gap-1 text-[11.5px] font-medium"
+          style={{ color: nota.tono === "antes" ? PAL.aprobado.ink : nota.tono === "pendiente" ? "var(--muted-foreground)" : "var(--foreground)" }}
+        >
+          {c.paquete?.entregado ? <CheckCircle2 className="size-3" aria-hidden /> : <CalendarDays className="size-3" aria-hidden />}
+          {nota.texto}
         </span>
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
-          Abrir <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+      )}
+
+      {abierto && (
+        <div className="flex flex-col gap-2.5 border-t border-border pt-3">
+          {equipos.map((e) => (
+            <div key={e.k}>
+              <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{e.label}</p>
+              <ul className="overflow-hidden rounded-lg border border-border">
+                {e.ts.map((t) => (
+                  <li key={t.id} className="border-t border-border first:border-t-0">
+                    <Link href={`${base}&tarea=${t.id}`} className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/60">
+                      {t.code && (
+                        <span className="shrink-0 rounded bg-secondary px-1 py-0.5 font-mono text-[11px] font-semibold text-secondary-foreground">{t.code}</span>
+                      )}
+                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{nombreTarea(t)}</span>
+                      <EstadoPill status={t.status} reReview={t.reReview} teRespondieron={t.teRespondieron} />
+                    </Link>
+                  </li>
+                ))}
+                {e.nProd > 0 && (
+                  <li className="flex items-center gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground first:border-t-0">
+                    <span className="size-2 shrink-0 rounded-[3px]" style={{ background: PAL.prod.c }} />
+                    {e.nProd} en producción · el equipo las arma
+                  </li>
+                )}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-0.5 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setAbierto((v) => !v)}
+          aria-expanded={abierto}
+          className="inline-flex min-h-8 items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          {abierto ? "Ocultar piezas" : "Ver piezas"}
+          <ChevronDown className={`size-3.5 transition-transform ${abierto ? "rotate-180" : ""}`} />
+        </button>
+        <span className="flex items-center gap-3 text-xs">
+          <span className="text-muted-foreground">
+            {esperanTurno > 0 ? `${esperanTurno} ${esperanTurno === 1 ? "espera" : "esperan"} tu turno` : puedeAbrir ? "Al día" : "En producción"}
+          </span>
+          {puedeAbrir && (
+            <Link href={base} className="group inline-flex items-center gap-1 font-semibold text-primary">
+              Abrir <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          )}
         </span>
       </div>
-    </Link>
+    </div>
   );
 }

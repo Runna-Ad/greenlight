@@ -55,6 +55,9 @@ export type PortalBrief = {
   paquetes: PaquetePortal[];
   /** La fecha del brief = la más lejana de sus paquetes. null si ninguno tiene fecha. */
   fechaEntrega: string | null;
+  /** En el portal por paquete, la unidad es un PAQUETE y esto es el nombre de su brief
+   *  ("Brief 30/10"), que el selector enseña como etiqueta. null/ausente = es un brief. */
+  etiqueta?: string | null;
 };
 
 /** Una marca del cliente con trabajo client-facing, para el grid de marcas del portal. */
