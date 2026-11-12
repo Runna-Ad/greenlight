@@ -3599,11 +3599,12 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 - Probado en el preview: Pedro creó contraseña con el código y entró al portal (20:51 UTC). EN VIVO: main d86bbd5, deploy dpl_BAjhe1Y8m4sdcg1MRnPhLvYik2rY (Ready); para volver: dpl_HG6DdGGv5KZ3D1hwSucogBdqRV9k. Sin probar en vivo: el botón Copiar.
 - Siguiente: aprobar a los tres clientes pendientes en Invitaciones y mandar código por chat si hace falta.
 
-## 2026-11-12 Session: comentar el título del plano en Modo Lectura + tamaños por plataforma de DiDi (main 1e49d63, eaf9f2b; sin push)
+## 2026-11-12 Session: comentar el título del plano en Modo Lectura + tamaños por plataforma de DiDi (main 02b0b9c, EN VIVO)
 **Hecho:** en Modo Lectura y portal el encabezado del plano acepta «Pedir cambio aquí» (se guarda en `titulo`). La tabla tamaño×plataforma (`brand.ts`) sigue las tablas nuevas de DiDi en Notion, videos por línea Préstamos/Card, estáticos iguales; también la usa el import del sheet. Un archivo por plataforma (decisión de Pedro). Sin migración.
 **Pruebas:** test-lib 738/0 · test-db 844/0 · tsc 0 · eslint 0; app local: título seleccionado en GIRLTHREE (sin guardar) y preview del brief Card 5 archivos / Préstamos 6.
 **Sin probar:** fila del sheet cuyos tamaños quedan todos fuera (la tarea saldría sin archivos); cliente real pidiendo cambio en el título.
-**Pick up next:** "ship it" de Pedro para push a main (despliega).
+**En vivo:** "ship it" de Pedro; deploy dpl_Aqu3N7FKPN6VapFHvYEsXy64wsV3 Ready. Para volver: dpl_BAjhe1Y8m4sdcg1MRnPhLvYik2rY. No revisado en el sitio en vivo.
+**Pick up next:** el equipo prueba un comentario en el título y un brief de DiDi en vivo; c7b58e8 + esta nota sin push (saldrán con el próximo cambio).
 
 ## 2026-11-12 Session: Slack de clientes + Admin ▸ Notificaciones (feat/slack-bot fbd8afa, sólo preview)
 **Hecho:** liga «Add to Slack» por cliente (un solo uso, 7 días, crear otra cancela la anterior); el espacio llega PENDIENTE y un admin lo aprueba o rechaza en Integraciones ▸ Slack; desconectar revoca el token. El bot manda a cada cliente por el Slack de SU empresa, nunca por el de otro. Admin ▸ Notificaciones: 4 interruptores (correo/Slack × equipo/clientes), tabla por persona y «Buscar en Slack» que llena los member IDs por correo. Token cifrado AES-GCM atado al espacio. Copiar compartido (`src/lib/copiar.ts`).
