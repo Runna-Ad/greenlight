@@ -1,6 +1,6 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-11-12 — Brief › Paquete › Tarea, fase 1 (rama `feat/paquetes`, worktree ../greenlight-paquetes)
+## ✅ 2026-11-12 — Brief › Paquete › Tarea, fase 1: EN VIVO (main a30aa80, deploy dpl_8i9A9QVURcjCMwKnE4JuzB5AxTJA; para volver: dpl_8iYVahssbswVCQF6QrERDNHe1XSi)
 Pedro: un brief (Brief 30/10) tiene PAQUETES (columna "Package Name" del sheet, antes "Brief Name") y cada paquete tiene tareas. Opción B: el paquete es su propio registro, con fecha de entrega que pone un ADMIN. La fecha del brief = la más lejana de sus paquetes. Paquete entregado (su última tarea Greenlit) → "Entregado X · fecha Y (N días antes)". Tarde: el equipo ve "N días tarde"; el cliente sólo "Entregado X". En el portal el cliente sí ve Real/Normal, como desglose por paquete ("3 piezas · 2 real · 1 normal").
 
 **Diseño**
@@ -37,7 +37,7 @@ Pedro: un brief (Brief 30/10) tiene PAQUETES (columna "Package Name" del sheet, 
 **Visto en la preview (feat/paquetes 0fe92b6, como Master):** Briefs muestra los paquetes de cada pestaña ("LT AfterBF · 6 piezas · 3 real · 3 normal"); poner fecha 20/11 en LT Categories → aviso "Fecha del paquete guardada" + «Quitar fecha»; portal: "Brief 30/10 · 12 piezas" junta Real+Normal con 6 paquetes; "Brief 23/10 · 2 piezas · fecha 20/11 … LT Categories · 2 normal · Fecha 20/11"; `diasAntes` 0 veces en el HTML; consola sin errores. Fecha de prueba quitada (fecha_entrega = NULL).
 **Sin probar:** la nota "Entregado… (N días antes/tarde)" con un paquete entregado de verdad (no hay ninguno); vista de lead y especialista; un sync real con el encabezado «Package Name»; Safari.
 
-Next Step: "ship it" de Pedro → `feat/paquetes` a `main` (sin migración pendiente). Luego fase 2 (tablero, Mi trabajo, Entregas con "· Real/Normal").
+Next Step: fase 1 en vivo. Luego fase 2 (tablero, Mi trabajo, Entregas con "· Real/Normal").
 
 ## ✅ 2026-11-12 — Bot de Slack «Greenlight»: EN VIVO (main f88c17d, deploy dpl_H88GvKdmiULWBpmUtxVRwZU83mRE; para volver: dpl_Aqu3N7FKPN6VapFHvYEsXy64wsV3)
 Pedro eligió la opción 2: DM por persona en el Slack de Runna, con el código listo para un segundo espacio (DiDi) si su admin lo aprueba. Mismo patrón que SnapTrack.

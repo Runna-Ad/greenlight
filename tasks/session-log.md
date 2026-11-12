@@ -1,5 +1,13 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-12 — Brief › Paquete › Tarea, fase 1 EN VIVO (main a30aa80, 0097 aplicada)
+**Hecho:** paquetes como registros propios (0097: tabla `paquetes`, `ideas.paquete_id`, fecha del brief desde la pestaña). La hoja acepta «Package Name» (antes «Brief Name»). Briefs del equipo: paquetes con conteo y fecha de entrega que pone un admin. Portal: Real y Normal de la misma fecha son un brief; cada paquete con barra y «N piezas · x real · y normal»; fecha del brief = la última de sus paquetes; entregado antes = "Entregado X · fecha Y (N días antes)"; tarde: el equipo ve "N días tarde", el cliente sólo "Entregado X".
+**Pruebas:** tras juntar main (Slack 0098): npm test exit 0 (lib 845, db 892, import 90, sync 45, prisma 975, formatos 797) · tsc 0 · next build 0. Preview como Master: paquetes y fecha 20/11 guardada y quitada; portal junta Brief 30/10 (12 piezas, 6 paquetes); "diasAntes" 0 veces en el HTML del cliente.
+**En vivo:** «Ship it» de Pedro: fast-forward de feat/paquetes a main (a30aa80), deploy dpl_8i9A9QVURcjCMwKnE4JuzB5AxTJA. Para volver: dpl_8iYVahssbswVCQF6QrERDNHe1XSi (main 0bb59be).
+**Sin probar:** la nota de entregado/tarde con un paquete entregado de verdad (no hay ninguno); vista de lead y especialista; un sync real con la cabecera «Package Name»; Safari.
+**Ojo:** Entregas, Performance, la tarea y Papelera dicen "Brief 30/10" para Real y Normal igual hasta la fase 2.
+**Pick up next:** fase 2 (tablero, Mi trabajo, Entregas/Performance con Real/Normal, búsqueda, avisos, Slack). Lista en tasks/todo.md.
+
 ## 2026-11-12 — Bot de Slack «Greenlight» EN VIVO (main f88c17d, 0096 aplicada)
 **Hecho:** DM a cada persona del equipo en el Slack de Runna, por los mismos avisos que el correo (opción 2 de Pedro: listo para un 2º espacio como DiDi). 0096: `slack` como canal, `track_members.slack_team_id`, `rpc_reclamar_slack`, índice de la cola. El bot busca a la persona por el correo de su login y guarda su Slack. Mi perfil: interruptor de Slack activo. Equipo valida el member ID (U…/W…).
 **Pruebas:** test-lib 779/0 · test-db 856/0 · npm test exit 0 · build ✓. Tres revisiones (código, seguridad, verificación): 14 serios arreglados. Real en la preview: 2 DMs a Nils Vera `sent` (18:31:29 UTC), Nils los vio, su Slack quedó guardado. Aviso de prueba borrado.
