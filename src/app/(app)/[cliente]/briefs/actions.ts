@@ -19,7 +19,8 @@ import { getCurrentUser } from "@/lib/identity";
  */
 export async function eliminarBrief(
   cliente: string,
-  briefId: string,
+  /** Las pestañas del card: Real y Normal del mismo día van juntas (Pedro 2026-11-12). */
+  briefIds: string[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
   const role = await getViewAs();
@@ -29,15 +30,26 @@ export async function eliminarBrief(
   const db = supabaseAdmin();
   const sello = { deleted_at: new Date().toISOString(), deleted_by: actor };
 
+  // Sólo briefs de ESTE cliente: un id de otro cliente en la lista no se toca.
+  const pedidos = [...new Set(Array.isArray(briefIds) ? briefIds : [])].slice(0, 20);
+  if (!pedidos.length) return { ok: false, error: "No llegó ningún brief." };
+  const { data: cli } = await db.from("clients").select("id").eq("slug", cliente).maybeSingle<{ id: string }>();
+  if (!cli) return { ok: false, error: "Cliente no encontrado." };
+  const { data: propios, error: eProp } = await db
+    .from("briefs").select("id").eq("client_id", cli.id).in("id", pedidos).returns<{ id: string }[]>();
+  if (eProp) return { ok: false, error: eProp.message };
+  const ids = (propios ?? []).map((b) => b.id);
+  if (ids.length !== pedidos.length) return { ok: false, error: "Ese brief no es de este cliente." };
+
   // Las TAREAS primero: si fallara a media faena, un brief vivo con tareas selladas
   // se ve raro pero es recuperable; un brief sellado con tareas vivas dejaría trabajo
   // huérfano visible en el tablero sin brief detrás.
   const { error: eIdeas } = await db
-    .from("ideas").update(sello).eq("brief_id", briefId).is("deleted_at", null);
+    .from("ideas").update(sello).in("brief_id", ids).is("deleted_at", null);
   if (eIdeas) return { ok: false, error: eIdeas.message };
 
   const { error } = await db
-    .from("briefs").update(sello).eq("id", briefId).is("deleted_at", null);
+    .from("briefs").update(sello).in("id", ids).is("deleted_at", null);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/${cliente}/briefs`);

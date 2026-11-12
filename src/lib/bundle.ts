@@ -107,7 +107,11 @@ export function compararBundle(
 }
 
 export type Bundle = {
+  /** El brief con que se abre/nombra el card (el primero de `brief_ids`). */
   brief_id: string;
+  /** Las pestañas (filas de `briefs`) que este card junta: Real y Normal del mismo día son
+   *  UN brief (Pedro 2026-11-12). Una sola cuando el brief no tiene fecha. */
+  brief_ids: string[];
   brief_title: string | null;
   brief_tab: string | null;
   tasks: BundleTask[];
@@ -154,7 +158,7 @@ export function agruparBundles(visibles: BundleTask[]): Bundle[] {
     let b = porBrief.get(t.brief_id);
     if (!b) {
       b = {
-        brief_id: t.brief_id, brief_title: t.brief_title, brief_tab: t.brief_tab,
+        brief_id: t.brief_id, brief_ids: [t.brief_id], brief_title: t.brief_title, brief_tab: t.brief_tab,
         tasks: [], greenlitAt: null, paquetes: [],
       };
       porBrief.set(t.brief_id, b);
@@ -166,12 +170,67 @@ export function agruparBundles(visibles: BundleTask[]): Bundle[] {
     b.greenlitAt = greenlitDeBundle(b.tasks);
   }
 
-  // Briefs con más tareas primero; empate → por título, estable.
-  return [...porBrief.values()].sort(
-    (a, b) =>
-      b.tasks.length - a.tasks.length ||
-      (a.brief_title ?? "").localeCompare(b.brief_title ?? ""),
+  return [...porBrief.values()].sort(ordenDeBundles);
+}
+
+/** Briefs con más tareas primero; empate → por título, y luego por id (estable). */
+function ordenDeBundles(a: Bundle, b: Bundle): number {
+  return (
+    b.tasks.length - a.tasks.length ||
+    (a.brief_title ?? "").localeCompare(b.brief_title ?? "") ||
+    a.brief_id.localeCompare(b.brief_id)
   );
+}
+
+/**
+ * Junta en UN card las pestañas del mismo brief: Real y Normal con la misma fecha
+ * (`briefs.brief_date`, 0097). La misma regla que el portal (portal-grupos.ts): un brief
+ * sin fecha queda solo. El card se nombra por la pestaña Real si la hay (si no, la primera
+ * por id), y queda Greenlit sólo cuando TODAS sus tareas visibles lo están.
+ */
+export function juntarPorFecha(bundles: Bundle[], fechaDe: ReadonlyMap<string, string | null>): Bundle[] {
+  const porLlave = new Map<string, Bundle[]>();
+  for (const b of bundles) {
+    const fecha = fechaDe.get(b.brief_id) ?? null;
+    const k = fecha ? `d:${fecha}` : `b:${b.brief_id}`;
+    (porLlave.get(k) ?? porLlave.set(k, []).get(k)!).push(b);
+  }
+  const out: Bundle[] = [];
+  for (const grupo of porLlave.values()) {
+    if (grupo.length === 1) { out.push(grupo[0]); continue; }
+    const esReal = (b: Bundle) => b.tasks.some((t) => t.track === "real");
+    grupo.sort((a, b) => Number(esReal(b)) - Number(esReal(a)) || a.brief_id.localeCompare(b.brief_id));
+    const tasks = grupo.flatMap((b) => b.tasks).sort(compararBundle);
+    out.push({
+      brief_id: grupo[0].brief_id,
+      brief_ids: grupo.flatMap((b) => b.brief_ids),
+      brief_title: grupo[0].brief_title,
+      brief_tab: null, // varias pestañas: el card dice "Real N · Normal M"
+      tasks,
+      greenlitAt: greenlitDeBundle(tasks),
+      paquetes: [],
+    });
+  }
+  return out.sort(ordenDeBundles);
+}
+
+/** Cuántas tareas de cada pestaña trae el card: "Real 9 · Normal 3". */
+export function desgloseDeBundle(tasks: Pick<BundleTask, "track">[]): string {
+  const real = tasks.filter((t) => t.track === "real").length;
+  const normal = tasks.length - real;
+  return [real && `Real ${real}`, normal && `Normal ${normal}`].filter(Boolean).join(" · ");
+}
+
+/**
+ * El orden en que el card ENSEÑA las tareas (por paquete, "Sin paquete" al final) y,
+ * por eso mismo, el de las flechas ← n/N → de la tarea: si cada uno tuviera el suyo, el
+ * card diría 4/12 y la tarea 7/12.
+ */
+export function ordenDeTarjeta<T extends { paquete_id: string | null }>(
+  tasks: T[],
+  paquetes: { id: string; nombre: string }[],
+): T[] {
+  return gruposPorPaquete(tasks, paquetes).flatMap((g) => g.tasks);
 }
 
 /** Las columnas que la vista board_tasks expone para un bundle. */

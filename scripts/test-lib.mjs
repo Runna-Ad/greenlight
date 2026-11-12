@@ -411,6 +411,50 @@ eq("tarea fuera del bundle filtrado → índice -1 (flechas apagadas)",
 eq("la primera no tiene anterior", posicionEnBundle(ordenadas, "a").anterior, null);
 eq("la última no tiene siguiente", posicionEnBundle(ordenadas, "c").siguiente, null);
 
+// ── Briefs: Real y Normal del mismo día en UN card (Pedro 2026-11-12) ──
+{
+  const { agruparBundles, juntarPorFecha, ordenDeTarjeta, desgloseDeBundle } = await import("../src/lib/bundle.ts");
+  const tk = (id, brief_id, track, code, extra = {}) => ({
+    id, brief_id, track, code, brief_title: "Brief 30/10", brief_tab: track, status: "todo",
+    delivered_at: null, member_ids: [], paquete_id: null, ...extra,
+  });
+  const tareasB = [
+    tk("r1", "BR", "real", "A1"), tk("r2", "BR", "real", "B1"),
+    tk("n1", "BN", "normal", "A1"),
+    tk("s1", "BS", "real", "A1", { brief_title: "Manual" }), // sin fecha: queda solo
+    tk("v1", "BV", "normal", "A1", { brief_title: "Brief 23/10" }),
+  ];
+  const fechas = new Map([["BR", "2026-10-30"], ["BN", "2026-10-30"], ["BS", null], ["BV", "2026-10-23"]]);
+  const cards = juntarPorFecha(agruparBundles(tareasB), fechas);
+  eq("Real y Normal del 30/10 son un card; sin fecha y otra fecha quedan aparte", cards.length, 3);
+  const c30 = cards.find((c) => c.brief_ids.length > 1);
+  eq("…el card junto lleva las dos pestañas, la Real primero", c30?.brief_ids.join(","), "BR,BN");
+  eq("…y las 3 tareas", c30?.tasks.length, 3);
+  eq("…se nombra por la pestaña Real", c30?.brief_id, "BR");
+  eq("…y dice cuántas de cada una", desgloseDeBundle(c30?.tasks ?? []), "Real 2 · Normal 1");
+  eq("sólo Normal → sin 'Real 0'", desgloseDeBundle([{ track: "normal" }]), "Normal 1");
+  eq("el card más grande va primero", cards[0].brief_ids.join(","), "BR,BN");
+  eq("juntar no cambia el resultado si se repite (estable)",
+     juntarPorFecha(agruparBundles([...tareasB].reverse()), fechas).map((c) => c.brief_ids.join(",")).join("|"),
+     cards.map((c) => c.brief_ids.join(",")).join("|"));
+
+  const ahora = new Date().toISOString();
+  const medio = juntarPorFecha(agruparBundles([
+    tk("g1", "BR", "real", "A1", { status: "delivered", delivered_at: ahora }),
+    tk("g2", "BN", "normal", "A1"),
+  ]), fechas);
+  eq("una pestaña entregada y la otra no → el card NO está Greenlit", medio[0].greenlitAt, null);
+
+  // El orden del card (por paquete) es el de las flechas de la tarea.
+  const conPaq = [
+    tk("x1", "BR", "real", "A1", { paquete_id: "PZ" }), tk("x2", "BN", "normal", "A1", { paquete_id: "PA" }),
+    tk("x3", "BR", "real", "B1", { paquete_id: null }), tk("x4", "BR", "real", "C1", { paquete_id: "PA" }),
+  ];
+  eq("orden del card: paquetes por nombre, 'Sin paquete' al final",
+     ordenDeTarjeta(conPaq, [{ id: "PZ", nombre: "Zeta" }, { id: "PA", nombre: "Alfa" }]).map((t) => t.id).join(","),
+     "x2,x4,x1,x3");
+}
+
 // ── Liga de entrega: sólo http/https (se pinta como href) ──
 console.log("\n▶ URL de entrega");
 const { urlSegura } = await import("../src/lib/url-segura.ts");

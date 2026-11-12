@@ -12,11 +12,17 @@ import {
   compararBundle,
   filtroBundle,
   bundleEnCurso,
+  juntarPorFecha,
+  ordenDeTarjeta,
   type Bundle,
   type BundleTask,
 } from "@/lib/bundle";
 
-/** Las tareas de UN brief, ya filtradas y ordenadas. */
+/**
+ * Las tareas del brief de una tarea, ya filtradas y en el orden del card de /briefs: las
+ * flechas ← n/N → recorren el MISMO brief que el card (Real y Normal del mismo día juntos)
+ * y en el mismo orden (por paquete).
+ */
 export async function cargarBundle(
   briefId: string,
   role: ViewRole,
@@ -24,16 +30,35 @@ export async function cargarBundle(
   tracks: Track[] | null,
 ): Promise<BundleTask[]> {
   const db = supabaseAdmin();
+  const ids = await pestanasDelBrief(db, briefId);
   const { data } = await db
     .from("board_tasks")
     .select(BUNDLE_SELECT)
-    .eq("brief_id", briefId)
+    .in("brief_id", ids)
     .returns<Omit<BundleTask, "paquete_id">[]>();
 
-  // Las flechas ← n/N → no usan el paquete: va null (no se paga otra consulta).
-  const tasks: BundleTask[] = (data ?? []).map((t) => ({ ...t, paquete_id: null }));
+  const tasks = await conPaquete(db, data ?? []);
   const conCambios = await cambiosParaFiltro(db, role, tasks);
-  return tasks.filter(filtroBundle(role, soyId, tracks, conCambios)).sort(compararBundle);
+  const visibles = tasks.filter(filtroBundle(role, soyId, tracks, conCambios)).sort(compararBundle);
+
+  const paqIds = [...new Set(visibles.map((t) => t.paquete_id).filter((x): x is string => !!x))];
+  const { data: paqs } = paqIds.length
+    ? await db.from("paquetes").select("id, nombre").in("id", paqIds).returns<{ id: string; nombre: string }[]>()
+    : { data: [] };
+  return ordenDeTarjeta(visibles, paqs ?? []);
+}
+
+/** Las pestañas vivas del mismo brief (mismo cliente y misma fecha); sin fecha, sólo ella. */
+async function pestanasDelBrief(db: ReturnType<typeof supabaseAdmin>, briefId: string): Promise<string[]> {
+  const { data: b } = await db
+    .from("briefs").select("client_id, brief_date").eq("id", briefId)
+    .maybeSingle<{ client_id: string; brief_date: string | null }>();
+  if (!b?.brief_date) return [briefId];
+  const { data } = await db
+    .from("briefs").select("id").eq("client_id", b.client_id).eq("brief_date", b.brief_date).is("deleted_at", null)
+    .returns<{ id: string }[]>();
+  const ids = (data ?? []).map((r) => r.id);
+  return ids.includes(briefId) ? ids : [briefId, ...ids];
 }
 
 /** board_tasks no trae `paquete_id` (0097 no toca esa vista): se lee de `ideas`, por lotes. */
@@ -103,11 +128,23 @@ export async function cargarBundles(
   // ninguna señal. Mejor la página de error que un vacío convincente. (review 2026-09-02)
   if (eErr) throw new Error(`brief_estado: ${eErr.message}`);
 
-  // Misma regla que abajo (bundleEnCurso), aplicada al brief entero. Un brief sin
-  // tareas no puede formar bundle: fuera.
-  const enCurso = (estados ?? [])
-    .filter((e) => e.n_tareas > 0 && bundleEnCurso({ greenlitAt: e.greenlit_at }))
-    .map((e) => e.brief_id);
+  const { data: cli } = await db.from("clients").select("id").eq("slug", clienteSlug).maybeSingle<{ id: string }>();
+  // La fecha de cada pestaña (0097): Real y Normal del mismo día son UN card.
+  const { data: fechas, error: fErr } = cli
+    ? await db.from("briefs").select("id, brief_date").eq("client_id", cli.id).is("deleted_at", null)
+        .returns<{ id: string; brief_date: string | null }[]>()
+    : { data: [], error: null };
+  if (fErr) throw new Error(`briefs: ${fErr.message}`);
+  const fechaDe = new Map((fechas ?? []).map((f) => [f.id, f.brief_date]));
+  const llave = (id: string) => (fechaDe.get(id) ? `d:${fechaDe.get(id)}` : `b:${id}`);
+
+  // Misma regla que abajo (bundleEnCurso), por brief JUNTO: si una de sus pestañas sigue en
+  // curso, se cargan todas (si no, el card enseñaría sólo la mitad). Sin tareas: fuera.
+  const conTareas = (estados ?? []).filter((e) => e.n_tareas > 0);
+  const llavesEnCurso = new Set(
+    conTareas.filter((e) => bundleEnCurso({ greenlitAt: e.greenlit_at })).map((e) => llave(e.brief_id)),
+  );
+  const enCurso = conTareas.filter((e) => llavesEnCurso.has(llave(e.brief_id))).map((e) => e.brief_id);
   if (!enCurso.length) return [];
 
   const { data, error } = await db
@@ -119,12 +156,11 @@ export async function cargarBundles(
 
   const tasks = await conPaquete(db, data ?? []);
   const conCambios = await cambiosParaFiltro(db, role, tasks);
-  const bundles = agruparBundles(tasks.filter(filtroBundle(role, soyId, tracks, conCambios)))
+  const bundles = juntarPorFecha(agruparBundles(tasks.filter(filtroBundle(role, soyId, tracks, conCambios))), fechaDe)
     .filter((b) => bundleEnCurso(b));
 
   // Paquetes (0097): sólo los que tocan las tareas VISIBLES; su entrega se calcula con
   // todas sus tareas (cargarPaquetes).
-  const { data: cli } = await db.from("clients").select("id").eq("slug", clienteSlug).maybeSingle<{ id: string }>();
   const paquetes = cli
     ? await cargarPaquetes(cli.id, bundles.flatMap((b) => b.tasks.map((t) => t.paquete_id)))
     : new Map();

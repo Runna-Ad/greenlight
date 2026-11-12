@@ -87,7 +87,7 @@ export default async function BriefsPage({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {bundles.map((b) => (
-            <BundleCard key={b.brief_id} bundle={b} cliente={cliente} puedeBorrar={canAdmin(role)} puedeFecha={canAdmin(role)} />
+            <BundleCard key={b.brief_ids.join(",")} bundle={b} cliente={cliente} puedeBorrar={canAdmin(role)} puedeFecha={canAdmin(role)} />
           ))}
         </div>
       )}

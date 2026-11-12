@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Pill, type PillStatus } from "@/components/ui/pill";
 import { ChevronDown, Files, Layers, Package, Sparkles, Trash2 } from "lucide-react";
 
-import { gruposPorPaquete, type Bundle, type BundleTask, type PaqueteEquipo } from "@/lib/bundle";
+import { desgloseDeBundle, gruposPorPaquete, type Bundle, type BundleTask, type PaqueteEquipo } from "@/lib/bundle";
 import { STATUS_LABEL, STATUS_TOKEN } from "@/lib/brand";
 import { notaEntrega, type TonoEntrega } from "@/lib/paquetes";
 import { eliminarBrief, ponerFechaPaquete } from "@/app/(app)/[cliente]/briefs/actions";
@@ -217,7 +217,7 @@ export function BundleCard({
 
   const borrar = () =>
     startBorrar(async () => {
-      const r = await eliminarBrief(cliente, bundle.brief_id);
+      const r = await eliminarBrief(cliente, bundle.brief_ids);
       if (!r.ok) {
         toast.error(r.error ?? "No se pudo borrar el brief.");
         return;
@@ -239,8 +239,13 @@ export function BundleCard({
             <h3 className="truncate text-sm font-semibold text-foreground">
               {bundle.brief_title ?? bundle.brief_tab ?? "Brief sin título"}
             </h3>
-            {bundle.brief_tab && bundle.brief_tab !== bundle.brief_title && (
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{bundle.brief_tab}</p>
+            {/* Real y Normal del mismo día van en un solo card: se dice cuántas de cada una. */}
+            {bundle.brief_ids.length > 1 ? (
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{desgloseDeBundle(bundle.tasks)}</p>
+            ) : (
+              bundle.brief_tab && bundle.brief_tab !== bundle.brief_title && (
+                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{bundle.brief_tab}</p>
+              )
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -334,8 +339,8 @@ export function BundleCard({
             <button
               type="button"
               onClick={() => setConfirmando(true)}
-              aria-label="Borrar brief y todas sus tareas"
-              title="Borrar brief y todas sus tareas"
+              aria-label={bundle.brief_ids.length > 1 ? "Borrar el brief (Real y Normal) y todas sus tareas" : "Borrar brief y todas sus tareas"}
+              title={bundle.brief_ids.length > 1 ? "Borrar el brief (Real y Normal) y todas sus tareas" : "Borrar brief y todas sus tareas"}
               className="flex items-center border-l border-border/60 px-3 text-muted-foreground hover:bg-secondary/40 hover:text-status-corrections"
             >
               <Trash2 className="size-3.5" />
