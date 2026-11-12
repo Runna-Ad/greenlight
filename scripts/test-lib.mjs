@@ -793,7 +793,10 @@ console.log("\n▶ Bot de Slack: a quién, por qué espacio, qué mensaje");
   eq("tarea suya con Slack conocido → se manda sin buscar", JSON.stringify(S({})), JSON.stringify({ enviar: true, buscarPorCorreo: false }));
   eq("sin Slack pero con correo → se busca por correo", JSON.stringify(S({ slackUserId: null })), JSON.stringify({ enviar: true, buscarPorCorreo: true }));
   eq("sin Slack ni correo → no", S({ slackUserId: null, email: "  " }).razon, "sin Slack ni correo");
-  eq("un cliente (sin fila en el equipo) → no", S({ esDelEquipo: false }).razon, "no es del equipo");
+  eq("sin destinatario → no", S({ esDelEquipo: false }).razon, "sin destinatario");
+  eq("Slack apagado en Admin para su grupo → no, aunque sea suyo",
+     S({ canalActivo: false, esMiTarea: true }).razon, "Slack apagado en Admin para su grupo");
+  ok("interruptor del grupo encendido → sí", S({ canalActivo: true }).enviar);
   eq("apagó Slack en Mi perfil → no", S({ notifySlack: false }).razon, "persona desactivó Slack");
   eq("aviso de su alcance que apagó por evento → no", S({ esMiTarea: false, eventPref: false }).razon, "evento no avisa (pref/def)");
   ok("aviso de su alcance encendido por evento → sí", S({ esMiTarea: false, eventPref: true }).enviar);
@@ -804,12 +807,64 @@ console.log("\n▶ Bot de Slack: a quién, por qué espacio, qué mensaje");
      S({ creadoEn: new Date(ahora - SLACK_MAX_EDAD_MS - 1000).toISOString() }).razon, "aviso de hace más de 1 día");
   ok("aviso de hace 23 h → sí", S({ creadoEn: new Date(ahora - 23 * 3600_000).toISOString() }).enviar);
 
-  const runna = { teamId: "TRUNNA", token: "xoxb-r" };
-  const didi = { teamId: "TDIDI", token: "xoxb-d" };
-  eq("sin espacio guardado → la conexión de Runna", elegirConexion(null, [runna, didi])?.token, "xoxb-r");
-  eq("espacio de DiDi → la conexión de DiDi", elegirConexion("TDIDI", [runna, didi])?.token, "xoxb-d");
-  eq("espacio que no está conectado → ninguna (no por el equivocado)", elegirConexion("TOTRO", [runna]), null);
+  const runna = { teamId: "TRUNNA", token: "xoxb-r", clienteId: null };
+  const didi = { teamId: "TDIDI", token: "xoxb-d", clienteId: "cli-didi" };
+  eq("el equipo → la conexión de Runna", elegirConexion(null, [didi, runna])?.token, "xoxb-r");
+  eq("un cliente de DiDi → la conexión de DiDi", elegirConexion("cli-didi", [runna, didi])?.token, "xoxb-d");
+  eq("un cliente cuya empresa no conectó Slack → ninguna (nunca por el Slack de otro)", elegirConexion("cli-otro", [runna, didi]), null);
   eq("sin conexiones → ninguna", elegirConexion(null, []), null);
+
+  const { idGuardadoSirve, emparejarPorCorreo, urlInstalacion, SLACK_SCOPES } = await import("../src/lib/slack-routing.ts");
+  ok("id guardado del mismo espacio sirve", idGuardadoSirve("U0123ABCD", "TDIDI", didi));
+  ok("id escrito a mano (sin espacio) sirve en el Slack de Runna", idGuardadoSirve("U0123ABCD", null, runna));
+  ok("…pero en el Slack de un cliente un id sin espacio NO sirve (se busca por correo)", !idGuardadoSirve("U0123ABCD", null, didi));
+  ok("id de OTRO espacio no sirve (se vuelve a buscar)", !idGuardadoSirve("U0123ABCD", "TRUNNA", didi));
+  ok("un canal guardado no sirve", !idGuardadoSirve("C0123ABCD", null, runna));
+  ok("vacío no sirve", !idGuardadoSirve(null, null, runna));
+
+  const usuarios = [
+    { id: "U0000NILS", team_id: "TRUNNA", profile: { email: "Nils@Runna.com.mx" } },
+    { id: "U0000BOT1", team_id: "TRUNNA", is_bot: true, profile: { email: "bot@runna.com.mx" } },
+    { id: "U0000GONE", team_id: "TRUNNA", deleted: true, profile: { email: "ex@runna.com.mx" } },
+    { id: "U0000EXTR", team_id: "TOTRO", profile: { email: "ana@didi.com" } },
+  ];
+  const pares = emparejarPorCorreo(usuarios, [
+    { clave: "nils", correos: ["nils@runna.com.mx"] },
+    { clave: "bot", correos: ["bot@runna.com.mx"] },
+    { clave: "ex", correos: ["ex@runna.com.mx"] },
+    { clave: "ana", correos: ["ana@didi.com"] },
+    { clave: "segundo", correos: [null, "nils@runna.com.mx"] },
+  ], "TRUNNA");
+  eq("empareja por correo sin importar mayúsculas", pares.get("nils"), "U0000NILS");
+  ok("un bot no se empareja", !pares.has("bot"));
+  ok("una cuenta borrada no se empareja", !pares.has("ex"));
+  ok("alguien de otro espacio no se empareja", !pares.has("ana"));
+  eq("usa el segundo correo si el primero falta", pares.get("segundo"), "U0000NILS");
+
+  const liga = new URL(urlInstalacion({ clientId: "123.456", state: "abc", redirectUri: "https://greenlight.runna.agency/api/slack/oauth" }));
+  eq("la liga va a Slack", liga.origin + liga.pathname, "https://slack.com/oauth/v2/authorize");
+  eq("…con los permisos del bot", liga.searchParams.get("scope"), SLACK_SCOPES.join(","));
+  eq("…el state de un solo uso", liga.searchParams.get("state"), "abc");
+  eq("…y el regreso a Greenlight", liga.searchParams.get("redirect_uri"), "https://greenlight.runna.agency/api/slack/oauth");
+
+  const { cifrarToken, descifrarToken } = await import("../src/lib/slack-cifrado.ts");
+  const { randomBytes } = await import("node:crypto");
+  const llave = randomBytes(32).toString("base64");
+  const otra = randomBytes(32).toString("base64");
+  const guardado = cifrarToken("xoxb-123-abc", llave, "TDIDI");
+  ok("el token cifrado no trae el token en claro", !guardado.includes("xoxb"));
+  eq("se descifra con la misma llave y el mismo espacio", descifrarToken(guardado, llave, "TDIDI"), "xoxb-123-abc");
+  eq("con otra llave no se descifra", descifrarToken(guardado, otra, "TDIDI"), null);
+  eq("pegado en la fila de OTRO espacio no se descifra", descifrarToken(guardado, llave, "TOTRO"), null);
+  const [v, iv, tag, c] = guardado.split(":");
+  const alterado = [v, iv, tag, Buffer.from("x" + c).toString("base64")].join(":");
+  eq("alterado no se descifra", descifrarToken(alterado, llave, "TDIDI"), null);
+  eq("con la etiqueta recortada no se descifra", descifrarToken([v, iv, tag.slice(0, 8), c].join(":"), llave, "TDIDI"), null);
+  eq("basura no se descifra", descifrarToken("hola", llave, "TDIDI"), null);
+  ok("cifrar dos veces da distinto (iv nuevo)", cifrarToken("xoxb-1", llave, "T1") !== cifrarToken("xoxb-1", llave, "T1"));
+  let llaveCorta = false;
+  try { cifrarToken("x", Buffer.from("corta").toString("base64"), "T1"); } catch { llaveCorta = true; }
+  ok("una llave que no es de 32 bytes se rechaza", llaveCorta);
 
   ok("token revocado es permanente", errorSlackPermanente("token_revoked"));
   ok("mensaje mal armado es permanente (no se reintenta 3 veces)", errorSlackPermanente("invalid_blocks"));

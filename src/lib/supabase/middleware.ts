@@ -14,7 +14,9 @@ const DB_SCHEMA = process.env.NEXT_PUBLIC_DB_SCHEMA ?? "produccion";
 // con su secreto (CRON_SECRET); el muro de login lo mandaba a /login.
 // /api/prisma/vigia igual: el cron del vigía llega sin sesión y exige su propio secreto.
 // /api/notion/sync igual: el reloj de Notion (0094) llega sin sesión y exige CRON_SECRET.
-const PUBLIC_PATHS = ["/login", "/portal/login", "/auth/callback", "/auth/confirm", "/robots.txt", "/api/avisos/enviar", "/api/prisma/vigia", "/api/notion/sync"];
+// /api/slack/oauth: regreso de «Add to Slack»; lo abre el admin del CLIENTE (sin cuenta en
+// Greenlight). Lo protege el state de un solo uso que sólo un admin de Runna puede crear.
+const PUBLIC_PATHS = ["/login", "/portal/login", "/auth/callback", "/auth/confirm", "/robots.txt", "/api/avisos/enviar", "/api/prisma/vigia", "/api/notion/sync", "/api/slack/oauth"];
 
 // Refreshes the Supabase session cookie on every request and gates auth.
 export async function updateSession(request: NextRequest) {

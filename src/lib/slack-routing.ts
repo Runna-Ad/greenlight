@@ -15,12 +15,16 @@ export type DecisionSlack =
 
 /**
  * ¿Se manda DM de Slack para esta entrega?
- * Sólo a gente del EQUIPO (fila en track_members): los clientes no están en el Slack de Runna.
- * `buscarPorCorreo` = no sabemos su Slack todavía, pero tiene correo: el bot lo busca.
+ * A una persona del equipo (por el Slack de Runna) o a un cliente (por el Slack de SU
+ * empresa, si está conectado). `buscarPorCorreo` = no sabemos su Slack todavía, pero tiene
+ * correo: el bot lo busca.
  */
 export function decisionSlack(args: {
   type: string | null | undefined;
+  /** Se encontró a quién va (equipo o cliente). */
   esDelEquipo: boolean;
+  /** El interruptor general de Admin ▸ Notificaciones para su grupo (equipo/clientes). */
+  canalActivo?: boolean;
   notifySlack: boolean;
   slackUserId: string | null | undefined;
   email: string | null | undefined;
@@ -31,7 +35,8 @@ export function decisionSlack(args: {
   creadoEn: string;
   ahora: number;
 }): DecisionSlack {
-  if (!args.esDelEquipo) return { enviar: false, razon: "no es del equipo" };
+  if (!args.esDelEquipo) return { enviar: false, razon: "sin destinatario" };
+  if (args.canalActivo === false) return { enviar: false, razon: "Slack apagado en Admin para su grupo" };
   const toca = args.esMiTarea ? true : args.eventPref ?? tipoEmailea(args.type);
   if (!toca) return { enviar: false, razon: "evento no avisa (pref/def)" };
   if (!args.notifySlack) return { enviar: false, razon: "persona desactivó Slack" };
@@ -44,17 +49,66 @@ export function decisionSlack(args: {
   return { enviar: false, razon: "sin Slack ni correo" };
 }
 
-export type ConexionSlack = { teamId: string | null; token: string };
+/** Una conexión del bot a un espacio de Slack. `clienteId` null = el Slack de Runna (equipo). */
+export type ConexionSlack = { teamId: string | null; token: string; clienteId: string | null };
 
 /**
- * Qué conexión (qué espacio de Slack) usa una persona. Su `slack_team_id` null = el espacio
- * de Runna, que es la primera conexión. Con un team id que no tenemos conectado → null
- * (no se le manda nada; mejor que mandarlo por el espacio equivocado).
+ * Qué conexión usa una persona: el equipo, la de Runna; un cliente, la de SU empresa.
+ * Un cliente cuya empresa no conectó Slack → null (no se le manda nada; nunca por el
+ * espacio de otro).
  */
-export function elegirConexion(teamId: string | null | undefined, conexiones: ConexionSlack[]): ConexionSlack | null {
-  if (!conexiones.length) return null;
-  if (!teamId) return conexiones[0];
-  return conexiones.find((c) => c.teamId === teamId) ?? null;
+export function elegirConexion(clienteId: string | null | undefined, conexiones: ConexionSlack[]): ConexionSlack | null {
+  return conexiones.find((c) => c.clienteId === (clienteId ?? null)) ?? null;
+}
+
+/** El id guardado de la persona sirve para ESTA conexión: es de una persona y del mismo
+ *  espacio. Sin espacio guardado sólo vale en el Slack de Runna (ids escritos a mano en
+ *  Equipo); en el espacio de un cliente un id sin espacio podría ser de otra persona. */
+export function idGuardadoSirve(
+  userId: string | null | undefined, teamGuardado: string | null | undefined, con: ConexionSlack,
+): userId is string {
+  const id = userId?.trim() ?? "";
+  if (!esSlackUserId(id)) return false;
+  if (!teamGuardado) return con.clienteId === null;
+  return !con.teamId || teamGuardado === con.teamId;
+}
+
+/**
+ * «Buscar en Slack»: empareja la lista de usuarios de un espacio (users.list) con la gente
+ * de Greenlight por correo (sin distinguir mayúsculas). Sólo personas vivas, no bots, del
+ * mismo espacio. Devuelve clave de la persona → member ID.
+ */
+export function emparejarPorCorreo(
+  usuarios: unknown[], personas: { clave: string; correos: (string | null | undefined)[] }[], teamId: string | null,
+): Map<string, string> {
+  const porCorreo = new Map<string, string>();
+  for (const u of usuarios) {
+    if (!usuarioSlackValido(u, teamId)) continue;
+    const correo = (u as { profile?: { email?: unknown } }).profile?.email;
+    if (typeof correo === "string" && correo.trim()) porCorreo.set(correo.trim().toLowerCase(), (u as { id: string }).id);
+  }
+  const res = new Map<string, string>();
+  for (const p of personas) {
+    for (const c of p.correos) {
+      const id = c?.trim() ? porCorreo.get(c.trim().toLowerCase()) : undefined;
+      if (id) { res.set(p.clave, id); break; }
+    }
+  }
+  return res;
+}
+
+/** Los permisos que pide el bot (los mismos del manifest). */
+export const SLACK_SCOPES = ["chat:write", "im:write", "users:read", "users:read.email"];
+
+/** La liga «Add to Slack» que se le manda al admin del cliente. `state` = id de un solo uso. */
+export function urlInstalacion(args: { clientId: string; state: string; redirectUri: string }): string {
+  const q = new URLSearchParams({
+    client_id: args.clientId,
+    scope: SLACK_SCOPES.join(","),
+    state: args.state,
+    redirect_uri: args.redirectUri,
+  });
+  return `https://slack.com/oauth/v2/authorize?${q.toString()}`;
 }
 
 /** Un member ID de Slack de una PERSONA (U… o W…). Un canal (C…, G…) no: el aviso privado

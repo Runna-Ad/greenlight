@@ -390,6 +390,14 @@ for (const fn of ["produccion.rpc_reclamar_emails(int)", "produccion.rpc_reserva
   ok(`authenticated NO puede ejecutar ${fn}`,
      !(await scalar(`select has_function_privilege('authenticated', $1, 'execute')`, [fn])));
 }
+// 0097: los tokens de Slack (cifrados), las ligas de instalación y los interruptores sólo los
+// toca el servidor: ni anon ni alguien con sesión los lee ni los escribe.
+for (const t of ["produccion.slack_conexiones", "produccion.slack_instalaciones", "produccion.notif_canales"]) {
+  for (const rol of ["anon", "authenticated"]) {
+    ok(`${rol} NO puede leer ${t}`, !(await scalar(`select has_table_privilege($1, $2, 'select')`, [rol, t])));
+    ok(`${rol} NO puede escribir ${t}`, !(await scalar(`select has_table_privilege($1, $2, 'update')`, [rol, t])));
+  }
+}
 
 // ── RLS enforcement (run queries as the authenticated role) ──
 console.log("\n▶ RLS enforcement");
@@ -3661,6 +3669,44 @@ console.log("\n▶ 0096 — bot de Slack");
 
   await db.query(`delete from produccion.notifications where id=$1`, [n]);
   await db.query(`delete from produccion.profiles where id=$1`, [p]);
+}
+
+// ── 0097 — Slack para clientes: conexiones, ligas de un solo uso, interruptores ──
+console.log("\n▶ 0097 — Slack para clientes e interruptores");
+{
+  eq("los 4 interruptores generales existen y arrancan encendidos",
+     await scalar(`select string_agg(audiencia||'/'||canal||'='||activo, ',' order by audiencia, canal) from produccion.notif_canales`),
+     "clientes/email=true,clientes/slack=true,equipo/email=true,equipo/slack=true");
+  let malo = false;
+  try { await db.query(`insert into produccion.notif_canales (audiencia, canal) values ('todos','email')`); } catch { malo = true; }
+  ok("un grupo que no existe se rechaza", malo);
+  ok("profiles tiene slack_team_id",
+     Number(await scalar(`select count(*) from information_schema.columns where table_schema='produccion' and table_name='profiles' and column_name='slack_team_id'`)) === 1);
+
+  const cli = await scalar(`select id from produccion.clients limit 1`);
+  await db.query(`insert into produccion.slack_conexiones (team_id, team_name, client_id, token_cifrado) values ('T0097A','DiDi', $1, 'v1:x:y:z')`, [cli]);
+  let doble = false;
+  try { await db.query(`insert into produccion.slack_conexiones (team_id, client_id, token_cifrado) values ('T0097A', $1, 'v1:a:b:c')`, [cli]); } catch { doble = true; }
+  ok("un espacio de Slack sólo se conecta una vez", doble);
+  let dosPorCliente = false;
+  try { await db.query(`insert into produccion.slack_conexiones (team_id, client_id, token_cifrado) values ('T0097B', $1, 'v1:a:b:c')`, [cli]); } catch { dosPorCliente = true; }
+  ok("un cliente sólo tiene un espacio de Slack", dosPorCliente);
+  eq("una conexión nueva arranca PENDIENTE (no recibe avisos hasta que Runna la aprueba)",
+     await scalar(`select active from produccion.slack_conexiones where team_id='T0097A'`), false);
+
+  // La liga: se aparta una sola vez y no sirve vencida (lo que hace la ruta de regreso).
+  const inst = await scalar(`insert into produccion.slack_instalaciones (client_id, redirect_uri) values ($1, 'https://greenlight.runna.agency/api/slack/oauth') returning id`, [cli]);
+  const apartar = async (id) => (await db.query(
+    `update produccion.slack_instalaciones set usado_at = now() where id=$1 and usado_at is null and expira_at > now() returning id`, [id])).rows.length;
+  eq("la liga se aparta la primera vez", await apartar(inst), 1);
+  eq("…y la segunda ya no", await apartar(inst), 0);
+  const vencida = await scalar(`insert into produccion.slack_instalaciones (client_id, redirect_uri, expira_at) values ($1, 'https://greenlight.runna.agency/api/slack/oauth', now() - interval '1 minute') returning id`, [cli]);
+  eq("una liga vencida no se aparta", await apartar(vencida), 0);
+  ok("la liga vence sola a los 7 días",
+     Number(await scalar(`select round(extract(epoch from (expira_at - created_at)) / 86400) from produccion.slack_instalaciones where id=$1`, [inst])) === 7);
+
+  await db.query(`delete from produccion.slack_instalaciones where client_id=$1`, [cli]);
+  await db.query(`delete from produccion.slack_conexiones where team_id='T0097A'`);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
