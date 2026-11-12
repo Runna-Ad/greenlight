@@ -88,7 +88,7 @@ export type PortalData = {
    *  está armando y aún NO manda. Es la ÚNICA data pre-publicación que ve el cliente, y sólo
    *  como CONTEO (panel de inicio): nunca el nombre ni el detalle (no se filtra WIP). Acotado a
    *  los briefs YA client-facing para que el número reconcilie con las tarjetas de brief. */
-  produccion: { briefId: string; marcaId: string; paqueteId: string | null; track: string | null }[];
+  produccion: { id: string; code: string | null; naming: string | null; briefId: string; marcaId: string; paqueteId: string | null; track: string | null }[];
   /** Hora del SERVIDOR al cargar (ms). El split panel(≤15d)/archivo(>15d) se corta contra esta
    *  marca — determinista en el render (no Date.now() en el componente). */
   ahora: number;
@@ -327,9 +327,10 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
     })
     .sort((a, b) => b.tareas - a.tareas || a.name.localeCompare(b.name));
 
-  // "En producción" (pre-envío): SÓLO {brief, marca} de cada pieza en un estado de producción
-  // interno (todo/in_progress/under_review/completed), para el CONTEO del panel de inicio —
-  // nunca el nombre ni el cuerpo (no se filtra WIP al cliente). Acotado a los briefs YA
+  // "En producción" (pre-envío): cada pieza en un estado de producción interno
+  // (todo/in_progress/under_review/completed) con su código y su nombre, para el conteo del panel
+  // y la lista de piezas de cada paquete (Pedro 2026-11-12: el cliente ve TODAS sus piezas, las
+  // que aún no le tocan sin poder abrirlas). Nunca su estado interno ni su contenido. Acotado a los briefs YA
   // client-facing (conTareas) para que el número del panel RECONCILIE con las tarjetas de brief
   // (un brief sin NADA enviado sigue invisible, como hoy). Sin briefs client-facing → [].
   const conTareasIds = conTareas.flatMap((b) => b.memberIds);
@@ -337,12 +338,13 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
   if (conTareasIds.length) {
     const { data: prod } = await db
       .from("ideas")
-      .select("marca_id, brief_id, paquete_id, track")
+      .select("id, code, naming_base, marca_id, brief_id, paquete_id, track")
       .in("brief_id", conTareasIds)
       .in("status", ["todo", "in_progress", "under_review", "completed"])
       .is("deleted_at", null)
-      .returns<{ marca_id: string | null; brief_id: string; paquete_id: string | null; track: string | null }[]>();
+      .returns<{ id: string; code: string | null; naming_base: string | null; marca_id: string | null; brief_id: string; paquete_id: string | null; track: string | null }[]>();
     produccion = (prod ?? []).map((p) => ({
+      id: p.id, code: p.code, naming: p.naming_base,
       briefId: grupoDe[p.brief_id] ?? p.brief_id, marcaId: p.marca_id ?? "__none__",
       paqueteId: p.paquete_id, track: p.track,
     }));

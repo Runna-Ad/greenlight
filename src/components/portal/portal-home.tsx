@@ -18,8 +18,8 @@ import { cn } from "@/lib/utils";
  *   · Zona C — Tus paquetes: avance por PAQUETE con su brief como etiqueta (Pedro 2026-11-12) →
  *     entra a revisar SÓLO ese paquete.
  *
- * "En producción" es CONTEO puro (pre-envío): un número de impulso, sin lista, sin fechas, sin
- * detalle — no se filtra WIP al cliente. Todo lo demás se DERIVA de la misma lista filtrada
+ * "En producción" (pre-envío): el contador, y en cada paquete la pieza con su código y nombre,
+ * sin estado interno ni contenido — no se puede abrir hasta que se envía. Todo lo demás se DERIVA de la misma lista filtrada
  * (client-facing + producción) con el MISMO filtro de marca, así contador, cola y tarjetas nunca
  * driftан. Los colores/estados son los reales del portal (estadoCliente).
  */
@@ -46,7 +46,7 @@ function EstadoIcon({ status, reReview, teRespondieron = false, className }: { s
 const nombreTarea = (t: PortalTarea) => t.naming ?? t.code ?? "Idea";
 
 type QItem = PortalTarea & { briefId: string; briefLabel: string; unidadId: string; unidadNombre: string | null };
-type Prod = { briefId: string; marcaId: string; paqueteId: string | null; track: string | null };
+type Prod = { id: string; code: string | null; naming: string | null; briefId: string; marcaId: string; paqueteId: string | null; track: string | null };
 
 export function PortalHome({
   cliente,
@@ -295,8 +295,9 @@ function SecHead({ titulo, hint }: { titulo: string; hint: string }) {
 
 function EstadoPill({ status, reReview, teRespondieron = false }: { status: AssetStatus; reReview: boolean; teRespondieron?: boolean }) {
   const est = estadoCliente(status, reReview, teRespondieron);
-  // "Te respondieron" va SÓLIDA (Pedro 2026-10-27: el tinte suave se perdía); el resto, tinte.
-  const solida = status === "in_corrections" && teRespondieron;
+  // Lo que es SU TURNO va SÓLIDO para llamar la atención: por revisar / cambios listos (Pedro
+  // 2026-11-12) y "Te respondieron" (Pedro 2026-10-27: el tinte suave se perdía). El resto, tinte.
+  const solida = status === "published" || (status === "in_corrections" && teRespondieron);
   return (
     <span
       className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px]", solida ? "font-bold text-white shadow-sm" : "font-semibold")}
@@ -404,9 +405,9 @@ const equipoDe = (track: string | null) => (track === "real" ? "real" : track ==
 
 /**
  * Un PAQUETE en el panel del cliente (Pedro 2026-11-12): su nombre, su brief como etiqueta, su
- * barra y la nota de entrega. «Ver piezas» despliega sus piezas por equipo (Real / Normal) con su
- * estado; las que siguen en producción sólo se CUENTAN (nunca su nombre: no se enseña trabajo sin
- * enviar). «Abrir» entra a revisar SÓLO este paquete.
+ * barra y la nota de entrega. «Ver piezas» despliega TODAS sus piezas por equipo (Real / Normal):
+ * las enviadas con su estado y se abren; las que siguen en producción se ven con «En producción»
+ * y no se abren todavía (Pedro 2026-11-12). «Abrir» entra a revisar SÓLO este paquete.
  */
 function PaqueteCard({ c }: { c: Tarjeta }) {
   const [abierto, setAbierto] = useState(false);
@@ -415,11 +416,15 @@ function PaqueteCard({ c }: { c: Tarjeta }) {
   const puedeAbrir = c.ts.length > 0;
   const nota = c.paquete?.nota ?? null; // ya viene armada para el cliente desde el servidor
   const desglose = desgloseTracks([...c.ts, ...c.prod]);
+  // Todas las piezas del paquete, por equipo y por código: las enviadas se abren; las que siguen
+  // en producción se ven (código y nombre) pero no se abren todavía (Pedro 2026-11-12).
   const equipos = EQUIPOS.map((e) => ({
     ...e,
-    ts: c.ts.filter((t) => equipoDe(t.track) === e.k),
-    nProd: c.prod.filter((p) => equipoDe(p.track) === e.k).length,
-  })).filter((e) => e.ts.length || e.nProd);
+    filas: [
+      ...c.ts.filter((t) => equipoDe(t.track) === e.k).map((t) => ({ id: t.id, code: t.code, nombre: nombreTarea(t), t })),
+      ...c.prod.filter((p) => equipoDe(p.track) === e.k).map((p) => ({ id: p.id, code: p.code, nombre: p.naming ?? p.code ?? "Pieza", t: null })),
+    ].sort((a, b) => (a.code ?? "￿").localeCompare(b.code ?? "￿") || a.nombre.localeCompare(b.nombre)),
+  })).filter((e) => e.filas.length);
 
   const titulo = (
     <span className="flex min-w-0 flex-col gap-1">
@@ -476,23 +481,37 @@ function PaqueteCard({ c }: { c: Tarjeta }) {
             <div key={e.k}>
               <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{e.label}</p>
               <ul className="overflow-hidden rounded-lg border border-border">
-                {e.ts.map((t) => (
-                  <li key={t.id} className="border-t border-border first:border-t-0">
-                    <Link href={`${base}&tarea=${t.id}`} className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/60">
-                      {t.code && (
-                        <span className="shrink-0 rounded bg-secondary px-1 py-0.5 font-mono text-[11px] font-semibold text-secondary-foreground">{t.code}</span>
+                {e.filas.map((f) => {
+                  const fila = (
+                    <>
+                      {f.code && (
+                        <span className="shrink-0 rounded bg-secondary px-1 py-0.5 font-mono text-[11px] font-semibold text-secondary-foreground">{f.code}</span>
                       )}
-                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{nombreTarea(t)}</span>
-                      <EstadoPill status={t.status} reReview={t.reReview} teRespondieron={t.teRespondieron} />
-                    </Link>
-                  </li>
-                ))}
-                {e.nProd > 0 && (
-                  <li className="flex items-center gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground first:border-t-0">
-                    <span className="size-2 shrink-0 rounded-[3px]" style={{ background: PAL.prod.c }} />
-                    {e.nProd} en producción · el equipo las arma
-                  </li>
-                )}
+                      <span className={cn("min-w-0 flex-1 truncate font-mono font-medium", f.t ? "text-foreground" : "text-muted-foreground")} title={f.nombre}>
+                        {f.nombre}
+                      </span>
+                      {f.t ? (
+                        <EstadoPill status={f.t.status} reReview={f.t.reReview} teRespondieron={f.t.teRespondieron} />
+                      ) : (
+                        <span
+                          className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold"
+                          style={{ background: `color-mix(in srgb, ${PAL.prod.c} 14%, #fff)`, color: PAL.prod.ink }}
+                        >
+                          En producción
+                        </span>
+                      )}
+                    </>
+                  );
+                  return (
+                    <li key={f.id} className="border-t border-border first:border-t-0">
+                      {f.t ? (
+                        <Link href={`${base}&tarea=${f.id}`} className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/60">{fila}</Link>
+                      ) : (
+                        <div className="flex cursor-default items-center gap-2 px-3 py-2 text-xs" title="El equipo la está armando: podrás abrirla cuando llegue a revisión.">{fila}</div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
