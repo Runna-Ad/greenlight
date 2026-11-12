@@ -5,7 +5,8 @@
 **Pruebas:** test-lib 779/0 · test-db 856/0 · npm test exit 0 · build ✓. Tres revisiones (código, seguridad, verificación): 14 serios arreglados. Real en la preview: 2 DMs a Nils Vera `sent` (18:31:29 UTC), Nils los vio, su Slack quedó guardado. Aviso de prueba borrado.
 **En vivo:** con «Ship it» de Pedro: push fast-forward de `feat/slack-bot` a main; deploy dpl_H88GvKdmiULWBpmUtxVRwZU83mRE Ready con alias greenlight.runna.agency; 0 errores en 15 min; `/api/avisos/enviar` sin secreto = 401. **Para volver:** dpl_Aqu3N7FKPN6VapFHvYEsXy64wsV3 (02b0b9c) + `active_notify_channels()` de vuelta a in_app,email.
 **Decisiones:** Slack sigue la misma elección por evento que el correo (sin segunda matriz); clientes no reciben Slack; sin agrupar DMs; avisos de más de 1 día se saltan. Las pruebas van a Nils, no a Pedro.
-**Waiting on Pedro:** volver a correr `supabase/manual/0084_reloj_correos.sql` en el SQL Editor (el reloj despierta también por Slack). Pedir a DiDi que su admin apruebe la app si quieren Slack.
+**Reloj:** `greenlight_privado.tick_correos()` actualizada en la base viva por el CLI (sólo la función; el job `greenlight-correos-agrupados` sigue activo, cada minuto). Comprobado: la función ya mira `slack`, `authenticated` no puede ejecutarla.
+**Waiting on Pedro:** pedir a DiDi que su admin apruebe la app si quieren Slack.
 **Sin probar:** un DM a alguien con Slack apagado o sin cuenta; el reintento tras una caída real de Slack.
 **Ojo:** la carpeta principal `greenlight` sigue en 4752a04 con 2 commits de docs sin subir; `origin/main` ya va en f88c17d. Hay que juntarlos (rebase de esos 2) antes de trabajar ahí; otra sesión tiene un dev server en esa carpeta.
 
