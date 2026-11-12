@@ -1,5 +1,17 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-11-12 — «Crear login» del Master + «Cambiar contraseña» del cliente (rama `feat/crear-login`, worktree ../greenlight-crear-login, en preview, sin migración)
+Pedro: algunos clientes no logran entrar; un plan C donde el Master pone correo + contraseña + empresa y se la manda por chat. Contraseña fácil de marca (DiDi@657) y el cliente la puede cambiar en su perfil.
+- [x] Admin › Clientes › Crear login (sólo Master): correo, nombre opcional, empresa, rol fijo Partner, contraseña con «Generar» (marca + @ + 3 números, editable, mínimo 8). Mensaje listo para copiar. Si el correo ya es cliente de esa empresa, cambia su contraseña. Aprueba su solicitud pendiente.
+- [x] Bloqueos: correo del equipo, perfil del equipo, cliente de otra empresa, cuenta de otra app (S.P.A.M) sin perfil ni solicitud.
+- [x] Menú de cuenta del cliente › Cambiar contraseña (sólo Partner y nunca un correo del equipo); reabre la sesión y cierra las demás.
+- [x] Revisión de seguridad (Opus): 2 altos (cuenta de S.P.A.M sin perfil; correo del equipo con rol cliente) y 2 bajos arreglados; cerrar las otras sesiones añadido.
+- [x] Pruebas: test-lib 868/0 (13 nuevas), `npm test` exit 0, tsc 0, eslint 0, build ✓.
+- [ ] Probar en la preview como Master: crear un login de prueba (pide OK, escribe en la base real) y entrar con él; cambiar la contraseña como ese cliente.
+- [ ] "Ship it" de Pedro → merge a `main`.
+**Riesgo aceptado por Pedro (dicho una vez):** marca + 3 números = 1,000 combinaciones; con el límite de Supabase por IP, una sola IP las prueba en unas horas. Subir a 4 números es cambiar `DIGITOS_CLAVE_MARCA`.
+**No hecho:** pedir la contraseña actual al cambiarla (quien entra con Google no la tiene).
+
 ## ✅ 2026-11-12 — Brief › Paquete › Tarea, fase 1: EN VIVO (main a30aa80, deploy dpl_8i9A9QVURcjCMwKnE4JuzB5AxTJA; para volver: dpl_8iYVahssbswVCQF6QrERDNHe1XSi)
 Pedro: un brief (Brief 30/10) tiene PAQUETES (columna "Package Name" del sheet, antes "Brief Name") y cada paquete tiene tareas. Opción B: el paquete es su propio registro, con fecha de entrega que pone un ADMIN. La fecha del brief = la más lejana de sus paquetes. Paquete entregado (su última tarea Greenlit) → "Entregado X · fecha Y (N días antes)". Tarde: el equipo ve "N días tarde"; el cliente sólo "Entregado X". En el portal el cliente sí ve Real/Normal, como desglose por paquete ("3 piezas · 2 real · 1 normal").
 
