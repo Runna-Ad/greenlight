@@ -9,7 +9,7 @@
 // list de aquí, para que capturar-a-mano y capturar-del-sheet nunca discrepen.
 
 import { buildFilename, namingKindForTipo } from "./filename.ts";
-import { SIZE_PLATFORMS, type Platform } from "./brand.ts";
+import { tablaTamanos, type Platform } from "./brand.ts";
 import { missingRequired } from "./required.ts";
 import type { SheetColumn, SheetRow } from "./sheet-sync.ts";
 import type { Track } from "./vocab.ts";
@@ -63,9 +63,14 @@ export function splitIdeaCode(raw: string): { letter: string; variant: number } 
 // raros que quedan ABIERTOS (pueden ser cualquier cosa).
 const RULED_PLATFORMS = new Set(["GG", "FB", "TT"]);
 
-export function isAllowed(media: "video" | "static", size: string, plat: string): boolean {
+export function isAllowed(
+  media: "video" | "static",
+  size: string,
+  plat: string,
+  marca?: string | null,
+): boolean {
   if (!RULED_PLATFORMS.has(plat)) return true; // EC / custom → abierto
-  const allowed = SIZE_PLATFORMS[media]?.[size];
+  const allowed = tablaTamanos(marca)[media]?.[size];
   if (!allowed) return true; // tamaño desconocido (2736 x 1260, custom) → abierto
   return allowed.includes(plat as Platform);
 }
@@ -196,7 +201,7 @@ export function combosDeTarjeta(t: TaskDraft): AssetCombo[] {
   const out: AssetCombo[] = [];
   for (const size of t.tamano.map(cleanSize).filter(Boolean)) {
     for (const plat of t.plataforma) {
-      if (!isAllowed(media, size, plat)) continue;
+      if (!isAllowed(media, size, plat, first(t.marca))) continue;
       for (const dur of durs) {
         out.push({ tamano_code: size, plataforma_code: plat, duracion_code: dur });
       }

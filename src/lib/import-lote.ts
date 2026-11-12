@@ -30,7 +30,7 @@ import { puedeSerLead } from "./roles.ts";
 import type { Track } from "./vocab.ts";
 import { namingKindForTipo } from "./filename.ts";
 import { generatesFiles, missingRequired } from "./required.ts";
-import { list, cleanSize, labelToCode, splitIdeaCode, fold } from "./intake-crear.ts";
+import { list, cleanSize, labelToCode, splitIdeaCode, fold, isAllowed } from "./intake-crear.ts";
 
 type Db = ReturnType<typeof supabaseAdmin>;
 
@@ -528,8 +528,12 @@ export async function ejecutarImport(
     const durs = [...new Set(list(v("Duración")))];
     const durCodes = namingKind === "static" ? [null] : durs.length ? durs : [null];
     const out: Record<string, unknown>[] = [];
+    // Misma regla tamaño × plataforma (por línea Préstamos/Card) que el brief a mano:
+    // un 1:1 de Card no lleva archivo de GG, aunque la fila pida GG para otro tamaño.
+    const media = namingKind === "static" ? "static" : "video";
     for (const size of generatesFiles(tipo) ? sizes : []) {
       for (const plat of plats) {
+        if (!isAllowed(media, size, plat, v("Marca"))) continue;
         for (const dur of durCodes) {
           out.push({
             idea_id: c.ideaId,

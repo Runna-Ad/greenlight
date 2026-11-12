@@ -672,6 +672,37 @@ eq("Copies no genera archivos → 0 combos", combosDeTarjeta(copies).length, 0);
 const staticBad = draft({ tipoAsset: ["Images"], tamano: ["4:5"], plataforma: ["TT"] });
 eq("estático 4:5×TT no es válido → 0 combos", combosDeTarjeta(staticBad).length, 0);
 
+// Reglas DiDi por línea (2026-11-12): un archivo por plataforma, sólo las que lleva el tamaño.
+const platsDe = (d) => combosDeTarjeta(d).map((c) => `${c.tamano_code}:${c.plataforma_code}`).sort().join(" ");
+const todas = ["FB", "TT", "GG"];
+eq(
+  "video Préstamos → 1:1 GG · 9:16 FB TT GG · 4:5 FB · 16:9 GG",
+  platsDe(draft({ tipoAsset: ["RP Video"], marca: ["Préstamos"], tamano: ["1:1", "9:16", "4:5", "16:9"], plataforma: todas })),
+  "16:9:GG 1:1:GG 4:5:FB 9:16:FB 9:16:GG 9:16:TT",
+);
+eq(
+  "video Card → 1:1 FB · 9:16 FB TT GG · 16:9 GG · 4:5 nada",
+  platsDe(draft({ tipoAsset: ["RP Video"], marca: ["Card"], tamano: ["1:1", "9:16", "4:5", "16:9"], plataforma: todas })),
+  "16:9:GG 1:1:FB 9:16:FB 9:16:GG 9:16:TT",
+);
+for (const marca of ["Préstamos", "Card"]) {
+  eq(
+    `estático ${marca} → 1:1 GG · 9:16 FB · 4:5 FB · 1.91:1 GG`,
+    platsDe(draft({ tipoAsset: ["Images"], marca: [marca], tamano: ["1:1", "9:16", "4:5", "1.91:1"], plataforma: todas })),
+    "1.91:1:GG 1:1:GG 4:5:FB 9:16:FB",
+  );
+}
+eq(
+  "EC sigue abierto (siempre va por separado)",
+  platsDe(draft({ tipoAsset: ["Images"], marca: ["Card"], tamano: ["4:5"], plataforma: ["EC"] })),
+  "4:5:EC",
+);
+eq(
+  "sin Marca → suma de las dos líneas (video 1:1 GG y FB)",
+  platsDe(draft({ tipoAsset: ["RP Video"], tamano: ["1:1"], plataforma: todas })),
+  "1:1:FB 1:1:GG",
+);
+
 // Fan-out por duración: cada pastilla multiplica los entregables (tamaño × plat × dur).
 const videoDur = draft({
   tipoAsset: ["RP Video"], tamano: ["9:16", "1:1"], plataforma: ["GG", "FB"],
