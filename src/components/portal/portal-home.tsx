@@ -300,11 +300,14 @@ function EstadoPill({ status, reReview, teRespondieron = false }: { status: Asse
   const solida = status === "published" || (status === "in_corrections" && teRespondieron);
   return (
     <span
-      className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px]", solida ? "font-bold text-white shadow-sm" : "font-semibold")}
+      className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px]", solida ? "font-bold shadow-sm" : "font-semibold")}
       style={
-        solida
-          ? { background: `color-mix(in srgb, ${est.tone} 88%, #000)` }
-          : { background: `color-mix(in srgb, ${est.tone} 14%, #fff)`, color: `color-mix(in srgb, ${est.tone} 78%, #000)` }
+        // Por revisar: el ámbar vivo de su barra con texto oscuro (oscurecido se veía café y apagado).
+        status === "published"
+          ? { background: PAL.revisar.c, color: "#3b2600" }
+          : solida
+            ? { background: `color-mix(in srgb, ${est.tone} 88%, #000)`, color: "#fff" }
+            : { background: `color-mix(in srgb, ${est.tone} 14%, #fff)`, color: `color-mix(in srgb, ${est.tone} 78%, #000)` }
       }
     >
       <EstadoIcon status={status} reReview={reReview} teRespondieron={teRespondieron} className="size-2.5" /> {est.label}
