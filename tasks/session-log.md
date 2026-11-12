@@ -1,5 +1,14 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-12 — Bot de Slack «Greenlight» EN VIVO (main f88c17d, 0096 aplicada)
+**Hecho:** DM a cada persona del equipo en el Slack de Runna, por los mismos avisos que el correo (opción 2 de Pedro: listo para un 2º espacio como DiDi). 0096: `slack` como canal, `track_members.slack_team_id`, `rpc_reclamar_slack`, índice de la cola. El bot busca a la persona por el correo de su login y guarda su Slack. Mi perfil: interruptor de Slack activo. Equipo valida el member ID (U…/W…).
+**Pruebas:** test-lib 779/0 · test-db 856/0 · npm test exit 0 · build ✓. Tres revisiones (código, seguridad, verificación): 14 serios arreglados. Real en la preview: 2 DMs a Nils Vera `sent` (18:31:29 UTC), Nils los vio, su Slack quedó guardado. Aviso de prueba borrado.
+**En vivo:** con «Ship it» de Pedro: push fast-forward de `feat/slack-bot` a main; deploy dpl_H88GvKdmiULWBpmUtxVRwZU83mRE Ready con alias greenlight.runna.agency; 0 errores en 15 min; `/api/avisos/enviar` sin secreto = 401. **Para volver:** dpl_Aqu3N7FKPN6VapFHvYEsXy64wsV3 (02b0b9c) + `active_notify_channels()` de vuelta a in_app,email.
+**Decisiones:** Slack sigue la misma elección por evento que el correo (sin segunda matriz); clientes no reciben Slack; sin agrupar DMs; avisos de más de 1 día se saltan. Las pruebas van a Nils, no a Pedro.
+**Waiting on Pedro:** volver a correr `supabase/manual/0084_reloj_correos.sql` en el SQL Editor (el reloj despierta también por Slack). Pedir a DiDi que su admin apruebe la app si quieren Slack.
+**Sin probar:** un DM a alguien con Slack apagado o sin cuenta; el reintento tras una caída real de Slack.
+**Ojo:** la carpeta principal `greenlight` sigue en 4752a04 con 2 commits de docs sin subir; `origin/main` ya va en f88c17d. Hay que juntarlos (rebase de esos 2) antes de trabajar ahí; otra sesión tiene un dev server en esa carpeta.
+
 ## 2026-11-10 — Numeración de planos: borrar renumera, Modo Lectura muestra el lugar real (main 334ca09)
 **Hecho:** borrar un plano llama `_planos_renumerar` (0093) y el editor recibe la lista; el encabezado numera por el lugar del plano (igual en edición y lectura); en lectura/portal el "PLANO N" escrito en el título se cambia por el lugar real (`encabezadoPlano`). Sin migración.
 **Pruebas:** test-lib 732/0 · test-db 844/0 · tsc 0 · build ✓. En la app local sobre CMHOOKDANI: lectura Plano 1–7 en orden, edición 1–11 sin hueco.

@@ -1,8 +1,8 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-11-12 — Bot de Slack «Greenlight» (opción 2: Runna hoy, listo para un 2º espacio) — rama `feat/slack-bot`, worktree ../greenlight-slack
+## ✅ 2026-11-12 — Bot de Slack «Greenlight»: EN VIVO (main f88c17d, deploy dpl_H88GvKdmiULWBpmUtxVRwZU83mRE; para volver: dpl_Aqu3N7FKPN6VapFHvYEsXy64wsV3)
 Pedro eligió la opción 2: DM por persona en el Slack de Runna, con el código listo para un segundo espacio (DiDi) si su admin lo aprueba. Mismo patrón que SnapTrack.
-Next Step: con el «ship it» de Pedro, `feat/slack-bot` → `main` (deploy de producción) y Pedro vuelve a correr `supabase/manual/0084_reloj_correos.sql`.
+Next Step: Pedro vuelve a correr `supabase/manual/0084_reloj_correos.sql` en Supabase.
 
 **2026-11-12, prueba real en la preview (a31244e, dpl_czfxPaEVYgSBMBtFjSpUFDsSczLC):** 0096 APLICADA con el «ship 0096» de Pedro (ledger 20261112120001; canales in_app,email,slack; anon no puede reclamar). App «Greenlight» creada en el Slack de Runna, `SLACK_BOT_TOKEN` en Preview y Production. Aviso de prueba sólo-Slack a Nils Vera + Pedro le asignó CMNOBLINKING en la preview: las 2 entregas `sent` con su ts de Slack (18:31:29 UTC), Nils confirmó los 2 DMs, el bot encontró su Slack por correo y lo guardó (U…, con espacio). Aviso de prueba borrado.
 
