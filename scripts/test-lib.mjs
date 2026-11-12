@@ -1957,6 +1957,15 @@ console.log("\n▶ Paquetes — clave, fecha del brief, nota de entrega");
   eq("desglose 2 real · 1 normal", desgloseTracks([{ track: "real" }, { track: "normal" }, { track: "real" }]), "2 real · 1 normal");
   eq("desglose sólo real", desgloseTracks([{ track: "real" }, { track: "real" }]), "2 real");
   eq("desglose sólo normal", desgloseTracks([{ track: "normal" }]), "1 normal");
+  // Pedro 2026-11-12: las imágenes se cuentan aparte de los videos normales.
+  const pz = (track, tipoAsset) => ({ track, tipoAsset });
+  eq("6 piezas: 3 real · 2 normal · 1 imagen",
+     desgloseTracks([pz("real", "RP Video"), pz("real", "RP Video"), pz("real", "RP Video"),
+                     pz("normal", "Normal Video"), pz("normal", "Normal Video"), pz("normal", "Images")]),
+     "3 real · 2 normal · 1 imagen");
+  eq("varias imágenes en plural", desgloseTracks([pz("normal", "Images"), pz("normal", "Images")]), "2 imágenes");
+  eq("los copies también aparte", desgloseTracks([pz("normal", "Copies"), pz("normal", "Normal Video")]), "1 normal · 1 copy");
+  eq("sin tipo cuenta como video de su equipo", desgloseTracks([pz("normal", null)]), "1 normal");
 }
 
 console.log("\n▶ Portal — cada paquete es su propia revisión (Pedro 2026-11-12)");

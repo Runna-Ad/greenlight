@@ -128,11 +128,22 @@ export function notaEntrega(
 }
 
 /** Cuántas piezas de cada equipo: "2 real · 1 normal" (sólo los que tienen piezas). */
-export function desgloseTracks(tareas: { track: string | null }[]): string {
-  let real = 0, normal = 0;
+export function desgloseTracks(tareas: { track: string | null; tipoAsset?: string | null }[]): string {
+  // Las imágenes y los copies se cuentan aparte (Pedro 2026-11-12): "3 real · 2 normal · 1 imagen".
+  // Mismo criterio que el ícono (contentType): «Images» = imagen, «Copies» = copy; el resto es
+  // video y va por su equipo.
+  let real = 0, normal = 0, imagen = 0, copy = 0;
   for (const t of tareas) {
-    if (t.track === "real") real++;
+    const tipo = (t.tipoAsset ?? "").trim();
+    if (tipo === "Images") imagen++;
+    else if (tipo === "Copies") copy++;
+    else if (t.track === "real") real++;
     else if (t.track === "normal") normal++;
   }
-  return [real ? `${real} real` : null, normal ? `${normal} normal` : null].filter(Boolean).join(" · ");
+  return [
+    real ? `${real} real` : null,
+    normal ? `${normal} normal` : null,
+    imagen ? `${imagen} ${imagen === 1 ? "imagen" : "imágenes"}` : null,
+    copy ? `${copy} ${copy === 1 ? "copy" : "copies"}` : null,
+  ].filter(Boolean).join(" · ");
 }

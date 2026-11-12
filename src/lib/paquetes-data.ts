@@ -20,9 +20,9 @@ export async function cargarPaquetes(clientId: string, ids: (string | null)[]): 
   // Las tareas vivas de esos paquetes, directo de `ideas` (board_tasks no trae paquete_id, ver
   // 0097). Mandar un brief a la papelera sella también sus tareas, así que deleted_at basta.
   const { data: tareas, error: e2 } = delCliente.length
-    ? await db.from("ideas").select("paquete_id, status, delivered_at, track")
+    ? await db.from("ideas").select("paquete_id, status, delivered_at, track, tipo_asset")
         .in("paquete_id", delCliente).is("deleted_at", null)
-        .returns<{ paquete_id: string; status: string; delivered_at: string | null; track: string | null }[]>()
+        .returns<{ paquete_id: string; status: string; delivered_at: string | null; track: string | null; tipo_asset: string | null }[]>()
     : { data: [], error: null };
   // Sin paquetes no se rompe la pantalla: las tareas se ven igual, agrupadas en "Sin paquete".
   if (e1 || e2) {
@@ -30,7 +30,7 @@ export async function cargarPaquetes(clientId: string, ids: (string | null)[]): 
     return out;
   }
 
-  const porPaquete = new Map<string, { paquete_id: string; status: string; delivered_at: string | null; track: string | null }[]>();
+  const porPaquete = new Map<string, { paquete_id: string; status: string; delivered_at: string | null; track: string | null; tipo_asset: string | null }[]>();
   for (const t of tareas ?? []) (porPaquete.get(t.paquete_id) ?? porPaquete.set(t.paquete_id, []).get(t.paquete_id)!).push(t);
 
   for (const p of paqs ?? []) {
@@ -42,7 +42,7 @@ export async function cargarPaquetes(clientId: string, ids: (string | null)[]): 
       fechaEntrega: p.fecha_entrega,
       entregadoEl: e.entregadoEl,
       diasAntes: e.diasAntes,
-      desglose: desgloseTracks(ts),
+      desglose: desgloseTracks(ts.map((t) => ({ track: t.track, tipoAsset: t.tipo_asset }))),
       total: ts.length,
     });
   }
