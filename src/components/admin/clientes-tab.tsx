@@ -135,7 +135,10 @@ function NuevoLogin({
   const [email, setEmail] = useState("");
   const [nombre, setNombre] = useState("");
   const [clientId, setClientId] = useState(empresas.length === 1 ? empresas[0]!.id : "");
-  const [clave, setClave] = useState("");
+  // Con una sola empresa ya elegida, la contraseña de marca sale lista (el panel no se
+  // pinta en el servidor, así que el azar no choca con la hidratación).
+  const claveInicial = () => (empresas.length === 1 ? claveDeMarca(empresas[0]!.name, azarSeguro) : "");
+  const [clave, setClave] = useState(claveInicial);
   const [pending, start] = useTransition();
   const [listo, setListo] = useState<{ email: string; clave: string; empresa: string; nuevo: boolean } | null>(null);
 
@@ -158,7 +161,7 @@ function NuevoLogin({
       setListo({ email: res.email, clave, empresa: res.empresa, nuevo: res.nuevo });
       setEmail("");
       setNombre("");
-      setClave("");
+      setClave(claveInicial());
     });
 
   const mensaje = listo
