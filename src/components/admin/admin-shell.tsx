@@ -13,6 +13,7 @@ import {
   UserCheck,
   Brain,
   Trash2,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,7 @@ const InvitacionesTab = dynamic(
 );
 const ClientesTab = dynamic(() => import("./clientes-tab").then((m) => m.ClientesTab), { ssr: false });
 const PapeleraTab = dynamic(() => import("./papelera-tab").then((m) => m.PapeleraTab), { ssr: false });
+const NotificacionesTab = dynamic(() => import("./notificaciones-tab").then((m) => m.NotificacionesTab), { ssr: false });
 
 type Soy = {
   id: string;
@@ -63,7 +65,7 @@ type Soy = {
 
 type TabKey =
   | "perfil" | "equipo" | "invitaciones" | "clientes"
-  | "marcas" | "actividad" | "integraciones" | "biblioteca" | "hue" | "papelera";
+  | "marcas" | "actividad" | "notificaciones" | "integraciones" | "biblioteca" | "hue" | "papelera";
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "perfil", label: "Mi perfil", icon: UserRound },
   { key: "equipo", label: "Equipo", icon: Users },
@@ -71,6 +73,7 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "clientes", label: "Clientes", icon: UserCheck },
   { key: "marcas", label: "Marcas", icon: Images },
   { key: "actividad", label: "Actividad", icon: Activity },
+  { key: "notificaciones", label: "Notificaciones", icon: Bell },
   { key: "integraciones", label: "Integraciones", icon: Plug },
   { key: "biblioteca", label: "Biblioteca", icon: BookText },
 ];
@@ -164,6 +167,7 @@ export function AdminShell({
           )}
           {tab === "marcas" && <MarcasTab clientes={marcas} tipografiasGoogle={tipografiasGoogle} />}
           {tab === "actividad" && <ActividadTab rows={actividad} />}
+          {tab === "notificaciones" && <NotificacionesTab />}
           {tab === "integraciones" && <IntegracionesTab estado={integraciones} />}
           {tab === "biblioteca" && <BibliotecaTab snippets={biblioteca.snippets} marcas={biblioteca.marcas} />}
           {tab === "hue" && esMaster && <HueHubTab />}

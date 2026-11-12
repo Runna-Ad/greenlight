@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { IntegracionesEstado } from "@/lib/admin-tipos";
 import { sincronizarLegales, buscarCifrasViejas, type TareaConCifrasViejas } from "@/app/(app)/admin/legales-actions";
+import { SlackIntegracionCard } from "@/components/admin/slack-integracion";
 
 function fecha(iso: string | null): string {
   if (!iso) return "nunca";
@@ -48,6 +49,8 @@ export function IntegracionesTab({ estado }: { estado: IntegracionesEstado }) {
 
   return (
     <div className="space-y-4">
+      <SlackIntegracionCard />
+
       {/* Google Sheets */}
       <section className="gl-card rounded-xl border border-border bg-card p-4">
         <div className="flex items-center gap-2">

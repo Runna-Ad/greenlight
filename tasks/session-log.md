@@ -1,5 +1,15 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-12 — Bot de Slack «Greenlight» EN VIVO (main f88c17d, 0096 aplicada)
+**Hecho:** DM a cada persona del equipo en el Slack de Runna, por los mismos avisos que el correo (opción 2 de Pedro: listo para un 2º espacio como DiDi). 0096: `slack` como canal, `track_members.slack_team_id`, `rpc_reclamar_slack`, índice de la cola. El bot busca a la persona por el correo de su login y guarda su Slack. Mi perfil: interruptor de Slack activo. Equipo valida el member ID (U…/W…).
+**Pruebas:** test-lib 779/0 · test-db 856/0 · npm test exit 0 · build ✓. Tres revisiones (código, seguridad, verificación): 14 serios arreglados. Real en la preview: 2 DMs a Nils Vera `sent` (18:31:29 UTC), Nils los vio, su Slack quedó guardado. Aviso de prueba borrado.
+**En vivo:** con «Ship it» de Pedro: push fast-forward de `feat/slack-bot` a main; deploy dpl_H88GvKdmiULWBpmUtxVRwZU83mRE Ready con alias greenlight.runna.agency; 0 errores en 15 min; `/api/avisos/enviar` sin secreto = 401. **Para volver:** dpl_Aqu3N7FKPN6VapFHvYEsXy64wsV3 (02b0b9c) + `active_notify_channels()` de vuelta a in_app,email.
+**Decisiones:** Slack sigue la misma elección por evento que el correo (sin segunda matriz); clientes no reciben Slack; sin agrupar DMs; avisos de más de 1 día se saltan. Las pruebas van a Nils, no a Pedro.
+**Reloj:** `greenlight_privado.tick_correos()` actualizada en la base viva por el CLI (sólo la función; el job `greenlight-correos-agrupados` sigue activo, cada minuto). Comprobado: la función ya mira `slack`, `authenticated` no puede ejecutarla.
+**Waiting on Pedro:** pedir a DiDi que su admin apruebe la app si quieren Slack.
+**Sin probar:** un DM a alguien con Slack apagado o sin cuenta; el reintento tras una caída real de Slack.
+**Ojo:** la carpeta principal `greenlight` sigue en 4752a04 con 2 commits de docs sin subir; `origin/main` ya va en f88c17d. Hay que juntarlos (rebase de esos 2) antes de trabajar ahí; otra sesión tiene un dev server en esa carpeta.
+
 ## 2026-11-10 — Numeración de planos: borrar renumera, Modo Lectura muestra el lugar real (main 334ca09)
 **Hecho:** borrar un plano llama `_planos_renumerar` (0093) y el editor recibe la lista; el encabezado numera por el lugar del plano (igual en edición y lectura); en lectura/portal el "PLANO N" escrito en el título se cambia por el lugar real (`encabezadoPlano`). Sin migración.
 **Pruebas:** test-lib 732/0 · test-db 844/0 · tsc 0 · build ✓. En la app local sobre CMHOOKDANI: lectura Plano 1–7 en orden, edición 1–11 sin hueco.
@@ -3533,3 +3543,9 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 **Pruebas:** test-lib 738/0 · test-db 844/0 · tsc 0 · eslint 0; app local: título seleccionado en GIRLTHREE (sin guardar) y preview del brief Card 5 archivos / Préstamos 6.
 **Sin probar:** fila del sheet cuyos tamaños quedan todos fuera (la tarea saldría sin archivos); cliente real pidiendo cambio en el título.
 **Pick up next:** "ship it" de Pedro para push a main (despliega).
+
+## 2026-11-12 Session: Slack de clientes + Admin ▸ Notificaciones (feat/slack-bot fbd8afa, sólo preview)
+**Hecho:** liga «Add to Slack» por cliente (un solo uso, 7 días, crear otra cancela la anterior); el espacio llega PENDIENTE y un admin lo aprueba o rechaza en Integraciones ▸ Slack; desconectar revoca el token. El bot manda a cada cliente por el Slack de SU empresa, nunca por el de otro. Admin ▸ Notificaciones: 4 interruptores (correo/Slack × equipo/clientes), tabla por persona y «Buscar en Slack» que llena los member IDs por correo. Token cifrado AES-GCM atado al espacio. Copiar compartido (`src/lib/copiar.ts`).
+**Pruebas:** npm test todo en verde (test-lib 805/0, test-db 879/0, prisma 975/0, formatos 797/0) · tsc 0 · eslint 0 · next build OK.
+**Sin probar:** el flujo real de Slack OAuth (necesita a DiDi o un espacio de prueba); la pantalla en el navegador; 0097 NO aplicada, así que en el preview la pestaña Notificaciones falla hasta aplicarla (los avisos no se pierden: la fila se suelta y el reloj en vivo la manda).
+**Pick up next:** Pedro: Manage Distribution + Redirect URLs en la app de Slack, 3 variables en Vercel, luego "ship it" para 0097 + merge a main.

@@ -26,6 +26,7 @@ const TIPO: Record<string, TipoConfig> = {
   ready_for_review: { chip: "Lista para tu revisión", color: "#00c2ff", cta: "Abrir mi portal" }, // azul neón — al CLIENTE
   change_reply: { chip: "Respuesta", color: "#ff2d6f", cta: "Ver la conversación" }, // rosa-rojo: es de un cambio
   change_reply_client: { chip: "Te respondieron", color: "#00c2ff", cta: "Ver la respuesta" }, // azul: de cara al cliente
+  slack_por_aprobar: { chip: "Slack por aprobar", color: "#ff9e2c", cta: "Revisar en Integraciones" }, // ámbar — al MASTER
   vigia_propuestas: { chip: "Prisma · Vigía", color: "#00c2ff", cta: "Revisar en el Hub" }, // azul neón — al MASTER
 };
 const DEFECTO: TipoConfig = { chip: "Aviso", color: "#9d4edd", cta: "Abrir en Greenlight" };

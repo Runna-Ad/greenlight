@@ -15,6 +15,8 @@ import {
 import { listarInvitaciones, listarClientesUsuarios } from "./clientes-actions";
 
 export const dynamic = "force-dynamic";
+// «Buscar en Slack» recorre la lista de usuarios de cada espacio y puede esperar a Slack.
+export const maxDuration = 60;
 
 // El panel de administración. Sólo master/admin. Con el login apagado (beta)
 // todos son admin, así que en la práctica está abierto — es a propósito: la app
@@ -28,7 +30,7 @@ export default async function AdminPage({
   const { tab } = await searchParams;
   const TABS_VALIDAS = new Set([
     "perfil", "equipo", "invitaciones", "clientes", "marcas",
-    "actividad", "integraciones", "biblioteca", "hue", "papelera",
+    "actividad", "notificaciones", "integraciones", "biblioteca", "hue", "papelera",
   ]);
   const initialTab = tab && TABS_VALIDAS.has(tab) ? (tab as never) : undefined;
 

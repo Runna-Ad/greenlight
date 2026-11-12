@@ -3,6 +3,7 @@ import "server-only";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { sendEmail, hasEmail } from "@/lib/email";
 import { decisionEmail, CLIENT_TYPES } from "@/lib/notif-routing";
+import { leerCanales } from "@/lib/notif-canales";
 import {
   htmlFor, textFor, ctaUrl, htmlAgrupado, textAgrupado, asuntoAgrupado, type AvisoAgrupado,
 } from "@/lib/email-template";
@@ -77,14 +78,14 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
   const memberIds = [...new Set(((notifs ?? []) as Notif[]).map((n) => n.recipient_member_id).filter(Boolean))] as string[];
   const profileIds = [...new Set(((notifs ?? []) as Notif[]).map((n) => n.recipient_id).filter(Boolean))] as string[];
   type Member = { id: string; email: string | null; notify_email: boolean; profile_id: string | null };
-  type Profile = { id: string; email: string | null; notify_email: boolean };
+  type Profile = { id: string; email: string | null; notify_email: boolean; role: string };
   type Roster = { profile_id: string; notify_email: boolean; email: string | null };
   const [membersRes, profilesRes, rosterRes] = await Promise.all([
     memberIds.length
       ? db.from("track_members").select("id, email, notify_email, profile_id").in("id", memberIds)
       : Promise.resolve({ data: [] as Member[], error: null }),
     profileIds.length
-      ? db.from("profiles").select("id, email, notify_email").in("id", profileIds)
+      ? db.from("profiles").select("id, email, notify_email, role").in("id", profileIds)
       : Promise.resolve({ data: [] as Profile[], error: null }),
     // El interruptor maestro "Recibe emails" vive en track_members.notify_email (Mi perfil
     // y Equipo escriben AHÍ). profiles.notify_email no lo escribe nadie. Los avisos por
@@ -123,6 +124,8 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
   //    (la misma persona puede llegar por su member o por su profile).
   type Listo = { id: string; createdAt: string; n: Notif; cta: string; esCliente: boolean };
   const porDireccion = new Map<string, Listo[]>();
+  // Interruptores generales de Admin ▸ Notificaciones (0098): correo al equipo / a clientes.
+  const canales = await leerCanales();
   let sent = 0, skipped = 0, failed = 0, held = 0;
   for (const d of rows) {
     const n = notifById.get(d.notification_id);
@@ -130,6 +133,7 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
 
     let email: string | null = null;
     let notifyEmail = false;
+    let audienciaCliente = false;
     if (n.recipient_member_id) {
       const m = memberById.get(n.recipient_member_id);
       email = m?.email ?? null; notifyEmail = m?.notify_email ?? false;
@@ -138,6 +142,10 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
       const m = memberByProfile.get(n.recipient_id);
       email = p?.email ?? m?.email ?? null;
       notifyEmail = m ? m.notify_email : (p?.notify_email ?? false);
+      audienciaCliente = !m && p?.role === "client";
+    }
+    if (!(audienciaCliente ? canales.clientes.email : canales.equipo.email)) {
+      await marcar([d.id], { status: "skipped", error: "correo apagado en Admin para su grupo" }); skipped++; continue;
     }
 
     const pid = perfilDe(n);

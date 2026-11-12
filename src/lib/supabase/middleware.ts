@@ -14,7 +14,9 @@ const DB_SCHEMA = process.env.NEXT_PUBLIC_DB_SCHEMA ?? "produccion";
 // con su secreto (CRON_SECRET); el muro de login lo mandaba a /login.
 // /api/prisma/vigia igual: el cron del vigía llega sin sesión y exige su propio secreto.
 // /api/notion/sync igual: el reloj de Notion (0094) llega sin sesión y exige CRON_SECRET.
-const PUBLIC_PATHS = ["/login", "/portal/login", "/auth/callback", "/auth/confirm", "/robots.txt", "/api/avisos/enviar", "/api/prisma/vigia", "/api/notion/sync"];
+// /api/slack/oauth: regreso de «Add to Slack»; lo abre el admin del CLIENTE (sin cuenta en
+// Greenlight). Lo protege el state de un solo uso que sólo un admin de Runna puede crear.
+const PUBLIC_PATHS = ["/login", "/portal/login", "/auth/callback", "/auth/confirm", "/robots.txt", "/api/avisos/enviar", "/api/prisma/vigia", "/api/notion/sync", "/api/slack/oauth"];
 
 // Refreshes the Supabase session cookie on every request and gates auth.
 export async function updateSession(request: NextRequest) {
@@ -77,7 +79,8 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC_PATHS.includes(path);
+  // /slack/<id>: la liga corta «Add to Slack» que abre el admin de un cliente (sin sesión).
+  const isPublic = PUBLIC_PATHS.includes(path) || /^\/slack\/[0-9a-f-]{36}$/i.test(path);
 
   // El portal de un cliente vive en `/{slug}/portal` — NO empieza con "/portal".
   const esRutaPortal = /^\/[^/]+\/portal(\/|$)/.test(path);

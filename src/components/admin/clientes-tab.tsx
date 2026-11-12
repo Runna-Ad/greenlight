@@ -13,6 +13,7 @@ import {
 } from "@/app/(app)/admin/clientes-actions";
 import { Button } from "@/components/ui/button";
 import { Pill } from "@/components/ui/pill";
+import { copiarTexto } from "@/lib/copiar";
 
 export function ClientesTab({
   usuarios: inicial,
@@ -185,34 +186,10 @@ function ClienteRow({
     sel.addRange(r);
   };
 
-  // Tres intentos, del más compatible al menos: (1) copia clásica DENTRO del clic
-  // (funciona aunque el navegador niegue el portapapeles moderno, p. ej. un navegador
-  // embebido o sin foco), (2) el portapapeles moderno, (3) dejar el código seleccionado.
+  // Si ni la copia clásica ni el portapapeles moderno sirven, se deja el código seleccionado.
   const copiar = async () => {
     if (!codigo) return;
-    let ok = false;
-    const ta = document.createElement("textarea");
-    ta.value = codigo;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-      ok = document.execCommand("copy");
-    } catch {
-      ok = false;
-    }
-    ta.remove();
-    if (!ok) {
-      try {
-        await navigator.clipboard.writeText(codigo);
-        ok = true;
-      } catch {
-        ok = false;
-      }
-    }
-    if (ok) {
+    if (await copiarTexto(codigo)) {
       toast.success("Código copiado.");
     } else {
       seleccionarCodigo();
