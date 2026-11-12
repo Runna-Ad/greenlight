@@ -35,6 +35,16 @@ export const SHEET_COLUMNS = [
 ] as const;
 
 export type SheetColumn = (typeof SHEET_COLUMNS)[number];
+
+/**
+ * Otros encabezados que valen por una columna. DiDi renombró «Brief Name» a «Package Name»
+ * (2026-11, Pedro): es el nombre del PAQUETE, no del brief. Por dentro la columna conserva
+ * su nombre viejo a propósito: las filas ya guardadas (staged_rows.data) y su huella
+ * (row_hash) usan esa llave, y cambiarla haría que todo el sheet pareciera «actualizado».
+ */
+const NOMBRES_ALTERNOS: Partial<Record<SheetColumn, string[]>> = {
+  "Brief Name": ["Package Name"],
+};
 export type SheetRow = Partial<Record<SheetColumn, string>>;
 
 /** RFC4180-ish CSV parser: handles quoted fields, embedded commas and newlines. */
@@ -89,7 +99,8 @@ export function mapHeader(header: string[]): Record<SheetColumn, number> | null 
   const index: Partial<Record<SheetColumn, number>> = {};
   const seen = header.map(norm);
   for (const col of SHEET_COLUMNS) {
-    const at = seen.indexOf(norm(col));
+    let at = seen.indexOf(norm(col));
+    for (const otro of NOMBRES_ALTERNOS[col] ?? []) if (at === -1) at = seen.indexOf(norm(otro));
     if (at !== -1) index[col] = at;
   }
   // Require the identifying columns; a different tab won't have these.

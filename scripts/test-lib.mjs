@@ -13,6 +13,8 @@ import { puedeSerLead, puedeSerEspecialista, tieneAccesoPrisma, tieneHueCreativo
 import { RAMAS, esRama, ramaDe } from "../src/lib/equipo.ts";
 import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoEnvioPieza, motivoBloqueoEnvio, ultimoVisibleDe } from "../src/lib/correcciones.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
+import { claveDePaquete, fechaDeDateSort, diaLocal, fechaDelBrief, entregaDePaquete, notaEntrega, desgloseTracks } from "../src/lib/paquetes.ts";
+import { classifyTab, mapHeader } from "../src/lib/sheet-sync.ts";
 
 let pass = 0,
   fail = 0;
@@ -1801,6 +1803,96 @@ console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo e
   ok("…y no dice «no vigente»", !/no vigente/.test(probO("¿me da hasta 6% de CASHBACK*?")));
   ok("cifra vieja de nadie sigue siendo «no vigente»", /Cifra no vigente: "\$30,000"/.test(probO("límite de crédito de $30,000 m.n.")));
   ok("cifra propia pasa", probO("Puedes obtener hasta $46,800 m.n.") === "");
+}
+
+// ── Brief › Paquete › Tarea (0097) ──
+console.log("\n▶ Paquetes — clave, fecha del brief, nota de entrega");
+{
+  // Mismos casos que el test de produccion.paquete_clave() en test-db.mjs (contrato).
+  eq("clave: ignora espacios y mayúsculas", claveDePaquete("LT AfterBF - November"), "ltafterbfnovember");
+  eq("clave: 'LT After BF' es el mismo paquete", claveDePaquete("LT After BF - November"), "ltafterbfnovember");
+  eq("clave: quita acentos", claveDePaquete("Préstamos ÑANDÚ Ça"), "prestamosnanduca");
+  eq("clave: vacío", claveDePaquete("   "), "");
+  eq("clave: un acento fuera de la lista se quita igual que en SQL", claveDePaquete("Ā-Ōb Ÿ2"), "b2");
+
+  eq("dateSort → fecha del brief", fechaDeDateSort(20261030), "2026-10-30");
+  eq("sin dateSort → null", fechaDeDateSort(null), null);
+  eq("la pestaña Real del 30/10 da 2026-10-30 (sync en noviembre)",
+     fechaDeDateSort(classifyTab("Real (Card/Préstamos | Brief 30/10)", new Date("2026-11-12T12:00:00Z")).dateSort), "2026-10-30");
+  eq("un brief de diciembre sincronizado en enero es del año anterior",
+     fechaDeDateSort(classifyTab("Real (Card | Brief 20/12)", new Date("2027-01-05T12:00:00Z")).dateSort), "2026-12-20");
+
+  eq("fecha del brief = la más lejana de sus paquetes", fechaDelBrief(["2026-11-20", null, "2026-11-25", "2026-11-22"]), "2026-11-25");
+  eq("sin fechas → null", fechaDelBrief([null, null]), null);
+
+  // Día local: una entrega a las 11 pm de México del 18 ya es el 19 en UTC; cuenta el 18.
+  eq("el día de entrega es el de México", diaLocal("2026-11-19T05:00:00Z"), "2026-11-18");
+
+  const G = (at) => ({ status: "delivered", delivered_at: at });
+  const noEntregado = entregaDePaquete([G("2026-11-18T18:00:00Z"), { status: "published", delivered_at: null }], "2026-11-20");
+  eq("con una tarea sin Greenlit, el paquete no está entregado", noEntregado.entregadoEl, null);
+  eq("…y se ve su fecha", notaEntrega(noEntregado, "2026-11-20", "cliente")?.texto, "Fecha 20/11");
+  eq("sin fecha y sin entregar no hay nota", notaEntrega(noEntregado, null, "equipo"), null);
+
+  const antes = entregaDePaquete([G("2026-11-17T18:00:00Z"), G("2026-11-18T18:00:00Z")], "2026-11-20");
+  eq("entregado = la ÚLTIMA tarea", antes.entregadoEl, "2026-11-18");
+  eq("2 días antes", antes.diasAntes, 2);
+  eq("nota antes (cliente)", notaEntrega(antes, "2026-11-20", "cliente")?.texto, "Entregado 18/11 · fecha 20/11 (2 días antes)");
+  eq("nota antes (equipo) igual", notaEntrega(antes, "2026-11-20", "equipo")?.texto, "Entregado 18/11 · fecha 20/11 (2 días antes)");
+  eq("1 día en singular", notaEntrega(entregaDePaquete([G("2026-11-19T18:00:00Z")], "2026-11-20"), "2026-11-20", "cliente")?.texto,
+     "Entregado 19/11 · fecha 20/11 (1 día antes)");
+
+  const aTiempo = entregaDePaquete([G("2026-11-20T18:00:00Z")], "2026-11-20");
+  eq("el mismo día es a tiempo", notaEntrega(aTiempo, "2026-11-20", "cliente")?.texto, "Entregado 20/11 · fecha 20/11 (a tiempo)");
+
+  const tarde = entregaDePaquete([G("2026-11-23T18:00:00Z")], "2026-11-20");
+  eq("tarde: el equipo lo ve", notaEntrega(tarde, "2026-11-20", "equipo")?.texto, "Entregado 23/11 · fecha 20/11 (3 días tarde)");
+  eq("tarde: tono tarde (rojo)", notaEntrega(tarde, "2026-11-20", "equipo")?.tono, "tarde");
+  eq("tarde: el cliente sólo ve el día de entrega (Pedro, opción A)", notaEntrega(tarde, "2026-11-20", "cliente")?.texto, "Entregado 23/11");
+  eq("…sin tono rojo", notaEntrega(tarde, "2026-11-20", "cliente")?.tono, "a_tiempo");
+
+  eq("entregado sin fecha puesta", notaEntrega(entregaDePaquete([G("2026-11-18T18:00:00Z")], null), null, "equipo")?.texto, "Entregado 18/11");
+  eq("reabrir una tarea quita la entrega",
+     entregaDePaquete([G("2026-11-18T18:00:00Z"), { status: "in_corrections", delivered_at: null }], "2026-11-20").entregadoEl, null);
+
+  eq("desglose 2 real · 1 normal", desgloseTracks([{ track: "real" }, { track: "normal" }, { track: "real" }]), "2 real · 1 normal");
+  eq("desglose sólo real", desgloseTracks([{ track: "real" }, { track: "real" }]), "2 real");
+  eq("desglose sólo normal", desgloseTracks([{ track: "normal" }]), "1 normal");
+}
+
+console.log("\n▶ Portal — Real y Normal del mismo día son UN brief");
+{
+  const { agruparBriefsPortal } = await import("../src/lib/portal-grupos.ts");
+  const fila = (id, fecha, creado) => ({ id, brief_name: null, code: null, brief_date: fecha, created_at: creado });
+  const est = (id, g, n) => ({ brief_id: id, greenlit_at: g, n_tareas: n });
+  const gs = agruparBriefsPortal(
+    [fila("normal30", "2026-10-30", "2026-11-04T10:00Z"), fila("real30", "2026-10-30", "2026-11-04T09:00Z"),
+     fila("real16", "2026-10-16", "2026-10-22T09:00Z"), fila("manual", null, "2026-11-01T09:00Z")],
+    [est("real30", null, 9), est("normal30", "2026-11-10T00:00Z", 3), est("real16", "2026-11-01T00:00Z", 2)],
+  );
+  eq("4 pestañas → 3 briefs", gs.length, 3);
+  const g30 = gs.find((g) => g.brief_date === "2026-10-30");
+  eq("el 30/10 junta Real y Normal", g30.memberIds.slice().sort().join(), "normal30,real30");
+  eq("su id es el de la pestaña más vieja (estable)", g30.id, "real30");
+  eq("suma las piezas de las dos", g30.nTareas, 12);
+  eq("no está completo si una pestaña sigue abierta", g30.greenlitAt, null);
+  eq("un brief sin fecha queda solo", gs.find((g) => g.id === "manual").memberIds.join(), "manual");
+  const cerrado = agruparBriefsPortal(
+    [fila("a", "2026-10-30", "1"), fila("b", "2026-10-30", "2"), fila("vacia", "2026-10-30", "3")],
+    [est("a", "2026-11-05T00:00Z", 2), est("b", "2026-11-07T00:00Z", 1), est("vacia", null, 0)],
+  )[0];
+  eq("completo cuando todas las pestañas con piezas lo están: la última fecha", cerrado.greenlitAt, "2026-11-07T00:00Z");
+}
+
+console.log("\n▶ Sheet: la columna se llama «Package Name» (antes «Brief Name»)");
+{
+  const base = ["Asignación", "Marca", "Naming", "# Idea"];
+  const nuevo = mapHeader([...base, "Package Name"]);
+  ok("el encabezado nuevo «Package Name» se lee", nuevo && nuevo["Brief Name"] === 4);
+  const viejo = mapHeader([...base, "Brief Name"]);
+  ok("el encabezado viejo «Brief Name» se sigue leyendo", viejo && viejo["Brief Name"] === 4);
+  const sinCol = mapHeader(base);
+  ok("sin la columna, el sheet igual se acepta (no es obligatoria)", sinCol && sinCol["Brief Name"] === undefined);
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

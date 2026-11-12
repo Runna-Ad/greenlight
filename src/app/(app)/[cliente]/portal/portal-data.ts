@@ -7,6 +7,10 @@ import type { RefVista } from "@/components/tarea/referencias-plano";
 import type { TemaRow } from "@/components/tarea/documento-copies";
 import { estadoDeTimestamps, equipoEscribioUltimo, type Correccion } from "@/lib/correcciones";
 import { ESTADOS_PORTAL, estadoBriefPanel } from "@/lib/portal-bucket";
+import type { PaqueteEquipo } from "@/lib/bundle";
+import { cargarPaquetes } from "@/lib/paquetes-data";
+import { agruparBriefsPortal } from "@/lib/portal-grupos";
+import { fechaDelBrief, paqueteParaCliente, type PaquetePortal } from "@/lib/paquetes";
 
 // El portal muestra SÓLO lo que ya se envió al cliente: published_at != null (el
 // mismo criterio que Entregas). Su estado ACTUAL puede ser published (en su
@@ -29,10 +33,16 @@ export type PortalTarea = {
   /** En cambios y el equipo le contestó en el hilo de uno de sus cambios: le toca a él
    *  ("Te respondieron"). Se apaga cuando el cliente contesta. */
   teRespondieron: boolean;
+  /** Su paquete (0097) y su equipo: el cliente ve "2 real · 1 normal" por paquete (Pedro 2026-11-12). */
+  paqueteId: string | null;
+  track: string | null;
 };
 
 export type PortalBrief = {
+  /** Id del brief en el portal. Las pestañas Real y Normal del mismo día son UN brief para el
+   *  cliente (0097): este id es el de una de ellas, y `memberIds` trae todas. */
   id: string;
+  memberIds: string[];
   label: string;
   /** Fecha del brief (ISO) — para agrupar por mes en el selector del portal. null si no tiene. */
   date: string | null;
@@ -41,6 +51,10 @@ export type PortalBrief = {
    *  (MAX delivered_at cuando no queda pendiente). null = sigue activo. Gobierna el split
    *  panel/Completados/Archivo (ver `estadoBriefPanel`). */
   greenlitAt: string | null;
+  /** Sus paquetes (0097), por nombre, en versión para el cliente. Vacío si el brief no tiene. */
+  paquetes: PaquetePortal[];
+  /** La fecha del brief = la más lejana de sus paquetes. null si ninguno tiene fecha. */
+  fechaEntrega: string | null;
 };
 
 /** Una marca del cliente con trabajo client-facing, para el grid de marcas del portal. */
@@ -71,10 +85,13 @@ export type PortalData = {
    *  está armando y aún NO manda. Es la ÚNICA data pre-publicación que ve el cliente, y sólo
    *  como CONTEO (panel de inicio): nunca el nombre ni el detalle (no se filtra WIP). Acotado a
    *  los briefs YA client-facing para que el número reconcilie con las tarjetas de brief. */
-  produccion: { briefId: string; marcaId: string }[];
+  produccion: { briefId: string; marcaId: string; paqueteId: string | null; track: string | null }[];
   /** Hora del SERVIDOR al cargar (ms). El split panel(≤15d)/archivo(>15d) se corta contra esta
    *  marca — determinista en el render (no Date.now() en el componente). */
   ahora: number;
+  /** Id de pestaña → id del brief en el portal. Un link viejo `?brief=<id de la pestaña Normal>`
+   *  sigue abriendo el brief junto. */
+  grupoDe: Record<string, string>;
 };
 
 /** La etiqueta de un brief: "Brief DD/MM" (por fecha), o su nombre, o su código. */
@@ -104,7 +121,7 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
   const [{ data: briefs }, { data: marcas }, { data: estados }] = await Promise.all([
     // `.is("deleted_at", null)`: lo mandado a la papelera (0057) desaparece del portal
     // del cliente de inmediato — no espera a la purga de 30 días.
-    db.from("briefs").select("id, brief_name, code, brief_date").eq("client_id", cli.id).is("deleted_at", null),
+    db.from("briefs").select("id, brief_name, code, brief_date, created_at").eq("client_id", cli.id).is("deleted_at", null),
     db.from("marcas").select("id, name, logo_url").eq("client_id", cli.id),
     // greenlit_at por brief (vista brief_estado 0060): completo ⇔ greenlit_at != null; su fecha
     // gobierna panel(≤15d)/archivo(>15d). Se cuenta en SQL (la vista), no en JS — evita traer y
@@ -112,9 +129,17 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
     db.from("brief_estado").select("brief_id, greenlit_at, n_tareas").eq("client_slug", clienteSlug)
       .returns<{ brief_id: string; greenlit_at: string | null; n_tareas: number }[]>(),
   ]);
-  const greenlitByBrief = new Map((estados ?? []).map((e) => [e.brief_id, e.greenlit_at]));
-  const nTareasByBrief = new Map((estados ?? []).map((e) => [e.brief_id, e.n_tareas]));
-  const briefRows = (briefs ?? []) as { id: string; brief_name: string | null; code: string | null; brief_date: string | null }[];
+  // El brief del CLIENTE junta las pestañas Real y Normal del mismo día (0097). De aquí en
+  // adelante "brief" = ese grupo; `grupoDe` traduce el id de cada pestaña al del grupo.
+  const grupos = agruparBriefsPortal(
+    (briefs ?? []) as { id: string; brief_name: string | null; code: string | null; brief_date: string | null; created_at: string | null }[],
+    estados ?? [],
+  );
+  const grupoDe: Record<string, string> = {};
+  for (const g of grupos) for (const m of g.memberIds) grupoDe[m] = g.id;
+  const greenlitByBrief = new Map(grupos.map((g) => [g.id, g.greenlitAt]));
+  const nTareasByBrief = new Map(grupos.map((g) => [g.id, g.nTareas]));
+  const briefRows = grupos;
   const marcaById = new Map(
     ((marcas ?? []) as { id: string; name: string; logo_url: string | null }[]).map((m) => [m.id, m]),
   );
@@ -127,8 +152,11 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
       marcas: [],
       produccion: [],
       ahora,
+      grupoDe,
     };
   }
+  // Object.hasOwn: el id viene de la URL; "constructor" o "__proto__" no deben resolver a nada.
+  const pedido = briefPedido ? (Object.hasOwn(grupoDe, briefPedido) ? grupoDe[briefPedido] : briefPedido) : undefined;
 
   // Fase 1 (índice, ya en SQL vía brief_estado): quién está archivado. Fase 2 (aquí): traemos
   // detalle de tareas SÓLO de los NO archivados (+ el brief que se está viendo, `briefPedido`,
@@ -136,7 +164,9 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
   // SILENCIOSO a ~1000 filas de PostgREST cuando un cliente acumula cientos de briefs entregados
   // (misma familia que la 0060). El Archivo se arma desde el índice (metadata), sin tareas.
   const archivado = (id: string) => estadoBriefPanel(greenlitByBrief.get(id) ?? null, ahora) === "archivado";
-  const cargarIds = briefIds.filter((id) => !archivado(id) || id === briefPedido);
+  const cargarIds = briefRows
+    .filter((g) => !archivado(g.id) || g.id === pedido)
+    .flatMap((g) => g.memberIds); // las pestañas de cada brief a cargar
 
   let ideaRows: {
     id: string;
@@ -145,11 +175,13 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
     status: AssetStatus;
     marca_id: string | null;
     brief_id: string;
+    paquete_id: string | null;
+    track: string | null;
   }[] = [];
   if (cargarIds.length) {
     const { data: ideas } = await db
       .from("ideas")
-      .select("id, code, naming_base, status, marca_id, brief_id")
+      .select("id, code, naming_base, status, marca_id, brief_id, paquete_id, track")
       .in("brief_id", cargarIds)
       .not("published_at", "is", null)
       // El ESTADO ACTUAL manda: una tarea sacada de Greenlit de vuelta a producción interna
@@ -237,7 +269,8 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
   const porBrief = new Map<string, PortalTarea[]>();
   for (const i of ideaRows) {
     const m = i.marca_id ? marcaById.get(i.marca_id) : undefined;
-    (porBrief.get(i.brief_id) ?? porBrief.set(i.brief_id, []).get(i.brief_id)!).push({
+    const g = grupoDe[i.brief_id] ?? i.brief_id;
+    (porBrief.get(g) ?? porBrief.set(g, []).get(g)!).push({
       id: i.id,
       code: i.code,
       naming: i.naming_base,
@@ -247,15 +280,23 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
       marcaLogo: m?.logo_url ?? null,
       reReview: i.status === "published" && conRonda.has(i.id),
       teRespondieron: teRespondieron.has(i.id),
+      paqueteId: i.paquete_id,
+      track: i.track,
     });
   }
+  // Juntar dos pestañas mezcla dos listas ordenadas por código: se reordena dentro del brief.
+  // Real y Normal numeran igual (A1, A2…): a mismo código va primero Real, luego por nombre.
+  for (const ts of porBrief.values()) ts.sort((a, b) =>
+    (a.code ?? "￿").localeCompare(b.code ?? "￿") || (a.track ?? "").localeCompare(b.track ?? "") * -1 ||
+    (a.naming ?? "").localeCompare(b.naming ?? "") || a.id.localeCompare(b.id));
 
   // Sólo briefs CON tareas enviadas; los de más tareas primero.
   const conTareas: PortalBrief[] = briefRows
     .filter((b) => porBrief.has(b.id))
     .map((b) => ({
-      id: b.id, label: briefLabel(b), date: b.brief_date, tasks: porBrief.get(b.id)!,
+      id: b.id, memberIds: b.memberIds, label: briefLabel(b), date: b.brief_date, tasks: porBrief.get(b.id)!,
       greenlitAt: greenlitByBrief.get(b.id) ?? null,
+      paquetes: [], fechaEntrega: null,
     }))
     .sort((a, b) => b.tasks.length - a.tasks.length || a.label.localeCompare(b.label));
 
@@ -288,17 +329,42 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
   // nunca el nombre ni el cuerpo (no se filtra WIP al cliente). Acotado a los briefs YA
   // client-facing (conTareas) para que el número del panel RECONCILIE con las tarjetas de brief
   // (un brief sin NADA enviado sigue invisible, como hoy). Sin briefs client-facing → [].
-  const conTareasIds = conTareas.map((b) => b.id);
-  let produccion: { briefId: string; marcaId: string }[] = [];
+  const conTareasIds = conTareas.flatMap((b) => b.memberIds);
+  let produccion: PortalData["produccion"] = [];
   if (conTareasIds.length) {
     const { data: prod } = await db
       .from("ideas")
-      .select("marca_id, brief_id")
+      .select("marca_id, brief_id, paquete_id, track")
       .in("brief_id", conTareasIds)
       .in("status", ["todo", "in_progress", "under_review", "completed"])
       .is("deleted_at", null)
-      .returns<{ marca_id: string | null; brief_id: string }[]>();
-    produccion = (prod ?? []).map((p) => ({ briefId: p.brief_id, marcaId: p.marca_id ?? "__none__" }));
+      .returns<{ marca_id: string | null; brief_id: string; paquete_id: string | null; track: string | null }[]>();
+    produccion = (prod ?? []).map((p) => ({
+      briefId: grupoDe[p.brief_id] ?? p.brief_id, marcaId: p.marca_id ?? "__none__",
+      paqueteId: p.paquete_id, track: p.track,
+    }));
+  }
+
+  // Paquetes (0097) de cada brief, con su fecha y su entrega (calculada con TODAS sus tareas).
+  // Al navegador del cliente sólo llega la versión para el cliente (paqueteParaCliente): el
+  // texto de la nota y la fecha si puede verla. Nunca los días de retraso (Pedro, opción A).
+  // El NOMBRE del paquete sí aparece aunque todas sus piezas sigan en producción: es el texto
+  // que el propio cliente escribió en su sheet («Package Name»), no trabajo del equipo.
+  const paquetes = await cargarPaquetes(cli.id, [
+    ...conTareas.flatMap((b) => b.tasks.map((t) => t.paqueteId)),
+    ...produccion.map((p) => p.paqueteId),
+  ]);
+  for (const b of conTareas) {
+    const ids = new Set([
+      ...b.tasks.map((t) => t.paqueteId),
+      ...produccion.filter((p) => p.briefId === b.id).map((p) => p.paqueteId),
+    ].filter((x): x is string => !!x));
+    b.paquetes = [...ids].map((id) => paquetes.get(id)).filter((p): p is PaqueteEquipo => !!p)
+      .sort((x, y) => x.nombre.localeCompare(y.nombre))
+      .map(paqueteParaCliente);
+    // La fecha del brief sale sólo de las fechas que el cliente puede ver: si el paquete con
+    // la fecha más lejana se entregó tarde, su fecha no se cuela por el encabezado del brief.
+    b.fechaEntrega = fechaDelBrief(b.paquetes.map((p) => p.fechaVisible));
   }
 
   // Los ARCHIVADOS: metadata desde el índice (label + fecha de completado + nº de piezas), SIN
@@ -321,6 +387,7 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
     marcas: marcasResumen,
     produccion,
     ahora,
+    grupoDe,
   };
 }
 

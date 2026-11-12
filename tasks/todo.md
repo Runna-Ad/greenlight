@@ -1,5 +1,40 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-11-12 — Brief › Paquete › Tarea, fase 1 (rama `feat/paquetes`, worktree ../greenlight-paquetes)
+Pedro: un brief (Brief 30/10) tiene PAQUETES (columna "Package Name" del sheet, antes "Brief Name") y cada paquete tiene tareas. Opción B: el paquete es su propio registro, con fecha de entrega que pone un ADMIN. La fecha del brief = la más lejana de sus paquetes. Paquete entregado (su última tarea Greenlit) → "Entregado X · fecha Y (N días antes)". Tarde: el equipo ve "N días tarde"; el cliente sólo "Entregado X". En el portal el cliente sí ve Real/Normal, como desglose por paquete ("3 piezas · 2 real · 1 normal").
+
+**Diseño**
+- `briefs.brief_date` siempre puesto: el sync lo saca de la pestaña ("Brief 30/10" + año del sync; si cae >60 días en el futuro, año anterior). Backfill de los 4 briefs vivos. Brief = (cliente, brief_date); las pestañas Real y Normal del mismo día son UN brief para el cliente.
+- Tabla `paquetes` (cliente, brief_date, nombre, clave = nombre sin acentos/espacios/mayúsculas, fecha_entrega, quién y cuándo la puso). Única por (cliente, brief_date, clave): "LT AfterBF" y "LT After BF" son el mismo. `ideas.paquete_id`. Sólo service_role (como todo `produccion` desde 0056); el permiso de admin vive en la server action.
+- `board_tasks` expone `paquete_id` (columna al final de la vista).
+- Backfill: paquetes desde `staged_rows.data->>'Brief Name'` vía `idea_id`.
+
+**DONE**
+- D1 Migración 0097 corre en PGlite: `npm run test:db` verde, con pruebas nuevas (clave única, backfill, brief_date).
+- D2 Sync: lee "Package Name" y también "Brief Name"; tarjeta del sync dice "Package Name"; el import crea/reusa el paquete y llena `paquete_id` y `brief_date`. Prueba en `npm run test:lib`/`test:import`.
+- D3 Lógica pura `src/lib/paquetes.ts` (clave, fecha del brief, estado de entrega con días antes/tarde, vista cliente vs equipo) con pruebas.
+- D4 Página Briefs (equipo): tareas agrupadas por paquete, con fecha; admin/master la pone o la cambia; nota de entrega con tarde en rojo. Visto en el navegador.
+- D5 Portal: una tarjeta por brief (Real+Normal juntos) con paquetes: barra, piezas, real/normal, fecha o nota de entrega (sin "tarde"). Selector y archivo usan el mismo brief agrupado; links viejos `?brief=<id de pestaña>` siguen abriendo. Visto en el navegador.
+- D6 tsc 0 · eslint 0 · build ✓ · reap.
+
+**No hago en esta fase:** tablero, Mi trabajo, Entregas, Performance, búsqueda, avisos y Slack (fases 2 y 3); formulario de brief manual (sus tareas quedan sin paquete); no aplico 0097 ni paso a `main` sin "ship it".
+
+**Avance**
+- [x] D1 0097 + pruebas en PGlite (test-db verde). Ensayo de solo lectura en vivo: las 18 tareas caen en 9 paquetes; «LT After BF» = 3 real + 3 normal; las 4 pestañas dan su fecha.
+- [x] D2 sync «Package Name» + import (test-import 90/0; la prueba del encabezado falló antes del arreglo).
+- [x] D3 lib/paquetes.ts + portal-grupos.ts con pruebas (test-lib verde).
+- [x] D4/D5 código hecho; tsc 0, eslint 0, build ✓. **Navegador: pendiente**, necesita 0097 aplicada (la preview usa la base real).
+- [x] Reap: revisión de código (Sonnet) + seguridad (Opus). Arreglado: la fecha de un paquete tarde ya no llega al navegador del cliente (tipo PaquetePortal armado en el servidor; la fecha del brief sólo usa fechas visibles); paquetes acotados al cliente; clave JS = SQL letra por letra; día imposible ("31/02") no tumba la migración; patrón de pestaña igual al del sync; el import guarda la fecha de un brief viejo y avisa si una fila con «Package Name» queda sin paquete; el campo de fecha guarda al salir (no en cada tecla), rango 2020–2100, «Quitar fecha»; textos ≥11 px; n/N en el orden que se ve; dos A1 (Real y Normal) en orden estable; `?brief=constructor` no resuelve nada.
+
+**NO arreglado (a propósito o para después)**
+- El nombre de un paquete aparece en el portal aunque todas sus piezas sigan en producción: es el texto que DiDi escribió en su sheet. Preguntarle a Pedro si le parece bien.
+- Tras aplicar 0097, Entregas, Performance, el encabezado de la tarea y la Papelera dirán "Brief 30/10" para la pestaña Real Y la Normal (antes decían el primer paquete, mal). Fase 2: agregar "· Real/Normal" en pantallas del equipo.
+- cargarPaquetes: sin lotes de ids ni paginación (tope de 1000 filas de PostgREST). Hoy son 18 tareas; hacerlo vista SQL si crece.
+- Un link viejo `?brief=<pestaña en la papelera>` abre el primer brief en silencio.
+- Cambiar el «Package Name» de una tarea YA importada en el sheet no la mueve de paquete (el import sólo crea).
+
+Next Step: commit y push de la rama (preview); pedirle a Pedro el OK para aplicar 0097 y verlo en el navegador.
+
 ## 🟡 2026-11-12 — Bot de Slack «Greenlight» (opción 2: Runna hoy, listo para un 2º espacio) — rama `feat/slack-bot`, worktree ../greenlight-slack
 Pedro eligió la opción 2: DM por persona en el Slack de Runna, con el código listo para un segundo espacio (DiDi) si su admin lo aprueba. Mismo patrón que SnapTrack.
 Next Step: con el «ship it» de Pedro, `feat/slack-bot` → `main` (deploy de producción) y Pedro vuelve a correr `supabase/manual/0084_reloj_correos.sql`.

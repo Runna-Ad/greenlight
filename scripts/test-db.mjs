@@ -3663,5 +3663,41 @@ console.log("\n▶ 0096 — bot de Slack");
   await db.query(`delete from produccion.profiles where id=$1`, [p]);
 }
 
+// ── 0097 — Brief › Paquete › Tarea ──
+console.log("\n▶ 0097 — paquetes");
+{
+  const clave = (s) => scalar(`select produccion.paquete_clave($1)`, [s]);
+  eq("la clave ignora espacios y mayúsculas", await clave("LT AfterBF - November"), "ltafterbfnovember");
+  eq("…así 'LT After BF' es el mismo paquete", await clave("LT After BF - November"), "ltafterbfnovember");
+  eq("…y quita acentos", await clave("Préstamos ÑANDÚ Ça"), "prestamosnanduca");
+  eq("un nombre vacío da clave vacía", await clave("   "), "");
+  eq("un acento fuera de la lista se quita igual que en JS", await clave("Ā-Ōb Ÿ2"), "b2");
+
+  const cli = await scalar(`select b.client_id from produccion.ideas i join produccion.briefs b on b.id=i.brief_id where i.id=$1`, [IDEA_D]);
+  const pq = await scalar(
+    `insert into produccion.paquetes (client_id, brief_date, nombre, clave) values ($1,'2026-10-30','  LT AfterBF - November ','x') returning id`, [cli]);
+  eq("el trigger pone la clave (ignora la que mande la app)",
+     await scalar(`select clave from produccion.paquetes where id=$1`, [pq]), "ltafterbfnovember");
+  eq("…y recorta el nombre", await scalar(`select nombre from produccion.paquetes where id=$1`, [pq]), "LT AfterBF - November");
+  let dup = null;
+  try {
+    await db.query(`insert into produccion.paquetes (client_id, brief_date, nombre, clave) values ($1,'2026-10-30','lt after bf - NOVEMBER','')`, [cli]);
+  } catch (e) { dup = e.message; }
+  ok("el mismo paquete escrito distinto en el mismo brief choca (único por cliente+fecha+clave)", !!dup && /duplicate|unique/i.test(dup));
+  const otroDia = await scalar(
+    `insert into produccion.paquetes (client_id, brief_date, nombre, clave) values ($1,'2026-10-23','LT After BF - November','') returning id`, [cli]);
+  ok("…pero en otro brief (otra fecha) es otro paquete", !!otroDia);
+
+  await db.query(`update produccion.ideas set paquete_id=$2 where id=$1`, [IDEA_D, pq]);
+  eq("board_tasks expone paquete_id", await scalar(`select paquete_id::text from produccion.board_tasks where id=$1`, [IDEA_D]), pq);
+  await db.query(`delete from produccion.paquetes where id=$1`, [pq]);
+  eq("borrar el paquete deja la tarea sin paquete (no la borra)",
+     await scalar(`select coalesce(paquete_id::text,'null') from produccion.ideas where id=$1`, [IDEA_D]), "null");
+  await db.query(`delete from produccion.paquetes where id=$1`, [otroDia]);
+
+  // Que anon/authenticated no lean `paquetes` lo vigila el "Candado RLS 0056" (barre todas las
+  // tablas y corre antes del bloque que re-concede a `authenticated` a propósito).
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -31,6 +31,22 @@ export type BundleTask = {
   client_slug: string | null;
   /** Cuándo se entregó (Greenlit). null = aún no. Lo expone la vista desde 0058. */
   delivered_at: string | null;
+  /** Su paquete dentro del brief (0097). null = sin paquete (brief manual o fila sin «Package Name»). */
+  paquete_id: string | null;
+};
+
+/** Un paquete visto por el equipo en la lista de briefs. El estado de entrega se calcula
+ *  con TODAS sus tareas (Real y Normal), aunque el lead sólo vea las de su equipo. */
+export type PaqueteEquipo = {
+  id: string;
+  nombre: string;
+  fechaEntrega: string | null;
+  /** Día (México) en que se entregó su última tarea; null si falta alguna. */
+  entregadoEl: string | null;
+  diasAntes: number | null;
+  /** "2 real · 1 normal", de todas sus tareas. */
+  desglose: string;
+  total: number;
 };
 
 /** La ventana en la que el trabajo ya entregado sigue A LA VISTA antes de vivir sólo
@@ -101,6 +117,8 @@ export type Bundle = {
    * deja de estar greenlit solo. (Pedro 2026-09-01)
    */
   greenlitAt: string | null;
+  /** Los paquetes que tocan sus tareas (los llena bundle-data; vacío si ninguno). */
+  paquetes: PaqueteEquipo[];
 };
 
 /**
@@ -136,7 +154,7 @@ export function agruparBundles(visibles: BundleTask[]): Bundle[] {
     if (!b) {
       b = {
         brief_id: t.brief_id, brief_title: t.brief_title, brief_tab: t.brief_tab,
-        tasks: [], greenlitAt: null,
+        tasks: [], greenlitAt: null, paquetes: [],
       };
       porBrief.set(t.brief_id, b);
     }
@@ -157,7 +175,26 @@ export function agruparBundles(visibles: BundleTask[]): Bundle[] {
 
 /** Las columnas que la vista board_tasks expone para un bundle. */
 export const BUNDLE_SELECT =
-  "id, code, status, naming_base, concepto, tipo_asset, duracion, marca, plataformas, file_count, track, member_ids, members, brief_id, brief_title, brief_tab, client_slug, delivered_at";
+  "id, code, status, naming_base, concepto, tipo_asset, duracion, marca, plataformas, file_count, track, member_ids, members, brief_id, brief_title, brief_tab, client_slug, delivered_at, paquete_id";
+
+/**
+ * Las tareas de un bundle agrupadas por paquete, en el orden en que se muestran: paquetes
+ * por nombre, y "Sin paquete" al final. Cada grupo conserva el orden del bundle.
+ */
+export function gruposPorPaquete<T extends { paquete_id: string | null }>(
+  tasks: T[],
+  paquetes: { id: string; nombre: string }[],
+): { paqueteId: string | null; tasks: T[] }[] {
+  const porId = new Map(paquetes.map((p) => [p.id, p.nombre]));
+  const grupos = new Map<string | null, T[]>();
+  for (const t of tasks) {
+    const k = t.paquete_id && porId.has(t.paquete_id) ? t.paquete_id : null;
+    (grupos.get(k) ?? grupos.set(k, []).get(k)!).push(t);
+  }
+  return [...grupos.entries()]
+    .sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : porId.get(a)!.localeCompare(porId.get(b)!)))
+    .map(([paqueteId, ts]) => ({ paqueteId, tasks: ts }));
+}
 
 /** Dónde está esta tarea dentro de su bundle — alimenta las flechas ← n/N →. */
 export function posicionEnBundle(tasks: BundleTask[], ideaId: string) {

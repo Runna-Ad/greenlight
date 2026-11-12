@@ -187,7 +187,9 @@ export function StagedCard({
                 onChange={(v) => onEdit("Mes", v)} onReset={() => onResetField("Mes")} />
               <Text label="Entrega final" value={val("Entrega final")} edited={isEdited("Entrega final")}
                 onChange={(v) => onEdit("Entrega final", v)} onReset={() => onResetField("Entrega final")} />
-              <Text label="Brief Name" value={val("Brief Name")} edited={isEdited("Brief Name")}
+              {/* La columna del sheet ahora se llama «Package Name» (el paquete del brief, 0097);
+                  por dentro conserva la llave «Brief Name» (ver NOMBRES_ALTERNOS en sheet-sync). */}
+              <Text label="Package Name" value={val("Brief Name")} edited={isEdited("Brief Name")}
                 onChange={(v) => onEdit("Brief Name", v)} onReset={() => onResetField("Brief Name")} />
             </Grid>
           </Section>

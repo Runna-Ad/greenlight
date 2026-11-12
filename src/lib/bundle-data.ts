@@ -3,6 +3,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { ideasConCambiosDelCliente } from "@/lib/cambios-pendientes";
+import { cargarPaquetes } from "@/lib/paquetes-data";
 import type { ViewRole } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
 import {
@@ -99,6 +100,19 @@ export async function cargarBundles(
   if (error) throw new Error(`board_tasks: ${error.message}`);
 
   const conCambios = await cambiosParaFiltro(db, role, data ?? []);
-  return agruparBundles((data ?? []).filter(filtroBundle(role, soyId, tracks, conCambios)))
+  const bundles = agruparBundles((data ?? []).filter(filtroBundle(role, soyId, tracks, conCambios)))
     .filter((b) => bundleEnCurso(b));
+
+  // Paquetes (0097): sólo los que tocan las tareas VISIBLES; su entrega se calcula con
+  // todas sus tareas (cargarPaquetes).
+  const { data: cli } = await db.from("clients").select("id").eq("slug", clienteSlug).maybeSingle<{ id: string }>();
+  const paquetes = cli
+    ? await cargarPaquetes(cli.id, bundles.flatMap((b) => b.tasks.map((t) => t.paquete_id)))
+    : new Map();
+  for (const b of bundles) {
+    const ids = new Set(b.tasks.map((t) => t.paquete_id).filter((x): x is string => !!x));
+    b.paquetes = [...ids].map((id) => paquetes.get(id)).filter((p): p is NonNullable<typeof p> => !!p)
+      .sort((x, y) => x.nombre.localeCompare(y.nombre));
+  }
+  return bundles;
 }

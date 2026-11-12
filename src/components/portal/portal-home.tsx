@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Flame, ArrowRight, Eye, RefreshCw, CheckCircle2, CheckCheck, ChevronDown, Archive, MessageSquare } from "lucide-react";
+import { Flame, ArrowRight, Eye, RefreshCw, CheckCircle2, CheckCheck, ChevronDown, Archive, MessageSquare, Package, CalendarDays } from "lucide-react";
 import type { PortalBrief, PortalTarea, PortalMarca } from "@/app/(app)/[cliente]/portal/portal-data";
 import type { AssetStatus } from "@/lib/brand";
 import { estadoCliente, estadoBriefPanel } from "@/lib/portal-bucket";
+import { ddmm, desgloseTracks } from "@/lib/paquetes";
 import { cn } from "@/lib/utils";
 
 /**
@@ -43,6 +44,7 @@ function EstadoIcon({ status, reReview, teRespondieron = false, className }: { s
 const nombreTarea = (t: PortalTarea) => t.naming ?? t.code ?? "Idea";
 
 type QItem = PortalTarea & { briefId: string; briefLabel: string };
+type Prod = { briefId: string; marcaId: string; paqueteId: string | null; track: string | null };
 
 export function PortalHome({
   cliente,
@@ -56,7 +58,7 @@ export function PortalHome({
   marcas: PortalMarca[];
   /** Sólo briefs NO archivados (activos + completados ≤15d) — la carga es acotada. */
   briefs: PortalBrief[];
-  produccion: { briefId: string; marcaId: string }[];
+  produccion: Prod[];
   /** "Ahora" fijado en el servidor (hora de la request) — para el corte panel/archivo por edad. */
   ahora: number;
   /** Cuántos briefs archivados hay (>15d) — llega aparte porque no vienen en `briefs`; gobierna
@@ -95,17 +97,11 @@ export function PortalHome({
   const tarjetas = briefs
     .map((b) => {
       const ts = filtro ? b.tasks.filter((t) => t.marcaId === filtro) : b.tasks;
-      const seg = {
-        revisar: ts.filter((t) => t.status === "published").length,
-        cambios: ts.filter((t) => t.status === "in_corrections").length,
-        aprobado: ts.filter((t) => t.status === "delivered").length,
-        prod: produccion.filter((p) => p.briefId === b.id && (!filtro || p.marcaId === filtro)).length,
-        // En cambios con respuesta del equipo: también es su turno (misma regla que la cola).
-        respondidas: ts.filter((t) => t.status === "in_corrections" && t.teRespondieron).length,
-      };
+      const prodB = produccion.filter((p) => p.briefId === b.id && (!filtro || p.marcaId === filtro));
+      const seg = segmentos(ts, prodB);
       const total = seg.revisar + seg.cambios + seg.aprobado + seg.prod;
       const entryMarca = filtro ?? b.tasks[0]?.marcaId ?? "__none__";
-      return { brief: b, seg, total, entryMarca, arch: estadoBriefPanel(b.greenlitAt, ahora) };
+      return { brief: b, seg, total, entryMarca, ts, prodB, arch: estadoBriefPanel(b.greenlitAt, ahora) };
     })
     .filter((x) => x.total > 0)
     .sort((a, b) => b.total - a.total);
@@ -188,8 +184,8 @@ export function PortalHome({
         <>
           <SecHead titulo="Tus briefs" hint="— avance de cada entrega" />
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="Avance por brief">
-            {activas.map(({ brief, seg, total, entryMarca }) => (
-              <BriefCard key={brief.id} brief={brief} seg={seg} total={total} entryMarca={entryMarca} />
+            {activas.map(({ brief, seg, total, entryMarca, ts, prodB }) => (
+              <BriefCard key={brief.id} brief={brief} seg={seg} total={total} entryMarca={entryMarca} ts={ts} prodB={prodB} />
             ))}
           </section>
         </>
@@ -222,8 +218,8 @@ export function PortalHome({
           </div>
           {recientes.length > 0 && verCompletados && (
             <section className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="Briefs completados (últimos 15 días)">
-              {recientes.map(({ brief, seg, total, entryMarca }) => (
-                <BriefCard key={brief.id} brief={brief} seg={seg} total={total} entryMarca={entryMarca} />
+              {recientes.map(({ brief, seg, total, entryMarca, ts, prodB }) => (
+                <BriefCard key={brief.id} brief={brief} seg={seg} total={total} entryMarca={entryMarca} ts={ts} prodB={prodB} />
               ))}
             </section>
           )}
@@ -324,18 +320,99 @@ function Tile({ k, n, foot, destacado = false }: { k: Bucket; n: number; foot: s
   );
 }
 
+type Seg = { revisar: number; cambios: number; aprobado: number; prod: number; respondidas: number };
+const ORDEN: Bucket[] = ["revisar", "cambios", "prod", "aprobado"];
+
+/** Cuántas piezas hay en cada estado (lo enviado + lo que el equipo aún arma). */
+function segmentos(ts: PortalTarea[], prod: Prod[]): Seg {
+  return {
+    revisar: ts.filter((t) => t.status === "published").length,
+    cambios: ts.filter((t) => t.status === "in_corrections").length,
+    aprobado: ts.filter((t) => t.status === "delivered").length,
+    prod: prod.length,
+    // En cambios con respuesta del equipo: también es su turno (misma regla que la cola).
+    respondidas: ts.filter((t) => t.status === "in_corrections" && t.teRespondieron).length,
+  };
+}
+
+function Barra({ seg, total, alto = "h-2" }: { seg: Seg; total: number; alto?: string }) {
+  return (
+    <div className={`flex ${alto} overflow-hidden rounded-full`} style={{ background: "#f0eef6" }} role="img" aria-label={`${seg.revisar} por revisar, ${seg.cambios} en cambios, ${seg.prod} en producción, ${seg.aprobado} aprobadas`}>
+      {ORDEN.map((k) => seg[k] > 0 && (
+        <span key={k} style={{ width: `${(seg[k] / total) * 100}%`, background: PAL[k].c }} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Brief › PAQUETE › Tarea (0097): cada paquete del brief con su barra, sus piezas por equipo
+ * (Real/Normal, Pedro 2026-11-12) y su fecha. Si ya se entregó: "Entregado 18/11 · fecha 20/11
+ * (2 días antes)". Si se entregó tarde el cliente sólo ve "Entregado 23/11" (opción A de Pedro).
+ */
+function PaquetesDelBrief({ brief, ts, prodB }: { brief: PortalBrief; ts: PortalTarea[]; prodB: Prod[] }) {
+  if (!brief.paquetes.length) return null;
+  const filas = [
+    ...brief.paquetes.map((p) => ({ id: p.id, nombre: p.nombre, p })),
+    { id: null, nombre: "Otras piezas", p: null },
+  ]
+    .map((f) => {
+      const tsP = ts.filter((t) => t.paqueteId === f.id);
+      const prodP = prodB.filter((x) => x.paqueteId === f.id);
+      const seg = segmentos(tsP, prodP);
+      const total = seg.revisar + seg.cambios + seg.aprobado + seg.prod;
+      return { ...f, seg, total, desglose: desgloseTracks([...tsP, ...prodP]) };
+    })
+    .filter((f) => f.total > 0);
+
+  return (
+    <ul className="flex flex-col gap-2.5 border-t border-border pt-3" aria-label="Paquetes del brief">
+      {filas.map((f) => {
+        const nota = f.p?.nota ?? null; // ya viene armada para el cliente desde el servidor
+        return (
+          <li key={f.id ?? "otras"} className="flex flex-col gap-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Package className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="truncate text-[13px] font-medium text-foreground" title={f.nombre}>{f.nombre}</span>
+              </span>
+              <span className="shrink-0 text-[11.5px] tabular-nums text-muted-foreground">
+                {f.total} {f.total === 1 ? "pieza" : "piezas"}{f.desglose ? ` · ${f.desglose}` : ""}
+              </span>
+            </div>
+            <Barra seg={f.seg} total={f.total} alto="h-1.5" />
+            {nota && (
+              <span
+                className="inline-flex items-center gap-1 text-[11.5px] font-medium"
+                style={{ color: nota.tono === "antes" ? PAL.aprobado.ink : nota.tono === "pendiente" ? "var(--muted-foreground)" : "var(--foreground)" }}
+              >
+                {f.p?.entregado ? <CheckCircle2 className="size-3" aria-hidden /> : <CalendarDays className="size-3" aria-hidden />}
+                {nota.texto}
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function BriefCard({
   brief,
   seg,
   total,
   entryMarca,
+  ts,
+  prodB,
 }: {
   brief: PortalBrief;
-  seg: { revisar: number; cambios: number; aprobado: number; prod: number; respondidas: number };
+  seg: Seg;
   total: number;
   entryMarca: string;
+  ts: PortalTarea[];
+  prodB: Prod[];
 }) {
-  const orden: Bucket[] = ["revisar", "cambios", "prod", "aprobado"];
+  const orden = ORDEN;
   const esperanTurno = seg.revisar + seg.respondidas;
   return (
     <Link
@@ -344,14 +421,13 @@ function BriefCard({
     >
       <div className="flex items-baseline justify-between gap-2">
         <span className="truncate font-semibold text-foreground">{brief.label}</span>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{total} {total === 1 ? "pieza" : "piezas"}</span>
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+          {total} {total === 1 ? "pieza" : "piezas"}
+          {brief.fechaEntrega ? ` · fecha ${ddmm(brief.fechaEntrega)}` : ""}
+        </span>
       </div>
 
-      <div className="flex h-2 overflow-hidden rounded-full" style={{ background: "#f0eef6" }} role="img" aria-label={`${seg.revisar} por revisar, ${seg.cambios} en cambios, ${seg.prod} en producción, ${seg.aprobado} aprobadas`}>
-        {orden.map((k) => seg[k] > 0 && (
-          <span key={k} style={{ width: `${(seg[k] / total) * 100}%`, background: PAL[k].c }} />
-        ))}
-      </div>
+      <Barra seg={seg} total={total} />
 
       <div className="flex flex-wrap gap-x-3.5 gap-y-1">
         {orden.map((k) => seg[k] > 0 && (
@@ -361,6 +437,8 @@ function BriefCard({
           </span>
         ))}
       </div>
+
+      <PaquetesDelBrief brief={brief} ts={ts} prodB={prodB} />
 
       <div className="mt-0.5 flex items-center justify-between">
         <span className="text-xs text-muted-foreground">

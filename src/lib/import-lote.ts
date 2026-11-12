@@ -31,6 +31,7 @@ import type { Track } from "./vocab.ts";
 import { namingKindForTipo } from "./filename.ts";
 import { generatesFiles, missingRequired } from "./required.ts";
 import { list, cleanSize, labelToCode, splitIdeaCode, fold, isAllowed } from "./intake-crear.ts";
+import { claveDePaquete, fechaDeDateSort } from "./paquetes.ts";
 
 type Db = ReturnType<typeof supabaseAdmin>;
 
@@ -261,11 +262,23 @@ export async function ejecutarImport(
   // papelera metería las tareas nuevas en un brief invisible (board_tasks filtra
   // b.deleted_at) — el import "funcionaría" y no se vería nada.
   const { data: briefsPrevios, error: bErr } = await db
-    .from("briefs").select("id, source_tab")
+    .from("briefs").select("id, source_tab, brief_date")
     .eq("client_id", clientId).is("deleted_at", null).in("source_tab", tabs);
   if (bErr) return fallo(res, `No se pudieron leer los briefs: ${bErr.message}`);
-  for (const b of (briefsPrevios ?? []) as { id: string; source_tab: string | null }[]) {
-    if (b.source_tab && !briefByTab.has(b.source_tab)) briefByTab.set(b.source_tab, b.id);
+  // La fecha de cada brief: con ella se agrupan sus paquetes (0097). Un brief viejo sin
+  // fecha la toma de su pestaña, igual que uno nuevo.
+  const fechaDeBrief = new Map<string, string | null>();
+  for (const b of (briefsPrevios ?? []) as { id: string; source_tab: string | null; brief_date: string | null }[]) {
+    if (b.source_tab && !briefByTab.has(b.source_tab)) {
+      briefByTab.set(b.source_tab, b.id);
+      const fecha = b.brief_date ?? fechaDeDateSort(classifyTab(b.source_tab).dateSort);
+      fechaDeBrief.set(b.id, fecha);
+      // Se guarda también en el brief: sin ella el portal no junta su Real con su Normal.
+      if (!b.brief_date && fecha) {
+        const { error: eF } = await db.from("briefs").update({ brief_date: fecha }).eq("id", b.id).is("brief_date", null);
+        if (eF) res.errors.push(`Brief "${b.source_tab}": no se pudo guardar su fecha: ${eF.message}`);
+      }
+    }
   }
 
   // ── 2. lecturas en LOTE, acotadas a este run ──
@@ -366,6 +379,7 @@ export async function ejecutarImport(
         title: info.label,
         brief_name: v("Brief Name") || null,
         track: info.track,
+        brief_date: fechaDeDateSort(info.dateSort),
         source_tab: tab,
         status: "active",
         created_by: actorId,
@@ -378,6 +392,7 @@ export async function ejecutarImport(
     }
     briefByTab.set(tab, brief.id);
     nuevosBriefIds.add(brief.id);
+    fechaDeBrief.set(brief.id, fechaDeDateSort(info.dateSort));
   }
 
   const planes: Plan[] = planes0.flatMap((p) => {
@@ -388,6 +403,45 @@ export async function ejecutarImport(
     }
     return [{ ...p, briefId }];
   });
+
+  // ── 3c. paquetes (0097): uno por (fecha del brief, nombre en «Package Name»). Real y
+  // Normal del mismo día comparten paquete ("LT After BF": 2 real + 1 normal). Se crean
+  // los que falten en UN upsert y se leen en UNA consulta. Si esto falla, las tareas se
+  // crean igual, sin paquete, y el error queda en el reporte (no se pierde trabajo).
+  const llavePaq = (fecha: string, clave: string) => `${fecha}|${clave}`;
+  const paquetePorLlave = new Map<string, string>();
+  const pedidos = new Map<string, { client_id: string; brief_date: string; nombre: string; clave: string }>();
+  for (const p of planes) {
+    const fecha = fechaDeBrief.get(p.briefId);
+    const nombrePaq = p.v("Brief Name");
+    const clave = claveDePaquete(nombrePaq);
+    if (!fecha || !clave) continue;
+    const k = llavePaq(fecha, clave);
+    if (!pedidos.has(k)) pedidos.set(k, { client_id: clientId, brief_date: fecha, nombre: nombrePaq, clave });
+  }
+  if (pedidos.size) {
+    const { error: ePaq } = await db
+      .from("paquetes")
+      .upsert([...pedidos.values()], { onConflict: "client_id,brief_date,clave", ignoreDuplicates: true });
+    const { data: paqs, error: eLee } = ePaq
+      ? { data: null, error: ePaq }
+      : await db.from("paquetes").select("id, brief_date, clave")
+          .eq("client_id", clientId).in("brief_date", [...new Set([...pedidos.values()].map((x) => x.brief_date))]);
+    if (eLee) res.errors.push(`Paquetes: ${eLee.message} — las tareas se crean sin paquete.`);
+    for (const q of (paqs ?? []) as { id: string; brief_date: string; clave: string }[]) {
+      paquetePorLlave.set(llavePaq(q.brief_date, q.clave), q.id);
+    }
+  }
+  const paqueteDe = (p: Plan): string | null => {
+    const fecha = fechaDeBrief.get(p.briefId);
+    const clave = claveDePaquete(p.v("Brief Name"));
+    return fecha && clave ? (paquetePorLlave.get(llavePaq(fecha, clave)) ?? null) : null;
+  };
+  // Una fila con «Package Name» que se queda sin paquete se dice, no se calla.
+  const sinPaquete = planes.filter((p) => claveDePaquete(p.v("Brief Name")) && !paqueteDe(p));
+  if (sinPaquete.length && pedidos.size && paquetePorLlave.size) {
+    res.errors.push(`${sinPaquete.length} tarea(s) con «Package Name» quedaron sin paquete: ${sinPaquete.map(nombre).slice(0, 5).join(", ")}.`);
+  }
 
   // ── 4. familias que faltan: UN insert (fila a fila si falla) ──
   const faltantes = new Map<string, { brief_id: string; letter: string; name: string | null }>();
@@ -456,6 +510,7 @@ export async function ejecutarImport(
       id: c.ideaId,
       family_id: c.familyId,
       brief_id: c.briefId,
+      paquete_id: paqueteDe(c),
       track,
       marca_id: resolveMarca(v("Marca")),
       variant_number: c.variant,

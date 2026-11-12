@@ -30,7 +30,7 @@ const eq = (n, got, want) => ok(n, got === want, `\n      got:  ${got}\n      wa
 function baseFalsa() {
   const t = {
     vocab_terms: [], track_members: [], marcas: [], briefs: [], staged_rows: [],
-    idea_families: [], ideas: [], idea_assignments: [], assets: [],
+    idea_families: [], ideas: [], idea_assignments: [], assets: [], paquetes: [],
   };
   let seq = 0;
   const uuid = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`;
@@ -415,6 +415,36 @@ console.log("\n▶ Limpieza del brief vacío recuenta en la base (no borra lo de
   eq("0 creadas en este run", r.created, 0);
   eq("el brief NO se borró (tiene una idea ajena)", db.t.briefs.length, 1);
   eq("la idea ajena sigue viva", db.t.ideas.filter((i) => i.naming_base === "AJENA").length, 1);
+}
+
+// ── 12. Paquetes (0097): Real y Normal del mismo día comparten paquete ─────────
+console.log("\n▶ Paquetes — «Package Name» agrupa tareas de las dos pestañas");
+{
+  const db = conFixtures();
+  const r = await ejecutarImport(db, ctx, [
+    fila(1, { "Brief Name": "LT AfterBF - November" }, TAB_REAL),
+    fila(2, { "Brief Name": "LT AfterBF - November" }, TAB_REAL),
+    fila(3, { "Brief Name": "LT After BF - November", "Asignación": "Ana" }, TAB_NORMAL),
+    fila(4, { "Brief Name": "Ling Hook Variations - November" }, TAB_REAL),
+    fila(5, {}, TAB_REAL),
+  ]);
+  eq("5 tareas creadas", r.created, 5);
+  eq("los briefs nuevos llevan su fecha (de la pestaña)",
+     db.t.briefs.map((b) => b.brief_date).join(), "2026-07-24,2026-07-24");
+  eq("2 paquetes: 'LT AfterBF' y 'LT After BF' son el mismo", db.t.paquetes.length, 2);
+  const lt = db.t.paquetes.find((p) => p.clave === "ltafterbfnovember");
+  eq("el paquete compartido tiene 3 tareas (2 real + 1 normal)",
+     db.t.ideas.filter((i) => i.paquete_id === lt?.id).map((i) => i.track).sort().join(), "normal,real,real");
+  eq("la fila sin «Package Name» queda sin paquete (no se inventa uno)",
+     db.t.ideas.find((i) => i.naming_base === "NAM5")?.paquete_id ?? null, null);
+  eq("sin errores", r.errors.join(" | "), "");
+
+  // Re-sync con una fila nueva del mismo paquete: lo REUSA, no crea otro.
+  const r2 = await ejecutarImport(db, ctx, [fila(6, { "Brief Name": "lt after bf - november" }, TAB_NORMAL)]);
+  eq("re-sync: 1 creada", r2.created, 1);
+  eq("re-sync: reusa el paquete (siguen 2)", db.t.paquetes.length, 2);
+  eq("re-sync: la nueva cae en el paquete compartido",
+     db.t.ideas.find((i) => i.naming_base === "NAM6")?.paquete_id, lt?.id);
 }
 
 console.log(`\n${fail ? "❌" : "✅"} ${pass} pass, ${fail} fail\n`);

@@ -5,11 +5,95 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Pill, type PillStatus } from "@/components/ui/pill";
-import { ChevronDown, Files, Layers, Sparkles, Trash2 } from "lucide-react";
+import { ChevronDown, Files, Layers, Package, Sparkles, Trash2 } from "lucide-react";
 
-import type { Bundle } from "@/lib/bundle";
+import { gruposPorPaquete, type Bundle, type PaqueteEquipo } from "@/lib/bundle";
 import { STATUS_LABEL, STATUS_TOKEN } from "@/lib/brand";
-import { eliminarBrief } from "@/app/(app)/[cliente]/briefs/actions";
+import { notaEntrega, type TonoEntrega } from "@/lib/paquetes";
+import { eliminarBrief, ponerFechaPaquete } from "@/app/(app)/[cliente]/briefs/actions";
+
+/** Color del texto de la fecha según cómo va el paquete. Tarde = rojo, sólo lo ve el equipo. */
+const TONO_COLOR: Record<TonoEntrega, string> = {
+  antes: "color-mix(in srgb, #00e676 60%, var(--foreground))",
+  a_tiempo: "var(--foreground)",
+  tarde: "var(--status-corrections)",
+  pendiente: "var(--muted-foreground)",
+};
+
+/**
+ * Un paquete dentro del card de su brief: nombre, cuántas piezas (Real/Normal) y su fecha.
+ * Admin/master pone o cambia la fecha aquí mismo; los demás la ven.
+ */
+// El padre le pone `key` con la fecha guardada: si cambia (otra persona, o tras guardar), el
+// campo arranca de nuevo con el valor real en vez de quedarse con uno viejo.
+function PaqueteFila({ p, cliente, puedeFecha }: { p: PaqueteEquipo; cliente: string; puedeFecha: boolean }) {
+  const router = useRouter();
+  const [fecha, setFecha] = useState(p.fechaEntrega ?? "");
+  const [guardando, startGuardar] = useTransition();
+  const nota = notaEntrega({ entregadoEl: p.entregadoEl, diasAntes: p.diasAntes }, p.fechaEntrega, "equipo");
+
+  // Se guarda al SALIR del campo (o con Enter), no en cada cambio: mientras se teclea el año,
+  // el navegador va mandando 0002, 0020, 0202… y cada uno se guardaba.
+  const guardar = (nueva: string) => {
+    if (nueva === (p.fechaEntrega ?? "")) return;
+    startGuardar(async () => {
+      const r = await ponerFechaPaquete(cliente, p.id, nueva || null);
+      if (!r.ok) {
+        setFecha(p.fechaEntrega ?? "");
+        toast.error(r.error);
+        return;
+      }
+      toast.success(nueva ? "Fecha del paquete guardada." : "Fecha del paquete quitada.");
+      router.refresh();
+    });
+  };
+
+  return (
+    <li className="flex items-start gap-2 py-1.5">
+      <Package className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-medium text-foreground" title={p.nombre}>{p.nombre}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {p.total} {p.total === 1 ? "pieza" : "piezas"}{p.desglose ? ` · ${p.desglose}` : ""}
+        </p>
+        {nota && (p.entregadoEl || !puedeFecha) && (
+          <p className="text-[11px] font-medium" style={{ color: TONO_COLOR[nota.tono] }}>{nota.texto}</p>
+        )}
+      </div>
+      {puedeFecha && (
+        <div className="flex shrink-0 flex-col items-end gap-0.5">
+          <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            Fecha
+            <input
+              type="date"
+              min="2020-01-01"
+              max="2100-12-31"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              onBlur={() => guardar(fecha)}
+              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+              aria-label={`Fecha de entrega de ${p.nombre}`}
+              className="h-7 rounded-md border border-border bg-background px-1.5 text-[11px] text-foreground"
+            />
+          </label>
+          {guardando ? (
+            <span className="text-[11px] text-muted-foreground">Guardando…</span>
+          ) : (
+            p.fechaEntrega && (
+              <button
+                type="button"
+                onClick={() => { setFecha(""); guardar(""); }}
+                className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Quitar fecha
+              </button>
+            )
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
 
 /**
  * El card de un bundle (wireframe "Brief View"): el brief con cuántas tareas
@@ -23,11 +107,14 @@ export function BundleCard({
   bundle,
   cliente,
   puedeBorrar = false,
+  puedeFecha = false,
 }: {
   bundle: Bundle;
   cliente: string;
   /** master/admin: puede borrar el brief entero (con todas sus tareas). */
   puedeBorrar?: boolean;
+  /** master/admin: pone la fecha de entrega de cada paquete (Pedro 2026-11-12). */
+  puedeFecha?: boolean;
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
@@ -99,6 +186,20 @@ export function BundleCard({
         </div>
       </button>
 
+      {/* Brief › PAQUETE › Tarea (0097): los paquetes del brief con su fecha. */}
+      {bundle.paquetes.length > 0 && (
+        <div className="border-t border-border/60 px-4 py-1.5">
+          <p className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {bundle.paquetes.length === 1 ? "1 paquete" : `${bundle.paquetes.length} paquetes`}
+          </p>
+          <ul className="divide-y divide-border/40">
+            {bundle.paquetes.map((p) => (
+              <PaqueteFila key={`${p.id}|${p.fechaEntrega ?? ""}`} p={p} cliente={cliente} puedeFecha={puedeFecha} />
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="flex items-stretch border-t border-border/60">
         <button
           onClick={() => setAbierto((v) => !v)}
@@ -144,7 +245,15 @@ export function BundleCard({
 
       {abierto && (
         <ul className="border-t border-border/60">
-          {bundle.tasks.map((t, i) => (
+          {gruposPorPaquete(bundle.tasks, bundle.paquetes).map((g, gi, todos) => [
+            // Encabezado de paquete sólo si el brief tiene paquetes (si no, la lista queda como antes).
+            bundle.paquetes.length > 0 && (
+              <li key={`h-${g.paqueteId ?? "sin"}`} className="bg-secondary/30 px-4 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {bundle.paquetes.find((p) => p.id === g.paqueteId)?.nombre ?? "Sin paquete"}
+              </li>
+            ),
+            // n/N en el orden en que se ven (por paquete), no en el del bundle.
+            ...g.tasks.map((t, ti) => ({ t, i: todos.slice(0, gi).reduce((s, x) => s + x.tasks.length, 0) + ti })).map(({ t, i }) => (
             <li key={t.id}>
               <Link
                 href={`/${cliente}/tareas/${t.id}`}
@@ -169,7 +278,8 @@ export function BundleCard({
                 </span>
               </Link>
             </li>
-          ))}
+            )),
+          ])}
         </ul>
       )}
     </div>

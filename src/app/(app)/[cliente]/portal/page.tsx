@@ -135,6 +135,10 @@ export default async function PortalPage({
     );
   }
 
+  // El brief pedido, traducido al brief del cliente: un link viejo con el id de una pestaña
+  // (Real o Normal) abre el brief que las junta (0097).
+  const briefPedido = sp.brief ? (Object.hasOwn(data.grupoDe, sp.brief) ? data.grupoDe[sp.brief] : sp.brief) : undefined;
+
   // Marca seleccionada (auto-salto si hay UNA sola marca). Los enlaces del panel/archivo SIEMPRE
   // traen ?marca, así que un `!marcaSel` sólo pasa con una URL a mano/rota en un cliente
   // multi-marca → de vuelta al panel. Ya NO hay grid de MARCAS ni de BRIEFS: el panel es el hub
@@ -142,8 +146,8 @@ export default async function PortalPage({
   const marcaValida = sp.marca && marcas.some((m) => m.id === sp.marca) ? sp.marca : null;
   let marcaSel = marcaValida ?? (marcas.length === 1 ? marcas[0].id : null);
   // El Archivo enlaza sin marca (?brief=Y); si falta, se deriva del brief YA cargado (briefPedido).
-  if (!marcaSel && sp.brief) {
-    marcaSel = data.briefs.find((b) => b.id === sp.brief)?.tasks[0]?.marcaId ?? null;
+  if (!marcaSel && briefPedido) {
+    marcaSel = data.briefs.find((b) => b.id === briefPedido)?.tasks[0]?.marcaId ?? null;
   }
   if (!marcaSel) redirect(`/${cliente}/portal`);
 
@@ -153,7 +157,7 @@ export default async function PortalPage({
     .filter((b) => b.tasks.length > 0);
 
   // NIVEL de TAREA (filtrada a la marca). El auto-salto de brief único cae aquí.
-  const briefSel = (sp.brief && briefsMarca.some((b) => b.id === sp.brief) ? sp.brief : briefsMarca[0]?.id) ?? null;
+  const briefSel = (briefPedido && briefsMarca.some((b) => b.id === briefPedido) ? briefPedido : briefsMarca[0]?.id) ?? null;
   const briefObj = briefsMarca.find((b) => b.id === briefSel);
   const vistaBucket: BucketPortal | null = sp.vista === "revision" || sp.vista === "aprobado" ? sp.vista : null;
   // Atrás: al ARCHIVO si el brief que ves está archivado (completado hace >15d), si no al INICIO
