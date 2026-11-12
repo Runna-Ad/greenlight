@@ -1,4 +1,4 @@
-// Tipos de Admin ▸ Notificaciones y de la tarjeta de Slack en Integraciones (0097).
+// Tipos de Admin ▸ Notificaciones y de la tarjeta de Slack en Integraciones (0098).
 
 import type { CanalesNotif } from "@/lib/notif-canales";
 

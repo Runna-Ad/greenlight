@@ -124,7 +124,7 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
   //    (la misma persona puede llegar por su member o por su profile).
   type Listo = { id: string; createdAt: string; n: Notif; cta: string; esCliente: boolean };
   const porDireccion = new Map<string, Listo[]>();
-  // Interruptores generales de Admin ▸ Notificaciones (0097): correo al equipo / a clientes.
+  // Interruptores generales de Admin ▸ Notificaciones (0098): correo al equipo / a clientes.
   const canales = await leerCanales();
   let sent = 0, skipped = 0, failed = 0, held = 0;
   for (const d of rows) {

@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 0097 — Slack para clientes, varios espacios de Slack y los interruptores generales.
+-- 0098 — Slack para clientes, varios espacios de Slack y los interruptores generales.
 --
 -- Pedro (2026-11-12), opción 1 + opción A:
 -- 1) `slack_conexiones`: un espacio de Slack conectado con «Add to Slack», atado a un

@@ -2,7 +2,7 @@ import "server-only";
 
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 
-/** Los 4 interruptores generales de Admin ▸ Notificaciones (0097). */
+/** Los 4 interruptores generales de Admin ▸ Notificaciones (0098). */
 export type CanalesNotif = { equipo: { email: boolean; slack: boolean }; clientes: { email: boolean; slack: boolean } };
 
 export const CANALES_TODO_ENCENDIDO: CanalesNotif = {
