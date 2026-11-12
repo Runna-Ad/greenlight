@@ -58,6 +58,8 @@ Pedro: un brief (Brief 30/10) tiene PAQUETES (columna "Package Name" del sheet, 
 
 **Portal por paquete EN VIVO** con «Ship it» (2026-11-12); para volver: dpl_2749gWqoPofGZo4TpMWmdCJ7NChp (main cb1b414). Sin probar: sesión de cliente real.
 
+**Íconos de tipo EN VIVO** (2026-11-12, «Ship it»): en «Ver piezas» del portal y en la lista de Briefs, el ícono de imagen/video (contentType de iconos.ts) reemplaza A1/B1/C1; en Briefs el código queda en el tooltip. Para volver: dpl_3CSeHZJycdYgHuxFvLYgFpi3H6RL (main dc96b8c).
+
 Next Step: fase 2. Luego fase 2 (tablero, Mi trabajo, Entregas con "· Real/Normal").
 
 ## ✅ 2026-11-12 — Bot de Slack «Greenlight»: EN VIVO (main f88c17d, deploy dpl_H88GvKdmiULWBpmUtxVRwZU83mRE; para volver: dpl_Aqu3N7FKPN6VapFHvYEsXy64wsV3)
