@@ -102,7 +102,9 @@ export function SlackIntegracionCard() {
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Esperan tu aprobación</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Revisa que el nombre del espacio sea el del cliente antes de aprobar. Hasta entonces no reciben avisos.
+                {datos.puedeAprobar
+                  ? "Revisa que el nombre del espacio sea el del cliente antes de aprobar. Hasta entonces no reciben avisos."
+                  : "Sólo el Master Builder los aprueba. Hasta entonces no reciben avisos."}
               </p>
               <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
                 {pendientes.map((c) => (
@@ -112,12 +114,12 @@ export function SlackIntegracionCard() {
                       <p className="truncate text-foreground">{c.teamName ?? c.teamId}</p>
                       <p className="text-xs text-muted-foreground">Para {c.cliente} · llegó el {fecha(c.desde)}</p>
                     </div>
-                    <div className="ml-auto flex gap-2">
+                    {datos.puedeAprobar && <div className="ml-auto flex gap-2">
                       <Button size="sm" disabled={pend} onClick={() => aprobar(c)}>
                         <Check className="size-3.5" /> Aprobar
                       </Button>
                       <Button size="sm" variant="ghost" disabled={pend} onClick={() => quitar(c)}>Rechazar</Button>
-                    </div>
+                    </div>}
                   </li>
                 ))}
               </ul>

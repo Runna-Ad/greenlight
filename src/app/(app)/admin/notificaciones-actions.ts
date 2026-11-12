@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getCurrentUser } from "@/lib/identity";
-import { canAdmin } from "@/lib/roles";
+import { canAdmin, canAssignAdmins } from "@/lib/roles";
 import { leerCanales } from "@/lib/notif-canales";
 import { conexionesSlack, hasSlack, revocarToken, slackApi } from "@/lib/slack-api";
 import { descifrarToken, llaveValida } from "@/lib/slack-cifrado";
@@ -16,11 +16,11 @@ import type {
 type Res = { ok: true } | { ok: false; error: string };
 
 /** Sólo admin/master (en la pantalla Y aquí: una acción se puede llamar sin la pantalla). */
-async function gate(): Promise<{ userId: string } | null> {
+async function gate(): Promise<{ userId: string; esMaster: boolean } | null> {
   if (!hasSupabase()) return null;
   const u = await getCurrentUser();
   if (!u || !canAdmin(u.role)) return null;
-  return { userId: u.userId };
+  return { userId: u.userId, esMaster: canAssignAdmins(u.role) };
 }
 
 type MiembroRow = {
@@ -211,7 +211,8 @@ function puedeConectar(): boolean {
 }
 
 export async function estadoSlackIntegracion(): Promise<{ ok: true; datos: SlackIntegracion } | { ok: false; error: string }> {
-  if (!(await gate())) return { ok: false, error: "Sólo un admin ve las integraciones." };
+  const g = await gate();
+  if (!g) return { ok: false, error: "Sólo un admin ve las integraciones." };
   const db = supabaseAdmin();
   const [conRes, cliRes] = await Promise.all([
     db.from("slack_conexiones").select("team_id, team_name, created_at, active, clients(name)").order("created_at"),
@@ -226,7 +227,7 @@ export async function estadoSlackIntegracion(): Promise<{ ok: true; datos: Slack
   return {
     ok: true,
     datos: {
-      runnaConectado: hasSlack(), puedeConectar: puedeConectar(), conexiones,
+      runnaConectado: hasSlack(), puedeConectar: puedeConectar(), conexiones, puedeAprobar: g.esMaster,
       clientes: (cliRes.data ?? []) as { id: string; name: string }[],
     },
   };
@@ -273,7 +274,7 @@ export async function crearLigaSlack(clienteId: string): Promise<{ ok: true; url
 /** Activa un espacio que llegó por «Add to Slack», después de ver que es el del cliente. */
 export async function aprobarSlack(teamId: string): Promise<Res> {
   const g = await gate();
-  if (!g) return { ok: false, error: "Sólo un admin aprueba Slack." };
+  if (!g?.esMaster) return { ok: false, error: "Sólo el Master Builder aprueba un Slack nuevo." };
   if (typeof teamId !== "string" || !teamId) return { ok: false, error: "Ese espacio no existe." };
   const { data, error } = await supabaseAdmin().from("slack_conexiones")
     .update({ active: true, aprobado_por: g.userId, aprobado_at: new Date().toISOString() })
@@ -287,12 +288,14 @@ export async function aprobarSlack(teamId: string): Promise<Res> {
 /** Desconecta (o rechaza) el espacio de un cliente: se desinstala el bot de ese Slack y su
  *  token se borra. El bot deja de mandarle avisos. */
 export async function desconectarSlack(teamId: string): Promise<Res> {
-  if (!(await gate())) return { ok: false, error: "Sólo un admin desconecta Slack." };
+  const g = await gate();
+  if (!g) return { ok: false, error: "Sólo un admin desconecta Slack." };
   if (typeof teamId !== "string" || !teamId) return { ok: false, error: "Ese espacio no existe." };
   const db = supabaseAdmin();
-  const { data: fila } = await db.from("slack_conexiones").select("token_cifrado").eq("team_id", teamId)
-    .maybeSingle<{ token_cifrado: string }>();
+  const { data: fila } = await db.from("slack_conexiones").select("token_cifrado, active").eq("team_id", teamId)
+    .maybeSingle<{ token_cifrado: string; active: boolean }>();
   if (!fila) return { ok: false, error: "Ese espacio ya no estaba conectado." };
+  if (!fila.active && !g.esMaster) return { ok: false, error: "Sólo el Master Builder rechaza un Slack nuevo." };
   const llave = process.env.SLACK_TOKEN_KEY?.trim();
   const token = llave ? descifrarToken(fila.token_cifrado, llave, teamId) : null;
   if (token) await revocarToken(token);

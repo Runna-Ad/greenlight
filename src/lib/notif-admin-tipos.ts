@@ -36,6 +36,8 @@ export type SlackIntegracion = {
   /** SLACK_CLIENT_ID + SLACK_CLIENT_SECRET + SLACK_TOKEN_KEY: se pueden conectar espacios de clientes. */
   puedeConectar: boolean;
   conexiones: ConexionSlackFila[];
+  /** Sólo el Master Builder aprueba o rechaza un espacio nuevo. */
+  puedeAprobar: boolean;
   clientes: { id: string; name: string }[];
 };
 

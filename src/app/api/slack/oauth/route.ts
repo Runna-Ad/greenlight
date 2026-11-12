@@ -3,6 +3,7 @@ import { hasSlack, slackApi, teamDeRunna } from "@/lib/slack-api";
 import { cifrarToken, llaveValida } from "@/lib/slack-cifrado";
 import { SLACK_SCOPES } from "@/lib/slack-routing";
 import { escapeHtml } from "@/lib/email-template";
+import { avisarMasters } from "@/lib/aviso-master";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,8 @@ export async function GET(req: Request) {
   };
 
   try {
-    const { data: cli } = await db.from("clients").select("id").eq("id", inst.client_id).eq("active", true).maybeSingle();
+    const { data: cli } = await db.from("clients").select("id, name").eq("id", inst.client_id).eq("active", true)
+      .maybeSingle<{ id: string; name: string }>();
     if (!cli) return await noSePudo("el cliente de la liga ya no está activo");
 
     // El mismo regreso que se puso en la liga (Slack lo exige igual).
@@ -91,6 +93,13 @@ export async function GET(req: Request) {
     }, { onConflict: "team_id" });
     if (upErr) return await noSePudo(`no se pudo guardar la conexión: ${upErr.message}`, 500);
     await db.from("slack_instalaciones").update({ team_id: team.id }).eq("id", inst.id);
+    // Al Master Builder (sólo a él): campana, correo y Slack. Un aviso que falla no tumba la página.
+    await avisarMasters({
+      type: "slack_por_aprobar",
+      title: `${cli.name} conectó su Slack`,
+      body: `Espacio: ${team.name ?? team.id}. No recibe avisos hasta que lo apruebes en Admin ▸ Integraciones.`,
+      ruta: "/admin?tab=integraciones",
+    }).catch((e) => console.error("[slack-oauth] no se pudo avisar al master:", e));
     return pagina("Listo", `Greenlight quedó instalado en ${team.name ?? "tu espacio de Slack"}. Rünna lo activa en cuanto lo revise. Ya puedes cerrar esta pestaña.`);
   } catch (e) {
     return await noSePudo(`reventó: ${e instanceof Error ? e.message : String(e)}`, 500);
