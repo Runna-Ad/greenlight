@@ -7,7 +7,8 @@ Pedro: algunos clientes no logran entrar; un plan C donde el Master pone correo 
 - [x] Menú de cuenta del cliente › Cambiar contraseña (sólo Partner y nunca un correo del equipo); reabre la sesión y cierra las demás.
 - [x] Revisión de seguridad (Opus): 2 altos (cuenta de S.P.A.M sin perfil; correo del equipo con rol cliente) y 2 bajos arreglados; cerrar las otras sesiones añadido.
 - [x] Pruebas: test-lib 868/0 (13 nuevas), `npm test` exit 0, tsc 0, eslint 0, build ✓.
-- [ ] Probar en la preview como Master: crear un login de prueba (pide OK, escribe en la base real) y entrar con él; cambiar la contraseña como ese cliente.
+- [x] Probado en la preview (2026-11-12, OK de Pedro): Claude creó «PRUEBA Crear Login» (prueba-crear-login@example.com, DiDi) con Generar → DiDi@194; la base mostró cuenta confirmada, clave_verificada, client/DiDi/activo. Pedro entró como ese cliente, cambió la contraseña y volvió a entrar ("all worked"); la base registró el ingreso 22:22 UTC y 0 sesiones abiertas al final. Cuenta de prueba REVOCADA (profiles.active=false, id f727b6ff…); queda en «Dados de baja».
+- [x] Con una sola empresa, la contraseña de marca ya sale escrita (588c931). Sin ver en pantalla.
 - [ ] "Ship it" de Pedro → merge a `main`.
 **Riesgo aceptado por Pedro (dicho una vez):** marca + 3 números = 1,000 combinaciones; con el límite de Supabase por IP, una sola IP las prueba en unas horas. Subir a 4 números es cambiar `DIGITOS_CLAVE_MARCA`.
 **No hecho:** pedir la contraseña actual al cambiarla (quien entra con Google no la tiene).
