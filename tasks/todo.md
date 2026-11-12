@@ -2,11 +2,13 @@
 
 ## 🟡 2026-11-12 — Bot de Slack «Greenlight» (opción 2: Runna hoy, listo para un 2º espacio) — rama `feat/slack-bot`, worktree ../greenlight-slack
 Pedro eligió la opción 2: DM por persona en el Slack de Runna, con el código listo para un segundo espacio (DiDi) si su admin lo aprueba. Mismo patrón que SnapTrack.
-Next Step: con el OK de Pedro, commit y push de `feat/slack-bot` (preview). Pedro crea la app en el Slack de Runna y pone `SLACK_BOT_TOKEN` en Vercel (Preview). Luego 0096 con su «ship it» y una prueba real.
+Next Step: con el «ship it» de Pedro, `feat/slack-bot` → `main` (deploy de producción) y Pedro vuelve a correr `supabase/manual/0084_reloj_correos.sql`.
+
+**2026-11-12, prueba real en la preview (a31244e, dpl_czfxPaEVYgSBMBtFjSpUFDsSczLC):** 0096 APLICADA con el «ship 0096» de Pedro (ledger 20261112120001; canales in_app,email,slack; anon no puede reclamar). App «Greenlight» creada en el Slack de Runna, `SLACK_BOT_TOKEN` en Preview y Production. Aviso de prueba sólo-Slack a Nils Vera + Pedro le asignó CMNOBLINKING en la preview: las 2 entregas `sent` con su ts de Slack (18:31:29 UTC), Nils confirmó los 2 DMs, el bot encontró su Slack por correo y lo guardó (U…, con espacio). Aviso de prueba borrado.
 
 - [x] D1 0096: `slack` entra a `active_notify_channels()`, `track_members.slack_team_id`, `rpc_reclamar_slack` (sólo filas `slack`, SKIP LOCKED), índice de la cola. Prueba: `npm run test:db` 856/0 (bloque 0096: reclama sólo Slack, rescata atascadas, respeta not_before, el de correo no toma filas de Slack, anon/authenticated no pueden). **0096 SIN aplicar** (`migrate.mjs --status`: única pendiente).
 - [x] D2 Despachador `src/lib/notif-slack.ts`: DM con encabezado, línea y botón; respeta `notify_slack`, las preferencias por evento del correo e inactivos; sin token no reclama nada; token malo o Slack caído/429 = todo a la cola sin gastar intento; plazo de 45 s; si revienta, lo que falta vuelve a la cola. Prueba: lógica pura en `npm run test:lib` 779/0. **El despachador en sí no tiene prueba automática** (llama a Slack): se prueba con el token real.
-- [x] D3 Busca a la persona por el correo de su login (o el de Equipo); sólo acepta una persona viva, no bot, del mismo espacio; guarda id y espacio. Prueba: pruebas puras de `usuarioSlackValido`. Real: sin probar hasta tener token.
+- [x] D3 Busca a la persona por el correo de su login (o el de Equipo); sólo acepta una persona viva, no bot, del mismo espacio; guarda id y espacio. Prueba: pruebas puras de `usuarioSlackValido` + real con Nils (ver arriba).
 - [x] D4 Varios espacios: cada persona usa la conexión de SU espacio (`elegirConexion`). Prueba: 4 pruebas puras.
 - [~] D5 Mi perfil: el interruptor de Slack funciona, texto «Qué me llega por correo y Slack». Prueba: tsc + build. **No visto en el navegador** (el server local necesita `.env.local`; se ve en la preview).
 - [x] D6 `docs/slack-app-manifest.json` (chat:write, im:write, users:read, users:read.email). Pasos en inglés en el mensaje a Pedro.
