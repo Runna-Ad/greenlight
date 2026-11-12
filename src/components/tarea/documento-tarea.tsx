@@ -166,9 +166,23 @@ export function DocumentoTarea({
               {lectura ? (
                 // El encabezado ya va en negrita; si el título trae marcadores
                 // `**…**` se quitan para no mostrarlos literales aquí (display only).
-                <span className="truncate text-[11px] font-bold uppercase tracking-wide text-foreground">
-                  {encabezadoPlano(sinNegrita(p.titulo), n)}
-                </span>
+                // Revisor y cliente pueden seleccionar el título y "Pedir cambio aquí",
+                // igual que en Modo Edición (mismo campo `titulo`). (Pedro 2026-11-12)
+                <CampoLectura
+                  encabezado
+                  tabla="planos"
+                  filaId={p.id}
+                  campo="titulo"
+                  label="Plano"
+                  grupo={`Plano ${n}`}
+                  valor={encabezadoPlano(sinNegrita(p.titulo), n)}
+                  icono={null}
+                  pretty={
+                    <span className="block truncate text-[11px] font-bold uppercase tracking-wide text-foreground">
+                      {encabezadoPlano(sinNegrita(p.titulo), n)}
+                    </span>
+                  }
+                />
               ) : (
                 <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                   Plano {n}

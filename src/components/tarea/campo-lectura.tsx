@@ -42,6 +42,7 @@ export function CampoLectura({
   valor,
   icono,
   pretty,
+  encabezado = false,
 }: {
   tabla: "planos" | "estaticos" | "copies_temas" | "copies" | "ideas";
   filaId: string;
@@ -56,6 +57,10 @@ export function CampoLectura({
   icono: ReactNode;
   /** La vista bonita para el partner (Linkify o diálogo formateado). */
   pretty: ReactNode;
+  /** El rótulo del plano en Modo Lectura/portal ("PLANO 1 - EXT. COCHERA - MS"):
+   *  sin columna de etiqueta, con el estilo del encabezado, y el botón "Pedir cambio
+   *  aquí" DENTRO de la franja (la tarjeta del plano recorta lo que sale por arriba). */
+  encabezado?: boolean;
 }) {
   const ctx = useCorrecciones();
   const contRef = useRef<HTMLDivElement>(null);
@@ -225,7 +230,15 @@ export function CampoLectura({
     }
   };
 
-  const fila = (contenido: ReactNode) => (
+  const fila = (contenido: ReactNode) =>
+    encabezado ? (
+      <div
+        data-campo-key={ctx ? keyCampo(tabla, filaId, campo) : undefined}
+        className="min-w-0 flex-1 scroll-mt-24"
+      >
+        {contenido}
+      </div>
+    ) : (
     <div
       // Ancla para "Ver campo" del panel de correcciones (mismo data-campo-key que
       // el editor) — así el salto+flash también funciona en la Vista cliente.
@@ -238,7 +251,7 @@ export function CampoLectura({
       </span>
       <div className="min-w-0">{contenido}</div>
     </div>
-  );
+    );
 
   // Partner en sólo-lectura (o fuera del workspace): la vista bonita, sin tocar.
   // Interactivo para el revisor (correcciones) o el cliente del portal (pins).
@@ -256,7 +269,10 @@ export function CampoLectura({
     }
     const range = s.getRangeAt(0);
     if (!cont.contains(range.commonAncestorContainer)) return;
-    const quote = s.toString();
+    // En el encabezado el texto va en MAYÚSCULAS sólo por CSS; algunos navegadores
+    // copian la selección ya en mayúsculas y la cita no se encontraría en el título
+    // guardado. El Range da el texto tal cual está escrito.
+    const quote = encabezado ? range.toString() : s.toString();
     if (!quote.trim()) {
       if (!componiendo) setSel(null);
       return;
@@ -361,7 +377,11 @@ export function CampoLectura({
       <div
         ref={contRef}
         onMouseUp={capturar}
-        className="whitespace-pre-wrap break-words px-1.5 py-1 text-[13px] leading-relaxed text-foreground"
+        className={
+          encabezado
+            ? (sel && !componiendo ? "pr-36 " : "") + "whitespace-pre-wrap break-words text-[11px] font-bold uppercase tracking-wide text-foreground"
+            : "whitespace-pre-wrap break-words px-1.5 py-1 text-[13px] leading-relaxed text-foreground"
+        }
       >
         {segmentos.map((sg, i) =>
           sg.corr ? (
@@ -445,7 +465,10 @@ export function CampoLectura({
             setComponiendo(true);
             setTexto("");
           }}
-          className="absolute bottom-full right-0 z-30 mb-1 inline-flex items-center gap-1 rounded-full border border-status-corrections/50 bg-card px-2 py-0.5 text-[11px] font-bold text-[color-mix(in_srgb,var(--status-corrections)_72%,#000)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--status-corrections)_80%,#000)] hover:text-white"
+          className={cn(
+            "absolute right-0 z-30",
+            encabezado ? "top-0" : "bottom-full mb-1",
+          ) + " inline-flex items-center gap-1 rounded-full border border-status-corrections/50 bg-card px-2 py-0.5 text-[11px] font-bold text-[color-mix(in_srgb,var(--status-corrections)_72%,#000)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--status-corrections)_80%,#000)] hover:text-white"}
         >
           <Plus className="size-3" /> Pedir cambio aquí
         </button>
