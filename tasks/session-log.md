@@ -1,5 +1,11 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-12 — Briefs: un card por fecha (Real + Normal) y tareas por paquete EN VIVO
+**Hecho:** a pedido de Pedro, cada paquete abre sus tareas («Ver N tareas»); al ver «6 piezas» y 3 tareas en el card Normal, Pedro eligió juntar Real y Normal del mismo día en un card (subtítulo «Real 9 · Normal 3», cada fila dice Real/Normal). Las flechas de la tarea recorren el brief junto en el orden del card; borrar el card manda ambas pestañas a la papelera, sólo si son del cliente.
+**Pruebas:** test-lib 855/0 · npm test exit 0 · tsc 0 · build 0. Preview como Master: LT AfterBF abre 6 (4/12–9/12) y la tarea dice 8 / 12 igual que el card; sin errores en consola.
+**En vivo:** «Ship it»; para volver: dpl_8i9A9QVURcjCMwKnE4JuzB5AxTJA (main a30aa80).
+**Sin probar:** borrar un card junto (datos reales); lead y especialista con su sesión.
+
 ## 2026-11-12 — Brief › Paquete › Tarea, fase 1 EN VIVO (main a30aa80, 0097 aplicada)
 **Hecho:** paquetes como registros propios (0097: tabla `paquetes`, `ideas.paquete_id`, fecha del brief desde la pestaña). La hoja acepta «Package Name» (antes «Brief Name»). Briefs del equipo: paquetes con conteo y fecha de entrega que pone un admin. Portal: Real y Normal de la misma fecha son un brief; cada paquete con barra y «N piezas · x real · y normal»; fecha del brief = la última de sus paquetes; entregado antes = "Entregado X · fecha Y (N días antes)"; tarde: el equipo ve "N días tarde", el cliente sólo "Entregado X".
 **Pruebas:** tras juntar main (Slack 0098): npm test exit 0 (lib 845, db 892, import 90, sync 45, prisma 975, formatos 797) · tsc 0 · next build 0. Preview como Master: paquetes y fecha 20/11 guardada y quitada; portal junta Brief 30/10 (12 piezas, 6 paquetes); "diasAntes" 0 veces en el HTML del cliente.

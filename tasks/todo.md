@@ -39,7 +39,9 @@ Pedro: un brief (Brief 30/10) tiene PAQUETES (columna "Package Name" del sheet, 
 
 **2026-11-12, después del ship (Pedro):** en Briefs, las tareas se abren debajo de cada paquete («Ver N tareas»); «Sin paquete» al final; el «Ver tareas» de abajo sólo queda en un brief sin paquetes (35f06be, en la preview de la rama, NO en vivo). Pedro vio el card Normal decir «6 piezas» y abrir 3, y eligió JUNTAR Real y Normal: un card por fecha (como el portal), subtítulo «Real 9 · Normal 3», cada fila dice Real/Normal, las flechas de la tarea recorren el brief junto en el orden del card (probado: 8 / 12 en tarea y card), y borrar el card manda las dos pestañas a la papelera (sólo si son del cliente).
 
-Next Step: Pedro revisa la preview y dice «ship it» para los dos cambios de arriba. Luego fase 2 (tablero, Mi trabajo, Entregas con "· Real/Normal").
+**En vivo** con «Ship it» de Pedro (2026-11-12): main 91f9f8c+notas; para volver: dpl_8i9A9QVURcjCMwKnE4JuzB5AxTJA (main a30aa80). Sin probar: borrar un card junto; vistas de lead y especialista.
+
+Next Step: Luego fase 2 (tablero, Mi trabajo, Entregas con "· Real/Normal").
 
 ## ✅ 2026-11-12 — Bot de Slack «Greenlight»: EN VIVO (main f88c17d, deploy dpl_H88GvKdmiULWBpmUtxVRwZU83mRE; para volver: dpl_Aqu3N7FKPN6VapFHvYEsXy64wsV3)
 Pedro eligió la opción 2: DM por persona en el Slack de Runna, con el código listo para un segundo espacio (DiDi) si su admin lo aprueba. Mismo patrón que SnapTrack.
