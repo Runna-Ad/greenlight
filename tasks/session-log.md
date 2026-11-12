@@ -3527,3 +3527,9 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 - Revisión de seguridad hecha y aplicada: 1 h sin códigos públicos tras uno del admin, código fuera del asunto, nunca cuentas del equipo, aviso si el correo de aprobación no sale. Copiar con respaldo si el navegador niega el portapapeles.
 - Probado en el preview: Pedro creó contraseña con el código y entró al portal (20:51 UTC). EN VIVO: main d86bbd5, deploy dpl_BAjhe1Y8m4sdcg1MRnPhLvYik2rY (Ready); para volver: dpl_HG6DdGGv5KZ3D1hwSucogBdqRV9k. Sin probar en vivo: el botón Copiar.
 - Siguiente: aprobar a los tres clientes pendientes en Invitaciones y mandar código por chat si hace falta.
+
+## 2026-11-12 Session: comentar el título del plano en Modo Lectura + tamaños por plataforma de DiDi (main 1e49d63, eaf9f2b; sin push)
+**Hecho:** en Modo Lectura y portal el encabezado del plano acepta «Pedir cambio aquí» (se guarda en `titulo`). La tabla tamaño×plataforma (`brand.ts`) sigue las tablas nuevas de DiDi en Notion, videos por línea Préstamos/Card, estáticos iguales; también la usa el import del sheet. Un archivo por plataforma (decisión de Pedro). Sin migración.
+**Pruebas:** test-lib 738/0 · test-db 844/0 · tsc 0 · eslint 0; app local: título seleccionado en GIRLTHREE (sin guardar) y preview del brief Card 5 archivos / Préstamos 6.
+**Sin probar:** fila del sheet cuyos tamaños quedan todos fuera (la tarea saldría sin archivos); cliente real pidiendo cambio en el título.
+**Pick up next:** "ship it" de Pedro para push a main (despliega).
