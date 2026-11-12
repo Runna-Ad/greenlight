@@ -28,10 +28,28 @@ export async function cargarBundle(
     .from("board_tasks")
     .select(BUNDLE_SELECT)
     .eq("brief_id", briefId)
-    .returns<BundleTask[]>();
+    .returns<Omit<BundleTask, "paquete_id">[]>();
 
-  const conCambios = await cambiosParaFiltro(db, role, data ?? []);
-  return (data ?? []).filter(filtroBundle(role, soyId, tracks, conCambios)).sort(compararBundle);
+  // Las flechas ← n/N → no usan el paquete: va null (no se paga otra consulta).
+  const tasks: BundleTask[] = (data ?? []).map((t) => ({ ...t, paquete_id: null }));
+  const conCambios = await cambiosParaFiltro(db, role, tasks);
+  return tasks.filter(filtroBundle(role, soyId, tracks, conCambios)).sort(compararBundle);
+}
+
+/** board_tasks no trae `paquete_id` (0097 no toca esa vista): se lee de `ideas`, por lotes. */
+async function conPaquete(
+  db: ReturnType<typeof supabaseAdmin>,
+  tasks: Omit<BundleTask, "paquete_id">[],
+): Promise<BundleTask[]> {
+  const paq = new Map<string, string | null>();
+  const ids = tasks.map((t) => t.id);
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data, error } = await db.from("ideas").select("id, paquete_id").in("id", ids.slice(i, i + 100))
+      .returns<{ id: string; paquete_id: string | null }[]>();
+    if (error) console.error("conPaquete:", error.message); // sin paquete se ve igual, en "Sin paquete"
+    for (const r of data ?? []) paq.set(r.id, r.paquete_id);
+  }
+  return tasks.map((t) => ({ ...t, paquete_id: paq.get(t.id) ?? null }));
 }
 
 /** Sólo el especialista necesita saber qué tareas tienen cambios del cliente (los demás
@@ -96,11 +114,12 @@ export async function cargarBundles(
     .from("board_tasks")
     .select(BUNDLE_SELECT)
     .in("brief_id", enCurso)
-    .returns<BundleTask[]>();
+    .returns<Omit<BundleTask, "paquete_id">[]>();
   if (error) throw new Error(`board_tasks: ${error.message}`);
 
-  const conCambios = await cambiosParaFiltro(db, role, data ?? []);
-  const bundles = agruparBundles((data ?? []).filter(filtroBundle(role, soyId, tracks, conCambios)))
+  const tasks = await conPaquete(db, data ?? []);
+  const conCambios = await cambiosParaFiltro(db, role, tasks);
+  const bundles = agruparBundles(tasks.filter(filtroBundle(role, soyId, tracks, conCambios)))
     .filter((b) => bundleEnCurso(b));
 
   // Paquetes (0097): sólo los que tocan las tareas VISIBLES; su entrega se calcula con

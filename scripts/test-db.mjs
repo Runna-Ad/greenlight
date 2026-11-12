@@ -3689,7 +3689,11 @@ console.log("\n▶ 0097 — paquetes");
   ok("…pero en otro brief (otra fecha) es otro paquete", !!otroDia);
 
   await db.query(`update produccion.ideas set paquete_id=$2 where id=$1`, [IDEA_D, pq]);
-  eq("board_tasks expone paquete_id", await scalar(`select paquete_id::text from produccion.board_tasks where id=$1`, [IDEA_D]), pq);
+  eq("la tarea queda en su paquete", await scalar(`select paquete_id::text from produccion.ideas where id=$1`, [IDEA_D]), pq);
+  // board_tasks NO se redefine en 0097: la vista viva trae columnas de la rama de Diseño (0076)
+  // que esta rama no conoce, y redefinirla las borraría (Postgres lo rechaza en vivo).
+  eq("0097 no toca board_tasks (no tiene paquete_id)",
+     Number(await scalar(`select count(*) from information_schema.columns where table_schema='produccion' and table_name='board_tasks' and column_name='paquete_id'`)), 0);
   await db.query(`delete from produccion.paquetes where id=$1`, [pq]);
   eq("borrar el paquete deja la tarea sin paquete (no la borra)",
      await scalar(`select coalesce(paquete_id::text,'null') from produccion.ideas where id=$1`, [IDEA_D]), "null");

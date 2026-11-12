@@ -12,14 +12,18 @@ export async function cargarPaquetes(clientId: string, ids: (string | null)[]): 
   if (!unicos.length) return out;
 
   const db = supabaseAdmin();
-  const [{ data: paqs, error: e1 }, { data: tareas, error: e2 }] = await Promise.all([
-    // Acotado al cliente: un paquete_id equivocado nunca enseña el paquete de otro cliente.
-    db.from("paquetes").select("id, nombre, fecha_entrega").eq("client_id", clientId).in("id", unicos)
-      .returns<{ id: string; nombre: string; fecha_entrega: string | null }[]>(),
-    // board_tasks ya excluye la papelera (tarea o brief borrados).
-    db.from("board_tasks").select("paquete_id, status, delivered_at, track").eq("client_id", clientId).in("paquete_id", unicos)
-      .returns<{ paquete_id: string; status: string; delivered_at: string | null; track: string | null }[]>(),
-  ]);
+  // Acotado al cliente: un paquete_id equivocado nunca enseña el paquete de otro cliente.
+  const { data: paqs, error: e1 } = await db
+    .from("paquetes").select("id, nombre, fecha_entrega").eq("client_id", clientId).in("id", unicos)
+    .returns<{ id: string; nombre: string; fecha_entrega: string | null }[]>();
+  const delCliente = (paqs ?? []).map((p) => p.id);
+  // Las tareas vivas de esos paquetes, directo de `ideas` (board_tasks no trae paquete_id, ver
+  // 0097). Mandar un brief a la papelera sella también sus tareas, así que deleted_at basta.
+  const { data: tareas, error: e2 } = delCliente.length
+    ? await db.from("ideas").select("paquete_id, status, delivered_at, track")
+        .in("paquete_id", delCliente).is("deleted_at", null)
+        .returns<{ paquete_id: string; status: string; delivered_at: string | null; track: string | null }[]>()
+    : { data: [], error: null };
   // Sin paquetes no se rompe la pantalla: las tareas se ven igual, agrupadas en "Sin paquete".
   if (e1 || e2) {
     console.error("cargarPaquetes:", e1?.message ?? e2?.message);

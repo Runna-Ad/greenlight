@@ -31,7 +31,8 @@ export type BundleTask = {
   client_slug: string | null;
   /** Cuándo se entregó (Greenlit). null = aún no. Lo expone la vista desde 0058. */
   delivered_at: string | null;
-  /** Su paquete dentro del brief (0097). null = sin paquete (brief manual o fila sin «Package Name»). */
+  /** Su paquete dentro del brief (0097). null = sin paquete (brief manual o fila sin «Package Name»).
+   *  NO viene de board_tasks (esa vista no se toca, ver 0097): lo pone bundle-data desde `ideas`. */
   paquete_id: string | null;
 };
 
@@ -175,7 +176,7 @@ export function agruparBundles(visibles: BundleTask[]): Bundle[] {
 
 /** Las columnas que la vista board_tasks expone para un bundle. */
 export const BUNDLE_SELECT =
-  "id, code, status, naming_base, concepto, tipo_asset, duracion, marca, plataformas, file_count, track, member_ids, members, brief_id, brief_title, brief_tab, client_slug, delivered_at, paquete_id";
+  "id, code, status, naming_base, concepto, tipo_asset, duracion, marca, plataformas, file_count, track, member_ids, members, brief_id, brief_title, brief_tab, client_slug, delivered_at";
 
 /**
  * Las tareas de un bundle agrupadas por paquete, en el orden en que se muestran: paquetes
