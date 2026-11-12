@@ -79,7 +79,8 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC_PATHS.includes(path);
+  // /slack/<id>: la liga corta «Add to Slack» que abre el admin de un cliente (sin sesión).
+  const isPublic = PUBLIC_PATHS.includes(path) || /^\/slack\/[0-9a-f-]{36}$/i.test(path);
 
   // El portal de un cliente vive en `/{slug}/portal` — NO empieza con "/portal".
   const esRutaPortal = /^\/[^/]+\/portal(\/|$)/.test(path);

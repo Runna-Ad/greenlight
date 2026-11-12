@@ -8,7 +8,7 @@ import { canAdmin, canAssignAdmins } from "@/lib/roles";
 import { leerCanales } from "@/lib/notif-canales";
 import { conexionesSlack, hasSlack, revocarToken, slackApi } from "@/lib/slack-api";
 import { descifrarToken, llaveValida } from "@/lib/slack-cifrado";
-import { elegirConexion, emparejarPorCorreo, idGuardadoSirve, urlInstalacion, type ConexionSlack } from "@/lib/slack-routing";
+import { elegirConexion, emparejarPorCorreo, idGuardadoSirve, type ConexionSlack } from "@/lib/slack-routing";
 import type {
   ConexionSlackFila, EstadoSlackPersona, NotifAdmin, PersonaNotif, ResultadoBusqueda, SlackIntegracion,
 } from "@/lib/notif-admin-tipos";
@@ -268,7 +268,8 @@ export async function crearLigaSlack(clienteId: string): Promise<{ ok: true; url
   const { data: inst, error } = await db.from("slack_instalaciones")
     .insert({ client_id: clienteId, creado_por: g.userId, redirect_uri: redirectUri }).select("id").single<{ id: string }>();
   if (error || !inst) return { ok: false, error: "No se pudo crear la liga." };
-  return { ok: true, url: urlInstalacion({ clientId: process.env.SLACK_CLIENT_ID!.trim(), state: inst.id, redirectUri }) };
+  // La liga corta de Greenlight; /slack/<id> reenvía a la página larga de Slack.
+  return { ok: true, url: `https://${host}/slack/${inst.id}` };
 }
 
 /** Activa un espacio que llegó por «Add to Slack», después de ver que es el del cliente. */
