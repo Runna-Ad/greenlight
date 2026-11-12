@@ -13,6 +13,7 @@ import { PortalListaTareas } from "@/components/portal/portal-lista-tareas";
 import { PortalHome } from "@/components/portal/portal-home";
 import { PortalArchivo } from "@/components/portal/portal-archivo";
 import { bucketPortal, estadoBriefPanel, type BucketPortal } from "@/lib/portal-bucket";
+import { idDeUnidad, leerUnidad, unidadPedida, unidadesDePaquete } from "@/lib/portal-paquetes";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +91,9 @@ export default async function PortalPage({
 
   // Se pasa el brief que se está viendo (`sp.brief`) para que, si está archivado, cargue SU
   // detalle además de los no-archivados (carga acotada — ver cargarPortal).
-  const data = await cargarPortal(cliente, sp.brief);
+  // `?brief=` puede traer "<brief>.<paquete>" (portal por paquete): para cargar sólo cuenta el brief.
+  const briefParam = sp.brief ? leerUnidad(sp.brief) : null;
+  const data = await cargarPortal(cliente, briefParam?.briefId);
   if (!data) {
     return (
       <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
@@ -137,7 +140,13 @@ export default async function PortalPage({
 
   // El brief pedido, traducido al brief del cliente: un link viejo con el id de una pestaña
   // (Real o Normal) abre el brief que las junta (0097).
-  const briefPedido = sp.brief ? (Object.hasOwn(data.grupoDe, sp.brief) ? data.grupoDe[sp.brief] : sp.brief) : undefined;
+  const briefPedido = briefParam
+    ? (Object.hasOwn(data.grupoDe, briefParam.briefId) ? data.grupoDe[briefParam.briefId] : briefParam.briefId)
+    : undefined;
+  // La unidad pedida con el brief ya traducido ("<brief>.<paquete>", o el brief solo si el link es viejo).
+  const unidadParam = briefPedido
+    ? (briefParam?.paqueteId === undefined ? briefPedido : idDeUnidad(briefPedido, briefParam.paqueteId))
+    : undefined;
 
   // Marca seleccionada (auto-salto si hay UNA sola marca). Los enlaces del panel/archivo SIEMPRE
   // traen ?marca, así que un `!marcaSel` sólo pasa con una URL a mano/rota en un cliente
@@ -156,9 +165,11 @@ export default async function PortalPage({
     .map((b) => ({ ...b, tasks: b.tasks.filter((t) => t.marcaId === marcaSel) }))
     .filter((b) => b.tasks.length > 0);
 
-  // NIVEL de TAREA (filtrada a la marca). El auto-salto de brief único cae aquí.
-  const briefSel = (briefPedido && briefsMarca.some((b) => b.id === briefPedido) ? briefPedido : briefsMarca[0]?.id) ?? null;
-  const briefObj = briefsMarca.find((b) => b.id === briefSel);
+  // NIVEL de TAREA, por PAQUETE (Pedro 2026-11-12): el cliente entra a un paquete y sólo ve sus
+  // piezas — pestañas, flechas y listas. El selector de arriba lista paquetes con su brief.
+  const unidades = unidadesDePaquete(briefsMarca);
+  const briefObj = unidadPedida(unidades, unidadParam, sp.tarea) ?? undefined;
+  const briefSel = briefObj?.id ?? null;
   const vistaBucket: BucketPortal | null = sp.vista === "revision" || sp.vista === "aprobado" ? sp.vista : null;
   // Atrás: al ARCHIVO si el brief que ves está archivado (completado hace >15d), si no al INICIO
   // (el panel). Se DERIVA del estado del brief, no de un marcador en la URL → correcto aunque
@@ -170,7 +181,7 @@ export default async function PortalPage({
   if (vistaBucket) {
     const tareasBucket = (briefObj?.tasks ?? []).filter((t) => bucketPortal(t.status) === vistaBucket);
     return (
-      <PortalShell cliente={clienteInfo} briefs={briefsMarca} selBriefId={briefSel} selTareaId={null}
+      <PortalShell cliente={clienteInfo} briefs={unidades} selBriefId={briefSel} selTareaId={null}
         vistaBucket={vistaBucket} marcaId={marcaSel} backHref={backHref} backLabel={backLabel} mostrarNav
         vista={briefSel ? <PortalListaTareas briefId={briefSel} bucket={vistaBucket} tareas={tareasBucket} marca={marca} marcaId={marcaSel} /> : null} />
     );
@@ -179,7 +190,7 @@ export default async function PortalPage({
   const tareaSel = (sp.tarea && briefObj?.tasks.some((t) => t.id === sp.tarea) ? sp.tarea : briefObj?.tasks[0]?.id) ?? null;
   const tareaData = tareaSel ? await cargarTareaPortal(cliente, tareaSel) : null;
   return (
-    <PortalShell cliente={clienteInfo} briefs={briefsMarca} selBriefId={briefSel} selTareaId={tareaSel}
+    <PortalShell cliente={clienteInfo} briefs={unidades} selBriefId={briefSel} selTareaId={tareaSel}
       vistaBucket={null} marcaId={marcaSel} backHref={backHref} backLabel={backLabel} mostrarNav
       vista={tareaData ? <PortalTarea t={tareaData} puedeActuar={puedeActuar} colorCliente={marca} /> : null} />
   );

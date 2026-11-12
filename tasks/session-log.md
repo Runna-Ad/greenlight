@@ -1,5 +1,12 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-12 — Portal del cliente por PAQUETE EN VIVO
+**Hecho:** «Tus paquetes»: un card por paquete con su brief como etiqueta, barra, nota de fecha y «Ver piezas» con TODAS sus piezas por equipo (Real / Normal); las de producción con «En producción» y sin abrirse, «Por revisar» en ámbar vivo. «Abrir» entra a revisar sólo ese paquete (selector de paquetes bajo su brief; pestañas, flechas y listas sólo de sus piezas). `?brief=<brief>.<paquete>`; links viejos por brief abren el paquete de la tarea.
+**Pedro corrigió:** mostrar los nombres de las piezas en producción (PEDRO_OVERRIDE en lessons).
+**Pruebas:** test-lib 869/0 · npm test 0 · build 0. Preview como Master: 9 cards, LT AfterBF abre 1/1, 6 piezas listadas, link viejo abre LT AfterBF, sin errores.
+**En vivo:** «Ship it»; para volver: dpl_2749gWqoPofGZo4TpMWmdCJ7NChp (main cb1b414).
+**Sin probar:** sesión de cliente real.
+
 ## 2026-11-12 — Briefs: un card por fecha (Real + Normal) y tareas por paquete EN VIVO
 **Hecho:** a pedido de Pedro, cada paquete abre sus tareas («Ver N tareas»); al ver «6 piezas» y 3 tareas en el card Normal, Pedro eligió juntar Real y Normal del mismo día en un card (subtítulo «Real 9 · Normal 3», cada fila dice Real/Normal). Las flechas de la tarea recorren el brief junto en el orden del card; borrar el card manda ambas pestañas a la papelera, sólo si son del cliente.
 **Pruebas:** test-lib 855/0 · npm test exit 0 · tsc 0 · build 0. Preview como Master: LT AfterBF abre 6 (4/12–9/12) y la tarea dice 8 / 12 igual que el card; sin errores en consola.
