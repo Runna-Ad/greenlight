@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Pill, type PillStatus } from "@/components/ui/pill";
 import { ChevronDown, Files, Layers, Package, Sparkles, Trash2 } from "lucide-react";
 
-import { gruposPorPaquete, type Bundle, type PaqueteEquipo } from "@/lib/bundle";
+import { gruposPorPaquete, type Bundle, type BundleTask, type PaqueteEquipo } from "@/lib/bundle";
 import { STATUS_LABEL, STATUS_TOKEN } from "@/lib/brand";
 import { notaEntrega, type TonoEntrega } from "@/lib/paquetes";
 import { eliminarBrief, ponerFechaPaquete } from "@/app/(app)/[cliente]/briefs/actions";
@@ -26,8 +26,20 @@ const TONO_COLOR: Record<TonoEntrega, string> = {
  */
 // El padre le pone `key` con la fecha guardada: si cambia (otra persona, o tras guardar), el
 // campo arranca de nuevo con el valor real en vez de quedarse con uno viejo.
-function PaqueteFila({ p, cliente, puedeFecha }: { p: PaqueteEquipo; cliente: string; puedeFecha: boolean }) {
+function PaqueteFila({
+  p,
+  cliente,
+  puedeFecha,
+  tareas,
+}: {
+  p: PaqueteEquipo;
+  cliente: string;
+  puedeFecha: boolean;
+  /** Las tareas de ESTE card que son de este paquete (el resto del paquete puede vivir en el card Real/Normal hermano). */
+  tareas: TareaConLugar[];
+}) {
   const router = useRouter();
+  const [abierto, setAbierto] = useState(false);
   const [fecha, setFecha] = useState(p.fechaEntrega ?? "");
   const [guardando, startGuardar] = useTransition();
   const nota = notaEntrega({ entregadoEl: p.entregadoEl, diasAntes: p.diasAntes }, p.fechaEntrega, "equipo");
@@ -49,7 +61,8 @@ function PaqueteFila({ p, cliente, puedeFecha }: { p: PaqueteEquipo; cliente: st
   };
 
   return (
-    <li className="flex items-start gap-2 py-1.5">
+    <li className="py-1.5">
+    <div className="flex items-start gap-2">
       <Package className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium text-foreground" title={p.nombre}>{p.nombre}</p>
@@ -59,6 +72,7 @@ function PaqueteFila({ p, cliente, puedeFecha }: { p: PaqueteEquipo; cliente: st
         {nota && (p.entregadoEl || !puedeFecha) && (
           <p className="text-[11px] font-medium" style={{ color: TONO_COLOR[nota.tono] }}>{nota.texto}</p>
         )}
+        <BotonTareas n={tareas.length} abierto={abierto} onClick={() => setAbierto((v) => !v)} />
       </div>
       {puedeFecha && (
         <div className="flex shrink-0 flex-col items-end gap-0.5">
@@ -91,6 +105,76 @@ function PaqueteFila({ p, cliente, puedeFecha }: { p: PaqueteEquipo; cliente: st
           )}
         </div>
       )}
+    </div>
+    {abierto && <ListaTareas tareas={tareas} cliente={cliente} />}
+    </li>
+  );
+}
+
+/** Una tarea con su lugar n/N dentro del card (en el orden en que se ven, por paquete). */
+type TareaConLugar = { t: BundleTask; n: number; total: number };
+
+/** "Ver 3 tareas ▾": abre las tareas de un paquete (o de "Sin paquete") debajo de su fila. */
+function BotonTareas({ n, abierto, onClick }: { n: number; abierto: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={abierto}
+      className="mt-0.5 flex items-center gap-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+    >
+      {abierto ? "Ocultar tareas" : `Ver ${n} ${n === 1 ? "tarea" : "tareas"}`}
+      <ChevronDown className={`size-3.5 transition-transform ${abierto ? "rotate-180" : ""}`} />
+    </button>
+  );
+}
+
+function ListaTareas({ tareas, cliente, sangria = true }: { tareas: TareaConLugar[]; cliente: string; sangria?: boolean }) {
+  return (
+    <ul className={`mt-1 overflow-hidden rounded-md border border-border/60 ${sangria ? "ml-5" : ""}`}>
+      {tareas.map(({ t, n, total }) => (
+        <li key={t.id} className="border-t border-border/40 first:border-t-0">
+          <Link
+            href={`/${cliente}/tareas/${t.id}`}
+            className="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-secondary/40"
+          >
+            <span className="w-8 shrink-0 font-mono text-[11px] text-muted-foreground">
+              {n}/{total}
+            </span>
+            {t.code && (
+              <span className="shrink-0 rounded bg-secondary px-1 py-0.5 font-mono text-[11px] font-semibold text-secondary-foreground">
+                {t.code}
+              </span>
+            )}
+            <span className="min-w-0 truncate font-mono font-medium text-foreground">
+              {t.naming_base ?? "Sin naming"}
+            </span>
+            <Pill status={STATUS_TOKEN[t.status] as PillStatus} className="ml-auto shrink-0 text-[9px] uppercase">
+              {STATUS_LABEL[t.status]}
+            </Pill>
+            <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+              <Files className="size-3" /> {t.file_count}
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Las tareas sin paquete de un brief que sí tiene paquetes: su propia fila, al final. */
+function SinPaqueteFila({ tareas, cliente }: { tareas: TareaConLugar[]; cliente: string }) {
+  const [abierto, setAbierto] = useState(false);
+  return (
+    <li className="py-1.5">
+      <div className="flex items-start gap-2">
+        <Package className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/50" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-muted-foreground">Sin paquete</p>
+          <BotonTareas n={tareas.length} abierto={abierto} onClick={() => setAbierto((v) => !v)} />
+        </div>
+      </div>
+      {abierto && <ListaTareas tareas={tareas} cliente={cliente} />}
     </li>
   );
 }
@@ -121,6 +205,15 @@ export function BundleCard({
   const [confirmando, setConfirmando] = useState(false);
   const [borrando, startBorrar] = useTransition();
   const primera = bundle.tasks[0];
+  const conPaquetes = bundle.paquetes.length > 0;
+  // n/N en el orden en que se ven (por paquete, y "Sin paquete" al final).
+  let n = 0;
+  const grupos = gruposPorPaquete(bundle.tasks, bundle.paquetes).map((g) => ({
+    paqueteId: g.paqueteId,
+    tareas: g.tasks.map((t) => ({ t, n: ++n, total: bundle.tasks.length })),
+  }));
+  const tareasDe = (id: string | null) => grupos.find((g) => g.paqueteId === id)?.tareas ?? [];
+  const sinPaquete = tareasDe(null);
 
   const borrar = () =>
     startBorrar(async () => {
@@ -187,27 +280,34 @@ export function BundleCard({
       </button>
 
       {/* Brief › PAQUETE › Tarea (0097): los paquetes del brief con su fecha. */}
-      {bundle.paquetes.length > 0 && (
+      {conPaquetes && (
         <div className="border-t border-border/60 px-4 py-1.5">
           <p className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             {bundle.paquetes.length === 1 ? "1 paquete" : `${bundle.paquetes.length} paquetes`}
           </p>
           <ul className="divide-y divide-border/40">
             {bundle.paquetes.map((p) => (
-              <PaqueteFila key={`${p.id}|${p.fechaEntrega ?? ""}`} p={p} cliente={cliente} puedeFecha={puedeFecha} />
+              <PaqueteFila key={`${p.id}|${p.fechaEntrega ?? ""}`} p={p} cliente={cliente} puedeFecha={puedeFecha} tareas={tareasDe(p.id)} />
             ))}
+            {sinPaquete.length > 0 && <SinPaqueteFila tareas={sinPaquete} cliente={cliente} />}
           </ul>
         </div>
       )}
 
-      <div className="flex items-stretch border-t border-border/60">
+      {/* Con paquetes, las tareas se abren debajo de cada paquete (Pedro 2026-11-12): aquí sólo
+          queda "Ver tareas" para un brief sin paquetes, y el bote de basura. */}
+      {(!conPaquetes || puedeBorrar) && (
+      <div className="flex items-stretch justify-end border-t border-border/60">
+        {!conPaquetes && (
         <button
           onClick={() => setAbierto((v) => !v)}
+          aria-expanded={abierto}
           className="flex flex-1 items-center justify-center gap-1 py-1.5 text-[11px] text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
         >
           {abierto ? "Ocultar tareas" : "Ver tareas"}
           <ChevronDown className={`size-3.5 transition-transform ${abierto ? "rotate-180" : ""}`} />
         </button>
+        )}
         {puedeBorrar &&
           (confirmando ? (
             <span className="flex items-center gap-1 border-l border-border/60 px-2 text-[11px] text-muted-foreground">
@@ -242,45 +342,12 @@ export function BundleCard({
             </button>
           ))}
       </div>
+      )}
 
-      {abierto && (
-        <ul className="border-t border-border/60">
-          {gruposPorPaquete(bundle.tasks, bundle.paquetes).map((g, gi, todos) => [
-            // Encabezado de paquete sólo si el brief tiene paquetes (si no, la lista queda como antes).
-            bundle.paquetes.length > 0 && (
-              <li key={`h-${g.paqueteId ?? "sin"}`} className="bg-secondary/30 px-4 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {bundle.paquetes.find((p) => p.id === g.paqueteId)?.nombre ?? "Sin paquete"}
-              </li>
-            ),
-            // n/N en el orden en que se ven (por paquete), no en el del bundle.
-            ...g.tasks.map((t, ti) => ({ t, i: todos.slice(0, gi).reduce((s, x) => s + x.tasks.length, 0) + ti })).map(({ t, i }) => (
-            <li key={t.id}>
-              <Link
-                href={`/${cliente}/tareas/${t.id}`}
-                className="flex items-center gap-2.5 px-4 py-2 text-xs hover:bg-secondary/40"
-              >
-                <span className="w-8 shrink-0 font-mono text-[10px] text-muted-foreground">
-                  {i + 1}/{bundle.tasks.length}
-                </span>
-                {t.code && (
-                  <span className="shrink-0 rounded bg-secondary px-1 py-0.5 font-mono text-[10px] font-semibold text-secondary-foreground">
-                    {t.code}
-                  </span>
-                )}
-                <span className="min-w-0 truncate font-mono font-medium text-foreground">
-                  {t.naming_base ?? "Sin naming"}
-                </span>
-                <Pill status={STATUS_TOKEN[t.status] as PillStatus} className="ml-auto shrink-0 text-[9px] uppercase">
-                  {STATUS_LABEL[t.status]}
-                </Pill>
-                <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
-                  <Files className="size-3" /> {t.file_count}
-                </span>
-              </Link>
-            </li>
-            )),
-          ])}
-        </ul>
+      {abierto && !conPaquetes && (
+        <div className="border-t border-border/60 px-4 py-2">
+          <ListaTareas tareas={tareasDe(null)} cliente={cliente} sangria={false} />
+        </div>
       )}
     </div>
   );
