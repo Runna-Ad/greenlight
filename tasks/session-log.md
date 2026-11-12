@@ -3543,3 +3543,9 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 **Pruebas:** test-lib 738/0 · test-db 844/0 · tsc 0 · eslint 0; app local: título seleccionado en GIRLTHREE (sin guardar) y preview del brief Card 5 archivos / Préstamos 6.
 **Sin probar:** fila del sheet cuyos tamaños quedan todos fuera (la tarea saldría sin archivos); cliente real pidiendo cambio en el título.
 **Pick up next:** "ship it" de Pedro para push a main (despliega).
+
+## 2026-11-12 Session: Slack de clientes + Admin ▸ Notificaciones (feat/slack-bot fbd8afa, sólo preview)
+**Hecho:** liga «Add to Slack» por cliente (un solo uso, 7 días, crear otra cancela la anterior); el espacio llega PENDIENTE y un admin lo aprueba o rechaza en Integraciones ▸ Slack; desconectar revoca el token. El bot manda a cada cliente por el Slack de SU empresa, nunca por el de otro. Admin ▸ Notificaciones: 4 interruptores (correo/Slack × equipo/clientes), tabla por persona y «Buscar en Slack» que llena los member IDs por correo. Token cifrado AES-GCM atado al espacio. Copiar compartido (`src/lib/copiar.ts`).
+**Pruebas:** npm test todo en verde (test-lib 805/0, test-db 879/0, prisma 975/0, formatos 797/0) · tsc 0 · eslint 0 · next build OK.
+**Sin probar:** el flujo real de Slack OAuth (necesita a DiDi o un espacio de prueba); la pantalla en el navegador; 0097 NO aplicada, así que en el preview la pestaña Notificaciones falla hasta aplicarla (los avisos no se pierden: la fila se suelta y el reloj en vivo la manda).
+**Pick up next:** Pedro: Manage Distribution + Redirect URLs en la app de Slack, 3 variables en Vercel, luego "ship it" para 0097 + merge a main.
