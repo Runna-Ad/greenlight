@@ -1,6 +1,6 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-11-12 — «Crear login» del Master + «Cambiar contraseña» del cliente (rama `feat/crear-login`, worktree ../greenlight-crear-login, en preview, sin migración)
+## ✅ 2026-11-12 — «Crear login» del Master + «Cambiar contraseña» del cliente — EN VIVO (main 6374b89, sin migración; para volver: dpl_D1TGwy6aMREiu2zWxBeY3cJwz9e3)
 Pedro: algunos clientes no logran entrar; un plan C donde el Master pone correo + contraseña + empresa y se la manda por chat. Contraseña fácil de marca (DiDi@657) y el cliente la puede cambiar en su perfil.
 - [x] Admin › Clientes › Crear login (sólo Master): correo, nombre opcional, empresa, rol fijo Partner, contraseña con «Generar» (marca + @ + 3 números, editable, mínimo 8). Mensaje listo para copiar. Si el correo ya es cliente de esa empresa, cambia su contraseña. Aprueba su solicitud pendiente.
 - [x] Bloqueos: correo del equipo, perfil del equipo, cliente de otra empresa, cuenta de otra app (S.P.A.M) sin perfil ni solicitud.
@@ -9,7 +9,7 @@ Pedro: algunos clientes no logran entrar; un plan C donde el Master pone correo 
 - [x] Pruebas: test-lib 868/0 (13 nuevas), `npm test` exit 0, tsc 0, eslint 0, build ✓.
 - [x] Probado en la preview (2026-11-12, OK de Pedro): Claude creó «PRUEBA Crear Login» (prueba-crear-login@example.com, DiDi) con Generar → DiDi@194; la base mostró cuenta confirmada, clave_verificada, client/DiDi/activo. Pedro entró como ese cliente, cambió la contraseña y volvió a entrar ("all worked"); la base registró el ingreso 22:22 UTC y 0 sesiones abiertas al final. Cuenta de prueba REVOCADA (profiles.active=false, id f727b6ff…); queda en «Dados de baja».
 - [x] Con una sola empresa, la contraseña de marca ya sale escrita (588c931). Sin ver en pantalla.
-- [ ] "Ship it" de Pedro → merge a `main`.
+- [x] "Ship it" de Pedro → main 6374b89 (fast-forward tras merge de main).
 **Riesgo aceptado por Pedro (dicho una vez):** marca + 3 números = 1,000 combinaciones; con el límite de Supabase por IP, una sola IP las prueba en unas horas. Subir a 4 números es cambiar `DIGITOS_CLAVE_MARCA`.
 **No hecho:** pedir la contraseña actual al cambiarla (quien entra con Google no la tiene).
 
