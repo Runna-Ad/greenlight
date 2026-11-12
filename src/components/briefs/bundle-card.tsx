@@ -112,7 +112,7 @@ function PaqueteFila({
 }
 
 /** Una tarea con su lugar n/N dentro del card (en el orden en que se ven, por paquete). */
-type TareaConLugar = { t: BundleTask; n: number; total: number };
+type TareaConLugar = { t: BundleTask; n: number; total: number; pestana?: "Real" | "Normal" };
 
 /** "Ver 3 tareas ▾": abre las tareas de un paquete (o de "Sin paquete") debajo de su fila. */
 function BotonTareas({ n, abierto, onClick }: { n: number; abierto: boolean; onClick: () => void }) {
@@ -132,7 +132,7 @@ function BotonTareas({ n, abierto, onClick }: { n: number; abierto: boolean; onC
 function ListaTareas({ tareas, cliente, sangria = true }: { tareas: TareaConLugar[]; cliente: string; sangria?: boolean }) {
   return (
     <ul className={`mt-1 overflow-hidden rounded-md border border-border/60 ${sangria ? "ml-5" : ""}`}>
-      {tareas.map(({ t, n, total }) => (
+      {tareas.map(({ t, n, total, pestana }) => (
         <li key={t.id} className="border-t border-border/40 first:border-t-0">
           <Link
             href={`/${cliente}/tareas/${t.id}`}
@@ -145,6 +145,10 @@ function ListaTareas({ tareas, cliente, sangria = true }: { tareas: TareaConLuga
               <span className="shrink-0 rounded bg-secondary px-1 py-0.5 font-mono text-[11px] font-semibold text-secondary-foreground">
                 {t.code}
               </span>
+            )}
+            {/* En un card con Real y Normal, los códigos se repiten (A1 en cada pestaña). */}
+            {pestana && (
+              <span className="shrink-0 text-[11px] font-medium text-muted-foreground">{pestana}</span>
             )}
             <span className="min-w-0 truncate font-mono font-medium text-foreground">
               {t.naming_base ?? "Sin naming"}
@@ -207,10 +211,16 @@ export function BundleCard({
   const primera = bundle.tasks[0];
   const conPaquetes = bundle.paquetes.length > 0;
   // n/N en el orden en que se ven (por paquete, y "Sin paquete" al final).
+  const mixto = new Set(bundle.tasks.map((t) => t.track)).size > 1;
   let n = 0;
   const grupos = gruposPorPaquete(bundle.tasks, bundle.paquetes).map((g) => ({
     paqueteId: g.paqueteId,
-    tareas: g.tasks.map((t) => ({ t, n: ++n, total: bundle.tasks.length })),
+    tareas: g.tasks.map((t) => ({
+      t,
+      n: ++n,
+      total: bundle.tasks.length,
+      pestana: mixto ? (t.track === "real" ? ("Real" as const) : ("Normal" as const)) : undefined,
+    })),
   }));
   const tareasDe = (id: string | null) => grupos.find((g) => g.paqueteId === id)?.tareas ?? [];
   const sinPaquete = tareasDe(null);
