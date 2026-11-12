@@ -41,7 +41,9 @@ Pedro: un brief (Brief 30/10) tiene PAQUETES (columna "Package Name" del sheet, 
 
 **En vivo** con «Ship it» de Pedro (2026-11-12): main 91f9f8c+notas; para volver: dpl_8i9A9QVURcjCMwKnE4JuzB5AxTJA (main a30aa80). Sin probar: borrar un card junto; vistas de lead y especialista.
 
-Next Step: Luego fase 2 (tablero, Mi trabajo, Entregas con "· Real/Normal").
+**Portal por paquete (Pedro 2026-11-12, d9baa4d, en la preview, NO en vivo):** el panel enseña «Tus paquetes», un card por paquete con su brief como etiqueta, barra, nota de fecha y «Ver piezas» por equipo (Real / Normal) con su estado; lo que sigue en producción sólo se cuenta («3 en producción»), nunca su nombre. «Abrir» entra a revisar SÓLO ese paquete: el selector lista paquetes bajo su brief y las pestañas, flechas y listas recorren sólo sus piezas. La unidad viaja en `?brief=<brief>.<paquete>` (src/lib/portal-paquetes.ts); los links viejos por brief (Archivo, avisos) abren el paquete de la tarea. Probado en la preview como Master: 9 cards, LT AfterBF abre 1/1, link viejo abre LT AfterBF. Sin probar: con una sesión de cliente real; Completados y Archivo siguen por brief.
+
+Next Step: Pedro revisa la preview del portal y dice «ship it». Luego fase 2 (tablero, Mi trabajo, Entregas con "· Real/Normal").
 
 ## ✅ 2026-11-12 — Bot de Slack «Greenlight»: EN VIVO (main f88c17d, deploy dpl_H88GvKdmiULWBpmUtxVRwZU83mRE; para volver: dpl_Aqu3N7FKPN6VapFHvYEsXy64wsV3)
 Pedro eligió la opción 2: DM por persona en el Slack de Runna, con el código listo para un segundo espacio (DiDi) si su admin lo aprueba. Mismo patrón que SnapTrack.
