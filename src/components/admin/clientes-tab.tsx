@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Mail, ShieldOff, ShieldCheck, Plus, Building2, ChevronRight, KeyRound, Copy } from "lucide-react";
+import { Mail, ShieldOff, ShieldCheck, Plus, Building2, ChevronRight, KeyRound, Copy, Dices, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   cambiarAccesoCliente,
   crearCliente,
+  crearLoginCliente,
   generarCodigoCliente,
   type ClienteUsuarioRow,
   type EmpresaCliente,
@@ -14,13 +15,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Pill } from "@/components/ui/pill";
 import { copiarTexto } from "@/lib/copiar";
+import { azarSeguro, claveDeMarca, motivoClaveInvalida } from "@/lib/auth/clave-marca";
+
 
 export function ClientesTab({
   usuarios: inicial,
   empresas: empresasIniciales,
+  esMaster = false,
 }: {
   usuarios: ClienteUsuarioRow[];
   empresas: { id: string; name: string; slug: string }[];
+  esMaster?: boolean;
 }) {
   const [usuarios, setUsuarios] = useState(inicial);
   const [empresas, setEmpresas] = useState(empresasIniciales);
@@ -54,6 +59,15 @@ export function ClientesTab({
         )}
         <NuevaEmpresa onCreada={(e) => setEmpresas((prev) => [...prev, { id: e.id, name: e.name, slug: e.slug }])} />
       </section>
+
+      {esMaster && (
+        <NuevoLogin
+          empresas={empresas}
+          onCreado={(nuevo) =>
+            setUsuarios((prev) => [nuevo, ...prev.filter((u) => u.id !== nuevo.id)])
+          }
+        />
+      )}
 
       <section>
       <h2 className="text-lg font-semibold text-foreground">Clientes con acceso</h2>
@@ -104,6 +118,173 @@ function ListaClientes({
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * «Crear login» (sólo Master Builder): correo + contraseña + empresa, y listo para
+ * mandárselo por chat. La contraseña sale de la marca (DiDi@657) y se puede editar.
+ */
+function NuevoLogin({
+  empresas,
+  onCreado,
+}: {
+  empresas: { id: string; name: string; slug: string }[];
+  onCreado: (u: ClienteUsuarioRow) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [nombre, setNombre] = useState("");
+  const [clientId, setClientId] = useState(empresas.length === 1 ? empresas[0]!.id : "");
+  const [clave, setClave] = useState("");
+  const [pending, start] = useTransition();
+  const [listo, setListo] = useState<{ email: string; clave: string; empresa: string; nuevo: boolean } | null>(null);
+
+  const empresa = empresas.find((e) => e.id === clientId);
+  const generar = (id = clientId) => {
+    const e = empresas.find((x) => x.id === id);
+    if (e) setClave(claveDeMarca(e.name, azarSeguro));
+  };
+  const motivo = clave ? motivoClaveInvalida(clave) : null;
+  const puede = !!email.trim() && !!clientId && !!clave && !motivo && !pending;
+
+  const guardar = () =>
+    start(async () => {
+      const res = await crearLoginCliente({ email, password: clave, clientId, name: nombre || null });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      onCreado(res.usuario);
+      setListo({ email: res.email, clave, empresa: res.empresa, nuevo: res.nuevo });
+      setEmail("");
+      setNombre("");
+      setClave("");
+    });
+
+  const mensaje = listo
+    ? `Tu acceso a Greenlight (${listo.empresa}):\n${typeof window === "undefined" ? "" : window.location.origin}/portal/login\nCorreo: ${listo.email}\nContraseña: ${listo.clave}\nLa puedes cambiar en el menú de tu cuenta (arriba a la derecha) › Cambiar contraseña.`
+    : "";
+
+  const copiar = async () => {
+    if (await copiarTexto(mensaje)) toast.success("Mensaje copiado.");
+    else toast.info("No se pudo copiar solo: selecciona el texto y cópialo.");
+  };
+
+  const campo =
+    "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+  return (
+    <section>
+      <h2 className="text-lg font-semibold text-foreground">Crear login</h2>
+      <p className="mb-4 mt-0.5 text-sm text-muted-foreground">
+        Para cuando un cliente no puede entrar: tú le pones correo y contraseña y se los mandas por chat. Entra
+        al momento, sin correo ni código. Si el correo ya tiene acceso, su contraseña cambia por ésta.
+      </p>
+      <div className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1 text-xs font-medium text-muted-foreground">
+            Correo
+            <input
+              type="email"
+              autoComplete="off"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="ana@didi.com"
+              className={campo}
+            />
+          </label>
+          <label className="space-y-1 text-xs font-medium text-muted-foreground">
+            Nombre (opcional)
+            <input
+              autoComplete="off"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Ana López"
+              className={campo}
+            />
+          </label>
+          <label className="space-y-1 text-xs font-medium text-muted-foreground">
+            Empresa
+            <select
+              value={clientId}
+              onChange={(e) => {
+                setClientId(e.target.value);
+                if (!clave || /@\d+$/.test(clave)) generar(e.target.value);
+              }}
+              className={campo}
+            >
+              <option value="">Elige…</option>
+              {empresas.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="space-y-1 text-xs font-medium text-muted-foreground">
+            Rol
+            <p className="flex h-9 items-center rounded-md border border-dashed border-border px-3 text-sm text-foreground">
+              Partner (cliente)
+            </p>
+          </div>
+          <label className="space-y-1 text-xs font-medium text-muted-foreground sm:col-span-2">
+            Contraseña
+            <div className="flex gap-2">
+              <input
+                autoComplete="off"
+                spellCheck={false}
+                value={clave}
+                onChange={(e) => setClave(e.target.value)}
+                placeholder={empresa ? `${empresa.name.replace(/\s+/g, "")}@123` : "Elige la empresa primero"}
+                className={`${campo} font-mono`}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!clientId}
+                onClick={() => generar()}
+                className="h-9 shrink-0 gap-1.5"
+              >
+                <Dices className="size-3.5" /> Generar
+              </Button>
+            </div>
+            {motivo && <span className="block text-[11px] font-normal text-destructive">{motivo}</span>}
+          </label>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          El equipo Rünna no va aquí: entra con Google.
+        </p>
+        <div className="flex justify-end">
+          <Button size="sm" disabled={!puede} onClick={guardar} className="gap-1.5">
+            <UserPlus className="size-3.5" /> {pending ? "Guardando…" : "Crear login"}
+          </Button>
+        </div>
+      </div>
+
+      {listo && (
+        <div role="status" className="mt-3 rounded-lg border border-border bg-secondary/40 px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-foreground">
+              {listo.nuevo ? "Login creado." : "Contraseña cambiada."} Mándale esto por chat:
+            </p>
+            <button
+              type="button"
+              className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setListo(null)}
+            >
+              Ocultar
+            </button>
+          </div>
+          <pre className="mt-2 select-all whitespace-pre-wrap rounded-md bg-background px-3 py-2 font-mono text-[12px] text-foreground">
+            {mensaje}
+          </pre>
+          <Button size="sm" variant="secondary" onClick={copiar} className="mt-2 gap-1.5">
+            <Copy className="size-3.5" /> Copiar mensaje
+          </Button>
+        </div>
+      )}
+    </section>
   );
 }
 
