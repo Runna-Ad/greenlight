@@ -4,7 +4,7 @@
 **Decisiones de Pedro (las 4 recomendadas):** filtro único Brief / paquete; Entregas un card por brief (Real + Normal) con tareas por paquete; Mi trabajo por estado y luego por paquete; Performance sigue por pestaña con «Brief 30/10 · Real».
 **Pruebas:** test-lib 916/0 · npm test exit 0 · tsc 0 · eslint 0 · next build exit 0. Revisión Sonnet: nada serio, 2 arreglos menores.
 **Preview como Master:** tablero (16/16 con paquete; LT AfterBF = 6; Brief 30/10 = 12 de 16) y encabezado de tarea Real y Normal vistos con datos reales; consola limpia. Entregas, Performance, Mi trabajo y Papelera cargan pero no tienen datos que enseñar.
-**En vivo:** «Ship it» de Pedro; fast-forward a main (origin/main no se había movido). **Para volver:** dpl_7Grv7B2acEsx8Fh8hjVtNBxoVYHk (main faeb749).
+**En vivo:** «Ship it» de Pedro; fast-forward a main (origin/main no se había movido). Main 6e37539, deploy dpl_HybD5ihZBC13msHWH2hT22jgetTy Ready. Visto en greenlight.runna.agency como Master: tablero 16/16 con paquete y filtro con cada brief una vez; tarea Normal «Brief 30/10 · Normal» + «LT AfterBF - November»; consola sin errores. (Esta nota vive sólo en la rama, para no redesplegar main.) **Para volver:** dpl_7Grv7B2acEsx8Fh8hjVtNBxoVYHk (main faeb749).
 **Pick up next:** ver Entregas/Performance en cuanto haya un paquete entregado; fase 3 (búsqueda, avisos, Slack con el paquete).
 
 ## 2026-11-12 — «Crear login» del Master + «Cambiar contraseña» del cliente — EN VIVO (main 6374b89, sin migración)
