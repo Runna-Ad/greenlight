@@ -1,5 +1,11 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-13 — Paquetes fase 3: avisos y búsqueda con el paquete (rama `claude/paquetes-fase2-703cdf`, 334eb45, SIN migración, NO en vivo)
+**Decisiones de Pedro:** la línea del paquete se arma al enseñar el aviso (no se guarda en el título); la búsqueda da un resultado «Paquete» que abre el tablero filtrado.
+**Pruebas:** test-lib 926/0 · npm test exit 0 · tsc 0 · eslint 0 · build exit 0. Revisión Sonnet: 2 arreglos.
+**Preview como Master:** búsqueda «AfterBF» → resultado Paquete → tablero filtrado con 6 tarjetas; consola limpia. La línea en avisos de tarea, correo y Slack: sólo pruebas (no hay aviso de tarea que ver).
+**Waiting on Pedro:** «ship it».
+
 ## 2026-11-13 — Paquetes fase 2: paquete y Real/Normal en tablero, Entregas, Performance, Mi trabajo, tarea y Papelera (main, SIN migración, EN VIVO)
 **Decisiones de Pedro (las 4 recomendadas):** filtro único Brief / paquete; Entregas un card por brief (Real + Normal) con tareas por paquete; Mi trabajo por estado y luego por paquete; Performance sigue por pestaña con «Brief 30/10 · Real».
 **Pruebas:** test-lib 916/0 · npm test exit 0 · tsc 0 · eslint 0 · next build exit 0. Revisión Sonnet: nada serio, 2 arreglos menores.

@@ -13,6 +13,15 @@ Pedro: algunos clientes no logran entrar; un plan C donde el Master pone correo 
 **Riesgo aceptado por Pedro (dicho una vez):** marca + 3 números = 1,000 combinaciones; con el límite de Supabase por IP, una sola IP las prueba en unas horas. Subir a 4 números es cambiar `DIGITOS_CLAVE_MARCA`.
 **No hecho:** pedir la contraseña actual al cambiarla (quien entra con Google no la tiene).
 
+## 🟡 2026-11-13 — Brief › Paquete › Tarea, fase 3: avisos y búsqueda con el paquete (rama `claude/paquetes-fase2-703cdf`, 334eb45, SIN migración, NO en vivo)
+Pedro eligió las 2 recomendadas:
+- **Avisos (campana, correo uno y agrupado, Slack):** línea «LT AfterBF · Brief 30/10 · Real» bajo el título, armada al ENSEÑAR el aviso (`contextoDeTareas` en `src/lib/paquetes-data.ts`), no guardada: sin reescribir las ~20 funciones de la base, y los avisos viejos también la tienen. Si la búsqueda falla, el aviso sale sin la línea (try/catch).
+- **Búsqueda:** resultado «Paquete» (lead/admin/master; lead sólo con tareas de su equipo) que abre `/<cliente>/tablero?paquete=<id>` ya filtrado; cada tarea dice su paquete en vez del concepto.
+**Pruebas:** test-lib 926/0 · npm test exit 0 · tsc 0 · eslint 0 · next build exit 0. Revisión Sonnet: nada serio; arreglado el try/catch y el tope de la búsqueda (20 → 100 antes de filtrar).
+**Visto en la preview (334eb45, como Master):** buscar «AfterBF» → «LT AfterBF - November · Brief 30/10 · 6 tareas · didi · PAQUETE»; Enter abre el tablero con el filtro en ese paquete y 6 tarjetas; consola sin errores.
+**Sin probar en pantalla:** la línea en un aviso de tarea (la campana del Master sólo tiene una solicitud de acceso, que no es de tarea); un correo y un DM de Slack reales con la línea (hace falta mandar un aviso nuevo).
+**Ojo:** el cliente también ve «Real/Normal» en sus avisos (Pedro: el cliente sí ve Real/Normal).
+
 ## ✅ 2026-11-13 — Brief › Paquete › Tarea, fase 2: paquete y Real/Normal en las pantallas del equipo (main, SIN migración, EN VIVO)
 Pedro eligió las 4 recomendadas (2026-11-13):
 - **Tablero:** cada tarjeta dice su paquete arriba del naming. Filtro «Brief / paquete»: cada brief UNA vez (Real y Normal juntos), «Todo el Brief 30/10» y sus paquetes debajo (`src/lib/filtro-tablero.ts`).
