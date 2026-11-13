@@ -163,6 +163,7 @@ export function AdminShell({
             <ClientesTab
               usuarios={clientesUsuarios}
               empresas={marcas.map((c) => ({ id: c.id, name: c.name, slug: c.slug }))}
+              esMaster={esMaster}
             />
           )}
           {tab === "marcas" && <MarcasTab clientes={marcas} tipografiasGoogle={tipografiasGoogle} />}

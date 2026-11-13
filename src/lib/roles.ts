@@ -151,6 +151,13 @@ export const canAdmin = (role: ViewRole): boolean => esNivelAdmin(role);
 export const canAssignAdmins = (role: ViewRole): boolean => role === "master";
 
 /**
+ * Quién crea el login de un cliente a mano (correo + contraseña + empresa) en
+ * Admin › Clientes. Sólo el Master Builder (Pedro, 2026-11-12): poner contraseñas
+ * es más delicado que aprobar una solicitud, que sí puede cualquier admin.
+ */
+export const canCrearLogins = (role: ViewRole): boolean => role === "master";
+
+/**
  * HÜE Prisma: quién ve y puede tocar los prompts de TODOS (historial completo, refinar
  * o recompilar lo de otra persona). Lead/admin/master sí; el especialista sólo lo suyo.
  * FUENTE ÚNICA para la página (qué lista) y las actions (qué deja tocar): si cada una

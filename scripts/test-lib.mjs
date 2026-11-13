@@ -15,6 +15,8 @@ import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoE
 import { agruparCarga } from "../src/lib/workload.ts";
 import { claveDePaquete, fechaDeDateSort, diaLocal, fechaDelBrief, entregaDePaquete, notaEntrega, desgloseTracks } from "../src/lib/paquetes.ts";
 import { classifyTab, mapHeader } from "../src/lib/sheet-sync.ts";
+import { claveDeMarca, raizDeMarca, motivoClaveInvalida, azarSeguro, CLAVE_MIN } from "../src/lib/auth/clave-marca.ts";
+import { canCrearLogins } from "../src/lib/roles.ts";
 
 let pass = 0,
   fail = 0;
@@ -2032,6 +2034,24 @@ console.log("\n▶ Sheet: la columna se llama «Package Name» (antes «Brief Na
   ok("el encabezado viejo «Brief Name» se sigue leyendo", viejo && viejo["Brief Name"] === 4);
   const sinCol = mapHeader(base);
   ok("sin la columna, el sheet igual se acepta (no es obligatoria)", sinCol && sinCol["Brief Name"] === undefined);
+}
+
+console.log("\n▶ Crear login: contraseña de marca (DiDi@657) y quién la crea");
+{
+  const fijo = (n) => () => n; // azar fijo
+  eq("DiDi + 3 números", claveDeMarca("DiDi", fijo(0.657)), "DiDi@666");
+  ok("formato marca@números", /^DiDi@\d{3}$/.test(claveDeMarca("DiDi", azarSeguro)));
+  eq("espacios y acentos fuera", raizDeMarca("La Comér MX"), "LaComerMX");
+  eq("nombre sin letras → Cliente", raizDeMarca("¡¡ !!"), "Cliente");
+  eq("marca corta lleva más números hasta el mínimo", claveDeMarca("HP", fijo(0.1)).length, CLAVE_MIN);
+  eq("marca corta: forma", claveDeMarca("HP", fijo(0.1)), "HP@11111");
+  ok("azar 0.9999 nunca da un 10", /^DiDi@9{3}$/.test(claveDeMarca("DiDi", fijo(0.99999))));
+  ok("cada generada pasa la validación", [..."x".repeat(50)].every(() => motivoClaveInvalida(claveDeMarca("DiDi", azarSeguro)) === null));
+  ok("7 caracteres no pasa", motivoClaveInvalida("DiDi@65") !== null);
+  ok("8 caracteres pasa", motivoClaveInvalida("DiDi@657") === null);
+  ok("con espacio no pasa", motivoClaveInvalida("DiDi @6578") !== null);
+  ok("73 caracteres no pasa", motivoClaveInvalida("a".repeat(73)) !== null);
+  ok("sólo el Master crea logins", canCrearLogins("master") && !canCrearLogins("admin") && !canCrearLogins("lead") && !canCrearLogins("client"));
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);

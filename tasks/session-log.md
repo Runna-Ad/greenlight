@@ -1,5 +1,15 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-12 — «Crear login» del Master + «Cambiar contraseña» del cliente — EN VIVO (main 6374b89, sin migración)
+**Por qué:** clientes con problemas para entrar; Pedro quiso un plan C: él pone correo + contraseña + empresa y se la manda por chat.
+**Hecho:** Admin › Clientes › Crear login (sólo Master): contraseña de marca con «Generar» (DiDi@194, mínimo 8, editable), mensaje listo para copiar; si el correo ya es cliente de esa empresa, le cambia la contraseña. Menú de cuenta del cliente › Cambiar contraseña. Bloquea correos y perfiles del equipo, clientes de otra empresa y cuentas de S.P.A.M sin perfil ni solicitud.
+**Revisión Opus:** 2 altos + 2 bajos arreglados antes de la preview.
+**Pruebas:** `npm test` exit 0 (test-lib 882/0), tsc 0, eslint 0, build ✓ tras cada merge de main. Preview: Claude creó el login de prueba; Pedro entró, cambió la contraseña y volvió a entrar ("all worked"); la base lo confirmó. Prueba revocada (prueba-crear-login@example.com, f727b6ff…).
+**Para volver:** deploy anterior dpl_D1TGwy6aMREiu2zWxBeY3cJwz9e3.
+**Riesgo aceptado:** marca + 3 números = 1,000 combinaciones; `DIGITOS_CLAVE_MARCA` lo sube.
+**Sin probar:** la contraseña ya escrita con una sola empresa (588c931) en pantalla; crear login en vivo con un cliente real.
+**Pick up next:** cuando un cliente real no pueda entrar, crearle el login en vivo y confirmar que entra.
+
 ## 2026-11-12 — Portal del cliente por PAQUETE EN VIVO
 **Hecho:** «Tus paquetes»: un card por paquete con su brief como etiqueta, barra, nota de fecha y «Ver piezas» con TODAS sus piezas por equipo (Real / Normal); las de producción con «En producción» y sin abrirse, «Por revisar» en ámbar vivo. «Abrir» entra a revisar sólo ese paquete (selector de paquetes bajo su brief; pestañas, flechas y listas sólo de sus piezas). `?brief=<brief>.<paquete>`; links viejos por brief abren el paquete de la tarea.
 **Pedro corrigió:** mostrar los nombres de las piezas en producción (PEDRO_OVERRIDE en lessons).

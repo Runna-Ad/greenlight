@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getCurrentUser } from "@/lib/identity";
-import { canAdmin } from "@/lib/roles";
+import { canAdmin, canCrearLogins } from "@/lib/roles";
+import { motivoClaveInvalida } from "@/lib/auth/clave-marca";
+import { sinComodines } from "@/lib/auth/provision";
 import { slugify } from "@/lib/slug";
 import { hasEmail } from "@/lib/email";
 import {
@@ -12,6 +14,8 @@ import {
   mandarCorreoCuentaActiva,
   generarCodigo,
   marcarCodigoAdmin,
+  leerPerfil,
+  tieneSolicitudPendiente,
 } from "@/lib/auth/acceso-cliente";
 import { isAgencyEmail } from "@/lib/auth/allowlist";
 
@@ -240,6 +244,179 @@ export async function generarCodigoCliente(profileId: string): Promise<CodigoCli
   await marcarCodigoAdmin(perfil.id);
   console.info("[clientes] código generado por admin", { adminId: g.userId, clienteId: perfil.id });
   return { ok: true, codigo: gen.codigo, email };
+}
+
+export type CrearLoginResult =
+  | { ok: true; email: string; nuevo: boolean; empresa: string; usuario: ClienteUsuarioRow }
+  | { ok: false; error: string };
+
+const esEmailValido = (v: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
+
+/**
+ * PLAN C (Pedro, 2026-11-12): el Master Builder crea el login del cliente completo —
+ * correo, contraseña y empresa — y se lo manda por chat. Sin correo, sin código, sin
+ * solicitud. Si el correo ya es cliente de ESA empresa, le cambia la contraseña (y se
+ * cierran sus sesiones abiertas). Sólo rol Partner: el equipo entra con Google, y el
+ * proyecto de auth es compartido con S.P.A.M (una contraseña en un correo del equipo
+ * le cambiaría S.P.A.M también).
+ */
+export async function crearLoginCliente(input: {
+  email: string;
+  password: string;
+  clientId: string;
+  name?: string | null;
+}): Promise<CrearLoginResult> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const yo = await getCurrentUser();
+  if (!yo || !canCrearLogins(yo.role)) return { ok: false, error: "Sólo el Master Builder crea logins." };
+  if (
+    typeof input?.email !== "string" ||
+    typeof input.password !== "string" ||
+    typeof input.clientId !== "string" ||
+    (input.name != null && typeof input.name !== "string")
+  ) {
+    return { ok: false, error: "Faltan datos." };
+  }
+
+  const email = input.email.trim().toLowerCase().slice(0, 254);
+  const password = input.password;
+  const nombre = (input.name ?? "").replace(/[\r\n\t]+/g, " ").trim().slice(0, 120);
+  if (!esEmailValido(email) || email.includes("*")) return { ok: false, error: "Escribe un correo válido." };
+  const motivo = motivoClaveInvalida(password);
+  if (motivo) return { ok: false, error: motivo };
+  if (!input.clientId) return { ok: false, error: "Elige la empresa del cliente." };
+  if (isAgencyEmail(email)) {
+    return { ok: false, error: "Ese es un correo del equipo Rünna: entra con Google, no con contraseña." };
+  }
+
+  const db = supabaseAdmin();
+  const { data: cli } = await db
+    .from("clients")
+    .select("id, name")
+    .eq("id", input.clientId)
+    .maybeSingle<{ id: string; name: string }>();
+  if (!cli) return { ok: false, error: "Esa empresa no existe." };
+
+  // Antes de tocar cualquier contraseña: ¿quién es este correo en Greenlight?
+  const revisar = (p: Awaited<ReturnType<typeof leerPerfil>>): string | null => {
+    if (p === "error") return "No se pudo revisar la cuenta. Intenta de nuevo.";
+    if (p && p.role !== "client") return "Ese correo es de alguien del equipo. El equipo entra con Google.";
+    if (p && p.clientId && p.clientId !== cli.id) {
+      return "Ese correo ya es cliente de otra empresa. Cámbialo de empresa antes de crearle un login aquí.";
+    }
+    return null;
+  };
+  const err1 = revisar(await leerPerfil({ email }));
+  if (err1) return { ok: false, error: err1 };
+
+  // 1) La cuenta de acceso: nueva con la contraseña, o la existente con la contraseña nueva.
+  //    `clave_verificada` es la marca que deja entrar con contraseña (contrasenaPermitida).
+  let userId: string;
+  let nuevo = false;
+  const creada = await db.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    app_metadata: { clave_verificada: true },
+  });
+  if (creada.data?.user?.id) {
+    userId = creada.data.user.id;
+    nuevo = true;
+  } else {
+    const yaExiste =
+      creada.error?.code === "email_exists" || /already|registered|exists/i.test(creada.error?.message ?? "");
+    if (!yaExiste) {
+      const debil = creada.error?.name === "AuthWeakPasswordError";
+      console.error("[clientes] crear login: no se pudo crear la cuenta —", creada.error?.message);
+      return {
+        ok: false,
+        error: debil
+          ? "Esa contraseña no cumple los requisitos. Prueba una más larga."
+          : "No se pudo crear la cuenta. Intenta de nuevo.",
+      };
+    }
+    // Ya hay cuenta de acceso. El proyecto de auth es COMPARTIDO con S.P.A.M: sólo se le
+    // pone una contraseña conocida si la cuenta ya es de Greenlight (perfil de cliente) o
+    // su dueño ya probó el correo con un código (solicitud pendiente). Si no, ponerle
+    // contraseña sería quedarse con su login de S.P.A.M. (security review 2026-11-12)
+    const perfilCorreo = await leerPerfil({ email });
+    let existente: { id: string; email?: string | null } | null = null;
+    if (perfilCorreo && perfilCorreo !== "error") {
+      const { data: au } = await db.auth.admin.getUserById(perfilCorreo.profileId);
+      if (au?.user) existente = au.user;
+    } else if (await tieneSolicitudPendiente(email)) {
+      // Sin perfil no hay código de admin vigente que cancelar; generateLink no manda correo.
+      const link = await db.auth.admin.generateLink({ type: "magiclink", email });
+      if (link.data?.user) existente = link.data.user;
+    } else {
+      return {
+        ok: false,
+        error:
+          "Ese correo ya tiene cuenta en otra app de Rünna. Por seguridad no se le pone contraseña desde aquí: pídele que solicite acceso con «¿Primera vez aquí?» y apruébalo en Invitaciones.",
+      };
+    }
+    if (!existente?.id || existente.email?.toLowerCase() !== email) {
+      console.error("[clientes] crear login: no se pudo leer la cuenta existente");
+      return { ok: false, error: "No se pudo preparar la cuenta. Intenta de nuevo." };
+    }
+    // El perfil se revisa también por id (el correo del perfil podría no coincidir).
+    const err2 = revisar(await leerPerfil({ id: existente.id }));
+    if (err2) return { ok: false, error: err2 };
+    const { error: pwErr } = await db.auth.admin.updateUserById(existente.id, {
+      password,
+      email_confirm: true,
+      app_metadata: { clave_verificada: true, codigo_admin_hasta: null },
+    });
+    if (pwErr) {
+      console.error("[clientes] crear login: no se pudo poner la contraseña —", pwErr.message);
+      return {
+        ok: false,
+        error:
+          pwErr.name === "AuthWeakPasswordError"
+            ? "Esa contraseña no cumple los requisitos. Prueba una más larga."
+            : "No se pudo poner la contraseña. Intenta de nuevo.",
+      };
+    }
+    userId = existente.id;
+  }
+
+  // 2) El perfil Partner de esa empresa. El nombre: el escrito, o el que ya tenía, o la
+  //    parte del correo antes de la @.
+  const { data: previo } = await db
+    .from("profiles")
+    .select("full_name")
+    .eq("id", userId)
+    .maybeSingle<{ full_name: string | null }>();
+  const fullName = nombre || previo?.full_name?.trim() || email.split("@")[0]!;
+  const { error: profErr } = await db
+    .from("profiles")
+    .upsert(
+      { id: userId, email, full_name: fullName, role: "client", client_id: cli.id, active: true },
+      { onConflict: "id" },
+    );
+  if (profErr) {
+    console.error("[clientes] crear login: perfil —", profErr.message);
+    return { ok: false, error: "La cuenta quedó creada pero falta su perfil. Vuelve a guardar para terminar." };
+  }
+
+  // 3) Si tenía una solicitud pendiente, queda aprobada (no se queda esperando en Invitaciones).
+  const { error: invErr } = await db
+    .from("pending_invites")
+    .update({ status: "approved", client_id: cli.id, decided_by: yo.userId, decided_at: new Date().toISOString() })
+    .ilike("email", sinComodines(email))
+    .eq("status", "pending");
+  if (invErr) console.error("[clientes] crear login: no se pudo cerrar la solicitud —", invErr.message);
+
+  // Nunca la contraseña en los registros.
+  console.info("[clientes] login creado por master", { masterId: yo.userId, clienteId: userId, nuevo });
+  revalidatePath("/admin");
+  return {
+    ok: true,
+    email,
+    nuevo,
+    empresa: cli.name,
+    usuario: { id: userId, email, name: fullName, active: true, clientId: cli.id, clientName: cli.name },
+  };
 }
 
 /** Revocar / reactivar el acceso de un cliente (soft: active=false). */

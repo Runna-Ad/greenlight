@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { User, UserRound, LogOut } from "lucide-react";
+import { User, UserRound, LogOut, KeyRound } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -17,6 +18,7 @@ import { NotificationsBell } from "./notifications-bell";
 import { SearchBox } from "./search-box";
 import { MobileNav } from "./sidebar";
 import { cerrarSesion } from "@/app/(app)/logout-actions";
+import { CambiarContrasena } from "./cambiar-contrasena";
 
 export function Topbar({
   title,
@@ -29,6 +31,7 @@ export function Topbar({
   soy?: Soy | null;
   avisos?: number;
 }) {
+  const [cambiarClave, setCambiarClave] = useState(false);
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground shadow-sm md:px-6">
       <MobileNav role={role} prismaAcceso={tieneAccesoPrisma(role, soy?.prisma_acceso)} />
@@ -72,6 +75,14 @@ export function Topbar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel className="truncate">{soy ? soy.name : "Sin identidad"}</DropdownMenuLabel>
+            {role === "client" && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="cursor-pointer" onSelect={() => setCambiarClave(true)}>
+                  <KeyRound className="size-4" /> Cambiar contraseña
+                </DropdownMenuItem>
+              </>
+            )}
             {canSee(role, "mi-perfil") && (
               <>
                 <DropdownMenuSeparator />
@@ -94,6 +105,7 @@ export function Topbar({
             </form>
           </DropdownMenuContent>
         </DropdownMenu>
+        {role === "client" && <CambiarContrasena open={cambiarClave} onOpenChange={setCambiarClave} />}
       </div>
     </header>
   );
