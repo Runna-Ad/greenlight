@@ -10,6 +10,11 @@
 > base: esquema `produccion` de Greenlight en el proyecto Supabase compartido `ybbrpqzbedaxsmotgtkh`.
 Última actualización: 2026-10-27 — hilos de cambios con el cliente SHIPPEADOS (main ffd5ed7). Antes: 2026-09-03 (noche) — REAP + 0061 + 4 features + **restructura del PORTAL** (En proceso · pestañas Activas/En revisión/Aprobadas · Fase 1 tarjetas · Fase 2 drill-down por marca) + fixes de flujo (cortinilla obligatoria, H.Ü.E cada envío, Greenlit fuera del portal, confirmar desde el panel, Enviar-a-cliente persiste) — **TODO SHIPPEADO + LIVE**. Sólo falta el walkthrough de Pedro + onboarding (el BLANK-SLATE RESET content-only ya está HECHO 2026-09-03: 639 filas de contenido borradas, prod vacío de tareas/briefs, equipo/cuentas/H.Ü.E-brain intactos). Antes: REAP + 4 features (login YA forzado en prod; sólo falta el walkthrough de Pedro + reset + onboarding). Antes: 2026-09-02 (noche) — REAP deep: main 977d7cf (fixes 4077c52 · 0061 dc39caa · merge asignar-rpc edb3371 · hotfix robots 977d7cf) · migración **0061 aplicada** · Vercel Ready · llave pública 401. Antes: (tarde) — deuda de perf (import en lotes · bundles vía vista 0060) + TS 6 / @types/node 24 + a11y AAA del PortalNav — **SHIPPEADO + LIVE (main 3e81636, migración 0060 aplicada, Vercel Ready, CI verde)**
 
+## 🔺 Paquetes fase 2: pantallas del equipo · 2026-11-13 · PROD
+- main 6e37539 (deploy dpl_HybD5ihZBC13msHWH2hT22jgetTy). Para volver: dpl_7Grv7B2acEsx8Fh8hjVtNBxoVYHk (main faeb749). Sin migración.
+- Tablero: paquete en cada tarjeta; filtro «Brief / paquete» con cada brief una vez. Entregas: un card por brief (Real + Normal), tareas por paquete. Performance: «Brief 30/10 · Real» + paquetes (la nota no cambia). Mi trabajo: por estado y luego por paquete. Tarea: pastilla de brief con Real/Normal + paquete. Papelera: mismas etiquetas.
+- Sin datos en vivo todavía: Entregas, Performance, Mi trabajo del Master, Papelera. Sigue: fase 3 (búsqueda, avisos, Slack con el paquete).
+
 ## 🔺 Paquetes en Briefs y portal · 2026-11-13 · PROD
 - main faeb749 (deploy dpl_7Grv7B2acEsx8Fh8hjVtNBxoVYHk). Para volver: dpl_HiuFusNs64FjG2JA3fgwgHaz5HHR.
 - Briefs del equipo: un card por fecha (Real + Normal), «Ver N tareas» por paquete, flechas de la tarea en el orden del card.
