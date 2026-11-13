@@ -13,7 +13,7 @@ Pedro: algunos clientes no logran entrar; un plan C donde el Master pone correo 
 **Riesgo aceptado por Pedro (dicho una vez):** marca + 3 números = 1,000 combinaciones; con el límite de Supabase por IP, una sola IP las prueba en unas horas. Subir a 4 números es cambiar `DIGITOS_CLAVE_MARCA`.
 **No hecho:** pedir la contraseña actual al cambiarla (quien entra con Google no la tiene).
 
-## 🟡 2026-11-13 — Brief › Paquete › Tarea, fase 3: avisos y búsqueda con el paquete (rama `claude/paquetes-fase2-703cdf`, 334eb45, SIN migración, NO en vivo)
+## ✅ 2026-11-13 — Brief › Paquete › Tarea, fase 3: avisos y búsqueda con el paquete (main, SIN migración, EN VIVO; para volver: dpl_HybD5ihZBC13msHWH2hT22jgetTy = main 6e37539)
 Pedro eligió las 2 recomendadas:
 - **Avisos (campana, correo uno y agrupado, Slack):** línea «LT AfterBF · Brief 30/10 · Real» bajo el título, armada al ENSEÑAR el aviso (`contextoDeTareas` en `src/lib/paquetes-data.ts`), no guardada: sin reescribir las ~20 funciones de la base, y los avisos viejos también la tienen. Si la búsqueda falla, el aviso sale sin la línea (try/catch).
 - **Búsqueda:** resultado «Paquete» (lead/admin/master; lead sólo con tareas de su equipo) que abre `/<cliente>/tablero?paquete=<id>` ya filtrado; cada tarea dice su paquete en vez del concepto.
