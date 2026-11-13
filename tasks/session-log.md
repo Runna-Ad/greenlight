@@ -4,7 +4,7 @@
 **Decisiones de Pedro:** la línea del paquete se arma al enseñar el aviso (no se guarda en el título); la búsqueda da un resultado «Paquete» que abre el tablero filtrado.
 **Pruebas:** test-lib 926/0 · npm test exit 0 · tsc 0 · eslint 0 · build exit 0. Revisión Sonnet: 2 arreglos.
 **Preview como Master:** búsqueda «AfterBF» → resultado Paquete → tablero filtrado con 6 tarjetas; consola limpia. La línea en avisos de tarea, correo y Slack: sólo pruebas (no hay aviso de tarea que ver).
-**En vivo:** «Ship it» de Pedro; origin/main seguía en 6e37539 (sin merge); fast-forward. **Para volver:** dpl_HybD5ihZBC13msHWH2hT22jgetTy (main 6e37539, fase 2).
+**En vivo:** «Ship it» de Pedro; origin/main seguía en 6e37539 (sin merge); fast-forward. **Para volver:** dpl_HybD5ihZBC13msHWH2hT22jgetTy (main 6e37539, fase 2). En vivo: main a3d3d5a, deploy dpl_556kcswvoAuJiVRPLEJDib8dfBrr Ready. Visto en greenlight.runna.agency como Master: buscar «Categories» → «LT Categories - November · Brief 23/10 · 2 tareas» → tablero filtrado con 2 tarjetas; consola limpia. (Nota sólo en la rama.)
 **Pick up next:** ver la línea del paquete en el primer aviso real de una tarea (campana, correo, Slack).
 
 ## 2026-11-13 — Paquetes fase 2: paquete y Real/Normal en tablero, Entregas, Performance, Mi trabajo, tarea y Papelera (main, SIN migración, EN VIVO)
