@@ -62,7 +62,7 @@ Pedro: un brief (Brief 30/10) tiene PAQUETES (columna "Package Name" del sheet, 
 
 **Desglose con imágenes EN VIVO** (2026-11-13, «Ship it»): «3 real · 2 normal · 1 imagen» (y copies aparte) en portal y Briefs; LT Categories dice «2 imágenes». Para volver: el deploy de main 3dd3355 (crear login).
 
-Next Step: fase 2. Luego fase 2 (tablero, Mi trabajo, Entregas con "· Real/Normal").
+Next Step: fase 2 = paquetes en tablero, Mi trabajo, Entregas, Performance, encabezado de la tarea y Papelera (cada pantalla dice paquete y Real/Normal). Fase 3 = búsqueda, avisos (campana/correo) y Slack con el nombre del paquete.
 
 ## ✅ 2026-11-12 — Bot de Slack «Greenlight»: EN VIVO (main f88c17d, deploy dpl_H88GvKdmiULWBpmUtxVRwZU83mRE; para volver: dpl_Aqu3N7FKPN6VapFHvYEsXy64wsV3)
 Pedro eligió la opción 2: DM por persona en el Slack de Runna, con el código listo para un segundo espacio (DiDi) si su admin lo aprueba. Mismo patrón que SnapTrack.
