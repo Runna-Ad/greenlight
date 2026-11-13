@@ -10,6 +10,14 @@
 **Sin probar:** la contraseña ya escrita con una sola empresa (588c931) en pantalla; crear login en vivo con un cliente real.
 **Pick up next:** cuando un cliente real no pueda entrar, crearle el login en vivo y confirmar que entra.
 
+## 2026-11-13 — Íconos de tipo y desglose con imágenes EN VIVO (cierre de la sesión de paquetes)
+**Hecho:** el ícono de imagen/video (contentType) reemplaza A1/B1/C1 en «Ver piezas» del portal y en la lista de Briefs (en Briefs el código queda en el tooltip). El desglose cuenta imágenes y copies aparte: «3 real · 2 normal · 1 imagen»; LT Categories dice «2 imágenes» en portal y Briefs.
+**Pruebas:** test-lib 886/0 tras juntar «Crear login» · npm test 0 · tsc 0 · build 0. En vivo como Master: íconos (3 «Video persona real», 3 «Video animado» en LT AfterBF) y «2 imágenes» en LT Categories, sin errores.
+**En vivo:** main faeb749, deploy dpl_7Grv7B2acEsx8Fh8hjVtNBxoVYHk. Para volver: dpl_HiuFusNs64FjG2JA3fgwgHaz5HHR (main 6374b89, conserva «Crear login»).
+**Ojo:** la carpeta principal `greenlight` sigue en 4752a04 (muy atrás de origin/main) con tasks/lessons.md sin commitear: es la lección «Real/Normal sí lo ve el cliente», YA copiada en esta rama. Al poner esa carpeta al día, descartar ese cambio local (el hook no me dejó hacerlo).
+**Sin probar:** una sesión de cliente real en el portal por paquete; borrar un card junto en Briefs; lead y especialista.
+**Pick up next:** fase 2 (tablero, Mi trabajo, Entregas/Performance con Real/Normal, búsqueda, avisos, Slack). Lista en tasks/todo.md.
+
 ## 2026-11-12 — Portal del cliente por PAQUETE EN VIVO
 **Hecho:** «Tus paquetes»: un card por paquete con su brief como etiqueta, barra, nota de fecha y «Ver piezas» con TODAS sus piezas por equipo (Real / Normal); las de producción con «En producción» y sin abrirse, «Por revisar» en ámbar vivo. «Abrir» entra a revisar sólo ese paquete (selector de paquetes bajo su brief; pestañas, flechas y listas sólo de sus piezas). `?brief=<brief>.<paquete>`; links viejos por brief abren el paquete de la tarea.
 **Pedro corrigió:** mostrar los nombres de las piezas en producción (PEDRO_OVERRIDE en lessons).
