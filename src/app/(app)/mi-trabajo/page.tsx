@@ -7,6 +7,9 @@ import { ideasConCambiosDelCliente, ideasEnRondaDelCliente, ideasConRespuestaDel
 import { ROLE_LABEL, canSee } from "@/lib/roles";
 import { STATUS_LABEL, STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
 import { MyTasks, type MyTask } from "@/components/board/my-tasks";
+import { paquetesDeTareas } from "@/lib/paquetes-data";
+import { etiquetaBrief } from "@/lib/paquetes";
+import { gruposMiTrabajo } from "@/lib/mi-trabajo-grupos";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +77,27 @@ export default async function MiTrabajoPage() {
         }))
         .filter((t) => !(role === "creative" && t.clientChangesPending));
     }
+
+    // Paquete y pestaña de cada tarea (fase 2): "LT AfterBF" como grupo y "Brief 30/10 · Real"
+    // en la fila (antes decía el nombre de la pestaña, igual para Real y Normal).
+    const briefIds = [...new Set(tasks.map((t) => t.brief_id))];
+    const [paqDe, { data: fechas }] = await Promise.all([
+      paquetesDeTareas(tasks.map((t) => t.id)),
+      briefIds.length
+        ? db.from("briefs").select("id, brief_date, brief_name, code").in("id", briefIds)
+            .returns<{ id: string; brief_date: string | null; brief_name: string | null; code: string | null }[]>()
+        : Promise.resolve({ data: [] as { id: string; brief_date: string | null; brief_name: string | null; code: string | null }[] }),
+    ]);
+    const briefDe = new Map((fechas ?? []).map((b) => [b.id, b]));
+    tasks = tasks.map((t) => {
+      const b = briefDe.get(t.brief_id);
+      return {
+        ...t,
+        paquete: paqDe.get(t.id) ?? null,
+        briefLabel: b ? etiquetaBrief({ ...b, track: t.track }) : t.brief_tab,
+        briefDeGrupo: b ? etiquetaBrief(b) : null,
+      };
+    });
   }
 
   const grupos = ORDEN.map((status) => ({
@@ -127,7 +151,21 @@ export default async function MiTrabajoPage() {
                 {status === "in_corrections" ? "Cambios pedidos" : STATUS_LABEL[status]}
                 <span className="text-muted-foreground">({items.length})</span>
               </h3>
-              <MyTasks tasks={items} soyId={soy.id} role={role} />
+              {/* Dentro del estado, por paquete (fase 2). Con un solo grupo «Sin paquete»
+                  no hace falta título. */}
+              <div className="space-y-3">
+                {gruposMiTrabajo(items).map((g, _i, todos) => (
+                  <div key={g.llave}>
+                    {(g.nombre || todos.length > 1) && (
+                      <p className="mb-1.5 flex items-baseline gap-1.5 text-[11px] font-semibold text-foreground">
+                        {g.nombre ?? "Sin paquete"}
+                        {g.brief && <span className="font-normal text-muted-foreground">· {g.brief}</span>}
+                      </p>
+                    )}
+                    <MyTasks tasks={g.tareas} soyId={soy.id} role={role} />
+                  </div>
+                ))}
+              </div>
             </section>
           ))}
         </div>

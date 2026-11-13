@@ -5,6 +5,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getViewAs } from "@/lib/view-as";
 import { ideasConCambiosDelCliente, ideasEnRondaDelCliente } from "@/lib/cambios-pendientes";
 import { getSoy, type Soy } from "@/lib/soy";
+import { paquetesDeTareas } from "@/lib/paquetes-data";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Board, type BriefOption, type Member, type Task } from "@/components/board/board";
@@ -86,11 +87,11 @@ async function loadBoard(
       : Promise.resolve({ data: [] as Member[] }),
     db
       .from("briefs")
-      .select("id, title, source_tab")
+      .select("id, title, source_tab, brief_date, track")
       .eq("client_id", client.id)
       .is("deleted_at", null) // papelera 0057 (las tareas ya las filtra la vista board_tasks)
       .order("created_at", { ascending: false })
-      .returns<{ id: string; title: string | null; source_tab: string | null }[]>(),
+      .returns<{ id: string; title: string | null; source_tab: string | null; brief_date: string | null; track: string | null }[]>(),
   ]);
 
   // Anota qué tareas en in_corrections tienen cambios del CLIENTE sin resolver (cancha
@@ -131,10 +132,14 @@ async function loadBoard(
     );
   }
 
+  // El paquete de cada tarjeta (fase 2): sólo de las tareas que este rol ya ve.
+  const paq = await paquetesDeTareas(conFecha.map((t) => t.id));
+  const conPaquete = conFecha.map((t) => ({ ...t, paquete: paq.get(t.id) ?? null }));
+
   return {
-    tasks: conFecha,
+    tasks: conPaquete,
     members: members ?? [],
-    briefs: (briefs ?? []).map((b) => ({ id: b.id, title: b.title, tab: b.source_tab })),
+    briefs: (briefs ?? []).map((b) => ({ id: b.id, title: b.title, tab: b.source_tab, brief_date: b.brief_date, track: b.track })),
     marcaColor: client.brand_color,
   };
 }

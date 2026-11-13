@@ -7,6 +7,7 @@ import { getViewAs } from "@/lib/view-as";
 // La constante y el tipo viven en lib/: un módulo "use server" sólo puede exportar
 // funciones async (exportar aquí DIAS_RETENCION rompía el build).
 import { DIAS_RETENCION, type ItemPapelera } from "@/lib/papelera";
+import { etiquetaBrief, etiquetaTarea } from "@/lib/paquetes";
 
 /**
  * PAPELERA de 30 días (0057). Borrar sella `deleted_at` en vez de destruir; aquí
@@ -63,11 +64,11 @@ export async function listarPapelera(): Promise<Ok<{ items: ItemPapelera[] }> | 
   const corte = corteISO();
   const [rBriefs, rIdeas] = await Promise.all([
     db.from("briefs")
-      .select("id, brief_name, code, brief_date, client_id, deleted_at, deleted_by")
+      .select("id, brief_name, code, brief_date, track, client_id, deleted_at, deleted_by")
       .not("deleted_at", "is", null).gte("deleted_at", corte)
       .order("deleted_at", { ascending: false }).limit(500),
     db.from("ideas")
-      .select("id, code, naming_base, concepto, brief_id, deleted_at, deleted_by")
+      .select("id, code, naming_base, concepto, brief_id, track, paquete_id, deleted_at, deleted_by")
       .not("deleted_at", "is", null).gte("deleted_at", corte)
       .order("deleted_at", { ascending: false }).limit(500),
   ]);
@@ -78,30 +79,37 @@ export async function listarPapelera(): Promise<Ok<{ items: ItemPapelera[] }> | 
 
   const briefs = (rBriefs.data ?? []) as {
     id: string; brief_name: string | null; code: string | null; brief_date: string | null;
-    client_id: string; deleted_at: string; deleted_by: string | null;
+    track: string | null; client_id: string; deleted_at: string; deleted_by: string | null;
   }[];
   const ideas = (rIdeas.data ?? []) as {
     id: string; code: string | null; naming_base: string | null; concepto: string | null;
-    brief_id: string; deleted_at: string; deleted_by: string | null;
+    brief_id: string; track: string | null; paquete_id: string | null; deleted_at: string; deleted_by: string | null;
   }[];
 
-  // Nombres para mostrar (cliente, brief padre, quién borró) en lote — sin N+1.
-  const clientIds = [...new Set(briefs.map((b) => b.client_id))];
+  // Nombres para mostrar (cliente, brief padre, paquete, quién borró) en lote — sin N+1.
+  type Padre = {
+    id: string; brief_name: string | null; code: string | null; brief_date: string | null;
+    client_id: string; deleted_at: string | null;
+  };
   const briefIds = [...new Set(ideas.map((i) => i.brief_id))];
+  const paqueteIds = [...new Set(ideas.map((i) => i.paquete_id).filter((x): x is string => !!x))];
   const autorIds = [...new Set([...briefs, ...ideas].map((r) => r.deleted_by).filter(Boolean))] as string[];
-  const [rCli, rBriefsPadre, rAutores] = await Promise.all([
-    clientIds.length ? db.from("clients").select("id, name").in("id", clientIds) : { data: [] },
+  const [rBriefsPadre, rPaquetes, rAutores] = await Promise.all([
     briefIds.length
-      ? db.from("briefs").select("id, brief_name, code, client_id, deleted_at").in("id", briefIds)
+      ? db.from("briefs").select("id, brief_name, code, brief_date, client_id, deleted_at").in("id", briefIds)
       : { data: [] },
+    paqueteIds.length ? db.from("paquetes").select("id, nombre").in("id", paqueteIds) : { data: [] },
     autorIds.length ? db.from("profiles").select("id, full_name").in("id", autorIds) : { data: [] },
   ]);
-  const cliName = new Map(((rCli.data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
-  const padre = new Map(
-    ((rBriefsPadre.data ?? []) as {
-      id: string; brief_name: string | null; code: string | null; client_id: string; deleted_at: string | null;
-    }[]).map((b) => [b.id, b]),
-  );
+  const padre = new Map(((rBriefsPadre.data ?? []) as Padre[]).map((b) => [b.id, b]));
+  const paquete = new Map(((rPaquetes.data ?? []) as { id: string; nombre: string }[]).map((p) => [p.id, p.nombre]));
+  // Los clientes de los briefs borrados Y de los briefs de las tareas borradas: antes sólo
+  // los primeros, y una tarea suelta de un brief vivo salía sin su cliente.
+  const clientIds = [...new Set([...briefs.map((b) => b.client_id), ...[...padre.values()].map((b) => b.client_id)])];
+  const { data: cliRows } = clientIds.length
+    ? await db.from("clients").select("id, name").in("id", clientIds)
+    : { data: [] };
+  const cliName = new Map(((cliRows ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
   const autor = new Map(
     ((rAutores.data ?? []) as { id: string; full_name: string }[]).map((p) => [p.id, p.full_name]),
   );
@@ -113,7 +121,8 @@ export async function listarPapelera(): Promise<Ok<{ items: ItemPapelera[] }> | 
     ...briefs.map((b) => ({
       id: b.id,
       tipo: "brief" as const,
-      titulo: b.brief_name || b.code || "Brief sin nombre",
+      // "Brief 30/10 · Real": Real y Normal del mismo día ya no se ven iguales (fase 2).
+      titulo: etiquetaBrief(b),
       contexto: cliName.get(b.client_id) ?? null,
       borradoEn: b.deleted_at,
       borradoPor: b.deleted_by ? autor.get(b.deleted_by) ?? null : null,
@@ -123,7 +132,8 @@ export async function listarPapelera(): Promise<Ok<{ items: ItemPapelera[] }> | 
     ...ideas.map((i) => {
       const p = padre.get(i.brief_id);
       const cli = p ? cliName.get(p.client_id) : null;
-      const nombreBrief = p ? p.brief_name || p.code : null;
+      // "LT AfterBF · Brief 30/10 · Normal": de qué paquete y pestaña era (fase 2).
+      const nombreBrief = p ? etiquetaTarea({ ...p, track: i.track }, i.paquete_id ? paquete.get(i.paquete_id) : null) : null;
       return {
         id: i.id,
         tipo: "tarea" as const,

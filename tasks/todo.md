@@ -13,6 +13,18 @@ Pedro: algunos clientes no logran entrar; un plan C donde el Master pone correo 
 **Riesgo aceptado por Pedro (dicho una vez):** marca + 3 números = 1,000 combinaciones; con el límite de Supabase por IP, una sola IP las prueba en unas horas. Subir a 4 números es cambiar `DIGITOS_CLAVE_MARCA`.
 **No hecho:** pedir la contraseña actual al cambiarla (quien entra con Google no la tiene).
 
+## 🟡 2026-11-13 — Brief › Paquete › Tarea, fase 2: paquete y Real/Normal en las pantallas del equipo (rama `claude/paquetes-fase2-703cdf`, SIN migración, NO en vivo)
+Pedro eligió las 4 recomendadas (2026-11-13):
+- **Tablero:** cada tarjeta dice su paquete arriba del naming. Filtro «Brief / paquete»: cada brief UNA vez (Real y Normal juntos), «Todo el Brief 30/10» y sus paquetes debajo (`src/lib/filtro-tablero.ts`).
+- **Entregas:** un card por brief (cliente + fecha), subtítulo «Real 4 · Normal 2», tareas por paquete («Sin paquete» al final) y cada fila dice Real/Normal (`src/lib/entregas-archivo.ts`).
+- **Performance:** la nota sigue por pestaña, ahora «Brief 30/10 · Real», con los paquetes debajo y en el tooltip de cada tarea.
+- **Mi trabajo:** las secciones de estado se quedan (Cambios pedidos primero); dentro, tareas por paquete; la fila dice «Brief 30/10 · Real» (`src/lib/mi-trabajo-grupos.ts`).
+- **Tarea:** pastilla «Brief 30/10 · Real» + pastilla del paquete. El portal no cambia.
+- **Papelera:** brief «Brief 30/10 · Real»; tarea «DiDi · LT AfterBF · Brief 30/10 · Normal». Arreglado de paso: una tarea suelta de un brief vivo salía sin su cliente.
+- Una sola etiqueta: `etiquetaBrief` / `etiquetaTarea` en `src/lib/paquetes.ts`; una sola carga tarea→paquete: `paquetesDeTareas` en `src/lib/paquetes-data.ts`.
+**Pruebas:** test-lib 916/0 · tsc 0 · eslint 0. npm test y build: ver session-log.
+**Sin probar:** vistas de lead y especialista con su sesión.
+
 ## ✅ 2026-11-12 — Brief › Paquete › Tarea, fase 1: EN VIVO (main a30aa80, deploy dpl_8i9A9QVURcjCMwKnE4JuzB5AxTJA; para volver: dpl_8iYVahssbswVCQF6QrERDNHe1XSi)
 Pedro: un brief (Brief 30/10) tiene PAQUETES (columna "Package Name" del sheet, antes "Brief Name") y cada paquete tiene tareas. Opción B: el paquete es su propio registro, con fecha de entrega que pone un ADMIN. La fecha del brief = la más lejana de sus paquetes. Paquete entregado (su última tarea Greenlit) → "Entregado X · fecha Y (N días antes)". Tarde: el equipo ve "N días tarde"; el cliente sólo "Entregado X". En el portal el cliente sí ve Real/Normal, como desglose por paquete ("3 piezas · 2 real · 1 normal").
 

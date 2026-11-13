@@ -18,6 +18,7 @@ import { ESTADOS_SOLO_LECTURA, plantillaPara, requiereCortinilla, notaGlobal, LE
 import { posicionEnBundle } from "@/lib/bundle";
 import { veTodo } from "@/lib/task-actions";
 import { cargarBundle } from "@/lib/bundle-data";
+import { etiquetaBrief } from "@/lib/paquetes";
 import { CorreccionesProvider } from "@/components/tarea/correcciones/contexto";
 import { WorkspaceProvider } from "@/components/tarea/workspace-provider";
 import { PanelCorrecciones } from "@/components/tarea/correcciones/panel";
@@ -50,6 +51,8 @@ type Idea = {
   trend: string | null; notas: string | null; legales_libres: string | null; nota_guion: string | null;
   comentarios_creativo: string | null; selling_points: string[] | null;
   cambios_cliente_en_lead: boolean;
+  /** Su paquete (0097); null = sin paquete. */
+  paquete_id: string | null;
   deleted_at: string | null;
   published_at: string | null;
 };
@@ -73,7 +76,7 @@ export default async function TareaPage({
   const { data: idea } = await db
     .from("ideas")
     .select(
-      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo, selling_points, cambios_cliente_en_lead, deleted_at, published_at",
+      "id, code, status, track, naming_base, concepto, tipo_asset, formato_code, duracion, tamanos, plataformas, marca_id, brief_id, entrega_num, entrega_final, entrega_url, trend, notas, legales_libres, nota_guion, comentarios_creativo, selling_points, cambios_cliente_en_lead, paquete_id, deleted_at, published_at",
     )
     .eq("id", id)
     .is("deleted_at", null) // en la papelera (0057) = 404; se restaura desde /admin
@@ -146,16 +149,14 @@ export default async function TareaPage({
   const brf = brief as
     | { brief_name: string | null; code: string | null; brief_date: string | null }
     | null;
-  // Preferir la FECHA del brief en formato compacto "DD/MM" (igual que el
-  // tablero) — el brief_name es la etiqueta libre del cliente y a veces es un
-  // título largo. Cae a brief_name y luego a code.
-  const md = brf?.brief_date?.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  const fechaBrief = md ? `${md[3]}/${md[2]}` : null;
-  // Con fecha → "Brief 24/07" (compacto, como el mockup y el tablero). Sin fecha,
-  // el brief_name ya es un nombre propio (no se le antepone "Brief"); cae a code.
-  const briefLabel = fechaBrief
-    ? `Brief ${fechaBrief}`
-    : brf?.brief_name?.trim() || brf?.code?.trim() || null;
+  // "Brief 30/10 · Real" (fase 2): Real y Normal del mismo día son dos pestañas con la misma
+  // fecha; el track de la TAREA dice cuál es. Sin fecha, el nombre propio del brief o su código.
+  const briefLabel = brf ? etiquetaBrief({ ...brf, track: idea.track }) : null;
+  // Y su paquete, en su propia pastilla (sólo el nombre; el brief ya va al lado).
+  const { data: paq } = idea.paquete_id
+    ? await db.from("paquetes").select("nombre").eq("id", idea.paquete_id).maybeSingle<{ nombre: string }>()
+    : { data: null };
+  const paqueteNombre = paq?.nombre ?? null;
 
   // El bundle: las tareas hermanas de este brief, con el MISMO filtro y orden
   // que los cards de /briefs (lib/bundle.ts es la única fuente).
@@ -601,6 +602,7 @@ export default async function TareaPage({
             marca={marca?.name ?? null}
             logoUrl={marca?.logo_url ?? null}
             briefLabel={briefLabel}
+            paqueteNombre={paqueteNombre}
             naming={idea.naming_base}
             status={idea.status}
             notaGuion={idea.nota_guion}

@@ -10,7 +10,7 @@ import { useWorkspaceView } from "./workspace-provider";
 
 /**
  * La HERO de la tarea (mockup): la tarjeta cálida con la identidad de la pieza.
- *   [logo marca] [Brief 20-07]                     [status]
+ *   [logo marca] [Brief 20/07 · Real] [paquete]      [status]
  *   TÍTULO GRANDE (naming_base)
  *   💬 Notas de guión (editable)       · cliente: [Link de entrega ↗]
  *
@@ -24,6 +24,7 @@ export function HeroTarea({
   marca,
   logoUrl,
   briefLabel,
+  paqueteNombre,
   naming,
   status,
   notaGuion,
@@ -36,6 +37,9 @@ export function HeroTarea({
   marca: string | null;
   logoUrl: string | null;
   briefLabel: string | null;
+  /** El paquete de la tarea (0097); sin él, no hay pastilla. El portal no lo pasa: ahí el
+   *  cliente ya entra por paquete. */
+  paqueteNombre?: string | null;
   naming: string | null;
   status: AssetStatus;
   notaGuion: string | null;
@@ -75,6 +79,14 @@ export function HeroTarea({
               title={briefLabel}
             >
               {briefLabel}
+            </span>
+          )}
+          {paqueteNombre && (
+            <span
+              className="max-w-[240px] truncate rounded-full border border-border bg-card px-3 py-1 text-[11px] font-semibold text-foreground"
+              title={`Paquete: ${paqueteNombre}`}
+            >
+              {paqueteNombre}
             </span>
           )}
         </div>

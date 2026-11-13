@@ -40,6 +40,7 @@ import {
   type ViewRole,
 } from "@/lib/roles";
 import { contentType, canales } from "@/lib/iconos";
+import { gruposFiltroBrief, pasaFiltroBrief, type GrupoFiltro } from "@/lib/filtro-tablero";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Pill, type PillStatus } from "@/components/ui/pill";
@@ -92,9 +93,12 @@ export type Task = {
   /** La ronda ACTUAL de correcciones trae cambios pedidos por el CLIENTE → pastilla
    *  "Cambios pedidos por el cliente" (lead antes de enrutar, especialista después). */
   cambiosDelCliente?: boolean;
+  /** Su paquete dentro del brief (0097, fase 2). Lo pone el loader desde `ideas`
+   *  (board_tasks no lo trae); null = sin paquete. */
+  paquete?: { id: string; nombre: string } | null;
 };
 
-export type BriefOption = { id: string; title: string | null; tab: string | null };
+export type BriefOption = { id: string; title: string | null; tab: string | null; brief_date: string | null; track: string | null };
 
 const ALL = "__todas__";
 
@@ -200,16 +204,19 @@ export function Board({
     [tasks],
   );
 
+  // «Brief / paquete» (fase 2): cada brief UNA vez (Real y Normal juntos) y sus paquetes.
+  const gruposBrief = useMemo(() => gruposFiltroBrief(briefs, tasks), [briefs, tasks]);
+
   const visible = useMemo(
     () =>
       tasks.filter(
         (t) =>
           (fPersona === ALL || t.members.some((m) => m.id === fPersona)) &&
-          (fBrief === ALL || t.brief_id === fBrief) &&
+          pasaFiltroBrief(fBrief, ALL, gruposBrief, t) &&
           (fPlataforma === ALL || (t.plataformas ?? []).includes(fPlataforma)) &&
           (fMarca === ALL || t.marca === fMarca),
       ),
-    [tasks, fPersona, fBrief, fPlataforma, fMarca],
+    [tasks, fPersona, fBrief, gruposBrief, fPlataforma, fMarca],
   );
 
   // Agrupa las tarjetas visibles por columna UNA sola vez por render. Así cada
@@ -367,7 +374,7 @@ export function Board({
       )}
       <FilterBar
         members={members}
-        briefs={briefs}
+        grupos={gruposBrief}
         plataformas={plataformas}
         marcas={marcas}
         fPersona={fPersona}
@@ -744,7 +751,16 @@ const CardBody = memo(function CardBody({
 
       {/* Toda la tarjeta es el link (arriba); el título es sólo texto para no
           anidar un <a> dentro de otro. */}
-      <p className="mt-1.5 font-mono text-[11px] font-semibold text-foreground">
+      {/* El PAQUETE de la tarea (fase 2): de qué tema del brief es, de un vistazo. */}
+      {task.paquete && (
+        <p
+          className="mt-1.5 truncate text-[10px] font-semibold uppercase tracking-wide text-primary"
+          title={`Paquete: ${task.paquete.nombre}`}
+        >
+          {task.paquete.nombre}
+        </p>
+      )}
+      <p className={`${task.paquete ? "mt-0.5" : "mt-1.5"} font-mono text-[11px] font-semibold text-foreground`}>
         {task.naming_base ?? "Abrir tarea"}
       </p>
       <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-muted-foreground">
@@ -1030,7 +1046,7 @@ function Radio({ activo }: { activo: boolean }) {
 // ─────────────────────────────────────────────────────────────
 function FilterBar(props: {
   members: Member[];
-  briefs: BriefOption[];
+  grupos: GrupoFiltro[];
   plataformas: string[];
   marcas: string[];
   fPersona: string;
@@ -1068,14 +1084,25 @@ function FilterBar(props: {
         className={sel}
         value={props.fBrief}
         onChange={(e) => props.setFBrief(e.target.value)}
-        aria-label="Filtrar por brief"
+        aria-label="Filtrar por brief o paquete"
       >
         <option value={ALL}>Todos los briefs</option>
-        {props.briefs.map((b) => (
-          <option key={b.id} value={b.id}>
-            {b.tab ?? b.title ?? "Sin nombre"}
-          </option>
-        ))}
+        {props.grupos.map((g) =>
+          g.paquetes.length ? (
+            <optgroup key={g.valor} label={g.etiqueta}>
+              <option value={g.valor}>Todo el {g.etiqueta}</option>
+              {g.paquetes.map((p) => (
+                <option key={p.valor} value={p.valor}>
+                  {p.nombre}
+                </option>
+              ))}
+            </optgroup>
+          ) : (
+            <option key={g.valor} value={g.valor}>
+              {g.etiqueta}
+            </option>
+          ),
+        )}
       </select>
 
       <select

@@ -147,3 +147,37 @@ export function desgloseTracks(tareas: { track: string | null; tipoAsset?: strin
     copy ? `${copy} ${copy === 1 ? "copy" : "copies"}` : null,
   ].filter(Boolean).join(" · ");
 }
+
+/** "Real" / "Normal" para un track (null si no es ninguno). */
+export function nombreTrack(track: string | null | undefined): "Real" | "Normal" | null {
+  return track === "real" ? "Real" : track === "normal" ? "Normal" : null;
+}
+
+/**
+ * La etiqueta de un brief en las pantallas del EQUIPO (fase 2, Pedro 2026-11-13). Real y
+ * Normal del mismo día son dos pestañas con la misma fecha: sin el track, Entregas y
+ * Performance decían "Brief 30/10" dos veces. Con fecha → "Brief 30/10 · Real"; sin fecha,
+ * el nombre propio del brief (o su código). `track` null → sólo "Brief 30/10".
+ * Una sola fuente: Entregas, Performance, la tarea y la Papelera la usan igual.
+ */
+export function etiquetaBrief(b: {
+  brief_date: string | null;
+  brief_name?: string | null;
+  code?: string | null;
+  track?: string | null;
+}): string {
+  const md = b.brief_date?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const base = md ? `Brief ${md[3]}/${md[2]}` : b.brief_name?.trim() || b.code?.trim() || "Brief";
+  const t = nombreTrack(b.track);
+  return t ? `${base} · ${t}` : base;
+}
+
+/** "LT AfterBF · Brief 30/10 · Real": de qué paquete y pestaña es una tarea. Sin paquete,
+ *  sólo la del brief. */
+export function etiquetaTarea(
+  b: Parameters<typeof etiquetaBrief>[0],
+  paquete: string | null | undefined,
+): string {
+  const p = paquete?.trim();
+  return p ? `${p} · ${etiquetaBrief(b)}` : etiquetaBrief(b);
+}

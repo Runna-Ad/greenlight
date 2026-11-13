@@ -19,20 +19,28 @@ export type TareaArchivada = {
   id: string;
   code: string | null;
   namingBase: string | null;
+  /** De qué pestaña es: el card junta Real y Normal del mismo día (fase 2). */
+  track: "Real" | "Normal" | null;
   greenlitEl: string | null; // fecha ya formateada por el server
   asignados: { name: string; color: string }[];
   /** ¿Estrellada como top performer? (Biblioteca de Ganadores de H.Ü.E) */
   starred: boolean;
 };
 
-// El archivo se BUNDLEA por brief: una tarjeta por brief, expandible.
+// El archivo se BUNDLEA por brief: una tarjeta por brief (Real y Normal del mismo día
+// juntos), expandible, con sus tareas por paquete (fase 2, Pedro 2026-11-13).
 export type BriefArchivo = {
+  /** Llave del card (cliente + fecha, o la pestaña sola si el brief no tiene fecha). */
   briefId: string;
   briefLabel: string;
+  /** "Real 4 · Normal 2". */
+  desglose: string;
   clienteName: string;
   clienteColor: string;
   clienteSlug: string;
-  tareas: TareaArchivada[];
+  total: number;
+  /** Paquetes por nombre; `nombre` null = «Sin paquete» (al final). */
+  grupos: { paqueteId: string | null; nombre: string | null; tareas: TareaArchivada[] }[];
 };
 
 /**
@@ -50,7 +58,7 @@ export function EntregasBoard({
   /** master/admin: puede estrellar top performers. El resto sólo ve la estrella si ya está. */
   puedeEstrellar: boolean;
 }) {
-  const total = briefs.reduce((n, b) => n + b.tareas.length, 0);
+  const total = briefs.reduce((n, b) => n + b.total, 0);
   if (!total) {
     return (
       <EmptyState
@@ -87,6 +95,7 @@ function BriefCard({ b, puedeEstrellar }: { b: BriefArchivo; puedeEstrellar: boo
         <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", abierto && "rotate-180")} />
         <FileText className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 truncate font-semibold text-foreground">{b.briefLabel}</span>
+        {b.desglose && <span className="shrink-0 text-xs text-muted-foreground">{b.desglose}</span>}
         <Pill color={b.clienteColor} dot className="shrink-0">
           {b.clienteName}
         </Pill>
@@ -94,13 +103,22 @@ function BriefCard({ b, puedeEstrellar }: { b: BriefArchivo; puedeEstrellar: boo
           className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold"
           style={{ background: `color-mix(in srgb, ${GREENLIT} 20%, transparent)`, color: "var(--greenlight-ink)" }}
         >
-          <Sparkles className="size-3" /> {b.tareas.length} Greenlit
+          <Sparkles className="size-3" /> {b.total} Greenlit
         </span>
       </button>
 
       {abierto && (
         <div className="border-t border-border">
-          {b.tareas.map((t) => (
+          {b.grupos.map((g) => (
+            <div key={g.paqueteId ?? "sin-paquete"}>
+              {/* Con un solo grupo «Sin paquete» (brief viejo o manual) no hace falta título. */}
+              {(g.nombre || b.grupos.length > 1) && (
+                <p className="border-b border-border bg-secondary/30 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {g.nombre ?? "Sin paquete"}
+                  <span className="ml-1.5 font-normal normal-case tracking-normal">· {g.tareas.length}</span>
+                </p>
+              )}
+          {g.tareas.map((t) => (
             <div key={t.id} className="flex items-stretch border-b border-border last:border-b-0">
               <Link
                 href={`/${b.clienteSlug}/tareas/${t.id}`}
@@ -116,6 +134,17 @@ function BriefCard({ b, puedeEstrellar }: { b: BriefArchivo; puedeEstrellar: boo
                 <span className="min-w-0 flex-1 truncate font-mono text-foreground">
                   {t.namingBase ?? "—"}
                 </span>
+                {t.track && (
+                  <span
+                    className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
+                    style={{
+                      color: `var(--type-${t.track === "Real" ? "real" : "normal"})`,
+                      backgroundColor: `color-mix(in srgb, var(--type-${t.track === "Real" ? "real" : "normal"}) 12%, transparent)`,
+                    }}
+                  >
+                    {t.track}
+                  </span>
+                )}
                 {t.asignados.length > 0 && (
                   <div className="flex -space-x-1.5">
                     {t.asignados.slice(0, 3).map((a, i) => (
@@ -145,6 +174,8 @@ function BriefCard({ b, puedeEstrellar }: { b: BriefArchivo; puedeEstrellar: boo
                   nombre={t.namingBase ?? t.code ?? "tarea"}
                 />
               )}
+            </div>
+          ))}
             </div>
           ))}
         </div>

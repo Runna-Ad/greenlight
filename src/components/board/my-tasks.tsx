@@ -23,6 +23,7 @@ export type MyTask = {
   duracion: string[] | null;
   marca: string | null;
   brief_tab: string | null;
+  brief_id: string;
   client_slug: string | null;
   file_count: number;
   member_ids: string[];
@@ -33,6 +34,11 @@ export type MyTask = {
   cambiosDelCliente?: boolean;
   /** El cliente contestó en el hilo de un cambio y espera al lead (pastilla "El cliente respondió"). */
   clienteRespondio?: boolean;
+  /** Fase 2 (los pone la página): su paquete, "Brief 30/10 · Real" para la fila y "Brief 30/10"
+   *  para el título del grupo. */
+  paquete?: { id: string; nombre: string } | null;
+  briefLabel?: string | null;
+  briefDeGrupo?: string | null;
 };
 
 /**
@@ -153,8 +159,8 @@ export function MyTasks({
               <p className="mt-0.5 line-clamp-1 text-[13px] text-muted-foreground">
                 {t.concepto ?? "Sin concepto"}
               </p>
-              {t.brief_tab && (
-                <p className="mt-0.5 text-[10px] text-muted-foreground/70">{t.brief_tab}</p>
+              {(t.briefLabel ?? t.brief_tab) && (
+                <p className="mt-0.5 text-[10px] text-muted-foreground/70">{t.briefLabel ?? t.brief_tab}</p>
               )}
             </div>
 

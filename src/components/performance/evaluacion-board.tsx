@@ -222,6 +222,11 @@ function BriefRow({ b }: { b: BriefEval }) {
           <span className="ml-1.5 text-[10.5px] font-normal text-muted-foreground">
             · {b.tareas} tarea{b.tareas === 1 ? "" : "s"}
           </span>
+          {b.paquetes.length > 0 && (
+            <span className="block truncate text-[10.5px] font-normal text-muted-foreground" title={b.paquetes.join(", ")}>
+              {b.paquetes.join(" · ")}
+            </span>
+          )}
         </span>
         <span className="hidden items-center gap-3 sm:flex">
           <MiniScore label="Cal" v={b.calidad} />
@@ -285,7 +290,11 @@ function TareaChip({ t }: { t: TareaEval }) {
         color: "color-mix(in srgb, var(--status-completed) 74%, #000)",
       };
   return (
-    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold" style={estilo}>
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold"
+      style={estilo}
+      title={t.paquete ? `Paquete: ${t.paquete}` : undefined}
+    >
       {t.conNotas ? (
         <span className="size-1.5 rounded-full" style={{ background: "currentColor" }} />
       ) : (

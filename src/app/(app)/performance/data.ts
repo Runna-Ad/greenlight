@@ -3,6 +3,8 @@ import { STATUS_LABEL, STATUS_TOKEN } from "@/lib/brand";
 import type { WorkloadMember } from "@/components/workload/workload-board";
 import type { PillStatus } from "@/components/ui/pill";
 import type { Track } from "@/lib/vocab";
+import { etiquetaBrief } from "@/lib/paquetes";
+import { paquetesDeTareas } from "@/lib/paquetes-data";
 import {
   agruparCarga,
   ESTADOS_ACTIVOS,
@@ -119,16 +121,6 @@ export async function cargarWorkload(tracks: Track[] | null): Promise<WorkloadMe
   }));
 }
 
-/** Etiqueta de un brief: "Brief DD/MM" (por fecha), o su nombre, o su código. */
-function briefLabelDe(b: { brief_name: string | null; code: string | null; brief_date: string | null }): string {
-  if (b.brief_date) {
-    const d = new Date(b.brief_date);
-    if (!Number.isNaN(d.getTime()))
-      return `Brief ${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-  }
-  return b.brief_name || b.code || "Brief";
-}
-
 // ── Evaluación ──
 /**
  * Devuelve la Evaluación por especialista para el periodo. `tracks` = equipos
@@ -208,15 +200,18 @@ export async function cargarEvaluacion(
         // Etiquetas de los briefs de estas tareas (para el desglose por brief).
         db
           .from("briefs")
-          .select("id, brief_name, code, brief_date")
+          .select("id, brief_name, code, brief_date, track")
           .in("id", briefIdsUniq)
           .then((r) => r.data ?? []),
       ])
     : [[], [], [], []];
+  // El paquete de cada tarea (fase 2): sólo se enseña, no cambia la nota.
+  const paqDe = await paquetesDeTareas(ideaIds);
 
   const labelDe = new Map<string, string>();
-  for (const b of briefsData as { id: string; brief_name: string | null; code: string | null; brief_date: string | null }[]) {
-    labelDe.set(b.id, briefLabelDe(b));
+  // "Brief 30/10 · Real": la nota sigue por pestaña, y Real y Normal ya no se ven iguales.
+  for (const b of briefsData as { id: string; brief_name: string | null; code: string | null; brief_date: string | null; track: string | null }[]) {
+    labelDe.set(b.id, etiquetaBrief(b));
   }
 
   const miembrosIn: MiembroInput[] = ((miembros ?? []) as {
@@ -303,6 +298,7 @@ export async function cargarEvaluacion(
     briefId: i.brief_id,
     briefLabel: labelDe.get(i.brief_id) ?? "Brief",
     code: i.naming_base ?? i.code ?? null,
+    paquete: paqDe.get(i.id)?.nombre ?? null,
   }));
 
   return evaluarEquipo(miembrosIn, autoria, correcciones, asigsIn, ideasIn, periodo);

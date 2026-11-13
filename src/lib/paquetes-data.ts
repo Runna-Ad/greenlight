@@ -48,3 +48,41 @@ export async function cargarPaquetes(clientId: string, ids: (string | null)[]): 
   }
   return out;
 }
+
+export type PaqueteDeTarea = { id: string; nombre: string };
+
+/**
+ * El paquete de cada tarea, para las pantallas del equipo que no lo traían (fase 2: tablero,
+ * Mi trabajo, Entregas, Performance). board_tasks no tiene `paquete_id` (0097 no toca esa
+ * vista), así que se lee de `ideas`, por lotes de 100 ids (el tope de una URL de PostgREST).
+ * Un error no rompe la pantalla: las tareas se ven sin paquete y queda en el log.
+ */
+export async function paquetesDeTareas(ideaIds: string[]): Promise<Map<string, PaqueteDeTarea>> {
+  const out = new Map<string, PaqueteDeTarea>();
+  const ids = [...new Set(ideaIds)];
+  if (!ids.length) return out;
+  const db = supabaseAdmin();
+
+  const lotes = <T,>(xs: T[]) => Array.from({ length: Math.ceil(xs.length / 100) }, (_, i) => xs.slice(i * 100, i * 100 + 100));
+
+  // Los lotes van en paralelo. Si uno falla, la pantalla sale sin paquetes (todas igual),
+  // no con unas tarjetas con paquete y otras sin.
+  const rIdeas = await Promise.all(lotes(ids).map((l) =>
+    db.from("ideas").select("id, paquete_id").in("id", l).not("paquete_id", "is", null)
+      .returns<{ id: string; paquete_id: string }[]>()));
+  const eIdeas = rIdeas.find((r) => r.error)?.error;
+  if (eIdeas) { console.error("paquetesDeTareas (ideas):", eIdeas.message); return out; }
+  const paqDe = new Map(rIdeas.flatMap((r) => r.data ?? []).map((r) => [r.id, r.paquete_id]));
+
+  const rPaqs = await Promise.all(lotes([...new Set(paqDe.values())]).map((l) =>
+    db.from("paquetes").select("id, nombre").in("id", l).returns<{ id: string; nombre: string }[]>()));
+  const ePaqs = rPaqs.find((r) => r.error)?.error;
+  if (ePaqs) { console.error("paquetesDeTareas (paquetes):", ePaqs.message); return out; }
+  const nombre = new Map(rPaqs.flatMap((r) => r.data ?? []).map((p) => [p.id, p.nombre]));
+
+  for (const [ideaId, paqId] of paqDe) {
+    const n = nombre.get(paqId);
+    if (n) out.set(ideaId, { id: paqId, nombre: n });
+  }
+  return out;
+}

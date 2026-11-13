@@ -1475,7 +1475,7 @@ console.log("\n▶ evaluarEquipo() — por autor");
   ];
   const ideas = [
     { id: "A", completedAt: "2026-08-20T00:00:00Z", briefId: "bfV", briefLabel: "Brief 20/08", code: "AAA" },
-    { id: "B", completedAt: "2026-08-25T00:00:00Z", briefId: "bfP", briefLabel: "Brief 25/08", code: "BBB" },
+    { id: "B", completedAt: "2026-08-25T00:00:00Z", briefId: "bfP", briefLabel: "Brief 25/08", code: "BBB", paquete: "LT AfterBF" },
   ];
   const evs = evaluarEquipo(
     [
@@ -1520,6 +1520,10 @@ console.log("\n▶ evaluarEquipo() — por autor");
   eq("brief · Ana bfP etiqueta = Brief 25/08", bf(ana, "bfP").briefLabel, "Brief 25/08");
   eq("brief · Beto: 1 brief (sólo tarea A)", beto.briefs.length, 1);
   eq("brief · Beto bfV overall = 9.2", bf(beto, "bfV").overall, 9.2);
+  // Fase 2: el paquete se enseña por brief y por tarea, sin tocar la nota.
+  eq("brief · Ana bfP lista su paquete", bf(ana, "bfP").paquetes.join(","), "LT AfterBF");
+  eq("brief · Ana bfV sin paquete", bf(ana, "bfV").paquetes.length, 0);
+  eq("brief · tarea B dice su paquete", bf(ana, "bfP").tareasDetalle[0].paquete, "LT AfterBF");
 }
 
 // ── Evaluación v2: Resolución (rework fallido de H.Ü.E) + Eficiencia (rondas + cambios/ronda) ──
@@ -1968,6 +1972,85 @@ console.log("\n▶ Paquetes — clave, fecha del brief, nota de entrega");
   eq("varias imágenes en plural", desgloseTracks([pz("normal", "Images"), pz("normal", "Images")]), "2 imágenes");
   eq("los copies también aparte", desgloseTracks([pz("normal", "Copies"), pz("normal", "Normal Video")]), "1 normal · 1 copy");
   eq("sin tipo cuenta como video de su equipo", desgloseTracks([pz("normal", null)]), "1 normal");
+}
+
+console.log("\n▶ Fase 2 — etiqueta de brief y tarea con Real/Normal y paquete (Pedro 2026-11-13)");
+{
+  const { etiquetaBrief, etiquetaTarea, nombreTrack } = await import("../src/lib/paquetes.ts");
+  eq("Real y Normal del mismo día ya no dicen lo mismo",
+     [etiquetaBrief({ brief_date: "2026-10-30", track: "real" }), etiquetaBrief({ brief_date: "2026-10-30", track: "normal" })].join(" | "),
+     "Brief 30/10 · Real | Brief 30/10 · Normal");
+  eq("sin track: sólo la fecha", etiquetaBrief({ brief_date: "2026-10-30", track: null }), "Brief 30/10");
+  eq("sin fecha: el nombre propio, sin 'Brief' delante", etiquetaBrief({ brief_date: null, brief_name: " Voyager Local ", track: "real" }), "Voyager Local · Real");
+  eq("sin fecha ni nombre: el código", etiquetaBrief({ brief_date: null, brief_name: "", code: "DIDI-01" }), "DIDI-01");
+  eq("sin nada: 'Brief'", etiquetaBrief({ brief_date: null }), "Brief");
+  eq("la fecha no se corre por zona horaria", etiquetaBrief({ brief_date: "2026-11-01" }), "Brief 01/11");
+  eq("tarea con paquete", etiquetaTarea({ brief_date: "2026-10-30", track: "normal" }, "LT AfterBF"), "LT AfterBF · Brief 30/10 · Normal");
+  eq("tarea sin paquete", etiquetaTarea({ brief_date: "2026-10-30", track: "real" }, null), "Brief 30/10 · Real");
+  eq("paquete vacío cuenta como sin paquete", etiquetaTarea({ brief_date: "2026-10-30", track: "real" }, "  "), "Brief 30/10 · Real");
+  eq("track desconocido no se inventa", nombreTrack("otro"), null);
+}
+
+console.log("\n▶ Fase 2 — filtro Brief / paquete del tablero (Pedro 2026-11-13, opción A)");
+{
+  const { gruposFiltroBrief, pasaFiltroBrief } = await import("../src/lib/filtro-tablero.ts");
+  const pest = [
+    { id: "R30", brief_date: "2026-10-30", title: "Brief 30/10", tab: "Brief 30/10" },
+    { id: "N30", brief_date: "2026-10-30", title: "Brief 30/10", tab: "Brief 30/10" },
+    { id: "R23", brief_date: "2026-10-23", title: "Brief 23/10", tab: "Brief 23/10" },
+    { id: "MAN", brief_date: null, title: "Voyager", tab: null, track: "real" },
+  ];
+  const LT = { id: "pLT", nombre: "LT AfterBF" }, CAT = { id: "pCAT", nombre: "LT Categories" }, AA = { id: "pAA", nombre: "Alpha" };
+  const ts = [
+    { brief_id: "R30", paquete: LT }, { brief_id: "N30", paquete: LT }, { brief_id: "N30", paquete: AA },
+    { brief_id: "R23", paquete: CAT }, { brief_id: "MAN", paquete: null }, { brief_id: "R30", paquete: null },
+  ];
+  const g = gruposFiltroBrief(pest, ts);
+  eq("Real y Normal del mismo día salen UNA vez", g.map((x) => x.etiqueta).join(" | "), "Brief 30/10 | Brief 23/10 | Voyager · Real");
+  eq("el grupo junta las dos pestañas", g[0].briefIds.join(","), "R30,N30");
+  eq("un paquete con tareas Real y Normal aparece una vez, por nombre", g[0].paquetes.map((p) => p.nombre).join(","), "Alpha,LT AfterBF");
+  eq("brief sin paquetes: sin sub-opciones", g[2].paquetes.length, 0);
+  const pasa = (v) => ts.filter((t) => pasaFiltroBrief(v, "ALL", g, t)).length;
+  eq("todos", pasa("ALL"), 6);
+  eq("todo el brief 30/10 = Real + Normal", pasa(g[0].valor), 4);
+  eq("sólo el paquete LT AfterBF", pasa("p:pLT"), 2);
+  eq("un valor viejo no deja pasar nada", pasa("g:d:2025-01-01"), 0);
+}
+
+console.log("\n▶ Fase 2 — Entregas: un card por brief (Real + Normal) y tareas por paquete (Pedro 2026-11-13)");
+{
+  const { agruparArchivo } = await import("../src/lib/entregas-archivo.ts");
+  const pest = new Map([
+    ["R30", { id: "R30", client_id: "didi", brief_date: "2026-10-30", brief_name: "LT", code: "X" }],
+    ["N30", { id: "N30", client_id: "didi", brief_date: "2026-10-30", brief_name: "LT", code: "Y" }],
+    ["O30", { id: "O30", client_id: "otro", brief_date: "2026-10-30", brief_name: null, code: "Z" }],
+    ["MAN", { id: "MAN", client_id: "didi", brief_date: null, brief_name: " Voyager ", code: "M" }],
+  ]);
+  const LT = { id: "pLT", nombre: "LT AfterBF" }, AA = { id: "pAA", nombre: "Alpha" };
+  const f = (id, briefId, track, paquete) => ({ id, briefId, track, paquete });
+  const cards = agruparArchivo([
+    f("t1", "N30", "normal", LT), f("t2", "R30", "real", null), f("t3", "R30", "real", LT),
+    f("t4", "MAN", "real", null), f("t5", "O30", "normal", AA), f("t6", "R30", "real", AA), f("t7", "BORRADO", "real", null),
+  ], pest);
+  eq("Real y Normal del mismo día: UN card; otro cliente con la misma fecha va aparte",
+     cards.map((c) => `${c.etiqueta}:${c.total}`).join(" | "), "Brief 30/10:4 | Voyager:1 | Brief 30/10:1");
+  eq("desglose del card", cards[0].desglose, "Real 3 · Normal 1");
+  eq("paquetes por nombre, Sin paquete al final", cards[0].grupos.map((g) => g.nombre ?? "—").join(","), "Alpha,LT AfterBF,—");
+  eq("un paquete junta su Real y su Normal, en el orden de entrega", cards[0].grupos[1].tareas.map((t) => t.id).join(","), "t1,t3");
+  eq("una tarea de un brief que ya no está se salta", cards.reduce((n, c) => n + c.total, 0), 6);
+}
+
+console.log("\n▶ Fase 2 — Mi trabajo: por paquete dentro de cada estado (Pedro 2026-11-13)");
+{
+  const { gruposMiTrabajo } = await import("../src/lib/mi-trabajo-grupos.ts");
+  const LT = { id: "pLT", nombre: "LT AfterBF" }, AA = { id: "pAA", nombre: "Alpha" }, ZZ = { id: "pZZ", nombre: "Zeta" };
+  const t = (id, paquete, clienteRespondio = false) => ({ id, paquete, briefDeGrupo: paquete ? "Brief 30/10" : null, clienteRespondio });
+  const g = gruposMiTrabajo([t("1", LT), t("2", null), t("3", AA), t("4", LT), t("5", ZZ, true)]);
+  eq("cliente respondió primero; luego por nombre; Sin paquete al final",
+     g.map((x) => x.nombre ?? "—").join(","), "Zeta,Alpha,LT AfterBF,—");
+  eq("cada grupo conserva el orden de llegada", g[2].tareas.map((x) => x.id).join(","), "1,4");
+  eq("sin paquete no tiene brief en el título", g[3].brief, null);
+  eq("una sola tarea sin paquete: un grupo", gruposMiTrabajo([t("9", null)]).length, 1);
 }
 
 console.log("\n▶ Portal — cada paquete es su propia revisión (Pedro 2026-11-12)");

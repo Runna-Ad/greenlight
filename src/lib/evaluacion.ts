@@ -64,6 +64,8 @@ export type IdeaInput = {
   briefId: string;
   briefLabel: string;
   code: string | null;
+  /** Su paquete dentro del brief (0097, fase 2); null/ausente = sin paquete. No cambia la nota. */
+  paquete?: string | null;
 };
 /** Ventana del reporte [desde, hasta) en ISO; `hasta` exclusivo. */
 export type Periodo = { desde: string; hasta: string };
@@ -98,12 +100,14 @@ export type Puntaje = {
 };
 
 /** Una tarea del desglose por brief: su código + si tuvo ≥1 nota del autor (para el chip). */
-export type TareaEval = { ideaId: string; code: string | null; conNotas: boolean };
+export type TareaEval = { ideaId: string; code: string | null; conNotas: boolean; paquete: string | null };
 
 /** El puntaje de un miembro en UN brief + de qué tareas salió. */
 export type BriefEval = Puntaje & {
   briefId: string;
   briefLabel: string;
+  /** Los paquetes de sus tareas, por nombre (fase 2). Sólo para leer; la nota sigue por pestaña. */
+  paquetes: string[];
   tareasDetalle: TareaEval[];
 };
 
@@ -281,7 +285,9 @@ export function evaluarEquipo(
   const briefDe = new Map<string, string>(); // ideaId → briefId
   const labelDe = new Map<string, string>(); // briefId → etiqueta
   const codeDe = new Map<string, string | null>(); // ideaId → código/naming
+  const paqueteDe = new Map<string, string | null>(); // ideaId → nombre del paquete
   for (const i of ideas) {
+    paqueteDe.set(i.id, i.paquete?.trim() || null);
     if (i.completedAt && enRango(i.completedAt, periodo)) completadaEnP.set(i.id, i.completedAt);
     briefDe.set(i.id, i.briefId);
     labelDe.set(i.briefId, i.briefLabel);
@@ -342,8 +348,11 @@ export function evaluarEquipo(
           ideaId: id,
           code: codeDe.get(id) ?? null,
           conNotas: (misCorr.get(id)?.total ?? 0) > 0,
+          paquete: paqueteDe.get(id) ?? null,
         }));
-        return { briefId, briefLabel: labelDe.get(briefId) ?? "Brief", ...pb, tareasDetalle };
+        const paquetes = [...new Set(tareasDetalle.map((t) => t.paquete).filter((x): x is string => !!x))]
+          .sort((a, b) => a.localeCompare(b));
+        return { briefId, briefLabel: labelDe.get(briefId) ?? "Brief", ...pb, paquetes, tareasDetalle };
       })
       .sort((a, b) => (b.overall ?? -1) - (a.overall ?? -1));
 
