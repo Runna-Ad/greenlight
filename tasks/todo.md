@@ -13,7 +13,7 @@ Pedro: algunos clientes no logran entrar; un plan C donde el Master pone correo 
 **Riesgo aceptado por Pedro (dicho una vez):** marca + 3 números = 1,000 combinaciones; con el límite de Supabase por IP, una sola IP las prueba en unas horas. Subir a 4 números es cambiar `DIGITOS_CLAVE_MARCA`.
 **No hecho:** pedir la contraseña actual al cambiarla (quien entra con Google no la tiene).
 
-## 🟡 2026-11-13 — Brief › Paquete › Tarea, fase 2: paquete y Real/Normal en las pantallas del equipo (rama `claude/paquetes-fase2-703cdf`, SIN migración, NO en vivo)
+## ✅ 2026-11-13 — Brief › Paquete › Tarea, fase 2: paquete y Real/Normal en las pantallas del equipo (main, SIN migración, EN VIVO)
 Pedro eligió las 4 recomendadas (2026-11-13):
 - **Tablero:** cada tarjeta dice su paquete arriba del naming. Filtro «Brief / paquete»: cada brief UNA vez (Real y Normal juntos), «Todo el Brief 30/10» y sus paquetes debajo (`src/lib/filtro-tablero.ts`).
 - **Entregas:** un card por brief (cliente + fecha), subtítulo «Real 4 · Normal 2», tareas por paquete («Sin paquete» al final) y cada fila dice Real/Normal (`src/lib/entregas-archivo.ts`).
@@ -26,7 +26,7 @@ Pedro eligió las 4 recomendadas (2026-11-13):
 **Visto en la preview (5780570, como Master):** tablero 16/16 tarjetas con paquete; filtro con cada brief una vez (23/10, 30/10, 16/10) y sus paquetes; «LT AfterBF» = 6 tarjetas, «Todo el Brief 30/10» = 12 de 16; tarea Real «Brief 30/10 · Real» + «No blinking challenge - November»; tarea Normal «Brief 30/10 · Normal» + «LT AfterBF - November»; consola sin errores.
 **Sin datos para verlo en pantalla (sólo pruebas):** Entregas (0 tareas Greenlit), Performance (sin tareas evaluadas en oct/nov), Mi trabajo (el Master no tiene tareas asignadas), Papelera (vacía).
 **Sin probar:** vistas de lead y especialista con su sesión.
-**Waiting on Pedro:** «ship it» para llevarlo a main (antes: fetch + merge de origin/main y todo otra vez).
+**«Ship it» de Pedro (2026-11-13):** origin/main seguía en faeb749 (ya dentro de la rama): sin merge; npm test 0 y build 0 sobre este mismo código. Fast-forward a main. **Para volver:** dpl_7Grv7B2acEsx8Fh8hjVtNBxoVYHk (main faeb749).
 
 ## ✅ 2026-11-12 — Brief › Paquete › Tarea, fase 1: EN VIVO (main a30aa80, deploy dpl_8i9A9QVURcjCMwKnE4JuzB5AxTJA; para volver: dpl_8iYVahssbswVCQF6QrERDNHe1XSi)
 Pedro: un brief (Brief 30/10) tiene PAQUETES (columna "Package Name" del sheet, antes "Brief Name") y cada paquete tiene tareas. Opción B: el paquete es su propio registro, con fecha de entrega que pone un ADMIN. La fecha del brief = la más lejana de sus paquetes. Paquete entregado (su última tarea Greenlit) → "Entregado X · fecha Y (N días antes)". Tarde: el equipo ve "N días tarde"; el cliente sólo "Entregado X". En el portal el cliente sí ve Real/Normal, como desglose por paquete ("3 piezas · 2 real · 1 normal").

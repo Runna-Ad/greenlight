@@ -1,11 +1,11 @@
 # Session log — Greenlight · by Rünna
 
-## 2026-11-13 — Paquetes fase 2: paquete y Real/Normal en tablero, Entregas, Performance, Mi trabajo, tarea y Papelera (rama `claude/paquetes-fase2-703cdf`, 5780570, SIN migración, NO en vivo)
+## 2026-11-13 — Paquetes fase 2: paquete y Real/Normal en tablero, Entregas, Performance, Mi trabajo, tarea y Papelera (main, SIN migración, EN VIVO)
 **Decisiones de Pedro (las 4 recomendadas):** filtro único Brief / paquete; Entregas un card por brief (Real + Normal) con tareas por paquete; Mi trabajo por estado y luego por paquete; Performance sigue por pestaña con «Brief 30/10 · Real».
 **Pruebas:** test-lib 916/0 · npm test exit 0 · tsc 0 · eslint 0 · next build exit 0. Revisión Sonnet: nada serio, 2 arreglos menores.
 **Preview como Master:** tablero (16/16 con paquete; LT AfterBF = 6; Brief 30/10 = 12 de 16) y encabezado de tarea Real y Normal vistos con datos reales; consola limpia. Entregas, Performance, Mi trabajo y Papelera cargan pero no tienen datos que enseñar.
-**Waiting on Pedro:** «ship it».
-**Pick up next:** con «ship it»: fetch + merge origin/main, npm test + build, fast-forward a main, anotar el deploy de regreso. Luego fase 3 (búsqueda, avisos, Slack con el paquete).
+**En vivo:** «Ship it» de Pedro; fast-forward a main (origin/main no se había movido). **Para volver:** dpl_7Grv7B2acEsx8Fh8hjVtNBxoVYHk (main faeb749).
+**Pick up next:** ver Entregas/Performance en cuanto haya un paquete entregado; fase 3 (búsqueda, avisos, Slack con el paquete).
 
 ## 2026-11-12 — «Crear login» del Master + «Cambiar contraseña» del cliente — EN VIVO (main 6374b89, sin migración)
 **Por qué:** clientes con problemas para entrar; Pedro quiso un plan C: él pone correo + contraseña + empresa y se la manda por chat.
