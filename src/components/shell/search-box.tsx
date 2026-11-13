@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, FileText, LayoutGrid, Loader2 } from "lucide-react";
+import { Search, FileText, LayoutGrid, Loader2, Package } from "lucide-react";
 import { buscar, type ResultadoBusqueda } from "@/app/(app)/buscar-actions";
 
 /**
@@ -113,7 +113,13 @@ export function SearchBox() {
                     }`}
                   >
                     <span className="grid size-7 shrink-0 place-items-center rounded-md bg-secondary text-muted-foreground">
-                      {r.tipo === "tarea" ? <LayoutGrid className="size-3.5" /> : <FileText className="size-3.5" />}
+                      {r.tipo === "tarea" ? (
+                        <LayoutGrid className="size-3.5" />
+                      ) : r.tipo === "paquete" ? (
+                        <Package className="size-3.5" />
+                      ) : (
+                        <FileText className="size-3.5" />
+                      )}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium text-foreground">{r.titulo}</span>

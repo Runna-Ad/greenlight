@@ -1703,6 +1703,27 @@ console.log("\n▶ Correos agrupados (0084) — la plantilla del correo junto");
   ok("texto plano: asunto, cada aviso y el portal", txt.startsWith("3 piezas") && txt.includes("• B") && txt.endsWith("https://runna-greenlight.vercel.app/didi/portal"));
 }
 
+console.log("\n▶ Fase 3 — los avisos dicen paquete y pestaña (Pedro 2026-11-13)");
+{
+  const tpl = await import("../src/lib/email-template.ts");
+  const { mensajeSlack } = await import("../src/lib/slack-routing.ts");
+  const CTX = "LT AfterBF · Brief 30/10 · Real";
+  const uno = tpl.htmlFor({ type: "task_assigned", title: "Te asignaron CMNOBLINKING", body: null, ctaUrl: "https://a.b/x", contexto: CTX });
+  ok("correo: la línea del paquete va bajo el título", uno.indexOf("CMNOBLINKING</h1>") < uno.indexOf(CTX));
+  ok("correo sin contexto: igual que antes", !tpl.htmlFor({ type: "task_assigned", title: "T", body: null, ctaUrl: "https://a.b" }).includes("Brief 30/10"));
+  ok("correo: el contexto se escapa", tpl.htmlFor({ type: null, title: "T", body: null, ctaUrl: "https://a.b", contexto: "<b>x</b>" }).includes("&lt;b&gt;x&lt;/b&gt;"));
+  eq("texto plano: título, contexto, cuerpo", tpl.textFor("T", "cuerpo", "https://a.b", CTX), `T\n${CTX}\n\ncuerpo\n\nAbrir en Greenlight: https://a.b`);
+  eq("texto plano sin contexto: igual que antes", tpl.textFor("T", null, "https://a.b"), "T\n\nAbrir en Greenlight: https://a.b");
+  const ag = (title, contexto) => ({ type: "ready_for_review", title, body: null, ctaUrl: "https://a.b", contexto });
+  const agr = tpl.htmlAgrupado({ avisos: [ag("A", CTX), ag("B", null)], esCliente: false });
+  ok("agrupado: cada aviso con su paquete", agr.includes(">A</div>") && agr.includes(CTX));
+  ok("agrupado: texto plano con la línea", tpl.textAgrupado([ag("A", CTX)], false).includes(`• A\n  ${CTX}`));
+  const m = mensajeSlack({ title: "Te asignaron CMNOBLINKING", body: "A1", ctaUrl: "https://a.b", contexto: CTX });
+  eq("Slack: bloque de contexto bajo el encabezado", m.blocks[1].type, "context");
+  eq("Slack: el aviso del teléfono dice el paquete", m.text, `Te asignaron CMNOBLINKING (${CTX}): A1`);
+  eq("Slack sin contexto: igual que antes", mensajeSlack({ title: "X", body: null, ctaUrl: "https://a.b" }).blocks[1].type, "actions");
+}
+
 console.log("\n▶ \"Te respondieron\" — le toca al cliente cuando el equipo escribió al último");
 {
   const { estadoCliente } = await import("../src/lib/portal-bucket.ts");

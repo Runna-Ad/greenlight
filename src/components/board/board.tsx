@@ -154,8 +154,11 @@ export function Board({
   role = DEFAULT_ROLE,
   soyId = null,
   marcaColor = null,
+  paqueteInicial = null,
 }: {
   cliente: string;
+  /** `?paquete=<id>` (fase 3): el filtro arranca en ese paquete si tiene tarjetas aquí. */
+  paqueteInicial?: string | null;
   tasks: Task[];
   members: Member[];
   briefs: BriefOption[];
@@ -191,7 +194,9 @@ export function Board({
 
   // ── filters ──
   const [fPersona, setFPersona] = useState(ALL);
-  const [fBrief, setFBrief] = useState(ALL);
+  const [fBrief, setFBrief] = useState(() =>
+    paqueteInicial && initialTasks.some((t) => t.paquete?.id === paqueteInicial) ? `p:${paqueteInicial}` : ALL,
+  );
   const [fPlataforma, setFPlataforma] = useState(ALL);
   const [fMarca, setFMarca] = useState(ALL);
 

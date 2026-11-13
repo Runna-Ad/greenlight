@@ -54,8 +54,9 @@ export function bestText(bg: string): string {
 }
 
 /** La versión de texto plano (para clientes que no muestran HTML). */
-export function textFor(title: string, body: string | null, ctaUrl: string): string {
-  return `${title}${body ? `\n\n${body}` : ""}\n\nAbrir en Greenlight: ${ctaUrl}`.trim();
+export function textFor(title: string, body: string | null, ctaUrl: string, contexto?: string | null): string {
+  const ctx = contexto?.trim() ? `\n${contexto.trim()}` : "";
+  return `${title}${ctx}${body ? `\n\n${body}` : ""}\n\nAbrir en Greenlight: ${ctaUrl}`.trim();
 }
 
 const APP_URL = process.env.APP_URL ?? "https://runna-greenlight.vercel.app";
@@ -103,6 +104,8 @@ function marco(args: {
   chipStyle: string;
   chip: string;
   title: string;
+  /** "LT AfterBF · Brief 30/10 · Real" bajo el título (fase 3); sin él, nada. */
+  contexto?: string | null;
   contenido: string;
   ctaUrl: string;
   ctaLabel: string;
@@ -123,6 +126,7 @@ function marco(args: {
       <tr><td style="padding:26px 28px 8px;">
         <span style="display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;${args.chipStyle};padding:4px 11px;border-radius:999px;">${escapeHtml(args.chip)}</span>
         <h1 style="margin:14px 0 0;font-size:19px;line-height:1.35;color:#2d2b55;font-weight:700;">${escapeHtml(args.title)}</h1>
+        ${args.contexto?.trim() ? `<div style="margin-top:6px;font-size:13px;line-height:1.4;color:#6f6b8d;">${escapeHtml(args.contexto.trim())}</div>` : ""}
       </td></tr>
       ${args.contenido}
       <tr><td style="padding:22px 28px 6px;">
@@ -167,6 +171,8 @@ export function htmlFor(args: {
   colorOverride?: string;
   /** Respeta los saltos de línea del cuerpo (listas en texto plano, p. ej. el aviso del vigía). */
   saltos?: boolean;
+  /** De qué paquete y pestaña es la tarea del aviso (fase 3). */
+  contexto?: string | null;
 }): string {
   const cfg = (args.type && TIPO[args.type]) || DEFECTO;
   const color = args.colorOverride ?? cfg.color;
@@ -176,6 +182,7 @@ export function htmlFor(args: {
     chipStyle: estiloChip(color, args.darkChip ?? cfg.darkChip ?? false),
     chip: cfg.chip,
     title: args.title,
+    contexto: args.contexto,
     contenido: body ? `<tr><td style="padding:14px 28px 0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
           <td style="background:#f7f5fc;border-left:3px solid ${color};border-radius:6px;padding:12px 14px;font-size:14px;line-height:1.55;color:#4a4770;${args.saltos ? "white-space:pre-line;" : ""}">${body}</td>
@@ -191,7 +198,11 @@ export function htmlFor(args: {
 // Varios avisos a la misma persona dentro de la ventana de 10 minutos salen en uno.
 
 /** Un aviso dentro del correo agrupado. `ctaUrl` ya es ABSOLUTA (`ctaUrl()`). */
-export type AvisoAgrupado = { type: string | null; title: string; body: string | null; ctaUrl: string };
+export type AvisoAgrupado = {
+  type: string | null; title: string; body: string | null; ctaUrl: string;
+  /** "LT AfterBF · Brief 30/10 · Real" (fase 3); null = sin línea. */
+  contexto?: string | null;
+};
 
 /** Cuántos avisos se listan; del resto sólo se dice cuántos más hay. */
 export const MAX_AVISOS_EN_CORREO = 25;
@@ -245,6 +256,7 @@ export function htmlAgrupado(args: { avisos: AvisoAgrupado[]; esCliente: boolean
       return `<tr><td style="padding:12px 0;border-bottom:1px solid #efeaf9;">
           <span style="display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;${estiloChip(cfg.color, cfg.darkChip ?? false)};padding:2px 8px;border-radius:999px;">${escapeHtml(cfg.chip)}</span>
           <div style="margin-top:6px;font-size:14px;line-height:1.45;font-weight:700;color:#2d2b55;">${escapeHtml(a.title)}</div>
+          ${a.contexto?.trim() ? `<div style="margin-top:2px;font-size:12px;line-height:1.4;color:#6f6b8d;">${escapeHtml(a.contexto.trim())}</div>` : ""}
           ${a.body ? `<div style="margin-top:4px;font-size:13px;line-height:1.5;color:#4a4770;">${escapeHtml(a.body)}</div>` : ""}
           <a href="${escapeHtml(a.ctaUrl)}" style="display:inline-block;margin-top:6px;font-size:13px;font-weight:700;color:#5b3fc4;text-decoration:none;">${escapeHtml(cfg.cta)} &rarr;</a>
         </td></tr>`;
@@ -272,7 +284,8 @@ export function htmlAgrupado(args: { avisos: AvisoAgrupado[]; esCliente: boolean
 export function textAgrupado(avisos: AvisoAgrupado[], esCliente: boolean): string {
   const visibles = avisos.slice(0, MAX_AVISOS_EN_CORREO);
   const resto = avisos.length - visibles.length;
-  const lineas = visibles.map((a) => `• ${a.title}${a.body ? `\n  ${a.body}` : ""}\n  ${a.ctaUrl}`);
+  const lineas = visibles.map((a) =>
+    `• ${a.title}${a.contexto?.trim() ? `\n  ${a.contexto.trim()}` : ""}${a.body ? `\n  ${a.body}` : ""}\n  ${a.ctaUrl}`);
   return [
     asuntoAgrupado(avisos, esCliente),
     "",

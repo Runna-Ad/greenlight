@@ -146,10 +146,14 @@ async function loadBoard(
 
 export default async function TableroPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ cliente: string }>;
+  searchParams: Promise<{ paquete?: string }>;
 }) {
   const { cliente } = await params;
+  // `?paquete=<id>` (fase 3): el buscador abre el tablero ya filtrado a ese paquete.
+  const { paquete } = await searchParams;
   const [role, soy] = await Promise.all([getViewAs(), getSoy()]);
 
   // Quitar la entrada del menú no basta: la URL sigue siendo tecleable, y una
@@ -203,6 +207,9 @@ export default async function TableroPage({
         </EmptyState>
       ) : (
         <Board
+          // Otro paquete desde el buscador = otro filtro de entrada: se vuelve a montar.
+          key={paquete ?? "todos"}
+          paqueteInicial={paquete ?? null}
           cliente={cliente}
           tasks={data?.tasks ?? []}
           members={data?.members ?? []}

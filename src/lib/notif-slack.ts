@@ -1,4 +1,5 @@
 import "server-only";
+import { contextoDeTareas } from "@/lib/paquetes-data";
 
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { ctaUrl } from "@/lib/email-template";
@@ -103,6 +104,8 @@ export async function dispatchPendingSlack(limit = 50): Promise<SlackDispatchRes
   };
   const lista = (notifs ?? []) as Notif[];
   const notifById = new Map<string, Notif>(lista.map((n) => [n.id, n]));
+  // "LT AfterBF · Brief 30/10 · Real" bajo el título (fase 3). Si falla, el DM sale sin él.
+  const contexto = await contextoDeTareas(lista.filter((n) => n.entity_type === "idea").map((n) => n.entity_id));
 
   // Destinatarios. Un aviso va a un member (tarea suya) o a un profile (por rol, o un cliente).
   // Con fila activa en el EQUIPO manda esa fila; un profile sin fila es un cliente (o alguien
@@ -304,7 +307,10 @@ export async function dispatchPendingSlack(limit = 50): Promise<SlackDispatchRes
 
       if (!respuesta) {
         const esClienteCta = !n.recipient_member_id && !!n.recipient_id && per!.esCliente && CLIENT_TYPES.has(n.type ?? "");
-        const msg = mensajeSlack({ title: n.title, body: n.body, ctaUrl: ctaUrl({ ...n, esCliente: esClienteCta }) });
+        const msg = mensajeSlack({
+          title: n.title, body: n.body, ctaUrl: ctaUrl({ ...n, esCliente: esClienteCta }),
+          contexto: n.entity_type === "idea" && n.entity_id ? contexto.get(n.entity_id) ?? null : null,
+        });
         respuesta = await slackApi(con.token, "chat.postMessage", {
           channel: userId, text: msg.text, blocks: msg.blocks, unfurl_links: false, unfurl_media: false,
         });

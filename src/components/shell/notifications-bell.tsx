@@ -99,6 +99,10 @@ export function NotificationsBell({ initialCount }: { initialCount: number }) {
             const cuerpo = (
               <>
                 <p className="text-[12px] font-medium leading-snug text-foreground">{a.title}</p>
+                {/* De qué paquete y pestaña es la tarea (fase 3). */}
+                {a.contexto && (
+                  <p className="mt-0.5 truncate text-[11px] font-medium leading-snug text-primary">{a.contexto}</p>
+                )}
                 {a.body && (
                   <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
                     {a.body}

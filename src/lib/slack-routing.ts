@@ -164,7 +164,11 @@ const recortar = (s: string, max: number) => {
  * ligas ni menciones. `text` es lo que sale en la notificación del teléfono.
  * Slack rechaza encabezados de más de 150 caracteres y secciones de más de 3000.
  */
-export function mensajeSlack(args: { title: string; body: string | null; ctaUrl: string }): {
+export function mensajeSlack(args: {
+  title: string; body: string | null; ctaUrl: string;
+  /** "LT AfterBF · Brief 30/10 · Real" bajo el título (fase 3). */
+  contexto?: string | null;
+}): {
   text: string;
   blocks: unknown[];
 } {
@@ -173,6 +177,8 @@ export function mensajeSlack(args: { title: string; body: string | null; ctaUrl:
   const blocks: unknown[] = [
     { type: "header", text: { type: "plain_text", text: recortar(title, 150), emoji: false } },
   ];
+  const contexto = args.contexto?.trim() ?? "";
+  if (contexto) blocks.push({ type: "context", elements: [{ type: "plain_text", text: recortar(contexto, 2900), emoji: false }] });
   if (body) blocks.push({ type: "section", text: { type: "plain_text", text: recortar(body, 2900), emoji: false } });
   // Slack rechaza el mensaje ENTERO si el botón lleva una liga que no es http(s) (p. ej. sin
   // APP_URL la liga sale relativa): mejor el aviso sin botón que ningún aviso.
@@ -190,5 +196,6 @@ export function mensajeSlack(args: { title: string; body: string | null; ctaUrl:
     });
   }
   // Se recorta ANTES de escapar: así el corte nunca cae a la mitad de un "&amp;".
-  return { text: escaparSlack(recortar(body ? `${title}: ${body}` : title, 2500)), blocks };
+  const cabeza = contexto ? `${title} (${contexto})` : title;
+  return { text: escaparSlack(recortar(body ? `${cabeza}: ${body}` : cabeza, 2500)), blocks };
 }

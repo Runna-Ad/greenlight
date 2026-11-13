@@ -4,6 +4,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { sendEmail, hasEmail } from "@/lib/email";
 import { decisionEmail, CLIENT_TYPES } from "@/lib/notif-routing";
 import { leerCanales } from "@/lib/notif-canales";
+import { contextoDeTareas } from "@/lib/paquetes-data";
 import {
   htmlFor, textFor, ctaUrl, htmlAgrupado, textAgrupado, asuntoAgrupado, type AvisoAgrupado,
 } from "@/lib/email-template";
@@ -74,6 +75,11 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
     recipient_member_id: string | null; recipient_id: string | null;
   };
   const notifById = new Map<string, Notif>(((notifs ?? []) as Notif[]).map((n) => [n.id, n]));
+  // "LT AfterBF · Brief 30/10 · Real" bajo el título (fase 3). Si falla, el correo sale sin él.
+  const contexto = await contextoDeTareas(
+    ((notifs ?? []) as Notif[]).filter((n) => n.entity_type === "idea").map((n) => n.entity_id),
+  );
+  const ctxDe = (n: Notif) => (n.entity_type === "idea" && n.entity_id ? contexto.get(n.entity_id) ?? null : null);
 
   const memberIds = [...new Set(((notifs ?? []) as Notif[]).map((n) => n.recipient_member_id).filter(Boolean))] as string[];
   const profileIds = [...new Set(((notifs ?? []) as Notif[]).map((n) => n.recipient_id).filter(Boolean))] as string[];
@@ -192,11 +198,13 @@ export async function dispatchPendingEmails(limit = 50): Promise<DispatchResult>
       res = await sendEmail({
         to: dir,
         subject: n.title,
-        text: textFor(n.title, n.body, cta),
-        html: htmlFor({ type: n.type, title: n.title, body: n.body, ctaUrl: cta }),
+        text: textFor(n.title, n.body, cta, ctxDe(n)),
+        html: htmlFor({ type: n.type, title: n.title, body: n.body, ctaUrl: cta, contexto: ctxDe(n) }),
       });
     } else {
-      const avisos: AvisoAgrupado[] = lote.map((l) => ({ type: l.n.type, title: l.n.title, body: l.n.body, ctaUrl: l.cta }));
+      const avisos: AvisoAgrupado[] = lote.map((l) => ({
+        type: l.n.type, title: l.n.title, body: l.n.body, ctaUrl: l.cta, contexto: ctxDe(l.n),
+      }));
       // Pie y botón de cliente sólo si TODO el lote es de cara al cliente.
       const esCliente = lote.every((l) => l.esCliente);
       res = await sendEmail({

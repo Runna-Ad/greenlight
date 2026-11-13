@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { getCurrentUser } from "@/lib/identity";
+import { contextoDeTareas } from "@/lib/paquetes-data";
 
 export type Aviso = {
   id: string;
@@ -12,6 +13,8 @@ export type Aviso = {
   url: string | null;
   read_at: string | null;
   created_at: string;
+  /** "LT AfterBF · Brief 30/10 · Real" (fase 3): de qué paquete y pestaña es la tarea. */
+  contexto?: string | null;
 };
 
 /**
@@ -50,7 +53,14 @@ export async function listAvisos(limit = 30): Promise<Aviso[]> {
     .limit(limit)
     .returns<(Aviso & { entity_type: string | null; entity_id: string | null })[]>();
 
-  const avisos = data ?? [];
+  // La línea del paquete se arma al leer (fase 3): también la tienen los avisos viejos.
+  const contexto = await contextoDeTareas(
+    (data ?? []).filter((a) => a.entity_type === "idea").map((a) => a.entity_id),
+  );
+  const avisos = (data ?? []).map((a) => ({
+    ...a,
+    contexto: a.entity_type === "idea" && a.entity_id ? contexto.get(a.entity_id) ?? null : null,
+  }));
 
   // ── El aviso lleva A LA TAREA, no al tablero ────────────────────────────────
   // El trigger guarda `url = /{slug}/tablero` para TODOS (misma línea en 4 migraciones),

@@ -4,7 +4,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { PaqueteEquipo } from "@/lib/bundle";
-import { desgloseTracks, entregaDePaquete } from "@/lib/paquetes";
+import { desgloseTracks, entregaDePaquete, etiquetaTarea } from "@/lib/paquetes";
 
 export async function cargarPaquetes(clientId: string, ids: (string | null)[]): Promise<Map<string, PaqueteEquipo>> {
   const unicos = [...new Set(ids.filter((x): x is string => !!x))];
@@ -83,6 +83,60 @@ export async function paquetesDeTareas(ideaIds: string[]): Promise<Map<string, P
   for (const [ideaId, paqId] of paqDe) {
     const n = nombre.get(paqId);
     if (n) out.set(ideaId, { id: paqId, nombre: n });
+  }
+  return out;
+}
+
+/**
+ * La línea de contexto de cada tarea para los AVISOS (fase 3, Pedro 2026-11-13: opción A):
+ * "LT AfterBF · Brief 30/10 · Real". Se arma al ENSEÑAR el aviso (campana, correo, Slack),
+ * no se guarda: así también la tienen los avisos viejos y no hay que reescribir las ~20
+ * funciones de la base que escriben el título. Incluye tareas en la papelera (el aviso
+ * sigue existiendo). Un error deja los avisos sin la línea, nunca los frena.
+ */
+export async function contextoDeTareas(ideaIds: (string | null | undefined)[]): Promise<Map<string, string>> {
+  // Lo llaman los despachadores de correo y Slack con filas ya reclamadas: un error que se
+  // escapara dejaría esos avisos atorados. Cualquier falla = avisos sin la línea, nada más.
+  try {
+    return await armarContexto(ideaIds);
+  } catch (e) {
+    console.error("contextoDeTareas:", e instanceof Error ? e.message : e);
+    return new Map();
+  }
+}
+
+async function armarContexto(ideaIds: (string | null | undefined)[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const ids = [...new Set(ideaIds.filter((x): x is string => !!x))];
+  if (!ids.length) return out;
+  const db = supabaseAdmin();
+  const lotes = <T,>(xs: T[]) => Array.from({ length: Math.ceil(xs.length / 100) }, (_, i) => xs.slice(i * 100, i * 100 + 100));
+
+  type Idea = { id: string; track: string | null; brief_id: string; paquete_id: string | null };
+  const rIdeas = await Promise.all(lotes(ids).map((l) =>
+    db.from("ideas").select("id, track, brief_id, paquete_id").in("id", l).returns<Idea[]>()));
+  const eIdeas = rIdeas.find((r) => r.error)?.error;
+  if (eIdeas) { console.error("contextoDeTareas (ideas):", eIdeas.message); return out; }
+  const ideas = rIdeas.flatMap((r) => r.data ?? []);
+
+  type Brief = { id: string; brief_date: string | null; brief_name: string | null; code: string | null };
+  const briefIds = [...new Set(ideas.map((i) => i.brief_id))];
+  const paqIds = [...new Set(ideas.map((i) => i.paquete_id).filter((x): x is string => !!x))];
+  const [rBriefs, rPaqs] = await Promise.all([
+    Promise.all(lotes(briefIds).map((l) =>
+      db.from("briefs").select("id, brief_date, brief_name, code").in("id", l).returns<Brief[]>())),
+    Promise.all(lotes(paqIds).map((l) =>
+      db.from("paquetes").select("id, nombre").in("id", l).returns<{ id: string; nombre: string }[]>())),
+  ]);
+  const eOtro = [...rBriefs, ...rPaqs].find((r) => r.error)?.error;
+  if (eOtro) { console.error("contextoDeTareas:", eOtro.message); return out; }
+  const brief = new Map(rBriefs.flatMap((r) => r.data ?? []).map((b) => [b.id, b]));
+  const paquete = new Map(rPaqs.flatMap((r) => r.data ?? []).map((p) => [p.id, p.nombre]));
+
+  for (const i of ideas) {
+    const b = brief.get(i.brief_id);
+    if (!b) continue;
+    out.set(i.id, etiquetaTarea({ ...b, track: i.track }, i.paquete_id ? paquete.get(i.paquete_id) : null));
   }
   return out;
 }
