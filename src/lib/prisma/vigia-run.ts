@@ -5,7 +5,7 @@ import { cargarReglas } from "@/lib/prisma/data";
 import { leerPagina } from "@/lib/prisma/vigia-leer";
 import { proponerCambios } from "@/lib/prisma/vigia-ia";
 import { avisarPropuestas } from "@/lib/prisma/vigia-aviso";
-import { cambios, enLotes, extraerTexto, huellaTexto, pendientesDe, sabidoDe, sinParrafos, temaDe, type AvisoVigia, type Origen, type Propuesta } from "@/lib/prisma/vigia";
+import { cambios, enLotes, esDeHiggsfield, extraerTexto, huellaTexto, pendientesDe, sabidoDe, sinParrafos, temaDe, type AvisoVigia, type Origen, type Propuesta } from "@/lib/prisma/vigia";
 import { TOOLS, type Tool } from "@/lib/prisma/spec";
 
 /**
@@ -160,6 +160,8 @@ export async function revisarFuentes(db: Db, opts: { soloId?: string; maxLlamada
       }
       r.tokens += ia.tokens;
       for (const p of ia.propuestas) {
+        // Los créditos son de Higgsfield: un precio leído en otra fuente (OpenAI cobra en dólares) no se guarda.
+        if (p.tipo === "modelo" && p.contenido.costo && !esDeHiggsfield(f.url)) delete p.contenido.costo;
         const tema = temaDe(p);
         const mismoTema = tema ? pendientes.find((q) => temaDe(q) === tema) : undefined;
         // Mismo tema que una pendiente = la misma noticia: se suma a esa (como una repetida), no abre otra tarjeta.

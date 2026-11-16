@@ -25,7 +25,7 @@ export const PROPUESTAS_SCHEMA = {
           contenido: {
             type: "object",
             description:
-              "nota/deprecacion: {nota_en}. regla: {campo, patron|umbral, nivel, que_es, que_en, porque_es, porque_en, arreglo_es, arreglo_en}. modelo: {id, etiqueta, rol: rapido|fino, como_llegar_es, como_llegar_en}. limite: {campo, valor}. fortaleza: {fortaleza, valor 0-5}. codigo: {detalle_es}.",
+              "nota/deprecacion: {nota_en}. regla: {campo, patron|umbral, nivel, que_es, que_en, porque_es, porque_en, arreglo_es, arreglo_en}. modelo: {id, etiqueta, rol: rapido|fino, como_llegar_es, como_llegar_en, costo?: {creditos_tipicos, creditos_min, creditos_max}} — como_llegar = how to open it on Higgsfield (e.g. 'En Higgsfield: Image → <name> → adjunta las imágenes en orden y pega el prompt.'), never what it is good for; costo ONLY when the text states Higgsfield credits for that model, every number copied into cita, otherwise omit it. limite: {campo, valor}. fortaleza: {fortaleza, valor 0-5}. codigo: {detalle_es}.",
           },
         },
         required: ["tipo", "tool", "resumen_es", "cita", "contenido"],

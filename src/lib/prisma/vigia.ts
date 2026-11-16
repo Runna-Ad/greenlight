@@ -7,7 +7,7 @@
  * Módulo puro (se prueba en node).
  */
 import { ASPECTS, TOOLS, type Tool } from "./spec.ts";
-import { ID_MODELO, ROLES_MODELO, fichaAFila, fortalezasDe, type FichaHerramienta } from "./catalogo.ts";
+import { ID_MODELO, ROLES_MODELO, fichaAFila, fortalezasDe, leerCosto, type FichaHerramienta } from "./catalogo.ts";
 import { validarRegla } from "./reglas.ts";
 import { plano } from "./texto.ts";
 import { listaDe, objetoDe } from "./json.ts";
@@ -257,7 +257,10 @@ export function validarContenido(tipo: TipoPropuesta, tool: Tool | null, raw: un
       const es = linea(c.como_llegar_es, 300);
       const en = linea(c.como_llegar_en, 300);
       if (!id || !etiqueta || !rol || !es || !en) return null;
-      return { id, etiqueta, rol, como_llegar_es: es, como_llegar_en: en };
+      // El costo es opcional: sólo cuando la página lo publica (sanearPropuestas exige que cada número esté en la
+      // cita y el vigía lo guarda sólo si la fuente es de Higgsfield, cuyos créditos son la unidad).
+      const costo = costoDeVigia(c.costo);
+      return { id, etiqueta, rol, como_llegar_es: es, como_llegar_en: en, ...(costo ? { costo } : {}) };
     }
     case "limite": {
       if (!tool || !(CAMPOS_LIMITE as readonly unknown[]).includes(c.campo)) return null;
@@ -304,10 +307,59 @@ export function sanearPropuestas(raw: unknown, leido: string[], toolFuente: Tool
     if (!resumen_es || !cita || cita.length < 12 || !fuente.includes(comparable(cita))) continue;
     const contenido = validarContenido(tipo, tool, o.contenido);
     if (!contenido) continue;
+    // Un precio que no está en la cita es un número inventado: se quita el costo (la propuesta sigue).
+    if (contenido.costo && !costoCitado(contenido.costo as Record<string, unknown>, cita)) delete contenido.costo;
     out.push({ tipo, tool, resumen_es, cita, contenido });
     if (out.length >= LIMITES_VIGIA.propuestasPorLectura) break;
   }
   return out;
+}
+
+// ── Modelo nuevo: costo publicado y página en Higgsfield ─────────────────────
+
+/** El costo que una propuesta de modelo puede traer: créditos de Higgsfield, en la forma de la ficha
+ *  ({ilimitado:false, creditos_tipicos, creditos_min, creditos_max}). null si no trae o no pasa leerCosto. */
+export function costoDeVigia(raw: unknown): Record<string, unknown> | null {
+  const o = objetoDe(raw);
+  if (!o) return null;
+  const v = leerCosto({ ilimitado: false, creditos_tipicos: o.creditos_tipicos ?? null, creditos_min: o.creditos_min ?? null, creditos_max: o.creditos_max ?? null });
+  if (!v.ok || !v.valor || (v.valor.tipico === null && v.valor.max === null)) return null;
+  return { ilimitado: false, creditos_tipicos: v.valor.tipico, creditos_min: v.valor.min, creditos_max: v.valor.max };
+}
+
+/** Cada número del costo aparece tal cual en la cita (2.75 → "2.75"; acepta "2,75"). */
+export function costoCitado(costo: Record<string, unknown>, cita: string): boolean {
+  const nums = [costo.creditos_tipicos, costo.creditos_min, costo.creditos_max].filter((n): n is number => typeof n === "number");
+  const enCita = new Set((cita.match(/\d+(?:[.,]\d+)?/g) ?? []).map((x) => Number(x.replace(",", "."))));
+  return nums.length > 0 && nums.every((n) => enCita.has(n));
+}
+
+/** Las fuentes cuyos créditos valen (son la unidad de costo de Prisma): sólo Higgsfield. */
+export const esDeHiggsfield = (url: string): boolean => {
+  try {
+    const h = new URL(url).hostname;
+    return h === "higgsfield.ai" || h.endsWith(".higgsfield.ai");
+  } catch {
+    return false;
+  }
+};
+
+/** Las ligas a probar para la página de un modelo nuevo en Higgsfield: la de imagen o video según la herramienta,
+ *  con el id escrito como Higgsfield suele hacerlo (gpt-image-2.6-flare → gpt-image-2-6-flare; kling3.0 →
+ *  kling3_0). Cada una se COMPRUEBA antes de guardarla (tituloDelModelo): adivinar no basta. */
+export function candidatosUrlModelo(tool: Tool, id: string): string[] {
+  const base = TOOL_INFO[tool].url.split("?")[0];
+  const formas = [id.replace(/\./g, "-"), id, id.replace(/\./g, "_"), id.replace(/[.-]/g, "_")];
+  return [...new Set(formas)].map((f) => `${base}?model=${encodeURIComponent(f)}`);
+}
+
+const soloLetras = (s: string): string => comparable(s).replace(/[^a-z0-9.]+/g, " ").trim();
+/** ¿La página es la de ESE modelo? Su <title> nombra el modelo ("GPT Image 2.6 Flare | Higgsfield"); un id que
+ *  no existe da la página genérica ("Create AI Images…"), que no lo nombra. */
+export function tituloDelModelo(html: string, etiqueta: string): boolean {
+  const t = /<title[^>]*>([^<]{1,300})<\/title>/i.exec(html)?.[1];
+  const e = soloLetras(etiqueta);
+  return !!t && e.length >= 3 && soloLetras(desEntidades(t)).includes(e);
 }
 
 /** JSON con las llaves en orden: la misma propuesta da la misma huella aunque el modelo reordene. */
@@ -359,8 +411,10 @@ export function aplicarAFicha(ficha: FichaHerramienta, tool: Tool, p: Pick<Propu
   if (p.tipo === "fortaleza") fila.fortalezas = { ...fila.fortalezas, [c.fortaleza as string]: c.valor };
   if (p.tipo === "modelo") {
     const i = fila.modelos.findIndex((m) => m.id === c.id);
-    // Un modelo nuevo entra SIN costo conocido (lo pone una persona en el Hub); uno existente conserva el suyo.
-    const nuevo = { ...c, url: i >= 0 ? fila.modelos[i].url : null, costo: i >= 0 ? fila.modelos[i].costo : null };
+    // Uno existente conserva su página y su costo (los puso una persona). Uno nuevo entra con la página que la
+    // aprobación comprobó en Higgsfield y el costo que la fuente publicó; sin eso, vacíos (se ponen en el Hub).
+    const previo = i >= 0 ? fila.modelos[i] : null;
+    const nuevo = { ...c, url: previo?.url ?? c.url ?? null, costo: previo?.costo ?? c.costo ?? null };
     if (i >= 0) fila.modelos = fila.modelos.map((m, j) => (j === i ? nuevo : m));
     else {
       // Uno NUEVO (versión nueva, renombre) pasa a ser el recomendado de su rol: va antes de los de ese rol.
@@ -423,8 +477,13 @@ export function describirContenido(tipo: TipoPropuesta, c: Record<string, unknow
         c.arreglo_es || c.arreglo_en ? `Arreglo: «${s(c.arreglo_es ?? "")}» / «${s(c.arreglo_en ?? "")}».` : null,
         c.accion ? `Acción de un click: ${JSON.stringify(c.accion)}.` : null,
       ].filter(Boolean).join(" ");
-    case "modelo":
-      return `${s(c.etiqueta)} (${s(c.id)}, ${c.rol === "rapido" ? "rápido" : "fino"}) — si es nuevo, pasa a ser el recomendado de ese nivel. ${s(c.como_llegar_es)}`;
+    case "modelo": {
+      const k = objetoDe(c.costo);
+      const costo = k
+        ? `Costo: ${k.creditos_tipicos ?? "?"} créditos típicos${k.creditos_max != null ? `, máx. ${k.creditos_max}` : ""} (de la fuente).`
+        : "Costo: la fuente no lo publica; ponlo en Herramientas.";
+      return `${s(c.etiqueta)} (${s(c.id)}, ${c.rol === "rapido" ? "rápido" : "fino"}) — si es nuevo, pasa a ser el recomendado de ese nivel. ${s(c.como_llegar_es)} ${costo} Liga de Higgsfield: se busca y se comprueba al aprobar.`;
+    }
     case "limite":
       return `${CAMPO_LIMITE_LABEL[c.campo as CampoLimite] ?? s(c.campo)} → ${s(c.valor)}`;
     case "fortaleza":

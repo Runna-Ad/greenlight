@@ -11,6 +11,7 @@ import { plano } from "@/lib/prisma/texto";
 import { TOOLS, type Tool } from "@/lib/prisma/spec";
 import { ESCRIBE_FICHA, ESCRIBE_REGLA, aplicarAFicha, codigoDeHuella, reglaDePropuesta, validarFuente, visible, type Origen, type TipoPropuesta } from "@/lib/prisma/vigia";
 import { correrVigia, type ResumenVigia } from "@/lib/prisma/vigia-run";
+import { buscarPaginaModelo } from "@/lib/prisma/vigia-leer";
 import { noMaster } from "./gate";
 
 /** F6b — Hub › Prisma › Vigía. Todo master-only (noMaster, la misma puerta del resto del Hub). */
@@ -117,7 +118,7 @@ export async function revisarAhoraVigia(soloId?: string): Promise<Ok<{ resumen: 
 /** Aprobar = RECLAMAR la propuesta (pendiente → aprobada, en un solo UPDATE condicionado: un descarte o una
  *  segunda aprobación al mismo tiempo no pueden cruzarse), escribir con el MISMO validador del Hub y, si la
  *  escritura falla, devolverla a pendiente. Idempotente: el código de la regla sale de la huella. */
-export async function aprobarPropuestaVigia(id: string): Promise<Ok | Fail> {
+export async function aprobarPropuestaVigia(id: string): Promise<Ok<{ aviso?: string }> | Fail> {
   const no = await noMaster();
   if (no) return no;
   if (!UUID_RE.test(id)) return { ok: false, error: "Esa propuesta ya no existe." };
@@ -142,8 +143,9 @@ export async function aprobarPropuestaVigia(id: string): Promise<Ok | Fail> {
   }
 }
 
-async function escribirAprobada(db: ReturnType<typeof supabaseAdmin>, p: PrismaPropuestaRow, soyId: string, ahora: string, devolver: (msg: string) => Promise<Fail>): Promise<Ok | Fail> {
+async function escribirAprobada(db: ReturnType<typeof supabaseAdmin>, p: PrismaPropuestaRow, soyId: string, ahora: string, devolver: (msg: string) => Promise<Fail>): Promise<Ok<{ aviso?: string }> | Fail> {
   const tipo = p.tipo as TipoPropuesta;
+  let aviso: string | undefined;
   const tool = p.tool && (TOOLS as string[]).includes(p.tool) ? (p.tool as Tool) : null;
 
   if (ESCRIBE_REGLA.includes(tipo)) {
@@ -165,7 +167,17 @@ async function escribirAprobada(db: ReturnType<typeof supabaseAdmin>, p: PrismaP
     // upsert pisaría campos que la propuesta no toca: mejor que una persona la revise primero.
     if (fila && !validarFicha(tool, fila).ok) return devolver("La ficha guardada de esa herramienta tiene datos raros: revísala en Herramientas antes de aprobar.");
     const ficha = catalogoDesdeFilas(fila ? [fila] : [])[tool];
-    const v = validarFicha(tool, aplicarAFicha(ficha, tool, { tipo, contenido: p.contenido }));
+    let contenido = p.contenido;
+    // Modelo NUEVO: su página en Higgsfield se busca y se comprueba aquí (la liga que el botón "Abrir" usa).
+    if (tipo === "modelo" && typeof contenido.id === "string" && !ficha.modelos.some((m) => m.id === contenido.id)) {
+      const url = await buscarPaginaModelo(tool, contenido.id, String(contenido.etiqueta ?? contenido.id));
+      contenido = { ...contenido, url };
+      aviso = [
+        url ? `Liga de Higgsfield comprobada: ${url}` : "No encontré su página en Higgsfield: el botón Abrir lleva a la de la herramienta. Si la tienes, ponla en Herramientas.",
+        contenido.costo ? null : "El costo quedó vacío: ponlo en Herramientas.",
+      ].filter(Boolean).join(" ");
+    }
+    const v = validarFicha(tool, aplicarAFicha(ficha, tool, { tipo, contenido }));
     if (!v.ok) return devolver(`No pasa la validación del Hub: ${v.error}`);
     const cambios = { ...v.fila, updated_by: soyId, updated_at: ahora };
     if (fila) {
@@ -187,7 +199,7 @@ async function escribirAprobada(db: ReturnType<typeof supabaseAdmin>, p: PrismaP
   // tipo "codigo": no se escribe nada; queda aprobado como ticket (lo implementa Claude en la siguiente tanda).
   olvidarConocimiento();
   refrescar();
-  return { ok: true };
+  return { ok: true, ...(aviso ? { aviso } : {}) };
 }
 
 export async function descartarPropuestaVigia(id: string, motivo: string): Promise<Ok | Fail> {

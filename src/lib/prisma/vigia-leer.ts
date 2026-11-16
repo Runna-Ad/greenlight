@@ -2,7 +2,8 @@ import "server-only";
 import { request } from "node:https";
 import { lookup, type LookupAddress } from "node:dns";
 import { isIP } from "node:net";
-import { hostPermitido } from "@/lib/prisma/vigia";
+import { candidatosUrlModelo, hostPermitido, tituloDelModelo } from "@/lib/prisma/vigia";
+import type { Tool } from "@/lib/prisma/spec";
 
 /**
  * F6b — leer UNA fuente del vigía sin abrirle la puerta a nada más (SSRF):
@@ -138,4 +139,17 @@ export async function leerPagina(url: string): Promise<Lectura> {
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message.slice(0, 200) : "no se pudo leer" };
   }
+}
+
+/** La página de un modelo NUEVO en Higgsfield, comprobada: prueba las formas del id (candidatosUrlModelo) y se queda
+ *  con la primera cuyo título nombra el modelo. null si ninguna (no se guarda una liga adivinada). Con tope de
+ *  tiempo: corre dentro de "Aprobar". */
+export async function buscarPaginaModelo(tool: Tool, id: string, etiqueta: string, topeMs = 30_000): Promise<string | null> {
+  const inicio = Date.now();
+  for (const url of candidatosUrlModelo(tool, id)) {
+    if (Date.now() - inicio > topeMs) break;
+    const l = await leerPagina(url);
+    if (l.ok && tituloDelModelo(l.html, etiqueta)) return l.url;
+  }
+  return null;
 }

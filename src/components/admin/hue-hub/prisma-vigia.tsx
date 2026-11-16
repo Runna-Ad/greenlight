@@ -82,6 +82,9 @@ export function PrismaVigia({ demo = null }: { demo?: DatosVigia | null }) {
       const r = aprobar ? await aprobarPropuestaVigia(p.id) : await descartarPropuestaVigia(p.id, motivos[p.id] ?? "");
       if (!r.ok) return void toast.error(r.error);
       toast.success(aprobar ? "Aprobada: la siguiente generación ya la usa." : "Descartada: no se volverá a proponer.");
+      // Modelo nuevo: dice si encontró su página en Higgsfield y si falta el costo (se queda hasta cerrarlo).
+      const aviso = "aviso" in r && typeof r.aviso === "string" ? r.aviso : null;
+      if (aviso) toast.message(aviso, { duration: Infinity, closeButton: true });
       setDescartando(null);
       await recargar();
     } catch {
