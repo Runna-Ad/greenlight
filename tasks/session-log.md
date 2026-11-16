@@ -1,5 +1,13 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-16 — Vigía: sin tarjetas repetidas, fuentes de Google y liga + costo automáticos (main, SIN migración, EN VIVO)
+**Qué cambió:** (1) una propuesta del mismo modelo/límite/fortaleza que una pendiente se suma a ella, y cada llamada a H.Ü.E ve lo pendiente (el correo traía GPT Image 2.6 Sunburst dos veces). (2) Al aprobar un modelo NUEVO, su página de Higgsfield se busca y se comprueba por el título; el costo viene en la tarjeta cuando una fuente de Higgsfield lo publica (cada número en la cita). (3) H.Ü.E escribe «cómo llegar» como el camino en Higgsfield.
+**Datos en prod (por el Hub, como Pedro):** 8 tarjetas descartadas con motivo (Pedro aprobó Flare y Sunburst); GPT Image 2.6 Flare/Sunburst con liga, 2.75 típicos / 4.25 máx. y «cómo llegar»; fuentes de Google → aistudio.google.com/docs/image-generation.md y /veo.md (la página nueva es JavaScript: el texto sólo sale en .md); nueva fuente «Higgsfield — GPT Image 2.6» (blog con la tabla de precios).
+**Pruebas:** npm test exit 0 (prisma 990/0) · tsc 0 · eslint 0 · next build exit 0 · búsqueda de liga contra Higgsfield real: 2.6 Flare/Sunburst y kling3_0 sí, modelo inventado null. Fuentes en BD: 205 199 / 83 425 / 9 329 caracteres, sin error.
+**En vivo:** «ship everything together» de Pedro; fast-forward a3d3d5a → 794255b, dpl_2pbLvd32qWvdBi3nFMFV4utPAuQW READY. **Para volver:** dpl_556kcswvoAuJiVRPLEJDib8dfBrr (main a3d3d5a).
+**No probado:** «Aprobar» de una tarjeta de modelo nuevo en vivo (no había ninguna; se verá con el próximo modelo). La carpeta principal ~/Projects/greenlight sigue en main local 49 commits atrás con un tasks/lessons.md modificado que no es de esta sesión.
+**Pick up next:** cuando Vigía traiga el próximo modelo, revisar que el aviso al aprobar diga la liga comprobada.
+
 ## 2026-11-13 — Paquetes fase 3: avisos y búsqueda con el paquete (main, SIN migración, EN VIVO)
 **Decisiones de Pedro:** la línea del paquete se arma al enseñar el aviso (no se guarda en el título); la búsqueda da un resultado «Paquete» que abre el tablero filtrado.
 **Pruebas:** test-lib 926/0 · npm test exit 0 · tsc 0 · eslint 0 · build exit 0. Revisión Sonnet: 2 arreglos.
