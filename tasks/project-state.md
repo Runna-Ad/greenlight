@@ -231,6 +231,10 @@
 - **Regla de costo:** la calidad decide; el costo sólo desempata o sube al fino si es ilimitado o cuesta ≤.
 - **F6b Vigía (0074):** 14 fuentes, propuestas citadas que el master aprueba en Hub › Prisma › Vigía; correo a los
   masters cuando hay algo que decidir (necesita GMAIL_* — hoy sólo en Production); cron semanal con CRON_SECRET (pendiente).
+  **2026-11-16 (main 794255b, en vivo):** 15 fuentes (Google en aistudio.google.com/docs/*.md; nueva «Higgsfield — GPT Image 2.6»);
+  propuestas del mismo tema se juntan; al aprobar un modelo nuevo su liga de Higgsfield se comprueba y el costo viene de la
+  fuente si lo publica. ChatGPT Images recomienda GPT Image 2.6 Flare/Sunburst (2.75 típicos). Sin probar en vivo: el aviso
+  de «Aprobar» en una tarjeta real de modelo nuevo.
 - **Siguiente:** paso 3 (estadísticas por diseñador en Evaluación).
 
 ## 🔺 HÜE Prisma (rama `prisma`) — 2026-09-15 (tarde) — TODO LIVE en preview (0065–0071 APLICADAS · F6a + F5c)
