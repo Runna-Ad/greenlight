@@ -5,7 +5,7 @@ import { cargarReglas } from "@/lib/prisma/data";
 import { leerPagina } from "@/lib/prisma/vigia-leer";
 import { proponerCambios } from "@/lib/prisma/vigia-ia";
 import { avisarPropuestas } from "@/lib/prisma/vigia-aviso";
-import { cambios, enLotes, extraerTexto, huellaTexto, sabidoDe, sinParrafos, type AvisoVigia, type Origen } from "@/lib/prisma/vigia";
+import { cambios, enLotes, extraerTexto, huellaTexto, pendientesDe, sabidoDe, sinParrafos, temaDe, type AvisoVigia, type Origen, type Propuesta } from "@/lib/prisma/vigia";
 import { TOOLS, type Tool } from "@/lib/prisma/spec";
 
 /**
@@ -96,6 +96,13 @@ export async function revisarFuentes(db: Db, opts: { soloId?: string; maxLlamada
   const fuentes = data ?? [];
   const conocimiento = await cargarReglas(db);
   const hoy = new Date().toISOString().slice(0, 10);
+  // Lo que ya espera revisión: H.Ü.E lo ve (no lo repite con otras palabras) y una propuesta del mismo TEMA se
+  // suma a la que ya está en vez de abrir otra tarjeta. Crece con lo que entra en esta corrida (el 2º lote de una
+  // página ve lo que propuso el 1º).
+  type Pendiente = Pick<Propuesta, "tipo" | "tool" | "contenido"> & { huella: string };
+  const { data: pendData, error: pendErr } = await db.from("prisma_propuestas").select("huella, tipo, tool, contenido").eq("estado", "pendiente").limit(200).returns<Pendiente[]>();
+  if (pendErr) console.warn(`[prisma/vigia] pendientes: ${pendErr.message}`);
+  const pendientes: Pendiente[] = pendData ?? [];
 
   // 1) Leer (en paralelo, de a 4): la red es lo lento; H.Ü.E va después, en serie y con tope.
   const lecturas: { f: FilaFuenteBD; texto: string | null; error: string | null }[] = [];
@@ -146,18 +153,24 @@ export async function revisarFuentes(db: Db, opts: { soloId?: string; maxLlamada
     for (const lote of lotes) {
       if (leidos >= LOTES_POR_FUENTE || r.llamadas >= maxLlamadas || Date.now() - inicio > presupuesto) break;
       r.llamadas++;
-      const ia = await proponerCambios({ fuente: { nombre: f.nombre, url: f.url, tool }, nuevos: lote, sabido, hoy });
+      const ia = await proponerCambios({ fuente: { nombre: f.nombre, url: f.url, tool }, nuevos: lote, sabido, pendientes: pendientesDe(pendientes, tool), hoy });
       if (!ia.ok) {
         fallo = ia.error;
         break;
       }
       r.tokens += ia.tokens;
       for (const p of ia.propuestas) {
-        const huella = sha256(huellaTexto(p));
-        const { error: insErr } = await db.from("prisma_propuestas").insert({ huella, tipo: p.tipo, tool: p.tool, origen: f.origen, fuentes: [f.id], resumen_es: p.resumen_es, contenido: p.contenido, cita: p.cita, cita_url: f.url, cita_fecha: hoy });
+        const tema = temaDe(p);
+        const mismoTema = tema ? pendientes.find((q) => temaDe(q) === tema) : undefined;
+        // Mismo tema que una pendiente = la misma noticia: se suma a esa (como una repetida), no abre otra tarjeta.
+        const huella = mismoTema?.huella ?? sha256(huellaTexto(p));
+        const { error: insErr } = mismoTema
+          ? { error: { code: "23505", message: "mismo tema" } }
+          : await db.from("prisma_propuestas").insert({ huella, tipo: p.tipo, tool: p.tool, origen: f.origen, fuentes: [f.id], resumen_es: p.resumen_es, contenido: p.contenido, cita: p.cita, cita_url: f.url, cita_fecha: hoy });
         const aviso: AvisoVigia = { tipo: p.tipo, tool: p.tool, resumen_es: p.resumen_es, fuente: f.nombre };
         if (!insErr) {
           r.propuestas++;
+          pendientes.push({ huella, tipo: p.tipo, tool: p.tool, contenido: p.contenido });
           // La de comunidad espera a su segunda fuente para avisar (antes no se puede aprobar).
           if (f.origen === "oficial") opts.avisos?.push(aviso);
         } else if (insErr.code === "23505") {

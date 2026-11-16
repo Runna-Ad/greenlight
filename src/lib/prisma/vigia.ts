@@ -320,6 +320,30 @@ function canonico(v: unknown): string {
  *  fuente que venga: así un descarte no vuelve y dos fuentes de comunidad se suman. */
 export const huellaTexto = (p: Pick<Propuesta, "tipo" | "tool" | "contenido">): string => `${p.tipo}|${p.tool ?? "*"}|${canonico(p.contenido)}`;
 
+/** La llave que dice DE QUÉ habla una propuesta de ficha: un modelo es su id, un límite su campo, una fortaleza su
+ *  nombre. Las notas, reglas, deprecaciones y código no tienen tema (su texto ES el tema). */
+export const LLAVE_TEMA: Partial<Record<TipoPropuesta, string>> = { modelo: "id", limite: "campo", fortaleza: "fortaleza" };
+
+/** El TEMA de una propuesta, o null. Dos PENDIENTES con el mismo tema son la misma noticia aunque H.Ü.E la cuente
+ *  con otras palabras (2026-11-16: la guía de OpenAI se leyó en dos lotes y GPT Image 2.6 Sunburst llegó dos
+ *  veces, con distinto "cómo llegar", y la huella exacta no las juntó). Sólo vale entre pendientes: un descarte
+ *  viejo no bloquea un valor NUEVO del mismo campo (eso lo sigue decidiendo la huella). */
+export function temaDe(p: Pick<Propuesta, "tipo" | "tool" | "contenido">): string | null {
+  const llave = LLAVE_TEMA[p.tipo];
+  const v = llave ? p.contenido[llave] : null;
+  return typeof v === "string" && v.trim() ? `${p.tipo}|${p.tool ?? "*"}|${comparable(v)}` : null;
+}
+
+/** Lo que ya espera revisión, en texto corto para H.Ü.E (así no lo vuelve a proponer con otras palabras, ni en el
+ *  segundo lote de la misma página). Las de esa herramienta y las generales. */
+export function pendientesDe(pend: Pick<Propuesta, "tipo" | "tool" | "contenido">[], tool: Tool | null, max = 3000): string {
+  return pend
+    .filter((p) => !tool || p.tool === tool || p.tool === null)
+    .map((p) => `${p.tipo}${p.tool ? ` [${p.tool}]` : ""}: ${describirContenido(p.tipo, p.contenido)}`)
+    .join("\n")
+    .slice(0, max);
+}
+
 /** Una propuesta de comunidad necesita 2 fuentes distintas antes de enseñarse. */
 export const visible = (p: { origen: Origen; fuentes: string[] }): boolean => p.origen === "oficial" || new Set(p.fuentes).size >= 2;
 

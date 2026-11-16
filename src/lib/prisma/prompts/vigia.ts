@@ -41,6 +41,8 @@ export type EntradaVigia = {
   nuevos: string[];
   /** Lo que Prisma sabe hoy de esa herramienta (ficha del catálogo + notas activas), ya en texto. */
   sabido: string;
+  /** Lo que ya espera revisión (de corridas anteriores y de los lotes anteriores de esta misma página). */
+  pendientes?: string;
   hoy: string;
 };
 
@@ -69,7 +71,12 @@ WHAT PRISMA ALREADY KNOWS
 <known>
 ${cercadoMultilinea(e.sabido)}
 </known>
-
+${e.pendientes ? `
+ALREADY PROPOSED, WAITING FOR A PERSON'S REVIEW (do not propose these again, not even reworded or with a different explanation)
+<pending>
+${cercadoMultilinea(e.pendientes)}
+</pending>
+` : ""}
 NEW TEXT (paragraphs that were not on the page last time)
 <new_text>
 ${e.nuevos.map((p) => cercado(p)).join("\n")}
