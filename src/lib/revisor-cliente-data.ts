@@ -41,21 +41,21 @@ export async function revisoresDe(
   for (const id of ids) out[id] = null;
   if (!ids.length || !clientId) return out;
 
-  // Por tandas: una lista larga de ids en la URL de PostgREST tiene tope.
-  const filas: { id: string; revisor_cliente_id: string | null }[] = [];
-  for (let i = 0; i < ids.length; i += 200) {
-    const { data, error } = await db
-      .from("ideas")
-      .select("id, revisor_cliente_id")
-      .in("id", ids.slice(i, i + 200))
-      .not("revisor_cliente_id", "is", null)
-      .returns<{ id: string; revisor_cliente_id: string | null }[]>();
-    if (error) {
-      console.error("revisoresDe:", error.message);
-      return out; // sin revisores la pantalla se ve igual («Sin asignar»), no se rompe
-    }
-    filas.push(...(data ?? []));
+  // Por tandas (en paralelo): una lista larga de ids en la URL de PostgREST tiene tope.
+  const tandas: string[][] = [];
+  for (let i = 0; i < ids.length; i += 200) tandas.push(ids.slice(i, i + 200));
+  const respuestas = await Promise.all(
+    tandas.map((t) =>
+      db.from("ideas").select("id, revisor_cliente_id").in("id", t).not("revisor_cliente_id", "is", null)
+        .returns<{ id: string; revisor_cliente_id: string | null }[]>(),
+    ),
+  );
+  const fallo = respuestas.find((r) => r.error);
+  if (fallo?.error) {
+    console.error("revisoresDe:", fallo.error.message);
+    return out; // sin revisores la pantalla se ve igual («Sin revisor»), no se rompe
   }
+  const filas = respuestas.flatMap((r) => r.data ?? []);
   const perfilIds = [...new Set(filas.map((f) => f.revisor_cliente_id).filter((x): x is string => !!x))];
   if (!perfilIds.length) return out;
   const { data: perfiles, error: e2 } = await db

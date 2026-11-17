@@ -13,7 +13,10 @@ import { cargarPortal, cargarTareaPortal } from "@/app/(app)/[cliente]/portal/po
 
 export type RevisorResultado = { ok: true } | { ok: false; error: string };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Los estados que el portal enseña como «En producción» (mismo filtro que cargarPortal). */
+const ESTADOS_PRODUCCION: AssetStatus[] = ["todo", "in_progress", "under_review", "completed"];
+
+const UUID =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function asignarRevisorCliente(ideaId: string, profileId: string | null): Promise<RevisorResultado> {
   if (!hasSupabase()) return { ok: false, error: "Sin base de datos." };
@@ -49,13 +52,16 @@ export async function asignarRevisorCliente(ideaId: string, profileId: string | 
 
   // ¿La pieza está en la lista del portal de ese cliente? Lo decide el MISMO cargador que pinta
   // el portal (así la regla no se separa de lo que el cliente ve). Sólo hace falta para clientes.
+  // Primero lo barato: un cliente de otra empresa no llega a cargar nada.
   let enPortal = false;
-  if (u.role === "client" && slug && !borrada) {
-    const portal = await cargarPortal(slug);
-    enPortal =
-      !!portal &&
-      (portal.produccion.some((p) => p.id === ideaId) || portal.briefs.some((b) => b.tasks.some((t) => t.id === ideaId)));
-    if (!enPortal) enPortal = !!(await cargarTareaPortal(slug, ideaId)); // pieza de un brief archivado
+  if (u.role === "client" && slug && !borrada && u.clientId === clientId) {
+    // Pieza ya enviada (Por revisar / En cambios / Aprobada): basta la carga de UNA pieza.
+    enPortal = !!(await cargarTareaPortal(slug, ideaId));
+    // Pieza «En producción»: sólo el panel sabe si su brief ya se ve en el portal.
+    if (!enPortal && ESTADOS_PRODUCCION.includes(idea.status)) {
+      const portal = await cargarPortal(slug);
+      enPortal = !!portal && portal.produccion.some((p) => p.id === ideaId);
+    }
   }
 
   const motivo = motivoNoPuedeAsignar(
@@ -74,7 +80,9 @@ export async function asignarRevisorCliente(ideaId: string, profileId: string | 
   }
   if ((idea.revisor_cliente_id ?? null) === profileId) return { ok: true }; // nada que cambiar
 
-  const { error } = await db
+  // Se escribe sólo si la tarea sigue en el estado que se revisó arriba: si alguien la movió
+  // entre la revisión y la escritura (p. ej. de «Con Cliente» a producción), no se guarda.
+  const { data: escritas, error } = await db
     .from("ideas")
     .update(
       profileId === null
@@ -82,11 +90,14 @@ export async function asignarRevisorCliente(ideaId: string, profileId: string | 
         : { revisor_cliente_id: profileId, revisor_cliente_por: u.userId, revisor_cliente_at: new Date().toISOString() },
     )
     .eq("id", ideaId)
-    .is("deleted_at", null);
+    .eq("status", idea.status)
+    .is("deleted_at", null)
+    .select("id");
   if (error) {
     console.error("asignarRevisorCliente:", error.message);
     return { ok: false, error: "No se pudo guardar el revisor. Intenta de nuevo." };
   }
+  if (!escritas?.length) return { ok: false, error: "La tarea cambió mientras tanto. Recarga e intenta de nuevo." };
 
   if (slug) {
     revalidatePath(`/${slug}/portal`);

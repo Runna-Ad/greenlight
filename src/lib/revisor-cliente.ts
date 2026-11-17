@@ -25,6 +25,10 @@ export const MSG_REVISOR = {
   noExiste: "La tarea no existe o está en la papelera.",
 } as const;
 
+/** Los mismos textos en tablero, tarea y portal. */
+export const REVISOR_ETIQUETA = "Revisor del cliente";
+export const REVISOR_VACIO = "Sin revisor";
+
 /** Un usuario del portal, como se pinta en la pastilla y en el selector. */
 export type PersonaCliente = { id: string; name: string };
 

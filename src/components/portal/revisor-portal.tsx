@@ -49,8 +49,6 @@ export function RevisorPortal({
       opciones={v.opciones}
       editable={editable}
       soyId={v.soyId}
-      etiqueta="Quién la revisa"
-      vacio="Sin asignar"
       className={className}
     />
   );
@@ -58,13 +56,15 @@ export function RevisorPortal({
 
 /** Interruptor «Mis tareas»: encendido deja sólo las piezas que revisa quien mira. Se guarda en
  *  una cookie (un año) para que siga puesto al navegar y al volver otro día. */
-export function MisTareasToggle({ activo }: { activo: boolean }) {
+export function MisTareasToggle({ activo, soyId }: { activo: boolean; soyId: string }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
   const cambiar = () => {
+    // El valor es el id de quien lo prendió: otro usuario en el mismo navegador no lo hereda.
+    const seguro = location.protocol === "https:" ? "; secure" : "";
     document.cookie = activo
-      ? `${COOKIE_MIS_TAREAS}=; path=/; max-age=0; samesite=lax`
-      : `${COOKIE_MIS_TAREAS}=1; path=/; max-age=31536000; samesite=lax`;
+      ? `${COOKIE_MIS_TAREAS}=; path=/; max-age=0; samesite=lax${seguro}`
+      : `${COOKIE_MIS_TAREAS}=${soyId}; path=/; max-age=31536000; samesite=lax${seguro}`;
     startTransition(() => router.refresh());
   };
   return (

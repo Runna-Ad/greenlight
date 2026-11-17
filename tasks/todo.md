@@ -1,5 +1,60 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-11-17 — Revisor del cliente por tarea (CONSTRUIDO en feat/revisor-cliente, sin aplicar 0099, sin preview)
+**Pedro eligió (2026-11-17):** enfoque A; el brillo sólo para admin/master; admin/master SÍ cambian el revisor en «En cambios» además de «Con Cliente» (para destrabar si el revisor ya no está disponible). «Mis tareas» se guarda en una cookie (no en la URL) para que siga puesto al navegar.
+**Pedido de Pedro (2026-11-17):** cada tarea puede tener UN revisor del lado del cliente (un usuario del portal de esa empresa). No es obligatorio: sin revisor todo funciona igual.
+- **Cliente:** se asigna a sí mismo o a un compañero de su empresa en cuanto la pieza aparece en su portal (también «En producción»). Lo puede cambiar o quitar en cualquier momento.
+- **Admin / Master:** asignan o cambian sólo cuando la tarjeta está en «Con Cliente» (`status = published`). Lead y especialista no.
+- **Mismo campo:** si el cliente se asignó antes, la tarjeta llega a «Con Cliente» ya con su nombre. Nada se copia.
+- **Brillo:** tarjeta en «Con Cliente» sin revisor → borde/anillo que llama la atención, visible para admin/master.
+- **Portal:** cada pieza lleva una pastilla con el nombre del revisor o «Sin asignar». Un interruptor «Mis tareas» deja sólo las mías; apagado se ve todo.
+- **Rondas:** el revisor se queda cuando la pieza vuelve a producción y regresa.
+- **Después (no en esta fase):** aviso al revisor (campana / correo / Slack).
+
+**Lo que ya existe (mapa 2026-11-17):** `produccion` es sólo service_role (0056) → todo permiso vive en server actions. Asignar equipo = `idea_assignments` con `member_id` → `track_members`; los clientes NO tienen `track_members` (identity.ts:131), así que el revisor no cabe ahí (además `rpc_set_assignees` borraría la fila). Usuario cliente = `profiles.role='client'`, `active`, `client_id`. El portal muestra `published / in_corrections / delivered` + piezas «En producción» (todo/in_progress/under_review/completed) de briefs ya visibles (`portal-data.ts:341`). Live refresh: `live_ideas_stmt` (última versión 0077:222) sólo avisa si cambian ciertas columnas. Tablero: columna «Con Cliente» `board.tsx:111`, chips de gente `board.tsx:796-815`.
+
+**Enfoques (Pedro elige):**
+- **A (recomendado): columna en `ideas`.** `revisor_cliente_id` (FK profiles, on delete set null) + `revisor_cliente_por` + `revisor_cliente_at`. Un revisor = una columna. Lo menos que hay que tocar.
+- **B: tabla aparte `idea_revisores_cliente`** (una fila por tarea, con quién y cuándo). Sirve si algún día son varios revisores o se quiere historial; más código hoy.
+- **C: reusar `idea_assignments` con `profile_id`.** Descartado: choca con `track_members`, con la vista `board_tasks` y con `rpc_set_assignees`.
+
+**DONE (con enfoque A)**
+- D1 Migración 0099: columnas + índice + `live_ideas_stmt` (partiendo de la versión EN VIVO, leída antes con `pg_get_functiondef`) que también avisa cuando cambia el revisor. `npm run test:db` verde con pruebas nuevas (FK, set null al borrar perfil, el aviso en vivo sale al cambiar el revisor).
+- D2 Lógica pura `src/lib/revisor-cliente.ts`: `puedeAsignarRevisor(quien, tarea)` y `revisorValido(perfil, tarea)` con pruebas en `npm run test:lib` (cliente de otra empresa NO; cliente con pieza fuera del portal NO; admin fuera de «Con Cliente» NO; lead NO; perfil inactivo o de otra empresa NO; quitar = null SÍ).
+- D3 UNA server action `asignarRevisorCliente(ideaId, profileId | null)` que usan portal y tablero (misma regla en los dos lados). Lee la tarea con servicio, su cliente por `briefs.client_id` (respaldo `marcas.client_id`), valida con D2, escribe, revalida.
+- D4 Tablero: en «Con Cliente», pastilla del revisor; admin/master la cambian con un selector de los usuarios cliente activos de esa empresa; sin revisor → brillo + «Sin revisor». Fuera de «Con Cliente» la pastilla se ve pero no se edita. Visto en la preview como Master.
+- D5 Página de la tarea (equipo): la misma pastilla/selector junto a los asignados.
+- D6 Portal: pastilla en cada pieza (incluidas las «En producción») con selector «Asignarme» / compañeros / «Quitar»; interruptor «Mis tareas» (guardado en la URL `?mias=1`); también en la página de la pieza. Visto en la preview como cliente de prueba.
+- D7 Revisor dado de baja (`active=false`) se muestra como «Sin asignar» y la tarjeta vuelve a brillar.
+- D8 tsc 0 · eslint 0 · `npm test` exit 0 · build ✓ · reap con revisión de seguridad (Opus).
+
+**Decisiones tomadas tras la revisión del plan (lector Sonnet, 12 huecos):**
+- Regla del equipo igual en todas partes: admin/master sólo con `status = published`, sea desde el tablero, la tarea o el portal. Admin en el portal sigue de sólo lectura (ve la pastilla). Master en el portal puede elegir a cualquier usuario cliente de esa empresa, sin «Asignarme». «Mis tareas» sólo existe para usuarios cliente.
+- Regla del cliente = «la pieza está en su lista del portal»: brief ya visible + estado de producción o de portal + `deleted_at is null`. Esa condición sale a UN helper que usan el cargador del portal y la acción (no dos copias).
+- Empresa con un solo usuario: el selector se ve igual («Asignarme» / «Quitar»).
+- Validez al LEER: el revisor cuenta sólo si su perfil está activo, es `client` y su `client_id` es el de la tarea; si no, «Sin asignar» y brillo. La columna no se limpia sola; la siguiente asignación la reemplaza.
+- Tarea sin cliente (brief y marca sin `client_id`) → la acción responde «Esta tarea no tiene cliente».
+- Columnas: `revisor_cliente_id uuid null references produccion.profiles(id) on delete set null`, `revisor_cliente_por uuid null references produccion.profiles(id) on delete set null`, `revisor_cliente_at timestamptz null` (la pone la acción). Índice parcial en `revisor_cliente_id where not null`. Sin grants nuevos (todo es service_role). «Quitar» vacía las tres.
+- Archivo: `20261117120001_greenlight_0099_revisor_cliente.sql`; antes, `git worktree list` + `ls` de migraciones en cada worktree para que nadie más use 0099. `live_ideas_stmt` se reescribe desde la versión EN VIVO y sólo se le suma `revisor_cliente_id` a la lista de columnas que avisan.
+- Acción: devuelve el `ActionResult` de siempre; gana la última escritura; revalida tablero, tarea y portal del cliente.
+- «Mis tareas» empieza apagado; vacío = «No tienes piezas asignadas».
+- Ubicación y textos exactos (pastilla junto a los chips de `board.tsx:796-815`, «Revisor cliente: Ana» / «Sin revisor cliente»; en portal «Ana» / «Sin asignar») se fijan al construir y se enseñan en la preview.
+
+**No hago:** avisos al revisor; historial de quién lo cambió (sólo el último); que el revisor cambie lo que el cliente puede ver o hacer; no aplico 0099 ni paso a `main` sin «ship it».
+
+**Avance (2026-11-17, commit c211f21):**
+- [x] D1 0099 escrita; `npm run test:db` 902/0 (9 pruebas nuevas). NO aplicada en vivo.
+- [x] D2 `src/lib/revisor-cliente.ts` + 26 pruebas en test-lib (952/0).
+- [x] D3 `asignarRevisorCliente` en `src/app/(app)/revisor-cliente-actions.ts`; el «está en su portal» lo decide el mismo `cargarPortal`.
+- [x] D4 tablero: pastilla «Revisa:» + brillo ámbar (admin/master) en «Con Cliente» sin revisor.
+- [x] D5 tarea: pastilla en la cabecera (HeroTarea `revisorSlot`).
+- [x] D6 portal: pastilla por pieza (inicio, lista sólo-ver, página de la pieza) + «Mis tareas».
+- [x] D7 revisor dado de baja / otra empresa = «Sin asignar» (se valida al leer).
+- [ ] D8 tsc 0 · eslint 0 · `npm test` exit 0 · build exit 0 ✓; revisión (seguridad Opus + código) EN CURSO.
+- [ ] Preview en el navegador: necesita 0099 en la base (la preview usa la base en vivo).
+
+Next Step: arreglar lo que traiga la revisión → pedir a Pedro el OK para aplicar 0099 (sólo agrega 3 columnas vacías; nadie las lee hasta el deploy) → preview como Master y como cliente de prueba.
+
 ## ✅ 2026-11-12 — «Crear login» del Master + «Cambiar contraseña» del cliente — EN VIVO (main 6374b89, sin migración; para volver: dpl_D1TGwy6aMREiu2zWxBeY3cJwz9e3)
 Pedro: algunos clientes no logran entrar; un plan C donde el Master pone correo + contraseña + empresa y se la manda por chat. Contraseña fácil de marca (DiDi@657) y el cliente la puede cambiar en su perfil.
 - [x] Admin › Clientes › Crear login (sólo Master): correo, nombre opcional, empresa, rol fijo Partner, contraseña con «Generar» (marca + @ + 3 números, editable, mínimo 8). Mensaje listo para copiar. Si el correo ya es cliente de esa empresa, cambia su contraseña. Aprueba su solicitud pendiente.

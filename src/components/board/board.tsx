@@ -695,7 +695,7 @@ const CardBody = memo(function CardBody({
         enCorrecciones
           ? "border-status-corrections ring-1 ring-[color-mix(in_srgb,var(--status-corrections)_35%,transparent)]"
           : pideRevisor
-            ? "border-status-warning shadow-[0_0_0_3px_color-mix(in_srgb,var(--status-warning)_22%,transparent),0_0_14px_color-mix(in_srgb,var(--status-warning)_35%,transparent)]"
+            ? "border-status-warning shadow-[0_0_0_3px_color-mix(in_srgb,var(--status-warning)_22%,transparent),0_0_14px_color-mix(in_srgb,var(--status-warning)_35%,transparent)] hover:shadow-[0_0_0_3px_color-mix(in_srgb,var(--status-warning)_30%,transparent),0_0_18px_color-mix(in_srgb,var(--status-warning)_45%,transparent)]"
             : "border-border"
       } ${dragging ? "rotate-1 scale-[1.03] shadow-lg" : ""}`}
     >
@@ -828,8 +828,6 @@ const CardBody = memo(function CardBody({
             revisor={revisor}
             opciones={revisorUi.opciones}
             editable={revisorEditable && !dragging}
-            etiqueta="Revisor del cliente"
-            vacio="Sin revisor del cliente"
             alerta={pideRevisor}
           />
         </div>

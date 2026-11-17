@@ -124,8 +124,8 @@ export default async function PortalPage({
   // contadores, paquetes y navegación salgan de la misma lista.
   const soyCliente = role === "client" && !!user;
   // Se guarda en una cookie (no en la URL) para que siga puesta al navegar entre piezas.
-  const mias = soyCliente && (await cookies()).get(COOKIE_MIS_TAREAS)?.value === "1";
   const yo = soyCliente ? user!.userId : null;
+  const mias = !!yo && (await cookies()).get(COOKIE_MIS_TAREAS)?.value === yo;
   const data = mias
     ? {
         ...cargado,
@@ -136,7 +136,7 @@ export default async function PortalPage({
       }
     : cargado;
   const valorRevisor: RevisorPortalValor = { revisores, opciones: revisorOpciones, soyId: yo, modo: modoRevisor };
-  const herramientas = soyCliente ? <MisTareasToggle activo={mias} /> : null;
+  const herramientas = yo ? <MisTareasToggle activo={mias} soyId={yo} /> : null;
   const conRevisor = (n: ReactNode) => <RevisorPortalProvider valor={valorRevisor}>{n}</RevisorPortalProvider>;
 
   if (mias && !data.briefs.length && !data.produccion.length) {

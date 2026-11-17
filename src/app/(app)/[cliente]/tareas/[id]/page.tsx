@@ -158,8 +158,6 @@ export default async function TareaPage({
         revisor={revisorCliente}
         opciones={revisorOpciones}
         editable={revisorEditable}
-        etiqueta="Revisor del cliente"
-        vacio="Sin revisor del cliente"
         alerta={faltaRevisor(idea.status as AssetStatus, !!revisorCliente)}
         className="px-3 py-1 text-[11px]"
       />
