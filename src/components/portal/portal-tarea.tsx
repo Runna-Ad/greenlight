@@ -13,6 +13,7 @@ import { PanelControlCambios } from "@/components/portal/panel-control-cambios";
 import { PLACEHOLDER_ESTATICO, placeholdersGuion } from "@/lib/plantilla";
 import type { TareaPortal } from "@/app/(app)/[cliente]/portal/portal-data";
 import { equipoEscribioUltimo } from "@/lib/correcciones";
+import { RevisorPortal } from "@/components/portal/revisor-portal";
 
 const noop = () => {};
 
@@ -78,6 +79,7 @@ function CuerpoTarea({ t, colorCliente }: { t: TareaPortal; colorCliente?: strin
       marca={t.marcaName}
       logoUrl={t.marcaLogo}
       briefLabel={t.briefLabel}
+      revisorSlot={<RevisorPortal ideaId={t.ideaId} status={t.status} className="px-3 py-1 text-[11px]" />}
       naming={t.naming}
       status={t.status}
       notaGuion={t.notaGuion}

@@ -14,6 +14,11 @@ import { PortalHome } from "@/components/portal/portal-home";
 import { PortalArchivo } from "@/components/portal/portal-archivo";
 import { bucketPortal, estadoBriefPanel, type BucketPortal } from "@/lib/portal-bucket";
 import { idDeUnidad, leerUnidad, unidadPedida, unidadesDePaquete } from "@/lib/portal-paquetes";
+import type { ReactNode } from "react";
+import { cookies } from "next/headers";
+import { filtrarMias, COOKIE_MIS_TAREAS } from "@/lib/revisor-cliente";
+import { revisoresDe, usuariosCliente } from "@/lib/revisor-cliente-data";
+import { RevisorPortalProvider, MisTareasToggle, type RevisorPortalValor } from "@/components/portal/revisor-portal";
 
 export const dynamic = "force-dynamic";
 
@@ -93,12 +98,57 @@ export default async function PortalPage({
   // detalle además de los no-archivados (carga acotada — ver cargarPortal).
   // `?brief=` puede traer "<brief>.<paquete>" (portal por paquete): para cargar sólo cuenta el brief.
   const briefParam = sp.brief ? leerUnidad(sp.brief) : null;
-  const data = await cargarPortal(cliente, briefParam?.briefId);
-  if (!data) {
+  const cargado = await cargarPortal(cliente, briefParam?.briefId);
+  if (!cargado) {
     return (
       <div className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
         No se encontró el cliente «{cliente}».
       </div>
+    );
+  }
+
+  // ── Revisor del cliente (0099) ── quién revisa cada pieza, y las opciones del selector.
+  // cliente = lo cambia siempre; master = sólo en «Con Cliente» / «En cambios»; admin = sólo ve.
+  const { data: cliRow } = hasSupabase()
+    ? await supabaseAdmin().from("clients").select("id").eq("slug", cliente).maybeSingle<{ id: string }>()
+    : { data: null };
+  const clientIdPortal = cliRow?.id ?? null;
+  const modoRevisor: RevisorPortalValor["modo"] =
+    role === "client" && puedeActuar ? "cliente" : role === "master" ? "master" : "lectura";
+  const idsPortal = [...cargado.briefs.flatMap((b) => b.tasks.map((t) => t.id)), ...cargado.produccion.map((p) => p.id)];
+  const [revisores, revisorOpciones] = await Promise.all([
+    revisoresDe(idsPortal, clientIdPortal),
+    modoRevisor !== "lectura" && clientIdPortal ? usuariosCliente(clientIdPortal) : Promise.resolve([]),
+  ]);
+  // «Mis tareas» (?mias=1, sólo usuarios cliente): se filtra AQUÍ, antes de todo, para que panel,
+  // contadores, paquetes y navegación salgan de la misma lista.
+  const soyCliente = role === "client" && !!user;
+  // Se guarda en una cookie (no en la URL) para que siga puesta al navegar entre piezas.
+  const mias = soyCliente && (await cookies()).get(COOKIE_MIS_TAREAS)?.value === "1";
+  const yo = soyCliente ? user!.userId : null;
+  const data = mias
+    ? {
+        ...cargado,
+        briefs: cargado.briefs
+          .map((b) => ({ ...b, tasks: filtrarMias(b.tasks, revisores, yo, true) }))
+          .filter((b) => b.tasks.length > 0 || cargado.produccion.some((p) => p.briefId === b.id && revisores[p.id]?.id === yo)),
+        produccion: filtrarMias(cargado.produccion, revisores, yo, true),
+      }
+    : cargado;
+  const valorRevisor: RevisorPortalValor = { revisores, opciones: revisorOpciones, soyId: yo, modo: modoRevisor };
+  const herramientas = soyCliente ? <MisTareasToggle activo={mias} /> : null;
+  const conRevisor = (n: ReactNode) => <RevisorPortalProvider valor={valorRevisor}>{n}</RevisorPortalProvider>;
+
+  if (mias && !data.briefs.length && !data.produccion.length) {
+    return conRevisor(
+      <PortalShell cliente={{ name: data.cliente.name, logoUrl: data.cliente.logoUrl, brandColor: data.cliente.brandColor }}
+        briefs={[]} selBriefId={null} selTareaId={null} vistaBucket={null} marcaId={null} backHref={null} backLabel=""
+        mostrarNav={false} herramientas={herramientas}
+        vista={
+          <p className="mx-auto max-w-lg rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+            No tienes piezas asignadas. Apaga «Mis tareas» para ver todas.
+          </p>
+        } />,
     );
   }
 
@@ -113,7 +163,7 @@ export default async function PortalPage({
 
   // Sin trabajo client-facing → estado vacío (el shell lo pinta con !briefs && !vista).
   if (!marcas.length) {
-    return <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null} vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false} vista={null} />;
+    return conRevisor(<PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null} vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false} vista={null} />);
   }
 
   // NIVEL 0 — VISTA GENERAL (home): sin ningún parámetro de navegación, el cliente aterriza en el
@@ -121,10 +171,10 @@ export default async function PortalPage({
   // llevan ?marca=&brief=&tarea= → salen del home y toma el relevo la navegación por niveles.
   const enHome = !sp.marca && !sp.brief && !sp.tarea && !sp.vista;
   if (enHome) {
-    return (
+    return conRevisor(
       <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null}
-        vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false}
-        vista={<PortalHome cliente={clienteInfo} marcas={marcas} briefs={data.briefs} produccion={data.produccion} ahora={ahora} nArchivadas={data.archivadas.length} />} />
+        vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false} herramientas={herramientas}
+        vista={<PortalHome cliente={clienteInfo} marcas={marcas} briefs={data.briefs} produccion={data.produccion} ahora={ahora} nArchivadas={data.archivadas.length} />} />,
     );
   }
 
@@ -180,18 +230,20 @@ export default async function PortalPage({
 
   if (vistaBucket) {
     const tareasBucket = (briefObj?.tasks ?? []).filter((t) => bucketPortal(t.status) === vistaBucket);
-    return (
+    return conRevisor(
       <PortalShell cliente={clienteInfo} briefs={unidades} selBriefId={briefSel} selTareaId={null}
-        vistaBucket={vistaBucket} marcaId={marcaSel} backHref={backHref} backLabel={backLabel} mostrarNav
-        vista={briefSel ? <PortalListaTareas briefId={briefSel} bucket={vistaBucket} tareas={tareasBucket} marca={marca} marcaId={marcaSel} /> : null} />
+        vistaBucket={vistaBucket} marcaId={marcaSel} backHref={backHref} backLabel={backLabel} mostrarNav herramientas={herramientas}
+        vista={briefSel ? <PortalListaTareas briefId={briefSel} bucket={vistaBucket} tareas={tareasBucket} marca={marca} marcaId={marcaSel} /> : null} />,
     );
   }
 
   const tareaSel = (sp.tarea && briefObj?.tasks.some((t) => t.id === sp.tarea) ? sp.tarea : briefObj?.tasks[0]?.id) ?? null;
   const tareaData = tareaSel ? await cargarTareaPortal(cliente, tareaSel) : null;
-  return (
+  // Una pieza de un brief archivado no venía en la carga del panel: su revisor se lee aparte.
+  if (tareaSel && !(tareaSel in revisores)) Object.assign(revisores, await revisoresDe([tareaSel], clientIdPortal));
+  return conRevisor(
     <PortalShell cliente={clienteInfo} briefs={unidades} selBriefId={briefSel} selTareaId={tareaSel}
-      vistaBucket={null} marcaId={marcaSel} backHref={backHref} backLabel={backLabel} mostrarNav
-      vista={tareaData ? <PortalTarea t={tareaData} puedeActuar={puedeActuar} colorCliente={marca} /> : null} />
+      vistaBucket={null} marcaId={marcaSel} backHref={backHref} backLabel={backLabel} mostrarNav herramientas={herramientas}
+      vista={tareaData ? <PortalTarea t={tareaData} puedeActuar={puedeActuar} colorCliente={marca} /> : null} />,
   );
 }

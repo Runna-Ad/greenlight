@@ -17,7 +17,10 @@ export function PortalShell({
   backLabel,
   mostrarNav,
   vista,
+  herramientas,
 }: {
+  /** Controles arriba del contenido (p. ej. el interruptor «Mis tareas»). */
+  herramientas?: ReactNode;
   cliente: { name: string; logoUrl: string | null; brandColor: string };
   briefs: PortalBrief[];
   selBriefId: string | null;
@@ -70,6 +73,7 @@ export function PortalShell({
     return (
       <div className="relative w-full px-4 py-8 sm:px-6 lg:px-8">
         {glow}
+        {herramientas && <div className="mb-3 flex justify-end">{herramientas}</div>}
         <header className="mb-6 flex items-center gap-3 gl-rise-in">
           {cliente.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -120,6 +124,7 @@ export function PortalShell({
           que dejaba mucho espacio muerto a los lados (Pedro). El key por tarea la remonta al
           cambiar → entra con un fade sutil. */}
       <div className="px-4 py-6 sm:px-6 lg:px-8">
+        {herramientas && <div className="mb-3 flex justify-end">{herramientas}</div>}
         {vista ? (
           <div key={selTareaId ?? vistaBucket ?? marcaId ?? "grid"} className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
             {vista}

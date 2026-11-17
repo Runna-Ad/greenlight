@@ -25,6 +25,7 @@ export function HeroTarea({
   logoUrl,
   briefLabel,
   paqueteNombre,
+  revisorSlot,
   naming,
   status,
   notaGuion,
@@ -40,6 +41,8 @@ export function HeroTarea({
   /** El paquete de la tarea (0097); sin él, no hay pastilla. El portal no lo pasa: ahí el
    *  cliente ya entra por paquete. */
   paqueteNombre?: string | null;
+  /** Pastilla del revisor del cliente (0099), ya armada por la página. */
+  revisorSlot?: React.ReactNode;
   naming: string | null;
   status: AssetStatus;
   notaGuion: string | null;
@@ -89,6 +92,7 @@ export function HeroTarea({
               {paqueteNombre}
             </span>
           )}
+          {revisorSlot}
         </div>
 
         <span

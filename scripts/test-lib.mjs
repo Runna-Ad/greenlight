@@ -2158,6 +2158,46 @@ console.log("\n▶ Crear login: contraseña de marca (DiDi@657) y quién la crea
   ok("sólo el Master crea logins", canCrearLogins("master") && !canCrearLogins("admin") && !canCrearLogins("lead") && !canCrearLogins("client"));
 }
 
+console.log("\n▶ Revisor del cliente (0099): quién lo pone, cuándo y a quién");
+{
+  const { motivoNoPuedeAsignar, revisorValido, faltaRevisor, filtrarMias, MSG_REVISOR } = await import("../src/lib/revisor-cliente.ts");
+  const DIDI = "didi", OTRA = "otra";
+  const t = (o = {}) => ({ status: "in_progress", borrada: false, clientId: DIDI, enPortal: true, ...o });
+  const cli = { role: "client", clientId: DIDI };
+  eq("cliente con la pieza en su portal (aún en producción) → puede", motivoNoPuedeAsignar(cli, t()), null);
+  eq("cliente con la pieza fuera de su portal → no", motivoNoPuedeAsignar(cli, t({ enPortal: false })), MSG_REVISOR.noEnPortal);
+  eq("cliente de OTRA empresa → no", motivoNoPuedeAsignar({ role: "client", clientId: OTRA }, t()), MSG_REVISOR.sinPermiso);
+  eq("cliente sin empresa → no", motivoNoPuedeAsignar({ role: "client", clientId: null }, t()), MSG_REVISOR.sinPermiso);
+  eq("admin en «Con Cliente» → puede", motivoNoPuedeAsignar({ role: "admin", clientId: null }, t({ status: "published" })), null);
+  eq("admin en «En cambios» → puede (destrabar)", motivoNoPuedeAsignar({ role: "admin", clientId: null }, t({ status: "in_corrections" })), null);
+  eq("master en «Con Cliente» → puede", motivoNoPuedeAsignar({ role: "master", clientId: null }, t({ status: "published" })), null);
+  eq("admin en producción → no", motivoNoPuedeAsignar({ role: "admin", clientId: null }, t()), MSG_REVISOR.fueraDeEstado);
+  eq("admin en Greenlit → no", motivoNoPuedeAsignar({ role: "admin", clientId: null }, t({ status: "delivered" })), MSG_REVISOR.fueraDeEstado);
+  eq("lead → nunca", motivoNoPuedeAsignar({ role: "lead", clientId: null }, t({ status: "published" })), MSG_REVISOR.sinPermiso);
+  eq("especialista → nunca", motivoNoPuedeAsignar({ role: "creative", clientId: null }, t({ status: "published" })), MSG_REVISOR.sinPermiso);
+  eq("tarea en la papelera → nadie", motivoNoPuedeAsignar(cli, t({ borrada: true })), MSG_REVISOR.noExiste);
+  eq("tarea sin cliente → nadie", motivoNoPuedeAsignar({ role: "admin", clientId: null }, t({ status: "published", clientId: null })), MSG_REVISOR.sinCliente);
+
+  const p = (o = {}) => ({ role: "client", active: true, client_id: DIDI, ...o });
+  ok("usuario activo de la empresa → revisor válido", revisorValido(p(), DIDI));
+  ok("dado de baja → no", !revisorValido(p({ active: false }), DIDI));
+  ok("de otra empresa → no", !revisorValido(p({ client_id: OTRA }), DIDI));
+  ok("alguien del equipo → no", !revisorValido(p({ role: "admin" }), DIDI));
+  ok("sin perfil → no", !revisorValido(null, DIDI));
+  ok("tarea sin cliente → no", !revisorValido(p(), null));
+
+  ok("«Con Cliente» sin revisor → pide atención", faltaRevisor("published", false));
+  ok("«Con Cliente» con revisor → no", !faltaRevisor("published", true));
+  ok("en producción sin revisor → no (todavía no importa)", !faltaRevisor("in_progress", false));
+  ok("«En cambios» sin revisor → no brilla", !faltaRevisor("in_corrections", false));
+
+  const items = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  const rev = { a: { id: "yo" }, b: { id: "otro" }, c: null };
+  eq("«Mis tareas» apagado → todas", filtrarMias(items, rev, "yo", false).length, 3);
+  eq("«Mis tareas» encendido → sólo las mías", filtrarMias(items, rev, "yo", true).map((i) => i.id).join(), "a");
+  eq("encendido sin usuario → todas (no esconde nada por error)", filtrarMias(items, rev, null, true).length, 3);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);
 

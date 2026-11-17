@@ -3749,5 +3749,51 @@ console.log("\n▶ 0098 — Slack para clientes e interruptores");
   await db.query(`delete from produccion.slack_conexiones where team_id='T0098A'`);
 }
 
+// ── 0099 — Revisor del cliente por tarea ──
+console.log("\n▶ 0099 — revisor del cliente");
+{
+  const tipos = await q(`select column_name, data_type, is_nullable from information_schema.columns
+     where table_schema='produccion' and table_name='ideas' and column_name like 'revisor_cliente%' order by column_name`);
+  eq("las 3 columnas existen y aceptan vacío",
+     tipos.map((t) => `${t.column_name}:${t.data_type}:${t.is_nullable}`).join(","),
+     "revisor_cliente_at:timestamp with time zone:YES,revisor_cliente_id:uuid:YES,revisor_cliente_por:uuid:YES");
+
+  const I = await scalar(`select i.id from produccion.ideas i join produccion.briefs b on b.id=i.brief_id
+                          where i.deleted_at is null and b.client_id is not null limit 1`);
+  const C = await scalar(`select b.client_id from produccion.ideas i join produccion.briefs b on b.id=i.brief_id where i.id=$1`, [I]);
+  const R = "aaaaaaaa-0099-4000-8000-000000000001";
+  await db.query(`insert into produccion.profiles (id,email,full_name,role,client_id) values ($1,'rev-0099@x.mx','Revisora 0099','client',$2)`, [R, C]);
+  eq("una tarea arranca sin revisor", await scalar(`select coalesce(revisor_cliente_id::text,'null') from produccion.ideas where id=$1`, [I]), "null");
+
+  let fkMala = false;
+  try { await db.query(`update produccion.ideas set revisor_cliente_id='aaaaaaaa-0099-4000-8000-0000000000ff' where id=$1`, [I]); } catch { fkMala = true; }
+  ok("un revisor que no es un perfil se rechaza", fkMala);
+
+  // Poner el revisor avisa en vivo (tablero y portal se enteran); un no-cambio no avisa.
+  await db.exec(`delete from realtime._enviados`);
+  await db.query(`update produccion.ideas set revisor_cliente_id=$2, revisor_cliente_por=$2, revisor_cliente_at=now() where id=$1`, [I, R]);
+  const avisos = await q(`select topic from realtime._enviados`);
+  ok("poner revisor → avisa en vivo", avisos.length > 0);
+  ok("…y la revisora (cliente de esa empresa) recibe el aviso", avisos.some((m) => m.topic === `greenlight:user:${R}`));
+  await db.exec(`delete from realtime._enviados`);
+  await db.query(`update produccion.ideas set revisor_cliente_id=revisor_cliente_id where id=$1`, [I]);
+  eq("mismo revisor (sin cambio) → 0 avisos", (await q(`select 1 from realtime._enviados`)).length, 0);
+
+  // El revisor se queda entre rondas: cambiar de estado no lo toca.
+  const antes = await scalar(`select status from produccion.ideas where id=$1`, [I]);
+  await db.exec(`select set_config('produccion.lead_override','on',false)`);
+  await db.query(`update produccion.ideas set status = case when status='in_progress' then 'under_review' else 'in_progress' end::produccion.asset_status where id=$1`, [I]);
+  eq("cambiar de estado no quita el revisor", await scalar(`select revisor_cliente_id::text from produccion.ideas where id=$1`, [I]), R);
+  await db.query(`update produccion.ideas set status=$2 where id=$1`, [I, antes]);
+  await db.exec(`select set_config('produccion.lead_override','',false)`);
+
+  // Borrar el perfil deja la tarea sin revisor (no la borra).
+  await db.query(`delete from produccion.profiles where id=$1`, [R]);
+  eq("borrar el perfil deja revisor_cliente_id vacío",
+     await scalar(`select coalesce(revisor_cliente_id::text,'null') || '/' || coalesce(revisor_cliente_por::text,'null') from produccion.ideas where id=$1`, [I]), "null/null");
+  ok("la tarea sigue viva", Number(await scalar(`select count(*) from produccion.ideas where id=$1`, [I])) === 1);
+  await db.query(`update produccion.ideas set revisor_cliente_at=null where id=$1`, [I]);
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} pass, ${fail} fail\n`);
 process.exit(fail === 0 ? 0 : 1);

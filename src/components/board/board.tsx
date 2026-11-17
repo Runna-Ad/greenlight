@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useMemo, useState, useTransition, type CSSProperties } from "react";
+import { createContext, memo, useCallback, useContext, useMemo, useState, useTransition, type CSSProperties } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -44,6 +44,12 @@ import { gruposFiltroBrief, pasaFiltroBrief, type GrupoFiltro } from "@/lib/filt
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Pill, type PillStatus } from "@/components/ui/pill";
+import { RevisorClientePill } from "@/components/revisor-cliente-pill";
+import { ESTADOS_REVISOR_EQUIPO, faltaRevisor, type PersonaCliente } from "@/lib/revisor-cliente";
+
+/** Revisor del cliente (0099): las opciones del selector viajan una vez por tablero, no por
+ *  tarjeta. `editable` = admin/master (el servidor vuelve a validar). */
+const RevisorCtx = createContext<{ opciones: PersonaCliente[]; editable: boolean }>({ opciones: [], editable: false });
 
 export type Member = {
   id: string;
@@ -96,6 +102,8 @@ export type Task = {
   /** Su paquete dentro del brief (0097, fase 2). Lo pone el loader desde `ideas`
    *  (board_tasks no lo trae); null = sin paquete. */
   paquete?: { id: string; nombre: string } | null;
+  /** Revisor del cliente (0099), ya validado al leer. null/undefined = sin revisor. */
+  revisorCliente?: PersonaCliente | null;
 };
 
 export type BriefOption = { id: string; title: string | null; tab: string | null; brief_date: string | null; track: string | null };
@@ -130,6 +138,7 @@ function esGreenlitReciente(t: Task): boolean {
 // Referencia estable para columnas sin tarjetas: evita crear un [] nuevo por
 // render, que rompería el React.memo de <Column>.
 const EMPTY_TASKS: Task[] = [];
+const EMPTY_PERSONAS: PersonaCliente[] = [];
 
 /**
  * The sheet's people colours are NOT all pastel — Sebas is #666666, Mony a
@@ -155,8 +164,11 @@ export function Board({
   soyId = null,
   marcaColor = null,
   paqueteInicial = null,
+  revisorOpciones = EMPTY_PERSONAS,
 }: {
   cliente: string;
+  /** Usuarios activos de la empresa (sólo llegan a admin/master). */
+  revisorOpciones?: PersonaCliente[];
   /** `?paquete=<id>` (fase 3): el filtro arranca en ese paquete si tiene tarjetas aquí. */
   paqueteInicial?: string | null;
   tasks: Task[];
@@ -173,6 +185,9 @@ export function Board({
   const mayMove = canMoveStatus(role);
   const mayOverride = canOverrideStatus(role);
   const mayAssign = canAssign(role);
+  // Revisor del cliente: sólo admin/master lo cambian desde el tablero (y lo ven brillar).
+  const esAdmin = role === "master" || role === "admin";
+  const revisorCtx = useMemo(() => ({ opciones: revisorOpciones, editable: esAdmin }), [revisorOpciones, esAdmin]);
 
   const [tasks, setTasks] = useState(initialTasks);
   // Live refresh (0062): `tasks` es estado propio (para el drag optimista), así que un
@@ -398,6 +413,7 @@ export function Board({
       {/* A stable id is required: without it dnd-kit numbers its a11y description
           element from a module counter, which lands on a different value during
           SSR than on the client and hydration fails ("DndDescribedBy-1" vs "-0"). */}
+      <RevisorCtx.Provider value={revisorCtx}>
       <DndContext
         id="tablero"
         sensors={sensors}
@@ -432,6 +448,7 @@ export function Board({
           {dragging ? <CardBody cliente={cliente} task={dragging} mayOverride={mayOverride} dragging /> : null}
         </DragOverlay>
       </DndContext>
+      </RevisorCtx.Provider>
     </div>
   );
 }
@@ -655,6 +672,12 @@ const CardBody = memo(function CardBody({
   const tipo = contentType(task.tipo_asset);
   const IconoTipo = tipo.icon;
   const enCorrecciones = task.status === "in_corrections";
+  // Revisor del cliente (0099): admin/master lo cambian en «Con Cliente» / «En cambios»; la
+  // tarjeta en «Con Cliente» sin revisor brilla, sólo para ellos (Pedro 2026-11-17).
+  const revisorUi = useContext(RevisorCtx);
+  const revisor = task.revisorCliente ?? null;
+  const revisorEditable = revisorUi.editable && ESTADOS_REVISOR_EQUIPO.includes(task.status);
+  const pideRevisor = revisorUi.editable && faltaRevisor(task.status, !!revisor);
   // Un no-lead sólo ve destinos de DOER (empezar/mandar a revisión/retomar/devolver);
   // aprobar/enviar-a-cliente/entregar son del lead (el server también lo bloquea). Así
   // el menú "Mover" no ofrece un movimiento que el servidor rechazaría. (reap C1)
@@ -671,7 +694,9 @@ const CardBody = memo(function CardBody({
       className={`relative rounded-lg border bg-card p-2.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
         enCorrecciones
           ? "border-status-corrections ring-1 ring-[color-mix(in_srgb,var(--status-corrections)_35%,transparent)]"
-          : "border-border"
+          : pideRevisor
+            ? "border-status-warning shadow-[0_0_0_3px_color-mix(in_srgb,var(--status-warning)_22%,transparent),0_0_14px_color-mix(in_srgb,var(--status-warning)_35%,transparent)]"
+            : "border-border"
       } ${dragging ? "rotate-1 scale-[1.03] shadow-lg" : ""}`}
     >
       {/* Toda la tarjeta abre la tarea: un link estirado por debajo. Los
@@ -792,6 +817,23 @@ const CardBody = memo(function CardBody({
       {/* Sin botones de flujo aquí: en el tablero el trabajo se empuja
           arrastrando (o con "Mover"), y el auto-move + la barra del workspace
           los hacían redundantes. (Decisión de Pedro.) */}
+
+      {/* Revisor del cliente: se ve si hay uno (aunque lo haya puesto el cliente en producción)
+          y, para admin/master, en «Con Cliente» / «En cambios» aunque falte. */}
+      {(revisor || revisorEditable) && (
+        <div className="relative z-10 mt-2 flex min-w-0 items-center gap-1">
+          <span className="shrink-0 text-[10px] text-muted-foreground">Revisa:</span>
+          <RevisorClientePill
+            ideaId={task.id}
+            revisor={revisor}
+            opciones={revisorUi.opciones}
+            editable={revisorEditable && !dragging}
+            etiqueta="Revisor del cliente"
+            vacio="Sin revisor del cliente"
+            alerta={pideRevisor}
+          />
+        </div>
+      )}
 
       {/* people + the no-drag way to change status (mobile, keyboard).
           relative z-10: por encima del link estirado, para seguir clicables. */}

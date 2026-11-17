@@ -6,6 +6,7 @@ import { getViewAs } from "@/lib/view-as";
 import { ideasConCambiosDelCliente, ideasEnRondaDelCliente } from "@/lib/cambios-pendientes";
 import { getSoy, type Soy } from "@/lib/soy";
 import { paquetesDeTareas } from "@/lib/paquetes-data";
+import { revisoresDe, usuariosCliente, type PersonaCliente } from "@/lib/revisor-cliente-data";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Board, type BriefOption, type Member, type Task } from "@/components/board/board";
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
  * A CARD is one sheet row — one unit of work, one set of people, one status.
  * Its Tamaño × Plataforma files are counted inside it, never split into cards.
  */
-type BoardData = { tasks: Task[]; members: Member[]; briefs: BriefOption[]; marcaColor: string | null };
+type BoardData = { tasks: Task[]; members: Member[]; briefs: BriefOption[]; marcaColor: string | null; revisorOpciones: PersonaCliente[] };
 
 /**
  * Qué tareas ve cada rol en el tablero. Espeja el gate de ESCRITURA
@@ -58,7 +59,7 @@ async function loadBoard(
     .eq("slug", clienteSlug)
     .maybeSingle<{ id: string; brand_color: string | null }>();
 
-  const empty: BoardData = { tasks: [], members: [], briefs: [], marcaColor: null };
+  const empty: BoardData = { tasks: [], members: [], briefs: [], marcaColor: null, revisorOpciones: [] };
   if (!client) return empty;
 
   // board_tasks already carries the people and the file count (migration 0008),
@@ -134,9 +135,16 @@ async function loadBoard(
 
   // El paquete de cada tarjeta (fase 2): sólo de las tareas que este rol ya ve.
   const paq = await paquetesDeTareas(conFecha.map((t) => t.id));
-  const conPaquete = conFecha.map((t) => ({ ...t, paquete: paq.get(t.id) ?? null }));
+  // Revisor del cliente (0099): el de cada tarjeta, validado al leer; y las opciones del
+  // selector sólo para admin/master (los únicos que lo cambian desde el tablero).
+  const [revisores, revisorOpciones] = await Promise.all([
+    revisoresDe(conFecha.map((t) => t.id), client.id, db),
+    role === "master" || role === "admin" ? usuariosCliente(client.id, db) : Promise.resolve([]),
+  ]);
+  const conPaquete = conFecha.map((t) => ({ ...t, paquete: paq.get(t.id) ?? null, revisorCliente: revisores[t.id] ?? null }));
 
   return {
+    revisorOpciones,
     tasks: conPaquete,
     members: members ?? [],
     briefs: (briefs ?? []).map((b) => ({ id: b.id, title: b.title, tab: b.source_tab, brief_date: b.brief_date, track: b.track })),
@@ -217,6 +225,7 @@ export default async function TableroPage({
           role={role}
           soyId={soy?.id ?? null}
           marcaColor={data?.marcaColor ?? null}
+          revisorOpciones={data?.revisorOpciones ?? []}
         />
       )}
     </div>

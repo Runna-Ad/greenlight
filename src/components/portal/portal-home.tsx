@@ -10,6 +10,7 @@ import { desgloseTracks, type PaquetePortal } from "@/lib/paquetes";
 import { idDeUnidad } from "@/lib/portal-paquetes";
 import { contentType } from "@/lib/iconos";
 import { cn } from "@/lib/utils";
+import { RevisorPortal } from "@/components/portal/revisor-portal";
 
 /**
  * NIVEL 0 del portal — la VISTA GENERAL (home) del cliente. Un pantallazo de dónde va TODO su
@@ -511,12 +512,14 @@ function PaqueteCard({ c }: { c: Tarjeta }) {
                     </>
                   );
                   return (
-                    <li key={f.id} className="border-t border-border first:border-t-0">
+                    <li key={f.id} className="flex items-center gap-1 border-t border-border pr-2 first:border-t-0">
                       {f.t ? (
-                        <Link href={`${base}&tarea=${f.id}`} className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/60">{fila}</Link>
+                        <Link href={`${base}&tarea=${f.id}`} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/60">{fila}</Link>
                       ) : (
-                        <div className="flex cursor-default items-center gap-2 px-3 py-2 text-xs" title="El equipo la está armando: podrás abrirla cuando llegue a revisión.">{fila}</div>
+                        <div className="flex min-w-0 flex-1 cursor-default items-center gap-2 px-3 py-2 text-xs" title="El equipo la está armando: podrás abrirla cuando llegue a revisión.">{fila}</div>
                       )}
+                      {/* Quién la revisa (0099): fuera del link para que el selector no abra la pieza. */}
+                      <RevisorPortal ideaId={f.id} status={f.t?.status} className="max-w-[40%]" />
                     </li>
                   );
                 })}

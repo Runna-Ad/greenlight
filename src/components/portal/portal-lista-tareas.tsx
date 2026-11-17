@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CheckCircle2, RefreshCw, Eye, CheckCheck, ArrowRight, MessageSquare } from "lucide-react";
 import type { PortalTarea } from "@/app/(app)/[cliente]/portal/portal-data";
 import { estadoCliente, type BucketPortal } from "@/lib/portal-bucket";
+import { RevisorPortal } from "@/components/portal/revisor-portal";
 
 const LABEL_BUCKET: Record<BucketPortal, string> = {
   activas: "Por revisar",
@@ -94,6 +95,7 @@ export function PortalListaTareas({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate font-semibold text-foreground">{nombreTarea(t)}</span>
+                  <RevisorPortal ideaId={t.id} status={t.status} soloVer className="max-w-[45%]" />
                   <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
                 </div>
               </Link>

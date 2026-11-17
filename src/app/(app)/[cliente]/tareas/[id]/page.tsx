@@ -33,6 +33,9 @@ import { BloqueLegal } from "@/components/tarea/bloque-legal";
 import { legalSugerido } from "@/lib/legal-sugerido";
 import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
 import { piezaEnPortal } from "@/lib/portal-bucket";
+import { ESTADOS_REVISOR_EQUIPO, faltaRevisor } from "@/lib/revisor-cliente";
+import { revisoresDe, usuariosCliente } from "@/lib/revisor-cliente-data";
+import { RevisorClientePill } from "@/components/revisor-cliente-pill";
 import { estadoDeTimestamps, bloqueoEnvioPieza, motivoBloqueoEnvio, type Correccion, type RespuestaCorreccion } from "@/lib/correcciones";
 import type { RefVista } from "@/components/tarea/referencias-plano";
 import { COLS_PLANO, type EstaticoVista, type PlanoVista } from "@/lib/vista-tipos";
@@ -133,9 +136,34 @@ export default async function TareaPage({
       // El número de Brief para el pill de la hero ("Brief 24/07").
       db.from("briefs").select("brief_name, code, brief_date").eq("id", idea.brief_id).maybeSingle(),
       // Color de marca del cliente — pinta el badge "Cliente" de sus cambios (Pedro).
-      db.from("clients").select("brand_color").eq("slug", cliente).maybeSingle<{ brand_color: string | null }>(),
+      db.from("clients").select("id, brand_color").eq("slug", cliente).maybeSingle<{ id: string; brand_color: string | null }>(),
     ]);
   const marcaColor = clienteRow?.brand_color ?? null;
+
+  // Revisor del cliente (0099): la misma pastilla del tablero. Admin/master la cambian en
+  // «Con Cliente» / «En cambios»; los demás la ven si ya hay uno.
+  const revisorEditable =
+    (role === "master" || role === "admin") && ESTADOS_REVISOR_EQUIPO.includes(idea.status as AssetStatus);
+  const [revisores, revisorOpciones] = clienteRow
+    ? await Promise.all([
+        revisoresDe([idea.id], clienteRow.id, db),
+        revisorEditable ? usuariosCliente(clienteRow.id, db) : Promise.resolve([]),
+      ])
+    : [{} as Record<string, null>, []];
+  const revisorCliente = revisores[idea.id] ?? null;
+  const revisorSlot =
+    revisorCliente || revisorEditable ? (
+      <RevisorClientePill
+        ideaId={idea.id}
+        revisor={revisorCliente}
+        opciones={revisorOpciones}
+        editable={revisorEditable}
+        etiqueta="Revisor del cliente"
+        vacio="Sin revisor del cliente"
+        alerta={faltaRevisor(idea.status as AssetStatus, !!revisorCliente)}
+        className="px-3 py-1 text-[11px]"
+      />
+    ) : null;
   const memberIds = (asignaciones ?? []).map((a) => a.member_id).filter(Boolean) as string[];
   const personas = (asignaciones ?? [])
     .filter((a) => a.track_members)
@@ -603,6 +631,7 @@ export default async function TareaPage({
             logoUrl={marca?.logo_url ?? null}
             briefLabel={briefLabel}
             paqueteNombre={paqueteNombre}
+            revisorSlot={revisorSlot}
             naming={idea.naming_base}
             status={idea.status}
             notaGuion={idea.nota_guion}
