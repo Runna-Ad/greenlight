@@ -3611,3 +3611,9 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 **Pruebas:** npm test todo en verde (test-lib 805/0, test-db 879/0, prisma 975/0, formatos 797/0) · tsc 0 · eslint 0 · next build OK.
 **Sin probar:** el flujo real de Slack OAuth (necesita a DiDi o un espacio de prueba); la pantalla en el navegador; 0097 NO aplicada, así que en el preview la pestaña Notificaciones falla hasta aplicarla (los avisos no se pierden: la fila se suelta y el reloj en vivo la manda).
 **Pick up next:** Pedro: Manage Distribution + Redirect URLs en la app de Slack, 3 variables en Vercel, luego "ship it" para 0097 + merge a main.
+
+## 2026-11-17 Session: Revisor del cliente por tarea (0099 aplicada, main 244fdc6 mandado)
+**Hecho:** cada tarea puede tener UN revisor del cliente (columna en `ideas`). El cliente se asigna a sí mismo o a un compañero desde el portal (también «En producción») y tiene «Mis tareas». Master lo cambia siempre y en todas partes (PEDRO_OVERRIDE); admin sólo en «Con Cliente» / «En cambios». Tarjeta en «Con Cliente» sin revisor brilla (admin/master). Para volver: dpl_GadVmHpzy288vzQrqXG7kYbzPuCG.
+**Pruebas:** npm test exit 0 (test-lib 960/0, test-db 902/0); preview probada como Master (tablero, tarea, portal, quitar); revisores de prueba quitados, BD en 0.
+**Sin probar:** botones del cliente («Asignarme», «Mis tareas») en navegador; deploy de producción de 244fdc6 aún construyendo al cerrar esta nota.
+**Pick up next:** confirmar el deploy de producción por SHA y ver el sitio en vivo; después, avisos al revisor (campana / correo / Slack).
