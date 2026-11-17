@@ -3615,5 +3615,5 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 ## 2026-11-17 Session: Revisor del cliente por tarea (0099 aplicada, main 244fdc6 mandado)
 **Hecho:** cada tarea puede tener UN revisor del cliente (columna en `ideas`). El cliente se asigna a sí mismo o a un compañero desde el portal (también «En producción») y tiene «Mis tareas». Master lo cambia siempre y en todas partes (PEDRO_OVERRIDE); admin sólo en «Con Cliente» / «En cambios». Tarjeta en «Con Cliente» sin revisor brilla (admin/master). Para volver: dpl_GadVmHpzy288vzQrqXG7kYbzPuCG.
 **Pruebas:** npm test exit 0 (test-lib 960/0, test-db 902/0); preview probada como Master (tablero, tarea, portal, quitar); revisores de prueba quitados, BD en 0.
-**Sin probar:** botones del cliente («Asignarme», «Mis tareas») en navegador; deploy de producción de 244fdc6 aún construyendo al cerrar esta nota.
-**Pick up next:** confirmar el deploy de producción por SHA y ver el sitio en vivo; después, avisos al revisor (campana / correo / Slack).
+**Sin probar:** botones del cliente («Asignarme», «Mis tareas») en navegador. **EN VIVO:** deploy de producción dpl_ES1qE4ZvwVhAzynEppGfXCK1pTkF (244fdc6) Ready; greenlight.runna.agency/didi/tablero enseña 16 botones de revisor como Master.
+**Pick up next:** avisos al revisor (campana / correo / Slack); que alguien con login cliente (Nils Cliente) pruebe «Asignarme» y «Mis tareas».
