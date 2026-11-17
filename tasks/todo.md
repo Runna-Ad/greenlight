@@ -56,10 +56,10 @@
 - [x] Preview como Master: brillo + «⚠ Sin revisor» en las 4 de «Con Cliente», selector, guardado (BD: Nils Cliente, puesto por Master), pastilla en la tarea y en los paquetes del portal.
 - [x] Arreglo: faltaba la pastilla en «Necesitan tu aprobación» del portal (b829c0e).
 - [x] Master cambia siempre (override de arriba): 960/0 en test-lib.
-- [ ] Ver en la preview: Master cambia en producción (tablero y portal) y quita; quitar los revisores de prueba y confirmar 0 en la BD.
-- [ ] Sin probar en navegador: lado cliente («Asignarme», «Mis tareas»): no hay login cliente de prueba (Pedro 2026-11-17: probar con Master).
+- [x] Preview f15c240 como Master: 16/16 tarjetas con selector; Nils Cliente puesto en CMNOBLINKING («Por hacer», BD status todo); pastilla en «Necesitan tu aprobación»; «Quitar revisor» desde el portal en CMCOOKINGSP y en CMNOBLINKING (producción). BD al final: 0 con revisor, 0 restos; tablero 16/16 «Sin revisor»; consola sin errores.
+- [ ] Sin probar en navegador: lado cliente («Asignarme», «Mis tareas»): no hay login cliente de prueba (Pedro 2026-11-17: probar con Master). Cubierto sólo por test-lib.
 
-Next Step: push → preview como Master (producción en tablero y portal, quitar) → limpiar → esperar «ship it».
+Next Step: esperar «ship it» → fetch + merge origin/main en la rama, tests + build → main → confirmar deploy de producción por SHA.
 
 ## ✅ 2026-11-12 — «Crear login» del Master + «Cambiar contraseña» del cliente — EN VIVO (main 6374b89, sin migración; para volver: dpl_D1TGwy6aMREiu2zWxBeY3cJwz9e3)
 Pedro: algunos clientes no logran entrar; un plan C donde el Master pone correo + contraseña + empresa y se la manda por chat. Contraseña fácil de marca (DiDi@657) y el cliente la puede cambiar en su perfil.
