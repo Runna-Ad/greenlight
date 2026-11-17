@@ -319,10 +319,10 @@ function EstadoPill({ status, reReview, teRespondieron = false }: { status: Asse
 
 function QueueRow({ idx, t }: { idx: number; t: QItem }) {
   return (
-    <li className="border-t border-border first:border-t-0">
+    <li className="flex items-center gap-2 border-t border-border pr-5 first:border-t-0">
       <Link
         href={`?marca=${t.marcaId}&brief=${t.unidadId}&tarea=${t.id}`}
-        className="group flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-card"
+        className="group flex min-w-0 flex-1 items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-card"
       >
         <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-bold tabular-nums text-primary-foreground">
           {idx}
@@ -343,6 +343,8 @@ function QueueRow({ idx, t }: { idx: number; t: QItem }) {
         </span>
         <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
       </Link>
+      {/* Quién la revisa (0099): fuera del link para que el selector no abra la pieza. */}
+      <RevisorPortal ideaId={t.id} status={t.status} className="max-w-[30%]" />
     </li>
   );
 }
