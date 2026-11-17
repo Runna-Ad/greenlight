@@ -7,7 +7,7 @@
 import { createContext, useContext, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { AssetStatus } from "@/lib/brand";
-import { COOKIE_MIS_TAREAS, ESTADOS_REVISOR_EQUIPO, type PersonaCliente } from "@/lib/revisor-cliente";
+import { COOKIE_MIS_TAREAS, equipoPuedeCambiar, type PersonaCliente } from "@/lib/revisor-cliente";
 import { RevisorClientePill } from "@/components/revisor-cliente-pill";
 
 export type RevisorPortalValor = {
@@ -15,8 +15,10 @@ export type RevisorPortalValor = {
   opciones: PersonaCliente[];
   /** Perfil de quien mira si es usuario de la empresa (para «Asignarme»). */
   soyId: string | null;
-  /** cliente = lo cambia siempre; master = sólo en «Con Cliente» / «En cambios»; lectura = no. */
-  modo: "cliente" | "master" | "lectura";
+  /** cliente = lo cambia siempre; equipo = regla del tablero (equipoPuedeCambiar); lectura = no. */
+  modo: "cliente" | "equipo" | "lectura";
+  /** Rol de quien mira (para la regla del equipo: master siempre, admin en «Con Cliente» / «En cambios»). */
+  rol?: string;
 };
 
 const Ctx = createContext<RevisorPortalValor | null>(null);
@@ -40,8 +42,8 @@ export function RevisorPortal({
 }) {
   const v = useContext(Ctx);
   if (!v) return null;
-  const editable =
-    !soloVer && (v.modo === "cliente" || (v.modo === "master" && !!status && ESTADOS_REVISOR_EQUIPO.includes(status)));
+  // Equipo: la misma regla que el tablero y la tarea (master siempre: cuenta de respaldo).
+  const editable = !soloVer && (v.modo === "cliente" || (v.modo === "equipo" && equipoPuedeCambiar(v.rol, status)));
   return (
     <RevisorClientePill
       ideaId={ideaId}

@@ -108,13 +108,14 @@ export default async function PortalPage({
   }
 
   // ── Revisor del cliente (0099) ── quién revisa cada pieza, y las opciones del selector.
-  // cliente = lo cambia siempre; master = sólo en «Con Cliente» / «En cambios»; admin = sólo ve.
+  // cliente = lo cambia siempre; equipo = la misma regla del tablero (master siempre, admin en
+  // «Con Cliente» / «En cambios»); los demás sólo ven.
   const { data: cliRow } = hasSupabase()
     ? await supabaseAdmin().from("clients").select("id").eq("slug", cliente).maybeSingle<{ id: string }>()
     : { data: null };
   const clientIdPortal = cliRow?.id ?? null;
   const modoRevisor: RevisorPortalValor["modo"] =
-    role === "client" && puedeActuar ? "cliente" : role === "master" ? "master" : "lectura";
+    role === "client" && puedeActuar ? "cliente" : role === "master" || role === "admin" ? "equipo" : "lectura";
   const idsPortal = [...cargado.briefs.flatMap((b) => b.tasks.map((t) => t.id)), ...cargado.produccion.map((p) => p.id)];
   const [revisores, revisorOpciones] = await Promise.all([
     revisoresDe(idsPortal, clientIdPortal),
@@ -135,7 +136,7 @@ export default async function PortalPage({
         produccion: filtrarMias(cargado.produccion, revisores, yo, true),
       }
     : cargado;
-  const valorRevisor: RevisorPortalValor = { revisores, opciones: revisorOpciones, soyId: yo, modo: modoRevisor };
+  const valorRevisor: RevisorPortalValor = { revisores, opciones: revisorOpciones, soyId: yo, modo: modoRevisor, rol: role };
   const herramientas = yo ? <MisTareasToggle activo={mias} soyId={yo} /> : null;
   const conRevisor = (n: ReactNode) => <RevisorPortalProvider valor={valorRevisor}>{n}</RevisorPortalProvider>;
 

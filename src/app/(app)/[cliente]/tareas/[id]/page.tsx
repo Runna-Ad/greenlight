@@ -33,7 +33,7 @@ import { BloqueLegal } from "@/components/tarea/bloque-legal";
 import { legalSugerido } from "@/lib/legal-sugerido";
 import { BottomBarTarea } from "@/components/tarea/bottom-bar-tarea";
 import { piezaEnPortal } from "@/lib/portal-bucket";
-import { ESTADOS_REVISOR_EQUIPO, faltaRevisor } from "@/lib/revisor-cliente";
+import { equipoPuedeCambiar, faltaRevisor } from "@/lib/revisor-cliente";
 import { revisoresDe, usuariosCliente } from "@/lib/revisor-cliente-data";
 import { RevisorClientePill } from "@/components/revisor-cliente-pill";
 import { estadoDeTimestamps, bloqueoEnvioPieza, motivoBloqueoEnvio, type Correccion, type RespuestaCorreccion } from "@/lib/correcciones";
@@ -140,10 +140,9 @@ export default async function TareaPage({
     ]);
   const marcaColor = clienteRow?.brand_color ?? null;
 
-  // Revisor del cliente (0099): la misma pastilla del tablero. Admin/master la cambian en
-  // «Con Cliente» / «En cambios»; los demás la ven si ya hay uno.
-  const revisorEditable =
-    (role === "master" || role === "admin") && ESTADOS_REVISOR_EQUIPO.includes(idea.status as AssetStatus);
+  // Revisor del cliente (0099): la misma pastilla del tablero. Master la cambia siempre; admin
+  // en «Con Cliente» / «En cambios»; los demás la ven si ya hay uno.
+  const revisorEditable = equipoPuedeCambiar(role, idea.status as AssetStatus);
   const [revisores, revisorOpciones] = clienteRow
     ? await Promise.all([
         revisoresDe([idea.id], clienteRow.id, db),

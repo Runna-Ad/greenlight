@@ -2171,6 +2171,18 @@ console.log("\n▶ Revisor del cliente (0099): quién lo pone, cuándo y a quié
   eq("admin en «Con Cliente» → puede", motivoNoPuedeAsignar({ role: "admin", clientId: null }, t({ status: "published" })), null);
   eq("admin en «En cambios» → puede (destrabar)", motivoNoPuedeAsignar({ role: "admin", clientId: null }, t({ status: "in_corrections" })), null);
   eq("master en «Con Cliente» → puede", motivoNoPuedeAsignar({ role: "master", clientId: null }, t({ status: "published" })), null);
+  // Master = cuenta de respaldo: todo, en todas partes (Pedro 2026-11-17).
+  eq("master en producción → puede", motivoNoPuedeAsignar({ role: "master", clientId: null }, t()), null);
+  eq("master en Greenlit → puede", motivoNoPuedeAsignar({ role: "master", clientId: null }, t({ status: "delivered" })), null);
+  eq("master con pieza aún fuera del portal → puede", motivoNoPuedeAsignar({ role: "master", clientId: null }, t({ status: "todo", enPortal: false })), null);
+  eq("master: tarea en la papelera → no", motivoNoPuedeAsignar({ role: "master", clientId: null }, t({ borrada: true })), MSG_REVISOR.noExiste);
+  {
+    const { equipoPuedeCambiar } = await import("../src/lib/revisor-cliente.ts");
+    eq("equipoPuedeCambiar master sin estado (pieza En producción del portal) → sí", equipoPuedeCambiar("master", undefined), true);
+    eq("equipoPuedeCambiar admin sin estado → no", equipoPuedeCambiar("admin", undefined), false);
+    eq("equipoPuedeCambiar admin en «En cambios» → sí", equipoPuedeCambiar("admin", "in_corrections"), true);
+    eq("equipoPuedeCambiar lead en «Con Cliente» → no", equipoPuedeCambiar("lead", "published"), false);
+  }
   eq("admin en producción → no", motivoNoPuedeAsignar({ role: "admin", clientId: null }, t()), MSG_REVISOR.fueraDeEstado);
   eq("admin en Greenlit → no", motivoNoPuedeAsignar({ role: "admin", clientId: null }, t({ status: "delivered" })), MSG_REVISOR.fueraDeEstado);
   eq("lead → nunca", motivoNoPuedeAsignar({ role: "lead", clientId: null }, t({ status: "published" })), MSG_REVISOR.sinPermiso);

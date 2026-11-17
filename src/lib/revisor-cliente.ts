@@ -4,7 +4,8 @@
 // No es obligatorio. Quién lo pone y cuándo:
 //   · el CLIENTE (cualquier usuario de esa empresa): a sí mismo o a un compañero, en cuanto la
 //     pieza aparece en su portal (también «En producción»), y lo cambia o lo quita cuando quiera;
-//   · ADMIN / MASTER: sólo con la tarjeta en «Con Cliente» (published) o «En cambios»
+//   · MASTER: siempre, en cualquier estado y en cualquier pantalla (cuenta de respaldo);
+//   · ADMIN: sólo con la tarjeta en «Con Cliente» (published) o «En cambios»
 //     (in_corrections), para destrabarla si el revisor ya no está disponible.
 // Lead y especialista no. El revisor se queda entre rondas.
 //
@@ -52,9 +53,17 @@ export function motivoNoPuedeAsignar(quien: QuienAsigna, t: TareaParaRevisor): s
     return t.enPortal ? null : MSG_REVISOR.noEnPortal;
   }
   if (quien.role === "master" || quien.role === "admin") {
-    return ESTADOS_REVISOR_EQUIPO.includes(t.status) ? null : MSG_REVISOR.fueraDeEstado;
+    return equipoPuedeCambiar(quien.role, t.status) ? null : MSG_REVISOR.fueraDeEstado;
   }
   return MSG_REVISOR.sinPermiso;
+}
+
+/** ¿Alguien del EQUIPO puede cambiar el revisor en este estado? Master siempre (cuenta de
+ *  respaldo: todo, en todas partes, Pedro 2026-11-17); admin sólo en «Con Cliente» / «En cambios».
+ *  La usan la acción, el tablero, la tarea y el portal: una sola regla. */
+export function equipoPuedeCambiar(role: string | null | undefined, status: AssetStatus | undefined): boolean {
+  if (role === "master") return true;
+  return role === "admin" && !!status && ESTADOS_REVISOR_EQUIPO.includes(status);
 }
 
 export type PerfilRevisor = { role: string; active: boolean; client_id: string | null };

@@ -45,11 +45,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Pill, type PillStatus } from "@/components/ui/pill";
 import { RevisorClientePill } from "@/components/revisor-cliente-pill";
-import { ESTADOS_REVISOR_EQUIPO, faltaRevisor, type PersonaCliente } from "@/lib/revisor-cliente";
+import { equipoPuedeCambiar, faltaRevisor, type PersonaCliente } from "@/lib/revisor-cliente";
 
 /** Revisor del cliente (0099): las opciones del selector viajan una vez por tablero, no por
  *  tarjeta. `editable` = admin/master (el servidor vuelve a validar). */
-const RevisorCtx = createContext<{ opciones: PersonaCliente[]; editable: boolean }>({ opciones: [], editable: false });
+const RevisorCtx = createContext<{ opciones: PersonaCliente[]; editable: boolean; role?: string }>({ opciones: [], editable: false });
 
 export type Member = {
   id: string;
@@ -187,7 +187,7 @@ export function Board({
   const mayAssign = canAssign(role);
   // Revisor del cliente: sólo admin/master lo cambian desde el tablero (y lo ven brillar).
   const esAdmin = role === "master" || role === "admin";
-  const revisorCtx = useMemo(() => ({ opciones: revisorOpciones, editable: esAdmin }), [revisorOpciones, esAdmin]);
+  const revisorCtx = useMemo(() => ({ opciones: revisorOpciones, editable: esAdmin, role }), [revisorOpciones, esAdmin, role]);
 
   const [tasks, setTasks] = useState(initialTasks);
   // Live refresh (0062): `tasks` es estado propio (para el drag optimista), así que un
@@ -676,7 +676,7 @@ const CardBody = memo(function CardBody({
   // tarjeta en «Con Cliente» sin revisor brilla, sólo para ellos (Pedro 2026-11-17).
   const revisorUi = useContext(RevisorCtx);
   const revisor = task.revisorCliente ?? null;
-  const revisorEditable = revisorUi.editable && ESTADOS_REVISOR_EQUIPO.includes(task.status);
+  const revisorEditable = revisorUi.editable && equipoPuedeCambiar(revisorUi.role, task.status);
   const pideRevisor = revisorUi.editable && faltaRevisor(task.status, !!revisor);
   // Un no-lead sólo ve destinos de DOER (empezar/mandar a revisión/retomar/devolver);
   // aprobar/enviar-a-cliente/entregar son del lead (el server también lo bloquea). Así

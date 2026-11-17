@@ -1,6 +1,7 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-11-17 — Revisor del cliente por tarea (CONSTRUIDO en feat/revisor-cliente, sin aplicar 0099, sin preview)
+## 🟡 2026-11-17 — Revisor del cliente por tarea (0099 APLICADA en vivo 2026-11-17; en preview feat/revisor-cliente; sin pasar a main)
+**PEDRO_OVERRIDE (2026-11-17, en la preview):** Master = cuenta de respaldo, cambia el revisor SIEMPRE: cualquier estado (también «En producción» y Greenlit) y en cualquier pantalla (tablero, tarea, portal). Admin sigue sólo en «Con Cliente» / «En cambios», ahora también en el portal. Una sola regla: `equipoPuedeCambiar(role, status)`.
 **Pedro eligió (2026-11-17):** enfoque A; el brillo sólo para admin/master; admin/master SÍ cambian el revisor en «En cambios» además de «Con Cliente» (para destrabar si el revisor ya no está disponible). «Mis tareas» se guarda en una cookie (no en la URL) para que siga puesto al navegar.
 **Pedido de Pedro (2026-11-17):** cada tarea puede tener UN revisor del lado del cliente (un usuario del portal de esa empresa). No es obligatorio: sin revisor todo funciona igual.
 - **Cliente:** se asigna a sí mismo o a un compañero de su empresa en cuanto la pieza aparece en su portal (también «En producción»). Lo puede cambiar o quitar en cualquier momento.
@@ -50,10 +51,15 @@
 - [x] D5 tarea: pastilla en la cabecera (HeroTarea `revisorSlot`).
 - [x] D6 portal: pastilla por pieza (inicio, lista sólo-ver, página de la pieza) + «Mis tareas».
 - [x] D7 revisor dado de baja / otra empresa = «Sin asignar» (se valida al leer).
-- [ ] D8 tsc 0 · eslint 0 · `npm test` exit 0 · build exit 0 ✓; revisión (seguridad Opus + código) EN CURSO.
-- [ ] Preview en el navegador: necesita 0099 en la base (la preview usa la base en vivo).
+- [x] D8 tsc 0 · eslint 0 · `npm test` exit 0 · build exit 0; revisión de seguridad (Opus) y de código hechas, lo serio arreglado.
+- [x] 0099 aplicada en vivo con OK de Pedro (3 columnas vacías confirmadas; `live_ideas_stmt` incluye el revisor).
+- [x] Preview como Master: brillo + «⚠ Sin revisor» en las 4 de «Con Cliente», selector, guardado (BD: Nils Cliente, puesto por Master), pastilla en la tarea y en los paquetes del portal.
+- [x] Arreglo: faltaba la pastilla en «Necesitan tu aprobación» del portal (b829c0e).
+- [x] Master cambia siempre (override de arriba): 960/0 en test-lib.
+- [ ] Ver en la preview: Master cambia en producción (tablero y portal) y quita; quitar los revisores de prueba y confirmar 0 en la BD.
+- [ ] Sin probar en navegador: lado cliente («Asignarme», «Mis tareas»): no hay login cliente de prueba (Pedro 2026-11-17: probar con Master).
 
-Next Step: arreglar lo que traiga la revisión → pedir a Pedro el OK para aplicar 0099 (sólo agrega 3 columnas vacías; nadie las lee hasta el deploy) → preview como Master y como cliente de prueba.
+Next Step: push → preview como Master (producción en tablero y portal, quitar) → limpiar → esperar «ship it».
 
 ## ✅ 2026-11-12 — «Crear login» del Master + «Cambiar contraseña» del cliente — EN VIVO (main 6374b89, sin migración; para volver: dpl_D1TGwy6aMREiu2zWxBeY3cJwz9e3)
 Pedro: algunos clientes no logran entrar; un plan C donde el Master pone correo + contraseña + empresa y se la manda por chat. Contraseña fácil de marca (DiDi@657) y el cliente la puede cambiar en su perfil.
