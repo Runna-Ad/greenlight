@@ -1,5 +1,13 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-19 — Carpeta de Drive por paquete, Entregas por paquete y Archivo del cliente (main, 0100 aplicada, EN VIVO)
+**Qué cambió:** admin/master pega el link de la carpeta de Google Drive de un paquete Greenlit, en Briefs (mientras sigue ahí) o en Entregas. Entregas ahora se ve como Briefs (brief › paquete con la pastilla Greenlit), sólo paquetes aprobados completos. El cliente ve en Archivo cada paquete aprobado, por mes, con «Abrir carpeta en Drive» o «Carpeta en preparación».
+**Decisiones de Pedro:** sólo link, nada de descargas; el link existe después del Greenlit; Archivo muestra el paquete al aprobarse y el link después; los 7 días en Briefs se quedan por ahora.
+**Pruebas:** npm test exit 0 (lib 969/0) · tsc 0 · eslint 0 · next build exit 0. Preview como Master: Briefs DiDi 9 paquetes, Entregas y Archivo vacíos, consola limpia.
+**En vivo:** «Ship it now» de Pedro; fast-forward 244fdc6 → af01720, dpl_4wT6CNasVpLQnJAtw7H8DmpWozh2. **Para volver:** dpl_ES1qE4ZvwVhAzynEppGfXCK1pTkF (main 244fdc6).
+**No probado:** las pantallas con un paquete Greenlit real (campo de Drive, tarjeta en Entregas, fila en Archivo, guardar un link): en prod no hay ninguno.
+**Pick up next:** cuando DiDi apruebe un paquete completo, pegar su link y revisar las 3 pantallas.
+
 ## 2026-11-16 — Vigía: sin tarjetas repetidas, fuentes de Google y liga + costo automáticos (main, SIN migración, EN VIVO)
 **Qué cambió:** (1) una propuesta del mismo modelo/límite/fortaleza que una pendiente se suma a ella, y cada llamada a H.Ü.E ve lo pendiente (el correo traía GPT Image 2.6 Sunburst dos veces). (2) Al aprobar un modelo NUEVO, su página de Higgsfield se busca y se comprueba por el título; el costo viene en la tarjeta cuando una fuente de Higgsfield lo publica (cada número en la cita). (3) H.Ü.E escribe «cómo llegar» como el camino en Higgsfield.
 **Datos en prod (por el Hub, como Pedro):** 8 tarjetas descartadas con motivo (Pedro aprobó Flare y Sunburst); GPT Image 2.6 Flare/Sunburst con liga, 2.75 típicos / 4.25 máx. y «cómo llegar»; fuentes de Google → aistudio.google.com/docs/image-generation.md y /veo.md (la página nueva es JavaScript: el texto sólo sale en .md); nueva fuente «Higgsfield — GPT Image 2.6» (blog con la tabla de precios).

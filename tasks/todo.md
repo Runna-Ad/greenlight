@@ -1,6 +1,6 @@
 # Greenlight · by Rünna — Build Todo
 
-## 🟡 2026-11-19 — Carpeta de Drive por paquete + Entregas por paquete + Archivo del cliente (0100 APLICADA 2026-11-19; preview feat/paquete-drive; sin pasar a main)
+## ✅ 2026-11-19 — Carpeta de Drive por paquete + Entregas por paquete + Archivo del cliente (0100 APLICADA; EN VIVO main af01720, rollback dpl_ES1qE4ZvwVhAzynEppGfXCK1pTkF)
 **Pedro:** sólo un link a Google Drive (el cliente revisa que todo esté, en orden y bien nombrado), no una descarga. El link existe después de Greenlit: se pone en Briefs mientras el paquete sigue ahí, o en Entregas después. Entregas se ve como Briefs con la pastilla Greenlit, sólo paquetes aprobados. Cliente: el paquete aparece en su Archivo al aprobarse; «Carpeta en preparación» hasta que haya link.
 - [x] 0100 `paquetes.drive_url` (sólo https) + drive_por/drive_at — aplicada en vivo con `migrate.mjs --only` (columna vacía; main no la lee)
 - [x] Campo en Briefs (paquete Greenlit) y en Entregas; sólo admin/master edita
