@@ -79,7 +79,7 @@ export function CampoDrive({
       <button
         type="button"
         onClick={() => { setValor(""); setEditando(true); }}
-        className={`my-1 inline-flex items-center gap-1 whitespace-nowrap py-1 text-left text-[11px] font-semibold underline underline-offset-2 ${AZUL_LIGA}`}
+        className={`my-1 flex w-fit items-center gap-1 whitespace-nowrap py-1 text-left text-[11px] font-semibold underline underline-offset-2 ${AZUL_LIGA}`}
       >
         <FolderOpen className="size-3.5" /> Agregar carpeta de Drive
       </button>
