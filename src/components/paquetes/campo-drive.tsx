@@ -70,6 +70,19 @@ export function CampoDrive({
     return <p className="mt-1 text-[11px] text-muted-foreground">Carpeta de Drive pendiente</p>;
   }
 
+  // Sin link: una liga chica que abre el campo, para no llenar cada tarjeta de cajas vacías.
+  if (!editando) {
+    return (
+      <button
+        type="button"
+        onClick={() => { setValor(""); setEditando(true); }}
+        className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+      >
+        <FolderOpen className="size-3.5" /> Agregar carpeta de Drive
+      </button>
+    );
+  }
+
   return (
     <form
       className="mt-1 flex flex-wrap items-center gap-1.5"
@@ -82,6 +95,7 @@ export function CampoDrive({
         placeholder="Pega el link de la carpeta de Drive"
         value={valor}
         onChange={(e) => setValor(e.target.value)}
+        autoFocus
         aria-label={`Link de la carpeta de Drive de ${nombre}`}
         className="h-7 min-w-0 flex-1 basis-56 rounded-md border border-border bg-background px-2 text-[11px] text-foreground"
       />
@@ -93,25 +107,23 @@ export function CampoDrive({
         {guardando ? "Guardando…" : "Guardar"}
       </button>
       {driveUrl && (
-        <>
-          <button
-            type="button"
-            disabled={guardando}
-            onClick={() => guardar("")}
-            className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          >
-            Quitar
-          </button>
-          <button
-            type="button"
-            disabled={guardando}
-            onClick={() => setEditando(false)}
-            className="text-[11px] text-muted-foreground hover:text-foreground"
-          >
-            Cancelar
-          </button>
-        </>
+        <button
+          type="button"
+          disabled={guardando}
+          onClick={() => guardar("")}
+          className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        >
+          Quitar
+        </button>
       )}
+      <button
+        type="button"
+        disabled={guardando}
+        onClick={() => setEditando(false)}
+        className="text-[11px] text-muted-foreground hover:text-foreground"
+      >
+        Cancelar
+      </button>
     </form>
   );
 }
