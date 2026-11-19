@@ -7,6 +7,7 @@
 **En vivo:** «Ship it now» de Pedro; fast-forward 244fdc6 → af01720, dpl_4wT6CNasVpLQnJAtw7H8DmpWozh2. **Para volver:** dpl_ES1qE4ZvwVhAzynEppGfXCK1pTkF (main 244fdc6).
 **No probado:** las pantallas con un paquete Greenlit real (campo de Drive, tarjeta en Entregas, fila en Archivo, guardar un link): en prod no hay ninguno.
 **Pick up next:** cuando DiDi apruebe un paquete completo, pegar su link y revisar las 3 pantallas.
+**Arreglo el mismo día (Pedro: "add it at any point"):** el admin pega la carpeta en Briefs en cualquier etapa, no sólo con Greenlit; liga «Agregar carpeta de Drive» en azul de liga que abre el campo. El cliente la sigue viendo sólo en su Archivo con el paquete aprobado. Probado en la preview de la rama con un clic real; guardar un link no se probó (escribiría en datos de DiDi). «Ship it» de Pedro: main 70bf2b8 + notas. **Para volver:** dpl_4wT6CNasVpLQnJAtw7H8DmpWozh2 (main af01720).
 
 ## 2026-11-16 — Vigía: sin tarjetas repetidas, fuentes de Google y liga + costo automáticos (main, SIN migración, EN VIVO)
 **Qué cambió:** (1) una propuesta del mismo modelo/límite/fortaleza que una pendiente se suma a ella, y cada llamada a H.Ü.E ve lo pendiente (el correo traía GPT Image 2.6 Sunburst dos veces). (2) Al aprobar un modelo NUEVO, su página de Higgsfield se busca y se comprueba por el título; el costo viene en la tarjeta cuando una fuente de Higgsfield lo publica (cada número en la cita). (3) H.Ü.E escribe «cómo llegar» como el camino en Higgsfield.
