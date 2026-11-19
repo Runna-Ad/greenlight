@@ -3626,3 +3626,7 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 **Pruebas:** npm test exit 0 (test-lib 960/0, test-db 902/0); preview probada como Master (tablero, tarea, portal, quitar); revisores de prueba quitados, BD en 0.
 **Sin probar:** botones del cliente («Asignarme», «Mis tareas») en navegador. **EN VIVO:** deploy de producción dpl_ES1qE4ZvwVhAzynEppGfXCK1pTkF (244fdc6) Ready; greenlight.runna.agency/didi/tablero enseña 16 botones de revisor como Master.
 **Pick up next:** avisos al revisor (campana / correo / Slack); que alguien con login cliente (Nils Cliente) pruebe «Asignarme» y «Mis tareas».
+
+## 2026-11-19 Session: Drive link spacing fix in Entregas
+Pedro simulated a Greenlit (LT Categories - November) and saw «Agregar carpeta de Drive» stuck to «Ver tareas» on the wide Entregas card. Fix: the link is its own line (`flex w-fit`), c1d83f9 pushed to main after Pedro's «Ship it»; checked on the branch preview. Rollback: dpl_7PRhL4gRwxHR4L6K3qycpKZtQ7XU (main 8da6e0a).
+Pick up next: LT Categories is now a real Greenlit in live data from Pedro's simulation; he decides whether to move it back. Saving a real Drive link still untested.
