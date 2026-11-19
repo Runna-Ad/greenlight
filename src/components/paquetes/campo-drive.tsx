@@ -52,7 +52,7 @@ export function CampoDrive({
           href={driveUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className={`inline-flex items-center gap-1 py-1 text-xs font-semibold underline underline-offset-2 ${AZUL_LIGA}`}
+          className={`inline-flex items-center gap-1 whitespace-nowrap py-1 text-[11px] font-semibold underline underline-offset-2 ${AZUL_LIGA}`}
         >
           <FolderOpen className="size-3.5" /> Abrir carpeta en Drive <ExternalLink className="size-3" />
         </a>
@@ -79,7 +79,7 @@ export function CampoDrive({
       <button
         type="button"
         onClick={() => { setValor(""); setEditando(true); }}
-        className={`my-1 inline-flex items-center gap-1 py-1 text-xs font-semibold underline underline-offset-2 ${AZUL_LIGA}`}
+        className={`my-1 inline-flex items-center gap-1 whitespace-nowrap py-1 text-left text-[11px] font-semibold underline underline-offset-2 ${AZUL_LIGA}`}
       >
         <FolderOpen className="size-3.5" /> Agregar carpeta de Drive
       </button>
@@ -91,7 +91,6 @@ export function CampoDrive({
       className="mt-1 flex flex-wrap items-center gap-1.5"
       onSubmit={(e) => { e.preventDefault(); guardar(valor); }}
     >
-      <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       <input
         type="url"
         inputMode="url"
@@ -100,7 +99,7 @@ export function CampoDrive({
         onChange={(e) => setValor(e.target.value)}
         autoFocus
         aria-label={`Link de la carpeta de Drive de ${nombre}`}
-        className="h-7 min-w-0 flex-1 basis-56 rounded-md border border-border bg-background px-2 text-[11px] text-foreground"
+        className="h-7 min-w-0 flex-1 basis-full rounded-md border border-border bg-background px-2 text-[11px] text-foreground"
       />
       <button
         type="submit"
