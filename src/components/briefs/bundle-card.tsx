@@ -74,8 +74,9 @@ function PaqueteFila({
         {nota && (p.entregadoEl || !puedeFecha) && (
           <p className="text-[11px] font-medium" style={{ color: TONO_COLOR[nota.tono] }}>{nota.texto}</p>
         )}
-        {/* La carpeta de Drive existe hasta que el paquete queda Greenlit (Pedro 2026-11-19). */}
-        {p.entregadoEl && (
+        {/* La carpeta de Drive: admin/master la pega en cualquier momento (Pedro 2026-11-19).
+            Los demás sólo la ven si ya hay link o el paquete está Greenlit («pendiente»). */}
+        {(puedeFecha || p.driveUrl || p.entregadoEl) && (
           <CampoDrive key={p.driveUrl ?? ""} cliente={cliente} paqueteId={p.id} nombre={p.nombre} driveUrl={p.driveUrl} puedeEditar={puedeFecha} />
         )}
         <BotonTareas n={tareas.length} abierto={abierto} onClick={() => setAbierto((v) => !v)} />

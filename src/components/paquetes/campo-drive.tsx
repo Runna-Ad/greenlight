@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { ponerDrivePaquete } from "@/app/(app)/[cliente]/briefs/actions";
 
 /**
- * La carpeta de Google Drive de un paquete Greenlit (0100, Pedro 2026-11-19), para el EQUIPO.
+ * La carpeta de Google Drive de un paquete (0100, Pedro 2026-11-19), para el EQUIPO.
  * Admin/master pega o cambia el link; los demás sólo lo abren. Va en Briefs (mientras el
  * paquete sigue ahí) y en Entregas: la misma pieza, para que se lea igual en las dos.
  */

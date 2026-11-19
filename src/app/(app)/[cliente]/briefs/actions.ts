@@ -109,8 +109,8 @@ export async function ponerFechaPaquete(
 
 /**
  * Pone o quita la carpeta de Google Drive de un paquete (0100, Pedro 2026-11-19). Sólo
- * admin/master y sólo con el paquete ya Greenlit (la carpeta se arma después de la
- * aprobación). Se pone desde Briefs mientras el paquete sigue ahí, o desde Entregas.
+ * admin/master, en cualquier momento (Pedro 2026-11-19: «add it at any point»): desde
+ * Briefs, o desde Entregas. El cliente sólo la ve en su Archivo, ya con el paquete Greenlit.
  */
 export async function ponerDrivePaquete(
   cliente: string,
@@ -125,14 +125,11 @@ export async function ponerDrivePaquete(
   const actor = (await getCurrentUser())?.userId ?? null;
   const db = supabaseAdmin();
 
-  // El paquete tiene que ser de ESTE cliente (el id viene del navegador) y estar Greenlit.
+  // El paquete tiene que ser de ESTE cliente (el id viene del navegador).
   const { data: cli } = await db.from("clients").select("id").eq("slug", cliente).maybeSingle<{ id: string }>();
   if (!cli) return { ok: false, error: "Cliente no encontrado." };
   const paq = (await cargarPaquetes(cli.id, [paqueteId])).get(paqueteId);
   if (!paq) return { ok: false, error: "Paquete no encontrado." };
-  if (limpio.url && !paq.entregadoEl) {
-    return { ok: false, error: "La carpeta se pone cuando todo el paquete está Greenlit." };
-  }
 
   const { data, error } = await db
     .from("paquetes")
