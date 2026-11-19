@@ -1,5 +1,18 @@
 # Greenlight · by Rünna — Build Todo
 
+## 🟡 2026-11-19 — Carpeta de Drive por paquete + Entregas por paquete + Archivo del cliente (0100 APLICADA 2026-11-19; preview feat/paquete-drive; sin pasar a main)
+**Pedro:** sólo un link a Google Drive (el cliente revisa que todo esté, en orden y bien nombrado), no una descarga. El link existe después de Greenlit: se pone en Briefs mientras el paquete sigue ahí, o en Entregas después. Entregas se ve como Briefs con la pastilla Greenlit, sólo paquetes aprobados. Cliente: el paquete aparece en su Archivo al aprobarse; «Carpeta en preparación» hasta que haya link.
+- [x] 0100 `paquetes.drive_url` (sólo https) + drive_por/drive_at — aplicada en vivo con `migrate.mjs --only` (columna vacía; main no la lee)
+- [x] Campo en Briefs (paquete Greenlit) y en Entregas; sólo admin/master edita
+- [x] Entregas: card como Briefs, sólo paquetes con todas sus piezas Greenlit
+- [x] Portal › Archivo: paquetes aprobados por mes con «Abrir carpeta en Drive» / «Carpeta en preparación»; briefs viejos sin paquete abajo
+- [x] cargarPaquetes por lotes de 20 (el tope de 1000 filas cortaba en silencio)
+- [x] npm test exit 0 (lib 969, db 905) · tsc 0 · eslint 0 · next build 0 · revisión Sonnet: 2 serios + 2 menores arreglados
+- [x] Preview como Master 2026-11-19: Briefs DiDi carga sus 9 paquetes sin campo de Drive (ninguno Greenlit); Entregas y Portal › Archivo cargan su estado vacío; consola sin errores
+- [ ] Sin ver: un paquete Greenlit de verdad (campo de Drive, card en Entregas, fila en el Archivo con y sin link) — no hay ninguno en prod
+- [ ] Pedro decide si los 7 días en Briefs bajan («maybe not 7 days»)
+- [ ] «Ship it» de Pedro → main
+
 ## 🟡 2026-11-17 — Revisor del cliente por tarea (0099 APLICADA en vivo 2026-11-17; en preview feat/revisor-cliente; sin pasar a main)
 **PEDRO_OVERRIDE (2026-11-17, en la preview):** Master = cuenta de respaldo, cambia el revisor SIEMPRE: cualquier estado (también «En producción» y Greenlit) y en cualquier pantalla (tablero, tarea, portal). Admin sigue sólo en «Con Cliente» / «En cambios», ahora también en el portal. Una sola regla: `equipoPuedeCambiar(role, status)`.
 **Pedro eligió (2026-11-17):** enfoque A; el brillo sólo para admin/master; admin/master SÍ cambian el revisor en «En cambios» además de «Con Cliente» (para destrabar si el revisor ya no está disponible). «Mis tareas» se guarda en una cookie (no en la URL) para que siga puesto al navegar.
