@@ -5,7 +5,9 @@ import { getSoy } from "@/lib/soy";
 import { ROLE_LABEL, canSee, canAdmin, tracksVisibles } from "@/lib/roles";
 import type { Track } from "@/lib/vocab";
 import { EntregasBoard, type BriefArchivo } from "@/components/entregas/entregas-board";
-import { paquetesDeTareas } from "@/lib/paquetes-data";
+import { paquetesDeTareas, cargarPaquetes } from "@/lib/paquetes-data";
+import { notaEntrega } from "@/lib/paquetes";
+import type { PaqueteEquipo } from "@/lib/bundle";
 import { agruparArchivo } from "@/lib/entregas-archivo";
 
 // Entregas = ARCHIVO: registro COMPLETO de todo el trabajo Greenlit (delivered),
@@ -90,19 +92,51 @@ async function cargarArchivo(tracks: Track[] | null): Promise<BriefArchivo[]> {
     rows.map((r) => ({ ...r, briefId: r.brief_id, paquete: paqDe.get(r.id) ?? null })),
     briefById,
   );
-  return cards.map((c) => {
+  // Entregas guarda PAQUETES terminados (Pedro 2026-11-19): un paquete con alguna tarea aún
+  // en proceso sigue en Briefs. Se mira con TODAS sus tareas vivas (cargarPaquetes), no sólo
+  // las Greenlit que trajo esta consulta. Las tareas sin paquete (briefs viejos) siguen igual.
+  const idsPorCliente = new Map<string, string[]>();
+  for (const c of cards) for (const g of c.grupos) {
+    if (g.paqueteId) (idsPorCliente.get(c.clientId) ?? idsPorCliente.set(c.clientId, []).get(c.clientId)!).push(g.paqueteId);
+  }
+  const paqInfo = new Map<string, PaqueteEquipo>();
+  await Promise.all([...idsPorCliente].map(async ([cid, ids]) => {
+    for (const [id, p] of await cargarPaquetes(cid, ids)) paqInfo.set(id, p);
+  }));
+
+  const terminados = cards
+    .map((c) => ({
+      ...c,
+      grupos: c.grupos.filter((g) => g.paqueteId === null || !!paqInfo.get(g.paqueteId)?.entregadoEl),
+    }))
+    .filter((c) => c.grupos.length > 0);
+
+  return terminados.map((c) => {
     const cli = clientById.get(c.clientId);
+    const tareas = c.grupos.flatMap((g) => g.tareas);
+    const real = tareas.filter((t) => t.track === "real").length;
+    const normal = tareas.filter((t) => t.track === "normal").length;
     return {
       briefId: c.llave,
       briefLabel: c.etiqueta,
-      desglose: c.desglose,
+      desglose: [real && `Real ${real}`, normal && `Normal ${normal}`].filter(Boolean).join(" · "),
       clienteName: cli?.name ?? "Sin cliente",
       clienteColor: cli?.brand_color ?? "#775cbf",
       clienteSlug: cli?.slug ?? "?",
-      total: c.total,
-      grupos: c.grupos.map((g) => ({
+      total: tareas.length,
+      grupos: c.grupos.map((g) => {
+        const p = g.paqueteId ? paqInfo.get(g.paqueteId) : undefined;
+        return {
         paqueteId: g.paqueteId,
         nombre: g.nombre,
+        paquete: p
+          ? {
+              total: p.total,
+              desglose: p.desglose,
+              nota: notaEntrega({ entregadoEl: p.entregadoEl, diasAntes: p.diasAntes }, p.fechaEntrega, "equipo"),
+              driveUrl: p.driveUrl,
+            }
+          : null,
         tareas: g.tareas.map((r) => ({
           id: r.id,
           code: r.code,
@@ -112,7 +146,8 @@ async function cargarArchivo(tracks: Track[] | null): Promise<BriefArchivo[]> {
           asignados: asigsByIdea.get(r.id) ?? [],
           starred: starredSet.has(r.id),
         })),
-      })),
+        };
+      }),
     };
   });
 }
@@ -139,8 +174,8 @@ export default async function EntregasPage() {
         <p className="gl-eyebrow">Entregas</p>
         <h1 className="mt-1 text-2xl font-semibold text-foreground">Archivo</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Todo el trabajo Greenlit (aprobado por el cliente), agrupado por brief y por paquete. Las recientes también
-          están en el tablero, en la columna Greenlit. Ábrelas para consultarlas o reabrirlas.
+          Los paquetes Greenlit (todas sus piezas aprobadas por el cliente), por brief. Aquí va el link de la
+          carpeta de Drive de cada paquete; el cliente la abre desde su Archivo.
         </p>
         {puedeEstrellar && (
           <p className="mt-1 text-xs text-muted-foreground">

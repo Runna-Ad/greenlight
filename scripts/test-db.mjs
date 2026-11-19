@@ -3696,6 +3696,15 @@ console.log("\n▶ 0097 — paquetes");
     `insert into produccion.paquetes (client_id, brief_date, nombre, clave) values ($1,'2026-10-23','LT After BF - November','') returning id`, [cli]);
   ok("…pero en otro brief (otra fecha) es otro paquete", !!otroDia);
 
+  // 0100 — carpeta de Drive del paquete: sólo https.
+  await db.query(`update produccion.paquetes set drive_url='https://drive.google.com/drive/folders/abc' where id=$1`, [pq]);
+  eq("0100: el paquete guarda su link de Drive",
+     await scalar(`select drive_url from produccion.paquetes where id=$1`, [pq]), "https://drive.google.com/drive/folders/abc");
+  let sinHttps = null;
+  try { await db.query(`update produccion.paquetes set drive_url='javascript:alert(1)' where id=$1`, [pq]); }
+  catch (e) { sinHttps = e.message; }
+  ok("0100: un link que no empieza con https:// se rechaza", !!sinHttps && /check/i.test(sinHttps));
+
   await db.query(`update produccion.ideas set paquete_id=$2 where id=$1`, [IDEA_D, pq]);
   eq("la tarea queda en su paquete", await scalar(`select paquete_id::text from produccion.ideas where id=$1`, [IDEA_D]), pq);
   // board_tasks NO se redefine en 0097: la vista viva trae columnas de la rama de Diseño (0076)

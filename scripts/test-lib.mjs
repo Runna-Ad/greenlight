@@ -13,7 +13,7 @@ import { puedeSerLead, puedeSerEspecialista, tieneAccesoPrisma, tieneHueCreativo
 import { RAMAS, esRama, ramaDe } from "../src/lib/equipo.ts";
 import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoEnvioPieza, motivoBloqueoEnvio, ultimoVisibleDe } from "../src/lib/correcciones.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
-import { claveDePaquete, fechaDeDateSort, diaLocal, fechaDelBrief, entregaDePaquete, notaEntrega, desgloseTracks } from "../src/lib/paquetes.ts";
+import { claveDePaquete, fechaDeDateSort, diaLocal, fechaDelBrief, entregaDePaquete, notaEntrega, desgloseTracks, limpiarLinkDrive } from "../src/lib/paquetes.ts";
 import { classifyTab, mapHeader } from "../src/lib/sheet-sync.ts";
 import { claveDeMarca, raizDeMarca, motivoClaveInvalida, azarSeguro, CLAVE_MIN } from "../src/lib/auth/clave-marca.ts";
 import { canCrearLogins } from "../src/lib/roles.ts";
@@ -1959,6 +1959,16 @@ console.log("\n▶ Paquetes — clave, fecha del brief, nota de entrega");
   eq("con una tarea sin Greenlit, el paquete no está entregado", noEntregado.entregadoEl, null);
   eq("…y se ve su fecha", notaEntrega(noEntregado, "2026-11-20", "cliente")?.texto, "Fecha 20/11");
   eq("sin fecha y sin entregar no hay nota", notaEntrega(noEntregado, null, "equipo"), null);
+  // 0100 — link de Drive del paquete
+  eq("Drive: vacío quita el link", JSON.stringify(limpiarLinkDrive("   ")), JSON.stringify({ ok: true, url: null, aviso: null }));
+  eq("Drive: un link de carpeta pasa sin aviso", limpiarLinkDrive(" https://drive.google.com/drive/folders/1AbC?usp=sharing ").aviso, null);
+  eq("…y se guarda sin espacios", limpiarLinkDrive(" https://drive.google.com/drive/folders/1AbC ").url, "https://drive.google.com/drive/folders/1AbC");
+  eq("Drive: http se rechaza", limpiarLinkDrive("http://drive.google.com/x").ok, false);
+  eq("Drive: javascript: se rechaza", limpiarLinkDrive("javascript:alert(1)").ok, false);
+  eq("Drive: texto suelto se rechaza", limpiarLinkDrive("carpeta de didi").ok, false);
+  eq("Drive: un link con usuario:clave se rechaza", limpiarLinkDrive("https://a:b@drive.google.com/x").ok, false);
+  eq("Drive: otro sitio https pasa con aviso", limpiarLinkDrive("https://www.dropbox.com/s/x").aviso, "Guardado, pero no es un link de Google Drive.");
+  eq("Drive: un dominio que imita a Google lleva aviso", !!limpiarLinkDrive("https://drive.google.com.evil.io/x").aviso, true);
 
   const antes = entregaDePaquete([G("2026-11-17T18:00:00Z"), G("2026-11-18T18:00:00Z")], "2026-11-20");
   eq("entregado = la ÚLTIMA tarea", antes.entregadoEl, "2026-11-18");

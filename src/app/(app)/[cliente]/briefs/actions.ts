@@ -5,6 +5,8 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { canAdmin } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getCurrentUser } from "@/lib/identity";
+import { cargarPaquetes } from "@/lib/paquetes-data";
+import { limpiarLinkDrive } from "@/lib/paquetes";
 
 /**
  * Manda un BRIEF entero a la PAPELERA, con TODAS sus tareas — sólo master/admin
@@ -103,4 +105,49 @@ export async function ponerFechaPaquete(
   revalidatePath(`/${cliente}/briefs`);
   revalidatePath(`/${cliente}/portal`);
   return { ok: true };
+}
+
+/**
+ * Pone o quita la carpeta de Google Drive de un paquete (0100, Pedro 2026-11-19). Sólo
+ * admin/master y sólo con el paquete ya Greenlit (la carpeta se arma después de la
+ * aprobación). Se pone desde Briefs mientras el paquete sigue ahí, o desde Entregas.
+ */
+export async function ponerDrivePaquete(
+  cliente: string,
+  paqueteId: string,
+  link: string | null,
+): Promise<{ ok: true; aviso: string | null } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const role = await getViewAs();
+  if (!canAdmin(role)) return { ok: false, error: "Sólo un admin o master pone la carpeta de Drive." };
+  const limpio = limpiarLinkDrive(link);
+  if (!limpio.ok) return limpio;
+  const actor = (await getCurrentUser())?.userId ?? null;
+  const db = supabaseAdmin();
+
+  // El paquete tiene que ser de ESTE cliente (el id viene del navegador) y estar Greenlit.
+  const { data: cli } = await db.from("clients").select("id").eq("slug", cliente).maybeSingle<{ id: string }>();
+  if (!cli) return { ok: false, error: "Cliente no encontrado." };
+  const paq = (await cargarPaquetes(cli.id, [paqueteId])).get(paqueteId);
+  if (!paq) return { ok: false, error: "Paquete no encontrado." };
+  if (limpio.url && !paq.entregadoEl) {
+    return { ok: false, error: "La carpeta se pone cuando todo el paquete está Greenlit." };
+  }
+
+  const { data, error } = await db
+    .from("paquetes")
+    .update({ drive_url: limpio.url, drive_por: actor, drive_at: new Date().toISOString() })
+    .eq("id", paqueteId)
+    .eq("client_id", cli.id)
+    .select("id");
+  if (error) {
+    console.error("ponerDrivePaquete:", error.message);
+    return { ok: false, error: "No se pudo guardar el link. Intenta de nuevo." };
+  }
+  if (!data?.length) return { ok: false, error: "Paquete no encontrado." };
+
+  revalidatePath(`/${cliente}/briefs`);
+  revalidatePath(`/${cliente}/portal`);
+  revalidatePath("/entregas");
+  return { ok: true, aviso: limpio.aviso };
 }

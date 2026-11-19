@@ -10,7 +10,8 @@ import { ESTADOS_PORTAL, estadoBriefPanel } from "@/lib/portal-bucket";
 import type { PaqueteEquipo } from "@/lib/bundle";
 import { cargarPaquetes } from "@/lib/paquetes-data";
 import { agruparBriefsPortal } from "@/lib/portal-grupos";
-import { fechaDelBrief, paqueteParaCliente, type PaquetePortal } from "@/lib/paquetes";
+import { fechaDelBrief, paqueteParaCliente, entregaDePaquete, desgloseTracks, ddmm, type PaquetePortal } from "@/lib/paquetes";
+import { idDeUnidad } from "@/lib/portal-paquetes";
 
 // El portal muestra SÓLO lo que ya se envió al cliente: published_at != null (el
 // mismo criterio que Entregas). Su estado ACTUAL puede ser published (en su
@@ -706,4 +707,82 @@ export async function cargarTareaPortal(clienteSlug: string, ideaId: string): Pr
     revisiones,
     enProceso,
   };
+}
+
+/** Un paquete GREENLIT en el Archivo del cliente (Pedro 2026-11-19): aparece en cuanto todas
+ *  sus piezas están aprobadas; la carpeta de Drive llega después, cuando el equipo la pega. */
+export type ArchivoPaquete = {
+  id: string;
+  nombre: string;
+  /** "Brief 30/10". */
+  briefLabel: string;
+  /** El grupo del brief (para no repetirlo en la lista vieja de briefs archivados). */
+  briefGrupoId: string | null;
+  /** `?brief=` para abrir sus piezas (ya aprobadas). */
+  unidad: string;
+  /** Día (México) en que quedó Greenlit, YYYY-MM-DD. */
+  entregadoEl: string;
+  /** La nota que el cliente puede ver ("Entregado 18/11 · fecha 20/11 (2 días antes)"). */
+  nota: string | null;
+  total: number;
+  desglose: string;
+  driveUrl: string | null;
+};
+
+/**
+ * Los paquetes Greenlit de un cliente, para su Archivo. Sólo corre al abrir el Archivo.
+ * Las tareas se leen por lotes de 20 paquetes; un lote que llega al tope de ~1000 filas de
+ * PostgREST (que corta EN SILENCIO) cuenta como error.
+ */
+export async function cargarArchivoPaquetes(clienteSlug: string, grupoDe: Record<string, string>): Promise<ArchivoPaquete[]> {
+  if (!hasSupabase()) return [];
+  const db = supabaseAdmin();
+  const { data: cli } = await db.from("clients").select("id").eq("slug", clienteSlug).maybeSingle<{ id: string }>();
+  if (!cli) return [];
+
+  type Paq = { id: string; nombre: string; brief_date: string; fecha_entrega: string | null; drive_url: string | null };
+  const { data: paqs, error: e1 } = await db
+    .from("paquetes").select("id, nombre, brief_date, fecha_entrega, drive_url").eq("client_id", cli.id)
+    .returns<Paq[]>();
+  if (e1) { console.error("cargarArchivoPaquetes (paquetes):", e1.message); return []; }
+  if (!paqs?.length) return [];
+
+  type T = { paquete_id: string; brief_id: string; status: string; delivered_at: string | null; track: string | null; tipo_asset: string | null };
+  const ids = paqs.map((p) => p.id);
+  const lotes = Array.from({ length: Math.ceil(ids.length / 20) }, (_, i) => ids.slice(i * 20, i * 20 + 20));
+  const res = await Promise.all(lotes.map((l) =>
+    db.from("ideas").select("paquete_id, brief_id, status, delivered_at, track, tipo_asset")
+      .in("paquete_id", l).is("deleted_at", null).limit(1000).returns<T[]>()));
+  // Un lote que llega al tope pudo perder filas: se trata como error.
+  const err = res.find((r) => r.error)?.error
+    ?? (res.some((r) => (r.data?.length ?? 0) >= 1000) ? { message: "un lote llegó al tope de filas" } : null);
+  // Mejor un Archivo vacío que uno con paquetes a medias marcados como entregados.
+  if (err) { console.error("cargarArchivoPaquetes (ideas):", err.message); return []; }
+  const porPaquete = new Map<string, T[]>();
+  for (const t of res.flatMap((r) => r.data ?? [])) (porPaquete.get(t.paquete_id) ?? porPaquete.set(t.paquete_id, []).get(t.paquete_id)!).push(t);
+
+  const out: ArchivoPaquete[] = [];
+  for (const p of paqs) {
+    const ts = porPaquete.get(p.id) ?? [];
+    const e = entregaDePaquete(ts, p.fecha_entrega);
+    if (!e.entregadoEl || !ts.length) continue;
+    const vista = paqueteParaCliente({ id: p.id, nombre: p.nombre, fechaEntrega: p.fecha_entrega, entregadoEl: e.entregadoEl, diasAntes: e.diasAntes });
+    const tab = ts[0].brief_id;
+    const grupo = Object.hasOwn(grupoDe, tab) ? grupoDe[tab] : null;
+    out.push({
+      id: p.id,
+      nombre: p.nombre,
+      briefLabel: `Brief ${ddmm(p.brief_date)}`,
+      briefGrupoId: grupo,
+      unidad: idDeUnidad(grupo ?? tab, p.id),
+      entregadoEl: e.entregadoEl,
+      nota: vista.nota?.texto ?? null,
+      total: ts.length,
+      desglose: desgloseTracks(ts.map((t) => ({ track: t.track, tipoAsset: t.tipo_asset }))),
+      driveUrl: p.drive_url,
+    });
+  }
+  // Lo más reciente primero; dentro del mismo día, por brief y nombre.
+  return out.sort((a, b) =>
+    b.entregadoEl.localeCompare(a.entregadoEl) || a.briefLabel.localeCompare(b.briefLabel) || a.nombre.localeCompare(b.nombre));
 }

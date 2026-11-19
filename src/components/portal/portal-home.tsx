@@ -146,6 +146,9 @@ export function PortalHome({
   // Ciclo de vida del brief: activo → "Tus paquetes"; completado ≤15d → "Completados" (colapsado).
   // `briefs` YA viene acotado a NO archivados, así que aquí sólo se separan activo/reciente; los
   // archivados (>15d) no están en `briefs` — su conteo (`nArchivadas`) gobierna el link al Archivo.
+  // El Archivo guarda cada paquete aprobado desde el día en que queda Greenlit (Pedro
+  // 2026-11-19), aunque su brief siga activo: el link aparece en cuanto hay uno.
+  const hayArchivo = nArchivadas > 0 || briefs.some((b) => b.paquetes.some((p) => p.entregado));
   const activas = tarjetas.filter((x) => x.arch === "activo");
   const recientes = tarjetas.filter((x) => x.arch === "reciente");
 
@@ -229,7 +232,7 @@ export function PortalHome({
       )}
 
       {/* Completados (≤15 días) — colapsado; los de >15 días viven en el Archivo. */}
-      {(recientes.length > 0 || nArchivadas > 0) && (
+      {(recientes.length > 0 || hayArchivo) && (
         <div className="mt-8 rounded-xl border border-border bg-secondary/30 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             {recientes.length > 0 ? (
@@ -245,9 +248,9 @@ export function PortalHome({
                 <span className="font-normal text-muted-foreground">· últimos 15 días</span>
               </button>
             ) : (
-              <span className="text-[13px] text-muted-foreground">Los briefs completados hace más de 15 días están en el archivo.</span>
+              <span className="text-[13px] text-muted-foreground">Tus paquetes aprobados y sus carpetas de Drive están en el archivo.</span>
             )}
-            {nArchivadas > 0 && (
+            {hayArchivo && (
               <Link href="?vista=archivo" className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline">
                 <Archive className="size-3.5" /> Ver archivo
               </Link>

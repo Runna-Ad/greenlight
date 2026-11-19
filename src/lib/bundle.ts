@@ -48,6 +48,8 @@ export type PaqueteEquipo = {
   /** "2 real · 1 normal", de todas sus tareas. */
   desglose: string;
   total: number;
+  /** La carpeta de Google Drive con sus archivos finales (0100). Se pone ya Greenlit. */
+  driveUrl: string | null;
 };
 
 /** La ventana en la que el trabajo ya entregado sigue A LA VISTA antes de vivir sólo

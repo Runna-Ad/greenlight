@@ -181,3 +181,27 @@ export function etiquetaTarea(
   const p = paquete?.trim();
   return p ? `${p} · ${etiquetaBrief(b)}` : etiquetaBrief(b);
 }
+
+/**
+ * El link de la carpeta de Google Drive de un paquete (0100, Pedro 2026-11-19). Sólo un link:
+ * el cliente lo abre para revisar que sus archivos estén, en orden y bien nombrados.
+ * Vacío = quitarlo. Tiene que ser https (lo mismo exige la base). Un link que no es de
+ * Google Drive se acepta con aviso: a veces se comparte por otro lado.
+ */
+export function limpiarLinkDrive(
+  raw: string | null | undefined,
+): { ok: true; url: string | null; aviso: string | null } | { ok: false; error: string } {
+  const s = (raw ?? "").trim();
+  if (!s) return { ok: true, url: null, aviso: null };
+  if (s.length > 2000) return { ok: false, error: "El link es demasiado largo." };
+  let u: URL;
+  try {
+    u = new URL(s);
+  } catch {
+    return { ok: false, error: "Eso no es un link. Copia el link de la carpeta desde Google Drive." };
+  }
+  if (u.protocol !== "https:") return { ok: false, error: "El link tiene que empezar con https://" };
+  if (u.username || u.password) return { ok: false, error: "El link no puede llevar usuario ni contraseña." };
+  const drive = u.hostname === "drive.google.com" || u.hostname === "docs.google.com";
+  return { ok: true, url: u.toString(), aviso: drive ? null : "Guardado, pero no es un link de Google Drive." };
+}

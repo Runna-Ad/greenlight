@@ -14,16 +14,23 @@ export async function cargarPaquetes(clientId: string, ids: (string | null)[]): 
   const db = supabaseAdmin();
   // Acotado al cliente: un paquete_id equivocado nunca enseña el paquete de otro cliente.
   const { data: paqs, error: e1 } = await db
-    .from("paquetes").select("id, nombre, fecha_entrega").eq("client_id", clientId).in("id", unicos)
-    .returns<{ id: string; nombre: string; fecha_entrega: string | null }[]>();
+    .from("paquetes").select("id, nombre, fecha_entrega, drive_url").eq("client_id", clientId).in("id", unicos)
+    .returns<{ id: string; nombre: string; fecha_entrega: string | null; drive_url: string | null }[]>();
   const delCliente = (paqs ?? []).map((p) => p.id);
   // Las tareas vivas de esos paquetes, directo de `ideas` (board_tasks no trae paquete_id, ver
   // 0097). Mandar un brief a la papelera sella también sus tareas, así que deleted_at basta.
-  const { data: tareas, error: e2 } = delCliente.length
-    ? await db.from("ideas").select("paquete_id, status, delivered_at, track, tipo_asset")
-        .in("paquete_id", delCliente).is("deleted_at", null)
-        .returns<{ paquete_id: string; status: string; delivered_at: string | null; track: string | null; tipo_asset: string | null }[]>()
-    : { data: [], error: null };
+  // Por lotes de 20 paquetes: PostgREST corta en ~1000 filas SIN avisar, y una tarea sin
+  // aprobar que se cae del corte haría ver el paquete como entregado. Un lote que llega al
+  // tope cuenta como error (mejor no enseñar nada que enseñar un paquete a medias).
+  type T = { paquete_id: string; status: string; delivered_at: string | null; track: string | null; tipo_asset: string | null };
+  const TOPE = 1000;
+  const lotes = Array.from({ length: Math.ceil(delCliente.length / 20) }, (_, i) => delCliente.slice(i * 20, i * 20 + 20));
+  const res = await Promise.all(lotes.map((l) =>
+    db.from("ideas").select("paquete_id, status, delivered_at, track, tipo_asset")
+      .in("paquete_id", l).is("deleted_at", null).limit(TOPE).returns<T[]>()));
+  const e2 = res.find((r) => r.error)?.error
+    ?? (res.some((r) => (r.data?.length ?? 0) >= TOPE) ? { message: "un lote llegó al tope de filas" } : null);
+  const tareas = res.flatMap((r) => r.data ?? []);
   // Sin paquetes no se rompe la pantalla: las tareas se ven igual, agrupadas en "Sin paquete".
   if (e1 || e2) {
     console.error("cargarPaquetes:", e1?.message ?? e2?.message);
@@ -31,7 +38,7 @@ export async function cargarPaquetes(clientId: string, ids: (string | null)[]): 
   }
 
   const porPaquete = new Map<string, { paquete_id: string; status: string; delivered_at: string | null; track: string | null; tipo_asset: string | null }[]>();
-  for (const t of tareas ?? []) (porPaquete.get(t.paquete_id) ?? porPaquete.set(t.paquete_id, []).get(t.paquete_id)!).push(t);
+  for (const t of tareas) (porPaquete.get(t.paquete_id) ?? porPaquete.set(t.paquete_id, []).get(t.paquete_id)!).push(t);
 
   for (const p of paqs ?? []) {
     const ts = porPaquete.get(p.id) ?? [];
@@ -44,6 +51,7 @@ export async function cargarPaquetes(clientId: string, ids: (string | null)[]): 
       diasAntes: e.diasAntes,
       desglose: desgloseTracks(ts.map((t) => ({ track: t.track, tipoAsset: t.tipo_asset }))),
       total: ts.length,
+      driveUrl: p.drive_url,
     });
   }
   return out;

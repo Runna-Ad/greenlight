@@ -6,7 +6,7 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase-admin";
 import { createClient } from "@/lib/supabase/server";
 import { leerPerfil, esClienteAprobado } from "@/lib/auth/acceso-cliente";
 import { ROLE_LABEL, canSee } from "@/lib/roles";
-import { cargarPortal, cargarTareaPortal } from "./portal-data";
+import { cargarPortal, cargarTareaPortal, cargarArchivoPaquetes } from "./portal-data";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { PortalTarea } from "@/components/portal/portal-tarea";
 import { PortalListaTareas } from "@/components/portal/portal-lista-tareas";
@@ -182,10 +182,15 @@ export default async function PortalPage({
   // Pestaña ARCHIVO — briefs completados hace >15 días (fuera del panel). Nivel propio, sin marca;
   // el split ≤15d/>15d lo hace `estadoBriefPanel` sobre `greenlitAt` (misma fuente que el panel).
   if (sp.vista === "archivo") {
+    // Los paquetes Greenlit (con su carpeta de Drive) + los briefs archivados viejos que no
+    // tienen paquetes (de antes de 0097), para que ninguno salga dos veces.
+    const paquetesArchivo = await cargarArchivoPaquetes(cliente, data.grupoDe);
+    const conPaquete = new Set(paquetesArchivo.map((p) => p.briefGrupoId).filter(Boolean));
+    const briefsSinPaquete = data.archivadas.filter((b) => !conPaquete.has(b.id));
     return (
       <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null}
         vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false}
-        vista={<PortalArchivo cliente={clienteInfo} archivadas={data.archivadas} />} />
+        vista={<PortalArchivo cliente={clienteInfo} paquetes={paquetesArchivo} archivadas={briefsSinPaquete} />} />
     );
   }
 
