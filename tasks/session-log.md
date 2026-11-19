@@ -3640,3 +3640,7 @@ Not checked on screen: the red numbers, «Nuevo» and the reset need a real clie
 Pedro wanted a Frame.io link per task. Reused `ideas.entrega_url` («Link de entrega», hidden in Rünna tools, empty on all 16 live tasks) and moved it to the task header under «Notas de guión»: blue «Agregar link de Frame.io» → «Abrir en Frame.io» + «Cambiar». Anyone who works the task pastes it (guardarIntake); a non-Frame.io link saves with a warning. Pedro first said team-only, then corrected mid-build: clients see it too, read-only, only once a link exists. Old field removed from Rünna tools; old client «Link de entrega» button replaced.
 Tests lib 983/0, build 0. Preview as Master on APPBFMOMCHAT: line shows in Modo Edición and opens the box; Rünna tools no longer has the old field. «Ship it»: main 0ad455e. Rollback: dpl_5jHgJEyUW4KuJFhxC6Ef7nsGZRhS (main acde6c1).
 Not checked: saving a link, the client's view of it. Note: Master opens tasks in Modo Lectura, so the add line only appears in Modo Edición.
+
+## 2026-11-19 Session: wrap-up (Drive, client Archivo, Frame.io)
+Wrap-up of the day: Drive link per paquete, client Archivo with red numbers (0101), and Frame.io link per task are all live (main 0ad455e). project-state.md and lessons.md updated (3 lessons: Drive link any stage, verify a failed click, visibility answer can change mid-build).
+Pick up next: try a real Drive and Frame.io save; watch the first DiDi user's red numbers and «Nuevo».
