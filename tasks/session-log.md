@@ -3630,3 +3630,8 @@ Pedro pidió poner en vivo todo lo de hoy. No hizo falta desplegar: todo ya esta
 ## 2026-11-19 Session: Drive link spacing fix in Entregas
 Pedro simulated a Greenlit (LT Categories - November) and saw «Agregar carpeta de Drive» stuck to «Ver tareas» on the wide Entregas card. Fix: the link is its own line (`flex w-fit`), c1d83f9 pushed to main after Pedro's «Ship it»; checked on the branch preview. Rollback: dpl_7PRhL4gRwxHR4L6K3qycpKZtQ7XU (main 8da6e0a).
 Pick up next: LT Categories is now a real Greenlit in live data from Pedro's simulation; he decides whether to move it back. Saving a real Drive link still untested.
+
+## 2026-11-19 Session: Archivo in the client menu with red numbers (0101 applied, LIVE)
+Pedro: the client's Archivo was buried at the bottom of the portal. Now «Archivo» sits under «Portal» in the client's left menu. Portal shows a red number = pieces waiting for approval (same rule as «Por revisar», published + published_at); Archivo shows paquetes approved or given a Drive link since the client's last visit (`profiles.archivo_visto_at`, migration 0101, applied). Opening Archivo saves the visit; new rows carry «Nuevo». Master/admin see the item but no numbers and never reset a client's visit (checked: 0 visits saved after a Master visit).
+Tests: lib 978/0, db 907/0, build 0; Opus review: 1 real bug fixed (number came back after leaving Archivo) + 4 small. «Ship it» from Pedro: main acde6c1. Rollback: dpl_8WvBjdfbGN2w2qeo9t87XiSPAv9x (main c1d83f9); 0101 is only an empty column, safe to leave.
+Not checked on screen: the red numbers, «Nuevo» and the reset need a real client login. DiDi today: Portal 4, Archivo 0. Pick up next: watch the first DiDi user's numbers.
