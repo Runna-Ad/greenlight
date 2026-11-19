@@ -17,6 +17,7 @@ import type { Soy } from "@/lib/soy";
 import { NotificationsBell } from "./notifications-bell";
 import { SearchBox } from "./search-box";
 import { MobileNav } from "./sidebar";
+import type { AvisosCliente } from "@/lib/avisos-cliente";
 import { cerrarSesion } from "@/app/(app)/logout-actions";
 import { CambiarContrasena } from "./cambiar-contrasena";
 
@@ -25,16 +26,18 @@ export function Topbar({
   role = DEFAULT_ROLE,
   soy = null,
   avisos = 0,
+  avisosCliente = null,
 }: {
   title?: string;
   role?: ViewRole;
   soy?: Soy | null;
   avisos?: number;
+  avisosCliente?: AvisosCliente | null;
 }) {
   const [cambiarClave, setCambiarClave] = useState(false);
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground shadow-sm md:px-6">
-      <MobileNav role={role} prismaAcceso={tieneAccesoPrisma(role, soy?.prisma_acceso)} />
+      <MobileNav role={role} prismaAcceso={tieneAccesoPrisma(role, soy?.prisma_acceso)} avisosCliente={avisosCliente} />
       {/* La marca vive UNA sola vez, en el sidebar. Aquí el topbar lleva el
           contexto: el título de la página, o el saludo personalizado
           "Hola, {nombre}" (de su sesión) — nunca el logo repetido. */}

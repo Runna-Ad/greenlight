@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronLeft, ArrowRight, CheckCircle2, Archive, FolderOpen, ExternalLink, Package } from "lucide-react";
 import type { ArchivoBrief, ArchivoPaquete } from "@/app/(app)/[cliente]/portal/portal-data";
+import { esNovedad } from "@/lib/archivo-novedad";
 
 /**
  * Pestaña ARCHIVO del portal (Pedro 2026-11-19): cada paquete APROBADO (todas sus piezas
@@ -15,12 +16,16 @@ export function PortalArchivo({
   cliente,
   paquetes,
   archivadas,
+  vistoAt = undefined,
 }: {
   cliente: { name: string; logoUrl: string | null; brandColor: string };
   /** Los paquetes Greenlit, ya ordenados (reciente primero) en cargarArchivoPaquetes. */
   paquetes: ArchivoPaquete[];
   /** Briefs archivados que no tienen paquetes (metadata, SIN tareas). */
   archivadas: ArchivoBrief[];
+  /** Su visita anterior al Archivo (0101), para marcar «Nuevo». `undefined` = no es el
+   *  cliente quien mira (el Master): sin etiquetas. */
+  vistoAt?: string | null;
 }) {
   const grupos: { mes: string; items: ArchivoPaquete[] }[] = [];
   for (const p of paquetes) {
@@ -66,7 +71,7 @@ export function PortalArchivo({
               <h2 className="mb-2 px-0.5 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">{g.mes}</h2>
               <ul className="space-y-2">
                 {g.items.map((p) => (
-                  <PaqueteRow key={p.id} p={p} />
+                  <PaqueteRow key={p.id} p={p} nuevo={vistoAt !== undefined && esNovedad(p.novedadAt, vistoAt)} />
                 ))}
               </ul>
             </section>
@@ -101,7 +106,7 @@ function fechaCorta(iso: string | null): string {
   return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
 }
 
-function PaqueteRow({ p }: { p: ArchivoPaquete }) {
+function PaqueteRow({ p, nuevo }: { p: ArchivoPaquete; nuevo: boolean }) {
   return (
     <li className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -109,6 +114,11 @@ function PaqueteRow({ p }: { p: ArchivoPaquete }) {
         <Link href={`?brief=${p.unidad}`} className="group min-w-0 flex-1 basis-48">
           <span className="flex items-center gap-1.5 truncate font-semibold text-foreground group-hover:text-primary">
             <Package className="size-3.5 shrink-0 text-muted-foreground" /> {p.nombre}
+            {nuevo && (
+              <span className="shrink-0 rounded-full bg-[#e5484d] px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-white">
+                Nuevo
+              </span>
+            )}
           </span>
           <span className="block text-xs text-muted-foreground">
             {p.briefLabel} · {p.total} {p.total === 1 ? "pieza" : "piezas"}{p.desglose ? ` · ${p.desglose}` : ""}

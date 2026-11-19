@@ -12,6 +12,8 @@ import { PortalTarea } from "@/components/portal/portal-tarea";
 import { PortalListaTareas } from "@/components/portal/portal-lista-tareas";
 import { PortalHome } from "@/components/portal/portal-home";
 import { PortalArchivo } from "@/components/portal/portal-archivo";
+import { MarcarArchivoVisto } from "@/components/portal/marcar-archivo-visto";
+import { leerArchivoVisto } from "@/lib/avisos-cliente";
 import { bucketPortal, estadoBriefPanel, type BucketPortal } from "@/lib/portal-bucket";
 import { idDeUnidad, leerUnidad, unidadPedida, unidadesDePaquete } from "@/lib/portal-paquetes";
 import type { ReactNode } from "react";
@@ -184,13 +186,22 @@ export default async function PortalPage({
   if (sp.vista === "archivo") {
     // Los paquetes Greenlit (con su carpeta de Drive) + los briefs archivados viejos que no
     // tienen paquetes (de antes de 0097), para que ninguno salga dos veces.
-    const paquetesArchivo = await cargarArchivoPaquetes(cliente, data.grupoDe);
+    // Un cliente de verdad: su visita anterior marca «Nuevo», y abrirlo guarda la de hoy (0101).
+    const yoCliente = await getCurrentUser();
+    const esCliente = yoCliente?.role === "client";
+    const [paquetesArchivo, vistoAt] = await Promise.all([
+      cargarArchivoPaquetes(cliente, data.grupoDe),
+      esCliente ? leerArchivoVisto(yoCliente.userId) : Promise.resolve(undefined),
+    ]);
     const conPaquete = new Set(paquetesArchivo.map((p) => p.briefGrupoId).filter(Boolean));
     const briefsSinPaquete = data.archivadas.filter((b) => !conPaquete.has(b.id));
     return (
       <PortalShell cliente={clienteInfo} briefs={[]} selBriefId={null} selTareaId={null}
         vistaBucket={null} marcaId={null} backHref={null} backLabel="" mostrarNav={false}
-        vista={<PortalArchivo cliente={clienteInfo} paquetes={paquetesArchivo} archivadas={briefsSinPaquete} />} />
+        vista={<>
+          {esCliente && <MarcarArchivoVisto />}
+          <PortalArchivo cliente={clienteInfo} paquetes={paquetesArchivo} archivadas={briefsSinPaquete} vistoAt={vistoAt} />
+        </>} />
     );
   }
 

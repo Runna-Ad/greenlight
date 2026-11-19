@@ -13,6 +13,7 @@ import { puedeSerLead, puedeSerEspecialista, tieneAccesoPrisma, tieneHueCreativo
 import { RAMAS, esRama, ramaDe } from "../src/lib/equipo.ts";
 import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoEnvioPieza, motivoBloqueoEnvio, ultimoVisibleDe } from "../src/lib/correcciones.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
+import { novedadDe, esNovedad, contarNovedades } from "../src/lib/archivo-novedad.ts";
 import { claveDePaquete, fechaDeDateSort, diaLocal, fechaDelBrief, entregaDePaquete, notaEntrega, desgloseTracks, limpiarLinkDrive } from "../src/lib/paquetes.ts";
 import { classifyTab, mapHeader } from "../src/lib/sheet-sync.ts";
 import { claveDeMarca, raizDeMarca, motivoClaveInvalida, azarSeguro, CLAVE_MIN } from "../src/lib/auth/clave-marca.ts";
@@ -1969,6 +1970,17 @@ console.log("\n▶ Paquetes — clave, fecha del brief, nota de entrega");
   eq("Drive: un link con usuario:clave se rechaza", limpiarLinkDrive("https://a:b@drive.google.com/x").ok, false);
   eq("Drive: otro sitio https pasa con aviso", limpiarLinkDrive("https://www.dropbox.com/s/x").aviso, "Guardado, pero no es un link de Google Drive.");
   eq("Drive: un dominio que imita a Google lleva aviso", !!limpiarLinkDrive("https://drive.google.com.evil.io/x").aviso, true);
+
+  // 0101 — «nuevo» en el Archivo del cliente: la última aprobación o la carpeta de Drive.
+  eq("novedad = la fecha más reciente", novedadDe(["2026-11-17T18:00:00Z", "2026-11-18T09:00:00Z"], "2026-11-18T08:00:00Z"), "2026-11-18T09:00:00Z");
+  eq("novedad: la carpeta de Drive cuenta si llega después", novedadDe(["2026-11-17T18:00:00Z"], "2026-11-19T10:00:00Z"), "2026-11-19T10:00:00Z");
+  eq("novedad: sin fechas no hay novedad", novedadDe([null], null), null);
+  eq("novedad: una fecha rota se ignora", novedadDe(["no-es-fecha", "2026-11-17T18:00:00Z"], null), "2026-11-17T18:00:00Z");
+  eq("nunca abrió el Archivo → es nuevo", esNovedad("2026-11-17T18:00:00Z", null), true);
+  eq("aprobado DESPUÉS de su visita (el mismo día) → nuevo", esNovedad("2026-11-19T15:00:00Z", "2026-11-19T10:00:00Z"), true);
+  eq("aprobado ANTES de su visita → ya no es nuevo", esNovedad("2026-11-19T09:00:00Z", "2026-11-19T10:00:00Z"), false);
+  eq("sin fecha nunca cuenta", esNovedad(null, null), false);
+  eq("cuenta sólo los nuevos", contarNovedades([{ novedadAt: "2026-11-19T15:00:00Z" }, { novedadAt: "2026-11-18T15:00:00Z" }, { novedadAt: null }], "2026-11-19T10:00:00Z"), 1);
 
   const antes = entregaDePaquete([G("2026-11-17T18:00:00Z"), G("2026-11-18T18:00:00Z")], "2026-11-20");
   eq("entregado = la ÚLTIMA tarea", antes.entregadoEl, "2026-11-18");

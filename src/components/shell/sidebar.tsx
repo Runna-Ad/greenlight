@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutGrid,
   Users,
@@ -16,6 +16,7 @@ import {
   Menu,
   ChevronDown,
   Sparkles,
+  Archive,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ import { prismaActivo } from "@/lib/prisma/flags";
 import { Wordmark } from "./wordmark";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import type { AvisosCliente } from "@/lib/avisos-cliente";
 
 // `soon` = la pantalla está en el roadmap pero la ruta todavía no existe.
 // Se pinta apagada y SIN <Link>, porque un Link a una ruta inexistente lo
@@ -38,6 +40,8 @@ type NavItem = {
    *  seleccionado (riel izquierdo + icono). Una bandera, no un caso especial en el JSX,
    *  para que el resto del menú no cambie. Estilos en globals.css (.gl-nav-spectrum). */
   accent?: "spectrum";
+  /** Las páginas que comparten ruta y se distinguen por `?vista=` (Portal / Archivo). */
+  vista?: string;
 };
 
 // Cross-client items live at the root; client-scoped items take the active slug.
@@ -72,6 +76,8 @@ function navFor(
               { key: "briefs", href: `${clientBase}/briefs`, label: "Briefs", icon: FileText },
               { key: "sync", href: `${clientBase}/sync`, label: "Sincronizar", icon: RefreshCw },
               { key: "portal", href: `${clientBase}/portal`, label: "Portal", icon: Eye },
+              // El Archivo con su propio lugar: antes había que bajar todo el portal (Pedro 2026-11-19).
+              { key: "portal-archivo", href: `${clientBase}/portal?vista=archivo`, label: "Archivo", icon: Archive, vista: "archivo" },
             ] as NavItem[],
           },
         ]
@@ -108,11 +114,17 @@ const RESERVED = new Set([
 function SidebarNav({
   role = DEFAULT_ROLE,
   prismaAcceso = false,
+  avisosCliente = null,
+  vistaActual = null,
   onNavigate,
 }: {
   role?: ViewRole;
   /** Quien no tiene acceso a HÜE Prisma no lo ve en el menú (0090). */
   prismaAcceso?: boolean;
+  /** Los números rojos del cliente (0101); null para el equipo. */
+  avisosCliente?: AvisosCliente | null;
+  /** `?vista=` de la página (separa Portal de Archivo). */
+  vistaActual?: string | null;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -190,8 +202,17 @@ function SidebarNav({
             {!cerrada && (
             <ul className="space-y-0.5">
               {group.items.map((item) => {
-                const active =
-                  pathname === item.href || pathname.startsWith(`${item.href}/`);
+                // Portal y Archivo comparten ruta: los separa `?vista=`.
+                const ruta = item.href.split("?")[0];
+                const enRuta = pathname === ruta || pathname.startsWith(`${ruta}/`);
+                const active = enRuta && (item.vista ? vistaActual === item.vista : !(item.key === "portal" && vistaActual === "archivo"));
+                // El número rojo, como el correo: sólo en la sección de SU empresa. En el Archivo
+                // abierto no se pinta (lo está viendo; la visita ya se guardó).
+                const enSuEmpresa = avisosCliente && clienteMostrado === avisosCliente.slug;
+                const badge = !enSuEmpresa ? 0
+                  : item.key === "portal" ? avisosCliente.porRevisar
+                  : item.key === "portal-archivo" && !active ? avisosCliente.archivoNuevos
+                  : 0;
                 const Icon = item.icon;
                 const row = "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm";
 
@@ -231,6 +252,14 @@ function SidebarNav({
                     >
                       <Icon className="size-4 shrink-0" />
                       {item.label}
+                      {badge > 0 && (
+                        <span
+                          className="ml-auto min-w-5 rounded-full bg-[#e5484d] px-1.5 py-px text-center text-[11px] font-semibold leading-4 text-white"
+                          aria-label={`${badge} ${item.key === "portal" ? "por revisar" : "nuevos"}`}
+                        >
+                          {badge > 99 ? "99+" : badge}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );
@@ -249,17 +278,36 @@ function SidebarNav({
   );
 }
 
+type PropsNav = Parameters<typeof SidebarNav>[0];
+
+/** Lee `?vista=` y pinta el menú. useSearchParams exige un Suspense alrededor (si no, las
+ *  páginas estáticas no compilan); mientras tanto sale el mismo menú sin la vista. */
+function SidebarNavConVista(props: PropsNav) {
+  const vistaActual = useSearchParams().get("vista");
+  return <SidebarNav {...props} vistaActual={vistaActual} />;
+}
+
+function Nav(props: PropsNav) {
+  return (
+    <Suspense fallback={<SidebarNav {...props} />}>
+      <SidebarNavConVista {...props} />
+    </Suspense>
+  );
+}
+
 /** Rail de escritorio (≥ md). Debajo de md el menú vive en <MobileNav>. */
 export function Sidebar({
   role = DEFAULT_ROLE,
   prismaAcceso = false,
+  avisosCliente = null,
 }: {
   role?: ViewRole;
   prismaAcceso?: boolean;
+  avisosCliente?: AvisosCliente | null;
 }) {
   return (
     <aside className="sticky top-0 hidden h-dvh shrink-0 flex-col self-start bg-sidebar text-sidebar-foreground md:flex md:w-60">
-      <SidebarNav role={role} prismaAcceso={prismaAcceso} />
+      <Nav role={role} prismaAcceso={prismaAcceso} avisosCliente={avisosCliente} />
     </aside>
   );
 }
@@ -271,9 +319,11 @@ export function Sidebar({
 export function MobileNav({
   role = DEFAULT_ROLE,
   prismaAcceso = false,
+  avisosCliente = null,
 }: {
   role?: ViewRole;
   prismaAcceso?: boolean;
+  avisosCliente?: AvisosCliente | null;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -288,7 +338,7 @@ export function MobileNav({
         className="flex w-64 flex-col bg-sidebar p-0 text-sidebar-foreground [&>button]:top-5 [&>button]:text-sidebar-foreground/70"
       >
         <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
-        <SidebarNav role={role} prismaAcceso={prismaAcceso} onNavigate={() => setOpen(false)} />
+        <Nav role={role} prismaAcceso={prismaAcceso} avisosCliente={avisosCliente} onNavigate={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
   );

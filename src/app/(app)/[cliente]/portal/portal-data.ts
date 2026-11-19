@@ -10,6 +10,7 @@ import { ESTADOS_PORTAL, estadoBriefPanel } from "@/lib/portal-bucket";
 import type { PaqueteEquipo } from "@/lib/bundle";
 import { cargarPaquetes } from "@/lib/paquetes-data";
 import { agruparBriefsPortal } from "@/lib/portal-grupos";
+import { novedadDe } from "@/lib/archivo-novedad";
 import { fechaDelBrief, paqueteParaCliente, entregaDePaquete, desgloseTracks, ddmm, type PaquetePortal } from "@/lib/paquetes";
 import { idDeUnidad } from "@/lib/portal-paquetes";
 
@@ -727,6 +728,9 @@ export type ArchivoPaquete = {
   total: number;
   desglose: string;
   driveUrl: string | null;
+  /** Lo último que le pasó al paquete para el cliente (ISO): la última aprobación o la
+   *  carpeta de Drive. Contra `profiles.archivo_visto_at` decide si es «nuevo» (0101). */
+  novedadAt: string | null;
 };
 
 /**
@@ -740,9 +744,9 @@ export async function cargarArchivoPaquetes(clienteSlug: string, grupoDe: Record
   const { data: cli } = await db.from("clients").select("id").eq("slug", clienteSlug).maybeSingle<{ id: string }>();
   if (!cli) return [];
 
-  type Paq = { id: string; nombre: string; brief_date: string; fecha_entrega: string | null; drive_url: string | null };
+  type Paq = { id: string; nombre: string; brief_date: string; fecha_entrega: string | null; drive_url: string | null; drive_at: string | null };
   const { data: paqs, error: e1 } = await db
-    .from("paquetes").select("id, nombre, brief_date, fecha_entrega, drive_url").eq("client_id", cli.id)
+    .from("paquetes").select("id, nombre, brief_date, fecha_entrega, drive_url, drive_at").eq("client_id", cli.id)
     .returns<Paq[]>();
   if (e1) { console.error("cargarArchivoPaquetes (paquetes):", e1.message); return []; }
   if (!paqs?.length) return [];
@@ -780,9 +784,11 @@ export async function cargarArchivoPaquetes(clienteSlug: string, grupoDe: Record
       total: ts.length,
       desglose: desgloseTracks(ts.map((t) => ({ track: t.track, tipoAsset: t.tipo_asset }))),
       driveUrl: p.drive_url,
+      novedadAt: novedadDe(ts.map((t) => t.delivered_at), p.drive_url ? p.drive_at : null),
     });
   }
   // Lo más reciente primero; dentro del mismo día, por brief y nombre.
   return out.sort((a, b) =>
     b.entregadoEl.localeCompare(a.entregadoEl) || a.briefLabel.localeCompare(b.briefLabel) || a.nombre.localeCompare(b.nombre));
 }
+

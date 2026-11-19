@@ -3705,6 +3705,10 @@ console.log("\n▶ 0097 — paquetes");
   catch (e) { sinHttps = e.message; }
   ok("0100: un link que no empieza con https:// se rechaza", !!sinHttps && /check/i.test(sinHttps));
 
+  // 0101 — la última visita del cliente a su Archivo vive en su perfil (null = nunca).
+  eq("0101: el perfil arranca sin visita al Archivo",
+     await scalar(`select count(*)::int from produccion.profiles where archivo_visto_at is not null`), 0);
+
   await db.query(`update produccion.ideas set paquete_id=$2 where id=$1`, [IDEA_D, pq]);
   eq("la tarea queda en su paquete", await scalar(`select paquete_id::text from produccion.ideas where id=$1`, [IDEA_D]), pq);
   // board_tasks NO se redefine en 0097: la vista viva trae columnas de la rama de Diseño (0076)

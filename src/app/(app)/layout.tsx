@@ -7,6 +7,7 @@ import { countSinLeer } from "./notification-actions";
 import { getCurrentUser } from "@/lib/identity";
 import { liveTopic } from "@/lib/live";
 import { LiveRefresh } from "@/components/shell/live-refresh";
+import { cargarAvisosCliente } from "@/lib/avisos-cliente";
 
 export default async function AppLayout({
   children,
@@ -17,6 +18,8 @@ export default async function AppLayout({
   // already filtered by role and the avatar already named — no flash of a fuller
   // menu before it narrows.
   const [role, soy, avisos, user] = await Promise.all([getViewAs(), getSoy(), countSinLeer(), getCurrentUser()]);
+  // Los números rojos del menú del cliente (0101): sólo para un cliente de verdad.
+  const avisosCliente = await cargarAvisosCliente(user);
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -31,9 +34,9 @@ export default async function AppLayout({
       >
         Saltar al contenido principal
       </a>
-      <Sidebar role={role} prismaAcceso={tieneAccesoPrisma(role, soy?.prisma_acceso)} />
+      <Sidebar role={role} prismaAcceso={tieneAccesoPrisma(role, soy?.prisma_acceso)} avisosCliente={avisosCliente} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar role={role} soy={soy} avisos={avisos} />
+        <Topbar role={role} soy={soy} avisos={avisos} avisosCliente={avisosCliente} />
         {/* Sin overflow-y-auto: con la altura sin tope, main no hace scroll (lo
             hace la ventana), y un overflow≠visible aquí ROMPERÍA position:sticky
             de los menús internos. */}

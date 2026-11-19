@@ -66,6 +66,9 @@ export type NavKey =
   | "admin"
   | "mi-perfil"
   | "portal"
+  // El Archivo del cliente (paquetes aprobados + carpeta de Drive), con su propio lugar en el
+  // menú (Pedro 2026-11-19). Lo ven quienes ven el portal.
+  | "portal-archivo"
   // HÜE Prisma: el estudio de prompts (imagen/video/edición). Lo ve todo el equipo
   // interno — es una herramienta de trabajo, no de administración. El cliente no.
   | "prisma";
@@ -80,6 +83,7 @@ const NAV_ALL: NavKey[] = [
   "sync",
   "entregas",
   "portal",
+  "portal-archivo",
   "admin",
   // `mi-perfil` se queda en los sets de rol para el GUARD de la página (canSee), pero ya
   // NO se muestra en la nav lateral: se accede desde el menú del avatar (Topbar). (Pedro)
@@ -110,7 +114,7 @@ const NAV_BY_ROLE: Record<ViewRole, NavKey[]> = {
   // bundles (donde sólo ve las tareas que tiene asignadas) + su Mi perfil.
   creative: ["mi-trabajo", "prisma", "tablero", "briefs", "mi-perfil"],
   // El cliente no entra a la app interna en absoluto — sólo a su portal.
-  client: ["portal"],
+  client: ["portal", "portal-archivo"],
 };
 
 export const canSee = (role: ViewRole, key: NavKey): boolean =>
