@@ -11,6 +11,9 @@ import { ponerDrivePaquete } from "@/app/(app)/[cliente]/briefs/actions";
  * Admin/master pega o cambia el link; los demás sólo lo abren. Va en Briefs (mientras el
  * paquete sigue ahí) y en Entregas: la misma pieza, para que se lea igual en las dos.
  */
+/** El azul de liga que la gente reconoce (el de Google), claro y oscuro (Pedro 2026-11-19). */
+const AZUL_LIGA = "text-[#1a73e8] hover:text-[#1557b0] dark:text-[#8ab4f8] dark:hover:text-[#aecbfa]";
+
 export function CampoDrive({
   cliente,
   paqueteId,
@@ -44,12 +47,12 @@ export function CampoDrive({
 
   if (driveUrl && !editando) {
     return (
-      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="my-1 flex flex-wrap items-center gap-x-3 gap-y-1">
         <a
           href={driveUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+          className={`inline-flex items-center gap-1 py-1 text-xs font-semibold underline underline-offset-2 ${AZUL_LIGA}`}
         >
           <FolderOpen className="size-3.5" /> Abrir carpeta en Drive <ExternalLink className="size-3" />
         </a>
@@ -76,7 +79,7 @@ export function CampoDrive({
       <button
         type="button"
         onClick={() => { setValor(""); setEditando(true); }}
-        className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+        className={`my-1 inline-flex items-center gap-1 py-1 text-xs font-semibold underline underline-offset-2 ${AZUL_LIGA}`}
       >
         <FolderOpen className="size-3.5" /> Agregar carpeta de Drive
       </button>
