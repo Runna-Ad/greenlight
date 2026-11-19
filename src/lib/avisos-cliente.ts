@@ -39,16 +39,17 @@ export async function cargarAvisosCliente(user: CurrentUser | null): Promise<Avi
     ]);
     if (eB) throw eB;
 
-    // Las mismas reglas que el portal: enviada (published), no en la papelera, de un brief vivo.
+    // Las mismas reglas que el portal: enviada (published, con published_at), no en la papelera,
+    // de un brief vivo. No sigue «Mis tareas»: el número es de toda la empresa.
     // Se cuenta en la BD (head), sin traer filas: no le afecta el tope de ~1000 de PostgREST.
-    let porRevisar = 0;
     const ids = (briefs ?? []).map((b) => b.id);
-    for (let i = 0; i < ids.length; i += 50) {
-      const { count, error } = await db.from("ideas").select("id", { count: "exact", head: true })
-        .in("brief_id", ids.slice(i, i + 50)).eq("status", "published").is("deleted_at", null);
-      if (error) throw error;
-      porRevisar += count ?? 0;
-    }
+    const lotes = Array.from({ length: Math.ceil(ids.length / 50) }, (_, i) => ids.slice(i * 50, i * 50 + 50));
+    const conteos = await Promise.all(lotes.map((l) =>
+      db.from("ideas").select("id", { count: "exact", head: true })
+        .in("brief_id", l).eq("status", "published").not("published_at", "is", null).is("deleted_at", null)));
+    const malo = conteos.find((c) => c.error)?.error;
+    if (malo) throw malo;
+    const porRevisar = conteos.reduce((n, c) => n + (c.count ?? 0), 0);
 
     const paquetes = await cargarArchivoPaquetes(cli.slug, {});
     return { slug: cli.slug, porRevisar, archivoNuevos: contarNovedades(paquetes, visto) };

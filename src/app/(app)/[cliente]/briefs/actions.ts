@@ -130,6 +130,8 @@ export async function ponerDrivePaquete(
   if (!cli) return { ok: false, error: "Cliente no encontrado." };
   const paq = (await cargarPaquetes(cli.id, [paqueteId])).get(paqueteId);
   if (!paq) return { ok: false, error: "Paquete no encontrado." };
+  // El mismo link otra vez no cambia nada: no lo vuelve a marcar «Nuevo» en el Archivo del cliente.
+  if (limpio.url === paq.driveUrl) return { ok: true, aviso: limpio.aviso };
 
   const { data, error } = await db
     .from("paquetes")
