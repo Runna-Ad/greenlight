@@ -25,7 +25,6 @@ type DetallesProps = {
 type PoolPersona = { id: string; name: string; color: string };
 type RunnaProps = {
   personas: Persona[];
-  entregaUrl: string | null;
   filenames: string[];
   comentariosCreativo: string | null;
   sellingPoints: string | null;
@@ -79,11 +78,9 @@ export function TabsTarea({
           <RunnaToolsTab
             ideaId={ideaId}
             personas={runna.personas}
-            entregaUrl={runna.entregaUrl}
             filenames={runna.filenames}
             comentariosCreativo={runna.comentariosCreativo}
             sellingPoints={runna.sellingPoints}
-            puedeEditar={runna.puedeEditar}
             puedeAsignar={runna.puedeAsignar}
             leadsPool={runna.leadsPool}
             especialistasPool={runna.especialistasPool}

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, Crown, Check, UserPlus } from "lucide-react";
+import { Crown, Check, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { asignarTarea } from "@/app/(app)/[cliente]/tablero/actions";
@@ -22,17 +22,14 @@ export type PoolPersona = { id: string; name: string; color: string };
  * servidor, no con CSS, para no filtrar nombres/ligas en el payload RSC), y las
  * pestañas la ocultan en "Vista cliente".
  *
- * Izquierda: Lead / Team asignado + Comentarios. Derecha: Link de entrega +
- * Nombre de archivos.
+ * Izquierda: Lead / Team asignado + Comentarios. Derecha: Nombre de archivos.
  */
 export function RunnaToolsTab({
   ideaId,
   personas,
-  entregaUrl,
   filenames,
   comentariosCreativo,
   sellingPoints,
-  puedeEditar,
   puedeAsignar,
   leadsPool,
   especialistasPool,
@@ -40,14 +37,11 @@ export function RunnaToolsTab({
 }: {
   ideaId: string;
   personas: Persona[];
-  entregaUrl: string | null;
   filenames: string[];
   /** "Comentarios": la columna Comentarios Leads del sheet. H.Ü.E no la lee al escribir. */
   comentariosCreativo: string | null;
   /** Selling points del brief (texto). Vive aquí — guía interna del equipo. */
   sellingPoints: string | null;
-  /** El lead edite (leads + link); el especialista sólo lee esos. */
-  puedeEditar: boolean;
   /** Puede cambiar la asignación (lead/admin/master). */
   puedeAsignar: boolean;
   /** Pool vivo por rol+track (lead/creative de este track) para el editor. */
@@ -148,35 +142,9 @@ export function RunnaToolsTab({
         </div>
       </div>
 
-      {/* Columna derecha: link de entrega + nombres */}
+      {/* Columna derecha: nombres. El link de entrega se volvió el link de Frame.io y vive
+          en la cabecera de la tarea (Pedro 2026-11-19). */}
       <div className="space-y-4">
-        <div className="leading-tight">
-          <span className="block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-            Link de entrega
-          </span>
-          <div className="mt-1.5">
-            <CampoIntake
-              ideaId={ideaId}
-              campo="entrega_url"
-              label=""
-              valorInicial={entregaUrl}
-              placeholder="www."
-              caja
-              soloLectura={!puedeEditar}
-            />
-            {entregaUrl && (
-              <a
-                href={entregaUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline"
-              >
-                <ExternalLink className="size-3.5" /> Abrir entregable
-              </a>
-            )}
-          </div>
-        </div>
-
         <NombresFinales filenames={filenames} />
       </div>
     </div>

@@ -634,7 +634,8 @@ export default async function TareaPage({
             notaGuion={idea.nota_guion}
             notaPlaceholder={notaPlaceholder}
             plantilla={plantilla}
-            entregaUrl={idea.entrega_url}
+            // Frame.io (Pedro 2026-11-19): el equipo lo pega en la cabecera; el cliente lo abre.
+            frameioUrl={idea.entrega_url}
             soloLectura={soloLectura}
           />
 
@@ -659,7 +660,6 @@ export default async function TareaPage({
               esEquipo
                 ? {
                     personas,
-                    entregaUrl: idea.entrega_url,
                     filenames,
                     comentariosCreativo: idea.comentarios_creativo,
                     sellingPoints: (idea.selling_points ?? []).join("\n"),

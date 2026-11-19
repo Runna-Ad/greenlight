@@ -85,7 +85,7 @@ function CuerpoTarea({ t, colorCliente }: { t: TareaPortal; colorCliente?: strin
       notaGuion={t.notaGuion}
       notaPlaceholder=""
       plantilla={t.plantilla}
-      entregaUrl={t.entregaUrl}
+      frameioUrl={t.entregaUrl}
       soloLectura={true}
     />
   );

@@ -13,6 +13,7 @@ import { puedeSerLead, puedeSerEspecialista, tieneAccesoPrisma, tieneHueCreativo
 import { RAMAS, esRama, ramaDe } from "../src/lib/equipo.ts";
 import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoEnvioPieza, motivoBloqueoEnvio, ultimoVisibleDe } from "../src/lib/correcciones.ts";
 import { agruparCarga } from "../src/lib/workload.ts";
+import { esLinkFrameio } from "../src/lib/frameio.ts";
 import { novedadDe, esNovedad, contarNovedades } from "../src/lib/archivo-novedad.ts";
 import { claveDePaquete, fechaDeDateSort, diaLocal, fechaDelBrief, entregaDePaquete, notaEntrega, desgloseTracks, limpiarLinkDrive } from "../src/lib/paquetes.ts";
 import { classifyTab, mapHeader } from "../src/lib/sheet-sync.ts";
@@ -1981,6 +1982,13 @@ console.log("\n▶ Paquetes — clave, fecha del brief, nota de entrega");
   eq("aprobado ANTES de su visita → ya no es nuevo", esNovedad("2026-11-19T09:00:00Z", "2026-11-19T10:00:00Z"), false);
   eq("sin fecha nunca cuenta", esNovedad(null, null), false);
   eq("cuenta sólo los nuevos", contarNovedades([{ novedadAt: "2026-11-19T15:00:00Z" }, { novedadAt: "2026-11-18T15:00:00Z" }, { novedadAt: null }], "2026-11-19T10:00:00Z"), 1);
+
+  // Frame.io en la cabecera de la tarea (Pedro 2026-11-19): sólo avisa, no bloquea.
+  eq("Frame.io: link de proyecto", esLinkFrameio("https://app.frame.io/reviews/abc"), true);
+  eq("Frame.io: link corto f.io", esLinkFrameio(" https://f.io/AbC12 "), true);
+  eq("Frame.io: otro sitio no es Frame.io", esLinkFrameio("https://drive.google.com/x"), false);
+  eq("Frame.io: un dominio que lo imita no cuenta", esLinkFrameio("https://frame.io.evil.com/x"), false);
+  eq("Frame.io: texto suelto no es link", esLinkFrameio("frame.io/abc"), false);
 
   const antes = entregaDePaquete([G("2026-11-17T18:00:00Z"), G("2026-11-18T18:00:00Z")], "2026-11-20");
   eq("entregado = la ÚLTIMA tarea", antes.entregadoEl, "2026-11-18");

@@ -1,23 +1,24 @@
 "use client";
 
 import Image from "next/image";
-import { MessageSquareText, Link2 } from "lucide-react";
+import { MessageSquareText } from "lucide-react";
 
 import { STATUS_LABEL, STATUS_TOKEN, type AssetStatus } from "@/lib/brand";
 import type { Plantilla } from "@/lib/plantilla";
 import { CampoIntake } from "./campo-intake";
+import { CampoFrameio } from "./campo-frameio";
 import { useWorkspaceView } from "./workspace-provider";
 
 /**
  * La HERO de la tarea (mockup): la tarjeta cálida con la identidad de la pieza.
  *   [logo marca] [Brief 20/07 · Real] [paquete]      [status]
  *   TÍTULO GRANDE (naming_base)
- *   💬 Notas de guión (editable)       · cliente: [Link de entrega ↗]
+ *   💬 Notas de guión (editable)
+ *   🎬 Link de Frame.io
  *
  * El logo sale de marcas.logo_url (con fallback de 2 letras). El pill de Brief
- * viene del join a briefs. En "Vista cliente" (o rol cliente) se muestra el
- * botón "Link de entrega" (la liga del entregable, que SÍ es para el cliente),
- * porque en esa vista las Rünna tools se ocultan.
+ * viene del join a briefs. El link de Frame.io (Pedro 2026-11-19): el equipo lo pega aquí;
+ * el cliente (y la "Vista cliente") sólo lo abre, y sólo si ya hay link.
  */
 export function HeroTarea({
   ideaId,
@@ -31,7 +32,7 @@ export function HeroTarea({
   notaGuion,
   notaPlaceholder,
   plantilla,
-  entregaUrl,
+  frameioUrl,
   soloLectura,
 }: {
   ideaId: string;
@@ -48,7 +49,8 @@ export function HeroTarea({
   notaGuion: string | null;
   notaPlaceholder: string;
   plantilla: Plantilla;
-  entregaUrl: string | null;
+  /** El link de Frame.io (`ideas.entrega_url`). `undefined` = no se pinta. */
+  frameioUrl?: string | null;
   soloLectura: boolean;
 }) {
   const { verCliente } = useWorkspaceView();
@@ -133,17 +135,14 @@ export function HeroTarea({
           <span />
         )}
 
-        {verCliente && entregaUrl && (
-          <a
-            href={entregaUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-status-published px-4 py-2 text-sm font-bold text-white hover:opacity-90"
-          >
-            Link de entrega <Link2 className="size-4" />
-          </a>
-        )}
       </div>
+
+      {/* Frame.io: el equipo lo pega; el cliente sólo lo abre cuando ya existe. */}
+      {frameioUrl !== undefined && (!verCliente || frameioUrl) && (
+        <div className="mt-2 pl-6">
+          <CampoFrameio key={frameioUrl ?? ""} ideaId={ideaId} url={frameioUrl} puedeEditar={!soloLectura && !verCliente} />
+        </div>
+      )}
     </div>
   );
 }
