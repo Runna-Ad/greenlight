@@ -131,11 +131,12 @@ export async function cargarBundles(
   const { data: cli } = await db.from("clients").select("id").eq("slug", clienteSlug).maybeSingle<{ id: string }>();
   // La fecha de cada pestaña (0097): Real y Normal del mismo día son UN card.
   const { data: fechas, error: fErr } = cli
-    ? await db.from("briefs").select("id, brief_date").eq("client_id", cli.id).is("deleted_at", null)
-        .returns<{ id: string; brief_date: string | null }[]>()
+    ? await db.from("briefs").select("id, brief_date, brief_url").eq("client_id", cli.id).is("deleted_at", null)
+        .returns<{ id: string; brief_date: string | null; brief_url: string | null }[]>()
     : { data: [], error: null };
   if (fErr) throw new Error(`briefs: ${fErr.message}`);
   const fechaDe = new Map((fechas ?? []).map((f) => [f.id, f.brief_date]));
+  const linkDe = new Map((fechas ?? []).map((f) => [f.id, f.brief_url]));
   const llave = (id: string) => (fechaDe.get(id) ? `d:${fechaDe.get(id)}` : `b:${id}`);
 
   // Misma regla que abajo (bundleEnCurso), por brief JUNTO: si una de sus pestañas sigue en
@@ -166,6 +167,7 @@ export async function cargarBundles(
     : new Map();
   for (const b of bundles) {
     const ids = new Set(b.tasks.map((t) => t.paquete_id).filter((x): x is string => !!x));
+    b.briefUrl = b.brief_ids.map((id) => linkDe.get(id)).find((u) => !!u) ?? null;
     b.paquetes = [...ids].map((id) => paquetes.get(id)).filter((p): p is NonNullable<typeof p> => !!p)
       .sort((x, y) => x.nombre.localeCompare(y.nombre));
   }

@@ -239,9 +239,11 @@ export function etiquetaTarea(
  * Vacío = quitarlo. Tiene que ser https (lo mismo exige la base). Un link que no es de
  * Google Drive se acepta con aviso: a veces se comparte por otro lado.
  */
-export function limpiarLinkDrive(
-  raw: string | null | undefined,
-): { ok: true; url: string | null; aviso: string | null } | { ok: false; error: string } {
+type LinkLimpio = { ok: true; url: string | null; aviso: string | null } | { ok: false; error: string };
+
+/** Lo común a los links que pega el equipo: https, sin usuario/contraseña, ≤ 2000. `esperado`
+ *  dice si es del tipo que se pide; si no, se guarda igual con `aviso`. */
+function limpiarLink(raw: string | null | undefined, comoCopiarlo: string, esperado: (u: URL) => boolean, aviso: string): LinkLimpio {
   const s = (raw ?? "").trim();
   if (!s) return { ok: true, url: null, aviso: null };
   if (s.length > 2000) return { ok: false, error: "El link es demasiado largo." };
@@ -249,10 +251,22 @@ export function limpiarLinkDrive(
   try {
     u = new URL(s);
   } catch {
-    return { ok: false, error: "Eso no es un link. Copia el link de la carpeta desde Google Drive." };
+    return { ok: false, error: `Eso no es un link. ${comoCopiarlo}` };
   }
   if (u.protocol !== "https:") return { ok: false, error: "El link tiene que empezar con https://" };
   if (u.username || u.password) return { ok: false, error: "El link no puede llevar usuario ni contraseña." };
-  const drive = u.hostname === "drive.google.com" || u.hostname === "docs.google.com";
-  return { ok: true, url: u.toString(), aviso: drive ? null : "Guardado, pero no es un link de Google Drive." };
+  return { ok: true, url: u.toString(), aviso: esperado(u) ? null : aviso };
+}
+
+export function limpiarLinkDrive(raw: string | null | undefined): LinkLimpio {
+  return limpiarLink(raw, "Copia el link de la carpeta desde Google Drive.",
+    (u) => u.hostname === "drive.google.com" || u.hostname === "docs.google.com",
+    "Guardado, pero no es un link de Google Drive.");
+}
+
+/** «Link a Brief» (0102, Pedro 2026-11-20): el Google Sheet del brief. */
+export function limpiarLinkBrief(raw: string | null | undefined): LinkLimpio {
+  return limpiarLink(raw, "Copia el link del Google Sheet del brief.",
+    (u) => u.hostname === "docs.google.com" && u.pathname.startsWith("/spreadsheets/"),
+    "Guardado, pero no es un link de Google Sheets.");
 }

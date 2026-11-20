@@ -128,6 +128,9 @@ export type Bundle = {
   greenlitAt: string | null;
   /** Los paquetes que tocan sus tareas (los llena bundle-data; vacío si ninguno). */
   paquetes: PaqueteEquipo[];
+  /** «Link a Brief» (0102): el Google Sheet del brief. Lo llena bundle-data con el de
+   *  cualquiera de sus pestañas (se guarda igual en todas). */
+  briefUrl?: string | null;
 };
 
 /**

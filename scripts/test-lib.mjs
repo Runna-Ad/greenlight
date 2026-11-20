@@ -15,7 +15,7 @@ import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoE
 import { agruparCarga } from "../src/lib/workload.ts";
 import { esLinkFrameio } from "../src/lib/frameio.ts";
 import { novedadDe, esNovedad, contarNovedades } from "../src/lib/archivo-novedad.ts";
-import { claveDePaquete, fechaDeDateSort, diaLocal, fechaDelBrief, entregaDePaquete, notaEntrega, conteoPaquete, piezasDeFila, textoPiezas, limpiarLinkDrive } from "../src/lib/paquetes.ts";
+import { claveDePaquete, fechaDeDateSort, diaLocal, fechaDelBrief, entregaDePaquete, notaEntrega, conteoPaquete, piezasDeFila, textoPiezas, limpiarLinkDrive, limpiarLinkBrief } from "../src/lib/paquetes.ts";
 import { classifyTab, mapHeader } from "../src/lib/sheet-sync.ts";
 import { claveDeMarca, raizDeMarca, motivoClaveInvalida, azarSeguro, CLAVE_MIN } from "../src/lib/auth/clave-marca.ts";
 import { canCrearLogins } from "../src/lib/roles.ts";
@@ -1962,6 +1962,12 @@ console.log("\n▶ Paquetes — clave, fecha del brief, nota de entrega");
   eq("…y se ve su fecha", notaEntrega(noEntregado, "2026-11-20", "cliente")?.texto, "Fecha 20/11");
   eq("sin fecha y sin entregar no hay nota", notaEntrega(noEntregado, null, "equipo"), null);
   // 0100 — link de Drive del paquete
+  // «Link a Brief» (0102, Pedro 2026-11-20).
+  eq("Brief: un Google Sheet pasa sin aviso", limpiarLinkBrief("https://docs.google.com/spreadsheets/d/1KZkAbCdEf/edit#gid=0").aviso, null);
+  eq("Brief: un Doc se guarda con aviso", limpiarLinkBrief("https://docs.google.com/document/d/1abc/edit").aviso, "Guardado, pero no es un link de Google Sheets.");
+  eq("Brief: http se rechaza", limpiarLinkBrief("http://docs.google.com/spreadsheets/d/1").ok, false);
+  eq("Brief: texto suelto se rechaza", limpiarLinkBrief("brief de DiDi").ok, false);
+  eq("Brief: vacío lo quita", limpiarLinkBrief("").url, null);
   eq("Drive: vacío quita el link", JSON.stringify(limpiarLinkDrive("   ")), JSON.stringify({ ok: true, url: null, aviso: null }));
   eq("Drive: un link de carpeta pasa sin aviso", limpiarLinkDrive(" https://drive.google.com/drive/folders/1AbC?usp=sharing ").aviso, null);
   eq("…y se guarda sin espacios", limpiarLinkDrive(" https://drive.google.com/drive/folders/1AbC ").url, "https://drive.google.com/drive/folders/1AbC");

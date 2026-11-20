@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Pill, type PillStatus } from "@/components/ui/pill";
-import { CampoDrive } from "@/components/paquetes/campo-drive";
+import { CampoDrive, CampoLinkBrief } from "@/components/paquetes/campo-drive";
 import { ChevronDown, Files, Layers, Package, Sparkles, Trash2 } from "lucide-react";
 
 import { contentType } from "@/lib/iconos";
@@ -252,23 +252,35 @@ export function BundleCard({
 
   return (
     <div className="gl-card-interactive overflow-hidden">
-      <button
-        onClick={() => primera && router.push(`/${cliente}/tareas/${primera.id}`)}
-        className="block w-full p-4 text-left"
-        aria-label={`Abrir ${bundle.brief_title ?? "brief"} (${bundle.tasks.length} tareas)`}
-      >
+      {/* El card entero abre la primera tarea: el botón va DEBAJO del contenido (capa completa)
+          para que el «Link a Brief» pueda vivir junto al nombre sin quedar dentro de un botón. */}
+      <div className="relative p-4">
+        <button
+          type="button"
+          onClick={() => primera && router.push(`/${cliente}/tareas/${primera.id}`)}
+          className="absolute inset-0 rounded-t-[inherit]"
+          aria-label={`Abrir ${bundle.brief_title ?? "brief"} (${bundle.tasks.length} tareas)`}
+        />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="truncate text-sm font-semibold text-foreground">
               {bundle.brief_title ?? bundle.brief_tab ?? "Brief sin título"}
             </h3>
-            {/* Real y Normal del mismo día van en un solo card: se dice cuántas de cada una. */}
-            {bundle.brief_ids.length > 1 ? (
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{desgloseDeBundle(bundle.tasks)}</p>
-            ) : (
-              bundle.brief_tab && bundle.brief_tab !== bundle.brief_title && (
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{bundle.brief_tab}</p>
-              )
+            {/* Cuántas tareas de cada equipo, en todos los cards (Pedro 2026-11-20), junten o no
+                Real y Normal. */}
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{desgloseDeBundle(bundle.tasks)}</p>
+            {/* El Google Sheet del brief (0102): encima de la capa del botón para poder darle clic. */}
+            {(puedeFecha || bundle.briefUrl) && (
+              <div className="relative z-10 w-fit">
+                <CampoLinkBrief
+                  key={bundle.briefUrl ?? ""}
+                  cliente={cliente}
+                  briefIds={bundle.brief_ids}
+                  nombre={bundle.brief_title ?? "el brief"}
+                  briefUrl={bundle.briefUrl ?? null}
+                  puedeEditar={puedeFecha}
+                />
+              </div>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -305,7 +317,7 @@ export function BundleCard({
             </Pill>
           ))}
         </div>
-      </button>
+      </div>
 
       {/* Brief › PAQUETE › Tarea (0097): los paquetes del brief con su fecha. */}
       {conPaquetes && (

@@ -6,7 +6,7 @@ import { canAdmin } from "@/lib/roles";
 import { getViewAs } from "@/lib/view-as";
 import { getCurrentUser } from "@/lib/identity";
 import { cargarPaquetes } from "@/lib/paquetes-data";
-import { limpiarLinkDrive } from "@/lib/paquetes";
+import { limpiarLinkDrive, limpiarLinkBrief } from "@/lib/paquetes";
 
 /**
  * Manda un BRIEF entero a la PAPELERA, con TODAS sus tareas — sólo master/admin
@@ -148,5 +148,44 @@ export async function ponerDrivePaquete(
   revalidatePath(`/${cliente}/briefs`);
   revalidatePath(`/${cliente}/portal`);
   revalidatePath("/entregas");
+  return { ok: true, aviso: limpio.aviso };
+}
+
+/**
+ * Pone o quita el «Link a Brief» (0102, Pedro 2026-11-20): el Google Sheet del brief, en su
+ * card de Briefs. Sólo admin/master; el resto del equipo sólo lo abre. El card junta Real y
+ * Normal del mismo día, así que el link se guarda en TODAS sus pestañas (`briefIds`).
+ */
+export async function ponerLinkBrief(
+  cliente: string,
+  briefIds: string[],
+  link: string | null,
+): Promise<{ ok: true; aviso: string | null } | { ok: false; error: string }> {
+  if (!hasSupabase()) return { ok: false, error: "La base de datos no está configurada." };
+  const role = await getViewAs();
+  if (!canAdmin(role)) return { ok: false, error: "Sólo un admin o master pone el link del brief." };
+  const ids = [...new Set(briefIds)];
+  if (!ids.length || ids.length > 10) return { ok: false, error: "Brief no encontrado." };
+  const limpio = limpiarLinkBrief(link);
+  if (!limpio.ok) return limpio;
+  const db = supabaseAdmin();
+
+  // Las pestañas tienen que ser de ESTE cliente (los ids vienen del navegador).
+  const { data: cli } = await db.from("clients").select("id").eq("slug", cliente).maybeSingle<{ id: string }>();
+  if (!cli) return { ok: false, error: "Cliente no encontrado." };
+  const { data, error } = await db
+    .from("briefs")
+    .update({ brief_url: limpio.url })
+    .in("id", ids)
+    .eq("client_id", cli.id)
+    .is("deleted_at", null)
+    .select("id");
+  if (error) {
+    console.error("ponerLinkBrief:", error.message);
+    return { ok: false, error: "No se pudo guardar el link. Intenta de nuevo." };
+  }
+  if (!data?.length) return { ok: false, error: "Brief no encontrado." };
+
+  revalidatePath(`/${cliente}/briefs`);
   return { ok: true, aviso: limpio.aviso };
 }
