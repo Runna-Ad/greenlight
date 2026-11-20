@@ -636,6 +636,7 @@ export default async function TareaPage({
             plantilla={plantilla}
             // Frame.io (Pedro 2026-11-19): el equipo lo pega en la cabecera; el cliente lo abre.
             frameioUrl={idea.entrega_url}
+            frameioEditable={esEquipo}
             soloLectura={soloLectura}
           />
 

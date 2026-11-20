@@ -33,6 +33,7 @@ export function HeroTarea({
   notaPlaceholder,
   plantilla,
   frameioUrl,
+  frameioEditable = false,
   soloLectura,
 }: {
   ideaId: string;
@@ -51,6 +52,9 @@ export function HeroTarea({
   plantilla: Plantilla;
   /** El link de Frame.io (`ideas.entrega_url`). `undefined` = no se pinta. */
   frameioUrl?: string | null;
+  /** El equipo lo pega o lo cambia SIEMPRE: en Modo Lectura y Edición, y con la tarea en
+   *  cualquier estado (Pedro 2026-11-20: se usa mucho y en momentos distintos). */
+  frameioEditable?: boolean;
   soloLectura: boolean;
 }) {
   const { verCliente } = useWorkspaceView();
@@ -138,9 +142,9 @@ export function HeroTarea({
       </div>
 
       {/* Frame.io: el equipo lo pega; el cliente sólo lo abre cuando ya existe. */}
-      {frameioUrl !== undefined && (!verCliente || frameioUrl) && (
+      {frameioUrl !== undefined && (frameioEditable || frameioUrl) && (
         <div className="mt-2 pl-6">
-          <CampoFrameio key={frameioUrl ?? ""} ideaId={ideaId} url={frameioUrl} puedeEditar={!soloLectura && !verCliente} />
+          <CampoFrameio key={frameioUrl ?? ""} ideaId={ideaId} url={frameioUrl} puedeEditar={frameioEditable} />
         </div>
       )}
     </div>

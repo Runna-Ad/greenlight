@@ -98,7 +98,8 @@ export async function guardarIntake(
   if (!idea) return { ok: false, error: "La tarea ya no existe." };
 
   const status = idea.status as AssetStatus;
-  if (ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role)) {
+  // El link de Frame.io se pega en cualquier estado (Pedro 2026-11-20): es sólo una liga.
+  if (ESTADOS_SOLO_LECTURA.includes(status) && !canOverrideStatus(role) && campo !== "entrega_url") {
     return { ok: false, error: motivoSoloLectura(status) };
   }
 
