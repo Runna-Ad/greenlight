@@ -3644,3 +3644,7 @@ Not checked: saving a link, the client's view of it. Note: Master opens tasks in
 ## 2026-11-19 Session: wrap-up (Drive, client Archivo, Frame.io)
 Wrap-up of the day: Drive link per paquete, client Archivo with red numbers (0101), and Frame.io link per task are all live (main 0ad455e). project-state.md and lessons.md updated (3 lessons: Drive link any stage, verify a failed click, visibility answer can change mid-build).
 Pick up next: try a real Drive and Frame.io save; watch the first DiDi user's red numbers and «Nuevo».
+
+## 2026-11-20 Session: Frame.io link always visible to the team (preview)
+Pedro: the Frame.io link is used constantly, at different moments, so it must always be visible. Now the team sees and edits it in Modo Lectura and Modo Edición and on any task status (guardarIntake lets `entrega_url` through on closed statuses). Clients unchanged: open only, once a link exists. Branch feat/paquete-drive be4b393, tests/build pass; not live yet.
+Pick up next: check the preview in Modo Lectura, then Pedro's «ship it». Main has local doc commits, so ship by cherry-picking be4b393.
