@@ -14,7 +14,7 @@
 - main 0ad455e (deploy dpl_3vi6fTapetqcuCSZbxQTchdSe8qU). Migraciones 0100 (paquetes.drive_url/drive_por/drive_at) y 0101 (profiles.archivo_visto_at) aplicadas.
 - Paquetes: admin/master pega la carpeta de Drive en Briefs en cualquier momento (o en Entregas). Entregas se ve como Briefs (brief › paquete, sólo aprobados completos). El cliente tiene «Archivo» en su menú: paquetes aprobados por mes, con «Abrir carpeta en Drive» o «Carpeta en preparación».
 - Números rojos del cliente: Portal = piezas por revisar; Archivo = paquetes nuevos desde su última visita («Nuevo»). Sólo para un cliente de verdad.
-- Frame.io: `ideas.entrega_url` (el viejo «Link de entrega») ahora es el link de Frame.io, en la cabecera de la tarea; el equipo lo pega, el cliente lo abre.
+- Frame.io: `ideas.entrega_url` (el viejo «Link de entrega») ahora es el link de Frame.io, en la cabecera de la tarea; el equipo lo ve y lo pega SIEMPRE (Modo Lectura y Edición, cualquier estado; main d380d76, 2026-11-20); el cliente sólo lo abre.
 - Sin ver en pantalla: guardar un link real (Drive o Frame.io), los números rojos y «Nuevo» (no hay login de cliente de prueba).
 
 ## 🔺 Paquetes fase 2: pantallas del equipo · 2026-11-13 · PROD
