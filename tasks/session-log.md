@@ -3648,3 +3648,4 @@ Pick up next: try a real Drive and Frame.io save; watch the first DiDi user's re
 ## 2026-11-20 Session: Frame.io link always visible to the team (preview)
 Pedro: the Frame.io link is used constantly, at different moments, so it must always be visible. Now the team sees and edits it in Modo Lectura and Modo Edición and on any task status (guardarIntake lets `entrega_url` through on closed statuses). Clients unchanged: open only, once a link exists. Branch feat/paquete-drive be4b393, tests/build pass; not live yet.
 Pick up next: check the preview in Modo Lectura, then Pedro's «ship it». Main has local doc commits, so ship by cherry-picking be4b393.
+LIVE 2026-11-20: «Ship it» from Pedro; main d380d76, deploy dpl_J4GXeJ3mFTev4sgd7gGCgJpCTuM1 Ready; checked live in Modo Lectura on APPBFMOMCHAT. Rollback: dpl_3vi6fTapetqcuCSZbxQTchdSe8qU.
