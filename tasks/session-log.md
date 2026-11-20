@@ -1,5 +1,10 @@
 # Session log — Greenlight · by Rünna
 
+## 2026-11-20 — «Link a Brief» + «Real N · Normal M» en todos los cards de Briefs (rama feat/ideas-piezas, 0102 APLICADA, en preview)
+**Qué cambió:** 0102 agrega `briefs.brief_url` (aplicada a prod con el OK de Pedro «go, add the column»; vacía). En Briefs, bajo el nombre del brief: «Agregar link a Brief» (admin/master) → «Link a Brief» abre el sheet; se guarda en todas las pestañas del card. Todos los cards dicen «Real N · Normal M» (antes sólo los que juntaban dos pestañas). El campo de Drive y el del brief comparten CampoLink. El botón del card pasó a capa debajo del contenido para que el link no quede dentro de un botón.
+**Pruebas:** test:db exit 0 (0102 ✓) · npm test exit 0 (5 casos nuevos de limpiarLinkBrief) · tsc 0 · eslint 0 · build 0. Preview como Master: 30/10 «Real 9 · Normal 3», 16/10 «Real 2», 23/10 «Normal 2»; link de prueba guardado (base: las 2 pestañas de 30/10) y quitado (base: 0); clic al card abre la primera tarea; consola sin errores.
+**Pick up next:** «ship it» de Pedro → fast-forward a main.
+
 ## 2026-11-20 — Conteo de Ideas y Piezas por paquete (main 08f7201, SIN migración, EN VIVO)
 **Qué cambió:** cada paquete muestra dos líneas: «6 ideas: 3 videos real · 3 videos normal» y «6 piezas: …»; una pieza = un nombre de archivo (fila de `assets`, leída con `assets(count)`). Portal (card + Archivo), Briefs y Entregas. «Ver piezas» → «Ver ideas» con etiqueta «N piezas» por idea; los textos del portal que contaban tareas dicen ideas («tu turno en 3 ideas», «Otras ideas»).
 **Decisiones de Pedro:** Ver ideas + etiqueta; cambiar en todas las pantallas; palabras video real / video normal / imagen.
