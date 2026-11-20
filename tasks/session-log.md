@@ -1,10 +1,11 @@
 # Session log — Greenlight · by Rünna
 
-## 2026-11-20 — Conteo de Ideas y Piezas por paquete (rama feat/ideas-piezas, SIN migración, en preview)
+## 2026-11-20 — Conteo de Ideas y Piezas por paquete (main 08f7201, SIN migración, EN VIVO)
 **Qué cambió:** cada paquete muestra dos líneas: «6 ideas: 3 videos real · 3 videos normal» y «6 piezas: …»; una pieza = un nombre de archivo (fila de `assets`, leída con `assets(count)`). Portal (card + Archivo), Briefs y Entregas. «Ver piezas» → «Ver ideas» con etiqueta «N piezas» por idea; los textos del portal que contaban tareas dicen ideas («tu turno en 3 ideas», «Otras ideas»).
 **Decisiones de Pedro:** Ver ideas + etiqueta; cambiar en todas las pantallas; palabras video real / video normal / imagen.
 **Pruebas:** npm test exit 0 (nuevos casos conteoPaquete) · tsc 0 · eslint 0 · next build exit 0. Preview como Master: los 9 paquetes de DiDi = conteo de la base (LT Categories 2 ideas / 4 piezas, LT AfterBF 6/6, 3 versions WN 1/3); «Ver ideas» con «2 piezas» por fila; Archivo, Briefs y Entregas con las dos líneas; consola sin errores.
-**Pick up next:** «ship it» de Pedro → fast-forward a main.
+**En vivo:** «Ship it» de Pedro; fast-forward d380d76 → 08f7201, dpl_2mHPS7XFHTeCHpgmsEeCZuifNVkb Ready con alias greenlight.runna.agency; portal en vivo como Master con las dos líneas en los 9 paquetes. **Para volver:** dpl_J4GXeJ3mFTev4sgd7gGCgJpCTuM1 (main d380d76).
+**Sin probar:** una sesión de cliente real (sólo Master).
 
 ## 2026-11-19 — Carpeta de Drive por paquete, Entregas por paquete y Archivo del cliente (main, 0100 aplicada, EN VIVO)
 **Qué cambió:** admin/master pega el link de la carpeta de Google Drive de un paquete Greenlit, en Briefs (mientras sigue ahí) o en Entregas. Entregas ahora se ve como Briefs (brief › paquete con la pastilla Greenlit), sólo paquetes aprobados completos. El cliente ve en Archivo cada paquete aprobado, por mes, con «Abrir carpeta en Drive» o «Carpeta en preparación».
