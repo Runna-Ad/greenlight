@@ -127,25 +127,76 @@ export function notaEntrega(
   return { texto: `${entregado} · ${fecha} (${dias} tarde)`, tono: "tarde" };
 }
 
-/** Cuántas piezas de cada equipo: "2 real · 1 normal" (sólo los que tienen piezas). */
-export function desgloseTracks(tareas: { track: string | null; tipoAsset?: string | null }[]): string {
-  // Las imágenes y los copies se cuentan aparte (Pedro 2026-11-12): "3 real · 2 normal · 1 imagen".
-  // Mismo criterio que el ícono (contentType): «Images» = imagen, «Copies» = copy; el resto es
-  // video y va por su equipo.
-  let real = 0, normal = 0, imagen = 0, copy = 0;
+/** Qué es una idea, con el mismo criterio que su ícono (contentType): «Images» = imagen,
+ *  «Copies» = copy; el resto es video de su equipo (Real o Normal). null = video sin equipo. */
+type ClaseIdea = "real" | "normal" | "imagen" | "copy";
+function claseDeIdea(t: { track: string | null; tipoAsset?: string | null }): ClaseIdea | null {
+  const tipo = (t.tipoAsset ?? "").trim();
+  if (tipo === "Images") return "imagen";
+  if (tipo === "Copies") return "copy";
+  if (t.track === "real") return "real";
+  if (t.track === "normal") return "normal";
+  return null;
+}
+const NOMBRE_CLASE: Record<ClaseIdea, [string, string]> = {
+  real: ["video real", "videos real"],
+  normal: ["video normal", "videos normal"],
+  imagen: ["imagen", "imágenes"],
+  copy: ["copy", "copies"],
+};
+const ORDEN_CLASES: ClaseIdea[] = ["real", "normal", "imagen", "copy"];
+
+/** "1 pieza" / "4 piezas". */
+export function textoPiezas(n: number): string {
+  return `${n} ${n === 1 ? "pieza" : "piezas"}`;
+}
+
+export type ConteoPaquete = {
+  ideas: number;
+  /** Los archivos a entregar: un «Nombre de archivo» = una pieza (tamaño × plataforma × duración). */
+  piezas: number;
+  /** "3 ideas: 2 videos real · 1 video normal". */
+  lineaIdeas: string;
+  /** "6 piezas: 2 videos real · 4 videos normal". Un copy no genera archivos: nunca sale aquí. */
+  lineaPiezas: string;
+};
+
+/**
+ * Los dos conteos de un paquete (Pedro 2026-11-20): IDEAS (cada tarea) y PIEZAS (cada nombre
+ * de archivo de esas tareas), los dos desglosados por tipo. `piezas` de cada tarea = sus filas
+ * en `assets`, la misma lista que el equipo ve en «Nombres de archivos».
+ */
+export function conteoPaquete(
+  tareas: { track: string | null; tipoAsset?: string | null; piezas?: number | null }[],
+): ConteoPaquete {
+  const ideas: Record<ClaseIdea, number> = { real: 0, normal: 0, imagen: 0, copy: 0 };
+  const piezas: Record<ClaseIdea, number> = { real: 0, normal: 0, imagen: 0, copy: 0 };
+  let totalPiezas = 0;
   for (const t of tareas) {
-    const tipo = (t.tipoAsset ?? "").trim();
-    if (tipo === "Images") imagen++;
-    else if (tipo === "Copies") copy++;
-    else if (t.track === "real") real++;
-    else if (t.track === "normal") normal++;
+    const n = Math.max(0, t.piezas ?? 0);
+    totalPiezas += n;
+    const c = claseDeIdea(t);
+    if (!c) continue;
+    ideas[c]++;
+    piezas[c] += n;
   }
-  return [
-    real ? `${real} real` : null,
-    normal ? `${normal} normal` : null,
-    imagen ? `${imagen} ${imagen === 1 ? "imagen" : "imágenes"}` : null,
-    copy ? `${copy} ${copy === 1 ? "copy" : "copies"}` : null,
-  ].filter(Boolean).join(" · ");
+  const linea = (total: number, cuenta: Record<ClaseIdea, number>, nombre: [string, string]) => {
+    const partes = ORDEN_CLASES.filter((c) => cuenta[c] > 0)
+      .map((c) => `${cuenta[c]} ${NOMBRE_CLASE[c][cuenta[c] === 1 ? 0 : 1]}`);
+    const cabeza = `${total} ${nombre[total === 1 ? 0 : 1]}`;
+    return partes.length ? `${cabeza}: ${partes.join(" · ")}` : cabeza;
+  };
+  return {
+    ideas: tareas.length,
+    piezas: totalPiezas,
+    lineaIdeas: linea(tareas.length, ideas, ["idea", "ideas"]),
+    lineaPiezas: linea(totalPiezas, piezas, ["pieza", "piezas"]),
+  };
+}
+
+/** Las piezas de una fila de `ideas` leída con `assets(count)` (PostgREST trae `[{ count }]`). */
+export function piezasDeFila(r: { assets?: { count: number }[] | null }): number {
+  return r.assets?.[0]?.count ?? 0;
 }
 
 /** "Real" / "Normal" para un track (null si no es ninguno). */

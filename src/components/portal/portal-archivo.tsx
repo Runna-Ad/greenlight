@@ -120,9 +120,8 @@ function PaqueteRow({ p, nuevo }: { p: ArchivoPaquete; nuevo: boolean }) {
               </span>
             )}
           </span>
-          <span className="block text-xs text-muted-foreground">
-            {p.briefLabel} · {p.total} {p.total === 1 ? "pieza" : "piezas"}{p.desglose ? ` · ${p.desglose}` : ""}
-          </span>
+          <span className="block text-xs text-muted-foreground">{p.briefLabel} · {p.lineaIdeas}</span>
+          <span className="block text-xs text-muted-foreground">{p.lineaPiezas}</span>
           {p.nota && <span className="block text-xs text-muted-foreground">{p.nota}</span>}
         </Link>
         {p.driveUrl ? (
@@ -156,7 +155,7 @@ function ArchivoRow({ brief }: { brief: ArchivoBrief }) {
         <span className="min-w-0 flex-1">
           <span className="block truncate font-semibold text-foreground">{brief.label}</span>
           <span className="block text-xs text-muted-foreground">
-            {n} {n === 1 ? "pieza" : "piezas"} · completado {fechaCorta(brief.greenlitAt)}
+            {n} {n === 1 ? "idea" : "ideas"} · completado {fechaCorta(brief.greenlitAt)}
           </span>
         </span>
         <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />

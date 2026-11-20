@@ -11,7 +11,7 @@ import type { PaqueteEquipo } from "@/lib/bundle";
 import { cargarPaquetes } from "@/lib/paquetes-data";
 import { agruparBriefsPortal } from "@/lib/portal-grupos";
 import { novedadDe } from "@/lib/archivo-novedad";
-import { fechaDelBrief, paqueteParaCliente, entregaDePaquete, desgloseTracks, ddmm, type PaquetePortal } from "@/lib/paquetes";
+import { fechaDelBrief, paqueteParaCliente, entregaDePaquete, conteoPaquete, piezasDeFila, ddmm, type PaquetePortal } from "@/lib/paquetes";
 import { idDeUnidad } from "@/lib/portal-paquetes";
 
 // El portal muestra SÓLO lo que ya se envió al cliente: published_at != null (el
@@ -40,6 +40,8 @@ export type PortalTarea = {
   track: string | null;
   /** «Tipo de Asset» del sheet (Images, RP Video…): el ícono de imagen/video en la lista. */
   tipoAsset: string | null;
+  /** Sus nombres de archivo (filas de `assets`): cada uno es una pieza (Pedro 2026-11-20). */
+  piezas: number;
 };
 
 export type PortalBrief = {
@@ -92,7 +94,7 @@ export type PortalData = {
    *  está armando y aún NO manda. Es la ÚNICA data pre-publicación que ve el cliente, y sólo
    *  como CONTEO (panel de inicio): nunca el nombre ni el detalle (no se filtra WIP). Acotado a
    *  los briefs YA client-facing para que el número reconcilie con las tarjetas de brief. */
-  produccion: { id: string; code: string | null; naming: string | null; tipoAsset: string | null; briefId: string; marcaId: string; paqueteId: string | null; track: string | null }[];
+  produccion: { id: string; code: string | null; naming: string | null; tipoAsset: string | null; briefId: string; marcaId: string; paqueteId: string | null; track: string | null; piezas: number }[];
   /** Hora del SERVIDOR al cargar (ms). El split panel(≤15d)/archivo(>15d) se corta contra esta
    *  marca — determinista en el render (no Date.now() en el componente). */
   ahora: number;
@@ -185,11 +187,12 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
     paquete_id: string | null;
     track: string | null;
     tipo_asset: string | null;
+    assets: { count: number }[] | null;
   }[] = [];
   if (cargarIds.length) {
     const { data: ideas } = await db
       .from("ideas")
-      .select("id, code, naming_base, status, marca_id, brief_id, paquete_id, track, tipo_asset")
+      .select("id, code, naming_base, status, marca_id, brief_id, paquete_id, track, tipo_asset, assets(count)")
       .in("brief_id", cargarIds)
       .not("published_at", "is", null)
       // El ESTADO ACTUAL manda: una tarea sacada de Greenlit de vuelta a producción interna
@@ -291,6 +294,7 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
       paqueteId: i.paquete_id,
       track: i.track,
       tipoAsset: i.tipo_asset,
+      piezas: piezasDeFila(i),
     });
   }
   // Juntar dos pestañas mezcla dos listas ordenadas por código: se reordena dentro del brief.
@@ -344,15 +348,15 @@ export async function cargarPortal(clienteSlug: string, briefPedido?: string): P
   if (conTareasIds.length) {
     const { data: prod } = await db
       .from("ideas")
-      .select("id, code, naming_base, tipo_asset, marca_id, brief_id, paquete_id, track")
+      .select("id, code, naming_base, tipo_asset, marca_id, brief_id, paquete_id, track, assets(count)")
       .in("brief_id", conTareasIds)
       .in("status", ["todo", "in_progress", "under_review", "completed"])
       .is("deleted_at", null)
-      .returns<{ id: string; code: string | null; naming_base: string | null; tipo_asset: string | null; marca_id: string | null; brief_id: string; paquete_id: string | null; track: string | null }[]>();
+      .returns<{ id: string; code: string | null; naming_base: string | null; tipo_asset: string | null; marca_id: string | null; brief_id: string; paquete_id: string | null; track: string | null; assets: { count: number }[] | null }[]>();
     produccion = (prod ?? []).map((p) => ({
       id: p.id, code: p.code, naming: p.naming_base, tipoAsset: p.tipo_asset,
       briefId: grupoDe[p.brief_id] ?? p.brief_id, marcaId: p.marca_id ?? "__none__",
-      paqueteId: p.paquete_id, track: p.track,
+      paqueteId: p.paquete_id, track: p.track, piezas: piezasDeFila(p),
     }));
   }
 
@@ -725,8 +729,9 @@ export type ArchivoPaquete = {
   entregadoEl: string;
   /** La nota que el cliente puede ver ("Entregado 18/11 · fecha 20/11 (2 días antes)"). */
   nota: string | null;
-  total: number;
-  desglose: string;
+  /** "3 ideas: 2 videos real · 1 video normal" y "6 piezas: …" (conteoPaquete). */
+  lineaIdeas: string;
+  lineaPiezas: string;
   driveUrl: string | null;
   /** Lo último que le pasó al paquete para el cliente (ISO): la última aprobación o la
    *  carpeta de Drive. Contra `profiles.archivo_visto_at` decide si es «nuevo» (0101). */
@@ -751,11 +756,11 @@ export async function cargarArchivoPaquetes(clienteSlug: string, grupoDe: Record
   if (e1) { console.error("cargarArchivoPaquetes (paquetes):", e1.message); return []; }
   if (!paqs?.length) return [];
 
-  type T = { paquete_id: string; brief_id: string; status: string; delivered_at: string | null; track: string | null; tipo_asset: string | null };
+  type T = { paquete_id: string; brief_id: string; status: string; delivered_at: string | null; track: string | null; tipo_asset: string | null; assets: { count: number }[] | null };
   const ids = paqs.map((p) => p.id);
   const lotes = Array.from({ length: Math.ceil(ids.length / 20) }, (_, i) => ids.slice(i * 20, i * 20 + 20));
   const res = await Promise.all(lotes.map((l) =>
-    db.from("ideas").select("paquete_id, brief_id, status, delivered_at, track, tipo_asset")
+    db.from("ideas").select("paquete_id, brief_id, status, delivered_at, track, tipo_asset, assets(count)")
       .in("paquete_id", l).is("deleted_at", null).limit(1000).returns<T[]>()));
   // Un lote que llega al tope pudo perder filas: se trata como error.
   const err = res.find((r) => r.error)?.error
@@ -772,6 +777,7 @@ export async function cargarArchivoPaquetes(clienteSlug: string, grupoDe: Record
     if (!e.entregadoEl || !ts.length) continue;
     const vista = paqueteParaCliente({ id: p.id, nombre: p.nombre, fechaEntrega: p.fecha_entrega, entregadoEl: e.entregadoEl, diasAntes: e.diasAntes });
     const tab = ts[0].brief_id;
+    const conteo = conteoPaquete(ts.map((t) => ({ track: t.track, tipoAsset: t.tipo_asset, piezas: piezasDeFila(t) })));
     const grupo = Object.hasOwn(grupoDe, tab) ? grupoDe[tab] : null;
     out.push({
       id: p.id,
@@ -781,8 +787,8 @@ export async function cargarArchivoPaquetes(clienteSlug: string, grupoDe: Record
       unidad: idDeUnidad(grupo ?? tab, p.id),
       entregadoEl: e.entregadoEl,
       nota: vista.nota?.texto ?? null,
-      total: ts.length,
-      desglose: desgloseTracks(ts.map((t) => ({ track: t.track, tipoAsset: t.tipo_asset }))),
+      lineaIdeas: conteo.lineaIdeas,
+      lineaPiezas: conteo.lineaPiezas,
       driveUrl: p.drive_url,
       novedadAt: novedadDe(ts.map((t) => t.delivered_at), p.drive_url ? p.drive_at : null),
     });

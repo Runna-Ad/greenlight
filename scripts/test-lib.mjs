@@ -15,7 +15,7 @@ import { destinoRespuesta, equipoEscribioUltimo, clienteEscribioUltimo, bloqueoE
 import { agruparCarga } from "../src/lib/workload.ts";
 import { esLinkFrameio } from "../src/lib/frameio.ts";
 import { novedadDe, esNovedad, contarNovedades } from "../src/lib/archivo-novedad.ts";
-import { claveDePaquete, fechaDeDateSort, diaLocal, fechaDelBrief, entregaDePaquete, notaEntrega, desgloseTracks, limpiarLinkDrive } from "../src/lib/paquetes.ts";
+import { claveDePaquete, fechaDeDateSort, diaLocal, fechaDelBrief, entregaDePaquete, notaEntrega, conteoPaquete, piezasDeFila, textoPiezas, limpiarLinkDrive } from "../src/lib/paquetes.ts";
 import { classifyTab, mapHeader } from "../src/lib/sheet-sync.ts";
 import { claveDeMarca, raizDeMarca, motivoClaveInvalida, azarSeguro, CLAVE_MIN } from "../src/lib/auth/clave-marca.ts";
 import { canCrearLogins } from "../src/lib/roles.ts";
@@ -2011,18 +2011,25 @@ console.log("\n▶ Paquetes — clave, fecha del brief, nota de entrega");
   eq("reabrir una tarea quita la entrega",
      entregaDePaquete([G("2026-11-18T18:00:00Z"), { status: "in_corrections", delivered_at: null }], "2026-11-20").entregadoEl, null);
 
-  eq("desglose 2 real · 1 normal", desgloseTracks([{ track: "real" }, { track: "normal" }, { track: "real" }]), "2 real · 1 normal");
-  eq("desglose sólo real", desgloseTracks([{ track: "real" }, { track: "real" }]), "2 real");
-  eq("desglose sólo normal", desgloseTracks([{ track: "normal" }]), "1 normal");
-  // Pedro 2026-11-12: las imágenes se cuentan aparte de los videos normales.
-  const pz = (track, tipoAsset) => ({ track, tipoAsset });
-  eq("6 piezas: 3 real · 2 normal · 1 imagen",
-     desgloseTracks([pz("real", "RP Video"), pz("real", "RP Video"), pz("real", "RP Video"),
-                     pz("normal", "Normal Video"), pz("normal", "Normal Video"), pz("normal", "Images")]),
-     "3 real · 2 normal · 1 imagen");
-  eq("varias imágenes en plural", desgloseTracks([pz("normal", "Images"), pz("normal", "Images")]), "2 imágenes");
-  eq("los copies también aparte", desgloseTracks([pz("normal", "Copies"), pz("normal", "Normal Video")]), "1 normal · 1 copy");
-  eq("sin tipo cuenta como video de su equipo", desgloseTracks([pz("normal", null)]), "1 normal");
+  // Pedro 2026-11-20: IDEAS (cada tarea) y PIEZAS (cada nombre de archivo), las dos por tipo.
+  const pz = (track, tipoAsset, piezas = 0) => ({ track, tipoAsset, piezas });
+  const ej = conteoPaquete([pz("real", "RP Video", 2), pz("normal", "Normal Video", 2), pz("normal", "Normal Video", 2)]);
+  eq("ejemplo de Pedro: ideas", ej.lineaIdeas, "3 ideas: 1 video real · 2 videos normal");
+  eq("ejemplo de Pedro: piezas", ej.lineaPiezas, "6 piezas: 2 videos real · 4 videos normal");
+  eq("números sueltos", [ej.ideas, ej.piezas].join(), "3,6");
+  const cat = conteoPaquete([pz("normal", "Images", 2), pz("normal", "Images", 2)]);
+  eq("LT Categories: 2 ideas, 4 piezas", `${cat.lineaIdeas} | ${cat.lineaPiezas}`, "2 ideas: 2 imágenes | 4 piezas: 4 imágenes");
+  const uno = conteoPaquete([pz("real", "RP Video", 1)]);
+  eq("singular", `${uno.lineaIdeas} | ${uno.lineaPiezas}`, "1 idea: 1 video real | 1 pieza: 1 video real");
+  const conCopy = conteoPaquete([pz("normal", "Copies", 0), pz("normal", "Normal Video", 3)]);
+  eq("un copy cuenta como idea", conCopy.lineaIdeas, "2 ideas: 1 video normal · 1 copy");
+  eq("…pero no genera piezas", conCopy.lineaPiezas, "3 piezas: 3 videos normal");
+  eq("sin tipo cuenta como video de su equipo", conteoPaquete([pz("normal", null, 2)]).lineaPiezas, "2 piezas: 2 videos normal");
+  eq("sin nombres de archivo todavía", conteoPaquete([pz("real", "RP Video")]).lineaPiezas, "0 piezas");
+  eq("video sin equipo: suma, sin desglose", conteoPaquete([pz(null, "RP Video", 2)]).lineaIdeas, "1 idea");
+  eq("piezasDeFila lee assets(count)", piezasDeFila({ assets: [{ count: 4 }] }), 4);
+  eq("piezasDeFila sin dato = 0", piezasDeFila({}), 0);
+  eq("textoPiezas", `${textoPiezas(1)} / ${textoPiezas(3)}`, "1 pieza / 3 piezas");
 }
 
 console.log("\n▶ Fase 2 — etiqueta de brief y tarea con Real/Normal y paquete (Pedro 2026-11-13)");
@@ -2116,11 +2123,11 @@ console.log("\n▶ Portal — cada paquete es su propia revisión (Pedro 2026-11
   };
   const bManual = { id: "BM", label: "Manual", date: null, tasks: [t("m", null)], paquetes: [] };
   const us = unidadesDePaquete([b30, bManual]);
-  eq("una unidad por paquete con piezas enviadas, 'Otras piezas' y el brief sin paquetes",
-     us.map((u) => u.label).join("|"), "Ling Hook|LT AfterBF|Otras piezas|Manual");
+  eq("una unidad por paquete con piezas enviadas, 'Otras ideas' y el brief sin paquetes",
+     us.map((u) => u.label).join("|"), "Ling Hook|LT AfterBF|Otras ideas|Manual");
   eq("un paquete sólo trae SUS piezas", us.find((u) => u.label === "LT AfterBF").tasks.map((x) => x.id).join(), "a,b");
-  eq("'Otras piezas' junta las sin paquete y las de un paquete ajeno al brief",
-     us.find((u) => u.label === "Otras piezas").tasks.map((x) => x.id).join(), "d,e");
+  eq("'Otras ideas' junta las sin paquete y las de un paquete ajeno al brief",
+     us.find((u) => u.label === "Otras ideas").tasks.map((x) => x.id).join(), "d,e");
   eq("el paquete lleva su brief como etiqueta", us.find((u) => u.label === "LT AfterBF").etiqueta, "Brief 30/10");
   eq("el brief sin paquetes no lleva etiqueta", us.find((u) => u.label === "Manual").etiqueta, null);
   eq("id de unidad = brief.paquete", us.find((u) => u.label === "LT AfterBF").id, "B30.LT");

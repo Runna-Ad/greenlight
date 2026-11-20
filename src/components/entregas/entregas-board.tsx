@@ -47,8 +47,9 @@ export type BriefArchivo = {
     paqueteId: string | null;
     nombre: string | null;
     paquete: {
-      total: number;
-      desglose: string;
+      /** "3 ideas: 2 videos real · 1 video normal" y "6 piezas: …" (conteoPaquete). */
+      lineaIdeas: string;
+      lineaPiezas: string;
       nota: { texto: string; tono: TonoEntrega } | null;
       driveUrl: string | null;
     } | null;
@@ -171,9 +172,8 @@ function GrupoFila({
           </p>
           {g.paquete ? (
             <>
-              <p className="text-[11px] text-muted-foreground">
-                {g.paquete.total} {g.paquete.total === 1 ? "pieza" : "piezas"}{g.paquete.desglose ? ` · ${g.paquete.desglose}` : ""}
-              </p>
+              <p className="text-[11px] text-muted-foreground">{g.paquete.lineaIdeas}</p>
+              <p className="text-[11px] text-muted-foreground">{g.paquete.lineaPiezas}</p>
               {g.paquete.nota && (
                 <p className="text-[11px] font-medium" style={{ color: TONO_COLOR[g.paquete.nota.tono] }}>{g.paquete.nota.texto}</p>
               )}

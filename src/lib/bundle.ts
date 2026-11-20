@@ -45,9 +45,11 @@ export type PaqueteEquipo = {
   /** Día (México) en que se entregó su última tarea; null si falta alguna. */
   entregadoEl: string | null;
   diasAntes: number | null;
-  /** "2 real · 1 normal", de todas sus tareas. */
-  desglose: string;
-  total: number;
+  /** Ideas y piezas (nombres de archivo) de todas sus tareas, desglosadas por tipo (conteoPaquete). */
+  ideas: number;
+  piezas: number;
+  lineaIdeas: string;
+  lineaPiezas: string;
   /** La carpeta de Google Drive con sus archivos finales (0100). Se pone ya Greenlit. */
   driveUrl: string | null;
 };

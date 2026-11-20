@@ -23,7 +23,7 @@ const TONO_COLOR: Record<TonoEntrega, string> = {
 };
 
 /**
- * Un paquete dentro del card de su brief: nombre, cuántas piezas (Real/Normal) y su fecha.
+ * Un paquete dentro del card de su brief: nombre, sus ideas y sus piezas por tipo, y su fecha.
  * Admin/master pone o cambia la fecha aquí mismo; los demás la ven.
  */
 // El padre le pone `key` con la fecha guardada: si cambia (otra persona, o tras guardar), el
@@ -68,9 +68,8 @@ function PaqueteFila({
       <Package className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium text-foreground" title={p.nombre}>{p.nombre}</p>
-        <p className="text-[11px] text-muted-foreground">
-          {p.total} {p.total === 1 ? "pieza" : "piezas"}{p.desglose ? ` · ${p.desglose}` : ""}
-        </p>
+        <p className="text-[11px] text-muted-foreground">{p.lineaIdeas}</p>
+        <p className="text-[11px] text-muted-foreground">{p.lineaPiezas}</p>
         {nota && (p.entregadoEl || !puedeFecha) && (
           <p className="text-[11px] font-medium" style={{ color: TONO_COLOR[nota.tono] }}>{nota.texto}</p>
         )}

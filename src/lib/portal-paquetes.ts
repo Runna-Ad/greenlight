@@ -55,7 +55,7 @@ export function unidadesDePaquete<T extends { paqueteId: string | null }, B exte
     const otras = b.tasks.filter((t) => !t.paqueteId || !ids.has(t.paqueteId));
     if (otras.length) {
       out.push({
-        ...b, id: idDeUnidad(b.id, null), label: "Otras piezas", tasks: otras, paquetes: [],
+        ...b, id: idDeUnidad(b.id, null), label: "Otras ideas", tasks: otras, paquetes: [],
         briefId: b.id, paqueteId: null, etiqueta: b.label,
       });
     }

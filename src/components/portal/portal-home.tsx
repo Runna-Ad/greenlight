@@ -6,7 +6,7 @@ import { Flame, ArrowRight, Eye, RefreshCw, CheckCircle2, CheckCheck, ChevronDow
 import type { PortalBrief, PortalTarea, PortalMarca } from "@/app/(app)/[cliente]/portal/portal-data";
 import type { AssetStatus } from "@/lib/brand";
 import { estadoCliente, estadoBriefPanel } from "@/lib/portal-bucket";
-import { desgloseTracks, type PaquetePortal } from "@/lib/paquetes";
+import { conteoPaquete, textoPiezas, type PaquetePortal } from "@/lib/paquetes";
 import { idDeUnidad } from "@/lib/portal-paquetes";
 import { contentType } from "@/lib/iconos";
 import { cn } from "@/lib/utils";
@@ -48,7 +48,7 @@ function EstadoIcon({ status, reReview, teRespondieron = false, className }: { s
 const nombreTarea = (t: PortalTarea) => t.naming ?? t.code ?? "Idea";
 
 type QItem = PortalTarea & { briefId: string; briefLabel: string; unidadId: string; unidadNombre: string | null };
-type Prod = { id: string; code: string | null; naming: string | null; tipoAsset: string | null; briefId: string; marcaId: string; paqueteId: string | null; track: string | null };
+type Prod = { id: string; code: string | null; naming: string | null; tipoAsset: string | null; briefId: string; marcaId: string; paqueteId: string | null; track: string | null; piezas: number };
 
 export function PortalHome({
   cliente,
@@ -82,7 +82,7 @@ export function PortalHome({
       const pid = t.paqueteId && ids.has(t.paqueteId) ? t.paqueteId : null;
       return {
         ...t, briefId: b.id, briefLabel: b.label, unidadId: idDeUnidad(b.id, pid),
-        unidadNombre: pid ? b.paquetes.find((p) => p.id === pid)!.nombre : b.paquetes.length ? "Otras piezas" : null,
+        unidadNombre: pid ? b.paquetes.find((p) => p.id === pid)!.nombre : b.paquetes.length ? "Otras ideas" : null,
       };
     });
   });
@@ -108,7 +108,7 @@ export function PortalHome({
 
   // Zona C — avance por PAQUETE (Pedro 2026-11-12: el paquete es lo importante; el brief es una
   // etiqueta). Un paquete por card, con lo enviado y lo que sigue en producción; las piezas sin
-  // paquete van en "Otras piezas". Un brief sin paquetes queda como un solo card con su nombre.
+  // paquete van en "Otras ideas". Un brief sin paquetes queda como un solo card con su nombre.
   // Activo/completado sigue al brief (el Archivo es por brief). Primero lo que espera tu turno.
   const tarjetas: Tarjeta[] = briefs.flatMap((b) => {
     const ts = filtro ? b.tasks.filter((t) => t.marcaId === filtro) : b.tasks;
@@ -124,7 +124,7 @@ export function PortalHome({
       const seg = segmentos(tsP, prodP);
       return {
         key: idDeUnidad(b.id, pid),
-        nombre: p ? p.nombre : b.paquetes.length ? "Otras piezas" : b.label,
+        nombre: p ? p.nombre : b.paquetes.length ? "Otras ideas" : b.label,
         etiqueta: b.paquetes.length ? b.label : null,
         paquete: p,
         seg,
@@ -186,7 +186,7 @@ export function PortalHome({
         <>
           <SecHead
             titulo={nRespuestas ? "Necesitan tu atención" : "Necesitan tu aprobación"}
-            hint={`— tu turno en ${cola.length} ${cola.length === 1 ? "pieza" : "piezas"}`}
+            hint={`— tu turno en ${cola.length} ${cola.length === 1 ? "idea" : "ideas"}`}
           />
           <section
             className="overflow-hidden rounded-xl border shadow-sm"
@@ -211,7 +211,7 @@ export function PortalHome({
       )}
 
       {/* Zona B — Dónde va todo */}
-      <SecHead titulo="Dónde va todo" hint={`— ${visibles.length + cuenta.prod} piezas en tus paquetes`} />
+      <SecHead titulo="Dónde va todo" hint={`— ${visibles.length + cuenta.prod} ideas en tus paquetes`} />
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Resumen por estado">
         <Tile k="prod" n={cuenta.prod} foot="El equipo las arma · aún no es tu turno" />
         <Tile k="revisar" n={cuenta.revisar} foot="Esperan tu aprobación" destacado />
@@ -415,7 +415,7 @@ const equipoDe = (track: string | null) => (track === "real" ? "real" : track ==
 
 /**
  * Un PAQUETE en el panel del cliente (Pedro 2026-11-12): su nombre, su brief como etiqueta, su
- * barra y la nota de entrega. «Ver piezas» despliega TODAS sus piezas por equipo (Real / Normal):
+ * barra, sus ideas y sus piezas por tipo, y la nota de entrega. «Ver ideas» despliega TODAS sus ideas por equipo (Real / Normal):
  * las enviadas con su estado y se abren; las que siguen en producción se ven con «En producción»
  * y no se abren todavía (Pedro 2026-11-12). «Abrir» entra a revisar SÓLO este paquete.
  */
@@ -425,14 +425,15 @@ function PaqueteCard({ c }: { c: Tarjeta }) {
   const base = `?marca=${c.entryMarca}&brief=${c.key}`;
   const puedeAbrir = c.ts.length > 0;
   const nota = c.paquete?.nota ?? null; // ya viene armada para el cliente desde el servidor
-  const desglose = desgloseTracks([...c.ts, ...c.prod]);
+  // Ideas (cada tarea) y piezas (cada nombre de archivo), por tipo (Pedro 2026-11-20).
+  const conteo = conteoPaquete([...c.ts, ...c.prod]);
   // Todas las piezas del paquete, por equipo y por código: las enviadas se abren; las que siguen
   // en producción se ven (código y nombre) pero no se abren todavía (Pedro 2026-11-12).
   const equipos = EQUIPOS.map((e) => ({
     ...e,
     filas: [
-      ...c.ts.filter((t) => equipoDe(t.track) === e.k).map((t) => ({ id: t.id, code: t.code, tipo: t.tipoAsset, nombre: nombreTarea(t), t })),
-      ...c.prod.filter((p) => equipoDe(p.track) === e.k).map((p) => ({ id: p.id, code: p.code, tipo: p.tipoAsset, nombre: p.naming ?? p.code ?? "Pieza", t: null })),
+      ...c.ts.filter((t) => equipoDe(t.track) === e.k).map((t) => ({ id: t.id, code: t.code, tipo: t.tipoAsset, nombre: nombreTarea(t), piezas: t.piezas, t })),
+      ...c.prod.filter((p) => equipoDe(p.track) === e.k).map((p) => ({ id: p.id, code: p.code, tipo: p.tipoAsset, nombre: p.naming ?? p.code ?? "Idea", piezas: p.piezas, t: null })),
     ].sort((a, b) => (a.code ?? "￿").localeCompare(b.code ?? "￿") || a.nombre.localeCompare(b.nombre)),
   })).filter((e) => e.filas.length);
 
@@ -458,10 +459,11 @@ function PaqueteCard({ c }: { c: Tarjeta }) {
         ) : (
           titulo
         )}
-        <span className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-          {c.total} {c.total === 1 ? "pieza" : "piezas"}
-          {desglose && <span className="block text-[11px]">{desglose}</span>}
-        </span>
+      </div>
+
+      <div className="flex flex-col gap-0.5 text-xs tabular-nums text-muted-foreground">
+        <span>{conteo.lineaIdeas}</span>
+        <span>{conteo.lineaPiezas}</span>
       </div>
 
       <Barra seg={c.seg} total={c.total} />
@@ -504,6 +506,12 @@ function PaqueteCard({ c }: { c: Tarjeta }) {
                       <span className={cn("min-w-0 flex-1 truncate font-mono font-medium", f.t ? "text-foreground" : "text-muted-foreground")} title={f.nombre}>
                         {f.nombre}
                       </span>
+                      {/* Cuántos archivos salen de esta idea (Pedro 2026-11-20). */}
+                      {f.piezas > 0 && (
+                        <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-[10.5px] tabular-nums text-muted-foreground">
+                          {textoPiezas(f.piezas)}
+                        </span>
+                      )}
                       {f.t ? (
                         <EstadoPill status={f.t.status} reReview={f.t.reReview} teRespondieron={f.t.teRespondieron} />
                       ) : (
@@ -541,7 +549,7 @@ function PaqueteCard({ c }: { c: Tarjeta }) {
           aria-expanded={abierto}
           className="inline-flex min-h-8 items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
-          {abierto ? "Ocultar piezas" : "Ver piezas"}
+          {abierto ? "Ocultar ideas" : "Ver ideas"}
           <ChevronDown className={`size-3.5 transition-transform ${abierto ? "rotate-180" : ""}`} />
         </button>
         <span className="flex items-center gap-3 text-xs">

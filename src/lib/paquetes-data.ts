@@ -4,7 +4,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { PaqueteEquipo } from "@/lib/bundle";
-import { desgloseTracks, entregaDePaquete, etiquetaTarea } from "@/lib/paquetes";
+import { conteoPaquete, entregaDePaquete, etiquetaTarea, piezasDeFila } from "@/lib/paquetes";
 
 export async function cargarPaquetes(clientId: string, ids: (string | null)[]): Promise<Map<string, PaqueteEquipo>> {
   const unicos = [...new Set(ids.filter((x): x is string => !!x))];
@@ -22,11 +22,12 @@ export async function cargarPaquetes(clientId: string, ids: (string | null)[]): 
   // Por lotes de 20 paquetes: PostgREST corta en ~1000 filas SIN avisar, y una tarea sin
   // aprobar que se cae del corte haría ver el paquete como entregado. Un lote que llega al
   // tope cuenta como error (mejor no enseñar nada que enseñar un paquete a medias).
-  type T = { paquete_id: string; status: string; delivered_at: string | null; track: string | null; tipo_asset: string | null };
+  // `assets(count)`: cuántos nombres de archivo (piezas) tiene cada tarea, en la misma lectura.
+  type T = { paquete_id: string; status: string; delivered_at: string | null; track: string | null; tipo_asset: string | null; assets: { count: number }[] | null };
   const TOPE = 1000;
   const lotes = Array.from({ length: Math.ceil(delCliente.length / 20) }, (_, i) => delCliente.slice(i * 20, i * 20 + 20));
   const res = await Promise.all(lotes.map((l) =>
-    db.from("ideas").select("paquete_id, status, delivered_at, track, tipo_asset")
+    db.from("ideas").select("paquete_id, status, delivered_at, track, tipo_asset, assets(count)")
       .in("paquete_id", l).is("deleted_at", null).limit(TOPE).returns<T[]>()));
   const e2 = res.find((r) => r.error)?.error
     ?? (res.some((r) => (r.data?.length ?? 0) >= TOPE) ? { message: "un lote llegó al tope de filas" } : null);
@@ -37,7 +38,7 @@ export async function cargarPaquetes(clientId: string, ids: (string | null)[]): 
     return out;
   }
 
-  const porPaquete = new Map<string, { paquete_id: string; status: string; delivered_at: string | null; track: string | null; tipo_asset: string | null }[]>();
+  const porPaquete = new Map<string, T[]>();
   for (const t of tareas) (porPaquete.get(t.paquete_id) ?? porPaquete.set(t.paquete_id, []).get(t.paquete_id)!).push(t);
 
   for (const p of paqs ?? []) {
@@ -49,8 +50,7 @@ export async function cargarPaquetes(clientId: string, ids: (string | null)[]): 
       fechaEntrega: p.fecha_entrega,
       entregadoEl: e.entregadoEl,
       diasAntes: e.diasAntes,
-      desglose: desgloseTracks(ts.map((t) => ({ track: t.track, tipoAsset: t.tipo_asset }))),
-      total: ts.length,
+      ...conteoPaquete(ts.map((t) => ({ track: t.track, tipoAsset: t.tipo_asset, piezas: piezasDeFila(t) }))),
       driveUrl: p.drive_url,
     });
   }

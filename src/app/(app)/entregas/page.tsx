@@ -131,8 +131,8 @@ async function cargarArchivo(tracks: Track[] | null): Promise<BriefArchivo[]> {
         nombre: g.nombre,
         paquete: p
           ? {
-              total: p.total,
-              desglose: p.desglose,
+              lineaIdeas: p.lineaIdeas,
+              lineaPiezas: p.lineaPiezas,
               nota: notaEntrega({ entregadoEl: p.entregadoEl, diasAntes: p.diasAntes }, p.fechaEntrega, "equipo"),
               driveUrl: p.driveUrl,
             }
